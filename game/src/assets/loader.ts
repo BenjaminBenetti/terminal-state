@@ -20,6 +20,88 @@ export function assetUrl(rel: string): string {
   return new URL(rel, document.baseURI).href;
 }
 
+/**
+ * Iteration 07 (Lane P2): LAZY, per-station prop models. The 100+ iteration-07 prop GLBs are NOT part of the boot preload: before a
+ * station is revealed the game asks for exactly the models its generated layout placed (gen/props07.ts p7ModelKeysFor), fetched with
+ * progress (relative URLs, at most `concurrency` in flight) and cached for later stations. A model that failed to load stays absent
+ * (the station drops those placements; never a box stand-in). `trim` releases geometry/textures of models the current station does not
+ * use beyond a small recently-used set, so GPU memory follows the station rather than the whole catalogue.
+ */
+export class PropModelLibrary {
+  private readonly pending = new Map<string, Promise<GLTF | null>>();
+  private readonly models = new Map<string, GLTF>();
+  private readonly recent: string[] = [];
+  private readonly geometries = new WeakSet<THREE.BufferGeometry>();
+  readonly failures: {key: string; url: string; reason: string}[] = [];
+  /** Bytes fetched so far (catalogue sizes) and fetch count (tests/QA). */
+  stats = {fetched: 0, bytes: 0, released: 0};
+  constructor(private readonly files: Readonly<Record<string, {url: string; bytes: number}>>, private readonly concurrency = 6,
+    private readonly load: (url: string, onProgress: (f: number) => void) => Promise<GLTF> = defaultGltfLoad) {}
+
+  has(key: string): boolean { return this.models.has(key); }
+  /** Geometry belongs to a cached library model (station teardown must not dispose it). */
+  ownsGeometry(g: THREE.BufferGeometry): boolean { return this.geometries.has(g); }
+  get(key: string): GLTF | undefined { return this.models.get(key); }
+  /** Loaded models as a plain record (merged into the station builder's model map). */
+  record(): Record<string, GLTF> { return Object.fromEntries(this.models); }
+  loadedKeys(): string[] { return [...this.models.keys()]; }
+
+  /** Fetches every listed model not yet cached; resolves when all settled (failures recorded, never thrown). */
+  async ensure(keys: readonly string[], onProgress?: (frac: number, label: string) => void): Promise<{loaded: string[]; failed: string[]; fetchedBytes: number}> {
+    const want = [...new Set(keys)].filter(k => this.files[k]);
+    const todo = want.filter(k => !this.models.has(k));
+    const total = todo.reduce((s, k) => s + this.files[k].bytes, 0) || 1;
+    const part = new Map<string, number>();
+    const report = (label: string) => { let s = 0; for (const v of part.values()) s += v; onProgress?.(Math.min(1, s / total), label); };
+    let next = 0, fetchedBytes = 0;
+    const worker = async () => {
+      while (next < todo.length) {
+        const key = todo[next++], f = this.files[key];
+        let p = this.pending.get(key);
+        if (!p) {
+          p = this.load(assetUrl(f.url), fr => { part.set(key, f.bytes * fr * 0.98); report(f.url.split('/').pop() ?? key); })
+            .then(g => { this.models.set(key, g); g.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) this.geometries.add((o as THREE.Mesh).geometry); }); this.stats.fetched++; this.stats.bytes += f.bytes; fetchedBytes += f.bytes; return g; })
+            .catch(err => { this.failures.push({key, url: f.url, reason: err instanceof Error ? err.message : String(err)}); return null; })
+            .finally(() => this.pending.delete(key));
+          this.pending.set(key, p);
+        }
+        await p;
+        part.set(key, f.bytes);
+        report(f.url.split('/').pop() ?? key);
+      }
+    };
+    await Promise.all(Array.from({length: Math.min(this.concurrency, todo.length)}, worker));
+    for (const k of want) { const i = this.recent.indexOf(k); if (i >= 0) this.recent.splice(i, 1); this.recent.push(k); }
+    return {loaded: want.filter(k => this.models.has(k)), failed: want.filter(k => !this.models.has(k)), fetchedBytes};
+  }
+
+  /** Disposes models outside `keep` beyond the `extra` most recently used ones (re-fetched from the HTTP cache if needed again). */
+  trim(keep: ReadonlySet<string>, extra = 16): string[] {
+    const spare = this.recent.filter(k => !keep.has(k) && this.models.has(k));
+    const drop = spare.slice(0, Math.max(0, spare.length - extra));
+    for (const k of drop) {
+      const g = this.models.get(k)!;
+      g.scene.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+          for (const v of Object.values(mat)) if ((v as THREE.Texture | null)?.isTexture) (v as THREE.Texture).dispose();
+          mat.dispose();
+        }
+      });
+      this.models.delete(k);
+      this.recent.splice(this.recent.indexOf(k), 1);
+      this.stats.released++;
+    }
+    return drop;
+  }
+}
+
+function defaultGltfLoad(url: string, onProgress: (f: number) => void): Promise<GLTF> {
+  return new Promise((resolve, reject) => new GLTFLoader().load(url, resolve, ev => { if (ev.lengthComputable && ev.total > 0) onProgress(ev.loaded / ev.total); }, reject));
+}
+
 export async function loadAssets(onProgress: (frac: number, label: string) => void): Promise<AssetBundle> {
   const gltf = new GLTFLoader();
   const texLoader = new THREE.TextureLoader();

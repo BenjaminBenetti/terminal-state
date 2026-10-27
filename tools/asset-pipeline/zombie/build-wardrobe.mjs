@@ -5,6 +5,13 @@
 //   --only-stage     stop after the cached stages (warm the cache)
 //   dev only: --bodies=a,b --wear=x,y (canonical body always included) --out=DIR (write GLB/JSON to DIR/models, DIR/derivatives
 //             instead of game/public/assets; nothing else is touched) --no-write
+// Iteration 07: after the per-body placement, every upper / pants variant is REFITTED by lib/fit07.mjs
+// (outer-hull anchors -> body weights at the anchor -> wrinkle ironing -> skin offset field until the cloth
+// is outside the body AND the fitted pants -> pose validation over the bind pose, every 3rd frame of the six
+// clips and 3 ragdoll-like extremes -> all-pose masks); hats use lib/headwear.mjs (cranium fit + seat solve);
+// the fit07 gate (wardrobe.config FIT07) excludes variants whose body still VISIBLY pokes through and turns
+// failing upper x pants layerings into per-body incompatibilities (variant extras incompatibleWear).
+// Independent check: qa/fit-audit.mjs on the written GLBs + qa/fit-report.mjs.
 // Slots: upper (garment kind: canonical fit + per-body retarget), lower (pants kind: per-body row
 // profile fit), head / face (rigid kind: per-body scale + contact solve, 100% Head). Order:
 //   bodies (auto-rig, stretch audit) -> wearable stages -> phase 1: lower + head + face per body ->
@@ -30,11 +37,15 @@ import {fitVariantsParallel} from './lib/fit-pool.mjs';
 import {coverMask} from './lib/fit.mjs';
 import {sampleBodyClips, verifyClips} from './lib/clipsolve.mjs';
 import {auditPoses, triangleStretch, stretchStats} from './lib/stretch.mjs';
+import {worldList} from './lib/fit07.mjs';
+import {EXTREME_POSES} from './lib/extreme-poses.mjs';
+import {Rig} from './lib/pose.mjs';
 import {buildBodyDocument, buildOutfitDocument, writeDoc, geometryHash, bitsetBase64} from './lib/variant-glb.mjs';
+import {Document} from '@gltf-transform/core';
 import {JOINTS} from './lib/skeleton.mjs';
 import {JOINT_NAMES} from './lib/skin.mjs';
 import {CLIP_SPECS} from './lib/clips.mjs';
-import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY} from './wardrobe.config.mjs';
+import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07} from './wardrobe.config.mjs';
 
 const ARGS = new Set(process.argv.slice(2));
 const OPT = Object.fromEntries(process.argv.slice(2).filter(a => a.includes('=')).map(a => a.replace(/^--/, '').split('=')));
@@ -111,6 +122,15 @@ async function main() {
   }
   const C = bodies.find(b => b.id === CANONICAL_BODY);
   if (!C) throw new Error('canonical body missing');
+  // iteration 07: validation poses per body for the pose-aware refit (lib/fit07.mjs): every 3rd frame of
+  // the six clips (death pose solved against the body alone) + three ragdoll-like extreme poses
+  for (const B of bodies) {
+    const {clips, rig} = sampleBodyClips(B.skel, [{name: 'ZombieBody', pos: B.low.pos, joints: B.joints, weights: B.weights}]);
+    const list = [{clip: 'Bind', t: 0, world: worldList(rig.fk({hips: [0, 0, 0], rot: {}}), B.skel)}, ...auditPoses(clips, {every: FIT07.everyFrames}).map(p => ({clip: p.clip, t: p.t, world: worldList(rig.fk(p.pose), B.skel)}))];
+    for (const [name, rot] of Object.entries(EXTREME_POSES)) list.push({clip: name, t: 0, world: worldList(new Rig(B.skel).fk({hips: [0, 0, 0], rot}), B.skel)});
+    B.validation = list;
+    console.log(`  [${B.id}] validation poses: ${list.length}`);
+  }
 
   // ---------------------------------------------------------------- wearable stages
   const wear = [];
@@ -150,9 +170,11 @@ async function main() {
       for (const B of bodies) {
         const s = supports(w, B);
         if (!s.ok) { excluded.push({body: B.id, wearable: w.id, slot: w.def.slot, rule: s.rule, reason: s.reason}); continue; }
-        jobs.push({key: `${w.id}|${B.id}`, g: w.g, cfg: w.cfg, C, B, extraCollide: w.def.slot === 'upper' ? lowerCollision(B) : undefined, onDone: (v, ms) => {
+        const up = w.def.slot === 'upper';
+        jobs.push({key: `${w.id}|${B.id}`, g: w.g, cfg: w.cfg, C, B, extraCollide: up ? lowerCollision(B) : undefined, poses: B.validation, layers: up ? lowerLayers(B) : undefined, layerUV: up ? lowerUV(B) : undefined, onDone: (v, ms) => {
           fits[w.id][B.id] = v;
-          console.log(`  fit ${w.id} x ${B.id}: hidden ${v.mask.hidden}/${v.mask.total} bulk ${JSON.stringify(v.stats.bulkM)} (${ms} ms)`);
+          const rf = v.stats.refit07;
+          console.log(`  fit ${w.id} x ${B.id}: hidden ${v.mask.hidden}/${v.mask.total} bulk ${JSON.stringify(v.stats.bulkM)}${rf ? ` refit: offset p50 ${rf.offsetM.p50} p95 ${rf.offsetM.p95} max ${rf.offsetM.max}; bind rounds ${rf.bindRounds.map(r => r.skinVerticesRaised).join('>')}; pose rounds ${rf.poseRounds.map(r => r.skinVerticesNeedingMore).join('>')}` : ''} (${ms} ms)`);
         }});
       }
     }
@@ -170,8 +192,61 @@ async function main() {
     }
     return {pos: Float32Array.from(pos), idx: Uint32Array.from(idx)};
   };
+  // iteration 07: fitted lower garments of this body as layers the upper must stay outside of (welded,
+  // weighted) + their UV-split triangles for the all-pose hideWear masks
+  const lowerLayers = B => wear.filter(w => w.def.slot === 'lower' && fits[w.id]?.[B.id]?.weldedJoints).map(w => { const v = fits[w.id][B.id]; return {id: w.id, pos: v.weldedPos, idx: w.g.low.welded.idx, joints: v.weldedJoints, weights: v.weldedWeights}; });
+  const lowerUV = B => Object.fromEntries(wear.filter(w => w.def.slot === 'lower' && fits[w.id]?.[B.id]).map(w => { const v = fits[w.id][B.id]; return [w.id, {pos: v.pos, idx: w.g.low.idx, joints: v.joints, weldId: w.g.low.weldId}]; }));
   await runPhase(wear.filter(w => w.def.slot !== 'upper'));
   await runPhase(wear.filter(w => w.def.slot === 'upper'));
+  // ---------------------------------------------------------------- iteration 07 fit gate
+  // Every refitted upper / pants variant reports, from its own pose validation, how many covered body
+  // vertices still poke through the cloth (bind pose, any clip frame, the 3 ragdoll-like extremes) and,
+  // for uppers, how many covered outer-wall vertices of each fitted pants poke through it. A variant over
+  // the limits is EXCLUDED (never shipped); an upper x pants layering over the limit becomes a per-body
+  // incompatibility (the runtime never combines them on that body).
+  const fitGate = {limits: FIT07.gate, variants: [], layerIncompatible: []};
+  for (const w of wear) for (const B of bodies) {
+    const v = fits[w.id]?.[B.id], rf = v?.stats?.refit07;
+    if (!rf) continue;
+    // VISIBLE poke-through (vertices of unhidden triangles) per validation pose, as a fraction of the
+    // covered body vertices; 'Bind' = the rest pose itself
+    const vis = rf.visiblePerClip ?? {}, cov = Math.max(1, ...Object.values(vis).map(c => c.covered));
+    const anim = Object.entries(vis).filter(([k]) => !/^ragdoll-|^Bind$/.test(k)), ext = Object.entries(vis).filter(([k]) => /^ragdoll-/.test(k));
+    const m = {body: B.id, wearable: w.id, covered: cov, bind: +((vis.Bind?.maxVisiblePoke ?? 0) / cov).toFixed(4), animated: +(Math.max(0, ...anim.map(([, c]) => c.maxVisiblePoke)) / cov).toFixed(4), extreme: +(Math.max(0, ...ext.map(([, c]) => c.maxVisiblePoke)) / cov).toFixed(4), layers: {}};
+    for (const [, c] of anim) for (const [lid, l] of Object.entries(c.layers ?? {})) { const q = m.layers[lid] ??= {covered: l.covered, animated: 0}; q.animated = Math.max(q.animated, l.maxVisiblePoke); }
+    for (const q of Object.values(m.layers)) q.animated = +(q.animated / Math.max(1, q.covered)).toFixed(4);
+    const g = FIT07.gate, fail = [];
+    if (m.bind > g.bind) fail.push(`bind ${(m.bind * 100).toFixed(2)}% > ${g.bind * 100}%`);
+    if (m.animated > g.animated) fail.push(`animated ${(m.animated * 100).toFixed(2)}% > ${g.animated * 100}%`);
+    if (m.extreme > g.extreme) fail.push(`extreme ${(m.extreme * 100).toFixed(2)}% > ${g.extreme * 100}%`);
+    m.pass = !fail.length;
+    fitGate.variants.push(m);
+    if (fail.length && g.enforce && process.env.FIT07_NOGATE !== '1') {
+      excluded.push({body: B.id, wearable: w.id, slot: w.def.slot, rule: 'fit07-pose-gate', reason: `body still visibly pokes through the refitted cloth in the pose validation: ${fail.join(', ')} of ${cov} covered vertices`, metrics: m});
+      delete fits[w.id][B.id];
+      console.log(`  ! ${w.id} x ${B.id} EXCLUDED by the fit07 pose gate: ${fail.join(', ')}`);
+      continue;
+    }
+    for (const [lid, q] of Object.entries(m.layers)) if (q.animated > g.layerAnimated && g.enforce && process.env.FIT07_NOGATE !== '1') {
+      fitGate.layerIncompatible.push({body: B.id, upper: w.id, lower: lid, animated: q.animated, covered: q.covered});
+      (v.incompatibleWear ??= []).push(lid);
+      console.log(`  ! ${w.id} over ${lid} on ${B.id}: pants poke through ${(q.animated * 100).toFixed(2)}% > ${g.layerAnimated * 100}% -> per-body incompatibility`);
+    }
+  }
+  // an upper that no fitted pants may be layered under on a body that REQUIRES pants would be unreachable:
+  // exclude that pair explicitly (recorded) instead of shipping a dead variant
+  for (const B of bodies) {
+    if (!(B.def.traits?.requires ?? []).includes('lower')) continue;
+    const lowers = wear.filter(w => w.def.slot === 'lower' && fits[w.id]?.[B.id]).map(w => w.id);
+    for (const U of wear.filter(w => w.def.slot === 'upper' && fits[w.id]?.[B.id])) {
+      const inc = fits[U.id][B.id].incompatibleWear ?? [];
+      if (lowers.length && lowers.every(l => inc.includes(l))) {
+        excluded.push({body: B.id, wearable: U.id, slot: 'upper', rule: 'fit07-layering-gate', reason: `every fitted pants of ${B.id} (a body that always wears pants) visibly pokes through it: ${lowers.join(', ')}`});
+        delete fits[U.id][B.id];
+        console.log(`  ! ${U.id} x ${B.id} EXCLUDED: incompatible with every fitted pants of a pants-required body`);
+      }
+    }
+  }
   if (ARGS.has('--no-write')) { console.log('dev run: nothing written'); return; }
 
   // ---------------------------------------------------------------- clips, motion audit, layer masks per body
@@ -213,6 +288,7 @@ async function main() {
     for (const [over, under] of [['upper', 'lower'], ['head', 'face']]) {
       for (const U of worn.filter(w => w.def.slot === over)) for (const L of worn.filter(w => w.def.slot === under)) {
         const lv = fits[L.id][B.id], uv = fits[U.id][B.id];
+        if (uv.hideWear?.[L.id]) { const ex = extrasOf(U); (ex.hideWear ??= {})[L.id] = bitsetBase64(uv.hideWear[L.id].hide); (ex.hideWearCounts ??= {})[L.id] = uv.hideWear[L.id].hidden; continue; }
         const m = coverMask({pos: lv.pos, idx: L.g.low.idx}, {pos: uv.weldedPos, idx: U.def.kind === 'garment' ? U.g.canonical.idx : U.g.low.welded.idx},
           {maxDist: over === 'upper' ? 0.08 : 0.04, inset: 0.01, tiltDeg: 24, bodyJoints: lv.joints, skipJoints: ['L_Foot', 'R_Foot']});
         const ex = extrasOf(U);
@@ -234,14 +310,29 @@ async function main() {
   // ---------------------------------------------------------------- wearable GLBs
   for (const w of wear) {
     const bs = bodies.filter(B => fits[w.id]?.[B.id]);
-    if (!bs.length) continue;
+    if (!bs.length) {
+      // iteration 07: a wearable excluded on EVERY body still gets an inert GLB (no meshes / textures, scene
+      // extras only) so a stale earlier build of it can never be loaded and matched against these bodies
+      const reasons = excluded.filter(e => e.wearable === w.id).map(e => ({body: e.body, rule: e.rule, reason: e.reason}));
+      const doc = new Document();
+      doc.getRoot().getAsset().generator = GENERATOR;
+      doc.createScene('Outfit_' + w.id).setExtras({zombieWearable: {id: w.id, label: w.def.label, slot: w.def.slot, kind: w.def.kind, bodies: [], excludedOnEveryBody: true, approved: false, gameReady: false}});
+      const glb = guard(path.join(MODELS, `outfit-${w.id}.glb`));
+      await writeDoc(doc, glb);
+      const bytes = fs.statSync(glb).size, sha = sha256File(glb);
+      fs.writeFileSync(guard(path.join(DERIV, `outfit-${w.id}.json`)), JSON.stringify({schema: 'the-last-line/derivative-manifest@1', asset: 'outfit-' + w.id, title: `Zombie wearable "${w.def.label}" (${w.def.slot}) - EXCLUDED on every body (iteration 07 fit gate)`, status: STATUS, origin: w.def.origin, provenance: w.def.provenance, slot: w.def.slot, kind: w.def.kind,
+        outputs: {glb: {path: rel(glb), bytes, sha256: sha, format: 'inert glTF 2.0 binary: scene extras only, no meshes / textures (not in the runtime manifest)'}}, source: srcInfo(w.src, w.g.master), perBody: {}, excludedOnEveryBody: reasons}, null, 2) + '\n');
+      summary.wearables[w.id] = {slot: w.def.slot, kind: w.def.kind, glb: rel(glb), bytes, sha256: sha, triangles: 0, excludedOnEveryBody: true, bodies: []};
+      console.log(`  wrote INERT ${rel(glb)} (excluded on every body)`);
+      continue;
+    }
     const kind = w.def.kind;
     const uv = w.g.low.uv, idx = w.g.low.idx;
     const vs = bs.map(B => {
       const v = fits[w.id][B.id];
       const ex = variantExtras[w.id]?.[B.id] ?? {};
       return {bodyId: B.id, skel: B.skel, pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights,
-        extras: {outfit: w.id, slot: w.def.slot, body: B.id, bodyTriangles: B.low.idx.length / 3, bodyGeometryHash: geometryHash(B.low.pos, B.low.idx), hideBodyTriangles: bitsetBase64(v.mask.hide), hiddenCount: v.mask.hidden, bulkM: v.stats.bulkM, ...(ex.hideWear ? {hideWear: ex.hideWear, hideWearCounts: ex.hideWearCounts} : {})}};
+        extras: {outfit: w.id, slot: w.def.slot, body: B.id, bodyTriangles: B.low.idx.length / 3, bodyGeometryHash: geometryHash(B.low.pos, B.low.idx), hideBodyTriangles: bitsetBase64(v.mask.hide), hiddenCount: v.mask.hidden, bulkM: v.stats.bulkM, ...(ex.hideWear ? {hideWear: ex.hideWear, hideWearCounts: ex.hideWearCounts} : {}), ...(v.incompatibleWear?.length ? {incompatibleWear: v.incompatibleWear} : {})}};
     });
     const extras = {id: w.id, label: w.def.label, slot: w.def.slot, kind, heavy: !!w.def.heavy, bodies: bs.map(b => b.id), triangles: idx.length / 3, provenance: w.def.provenance, approved: false, gameReady: false, origin: w.def.origin};
     const doc = buildOutfitDocument({id: w.id, uv, idx, baseColor: w.g.enc.baseJpg, metallicRoughness: w.g.enc.mrJpg, variants: vs, extras, generator: GENERATOR, extrasKey: 'zombieWearable', quantizeNormals: true});
@@ -256,9 +347,9 @@ async function main() {
   for (const s of sources) { const abs = path.isAbsolute(s.file) ? s.file : path.join(REPO, s.file); if (sha256File(abs) !== s.sha256) throw new Error('SOURCE CHANGED ' + s.file); }
   const totalBytes = Object.values(summary.bodies).reduce((a, b) => a + b.bytes, 0) + Object.values(summary.wearables).reduce((a, b) => a + b.bytes, 0);
   const counts = countLooks(bodies, wear, fits);
-  const out = {schema: 'the-last-line/zombie-wardrobe@1', title: 'Zombie wardrobe: bodies x slot wearables (iteration 06) - prototype derivatives', status: {approved: false, gameReady: false},
+  const out = {schema: 'the-last-line/zombie-wardrobe@1', title: 'Zombie wardrobe: bodies x slot wearables (iteration 07 refit) - prototype derivatives', status: {approved: false, gameReady: false},
     authoredOn: new Date().toISOString().slice(0, 10), canonicalBody: CANONICAL_BODY, slots: SLOT_ORDER,
-    counts, excluded, skipped, quality: QUALITY, totalBytes, totalMB: +(totalBytes / 1e6).toFixed(2), ...summary,
+    counts, excluded, skipped, quality: QUALITY, fit07: {method: 'lib/fit07.mjs (garments, pants) + lib/headwear.mjs (hats); validation poses = every ' + FIT07.everyFrames + 'rd frame of the six clips + 3 ragdoll-like extremes', gate: fitGate}, totalBytes, totalMB: +(totalBytes / 1e6).toFixed(2), ...summary,
     rebuild: 'node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs',
     buildSeconds: Math.round((Date.now() - t0) / 1000)};
   fs.writeFileSync(guard(path.join(DERIV, 'zombie-wardrobe.json')), JSON.stringify(out, null, 2) + '\n');
@@ -275,16 +366,22 @@ function countLooks(bodies, wear, fits) {
     const covers = B.def.traits?.covers ?? [], requires = B.def.traits?.requires ?? [];
     const bySlot = Object.fromEntries(SLOT_ORDER.map(s => [s, wear.filter(w => w.def.slot === s && fits[w.id]?.[B.id]).map(w => w.id)]));
     const p = Object.values(bySlot).reduce((a, l) => a + l.length, 0);
-    let n = 1;
-    for (const s of SLOT_ORDER) { if (covers.includes(s)) continue; n *= bySlot[s].length + (requires.includes(s) ? 0 : 1); }
-    // minus the base look (nothing worn) when it is allowed
-    const base = requires.some(s => !covers.includes(s)) ? 0 : 1;
-    per[B.id] = {pairs: p, perSlot: Object.fromEntries(Object.entries(bySlot).map(([s, l]) => [s, l.length])), compositions: n - base};
-    pairs += p; looks += n - base;
+    // iteration 07: enumerate (instead of multiplying) so per-body layering incompatibilities count
+    const inc = (a, b) => (fits[a]?.[B.id]?.incompatibleWear ?? []).includes(b) || (fits[b]?.[B.id]?.incompatibleWear ?? []).includes(a);
+    const slots = SLOT_ORDER.filter(s => !covers.includes(s));
+    let n = 0;
+    const rec = (k, picked) => {
+      if (k === slots.length) { if (picked.length && requires.every(r => covers.includes(r) || picked.some(w => wear.find(x => x.id === w).def.slot === r))) n++; return; }
+      if (!requires.includes(slots[k])) rec(k + 1, picked);
+      for (const w of bySlot[slots[k]]) if (picked.every(q => !inc(q, w))) rec(k + 1, [...picked, w]);
+    };
+    rec(0, []);
+    per[B.id] = {pairs: p, perSlot: Object.fromEntries(Object.entries(bySlot).map(([s, l]) => [s, l.length])), compositions: n};
+    pairs += p; looks += n;
   }
   return {bodies: bodies.length, wearables: wear.length, perSlotWearables: Object.fromEntries(SLOT_ORDER.map(s => [s, wear.filter(w => w.def.slot === s).length])), pairs, looks, perBody: per,
     definitions: {pairs: 'supported body x wearable pairs: each is a separately fitted, skinned and masked mesh variant (built here, validated by tests); excluded/covered pairs are not counted',
-      looks: 'valid compositions per body: product over the slots the body does not cover of (fitted wearables + none, or no none for required slots), minus the nothing-worn base look; pairwise runtime incompatibilities (registry incompatibleWith) are applied on top by the runtime count'}};
+      looks: 'valid compositions per body (enumerated): one fitted wearable or nothing per slot the body does not cover, required slots filled, at least one wearable, no per-body layering incompatibility (iteration 07 incompatibleWear); registry incompatibleWith rules are applied on top by the runtime count'}};
 }
 
 const STATUS = {approved: false, gameReady: false, stage: 'unapproved prototype derivative (iteration 06 zombie wardrobe); art/anatomy/deformation/fit not certified', licenseClearance: 'none - evaluation quality does not grant commercial rights; sources are AI reconstructions of AI-generated concept images'};

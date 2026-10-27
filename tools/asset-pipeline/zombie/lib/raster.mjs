@@ -68,10 +68,11 @@ export class Canvas {
         const w1 = ((cx - qx) * (ay - qy) - (ax - qx) * (cy - qy)) / area;
         const w2 = 1 - w0 - w1;
         if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue;
-        const z = w0 * sz[a] + w1 * sz[b] + w2 * sz[c];
+        const z = w0 * sz[a] + w1 * sz[b] + w2 * sz[c] + (mesh.zBias || 0);
         const o = y * w + x;
         if (z <= this.z[o]) continue;
         this.z[o] = z;
+        if (mesh.mark) (this.mark ??= new Uint8Array(w * h))[o] = mesh.mark;
         let r = col[0], g = col[1], bl = col[2];
         if (tex && uv) {
           const u = w0 * uv[a * 2] + w1 * uv[b * 2] + w2 * uv[c * 2], v = w0 * uv[a * 2 + 1] + w1 * uv[b * 2 + 1] + w2 * uv[c * 2 + 1];

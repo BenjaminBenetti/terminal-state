@@ -66,6 +66,11 @@ export interface WoundResult {
   strength: number;
   /** Average colour of the entered layer (cloth scraps / skin), linear. */
   color: THREE.Color;
+  /** Iteration 07 (Lane K): index into `layers` of the entered layer, the entry / shot direction in its rest space and rest units per metre. */
+  layer: number;
+  restEntry: THREE.Vector3;
+  restDir: THREE.Vector3;
+  k: number;
 }
 
 interface Layer {
@@ -76,7 +81,7 @@ interface Layer {
   color: THREE.Color;
 }
 
-interface Wound { c: THREE.Vector3; d: THREE.Vector3; r: number; len: number; back: number; strength: number; seed: number; depth: number; bone: string; age: number }
+interface Wound { c: THREE.Vector3; d: THREE.Vector3; r: number; len: number; back: number; strength: number; seed: number; depth: number; bone: string; age: number; torn?: boolean }
 
 /** Visible-vertex rest positions + dominant bone per geometry (masked geometries share attributes). */
 const vertCache = new WeakMap<THREE.BufferGeometry, {pos: Float32Array; bone: Int16Array}>();
@@ -418,12 +423,35 @@ export class WoundController {
       this.wounds.push(w);
     }
     const partD = hit.part === 'torso' ? 1 : 1.35;
-    w.depth = Math.min(this.maxDepth * partD, (0.006 + 0.022 * w.strength) * partD) * k;
+    w.depth = Math.max(w.torn ? w.depth : 0, Math.min(this.maxDepth * partD, (0.006 + 0.022 * w.strength) * partD) * k);
     this.upload();
     // entry point back to world through the same bone transform
     const entry = entryRest.clone().applyMatrix4(tmpM.copy(restM).invert());
-    return {slot: layer.slot, cls: layer.cls, entry, bone: boneName, merged: merged >= 0, index: this.wounds.indexOf(w), radius: w.r / k, strength: w.strength, color: layer.color.clone()};
+    return {slot: layer.slot, cls: layer.cls, entry, bone: boneName, merged: merged >= 0, index: this.wounds.indexOf(w), radius: w.r / k, strength: w.strength, color: layer.color.clone(),
+      layer: bestLayer, restEntry: entryRest.clone(), restDir: d.clone(), k};
   }
+
+  /**
+   * Iteration 07 (Lane K): a piece was torn OFF the actor at wound `index` (physics chunk cut from the
+   * posed layer, damage/fleshPatch.ts): the wound becomes a persistent MISSING area of that size —
+   * radius grown to cover the taken patch, full strength (dark cavity / torn-open garment showing
+   * skin then flesh), deeper inward displacement. `restRadius` in rest units.
+   */
+  tear(index: number, restRadius: number, restCenter?: THREE.Vector3): void {
+    const w = this.wounds[index];
+    if (!w) return;
+    const cap = DAMAGE_MATERIALS.flesh.markMax * 1.5 * this.uniforms.uWoundK.value;
+    if (restCenter) w.c.lerp(restCenter, 0.5);
+    w.r = Math.min(cap, Math.max(w.r, restRadius * 1.05));
+    w.strength = 1;
+    w.len = Math.max(w.len, w.r * 1.6);
+    w.depth = Math.max(w.depth, this.maxDepth * 1.5 * this.uniforms.uWoundK.value);
+    w.torn = true;
+    this.tears++;
+    this.upload();
+  }
+  /** Pieces torn off this actor (iteration 07). */
+  tears = 0;
 
   private upload(): void {
     const u = this.uniforms;

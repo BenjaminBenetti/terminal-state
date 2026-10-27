@@ -18,6 +18,7 @@ import {pushOut} from './coat.mjs';
 import {frameRot, qRot, V} from './pose.mjs';
 import {measurePants, fitPantsToBody} from './pants.mjs';
 import {fitRigid} from './rigid.mjs';
+import {fitHat, hatMask} from './headwear.mjs';
 
 const TORSO = new Set(['Root', 'Hips', 'Spine', 'Chest', 'Neck']);
 const CHILD = {L_UpperArm: 'L_Forearm', L_Forearm: 'L_Hand', R_UpperArm: 'R_Forearm', R_Forearm: 'R_Hand', L_Thigh: 'L_Shin', L_Shin: 'L_Foot', R_Thigh: 'R_Shin', R_Shin: 'R_Foot'};
@@ -307,7 +308,7 @@ const HEAD_NECK = JOINT_NAMES.filter(n => n !== 'Head' && n !== 'Neck');
  */
 function fitDirect(gC, cfg, B) {
   const W = gC.low.welded;
-  let pos, fitStats, joints, weights, push = null, transfer;
+  let pos, fitStats, joints, weights, push = null, transfer, hatFit = null;
   if (cfg.kind === 'pants') {
     const F = measurePants(W.pos);
     const r = fitPantsToBody(W.pos, W.idx, F, B, cfg);
@@ -315,6 +316,15 @@ function fitDirect(gC, cfg, B) {
     push = pushOut(pos, W.idx, B.low.welded, {...cfg.pushOut, radius: Math.max(cfg.pushOut.radius ?? 0.05, 0.08)});
     const tw = transferWeights({pos, idx: W.idx}, B.low.welded, B.weldedWeights, B.rigDesc, {skirt: false, smoothIters: 3, grid: buildGrid(B.low.welded.pos, B.low.welded.idx, 0.03)});
     joints = tw.joints; weights = tw.weights; transfer = tw.stats;
+  } else if (cfg.fit?.mode === 'hat07') {
+    // iteration 07: hats fitted to the measured cranium (lib/headwear.mjs), band-plane mask
+    const r = fitHat(gC, cfg, B);
+    pos = r.pos; fitStats = {...r.stats, transform: r.transform, bulkHeadM: +Math.max(0, Math.min(0.04, (r.stats.item.widthM - r.stats.cranium.breadthM) / 2 * 0.6)).toFixed(4)};
+    hatFit = r;
+    const n = pos.length / 3; joints = new Uint16Array(n * 4); weights = new Float32Array(n * 4);
+    const hi = JOINT_NAMES.indexOf('Head');
+    for (let i = 0; i < n; i++) { joints[i * 4] = hi; weights[i * 4] = 1; }
+    transfer = {method: 'rigid: 100% Head'};
   } else {
     const r = fitRigid(gC, cfg, B);
     pos = r.pos; fitStats = {...r.stats, transform: r.transform};
@@ -338,7 +348,7 @@ function fitDirect(gC, cfg, B) {
   // rigid items: rays start deeper (hair / cheeks that poke a little THROUGH a rigid shell are still
   // recognised as enclosed and hidden)
   const maskOpts = cfg.kind === 'pants' ? {maxDist: 0.07, inset: 0.025} : cfg.slot === 'head' ? {maxDist: 0.06, inset: 0.03, tiltDeg: 22} : {maxDist: 0.05, inset: 0.02, tiltDeg: 22};
-  const mask = coverMask({pos: B.low.pos, idx: B.low.idx}, {pos, idx: W.idx}, {...maskOpts, ...(cfg.mask || {}), bodyJoints: B.joints, skipJoints});
+  let mask = hatFit ? hatMask(B, hatFit, {itemIdx: W.idx}) : coverMask({pos: B.low.pos, idx: B.low.idx}, {pos, idx: W.idx}, {...maskOpts, ...(cfg.mask || {}), bodyJoints: B.joints, skipJoints});
   const dist = closestDistances(pos, B.low.welded);
   const groups = {leg: [], torso: []};
   for (let i = 0; i < pos.length / 3; i++) { const j = JOINT_NAMES[joints[i * 4]]; if (/Thigh|Shin/.test(j)) groups.leg.push(dist[i]); else if (['Hips', 'Spine'].includes(j)) groups.torso.push(dist[i]); }

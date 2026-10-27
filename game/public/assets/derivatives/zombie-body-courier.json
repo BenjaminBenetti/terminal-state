@@ -21,7 +21,7 @@
     "glb": {
       "path": "game/public/assets/models/zombie-body-courier.glb",
       "bytes": 695128,
-      "sha256": "6cb795d324d28b20e5a0bff170883d1ef6c5dec73fa75c7b8725dde8157a1bda",
+      "sha256": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -1429,33 +1429,33 @@
     }
   ],
   "death": {
-    "hipsY": -0.6552,
+    "hipsY": -0.6472,
     "tune": {
-      "hipsPitch": -93.859,
-      "hipsRoll": 0.875,
-      "neck": -26.148,
-      "head": -23.5,
+      "hipsPitch": -94.68,
+      "hipsRoll": 9.5,
+      "neck": -25.797,
+      "head": -24.75,
       "headYaw": -20,
-      "armLz": -0.619,
-      "armRz": -0.25,
-      "footLz": 0.295,
-      "footRz": -0.086
+      "armLz": -0.65,
+      "armRz": -0.281,
+      "footLz": 0.42,
+      "footRz": -0.018
     },
     "lowestPointPerRegionM": {
       "legL": 0.012,
-      "pelvis": 0.109,
+      "pelvis": 0.116,
       "legR": 0.007,
-      "torso": 0.087,
-      "armL": 0.05,
+      "torso": 0.09,
+      "armL": 0.037,
       "armR": 0.04,
-      "head": 0.064,
-      "outfit.torso": 0.01,
-      "outfit.head": 0.021,
+      "head": 0.062,
+      "outfit.torso": 0.022,
+      "outfit.head": 0.045,
       "outfit.armL": 0.01,
-      "outfit.armR": 0.011,
+      "outfit.armR": 0.01,
       "outfit.pelvis": 0.01,
-      "outfit.legR": 0.09,
-      "outfit.legL": 0.035
+      "outfit.legR": 0.08,
+      "outfit.legL": 0.033
     },
     "solvedAgainst": "body + every fitted wearable"
   },
@@ -1464,21 +1464,6 @@
       "Idle": {
         "maxLegReach": 0.9664,
         "body": {
-          "minY": 0.0032,
-          "atT": 0.76667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_coat": {
-          "minY": 0.0032,
-          "atT": 0.76667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_trench": {
-          "minY": 0.0032,
-          "atT": 0.76667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
           "minY": 0.0032,
           "atT": 0.76667,
           "framesBelowMinus1cm": 0
@@ -1493,17 +1478,7 @@
           "atT": 0.76667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_puffer": {
-          "minY": 0.0032,
-          "atT": 0.76667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_flannel": {
-          "minY": 0.0032,
-          "atT": 0.76667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_sweater": {
           "minY": 0.0032,
           "atT": 0.76667,
           "framesBelowMinus1cm": 0
@@ -1514,11 +1489,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": 0.0032,
-          "atT": 0.76667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
           "minY": 0.0032,
           "atT": 0.76667,
           "framesBelowMinus1cm": 0
@@ -1556,21 +1526,6 @@
           "atT": 0.16667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_coat": {
-          "minY": 0.0032,
-          "atT": 0.16667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_trench": {
-          "minY": 0.0032,
-          "atT": 0.16667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
-          "minY": 0.0032,
-          "atT": 0.16667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0.0032,
           "atT": 0.16667,
@@ -1581,17 +1536,7 @@
           "atT": 0.16667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_puffer": {
-          "minY": 0.0032,
-          "atT": 0.16667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_flannel": {
-          "minY": 0.0032,
-          "atT": 0.16667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_sweater": {
           "minY": 0.0032,
           "atT": 0.16667,
           "framesBelowMinus1cm": 0
@@ -1602,11 +1547,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": 0.0032,
-          "atT": 0.16667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
           "minY": 0.0032,
           "atT": 0.16667,
           "framesBelowMinus1cm": 0
@@ -1644,21 +1584,6 @@
           "atT": 0.06667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_coat": {
-          "minY": 0.0032,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_trench": {
-          "minY": 0.0032,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
-          "minY": 0.0032,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0.0032,
           "atT": 0.06667,
@@ -1669,17 +1594,7 @@
           "atT": 0.06667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_puffer": {
-          "minY": 0.0032,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_flannel": {
-          "minY": 0.0032,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_sweater": {
           "minY": 0.0032,
           "atT": 0.06667,
           "framesBelowMinus1cm": 0
@@ -1690,11 +1605,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": 0.0032,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
           "minY": 0.0032,
           "atT": 0.06667,
           "framesBelowMinus1cm": 0
@@ -1732,21 +1642,6 @@
           "atT": 0,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_coat": {
-          "minY": 0.0032,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_trench": {
-          "minY": 0.0032,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
-          "minY": 0.0032,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0.0032,
           "atT": 0,
@@ -1757,17 +1652,7 @@
           "atT": 0,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_puffer": {
-          "minY": 0.0032,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_flannel": {
-          "minY": 0.0032,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_sweater": {
           "minY": 0.0032,
           "atT": 0,
           "framesBelowMinus1cm": 0
@@ -1778,11 +1663,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": 0.0032,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
           "minY": 0.0032,
           "atT": 0,
           "framesBelowMinus1cm": 0
@@ -1820,21 +1700,6 @@
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_coat": {
-          "minY": 0.0032,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_trench": {
-          "minY": 0.0032,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
-          "minY": 0.0032,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0.0032,
           "atT": 0.26667,
@@ -1845,17 +1710,7 @@
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_puffer": {
-          "minY": 0.0032,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_flannel": {
-          "minY": 0.0032,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_sweater": {
           "minY": 0.0032,
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
@@ -1866,11 +1721,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": 0.0032,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
           "minY": 0.0032,
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
@@ -1908,21 +1758,6 @@
           "atT": 0.1,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_coat": {
-          "minY": 0.0032,
-          "atT": 0.1,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_trench": {
-          "minY": -0.0135,
-          "atT": 0.83333,
-          "framesBelowMinus1cm": 6
-        },
-        "Outfit_hivis": {
-          "minY": 0.0032,
-          "atT": 0.1,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0.0032,
           "atT": 0.1,
@@ -1933,17 +1768,7 @@
           "atT": 0.1,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_puffer": {
-          "minY": 0.0032,
-          "atT": 0.1,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_flannel": {
-          "minY": 0.0032,
-          "atT": 0.1,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_sweater": {
           "minY": 0.0032,
           "atT": 0.1,
           "framesBelowMinus1cm": 0
@@ -1954,11 +1779,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": 0.0032,
-          "atT": 0.1,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
           "minY": 0.0032,
           "atT": 0.1,
           "framesBelowMinus1cm": 0
@@ -1992,15 +1812,15 @@
     },
     "motionStretch": {
       "triangles": 14956,
-      "p50": 1.034,
+      "p50": 1.033,
       "p99": 1.967,
       "max": 11.83,
       "over2x": 140,
       "over3x": 27,
       "fractionOver": 0.0018,
       "worstClips": {
-        "Run": 58,
-        "Death": 68,
+        "Run": 56,
+        "Death": 70,
         "Attack": 25
       },
       "poses": 85,

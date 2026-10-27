@@ -1,0 +1,2397 @@
+{
+  "schema": "terminal-state-public-inputs-v1",
+  "release": "iteration-7",
+  "note": "Reviewed cooked runtime inputs, not raw masters. Update deliberately alongside approved input changes; never populate from untrusted dist. All public files remain tracked even if the packager omits an unreferenced model.",
+  "files": [
+    {
+      "path": "assets/CREDITS.md",
+      "bytes": 6419,
+      "sha256": "8586163e267be59f71b8bb1eae293ad121d89f17cd839e5af035e3868b90a264"
+    },
+    {
+      "path": "assets/audio/NOTICE.md",
+      "bytes": 1024,
+      "sha256": "e71d39feb1bf0cc961558e55c09efb8c3b696f3a3845afe5334033fdba4d8bcd"
+    },
+    {
+      "path": "assets/audio/bed-buzz-02-loop.mp3",
+      "bytes": 115670,
+      "sha256": "983e5caf9c533e527f4e07e49e59bce3fdecfd15ebec96bf6d95f59272a6b0e2"
+    },
+    {
+      "path": "assets/audio/bed-fridge-01-loop.mp3",
+      "bytes": 115670,
+      "sha256": "493080cff4b62c46f22dc2fda10424116c12945b52e15a26866959b595dc6b0f"
+    },
+    {
+      "path": "assets/audio/bed-hvac-02-loop.mp3",
+      "bytes": 202292,
+      "sha256": "6f26b521c2ab806de3c71238002d677d698ee7a7f39fe187b6d7ba7cb6683135"
+    },
+    {
+      "path": "assets/audio/bed-rumble-01-loop.mp3",
+      "bytes": 202292,
+      "sha256": "4984371cc165d0cb272980f663ba5c14e2bbaa345474ae2b8c5951cc7f6c20b3"
+    },
+    {
+      "path": "assets/audio/bed-wind-01-loop.mp3",
+      "bytes": 202292,
+      "sha256": "e4a52143a0923bb559fa339f82ef246dfb9ec505b28ed6f4891a23e81110f091"
+    },
+    {
+      "path": "assets/audio/body-fall-01.mp3",
+      "bytes": 13479,
+      "sha256": "3a7ba169772c99f76e842b6b0c33deff6971eff70816483d83ddda5927cd96ac"
+    },
+    {
+      "path": "assets/audio/body-fall-02.mp3",
+      "bytes": 12539,
+      "sha256": "4c938249a62ee94f28d20ad1a860c1b9d395ff38b5272c54e1ce3181fd9c1df2"
+    },
+    {
+      "path": "assets/audio/body-fall-03.mp3",
+      "bytes": 11912,
+      "sha256": "a39b5e465e657e12cdc71f99724e0f6cde60674f769a8933b04685efdf6bd59d"
+    },
+    {
+      "path": "assets/audio/breathing-01-s01.mp3",
+      "bytes": 13793,
+      "sha256": "9d02d0c75cb18bef9a20f64ca17b0496e8770cd52d7c6f35d298d269d6db561d"
+    },
+    {
+      "path": "assets/audio/breathing-01-s02.mp3",
+      "bytes": 10971,
+      "sha256": "86bf03c3de3529bb3890c87fb447acdf2e6c48a8b9aed2668b39192f2c720378"
+    },
+    {
+      "path": "assets/audio/breathing-01-s03.mp3",
+      "bytes": 11285,
+      "sha256": "ffc15232ea571b15470e8dbe469480246f35d51bb49eba288a43407876115f34"
+    },
+    {
+      "path": "assets/audio/breathing-01-s04.mp3",
+      "bytes": 15987,
+      "sha256": "c189e1ded6e6fb964cb28bb931432b4ded7016f3b346f53469a67a23ca8e0ff6"
+    },
+    {
+      "path": "assets/audio/cabinet-close-b-01.mp3",
+      "bytes": 18495,
+      "sha256": "3fed284ae1ffda4eb93088409ab952418eb041ccdc74cec1768c680d8718d9bc"
+    },
+    {
+      "path": "assets/audio/cabinet-close-b-02.mp3",
+      "bytes": 18495,
+      "sha256": "542be33c6b7e645947243f91a2bc3353c35656a9af9c8e8c790eaf9cac8f457e"
+    },
+    {
+      "path": "assets/audio/cabinet-open-01.mp3",
+      "bytes": 5329,
+      "sha256": "9e64954d7dce2120de9220068c50637cd7adf2295250e1451a5be3c1eee451e7"
+    },
+    {
+      "path": "assets/audio/cabinet-open-02.mp3",
+      "bytes": 21943,
+      "sha256": "2a002263494a0295313ba44c8c9cd9d70a291ba2ecd320b836fa1ecaacc5c171"
+    },
+    {
+      "path": "assets/audio/casing-brass-01-s01.mp3",
+      "bytes": 1881,
+      "sha256": "ab81e651cfde8f8db62650532ab08f66e513347ad9e2714c29b83ded02fc60d0"
+    },
+    {
+      "path": "assets/audio/casing-brass-01-s02.mp3",
+      "bytes": 4389,
+      "sha256": "36442bbe5bd6d2fb70dcefa28ef94cd8b1805252cc1b8d0b47618bf52e66d306"
+    },
+    {
+      "path": "assets/audio/casing-brass-01-s03.mp3",
+      "bytes": 6583,
+      "sha256": "3366417b7c73d5025ff513abc93988214164c2e1d8aae50fd3551058fea503f9"
+    },
+    {
+      "path": "assets/audio/casing-brass-01-s04.mp3",
+      "bytes": 3448,
+      "sha256": "918bc00e7b7f030646dde7f6c784eb68665dc506a133bea0207e08528789a054"
+    },
+    {
+      "path": "assets/audio/casing-brass-01-s05.mp3",
+      "bytes": 2194,
+      "sha256": "3d518e9c4226cf691efa3175ac7cf2a9560c19c3042a8e4e035b748d3d963e81"
+    },
+    {
+      "path": "assets/audio/casing-brass-01-s06.mp3",
+      "bytes": 1881,
+      "sha256": "0a794d6a78d422e67ff1014941c90a8340f6fdaa08a10b51efc34053d670fcdb"
+    },
+    {
+      "path": "assets/audio/casing-hull-01-s01.mp3",
+      "bytes": 2194,
+      "sha256": "5562ca846d492aefbb339ca3b03877bce7506ad7b91bb25f4efd20b320859c58"
+    },
+    {
+      "path": "assets/audio/casing-hull-01-s02.mp3",
+      "bytes": 1881,
+      "sha256": "fbde3ad8ce7b85494664a7332f20c6d14ef15e20e20c9c2d78024861a946e118"
+    },
+    {
+      "path": "assets/audio/casing-hull-01-s03.mp3",
+      "bytes": 3135,
+      "sha256": "3860914fe2f6026b3d670165abcbea7cebfbf0d12d4fb0f4f805f384649639f7"
+    },
+    {
+      "path": "assets/audio/casing-hull-01-s04.mp3",
+      "bytes": 4389,
+      "sha256": "918c51010c6abde5df985e26b961d220bec574a1eb2af7baaf6b51ffb471f8f5"
+    },
+    {
+      "path": "assets/audio/clank-01.mp3",
+      "bytes": 6269,
+      "sha256": "fd5ec36475426507a2ca4d7575c3485cc3f82932e78ef297bbf752b50089cfad"
+    },
+    {
+      "path": "assets/audio/clank-02.mp3",
+      "bytes": 19749,
+      "sha256": "ff24b454ab91d165588ced932ff27e0a27ff59c21ac475cafbb7f0d914f7125d"
+    },
+    {
+      "path": "assets/audio/cooler-close-b-01.mp3",
+      "bytes": 17241,
+      "sha256": "1e2c2503a6ad70d0a571e8b1f016fe27f731cf70b3bd334cec4ed574037ca4ef"
+    },
+    {
+      "path": "assets/audio/cooler-open-01.mp3",
+      "bytes": 21943,
+      "sha256": "6054daf5fdf831326bcf04ea0888c21edffd24d653c3a3a06ab9bdd9a4a43967"
+    },
+    {
+      "path": "assets/audio/crate-close-b-01.mp3",
+      "bytes": 5329,
+      "sha256": "3b81fa30b24d84274e966e04d97bbee599f8dc3e767e2433c5b92b2b1735f629"
+    },
+    {
+      "path": "assets/audio/crate-open-01.mp3",
+      "bytes": 12852,
+      "sha256": "1019f4e792ad0fe2821567f65a1d5a703513dec27c853f45adce146e49da53c5"
+    },
+    {
+      "path": "assets/audio/creak-01.mp3",
+      "bytes": 35736,
+      "sha256": "714618dad5bc6e36e53e9ae0b94d545e07da1bc833f7fd8d0ba7c2e4da6ba818"
+    },
+    {
+      "path": "assets/audio/creak-02.mp3",
+      "bytes": 35736,
+      "sha256": "53e6ecfeb7452ac5c5e28d74bd4f039505481f649f08365c7c6f4ddd5a038c7d"
+    },
+    {
+      "path": "assets/audio/crouch-rustle-b-01.mp3",
+      "bytes": 11285,
+      "sha256": "d4b2898677a7220bdce649875a84d5f28058b0c11ae7e596a51febde7f4027df"
+    },
+    {
+      "path": "assets/audio/crouch-rustle-b-02.mp3",
+      "bytes": 11285,
+      "sha256": "ed400c33921002ad453c128b38b3c0a6fd9e26b0db07f69227d911c4b91a8e55"
+    },
+    {
+      "path": "assets/audio/denied-01.mp3",
+      "bytes": 3448,
+      "sha256": "17ac8a823932beda43a0e4e95e9630d9b3abc82530a21988c24e140d0cee537b"
+    },
+    {
+      "path": "assets/audio/denied-02.mp3",
+      "bytes": 3448,
+      "sha256": "5a06723fea3a5ba1788dd3a0b39004cd6aae927bdb4918684395a85b871d6a5d"
+    },
+    {
+      "path": "assets/audio/drawer-open-b-01.mp3",
+      "bytes": 17241,
+      "sha256": "bb3d2d0845d060658d9ae940660acbd22a1a211904d201b1762b96841dddb316"
+    },
+    {
+      "path": "assets/audio/drink-cola-01.mp3",
+      "bytes": 35109,
+      "sha256": "0d6303dbf753a596a8864ec400c004e42ace2ae33c45d4d6b3348e9cb82519de"
+    },
+    {
+      "path": "assets/audio/drink-juice-01.mp3",
+      "bytes": 35422,
+      "sha256": "8a0b1aea6f1b0d02fe5d3769b630896966a2b4503f5c94aa549903559136a0c0"
+    },
+    {
+      "path": "assets/audio/drink-water-01.mp3",
+      "bytes": 33855,
+      "sha256": "be0d3fb3da2796ce24124b0453a225e97414010bc151aaf16621595d9523f439"
+    },
+    {
+      "path": "assets/audio/drips-01-s01.mp3",
+      "bytes": 1567,
+      "sha256": "7bce7fe34627a58fe31bde1b296a77151124b2a537b9f95db07ba52121169d2f"
+    },
+    {
+      "path": "assets/audio/drips-01-s02.mp3",
+      "bytes": 7523,
+      "sha256": "2b8347985a7a56e4ed5253ecdf6329b43fb0cd5912c84fed4dbd96f384e7b417"
+    },
+    {
+      "path": "assets/audio/drips-01-s03.mp3",
+      "bytes": 2508,
+      "sha256": "96852a3d5c365a76637edeb42866c116feaca808513aa0034eb45700623956e9"
+    },
+    {
+      "path": "assets/audio/drips-01-s04.mp3",
+      "bytes": 3448,
+      "sha256": "a7175ea167b1d5b92565043d0d2d29216ed823f22183b72a7ab96d8cec6fd537"
+    },
+    {
+      "path": "assets/audio/drips-01-s05.mp3",
+      "bytes": 2194,
+      "sha256": "8ec1449ccb6dace92ef2e6f7d8766ed9e065304052f883a463a7780102e21385"
+    },
+    {
+      "path": "assets/audio/drips-01-s06.mp3",
+      "bytes": 2508,
+      "sha256": "6faddb6865a4f568dfaba224ac46cb1f4fd2fea2724dc0168dc5e359fe738bfe"
+    },
+    {
+      "path": "assets/audio/dry-fire-01.mp3",
+      "bytes": 1881,
+      "sha256": "1060fc599afcf6fb60a99e4312ae90b7f65359dc208393ad21399a29908b73bb"
+    },
+    {
+      "path": "assets/audio/dry-fire-02.mp3",
+      "bytes": 2508,
+      "sha256": "f5bfda447a8ff6ab1bbafa925ce1f55777d36f5cea5e38bfc4f4e7737009dd97"
+    },
+    {
+      "path": "assets/audio/eat-beans-01.mp3",
+      "bytes": 34168,
+      "sha256": "ac09981564a4040c8676d089a4e50add9a4f6ab34f59295f7c6603dff223e6d0"
+    },
+    {
+      "path": "assets/audio/eat-chew-01.mp3",
+      "bytes": 33541,
+      "sha256": "a1c88fcce7e375213382b6fc4fb11f8ee92f97274717562af62c627f8bc803f1"
+    },
+    {
+      "path": "assets/audio/eat-chips-01.mp3",
+      "bytes": 35109,
+      "sha256": "7681bc482da4f8a6edf07b2393f563e87c476ad855e33973b0c458783500a774"
+    },
+    {
+      "path": "assets/audio/eat-chocolate-01.mp3",
+      "bytes": 36049,
+      "sha256": "0a4ad8c8644d7717db32af3fccd7ec50d7802c643eda65730391e952eaa7e48a"
+    },
+    {
+      "path": "assets/audio/eat-noodles-01.mp3",
+      "bytes": 36049,
+      "sha256": "57ee1a3e5f17c558dae4aee20d44dabfd84b43709da68af602bd7c13e577c9fa"
+    },
+    {
+      "path": "assets/audio/flashlight-click-01.mp3",
+      "bytes": 3448,
+      "sha256": "fef51eaad35d360a0fed82523806b6385b93ab4721be080c2397e7bf16774c55"
+    },
+    {
+      "path": "assets/audio/flashlight-click-02.mp3",
+      "bytes": 3448,
+      "sha256": "19489c9c9d7e27c216e5e86b06ab9761c47f9ee9c2c2eb85890c632dc8b175e7"
+    },
+    {
+      "path": "assets/audio/flicker-01.mp3",
+      "bytes": 36362,
+      "sha256": "71ac817ef911fef7b8485be92b517d073b85f32a37829309c3198ee786ccd107"
+    },
+    {
+      "path": "assets/audio/flicker-02.mp3",
+      "bytes": 26018,
+      "sha256": "224b0dd8f3456d729f12f18e3c53655fe1fb7b4179047258bf6e96d600d060c7"
+    },
+    {
+      "path": "assets/audio/heal-01.mp3",
+      "bytes": 22883,
+      "sha256": "0c9c9db5b225df6c658f7fa7a6c84418c9cb4a0531153d93bac21f47223ac36a"
+    },
+    {
+      "path": "assets/audio/heal-02.mp3",
+      "bytes": 22570,
+      "sha256": "c8f13aefe91eb0feb13f42cc46dd9e069310b6494ffabf83da245438ee59ba05"
+    },
+    {
+      "path": "assets/audio/heartbeat-01-s01.mp3",
+      "bytes": 8150,
+      "sha256": "7655faf73800cc5117d60d216d39b97bdd5ab3386e80319ce272ad528070d7ed"
+    },
+    {
+      "path": "assets/audio/heartbeat-01-s02.mp3",
+      "bytes": 7837,
+      "sha256": "bf0185f1b661f9e2982d0c51c079a999d2019281c5c54114ed46a83be59475e0"
+    },
+    {
+      "path": "assets/audio/heartbeat-01-s03.mp3",
+      "bytes": 9404,
+      "sha256": "4fec221d3b547603fb089690b40df6204a8e7af80398c59224b674d717c0cd76"
+    },
+    {
+      "path": "assets/audio/heartbeat-01-s04.mp3",
+      "bytes": 8150,
+      "sha256": "d69f31496717f0692d5e67d6966258e15930e567139380f468c58b8f814d8190"
+    },
+    {
+      "path": "assets/audio/hit-tick-01.mp3",
+      "bytes": 3448,
+      "sha256": "c4afd07aa73ed75ba05d7b2d54c1bb3f226e81b03e1b7b3cf4305ee7807c3dc3"
+    },
+    {
+      "path": "assets/audio/hit-tick-02.mp3",
+      "bytes": 3448,
+      "sha256": "a02ddbfce06efea6e2308919ee2641f0da2311163315447272287a104f08e724"
+    },
+    {
+      "path": "assets/audio/i06-break-glass-01.mp3",
+      "bytes": 25391,
+      "sha256": "bf6eee99fd3de9e95da4571174a9798dbf0e77f0e75d80360d5876fc72817a7b"
+    },
+    {
+      "path": "assets/audio/i06-break-glass-02.mp3",
+      "bytes": 26018,
+      "sha256": "4856c452d122e05bf34e0b6ba47da8035a2f8df4c35866770707f2494cbdadb9"
+    },
+    {
+      "path": "assets/audio/i06-break-glass-03.mp3",
+      "bytes": 31660,
+      "sha256": "c288d62b36b742730723b07d4e4ba2f3d8036a74245bb27c9137d1c5ecd7e637"
+    },
+    {
+      "path": "assets/audio/i06-break-wood-01.mp3",
+      "bytes": 19749,
+      "sha256": "111008530a98dc14c7e6e7d9ec4f94413159205c5dd480803673dce6e1d59f5a"
+    },
+    {
+      "path": "assets/audio/i06-break-wood-02.mp3",
+      "bytes": 19749,
+      "sha256": "fdb60d7807f9b4403eae44e7bb6c9b1902301eee5caf77f2920eaa91a12f5144"
+    },
+    {
+      "path": "assets/audio/i06-break-wood-03.mp3",
+      "bytes": 11285,
+      "sha256": "ff0d81aa2ecb38a4e5231bf20f7c5e043ab31dfad034504a83ca07a80f2092d7"
+    },
+    {
+      "path": "assets/audio/i06-debris-fall-01.mp3",
+      "bytes": 13166,
+      "sha256": "32a65458c86ed533bb07fd65b8a540a822908c34682719e8c5ee18d4d4f0a917"
+    },
+    {
+      "path": "assets/audio/i06-debris-fall-02.mp3",
+      "bytes": 11912,
+      "sha256": "670e62f4c56d12aebc5ffda298c589222602063acc048d5cbdf6cc460a66ffc1"
+    },
+    {
+      "path": "assets/audio/i06-debris-fall-03.mp3",
+      "bytes": 14106,
+      "sha256": "2295ed7cdc27e315f4393ef27aa14c4d548461912276252e19659664526fdda8"
+    },
+    {
+      "path": "assets/audio/i06-flesh-tear-01.mp3",
+      "bytes": 10031,
+      "sha256": "d2adf6c45741c0ba6f943d7872ec8261937c00d2cec040b179a9c8eb46c01d44"
+    },
+    {
+      "path": "assets/audio/i06-flesh-tear-02.mp3",
+      "bytes": 9091,
+      "sha256": "27a0ff6fc6629fc8fea436dd37952fe02ab53067342ddbafed20de4cd5dd058a"
+    },
+    {
+      "path": "assets/audio/i06-flesh-tear-03.mp3",
+      "bytes": 10031,
+      "sha256": "b3e8ae7d9125164abd5f2b216195d514b44b0ec9ef9e9bebf3e8b641f8d20ade"
+    },
+    {
+      "path": "assets/audio/i06-impact-glass-01.mp3",
+      "bytes": 11285,
+      "sha256": "236ffcff63f7feb5abd0f4743256633d5e5faf4bcc180fbebfa62f7adc40fc3e"
+    },
+    {
+      "path": "assets/audio/i06-impact-glass-02.mp3",
+      "bytes": 7210,
+      "sha256": "3341f0b333289c89cdaf8ee9adcab339e886599e66aaee5cd321ae195a8f528b"
+    },
+    {
+      "path": "assets/audio/i06-impact-glass-03.mp3",
+      "bytes": 4389,
+      "sha256": "36ef514bf7f03398b13f67d708bf36363a9bccd80904656aa445165c5b376659"
+    },
+    {
+      "path": "assets/audio/i06-impact-sheet-metal-01.mp3",
+      "bytes": 6896,
+      "sha256": "903dc3524746c36558a79d79469eb9aad78bd0b9a1290b0694b3681352f2a28e"
+    },
+    {
+      "path": "assets/audio/i06-impact-sheet-metal-02.mp3",
+      "bytes": 12539,
+      "sha256": "cff45ae71bf01fffa0c950d7b9b9699f4a00054f1e1198f839542f0beaeea424"
+    },
+    {
+      "path": "assets/audio/i06-impact-sheet-metal-03.mp3",
+      "bytes": 12539,
+      "sha256": "2168653c84b3a3e904eb554799abe4548a7074cfff8110c562f81fc2344b63f9"
+    },
+    {
+      "path": "assets/audio/i07k-chunk-flesh-01.mp3",
+      "bytes": 7523,
+      "sha256": "c4726c5731ac6c293981a73bef1960f6860fefb288b929bbabfb0e17908963e2"
+    },
+    {
+      "path": "assets/audio/i07k-chunk-flesh-02.mp3",
+      "bytes": 5956,
+      "sha256": "9288f117186c7fb8ec7d3c4041036d4415ebc03397fa663c7e1de151ff5992b9"
+    },
+    {
+      "path": "assets/audio/i07k-chunk-flesh-03.mp3",
+      "bytes": 6896,
+      "sha256": "3a166cc7d77d266ea59986fdf988da9789620fa1b4f874b5702a19fa5fcba1b5"
+    },
+    {
+      "path": "assets/audio/i07k-item-can-01.mp3",
+      "bytes": 17868,
+      "sha256": "a13b13f62297c8ac038c6c87ad65a674805035e7251a0e8f01b0e930b5a42b98"
+    },
+    {
+      "path": "assets/audio/i07k-item-can-02.mp3",
+      "bytes": 17868,
+      "sha256": "af29fd6f0547a56776c0e5a7ec77a2b9780589c2f04c9da480d7dd9e9ad8ca43"
+    },
+    {
+      "path": "assets/audio/i07k-item-can-03.mp3",
+      "bytes": 17868,
+      "sha256": "b7ab4b7820a2b156e80a8c240605c925a866f64de30f75f59d770f4e54185ab1"
+    },
+    {
+      "path": "assets/audio/i07k-item-light-01.mp3",
+      "bytes": 10658,
+      "sha256": "b1407a7a91c4e6a6f0f340e780297d1dcd47284e6c24e36715320ac9b3b9d68c"
+    },
+    {
+      "path": "assets/audio/i07k-item-light-02.mp3",
+      "bytes": 12539,
+      "sha256": "4f61b40cc94dffb45fddbcb35dc527419246a471aea3ebc50566bebd483a7e47"
+    },
+    {
+      "path": "assets/audio/i07k-item-light-03.mp3",
+      "bytes": 10658,
+      "sha256": "5fca2228d363422deb15dc76e06c3c77432163fc1f999990e82ba7239181c77d"
+    },
+    {
+      "path": "assets/audio/i07k-prop-topple-01.mp3",
+      "bytes": 16300,
+      "sha256": "adf9a1081dce7420c91e389aee3930105e82f4a6f56852f6b3499f03cefb3f3a"
+    },
+    {
+      "path": "assets/audio/i07k-prop-topple-02.mp3",
+      "bytes": 16614,
+      "sha256": "d522fee2ce8d6e6a0e2c07046ef8534928afe09694f6b8005182b18535746723"
+    },
+    {
+      "path": "assets/audio/i07k-prop-topple-03.mp3",
+      "bytes": 15987,
+      "sha256": "40bfb8302967e10e95b08e33f3b7eb70902293b32c4e9747b39e3bbb86cc4930"
+    },
+    {
+      "path": "assets/audio/i07q-creature-bite-01.mp3",
+      "bytes": 14733,
+      "sha256": "03fb41652c399002f43feed8f4af52c6648b3ab450cb80d9585735726afce133"
+    },
+    {
+      "path": "assets/audio/i07q-creature-bite-02.mp3",
+      "bytes": 5016,
+      "sha256": "e3955f76a44dea87ab92dcc74076e165edf2b637bb4be027c1b7c6a2bc4dbd18"
+    },
+    {
+      "path": "assets/audio/i07q-creature-bite-03.mp3",
+      "bytes": 14733,
+      "sha256": "5bed10d7d41638b1f406cbb46988f12f8a44e8f0a5281f596a80a4564333ec0f"
+    },
+    {
+      "path": "assets/audio/i07q-creature-death-01.mp3",
+      "bytes": 31660,
+      "sha256": "757d5e4fa020084531799f0abbb6d48f32d538553e896ce52108defb77380e82"
+    },
+    {
+      "path": "assets/audio/i07q-creature-death-02.mp3",
+      "bytes": 23824,
+      "sha256": "6ca437ae29a160b877db327148f8dfa7d4a68ed9fe653e0f4b2e26a0891b4348"
+    },
+    {
+      "path": "assets/audio/i07q-creature-death-03.mp3",
+      "bytes": 26018,
+      "sha256": "2b84d1af0ef4d881df581a925f015e1f36088e2574c02a88779eafef77940b9d"
+    },
+    {
+      "path": "assets/audio/i07q-creature-growl-01.mp3",
+      "bytes": 23510,
+      "sha256": "2458f51ee1b0edb0c60537d93583bb0f248ca050a07e9052e5c6b6f2711eecb4"
+    },
+    {
+      "path": "assets/audio/i07q-creature-growl-02.mp3",
+      "bytes": 29153,
+      "sha256": "36129792f647d415b4ce048d9f1502a1d56d536db52ba37cbf43ca8e32186681"
+    },
+    {
+      "path": "assets/audio/i07q-creature-growl-03.mp3",
+      "bytes": 24137,
+      "sha256": "451bd8f8d7a3409af909009d2e6ccde63de77def49aed7203aef1f7e87ec3b55"
+    },
+    {
+      "path": "assets/audio/i07q-creature-snarl-01.mp3",
+      "bytes": 19749,
+      "sha256": "b7c00cd7ac9c21ca944acfb56735b58578a808f70b68680c149ca8cb80e3f5f9"
+    },
+    {
+      "path": "assets/audio/i07q-creature-snarl-02.mp3",
+      "bytes": 19749,
+      "sha256": "7adda94f099995cc2b1655472e53881c1803b6d3d91842a374920c80c0c7e5a1"
+    },
+    {
+      "path": "assets/audio/i07q-creature-snarl-03.mp3",
+      "bytes": 19749,
+      "sha256": "bf11d1500568003902a9c7e2d0f5bd7aadfd9a213b0b29cf5ed5427bf417523f"
+    },
+    {
+      "path": "assets/audio/i07q-creature-step-01.mp3",
+      "bytes": 4702,
+      "sha256": "bae5da963a622118ca865b40f69f32edb0b817f53090e1a0d6cdb916c78407fa"
+    },
+    {
+      "path": "assets/audio/i07q-creature-step-02.mp3",
+      "bytes": 3135,
+      "sha256": "5722148100c1adf5cc5cfef1092866471432527b8d0fffe40645d45233c22396"
+    },
+    {
+      "path": "assets/audio/i07q-creature-step-03.mp3",
+      "bytes": 4702,
+      "sha256": "f521e5fbf356ef9331f8e2052968ffba4294170267d5d7459d743bb35a08d3c9"
+    },
+    {
+      "path": "assets/audio/i07q-creature-yelp-01.mp3",
+      "bytes": 1881,
+      "sha256": "8591b7abab4a808dce2b46c4e2bf2ddb635f89a14012edd4e06eafe59909536f"
+    },
+    {
+      "path": "assets/audio/i07q-creature-yelp-02.mp3",
+      "bytes": 5329,
+      "sha256": "64f79b9ed37d2f2b7e2e6f93d13d6903f08fba9090a348da05aacfcd2fa5a38f"
+    },
+    {
+      "path": "assets/audio/i07q-creature-yelp-03.mp3",
+      "bytes": 4389,
+      "sha256": "9cea8752e3af3cfc7c7ee207de1fc22410afc3a836b0e014587ef68b3ba2e251"
+    },
+    {
+      "path": "assets/audio/impact-concrete-b-01.mp3",
+      "bytes": 5016,
+      "sha256": "5244a88e8c54c698e1befd07d3bfe58d554ed426206c9ddc36e7e0c557c93c7e"
+    },
+    {
+      "path": "assets/audio/impact-concrete-b-02.mp3",
+      "bytes": 6896,
+      "sha256": "3af13500cb6c9d2424f8e2d6edf8d72fdeb88c8d5ed127c9b0f431f41792d368"
+    },
+    {
+      "path": "assets/audio/impact-concrete-b-03.mp3",
+      "bytes": 7210,
+      "sha256": "5fb828b83f6a17d0ea8a0c80b13d7654f7127f5ac54bea99ec7c794d4aa6ea06"
+    },
+    {
+      "path": "assets/audio/impact-flesh-01.mp3",
+      "bytes": 1567,
+      "sha256": "ff2179e8b06a7a80a31adf675e6d20d87311fdfdf8fa602d82b6604db0a9131e"
+    },
+    {
+      "path": "assets/audio/impact-flesh-02.mp3",
+      "bytes": 3448,
+      "sha256": "2dfa794775781d92dc31aae8e0ecca9cccc7c65265146a5967c1fdd268be0371"
+    },
+    {
+      "path": "assets/audio/impact-flesh-03.mp3",
+      "bytes": 1567,
+      "sha256": "006c6875d801994ac80afeeca553b92005c8863acc7c85406b4650501feeaa60"
+    },
+    {
+      "path": "assets/audio/impact-metal-b-01.mp3",
+      "bytes": 12539,
+      "sha256": "3cb32671da0ef55c5f6d1063edc98cbb80433d2e520cbb32f1c89395b3f79476"
+    },
+    {
+      "path": "assets/audio/impact-metal-b-02.mp3",
+      "bytes": 12539,
+      "sha256": "5ba6da42fd4af0061c90be2b8ce90628f7358ff275d435bf9053304951f1d0bf"
+    },
+    {
+      "path": "assets/audio/impact-metal-b-03.mp3",
+      "bytes": 12539,
+      "sha256": "49c0e15a22d2b0b993943be03ded02f6c18ca0c6aff191e82e1fa147c0e879ab"
+    },
+    {
+      "path": "assets/audio/impact-tile-b-01.mp3",
+      "bytes": 3448,
+      "sha256": "30a9f81501c624029817beab6e2e4ecbbd95c3b42f675e054cc603c6bedc399c"
+    },
+    {
+      "path": "assets/audio/impact-tile-b-02.mp3",
+      "bytes": 3448,
+      "sha256": "9c2a7dd99dd78b0ca9e9df210c1a3825e0035b8183494b17bddb4938fbb1240c"
+    },
+    {
+      "path": "assets/audio/impact-tile-b-03.mp3",
+      "bytes": 5956,
+      "sha256": "bbc589192b0d9af279f08674fd39a448999475ccc94c22831bf89ce8984c98d9"
+    },
+    {
+      "path": "assets/audio/impact-wood-b-01.mp3",
+      "bytes": 6269,
+      "sha256": "04d4023e91af1a4e598171fc3e29a7f1e7a6a347b7485bf387b91e02e451eb06"
+    },
+    {
+      "path": "assets/audio/impact-wood-b-02.mp3",
+      "bytes": 4702,
+      "sha256": "62ad9ff2678528e6ae755433613582b0cb4531bdf04af94136dfefada1349a9f"
+    },
+    {
+      "path": "assets/audio/impact-wood-b-03.mp3",
+      "bytes": 6896,
+      "sha256": "77158f368792ef7cb438609e95d7c11e52630b1ccab68be8522f5052f8bfa46c"
+    },
+    {
+      "path": "assets/audio/jump-01.mp3",
+      "bytes": 3135,
+      "sha256": "74a18f91827367f7cc2a4de3a56b76f6832ccb9fc5232961a5e346ba0dee8e82"
+    },
+    {
+      "path": "assets/audio/jump-02.mp3",
+      "bytes": 2194,
+      "sha256": "150902c453df6c5f3654a148d231ebfe0829e4b60b85e3eae86171d927ffa131"
+    },
+    {
+      "path": "assets/audio/kill-thump-01.mp3",
+      "bytes": 6583,
+      "sha256": "cb559dd063f140784db50cc4bada28b9171b00427a7d65742568fa1fd2fb14f3"
+    },
+    {
+      "path": "assets/audio/kill-thump-02.mp3",
+      "bytes": 4389,
+      "sha256": "1b055421a3ab2a7310497830cb4ee11de57dedc9ad973f68b76d171dae354127"
+    },
+    {
+      "path": "assets/audio/ladder-climb-01-s01.mp3",
+      "bytes": 1567,
+      "sha256": "2a46770487147bb6098b7b5f694c5a33e42aed8fe95f7b95ddb0474cbb5d4ddd"
+    },
+    {
+      "path": "assets/audio/ladder-climb-01-s02.mp3",
+      "bytes": 1881,
+      "sha256": "aba78d100c72975a2aecc59abee2c4d0570aee75492470a9bd999d90f003540c"
+    },
+    {
+      "path": "assets/audio/ladder-climb-01-s03.mp3",
+      "bytes": 3135,
+      "sha256": "9c71786788fe2aff16df5d9f105b8b06964f9c82c364d90cdc308b9e7d66f310"
+    },
+    {
+      "path": "assets/audio/ladder-climb-01-s04.mp3",
+      "bytes": 3135,
+      "sha256": "f6e565b2ed51421fc78b9521867701bd450c35d7225d26b19677d3c709e60915"
+    },
+    {
+      "path": "assets/audio/ladder-climb-01-s05.mp3",
+      "bytes": 2821,
+      "sha256": "be68a2315d558d7b0775bc4450b4ad3ea0a9fe7c3aeafda0f25c17f4d4ecb974"
+    },
+    {
+      "path": "assets/audio/ladder-climb-01-s06.mp3",
+      "bytes": 1881,
+      "sha256": "07151926c48a3d0c28e086ff31bc4fd2e390131e453ad71257add98a976d50bd"
+    },
+    {
+      "path": "assets/audio/land-b-01.mp3",
+      "bytes": 4702,
+      "sha256": "7707ddc0d24c98347e320788d5c26aa67ef808010f93d261568542589441a2e0"
+    },
+    {
+      "path": "assets/audio/land-b-02.mp3",
+      "bytes": 1881,
+      "sha256": "a38e089f96b675fab30ba26931b40681e67a4bc6c0244138ff7dea1b20443266"
+    },
+    {
+      "path": "assets/audio/land-b-03.mp3",
+      "bytes": 3448,
+      "sha256": "8159db27d7a99c8e006f4f8b2d354119f9ac3ce921eb6473a78a2fdfa7297368"
+    },
+    {
+      "path": "assets/audio/pickup-01.mp3",
+      "bytes": 6269,
+      "sha256": "6506647718f9d1b38349d00f486e883d38c9ee95e3494cbd392bd5d3d197194b"
+    },
+    {
+      "path": "assets/audio/pickup-02.mp3",
+      "bytes": 5642,
+      "sha256": "c706235b4e6ed02b3bbb493123ca7335fef0f10569a683ca49646dec81b391c4"
+    },
+    {
+      "path": "assets/audio/pickup-03.mp3",
+      "bytes": 5956,
+      "sha256": "2182aa16f4c7b3478b64466dbfd28444009d8e3024434818378b4e873f702b51"
+    },
+    {
+      "path": "assets/audio/player-death-01.mp3",
+      "bytes": 7837,
+      "sha256": "98517e9cc1680e332d9716c5329ff0927d457739a4890c10091ca62136b3da1d"
+    },
+    {
+      "path": "assets/audio/player-death-02.mp3",
+      "bytes": 23197,
+      "sha256": "fae9ce63e7c878e7d71dc60457a4ff18b5fb5c24cb19c041ad59cf1f97d7655d"
+    },
+    {
+      "path": "assets/audio/player-hurt-01.mp3",
+      "bytes": 6896,
+      "sha256": "aaf0dd207c1bfcf8cdd2daf3748ca7ab84f93460e378a427e22caac22c71fa61"
+    },
+    {
+      "path": "assets/audio/player-hurt-02.mp3",
+      "bytes": 7210,
+      "sha256": "a6f3eefa70a6e4a11f7a56fdf5548388aac24c965ce4aef0e63f9c4784d9c556"
+    },
+    {
+      "path": "assets/audio/player-hurt-03.mp3",
+      "bytes": 6896,
+      "sha256": "95cd355803112f48a03ac09376afc55b74d95176dadccbec901f8087f5fa74e8"
+    },
+    {
+      "path": "assets/audio/player-hurt-04.mp3",
+      "bytes": 6896,
+      "sha256": "e046da6e89cbef5ec1a938a4d67ae3483bc724f98f1e273068a5dbf1219787b5"
+    },
+    {
+      "path": "assets/audio/rifle-charge-b-01.mp3",
+      "bytes": 2821,
+      "sha256": "2d62509d4c42744d0e72433f9fc42d8d7d02afdb3189f96a3c7b9db6e3ab7984"
+    },
+    {
+      "path": "assets/audio/rifle-charge-b-02.mp3",
+      "bytes": 2821,
+      "sha256": "02bbb6038d67916bc1b8baadb63d26e5670fc922078e6a92479bb2261a2016c7"
+    },
+    {
+      "path": "assets/audio/rifle-mag-drop-b-01.mp3",
+      "bytes": 12539,
+      "sha256": "0531c44bee5cb124eb09f8af4d44febadb5f61eff2aad649376bf3e1aa1e2f46"
+    },
+    {
+      "path": "assets/audio/rifle-mag-in-b-01.mp3",
+      "bytes": 14733,
+      "sha256": "90f59c4e8dfaf409806f959486dd8db27525db27e7281239f7fd7b96936677df"
+    },
+    {
+      "path": "assets/audio/rifle-mag-in-b-02.mp3",
+      "bytes": 14733,
+      "sha256": "d318e45d713414d291da3993daa90a4a90d78255bcd67bfd493ada67331ee334"
+    },
+    {
+      "path": "assets/audio/rifle-mag-out-b-01.mp3",
+      "bytes": 14733,
+      "sha256": "3d023e72e0f9aa088b3ca69d717e8d599c805f6d66251577e8aa6c33ccc1cabd"
+    },
+    {
+      "path": "assets/audio/rifle-mag-out-b-02.mp3",
+      "bytes": 14733,
+      "sha256": "6f49dabf8bafc63034233eff3acbe7c7ea3c536c18558b7bf82403becfda4435"
+    },
+    {
+      "path": "assets/audio/rifle-shot-01.mp3",
+      "bytes": 32914,
+      "sha256": "4a7a830e6b50696ae4f68399b4e052689e276e0e1171323c339e425650507ab6"
+    },
+    {
+      "path": "assets/audio/rifle-shot-02.mp3",
+      "bytes": 32914,
+      "sha256": "188c46445aee4a9daa3beefac9b3d504c4500d9c0bc2bd9eb76e9c89983616de"
+    },
+    {
+      "path": "assets/audio/rifle-shot-03.mp3",
+      "bytes": 32914,
+      "sha256": "144311f3f6f0c66c4e3b4f10908e47ddfc00e387c7e0428fe4fed108f477a488"
+    },
+    {
+      "path": "assets/audio/rifle-shot-04.mp3",
+      "bytes": 32914,
+      "sha256": "16e6e4f19630c57e0564cb42ef03de86491ade07abaf78ec1c699b7f01bf394b"
+    },
+    {
+      "path": "assets/audio/search-rummage-01-w01.mp3",
+      "bytes": 11285,
+      "sha256": "670897b8b43feecfa3a49c908f1f708a57e622381011534149c609edb5ef3dc2"
+    },
+    {
+      "path": "assets/audio/search-rummage-01-w02.mp3",
+      "bytes": 11285,
+      "sha256": "aae7c58dd052b674a41ff2326738253bef08b4f5289bee2d50b4df3b753b2a46"
+    },
+    {
+      "path": "assets/audio/search-rummage-01-w03.mp3",
+      "bytes": 11285,
+      "sha256": "4c712896e26c7e3ff7af8a2ea1738524a779c6cd26ef505f3b848503bbad7101"
+    },
+    {
+      "path": "assets/audio/shell-insert-01-s01.mp3",
+      "bytes": 5956,
+      "sha256": "e11d1619691d26b770b8b0f62d5e3589323a448eac661bf6e7013e27d99b5a23"
+    },
+    {
+      "path": "assets/audio/shell-insert-01-s02.mp3",
+      "bytes": 6583,
+      "sha256": "139163c378bc256a32e335018ab9675d376b48f1e8c93551fc55f896aeb494d8"
+    },
+    {
+      "path": "assets/audio/shell-insert-01-s03.mp3",
+      "bytes": 5016,
+      "sha256": "4db528f012eeec819190c3c91fbdcec57f9a4314e5019d93fd953c51957a8125"
+    },
+    {
+      "path": "assets/audio/shell-insert-01-s04.mp3",
+      "bytes": 1881,
+      "sha256": "cb158294db1aa223b1e0b3ee3bf4af3563734b352962c564b14aefebe79535cf"
+    },
+    {
+      "path": "assets/audio/shotgun-pump-01.mp3",
+      "bytes": 12539,
+      "sha256": "dc38f1468a3b2f8ce2c82db6535cd22f8636407493b990711fdec0daaf9a025d"
+    },
+    {
+      "path": "assets/audio/shotgun-pump-02.mp3",
+      "bytes": 12539,
+      "sha256": "8beafc07331eab5021522f9389293f0bff45e039b6d1bf5f5f64291e70e87f39"
+    },
+    {
+      "path": "assets/audio/shotgun-shot-b-01.mp3",
+      "bytes": 38661,
+      "sha256": "be5195a3f1cf2514291668b08939499a7fb4562ff8cafc8dfc3ad758d62959bb"
+    },
+    {
+      "path": "assets/audio/shotgun-shot-b-02.mp3",
+      "bytes": 38661,
+      "sha256": "517f59de73cf0570bb0773f88b02440d7baca5e3c08ef63e2d77c7c6cd82a267"
+    },
+    {
+      "path": "assets/audio/shotgun-shot-b-03.mp3",
+      "bytes": 38661,
+      "sha256": "701ca9de38625932ad511ae389e7ba38e27173c8d0199967af83b91cedd2ded7"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s01.mp3",
+      "bytes": 4389,
+      "sha256": "d13b56f7b44f89cb28b91b36c1a139928e2a7d33b0195318dd261b015720e10e"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s02.mp3",
+      "bytes": 3448,
+      "sha256": "01785f2ecb8c4094e5b08d19df84fb611d5a93c6f510d0b57c7d3e7f633b07b8"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s03.mp3",
+      "bytes": 4389,
+      "sha256": "928541d1feec5d316896e182099c1c12e2794ea30dc0f7a9e87fd8a545720e96"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s04.mp3",
+      "bytes": 3448,
+      "sha256": "94fbcf1f48e8fbc68e4ad1f5ef14adfa74d4b99c9346d34a7357df1e7f8c2e5e"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s05.mp3",
+      "bytes": 1254,
+      "sha256": "49f1f13681e999df3c7c6db272866ce0dbf0c222d04a8e1c833d738fc4c57c14"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s06.mp3",
+      "bytes": 4389,
+      "sha256": "56c735945e85ea14487cfee523ef7a4e191dd55d0e731cd0926962bc014775d7"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s07.mp3",
+      "bytes": 3448,
+      "sha256": "a26e67f110edfc1c86ac0849e2bf53cf9c777a8653d9f57b405e072fa8bb024e"
+    },
+    {
+      "path": "assets/audio/step-concrete-run-01-s08.mp3",
+      "bytes": 4389,
+      "sha256": "ed8eefa6297c912e2ea92662702cdc130efaf5967846d1c6149666535a122e94"
+    },
+    {
+      "path": "assets/audio/step-concrete-sneak-01-s01.mp3",
+      "bytes": 1881,
+      "sha256": "16ce783a35e407ed42f548cd410900f58093f924b351fdaf07e514da423b5c49"
+    },
+    {
+      "path": "assets/audio/step-concrete-sneak-01-s02.mp3",
+      "bytes": 1881,
+      "sha256": "207db1db5eb3e2c36832ba54e3b880298d293ace11fff4ffc85f122409482f8a"
+    },
+    {
+      "path": "assets/audio/step-concrete-sneak-01-s03.mp3",
+      "bytes": 2821,
+      "sha256": "5429e10219931ae2c9a6761c802db2a835a5397ed37433dc777b08ebdfe370b3"
+    },
+    {
+      "path": "assets/audio/step-concrete-sneak-01-s04.mp3",
+      "bytes": 1567,
+      "sha256": "744ba2d26c3dcd90c7e1e069851a5e0edd6f7290c41168f8ae0742656c6c318b"
+    },
+    {
+      "path": "assets/audio/step-concrete-sneak-01-s05.mp3",
+      "bytes": 1254,
+      "sha256": "720e99692f5637d72b91ecba72e4fb1223d2adedffd892163d0f8ff964bda0a8"
+    },
+    {
+      "path": "assets/audio/step-concrete-sneak-01-s06.mp3",
+      "bytes": 1567,
+      "sha256": "cbb89a0595c393747f765a9e5cb01eb867e392232444bc925494beb25613f62a"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s01.mp3",
+      "bytes": 2194,
+      "sha256": "0afeff054c11eaa43c78642750b285af2b706e01e451624b75695dbd003fa2ed"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s02.mp3",
+      "bytes": 2508,
+      "sha256": "8b99f91a4c758763154f63637ec6b8f268880f57a495f99fa2bd2aa5e8b70888"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s03.mp3",
+      "bytes": 3135,
+      "sha256": "24bd22d4038a8845dd833ea72afa90ad2a59531a9fc0dbb4295e3bb770001345"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s04.mp3",
+      "bytes": 2508,
+      "sha256": "a7e312a58bd1d763ed4e3350acdcdf8a02fac28f7ecd03d57253bb5f54ee4451"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s05.mp3",
+      "bytes": 1881,
+      "sha256": "5eb26b28ac28fe7fb07b3c39f9d1a10910abfa28cf86e8796e7ba258160001a3"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s06.mp3",
+      "bytes": 1881,
+      "sha256": "8b0d76319280f05f49b7de80f098074cacf9ce4aab69a081c3ce841fdf78cfdb"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s07.mp3",
+      "bytes": 2194,
+      "sha256": "e340092338e42be3c1ed64b9f2726b6337c4b0f2a7163febe9c35d87c46e3246"
+    },
+    {
+      "path": "assets/audio/step-concrete-walk-01-s08.mp3",
+      "bytes": 1567,
+      "sha256": "1488c592f505fcabc0457c97cf80c7a49abd775ff84c9aea8e0b74876dcf26cc"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s01.mp3",
+      "bytes": 2508,
+      "sha256": "d797fc5f0608fb162b628f79fd4c0145cdcd25aac217d6f26e8b10fe8dc16346"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s02.mp3",
+      "bytes": 3762,
+      "sha256": "177f54139b25a9036ebc2ea9b6e2d5f588a1200c0057e485b7cdef50fd9c503f"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s03.mp3",
+      "bytes": 2821,
+      "sha256": "c93235f91f7809d2d7757940b8fd5f65d0411c75359288d94f33f6312b9d8e2f"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s04.mp3",
+      "bytes": 3135,
+      "sha256": "901d62420d1c642b2d715f568d946f9850f387f0cb390b1ed9e6429bc442616b"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s05.mp3",
+      "bytes": 3448,
+      "sha256": "d4a689e102da20f633eb73c2bd015794e56226ee471c946c00161a4c51300db6"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s06.mp3",
+      "bytes": 3135,
+      "sha256": "cde7c717b6d28fe799fd595f46807d76de40d89d34adaac9dcbdeac083ca20e8"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s07.mp3",
+      "bytes": 4075,
+      "sha256": "c8389e198662052ba5008814463457711063f32e499f50ecbc52c4179bdefe0e"
+    },
+    {
+      "path": "assets/audio/step-tile-run-01-s08.mp3",
+      "bytes": 3448,
+      "sha256": "3c71488d18166afb9c05e34165e00520d7042916be5b6e65b084d9875320d76a"
+    },
+    {
+      "path": "assets/audio/step-tile-sneak-01-s01.mp3",
+      "bytes": 1567,
+      "sha256": "92f11cd91263559df85baf9453c12c9a8b473741e6ca39f2240ba03c1e2f5fdf"
+    },
+    {
+      "path": "assets/audio/step-tile-sneak-01-s02.mp3",
+      "bytes": 1881,
+      "sha256": "ab5c773f8eea69d4a008a0d1be1c4b2383ccff68372f3043b72674e84c290855"
+    },
+    {
+      "path": "assets/audio/step-tile-sneak-01-s03.mp3",
+      "bytes": 1881,
+      "sha256": "4e0089ede2bf1c48c574d12d7f64c4b2793489c9a9c12691c8b92fe85692943c"
+    },
+    {
+      "path": "assets/audio/step-tile-sneak-01-s04.mp3",
+      "bytes": 3135,
+      "sha256": "8d88ac8d6cef9021b55f6692fd956d0b49ead1f10d05568942cf43b6b9666c3d"
+    },
+    {
+      "path": "assets/audio/step-tile-sneak-01-s05.mp3",
+      "bytes": 4389,
+      "sha256": "59034b866481acda66ad1217ac7442f4443a4eeab7775549a9598c2026c59dfa"
+    },
+    {
+      "path": "assets/audio/step-tile-sneak-01-s06.mp3",
+      "bytes": 1567,
+      "sha256": "770a692101cea8ea7e9aa8a3b8cd41f21c92b06a105d485326b71effb610a91a"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s01.mp3",
+      "bytes": 3448,
+      "sha256": "4af0cd6877556b423dda3324fafacfb351a9018e3530b874b715274433f49c64"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s02.mp3",
+      "bytes": 3448,
+      "sha256": "635af8f23a86803121ebf9d86db3c0c05ba74f62be4fadaf14bd3c10cfbc1f67"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s03.mp3",
+      "bytes": 2194,
+      "sha256": "89440d92a9382faf4671775f580eab777813296fe1c7f28c9333930b8654a9c8"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s04.mp3",
+      "bytes": 2194,
+      "sha256": "676df860083063fa28189acd14614dc1e687bc135a62a711b9955bad9e051633"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s05.mp3",
+      "bytes": 1567,
+      "sha256": "6ed8e45f1657cb7586d3b20983597f25a2a5047b8a9ef8daeb3ef49393d8ea87"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s06.mp3",
+      "bytes": 1881,
+      "sha256": "04cf7ab5ee716e8f481f1aab1a5fb07c40705e10478e2fdf6c6273e3d2109dc7"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s07.mp3",
+      "bytes": 2508,
+      "sha256": "2ecc333862019657e2d3ef40a67665d9d70acdf1136368fc8b439d985f6a63f6"
+    },
+    {
+      "path": "assets/audio/step-tile-walk-01-s08.mp3",
+      "bytes": 4389,
+      "sha256": "9e8f67caa43ecd62bb7d096fd42fe68c7f871a6ec8dd5b23bd2a78e638502c82"
+    },
+    {
+      "path": "assets/audio/train-distant-01.mp3",
+      "bytes": 119118,
+      "sha256": "7b089591a6d79233e9887bdac5e9a1fe9fddcefa33db64afc9ac3b306a7b23cf"
+    },
+    {
+      "path": "assets/audio/train-distant-02.mp3",
+      "bytes": 119432,
+      "sha256": "17ed6babf2707e3ebd43dcd56cba996c2f8afaa46dd539df398b0b377902565a"
+    },
+    {
+      "path": "assets/audio/vending-close-b-01.mp3",
+      "bytes": 11285,
+      "sha256": "ae665873ee6b31dd3514e887902b3d6877d72bf52155791106fc5035ceb6faf7"
+    },
+    {
+      "path": "assets/audio/vending-pry-01.mp3",
+      "bytes": 24137,
+      "sha256": "ed02fecb7babb88092720e7e3660b675e1f265e37738bef6221f2a728a42c9b7"
+    },
+    {
+      "path": "assets/audio/weapon-equip-b-01.mp3",
+      "bytes": 12539,
+      "sha256": "6a892772cf50eaad6df8d29f1e5345042417c99cb17a9d1080b4096805d70ce1"
+    },
+    {
+      "path": "assets/audio/weapon-equip-b-02.mp3",
+      "bytes": 12539,
+      "sha256": "b8ddce8988422f3495a99e953dbb2df597b6fd58bcfbb717675c406193bbad80"
+    },
+    {
+      "path": "assets/audio/win-chime-01.mp3",
+      "bytes": 41691,
+      "sha256": "f8b4342ac1bb9330ceb7f6fca4b5a66a9d4ad88086f181acd839694bc2f180bb"
+    },
+    {
+      "path": "assets/audio/zombie-attack-b-01.mp3",
+      "bytes": 18181,
+      "sha256": "35f2ab45072240b364a41c37478f5475983bcc83cc803ad8a9045e19d9b8cba4"
+    },
+    {
+      "path": "assets/audio/zombie-attack-b-02.mp3",
+      "bytes": 13479,
+      "sha256": "b86357494a36cde9e773c40352c416f908f0f969a796032324396737d22d9150"
+    },
+    {
+      "path": "assets/audio/zombie-attack-b-03.mp3",
+      "bytes": 11598,
+      "sha256": "12ffced462678e01889c41e824f5463a597bbef6be238453c097fa8a21499188"
+    },
+    {
+      "path": "assets/audio/zombie-death-b-01.mp3",
+      "bytes": 23824,
+      "sha256": "7f8e7d95fab3bb1e11e0a8ddb009d0d1a1929bb897dca1e2201f456192149505"
+    },
+    {
+      "path": "assets/audio/zombie-death-b-02.mp3",
+      "bytes": 21002,
+      "sha256": "bc01f3373f0ef0d8360a5b632b4c744e7b2f38be3d33f8ee3fa5f351c9442bd2"
+    },
+    {
+      "path": "assets/audio/zombie-death-b-03.mp3",
+      "bytes": 22883,
+      "sha256": "e595992e1d0f5152f68fd760046391594984672d35c9b684499b000e81bec2ce"
+    },
+    {
+      "path": "assets/audio/zombie-groan-01.mp3",
+      "bytes": 27272,
+      "sha256": "1f85955953de51568c8f39fc2ddb83bbbc03563b173890cafa6a12b7f3e94697"
+    },
+    {
+      "path": "assets/audio/zombie-groan-02.mp3",
+      "bytes": 25078,
+      "sha256": "d28aebbba88cdf31e7702a0eb9fbfba952638e2f356a16ff381c918f44228086"
+    },
+    {
+      "path": "assets/audio/zombie-groan-03.mp3",
+      "bytes": 25391,
+      "sha256": "71075dad0d097ccf73955ccae1a98f55e8c31d805087c5333f9c13061a8ccb7c"
+    },
+    {
+      "path": "assets/audio/zombie-groan-04.mp3",
+      "bytes": 24451,
+      "sha256": "56cbdfb8797ed8c6fe3842487a7c3e23a8bb955c6a23970dc5d1a55ddceccd8b"
+    },
+    {
+      "path": "assets/audio/zombie-groan-deep-01.mp3",
+      "bytes": 26018,
+      "sha256": "f3f87953af72d9a522efbe759b4e4292fcbd846b7f00bd4e91d622253b6497db"
+    },
+    {
+      "path": "assets/audio/zombie-groan-deep-02.mp3",
+      "bytes": 25391,
+      "sha256": "53218f049120f41c61dc181b1997f747ef8b7fd5671f0d9092cb173e692dba4e"
+    },
+    {
+      "path": "assets/audio/zombie-groan-deep-03.mp3",
+      "bytes": 26331,
+      "sha256": "befb2a1e870186ecc9c767a4ae44e421f649a1eaffb02d6889567fcd345ca1c8"
+    },
+    {
+      "path": "assets/audio/zombie-shuffle-01-s01.mp3",
+      "bytes": 7523,
+      "sha256": "2436e2d3aea3a9ca35605f77beb42cfd07f4698803d3b6a5299ccac3722608ad"
+    },
+    {
+      "path": "assets/audio/zombie-shuffle-01-s02.mp3",
+      "bytes": 3448,
+      "sha256": "a829a125ad8860f44a7b1d517ba429076dbf0c90aa70d97c4b352a8bf2e0d9d7"
+    },
+    {
+      "path": "assets/audio/zombie-shuffle-01-s03.mp3",
+      "bytes": 3135,
+      "sha256": "0804011920615681456af42a2f3f3fb30d189f36f1aae54aa252110f6f92846f"
+    },
+    {
+      "path": "assets/audio/zombie-shuffle-01-s04.mp3",
+      "bytes": 2194,
+      "sha256": "9bbaf709c167943f78f3097ed04c9ee7d5b479b11453e0d845eea49036c2eb0e"
+    },
+    {
+      "path": "assets/audio/zombie-shuffle-01-s05.mp3",
+      "bytes": 6896,
+      "sha256": "74611df1b56925dd093935a8b790f93d6fc9648563cf0dcb0a7d9d8d2d76050a"
+    },
+    {
+      "path": "assets/audio/zombie-shuffle-01-s06.mp3",
+      "bytes": 7523,
+      "sha256": "17a00d56c51c35297da9ff114c1bfa80bb4b38e043cb1c5fd75027144fde5229"
+    },
+    {
+      "path": "assets/audio/zombie-stomp-01-s01.mp3",
+      "bytes": 3448,
+      "sha256": "d9f422df8014cf554bda2fd6459485f1d169d04a0eb991c5a38f623140fb1945"
+    },
+    {
+      "path": "assets/audio/zombie-stomp-01-s02.mp3",
+      "bytes": 1881,
+      "sha256": "44a32f453fb7256321cdfaebd71fffd6453fc7693078b2c0c686e6741d03edb3"
+    },
+    {
+      "path": "assets/audio/zombie-stomp-01-s03.mp3",
+      "bytes": 3135,
+      "sha256": "7ae02d3fe7fa9f3181b8a6c36219e09794c33afc6718cfe472ef44ce5b068cc6"
+    },
+    {
+      "path": "assets/audio/zombie-stomp-01-s04.mp3",
+      "bytes": 3135,
+      "sha256": "0f29e0c9175ddf957bad32f8603abaae4ec4c0b90c96dae344f042d8fbad25a0"
+    },
+    {
+      "path": "assets/audio/zombie-stomp-01-s05.mp3",
+      "bytes": 2821,
+      "sha256": "104f219e2f4c26bfbde24288f72f1d88ee4b175409cffc770e5417861570ae43"
+    },
+    {
+      "path": "assets/audio/zombie-stomp-01-s06.mp3",
+      "bytes": 3448,
+      "sha256": "51d536d39b4627c65f823504f60417ed0a6c7e05b8f8f8d8c98d8770e43866bc"
+    },
+    {
+      "path": "assets/derivatives/audio-iteration05.json",
+      "bytes": 342301,
+      "sha256": "bd70d5a46c5b976079440faca78268194bf422d4bfd1467981d199b19f79fa08"
+    },
+    {
+      "path": "assets/derivatives/audio-iteration06.json",
+      "bytes": 32293,
+      "sha256": "033431ca6506e6250ca5cf90e25845974d5397a60012da30abca55499870f6c8"
+    },
+    {
+      "path": "assets/derivatives/audio-iteration07-creature.json",
+      "bytes": 33307,
+      "sha256": "49c281f50683878f965de9f19143a58bd52f9e869e3cbd196b219facfe5396ac"
+    },
+    {
+      "path": "assets/derivatives/audio-iteration07k.json",
+      "bytes": 31990,
+      "sha256": "63700d336dba7527e3971f7486df6cb3725aa268572882946316d5d41027a702"
+    },
+    {
+      "path": "assets/derivatives/creature-ratdog.json",
+      "bytes": 17740,
+      "sha256": "5c014d54cbbd8d8bd13695b81a5e22c204b6d59d69645237ccc29c997b589ddb"
+    },
+    {
+      "path": "assets/derivatives/light-lod-iteration03.json",
+      "bytes": 1080,
+      "sha256": "1faf9dac8c07ada6acb9b220bbf9badb65465b8ee3d959ff99ba9877cf955d62"
+    },
+    {
+      "path": "assets/derivatives/light-lod-iteration04.json",
+      "bytes": 5092,
+      "sha256": "b0bca74834e3246feeac4bf040db884c2f518b343d7ffbe1375f7928d27c68c1"
+    },
+    {
+      "path": "assets/derivatives/outfit-beanie.json",
+      "bytes": 23833,
+      "sha256": "dd9d4b883ef2f6310e7a30790e3f4945baa0164e2be5da4a4057d265865e0437"
+    },
+    {
+      "path": "assets/derivatives/outfit-blazer.json",
+      "bytes": 113124,
+      "sha256": "be51fccef0f4138ff0cf898ab466d870a60e88c59322010b401cd791ccc79090"
+    },
+    {
+      "path": "assets/derivatives/outfit-cap.json",
+      "bytes": 25087,
+      "sha256": "07dc9855e0a23d0f787538c57866491640c898cfcc900f216a172719bbe76229"
+    },
+    {
+      "path": "assets/derivatives/outfit-cargo.json",
+      "bytes": 49288,
+      "sha256": "661631effa9130e6191857a03fddfd3a72b426698f3ce3431ade2e618e85e364"
+    },
+    {
+      "path": "assets/derivatives/outfit-coat.json",
+      "bytes": 87059,
+      "sha256": "2b82172944adaf2f3153e414b60270d2fa179d5ac22b1d90d6e3f135981669af"
+    },
+    {
+      "path": "assets/derivatives/outfit-flannel.json",
+      "bytes": 61817,
+      "sha256": "c2952cfe6575f5b116c95d2af79ff480ce841b2288b4fee7373353e9bc2ce9fd"
+    },
+    {
+      "path": "assets/derivatives/outfit-gasmask.json",
+      "bytes": 16202,
+      "sha256": "64c429d70b410e9ddb8b8bad9e79204a052bed87ba5e3dabce620b58ab515fb5"
+    },
+    {
+      "path": "assets/derivatives/outfit-hardhat.json",
+      "bytes": 27799,
+      "sha256": "c9cbc72d839e73b871e7880deef87201d5dd005d79b4b073c233085e36b226a7"
+    },
+    {
+      "path": "assets/derivatives/outfit-hivis.json",
+      "bytes": 57501,
+      "sha256": "edf278273218a877aea288311d2326ed9bd66996cd8edb5baefce2403232365e"
+    },
+    {
+      "path": "assets/derivatives/outfit-hoodie.json",
+      "bytes": 113066,
+      "sha256": "039dade6c7082ae193f3706fbb911fb735071599983c7c193be33fc05d16ea24"
+    },
+    {
+      "path": "assets/derivatives/outfit-jeans.json",
+      "bytes": 50533,
+      "sha256": "890c437c1364c11170c0db73a4334da0a2bbbb67faccfdb07e056559beedb800"
+    },
+    {
+      "path": "assets/derivatives/outfit-puffer.json",
+      "bytes": 3920,
+      "sha256": "4f1c0f65669e95a67e003a8c77e47c492c6d93799ee54731e2c35af2e4639ff1"
+    },
+    {
+      "path": "assets/derivatives/outfit-respirator.json",
+      "bytes": 16223,
+      "sha256": "a13b6323a68dc8381e012ae9e2e7f6d7125ed6f81ae9eed0dec1986bedda8f19"
+    },
+    {
+      "path": "assets/derivatives/outfit-slacks.json",
+      "bytes": 38848,
+      "sha256": "4393910a9cd52d387c08d922a1bbf640c656abe20ce6d0e4d3e378cdc827a766"
+    },
+    {
+      "path": "assets/derivatives/outfit-sweater.json",
+      "bytes": 87437,
+      "sha256": "cd19e8d4c65a9fea22c3200b7aebd9e73d9b8ee252397c10f103d232029e2a76"
+    },
+    {
+      "path": "assets/derivatives/outfit-trench.json",
+      "bytes": 87940,
+      "sha256": "8f0f6190551305525a0d22a5fa797c8ffed6a54d8dc2023f1bbdf2f1af89859f"
+    },
+    {
+      "path": "assets/derivatives/props-iteration02.json",
+      "bytes": 15138,
+      "sha256": "0dbf6da6375da623d315cb3627e3f0b464f5bbdafeeaf899ac97c64e20c9bc3a"
+    },
+    {
+      "path": "assets/derivatives/props-iteration03.json",
+      "bytes": 85753,
+      "sha256": "dd369f4f702be1688ed03074941105f9bb85e52c99fe5b889eba0b00f73140ea"
+    },
+    {
+      "path": "assets/derivatives/props-iteration04.json",
+      "bytes": 61832,
+      "sha256": "13242ebe8c674e25d0571eb859d3c4b673d9f61f2f1fe71173f353e41a0bff65"
+    },
+    {
+      "path": "assets/derivatives/props-iteration05.json",
+      "bytes": 71709,
+      "sha256": "2c5d0d9865f289b20ee0604caf69a1cea577ed5b498a9f25881b0957e76c5200"
+    },
+    {
+      "path": "assets/derivatives/props-iteration07.json",
+      "bytes": 1301388,
+      "sha256": "45c45577dfc5f3dff2d39d400d54fa69511c73a0277a4c0ac55c81a922dd6582"
+    },
+    {
+      "path": "assets/derivatives/props.json",
+      "bytes": 95557,
+      "sha256": "6ee44331b22b28216dbf4ba77f9234951b6057fde548962b50b235d0bbf41ac2"
+    },
+    {
+      "path": "assets/derivatives/rifle-optic-iteration04.json",
+      "bytes": 10032,
+      "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
+    },
+    {
+      "path": "assets/derivatives/zombie-body-agent.json",
+      "bytes": 35774,
+      "sha256": "d7d6a936aeedb656176f38f1e0e6112c373a29287f65ad9124dafc56b72c2846"
+    },
+    {
+      "path": "assets/derivatives/zombie-body-courier.json",
+      "bytes": 37865,
+      "sha256": "4f74e5193da56387ce1d846c96b9d177339d2f3578d1ab999ea342734cffe4ae"
+    },
+    {
+      "path": "assets/derivatives/zombie-body-heavyset.json",
+      "bytes": 41653,
+      "sha256": "0f0277901e05099c608259872abbc3dc4e37a403a8f41a4cdc418b88dcd3b71a"
+    },
+    {
+      "path": "assets/derivatives/zombie-body-lastshift.json",
+      "bytes": 37866,
+      "sha256": "8bd4956eb7542842093c54660607bea2163f077485bceeb95f7fa4ac8a8593d4"
+    },
+    {
+      "path": "assets/derivatives/zombie-body-scavenger.json",
+      "bytes": 28273,
+      "sha256": "45778f0bf0eb2333d9d34c61866cd800f86ddfe3b5cb96427233d2e9d5573cbd"
+    },
+    {
+      "path": "assets/derivatives/zombie-body-tall.json",
+      "bytes": 39641,
+      "sha256": "a335a71bed9cd7c723b3a3974be7f0401a6f9dac4be6f54e1b4a4d4aa214a3c5"
+    },
+    {
+      "path": "assets/derivatives/zombie-rigged.json",
+      "bytes": 43884,
+      "sha256": "409ff30a8073fbc0e563d5668ae2422b468084af3e011fc7e2d9cb9f6baf076d"
+    },
+    {
+      "path": "assets/derivatives/zombie-variants.json",
+      "bytes": 405,
+      "sha256": "0927065cf8986634595f4ba6af0f26381037f951ef94c9baa52ae98a71c03941"
+    },
+    {
+      "path": "assets/derivatives/zombie-wardrobe-fit-audit.json",
+      "bytes": 89031,
+      "sha256": "bb5cd5dab4515f1b7af47310cf3f5df04e2470e4d9b2d8dfe19839549cd12d68"
+    },
+    {
+      "path": "assets/derivatives/zombie-wardrobe.json",
+      "bytes": 114800,
+      "sha256": "aff8e1efd21acda4c281bdf6b11ae316d9cd55ce491249f7e7e5a74f4385fd06"
+    },
+    {
+      "path": "assets/models/bench.glb",
+      "bytes": 950388,
+      "sha256": "73ab8140411735e6f1d0997f9871970585f246306a65911b32dd28c065feacce"
+    },
+    {
+      "path": "assets/models/cabinet-low.glb",
+      "bytes": 906984,
+      "sha256": "d84562f0394d8825d3361439a82e1ec9c0d8d8cafde2b8d64031ba27a5e8389f"
+    },
+    {
+      "path": "assets/models/cabinet-tall.glb",
+      "bytes": 890300,
+      "sha256": "5696abfd7f21ba775dc6b3309751eaaa0be1647f7112f093946c06be08461c13"
+    },
+    {
+      "path": "assets/models/crate.glb",
+      "bytes": 798944,
+      "sha256": "cf560533199edf4af2cb7321ab081d7c4d08d39fe532d5162d15df7186725f08"
+    },
+    {
+      "path": "assets/models/creature-ratdog.glb",
+      "bytes": 1238220,
+      "sha256": "7bf1649d02762365e2849de9690f32afdf91e152517384c88c94270fd78809d9"
+    },
+    {
+      "path": "assets/models/gun-locker.glb",
+      "bytes": 850212,
+      "sha256": "5660ca7e9c383c92307cf5865c38e4cecf2cce9b50ad9206bdd67d4478150bfa"
+    },
+    {
+      "path": "assets/models/hotdog-cart.glb",
+      "bytes": 799288,
+      "sha256": "e50ba14b293e4f6b64399d807276422e4c19f72b0112e903ecd7d0a652d9e8b9"
+    },
+    {
+      "path": "assets/models/item-beans.glb",
+      "bytes": 144744,
+      "sha256": "898e388bce1fbb57478d0e97a714cb1f5171a9237ebbb9f93aa8553289ae97c4"
+    },
+    {
+      "path": "assets/models/item-chips.glb",
+      "bytes": 212724,
+      "sha256": "819e152e0376fd901992e74aeb17813d1f276da7ec7c5b51fd181cc84cf8be7d"
+    },
+    {
+      "path": "assets/models/item-chocolate.glb",
+      "bytes": 119504,
+      "sha256": "6b6ed2e70b3bbf81698c4dbc6cf189f8486d3b6d1a6c47626b2f414e65c8dfab"
+    },
+    {
+      "path": "assets/models/item-cola.glb",
+      "bytes": 137772,
+      "sha256": "76294dfa01e6a6e88868c4639fdf9487f757524e4f736499fb1927d63a9fef86"
+    },
+    {
+      "path": "assets/models/item-juice.glb",
+      "bytes": 141516,
+      "sha256": "0e1405ffc876defa53ff4a0c629a1f908bd4edf1593b32c6f6717b56fa7cfc05"
+    },
+    {
+      "path": "assets/models/item-noodles.glb",
+      "bytes": 159108,
+      "sha256": "c866a07382bde8ca1dde8c260d05ea587a5b885d2f1a4ea1abe452e0517b95a4"
+    },
+    {
+      "path": "assets/models/item-water.glb",
+      "bytes": 203912,
+      "sha256": "0d8189558b9341657e313c4bc6c0d7264dac59235538319013740f3b5f0f1e56"
+    },
+    {
+      "path": "assets/models/janitor-cart.glb",
+      "bytes": 878568,
+      "sha256": "8757d1557df62f6e1a1c48fbc25791bba5f70b49035c1e2eec8de866b08230a2"
+    },
+    {
+      "path": "assets/models/light-lod.glb",
+      "bytes": 670520,
+      "sha256": "1bf7cd4e5c359d9494a853548c8df53fb3375b78be3fc64446f40e15e064336f"
+    },
+    {
+      "path": "assets/models/light-lod2.glb",
+      "bytes": 538696,
+      "sha256": "fe57c42989f9b533d52ec49f7261e964c5fc8eaf69d35e1630701442e94cc4f7"
+    },
+    {
+      "path": "assets/models/light.glb",
+      "bytes": 680432,
+      "sha256": "368f668b399e55fad5cd0c9321151263e8f0b88dcfb5c54d6df2eb4c369c2e22"
+    },
+    {
+      "path": "assets/models/magazine-rack.glb",
+      "bytes": 783032,
+      "sha256": "ef5f410fe9d2d36e117526d4be958b089d35004307774ad241436bc14f726a0d"
+    },
+    {
+      "path": "assets/models/outfit-beanie.glb",
+      "bytes": 296552,
+      "sha256": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a"
+    },
+    {
+      "path": "assets/models/outfit-blazer.glb",
+      "bytes": 730644,
+      "sha256": "972a3f48a8ffae01c76f547ed8d8eb1123bb7836bb198b63150336b91afa44bd"
+    },
+    {
+      "path": "assets/models/outfit-cap.glb",
+      "bytes": 341468,
+      "sha256": "4fdb02fccf121e22fadfa81cef6754d46d6d91d16f12f59295744ed848e3ddb7"
+    },
+    {
+      "path": "assets/models/outfit-cargo.glb",
+      "bytes": 612752,
+      "sha256": "68851c3eed45291936121d6770e37538c1ff1fe9989ecd9185d7b614878d2d06"
+    },
+    {
+      "path": "assets/models/outfit-coat.glb",
+      "bytes": 821396,
+      "sha256": "e8a6462714d12a3d1c278d400b3d31760b83b3743571955ba67f6964743f88ed"
+    },
+    {
+      "path": "assets/models/outfit-flannel.glb",
+      "bytes": 428204,
+      "sha256": "0303a2698c8b530d8f6f81c407ad359f5ab29514938f012973afc26c67082b23"
+    },
+    {
+      "path": "assets/models/outfit-gasmask.glb",
+      "bytes": 490108,
+      "sha256": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4"
+    },
+    {
+      "path": "assets/models/outfit-hardhat.glb",
+      "bytes": 349096,
+      "sha256": "c94ed2035aa144330e5307b4bb00db6ef5b5d6ae16f3953c0f3040679e5ad640"
+    },
+    {
+      "path": "assets/models/outfit-hivis.glb",
+      "bytes": 418748,
+      "sha256": "4762bd2048f2bbea45932dd025f661d8984e55abc3ccb7a5b79f3d575875eaf0"
+    },
+    {
+      "path": "assets/models/outfit-hoodie.glb",
+      "bytes": 823720,
+      "sha256": "5364d68aaeabec4dfd4fa8a2dfc4636f5bb63fc574de35efad2c7c3330e55988"
+    },
+    {
+      "path": "assets/models/outfit-jeans.glb",
+      "bytes": 583696,
+      "sha256": "1563d11941520228862247e7acc2e08533d6bfea6cb77237bbb4fc0ba9292e35"
+    },
+    {
+      "path": "assets/models/outfit-puffer.glb",
+      "bytes": 372,
+      "sha256": "3902e0e2dcc5993e6151abbfbf222e6c3bc0df99d31ead7070ad0595d3e35049"
+    },
+    {
+      "path": "assets/models/outfit-respirator.glb",
+      "bytes": 392876,
+      "sha256": "12b7b25a197f555be624c754836fa3b29c85cb8d8d3a9f96620dfc083390577e"
+    },
+    {
+      "path": "assets/models/outfit-slacks.glb",
+      "bytes": 490088,
+      "sha256": "54bc4ad60d795ba9cb473fa0dda4517e7d8b9d2eb4c5ff9169a1b7923635101e"
+    },
+    {
+      "path": "assets/models/outfit-sweater.glb",
+      "bytes": 594220,
+      "sha256": "543b57efeedc53007cc3a9b821d77630594cbc4119fbeb38d46ce53f3560fb45"
+    },
+    {
+      "path": "assets/models/outfit-trench.glb",
+      "bytes": 761772,
+      "sha256": "87904fb00ee3370d76a4fd5ee552a3f7314101d044b1e1d178c15a3c07a6d601"
+    },
+    {
+      "path": "assets/models/p7-aed-wall-cabinet.glb",
+      "bytes": 313580,
+      "sha256": "5422153c643b7fc2a0750a27338db1c8c508679b3a60654b03fa1de26748609b"
+    },
+    {
+      "path": "assets/models/p7-air-compressor.glb",
+      "bytes": 508356,
+      "sha256": "9519b1683c86194e440ef988744dedb7c65c9a0b60dc4780ef5cb4aab8f7e054"
+    },
+    {
+      "path": "assets/models/p7-atm-kiosk.glb",
+      "bytes": 507180,
+      "sha256": "b403613703a327caff55ebaccc907d3e00775331998ba08062bc2443c7617883"
+    },
+    {
+      "path": "assets/models/p7-baby-stroller.glb",
+      "bytes": 549120,
+      "sha256": "f0c3775deb7b6e1dad00bc2915b7cc696bd664cd6fdd5c6ee9f9187239e1f1ba"
+    },
+    {
+      "path": "assets/models/p7-basket-stack.glb",
+      "bytes": 549628,
+      "sha256": "3475c1199d71bf025d5a154654115fbd77e3783f819292b6d3e2e4f402cf2a95"
+    },
+    {
+      "path": "assets/models/p7-bench-grinder-stand.glb",
+      "bytes": 522572,
+      "sha256": "2538f3d2df76ad6323e88ad0fbc8c67333beae39284efc659e5f1bfea577c7d6"
+    },
+    {
+      "path": "assets/models/p7-bicycle.glb",
+      "bytes": 786224,
+      "sha256": "995684d565e52c8be99e4e759b7bb1da977141dd8bdceaf162d6f441c045bff2"
+    },
+    {
+      "path": "assets/models/p7-blood-pressure-kiosk.glb",
+      "bytes": 569724,
+      "sha256": "a9e3aca57a6765c01c79c4d01481f99edf1b69b7d953056a12012462eb99f997"
+    },
+    {
+      "path": "assets/models/p7-bus-cart.glb",
+      "bytes": 521576,
+      "sha256": "a3c9e0f8341e07b4d77e068485284381866f018d4af0ff79b552c3404f6685c9"
+    },
+    {
+      "path": "assets/models/p7-capsule-toy-machine.glb",
+      "bytes": 538456,
+      "sha256": "de882487451609e053423d53fd725afb8cab30dddf267cec181cce29c9cc3b7c"
+    },
+    {
+      "path": "assets/models/p7-cash-register.glb",
+      "bytes": 303776,
+      "sha256": "229fc201284b3ceeb6753f297bf8ac37d66a0c2c5c422c514565af3f4b062a58"
+    },
+    {
+      "path": "assets/models/p7-cctv-camera.glb",
+      "bytes": 310028,
+      "sha256": "9b7462593773b91382170dd1b4f7730255ce88d360b201bef62e35e89494ce16"
+    },
+    {
+      "path": "assets/models/p7-chest-freezer.glb",
+      "bytes": 554648,
+      "sha256": "95c942871274bcfaf1d28f2e1a45b230659bd93b6f88b64ffa4807b79506fbb7"
+    },
+    {
+      "path": "assets/models/p7-coat-rack.glb",
+      "bytes": 631312,
+      "sha256": "3527e1481996ef784f4c42afb67554f791e42d4238226457c9960658c03da0b6"
+    },
+    {
+      "path": "assets/models/p7-coin-counter.glb",
+      "bytes": 312700,
+      "sha256": "39635cc3bfadaf9e0d3d7962f53c1c38bc9ee98b42deed51aaadd26e3639d3f5"
+    },
+    {
+      "path": "assets/models/p7-condiment-station.glb",
+      "bytes": 275080,
+      "sha256": "e6838ba374947ee863e563f273bb3f3367f16158ae544126ee6a1051a4381408"
+    },
+    {
+      "path": "assets/models/p7-conveyor-toaster.glb",
+      "bytes": 528528,
+      "sha256": "e8dc39db5b5cb7f21807a40b342e74b79e115c47fccf9641056a495d09ba80d4"
+    },
+    {
+      "path": "assets/models/p7-crash-cart.glb",
+      "bytes": 514308,
+      "sha256": "1e8aa28e02b21d01c7dfef1254911af14cc78ee0c5f79729ba711a854fbb509e"
+    },
+    {
+      "path": "assets/models/p7-crowd-barrier.glb",
+      "bytes": 607324,
+      "sha256": "5848f78d381389bf96082b9052e49668c8bdabd4d759878193e5ac24992e6a2e"
+    },
+    {
+      "path": "assets/models/p7-crt-terminal.glb",
+      "bytes": 503664,
+      "sha256": "b4f868bd2bbf3eb50fe243d39700c65d70ddae5b79d88a694f210c2570c456a3"
+    },
+    {
+      "path": "assets/models/p7-crt-tv-cart.glb",
+      "bytes": 468060,
+      "sha256": "a270a89adf21d579b1c06790f7f40ba09c6eb322e1e85bc7aa178eb637e7dda5"
+    },
+    {
+      "path": "assets/models/p7-deep-fryer.glb",
+      "bytes": 490392,
+      "sha256": "4a9ada7b0b65349cc6909089237e2a5d99f79329ccca3c8c7cf22518482bb291"
+    },
+    {
+      "path": "assets/models/p7-disconnect-switch.glb",
+      "bytes": 307740,
+      "sha256": "c2daa8cc00640043bd4ea3e5c55af1e3844ada2fa8378dce899f8bab4f1cee6e"
+    },
+    {
+      "path": "assets/models/p7-drip-coffee-maker.glb",
+      "bytes": 328496,
+      "sha256": "4dd9c9e28978d21ac071e5a2e9d0634ad3050fee1c5a55837118749005fafebd"
+    },
+    {
+      "path": "assets/models/p7-drum-fan.glb",
+      "bytes": 483264,
+      "sha256": "6293dc18f8a06dd37e6e7cdcb5595a10fc9361927f8c870e38689e81bc3e6fa3"
+    },
+    {
+      "path": "assets/models/p7-dry-transformer.glb",
+      "bytes": 704052,
+      "sha256": "78cec058fb5e18eddb2ecf589a56ff0047192bf19fec23421e81dae1088cfd0a"
+    },
+    {
+      "path": "assets/models/p7-emergency-call-point.glb",
+      "bytes": 384936,
+      "sha256": "3fe253a9f4b796ff7f9ded8a88c7be4ee239ed550eb0b4362e1d4fd9e1bfae80"
+    },
+    {
+      "path": "assets/models/p7-espresso-grinder.glb",
+      "bytes": 323456,
+      "sha256": "64e9597e99b5176e107f90448bc9816c8403e913127e172b54e99fe8e00096ad"
+    },
+    {
+      "path": "assets/models/p7-eyewash-station.glb",
+      "bytes": 489732,
+      "sha256": "46cb215aeb9705d10c9341abefed44f8d5ce2a1b4ff91f91cc5402aad22fd3cf"
+    },
+    {
+      "path": "assets/models/p7-fare-validator-stand.glb",
+      "bytes": 286524,
+      "sha256": "6cbfdd53bbb8f45caef34d9948d732920dc2c5661c3397eaa96f9baed7c451ee"
+    },
+    {
+      "path": "assets/models/p7-fare-vault-cart.glb",
+      "bytes": 529236,
+      "sha256": "6a177dbc06a12c8a605390b23f2b22689d41e61c85787a25fc7cbdd1b762becf"
+    },
+    {
+      "path": "assets/models/p7-field-phone-box.glb",
+      "bytes": 293584,
+      "sha256": "d9a0658a53f711f8831873aeba1ec15d6e879907bace2f8708119844df6df14e"
+    },
+    {
+      "path": "assets/models/p7-filing-cabinet.glb",
+      "bytes": 393000,
+      "sha256": "49b34abd726bbcc9d9de6a03bb75e5b4e04510a1893d0841a6d7c9f58775a91d"
+    },
+    {
+      "path": "assets/models/p7-fire-extinguisher-cabinet.glb",
+      "bytes": 515040,
+      "sha256": "e819c60d8a3e02f3277cc329df42e171fc4ed02e26e4c663b32480d1e1a9dbbc"
+    },
+    {
+      "path": "assets/models/p7-fire-extinguisher.glb",
+      "bytes": 262880,
+      "sha256": "dffba64c361ee0c71c2119cbb64785a9d74705eaaaa9ccc58a9ca8f8b2655716"
+    },
+    {
+      "path": "assets/models/p7-fire-hose-reel-cabinet.glb",
+      "bytes": 470312,
+      "sha256": "63f45aa93187cd7b76c0aa12ef2eefd870d0249aab1e27192392987b6637f31d"
+    },
+    {
+      "path": "assets/models/p7-first-aid-wall-kit.glb",
+      "bytes": 263384,
+      "sha256": "5c657ce15662860ef1b6c8cd29cb3fe73aacf7cde26df845a22aba3a3c6b2df2"
+    },
+    {
+      "path": "assets/models/p7-floor-buffer.glb",
+      "bytes": 453484,
+      "sha256": "24a582477aaba048c2d4a915e45f12813b0bf7f6717a46a1cc3cd995a6b98afa"
+    },
+    {
+      "path": "assets/models/p7-floor-scrubber.glb",
+      "bytes": 687760,
+      "sha256": "c37354fb1e1d0a81fa5f06291f5a5bb5f49121c26fe54887e4b41d56d71ef5bc"
+    },
+    {
+      "path": "assets/models/p7-folding-barricade.glb",
+      "bytes": 661332,
+      "sha256": "d94fce0eaec991cd49a708492219295aec3e8c0e1eb631925dfa255631c6e787"
+    },
+    {
+      "path": "assets/models/p7-folding-chair.glb",
+      "bytes": 364204,
+      "sha256": "e6099013eaa6f596c3a69a4ce18fb2f65ca96316955ee750f67a6b63d6ae56e3"
+    },
+    {
+      "path": "assets/models/p7-gas-cylinder-cart.glb",
+      "bytes": 459624,
+      "sha256": "11178258acb6b86f6d3be3c3af11849e741c7bb65f308fe5ecf0afd2eb6fc943"
+    },
+    {
+      "path": "assets/models/p7-hand-dryer.glb",
+      "bytes": 227356,
+      "sha256": "c0a9f2f5487fe849038d0c4e81c9acdec17af94474e5493a7d884ddc69ba7e9e"
+    },
+    {
+      "path": "assets/models/p7-hand-toolbox.glb",
+      "bytes": 320716,
+      "sha256": "c3360fc52441af7db0fa415deca04917ea942e926e9bf2df5d672013566d95f5"
+    },
+    {
+      "path": "assets/models/p7-hand-truck.glb",
+      "bytes": 398108,
+      "sha256": "f489ec102432cf6a69d34eeb9d3e00161b0152066308ad2450aabdd79f58284a"
+    },
+    {
+      "path": "assets/models/p7-hot-dog-roller.glb",
+      "bytes": 491608,
+      "sha256": "0469087cf141e2416a9efe4d17be8132dde0cbf90102eaefa1d49495cf98e8fa"
+    },
+    {
+      "path": "assets/models/p7-ice-machine.glb",
+      "bytes": 704416,
+      "sha256": "2b2d25d6a861e7b39414a6ab76250952aa8ad646b2f51c9eacb6244289bcd553"
+    },
+    {
+      "path": "assets/models/p7-info-touch-kiosk.glb",
+      "bytes": 464280,
+      "sha256": "6ef9359feae7bc2dda8cc5339b3a2e7b2f6a43db5de20db44c5638c661ba0a36"
+    },
+    {
+      "path": "assets/models/p7-ingredient-bin.glb",
+      "bytes": 494020,
+      "sha256": "6e2020f0f9a27c3eda45833d96d6a398b0887d36b6e229ab1341a590b802f1a3"
+    },
+    {
+      "path": "assets/models/p7-iv-pole.glb",
+      "bytes": 569044,
+      "sha256": "2fb9de417f389c608c282077559cb50726ec78faf4521a31547ca1be114b857c"
+    },
+    {
+      "path": "assets/models/p7-key-cabinet.glb",
+      "bytes": 290800,
+      "sha256": "8e307a70b9e2698b16f1df09f2c4f012870667b88eacd0230c774f6f3748ee6e"
+    },
+    {
+      "path": "assets/models/p7-key-cutting-machine.glb",
+      "bytes": 274320,
+      "sha256": "12d52ed9716e91b42bb5b23a621047c4de003febfcc495a1e8e19882f4f29ff6"
+    },
+    {
+      "path": "assets/models/p7-meat-slicer.glb",
+      "bytes": 539860,
+      "sha256": "0bffc36c004fbdc82d5beeeaf829a6503133f2646595c8d92c3715c0c3eebb0e"
+    },
+    {
+      "path": "assets/models/p7-microwave-oven.glb",
+      "bytes": 261780,
+      "sha256": "9dd1fc299f2aa897eeeba34d11b196f78d53ad80c5ef3bfbc5ab725ce92ad8a4"
+    },
+    {
+      "path": "assets/models/p7-mobile-whiteboard.glb",
+      "bytes": 477628,
+      "sha256": "6213c12764121c6ea3a4180d7303229af847f114a6e760a7ec7dd21ea0b9d879"
+    },
+    {
+      "path": "assets/models/p7-mop-bucket-wringer.glb",
+      "bytes": 483124,
+      "sha256": "6f27f42e06abb73b0007f9963799057faaa5b5885153233d155cf4dfdbb42163"
+    },
+    {
+      "path": "assets/models/p7-newspaper-bundles.glb",
+      "bytes": 454108,
+      "sha256": "acc4aed6947d0ee58f31e9730727d0588486f8da5ae2175f5ecd2cb6b0390912"
+    },
+    {
+      "path": "assets/models/p7-newspaper-vending-box.glb",
+      "bytes": 537168,
+      "sha256": "15dc8bc379cb660cde406215cd2d65317e310572965f4c74d648b58df368af79"
+    },
+    {
+      "path": "assets/models/p7-office-copier.glb",
+      "bytes": 468916,
+      "sha256": "54caa4a11b863335debb571143acc6a55fe16420878646bbe43a50b161b13c5d"
+    },
+    {
+      "path": "assets/models/p7-office-swivel-chair.glb",
+      "bytes": 473728,
+      "sha256": "9799826fd244ffa958a1444186f666d148896377f89b5e6f1f10f04969f8a597"
+    },
+    {
+      "path": "assets/models/p7-oxygen-cart.glb",
+      "bytes": 475580,
+      "sha256": "d5f668d546eb6dd02ee17a949adbf1a7be04a3a3a19581cdaef10f6ef959e636"
+    },
+    {
+      "path": "assets/models/p7-pallet-jack.glb",
+      "bytes": 690100,
+      "sha256": "0e8318905e9d4b0451d866420049c384fc3e9cdb50af7b14d1bd2f9559a0f258"
+    },
+    {
+      "path": "assets/models/p7-paper-shredder.glb",
+      "bytes": 221128,
+      "sha256": "0c51bbbac3a0c9839e2dadb937639350921d1bab7223382c78acd8213caaa391"
+    },
+    {
+      "path": "assets/models/p7-paper-towel-dispenser.glb",
+      "bytes": 271704,
+      "sha256": "eaa6f193cbc9b4d388972fe900b63f0ed39a6db1a0999f0769965cf1d6fb1e51"
+    },
+    {
+      "path": "assets/models/p7-parts-bin-rack.glb",
+      "bytes": 552932,
+      "sha256": "85af82ac20dabdec02dcca2e0d8f4ebf47e3a854d14e48476969066c76afaeb3"
+    },
+    {
+      "path": "assets/models/p7-payphone.glb",
+      "bytes": 435884,
+      "sha256": "45a945bc2557856ceec23472503b12e43c568704270c5af919fd2553b28e9c5a"
+    },
+    {
+      "path": "assets/models/p7-pedestal-fan.glb",
+      "bytes": 469248,
+      "sha256": "2bb334906cf62b2a6ad9decb59f8f2928cb456b05b4edc68a558318bfb82d0cf"
+    },
+    {
+      "path": "assets/models/p7-physician-scale.glb",
+      "bytes": 390008,
+      "sha256": "e653efd441fe34d5fc695695c1970854fbb429c8514c97bafb11bc3d95ae50a7"
+    },
+    {
+      "path": "assets/models/p7-pipe-valve-manifold.glb",
+      "bytes": 467860,
+      "sha256": "b68611f6c6910758636ee88acaaf39d690ffba25dd6eb8d86fc27c46e64a906f"
+    },
+    {
+      "path": "assets/models/p7-plastic-stack-chair.glb",
+      "bytes": 464520,
+      "sha256": "e4d0f8021b17a1e5a4607eac5e9b72e58ac9822a8427b23920ba6b9eb77e215d"
+    },
+    {
+      "path": "assets/models/p7-platform-clock.glb",
+      "bytes": 434576,
+      "sha256": "f823ffb1c74686960888366f797a5c58d62fc874d0463d409322607688b9d07b"
+    },
+    {
+      "path": "assets/models/p7-popcorn-machine.glb",
+      "bytes": 522892,
+      "sha256": "48a7f26fda0c0a11dc39db78733efa74e4df78ee0736b8d2e4fcdee581d5b784"
+    },
+    {
+      "path": "assets/models/p7-portable-generator.glb",
+      "bytes": 519108,
+      "sha256": "5ca6eecbc30950e6ac4a7e6b8c1a47789627f32a5cc7743556143e5101768a56"
+    },
+    {
+      "path": "assets/models/p7-punch-clock.glb",
+      "bytes": 297604,
+      "sha256": "5cbccc2fc29e77f1adb763c60c7e4d5ec819fa97f05e615d41a810672b8616a2"
+    },
+    {
+      "path": "assets/models/p7-rice-cooker.glb",
+      "bytes": 264148,
+      "sha256": "fee1ad182447c91e05f9d20c7d974c3491e5a0d7c52f239dc646fe544947a5a3"
+    },
+    {
+      "path": "assets/models/p7-rolling-suitcase.glb",
+      "bytes": 395984,
+      "sha256": "fbded176f8d76bc09a1d523c2590acabf35023c80261041a403cd0fe303d442f"
+    },
+    {
+      "path": "assets/models/p7-rolling-tool-chest.glb",
+      "bytes": 473048,
+      "sha256": "a3b17d7e86404d68796ca16fcfdb81b0eb25953120df45612fe40e6f0957b31a"
+    },
+    {
+      "path": "assets/models/p7-security-podium.glb",
+      "bytes": 389816,
+      "sha256": "36d9cb6bfb2637ca6c9e7ceea4d7f4a94de6134e85f08bc355ec5d14d9a881bf"
+    },
+    {
+      "path": "assets/models/p7-shoe-shine-chair.glb",
+      "bytes": 562872,
+      "sha256": "58c3e01d099f2c652ffb69ccb38ce6ab51f817e379a1f16969634511401a406b"
+    },
+    {
+      "path": "assets/models/p7-shopping-cart.glb",
+      "bytes": 537796,
+      "sha256": "33c9477fde89819419a4f8752eac4679dbf849f56532f578d2da0c7697c5c869"
+    },
+    {
+      "path": "assets/models/p7-signal-head-spare.glb",
+      "bytes": 436424,
+      "sha256": "a14eb63dbdbcd1b1c7dc821389430a5e9a370a1af9a8b39e55391c1f84aa596a"
+    },
+    {
+      "path": "assets/models/p7-slush-machine.glb",
+      "bytes": 540192,
+      "sha256": "0a9a5f09f6fd09fccf1921880f6963312dc4e99be2b0f0ee887ba30c0bb9d5d9"
+    },
+    {
+      "path": "assets/models/p7-soda-fountain.glb",
+      "bytes": 526448,
+      "sha256": "aa1c2012b8df84e415a0dc52fc85b75c8837cfc5d6e986314b96ecf05cb6a354"
+    },
+    {
+      "path": "assets/models/p7-soldering-station.glb",
+      "bytes": 328076,
+      "sha256": "1a691db3b4f3eaf081bc86e6f4bd42aed31dfb9c2fa8217ea2668445c188bb1c"
+    },
+    {
+      "path": "assets/models/p7-spinner-rack.glb",
+      "bytes": 552120,
+      "sha256": "a504532d372039bf37e866d7381edf31f319db6ddd1b07bfd310c19fd00dcc32"
+    },
+    {
+      "path": "assets/models/p7-stand-mixer.glb",
+      "bytes": 517452,
+      "sha256": "afbb0555b617269dddfe2f296ce74c0755fb0b58fdbf166f870b01c757c25348"
+    },
+    {
+      "path": "assets/models/p7-step-ladder.glb",
+      "bytes": 586900,
+      "sha256": "a159cf7f9d15a93b457ca57e08015e69409c442ecfda1df510af0a2d0ddba8de"
+    },
+    {
+      "path": "assets/models/p7-tool-pegboard.glb",
+      "bytes": 555372,
+      "sha256": "ef9c026da445182e3b95555de570bf8de030407343ead2ce5de1a24e7193cac8"
+    },
+    {
+      "path": "assets/models/p7-trash-bag-pile.glb",
+      "bytes": 470592,
+      "sha256": "ca1420bce3c481d958bbd9d2a70fc37805f1a1d1458295dbd89adf4fb2bb8a12"
+    },
+    {
+      "path": "assets/models/p7-tripod-work-light.glb",
+      "bytes": 729324,
+      "sha256": "421ec778e45bc322bdea46657c0083cfb33e30ba8de806765a95e6921f7a6544"
+    },
+    {
+      "path": "assets/models/p7-urinal.glb",
+      "bytes": 411648,
+      "sha256": "6249357dad997035da9d8360ba3ca81edc719033e2cebe6c6f36c60dff695f2d"
+    },
+    {
+      "path": "assets/models/p7-wall-data-cabinet.glb",
+      "bytes": 510784,
+      "sha256": "c2852deb74bdb50b0faaf53519b0b82d60ccfb56644c824bdc4121db33d7d06a"
+    },
+    {
+      "path": "assets/models/p7-water-cooler.glb",
+      "bytes": 331420,
+      "sha256": "dd56e97f9b145ec86183397095327c5e955089bb0a7347cd892ea15883c819b8"
+    },
+    {
+      "path": "assets/models/p7-water-heater-tank.glb",
+      "bytes": 363608,
+      "sha256": "de707fc9d32f38591aba9d313195c57ba3a8b8636ce94ab5164eaec82b2636cc"
+    },
+    {
+      "path": "assets/models/p7-water-pump-skid.glb",
+      "bytes": 523340,
+      "sha256": "d4677df4476be702daa81d648d3842ae19c0c40acfbcb2ebc9162d4b9977d6fa"
+    },
+    {
+      "path": "assets/models/p7-wet-dry-vac.glb",
+      "bytes": 528812,
+      "sha256": "ff9ce751f86e1f8fe6cec257db4ec3d3f7caff4cb7f88ed02d35daea66a28a52"
+    },
+    {
+      "path": "assets/models/p7-wet-floor-sign.glb",
+      "bytes": 311492,
+      "sha256": "c3ccf50468d471856fa62f281723e2d7f2a802012b5c01cbe5c70f359aa7d347"
+    },
+    {
+      "path": "assets/models/p7-wheelchair.glb",
+      "bytes": 518452,
+      "sha256": "a4bcbaf1862514c14675be8386de35c5cdc5f19bfb706f470b2ca53f3ecc5080"
+    },
+    {
+      "path": "assets/models/p7-wheeled-stretcher.glb",
+      "bytes": 738640,
+      "sha256": "97f2a86c8b3e781a98b5c07858cd6c28e4da27477c50a796011171b7860ce818"
+    },
+    {
+      "path": "assets/models/p7-wheelie-bin.glb",
+      "bytes": 473304,
+      "sha256": "5cbf59bd701d1bedc5af454d2eeb2b3814e2ccdb44fcdc49bb756b30114cae02"
+    },
+    {
+      "path": "assets/models/rifle-optic.glb",
+      "bytes": 3811688,
+      "sha256": "296c2e9ab86a3c2ea5aac91ecb5ac35be37a3149c32159e4047ed10d4ce9693c"
+    },
+    {
+      "path": "assets/models/rifle.glb",
+      "bytes": 3772324,
+      "sha256": "eb8b2f43f56629db2f95a1d2738be15a6922f7a4c368b9f04aa8fea402692623"
+    },
+    {
+      "path": "assets/models/shelf.glb",
+      "bytes": 853072,
+      "sha256": "a236afe23cc7b77afc92dac32b13c5118c1c2e300aa7d9ea1653491407ead715"
+    },
+    {
+      "path": "assets/models/shop-backbar.glb",
+      "bytes": 932160,
+      "sha256": "845b0f2a819166d9fc40f659a1867028981e3d1f058d9973d6bb0dc5429c26f6"
+    },
+    {
+      "path": "assets/models/shop-cooler-open.glb",
+      "bytes": 648412,
+      "sha256": "6f2dab9ac163dd91c6705a6f68ce37f62b14a11e2b4a8f858acd53abed543f84"
+    },
+    {
+      "path": "assets/models/shop-cooler.glb",
+      "bytes": 635820,
+      "sha256": "b2afaf28962d8a4d0aa424455e4dd7839561010f449c70d691ad8e976737fb36"
+    },
+    {
+      "path": "assets/models/shop-counter.glb",
+      "bytes": 742204,
+      "sha256": "fb966601637395e82c0f59056791833617f44e764cae9e792b26379d7387ef78"
+    },
+    {
+      "path": "assets/models/shop-display-open.glb",
+      "bytes": 653604,
+      "sha256": "9ceeab8bb9ecb4f6bb16534942badcb97505bb81df95cc1b7a6e99af361c1fc1"
+    },
+    {
+      "path": "assets/models/shop-display.glb",
+      "bytes": 791612,
+      "sha256": "1322659e8de65cfdeac405ef0b6a5dee3cb5332099d6b81948c9ad28a7818f65"
+    },
+    {
+      "path": "assets/models/shotgun.glb",
+      "bytes": 2893204,
+      "sha256": "9ed980d9d89f98410934f620c6ecc86d5b2da429885c82f1752abe9f209ca3e1"
+    },
+    {
+      "path": "assets/models/sign.glb",
+      "bytes": 259508,
+      "sha256": "51aee024f5ff0cfec1cbdb93912bd79672612023a4f5add2b1b1eb13a8043de3"
+    },
+    {
+      "path": "assets/models/stall.glb",
+      "bytes": 838396,
+      "sha256": "b8400b8a190a471d47e120df783ee9b28327f4c234c3bf0ebd39d25d20fecfb5"
+    },
+    {
+      "path": "assets/models/tech-display.glb",
+      "bytes": 792920,
+      "sha256": "a7a98a232f407569a6497997a8eb688562fbf65b3dd2ec9829e06316c5662de5"
+    },
+    {
+      "path": "assets/models/trash-can.glb",
+      "bytes": 665600,
+      "sha256": "3cd3aacb4a0f3cfe5c215b6d7170f548614d338624aa73404d2b508d1582bd76"
+    },
+    {
+      "path": "assets/models/turnstile.glb",
+      "bytes": 819264,
+      "sha256": "ad681e7d825177007122170c0ac4e38b930415e580a13edc0c620c6141d8cadf"
+    },
+    {
+      "path": "assets/models/vending.glb",
+      "bytes": 1032668,
+      "sha256": "a9360c17c9c87860368f299d8c7ce708a74481f6957a995558e3bbbccb1b5821"
+    },
+    {
+      "path": "assets/models/zombie-body-agent.glb",
+      "bytes": 662524,
+      "sha256": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45"
+    },
+    {
+      "path": "assets/models/zombie-body-courier.glb",
+      "bytes": 695128,
+      "sha256": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df"
+    },
+    {
+      "path": "assets/models/zombie-body-heavyset.glb",
+      "bytes": 627580,
+      "sha256": "a55889055287c4e852ff52de72d15af3fc3788b1b278da5e05f5760f66ffab6c"
+    },
+    {
+      "path": "assets/models/zombie-body-lastshift.glb",
+      "bytes": 732068,
+      "sha256": "b91e2c0bd56effec6d2f7a825e4c26da6e2c5d4fc1e80ef87730e6fee6246559"
+    },
+    {
+      "path": "assets/models/zombie-body-scavenger.glb",
+      "bytes": 832684,
+      "sha256": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869"
+    },
+    {
+      "path": "assets/models/zombie-body-tall.glb",
+      "bytes": 628536,
+      "sha256": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281"
+    },
+    {
+      "path": "assets/models/zombie-rigged.glb",
+      "bytes": 1938556,
+      "sha256": "a4e58b99847d0e3a1f06731bedb2d48dcfe4f6418617d00bf3e0522a30d97606"
+    },
+    {
+      "path": "assets/textures/ceiling-authored-backing-color.jpg",
+      "bytes": 5646,
+      "sha256": "17b608b6ed8e1609730239a4fe62193194f0e9f2a523023c779543ae6c371ebd"
+    },
+    {
+      "path": "assets/textures/ceiling-authored-backing-normal.png",
+      "bytes": 13144,
+      "sha256": "99be6bcb0ab66e2e10b4ef9d8aba27f311e135181bc1aea4c99acdf1005cb677"
+    },
+    {
+      "path": "assets/textures/ceiling-authored-backing-orm.jpg",
+      "bytes": 24605,
+      "sha256": "d6a238dd0787d92dd74d5e2483ed9d96996937a7ce28d87f6c4b354d9913acba"
+    },
+    {
+      "path": "assets/textures/ceiling-working-face-color.jpg",
+      "bytes": 29257,
+      "sha256": "aa19eeb3d67f2181d2e156615a2199bf605b42ec4410c4642e71a0279cc0d6a3"
+    },
+    {
+      "path": "assets/textures/ceiling-working-face-normal.png",
+      "bytes": 109696,
+      "sha256": "64e151bf64122abc52ad898a356a52a1720c8a799dc21fa571333553fe0565be"
+    },
+    {
+      "path": "assets/textures/ceiling-working-face-orm.jpg",
+      "bytes": 160656,
+      "sha256": "bd068b213befd43bbb63b06e77c86c6bb12b697810c4a4d81a921b8abd02f7a3"
+    },
+    {
+      "path": "assets/textures/platform-authored-backing-color.jpg",
+      "bytes": 5686,
+      "sha256": "2946f51166c3f41cb45c494347e8a3cd792e0a166ae4d6b797d33dfa1bdad416"
+    },
+    {
+      "path": "assets/textures/platform-authored-backing-normal.png",
+      "bytes": 12905,
+      "sha256": "788a3491e853e71788f0362e390c750c20dd025b5b2e28a2b17ecd025a337ab4"
+    },
+    {
+      "path": "assets/textures/platform-authored-backing-orm.jpg",
+      "bytes": 24426,
+      "sha256": "ce8be1e225044401527aca6049e285f251943d484e95e272c3921dd42c78f4c2"
+    },
+    {
+      "path": "assets/textures/platform-integrated-safety-edge-color.jpg",
+      "bytes": 28402,
+      "sha256": "912bd719515ca992d644974995ca3df35736a6e6d0b93289dcb2529ed223f664"
+    },
+    {
+      "path": "assets/textures/platform-integrated-safety-edge-normal.png",
+      "bytes": 844,
+      "sha256": "e83536740051b8cd615d23a1b405ab17ff2b20bfd8e27dd5f647b58d8a647561"
+    },
+    {
+      "path": "assets/textures/platform-integrated-safety-edge-orm.jpg",
+      "bytes": 60066,
+      "sha256": "94384ae8e151b3dc9d3577b65311771e231bcfc15d3dab459941c1d78ffa3cca"
+    },
+    {
+      "path": "assets/textures/platform-working-face-color.jpg",
+      "bytes": 81621,
+      "sha256": "1d1b635d6439ba9dc9f9d1a98043e6a8ba1bdc30d5b1270360dd87e9eef927b7"
+    },
+    {
+      "path": "assets/textures/platform-working-face-normal.png",
+      "bytes": 178949,
+      "sha256": "ef0055da5772297d4837b9181aa1d356ae97b4dcf315a8f2a5617cbb415fad02"
+    },
+    {
+      "path": "assets/textures/platform-working-face-orm.jpg",
+      "bytes": 383868,
+      "sha256": "84615abbfd9be47e8db07fa5daf921e0c9592b503aa60702e2ac3181d3c9eabd"
+    },
+    {
+      "path": "assets/textures/tunnel-authored-backing-color.jpg",
+      "bytes": 5552,
+      "sha256": "26389888ffa68590005c90469029ec68ae8d5575c070fd703c338b88ae22726c"
+    },
+    {
+      "path": "assets/textures/tunnel-authored-backing-normal.png",
+      "bytes": 12244,
+      "sha256": "64032b210fac49e89c567275e8896317e67fbe00a27aef7046ad22d649034a3d"
+    },
+    {
+      "path": "assets/textures/tunnel-authored-backing-orm.jpg",
+      "bytes": 24534,
+      "sha256": "136bcc3de4c4eff6e4fd50f5478416f1a35f66a6c04f05b2ebfe79307cc31ae1"
+    },
+    {
+      "path": "assets/textures/tunnel-working-face-color.jpg",
+      "bytes": 67133,
+      "sha256": "e95e6e97075d7c64f7043728deac7e1a9fda63b01770d409c235120425bae6f6"
+    },
+    {
+      "path": "assets/textures/tunnel-working-face-normal.png",
+      "bytes": 551077,
+      "sha256": "c80295e3b0412aee2d22c326c38075a2ffa315c171666c635c8860ef22bbeef2"
+    },
+    {
+      "path": "assets/textures/tunnel-working-face-orm.jpg",
+      "bytes": 55015,
+      "sha256": "762a12cede02154d37008a3611537898ff02681e239b96ebd750d24d07a20f13"
+    },
+    {
+      "path": "assets/textures/wall-authored-backing-color.jpg",
+      "bytes": 5661,
+      "sha256": "df2cf1701bae0c4ac7886f524584b88f76134339e86c7d4a99927a7eecb23208"
+    },
+    {
+      "path": "assets/textures/wall-authored-backing-normal.png",
+      "bytes": 12699,
+      "sha256": "78af34baf652476cf23075560f7fb27975df2d99e013d12bdac82ba4a10c3fb5"
+    },
+    {
+      "path": "assets/textures/wall-authored-backing-orm.jpg",
+      "bytes": 24344,
+      "sha256": "0a6790cb7cc71a80dd4db11aff327c5e8d28cef5218f8d730439bfd74968c5e0"
+    },
+    {
+      "path": "assets/textures/wall-working-face-color.jpg",
+      "bytes": 73553,
+      "sha256": "5b7dd7cc6963f2f470b33632300d9d5a44f87d404c5681a1f68c6674c00b7105"
+    },
+    {
+      "path": "assets/textures/wall-working-face-normal.png",
+      "bytes": 75357,
+      "sha256": "8d49f85bbea8d55f88f812f43b1f5feeffcc53011eea12d5f67e1b2a56fb0a44"
+    },
+    {
+      "path": "assets/textures/wall-working-face-orm.jpg",
+      "bytes": 268609,
+      "sha256": "b095e0274a6088031c090dd3171a0dcd9e6935fb30470284e87b6f9cf2b6af29"
+    }
+  ]
+}

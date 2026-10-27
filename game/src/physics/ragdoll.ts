@@ -29,6 +29,12 @@ export interface RagdollTarget {
   setCullSphere(center: THREE.Vector3, radius: number): void;
   /** The body moved (pelvis ground position) — lets game logic/QA follow the corpse. */
   ragdollMoved?(x: number, z: number): void;
+  /**
+   * Iteration 07 (Lane K, generic hook for non-humanoid actors, e.g. Lane Q's quadruped): the
+   * articulated rig to build (parts, joints, root/core parts). Omitted = the humanoid zombie rig
+   * (HUMANOID_RIG). Sphere offsets are in each named bone's local frame (unscaled model metres).
+   */
+  readonly ragdollRig?: RagdollRig;
 }
 
 export interface KillImpulse {
@@ -46,26 +52,56 @@ export type PartName = 'pelvis' | 'torso' | 'head' | 'upperArmL' | 'forearmL' | 
 
 export const GROUP_STATIC = 1;
 export const GROUP_RAGDOLL = 2;
+/** Iteration 07 (Lane K): activate-on-hit items / light props and physical chunks (physics/dynamicItems.ts, chunks.ts). */
+export const GROUP_ITEM = 4;
+export const GROUP_CHUNK = 8;
 
 type V3 = [number, number, number];
-type SphereSpec = {seg: string; t: number; r: number} | {at: V3; bone?: string; r: number} | {tip: number; bone: string; r: number};
+export type SphereSpec = {seg: string; t: number; r: number} | {at: V3; bone?: string; r: number} | {tip: number; bone: string; r: number};
 
-interface PartSpec {
-  name: PartName;
+export interface RagdollPartSpec {
+  name: string;
   bone: string;
   /** Child bone defining the segment direction (bone axis d0). */
   child: string;
-  parent: PartName | null;
+  parent: string | null;
   mass: number;
   /** Radius multiplier for the long-coat variant (coat panels add bulk). */
   coat: number;
   spheres: SphereSpec[];
   /** Linear/angular damping. */
   damp: [number, number];
+  /** Which RagdollTarget.girth multiplier scales this part's spheres (default from the humanoid part name). */
+  girth?: 'torso' | 'arm' | 'leg' | 'none';
 }
+type PartSpec = RagdollPartSpec;
 
-interface BallSpec { kind: 'ball'; cone: V3; coneAngle: number; twistRef: V3; twist: number }
-interface HingeSpec { kind: 'hinge'; axis: 'x' | 'elbow'; min: number; max: number }
+export interface BallSpec { kind: 'ball'; cone: V3; coneAngle: number; twistRef: V3; twist: number }
+/** Hinge about the bind-frame X axis ('x') or about (child axis x forward) ('elbow'), flexion min..max (rad). */
+export interface HingeSpec { kind: 'hinge'; axis: 'x' | 'elbow'; min: number; max: number }
+
+/**
+ * A ragdoll rig (iteration 07 generic hook; the humanoid zombie rig is HUMANOID_RIG). Joint axes are
+ * written in bind/model coordinates for the LEFT side; parts whose bone starts with `mirrorPrefix`
+ * mirror the cone's X component.
+ */
+export interface RagdollRig {
+  parts: RagdollPartSpec[];
+  /** Joint limits per CHILD part name (every part except the root needs one). */
+  joints: Record<string, BallSpec | HingeSpec>;
+  /** Root part (writes the root translation; `Ragdoll.pelvis`). */
+  root: string;
+  /** Parts sharing the shot impulse a light hit part cannot take, with fractions summing to 1. */
+  core: [string, number][];
+  /** Part hit by head shots (KillImpulse.bone === 'head'). */
+  head?: string;
+  /** Parts whose first contact plays the body-fall cue. Default [root, core[0]]. */
+  fall?: string[];
+  /** Bone name prefix of right-side parts (default 'R_'). */
+  mirrorPrefix?: string;
+  /** Root bone of the skeleton (default 'Root', else the root part bone's parent). */
+  rootBone?: string;
+}
 
 // Masses sum to ~72.6 kg at scale 1 (scaled by scale^3). Sphere offsets are in the named bone's
 // local (bind-aligned) frame, in unscaled model metres.
@@ -95,7 +131,7 @@ function partSpecs(): PartSpec[] {
 }
 
 /** Joint limits per child part (left side; right mirrors X). Angles in radians. */
-const JOINTS: Record<Exclude<PartName, 'pelvis'>, BallSpec | HingeSpec> = {
+const JOINTS: Record<Exclude<PartName, 'pelvis'>, BallSpec | HingeSpec> & Record<string, BallSpec | HingeSpec> = {
   // lower spine: flex forward ~34 deg, back ~14 deg; side bend + axial twist ~20 deg
   torso: {kind: 'ball', cone: [0, 1, 0.18], coneAngle: 0.42, twistRef: [1, 0, 0], twist: 0.35},
   // neck: forward ~49 deg, back ~31 deg (a supine head can reach the floor); turn/tilt ~40 deg
@@ -114,10 +150,17 @@ const JOINTS: Record<Exclude<PartName, 'pelvis'>, BallSpec | HingeSpec> = {
   shinR: {kind: 'hinge', axis: 'x', min: 0, max: 2.3},
 };
 
+/** The humanoid zombie rig (iteration 03; 11 parts, 10 joints). */
+export const HUMANOID_RIG: RagdollRig = {
+  parts: partSpecs(), joints: JOINTS, root: 'pelvis', core: [['torso', 0.6], ['pelvis', 0.4]], head: 'head', fall: ['pelvis', 'torso'], mirrorPrefix: 'R_', rootBone: 'Root',
+};
+
 /** Sphere radius multiplier for a part from the target's girth (clamped; 1 without girth data). */
-function girthOf(g: RagdollTarget['girth'], part: PartName): number {
+function girthOf(g: RagdollTarget['girth'], spec: PartSpec): number {
   if (!g) return 1;
-  const k = part === 'pelvis' || part === 'torso' ? g.torso : part.startsWith('upperArm') || part.startsWith('forearm') ? g.arm : part === 'head' ? 1 : g.leg;
+  const part = spec.name;
+  const group = spec.girth ?? (part === 'pelvis' || part === 'torso' ? 'torso' : part.startsWith('upperArm') || part.startsWith('forearm') ? 'arm' : part.startsWith('thigh') || part.startsWith('shin') ? 'leg' : 'none');
+  const k = group === 'none' ? 1 : g[group];
   return Math.min(1.45, Math.max(0.75, k));
 }
 
@@ -236,7 +279,9 @@ export interface RagdollOptions {
 export class Ragdoll {
   readonly parts: Part[] = [];
   readonly joints: RagdollJoint[] = [];
-  private readonly byName = new Map<PartName, Part>();
+  private readonly byName = new Map<string, Part>();
+  /** The rig this ragdoll was built from (target.ragdollRig or HUMANOID_RIG). */
+  readonly rig: RagdollRig;
   /** Bones in hierarchy order with their (frozen-unless-driven) local rotations. */
   private readonly order: {bone: THREE.Object3D; part: Part | null; parentIdx: number}[] = [];
   private readonly worldQ: THREE.Quaternion[] = [];
@@ -252,16 +297,20 @@ export class Ragdoll {
 
   constructor(readonly target: RagdollTarget, impulse: KillImpulse | null, private readonly opts: RagdollOptions, now = 0) {
     this.startedAt = now;
+    const rig = (this.rig = target.ragdollRig ?? HUMANOID_RIG);
     const root = target.root;
     root.updateMatrixWorld(true);
-    const rootBone = target.bone('Root') ?? target.bone('Hips')!.parent!;
+    const rootPart = rig.parts.find(p => p.name === rig.root);
+    if (!rootPart) throw new Error(`ragdoll: rig root part ${rig.root} missing`);
+    const rootBone = target.bone(rig.rootBone ?? 'Root') ?? target.bone(rootPart.bone)?.parent;
+    if (!rootBone) throw new Error('ragdoll: no root bone');
     rootBone.updateWorldMatrix(true, false);
     this.rootBoneInv.copy(rootBone.matrixWorld).invert();
     (rootBone.parent ?? root).getWorldQuaternion(this.baseQ);
     const s = target.scale;
     const coatK = target.coated;
 
-    for (const spec of partSpecs()) {
+    for (const spec of rig.parts) {
       const bone = target.bone(spec.bone);
       const child = target.bone(spec.child);
       if (!bone || !child) throw new Error(`ragdoll: missing bone ${spec.bone}/${spec.child}`);
@@ -275,7 +324,7 @@ export class Ragdoll {
         if ('seg' in sp) p = bone.localToWorld(target.bone(sp.seg)!.position.clone().multiplyScalar(sp.t));
         else if ('tip' in sp) { const b = target.bone(sp.bone)!; p = b.localToWorld(b.position.clone().normalize().multiplyScalar(sp.tip)); }
         else p = (sp.bone ? target.bone(sp.bone)! : bone).localToWorld(new THREE.Vector3(...sp.at));
-        centres.push({p, r: sp.r * s * (coatK ? spec.coat : 1) * girthOf(target.girth, spec.name)});
+        centres.push({p, r: sp.r * s * (coatK ? spec.coat : 1) * girthOf(target.girth, spec)});
       }
       const com = new THREE.Vector3();
       let wsum = 0;
@@ -319,14 +368,15 @@ export class Ragdoll {
       const pivotA = A.pointToLocalFrame(J, new CANNON.Vec3());
       const pivotB = B.pointToLocalFrame(J, new CANNON.Vec3());
       const joint = new RagdollJoint(A, pivotA, B, pivotB);
-      const mirror = spec.bone.startsWith('R_') ? -1 : 1;
+      const mirror = spec.bone.startsWith(rig.mirrorPrefix ?? 'R_') ? -1 : 1;
       // rotation taking bind-frame vectors of the child's real parent bone into the parent body frame
       parent.bone.getWorldQuaternion(tq);
       part.bone.parent!.getWorldQuaternion(tq2);
       const qRel = tq.invert().multiply(tq2);
       const toA = (v: THREE.Vector3) => toC(v.clone().applyQuaternion(qRel).normalize());
       const d0 = this.target.bone(spec.child)!.position.clone().normalize(); // child bone axis (child frame == bind)
-      const js = JOINTS[spec.name as Exclude<PartName, 'pelvis'>];
+      const js = rig.joints[spec.name];
+      if (!js) throw new Error(`ragdoll: no joint spec for part ${spec.name}`);
       if (js.kind === 'ball') {
         const cone = new THREE.Vector3(js.cone[0] * mirror, js.cone[1], js.cone[2]).normalize();
         joint.addLimit(toA(cone), toC(d0), js.coneAngle);
@@ -367,8 +417,9 @@ export class Ragdoll {
     // the solver from popping an arm through a wall it was animated into)
     for (const p of this.parts) if (this.insideStatic(p)) { p.ghostT = 0.7; p.body.collisionFilterMask = 0; }
 
+    const fallParts = rig.fall ?? [rig.root, rig.core[0]?.[0] ?? rig.root];
     for (const p of this.parts) {
-      if (p.spec.name === 'pelvis' || p.spec.name === 'torso') {
+      if (fallParts.includes(p.spec.name)) {
         p.body.addEventListener('collide', (e: {contact: CANNON.ContactEquation}) => {
           if (this.fell) return;
           this.fell = true;
@@ -384,12 +435,12 @@ export class Ragdoll {
     this.sync(false);
   }
 
-  part(name: PartName): Part | undefined {
+  part(name: PartName | string): Part | undefined {
     return this.byName.get(name);
   }
 
   get pelvis(): CANNON.Body {
-    return this.byName.get('pelvis')!.body;
+    return this.byName.get(this.rig.root)!.body;
   }
 
   private applyShot(imp: KillImpulse): void {
@@ -399,8 +450,10 @@ export class Ragdoll {
     dir.y = Math.max(-0.3, Math.min(0.15, dir.y)); // shots from eye height should shove, not launch or pin
     dir.normalize();
     const point = new CANNON.Vec3(imp.point.x, imp.point.y, imp.point.z);
-    let hit: Part = this.byName.get('torso')!;
-    if (imp.bone === 'head') hit = this.byName.get('head')!;
+    const rig = this.rig;
+    let hit: Part = this.byName.get(rig.core[0]?.[0] ?? rig.root)!;
+    const headPart = rig.head ? this.byName.get(rig.head) : undefined;
+    if (imp.bone === 'head' && headPart) hit = headPart;
     else {
       let best = Infinity;
       for (const p of this.parts) {
@@ -421,8 +474,9 @@ export class Ragdoll {
     if (cv2.length() > 0.4) cv2.scale(0.4 / cv2.length(), cv2);
     hit.body.applyImpulse(cv, cv2);
     if (rest > 0) {
-      for (const [n, k] of [['torso', 0.6], ['pelvis', 0.4]] as const) {
-        const b = this.byName.get(n)!.body;
+      for (const [n, k] of rig.core) {
+        const b = this.byName.get(n)?.body;
+        if (!b) continue;
         cv.set(dir.x * rest * k, dir.y * rest * k, dir.z * rest * k);
         b.applyImpulse(cv, new CANNON.Vec3());
       }

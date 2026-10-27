@@ -12,6 +12,7 @@ import {CELL, SOLID, rampHeight, type Grid, type Ramp} from '../gen/grid';
 import type {StationLayout} from '../gen/station';
 import {surfaceMaterial, type MatKey, type WorldMaterials} from './materials';
 import {canvasTexture} from './canvasTextures';
+import {flightRailRuns} from '../gen/doorways';
 
 /** The builder's per-material quad accumulator. */
 export interface QuadSink { quad(p: number[][], n: readonly number[], uv: number[][]): void }
@@ -181,15 +182,14 @@ function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMateria
     flatQuad(acc('safetyEdge'), nm, axisX, s, s + upperDir * 0.055, a0 + 0.03, a1 - 0.03, y1 + 0.003, y1 + 0.003, true);
   }
   // Handrails on both walls: steel rail along the pitch line + wall brackets.
-  for (const side of [-1, 1] as const) {
-    const mid = Math.floor(n / 2);
-    const cx = axisX ? r.x + mid : side < 0 ? r.x - 1 : r.x + r.w, cy = axisX ? (side < 0 ? r.y - 1 : r.y + r.h) : r.y + mid;
-    if (g.get(cx, cy) !== SOLID) continue;
+  // Iteration 07 (Lane DW): only along solid side wall, stopping short of any opening in it
+  // (gen/doorways.ts flightRailRuns), so a rail never crosses a doorway or an open join.
+  for (const {side, s0: r0, s1: r1} of flightRailRuns(g, r)) {
     const across = side < 0 ? a0 + RAIL_OFF : a1 - RAIL_OFF;
     const P = (s: number): V3 => (axisX ? {x: s, y: H(s) + RAIL_Y, z: across} : {x: across, y: H(s) + RAIL_Y, z: s});
-    const ss = [lo + 0.15, ...kinks.filter(k => k > lo + 0.15 && k < hi - 0.15), hi - 0.15];
+    const ss = [r0, ...kinks.filter(k => k > r0 && k < r1), r1];
     for (let i = 0; i + 1 < ss.length; i++) beam(steel, P(ss[i]), P(ss[i + 1]), 0.045);
-    for (let s = lo + 0.4; s < hi - 0.2; s += 1.2) {
+    for (let s = r0 + 0.25; s < r1 - 0.05; s += 1.2) {
       const p = P(s), off = side < 0 ? -0.04 : 0.04;
       const q = axisX ? {x: p.x, y: p.y - 0.06, z: p.z + off} : {x: p.x + off, y: p.y - 0.06, z: p.z};
       beam(steel, p, q, 0.025);
@@ -231,8 +231,11 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   }
 
   // Tunnel mouths: striped barricades (posts + planks) mark the end of the walkable track bed.
+  // Iteration 07 (Lane DW): set 0.12 m off the end wall so the planks lie inside the player's
+  // collision radius (0.3 m) of that wall — the barricade really blocks (was 0.4 m: you could
+  // step 0.16 m through the planks).
   for (const t of layout.trenches) {
-    for (const x of [t.x0 + 0.4, t.x1 - 0.4]) {
+    for (const x of [t.x0 + 0.12, t.x1 - 0.12]) {
       const zc = (t.z0 + t.z1) / 2, w = t.z1 - t.z0 - 0.3;
       for (const zz of [t.z0 + 0.25, t.z1 - 0.25, zc]) box(steel, x, t.floorY + 0.65, zz, 0.08, 1.3, 0.08);
       for (const y of [0.55, 1.1]) box(stripes, x + (x < (t.x0 + t.x1) / 2 ? 0.06 : -0.06), t.floorY + y, zc, 0.03, 0.2, w, 0.6);

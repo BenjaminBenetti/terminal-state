@@ -10,6 +10,7 @@
 import {hashString, mulberry32} from '../core/rng';
 import {PURPOSE_HOLDER_KINDS, type PurposeHolderKind} from '../gen/props';
 import {purposeLoot} from '../gen/purposes';
+import {P7_HOLDER_KINDS, P7_HOLDER_META, type P7HolderKind} from '../gen/props07';
 import {effectText, itemDef} from './items';
 import type {Inventory} from './inventory';
 import {packItems, type Placement, type Surface} from './lootLayout';
@@ -26,8 +27,10 @@ export type SurfaceKind = 'shelf' | 'stall' | 'vending' | 'table' | 'desk'
   | 'shopCounter' | 'shopDisplay' | 'shopBackbar' | 'shopCooler'
   // Iteration 05 purpose holders (gen/props.ts PURPOSE_HOLDER_KINDS): store shelving, snack rack,
   // hot-dog cart, kitchen lines, staff kitchenette/fridge, gun locker, security desk, first-aid cabinet.
-  | PurposeHolderKind;
-export const SURFACE_KINDS: readonly SurfaceKind[] = ['shelf', 'stall', 'vending', 'table', 'desk', 'shopCounter', 'shopDisplay', 'shopBackbar', 'shopCooler', ...PURPOSE_HOLDER_KINDS];
+  | PurposeHolderKind
+  // Iteration 07 (Lane P2): generated holders with measured surfaces (gen/props07.ts P7_HOLDER_KINDS).
+  | P7HolderKind;
+export const SURFACE_KINDS: readonly SurfaceKind[] = ['shelf', 'stall', 'vending', 'table', 'desk', 'shopCounter', 'shopDisplay', 'shopBackbar', 'shopCooler', ...PURPOSE_HOLDER_KINDS, ...P7_HOLDER_KINDS];
 export function isSurfaceKind(kind: string): kind is SurfaceKind {
   return (SURFACE_KINDS as readonly string[]).includes(kind);
 }
@@ -43,6 +46,7 @@ export const HOLDER_LABEL: Record<HolderKind, string> = {
   stockShelf: 'shelf', snackRack: 'snack rack', hotdogCart: 'hot-dog cart', grillLine: 'grill line', espressoBar: 'espresso bar',
   wokLine: 'wok station', deliLine: 'prep line', blenderBar: 'juice station', kitchenette: 'kitchenette', fridge: 'fridge',
   gunLocker: 'gun locker', monitorDesk: 'security desk', medCabinet: 'first-aid cabinet',
+  ...P7_HOLDER_META.label,
 };
 /** Back-compat alias (iteration 02 name). */
 export const CONTAINER_LABEL = HOLDER_LABEL;
@@ -105,18 +109,21 @@ const HOLDER_MOD: Record<HolderKind, W4> = {
   stockShelf: [1, 1, 0.9, 0.3], snackRack: [2, 0.5, 0, 0], hotdogCart: [1.5, 1.5, 0, 0], grillLine: [1.4, 1, 0, 0], espressoBar: [1, 1.4, 0, 0],
   wokLine: [1.6, 0.8, 0, 0], deliLine: [1.4, 1, 0, 0], blenderBar: [0.5, 2, 0, 0], kitchenette: [2, 1, 0.1, 0], fridge: [0.6, 2.4, 0, 0],
   gunLocker: [0, 0, 0.4, 3], monitorDesk: [1, 1.2, 0.2, 0.3], medCabinet: [0, 0.2, 3, 0],
+  ...P7_HOLDER_META.mod,
 };
 /** Empties are rare (and clearly labelled when opened). */
 const EMPTY_CHANCE: Record<HolderKind, number> = {
   cabinetTall: 0.08, cabinetLow: 0.1, crate: 0.12, shelf: 0.08, stall: 0.1, vending: 0.12, table: 0.65, desk: 0.55, shopCounter: 0.3, shopDisplay: 0.25, shopBackbar: 0.3, shopCooler: 0.15,
   stockShelf: 0.12, snackRack: 0.15, hotdogCart: 0.2, grillLine: 0.35, espressoBar: 0.35, wokLine: 0.35, deliLine: 0.35, blenderBar: 0.35,
   kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
+  ...P7_HOLDER_META.empty,
 };
 const LOT_COUNT: Record<HolderKind, readonly [number, number]> = {
   cabinetTall: [2, 5], cabinetLow: [2, 4], crate: [1, 3], shelf: [2, 5], stall: [2, 5], vending: [3, 6], table: [1, 2], desk: [1, 2],
   shopCounter: [1, 3], shopDisplay: [2, 4], shopBackbar: [1, 3], shopCooler: [3, 7],
   stockShelf: [2, 5], snackRack: [2, 4], hotdogCart: [2, 4], grillLine: [1, 3], espressoBar: [1, 3], wokLine: [1, 3], deliLine: [1, 3], blenderBar: [1, 3],
   kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
+  ...P7_HOLDER_META.lots,
 };
 /** Stocked rooms get fuller shelves. */
 const FULL_ROOMS = new Set(['stock-room', 'food-court', 'retail-arcade', 'storage', 'crew-room', 'shop']);

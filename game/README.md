@@ -1,4 +1,6 @@
-# The Last Line — first playable vertical slice
+# Terminal State — first playable vertical slice
+
+(Formerly "The Last Line", the working title; legacy task folders, asset provenance and file names keep the old name.)
 
 Working title. Static Three.js first-person subway survival slice: every page load generates a new
 large station from one of six macro archetypes (side platforms + long or twin mezzanines; island
@@ -27,6 +29,7 @@ saved: no localStorage/IndexedDB; settings last for the session only.
 | `node tools/qa/station-perf.mjs [OUT.json] [seed …]` | Node-side draw-call / triangle estimate of the built station from a few viewpoints (no GPU, procedural fallbacks) |
 | `node game/e2e/iter02-check.mjs OUT` | short iteration-02 browser check (jump/crouch, container, dark/flashlight, New Station audio, turnstiles) |
 | `npm run assets:build` | rebuild runtime derivatives from the read-only masters (CPU only) |
+| `node tools/asset-pipeline/props/build-props-iteration07.mjs [--only k,k] [--force]` | iteration-07 generated props: rebuild `public/assets/models/p7-*.glb`, `derivatives/props-iteration07.json` and `src/gen/props07.catalog.ts` from the native masters (resumable, deterministic; previews in `.cache/iteration07-p2-previews/`) |
 | `npm run game:release` | copy `dist/game` to the handoff folder with a SHA-256 manifest |
 | `npm run game:backup` | tar snapshot of the project into the shared task folder |
 | `npm run board` | unchanged read-only concept board preview (port 4173) |
@@ -132,7 +135,7 @@ station" (same seed, this session only).
 
 ## Layout
 `src/gen` deterministic generator + grid/A*/LOS (pure, unit-tested) · `src/world` mesh building,
-materials, light pool, pickups, effects · `src/weapons` data-driven `WeaponDef`s + shared
+materials, light pool, pickups, effects (iteration-07 generated props: `src/gen/props07.ts` registry + `props07Dress.ts` placement, models lazy-loaded per station by `src/assets/loader.ts` PropModelLibrary) · `src/weapons` data-driven `WeaponDef`s + shared
 fire/reload state machine + viewmodel · `src/items` item catalogue + inventory · `src/ai` zombie
 brain (pure) + skinned actor · `src/physics` cannon-es ragdolls + pooled casings · `src/player`
 movement + survival (hunger/thirst) · `src/ui` HUD/inventory · `src/audio` procedural spatial WebAudio ·

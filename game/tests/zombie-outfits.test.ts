@@ -227,7 +227,10 @@ describe('zombie wardrobe registry (real GLBs)', () => {
       const heavy = lib.wearables.find(w => w.heavy && lib.supports(b.id, w.id))?.id ?? null;
       const req: ZombieLook['wear'] = {};
       for (const r of b.requires ?? []) req[r] = lib.wearables.find(w => w.slot === r && lib.supports(b.id, w.id))!.id;
-      for (const wear of [req, heavy ? {...req, upper: heavy} : null]) {
+      // iteration 07: with the heavy upper, a required slot takes a wearable layer-compatible with it on this body
+      const reqHeavy: ZombieLook['wear'] = {...req};
+      if (heavy) for (const r of b.requires ?? []) reqHeavy[r] = lib.wearables.find(w => w.slot === r && lib.supports(b.id, w.id) && lib.compatible(b.id, lib.wearable(heavy)!, w))?.id ?? req[r];
+      for (const wear of [req, heavy ? {...reqHeavy, upper: heavy} : null]) {
         if (!wear) continue;
         const app = lib.build({body: b.id, wear});
         const z = new ZombieActor(app, {x: 6 + (n % 5) * 5, z: 6 + Math.floor(n / 5) * 6, yaw: 0.3, type: wear.upper ? 'coated' : 'shambler', area: 0}, rand);

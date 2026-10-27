@@ -16,26 +16,53 @@ import type {WorldMaterials, MatKey} from '../world/materials';
 import {shapeMaterial} from '../world/shapeMaterials';
 import {StaticQuery} from '../physics/staticQuery';
 import {raySphere, rayCapsule, type HitInfo, type Vec3, type WorldHit} from '../combat/hitscan';
-import {DAMAGE_MATERIALS, STRUCTURAL_CLASS, structuralKeyAt, type DamageClass, type StructuralKey} from './materials';
+import {CHUNK_PHYS, DAMAGE_MATERIALS, STRUCTURAL_CLASS, itemClass, structuralKeyAt, type DamageClass, type StructuralKey} from './materials';
 import {DebrisSystem, type DebrisSpawn} from './debris';
 import {CraterField} from './craters';
 import {PropDamage, type PropBreakEvent, type PropDamageHooks} from './propDamage';
-import {installWounds, woundsOf, type WoundController, type WoundableActor} from './wounds';
+import {installWounds, woundsOf, type WoundController, type WoundResult, type WoundableActor} from './wounds';
 import {sampleTexture, textureMean} from './sample';
+import {extractPatch, fallbackFlap} from './fleshPatch';
+import {isLootHolderKind} from '../items/loot';
+import type {PhysicsSystem} from '../physics/world';
+import type {PickupLike} from '../physics/dynamicItems';
 
 /** What the damage system needs from a zombie (ZombieActor satisfies it). */
 export interface DamageZombie extends WoundableActor {
   brain: {alive: boolean; x: number; y?: number; z: number};
   scale: number;
   bone?(name: string): THREE.Object3D | undefined;
+  /** Iteration 07: animated bone velocity (chunks inherit it; ZombieActor / RagdollTarget). */
+  boneVelocity?(name: string, out: THREE.Vector3): THREE.Vector3;
+  /** Iteration 07: non-humanoid actors may supply their own corpse hit volumes (else humanoid bones). */
+  corpseVolumes?(): {part: 'head' | 'torso' | 'limb'; a: Vec3; b: Vec3 | null; r: number}[];
 }
 
-export interface DamagePickup { stack: {itemId: string; uid?: number}; x: number; y: number; z: number; obj: THREE.Object3D }
+export interface DamagePickup { stack: {itemId: string; uid?: number; count?: number}; x: number; y: number; z: number; obj: THREE.Object3D }
+
+/** Iteration 07 (Lane K): a visible loot lot crossed by a shot (ContainerManager.shotLots). */
+export interface ShotLot { holder: object; lotId: number; t: number }
 
 export interface DamageHooks extends PropDamageHooks {
-  /** Loose pickups (knocked by near-miss shots). */
+  /** Loose pickups (shot items become rigid bodies; legacy: knocked by near-miss shots). */
   pickups?(): readonly DamagePickup[];
+  /** Iteration 07 (Lane K): the station physics (rigid items / chunks); none = legacy knock + ballistic debris. */
+  physics?: PhysicsSystem | null;
+  /** Visible loot lots along a shot ray (nearest first, before maxT). */
+  lots?(o: Vec3, d: Vec3, maxT: number): readonly ShotLot[];
+  /**
+   * Lift a lot off its holder into a loose pickup at its exact transform (same item id / count; the lot
+   * is removed from the holder so it can never be taken twice). null if it is no longer there.
+   */
+  detachLot?(holder: object, lotId: number): PickupLike | null;
+  /** Visible loot lots overlapping a world box (a flying item knocks them over). */
+  lotsIn?(box: THREE.Box3): readonly {holder: object; lotId: number}[];
 }
+
+/** Bullet impulse handed to a loose item / light prop (N.s per point of weapon damage: rifle ~1.3, buckshot pellet ~0.8). */
+export const SHOT_IMPULSE_PER_DAMAGE = 0.055;
+/** Torn-off actor pieces per actor (bounded; later hits still wound). */
+export const MAX_TEARS_PER_ACTOR = 12;
 
 export interface ShotInput {
   /** Weapon damage of this bullet / pellet after range falloff. */
@@ -63,10 +90,12 @@ export class DamageSystem {
   private actors: WoundController[] = [];
   private shot = 0;
   private tearShot = new WeakMap<object, number>();
+  private patchShot = new WeakMap<object, number>();
   private fallCue = 0;
+  private physics: PhysicsSystem | null = null;
   rand: () => number = Math.random;
   /** Hits handled per kind (QA). */
-  readonly counts = {structural: 0, prop: 0, zombie: 0, corpse: 0, knocked: 0, breaks: 0};
+  readonly counts = {structural: 0, prop: 0, zombie: 0, corpse: 0, knocked: 0, breaks: 0, itemsShot: 0, lotsLifted: 0, propsShoved: 0, patches: 0, flaps: 0, worldChunks: 0};
 
   constructor(private readonly fx: Effects | null, private readonly sfx: Sfx | null) {
     this.group.name = 'damage';
@@ -83,6 +112,17 @@ export class DamageSystem {
     this.debris.setStatics(this.query);
     this.props.hooks = {ownMeshes: hooks.ownMeshes, onBreak: e => this.onBreak(e)};
     this.props.build(layout.props, roots);
+    this.physics = hooks.physics ?? null;
+    if (this.physics) {
+      const di = this.physics.dynamicItems;
+      di.detacher = this.props;
+      di.pickups = () => (hooks.pickups?.() ?? []) as readonly PickupLike[];
+      di.liftLots = box => {
+        const out: PickupLike[] = [];
+        for (const l of hooks.lotsIn?.(box) ?? []) { const pk = hooks.detachLot?.(l.holder, l.lotId); if (pk) { out.push(pk); this.counts.lotsLifted++; } }
+        return out;
+      };
+    }
     this.props.warmup();
     this.warmFrames = 0;
   }
@@ -117,6 +157,10 @@ export class DamageSystem {
     if (wh.kind === 'prop' && L && wh.prop !== undefined && L.props[wh.prop]) {
       const prop = L.props[wh.prop];
       const r = this.props.hit({prop, index: wh.prop, point, dir, normal, damage: shot.damage, pellet: shot.pellet});
+      // Iteration 07: a light prop (trash can …) takes the shot's impulse at the hit point and goes loose
+      if (!r.rubble && this.physics?.world && this.physics.dynamicItems.isDynamicProp(prop)) {
+        if (this.physics.dynamicItems.shootProp(prop, wh.prop, r.point, dir, shot.damage * SHOT_IMPULSE_PER_DAMAGE)) this.counts.propsShoved++;
+      }
       if (!r.rubble) {
         this.counts.prop++;
         const spec = DAMAGE_MATERIALS[r.cls];
@@ -192,18 +236,34 @@ export class DamageSystem {
     const [lo, hi] = spec.chips;
     const n = Math.round((lo + R() * (hi - lo)) * k);
     let made = 0;
-    const refl = tv2.copy(dir).addScaledVector(normal, -2 * dir.dot(normal)).normalize();
+    const refl = new THREE.Vector3().copy(dir).addScaledVector(normal, -2 * dir.dot(normal)).normalize();
+    // Iteration 07 (Lane K): the biggest piece of a full hit (a fraction of pellet hits) is a real rigid body
+    const phys = this.physics?.world && spec.chip[1] >= 0.02 ? (k >= 0.9 ? 1 : R() < 0.35 ? 1 : 0) : 0;
     for (let i = 0; i < n; i++) {
       const useSurface = R() < (spec.shape === 'shard' || spec.shape === 'flake' ? 0.7 : 0.5);
       const col = (useSurface ? tc.copy(surface) : tc.set(spec.substrate)).multiplyScalar(0.8 + R() * 0.35);
       const shape = cls === 'tile' && !useSurface ? 'chunk' : spec.shape;
       const sp = 1.3 + R() * 2.4;
       const v = tv.copy(normal).multiplyScalar(sp).addScaledVector(refl, 0.6 + R()).add(tv2.set((R() - 0.5) * 2.2, R() * 1.6, (R() - 0.5) * 2.2));
-      const size = (spec.chip[0] + (spec.chip[1] - spec.chip[0]) * Math.pow(R(), 1.6)) * sizeK;
+      const big = i < phys;
+      const size = (big ? spec.chip[1] * (0.85 + R() * 0.45) : spec.chip[0] + (spec.chip[1] - spec.chip[0]) * Math.pow(R(), 1.6)) * sizeK;
       const s: DebrisSpawn = {x: point.x + normal.x * 0.02, y: point.y + normal.y * 0.02, z: point.z + normal.z * 0.02, vx: v.x, vy: v.y, vz: v.z, size, color: col, shape};
-      if (this.debris.spawn(s)) made++;
+      if (big ? this.physicalPiece(s, cls) : this.debris.spawn(s)) made++;
     }
     return made;
+  }
+
+  /** Iteration 07: a debris piece driven by a rigid body (falls back to an ordinary ballistic piece). */
+  private physicalPiece(s: DebrisSpawn, cls: DamageClass): boolean {
+    const ph = this.physics;
+    if (!ph?.world) return this.debris.spawn(s);
+    const d = this.debris.spawnDriven(s);
+    if (!d) return false;
+    const R = this.rand, c = CHUNK_PHYS[cls];
+    const spin = new THREE.Vector3(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(2 * (cls === 'wood' || cls === 'glass' ? 18 : 24));
+    ph.chunks.spawnWorld(d.piece, d.half, {vel: new THREE.Vector3(s.vx, s.vy, s.vz), spin, mat: c.mat, density: c.density});
+    this.counts.worldChunks++;
+    return true;
   }
 
   private onBreak(e: PropBreakEvent): void {
@@ -225,7 +285,10 @@ export class DamageSystem {
         for (let i = 0; i < n; i++) {
           const x = b.min.x + R() * sz.x, y = b.min.y + R() * sz.y, z = b.min.z + R() * sz.z;
           const v = tv.copy(dir).multiplyScalar(0.8 + R() * 1.6).add(tv2.set((R() - 0.5) * 1.6, R() * 0.8, (R() - 0.5) * 1.6));
-          this.debris.spawn({x, y, z, vx: v.x, vy: v.y, vz: v.z, size: 0.03 + Math.pow(R(), 1.5) * 0.1, color: tc.set(DAMAGE_MATERIALS.glass.palette[i % 3]), shape: 'glass', life: 45});
+          // Iteration 07: the first few big shards are rigid bodies (slide / clink / settle on the real floor)
+          const big = kind === 'shatter' && i < 4;
+          const sp: DebrisSpawn = {x, y, z, vx: v.x, vy: v.y, vz: v.z, size: big ? 0.09 + R() * 0.06 : 0.03 + Math.pow(R(), 1.5) * 0.1, color: tc.set(DAMAGE_MATERIALS.glass.palette[i % 3]), shape: 'glass', life: 45};
+          if (big) this.physicalPiece(sp, 'glass'); else this.debris.spawn(sp);
         }
       }
       return;
@@ -239,8 +302,10 @@ export class DamageSystem {
         const out = tv2.set(x - c.x, 0, z - c.z).normalize();
         const v = tv.copy(out).multiplyScalar(0.6 + R() * 1.6).addScaledVector(dir, 0.8 + R()).add(tv2.set(0, 1 + R() * 2, 0));
         const plank = i < 10;
-        this.debris.spawn({x, y, z, vx: v.x, vy: v.y, vz: v.z, size: plank ? 0.18 + R() * 0.3 : 0.04 + R() * 0.08, color: tc.copy(color).multiplyScalar(0.75 + R() * 0.4), shape: 'splinter', life: 70,
-          aspect: plank ? [0.5 + R() * 0.6, 0.35 + R() * 0.3, 1] : undefined});
+        const sp: DebrisSpawn = {x, y, z, vx: v.x, vy: v.y, vz: v.z, size: plank ? 0.18 + R() * 0.3 : 0.04 + R() * 0.08, color: tc.copy(color).multiplyScalar(0.75 + R() * 0.4), shape: 'splinter', life: 70,
+          aspect: plank ? [0.5 + R() * 0.6, 0.35 + R() * 0.3, 1] : undefined};
+        // Iteration 07: crate boards are rigid bodies (tumble, stack, settle)
+        if (i < 6) this.physicalPiece(sp, 'wood'); else this.debris.spawn(sp);
       }
       this.burst(c, tv.set(0, 1, 0), dir, 'wood', color, 1.5);
     } else if (kind === 'collapse') {
@@ -249,7 +314,8 @@ export class DamageSystem {
       for (let i = 0; i < 14; i++) {
         const x = b.min.x + R() * sz.x, y = b.min.y + R() * sz.y, z = b.min.z + R() * sz.z;
         const v = tv.copy(dir).multiplyScalar(0.4 + R()).add(tv2.set((R() - 0.5) * 1.5, R() * 1.2, (R() - 0.5) * 1.5));
-        this.debris.spawn({x, y, z, vx: v.x, vy: v.y, vz: v.z, size: i < 8 ? 0.22 + R() * 0.22 : 0.05 + R() * 0.08, color: tc.copy(color).multiplyScalar(0.8 + R() * 0.35), shape: 'flake', life: 75});
+        const sp: DebrisSpawn = {x, y, z, vx: v.x, vy: v.y, vz: v.z, size: i < 8 ? 0.22 + R() * 0.22 : 0.05 + R() * 0.08, color: tc.copy(color).multiplyScalar(0.8 + R() * 0.35), shape: 'flake', life: 75};
+        if (i < 6) this.physicalPiece(sp, 'cardboard'); else this.debris.spawn(sp);
       }
     }
     void cls;
@@ -281,9 +347,63 @@ export class DamageSystem {
       this.tearShot.set(z, this.shot);
       this.sfx?.breakage('fleshTear', at.x, at.y, at.z, Math.min(1, 0.4 + strength));
     }
+    if (r && w) this.tearChunk(z, w, r, dir, shot, part);
     const restP = r ? w!.wounds[r.index]?.c : null;
     return {point: v3(at), normal: v3(tv.copy(dir).negate()), object: corpse ? 'corpse' : 'zombie', instanceId: null, material: r?.cls ?? 'flesh', bone: r?.bone,
       localPoint: restP ? v3(restP) : undefined};
+  }
+
+  /**
+   * Iteration 07 (Lane K): a real piece comes OFF the actor where it was shot — the triangles around
+   * the wound on the entered layer (skin, garment, mask, hat) baked in their current posed / ragdolled
+   * positions (damage/fleshPatch.ts) into a rigid chunk that inherits the actor's velocity there plus
+   * the bullet's shove; the wound becomes a persistent missing area (WoundController.tear). A too
+   * coarse layer gives a material-matched torn flap instead. Bounded per actor and per shot.
+   */
+  private tearChunk(z: DamageZombie, w: WoundController, r: WoundResult, dir: THREE.Vector3, shot: ShotInput, part: 'head' | 'torso' | 'limb'): void {
+    const ph = this.physics;
+    if (!ph?.world || w.tears >= MAX_TEARS_PER_ACTOR) return;
+    if (this.patchShot.get(z) === this.shot) return; // one piece per actor per trigger pull
+    if (shot.pellet ? r.strength < 0.38 : r.strength < 0.2) return;
+    const layer = w.layers[r.layer];
+    if (!layer) return;
+    this.patchShot.set(z, this.shot);
+    const R = this.rand;
+    // patch radius ~3.5-4.5 cm for a rifle round, bigger for merged buckshot tears (the body / garment meshes have ~3 cm triangles)
+    const partK = part === 'limb' ? 0.85 : part === 'head' ? 0.9 : 1;
+    const radiusM = Math.max(0.025, Math.min(0.06, r.radius * 0.8 * partK * (0.9 + r.strength * 0.4)));
+    const cls = layer.cls;
+    const th = cls === 'flesh' ? 0.012 + 0.014 * r.strength : cls === 'cloth' ? 0.005 : cls === 'rubber' ? 0.007 : 0.006;
+    z.root.updateMatrixWorld(true);
+    // coarse layers: widen the cut until it holds a few real triangles (the chunk stays as small as the mesh allows)
+    let patch: ReturnType<typeof extractPatch> = null, usedR = radiusM;
+    for (const f of [1, 1.5, 2.1]) {
+      usedR = Math.min(0.085, radiusM * f);
+      patch = extractPatch(layer, r.restEntry, r.restDir, usedR * r.k, {thickness: th});
+      if (patch) break;
+    }
+    // velocity: the body there (ragdoll part / animated bone) + the bullet's throw
+    const vel = new THREE.Vector3();
+    if (!ph.actorVelocity(z, r.entry, vel)) z.boneVelocity?.(r.bone, vel);
+    if (vel.length() > 6) vel.setLength(6);
+    const n = patch?.normal ?? dir.clone().negate();
+    vel.addScaledVector(dir, 1.3 + R() * 1.6).addScaledVector(n, 0.5 + R() * 0.9).add(tv.set((R() - 0.5) * 0.9, 0.7 + R() * 1.1, (R() - 0.5) * 0.9));
+    const spin = new THREE.Vector3(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(cls === 'flesh' ? 18 : 26);
+    const c = CHUNK_PHYS[cls];
+    const mat = ph.chunks.chunkMaterial(layer.material);
+    if (patch) {
+      ph.chunks.spawnFlesh(patch.geometry, mat, patch.position, patch.quaternion, patch.half, {vel, spin, mat: c.mat, density: c.density});
+      w.tear(r.index, Math.min(patch.restRadius, usedR * 1.3 * r.k), patch.restCenter);
+      this.counts.patches++;
+    } else {
+      const size = radiusM * 1.4;
+      const geo = fallbackFlap(size, th, tc.copy(r.color).lerp(new THREE.Color(DAMAGE_MATERIALS[cls].substrate), 0.25), (this.shot * 7919 + w.hits) | 0);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+      const pos = r.entry.clone().addScaledVector(dir, -0.01);
+      ph.chunks.spawnFlesh(geo, mat, pos, q, new THREE.Vector3(size / 2, Math.max(0.004, th / 2), size / 2), {vel, spin, mat: c.mat, density: c.density});
+      w.tear(r.index, radiusM * 0.8 * r.k);
+      this.counts.flaps++;
+    }
   }
 
   /**
@@ -307,9 +427,62 @@ export class DamageSystem {
   }
 
   // ---------------------------------------------------------------------------------------
-  // Loose pickups: knocked by shots passing close (never destroyed, stay reachable)
+  // Loose items, loot lots and light props hit by a shot (never destroyed, stay reachable)
 
-  knockPickups(o: Vec3, d: Vec3, maxT: number): number {
+  /**
+   * Iteration 07 (Lane K): every loose pickup, visible loot lot (a can on a shelf / in an open cooler)
+   * and loose light prop the bullet passes through before `maxT` (the first world / actor hit; a loot
+   * holder hit first lets the shot reach the items INSIDE it, up to its far side) becomes a rigid body
+   * and takes the bullet's impulse at the hit point. Bullets pass on through them (at most 2 per
+   * bullet, 1 per pellet). Lots are lifted off their holder into pickups with the same item / count
+   * first. Without a physics world: the iteration-06 near-miss knock.
+   */
+  knockPickups(o: Vec3, d: Vec3, maxT: number, wh?: WorldHit, shot?: ShotInput): number {
+    const ph = this.physics;
+    if (!ph?.world) return this.knockLegacy(o, d, maxT);
+    const L = this.layout;
+    let limit = maxT;
+    if (wh && wh.kind === 'prop' && wh.prop !== undefined && L && Math.abs(wh.t - maxT) < 1e-4) {
+      const p = L.props[wh.prop];
+      if (p && isLootHolderKind(p.kind)) limit = Math.min(maxT + 2, rayExitT(o, d, p, maxT));
+    }
+    const dir = new THREE.Vector3(d.x, d.y, d.z).normalize();
+    const pickups = (this.hooks.pickups?.() ?? []) as readonly PickupLike[];
+    type Cand = {t: number; point: THREE.Vector3; pickup?: PickupLike; prop?: import('../gen/props').PropPlacement; propIndex?: number; lot?: ShotLot};
+    const cands: Cand[] = ph.dynamicItems.rayHits(o, d, limit, pickups).map(h => ({t: h.t, point: h.point, pickup: h.pickup, prop: h.prop, propIndex: h.propIndex}));
+    for (const lot of this.hooks.lots?.(o, d, limit) ?? []) cands.push({t: lot.t, point: new THREE.Vector3(o.x + d.x * lot.t, o.y + d.y * lot.t, o.z + d.z * lot.t), lot});
+    cands.sort((a, b) => a.t - b.t);
+    const damage = shot?.damage ?? 24, pellet = shot?.pellet ?? false;
+    const J = damage * SHOT_IMPULSE_PER_DAMAGE;
+    let n = 0;
+    for (const c of cands) {
+      if (n >= (pellet ? 1 : 2)) break;
+      let surface: DamageClass = 'plastic';
+      if (c.lot) {
+        const pk = this.hooks.detachLot?.(c.lot.holder, c.lot.lotId) ?? null;
+        if (!pk) continue;
+        this.counts.lotsLifted++;
+        ph.dynamicItems.shootPickup(pk, c.point, dir, J);
+        surface = itemClass(pk.stack.itemId);
+      } else if (c.pickup) {
+        ph.dynamicItems.shootPickup(c.pickup, c.point, dir, J);
+        surface = itemClass(c.pickup.stack.itemId);
+      } else if (c.prop && c.propIndex !== undefined) {
+        const r = this.props.hit({prop: c.prop, index: c.propIndex, point: c.point, dir, normal: dir.clone().negate(), damage, pellet});
+        ph.dynamicItems.shootProp(c.prop, c.propIndex, r.point, dir, J);
+        surface = r.cls;
+        this.counts.propsShoved++;
+      } else continue;
+      n++;
+      this.counts.itemsShot++;
+      this.counts.knocked++;
+      this.sfx?.impact(c.point.x, c.point.y, c.point.z, DAMAGE_MATERIALS[surface].sound);
+    }
+    return n;
+  }
+
+  /** Iteration-06 behaviour without a physics world: near-miss knock along the floor. */
+  private knockLegacy(o: Vec3, d: Vec3, maxT: number): number {
     const list = this.hooks.pickups?.() ?? [];
     let n = 0;
     for (const p of list) {
@@ -377,9 +550,23 @@ export class DamageSystem {
 
 const v3 = (v: THREE.Vector3): Vec3 => ({x: v.x, y: v.y, z: v.z});
 
+/** Ray parameter where the ray leaves a prop's AABB (the far side), or `fallback`. */
+function rayExitT(o: Vec3, d: Vec3, p: {x: number; y: number; z: number; hx: number; hz: number; h: number}, fallback: number): number {
+  let tmax = Infinity;
+  const lo = [p.x - p.hx, p.y, p.z - p.hz], hi = [p.x + p.hx, p.y + p.h, p.z + p.hz], O = [o.x, o.y, o.z], D = [d.x, d.y, d.z];
+  for (let a = 0; a < 3; a++) {
+    if (Math.abs(D[a]) < 1e-12) continue;
+    const t1 = (lo[a] - O[a]) / D[a], t2 = (hi[a] - O[a]) / D[a];
+    tmax = Math.min(tmax, Math.max(t1, t2));
+  }
+  return Number.isFinite(tmax) ? Math.max(fallback, tmax) : fallback;
+}
+
 /** Corpse hit volumes from the (ragdolled / death-clip) bones. */
 const DEFAULT_RADII = {head: 0.135, torso: 0.2, arm: 0.075, leg: 0.1};
 export function corpseVolumes(z: DamageZombie): {part: 'head' | 'torso' | 'limb'; a: Vec3; b: Vec3 | null; r: number}[] {
+  const own = z.corpseVolumes?.();
+  if (own) return own;
   const at = (n: string): Vec3 | null => { const b = z.bone?.(n); if (!b) return null; b.getWorldPosition(tv); return {x: tv.x, y: tv.y, z: tv.z}; };
   const H = ((z as unknown as {hit?: typeof DEFAULT_RADII}).hit) ?? DEFAULT_RADII;
   const s = z.scale || 1;

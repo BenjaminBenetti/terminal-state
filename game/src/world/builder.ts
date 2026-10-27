@@ -17,6 +17,7 @@ import {shapeMaterial, shapeMaterials} from './shapeMaterials';
 import {SHOP_BLOCKERS, SHOP_FURNITURE} from '../gen/storefronts';
 import {buildStorefronts} from './storefrontBuilder';
 import {buildTraversal} from './traversalBuilder';
+import {SIGN_SIZE, passageRails, signDims} from '../gen/doorways';
 
 class Accum {
   pos: number[] = [];
@@ -312,23 +313,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const zs = a.edge === 'NS' ? [a.y * CELL + 0.04, (a.y + a.h) * CELL - 0.04] : [a.edge === 'S' ? (a.y + a.h) * CELL - 0.04 : a.y * CELL + 0.04];
     for (const z of zs) addBox('platformFace', (a.x + a.w / 2) * CELL, -0.04, z, a.w * CELL, 0.08, 0.08);
   }
-  // Passages (stairs, escalator halls, transfer passages): wall handrails along both long walls.
-  for (const a of layout.areas) {
-    if (a.type !== 'passage') continue;
-    const alongX = a.w > a.h;
-    const s0 = (alongX ? a.x : a.y) * CELL + 0.6, s1 = (alongX ? a.x + a.w : a.y + a.h) * CELL - 0.6;
-    const c = (alongX ? a.y + a.h / 2 : a.x + a.w / 2) * CELL;
-    for (const w of alongX ? [a.y * CELL + 0.07, (a.y + a.h) * CELL - 0.07] : [a.x * CELL + 0.07, (a.x + a.w) * CELL - 0.07]) {
-      const out = w < c ? -0.025 : 0.025;
-      if (alongX) {
-        addBox('steel', (s0 + s1) / 2, 0.92, w, s1 - s0, 0.05, 0.05);
-        for (let t = s0 + 0.2; t < s1; t += 1.6) addBox('steel', t, 0.86, w + out, 0.04, 0.1, 0.04);
-      } else {
-        addBox('steel', w, 0.92, (s0 + s1) / 2, 0.05, 0.05, s1 - s0);
-        for (let t = s0 + 0.2; t < s1; t += 1.6) addBox('steel', w + out, 0.86, t, 0.04, 0.1, 0.04);
-      }
-    }
-  }
+  // Passages (stairs, escalator halls, transfer passages): wall handrails along the side walls.
+  // Iteration 07 (Lane DW): rails stop short of every opening (gen/doorways.ts passageRails).
+  for (const b of passageRails(layout)) addBox('steel', (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2, b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
   // Pendant rods for fixtures hung below tall ceilings.
   for (const l of layout.lights) {
     // Lane T: the local ceiling (follows flights / landings / the underpass), not the area's top.
@@ -492,9 +479,7 @@ function addProceduralProp(group: THREE.Group, kind: PropKind, list: PropPlaceme
 // ---------------------------------------------------------------------------------------
 // Signage
 
-const SIGN_SIZE: Record<SignPlacement['kind'], {w: number; h: number}> = {
-  station: {w: 1.8, h: 0.38}, exit: {w: 1.2, h: 0.26}, service: {w: 1.2, h: 0.26}, info: {w: 1.4, h: 0.3}, platform: {w: 2.2, h: 0.42},
-};
+// Plate sizes (SIGN_SIZE / signDims) live in gen/doorways.ts: generation keeps plates off openings.
 const signTexCache = new Map<string, THREE.Texture>();
 
 function signTexture(s: SignPlacement, w: number, h: number): THREE.Texture {
@@ -579,7 +564,7 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
   }
   for (const s of layout.signs) {
     const size = SIGN_SIZE[s.kind];
-    const w = s.w ?? size.w, h = s.w && s.kind !== 'station' && s.kind !== 'platform' ? Math.max(size.h, Math.min(0.34, w * 0.15)) : size.h;
+    const {w, h} = signDims(s);
     const tex = signTexture(s, w, h);
     const sides = s.hang ? [s.rot, s.rot + Math.PI] : [s.rot];
     const useFrame = s.kind === 'station' && frameLocal.length && !s.hang && (s.w === undefined || s.w === size.w);

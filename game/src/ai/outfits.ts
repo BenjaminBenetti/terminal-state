@@ -5,6 +5,12 @@
 // public/assets/derivatives/). A body x wearable pair exists only where the offline fit produced a
 // variant node for that body; looks are composed from slots (upper, lower, head, face).
 // The 'coated' archetype wears a heavy (long-coat) upper; shamblers a light upper or none.
+// Iteration 07: every upper / pants variant is refitted so the cloth sits OUTSIDE the posed body
+// (tools/asset-pipeline/zombie/lib/fit07.mjs, validated in 92 poses); pairs whose body still visibly
+// pokes through are NOT shipped (no variant node), and upper x pants layerings that still clip on a
+// given body are per-body incompatibilities (variant extras incompatibleWear, honoured by
+// WardrobeLibrary.compatible). Hats are fitted to the measured cranium (lib/headwear.mjs).
+// See derivatives/zombie-wardrobe.json (fit07 gate) and derivatives/zombie-wardrobe-fit-audit.json.
 // All derivatives are unapproved prototypes (gameReady false).
 
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -40,6 +46,8 @@ export const ZOMBIE_WEARABLES: readonly WearableDef[] = [
   {id: 'hivis', slot: 'upper', label: 'Hi-vis vest', model: 'outfit_hivis', weight: 1, tags: ['vest'], origin: 'generated'},
   {id: 'hoodie', slot: 'upper', label: 'Zip hoodie', model: 'outfit_hoodie', weight: 1, tags: ['hood-down'], origin: 'generated'},
   {id: 'blazer', slot: 'upper', label: 'Office blazer', model: 'outfit_blazer', weight: 1, origin: 'generated'},
+  // iteration 07: the puffer fails the fit gate on EVERY body (its huge collar / quilted shell still lets the
+  // body poke through after the refit): no variant ships and its model is not in the runtime manifest
   {id: 'puffer', slot: 'upper', label: 'Puffer jacket', model: 'outfit_puffer', weight: 1, tags: ['bulky-collar'], origin: 'generated'},
   {id: 'flannel', slot: 'upper', label: 'Plaid flannel shirt', model: 'outfit_flannel', weight: 1, tags: ['shirt'], origin: 'generated'},
   {id: 'sweater', slot: 'upper', label: 'Cable-knit sweater', model: 'outfit_sweater', weight: 1, tags: ['knit'], origin: 'generated'},

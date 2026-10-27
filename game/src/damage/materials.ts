@@ -9,6 +9,7 @@
 // Level-generic: new prop kinds / keys / slots only need a line here (tests check coverage).
 
 import {PROP_DEFS, type PropKind} from '../gen/props';
+import {P7_MODEL_CLASS, P7_PROP_DAMAGE} from '../gen/props07';
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -153,6 +154,8 @@ export const MODEL_KEY_CLASS: Record<string, DamageClass> = {
   item_water: 'plastic', item_cola: 'sheetMetal', item_juice: 'cardboard', item_chocolate: 'food', item_chips: 'food', item_beans: 'sheetMetal', item_noodles: 'food',
   trashCan: 'sheetMetal', shopCounter: 'laminate', shopBackbar: 'steel', shopCooler: 'sheetMetal', shopDisplay: 'steel',
   janitorCart: 'plastic', magazineRack: 'steel', techDisplay: 'laminate', hotdogCart: 'steel', gunLocker: 'sheetMetal',
+  // Iteration 07 (Lane P2): generated props p7_<kind> (class per type in gen/props07.ts).
+  ...P7_MODEL_CLASS,
 };
 
 /** Model key -> class; zombie bodies are flesh, wardrobe wearables (outfit_*) cloth unless named rubber/hard. */
@@ -211,6 +214,8 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   medCabinet: NEVER('sheetMetal'), safe: NEVER('steel'), signalRack: NEVER('sheetMetal'),
   // Carton stack (decor): cardboard collapses into a low heap of flattened boxes.
   cartonStack: {cls: 'cardboard', integrity: 80, breaks: 'collapse'},
+  // Iteration 07 (Lane P2): generated prop types (class / breaks per type in gen/props07.ts).
+  ...P7_PROP_DAMAGE,
 };
 
 /** Spec for any prop kind (unknown future kinds: painted sheet metal, never breaks). */
@@ -231,6 +236,77 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
 }
+
+// ---------------------------------------------------------------------------------------
+// Iteration 07 (Lane K): rigid-body physics of loose items, light props and chunks
+// (physics/dynamicItems.ts, physics/chunks.ts). Pure data.
+
+/** Contact / sound family of a rigid body (cannon contact material vs the static station). */
+export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' | 'glass' | 'flesh' | 'cloth';
+/** Friction / restitution against the station (floors, walls, prop boxes, holder shelves). */
+export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution: number}>> = {
+  metal: {friction: 0.32, restitution: 0.34}, plastic: {friction: 0.42, restitution: 0.3}, soft: {friction: 0.7, restitution: 0.08},
+  heavy: {friction: 0.55, restitution: 0.1}, stone: {friction: 0.7, restitution: 0.2}, wood: {friction: 0.6, restitution: 0.24},
+  glass: {friction: 0.45, restitution: 0.14}, flesh: {friction: 0.95, restitution: 0.02}, cloth: {friction: 0.98, restitution: 0},
+};
+
+export interface ItemPhysics {
+  /** Mass (kg) of one loose item (a full can, a box of rounds). */
+  mass: number;
+  /** Collider in the item's model frame (origin bottom-centre): upright cylinder (cans, bottles, cups) or box. */
+  shape: 'cylinder' | 'box';
+  mat: PhysMat;
+}
+
+/** Loose items / loot lots that react to bullets (every inventory item; unknown ids: a light box). */
+export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
+  cola: {mass: 0.37, shape: 'cylinder', mat: 'metal'}, beans: {mass: 0.45, shape: 'cylinder', mat: 'metal'},
+  water: {mass: 0.55, shape: 'cylinder', mat: 'plastic'}, noodles: {mass: 0.09, shape: 'cylinder', mat: 'soft'},
+  juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
+  ammo_rifle: {mass: 0.62, shape: 'box', mat: 'soft'}, ammo_shells: {mass: 0.7, shape: 'box', mat: 'soft'},
+  medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
+  rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'},
+};
+export function itemPhysics(itemId: string): ItemPhysics {
+  return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};
+}
+
+/**
+ * Per prop KIND rigid-body flags. `dynamic` props become rigid bodies when shot (bins rock / tip /
+ * slide, walkers shove them); everything else (heavy, fixed, loot holders) stays static. New prop
+ * kinds (iteration 07 Lane P2) either add a line here or give their PROP_DEFS entry an optional
+ * `physics: {mass, dynamic, shape?}` field (read first).
+ */
+export interface PropPhysics { mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: PhysMat }
+export const PROP_PHYSICS: Record<string, PropPhysics> = {
+  // Lane A trash can: 0.55 x 0.95 m sheet-steel can with a liner (~7 kg): a rifle round rocks it, buckshot tips it.
+  bin: {mass: 7, dynamic: true, shape: 'cylinder', mat: 'metal'},
+  // Light, floor-standing iteration-07 generated types (ids of the Lane P1 manifest; used only if Lane P2 integrates a kind
+  // with this id, and only while it stands on the floor — physics/dynamicItems.ts). Heavy / fixed / holder types stay static.
+  foldingChair: {mass: 4, dynamic: true, mat: 'heavy'}, plasticStackChair: {mass: 3, dynamic: true, mat: 'plastic'}, officeSwivelChair: {mass: 12, dynamic: true, mat: 'heavy'},
+  wetFloorSign: {mass: 1.2, dynamic: true, mat: 'plastic'}, mopBucketWringer: {mass: 8, dynamic: true, mat: 'plastic'}, duffelBag: {mass: 6, dynamic: true, mat: 'soft'},
+  rollingSuitcase: {mass: 9, dynamic: true, mat: 'plastic'}, basketStack: {mass: 3, dynamic: true, mat: 'plastic'}, babyStroller: {mass: 9, dynamic: true, mat: 'heavy'},
+  shoppingCart: {mass: 15, dynamic: true, mat: 'heavy'}, handTruck: {mass: 14, dynamic: true, mat: 'heavy'}, pedestalFan: {mass: 5, dynamic: true, mat: 'plastic'},
+  drumFan: {mass: 14, dynamic: true, mat: 'heavy'}, fireExtinguisher: {mass: 6, dynamic: true, shape: 'cylinder', mat: 'metal'}, trashBagPile: {mass: 8, dynamic: true, mat: 'soft'},
+  newspaperBundles: {mass: 12, dynamic: true, mat: 'soft'}, wheelieBin: {mass: 12, dynamic: true, mat: 'plastic'}, tripodWorkLight: {mass: 6, dynamic: true, mat: 'heavy'},
+  stepLadder: {mass: 7, dynamic: true, mat: 'heavy'}, foldingBarricade: {mass: 6, dynamic: true, mat: 'plastic'}, ivPole: {mass: 4, dynamic: true, mat: 'heavy'},
+  oilRadiator: {mass: 12, dynamic: true, mat: 'heavy'}, wetDryVac: {mass: 8, dynamic: true, mat: 'plastic'}, handToolbox: {mass: 6, dynamic: true, mat: 'heavy'},
+  coatRack: {mass: 6, dynamic: true, mat: 'heavy'}, biohazardBin: {mass: 6, dynamic: true, mat: 'plastic'}, bicycle: {mass: 13, dynamic: true, mat: 'heavy'},
+  wheelchair: {mass: 15, dynamic: true, mat: 'heavy'}, crowdBarrier: {mass: 16, dynamic: true, mat: 'heavy'},
+};
+export function propPhysics(kind: string): PropPhysics {
+  const def = (PROP_DEFS as unknown as Record<string, {physics?: PropPhysics} | undefined>)[kind];
+  return def?.physics ?? PROP_PHYSICS[kind] ?? {mass: Infinity, dynamic: false};
+}
+
+/** Rigid chunk family per damage class: contact material and density (kg/m^3, before a 0.5 fill factor). */
+export const CHUNK_PHYS: Readonly<Record<DamageClass, {mat: PhysMat; density: number}>> = {
+  concrete: {mat: 'stone', density: 2300}, tile: {mat: 'stone', density: 2200}, terrazzo: {mat: 'stone', density: 2400}, plaster: {mat: 'stone', density: 1400},
+  ballast: {mat: 'stone', density: 2600}, sheetMetal: {mat: 'metal', density: 7800}, steel: {mat: 'metal', density: 7800}, wood: {mat: 'wood', density: 600},
+  glass: {mat: 'glass', density: 2500}, screen: {mat: 'glass', density: 2500}, plastic: {mat: 'plastic', density: 1100}, laminate: {mat: 'wood', density: 800},
+  porcelain: {mat: 'stone', density: 2400}, fabric: {mat: 'cloth', density: 300}, cardboard: {mat: 'soft', density: 250}, food: {mat: 'soft', density: 500},
+  flesh: {mat: 'flesh', density: 1050}, cloth: {mat: 'cloth', density: 400}, rubber: {mat: 'soft', density: 1100},
+};
 
 // ---------------------------------------------------------------------------------------
 // Zombies: body skin + wardrobe slots (ai/wardrobe.ts MeshSlot)

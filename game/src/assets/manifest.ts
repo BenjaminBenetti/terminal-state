@@ -3,9 +3,12 @@
 
 export type ModelKey = 'rifle' | 'shotgun' | 'bench' | 'light' | 'cabinetTall' | 'cabinetLow' | 'sign' | 'crate' | 'turnstile'
   // Iteration 06 zombie wardrobe (ai/outfits.ts + ai/wardrobe.ts): bodies (derivatives/zombie-body-*.json) + slot wearables fitted per body (derivatives/outfit-*.json; summary zombie-wardrobe.json).
+  // Iteration 07: refitted outside the posed body + cranium-fitted hats; the puffer fails the fit gate on every body (no model key).
   | 'zombieBody_lastshift' | 'zombieBody_courier' | 'zombieBody_agent' | 'zombieBody_scavenger' | 'zombieBody_heavyset' | 'zombieBody_tall'
-  | 'outfit_coat' | 'outfit_hivis' | 'outfit_hoodie' | 'outfit_blazer' | 'outfit_puffer' | 'outfit_trench' | 'outfit_flannel' | 'outfit_sweater'
+  | 'outfit_coat' | 'outfit_hivis' | 'outfit_hoodie' | 'outfit_blazer' | 'outfit_trench' | 'outfit_flannel' | 'outfit_sweater'
   | 'outfit_cargo' | 'outfit_jeans' | 'outfit_slacks' | 'outfit_hardhat' | 'outfit_cap' | 'outfit_beanie' | 'outfit_gasmask' | 'outfit_respirator'
+  // Iteration 07 (Lane Q): rat/dog creature — rigged derivative of the Field Notes quadruped-02 master (derivatives/creature-ratdog.json).
+  | 'creature_ratdog'
   // Iteration 03 generated props/items (derivatives/props-iteration03.json); each key is added only once its GLB exists.
   | 'shelf' | 'vending' | 'stall' | 'item_water' | 'item_cola' | 'item_juice' | 'item_chocolate' | 'item_chips' | 'item_beans' | 'item_noodles'
   // Iteration 04 generated trash can + modular shop building blocks (derivatives/props-iteration04.json); added once each GLB exists.
@@ -22,22 +25,23 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   zombieBody_scavenger: {url: 'assets/models/zombie-body-scavenger.glb', bytes: 833_000}, // REUSED original upload (zombie-pixal3d); iteration-06 repose v2 + webbing fix
   zombieBody_heavyset: {url: 'assets/models/zombie-body-heavyset.glb', bytes: 628_000}, // iteration 06 generated base-layer body (always wears pants)
   zombieBody_tall: {url: 'assets/models/zombie-body-tall.glb', bytes: 629_000}, // iteration 06 generated base-layer body (always wears pants)
-  outfit_coat: {url: 'assets/models/outfit-coat.glb', bytes: 1_371_000},
-  outfit_hivis: {url: 'assets/models/outfit-hivis.glb', bytes: 809_000},
-  outfit_hoodie: {url: 'assets/models/outfit-hoodie.glb', bytes: 1_142_000},
-  outfit_blazer: {url: 'assets/models/outfit-blazer.glb', bytes: 1_011_000},
-  outfit_puffer: {url: 'assets/models/outfit-puffer.glb', bytes: 757_000},
-  outfit_trench: {url: 'assets/models/outfit-trench.glb', bytes: 1_259_000},
-  outfit_flannel: {url: 'assets/models/outfit-flannel.glb', bytes: 925_000},
-  outfit_sweater: {url: 'assets/models/outfit-sweater.glb', bytes: 994_000},
-  outfit_cargo: {url: 'assets/models/outfit-cargo.glb', bytes: 834_000},
-  outfit_jeans: {url: 'assets/models/outfit-jeans.glb', bytes: 790_000},
-  outfit_slacks: {url: 'assets/models/outfit-slacks.glb', bytes: 820_000},
+  // iteration 07 refit (fewer per-body variants: pairs that still clipped are not shipped)
+  outfit_coat: {url: 'assets/models/outfit-coat.glb', bytes: 822_000},
+  outfit_hivis: {url: 'assets/models/outfit-hivis.glb', bytes: 419_000},
+  outfit_hoodie: {url: 'assets/models/outfit-hoodie.glb', bytes: 824_000},
+  outfit_blazer: {url: 'assets/models/outfit-blazer.glb', bytes: 731_000},
+  outfit_trench: {url: 'assets/models/outfit-trench.glb', bytes: 762_000},
+  outfit_flannel: {url: 'assets/models/outfit-flannel.glb', bytes: 429_000},
+  outfit_sweater: {url: 'assets/models/outfit-sweater.glb', bytes: 595_000},
+  outfit_cargo: {url: 'assets/models/outfit-cargo.glb', bytes: 613_000},
+  outfit_jeans: {url: 'assets/models/outfit-jeans.glb', bytes: 584_000},
+  outfit_slacks: {url: 'assets/models/outfit-slacks.glb', bytes: 491_000},
   outfit_hardhat: {url: 'assets/models/outfit-hardhat.glb', bytes: 350_000},
   outfit_cap: {url: 'assets/models/outfit-cap.glb', bytes: 342_000},
   outfit_beanie: {url: 'assets/models/outfit-beanie.glb', bytes: 297_000},
   outfit_gasmask: {url: 'assets/models/outfit-gasmask.glb', bytes: 491_000},
   outfit_respirator: {url: 'assets/models/outfit-respirator.glb', bytes: 393_000},
+  creature_ratdog: {url: 'assets/models/creature-ratdog.glb', bytes: 1_240_000}, // iteration 07 Lane Q: new quadruped rig + procedural clips (unapproved)
   rifle: {url: 'assets/models/rifle-optic.glb', bytes: 3_810_000}, // iteration 04: see-through optic derivative (derivatives/rifle-optic-iteration04.json); rifle.glb unchanged
   shotgun: {url: 'assets/models/shotgun.glb', bytes: 2_500_000},
   bench: {url: 'assets/models/bench.glb', bytes: 900_000},

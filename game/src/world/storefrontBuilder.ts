@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PROP_DEFS, PURPOSE_MODEL_KEYS, PURPOSE_PROP_KINDS, SHOP_DISPLAY_CASE, type PropKind, type PropPlacement, type PurposePropKind} from '../gen/props';
 import {STORE_PURPOSES} from '../gen/purposes';
+import {isP7Kind, p7ModelKey} from '../gen/props07';
 import {PURPOSE_ACCENT, isPurposeMat, purposePropShape, shapeVariant, stockShelfStock, type PurposePart} from '../gen/purposeShapes';
 import {SHOP_HOLDERS, shopPropShape, storefrontParts, type ShopBox, type ShopFace} from '../gen/storefronts';
 import type {ShopUse, StationLayout, Storefront} from '../gen/stationTypes';
@@ -98,7 +99,34 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
   }
   // --- Purpose props (iteration 05): store fixtures, kitchen lines, back-of-house furniture ------
   instances += buildPurposeProps(group, layout, deps);
+  // --- Iteration 07 (Lane P2): NEW generated prop types (lazy per-station models) ---------------------------------------------
+  instances += buildP7Props(group, layout, deps);
   return instances + boxes.length;
+}
+
+/**
+ * Iteration-07 generated props (gen/props07.ts): one instanced mesh per kind per chunk, fitted to the measured footprint (scale ~1).
+ * Models are lazy (assets/loader.ts PropModelLibrary, loaded before the station is revealed); a kind whose model is not loaded renders
+ * nothing — never a box stand-in (the game drops such placements before building, see props07.dropUnloadedP7).
+ */
+function buildP7Props(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): number {
+  const byKind = new Map<string, PropPlacement[]>();
+  for (const p of layout.props) {
+    if (!isP7Kind(p.kind)) continue;
+    let l = byKind.get(p.kind);
+    if (!l) byKind.set(p.kind, (l = []));
+    l.push(p);
+  }
+  let n = 0;
+  for (const [kind, list] of [...byKind].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const model = deps.models[p7ModelKey(kind)];
+    if (!model) continue;
+    const def = PROP_DEFS[kind as PropKind];
+    // Low wall mounts (hose reels, payphones, urinals) collide from the floor but render `lift` metres up.
+    const mats = list.map(p => (p.lift ? new THREE.Matrix4().makeTranslation(0, p.lift, 0).multiply(placeM(p)) : placeM(p)));
+    n += deps.instanceModel(group, model, mats, {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
+  }
+  return n;
 }
 
 const placeM = (p: PropPlacement) => new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));

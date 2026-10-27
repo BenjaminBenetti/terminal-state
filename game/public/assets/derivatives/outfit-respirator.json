@@ -205,10 +205,9 @@
         "fractionOver": 0,
         "worstClips": {
           "Idle": 18,
+          "Death": 6,
           "Attack": 2,
-          "Walk": 2,
-          "Death": 2,
-          "Run": 2
+          "Walk": 2
         },
         "poses": 85
       }
@@ -281,9 +280,10 @@
         "worstClips": {
           "Hit": 8,
           "Idle": 6,
+          "Death": 2,
           "Attack": 4,
           "Walk": 2,
-          "Run": 4
+          "Run": 2
         },
         "poses": 85
       }
@@ -504,7 +504,7 @@
         "fractionOver": 0,
         "worstClips": {
           "Walk": 10,
-          "Death": 8,
+          "Death": 6,
           "Run": 2,
           "Idle": 4,
           "Hit": 6

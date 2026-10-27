@@ -1,0 +1,1074 @@
+{
+ "task": "studio-slice-iteration07-20261026-01",
+ "lane": "Q (rat/dog creature)",
+ "generatedBy": "tools/asset-pipeline/creature/build-audio.mjs",
+ "policy": "Root CLAUDE.md \"Sound effects: Sound Lab only (user rule, 2026-10-26)\": every runtime SFX is a derivative of a Sound Lab raw; no synthesis, stock or hosted audio; missing cues stay silent and are listed as gaps. Only the creature's own vocal/foley cues were generated here; bullet impacts, flesh and body-fall sounds reuse the iteration-05/06 banks.",
+ "soundLab": {
+  "endpoint": "http://10.0.0.59:7871",
+  "kit": {
+   "name": "Last Line Sound Lab CPU",
+   "version": "0.1.0"
+  },
+  "profile": "w8a8",
+  "modelCard": {
+   "repo": "stabilityai/stable-audio-3-small-sfx",
+   "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+   "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+  },
+  "weightsRepo": "stabilityai/stable-audio-3-optimized",
+  "revision": "08b17423649b5714b22eab20f96bf00751f2358a",
+  "upstreamCode": {
+   "repo": "https://github.com/Stability-AI/stable-audio-3",
+   "commit": "77e0398c26f7d22d801ec1bb036307e8b231f741",
+   "committed": "2026-10-11T03:32:19-04:00",
+   "path": "optimized/tflite",
+   "license": "MIT (code only; does not cover model weights)"
+  },
+  "sharedLock": "flock /tmp/ll-soundlab.lock around every request (incl. status), one clip per hold; shared with iteration-07 Lane K"
+ },
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "Unreviewed by ear on the worker; human audition required.",
+  "gameReady": false,
+  "approved": false
+ },
+ "rawFolder": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw",
+ "totals": {
+  "derivatives": 18,
+  "bytes": 276169,
+  "cuesCovered": 6,
+  "cues": 6
+ },
+ "gaps": [],
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/i07q-creature-growl-01.mp3",
+   "url": "assets/audio/i07q-creature-growl-01.mp3",
+   "bytes": 23510,
+   "sha256": "2458f51ee1b0edb0c60537d93583bb0f248ca050a07e9052e5c6b6f2711eecb4",
+   "cue": "creatureGrowl",
+   "durationS": 1.9244,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-growl-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-growl-01.wav",
+    "rawSha256": "1132e16b29884584832008aa8bb586c75df8ece598f07cc45ff22f86738787d1",
+    "labFile": "sfx_a-large-feral-dog-sized-scavenger-animal_w8a8_seed342737879_213314.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-growl-01.lab.json",
+    "jobId": "20261026T213314-342737879",
+    "prompt": "TrackType: SFX, a large feral dog-sized scavenger animal growling low and menacing, a deep rumbling throaty growl with a raspy hiss and wet breathing through bared teeth, close mic, recorded dry with no echo or reverb.",
+    "seed": 342737879,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2315,
+     "endS": 2.1559,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.3,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 9.35
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-growl-02.mp3",
+   "url": "assets/audio/i07q-creature-growl-02.mp3",
+   "bytes": 29153,
+   "sha256": "36129792f647d415b4ce048d9f1502a1d56d536db52ba37cbf43ca8e32186681",
+   "cue": "creatureGrowl",
+   "durationS": 2.4,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-growl-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-growl-02.wav",
+    "rawSha256": "323b7d41ba71dfd1aa619234378614cde3d67e090e9d2f42f3caef0c5ddb3558",
+    "labFile": "sfx_a-large-feral-dog-sized-scavenger-animal_w8a8_seed1536503915_213318.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-growl-02.lab.json",
+    "jobId": "20261026T213318-1536503915",
+    "prompt": "TrackType: SFX, a large feral dog-sized scavenger animal growling low and menacing, a deep rumbling throaty growl with a raspy hiss and wet breathing through bared teeth, close mic, recorded dry with no echo or reverb.",
+    "seed": 1536503915,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2967,
+     "endS": 2.6967,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.3,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 6.5
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-growl-03.mp3",
+   "url": "assets/audio/i07q-creature-growl-03.mp3",
+   "bytes": 24137,
+   "sha256": "451bd8f8d7a3409af909009d2e6ccde63de77def49aed7203aef1f7e87ec3b55",
+   "cue": "creatureGrowl",
+   "durationS": 1.9845,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-growl-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-growl-03.wav",
+    "rawSha256": "03764a6e92468811f46837110e394a16347956722224f2f879cd238201739b06",
+    "labFile": "sfx_a-large-feral-dog-sized-scavenger-animal_w8a8_seed760093369_213323.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-growl-03.lab.json",
+    "jobId": "20261026T213323-760093369",
+    "prompt": "TrackType: SFX, a large feral dog-sized scavenger animal growling low and menacing, a deep rumbling throaty growl with a raspy hiss and wet breathing through bared teeth, close mic, recorded dry with no echo or reverb.",
+    "seed": 760093369,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2065,
+     "endS": 2.191,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.3,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 9.08
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-snarl-01.mp3",
+   "url": "assets/audio/i07q-creature-snarl-01.mp3",
+   "bytes": 19749,
+   "sha256": "b7c00cd7ac9c21ca944acfb56735b58578a808f70b68680c149ca8cb80e3f5f9",
+   "cue": "creatureSnarl",
+   "durationS": 1.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-snarl-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-snarl-01.wav",
+    "rawSha256": "6b8cae7e8503a3950f2f7739c523439209e368e54637b2383163d753e9a503c6",
+    "labFile": "sfx_a-large-feral-dog-spotting-prey-and-char_w8a8_seed1565689729_213328.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-snarl-01.lab.json",
+    "jobId": "20261026T213328-1565689729",
+    "prompt": "TrackType: SFX, a large feral dog spotting prey and charging, a vicious guttural snarl rising into one harsh rasping bark with bared teeth, close mic, recorded dry with no echo or reverb.",
+    "seed": 1565689729,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0261,
+     "endS": 1.6261,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 6.81
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-snarl-02.mp3",
+   "url": "assets/audio/i07q-creature-snarl-02.mp3",
+   "bytes": 19749,
+   "sha256": "7adda94f099995cc2b1655472e53881c1803b6d3d91842a374920c80c0c7e5a1",
+   "cue": "creatureSnarl",
+   "durationS": 1.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-snarl-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-snarl-02.wav",
+    "rawSha256": "e6ef764c0eac7286f65f9d3c079cdf6baf93b852e02b8c14799df33d563025fd",
+    "labFile": "sfx_a-large-feral-dog-spotting-prey-and-char_w8a8_seed1557685815_213333.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-snarl-02.lab.json",
+    "jobId": "20261026T213333-1557685815",
+    "prompt": "TrackType: SFX, a large feral dog spotting prey and charging, a vicious guttural snarl rising into one harsh rasping bark with bared teeth, close mic, recorded dry with no echo or reverb.",
+    "seed": 1557685815,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1463,
+     "endS": 1.7463,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.94
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-snarl-03.mp3",
+   "url": "assets/audio/i07q-creature-snarl-03.mp3",
+   "bytes": 19749,
+   "sha256": "bf11d1500568003902a9c7e2d0f5bd7aadfd9a213b0b29cf5ed5427bf417523f",
+   "cue": "creatureSnarl",
+   "durationS": 1.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-snarl-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-snarl-03.wav",
+    "rawSha256": "fe184471919f2881e1da7249bf15e220a9e6d12635a059cad5d0bd9176109ee9",
+    "labFile": "sfx_a-large-feral-dog-spotting-prey-and-char_w8a8_seed2089979696_213337.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-snarl-03.lab.json",
+    "jobId": "20261026T213337-2089979696",
+    "prompt": "TrackType: SFX, a large feral dog spotting prey and charging, a vicious guttural snarl rising into one harsh rasping bark with bared teeth, close mic, recorded dry with no echo or reverb.",
+    "seed": 2089979696,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1012,
+     "endS": 1.7012,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.36
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-bite-01.mp3",
+   "url": "assets/audio/i07q-creature-bite-01.mp3",
+   "bytes": 14733,
+   "sha256": "03fb41652c399002f43feed8f4af52c6648b3ab450cb80d9585735726afce133",
+   "cue": "creatureBite",
+   "durationS": 1.2,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-bite-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-bite-01.wav",
+    "rawSha256": "e9fae1716de2543b0a59bcd089a23f2a7402532f0103a1b91b8c885fd7de8f24",
+    "labFile": "sfx_a-large-feral-dog-lunging-to-bite-a-vici_w8a8_seed2075749556_213342.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-bite-01.lab.json",
+    "jobId": "20261026T213342-2075749556",
+    "prompt": "TrackType: SFX, a large feral dog lunging to bite, a vicious snap of jaws clamping shut with teeth clacking and a short savage snarl, close mic, recorded dry with no echo or reverb.",
+    "seed": 2075749556,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0261,
+     "endS": 1.2261,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.43
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-bite-02.mp3",
+   "url": "assets/audio/i07q-creature-bite-02.mp3",
+   "bytes": 5016,
+   "sha256": "e3955f76a44dea87ab92dcc74076e165edf2b637bb4be027c1b7c6a2bc4dbd18",
+   "cue": "creatureBite",
+   "durationS": 0.3759,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-bite-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-bite-02.wav",
+    "rawSha256": "4cbb56362088967bd7b4559eddcef3e6060dcf878d4000a5fbcf56f3cc323946",
+    "labFile": "sfx_a-large-feral-dog-lunging-to-bite-a-vici_w8a8_seed1833820517_213347.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-bite-02.lab.json",
+    "jobId": "20261026T213347-1833820517",
+    "prompt": "TrackType: SFX, a large feral dog lunging to bite, a vicious snap of jaws clamping shut with teeth clacking and a short savage snarl, close mic, recorded dry with no echo or reverb.",
+    "seed": 1833820517,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0361,
+     "endS": 0.412,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-bite-03.mp3",
+   "url": "assets/audio/i07q-creature-bite-03.mp3",
+   "bytes": 14733,
+   "sha256": "5bed10d7d41638b1f406cbb46988f12f8a44e8f0a5281f596a80a4564333ec0f",
+   "cue": "creatureBite",
+   "durationS": 1.2,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-bite-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-bite-03.wav",
+    "rawSha256": "d758a550d0e35e5325b7d474aab5a93ebba20ab1e7733fb69e2e7d88b6f498f1",
+    "labFile": "sfx_a-large-feral-dog-lunging-to-bite-a-vici_w8a8_seed560893994_213351.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-bite-03.lab.json",
+    "jobId": "20261026T213351-560893994",
+    "prompt": "TrackType: SFX, a large feral dog lunging to bite, a vicious snap of jaws clamping shut with teeth clacking and a short savage snarl, close mic, recorded dry with no echo or reverb.",
+    "seed": 560893994,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0261,
+     "endS": 1.2261,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.78
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-yelp-01.mp3",
+   "url": "assets/audio/i07q-creature-yelp-01.mp3",
+   "bytes": 1881,
+   "sha256": "8591b7abab4a808dce2b46c4e2bf2ddb635f89a14012edd4e06eafe59909536f",
+   "cue": "creatureYelp",
+   "durationS": 0.1253,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-yelp-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-yelp-01.wav",
+    "rawSha256": "ad302e839402820b2502320c00886b23d13910493e1d9cba5d7ee15d0b19266e",
+    "labFile": "sfx_a-large-feral-dog-struck-by-a-bullet-a-s_w8a8_seed294327371_213356.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-yelp-01.lab.json",
+    "jobId": "20261026T213356-294327371",
+    "prompt": "TrackType: SFX, a large feral dog struck by a bullet, a single sharp pained yelp followed by a short whimper, close mic, recorded dry with no echo or reverb.",
+    "seed": 294327371,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0411,
+     "endS": 0.1664,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.0501,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.54
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-yelp-02.mp3",
+   "url": "assets/audio/i07q-creature-yelp-02.mp3",
+   "bytes": 5329,
+   "sha256": "64f79b9ed37d2f2b7e2e6f93d13d6903f08fba9090a348da05aacfcd2fa5a38f",
+   "cue": "creatureYelp",
+   "durationS": 0.4159,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-yelp-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-yelp-02.wav",
+    "rawSha256": "1953536e8c774e1a0110f3037fad6bb6c833da9b348354777a9c14241c662487",
+    "labFile": "sfx_a-large-feral-dog-struck-by-a-bullet-a-s_w8a8_seed1354932905_213401.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-yelp-02.lab.json",
+    "jobId": "20261026T213401-1354932905",
+    "prompt": "TrackType: SFX, a large feral dog struck by a bullet, a single sharp pained yelp followed by a short whimper, close mic, recorded dry with no echo or reverb.",
+    "seed": 1354932905,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.6375,
+     "endS": 1.0534,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.41
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-yelp-03.mp3",
+   "url": "assets/audio/i07q-creature-yelp-03.mp3",
+   "bytes": 4389,
+   "sha256": "9cea8752e3af3cfc7c7ee207de1fc22410afc3a836b0e014587ef68b3ba2e251",
+   "cue": "creatureYelp",
+   "durationS": 0.3157,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-yelp-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-yelp-03.wav",
+    "rawSha256": "3a9dd825d638462dd6d52d8f2fc6bc2feae3ae34c9513a0814268b6e9017b8db",
+    "labFile": "sfx_a-large-feral-dog-struck-by-a-bullet-a-s_w8a8_seed551458806_213405.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-yelp-03.lab.json",
+    "jobId": "20261026T213405-551458806",
+    "prompt": "TrackType: SFX, a large feral dog struck by a bullet, a single sharp pained yelp followed by a short whimper, close mic, recorded dry with no echo or reverb.",
+    "seed": 551458806,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.6324,
+     "endS": 0.9482,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 5.32
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-death-01.mp3",
+   "url": "assets/audio/i07q-creature-death-01.mp3",
+   "bytes": 31660,
+   "sha256": "757d5e4fa020084531799f0abbb6d48f32d538553e896ce52108defb77380e82",
+   "cue": "creatureDeath",
+   "durationS": 2.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-death-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-death-01.wav",
+    "rawSha256": "023752d8c29885fcaa5269f691e6a13e29761fd5edc993c36e00e1acde549f76",
+    "labFile": "sfx_a-large-wounded-feral-dog-dying-a-strang_w8a8_seed1485511873_213410.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-death-01.lab.json",
+    "jobId": "20261026T213410-1485511873",
+    "prompt": "TrackType: SFX, a large wounded feral dog dying, a strangled choking yelp fading into a weak last whine and a rattling final breath, close mic, recorded dry with no echo or reverb.",
+    "seed": 1485511873,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1213,
+     "endS": 2.7213,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.35,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 6.17
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-death-02.mp3",
+   "url": "assets/audio/i07q-creature-death-02.mp3",
+   "bytes": 23824,
+   "sha256": "6ca437ae29a160b877db327148f8dfa7d4a68ed9fe653e0f4b2e26a0891b4348",
+   "cue": "creatureDeath",
+   "durationS": 1.9494,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-death-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-death-02.wav",
+    "rawSha256": "547c2cbf96a2826b8461cf6ca407a11c6417e696cbaed44504e77d89ab609adf",
+    "labFile": "sfx_a-large-wounded-feral-dog-dying-a-strang_w8a8_seed1251211574_213415.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-death-02.lab.json",
+    "jobId": "20261026T213415-1251211574",
+    "prompt": "TrackType: SFX, a large wounded feral dog dying, a strangled choking yelp fading into a weak last whine and a rattling final breath, close mic, recorded dry with no echo or reverb.",
+    "seed": 1251211574,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1313,
+     "endS": 2.0807,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.35,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 10.96
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-death-03.mp3",
+   "url": "assets/audio/i07q-creature-death-03.mp3",
+   "bytes": 26018,
+   "sha256": "2b84d1af0ef4d881df581a925f015e1f36088e2574c02a88779eafef77940b9d",
+   "cue": "creatureDeath",
+   "durationS": 2.1248,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-death-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-death-03.wav",
+    "rawSha256": "858b1e8dd23bdfc14757f56b11e5ab862fc7409667673524f609efe8b3bb01aa",
+    "labFile": "sfx_a-large-wounded-feral-dog-dying-a-strang_w8a8_seed74373766_213420.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-death-03.lab.json",
+    "jobId": "20261026T213420-74373766",
+    "prompt": "TrackType: SFX, a large wounded feral dog dying, a strangled choking yelp fading into a weak last whine and a rattling final breath, close mic, recorded dry with no echo or reverb.",
+    "seed": 74373766,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0361,
+     "endS": 2.1609,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.35,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 8.29
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-step-01.mp3",
+   "url": "assets/audio/i07q-creature-step-01.mp3",
+   "bytes": 4702,
+   "sha256": "bae5da963a622118ca865b40f69f32edb0b817f53090e1a0d6cdb916c78407fa",
+   "cue": "creatureStep",
+   "durationS": 0.35,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-step-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-step-01.wav",
+    "rawSha256": "4f413e9c08cd97470cecd3811d09a3649469d24d38da0f52a0dc4ce91a8e1b57",
+    "labFile": "sfx_a-large-dog-s-clawed-paws-scrabbling-acr_w8a8_seed710934456_213424.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-step-01.lab.json",
+    "jobId": "20261026T213424-710934456",
+    "prompt": "TrackType: SFX, a large dog's clawed paws scrabbling across a bare concrete floor, a quick run of four paw steps with sharp claw clicks and scratches, close mic, recorded dry with no echo or reverb.",
+    "seed": 710934456,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1363,
+     "endS": 0.4863,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.05,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 13.47
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-step-02.mp3",
+   "url": "assets/audio/i07q-creature-step-02.mp3",
+   "bytes": 3135,
+   "sha256": "5722148100c1adf5cc5cfef1092866471432527b8d0fffe40645d45233c22396",
+   "cue": "creatureStep",
+   "durationS": 0.2205,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-step-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-step-02.wav",
+    "rawSha256": "db986c36870ecf33c31b4f1c0e886c58c1e7775dd0449f8ec4274a49db16cae0",
+    "labFile": "sfx_a-large-dog-s-clawed-paws-scrabbling-acr_w8a8_seed1039776088_213429.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-step-02.lab.json",
+    "jobId": "20261026T213429-1039776088",
+    "prompt": "TrackType: SFX, a large dog's clawed paws scrabbling across a bare concrete floor, a quick run of four paw steps with sharp claw clicks and scratches, close mic, recorded dry with no echo or reverb.",
+    "seed": 1039776088,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1363,
+     "endS": 0.3568,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.05,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 10.02
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07q-creature-step-03.mp3",
+   "url": "assets/audio/i07q-creature-step-03.mp3",
+   "bytes": 4702,
+   "sha256": "f521e5fbf356ef9331f8e2052968ffba4294170267d5d7459d743bb35a08d3c9",
+   "cue": "creatureStep",
+   "durationS": 0.35,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i07q-creature-step-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-step-03.wav",
+    "rawSha256": "75b2e14748622802d0f6b1152ae72846ff8ccd1ff86bd6bbc54e2a359f3f1d1a",
+    "labFile": "sfx_a-large-dog-s-clawed-paws-scrabbling-acr_w8a8_seed1690222340_213434.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-q/raw/i07q-creature-step-03.lab.json",
+    "jobId": "20261026T213434-1690222340",
+    "prompt": "TrackType: SFX, a large dog's clawed paws scrabbling across a bare concrete floor, a quick run of four paw steps with sharp claw clicks and scratches, close mic, recorded dry with no echo or reverb.",
+    "seed": 1690222340,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1313,
+     "endS": 0.4813,
+     "split": false
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.05,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 17.12
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  }
+ ],
+ "rejectedRaws": [],
+ "notDone": []
+}

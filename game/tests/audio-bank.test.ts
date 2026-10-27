@@ -7,11 +7,15 @@ import {describe, expect, it} from 'vitest';
 import {CUES, ClipBank, leadOffset} from '../src/audio/bank';
 import {CLIP_BYTES as CLIP_BYTES_I05, CLIP_GAPS as CLIP_GAPS_I05, CLIP_MANIFEST as CLIP_MANIFEST_I05} from '../src/audio/manifest.generated';
 import {CLIP_BYTES_I06, CLIP_GAPS_I06, CLIP_MANIFEST_I06} from '../src/audio/manifest.iteration06.generated';
+import {CLIP_BYTES_I07K, CLIP_GAPS_I07K, CLIP_MANIFEST_I07K} from '../src/audio/manifest.iteration07k.generated';
+import {CLIP_BYTES_I07Q, CLIP_GAPS_I07Q, CLIP_MANIFEST_I07Q} from '../src/audio/manifest.iteration07q.generated';
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06;
+// Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
+// Iteration 07 (Lane Q): + rat/dog creature vocals + paw scrabble (i07q).
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -67,7 +71,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -125,10 +129,14 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       impact: () => { for (const s of ['concrete', 'tile', 'metal', 'wood', 'flesh', 'glass', 'sheet'] as const) { ctx.currentTime += 1; sfx.impact(3, 1, 3, s); } },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
+      physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },
       groan: () => { sfx.groan(4, 1.6, 4, false); sfx.groan(4, 1.6, 4, true); }, zombieAttack: () => sfx.zombieAttack(3, 1.5, 3), zombieDeath: () => sfx.zombieDeath(3, 1.4, 3),
       zombieGait: () => { for (let i = 0; i < 20; i++) { ctx.currentTime += 0.2; sfx.zombieGait(z, 2, 2, 1.5, 0.2, i % 2 === 0); } },
       zombieStep: () => { ctx.currentTime += 1; sfx.zombieStep(2, 2, true); sfx.zombieStep(2, 2, false, 1, -1.15); },
       zombieClimb: () => { for (let i = 0; i < 10; i++) { ctx.currentTime += 0.2; sfx.zombieClimb(z, 3, -0.5, 3, 0.2); } },
+      // Iteration 07 (Lane Q): rat/dog vocals + paw scrabble
+      creature: () => { for (const c of ['growl', 'snarl', 'bite', 'yelp', 'death'] as const) { ctx.currentTime += 1; sfx.creature(c, 3, 0.35, 3); } },
+      creatureGait: () => { for (let i = 0; i < 20; i++) { ctx.currentTime += 0.2; sfx.creatureGait(z, 2, 2, i % 2 ? 4.4 : 0.8, 0.2); } },
       ambience: () => {
         for (const area of ['platform', 'service-corridor', 'washroom', 'food-court', 'utility']) { sfx.setRoom('medium', area); for (let i = 0; i < 400; i++) { ctx.currentTime += 0.25; sfx.ambience(0.25); } }
       },

@@ -18,6 +18,11 @@ export interface Pickup {
   x: number; y: number; z: number;
   obj: THREE.Object3D;
   mats: THREE.MeshStandardMaterial[];
+  /**
+   * Iteration 07 (Lane K): this pickup was a loot lot shot off its holder (same item id / count; the
+   * lot left the holder): its holder serial and lot id, as provenance (QA / tests).
+   */
+  fromLot?: {holder: number; lot: number};
 }
 
 // ---------------------------------------------------------------------------------------
@@ -340,6 +345,21 @@ export class PickupManager {
       return wrap;
     }
     return makeSupplyMesh(itemId);
+  }
+
+  /**
+   * Iteration 07 (Lane K): a pickup at an exact world transform (model frame: origin bottom-centre,
+   * front +Z) — e.g. a loot lot lifted off its shelf lying on its side. The targeting anchor is the
+   * transformed model centre.
+   */
+  addAt(stack: ItemStack, matrix: THREE.Matrix4, fromLot?: {holder: number; lot: number}): Pickup {
+    const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    matrix.decompose(pos, q, sc);
+    const p = this.add(stack, pos.x, pos.y, pos.z, 0);
+    p.obj.quaternion.copy(q);
+    p.obj.updateMatrix();
+    if (fromLot) p.fromLot = fromLot;
+    return p;
   }
 
   add(stack: ItemStack, x: number, y: number, z: number, yaw = 0): Pickup {

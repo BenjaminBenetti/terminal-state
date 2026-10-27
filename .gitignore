@@ -37,3 +37,11 @@ credentials*.json
 # Models, audio, textures and their provenance are SOURCE INPUTS.
 # Do not add blanket *.glb, *.blend, *.fbx, *.zip or art/generated/ ignores.
 # In particular, keep every file under game/public/assets/ tracked.
+
+# GitHub CI handoff directory (static site plus integrity metadata).
+artifacts/
+
+# Studio-only external archive and historical board inputs; never stage on migration.
+# These are ROOT paths, deliberately not game/public or its runtime source assets.
+/reference/
+/public/vision-board/

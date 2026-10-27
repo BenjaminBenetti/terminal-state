@@ -115,6 +115,12 @@ export interface WardrobeAvailability {
   bodies: readonly ZombieBodyDef[];
   wearables: readonly WearableDef[];
   supports(bodyId: string, wearableId: string): boolean;
+  /**
+   * Iteration 07: body-specific compatibility of two wearables (registry rules AND the build's per-body
+   * layering exclusions, e.g. a coat whose skirt the fitted pants of THAT body still poke through).
+   * Optional: when absent only the registry rules (wearablesCompatible) apply.
+   */
+  compatible?(bodyId: string, a: WearableDef, b: WearableDef): boolean;
   /** Backward compat: available upper-slot wearables. */
   readonly outfits: readonly WearableDef[];
 }
@@ -179,9 +185,14 @@ export function pickZombieLook(seed: number, index: number, type: ZombieType, av
     const wear: Partial<Record<WardrobeSlot, string>> = {};
     const picked: WearableDef[] = [];
     let ok = true;
-    for (const slot of PICK_ORDER) {
+    const compat = (a: WearableDef, b: WearableDef) => (av.compatible ? av.compatible(body.id, a, b) : wearablesCompatible(a, b));
+    const fits = (w: WearableDef) => ww(w) > 0 && av.supports(body.id, w.id) && wearableFitsBodyRules(w, body);
+    for (const [si, slot] of PICK_ORDER.entries()) {
       if (body.covers?.includes(slot)) continue;
-      let cands = av.wearables.filter(w => w.slot === slot && ww(w) > 0 && av.supports(body.id, w.id) && wearableFitsBodyRules(w, body) && picked.every(p => wearablesCompatible(p, w)));
+      // a candidate must leave every later REQUIRED slot fillable with something compatible
+      const laterRequired = PICK_ORDER.slice(si + 1).filter(s => body.requires?.includes(s) && !body.covers?.includes(s));
+      let cands = av.wearables.filter(w => w.slot === slot && fits(w) && picked.every(p => compat(p, w))
+        && laterRequired.every(r => av.wearables.some(x => x.slot === r && fits(x) && compat(w, x) && picked.every(p => compat(p, x)))));
       const required = !!body.requires?.includes(slot);
       let allowNone = !required;
       if (slot === 'upper') {
@@ -218,6 +229,8 @@ interface VariantExtras {
   hideBodyTriangles?: string; hiddenCount?: number;
   bulkM?: {torso?: number; arm?: number; leg?: number; head?: number};
   hideWear?: Record<string, string>;
+  /** Iteration 07: wearables this fitted variant must never be combined with on this body (layering gate). */
+  incompatibleWear?: string[];
 }
 interface WearableSceneExtras { id?: string; slot?: WardrobeSlot; kind?: string; heavy?: boolean }
 
@@ -268,7 +281,7 @@ export class WardrobeLibrary {
 
   get available(): WardrobeAvailability {
     const outfits = this.outfits;
-    return {bodies: this.bodies, wearables: this.wearables, supports: (b, w) => this.supports(b, w), outfits};
+    return {bodies: this.bodies, wearables: this.wearables, supports: (b, w) => this.supports(b, w), compatible: (b, x, y) => this.compatible(b, x, y), outfits};
   }
 
   /** Backward compat: available upper-slot wearables. */
@@ -278,6 +291,13 @@ export class WardrobeLibrary {
 
   supports(bodyId: string, wearableId: string): boolean {
     return !!this.support.get(bodyId)?.has(wearableId);
+  }
+
+  /** Registry rules AND the build's per-body layering exclusions (variant extras incompatibleWear). */
+  compatible(bodyId: string, a: WearableDef, b: WearableDef): boolean {
+    if (!wearablesCompatible(a, b)) return false;
+    const ea = this.support.get(bodyId)?.get(a.id)?.userData as VariantExtras | undefined, eb = this.support.get(bodyId)?.get(b.id)?.userData as VariantExtras | undefined;
+    return !ea?.incompatibleWear?.includes(b.id) && !eb?.incompatibleWear?.includes(a.id);
   }
 
   /** Supported (fitted) body x wearable pairs over every slot. */
@@ -308,7 +328,7 @@ export class WardrobeLibrary {
       if (!w || w.slot !== slot || b.covers?.includes(slot) || !this.supports(b.id, id)) return false;
       worn.push(w);
     }
-    for (let i = 0; i < worn.length; i++) for (let j = i + 1; j < worn.length; j++) if (!wearablesCompatible(worn[i], worn[j])) return false;
+    for (let i = 0; i < worn.length; i++) for (let j = i + 1; j < worn.length; j++) if (!this.compatible(b.id, worn[i], worn[j])) return false;
     return (b.requires ?? []).every(s => !!l.wear[s]);
   }
 
@@ -326,7 +346,7 @@ export class WardrobeLibrary {
         }
         for (const w of options[k]) {
           if (!w) { rec(k + 1, wear, picked); continue; }
-          if (!picked.every(p => wearablesCompatible(p, w))) continue;
+          if (!picked.every(p => this.compatible(b.id, p, w))) continue;
           wear[slots[k]] = w.id;
           rec(k + 1, wear, [...picked, w]);
           delete wear[slots[k]];
@@ -419,7 +439,7 @@ export class WardrobeLibrary {
       if (!id) continue;
       const w = this.wearable(id);
       const src = w && w.slot === slot ? this.variant(id, b.id) : null;
-      if (!w || !src || !worn.every(o => wearablesCompatible(o.w, w))) continue;
+      if (!w || !src || !worn.every(o => this.compatible(b.id, o.w, w))) continue;
       worn.push({w, src, ex: src.userData as VariantExtras});
     }
     worn.sort((x, y) => SLOTS.indexOf(x.w.slot) - SLOTS.indexOf(y.w.slot));

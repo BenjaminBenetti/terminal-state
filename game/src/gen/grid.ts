@@ -400,6 +400,8 @@ const NONE: readonly number[] = [];
 export interface PathOpts {
   /** Allow one-way drops off ledges up to MAX_DROP (chasing zombies jump into the track bed). */
   drops?: boolean;
+  /** Iteration 07 (Lane Q): ignore nav links (rescue ladders) — for actors that cannot climb (the quadruped). */
+  noLinks?: boolean;
 }
 
 /**
@@ -517,7 +519,7 @@ export class PathFinder {
     const cur = this.cur;
     const walk = this.walk, gArr = this.g, stamp = this.stamp, closed = this.closed, came = this.came, cameLink = this.cameLink, wallCost = this.wallCost, fl = this.fl, linkFlag = this.linkFlag;
     const drops = !!opts.drops;
-    const links = grid.links;
+    const links = grid.links, useLinks = !opts.noLinks;
     this.heapSize = 0;
     gArr[start] = 0;
     stamp[start] = cur;
@@ -565,7 +567,7 @@ export class PathFinder {
           }
         }
       }
-      if (linkFlag[c]) {
+      if (useLinks && linkFlag[c]) {
         for (const li of grid.linksAt(c)) {
           const l = links[li];
           const n = l.a === c ? l.b : l.a;

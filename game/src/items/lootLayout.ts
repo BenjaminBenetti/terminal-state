@@ -6,6 +6,7 @@
 
 import {PURPOSE_SURFACES, SHOP_COOLER_SURFACES, SHOP_DISPLAY_SURFACES, type PurposeHolderKind, type SurfaceSpec} from '../gen/props';
 import {itemDims} from './items';
+import {P7_SURFACES, type P7HolderKind} from '../gen/props07';
 
 export type Orient = 'up' | 'side' | 'back';
 
@@ -124,7 +125,9 @@ export function cabinetInsert(kind: 'cabinetTall' | 'cabinetLow', def: Dims, she
 export type SurfaceHolder = 'cabinetTall' | 'cabinetLow' | 'crate' | 'shelf' | 'stall' | 'vending' | 'table' | 'desk'
   | 'shopCounter' | 'shopDisplay' | 'shopBackbar' | 'shopCooler'
   // Iteration 05 (Lane R): purpose holders (gen/props.ts PURPOSE_SURFACES).
-  | PurposeHolderKind;
+  | PurposeHolderKind
+  // Iteration 07 (Lane P2): generated holders, measured surfaces (gen/props07.ts P7_SURFACES).
+  | P7HolderKind;
 
 /**
  * Storefront holder surfaces as fractions of the prop height (gen/props.ts SHOP_* constants over
@@ -229,7 +232,7 @@ export function holderSurfaces(kind: SurfaceHolder, def: Dims, o: SurfaceOptions
       out.push(...specSurfaces(SHOP_COOLER_SURFACES, def, 2.0));
       break;
     default: {
-      const spec = PURPOSE_SURFACES[kind];
+      const spec = (PURPOSE_SURFACES as Partial<Record<string, SurfaceSpec[]>>)[kind] ?? (P7_SURFACES as Partial<Record<string, SurfaceSpec[]>>)[kind];
       if (spec) out.push(...spec.map(s => ({y: s.y + 0.002, x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, clear: s.clear})));
     }
   }

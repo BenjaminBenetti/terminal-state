@@ -117,9 +117,71 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       game.damage.beginShot();
       const end = origin.clone().addScaledVector(dir, bestT);
       const shot = {damage: weapon === 'shotgun' ? 15 : 24, pellet: weapon === 'shotgun', weapon};
+      // Iteration 07 (Lane K): items / lots / light props on the line take the impulse (same call as Game.fire)
+      const moved = game.damage.knockPickups(o, d, bestT, wh, shot);
       const info = bz ? game.damage.hitZombie(bz, end, dir, part, shot) : corpse ? game.damage.hitZombie(corpse.z, end, dir, corpse.part, shot, true)
         : wh.kind !== 'none' ? game.damage.hitWorld(wh, end, dir, shot) : null;
-      return info ? {...info, t: bestT, cls: DAMAGE_MATERIALS[info.material as keyof typeof DAMAGE_MATERIALS]?.label ?? info.material, stats: game.damage.stats(game.zombies)} : null;
+      return info ? {...info, t: bestT, itemsMoved: moved, cls: DAMAGE_MATERIALS[info.material as keyof typeof DAMAGE_MATERIALS]?.label ?? info.material, stats: game.damage.stats(game.zombies)}
+        : moved ? {itemsMoved: moved, t: bestT} : null;
+    },
+    /**
+     * Iteration 07 (Lane K): rigid-body stats — simulating items / loose props (budget, frozen-pending,
+     * activations, shots, pushes), physical chunks (world bodies, flesh / cloth pieces), step cost, and
+     * bounded lists of tracked items / flesh chunks.
+     */
+    dynamics: () => {
+      const ph = game.physics;
+      const st = ph.stats();
+      return {dynamic: st.dynamic, chunks: st.chunks, stepMs: st.stepMs, stepMsMax: st.stepMsMax, bodies: st.bodies, staticBodies: st.staticBodies,
+        items: ph.dynamicItems.list(16), flesh: ph.chunks.listFlesh(12), drivenDebris: game.damage.debris.driven(), counts: {...game.damage.counts},
+        pickups: game.pickups.list.length, liftedLots: game.pickups.list.filter(p => p.fromLot).map(p => ({itemId: p.stack.itemId, count: p.stack.count, uid: p.stack.uid, ...p.fromLot, x: p.x, y: p.y, z: p.z}))};
+    },
+    /**
+     * Iteration 07 (Lane K): aim at the nearest loose pickup or VISIBLE loot lot (optionally of one item
+     * id, e.g. 'cola'); teleport: stand ~1.6 m in front of it first. Returns what was aimed at.
+     */
+    aimItem: (itemId?: string, o: {teleport?: boolean; source?: 'pickup' | 'lot'} = {}) => {
+      const p = game.player, L = game.layout;
+      type Cand = {source: 'pickup' | 'lot'; itemId: string; count: number; at: {x: number; y: number; z: number}; front: {x: number; z: number} | null; holder?: number; lot?: number; d: number};
+      const cands: Cand[] = [];
+      if (o.source !== 'lot') for (const pk of game.pickups.list) {
+        if (itemId && pk.stack.itemId !== itemId) continue;
+        const box = new THREE.Box3().setFromObject(pk.obj), c = box.getCenter(new THREE.Vector3());
+        cands.push({source: 'pickup', itemId: pk.stack.itemId, count: pk.stack.count, at: {x: c.x, y: c.y, z: c.z}, front: null, d: Math.hypot(c.x - p.x, c.z - p.z)});
+      }
+      const cm = game.containers;
+      if (cm && o.source !== 'pickup') for (const h of cm.all) {
+        if (!h.state.lots.length || !(h.group === 'surface' ? h.state.open : h.t > 0.001)) continue;
+        for (const l of h.state.lots) {
+          if (itemId && l.itemId !== itemId) continue;
+          const at = cm.lotPoint(h, l);
+          if (at) cands.push({source: 'lot', itemId: l.itemId, count: l.count, at, front: {x: Math.sin(h.prop.rot), z: Math.cos(h.prop.rot)}, holder: h.serial, lot: l.id, d: Math.hypot(at.x - p.x, at.z - p.z)});
+        }
+      }
+      cands.sort((a, b) => a.d - b.d);
+      const t = cands[0];
+      if (!t) return null;
+      if (o.teleport) {
+        const f = t.front ?? (() => { const dx = p.x - t.at.x, dz = p.z - t.at.z, d = Math.hypot(dx, dz) || 1; return {x: dx / d, z: dz / d}; })();
+        teleport(t.at.x + f.x * 1.6, t.at.z + f.z * 1.6);
+      }
+      lookAt(t.at.x, t.at.y, t.at.z);
+      const e = eye();
+      const wh = raycastWorld(L.grid, L.props, {x: e.x, y: e.y, z: e.z}, (() => { const v = new THREE.Vector3(t.at.x - e.x, t.at.y - e.y, t.at.z - e.z).normalize(); return {x: v.x, y: v.y, z: v.z}; })(), 30, L.trench.floorY);
+      return {...t, dist: Math.hypot(t.at.x - game.player.x, t.at.z - game.player.z), firstHit: wh.kind, firstHitT: wh.t};
+    },
+    /** Iteration 07 (Lane K): aim at the nearest light dynamic prop (e.g. a trash can), optionally standing in front of it. */
+    aimLooseProp: (o: {teleport?: boolean} = {}) => {
+      const p = game.player;
+      const props = game.layout.props.map((q, i) => ({q, i})).filter(({q}) => game.physics.dynamicItems.isDynamicProp(q));
+      props.sort((a, b) => Math.hypot(a.q.x - p.x, a.q.z - p.z) - Math.hypot(b.q.x - p.x, b.q.z - p.z));
+      const t = props[0];
+      if (!t) return null;
+      const f = {x: Math.sin(t.q.rot), z: Math.cos(t.q.rot)};
+      if (o.teleport) teleport(t.q.x + f.x * 1.8, t.q.z + f.z * 1.8);
+      const y = t.q.y + Math.max(0.4, t.q.h * 0.7);
+      lookAt(t.q.x, y, t.q.z);
+      return {kind: t.q.kind, index: t.i, loose: t.q.h === 0, at: {x: t.q.x, y, z: t.q.z}};
     },
   };
   return api;

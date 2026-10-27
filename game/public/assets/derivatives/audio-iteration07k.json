@@ -1,0 +1,924 @@
+{
+ "task": "studio-slice-iteration07-20261026-01",
+ "lane": "K (physics: shot impulses + physics chunks)",
+ "generatedBy": "tools/audio-pipeline/build-iteration07k.mjs",
+ "policy": "Root CLAUDE.md \"Sound effects: Sound Lab only (user rule, 2026-10-26)\": every runtime SFX is a derivative of a Sound Lab raw; no synthesis, stock or hosted audio; missing cues stay silent and are listed as gaps. Existing iteration-05/06 cues are reused for everything else.",
+ "soundLab": {
+  "endpoint": "http://10.0.0.59:7871",
+  "kit": {
+   "name": "Last Line Sound Lab CPU",
+   "version": "0.1.0"
+  },
+  "profile": "w8a8",
+  "modelCard": {
+   "repo": "stabilityai/stable-audio-3-small-sfx",
+   "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+   "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+  },
+  "weightsRepo": "stabilityai/stable-audio-3-optimized",
+  "revision": "08b17423649b5714b22eab20f96bf00751f2358a",
+  "upstreamCode": {
+   "repo": "https://github.com/Stability-AI/stable-audio-3",
+   "commit": "77e0398c26f7d22d801ec1bb036307e8b231f741",
+   "committed": "2026-10-11T03:32:19-04:00",
+   "path": "optimized/tflite",
+   "license": "MIT (code only; does not cover model weights)"
+  },
+  "lock": "flock /tmp/ll-soundlab.lock (shared with Lane Q; one job in flight across lanes)"
+ },
+ "license": {
+  "status": "conditional prototype, not commercially cleared: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Conditional prototype status, not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "Unreviewed by ear on the worker; human audition required.",
+  "gameReady": false,
+  "approved": false
+ },
+ "rawFolder": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw",
+ "totals": {
+  "derivatives": 12,
+  "bytes": 156735,
+  "cuesCovered": 4,
+  "cues": 4
+ },
+ "gaps": [],
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/i07k-item-can-01.mp3",
+   "url": "assets/audio/i07k-item-can-01.mp3",
+   "bytes": 17868,
+   "sha256": "a13b13f62297c8ac038c6c87ad65a674805035e7251a0e8f01b0e930b5a42b98",
+   "cue": "itemCan",
+   "durationS": 1.45,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 57,
+    "frameChainDurationS": 1.489,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-item-can-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-01.wav",
+    "rawSha256": "224213fb6910486fbc144d0c0779f74d8915f09e352a04e26cafce421af22b01",
+    "labFile": "sfx_a-single-empty-aluminium-soda-can-knocke_w8a8_seed307828086_213445.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-01.lab.json",
+    "labSidecarSha256": "7e9142cff564c9b25f11cccbd82b3e3ddb5a7cac7bebbbd1f158eaab0a56ba27",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-01.sidecar.json",
+    "jobId": "20261026T213445-307828086",
+    "prompt": "TrackType: SFX, a single empty aluminium soda can knocked over and dropping onto a concrete floor, a hollow tinny metallic clink then a short rattling roll clattering to a stop, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 307828086,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 1.451
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 6.08
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-item-can-02.mp3",
+   "url": "assets/audio/i07k-item-can-02.mp3",
+   "bytes": 17868,
+   "sha256": "af29fd6f0547a56776c0e5a7ec77a2b9780589c2f04c9da480d7dd9e9ad8ca43",
+   "cue": "itemCan",
+   "durationS": 1.45,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 57,
+    "frameChainDurationS": 1.489,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-item-can-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-02.wav",
+    "rawSha256": "17985b03c93e9bfafa912dc9bf3607d3ab4c2139a3fe89e181bc2f8a577f6563",
+    "labFile": "sfx_a-single-empty-aluminium-soda-can-knocke_w8a8_seed1512891694_213450.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-02.lab.json",
+    "labSidecarSha256": "28ce53a6f6c65df8d3fbdf7b7dac76c31f7c251b6ab4472c2c8c46c5a5d68110",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-02.sidecar.json",
+    "jobId": "20261026T213450-1512891694",
+    "prompt": "TrackType: SFX, a single empty aluminium soda can knocked over and dropping onto a concrete floor, a hollow tinny metallic clink then a short rattling roll clattering to a stop, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 1512891694,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.45
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 5.7
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-item-can-03.mp3",
+   "url": "assets/audio/i07k-item-can-03.mp3",
+   "bytes": 17868,
+   "sha256": "b7ab4b7820a2b156e80a8c240605c925a866f64de30f75f59d770f4e54185ab1",
+   "cue": "itemCan",
+   "durationS": 1.45,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 57,
+    "frameChainDurationS": 1.489,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-item-can-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-03.wav",
+    "rawSha256": "a45335ae9bdb9cddf4ad81b8cc01ae72537339c8d17e3f44eec81820280090f9",
+    "labFile": "sfx_a-single-empty-aluminium-soda-can-knocke_w8a8_seed433238252_213454.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-03.lab.json",
+    "labSidecarSha256": "f4f476941190ea99afd72a2f3529d3f46ab8c39485ec729c02e3b9cfa6a17266",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-can-03.sidecar.json",
+    "jobId": "20261026T213454-433238252",
+    "prompt": "TrackType: SFX, a single empty aluminium soda can knocked over and dropping onto a concrete floor, a hollow tinny metallic clink then a short rattling roll clattering to a stop, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 433238252,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 1.451
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.89
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-item-light-01.mp3",
+   "url": "assets/audio/i07k-item-light-01.mp3",
+   "bytes": 10658,
+   "sha256": "b1407a7a91c4e6a6f0f340e780297d1dcd47284e6c24e36715320ac9b3b9d68c",
+   "cue": "itemLight",
+   "durationS": 0.862,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 34,
+    "frameChainDurationS": 0.8882,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-item-light-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-01.wav",
+    "rawSha256": "42bfc0eeb18563ad370cc80fe82f590fdd37fc6a4013c14e87384746484bb73a",
+    "labFile": "sfx_a-small-empty-plastic-bottle-falling-and_w8a8_seed1744803258_213459.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-01.lab.json",
+    "labSidecarSha256": "e845b022857a4834bc2a343cf07465f575039e5d8587c59199eb4b47c46f7905",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-01.sidecar.json",
+    "jobId": "20261026T213459-1744803258",
+    "prompt": "TrackType: SFX, a small empty plastic bottle falling and bouncing on a hard floor, a light hollow plastic knock and a couple of soft taps, no metal, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 1744803258,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.862
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.3
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-item-light-02.mp3",
+   "url": "assets/audio/i07k-item-light-02.mp3",
+   "bytes": 12539,
+   "sha256": "4f61b40cc94dffb45fddbcb35dc527419246a471aea3ebc50566bebd483a7e47",
+   "cue": "itemLight",
+   "durationS": 1,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 40,
+    "frameChainDurationS": 1.0449,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-item-light-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-02.wav",
+    "rawSha256": "15cc1203d67bb2edc60286dd51465adfad57d122cbf88f2cd085f07710b4f39a",
+    "labFile": "sfx_a-small-empty-plastic-bottle-falling-and_w8a8_seed454663097_213503.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-02.lab.json",
+    "labSidecarSha256": "57186cbf4e4123b6d90edf0014b690b2f83f597e529b125c2000da4aac6a9199",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-02.sidecar.json",
+    "jobId": "20261026T213503-454663097",
+    "prompt": "TrackType: SFX, a small empty plastic bottle falling and bouncing on a hard floor, a light hollow plastic knock and a couple of soft taps, no metal, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 454663097,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 1.001
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 6.22
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-item-light-03.mp3",
+   "url": "assets/audio/i07k-item-light-03.mp3",
+   "bytes": 10658,
+   "sha256": "5fca2228d363422deb15dc76e06c3c77432163fc1f999990e82ba7239181c77d",
+   "cue": "itemLight",
+   "durationS": 0.8369,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 34,
+    "frameChainDurationS": 0.8882,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-item-light-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-03.wav",
+    "rawSha256": "c3caeea8b1a426408a9b13406115fe5c8780161e498190493c6187e64fe01112",
+    "labFile": "sfx_a-small-empty-plastic-bottle-falling-and_w8a8_seed240385869_213508.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-03.lab.json",
+    "labSidecarSha256": "81722bde0410b5035b0dd6fa1404cea6ed175f7d54db204d3265cb02ad85121c",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-item-light-03.sidecar.json",
+    "jobId": "20261026T213508-240385869",
+    "prompt": "TrackType: SFX, a small empty plastic bottle falling and bouncing on a hard floor, a light hollow plastic knock and a couple of soft taps, no metal, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 240385869,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.011,
+     "endS": 0.8479
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.21
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-chunk-flesh-01.mp3",
+   "url": "assets/audio/i07k-chunk-flesh-01.mp3",
+   "bytes": 7523,
+   "sha256": "c4726c5731ac6c293981a73bef1960f6860fefb288b929bbabfb0e17908963e2",
+   "cue": "chunkFlesh",
+   "durationS": 0.5913,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 24,
+    "frameChainDurationS": 0.6269,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-chunk-flesh-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-01.wav",
+    "rawSha256": "ef50d2862c272d4a9588ca0217a7325dfb24faa64d3a56b9ca130b1eb6b5b263",
+    "labFile": "sfx_a-wet-chunk-of-raw-meat-dropping-and-sla_w8a8_seed142814992_213513.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-01.lab.json",
+    "labSidecarSha256": "a92fad53858aa9f8ea1b4e3c55d686e8e0e593d7d988debf214df8581a0da670",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-01.sidecar.json",
+    "jobId": "20261026T213513-142814992",
+    "prompt": "TrackType: SFX, a wet chunk of raw meat dropping and slapping onto a hard concrete floor, a single short wet slap and splat, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 142814992,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1915,
+     "endS": 0.7828
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 0.52
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-chunk-flesh-02.mp3",
+   "url": "assets/audio/i07k-chunk-flesh-02.mp3",
+   "bytes": 5956,
+   "sha256": "9288f117186c7fb8ec7d3c4041036d4415ebc03397fa663c7e1de151ff5992b9",
+   "cue": "chunkFlesh",
+   "durationS": 0.446,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 19,
+    "frameChainDurationS": 0.4963,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-chunk-flesh-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-02.wav",
+    "rawSha256": "608aa6fddc9a8db67ca742dcd2a5514b9455862b725b230cc7f2b2619a9b61e5",
+    "labFile": "sfx_a-wet-chunk-of-raw-meat-dropping-and-sla_w8a8_seed847102582_213517.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-02.lab.json",
+    "labSidecarSha256": "aff7af335fe2d7b3e59cee03511c88a64b6ea6c7fb4d502d540852b8a11e363a",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-02.sidecar.json",
+    "jobId": "20261026T213517-847102582",
+    "prompt": "TrackType: SFX, a wet chunk of raw meat dropping and slapping onto a hard concrete floor, a single short wet slap and splat, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 847102582,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2165,
+     "endS": 0.6625
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-chunk-flesh-03.mp3",
+   "url": "assets/audio/i07k-chunk-flesh-03.mp3",
+   "bytes": 6896,
+   "sha256": "3a166cc7d77d266ea59986fdf988da9789620fa1b4f874b5702a19fa5fcba1b5",
+   "cue": "chunkFlesh",
+   "durationS": 0.5362,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 22,
+    "frameChainDurationS": 0.5747,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-chunk-flesh-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-03.wav",
+    "rawSha256": "003b0df625c42284465c9377873a39ed6d329a3f0cab185cd18cbf945048f1b1",
+    "labFile": "sfx_a-wet-chunk-of-raw-meat-dropping-and-sla_w8a8_seed280463600_213522.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-03.lab.json",
+    "labSidecarSha256": "6dbb48d10b6b90a678eb4bcf3e9647c3f9dae3a5975543406394e50c3a8f5e71",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-chunk-flesh-03.sidecar.json",
+    "jobId": "20261026T213522-280463600",
+    "prompt": "TrackType: SFX, a wet chunk of raw meat dropping and slapping onto a hard concrete floor, a single short wet slap and splat, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 280463600,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1664,
+     "endS": 0.7026
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-prop-topple-01.mp3",
+   "url": "assets/audio/i07k-prop-topple-01.mp3",
+   "bytes": 16300,
+   "sha256": "adf9a1081dce7420c91e389aee3930105e82f4a6f56852f6b3499f03cefb3f3a",
+   "cue": "propTopple",
+   "durationS": 1.308,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 52,
+    "frameChainDurationS": 1.3584,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-prop-topple-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-01.wav",
+    "rawSha256": "0a6df29d3280d70a5b948d37cfff88d07a40f41c37ffcfc0ced4b1220299a148",
+    "labFile": "sfx_a-metal-trash-can-knocked-over-toppling_w8a8_seed1606239743_213526.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-01.lab.json",
+    "labSidecarSha256": "aa8bddbcc3c6bcdd82534cca6a2087461661e383d360cc3dfb60917ad09fdff7",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-01.sidecar.json",
+    "jobId": "20261026T213526-1606239743",
+    "prompt": "TrackType: SFX, a metal trash can knocked over, toppling and clanging onto a concrete floor, a hollow metallic crash followed by a short rolling rattle, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 1606239743,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.308
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.2,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-prop-topple-02.mp3",
+   "url": "assets/audio/i07k-prop-topple-02.mp3",
+   "bytes": 16614,
+   "sha256": "d522fee2ce8d6e6a0e2c07046ef8534928afe09694f6b8005182b18535746723",
+   "cue": "propTopple",
+   "durationS": 1.348,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 53,
+    "frameChainDurationS": 1.3845,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-prop-topple-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-02.wav",
+    "rawSha256": "5bd765376238ed53674f8eb8306e92fee8dfb0e0ffc054d4be199343ff298285",
+    "labFile": "sfx_a-metal-trash-can-knocked-over-toppling_w8a8_seed241304596_213531.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-02.lab.json",
+    "labSidecarSha256": "e65f3dfeaaf8ef880a5e1f646b1ad558f9747726d8e3555e9b15d9ad70fb4802",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-02.sidecar.json",
+    "jobId": "20261026T213531-241304596",
+    "prompt": "TrackType: SFX, a metal trash can knocked over, toppling and clanging onto a concrete floor, a hollow metallic crash followed by a short rolling rattle, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 241304596,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.348
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.2,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.8
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i07k-prop-topple-03.mp3",
+   "url": "assets/audio/i07k-prop-topple-03.mp3",
+   "bytes": 15987,
+   "sha256": "40bfb8302967e10e95b08e33f3b7eb70902293b32c4e9747b39e3bbb86cc4930",
+   "cue": "propTopple",
+   "durationS": 1.2879,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "mp3Check": {
+    "frames": 51,
+    "frameChainDurationS": 1.3322,
+    "sampleRate": 44100,
+    "channels": 1
+   },
+   "source": {
+    "clip": "i07k-prop-topple-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-03.wav",
+    "rawSha256": "f763c96d2ded64941a79219411c9f165f6b68659096b95b749838cb75b08554e",
+    "labFile": "sfx_a-metal-trash-can-knocked-over-toppling_w8a8_seed601060241_213535.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-03.lab.json",
+    "labSidecarSha256": "e50db59cbe4a4f22332b5bae6b94ef6e7ccfca68bb89e45ac337ff2f021c39cc",
+    "runnerSidecar": "reference/tasks/vertical-slice-iteration07-20261026/audio-k/raw/i07k-prop-topple-03.sidecar.json",
+    "jobId": "20261026T213535-601060241",
+    "prompt": "TrackType: SFX, a metal trash can knocked over, toppling and clanging onto a concrete floor, a hollow metallic crash followed by a short rolling rattle, close mic, recorded dry with no echo or reverb.",
+    "negativePrompt": "",
+    "seed": 601060241,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "profileLabel": "w8a8 (upstream default): int8 DiT + int8 SAME-S decoder, fp16 T5Gemma",
+    "modelCard": {
+     "repo": "stabilityai/stable-audio-3-small-sfx",
+     "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+     "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+    },
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "licenseStatus": "conditional prototype, not commercially cleared"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.2879
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.2,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.8
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  }
+ ],
+ "rejectedRaws": [],
+ "notDone": []
+}

@@ -10,6 +10,8 @@ import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type RoomPurpose, type R
 import {stockVariant} from './purposeShapes';
 import type {Wing} from './stationKit';
 import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
+import {dressP7} from './props07Dress';
+import {passageWallsAlongX, signDims, wallSignSpot} from './doorways';
 import {
   MIN_ZOMBIE_SPAWN_CELLS, PENDANT_Y, SPAWN_LIT_RADIUS,
   type Area, type Door, type LightPlacement, type RoomType, type Side, type SignPlacement, type StationLayout, type ZombieType,
@@ -306,6 +308,18 @@ function roomLights(ctx: Ctx, area: Area): void {
 }
 
 function wallSign(ctx: Ctx, area: Area, side: Side, t: number, y: number, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>) {
+  // Iteration 07 (Lane DW): a plate never floats across an opening (or past a corner) — it slides
+  // along the wall to the nearest wall-backed spot (deterministic, no RNG); where the wall left
+  // beside openings is too short it gets a narrower plate (down to 1 m), else it is left out.
+  let spot = wallSignSpot(ctx.g, area, side, t, y, signDims(s));
+  for (const f of [0.8, 0.6, 0.45]) {
+    if (spot !== null) break;
+    const narrow = {...s, w: Math.round(Math.max(1.0, signDims(s).w * f) * 100) / 100};
+    spot = wallSignSpot(ctx.g, area, side, t, y, signDims(narrow));
+    if (spot !== null) s = narrow;
+  }
+  if (spot === null) return;
+  t = spot;
   const ax0 = area.x * CELL, az0 = area.y * CELL, ax1 = (area.x + area.w) * CELL, az1 = (area.y + area.h) * CELL;
   const pos = side === 'N' ? {x: t, z: az0 + 0.02, rot: 0} : side === 'S' ? {x: t, z: az1 - 0.02, rot: Math.PI}
     : side === 'W' ? {x: ax0 + 0.02, z: t, rot: Math.PI / 2} : {x: ax1 - 0.02, z: t, rot: -Math.PI / 2};
@@ -325,7 +339,9 @@ function signAtDoor(ctx: Ctx, d: Door, area: Area, s: Omit<SignPlacement, 'x' | 
   const mid = d.h === 1 ? (d.x + d.w / 2) * CELL : (d.y + d.h / 2) * CELL;
   const room = area.ceil - d.height;
   if (room >= 0.5) wallSign(ctx, area, side, mid, Math.min(d.height + 0.32, area.ceil - 0.24), s);
-  else wallSign(ctx, area, side, mid + ((d.h === 1 ? d.w : d.h) * CELL / 2 + 0.75), 1.9, {...s, w: s.w ?? 1.1});
+  // Beside it: 0.2 m clear of the opening edge whatever the plate's width (was a fixed 0.75 m from
+  // the edge to the centre, so wide plates reached back into the opening).
+  else { const w = s.w ?? 1.1; wallSign(ctx, area, side, mid + ((d.h === 1 ? d.w : d.h) * CELL / 2 + 0.2 + w / 2), 1.9, {...s, w}); }
 }
 
 const other = (ctx: Ctx, d: Door, a: Area) => ctx.layout.areas[d.a === a.id ? d.b : d.a];
@@ -362,6 +378,26 @@ export function dress(layout: StationLayout, rng: Rng): void {
       default: dressBackOfHouse(ctx, area); break;
     }
   }
+  // Iteration 07 (Lane P2): NEW generated props by room/store purpose and hall type, then host decor / chairs (gen/props07Dress.ts).
+  // Same placement primitive (door zones, access strips, rings, edge bands, connectivity) on a forked RNG; DW doorway volumes too.
+  {
+    const pctx: Ctx = {...ctx, rng: rng.fork('p7')};
+    const g = ctx.g;
+    dressP7(layout, {
+      rng: pctx.rng,
+      place: (a, kind, x, z, rot, o = {}) => tryPlaceProp(pctx, a, kind, x, z, rot, o),
+      cellsFree: (a, x, z, hx, hz) => {
+        const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
+        for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+          if (!g.inBounds(cx, cy)) return false;
+          const i = g.idx(cx, cy);
+          if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || ctx.zone[i] || ctx.doorCell[i] || ctx.edge[i]) return false;
+        }
+        return true;
+      },
+      doorSide: a => { const d = mainDoor(pctx, a); return d ? doorSide(d, a) : null; },
+    });
+  }
   // Staff-only plates on the public side of back-of-house doors; purpose plates (SECURITY,
   // ELECTRICAL, JANITOR …) on the corridor side of a purpose room's main door.
   for (const d of layout.doors) {
@@ -384,6 +420,8 @@ const PLATES: Record<string, string> = {
   'staff-room': 'STAFF ROOM', 'locker-room': 'CREW LOCKERS', 'first-aid-room': 'FIRST AID', 'security-office': 'TRANSIT SECURITY',
   'electrical-room': 'ELECTRICAL · DANGER', 'electrical-closet': 'ELECTRICAL', 'signal-room': 'SIGNAL RELAY ROOM', 'storage': 'MAINTENANCE STORES',
   'stock-room': 'STOCK ROOM', 'janitor-closet': 'JANITOR', 'supply-closet': 'SUPPLIES',
+  // Iteration 07 (Lane P2): rooms built around the new generated props.
+  'workshop': 'WORKSHOP', 'pump-room': 'PUMP ROOM', 'lost-property': 'LOST PROPERTY', 'revenue-room': 'REVENUE ROOM', 'custodial-room': 'CUSTODIAL',
 };
 
 /** Back-of-house wing of an area from its ancestry (food court / agent office / platform staff side). */
@@ -542,8 +580,12 @@ function dressPassage(ctx: Ctx, a: Area): void {
   const len = alongX ? aw : ah;
   const step = a.role === 'escalator' ? 4.5 : 3.5;
   for (let t = 1.5; t < len; t += step) addLight(ctx, a, alongX ? ax0 + t : ax0 + aw / 2, alongX ? az0 + ah / 2 : az0 + t, alongX ? 0 : Math.PI / 2, 0.08);
-  const sideA: Side = alongX ? (rng.chance(0.5) ? 'N' : 'S') : (rng.chance(0.5) ? 'W' : 'E');
-  const mid = alongX ? ax0 + aw / 2 : az0 + ah / 2;
+  let sideA: Side = alongX ? (rng.chance(0.5) ? 'N' : 'S') : (rng.chance(0.5) ? 'W' : 'E');
+  let mid = alongX ? ax0 + aw / 2 : az0 + ah / 2;
+  // Iteration 07 (Lane DW): a passage wider than long has its mouths in the "long" walls — the
+  // sign goes on a side wall (the wall pair the handrails use), not across a mouth.
+  const sideX = passageWallsAlongX(ctx.g, a);
+  if (sideX !== alongX) { sideA = ({N: 'W', S: 'E', W: 'N', E: 'S'} as const)[sideA]; mid = sideX ? ax0 + aw / 2 : az0 + ah / 2; }
   const text = a.role === 'transfer' ? 'TRANSFER · LINE 1 / LINE 2' : a.role === 'escalator' ? 'TO STREET · TICKET HALL' : 'TO STREET';
   wallSign(ctx, a, sideA, mid, 2.2, {kind: a.role === 'transfer' ? 'info' : 'exit', text, w: a.role === 'transfer' ? 2.4 : undefined});
   if (a.role === 'transfer' || a.role === 'escalator') {

@@ -6,7 +6,8 @@ import {freshSeed, mulberry32, seedToCode} from './core/rng';
 import {PropIndex, moveCircle} from './core/physics';
 import {CELL, PathFinder, nearestWalkable} from './gen/grid';
 import {generateStation, type StationLayout} from './gen/station';
-import {loadAssets, type AssetBundle} from './assets/loader';
+import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
+import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorld, type BuiltWorld} from './world/builder';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
@@ -24,6 +25,8 @@ import {Viewmodel} from './weapons/viewmodel';
 import {ConsumeView} from './weapons/consumeView';
 import {buildItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
+import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
+import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
 import type {BrainWorld} from './ai/brain';
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
@@ -55,6 +58,9 @@ export class Game {
   readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high'};
   state: GameState = 'loading';
   assets!: AssetBundle;
+  /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
+  readonly propModels = new PropModelLibrary(P7_FILES);
+  private prepared: {seed: number; layout: StationLayout} | null = null;
   mats!: WorldMaterials;
   viewmodel!: Viewmodel;
   layout!: StationLayout;
@@ -68,7 +74,10 @@ export class Game {
   readonly survival = new Survival();
   inv = new Inventory();
   weapon = new WeaponController();
-  zombies: ZombieActor[] = [];
+  /** Every enemy actor (zombies + iteration-07 archetypes such as the rat/dog; ai/creatureArchetypes.ts EnemyActor). */
+  zombies: EnemyActor[] = [];
+  /** Spawns whose archetype model was missing and fell back to a zombie (QA). */
+  enemyFallbacks = 0;
   /** Iteration 05 body x outfit registry/assembler (ai/outfits.ts), built once from the loaded GLBs. */
   private zombieLooks: ZombieLookLibrary | null = null;
   pickups!: PickupManager;
@@ -177,6 +186,16 @@ export class Game {
     return this.currentSeed;
   }
 
+  /**
+   * Iteration 07 (Lane P2): generates the station for `seed` and fetches exactly the lazy prop models it placed BEFORE it is built and
+   * revealed (newStation reuses this layout). Cached models resolve at once; a model that fails is dropped from the station, never boxed.
+   */
+  async prepareStation(seed: number, onProgress?: (frac: number, label: string) => void): Promise<void> {
+    const layout = generateStation(seed >>> 0);
+    await this.propModels.ensure(p7ModelKeysFor(layout), onProgress);
+    this.prepared = {seed: seed >>> 0, layout};
+  }
+
   newStation(seed: number): void {
     this.currentSeed = seed >>> 0;
     this.rand = mulberry32(seed ^ 0x5bd1e995);
@@ -186,7 +205,7 @@ export class Game {
       this.world.group.traverse(o => {
         const mesh = o as THREE.Mesh;
         if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
-        if (mesh.isMesh && !this.sharedGeometries.has(mesh.geometry)) mesh.geometry.dispose();
+        if (mesh.isMesh && !this.sharedGeometries.has(mesh.geometry) && !this.propModels.ownsGeometry(mesh.geometry)) mesh.geometry.dispose();
       });
       this.lightPool.dispose(this.scene);
     }
@@ -201,8 +220,13 @@ export class Game {
     this.consumeView?.reset();
 
     const t0 = performance.now();
-    this.layout = generateStation(seed);
-    this.world = buildWorld(this.layout, this.mats, this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
+    // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
+    this.layout = this.prepared?.seed === (seed >>> 0) ? this.prepared.layout : generateStation(seed);
+    this.prepared = null;
+    const p7Keys = p7ModelKeysFor(this.layout);
+    dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
+    this.propModels.trim(new Set(p7Keys));
+    this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     this.scene.add(this.world.group);
     if (!this.containers) {
       this.containers = new ContainerManager(this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, this.mats, () => this.inv);
@@ -216,10 +240,25 @@ export class Game {
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
     const cm = this.containers;
+    // Iteration 07 (Lane K): items / chunks rest on real holder shelves; walkers shove loose light props.
+    this.physics.holderBoxes = p => cm.physicsBoxes(p);
+    this.physics.dynamicItems.walkers = () => [{id: this.player, x: this.player.x, z: this.player.z, y: this.player.y, r: this.player.radius},
+      ...this.zombies.filter(z => z.brain.alive && !z.ragdolled).map(z => ({id: z, x: z.brain.x, z: z.brain.z, y: z.brain.y, r: z.brain.stats.radius}))];
     this.damage.build(this.layout, this.mats, [this.world.group, cm.group], {
       ownMeshes: p => cm.ownMeshes(p),
       onBreak: e => { const h = cm.holderFor(e.prop); if (h) cm.breakHolder(h, e.kind); this.physics.propsChanged(e.prop.x, e.prop.z); },
       pickups: () => this.pickups.list,
+      // Iteration 07 (Lane K): shot items move — rigid items / chunks, loot lots lifted off holders (same item / count, never duplicated)
+      physics: this.physics,
+      lots: (o, d, maxT) => cm.shotLots(o, d, maxT).map(l => ({holder: l.holder, lotId: l.lotId, t: l.t})),
+      lotsIn: box => cm.lotsInBox(box),
+      detachLot: (h, lotId) => {
+        const r = cm.detachLot(h as Parameters<typeof cm.detachLot>[0], lotId);
+        if (!r) return null;
+        const st = this.inv.makeStack(r.lot.itemId, r.lot.count);
+        st.count = r.lot.count; // a lot may hold more than one stack (ammo): keep its finite count exactly
+        return this.pickups.addAt(st, r.matrix, {holder: r.holder, lot: r.lot.id});
+      },
     });
     // Audio: occlusion-lite (no line of sight -> muffled) + humming vending/stall emitters. Same Sfx/context.
     this.sfx.setWorld({occlusion: (x, z) => this.layout.grid.lineOfSight(this.player.x, this.player.z, x, z) ? 0 : 1, emitters: humEmitters(this.layout.props)});
@@ -247,27 +286,41 @@ export class Game {
 
     // Iteration 05: each zombie wears a seeded body x outfit look (deterministic per station seed + spawn index; 'coated' = heavy coat outfit).
     // Falls back to the legacy single template (zombie-rigged.glb: Last-shift body + coat) when no registry body model is loaded.
-    const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
-    const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
-    this.layout.zombies.forEach((s, i) => {
-      const source = looks.bodies.length ? looks.build(pickZombieLook(this.currentSeed, i, s.type, looks.available)) : models.zombie;
-      if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
-      const z = new ZombieActor(source, s, this.rand);
-      this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
-      z.brain.y = z.root.position.y = this.layout.grid.floorAt(s.x, s.z); // Lane T: spawn on the local floor height
-      this.zombies.push(z);
-      this.scene.add(z.root);
-    });
+    // Iteration 07 (Lane Q): each spawn's archetype comes from the layout (~5 % rat/dog, ai/creatureSpawn.ts).
+    this.enemyFallbacks = 0;
+    this.layout.zombies.forEach((s, i) => this.spawnEnemy(s, i));
     for (const p of this.layout.pickups) this.pickups.add(this.inv.makeStack(p.itemId, p.count), p.x, p.y, p.z, this.rand() * Math.PI * 2);
     this.stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
     this.wonAt = -1;
     this.hud.reset();
-    for (const z of this.zombies) this.atmosphere.markShadows(z.root, false); // Lane F: zombies block the flashlight beam
+    // Lane F: enemies block the flashlight beam — marked once per actor in spawnEnemy (iteration 07, Lane Q)
     this.genMs = performance.now() - t0;
     $('#seed-line').textContent = `Station: ${this.layout.name} · code ${seedToCode(seed)} (debug/share only; reloading the page always makes a new station)`;
     this.updateCamera(0);
   }
   genMs = 0;
+
+  /**
+   * Iteration 07 (Lane Q): build + register one enemy for a spawn (zombie look or archetype actor).
+   * Zombies wear a seeded body x outfit look (deterministic per station seed + spawn index; 'coated' =
+   * heavy coat outfit), falling back to the legacy single template when no registry body is loaded.
+   */
+  spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
+    const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
+    const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
+    const {actor: z, fallback} = createEnemyActor(s, models, this.rand, () => {
+      const source = looks.bodies.length ? looks.build(pickZombieLook(this.currentSeed, i, s.type, looks.available)) : models.zombie;
+      if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
+      return new ZombieActor(source, s, this.rand);
+    });
+    if (fallback) this.enemyFallbacks++;
+    this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
+    z.brain.y = z.root.position.y = this.layout.grid.floorAt(s.x, s.z); // Lane T: spawn on the local floor height
+    this.zombies.push(z);
+    this.scene.add(z.root);
+    this.atmosphere.markShadows(z.root, false); // Lane F: enemies block the flashlight beam
+    return z;
+  }
 
   // ---------------------------------------------------------------------------------------
   setState(s: GameState): void {
@@ -614,6 +667,9 @@ export class Game {
     // Containers under the crosshair within reach; a closer targeted floor pickup wins.
     const tp = this.currentTarget;
     this.containerTarget = this.containers?.target(eye, look, this.layout.grid, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
+    // Iteration 07 (Lane K): a loose item resting INSIDE a holder's box (shot down to a lower shelf tier) wins over the holder body.
+    const ct = this.containerTarget;
+    if (ct && !ct.lot && tp && tp.x > ct.container.min.x && tp.x < ct.container.max.x && tp.z > ct.container.min.z && tp.z < ct.container.max.z && tp.y + 0.08 < ct.container.max.y) this.containerTarget = null;
     // Container wins: clear the pickup target + its highlight (an unreachable eye matches nothing).
     if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, this.layout.grid);
     // Lane T: a rescue ladder under the crosshair (only when nothing else is targeted).
@@ -728,7 +784,7 @@ export class Game {
     const right = new THREE.Vector3().crossVectors(fwd, this.camera.up).normalize();
     const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
     const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z};
-    const dmg = new Map<ZombieActor, {total: number; pellets: number; head: boolean; point: THREE.Vector3}>();
+    const dmg = new Map<EnemyActor, {total: number; pellets: number; head: boolean; point: THREE.Vector3}>();
     const muzzle = this.viewmodel.muzzleWorld(this.camera);
     this.fx.muzzle(muzzle, fwd, def.pellets > 1);
     this.physics.onFire(def.id, this.viewmodel, this.camera, this.player); // brass now; shotgun hull on the pump
@@ -737,7 +793,7 @@ export class Game {
       const dir = fwd.clone().addScaledVector(right, Math.tan(r) * Math.cos(a)).addScaledVector(up, Math.tan(r) * Math.sin(a)).normalize();
       const d: Vec3 = {x: dir.x, y: dir.y, z: dir.z};
       const wh = raycastWorld(this.layout.grid, this.layout.props, o, d, def.range, this.layout.trench.floorY);
-      let bestT = wh.t, bestZ: ZombieActor | null = null, bestPart = 'torso';
+      let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
       for (const z of this.zombies) {
         if (!z.brain.alive) continue;
         // reject zombies far from the ray
@@ -754,9 +810,10 @@ export class Game {
       // Lane D: corpses stop (and tear under) bullets too; shots passing close knock loose pickups about.
       const corpse = this.damage.corpseHit(this.zombies, o, d, bestT);
       if (corpse) { bestT = corpse.t; bestZ = null; }
-      this.damage.knockPickups(o, d, bestT);
       const end = origin.clone().addScaledVector(dir, bestT);
       const shot = {damage: def.damage * WeaponController.falloff(def, bestT), pellet: def.pellets > 1, weapon: def.id};
+      // Iteration 07 (Lane K): items / lots / light props on the shot line take the bullet's impulse (it passes on through them)
+      this.damage.knockPickups(o, d, bestT, wh, shot);
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
         const amount = def.damage * WeaponController.falloff(def, bestT) * mult;
@@ -785,10 +842,11 @@ export class Game {
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);
       if (!z.brain.climbing) [z.brain.x, z.brain.z] = moveCircle(this.layout.grid, this.propIndex, z.brain.x, z.brain.z, fwd.x * k, fwd.z * k, z.brain.stats.radius, z.brain.y);
+      if (!killed) enemyCues(z).hurt(this.sfx, z); // Lane Q: rat/dog yelp (zombies: none)
       if (killed) {
         anyKill = true;
         this.stats.kills++;
-        this.sfx.zombieDeath(z.brain.x, z.brain.y + 1.4, z.brain.z);
+        enemyCues(z).death(this.sfx, z); // zombie death cue / rat/dog death (Lane Q adapter)
         // articulated ragdoll from the current pose, shoved by this shot (falls back to the Death clip)
         this.physics.ragdoll(z, {dir: fwd, point: e.point, strength: killImpulseStrength(def.id, e.pellets, def.pellets), bone: e.head ? 'head' : undefined});
       }
@@ -846,7 +904,7 @@ export class Game {
       if (out.face !== null) {
         let d = out.face - b.yaw;
         d = Math.atan2(Math.sin(d), Math.cos(d));
-        const turn = (b.state === 'attack' ? 7 : 4.5) * dt;
+        const turn = (b.state === 'attack' ? Math.max(7, b.stats.turnRate ?? 0) : b.stats.turnRate ?? 4.5) * dt;
         b.yaw += Math.max(-turn, Math.min(turn, d));
       }
       // Lane T (iteration 05): height-aware motor (stairs, drops into the track bed, ladder climbs by the brain).
@@ -862,16 +920,13 @@ export class Game {
         if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { b.x += dx / d * (min - d); b.z += dz / d * (min - d); }
         settleZombie(b, this.layout.grid, this.propIndex);
       }
-      // positional (panner) zombie audio: vocals, swings, footfalls
+      // positional (panner) enemy audio: vocals, swings, footfalls — per archetype (Lane Q cue adapter;
+      // the zombie adapter makes exactly the previous groan / swing / gait / ladder calls)
       const [, dist] = this.panOf(b.x, b.z);
-      if (out.alerted) this.sfx.groan(b.x, b.y + 1.6, b.z, b.type === 'coated');
-      if (b.attackSeq !== seqBefore) this.sfx.zombieAttack(b.x, b.y + 1.5, b.z);
-      if (b.alive) {
-        z.groanT -= dt;
-        if (z.groanT <= 0) { z.groanT = (b.aware ? 2.5 : 6) + this.rand() * 6; if (dist < 22) this.sfx.groan(b.x, b.y + 1.6, b.z, b.type === 'coated'); }
-        if (b.climbing) this.sfx.zombieClimb(z, b.x, b.y, b.z, dt); // Lane S: rung clanks on a ladder
-        else this.sfx.zombieGait(z, b.x, b.z, moved, dt, b.type === 'coated', b.y);
-      }
+      const cues = enemyCues(z);
+      if (out.alerted) cues.alert(this.sfx, z);
+      if (b.attackSeq !== seqBefore) cues.attack(this.sfx, z);
+      cues.tick(this.sfx, z, dt, moved, dist, this.rand);
       if (out.attackHit) this.hurtPlayer(z);
       z.animate(dt, out.anim, moved);
       z.syncTransform();
@@ -880,7 +935,7 @@ export class Game {
     }
   }
 
-  private hurtPlayer(z: ZombieActor): void {
+  private hurtPlayer(z: EnemyActor): void {
     const p = this.player;
     const amount = z.brain.stats.attackDamage;
     p.takeDamage(amount);
@@ -920,8 +975,11 @@ export class Game {
     this.sfx.init();
     // Request pointer lock inside the click gesture too; the rebuild can outlast the gesture window.
     const lock = this.input.lock();
-    this.newStation(sameSeed ? this.currentSeed : freshSeed());
-    void lock.then(() => this.enterPlay());
+    const seed = sameSeed ? this.currentSeed : freshSeed();
+    // Iteration 07 (Lane P2): fetch the new station's lazy prop models first (cached ones resolve at once), then rebuild.
+    let told = false;
+    void this.prepareStation(seed, () => { if (!told) { told = true; this.hud.toast('Loading station props…'); } })
+      .then(() => { this.newStation(seed); void lock.then(() => this.enterPlay()); });
   }
 
   /** Nearest walkable world point (helper for QA hooks). */

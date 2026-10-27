@@ -12,6 +12,7 @@ import {
 } from '../src/gen/purposes';
 import {STOCK_THEMES, stockVariant} from '../src/gen/purposeShapes';
 import {ITEMS} from '../src/items/items';
+import {isP7Kind, p7KindsFor} from '../src/gen/props07';
 import {createHolderState, isContainerKind, isLootHolderKind, rollLootItems, type HolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 
@@ -194,7 +195,8 @@ describe('purposes in generated levels', () => {
         const unit = l.areas[sf.unit];
         expect(unit.purpose).toBe(sf.use);
         expect(P.names.some(n => sf.name === n) || sf.name.endsWith(P.names[0].split(' ').slice(-1)[0]), `${sf.name} is a ${sf.use} name`).toBe(true);
-        const allowed = new Set<string>([...BASE, ...LAYOUT[P.layout], ...(P.kitchen ?? []).map(k => k[0]), ...(P.extras ?? []).map(r => r.kind)]);
+        // Iteration 07 (Lane P2): plus the generated props whose uses name this store purpose (gen/props07.ts).
+        const allowed = new Set<string>([...BASE, ...LAYOUT[P.layout], ...(P.kitchen ?? []).map(k => k[0]), ...(P.extras ?? []).map(r => r.kind), ...p7KindsFor(P.id)]);
         const props = l.props.filter(p => p.area === unit.id);
         for (const p of props) {
           expect(allowed.has(p.kind), `${l.seed} ${sf.name} (${sf.use}) has a ${p.kind}`).toBe(true);
@@ -289,7 +291,8 @@ describe('purposes in generated levels', () => {
     expect(Math.min(...backSets)).toBeGreaterThanOrEqual(7);
     expect(Math.min(...storeSets)).toBeGreaterThanOrEqual(6);
     expect(seenStores.size).toBeGreaterThanOrEqual(16);
-    expect(seenBack.size).toBe(Object.keys(ROOM_PURPOSES).length - 2);
+    // Iteration 07: purposes built around generated props count once their signature model is integrated (gen/props07.ts).
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => !p.requires || p.requires.some(isP7Kind)).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

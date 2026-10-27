@@ -1,6 +1,8 @@
 // Footprints for generated props, in meters. Local frame: front faces +Z, X is width.
 // Mesh derivatives are scaled to match these provisional dimensions at build time.
 
+import {P7_PROP_DEFS, type P7Kind} from './props07';
+
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
   // Iteration 03: generated-asset props (models optional; procedural stand-ins until present).
@@ -16,7 +18,9 @@ export type PropKind =
   // Iteration 05 (Lane R): room/store PURPOSE props (gen/purposes.ts registry). Rendered by
   // world/storefrontBuilder.ts: Lane A generated models when present (PURPOSE_MODEL_KEYS), authored
   // textured parts (gen/purposeShapes.ts) otherwise. Holders among them have PURPOSE_SURFACES.
-  | PurposePropKind;
+  | PurposePropKind
+  // Iteration 07 (Lane P2): NEW generated prop types (gen/props07.ts; lazy-loaded p7-*.glb models, measured footprints).
+  | P7Kind;
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -38,6 +42,8 @@ export interface PropDef {
   d: number;
   h: number;
   blocksSight: boolean;
+  /** Rigid-body flags read first by damage/materials.ts propPhysics (iteration 07 generated props). */
+  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh'};
 }
 
 export const PROP_DEFS: Record<PropKind, PropDef> = {
@@ -128,6 +134,8 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   safe: {w: 0.7, d: 0.7, h: 1.0, blocksSight: false},
   signalRack: {w: 1.2, d: 0.6, h: 2.1, blocksSight: true},
   cartonStack: {w: 1.0, d: 0.8, h: 1.3, blocksSight: false},
+  // --- Iteration 07 generated props (Lane P2): footprints = measured runtime model bounds (gen/props07.ts) ---
+  ...P7_PROP_DEFS,
 };
 
 /**
@@ -256,6 +264,14 @@ export interface PropPlacement {
   shop?: number;
   /** Purpose override for loot/QA (e.g. a hot-dog cart standing in a hall); else the area's purpose. */
   purpose?: string;
+  /** Iteration 07 (P2): on-top decor — index (in layout.props) of the host prop it stands on. */
+  host?: number;
+  /** Iteration 07 (P2): spans of this host's top taken by on-top decor (host-local x, at height y); loot surfaces skip them. */
+  cut?: {y: number; x0: number; x1: number}[];
+  /** Iteration 07 (P2): wall-mounted / ceiling-hung (does not block walking; its cells are reserved). */
+  mounted?: boolean;
+  /** Iteration 07 (P2): low wall-mounted model rendered `lift` m above the placement base (the box still collides from the floor). */
+  lift?: number;
 }
 
 export function footprint(kind: PropKind, rot: number): {hx: number; hz: number} {

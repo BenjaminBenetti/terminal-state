@@ -21,6 +21,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import * as propsModule from '../gen/props';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
+import {cutSurfaces} from '../gen/props07';
 import {FLOOR, type Grid} from '../gen/grid';
 import type {StationLayout} from '../gen/station';
 import {rayAabb} from '../combat/hitscan';
@@ -40,6 +41,7 @@ import {surface} from './canvasTextures';
 import {LotDisplay, type LotInstance} from './lootDisplay';
 import {cloneWithShaderHooks} from '../render/shaderHooks';
 import {itemModelSources} from './pickups';
+import {holderBoxes} from '../physics/holderShapes';
 
 /**
  * Lid split for the generated crate model (`models.crate`, assets/models/crate.glb): triangles
@@ -592,7 +594,8 @@ export class ContainerManager {
       if (!isLootHolderKind(kind)) continue;
       const isC = isContainerKind(kind);
       const def = holderDims(kind);
-      const surfaces = holderSurfaces(kind, def, {...opts, crateSplitY: this.crateSplitY()});
+      // Iteration 07 (Lane P2): spans taken by on-top decor (register, lamp ...) are not loot surface.
+      const surfaces = cutSurfaces(holderSurfaces(kind, def, {...opts, crateSplitY: this.crateSplitY()}), p.cut);
       // Iteration 05 (Lane R): the holder's purpose (prop override, else its room/store purpose)
       // keys the loot table (gen/purposes.ts); plain halls keep their room type.
       const area = layout.areas[p.area];
@@ -931,6 +934,68 @@ export class ContainerManager {
     h.max.y = h.min.y + 0.35;
     if (this.highlighted === h) this.setHighlight(null);
     this.dirty = true;
+  }
+
+  // --- Iteration 07 (Lane K): shot loot lots become loose physical items ------------------
+  /** Visible lots a shot ray crosses before maxT (their own oriented model box, 1 cm pad), nearest first. */
+  shotLots(o: {x: number; y: number; z: number}, d: {x: number; y: number; z: number}, maxT: number): {holder: Holder; lotId: number; t: number}[] {
+    const out: {holder: Holder; lotId: number; t: number}[] = [];
+    const inv = new THREE.Matrix4(), lo = new THREE.Vector3(), ld = new THREE.Vector3();
+    for (const h of this.all) {
+      if (!h.state.lots.length || !this.lotsVisible(h)) continue;
+      const rx = h.prop.x - o.x, rz = h.prop.z - o.z, along = rx * d.x + rz * d.z, reach = Math.max(h.prop.hx, h.prop.hz) + 1.5;
+      if (along < -reach || along > maxT + reach || Math.hypot(rx - d.x * along, rz - d.z * along) > reach) continue;
+      for (const l of h.state.lots) {
+        const m = h.lotMats.get(l.id);
+        if (!m) continue;
+        const dm = itemDims(l.itemId);
+        inv.copy(m).invert();
+        lo.set(o.x, o.y, o.z).applyMatrix4(inv);
+        ld.set(d.x, d.y, d.z).transformDirection(inv);
+        const p = 0.01;
+        const r = rayAabb(lo, ld, {x: -dm.w / 2 - p, y: -p, z: -dm.d / 2 - p}, {x: dm.w / 2 + p, y: dm.h + p, z: dm.d / 2 + p});
+        if (r && r.t < maxT) out.push({holder: h, lotId: l.id, t: r.t});
+      }
+    }
+    return out.sort((a, b) => a.t - b.t);
+  }
+
+  /**
+   * Lift one visible lot OFF its holder (it is removed from the holder's finite contents, so it can
+   * never be taken twice) and return it with its exact world transform; the caller turns it into a
+   * loose pickup with the same item id and count. null if it is not there / not visible.
+   */
+  detachLot(h: Holder, lotId: number): {lot: Lot; matrix: THREE.Matrix4; holder: number} | null {
+    if (!this.lotsVisible(h)) return null;
+    const i = h.state.lots.findIndex(l => l.id === lotId);
+    if (i < 0) return null;
+    const [lot] = h.state.lots.splice(i, 1);
+    const matrix = (h.lotMats.get(lot.id) ?? h.matrix).clone();
+    h.lotMats.delete(lot.id);
+    h.lotBoxes.delete(lot.id);
+    if (this.highlightLot === this.displayId(h, lot)) this.highlightLot = -1;
+    this.dirty = true;
+    return {lot, matrix, holder: h.serial};
+  }
+
+  /** Visible lots whose (unpadded) box overlaps a world box — what a flying item knocks into. */
+  lotsInBox(box: THREE.Box3): {holder: Holder; lotId: number}[] {
+    const out: {holder: Holder; lotId: number}[] = [];
+    const c = box.getCenter(new THREE.Vector3()), b = new THREE.Box3();
+    for (const h of this.all) {
+      if (!h.state.lots.length || Math.abs(h.prop.x - c.x) > h.prop.hx + 0.8 || Math.abs(h.prop.z - c.z) > h.prop.hz + 0.8 || !this.lotsVisible(h)) continue;
+      for (const l of h.state.lots) {
+        const lb = h.lotBoxes.get(l.id);
+        if (lb && b.copy(lb).expandByScalar(-LOT_MARGIN).intersectsBox(box)) out.push({holder: h, lotId: l.id});
+      }
+    }
+    return out;
+  }
+
+  /** Item / chunk collision of a loot holder (its shelves, physics/holderShapes.ts); null: not a holder (solid box). */
+  physicsBoxes(prop: PropPlacement): THREE.Box3[] | null {
+    const h = this.holderFor(prop);
+    return h ? holderBoxes(prop, h.surfaces, {broken: !!h.broken}) : null;
   }
 
   // --- QA ---------------------------------------------------------------------------------

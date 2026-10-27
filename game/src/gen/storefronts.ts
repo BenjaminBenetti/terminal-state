@@ -661,9 +661,31 @@ export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: 
       box(mat, p0, p1, y0, y1, back + 0.05, back + 0.065);
     }
     // Stainless backsplash / hood band over the back counter.
-    box('kitchenSteel', a0 + 0.05, a1 - 0.05, 0.95, 1.95, back, back + 0.015);
+    // Iteration 07 (Lane DW): the panel stops at a rear door instead of boarding it across.
+    const holes = backWallOpenings(layout, sf, fr, back);
+    let from = a0 + 0.05;
+    for (const [h0, h1] of [...holes, [a1, Infinity] as [number, number]]) {
+      if (h0 - 0.05 - from > 0.1) box('kitchenSteel', from, Math.min(h0 - 0.05, a1 - 0.05), 0.95, 1.95, back, back + 0.015);
+      from = Math.max(from, h1 + 0.05);
+    }
   }
   return {boxes, faces};
+}
+
+/**
+ * Iteration 07 (Lane DW): spans (along the frontage, world m, sorted) of the unit's doors that lie
+ * in its back wall (rear service doors), so wall-wide parts stop at them.
+ */
+function backWallOpenings(layout: StationLayout, sf: Storefront, fr: ShopFrame, back: number): [number, number][] {
+  const plane = fr.wall + fr.sign * back;
+  const out: [number, number][] = [];
+  for (const d of layout.doors) {
+    if (d.shopfront || (d.a !== sf.unit && d.b !== sf.unit)) continue;
+    const n0 = (fr.alongX ? d.y : d.x) * CELL, n1 = (fr.alongX ? d.y + d.h : d.x + d.w) * CELL;
+    if (plane < n0 - 1e-6 || plane > n1 + 1e-6) continue;
+    out.push(fr.alongX ? [d.x * CELL, (d.x + d.w) * CELL] : [d.y * CELL, (d.y + d.h) * CELL]);
+  }
+  return out.sort((p, q) => p[0] - q[0]);
 }
 
 function rodGrille(box: (m: ShopMat, a0: number, a1: number, y0: number, y1: number, n0: number, n1: number) => void, a0: number, a1: number, y0: number, y1: number, n0: number, n1: number): void {

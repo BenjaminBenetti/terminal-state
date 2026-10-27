@@ -2,13 +2,17 @@
 // scripted playtests (pointer lock cannot be granted to automated browsers). Inputs still go
 // through real keyboard/mouse events; nothing here changes health, ammo or enemy behaviour.
 
+import {isP7Kind, p7ModelKeysFor} from './gen/props07';
 import * as THREE from 'three';
 import type {Game} from './game';
 import {itemDef} from './items/items';
 import {killImpulseStrength} from './physics/world';
 import {itemIconStats, itemIconUrl} from './ui/itemIcons';
 import {traversalSummary} from './gen/traversal';
+import {doorClearVolumes, doorwaySummary} from './gen/doorways';
+import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
+import {creatureQaApi} from './ai/creatureQa';
 
 export function installQaHooks(game: Game): void {
   const api = {
@@ -27,7 +31,7 @@ export function installQaHooks(game: Game): void {
         pack: game.inv.pack.map(s => s && {itemId: s.itemId, count: s.count}),
         ammo: {rifle: game.inv.count('ammo_rifle'), shells: game.inv.count('ammo_shells')},
         invariants: game.inv.invariants(),
-        zombies: game.zombies.map(z => ({x: z.brain.x, z: z.brain.z, hp: z.brain.hp, state: z.brain.state, type: z.brain.type, alive: z.brain.alive, rigged: z.hasRig, look: z.look})),
+        zombies: game.zombies.map(z => ({x: z.brain.x, z: z.brain.z, hp: z.brain.hp, state: z.brain.state, type: z.brain.type, alive: z.brain.alive, rigged: z.hasRig, look: z.look, archetype: z.archetype ?? 'zombie'})),
         pickups: game.pickups.list.map(pk => ({itemId: pk.stack.itemId, count: pk.stack.count, x: pk.x, y: pk.y, z: pk.z, name: itemDef(pk.stack.itemId).name})),
         // Searchable cabinets/crates: {count, models, list: [{index, kind, x, z, open, searched, remaining, items, aim, stand, …}]}
         containers: game.containers?.qaState() ?? null,
@@ -50,6 +54,9 @@ export function installQaHooks(game: Game): void {
           storefronts: game.layout.storefronts.map(s => ({name: s.name, use: s.use, hall: game.layout.areas[s.hall].type, side: s.side, shutter: s.shutter, unit: s.unit})),
           // Iteration 05 (Lane R): purpose per area (back-of-house rooms + store units) with its label and fixtures.
           purposes: game.layout.areas.filter(a => a.purpose).map(a => ({area: a.id, purpose: a.purpose, label: a.label, type: a.type, props: [...new Set(game.layout.props.filter(p => p.area === a.id).map(p => p.kind))]}))},
+        // Iteration 07 (Lane P2): generated props — kinds placed in this station, lazily loaded models (only this station's), library stats.
+        props07: game.layout && {kinds: [...new Set(game.layout.props.filter(p => isP7Kind(p.kind)).map(p => p.kind))].sort(), placements: game.layout.props.filter(p => isP7Kind(p.kind)).length,
+          needed: p7ModelKeysFor(game.layout), loaded: game.propModels.loadedKeys().sort(), failures: game.propModels.failures, library: {...game.propModels.stats}},
         // Iteration 04 (Lane D): consume view (item to face / gun holster), inventory drag-drop, 3D icon cache, crouch input.
         consume: game.consumeView?.qaState() ?? null,
         invUi: {dragging: game.invUI.dragging, lastDrop: game.invUI.lastDrop, selected: game.invUI.selected, uids: {hotbar: game.inv.hotbar.map(s => s?.uid ?? null), pack: game.inv.pack.map(s => s?.uid ?? null)}, packMags: game.inv.pack.map(s => s?.mag ?? null)},
@@ -115,6 +122,31 @@ export function installQaHooks(game: Game): void {
       p.yaw = (end === 'bottom') === (l.dir > 0) ? Math.PI : 0; // face the platform face: +dir from the bed, -dir from the platform
       p.pitch = end === 'bottom' ? -0.3 : -1.0;
       return {id: l.id, x: l.x, faceZ: l.faceZ, end, top: l.top, bottom: l.bottom};
+    },
+    // --- Iteration 07 (Lane DW): doorway clearance --------------------------------------------
+    /** Walk-through openings (clear lanes by kind, sealed storefronts) and decor intruding on them (expect []). */
+    doorways: () => doorwaySummary(game.layout),
+    /**
+     * QA-only: stand 2.2 m in front of clear lane `i` (index into doorways().lanes; default: the
+     * nearest lane of `kind`, default 'staff'), facing through the opening at eye level.
+     */
+    goDoorway: (i?: number, kind = 'staff') => {
+      const vols = doorClearVolumes(game.layout);
+      const p = game.player;
+      const c = (v: (typeof vols)[number]) => [(v.x0 + v.x1) / 2, (v.z0 + v.z1) / 2];
+      const v = i !== undefined ? vols[i] : vols.filter(q => q.kind === kind).sort((a, b) => Math.hypot(c(a)[0] - p.x, c(a)[1] - p.z) - Math.hypot(c(b)[0] - p.x, c(b)[1] - p.z))[0];
+      if (!v) return null;
+      const [cx, cz] = c(v);
+      const A = game.layout.areas[v.a];
+      const toA = v.alongX ? Math.sign((A.y + A.h / 2) * CELL - cz) || 1 : Math.sign((A.x + A.w / 2) * CELL - cx) || 1;
+      for (const s of [toA, -toA]) {
+        const spot = game.snap(v.alongX ? cx : cx + s * 2.2, v.alongX ? cz + s * 2.2 : cz);
+        if (!spot) continue;
+        p.x = spot[0]; p.z = spot[1]; p.y = game.layout.grid.floorAt(p.x, p.z); p.vy = 0; p.grounded = true; p.climb = null;
+        p.yaw = Math.atan2(-(cx - p.x), -(cz - p.z)); p.pitch = -0.04;
+        return {door: v.door, lane: v.lane, kind: v.kind, a: A.label, b: game.layout.areas[v.b].label, stand: {x: p.x, z: p.z}, clear: {y0: v.y0, y1: v.y1}};
+      }
+      return null;
     },
     /** Aim at container `i` (default: nearest to the player): door centre / crate lid. Returns its QA entry. */
     aimContainer: (i?: number) => {
@@ -209,7 +241,7 @@ export function installQaHooks(game: Game): void {
       }
       const dot = (wx: number, wz: number, col: string, r = scale * 0.9) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc((wx / 0.5 - x0) * scale, (wz / 0.5 - y0) * scale, r, 0, Math.PI * 2); ctx.fill(); };
       for (const pk of l.pickups) dot(pk.x, pk.z, pk.itemId === 'shotgun' ? '#4f8a87' : '#d9a520', scale * 0.6);
-      for (const z of l.zombies) dot(z.x, z.z, z.type === 'coated' ? '#3d6fd1' : '#c2463a');
+      for (const z of l.zombies) dot(z.x, z.z, z.archetype === 'ratdog' ? '#b45cd6' : z.type === 'coated' ? '#3d6fd1' : '#c2463a'); // Lane Q: rat/dog purple
       dot(l.playerSpawn.x, l.playerSpawn.z, '#ffffff', scale * 1.2);
       ctx.fillStyle = '#ece4cf'; ctx.font = '12px sans-serif';
       ctx.fillText(`${l.name} · ${l.archetype} · ${l.areas.length} areas · ${l.storefronts.length} storefronts · ${l.zombies.length} zombies`, 4, c.height - 5);
@@ -222,6 +254,8 @@ export function installQaHooks(game: Game): void {
     fx: () => game.fx.stats(),
     // Iteration 06 (Lane D): damage stats + aimDamage(type, {teleport}) + DEBUG qaDamageShot(weapon) (src/damage/qa.ts).
     ...damageQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
+    // Iteration 07 (Lane Q): rat/dog creature — creatures(), enemyMix(), goCreature(i?), aimCreature(i?, part), DEBUG qaSpawnCreature(dist).
+    ...creatureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
     /** Iteration 06 (Lane F): volumetric atmosphere state (enabled/active, resolution, steps, shadow map, GPU/CPU ms). */
     atmosphere: () => game.atmosphere.debug(),
     /**

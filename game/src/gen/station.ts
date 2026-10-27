@@ -21,6 +21,8 @@ import {
 } from './stationTypes';
 import {applyLighting, clearAround, dress, placeSpawns} from './stationDress';
 import {finishTraversal, placeLadders, shiftFlight, shiftRamp, traversalIssues} from './traversal';
+import {doorwayIssues} from './doorways';
+import {assignEnemyArchetypes} from '../ai/creatureSpawn';
 
 export * from './stationTypes';
 export {ROOM_LABEL};
@@ -57,6 +59,15 @@ export function generateStation(seed: number, opts: {archetype?: Archetype} = {}
     if (layout) return layout;
   }
   throw new Error('station generation failed');
+}
+
+/**
+ * Iteration 07 (Lane DW): one raw generation attempt exactly as generateStation would try it, with
+ * no validation retry — tests use it to catch issues (e.g. decor in doorways) that a retry would
+ * otherwise hide by silently picking another layout.
+ */
+export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed)): StationLayout | null {
+  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch);
 }
 
 function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype): StationLayout | null {
@@ -332,6 +343,8 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   applyLighting(layout, rng.fork('lighting'));
   // Lane T: fixtures follow stepped ceilings, loot/props lifted to local floors, never on stairs; underpass + ladder signs.
   finishTraversal(layout);
+  // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed.
+  assignEnemyArchetypes(layout);
   return layout;
 }
 
@@ -389,6 +402,8 @@ export function validateLayout(layout: StationLayout): string[] {
   if (count('exitStair') < 2) issues.push('exit stairs not dressed');
   // Lane T (iteration 05): walkable flights, clear ladder heads/feet, a ladder near every track-bed cell.
   issues.push(...traversalIssues(layout));
+  // Iteration 07 (Lane DW): every walk-through opening is free of decor (rails, plates, panels, props).
+  issues.push(...doorwayIssues(layout));
   return issues;
 }
 

@@ -48,6 +48,37 @@ await withBrowserLock(async () => {
     await page.mouse.down(); await sleep(120); await page.mouse.up(); await sleep(800);
     result.shotClickNoError = true;
     await page.screenshot({path: path.join(out, 'in-world.png')});
+    if (process.env.LIVE_R6) {
+      // Iteration 06: frame-aware normal inputs (standard requestAnimationFrame waits, no game hooks):
+      // F flashlight off/on (2 screenshots, same position), C crouch, one fire at the floor, Tab icons.
+      const frames = n => page.evaluate(k => new Promise(res => { let i = 0; const t = setTimeout(() => res(i), 30000); const f = () => { if (++i >= k) { clearTimeout(t); res(i); } else requestAnimationFrame(f); }; requestAnimationFrame(f); }), n);
+      const tap = async key => { await page.keyboard.down(key); await frames(2); await page.keyboard.up(key); await frames(4); };
+      const hud = () => page.evaluate(() => (document.querySelector('#hud')?.innerText ?? '').replace(/\s+/g, ' '));
+      result.hudFoodWater = (await hud()).match(/FOOD \d+%|WATER \d+%/g);
+      result.lightBefore = ((await hud()).match(/LIGHT (ON|OFF)/) ?? [])[0] ?? null;
+      await page.screenshot({path: path.join(out, 'flashlight-a.png')});
+      await tap('KeyF');
+      result.lightAfterF = ((await hud()).match(/LIGHT (ON|OFF)/) ?? [])[0] ?? null;
+      await page.screenshot({path: path.join(out, 'flashlight-b.png')});
+      await tap('KeyF');
+      result.lightAfterSecondF = ((await hud()).match(/LIGHT (ON|OFF)/) ?? [])[0] ?? null;
+      await tap('KeyC');
+      result.stanceAfterC = await page.evaluate(() => document.querySelector('#stance-tag')?.textContent ?? null);
+      await tap('KeyC');
+      result.stanceAfterSecondC = await page.evaluate(() => document.querySelector('#stance-tag')?.textContent ?? null);
+      // aim down at the floor with normal relative mouse movement, then one fire press spanning 2 frames
+      for (let i = 0; i < 8; i++) { await page.mouse.move(640, 360 + (i + 1) * 25); await frames(1); }
+      await frames(3);
+      const ammo = t => (t.match(/RIFLE (\d+) ?\/ ?(\d+)/) ?? []).slice(1, 3).join('/');
+      result.ammoBeforeFire = ammo(await hud());
+      await page.mouse.down(); await frames(2); await page.mouse.up(); await frames(8);
+      result.ammoAfterFire = ammo(await hud());
+      await page.screenshot({path: path.join(out, 'after-fire-floor.png')});
+      await tap('Tab'); await frames(4);
+      result.inventoryIcons = await page.evaluate(() => [...document.querySelectorAll('#inventory img')].filter(i => i.naturalWidth > 0).length);
+      await page.screenshot({path: path.join(out, 'inventory.png')});
+      await tap('Tab');
+    }
     if (process.env.LIVE_R5) {
       // Iteration 05: HUD food/water, C crouch (and Ctrl press alone must NOT crouch; never Ctrl+W), one
       // fire hold long enough for a software-GL frame, inventory icons, one RMB optic view. No hooks.

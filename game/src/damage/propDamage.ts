@@ -553,6 +553,19 @@ export class PropDamage {
     return true;
   }
 
+  /**
+   * Iteration 07 (Lane K): a light prop becomes a rigid body (physics/dynamicItems.ts). Detach it
+   * (forced past the soft cap) and mark its parts MOVING, so later bullet marks convert through the
+   * part's current matrix into its rest frame. Returns the meshes drawn for it alone (their
+   * `matrix` = world; the caller drives them), or null when nothing could be detached.
+   */
+  detachForPhysics(prop: PropPlacement, index: number): THREE.Mesh[] | null {
+    const s = this.state(prop, index);
+    if (!this.detach(s, true) || !s.parts) return null;
+    for (const q of s.parts) q.moving = true;
+    return s.parts.filter(q => q.created).map(q => q.mesh);
+  }
+
   /** Whether another prop rests on top of this one (it then never fully breaks: no floating stacks). */
   private supports(p: PropPlacement): boolean {
     const top = p.y + p.h;

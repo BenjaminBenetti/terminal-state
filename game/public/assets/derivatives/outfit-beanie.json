@@ -22,8 +22,8 @@
   "outputs": {
     "glb": {
       "path": "game/public/assets/models/outfit-beanie.glb",
-      "bytes": 296544,
-      "sha256": "a2e29e6648ee252d3b8d00ab66346154044585de31cb2ceecbf9625a176884e7",
+      "bytes": 296552,
+      "sha256": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -138,36 +138,102 @@
       "node": "Outfit_beanie__lastshift",
       "kind": "rigid",
       "fit": {
-        "head": {
-          "topM": 1.7793,
-          "craniumWidthM": 0.2116,
-          "centre": [
-            -0.0121,
-            -0.0691
-          ],
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.17,
+          "lengthM": 0.1996,
+          "envelopeBreadthM": 0.2085,
+          "envelopeLengthM": 0.1996,
+          "topM": 1.7747,
+          "meshTopM": 1.7793,
+          "browY": 1.6697,
           "noseY": 1.6247,
-          "chinY": 1.5463,
-          "cheekWidthM": 0.1261
+          "hairAllowanceM": {
+            "sides": 0.0192,
+            "top": 0.0047
+          }
         },
-        "itemWidthM": 0.1998,
-        "solve": {
-          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
-          "thicknessM": 0.012,
-          "contactCells": 2828,
-          "gapM": -0.01,
-          "eyeClearLiftM": 0.0201,
-          "rimBelowHeadTopM": 0.1544
+        "item": {
+          "widthM": 0.1894,
+          "lengthM": 0.253,
+          "heightM": 0.1547,
+          "bandWidthM": 0.1867,
+          "bandLengthM": 0.2487,
+          "bandY": 1.7117,
+          "bandAboveBrowM": 0.042,
+          "topAboveCraniumM": 0.0556,
+          "crownClearanceM": 0.0449,
+          "eyeLiftM": 0
         },
-        "bulkHeadM": 0,
-        "method": "uniform scale: item width at 0.45 of its height = 0.185 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
-        "transform": {
-          "scale": 0.83211,
-          "translate": [
-            -0.01311,
-            1.62492,
-            -0.06492
+        "seat": {
+          "pitchDeg": 8,
+          "liftM": 0.012,
+          "rimContactVerticesBefore": 226,
+          "rimContactVerticesAfter": 154,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0044,
+          "bandClearFrontBackM": 0.0287,
+          "rings": [
+            {
+              "y": 1.6801,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.6833,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.012
+            },
+            {
+              "y": 1.6866,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0192
+            },
+            {
+              "y": 1.6899,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0236
+            },
+            {
+              "y": 1.6931,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0243
+            },
+            {
+              "y": 1.6964,
+              "clearSideM": 0.0044,
+              "clearFrontBackM": 0.0266
+            }
           ]
-        }
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.1139,
+          "bandToCraniumBreadth": 1.0985
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.7476,
+            0.656,
+            1.0017
+          ],
+          "translate": [
+            -0.0106,
+            1.6506,
+            -0.0745
+          ]
+        },
+        "bulkHeadM": 0.0058
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -177,14 +243,14 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0
+        "head": 0.0058
       },
-      "hiddenBodyTriangles": 495,
-      "hiddenFraction": 0.0332,
+      "hiddenBodyTriangles": 577,
+      "hiddenFraction": 0.0387,
       "mask": {
-        "hidden": 495,
+        "hidden": 577,
         "total": 14912,
-        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
         "triangles": 2194,
@@ -195,9 +261,10 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 9,
-          "Idle": 10,
-          "Death": 4
+          "Death": 10,
+          "Attack": 2,
+          "Run": 3,
+          "Idle": 8
         },
         "poses": 85
       }
@@ -206,36 +273,102 @@
       "node": "Outfit_beanie__courier",
       "kind": "rigid",
       "fit": {
-        "head": {
-          "topM": 1.8,
-          "craniumWidthM": 0.1651,
-          "centre": [
-            -0.0044,
-            0.0321
-          ],
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.165,
+          "lengthM": 0.206,
+          "envelopeBreadthM": 0.165,
+          "envelopeLengthM": 0.2072,
+          "topM": 1.7733,
+          "meshTopM": 1.8,
+          "browY": 1.6683,
           "noseY": 1.6233,
-          "chinY": 1.5509,
-          "cheekWidthM": 0.0926
+          "hairAllowanceM": {
+            "sides": 0,
+            "top": 0.0267
+          }
         },
-        "itemWidthM": 0.1823,
-        "solve": {
-          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
-          "thicknessM": 0.012,
-          "contactCells": 2348,
-          "gapM": -0.01,
-          "eyeClearLiftM": 0,
-          "rimBelowHeadTopM": 0.1575
+        "item": {
+          "widthM": 0.1887,
+          "lengthM": 0.2462,
+          "heightM": 0.1582,
+          "bandWidthM": 0.1861,
+          "bandLengthM": 0.2354,
+          "bandY": 1.7063,
+          "bandAboveBrowM": 0.038,
+          "topAboveCraniumM": 0.0438,
+          "crownClearanceM": 0.0312,
+          "eyeLiftM": 0
         },
-        "bulkHeadM": 0.0052,
-        "method": "uniform scale: item width at 0.45 of its height = 0.185 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
-        "transform": {
-          "scale": 0.7594,
-          "translate": [
-            -0.00531,
-            1.64245,
-            0.03582
+        "seat": {
+          "pitchDeg": 0,
+          "liftM": 0.008,
+          "rimContactVerticesBefore": 92,
+          "rimContactVerticesAfter": 77,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0095,
+          "bandClearFrontBackM": 0.0182,
+          "rings": [
+            {
+              "y": 1.6793,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0071
+            },
+            {
+              "y": 1.6824,
+              "clearSideM": 0.0081,
+              "clearFrontBackM": 0.0113
+            },
+            {
+              "y": 1.6856,
+              "clearSideM": 0.0079,
+              "clearFrontBackM": 0.0181
+            },
+            {
+              "y": 1.6888,
+              "clearSideM": 0.011,
+              "clearFrontBackM": 0.0107
+            },
+            {
+              "y": 1.6919,
+              "clearSideM": 0.0107,
+              "clearFrontBackM": 0.0154
+            },
+            {
+              "y": 1.6951,
+              "clearSideM": 0.0105,
+              "clearFrontBackM": 0.0176
+            }
           ]
-        }
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.144,
+          "bandToCraniumBreadth": 1.1282
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.7451,
+            0.635,
+            0.9483
+          ],
+          "translate": [
+            -0.0028,
+            1.6508,
+            0.0275
+          ]
+        },
+        "bulkHeadM": 0.0071
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -245,14 +378,14 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0052
+        "head": 0.0071
       },
-      "hiddenBodyTriangles": 376,
-      "hiddenFraction": 0.0251,
+      "hiddenBodyTriangles": 437,
+      "hiddenFraction": 0.0292,
       "mask": {
-        "hidden": 376,
+        "hidden": 437,
         "total": 14956,
-        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
         "triangles": 2194,
@@ -263,12 +396,10 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Walk": 3,
-          "Idle": 8,
-          "Death": 2,
-          "Attack": 2,
-          "Run": 6,
-          "Hit": 2
+          "Death": 9,
+          "Walk": 2,
+          "Run": 10,
+          "Attack": 4
         },
         "poses": 85
       }
@@ -277,36 +408,102 @@
       "node": "Outfit_beanie__agent",
       "kind": "rigid",
       "fit": {
-        "head": {
-          "topM": 1.6506,
-          "craniumWidthM": 0.2232,
-          "centre": [
-            -0.0069,
-            0.0929
-          ],
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.17,
+          "lengthM": 0.2013,
+          "envelopeBreadthM": 0.2226,
+          "envelopeLengthM": 0.2056,
+          "topM": 1.6307,
+          "meshTopM": 1.6506,
+          "browY": 1.5257,
           "noseY": 1.4807,
-          "chinY": 1.4084,
-          "cheekWidthM": 0.0871
+          "hairAllowanceM": {
+            "sides": 0.0263,
+            "top": 0.0199
+          }
         },
-        "itemWidthM": 0.1998,
-        "solve": {
-          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
-          "thicknessM": 0.012,
-          "contactCells": 2828,
-          "gapM": -0.01,
-          "eyeClearLiftM": 0.0162,
-          "rimBelowHeadTopM": 0.1696
+        "item": {
+          "widthM": 0.1894,
+          "lengthM": 0.2544,
+          "heightM": 0.1552,
+          "bandWidthM": 0.1867,
+          "bandLengthM": 0.2501,
+          "bandY": 1.5557,
+          "bandAboveBrowM": 0.03,
+          "topAboveCraniumM": 0.044,
+          "crownClearanceM": 0.0333,
+          "eyeLiftM": 0
         },
-        "bulkHeadM": 0,
-        "method": "uniform scale: item width at 0.45 of its height = 0.185 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
-        "transform": {
-          "scale": 0.83211,
-          "translate": [
-            -0.00791,
-            1.48093,
-            0.09702
+        "seat": {
+          "pitchDeg": 8,
+          "liftM": 0,
+          "rimContactVerticesBefore": 275,
+          "rimContactVerticesAfter": 247,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0044,
+          "bandClearFrontBackM": 0.0287,
+          "rings": [
+            {
+              "y": 1.536,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.5393,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.0106
+            },
+            {
+              "y": 1.5426,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0178
+            },
+            {
+              "y": 1.5458,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.026
+            },
+            {
+              "y": 1.5491,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0288
+            },
+            {
+              "y": 1.5524,
+              "clearSideM": 0.0044,
+              "clearFrontBackM": 0.0311
+            }
           ]
-        }
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.1139,
+          "bandToCraniumBreadth": 1.0985
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.7476,
+            0.6581,
+            1.0074
+          ],
+          "translate": [
+            -0.0059,
+            1.5064,
+            0.0846
+          ]
+        },
+        "bulkHeadM": 0.0058
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -316,14 +513,14 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0
+        "head": 0.0058
       },
-      "hiddenBodyTriangles": 767,
-      "hiddenFraction": 0.0512,
+      "hiddenBodyTriangles": 1005,
+      "hiddenFraction": 0.0671,
       "mask": {
-        "hidden": 767,
+        "hidden": 1005,
         "total": 14972,
-        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
         "triangles": 2194,
@@ -334,11 +531,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Walk": 1,
-          "Idle": 4,
-          "Death": 10,
+          "Death": 8,
+          "Hit": 2,
+          "Run": 7,
+          "Idle": 2,
           "Attack": 2,
-          "Run": 6
+          "Walk": 4
         },
         "poses": 85
       }
@@ -347,36 +545,102 @@
       "node": "Outfit_beanie__heavyset",
       "kind": "rigid",
       "fit": {
-        "head": {
-          "topM": 1.7803,
-          "craniumWidthM": 0.1766,
-          "centre": [
-            -0.0062,
-            0.0057
-          ],
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.17,
+          "lengthM": 0.1951,
+          "envelopeBreadthM": 0.1763,
+          "envelopeLengthM": 0.1991,
+          "topM": 1.7635,
+          "meshTopM": 1.7803,
+          "browY": 1.6585,
           "noseY": 1.6135,
-          "chinY": 1.5235,
-          "cheekWidthM": 0.1348
+          "hairAllowanceM": {
+            "sides": 0.0032,
+            "top": 0.0168
+          }
         },
-        "itemWidthM": 0.1885,
-        "solve": {
-          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
-          "thicknessM": 0.012,
-          "contactCells": 2504,
-          "gapM": -0.01,
-          "eyeClearLiftM": 0.0032,
-          "rimBelowHeadTopM": 0.1634
+        "item": {
+          "widthM": 0.1894,
+          "lengthM": 0.2352,
+          "heightM": 0.1545,
+          "bandWidthM": 0.1867,
+          "bandLengthM": 0.2249,
+          "bandY": 1.7005,
+          "bandAboveBrowM": 0.042,
+          "topAboveCraniumM": 0.0451,
+          "crownClearanceM": 0.0328,
+          "eyeLiftM": 0
         },
-        "bulkHeadM": 0.0036,
-        "method": "uniform scale: item width at 0.45 of its height = 0.185 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
-        "transform": {
-          "scale": 0.7852,
-          "translate": [
-            -0.00717,
-            1.61682,
-            0.00958
+        "seat": {
+          "pitchDeg": 0,
+          "liftM": 0.012,
+          "rimContactVerticesBefore": 78,
+          "rimContactVerticesAfter": 55,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0044,
+          "bandClearFrontBackM": 0.0216,
+          "rings": [
+            {
+              "y": 1.6699,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.673,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.011
+            },
+            {
+              "y": 1.6761,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0174
+            },
+            {
+              "y": 1.6792,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0238
+            },
+            {
+              "y": 1.6823,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0192
+            },
+            {
+              "y": 1.6854,
+              "clearSideM": 0.0044,
+              "clearFrontBackM": 0.0213
+            }
           ]
-        }
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.1139,
+          "bandToCraniumBreadth": 1.0985
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.7476,
+            0.6201,
+            0.906
+          ],
+          "translate": [
+            -0.0046,
+            1.6421,
+            0.0011
+          ]
+        },
+        "bulkHeadM": 0.0058
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -386,14 +650,14 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0036
+        "head": 0.0058
       },
-      "hiddenBodyTriangles": 358,
-      "hiddenFraction": 0.0239,
+      "hiddenBodyTriangles": 318,
+      "hiddenFraction": 0.0213,
       "mask": {
-        "hidden": 358,
+        "hidden": 318,
         "total": 14962,
-        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
         "triangles": 2194,
@@ -404,9 +668,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 11,
-          "Idle": 8,
-          "Attack": 4
+          "Attack": 5,
+          "Death": 12,
+          "Run": 4,
+          "Walk": 2,
+          "Hit": 2
         },
         "poses": 85
       }
@@ -415,36 +681,102 @@
       "node": "Outfit_beanie__tall",
       "kind": "rigid",
       "fit": {
-        "head": {
-          "topM": 1.7503,
-          "craniumWidthM": 0.1974,
-          "centre": [
-            -0.0009,
-            -0.0167
-          ],
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.17,
+          "lengthM": 0.2085,
+          "envelopeBreadthM": 0.1976,
+          "envelopeLengthM": 0.2184,
+          "topM": 1.7177,
+          "meshTopM": 1.7503,
+          "browY": 1.6127,
           "noseY": 1.5677,
-          "chinY": 1.4942,
-          "cheekWidthM": 0.1119
+          "hairAllowanceM": {
+            "sides": 0.0138,
+            "top": 0.0326
+          }
         },
-        "itemWidthM": 0.1994,
-        "solve": {
-          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
-          "thicknessM": 0.012,
-          "contactCells": 2820,
-          "gapM": -0.01,
-          "eyeClearLiftM": 0.0023,
-          "rimBelowHeadTopM": 0.1821
+        "item": {
+          "widthM": 0.1894,
+          "lengthM": 0.248,
+          "heightM": 0.1591,
+          "bandWidthM": 0.1867,
+          "bandLengthM": 0.2372,
+          "bandY": 1.6507,
+          "bandAboveBrowM": 0.038,
+          "topAboveCraniumM": 0.0444,
+          "crownClearanceM": 0.0318,
+          "eyeLiftM": 0
         },
-        "bulkHeadM": 0.0006,
-        "method": "uniform scale: item width at 0.45 of its height = 0.185 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
-        "transform": {
-          "scale": 0.83033,
-          "translate": [
-            -0.00186,
-            1.56807,
-            -0.01262
+        "seat": {
+          "pitchDeg": 0,
+          "liftM": 0.008,
+          "rimContactVerticesBefore": 250,
+          "rimContactVerticesAfter": 237,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0044,
+          "bandClearFrontBackM": 0.0171,
+          "rings": [
+            {
+              "y": 1.6236,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.6268,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.0079
+            },
+            {
+              "y": 1.63,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0147
+            },
+            {
+              "y": 1.6332,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0164
+            },
+            {
+              "y": 1.6363,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0177
+            },
+            {
+              "y": 1.6395,
+              "clearSideM": 0.0044,
+              "clearFrontBackM": 0.0199
+            }
           ]
-        }
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.1139,
+          "bandToCraniumBreadth": 1.0985
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.7476,
+            0.6386,
+            0.9553
+          ],
+          "translate": [
+            -0.0006,
+            1.5949,
+            -0.0115
+          ]
+        },
+        "bulkHeadM": 0.0058
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -454,14 +786,14 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0006
+        "head": 0.0058
       },
-      "hiddenBodyTriangles": 787,
-      "hiddenFraction": 0.0526,
+      "hiddenBodyTriangles": 1041,
+      "hiddenFraction": 0.0696,
       "mask": {
-        "hidden": 787,
+        "hidden": 1041,
         "total": 14960,
-        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
         "triangles": 2194,
@@ -472,10 +804,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 10,
-          "Attack": 9,
+          "Death": 8,
+          "Idle": 10,
           "Run": 2,
-          "Idle": 2
+          "Walk": 2,
+          "Hit": 2
         },
         "poses": 85
       }

@@ -23,6 +23,8 @@ export interface ZombieStats {
   sightRange: number;
   radius: number;
   chaseAnim: 'Run' | 'Walk';
+  /** Iteration 07 (Lane Q): body turn rate outside attacks (rad/s; default 4.5) — the quadruped turns fast. */
+  turnRate?: number;
 }
 
 // Attack duration/impact match the Attack clip (1.1 s, impact 0.45 s) in derivatives/zombie-rigged.json.
@@ -44,7 +46,7 @@ export interface BrainWorld {
   los(ax: number, az: number, bx: number, bz: number): boolean;
   walkClear(ax: number, az: number, bx: number, bz: number, r: number): boolean;
   /** `drops`: chase paths may jump down ledges (platform edge into the track bed). */
-  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean}): Waypoint[] | null;
+  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean}): Waypoint[] | null;
   randomNear(x: number, z: number, r: number): [number, number] | null;
   rand(): number;
   /** Player feet height (world y); omitted = same level. */

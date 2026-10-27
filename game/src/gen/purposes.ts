@@ -19,6 +19,7 @@
 // world/storefrontBuilder.ts (menus), qa.ts / tests.
 
 import type {PropKind} from './props';
+import {isP7Kind} from './props07';
 import type {StockTheme} from './purposeShapes';
 import type {Wing} from './stationKit';
 import type {AreaKind, RoomType, ShopUse} from './stationTypes';
@@ -101,6 +102,11 @@ export interface RoomPurpose extends PurposeBase {
   weight: number;
   /** At most this many per level (default 2). */
   max?: number;
+  /**
+   * Iteration 07 (Lane P2): purpose built around generated props (gen/props07.ts) — eligible only when at least one of these
+   * signature kinds is integrated (its model exists), so a level never gets an empty "workshop".
+   */
+  requires?: readonly string[];
   /** Assigned first (one per level) when a fitting slot exists. */
   required?: boolean;
   props: readonly PropRule[];
@@ -509,6 +515,77 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     loot: {crate: CACHE_CRATE},
     floor: {ammo: 0.6},
   },
+  // --- Iteration 07 (Lane P2): rooms built around the NEW generated props (gen/props07.ts uses place the signature fixtures:
+  // tool chest / bench grinder / pegboard, pumps / water heater / valve manifold, lost luggage, fare vault carts, bins / scrubbers).
+  'workshop': {
+    id: 'workshop', category: 'back', label: 'Maintenance workshop', slots: ['storage', 'utility'], kinds: ['room'], min: [4, 4.5],
+    weight: 1.5, max: 1, light: [0.15, 0.5, 0.35], stock: 'parts', wings: {north: 1.3, misc: 1.2},
+    requires: ['rollingToolChest', 'benchGrinderStand', 'toolPegboard'],
+    props: [
+      {kind: 'shelf', at: 'wall', wall: 'side', n: [1, 1], front: 0.8},
+      {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], front: 0.8},
+      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 2]},
+    ],
+    loot: {
+      shelf: {items: [['ammo_rifle', 1], ['ammo_shells', 0.8], ['bandage', 1], ['water', 1]], lots: [1, 3], empty: 0.25},
+      cabinetTall: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 1], ['water', 0.6]], lots: [2, 4], empty: 0.1},
+      crate: CACHE_CRATE,
+      default: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 0.8], ['water', 0.6]], lots: [1, 3], empty: 0.25},
+    },
+    floor: {ammo: 1.2, med: 0.4},
+  },
+  'pump-room': {
+    id: 'pump-room', category: 'back', label: 'Pump room', slots: ['utility'], kinds: ['room'], min: [4, 4.5],
+    weight: 1.2, max: 1, light: [0.05, 0.35, 0.6], requires: ['waterPumpSkid', 'waterHeaterTank', 'pipeValveManifold'],
+    props: [
+      {kind: 'cabinetLow', at: 'wall', wall: 'any', n: [1, 1], chance: 0.5, front: 0.7},
+      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
+    ],
+    loot: {
+      cabinetLow: {items: [['bandage', 1], ['water', 1], ['ammo_rifle', 0.6]], lots: [1, 2], empty: 0.3},
+      crate: CACHE_CRATE,
+    },
+    floor: {ammo: 0.6, med: 0.3},
+  },
+  'lost-property': {
+    id: 'lost-property', category: 'back', label: 'Lost property office', slots: ['storage', 'crew-room'], kinds: ['room'], min: [4, 4.5],
+    weight: 1.2, max: 1, light: [0.3, 0.5, 0.2], warm: true, requires: ['rollingSuitcase', 'duffelBag', 'babyStroller'],
+    props: [
+      {kind: 'shelf', at: 'row', wall: 'far', n: [1, 2], front: 0.8},
+      {kind: 'desk', at: 'wall', wall: 'near', n: [1, 1], front: 0.7},
+      {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [1, 1], chance: 0.5, front: 0.8},
+    ],
+    loot: {
+      shelf: {items: [['water', 1], ['chocolate', 1], ['chips', 0.8], ['juice', 0.6], ['bandage', 0.8], ['cola', 0.6]], lots: [2, 4], empty: 0.15},
+      desk: {items: [['chocolate', 1], ['water', 1]], lots: [1, 1], empty: 0.5},
+      cabinetTall: {items: [['bandage', 1], ['medkit', 0.3], ['water', 1], ['ammo_shells', 0.4]], lots: [1, 3], empty: 0.15},
+    },
+    floor: {med: 0.5},
+  },
+  'revenue-room': {
+    id: 'revenue-room', category: 'back', label: 'Fare revenue room', slots: ['storage', 'utility', 'crew-room'], kinds: ['room'], min: [4, 4.5],
+    weight: 1.0, max: 1, light: [0.3, 0.5, 0.2], wings: {agent: 2.5, north: 0.6}, requires: ['fareVaultCart'],
+    props: [
+      {kind: 'safe', at: 'wall', wall: 'far', n: [1, 2], front: 0.6},
+      {kind: 'desk', at: 'wall', wall: 'side', n: [1, 1], front: 0.7},
+      {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [1, 1], chance: 0.5, front: 0.8},
+    ],
+    loot: {
+      desk: {items: [['cola', 1], ['chocolate', 1], ['ammo_shells', 0.4]], lots: [1, 2], empty: 0.4},
+      cabinetTall: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 0.8], ['medkit', 0.3]], lots: [2, 4], empty: 0.1},
+    },
+    floor: {ammo: 1.4, med: 0.4},
+  },
+  'custodial-room': {
+    id: 'custodial-room', category: 'back', label: 'Custodial & waste room', slots: ['storage', 'utility'], kinds: ['room'], min: [4, 4],
+    weight: 1.2, max: 1, light: [0.05, 0.4, 0.55], stock: 'cleaning', requires: ['wheelieBin', 'floorScrubber', 'trashBagPile'],
+    props: [
+      {kind: 'stockShelf', at: 'wall', wall: 'side', n: [1, 1], variant: 'stock', front: 0.8},
+      {kind: 'mopSink', at: 'wall', wall: 'far', n: [1, 1], chance: 0.6, front: 0.6},
+    ],
+    loot: {stockShelf: {items: [['water', 1], ['bandage', 0.6]], lots: [1, 2], empty: 0.4}},
+    floor: {med: 0.3},
+  },
   'washroom': {
     id: 'washroom', category: 'back', label: 'Washroom', slots: ['washroom'], kinds: ['room'], weight: 1, max: 4,
     props: [], loot: {}, floor: {med: 0.6},
@@ -575,6 +652,7 @@ export function assignRoomPurposes(slots: readonly RoomSlot[], rnd: () => number
   const list = Object.values(ROOM_PURPOSES);
   const fits = (p: RoomPurpose, s: RoomSlot) => {
     if (!p.slots.includes(s.type) || !p.kinds.includes(s.kind)) return false;
+    if (p.requires && !p.requires.some(isP7Kind)) return false;
     if ((used.get(p.id) ?? 0) >= (p.max ?? 2)) return false;
     if (p.min) { const a = Math.min(s.wM, s.hM), b = Math.max(s.wM, s.hM); if (a < p.min[0] || b < p.min[1]) return false; }
     return true;

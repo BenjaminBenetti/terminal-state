@@ -23,7 +23,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-gasmask.glb",
       "bytes": 490108,
-      "sha256": "160cb2a7a5e8937fd6cafe1018a58a87fb315af3ab6f45198a54bd2141637558",
+      "sha256": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -157,11 +157,11 @@
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1295,
-          "gapM": 0.008,
+          "contactCells": 1978,
+          "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            -0.003,
-            -0.155
+            -0.011,
+            -0.091
           ],
           "itemTopY": 1.6997,
           "itemBottomY": 1.5163,
@@ -174,7 +174,7 @@
           "translate": [
             -0.01331,
             1.51639,
-            0.03911
+            0.09021
           ]
         }
       },
@@ -188,10 +188,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 92,
-      "hiddenFraction": 0.0062,
+      "hiddenBodyTriangles": 0,
+      "hiddenFraction": 0,
       "mask": {
-        "hidden": 92,
+        "hidden": 0,
         "total": 14912,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -204,11 +204,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Hit": 4,
-          "Walk": 5,
-          "Idle": 2,
-          "Death": 18,
-          "Attack": 6
+          "Run": 11,
+          "Idle": 8,
+          "Attack": 6,
+          "Walk": 2,
+          "Death": 4
         },
         "poses": 85
       }
@@ -232,11 +232,11 @@
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1295,
-          "gapM": 0.008,
+          "contactCells": 1982,
+          "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            -0.001,
-            -0.163
+            0.009,
+            -0.109
           ],
           "itemTopY": 1.6983,
           "itemBottomY": 1.5209,
@@ -249,7 +249,7 @@
           "translate": [
             -0.00556,
             1.5209,
-            0.14776
+            0.18152
           ]
         }
       },
@@ -263,10 +263,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 56,
-      "hiddenFraction": 0.0037,
+      "hiddenBodyTriangles": 3,
+      "hiddenFraction": 0.0002,
       "mask": {
-        "hidden": 56,
+        "hidden": 3,
         "total": 14956,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -279,12 +279,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 6,
-          "Idle": 5,
-          "Walk": 8,
-          "Death": 10,
+          "Attack": 14,
+          "Walk": 6,
+          "Death": 8,
           "Hit": 2,
-          "Run": 2
+          "Idle": 2
         },
         "poses": 85
       }
@@ -308,11 +307,11 @@
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1330,
-          "gapM": 0.008,
+          "contactCells": 1995,
+          "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.033,
-            -0.135
+            -0.011,
+            -0.103
           ],
           "itemTopY": 1.5557,
           "itemBottomY": 1.3784,
@@ -325,7 +324,7 @@
           "translate": [
             -0.00807,
             1.37845,
-            0.19949
+            0.21964
           ]
         }
       },
@@ -339,10 +338,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 77,
-      "hiddenFraction": 0.0051,
+      "hiddenBodyTriangles": 17,
+      "hiddenFraction": 0.0011,
       "mask": {
-        "hidden": 77,
+        "hidden": 17,
         "total": 14972,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -355,12 +354,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 7,
-          "Idle": 2,
-          "Hit": 4,
+          "Idle": 7,
+          "Death": 6,
+          "Walk": 2,
           "Run": 8,
-          "Death": 8,
-          "Walk": 2
+          "Attack": 6,
+          "Hit": 2
         },
         "poses": 85
       }
@@ -384,11 +383,11 @@
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1295,
-          "gapM": 0.008,
+          "contactCells": 1968,
+          "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.005,
-            -0.157
+            0.011,
+            -0.101
           ],
           "itemTopY": 1.6885,
           "itemBottomY": 1.4935,
@@ -401,7 +400,7 @@
           "translate": [
             -0.00751,
             1.49353,
-            0.12734
+            0.15532
           ]
         }
       },
@@ -415,10 +414,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 94,
-      "hiddenFraction": 0.0063,
+      "hiddenBodyTriangles": 14,
+      "hiddenFraction": 0.0009,
       "mask": {
-        "hidden": 94,
+        "hidden": 14,
         "total": 14962,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -431,11 +430,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Walk": 6,
-          "Death": 10,
-          "Run": 3,
-          "Idle": 10,
-          "Attack": 2
+          "Walk": 5,
+          "Death": 6,
+          "Run": 7,
+          "Attack": 4,
+          "Hit": 8,
+          "Idle": 2
         },
         "poses": 85
       }
@@ -459,11 +459,11 @@
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1295,
-          "gapM": 0.008,
+          "contactCells": 1982,
+          "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.033,
-            -0.149
+            0.009,
+            -0.115
           ],
           "itemTopY": 1.6427,
           "itemBottomY": 1.4642,
@@ -476,7 +476,7 @@
           "translate": [
             -0.00203,
             1.46429,
-            0.08234
+            0.12167
           ]
         }
       },
@@ -490,10 +490,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 118,
-      "hiddenFraction": 0.0079,
+      "hiddenBodyTriangles": 0,
+      "hiddenFraction": 0,
       "mask": {
-        "hidden": 118,
+        "hidden": 0,
         "total": 14960,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -506,10 +506,10 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 14,
-          "Idle": 6,
-          "Death": 8,
-          "Hit": 4
+          "Idle": 17,
+          "Walk": 4,
+          "Death": 6,
+          "Attack": 4
         },
         "poses": 85
       }

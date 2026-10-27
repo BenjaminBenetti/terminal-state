@@ -1,4 +1,4 @@
-# The Last Line — vertical slice credits and provenance (working title)
+# Terminal State (formerly "The Last Line") — vertical slice credits and provenance
 
 Prototype build. Nothing here is approved production art and **no commercial licence clearance is
 asserted** for any generated source. Full per-file provenance: `assets/derivatives/*.json`.

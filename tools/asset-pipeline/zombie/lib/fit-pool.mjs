@@ -2,7 +2,9 @@
 import os from 'node:os';
 import {Worker} from 'node:worker_threads';
 
-const bodyRec = (B, extra) => ({id: B.id, skel: B.skel, rigDesc: B.rigDesc, profile: B.profile, low: {pos: B.low.pos, idx: B.low.idx, welded: B.low.welded}, weldedWeights: {joints: B.weldedWeights.joints, weights: B.weldedWeights.weights}, joints: B.joints, extraCollide: extra ?? undefined, pantsFit: B.def?.pantsFit});
+// iteration 07: + welded skin regions, UV-split weld map, validation poses and (uppers) fitted lower layers for lib/fit07.mjs
+const bodyRec = (B, extra, job = {}) => ({id: B.id, skel: B.skel, rigDesc: B.rigDesc, profile: B.profile, low: {pos: B.low.pos, idx: B.low.idx, nrm: B.low.nrm, welded: B.low.welded, weldId: B.low.weldId}, weldedWeights: {joints: B.weldedWeights.joints, weights: B.weldedWeights.weights, region: B.weldedWeights.region}, joints: B.joints, extraCollide: extra ?? undefined, pantsFit: B.def?.pantsFit,
+  poses: job.poses, layers: job.layers, layerUV: job.layerUV});
 // garment jobs carry the canonical fit; pants / rigid jobs the body-independent stage mesh
 const stageRec = (g, cfg) => cfg.kind === 'pants' || cfg.kind === 'rigid' ? {kind: cfg.kind, low: {weldId: g.low.weldId, welded: g.low.welded}} : {canonical: g.canonical, low: {weldId: g.low.weldId}, sleeved: g.garment.sleeved};
 
@@ -16,7 +18,7 @@ export async function fitVariantsParallel(jobs, {threads = Math.min(jobs.length,
       if (next >= jobs.length) { w.terminate(); resolve(); return; }
       const j = jobs[next++];
       j.t0 = Date.now();
-      w.postMessage({id: j.key, gC: stageRec(j.g, j.cfg), cfg: j.cfg, C: bodyRec(j.C), B: bodyRec(j.B, j.extraCollide)});
+      w.postMessage({id: j.key, gC: stageRec(j.g, j.cfg), cfg: j.cfg, C: bodyRec(j.C), B: bodyRec(j.B, j.extraCollide, j)});
     };
     w.on('message', m => {
       if (m.error) { w.terminate(); reject(new Error(`fit ${m.id}: ${m.error}`)); return; }

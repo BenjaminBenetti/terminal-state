@@ -1,11 +1,18 @@
 @AGENTS.md
 
-Follow the portable repository guidance above. This repository does not install,
-pin, authenticate or require an assistant CLI. Historical setup instructions are
-retained only under `docs/history/`; do not recreate their shared mounts/settings.
+Follow current portable repository guidance. Work in Git, push checked changes to
+GitHub `main` without rewriting history, and publish only verified GitHub Actions
+artifacts. This repo does not install or authenticate an assistant CLI. Historical
+setup/job documents are not active instructions and authorize no generation.
 
-Existing project skills record asset-method guardrails, not authorization to run
-asset services. The released game's audio is bundled Sound Lab-derived MP3 data;
-no audio generation service is needed to build or play. Preserve the audio notice
-and conditional prototype licensing status. Do not substitute generated, stock or
-synthesized sound effects without explicit approval.
+Project skills preserve asset-method guardrails only. Audio is bundled Sound
+Lab-derived MP3 data; building/playing does not require an audio generation service.
+Preserve its notice and conditional prototype licensing status. Preserve raw asset
+backups independently of Git's cooked runtime inputs. Do not substitute or generate
+models/images/audio without fresh explicit approval.
+
+Existing-studio migration must preserve its workspace path, ignored root reference/
+and public/vision-board/, native .cache/ originals, qa-artifacts/, dependencies and
+local assistant settings. Main backs up old .git/root docs and verifies GitHub
+source/asset hashes before adoption. Never git clean/reset away existing work or
+stage external archives. Never reuse old generation budgets.

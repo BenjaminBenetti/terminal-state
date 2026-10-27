@@ -4,6 +4,7 @@ import type {Grid} from './grid';
 import type {PropPlacement} from './props';
 import type {ShopBox} from './storefronts';
 import type {Traversal} from './traversal';
+import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -98,7 +99,11 @@ export interface SignPlacement {
 }
 export interface PickupPlacement { itemId: string; count: number; x: number; y: number; z: number; area: number }
 export type ZombieType = 'shambler' | 'coated';
-export interface ZombieSpawn { x: number; z: number; yaw: number; type: ZombieType; area: number }
+export interface ZombieSpawn {
+  x: number; z: number; yaw: number; type: ZombieType; area: number;
+  /** Iteration 07 (Lane Q): enemy archetype drawn per spawn from the level-generic pool (ai/creatureSpawn.ts); absent = zombie. */
+  archetype?: EnemyArchetypeId;
+}
 
 export interface Trench {
   x0: number; x1: number; z0: number; z1: number; floorY: number;

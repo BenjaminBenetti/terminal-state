@@ -92,6 +92,8 @@ async function boot(): Promise<void> {
   const seedParam = params.get('seed');
   const parsed = seedParam ? codeToSeed(seedParam) : null;
   const seed = parsed ?? freshSeed();
+  // Iteration 07 (Lane P2): only this station's lazy prop models are fetched (with progress) before it is built and revealed.
+  await game.prepareStation(seed, (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; });
   game.newStation(seed);
   const n = game.layout.zombies.length;
   $('#station-intro').textContent = `${game.layout.name}. ${n} infected reported below street level. Clear them out.`;

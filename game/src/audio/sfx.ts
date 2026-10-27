@@ -22,6 +22,7 @@
 
 import {ClipBank, type Clip, type CueId} from './bank';
 import {makeIR} from './reverb';
+import type {ImpactFamily} from '../physics/chunks';
 
 type Desired = 'running' | 'suspended';
 export type RoomKind = 'large' | 'medium' | 'small' | 'tunnel';
@@ -84,10 +85,12 @@ export const CUE_GAIN: Record<CueId, number> = {
   rifleMagDrop: 0.3, dryFire: 0.35, equip: 0.28, hitTick: 0.22, hitKill: 0.32,
   impactConcrete: 0.55, impactTile: 0.55, impactMetal: 0.5, impactWood: 0.55, impactFlesh: 0.5,
   impactGlass: 0.5, impactSheetMetal: 0.48, fleshTear: 0.42, breakGlass: 0.62, breakWood: 0.58, debrisFall: 0.32,
+  itemCan: 0.34, itemLight: 0.3, chunkFlesh: 0.34, propTopple: 0.5, // iteration 07 (Lane K)
   casingBrass: 0.3, casingHull: 0.32, bodyFall: 0.6,
   stepConcrete: 0.16, stepTile: 0.16, stepConcreteRun: 0.2, stepTileRun: 0.2, stepConcreteSneak: 0.14, stepTileSneak: 0.14,
   jump: 0.16, land: 0.3, crouch: 0.13, ladder: 0.24,
   zombieGroan: 0.55, zombieGroanDeep: 0.6, zombieAttack: 0.6, zombieDeath: 0.6, zombieStep: 0.26, zombieStepHeavy: 0.3,
+  creatureGrowl: 0.5, creatureSnarl: 0.6, creatureBite: 0.58, creatureYelp: 0.55, creatureDeath: 0.6, creatureStep: 0.24, // iteration 07 (Lane Q)
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12,
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
@@ -139,6 +142,8 @@ const CLOSE_CUE: Record<string, CueId> = {
 };
 const EAT_CUE: Record<string, CueId> = {chips: 'eatChips', chocolate: 'eatChocolate', beans: 'eatBeans', noodles: 'eatNoodles'};
 const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater', juice: 'drinkJuice'};
+/** Iteration 07 (Lane K): rigid item / chunk contact families -> Sound Lab cues (bank i07k + reused impacts). */
+const PHYS_CUE: Record<ImpactFamily, CueId> = {can: 'itemCan', light: 'itemLight', heavy: 'impactMetal', prop: 'propTopple', flesh: 'chunkFlesh', stone: 'debrisFall', wood: 'impactWood', glass: 'impactGlass', metal: 'impactSheetMetal'};
 const IMPACT_CUE: Record<Surface, CueId> = {concrete: 'impactConcrete', tile: 'impactTile', metal: 'impactMetal', wood: 'impactWood', flesh: 'impactFlesh', glass: 'impactGlass', sheet: 'impactSheetMetal'};
 
 interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean }
@@ -914,6 +919,21 @@ export class Sfx {
     const v = this.voice({at: {x, y, z}, ref: 0.9, rolloff: 1.6, send: 0.3, pri: 0, maxDist: 14, occlude: false, gain: 0.15 + 0.6 * Math.pow(s, 0.8)});
     this.play(v, kind === 'shell' ? 'casingHull' : 'casingBrass', {rate: 0.9 + 0.15 * s, jitter: 0.06});
   }
+  /**
+   * Iteration 07 (Lane K): a rigid item / chunk / loose prop striking the station at `speed` m/s —
+   * can: aluminium can / tin clatter; light: bottle / box / bag knock; heavy: a dropped gun; prop: a
+   * trash can toppling; flesh: a torn chunk slapping down; stone / wood / glass / metal: chips (low).
+   */
+  physImpact(x: number, y: number, z: number, speed: number, family: ImpactFamily): void {
+    if (!this.live || speed < 0.6) return;
+    const L = this.listener;
+    if (Math.hypot(x - L.x, z - L.z) > 24) { this.culled++; return; }
+    if (!this.take(family === 'prop' ? 'fall' : 'casing')) return;
+    const s = clamp01(speed / 5);
+    const base = family === 'prop' ? 0.45 : family === 'stone' || family === 'wood' || family === 'glass' || family === 'metal' ? 0.1 : 0.25;
+    const v = this.voice({at: {x, y, z}, ref: family === 'prop' ? 1.8 : 1.1, rolloff: 1.4, send: 0.35, pri: 0, maxDist: 24, gain: base + (1 - base) * 0.75 * Math.pow(s, 0.8)});
+    this.play(v, PHYS_CUE[family], {rate: 0.92 + 0.16 * s, jitter: 0.07});
+  }
   /** Ragdoll / corpse hitting the ground; strength 0..1. Rate-limited for multi-bone contacts. */
   bodyFall(x: number, y: number, z: number, strength: number): void {
     const s = clamp01(strength);
@@ -922,6 +942,31 @@ export class Sfx {
     this.play(v, 'bodyFall', {rate: 1.02 - s * 0.08, jitter: 0.06});
   }
   /** Zombie vocal, HRTF-positioned; `deep` = heavy/coated build. */
+  /**
+   * Iteration 07 (Lane Q): the rat/dog creature's positional Sound Lab vocals (growl idle/threat,
+   * snarl on alert, bite on the lunge, yelp when hit, death). Missing clips stay silent (bank gaps).
+   */
+  creature(cue: 'growl' | 'snarl' | 'bite' | 'yelp' | 'death', x: number, y: number, z: number): void {
+    const id: CueId = cue === 'growl' ? 'creatureGrowl' : cue === 'snarl' ? 'creatureSnarl' : cue === 'bite' ? 'creatureBite' : cue === 'yelp' ? 'creatureYelp' : 'creatureDeath';
+    const near = cue === 'bite' || cue === 'yelp';
+    const v = this.voice({at: {x, y, z}, hrtf: true, ref: near ? 1.8 : 2.2, rolloff: 1.15, send: 0.5, pri: cue === 'growl' ? 0 : 1, maxDist: cue === 'growl' ? 26 : 36});
+    this.play(v, id, {jitter: 0.06});
+  }
+  /** Rat/dog paw scrabble: per-creature stride accumulator (short quick strides), positional, low. */
+  creatureGait(id: object, x: number, z: number, speed: number, dt: number, y = 0): void {
+    if (!this.live || speed < 0.2) return;
+    const stride = speed > 2 ? 0.55 : 0.32;
+    let d = (this.gait.get(id) ?? Math.random() * stride) + speed * dt;
+    if (d >= stride) {
+      d -= stride;
+      const L = this.listener;
+      if (Math.hypot(x - L.x, z - L.z) <= 16 && this.take('step')) {
+        const v = this.voice({at: {x, y: y + 0.03, z}, ref: 1.2, rolloff: 1.5, send: 0.22, pri: 0, maxDist: 16, gain: Math.min(1.2, 0.55 + speed * 0.12)});
+        this.play(v, 'creatureStep', {jitter: 0.1, gainJitter: 2});
+      }
+    }
+    this.gait.set(id, d);
+  }
   groan(x: number, y: number, z: number, deep: boolean): void {
     const v = this.voice({at: {x, y, z}, hrtf: true, ref: 2.2, rolloff: 1.1, send: 0.6, pri: 1, maxDist: 34});
     this.play(v, deep ? 'zombieGroanDeep' : 'zombieGroan', {jitter: 0.07});

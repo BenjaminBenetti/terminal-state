@@ -14,8 +14,12 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import {CELL} from '../gen/grid';
 import {StaticQuery, rampPieces, type StaticLayout} from './staticQuery';
-import {GROUP_RAGDOLL, GROUP_STATIC, Ragdoll, RagdollJoint, type KillImpulse, type RagdollTarget} from './ragdoll';
+import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC, Ragdoll, RagdollJoint, type KillImpulse, type RagdollTarget} from './ragdoll';
 import {CasingSystem, type CasingAudio, type CasingKind} from './casings';
+import {PhysChunks, type BodyHost, type PhysAudio} from './chunks';
+import {DynamicItems} from './dynamicItems';
+import {PHYS_MATS, type PhysMat} from '../damage/materials';
+import type {PropPlacement} from '../gen/props';
 
 export type {KillImpulse, RagdollTarget} from './ragdoll';
 export type {CasingKind} from './casings';
@@ -25,6 +29,8 @@ export const MAX_SUBSTEPS = 3;
 export const MAX_SIMULATING_RAGDOLLS = 4;
 const CHUNK = 8; // cells (4 m)
 const ACTIVE_RADIUS = 3; // m around each simulating pelvis
+/** Iteration 07: m around each simulating item / prop / chunk body. */
+const BODY_RADIUS = 1.6;
 const WALL_TOP = 9;
 
 /** Seconds after a shotgun shot until the pump stroke throws the hull (not on the trigger pull). */
@@ -53,7 +59,7 @@ export interface EjectionPortSource {
   ejectionPort(main: THREE.PerspectiveCamera, itemId: string, pos: THREE.Vector3, dir: THREE.Vector3, outPos: THREE.Vector3, outDir: THREE.Vector3): boolean;
 }
 
-export interface PhysicsAudio extends CasingAudio {
+export interface PhysicsAudio extends CasingAudio, PhysAudio {
   bodyFall?(x: number, y: number, z: number, strength: number): void;
 }
 
@@ -67,6 +73,9 @@ export interface PhysicsStats {
   /** Smoothed cannon step cost per frame (ms); 0 when idle. */
   stepMs: number;
   stepMsMax: number;
+  /** Iteration 07 (Lane K): simulating item / prop bodies and physical chunks. */
+  dynamic: ReturnType<DynamicItems['stats']>;
+  chunks: ReturnType<PhysChunks['stats']>;
 }
 
 interface Chunk { bodies: CANNON.Body[]; active: boolean }
@@ -103,16 +112,29 @@ function warmUp(): void {
   for (let i = 0; i < 40; i++) { w.step(FIXED_DT); for (const c of w.constraints) (c as RagdollJoint).damp(FIXED_DT, 5); }
 }
 
-export class PhysicsSystem {
+export class PhysicsSystem implements BodyHost {
   world: CANNON.World | null = null;
   readonly casings = new CasingSystem();
+  /**
+   * Iteration 07 (Lane K): activate-on-hit loose items / loot lots / light props (lane contract name
+   * `physics.dynamicItems`) and physical chunks (world pieces + torn flesh / cloth), all in this one
+   * bounded cannon world.
+   */
+  readonly dynamicItems: DynamicItems;
+  readonly chunks: PhysChunks;
+  /**
+   * Loot-holder collision for items / chunks (shelf tiers etc., physics/holderShapes.ts); set per station
+   * by the game (ContainerManager.physicsBoxes). null / a null result: the prop's full AABB.
+   */
+  holderBoxes: ((p: PropPlacement) => THREE.Box3[] | null) | null = null;
+  private readonly physMats = new Map<PhysMat, CANNON.Material>();
   private query: StaticQuery | null = null;
   private readonly ragdollMat = new CANNON.Material('ragdoll');
   private readonly staticMat = new CANNON.Material('static');
   private ragdolls: Ragdoll[] = [];
   private frozen: Ragdoll[] = [];
   private failedCount = 0;
-  private readonly chunks = new Map<number, Chunk>();
+  private readonly staticChunks = new Map<number, Chunk>();
   private chunkTimer = 0;
   private time = 0;
   private stepMs = 0;
@@ -123,8 +145,27 @@ export class PhysicsSystem {
   private readonly eyeTmp = new THREE.Vector3();
 
   constructor(scene: THREE.Object3D | null, public audio: PhysicsAudio | null = null) {
-    if (scene) scene.add(this.casings.group);
+    this.dynamicItems = new DynamicItems(this);
+    this.chunks = new PhysChunks(this);
+    if (scene) scene.add(this.casings.group, this.chunks.group);
     this.casings.audio = audio;
+  }
+
+  /** BodyHost: the read-only station statics (null between stations). */
+  get statics(): StaticQuery | null {
+    return this.query;
+  }
+
+  /** BodyHost: cannon material of a rigid-body family (contacts vs the station defined in build()). */
+  material(m: PhysMat): CANNON.Material {
+    let mat = this.physMats.get(m);
+    if (!mat) { mat = new CANNON.Material(`phys-${m}`); this.physMats.set(m, mat); }
+    return mat;
+  }
+
+  /** BodyHost: new bodies joined the world — make sure static collision exists around them now. */
+  bodiesChanged(): void {
+    this.refreshChunks();
   }
 
   /** Build the world for a new station (disposes the previous one first). */
@@ -140,6 +181,11 @@ export class PhysicsSystem {
     w.defaultContactMaterial.friction = 0.5;
     w.defaultContactMaterial.restitution = 0;
     w.addContactMaterial(new CANNON.ContactMaterial(this.ragdollMat, this.staticMat, {friction: 0.62, restitution: 0.02, contactEquationStiffness: 1e7, contactEquationRelaxation: 3}));
+    // Iteration 07: items / props / chunks vs the station (and resting loose props use these materials too)
+    for (const k of Object.keys(PHYS_MATS) as PhysMat[]) {
+      const c = PHYS_MATS[k];
+      w.addContactMaterial(new CANNON.ContactMaterial(this.material(k), this.staticMat, {friction: c.friction, restitution: c.restitution, contactEquationStiffness: 1e7, contactEquationRelaxation: 3}));
+    }
     w.addEventListener('preStep', () => { for (const r of this.ragdolls) r.preStep(FIXED_DT); });
     w.addEventListener('postStep', () => { for (const r of this.ragdolls) r.postStep(FIXED_DT); });
     this.world = w;
@@ -151,6 +197,8 @@ export class PhysicsSystem {
   /** Remove every body/constraint and casing; ragdoll corpses keep their frozen bone poses. */
   dispose(): void {
     const w = this.world;
+    this.dynamicItems.clear();
+    this.chunks.clear();
     if (w) {
       for (const r of this.ragdolls) r.freeze();
       for (const c of w.constraints.slice()) w.removeConstraint(c);
@@ -159,7 +207,7 @@ export class PhysicsSystem {
     this.ragdolls = [];
     this.frozen = [];
     this.failedCount = 0;
-    this.chunks.clear();
+    this.staticChunks.clear();
     this.pending = [];
     this.world = null;
     this.query = null;
@@ -230,7 +278,13 @@ export class PhysicsSystem {
     }
     this.casings.update(dt);
     const w = this.world;
-    if (!w || !this.ragdolls.length) { this.stepMs *= 0.9; return; }
+    if (!w || (!this.ragdolls.length && !this.dynamicItems.awake && !this.chunks.awake)) {
+      this.stepMs *= 0.9;
+      // resting chunks still fade / expire, walkers can still shove resting loose props
+      this.chunks.update(dt);
+      this.dynamicItems.update(dt);
+      return;
+    }
     const t0 = performance.now();
     this.chunkTimer -= dt;
     if (this.chunkTimer <= 0) this.refreshChunks();
@@ -239,7 +293,9 @@ export class PhysicsSystem {
       if (r.update(dt)) this.retire(r);
       else r.sync(true);
     }
-    if (!this.ragdolls.length) this.refreshChunks();
+    this.dynamicItems.update(dt);
+    this.chunks.update(dt);
+    if (!this.ragdolls.length && !this.dynamicItems.awake && !this.chunks.awake) this.refreshChunks();
     const ms = performance.now() - t0;
     this.stepMs += (ms - this.stepMs) * 0.1;
     this.stepMsMax = Math.max(this.stepMsMax * 0.995, ms);
@@ -257,18 +313,22 @@ export class PhysicsSystem {
     if (!w || !q) return;
     const need = new Set<number>();
     const span = CHUNK * CELL;
-    for (const r of this.ragdolls) {
-      const p = r.pelvis.position;
-      const x0 = Math.floor((p.x - ACTIVE_RADIUS) / span), x1 = Math.floor((p.x + ACTIVE_RADIUS) / span);
-      const y0 = Math.floor((p.z - ACTIVE_RADIUS) / span), y1 = Math.floor((p.z + ACTIVE_RADIUS) / span);
+    const around = (p: {x: number; z: number}, rad: number) => {
+      const x0 = Math.floor((p.x - rad) / span), x1 = Math.floor((p.x + rad) / span);
+      const y0 = Math.floor((p.z - rad) / span), y1 = Math.floor((p.z + rad) / span);
       for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) need.add(this.chunkKey(cx, cy));
-    }
-    for (const [k, c] of this.chunks) {
+    };
+    for (const r of this.ragdolls) around(r.pelvis.position, ACTIVE_RADIUS);
+    const pts: CANNON.Vec3[] = [];
+    this.dynamicItems.activePoints(pts);
+    this.chunks.activePoints(pts);
+    for (const p of pts) if (Number.isFinite(p.x + p.z)) around(p, BODY_RADIUS);
+    for (const [k, c] of this.staticChunks) {
       if (c.active && !need.has(k)) { for (const b of c.bodies) w.removeBody(b); c.active = false; }
     }
     for (const k of need) {
-      let c = this.chunks.get(k);
-      if (!c) { c = {bodies: this.buildChunk(k), active: false}; this.chunks.set(k, c); }
+      let c = this.staticChunks.get(k);
+      if (!c) { c = {bodies: this.buildChunk(k), active: false}; this.staticChunks.set(k, c); }
       if (!c.active) { for (const b of c.bodies) w.addBody(b); c.active = true; }
     }
   }
@@ -281,8 +341,9 @@ export class PhysicsSystem {
     const used = new Uint8Array(CHUNK * CHUNK);
     const cls = (x: number, y: number) => q.cellClass(cx0 + x, cy0 + y);
     const bodies: CANNON.Body[] = [];
-    const box = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => {
-      const b = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, material: this.staticMat, collisionFilterGroup: GROUP_STATIC, collisionFilterMask: GROUP_RAGDOLL});
+    const ALL = GROUP_RAGDOLL | GROUP_ITEM | GROUP_CHUNK;
+    const box = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, mask = ALL) => {
+      const b = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, material: this.staticMat, collisionFilterGroup: GROUP_STATIC, collisionFilterMask: mask});
       b.addShape(new CANNON.Box(new CANNON.Vec3((x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2)));
       b.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
       b.aabbNeedsUpdate = true;
@@ -320,7 +381,11 @@ export class PhysicsSystem {
     for (const p of q.props) {
       if (Math.floor(p.x / span) !== cx0 / CHUNK || Math.floor(p.z / span) !== cy0 / CHUNK) continue;
       if (p.h <= 0.02 || p.hx <= 0 || p.hz <= 0) continue;
-      box(p.x - p.hx, p.x + p.hx, p.y, p.y + p.h, p.z - p.hz, p.z + p.hz);
+      // Iteration 07: loot holders are solid for ragdolls, but items / chunks rest on their real shelves
+      const hb = this.holderBoxes?.(p) ?? null;
+      if (!hb) { box(p.x - p.hx, p.x + p.hx, p.y, p.y + p.h, p.z - p.hz, p.z + p.hz); continue; }
+      box(p.x - p.hx, p.x + p.hx, p.y, p.y + p.h, p.z - p.hz, p.z + p.hz, GROUP_RAGDOLL);
+      for (const b of hb) box(b.min.x, b.max.x, b.min.y, b.max.y, b.min.z, b.max.z, GROUP_ITEM | GROUP_CHUNK);
     }
     return bodies;
   }
@@ -332,17 +397,17 @@ export class PhysicsSystem {
   propsChanged(x: number, z: number): void {
     const span = CHUNK * CELL;
     const key = this.chunkKey(Math.floor(x / span), Math.floor(z / span));
-    const c = this.chunks.get(key);
+    const c = this.staticChunks.get(key);
     if (!c) return;
     if (c.active && this.world) for (const b of c.bodies) this.world.removeBody(b);
-    this.chunks.delete(key);
+    this.staticChunks.delete(key);
     if (c.active) this.refreshChunks();
   }
 
   // -------------------------------------------------------------------------------------------
   stats(): PhysicsStats {
     let staticBodies = 0;
-    for (const c of this.chunks.values()) if (c.active) staticBodies += c.bodies.length;
+    for (const c of this.staticChunks.values()) if (c.active) staticBodies += c.bodies.length;
     return {
       ragdollsActive: this.ragdolls.length,
       ragdollsFrozen: this.frozen.length,
@@ -352,7 +417,25 @@ export class PhysicsSystem {
       staticBodies,
       stepMs: Math.round(this.stepMs * 1000) / 1000,
       stepMsMax: Math.round(this.stepMsMax * 1000) / 1000,
+      dynamic: this.dynamicItems.stats(),
+      chunks: this.chunks.stats(),
     };
+  }
+
+  /**
+   * World velocity of an actor's body at a point: the nearest simulating ragdoll part (linear +
+   * angular), else false (caller uses the animated bone velocity).
+   */
+  actorVelocity(target: object, point: THREE.Vector3, out: THREE.Vector3): boolean {
+    const r = this.ragdolls.find(x => x.target === target);
+    if (!r) return false;
+    let best: CANNON.Body | null = null, bd = Infinity;
+    for (const p of r.parts) { const d = p.body.position.distanceTo(new CANNON.Vec3(point.x, point.y, point.z)); if (d < bd) { bd = d; best = p.body; } }
+    if (!best) return false;
+    const rel = new CANNON.Vec3(point.x - best.position.x, point.y - best.position.y, point.z - best.position.z);
+    const v = best.angularVelocity.cross(rel).vadd(best.velocity);
+    out.set(v.x, v.y, v.z);
+    return true;
   }
 
   /** QA: simulating ragdolls' pelvis positions. */

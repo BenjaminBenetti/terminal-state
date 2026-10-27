@@ -39,11 +39,16 @@ export interface DebrisSpawn {
   aspect?: [number, number, number];
 }
 
-interface Piece {
+/**
+ * One debris piece (exported for iteration 07 physics chunks: a DRIVEN piece, mode 3, takes its pose
+ * from a rigid body in physics/chunks.ts; when the body is retired the piece rests (mode 2) or flies
+ * on ballistically (mode 0)).
+ */
+export interface Piece {
   live: boolean; serial: number; age: number; life: number;
   pos: THREE.Vector3; vel: THREE.Vector3; q: THREE.Quaternion; w: THREE.Vector3; scale: THREE.Vector3;
-  /** 0 flying, 2 at rest. */
-  mode: 0 | 2;
+  /** 0 flying, 2 at rest, 3 driven by a rigid body. */
+  mode: 0 | 2 | 3;
   /** Contact radius (smallest half extent) and half thickness along local Y (rest height). */
   r: number;
   hy: number;
@@ -252,7 +257,30 @@ export class DebrisSystem {
   }
 
   spawn(s: DebrisSpawn): boolean {
-    if (this.budget <= 0) { this.dropped++; return false; }
+    return this.spawnPiece(s) !== null;
+  }
+
+  /**
+   * Iteration 07 (Lane K): spawn a piece whose pose is DRIVEN by a rigid body (mode 3). Returns the
+   * piece and its box half extents (world metres, local axes) for the body, or null (budget).
+   */
+  spawnDriven(s: DebrisSpawn): {piece: Piece; half: THREE.Vector3} | null {
+    const p = this.spawnPiece(s);
+    if (!p) return null;
+    p.mode = 3;
+    const pool = this.pools[s.shape];
+    return {piece: p, half: new THREE.Vector3(p.scale.x * pool.half.x, p.scale.y * pool.half.y, p.scale.z * pool.half.z)};
+  }
+
+  /** Driven pieces live (QA). */
+  driven(): number {
+    let n = 0;
+    for (const p of Object.values(this.pools)) for (const q of p.pieces) if (q.live && q.mode === 3) n++;
+    return n;
+  }
+
+  private spawnPiece(s: DebrisSpawn): Piece | null {
+    if (this.budget <= 0) { this.dropped++; return null; }
     this.budget--;
     this.spawned++;
     const pool = this.pools[s.shape];
@@ -274,7 +302,7 @@ export class DebrisSystem {
     // never start inside a wall / prop (the hit point sits on its surface): nudge along the throw
     if (this.query?.insideSolid(p.pos.x, p.pos.y, p.pos.z)) p.pos.addScaledVector(tv.copy(p.vel).normalize(), 0.04);
     pool.setColor(i, s.color);
-    return true;
+    return p;
   }
 
   update(dt: number): void {

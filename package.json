@@ -2,7 +2,7 @@
   "name": "terminal-state",
   "version": "0.0.0",
   "private": true,
-  "description": "Terminal State (formerly The Last Line): frozen iteration-6 browser game prototype",
+  "description": "Terminal State: iteration-7 browser subway survival prototype",
   "scripts": {
     "doctor": "node scripts/doctor.mjs",
     "board": "node scripts/serve-board.mjs",
@@ -18,7 +18,10 @@
     "game:backup": "node tools/release/backup.mjs",
     "build": "npm run game:build",
     "preview": "npm run game:preview",
-    "test": "npm run game:test"
+    "test": "npm run game:test",
+    "ci:package": "node tools/release/package-ci.mjs",
+    "ci:check": "node tools/release/check-workflow.mjs",
+    "ci:test": "node --test tools/release/package-ci.test.mjs"
   },
   "engines": {
     "node": ">=22"
