@@ -1,0 +1,491 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "outfit-hardhat",
+  "title": "Zombie wearable \"Transit hard hat\" (head) - fitted per body (prototype)",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative (iteration 06 zombie wardrobe); art/anatomy/deformation/fit not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; sources are AI reconstructions of AI-generated concept images"
+  },
+  "honesty": {
+    "sourcesHadSkeleton": false,
+    "rig": "NEW derivative skeleton (shared 18-joint naming/hierarchy) and automatic skin weights created by this CPU pipeline",
+    "animation": "hand-authored procedural keyframes (same clip functions for every body, sampled with each body's own joint positions) - NOT motion capture",
+    "generation": "no AI generation, inference, model download or network service was used by this builder",
+    "garment": "item source is a separate empty (ghost) reconstruction; scaled and placed per body (rigid, no deformation)"
+  },
+  "origin": "iteration-06 generated (Lane G headHardHat)",
+  "provenance": "generated",
+  "slot": "head",
+  "kind": "rigid",
+  "outputs": {
+    "glb": {
+      "path": "game/public/assets/models/outfit-hardhat.glb",
+      "bytes": 349092,
+      "sha256": "0c2428f474b6da27d9c5dc1222914055a6b746b953ca82e1ca325ed667e5673a",
+      "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
+    }
+  },
+  "source": {
+    "id": "headHardHat",
+    "file": ".cache/iteration06-native-masters/headHardHat/asset.glb",
+    "sha256Verified": "a740855afda5e4faf3eb7ca272811713cccc862b6a68dfca2934fad452507e65",
+    "displayName": "Head: yellow transit-worker hard hat",
+    "ledger": "reference/tasks/vertical-slice-iteration06-20261026/generation/ledger.json",
+    "ledgerKey": "headHardHat",
+    "inputPng": "reference/tasks/vertical-slice-iteration06-20261026/generation/headHardHat/image/headHardHat-original.png",
+    "inputPngSha256": "4b7fd4b2bedf16e7db066047f4f31b4fe13302d34bb6d0bf492e8c9fff2378b4",
+    "nativeJob": "20261026T191342Z-fd07207c71f746868dd9223dc607fbad",
+    "nativeMetadata": "reference/tasks/vertical-slice-iteration06-20261026/generation/headHardHat/native/metadata.json",
+    "nativeReceipt": "reference/tasks/vertical-slice-iteration06-20261026/generation/headHardHat/native/receipt.json",
+    "preservedXz": "reference/tasks/vertical-slice-iteration06-20261026/generation/headHardHat/native/asset.glb.xz",
+    "triangles": 959572,
+    "vertices": 646889,
+    "textures": {
+      "baseColor": [
+        4096,
+        4096,
+        "image/png"
+      ],
+      "metallicRoughness": [
+        4096,
+        4096,
+        "image/png"
+      ]
+    },
+    "material": {
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallicRoughnessSynthesised": false
+    }
+  },
+  "stage": {
+    "nominal": {
+      "scale": 0.367807,
+      "pivot": [
+        -0.00014,
+        -0.30981,
+        0.01027
+      ],
+      "flipFacing": true
+    },
+    "frame": null,
+    "sourceTrim": null
+  },
+  "mesh": {
+    "vertices": 1841,
+    "triangles": 2190,
+    "simplify": {
+      "targetTris": 2200,
+      "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
+      "importanceWeighted": false,
+      "flags": [
+        "Prune",
+        "Regularize"
+      ],
+      "resultTris": 2190,
+      "resultVerts": 1058,
+      "relativeError": 0.02467,
+      "absoluteErrorM": 0.00876
+    },
+    "unwrap": {
+      "initialCharts": 379,
+      "charts": 136,
+      "mergedSmallCharts": 243,
+      "texelsPerMetreBase": 467.3,
+      "uvAreaFill": 0.59,
+      "uvMirroredFaces": 0,
+      "coneDeg": 66,
+      "validDot": 0.15,
+      "minChartFaces": 40,
+      "smoothIters": 12,
+      "padTexels": 4,
+      "packAtlas": 512
+    },
+    "bake": {
+      "texels": 614467,
+      "coverage": 0.586,
+      "missed": 0,
+      "farOver1cm": 0,
+      "distMedianMm": 1.65,
+      "distP99Mm": 5.61,
+      "cageRayHits": 325589,
+      "cageM": 0.006,
+      "rayBelowM": 0.002,
+      "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
+      "gridCells": [
+        35,
+        26,
+        37
+      ],
+      "workers": 32
+    },
+    "textures": {
+      "baseColor": 512,
+      "metallicRoughness": 128,
+      "jpegQuality": 88
+    }
+  },
+  "perBody": {
+    "lastshift": {
+      "node": "Outfit_hardhat__lastshift",
+      "kind": "rigid",
+      "fit": {
+        "head": {
+          "topM": 1.7793,
+          "craniumWidthM": 0.2116,
+          "centre": [
+            -0.0121,
+            -0.0691
+          ],
+          "noseY": 1.6247,
+          "chinY": 1.5463,
+          "cheekWidthM": 0.1261
+        },
+        "itemWidthM": 0.2538,
+        "solve": {
+          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
+          "thicknessM": 0.012,
+          "contactCells": 4556,
+          "gapM": 0,
+          "eyeClearLiftM": 0.0882,
+          "rimBelowHeadTopM": 0.1097
+        },
+        "bulkHeadM": 0.0127,
+        "method": "uniform scale: item width at 0.45 of its height = 0.235 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
+        "transform": {
+          "scale": 0.89571,
+          "translate": [
+            -0.01199,
+            1.66728,
+            -0.06084
+          ]
+        }
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0127
+      },
+      "hiddenBodyTriangles": 283,
+      "hiddenFraction": 0.019,
+      "mask": {
+        "hidden": 283,
+        "total": 14912,
+        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 2190,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Attack": 14,
+          "Death": 4,
+          "Walk": 2,
+          "Idle": 8
+        },
+        "poses": 85
+      }
+    },
+    "courier": {
+      "node": "Outfit_hardhat__courier",
+      "kind": "rigid",
+      "fit": {
+        "head": {
+          "topM": 1.8,
+          "craniumWidthM": 0.1651,
+          "centre": [
+            -0.0044,
+            0.0321
+          ],
+          "noseY": 1.6233,
+          "chinY": 1.5509,
+          "cheekWidthM": 0.0926
+        },
+        "itemWidthM": 0.2316,
+        "solve": {
+          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
+          "thicknessM": 0.012,
+          "contactCells": 3796,
+          "gapM": 0,
+          "eyeClearLiftM": 0.0458,
+          "rimBelowHeadTopM": 0.1317
+        },
+        "bulkHeadM": 0.0199,
+        "method": "uniform scale: item width at 0.45 of its height = 0.235 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
+        "transform": {
+          "scale": 0.81744,
+          "translate": [
+            -0.00428,
+            1.6661,
+            0.03955
+          ]
+        }
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0199
+      },
+      "hiddenBodyTriangles": 351,
+      "hiddenFraction": 0.0235,
+      "mask": {
+        "hidden": 351,
+        "total": 14956,
+        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 2190,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Walk": 4,
+          "Attack": 9,
+          "Death": 6,
+          "Run": 2,
+          "Idle": 2,
+          "Hit": 2
+        },
+        "poses": 85
+      }
+    },
+    "agent": {
+      "node": "Outfit_hardhat__agent",
+      "kind": "rigid",
+      "fit": {
+        "head": {
+          "topM": 1.6506,
+          "craniumWidthM": 0.2232,
+          "centre": [
+            -0.0069,
+            0.0929
+          ],
+          "noseY": 1.4807,
+          "chinY": 1.4084,
+          "cheekWidthM": 0.0871
+        },
+        "itemWidthM": 0.2538,
+        "solve": {
+          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
+          "thicknessM": 0.012,
+          "contactCells": 4556,
+          "gapM": 0,
+          "eyeClearLiftM": 0.0664,
+          "rimBelowHeadTopM": 0.1249
+        },
+        "bulkHeadM": 0.0092,
+        "method": "uniform scale: item width at 0.45 of its height = 0.235 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
+        "transform": {
+          "scale": 0.89571,
+          "translate": [
+            -0.00679,
+            1.5233,
+            0.10109
+          ]
+        }
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0092
+      },
+      "hiddenBodyTriangles": 473,
+      "hiddenFraction": 0.0316,
+      "mask": {
+        "hidden": 473,
+        "total": 14972,
+        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 2190,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Idle": 4,
+          "Attack": 9,
+          "Death": 4,
+          "Hit": 8
+        },
+        "poses": 85
+      }
+    },
+    "heavyset": {
+      "node": "Outfit_hardhat__heavyset",
+      "kind": "rigid",
+      "fit": {
+        "head": {
+          "topM": 1.7803,
+          "craniumWidthM": 0.1766,
+          "centre": [
+            -0.0062,
+            0.0057
+          ],
+          "noseY": 1.6135,
+          "chinY": 1.5235,
+          "cheekWidthM": 0.1348
+        },
+        "itemWidthM": 0.2395,
+        "solve": {
+          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
+          "thicknessM": 0.012,
+          "contactCells": 4060,
+          "gapM": 0,
+          "eyeClearLiftM": 0.0658,
+          "rimBelowHeadTopM": 0.1218
+        },
+        "bulkHeadM": 0.0189,
+        "method": "uniform scale: item width at 0.45 of its height = 0.235 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
+        "transform": {
+          "scale": 0.84521,
+          "translate": [
+            -0.00611,
+            1.65623,
+            0.01343
+          ]
+        }
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0189
+      },
+      "hiddenBodyTriangles": 291,
+      "hiddenFraction": 0.0194,
+      "mask": {
+        "hidden": 291,
+        "total": 14962,
+        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 2190,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Idle": 12,
+          "Death": 7,
+          "Attack": 2,
+          "Walk": 2
+        },
+        "poses": 85
+      }
+    },
+    "tall": {
+      "node": "Outfit_hardhat__tall",
+      "kind": "rigid",
+      "fit": {
+        "head": {
+          "topM": 1.7503,
+          "craniumWidthM": 0.1974,
+          "centre": [
+            -0.0009,
+            -0.0167
+          ],
+          "noseY": 1.5677,
+          "chinY": 1.4942,
+          "cheekWidthM": 0.1119
+        },
+        "itemWidthM": 0.2533,
+        "solve": {
+          "mode": "drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes",
+          "thicknessM": 0.012,
+          "contactCells": 4548,
+          "gapM": 0,
+          "eyeClearLiftM": 0.0574,
+          "rimBelowHeadTopM": 0.1376
+        },
+        "bulkHeadM": 0.0167,
+        "method": "uniform scale: item width at 0.45 of its height = 0.235 m x sqrt(cranium width / 0.17) (clamped +-8%); drop onto head height field (2 mm cells): item top surface - shell thickness rests on the head; lifted if the front rim would cover the eyes; 100% Head weights (rigid)",
+        "transform": {
+          "scale": 0.89379,
+          "translate": [
+            -0.00074,
+            1.61033,
+            -0.00855
+          ]
+        }
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0167
+      },
+      "hiddenBodyTriangles": 503,
+      "hiddenFraction": 0.0336,
+      "mask": {
+        "hidden": 503,
+        "total": 14960,
+        "method": "normal + 4 rays tilted 22 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.06 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 2190,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Idle": 10,
+          "Attack": 12,
+          "Death": 4
+        },
+        "poses": 85
+      }
+    }
+  },
+  "limitations": [
+    "Rigid item: follows the Head bone exactly; no strap/brim flex.",
+    "Placement by a rigid contact solve on a 2 mm height/depth field; hair is allowed to compress slightly under hats and is hidden where enclosed.",
+    "Body triangles fully enclosed by the item in the bind pose are hidden per body; in motion small gaps can reveal the underlying body or base clothing.",
+    "Hidden-side geometry of the source is AI-hallucinated.",
+    "Unapproved prototype; gameReady false."
+  ]
+}

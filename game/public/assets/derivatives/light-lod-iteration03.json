@@ -1,0 +1,30 @@
+{
+  "schema": "last-line-derivative/1",
+  "asset": "light-lod",
+  "task": "studio-slice-iteration03-20261026",
+  "status": "prototype; unapproved; gameReady false",
+  "source": {
+    "file": "assets/models/light.glb",
+    "sha256": "368f668b399e55fad5cd0c9321151263e8f0b88dcfb5c54d6df2eb4c369c2e22",
+    "note": "existing iteration-01 runtime derivative of the generated ceiling light; source file unchanged"
+  },
+  "output": {
+    "file": "assets/models/light-lod.glb",
+    "sha256": "1bf7cd4e5c359d9494a853548c8df53fb3375b78be3fc64446f40e15e064336f",
+    "bytes": 670520,
+    "triangles": 670
+  },
+  "steps": [
+    {
+      "step": "simplifySloppy (positions only, original vertex attributes kept) + prune",
+      "tool": "meshoptimizer MeshoptSimplifier.simplifySloppy + @gltf-transform/functions prune",
+      "options": {
+        "ratio": 0.25,
+        "error": 0.06
+      },
+      "trianglesBefore": 2992,
+      "trianglesAfter": 670
+    }
+  ],
+  "why": "The iteration-03 station places ~250-300 instanced ceiling fixtures; 2,992 tris each was ~0.85M triangles per frame."
+}

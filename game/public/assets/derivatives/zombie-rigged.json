@@ -1,0 +1,1720 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "zombie-rigged",
+  "title": "Last-shift zombie - rigged runtime derivative (prototype)",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative for the vertical slice; art/anatomy/deformation not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; masters are AI reconstructions of AI-generated concept images"
+  },
+  "authoredOn": "2026-10-25",
+  "honesty": {
+    "mastersHadSkeleton": false,
+    "rig": "NEW derivative skeleton and automatic skin weights created by this pipeline; the masters were static, unrigged AI reconstructions",
+    "animation": "hand-authored procedural keyframes (periodic gait functions, eased keyframes, analytic 2-bone leg IK) - NOT motion capture",
+    "generation": "no AI generation, inference, model download or network service was used to build this derivative"
+  },
+  "outputs": {
+    "glb": {
+      "path": "game/public/assets/models/zombie-rigged.glb",
+      "bytes": 1938556,
+      "sha256": "a4e58b99847d0e3a1f06731bedb2d48dcfe4f6418617d00bf3e0522a30d97606",
+      "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures"
+    },
+    "manifest": "game/public/assets/derivatives/zombie-rigged.json",
+    "rebuild": "node tools/asset-pipeline/zombie/build-zombie.mjs && node tools/asset-pipeline/zombie/qa/render-qa.mjs"
+  },
+  "conventions": {
+    "units": "metres",
+    "up": "+Y",
+    "facing": "+Z (masters faced -Z and were rotated 180 deg about Y)",
+    "floor": "y = 0, feet on the floor",
+    "origin": "midpoint between the feet (bbox centres of the soles)",
+    "handedness": "L_ = character left = +X when facing +Z",
+    "heightM": 1.78,
+    "bindPose": "A-pose (upper arms ~34 deg, forearms ~39 deg from vertical)"
+  },
+  "sources": {
+    "body": {
+      "id": "zombie-body-03",
+      "uploadId": "269b8a208b034b7d8887f44dcdf12f2f",
+      "packagePath": "public/vision-board/models/269b8a208b034b7d8887f44dcdf12f2f.glb",
+      "sha256Expected": "4183d7a74a8088074541e5062728642c9b6b4cfe71bf981f39ec6d106d2ccf7c",
+      "sha256Verified": "4183d7a74a8088074541e5062728642c9b6b4cfe71bf981f39ec6d106d2ccf7c",
+      "bytes": 79829908,
+      "triangles": 925572,
+      "vertices": 701123,
+      "textures": {
+        "baseColor": [
+          4096,
+          4096,
+          "image/png"
+        ],
+        "metallicRoughness": [
+          4096,
+          4096,
+          "image/png"
+        ]
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "baseColorFactor": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "provenance": {
+        "title": "Last-shift body",
+        "conceptImage": "assets/core-assets/round-03/zombie-body-03.png",
+        "conceptImageSha256": "edaba4307b761828e08869d5531315fda9db18205c4bf93b25c7a3437b066ca8",
+        "conceptGenerator": "Native Codex/ChatGPT image_gen.imagegen",
+        "conceptGeneratorModel": "unknown; not reported",
+        "reconstruction": {
+          "nativeJob": "20261019T221355Z-09eb8435b7e34a6188f4a6a164a2c4af",
+          "steps": 24,
+          "seed": 42,
+          "resolution": 1024,
+          "sourceImageSha256": "edaba4307b761828e08869d5531315fda9db18205c4bf93b25c7a3437b066ca8",
+          "manifestSha256": "42bea4779543d611e7a94575010e59597e88493ab13ef15036d991ae7125e2ce"
+        },
+        "catalogStatus": {
+          "unrigged": true,
+          "gameReady": false
+        },
+        "catalogFile": "public/vision-board/core-assets.json (read-only)"
+      },
+      "placement": {
+        "scale": 1.997276,
+        "pivotNative": [
+          -0.00219,
+          -0.43889,
+          -0.02372
+        ],
+        "rotateYDeg": 180,
+        "note": "native masters face -Z (boot toes and pale face on -Z, hair on +Z); rotated 180deg about Y; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+      }
+    },
+    "coat": {
+      "id": "zombie-coat-03",
+      "uploadId": "0429b64701a740bab039f492351b01cd",
+      "packagePath": "public/vision-board/models/0429b64701a740bab039f492351b01cd.glb",
+      "sha256Expected": "22c2a696972c75ac2e6b7f4d815d416f8a7e3da46124635c436374bb80cc6a84",
+      "sha256Verified": "22c2a696972c75ac2e6b7f4d815d416f8a7e3da46124635c436374bb80cc6a84",
+      "bytes": 81583080,
+      "triangles": 988416,
+      "vertices": 773731,
+      "textures": {
+        "baseColor": [
+          4096,
+          4096,
+          "image/png"
+        ],
+        "metallicRoughness": [
+          4096,
+          4096,
+          "image/png"
+        ]
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "baseColorFactor": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "provenance": {
+        "title": "Last-shift coat",
+        "conceptImage": "assets/core-assets/round-03/zombie-coat-03.png",
+        "conceptImageSha256": "0e23758409c2dd9041d0819c00894240da3e7f221ad0a25ea234c9f4a12f0a36",
+        "conceptGenerator": "Native Codex/ChatGPT image_gen.imagegen",
+        "conceptGeneratorModel": "unknown; not reported",
+        "reconstruction": {
+          "nativeJob": "20261019T221902Z-eed17eaf89a34d3daf8bff1d4521c0bb",
+          "steps": 24,
+          "seed": 42,
+          "resolution": 1024,
+          "sourceImageSha256": "0e23758409c2dd9041d0819c00894240da3e7f221ad0a25ea234c9f4a12f0a36",
+          "manifestSha256": "42bea4779543d611e7a94575010e59597e88493ab13ef15036d991ae7125e2ce"
+        },
+        "catalogStatus": {
+          "unrigged": true,
+          "gameReady": false
+        },
+        "catalogFile": "public/vision-board/core-assets.json (read-only)"
+      }
+    }
+  },
+  "meshes": {
+    "ZombieBody": {
+      "node": "ZombieBody",
+      "skinned": true,
+      "vertices": 13161,
+      "triangles": 16918,
+      "material": "ZombieBodyMaterial",
+      "doubleSided": false,
+      "baseColor": {
+        "size": [
+          1024,
+          1024
+        ],
+        "mimeType": "image/jpeg",
+        "jpegQuality": 92,
+        "bytes": 178680
+      },
+      "metallicRoughness": {
+        "size": [
+          512,
+          512
+        ],
+        "mimeType": "image/jpeg",
+        "channels": "G roughness, B metalness (~0), R unused",
+        "bytes": 77439
+      }
+    },
+    "ZombieCoat": {
+      "node": "ZombieCoat",
+      "skinned": true,
+      "vertices": 8409,
+      "triangles": 10408,
+      "material": "ZombieCoatMaterial",
+      "doubleSided": false,
+      "baseColor": {
+        "size": [
+          1024,
+          1024
+        ],
+        "mimeType": "image/jpeg",
+        "jpegQuality": 92,
+        "bytes": 208394
+      },
+      "metallicRoughness": {
+        "size": [
+          512,
+          512
+        ],
+        "mimeType": "image/jpeg",
+        "channels": "G roughness, B metalness (~0), R unused",
+        "bytes": 4200
+      },
+      "hideForUncoatedVariant": true
+    },
+    "sharedSkin": "both SkinnedMesh nodes reference the single skin \"ZombieSkin\" (same 18 joints)"
+  },
+  "skeleton": {
+    "jointCount": 18,
+    "joints": [
+      {
+        "index": 0,
+        "name": "Root",
+        "parent": null,
+        "bindWorldPosition": [
+          0,
+          0,
+          0
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 1,
+        "name": "Hips",
+        "parent": "Root",
+        "bindWorldPosition": [
+          0,
+          0.8722,
+          -0.0742
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 2,
+        "name": "Spine",
+        "parent": "Hips",
+        "bindWorldPosition": [
+          0,
+          1.065,
+          -0.0892
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 3,
+        "name": "Chest",
+        "parent": "Spine",
+        "bindWorldPosition": [
+          0,
+          1.2964,
+          -0.1146
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 4,
+        "name": "Neck",
+        "parent": "Chest",
+        "bindWorldPosition": [
+          0,
+          1.515,
+          -0.0735
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 5,
+        "name": "Head",
+        "parent": "Neck",
+        "bindWorldPosition": [
+          0,
+          1.621,
+          -0.0635
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 6,
+        "name": "L_UpperArm",
+        "parent": "Chest",
+        "bindWorldPosition": [
+          0.1797,
+          1.4254,
+          -0.1214
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 7,
+        "name": "L_Forearm",
+        "parent": "L_UpperArm",
+        "bindWorldPosition": [
+          0.3168,
+          1.2218,
+          -0.1133
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 8,
+        "name": "L_Hand",
+        "parent": "L_Forearm",
+        "bindWorldPosition": [
+          0.4547,
+          1.0688,
+          -0.0841
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 9,
+        "name": "R_UpperArm",
+        "parent": "Chest",
+        "bindWorldPosition": [
+          -0.1797,
+          1.4254,
+          -0.1214
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 10,
+        "name": "R_Forearm",
+        "parent": "R_UpperArm",
+        "bindWorldPosition": [
+          -0.3168,
+          1.2218,
+          -0.1133
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 11,
+        "name": "R_Hand",
+        "parent": "R_Forearm",
+        "bindWorldPosition": [
+          -0.4547,
+          1.0688,
+          -0.0841
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 12,
+        "name": "L_Thigh",
+        "parent": "Hips",
+        "bindWorldPosition": [
+          0.1031,
+          0.8722,
+          -0.0742
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 13,
+        "name": "L_Shin",
+        "parent": "L_Thigh",
+        "bindWorldPosition": [
+          0.1561,
+          0.4936,
+          -0.0868
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 14,
+        "name": "L_Foot",
+        "parent": "L_Shin",
+        "bindWorldPosition": [
+          0.1818,
+          0.115,
+          -0.0767
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 15,
+        "name": "R_Thigh",
+        "parent": "Hips",
+        "bindWorldPosition": [
+          -0.1031,
+          0.8722,
+          -0.0742
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 16,
+        "name": "R_Shin",
+        "parent": "R_Thigh",
+        "bindWorldPosition": [
+          -0.1561,
+          0.4936,
+          -0.0868
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "index": 17,
+        "name": "R_Foot",
+        "parent": "R_Shin",
+        "bindWorldPosition": [
+          -0.1818,
+          0.115,
+          -0.0767
+        ],
+        "bindLocalRotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    ],
+    "root": "Root (origin, floor)",
+    "inverseBindMatrices": "pure translations (all bind rotations identity: joint frames are world-aligned)",
+    "ends": {
+      "Head": [
+        0,
+        1.78,
+        -0.0635
+      ],
+      "L_Hand": [
+        0.6021,
+        0.8635,
+        -0.0574
+      ],
+      "R_Hand": [
+        -0.6021,
+        0.8635,
+        -0.0574
+      ],
+      "L_Foot": [
+        0.2136,
+        0.03,
+        0.1521
+      ],
+      "R_Foot": [
+        -0.2136,
+        0.03,
+        0.1521
+      ]
+    },
+    "estimation": {
+      "feet": {
+        "L": [
+          0.2136,
+          0,
+          0.0008
+        ],
+        "R": [
+          -0.2136,
+          0,
+          -0.0008
+        ],
+        "toeZ": 0.1725,
+        "shinDepth": 0.1508,
+        "ankleTransitionY": 0.13,
+        "ankleY": 0.115,
+        "method": "boot depth widens >1.3x shin depth below ankle; joint 1.5 cm under transition"
+      },
+      "arm_L": {
+        "armpitY": 1.245,
+        "forearmAxisDir": [
+          0.6153,
+          -0.7752,
+          0.1431
+        ],
+        "forearmAngleFromVerticalDeg": 39.2,
+        "wristT": 0.11,
+        "wristRadius": 0.0379,
+        "tipT": 0.369,
+        "acromion": [
+          0.19,
+          1.4769
+        ],
+        "shoulderSlabZ": [
+          -0.208,
+          -0.042
+        ],
+        "upperArmAngleFromVerticalDeg": 34.6,
+        "method": "arm = slice clusters separated from torso; forearm PCA axis; wrist = min radius 11-27 cm from tip; shoulder from acromion (top-surface slope over 4 cm < -0.8 after the trapezius plateau) -5 cm/-2 cm medial, slab-centred in z; elbow 54% shoulder->wrist centred in limb section"
+      },
+      "arm_R": {
+        "armpitY": 1.255,
+        "forearmAxisDir": [
+          -0.6077,
+          -0.7849,
+          0.1207
+        ],
+        "forearmAngleFromVerticalDeg": 38.3,
+        "wristT": 0.11,
+        "wristRadius": 0.0365,
+        "tipT": 0.372,
+        "acromion": [
+          -0.21,
+          1.4739
+        ],
+        "shoulderSlabZ": [
+          -0.198,
+          -0.038
+        ],
+        "upperArmAngleFromVerticalDeg": 33.4,
+        "method": "arm = slice clusters separated from torso; forearm PCA axis; wrist = min radius 11-27 cm from tip; shoulder from acromion (top-surface slope over 4 cm < -0.8 after the trapezius plateau) -5 cm/-2 cm medial, slab-centred in z; elbow 54% shoulder->wrist centred in limb section"
+      },
+      "neck": {
+        "neckMinY": 1.545,
+        "neckWidth": 0.1194,
+        "neckBaseY": 1.515,
+        "headTop": 1.78,
+        "headPivotY": 1.621,
+        "method": "narrowest slice above shoulders; base where width >1.9x neck; head pivot at 40% base->top"
+      },
+      "legs": {
+        "crotchY": 0.75,
+        "hipY": 0.872,
+        "thighCentreX": [
+          0.1225,
+          -0.1352
+        ],
+        "method": "crotch = lowest merge of leg clusters; hip height = 0.49H clamped to crotch+[0.06,0.18]; hip x = 0.8 x thigh centre 4 cm below crotch; knee at 50% ankle->hip, centred in leg section; ankle centred in shin section"
+      },
+      "rawPaired": {
+        "armpitPt": {
+          "L": [
+            0.1599,
+            1.245,
+            -0.1251
+          ],
+          "R": [
+            -0.1728,
+            1.255,
+            -0.1177
+          ]
+        },
+        "acromionPt": {
+          "L": [
+            0.1897,
+            1.4769,
+            -0.1251
+          ],
+          "R": [
+            -0.2097,
+            1.4739,
+            -0.1177
+          ]
+        },
+        "shoulder": {
+          "L": [
+            0.1697,
+            1.4269,
+            -0.1251
+          ],
+          "R": [
+            -0.1897,
+            1.4239,
+            -0.1177
+          ]
+        },
+        "elbow": {
+          "L": [
+            0.3111,
+            1.2213,
+            -0.1151
+          ],
+          "R": [
+            -0.3225,
+            1.2224,
+            -0.1115
+          ]
+        },
+        "wrist": {
+          "L": [
+            0.453,
+            1.0673,
+            -0.084
+          ],
+          "R": [
+            -0.4565,
+            1.0703,
+            -0.0843
+          ]
+        },
+        "handTip": {
+          "L": [
+            0.6001,
+            0.8636,
+            -0.0541
+          ],
+          "R": [
+            -0.6041,
+            0.8633,
+            -0.0607
+          ]
+        },
+        "hip": {
+          "L": [
+            0.098,
+            0.8722,
+            -0.0742
+          ],
+          "R": [
+            -0.1081,
+            0.8722,
+            -0.0742
+          ]
+        },
+        "knee": {
+          "L": [
+            0.1532,
+            0.4936,
+            -0.0879
+          ],
+          "R": [
+            -0.159,
+            0.4936,
+            -0.0857
+          ]
+        },
+        "ankle": {
+          "L": [
+            0.181,
+            0.115,
+            -0.0751
+          ],
+          "R": [
+            -0.1827,
+            0.115,
+            -0.0784
+          ]
+        },
+        "toe": {
+          "L": [
+            0.2136,
+            0.03,
+            0.1525
+          ],
+          "R": [
+            -0.2136,
+            0.03,
+            0.1518
+          ]
+        }
+      },
+      "shoulderCutPlanes": {
+        "L": {
+          "A": [
+            0.1664,
+            1.25,
+            -0.1214
+          ],
+          "T": [
+            0.1997,
+            1.4754,
+            -0.1214
+          ]
+        },
+        "R": {
+          "A": [
+            -0.1664,
+            1.25,
+            -0.1214
+          ],
+          "T": [
+            -0.1997,
+            1.4754,
+            -0.1214
+          ]
+        },
+        "method": "plane through armpit wall point A and acromion T, containing the front-back axis"
+      }
+    },
+    "symmetrized": "paired joints averaged left/right (raw per-side values in estimation.rawPaired)"
+  },
+  "skinning": {
+    "influencesPerVertex": 4,
+    "weightsNormalized": true,
+    "jointsAccessor": "UNSIGNED_SHORT",
+    "weightsAccessor": "FLOAT",
+    "body": {
+      "method": "region classification (arm flood fill behind armpit-acromion cut plane + torso-wall guard; legs below crotch by side) -> chain-parameterised weights with joint blends (tilted neck/head boundary) -> masked Laplacian smoothing -> top-4",
+      "regionVertexCounts": {
+        "armR": 743,
+        "torso": 5256,
+        "legR": 973,
+        "legL": 962,
+        "armL": 379
+      },
+      "armVerticesAdoptedOutsideFlood": {
+        "L": 0,
+        "R": 0
+      },
+      "verticesWithMoreThan4Truncated": 0,
+      "smoothIters": 4,
+      "smoothLambda": 0.5
+    },
+    "coat": {
+      "fitSkeletonWeights": {
+        "regionVertexCounts": {
+          "armR": 495,
+          "torso": 3938,
+          "armL": 522
+        },
+        "armVerticesAdoptedOutsideFlood": {
+          "L": 9,
+          "R": 4
+        },
+        "verticesWithMoreThan4Truncated": 0,
+        "smoothIters": 4,
+        "smoothLambda": 0.5
+      },
+      "final": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing",
+        "maxDistToBodyM": 0.1684,
+        "verticesFartherThan10cm": 98,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      }
+    }
+  },
+  "pipeline": {
+    "order": [
+      "verify master sha256",
+      "place in game space (scale, 180 deg Y, feet origin)",
+      "weld exact-position duplicates",
+      "detect skeleton from horizontal cross-sections",
+      "meshoptimizer simplifyWithUpdate (position quadric, Prune+Regularize, head/hands importance attribute)",
+      "new UV unwrap (smoothed-normal cone charts, planar projection, horizon packing)",
+      "bake base colour + metallicRoughness from the master (closest facing point + cage ray, 32 worker threads) at 2048, push-pull gutter fill, Lanczos downsample, JPEG",
+      "coat: global per-axis fit -> same mesh/bake path -> back-drape taper -> sleeve retarget onto body arm bones -> bind-pose push-out -> weight transfer from body",
+      "skin weights",
+      "procedural clips (FK/IK) sampled at 30 fps",
+      "CPU skinning floor verification",
+      "write GLB (gltf-transform)"
+    ],
+    "seamPreservingSimplifyRejected": {
+      "reason": "the AI atlases have thousands of tiny charts (~35% of vertices are UV-seam duplicates): seam-preserving simplification stalled at 98,728 tris (body) / 135,994 (coat) for a 15k target; meshopt Permissive reached the target but collapses across seams and would smear texture. So geometry is simplified position-only and textures are re-baked onto a fresh UV layout (no smearing).",
+      "measuredDuringDevelopment": {
+        "bodySeamLocked": 98728,
+        "coatSeamLocked": 135994,
+        "bodyPermissive": 14778,
+        "coatPermissive": 14616
+      }
+    },
+    "normalAttributeWeight": "comparison at 16k tris (body): normal weight 0 -> 396 folded faces / 5 slivers; 0.35 -> 984 / 108. Position-only error kept.",
+    "body": {
+      "options": {
+        "targetTris": 17000,
+        "importance": {
+          "head": 100,
+          "hands": 40,
+          "note": "extra simplifier attribute = position * k; head ~2x triangles (3.2k vs 1.6k at k=0)"
+        },
+        "unwrap": {
+          "coneDeg": 66,
+          "validDot": 0.15,
+          "minChartFaces": 80,
+          "smoothIters": 12,
+          "atlas": 1024,
+          "pad": 6
+        },
+        "density": {
+          "head": 1.8,
+          "hands": 1.3
+        },
+        "bake": {
+          "size": 2048,
+          "cage": 0.015,
+          "rayBelow": 0.004
+        },
+        "textures": {
+          "baseColor": 1024,
+          "metallicRoughness": 512,
+          "jpegQuality": 92
+        }
+      },
+      "simplify": {
+        "targetTris": 17000,
+        "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
+        "importanceWeighted": true,
+        "flags": [
+          "Prune",
+          "Regularize"
+        ],
+        "resultTris": 16918,
+        "resultVerts": 8313,
+        "relativeError": 0.00517,
+        "absoluteErrorM": 0.0092
+      },
+      "unwrap": {
+        "initialCharts": 1557,
+        "charts": 667,
+        "mergedSmallCharts": 890,
+        "texelsPerMetreBase": 348.9,
+        "uvAreaFill": 0.501,
+        "uvMirroredFaces": 0,
+        "coneDeg": 66,
+        "validDot": 0.15,
+        "minChartFaces": 80,
+        "smoothIters": 12,
+        "padTexels": 6,
+        "packAtlas": 1024
+      },
+      "bake": {
+        "texels": 2068442,
+        "coverage": 0.493,
+        "missed": 0,
+        "farOver1cm": 29015,
+        "distMedianMm": 0.82,
+        "distP99Mm": 11.06,
+        "cageRayHits": 462433,
+        "cageM": 0.015,
+        "rayBelowM": 0.004,
+        "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
+        "gridCells": [
+          131,
+          179,
+          42
+        ],
+        "workers": 32
+      },
+      "outVertices": 13161
+    },
+    "coat": {
+      "options": {
+        "targetTris": 10500,
+        "unwrap": {
+          "coneDeg": 66,
+          "validDot": 0.15,
+          "minChartFaces": 80,
+          "smoothIters": 12,
+          "atlas": 1024,
+          "pad": 6
+        },
+        "bake": {
+          "size": 2048,
+          "cage": 0.012,
+          "rayBelow": 0.004
+        },
+        "textures": {
+          "baseColor": 1024,
+          "metallicRoughness": 512,
+          "jpegQuality": 92
+        },
+        "thighFollow": 0.45,
+        "pushOut": {
+          "margin": 0.012,
+          "radius": 0.06,
+          "rounds": 8,
+          "smoothIters": 6
+        },
+        "backTaper": {
+          "hemFactor": 0.3,
+          "fullAboveY": 1.25,
+          "clearance": 0.015,
+          "fullTaperBelowY": "hipY"
+        }
+      },
+      "simplify": {
+        "targetTris": 10500,
+        "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
+        "importanceWeighted": false,
+        "flags": [
+          "Prune",
+          "Regularize"
+        ],
+        "resultTris": 10408,
+        "resultVerts": 4955,
+        "relativeError": 0.00781,
+        "absoluteErrorM": 0.00939
+      },
+      "unwrap": {
+        "initialCharts": 1719,
+        "charts": 591,
+        "mergedSmallCharts": 1128,
+        "texelsPerMetreBase": 395.5,
+        "uvAreaFill": 0.516,
+        "uvMirroredFaces": 0,
+        "coneDeg": 66,
+        "validDot": 0.15,
+        "minChartFaces": 80,
+        "smoothIters": 12,
+        "padTexels": 6,
+        "packAtlas": 1024
+      },
+      "bake": {
+        "texels": 2073681,
+        "coverage": 0.494,
+        "missed": 0,
+        "farOver1cm": 21696,
+        "distMedianMm": 1.19,
+        "distP99Mm": 10.08,
+        "cageRayHits": 660585,
+        "cageM": 0.012,
+        "rayBelowM": 0.004,
+        "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
+        "gridCells": [
+          102,
+          122,
+          58
+        ],
+        "workers": 32
+      },
+      "outVertices": 8409,
+      "globalFit": {
+        "nominal": {
+          "scale": 1.408168,
+          "pivot": [
+            -0.0011,
+            -0.4123,
+            -0.0139
+          ],
+          "flipFacing": true
+        },
+        "scale": [
+          0.8015,
+          1.0019,
+          0.8637
+        ],
+        "translate": [
+          -0.0003,
+          0.4586,
+          -0.0501
+        ],
+        "landmarks": {
+          "coatArmpitNominal": 0.75,
+          "coatHemNominal": 0,
+          "coatTopNominal": 1.2,
+          "bodyArmpit": 1.245,
+          "armpitTarget": 1.21,
+          "hemTarget": 0.4586,
+          "level": {
+            "coatNominalY": 0.69,
+            "bodyY": 1.1499,
+            "coatWidth": 0.5178,
+            "coatDepth": 0.4133,
+            "bodyWidth": 0.3134,
+            "bodyDepth": 0.287
+          }
+        },
+        "method": "per-axis scale+translate: coat armpit -> body armpit - 3.5 cm, hem -> knee joint - 3.5 cm; width = 1.18 x body + 2 cm, depth = body + 7 cm (clamped to 0.8-1.0 / 0.7-1.0 of vertical scale); centred on the body chest"
+      },
+      "backTaper": {
+        "hemFactor": 0.3,
+        "fullAboveY": 1.25,
+        "clearance": 0.015,
+        "fullTaperBelowY": "hipY",
+        "verticesTapered": 900
+      },
+      "sleeveRetarget": {
+        "L": {
+          "fitElbowOffsetFromBodyElbow": [
+            0.0035,
+            0.0003,
+            -0.0035
+          ],
+          "fitShoulder": [
+            0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "fitElbow": [
+            0.3203,
+            1.2221,
+            -0.1168
+          ],
+          "fitWrist": [
+            0.4497,
+            1.0132,
+            0.0018
+          ],
+          "bodyShoulder": [
+            0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "bodyElbow": [
+            0.3168,
+            1.2218,
+            -0.1133
+          ],
+          "bodyWristTarget": [
+            0.468,
+            1.0541,
+            -0.0813
+          ],
+          "cuff": [
+            0.4565,
+            1.001,
+            0.0074
+          ],
+          "sleeveAxis": [
+            0.4544,
+            -0.8081,
+            0.3748
+          ],
+          "coatArmpit": [
+            0.2,
+            1.2136,
+            -0.1214
+          ],
+          "upperArmScale": 0.9934,
+          "forearmScale": 0.8358
+        },
+        "R": {
+          "fitElbowOffsetFromBodyElbow": [
+            -0.0013,
+            0.0031,
+            0.005
+          ],
+          "fitShoulder": [
+            -0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "fitElbow": [
+            -0.3181,
+            1.2249,
+            -0.1083
+          ],
+          "fitWrist": [
+            -0.4505,
+            1.0123,
+            0.0116
+          ],
+          "bodyShoulder": [
+            -0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "bodyElbow": [
+            -0.3168,
+            1.2218,
+            -0.1133
+          ],
+          "bodyWristTarget": [
+            -0.468,
+            1.0541,
+            -0.0813
+          ],
+          "cuff": [
+            -0.4574,
+            1.0002,
+            0.0173
+          ],
+          "sleeveAxis": [
+            -0.4562,
+            -0.8056,
+            0.3782
+          ],
+          "coatArmpit": [
+            -0.2049,
+            1.1836,
+            -0.1214
+          ],
+          "upperArmScale": 1.0066,
+          "forearmScale": 0.8213
+        }
+      },
+      "fitSkeleton": {
+        "Root": [
+          0,
+          0,
+          0
+        ],
+        "Hips": [
+          0,
+          0.8722,
+          -0.0742
+        ],
+        "Spine": [
+          0,
+          1.065,
+          -0.0892
+        ],
+        "Chest": [
+          0,
+          1.2964,
+          -0.1146
+        ],
+        "Neck": [
+          0,
+          1.515,
+          -0.0735
+        ],
+        "Head": [
+          0,
+          1.621,
+          -0.0635
+        ],
+        "L_UpperArm": [
+          0.1797,
+          1.4254,
+          -0.1214
+        ],
+        "L_Forearm": [
+          0.3203,
+          1.2221,
+          -0.1168
+        ],
+        "L_Hand": [
+          0.4497,
+          1.0132,
+          0.0018
+        ],
+        "R_UpperArm": [
+          -0.1797,
+          1.4254,
+          -0.1214
+        ],
+        "R_Forearm": [
+          -0.3181,
+          1.2249,
+          -0.1083
+        ],
+        "R_Hand": [
+          -0.4505,
+          1.0123,
+          0.0116
+        ],
+        "L_Thigh": [
+          0.1031,
+          0.8722,
+          -0.0742
+        ],
+        "L_Shin": [
+          0.1561,
+          0.4936,
+          -0.0868
+        ],
+        "L_Foot": [
+          0.1818,
+          0.115,
+          -0.0767
+        ],
+        "R_Thigh": [
+          -0.1031,
+          0.8722,
+          -0.0742
+        ],
+        "R_Shin": [
+          -0.1561,
+          0.4936,
+          -0.0868
+        ],
+        "R_Foot": [
+          -0.1818,
+          0.115,
+          -0.0767
+        ]
+      },
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 302,
+        "verticesMoved": 4058,
+        "maxDisplacementM": 0.0955,
+        "lastRoundViolations": 330,
+        "rounds": 8,
+        "smoothIters": 6
+      }
+    },
+    "textureResolutionJustification": "1024^2 base colour per mesh: the head/face charts get 1.8x texel density (~628 texels/m on the face vs 349 elsewhere), which keeps the gaunt face readable in close-up renders; 2048 was not needed. MR 512^2 (coat roughness is near-constant in the master, body varies)."
+  },
+  "clips": [
+    {
+      "name": "Idle",
+      "durationS": 3,
+      "loop": true,
+      "fps": 30,
+      "keyframes": 91,
+      "rotationTracks": 17,
+      "hipsTranslationTrack": true,
+      "rootMotion": false,
+      "description": "hunched sway, head loll, breathing, arms hanging"
+    },
+    {
+      "name": "Walk",
+      "durationS": 1.2,
+      "loop": true,
+      "fps": 30,
+      "keyframes": 37,
+      "rotationTracks": 17,
+      "hipsTranslationTrack": true,
+      "rootMotion": false,
+      "inPlace": true,
+      "impliedGroundSpeedMps": 0.55,
+      "gait": "shamble with limp: right leg drags (3.5 cm lift vs 7.5 cm, shorter stance), hips dip/sway, arms raised forward, palms down-inward"
+    },
+    {
+      "name": "Run",
+      "durationS": 0.75,
+      "loop": true,
+      "fps": 30,
+      "keyframes": 24,
+      "rotationTracks": 17,
+      "hipsTranslationTrack": true,
+      "rootMotion": false,
+      "inPlace": true,
+      "impliedGroundSpeedMps": 2.3,
+      "gait": "lurching chase with flight phase, torso pitched forward, reaching arms"
+    },
+    {
+      "name": "Attack",
+      "durationS": 1.1,
+      "loop": false,
+      "fps": 30,
+      "keyframes": 34,
+      "rotationTracks": 17,
+      "hipsTranslationTrack": true,
+      "rootMotion": false,
+      "impactTimeS": 0.45,
+      "phases": {
+        "windup": [
+          0,
+          0.32
+        ],
+        "lunge": [
+          0.32,
+          0.45
+        ],
+        "impact": 0.45,
+        "followThrough": [
+          0.45,
+          0.58
+        ],
+        "recover": [
+          0.58,
+          1.1
+        ]
+      },
+      "description": "two-arm claw swipe with a lunge step; starts and ends on the Idle t=0 pose"
+    },
+    {
+      "name": "Hit",
+      "durationS": 0.35,
+      "loop": false,
+      "fps": 30,
+      "keyframes": 12,
+      "rotationTracks": 17,
+      "hipsTranslationTrack": true,
+      "rootMotion": false,
+      "description": "flinch back with head snap, peak at 0.08 s, returns to Idle t=0 pose"
+    },
+    {
+      "name": "Death",
+      "durationS": 1.6,
+      "loop": false,
+      "fps": 30,
+      "keyframes": 49,
+      "rotationTracks": 17,
+      "hipsTranslationTrack": true,
+      "rootMotion": false,
+      "description": "jolt, stagger back, knees buckle, topple onto the back (feet stay planted via IK), settle supine; Root stays at origin, Hips translate/rotate",
+      "finalPose": {
+        "hipsOffsetY": -0.676,
+        "solverTune": {
+          "hipsPitch": -91.516,
+          "hipsRoll": 11,
+          "neck": -25.797,
+          "head": -23.5,
+          "headYaw": -20,
+          "armLz": -0.525,
+          "armRz": -0.087,
+          "footLz": 0.42,
+          "footRz": 0.12
+        },
+        "lowestPointPerRegionM": {
+          "torso": 0.022,
+          "armR": 0.025,
+          "pelvis": 0.053,
+          "legR": -0.003,
+          "legL": -0.005,
+          "armL": 0.032,
+          "head": 0.015,
+          "coat.pelvis": 0.019,
+          "coat.torso": 0.01,
+          "coat.legL": 0.067,
+          "coat.armL": 0.011,
+          "coat.legR": 0.089,
+          "coat.armR": 0.011,
+          "coat.head": 0.032
+        },
+        "restingBoundsM": {
+          "min": [
+            -0.786,
+            -0.005,
+            -1.44
+          ],
+          "max": [
+            0.741,
+            0.547,
+            0.313
+          ]
+        },
+        "layout": "supine, head toward -Z, heels toward +Z"
+      }
+    }
+  ],
+  "verification": {
+    "cpuSkinningFloorCheck": {
+      "Idle": {
+        "minYOverClip": -0.0002,
+        "minAtT": 0,
+        "framesBelowMinus1cm": [],
+        "maxOfFrameMinY": -0.0002,
+        "firstFrameMinY": -0.0002,
+        "lastFrameMinY": -0.0002,
+        "maxLegReach": 0.9637
+      },
+      "Walk": {
+        "minYOverClip": -0.0002,
+        "minAtT": 0.13333,
+        "framesBelowMinus1cm": [],
+        "maxOfFrameMinY": 0.0032,
+        "firstFrameMinY": 0.0015,
+        "lastFrameMinY": 0.0015,
+        "maxLegReach": 0.9597
+      },
+      "Run": {
+        "minYOverClip": -0.0002,
+        "minAtT": 0.06667,
+        "framesBelowMinus1cm": [],
+        "maxOfFrameMinY": 0.0306,
+        "firstFrameMinY": 0.0016,
+        "lastFrameMinY": 0.0016,
+        "maxLegReach": 0.9956
+      },
+      "Attack": {
+        "minYOverClip": -0.0002,
+        "minAtT": 0,
+        "framesBelowMinus1cm": [],
+        "maxOfFrameMinY": 0.0047,
+        "firstFrameMinY": -0.0002,
+        "lastFrameMinY": -0.0002,
+        "maxLegReach": 0.9512
+      },
+      "Hit": {
+        "minYOverClip": -0.0002,
+        "minAtT": 0,
+        "framesBelowMinus1cm": [],
+        "maxOfFrameMinY": -0.0002,
+        "firstFrameMinY": -0.0002,
+        "lastFrameMinY": -0.0002,
+        "maxLegReach": 0.9512
+      },
+      "Death": {
+        "minYOverClip": -0.0065,
+        "minAtT": 1.1,
+        "framesBelowMinus1cm": [],
+        "maxOfFrameMinY": 0.0018,
+        "firstFrameMinY": -0.0002,
+        "lastFrameMinY": -0.0051,
+        "maxLegReach": 0.9571
+      }
+    },
+    "notes": "minYOverClip = lowest skinned vertex (body+coat) over all 30 fps frames; framesBelowMinus1cm lists frames sinking more than 1 cm.",
+    "mastersUnchangedAfterBuild": true,
+    "browserQA": "see qa section (written by tools/asset-pipeline/zombie/qa/render-qa.mjs)"
+  },
+  "limitations": [
+    "Automatic, approximate skin weights (no hand painting): expect LBS volume loss at shoulders/elbows/hips in extreme poses and some coat-body interpenetration in motion.",
+    "No mocap: all clips are hand-authored procedural keyframes; no facial rig, no finger joints (fingers are rigid with the hand), no twist bones (forearm twist limited to ~35 deg at the wrist).",
+    "No cloth simulation: the coat is skinned to the body skeleton (skirt follows Hips plus 45% thigh influence, faded to Hips on the centre line); it cannot drape or flatten on the floor.",
+    "Coat fitted by per-axis transform + back-drape taper + sleeve retarget + bind-pose push-out; the reconstructed coat interior/lining and the back of both masters are AI-hallucinated hidden-side geometry.",
+    "Death clip lies supine because rigid coat front panels would prop a prone body ~15 cm off the floor; the pelvis rests ~5 cm up on the coat back panel (also in the uncoated variant).",
+    "Walk/Run are in place; the game must move the character at roughly the implied ground speeds to avoid foot sliding.",
+    "Textures re-baked from the masters at 2048 then downsampled to 1024 (MR 512): fine detail of the 4096 masters is lost; no normal map is baked.",
+    "Joint heights without a visible landmark (hip, knee, elbow centres) use anthropometric ratios between measured landmarks.",
+    "Raised-arm poses (Attack wind-up) let the T-shirt show through the coat yoke; the master hair strand loops near the ears simplify into small flap-like shells.",
+    "Unapproved prototype: appearance, anatomy, deformation, performance budget and licensing are not certified; gameReady false."
+  ],
+  "qa": {
+    "renderer": "three 0.186.1 GLTFLoader + WebGLRenderer in Firefox (puppeteer) on Xvfb with Mesa llvmpipe CPU WebGL2 (tools/qa/browser-env.mjs)",
+    "loadedWithoutErrors": true,
+    "loadErrors": [],
+    "consoleLogs": [],
+    "skinnedMeshes": [
+      {
+        "name": "ZombieBody",
+        "vertices": 13161,
+        "triangles": 16918,
+        "joints": 18,
+        "baseColor": [
+          1024,
+          1024
+        ],
+        "metallicRoughness": [
+          512,
+          512
+        ]
+      },
+      {
+        "name": "ZombieCoat",
+        "vertices": 8409,
+        "triangles": 10408,
+        "joints": 18,
+        "baseColor": [
+          1024,
+          1024
+        ],
+        "metallicRoughness": [
+          512,
+          512
+        ]
+      }
+    ],
+    "sharedSkeleton": true,
+    "jointNames": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Chest",
+      "Neck",
+      "Head",
+      "L_UpperArm",
+      "L_Forearm",
+      "L_Hand",
+      "R_UpperArm",
+      "R_Forearm",
+      "R_Hand",
+      "L_Thigh",
+      "L_Shin",
+      "L_Foot",
+      "R_Thigh",
+      "R_Shin",
+      "R_Foot"
+    ],
+    "clips": [
+      {
+        "name": "Idle",
+        "duration": 3,
+        "tracks": 18
+      },
+      {
+        "name": "Walk",
+        "duration": 1.2,
+        "tracks": 18
+      },
+      {
+        "name": "Run",
+        "duration": 0.75,
+        "tracks": 18
+      },
+      {
+        "name": "Attack",
+        "duration": 1.1,
+        "tracks": 18
+      },
+      {
+        "name": "Hit",
+        "duration": 0.35,
+        "tracks": 18
+      },
+      {
+        "name": "Death",
+        "duration": 1.6,
+        "tracks": 18
+      }
+    ],
+    "threeSkinningFloorSamples": {
+      "Idle": [
+        {
+          "t": 0,
+          "min": -0.00020797476870701589,
+          "max": 1.6938088309639794
+        },
+        {
+          "t": 0.75,
+          "min": -0.00020943733373210007,
+          "max": 1.7094199943056803
+        },
+        {
+          "t": 1.5,
+          "min": -0.0002081335368644237,
+          "max": 1.7050172916458046
+        },
+        {
+          "t": 2.25,
+          "min": -0.00020937421716043012,
+          "max": 1.713467348007367
+        }
+      ],
+      "Walk": [
+        {
+          "t": 0,
+          "min": 0.0015054897234840193,
+          "max": 1.65462208963511
+        },
+        {
+          "t": 0.3,
+          "min": -0.00020806116083956224,
+          "max": 1.6880864951314793
+        },
+        {
+          "t": 0.6,
+          "min": 0.002159622161381821,
+          "max": 1.6546220903121345
+        },
+        {
+          "t": 0.9,
+          "min": 0.0004163419503895059,
+          "max": 1.6776358448418398
+        }
+      ],
+      "Run": [
+        {
+          "t": 0,
+          "min": 0.0015746660002650902,
+          "max": 1.5904186050032054
+        },
+        {
+          "t": 0.19,
+          "min": 0.0009485960945765188,
+          "max": 1.5614584485090723
+        },
+        {
+          "t": 0.375,
+          "min": -0.0004428184238517386,
+          "max": 1.592361654511404
+        },
+        {
+          "t": 0.56,
+          "min": -0.00015113058274809026,
+          "max": 1.5639899720545192
+        }
+      ],
+      "Attack": [
+        {
+          "t": 0,
+          "min": -0.00020814816781527138,
+          "max": 1.7065681418516825
+        },
+        {
+          "t": 0.32,
+          "min": 0.0006304055133381291,
+          "max": 1.7047141429229224
+        },
+        {
+          "t": 0.45,
+          "min": 0.0031583485600809543,
+          "max": 1.561793052223395
+        },
+        {
+          "t": 0.58,
+          "min": 0.0019522000192295599,
+          "max": 1.4707090645934104
+        },
+        {
+          "t": 0.82,
+          "min": 0.0006801953190145905,
+          "max": 1.6804940781921422
+        },
+        {
+          "t": 1.1,
+          "min": -0.00020814144389447967,
+          "max": 1.706568125555675
+        }
+      ],
+      "Hit": [
+        {
+          "t": 0,
+          "min": -0.0002081615995757583,
+          "max": 1.7065681262556422
+        },
+        {
+          "t": 0.08,
+          "min": -0.00020837295636429626,
+          "max": 1.6796835861506563
+        },
+        {
+          "t": 0.2,
+          "min": -0.00020839121552710876,
+          "max": 1.7217521886991867
+        },
+        {
+          "t": 0.35,
+          "min": -0.0002081863294706055,
+          "max": 1.7065681262556422
+        }
+      ],
+      "Death": [
+        {
+          "t": 0,
+          "min": -0.00020812533052076012,
+          "max": 1.7065681262556422
+        },
+        {
+          "t": 0.45,
+          "min": 0.0013833996054900672,
+          "max": 1.5968260718487088
+        },
+        {
+          "t": 0.72,
+          "min": 0.0009396999971674342,
+          "max": 1.2712372088309383
+        },
+        {
+          "t": 1.05,
+          "min": -0.004755492046390005,
+          "max": 0.7544576084325268
+        },
+        {
+          "t": 1.25,
+          "min": -0.0050695267896845,
+          "max": 0.558033448771229
+        },
+        {
+          "t": 1.6,
+          "min": -0.005063919061460356,
+          "max": 0.5469032791617627
+        }
+      ]
+    },
+    "contactSheets": [
+      "qa-artifacts/assets/zombie/bind-body-only.png",
+      "qa-artifacts/assets/zombie/bind-body-coat.png",
+      "qa-artifacts/assets/zombie/head-closeup.png",
+      "qa-artifacts/assets/zombie/skeleton-overlay.png",
+      "qa-artifacts/assets/zombie/skin-weights.png",
+      "qa-artifacts/assets/zombie/clip-idle.png",
+      "qa-artifacts/assets/zombie/clip-walk.png",
+      "qa-artifacts/assets/zombie/clip-walk-nocoat.png",
+      "qa-artifacts/assets/zombie/clip-run.png",
+      "qa-artifacts/assets/zombie/clip-attack.png",
+      "qa-artifacts/assets/zombie/clip-attack-nocoat.png",
+      "qa-artifacts/assets/zombie/clip-hit.png",
+      "qa-artifacts/assets/zombie/clip-death.png",
+      "qa-artifacts/assets/zombie/clip-death-nocoat.png",
+      "qa-artifacts/assets/zombie/atlas-body-basecolor-1024.png",
+      "qa-artifacts/assets/zombie/atlas-coat-basecolor-1024.png"
+    ]
+  }
+}

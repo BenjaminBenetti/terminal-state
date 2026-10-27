@@ -1,0 +1,10 @@
+{
+  "name": "Terminal State — Node 22",
+  "build": {"dockerfile": "Dockerfile"},
+  "remoteUser": "node",
+  "forwardPorts": [5173, 4180],
+  "portsAttributes": {
+    "5173": {"label": "Game development", "onAutoForward": "silent"},
+    "4180": {"label": "Built game preview", "onAutoForward": "silent"}
+  }
+}

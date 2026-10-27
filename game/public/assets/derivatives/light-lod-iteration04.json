@@ -1,0 +1,164 @@
+{
+  "schema": "last-line-derivative/1",
+  "asset": "light-lod2",
+  "task": "studio-slice-iteration04-20261026-01",
+  "status": "prototype; unapproved; gameReady false",
+  "replaces": {
+    "runtimeKey": "light",
+    "previous": "assets/models/light-lod.glb (iteration 03; file kept unchanged, no longer referenced by the manifest)"
+  },
+  "diagnosis": {
+    "symptom": "User feedback iteration 04: \"Overhead lights textures look messed up / mangled\".",
+    "cause": "light-lod.glb = meshoptimizer simplifySloppy on positions only over light.glb. light.glb UVs are a ~760-chart box-projection atlas; sloppy clustering merges vertices across chart seams and reuses one arbitrary original vertex (with its UV) per cluster, so output triangles sample unrelated atlas charts.",
+    "measured": {
+      "light.glb (iteration 01)": {
+        "triangles": 2992,
+        "uvAreaSum": 0.3994,
+        "trianglesStretched8xMedian": 0,
+        "verdict": "clean bake/atlas"
+      },
+      "light-lod.glb (iteration 03)": {
+        "triangles": 670,
+        "uvAreaSum": 32.1073,
+        "trianglesStretched8xMedian": 129,
+        "stretchedUvAreaFraction": 0.5026,
+        "referencedVertices": 165,
+        "storedVertices": 4423,
+        "verdict": "mangled: triangles span multiple atlas charts; unused vertices also kept"
+      }
+    },
+    "evidence": "qa-artifacts/assets/light-lod-iteration04/compare.png + metrics.json (CPU renders: front, below 3/4, straight below)"
+  },
+  "source": {
+    "id": "env-light-03",
+    "uploadId": "c9e6df8da08c43c79e39d63fc1e5b779",
+    "path": "public/vision-board/models/c9e6df8da08c43c79e39d63fc1e5b779.glb",
+    "sha256": "63c25dd850a4f6b1204d3287094f0e0944872081cc51f9f87b27ac50e1aee3ce",
+    "sha256Verified": true,
+    "bytes": 74180104,
+    "triangles": 979562,
+    "reviewStatus": "unapproved",
+    "gameReady": false,
+    "note": "same dense master as iteration-01 light.glb; read-only"
+  },
+  "output": {
+    "file": "assets/models/light-lod2.glb",
+    "sha256": "fe57c42989f9b533d52ec49f7261e964c5fc8eaf69d35e1630701442e94cc4f7",
+    "bytes": 538696,
+    "triangles": 894,
+    "vertices": 1595,
+    "textures": {
+      "baseColor": [
+        1024,
+        1024
+      ],
+      "metallicRoughness": [
+        512,
+        512
+      ],
+      "normal": [
+        512,
+        512
+      ]
+    },
+    "bboxMeters": {
+      "min": [
+        -0.6,
+        -0.192473,
+        -0.086124
+      ],
+      "max": [
+        0.6,
+        0,
+        0.086124
+      ],
+      "size": [
+        1.2,
+        0.192473,
+        0.172249
+      ]
+    },
+    "comparedTo": {
+      "file": "assets/models/light.glb",
+      "bboxSize": [
+        1.2,
+        0.194363,
+        0.172479
+      ]
+    }
+  },
+  "conventions": {
+    "units": "meters",
+    "front": "+Z",
+    "up": "+Y",
+    "origin": "top centre (y=0 is the top/mounting face; fixture hangs down to negative y; x/z bbox centre)",
+    "transform": "identity orientation (as light.glb), uniform scale 1.385612 to 1.2 m length, translation 0.000528,-0.096583,0.00052"
+  },
+  "steps": [
+    {
+      "step": "verify-source",
+      "detail": "sha256 vs public/vision-board/local-model-map.json"
+    },
+    {
+      "step": "simplify",
+      "tool": "lib/dense.mjs simplifyGeometry (meshoptimizer simplify, Permissive, weld by position)",
+      "options": {
+        "targetTriangles": 900,
+        "targetError": 1
+      },
+      "resultTriangles": 894,
+      "errorMeters": 0.006766,
+      "droppedDegenerate": 0
+    },
+    {
+      "step": "unwrap",
+      "tool": "lib/unwrap.mjs (fresh box-projection atlas; no UV reused from light.glb)",
+      "options": {
+        "atlas": 1024,
+        "paddingPx": 4
+      },
+      "stats": {
+        "charts": 296,
+        "chartAreaFraction": 0.614995
+      }
+    },
+    {
+      "step": "bake",
+      "tool": "lib/bake.mjs (closest same-facing dense-source surface; colour, packed metallic-roughness, tangent-space normal)",
+      "options": {
+        "supersample": 2,
+        "mrDiv": 2,
+        "normalDiv": 2,
+        "searchRadiusSourceUnits": 0.0293
+      }
+    },
+    {
+      "step": "qa",
+      "tool": "light-lod-iteration04-qa.mjs uvMetrics",
+      "result": {
+        "triangles": 894,
+        "vertices": 1595,
+        "referencedVertices": 1595,
+        "surfaceM2": 1.8301,
+        "uvAreaSum": 0.4916,
+        "uvRange": [
+          0.0039,
+          0.996
+        ],
+        "globalUvPerM2": 0.2686,
+        "medianUvPerM2": 0.2708,
+        "trianglesStretched8xMedian": 0,
+        "stretchedUvAreaFraction": 0
+      }
+    },
+    {
+      "step": "encode",
+      "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90, normal PNG; plain glTF 2.0 binary"
+    }
+  ],
+  "limitations": [
+    "Source is an unapproved AI reconstruction; inferred hidden surfaces. Prototype derivative, not approved art, no license clearance asserted.",
+    "Simplified from 979562 to 894 triangles (max error ~6.8 mm); small fasteners/strap relief survive only in the baked normal/colour maps.",
+    "Provisional 1.2 m length chosen in iteration 01, not measured/approved."
+  ]
+}

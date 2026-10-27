@@ -1,0 +1,470 @@
+// Zombie flesh / clothing wounds (iteration 06, Lane D). Contract (lane-contracts.md, D <-> W):
+//
+//   installWounds(actor, opts) — called by game.ts right after each actor is built. Takes every
+//   SkinnedMesh of the actor (body + each worn wearable), gives the actor its OWN material clones
+//   (hitting one zombie never marks another; Lane F's chained shader hooks are carried over) and
+//   patches them with a wound shader chunk that works in the meshes' BIND (rest) space: the
+//   pre-skinning vertex position is passed to the fragment shader, so wounds stay glued to the
+//   animated / ragdolled body and its clothing — no floating decals, no per-frame CPU work.
+//
+// A wound is a short segment along the bullet path in rest space (entry point found on the actual
+// visible mesh surface, so the oversized hit capsules do not misplace it): fragments near the
+// segment are eroded with a ragged, noise-modulated edge into torn dark flesh (exposed bone flecks
+// on strong head / limb wounds), with a darkened blood-soaked halo; clothing tears fray and show
+// skin then flesh underneath; vertices inside a wound are pushed inward (local loss of material).
+// Thin limbs get exit wounds because the segment passes through. Wounds per zombie are bounded
+// (WOUND_MAX) and nearby hits merge into one larger, deeper tear (shotgun = big tears).
+//
+// Bone-space conversion: the hit is mapped through the transform of the bone nearest to the hit
+// point (the dominant influence there): rest = (M · B⁻¹ · bone.matrixWorld · boneInverse · B)⁻¹ · world.
+
+import * as THREE from 'three';
+import {cloneWithShaderHooks, addShaderHook} from '../render/shaderHooks';
+import {DAMAGE_MATERIALS, zombieMeshClass, type DamageClass} from './materials';
+import {DMG_COMMON, DMG_PERTURB, after} from './glsl';
+
+export const WOUND_MAX = 14;
+export const WOUND_HOOK = 'zombie-wounds-v1';
+const MODE: Record<string, number> = {flesh: 0, cloth: 1, rubber: 2, plastic: 2};
+
+export interface WoundableActor {
+  root: THREE.Object3D;
+  /** Lane W: body + every worn wearable (SkinnedMeshes, or {mesh, slot, wearable} records). */
+  meshes?: readonly (THREE.SkinnedMesh | {mesh: THREE.SkinnedMesh; slot?: string; wearable?: string | null})[];
+}
+
+export interface WoundOptions {
+  /** Wounds kept per zombie (merging beyond). Default and maximum WOUND_MAX. */
+  maxWounds?: number;
+  /** Gore colour strength 0..1 (default 1; the user judges presentation). */
+  gore?: number;
+  /** Max inward displacement of the mesh at a wound (metres; default 0.03). */
+  maxDepth?: number;
+}
+
+export interface WoundHit {
+  /** World hit point (hit-capsule surface) and shot direction (unit). */
+  point: THREE.Vector3;
+  dir: THREE.Vector3;
+  part?: 'head' | 'torso' | 'limb';
+  /** Weapon damage of this pellet / bullet after falloff and part multiplier. */
+  damage: number;
+  /** Shotgun pellet (smaller each, merge into big tears). */
+  pellet?: boolean;
+}
+
+export interface WoundResult {
+  /** Layer the bullet entered first (outermost visible surface). */
+  slot: string;
+  cls: DamageClass;
+  /** Entry point on that surface (world). */
+  entry: THREE.Vector3;
+  bone: string;
+  merged: boolean;
+  index: number;
+  radius: number;
+  strength: number;
+  /** Average colour of the entered layer (cloth scraps / skin), linear. */
+  color: THREE.Color;
+}
+
+interface Layer {
+  mesh: THREE.SkinnedMesh;
+  slot: string;
+  cls: DamageClass;
+  material: THREE.Material;
+  color: THREE.Color;
+}
+
+interface Wound { c: THREE.Vector3; d: THREE.Vector3; r: number; len: number; back: number; strength: number; seed: number; depth: number; bone: string; age: number }
+
+/** Visible-vertex rest positions + dominant bone per geometry (masked geometries share attributes). */
+const vertCache = new WeakMap<THREE.BufferGeometry, {pos: Float32Array; bone: Int16Array}>();
+function visibleVerts(g: THREE.BufferGeometry): {pos: Float32Array; bone: Int16Array} {
+  let v = vertCache.get(g);
+  if (v) return v;
+  const p = g.attributes.position as THREE.BufferAttribute;
+  const si = g.attributes.skinIndex as THREE.BufferAttribute | undefined, sw = g.attributes.skinWeight as THREE.BufferAttribute | undefined;
+  const used = new Uint8Array(p.count);
+  if (g.index) for (let i = 0; i < g.index.count; i++) used[g.index.getX(i)] = 1;
+  else used.fill(1);
+  let n = 0;
+  for (let i = 0; i < used.length; i++) n += used[i];
+  // ~6k samples max per layer keeps the per-hit entry search well under a millisecond
+  const stride = Math.max(1, Math.ceil(n / 6000));
+  const pos: number[] = [], bone: number[] = [];
+  let k = 0;
+  for (let i = 0; i < used.length; i++) {
+    if (!used[i] || (k++ % stride)) continue;
+    pos.push(p.getX(i), p.getY(i), p.getZ(i));
+    let b = -1, bw = 0;
+    if (si && sw) for (let c = 0; c < 4; c++) { const w = sw.getComponent(i, c); if (w > bw) { bw = w; b = si.getComponent(i, c); } }
+    bone.push(b);
+  }
+  v = {pos: new Float32Array(pos), bone: new Int16Array(bone)};
+  vertCache.set(g, v);
+  return v;
+}
+
+/** Average (linear) base colour of a material: colour x texture mean (browser only; else the colour). */
+const colorCache = new WeakMap<object, THREE.Color>();
+export function materialColor(mat: THREE.Material | undefined, fallback = 0x6e6a5e): THREE.Color {
+  const m = mat as THREE.MeshStandardMaterial | undefined;
+  if (!m || !(m as THREE.MeshStandardMaterial).color) return new THREE.Color(fallback);
+  const base = m.color.clone();
+  const img = m.map?.image as (CanvasImageSource & {width?: number}) | undefined;
+  if (!img || !img.width || typeof document === 'undefined') return base;
+  let avg = colorCache.get(img as object);
+  if (!avg) {
+    avg = new THREE.Color(1, 1, 1);
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 16;
+      const ctx = c.getContext('2d', {willReadFrequently: true})!;
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const px = ctx.getImageData(0, 0, 16, 16).data;
+      let r = 0, gg = 0, b = 0, n = 0;
+      for (let i = 0; i < px.length; i += 4) { if (px[i + 3] < 128 || px[i] + px[i + 1] + px[i + 2] < 12) continue; r += px[i]; gg += px[i + 1]; b += px[i + 2]; n++; }
+      if (n) avg.setRGB(r / n / 255, gg / n / 255, b / n / 255, THREE.SRGBColorSpace);
+    } catch { /* tainted / not drawable: plain colour */ }
+    colorCache.set(img as object, avg);
+  }
+  return base.multiply(avg);
+}
+
+const WOUND_PARS = /* glsl */ `
+#define WOUND_MAX ${WOUND_MAX}
+uniform vec4 uWoundA[ WOUND_MAX ];
+uniform vec4 uWoundB[ WOUND_MAX ];
+uniform vec4 uWoundC[ WOUND_MAX ];
+uniform int uWoundN;
+uniform float uWoundK;
+varying vec3 vWoundP;
+${DMG_COMMON}
+float woundDisp( vec3 p ) {
+	float h = 0.0;
+	for ( int i = 0; i < WOUND_MAX; i ++ ) {
+		if ( i >= uWoundN ) break;
+		vec4 A = uWoundA[ i ]; vec4 B = uWoundB[ i ]; vec4 C = uWoundC[ i ];
+		vec3 rel = p - A.xyz;
+		float t = clamp( dot( rel, B.xyz ), - C.z, B.w );
+		float d = length( rel - B.xyz * t );
+		h = max( h, ( 1.0 - smoothstep( A.w * 0.2, A.w * 0.95, d ) ) * C.w );
+	}
+	return h;
+}
+`;
+
+const WOUND_FRAG_PARS = /* glsl */ `
+uniform int uWoundMode;
+uniform float uWoundGore;
+${DMG_PERTURB}
+// x: torn core 0..1, y: blood halo, z: deep (dark cavity), w: strength-weighted core
+vec4 woundField( vec3 p ) {
+	vec4 acc = vec4( 0.0 );
+	for ( int i = 0; i < WOUND_MAX; i ++ ) {
+		if ( i >= uWoundN ) break;
+		vec4 A = uWoundA[ i ]; vec4 B = uWoundB[ i ]; vec4 C = uWoundC[ i ];
+		vec3 rel = p - A.xyz;
+		float t = clamp( dot( rel, B.xyz ), - C.z, B.w );
+		float d = length( rel - B.xyz * t );
+		vec3 q = p * ( 38.0 / uWoundK ) + C.y * 13.0;
+		float n = dmgNoise( q ), n2 = dmgNoise( q * 2.7 + 5.1 );
+		float rr = A.w * ( 0.7 + 0.42 * n + 0.16 * n2 );
+		float core = 1.0 - smoothstep( rr * 0.6, rr, d );
+		float halo = 1.0 - smoothstep( rr, rr * ( 1.55 + 0.5 * C.x ) * ( 0.85 + 0.3 * n2 ), d );
+		float deep = 1.0 - smoothstep( 0.0, rr * 0.55, d );
+		acc.x = max( acc.x, core );
+		acc.y = max( acc.y, halo * ( 0.45 + 0.55 * C.x ) );
+		acc.z = max( acc.z, deep * C.x );
+		acc.w = max( acc.w, core * C.x );
+	}
+	return acc;
+}
+`;
+
+const WOUND_COLOR = /* glsl */ `
+vec4 wf = uWoundN > 0 ? woundField( vWoundP ) : vec4( 0.0 );
+float wFib = 0.0;
+if ( wf.y + wf.x > 0.002 ) {
+	wFib = dmgNoise( vWoundP * ( 150.0 / uWoundK ) );
+	vec3 wBase = diffuseColor.rgb;
+	// blood-soaked halo: darker, browner, a little wetter
+	diffuseColor.rgb = mix( wBase, wBase * vec3( 0.42, 0.2, 0.17 ), wf.y * 0.85 * uWoundGore );
+	vec3 wFlesh = mix( vec3( 0.26, 0.05, 0.04 ), vec3( 0.42, 0.1, 0.075 ), wFib );
+	vec3 wCav = mix( wFlesh, vec3( 0.06, 0.012, 0.01 ), smoothstep( 0.25, 0.9, wf.z ) );
+	float wLip = clamp( wf.x * ( 1.0 - wf.x ) * 4.0, 0.0, 1.0 );
+	if ( uWoundMode == 0 ) {
+		// skin: torn lip darker, raw flesh inside, bone flecks deep in strong wounds
+		vec3 wc = wCav * ( 1.0 - 0.3 * wLip );
+		wc = mix( wc, vec3( 0.58, 0.54, 0.46 ), step( 0.8, wFib ) * smoothstep( 0.6, 0.95, wf.z ) );
+		diffuseColor.rgb = mix( diffuseColor.rgb, wc, wf.x * uWoundGore );
+	} else {
+		// clothing / rubber: frayed (cloth: lighter threads, rubber: dark torn edge), skin ring, flesh core
+		vec3 wFray = uWoundMode == 1 ? wBase * 1.35 + 0.035 * wFib : wBase * 0.45;
+		vec3 wSkin = vec3( 0.36, 0.36, 0.3 );
+		float wOpen = smoothstep( 0.18, 0.55, wf.x );
+		float wMeat = smoothstep( 0.55, 0.95, wf.x );
+		vec3 wc = mix( wFray, wSkin, wOpen );
+		wc = mix( wc, wCav, wMeat * uWoundGore );
+		diffuseColor.rgb = mix( diffuseColor.rgb, wc, smoothstep( 0.02, 0.2, wf.x ) );
+	}
+}
+`;
+
+const WOUND_ROUGH = /* glsl */ `
+roughnessFactor = mix( roughnessFactor, 0.34, clamp( wf.x * 0.9 + wf.y * 0.25, 0.0, 1.0 ) );
+`;
+const WOUND_METAL = /* glsl */ `
+metalnessFactor *= 1.0 - wf.x;
+`;
+const WOUND_NORMAL = /* glsl */ `
+if ( wf.x > 0.001 ) {
+	float wH = - ( wf.x * 0.6 + wf.z * 0.4 ) * ( 0.6 + 0.4 * wFib );
+	normal = dmgPerturb( - vViewPosition, normal, vec2( dFdx( wH ), dFdy( wH ) ) * 0.9, faceDirection );
+}
+`;
+
+/** Shared uniform objects of one actor (every material of that actor points at the same arrays). */
+export interface WoundUniforms {
+  uWoundA: {value: THREE.Vector4[]};
+  uWoundB: {value: THREE.Vector4[]};
+  uWoundC: {value: THREE.Vector4[]};
+  uWoundN: {value: number};
+  uWoundK: {value: number};
+  uWoundGore: {value: number};
+}
+
+function patchMaterial(mat: THREE.Material, u: WoundUniforms, mode: number): void {
+  addShaderHook(mat, WOUND_HOOK, shader => {
+    Object.assign(shader.uniforms, u, {uWoundMode: {value: mode}});
+    shader.vertexShader = after(after(shader.vertexShader, '#include <common>', WOUND_PARS), '#include <begin_vertex>',
+      'vWoundP = transformed;\ntransformed -= normal * woundDisp( transformed );');
+    let f = shader.fragmentShader;
+    f = after(f, '#include <common>', WOUND_PARS + WOUND_FRAG_PARS);
+    f = after(f, '#include <color_fragment>', WOUND_COLOR);
+    f = after(f, '#include <roughnessmap_fragment>', WOUND_ROUGH);
+    f = after(f, '#include <metalnessmap_fragment>', WOUND_METAL);
+    f = after(f, '#include <normal_fragment_maps>', WOUND_NORMAL);
+    shader.fragmentShader = f;
+  });
+}
+
+const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+
+export class WoundController {
+  readonly wounds: Wound[] = [];
+  readonly layers: Layer[] = [];
+  readonly uniforms: WoundUniforms;
+  readonly max: number;
+  private readonly maxDepth: number;
+  private seed = 1;
+  /** Hits applied (incl. merged). */
+  hits = 0;
+  private skeleton: THREE.Skeleton | null = null;
+  private boneIndex = new Map<THREE.Object3D, number>();
+
+  constructor(readonly actor: WoundableActor, opts: WoundOptions = {}) {
+    this.max = Math.max(1, Math.min(WOUND_MAX, opts.maxWounds ?? WOUND_MAX));
+    this.maxDepth = opts.maxDepth ?? 0.03;
+    const vec = () => Array.from({length: WOUND_MAX}, () => new THREE.Vector4());
+    this.uniforms = {uWoundA: {value: vec()}, uWoundB: {value: vec()}, uWoundC: {value: vec()}, uWoundN: {value: 0}, uWoundK: {value: 1}, uWoundGore: {value: opts.gore ?? 1}};
+  }
+
+  /** Clone + patch every mesh's material (called once by installWounds). */
+  install(): void {
+    const recs: {mesh: THREE.SkinnedMesh; slot?: string; wearable?: string | null}[] = [];
+    if (this.actor.meshes?.length) {
+      for (const m of this.actor.meshes) recs.push((m as THREE.SkinnedMesh).isSkinnedMesh ? {mesh: m as THREE.SkinnedMesh} : m as {mesh: THREE.SkinnedMesh; slot?: string; wearable?: string | null});
+    } else {
+      this.actor.root.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) recs.push({mesh: o as THREE.SkinnedMesh}); });
+    }
+    const replaced = new Map<THREE.Material, THREE.Material>();
+    for (const r of recs) {
+      const mesh = r.mesh;
+      const slot = r.slot ?? (mesh.userData.slot as string | undefined) ?? (/ZombieBody/i.test(mesh.name) ? 'body' : 'upper');
+      const wearable = r.wearable ?? (mesh.userData.wearable as string | null | undefined) ?? (mesh.userData.outfit as string | undefined) ?? null;
+      const cls = zombieMeshClass(slot, wearable, mesh.name);
+      const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material;
+      let mat = replaced.get(src);
+      if (!mat) {
+        mat = cloneWithShaderHooks(src);
+        patchMaterial(mat, this.uniforms, MODE[DAMAGE_MATERIALS[cls].shade] ?? MODE[cls] ?? 1);
+        replaced.set(src, mat);
+      }
+      mesh.material = mat;
+      this.layers.push({mesh, slot, cls, material: mat, color: materialColor(src)});
+      if (!this.skeleton && mesh.skeleton) this.skeleton = mesh.skeleton;
+    }
+    // Keep the actor's own per-actor material list (hit flash emissive, dispose) pointing at our clones.
+    const own = (this.actor as unknown as {mats?: THREE.Material[]}).mats;
+    if (Array.isArray(own)) for (let i = 0; i < own.length; i++) { const r = replaced.get(own[i]); if (r) own[i] = r; }
+    if (this.skeleton) this.skeleton.bones.forEach((b, i) => this.boneIndex.set(b, i));
+    this.syncScale();
+  }
+
+  /** Rest units per world metre (bind space may not be metres; actor scale applies too). */
+  private syncScale(): void {
+    const l = this.layers[0];
+    if (!l || !this.skeleton) return;
+    this.actor.root.updateMatrixWorld(true);
+    this.restMatrix(l.mesh, 0, tmpM).setPosition(0, 0, 0);
+    this.uniforms.uWoundK.value = tmpV.set(1, 0, 0).applyMatrix4(tmpM).length() || 1;
+  }
+
+  /** World -> rest-space matrix of `mesh` through bone j (inverse of the skinning transform). */
+  private restMatrix(mesh: THREE.SkinnedMesh, j: number, out: THREE.Matrix4): THREE.Matrix4 {
+    const sk = mesh.skeleton;
+    const bone = sk.bones[j];
+    // F = M · Binv · bone.matrixWorld · boneInverse · B ; rest = F^-1 · world
+    out.copy(mesh.matrixWorld).multiply(mesh.bindMatrixInverse).multiply(bone.matrixWorld).multiply(sk.boneInverses[j]).multiply(mesh.bindMatrix);
+    return out.invert();
+  }
+
+  /** Bone whose segment (to its child bones) is nearest the world point. */
+  private nearestBone(p: THREE.Vector3): number {
+    const sk = this.skeleton;
+    if (!sk) return 0;
+    let best = 0, bd = Infinity;
+    const a = tmpV, b = tmpV2;
+    sk.bones.forEach((bone, i) => {
+      a.setFromMatrixPosition(bone.matrixWorld);
+      const kids = bone.children.filter(c => (c as THREE.Bone).isBone);
+      const test = (q: THREE.Vector3 | null) => {
+        let d: number;
+        if (!q) d = a.distanceToSquared(p);
+        else {
+          const ab = tmpV3.subVectors(q, a), t = Math.max(0, Math.min(1, ab.dot(tmpV4.subVectors(p, a)) / Math.max(1e-9, ab.lengthSq())));
+          d = tmpV4.copy(a).addScaledVector(ab, t).distanceToSquared(p);
+        }
+        if (d < bd) { bd = d; best = i; }
+      };
+      if (!kids.length) test(null);
+      for (const k of kids) test(b.setFromMatrixPosition(k.matrixWorld));
+    });
+    return best;
+  }
+
+  /**
+   * Apply a bullet hit. Finds the bone and the first visible surface along the shot (rest space),
+   * then adds (or merges into) a wound segment. Returns null when the actor has no skinned layers.
+   */
+  add(hit: WoundHit): WoundResult | null {
+    if (!this.layers.length || !this.skeleton) return null;
+    this.hits++;
+    const j = this.nearestBone(hit.point);
+    const boneName = this.skeleton.bones[j]?.name ?? '';
+    const sk = this.skeleton;
+    const near = new Set<number>([j]);
+    const bone = sk.bones[j];
+    const parent = bone.parent as THREE.Bone | null;
+    if (parent?.isBone) near.add(this.boneIndex.get(parent) ?? -1);
+    for (const c of bone.children) if ((c as THREE.Bone).isBone) near.add(this.boneIndex.get(c) ?? -1);
+    // Layers share the body skeleton + bind matrix (Lane W binds wearables to it), so one rest frame.
+    const restM = this.restMatrix(this.layers[0].mesh, j, new THREE.Matrix4());
+    const lin = new THREE.Matrix4().copy(restM).setPosition(0, 0, 0);
+    const k = new THREE.Vector3().copy(hit.dir).applyMatrix4(lin).length() || 1; // rest units per metre
+    const c0 = hit.point.clone().applyMatrix4(restM);
+    const d = hit.dir.clone().applyMatrix4(lin).normalize();
+    // first visible vertex near the shot line (search a little before/after the capsule surface)
+    const searchR = 0.055 * k, r2 = searchR * searchR;
+    let bestT = Infinity, bestLayer = 0;
+    this.layers.forEach((l, li) => {
+      if (!l.mesh.visible) return;
+      const v = visibleVerts(l.mesh.geometry);
+      const P = v.pos;
+      for (let i = 0, n = P.length / 3; i < n; i++) {
+        if (v.bone[i] >= 0 && !near.has(v.bone[i])) continue;
+        const rx = P[i * 3] - c0.x, ry = P[i * 3 + 1] - c0.y, rz = P[i * 3 + 2] - c0.z;
+        const t = rx * d.x + ry * d.y + rz * d.z;
+        if (t < -0.3 * k || t > 0.35 * k || t >= bestT) continue;
+        const qx = rx - d.x * t, qy = ry - d.y * t, qz = rz - d.z * t;
+        if (qx * qx + qy * qy + qz * qz > r2) continue;
+        bestT = t; bestLayer = li;
+      }
+    });
+    const found = Number.isFinite(bestT);
+    const entryRest = c0.clone().addScaledVector(d, found ? bestT : 0);
+    const layer = this.layers[bestLayer];
+    const spec = DAMAGE_MATERIALS[layer.cls];
+    // size / strength from the hit: rifle bigger per hit, pellets small but merge; head / limbs lose more
+    const partK = hit.part === 'head' ? 1.1 : hit.part === 'limb' ? 1.15 : 1;
+    const dmgK = Math.min(1.6, Math.max(0.35, hit.damage / 24));
+    const rNew = spec.markSize * (hit.pellet ? 0.72 : 1) * partK * (0.85 + 0.3 * dmgK) * k;
+    const sNew = Math.min(1, (hit.pellet ? 0.22 : 0.42) * dmgK * partK);
+    const len = (hit.part === 'limb' ? 0.2 : hit.part === 'head' ? 0.12 : spec.pierce) * k;
+    // merge with a nearby wound
+    let merged = -1, md = Infinity;
+    for (let i = 0; i < this.wounds.length; i++) {
+      const w = this.wounds[i];
+      const dd = w.c.distanceTo(entryRest);
+      if (dd < w.r * 0.9 + rNew * 0.5 && dd < md) { md = dd; merged = i; }
+    }
+    if (merged < 0 && this.wounds.length >= this.max) {
+      // full: grow the nearest wound instead of dropping the hit
+      for (let i = 0; i < this.wounds.length; i++) { const dd = this.wounds[i].c.distanceTo(entryRest); if (dd < md) { md = dd; merged = i; } }
+    }
+    const maxR = spec.markMax * partK * k;
+    let w: Wound;
+    if (merged >= 0) {
+      w = this.wounds[merged];
+      w.c.lerp(entryRest, 0.25);
+      w.r = Math.min(maxR, Math.sqrt(w.r * w.r + rNew * rNew * 0.65));
+      w.strength = Math.min(1, w.strength + sNew * 0.7);
+      w.d.lerp(d, 0.3).normalize();
+      w.len = Math.max(w.len, len);
+    } else {
+      w = {c: entryRest, d, r: rNew, len, back: 0.035 * k, strength: sNew, seed: (this.seed = (this.seed * 16807) % 2147483647) / 2147483647 * 10, depth: 0, bone: boneName, age: 0};
+      this.wounds.push(w);
+    }
+    const partD = hit.part === 'torso' ? 1 : 1.35;
+    w.depth = Math.min(this.maxDepth * partD, (0.006 + 0.022 * w.strength) * partD) * k;
+    this.upload();
+    // entry point back to world through the same bone transform
+    const entry = entryRest.clone().applyMatrix4(tmpM.copy(restM).invert());
+    return {slot: layer.slot, cls: layer.cls, entry, bone: boneName, merged: merged >= 0, index: this.wounds.indexOf(w), radius: w.r / k, strength: w.strength, color: layer.color.clone()};
+  }
+
+  private upload(): void {
+    const u = this.uniforms;
+    this.wounds.forEach((w, i) => {
+      u.uWoundA.value[i].set(w.c.x, w.c.y, w.c.z, w.r);
+      u.uWoundB.value[i].set(w.d.x, w.d.y, w.d.z, w.len);
+      u.uWoundC.value[i].set(w.strength, w.seed, w.back, w.depth);
+    });
+    u.uWoundN.value = this.wounds.length;
+  }
+
+  get count(): number {
+    return this.wounds.length;
+  }
+
+  /** Dispose the per-actor wound material clones (idempotent; the actor may dispose them too). */
+  dispose(): void {
+    for (const m of new Set(this.layers.map(l => l.material))) m.dispose();
+  }
+
+  stats(): {wounds: number; hits: number; layers: {slot: string; cls: DamageClass}[]; maxStrength: number} {
+    return {wounds: this.wounds.length, hits: this.hits, layers: this.layers.map(l => ({slot: l.slot, cls: l.cls})), maxStrength: this.wounds.reduce((m, w) => Math.max(m, w.strength), 0)};
+  }
+}
+
+const tmpV3 = new THREE.Vector3(), tmpV4 = new THREE.Vector3();
+const controllers = new WeakMap<object, WoundController>();
+
+/**
+ * Give `actor` its own wound-patched material clones (body + every worn wearable). Idempotent:
+ * a second call returns the existing controller.
+ */
+export function installWounds(actor: WoundableActor, opts: WoundOptions = {}): WoundController {
+  let c = controllers.get(actor);
+  if (c) return c;
+  c = new WoundController(actor, opts);
+  c.install();
+  controllers.set(actor, c);
+  return c;
+}
+
+export function woundsOf(actor: object): WoundController | undefined {
+  return controllers.get(actor);
+}

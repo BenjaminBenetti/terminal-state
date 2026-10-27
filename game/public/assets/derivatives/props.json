@@ -1,0 +1,2934 @@
+{
+  "schema": "last-line-props-derivatives-v1",
+  "status": "PROTOTYPE runtime derivatives for the first playable slice. All sources are unapproved (reviewStatus unapproved/unreviewed, gameReady false). Outputs inherit that status: not approved art, not production assets, no commercial/model license clearance asserted. Dimensions are provisional choices of this pipeline.",
+  "rebuild": "node tools/asset-pipeline/props/build-props.mjs   (QA renders: node tools/asset-pipeline/props/qa-props.mjs)",
+  "deterministic": "Fixed parameters, no timestamps, order-independent parallel bake; identical inputs + tool versions reproduce identical bytes.",
+  "tooling": {
+    "node": "v22.16.0",
+    "three": "0.186.1",
+    "@gltf-transform/core": "4.5.1",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5"
+  },
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "handedness": "right-handed (glTF)",
+    "guns": "muzzle -Z, top +Y, concept/reference side faces -X (seen by a right-handed first-person camera), origin at bounding-box centre; child empties \"Muzzle\" and \"Grip\"",
+    "props": "front +Z; origin bottom-centre (y=0 floor contact) except light.glb: top-centre (y=0 = top mounting face, fixture hangs below)",
+    "files": "plain glTF 2.0 binary; no Draco/meshopt/KTX2/webp extensions; JPEG/PNG textures; no TANGENT attribute (three.js derivative tangents; normal maps baked for that)"
+  },
+  "outputs": [
+    {
+      "output": "game/public/assets/models/rifle.glb",
+      "key": "rifle",
+      "kind": "gun",
+      "bytes": 3772324,
+      "sha256": "eb8b2f43f56629db2f95a1d2738be15a6922f7a4c368b9f04aa8fea402692623",
+      "triangles": 24940,
+      "vertices": 30784,
+      "textures": {
+        "baseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "mime": "image/jpeg",
+          "bytes": 610316
+        },
+        "metallicRoughness": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 458876,
+          "channels": "R=255 (unused; occlusion-neutral), G=roughness, B=metalness"
+        },
+        "normal": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/png",
+          "bytes": 1566170,
+          "convention": "tangent space, glTF +Y (green) = image up; baked for three.js derivative tangent frame (no TANGENT attribute)"
+        }
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "doubleSided": false,
+        "alphaMode": "OPAQUE"
+      },
+      "source": {
+        "id": "assault-rifle-03",
+        "title": "Kept running",
+        "uploadId": "34e748e9738943288af40e260699d36b",
+        "path": "public/vision-board/models/34e748e9738943288af40e260699d36b.glb",
+        "sha256": "3b67848b1352f4ebd28319fadf7d43392272ebd315facedb3e36856f70f7ca35",
+        "sha256Verified": true,
+        "bytes": 81649676,
+        "generationMode": "sv (historical default; not explicit in current metadata)",
+        "reviewStatus": null,
+        "gameReady": false,
+        "triangles": 954342,
+        "vertices": 699807,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        },
+        "boundsSourceUnits": {
+          "min": [
+            -0.45398,
+            -0.191145,
+            -0.051106
+          ],
+          "max": [
+            0.454117,
+            0.188237,
+            0.074417
+          ]
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform is identity)",
+        "axisMap": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ]
+        ],
+        "alignmentYawDeg": 1.6765,
+        "alignment": {
+          "yawDeg": -1.6765,
+          "yawSamples": 23
+        },
+        "R": [
+          [
+            0.029256,
+            0,
+            0.999572
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0.999572,
+            0,
+            -0.029256
+          ]
+        ],
+        "determinant": -1,
+        "mirrored": true,
+        "scale": 1.014214,
+        "translation": [
+          -0.010947,
+          0.001528,
+          0.000427
+        ],
+        "orientationEvidence": "Source muzzle is at source -X (thin 3.5 cm flash hider; the 15.6 cm tall stock is at +X) and the concept-matching side (rendered from -Z it reproduces the muzzle-right concept) faces source -Z. The concept shows the rifle's RIGHT side, so placing it on -X with muzzle -Z requires a mirror: x'=z, y'=y, z'=x (det -1, winding flipped, handedness of the prop reversed).",
+        "origin": "bounding-box centre"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "overall length 0.92 m (uniform scale; other dimensions follow source proportions)",
+        "bbox": {
+          "min": [
+            -0.071591,
+            -0.192139,
+            -0.46
+          ],
+          "max": [
+            0.071591,
+            0.192139,
+            0.46
+          ],
+          "size": [
+            0.143181,
+            0.384279,
+            0.92
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "muzzle": "-Z",
+        "up": "+Y",
+        "referenceSide": "-X (side seen by a right-handed first-person camera)",
+        "origin": "bounding-box centre"
+      },
+      "anchors": {
+        "Muzzle": {
+          "position": [
+            -0.025302,
+            0.050802,
+            -0.460147
+          ],
+          "method": "Barrel = dense-source vertices in the front 4 cm whose height is within 2.8 cm of the front-most top; tip z = min z of those; x/y = centre of the barrel cross-section within 1 cm of the tip.",
+          "details": {
+            "frontTopY": 0.064904,
+            "barrelCrossSectionX": [
+              -0.041238,
+              -0.009366
+            ],
+            "barrelCrossSectionY": [
+              0.036921,
+              0.064682
+            ],
+            "frontMostZ": -0.460147
+          }
+        },
+        "Grip": {
+          "position": [
+            0.006608,
+            -0.086665,
+            0.188534
+          ],
+          "method": "Bottom profile (5 mm bins along Z): magazine = deepest run; pistol grip = deepest bin behind it and ahead of the rear 25% (stock); receiver bottom = highest underside between them; Grip = centroid of dense vertices in the grip run 1-6 cm below the receiver bottom (upper grip, just behind the trigger).",
+          "details": {
+            "position": [
+              0.006608,
+              -0.086665,
+              0.188534
+            ],
+            "rule": "pistol-grip",
+            "receiverBottomY": -0.050395,
+            "gripRunZ": [
+              0.149853,
+              0.239853
+            ],
+            "gripBottomY": -0.147981,
+            "magazineBottomZ": 0.027353
+          }
+        },
+        "barrelAlignment": {
+          "yawResidualDegAfterCorrection": -0.0852,
+          "pitchMeasuredNotCorrectedDeg": 0.4247,
+          "pitchMethod": "Theil-Sen slope of the barrel top line (1 cm slice maxima) over 0-8% of the length from the muzzle (7 slices; top line range 1.8 mm). Level within this tolerance; no pitch rotation applied (concept profiles were level)."
+        }
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs public/vision-board/local-model-map.json and catalog model.modelSha256"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer MeshoptSimplifier.simplify",
+          "options": {
+            "targetTriangles": 25000,
+            "targetError": 1,
+            "flags": [
+              "Permissive"
+            ]
+          },
+          "resultTriangles": 24940,
+          "errorRelative": 0.000961,
+          "errorSourceUnits": 0.000873,
+          "errorMeters": 0.000885,
+          "droppedDegenerate": 0,
+          "note": "geometry only; source UVs discarded; weld by exact position after collapse"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs (6-axis box-projection charts, 4 smoothing passes, small-chart merge <=6 faces, min-area rotation, shelf packing)",
+          "options": {
+            "atlas": 2048,
+            "paddingPx": 4,
+            "minDot": 0.25,
+            "creaseDeg": 50
+          },
+          "stats": {
+            "charts": 2401,
+            "mergedSmallCharts": 718,
+            "degenerateNormalGroups": 0,
+            "texelsPerSourceUnit": 1366.020617,
+            "atlas": 2048,
+            "pad": 4,
+            "chartAreaFraction": 0.617625,
+            "vertices": 30784,
+            "triangles": 24940
+          }
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface via uniform grid; bilinear source texture sampling; dense vertex normals -> tangent space)",
+          "options": {
+            "supersample": 2,
+            "searchRadiusSourceUnits": 0.02,
+            "dilationPx": 32,
+            "mrDiv": 2,
+            "normalDiv": 2
+          },
+          "stats": {
+            "bakeResolution": 4096,
+            "supersample": 2,
+            "samples": 7673538,
+            "insideTexels": 6105857,
+            "skirtTexels": 1567681,
+            "uvOverlapInteriorTexels": 19724,
+            "matchedSameFacing": 7673538,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0,
+            "searchRadiusSourceUnits": 0.02,
+            "projectionDistanceSourceUnits": {
+              "p50": 0.000217,
+              "p90": 0.000568,
+              "p99": 0.001049,
+              "max": 0.01002
+            },
+            "grid": {
+              "dims": [
+                238,
+                106,
+                42
+              ],
+              "cell": 0.003995,
+              "refs": 1932832
+            }
+          }
+        },
+        {
+          "step": "transform",
+          "detail": "axis map + alignment yaw + uniform scale + origin translation baked into vertices; normals rotated; winding flipped when mirrored"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90 4:4:4, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Source is an AI reconstruction (Pixal3D-family local generation from concept images): hidden/back/underside surfaces and texture are inferred, not designed; some details are blurred or mirrored copies.",
+        "Simplified from 954342 to 24940 triangles; thin parts and small protrusions lose geometric detail (max simplification error ~0.9 mm); fine relief is approximated by the baked normal map only.",
+        "Textures re-baked onto a new automatic atlas (box-projection charts); chart seams can show faint discontinuities at grazing angles and at distant mip levels.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: source reviewStatus unapproved, gameReady false; not approved art; no commercial/model license clearance asserted.",
+        "Mirrored relative to the concept so the concept side faces the player (-X): any lettering/markings appear reversed and the prop is a left/right-swapped version of the reference rifle.",
+        "Muzzle/Grip anchors are geometric estimates for prototype hand/aim placement, not rig-authored sockets."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/shotgun.glb",
+      "key": "shotgun",
+      "kind": "gun",
+      "bytes": 2893204,
+      "sha256": "9ed980d9d89f98410934f620c6ecc86d5b2da429885c82f1752abe9f209ca3e1",
+      "triangles": 24998,
+      "vertices": 22413,
+      "textures": {
+        "baseColor": {
+          "size": [
+            2048,
+            2048
+          ],
+          "mime": "image/jpeg",
+          "bytes": 657593
+        },
+        "metallicRoughness": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 350467,
+          "channels": "R=255 (unused; occlusion-neutral), G=roughness, B=metalness"
+        },
+        "normal": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/png",
+          "bytes": 1015744,
+          "convention": "tangent space, glTF +Y (green) = image up; baked for three.js derivative tangent frame (no TANGENT attribute)"
+        }
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "doubleSided": false,
+        "alphaMode": "OPAQUE"
+      },
+      "source": {
+        "id": "shotgun-07",
+        "title": "Old reliable",
+        "uploadId": "22cb0bf0a75f497e9c9e1cc7a16eacf3",
+        "path": "public/vision-board/models/22cb0bf0a75f497e9c9e1cc7a16eacf3.glb",
+        "sha256": "8f3383423c9dd51a46a54d489088b2606fffee9cc447612a5f61cdf1ac5cd555",
+        "sha256Verified": true,
+        "bytes": 81316836,
+        "generationMode": "sv",
+        "reviewStatus": "needs-revision",
+        "gameReady": false,
+        "triangles": 940218,
+        "vertices": 700837,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        },
+        "boundsSourceUnits": {
+          "min": [
+            -0.454153,
+            -0.109999,
+            -0.097615
+          ],
+          "max": [
+            0.438574,
+            0.103325,
+            0.049749
+          ]
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform is identity)",
+        "axisMap": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            -1,
+            0,
+            0
+          ]
+        ],
+        "alignmentYawDeg": -5.3282,
+        "alignment": {
+          "yawDeg": 5.3282,
+          "yawSamples": 22
+        },
+        "R": [
+          [
+            0.09286,
+            0,
+            0.995679
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            -0.995679,
+            0,
+            0.09286
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 1.114823,
+        "translation": [
+          0.037129,
+          0.003642,
+          -0.005841
+        ],
+        "orientationEvidence": "Source muzzle is at source +X (stock/butt 15 cm tall at -X) and the concept side (muzzle-left profile, white/red stock marks; one-sided shell carrier protrudes to z=-0.098) faces source -Z. Pure +90 deg rotation about Y: x'=z, z'=-x puts the muzzle at -Z and the concept side at -X.",
+        "origin": "bounding-box centre"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "overall length 1 m (uniform scale; other dimensions follow source proportions)",
+        "bbox": {
+          "min": [
+            -0.058095,
+            -0.118726,
+            -0.5
+          ],
+          "max": [
+            0.058095,
+            0.118726,
+            0.5
+          ],
+          "size": [
+            0.116189,
+            0.237452,
+            1
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "muzzle": "-Z",
+        "up": "+Y",
+        "referenceSide": "-X (side seen by a right-handed first-person camera)",
+        "origin": "bounding-box centre"
+      },
+      "anchors": {
+        "Muzzle": {
+          "position": [
+            -0.004226,
+            0.08807,
+            -0.499981
+          ],
+          "method": "Barrel = dense-source vertices in the front 4 cm whose height is within 2.8 cm of the front-most top; tip z = min z of those; x/y = centre of the barrel cross-section within 1 cm of the tip.",
+          "details": {
+            "frontTopY": 0.109242,
+            "barrelCrossSectionX": [
+              -0.021214,
+              0.012762
+            ],
+            "barrelCrossSectionY": [
+              0.081254,
+              0.094886
+            ],
+            "frontMostZ": -0.500027
+          }
+        },
+        "Grip": {
+          "position": [
+            0.000145,
+            0.041926,
+            0.187473
+          ],
+          "method": "No pistol grip: trigger guard = deepest two-sided local protrusion of the bottom profile between 45% and 70% of the length (5 mm bins, 5 cm windows); Grip = centre of the cross-section 4 cm behind the guard's rear edge (stock wrist where the firing hand wraps).",
+          "details": {
+            "position": [
+              0.000145,
+              0.041926,
+              0.187473
+            ],
+            "rule": "stock-wrist",
+            "triggerGuard": {
+              "z": 0.107473,
+              "bottomY": -0.013164,
+              "depth": 0.027734,
+              "rearZ": 0.147473
+            }
+          }
+        },
+        "barrelAlignment": {
+          "yawResidualDegAfterCorrection": -0.1484,
+          "pitchMeasuredNotCorrectedDeg": 0.4039,
+          "pitchMethod": "Theil-Sen slope of the barrel top line (1 cm slice maxima) over 10-30% of the length from the muzzle (20 slices; top line range 1.3 mm). Level within this tolerance; no pitch rotation applied (concept profiles were level)."
+        }
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs public/vision-board/local-model-map.json and catalog model.modelSha256"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer MeshoptSimplifier.simplify",
+          "options": {
+            "targetTriangles": 25000,
+            "targetError": 1,
+            "flags": [
+              "Permissive"
+            ]
+          },
+          "resultTriangles": 24998,
+          "errorRelative": 0.00044,
+          "errorSourceUnits": 0.000393,
+          "errorMeters": 0.000438,
+          "droppedDegenerate": 0,
+          "note": "geometry only; source UVs discarded; weld by exact position after collapse"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs (6-axis box-projection charts, 4 smoothing passes, small-chart merge <=6 faces, min-area rotation, shelf packing)",
+          "options": {
+            "atlas": 2048,
+            "paddingPx": 4,
+            "minDot": 0.25,
+            "creaseDeg": 50
+          },
+          "stats": {
+            "charts": 991,
+            "mergedSmallCharts": 485,
+            "degenerateNormalGroups": 0,
+            "texelsPerSourceUnit": 1957.818567,
+            "atlas": 2048,
+            "pad": 4,
+            "chartAreaFraction": 0.722948,
+            "vertices": 22413,
+            "triangles": 24998
+          }
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface via uniform grid; bilinear source texture sampling; dense vertex normals -> tangent space)",
+          "options": {
+            "supersample": 2,
+            "searchRadiusSourceUnits": 0.02,
+            "dilationPx": 32,
+            "mrDiv": 2,
+            "normalDiv": 2
+          },
+          "stats": {
+            "bakeResolution": 4096,
+            "supersample": 2,
+            "samples": 8595435,
+            "insideTexels": 7698300,
+            "skirtTexels": 897135,
+            "uvOverlapInteriorTexels": 35213,
+            "matchedSameFacing": 8595435,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0,
+            "searchRadiusSourceUnits": 0.02,
+            "projectionDistanceSourceUnits": {
+              "p50": 0.000103,
+              "p90": 0.000267,
+              "p99": 0.000466,
+              "max": 0.010972
+            },
+            "grid": {
+              "dims": [
+                288,
+                79,
+                59
+              ],
+              "cell": 0.003253,
+              "refs": 1889708
+            }
+          }
+        },
+        {
+          "step": "transform",
+          "detail": "axis map + alignment yaw + uniform scale + origin translation baked into vertices; normals rotated; winding flipped when mirrored"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90 4:4:4, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Source is an AI reconstruction (Pixal3D-family local generation from concept images): hidden/back/underside surfaces and texture are inferred, not designed; some details are blurred or mirrored copies.",
+        "Simplified from 940218 to 24998 triangles; thin parts and small protrusions lose geometric detail (max simplification error ~0.4 mm); fine relief is approximated by the baked normal map only.",
+        "Textures re-baked onto a new automatic atlas (box-projection charts); chart seams can show faint discontinuities at grazing angles and at distant mip levels.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: source reviewStatus unapproved, gameReady false; not approved art; no commercial/model license clearance asserted.",
+        "Muzzle/Grip anchors are geometric estimates for prototype hand/aim placement, not rig-authored sockets."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/bench.glb",
+      "key": "bench",
+      "kind": "prop",
+      "bytes": 950388,
+      "sha256": "73ab8140411735e6f1d0997f9871970585f246306a65911b32dd28c065feacce",
+      "triangles": 6998,
+      "vertices": 8019,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 240586
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 119553,
+          "channels": "R=255 (unused; occlusion-neutral), G=roughness, B=metalness"
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 289584,
+          "convention": "tangent space, glTF +Y (green) = image up; baked for three.js derivative tangent frame (no TANGENT attribute)"
+        }
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "doubleSided": false,
+        "alphaMode": "OPAQUE"
+      },
+      "source": {
+        "id": "env-bench-03",
+        "title": "Platform bench",
+        "uploadId": "43488a0677494b02b7712648249952a8",
+        "path": "public/vision-board/models/43488a0677494b02b7712648249952a8.glb",
+        "sha256": "a035815d14fa54895b1e9d766fe4034d3917c60a1566f15aaafe26f3d89280f5",
+        "sha256Verified": true,
+        "bytes": 78756108,
+        "generationMode": "mv",
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 931720,
+        "vertices": 608044,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        },
+        "boundsSourceUnits": {
+          "min": [
+            -0.419419,
+            -0.179465,
+            -0.125911
+          ],
+          "max": [
+            0.419516,
+            0.179135,
+            0.110467
+          ]
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform is identity)",
+        "axisMap": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "alignmentYawDeg": 0,
+        "alignment": {
+          "minAreaYawDeg": 0,
+          "applied": false
+        },
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 2.147029,
+        "translation": [
+          -0.000124,
+          0.384828,
+          0.016481
+        ],
+        "orientationEvidence": "Seat extends toward source +Z with the backrest at -Z (side render); the source -Z view matches the multi-view \"back\" input (framed recessed panels). Front (sitting side) is already +Z: identity.",
+        "origin": "bottom centre (y=0 is floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "length 1.8 m (uniform scale; other dimensions follow source proportions)",
+        "bbox": {
+          "min": [
+            -0.9,
+            0,
+            -0.252951
+          ],
+          "max": [
+            0.9,
+            0.76877,
+            0.252951
+          ],
+          "size": [
+            1.8,
+            0.76877,
+            0.505903
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "anchors": null,
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs public/vision-board/local-model-map.json and catalog model.modelSha256"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer MeshoptSimplifier.simplify",
+          "options": {
+            "targetTriangles": 7000,
+            "targetError": 1,
+            "flags": [
+              "Permissive"
+            ]
+          },
+          "resultTriangles": 6998,
+          "errorRelative": 0.001291,
+          "errorSourceUnits": 0.001083,
+          "errorMeters": 0.002325,
+          "droppedDegenerate": 0,
+          "note": "geometry only; source UVs discarded; weld by exact position after collapse"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs (6-axis box-projection charts, 4 smoothing passes, small-chart merge <=6 faces, min-area rotation, shelf packing)",
+          "options": {
+            "atlas": 1024,
+            "paddingPx": 4,
+            "minDot": 0.25,
+            "creaseDeg": 50
+          },
+          "stats": {
+            "charts": 564,
+            "mergedSmallCharts": 139,
+            "degenerateNormalGroups": 0,
+            "texelsPerSourceUnit": 480.723287,
+            "atlas": 1024,
+            "pad": 4,
+            "chartAreaFraction": 0.642539,
+            "vertices": 8019,
+            "triangles": 6998
+          }
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface via uniform grid; bilinear source texture sampling; dense vertex normals -> tangent space)",
+          "options": {
+            "supersample": 2,
+            "searchRadiusSourceUnits": 0.02,
+            "dilationPx": 32,
+            "mrDiv": 2,
+            "normalDiv": 2
+          },
+          "stats": {
+            "bakeResolution": 2048,
+            "supersample": 2,
+            "samples": 2030449,
+            "insideTexels": 1633151,
+            "skirtTexels": 397298,
+            "uvOverlapInteriorTexels": 11229,
+            "matchedSameFacing": 2030449,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0,
+            "searchRadiusSourceUnits": 0.02,
+            "projectionDistanceSourceUnits": {
+              "p50": 0.000256,
+              "p90": 0.000653,
+              "p99": 0.00127,
+              "max": 0.005971
+            },
+            "grid": {
+              "dims": [
+                154,
+                71,
+                49
+              ],
+              "cell": 0.005722,
+              "refs": 1846598
+            }
+          }
+        },
+        {
+          "step": "transform",
+          "detail": "axis map + alignment yaw + uniform scale + origin translation baked into vertices; normals rotated; winding flipped when mirrored"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90 4:4:4, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Source is an AI reconstruction (Pixal3D-family local generation from concept images): hidden/back/underside surfaces and texture are inferred, not designed; some details are blurred or mirrored copies.",
+        "Simplified from 931720 to 6998 triangles; thin parts and small protrusions lose geometric detail (max simplification error ~2.3 mm); fine relief is approximated by the baked normal map only.",
+        "Textures re-baked onto a new automatic atlas (box-projection charts); chart seams can show faint discontinuities at grazing angles and at distant mip levels.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: source reviewStatus unapproved, gameReady false; not approved art; no commercial/model license clearance asserted."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/light.glb",
+      "key": "light",
+      "kind": "prop",
+      "bytes": 680432,
+      "sha256": "368f668b399e55fad5cd0c9321151263e8f0b88dcfb5c54d6df2eb4c369c2e22",
+      "triangles": 2992,
+      "vertices": 4423,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 162135
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 94907,
+          "channels": "R=255 (unused; occlusion-neutral), G=roughness, B=metalness"
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 261830,
+          "convention": "tangent space, glTF +Y (green) = image up; baked for three.js derivative tangent frame (no TANGENT attribute)"
+        }
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "doubleSided": false,
+        "alphaMode": "OPAQUE"
+      },
+      "source": {
+        "id": "env-light-03",
+        "title": "Platform light",
+        "uploadId": "c9e6df8da08c43c79e39d63fc1e5b779",
+        "path": "public/vision-board/models/c9e6df8da08c43c79e39d63fc1e5b779.glb",
+        "sha256": "63c25dd850a4f6b1204d3287094f0e0944872081cc51f9f87b27ac50e1aee3ce",
+        "sha256Verified": true,
+        "bytes": 74180104,
+        "generationMode": "mv",
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 979562,
+        "vertices": 664844,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        },
+        "boundsSourceUnits": {
+          "min": [
+            -0.434166,
+            -0.069824,
+            -0.063367
+          ],
+          "max": [
+            0.432742,
+            0.071164,
+            0.062692
+          ]
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform is identity)",
+        "axisMap": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "alignmentYawDeg": 0,
+        "alignment": {
+          "minAreaYawDeg": 0,
+          "applied": false
+        },
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 1.384746,
+        "translation": [
+          0.000903,
+          -0.098256,
+          0.000658
+        ],
+        "orientationEvidence": "Mounting bracket with fasteners is on top (+Y); the brighter cream diffuser face that best matches the front input is +Z (the reconstruction shows diffuser through straps on both faces; the multi-view \"back\" input was a plain plate, not reproduced). Identity.",
+        "origin": "top centre (y=0 is the top/mounting face; fixture hangs down to negative y; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "length 1.2 m (uniform scale; other dimensions follow source proportions)",
+        "bbox": {
+          "min": [
+            -0.6,
+            -0.194363,
+            -0.08624
+          ],
+          "max": [
+            0.6,
+            0,
+            0.08624
+          ],
+          "size": [
+            1.2,
+            0.194363,
+            0.172479
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "top-center"
+      },
+      "anchors": null,
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs public/vision-board/local-model-map.json and catalog model.modelSha256"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer MeshoptSimplifier.simplify",
+          "options": {
+            "targetTriangles": 3000,
+            "targetError": 1,
+            "flags": [
+              "Permissive"
+            ]
+          },
+          "resultTriangles": 2992,
+          "errorRelative": 0.001759,
+          "errorSourceUnits": 0.001525,
+          "errorMeters": 0.002112,
+          "droppedDegenerate": 0,
+          "note": "geometry only; source UVs discarded; weld by exact position after collapse"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs (6-axis box-projection charts, 4 smoothing passes, small-chart merge <=6 faces, min-area rotation, shelf packing)",
+          "options": {
+            "atlas": 1024,
+            "paddingPx": 4,
+            "minDot": 0.25,
+            "creaseDeg": 50
+          },
+          "stats": {
+            "charts": 547,
+            "mergedSmallCharts": 77,
+            "degenerateNormalGroups": 0,
+            "texelsPerSourceUnit": 660.911458,
+            "atlas": 1024,
+            "pad": 4,
+            "chartAreaFraction": 0.563508,
+            "vertices": 4423,
+            "triangles": 2992
+          }
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface via uniform grid; bilinear source texture sampling; dense vertex normals -> tangent space)",
+          "options": {
+            "supersample": 2,
+            "searchRadiusSourceUnits": 0.02,
+            "dilationPx": 32,
+            "mrDiv": 2,
+            "normalDiv": 2
+          },
+          "stats": {
+            "bakeResolution": 2048,
+            "supersample": 2,
+            "samples": 2060654,
+            "insideTexels": 1674784,
+            "skirtTexels": 385870,
+            "uvOverlapInteriorTexels": 2273,
+            "matchedSameFacing": 2060654,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0,
+            "searchRadiusSourceUnits": 0.02,
+            "projectionDistanceSourceUnits": {
+              "p50": 0.000354,
+              "p90": 0.000918,
+              "p99": 0.001654,
+              "max": 0.004829
+            },
+            "grid": {
+              "dims": [
+                222,
+                45,
+                41
+              ],
+              "cell": 0.004106,
+              "refs": 1894189
+            }
+          }
+        },
+        {
+          "step": "transform",
+          "detail": "axis map + alignment yaw + uniform scale + origin translation baked into vertices; normals rotated; winding flipped when mirrored"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90 4:4:4, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Source is an AI reconstruction (Pixal3D-family local generation from concept images): hidden/back/underside surfaces and texture are inferred, not designed; some details are blurred or mirrored copies.",
+        "Simplified from 979562 to 2992 triangles; thin parts and small protrusions lose geometric detail (max simplification error ~2.1 mm); fine relief is approximated by the baked normal map only.",
+        "Textures re-baked onto a new automatic atlas (box-projection charts); chart seams can show faint discontinuities at grazing angles and at distant mip levels.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: source reviewStatus unapproved, gameReady false; not approved art; no commercial/model license clearance asserted."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/cabinet-tall.glb",
+      "key": "cabinet-tall",
+      "kind": "prop",
+      "bytes": 890300,
+      "sha256": "5696abfd7f21ba775dc6b3309751eaaa0be1647f7112f093946c06be08461c13",
+      "triangles": 6492,
+      "vertices": 8037,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 235772
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 87755,
+          "channels": "R=255 (unused; occlusion-neutral), G=roughness, B=metalness"
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 268516,
+          "convention": "tangent space, glTF +Y (green) = image up; baked for three.js derivative tangent frame (no TANGENT attribute)"
+        }
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "doubleSided": false,
+        "alphaMode": "OPAQUE"
+      },
+      "source": {
+        "id": "cabinet-tall-03",
+        "title": "Cabinet No. 3",
+        "uploadId": "605b0bbf7f83414abd20e81586657f98",
+        "path": "public/vision-board/models/605b0bbf7f83414abd20e81586657f98.glb",
+        "sha256": "8872d2a21d2cc6d445cb664e0bbb357f742a01e43ba67402c15453b1b59f5f3e",
+        "sha256Verified": true,
+        "bytes": 82087712,
+        "generationMode": "mv",
+        "reviewStatus": "needs-revision",
+        "gameReady": false,
+        "triangles": 956896,
+        "vertices": 654069,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        },
+        "boundsSourceUnits": {
+          "min": [
+            -0.231585,
+            -0.407243,
+            -0.126343
+          ],
+          "max": [
+            0.232487,
+            0.40726,
+            0.125632
+          ]
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform is identity)",
+        "axisMap": [
+          [
+            -1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            -1
+          ]
+        ],
+        "alignmentYawDeg": 0.5,
+        "alignment": {
+          "minAreaYawDeg": 0.5,
+          "applied": true
+        },
+        "R": [
+          [
+            -0.999962,
+            0,
+            -0.008727
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0.008727,
+            0,
+            -0.999962
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 2.334667,
+        "translation": [
+          -0.000367,
+          0.949528,
+          -0.002953
+        ],
+        "orientationEvidence": "Doors, handles, painted numeral and repair plate are on source -Z; rotate 180 deg about Y so the front faces +Z.",
+        "origin": "bottom centre (y=0 is floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "height 1.9 m (uniform scale; other dimensions follow source proportions)",
+        "bbox": {
+          "min": [
+            -0.54137,
+            0,
+            -0.291661
+          ],
+          "max": [
+            0.54137,
+            1.9,
+            0.291661
+          ],
+          "size": [
+            1.082741,
+            1.9,
+            0.583322
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "anchors": null,
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs public/vision-board/local-model-map.json and catalog model.modelSha256"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer MeshoptSimplifier.simplify",
+          "options": {
+            "targetTriangles": 6500,
+            "targetError": 1,
+            "flags": [
+              "Permissive"
+            ]
+          },
+          "resultTriangles": 6492,
+          "errorRelative": 0.001655,
+          "errorSourceUnits": 0.001348,
+          "errorMeters": 0.003147,
+          "droppedDegenerate": 0,
+          "note": "geometry only; source UVs discarded; weld by exact position after collapse"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs (6-axis box-projection charts, 4 smoothing passes, small-chart merge <=6 faces, min-area rotation, shelf packing)",
+          "options": {
+            "atlas": 1024,
+            "paddingPx": 4,
+            "minDot": 0.25,
+            "creaseDeg": 50
+          },
+          "stats": {
+            "charts": 748,
+            "mergedSmallCharts": 126,
+            "degenerateNormalGroups": 0,
+            "texelsPerSourceUnit": 327.144653,
+            "atlas": 1024,
+            "pad": 4,
+            "chartAreaFraction": 0.586596,
+            "vertices": 8037,
+            "triangles": 6492
+          }
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface via uniform grid; bilinear source texture sampling; dense vertex normals -> tangent space)",
+          "options": {
+            "supersample": 2,
+            "searchRadiusSourceUnits": 0.02,
+            "dilationPx": 32,
+            "mrDiv": 2,
+            "normalDiv": 2
+          },
+          "stats": {
+            "bakeResolution": 2048,
+            "supersample": 2,
+            "samples": 2310378,
+            "insideTexels": 1935559,
+            "skirtTexels": 374819,
+            "uvOverlapInteriorTexels": 2526,
+            "matchedSameFacing": 2310378,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0,
+            "searchRadiusSourceUnits": 0.02,
+            "projectionDistanceSourceUnits": {
+              "p50": 0.000257,
+              "p90": 0.00068,
+              "p99": 0.00135,
+              "max": 0.007382
+            },
+            "grid": {
+              "dims": [
+                57,
+                97,
+                34
+              ],
+              "cell": 0.008904,
+              "refs": 1839709
+            }
+          }
+        },
+        {
+          "step": "transform",
+          "detail": "axis map + alignment yaw + uniform scale + origin translation baked into vertices; normals rotated; winding flipped when mirrored"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90 4:4:4, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Source is an AI reconstruction (Pixal3D-family local generation from concept images): hidden/back/underside surfaces and texture are inferred, not designed; some details are blurred or mirrored copies.",
+        "Simplified from 956896 to 6492 triangles; thin parts and small protrusions lose geometric detail (max simplification error ~3.1 mm); fine relief is approximated by the baked normal map only.",
+        "Textures re-baked onto a new automatic atlas (box-projection charts); chart seams can show faint discontinuities at grazing angles and at distant mip levels.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: source reviewStatus unapproved, gameReady false; not approved art; no commercial/model license clearance asserted."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/cabinet-low.glb",
+      "key": "cabinet-low",
+      "kind": "prop",
+      "bytes": 906984,
+      "sha256": "d84562f0394d8825d3361439a82e1ec9c0d8d8cafde2b8d64031ba27a5e8389f",
+      "triangles": 6484,
+      "vertices": 7793,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 269999
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 132638,
+          "channels": "R=255 (unused; occlusion-neutral), G=roughness, B=metalness"
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 213960,
+          "convention": "tangent space, glTF +Y (green) = image up; baked for three.js derivative tangent frame (no TANGENT attribute)"
+        }
+      },
+      "material": {
+        "metallicFactor": 1,
+        "roughnessFactor": 1,
+        "doubleSided": false,
+        "alphaMode": "OPAQUE"
+      },
+      "source": {
+        "id": "cabinet-low-03",
+        "title": "Kept in service",
+        "uploadId": "45469b936d3248ffa988804c11a38b8b",
+        "path": "public/vision-board/models/45469b936d3248ffa988804c11a38b8b.glb",
+        "sha256": "4aa947c638f42fff3a9e45304012d12fb59712e9e1db12d3cef99ec52b8250c0",
+        "sha256Verified": true,
+        "bytes": 98470148,
+        "generationMode": "mv",
+        "reviewStatus": "needs-revision",
+        "gameReady": false,
+        "triangles": 996404,
+        "vertices": 650614,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        },
+        "boundsSourceUnits": {
+          "min": [
+            -0.407328,
+            -0.182918,
+            -0.181643
+          ],
+          "max": [
+            0.40739,
+            0.187785,
+            0.163368
+          ]
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform is identity)",
+        "axisMap": [
+          [
+            -1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            -1
+          ]
+        ],
+        "alignmentYawDeg": 0,
+        "alignment": {
+          "minAreaYawDeg": 0,
+          "applied": false
+        },
+        "R": [
+          [
+            -1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            -1
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 2.296698,
+        "translation": [
+          0.000114,
+          0.419037,
+          -0.020492
+        ],
+        "orientationEvidence": "Doors, mismatched handles and lower-left repair plate are on source -Z; rotate 180 deg about Y so the front faces +Z.",
+        "origin": "bottom centre (y=0 is floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "height 0.85 m (uniform scale; other dimensions follow source proportions)",
+        "bbox": {
+          "min": [
+            -0.935239,
+            0,
+            -0.395466
+          ],
+          "max": [
+            0.935239,
+            0.85,
+            0.395466
+          ],
+          "size": [
+            1.870477,
+            0.85,
+            0.790932
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "anchors": null,
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs public/vision-board/local-model-map.json and catalog model.modelSha256"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer MeshoptSimplifier.simplify",
+          "options": {
+            "targetTriangles": 6500,
+            "targetError": 1,
+            "flags": [
+              "Permissive"
+            ]
+          },
+          "resultTriangles": 6484,
+          "errorRelative": 0.001196,
+          "errorSourceUnits": 0.000974,
+          "errorMeters": 0.002238,
+          "droppedDegenerate": 0,
+          "note": "geometry only; source UVs discarded; weld by exact position after collapse"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs (6-axis box-projection charts, 4 smoothing passes, small-chart merge <=6 faces, min-area rotation, shelf packing)",
+          "options": {
+            "atlas": 1024,
+            "paddingPx": 4,
+            "minDot": 0.25,
+            "creaseDeg": 50
+          },
+          "stats": {
+            "charts": 710,
+            "mergedSmallCharts": 207,
+            "degenerateNormalGroups": 0,
+            "texelsPerSourceUnit": 346.429421,
+            "atlas": 1024,
+            "pad": 4,
+            "chartAreaFraction": 0.652094,
+            "vertices": 7793,
+            "triangles": 6484
+          }
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs + bake-worker.mjs (closest same-facing dense surface via uniform grid; bilinear source texture sampling; dense vertex normals -> tangent space)",
+          "options": {
+            "supersample": 2,
+            "searchRadiusSourceUnits": 0.02,
+            "dilationPx": 32,
+            "mrDiv": 2,
+            "normalDiv": 2
+          },
+          "stats": {
+            "bakeResolution": 2048,
+            "supersample": 2,
+            "samples": 2719982,
+            "insideTexels": 2409802,
+            "skirtTexels": 310180,
+            "uvOverlapInteriorTexels": 493,
+            "matchedSameFacing": 2719982,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0,
+            "searchRadiusSourceUnits": 0.02,
+            "projectionDistanceSourceUnits": {
+              "p50": 0.000205,
+              "p90": 0.000495,
+              "p99": 0.000994,
+              "max": 0.004192
+            },
+            "grid": {
+              "dims": [
+                94,
+                45,
+                43
+              ],
+              "cell": 0.009179,
+              "refs": 1906302
+            }
+          }
+        },
+        {
+          "step": "transform",
+          "detail": "axis map + alignment yaw + uniform scale + origin translation baked into vertices; normals rotated; winding flipped when mirrored"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG q86 4:4:4, metallicRoughness JPEG q90 4:4:4, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Source is an AI reconstruction (Pixal3D-family local generation from concept images): hidden/back/underside surfaces and texture are inferred, not designed; some details are blurred or mirrored copies.",
+        "Simplified from 996404 to 6484 triangles; thin parts and small protrusions lose geometric detail (max simplification error ~2.2 mm); fine relief is approximated by the baked normal map only.",
+        "Textures re-baked onto a new automatic atlas (box-projection charts); chart seams can show faint discontinuities at grazing angles and at distant mip levels.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: source reviewStatus unapproved, gameReady false; not approved art; no commercial/model license clearance asserted."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/sign.glb",
+      "key": "sign",
+      "kind": "procedural-reexport",
+      "bytes": 259508,
+      "sha256": "51aee024f5ff0cfec1cbdb93912bd79672612023a4f5add2b1b1eb13a8043de3",
+      "triangles": 300,
+      "primitives": 3,
+      "textures": [
+        {
+          "texture": "working-face-basecolor.png",
+          "from": [
+            2048,
+            448
+          ],
+          "to": [
+            1024,
+            224
+          ],
+          "format": "image/jpeg",
+          "greenInverted": false
+        },
+        {
+          "texture": "working-face-metallic-roughness.png",
+          "from": [
+            2048,
+            448
+          ],
+          "to": [
+            1024,
+            224
+          ],
+          "format": "image/jpeg",
+          "greenInverted": false
+        },
+        {
+          "texture": "working-face-normal.png",
+          "from": [
+            2048,
+            448
+          ],
+          "to": [
+            1024,
+            224
+          ],
+          "format": "image/png",
+          "greenInverted": true
+        },
+        {
+          "texture": "authored-backing-basecolor.png",
+          "from": [
+            256,
+            256
+          ],
+          "to": [
+            256,
+            256
+          ],
+          "format": "image/jpeg",
+          "greenInverted": false
+        },
+        {
+          "texture": "authored-backing-metallic-roughness.png",
+          "from": [
+            256,
+            256
+          ],
+          "to": [
+            256,
+            256
+          ],
+          "format": "image/jpeg",
+          "greenInverted": false
+        },
+        {
+          "texture": "authored-backing-normal.png",
+          "from": [
+            256,
+            256
+          ],
+          "to": [
+            256,
+            256
+          ],
+          "format": "image/png",
+          "greenInverted": true
+        },
+        {
+          "texture": "fastener-basecolor.png",
+          "from": [
+            128,
+            128
+          ],
+          "to": [
+            128,
+            128
+          ],
+          "format": "image/jpeg",
+          "greenInverted": false
+        },
+        {
+          "texture": "fastener-metallic-roughness.png",
+          "from": [
+            128,
+            128
+          ],
+          "to": [
+            128,
+            128
+          ],
+          "format": "image/jpeg",
+          "greenInverted": false
+        },
+        {
+          "texture": "fastener-normal.png",
+          "from": [
+            128,
+            128
+          ],
+          "to": [
+            128,
+            128
+          ],
+          "format": "image/png",
+          "greenInverted": true
+        }
+      ],
+      "source": {
+        "id": "env-sign-03",
+        "uploadId": "4846641ed0de48bf8c664d68c25c6e4c",
+        "path": "public/vision-board/models/4846641ed0de48bf8c664d68c25c6e4c.glb",
+        "sha256": "5458ff9bd48d162ee52bca6451f489f19dc60de4df6aabdb6c381684d7c3f7d4",
+        "sha256Verified": true,
+        "bytes": 1688408,
+        "generationMode": "procedural",
+        "reviewStatus": "unapproved",
+        "gameReady": false
+      },
+      "transform": {
+        "description": "none: geometry, materials, samplers and node layout preserved byte-for-byte except texture images and node name/extras",
+        "origin": "centre of the backing plate",
+        "front": "+Z"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "native": "1.8 x 0.38 m face, 0.018 m plate (rim/fasteners to +0.018 z)",
+        "bbox": {
+          "min": [
+            -0.9,
+            -0.19,
+            -0.009
+          ],
+          "max": [
+            0.9,
+            0.19,
+            0.018
+          ],
+          "size": [
+            1.8,
+            0.38,
+            0.027
+          ]
+        }
+      },
+      "pipeline": [
+        {
+          "step": "verify-source"
+        },
+        {
+          "step": "texture-downsize",
+          "detail": "long side <= 1024 (lanczos3); colour JPEG q85 4:4:4, metallic-roughness JPEG q90 4:4:4, normal PNG with GREEN INVERTED to glTF convention and renormalised"
+        },
+        {
+          "step": "write",
+          "tool": "gltf-transform NodeIO"
+        }
+      ],
+      "limitations": [
+        "Procedural draft (provisional dimensions, unreviewed); not approved art; no blanket license clearance (vendored DejaVu font notice applies to the lettering).",
+        "Normal map green channel inverted relative to the source (source used green-down; verified by grazing-light render)."
+      ]
+    }
+  ],
+  "environmentTextures": {
+    "directory": "game/public/assets/textures",
+    "naming": "<asset>-<material>-<color|orm|normal>.<ext>",
+    "normalMapNote": "The procedural kit (reference/tools/procedural-environment-kit/generate_v2.py) encodes normal green as -dH/dv with v pointing image-down (\"green down\"). glTF/three.js expect green = image-up, so tiles rendered with the source maps light from the wrong vertical direction (grazing-light check: qa-artifacts/assets/props/procedural-normal-green-check.png). All extracted normal maps (and sign.glb) have the GREEN channel INVERTED to the glTF convention. Sources untouched.",
+    "uvNote": "Working-face textures are authored for one panel: UV 0..1 spans the whole face (sizes below). To tile level geometry at real scale, repeat every <uMeters> horizontally and <vMeters> vertically (or map a sub-range). They are NOT seamless by construction (noise/spots at the borders); joints are measured from pixels.",
+    "table": [
+      {
+        "file": "game/public/assets/textures/wall-working-face-color.jpg",
+        "bytes": 73553,
+        "sha256": "5b7dd7cc6963f2f470b33632300d9d5a44f87d404c5681a1f68c6674c00b7105",
+        "size": [
+          1024,
+          512
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-wall-03",
+          "uploadId": "3a998a5eea914f7bad3c8e3b0012b49e",
+          "glbSha256": "dfcfec5ba1c80c11be1e208d8ba41fc777c369047a81c8375f595db21211a275",
+          "material": "working-face",
+          "image": "working-face-basecolor.png",
+          "size": [
+            1536,
+            768
+          ],
+          "sha256": "79d2cbb3e61e7ff62fffaf94d7bc307563cb551135b4e4617fc311f043c9a043"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.8,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "features": {
+          "horizontalJointsMetersFromBottom": [
+            1.7977,
+            1.6488,
+            1.1988,
+            1.0488,
+            0.8988,
+            0.7488,
+            0.5988,
+            0.4488
+          ],
+          "verticalJointsMetersFromLeft": [
+            0.0023,
+            0.1816,
+            0.3621,
+            0.5402,
+            0.7207,
+            0.9012,
+            1.0816,
+            1.2621,
+            1.4402,
+            1.6207,
+            1.8012,
+            1.9816,
+            2.1621,
+            2.3402,
+            2.5207,
+            2.7012,
+            2.8816,
+            3.0621,
+            3.2402,
+            3.4207,
+            3.5988
+          ],
+          "tealBandTileFaces": {
+            "topMetersFromBottom": 1.4953,
+            "bottomMetersFromBottom": 1.3523,
+            "pixelRows": [
+              [
+                130,
+                190
+              ]
+            ]
+          },
+          "charcoalBaseTileFaces": {
+            "topMetersFromBottom": 0.2953,
+            "bottomMetersFromBottom": 0.0023,
+            "pixelRows": [
+              [
+                642,
+                702
+              ],
+              [
+                706,
+                766
+              ]
+            ]
+          },
+          "courseHeightMeters": 0.15,
+          "topCourseVerticalJointsMetersFromLeft": [
+            0.0023,
+            0.3621,
+            0.7207,
+            1.0816,
+            1.4402,
+            1.8012,
+            2.1621,
+            2.5207,
+            2.8816,
+            3.2402,
+            3.5988
+          ],
+          "tileWidthMeters": 0.3598,
+          "note": "Running-bond tiles: alternate courses offset by half a tile. Joint/band heights include the 2 px grout margins of each course; \"tile faces\" exclude grout."
+        },
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/wall-working-face-orm.jpg",
+        "bytes": 268609,
+        "sha256": "b095e0274a6088031c090dd3171a0dcd9e6935fb30470284e87b6f9cf2b6af29",
+        "size": [
+          1024,
+          512
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-wall-03",
+          "uploadId": "3a998a5eea914f7bad3c8e3b0012b49e",
+          "glbSha256": "dfcfec5ba1c80c11be1e208d8ba41fc777c369047a81c8375f595db21211a275",
+          "material": "working-face",
+          "image": "working-face-metallic-roughness.png",
+          "size": [
+            1536,
+            768
+          ],
+          "sha256": "4e680a3a6f9f21b206da5328bdf4577fd6ea0869514f6903b9ad832da090fa65"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.8,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/wall-working-face-normal.png",
+        "bytes": 75357,
+        "sha256": "8d49f85bbea8d55f88f812f43b1f5feeffcc53011eea12d5f67e1b2a56fb0a44",
+        "size": [
+          1024,
+          512
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-wall-03",
+          "uploadId": "3a998a5eea914f7bad3c8e3b0012b49e",
+          "glbSha256": "dfcfec5ba1c80c11be1e208d8ba41fc777c369047a81c8375f595db21211a275",
+          "material": "working-face",
+          "image": "working-face-normal.png",
+          "size": [
+            1536,
+            768
+          ],
+          "sha256": "9b9c1bb59379af8928e94baec47e644b5b18a87f4a6610459ca8bb32875d039a"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.8,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/wall-authored-backing-color.jpg",
+        "bytes": 5661,
+        "sha256": "df2cf1701bae0c4ac7886f524584b88f76134339e86c7d4a99927a7eecb23208",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-wall-03",
+          "uploadId": "3a998a5eea914f7bad3c8e3b0012b49e",
+          "glbSha256": "dfcfec5ba1c80c11be1e208d8ba41fc777c369047a81c8375f595db21211a275",
+          "material": "authored-backing",
+          "image": "authored-backing-basecolor.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "3cf639603dfa2b6e0ee4262814d1ba52fc5e7b40c04ffdfa43dab81f9701e8b8"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.8
+            ],
+            "leftRight": [
+              0.065,
+              1.8
+            ],
+            "topBottom": [
+              3.6,
+              0.065
+            ]
+          }
+        },
+        "features": {},
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/wall-authored-backing-orm.jpg",
+        "bytes": 24344,
+        "sha256": "0a6790cb7cc71a80dd4db11aff327c5e8d28cef5218f8d730439bfd74968c5e0",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-wall-03",
+          "uploadId": "3a998a5eea914f7bad3c8e3b0012b49e",
+          "glbSha256": "dfcfec5ba1c80c11be1e208d8ba41fc777c369047a81c8375f595db21211a275",
+          "material": "authored-backing",
+          "image": "authored-backing-metallic-roughness.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "ae75b7f1d9f50bc3214fbb6e76286629c39b8c58354712ce23d7e42c5fcf2476"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.8
+            ],
+            "leftRight": [
+              0.065,
+              1.8
+            ],
+            "topBottom": [
+              3.6,
+              0.065
+            ]
+          }
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/wall-authored-backing-normal.png",
+        "bytes": 12699,
+        "sha256": "78af34baf652476cf23075560f7fb27975df2d99e013d12bdac82ba4a10c3fb5",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-wall-03",
+          "uploadId": "3a998a5eea914f7bad3c8e3b0012b49e",
+          "glbSha256": "dfcfec5ba1c80c11be1e208d8ba41fc777c369047a81c8375f595db21211a275",
+          "material": "authored-backing",
+          "image": "authored-backing-normal.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "a7dc6774b14dee61cf2f53c57d57c0f9840ca186bb1f5e60fce826e1d9ac90ab"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.8
+            ],
+            "leftRight": [
+              0.065,
+              1.8
+            ],
+            "topBottom": [
+              3.6,
+              0.065
+            ]
+          }
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/platform-working-face-color.jpg",
+        "bytes": 81621,
+        "sha256": "1d1b635d6439ba9dc9f9d1a98043e6a8ba1bdc30d5b1270360dd87e9eef927b7",
+        "size": [
+          1024,
+          1024
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "working-face",
+          "image": "working-face-basecolor.png",
+          "size": [
+            1024,
+            1024
+          ],
+          "sha256": "b708ffee7c856c9c4c6232ed166572cb59befe897d35ee083987a7532055f01d"
+        },
+        "spans": {
+          "uMeters": 2.4,
+          "vMeters": 2.28,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "features": {
+          "horizontalJointsMetersFromBottom": [
+            1.5152
+          ],
+          "verticalJointsMetersFromLeft": [
+            1.2012
+          ],
+          "safetyEdgeOverlay": {
+            "material": "integrated-safety-edge",
+            "coversMetersFromBottom": [
+              0,
+              0.35
+            ],
+            "raisedMeters": 0.01,
+            "note": "separate raised plate + 200 tactile bumps (5 rows x 40) sitting on top of the bottom strip of the working face; the face texture continues underneath"
+          },
+          "orientationNote": "Catalog upright display: X right, Y up, face +Z. In a level the slab face lies flat as the platform top; the bottom edge (safety strip) is the track-side edge."
+        },
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/platform-working-face-orm.jpg",
+        "bytes": 383868,
+        "sha256": "84615abbfd9be47e8db07fa5daf921e0c9592b503aa60702e2ac3181d3c9eabd",
+        "size": [
+          1024,
+          1024
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "working-face",
+          "image": "working-face-metallic-roughness.png",
+          "size": [
+            1024,
+            1024
+          ],
+          "sha256": "28f47c3e2b01303a9f803327be9cea86493b0eb8e531d46ea53e1c0a2d0f2b81"
+        },
+        "spans": {
+          "uMeters": 2.4,
+          "vMeters": 2.28,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/platform-working-face-normal.png",
+        "bytes": 178949,
+        "sha256": "ef0055da5772297d4837b9181aa1d356ae97b4dcf315a8f2a5617cbb415fad02",
+        "size": [
+          1024,
+          1024
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "working-face",
+          "image": "working-face-normal.png",
+          "size": [
+            1024,
+            1024
+          ],
+          "sha256": "fa35272a2c41d0350bf6cd73027fa40ef9512d1ad1df2e9f3cada2ffd6d26707"
+        },
+        "spans": {
+          "uMeters": 2.4,
+          "vMeters": 2.28,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/platform-authored-backing-color.jpg",
+        "bytes": 5686,
+        "sha256": "2946f51166c3f41cb45c494347e8a3cd792e0a166ae4d6b797d33dfa1bdad416",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "authored-backing",
+          "image": "authored-backing-basecolor.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "da513f1fa44667fc03f76a48460857dd263f03a67e896652f718ced0beb0c9af"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              2.4,
+              2.28
+            ],
+            "leftRight": [
+              0.14,
+              2.28
+            ],
+            "topBottom": [
+              2.4,
+              0.14
+            ]
+          }
+        },
+        "features": {},
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/platform-authored-backing-orm.jpg",
+        "bytes": 24426,
+        "sha256": "ce8be1e225044401527aca6049e285f251943d484e95e272c3921dd42c78f4c2",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "authored-backing",
+          "image": "authored-backing-metallic-roughness.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "dbcd7e925f58bc505079074cac6eeee02f839f835d0d4703474bb0d4c9072b48"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              2.4,
+              2.28
+            ],
+            "leftRight": [
+              0.14,
+              2.28
+            ],
+            "topBottom": [
+              2.4,
+              0.14
+            ]
+          }
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/platform-authored-backing-normal.png",
+        "bytes": 12905,
+        "sha256": "788a3491e853e71788f0362e390c750c20dd025b5b2e28a2b17ecd025a337ab4",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "authored-backing",
+          "image": "authored-backing-normal.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "3b733439514ca5a41523466c03a1e3f09ef4f02ea18392bf7fd98cb226c1973c"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              2.4,
+              2.28
+            ],
+            "leftRight": [
+              0.14,
+              2.28
+            ],
+            "topBottom": [
+              2.4,
+              0.14
+            ]
+          }
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/platform-integrated-safety-edge-color.jpg",
+        "bytes": 28402,
+        "sha256": "912bd719515ca992d644974995ca3df35736a6e6d0b93289dcb2529ed223f664",
+        "size": [
+          1024,
+          160
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "integrated-safety-edge",
+          "image": "integrated-safety-edge-basecolor.png",
+          "size": [
+            1024,
+            160
+          ],
+          "sha256": "856013020c467ec21f349f320e6a710b0e0672c3082c5d7bedbf01db217d71d5"
+        },
+        "spans": {
+          "uMeters": 2.4,
+          "vMeters": 0.35,
+          "region": "full 0..1 on the front of the raised edge plate (also its sides/top); tactile bump caps use radial 0..1 UVs"
+        },
+        "features": {
+          "darkGroovesMetersFromLeft": [
+            0.0035,
+            0.4816,
+            0.9598,
+            1.4379,
+            1.916,
+            2.3941
+          ]
+        },
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/platform-integrated-safety-edge-orm.jpg",
+        "bytes": 60066,
+        "sha256": "94384ae8e151b3dc9d3577b65311771e231bcfc15d3dab459941c1d78ffa3cca",
+        "size": [
+          1024,
+          160
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "integrated-safety-edge",
+          "image": "integrated-safety-edge-metallic-roughness.png",
+          "size": [
+            1024,
+            160
+          ],
+          "sha256": "ef4232d5f054593bf869f5975337ca3d32a6542f3e4cdd5af08b357cacb12f10"
+        },
+        "spans": {
+          "uMeters": 2.4,
+          "vMeters": 0.35,
+          "region": "full 0..1 on the front of the raised edge plate (also its sides/top); tactile bump caps use radial 0..1 UVs"
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/platform-integrated-safety-edge-normal.png",
+        "bytes": 844,
+        "sha256": "e83536740051b8cd615d23a1b405ab17ff2b20bfd8e27dd5f647b58d8a647561",
+        "size": [
+          1024,
+          160
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-platform-03",
+          "uploadId": "551a78689ed04feb97d0d1f7ffaf607d",
+          "glbSha256": "2545735be092cfc7c7de8553a8c2137caf4317e52922b471960f532e2a01e9f5",
+          "material": "integrated-safety-edge",
+          "image": "integrated-safety-edge-normal.png",
+          "size": [
+            1024,
+            160
+          ],
+          "sha256": "7f46b92f63ade4056e3c997662bcb745f9fab49a3bb1f7b6e86040567a768626"
+        },
+        "spans": {
+          "uMeters": 2.4,
+          "vMeters": 0.35,
+          "region": "full 0..1 on the front of the raised edge plate (also its sides/top); tactile bump caps use radial 0..1 UVs"
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/ceiling-working-face-color.jpg",
+        "bytes": 29257,
+        "sha256": "aa19eeb3d67f2181d2e156615a2199bf605b42ec4410c4642e71a0279cc0d6a3",
+        "size": [
+          1024,
+          341
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-ceiling-03",
+          "uploadId": "784fcda678c6401ba68cb476f29c5754",
+          "glbSha256": "15f429bc0c9ac30bbe18ef50a388a6a8e66a4f7a59a38405672889f88e274be5",
+          "material": "working-face",
+          "image": "working-face-basecolor.png",
+          "size": [
+            1536,
+            512
+          ],
+          "sha256": "621785ed4701c853b247c446d20bfdd00006d13ade8acfca0101fead0f7bedf5"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.15,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "features": {
+          "horizontalJointsMetersFromBottom": [],
+          "verticalJointsMetersFromLeft": [
+            0.2707,
+            0.791,
+            1.3863,
+            2.0168,
+            2.7012,
+            3.2754
+          ]
+        },
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/ceiling-working-face-orm.jpg",
+        "bytes": 160656,
+        "sha256": "bd068b213befd43bbb63b06e77c86c6bb12b697810c4a4d81a921b8abd02f7a3",
+        "size": [
+          1024,
+          341
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-ceiling-03",
+          "uploadId": "784fcda678c6401ba68cb476f29c5754",
+          "glbSha256": "15f429bc0c9ac30bbe18ef50a388a6a8e66a4f7a59a38405672889f88e274be5",
+          "material": "working-face",
+          "image": "working-face-metallic-roughness.png",
+          "size": [
+            1536,
+            512
+          ],
+          "sha256": "73b3fa26a0116813bd9cdaec42820d4e48494a37e89a6acf77e827b482917505"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.15,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/ceiling-working-face-normal.png",
+        "bytes": 109696,
+        "sha256": "64e151bf64122abc52ad898a356a52a1720c8a799dc21fa571333553fe0565be",
+        "size": [
+          1024,
+          341
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-ceiling-03",
+          "uploadId": "784fcda678c6401ba68cb476f29c5754",
+          "glbSha256": "15f429bc0c9ac30bbe18ef50a388a6a8e66a4f7a59a38405672889f88e274be5",
+          "material": "working-face",
+          "image": "working-face-normal.png",
+          "size": [
+            1536,
+            512
+          ],
+          "sha256": "949890c724b487b83699f0a1bfd11970f5770a019e887bbc92f2148db2da0b63"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.15,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/ceiling-authored-backing-color.jpg",
+        "bytes": 5646,
+        "sha256": "17b608b6ed8e1609730239a4fe62193194f0e9f2a523023c779543ae6c371ebd",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-ceiling-03",
+          "uploadId": "784fcda678c6401ba68cb476f29c5754",
+          "glbSha256": "15f429bc0c9ac30bbe18ef50a388a6a8e66a4f7a59a38405672889f88e274be5",
+          "material": "authored-backing",
+          "image": "authored-backing-basecolor.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "909b4f24839f9bdf610a2e54a0f968c9a57dd02b4ca41294ca2cc1ba34be1fb5"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.15
+            ],
+            "leftRight": [
+              0.1,
+              1.15
+            ],
+            "topBottom": [
+              3.6,
+              0.1
+            ]
+          }
+        },
+        "features": {},
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/ceiling-authored-backing-orm.jpg",
+        "bytes": 24605,
+        "sha256": "d6a238dd0787d92dd74d5e2483ed9d96996937a7ce28d87f6c4b354d9913acba",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-ceiling-03",
+          "uploadId": "784fcda678c6401ba68cb476f29c5754",
+          "glbSha256": "15f429bc0c9ac30bbe18ef50a388a6a8e66a4f7a59a38405672889f88e274be5",
+          "material": "authored-backing",
+          "image": "authored-backing-metallic-roughness.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "cfaa01973d3f9db4b43c17c0bf5efca437524bf4f300211c3f52ef868adad566"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.15
+            ],
+            "leftRight": [
+              0.1,
+              1.15
+            ],
+            "topBottom": [
+              3.6,
+              0.1
+            ]
+          }
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/ceiling-authored-backing-normal.png",
+        "bytes": 13144,
+        "sha256": "99be6bcb0ab66e2e10b4ef9d8aba27f311e135181bc1aea4c99acdf1005cb677",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-ceiling-03",
+          "uploadId": "784fcda678c6401ba68cb476f29c5754",
+          "glbSha256": "15f429bc0c9ac30bbe18ef50a388a6a8e66a4f7a59a38405672889f88e274be5",
+          "material": "authored-backing",
+          "image": "authored-backing-normal.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "a52996bb89abd7895fdcfb9946647af1ac541a9c05668282e0065d7e7c9d74b4"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.15
+            ],
+            "leftRight": [
+              0.1,
+              1.15
+            ],
+            "topBottom": [
+              3.6,
+              0.1
+            ]
+          }
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/tunnel-working-face-color.jpg",
+        "bytes": 67133,
+        "sha256": "e95e6e97075d7c64f7043728deac7e1a9fda63b01770d409c235120425bae6f6",
+        "size": [
+          1024,
+          384
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-tunnel-03",
+          "uploadId": "fdb52ba43c3c408fba3cfc3ab633d406",
+          "glbSha256": "52a37200c11fe8c714b8d637587a00822fc79dfd7a679e0f5e03fd7618ab92a0",
+          "material": "working-face",
+          "image": "working-face-basecolor.png",
+          "size": [
+            1536,
+            576
+          ],
+          "sha256": "dfa450b6657ac9d20260f0e1cf64fed0cef6576e7ce2846ba06785297ce6a924"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.38,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "features": {
+          "horizontalJointsMetersFromBottom": [
+            0.9188,
+            0.4588
+          ],
+          "verticalJointsMetersFromLeft": [
+            0.4254,
+            0.9715,
+            1.8387,
+            2.6824
+          ]
+        },
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/tunnel-working-face-orm.jpg",
+        "bytes": 55015,
+        "sha256": "762a12cede02154d37008a3611537898ff02681e239b96ebd750d24d07a20f13",
+        "size": [
+          1024,
+          384
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-tunnel-03",
+          "uploadId": "fdb52ba43c3c408fba3cfc3ab633d406",
+          "glbSha256": "52a37200c11fe8c714b8d637587a00822fc79dfd7a679e0f5e03fd7618ab92a0",
+          "material": "working-face",
+          "image": "working-face-metallic-roughness.png",
+          "size": [
+            1536,
+            576
+          ],
+          "sha256": "4e73347c2c887fb081df99fa0c0ca31549ee40ebd16e37847a13e34afbe62621"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.38,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/tunnel-working-face-normal.png",
+        "bytes": 551077,
+        "sha256": "c80295e3b0412aee2d22c326c38075a2ffa315c171666c635c8860ef22bbeef2",
+        "size": [
+          1024,
+          384
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-tunnel-03",
+          "uploadId": "fdb52ba43c3c408fba3cfc3ab633d406",
+          "glbSha256": "52a37200c11fe8c714b8d637587a00822fc79dfd7a679e0f5e03fd7618ab92a0",
+          "material": "working-face",
+          "image": "working-face-normal.png",
+          "size": [
+            1536,
+            576
+          ],
+          "sha256": "86a45e9dcfc26d0fb46ac3a697462ab65d9156f74f231a033ef9fb0f3d0bea37"
+        },
+        "spans": {
+          "uMeters": 3.6,
+          "vMeters": 1.38,
+          "region": "UV 0..1 x 0..1 covers the whole front (+Z) working face; u=0 at the left (-X) edge, v=0 at the TOP edge (glTF convention), v=1 at the bottom edge"
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      },
+      {
+        "file": "game/public/assets/textures/tunnel-authored-backing-color.jpg",
+        "bytes": 5552,
+        "sha256": "26389888ffa68590005c90469029ec68ae8d5575c070fd703c338b88ae22726c",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "base colour (sRGB)",
+        "source": {
+          "asset": "env-tunnel-03",
+          "uploadId": "fdb52ba43c3c408fba3cfc3ab633d406",
+          "glbSha256": "52a37200c11fe8c714b8d637587a00822fc79dfd7a679e0f5e03fd7618ab92a0",
+          "material": "authored-backing",
+          "image": "authored-backing-basecolor.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "107f08e9f8c8bef3496abe4d36513980e97ac5bdbbdb7bfba53d384fab481c0a"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.38
+            ],
+            "leftRight": [
+              0.1,
+              1.38
+            ],
+            "topBottom": [
+              3.6,
+              0.1
+            ]
+          }
+        },
+        "features": {},
+        "encoding": "JPEG q85 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/tunnel-authored-backing-orm.jpg",
+        "bytes": 24534,
+        "sha256": "136bcc3de4c4eff6e4fd50f5478416f1a35f66a6c04f05b2ebfe79307cc31ae1",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/jpeg",
+        "channel": "packed ORM: R=255 (no occlusion), G=roughness, B=metalness (0)",
+        "source": {
+          "asset": "env-tunnel-03",
+          "uploadId": "fdb52ba43c3c408fba3cfc3ab633d406",
+          "glbSha256": "52a37200c11fe8c714b8d637587a00822fc79dfd7a679e0f5e03fd7618ab92a0",
+          "material": "authored-backing",
+          "image": "authored-backing-metallic-roughness.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "dd297761085ed40a37effa384483a369f6c0b6d1c779405db7b7a9c747a936c3"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.38
+            ],
+            "leftRight": [
+              0.1,
+              1.38
+            ],
+            "topBottom": [
+              3.6,
+              0.1
+            ]
+          }
+        },
+        "encoding": "JPEG q90 4:4:4"
+      },
+      {
+        "file": "game/public/assets/textures/tunnel-authored-backing-normal.png",
+        "bytes": 12244,
+        "sha256": "64032b210fac49e89c567275e8896317e67fbe00a27aef7046ad22d649034a3d",
+        "size": [
+          256,
+          256
+        ],
+        "format": "image/png",
+        "channel": "tangent-space normal, glTF convention (+Y/green = image up); GREEN INVERTED from source",
+        "source": {
+          "asset": "env-tunnel-03",
+          "uploadId": "fdb52ba43c3c408fba3cfc3ab633d406",
+          "glbSha256": "52a37200c11fe8c714b8d637587a00822fc79dfd7a679e0f5e03fd7618ab92a0",
+          "material": "authored-backing",
+          "image": "authored-backing-normal.png",
+          "size": [
+            256,
+            256
+          ],
+          "sha256": "923063f6aaa1a9bfda6945461957b883eaae906a03ae2a8a2d366ca8cabc4183"
+        },
+        "spans": {
+          "region": "each of the 5 non-front faces of the backing box maps the FULL 0..1 texture (stretched per face)",
+          "faces": {
+            "back": [
+              3.6,
+              1.38
+            ],
+            "leftRight": [
+              0.1,
+              1.38
+            ],
+            "topBottom": [
+              3.6,
+              0.1
+            ]
+          }
+        },
+        "materialNormalScale": 0.65,
+        "encoding": "PNG lossless"
+      }
+    ]
+  },
+  "sourceAudit": {
+    "modelMap": "public/vision-board/local-model-map.json",
+    "catalog": "public/vision-board/core-assets.json",
+    "note": "Masters read-only; no file under public/vision-board/ or reference/ was written."
+  }
+}

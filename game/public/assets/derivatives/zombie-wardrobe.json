@@ -1,0 +1,3604 @@
+{
+  "schema": "the-last-line/zombie-wardrobe@1",
+  "title": "Zombie wardrobe: bodies x slot wearables (iteration 06) - prototype derivatives",
+  "status": {
+    "approved": false,
+    "gameReady": false
+  },
+  "authoredOn": "2026-10-26",
+  "canonicalBody": "lastshift",
+  "slots": [
+    "lower",
+    "upper",
+    "face",
+    "head"
+  ],
+  "counts": {
+    "bodies": 6,
+    "wearables": 16,
+    "perSlotWearables": {
+      "lower": 3,
+      "upper": 8,
+      "face": 2,
+      "head": 3
+    },
+    "pairs": 89,
+    "looks": 1924,
+    "perBody": {
+      "lastshift": {
+        "pairs": 16,
+        "perSlot": {
+          "lower": 3,
+          "upper": 8,
+          "face": 2,
+          "head": 3
+        },
+        "compositions": 431
+      },
+      "courier": {
+        "pairs": 16,
+        "perSlot": {
+          "lower": 3,
+          "upper": 8,
+          "face": 2,
+          "head": 3
+        },
+        "compositions": 431
+      },
+      "scavenger": {
+        "pairs": 10,
+        "perSlot": {
+          "lower": 3,
+          "upper": 7,
+          "face": 0,
+          "head": 0
+        },
+        "compositions": 31
+      },
+      "agent": {
+        "pairs": 15,
+        "perSlot": {
+          "lower": 3,
+          "upper": 7,
+          "face": 2,
+          "head": 3
+        },
+        "compositions": 383
+      },
+      "heavyset": {
+        "pairs": 16,
+        "perSlot": {
+          "lower": 3,
+          "upper": 8,
+          "face": 2,
+          "head": 3
+        },
+        "compositions": 324
+      },
+      "tall": {
+        "pairs": 16,
+        "perSlot": {
+          "lower": 3,
+          "upper": 8,
+          "face": 2,
+          "head": 3
+        },
+        "compositions": 324
+      }
+    },
+    "definitions": {
+      "pairs": "supported body x wearable pairs: each is a separately fitted, skinned and masked mesh variant (built here, validated by tests); excluded/covered pairs are not counted",
+      "looks": "valid compositions per body: product over the slots the body does not cover of (fitted wearables + none, or no none for required slots), minus the nothing-worn base look; pairwise runtime incompatibilities (registry incompatibleWith) are applied on top by the runtime count"
+    }
+  },
+  "excluded": [
+    {
+      "body": "scavenger",
+      "wearable": "hardhat",
+      "slot": "head",
+      "rule": "body-covers-slot",
+      "reason": "body scavenger covers the head slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "scavenger",
+      "wearable": "cap",
+      "slot": "head",
+      "rule": "body-covers-slot",
+      "reason": "body scavenger covers the head slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "scavenger",
+      "wearable": "beanie",
+      "slot": "head",
+      "rule": "body-covers-slot",
+      "reason": "body scavenger covers the head slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "scavenger",
+      "wearable": "gasmask",
+      "slot": "face",
+      "rule": "body-covers-slot",
+      "reason": "body scavenger covers the face slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "scavenger",
+      "wearable": "respirator",
+      "slot": "face",
+      "rule": "body-covers-slot",
+      "reason": "body scavenger covers the face slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "scavenger",
+      "wearable": "puffer",
+      "slot": "upper",
+      "rule": "motion-quality-gate",
+      "reason": "6.8% of its triangles stretch > 3x in the clips (limit 5%): sheet-like webbing under the raised arms",
+      "motion": {
+        "triangles": 7460,
+        "p50": 1.137,
+        "p99": 8.034,
+        "max": 32.51,
+        "over2x": 930,
+        "over3x": 507,
+        "fractionOver": 0.068,
+        "worstClips": {
+          "Attack": 55,
+          "Death": 6,
+          "Run": 16
+        },
+        "poses": 85
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "puffer",
+      "slot": "upper",
+      "rule": "motion-quality-gate",
+      "reason": "6.0% of its triangles stretch > 3x in the clips (limit 5%): sheet-like webbing under the raised arms",
+      "motion": {
+        "triangles": 7460,
+        "p50": 1.147,
+        "p99": 7.595,
+        "max": 46.42,
+        "over2x": 801,
+        "over3x": 449,
+        "fractionOver": 0.0602,
+        "worstClips": {
+          "Attack": 24,
+          "Run": 48,
+          "Death": 4
+        },
+        "poses": 85
+      }
+    }
+  ],
+  "skipped": {
+    "bodies": [],
+    "wearables": []
+  },
+  "quality": {
+    "stretchRatio": 3,
+    "maxFractionOver": 0.05
+  },
+  "totalBytes": 16756916,
+  "totalMB": 16.76,
+  "bodies": {
+    "lastshift": {
+      "glb": "game/public/assets/models/zombie-body-lastshift.glb",
+      "bytes": 732068,
+      "sha256": "4be697eae476eaff5d4deb33c95d8145348b4a0b160afc82e741a4ee723d9782",
+      "triangles": 14912,
+      "vertices": 11784,
+      "heightM": 1.78,
+      "hit": {
+        "head": 0.1199,
+        "torso": 0.1462,
+        "arm": 0.0722,
+        "leg": 0.1116,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {},
+      "provenance": "generated",
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0312,
+      "motion": {
+        "triangles": 14912,
+        "p50": 1.029,
+        "p99": 2.013,
+        "max": 5.44,
+        "over2x": 156,
+        "over3x": 23,
+        "fractionOver": 0.0015,
+        "worstClips": {
+          "Death": 78,
+          "Run": 51,
+          "Attack": 20,
+          "Hit": 2
+        },
+        "poses": 85
+      }
+    },
+    "courier": {
+      "glb": "game/public/assets/models/zombie-body-courier.glb",
+      "bytes": 695128,
+      "sha256": "6cb795d324d28b20e5a0bff170883d1ef6c5dec73fa75c7b8725dde8157a1bda",
+      "triangles": 14956,
+      "vertices": 11165,
+      "heightM": 1.8,
+      "hit": {
+        "head": 0.106,
+        "torso": 0.123,
+        "arm": 0.0651,
+        "leg": 0.1046,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {},
+      "provenance": "generated",
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0135,
+      "motion": {
+        "triangles": 14956,
+        "p50": 1.034,
+        "p99": 1.967,
+        "max": 11.83,
+        "over2x": 140,
+        "over3x": 27,
+        "fractionOver": 0.0018,
+        "worstClips": {
+          "Run": 58,
+          "Death": 68,
+          "Attack": 25
+        },
+        "poses": 85
+      }
+    },
+    "scavenger": {
+      "glb": "game/public/assets/models/zombie-body-scavenger.glb",
+      "bytes": 832684,
+      "sha256": "8f5b780bd2c4e61e893524e46c205ca8ba38b05c257236006b56e4a7ee03f648",
+      "triangles": 14767,
+      "vertices": 14658,
+      "heightM": 1.76,
+      "hit": {
+        "head": 0.1525,
+        "torso": 0.164,
+        "arm": 0.0818,
+        "leg": 0.0951,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {
+        "covers": [
+          "head",
+          "face"
+        ],
+        "note": "own hood + built-in gas mask"
+      },
+      "provenance": "reused",
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0491,
+      "motion": {
+        "triangles": 14767,
+        "p50": 1.02,
+        "p99": 4.584,
+        "max": 18.33,
+        "over2x": 582,
+        "over3x": 313,
+        "fractionOver": 0.0212,
+        "worstClips": {
+          "Attack": 6,
+          "Run": 6,
+          "Hit": 80,
+          "Death": 57
+        },
+        "poses": 85
+      }
+    },
+    "agent": {
+      "glb": "game/public/assets/models/zombie-body-agent.glb",
+      "bytes": 662524,
+      "sha256": "46ac8e87b7330089f9bb01caab85d08e559e62f076d0459870ba95524e07e73b",
+      "triangles": 14972,
+      "vertices": 11564,
+      "heightM": 1.65,
+      "hit": {
+        "head": 0.1241,
+        "torso": 0.1634,
+        "arm": 0.0696,
+        "leg": 0.1226,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {},
+      "provenance": "generated",
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0968,
+      "motion": {
+        "triangles": 14972,
+        "p50": 1.075,
+        "p99": 2.83,
+        "max": 16.92,
+        "over2x": 390,
+        "over3x": 121,
+        "fractionOver": 0.0081,
+        "worstClips": {
+          "Run": 57,
+          "Attack": 45,
+          "Death": 49,
+          "Hit": 1
+        },
+        "poses": 85
+      }
+    },
+    "heavyset": {
+      "glb": "game/public/assets/models/zombie-body-heavyset.glb",
+      "bytes": 627580,
+      "sha256": "17f742d732fa977d88007dcd50c007ca1e02c8322fc92d5e4ce690f61a5e7dd4",
+      "triangles": 14962,
+      "vertices": 10878,
+      "heightM": 1.78,
+      "hit": {
+        "head": 0.1137,
+        "torso": 0.1889,
+        "arm": 0.0846,
+        "leg": 0.1238,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {
+        "requires": [
+          "lower"
+        ],
+        "baseLayer": true
+      },
+      "provenance": "generated",
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0737,
+      "motion": {
+        "triangles": 14962,
+        "p50": 1.041,
+        "p99": 3.134,
+        "max": 11.98,
+        "over2x": 456,
+        "over3x": 160,
+        "fractionOver": 0.0107,
+        "worstClips": {
+          "Run": 77,
+          "Attack": 36,
+          "Death": 38
+        },
+        "poses": 85
+      }
+    },
+    "tall": {
+      "glb": "game/public/assets/models/zombie-body-tall.glb",
+      "bytes": 628536,
+      "sha256": "12379bc59c8f9666e95e46e8c4953472dba11afa800e3be0432581d71acb5ea9",
+      "triangles": 14960,
+      "vertices": 10971,
+      "heightM": 1.75,
+      "hit": {
+        "head": 0.11,
+        "torso": 0.11,
+        "arm": 0.0504,
+        "leg": 0.0757,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {
+        "requires": [
+          "lower"
+        ],
+        "baseLayer": true
+      },
+      "provenance": "generated",
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0149,
+      "motion": {
+        "triangles": 14960,
+        "p50": 1.037,
+        "p99": 2.077,
+        "max": 3.96,
+        "over2x": 179,
+        "over3x": 24,
+        "fractionOver": 0.0016,
+        "worstClips": {
+          "Attack": 39,
+          "Death": 58,
+          "Run": 49,
+          "Hit": 4,
+          "Idle": 2
+        },
+        "poses": 85
+      }
+    }
+  },
+  "wearables": {
+    "coat": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-coat.glb",
+      "bytes": 1370060,
+      "sha256": "5846da12c1ca6790748e319e9f5f0d6bd829a2b34334f4b784774e1927b5312f",
+      "triangles": 8856,
+      "vertices": 7189,
+      "heavy": true,
+      "provenance": "generated (iteration 01)",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "trench": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-trench.glb",
+      "bytes": 1258952,
+      "sha256": "99204a8059ed52cdbcebb885d486746fa8e145fccf9eccf3fc095f507e21faee",
+      "triangles": 8490,
+      "vertices": 6474,
+      "heavy": true,
+      "provenance": "generated (iteration 05)",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "hivis": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-hivis.glb",
+      "bytes": 808572,
+      "sha256": "80c88365f6a7e9fed2979fd5b7ac6fa5d68d933004bbe540b1da67f61117698a",
+      "triangles": 4928,
+      "vertices": 3641,
+      "heavy": false,
+      "provenance": "generated (iteration 05)",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "hoodie": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-hoodie.glb",
+      "bytes": 1141952,
+      "sha256": "1fc982bed524cdb33d3211213f5ba6f804815c14feb5e81f2ae443a25a2a7db9",
+      "triangles": 7386,
+      "vertices": 6158,
+      "heavy": false,
+      "provenance": "generated (iteration 05)",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "blazer": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-blazer.glb",
+      "bytes": 1010616,
+      "sha256": "25fbdc70e1226fe9040b84cd50113bfeb5ffd222135ea660c68a6d0db80c7500",
+      "triangles": 7460,
+      "vertices": 5359,
+      "heavy": false,
+      "provenance": "generated (iteration 05)",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "puffer": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-puffer.glb",
+      "bytes": 756420,
+      "sha256": "90700f60c6533e5c44c23ba80affad1bc7018a072a0e15ae15a4de4bb5685649",
+      "triangles": 7460,
+      "vertices": 5293,
+      "heavy": false,
+      "provenance": "generated (iteration 05)",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "flannel": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-flannel.glb",
+      "bytes": 924888,
+      "sha256": "4d484e0a9fb87cc2ce5bed34481f9d2820ef9d2e3ca84bad9ff6e9862ffcabde",
+      "triangles": 6468,
+      "vertices": 4743,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "sweater": {
+      "slot": "upper",
+      "kind": "garment",
+      "glb": "game/public/assets/models/outfit-sweater.glb",
+      "bytes": 993236,
+      "sha256": "15469b104abef98578ab92598a92a6f7c782cd9ecb9881bfeee4d55d4a410017",
+      "triangles": 6394,
+      "vertices": 5111,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "cargo": {
+      "slot": "lower",
+      "kind": "pants",
+      "glb": "game/public/assets/models/outfit-cargo.glb",
+      "bytes": 833720,
+      "sha256": "1890b7bf2615fddcc46b1aecddabe0b5c01fbd4b53a918129f3c32cd5ef4d0c0",
+      "triangles": 5988,
+      "vertices": 4342,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "jeans": {
+      "slot": "lower",
+      "kind": "pants",
+      "glb": "game/public/assets/models/outfit-jeans.glb",
+      "bytes": 789976,
+      "sha256": "d9a04f867e53701e07b3c8f1928fb4c5fd00ef8d50a361b7a42d442b61c381d2",
+      "triangles": 5990,
+      "vertices": 4036,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "slacks": {
+      "slot": "lower",
+      "kind": "pants",
+      "glb": "game/public/assets/models/outfit-slacks.glb",
+      "bytes": 819924,
+      "sha256": "fec3f910dca9ba339155c684378972deed33c3bd17a3f0ae292453868b4662e8",
+      "triangles": 5974,
+      "vertices": 4320,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "scavenger",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "hardhat": {
+      "slot": "head",
+      "kind": "rigid",
+      "glb": "game/public/assets/models/outfit-hardhat.glb",
+      "bytes": 349092,
+      "sha256": "0c2428f474b6da27d9c5dc1222914055a6b746b953ca82e1ca325ed667e5673a",
+      "triangles": 2190,
+      "vertices": 1841,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "cap": {
+      "slot": "head",
+      "kind": "rigid",
+      "glb": "game/public/assets/models/outfit-cap.glb",
+      "bytes": 341460,
+      "sha256": "efc8c4244a0117889e8933357cd38d84247cd812389725d575533eae009880b6",
+      "triangles": 2188,
+      "vertices": 1938,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "beanie": {
+      "slot": "head",
+      "kind": "rigid",
+      "glb": "game/public/assets/models/outfit-beanie.glb",
+      "bytes": 296544,
+      "sha256": "a2e29e6648ee252d3b8d00ab66346154044585de31cb2ceecbf9625a176884e7",
+      "triangles": 2194,
+      "vertices": 1540,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "gasmask": {
+      "slot": "face",
+      "kind": "rigid",
+      "glb": "game/public/assets/models/outfit-gasmask.glb",
+      "bytes": 490108,
+      "sha256": "160cb2a7a5e8937fd6cafe1018a58a87fb315af3ab6f45198a54bd2141637558",
+      "triangles": 2936,
+      "vertices": 2943,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    },
+    "respirator": {
+      "slot": "face",
+      "kind": "rigid",
+      "glb": "game/public/assets/models/outfit-respirator.glb",
+      "bytes": 392876,
+      "sha256": "12b7b25a197f555be624c754836fa3b29c85cb8d8d3a9f96620dfc083390577e",
+      "triangles": 2193,
+      "vertices": 2257,
+      "heavy": false,
+      "provenance": "generated",
+      "bodies": [
+        "lastshift",
+        "courier",
+        "agent",
+        "heavyset",
+        "tall"
+      ]
+    }
+  },
+  "pairs": [
+    {
+      "body": "lastshift",
+      "wearable": "coat",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4255,
+      "bulkM": {
+        "torso": 0.0316,
+        "arm": 0.0201
+      },
+      "motion": {
+        "over": 34,
+        "fraction": 0.0038,
+        "max": 6.59
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "coat",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5340,
+      "bulkM": {
+        "torso": 0.0273,
+        "arm": 0.0174
+      },
+      "motion": {
+        "over": 79,
+        "fraction": 0.0089,
+        "max": 18.18
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "coat",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3193,
+      "bulkM": {
+        "torso": 0.0253,
+        "arm": 0.017
+      },
+      "motion": {
+        "over": 135,
+        "fraction": 0.0152,
+        "max": 19.15
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "coat",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4988,
+      "bulkM": {
+        "torso": 0.0317,
+        "arm": 0.0177
+      },
+      "motion": {
+        "over": 231,
+        "fraction": 0.0261,
+        "max": 9.01
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "coat",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4773,
+      "bulkM": {
+        "torso": 0.0366,
+        "arm": 0.0154
+      },
+      "motion": {
+        "over": 141,
+        "fraction": 0.0159,
+        "max": 6.79
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "coat",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5618,
+      "bulkM": {
+        "torso": 0.0314,
+        "arm": 0.0188
+      },
+      "motion": {
+        "over": 84,
+        "fraction": 0.0095,
+        "max": 7.25
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "trench",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5601,
+      "bulkM": {
+        "torso": 0.0214,
+        "arm": 0.0199
+      },
+      "motion": {
+        "over": 53,
+        "fraction": 0.0062,
+        "max": 5.05
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "trench",
+      "slot": "upper",
+      "hiddenBodyTriangles": 7072,
+      "bulkM": {
+        "torso": 0.0214,
+        "arm": 0.0179
+      },
+      "motion": {
+        "over": 64,
+        "fraction": 0.0075,
+        "max": 6.18
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "trench",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4581,
+      "bulkM": {
+        "torso": 0.019,
+        "arm": 0.0185
+      },
+      "motion": {
+        "over": 123,
+        "fraction": 0.0145,
+        "max": 15.3
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "trench",
+      "slot": "upper",
+      "hiddenBodyTriangles": 7048,
+      "bulkM": {
+        "torso": 0.024,
+        "arm": 0.0192
+      },
+      "motion": {
+        "over": 85,
+        "fraction": 0.01,
+        "max": 8.64
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "trench",
+      "slot": "upper",
+      "hiddenBodyTriangles": 6299,
+      "bulkM": {
+        "torso": 0.0288,
+        "arm": 0.0169
+      },
+      "motion": {
+        "over": 66,
+        "fraction": 0.0078,
+        "max": 8.98
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "trench",
+      "slot": "upper",
+      "hiddenBodyTriangles": 7122,
+      "bulkM": {
+        "torso": 0.0231,
+        "arm": 0.0184
+      },
+      "motion": {
+        "over": 45,
+        "fraction": 0.0053,
+        "max": 5.71
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "hivis",
+      "slot": "upper",
+      "hiddenBodyTriangles": 2691,
+      "bulkM": {
+        "torso": 0.0224,
+        "arm": 0
+      },
+      "motion": {
+        "over": 8,
+        "fraction": 0.0016,
+        "max": 5.86
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "hivis",
+      "slot": "upper",
+      "hiddenBodyTriangles": 2822,
+      "bulkM": {
+        "torso": 0.0236,
+        "arm": 0
+      },
+      "motion": {
+        "over": 37,
+        "fraction": 0.0075,
+        "max": 6.06
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "hivis",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4387,
+      "bulkM": {
+        "torso": 0.0221,
+        "arm": 0
+      },
+      "motion": {
+        "over": 8,
+        "fraction": 0.0016,
+        "max": 7.7
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "hivis",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3380,
+      "bulkM": {
+        "torso": 0.0236,
+        "arm": 0
+      },
+      "motion": {
+        "over": 16,
+        "fraction": 0.0032,
+        "max": 6.21
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "hivis",
+      "slot": "upper",
+      "hiddenBodyTriangles": 2538,
+      "bulkM": {
+        "torso": 0.0242,
+        "arm": 0
+      },
+      "motion": {
+        "over": 18,
+        "fraction": 0.0037,
+        "max": 5.03
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "hivis",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3329,
+      "bulkM": {
+        "torso": 0.0229,
+        "arm": 0
+      },
+      "motion": {
+        "over": 6,
+        "fraction": 0.0012,
+        "max": 6.9
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4588,
+      "bulkM": {
+        "torso": 0.0261,
+        "arm": 0.0209
+      },
+      "motion": {
+        "over": 69,
+        "fraction": 0.0093,
+        "max": 20.36
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5673,
+      "bulkM": {
+        "torso": 0.0242,
+        "arm": 0.0198
+      },
+      "motion": {
+        "over": 88,
+        "fraction": 0.0119,
+        "max": 11.16
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5139,
+      "bulkM": {
+        "torso": 0.0208,
+        "arm": 0.0185
+      },
+      "motion": {
+        "over": 123,
+        "fraction": 0.0167,
+        "max": 19.15
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4896,
+      "bulkM": {
+        "torso": 0.0263,
+        "arm": 0.0198
+      },
+      "motion": {
+        "over": 208,
+        "fraction": 0.0282,
+        "max": 8.87
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5391,
+      "bulkM": {
+        "torso": 0.0295,
+        "arm": 0.0175
+      },
+      "motion": {
+        "over": 173,
+        "fraction": 0.0234,
+        "max": 8.67
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5847,
+      "bulkM": {
+        "torso": 0.0224,
+        "arm": 0.0196
+      },
+      "motion": {
+        "over": 78,
+        "fraction": 0.0106,
+        "max": 8.12
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "blazer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3979,
+      "bulkM": {
+        "torso": 0.0271,
+        "arm": 0.0235
+      },
+      "motion": {
+        "over": 107,
+        "fraction": 0.0143,
+        "max": 18.06
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "blazer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5266,
+      "bulkM": {
+        "torso": 0.0232,
+        "arm": 0.0205
+      },
+      "motion": {
+        "over": 130,
+        "fraction": 0.0174,
+        "max": 14.96
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "blazer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 2981,
+      "bulkM": {
+        "torso": 0.0225,
+        "arm": 0.0209
+      },
+      "motion": {
+        "over": 237,
+        "fraction": 0.0318,
+        "max": 20.91
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "blazer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4171,
+      "bulkM": {
+        "torso": 0.0244,
+        "arm": 0.0207
+      },
+      "motion": {
+        "over": 216,
+        "fraction": 0.029,
+        "max": 14.47
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "blazer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4641,
+      "bulkM": {
+        "torso": 0.0295,
+        "arm": 0.0194
+      },
+      "motion": {
+        "over": 145,
+        "fraction": 0.0194,
+        "max": 11.24
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "blazer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5530,
+      "bulkM": {
+        "torso": 0.0223,
+        "arm": 0.0202
+      },
+      "motion": {
+        "over": 80,
+        "fraction": 0.0107,
+        "max": 15.98
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "puffer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 2522,
+      "bulkM": {
+        "torso": 0.0437,
+        "arm": 0.033
+      },
+      "motion": {
+        "over": 140,
+        "fraction": 0.0188,
+        "max": 16.92
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "puffer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3154,
+      "bulkM": {
+        "torso": 0.0404,
+        "arm": 0.0299
+      },
+      "motion": {
+        "over": 155,
+        "fraction": 0.0208,
+        "max": 13.96
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "puffer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 2697,
+      "bulkM": {
+        "torso": 0.0506,
+        "arm": 0.0303
+      },
+      "motion": {
+        "over": 298,
+        "fraction": 0.0399,
+        "max": 15.77
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "puffer",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3542,
+      "bulkM": {
+        "torso": 0.0371,
+        "arm": 0.0299
+      },
+      "motion": {
+        "over": 219,
+        "fraction": 0.0294,
+        "max": 12.81
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4879,
+      "bulkM": {
+        "torso": 0.0151,
+        "arm": 0.017
+      },
+      "motion": {
+        "over": 56,
+        "fraction": 0.0087,
+        "max": 5.79
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5984,
+      "bulkM": {
+        "torso": 0.0144,
+        "arm": 0.0161
+      },
+      "motion": {
+        "over": 54,
+        "fraction": 0.0083,
+        "max": 14.83
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5619,
+      "bulkM": {
+        "torso": 0.0104,
+        "arm": 0.0139
+      },
+      "motion": {
+        "over": 170,
+        "fraction": 0.0263,
+        "max": 26.58
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5603,
+      "bulkM": {
+        "torso": 0.0141,
+        "arm": 0.0151
+      },
+      "motion": {
+        "over": 247,
+        "fraction": 0.0382,
+        "max": 11.34
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5832,
+      "bulkM": {
+        "torso": 0.0167,
+        "arm": 0.0138
+      },
+      "motion": {
+        "over": 106,
+        "fraction": 0.0164,
+        "max": 10.6
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 6298,
+      "bulkM": {
+        "torso": 0.0141,
+        "arm": 0.0157
+      },
+      "motion": {
+        "over": 72,
+        "fraction": 0.0111,
+        "max": 5.61
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4398,
+      "bulkM": {
+        "torso": 0.0176,
+        "arm": 0.021
+      },
+      "motion": {
+        "over": 67,
+        "fraction": 0.0105,
+        "max": 5.64
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5790,
+      "bulkM": {
+        "torso": 0.0167,
+        "arm": 0.018
+      },
+      "motion": {
+        "over": 61,
+        "fraction": 0.0095,
+        "max": 6.39
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 3080,
+      "bulkM": {
+        "torso": 0.0168,
+        "arm": 0.0185
+      },
+      "motion": {
+        "over": 123,
+        "fraction": 0.0192,
+        "max": 13.09
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4584,
+      "bulkM": {
+        "torso": 0.0178,
+        "arm": 0.0176
+      },
+      "motion": {
+        "over": 128,
+        "fraction": 0.02,
+        "max": 10.53
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5309,
+      "bulkM": {
+        "torso": 0.0178,
+        "arm": 0.0167
+      },
+      "motion": {
+        "over": 71,
+        "fraction": 0.0111,
+        "max": 8.2
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5982,
+      "bulkM": {
+        "torso": 0.0166,
+        "arm": 0.019
+      },
+      "motion": {
+        "over": 63,
+        "fraction": 0.0099,
+        "max": 9.78
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2303,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.017
+      },
+      "motion": {
+        "over": 4,
+        "fraction": 0.0007,
+        "max": 3.7
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2547,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0161
+      },
+      "motion": {
+        "over": 4,
+        "fraction": 0.0007,
+        "max": 4.1
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 898,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0179
+      },
+      "motion": {
+        "over": 6,
+        "fraction": 0.001,
+        "max": 3.42
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2173,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0161
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 2.77
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2095,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0203
+      },
+      "motion": {
+        "over": 4,
+        "fraction": 0.0007,
+        "max": 3.62
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2328,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0242
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 2.8
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2472,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0153
+      },
+      "motion": {
+        "over": 2,
+        "fraction": 0.0003,
+        "max": 3.37
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2764,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0122
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 2.79
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 932,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0159
+      },
+      "motion": {
+        "over": 6,
+        "fraction": 0.001,
+        "max": 4.84
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2360,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0132
+      },
+      "motion": {
+        "over": 2,
+        "fraction": 0.0003,
+        "max": 4.09
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2219,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0172
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 2.49
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2402,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0224
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 2.04
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2178,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0176
+      },
+      "motion": {
+        "over": 2,
+        "fraction": 0.0003,
+        "max": 3.16
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2419,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0136
+      },
+      "motion": {
+        "over": 12,
+        "fraction": 0.002,
+        "max": 4.49
+      }
+    },
+    {
+      "body": "scavenger",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 837,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0186
+      },
+      "motion": {
+        "over": 11,
+        "fraction": 0.0018,
+        "max": 5.63
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 1997,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0167
+      },
+      "motion": {
+        "over": 60,
+        "fraction": 0.01,
+        "max": 5.05
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 1884,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0186
+      },
+      "motion": {
+        "over": 30,
+        "fraction": 0.005,
+        "max": 4.57
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2111,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0237
+      },
+      "motion": {
+        "over": 6,
+        "fraction": 0.001,
+        "max": 4.02
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 283,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0127
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 351,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0199
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 473,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0092
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 291,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0189
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 503,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0167
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 437,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 379,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0066
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 557,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 296,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0051
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 678,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0022
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 495,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 376,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0052
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 767,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 358,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0036
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 787,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0006
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "gasmask",
+      "slot": "face",
+      "hiddenBodyTriangles": 92,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "gasmask",
+      "slot": "face",
+      "hiddenBodyTriangles": 56,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "gasmask",
+      "slot": "face",
+      "hiddenBodyTriangles": 77,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "gasmask",
+      "slot": "face",
+      "hiddenBodyTriangles": 94,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "gasmask",
+      "slot": "face",
+      "hiddenBodyTriangles": 118,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "lastshift",
+      "wearable": "respirator",
+      "slot": "face",
+      "hiddenBodyTriangles": 5,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "courier",
+      "wearable": "respirator",
+      "slot": "face",
+      "hiddenBodyTriangles": 10,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "agent",
+      "wearable": "respirator",
+      "slot": "face",
+      "hiddenBodyTriangles": 10,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "heavyset",
+      "wearable": "respirator",
+      "slot": "face",
+      "hiddenBodyTriangles": 3,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "tall",
+      "wearable": "respirator",
+      "slot": "face",
+      "hiddenBodyTriangles": 9,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    }
+  ],
+  "motionAudit": {
+    "lastshift": {
+      "body": {
+        "triangles": 14912,
+        "p50": 1.029,
+        "p99": 2.013,
+        "max": 5.44,
+        "over2x": 156,
+        "over3x": 23,
+        "fractionOver": 0.0015,
+        "worstClips": {
+          "Death": 78,
+          "Run": 51,
+          "Attack": 20,
+          "Hit": 2
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "coat": {
+          "triangles": 8856,
+          "p50": 1.094,
+          "p99": 2.588,
+          "max": 6.59,
+          "over2x": 232,
+          "over3x": 34,
+          "fractionOver": 0.0038,
+          "worstClips": {
+            "Run": 33,
+            "Attack": 18,
+            "Death": 40
+          },
+          "poses": 85
+        },
+        "trench": {
+          "triangles": 8490,
+          "p50": 1.083,
+          "p99": 2.638,
+          "max": 5.05,
+          "over2x": 192,
+          "over3x": 53,
+          "fractionOver": 0.0062,
+          "worstClips": {
+            "Attack": 16,
+            "Run": 25,
+            "Death": 43,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "hivis": {
+          "triangles": 4928,
+          "p50": 1.094,
+          "p99": 2.156,
+          "max": 5.86,
+          "over2x": 72,
+          "over3x": 8,
+          "fractionOver": 0.0016,
+          "worstClips": {
+            "Run": 17,
+            "Death": 35
+          },
+          "poses": 85
+        },
+        "hoodie": {
+          "triangles": 7386,
+          "p50": 1.088,
+          "p99": 2.975,
+          "max": 20.36,
+          "over2x": 222,
+          "over3x": 69,
+          "fractionOver": 0.0093,
+          "worstClips": {
+            "Attack": 17,
+            "Run": 17,
+            "Death": 42
+          },
+          "poses": 85
+        },
+        "blazer": {
+          "triangles": 7460,
+          "p50": 1.119,
+          "p99": 3.517,
+          "max": 18.06,
+          "over2x": 303,
+          "over3x": 107,
+          "fractionOver": 0.0143,
+          "worstClips": {
+            "Run": 17,
+            "Death": 35,
+            "Attack": 24
+          },
+          "poses": 85
+        },
+        "puffer": {
+          "triangles": 7460,
+          "p50": 1.117,
+          "p99": 4.043,
+          "max": 16.92,
+          "over2x": 356,
+          "over3x": 140,
+          "fractionOver": 0.0188,
+          "worstClips": {
+            "Run": 24,
+            "Attack": 40,
+            "Death": 12
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.106,
+          "p99": 2.875,
+          "max": 5.79,
+          "over2x": 199,
+          "over3x": 56,
+          "fractionOver": 0.0087,
+          "worstClips": {
+            "Attack": 11,
+            "Run": 17,
+            "Death": 39
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6394,
+          "p50": 1.098,
+          "p99": 3.083,
+          "max": 5.64,
+          "over2x": 202,
+          "over3x": 67,
+          "fractionOver": 0.0105,
+          "worstClips": {
+            "Run": 11,
+            "Attack": 18,
+            "Death": 36
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5988,
+          "p50": 1.072,
+          "p99": 1.825,
+          "max": 3.7,
+          "over2x": 32,
+          "over3x": 4,
+          "fractionOver": 0.0007,
+          "worstClips": {
+            "Death": 18,
+            "Run": 43
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5990,
+          "p50": 1.071,
+          "p99": 1.844,
+          "max": 3.37,
+          "over2x": 27,
+          "over3x": 2,
+          "fractionOver": 0.0003,
+          "worstClips": {
+            "Death": 30,
+            "Run": 32
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5974,
+          "p50": 1.066,
+          "p99": 2.244,
+          "max": 3.16,
+          "over2x": 99,
+          "over3x": 2,
+          "fractionOver": 0.0003,
+          "worstClips": {
+            "Death": 59,
+            "Run": 2
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2190,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 14,
+            "Death": 4,
+            "Walk": 2,
+            "Idle": 8
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2188,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 8,
+            "Idle": 6,
+            "Attack": 10,
+            "Walk": 2
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2194,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 9,
+            "Idle": 10,
+            "Death": 4
+          },
+          "poses": 85
+        },
+        "gasmask": {
+          "triangles": 2936,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Hit": 4,
+            "Walk": 5,
+            "Idle": 2,
+            "Death": 18,
+            "Attack": 6
+          },
+          "poses": 85
+        },
+        "respirator": {
+          "triangles": 2193,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 18,
+            "Attack": 2,
+            "Walk": 2,
+            "Death": 2,
+            "Run": 2
+          },
+          "poses": 85
+        }
+      }
+    },
+    "courier": {
+      "body": {
+        "triangles": 14956,
+        "p50": 1.034,
+        "p99": 1.967,
+        "max": 11.83,
+        "over2x": 140,
+        "over3x": 27,
+        "fractionOver": 0.0018,
+        "worstClips": {
+          "Run": 58,
+          "Death": 68,
+          "Attack": 25
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "coat": {
+          "triangles": 8856,
+          "p50": 1.087,
+          "p99": 2.888,
+          "max": 18.18,
+          "over2x": 253,
+          "over3x": 79,
+          "fractionOver": 0.0089,
+          "worstClips": {
+            "Run": 27,
+            "Attack": 41,
+            "Death": 23
+          },
+          "poses": 85
+        },
+        "trench": {
+          "triangles": 8490,
+          "p50": 1.08,
+          "p99": 2.6,
+          "max": 6.18,
+          "over2x": 235,
+          "over3x": 64,
+          "fractionOver": 0.0075,
+          "worstClips": {
+            "Attack": 22,
+            "Death": 44,
+            "Run": 18,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "hivis": {
+          "triangles": 4928,
+          "p50": 1.087,
+          "p99": 2.741,
+          "max": 6.06,
+          "over2x": 140,
+          "over3x": 37,
+          "fractionOver": 0.0075,
+          "worstClips": {
+            "Attack": 4,
+            "Run": 30,
+            "Death": 17
+          },
+          "poses": 85
+        },
+        "hoodie": {
+          "triangles": 7386,
+          "p50": 1.085,
+          "p99": 3.319,
+          "max": 11.16,
+          "over2x": 260,
+          "over3x": 88,
+          "fractionOver": 0.0119,
+          "worstClips": {
+            "Attack": 34,
+            "Run": 8,
+            "Death": 33
+          },
+          "poses": 85
+        },
+        "blazer": {
+          "triangles": 7460,
+          "p50": 1.107,
+          "p99": 3.58,
+          "max": 14.96,
+          "over2x": 277,
+          "over3x": 130,
+          "fractionOver": 0.0174,
+          "worstClips": {
+            "Attack": 48,
+            "Run": 5,
+            "Death": 23
+          },
+          "poses": 85
+        },
+        "puffer": {
+          "triangles": 7460,
+          "p50": 1.11,
+          "p99": 4.176,
+          "max": 13.96,
+          "over2x": 400,
+          "over3x": 155,
+          "fractionOver": 0.0208,
+          "worstClips": {
+            "Attack": 49,
+            "Run": 14,
+            "Death": 13
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.101,
+          "p99": 2.836,
+          "max": 14.83,
+          "over2x": 233,
+          "over3x": 54,
+          "fractionOver": 0.0083,
+          "worstClips": {
+            "Attack": 40,
+            "Run": 5,
+            "Death": 22
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6394,
+          "p50": 1.088,
+          "p99": 2.958,
+          "max": 6.39,
+          "over2x": 195,
+          "over3x": 61,
+          "fractionOver": 0.0095,
+          "worstClips": {
+            "Run": 10,
+            "Attack": 32,
+            "Death": 23
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5988,
+          "p50": 1.069,
+          "p99": 1.919,
+          "max": 4.1,
+          "over2x": 50,
+          "over3x": 4,
+          "fractionOver": 0.0007,
+          "worstClips": {
+            "Death": 58,
+            "Run": 4
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5990,
+          "p50": 1.069,
+          "p99": 1.843,
+          "max": 2.79,
+          "over2x": 31,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 49,
+            "Run": 12
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5974,
+          "p50": 1.06,
+          "p99": 2.395,
+          "max": 4.49,
+          "over2x": 116,
+          "over3x": 12,
+          "fractionOver": 0.002,
+          "worstClips": {
+            "Death": 43,
+            "Run": 18
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2190,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Walk": 4,
+            "Attack": 9,
+            "Death": 6,
+            "Run": 2,
+            "Idle": 2,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2188,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 14,
+            "Run": 4,
+            "Attack": 4,
+            "Idle": 2
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2194,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Walk": 3,
+            "Idle": 8,
+            "Death": 2,
+            "Attack": 2,
+            "Run": 6,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "gasmask": {
+          "triangles": 2936,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 6,
+            "Idle": 5,
+            "Walk": 8,
+            "Death": 10,
+            "Hit": 2,
+            "Run": 2
+          },
+          "poses": 85
+        },
+        "respirator": {
+          "triangles": 2193,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Hit": 8,
+            "Idle": 6,
+            "Attack": 4,
+            "Walk": 2,
+            "Run": 4
+          },
+          "poses": 85
+        }
+      }
+    },
+    "scavenger": {
+      "body": {
+        "triangles": 14767,
+        "p50": 1.02,
+        "p99": 4.584,
+        "max": 18.33,
+        "over2x": 582,
+        "over3x": 313,
+        "fractionOver": 0.0212,
+        "worstClips": {
+          "Attack": 6,
+          "Run": 6,
+          "Hit": 80,
+          "Death": 57
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "coat": {
+          "triangles": 8856,
+          "p50": 1.096,
+          "p99": 3.394,
+          "max": 19.15,
+          "over2x": 432,
+          "over3x": 135,
+          "fractionOver": 0.0152,
+          "worstClips": {
+            "Run": 38,
+            "Attack": 30,
+            "Death": 23
+          },
+          "poses": 85
+        },
+        "trench": {
+          "triangles": 8490,
+          "p50": 1.087,
+          "p99": 3.45,
+          "max": 15.3,
+          "over2x": 312,
+          "over3x": 123,
+          "fractionOver": 0.0145,
+          "worstClips": {
+            "Run": 31,
+            "Attack": 27,
+            "Death": 28
+          },
+          "poses": 85
+        },
+        "hivis": {
+          "triangles": 4928,
+          "p50": 1.071,
+          "p99": 1.992,
+          "max": 7.7,
+          "over2x": 49,
+          "over3x": 8,
+          "fractionOver": 0.0016,
+          "worstClips": {
+            "Run": 14,
+            "Attack": 4,
+            "Death": 33
+          },
+          "poses": 85
+        },
+        "hoodie": {
+          "triangles": 7386,
+          "p50": 1.092,
+          "p99": 3.662,
+          "max": 19.15,
+          "over2x": 322,
+          "over3x": 123,
+          "fractionOver": 0.0167,
+          "worstClips": {
+            "Attack": 34,
+            "Death": 34,
+            "Hit": 2,
+            "Run": 5
+          },
+          "poses": 85
+        },
+        "blazer": {
+          "triangles": 7460,
+          "p50": 1.129,
+          "p99": 4.91,
+          "max": 20.91,
+          "over2x": 567,
+          "over3x": 237,
+          "fractionOver": 0.0318,
+          "worstClips": {
+            "Attack": 44,
+            "Death": 15,
+            "Run": 17
+          },
+          "poses": 85
+        },
+        "puffer": {
+          "triangles": 7460,
+          "p50": 1.137,
+          "p99": 8.034,
+          "max": 32.51,
+          "over2x": 930,
+          "over3x": 507,
+          "fractionOver": 0.068,
+          "worstClips": {
+            "Attack": 55,
+            "Death": 6,
+            "Run": 16
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.107,
+          "p99": 4.618,
+          "max": 26.58,
+          "over2x": 353,
+          "over3x": 170,
+          "fractionOver": 0.0263,
+          "worstClips": {
+            "Attack": 32,
+            "Run": 23,
+            "Death": 12
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6394,
+          "p50": 1.097,
+          "p99": 3.855,
+          "max": 13.09,
+          "over2x": 319,
+          "over3x": 123,
+          "fractionOver": 0.0192,
+          "worstClips": {
+            "Run": 26,
+            "Attack": 23,
+            "Death": 17
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5988,
+          "p50": 1.079,
+          "p99": 1.7,
+          "max": 3.42,
+          "over2x": 21,
+          "over3x": 6,
+          "fractionOver": 0.001,
+          "worstClips": {
+            "Death": 42,
+            "Run": 19
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5990,
+          "p50": 1.075,
+          "p99": 1.683,
+          "max": 4.84,
+          "over2x": 18,
+          "over3x": 6,
+          "fractionOver": 0.001,
+          "worstClips": {
+            "Death": 43,
+            "Run": 19
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5974,
+          "p50": 1.082,
+          "p99": 1.886,
+          "max": 5.63,
+          "over2x": 38,
+          "over3x": 11,
+          "fractionOver": 0.0018,
+          "worstClips": {
+            "Death": 46,
+            "Run": 15
+          },
+          "poses": 85
+        }
+      }
+    },
+    "agent": {
+      "body": {
+        "triangles": 14972,
+        "p50": 1.075,
+        "p99": 2.83,
+        "max": 16.92,
+        "over2x": 390,
+        "over3x": 121,
+        "fractionOver": 0.0081,
+        "worstClips": {
+          "Run": 57,
+          "Attack": 45,
+          "Death": 49,
+          "Hit": 1
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "coat": {
+          "triangles": 8856,
+          "p50": 1.121,
+          "p99": 4.264,
+          "max": 9.01,
+          "over2x": 549,
+          "over3x": 231,
+          "fractionOver": 0.0261,
+          "worstClips": {
+            "Run": 40,
+            "Attack": 40,
+            "Death": 10
+          },
+          "poses": 85
+        },
+        "trench": {
+          "triangles": 8490,
+          "p50": 1.104,
+          "p99": 2.949,
+          "max": 8.64,
+          "over2x": 278,
+          "over3x": 85,
+          "fractionOver": 0.01,
+          "worstClips": {
+            "Attack": 29,
+            "Run": 37,
+            "Death": 18,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "hivis": {
+          "triangles": 4928,
+          "p50": 1.102,
+          "p99": 2.161,
+          "max": 6.21,
+          "over2x": 85,
+          "over3x": 16,
+          "fractionOver": 0.0032,
+          "worstClips": {
+            "Run": 30,
+            "Death": 20,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "hoodie": {
+          "triangles": 7386,
+          "p50": 1.106,
+          "p99": 4.665,
+          "max": 8.87,
+          "over2x": 462,
+          "over3x": 208,
+          "fractionOver": 0.0282,
+          "worstClips": {
+            "Attack": 40,
+            "Run": 31,
+            "Death": 4
+          },
+          "poses": 85
+        },
+        "blazer": {
+          "triangles": 7460,
+          "p50": 1.14,
+          "p99": 4.279,
+          "max": 14.47,
+          "over2x": 512,
+          "over3x": 216,
+          "fractionOver": 0.029,
+          "worstClips": {
+            "Run": 25,
+            "Attack": 49,
+            "Death": 2
+          },
+          "poses": 85
+        },
+        "puffer": {
+          "triangles": 7460,
+          "p50": 1.147,
+          "p99": 7.595,
+          "max": 46.42,
+          "over2x": 801,
+          "over3x": 449,
+          "fractionOver": 0.0602,
+          "worstClips": {
+            "Attack": 24,
+            "Run": 48,
+            "Death": 4
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.129,
+          "p99": 4.913,
+          "max": 11.34,
+          "over2x": 510,
+          "over3x": 247,
+          "fractionOver": 0.0382,
+          "worstClips": {
+            "Attack": 40,
+            "Run": 27
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6394,
+          "p50": 1.116,
+          "p99": 3.876,
+          "max": 10.53,
+          "over2x": 354,
+          "over3x": 128,
+          "fractionOver": 0.02,
+          "worstClips": {
+            "Run": 24,
+            "Attack": 28,
+            "Death": 14
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5988,
+          "p50": 1.079,
+          "p99": 1.889,
+          "max": 2.77,
+          "over2x": 41,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 52,
+            "Run": 10
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5990,
+          "p50": 1.075,
+          "p99": 1.875,
+          "max": 4.09,
+          "over2x": 30,
+          "over3x": 2,
+          "fractionOver": 0.0003,
+          "worstClips": {
+            "Death": 48,
+            "Run": 14
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5974,
+          "p50": 1.074,
+          "p99": 2.969,
+          "max": 5.05,
+          "over2x": 156,
+          "over3x": 60,
+          "fractionOver": 0.01,
+          "worstClips": {
+            "Death": 37,
+            "Run": 24
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2190,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 4,
+            "Attack": 9,
+            "Death": 4,
+            "Hit": 8
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2188,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 12,
+            "Walk": 4,
+            "Hit": 2,
+            "Death": 6,
+            "Attack": 2
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2194,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Walk": 1,
+            "Idle": 4,
+            "Death": 10,
+            "Attack": 2,
+            "Run": 6
+          },
+          "poses": 85
+        },
+        "gasmask": {
+          "triangles": 2936,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 7,
+            "Idle": 2,
+            "Hit": 4,
+            "Run": 8,
+            "Death": 8,
+            "Walk": 2
+          },
+          "poses": 85
+        },
+        "respirator": {
+          "triangles": 2193,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Hit": 2,
+            "Attack": 8,
+            "Run": 10,
+            "Death": 2,
+            "Idle": 2
+          },
+          "poses": 85
+        }
+      }
+    },
+    "heavyset": {
+      "body": {
+        "triangles": 14962,
+        "p50": 1.041,
+        "p99": 3.134,
+        "max": 11.98,
+        "over2x": 456,
+        "over3x": 160,
+        "fractionOver": 0.0107,
+        "worstClips": {
+          "Run": 77,
+          "Attack": 36,
+          "Death": 38
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "coat": {
+          "triangles": 8856,
+          "p50": 1.11,
+          "p99": 3.398,
+          "max": 6.79,
+          "over2x": 378,
+          "over3x": 141,
+          "fractionOver": 0.0159,
+          "worstClips": {
+            "Run": 45,
+            "Attack": 26,
+            "Death": 20
+          },
+          "poses": 85
+        },
+        "trench": {
+          "triangles": 8490,
+          "p50": 1.104,
+          "p99": 2.722,
+          "max": 8.98,
+          "over2x": 246,
+          "over3x": 66,
+          "fractionOver": 0.0078,
+          "worstClips": {
+            "Attack": 18,
+            "Run": 33,
+            "Death": 35
+          },
+          "poses": 85
+        },
+        "hivis": {
+          "triangles": 4928,
+          "p50": 1.108,
+          "p99": 2.349,
+          "max": 5.03,
+          "over2x": 97,
+          "over3x": 18,
+          "fractionOver": 0.0037,
+          "worstClips": {
+            "Attack": 16,
+            "Run": 26,
+            "Death": 10
+          },
+          "poses": 85
+        },
+        "hoodie": {
+          "triangles": 7386,
+          "p50": 1.098,
+          "p99": 4.044,
+          "max": 8.67,
+          "over2x": 450,
+          "over3x": 173,
+          "fractionOver": 0.0234,
+          "worstClips": {
+            "Run": 18,
+            "Attack": 33,
+            "Death": 25
+          },
+          "poses": 85
+        },
+        "blazer": {
+          "triangles": 7460,
+          "p50": 1.151,
+          "p99": 3.747,
+          "max": 11.24,
+          "over2x": 399,
+          "over3x": 145,
+          "fractionOver": 0.0194,
+          "worstClips": {
+            "Death": 8,
+            "Attack": 28,
+            "Run": 40
+          },
+          "poses": 85
+        },
+        "puffer": {
+          "triangles": 7460,
+          "p50": 1.145,
+          "p99": 5.483,
+          "max": 15.77,
+          "over2x": 580,
+          "over3x": 298,
+          "fractionOver": 0.0399,
+          "worstClips": {
+            "Attack": 12,
+            "Run": 56,
+            "Death": 8
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.128,
+          "p99": 3.657,
+          "max": 10.6,
+          "over2x": 301,
+          "over3x": 106,
+          "fractionOver": 0.0164,
+          "worstClips": {
+            "Attack": 21,
+            "Run": 21,
+            "Death": 24
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6394,
+          "p50": 1.116,
+          "p99": 3.131,
+          "max": 8.2,
+          "over2x": 266,
+          "over3x": 71,
+          "fractionOver": 0.0111,
+          "worstClips": {
+            "Run": 29,
+            "Attack": 17,
+            "Death": 19
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5988,
+          "p50": 1.075,
+          "p99": 1.914,
+          "max": 3.62,
+          "over2x": 45,
+          "over3x": 4,
+          "fractionOver": 0.0007,
+          "worstClips": {
+            "Death": 49,
+            "Run": 10,
+            "Attack": 2
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5990,
+          "p50": 1.072,
+          "p99": 1.955,
+          "max": 2.49,
+          "over2x": 53,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 46,
+            "Run": 14,
+            "Attack": 2
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5974,
+          "p50": 1.071,
+          "p99": 2.582,
+          "max": 4.57,
+          "over2x": 137,
+          "over3x": 30,
+          "fractionOver": 0.005,
+          "worstClips": {
+            "Death": 50,
+            "Run": 11
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2190,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 12,
+            "Death": 7,
+            "Attack": 2,
+            "Walk": 2
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2188,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 8,
+            "Walk": 6,
+            "Idle": 6,
+            "Death": 2,
+            "Hit": 2
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2194,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 11,
+            "Idle": 8,
+            "Attack": 4
+          },
+          "poses": 85
+        },
+        "gasmask": {
+          "triangles": 2936,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Walk": 6,
+            "Death": 10,
+            "Run": 3,
+            "Idle": 10,
+            "Attack": 2
+          },
+          "poses": 85
+        },
+        "respirator": {
+          "triangles": 2193,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 6,
+            "Attack": 6,
+            "Run": 4,
+            "Death": 8
+          },
+          "poses": 85
+        }
+      }
+    },
+    "tall": {
+      "body": {
+        "triangles": 14960,
+        "p50": 1.037,
+        "p99": 2.077,
+        "max": 3.96,
+        "over2x": 179,
+        "over3x": 24,
+        "fractionOver": 0.0016,
+        "worstClips": {
+          "Attack": 39,
+          "Death": 58,
+          "Run": 49,
+          "Hit": 4,
+          "Idle": 2
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "coat": {
+          "triangles": 8856,
+          "p50": 1.078,
+          "p99": 2.968,
+          "max": 7.25,
+          "over2x": 275,
+          "over3x": 84,
+          "fractionOver": 0.0095,
+          "worstClips": {
+            "Run": 36,
+            "Attack": 36,
+            "Death": 18
+          },
+          "poses": 85
+        },
+        "trench": {
+          "triangles": 8490,
+          "p50": 1.071,
+          "p99": 2.553,
+          "max": 5.71,
+          "over2x": 196,
+          "over3x": 45,
+          "fractionOver": 0.0053,
+          "worstClips": {
+            "Attack": 14,
+            "Run": 37,
+            "Death": 36
+          },
+          "poses": 85
+        },
+        "hivis": {
+          "triangles": 4928,
+          "p50": 1.087,
+          "p99": 2.267,
+          "max": 6.9,
+          "over2x": 112,
+          "over3x": 6,
+          "fractionOver": 0.0012,
+          "worstClips": {
+            "Run": 22,
+            "Death": 29
+          },
+          "poses": 85
+        },
+        "hoodie": {
+          "triangles": 7386,
+          "p50": 1.083,
+          "p99": 3.119,
+          "max": 8.12,
+          "over2x": 261,
+          "over3x": 78,
+          "fractionOver": 0.0106,
+          "worstClips": {
+            "Attack": 32,
+            "Run": 17,
+            "Death": 27
+          },
+          "poses": 85
+        },
+        "blazer": {
+          "triangles": 7460,
+          "p50": 1.11,
+          "p99": 3.102,
+          "max": 15.98,
+          "over2x": 273,
+          "over3x": 80,
+          "fractionOver": 0.0107,
+          "worstClips": {
+            "Attack": 42,
+            "Run": 22,
+            "Death": 13
+          },
+          "poses": 85
+        },
+        "puffer": {
+          "triangles": 7460,
+          "p50": 1.112,
+          "p99": 4.714,
+          "max": 12.81,
+          "over2x": 480,
+          "over3x": 219,
+          "fractionOver": 0.0294,
+          "worstClips": {
+            "Attack": 44,
+            "Death": 8,
+            "Run": 24
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.095,
+          "p99": 3.032,
+          "max": 5.61,
+          "over2x": 259,
+          "over3x": 72,
+          "fractionOver": 0.0111,
+          "worstClips": {
+            "Attack": 33,
+            "Run": 20,
+            "Death": 13
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6394,
+          "p50": 1.088,
+          "p99": 2.983,
+          "max": 9.78,
+          "over2x": 215,
+          "over3x": 63,
+          "fractionOver": 0.0099,
+          "worstClips": {
+            "Run": 19,
+            "Attack": 17,
+            "Death": 30
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5988,
+          "p50": 1.06,
+          "p99": 1.595,
+          "max": 2.8,
+          "over2x": 4,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 44,
+            "Run": 17
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5990,
+          "p50": 1.062,
+          "p99": 1.503,
+          "max": 2.04,
+          "over2x": 4,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 34,
+            "Run": 28
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5974,
+          "p50": 1.057,
+          "p99": 2.078,
+          "max": 4.02,
+          "over2x": 68,
+          "over3x": 6,
+          "fractionOver": 0.001,
+          "worstClips": {
+            "Run": 47,
+            "Death": 14
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2190,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 10,
+            "Attack": 12,
+            "Death": 4
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2188,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 6,
+            "Idle": 10,
+            "Death": 4,
+            "Hit": 2,
+            "Walk": 2
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2194,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 10,
+            "Attack": 9,
+            "Run": 2,
+            "Idle": 2
+          },
+          "poses": 85
+        },
+        "gasmask": {
+          "triangles": 2936,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Attack": 14,
+            "Idle": 6,
+            "Death": 8,
+            "Hit": 4
+          },
+          "poses": 85
+        },
+        "respirator": {
+          "triangles": 2193,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Walk": 10,
+            "Death": 8,
+            "Run": 2,
+            "Idle": 4,
+            "Hit": 6
+          },
+          "poses": 85
+        }
+      }
+    }
+  },
+  "rebuild": "node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs",
+  "buildSeconds": 744
+}

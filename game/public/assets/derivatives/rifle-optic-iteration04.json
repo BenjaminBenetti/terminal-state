@@ -1,0 +1,406 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "rifle-optic",
+ "key": "rifle",
+ "task": "studio-slice-iteration04-20261026-01",
+ "lane": "E (see-through rifle optic + usable ADS)",
+ "status": "prototype runtime derivative; source unapproved, gameReady false; not approved art; no commercial/model licence clearance asserted",
+ "rebuild": "node tools/asset-pipeline/props/rifle-optic-iteration04.mjs   (QA renders: node tools/asset-pipeline/props/qa-rifle-optic-iteration04.mjs)",
+ "deterministic": "Fixed parameters, no timestamps or randomness (hash noise); identical input + tool versions reproduce identical bytes.",
+ "source": {
+  "file": "game/public/assets/models/rifle.glb",
+  "sha256": "eb8b2f43f56629db2f95a1d2738be15a6922f7a4c368b9f04aa8fea402692623",
+  "sha256Verified": true,
+  "triangles": 24940,
+  "vertices": 30784,
+  "note": "iteration-01 runtime derivative of assault-rifle-03 (see derivatives/props.json outputs[rifle]); read only — rifle.glb and every master are unchanged"
+ },
+ "output": {
+  "file": "game/public/assets/models/rifle-optic.glb",
+  "sha256": "296c2e9ab86a3c2ea5aac91ecb5ac35be37a3149c32159e4047ed10d4ce9693c",
+  "bytes": 3811688,
+  "triangles": 25742,
+  "primitives": {
+   "aiRifleCut": {
+    "triangles": 24686,
+    "vertices": 30571,
+    "material": "rifle-baked (unchanged textures)"
+   },
+   "opticBody": {
+    "triangles": 960,
+    "vertices": 882,
+    "material": "rifle-optic-metal",
+    "parts": {
+     "innerTubeWall": 192,
+     "outerTubeSkin": 192,
+     "rearEyecupRing": 192,
+     "frontObjectiveRing": 192,
+     "ringBackFaces": 192
+    }
+   },
+   "glassRear": {
+    "triangles": 48,
+    "material": "rifle-optic-glass (BLEND)"
+   },
+   "glassFront": {
+    "triangles": 48,
+    "material": "rifle-optic-glass (BLEND)"
+   }
+  }
+ },
+ "diagnosis": "rifle.glb's ACOG-style scope is one closed, opaque AI surface: the objective is a textured cup closed ~1 cm inside the bell (z≈-0.04 m) and the eyepiece a closed textured disc (z≈+0.085 m); a ray along the scope axis hits opaque triangles at both ends. The iteration-01..03 ADS (aim [0,-0.283,-0.42]) therefore put the eye ~5 cm ABOVE the scope axis and sighted over the housing with the HUD crosshair.",
+ "method": [
+  {
+   "step": "axis fit",
+   "detail": "Kasa circle fits of mesh cross-sections (points in a 14-32 mm band around a seed centre, 3 rounds of 2 mm outlier rejection). Axis = mean centre of the eyepiece-half slices, constrained parallel to the bore (model -Z) so the reticle line is the bore line.",
+   "axis": [
+    0.01355,
+    0.14359
+   ],
+   "eyepieceSliceFits": [
+    {
+     "z": 0.03,
+     "centre": [
+      0.0117,
+      0.14205
+     ],
+     "radius": 0.02461,
+     "points": 112,
+     "rmsMm": 0.93
+    },
+    {
+     "z": 0.04,
+     "centre": [
+      0.01224,
+      0.14189
+     ],
+     "radius": 0.02457,
+     "points": 94,
+     "rmsMm": 0.97
+    },
+    {
+     "z": 0.05,
+     "centre": [
+      0.01306,
+      0.14253
+     ],
+     "radius": 0.02499,
+     "points": 100,
+     "rmsMm": 1.03
+    },
+    {
+     "z": 0.06,
+     "centre": [
+      0.01484,
+      0.14374
+     ],
+     "radius": 0.02348,
+     "points": 146,
+     "rmsMm": 1.28
+    },
+    {
+     "z": 0.066,
+     "centre": [
+      0.01555,
+      0.14481
+     ],
+     "radius": 0.02545,
+     "points": 82,
+     "rmsMm": 0.51
+    },
+    {
+     "z": 0.072,
+     "centre": [
+      0.01472,
+      0.14524
+     ],
+     "radius": 0.02757,
+     "points": 56,
+     "rmsMm": 0.81
+    },
+    {
+     "z": 0.078,
+     "centre": [
+      0.01218,
+      0.1442
+     ],
+     "radius": 0.02857,
+     "points": 84,
+     "rmsMm": 1
+    },
+    {
+     "z": 0.083,
+     "centre": [
+      0.01414,
+      0.14427
+     ],
+     "radius": 0.02194,
+     "points": 54,
+     "rmsMm": 0.51
+    }
+   ],
+   "objectiveSliceFits": [
+    {
+     "z": -0.047,
+     "centre": [
+      0.009,
+      0.14293
+     ],
+     "radius": 0.02517,
+     "points": 72,
+     "rmsMm": 0.43
+    },
+    {
+     "z": -0.044,
+     "centre": [
+      0.00797,
+      0.14277
+     ],
+     "radius": 0.02614,
+     "points": 82,
+     "rmsMm": 0.2
+    },
+    {
+     "z": -0.04,
+     "centre": [
+      0.00887,
+      0.14281
+     ],
+     "radius": 0.02641,
+     "points": 112,
+     "rmsMm": 0.75
+    },
+    {
+     "z": -0.035,
+     "centre": [
+      0.00865,
+      0.1428
+     ],
+     "radius": 0.02701,
+     "points": 156,
+     "rmsMm": 1.03
+    },
+    {
+     "z": -0.03,
+     "centre": [
+      0.00898,
+      0.14287
+     ],
+     "radius": 0.02695,
+     "points": 154,
+     "rmsMm": 1.06
+    },
+    {
+     "z": -0.02,
+     "centre": [
+      0.00849,
+      0.14293
+     ],
+     "radius": 0.02008,
+     "points": 94,
+     "rmsMm": 1.1
+    },
+    {
+     "z": -0.01,
+     "centre": [
+      0.01007,
+      0.14381
+     ],
+     "radius": 0.0238,
+     "points": 146,
+     "rmsMm": 1.12
+    },
+    {
+     "z": 0,
+     "centre": [
+      0.01021,
+      0.14207
+     ],
+     "radius": 0.02454,
+     "points": 128,
+     "rmsMm": 1.02
+    },
+    {
+     "z": 0.01,
+     "centre": [
+      0.01109,
+      0.14185
+     ],
+     "radius": 0.0239,
+     "points": 102,
+     "rmsMm": 0.83
+    },
+    {
+     "z": 0.02,
+     "centre": [
+      0.01202,
+      0.14324
+     ],
+     "radius": 0.02482,
+     "points": 82,
+     "rmsMm": 0.66
+    }
+   ],
+   "aiTubeMisalignment": {
+    "yawDeg": 2.85,
+    "pitchDeg": 0.65,
+    "note": "measured slope of the AI housing centres vs z; not applied (the axis stays bore-parallel); the bore cut and tube cover the few-mm offset"
+   }
+  },
+  {
+   "step": "faces",
+   "detail": "min/max z of AI vertices within 0.03 m of the axis (scope only)",
+   "objectiveFaceZ": -0.0525,
+   "eyepieceFaceZ": 0.0858
+  },
+  {
+   "step": "bore cut",
+   "detail": "removed every AI triangle with any of 16 barycentric samples inside r < 0.0202 m of the axis and within z ∈ [objective face - 3 mm, eyepiece face + 3 mm], except outward-facing housing facets centred outside the tube wall (mean vertex normal · radial > 0.35, centroid r ≥ 0.0205 m and no sample deeper than r = 0.0188 m; they keep the outside closed and are back faces behind the tube wall from inside the bore); remaining vertices compacted, attributes copied verbatim",
+   "trianglesRemoved": 254,
+   "outwardHousingFacetsKept": 23,
+   "verticesRemoved": 213,
+   "openBoundary": {
+    "front": {
+     "edges": 35,
+     "radiusRange": [
+      0.01905,
+      0.02726
+     ],
+     "zRange": [
+      -0.0525,
+      -0.03625
+     ]
+    },
+    "middle": {
+     "edges": 69,
+     "radiusRange": [
+      0.01887,
+      0.0296
+     ],
+     "zRange": [
+      -0.02747,
+      0.06396
+     ]
+    },
+    "rear": {
+     "edges": 16,
+     "radiusRange": [
+      0.01885,
+      0.02681
+     ],
+     "zRange": [
+      0.07786,
+      0.08479
+     ]
+    }
+   }
+  },
+  {
+   "step": "authored parts",
+   "detail": "all on the fitted axis, 48 segments; triangle winding checked against normals",
+   "innerTubeWall": {
+    "radius": 0.0205,
+    "z": [
+     -0.0531,
+     0.0864
+    ],
+    "normals": "inward",
+    "uv": "atlas v 0.54-0.98 (matte black, baffle rings)"
+   },
+   "outerTubeSkin": {
+    "radius": 0.0211,
+    "z": [
+     -0.0501,
+     0.0834
+    ],
+    "normals": "outward",
+    "uv": "atlas v 0.02-0.46 (worn exterior)",
+    "why": "closes small gaps where the AI housing steps down near the offset side of the bore"
+   },
+   "rearEyecupRing": {
+    "z": 0.0864,
+    "radius": [
+     0.0197,
+     0.02761
+    ],
+    "skirtDepth": 0.003,
+    "covers": "rear cut edge"
+   },
+   "frontObjectiveRing": {
+    "z": -0.0531,
+    "radius": [
+     0.0197,
+     0.02806
+    ],
+    "skirtDepth": 0.003,
+    "covers": "objective cut edge"
+   },
+   "glassRear": {
+    "z": 0.0818,
+    "radius": 0.0205,
+    "facing": "+Z (eye)",
+    "recess": 0.004,
+    "uv": "lens-local (0.5+0.5x/r, 0.5+0.5y/r)"
+   },
+   "glassFront": {
+    "z": -0.0435,
+    "radius": 0.0205,
+    "facing": "-Z (target)",
+    "recess": 0.009
+   },
+   "anchors": {
+    "OpticRear": [
+     0.01355,
+     0.14359,
+     0.0818
+    ],
+    "OpticFront": [
+     0.01355,
+     0.14359,
+     -0.0435
+    ],
+    "Muzzle": "unchanged",
+    "Grip": "unchanged"
+   }
+  },
+  {
+   "step": "textures/materials",
+   "detail": "rifle-optic-metal: 512² procedural JPEG (hash fbm grime, circumferential brushing, edge-wear speckle; interior half matte black with baffle rings) whose palette is sampled from the rifle's own baked optic-housing texels; metallic/roughness factors = medians of the rifle ORM texels on the housing. rifle-optic-glass: glTF BLEND, tinted, no texture (world/pickup view). rifle-baked textures untouched.",
+   "palette": {
+    "p10": [
+     23,
+     22,
+     20
+    ],
+    "p50": [
+     36,
+     31,
+     28
+    ],
+    "p90": [
+     76,
+     67,
+     62
+    ]
+   },
+   "sampledTexels": 1282,
+   "metallicFactor": 0.659,
+   "roughnessFactor": 0.533,
+   "texture": {
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 7474
+   }
+  }
+ ],
+ "runtime": "game/src/weapons/optic.ts + viewmodel.ts: in the first-person viewmodel the rear glass becomes a depth-masked lens (the world pass shows through the full eyepiece, i.e. a 1x optic image), a collimated reticle (red dot + duplex) drawn by the lens shader at the aim direction, coating tint/sheen, edge vignette and an eye-box exit pupil (dark lens off-axis / at hip). ADS puts the eye on the axis at the configured eye relief behind OpticRear (weapons.ts rifle.view.optic). World pickups use the plain glTF glass.",
+ "limitations": [
+  "The housing remains the AI reconstruction (inferred/blurred detail, mirrored markings); only the lens caps/interior were replaced.",
+  "The AI scope tube is a few millimetres off the bore-parallel axis (see aiTubeMisalignment); the authored rings are centred on the axis, so the housing can look slightly eccentric around the eyecup up close.",
+  "Optic is a 1x see-through presentation (no picture-in-picture magnification); the ADS camera FOV change is unchanged.",
+  "Authored parts use a procedural texture tuned to the rifle palette, not a bake from the source model."
+ ]
+}

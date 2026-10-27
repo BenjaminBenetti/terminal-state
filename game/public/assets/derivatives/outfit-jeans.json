@@ -1,0 +1,533 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "outfit-jeans",
+  "title": "Zombie wearable \"Dark-wash jeans\" (lower) - fitted per body (prototype)",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative (iteration 06 zombie wardrobe); art/anatomy/deformation/fit not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; sources are AI reconstructions of AI-generated concept images"
+  },
+  "honesty": {
+    "sourcesHadSkeleton": false,
+    "rig": "NEW derivative skeleton (shared 18-joint naming/hierarchy) and automatic skin weights created by this CPU pipeline",
+    "animation": "hand-authored procedural keyframes (same clip functions for every body, sampled with each body's own joint positions) - NOT motion capture",
+    "generation": "no AI generation, inference, model download or network service was used by this builder",
+    "garment": "garment source is a separate ghost-mannequin reconstruction; fitted and skinned per body by this pipeline (no cloth simulation)"
+  },
+  "origin": "iteration-06 generated (Lane G lowerJeans)",
+  "provenance": "generated",
+  "slot": "lower",
+  "kind": "pants",
+  "outputs": {
+    "glb": {
+      "path": "game/public/assets/models/outfit-jeans.glb",
+      "bytes": 789976,
+      "sha256": "d9a04f867e53701e07b3c8f1928fb4c5fd00ef8d50a361b7a42d442b61c381d2",
+      "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
+    }
+  },
+  "source": {
+    "id": "lowerJeans",
+    "file": ".cache/iteration06-native-masters/lowerJeans/asset.glb",
+    "sha256Verified": "2dcc35a9ea848e65f2e802e32c99aa56fe0d18d5388d7fedb61c605931c638b9",
+    "displayName": "Lower: dark-wash straight jeans",
+    "ledger": "reference/tasks/vertical-slice-iteration06-20261026/generation/ledger.json",
+    "ledgerKey": "lowerJeans",
+    "inputPng": "reference/tasks/vertical-slice-iteration06-20261026/generation/lowerJeans/image/lowerJeans-original.png",
+    "inputPngSha256": "338532084ca4a824c3a30825baf2afa9fb2449699a3b1b846aa6277b401ab4f4",
+    "nativeJob": "20261026T184510Z-f96dea954a14452e9e8f5176c71324ae",
+    "nativeMetadata": "reference/tasks/vertical-slice-iteration06-20261026/generation/lowerJeans/native/metadata.json",
+    "nativeReceipt": "reference/tasks/vertical-slice-iteration06-20261026/generation/lowerJeans/native/receipt.json",
+    "preservedXz": "reference/tasks/vertical-slice-iteration06-20261026/generation/lowerJeans/native/asset.glb.xz",
+    "triangles": 974776,
+    "vertices": 688706,
+    "textures": {
+      "baseColor": [
+        4096,
+        4096,
+        "image/png"
+      ],
+      "metallicRoughness": [
+        4096,
+        4096,
+        "image/png"
+      ]
+    },
+    "material": {
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallicRoughnessSynthesised": false
+    }
+  },
+  "stage": {
+    "nominal": {
+      "scale": 1.068023,
+      "pivot": [
+        -0.00117,
+        -0.46674,
+        0.00805
+      ],
+      "flipFacing": true
+    },
+    "frame": {
+      "crotchNominal": 0.71,
+      "hipHalf": [
+        0.1892,
+        0.1241
+      ]
+    },
+    "sourceTrim": null
+  },
+  "mesh": {
+    "vertices": 4036,
+    "triangles": 5990,
+    "simplify": {
+      "targetTris": 6000,
+      "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
+      "importanceWeighted": false,
+      "flags": [
+        "Prune",
+        "Regularize"
+      ],
+      "resultTris": 5990,
+      "resultVerts": 2953,
+      "relativeError": 0.00731,
+      "absoluteErrorM": 0.00731
+    },
+    "unwrap": {
+      "initialCharts": 377,
+      "charts": 99,
+      "mergedSmallCharts": 278,
+      "texelsPerMetreBase": 556.9,
+      "uvAreaFill": 0.47,
+      "uvMirroredFaces": 0,
+      "coneDeg": 66,
+      "validDot": 0.15,
+      "minChartFaces": 80,
+      "smoothIters": 12,
+      "padTexels": 6,
+      "packAtlas": 1024
+    },
+    "bake": {
+      "texels": 1963957,
+      "coverage": 0.468,
+      "missed": 0,
+      "farOver1cm": 13360,
+      "distMedianMm": 0.67,
+      "distP99Mm": 8.94,
+      "cageRayHits": 407406,
+      "cageM": 0.012,
+      "rayBelowM": 0.004,
+      "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
+      "gridCells": [
+        55,
+        101,
+        32
+      ],
+      "workers": 32
+    },
+    "textures": {
+      "baseColor": 1024,
+      "metallicRoughness": 256,
+      "jpegQuality": 86
+    }
+  },
+  "perBody": {
+    "lastshift": {
+      "node": "Outfit_jeans__lastshift",
+      "kind": "pants",
+      "fit": {
+        "targets": {
+          "waistY": 1.0222,
+          "crotchY": 0.72,
+          "hemY": 0.1
+        },
+        "bodyOverrides": null,
+        "globalScale": [
+          1.169,
+          0.909
+        ],
+        "easeM": 0.01,
+        "legRowGrowMax": 2.968,
+        "waistRowGrowMax": 4.814,
+        "method": "row-wise profile fit: piecewise height map (hem->ankle, crotch->body crotch, waist->hip joint+offset); rows re-centred on the body leg/pelvis centres, global hip-width scale, grown per row only where body+ease needs room; crotch band blend; 6 smoothing passes"
+      },
+      "collisionTarget": "whole body",
+      "pushOut": {
+        "marginM": 0.008,
+        "verticesInsideBodyBefore": 321,
+        "verticesMoved": 2760,
+        "maxDisplacementM": 0.0549,
+        "lastRoundViolations": 233,
+        "rounds": 8,
+        "smoothIters": 5
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, no skirt rule (pants), masked smoothing",
+        "maxDistToBodyM": 0.0598,
+        "verticesFartherThan10cm": 0,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0153
+      },
+      "hiddenBodyTriangles": 2472,
+      "hiddenFraction": 0.1658,
+      "mask": {
+        "hidden": 2472,
+        "total": 14912,
+        "method": "normal + 4 rays tilted 28 deg from 0.025 m below each body triangle centroid; hidden when all hit the fitted garment within 0.07 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 5990,
+        "p50": 1.071,
+        "p99": 1.844,
+        "max": 3.37,
+        "over2x": 27,
+        "over3x": 2,
+        "fractionOver": 0.0003,
+        "worstClips": {
+          "Death": 30,
+          "Run": 32
+        },
+        "poses": 85
+      }
+    },
+    "courier": {
+      "node": "Outfit_jeans__courier",
+      "kind": "pants",
+      "fit": {
+        "targets": {
+          "waistY": 1.032,
+          "crotchY": 0.72,
+          "hemY": 0.11
+        },
+        "bodyOverrides": null,
+        "globalScale": [
+          1.056,
+          0.824
+        ],
+        "easeM": 0.01,
+        "legRowGrowMax": 2.877,
+        "waistRowGrowMax": 4.711,
+        "method": "row-wise profile fit: piecewise height map (hem->ankle, crotch->body crotch, waist->hip joint+offset); rows re-centred on the body leg/pelvis centres, global hip-width scale, grown per row only where body+ease needs room; crotch band blend; 6 smoothing passes"
+      },
+      "collisionTarget": "whole body",
+      "pushOut": {
+        "marginM": 0.008,
+        "verticesInsideBodyBefore": 195,
+        "verticesMoved": 2832,
+        "maxDisplacementM": 0.035,
+        "lastRoundViolations": 216,
+        "rounds": 8,
+        "smoothIters": 5
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, no skirt rule (pants), masked smoothing",
+        "maxDistToBodyM": 0.0459,
+        "verticesFartherThan10cm": 0,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0122
+      },
+      "hiddenBodyTriangles": 2764,
+      "hiddenFraction": 0.1848,
+      "mask": {
+        "hidden": 2764,
+        "total": 14956,
+        "method": "normal + 4 rays tilted 28 deg from 0.025 m below each body triangle centroid; hidden when all hit the fitted garment within 0.07 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 5990,
+        "p50": 1.069,
+        "p99": 1.843,
+        "max": 2.79,
+        "over2x": 31,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Death": 49,
+          "Run": 12
+        },
+        "poses": 85
+      }
+    },
+    "scavenger": {
+      "node": "Outfit_jeans__scavenger",
+      "kind": "pants",
+      "fit": {
+        "targets": {
+          "waistY": 1.0124,
+          "crotchY": 0.72,
+          "hemY": 0.09
+        },
+        "bodyOverrides": null,
+        "globalScale": [
+          0.972,
+          0.748
+        ],
+        "easeM": 0.01,
+        "legRowGrowMax": 4.7,
+        "waistRowGrowMax": 6.962,
+        "method": "row-wise profile fit: piecewise height map (hem->ankle, crotch->body crotch, waist->hip joint+offset); rows re-centred on the body leg/pelvis centres, global hip-width scale, grown per row only where body+ease needs room; crotch band blend; 6 smoothing passes"
+      },
+      "collisionTarget": "whole body",
+      "pushOut": {
+        "marginM": 0.008,
+        "verticesInsideBodyBefore": 500,
+        "verticesMoved": 2910,
+        "maxDisplacementM": 0.1449,
+        "lastRoundViolations": 687,
+        "rounds": 8,
+        "smoothIters": 5
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, no skirt rule (pants), masked smoothing",
+        "maxDistToBodyM": 0.1449,
+        "verticesFartherThan10cm": 58,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0159
+      },
+      "hiddenBodyTriangles": 932,
+      "hiddenFraction": 0.0631,
+      "mask": {
+        "hidden": 932,
+        "total": 14767,
+        "method": "normal + 4 rays tilted 28 deg from 0.025 m below each body triangle centroid; hidden when all hit the fitted garment within 0.07 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 5990,
+        "p50": 1.075,
+        "p99": 1.683,
+        "max": 4.84,
+        "over2x": 18,
+        "over3x": 6,
+        "fractionOver": 0.001,
+        "worstClips": {
+          "Death": 43,
+          "Run": 19
+        },
+        "poses": 85
+      }
+    },
+    "agent": {
+      "node": "Outfit_jeans__agent",
+      "kind": "pants",
+      "fit": {
+        "targets": {
+          "waistY": 1.0085,
+          "crotchY": 0.62,
+          "hemY": 0.06
+        },
+        "bodyOverrides": {
+          "waistAboveHip": 0.2,
+          "waistAboveSpineMax": 0.035
+        },
+        "globalScale": [
+          1.281,
+          0.972
+        ],
+        "easeM": 0.01,
+        "legRowGrowMax": 2.823,
+        "waistRowGrowMax": 5.121,
+        "method": "row-wise profile fit: piecewise height map (hem->ankle, crotch->body crotch, waist->hip joint+offset); rows re-centred on the body leg/pelvis centres, global hip-width scale, grown per row only where body+ease needs room; crotch band blend; 6 smoothing passes"
+      },
+      "collisionTarget": "whole body",
+      "pushOut": {
+        "marginM": 0.008,
+        "verticesInsideBodyBefore": 233,
+        "verticesMoved": 2824,
+        "maxDisplacementM": 0.0614,
+        "lastRoundViolations": 349,
+        "rounds": 8,
+        "smoothIters": 5
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, no skirt rule (pants), masked smoothing",
+        "maxDistToBodyM": 0.0586,
+        "verticesFartherThan10cm": 0,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0132
+      },
+      "hiddenBodyTriangles": 2360,
+      "hiddenFraction": 0.1576,
+      "mask": {
+        "hidden": 2360,
+        "total": 14972,
+        "method": "normal + 4 rays tilted 28 deg from 0.025 m below each body triangle centroid; hidden when all hit the fitted garment within 0.07 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 5990,
+        "p50": 1.075,
+        "p99": 1.875,
+        "max": 4.09,
+        "over2x": 30,
+        "over3x": 2,
+        "fractionOver": 0.0003,
+        "worstClips": {
+          "Death": 48,
+          "Run": 14
+        },
+        "poses": 85
+      }
+    },
+    "heavyset": {
+      "node": "Outfit_jeans__heavyset",
+      "kind": "pants",
+      "fit": {
+        "targets": {
+          "waistY": 1.01,
+          "crotchY": 0.65,
+          "hemY": 0.09
+        },
+        "bodyOverrides": null,
+        "globalScale": [
+          1.283,
+          0.999
+        ],
+        "easeM": 0.01,
+        "legRowGrowMax": 2.863,
+        "waistRowGrowMax": 5.669,
+        "method": "row-wise profile fit: piecewise height map (hem->ankle, crotch->body crotch, waist->hip joint+offset); rows re-centred on the body leg/pelvis centres, global hip-width scale, grown per row only where body+ease needs room; crotch band blend; 6 smoothing passes"
+      },
+      "collisionTarget": "whole body",
+      "pushOut": {
+        "marginM": 0.008,
+        "verticesInsideBodyBefore": 187,
+        "verticesMoved": 2443,
+        "maxDisplacementM": 0.0592,
+        "lastRoundViolations": 181,
+        "rounds": 8,
+        "smoothIters": 5
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, no skirt rule (pants), masked smoothing",
+        "maxDistToBodyM": 0.0714,
+        "verticesFartherThan10cm": 0,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0172
+      },
+      "hiddenBodyTriangles": 2219,
+      "hiddenFraction": 0.1483,
+      "mask": {
+        "hidden": 2219,
+        "total": 14962,
+        "method": "normal + 4 rays tilted 28 deg from 0.025 m below each body triangle centroid; hidden when all hit the fitted garment within 0.07 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 5990,
+        "p50": 1.072,
+        "p99": 1.955,
+        "max": 2.49,
+        "over2x": 53,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Death": 46,
+          "Run": 14,
+          "Attack": 2
+        },
+        "poses": 85
+      }
+    },
+    "tall": {
+      "node": "Outfit_jeans__tall",
+      "kind": "pants",
+      "fit": {
+        "targets": {
+          "waistY": 1.01,
+          "crotchY": 0.77,
+          "hemY": 0.08
+        },
+        "bodyOverrides": null,
+        "globalScale": [
+          1.039,
+          0.74
+        ],
+        "easeM": 0.01,
+        "legRowGrowMax": 2.343,
+        "waistRowGrowMax": 4.677,
+        "method": "row-wise profile fit: piecewise height map (hem->ankle, crotch->body crotch, waist->hip joint+offset); rows re-centred on the body leg/pelvis centres, global hip-width scale, grown per row only where body+ease needs room; crotch band blend; 6 smoothing passes"
+      },
+      "collisionTarget": "whole body",
+      "pushOut": {
+        "marginM": 0.008,
+        "verticesInsideBodyBefore": 70,
+        "verticesMoved": 1475,
+        "maxDisplacementM": 0.0485,
+        "lastRoundViolations": 57,
+        "rounds": 8,
+        "smoothIters": 5
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, no skirt rule (pants), masked smoothing",
+        "maxDistToBodyM": 0.0584,
+        "verticesFartherThan10cm": 0,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0224
+      },
+      "hiddenBodyTriangles": 2402,
+      "hiddenFraction": 0.1606,
+      "mask": {
+        "hidden": 2402,
+        "total": 14960,
+        "method": "normal + 4 rays tilted 28 deg from 0.025 m below each body triangle centroid; hidden when all hit the fitted garment within 0.07 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 5990,
+        "p50": 1.062,
+        "p99": 1.503,
+        "max": 2.04,
+        "over2x": 4,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Death": 34,
+          "Run": 28
+        },
+        "poses": 85
+      }
+    }
+  },
+  "limitations": [
+    "No cloth simulation: linear-blend skinned with weights transferred from each body; it cannot drape, swing or collide in motion.",
+    "Pants fitted by a row-wise profile map (A-pose bodies standing upright) + push-out; deep crouches/lying poses can show small interpenetration with the body's own shoes or shorts.",
+    "Body triangles fully enclosed by the item in the bind pose are hidden per body; in motion small gaps can reveal the underlying body or base clothing.",
+    "Hidden-side geometry of the source is AI-hallucinated.",
+    "Unapproved prototype; gameReady false."
+  ]
+}

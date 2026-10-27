@@ -1,0 +1,1054 @@
+{
+ "task": "studio-slice-iteration06-20261026-01",
+ "lane": "D (material breaking)",
+ "generatedBy": "tools/audio-pipeline/build-iteration06.mjs",
+ "policy": "Root CLAUDE.md \"Sound effects: Sound Lab only (user rule, 2026-10-26)\": every runtime SFX is a derivative of a Sound Lab raw; no synthesis, stock or hosted audio; missing cues stay silent and are listed as gaps. Existing iteration-05 cues are reused for everything else.",
+ "soundLab": {
+  "endpoint": "http://10.0.0.59:7871",
+  "kit": {
+   "name": "Last Line Sound Lab CPU",
+   "version": "0.1.0"
+  },
+  "profile": "w8a8",
+  "modelCard": {
+   "repo": "stabilityai/stable-audio-3-small-sfx",
+   "revision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+   "url": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx"
+  },
+  "weightsRepo": "stabilityai/stable-audio-3-optimized",
+  "revision": "08b17423649b5714b22eab20f96bf00751f2358a",
+  "upstreamCode": {
+   "repo": "https://github.com/Stability-AI/stable-audio-3",
+   "commit": "77e0398c26f7d22d801ec1bb036307e8b231f741",
+   "committed": "2026-10-11T03:32:19-04:00",
+   "path": "optimized/tflite",
+   "license": "MIT (code only; does not cover model weights)"
+  }
+ },
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "Unreviewed by ear on the worker; human audition required.",
+  "gameReady": false,
+  "approved": false
+ },
+ "rawFolder": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw",
+ "totals": {
+  "derivatives": 18,
+  "bytes": 257047,
+  "cuesCovered": 6,
+  "cues": 6
+ },
+ "gaps": [],
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/i06-impact-glass-01.mp3",
+   "url": "assets/audio/i06-impact-glass-01.mp3",
+   "bytes": 11285,
+   "sha256": "236ffcff63f7feb5abd0f4743256633d5e5faf4bcc180fbebfa62f7adc40fc3e",
+   "cue": "impactGlass",
+   "durationS": 0.9,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-impact-glass-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-glass-01.wav",
+    "rawSha256": "d1e4c576a02b4fd5839a81ff76a67e743621d8c7e4b8a8ac4b61146f7df976e8",
+    "labFile": "sfx_a-bullet-punching-a-hole-through-a-thick_w8a8_seed176554373_183431.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-glass-01.lab.json",
+    "jobId": "20261026T183431-176554373",
+    "prompt": "TrackType: SFX, a bullet punching a hole through a thick glass pane, a sharp glassy crack with a few small glass fragments tinkling down, close mic, recorded dry with no echo or reverb.",
+    "seed": 176554373,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 0.901
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 7.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-impact-glass-02.mp3",
+   "url": "assets/audio/i06-impact-glass-02.mp3",
+   "bytes": 7210,
+   "sha256": "3341f0b333289c89cdaf8ee9adcab339e886599e66aaee5cd321ae195a8f528b",
+   "cue": "impactGlass",
+   "durationS": 0.5512,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-impact-glass-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-glass-02.wav",
+    "rawSha256": "07c1ea2d4c98604f79613936373c0a22cd1ac39f57a21a85a431cb1945f451d9",
+    "labFile": "sfx_a-bullet-punching-a-hole-through-a-thick_w8a8_seed838909267_183435.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-glass-02.lab.json",
+    "jobId": "20261026T183435-838909267",
+    "prompt": "TrackType: SFX, a bullet punching a hole through a thick glass pane, a sharp glassy crack with a few small glass fragments tinkling down, close mic, recorded dry with no echo or reverb.",
+    "seed": 838909267,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 0.5523
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 9.64
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-impact-glass-03.mp3",
+   "url": "assets/audio/i06-impact-glass-03.mp3",
+   "bytes": 4389,
+   "sha256": "36ef514bf7f03398b13f67d708bf36363a9bccd80904656aa445165c5b376659",
+   "cue": "impactGlass",
+   "durationS": 0.3257,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-impact-glass-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-glass-03.wav",
+    "rawSha256": "0fa6b591d332f836aa70764fb03309df676319e27b2134a2389579978ddf7dd5",
+    "labFile": "sfx_a-bullet-punching-a-hole-through-a-thick_w8a8_seed1924190261_183440.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-glass-03.lab.json",
+    "jobId": "20261026T183440-1924190261",
+    "prompt": "TrackType: SFX, a bullet punching a hole through a thick glass pane, a sharp glassy crack with a few small glass fragments tinkling down, close mic, recorded dry with no echo or reverb.",
+    "seed": 1924190261,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.3257
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 4.07
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-impact-sheet-metal-01.mp3",
+   "url": "assets/audio/i06-impact-sheet-metal-01.mp3",
+   "bytes": 6896,
+   "sha256": "903dc3524746c36558a79d79469eb9aad78bd0b9a1290b0694b3681352f2a28e",
+   "cue": "impactSheetMetal",
+   "durationS": 0.5362,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-impact-sheet-metal-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-sheet-metal-01.wav",
+    "rawSha256": "4507745a057f06e41acd9304f6afd0aaf3c39fd06cb89df7f3070dcd0380b3ae",
+    "labFile": "sfx_a-bullet-punching-through-a-thin-sheet-m_w8a8_seed877183856_183444.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-sheet-metal-01.lab.json",
+    "jobId": "20261026T183444-877183856",
+    "prompt": "TrackType: SFX, a bullet punching through a thin sheet-metal locker door, a hollow tinny metallic clang with a short rattle, close mic, recorded dry with no echo or reverb.",
+    "seed": 877183856,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0411,
+     "endS": 0.5773
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.69
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-impact-sheet-metal-02.mp3",
+   "url": "assets/audio/i06-impact-sheet-metal-02.mp3",
+   "bytes": 12539,
+   "sha256": "cff45ae71bf01fffa0c950d7b9b9699f4a00054f1e1198f839542f0beaeea424",
+   "cue": "impactSheetMetal",
+   "durationS": 1,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-impact-sheet-metal-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-sheet-metal-02.wav",
+    "rawSha256": "6ab2350ed5737c555e0277a0676b6efe44342ace285e3e709112979bbe9a6897",
+    "labFile": "sfx_a-bullet-punching-through-a-thin-sheet-m_w8a8_seed186855676_183449.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-sheet-metal-02.lab.json",
+    "jobId": "20261026T183449-186855676",
+    "prompt": "TrackType: SFX, a bullet punching through a thin sheet-metal locker door, a hollow tinny metallic clang with a short rattle, close mic, recorded dry with no echo or reverb.",
+    "seed": 186855676,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0411,
+     "endS": 1.0411
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.95
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-impact-sheet-metal-03.mp3",
+   "url": "assets/audio/i06-impact-sheet-metal-03.mp3",
+   "bytes": 12539,
+   "sha256": "2168653c84b3a3e904eb554799abe4548a7074cfff8110c562f81fc2344b63f9",
+   "cue": "impactSheetMetal",
+   "durationS": 1,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-impact-sheet-metal-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-sheet-metal-03.wav",
+    "rawSha256": "f7f0d2d7ebb096b56408eb271900f7c0dcd7bcea48757e6eac3a84f57e321e2d",
+    "labFile": "sfx_a-bullet-punching-through-a-thin-sheet-m_w8a8_seed417634378_183454.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-impact-sheet-metal-03.lab.json",
+    "jobId": "20261026T183454-417634378",
+    "prompt": "TrackType: SFX, a bullet punching through a thin sheet-metal locker door, a hollow tinny metallic clang with a short rattle, close mic, recorded dry with no echo or reverb.",
+    "seed": 417634378,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0411,
+     "endS": 1.0411
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 0.68
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-break-glass-01.mp3",
+   "url": "assets/audio/i06-break-glass-01.mp3",
+   "bytes": 25391,
+   "sha256": "bf6eee99fd3de9e95da4571174a9798dbf0e77f0e75d80360d5876fc72817a7b",
+   "cue": "breakGlass",
+   "durationS": 2.0747,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-break-glass-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-glass-01.wav",
+    "rawSha256": "91dce0c95cc3e5082b40f892eba3766072db4f158e2bb4f86c81dfdf050ba43e",
+    "labFile": "sfx_a-large-glass-pane-shattering-after-a-gu_w8a8_seed2083771381_183458.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-glass-01.lab.json",
+    "jobId": "20261026T183458-2083771381",
+    "prompt": "TrackType: SFX, a large glass pane shattering after a gunshot, a sharp crack then a burst of breaking glass with many shards crashing and tinkling onto a hard floor, close mic, recorded dry with no echo or reverb.",
+    "seed": 2083771381,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 2.0757
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.3,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-break-glass-02.mp3",
+   "url": "assets/audio/i06-break-glass-02.mp3",
+   "bytes": 26018,
+   "sha256": "4856c452d122e05bf34e0b6ba47da8035a2f8df4c35866770707f2494cbdadb9",
+   "cue": "breakGlass",
+   "durationS": 2.1198,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-break-glass-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-glass-02.wav",
+    "rawSha256": "a41f781a55382e2e2d2a253e2d5398976df0e87b7fbdaabedc891330e8c382c1",
+    "labFile": "sfx_a-large-glass-pane-shattering-after-a-gu_w8a8_seed990974219_183503.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-glass-02.lab.json",
+    "jobId": "20261026T183503-990974219",
+    "prompt": "TrackType: SFX, a large glass pane shattering after a gunshot, a sharp crack then a burst of breaking glass with many shards crashing and tinkling onto a hard floor, close mic, recorded dry with no echo or reverb.",
+    "seed": 990974219,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 2.1198
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.3,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.8
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-break-glass-03.mp3",
+   "url": "assets/audio/i06-break-glass-03.mp3",
+   "bytes": 31660,
+   "sha256": "c288d62b36b742730723b07d4e4ba2f3d8036a74245bb27c9137d1c5ecd7e637",
+   "cue": "breakGlass",
+   "durationS": 2.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-break-glass-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-glass-03.wav",
+    "rawSha256": "a960eedb80c4f0fae0bfa824665b6de46756f95d3a1d70bc0752f4c0adbc06a0",
+    "labFile": "sfx_a-large-glass-pane-shattering-after-a-gu_w8a8_seed867033854_183507.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-glass-03.lab.json",
+    "jobId": "20261026T183507-867033854",
+    "prompt": "TrackType: SFX, a large glass pane shattering after a gunshot, a sharp crack then a burst of breaking glass with many shards crashing and tinkling onto a hard floor, close mic, recorded dry with no echo or reverb.",
+    "seed": 867033854,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1463,
+     "endS": 2.7463
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.3,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-break-wood-01.mp3",
+   "url": "assets/audio/i06-break-wood-01.mp3",
+   "bytes": 19749,
+   "sha256": "111008530a98dc14c7e6e7d9ec4f94413159205c5dd480803673dce6e1d59f5a",
+   "cue": "breakWood",
+   "durationS": 1.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-break-wood-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-wood-01.wav",
+    "rawSha256": "95d9d1ff00234bd4f7810b8bbf4968ecddb3b52ba2cc28b6a7cc8aa812147aa5",
+    "labFile": "sfx_a-wooden-crate-smashed-apart-by-gunfire_w8a8_seed1608711717_183512.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-wood-01.lab.json",
+    "jobId": "20261026T183512-1608711717",
+    "prompt": "TrackType: SFX, a wooden crate smashed apart by gunfire, a loud splintering crack of breaking boards with planks clattering onto a concrete floor, close mic, recorded dry with no echo or reverb.",
+    "seed": 1608711717,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2265,
+     "endS": 1.8265
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 0.81
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-break-wood-02.mp3",
+   "url": "assets/audio/i06-break-wood-02.mp3",
+   "bytes": 19749,
+   "sha256": "fdb60d7807f9b4403eae44e7bb6c9b1902301eee5caf77f2920eaa91a12f5144",
+   "cue": "breakWood",
+   "durationS": 1.6,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-break-wood-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-wood-02.wav",
+    "rawSha256": "b57f925ef121903d89b2b48e305261a34ad1c6d75d2b5f9db79ced3e1e91f959",
+    "labFile": "sfx_a-wooden-crate-smashed-apart-by-gunfire_w8a8_seed1597368565_183516.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-wood-02.lab.json",
+    "jobId": "20261026T183516-1597368565",
+    "prompt": "TrackType: SFX, a wooden crate smashed apart by gunfire, a loud splintering crack of breaking boards with planks clattering onto a concrete floor, close mic, recorded dry with no echo or reverb.",
+    "seed": 1597368565,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2566,
+     "endS": 1.8566
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.04
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-break-wood-03.mp3",
+   "url": "assets/audio/i06-break-wood-03.mp3",
+   "bytes": 11285,
+   "sha256": "ff0d81aa2ecb38a4e5231bf20f7c5e043ab31dfad034504a83ca07a80f2092d7",
+   "cue": "breakWood",
+   "durationS": 0.902,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-break-wood-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-wood-03.wav",
+    "rawSha256": "4637bfba4c5a55ce512cfd2fd1a9381253cab1f94b72fddd14817fd84003213b",
+    "labFile": "sfx_a-wooden-crate-smashed-apart-by-gunfire_w8a8_seed1969305830_183521.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-break-wood-03.lab.json",
+    "jobId": "20261026T183521-1969305830",
+    "prompt": "TrackType: SFX, a wooden crate smashed apart by gunfire, a loud splintering crack of breaking boards with planks clattering onto a concrete floor, close mic, recorded dry with no echo or reverb.",
+    "seed": 1969305830,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.902
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.15,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-debris-fall-01.mp3",
+   "url": "assets/audio/i06-debris-fall-01.mp3",
+   "bytes": 13166,
+   "sha256": "32a65458c86ed533bb07fd65b8a540a822908c34682719e8c5ee18d4d4f0a917",
+   "cue": "debrisFall",
+   "durationS": 1.0474,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-debris-fall-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-debris-fall-01.wav",
+    "rawSha256": "0540412322739dfef2eda305298e89ab2a6795a5f987955a3157a9a47cd52579",
+    "labFile": "sfx_small-chunks-of-broken-concrete-and-plas_w8a8_seed803687941_183526.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-debris-fall-01.lab.json",
+    "jobId": "20261026T183526-803687941",
+    "prompt": "TrackType: SFX, small chunks of broken concrete and plaster falling and pattering onto a concrete floor, a short gritty rattle of rubble and dust, close mic, recorded dry with no echo or reverb.",
+    "seed": 803687941,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.0474
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.18,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-debris-fall-02.mp3",
+   "url": "assets/audio/i06-debris-fall-02.mp3",
+   "bytes": 11912,
+   "sha256": "670e62f4c56d12aebc5ffda298c589222602063acc048d5cbdf6cc460a66ffc1",
+   "cue": "debrisFall",
+   "durationS": 0.9622,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-debris-fall-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-debris-fall-02.wav",
+    "rawSha256": "c9ec6c4935bfc65576a3d8705d52966bdd2834990dde77e15512132aabd3e202",
+    "labFile": "sfx_small-chunks-of-broken-concrete-and-plas_w8a8_seed753034652_183530.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-debris-fall-02.lab.json",
+    "jobId": "20261026T183530-753034652",
+    "prompt": "TrackType: SFX, small chunks of broken concrete and plaster falling and pattering onto a concrete floor, a short gritty rattle of rubble and dust, close mic, recorded dry with no echo or reverb.",
+    "seed": 753034652,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.9622
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.18,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.68
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-debris-fall-03.mp3",
+   "url": "assets/audio/i06-debris-fall-03.mp3",
+   "bytes": 14106,
+   "sha256": "2295ed7cdc27e315f4393ef27aa14c4d548461912276252e19659664526fdda8",
+   "cue": "debrisFall",
+   "durationS": 1.1276,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-debris-fall-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-debris-fall-03.wav",
+    "rawSha256": "1397d1652a75cfc1eb823ffbfbc4b536fa958417764a2a401d7effd8c96a78be",
+    "labFile": "sfx_small-chunks-of-broken-concrete-and-plas_w8a8_seed1867929746_183535.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-debris-fall-03.lab.json",
+    "jobId": "20261026T183535-1867929746",
+    "prompt": "TrackType: SFX, small chunks of broken concrete and plaster falling and pattering onto a concrete floor, a short gritty rattle of rubble and dust, close mic, recorded dry with no echo or reverb.",
+    "seed": 1867929746,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.1276
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.18,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-flesh-tear-01.mp3",
+   "url": "assets/audio/i06-flesh-tear-01.mp3",
+   "bytes": 10031,
+   "sha256": "d2adf6c45741c0ba6f943d7872ec8261937c00d2cec040b179a9c8eb46c01d44",
+   "cue": "fleshTear",
+   "durationS": 0.8,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-flesh-tear-01",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-flesh-tear-01.wav",
+    "rawSha256": "89549fc6bab423b7009f9282ba869660ead15222eac6f4a339c5f3a3f2632b8f",
+    "labFile": "sfx_a-bullet-tearing-a-chunk-out-of-a-body-a_w8a8_seed230892852_183539.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-flesh-tear-01.lab.json",
+    "jobId": "20261026T183539-230892852",
+    "prompt": "TrackType: SFX, a bullet tearing a chunk out of a body, a short wet ripping tear with a heavy meaty squelch, close mic, recorded dry with no echo or reverb.",
+    "seed": 230892852,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1463,
+     "endS": 0.9463
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 5.52
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-flesh-tear-02.mp3",
+   "url": "assets/audio/i06-flesh-tear-02.mp3",
+   "bytes": 9091,
+   "sha256": "27a0ff6fc6629fc8fea436dd37952fe02ab53067342ddbafed20de4cd5dd058a",
+   "cue": "fleshTear",
+   "durationS": 0.7266,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-flesh-tear-02",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-flesh-tear-02.wav",
+    "rawSha256": "dad394cbc9609948a9db0ce65f8f82642ae1a04208f9b5f3b1fb3164a16d9593",
+    "labFile": "sfx_a-bullet-tearing-a-chunk-out-of-a-body-a_w8a8_seed1233789636_183544.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-flesh-tear-02.lab.json",
+    "jobId": "20261026T183544-1233789636",
+    "prompt": "TrackType: SFX, a bullet tearing a chunk out of a body, a short wet ripping tear with a heavy meaty squelch, close mic, recorded dry with no echo or reverb.",
+    "seed": 1233789636,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.7266
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.29
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i06-flesh-tear-03.mp3",
+   "url": "assets/audio/i06-flesh-tear-03.mp3",
+   "bytes": 10031,
+   "sha256": "b3e8ae7d9125164abd5f2b216195d514b44b0ec9ef9e9bebf3e8b641f8d20ade",
+   "cue": "fleshTear",
+   "durationS": 0.8,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i06-flesh-tear-03",
+    "rawFile": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-flesh-tear-03.wav",
+    "rawSha256": "a67bb8e27b7fbc033fc2c5fe2e60714ccfe94ae7b5a5e1fb614b84f4b81b9fb8",
+    "labFile": "sfx_a-bullet-tearing-a-chunk-out-of-a-body-a_w8a8_seed1296599165_183548.wav",
+    "labSidecar": "reference/tasks/vertical-slice-iteration06-20261026/audio/raw/i06-flesh-tear-03.lab.json",
+    "jobId": "20261026T183548-1296599165",
+    "prompt": "TrackType: SFX, a bullet tearing a chunk out of a body, a short wet ripping tear with a heavy meaty squelch, close mic, recorded dry with no echo or reverb.",
+    "seed": 1296599165,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1313,
+     "endS": 0.9313
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  }
+ ],
+ "rejectedRaws": []
+}

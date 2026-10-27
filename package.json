@@ -1,0 +1,45 @@
+{
+  "name": "terminal-state",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Terminal State (formerly The Last Line): frozen iteration-6 browser game prototype",
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "board": "node scripts/serve-board.mjs",
+    "dev": "npm run game:dev",
+    "game:dev": "vite --config game/vite.config.ts",
+    "game:typecheck": "tsc --noEmit -p game/tsconfig.json && tsc --noEmit -p game/tsconfig.node.json",
+    "game:build": "npm run game:typecheck && vite build --config game/vite.config.ts",
+    "game:preview": "vite preview --config game/vite.config.ts",
+    "game:test": "vitest run --config game/vitest.config.ts",
+    "game:e2e": "node game/e2e/playtest.mjs",
+    "assets:build": "node tools/asset-pipeline/build.mjs",
+    "game:release": "node tools/release/package-release.mjs",
+    "game:backup": "node tools/release/backup.mjs",
+    "build": "npm run game:build",
+    "preview": "npm run game:preview",
+    "test": "npm run game:test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "dependencies": {
+    "cannon-es": "0.20.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@breezystack/lamejs": "1.2.7",
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "@types/node": "26.6.5",
+    "@types/three": "0.186.0",
+    "meshoptimizer": "1.3.0",
+    "puppeteer": "25.16.0",
+    "sharp": "0.35.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

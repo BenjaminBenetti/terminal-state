@@ -1,0 +1,9 @@
+---
+name: image-delegation
+description: Route explicitly authorized new image work to Codex native image generation while preserving reference provenance.
+---
+
+Prefer reuse. Require fresh specific asset/count authorization; historical image budgets are consumed. Use Codex actual native image_generation/imagegen tools when available, not Claude. CLI -i/--image attaches inputs only. If the native capability is unavailable, report the blocker; never silently substitute another provider or label SVG/Pillow/procedural output as AI generation. Preserve exact input/output bytes, parent SHA, prompts and actual reported settings. Historical image_gen__imagegen outputs have unknown model IDs where unreported. Follow Codex's imagegen skill for actual tool use. Setup authorizes zero calls.
+
+## Forward rule — conditioning-image view (user feedback, iteration 04, 2026-10-26)
+User: "make sure you always get straight on shots for images intended for 3d asset generation or else the result will end up as a skewed model". Every NEW single-view conditioning image is a STRAIGHT-ON / front-on elevation: camera level with the object's vertical centre, looking perpendicularly at the front face, front face parallel to the image plane, orthographic-like with minimal perspective; single complete object, centred, square transparent canvas, no shadow/props/text overlays; no three-quarter, elevated or low views. State this explicitly in every prompt. Composite subjects (e.g. shops) are generated as separate building-block components and assembled, never one whole shop/food court. Forward-only: earlier three-quarter inputs and their models stay recorded as they were. Derivative note: a straight-on single view carries no depth cue and glass reconstructs opaque — plan a depth fit and pane projection in the runtime derivative.

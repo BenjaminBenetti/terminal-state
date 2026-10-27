@@ -1,0 +1,1983 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "zombie-body-agent",
+  "title": "Zombie body \"Station agent\" - rigged runtime derivative (prototype)",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative (iteration 06 zombie wardrobe); art/anatomy/deformation/fit not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; sources are AI reconstructions of AI-generated concept images"
+  },
+  "honesty": {
+    "sourcesHadSkeleton": false,
+    "rig": "NEW derivative skeleton (shared 18-joint naming/hierarchy) and automatic skin weights created by this CPU pipeline",
+    "animation": "hand-authored procedural keyframes (same clip functions for every body, sampled with each body's own joint positions) - NOT motion capture",
+    "generation": "no AI generation, inference, model download or network service was used by this builder"
+  },
+  "origin": "iteration-05 generated (Lane A bodyAgent, 15th manifest type)",
+  "provenance": "generated",
+  "traits": {},
+  "outputs": {
+    "glb": {
+      "path": "game/public/assets/models/zombie-body-agent.glb",
+      "bytes": 662524,
+      "sha256": "46ac8e87b7330089f9bb01caab85d08e559e62f076d0459870ba95524e07e73b",
+      "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
+    }
+  },
+  "conventions": {
+    "units": "metres",
+    "up": "+Y",
+    "facing": "+Z",
+    "floor": "y = 0",
+    "origin": "midpoint between the feet",
+    "handedness": "L_ = character left = +X",
+    "heightM": 1.65,
+    "bindPose": "A-pose (arm angles in skeleton.estimation)"
+  },
+  "source": {
+    "id": "bodyAgent",
+    "file": ".cache/iteration05-native-masters/bodyAgent/asset.glb",
+    "sha256Verified": "18f47a936d6bcbcdf9e11276241f050fa305c1b22f995b40b9cf38a64ef17c33",
+    "displayName": "Zombie body: subway station agent (woman, late 50s)",
+    "ledger": "reference/tasks/vertical-slice-iteration05-20261026/generation/ledger.json",
+    "ledgerKey": "bodyAgent",
+    "inputPng": "reference/tasks/vertical-slice-iteration05-20261026/generation/bodyAgent/image/bodyAgent-original.png",
+    "inputPngSha256": "d28c8a995c259e1935af3ebdf145a4f63ce0ea5502cf370e44e053fef63c9e5f",
+    "nativeJob": "20261026T043005Z-4857b4052b884d58a7a14c3f52f30be0",
+    "nativeMetadata": "reference/tasks/vertical-slice-iteration05-20261026/generation/bodyAgent/native/metadata.json",
+    "nativeReceipt": "reference/tasks/vertical-slice-iteration05-20261026/generation/bodyAgent/native/receipt.json",
+    "preservedXz": "reference/tasks/vertical-slice-iteration05-20261026/generation/bodyAgent/native/asset.glb.xz",
+    "triangles": 962578,
+    "vertices": 707380,
+    "textures": {
+      "baseColor": [
+        4096,
+        4096,
+        "image/png"
+      ],
+      "metallicRoughness": [
+        4096,
+        4096,
+        "image/png"
+      ]
+    },
+    "material": {
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallicRoughnessSynthesised": false
+    }
+  },
+  "placement": {
+    "scale": 1.8209445743249333,
+    "pivot": [
+      0.0001697540283203125,
+      -0.4535246193408966,
+      0.028539955615997314
+    ],
+    "flipFacing": true,
+    "offset": [
+      0,
+      0,
+      0
+    ],
+    "note": "scaled to 1.65 m; source faced -Z: rotated 180 deg about Y; feet midpoint (bbox centres of soles below 4 cm) moved to origin"
+  },
+  "facing": {
+    "facing": -1,
+    "margin": -0.0187,
+    "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front",
+    "used": -1,
+    "forced": false
+  },
+  "poseCorrection": null,
+  "bridgeTrim": null,
+  "skinOverrides": null,
+  "mesh": {
+    "node": "ZombieBody",
+    "vertices": 11564,
+    "triangles": 14972,
+    "simplify": {
+      "targetTris": 15000,
+      "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
+      "importanceWeighted": true,
+      "flags": [
+        "Prune",
+        "Regularize"
+      ],
+      "resultTris": 14972,
+      "resultVerts": 7306,
+      "relativeError": 0.00662,
+      "absoluteErrorM": 0.01093
+    },
+    "unwrap": {
+      "initialCharts": 1190,
+      "charts": 626,
+      "mergedSmallCharts": 564,
+      "texelsPerMetreBase": 366.7,
+      "uvAreaFill": 0.527,
+      "uvMirroredFaces": 0,
+      "coneDeg": 66,
+      "validDot": 0.15,
+      "minChartFaces": 80,
+      "smoothIters": 12,
+      "padTexels": 6,
+      "packAtlas": 1024
+    },
+    "bake": {
+      "texels": 2176392,
+      "coverage": 0.519,
+      "missed": 0,
+      "farOver1cm": 10823,
+      "distMedianMm": 0.92,
+      "distP99Mm": 7.52,
+      "cageRayHits": 515505,
+      "cageM": 0.015,
+      "rayBelowM": 0.004,
+      "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
+      "gridCells": [
+        99,
+        166,
+        41
+      ],
+      "workers": 32
+    },
+    "textures": {
+      "baseColor": 1024,
+      "metallicRoughness": 256,
+      "jpegQuality": 88
+    }
+  },
+  "skeleton": {
+    "jointCount": 18,
+    "joints": [
+      {
+        "name": "Root",
+        "parent": null,
+        "bindWorldPosition": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Hips",
+        "parent": "Root",
+        "bindWorldPosition": [
+          0,
+          0.8085,
+          0.0017
+        ]
+      },
+      {
+        "name": "Spine",
+        "parent": "Hips",
+        "bindWorldPosition": [
+          0,
+          0.9844,
+          0.0453
+        ]
+      },
+      {
+        "name": "Chest",
+        "parent": "Spine",
+        "bindWorldPosition": [
+          0,
+          1.1956,
+          0.0369
+        ]
+      },
+      {
+        "name": "Neck",
+        "parent": "Chest",
+        "bindWorldPosition": [
+          0,
+          1.395,
+          0.0682
+        ]
+      },
+      {
+        "name": "Head",
+        "parent": "Neck",
+        "bindWorldPosition": [
+          0,
+          1.497,
+          0.0782
+        ]
+      },
+      {
+        "name": "L_UpperArm",
+        "parent": "Chest",
+        "bindWorldPosition": [
+          0.1662,
+          1.3271,
+          0.0176
+        ]
+      },
+      {
+        "name": "L_Forearm",
+        "parent": "L_UpperArm",
+        "bindWorldPosition": [
+          0.2742,
+          1.0771,
+          0.0426
+        ]
+      },
+      {
+        "name": "L_Hand",
+        "parent": "L_Forearm",
+        "bindWorldPosition": [
+          0.412,
+          0.8941,
+          0.0627
+        ]
+      },
+      {
+        "name": "R_UpperArm",
+        "parent": "Chest",
+        "bindWorldPosition": [
+          -0.1662,
+          1.3271,
+          0.0176
+        ]
+      },
+      {
+        "name": "R_Forearm",
+        "parent": "R_UpperArm",
+        "bindWorldPosition": [
+          -0.2742,
+          1.0771,
+          0.0426
+        ]
+      },
+      {
+        "name": "R_Hand",
+        "parent": "R_Forearm",
+        "bindWorldPosition": [
+          -0.412,
+          0.8941,
+          0.0627
+        ]
+      },
+      {
+        "name": "L_Thigh",
+        "parent": "Hips",
+        "bindWorldPosition": [
+          0.1009,
+          0.8085,
+          0.0017
+        ]
+      },
+      {
+        "name": "L_Shin",
+        "parent": "L_Thigh",
+        "bindWorldPosition": [
+          0.1369,
+          0.4417,
+          -0.0133
+        ]
+      },
+      {
+        "name": "L_Foot",
+        "parent": "L_Shin",
+        "bindWorldPosition": [
+          0.1664,
+          0.075,
+          -0.0493
+        ]
+      },
+      {
+        "name": "R_Thigh",
+        "parent": "Hips",
+        "bindWorldPosition": [
+          -0.1009,
+          0.8085,
+          0.0017
+        ]
+      },
+      {
+        "name": "R_Shin",
+        "parent": "R_Thigh",
+        "bindWorldPosition": [
+          -0.1369,
+          0.4417,
+          -0.0133
+        ]
+      },
+      {
+        "name": "R_Foot",
+        "parent": "R_Shin",
+        "bindWorldPosition": [
+          -0.1664,
+          0.075,
+          -0.0493
+        ]
+      }
+    ],
+    "ends": {
+      "Head": [
+        0,
+        1.65,
+        0.0782
+      ],
+      "L_Hand": [
+        0.5037,
+        0.7504,
+        0.0665
+      ],
+      "R_Hand": [
+        -0.5037,
+        0.7504,
+        0.0665
+      ],
+      "L_Foot": [
+        0.1925,
+        0.03,
+        0.1165
+      ],
+      "R_Foot": [
+        -0.1925,
+        0.03,
+        0.1165
+      ]
+    },
+    "boneLengthsM": {
+      "Hips": 0.8085,
+      "Spine": 0.1812,
+      "Chest": 0.2114,
+      "Neck": 0.2018,
+      "Head": 0.1025,
+      "L_UpperArm": 0.2128,
+      "L_Forearm": 0.2735,
+      "L_Hand": 0.23,
+      "R_UpperArm": 0.2128,
+      "R_Forearm": 0.2735,
+      "R_Hand": 0.23,
+      "L_Thigh": 0.1009,
+      "L_Shin": 0.3689,
+      "L_Foot": 0.3696,
+      "R_Thigh": 0.1009,
+      "R_Shin": 0.3689,
+      "R_Foot": 0.3696
+    },
+    "validationIssues": [],
+    "estimation": {
+      "feet": {
+        "L": [
+          0.1925,
+          0,
+          0.0025
+        ],
+        "R": [
+          -0.1925,
+          0.0004,
+          -0.0025
+        ],
+        "toeZ": 0.1389,
+        "shinDepth": 0.1561,
+        "ankleTransitionY": 0.09,
+        "ankleY": 0.075,
+        "method": "boot depth widens >1.3x shin depth below ankle; joint 1.5 cm under transition"
+      },
+      "arm_L": {
+        "armpitY": 1.095,
+        "forearmAxisDir": [
+          0.5534,
+          -0.8299,
+          0.0712
+        ],
+        "forearmAngleFromVerticalDeg": 33.9,
+        "wristT": 0.12,
+        "wristRadius": 0.034,
+        "tipT": 0.282,
+        "acromion": [
+          0.186,
+          1.3773
+        ],
+        "shoulderSlabZ": [
+          -0.057,
+          0.087
+        ],
+        "upperArmAngleFromVerticalDeg": 24.9,
+        "method": "arm = slice clusters separated from torso; forearm PCA axis; wrist = min radius 11-27 cm from tip; shoulder from acromion (top-surface slope over 4 cm < -0.8 after the trapezius plateau) -5 cm/-2 cm medial, slab-centred in z; elbow 54% shoulder->wrist centred in limb section"
+      },
+      "arm_R": {
+        "armpitY": 1.085,
+        "forearmAxisDir": [
+          -0.543,
+          -0.8376,
+          0.0599
+        ],
+        "forearmAngleFromVerticalDeg": 33.1,
+        "wristT": 0.12,
+        "wristRadius": 0.0359,
+        "tipT": 0.281,
+        "acromion": [
+          -0.186,
+          1.377
+        ],
+        "shoulderSlabZ": [
+          -0.053,
+          0.095
+        ],
+        "upperArmAngleFromVerticalDeg": 23,
+        "method": "arm = slice clusters separated from torso; forearm PCA axis; wrist = min radius 11-27 cm from tip; shoulder from acromion (top-surface slope over 4 cm < -0.8 after the trapezius plateau) -5 cm/-2 cm medial, slab-centred in z; elbow 54% shoulder->wrist centred in limb section"
+      },
+      "neck": {
+        "neckMinY": 1.435,
+        "neckWidth": 0.1525,
+        "neckBaseY": 1.395,
+        "headTop": 1.65,
+        "headPivotY": 1.497,
+        "method": "narrowest slice above shoulders; base where width >1.9x neck; head pivot at 40% base->top"
+      },
+      "legs": {
+        "crotchY": 0.65,
+        "hipY": 0.808,
+        "thighCentreX": [
+          0.1281,
+          -0.1241
+        ],
+        "method": "crotch = lowest merge of leg clusters; hip height = 0.49H clamped to crotch+[0.06,0.18]; hip x = 0.8 x thigh centre 4 cm below crotch; knee at 50% ankle->hip, centred in leg section; ankle centred in shin section"
+      },
+      "rawPaired": {
+        "armpitPt": {
+          "L": [
+            0.1883,
+            1.095,
+            0.0147
+          ],
+          "R": [
+            -0.1897,
+            1.085,
+            0.0205
+          ]
+        },
+        "acromionPt": {
+          "L": [
+            0.1862,
+            1.3773,
+            0.0147
+          ],
+          "R": [
+            -0.1862,
+            1.377,
+            0.0205
+          ]
+        },
+        "shoulder": {
+          "L": [
+            0.1662,
+            1.3273,
+            0.0147
+          ],
+          "R": [
+            -0.1662,
+            1.327,
+            0.0205
+          ]
+        },
+        "elbow": {
+          "L": [
+            0.2763,
+            1.0801,
+            0.0462
+          ],
+          "R": [
+            -0.2721,
+            1.0741,
+            0.039
+          ]
+        },
+        "wrist": {
+          "L": [
+            0.4111,
+            0.8964,
+            0.066
+          ],
+          "R": [
+            -0.4129,
+            0.8917,
+            0.0594
+          ]
+        },
+        "handTip": {
+          "L": [
+            0.5034,
+            0.756,
+            0.0734
+          ],
+          "R": [
+            -0.504,
+            0.7449,
+            0.0597
+          ]
+        },
+        "hip": {
+          "L": [
+            0.1025,
+            0.8085,
+            0.0017
+          ],
+          "R": [
+            -0.0992,
+            0.8085,
+            0.0017
+          ]
+        },
+        "knee": {
+          "L": [
+            0.1387,
+            0.4417,
+            -0.0106
+          ],
+          "R": [
+            -0.1351,
+            0.4417,
+            -0.0159
+          ]
+        },
+        "ankle": {
+          "L": [
+            0.1662,
+            0.075,
+            -0.0443
+          ],
+          "R": [
+            -0.1665,
+            0.075,
+            -0.0543
+          ]
+        },
+        "toe": {
+          "L": [
+            0.1925,
+            0.03,
+            0.1189
+          ],
+          "R": [
+            -0.1925,
+            0.03,
+            0.114
+          ]
+        }
+      },
+      "shoulderCutPlanes": {
+        "L": {
+          "A": [
+            0.189,
+            1.09,
+            0.0176
+          ],
+          "T": [
+            0.1862,
+            1.3771,
+            0.0176
+          ]
+        },
+        "R": {
+          "A": [
+            -0.189,
+            1.09,
+            0.0176
+          ],
+          "T": [
+            -0.1862,
+            1.3771,
+            0.0176
+          ]
+        },
+        "method": "plane through armpit wall point A and acromion T, containing the front-back axis"
+      }
+    }
+  },
+  "skinning": {
+    "method": "skin.mjs region classification + chain weights + masked Laplacian smoothing (same as zombie-rigged body)",
+    "regionVertexCounts": {
+      "armR": 593,
+      "torso": 5093,
+      "legR": 516,
+      "armL": 564,
+      "legL": 540
+    },
+    "armVerticesAdoptedOutsideFlood": {
+      "L": 0,
+      "R": 0
+    },
+    "verticesWithMoreThan4Truncated": 0,
+    "smoothIters": 4,
+    "smoothLambda": 0.5,
+    "armRule": "wall"
+  },
+  "profile": {
+    "heightM": 1.65,
+    "landmarks": {
+      "ankle": 0.075,
+      "knee": 0.4417,
+      "crotch": 0.65,
+      "hip": 0.8085,
+      "spine": 0.9844,
+      "chest": 1.1956,
+      "armpit": 1.085,
+      "neck": 1.395,
+      "head": 1.497,
+      "top": 1.65
+    },
+    "limb": {
+      "L_UpperArm": {
+        "length": 0.2735,
+        "radius": 0.064,
+        "samples": 81
+      },
+      "L_Forearm": {
+        "length": 0.23,
+        "radius": 0.0391,
+        "samples": 38
+      },
+      "R_UpperArm": {
+        "length": 0.2735,
+        "radius": 0.064,
+        "samples": 66
+      },
+      "R_Forearm": {
+        "length": 0.23,
+        "radius": 0.0391,
+        "samples": 37
+      },
+      "L_Thigh": {
+        "length": 0.3689,
+        "radius": 0.1001,
+        "samples": 149
+      },
+      "L_Shin": {
+        "length": 0.3696,
+        "radius": 0.0751,
+        "samples": 118
+      },
+      "R_Thigh": {
+        "length": 0.3689,
+        "radius": 0.1001,
+        "samples": 136
+      },
+      "R_Shin": {
+        "length": 0.3696,
+        "radius": 0.0751,
+        "samples": 117
+      }
+    },
+    "head": {
+      "halfWidth": 0.1258,
+      "depth": 0.2447
+    },
+    "torso": {
+      "chest": {
+        "w": 0.3418,
+        "d": 0.3117
+      },
+      "waist": {
+        "w": 0.3595,
+        "d": 0.2783
+      },
+      "hips": {
+        "w": 0.453,
+        "d": 0.2871
+      }
+    },
+    "torsoRows": {
+      "y0": 0,
+      "step": 0.01,
+      "rows": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        [
+          0.4201,
+          0.2004,
+          0.0132,
+          0.0271
+        ],
+        [
+          0.3872,
+          0.202,
+          0.0201,
+          0.0325
+        ],
+        null,
+        [
+          0.4397,
+          0.2057,
+          0.0071,
+          0.0316
+        ],
+        [
+          0.4165,
+          0.1791,
+          0.0134,
+          0.0293
+        ],
+        [
+          0.4453,
+          0.2014,
+          0.0001,
+          0.0246
+        ],
+        [
+          0.4434,
+          0.2067,
+          0.0082,
+          0.0326
+        ],
+        [
+          0.4388,
+          0.2131,
+          0.01,
+          0.038
+        ],
+        [
+          0.4352,
+          0.2155,
+          -0.0078,
+          0.0371
+        ],
+        [
+          0.4529,
+          0.239,
+          0.0026,
+          0.021
+        ],
+        [
+          0.413,
+          0.2059,
+          -0.0004,
+          0.0232
+        ],
+        [
+          0.4076,
+          0.2336,
+          -0.021,
+          0.0352
+        ],
+        [
+          0.4081,
+          0.2348,
+          -0.0237,
+          0.0291
+        ],
+        [
+          0.4246,
+          0.237,
+          0.0212,
+          0.0009
+        ],
+        [
+          0.4342,
+          0.2634,
+          0.0207,
+          0.0186
+        ],
+        [
+          0.4565,
+          0.241,
+          -0.0002,
+          0.0346
+        ],
+        [
+          0.453,
+          0.2871,
+          0.0019,
+          0.0181
+        ],
+        [
+          0.4435,
+          0.287,
+          0.0062,
+          0.0216
+        ],
+        [
+          0.4555,
+          0.2941,
+          0.0039,
+          0.019
+        ],
+        [
+          0.4516,
+          0.301,
+          -0.0006,
+          0.0205
+        ],
+        [
+          0.447,
+          0.3102,
+          0.0067,
+          0.0299
+        ],
+        [
+          0.4289,
+          0.3117,
+          -0.0038,
+          0.0264
+        ],
+        [
+          0.4379,
+          0.3193,
+          -0.0021,
+          0.0309
+        ],
+        [
+          0.4303,
+          0.3293,
+          0.0043,
+          0.0334
+        ],
+        [
+          0.4327,
+          0.3093,
+          0.0061,
+          0.0328
+        ],
+        [
+          0.4481,
+          0.3299,
+          0.001,
+          0.0308
+        ],
+        [
+          0.4125,
+          0.323,
+          0.0091,
+          0.0405
+        ],
+        [
+          0.3537,
+          0.3215,
+          0.0324,
+          0.0533
+        ],
+        [
+          0.3419,
+          0.2897,
+          -0.0342,
+          0.0301
+        ],
+        [
+          0.3741,
+          0.3311,
+          0.0019,
+          0.0651
+        ],
+        [
+          0.4083,
+          0.3231,
+          0.0022,
+          0.0571
+        ],
+        [
+          0.3704,
+          0.321,
+          0.0083,
+          0.0573
+        ],
+        [
+          0.3366,
+          0.3173,
+          0.0141,
+          0.0667
+        ],
+        [
+          0.3595,
+          0.2783,
+          0,
+          0.0785
+        ],
+        [
+          0.3545,
+          0.305,
+          -0.0042,
+          0.0745
+        ],
+        [
+          0.3906,
+          0.3005,
+          0.0007,
+          0.0753
+        ],
+        [
+          0.3829,
+          0.2938,
+          0.0064,
+          0.0831
+        ],
+        [
+          0.392,
+          0.2989,
+          0.0055,
+          0.0747
+        ],
+        [
+          0.348,
+          0.3024,
+          -0.0085,
+          0.077
+        ],
+        [
+          0.327,
+          0.3041,
+          0.0163,
+          0.078
+        ],
+        [
+          0.3583,
+          0.2476,
+          -0.0021,
+          0.0534
+        ],
+        [
+          0.3639,
+          0.2999,
+          -0.0014,
+          0.0729
+        ],
+        [
+          0.3649,
+          0.2994,
+          -0.0043,
+          0.0742
+        ],
+        [
+          0.344,
+          0.2754,
+          0.0095,
+          0.059
+        ],
+        [
+          0.3509,
+          0.3032,
+          -0.0043,
+          0.0689
+        ],
+        [
+          0.3427,
+          0.303,
+          0.0087,
+          0.0653
+        ],
+        [
+          0.3418,
+          0.3117,
+          0.0078,
+          0.0676
+        ],
+        [
+          0.3517,
+          0.2894,
+          0.0025,
+          0.0707
+        ],
+        [
+          0.35,
+          0.3081,
+          0.0003,
+          0.0657
+        ],
+        [
+          0.3303,
+          0.2971,
+          0.0192,
+          0.0722
+        ],
+        [
+          0.3761,
+          0.3076,
+          0.0001,
+          0.0572
+        ],
+        [
+          0.3625,
+          0.2981,
+          -0.006,
+          0.0676
+        ],
+        [
+          0.3728,
+          0.3102,
+          0.0011,
+          0.0641
+        ],
+        [
+          0.3636,
+          0.3061,
+          -0.0054,
+          0.0613
+        ],
+        [
+          0.3509,
+          0.2915,
+          0.0033,
+          0.0669
+        ],
+        [
+          0.3268,
+          0.3005,
+          -0.0148,
+          0.0593
+        ],
+        null,
+        [
+          0.3107,
+          0.2763,
+          -0.002,
+          0.0505
+        ],
+        [
+          0.3542,
+          0.2798,
+          0.0089,
+          0.0524
+        ],
+        [
+          0.3188,
+          0.2611,
+          -0.0077,
+          0.0488
+        ],
+        [
+          0.2859,
+          0.2685,
+          0.0078,
+          0.0436
+        ],
+        [
+          0.3375,
+          0.28,
+          -0.0044,
+          0.0547
+        ],
+        [
+          0.3615,
+          0.252,
+          0.0016,
+          0.043
+        ],
+        [
+          0.33,
+          0.2792,
+          0.0182,
+          0.0547
+        ],
+        [
+          0.3598,
+          0.2655,
+          -0.0027,
+          0.0527
+        ],
+        [
+          0.3186,
+          0.2356,
+          0.0055,
+          0.0457
+        ],
+        null,
+        null,
+        [
+          0.34,
+          0.2349,
+          -0.0009,
+          0.0509
+        ],
+        [
+          0.346,
+          0.2377,
+          0.0053,
+          0.0566
+        ],
+        [
+          0.3425,
+          0.2341,
+          0.0036,
+          0.0598
+        ],
+        [
+          0.3525,
+          0.2132,
+          0.001,
+          0.0541
+        ],
+        [
+          0.3316,
+          0.1874,
+          -0.0026,
+          0.0493
+        ],
+        [
+          0.2948,
+          0.1671,
+          0.002,
+          0.0472
+        ],
+        [
+          0.2397,
+          0.1737,
+          0.0053,
+          0.0564
+        ],
+        [
+          0.1683,
+          0.1878,
+          0.0023,
+          0.0695
+        ],
+        [
+          0.1546,
+          0.2028,
+          0.003,
+          0.0823
+        ],
+        [
+          0.1377,
+          0.2155,
+          0.0006,
+          0.0772
+        ],
+        [
+          0.133,
+          0.2073,
+          -0.0005,
+          0.0726
+        ],
+        [
+          0.1546,
+          0.2164,
+          0.0039,
+          0.0825
+        ],
+        [
+          0.1675,
+          0.2131,
+          -0.0029,
+          0.0724
+        ],
+        [
+          0.1706,
+          0.2175,
+          -0.0036,
+          0.0742
+        ],
+        [
+          0.1802,
+          0.2124,
+          -0.0053,
+          0.0703
+        ],
+        [
+          0.196,
+          0.2328,
+          -0.0058,
+          0.0808
+        ],
+        [
+          0.2122,
+          0.2028,
+          -0.0012,
+          0.0736
+        ],
+        [
+          0.2077,
+          0.212,
+          -0.0074,
+          0.0747
+        ],
+        [
+          0.2207,
+          0.2089,
+          -0.0059,
+          0.0786
+        ],
+        [
+          0.2136,
+          0.2027,
+          -0.0034,
+          0.078
+        ],
+        [
+          0.2112,
+          0.2068,
+          -0.0064,
+          0.0787
+        ],
+        [
+          0.2166,
+          0.1879,
+          -0.0051,
+          0.0693
+        ],
+        [
+          0.2104,
+          0.1923,
+          -0.0043,
+          0.0809
+        ],
+        [
+          0.2085,
+          0.1886,
+          -0.0054,
+          0.0813
+        ],
+        [
+          0.1948,
+          0.1657,
+          -0.0029,
+          0.0766
+        ],
+        [
+          0.1937,
+          0.1806,
+          -0.0085,
+          0.0851
+        ],
+        [
+          0.1807,
+          0.1646,
+          -0.0025,
+          0.0833
+        ],
+        [
+          0.1637,
+          0.1697,
+          -0.0094,
+          0.0915
+        ],
+        [
+          0.1403,
+          0.1397,
+          -0.0053,
+          0.0947
+        ],
+        [
+          0.1238,
+          0.1234,
+          -0.0119,
+          0.0942
+        ],
+        [
+          0.0699,
+          0.0731,
+          -0.0215,
+          0.0772
+        ],
+        [
+          0.0561,
+          0.0478,
+          -0.0268,
+          0.0716
+        ],
+        null
+      ]
+    },
+    "hit": {
+      "head": 0.1241,
+      "torso": 0.1634,
+      "arm": 0.0696,
+      "leg": 0.1226,
+      "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+    }
+  },
+  "clips": [
+    {
+      "name": "Idle",
+      "durationS": 3,
+      "loop": true,
+      "keyframes": 91,
+      "maxLegReach": 0.968
+    },
+    {
+      "name": "Walk",
+      "durationS": 1.2,
+      "loop": true,
+      "keyframes": 37,
+      "maxLegReach": 0.9486
+    },
+    {
+      "name": "Run",
+      "durationS": 0.75,
+      "loop": true,
+      "keyframes": 24,
+      "maxLegReach": 0.976
+    },
+    {
+      "name": "Attack",
+      "durationS": 1.1,
+      "loop": false,
+      "keyframes": 34,
+      "maxLegReach": 0.9543
+    },
+    {
+      "name": "Hit",
+      "durationS": 0.35,
+      "loop": false,
+      "keyframes": 12,
+      "maxLegReach": 0.9543
+    },
+    {
+      "name": "Death",
+      "durationS": 1.6,
+      "loop": false,
+      "keyframes": 49,
+      "maxLegReach": 1.046
+    }
+  ],
+  "death": {
+    "hipsY": -0.5343,
+    "tune": {
+      "hipsPitch": -95,
+      "hipsRoll": 11.25,
+      "neck": -25.797,
+      "head": -23.5,
+      "headYaw": -30.5,
+      "armLz": -0.694,
+      "armRz": -0.444,
+      "footLz": 0.5,
+      "footRz": 0.043
+    },
+    "lowestPointPerRegionM": {
+      "torso": 0.151,
+      "armR": 0.047,
+      "pelvis": 0.132,
+      "armL": 0.069,
+      "legR": 0.027,
+      "legL": 0.006,
+      "head": 0.12,
+      "outfit.torso": 0.063,
+      "outfit.head": 0.068,
+      "outfit.armL": 0.039,
+      "outfit.armR": 0.01,
+      "outfit.pelvis": 0.01,
+      "outfit.legR": 0.049,
+      "outfit.legL": 0.001
+    },
+    "solvedAgainst": "body + every fitted wearable"
+  },
+  "verification": {
+    "cpuSkinningFloor": {
+      "Idle": {
+        "maxLegReach": 0.968,
+        "body": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_coat": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_trench": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_blazer": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_puffer": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_sweater": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cargo": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cap": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_beanie": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_gasmask": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_respirator": {
+          "minY": -0.0001,
+          "atT": 1.06667,
+          "framesBelowMinus1cm": 0
+        }
+      },
+      "Walk": {
+        "maxLegReach": 0.9486,
+        "body": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_coat": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_trench": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_blazer": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_puffer": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_sweater": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cargo": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cap": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_beanie": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_gasmask": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_respirator": {
+          "minY": -0.0002,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        }
+      },
+      "Run": {
+        "maxLegReach": 0.976,
+        "body": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_coat": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_trench": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_blazer": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_puffer": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_sweater": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cargo": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cap": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_beanie": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_gasmask": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_respirator": {
+          "minY": -0.0004,
+          "atT": 0.16667,
+          "framesBelowMinus1cm": 0
+        }
+      },
+      "Attack": {
+        "maxLegReach": 0.9543,
+        "body": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_coat": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_trench": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_blazer": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_puffer": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_sweater": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cargo": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cap": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_beanie": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_gasmask": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_respirator": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        }
+      },
+      "Hit": {
+        "maxLegReach": 0.9543,
+        "body": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_coat": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_trench": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_blazer": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_puffer": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_sweater": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cargo": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cap": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_beanie": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_gasmask": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_respirator": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        }
+      },
+      "Death": {
+        "maxLegReach": 1.046,
+        "body": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_coat": {
+          "minY": -0.0495,
+          "atT": 0.8,
+          "framesBelowMinus1cm": 9
+        },
+        "Outfit_trench": {
+          "minY": -0.0968,
+          "atT": 0.83333,
+          "framesBelowMinus1cm": 12
+        },
+        "Outfit_hivis": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_blazer": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_puffer": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_sweater": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cargo": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0032,
+          "atT": 1.1,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_cap": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_beanie": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_gasmask": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_respirator": {
+          "minY": -0.0001,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        }
+      }
+    },
+    "motionStretch": {
+      "triangles": 14972,
+      "p50": 1.075,
+      "p99": 2.83,
+      "max": 16.92,
+      "over2x": 390,
+      "over3x": 121,
+      "fractionOver": 0.0081,
+      "worstClips": {
+        "Run": 57,
+        "Attack": 45,
+        "Death": 49,
+        "Hit": 1
+      },
+      "poses": 85,
+      "method": "per triangle: worst edge length ratio posed/bind over every 3rd frame of all six clips (CPU skinning); body alone"
+    }
+  },
+  "limitations": [
+    "Automatic approximate skin weights; LBS volume loss at shoulders/elbows/hips in extreme poses.",
+    "Procedural (not mocap) clips; no facial rig, no finger or twist bones.",
+    "Hidden-side geometry of the source is AI-hallucinated; textures re-baked at 2048 and downsampled to 1024 (MR 256); no normal map.",
+    "Joint centres without visible landmarks use anthropometric ratios between measured landmarks.",
+    "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false."
+  ]
+}

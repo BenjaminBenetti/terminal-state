@@ -1,0 +1,351 @@
+// Zombie decision-making: idle / wander / chase / search / attack / stagger / climb / dead.
+// Pure logic driven through a BrainWorld interface so it can be unit-tested without three.js.
+//
+// Iteration 05 (Lane T, vertical traversal): the brain tracks its feet height `y`. Chase paths may
+// drop off the platform edge into the track bed (one-way) and climb rescue ladders (path waypoints
+// carry the ladder id; the climb follows the same scripted path as the player's). Swipes need the
+// player within ATTACK_REACH_Y vertically, so a zombie on the platform cannot hit a player down in
+// the track bed — it drops in after them, and climbs out by the nearest ladder.
+
+import type {ZombieType} from '../gen/station';
+import type {Waypoint} from '../gen/grid';
+import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
+
+export interface ZombieStats {
+  hp: number;
+  wanderSpeed: number;
+  chaseSpeed: number;
+  attackRange: number;
+  attackDamage: number;
+  attackDuration: number;
+  /** Seconds into the Attack clip when the swipe lands (from the rig manifest). */
+  attackImpact: number;
+  sightRange: number;
+  radius: number;
+  chaseAnim: 'Run' | 'Walk';
+}
+
+// Attack duration/impact match the Attack clip (1.1 s, impact 0.45 s) in derivatives/zombie-rigged.json.
+// The coated variant is tougher and slower: its Run clip plays at ~0.76x for a heavier lurch.
+export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
+  shambler: {hp: 100, wanderSpeed: 0.65, chaseSpeed: 2.55, attackRange: 1.35, attackDamage: 10, attackDuration: 1.1, attackImpact: 0.45, sightRange: 18, radius: 0.33, chaseAnim: 'Run'},
+  coated: {hp: 165, wanderSpeed: 0.55, chaseSpeed: 1.75, attackRange: 1.4, attackDamage: 15, attackDuration: 1.1, attackImpact: 0.45, sightRange: 16, radius: 0.38, chaseAnim: 'Run'},
+};
+
+export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead';
+/** Vertical reach of a swipe (m between feet heights). */
+export const ATTACK_REACH_Y = 0.9;
+export type AnimName = 'Idle' | 'Walk' | 'Run' | 'Attack' | 'Hit' | 'Death';
+
+export interface BrainWorld {
+  px: number;
+  pz: number;
+  playerAlive: boolean;
+  los(ax: number, az: number, bx: number, bz: number): boolean;
+  walkClear(ax: number, az: number, bx: number, bz: number, r: number): boolean;
+  /** `drops`: chase paths may jump down ledges (platform edge into the track bed). */
+  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean}): Waypoint[] | null;
+  randomNear(x: number, z: number, r: number): [number, number] | null;
+  rand(): number;
+  /** Player feet height (world y); omitted = same level. */
+  py?: number;
+  /** Ladder geometry for path waypoints that climb one. */
+  ladder?(id: number): Ladder | undefined;
+}
+
+export interface BrainOutput {
+  /** Desired horizontal direction (unit or zero). */
+  dirX: number;
+  dirZ: number;
+  speed: number;
+  /** Yaw the body should turn toward (radians, model forward +Z), or null to keep. */
+  face: number | null;
+  anim: AnimName;
+  attackHit: boolean;
+  /** Became aware of the player this frame (for a growl). */
+  alerted: boolean;
+}
+
+export class ZombieBrain {
+  state: BrainState = 'idle';
+  hp: number;
+  t = 0;
+  private stateT = 0;
+  private path: Waypoint[] = [];
+  /** Feet height (world y): set by the game's motor (gravity/stairs) and by ladder climbs. */
+  y = 0;
+  /** Vertical speed while falling (0 = on the ground). */
+  vy = 0;
+  private climb: {path: ClimbPath; t: number; ladder: number; yaw: number; resume: BrainState; resumeT: number} | null = null;
+  private readonly tmp: Vec3 = {x: 0, y: 0, z: 0};
+  private repathT = 0;
+  private lastKnown: [number, number] | null = null;
+  private unseenT = 0;
+  private attackDone = false;
+  private staggerCd = 0;
+  /** Recovery after a swing before the next one can start. */
+  private attackCd = 0;
+  private stuckT = 0;
+  /** Back-off after a failed path search so an unreachable goal is not re-searched every frame. */
+  private pathFailT = 0;
+  private lastX = 0;
+  private lastZ = 0;
+  aware = false;
+  /** Increments every time a new attack swing starts (lets the animator replay the clip). */
+  attackSeq = 0;
+
+  constructor(readonly type: ZombieType, public x: number, public z: number, public yaw: number, readonly stats: ZombieStats = ZOMBIE_STATS[type]) {
+    this.hp = stats.hp;
+    this.stateT = 1 + (x * 7.31 + z * 3.17) % 3;
+  }
+
+  get alive(): boolean {
+    return this.state !== 'dead';
+  }
+
+  private setState(s: BrainState, t = 0) {
+    if (s === 'attack') this.attackSeq++;
+    this.state = s;
+    this.stateT = t;
+    this.attackDone = false;
+  }
+
+  /** Heard a loud noise (gunshot) at a position. */
+  hear(x: number, z: number, radius: number): void {
+    if (!this.alive) return;
+    if (Math.hypot(x - this.x, z - this.z) > radius) return;
+    this.lastKnown = [x, z];
+    this.aware = true;
+    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search') {
+      this.setState('chase');
+      this.repathT = 0;
+    } else if (this.climb) this.climb.resume = 'chase';
+  }
+
+  /** Returns true if this hit killed the zombie. */
+  damage(amount: number, fromX: number, fromZ: number): boolean {
+    if (!this.alive) return false;
+    this.hp -= amount;
+    this.lastKnown = [fromX, fromZ];
+    this.aware = true;
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.setState('dead');
+      return true;
+    }
+    if (this.state === 'climb') { if (this.climb) this.climb.resume = 'chase'; }
+    else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0) {
+      this.setState('stagger', 0.35);
+      this.staggerCd = 0.9;
+    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search') {
+      this.setState('chase');
+    }
+    this.repathT = 0;
+    return false;
+  }
+
+  private sees(w: BrainWorld): boolean {
+    if (!w.playerAlive) return false;
+    const dx = w.px - this.x, dz = w.pz - this.z;
+    const d = Math.hypot(dx, dz);
+    if (d > this.stats.sightRange) return false;
+    if (d > 2.5) {
+      const ang = Math.atan2(dx, dz) - this.yaw;
+      const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
+      if (!this.aware && a > 1.3 && d > 5) return false;
+    }
+    return w.los(this.x, this.z, w.px, w.pz);
+  }
+
+  private steerTo(w: BrainWorld, tx: number, tz: number, out: BrainOutput): boolean {
+    const dx = tx - this.x, dz = tz - this.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.25) return true;
+    out.dirX = dx / d;
+    out.dirZ = dz / d;
+    out.face = Math.atan2(dx, dz);
+    void w;
+    return false;
+  }
+
+  private followPath(w: BrainWorld, out: BrainOutput, speed: number): boolean {
+    while (this.path.length) {
+      const [tx, tz, link] = this.path[0];
+      if (link === undefined && Math.hypot(tx - this.x, tz - this.z) < 0.35) this.path.shift();
+      else break;
+    }
+    if (!this.path.length) return true;
+    const [tx, tz, link] = this.path[0];
+    if (link !== undefined) {
+      // Waypoint reached by climbing a ladder: walk to its near end, then climb.
+      const l = w.ladder?.(link);
+      if (!l) { this.path.shift(); return false; }
+      const up = Math.abs(this.y - l.bottomY) <= Math.abs(this.y - l.topY);
+      const start = up ? l.bottom : l.top;
+      if (Math.hypot(start.x - this.x, start.z - this.z) < 0.55) { this.beginClimb(l, up); return false; }
+      this.steerTo(w, start.x, start.z, out);
+      out.speed = speed;
+      return false;
+    }
+    this.steerTo(w, tx, tz, out);
+    out.speed = speed;
+    return false;
+  }
+
+  /** Scripted ladder climb (same path as the player's, zombie speeds). */
+  private beginClimb(l: Ladder, up: boolean): void {
+    const resume = this.state, resumeT = this.stateT;
+    this.climb = {path: ladderClimbPath(l, up, {x: this.x, y: this.y, z: this.z}, CLIMB.zombie), t: 0, ladder: l.id, yaw: l.dir > 0 ? 0 : Math.PI, resume, resumeT};
+    this.setState('climb');
+  }
+
+  get climbing(): boolean {
+    return this.state === 'climb';
+  }
+
+  update(dt: number, w: BrainWorld): BrainOutput {
+    const out: BrainOutput = {dirX: 0, dirZ: 0, speed: 0, face: null, anim: 'Idle', attackHit: false, alerted: false};
+    this.t += dt;
+    this.staggerCd = Math.max(0, this.staggerCd - dt);
+    this.attackCd = Math.max(0, this.attackCd - dt);
+    this.pathFailT = Math.max(0, this.pathFailT - dt);
+    if (this.state === 'dead') { out.anim = 'Death'; return out; }
+    const sees = this.sees(w);
+    const distP = Math.hypot(w.px - this.x, w.pz - this.z);
+    if (sees) {
+      if (!this.aware) out.alerted = true;
+      this.aware = true;
+      this.lastKnown = [w.px, w.pz];
+      this.unseenT = 0;
+    } else this.unseenT += dt;
+
+    // Stuck detection while moving: re-path or pick a new wander target.
+    const moved = Math.hypot(this.x - this.lastX, this.z - this.lastZ);
+    this.lastX = this.x; this.lastZ = this.z;
+
+    for (let pass = 0; pass < 2; pass++) {
+      const before: BrainState = this.state;
+      this.step(dt, w, out, sees, distP, moved);
+      // Newly alerted zombies start moving in the same frame.
+      if (this.state === before || this.state !== 'chase') break;
+    }
+    return out;
+  }
+
+  private step(dt: number, w: BrainWorld, out: BrainOutput, sees: boolean, distP: number, moved: number): void {
+    switch (this.state) {
+      case 'idle': {
+        this.stateT -= dt;
+        out.anim = 'Idle';
+        if (sees) { this.setState('chase'); this.repathT = 0; break; }
+        if (this.stateT <= 0) {
+          const p = w.randomNear(this.x, this.z, 6);
+          const path = p && w.findPath(this.x, this.z, p[0], p[1]);
+          if (path && path.length) { this.path = path; this.setState('wander', 12); }
+          else this.stateT = 2 + w.rand() * 3;
+        }
+        break;
+      }
+      case 'wander':
+      case 'search': {
+        this.stateT -= dt;
+        if (sees) { this.setState('chase'); this.repathT = 0; break; }
+        const done = this.followPath(w, out, this.stats.wanderSpeed * (this.state === 'search' ? 1.4 : 1));
+        out.anim = 'Walk';
+        if (out.speed > 0 && moved < 0.002) this.stuckT += dt; else this.stuckT = 0;
+        if (done || this.stateT <= 0 || this.stuckT > 1.5) {
+          this.stuckT = 0;
+          this.setState('idle', 1.5 + w.rand() * 3.5);
+          if (this.unseenT > 20) this.aware = false;
+        }
+        break;
+      }
+      case 'chase': {
+        if (!w.playerAlive) { this.setState('idle', 3); break; }
+        if (sees && distP <= this.stats.attackRange && this.attackCd <= 0 && this.reachY(w)) {
+          this.setState('attack', this.stats.attackDuration);
+          out.face = Math.atan2(w.px - this.x, w.pz - this.z);
+          out.anim = 'Attack';
+          break;
+        }
+        const goal = this.lastKnown ?? [w.px, w.pz];
+        out.anim = this.stats.chaseAnim;
+        if (sees && w.walkClear(this.x, this.z, w.px, w.pz, this.stats.radius * 0.9)) {
+          this.steerTo(w, w.px, w.pz, out);
+          out.speed = this.stats.chaseSpeed;
+          this.path = [];
+        } else {
+          this.repathT -= dt;
+          if (this.repathT <= 0 || (!this.path.length && this.pathFailT <= 0)) {
+            // Far goals re-plan less often (long detours on the large station are costly).
+            this.repathT = 0.45 + w.rand() * 0.2 + Math.min(0.9, Math.hypot(goal[0] - this.x, goal[1] - this.z) / 45);
+            const path = w.findPath(this.x, this.z, goal[0], goal[1], {drops: true});
+            this.path = path ?? [];
+            if (!path) { this.pathFailT = 1.2 + w.rand() * 0.6; this.repathT = this.pathFailT; }
+          }
+          const done = this.followPath(w, out, this.stats.chaseSpeed);
+          if (done && !sees) {
+            // Reached the last known position without seeing the player: search around.
+            if (this.unseenT > 1.5) {
+              const p = w.randomNear(this.x, this.z, 5);
+              this.path = p ? w.findPath(this.x, this.z, p[0], p[1]) ?? [] : [];
+              this.setState('search', 8);
+              this.lastKnown = null;
+            }
+          }
+        }
+        if (this.unseenT > 9 && this.state === 'chase') {
+          this.setState('search', 6);
+          const p = w.randomNear(this.x, this.z, 5);
+          this.path = p ? w.findPath(this.x, this.z, p[0], p[1]) ?? [] : [];
+        }
+        break;
+      }
+      case 'attack': {
+        const total = this.stats.attackDuration;
+        const elapsed = total - this.stateT;
+        this.stateT -= dt;
+        out.anim = 'Attack';
+        if (elapsed < this.stats.attackImpact) out.face = Math.atan2(w.px - this.x, w.pz - this.z);
+        if (!this.attackDone && elapsed + dt >= this.stats.attackImpact) {
+          this.attackDone = true;
+          const ang = Math.atan2(w.px - this.x, w.pz - this.z) - this.yaw;
+          const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
+          if (w.playerAlive && distP <= this.stats.attackRange + 0.45 && a < 1.2 && this.reachY(w, 0.15) && w.los(this.x, this.z, w.px, w.pz)) out.attackHit = true;
+        }
+        if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; this.attackCd = 0.45; }
+        break;
+      }
+      case 'stagger': {
+        this.stateT -= dt;
+        out.anim = 'Hit';
+        if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; }
+        break;
+      }
+      case 'climb': {
+        const c = this.climb;
+        if (!c) { this.setState('chase'); break; }
+        c.t += dt;
+        sampleClimb(c.path, c.t, this.tmp);
+        this.x = this.tmp.x; this.y = this.tmp.y; this.z = this.tmp.z;
+        out.face = c.yaw;
+        out.anim = 'Walk';
+        if (c.t >= climbDuration(c.path)) {
+          const end = c.path.pts[c.path.pts.length - 1];
+          this.x = end.x; this.y = end.y; this.z = end.z;
+          if (this.path.length && this.path[0][2] === c.ladder) this.path.shift();
+          this.climb = null;
+          const resume = c.resume === 'wander' || c.resume === 'search' ? c.resume : 'chase';
+          this.setState(resume, resume === 'chase' ? 0 : Math.max(2, c.resumeT));
+          this.repathT = 0;
+        }
+        break;
+      }
+    }
+  }
+
+  /** Player within swiping reach vertically (feet heights). */
+  private reachY(w: BrainWorld, slack = 0): boolean {
+    return w.py === undefined || Math.abs(w.py - this.y) <= ATTACK_REACH_Y + slack;
+  }
+}

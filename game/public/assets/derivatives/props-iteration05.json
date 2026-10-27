@@ -1,0 +1,2079 @@
+{
+  "schema": "last-line-props-derivatives-v1",
+  "task": "studio-slice-iteration05-20261026-01",
+  "status": "PROTOTYPE runtime derivatives: (a) open-front hybrid cooler/display (iteration04 reconstructed exterior + authored interior, wire shelves and transparent glass; no stock picture); (b) NEW iteration05 native F16 SV purpose-specific props made from STRAIGHT-ON conditioning images. Unapproved, gameReady false, not production art, no license clearance asserted. Dimensions provisional.",
+  "rebuild": "node tools/asset-pipeline/props/build-props-iteration05.mjs [--only key,key]",
+  "generationManifest": "reference/tasks/vertical-slice-iteration05-20261026/generation/manifest.json",
+  "assembly": "Props are single building blocks (front +Z, origin bottom-centre, metres) placed by the room-purpose system (Lane R); none is a whole room or shop. Open-front cooler/display replace the picture-pane versions under the existing model keys shopCooler/shopDisplay (same bbox).",
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "front": "+Z",
+    "origin": "bottom-centre (y=0 floor contact)",
+    "files": "plain glTF 2.0 binary, no extensions"
+  },
+  "outputs": [
+    {
+      "output": "game/public/assets/models/shop-cooler-open.glb",
+      "key": "shopCoolerOpen",
+      "modelKey": "shopCooler",
+      "replaces": "game/public/assets/models/shop-cooler.glb",
+      "bytes": 648412,
+      "sha256": "6f2dab9ac163dd91c6705a6f68ce37f62b14a11e2b4a8f858acd53abed543f84",
+      "triangles": 4228,
+      "trianglesByNode": {
+        "body": 3750,
+        "interior": 476,
+        "glass": 2
+      },
+      "textures": {
+        "body": "iteration04 baked atlas reused byte-identical (colour 1024 JPEG, MR 512 JPEG, normal 512 PNG)",
+        "authored": "256 px atlas (colour JPEG, MR JPEG, emissive PNG), procedural value-noise/brushed/grime swatches",
+        "glass": "none (factor only)"
+      },
+      "materials": {
+        "shopCooler-open-baked": "reconstructed exterior (opaque)",
+        "shopCooler-open-authored": "interior liner / shelves / bezel / posts; emissive LED or heat-lamp strip via emissive map (scale with emissiveIntensity if needed)",
+        "shopCooler-open-glass": "transparent glass: baseColor (0.8,0.88,0.9) alpha 0.14, roughness 0.06, BLEND, double-sided"
+      },
+      "nodes": [
+        "body",
+        "interior",
+        "glass"
+      ],
+      "source": {
+        "derivative": "game/public/assets/models/shop-cooler.glb",
+        "derivativeSha256": "b2afaf28962d8a4d0aa424455e4dd7839561010f449c70d691ad8e976737fb36",
+        "derivativeSha256Verified": true,
+        "derivativeProvenance": "game/public/assets/derivatives/props-iteration04.json",
+        "nativeJobId": "20261025T233917Z-1c01051c4be1459aacb7dd649bc8c82c",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCooler/native/asset.glb.xz",
+          "sha256": "defe05baf6960792b007bfe91efc11891427e893dcf753741dc99a03577fccf0",
+          "bytes": 68857504,
+          "format": "xz -6 (lossless)"
+        },
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCooler/image/shopCooler-original.png",
+          "sha256": "9ec8a805b1b39756d505f9d03039f6bcff3129a48acce2e70fd44d63066ac2ce",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31dd-7c71-b5b2-959d8baf7b95"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false
+      },
+      "dimensionsMeters": {
+        "bbox": {
+          "min": [
+            -0.375,
+            0,
+            -0.375
+          ],
+          "max": [
+            0.375,
+            2,
+            0.375
+          ],
+          "size": [
+            0.75,
+            2,
+            0.75
+          ]
+        },
+        "measured": {
+          "w": 0.75,
+          "h": 2,
+          "d": 0.75
+        },
+        "note": "identical to the iteration04 derivative bbox (asserted), so the game fit (PROP_DEFS / SHOP_DISPLAY_CASE) is unchanged"
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "interior": {
+        "x": 0.3,
+        "yFloor": 0.26,
+        "yCeil": 1.7,
+        "zBack": -0.305,
+        "zGlass": 0.312
+      },
+      "interiorSurfaces": [
+        {
+          "name": "deck",
+          "y": 0.26,
+          "x0": -0.3,
+          "x1": 0.3,
+          "z0": -0.305,
+          "z1": 0.263,
+          "clearTo": 0.64,
+          "clearM": 0.38
+        },
+        {
+          "name": "wireShelf1",
+          "y": 0.66,
+          "x0": -0.286,
+          "x1": 0.286,
+          "z0": -0.293,
+          "z1": 0.263,
+          "clearTo": 1.04,
+          "clearM": 0.38
+        },
+        {
+          "name": "wireShelf2",
+          "y": 1.06,
+          "x0": -0.286,
+          "x1": 0.286,
+          "z0": -0.293,
+          "z1": 0.263,
+          "clearTo": 1.44,
+          "clearM": 0.38
+        },
+        {
+          "name": "wireShelf3",
+          "y": 1.46,
+          "x0": -0.286,
+          "x1": 0.286,
+          "z0": -0.293,
+          "z1": 0.263,
+          "clearTo": 1.68,
+          "clearM": 0.22
+        }
+      ],
+      "authoredParts": 59,
+      "cut": {
+        "removedFaces": 674,
+        "removedAreaM2": 2.412,
+        "keptFaces": 3750,
+        "rule": "([x, y, z], n) => (z >= 0.295 && Math.abs(x) < 0.3 && y > 0.255 && y < 1.705)                         // door pane (projected picture)\n    || (z > -0.31 && z < 0.295 && Math.abs(x) < 0.315 && y > 0.24 && y < 1.715)                                    // everything inside the case (side-wall shells at |x| 0.32-0.33 kept)\n    || (z >= -0.33 && z <= -0.31 && Math.abs(x) < 0.315 && y > 0.24 && y < 1.715 && n[2] > -0.3)"
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of game/public/assets/models/shop-cooler.glb == props-iteration04.json record (derivative of the preserved iteration04 native F16 SV master 20261025T233917Z-1c01051c4be1459aacb7dd649bc8c82c)"
+        },
+        {
+          "step": "cut",
+          "detail": "remove every reconstructed face whose centroid lies in the opaque pane / case volume (the projected stock picture and the reconstructed interior); exterior shell faces kept with their baked texels"
+        },
+        {
+          "step": "author",
+          "detail": "textured boxes: interior liner, deck/trays, real wire shelves (rod tops at the listed heights), shelf standards / posts, bezel or rails hiding the cut edge, emissive light strips"
+        },
+        {
+          "step": "glass",
+          "detail": "transparent pane(s) as a separate node \"glass\" (BLEND alpha 0.14): genuinely see-through, no picture"
+        },
+        {
+          "step": "encode",
+          "detail": "plain glTF 2.0 binary, three nodes / three materials, no extensions"
+        }
+      ],
+      "limitations": [
+        "Hybrid prototype: reconstructed exterior from a single straight-on AI view (sides/back inferred, see the iteration04 limitations) + simple authored interior; unapproved, gameReady false.",
+        "Glass is a plain alpha-blended pane (no refraction/reflection probe); three.js sorts per object, so overlapping panes of one case blend in a fixed order (low alpha keeps this subtle).",
+        "Interior emissive strips glow regardless of scene lighting (practical light look); stock items inside are lit only by the scene lights.",
+        "Reconstructed door frame/handle kept; the authored bezel is a 3.4 cm black frame slightly proud (z 0.338) of the reconstructed door face to hide the cut edge."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/shop-display-open.glb",
+      "key": "shopDisplayOpen",
+      "modelKey": "shopDisplay",
+      "replaces": "game/public/assets/models/shop-display.glb",
+      "bytes": 653604,
+      "sha256": "9ceeab8bb9ecb4f6bb16534942badcb97505bb81df95cc1b7a6e99af361c1fc1",
+      "triangles": 1728,
+      "trianglesByNode": {
+        "body": 1438,
+        "interior": 282,
+        "glass": 8
+      },
+      "textures": {
+        "body": "iteration04 baked atlas reused byte-identical (colour 1024 JPEG, MR 512 JPEG, normal 512 PNG)",
+        "authored": "256 px atlas (colour JPEG, MR JPEG, emissive PNG), procedural value-noise/brushed/grime swatches",
+        "glass": "none (factor only)"
+      },
+      "materials": {
+        "shopDisplay-open-baked": "reconstructed exterior (opaque)",
+        "shopDisplay-open-authored": "interior liner / shelves / bezel / posts; emissive LED or heat-lamp strip via emissive map (scale with emissiveIntensity if needed)",
+        "shopDisplay-open-glass": "transparent glass: baseColor (0.8,0.88,0.9) alpha 0.14, roughness 0.06, BLEND, double-sided"
+      },
+      "nodes": [
+        "body",
+        "interior",
+        "glass"
+      ],
+      "source": {
+        "derivative": "game/public/assets/models/shop-display.glb",
+        "derivativeSha256": "1322659e8de65cfdeac405ef0b6a5dee3cb5332099d6b81948c9ad28a7818f65",
+        "derivativeSha256Verified": true,
+        "derivativeProvenance": "game/public/assets/derivatives/props-iteration04.json",
+        "nativeJobId": "20261025T234821Z-b5f53c9ae50c4cc9abded487dce915c3",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopDisplay/native/asset.glb.xz",
+          "sha256": "d65cafc49af538ef0c0dc4134fe3a00f40b00b3d518ae9909ca7680c97d2b5d5",
+          "bytes": 64814656,
+          "format": "xz -6 (lossless)"
+        },
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopDisplay/image/shopDisplay-original.png",
+          "sha256": "f53053d5c35a49422575ef1af54e910197b1330b4a95ccfb46c72726fac580f9",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31e4-7622-8d6b-c827ea98224c"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false
+      },
+      "dimensionsMeters": {
+        "bbox": {
+          "min": [
+            -0.55,
+            0,
+            -0.31
+          ],
+          "max": [
+            0.55,
+            0.7,
+            0.31
+          ],
+          "size": [
+            1.1,
+            0.7,
+            0.62
+          ]
+        },
+        "measured": {
+          "w": 1.1,
+          "h": 0.7,
+          "d": 0.62
+        },
+        "note": "identical to the iteration04 derivative bbox (asserted), so the game fit (PROP_DEFS / SHOP_DISPLAY_CASE) is unchanged"
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "interior": {
+        "x": 0.52,
+        "z": 0.27,
+        "yLow": 0.214,
+        "yMid": 0.427,
+        "yCeil": 0.628
+      },
+      "interiorSurfaces": [
+        {
+          "name": "lowerTray",
+          "y": 0.22,
+          "x0": -0.51,
+          "x1": 0.51,
+          "z0": -0.246,
+          "z1": 0.236,
+          "clearTo": 0.407,
+          "clearM": 0.187
+        },
+        {
+          "name": "upperRackTray",
+          "y": 0.432,
+          "x0": -0.49,
+          "x1": 0.49,
+          "z0": -0.235,
+          "z1": 0.225,
+          "clearTo": 0.616,
+          "clearM": 0.184
+        }
+      ],
+      "authoredParts": 37,
+      "cut": {
+        "removedFaces": 2962,
+        "removedAreaM2": 6.003,
+        "keptFaces": 1438,
+        "rule": "([x, y, z]) => y > 0.217 && y < 0.624"
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of game/public/assets/models/shop-display.glb == props-iteration04.json record (derivative of the preserved iteration04 native F16 SV master 20261025T234821Z-b5f53c9ae50c4cc9abded487dce915c3)"
+        },
+        {
+          "step": "cut",
+          "detail": "remove every reconstructed face whose centroid lies in the opaque pane / case volume (the projected stock picture and the reconstructed interior); exterior shell faces kept with their baked texels"
+        },
+        {
+          "step": "author",
+          "detail": "textured boxes: interior liner, deck/trays, real wire shelves (rod tops at the listed heights), shelf standards / posts, bezel or rails hiding the cut edge, emissive light strips"
+        },
+        {
+          "step": "glass",
+          "detail": "transparent pane(s) as a separate node \"glass\" (BLEND alpha 0.14): genuinely see-through, no picture"
+        },
+        {
+          "step": "encode",
+          "detail": "plain glTF 2.0 binary, three nodes / three materials, no extensions"
+        }
+      ],
+      "limitations": [
+        "Hybrid prototype: reconstructed exterior from a single straight-on AI view (sides/back inferred, see the iteration04 limitations) + simple authored interior; unapproved, gameReady false.",
+        "Glass is a plain alpha-blended pane (no refraction/reflection probe); three.js sorts per object, so overlapping panes of one case blend in a fixed order (low alpha keeps this subtle).",
+        "Interior emissive strips glow regardless of scene lighting (practical light look); stock items inside are lit only by the scene lights.",
+        "The reconstructed pans/racks were removed with the opaque glass band; trays are authored flat stainless sheets (no food-pan wells)."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/hotdog-cart.glb",
+      "key": "hotdogCart",
+      "modelKey": "hotdogCart",
+      "displayName": "Street hot-dog vending cart",
+      "kind": "prop",
+      "bytes": 799288,
+      "sha256": "e50ba14b293e4f6b64399d807276422e4c19f72b0112e903ecd7d0a652d9e8b9",
+      "triangles": 4850,
+      "vertices": 8690,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 219971
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 95391
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 174535
+        }
+      },
+      "source": {
+        "asset": "hotdogCart",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/hotdogCart/native/asset.glb.xz",
+          "sha256": "28b8cc68eb132f0fd6172d9adc519fa26434b92c03731675db33c884781a43d3",
+          "bytes": 76020624,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "5612d149138b732cf4c1fb67ee1cc93882f269562c6b48fd6cc989557400fa98",
+        "sha256Verified": true,
+        "bytes": 96878300,
+        "nativeJobId": "20261026T045622Z-1bbb409cfee9438286d249b079505118",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration05-20261026/generation/hotdogCart/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/hotdogCart/image/hotdogCart-original.png",
+          "sha256": "90b89aa50f508105986b6ebe056725a208027906b1392a5795a49bfdabc53b1d",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17669-cf8c-7072-b3e0-807870f50c52"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 964574,
+        "vertices": 693876,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0.2,
+          "up": [
+            -0.000401,
+            0.986255,
+            -0.165232
+          ],
+          "front": [
+            -0.002094,
+            -0.165232,
+            -0.986252
+          ],
+          "right": [
+            -0.999998,
+            -0.000049,
+            0.002131
+          ],
+          "tiltFromSourceYDeg": 9.5107,
+          "frontYawFromCameraDeg": -0.1216,
+          "axisScores": [
+            0.09218843203587604,
+            0.06405661212227841,
+            0.044603752141520354
+          ]
+        },
+        "R": [
+          [
+            -0.999998,
+            -0.000049,
+            0.002131
+          ],
+          [
+            -0.000401,
+            0.986255,
+            -0.165232
+          ],
+          [
+            -0.002094,
+            -0.165232,
+            -0.986252
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 1.5,
+              "d": 0.75,
+              "h": 1.2
+            },
+            "used": {
+              "w": 1.72,
+              "h": 1.19,
+              "d": 0.8
+            },
+            "reason": "Image proportions put the cart work top at 0.65 x the overall height; at the manifest 1.5 m width it would sit at 0.80 m (below a 0.9-1.0 m vending work top). Scaled uniformly (levelled native w/h 1.449 kept, no vertical stretch) to 1.72 m long incl. push handle (street carts are ~1.5-1.8 m) and 1.19 m to the sneeze-guard rail; depth fitted to 0.8 m (native 1.0 m at this scale)."
+          },
+          "uniformScale": 1.96338,
+          "uniformDims": [
+            1.72,
+            1.175124,
+            0.997225
+          ],
+          "perAxisScale": [
+            1.96338,
+            1.988235,
+            1.575074
+          ],
+          "relativeFactors": [
+            1,
+            1.012659,
+            0.802226
+          ],
+          "contract": {
+            "w": 1.72,
+            "h": 1.19,
+            "d": 0.8
+          }
+        },
+        "translation": [
+          -0.000392,
+          0.549595,
+          0.058439
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (cart body); front (+Z) = the long customer side with the two service doors and the colour panel that faced the straight-on conditioning camera (wheel at -X, stand leg + push handle at +X).",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1.5,
+          "d": 0.75,
+          "h": 1.2
+        },
+        "chosen": "width 1.72 m uniform, then bounded per-axis contract fit (relative factors 1.000 / 1.013 / 0.802 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.86,
+            0,
+            -0.4
+          ],
+          "max": [
+            0.86,
+            1.19,
+            0.4
+          ],
+          "size": [
+            1.72,
+            1.19,
+            0.8
+          ]
+        },
+        "measured": {
+          "w": 1.72,
+          "h": 1.19,
+          "d": 0.8
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "workTop": {
+          "y": 0.928,
+          "yTop": 1.025,
+          "yBottom": 0.88,
+          "areaM2": 1.2133
+        },
+        "lidTops": {
+          "y": 1.171,
+          "yTop": 1.19,
+          "yBottom": 1.155,
+          "areaM2": 0.1162
+        },
+        "horizontalSurfaces": [
+          {
+            "y": 0.177,
+            "yTop": 0.455,
+            "yBottom": 0.12,
+            "areaM2": 1.1196
+          },
+          {
+            "y": 0.928,
+            "yTop": 1.025,
+            "yBottom": 0.88,
+            "areaM2": 1.2133
+          },
+          {
+            "y": 1.171,
+            "yTop": 1.19,
+            "yBottom": 1.155,
+            "areaM2": 0.1162
+          }
+        ],
+        "topY": 1.19,
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters (5 mm bins, adjacent bins merged) >= 3% of the largest within the central 90% x 90% of the footprint; named picks per height band: workTop largest in y 0.7..1.05 m; lidTops highest in y 0.9..1.2 m."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 5000,
+          "resultTriangles": 4850,
+          "errorMeters": 0.010521,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1594
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.032151,
+          "stats": {
+            "matchedSameFacing": 1877222,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "encode",
+          "detail": "byte budget re-encode: baseColor JPEG q72, metallicRoughness JPEG q72, normal JPEG q84 (was PNG); plain glTF 2.0 binary, no extensions",
+          "budget": {
+            "budgetBytes": 900000,
+            "bytesBefore": 1250392,
+            "bytesAfter": 799288,
+            "reencode": "baseColor JPEG q72, metallicRoughness JPEG q72, normal JPEG q84 (was PNG)"
+          }
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 964574 to 4850 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "Condiment bottles, napkin dispenser and steam-well lids are fixed baked geometry (decor, not loot); the colour panel is the AI design, no lettering.",
+        "Back/far side inferred from the single front view; depth fitted x0.80 relative to uniform; spoked wheel and handle are coarse at ~4.9k triangles."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/janitor-cart.glb",
+      "key": "janitorCart",
+      "modelKey": "janitorCart",
+      "displayName": "Janitorial cleaning cart with mop bucket",
+      "kind": "prop",
+      "bytes": 878568,
+      "sha256": "8757d1557df62f6e1a1c48fbc25791bba5f70b49035c1e2eec8de866b08230a2",
+      "triangles": 4958,
+      "vertices": 8786,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 252946
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 64344
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 248132
+        }
+      },
+      "source": {
+        "asset": "janitorCart",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/janitorCart/native/asset.glb.xz",
+          "sha256": "e3fc00ca34adf3ff6522928a45f1009bceca937eb621151f00a2fe75d1c28504",
+          "bytes": 61557992,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "116074e8d679b59b1e62905070aaeb8dd0498ea2930c405d2a8c55c635824cad",
+        "sha256Verified": true,
+        "bytes": 81764276,
+        "nativeJobId": "20261026T050320Z-1ecbfd10e0de4210b8c49be0a652afe2",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration05-20261026/generation/janitorCart/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/janitorCart/image/janitorCart-original.png",
+          "sha256": "3173068063170e7a07a4a61dcd94b448dd42e55b5a60ef6962eba3c837606dcb",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a1766a-3e4d-7851-b12d-9375ed65dba8"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 965396,
+        "vertices": 685604,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0.7,
+          "up": [
+            -0.000407,
+            0.997732,
+            -0.067309
+          ],
+          "front": [
+            0.02076,
+            -0.067286,
+            -0.997518
+          ],
+          "right": [
+            -0.999784,
+            -0.001803,
+            -0.020685
+          ],
+          "tiltFromSourceYDeg": 3.8595,
+          "frontYawFromCameraDeg": 1.1922,
+          "axisScores": [
+            0.09773339057484504,
+            0.09713938312657441,
+            0.05196819499051255
+          ]
+        },
+        "R": [
+          [
+            -0.999784,
+            -0.001803,
+            -0.020685
+          ],
+          [
+            -0.000407,
+            0.997732,
+            -0.067309
+          ],
+          [
+            0.02076,
+            -0.067286,
+            -0.997518
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 1.2,
+              "d": 0.55,
+              "h": 1
+            },
+            "used": {
+              "w": 1.42,
+              "h": 1.34,
+              "d": 0.55
+            },
+            "reason": "At the manifest 1.2 m width the cart top tray sits at ~0.76 m and the mop bucket at 0.28 m; commercial housekeeping carts have a ~0.95 m top. Scaled uniformly by ~1.2 (levelled native w/h 1.063 kept, no stretch): 1.42 m incl. bag caddy and mop bucket, 1.34 m to the mop handle tip; depth fitted to 0.55 m (native 0.76 m at this scale)."
+          },
+          "uniformScale": 1.677966,
+          "uniformDims": [
+            1.42,
+            1.33342,
+            0.756638
+          ],
+          "perAxisScale": [
+            1.677966,
+            1.686246,
+            1.219713
+          ],
+          "relativeFactors": [
+            1,
+            1.004935,
+            0.7269
+          ],
+          "contract": {
+            "w": 1.42,
+            "h": 1.34,
+            "d": 0.55
+          }
+        },
+        "translation": [
+          -0.003832,
+          0.645798,
+          -0.011541
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (cart frame); front (+Z) = the long side with the open shelf compartment that faced the straight-on conditioning camera (yellow bag caddy at -X, mop bucket at +X).",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1.2,
+          "d": 0.55,
+          "h": 1
+        },
+        "chosen": "width 1.42 m uniform, then bounded per-axis contract fit (relative factors 1.000 / 1.005 / 0.727 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.71,
+            0,
+            -0.275
+          ],
+          "max": [
+            0.71,
+            1.34,
+            0.275
+          ],
+          "size": [
+            1.42,
+            1.34,
+            0.55
+          ]
+        },
+        "measured": {
+          "w": 1.42,
+          "h": 1.34,
+          "d": 0.55
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "cartTop": {
+          "y": 0.866,
+          "yTop": 0.915,
+          "yBottom": 0.83,
+          "areaM2": 0.3742
+        },
+        "shelves": [
+          0.199,
+          0.336,
+          0.501,
+          0.529,
+          0.658
+        ],
+        "horizontalSurfaces": [
+          {
+            "y": 0.134,
+            "yTop": 0.14,
+            "yBottom": 0.13,
+            "areaM2": 0.0258
+          },
+          {
+            "y": 0.199,
+            "yTop": 0.245,
+            "yBottom": 0.19,
+            "areaM2": 0.2354
+          },
+          {
+            "y": 0.336,
+            "yTop": 0.37,
+            "yBottom": 0.27,
+            "areaM2": 0.0181
+          },
+          {
+            "y": 0.501,
+            "yTop": 0.505,
+            "yBottom": 0.485,
+            "areaM2": 0.2255
+          },
+          {
+            "y": 0.529,
+            "yTop": 0.55,
+            "yBottom": 0.52,
+            "areaM2": 0.1789
+          },
+          {
+            "y": 0.658,
+            "yTop": 0.685,
+            "yBottom": 0.64,
+            "areaM2": 0.0133
+          },
+          {
+            "y": 0.866,
+            "yTop": 0.915,
+            "yBottom": 0.83,
+            "areaM2": 0.3742
+          }
+        ],
+        "topY": 1.34,
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters (5 mm bins, adjacent bins merged) >= 3% of the largest within the central 40% x 80% of the footprint; named picks per height band: cartTop largest in y 0.75..1.1 m; shelves all in y 0.15..0.8 m."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 5000,
+          "resultTriangles": 4958,
+          "errorMeters": 0.012711,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1575
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.045451,
+          "stats": {
+            "matchedSameFacing": 1865210,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "encode",
+          "detail": "byte budget re-encode: baseColor JPEG q80, metallicRoughness JPEG q80, normal JPEG q90 (was PNG); plain glTF 2.0 binary, no extensions",
+          "budget": {
+            "budgetBytes": 900000,
+            "bytesBefore": 1225712,
+            "bytesAfter": 878568,
+            "reencode": "baseColor JPEG q80, metallicRoughness JPEG q80, normal JPEG q90 (was PNG)"
+          }
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 965396 to 4958 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "Spray bottles, jugs, rag tub and mop are fixed baked geometry (decor, not loot); loot belongs on the cart top (0.87 m).",
+        "Back inferred (plain dark panel by SV); depth fitted x0.72; the mop strands and wringer are coarse."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/magazine-rack.glb",
+      "key": "magazineRack",
+      "modelKey": "magazineRack",
+      "displayName": "Newsstand magazine and newspaper rack",
+      "kind": "prop",
+      "bytes": 783032,
+      "sha256": "ef5f410fe9d2d36e117526d4be958b089d35004307774ad241436bc14f726a0d",
+      "triangles": 4942,
+      "vertices": 7882,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 213161
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 74857
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 210890
+        }
+      },
+      "source": {
+        "asset": "magazineRack",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/magazineRack/native/asset.glb.xz",
+          "sha256": "c9b5ff43da876e407813e020bb350b3b8285ca836b83d2352d1e47e681dd994a",
+          "bytes": 68731784,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "de9c2f30c3464298a799bc7ada1952b499dcf055c3fa3ef1cb22d98d2e93d24a",
+        "sha256Verified": true,
+        "bytes": 89136380,
+        "nativeJobId": "20261026T051519Z-a5b0ef6188894afdbb82bfc19e0f4360",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration05-20261026/generation/magazineRack/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/magazineRack/image/magazineRack-original.png",
+          "sha256": "f3f3b5a0f572bca427106a8c83c99740765f5d6524d8f522c8bf11c1b2fa548c",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a1766a-4c5c-7250-8b54-225174f7061b"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 957580,
+        "vertices": 710694,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0,
+          "up": [
+            0.000636,
+            0.997251,
+            0.074095
+          ],
+          "front": [
+            -0.003181,
+            0.074097,
+            -0.997246
+          ],
+          "right": [
+            -0.999995,
+            0.000399,
+            0.003219
+          ],
+          "tiltFromSourceYDeg": 4.2494,
+          "frontYawFromCameraDeg": -0.1828,
+          "axisScores": [
+            0.14987429651394185,
+            0.13599878624845654,
+            0.12933936799125959
+          ]
+        },
+        "R": [
+          [
+            -0.999995,
+            0.000399,
+            0.003219
+          ],
+          [
+            0.000636,
+            0.997251,
+            0.074095
+          ],
+          [
+            -0.003181,
+            0.074097,
+            -0.997246
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 0.9,
+              "d": 0.45,
+              "h": 1.4
+            },
+            "used": {
+              "w": 0.99,
+              "h": 1.4,
+              "d": 0.45
+            },
+            "reason": "Manifest height 1.4 m kept; width from the straight-on image proportions (0.71 w/h) = 0.99 m; depth fitted to 0.45 m."
+          },
+          "uniformScale": 1.604764,
+          "uniformDims": [
+            0.993371,
+            1.4,
+            0.595736
+          ],
+          "perAxisScale": [
+            1.599318,
+            1.604764,
+            1.212187
+          ],
+          "relativeFactors": [
+            0.996606,
+            1,
+            0.755368
+          ],
+          "contract": {
+            "w": 0.99,
+            "h": 1.4,
+            "d": 0.45
+          }
+        },
+        "translation": [
+          -0.00118,
+          0.706645,
+          -0.019449
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (side frames / shelf fronts); front (+Z) = the face with the magazines and the newspaper bin that faced the straight-on conditioning camera.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 0.9,
+          "d": 0.45,
+          "h": 1.4
+        },
+        "chosen": "height 1.4 m uniform, then bounded per-axis contract fit (relative factors 0.997 / 1.000 / 0.755 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.495,
+            0,
+            -0.225
+          ],
+          "max": [
+            0.495,
+            1.4,
+            0.225
+          ],
+          "size": [
+            0.99,
+            1.4,
+            0.45
+          ]
+        },
+        "measured": {
+          "w": 0.99,
+          "h": 1.4,
+          "d": 0.45
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "tiers": [
+          {
+            "y": 0.055,
+            "yBottom": 0.04,
+            "yTop": 0.07,
+            "areaM2": 0.2798
+          },
+          {
+            "y": 0.377,
+            "yBottom": 0.36,
+            "yTop": 0.395,
+            "areaM2": 0.3033
+          },
+          {
+            "y": 0.613,
+            "yBottom": 0.595,
+            "yTop": 0.63,
+            "areaM2": 0.325
+          },
+          {
+            "y": 0.874,
+            "yBottom": 0.855,
+            "yTop": 0.895,
+            "areaM2": 0.3324
+          },
+          {
+            "y": 1.139,
+            "yBottom": 1.12,
+            "yTop": 1.16,
+            "areaM2": 0.3278
+          }
+        ],
+        "binFloor": {
+          "y": 0.055,
+          "yBottom": 0.04,
+          "yTop": 0.07,
+          "areaM2": 0.2798
+        },
+        "magazineTiers": [
+          {
+            "y": 0.377,
+            "yBottom": 0.36,
+            "yTop": 0.395,
+            "areaM2": 0.3033
+          },
+          {
+            "y": 0.613,
+            "yBottom": 0.595,
+            "yTop": 0.63,
+            "areaM2": 0.325
+          },
+          {
+            "y": 0.874,
+            "yBottom": 0.855,
+            "yTop": 0.895,
+            "areaM2": 0.3324
+          },
+          {
+            "y": 1.139,
+            "yBottom": 1.12,
+            "yTop": 1.16,
+            "areaM2": 0.3278
+          }
+        ],
+        "topY": 1.4,
+        "method": "Raw 5 mm up-facing (normal.y > 0.9) area bins of the dense output-space mesh within the central 80% x 80% footprint; bins < 0.012 m2 dropped, contiguous bins (one empty 5 mm bin tolerated) merged per tier (slanted shelves span yBottom..yTop front-to-back); tiers >= 0.05 m2 kept. Lowest = newspaper bin floor."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 5000,
+          "resultTriangles": 4942,
+          "errorMeters": 0.008124,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1288
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.030375,
+          "stats": {
+            "matchedSameFacing": 2014317,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "encode",
+          "detail": "byte budget re-encode: baseColor JPEG q80, metallicRoughness JPEG q80, normal JPEG q90 (was PNG); plain glTF 2.0 binary, no extensions",
+          "budget": {
+            "budgetBytes": 900000,
+            "bytesBefore": 1071552,
+            "bytesAfter": 783032,
+            "reencode": "baseColor JPEG q80, metallicRoughness JPEG q80, normal JPEG q90 (was PNG)"
+          }
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 957580 to 4942 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "Magazines and newspapers are fixed baked geometry with blurred AI covers (no legible text, no real titles); tiers slope ~3.5 cm front-to-back.",
+        "Back inferred (plain panel); depth fitted x0.76; wire lips are thin and may alias at distance."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/tech-display.glb",
+      "key": "techDisplay",
+      "modelKey": "techDisplay",
+      "displayName": "Electronics store wall-bay display unit",
+      "kind": "prop",
+      "bytes": 792920,
+      "sha256": "a7a98a232f407569a6497997a8eb688562fbf65b3dd2ec9829e06316c5662de5",
+      "triangles": 4964,
+      "vertices": 7983,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 195833
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 91151
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 218492
+        }
+      },
+      "source": {
+        "asset": "techDisplay",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/techDisplay/native/asset.glb.xz",
+          "sha256": "321ef012a849060c32167bafe636919cd7df95295bba137e9a190920233d7c71",
+          "bytes": 56175676,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "925810ac6c3228165f47460d1f8783ae1c18d46cd658ded987608a891beed952",
+        "sha256Verified": true,
+        "bytes": 76006976,
+        "nativeJobId": "20261026T052856Z-fcfb875282ad4870b3b9a13a1be7f7c6",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration05-20261026/generation/techDisplay/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/techDisplay/image/techDisplay-original.png",
+          "sha256": "2f4aba1204b31677516c78dc05cf9b29cfd5b32bf1dbd3092272b06c592cdb3f",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a1766a-609f-7652-beac-62e430dedb68"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 963856,
+        "vertices": 698658,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0.1,
+          "up": [
+            -0.000307,
+            0.998485,
+            -0.055023
+          ],
+          "front": [
+            0.004107,
+            -0.055021,
+            -0.998477
+          ],
+          "right": [
+            -0.999992,
+            -0.000532,
+            -0.004084
+          ],
+          "tiltFromSourceYDeg": 3.1542,
+          "frontYawFromCameraDeg": 0.2357,
+          "axisScores": [
+            0.13729108323675882,
+            0.08983510155139678,
+            0.03585421363724136
+          ]
+        },
+        "R": [
+          [
+            -0.999992,
+            -0.000532,
+            -0.004084
+          ],
+          [
+            -0.000307,
+            0.998485,
+            -0.055023
+          ],
+          [
+            0.004107,
+            -0.055021,
+            -0.998477
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit x/y (per-axis toward the brief dims, clamped +-35% vs uniform); depth by the depth-knot remap below (z uniform before it)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 1.2,
+              "d": 0.5,
+              "h": 1.9
+            },
+            "used": {
+              "w": 1.1,
+              "h": 2,
+              "d": 0.58
+            },
+            "reason": "At the manifest 1.9 m height the display deck sits at 0.81 m; scaled to 2.0 m so the deck is ~0.85 m (merchandiser counters 0.85-0.95 m); width from the levelled native proportions (0.549 w/h) = 1.10 m. Depth by depth knots (see depthKnotsReason): 0.58 m."
+          },
+          "uniformScale": 2.125524,
+          "uniformDims": [
+            1.097397,
+            2,
+            1.180515
+          ],
+          "perAxisScale": [
+            2.130567,
+            2.125524,
+            2.125524
+          ],
+          "relativeFactors": [
+            1.002372,
+            1,
+            1
+          ],
+          "contract": {
+            "w": 1.1,
+            "h": 2,
+            "d": 0.58
+          },
+          "depthRemap": {
+            "knots": [
+              [
+                0,
+                0
+              ],
+              [
+                0.8,
+                0.5
+              ],
+              [
+                0.95,
+                0.51
+              ],
+              [
+                1.183,
+                0.58
+              ]
+            ],
+            "uniformDepthM": 1.1805,
+            "targetDepthM": 0.58,
+            "note": "piecewise-linear depth-knot remap (depth from front, uniform metres -> output metres); re-centred on z = 0"
+          }
+        },
+        "translation": [
+          -0.012711,
+          0.969315,
+          0.186251
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (cabinet doors / slatwall); front (+Z) = the face with the cabinet doors, devices and switched-off screen that faced the straight-on conditioning camera.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1.2,
+          "d": 0.5,
+          "h": 1.9
+        },
+        "chosen": "height 2 m uniform, then bounded per-axis contract fit (relative factors 1.002 / 1.000 / 1.000 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.55,
+            0,
+            -0.289253
+          ],
+          "max": [
+            0.55,
+            2,
+            0.29
+          ],
+          "size": [
+            1.1,
+            2,
+            0.579253
+          ]
+        },
+        "measured": {
+          "w": 1.1,
+          "h": 2,
+          "d": 0.579
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "deck": {
+          "y": 0.856,
+          "yTop": 0.98,
+          "yBottom": 0.845,
+          "areaM2": 0.8468
+        },
+        "shelf": {
+          "y": 1.252,
+          "yTop": 1.255,
+          "yBottom": 1.25,
+          "areaM2": 0.0878
+        },
+        "horizontalSurfaces": [
+          {
+            "y": 0.155,
+            "yTop": 0.205,
+            "yBottom": 0.07,
+            "areaM2": 0.6236
+          },
+          {
+            "y": 0.822,
+            "yTop": 0.83,
+            "yBottom": 0.77,
+            "areaM2": 0.0286
+          },
+          {
+            "y": 0.856,
+            "yTop": 0.98,
+            "yBottom": 0.845,
+            "areaM2": 0.8468
+          },
+          {
+            "y": 1.232,
+            "yTop": 1.235,
+            "yBottom": 1.225,
+            "areaM2": 0.0889
+          },
+          {
+            "y": 1.252,
+            "yTop": 1.255,
+            "yBottom": 1.25,
+            "areaM2": 0.0878
+          }
+        ],
+        "topY": 2,
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters (5 mm bins, adjacent bins merged) >= 3% of the largest within the central 90% x 90% of the footprint; named picks per height band: deck largest in y 0.7..1 m; shelf highest in y 1.05..1.5 m."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 5000,
+          "resultTriangles": 4964,
+          "errorMeters": 0.008541,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1243
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.02411,
+          "stats": {
+            "matchedSameFacing": 2008785,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "recolour",
+          "classes": [
+            "back"
+          ],
+          "topFrac": 0.97,
+          "baseFrom": "darkPixels",
+          "yBand": null,
+          "flattenedNormalAndConstantMR": {
+            "orm": [
+              255,
+              170,
+              20
+            ],
+            "note": "painted steel: occlusion 1, roughness ~0.65, metal ~0.12; flat normal"
+          },
+          "baseRgb": [
+            46,
+            47,
+            47
+          ],
+          "baseLuminance": 46,
+          "darkImagePixels": 312986,
+          "lowFaces": 1415,
+          "recolouredTexels": 110452,
+          "keepLuminanceVariation": 0.25,
+          "method": "Low-poly texels of side (|n.x| > 0.8), back (n.z < -0.8) and top (n.y > 0.8 near the top) faces tinted to the mean colour of the dark opaque conditioning-image pixels (cabinet paint), keeping a mild luminance variation from the bake: out = base x (1 - keep/2 + keep x (clamp(lum, 0.6, 1) - 0.6) / 0.4) (the clamp stops dark gutter texels from drawing triangle edges). Also tints faces near the top that lie >15 cm behind the front (interiorTop: the open top showed the light interior). These faces were never seen by the straight-on view (SV inferred them)."
+        },
+        {
+          "step": "redilate",
+          "iterations": 8,
+          "coverage": [
+            {
+              "size": 1024,
+              "coveredTexels": 368853
+            },
+            {
+              "size": 512,
+              "coveredTexels": 90475
+            },
+            {
+              "size": 512,
+              "coveredTexels": 90475
+            }
+          ],
+          "method": "Coverage of all low-poly faces rasterised per texture (texel centres inside); lib/bake.mjs dilate() re-run from covered texels into uncovered gutter texels (8 iterations) so gutters follow the repainted colours."
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 963856 to 4964 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "Phones/tablets on security stands, boxed accessories and the switched-off screen are fixed baked geometry (decor, not loot); no brands.",
+        "SV stood the slatwall ~0.15 m behind an over-deep 0.8 m cabinet: depth-knot remap collapsed the gap and compressed the cabinet x0.625 / slatwall x0.30 (see transform.fit.depthRemap). Back faces (never seen) recoloured to the unit dark grey with flat normals."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/gun-locker.glb",
+      "key": "gunLocker",
+      "modelKey": "gunLocker",
+      "displayName": "Security office open-front steel weapons rack cabinet",
+      "kind": "prop",
+      "bytes": 850212,
+      "sha256": "5660ca7e9c383c92307cf5865c38e4cecf2cce9b50ad9206bdd67d4478150bfa",
+      "triangles": 4998,
+      "vertices": 6980,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 170504
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 92416
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 331733
+        }
+      },
+      "source": {
+        "asset": "gunLocker",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/gunLocker/native/asset.glb.xz",
+          "sha256": "6f35e4bb9c61566eb9fc731a88fd9380a9b3bf00a17b3466e8f36efad7a7ddf0",
+          "bytes": 57231796,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "f6f9517b4c52200a3cab359ebbc4942db90e221f1e6c2686e5e980847a4f46b9",
+        "sha256Verified": true,
+        "bytes": 77663352,
+        "nativeJobId": "20261026T053509Z-b827a4d900c94e01b231dcf7993680ae",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration05-20261026/generation/gunLocker/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration05-20261026/generation/gunLocker/image/gunLocker-original.png",
+          "sha256": "72d254c73b0279d9e0ef679b3b83f71f905c7d9e081f597d89541291710a9d2a",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a1766a-7790-7291-be21-c47757470aa5"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 498613,
+        "vertices": 350650,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0.1,
+          "up": [
+            0.000294,
+            0.999985,
+            -0.005473
+          ],
+          "front": [
+            0.000153,
+            -0.005473,
+            -0.999985
+          ],
+          "right": [
+            -1,
+            0.000294,
+            -0.000154
+          ],
+          "tiltFromSourceYDeg": 0.314,
+          "frontYawFromCameraDeg": 0.0088,
+          "axisScores": [
+            0.19494092025286028,
+            0.15561494351953484,
+            0.14031439139738128
+          ]
+        },
+        "R": [
+          [
+            -1,
+            0.000294,
+            -0.000154
+          ],
+          [
+            0.000294,
+            0.999985,
+            -0.005473
+          ],
+          [
+            0.000153,
+            -0.005473,
+            -0.999985
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 1,
+              "d": 0.5,
+              "h": 1.9
+            },
+            "used": {
+              "w": 0.95,
+              "h": 1.9,
+              "d": 0.5
+            },
+            "reason": "Manifest height 1.9 m kept; width from the levelled native proportions (0.498 w/h) = 0.95 m; depth fitted to 0.5 m after the depth cut (front cabinet ~0.75 m at uniform scale, x0.67)."
+          },
+          "uniformScale": 2.430277,
+          "uniformDims": [
+            0.949509,
+            1.9,
+            0.764374
+          ],
+          "perAxisScale": [
+            2.431535,
+            2.430277,
+            1.589717
+          ],
+          "relativeFactors": [
+            1.000518,
+            1,
+            0.65413
+          ],
+          "contract": {
+            "w": 0.95,
+            "h": 1.9,
+            "d": 0.5
+          }
+        },
+        "translation": [
+          -0.00161,
+          0.947089,
+          -0.531261
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (cabinet sides / back); front (+Z) = the open face with the empty rifle rack and bottom drawer that faced the straight-on conditioning camera.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1,
+          "d": 0.5,
+          "h": 1.9
+        },
+        "chosen": "height 1.9 m uniform, then bounded per-axis contract fit (relative factors 1.001 / 1.000 / 0.654 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.475,
+            0,
+            -0.25
+          ],
+          "max": [
+            0.475,
+            1.9,
+            0.25
+          ],
+          "size": [
+            0.95,
+            1.9,
+            0.5
+          ]
+        },
+        "measured": {
+          "w": 0.95,
+          "h": 1.9,
+          "d": 0.5
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "topShelf": {
+          "y": 1.532,
+          "yTop": 1.545,
+          "yBottom": 1.52,
+          "areaM2": 0.2134
+        },
+        "rackRest": {
+          "y": 0.551,
+          "yTop": 0.56,
+          "yBottom": 0.515,
+          "areaM2": 0.0581
+        },
+        "drawerTop": {
+          "y": 0.089,
+          "yTop": 0.09,
+          "yBottom": 0.08,
+          "areaM2": 0.3204
+        },
+        "horizontalSurfaces": [
+          {
+            "y": 0.089,
+            "yTop": 0.09,
+            "yBottom": 0.08,
+            "areaM2": 0.3204
+          },
+          {
+            "y": 0.314,
+            "yTop": 0.325,
+            "yBottom": 0.26,
+            "areaM2": 0.0135
+          },
+          {
+            "y": 0.356,
+            "yTop": 0.37,
+            "yBottom": 0.34,
+            "areaM2": 0.0614
+          },
+          {
+            "y": 0.415,
+            "yTop": 0.5,
+            "yBottom": 0.39,
+            "areaM2": 0.1765
+          },
+          {
+            "y": 0.551,
+            "yTop": 0.56,
+            "yBottom": 0.515,
+            "areaM2": 0.0581
+          },
+          {
+            "y": 1.27,
+            "yTop": 1.29,
+            "yBottom": 1.19,
+            "areaM2": 0.0131
+          },
+          {
+            "y": 1.362,
+            "yTop": 1.37,
+            "yBottom": 1.345,
+            "areaM2": 0.0179
+          },
+          {
+            "y": 1.532,
+            "yTop": 1.545,
+            "yBottom": 1.52,
+            "areaM2": 0.2134
+          },
+          {
+            "y": 1.56,
+            "yTop": 1.565,
+            "yBottom": 1.56,
+            "areaM2": 0.1328
+          },
+          {
+            "y": 1.735,
+            "yTop": 1.785,
+            "yBottom": 1.675,
+            "areaM2": 0.1039
+          },
+          {
+            "y": 1.858,
+            "yTop": 1.865,
+            "yBottom": 1.855,
+            "areaM2": 0.0738
+          },
+          {
+            "y": 1.89,
+            "yTop": 1.895,
+            "yBottom": 1.885,
+            "areaM2": 0.4332
+          }
+        ],
+        "topY": 1.9,
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters (5 mm bins, adjacent bins merged) >= 3% of the largest within the central 80% x 80% of the footprint; named picks per height band: topShelf largest in y 1.3..1.8 m; rackRest highest in y 0.2..0.7 m; drawerTop lowest in y 0.05..0.5 m."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "depth-cut",
+          "maxDepthFromFrontM": 0.75,
+          "removedDenseFaces": 498517,
+          "keptDenseFaces": 498613,
+          "reason": "Inspect (uniform 1.9 m scale): the reconstruction is a U - a complete front cabinet (frame 0.13 m, rack brackets ~0.51 m, interior back wall ~0.65 m from the front) plus a duplicated back section 1.95-2.40 m behind it joined by a floor slab. The front relief shows the back section is never visible from the front; everything deeper than 0.75 m is removed before simplify/bake."
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 5000,
+          "resultTriangles": 4998,
+          "errorMeters": 0.006945,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 868
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.02,
+          "stats": {
+            "matchedSameFacing": 2189229,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 498613 to 4998 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "The long-gun rack is EMPTY by design (place actual weapon loot in it); the ammo cans on the top shelf are fixed baked geometry.",
+        "SV produced a U-shaped reconstruction with a duplicated back section 1.95-2.4 m behind the cabinet; faces deeper than 0.75 m (uniform scale) were removed before simplify/bake (depth-cut step), then depth fitted x0.67. A small floor-slab lip remains at the bottom rear."
+      ]
+    }
+  ],
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration05-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public. The iteration04 derivatives (shop-cooler.glb, shop-display.glb) and props-iteration04.json are left unchanged."
+}

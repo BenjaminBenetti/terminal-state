@@ -1,0 +1,961 @@
+{
+  "schema": "the-last-line/derivative-manifest@1",
+  "asset": "outfit-coat",
+  "title": "Zombie wearable \"Hi-vis parka (long coat)\" (upper) - fitted per body (prototype)",
+  "status": {
+    "approved": false,
+    "gameReady": false,
+    "stage": "unapproved prototype derivative (iteration 06 zombie wardrobe); art/anatomy/deformation/fit not certified",
+    "licenseClearance": "none - evaluation quality does not grant commercial rights; sources are AI reconstructions of AI-generated concept images"
+  },
+  "honesty": {
+    "sourcesHadSkeleton": false,
+    "rig": "NEW derivative skeleton (shared 18-joint naming/hierarchy) and automatic skin weights created by this CPU pipeline",
+    "animation": "hand-authored procedural keyframes (same clip functions for every body, sampled with each body's own joint positions) - NOT motion capture",
+    "generation": "no AI generation, inference, model download or network service was used by this builder",
+    "garment": "garment source is a separate ghost-mannequin reconstruction; fitted and skinned per body by this pipeline (no cloth simulation)"
+  },
+  "origin": "iteration-01 generated master (zombie-coat-03)",
+  "provenance": "generated (iteration 01)",
+  "slot": "upper",
+  "kind": "garment",
+  "outputs": {
+    "glb": {
+      "path": "game/public/assets/models/outfit-coat.glb",
+      "bytes": 1370060,
+      "sha256": "5846da12c1ca6790748e319e9f5f0d6bd829a2b34334f4b784774e1927b5312f",
+      "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
+    }
+  },
+  "source": {
+    "id": "zombie-coat-03",
+    "file": "public/vision-board/models/0429b64701a740bab039f492351b01cd.glb",
+    "sha256Verified": "22c2a696972c75ac2e6b7f4d815d416f8a7e3da46124635c436374bb80cc6a84",
+    "uploadId": "0429b64701a740bab039f492351b01cd",
+    "triangles": 988416,
+    "vertices": 773731,
+    "textures": {
+      "baseColor": [
+        4096,
+        4096,
+        "image/png"
+      ],
+      "metallicRoughness": [
+        4096,
+        4096,
+        "image/png"
+      ]
+    },
+    "material": {
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "baseColorFactor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "metallicRoughnessSynthesised": false
+    }
+  },
+  "stage": {
+    "canonicalFit": {
+      "body": "lastshift",
+      "global": {
+        "nominal": {
+          "scale": 1.408168,
+          "pivot": [
+            -0.0011,
+            -0.4123,
+            -0.0139
+          ],
+          "flipFacing": true
+        },
+        "scale": [
+          0.8015,
+          1.0019,
+          0.8637
+        ],
+        "translate": [
+          -0.0003,
+          0.4586,
+          -0.0501
+        ],
+        "sleeved": true,
+        "landmarks": {
+          "garmentArmpitNominal": 0.75,
+          "garmentHemNominal": 0,
+          "garmentTopNominal": 1.2,
+          "bodyArmpit": 1.245,
+          "armpitTarget": 1.21,
+          "level": {
+            "garmentNominalY": 0.69,
+            "bodyY": 1.1499,
+            "garmentWidth": 0.5178,
+            "garmentDepth": 0.4133,
+            "bodyWidth": 0.3134,
+            "bodyDepth": 0.287
+          }
+        },
+        "method": "per-axis scale+translate: armpit -> body armpit - 0.035 m, hem -> knee joint - 3.5 cm; width = 1.18 x body + 0.02 m (clamped 0.8-1.0 of vertical); depth = body + 0.07 m (clamped 0.7-1)"
+      },
+      "backTaper": {
+        "hemFactor": 0.3,
+        "fullAboveY": 1.25,
+        "clearance": 0.015,
+        "verticesTapered": 763
+      },
+      "sleeveRetarget": {
+        "L": {
+          "fitElbowOffsetFromBodyElbow": [
+            0.0035,
+            0.0003,
+            -0.0035
+          ],
+          "fitShoulder": [
+            0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "fitElbow": [
+            0.3203,
+            1.2221,
+            -0.1168
+          ],
+          "fitWrist": [
+            0.4497,
+            1.0132,
+            0.0018
+          ],
+          "bodyShoulder": [
+            0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "bodyElbow": [
+            0.3168,
+            1.2218,
+            -0.1133
+          ],
+          "bodyWristTarget": [
+            0.468,
+            1.0541,
+            -0.0813
+          ],
+          "cuff": [
+            0.4565,
+            1.001,
+            0.0074
+          ],
+          "sleeveAxis": [
+            0.4544,
+            -0.8081,
+            0.3748
+          ],
+          "garmentArmpit": [
+            0.2,
+            1.2136,
+            -0.1214
+          ],
+          "longSleeve": true,
+          "upperArmScale": 0.9934,
+          "forearmScale": 0.8358
+        },
+        "R": {
+          "fitElbowOffsetFromBodyElbow": [
+            -0.0013,
+            0.0031,
+            0.005
+          ],
+          "fitShoulder": [
+            -0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "fitElbow": [
+            -0.3181,
+            1.2249,
+            -0.1083
+          ],
+          "fitWrist": [
+            -0.4505,
+            1.0123,
+            0.0116
+          ],
+          "bodyShoulder": [
+            -0.1797,
+            1.4254,
+            -0.1214
+          ],
+          "bodyElbow": [
+            -0.3168,
+            1.2218,
+            -0.1133
+          ],
+          "bodyWristTarget": [
+            -0.468,
+            1.0541,
+            -0.0813
+          ],
+          "cuff": [
+            -0.4574,
+            1.0002,
+            0.0173
+          ],
+          "sleeveAxis": [
+            -0.4562,
+            -0.8056,
+            0.3782
+          ],
+          "garmentArmpit": [
+            -0.2049,
+            1.1836,
+            -0.1214
+          ],
+          "longSleeve": true,
+          "upperArmScale": 1.0066,
+          "forearmScale": 0.8213
+        }
+      },
+      "fitSkeleton": {
+        "Root": [
+          0,
+          0,
+          0
+        ],
+        "Hips": [
+          0,
+          0.8722,
+          -0.0742
+        ],
+        "Spine": [
+          0,
+          1.065,
+          -0.0892
+        ],
+        "Chest": [
+          0,
+          1.2964,
+          -0.1146
+        ],
+        "Neck": [
+          0,
+          1.515,
+          -0.0735
+        ],
+        "Head": [
+          0,
+          1.621,
+          -0.0635
+        ],
+        "L_UpperArm": [
+          0.1797,
+          1.4254,
+          -0.1214
+        ],
+        "L_Forearm": [
+          0.3203,
+          1.2221,
+          -0.1168
+        ],
+        "L_Hand": [
+          0.4497,
+          1.0132,
+          0.0018
+        ],
+        "R_UpperArm": [
+          -0.1797,
+          1.4254,
+          -0.1214
+        ],
+        "R_Forearm": [
+          -0.3181,
+          1.2249,
+          -0.1083
+        ],
+        "R_Hand": [
+          -0.4505,
+          1.0123,
+          0.0116
+        ],
+        "L_Thigh": [
+          0.1031,
+          0.8722,
+          -0.0742
+        ],
+        "L_Shin": [
+          0.1561,
+          0.4936,
+          -0.0868
+        ],
+        "L_Foot": [
+          0.1818,
+          0.115,
+          -0.0767
+        ],
+        "R_Thigh": [
+          -0.1031,
+          0.8722,
+          -0.0742
+        ],
+        "R_Shin": [
+          -0.1561,
+          0.4936,
+          -0.0868
+        ],
+        "R_Foot": [
+          -0.1818,
+          0.115,
+          -0.0767
+        ]
+      },
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 275,
+        "verticesMoved": 3509,
+        "maxDisplacementM": 0.0948,
+        "lastRoundViolations": 313,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "skin": {
+        "fitSkeletonWeights": {
+          "regionVertexCounts": {
+            "armR": 417,
+            "torso": 3345,
+            "armL": 441
+          },
+          "armVerticesAdoptedOutsideFlood": {
+            "L": 7,
+            "R": 4
+          },
+          "verticesWithMoreThan4Truncated": 0,
+          "smoothIters": 4,
+          "smoothLambda": 0.5,
+          "armRule": "wall"
+        },
+        "final": {
+          "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+          "maxDistToBodyM": 0.1687,
+          "verticesFartherThan10cm": 84,
+          "thighFollowMax": 0.45,
+          "smoothIters": 3,
+          "panelVerticesArmFree": 2103
+        }
+      }
+    }
+  },
+  "mesh": {
+    "vertices": 7189,
+    "triangles": 8856,
+    "simplify": {
+      "targetTris": 9000,
+      "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
+      "importanceWeighted": false,
+      "flags": [
+        "Prune",
+        "Regularize"
+      ],
+      "resultTris": 8856,
+      "resultVerts": 4203,
+      "relativeError": 0.00805,
+      "absoluteErrorM": 0.00968
+    },
+    "unwrap": {
+      "initialCharts": 1503,
+      "charts": 497,
+      "mergedSmallCharts": 1006,
+      "texelsPerMetreBase": 413.3,
+      "uvAreaFill": 0.55,
+      "uvMirroredFaces": 0,
+      "coneDeg": 66,
+      "validDot": 0.15,
+      "minChartFaces": 80,
+      "smoothIters": 12,
+      "padTexels": 6,
+      "packAtlas": 1024
+    },
+    "bake": {
+      "texels": 2183772,
+      "coverage": 0.521,
+      "missed": 0,
+      "farOver1cm": 21198,
+      "distMedianMm": 1.32,
+      "distP99Mm": 9.94,
+      "cageRayHits": 732896,
+      "cageM": 0.012,
+      "rayBelowM": 0.004,
+      "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
+      "gridCells": [
+        102,
+        122,
+        58
+      ],
+      "workers": 32
+    },
+    "textures": {
+      "baseColor": 1024,
+      "metallicRoughness": 256,
+      "jpegQuality": 88
+    }
+  },
+  "perBody": {
+    "lastshift": {
+      "node": "Outfit_coat__lastshift",
+      "debug": {
+        "canonicalY": [
+          0.463,
+          1.662
+        ],
+        "retargetY": [
+          0.463,
+          1.662
+        ],
+        "pushedY": [
+          0.457,
+          1.662
+        ],
+        "pushPercentilesM": [
+          0.0004,
+          0.0232,
+          0.0893
+        ]
+      },
+      "retarget": {
+        "identity": true
+      },
+      "sleeveless": false,
+      "collisionTarget": "whole body + fitted lower garments above the crotch (layering)",
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 234,
+        "verticesMoved": 2508,
+        "maxDisplacementM": 0.1484,
+        "lastRoundViolations": 498,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+        "maxDistToBodyM": 0.1663,
+        "verticesFartherThan10cm": 52,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3,
+        "panelVerticesArmFree": 2103
+      },
+      "bulkM": {
+        "torso": 0.0316,
+        "arm": 0.0201
+      },
+      "hiddenBodyTriangles": 4255,
+      "hiddenFraction": 0.2853,
+      "mask": {
+        "hidden": 4255,
+        "total": 14912,
+        "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 8856,
+        "p50": 1.094,
+        "p99": 2.588,
+        "max": 6.59,
+        "over2x": 232,
+        "over3x": 34,
+        "fractionOver": 0.0038,
+        "worstClips": {
+          "Run": 33,
+          "Attack": 18,
+          "Death": 40
+        },
+        "poses": 85
+      }
+    },
+    "courier": {
+      "node": "Outfit_coat__courier",
+      "debug": {
+        "canonicalY": [
+          0.463,
+          1.662
+        ],
+        "retargetY": [
+          0.471,
+          1.676
+        ],
+        "pushedY": [
+          0.471,
+          1.676
+        ],
+        "pushPercentilesM": [
+          0.0036,
+          0.0221,
+          0.0781
+        ]
+      },
+      "retarget": {
+        "displacementSmoothIters": 12,
+        "headScale": 0.884,
+        "limbRadiusDeltaM": {
+          "L_UpperArm": -0.0097,
+          "L_Forearm": -0.0009,
+          "R_UpperArm": -0.0097,
+          "R_Forearm": -0.0009,
+          "L_Thigh": -0.0236,
+          "L_Shin": 0.0135,
+          "R_Thigh": -0.0236,
+          "R_Shin": 0.0135
+        },
+        "limbsMapped": true,
+        "limbLength": {
+          "L_UpperArm": 1.075,
+          "L_Forearm": 1.074,
+          "L_Hand": 1.062,
+          "R_UpperArm": 1.075,
+          "R_Forearm": 1.074,
+          "R_Hand": 1.062,
+          "L_Thigh": 1.001,
+          "L_Shin": 1,
+          "L_Foot": 0.932,
+          "R_Thigh": 1.001,
+          "R_Shin": 1,
+          "R_Foot": 0.932
+        }
+      },
+      "sleeveless": false,
+      "collisionTarget": "whole body + fitted lower garments above the crotch (layering)",
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 356,
+        "verticesMoved": 3896,
+        "maxDisplacementM": 0.1596,
+        "lastRoundViolations": 514,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+        "maxDistToBodyM": 0.2745,
+        "verticesFartherThan10cm": 82,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3,
+        "panelVerticesArmFree": 2105
+      },
+      "bulkM": {
+        "torso": 0.0273,
+        "arm": 0.0174
+      },
+      "hiddenBodyTriangles": 5340,
+      "hiddenFraction": 0.357,
+      "mask": {
+        "hidden": 5340,
+        "total": 14956,
+        "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 8856,
+        "p50": 1.087,
+        "p99": 2.888,
+        "max": 18.18,
+        "over2x": 253,
+        "over3x": 79,
+        "fractionOver": 0.0089,
+        "worstClips": {
+          "Run": 27,
+          "Attack": 41,
+          "Death": 23
+        },
+        "poses": 85
+      }
+    },
+    "scavenger": {
+      "node": "Outfit_coat__scavenger",
+      "debug": {
+        "canonicalY": [
+          0.463,
+          1.662
+        ],
+        "retargetY": [
+          0.454,
+          1.654
+        ],
+        "pushedY": [
+          0.447,
+          1.657
+        ],
+        "pushPercentilesM": [
+          0.0093,
+          0.0406,
+          0.0973
+        ]
+      },
+      "retarget": {
+        "displacementSmoothIters": 12,
+        "headScale": 1.25,
+        "limbRadiusDeltaM": {
+          "L_UpperArm": 0.0046,
+          "L_Forearm": 0.0096,
+          "R_UpperArm": 0.0046,
+          "R_Forearm": 0.0096,
+          "L_Thigh": -0.0289,
+          "L_Shin": 0.0053,
+          "R_Thigh": -0.0289,
+          "R_Shin": 0.0053
+        },
+        "limbsMapped": true,
+        "limbLength": {
+          "L_UpperArm": 1.147,
+          "L_Forearm": 1.139,
+          "L_Hand": 1.111,
+          "R_UpperArm": 1.147,
+          "R_Forearm": 1.139,
+          "R_Hand": 1.111,
+          "L_Thigh": 1.002,
+          "L_Shin": 1.001,
+          "L_Foot": 0.883,
+          "R_Thigh": 1.002,
+          "R_Shin": 1.001,
+          "R_Foot": 0.883
+        }
+      },
+      "sleeveless": false,
+      "collisionTarget": "whole body + fitted lower garments above the crotch (layering)",
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 796,
+        "verticesMoved": 4107,
+        "maxDisplacementM": 0.1605,
+        "lastRoundViolations": 927,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+        "maxDistToBodyM": 0.2172,
+        "verticesFartherThan10cm": 122,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3,
+        "panelVerticesArmFree": 2153
+      },
+      "bulkM": {
+        "torso": 0.0253,
+        "arm": 0.017
+      },
+      "hiddenBodyTriangles": 3193,
+      "hiddenFraction": 0.2162,
+      "mask": {
+        "hidden": 3193,
+        "total": 14767,
+        "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 8856,
+        "p50": 1.096,
+        "p99": 3.394,
+        "max": 19.15,
+        "over2x": 432,
+        "over3x": 135,
+        "fractionOver": 0.0152,
+        "worstClips": {
+          "Run": 38,
+          "Attack": 30,
+          "Death": 23
+        },
+        "poses": 85
+      }
+    },
+    "agent": {
+      "node": "Outfit_coat__agent",
+      "debug": {
+        "canonicalY": [
+          0.463,
+          1.662
+        ],
+        "retargetY": [
+          0.406,
+          1.538
+        ],
+        "pushedY": [
+          0.399,
+          1.537
+        ],
+        "pushPercentilesM": [
+          0.005,
+          0.027,
+          0.08
+        ]
+      },
+      "retarget": {
+        "displacementSmoothIters": 12,
+        "headScale": 1.035,
+        "limbRadiusDeltaM": {
+          "L_UpperArm": 0.0002,
+          "L_Forearm": -0.0041,
+          "R_UpperArm": 0.0002,
+          "R_Forearm": -0.0041,
+          "L_Thigh": -0.003,
+          "L_Shin": 0.0187,
+          "R_Thigh": -0.003,
+          "R_Shin": 0.0187
+        },
+        "limbsMapped": true,
+        "limbLength": {
+          "L_UpperArm": 1.114,
+          "L_Forearm": 1.105,
+          "L_Hand": 0.671,
+          "R_UpperArm": 1.114,
+          "R_Forearm": 1.105,
+          "R_Hand": 0.671,
+          "L_Thigh": 0.964,
+          "L_Shin": 0.974,
+          "L_Foot": 0.706,
+          "R_Thigh": 0.964,
+          "R_Shin": 0.974,
+          "R_Foot": 0.706
+        }
+      },
+      "sleeveless": false,
+      "collisionTarget": "whole body + fitted lower garments above the crotch (layering)",
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 463,
+        "verticesMoved": 4041,
+        "maxDisplacementM": 0.15,
+        "lastRoundViolations": 589,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+        "maxDistToBodyM": 0.2421,
+        "verticesFartherThan10cm": 92,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3,
+        "panelVerticesArmFree": 1939
+      },
+      "bulkM": {
+        "torso": 0.0317,
+        "arm": 0.0177
+      },
+      "hiddenBodyTriangles": 4988,
+      "hiddenFraction": 0.3332,
+      "mask": {
+        "hidden": 4988,
+        "total": 14972,
+        "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 8856,
+        "p50": 1.121,
+        "p99": 4.264,
+        "max": 9.01,
+        "over2x": 549,
+        "over3x": 231,
+        "fractionOver": 0.0261,
+        "worstClips": {
+          "Run": 40,
+          "Attack": 40,
+          "Death": 10
+        },
+        "poses": 85
+      }
+    },
+    "heavyset": {
+      "node": "Outfit_coat__heavyset",
+      "debug": {
+        "canonicalY": [
+          0.463,
+          1.662
+        ],
+        "retargetY": [
+          0.448,
+          1.662
+        ],
+        "pushedY": [
+          0.45,
+          1.661
+        ],
+        "pushPercentilesM": [
+          0.0031,
+          0.0251,
+          0.1043
+        ]
+      },
+      "retarget": {
+        "displacementSmoothIters": 12,
+        "headScale": 0.948,
+        "limbRadiusDeltaM": {
+          "L_UpperArm": 0.0091,
+          "L_Forearm": 0.0092,
+          "R_UpperArm": 0.0091,
+          "R_Forearm": 0.0092,
+          "L_Thigh": 0.006,
+          "L_Shin": 0.0114,
+          "R_Thigh": 0.006,
+          "R_Shin": 0.0114
+        },
+        "limbsMapped": true,
+        "limbLength": {
+          "L_UpperArm": 1.253,
+          "L_Forearm": 1.194,
+          "L_Hand": 0.815,
+          "R_UpperArm": 1.253,
+          "R_Forearm": 1.194,
+          "R_Hand": 0.815,
+          "L_Thigh": 1.004,
+          "L_Shin": 1.003,
+          "L_Foot": 0.927,
+          "R_Thigh": 1.004,
+          "R_Shin": 1.003,
+          "R_Foot": 0.927
+        }
+      },
+      "sleeveless": false,
+      "collisionTarget": "whole body + fitted lower garments above the crotch (layering)",
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 318,
+        "verticesMoved": 3818,
+        "maxDisplacementM": 0.2004,
+        "lastRoundViolations": 483,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+        "maxDistToBodyM": 0.2521,
+        "verticesFartherThan10cm": 97,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3,
+        "panelVerticesArmFree": 1941
+      },
+      "bulkM": {
+        "torso": 0.0366,
+        "arm": 0.0154
+      },
+      "hiddenBodyTriangles": 4773,
+      "hiddenFraction": 0.319,
+      "mask": {
+        "hidden": 4773,
+        "total": 14962,
+        "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 8856,
+        "p50": 1.11,
+        "p99": 3.398,
+        "max": 6.79,
+        "over2x": 378,
+        "over3x": 141,
+        "fractionOver": 0.0159,
+        "worstClips": {
+          "Run": 45,
+          "Attack": 26,
+          "Death": 20
+        },
+        "poses": 85
+      }
+    },
+    "tall": {
+      "node": "Outfit_coat__tall",
+      "debug": {
+        "canonicalY": [
+          0.463,
+          1.662
+        ],
+        "retargetY": [
+          0.45,
+          1.62
+        ],
+        "pushedY": [
+          0.449,
+          1.62
+        ],
+        "pushPercentilesM": [
+          0.0029,
+          0.0169,
+          0.0627
+        ]
+      },
+      "retarget": {
+        "displacementSmoothIters": 12,
+        "headScale": 0.917,
+        "limbRadiusDeltaM": {
+          "L_UpperArm": -0.0231,
+          "L_Forearm": -0.0092,
+          "R_UpperArm": -0.0231,
+          "R_Forearm": -0.0092,
+          "L_Thigh": -0.0386,
+          "L_Shin": -0.0128,
+          "R_Thigh": -0.0386,
+          "R_Shin": -0.0128
+        },
+        "limbsMapped": true,
+        "limbLength": {
+          "L_UpperArm": 0.93,
+          "L_Forearm": 0.928,
+          "L_Hand": 1.029,
+          "R_UpperArm": 0.93,
+          "R_Forearm": 0.928,
+          "R_Hand": 1.029,
+          "L_Thigh": 1.007,
+          "L_Shin": 1.01,
+          "L_Foot": 0.742,
+          "R_Thigh": 1.007,
+          "R_Shin": 1.01,
+          "R_Foot": 0.742
+        }
+      },
+      "sleeveless": false,
+      "collisionTarget": "whole body + fitted lower garments above the crotch (layering)",
+      "pushOut": {
+        "marginM": 0.012,
+        "verticesInsideBodyBefore": 316,
+        "verticesMoved": 3848,
+        "maxDisplacementM": 0.1232,
+        "lastRoundViolations": 449,
+        "rounds": 8,
+        "smoothIters": 6
+      },
+      "transfer": {
+        "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
+        "maxDistToBodyM": 0.1996,
+        "verticesFartherThan10cm": 108,
+        "thighFollowMax": 0.45,
+        "smoothIters": 3,
+        "panelVerticesArmFree": 2154
+      },
+      "bulkM": {
+        "torso": 0.0314,
+        "arm": 0.0188
+      },
+      "hiddenBodyTriangles": 5618,
+      "hiddenFraction": 0.3755,
+      "mask": {
+        "hidden": 5618,
+        "total": 14960,
+        "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
+      },
+      "motionStretch": {
+        "triangles": 8856,
+        "p50": 1.078,
+        "p99": 2.968,
+        "max": 7.25,
+        "over2x": 275,
+        "over3x": 84,
+        "fractionOver": 0.0095,
+        "worstClips": {
+          "Run": 36,
+          "Attack": 36,
+          "Death": 18
+        },
+        "poses": 85
+      }
+    }
+  },
+  "limitations": [
+    "No cloth simulation: linear-blend skinned with weights transferred from each body; it cannot drape, swing or collide in motion.",
+    "Per-body fit = skeleton-driven retarget + bind-pose push-out (+ collision with the body's fitted pants above the crotch); residual interpenetration appears in strong poses.",
+    "Body triangles fully enclosed by the item in the bind pose are hidden per body; in motion small gaps can reveal the underlying body or base clothing.",
+    "Hidden-side geometry of the source is AI-hallucinated.",
+    "Unapproved prototype; gameReady false."
+  ]
+}

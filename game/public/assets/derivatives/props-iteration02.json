@@ -1,0 +1,437 @@
+{
+  "schema": "last-line-props-derivatives-v1",
+  "task": "studio-slice-iteration02-20261025-01",
+  "status": "PROTOTYPE runtime derivatives of two NEW iteration02 native F16 SV masters (turnstile, supply crate). Unapproved, gameReady false, not production art, no license clearance asserted. Dimensions provisional.",
+  "rebuild": "node tools/asset-pipeline/props/build-props-iteration02.mjs",
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "front": "+Z",
+    "origin": "bottom-centre (y=0 floor contact)",
+    "files": "plain glTF 2.0 binary, no extensions"
+  },
+  "outputs": [
+    {
+      "output": "game/public/assets/models/turnstile.glb",
+      "key": "turnstile",
+      "kind": "prop",
+      "bytes": 819264,
+      "sha256": "ad681e7d825177007122170c0ac4e38b930415e580a13edc0c620c6141d8cadf",
+      "triangles": 5974,
+      "vertices": 7165,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 184682
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 86348
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 280942
+        }
+      },
+      "source": {
+        "asset": "turnstile",
+        "path": "reference/tasks/vertical-slice-iteration02-20261025/generation/turnstile/native/asset.glb",
+        "sha256": "e9d213f9073c250d6d138867f523de11a2f992e60172a01db05814b0e2634c17",
+        "sha256Verified": true,
+        "bytes": 85533296,
+        "nativeJobId": "20261025T201306Z-866c692a43d14db2b691bed05a0827e1",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration02-20261025/generation/turnstile/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration02-20261025/generation/turnstile/image/turnstile-original.png",
+          "sha256": "580b6a719077981c56047b7e66385214fa5238f64d0fc0cc3d6d45c5fb57ed71",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 968112,
+        "vertices": 695468,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform identity). R rows = output X,Y,Z axes in source coordinates, from the levelled box frame.",
+        "levelFrame": {
+          "up": [
+            -0.00473,
+            0.922634,
+            -0.385647
+          ],
+          "front": [
+            -0.443916,
+            -0.347506,
+            -0.825941
+          ],
+          "right": [
+            -0.896056,
+            0.167288,
+            0.411216
+          ],
+          "tiltFromSourceYDeg": 22.6857,
+          "axisScores": [
+            0.109028,
+            0.027078,
+            0.026999
+          ]
+        },
+        "R": [
+          [
+            -0.896056,
+            0.167288,
+            0.411216
+          ],
+          [
+            -0.00473,
+            0.922634,
+            -0.385647
+          ],
+          [
+            -0.443916,
+            -0.347506,
+            -0.825941
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 1.398711,
+        "translation": [
+          0.096617,
+          0.511658,
+          0.005791
+        ],
+        "orientationEvidence": "Native SV mesh keeps the elevated conditioning-camera pose (22.7 deg tilt from source +Y). Levelled via the dominant box-face frame; long cabinet axis -> Z with the card-reader end (image right, nearest the camera) at +Z; X = Y x Z (no mirror). Render check: qa-artifacts/assets/props-iteration02/turnstile-derived.png shows a level cabinet, reader on top at +Z, three arms on -X with one horizontal.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "height 1.02 m (uniform scale)",
+        "bbox": {
+          "min": [
+            -0.45797,
+            0,
+            -0.502193
+          ],
+          "max": [
+            0.45797,
+            1.02,
+            0.502193
+          ],
+          "size": [
+            0.915939,
+            1.02,
+            1.004386
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "armsProtrudeToward": "-X",
+        "cabinetFootprintMeters": {
+          "x": [
+            0.1417,
+            0.4587
+          ],
+          "z": [
+            -0.478,
+            0.5023
+          ],
+          "width": 0.317,
+          "length": 0.9804
+        },
+        "arms": {
+          "pointsMinusX": 39412,
+          "pointsPlusX": 0,
+          "reachX": -0.4585,
+          "reachBeyondCabinetMeters": 0.6002,
+          "yRange": [
+            0.4233,
+            0.8954
+          ],
+          "zRange": [
+            -0.0904,
+            0.3638
+          ],
+          "horizontalArmTip": {
+            "x": -0.4585,
+            "y": 0.862,
+            "z": -0.0398
+          }
+        },
+        "layout": "Cabinet long axis = local Z (walking direction); +Z end carries the card reader (entry end in the conditioning image). Arms + rotor hub on the -X side of the cabinet; the horizontal arm blocks the lane on -X. Bbox centre (origin) is offset from the cabinet centre toward -X by the arm reach.",
+        "method": "Output-space dense vertices: cabinet footprint from vertices below 0.30 m; arms = vertices >2 cm outside the cabinet x-range."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs native controller receipt (reference/tasks/vertical-slice-iteration02-20261025/generation/<asset>/native/receipt.json)"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 6000,
+          "resultTriangles": 5974,
+          "errorMeters": 0.0028
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 602
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "searchRadiusSourceUnits": 0.02
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame from area-weighted dominant face normals (undoes the single-view camera pitch/yaw), up = frame axis nearest source +Y, front chosen per asset (orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 968112 to 5974 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/crate.glb",
+      "key": "crate",
+      "kind": "prop",
+      "bytes": 798944,
+      "sha256": "cf560533199edf4af2cb7321ab081d7c4d08d39fe532d5162d15df7186725f08",
+      "triangles": 3994,
+      "vertices": 5264,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 199186
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 118736
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 286442
+        }
+      },
+      "source": {
+        "asset": "supply-crate",
+        "path": "reference/tasks/vertical-slice-iteration02-20261025/generation/supply-crate/native/asset.glb",
+        "sha256": "878f698358363136b1cebe2c1a184876fffd60f0e6b425e04b94a8f474c633bd",
+        "sha256Verified": true,
+        "bytes": 88735352,
+        "nativeJobId": "20261025T202111Z-063176ccaa714d4fadcdaf7753b0362c",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration02-20261025/generation/supply-crate/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration02-20261025/generation/supply-crate/image/supply-crate-original.png",
+          "sha256": "5367c04e8708e3c25e49ae9fe16d2fd24d52f6ffe7a1b52056289bfa68e3dc19",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 987180,
+        "vertices": 701302,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = scale * R * p_source + translation (baked into vertices; node transform identity). R rows = output X,Y,Z axes in source coordinates, from the levelled box frame.",
+        "levelFrame": {
+          "up": [
+            -0.007006,
+            0.931947,
+            -0.362527
+          ],
+          "front": [
+            -0.480582,
+            -0.321061,
+            -0.816064
+          ],
+          "right": [
+            -0.876922,
+            0.168506,
+            0.450126
+          ],
+          "tiltFromSourceYDeg": 21.2596,
+          "axisScores": [
+            0.083967,
+            0.079957,
+            0.053451
+          ]
+        },
+        "R": [
+          [
+            -0.876922,
+            0.168506,
+            0.450126
+          ],
+          [
+            -0.007006,
+            0.931947,
+            -0.362527
+          ],
+          [
+            -0.480582,
+            -0.321061,
+            -0.816064
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "scale": 0.788636,
+        "translation": [
+          -0.005626,
+          0.196956,
+          0.013621
+        ],
+        "orientationEvidence": "Native SV mesh keeps the elevated conditioning-camera pose. Levelled via the dominant box-face frame; front (+Z) = the box face most facing the conditioning camera (hasp + cream stencil panel); X = Y x Z (no mirror).",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "chosen": "width 0.62 m (uniform scale)",
+        "bbox": {
+          "min": [
+            -0.31,
+            0,
+            -0.220156
+          ],
+          "max": [
+            0.31,
+            0.432056,
+            0.220156
+          ],
+          "size": [
+            0.62,
+            0.432056,
+            0.440312
+          ]
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "lidSplitY": 0.353,
+        "lidSplitFraction": 0.817,
+        "lidHeightMeters": 0.0791,
+        "seamGrooveDepthMeters": 0.0064,
+        "seamDepthsAtSplit": {
+          "front": -0.023,
+          "right": -0.0147,
+          "left": -0.0214
+        },
+        "method": "Dense output-space surface; 2 mm height bins; outermost depth of the front face (|x| 0.12-0.24 m) and both side faces (|z| 0.10-0.17 m), averaged; lid seam = deepest groove between 70% and 92% of the height. Visual cross-check: front ortho render (qa-artifacts/assets/props-iteration02/supply-crate-derived.png).",
+        "hingeEdge": "back (-Z) top edge: the reconstruction shows two hinge-like plates on the back face just below the lid (inferred back; the conditioning image only showed the front/left)"
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 vs native controller receipt (reference/tasks/vertical-slice-iteration02-20261025/generation/<asset>/native/receipt.json)"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 4000,
+          "resultTriangles": 3994,
+          "errorMeters": 0.002857
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 474
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "searchRadiusSourceUnits": 0.021739
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame from area-weighted dominant face normals (undoes the single-view camera pitch/yaw), up = frame axis nearest source +Y, front chosen per asset (orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 987180 to 3994 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline, not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted."
+      ]
+    }
+  ],
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration02-20261025/generation/<asset>/native/ and are never copied to game/public. props.json (older derivatives) is not modified by this script."
+}

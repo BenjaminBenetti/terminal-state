@@ -1,0 +1,1733 @@
+{
+  "schema": "last-line-props-derivatives-v1",
+  "task": "studio-slice-iteration04-20261026-01",
+  "status": "PROTOTYPE runtime derivatives of NEW iteration04 native F16 SV masters (trash can + modular shop building blocks) made from STRAIGHT-ON conditioning images. Unapproved, gameReady false, not production art, no license clearance asserted. Dimensions provisional.",
+  "rebuild": "node tools/asset-pipeline/props/build-props-iteration04.mjs [--only key,key]",
+  "generationManifest": "reference/tasks/vertical-slice-iteration04-20261026/generation/manifest.json",
+  "assembly": "Shop components are building blocks (front +Z, origin bottom-centre, metres) to be assembled with procedurally authored shopfront frames, sign bands, menu boards and shutters (Lanes B/C); none is a whole shop.",
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "front": "+Z",
+    "origin": "bottom-centre (y=0 floor contact)",
+    "files": "plain glTF 2.0 binary, no extensions"
+  },
+  "outputs": [
+    {
+      "output": "game/public/assets/models/trash-can.glb",
+      "key": "trashCan",
+      "modelKey": "trashCan",
+      "displayName": "Transit-station waste receptacle (trash can)",
+      "kind": "prop",
+      "bytes": 665600,
+      "sha256": "3cd3aacb4a0f3cfe5c215b6d7170f548614d338624aa73404d2b508d1582bd76",
+      "triangles": 2374,
+      "vertices": 3284,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 172373
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 93740
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 277868
+        }
+      },
+      "source": {
+        "asset": "trashCan",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/trashCan/native/asset.glb.xz",
+          "sha256": "4d4f6fc5b096a8a727d0d9ad6df189d5ddd08e77c766b586a43cca528ea288df",
+          "bytes": 61468300,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "8acbe4e2b9d997e72f33b5109880b59a3f27aff9a2e3d210e51bfe53dce14552",
+        "sha256Verified": true,
+        "bytes": 81955504,
+        "nativeJobId": "20261025T230917Z-5324becf41694cbba120a06c3ce4e346",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration04-20261026/generation/trashCan/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/trashCan/image/trashCan-original.png",
+          "sha256": "c6e53ce920ceb16685f499780ca5ce6f9a1a95afee7730287857dd89f639037f",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31de-7f41-9341-b2047c3e9814"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 982280,
+        "vertices": 702120,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "area-weighted surface PCA",
+          "upRule": "pca-long",
+          "frontRule": "camera",
+          "yawRefineDeg": 0,
+          "up": [
+            -0.001349,
+            0.999535,
+            -0.030473
+          ],
+          "front": [
+            0.000041,
+            -0.030473,
+            -0.999536
+          ],
+          "right": [
+            -0.999999,
+            -0.001349,
+            0
+          ],
+          "tiltFromSourceYDeg": 1.7479,
+          "frontYawFromCameraDeg": 0.0024,
+          "axisScores": [
+            0.0751307055182685,
+            0.02137109347896288,
+            0.0207291407147114
+          ]
+        },
+        "R": [
+          [
+            -0.999999,
+            -0.001349,
+            0
+          ],
+          [
+            -0.001349,
+            0.999535,
+            -0.030473
+          ],
+          [
+            0.000041,
+            -0.030473,
+            -0.999536
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "uniformScale": 1.10792,
+          "uniformDims": [
+            0.535923,
+            0.95,
+            0.540719
+          ],
+          "perAxisScale": [
+            1.137021,
+            1.10792,
+            1.126937
+          ],
+          "relativeFactors": [
+            1.026266,
+            1,
+            1.017164
+          ],
+          "contract": {
+            "w": 0.55,
+            "d": 0.55,
+            "h": 0.95
+          }
+        },
+        "translation": [
+          0.000759,
+          0.458347,
+          0.006455
+        ],
+        "orientationEvidence": "Round receptacle: up = longest surface PCA axis (signed toward source +Y; the straight-on input had 0 deg elevation); front (+Z) = horizontal projection of the conditioning-camera direction, i.e. the hooded disposal opening and the blank label plate that faced the camera.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 0.55,
+          "d": 0.55,
+          "h": 0.95
+        },
+        "chosen": "height 0.95 m uniform, then bounded per-axis contract fit (relative factors 1.026 / 1.000 / 1.017 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.275,
+            0,
+            -0.275
+          ],
+          "max": [
+            0.275,
+            0.95,
+            0.275
+          ],
+          "size": [
+            0.55,
+            0.95,
+            0.55
+          ]
+        },
+        "measured": {
+          "w": 0.55,
+          "h": 0.95,
+          "d": 0.55
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "lidTopY": 0.95,
+        "diameterX": 0.55,
+        "diameterZ": 0.55,
+        "disposalOpening": {
+          "yMin": 0.76,
+          "yMax": 0.84,
+          "xMin": -0.15,
+          "xMax": 0.15,
+          "rows": 8,
+          "note": "front relief, approximate"
+        },
+        "method": "Disposal opening from a 1 cm front relief map (outermost z per cell) of the dense output-space mesh: per-column reference = outermost z in the 15-60% height band; open cell = >= 15 cm behind it; opening = first contiguous run of rows above 55% of the height with >= 25% of the central 70% of columns open; x = 3rd-97th percentile of open cells."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "area-weighted surface PCA; up rule pca-long, front rule camera (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 2400,
+          "resultTriangles": 2374,
+          "errorMeters": 0.007714,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 451
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.041777,
+          "stats": {
+            "matchedSameFacing": 1772305,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "top-repaint",
+          "yMin": 0.7600000351691718,
+          "minNy": 0.35,
+          "cellM": 0.002,
+          "lowFaces": 119,
+          "repaintedColorTexels": 25170,
+          "method": "Dense output-space mesh rendered orthographically from +Y (2 mm cells, highest upward-facing surface wins; colour + metallic-roughness from the dense textures); repainted onto low-poly texels of faces with normal.y > minNy and centroid above yMin; their normal texels set flat. Fixes closest-surface bake hits on the dark interior below a coarse simplified cap."
+        },
+        {
+          "step": "radial-repaint",
+          "yMin": 0.684,
+          "yMax": 0.95,
+          "maxNy": 0.35,
+          "dThetaDeg": 0.5,
+          "cellM": 0.002,
+          "lowFaces": 195,
+          "repaintedColorTexels": 30009,
+          "method": "Dense output-space mesh rendered in cylindrical (theta, y) space about the vertical axis through the bbox centre (0.5 deg x 2 mm cells, outermost outward-facing surface wins; colour + metallic-roughness from the dense textures); repainted onto low-poly texels of outward side faces in the band; normal texels set flat."
+        },
+        {
+          "step": "redilate",
+          "iterations": 8,
+          "coverage": [
+            {
+              "size": 1024,
+              "coveredTexels": 336612
+            },
+            {
+              "size": 512,
+              "coveredTexels": 83542
+            },
+            {
+              "size": 512,
+              "coveredTexels": 83542
+            }
+          ],
+          "method": "Coverage of all low-poly faces rasterised per texture (texel centres inside); lib/bake.mjs dilate() re-run from covered texels into uncovered gutter texels (8 iterations) so gutters follow the repainted colours."
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 982280 to 2374 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "At ~2.4k triangles the slats are slightly uneven and the hood is coarse; the dome top and hood band are repainted by projection (top-repaint / radial-repaint steps) because the coarse cap baked the dark bin interior; their normal texels are flat.",
+        "Back and interior inferred from a single front view (no opening at the back; dark inner bin visible between the slats). Label plate blank."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/shop-counter.glb",
+      "key": "shopCounter",
+      "modelKey": "shopCounter",
+      "displayName": "Takeout restaurant service-counter module",
+      "kind": "shop-component",
+      "bytes": 742204,
+      "sha256": "fb966601637395e82c0f59056791833617f44e764cae9e792b26379d7387ef78",
+      "triangles": 3976,
+      "vertices": 4835,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 203187
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 108467
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 249725
+        }
+      },
+      "source": {
+        "asset": "shopCounter",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCounter/native/asset.glb.xz",
+          "sha256": "3f695b548edce8688c8816939ce9b69e3d025392aad7a4fa729b75cc4549c980",
+          "bytes": 63764772,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "5da579d892fd5415917323606f7a61c22a5c8ef7d73049b013ad08be8e909862",
+        "sha256Verified": true,
+        "bytes": 83593292,
+        "nativeJobId": "20261025T231747Z-d6346612075f4eea88fb1621b7293926",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCounter/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCounter/image/shopCounter-original.png",
+          "sha256": "7012387d3104f1f318f7af7279c2055da71f6269be12412d3872772e1c78e91a",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31e6-7612-a900-2c1ebd85b24a"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 934554,
+        "vertices": 642602,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0.1,
+          "up": [
+            -0.000418,
+            0.999068,
+            -0.043168
+          ],
+          "front": [
+            0.001165,
+            -0.043167,
+            -0.999067
+          ],
+          "right": [
+            -0.999999,
+            -0.000468,
+            -0.001146
+          ],
+          "tiltFromSourceYDeg": 2.4742,
+          "frontYawFromCameraDeg": 0.0668,
+          "axisScores": [
+            0.09021368913234828,
+            0.08709639989205281,
+            0.06238661875006825
+          ]
+        },
+        "R": [
+          [
+            -0.999999,
+            -0.000468,
+            -0.001146
+          ],
+          [
+            -0.000418,
+            0.999068,
+            -0.043168
+          ],
+          [
+            0.001165,
+            -0.043167,
+            -0.999067
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit x/y (per-axis toward the brief dims, clamped +-35% vs uniform); depth by the depth-band remap below (z uniform before it)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "uniformScale": 2.659854,
+          "uniformDims": [
+            2.042296,
+            1.05,
+            2.657565
+          ],
+          "perAxisScale": [
+            1.953576,
+            2.659854,
+            2.659854
+          ],
+          "relativeFactors": [
+            0.734467,
+            1,
+            1
+          ],
+          "contract": {
+            "w": 1.5,
+            "d": 0.75,
+            "h": 1.05
+          },
+          "depthRemap": {
+            "frontBandM": 0.14,
+            "backBandM": 0.04,
+            "protrusionM": 0,
+            "protrusionToM": 0,
+            "uniformDepthM": 2.6576,
+            "targetDepthM": 0.75,
+            "middleScale": 0.2301,
+            "protrusionScale": 1,
+            "note": "z remapped piecewise-linearly: front band (behind any protrusion) and back band kept at uniform scale, middle compressed, protrusion compressed; re-centred on z = 0"
+          }
+        },
+        "translation": [
+          -0.013634,
+          0.47407,
+          0.012357
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (counter top / front panel); front (+Z) = the customer face with the tray-slide rail, i.e. the horizontal frame axis most aligned with the straight-on conditioning camera.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1.5,
+          "d": 0.75,
+          "h": 1.05
+        },
+        "chosen": "height 1.05 m uniform, then bounded per-axis contract fit (relative factors 0.734 / 1.000 / 1.000 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.75,
+            0,
+            -0.375
+          ],
+          "max": [
+            0.75,
+            1.05,
+            0.375
+          ],
+          "size": [
+            1.5,
+            1.05,
+            0.75
+          ]
+        },
+        "measured": {
+          "w": 1.5,
+          "h": 1.05,
+          "d": 0.75
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "counterTopY": 1.041,
+        "counterTopMaxY": 1.05,
+        "counterSurface": {
+          "y": 1.041,
+          "yTop": 1.05,
+          "yBottom": 0.985,
+          "areaM2": 0.819
+        },
+        "trayRail": {
+          "yMin": 0.77,
+          "yMax": 0.98,
+          "frontZ": 0.375,
+          "panelZ": 0.312,
+          "protrusionM": 0.063
+        },
+        "frontPanelZ": 0.312,
+        "backZ": -0.375,
+        "horizontalSurfaces": [
+          {
+            "y": 0.89,
+            "yTop": 0.94,
+            "yBottom": 0.82,
+            "areaM2": 0.0714
+          },
+          {
+            "y": 1.041,
+            "yTop": 1.05,
+            "yBottom": 0.985,
+            "areaM2": 0.819
+          }
+        ],
+        "method": "Counter top = largest horizontal (normal.y > 0.9) dense-face cluster above 0.6 m within the central 90% x 96% of the footprint (area-weighted 5 mm histogram). Tray rail = rows of a 1 cm front relief map below the counter top where >= 40% of the central 80% of cells protrude >= 2.5 cm in front of the median front-panel plane (0.25-0.6 m band)."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 4000,
+          "resultTriangles": 3976,
+          "errorMeters": 0.006489,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 448
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.02,
+          "stats": {
+            "matchedSameFacing": 2329592,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 934554 to 3976 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "The single front view gave no depth cue: SV returned a box 2.66 m deep at the 1.05 m height fit; depth-band remap kept the front 14 cm (rail, top overhang) and back 4 cm at true scale and compressed the plain middle x0.23 to reach 0.75 m. Width compressed x0.735 (rail tubes run along x, so their cross-section is unaffected).",
+        "SV mirrored the tray-slide rail onto the BACK face as well (staff side) and invented grey patches on the back/sides; a small knob protrudes at the +X end. Both ends are plain panels (modular run), not cut-open."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/shop-cooler.glb",
+      "key": "shopCooler",
+      "modelKey": "shopCooler",
+      "displayName": "Glass-door commercial drinks cooler",
+      "kind": "shop-component",
+      "bytes": 635820,
+      "sha256": "b2afaf28962d8a4d0aa424455e4dd7839561010f449c70d691ad8e976737fb36",
+      "triangles": 4424,
+      "vertices": 7310,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 157277
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 79724
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 136085
+        }
+      },
+      "source": {
+        "asset": "shopCooler",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCooler/native/asset.glb.xz",
+          "sha256": "defe05baf6960792b007bfe91efc11891427e893dcf753741dc99a03577fccf0",
+          "bytes": 68857504,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "dd0d0e57f0d54e721b201fda7d1968d8793828c6c3ab1b01abf66f80d06cc705",
+        "sha256Verified": true,
+        "bytes": 90531516,
+        "nativeJobId": "20261025T233917Z-1c01051c4be1459aacb7dd649bc8c82c",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCooler/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCooler/image/shopCooler-original.png",
+          "sha256": "9ec8a805b1b39756d505f9d03039f6bcff3129a48acce2e70fd44d63066ac2ce",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31dd-7c71-b5b2-959d8baf7b95"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 996010,
+        "vertices": 726267,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0,
+          "up": [
+            -0.000011,
+            0.99982,
+            -0.018975
+          ],
+          "front": [
+            0.00097,
+            -0.018975,
+            -0.999819
+          ],
+          "right": [
+            -1,
+            -0.00003,
+            -0.000969
+          ],
+          "tiltFromSourceYDeg": 1.0873,
+          "frontYawFromCameraDeg": 0.0556,
+          "axisScores": [
+            0.16806873620925003,
+            0.06874092809265779,
+            0.051034504921963125
+          ]
+        },
+        "R": [
+          [
+            -1,
+            -0.00003,
+            -0.000969
+          ],
+          [
+            -0.000011,
+            0.99982,
+            -0.018975
+          ],
+          [
+            0.00097,
+            -0.018975,
+            -0.999819
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit x/y (per-axis toward the brief dims, clamped +-35% vs uniform); depth by the depth-band remap below (z uniform before it)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "uniformScale": 2.438556,
+          "uniformDims": [
+            0.727487,
+            2,
+            2.380742
+          ],
+          "perAxisScale": [
+            2.514019,
+            2.438556,
+            2.438556
+          ],
+          "relativeFactors": [
+            1.030946,
+            1,
+            1
+          ],
+          "contract": {
+            "w": 0.75,
+            "d": 0.75,
+            "h": 2
+          },
+          "depthRemap": {
+            "frontBandM": 0.08,
+            "backBandM": 0.04,
+            "protrusionM": 0.375,
+            "protrusionToM": 0.05,
+            "uniformDepthM": 2.3807,
+            "targetDepthM": 0.75,
+            "middleScale": 0.3076,
+            "protrusionScale": 0.1333,
+            "note": "z remapped piecewise-linearly: front band (behind any protrusion) and back band kept at uniform scale, middle compressed, protrusion compressed; re-centred on z = 0"
+          }
+        },
+        "translation": [
+          -0.000546,
+          0.999488,
+          -0.013818
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (cabinet sides / glass door); front (+Z) = the glass door face that the straight-on conditioning camera saw (handle on the +X edge).",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 0.75,
+          "d": 0.75,
+          "h": 2
+        },
+        "chosen": "height 2 m uniform, then bounded per-axis contract fit (relative factors 1.031 / 1.000 / 1.000 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.375,
+            0,
+            -0.375
+          ],
+          "max": [
+            0.375,
+            2,
+            0.375
+          ],
+          "size": [
+            0.75,
+            2,
+            0.75
+          ]
+        },
+        "measured": {
+          "w": 0.75,
+          "h": 2,
+          "d": 0.75
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "shelfY": [
+          0.154,
+          1.818,
+          1.932
+        ],
+        "horizontalSurfaces": [
+          {
+            "y": 0.154,
+            "yTop": 0.165,
+            "yBottom": 0.15,
+            "areaM2": 0.0157
+          },
+          {
+            "y": 1.818,
+            "yTop": 1.84,
+            "yBottom": 1.8,
+            "areaM2": 0.2802
+          },
+          {
+            "y": 1.932,
+            "yTop": 1.94,
+            "yBottom": 1.895,
+            "areaM2": 0.0246
+          }
+        ],
+        "frontZ": 0.33,
+        "doorCentreRecessMedianM": 0.004,
+        "doorCentreRecessP90M": 0.007,
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters >= 5% of the largest within the central 80% x 70% of the footprint above 0.15 m (interior shelves only if modelled); door recess = front relief (1 cm cells) of the central door area vs the 95th-percentile front z.",
+        "paneFromProjection": {
+          "xMin": -0.308,
+          "xMax": 0.373,
+          "yMin": 0.126,
+          "yMax": 1.995
+        },
+        "visibleShelfLinesY": [
+          1.366,
+          1.056,
+          0.807,
+          0.553,
+          0.298
+        ],
+        "glassFromImage": {
+          "xMin": -0.295,
+          "xMax": 0.293,
+          "yMin": 0.269,
+          "yMax": 1.687
+        },
+        "shelfLinesMethod": "image-based: see shelfLinesFromImage (flat picture on the pane, not geometry)"
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 4500,
+          "resultTriangles": 4424,
+          "errorMeters": 0.012146,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1252
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.029884,
+          "stats": {
+            "matchedSameFacing": 1668043,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "pane-projection",
+          "paneZ": 0.325,
+          "lowFaces": 36,
+          "repaintedColorTexels": 8589,
+          "paneRect": {
+            "xMin": -0.308,
+            "xMax": 0.373,
+            "yMin": 0.126,
+            "yMax": 1.995
+          },
+          "imageAlphaBBox": [
+            407,
+            33,
+            847,
+            1221
+          ],
+          "conditioningImage": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopCooler/image/shopCooler-original.png",
+          "method": "Planar projection along Z of the straight-on conditioning image: image alpha>=128 bbox <-> output front-silhouette bbox (x, y); applied to low-poly texels of front-facing faces (normal.z > 0.85) within paneDepth of the pane plane (the dominant front-facing depth layer in the FRONT half, central 60% width x 30-80% height) whose baked colour is light; MR roughness ~0.18 / metal 0; flat normal. The products are a flat picture on the glass, not modelled depth."
+        },
+        {
+          "step": "recolour",
+          "classes": [
+            "side",
+            "back",
+            "top",
+            "interiorTop"
+          ],
+          "topFrac": 0.9,
+          "baseFrom": "darkPixels",
+          "yBand": null,
+          "flattenedNormalAndConstantMR": {
+            "orm": [
+              255,
+              165,
+              30
+            ],
+            "note": "painted steel: occlusion 1, roughness ~0.65, metal ~0.12; flat normal"
+          },
+          "baseRgb": [
+            42,
+            42,
+            42
+          ],
+          "baseLuminance": 42,
+          "darkImagePixels": 221986,
+          "lowFaces": 2280,
+          "recolouredTexels": 252390,
+          "keepLuminanceVariation": 0.2,
+          "method": "Low-poly texels of side (|n.x| > 0.8), back (n.z < -0.8) and top (n.y > 0.8 near the top) faces tinted to the mean colour of the dark opaque conditioning-image pixels (cabinet paint), keeping a mild luminance variation from the bake: out = base x (1 - keep/2 + keep x (clamp(lum, 0.6, 1) - 0.6) / 0.4) (the clamp stops dark gutter texels from drawing triangle edges). Also tints faces near the top that lie >15 cm behind the front (interiorTop: the open top showed the light interior). These faces were never seen by the straight-on view (SV inferred them)."
+        },
+        {
+          "step": "redilate",
+          "iterations": 8,
+          "coverage": [
+            {
+              "size": 1024,
+              "coveredTexels": 310064
+            },
+            {
+              "size": 512,
+              "coveredTexels": 75107
+            },
+            {
+              "size": 512,
+              "coveredTexels": 75107
+            }
+          ],
+          "method": "Coverage of all low-poly faces rasterised per texture (texel centres inside); lib/bake.mjs dilate() re-run from covered texels into uncovered gutter texels (8 iterations) so gutters follow the repainted colours."
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 996010 to 4424 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "SV reconstructed the glass door as an opaque light pane with only shelves and a few bottles behind it; the pane texels show the straight-on conditioning image projected along Z (pane-projection step): the drinks are a flat picture on closed glass, not modelled depth or loot. Shelf lines (visibleShelfLinesY) are measured on that image.",
+        "SV returned a box 2.38 m deep at the 2.0 m height fit with the door handle 0.375 m proud of the door: depth-band remap compressed the handle stand-off to 5 cm and the middle x0.31 to reach 0.75 m.",
+        "Sides, back and the open top were invented by SV as white panels/light interior: recoloured to the cabinet charcoal sampled from the conditioning image, with flat normals and constant painted-steel MR. A light sliver of the interior is still visible over the top edge from above."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/shop-display.glb",
+      "key": "shopDisplay",
+      "modelKey": "shopDisplay",
+      "displayName": "Countertop heated food display case",
+      "kind": "shop-component",
+      "bytes": 791612,
+      "sha256": "1322659e8de65cfdeac405ef0b6a5dee3cb5332099d6b81948c9ad28a7818f65",
+      "triangles": 4400,
+      "vertices": 7090,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 225733
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 104035
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 206339
+        }
+      },
+      "source": {
+        "asset": "shopDisplay",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopDisplay/native/asset.glb.xz",
+          "sha256": "d65cafc49af538ef0c0dc4134fe3a00f40b00b3d518ae9909ca7680c97d2b5d5",
+          "bytes": 64814656,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "d8223a8d55a50d613f126d0cb35455046ed8f2a2335132cfe719c4f0e8d09209",
+        "sha256Verified": true,
+        "bytes": 84553212,
+        "nativeJobId": "20261025T234821Z-b5f53c9ae50c4cc9abded487dce915c3",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopDisplay/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopDisplay/image/shopDisplay-original.png",
+          "sha256": "f53053d5c35a49422575ef1af54e910197b1330b4a95ccfb46c72726fac580f9",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31e4-7622-8d6b-c827ea98224c"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 923908,
+        "vertices": 679013,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0,
+          "up": [
+            0.000027,
+            0.998472,
+            -0.055261
+          ],
+          "front": [
+            -0.002312,
+            -0.055261,
+            -0.998469
+          ],
+          "right": [
+            -0.999997,
+            0.000154,
+            0.002307
+          ],
+          "tiltFromSourceYDeg": 3.1679,
+          "frontYawFromCameraDeg": -0.1327,
+          "axisScores": [
+            0.31932036046616186,
+            0.13017589786282072,
+            0.09834025792581844
+          ]
+        },
+        "R": [
+          [
+            -0.999997,
+            0.000154,
+            0.002307
+          ],
+          [
+            0.000027,
+            0.998472,
+            -0.055261
+          ],
+          [
+            -0.002312,
+            -0.055261,
+            -0.998469
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 1.2,
+              "d": 0.7,
+              "h": 0.65
+            },
+            "used": {
+              "w": 1.1,
+              "h": 0.7,
+              "d": 0.62
+            },
+            "reason": "Native proportions (w/h 1.58) give 0.76 m height at the manifest 1.2 m width, i.e. a 1.81 m top on the 1.05 m service counter (above eye level). Scaled uniformly (no vertical stretch) to a 1.1 m wide x 0.70 m tall countertop unit (common merchandiser sizes 0.6-1.2 m); depth fitted to 0.62 m so it sits on the 0.75 m deep counter."
+          },
+          "uniformScale": 1.338806,
+          "uniformDims": [
+            1.1,
+            0.698068,
+            1.064434
+          ],
+          "perAxisScale": [
+            1.338806,
+            1.342513,
+            0.779813
+          ],
+          "relativeFactors": [
+            1,
+            1.002768,
+            0.582469
+          ],
+          "contract": {
+            "w": 1.1,
+            "h": 0.7,
+            "d": 0.62
+          }
+        },
+        "translation": [
+          -0.002442,
+          0.332612,
+          0.061407
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (base / canopy / glass); front (+Z) = the glass front with the control knob (on the +X side) that faced the straight-on conditioning camera.",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1.2,
+          "d": 0.7,
+          "h": 0.65
+        },
+        "chosen": "width 1.1 m uniform, then bounded per-axis contract fit (relative factors 1.000 / 1.003 / 0.582 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.55,
+            0,
+            -0.31
+          ],
+          "max": [
+            0.55,
+            0.7,
+            0.31
+          ],
+          "size": [
+            1.1,
+            0.7,
+            0.62
+          ]
+        },
+        "measured": {
+          "w": 1.1,
+          "h": 0.7,
+          "d": 0.62
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "horizontalSurfaces": [
+          {
+            "y": 0.04,
+            "yTop": 0.04,
+            "yBottom": 0.04,
+            "areaM2": 0.458
+          },
+          {
+            "y": 0.212,
+            "yTop": 0.27,
+            "yBottom": 0.205,
+            "areaM2": 0.4127
+          },
+          {
+            "y": 0.427,
+            "yTop": 0.48,
+            "yBottom": 0.395,
+            "areaM2": 0.4328
+          },
+          {
+            "y": 0.643,
+            "yTop": 0.645,
+            "yBottom": 0.62,
+            "areaM2": 0.3591
+          },
+          {
+            "y": 0.69,
+            "yTop": 0.7,
+            "yBottom": 0.69,
+            "areaM2": 0.4554
+          }
+        ],
+        "innerLevelsY": [
+          0.04,
+          0.212,
+          0.427,
+          0.643
+        ],
+        "topY": 0.7,
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters >= 5% of the largest within the central 84% x 80% of the footprint (base deck, pan levels, canopy top).",
+        "paneFromProjection": {
+          "xMin": -0.547,
+          "xMax": 0.544,
+          "yMin": 0,
+          "yMax": 0.69
+        }
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 4500,
+          "resultTriangles": 4400,
+          "errorMeters": 0.007463,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1137
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.033447,
+          "stats": {
+            "matchedSameFacing": 1801777,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "pane-projection",
+          "paneZ": 0.265,
+          "lowFaces": 157,
+          "repaintedColorTexels": 17811,
+          "paneRect": {
+            "xMin": -0.547,
+            "xMax": 0.544,
+            "yMin": 0,
+            "yMax": 0.69
+          },
+          "imageAlphaBBox": [
+            25,
+            274,
+            1227,
+            1030
+          ],
+          "conditioningImage": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopDisplay/image/shopDisplay-original.png",
+          "method": "Planar projection along Z of the straight-on conditioning image: image alpha>=128 bbox <-> output front-silhouette bbox (x, y); applied to low-poly texels of front-facing faces (normal.z > 0.85) within paneDepth of the pane plane (the dominant front-facing depth layer in the FRONT half, central 60% width x 30-80% height) whose baked colour is light; MR roughness ~0.18 / metal 0; flat normal. The products are a flat picture on the glass, not modelled depth."
+        },
+        {
+          "step": "recolour",
+          "classes": [
+            "side",
+            "back"
+          ],
+          "topFrac": 0.97,
+          "baseFrom": "centralBox",
+          "yBand": [
+            0.27,
+            0.86
+          ],
+          "flattenedNormalAndConstantMR": {
+            "orm": [
+              255,
+              50,
+              0
+            ],
+            "note": "painted steel: occlusion 1, roughness ~0.65, metal ~0.12; flat normal"
+          },
+          "baseRgb": [
+            144,
+            126,
+            106
+          ],
+          "baseLuminance": 129,
+          "darkImagePixels": 200577,
+          "lowFaces": 1458,
+          "recolouredTexels": 87431,
+          "keepLuminanceVariation": 0.3,
+          "method": "Low-poly texels of side (|n.x| > 0.8), back (n.z < -0.8) and top (n.y > 0.8 near the top) faces tinted to the mean colour of the dark opaque conditioning-image pixels (cabinet paint), keeping a mild luminance variation from the bake: out = base x (1 - keep/2 + keep x (clamp(lum, 0.6, 1) - 0.6) / 0.4) (the clamp stops dark gutter texels from drawing triangle edges). Also tints faces near the top that lie >15 cm behind the front (interiorTop: the open top showed the light interior). These faces were never seen by the straight-on view (SV inferred them)."
+        },
+        {
+          "step": "redilate",
+          "iterations": 8,
+          "coverage": [
+            {
+              "size": 1024,
+              "coveredTexels": 312133
+            },
+            {
+              "size": 512,
+              "coveredTexels": 74905
+            },
+            {
+              "size": 512,
+              "coveredTexels": 74905
+            }
+          ],
+          "method": "Coverage of all low-poly faces rasterised per texture (texel centres inside); lib/bake.mjs dilate() re-run from covered texels into uncovered gutter texels (8 iterations) so gutters follow the repainted colours."
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 923908 to 4400 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "SV reconstructed the glass as opaque light panes with nothing behind the front: the front-plane texels show the straight-on conditioning image projected along Z (pane-projection step), so the lit pans and racks are a flat picture on closed glass. Side and back glass (never seen by the front view) are tinted to the mean interior colour of the image with flat normals; they are opaque.",
+        "Scaled to a 1.1 m countertop unit (see dimsOverride); depth fitted x0.58 vs uniform. Horizontal levels (innerLevelsY) come from the reconstructed geometry: lower deck ~0.21 m, upper rack ~0.43 m above the unit base (add the counter-top height when placed on shopCounter)."
+      ]
+    },
+    {
+      "output": "game/public/assets/models/shop-backbar.glb",
+      "key": "shopBackbar",
+      "modelKey": "shopBackbar",
+      "displayName": "Stainless back-counter kitchen equipment module",
+      "kind": "shop-component",
+      "bytes": 932160,
+      "sha256": "845b0f2a819166d9fc40f659a1867028981e3d1f058d9973d6bb0dc5429c26f6",
+      "triangles": 5172,
+      "vertices": 7773,
+      "textures": {
+        "baseColor": {
+          "size": [
+            1024,
+            1024
+          ],
+          "mime": "image/jpeg",
+          "bytes": 249332
+        },
+        "metallicRoughness": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/jpeg",
+          "bytes": 52542
+        },
+        "normal": {
+          "size": [
+            512,
+            512
+          ],
+          "mime": "image/png",
+          "bytes": 348293
+        }
+      },
+      "source": {
+        "asset": "shopBackbar",
+        "preservedMaster": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopBackbar/native/asset.glb.xz",
+          "sha256": "fa10e812ba83e18dd0f9396a4ce311b021c6cc2e4c7a0b9b2f513d5f164a9128",
+          "bytes": 61246168,
+          "format": "xz -6 (lossless)"
+        },
+        "sha256": "7795ac372f8483e5f3b150e16bc408075d2258a5798051ca3d9598de974107ec",
+        "sha256Verified": true,
+        "bytes": 80667568,
+        "nativeJobId": "20261025T232558Z-987026e2e8e5402bb4fc16c9577529d7",
+        "nativeReceipt": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopBackbar/native/receipt.json",
+        "generationMode": "local native F16 SV 1024, 24 steps/flow, seed 42, GSS 10, FoV 20 (straight-on input)",
+        "conditioningImage": {
+          "path": "reference/tasks/vertical-slice-iteration04-20261026/generation/shopBackbar/image/shopBackbar-original.png",
+          "sha256": "61dcc692cc0e4a9593efd6174d10a31d5cfb484808d4983d2c98bb38940efa3e",
+          "generator": "Codex native built-in image_gen (tools.image_gen__imagegen, Extension kind image_gen.generation)",
+          "generatorModel": "unknown; not reported",
+          "codexThreadId": "01a17552-31df-71a0-95c5-6cf33855a041"
+        },
+        "reviewStatus": "unapproved",
+        "gameReady": false,
+        "triangles": 997210,
+        "vertices": 665622,
+        "textures": {
+          "baseColor": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          },
+          "metallicRoughness": {
+            "mime": "image/png",
+            "width": 4096,
+            "height": 4096
+          }
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(perAxisScale) * R * p_source + translation (baked into vertices; node transform identity; normals use the inverse-transpose). R rows = output X,Y,Z axes in source coordinates.",
+        "levelFrame": {
+          "method": "box frame (area-weighted dominant planar face normals)",
+          "upRule": "box",
+          "frontRule": "camera-axis",
+          "yawRefineDeg": 0.2,
+          "up": [
+            0.000526,
+            0.987919,
+            -0.154968
+          ],
+          "front": [
+            0.00464,
+            -0.154969,
+            -0.987908
+          ],
+          "right": [
+            -0.999989,
+            -0.000199,
+            -0.004665
+          ],
+          "tiltFromSourceYDeg": 8.915,
+          "frontYawFromCameraDeg": 0.2691,
+          "axisScores": [
+            0.24051835775683592,
+            0.11655034756910415,
+            0.09167154619535073
+          ]
+        },
+        "R": [
+          [
+            -0.999989,
+            -0.000199,
+            -0.004665
+          ],
+          [
+            0.000526,
+            0.987919,
+            -0.154968
+          ],
+          [
+            0.00464,
+            -0.154969,
+            -0.987908
+          ]
+        ],
+        "determinant": 1,
+        "mirrored": false,
+        "fit": {
+          "mode": "contract-fit (per-axis toward the brief dims, clamped to x/y +-35%, z +-50% vs uniform)",
+          "bounds": {
+            "x": [
+              0.65,
+              1.35
+            ],
+            "y": [
+              0.65,
+              1.35
+            ],
+            "z": [
+              0.5,
+              1.5
+            ]
+          },
+          "dimsOverride": {
+            "manifestTarget": {
+              "w": 1.5,
+              "d": 0.65,
+              "h": 1.5
+            },
+            "used": {
+              "w": 1.77,
+              "h": 1.83,
+              "d": 0.7
+            },
+            "reason": "The native proportions put the worktop at 47% of the overall height: at the manifest 1.5 m overall the worktop measured 0.705 m, below the 0.86-0.91 m of real commercial worktops (and hidden behind the 1.05 m service counter). Scaled uniformly (no vertical stretch) so the worktop lands at ~0.86 m: a 1.77 m wide x 1.83 m tall module (commercial back counters come in 1.22/1.52/1.83 m widths); depth fitted to 0.70 m."
+          },
+          "uniformScale": 2.113616,
+          "uniformDims": [
+            1.771864,
+            1.83,
+            1.209328
+          ],
+          "perAxisScale": [
+            2.111392,
+            2.113616,
+            1.223433
+          ],
+          "relativeFactors": [
+            0.998948,
+            1,
+            0.578834
+          ],
+          "contract": {
+            "w": 1.77,
+            "h": 1.83,
+            "d": 0.7
+          }
+        },
+        "translation": [
+          -0.004585,
+          0.88075,
+          0.083206
+        ],
+        "orientationEvidence": "Levelled via the dominant box-face frame (cabinet doors / worktop / overshelf); front (+Z) = the door/drawer face that faced the straight-on conditioning camera (griddle on -X, fryer on +X).",
+        "origin": "bottom centre (y=0 floor contact; x/z bbox centre)"
+      },
+      "dimensionsMeters": {
+        "provisional": true,
+        "contract": {
+          "w": 1.5,
+          "d": 0.65,
+          "h": 1.5
+        },
+        "chosen": "height 1.83 m uniform, then bounded per-axis contract fit (relative factors 0.999 / 1.000 / 0.579 for x/y/z)",
+        "bbox": {
+          "min": [
+            -0.885,
+            0,
+            -0.35
+          ],
+          "max": [
+            0.885,
+            1.83,
+            0.35
+          ],
+          "size": [
+            1.77,
+            1.83,
+            0.7
+          ]
+        },
+        "measured": {
+          "w": 1.77,
+          "h": 1.83,
+          "d": 0.7
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "front": "+Z",
+        "up": "+Y",
+        "origin": "bottom-center"
+      },
+      "measurements": {
+        "worktopY": 0.863,
+        "worktop": {
+          "y": 0.863,
+          "yTop": 0.89,
+          "yBottom": 0.835,
+          "areaM2": 0.9919
+        },
+        "equipmentTopsY": [
+          0.927,
+          1.077
+        ],
+        "overshelfY": 1.622,
+        "overshelf": {
+          "y": 1.622,
+          "yTop": 1.63,
+          "yBottom": 1.62,
+          "areaM2": 0.3238
+        },
+        "horizontalSurfaces": [
+          {
+            "y": 0.142,
+            "yTop": 0.155,
+            "yBottom": 0.13,
+            "areaM2": 0.9268
+          },
+          {
+            "y": 0.863,
+            "yTop": 0.89,
+            "yBottom": 0.835,
+            "areaM2": 0.9919
+          },
+          {
+            "y": 0.927,
+            "yTop": 0.975,
+            "yBottom": 0.9,
+            "areaM2": 1.3529
+          },
+          {
+            "y": 1.077,
+            "yTop": 1.2,
+            "yBottom": 1.02,
+            "areaM2": 0.9048
+          },
+          {
+            "y": 1.622,
+            "yTop": 1.63,
+            "yBottom": 1.62,
+            "areaM2": 0.3238
+          },
+          {
+            "y": 1.665,
+            "yTop": 1.68,
+            "yBottom": 1.645,
+            "areaM2": 0.3286
+          }
+        ],
+        "method": "Horizontal (normal.y > 0.9) dense-face clusters (5 mm bins, adjacent bins merged) >= 3% of the largest within the central 94% x 94% of the footprint; worktop = LOWEST cluster >= 0.3 m2 between 0.6 and 1.15 m (partly covered by the griddle/fryer, whose plate/basket tops are the equipmentTopsY clusters just above it); overshelf = lowest cluster >= 0.1 m2 above 1.2 m (pans sit on it)."
+      },
+      "pipeline": [
+        {
+          "step": "verify-source",
+          "detail": "sha256 of the uncompressed working copy == native controller receipt (== native metadata output sha256); the preserved master is the lossless asset.glb.xz in the generation folder; conditioning image = straight-on front elevation (user rule, iteration04)"
+        },
+        {
+          "step": "level+orient",
+          "detail": "box frame (area-weighted dominant planar face normals); up rule box, front rule camera-axis (see orientationEvidence); uniform scale + bottom-centre origin baked into vertices"
+        },
+        {
+          "step": "simplify",
+          "tool": "meshoptimizer (Permissive, weld by position)",
+          "targetTriangles": 5200,
+          "resultTriangles": 5172,
+          "errorMeters": 0.006769,
+          "errorNote": "approximate (uniform-fit scale)"
+        },
+        {
+          "step": "unwrap",
+          "tool": "lib/unwrap.mjs",
+          "atlas": 1024,
+          "charts": 1070
+        },
+        {
+          "step": "bake",
+          "tool": "lib/bake.mjs (closest same-facing dense surface; colour, metallic-roughness, tangent normal)",
+          "supersample": 2,
+          "mrDiv": 2,
+          "normalDiv": 2,
+          "searchRadiusSourceUnits": 0.02,
+          "stats": {
+            "matchedSameFacing": 2158309,
+            "matchedFallbackAnyFacing": 0,
+            "unmatched": 0
+          }
+        },
+        {
+          "step": "encode",
+          "detail": "baseColor JPEG, metallicRoughness JPEG, normal PNG; plain glTF 2.0 binary, no extensions"
+        }
+      ],
+      "limitations": [
+        "Single-view AI reconstruction: back/underside/hidden surfaces and texture are inferred, not designed.",
+        "Simplified from 997210 to 5172 triangles; thin parts lose geometric detail; fine relief approximated by the baked normal map.",
+        "Provisional real-world scale chosen by this pipeline (uniform fit on one axis plus a bounded per-axis fit to the brief dims; a straight-on single view carries no direct depth cue, so depth is the least reliable axis), not measured or approved.",
+        "Prototype derivative: unapproved, gameReady false; no commercial/model license clearance asserted. Labels are fictional AI designs.",
+        "Reconstruction was tilted ~9 deg toward the camera in source space (levelled by the box frame). Depth fitted x0.58 relative to the uniform fit (single front view, no depth cue): griddle/fryer/overshelf are proportionally shallower.",
+        "Back and sides inferred (plain stainless back with a raised upstand); thin overshelf posts and fryer basket handles are coarse at ~5.2k triangles. Pans on the overshelf and the fryer baskets are fixed geometry (not loot)."
+      ]
+    }
+  ],
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration04-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public."
+}

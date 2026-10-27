@@ -1,0 +1,39 @@
+# Reproducible builds, installed dependencies, caches and generated QA output.
+node_modules/
+dist/
+coverage/
+qa-artifacts/
+.cache/
+.vite/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.tsbuildinfo
+
+# Local logs, temporary files and independent backup archives.
+logs/
+tmp/
+*.log
+*.tmp
+backups/
+core.[0-9]*
+.DS_Store
+Thumbs.db
+
+# Local settings / credentials (never source assets).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+.claude/settings.json
+.claude/settings.local.json
+.codex/
+.npm/
+.ssh/
+
+# Models, audio, textures and their provenance are SOURCE INPUTS.
+# Do not add blanket *.glb, *.blend, *.fbx, *.zip or art/generated/ ignores.
+# In particular, keep every file under game/public/assets/ tracked.

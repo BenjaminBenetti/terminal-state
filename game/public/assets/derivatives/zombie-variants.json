@@ -1,0 +1,6 @@
+{
+  "schema": "the-last-line/zombie-variants@1",
+  "superseded": true,
+  "note": "Iteration-05 body x outfit summary superseded in iteration 06 by the slot wardrobe: see zombie-wardrobe.json (same runtime files, rebuilt by build-wardrobe.mjs). The iteration-05 record is preserved in the pre-iteration-06 backup and reference/tasks/vertical-slice-iteration05-20261026.",
+  "see": "zombie-wardrobe.json"
+}
