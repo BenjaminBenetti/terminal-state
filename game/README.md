@@ -166,6 +166,18 @@ station" (same seed, this session only).
 - `?qa=1` — **test automation only**: exposes read-only `window.__LL` state + a camera aim helper
   and lets the game run without pointer lock (automated browsers cannot grant it). It does not
   change health, ammo or AI.
+- `?devpistol=1` (also `?qa=1&devpistol=1`) — **dev-only pistol test mode**: start with the pistol
+  (15 + 45 × 9 mm) drawn with an internal box placeholder (`pistol-dev-placeholder`, a dull flat
+  material — NOT the real pistol model or final art), so the pistol flow can be browser-tested before
+  its model exists; the rifle and shotgun become map finds. `__LL.weaponFinds()` lists the station's
+  weapon pickups (position, level, spawn distance). Normal play keeps the rifle start until
+  `PISTOL_ART_READY` (`src/weapons/pistol.ts`) is set true with the real `pistol.glb` in the manifest.
+- Weapon finds: the guaranteed spawn-side shotgun is gone. Weapons you do not start with are seeded
+  map finds (0-2 copies each, ~95 % of stations have at least one) in back-of-house rooms or platform-end
+  work zones on any storey, ≥ 25 m from the spawn, each with matching ammo (`src/gen/weaponFinds.ts`).
+- Pistol audio: the pistol shot is the existing Sound Lab rifle-shot clips (`assets/audio/rifle-shot-*.mp3`)
+  replayed at a higher playback rate and slightly lower gain; its reload/dry cues reuse the rifle magazine
+  and dry-fire Sound Lab clips. It is a reused, pitched rifle cue, not a dedicated pistol recording.
 
 ## Layout
 `src/gen` deterministic generator + grid/A*/LOS (pure, unit-tested) · `src/world` mesh building,

@@ -237,6 +237,8 @@ export interface StationLayout {
    * IS `grid`; upper / lower levels have grids of the same size and origin (gen/levelGen.ts).
    */
   levels: Level[];
+  /** Pistol lane: starting weapon the station was generated for (its other weapons are seeded finds); default 'rifle'. */
+  startWeapon?: 'rifle' | 'pistol';
   /** Stair runs (and ladders) between levels. */
   levelLinks: LevelLink[];
   /** Railings on walkable edges that face a drop on the upper level (light wells). */

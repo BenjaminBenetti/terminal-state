@@ -25,6 +25,7 @@ import {Inventory, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, type WeaponDef} from './weapons/weapons';
 import {Viewmodel} from './weapons/viewmodel';
+import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
 import {ConsumeView} from './weapons/consumeView';
 import {buildItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
@@ -67,6 +68,10 @@ export class Game {
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
   readonly propModels = new PropModelLibrary(P7_FILES);
   private prepared: {seed: number; layout: StationLayout} | null = null;
+  /** Pistol lane: `?devpistol=1` starts with the pistol (dev placeholder model) before its real art exists. */
+  readonly devPistol = devPistolRequested();
+  /** Starting weapon: the pistol once PISTOL_ART_READY (or in devpistol mode), else the rifle. Generation receives it. */
+  readonly startWeapon: StartWeapon = startWeaponFor(this.devPistol);
   mats!: WorldMaterials;
   viewmodel!: Viewmodel;
   layout!: StationLayout;
@@ -188,12 +193,16 @@ export class Game {
       o.traverse(x => { const mm = x as THREE.Mesh; if (mm.isMesh) mm.frustumCulled = false; });
       consumables[id] = o;
     }
-    this.viewmodel = new Viewmodel({rifle: m.rifle, shotgun: m.shotgun}, consumables);
+    // Pistol lane: the real pistol.glb once PISTOL_ART_READY; the internal dev placeholder only with ?devpistol=1; else none.
+    const pistolGltf = PISTOL_ART_READY ? (m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>).pistol
+      : this.devPistol ? ({scene: makePistolDevPlaceholder()} as unknown as import('three/addons/loaders/GLTFLoader.js').GLTF) : undefined;
+    const guns = {rifle: m.rifle, shotgun: m.shotgun, ...(pistolGltf ? {pistol: pistolGltf} : {})};
+    this.viewmodel = new Viewmodel(guns, consumables);
     // Lane D (iteration 04): eat/drink/apply with the real item model in hand, and inventory icons
     // rendered once from the runtime models through this renderer (ui/itemIcons.ts).
     this.consumeView = new ConsumeView(this.viewmodel, makeSupplyMesh);
-    await buildItemIcons(this.renderer, {rifle: m.rifle, shotgun: m.shotgun});
-    this.pickups = new PickupManager({rifle: m.rifle, shotgun: m.shotgun});
+    await buildItemIcons(this.renderer, guns); // a pistol without a model keeps its SVG icon (ui/icons.ts)
+    this.pickups = new PickupManager(guns);
     this.scene.add(this.pickups.group);
     this.resize();
   }
@@ -207,7 +216,7 @@ export class Game {
    * revealed (newStation reuses this layout). Cached models resolve at once; a model that fails is dropped from the station, never boxed.
    */
   async prepareStation(seed: number, onProgress?: (frac: number, label: string) => void): Promise<void> {
-    const layout = generateStation(seed >>> 0);
+    const layout = generateStation(seed >>> 0, {startWeapon: this.startWeapon});
     await this.propModels.ensure(p7ModelKeysFor(layout), onProgress);
     this.prepared = {seed: seed >>> 0, layout};
   }
@@ -237,7 +246,7 @@ export class Game {
 
     const t0 = performance.now();
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
-    this.layout = this.prepared?.seed === (seed >>> 0) ? this.prepared.layout : generateStation(seed);
+    this.layout = this.prepared?.seed === (seed >>> 0) ? this.prepared.layout : generateStation(seed, {startWeapon: this.startWeapon});
     this.prepared = null;
     const p7Keys = p7ModelKeysFor(this.layout);
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
@@ -305,9 +314,11 @@ export class Game {
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
 
     this.inv = new Inventory();
-    this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('rifle', 1, 30));
+    // Pistol lane: start with the pistol (15 + 45 x 9 mm) once its art is ready / in devpistol mode, else the rifle as before.
+    if (this.startWeapon === 'pistol') this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('pistol', 1, WEAPONS.pistol.magazine));
+    else this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('rifle', 1, 30));
     this.inv.set({bar: 'hotbar', index: 4}, this.inv.makeStack('bandage', 1));
-    this.inv.add(this.inv.makeStack('ammo_rifle', 60));
+    this.inv.add(this.startWeapon === 'pistol' ? this.inv.makeStack('ammo_pistol', 45) : this.inv.makeStack('ammo_rifle', 60));
     this.inv.select(0);
     this.lastSlot = 0;
     this.weapon = new WeaponController();

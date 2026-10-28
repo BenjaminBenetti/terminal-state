@@ -230,7 +230,7 @@ export const ALL_PROP_KINDS = Object.keys(PROP_DEFS) as PropKind[];
 // Loose items / loot lots (never destroyed: knocked about only)
 
 export const ITEM_CLASS: Record<string, DamageClass> = {
-  rifle: 'steel', shotgun: 'steel', ammo_rifle: 'cardboard', ammo_shells: 'cardboard', medkit: 'plastic', bandage: 'fabric',
+  rifle: 'steel', shotgun: 'steel', pistol: 'steel', ammo_rifle: 'cardboard', ammo_shells: 'cardboard', ammo_pistol: 'cardboard', medkit: 'plastic', bandage: 'fabric',
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
 };
 export function itemClass(itemId: string): DamageClass {
@@ -263,9 +263,9 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   cola: {mass: 0.37, shape: 'cylinder', mat: 'metal'}, beans: {mass: 0.45, shape: 'cylinder', mat: 'metal'},
   water: {mass: 0.55, shape: 'cylinder', mat: 'plastic'}, noodles: {mass: 0.09, shape: 'cylinder', mat: 'soft'},
   juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
-  ammo_rifle: {mass: 0.62, shape: 'box', mat: 'soft'}, ammo_shells: {mass: 0.7, shape: 'box', mat: 'soft'},
+  ammo_rifle: {mass: 0.62, shape: 'box', mat: 'soft'}, ammo_shells: {mass: 0.7, shape: 'box', mat: 'soft'}, ammo_pistol: {mass: 0.5, shape: 'box', mat: 'soft'},
   medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
-  rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'},
+  rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

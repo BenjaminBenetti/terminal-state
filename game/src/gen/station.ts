@@ -23,6 +23,7 @@ import {
   type Archetype, type Area, type AreaKind, type Rect, type RoomType, type Side, type StationLayout,
 } from './stationTypes';
 import {applyLighting, clearAround, dress, placeSpawns} from './stationDress';
+import {FIND_MAX_PER_WEAPON, FIND_MIN_SPAWN_M, findWeaponsFor, placeWeaponFinds, type StartWeaponId} from './weaponFinds';
 import {finishTraversal, placeLadders, shiftFlight, shiftRamp, traversalIssues} from './traversal';
 import {doorwayIssues} from './doorways';
 import {assignEnemyArchetypes} from '../ai/creatureSpawn';
@@ -51,16 +52,18 @@ export function pickArchetype(seed: number): Archetype {
   return new Rng(hashString('archetype', seed >>> 0)).weighted(ARCH_WEIGHTS);
 }
 
-export function generateStation(seed: number, opts: {archetype?: Archetype} = {}): StationLayout {
+/** Pistol lane: `startWeapon` (default 'rifle') decides which weapons are seeded map finds; deterministic per seed for a given option. */
+export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId} = {}): StationLayout {
   const arch = opts.archetype ?? pickArchetype(seed);
+  const sw = opts.startWeapon ?? 'rifle';
   for (let attempt = 0; attempt < 24; attempt++) {
     const s = attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed);
-    const layout = tryGenerate(s, seed >>> 0, attempt, arch);
+    const layout = tryGenerate(s, seed >>> 0, attempt, arch, sw);
     if (layout && validateLayout(layout).length === 0) return layout;
   }
   // Extremely unlikely; fall back to a deterministic layout even with warnings.
   for (let attempt = 24; attempt < 60; attempt++) {
-    const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine');
+    const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine', sw);
     if (layout) return layout;
   }
   throw new Error('station generation failed');
@@ -71,11 +74,11 @@ export function generateStation(seed: number, opts: {archetype?: Archetype} = {}
  * no validation retry — tests use it to catch issues (e.g. decor in doorways) that a retry would
  * otherwise hide by silently picking another layout.
  */
-export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed)): StationLayout | null {
-  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch);
+export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed), startWeapon: StartWeaponId = 'rifle'): StationLayout | null {
+  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch, startWeapon);
 }
 
-function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype): StationLayout | null {
+function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype, startWeapon: StartWeaponId = 'rifle'): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng);
   const {areas, doors, wing} = k;
@@ -371,6 +374,9 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   placeSpawns(layout, rng.fork('spawns'));
   // Lane A: a weighted share of the zombies / loose supplies onto the upper and lower levels (totals kept).
   placeLevelSpawns(layout, rng.fork('levelSpawns'));
+  // Pistol lane: the non-starting weapons (+ matching ammo) as seeded map finds, away from the spawn, on any storey.
+  layout.startWeapon = startWeapon;
+  placeWeaponFinds(layout, rng.fork('weaponFinds'), startWeapon);
   // After spawns so fixtures around the player spawn can be guaranteed working.
   applyLighting(layout, rng.fork('lighting'));
   // Lane A: the service level stays dark-moody but readable — sparse working dim lamps (crossing, gallery, stair feet, plant-room doors).
@@ -422,7 +428,18 @@ export function validateLayout(layout: StationLayout): string[] {
     const [x, y] = pg.cellOf(p.x, p.z);
     if (pd[pg.idx(x, y)] < 0) issues.push(`pickup ${p.itemId} unreachable`);
   }
-  if (!layout.pickups.some(p => p.itemId === 'shotgun')) issues.push('no shotgun pickup');
+  // Pistol lane: the start weapon never lies in the station; each find weapon at most FIND_MAX_PER_WEAPON copies,
+  // each >= FIND_MIN_SPAWN_M (straight line) from the spawn (reachability is checked above). Zero copies is allowed.
+  {
+    const start = layout.startWeapon ?? 'rifle', sp = layout.playerSpawn;
+    if (layout.pickups.some(p => p.itemId === start)) issues.push(`start weapon ${start} placed as a pickup`);
+    if (start !== 'pistol' && layout.pickups.some(p => p.itemId === 'pistol')) issues.push('pistol pickup without the pistol start');
+    for (const w of findWeaponsFor(start)) {
+      const ws = layout.pickups.filter(p => p.itemId === w);
+      if (ws.length > FIND_MAX_PER_WEAPON) issues.push(`too many ${w} pickups: ${ws.length}`);
+      for (const p of ws) if (Math.hypot(p.x - sp.x, p.z - sp.z) < FIND_MIN_SPAWN_M - 1e-6) issues.push(`${w} pickup too close to the spawn`);
+    }
+  }
   const plat = layout.areas[layout.platform];
   if (plat.w * CELL < 94) issues.push(`platform too short: ${plat.w * CELL} m`);
   for (const t of ['concourse', 'fare-hall', 'food-court', 'washroom', 'stock-room', 'storage', 'crew-room', 'utility', 'agent-office'] as const) {

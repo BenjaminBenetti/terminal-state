@@ -35,7 +35,7 @@ export interface WeaponDef {
   moveMult: number;
   /** Loudness radius (m) for alerting zombies. */
   noise: number;
-  sound: 'rifle' | 'shotgun';
+  sound: 'rifle' | 'shotgun' | 'pistol';
   /**
    * Viewmodel placement in camera space, pivoting at the model's Grip marker. Aim offsets come
    * from measured derivative geometry: shotgun rib ~0.07 m above the stock wrist (iron sights).
@@ -47,7 +47,7 @@ export interface WeaponDef {
    * `eyeRelief` behind the rear glass (weapons/optic.ts). `aim` stays the fallback for a model
    * without one (the original opaque rifle.glb: optic top ~0.28 m above the grip, sight over it).
    */
-  view: {model: 'rifle' | 'shotgun'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec};
+  view: {model: 'rifle' | 'shotgun' | 'pistol'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec};
 }
 
 export const WEAPONS: Record<string, WeaponDef> = {
@@ -68,6 +68,17 @@ export const WEAPONS: Record<string, WeaponDef> = {
     recoil: {pitch: 0.06, yaw: 0.015, kick: 0.09, recover: 6},
     equipTime: 0.6, aimFov: 60, moveMult: 0.92, noise: 38, sound: 'shotgun',
     view: {model: 'shotgun', hip: [0.235, -0.27, -0.66], aim: [0.0, -0.095, -0.45], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 1.0},
+  },
+  // Targeted pass 2026-10-28 (pistol lane): compact semi-auto sidearm, 9 mm (ammo_pistol). Starting weapon once
+  // its real model is in (weapons/pistol.ts PISTOL_ART_READY); view offsets suit a short pistol held out in front.
+  pistol: {
+    id: 'pistol', itemId: 'pistol', ammoItem: 'ammo_pistol', magazine: 15, auto: false, interval: 0.16,
+    damage: 17, pellets: 1, spreadHip: 0.022, spreadAim: 0.006, spreadMove: 0.025,
+    range: 60, falloffStart: 22, falloffMin: 0.6, headMult: 2.4, limbMult: 0.7, knockback: 0.18,
+    reload: {kind: 'magazine', time: 1.4, emptyTime: 1.65},
+    recoil: {pitch: 0.016, yaw: 0.005, kick: 0.03, recover: 11},
+    equipTime: 0.35, aimFov: 58, moveMult: 1.0, noise: 24, sound: 'pistol',
+    view: {model: 'pistol', hip: [0.17, -0.2, -0.42], aim: [0.0, -0.08, -0.36], hipYaw: 0.08, hipPitch: 0.03, hipRoll: -0.04, length: 0.2},
   },
 };
 

@@ -401,6 +401,16 @@ export function installQaHooks(game: Game): void {
      * DEBUG ONLY (exception to the read-only rule above, for the ragdoll browser check): kill the
      * nearest living zombie as if shot from the player, with the rifle/shotgun kill impulse.
      */
+    /** Pistol lane: weapon finds of this station (generated placements + live world pickups) with level and spawn distance. */
+    weaponFinds: () => {
+      const sp = game.layout.playerSpawn, isGun = (id: string) => itemDef(id).kind === 'weapon';
+      return {
+        startWeapon: game.startWeapon, devPistol: game.devPistol,
+        generated: game.layout.pickups.filter(p => isGun(p.itemId)).map(p => ({itemId: p.itemId, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), level: p.level ?? 0, area: p.area,
+          purpose: game.layout.areas[p.area]?.purpose ?? game.layout.areas[p.area]?.type, spawnDist: +Math.hypot(p.x - sp.x, p.z - sp.z).toFixed(1)})),
+        live: game.pickups.list.filter(p => isGun(p.stack.itemId)).map(p => ({itemId: p.stack.itemId, mag: p.stack.mag, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), spawnDist: +Math.hypot(p.x - sp.x, p.z - sp.z).toFixed(1)})),
+      };
+    },
     qaKillNearest: (weapon: 'rifle' | 'shotgun' = 'rifle') => {
       const p = game.player;
       const z = game.zombies.filter(q => q.brain.alive).sort((a, b) => Math.hypot(a.brain.x - p.x, a.brain.z - p.z) - Math.hypot(b.brain.x - p.x, b.brain.z - p.z))[0];

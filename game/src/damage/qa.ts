@@ -100,7 +100,7 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
      * ray through the real damage pipeline — no ammo spent, no zombie HP change (wounds / debris /
      * craters / prop integrity only). weapon 'shotgun' = one pellet's damage.
      */
-    qaDamageShot: (weapon: 'rifle' | 'shotgun' = 'rifle') => {
+    qaDamageShot: (weapon: 'rifle' | 'shotgun' | 'pistol' = 'rifle') => {
       game.camera.updateMatrixWorld(true);
       const origin = game.camera.getWorldPosition(new THREE.Vector3());
       const dir = game.camera.getWorldDirection(new THREE.Vector3());
@@ -116,7 +116,7 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       if (corpse) { bestT = corpse.t; bz = null; }
       game.damage.beginShot();
       const end = origin.clone().addScaledVector(dir, bestT);
-      const shot = {damage: weapon === 'shotgun' ? 15 : 24, pellet: weapon === 'shotgun', weapon};
+      const shot = {damage: weapon === 'shotgun' ? 15 : weapon === 'pistol' ? 17 : 24, pellet: weapon === 'shotgun', weapon};
       // Iteration 07 (Lane K): items / lots / light props on the line take the impulse (same call as Game.fire)
       const moved = game.damage.knockPickups(o, d, bestT, wh, shot);
       const info = bz ? game.damage.hitZombie(bz, end, dir, part, shot) : corpse ? game.damage.hitZombie(corpse.z, end, dir, corpse.part, shot, true)

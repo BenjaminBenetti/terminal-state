@@ -67,12 +67,14 @@ export class Viewmodel {
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpV = new THREE.Vector3();
 
-  constructor(models: {rifle: GLTF; shotgun: GLTF}, consumables: Record<string, THREE.Object3D>) {
+  /** Pistol lane: `pistol` is optional (no model until PISTOL_ART_READY; `?devpistol=1` passes the dev placeholder). A gun without a model is simply not shown. */
+  constructor(models: {rifle: GLTF; shotgun: GLTF; pistol?: Pick<GLTF, 'scene'>}, consumables: Record<string, THREE.Object3D>) {
     this.scene.add(this.hemi, this.key, this.camera, this.flashLight);
     this.key.position.set(-1, 2, 1);
     this.camera.add(this.pivot);
-    for (const [id, gltf] of Object.entries(models)) {
+    for (const [id, gltf] of Object.entries(models) as [string, Pick<GLTF, 'scene'> | undefined][]) {
       const def = WEAPONS[id];
+      if (!gltf || !def) continue;
       const root = gltf.scene.clone(true);
       root.updateMatrixWorld(true);
       const grip = root.getObjectByName('Grip');

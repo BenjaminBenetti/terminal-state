@@ -539,6 +539,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   group.updateMatrixWorld(true);
   let triangles = 0, meshes = 0;
   group.traverse(o => {
+    // Perf (iteration 09): the station shell never moves (instance matrices / instanceColor / layers / geometry
+    // carry every runtime change), so its world matrices are final here: no per-frame compose + force-propagated
+    // multiply over ~740 objects in every renderer.render scene.updateMatrixWorld().
+    o.matrixAutoUpdate = false;
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     meshes++;

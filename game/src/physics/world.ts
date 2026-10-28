@@ -52,6 +52,9 @@ export const SHELL_EJECT_DELAY = 0.46; // end of the pump back-stroke (Sfx.shot 
 export const EJECTION_PORTS: Record<string, {pos: THREE.Vector3; dir: THREE.Vector3; kind: CasingKind}> = {
   rifle: {pos: new THREE.Vector3(0.0294, 0.1217, -0.1085), dir: new THREE.Vector3(1, 0.55, 0.22).normalize(), kind: 'rifle'},
   shotgun: {pos: new THREE.Vector3(0.0269, 0.0131, -0.1275), dir: new THREE.Vector3(1, 0.5, 0.12).normalize(), kind: 'shell'},
+  // Pistol lane: slide port right of the slide (dev placeholder geometry; re-measure on the real pistol.glb). Reuses the
+  // rifle brass casing kind (same pooled mesh; a 9 mm case is smaller, but a separate mesh is not worth a pool).
+  pistol: {pos: new THREE.Vector3(0.016, 0.058, -0.045), dir: new THREE.Vector3(1, 0.7, 0.15).normalize(), kind: 'rifle'},
 };
 
 /** Killing-shot impulse (N·s). Rifle ~38; shotgun 22 + 85 x pellet fraction (full hit ~107). */

@@ -183,6 +183,20 @@ type BucketName = keyof typeof BUCKETS;
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
+/** Weapon sound kinds (WeaponDef.sound). */
+export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
+
+/**
+ * Shot cue per weapon kind. 'pistol' (pistol lane, 2026-10-28) is NOT a dedicated pistol recording: it REUSES the
+ * existing Sound Lab rifle-shot clips (assets/audio/rifle-shot-*.mp3) pitched up (playback rate x1.28) at a
+ * slightly lower gain. No new audio was generated; its reload/dry cues likewise reuse the rifle/dry Sound Lab clips.
+ */
+export const WEAPON_SHOT_CUES: Record<WeaponSoundKind, {cue: CueId; rate: number; gain: number; reused?: string}> = {
+  rifle: {cue: 'rifleShot', rate: 1, gain: 1},
+  shotgun: {cue: 'shotgunShot', rate: 1, gain: 1},
+  pistol: {cue: 'rifleShot', rate: 1.28, gain: 0.78, reused: 'Sound Lab rifle-shot clips, pitched (not a dedicated pistol recording)'},
+};
+
 export class Sfx {
   /** AudioContexts ever created by any Sfx (QA: must stay 1 per page). */
   static contextsCreated = 0;
@@ -774,26 +788,26 @@ export class Sfx {
   // ---------------------------------------------------------------------------------------
   // Weapons (player-local)
 
-  shot(kind: 'rifle' | 'shotgun'): void {
+  shot(kind: WeaponSoundKind): void {
     const v = this.voice({send: 1, pri: 2});
     if (!v) return;
-    const big = kind === 'shotgun', cue: CueId = big ? 'shotgunShot' : 'rifleShot';
+    const big = kind === 'shotgun', map = WEAPON_SHOT_CUES[kind] ?? WEAPON_SHOT_CUES.rifle, cue: CueId = map.cue;
     const clip = this.bank.pick(cue);
     if (clip) {
-      const rate = rnd(0.97, 1.03);
-      this.playClip(v, cue, clip, {rate, jitter: 0});
+      const rate = rnd(0.97, 1.03) * map.rate;
+      this.playClip(v, cue, clip, {rate, jitter: 0, gain: map.gain});
       // discrete slap-back from far walls in long/big spaces: delayed, darkened copies of the same take
       const room = ROOMS[this.roomKind];
       for (let i = 0; i < room.slaps; i++) {
-        this.playClip(v, cue, clip, {rate, jitter: 0, gain: (big ? 0.16 : 0.12) / (i + 1), gainJitter: 0, delay: room.slap * (i + 1) * rnd(0.9, 1.1), filter: {type: 'lowpass', freq: 1100}});
+        this.playClip(v, cue, clip, {rate, jitter: 0, gain: (big ? 0.16 : 0.12) * map.gain / (i + 1), gainJitter: 0, delay: room.slap * (i + 1) * rnd(0.9, 1.1), filter: {type: 'lowpass', freq: 1100}});
       }
     }
-    this.duck(big ? 0.4 : 0.6);
+    this.duck(big ? 0.4 : kind === 'pistol' ? 0.7 : 0.6);
     if (big) this.pump(0.42);
   }
   /** Dry-fire hammer click. */
-  dry(kind: 'rifle' | 'shotgun' = 'rifle'): void {
-    this.play(this.voice({send: 0.15}), 'dryFire', {rate: kind === 'shotgun' ? 0.85 : 1});
+  dry(kind: WeaponSoundKind = 'rifle'): void {
+    this.play(this.voice({send: 0.15}), 'dryFire', {rate: kind === 'shotgun' ? 0.85 : kind === 'pistol' ? 1.12 : 1});
   }
   /** Small switch click (flashlight); pitch nudges the playback rate. */
   click(pitch = 1): void {
@@ -805,12 +819,18 @@ export class Sfx {
     if (!v) return;
     for (const s of v.srcs) { try { s.stop(); } catch { /* already stopped */ } }
   }
-  reloadStart(kind: 'rifle' | 'shotgun', empty = false): void {
+  reloadStart(kind: WeaponSoundKind, empty = false): void {
     this.stopReload();
     this.lastReloadEmpty = empty;
     const v = this.voice({send: 0.15, pri: 1});
     this.reloadVoice = v;
-    if (kind === 'rifle') {
+    if (kind === 'pistol') {
+      // Pistol lane: the existing Sound Lab rifle magazine cues, pitched up and timed to the 1.4 s / 1.65 s reload.
+      const T = empty ? 1.65 : 1.4;
+      this.play(v, 'rifleMagOut', {delay: 0.04, rate: 1.25, gain: 0.85});
+      if (empty) this.play(v, 'rifleMagDrop', {delay: 0.42, gain: 0.6, rate: 1.3});
+      this.play(v, 'rifleMagIn', {delay: T * 0.5, rate: 1.25, gain: 0.85});
+    } else if (kind === 'rifle') {
       const T = empty ? 2.55 : 2.1;
       this.play(v, 'rifleMagOut', {delay: 0.05});
       if (empty) this.play(v, 'rifleMagDrop', {delay: 0.62, gain: 0.8}); // spent mag hits the floor
@@ -819,11 +839,11 @@ export class Sfx {
       this.play(v, 'equip', {gain: 0.7, rate: 1.05});
     }
   }
-  reloadEnd(kind: 'rifle' | 'shotgun'): void {
+  reloadEnd(kind: WeaponSoundKind): void {
     this.reloadVoice = null;
     if (kind === 'shotgun') { this.pump(); return; }
     const v = this.voice({send: 0.2});
-    if (this.lastReloadEmpty) this.play(v, 'rifleCharge'); // charging handle: pull, release slam
+    if (this.lastReloadEmpty) this.play(v, 'rifleCharge', kind === 'pistol' ? {rate: 1.35, gain: 0.8} : {}); // charging handle / slide release
     else this.play(v, 'dryFire', {gain: 0.6, rate: 1.15}); // small seat/tap click
   }
   shellIn(): void {

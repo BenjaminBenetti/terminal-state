@@ -252,16 +252,20 @@ describe('station generator', () => {
     for (const k of ['lit', 'dim', 'dark'] as const) expect(seen[k]).toBeGreaterThan(8);
   });
 
-  it('spawns the player on platform 1 looking down the platform, with the shotgun close by', () => {
+  it('spawns the player on platform 1 looking down the platform; the shotgun is a seeded find away from it (pistol lane)', () => {
     for (const l of SAMPLE()) {
       const sp = l.playerSpawn;
       expect(l.grid.areaAt(sp.x, sp.z)).toBe(l.platform);
       const dx = -Math.sin(sp.yaw), dz = -Math.cos(sp.yaw);
       expect(l.grid.raycast(sp.x, sp.z, dx, dz, 40, true), `seed ${l.seed} spawn faces a wall`).toBeGreaterThan(20);
-      const sg = l.pickups.find(p => p.itemId === 'shotgun')!;
-      expect(Math.hypot(sg.x - sp.x, sg.z - sp.z)).toBeLessThan(15);
-      const shells = l.pickups.filter(p => p.itemId === 'ammo_shells').map(p => Math.hypot(p.x - sg.x, p.z - sg.z));
-      expect(Math.min(...shells)).toBeLessThan(4);
+      // No guaranteed spawn-side shotgun any more: 0-2 seeded finds, each >= 25 m away with shells beside it.
+      const sgs = l.pickups.filter(p => p.itemId === 'shotgun');
+      expect(sgs.length).toBeLessThanOrEqual(2);
+      for (const sg of sgs) {
+        expect(Math.hypot(sg.x - sp.x, sg.z - sp.z)).toBeGreaterThanOrEqual(25);
+        const shells = l.pickups.filter(p => p.itemId === 'ammo_shells' && (p.level ?? 0) === (sg.level ?? 0)).map(p => Math.hypot(p.x - sg.x, p.z - sg.z));
+        expect(Math.min(...shells)).toBeLessThan(4.5);
+      }
     }
   });
 

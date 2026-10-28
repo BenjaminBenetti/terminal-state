@@ -196,7 +196,9 @@ export class ZombieActor implements RagdollTarget {
   private bonePos(name: string): Vec3 {
     const b = this.bones.get(name);
     if (!b) return {x: this.brain.x, y: 1, z: this.brain.z};
-    b.getWorldPosition(this.tmp);
+    // Perf (iteration 09): only called from updateVolumes right after root.updateMatrixWorld(true), so the bone's
+    // matrixWorld is fresh; getWorldPosition would re-walk and recompose its whole parent chain per bone (11 per zombie).
+    this.tmp.setFromMatrixPosition(b.matrixWorld);
     return {x: this.tmp.x, y: this.tmp.y, z: this.tmp.z};
   }
 

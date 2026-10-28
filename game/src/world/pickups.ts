@@ -284,6 +284,13 @@ function legacySupplyMesh(itemId: string): THREE.Object3D {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 0.16), [side, side, std({color: 0x5d6442}), side, std({map: label}), side]);
     m.position.y = 0.06;
     g.add(m);
+  } else if (itemId === 'ammo_pistol') {
+    // Pistol lane: small 9 mm carton (procedural supply box like the rifle/shell ones).
+    const label = pickupLabel('9MM', '#5a5146', '#efe6cf', 12);
+    const side = std({color: 0x4f473d});
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.11), [side, side, std({color: 0x5f564a}), side, std({map: label}), side]);
+    m.position.y = 0.04;
+    g.add(m);
   } else if (itemId === 'ammo_shells') {
     const label = pickupLabel('12 GA', '#7d2c22', '#efe2c4', 12);
     const side = std({color: 0x6b261d});

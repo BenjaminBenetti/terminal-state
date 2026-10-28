@@ -940,33 +940,8 @@ export function placeSpawns(layout: StationLayout, rng: Rng): void {
     return true;
   };
 
-  // Shotgun on the nearest bench to the spawn (or the floor ahead), plus shells to try it.
-  const benches = layout.props.filter(p => p.kind === 'bench' && p.area === plat.id)
-    .map(p => ({p, d: Math.hypot(p.x - wx, p.z - wz)})).sort((a, b) => a.d - b.d);
-  if (benches.length && benches[0].d < 14) {
-    const b = benches[0].p;
-    layout.pickups.push({itemId: 'shotgun', count: 1, x: b.x, y: 0.47, z: b.z, area: plat.id});
-  } else {
-    const ahead = west ? 3 : -3;
-    layout.pickups.push({itemId: 'shotgun', count: 1, x: wx + ahead, y: 0, z: wz, area: plat.id});
-  }
-  {
-    const sg = layout.pickups[layout.pickups.length - 1];
-    let best: [number, number] | null = null, bd = Infinity;
-    for (let y = plat.y; y < plat.y + plat.h; y++) for (let x = plat.x; x < plat.x + plat.w; x++) {
-      const i = g.idx(x, y);
-      if (!g.walkable(x, y) || dist[i] < 4 || zone[i] || used.has(i)) continue;
-      const [qx, qz] = g.center(x, y);
-      const d = Math.hypot(qx - sg.x, qz - sg.z);
-      if (d > 1.2 && d < bd) { bd = d; best = [x, y]; }
-    }
-    if (best) {
-      used.add(g.idx(best[0], best[1]));
-      const [bx, bz] = g.center(best[0], best[1]);
-      layout.pickups.push({itemId: 'ammo_shells', count: 8, x: bx, y: 0, z: bz, area: plat.id});
-    }
-  }
-
+  // Pistol lane (2026-10-28): no guaranteed spawn-side shotgun any more — the non-starting weapons are seeded
+  // map finds placed after the level spawns (gen/weaponFinds.ts placeWeaponFinds).
   // Loose floor supplies (shelves/counters/vending/containers hold the rest; rolled by items/containers).
   // Iteration 05: where they turn up follows the room PURPOSE (gen/purposes.ts `floor`): ammo in
   // the security office, stores and electrical rooms, dressings in first-aid rooms and pharmacies,
@@ -989,9 +964,6 @@ export function placeSpawns(layout: StationLayout, rng: Rng): void {
     if (!pool.length) continue;
     for (let t = 0; t < 10; t++) if (place(id, count, rng.weighted(pool))) break;
   }
-  // Rarely, a spare shotgun left in the transit security office.
-  const sec = layout.areas.find(a => a.purpose === 'security-office');
-  if (sec && rng.chance(0.3)) place('shotgun', 1, sec, 12);
 
   // --- Zombies: spread across public halls and back-of-house, never near the spawn ---
   const count = rng.int(11, 16);

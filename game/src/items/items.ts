@@ -6,7 +6,7 @@ export type ItemKind = 'weapon' | 'ammo' | 'consumable';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
-  | 'rifle' | 'shotgun' | 'rounds' | 'shells' | 'medkit' | 'bandage'
+  | 'rifle' | 'shotgun' | 'pistol' | 'rounds' | 'rounds9' | 'shells' | 'medkit' | 'bandage'
   | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles';
 
 /** How a consumable is used: wording, sound and the stat it mainly restores. */
@@ -38,8 +38,12 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Adapted automatic rifle with a battered optic. 30-round magazine.'},
   shotgun: {id: 'shotgun', name: 'Shotgun — "Old reliable"', short: 'Shotgun', kind: 'weapon', stackMax: 1, weaponId: 'shotgun', icon: 'shotgun',
     description: 'Pump shotgun with a repaired stock. Loads shell by shell; devastating up close.'},
+  pistol: {id: 'pistol', name: 'Pistol — "Service sidearm"', short: 'Pistol', kind: 'weapon', stackMax: 1, weaponId: 'pistol', icon: 'pistol',
+    description: 'Semi-automatic 9 mm service pistol. 15-round magazine; quick to raise and reload.'},
   ammo_rifle: {id: 'ammo_rifle', name: 'Rifle rounds', short: 'Rounds', kind: 'ammo', stackMax: 120, icon: 'rounds',
     description: 'Loose rifle cartridges. Used when reloading the rifle.'},
+  ammo_pistol: {id: 'ammo_pistol', name: '9 mm rounds', short: '9 mm', kind: 'ammo', stackMax: 120, icon: 'rounds9',
+    description: 'Loose 9 mm pistol cartridges. Used when reloading the pistol.'},
   ammo_shells: {id: 'ammo_shells', name: '12-gauge shells', short: 'Shells', kind: 'ammo', stackMax: 32, icon: 'shells',
     description: 'Buckshot shells for the shotgun.'},
   medkit: {id: 'medkit', name: 'First-aid kit', short: 'Med kit', kind: 'consumable', stackMax: 3, heal: 50, useTime: 2.2, verb: 'apply', icon: 'medkit',
@@ -125,6 +129,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // Legacy procedural supplies (world/pickups.ts makeSupplyMesh).
   ammo_rifle: {w: 0.28, d: 0.16, h: 0.12, shape: 'flat'},
   ammo_shells: {w: 0.2, d: 0.2, h: 0.1, shape: 'flat'},
+  ammo_pistol: {w: 0.16, d: 0.11, h: 0.08, shape: 'flat'},
   medkit: {w: 0.32, d: 0.22, h: 0.14, shape: 'flat'},
   bandage: {w: 0.1, d: 0.094, h: 0.092, shape: 'flat'},
 };
