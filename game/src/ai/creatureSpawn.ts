@@ -12,6 +12,17 @@ import {hashString, mulberry32} from '../core/rng';
 export type EnemyArchetypeId = 'zombie' | 'ratdog';
 
 /**
+ * Iteration 12 (AI lane, mandate F "More enemies. Double the number of enemies."): enemy spawn points per station.
+ * Before iteration 12 (d632ce8) placeSpawns drew rng.int(11, 16) — measured over a 78-station corpus (60 natural seeds +
+ * 3 per archetype): 1033 enemies, mean 13.24, 11..16, rat/dog 4.84 %, coated 38.8 % of zombies, levels main 74.5 / upper
+ * 14.0 / lower 11.4 %. Now the same single draw over the doubled range; every spawn keeps its independent type roll
+ * (40 % coated) and archetype roll (ENEMY_POOL), so the proportions are unchanged.
+ */
+export const ENEMY_SPAWNS_BASELINE = {min: 11, max: 16, mean: 13.24} as const;
+export const ENEMY_POPULATION_SCALE = 2;
+export const ENEMY_SPAWNS = {min: ENEMY_SPAWNS_BASELINE.min * ENEMY_POPULATION_SCALE, max: ENEMY_SPAWNS_BASELINE.max * ENEMY_POPULATION_SCALE} as const;
+
+/**
  * Relative spawn weight of each archetype at ANY spawn point (level-generic; new levels/archetypes
  * add rows here). The user asked for the field-notes rat/dog to be about 5 % of the enemies.
  */

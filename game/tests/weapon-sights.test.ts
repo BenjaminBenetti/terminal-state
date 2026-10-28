@@ -21,7 +21,9 @@ const io = new NodeIO();
 const GUNS = ['rifle', 'shotgun', 'pistol'] as const;
 const FILES = {rifle: 'assets/models/rifle-user.glb', shotgun: 'assets/models/shotgun-user.glb', pistol: 'assets/models/pistol.glb'};
 const LENGTH = {rifle: 0.88, shotgun: 0.98, pistol: 0.185};
-const RELIEF = {rifle: 0.26, shotgun: 0.30, pistol: 0.32};
+// Iteration 12 (LIGHT, user #6): pistol ADS lower (sightLift 0.014) and closer (relief 0.32 -> 0.28).
+const RELIEF = {rifle: 0.26, shotgun: 0.30, pistol: 0.28};
+const LIFT = {rifle: 0.04, shotgun: 0.022, pistol: 0.014};
 
 async function gltfOf(url: string): Promise<GLTF> { // textures stripped: no DOM image decoding in node
   const d = await io.read(pub(url));
@@ -41,6 +43,7 @@ describe('user weapon models in the manifest', () => {
     for (const old of ['rifle.glb', 'rifle-optic.glb', 'shotgun.glb']) expect(existsSync(pub(`assets/models/${old}`)), old).toBe(true);
     for (const id of GUNS) expect(WEAPONS[id].view.optic, id).toBeUndefined();
     expect(Object.fromEntries(GUNS.map(id => [id, WEAPONS[id].view.sightRelief]))).toEqual(RELIEF);
+    expect(Object.fromEntries(GUNS.map(id => [id, WEAPONS[id].view.sightLift]))).toEqual(LIFT);
   });
 });
 
@@ -89,6 +92,45 @@ describe('user weapon models: markers and sight-based ADS', async () => {
       const muzzleCam = holder.getObjectByName('Muzzle')!.getWorldPosition(new THREE.Vector3()).applyMatrix4(vm.camera.matrixWorldInverse);
       expect(muzzleCam.z, id).toBeLessThan(sightCam.z);
     }
+  });
+
+  it('Iteration 12 (user #6): the aimed pistol sits lower and closer than iteration 11, sights just under the crosshair, nothing clips', () => {
+    const view = WEAPONS.pistol.view;
+    expect(view.sightLift!).toBeGreaterThanOrEqual(0.012);
+    expect(view.sightLift!).toBeLessThanOrEqual(0.02);
+    expect(view.sightRelief!).toBeGreaterThanOrEqual(0.27);
+    expect(view.sightRelief!).toBeLessThanOrEqual(0.29);
+    const g = models.pistol;
+    const sightRel = marker(g, 'Sight').sub(marker(g, 'Grip'));
+    const now = sightAimPosition(sightRel.clone().setY(sightRel.y + view.sightLift!), view.sightRelief!);
+    const it11 = sightAimPosition(sightRel.clone(), 0.32); // iteration 11: relief 0.32, no lift
+    expect(now.y).toBeCloseTo(it11.y - view.sightLift!, 9); // lower by the lift
+    expect(now.z - it11.z).toBeCloseTo(0.32 - view.sightRelief!, 9); // closer to the camera
+    expect(now.x).toBeCloseTo(it11.x, 9); // same lateral line (still on the hitscan line)
+    // the rifle / shotgun ADS are untouched
+    expect(WEAPONS.rifle.view.sightRelief).toBe(0.26);
+    expect(WEAPONS.shotgun.view.sightRelief).toBe(0.30);
+    // full ADS in the real scene graph: every pistol vertex well past the viewmodel near plane (0.01 m), sight 2-4 deg under centre
+    const vm = new Viewmodel(models, {});
+    vm.setItem('pistol');
+    for (let i = 0; i < 80; i++) vm.update(0.05, state(true));
+    vm.scene.updateMatrixWorld(true);
+    const pivot = vm.camera.children.find(c => c.type === 'Group')!;
+    const holder = pivot.children.find(c => c.visible && c.type === 'Group')!;
+    let nearest = Infinity;
+    const v = new THREE.Vector3();
+    holder.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const pos = m.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 3) { v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).applyMatrix4(vm.camera.matrixWorldInverse); nearest = Math.min(nearest, -v.z); }
+    });
+    expect(nearest).toBeGreaterThan(vm.camera.near * 5);
+    const sightCam = holder.getObjectByName('Sight')!.getWorldPosition(new THREE.Vector3()).applyMatrix4(vm.camera.matrixWorldInverse);
+    const below = THREE.MathUtils.radToDeg(Math.atan2(-sightCam.y, -sightCam.z));
+    expect(below).toBeGreaterThan(2);
+    expect(below).toBeLessThan(4);
+    console.info(`[ads] pistol: sight ${below.toFixed(2)} deg under the crosshair at ${(-sightCam.z).toFixed(3)} m, nearest vertex ${nearest.toFixed(3)} m (near ${vm.camera.near})`);
   });
 
   it('casings eject from the model Eject marker (grip-relative), falling back to the EJECTION_PORTS constants', () => {

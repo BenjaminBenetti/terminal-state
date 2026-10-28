@@ -41,6 +41,13 @@ export type LootTable = Readonly<Partial<Record<PropKind | 'default', LootSpec>>
 export type LightOdds = readonly [lit: number, dim: number, dark: number];
 /** Loose floor supplies (stationDress placeSpawns): relative weight of the room per category. */
 export type FloorLoot = Readonly<Partial<Record<'ammo' | 'med', number>>>;
+/**
+ * Iteration 12 (LOOT lane): what a room / store is for, for the scarce-resource economy (items/lootEconomy.ts): security → ammo
+ * (sometimes flares / torch batteries), medical → dressings / first-aid kits, food → food and drink, service → batteries and
+ * flares, tech → batteries, personal → a bit of everything, public → sparse random. A SOFT weight: every room keeps some
+ * off-theme random finds (ammo is never excluded anywhere). Rooms without a purpose map by room type (lootEconomy THEME_OF_TYPE).
+ */
+export type LootTheme = 'security' | 'medical' | 'food' | 'service' | 'tech' | 'personal' | 'public';
 
 /** Which wall, relative to the room's main door. */
 export type WallSel = 'far' | 'side' | 'near' | 'any';
@@ -82,6 +89,8 @@ interface PurposeBase {
   label: string;
   loot: LootTable;
   floor?: FloorLoot;
+  /** Iteration 12 (LOOT lane): resource theme of the place (soft room-purpose weights, items/lootEconomy.ts). */
+  theme: LootTheme;
   /** Lighting odds hint [lit, dim, dark] (overrides the room-type default). */
   light?: LightOdds;
   /** Fixtures read warm in this room. */
@@ -157,7 +166,7 @@ const menu = (name: string, tag: string, colors: [string, string, string, string
 
 export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
   burger: {
-    id: 'burger', category: 'food', label: 'Burger counter', names: ['Big Ray\'s Burgers', 'Union Grill', 'Flat Top Burger', 'Burger Depot'], colors: [0xc0392b, 0xd9a520],
+    id: 'burger', category: 'food', theme: 'food', label: 'Burger counter', names: ['Big Ray\'s Burgers', 'Union Grill', 'Flat Top Burger', 'Burger Depot'], colors: [0xc0392b, 0xd9a520],
     w: [10, 14], d: [8, 11], glazed: false, mixes: {food: 1}, layout: 'food', display: 0, cooler: 0.6,
     kitchen: [['grillLine', 0], ['shopBackbar', 0]],
     menu: menu('GRILL & FRIES', 'COMBOS SERVED WITH FRIES + DRINK', ['#1c1e20', '#efe6cf', '#d9a520', '#a8362b'],
@@ -166,7 +175,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['chips', 2], ['cola', 1]]), grillLine: KITCHEN([['chips', 2], ['beans', 0.6]]), shopBackbar: KITCHEN([['chips', 1], ['cola', 1], ['water', 0.5]]), shopCooler: DRINKS},
   },
   pizza: {
-    id: 'pizza', category: 'food', label: 'Pizza counter', names: ['Napoli Slice', 'Tony\'s Pizza', 'Two Bros Slice', 'Pizza Pronto'], colors: [0x2e7d32, 0xb71c1c],
+    id: 'pizza', category: 'food', theme: 'food', label: 'Pizza counter', names: ['Napoli Slice', 'Tony\'s Pizza', 'Two Bros Slice', 'Pizza Pronto'], colors: [0x2e7d32, 0xb71c1c],
     w: [10, 13], d: [8, 11], glazed: false, mixes: {food: 1}, layout: 'food', display: 0.8, cooler: 0.6,
     kitchen: [['pizzaOven', 0], ['shopBackbar', 0]],
     menu: menu('SLICE STOP', 'BY THE SLICE OR WHOLE PIE', ['#1f2225', '#f2ead6', '#c2463a', '#2f7a78'],
@@ -175,7 +184,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['cola', 1], ['chips', 1]]), shopDisplay: TILL([['chips', 1], ['chocolate', 0.5]], 0.4), shopBackbar: KITCHEN([['beans', 1], ['water', 0.6]]), shopCooler: DRINKS},
   },
   coffee: {
-    id: 'coffee', category: 'food', label: 'Coffee bar', names: ['Daily Grind', 'Timberline Coffee', 'Second Cup Co.', 'Platform Espresso'], colors: [0x6d4c41, 0x1b5e20],
+    id: 'coffee', category: 'food', theme: 'food', label: 'Coffee bar', names: ['Daily Grind', 'Timberline Coffee', 'Second Cup Co.', 'Platform Espresso'], colors: [0x6d4c41, 0x1b5e20],
     w: [8, 11], d: [7, 10], glazed: false, mixes: {food: 1, retail: 1, kiosk: 1.5}, layout: 'food', display: 0.7, cooler: 0.7,
     kitchen: [['espressoBar', 0], ['shopBackbar', 0]],
     menu: menu('COFFEE · ESPRESSO', 'FRESH BREWED · BAKED DAILY', ['#25352f', '#efe6cf', '#c99a2e', '#c99a2e'],
@@ -184,7 +193,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['chocolate', 2], ['juice', 1]]), shopDisplay: TILL([['chocolate', 2]], 0.35), espressoBar: KITCHEN([['water', 1], ['chocolate', 1], ['juice', 0.5]]), shopBackbar: KITCHEN([['water', 1], ['juice', 0.6]]), shopCooler: {items: [['juice', 2], ['water', 2], ['cola', 1]], lots: [3, 6], empty: 0.15}},
   },
   donut: {
-    id: 'donut', category: 'food', label: 'Donut shop', names: ['Honey Dip Donuts', 'Crullers & Co.', 'Dough Bros', 'Glaze Donuts'], colors: [0xd81b60, 0xef6c00],
+    id: 'donut', category: 'food', theme: 'food', label: 'Donut shop', names: ['Honey Dip Donuts', 'Crullers & Co.', 'Dough Bros', 'Glaze Donuts'], colors: [0xd81b60, 0xef6c00],
     w: [8, 11], d: [7, 10], glazed: false, mixes: {food: 1, retail: 0.6, kiosk: 0.8}, layout: 'food', display: 0.95, cooler: 0.5,
     kitchen: [['espressoBar', 0]],
     extras: [{kind: 'breadRack', at: 'wall', wall: 'side', n: [1, 1], variant: 1, front: 0.9}],
@@ -194,7 +203,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['chocolate', 2], ['juice', 1]]), shopDisplay: TILL([['chocolate', 2]], 0.3), espressoBar: KITCHEN([['water', 1], ['chocolate', 1]]), shopCooler: {items: [['juice', 2], ['water', 2], ['cola', 1]], lots: [3, 6], empty: 0.15}},
   },
   bakery: {
-    id: 'bakery', category: 'food', label: 'Bakery', names: ['Hearth Bakery', 'Rise & Crust', 'Patisserie Lumière'], colors: [0x8d6e63, 0xfbe9e7],
+    id: 'bakery', category: 'food', theme: 'food', label: 'Bakery', names: ['Hearth Bakery', 'Rise & Crust', 'Patisserie Lumière'], colors: [0x8d6e63, 0xfbe9e7],
     w: [8, 11], d: [7, 10], glazed: false, mixes: {food: 1, retail: 0.5}, layout: 'food', display: 0.95, cooler: 0.5,
     kitchen: [['shopBackbar', 0]],
     extras: [{kind: 'breadRack', at: 'wall', wall: 'side', n: [1, 2], variant: 0, front: 0.9}],
@@ -204,7 +213,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['juice', 1], ['water', 1]]), shopDisplay: TILL([['chocolate', 2]], 0.3), shopBackbar: KITCHEN([['water', 1], ['chocolate', 0.6]]), shopCooler: {items: [['juice', 3], ['water', 2]], lots: [3, 6], empty: 0.15}},
   },
   noodles: {
-    id: 'noodles', category: 'food', label: 'Noodle counter', names: ['Golden Wok', 'Pho Express', 'Noodle Box', 'Lucky Dragon'], colors: [0xc62828, 0xf9a825],
+    id: 'noodles', category: 'food', theme: 'food', label: 'Noodle counter', names: ['Golden Wok', 'Pho Express', 'Noodle Box', 'Lucky Dragon'], colors: [0xc62828, 0xf9a825],
     w: [10, 14], d: [8, 11], glazed: false, mixes: {food: 1}, layout: 'food', display: 0.2, cooler: 0.6,
     kitchen: [['wokLine', 0], ['wokLine', 0]],
     menu: menu('NOODLE BAR', 'WOK FRESH · ALL DAY', ['#efe6d0', '#2a2522', '#a8362b', '#2a2522'],
@@ -213,7 +222,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['noodles', 2], ['cola', 1]]), wokLine: KITCHEN([['noodles', 3], ['water', 0.6]]), shopDisplay: TILL([['noodles', 1]]), shopCooler: DRINKS},
   },
   sushi: {
-    id: 'sushi', category: 'food', label: 'Sushi counter', names: ['Sushi Station', 'Maki Go', 'Kaiten Express'], colors: [0x263238, 0xe53935],
+    id: 'sushi', category: 'food', theme: 'food', label: 'Sushi counter', names: ['Sushi Station', 'Maki Go', 'Kaiten Express'], colors: [0x263238, 0xe53935],
     w: [9, 12], d: [8, 10], glazed: false, mixes: {food: 1}, layout: 'food', display: 0.9, cooler: 0.6,
     kitchen: [['deliLine', 0], ['wokLine', 0]],
     menu: menu('SUSHI & BENTO', 'ROLLED TO ORDER', ['#1c2226', '#f0ece4', '#e53935', '#e53935'],
@@ -222,7 +231,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['water', 1], ['noodles', 1]]), shopDisplay: TILL([['noodles', 1]], 0.4), deliLine: KITCHEN([['water', 1], ['noodles', 1]]), wokLine: KITCHEN([['noodles', 2]]), shopCooler: {items: [['water', 3], ['juice', 1], ['cola', 1]], lots: [3, 6], empty: 0.15}},
   },
   deli: {
-    id: 'deli', category: 'food', label: 'Deli counter', names: ['Carver St. Deli', 'Hero Subs', 'Midtown Deli', 'Corned Beef Co.'], colors: [0x1565c0, 0xf5f5f0],
+    id: 'deli', category: 'food', theme: 'food', label: 'Deli counter', names: ['Carver St. Deli', 'Hero Subs', 'Midtown Deli', 'Corned Beef Co.'], colors: [0x1565c0, 0xf5f5f0],
     w: [9, 13], d: [8, 11], glazed: false, mixes: {food: 1, retail: 0.5}, layout: 'food', display: 0.9, cooler: 0.7,
     kitchen: [['deliLine', 0], ['shopBackbar', 0]],
     menu: menu('DELI · SUBS', 'SLICED TO ORDER', ['#f2efe6', '#1d2a3a', '#1565c0', '#1565c0'],
@@ -231,7 +240,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['chips', 2]]), shopDisplay: TILL([['chips', 1], ['beans', 0.5]], 0.4), deliLine: KITCHEN([['beans', 1], ['chips', 1]]), shopBackbar: KITCHEN([['chips', 1], ['water', 0.6]]), shopCooler: DRINKS},
   },
   juice: {
-    id: 'juice', category: 'food', label: 'Juice bar', names: ['Squeeze Juice Bar', 'Green Line Juice', 'Fresh Press'], colors: [0x7cb342, 0xff8f00],
+    id: 'juice', category: 'food', theme: 'food', label: 'Juice bar', names: ['Squeeze Juice Bar', 'Green Line Juice', 'Fresh Press'], colors: [0x7cb342, 0xff8f00],
     w: [7, 10], d: [6, 9], glazed: false, mixes: {food: 1, retail: 0.4}, layout: 'food', display: 0.4, cooler: 0.9,
     kitchen: [['blenderBar', 0]],
     menu: menu('JUICE · SMOOTHIES', 'PRESSED FRESH', ['#f2f4e6', '#223018', '#7cb342', '#ff8f00'],
@@ -240,7 +249,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['juice', 1], ['water', 1]]), blenderBar: KITCHEN([['juice', 2], ['water', 1]]), shopDisplay: TILL([['juice', 1]]), shopCooler: {items: [['juice', 4], ['water', 2]], lots: [3, 7], empty: 0.1}},
   },
   shawarma: {
-    id: 'shawarma', category: 'food', label: 'Shawarma grill', names: ['Shawarma King', 'Cedar Grill', 'Pita Pit Stop'], colors: [0xf57f17, 0x4e342e],
+    id: 'shawarma', category: 'food', theme: 'food', label: 'Shawarma grill', names: ['Shawarma King', 'Cedar Grill', 'Pita Pit Stop'], colors: [0xf57f17, 0x4e342e],
     w: [9, 12], d: [8, 11], glazed: false, mixes: {food: 1}, layout: 'food', display: 0.6, cooler: 0.6,
     kitchen: [['grillLine', 1], ['shopBackbar', 0]],
     menu: menu('SHAWARMA · FALAFEL', 'WRAPS · PLATES · POUTINE', ['#2a2018', '#f2e8d6', '#f57f17', '#f57f17'],
@@ -249,7 +258,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['chips', 1], ['cola', 1]]), grillLine: KITCHEN([['beans', 1], ['chips', 1]]), shopDisplay: TILL([['chips', 1]]), shopBackbar: KITCHEN([['water', 1], ['beans', 0.6]]), shopCooler: DRINKS},
   },
   hotdog: {
-    id: 'hotdog', category: 'food', label: 'Hot-dog stand', names: ['Top Dog Stand', 'Frank\'s Franks', 'Ballpark Dogs', 'Union Dogs'], colors: [0xe53935, 0xfbc02d],
+    id: 'hotdog', category: 'food', theme: 'food', label: 'Hot-dog stand', names: ['Top Dog Stand', 'Frank\'s Franks', 'Ballpark Dogs', 'Union Dogs'], colors: [0xe53935, 0xfbc02d],
     w: [6, 9], d: [5, 8], glazed: false, mixes: {food: 0.8, retail: 0.7, kiosk: 1.2}, layout: 'food', display: 0, cooler: 0.85,
     kitchen: [['grillLine', 2]],
     extras: [{kind: 'snackRack', at: 'wall', wall: 'side', n: [1, 1], front: 0.8}],
@@ -259,12 +268,12 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     loot: {shopCounter: TILL([['chips', 1], ['cola', 1]]), grillLine: KITCHEN([['chips', 2], ['cola', 1]]), snackRack: SNACKS, hotdogCart: {items: [['chips', 2], ['cola', 2], ['water', 1]], lots: [2, 4], empty: 0.2}, shopCooler: {items: [['cola', 3], ['water', 2]], lots: [3, 6], empty: 0.15}},
   },
   convenience: {
-    id: 'convenience', category: 'retail', label: 'Convenience store', names: ['Metro Mart', 'Express Variety', '24/7 Convenience', 'QuickStop', 'Corner Mart'], colors: [0xe53935, 0x1e88e5, 0x43a047],
+    id: 'convenience', category: 'retail', theme: 'food', label: 'Convenience store', names: ['Metro Mart', 'Express Variety', '24/7 Convenience', 'QuickStop', 'Corner Mart'], colors: [0xe53935, 0x1e88e5, 0x43a047],
     w: [10, 16], d: [10, 14], glazed: true, mixes: {retail: 2.2, kiosk: 1}, layout: 'aisles', cooler: 1, stock: 'grocery',
     loot: {stockShelf: {items: [['chips', 3], ['chocolate', 3], ['beans', 2], ['noodles', 2]], lots: [2, 5], empty: 0.1}, shopCooler: DRINKS, shopCounter: TILL([['chocolate', 2], ['chips', 1]], 0.4), snackRack: SNACKS},
   },
   newsstand: {
-    id: 'newsstand', category: 'retail', label: 'Newsstand', names: ['News & Gifts', 'Lakeshore News', 'Transit Smoke & News', 'Headlines'], colors: [0x283593, 0xc62828],
+    id: 'newsstand', category: 'retail', theme: 'food', label: 'Newsstand', names: ['News & Gifts', 'Lakeshore News', 'Transit Smoke & News', 'Headlines'], colors: [0x283593, 0xc62828],
     w: [6, 9], d: [5, 7], glazed: false, mixes: {retail: 1.6, kiosk: 2}, layout: 'newsstand', cooler: 0.8, stock: 'snacks',
     loot: {
       stockShelf: {items: [['chocolate', 3], ['chips', 3]], lots: [2, 4], empty: 0.15}, snackRack: SNACKS, shopCounter: TILL([['chocolate', 2]], 0.4),
@@ -274,33 +283,33 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
     },
   },
   pharmacy: {
-    id: 'pharmacy', category: 'retail', label: 'Pharmacy', names: ['Station Pharmacy', 'Rexton Drug Mart', 'Shoppers Rx'], colors: [0xc62828, 0x00897b],
+    id: 'pharmacy', category: 'retail', theme: 'medical', label: 'Pharmacy', names: ['Station Pharmacy', 'Rexton Drug Mart', 'Shoppers Rx'], colors: [0xc62828, 0x00897b],
     w: [12, 16], d: [10, 14], glazed: true, mixes: {retail: 0.9}, layout: 'aisles', cooler: 0.4, stock: 'pharmacy',
     extras: [{kind: 'medCabinet', at: 'wall', wall: 'far', n: [1, 2], front: 0.9}],
     loot: {stockShelf: {items: [['bandage', 3], ['medkit', 0.5], ['water', 0.4]], lots: [1, 4], empty: 0.2}, medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}, shopCounter: TILL([['bandage', 1], ['medkit', 0.25]], 0.5), shopCooler: {items: [['water', 3], ['juice', 1]], lots: [2, 5], empty: 0.2}},
     floor: {med: 1.2},
   },
   florist: {
-    id: 'florist', category: 'retail', label: 'Florist', names: ['Bloom Florist', 'Union Flowers', 'Petal & Stem'], colors: [0x2e7d32, 0xad1457],
+    id: 'florist', category: 'retail', theme: 'public', label: 'Florist', names: ['Bloom Florist', 'Union Flowers', 'Petal & Stem'], colors: [0x2e7d32, 0xad1457],
     w: [6, 9], d: [6, 8], glazed: true, mixes: {retail: 0.6}, layout: 'florist',
     loot: {shopCounter: TILL([['water', 1]], 0.7)},
   },
   phone: {
-    id: 'phone', category: 'retail', label: 'Phone repair', names: ['Cell Fix', 'Phone Repair & Cases', 'Mobile Hub'], colors: [0x1e88e5, 0x212121],
+    id: 'phone', category: 'retail', theme: 'tech', label: 'Phone repair', names: ['Cell Fix', 'Phone Repair & Cases', 'Mobile Hub'], colors: [0x1e88e5, 0x212121],
     w: [6, 9], d: [6, 8], glazed: true, mixes: {retail: 0.8}, layout: 'service', stock: 'devices',
     extras: [{kind: 'repairBench', at: 'wall', wall: 'far', n: [1, 1], variant: 1, front: 0.9}, {kind: 'deviceWall', at: 'wall', wall: 'side', n: [1, 2], front: 0.9}],
     loot: {shopCounter: TILL([['cola', 1], ['chocolate', 1]], 0.7)},
   },
   keys: {
-    id: 'keys', category: 'retail', label: 'Key cutting & shoe repair', names: ['Keys · Shoe Repair', 'Kwik Key', 'Heel & Key'], colors: [0x6a1b9a, 0x455a64],
+    id: 'keys', category: 'retail', theme: 'tech', label: 'Key cutting & shoe repair', names: ['Keys · Shoe Repair', 'Kwik Key', 'Heel & Key'], colors: [0x6a1b9a, 0x455a64],
     w: [5, 7], d: [5, 7], glazed: false, mixes: {retail: 0.6, kiosk: 0.5}, layout: 'service', stock: 'parts',
     extras: [{kind: 'repairBench', at: 'wall', wall: 'far', n: [1, 1], variant: 0, front: 0.9}],
     loot: {shopCounter: TILL([['water', 1], ['chocolate', 1]], 0.7), stockShelf: {items: [['water', 1]], lots: [0, 1], empty: 0.8}},
   },
   tech: {
-    id: 'tech', category: 'retail', label: 'Electronics store', names: ['Volt Mobile', 'PixelPoint', 'Byte Box', 'Signal Tech'], colors: [0x00acc1, 0x212121, 0x7e57c2],
+    id: 'tech', category: 'retail', theme: 'tech', label: 'Electronics store', names: ['Volt Mobile', 'PixelPoint', 'Byte Box', 'Signal Tech'], colors: [0x00acc1, 0x212121, 0x7e57c2],
     w: [8, 12], d: [8, 11], glazed: true, mixes: {retail: 1}, layout: 'showroom', stock: 'devices',
-    // No device/battery items exist: tills hold staff leftovers only (never ammo or meds).
+    // Tills hold staff leftovers; iteration 12: the 'tech' theme turns most kept finds into torch batteries (items/lootEconomy.ts).
     loot: {shopCounter: TILL([['water', 1], ['cola', 1], ['chocolate', 1]], 0.6)},
   },
 };
@@ -312,7 +321,7 @@ const CACHE_CRATE: LootSpec = {items: [['ammo_rifle', 2], ['ammo_shells', 1.4], 
 
 export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   'staff-room': {
-    id: 'staff-room', category: 'back', label: 'Staff room', slots: ['crew-room', 'storage', 'utility'], kinds: ['room'], min: [4.5, 5],
+    id: 'staff-room', category: 'back', theme: 'food', label: 'Staff room', slots: ['crew-room', 'storage', 'utility'], kinds: ['room'], min: [4.5, 5],
     weight: 3, required: true, max: 2, light: [0.4, 0.45, 0.15], warm: true, wings: {north: 1.4, food: 1.2},
     props: [
       {kind: 'kitchenette', at: 'wall', wall: 'far', n: [1, 1], front: 0.9},
@@ -332,7 +341,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     },
   },
   'locker-room': {
-    id: 'locker-room', category: 'back', label: 'Crew locker room', slots: ['crew-room', 'storage'], kinds: ['room'], min: [4.5, 5],
+    id: 'locker-room', category: 'back', theme: 'personal', label: 'Crew locker room', slots: ['crew-room', 'storage'], kinds: ['room'], min: [4.5, 5],
     weight: 1.6, max: 1, light: [0.3, 0.5, 0.2], wings: {north: 1.5},
     props: [
       {kind: 'staffLockers', at: 'row', wall: 'far', n: [3, 5], front: 1.0},
@@ -345,7 +354,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 0.5, ammo: 0.4},
   },
   'first-aid-room': {
-    id: 'first-aid-room', category: 'back', label: 'First-aid room', slots: ['crew-room', 'storage', 'utility'], kinds: ['room'], min: [4.5, 5],
+    id: 'first-aid-room', category: 'back', theme: 'medical', label: 'First-aid room', slots: ['crew-room', 'storage', 'utility'], kinds: ['room'], min: [4.5, 5],
     weight: 1.2, max: 1, light: [0.45, 0.45, 0.1],
     props: [
       {kind: 'medCabinet', at: 'row', wall: 'far', n: [1, 2], front: 0.9},
@@ -363,7 +372,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 2.4},
   },
   'security-office': {
-    id: 'security-office', category: 'back', label: 'Transit security office', slots: ['storage', 'utility', 'crew-room'], kinds: ['room'], min: [4.5, 5],
+    id: 'security-office', category: 'back', theme: 'security', label: 'Transit security office', slots: ['storage', 'utility', 'crew-room'], kinds: ['room'], min: [4.5, 5],
     weight: 1.4, required: true, max: 1, light: [0.35, 0.45, 0.2], wings: {agent: 2, north: 1.2},
     props: [
       {kind: 'gunLocker', at: 'wall', wall: 'far', n: [1, 1], front: 0.8},
@@ -383,7 +392,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 2.6, med: 0.6},
   },
   'electrical-room': {
-    id: 'electrical-room', category: 'back', label: 'Electrical room', slots: ['utility', 'storage'], kinds: ['room'], min: [4, 4.5],
+    id: 'electrical-room', category: 'back', theme: 'service', label: 'Electrical room', slots: ['utility', 'storage'], kinds: ['room'], min: [4, 4.5],
     weight: 2.2, required: true, max: 2, light: [0.08, 0.4, 0.52], stock: 'parts',
     props: [
       {kind: 'electricalPanel', at: 'row', wall: 'far', n: [2, 4], front: 1.0},
@@ -400,7 +409,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 1.2, med: 0.4},
   },
   'signal-room': {
-    id: 'signal-room', category: 'back', label: 'Signal relay room', slots: ['utility', 'crew-room'], kinds: ['room'], min: [4, 4.5],
+    id: 'signal-room', category: 'back', theme: 'service', label: 'Signal relay room', slots: ['utility', 'crew-room'], kinds: ['room'], min: [4, 4.5],
     weight: 1.4, max: 1, light: [0.12, 0.45, 0.43], wings: {north: 2.2, agent: 0.3, food: 0.2},
     props: [
       {kind: 'signalRack', at: 'row', wall: 'far', n: [2, 4], front: 1.0},
@@ -416,7 +425,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 0.8},
   },
   'storage': {
-    id: 'storage', category: 'back', label: 'Maintenance storage', slots: ['storage', 'utility'], kinds: ['room'],
+    id: 'storage', category: 'back', theme: 'service', label: 'Maintenance storage', slots: ['storage', 'utility'], kinds: ['room'],
     weight: 2, max: 2, light: [0.12, 0.45, 0.43], stock: 'parts',
     props: [
       {kind: 'stockShelf', at: 'row', wall: 'far', n: [2, 3], variant: 'stock', front: 0.8},
@@ -436,7 +445,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 1.6, med: 1},
   },
   'stock-room': {
-    id: 'stock-room', category: 'back', label: 'Stock room', slots: ['stock-room'], kinds: ['room'],
+    id: 'stock-room', category: 'back', theme: 'food', label: 'Stock room', slots: ['stock-room'], kinds: ['room'],
     weight: 3, max: 6, light: [0.15, 0.45, 0.4], stock: 'cartons',
     // Shelving runs along two walls plus a back-to-back aisle (dressStockRoom), cartons and crates.
     props: [
@@ -456,7 +465,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 0.3},
   },
   'agent-office': {
-    id: 'agent-office', category: 'back', label: 'Station agent office', slots: ['agent-office'], kinds: ['room'],
+    id: 'agent-office', category: 'back', theme: 'security', label: 'Station agent office', slots: ['agent-office'], kinds: ['room'],
     weight: 10, required: true, max: 1, light: [0.45, 0.4, 0.15],
     props: [
       {kind: 'desk', at: 'wall', wall: 'far', n: [1, 1], front: 0.7},
@@ -475,7 +484,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 0.8, ammo: 0.5},
   },
   'janitor-closet': {
-    id: 'janitor-closet', category: 'back', label: 'Janitor closet', slots: ['janitor-closet', 'supply-closet'], kinds: ['closet'],
+    id: 'janitor-closet', category: 'back', theme: 'service', label: 'Janitor closet', slots: ['janitor-closet', 'supply-closet'], kinds: ['closet'],
     weight: 2, required: true, max: 3, light: [0, 0.3, 0.7], warm: true, stock: 'cleaning',
     props: [
       {kind: 'mopSink', at: 'wall', wall: 'far', n: [1, 1], front: 0.6},
@@ -490,7 +499,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 0.4},
   },
   'supply-closet': {
-    id: 'supply-closet', category: 'back', label: 'Supply closet', slots: ['supply-closet', 'janitor-closet'], kinds: ['closet'],
+    id: 'supply-closet', category: 'back', theme: 'medical', label: 'Supply closet', slots: ['supply-closet', 'janitor-closet'], kinds: ['closet'],
     weight: 1.6, max: 3, light: [0, 0.35, 0.65], stock: 'cartons',
     props: [
       {kind: 'stockShelf', at: 'wall', wall: 'far', n: [1, 2], variant: 'stock', front: 0.6},
@@ -506,7 +515,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 1},
   },
   'electrical-closet': {
-    id: 'electrical-closet', category: 'back', label: 'Electrical closet', slots: ['supply-closet', 'janitor-closet'], kinds: ['closet'],
+    id: 'electrical-closet', category: 'back', theme: 'service', label: 'Electrical closet', slots: ['supply-closet', 'janitor-closet'], kinds: ['closet'],
     weight: 0.9, max: 2, light: [0, 0.25, 0.75],
     props: [
       {kind: 'electricalPanel', at: 'row', wall: 'far', n: [1, 2], front: 0.8},
@@ -518,7 +527,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   // --- Iteration 07 (Lane P2): rooms built around the NEW generated props (gen/props07.ts uses place the signature fixtures:
   // tool chest / bench grinder / pegboard, pumps / water heater / valve manifold, lost luggage, fare vault carts, bins / scrubbers).
   'workshop': {
-    id: 'workshop', category: 'back', label: 'Maintenance workshop', slots: ['storage', 'utility'], kinds: ['room'], min: [4, 4.5],
+    id: 'workshop', category: 'back', theme: 'service', label: 'Maintenance workshop', slots: ['storage', 'utility'], kinds: ['room'], min: [4, 4.5],
     weight: 1.5, max: 1, light: [0.15, 0.5, 0.35], stock: 'parts', wings: {north: 1.3, misc: 1.2},
     requires: ['rollingToolChest', 'benchGrinderStand', 'toolPegboard'],
     props: [
@@ -535,7 +544,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 1.2, med: 0.4},
   },
   'pump-room': {
-    id: 'pump-room', category: 'back', label: 'Pump room', slots: ['utility'], kinds: ['room'], min: [4, 4.5],
+    id: 'pump-room', category: 'back', theme: 'service', label: 'Pump room', slots: ['utility'], kinds: ['room'], min: [4, 4.5],
     weight: 1.2, max: 1, light: [0.05, 0.35, 0.6], requires: ['waterPumpSkid', 'waterHeaterTank', 'pipeValveManifold'],
     props: [
       {kind: 'cabinetLow', at: 'wall', wall: 'any', n: [1, 1], chance: 0.5, front: 0.7},
@@ -548,7 +557,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 0.6, med: 0.3},
   },
   'lost-property': {
-    id: 'lost-property', category: 'back', label: 'Lost property office', slots: ['storage', 'crew-room'], kinds: ['room'], min: [4, 4.5],
+    id: 'lost-property', category: 'back', theme: 'personal', label: 'Lost property office', slots: ['storage', 'crew-room'], kinds: ['room'], min: [4, 4.5],
     weight: 1.2, max: 1, light: [0.3, 0.5, 0.2], warm: true, requires: ['rollingSuitcase', 'duffelBag', 'babyStroller'],
     props: [
       {kind: 'shelf', at: 'row', wall: 'far', n: [1, 2], front: 0.8},
@@ -563,7 +572,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 0.5},
   },
   'revenue-room': {
-    id: 'revenue-room', category: 'back', label: 'Fare revenue room', slots: ['storage', 'utility', 'crew-room'], kinds: ['room'], min: [4, 4.5],
+    id: 'revenue-room', category: 'back', theme: 'security', label: 'Fare revenue room', slots: ['storage', 'utility', 'crew-room'], kinds: ['room'], min: [4, 4.5],
     weight: 1.0, max: 1, light: [0.3, 0.5, 0.2], wings: {agent: 2.5, north: 0.6}, requires: ['fareVaultCart'],
     props: [
       {kind: 'safe', at: 'wall', wall: 'far', n: [1, 2], front: 0.6},
@@ -577,7 +586,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {ammo: 1.4, med: 0.4},
   },
   'custodial-room': {
-    id: 'custodial-room', category: 'back', label: 'Custodial & waste room', slots: ['storage', 'utility'], kinds: ['room'], min: [4, 4],
+    id: 'custodial-room', category: 'back', theme: 'service', label: 'Custodial & waste room', slots: ['storage', 'utility'], kinds: ['room'], min: [4, 4],
     weight: 1.2, max: 1, light: [0.05, 0.4, 0.55], stock: 'cleaning', requires: ['wheelieBin', 'floorScrubber', 'trashBagPile'],
     props: [
       {kind: 'stockShelf', at: 'wall', wall: 'side', n: [1, 1], variant: 'stock', front: 0.8},
@@ -587,11 +596,11 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     floor: {med: 0.3},
   },
   'washroom': {
-    id: 'washroom', category: 'back', label: 'Washroom', slots: ['washroom'], kinds: ['room'], weight: 1, max: 4,
+    id: 'washroom', category: 'back', theme: 'public', label: 'Washroom', slots: ['washroom'], kinds: ['room'], weight: 1, max: 4,
     props: [], loot: {}, floor: {med: 0.6},
   },
   'service-corridor': {
-    id: 'service-corridor', category: 'back', label: 'Service corridor', slots: ['service-corridor'], kinds: ['service'], weight: 1, max: 99, stock: 'cartons',
+    id: 'service-corridor', category: 'back', theme: 'service', label: 'Service corridor', slots: ['service-corridor'], kinds: ['service'], weight: 1, max: 99, stock: 'cartons',
     props: [
       {kind: 'cabinetLow', at: 'wall', wall: 'any', n: [1, 1], chance: 0.4, front: 0.7},
       {kind: 'stockShelf', at: 'wall', wall: 'any', n: [1, 1], chance: 0.3, variant: 'stock', front: 0.8},

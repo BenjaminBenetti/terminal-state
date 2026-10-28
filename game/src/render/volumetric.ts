@@ -7,25 +7,36 @@
 //      three renders the flashlight's spot shadow map during this pass;
 //   2. raymarch at 1/2 (high) or 1/4 (low) resolution, capped pixel budget, 24 / 14 jittered steps:
 //      reconstruct each pixel's surface from depth and integrate single in-scattering in FRONT of it
-//      only - flashlight cone (shadow-mapped), baked fixture light field, muzzle pulse - over a medium
-//      with per-area / height / drifting-noise density (render/atmosphere.ts);
-//   3. temporal accumulation (reprojected, neighbourhood-clamped, depth-rejected) at march resolution;
-//   4. full-resolution composite onto the canvas: bilateral (depth-aware) upsample, in-scatter added
+//      only - flashlight cone (shadow-mapped), baked fixture light field, muzzle pulse, iteration 12: scatter lights
+//      (thrown flares) - over a medium with per-area / height / flow-advected patch-noise density + ground layer and the
+//      smoke puffs (render/atmosphere.ts, render/smoke.ts). Iteration 12: two outputs (MRT) - in-scatter + view depth,
+//      and the transmittance of the dense patches / smoke in front of the surface;
+//   3. temporal accumulation (reprojected, neighbourhood-clamped, depth-rejected) at march resolution, both targets;
+//   4. full-resolution composite onto the canvas: bilateral (depth-aware) upsample, scene x transmittance + in-scatter
 //      in scene-linear space under three's ACES curve. game.ts then clears depth and draws the
 //      viewmodel overlay on top, so the gun and the DOM HUD are never fogged.
 // Quality 'off' (or unsupported float render targets, or a shader error) renders straight to the
 // canvas as in r5, without the flashlight shadow map. The pass adds no lights and no objects to the
 // station scene; its fullscreen triangle lives in a private scene.
+//
+// Iteration 12 (ATMOS) API for the light lane (design.md): addSmokeEmitter / clearSmoke, addScatterLight /
+// removeScatterLight. Bounded (render/smoke.ts SMOKE_LIMITS); cleared on setStation (new station / retry) and dispose.
 
 import * as THREE from 'three';
 import type {StationLayout} from '../gen/station';
+import {SOLID, type Grid} from '../gen/grid';
 import type {LightFieldVolume} from '../world/lightField';
+import {stationLevels} from '../world/levelGeometry';
 import {
   ACES_IN, ACES_IN_INV, ACES_OUT, ACES_OUT_INV, ATMOSPHERE_QUALITY, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS,
-  atmosphereFor, buildDensityMap, buildNoiseVolume, marchSize, shadowBiasFor,
-  type AtmosphereParams, type AtmosphereQuality, type DensityMap, type QualityPreset,
+  atmosphereFor, buildDensityMap, buildFlowMap, buildNoiseVolume, densitySlot, marchSize, sampleFlowMap, shadowBiasFor,
+  type AtmosphereParams, type AtmosphereQuality, type DensityMap, type FlowMap, type QualityPreset,
 } from './atmosphere';
-import {VF_COMPOSITE, VF_MARCH, VF_MARK, VF_TEMPORAL, VF_VERTEX} from './volumetricShaders';
+import {
+  SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, VIS_WINDOWS, computeVisWindow, windowStale,
+  type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
+} from './smoke';
+import {VF_COMPOSITE, VF_LIMITS, VF_MARCH, VF_MARK, VF_TEMPORAL, VF_VERTEX} from './volumetricShaders';
 
 export interface AtmosphereLights {
   flashlight: THREE.SpotLight;
@@ -45,8 +56,11 @@ export interface AtmosphereDebug {
   temporal: boolean;
   msaa: number;
   shadow: {enabled: boolean; mapSize: number; bias: number; normalBias: number; near: number; updating: boolean; casters: number; receivers: number};
-  station: {bound: boolean; densityMap: [number, number] | null; field: boolean};
+  station: {bound: boolean; densityMap: [number, number] | null; field: boolean; flowMap: boolean; draft: number};
   params: Omit<AtmosphereParams, 'areaDensity'>;
+  /** Iteration 12: smoke emitters / puffs and scatter lights in the march (bounded: SMOKE_LIMITS). */
+  smoke: {emitters: number; puffs: number; limits: typeof SMOKE_LIMITS; stats: SmokeField['stats']; list: {id: number; emitting: boolean; puffs: number; x: number; y: number; z: number}[]};
+  scatter: {lights: number; active: number; windows: number};
   /** gpu: volumetric passes (timer query, Chrome only); cpu: submission time of the volumetric passes / the scene pass. */
   ms: {gpu: number | null; cpu: number; cpuScene: number};
   frames: number;
@@ -156,10 +170,15 @@ export class VolumetricAtmosphere {
   requested: AtmosphereQuality;
   quality: AtmosphereQuality = 'off';
   densityMap: DensityMap | null = null;
+  /** Iteration 12: per-storey drift map of the current station (render/atmosphere.ts buildFlowMap). */
+  flowMap: FlowMap | null = null;
   readonly noise: THREE.Data3DTexture;
   readonly march: THREE.ShaderMaterial;
   readonly temporal: THREE.ShaderMaterial;
   readonly composite: THREE.ShaderMaterial;
+  /** Iteration 12: smoke puffs and scatter lights (render/smoke.ts); use the methods below. */
+  readonly smoke = new SmokeField();
+  readonly scatter = new ScatterLights();
   private full: [number, number] = [1, 1];
   private low: [number, number] = [1, 1];
   private sceneRT: THREE.WebGLRenderTarget | null = null;
@@ -168,6 +187,15 @@ export class VolumetricAtmosphere {
   private histIndex = 0;
   private historyValid = false;
   private densityTex: THREE.DataArrayTexture | null = null;
+  private flowTex: THREE.DataArrayTexture | null = null;
+  private readonly visData = new Uint8Array(VIS_RES * VIS_RES * VIS_WINDOWS);
+  readonly visTex: THREE.DataArrayTexture;
+  /** Window layer of each scatter light / smoke emitter id (layers 0..3 lights, 4..7 emitters). */
+  private readonly lightLayer = new Map<THREE.PointLight, number>();
+  private readonly smokeLayer = new Map<number, number>();
+  private readonly winState: {x0: number; z0: number; floor: number; ceil: number; ok: boolean}[] = Array.from({length: VIS_WINDOWS}, () => ({x0: 0, z0: 0, floor: -1e3, ceil: 1e3, ok: false}));
+  private levelGrids: Grid[] = [];
+  private lastTime = Number.NaN;
   private field: LightFieldVolume | null = null;
   private readonly quad: THREE.Mesh;
   private readonly quadScene = new THREE.Scene();
@@ -198,8 +226,9 @@ export class VolumetricAtmosphere {
     this.reason = reason;
     this.requested = quality;
 
+    // Iteration 12: two-channel (RG8) noise tile: patch field + wisps (render/atmosphere.ts buildNoiseVolume).
     const noise = new THREE.Data3DTexture(buildNoiseVolume(), NOISE_SIZE, NOISE_SIZE, NOISE_SIZE);
-    noise.format = THREE.RedFormat;
+    noise.format = THREE.RGFormat;
     noise.type = THREE.UnsignedByteType;
     noise.minFilter = noise.magFilter = THREE.LinearFilter;
     noise.wrapS = noise.wrapT = noise.wrapR = THREE.RepeatWrapping;
@@ -208,29 +237,47 @@ export class VolumetricAtmosphere {
     noise.colorSpace = THREE.NoColorSpace;
     noise.needsUpdate = true;
     this.noise = noise;
+    // Iteration 12: occlusion windows of the scatter lights / smoke emitters (R8 layers, render/smoke.ts).
+    const vis = new THREE.DataArrayTexture(this.visData, VIS_RES, VIS_RES, VIS_WINDOWS);
+    vis.format = THREE.RedFormat;
+    vis.type = THREE.UnsignedByteType;
+    vis.minFilter = vis.magFilter = THREE.LinearFilter;
+    vis.wrapS = vis.wrapT = THREE.ClampToEdgeWrapping;
+    vis.generateMipmaps = false;
+    vis.unpackAlignment = 1;
+    vis.colorSpace = THREE.NoColorSpace;
+    vis.needsUpdate = true;
+    this.visTex = vis;
 
-    const V2 = () => new THREE.Vector2(1, 1), V3 = () => new THREE.Vector3(), M4 = () => new THREE.Matrix4();
-    const pass = (name: string, fragmentShader: string, uniforms: Record<string, THREE.IUniform>, defines: Record<string, number> = {}) => new THREE.ShaderMaterial({
+    const V2 = () => new THREE.Vector2(1, 1), V3 = () => new THREE.Vector3(), V4 = () => new THREE.Vector4(), M4 = () => new THREE.Matrix4();
+    const arr = (n: number) => Array.from({length: n}, V4);
+    const pass = (name: string, fragmentShader: string, uniforms: Record<string, THREE.IUniform>, defines: Record<string, number> = {}, mrt = false) => new THREE.ShaderMaterial({
       name, vertexShader: VF_VERTEX, fragmentShader, uniforms, defines,
       depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false,
+      ...(mrt ? {glslVersion: THREE.GLSL3} : {}),
     });
     this.march = pass('volumetric-march', VF_MARCH, {
       tDepth: {value: null}, uFullSize: {value: V2()}, uLowSize: {value: V2()}, uProjInv: {value: M4()}, uCamWorld: {value: M4()},
       uCamPos: {value: V3()}, uNear: {value: 0.05}, uFar: {value: 70}, uMaxDist: {value: 36}, uFrame: {value: 0}, uTime: {value: 0},
       uFogDensity: {value: 0}, uNearFade: {value: V2()}, uDensity: {value: 0}, uHeightFalloff: {value: 0}, uRefHeight: {value: 1.6},
-      uNoiseScale: {value: 0.1}, uNoiseAmount: {value: 0}, uWind: {value: V3()}, tNoise: {value: noise}, tDensityMap: {value: null}, uMapSlots: {value: 1},
+      uNoiseScale: {value: V3()}, uNoiseAmount: {value: 0}, uWind: {value: V3()}, uCover: {value: V4()}, uGround: {value: V4()}, uFlow: {value: new THREE.Vector2(14, 0)},
+      uExt: {value: V3()}, tNoise: {value: noise}, tDensityMap: {value: null}, tFlowMap: {value: null}, uMapSlots: {value: 1},
       uMapXform: {value: new THREE.Vector4(0, 0, 1, 1)}, uMapFloor: {value: new THREE.Vector2(0, 1)}, uPhase: {value: V3()},
       uFlashPos: {value: V3()}, uFlashDir: {value: new THREE.Vector3(0, 0, -1)}, uFlashCone: {value: new THREE.Vector2(1, 1)}, uFlashColor: {value: V3()},
       uFlashRange: {value: new THREE.Vector2(30, 1.2)}, tShadow: {value: null}, uShadowMatrix: {value: M4()}, uShadowBias: {value: 0}, uShadowOn: {value: 0},
       tField: {value: null}, uFieldMin: {value: V3()}, uFieldMax: {value: new THREE.Vector3(1, 1, 1)}, uFieldLevels: {value: new THREE.Vector3(1, 1, 1)}, uFieldGain: {value: 0},
       uMuzzlePos: {value: V3()}, uMuzzleColor: {value: V3()}, uMuzzleRange: {value: new THREE.Vector2(8, 2)},
-    }, {VF_STEPS: 24});
+      tVis: {value: vis}, uWin: {value: arr(VF_LIMITS.windows)}, uWinY: {value: arr(VF_LIMITS.windows)},
+      uScatCount: {value: 0}, uScatPos: {value: arr(VF_LIMITS.scatter)}, uScatCol: {value: arr(VF_LIMITS.scatter)},
+      uSmokeCount: {value: 0}, uSmokeBound: {value: arr(VF_LIMITS.smoke)}, uSmokeTint: {value: arr(VF_LIMITS.smoke)},
+      uPuff: {value: arr(VF_LIMITS.puffs)}, uPuffD: {value: arr(VF_LIMITS.puffs / 4)},
+    }, {VF_STEPS: 24}, true);
     this.temporal = pass('volumetric-temporal', VF_TEMPORAL, {
-      tCurrent: {value: null}, tHistory: {value: null}, uLowSize: {value: V2()}, uProjInv: {value: M4()}, uCamWorld: {value: M4()},
+      tCurrent: {value: null}, tCurrentT: {value: null}, tHistory: {value: null}, tHistoryT: {value: null}, uLowSize: {value: V2()}, uProjInv: {value: M4()}, uCamWorld: {value: M4()},
       uPrevViewProj: {value: M4()}, uHistoryValid: {value: 0}, uBlend: {value: 0.85},
-    });
+    }, {}, true);
     this.composite = pass('volumetric-composite', VF_COMPOSITE, {
-      tScene: {value: null}, tDepth: {value: null}, tFog: {value: null}, uFullSize: {value: V2()}, uLowSize: {value: V2()},
+      tScene: {value: null}, tDepth: {value: null}, tFog: {value: null}, tFogT: {value: null}, uFullSize: {value: V2()}, uLowSize: {value: V2()},
       uNear: {value: 0.05}, uFar: {value: 70}, uExposure: {value: 1}, uIntensity: {value: 1},
       uAcesIn: {value: mat3(ACES_IN)}, uAcesOut: {value: mat3(ACES_OUT)}, uAcesInInv: {value: mat3(ACES_IN_INV)}, uAcesOutInv: {value: mat3(ACES_OUT_INV)},
     });
@@ -298,26 +345,43 @@ export class VolumetricAtmosphere {
     this.historyValid = false;
   }
 
-  /** New station: per-level tunables, density map (areas + floors) and the baked light field. */
+  /** New station: per-level tunables, density + flow maps (areas, floors, drift) and the baked light field. Drops smoke. */
   setStation(layout: StationLayout, field: LightFieldVolume | null): void {
     this.params = atmosphereFor(layout);
     this.densityMap = buildDensityMap(layout, this.params);
+    this.flowMap = buildFlowMap(layout);
+    this.levelGrids = stationLevels(layout).slice(0, 4).map(L => L.grid);
     this.densityTex?.dispose();
+    this.flowTex?.dispose();
+    const layerTex = (data: Uint8Array, w: number, h: number, n: number) => {
+      const t = new THREE.DataArrayTexture(data, w, h, n);
+      t.format = THREE.RGBAFormat;
+      t.type = THREE.UnsignedByteType;
+      t.minFilter = t.magFilter = THREE.LinearFilter;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.generateMipmaps = false;
+      t.unpackAlignment = 1;
+      t.colorSpace = THREE.NoColorSpace;
+      t.needsUpdate = true;
+      return t;
+    };
     const m = this.densityMap;
-    // Iteration 08: one layer per level slot (RGBA: multiplier, floor, ceiling, presence).
-    const t = new THREE.DataArrayTexture(m.data, m.w, m.h, m.slots);
-    t.format = THREE.RGBAFormat;
-    t.type = THREE.UnsignedByteType;
-    t.minFilter = t.magFilter = THREE.LinearFilter;
-    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-    t.generateMipmaps = false;
-    t.unpackAlignment = 1;
-    t.colorSpace = THREE.NoColorSpace;
-    t.needsUpdate = true;
-    this.densityTex = t;
+    // Iteration 08: one layer per level slot (RGBA: multiplier, floor, ceiling, presence). Iteration 12: + drift layers.
+    this.densityTex = layerTex(m.data, m.w, m.h, m.slots);
+    this.flowTex = layerTex(this.flowMap.data, this.flowMap.w, this.flowMap.h, this.flowMap.slots);
     this.field = field;
     this.historyValid = false;
     this.casters = this.receivers = 0;
+    // Iteration 12: smoke / scatter lights belong to the previous station (the light lane re-adds its flares' lights).
+    this.clearSmoke();
+    this.scatter.clear();
+    this.lightLayer.clear();
+    this.lastTime = Number.NaN;
+    this.smoke.env = {
+      band: (x, y, z) => this.bandAt(x, y, z),
+      open: (x, y, z) => this.openAt(x, y, z),
+      drift: (x, y, z) => this.driftAt(x, y, z),
+    };
   }
 
   /** Mark flashlight shadow casters/receivers (call for the station structure, containers, zombies). */
@@ -325,6 +389,145 @@ export class VolumetricAtmosphere {
     const r = markShadows(root, this.params.surfaceShadows, structure);
     this.casters += r.casters;
     this.receivers += r.receivers;
+  }
+
+  // --- Iteration 12 (ATMOS): smoke + scatter-light API (design.md; the light lane's thrown flares) -----------------------
+
+  /**
+   * World-space smoke rising from (x, y, z): soft analytic puffs in the volumetric march, tinted by `color`, lit by the
+   * station's lights, with their own extinction. Returns a handle: setPos / update({x, y, z, ...}) / stop(fade s). At most
+   * SMOKE_LIMITS.emitters at once (a fifth evicts the oldest, preferring one already stopping) and puffsPerEmitter puffs each.
+   */
+  addSmokeEmitter(o: SmokeEmitterOptions): SmokeHandle {
+    return this.smoke.add(o);
+  }
+
+  /** Drop every smoke emitter and puff at once (new station / retry); their handles go inert. */
+  clearSmoke(): void {
+    this.smoke.clear();
+    this.smokeLayer.clear();
+  }
+
+  /**
+   * In-scattering of a PointLight in the haze / smoke (the burning flare's red light): its colour x intensity, three's
+   * distance attenuation to its cutoff, occlusion-windowed on its storey. False when SMOKE_LIMITS.scatterLights are in use.
+   */
+  addScatterLight(light: THREE.PointLight): boolean {
+    if (!this.scatter.add(light)) return false;
+    if (!this.lightLayer.has(light)) {
+      const used = new Set(this.lightLayer.values());
+      for (let l = 0; l < SMOKE_LIMITS.scatterLights; l++) if (!used.has(l)) { this.lightLayer.set(light, l); break; }
+    }
+    return true;
+  }
+
+  removeScatterLight(light: THREE.PointLight): boolean {
+    this.lightLayer.delete(light);
+    return this.scatter.remove(light);
+  }
+
+  /** Storey band (local floor / ceiling) holding (x, y, z) from the density map, or null outside it. */
+  bandAt(x: number, y: number, z: number): {floor: number; ceil: number; slot: number} | null {
+    const m = this.densityMap;
+    if (!m) return null;
+    const cx = Math.floor(x / m.cell), cy = Math.floor(z / m.cell);
+    if (cx < 0 || cy < 0 || cx >= m.w || cy >= m.h) return null;
+    const slot = densitySlot(m, x, z, y);
+    const o = ((slot * m.h + cy) * m.w + cx) * 4;
+    return {floor: m.yMin + m.data[o + 1] / 255 * m.yRange, ceil: m.yMin + m.data[o + 2] / 255 * m.yRange, slot};
+  }
+
+  private openAt(x: number, y: number, z: number): boolean {
+    const b = this.bandAt(x, y, z);
+    const g = b ? this.levelGrids[b.slot] : null;
+    if (!g) return true;
+    const [cx, cy] = g.cellOf(x, z);
+    return g.inBounds(cx, cy) && g.cells[g.idx(cx, cy)] !== SOLID;
+  }
+
+  /** Air drift at a point (m/s): the flow map + the station-wide drift (smoke puffs ride it). */
+  private driftAt(x: number, y: number, z: number): readonly [number, number, number] {
+    const f = this.flowMap, b = this.bandAt(x, y, z);
+    const v = f && b ? sampleFlowMap(f, x, z, b.slot) : [0, 0, 0];
+    const w = this.params.wind, d = f?.draft ?? 1;
+    return [v[0] + w[0] * d, 0, v[1] + w[2]];
+  }
+
+  private readonly visLookup: VisLookup = {
+    grid: (x, y, z) => {
+      const b = this.bandAt(x, y, z);
+      const g = b ? this.levelGrids[b.slot] : null;
+      return b && g ? {grid: g, floor: b.floor, ceil: b.ceil} : null;
+    },
+  };
+
+  /** (Re)computes an occlusion window layer when its source moved; marks it for upload. */
+  private refreshWindow(layer: number, st: {winX: number; winY: number; winZ: number; winT: number}, x: number, y: number, z: number, now: number): void {
+    if (!windowStale(st, x, y, z, now)) return;
+    st.winX = x; st.winY = y; st.winZ = z; st.winT = now;
+    const n = VIS_RES * VIS_RES;
+    const w = computeVisWindow({x, y: y + 0.25, z}, this.visLookup, this.visData.subarray(layer * n, (layer + 1) * n));
+    this.winState[layer] = w ? {...w, ok: true} : {x0: 0, z0: 0, floor: -1e3, ceil: 1e3, ok: false};
+    this.visTex.addLayerUpdate(layer);
+    this.visTex.needsUpdate = true;
+  }
+
+  /** Smoke simulation + packing of puffs / scatter lights / windows into the march uniforms (each frame, `time` = game time). */
+  private syncSmoke(time: number): void {
+    const dt = Number.isFinite(this.lastTime) ? time - this.lastTime : 0;
+    this.lastTime = time;
+    if (dt > 0) this.smoke.step(dt);
+    const u = this.march.uniforms, p = this.params;
+    const win = u.uWin.value as THREE.Vector4[], winY = u.uWinY.value as THREE.Vector4[];
+    const size = 1 / (VIS_RES * (this.densityMap?.cell ?? 0.5));
+    const setWin = (k: number, layer: number) => {
+      const w = this.winState[layer];
+      if (w.ok) { win[k].set(w.x0, w.z0, size, layer); winY[k].set(w.floor, w.ceil, 0, 0); } else { win[k].set(0, 0, 1, -1); winY[k].set(-1e3, 1e3, 0, 0); }
+    };
+    // scatter lights
+    const pos = u.uScatPos.value as THREE.Vector4[], col = u.uScatCol.value as THREE.Vector4[];
+    let n = 0;
+    for (const s of this.scatter.list) {
+      const l = s.light;
+      if (!l.visible || l.intensity <= 0 || n >= VF_LIMITS.scatter) continue;
+      l.updateWorldMatrix(true, false);
+      l.getWorldPosition(this.tmp);
+      const layer = this.lightLayer.get(l) ?? n;
+      if (this.densityMap) this.refreshWindow(layer, s, this.tmp.x, this.tmp.y, this.tmp.z, time);
+      const k = l.intensity * p.scatterLightScatter;
+      pos[n].set(this.tmp.x, this.tmp.y, this.tmp.z, l.distance);
+      col[n].set(l.color.r * k, l.color.g * k, l.color.b * k, l.decay);
+      setWin(n, layer);
+      n++;
+    }
+    u.uScatCount.value = n;
+    // smoke emitters with puffs
+    const bound = u.uSmokeBound.value as THREE.Vector4[], tint = u.uSmokeTint.value as THREE.Vector4[];
+    const puff = u.uPuff.value as THREE.Vector4[], dens = u.uPuffD.value as THREE.Vector4[];
+    for (const id of [...this.smokeLayer.keys()]) if (!this.smoke.emitters.some(e => e.id === id)) this.smokeLayer.delete(id);
+    let m = 0;
+    for (const e of this.smoke.emitters) {
+      const b = this.smoke.bound(e);
+      if (!b || m >= VF_LIMITS.smoke) continue;
+      let layer = this.smokeLayer.get(e.id);
+      if (layer === undefined) {
+        const used = new Set(this.smokeLayer.values());
+        for (let l = SMOKE_LIMITS.scatterLights; l < VIS_WINDOWS; l++) if (!used.has(l)) { layer = l; break; }
+        layer ??= SMOKE_LIMITS.scatterLights + m;
+        this.smokeLayer.set(e.id, layer);
+      }
+      if (this.densityMap) this.refreshWindow(layer, e, e.x, e.y, e.z, time);
+      bound[m].set(b[0], b[1], b[2], b[3]);
+      tint[m].set(e.tint[0], e.tint[1], e.tint[2], Math.min(e.puffs.length, VF_LIMITS.puffsPer));
+      e.puffs.slice(0, VF_LIMITS.puffsPer).forEach((q, j) => {
+        const i = m * VF_LIMITS.puffsPer + j;
+        puff[i].set(q.x, q.y, q.z, q.r);
+        dens[i >> 2].setComponent(i & 3, q.d);
+      });
+      setWin(VF_LIMITS.scatter + m, layer);
+      m++;
+    }
+    u.uSmokeCount.value = m;
   }
 
   /**
@@ -337,7 +540,12 @@ export class VolumetricAtmosphere {
     const fl = this.lights.flashlight;
     // No shadow pass while the flashlight is off (the map is unused then).
     if (fl.castShadow) fl.shadow.autoUpdate = fl.intensity > 0 && fl.visible;
-    if (!this.active) { this.direct(scene, camera); return; }
+    // Iteration 12 (ATMOS): ...but the map must EXIST before anything samples it. With the light dark from the first frame
+    // (title screen, a flat battery, the torch switched off) three never creates it and binds its never-uploaded placeholder
+    // to every shadow sampler: WebGL 2 then rejects those draws (INVALID_OPERATION; measured in Firefox: the station and the
+    // march did not draw at all). One forced update creates it; afterwards it simply goes stale while the light is off.
+    if (fl.castShadow && !fl.shadow.map) fl.shadow.needsUpdate = true;
+    if (!this.active) { this.syncSmoke(time); this.direct(scene, camera); return; }
     const t0 = performance.now();
     this.ensureTargets();
     r.setRenderTarget(this.sceneRT);
@@ -348,17 +556,20 @@ export class VolumetricAtmosphere {
     const timing = this.timer?.begin() ?? false;
     const marchRT = this.marchRT!, history = this.history;
     this.draw(this.march, marchRT);
-    let fog = marchRT.texture;
+    let fog = marchRT.textures[0], fogT = marchRT.textures[1];
     if (history && !this.failed) {
       const dst = history[this.histIndex], src = history[1 - this.histIndex];
-      this.temporal.uniforms.tHistory.value = src.texture;
+      this.temporal.uniforms.tHistory.value = src.textures[0];
+      this.temporal.uniforms.tHistoryT.value = src.textures[1];
       this.draw(this.temporal, dst);
-      fog = dst.texture;
+      fog = dst.textures[0];
+      fogT = dst.textures[1];
       this.histIndex = 1 - this.histIndex;
       this.historyValid = true;
     }
     if (!this.failed) {
       this.composite.uniforms.tFog.value = fog;
+      this.composite.uniforms.tFogT.value = fogT;
       this.draw(this.composite, null);
     }
     if (timing) this.timer!.end();
@@ -411,12 +622,14 @@ export class VolumetricAtmosphere {
       rt.texture.name = 'volumetric-scene';
       this.sceneRT = rt;
     }
+    // Iteration 12: two colour attachments (in-scatter + depth, transmittance).
     const lowTarget = (name: string, filter: THREE.MagnificationTextureFilter) => {
       const rt = new THREE.WebGLRenderTarget(lw, lh, {
         type: THREE.HalfFloatType, format: THREE.RGBAFormat, colorSpace: THREE.NoColorSpace, depthBuffer: false, stencilBuffer: false,
-        minFilter: filter, magFilter: filter, generateMipmaps: false,
+        minFilter: filter, magFilter: filter, generateMipmaps: false, count: 2,
       });
-      rt.texture.name = name;
+      rt.textures[0].name = name;
+      rt.textures[1].name = `${name}-transmittance`;
       return rt;
     };
     this.marchRT ??= lowTarget('volumetric-march', THREE.NearestFilter);
@@ -457,12 +670,21 @@ export class VolumetricAtmosphere {
     u.uDensity.value = p.density;
     u.uHeightFalloff.value = p.heightFalloff;
     u.uRefHeight.value = p.refHeight;
-    u.uNoiseScale.value = p.noiseScale;
+    // Iteration 12: anisotropic patch-noise scale, the rigid station drift (x along the seeded draft), coverage / ground /
+    // flow / extinction tunables (render/atmosphere.ts mediumAt).
+    const S = p.noiseScale, A = p.noiseAnisotropy, draft = this.flowMap?.draft ?? 1;
+    u.uNoiseScale.value.set(S, S * A, S);
     u.uNoiseAmount.value = p.noiseAmount;
-    u.uWind.value.set(p.wind[0], p.wind[1], p.wind[2]).multiplyScalar(p.noiseScale);
+    u.uWind.value.set(p.wind[0] * draft * S, p.wind[1] * S * A, p.wind[2] * S);
+    u.uCover.value.set(p.coverage, p.coverageSlope, p.coverageSoftness, p.clear);
+    u.uGround.value.set(p.ground, p.groundHeight, p.groundVariation, 0);
+    u.uFlow.value.set(Math.max(1, p.flowPeriod), p.detail);
+    u.uExt.value.set(p.patchExtinction, p.smokeExtinction, p.smokeScatter);
     u.uPhase.value.set(p.anisotropy, p.backAnisotropy, p.backScatter);
     u.tNoise.value = this.noise;
     u.tDensityMap.value = this.densityTex;
+    u.tFlowMap.value = this.flowTex;
+    u.tVis.value = this.visTex;
     const m = this.densityMap;
     if (m) {
       u.uMapXform.value.set(0, 0, 1 / (m.w * m.cell), 1 / (m.h * m.cell));
@@ -501,11 +723,14 @@ export class VolumetricAtmosphere {
       u.uMuzzleRange.value.set(mz.distance, mz.decay);
     }
     u.uMuzzleColor.value.set(mz ? mz.color.r * mk : 0, mz ? mz.color.g * mk : 0, mz ? mz.color.b * mk : 0);
+    // Iteration 12: smoke puffs + scatter lights + their occlusion windows.
+    this.syncSmoke(time);
     // Temporal: camera cuts (teleport / respawn) drop the history.
     const camPos = u.uCamPos.value as THREE.Vector3;
     if (this.historyValid && camPos.distanceTo(this.prevCamPos) > 3) this.historyValid = false;
     const t = this.temporal.uniforms;
-    t.tCurrent.value = this.marchRT?.texture ?? null;
+    t.tCurrent.value = this.marchRT?.textures[0] ?? null;
+    t.tCurrentT.value = this.marchRT?.textures[1] ?? null;
     t.uLowSize.value.set(lw, lh);
     t.uProjInv.value.copy(camera.projectionMatrixInverse);
     t.uCamWorld.value.copy(camera.matrixWorld);
@@ -535,8 +760,13 @@ export class VolumetricAtmosphere {
         enabled: fl.castShadow, mapSize: fl.shadow.mapSize.x, bias: fl.shadow.bias, normalBias: fl.shadow.normalBias, near: fl.shadow.camera.near,
         updating: fl.castShadow && fl.shadow.autoUpdate, casters: this.casters, receivers: this.receivers,
       },
-      station: {bound: !!this.densityTex, densityMap: this.densityMap ? [this.densityMap.w, this.densityMap.h] : null, field: !!this.field},
+      station: {bound: !!this.densityTex, densityMap: this.densityMap ? [this.densityMap.w, this.densityMap.h] : null, field: !!this.field, flowMap: !!this.flowTex, draft: this.flowMap?.draft ?? 0},
       params,
+      smoke: {
+        emitters: this.smoke.emitters.length, puffs: this.smoke.puffCount, limits: SMOKE_LIMITS, stats: {...this.smoke.stats},
+        list: this.smoke.emitters.map(e => ({id: e.id, emitting: e.emitting, puffs: e.puffs.length, x: Math.round(e.x * 100) / 100, y: Math.round(e.y * 100) / 100, z: Math.round(e.z * 100) / 100})),
+      },
+      scatter: {lights: this.scatter.list.length, active: this.march.uniforms.uScatCount.value as number, windows: this.winState.filter(w => w.ok).length},
       ms: {gpu: this.timer?.ms ?? null, cpu: Math.round(this.cpuMs * 100) / 100, cpuScene: Math.round(this.cpuSceneMs * 100) / 100},
       frames: this.frame,
     };
@@ -548,13 +778,19 @@ export class VolumetricAtmosphere {
     this.dropTargets();
     this.densityTex?.dispose();
     this.densityTex = null;
+    this.flowTex?.dispose();
+    this.flowTex = null;
     this.noise.dispose();
+    this.visTex.dispose();
     this.march.dispose();
     this.temporal.dispose();
     this.composite.dispose();
     this.quad.geometry.dispose();
     this.quadScene.remove(this.quad);
     this.timer?.dispose();
+    this.clearSmoke();
+    this.scatter.clear();
+    this.lightLayer.clear();
     if (this.renderer) {
       const dbg = this.renderer.debug as {onShaderError: ShaderErrorFn | null};
       if (dbg.onShaderError === this.onShaderError) dbg.onShaderError = this.prevShaderError;

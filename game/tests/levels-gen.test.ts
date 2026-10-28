@@ -14,6 +14,7 @@ import {
 import {doorClearVolumes, doorwayIssues} from '../src/gen/doorways';
 import {SERVICE_LAMP} from '../src/gen/levelGenDress';
 import {traversalIssues} from '../src/gen/traversal';
+import {ENEMY_SPAWNS} from '../src/ai/creatureSpawn';
 
 const cache = new Map<string, StationLayout>();
 const gen = (seed: number, archetype?: Archetype) => {
@@ -304,8 +305,8 @@ describe('multi-level stations (iteration 08, Lane A)', () => {
         if (a.level === LEVEL_UPPER && a.publicSpace) expect(a.lighting, `${tag} ${a.label}`).toBe('lit');
         if (a.level === LEVEL_LOWER) { lower++; if (a.lighting !== 'lit') lowerDark++; }
       }
-      expect(l.zombies.length).toBeGreaterThanOrEqual(11);
-      expect(l.zombies.length).toBeLessThanOrEqual(16);
+      expect(l.zombies.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min); // Iteration 12 (AI): doubled population
+      expect(l.zombies.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
       zu += l.zombies.filter(z => z.level === LEVEL_UPPER).length;
       zl += l.zombies.filter(z => z.level === LEVEL_LOWER).length;
       pu += l.pickups.filter(p => p.level === LEVEL_UPPER).length;

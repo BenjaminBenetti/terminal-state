@@ -12,11 +12,24 @@
 // Also on a single level: registered (lit, fogged) meshes whose box lies entirely beyond the distance
 // where the scene's FogExp2 is >= 99.8 % opaque are hidden (they render as pure fog colour). Emissive
 // tubes and glow cards (fixture state readable from afar) are not registered and stay.
+//
+// Iteration 12 (ARCH, user: "right at the moment where you get to the bottom of the stairs the geometry
+// often disappears"): a stair RUN (flights + intermediate landings + its lead) is carved identically into
+// the two level grids it joins, so LevelColumns keeps ONE band for it, owned by the lower level index
+// (main). The camera's level on the whole run therefore resolved to main: at the bottom of a run down to
+// the lower level (and at the top of a run up to the upper level) the destination level was culled
+// unless a portal tile - only the few mid-run columns whose band reached BOTH fixed walking zones - was
+// in the frustum, and those lie behind you once you face off the last step. Now:
+// - the camera stands on EVERY level whose own (pre-dedup) band holds the eye, so on a shared run both
+//   levels are current and nothing of either is level-culled;
+// - every shared column (identical band in both grids: the whole run) is a portal tile of that pair, so
+//   just off either end the run and the level it came from stay visible through it;
+// - a portal tile right next to the eye counts as visible without the frustum / sight-line test.
 
 import * as THREE from 'three';
-import {CELL, FLOOR, VOID} from '../gen/grid';
+import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
 import type {Level} from '../gen/levels';
-import {LevelColumns, cellCeil} from './levelGeometry';
+import {LevelColumns, cellCeil, rampsEqual} from './levelGeometry';
 import type {LevelResolver} from './builder';
 
 /** Layer that no camera renders: culled meshes live here. */
@@ -34,9 +47,28 @@ export function fogCullDistance(fogDensity: number): number {
 }
 /** Height range above a level's base that counts as its walking/viewing zone (m). */
 const ZONE: [number, number] = [0.2, 2.4];
+/** A portal tile within this horizontal distance of the eye (and spanning its height) is visible outright (m). */
+export const PORTAL_NEAR = 1.0;
+/** Band tolerance when deciding which levels the eye stands on (as the builder's levelAt). */
+const EYE_TOL = 0.3;
+
+const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
+
+/** Lowest floor / highest ceiling of column i's band on grid g (ramps: the band the cell sweeps). */
+function bandOf(g: Grid, i: number): [number, number] {
+  return ramp(g, i) ?? [g.floorOf(i), cellCeil(g, i)];
+}
+
+/** True when column i is the SAME band in both grids (a stair run carved into both levels it joins). */
+export function sharedColumn(ga: Grid, gb: Grid, i: number): boolean {
+  if (!isOpen(ga, i) || !isOpen(gb, i)) return false;
+  const ra = ga.rampIdx[i], rb = gb.rampIdx[i];
+  if (ra >= 0 || rb >= 0) return ra >= 0 && rb >= 0 && rampsEqual(ga.ramps[ra], gb.ramps[rb]);
+  return Math.abs(ga.floorOf(i) - gb.floorOf(i)) < 1e-3 && Math.abs(cellCeil(ga, i) - cellCeil(gb, i)) < 1e-3;
+}
 
 interface Tile { a: number; b: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; cells: number[] }
-interface Entry { obj: THREE.Mesh; level: number; x0: number; z0: number; x1: number; z1: number; mask: number; culled: boolean }
+interface Entry { obj: THREE.Mesh; level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; mask: number; culled: boolean }
 
 export class LevelCuller {
   readonly entries: Entry[] = [];
@@ -47,8 +79,10 @@ export class LevelCuller {
   private readonly box = new THREE.Box3();
   private readonly eye = new THREE.Vector3();
   private last = {x: NaN, y: NaN, z: NaN, qx: 0, qy: 0, qz: 0, qw: 0};
-  /** Diagnostics of the last update. */
-  stats = {level: 0, tilesTested: 0, tilesVisible: 0, culled: 0, fogged: 0, registered: 0, uncullable: 0};
+  /** Levels the eye stands on (scratch of update). */
+  private readonly here = new Set<number>();
+  /** Diagnostics of the last update (`level`: the resolver's level; `levels`: every level the eye stands on). */
+  stats = {level: 0, levels: [0] as number[], tilesTested: 0, tilesVisible: 0, culled: 0, fogged: 0, registered: 0, uncullable: 0};
   enabled = true;
   /** Hide registered meshes entirely beyond this distance (m); set from the scene fog (fogCullDistance). */
   maxDistance = Infinity;
@@ -76,6 +110,11 @@ export class LevelCuller {
           // A flight's column sweeps its whole pitch: test its lowest floor / highest ceiling.
           const lo = ra ? ra[0] : f, hi = ra ? ra[1] : c;
           if (lo <= za[1] && hi >= za[0] && lo <= zb[1] && hi >= zb[0]) { portal = true; y0 = Math.min(y0, lo); y1 = Math.max(y1, hi); }
+        }
+        // Iteration 12 (ARCH): every column of a stair run shared by both grids joins the two levels.
+        if (sharedColumn(L[a].grid, L[b].grid, i)) {
+          const [lo, hi] = bandOf(L[a].grid, i);
+          portal = true; y0 = Math.min(y0, lo); y1 = Math.max(y1, hi);
         }
         if (!portal) continue;
         const cx = i % W, cy = (i - cx) / W;
@@ -119,7 +158,7 @@ export class LevelCuller {
       }
       // Not a station level (e.g. builder STAIR_LEVEL flights, seen from both levels): fog culling only.
       if (!this.levelIds.includes(level)) level = NaN;
-      this.entries.push({obj: m, level, x0: this.box.min.x, z0: this.box.min.z, x1: this.box.max.x, z1: this.box.max.z, mask: m.layers.mask, culled: false});
+      this.entries.push({obj: m, level, x0: this.box.min.x, z0: this.box.min.z, x1: this.box.max.x, z1: this.box.max.z, y0: this.box.min.y, y1: this.box.max.y, mask: m.layers.mask, culled: false});
     });
   }
 
@@ -133,37 +172,59 @@ export class LevelCuller {
       && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) return;
     Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w});
     const camLevel = this.levelAt(e.x, e.y, e.z);
+    // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both).
+    const here = this.eyeLevels(e, camLevel);
     this.stats.level = camLevel;
-    // Visible portal tiles from the camera's level, per other level.
+    this.stats.levels = [...here];
+    // Visible portal tiles from the camera's level(s), per other level.
     const vis = new Map<number, Tile[]>();
     let tested = 0, visible = 0;
     if (this.enabled) {
       this.pm.multiplyMatrices((camera as THREE.PerspectiveCamera).projectionMatrix, camera.matrixWorldInverse);
       this.fr.setFromProjectionMatrix(this.pm);
-      for (const t of this.tiles) {
-        if (t.a !== camLevel && t.b !== camLevel) continue;
-        const other = t.a === camLevel ? t.b : t.a;
+      const seen = (t: Tile): boolean => {
         const dx = Math.max(t.x0 - e.x, 0, e.x - t.x1), dz = Math.max(t.z0 - e.z, 0, e.z - t.z1);
-        if (dx * dx + dz * dz > PORTAL_MAX_DIST * PORTAL_MAX_DIST) continue;
+        if (dx * dx + dz * dz > PORTAL_MAX_DIST * PORTAL_MAX_DIST) return false;
         this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
-        const inside = e.x >= t.x0 && e.x <= t.x1 && e.z >= t.z0 && e.z <= t.z1;
-        if (!inside && !this.fr.intersectsBox(this.box)) continue;
+        // Right beside the tile (just off a run's end): visible without frustum / sight tests.
+        const inside = dx * dx + dz * dz <= PORTAL_NEAR * PORTAL_NEAR && e.y >= t.y0 - 0.5 && e.y <= t.y1 + 0.5;
+        if (!inside && !this.fr.intersectsBox(this.box)) return false;
         tested++;
-        if (!inside && !this.sees(e, t)) continue;
+        if (!inside && !this.sees(e, t)) return false;
         visible++;
-        let list = vis.get(other);
-        if (!list) vis.set(other, (list = []));
-        list.push(t);
+        return true;
+      };
+      const add = (other: number, t: Tile) => { let list = vis.get(other); if (!list) vis.set(other, (list = [])); list.push(t); };
+      for (const t of this.tiles) {
+        const ha = here.has(t.a), hb = here.has(t.b);
+        if (ha === hb) continue; // neither level is current, or both already are
+        if (seen(t)) add(ha ? t.b : t.a, t);
+      }
+      // Iteration 12 (ARCH): one more hop - a level seen through a portal shows a further level through ITS
+      // portals when those are in view and in sight too (the lower level down the second run of a stair
+      // core, seen from the upper landing across the main-level lobby).
+      const hop1 = vis.size ? new Set(vis.keys()) : null;
+      if (hop1) for (const t of this.tiles) {
+        if (here.has(t.a) || here.has(t.b)) continue;
+        const sa = hop1.has(t.a), sb = hop1.has(t.b);
+        if (sa === sb) continue;
+        if (seen(t)) add(sa ? t.b : t.a, t);
       }
     }
     let culled = 0, fogged = 0;
-    const far2 = this.maxDistance * this.maxDistance;
+    // Iteration 12 (ARCH): three's FogExp2 fogs by VIEW DEPTH (-mvPosition.z), not distance: at the screen corners
+    // a box 58 m away is only ~31 m deep (~17 % visible). Fog-cull a box only when its nearest point along the view
+    // axis lies beyond maxDistance (conservative, so nothing still visible through the fog pops out at the edges).
+    const me = camera.matrixWorld.elements;
+    const fl = Math.hypot(me[8], me[9], me[10]) || 1;
+    const fx = -me[8] / fl, fy = -me[9] / fl, fz = -me[10] / fl;
+    const far = this.maxDistance;
     for (const en of this.entries) {
       let show: boolean;
-      const dx = Math.max(en.x0 - e.x, 0, e.x - en.x1), dz = Math.max(en.z0 - e.z, 0, e.z - en.z1);
+      const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
-      else if (dx * dx + dz * dz > far2) { show = false; fogged++; } // entirely inside opaque fog
-      else if (en.level === camLevel || Number.isNaN(en.level)) show = true;
+      else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
+      else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
       else {
         // Another level: only near a portal tile the camera can see.
         show = false;
@@ -180,6 +241,29 @@ export class LevelCuller {
     this.stats.tilesVisible = visible;
     this.stats.culled = culled;
     this.stats.fogged = fogged;
+  }
+
+  /**
+   * Iteration 12 (ARCH): the levels the eye stands on: `camLevel` (the resolver's pick) plus every level whose
+   * OWN open band at the eye's column holds the eye (within EYE_TOL). A stair run carved into two grids is one
+   * deduplicated band in LevelColumns (owned by the lower level index), but it belongs to both levels it joins.
+   */
+  private eyeLevels(e: THREE.Vector3, camLevel: number): Set<number> {
+    const here = this.here;
+    here.clear();
+    here.add(camLevel);
+    const cx = Math.floor(e.x / CELL), cy = Math.floor(e.z / CELL);
+    if (cx < 0 || cy < 0 || cx >= this.cols.W || cy >= this.cols.H) return here;
+    const i = cy * this.cols.W + cx;
+    for (const L of this.levels) {
+      const g = L.grid;
+      if (!isOpen(g, i)) continue;
+      const f = g.floorAt(e.x, e.z);
+      const r = g.rampIdx[i];
+      const c = r >= 0 ? Math.max(cellCeil(g, i), f + g.ramps[r].headroom) : cellCeil(g, i);
+      if (e.y >= f - EYE_TOL && e.y <= c + EYE_TOL) here.add(L.id);
+    }
+    return here;
   }
 
   /** Line of sight from the eye to a few columns of a portal tile, through the union of free bands. */

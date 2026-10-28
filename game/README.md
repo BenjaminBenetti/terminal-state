@@ -11,7 +11,7 @@ a PATH-style mall), each with randomized fare lines, ticket halls, retail arcade
 whose restaurants and shops are storefront bays built into the hall walls (counter units with sign
 bands and menu boards, glazed shops, roll-down shutters, a service corridor behind; shared seating in
 the middle), washrooms, sealed street-exit stairs and back-of-house (stock rooms with shelving,
-storage, crew/utility rooms, closets) — 11–16 rigged zombies that fall as
+storage, crew/utility rooms, closets) — 22–32 rigged zombies (iteration 12: doubled) that fall as
 physics ragdolls, physical casings, both existing guns, a five-slot hotbar + backpack, visible
 searchable loot, food/drink with slow hunger/thirst (both start at 80%), death and restart. Nothing is
 saved: no localStorage/IndexedDB; settings last for the session only.
@@ -39,8 +39,20 @@ The built folder is fully static: open `index.html` through any static HTTP serv
 ## Controls
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use · right click
 aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) · 1–5 / wheel quick slots · Q last item · Tab or I inventory · H quick
-heal · G drop held item · F flashlight · M mute · Esc pause. Desktop keyboard + mouse only; touch
+heal · G drop held item · F flashlight · T throw flare · M mute · Esc pause. Desktop keyboard + mouse only; touch
 is not supported.
+
+Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
+(HUD meter bottom right, above the weapon panel). It starts at 80 % and drains only while the light is on: a full battery
+gives 7 min of continuous light. Above 25 % the beam is steady; below 25 % it flickers — soft irregular dips whose share of
+the light-on time grows linearly from 0 at 25 % to 40 % near 0 % (dips 0.10–0.34 s, half-dims near 25 %, real cut-outs
+only near empty, plus a slight brown-out); at 0 % it is dead and F only clicks. A found **battery** (D cell) is used like
+food (left click while held, or Use in the inventory): it refills to 100 %, consumes one, and is refused at ≥ 99 %. A
+faint warm-orange **body glow** (0.22 cd, 2 m reach) keeps the floor right around you from pitch black; it never draws
+enemies. **Flares** are the grenade slot: **T** strikes and throws one from anywhere in the inventory (or left click with a
+flare in the held quick slot); it bounces and settles physically, burns red with red smoke for 50 s (fading over the last
+6 s) and lures enemies that can see it (28 m). At most 3 burn at once (a 4th throw is refused, nothing used). The
+flashlight beam lures too (20 m around where it lands, scaled by its brightness). G still drops the held item.
 
 Crouch: **C** (iteration 05: back from Ctrl, which collided with the browser's Ctrl+W) — tap to
 toggle; hold longer than 0.3 s to crouch only while held. Crouched = half speed, ~30% less recoil and

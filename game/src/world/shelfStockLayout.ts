@@ -9,7 +9,7 @@
 // put in front of a lot, and lots keep their own surfaces (items/lootLayout.ts) untouched.
 
 import {mulberry32, hashString} from '../core/rng';
-import {CATEGORY_STOCK, STOCK_ARCHES, ARCH_INDEX, type StockArch, type StockCategory} from './shelfStockCatalog';
+import {CATEGORY_SPARSE, CATEGORY_STOCK, DEFAULT_SPARSE, STOCK_ARCHES, ARCH_INDEX, type StockArch, type StockCategory} from './shelfStockCatalog';
 
 export type V3 = [number, number, number];
 export type Q4 = [number, number, number, number];
@@ -79,6 +79,8 @@ export interface DressInput {
 
 /** Clearance kept around real loot lots. */
 export const LOT_GAP = 0.025;
+/** Iteration 12 (LOOT lane): rows deep of an intact leftover package (the rest of the facing long gone). */
+export const INTACT_ROWS = 2;
 /** Gap between neighbouring pieces in a facing / between facings (m). */
 const GAP_SAME = 0.004, GAP_PRODUCT = 0.012, GAP_ROW = 0.006;
 /** Tolerance of the overlap test (pieces may touch). */
@@ -219,6 +221,8 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
   const {r} = ctx;
   const deck = b.deck ?? flatDeck(b);
   const weights = CATEGORY_STOCK[category];
+  // Iteration 12 (LOOT lane): abandoned shelves — more sold-out bays, more looted facings, more knocked-over pieces (coolers most)
+  const sparse = CATEGORY_SPARSE[category] ?? DEFAULT_SPARSE;
   let x = b.x0 + 0.003;
   let run: {arch: number; variant: number; left: number} | null = null;
   let guard = 0;
@@ -226,9 +230,9 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
   const boardV = b.variant !== undefined ? b.variant + Math.floor(r() * 997) : undefined;
   while (x < b.x1 - 0.04 && guard++ < 400) {
     // Sold-out bay: a gap, sometimes with one knocked-over package lying in it.
-    if (r() < 0.055 && !b.full) {
-      const gw = 0.06 + r() * 0.14;
-      if (r() < 0.35) tipped(ctx, b, bi, deck, weights, x, Math.min(b.x1, x + gw));
+    if (r() < sparse.gap && !b.full) {
+      const gw = 0.06 + r() * 0.16;
+      if (r() < sparse.tipped) tipped(ctx, b, bi, deck, weights, x, Math.min(b.x1, x + gw));
       x += gw;
       run = null;
       continue;
@@ -242,7 +246,9 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
         const big = Math.max(A.w, A.d) * 0.026; // yaw jitter allowance
         if (A.h > b.top - b.y - 0.004 || A.d + big > b.z1 - b.z0 || A.w + big > b.x1 - x) continue;
         const rv = Math.floor(r() * A.variants);
-        run = {arch: a, variant: boardV !== undefined ? boardV % A.variants : rv, left: A.facings[0] + Math.floor(r() * (A.facings[1] - A.facings[0] + 1))};
+        // iteration 12: an intact (unopened) package is a leftover — one facing (now and then two), never a full block
+        const left = A.look === 'intact' ? (r() < 0.25 ? 2 : 1) : A.facings[0] + Math.floor(r() * (A.facings[1] - A.facings[0] + 1));
+        run = {arch: a, variant: boardV !== undefined ? boardV % A.variants : rv, left};
       }
       if (!run) break;
     }
@@ -268,9 +274,9 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
       zf = Math.min(zf, l.min[2] - LOT_GAP);
     }
     const pitch = 2 * ez + GAP_ROW;
-    const rows = Math.min(A.depth, depthCap, Math.floor((zf - b.z0 + GAP_ROW) / pitch));
+    const rows = Math.min(A.look === 'intact' ? INTACT_ROWS : A.depth, depthCap, Math.floor((zf - b.z0 + GAP_ROW) / pitch));
     // Looted facing: the front packages are gone (the back one usually left behind).
-    const taken = r() < 0.15 && !b.full ? (rows > 1 ? 1 + Math.floor(r() * (rows - 1)) : r() < 0.4 ? 1 : 0) : 0;
+    const taken = r() < sparse.taken && !b.full ? (rows > 1 ? 1 + Math.floor(r() * (rows - 1)) : r() < 0.4 ? 1 : 0) : 0;
     for (let k = 0; k < rows; k++) {
       if (k < taken) continue;
       const zc = zf - ez - k * pitch - 0.002;
@@ -278,7 +284,7 @@ function dressRows(ctx: Ctx, b: Board, bi: number, category: StockCategory, dept
       const dy = deck(a0, zc - ez, a1, zc + ez);
       if (!Number.isFinite(dy)) continue;
       const maxStack = Math.max(1, Math.min(A.stack, Math.floor((b.top - dy) / (A.h + 0.002))));
-      const levels = A.stack > 1 ? Math.max(1, maxStack - (r() < 0.3 && !b.full ? 1 : 0)) : 1;
+      const levels = A.stack > 1 && A.look !== 'intact' ? Math.max(1, maxStack - (r() < 0.3 && !b.full ? 1 : 0)) : 1;
       let below = -1, y = dy + 0.0015;
       for (let s = 0; s < levels; s++) {
         const j = s ? (r() - 0.5) * 0.04 : 0;
@@ -308,6 +314,12 @@ function tipped(ctx: Ctx, b: Board, bi: number, deck: NonNullable<Board['deck']>
   const dy = deck(f[0], f[1], f[2], f[3]);
   if (!Number.isFinite(dy)) return;
   p.c[1] = dy + 0.0015 + obbExtent(placementOBB(p))[1];
+  // real loot first: a knocked-over piece never lies in front of a lot (iteration 12: coolers tip far more of them)
+  const top = p.c[1] + obbExtent(placementOBB(p))[1];
+  for (const l of ctx.lots) {
+    if (l.max[0] <= f[0] - LOT_GAP || l.min[0] >= f[2] + LOT_GAP || l.max[1] < dy - 0.03 || l.min[1] > top) continue;
+    if (f[3] > l.min[2] - LOT_GAP) return;
+  }
   tryAdd(ctx, p, b);
 }
 
@@ -321,7 +333,7 @@ function dressLean(ctx: Ctx, b: Board, bi: number, category: StockCategory): voi
     const a = pickWeighted(weights, r);
     const A = STOCK_ARCHES[a];
     if (x + A.w > b.x1) break;
-    if (r() < 0.12) { x += A.w * (0.5 + r() * 0.6); continue; } // sold-out title
+    if (r() < 0.25) { x += A.w * (0.5 + r() * 0.6); continue; } // sold-out title (iteration 12: a picked-over rack)
     const variant = Math.floor(r() * A.variants);
     const copies = 1 + Math.floor(r() * 3);
     const cx = x + A.w / 2;
@@ -374,10 +386,14 @@ function dressSpots(ctx: Ctx, b: Board, bi: number, category: StockCategory): vo
   const {r} = ctx;
   const weights = CATEGORY_STOCK[category];
   for (const [sx, sz] of b.spots ?? []) {
-    if (r() < 0.12) continue;
+    if (r() < 0.22) continue; // iteration 12: emptier stands
     const a = pickWeighted(weights, r);
     const A = STOCK_ARCHES[a];
-    const p: StockPlacement = {arch: a, variant: Math.floor(r() * A.variants), c: [sx + (r() - 0.5) * 0.02, b.y + 0.0015 + A.h / 2, sz + (r() - 0.5) * 0.02], q: qYXZ(r() * Math.PI * 2), board: bi, on: -1, tint: r()};
+    // jitter kept inside the step's own band (a bucket as wide as its step never leans into the riser behind it)
+    const jx = (r() - 0.5) * 0.02, jz = (r() - 0.5) * 0.02;
+    const cz = Math.max(Math.min(sz + jz, b.z1 - A.d / 2), Math.min(sz, b.z0 + A.d / 2));
+    const cx = Math.max(Math.min(sx + jx, b.x1 - A.w / 2), Math.min(sx, b.x0 + A.w / 2));
+    const p: StockPlacement = {arch: a, variant: Math.floor(r() * A.variants), c: [cx, b.y + 0.0015 + A.h / 2, cz], q: qYXZ(r() * Math.PI * 2), board: bi, on: -1, tint: r()};
     tryAdd(ctx, p, b);
   }
 }

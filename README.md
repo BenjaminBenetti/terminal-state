@@ -4,10 +4,10 @@
 survival prototype set in a procedurally generated North American subway station.
 Explore, scavenge supplies, manage your inventory and fight the infected.
 
-This repository contains the **iteration 8** game source and all cooked runtime
-inputs (iteration 8 adds source/authored geometry only; the cooked public assets are
-unchanged from the reviewed v7 release). Portable repository packaging and the CI
-pipeline are separate from gameplay.
+This repository contains the **iteration 12** game source and all cooked runtime
+inputs (later iterations add the user-supplied weapon models of iteration 10 and new
+Sound Lab cues of iterations 11-12, each with provenance under `game/public/assets/derivatives/`).
+Portable repository packaging and the CI pipeline are separate from gameplay.
 This is an early keyboard-and-mouse prototype, not a finished game.
 
 ## Build and play
@@ -88,7 +88,9 @@ WASD move · mouse look · Shift sprint · Space jump · C crouch · left click 
 · right click aim · R reload · E interact · 1–5 / wheel quick slots · Q last item
 · Tab/I inventory · H heal · G drop · F flashlight · M mute · Esc pause.
 
-Iteration 8 adds stacked station levels (an upper concourse over the platforms and
+Iteration 12 adds a decayed, foggier station (30 years of neglect on walls/floors/ceilings, patchy drifting
+volumetric fog), a flashlight battery with a dim body glow, throwable red flares (T), enemies drawn to light, twice
+the enemies and far scarcer non-ammo supplies placed by room purpose. Iteration 8 adds stacked station levels (an upper concourse over the platforms and
 tracks, a lower service level beneath them, stair cores and light wells), zone-specific
 worn and broken wall detail, composed prop clusters, openable bins/lockers/drawers and
 other storage, and physical 3D shelf stock that scatters when shot. Iteration 7 added

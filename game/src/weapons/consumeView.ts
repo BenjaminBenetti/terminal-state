@@ -54,7 +54,7 @@ const MOUTH = new THREE.Vector3(0.015, -0.045, -0.14);
 const BELOW = new THREE.Vector3(0.03, -0.36, 0);
 const BELOW_TILT = euler(-0.7, 0, 0);
 
-type Motion = 'tip' | 'bite' | 'bandage' | 'medkit';
+type Motion = 'tip' | 'bite' | 'bandage' | 'medkit' | 'insert';
 interface Style {
   motion: Motion;
   /** Local point (item frame) that goes to the mouth / hands. */
@@ -89,6 +89,8 @@ function styleFor(itemId: string, box: THREE.Box3): Style {
       default: return {...s, motion: 'bite', a0: 1.0, a1: 1.1};
     }
   }
+  // Iteration 12 (LIGHT): the battery is held low in front, + end first, and pushed into the (off-screen) flashlight.
+  if (def.recharge) return {...s, motion: 'insert', anchor: centre, target: new THREE.Vector3(0.035, -0.095, -0.27)};
   // Medical: held low in front of the body.
   if (itemId === 'medkit') return {...s, motion: 'medkit', anchor: centre, target: new THREE.Vector3(0.0, -0.22, -0.46)};
   return {...s, motion: 'bandage', anchor: centre, target: new THREE.Vector3(0.02, -0.2, -0.3)};
@@ -295,6 +297,13 @@ export class ConsumeView {
     if (s.motion === 'medkit') {
       q = euler(0.75 + Math.sin(t * 9) * 0.03, -0.1, 0);
       target.x += Math.sin(t * 6) * 0.008;
+    } else if (s.motion === 'insert') {
+      // Iteration 12 (LIGHT): tipped + end forward / up, slides forward and in over the use, small seating jiggle.
+      const push = ease(clamp01((k - 0.25) / 0.55));
+      q = euler(-0.95 + push * 0.2, 0.35, 0.2 + Math.sin(t * 11) * 0.02);
+      target.z -= push * 0.08;
+      target.x -= push * 0.03;
+      target.y += push * 0.02 + (k > 0.8 ? Math.sin(t * 40) * 0.002 : 0);
     } else if (s.motion === 'bandage') {
       // Unrolling around the forearm: the roll orbits a little and spins about its own axis (X).
       q = euler(0.3, 0.6, 0).multiply(euler(t * 7, 0, 0));

@@ -214,6 +214,8 @@ function station(seed: number) {
   return {layout, mats, world, cm, inv, pickups, ph, sys};
 }
 
+const CANS = new Set(['water', 'cola', 'beans', 'noodles']);
+
 describe('loot lots become loose physical items (finite loot preserved)', () => {
   it('a can on a shelf tier is lifted off its holder (same id / count), drops tier to tier, and is taken exactly once', () => {
     type St = ReturnType<typeof station>;
@@ -224,7 +226,8 @@ describe('loot lots become loose physical items (finite loot preserved)', () => 
       st = station(seed);
       for (const h of st.cm.all) {
         if (!(h.kind === 'shelf' || h.kind === 'stockShelf') || !h.state.open) continue;
-        const l = h.state.lots.find(x => x.y > 0.5);
+        // Iteration 12 (LOOT lane): scarce shelves — the first lot above the bottom tier may now be an ammo box; this test is about a can.
+        const l = h.state.lots.find(x => x.y > 0.5 && CANS.has(x.itemId));
         if (l) { pick = {h, lot: l}; break; }
       }
       if (pick) break;

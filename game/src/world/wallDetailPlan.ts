@@ -95,6 +95,9 @@ export const RECIPES: Record<Treatment, Recipe> = {
   lowerConcrete: {bay: 4.8, pilaster: 0, joint: 0.5, band: 'none', frieze: false, formwork: true, condition: [0.55, 0.9], hotspots: 1.0, tileLoss: 0, spall: 1.5, crack: 0.8, patch: 0.6, streak: 1.2, edgeChips: 0.2, cornerChips: 0.7, wear: 'kick', soot: 0.5, damp: 0.7, conduit: 0.7, switchBox: 0.6, pipe: 0.55, cables: false, breach: 1.2, recess: 0.3},
 };
 
+/** Iteration 12 (ARCH): condition added to every wall for ~30 years without upkeep (world/decay.ts ages the surfaces). */
+export const WALL_AGE_30Y = 0.12;
+
 /** Per-station bounded budgets (features; geometry counts are reported by the builder). */
 export const WALL_DETAIL_CAPS = {cut: 240, breach: 4, decal: 900, soft: 600, flush: 1400, proud: 220, perFaceCut: 4, perFaceCutPerM: 1 / 7};
 
@@ -203,7 +206,8 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   const levels = new Levels(stationLevels(layout));
   const srng = new Rng(hashString('wall-detail', layout.seed >>> 0));
   const accent = STATION_ACCENTS[srng.int(0, STATION_ACCENTS.length - 1)];
-  const age = srng.range(-0.08, 0.14);
+  // Iteration 12 (ARCH): ~30 years without upkeep raise every wall's condition (more cracks, lost tiles, leak runs).
+  const age = srng.range(-0.08, 0.14) + WALL_AGE_30Y;
   const bayPhase = srng.range(0, 1);
   const jointEvery = srng.int(2, 4);
   const hallAccent = new Map<number, string>();
@@ -239,6 +243,8 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   const byFace: Feature[][] = planned.map(() => []);
   for (const f of ctx.features) byFace[f.face].push(f);
   planBreaches(ctx, planned, srng.fork('breach'), byFace);
+  // Iteration 12 (ARCH): rust bleeding down the finish from wall-mounted steel (after every cut is final).
+  planned.forEach((pf, i) => rustBleed({pf, idx: i, rng: new Rng(pf.face.seed ^ 0x7e57), placed: byFace[i]}, ctx));
   // Board-formed concrete last: its pattern runs around every cut, keep-out and other flush finish.
   planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
   const {features, dropped} = applyCaps(ctx.features, planned);
@@ -668,6 +674,37 @@ function formworkRun(st: FaceState, ctx: PlanCtx): void {
       if (a - s >= 0.3) push(st, ctx, {kind: 'formwork', s0: s, s1: Math.min(a, pf.len), y0: y, y1, cell: 'formwork', tint: [0.55, 0.53, 0.5], grid: {pu: 2.4, pv: 1.2, ou: 0, ov: f.base}});
       s = Math.max(s, b);
     }
+  }
+}
+
+/**
+ * Iteration 12 (ARCH): rust bleed - orange-brown runs from the fixings of wall-mounted sign plates and passage
+ * handrail brackets down the finish (soft layer; never over openings, storefronts, ladders or cut features).
+ */
+function rustBleed(st: FaceState, ctx: PlanCtx): void {
+  const pf = st.pf, f = pf.face;
+  if (pf.len < 0.6 || f.y1 - f.y0 < 0.8) return;
+  const hard = pf.keepouts.filter(k => (k.mask & M.soft) && k.why !== 'sign' && k.why !== 'sign-tablet' && k.why !== 'rail');
+  const run = (sc: number, top: number, w: number, len: number) => {
+    const r = {s0: sc - w / 2, s1: sc + w / 2, y0: Math.max(f.y0 + 0.05, top - len), y1: Math.min(f.y1, top)};
+    if (r.y1 - r.y0 < 0.25 || r.s0 < 0.04 || r.s1 > pf.len - 0.04) return;
+    if (hard.some(k => overlaps(r, k)) || st.placed.some(p => p.layer === 'cut' && overlaps(r, p, 0.04))) return;
+    push(st, ctx, {kind: 'streak', ...r, cell: st.rng.pick(['streakA', 'streakB', 'streakC'] as const), tint: [0.4, 0.22, 0.1], flip: st.rng.chance(0.5)});
+  };
+  const near = ctx.near!.at(pf.axis, planeOf(pf));
+  for (const si of near.signs) {
+    const s = ctx.layout.signs[si];
+    if (s.hang || s.y < f.y0 - 0.5 || s.y > f.y1 + 0.5) continue;
+    if (Math.sin(s.rot) * f.nx + Math.cos(s.rot) * f.nz < 0.9) continue;
+    if ((pf.axis === 'z' ? Math.abs(s.z - f.z0) : Math.abs(s.x - f.x0)) > 0.3) continue;
+    const {w, h} = signDims(s);
+    const sc = sOf(pf, pf.axis === 'z' ? s.x : s.z);
+    for (const side of [-1, 1]) if (st.rng.chance(0.15 + 0.7 * pf.condition)) run(sc + side * w * 0.38, s.y - h / 2 + 0.01, st.rng.range(0.1, 0.22), st.rng.range(0.3, 1.2));
+  }
+  for (const b of near.rails) {
+    const r = boxOnFace(pf, b, 0.25);
+    if (!r) continue;
+    for (let s = r.s0 + 0.3; s < r.s1 - 0.2; s += 1.2) if (st.rng.chance(0.35 * pf.condition)) run(s, r.y0 - 0.02, st.rng.range(0.08, 0.16), st.rng.range(0.25, 0.8));
   }
 }
 

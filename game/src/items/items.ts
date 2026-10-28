@@ -2,15 +2,17 @@
 // Consumables restore health (medical) or food/water (player/survival.ts); values are tuned so a
 // short slice never forces eating, but each item visibly moves its bar.
 
-export type ItemKind = 'weapon' | 'ammo' | 'consumable';
+// Iteration 12 (LIGHT): 'throwable' = the grenade slot (the road flare: T throws it, or left click while it is held).
+export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
   | 'rifle' | 'shotgun' | 'pistol' | 'rounds' | 'rounds9' | 'shells' | 'medkit' | 'bandage'
-  | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles';
+  | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles'
+  | 'battery' | 'flare';
 
-/** How a consumable is used: wording, sound and the stat it mainly restores. */
-export type ConsumeVerb = 'apply' | 'eat' | 'drink';
+/** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
+export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
 
 export interface ItemDef {
   id: string;
@@ -27,6 +29,8 @@ export interface ItemDef {
   thirst?: number;
   verb?: ConsumeVerb;
   useTime?: number;
+  /** Iteration 12 (LIGHT): flashlight battery charge set by using it (1 = refill to 100 %; player/flashlight.ts). */
+  recharge?: number;
   icon: IconKey;
 }
 
@@ -66,6 +70,11 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Ring-pull tin, eaten cold. The most filling find down here.'},
   noodles: {id: 'noodles', name: 'Instant noodle cup', short: 'Noodles', kind: 'consumable', stackMax: 4, hunger: 25, thirst: -3, useTime: 2.2, verb: 'eat', icon: 'noodles',
     description: 'No hot water, so you crunch them dry. Filling, salty.'},
+  // --- Iteration 12 (LIGHT): light survival (authored models: world/authoredItems.ts) ---
+  battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
+    description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
+  flare: {id: 'flare', name: 'Road flare', short: 'Flare', kind: 'throwable', stackMax: 3, icon: 'flare',
+    description: 'Red highway flare. T strikes and throws one (or left click while it is held): about 50 s of red light and smoke. Light draws the infected.'},
 };
 
 export function itemDef(id: string): ItemDef {
@@ -86,7 +95,13 @@ export function effectText(def: ItemDef): string {
   if (def.heal) out.push(`${signed(def.heal)} health`);
   if (def.hunger) out.push(`${signed(def.hunger)} food`);
   if (def.thirst) out.push(`${signed(def.thirst)} water`);
+  if (def.recharge) out.push(`flashlight battery ${Math.round(def.recharge * 100)} %`); // Iteration 12 (LIGHT)
   return out.join(' · ');
+}
+
+/** Iteration 12 (LIGHT): weapon-panel hint while a throwable (flare) is held. */
+export function throwHint(def: ItemDef): string {
+  return `Click or T to throw ${def.short.toLowerCase()}`;
 }
 
 /** Weapon-panel hint while a consumable is held. */
@@ -132,6 +147,9 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   ammo_pistol: {w: 0.16, d: 0.11, h: 0.08, shape: 'flat'},
   medkit: {w: 0.32, d: 0.22, h: 0.14, shape: 'flat'},
   bandage: {w: 0.1, d: 0.094, h: 0.092, shape: 'flat'},
+  // Iteration 12 (LIGHT): authored models (world/authoredItems.ts): a D cell standing upright, a capped road flare lying along X.
+  battery: {w: 0.0346, d: 0.0346, h: 0.0615, shape: 'cylinder'},
+  flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
 };
 
 export function itemDims(id: string): ItemDims {

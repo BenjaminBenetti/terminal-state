@@ -1,0 +1,647 @@
+{
+ "task": "studio-atmosphere-light-survival-20261028-01",
+ "generatedBy": "tools/audio-pipeline/build-iteration12.mjs",
+ "policy": "Sound Lab only: derivatives of FIVE freshly authorized Sound Lab jobs (one per cue, no retries/rerolls; 6th authorization unused) for the iteration-12 flashlight battery and thrown flare. No synthesis, stock or hosted audio; DSP editing only.",
+ "license": {
+  "status": "Conditional prototype: Stability AI Community License + Gemma terms; not production/commercial clearance. Unreviewed by ear on the worker.",
+  "gameReady": false
+ },
+ "rawArchive": "reference/tasks/atmosphere-light-survival-20261028/audio/ (raw WAVs + lab sidecars in raw/, intents/ACKs/terminals in ledger/, runner.log, queue.json)",
+ "gaps": [],
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/i12-battery-insert-01.mp3",
+   "url": "assets/audio/i12-battery-insert-01.mp3",
+   "bytes": 11598,
+   "sha256": "48b7884bd8046b7cbee0c46a7ee2eec90e3d3b2f78bdae8ac49e33b89bb5410d",
+   "cue": "batteryInsert",
+   "durationS": 0.9209,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-battery-insert-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-battery-insert-01.wav",
+    "rawSha256": "a52531c9e4a7bd0ec75c32795da13a907e96ad9cd96c3a84aee4eaef1b27dced",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-single-battery-being-pushed-into-a-sma_w8a8_seed140817381_074808.wav",
+    "jobId": "20261028T074808-140817381",
+    "prompt": "TrackType: SFX, a single battery being pushed into a small plastic flashlight and snapping into place with a crisp spring click, then the battery cover clicking shut, quick handheld foley, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 140817381,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 2,
+    "peakDb": -3.6,
+    "rmsDb": -41.1,
+    "flatDb": -44.7,
+    "activeS": 0.08,
+    "zcrPerS": 3289,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "select",
+     "mode": "sequence",
+     "note": "first onset to the end of the last event above -45 dB re peak (+60 ms); natural gaps kept"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1664,
+     "endS": 1.0873
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 2.67
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flare-ignite-01.mp3",
+   "url": "assets/audio/i12-flare-ignite-01.mp3",
+   "bytes": 11285,
+   "sha256": "d56aa9fcd9f2009fc00bab27e5aa5b1bd76e7a00c6f63d6f0ff5169ba5910202",
+   "cue": "flareIgnite",
+   "durationS": 0.9108,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-flare-ignite-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flare-ignite-01.wav",
+    "rawSha256": "cf078ae6fb9762c62bbfe0a13e668d80b1f25dc24d7ed4690fb683345d11348b",
+    "rawBytes": 529244,
+    "labFile": "sfx_a-road-safety-flare-being-struck-to-ligh_w8a8_seed719964300_074812.wav",
+    "jobId": "20261028T074812-719964300",
+    "prompt": "TrackType: SFX, a road safety flare being struck to light it, one sharp abrasive scrape of the striker cap followed by a sudden hissing whoosh as the flare flares up into a fierce sputtering burn, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 719964300,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 3,
+    "peakDb": -0.3,
+    "rmsDb": -25.2,
+    "flatDb": -51.5,
+    "activeS": 1.724,
+    "zcrPerS": 10505,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "select",
+     "mode": "lead",
+     "mainOnsetS": 1.5685,
+     "leadS": 0.5,
+     "note": "keeps the last 0.5 s of the scrape-hiss run-up before the loudest onset (the ignition whoosh) and the whoosh to its tail"
+    },
+    {
+     "op": "trim",
+     "startS": 1.0685,
+     "endS": 1.9793
+    },
+    {
+     "op": "fade",
+     "inS": 0.06,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.72
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flare-burn-01-loop.mp3",
+   "url": "assets/audio/i12-flare-burn-01-loop.mp3",
+   "bytes": 57783,
+   "sha256": "2b4c2f05ea49ae665bc4c790d0d96c71a369caa81c49e4c686c499a011d04598",
+   "cue": "flareBurn",
+   "durationS": 4.1,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 112,
+   "loop": {
+    "start": 0.3,
+    "length": 3.5
+   },
+   "loopInfo": {
+    "sourceStartS": 0.3,
+    "sourceEndS": 3.8,
+    "crossfadeSourceEndS": 4.2,
+    "seamDb": 0.46,
+    "levelStdDbBefore": 2.76,
+    "levelStdDbAfter": 0.16
+   },
+   "source": {
+    "clip": "i12-flare-burn-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flare-burn-01.wav",
+    "rawSha256": "c9bb8078b2c7d9c7642de1e53f44f6dc79e7ffcb36d8fd25448982558de5a5df",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-lit-red-road-safety-flare-burning-stea_w8a8_seed184096381_074817.wav",
+    "jobId": "20261028T074817-184096381",
+    "prompt": "TrackType: SFX, a lit red road safety flare burning steadily on the ground, a continuous fierce sputtering hiss with small crackles and pops of burning chemical, constant level throughout, no ignition and no ending, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 184096381,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 6,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 6,
+    "peakDb": -12.8,
+    "rmsDb": -33.5,
+    "flatDb": -43.9,
+    "activeS": 4.666,
+    "zcrPerS": 13939,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "loop-region",
+     "sourceStartS": 0.3,
+     "lengthS": 3.5,
+     "crossfadeS": 0.4,
+     "searchedS": [
+      0.3,
+      1
+     ],
+     "regionLevelStdDb": 2.76,
+     "regionLevelSpreadDb": 10.56,
+     "note": "most level-even 0.25 s-block region of the take"
+    },
+    {
+     "op": "level-flatten",
+     "windowS": 0.4,
+     "targetDb": -32.3,
+     "minGainDb": -3.83,
+     "maxGainDb": 8.73,
+     "note": "slow power-smoothed gain ride over the loop source so the start and end of the region match; sputter/crackle dynamics (< 0.2 s) untouched"
+    },
+    {
+     "op": "loop",
+     "lengthS": 3.5,
+     "crossfadeS": 0.4,
+     "curve": "equal-power",
+     "seamDb": 0.46,
+     "levelStdDbAfter": 0.16,
+     "note": "loop head blends in the material after the loop end (D.makeLoop)"
+    },
+    {
+     "op": "normalise",
+     "rmsDbfs": -20,
+     "peakCeilingDbfs": -1,
+     "gainDb": 12.32
+    },
+    {
+     "op": "loop-margins",
+     "marginS": 0.3,
+     "note": "periodic copies before/after so MP3 priming/padding stays outside [start, start+length)"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 112
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flare-out-01.mp3",
+   "url": "assets/audio/i12-flare-out-01.mp3",
+   "bytes": 27899,
+   "sha256": "a13663d02566d8cf3339b9aa979c4beb92592a906f39acef78b7ebe737fbe610",
+   "cue": "flareOut",
+   "durationS": 2.279,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-flare-out-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flare-out-01.wav",
+    "rawSha256": "2f0a3ac0d5f0300b51a30490545631d3b7c21e07f841073edde09a8c244ea13f",
+    "rawBytes": 529244,
+    "labFile": "sfx_a-burning-road-safety-flare-sputtering-o_w8a8_seed1462279404_074822.wav",
+    "jobId": "20261028T074822-1462279404",
+    "prompt": "TrackType: SFX, a burning road safety flare sputtering out and dying, the hiss weakening into a few last spitting crackles and a fading fizz, then silence, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 1462279404,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 3,
+    "peakDb": -11,
+    "rmsDb": -33.9,
+    "flatDb": -42.8,
+    "activeS": 1.263,
+    "zcrPerS": 9371,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "select",
+     "mode": "sequence",
+     "note": "first onset to the end of the last event above -50 dB re peak (+80 ms); natural gaps kept"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0311,
+     "endS": 2.31
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.25,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 9.98
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flashlight-flicker-01-s01.mp3",
+   "url": "assets/audio/i12-flashlight-flicker-01-s01.mp3",
+   "bytes": 1881,
+   "sha256": "b1ee6fc79a82ffeaf25445c713104beceae6ad28e40cfe289d0e39a1f55e8cec",
+   "cue": "flashlightFlicker",
+   "durationS": 0.1072,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-flashlight-flicker-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flashlight-flicker-01.wav",
+    "rawSha256": "54e752fdcbc93032a8062e7e90b95010235b94c6ab00d21be72aad8bcb361c63",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-failing-handheld-flashlight-flickering_w8a8_seed2136631223_074826.wav",
+    "jobId": "20261028T074826-2136631223",
+    "prompt": "TrackType: SFX, a failing handheld flashlight flickering, a few short faint electrical crackles and a tiny intermittent buzz from a loose battery contact, very small and quiet, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 2136631223,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 2,
+    "peakDb": -15,
+    "rmsDb": -46.2,
+    "flatDb": -43,
+    "activeS": 0.621,
+    "zcrPerS": 7150,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "highpass",
+     "hz": 120,
+     "order": 2,
+     "design": "Butterworth (RBJ biquad)",
+     "note": "removes sub-bass thumps / DC steps under the crackles"
+    },
+    {
+     "op": "select",
+     "mode": "slice",
+     "onsetIndex": 0,
+     "of": 7
+    },
+    {
+     "op": "trim",
+     "startS": 0.0361,
+     "endS": 0.1433
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.02,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 20.59
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flashlight-flicker-01-s02.mp3",
+   "url": "assets/audio/i12-flashlight-flicker-01-s02.mp3",
+   "bytes": 940,
+   "sha256": "70105ce12e648a601f5ded6a0983f23a795f431b0449ba8bdb5a73b59c90a097",
+   "cue": "flashlightFlicker",
+   "durationS": 0.0371,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-flashlight-flicker-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flashlight-flicker-01.wav",
+    "rawSha256": "54e752fdcbc93032a8062e7e90b95010235b94c6ab00d21be72aad8bcb361c63",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-failing-handheld-flashlight-flickering_w8a8_seed2136631223_074826.wav",
+    "jobId": "20261028T074826-2136631223",
+    "prompt": "TrackType: SFX, a failing handheld flashlight flickering, a few short faint electrical crackles and a tiny intermittent buzz from a loose battery contact, very small and quiet, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 2136631223,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 2,
+    "peakDb": -15,
+    "rmsDb": -46.2,
+    "flatDb": -43,
+    "activeS": 0.621,
+    "zcrPerS": 7150,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "highpass",
+     "hz": 120,
+     "order": 2,
+     "design": "Butterworth (RBJ biquad)",
+     "note": "removes sub-bass thumps / DC steps under the crackles"
+    },
+    {
+     "op": "select",
+     "mode": "slice",
+     "onsetIndex": 1,
+     "of": 7
+    },
+    {
+     "op": "trim",
+     "startS": 0.5272,
+     "endS": 0.5643
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.0148,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 16.83
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flashlight-flicker-01-s03.mp3",
+   "url": "assets/audio/i12-flashlight-flicker-01-s03.mp3",
+   "bytes": 940,
+   "sha256": "d97acdbe9f140db377c2ef55dab6d7830bead0587cc405eddf90886a3b0f6fdb",
+   "cue": "flashlightFlicker",
+   "durationS": 0.0471,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-flashlight-flicker-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flashlight-flicker-01.wav",
+    "rawSha256": "54e752fdcbc93032a8062e7e90b95010235b94c6ab00d21be72aad8bcb361c63",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-failing-handheld-flashlight-flickering_w8a8_seed2136631223_074826.wav",
+    "jobId": "20261028T074826-2136631223",
+    "prompt": "TrackType: SFX, a failing handheld flashlight flickering, a few short faint electrical crackles and a tiny intermittent buzz from a loose battery contact, very small and quiet, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 2136631223,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 2,
+    "peakDb": -15,
+    "rmsDb": -46.2,
+    "flatDb": -43,
+    "activeS": 0.621,
+    "zcrPerS": 7150,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "highpass",
+     "hz": 120,
+     "order": 2,
+     "design": "Butterworth (RBJ biquad)",
+     "note": "removes sub-bass thumps / DC steps under the crackles"
+    },
+    {
+     "op": "select",
+     "mode": "slice",
+     "onsetIndex": 2,
+     "of": 7
+    },
+    {
+     "op": "trim",
+     "startS": 1.1035,
+     "endS": 1.1506
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.0188,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 17.93
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/i12-flashlight-flicker-01-s04.mp3",
+   "url": "assets/audio/i12-flashlight-flicker-01-s04.mp3",
+   "bytes": 940,
+   "sha256": "8dbfefe9ba960efff79f18fb65bfc0d4f103c7920f1398850ed718cca87fbbc4",
+   "cue": "flashlightFlicker",
+   "durationS": 0.0371,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 96,
+   "source": {
+    "clip": "i12-flashlight-flicker-01",
+    "rawFile": "reference/tasks/atmosphere-light-survival-20261028/audio/raw/i12-flashlight-flicker-01.wav",
+    "rawSha256": "54e752fdcbc93032a8062e7e90b95010235b94c6ab00d21be72aad8bcb361c63",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-failing-handheld-flashlight-flickering_w8a8_seed2136631223_074826.wav",
+    "jobId": "20261028T074826-2136631223",
+    "prompt": "TrackType: SFX, a failing handheld flashlight flickering, a few short faint electrical crackles and a tiny intermittent buzz from a loose battery contact, very small and quiet, close mic, recorded dry with no echo or reverb, no voices, no music.",
+    "negativePrompt": "",
+    "seed": 2136631223,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 2,
+    "peakDb": -15,
+    "rmsDb": -46.2,
+    "flatDb": -43,
+    "activeS": 0.621,
+    "zcrPerS": 7150,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "highpass",
+     "hz": 120,
+     "order": 2,
+     "design": "Butterworth (RBJ biquad)",
+     "note": "removes sub-bass thumps / DC steps under the crackles"
+    },
+    {
+     "op": "select",
+     "mode": "slice",
+     "onsetIndex": 3,
+     "of": 7
+    },
+    {
+     "op": "trim",
+     "startS": 1.6999,
+     "endS": 1.7369
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.0148,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 14.08
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  }
+ ]
+}

@@ -14,6 +14,7 @@ import {STORE_PURPOSES} from '../src/gen/purposes';
 import {isLootHolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {freshSeed} from '../src/core/rng';
+import {ENEMY_SPAWNS} from '../src/ai/creatureSpawn';
 
 const SEEDS = Array.from({length: 12}, (_, i) => (i * 2654435761 + 12345) >>> 0);
 const cache = new Map<string, StationLayout>();
@@ -269,15 +270,16 @@ describe('station generator', () => {
     }
   });
 
-  it('spreads 11-16 zombies across public and back-of-house, far from the player, all reachable by A*', () => {
+  // Iteration 12 (AI): the population doubled (11-16 -> 22-32 spawns; ai/creatureSpawn.ts ENEMY_SPAWNS).
+  it('spreads 22-32 zombies across public and back-of-house, far from the player, all reachable by A*', () => {
     let coated = 0, shambler = 0, backOfHouse = 0, total = 0, offMain = 0;
     for (const l of PER_ARCH) {
       const g = l.grid;
       const [sx, sy] = g.cellOf(l.playerSpawn.x, l.playerSpawn.z);
       // Iteration 08: zombies stand on every level; distances / paths run through the stair cores.
       const dist = levelDistance(l.levels, sx, sy);
-      expect(l.zombies.length).toBeGreaterThanOrEqual(11);
-      expect(l.zombies.length).toBeLessThanOrEqual(16);
+      expect(l.zombies.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min);
+      expect(l.zombies.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
       const pf = new PathFinder(levelsOf(l));
       for (const z of l.zombies) {
         const lg = l.levels[z.level ?? 0].grid;

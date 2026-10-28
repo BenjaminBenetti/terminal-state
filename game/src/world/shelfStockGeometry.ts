@@ -8,6 +8,13 @@
 // draw call (world/shelfStock.ts). Geometry: origin bottom-centre, front +Z, metres, upright pose
 // of the catalogue dims (world/shelfStockCatalog.ts); vertex colours carry plastic / glass / cap /
 // bloom tints, the atlas carries print.
+//
+// Iteration 12 (LOOT lane): ~30 YEARS OF NEGLECT on everything that is not loot. Every label is painted through agedContext() —
+// each colour desaturated toward a warm sepia, darkened, its blacks lifted (faded ink) — and then overlaid with sun-bleach, water
+// stains, grime / dust, torn corners and (food print) mould specks; plain swatches are yellowed / tarnished; vertex colours are
+// desaturated and warmed (ageVertexColors); cans / foil lose their shine (rougher, less metallic). New abandoned-station pieces:
+// open and crushed cartons, crumpled wrappers, torn deflated bags, crushed cans, broken bottles, rusted tins, empty bottles;
+// rotten fruit, mouldy jar fills, dead flowers / plants, tarnished key blanks. Real loot keeps its own fresh models / materials.
 
 import * as THREE from 'three';
 import {canvasTexture} from './canvasTextures';
@@ -33,6 +40,8 @@ const CELL: Record<Exclude<LabelKind, 'none'>, CellSpec> = {
   phone: {w: 56, h: 72, front: 0.667}, tablet: {w: 78, h: 84, front: 0.81}, blister: {w: 48, h: 76, front: 0.92}, gadget: {w: 96, h: 40, front: 0.583},
   cartonbox: {w: 128, h: 56, front: 0.58}, tubes: {w: 128, h: 16, front: 0.876}, magazine: {w: 64, h: 88}, news: {w: 72, h: 92},
   loaf: {w: 104, h: 32, front: 0.675}, donuts: {w: 64, h: 84},
+  // iteration 12 (LOOT lane)
+  trash: {w: 64, h: 48}, rusttin: {w: 112, h: 40}, oldbottle: {w: 96, h: 32},
 };
 /** Plain swatches (vertex-coloured parts): white, brushed metal, paper, kraft, dark plastic, clear plastic, glass, soil, leaf. */
 export const SWATCHES = ['white', 'metal', 'paper', 'kraft', 'dark', 'clear', 'glass', 'soil', 'leaf', 'foil', 'peel'] as const;
@@ -446,22 +455,159 @@ const paint: Painter = (ctx, x, y, w, h, v, r) => {
   wear(ctx, x, y, w, h, r, 1.2);
 };
 
+// --- iteration 12 (LOOT lane): trash, rusted tins, empty bottles -----------------------------------------------------------
+const TRASH = ['#b7a98e', '#8a3a30', '#3e5a7a', '#9a9a90'] as const;
+/** Crumpled printed scraps: faded wrapper / newsprint / grey plastic with fragments of print and creases. */
+const trash: Painter = (ctx, x, y, w, h, v, r) => {
+  rect(ctx, x, y, w, h, pickOf(TRASH, v));
+  for (let i = 0; i < 6; i++) rect(ctx, x + r() * w * 0.8, y + r() * h * 0.8, w * (0.1 + r() * 0.3), h * (0.08 + r() * 0.22), pickOf(['#d8cfb8', '#6a2a22', '#2a3a4a', '#c8a040', '#e8e2d0'], v + i));
+  text(ctx, pickOf(['CRUNCH', 'FIZZ', 'DAILY', 'CHOCO'], v), x + w * 0.5, y + h * 0.45, w * 0.8, h * 0.22, 'rgba(240,232,214,0.55)');
+  for (let i = 0; i < 8; i++) { rect(ctx, x + r() * w, y, 1, h, 'rgba(30,24,18,0.2)'); rect(ctx, x, y + r() * h, w, 1, 'rgba(255,250,235,0.14)'); }
+  wear(ctx, x, y, w, h, r, 1.6);
+};
+const RUST = [['#7a3a1c', '#b8642a'], ['#6a2e18', '#a0552a'], ['#5a3424', '#8a5a3a']] as const;
+/** A tin rusted through, its paper label mostly peeled away. */
+const rusttin: Painter = (ctx, x, y, w, h, v, r) => {
+  const [dark, light] = pickOf(RUST, v);
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, light); g.addColorStop(1, dark);
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  const lx = x + w * (0.15 + r() * 0.3), lw = w * (0.25 + r() * 0.3);
+  rect(ctx, lx, y + h * 0.15, lw, h * 0.7, pickOf(['#b8a890', '#a89a7a', '#9a8c74'], v));
+  text(ctx, pickOf(['BEA', 'TOMA', 'PE'], v), lx + lw * 0.5, y + h * 0.5, lw * 0.9, h * 0.3, 'rgba(90,40,30,0.6)');
+  for (let i = 0; i < 28; i++) circle(ctx, x + r() * w, y + r() * h, 0.6 + r() * 2, r() < 0.5 ? 'rgba(60,24,10,0.5)' : 'rgba(190,110,50,0.4)');
+  for (let i = 0; i < 6; i++) rect(ctx, x + r() * w, y + r() * h * 0.3, 1 + r(), h * (0.3 + r() * 0.6), 'rgba(70,30,12,0.35)');
+};
+const OLDBOTTLE = [['#cfc8b4', '#5a7a9a'], ['#c8c2ae', '#8a4a3a'], ['#c4c0b0', '#5a7a4a']] as const;
+/** An empty bottle's sleeve: scuffed plastic showing through, a torn remnant of the label. */
+const oldbottle: Painter = (ctx, x, y, w, h, v, r) => {
+  const [base, print] = pickOf(OLDBOTTLE, v);
+  rect(ctx, x, y, w, h, '#96927f');
+  const tw = w * (0.35 + r() * 0.3), tx = x + r() * (w - tw);
+  rect(ctx, tx, y + h * 0.08, tw, h * 0.84, base);
+  rect(ctx, tx + tw * 0.12, y + h * 0.3, tw * 0.55, h * 0.4, print);
+  for (let k = 0; k < 6; k++) rect(ctx, tx + tw - 2 + r() * 3, y + h * (k / 6), 2 + r() * 3, h / 6 + 1, '#96927f');
+  for (let i = 0; i < 10; i++) rect(ctx, x + r() * w, y + r() * h, 1 + r() * w * 0.2, 1, 'rgba(60,54,40,0.3)');
+  wear(ctx, x, y, w, h, r, 1.6);
+};
+
 const PAINTERS: Record<Exclude<LabelKind, 'none'>, Painter> = {
   soda, energy, tin, bottle, bigbottle, jar, cup, carton, cereal, pantry, candy, chips, snack, towels: towelsP, rolls: rollsP,
   med, pills, lotion, spray, jug, phone, tablet, blister, gadget, cartonbox, tubes, magazine, news, loaf, donuts, reel, paint,
+  trash, rusttin, oldbottle,
 };
 
+/** Plain swatches, iteration 12: yellowed white / paper, tarnished metal, scuffed clouded plastic, grimy glass, dried leaf. */
 const SWATCH_FILL: Record<Swatch, string> = {
-  white: '#ffffff', metal: '#c9ccd0', paper: '#f2efe6', kraft: '#a67a48', dark: '#2a2c30', clear: '#e8eef0', glass: '#dfe8e6', soil: '#3a2a1e', leaf: '#4a7a34', foil: '#d8d8d4',
-  peel: '#ffffff',
+  white: '#d8d0bf', metal: '#8f8b82', paper: '#cfc5ae', kraft: '#8e6c44', dark: '#2a2a28', clear: '#b9b4a4', glass: '#a2a898', soil: '#3a2a1e', leaf: '#5a5434', foil: '#9a978c',
+  peel: '#d8d0bf',
 };
-/** Roughness / metalness per label family (packaging material). */
+/**
+ * Roughness / metalness per label family (packaging material). Iteration 12: dull, dusty, tarnished — no glossy cans or shiny
+ * foil left (real loot keeps its own fresh materials).
+ */
 const ORM: Partial<Record<LabelKind | `swatch:${Swatch}`, [number, number]>> = {
-  soda: [0.32, 0.7], energy: [0.32, 0.7], tin: [0.45, 0.55], paint: [0.5, 0.45], bottle: [0.35, 0], bigbottle: [0.35, 0], jar: [0.7, 0],
-  magazine: [0.4, 0], blister: [0.35, 0], phone: [0.45, 0], tablet: [0.45, 0], chips: [0.38, 0.15], snack: [0.4, 0.1],
-  'swatch:metal': [0.32, 0.85], 'swatch:clear': [0.18, 0], 'swatch:glass': [0.1, 0.05], 'swatch:dark': [0.5, 0], 'swatch:foil': [0.3, 0.8],
-  'swatch:peel': [0.48, 0],
+  soda: [0.66, 0.32], energy: [0.66, 0.32], tin: [0.72, 0.28], paint: [0.78, 0.25], bottle: [0.62, 0], bigbottle: [0.62, 0], jar: [0.78, 0],
+  magazine: [0.78, 0], blister: [0.62, 0], phone: [0.72, 0], tablet: [0.72, 0], chips: [0.66, 0.05], snack: [0.68, 0.04],
+  trash: [0.88, 0], rusttin: [0.92, 0.12], oldbottle: [0.64, 0],
+  'swatch:metal': [0.66, 0.42], 'swatch:clear': [0.48, 0], 'swatch:glass': [0.38, 0.04], 'swatch:dark': [0.74, 0], 'swatch:foil': [0.64, 0.36],
+  'swatch:peel': [0.72, 0],
 };
+
+// ---------------------------------------------------------------------------------------
+// Iteration 12 (LOOT lane): aging
+
+/** How hard the print is aged: desaturation toward luminance, warm sepia shift, darkening, lifted blacks (faded ink). */
+export const AGE = {desat: 0.6, sepia: 0.32, darken: 0.2, lift: 0.06} as const;
+
+/** One sRGB colour (0..255) aged by `k` (0 = fresh, 1 = the station's 30 years). */
+export function ageRGB(r: number, g: number, b: number, k = 1): [number, number, number] {
+  const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+  const mix = (c: number, t: number, f: number) => c + (t - c) * f;
+  let R = mix(r, Y, AGE.desat * k), G = mix(g, Y, AGE.desat * k), B = mix(b, Y, AGE.desat * k);
+  R = mix(R, Y * 1.08, AGE.sepia * k); G = mix(G, Y * 0.96, AGE.sepia * k); B = mix(B, Y * 0.76, AGE.sepia * k);
+  const d = 1 - AGE.darken * k, lift = 255 * AGE.lift * k;
+  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v * d + lift)));
+  return [c(R), c(G), c(B)];
+}
+
+/** A CSS colour ('#rgb', '#rrggbb', 'rgb()', 'rgba()') aged; anything else is returned unchanged. */
+export function ageColor(css: string, k = 1): string {
+  const t = css.trim();
+  let rgb: [number, number, number] | null = null, a = 1;
+  if (t[0] === '#') {
+    let h = t.slice(1);
+    if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+    if (h.length === 6 || h.length === 8) { const n = parseInt(h.slice(0, 6), 16); rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; if (h.length === 8) a = parseInt(h.slice(6), 16) / 255; }
+  } else {
+    const m = /^rgba?\(([^)]+)\)$/.exec(t);
+    if (m) { const p = m[1].split(',').map(x => parseFloat(x)); if (p.length >= 3 && p.every(Number.isFinite)) { rgb = [p[0], p[1], p[2]]; if (p.length > 3) a = p[3]; } }
+  }
+  if (!rgb) return css;
+  const [R, G, B] = ageRGB(rgb[0], rgb[1], rgb[2], k);
+  return a >= 1 ? `rgb(${R},${G},${B})` : `rgba(${R},${G},${B},${a})`;
+}
+
+const RAW = Symbol('raw-gradient');
+/** A 2D context whose every fill / stroke colour (and gradient stop) is aged on the way in: the painters stay as authored. */
+export function agedContext(ctx: Ctx, k = 1): Ctx {
+  const grad = (g: CanvasGradient): CanvasGradient => new Proxy(g, {
+    get(t, p) {
+      if (p === RAW) return t;
+      if (p === 'addColorStop') return (o: number, c: string) => t.addColorStop(o, ageColor(c, k));
+      const v = Reflect.get(t, p, t);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+  return new Proxy(ctx, {
+    get(t, p) {
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') {
+        const f = Reflect.get(t, p, t) as (...a: number[]) => CanvasGradient;
+        return (...a: number[]) => grad(f.apply(t, a));
+      }
+      const v = Reflect.get(t, p, t);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+    set(t, p, v) {
+      if (p === 'fillStyle' || p === 'strokeStyle') v = typeof v === 'string' ? ageColor(v, k) : (v as {[RAW]?: unknown})?.[RAW] ?? v;
+      return Reflect.set(t, p, v, t);
+    },
+  });
+}
+
+/** Food / drink / medicine print (mould specks, more staining). */
+const FOODISH = new Set<string>(['soda', 'energy', 'tin', 'bottle', 'bigbottle', 'jar', 'cup', 'carton', 'cereal', 'pantry', 'candy', 'chips', 'snack', 'med', 'pills', 'loaf', 'donuts']);
+
+/** Thirty years on a cell: sun-bleached side, water-stain rings, grime / dust, a torn corner, mould specks on food print. */
+function ageCell(ctx: Ctx, x: number, y: number, w: number, h: number, label: string, r: R): void {
+  // sun-bleach: one side washed out toward a dusty beige
+  const side = Math.floor(r() * 3);
+  const g = side === 0 ? ctx.createLinearGradient(x, 0, x + w, 0) : side === 1 ? ctx.createLinearGradient(x + w, 0, x, 0) : ctx.createLinearGradient(0, y, 0, y + h);
+  const bleach = 0.2 + r() * 0.18;
+  g.addColorStop(0, `rgba(214,204,180,${bleach})`); g.addColorStop(0.55, 'rgba(214,204,180,0)'); g.addColorStop(1, 'rgba(214,204,180,0)');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  // water stains: a tide-mark ring with a darker inside
+  for (let i = 0, n = 1 + Math.floor(r() * 2); i < n; i++) {
+    const cx = x + r() * w, cy = y + h * (0.4 + r() * 0.6), rx = w * (0.15 + r() * 0.25), ry = h * (0.12 + r() * 0.25);
+    ellipse(ctx, cx, cy, rx, ry, 'rgba(110,86,52,0.16)');
+    ctx.strokeStyle = 'rgba(80,60,34,0.32)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  // grime / dust (heavier than the old shelf wear)
+  wear(ctx, x, y, w, h, r, 2.2);
+  for (let i = 0; i < 10; i++) { ctx.fillStyle = `rgba(52,44,32,${0.06 + r() * 0.1})`; ctx.fillRect(x + r() * w, y + r() * h, 1 + r() * w * 0.25, 1 + r() * 2); }
+  // torn / scuffed corner
+  if (r() < 0.6) {
+    const cw = w * (0.08 + r() * 0.14), ch = h * (0.1 + r() * 0.2);
+    const cx = r() < 0.5 ? x : x + w - cw, cy = r() < 0.5 ? y : y + h - ch;
+    rect(ctx, cx, cy, cw, ch, 'rgba(120,104,78,0.75)');
+  }
+  // mould / spoilage specks on food print
+  if (FOODISH.has(label)) for (let c = 0, n = 1 + Math.floor(r() * 3); c < n; c++) {
+    const mx = x + r() * w, my = y + r() * h;
+    for (let i = 0; i < 8; i++) circle(ctx, mx + (r() - 0.5) * w * 0.2, my + (r() - 0.5) * h * 0.2, 0.5 + r() * 1.6, r() < 0.5 ? 'rgba(96,112,84,0.45)' : 'rgba(170,170,150,0.35)');
+  }
+}
 
 let colorTex: THREE.CanvasTexture | null = null;
 let ormTex: THREE.CanvasTexture | null = null;
@@ -476,12 +622,15 @@ function drawAtlas(): THREE.CanvasTexture {
       if (kind === 'swatch') { rect(ctx, c.x - PAD, c.y - PAD, c.w + 2 * PAD, c.h + 2 * PAD, SWATCH_FILL[vs as Swatch]); continue; }
       const p = PAINTERS[kind as Exclude<LabelKind, 'none'>];
       const fw = c.front ? Math.round(c.w * c.front) : c.w;
+      // iteration 12: every colour aged on the way in (faded, desaturated, warm), then the cell's own 30 years of wear
+      const actx = agedContext(ctx, 1);
       // gutter: a first pass scaled over the padded rect bleeds the cell's own colours into the 2 px
       // padding (mip-mapping then never samples a neighbour's print), then the cell itself.
       ctx.save(); ctx.translate(c.x - PAD, c.y - PAD); ctx.scale((c.w + 2 * PAD) / c.w, (c.h + 2 * PAD) / c.h);
-      p(ctx, 0, 0, c.w, c.h, Number(vs), r, fw);
+      p(actx, 0, 0, c.w, c.h, Number(vs), r, fw);
       ctx.restore();
-      p(ctx, c.x, c.y, c.w, c.h, Number(vs), r, fw);
+      p(actx, c.x, c.y, c.w, c.h, Number(vs), r, fw);
+      ageCell(ctx, c.x, c.y, c.w, c.h, kind, r);
       if (c.front) {
         // printed cartons: a slightly darker fold line round each panel, so a row of identical boxes reads
         // as separate boxes (their edges), not one continuous print
@@ -632,6 +781,15 @@ class Geo {
       this.tri(ia, ib, id, n);
     }
   }
+  /** Quad with its normal from its own corners, turned to face away from `centre` (sheared / sagging faces). */
+  quadAuto(p0: V3, p1: V3, p2: V3, p3: V3, uv: UVRect, c: C3, centre: V3): void {
+    const ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2], vx = p3[0] - p0[0], vy = p3[1] - p0[1], vz = p3[2] - p0[2];
+    let n: V3 = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    const m: V3 = [(p0[0] + p1[0] + p2[0] + p3[0]) / 4 - centre[0], (p0[1] + p1[1] + p2[1] + p3[1]) / 4 - centre[1], (p0[2] + p1[2] + p2[2] + p3[2]) / 4 - centre[2]];
+    if (n[0] * m[0] + n[1] * m[1] + n[2] * m[2] < 0) n = [-n[0], -n[1], -n[2]];
+    if (Math.hypot(n[0], n[1], n[2]) < 1e-12) return;
+    this.quad(p0, p1, p2, p3, n, uv, c);
+  }
   build(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
@@ -648,19 +806,27 @@ class Geo {
 const hex = (h: number): C3 => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255].map(c => Math.pow(c, 2.2)) as C3; // sRGB -> linear vertex colour
 const WHITE: C3 = [1, 1, 1];
 
-/** Per-variant plastic / cap / bloom tints. */
-const BOTTLE_TINT = [0xcfe2ee, 0xd8eee2, 0xe8f0b8, 0xf0b070, 0x6a2a1a];
+/** Per-variant plastic / cap / bloom tints (iteration 12: clouded, murky contents; ageVertexColors fades them further). */
+const BOTTLE_TINT = [0xa8b0a8, 0xb0b8a8, 0xb8b890, 0xb08a60, 0x4a2a1a];
 const BOTTLE_CAP = [0x2f6fb5, 0x1d8f6a, 0x3a7d1a, 0xf07d00, 0xc4161c];
-const BIG_TINT = [0x6a2a1a, 0xc8e6b0, 0xcfe2ee];
+const BIG_TINT = [0x4a2a1a, 0xa8b498, 0xa8b0a8];
 const BIG_CAP = [0xc4161c, 0x1d8f3a, 0x2f6fb5];
-const JAR_LID = [0xc4302a, 0xd8d8d0, 0x3a6a2a, 0xc9a64a];
-const JAR_FILL = [0x7a1424, 0xa83224, 0x9ab048, 0xa8743a];
+const JAR_LID = [0x8a3a2a, 0x8a8a80, 0x3a4a2a, 0x7a6a3a];
+/** Iteration 12: every jar's contents have gone over — black / grey-green mould, a dried brown crust. */
+const JAR_FILL = [0x2e2a20, 0x4a4a32, 0x5a6048, 0x4a3a2a];
+/** Iteration 12: empty bottles (scuffed clouded plastic) and broken glass (green / brown / clear, grimy). */
+const EMPTY_TINT = [0xb4b0a0, 0xa8aca0, 0xb8b0a0];
+const GLASS_TINT = [0x4a6a44, 0x5a3a20, 0x9aa298];
+const RUST_RIM = [0x6a3a20, 0x5a3018, 0x6a4a34];
 const PILL_BODY = [0xf2f0ea, 0xb8742a, 0xf2f0ea];
 const PILL_CAP = [0x2f6fd0, 0xf2f0ea, 0xc4302a];
 const SPRAY_HEAD = [0x2f6fd0, 0x3a9a48, 0xc4302a];
 const JUG_CAP = [0x2f6fd0, 0x2a2c30, 0x3a9a48];
 const LOTION_CAP = [0xd84a8a, 0x1d4f9a, 0xf4f4f0];
-const BLOOMS = [[0xd8322a, 0xe86a8a, 0xf4f0e8], [0xf0d040, 0xe8862a, 0xf4f0e8], [0x8a3ab0, 0xe86a8a, 0xf4f0e8], [0xd8322a, 0xd8322a, 0x7a1a2a], [0xf4f0e8, 0xf0e0a0, 0xe8e8e0], [0xe8862a, 0xd8322a, 0xf0d040]];
+/** Iteration 12: long-dead bunches — dried brown / rust / grey heads, papery whites gone tan. */
+const BLOOMS = [[0x6a3a2a, 0x7a5a44, 0x9a8a70], [0x8a7a40, 0x7a5030, 0x9a8a70], [0x5a3a4a, 0x6a4a44, 0x8a8070], [0x6a2a24, 0x5a2a20, 0x4a2020], [0xa89a80, 0x9a8a68, 0x8a8270], [0x7a4a2a, 0x6a3a24, 0x8a7a40]];
+/** Withered leaves / stems (olive-brown). */
+const DEAD_LEAF = [0x5a5430, 0x4a4428, 0x6a5a34];
 const WRAP = [0xa67a48, 0xf2efe6, 0x2a4a3a, 0xa67a48, 0xd8c8a8, 0xf2efe6];
 const POT = [0xb8603a, 0x2a2c30, 0xd8d4c8, 0x8a5a3a];
 
@@ -683,24 +849,31 @@ function buildArch(A: StockArch, variant: number): THREE.BufferGeometry {
       break;
     }
     case 'tin': {
-      const seg = 8, metal = S('metal'), tinC = hex(0xa9adb0);
+      const rusty = A.id === 'canRusty';
+      const seg = 8, metal = S('metal'), tinC = hex(rusty ? RUST_RIM[v % 3] : 0xa9adb0);
       g.band(r, 0, r, h * 0.07, seg, metal, false, tinC);
       g.band(r * 0.985, h * 0.07, r * 0.985, h * 0.93, seg, L.all, true, WHITE);
       g.band(r, h * 0.93, r, h, seg, metal, false, tinC);
-      g.disc(r, h, true, seg, metal, hex(0x9a9ea2));
+      g.disc(r, h, true, seg, metal, rusty ? hex(0x5a3420) : hex(0x9a9ea2));
       g.disc(r, 0, false, seg, metal, tinC);
       break;
     }
     case 'bottle': {
       // PET bottle: base / lower body, printed sleeve, shoulder to the neck, cap
-      const big = A.id === 'bigbottle';
-      const tint = hex(big ? BIG_TINT[v % 3] : BOTTLE_TINT[v % 5]), cap = hex(big ? BIG_CAP[v % 3] : BOTTLE_CAP[v % 5]);
+      const big = A.id === 'bigbottle', empty = A.id === 'bottleEmpty';
+      const tint = hex(empty ? EMPTY_TINT[v % 3] : big ? BIG_TINT[v % 3] : BOTTLE_TINT[v % 5]), cap = hex(big ? BIG_CAP[v % 3] : BOTTLE_CAP[v % 5]);
       const seg = 8, clear = S('clear');
       g.band(r * 0.88, 0, r, h * 0.27, seg, clear, false, tint);
       g.band(r, h * 0.27, r, h * 0.57, seg, L.all, true, WHITE);
       g.band(r, h * 0.57, r * 0.36, h * 0.88, seg, clear, false, tint);
-      g.band(r * 0.42, h * 0.88, r * 0.42, h, seg, S('white'), false, cap);
-      g.disc(r * 0.42, h, true, seg, S('white'), cap);
+      if (empty && v % 3 === 1) {
+        // cap long gone: an open neck
+        g.band(r * 0.36, h * 0.88, r * 0.36, h, seg, clear, false, tint);
+        g.disc(r * 0.3, h * 0.99, true, seg, S('dark'), hex(0x1a1a16));
+      } else {
+        g.band(r * 0.42, h * 0.88, r * 0.42, h, seg, S('white'), false, cap);
+        g.disc(r * 0.42, h, true, seg, S('white'), cap);
+      }
       g.disc(r * 0.88, 0, false, seg, clear, tint);
       break;
     }
@@ -897,11 +1070,11 @@ function buildArch(A: StockArch, variant: number): THREE.BufferGeometry {
       const leaf = S('leaf');
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2 + 0.4;
-        g.solid(Math.sin(a) * 0.02 - 0.004, 0.33, Math.cos(a) * 0.02 - 0.004, Math.sin(a) * 0.02 + 0.004, 0.45, Math.cos(a) * 0.02 + 0.004, leaf, hex(0x4a6a2a));
+        g.solid(Math.sin(a) * 0.02 - 0.004, 0.33, Math.cos(a) * 0.02 - 0.004, Math.sin(a) * 0.02 + 0.004, 0.45, Math.cos(a) * 0.02 + 0.004, leaf, hex(DEAD_LEAF[i % 3]));
       }
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2 + 0.3;
-        g.blob(Math.sin(a) * 0.058, 0.4 + R() * 0.05, Math.cos(a) * 0.058, 0.034, 0.014, 0.04, leaf, hex(i % 2 ? 0x3f6e2a : 0x557a32));
+        g.blob(Math.sin(a) * 0.058, 0.4 + R() * 0.05, Math.cos(a) * 0.058, 0.034, 0.014, 0.04, leaf, hex(DEAD_LEAF[i % 3]));
       }
       const pts: V3[] = [[0, 0.525, 0]];
       for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; pts.push([Math.sin(a) * 0.066, 0.47 + R() * 0.035, Math.cos(a) * 0.066]); }
@@ -920,14 +1093,15 @@ function buildArch(A: StockArch, variant: number): THREE.BufferGeometry {
       for (let i = 0; i < 7; i++) {
         const a = (i / 7) * Math.PI * 2 + R();
         const rad = 0.02 + R() * 0.028, y = ph + 0.04 + R() * 0.11;
-        g.blob(Math.sin(a) * rad, y, Math.cos(a) * rad, 0.05, 0.03, 0.05, leaf, hex(i % 2 ? 0x4a7a34 : 0x3a6a2a));
+        g.blob(Math.sin(a) * rad, y, Math.cos(a) * rad, 0.05, 0.03, 0.05, leaf, hex(DEAD_LEAF[i % 3]));
       }
-      g.blob(0, ph + 0.145, 0, 0.045, 0.04, 0.045, leaf, hex(0x5a8a3a));
+      g.blob(0, ph + 0.145, 0, 0.045, 0.04, 0.045, leaf, hex(DEAD_LEAF[(v + 1) % 3]));
       break;
     }
     case 'key': {
       // flat key blank (brass / nickel): hexagonal head pierced by its ring hole, shoulder, blade with a cut edge
-      const metal = S('metal'), col = hex(v % 2 ? 0xd0d4d8 : 0xd8b450), cut = hex(v % 2 ? 0x9a9ea2 : 0xa8863a);
+      // iteration 12: tarnished nickel / dulled brass
+      const metal = S('metal'), col = hex(v % 2 ? 0x8e908a : 0x8a7438), cut = hex(v % 2 ? 0x6a6c68 : 0x6a5a2e);
       const t = d / 2, hr = w / 2, s60 = Math.sqrt(3) / 2;
       const hy = h - hr * s60, holeY = hy + hr * 0.28, ri = 0.0032;
       const ring = (rad: number, cy: number, k: number): [number, number] => [rad * Math.cos(k * Math.PI / 3), cy + rad * Math.sin(k * Math.PI / 3)];
@@ -946,7 +1120,9 @@ function buildArch(A: StockArch, variant: number): THREE.BufferGeometry {
     }
     case 'ball': {
       // whole fruit: smooth low-poly sphere, darker underneath, a little mottled; apples carry a stem
-      const FRUIT = [0xe8761c, 0xb8201c, 0x8cc040, 0xf0d030, 0x6aa82a];
+      // iteration 12: rotten — shrivelled brown orange, blackened apples, olive lemon / lime, grey-white mould patches
+      const FRUIT = [0x6a4a22, 0x4a2a1a, 0x5a5a30, 0x8a7a40, 0x4a5228];
+      const MOULD = hex(0x9a9a88);
       const apple = v % 5 === 1 || v % 5 === 2;
       const rad = apple ? r * 0.94 : r, seg = 8, rings = 6;
       const peel = S('peel'), base = hex(FRUIT[v % 5]), R = mulberry(9300 + v);
@@ -956,7 +1132,10 @@ function buildArch(A: StockArch, variant: number): THREE.BufferGeometry {
         const row: number[] = [];
         for (let k = 0; k <= seg; k++) {
           const a = (2 * Math.PI * k) / seg, shade = (0.74 + 0.26 * (j / rings)) * (0.93 + 0.07 * R());
-          row.push(g.vert([rad * cp * Math.sin(a), rad + rad * sp, rad * cp * Math.cos(a)], [cp * Math.sin(a), sp, cp * Math.cos(a)], (peel[0] + peel[2]) / 2, (peel[1] + peel[3]) / 2, [base[0] * shade, base[1] * shade, base[2] * shade]));
+          // shrivelled: the skin sags in a little here and there (always inside the round collider)
+          const sag = 0.88 + 0.12 * R(), rr = rad * sag;
+          const col: C3 = R() < 0.22 ? MOULD : [base[0] * shade, base[1] * shade, base[2] * shade];
+          row.push(g.vert([rr * cp * Math.sin(a), rad + rr * sp, rr * cp * Math.cos(a)], [cp * Math.sin(a), sp, cp * Math.cos(a)], (peel[0] + peel[2]) / 2, (peel[1] + peel[3]) / 2, col));
         }
         ids.push(row);
       }
@@ -969,8 +1148,158 @@ function buildArch(A: StockArch, variant: number): THREE.BufferGeometry {
       if (apple) g.solid(-0.0018, 2 * rad - 0.003, -0.0018, 0.0018, Math.min(h, 2 * rad + 0.009), 0.0018, S('kraft'), hex(0x5a3a1e));
       break;
     }
+    // --- iteration 12 (LOOT lane): the abandoned station ----------------------------------------------------------------------
+    case 'openbox': {
+      // open carton: printed kraft walls, darker inside and floor, four flaps folded out (one torn off on variant 2); the flaps
+      // stay inside the catalogue box (the body is 72 % x 78 % x 74 % of it — the collider fit)
+      // the body is the collider (catalogue `fit` x / z): small emptied product boxes keep short, near-upright flaps
+      const fit = A.fit ?? [0.72, 1, 0.74];
+      const bw = w * fit[0], bd = d * fit[2], bh = h * 0.78, t = Math.min(0.004, bw * 0.05);
+      const x0 = -bw / 2, x1 = bw / 2, z0 = -bd / 2, z1 = bd / 2;
+      g.quad([x0, 0, z1], [x1, 0, z1], [x1, bh, z1], [x0, bh, z1], [0, 0, 1], L.front, WHITE);
+      g.quad([x1, 0, z0], [x0, 0, z0], [x0, bh, z0], [x1, bh, z0], [0, 0, -1], L.front, WHITE);
+      g.quad([x1, 0, z1], [x1, 0, z0], [x1, bh, z0], [x1, bh, z1], [1, 0, 0], L.side, WHITE);
+      g.quad([x0, 0, z0], [x0, 0, z1], [x0, bh, z1], [x0, bh, z0], [-1, 0, 0], L.side, WHITE);
+      g.quad([x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1], [0, -1, 0], L.flap, WHITE);
+      const kr = S('kraft'), inC = hex(0x5a4430);
+      g.quad([x0 + t, t, z1 - t], [x1 - t, t, z1 - t], [x1 - t, bh, z1 - t], [x0 + t, bh, z1 - t], [0, 0, -1], kr, inC);
+      g.quad([x0 + t, t, z0 + t], [x1 - t, t, z0 + t], [x1 - t, bh, z0 + t], [x0 + t, bh, z0 + t], [0, 0, 1], kr, inC);
+      g.quad([x1 - t, t, z0 + t], [x1 - t, t, z1 - t], [x1 - t, bh, z1 - t], [x1 - t, bh, z0 + t], [-1, 0, 0], kr, inC);
+      g.quad([x0 + t, t, z0 + t], [x0 + t, t, z1 - t], [x0 + t, bh, z1 - t], [x0 + t, bh, z0 + t], [1, 0, 0], kr, inC);
+      g.quad([x0 + t, t, z0 + t], [x1 - t, t, z0 + t], [x1 - t, t, z1 - t], [x0 + t, t, z1 - t], [0, 1, 0], kr, hex(0x4a3826));
+      const up = h - bh, outX = w / 2 - bw / 2, outZ = d / 2 - bd / 2;
+      const flap = (along: 'x' | 'z', sgn: 1 | -1, ang: number) => {
+        const out = along === 'x' ? outZ : outX, half = along === 'x' ? bw / 2 : bd / 2;
+        const len = Math.min(up / Math.cos(ang), out / Math.sin(ang), half) * 0.97;
+        const du = len * Math.cos(ang), dout = len * Math.sin(ang) * sgn;
+        const e = along === 'x' ? z1 * sgn : x1 * sgn; // hinge line coordinate (z for front / back flaps, x for side flaps)
+        const p0: V3 = along === 'x' ? [x0, bh, e] : [e, bh, z0], p1: V3 = along === 'x' ? [x1, bh, e] : [e, bh, z1];
+        const p2: V3 = along === 'x' ? [x1, bh + du, e + dout] : [e + dout, bh + du, z1], p3: V3 = along === 'x' ? [x0, bh + du, e + dout] : [e + dout, bh + du, z0];
+        const no: V3 = along === 'x' ? [0, -Math.sin(ang), Math.cos(ang) * sgn] : [Math.cos(ang) * sgn, -Math.sin(ang), 0];
+        g.quad(p0, p1, p2, p3, no, L.flap, WHITE);
+        g.quad(p0, p1, p2, p3, [-no[0], -no[1], -no[2]], kr, inC);
+      };
+      const R = mulberry(9400 + v);
+      flap('x', 1, 0.5 + R() * 0.5);
+      flap('x', -1, 0.5 + R() * 0.5);
+      // small emptied product boxes: the end flaps are torn off (and the piece stays cheap: 56 vertices)
+      if (w >= 0.2) {
+        flap('z', 1, 0.45 + R() * 0.5);
+        if (v % 3 !== 2) flap('z', -1, 0.45 + R() * 0.5);
+      }
+      break;
+    }
+    case 'crushed': {
+      // collapsed carton: the top sheared sideways and sagging at one end (mirrored on odd variants)
+      const m = v % 2 ? -1 : 1, a = w * 0.1, zt = d / 2 * 0.96;
+      const X = (x: number) => x * m;
+      const B: V3[] = [[X(-w / 2), 0, -d / 2], [X(w / 2 - a), 0, -d / 2], [X(w / 2 - a), 0, d / 2], [X(-w / 2), 0, d / 2]];
+      const T: V3[] = [[X(-w / 2 + a), h, -zt], [X(w / 2), h * 0.58, -zt], [X(w / 2), h * 0.62, zt], [X(-w / 2 + a), h * 0.96, zt]];
+      const ctr: V3 = [0, h / 2, 0];
+      g.quadAuto(B[3], B[2], T[2], T[3], L.front, WHITE, ctr);
+      g.quadAuto(B[1], B[0], T[0], T[1], L.front, WHITE, ctr);
+      g.quadAuto(B[2], B[1], T[1], T[2], L.side, WHITE, ctr);
+      g.quadAuto(B[0], B[3], T[3], T[0], L.side, WHITE, ctr);
+      g.quadAuto(T[0], T[1], T[2], T[3], L.flap, WHITE, ctr);
+      g.quadAuto(B[0], B[1], B[2], B[3], L.flap, WHITE, ctr);
+      break;
+    }
+    case 'crumple': {
+      // crumpled wrapper / paper wad: a few faceted lumps, each sampling a different patch of the scrap print
+      const m = v % 2 ? -1 : 1;
+      const sub = (fx: number, fy: number): UVRect => { const u = L.all[0] + (L.all[2] - L.all[0]) * fx, vv = L.all[1] + (L.all[3] - L.all[1]) * fy; return [u, vv, u, vv]; };
+      const lumps: [number, number, number, number, number, number, number, number][] = [
+        [0, 0.45, 0, 0.38, 0.42, 0.38, 0.5, 0.5], [0.18, 0.4, -0.12, 0.28, 0.36, 0.3, 0.2, 0.3], [-0.16, 0.38, 0.14, 0.3, 0.34, 0.3, 0.8, 0.7], [0.05, 0.62, 0.08, 0.22, 0.3, 0.22, 0.35, 0.8],
+      ];
+      lumps.forEach(([cx, cy, cz, rx, ry, rz, fu, fv], i) => g.blob(cx * w * m, cy * h, cz * d, rx * w, ry * h, rz * d, sub(fu, fv), i % 2 ? hex(0xe8e2d4) : WHITE));
+      break;
+    }
+    case 'flatbag': {
+      // a deflated snack bag lying flat, torn open at one corner: bulging printed top over a 4 x 4 grid, seams at the ends
+      const cols = [0, 0.25, 0.75, 1], rows = [0, 0.3, 0.7, 1];
+      const ids: number[][] = [];
+      const top: V3[][] = [];
+      for (let j = 0; j < rows.length; j++) {
+        const row: number[] = [], prow: V3[] = [];
+        for (let i = 0; i < cols.length; i++) {
+          const fx = cols[i], fz = rows[j];
+          const bulge = Math.sin(Math.PI * fx) ** 0.6 * Math.sin(Math.PI * fz) ** 0.6;
+          // the torn corner (variant-dependent) is ripped back and lies flat
+          const torn = (i === (v % 2 ? 3 : 0)) && j === 3;
+          const px = -w / 2 + w * (torn ? fx * 0.9 + (v % 2 ? 0 : 0.06) : fx), pz = -d / 2 + d * (torn ? 0.9 : fz);
+          const py = torn ? h * 0.15 : h * (0.25 + 0.75 * bulge);
+          const P: V3 = [px, py, pz];
+          prow.push(P);
+          row.push(g.vert(P, [(fx - 0.5) * 0.5, 1, (fz - 0.5) * 0.5], L.front[0] + (L.front[2] - L.front[0]) * fx, L.front[1] + (L.front[3] - L.front[1]) * fz, WHITE));
+        }
+        ids.push(row); top.push(prow);
+      }
+      for (let j = 0; j < rows.length - 1; j++) for (let i = 0; i < cols.length - 1; i++) {
+        g.tri(ids[j][i], ids[j][i + 1], ids[j + 1][i + 1], [0, 1, 0]);
+        g.tri(ids[j][i], ids[j + 1][i + 1], ids[j + 1][i], [0, 1, 0]);
+      }
+      // skirt down to the floor round the edge (seams / folds), and the flat underside
+      const ctr: V3 = [0, h / 2, 0], seamC = hex(0xb8b2a4);
+      const ring: V3[] = [...top[0], ...top.slice(1).map(rw => rw[cols.length - 1]), ...top[rows.length - 1].slice(0, -1).reverse(), ...top.slice(1, -1).map(rw => rw[0]).reverse()];
+      for (let k = 0; k < ring.length; k++) {
+        const a0 = ring[k], a1 = ring[(k + 1) % ring.length];
+        g.quadAuto([a0[0], 0, a0[2]], [a1[0], 0, a1[2]], a1, a0, L.flap, seamC, ctr);
+      }
+      g.quad([-w / 2, 0, -d / 2], [w / 2, 0, -d / 2], [w / 2, 0, d / 2], [-w / 2, 0, d / 2], [0, -1, 0], L.side, WHITE);
+      break;
+    }
+    case 'crushcan': {
+      // a stamped-flat drinks can: squashed to half height, the wall bulging out and folding in
+      const seg = 8, metal = S('metal'), lid = hex(0x8a8a84);
+      g.band(r * 0.78, 0, r * 0.86, h * 0.08, seg, metal, false, lid);
+      g.band(r * 0.86, h * 0.08, r * 0.99, h * 0.45, seg, L.all, true, WHITE);
+      g.band(r * 0.99, h * 0.45, r * 0.8, h * 0.82, seg, L.all, true, WHITE);
+      g.band(r * 0.8, h * 0.82, r * 0.68, h, seg, metal, false, lid);
+      g.disc(r * 0.68, h, true, seg, metal, hex(0x7a7a74));
+      g.disc(r * 0.78, 0, false, seg, metal, lid);
+      break;
+    }
+    case 'shard': {
+      // broken bottle: grimy glass lower body with the torn label sleeve, a jagged crown, dark inside
+      const seg = 8, glass = S('glass'), tint = hex(GLASS_TINT[v % 3]), rr = r * 0.95;
+      g.band(rr * 0.88, 0, rr, h * 0.18, seg, glass, false, tint);
+      g.band(rr, h * 0.18, rr, h * 0.5, seg, L.all, true, WHITE);
+      g.band(rr, h * 0.5, rr * 0.97, h * 0.62, seg, glass, false, tint);
+      g.disc(rr * 0.88, 0, false, seg, glass, tint);
+      const R = mulberry(9500 + v), y0 = h * 0.62, rc = rr * 0.97, inner = hex(0x1e221c);
+      const jag = Array.from({length: seg}, (_, k) => h * (0.64 + (k % 2 ? 0.08 + R() * 0.12 : 0.22 + R() * 0.14)));
+      for (let k = 0; k < seg; k++) {
+        const a0 = Math.PI + (k / seg) * Math.PI * 2, a1 = Math.PI + ((k + 1) / seg) * Math.PI * 2;
+        const b0: V3 = [rc * Math.sin(a0), y0, rc * Math.cos(a0)], b1: V3 = [rc * Math.sin(a1), y0, rc * Math.cos(a1)];
+        const t0: V3 = [rc * Math.sin(a0), Math.min(h, jag[k]), rc * Math.cos(a0)], t1: V3 = [rc * Math.sin(a1), Math.min(h, jag[(k + 1) % seg]), rc * Math.cos(a1)];
+        const am = (a0 + a1) / 2, no: V3 = [Math.sin(am), 0, Math.cos(am)];
+        g.quad(b0, b1, t1, t0, no, glass, tint);
+        g.quad(b0, b1, t1, t0, [-no[0], 0, -no[2]], S('dark'), inner);
+      }
+      // the inside of the remaining body (seen over the crown) and its floor
+      for (let k = 0; k < seg; k++) {
+        const a0 = Math.PI + (k / seg) * Math.PI * 2, a1 = Math.PI + ((k + 1) / seg) * Math.PI * 2, ri = rc * 0.96, am = (a0 + a1) / 2;
+        g.quad([ri * Math.sin(a0), h * 0.06, ri * Math.cos(a0)], [ri * Math.sin(a1), h * 0.06, ri * Math.cos(a1)], [ri * Math.sin(a1), y0, ri * Math.cos(a1)], [ri * Math.sin(a0), y0, ri * Math.cos(a0)], [-Math.sin(am), 0, -Math.cos(am)], S('dark'), inner);
+      }
+      g.disc(rc * 0.98, h * 0.06, true, seg, S('dark'), inner);
+      break;
+    }
   }
+  ageVertexColors(g, A);
   return g.build();
+}
+
+/**
+ * Iteration 12 (LOOT lane): vertex colours (plastic / glass / caps / blooms, and the WHITE that shows the atlas print) faded toward
+ * their luminance, warmed and darkened — the label atlas is aged separately (agedContext / ageCell).
+ */
+export const VERTEX_AGE = {desat: 0.45, warm: [1, 0.95, 0.82] as const, darken: 0.86} as const;
+function ageVertexColors(g: Geo, _A: StockArch): void {
+  const c = g.col;
+  for (let i = 0; i < c.length; i += 3) {
+    const Y = 0.2126 * c[i] + 0.7152 * c[i + 1] + 0.0722 * c[i + 2];
+    for (let k = 0; k < 3; k++) c[i + k] = (c[i + k] + (Y - c[i + k]) * VERTEX_AGE.desat) * VERTEX_AGE.warm[k] * VERTEX_AGE.darken;
+  }
 }
 
 const mulberry = (seed: number) => { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };

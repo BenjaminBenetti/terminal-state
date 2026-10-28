@@ -10,6 +10,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {DRINK_IDS, FOOD_IDS, itemDef, itemDims} from '../items/items';
 import type {ItemStack} from '../items/inventory';
 import {canvasTexture, pickupLabel, surface} from './canvasTextures';
+import {authoredItemModel, isAuthoredItem} from './authoredItems'; // Iteration 12 (LIGHT)
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 
@@ -248,7 +249,11 @@ export function itemTemplate(itemId: string): THREE.Object3D {
   if (t) return t;
   const key = ITEM_MODEL_KEYS[itemId];
   const gltf = key ? itemModels[key] : undefined;
-  if (gltf) {
+  if (isAuthoredItem(itemId)) {
+    // Iteration 12 (LIGHT): battery / road flare are authored procedural geometry (world/authoredItems.ts), never generated.
+    t = authoredItemModel(itemId);
+    templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
+  } else if (gltf) {
     t = fitItemModel(gltf, itemId);
     templateSource.set(itemId, `models.${key} (generated)`);
   } else {

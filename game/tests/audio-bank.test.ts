@@ -10,13 +10,15 @@ import {CLIP_BYTES_I06, CLIP_GAPS_I06, CLIP_MANIFEST_I06} from '../src/audio/man
 import {CLIP_BYTES_I07K, CLIP_GAPS_I07K, CLIP_MANIFEST_I07K} from '../src/audio/manifest.iteration07k.generated';
 import {CLIP_BYTES_I07Q, CLIP_GAPS_I07Q, CLIP_MANIFEST_I07Q} from '../src/audio/manifest.iteration07q.generated';
 import {CLIP_BYTES_I11, CLIP_GAPS_I11, CLIP_MANIFEST_I11} from '../src/audio/manifest.iteration11.generated';
+import {CLIP_BYTES_I12, CLIP_GAPS_I12, CLIP_MANIFEST_I12} from '../src/audio/manifest.iteration12.generated';
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
 // Iteration 07 (Lane Q): + rat/dog creature vocals + paw scrabble (i07q).
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11;
+// Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -63,7 +65,9 @@ describe('Sound Lab clip manifest + bundled assets', () => {
         expect(m.sampleRate).toBe(44100);
         // encoded audio covers the clip (+ loop margins for beds)
         expect(m.samples / m.sampleRate).toBeGreaterThanOrEqual((r.loop ? r.loop.start + r.loop.length : r.dur) - 0.001);
-        if (r.loop) expect(r.loop.length).toBeGreaterThan(5);
+        // ambience beds loop >= 5 s; the iteration-12 flare burn is a deliberately short (3-4 s) positional loop
+        if (r.loop) expect(r.loop.length).toBeGreaterThan(cue === 'flareBurn' ? 3 : 5);
+        if (cue === 'flareBurn') expect(r.loop!.length).toBeLessThanOrEqual(4);
       }
     }
     expect(bytes).toBe(CLIP_BYTES);
@@ -72,7 +76,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -105,7 +109,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
   // Infrastructure (non-cue) members of Sfx; every OTHER prototype method must be exercised below.
   const INFRA = new Set(['constructor', 'init', 'create', 'ready', 'setVolume', 'setMuted', 'applyGain', 'suspend', 'resume', 'pause', 'sync', 'debugState', 'live',
     'setListener', 'setWorld', 'prune', 'release', 'take', 'dist', 'setPannerPos', 'makePanner', 'voice', 'playClip', 'play', 'buildReverb', 'ir', 'loadSlot', 'setRoom',
-    'startAmbient', 'onCueReady', 'loopSource', 'attachBed', 'applyBeds', 'updateEmitter', 'duck', 'around', 'stopReload']);
+    'startAmbient', 'onCueReady', 'loopSource', 'attachBed', 'applyBeds', 'updateEmitter', 'duck', 'around', 'stopReload',
+    // iteration 12 (AUDIO): hit-confirm dip + flare-loop plumbing / lifecycle
+    'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
@@ -128,7 +134,11 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       search: () => sfx.search(), eat: () => { for (const k of ['chips', 'chocolate', 'beans', 'noodles', 'other']) sfx.eat(k); },
       drink: () => { for (const k of ['cola', 'water', 'juice', 'other']) sfx.drink(k); }, death: () => sfx.death(), win: () => sfx.win(),
       impact: () => { for (const s of ['concrete', 'tile', 'metal', 'wood', 'flesh', 'glass', 'sheet'] as const) { ctx.currentTime += 1; sfx.impact(3, 1, 3, s); } },
-      hitConfirm: () => { ctx.currentTime += 1; sfx.hitConfirm(3, 1, 3); ctx.currentTime += 1; sfx.hitConfirm(70, 1, 3); },
+      hitConfirm: () => { ctx.currentTime += 1; sfx.hitConfirm(3, 1, 3); ctx.currentTime += 1; sfx.shot('pistol'); sfx.hitConfirm(70, 1, 3, z); },
+      // Iteration 12 (AUDIO): flashlight battery + flare
+      batteryInsert: () => sfx.batteryInsert(), flashlightFlicker: () => { ctx.currentTime += 1; sfx.flashlightFlicker(0.5); },
+      flareIgnite: () => sfx.flareIgnite(2, 1.2, 2), flareOut: () => sfx.flareOut(6, 0.1, 6),
+      flareBurnStart: () => { const h = sfx.flareBurnStart(6, 0.1, 6); h.setPos(6.5, 0.1, 6); h.stop(); },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
       physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },

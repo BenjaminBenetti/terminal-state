@@ -51,7 +51,7 @@ import {cloneWithShaderHooks} from '../render/shaderHooks';
 import {itemModelSources} from './pickups';
 import {holderBoxes} from '../physics/holderShapes';
 import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, type Plane, type Soup} from './meshSplit';
-import {FitIndex, OpenableSet, type OpenRT} from './openables';
+import {FitIndex, OpenableSet, interiorShadowSide, type OpenRT} from './openables';
 import {openableActive} from './openablesSpec';
 
 /**
@@ -298,7 +298,8 @@ export class ContainerManager {
     }
     // Inside matches outside: the interior, door backs and shelving take the cabinet's own paint.
     const paint = averageColor(firstMaterial(gltf)) ?? new THREE.Color(0x3a3d38);
-    const interiorMat = std(paint.clone().multiplyScalar(0.42), 0.92, 0.2, THREE.BackSide);
+    // Iteration 12 (ATMOS, #4): the back-side interior box shadows from its inner faces, not its opening face (openables.ts).
+    const interiorMat = interiorShadowSide(std(paint.clone().multiplyScalar(0.42), 0.92, 0.2, THREE.BackSide));
     const plateMat = std(paint.clone().multiplyScalar(0.6), 0.85, 0.25);
     const body: Part[] = [];
     const doorParts: Part[][] = [[], []];
@@ -316,7 +317,11 @@ export class ContainerManager {
         }
         // Stray interior surfaces between the doors and the back wall would float inside the
         // opened cabinet; drop them (the outer back face, facing -Z, is kept).
-        if (inRect && c.z > zBack - 0.005 && !(nz < -0.6 && c.z < zBack + 0.05)) return -1;
+        // Iteration 12 (ATMOS, #4): only a -Z face AT the interior's back plane counts as that outer back. The low cupboard's
+        // model has a false back ~4 cm in front of it whose visible front face was dropped here but whose rear (-Z) face fell in
+        // the old 5 cm window: invisible from the front, it still cast in the flashlight's double-sided shadow pass and kept the
+        // whole opened cupboard dark. (The real back, behind zBack - 0.005, is never dropped.)
+        if (inRect && c.z > zBack - 0.005 && !(nz < -0.6 && c.z < zBack + 0.006)) return -1;
         return 0;
       });
       body.push({geo: soupGeometry(soup, keep), mat});
@@ -433,7 +438,7 @@ export class ContainerManager {
       source = 'placeholder crate (procedural box + lid)';
     }
     const wood = averageColor(firstMaterial(gltf)) ?? new THREE.Color(0x3b2f22);
-    const interiorMat = std(wood.clone().multiplyScalar(0.38), 0.95, 0, THREE.BackSide);
+    const interiorMat = interiorShadowSide(std(wood.clone().multiplyScalar(0.38), 0.95, 0, THREE.BackSide)); // Iteration 12 (ATMOS, #4)
     const pivot = new THREE.Vector3(0, splitY, -def.d / 2 + 0.01);
     const inset = Math.max(0.025, 0.05 * Math.min(def.w, def.d));
     const ix = def.w / 2 - inset, iz = def.d / 2 - inset;

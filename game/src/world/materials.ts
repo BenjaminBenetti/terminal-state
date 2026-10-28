@@ -118,9 +118,16 @@ export function thinTrim<M extends THREE.MeshStandardMaterial>(m: M): M {
 }
 
 export type MatKey =
-  | 'tileLower' | 'tileUpper' | 'paint' | 'terrazzo' | 'concrete' | 'platformSlab' | 'safetyEdge' | 'platformFace'
+  | 'tileLower' | 'tileUpper' | 'tileBase' | 'paint' | 'terrazzo' | 'concrete' | 'platformSlab' | 'safetyEdge' | 'platformFace'
   | 'ceiling' | 'ceilingService' | 'tunnel' | 'ballast' | 'steel' | 'rail' | 'sleeper' | 'coverboard'
   | 'crate' | 'bin' | 'gate' | 'tube';
+
+/**
+ * Iteration 12 (ARCH): the wall texture's two charcoal base courses (0-0.3 m of ENV_TEXTURE_LAYOUT.wall, the same
+ * 85 px / 0.2989 m crop height as the plain upper courses), tiling vertically every two courses: the raked skirting
+ * of stair-flight side walls (levelGeometry.stairWallZones), coursed level in world height.
+ */
+export const TILE_BASE_CROP = {v0: 0.0012 / 1.8, v1: 0.3001 / 1.8};
 
 /** Crop a sub-rectangle of a loaded texture image into a new tiling texture. */
 function cropTexture(src: THREE.Texture, u0: number, v0: number, u1: number, v1: number, srgb: boolean): THREE.Texture {
@@ -153,9 +160,11 @@ export class WorldMaterials {
     this.tileLowerHeight = L.wall.h;
     const c = L.wall.upperCrop;
     const upperW = (c.u1 - c.u0) * L.wall.w, upperH = (c.v1 - c.v0) * L.wall.h;
+    const bc = TILE_BASE_CROP, baseH = (bc.v1 - bc.v0) * L.wall.h;
     this.scale = {
       tileLower: {u: L.wall.w, v: L.wall.h},
       tileUpper: {u: upperW, v: upperH},
+      tileBase: {u: L.wall.w, v: baseH},
       paint: {u: 2.4, v: 3.0},
       terrazzo: {u: 2, v: 2},
       concrete: {u: 2, v: 2},
@@ -178,6 +187,11 @@ export class WorldMaterials {
       cropTexture(tex.wallColor, c.u0, c.v0, c.u1, c.v1, true),
       cropTexture(tex.wallOrm, c.u0, c.v0, c.u1, c.v1, false),
       cropTexture(tex.wallNormal, c.u0, c.v0, c.u1, c.v1, false)));
+    // Iteration 12 (ARCH): the two charcoal base courses alone, for the raked skirting of stair-flight walls.
+    this.mats.set('tileBase', pbr(
+      cropTexture(tex.wallColor, 0, bc.v0, 1, bc.v1, true),
+      cropTexture(tex.wallOrm, 0, bc.v0, 1, bc.v1, false),
+      cropTexture(tex.wallNormal, 0, bc.v0, 1, bc.v1, false)));
     this.mats.set('platformSlab', pbr(tex.platformColor, tex.platformOrm, tex.platformNormal));
     this.mats.set('safetyEdge', pbr(tex.edgeColor, tex.edgeOrm, tex.edgeNormal));
     this.mats.set('ceiling', pbr(tex.ceilingColor, tex.ceilingOrm, tex.ceilingNormal));

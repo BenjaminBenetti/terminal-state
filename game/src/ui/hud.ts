@@ -1,6 +1,6 @@
 // DOM heads-up display. Writes only when values change.
 
-import {STAT_ICONS} from './icons';
+import {LIGHT_ICONS, STAT_ICONS} from './icons';
 import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
 import type {Inventory} from '../items/inventory';
@@ -29,6 +29,10 @@ export interface HudState {
   /** Survival fullness 0-100 (FOOD = hunger, WATER = thirst); bars hidden when omitted. */
   food?: number;
   water?: number;
+  /** Iteration 12 (LIGHT): flashlight battery (charge 0..1, light switched on, flicker amount 0..1, spare batteries carried). */
+  battery?: {charge: number; on: boolean; flicker: number; spares: number};
+  /** Iteration 12 (LIGHT): flares carried (grenade slot, T) and burning in the world. */
+  flares?: {count: number; burning: number};
 }
 
 export class Hud {
@@ -41,6 +45,11 @@ export class Hud {
     for (const k of ['food', 'water'] as const) {
       const ico = document.querySelector(`#surv-${k} .ico`);
       if (ico) ico.innerHTML = STAT_ICONS[k];
+    }
+    // Iteration 12 (LIGHT): light panel icons
+    for (const [sel, svg] of [['#battery .ico', LIGHT_ICONS.battery], ['#flare-tag .ico', LIGHT_ICONS.flare]] as const) {
+      const ico = document.querySelector(sel);
+      if (ico) ico.innerHTML = svg;
     }
   }
 
@@ -77,7 +86,20 @@ export class Hud {
       ch.style.setProperty('--gap', `${Math.max(3, Math.min(60, s.spreadPx))}px`);
       ch.classList.toggle('aim', s.aiming);
     });
-    this.set('fl', s.flashlight ? 'LIGHT ON · F' : 'LIGHT OFF · F', v => { $('#flashlight-tag').textContent = v; });
+    // Iteration 12 (LIGHT): the tag also tells a flat / flickering battery apart
+    const flat = !!s.battery && s.battery.charge <= 0;
+    this.set('fl', flat ? 'LIGHT DEAD · NEEDS BATTERY' : s.flashlight ? (s.battery && s.battery.flicker > 0 ? 'LIGHT FLICKERING · F' : 'LIGHT ON · F') : 'LIGHT OFF · F', v => { $('#flashlight-tag').textContent = v; });
+    if (s.battery) this.batteryMeter(s.battery);
+    if (s.flares) {
+      const f = s.flares;
+      this.set('flares', `${f.count}|${f.burning}`, () => {
+        const el = document.querySelector('#flare-tag') as HTMLElement | null;
+        if (!el) return;
+        el.classList.toggle('none', f.count === 0);
+        el.querySelector('.n')!.textContent = `${f.count}`;
+        el.querySelector('.lit')!.textContent = f.burning ? ` · ${f.burning} lit` : '';
+      });
+    }
     this.set('use', s.use ? `${s.use.label}|${s.use.progress.toFixed(2)}` : '', v => {
       const bar = $('#usebar');
       bar.classList.toggle('show', !!v);
@@ -130,6 +152,24 @@ export class Hud {
     }
   }
 
+  /**
+   * Iteration 12 (LIGHT): BATTERY meter — fill + percentage; mustard below 25 % (the flicker band), red + pulse below 10 %,
+   * "FLAT" at 0; dimmed while the light is switched off (no drain); spare batteries carried as "+N".
+   */
+  private batteryMeter(b: {charge: number; on: boolean; flicker: number; spares: number}): void {
+    const pct = Math.max(0, Math.min(100, Math.ceil(b.charge * 100 - 1e-9)));
+    this.set('battery', `${pct}|${b.on}|${b.spares}`, () => {
+      const row = document.querySelector('#battery') as HTMLElement | null;
+      if (!row) return;
+      (row.querySelector('.fill') as HTMLElement).style.width = `${pct}%`;
+      row.querySelector('.pct')!.textContent = pct > 0 ? `${pct}%` : 'FLAT';
+      row.querySelector('.spare')!.textContent = b.spares > 0 ? `+${b.spares}` : '';
+      row.classList.toggle('low', pct <= 25 && pct > 10);
+      row.classList.toggle('crit', pct <= 10);
+      row.classList.toggle('off', !b.on);
+    });
+  }
+
   /** Stance tag above the vitals (empty while standing). */
   setStance(crouched: boolean, standBlocked: boolean): void {
     this.set('stance', crouched ? (standBlocked ? 'CROUCHED · NO HEADROOM' : 'CROUCHED · C') : '', v => { $('#stance-tag').textContent = v; });
@@ -176,7 +216,10 @@ export const CONTROLS: [string, string][] = [
   ['Crouch (tap toggle · hold)', 'C'], ['Fire / eat · drink · use held item', 'Left click'],
   ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
   ['Last item', 'Q'], ['Inventory', 'Tab or I'], ['Quick heal', 'H'], ['Drop held item', 'G'],
-  ['Flashlight', 'F'], ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
+  // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items; T throws a flare
+  ['Flashlight (battery meter, bottom right)', 'F'], ['Throw flare (grenade slot)', 'T · or click while held'],
+  ['Swap in a battery (refills the light)', 'Click while held · inventory Use'],
+  ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
 ];
 
 export function renderControls(el: HTMLElement): void {

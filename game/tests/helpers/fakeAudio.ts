@@ -65,7 +65,7 @@ export class FakeCtx {
   }
 }
 
-const LOOP_CUES = new Set<CueId>(['bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz']);
+const LOOP_CUES = new Set<CueId>(['bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz', 'flareBurn']); // flareBurn: iteration 12 spatial loop
 
 /** A decoded-looking bank: every cue (or the given ones) gets `variants` fake clips. */
 export function fakeBank(opts: {variants?: number; only?: readonly CueId[]} = {}): {bank: ClipBank; buffers: Set<unknown>} {

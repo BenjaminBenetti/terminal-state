@@ -13,7 +13,9 @@
 //
 // Graph (built once in create(), reused for every station):
 //   clip sources -> voice in -> [air/occlusion lowpass] -> panner -> master -> compressor -> out
-//                            \-> send -> reverbIn -> preDelay -> convolver A|B -> wet A|B -> master
+//                            \-> send -> reverbIn -> preDelay -> convolver A|B -> wet A|B -> revOut -> master
+//   player hit confirm (iteration 12): clip -> voice in -> StereoPanner (±0.3) -> master   (no PannerNode / lowpass)
+//   flare burn loops (iteration 12): loop source -> fade -> level -> lowpass -> panner -> master (+ send)
 //   ambient: looping bed clips (wind, rumble, HVAC, fridge, buzz) -> bed gains -> ambBus -> master
 //            + a positional fridge-hum emitter (same clip) at the nearest vending machine / cooler.
 // Processing only: panners, filters, gains, playback-rate jitter and convolution reverb (reverb.ts).
@@ -98,6 +100,9 @@ export const CUE_GAIN: Record<CueId, number> = {
   coolerOpen: 0.38, coolerClose: 0.38, drawerOpen: 0.38, search: 0.24,
   pickup: 0.3, heal: 0.3, eatChips: 0.3, eatChocolate: 0.3, eatBeans: 0.3, eatNoodles: 0.3, eat: 0.3,
   drinkCola: 0.3, drinkWater: 0.3, drinkJuice: 0.3, denied: 0.22, click: 0.3, win: 0.35,
+  // Iteration 12 (AUDIO): flashlight battery + thrown flare. flareBurn is an RMS -20 dBFS loop (positional, rolls off);
+  // the others are peak -1 dBFS one-shots. flashlightFlicker is deliberately faint (a failing contact at the hand).
+  batteryInsert: 0.4, flareIgnite: 0.55, flareBurn: 0.5, flareOut: 0.45, flashlightFlicker: 0.13,
 };
 
 const TYPE_ROOM: Record<string, RoomKind> = {
@@ -146,7 +151,8 @@ const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater'
 const PHYS_CUE: Record<ImpactFamily, CueId> = {can: 'itemCan', light: 'itemLight', heavy: 'impactMetal', prop: 'propTopple', flesh: 'chunkFlesh', stone: 'debrisFall', wood: 'impactWood', glass: 'impactGlass', metal: 'impactSheetMetal'};
 const IMPACT_CUE: Record<Surface, CueId> = {concrete: 'impactConcrete', tile: 'impactTile', metal: 'impactMetal', wood: 'impactWood', flesh: 'impactFlesh', glass: 'impactGlass', sheet: 'impactSheetMetal'};
 
-interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean }
+/** `fg` = a foreground (listener-relative) player hit confirm, bounded by HIT_CONFIRM.maxVoices. */
+interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean; fg?: boolean }
 interface VoiceOpts {
   /** World position; omitted = at the listener (player's own sounds, UI). */
   at?: Pos;
@@ -160,8 +166,12 @@ interface VoiceOpts {
   maxDist?: number;
   hrtf?: boolean;
   occlude?: boolean;
-  /** Cap on the occlusion amount (0..1) so a slab / wall muffles but never silences (player hit confirm). */
+  /** Cap on the occlusion amount (0..1) so a slab / wall muffles but never silences. */
   occMax?: number;
+  /** Listener-relative voices only (no `at`): StereoPannerNode pan -1..1 (iteration 12 foreground hit confirm). */
+  pan?: number;
+  /** Foreground hit-confirm voice (counted against HIT_CONFIRM.maxVoices). */
+  fg?: boolean;
 }
 type FilterSpec = {type: BiquadFilterType; freq: number; q?: number};
 interface PlayOpts {
@@ -179,34 +189,87 @@ interface PlayOpts {
 const MAX_VOICES = 44;
 const MAX_HRTF = 6;
 /** Token buckets: [refill per second, burst]. */
-const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2], confirm: [14, 4]} as const;
+const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2], confirm: [14, 4], flicker: [3, 2]} as const;
 type BucketName = keyof typeof BUCKETS;
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-/** Shared panner ceiling (makePanner): the inverse model clamps distance here, so gain stops falling beyond it. */
+/** Shared panner maxDistance (makePanner). NB: per the Web Audio spec it only limits the 'linear' model; 'inverse' keeps falling. */
 const PANNER_MAX_DIST = 90;
 /**
- * Player-confirmed enemy hit (hit-audio lane, 2026-10-28): the SAME Sound Lab flesh-impact clip, on a spatial
- * (panned) voice with the bullet-impact rolloff near, but an audible floor at range. No distance cull; occlusion
- * is capped (muffled, never silenced). Only the player's bullet hitting a live enemy uses this; world/NPC/chunk
- * impacts keep `impact()` / `physImpact()` unchanged.
+ * Iteration 12 (AUDIO lane, user feedback #5 "enemy hit feedback sound is not audible at long distances", still failing after
+ * iteration 11): the player's confirmed enemy hit is a FOREGROUND, listener-relative layer of the SAME Sound Lab impactFlesh clip.
+ *
+ * Why iteration 11 (panned voice, gain floor 0.4, capped occlusion) stayed inaudible at range — measured offline from the raws:
+ *  1. Same instant as the gunshot. fire() calls shot() then hitConfirm() in one frame, so the confirm started 0–8 ms after the shot.
+ *     The flesh clips (80–240 ms) carry their energy at 10–30 ms (−11..−12 dBFS per 10 ms window at unity) — exactly the gunshot's
+ *     own peak (pistol −14 dBFS, rifle −11..−15, shotgun −11..−14 per 10 ms, x game gain): simultaneous masking at its worst moment.
+ *  2. Level. At range it was CUE 0.5 x floor 0.4 = 0.2 (−14 dB), x(1 − 0.45·0.5) with capped occlusion = 0.155 (−16 dB): its peak
+ *     window sat ~12–16 dB under the gunshot's. Even a 2 m hit (0.5) was ~4 dB under the pistol.
+ *  3. The distance compensation (x1 → x12.6 at 60 m) was applied BEFORE the panner, so it multiplied the reverb send too:
+ *     at 60 m the convolver got ~5x the dry level, turning the confirm into a diffuse wash under the gunshot's own room tail.
+ *  4. Air-absorption + occlusion lowpass (17 kHz/(1 + 0.04 d), x0.54 at the occlusion cap: ~3.7 kHz at 37 m) removed the slap.
+ *  5. The compensation assumed the 'inverse' panner clamps at maxDistance 90 m; the spec only clamps 'linear' (minor, > 90 m).
+ *  Not causes: the gunshot duck() only dips the ambience bus (never voices); the 44-voice cap only bites in floods; the master
+ *  compressor is linked (it scales gunshot and confirm alike).
+ *
+ * Now: impactFlesh -> voice in -> StereoPanner (pan = HIT_CONFIRM.pan · sin(azimuth)) -> master -> compressor -> out, plus a
+ * fixed small room send. No PannerNode, no distance or occlusion term, no lowpass, no maxDist cull, exempt from the voice cap
+ * (pri 2) but bounded by its own voice cap + token bucket. Scheduled HIT_CONFIRM.delay after the shot onset (past the gunshot's
+ * transient peak; still perceptually immediate), and while it sounds the player's own shot voice and the reverb return dip lightly.
+ * Shotgun: one confirm per enemy per shot (game.ts aggregates pellets; the enemy key de-duplicates here as well); extra enemies of
+ * the same shot are staggered and quieter. Misses never call it. World / corpse / NPC / chunk impacts keep impact()/physImpact().
  */
-export const HIT_CONFIRM = {ref: 2, rolloff: 1.05, floor: 0.4, occMax: 0.5} as const;
-/** Inverse-model panner gain (Web Audio 'inverse' distanceModel), distance clamped to [ref, PANNER_MAX_DIST]. */
-export function pannerInverseGain(dist: number, ref: number, rolloff: number): number {
-  const d = Math.min(PANNER_MAX_DIST, Math.max(ref, dist));
-  return ref / (ref + rolloff * (d - ref));
+export const HIT_CONFIRM = {
+  /** Final linear gain on the −1 dBFS impactFlesh clip (fixed; iteration 11 was 0.5 near and 0.155–0.2 at range). */
+  level: 0.65,
+  /** Max |pan| toward the hit (restrained: direction hint only). */
+  pan: 0.3,
+  /** Seconds after the player's shot onset (pistol/rifle transient peak is 5–35 ms into the clip). */
+  delay: 0.05,
+  /** A shot is "the same shot" for this long (s): the per-enemy de-dup + stagger window. */
+  shotWindow: 0.25,
+  /** Additional enemies hit by the same shot: each `stagger` s later and x`multiGain` quieter than the previous. */
+  stagger: 0.03,
+  multiGain: 0.75,
+  /** Concurrent foreground confirm voices (own cap; the shared 44-voice cap does not apply). */
+  maxVoices: 4,
+  /** Fixed reverb send (not distance scaled). */
+  send: 0.12,
+  /** While a confirm sounds: player shot voice x shotDip, reverb return x reverbDip, held dipHold s, recovering with dipRelease. */
+  shotDip: 0.6,
+  reverbDip: 0.75,
+  dipHold: 0.09,
+  dipRelease: 0.06,
+} as const;
+
+/** Restrained stereo pan toward a hit: HIT_CONFIRM.pan x sin(azimuth) in the listener's horizontal plane (+ = right). */
+export function hitConfirmPan(listener: {x: number; z: number; yaw: number}, x: number, z: number): number {
+  const dx = x - listener.x, dz = z - listener.z, d = Math.hypot(dx, dz);
+  if (!(d > 1e-6)) return 0;
+  const right = (dx * Math.cos(listener.yaw) - dz * Math.sin(listener.yaw)) / d; // right = (cos yaw, 0, -sin yaw)
+  return Math.max(-HIT_CONFIRM.pan, Math.min(HIT_CONFIRM.pan, HIT_CONFIRM.pan * right));
 }
-/** Effective hit-confirm level relative to a near hit (1 inside ref): the normal rolloff, never below HIT_CONFIRM.floor. */
-export function hitConfirmGain(dist: number): number {
-  return Math.max(HIT_CONFIRM.floor, pannerInverseGain(dist, HIT_CONFIRM.ref, HIT_CONFIRM.rolloff));
+
+/**
+ * Iteration 12 (AUDIO): a burning flare's positional loop. Bounded to FLARE_LOOP.max at once (the oldest is faded out to make room);
+ * every loop is stopped on a new station (setWorld) and by stopFlares().
+ */
+export const FLARE_LOOP = {max: 4, ref: 1.6, rolloff: 1.1, fadeIn: 0.25, fadeOut: 0.6, send: 0.35, update: 0.2, far: 40} as const;
+/** Handle returned by Sfx.flareBurnStart (a no-op handle when audio is not running or the clip is missing). */
+export interface FlareBurnHandle {
+  /** Move the loop with the flare (cheap; the occlusion / air filter refreshes every FLARE_LOOP.update s). */
+  setPos(x: number, y: number, z: number): void;
+  /** Fade out (s, default FLARE_LOOP.fadeOut) and release. Idempotent. */
+  stop(fadeS?: number): void;
+  readonly playing: boolean;
 }
-/** Pre-panner input gain that turns the panner's rolloff into hitConfirmGain(dist) (>= 1; 1 while the rolloff is above the floor). */
-export function hitConfirmCompensation(dist: number): number {
-  return hitConfirmGain(dist) / pannerInverseGain(dist, HIT_CONFIRM.ref, HIT_CONFIRM.rolloff);
+interface FlareLoop {
+  src: AudioBufferSourceNode; fade: GainNode; level: GainNode; filter: BiquadFilterNode; panner: PannerNode; nodes: AudioNode[];
+  pos: Pos; next: number; stopped: boolean;
 }
+const NOOP_FLARE: FlareBurnHandle = {setPos() {}, stop() {}, playing: false};
 
 /** Weapon sound kinds (WeaponDef.sound). */
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
@@ -251,7 +314,16 @@ export class Sfx {
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
-  private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}, confirm: {n: 4, t: 0}};
+  private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}, confirm: {n: 4, t: 0}, flicker: {n: 2, t: 0}};
+  // Iteration 12 (AUDIO): foreground hit confirm — the latest player shot (onset time, voice) and its confirms so far.
+  private revOut: GainNode | null = null;
+  private shotAt = -Infinity;
+  private shotVoice: Voice | null = null;
+  private shotConfirms = 0;
+  private shotConfirmed = new WeakSet<object>();
+  private confirms = 0;
+  // Iteration 12 (AUDIO): burning flare loops (bounded, FLARE_LOOP.max).
+  private flareLoops: FlareLoop[] = [];
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   private reloadVoice: Voice | null = null;
@@ -390,7 +462,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -399,6 +471,7 @@ export class Sfx {
       voices: this.voices.length, hrtfVoices: this.voices.filter(v => v.hrtf).length, panners: this.pannersCreated,
       convolvers: this.convolversCreated, dropped: this.dropped, culled: this.culled, emitters: this.emitters.length, emitterOn: this.emitterOn,
       beds, bedsPlaying: (Object.keys(this.bedSources) as BedName[]), listener: {...this.listener}, bank: this.bank.stats(),
+      confirmVoices: this.voices.filter(v => v.fg).length, confirms: this.confirms, flareLoops: this.flareLoops.filter(l => !l.stopped).length,
     };
   }
 
@@ -428,12 +501,15 @@ export class Sfx {
         l.setOrientation?.(fx, 0, fz, 0, 1, 0);
       }
     }
-    if (++this.emitterTick >= 12) { this.emitterTick = 0; this.updateEmitter(); }
+    if (++this.emitterTick >= 12) { this.emitterTick = 0; this.updateEmitter(); this.updateLoops(false); }
   }
 
-  /** Per-station hooks: occlusion (0 = clear .. 1 = blocked) and humming fixture positions. */
+  /**
+   * Per-station hooks: occlusion (0 = clear .. 1 = blocked) and humming fixture positions. Iteration 12: a new station
+   * (new occlusion) also fades out every burning-flare loop of the previous one.
+   */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]}): void {
-    if (o.occlusion !== undefined) this.occlusion = o.occlusion;
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); }
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
   }
 
@@ -517,6 +593,13 @@ export class Sfx {
       this.setPannerPos(p, o.at.x, o.at.y, o.at.z);
       out.connect(p).connect(this.master);
       nodes.push(p);
+    } else if (o.pan !== undefined && typeof ctx.createStereoPanner === 'function') {
+      // Iteration 12: listener-relative voice with a restrained stereo position (no distance model at all).
+      const sp = ctx.createStereoPanner();
+      sp.pan.value = Math.max(-1, Math.min(1, o.pan));
+      out = out.connect(sp);
+      nodes.push(sp);
+      out.connect(this.master);
     } else out.connect(this.master);
     // The diffuse field stays fairly constant with distance (dry falls off faster): wetter when far.
     const send = (o.send ?? 0) * (o.at ? 1 / (1 + dist / 30) : 1);
@@ -526,7 +609,7 @@ export class Sfx {
       out.connect(s).connect(this.reverbIn);
       nodes.push(s);
     }
-    const v: Voice = {inp, nodes, srcs: [], pending: 0, end: now + 0.05, hrtf};
+    const v: Voice = {inp, nodes, srcs: [], pending: 0, end: now + 0.05, hrtf, fg: !!o.fg};
     this.voices.push(v);
     return v;
   }
@@ -579,13 +662,17 @@ export class Sfx {
     this.preDelay = ctx.createDelay ? ctx.createDelay(0.2) : null;
     let feed: AudioNode = this.reverbIn;
     if (this.preDelay) { this.preDelay.delayTime.value = ROOMS[this.roomKind].pre; feed = this.reverbIn.connect(this.preDelay); }
+    // Iteration 12: one shared return (dipped lightly while a foreground hit confirm sounds; otherwise unity).
+    this.revOut = ctx.createGain();
+    this.revOut.gain.value = 1;
+    this.revOut.connect(this.master);
     for (let i = 0; i < 2; i++) {
       const conv = ctx.createConvolver();
       conv.normalize = true;
       this.convolversCreated++;
       const wet = ctx.createGain();
       wet.gain.value = 0;
-      conv.connect(wet).connect(this.master);
+      conv.connect(wet).connect(this.revOut);
       this.slots.push({conv, wet, kind: null, connected: false, timer: null});
     }
     this.feed = feed;
@@ -816,6 +903,11 @@ export class Sfx {
   shot(kind: WeaponSoundKind): void {
     const v = this.voice({send: 1, pri: 2});
     if (!v) return;
+    // Iteration 12: a new shot — the hit confirms of THIS shot are timed from its onset and de-duplicated per enemy.
+    this.shotAt = this.ctx!.currentTime;
+    this.shotVoice = v;
+    this.shotConfirms = 0;
+    this.shotConfirmed = new WeakSet();
     const big = kind === 'shotgun', map = WEAPON_SHOT_CUES[kind] ?? WEAPON_SHOT_CUES.rifle, cue: CueId = map.cue;
     const clip = this.bank.pick(cue);
     if (clip) {
@@ -946,16 +1038,46 @@ export class Sfx {
     this.play(v, IMPACT_CUE[surface], {delay: Math.random() * 0.008, jitter: 0.08});
   }
   /**
-   * Player-confirmed enemy hit: the existing flesh-impact clip, once per enemy per shot (game.ts aggregates a
-   * shotgun's pellets per enemy before calling this). Panned/directional near; held at >= HIT_CONFIRM.floor of the
-   * near level at any range (no maxDist cull, occlusion capped). Own token bucket so world-impact pellets of the
-   * same shot cannot starve it, while still bounding multi-enemy bursts. Misses never call this.
+   * Iteration 12 (AUDIO, user #5): player-confirmed enemy hit — the impactFlesh clip as a FOREGROUND listener-relative layer
+   * (see HIT_CONFIRM for the routing and why iteration 11 was inaudible). Same level at 2 m and 90 m; only the stereo pan
+   * (±HIT_CONFIRM.pan) depends on where the hit is. `enemy` (the actor) de-duplicates within one shot: one confirm per enemy
+   * per shot even if a caller reports every pellet. Own token bucket + own voice cap; `y` is unused (no distance model).
    */
-  hitConfirm(x: number, y: number, z: number): void {
-    if (!this.live || !this.take('confirm')) return;
-    const at = {x, y, z};
-    const v = this.voice({at, ref: HIT_CONFIRM.ref, rolloff: HIT_CONFIRM.rolloff, send: 0.5, pri: 1, maxDist: Infinity, occMax: HIT_CONFIRM.occMax, gain: hitConfirmCompensation(this.dist(at))});
-    this.play(v, 'impactFlesh', {delay: Math.random() * 0.008, jitter: 0.08});
+  hitConfirm(x: number, _y: number, z: number, enemy?: object): void {
+    const ctx = this.live;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const sameShot = now - this.shotAt <= HIT_CONFIRM.shotWindow;
+    if (enemy && sameShot && this.shotConfirmed.has(enemy)) return;
+    this.prune(now);
+    if (this.voices.filter(v => v.fg).length >= HIT_CONFIRM.maxVoices) { this.dropped++; return; }
+    if (!this.take('confirm')) return;
+    const k = sameShot ? this.shotConfirms : 0;
+    const delay = sameShot ? Math.max(0, this.shotAt + HIT_CONFIRM.delay + k * HIT_CONFIRM.stagger - now) : 0;
+    const v = this.voice({pri: 2, fg: true, pan: hitConfirmPan(this.listener, x, z), send: HIT_CONFIRM.send});
+    const clip = this.play(v, 'impactFlesh', {delay, jitter: 0.04, gainJitter: 0, gain: HIT_CONFIRM.level * Math.pow(HIT_CONFIRM.multiGain, k) / CUE_GAIN.impactFlesh});
+    if (!clip) return;
+    this.confirms++;
+    if (sameShot) {
+      this.shotConfirms++;
+      if (enemy) this.shotConfirmed.add(enemy);
+    }
+    this.dipForConfirm(now + delay);
+  }
+
+  /** Light, brief dip of the player's own shot voice and of the reverb return around a confirm's onset `t`. */
+  private dipForConfirm(t: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const a = Math.max(ctx.currentTime, t - 0.005), b = t + HIT_CONFIRM.dipHold;
+    const dip = (g: AudioParam, depth: number) => {
+      g.cancelScheduledValues(a);
+      g.setTargetAtTime(depth, a, 0.006);
+      g.setTargetAtTime(1, b, HIT_CONFIRM.dipRelease);
+    };
+    const sv = this.shotVoice;
+    if (sv && sv.nodes.length && sv.end > ctx.currentTime) dip(sv.inp.gain, HIT_CONFIRM.shotDip);
+    if (this.revOut) dip(this.revOut.gain, HIT_CONFIRM.reverbDip);
   }
   /**
    * Iteration 06 (Lane D): material breakage at a world point — glass shatter, wood break, rubble
@@ -1060,5 +1182,120 @@ export class Sfx {
       if (Math.hypot(x - L.x, z - L.z) <= 20 && this.take('step')) this.ladder({x, y: y + 0.6, z});
     }
     this.gait.set(id, t);
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Iteration 12 (AUDIO lane): flashlight battery + thrown flare (Sound Lab clips i12-*; silent gaps until decoded)
+
+  /** A fresh battery clicked into the flashlight (player-local). */
+  batteryInsert(): void { this.play(this.voice({send: 0.08, pri: 1}), 'batteryInsert', {jitter: 0.02}); }
+  /** Faint electrical crackle of a failing flashlight (player-local); strength 0..1. Own bucket (3/s, burst 2), expendable. */
+  flashlightFlicker(strength = 1): void {
+    if (!this.live || !this.take('flicker')) return;
+    this.play(this.voice({send: 0.04, pri: 0, gain: 0.55 + 0.45 * clamp01(strength)}), 'flashlightFlicker', {jitter: 0.06, gainJitter: 1.5});
+  }
+  /** A flare struck alight at a world point (usually the player's hand): scrape + whoosh. */
+  flareIgnite(x: number, y: number, z: number): void {
+    this.play(this.voice({at: {x, y, z}, ref: 2, rolloff: 1, send: 0.35, pri: 1, maxDist: 40}), 'flareIgnite', {jitter: 0.03});
+  }
+  /** A flare sputtering out / dying fizz at a world point (stop its burn loop with the handle). */
+  flareOut(x: number, y: number, z: number): void {
+    this.play(this.voice({at: {x, y, z}, ref: FLARE_LOOP.ref, rolloff: FLARE_LOOP.rolloff, send: 0.4, pri: 1, maxDist: 36}), 'flareOut', {jitter: 0.04});
+  }
+
+  /**
+   * A burning flare's spatial hiss loop at a world point. Returns a handle: setPos() follows the flare (thrown / rolling),
+   * stop() fades it out. At most FLARE_LOOP.max loops (the oldest fades to make room); all stop on a new station.
+   * Silent no-op handle when audio is paused / not started or the clip is missing (counted as a silent play).
+   */
+  flareBurnStart(x: number, y: number, z: number): FlareBurnHandle {
+    const ctx = this.live;
+    if (!ctx) return NOOP_FLARE;
+    const clip = this.bank.pick('flareBurn');
+    if (!clip) return NOOP_FLARE;
+    this.flareLoops = this.flareLoops.filter(l => !l.stopped);
+    while (this.flareLoops.length >= FLARE_LOOP.max) this.endLoop(this.flareLoops[0], 0.15);
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = clip.buffer;
+    src.loop = true;
+    const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+    src.loopStart = a;
+    src.loopEnd = b;
+    src.playbackRate.value = rnd(0.96, 1.04); // two flares never phase into one
+    const fade = ctx.createGain();
+    fade.gain.value = 0;
+    fade.gain.setTargetAtTime(CUE_GAIN.flareBurn, now, FLARE_LOOP.fadeIn / 3);
+    const level = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.5;
+    const panner = this.makePanner(ctx, false, FLARE_LOOP.ref, FLARE_LOOP.rolloff);
+    src.connect(fade).connect(level).connect(filter).connect(panner).connect(this.master);
+    const nodes: AudioNode[] = [src, fade, level, filter, panner];
+    if (this.reverbIn) {
+      const s = ctx.createGain();
+      s.gain.value = FLARE_LOOP.send;
+      filter.connect(s).connect(this.reverbIn);
+      nodes.push(s);
+    }
+    const loop: FlareLoop = {src, fade, level, filter, panner, nodes, pos: {x, y, z}, next: 0, stopped: false};
+    this.setPannerPos(panner, x, y, z);
+    this.loopFilter(loop, true);
+    src.onended = () => { for (const n of loop.nodes) { try { n.disconnect(); } catch { /* already gone */ } } loop.nodes.length = 0; };
+    src.start(now, a + Math.random() * Math.max(0, b - a));
+    this.soundsStarted++;
+    this.flareLoops.push(loop);
+    const self = this;
+    return {
+      setPos(px: number, py: number, pz: number) {
+        if (loop.stopped) return;
+        loop.pos.x = px; loop.pos.y = py; loop.pos.z = pz;
+        self.setPannerPos(loop.panner, px, py, pz);
+        if (self.ctx && self.ctx.currentTime >= loop.next) self.loopFilter(loop, false);
+      },
+      stop(fadeS?: number) { self.endLoop(loop, fadeS ?? FLARE_LOOP.fadeOut); },
+      get playing() { return !loop.stopped; },
+    };
+  }
+
+  /** Fade out every burning-flare loop (new station / retry / death). */
+  stopFlares(fadeS = 0.1): void {
+    for (const l of this.flareLoops.slice()) this.endLoop(l, fadeS);
+    this.flareLoops = [];
+  }
+
+  /** Air absorption + occlusion lowpass and level for one loop (same law as voice()); silent but alive beyond FLARE_LOOP.far. */
+  private loopFilter(l: FlareLoop, immediate: boolean): void {
+    const ctx = this.ctx;
+    if (!ctx || l.stopped) return;
+    const t = ctx.currentTime, d = this.dist(l.pos);
+    const occ = this.occlusion && d > 1.5 ? clamp01(this.occlusion(l.pos.x, l.pos.z, l.pos.y)) : 0;
+    const cutoff = Math.min(20000, 17000 / (1 + d * 0.04)) * (occ > 0 ? 0.08 + 0.92 * (1 - occ) : 1);
+    const lvl = d > FLARE_LOOP.far ? 0 : 1 - 0.45 * occ;
+    l.next = t + FLARE_LOOP.update;
+    if (immediate) { l.filter.frequency.value = cutoff; l.level.gain.value = lvl; return; }
+    l.filter.frequency.setTargetAtTime(cutoff, t, 0.08);
+    l.level.gain.setTargetAtTime(lvl, t, 0.12);
+  }
+
+  /** Refresh every live loop's filter/level as the listener moves (setListener cadence). */
+  private updateLoops(force: boolean): void {
+    if (!this.flareLoops.length) return;
+    const t = this.ctx?.currentTime ?? 0;
+    for (const l of this.flareLoops) if (!l.stopped && (force || t >= l.next)) this.loopFilter(l, false);
+  }
+
+  private endLoop(l: FlareLoop, fadeS: number): void {
+    const i = this.flareLoops.indexOf(l);
+    if (i >= 0) this.flareLoops.splice(i, 1);
+    if (l.stopped) return;
+    l.stopped = true;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    l.fade.gain.cancelScheduledValues(t);
+    l.fade.gain.setTargetAtTime(0, t, f / 3);
+    try { l.src.stop(t + f + 0.05); } catch { /* already stopped */ }
   }
 }

@@ -8,6 +8,8 @@ import {CELL, FLOOR, type Grid} from './grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from './props';
 import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type RoomPurpose, type RoomSlot} from './purposes';
 import {stockVariant} from './purposeShapes';
+import {BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, lootTheme} from '../items/lootEconomy';
+import {ITEMS} from '../items/items';
 import type {Wing} from './stationKit';
 import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
 import {dressP7} from './props07Dress';
@@ -18,6 +20,7 @@ import {
   OPPOSITE, areaBase, areaLevel, cellsOfBox, doorSide, forceProp, levelGrid, levelsOf, mainDoor, makePlaceCtx, placeAgainstWall,
   rowAlongWall, tryPlaceProp, wallRange, wallSpot, backed, type PlaceCtx,
 } from './placeKit';
+import {ENEMY_SPAWNS} from '../ai/creatureSpawn'; // Iteration 12 (AI): doubled enemy population
 import {
   MIN_ZOMBIE_SPAWN_CELLS, PENDANT_Y, SPAWN_LIT_RADIUS,
   type Area, type Door, type LightPlacement, type RoomType, type Side, type SignPlacement, type StationLayout, type ZombieType,
@@ -956,17 +959,26 @@ export function placeSpawns(layout: StationLayout, rng: Rng): void {
   const loot: [string, number][] = [];
   for (let i = 0, n = rng.int(3, 4); i < n; i++) loot.push(['ammo_rifle', 30]);
   for (let i = 0, n = rng.int(2, 3); i < n; i++) loot.push(['ammo_shells', 8]);
-  for (let i = 0, n = rng.int(1, 2); i < n; i++) loot.push(['medkit', 1]);
-  for (let i = 0, n = rng.int(2, 3); i < n; i++) loot.push(['bandage', 1]);
-  const pools = {ammo: lootAreas('ammo'), med: lootAreas('med')};
+  // Iteration 12 (LOOT lane): scarce resources (items/lootEconomy.ts FLOOR_ECONOMY) — the ammo boxes above are unchanged; each old
+  // loose dressing / first-aid kit survives ~1 in 5 (own fork: the draws above stay as they were), plus sometimes a torch battery
+  // and a flare, dropped in service / security rooms first.
+  const scarceFloor = rng.fork('scarce-floor');
+  for (let i = 0, n = rng.int(1, 2); i < n; i++) if (scarceFloor.chance(FLOOR_ECONOMY.medKeep)) loot.push(['medkit', 1]);
+  for (let i = 0, n = rng.int(2, 3); i < n; i++) if (scarceFloor.chance(FLOOR_ECONOMY.medKeep)) loot.push(['bandage', 1]);
+  if (scarceFloor.chance(FLOOR_ECONOMY.batteryChance)) loot.push([BATTERY_ID, 1]);
+  if (scarceFloor.chance(FLOOR_ECONOMY.flareChance)) loot.push([FLARE_ID, 1]);
+  const lightPool = layout.areas.filter(a => a.storefront === undefined && a.type !== 'stair-core')
+    .map(a => [a, FLOOR_ECONOMY.themeWeight[lootTheme(a.purpose ?? a.type)]] as [Area, number]).filter(e => e[1] > 0);
+  const pools = {ammo: lootAreas('ammo'), med: lootAreas('med'), light: lightPool};
   for (const [id, count] of loot) {
-    const pool = pools[id.startsWith('ammo') ? 'ammo' : 'med'];
-    if (!pool.length) continue;
+    const pool = pools[id.startsWith('ammo') ? 'ammo' : id === BATTERY_ID || id === FLARE_ID ? 'light' : 'med'];
+    if (!pool.length || !(id in ITEMS)) continue;
     for (let t = 0; t < 10; t++) if (place(id, count, rng.weighted(pool))) break;
   }
 
   // --- Zombies: spread across public halls and back-of-house, never near the spawn ---
-  const count = rng.int(11, 16);
+  // Iteration 12 (AI, mandate F "double the number of enemies"): 22-32 spawn points (was 11-16; ai/creatureSpawn.ts ENEMY_SPAWNS).
+  const count = rng.int(ENEMY_SPAWNS.min, ENEMY_SPAWNS.max);
   const types: ZombieType[] = [];
   for (let i = 0; i < count; i++) types.push(rng.chance(0.4) ? 'coated' : 'shambler');
   if (!types.includes('coated')) types[0] = 'coated';

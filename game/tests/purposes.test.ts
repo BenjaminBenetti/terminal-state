@@ -187,7 +187,7 @@ describe('purposes in generated levels', () => {
       food: [], aisles: ['stockShelf'], newsstand: ['magazineRack', 'stockShelf'], showroom: ['deviceWall', 'techDisplay', 'showcase'],
       service: ['repairBench', 'stockShelf'], florist: ['flowerStand'],
     };
-    let units = 0, signed = 0;
+    let units = 0, signed = 0, stockFinds = 0, fromTable = 0;
     for (const l of SAMPLE()) {
       const lots = rolledLots(l);
       for (const sf of l.storefronts) {
@@ -211,9 +211,10 @@ describe('purposes in generated levels', () => {
           const sig = P.layout === 'food' ? [...(P.kitchen ?? []).map(k => k[0]), 'shopCooler'] : SIGN[P.layout];
           if (props.some(p => sig.includes(p.kind))) signed++;
         }
-        // Stock matches the sign: every rolled item comes from this purpose's tables.
+        // Stock matches the sign: what a store holds comes from this purpose's tables — iteration 12 (LOOT lane): apart from the
+        // rare off-theme random finds of the scarce economy (items/lootEconomy.ts soft room-purpose weights).
         const stocked = new Set(Object.values(P.loot).flatMap(s => [...itemsOf(s)]));
-        for (const h of lots.filter(x => x.p.area === unit.id)) for (const id of h.items) expect(stocked.has(id), `${sf.name} (${sf.use}) holds ${id}`).toBe(true);
+        for (const h of lots.filter(x => x.p.area === unit.id)) for (const id of h.items) { stockFinds++; if (stocked.has(id)) fromTable++; }
       }
       // Purpose props in food units: the cuisine's own back line (pizza oven only in pizzerias …).
       for (const p of l.props) {
@@ -224,18 +225,29 @@ describe('purposes in generated levels', () => {
       }
     }
     expect(signed / units).toBeGreaterThan(0.9);
+    expect(stockFinds).toBeGreaterThan(100);
+    expect(fromTable / stockFinds, 'store finds from the store\'s own tables').toBeGreaterThan(0.75);
+    expect(fromTable / stockFinds, 'some off-theme random finds').toBeLessThan(1);
   });
 
-  it('holders never carry implausible loot in the built level', () => {
+  it('holders never carry implausible loot in the built level (stores: ammo only as a rare random find)', () => {
+    let storeFinds = 0, storeAmmo = 0;
     for (const l of SAMPLE()) {
       for (const {p, items} of rolledLots(l)) {
         const a = l.areas[p.area];
         const pid = p.purpose ?? a.purpose;
-        if (pid && STORE_PURPOSES[pid as keyof typeof STORE_PURPOSES]) for (const id of items) expect(isAmmo(id), `${pid} ${p.kind} ${id}`).toBe(false);
+        // Iteration 12 (LOOT lane): ammo is never hard-excluded anywhere — a store's counter / stock shelf can hold a handful of
+        // rounds as an off-theme find, but never its display case, cooler or kitchen line, and only rarely.
+        if (pid && STORE_PURPOSES[pid as keyof typeof STORE_PURPOSES]) {
+          for (const id of items) { storeFinds++; if (isAmmo(id)) storeAmmo++; }
+          if (['shopDisplay', 'shopCooler', 'grillLine', 'espressoBar', 'wokLine', 'deliLine', 'blenderBar', 'hotdogCart', 'snackRack'].includes(p.kind)) for (const id of items) expect(isAmmo(id), `${pid} ${p.kind} ${id}`).toBe(false);
+        }
         if (p.kind === 'gunLocker') for (const id of items) expect(FOOD.has(id) || DRINK.has(id), `gun locker ${id}`).toBe(false);
         if (p.kind === 'shopCooler') for (const id of items) expect(DRINK.has(id), `cooler ${id}`).toBe(true);
       }
     }
+    expect(storeFinds).toBeGreaterThan(100);
+    expect(storeAmmo / storeFinds).toBeLessThan(0.06);
   });
 
   it('walkways: islands keep >= 0.9 m clear all round, holder fronts and doors stay open', () => {

@@ -8,6 +8,9 @@
 //   upsample never paints far fog over a near silhouette, composite is exact where there is no fog;
 // - lifecycle: quality/resize/new station/dispose without leaks, shader-error fallback, no lights added.
 // FOG_PREVIEW=1 additionally CPU-renders flashlight on/off views into qa-artifacts/iter06-fog/.
+// Iteration 12 (ATMOS): patchy world-space medium (dense patches / clear pockets by area, ground fog), the drift map and
+// two-phase advection (moves with the draft, no jump at phase resets), extinction + transmittance composite, MRT passes,
+// and the flashlight shadow map existing before anything samples it. FOG12_PREVIEW=1 renders qa-artifacts/iter12-fog/.
 import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,10 +24,10 @@ import {cellFloorFn} from '../src/world/lightField';
 import {worldMapped} from '../src/world/materials';
 import {addShaderHook, cloneWithShaderHooks, hasShaderHook, removeShaderHook, shaderHookKeys} from '../src/render/shaderHooks';
 import {
-  ATMOSPHERE, ATMOSPHERE_QUALITY, DENSITY_MAP_RANGE, acesForward, acesInverse, atmosphereFor, bilateralUpsample, buildDensityMap,
-  buildNoiseVolume, compositePixel, densityAt, distanceAttenuation, fixtureRadiance, flashlightRadiance, integrateInscatter, marchSamples,
-  marchSize, phase, sampleDensityMap, shadowBiasFor, srgbDecode, srgbEncode, SHADOW_NEAR, SHADOW_NORMAL_BIAS, viewZFromDepth,
-  type SpotInput, type V3,
+  ATMOSPHERE, ATMOSPHERE_QUALITY, DENSITY_MAP_RANGE, FLOW_SPEED, NOISE_SIZE, acesForward, acesInverse, atmosphereFor, bilateralUpsample, buildDensityMap,
+  buildFlowMap, buildNoiseVolume, compositePixel, densityAt, distanceAttenuation, fixtureRadiance, flashlightRadiance, integrateInscatter, integrateMedium,
+  marchSamples, marchSize, mediumAt, phase, sampleDensityMap, sampleFlowMap, sampleNoise, shadowBiasFor, srgbDecode, srgbEncode, SHADOW_NEAR, SHADOW_NORMAL_BIAS,
+  viewZFromDepth, type SpotInput, type V3,
 } from '../src/render/atmosphere';
 import {VolumetricAtmosphere, configureFlashlightShadow, fogOverrideFromUrl, markShadows} from '../src/render/volumetric';
 import {VF_COMPOSITE, VF_MARCH, VF_MARK, VF_TEMPORAL, VF_VERTEX} from '../src/render/volumetricShaders';
@@ -139,7 +142,7 @@ describe('volumetric GLSL (static checks; no GL in node)', () => {
 
   it('every declared uniform is supplied by its material and vice versa', () => {
     for (const {name, mat, src} of programs()) {
-      const declared = [...strip(src).matchAll(/^\s*uniform\s+(?:highp\s+|mediump\s+|lowp\s+)?\w+\s+(\w+)\s*;/gm)].map(m => m[1]).sort();
+      const declared = [...strip(src).matchAll(/^\s*uniform\s+(?:highp\s+|mediump\s+|lowp\s+)?\w+\s+(\w+)\s*(?:\[[^\]]*\])?\s*;/gm)].map(m => m[1]).sort();
       expect(declared, name).toEqual(Object.keys(mat.uniforms).sort());
       expect(mat.vertexShader).toBe(VF_VERTEX);
       expect(mat.depthTest && mat.depthWrite, name).toBe(false);
@@ -150,7 +153,7 @@ describe('volumetric GLSL (static checks; no GL in node)', () => {
   it('has no implicit int -> float mixing (GLSL ES 3.00 has no implicit conversions)', () => {
     // Heuristic lint: integer literals may only appear in int contexts (loops, ivec, texelFetch,
     // textureSize, bit ops, defines) - every float literal is written with a decimal point.
-    const intContext = /\b(int|ivec[234]|texelFetch|textureSize)\b|^\s*#(define|ifndef|endif|if)\b|&\s*1|\b[ij]\s*(<=?|\+\+|=)|lo\.[xy]|uFullSize \) - 1|uLowSize \) - 1|\) - 1,/;
+    const intContext = /\b(int|ivec[234]|texelFetch|textureSize)\b|^\s*#(define|ifndef|endif|if)\b|&\s*1|\b[ij]\s*(<=?|\+\+|=)|lo\.[xy]|uFullSize \) - 1|uLowSize \) - 1|\) - 1,|^\s*layout\(location = \d\)/;
     for (const {name, src} of [...programs(), {name: 'vertex', src: VF_VERTEX}]) {
       const lines = strip(src).split('\n');
       lines.forEach((line, i) => {
@@ -450,11 +453,179 @@ describe('station medium (density map, height, noise)', () => {
       s += a / densityAt(p, m, null, ATMOSPHERE, 0); n++;
       if (Math.abs(a - b) > 1e-4) changed++;
     }
-    expect(s / n).toBeGreaterThan(0.8);
-    expect(s / n).toBeLessThan(1.2);
+    // iteration 12: a high-contrast patch field; one instant over a 13 x 13 m patch of floor can sit in a dense or a clear
+    // region (the long-run mean is tested in the iteration-12 block)
+    expect(s / n).toBeGreaterThan(0.5);
+    expect(s / n).toBeLessThan(1.8);
     expect(changed).toBeGreaterThan(300);
     expect(atmosphereFor({archetype: 'deep'}).density).toBeGreaterThan(ATMOSPHERE.density);
     expect(atmosphereFor({archetype: 'deep'}).areaDensity.trackBed).toBe(ATMOSPHERE.areaDensity.trackBed);
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+describe('iteration 12: patchy, flowing medium (render/atmosphere.ts mediumAt)', () => {
+  const noise = buildNoiseVolume();
+  it('noise tile: RG8 48^3, tileable, both channels equalised (thresholds are coverage fractions), deterministic', () => {
+    expect(noise.length).toBe(NOISE_SIZE ** 3 * 2);
+    expect(Buffer.from(buildNoiseVolume()).equals(Buffer.from(noise))).toBe(true);
+    for (const ch of [0, 1]) {
+      let mean = 0, above = 0;
+      const n = NOISE_SIZE ** 3;
+      for (let i = 0; i < n; i++) { const v = noise[i * 2 + ch] / 255; mean += v; if (v > 0.64) above++; }
+      expect(mean / n).toBeCloseTo(0.5, 2);
+      expect(above / n).toBeCloseTo(0.36, 1);
+    }
+    for (const q of [[0.13, 0.42, 0.77], [0.9, 0.05, 0.31]] as V3[]) {
+      expect(sampleNoise(noise, q, NOISE_SIZE, 0)).toBeCloseTo(sampleNoise(noise, [q[0] + 1, q[1] - 2, q[2] + 1], NOISE_SIZE, 0), 9);
+    }
+  });
+
+  it('dense patches and clear pockets in world space (not a uniform knob); smooth, with the long-run mean kept', () => {
+    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), flow = buildFlowMap(l);
+    const P = l.areas[l.platform];
+    const pts: V3[] = [];
+    for (let cx = P.x + 1; cx < P.x + P.w - 1; cx += 1) for (let cy = P.y + 1; cy < P.y + P.h - 1; cy += 1) pts.push([(cx + 0.5) * CELL, 1.6, (cy + 0.5) * CELL]);
+    const ratio = pts.map(p => mediumAt(p, m, flow, noise, ATMOSPHERE, 3).sigma / mediumAt(p, m, flow, null, ATMOSPHERE, 3).sigma);
+    const clear = ratio.filter(r => r < 0.35).length / ratio.length, dense = ratio.filter(r => r > 1.8).length / ratio.length;
+    const mean = ratio.reduce((a, b) => a + b, 0) / ratio.length;
+    console.log(`platform at 1.6 m: ${(clear * 100).toFixed(0)} % clear pockets (< 0.35 x base), ${(dense * 100).toFixed(0)} % dense (> 1.8 x), mean ${mean.toFixed(2)} x, ${pts.length} points`);
+    expect(pts.length).toBeGreaterThan(200);
+    expect(clear).toBeGreaterThan(0.2);
+    expect(dense).toBeGreaterThan(0.15);
+    expect(Math.max(...ratio) / Math.min(...ratio)).toBeGreaterThan(8);
+    // spatially coherent: neighbours 0.5 m apart differ far less than random pairs (patches, not speckle)
+    const at = (x: number, z: number) => mediumAt([x, 1.6, z], m, flow, noise, ATMOSPHERE, 3).sigma;
+    let near = 0, far = 0, k = 0;
+    for (let i = 0; i < 200; i++) {
+      const p = pts[(i * 37) % pts.length], q = pts[(i * 101 + 17) % pts.length];
+      near += Math.abs(at(p[0], p[2]) - at(p[0] + 0.5, p[2])); far += Math.abs(at(p[0], p[2]) - at(q[0], q[2])); k++;
+    }
+    expect(near / k).toBeLessThan(far / k * 0.4);
+    // long-run mean over time and space stays near the unpatterned medium (the old knob), so the station is not just darker
+    let s = 0, n = 0;
+    for (let t = 0; t < 60; t += 7.3) for (const p of pts.slice(0, 120)) { s += mediumAt(p, m, flow, noise, ATMOSPHERE, t).sigma / mediumAt(p, m, flow, null, ATMOSPHERE, t).sigma; n++; }
+    expect(s / n).toBeGreaterThan(0.7);
+    expect(s / n).toBeLessThan(1.4);
+  });
+
+  it('thicker and more often dense over track beds / service levels, airier in big halls; ground fog hugs the floor', () => {
+    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), flow = buildFlowMap(l), g = l.grid;
+    // averaged over several moments (the field drifts through): a station is only a few noise tiles across
+    const avg = (cells: number[], y: (i: number) => number) => {
+      let s = 0, d = 0, n = 0;
+      for (const t of [0, 23, 47, 71, 95]) for (const i of cells) {
+        const cx = i % g.w, cy = (i - cx) / g.w;
+        const p: V3 = [(cx + 0.5) * CELL, y(i), (cy + 0.5) * CELL];
+        const r = mediumAt(p, m, flow, noise, ATMOSPHERE, t);
+        s += r.sigma; d += r.dense; n++;
+      }
+      return {sigma: s / n, dense: d / n};
+    };
+    const floorOf = cellFloorFn(g, l.trench.floorY);
+    const idx = Array.from({length: g.cells.length}, (_, i) => i); // (g.cells is a Uint8Array: never .map it into indices)
+    const bed = idx.filter(i => g.cells[i] === VOID).filter((_, k) => k % 7 === 0);
+    const hallIds = new Set(l.areas.filter(a => a.type === 'concourse' || a.type === 'fare-hall' || a.type === 'food-court').map(a => a.id));
+    const hall = idx.filter(i => g.cells[i] !== SOLID && g.cells[i] !== VOID && hallIds.has(g.area[i])).filter((_, k) => k % 7 === 0);
+    expect(bed.length).toBeGreaterThan(50);
+    expect(hall.length).toBeGreaterThan(50);
+    const fy = (i: number) => floorOf(i % g.w, Math.floor(i / g.w));
+    const bedLow = avg(bed, i => fy(i) + 0.25), bedHigh = avg(bed, i => fy(i) + 1.8);
+    const hallLow = avg(hall, i => fy(i) + 0.25), hallHigh = avg(hall, i => fy(i) + 1.8);
+    console.log(`sigma track bed 0.25 m ${bedLow.sigma.toFixed(4)} / 1.8 m ${bedHigh.sigma.toFixed(4)} (dense ${bedHigh.dense.toFixed(2)}); halls ${hallLow.sigma.toFixed(4)} / ${hallHigh.sigma.toFixed(4)} (dense ${hallHigh.dense.toFixed(2)})`);
+    expect(bedLow.sigma).toBeGreaterThan(bedHigh.sigma * 1.6);   // ground fog in the track bed
+    expect(bedLow.sigma).toBeGreaterThan(hallLow.sigma * 1.8);   // thick low over the tracks, thin in halls
+    expect(bedHigh.sigma).toBeGreaterThan(hallHigh.sigma * 1.25);
+    expect(bedHigh.dense).toBeGreaterThan(hallHigh.dense * 1.3); // more often inside a dense patch
+    expect(ATMOSPHERE.levelDensity.lower!).toBeGreaterThan(ATMOSPHERE.levelDensity.main!);
+    expect(ATMOSPHERE.levelDensity.upper!).toBeLessThan(ATMOSPHERE.levelDensity.main!);
+  });
+
+  it('drift map: the tunnel draft along the tracks (seeded direction), slower on platforms, rising over working fixtures', () => {
+    const drafts = new Set<number>();
+    for (const seed of [1, 2, 3, 6]) {
+      const l = station(seed), f = buildFlowMap(l), g = l.grid;
+      drafts.add(f.draft);
+      expect(Buffer.from(buildFlowMap(l).data).equals(Buffer.from(f.data))).toBe(true);
+      const vi = g.cells.findIndex((c, i) => c === VOID && [1, 2, 3].every(k => g.cells[i + k] === VOID && g.cells[i - k] === VOID && g.cells[i + k * g.w] === VOID && g.cells[i - k * g.w] === VOID));
+      const vx = vi % g.w, vy = (vi - vx) / g.w;
+      const [fx, fz] = sampleFlowMap(f, (vx + 0.5) * CELL, (vy + 0.5) * CELL, 0);
+      expect(Math.sign(fx)).toBe(f.draft);
+      expect(Math.abs(fx)).toBeGreaterThan(FLOW_SPEED.track * 0.6);
+      expect(Math.abs(fz)).toBeLessThan(Math.abs(fx) * 0.3);
+      const lit = l.lights.find(x => !x.broken && (x.level ?? 0) === 0)!;
+      expect(sampleFlowMap(f, lit.x, lit.z, 0)[2]).toBeGreaterThan(0.02);
+    }
+    expect(drafts.size).toBe(2); // both directions occur across stations
+  });
+
+  it('flows: the patch field moves with the drift, never jumps at a phase reset, and changes shape over time', () => {
+    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), flow = buildFlowMap(l), g = l.grid;
+    const vi = g.cells.findIndex((c, i) => c === VOID && [1, 2, 3, 4].every(k => g.cells[i + k] === VOID && g.cells[i - k] === VOID));
+    const vx = vi % g.w, vy = (vi - vx) / g.w;
+    const y = cellFloorFn(g, l.trench.floorY)(vx, vy) + 1.2;
+    const xs = Array.from({length: 120}, (_, i) => (vx - 30 + i * 0.5) * CELL);
+    const z = (vy + 0.5) * CELL;
+    const P = {...ATMOSPHERE, wind: [0, 0, 0] as const}; // local flow only
+    const row = (t: number) => xs.map(x => mediumAt([x, y, z], m, flow, noise, P, t).sigma);
+    // advected: the profile at t + 3 s matches the one at t shifted downstream (draft direction), not upstream
+    const a = row(4), b = row(7), shift = Math.round(Math.abs(sampleFlowMap(flow, xs[60], z, 0)[0]) * 3 / (0.5 * CELL));
+    const err = (k: number) => { let e = 0, n = 0; for (let i = 10; i < 110; i++) { e += Math.abs(b[i] - a[i - k]); n++; } return e / n; };
+    const down = err(shift * flow.draft), up = err(-shift * flow.draft);
+    expect(shift).toBeGreaterThanOrEqual(1);
+    expect(down).toBeLessThan(up);
+    // continuous through a phase reset (t = flowPeriod: one phase jumps by v x period, its weight is 0 there)
+    const T = ATMOSPHERE.flowPeriod;
+    const pre = row(T - 0.02), post = row(T + 0.02);
+    let maxJump = 0;
+    for (let i = 0; i < xs.length; i++) maxJump = Math.max(maxJump, Math.abs(post[i] - pre[i]) / Math.max(pre[i], 1e-4));
+    expect(maxJump).toBeLessThan(0.1);
+    // over a minute the field reshapes (not a frozen pattern)
+    const c = row(60);
+    let diff = 0;
+    for (let i = 0; i < xs.length; i++) diff += Math.abs(c[i] - a[i]) / Math.max(a[i], 1e-4);
+    expect(diff / xs.length).toBeGreaterThan(0.2);
+  });
+
+  it('dense patches and smoke dim what is behind them; clear air does not; the composite is exact without them', () => {
+    const ray = {origin: [0, 1.6, 0] as V3, dir: [0, 0, -1] as V3, steps: 24, jitter: 0.5, maxDistance: 36, fogDensity: 0.043};
+    const dense = integrateMedium({...ray, sceneDist: 12, sigma: () => 0.09, radiance: () => [0.05, 0.05, 0.05], extinction: () => (0.09 - 0.03) * ATMOSPHERE.patchExtinction});
+    const clear = integrateMedium({...ray, sceneDist: 12, sigma: () => 0.004, radiance: () => [0.05, 0.05, 0.05], extinction: () => 0});
+    expect(dense.transmittance).toBeLessThan(0.45);
+    expect(clear.transmittance).toBe(1);
+    expect(integrateInscatter({...ray, sceneDist: 12, sigma: () => 0.02, radiance: () => [1, 1, 1]})[0]).toBeCloseTo(integrateMedium({...ray, sceneDist: 12, sigma: () => 0.02, radiance: () => [1, 1, 1]}).inscatter[0], 12);
+    // light behind a dense stretch reaches the eye attenuated by it
+    const lamp = (ext: number) => integrateMedium({...ray, sceneDist: 12, sigma: () => 0.03, radiance: (_p, t) => (t > 8 ? [1, 1, 1] : [0, 0, 0]), extinction: (p) => (-p[2] < 6 ? ext : 0)}).inscatter[0];
+    expect(lamp(0.2)).toBeLessThan(lamp(0) * 0.45);
+    for (const v of [0.05, 0.3, 0.8]) {
+      const px: V3 = [v, v, v];
+      expect(compositePixel(px, [0, 0, 0], MOOD.exposure, 1)).toEqual(px);
+      const t7 = compositePixel(px, [0, 0, 0], MOOD.exposure, 0.7), t4 = compositePixel(px, [0, 0, 0], MOOD.exposure, 0.4);
+      expect(t7[0]).toBeLessThan(v);
+      expect(t4[0]).toBeLessThan(t7[0]);
+      expect(t4[0]).toBeGreaterThanOrEqual(v * 0.4 - 1e-9);
+    }
+  });
+
+  it('MRT passes: march + temporal write in-scatter/depth and transmittance; the composite applies scene x T + in-scatter', () => {
+    const a = new VolumetricAtmosphere(null, {flashlight: new THREE.SpotLight()});
+    expect(a.march.glslVersion).toBe(THREE.GLSL3);
+    expect(a.temporal.glslVersion).toBe(THREE.GLSL3);
+    expect(a.composite.glslVersion).toBe(null);
+    for (const src of [VF_MARCH, VF_TEMPORAL]) {
+      expect(src).toContain('layout(location = 0) out highp vec4 vfOut0;');
+      expect(src).toContain('layout(location = 1) out highp vec4 vfOut1;');
+      expect(src).not.toContain('gl_FragColor');
+    }
+    expect(VF_MARCH).toContain('vfOut1 = vec4( tv, 0.0, 0.0, 1.0 );');
+    expect(VF_MARCH).toContain('tv *= exp( - ( med.y * uExt.x + smokeSig * uExt.y ) * w );');
+    expect(VF_TEMPORAL).toContain('outT = mix( curT, clamp( hT, mnT, mxT ), k );');
+    expect(VF_COMPOSITE).toContain('vfAces( hdr * tv + fog )');
+    expect(VF_COMPOSITE).toContain('texelFetch( tFogT, q, 0 ).r');
+    // two noise samples per step (one per flow phase), each two channels: same step count as before
+    expect((VF_MARCH.match(/textureLod\( tNoise,/g) ?? []).length).toBe(2);
+    a.dispose();
   });
 });
 
@@ -632,6 +803,28 @@ describe('VolumetricAtmosphere lifecycle (no GL: fake renderer)', () => {
     a.dispose(); // idempotent
   });
 
+  it('iteration 12: the flashlight shadow map is created even while the light is dark (no shadow sampler without a map)', () => {
+    const {scene, camera, flashlight} = rig();
+    flashlight.intensity = 0; // title screen / flat battery / switched off from the first frame
+    const a = new VolumetricAtmosphere(fakeRenderer() as unknown as THREE.WebGLRenderer, {flashlight}, 'high');
+    a.setSize(640, 360);
+    a.setStation(station(1), null);
+    expect(flashlight.shadow.map).toBe(null);
+    a.render(scene, camera, 0);
+    expect(flashlight.shadow.autoUpdate).toBe(false);  // no per-frame shadow pass while dark...
+    expect(flashlight.shadow.needsUpdate).toBe(true);  // ...but one forced update creates the map
+    flashlight.shadow.needsUpdate = false;
+    (flashlight.shadow as unknown as {map: object}).map = {};    // three created it
+    a.render(scene, camera, 0.1);
+    expect(flashlight.shadow.needsUpdate).toBe(false);
+    a.enabled = false; // the direct (r5) path samples the same map
+    (flashlight.shadow as unknown as {map: object | null}).map = null;
+    a.render(scene, camera, 0.2);
+    expect(flashlight.shadow.needsUpdate).toBe(true);
+    (flashlight.shadow as unknown as {map: object | null}).map = null;
+    a.dispose();
+  });
+
   it('shadow casters: opaque lit meshes cast (structure double-sided), glow/tubes/decals do not', () => {
     const root = new THREE.Group();
     const wallMat = new THREE.MeshStandardMaterial();
@@ -696,4 +889,58 @@ describe.runIf(!!process.env.FOG_PREVIEW)('CPU fog previews (FOG_PREVIEW=1)', ()
       await sharp(big, {raw: {width: TW, height: TH, channels: 3}}).composite([{input: Buffer.from(svg)}]).png().toFile(path.join(out, `fog-preview-seed${seed}${process.env.FOG_PREVIEW_TAG ?? ''}.png`));
     }
   }, 900000);
+});
+
+// ---------------------------------------------------------------------------------------------
+describe.runIf(!!process.env.FOG12_PREVIEW)('iteration 12 CPU fog previews (FOG12_PREVIEW=1; qa-artifacts/iter12-fog)', () => {
+  it('renders before-like / after (torch on / off, two moments) / flare smoke views', async () => {
+    const sharp = (await import('sharp')).default;
+    const {renderFogPreview} = await import('./helpers/fogPreview');
+    const {previewScene} = await import('./helpers/lightPreview');
+    const {bakeLightField} = await import('../src/world/lightField');
+    const {SmokeField} = await import('../src/render/smoke');
+    const out = path.join(REPO, 'qa-artifacts', 'iter12-fog');
+    fs.mkdirSync(out, {recursive: true});
+    const W = Number(process.env.FOG_PREVIEW_W ?? 288), H = Math.round(W * 9 / 16);
+    const noise = buildNoiseVolume();
+    for (const seed of (process.env.FOG_PREVIEW_SEEDS ?? '1').split(',').map(Number)) {
+      const l = station(seed), field = bakeLightField({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY});
+      const sc = previewScene(l), params = {...atmosphereFor(l), ...JSON.parse(process.env.FOG_PREVIEW_PARAMS ?? '{}')}, dmap = buildDensityMap(l, params), flow = buildFlowMap(l);
+      const before = {...params, density: 0.02, noiseAmount: 0, ground: 0, patchExtinction: 0, fixtureScatter: 0.5, flashlightScatter: 0.45};
+      const P = l.areas[l.platform], sp = l.playerSpawn, pz = (P.y + P.h / 2) * CELL;
+      const views = [
+        {label: 'spawn', cam: {x: sp.x, y: 1.6, z: sp.z, yaw: sp.yaw, pitch: 0.0, fov: 75}},
+        {label: 'platform length', cam: {x: (P.x + 3) * CELL, y: 1.6, z: pz, yaw: -Math.PI / 2, pitch: -0.02, fov: 75}},
+      ];
+      const hall = l.areas.find(a => (a.type === 'concourse' || a.type === 'fare-hall') && a.w * a.h > 200);
+      if (hall) views.push({label: hall.type, cam: {x: (hall.x + 2) * CELL, y: 1.6, z: (hall.y + hall.h / 2) * CELL, yaw: -Math.PI / 2, pitch: -0.03, fov: 75}});
+      const cols = [
+        {t: 'before-like uniform haze, torch off', p: before, flash: false, time: 0, flare: false},
+        {t: 'iteration 12, torch on', p: params, flash: true, time: 0, flare: false},
+        {t: 'iteration 12, torch off', p: params, flash: false, time: 0, flare: false},
+        {t: 'iteration 12, torch off, 20 s later', p: params, flash: false, time: 20, flare: false},
+        {t: 'iteration 12 + flare smoke (6 s)', p: params, flash: false, time: 6, flare: true},
+      ];
+      const LH = 18, TW = W * cols.length, TH = views.length * (H + LH) + LH;
+      const big = Buffer.alloc(TW * TH * 3, 16);
+      const labels: string[] = [];
+      views.forEach((v, row) => {
+        cols.forEach((c, col) => {
+          let smoke = null, scatterLight = null;
+          if (c.flare) {
+            const fx = v.cam.x - Math.sin(v.cam.yaw) * 4.5, fz = v.cam.z - Math.cos(v.cam.yaw) * 4.5, fy = v.cam.y - 1.55;
+            smoke = new SmokeField();
+            smoke.add({x: fx, y: fy + 0.05, z: fz, color: 0xc0261a, rate: 1, radius: 1.4, life: 7});
+            for (let t = 0; t < 6; t += 1 / 30) smoke.step(1 / 30);
+            scatterLight = {pos: [fx, fy + 0.15, fz] as V3, color: [7, 7 * 0.0232, 7 * 0.006] as V3, distance: 10, decay: 2};
+          }
+          const img = renderFogPreview(sc, v.cam, {mood: MOOD, field, params: c.p, density: dmap, flow, noise, width: W, height: H, flashlight: c.flash, fog: true, time: c.time, smoke, scatterLight});
+          for (let y = 0; y < H; y++) img.copy(big, ((LH + row * (H + LH) + LH + y) * TW + col * W) * 3 - LH * TW * 3, y * W * 3, (y + 1) * W * 3);
+        });
+        labels.push(`<text x="6" y="${LH + row * (H + LH) + 13}" font-family="DejaVu Sans" font-size="12" fill="#ddd">seed ${seed} - ${v.label}</text>`);
+      });
+      const head = cols.map((c, i) => `<text x="${i * W + 6}" y="13" font-family="DejaVu Sans" font-size="12" fill="#ddd">${c.t}</text>`).join('');
+      await sharp(big, {raw: {width: TW, height: TH, channels: 3}}).composite([{input: Buffer.from(`<svg width="${TW}" height="${TH}">${head}${labels.join('')}</svg>`)}]).png().toFile(path.join(out, `fog-iter12-seed${seed}${process.env.FOG_PREVIEW_TAG ?? ''}.png`));
+    }
+  }, 1800000);
 });

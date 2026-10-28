@@ -22,7 +22,7 @@ import {Effects} from './world/fx';
 import {Input} from './player/input';
 import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/player';
 import {Inventory, type SlotRef} from './items/inventory';
-import {ITEMS, itemDef, useHint, useLabel} from './items/items';
+import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, type WeaponDef} from './weapons/weapons';
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
@@ -33,6 +33,7 @@ import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchety
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
 import type {BrainWorld} from './ai/brain';
+import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, rayCapsule, raySphere, type Vec3} from './combat/hitscan';
@@ -42,6 +43,9 @@ import {Sfx, humEmitters, roomKindFor} from './audio/sfx';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
 import {ShelfStock} from './world/shelfStock';
+import {LightSources} from './world/lightSources';
+import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
+import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 
@@ -104,9 +108,17 @@ export class Game {
   readonly damage = new DamageSystem(this.fx, this.sfx);
   /** Iteration 08 (Lane S): real 3D filler stock on retail shelving — physical on demand, never loot (world/shelfStock.ts). */
   readonly stock = new ShelfStock(this.fx, this.sfx);
+  /** Iteration 12 (primary contract): player-made light the world reacts to (flashlight, flares, body glow); world/lightSources.ts. */
+  readonly lightSources = new LightSources();
   readonly invUI: InventoryUI;
   private readonly flashlight: THREE.SpotLight;
-  flashlightOn = true;
+  /** Iteration 12 (LIGHT): flashlight battery / flicker + body glow + their light sources (player/flashlight.ts). */
+  readonly torch: PlayerLight;
+  /** Iteration 12 (LIGHT): thrown road flares (weapons/throwables.ts; a cannon BodySource of `physics`). */
+  readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
+  /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
+  get flashlightOn(): boolean { return this.torch.battery.on; }
+  set flashlightOn(v: boolean) { this.torch.battery.setOn(v); }
   private readonly muzzleLight = new THREE.PointLight(0xffb468, 0, 8, 2);
   /** Iteration 06 (Lane F): volumetric haze pass + flashlight shadow map (render/volumetric.ts). */
   readonly atmosphere: VolumetricAtmosphere;
@@ -155,6 +167,15 @@ export class Game {
     this.flashlight.target.position.set(0.04, -0.12, -6);
     this.camera.add(this.flashlight, this.flashlight.target);
     this.atmosphere = new VolumetricAtmosphere(this.renderer, {flashlight: this.flashlight, muzzle: this.muzzleLight}, this.settings.quality);
+    // Iteration 12 (LIGHT): battery-driven flashlight + warm body glow (always in the scene: the light count never changes);
+    // flares get the atmosphere smoke / scatter API, the Sound Lab flare cues and the storey / sight queries.
+    this.torch = new PlayerLight(this.flashlight, MOOD.flashlight);
+    this.scene.add(this.torch.glow);
+    this.flares.env = {
+      smoke: this.atmosphere satisfies FlareSmokeHost, audio: this.sfx, // smoke / scatter API: render/volumetric.ts (atmosphere lane)
+      levelAt: (x, z, y) => this.levels ? this.levels.levelAt(x, z, y) : 0,
+      lineOfSight: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
+    };
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -187,9 +208,10 @@ export class Game {
     // Food/drink use the generated item models when the manifest has them (else stand-ins).
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
-    for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable').map(d => d.id)) {
+    for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
       const o = makeSupplyMesh(id);
-      o.rotation.set(0.5, -0.4, 0.15);
+      // Iteration 12 (LIGHT): a held flare is gripped mid-tube, cap (head) pointing forward and a little up
+      if (itemDef(id).kind === 'throwable') o.rotation.set(0.35, Math.PI / 2 + 0.12, 0.1); else o.rotation.set(0.5, -0.4, 0.15);
       o.traverse(x => { const mm = x as THREE.Mesh; if (mm.isMesh) mm.frustumCulled = false; });
       consumables[id] = o;
     }
@@ -244,6 +266,7 @@ export class Game {
     this.damage.clear();
     this.use = null;
     this.consumeView?.reset();
+    this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
 
     const t0 = performance.now();
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
@@ -314,12 +337,15 @@ export class Game {
     this.survival.reset(); // food/water 80/80 on spawn, new station and retry
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
 
+    this.lightSources.clear(); // Iteration 12: lights of the previous station / life (re-registered by the light lane)
+    this.torch.reset(); // Iteration 12 (LIGHT): battery back to its 80 % start, light on, no dip in progress
     this.inv = new Inventory();
     // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
     if (this.startWeapon === 'pistol') this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('pistol', 1, WEAPONS.pistol.magazine));
     else this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('rifle', 1, 30));
     this.inv.set({bar: 'hotbar', index: 4}, this.inv.makeStack('bandage', 1));
     this.inv.add(this.startWeapon === 'pistol' ? this.inv.makeStack('ammo_pistol', 45) : this.inv.makeStack('ammo_rifle', 60));
+    this.inv.add(this.inv.makeStack('flare', 1)); // Iteration 12 (primary): ONE starting flare teaches T-throw; all others are scarce finds
     this.inv.select(0);
     this.lastSlot = 0;
     this.weapon = new WeaponController();
@@ -497,7 +523,55 @@ export class Game {
       this.viewmodel.setItem(st!.itemId);
     } else {
       this.weapon.equip(null);
-      this.viewmodel.setItem(def?.kind === 'consumable' ? st!.itemId : null);
+      this.viewmodel.setItem(def?.kind === 'consumable' || def?.kind === 'throwable' ? st!.itemId : null); // Iteration 12 (LIGHT): a held flare shows
+    }
+  }
+
+  /**
+   * Iteration 12 (LIGHT): strike + toss one flare (T from anywhere in the inventory; left click with a flare held). Exactly one
+   * item is removed, and only once the throw happened: at the cap / cooldown / without physics nothing is used (HUD message).
+   */
+  private throwFlare(fromHeld: boolean): void {
+    const ref = fromHeld && this.inv.selectedStack()?.itemId === 'flare' ? {bar: 'hotbar' as const, index: this.inv.selected} : null;
+    if (this.use || this.consumeView.busy || this.player.climbing) return;
+    const p = this.player;
+    // throwOneFlare: refused (cap / cooldown / no physics / none) -> nothing removed; else exactly one removed, then thrown
+    const r = throwOneFlare(this.flares, () => (ref ? this.inv.consumeAt(ref) : this.inv.take('flare', 1) === 1), () => this.inv.count('flare') > 0,
+      this.camera.getWorldPosition(new THREE.Vector3()), this.forward(), {x: p.vx, y: p.grounded ? 0 : p.vy * 0.5, z: p.vz});
+    if (!r.ok) {
+      if (r.reason === 'none') { this.hud.toast('No flares — find one first', true); this.sfx.denied(); }
+      else if (r.reason === 'cap') { this.hud.toast('Three flares already burning — wait for one to burn out', true); this.sfx.denied(); }
+      return; // 'cooldown' (a double press) / 'unavailable': silent
+    }
+    this.stats.itemsUsed++;
+    const left = this.inv.count('flare');
+    this.hud.toast(`Flare thrown · ${left ? `${left} left` : 'last one'}`);
+    // the hands were busy: the held item / gun comes back up from below
+    this.viewmodel.setItem(null);
+    this.syncHeld();
+  }
+
+  /** Iteration 12 (LIGHT): F — switch click; with a flat battery the light stays off (dry click + hint, at most every 4 s). */
+  private toggleFlashlight(): void {
+    const r = this.torch.toggle();
+    if (r !== 'dead') { this.sfx.click(1.4); return; }
+    this.sfx.click(0.6);
+    if (this.time - this.deadHintAt > 4) { this.deadHintAt = this.time; this.hud.toast(this.inv.count('battery') ? 'Flashlight battery is flat — use a battery' : 'Flashlight battery is flat — find a battery', true); }
+  }
+  private deadHintAt = -Infinity;
+
+  /** Iteration 12 (LIGHT): battery / flicker -> SpotLight + body glow + their light sources; HUD warnings; flicker crackle. */
+  private updatePlayerLight(dt: number, eye: THREE.Vector3): void {
+    const p = this.player, L = this.levels;
+    const ev = this.torch.update(dt, {
+      sources: this.lightSources, eye, feet: {x: p.x, y: p.y, z: p.z}, yaw: p.yaw, level: L.levelAt(p.x, p.z, p.y + 0.05),
+      raycast: (o, d, max) => raycastWorld(L, this.layout.props, o, d, max, this.layout.trench.floorY).t,
+    });
+    for (const e of ev) {
+      if (e === 'low') this.hud.toast('Flashlight battery low — it will start to flicker', true);
+      else if (e === 'critical') this.hud.toast('Flashlight battery almost flat', true);
+      else if (e === 'died') { this.hud.toast(this.inv.count('battery') ? 'Flashlight battery died — use a battery' : 'Flashlight battery died', true); this.sfx.click(0.7); }
+      else if (e === 'dip') this.sfx.flashlightFlicker?.(this.torch.battery.flicker);
     }
   }
 
@@ -543,7 +617,8 @@ export class Game {
     if (!st) return;
     const def = itemDef(st.itemId);
     if (def.kind !== 'consumable') return;
-    const blocked = this.survival.blockReason(def, this.player.hp, this.player.maxHp);
+    // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
+    const blocked = (def.recharge ? this.torch.battery.refuseReason() : null) ?? this.survival.blockReason(def, this.player.hp, this.player.maxHp);
     if (blocked) { this.hud.toast(blocked); this.sfx.denied(); return; }
     this.use = {uid: st.uid, itemId: st.itemId, t: 0, total: def.useTime ?? 1};
     // Consume view: the held gun/item lowers and this item's model comes up to the face.
@@ -651,7 +726,8 @@ export class Game {
     for (let i = 0; i < 5; i++) if (inp.hit(`Digit${i + 1}`)) this.selectSlot(i);
     if (inp.wheel) { const i = (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
     if (inp.hit('KeyQ')) this.selectSlot(this.lastSlot);
-    if (inp.hit('KeyF')) { this.flashlightOn = !this.flashlightOn; this.sfx.click(1.4); }
+    if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
+    if (inp.hit('KeyT')) this.throwFlare(false); // Iteration 12 (LIGHT): grenade slot — throw a flare from the inventory
     if (inp.hit('KeyG')) this.dropRef({bar: 'hotbar', index: this.inv.selected});
     if (inp.hit('KeyH')) this.quickHeal();
     if (inp.hit('KeyE')) this.interact();
@@ -682,6 +758,8 @@ export class Game {
       }
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use) {
       this.startUse({bar: 'hotbar', index: this.inv.selected});
+    } else if (heldDef?.kind === 'throwable' && inp.mousePressed[0] && !this.use) {
+      this.throwFlare(true); // Iteration 12 (LIGHT): a flare in the held quick slot throws with left click
     }
 
     if (this.use) {
@@ -689,8 +767,15 @@ export class Game {
       if (this.use.t >= this.use.total) {
         const ref = this.inv.find(this.use.uid);
         const def = itemDef(this.use.itemId);
-        const used = !!ref && this.inv.consumeAt(ref);
-        if (used && (def.verb === 'eat' || def.verb === 'drink')) {
+        // Iteration 12 (LIGHT): a battery is applied by applyBatteryItem — refused at >= 99 % (nothing used), else exactly one removed
+        const refused = def.recharge ? applyBatteryItem(this.torch.battery, () => !!ref && this.inv.consumeAt(ref), def.recharge) : null;
+        if (refused) this.hud.toast(refused);
+        const used = def.recharge ? !refused : !!ref && this.inv.consumeAt(ref);
+        if (used && def.recharge) {
+          this.stats.itemsUsed++;
+          this.sfx.batteryInsert?.();
+          this.hud.toast(`Battery swapped in: flashlight ${this.torch.battery.percent} %${this.torch.battery.on ? '' : ' (F to switch on)'}`);
+        } else if (used && (def.verb === 'eat' || def.verb === 'drink')) {
           // Food/drink: restore hunger/thirst (HUD bars animate up and pop "+N").
           const d = this.survival.consume(def);
           this.stats.itemsUsed++;
@@ -717,6 +802,7 @@ export class Game {
 
     this.updateZombies(dt);
     this.physics.update(dt); // ragdolls (fixed 1/60 steps) + casings; update() only runs while playing
+    this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
 
     // recoil recovery and bloom decay
     const rec = wdef ? wdef.recoil.recover : 8;
@@ -745,7 +831,7 @@ export class Game {
 
     this.muzzleT -= dt;
     this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (0.65 + Math.random() * 0.7) : 0; // flicker
-    this.flashlight.intensity = this.flashlightOn ? MOOD.flashlight : 0;
+    this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
     this.lightPool.update(dt, eye);
     this.fx.update(dt);
     this.damage.update(dt); // Lane D: debris physics, knocked pickups
@@ -756,7 +842,7 @@ export class Game {
     this.sfx.vitals(dt, p.hp / p.maxHp, p.stamina / 100);
     this.sfx.ambience(dt);
     // viewmodel brightness follows nearby light
-    this.viewmodel.setLightLevel(this.lightPool.viewLevel(eye, this.flashlightOn));
+    this.viewmodel.setLightLevel(this.lightPool.viewLevel(eye, this.torch.battery.emitting)); // Iteration 12 (LIGHT): actual output
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     this.viewmodel.update(dt, {
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx, lookDY: inp.dy,
@@ -803,6 +889,7 @@ export class Game {
       else if ((st.mag ?? 0) === 0) hint = this.inv.count(wdef.ammoItem) ? 'Empty — press R' : 'No ammo';
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && this.inv.count(wdef.ammoItem)) hint = 'Low — R to reload';
     } else if (def?.kind === 'consumable') hint = useHint(def);
+    else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
     let prompt = '';
     if (this.currentTarget) {
       const d = itemDef(this.currentTarget.stack.itemId);
@@ -825,6 +912,9 @@ export class Game {
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,
       food: this.survival.hunger, water: this.survival.thirst,
+      // Iteration 12 (LIGHT): battery meter + flare (grenade slot) count
+      battery: {charge: this.torch.battery.charge, on: this.flashlightOn, flicker: this.torch.battery.flicker, spares: this.inv.count('battery')},
+      flares: {count: this.inv.count('flare'), burning: this.flares.burningCount},
     }, this.inv);
   }
 
@@ -913,7 +1003,7 @@ export class Game {
     for (const [z, e] of dmg) {
       const killed = z.brain.damage(e.total, this.player.x, this.player.z, this.player.y);
       z.hitFlash = 1;
-      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z); // one range-audible flesh confirm per enemy per shot (pellets aggregated in dmg)
+      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups)
       if (e.head) this.stats.headshots++;
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);
@@ -977,6 +1067,8 @@ export class Game {
         return null;
       },
       rand: this.rand,
+      // Iteration 12 (AI): light lure — this frame's attracting lights, 3D eye-to-point sight, standable goal near a lit spot (ai/lightLure.ts).
+      ...lureWorld(L, this.lightSources),
     };
   }
 

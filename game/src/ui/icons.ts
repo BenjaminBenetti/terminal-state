@@ -23,6 +23,15 @@ export const ICONS: Record<IconKey, string> = {
   chips: S(`<path d="M20 4h24l-2 4 2 16-2 5H22l-2-5 2-16z"/><path d="M24 13h16v7H24z" fill="${DARK}" opacity="0.45"/>`),
   beans: S(`<rect x="22" y="6" width="20" height="22" rx="2"/><rect x="21" y="6" width="22" height="3" rx="1" opacity="0.7"/><rect x="21" y="25" width="22" height="3" rx="1" opacity="0.7"/><rect x="22" y="13" width="20" height="8" fill="${DARK}" opacity="0.4"/>`),
   noodles: S(`<path d="M20 9h24l-3 20H23z"/><rect x="18" y="5" width="28" height="4" rx="1"/><rect x="21" y="15" width="22" height="5" fill="${DARK}" opacity="0.45"/>`),
+  // Iteration 12 (LIGHT): D cell (upright, + nub) and road flare (tube, striker cap at the right).
+  battery: S(`<rect x="25" y="7" width="14" height="22" rx="2"/><rect x="29" y="3" width="6" height="4" rx="1"/><rect x="25" y="12" width="14" height="6" fill="${DARK}" opacity="0.45"/>`),
+  flare: S(`<rect x="6" y="12" width="40" height="9" rx="2"/><rect x="45" y="11" width="11" height="11" rx="2" opacity="0.75"/><rect x="14" y="13" width="18" height="7" fill="${DARK}" opacity="0.4"/>`),
+};
+
+/** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */
+export const LIGHT_ICONS = {
+  battery: `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="4" width="12" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="13" y="6.5" width="2" height="3"/></svg>`,
+  flare: `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 13l7-7 2 2-7 7z"/><path d="M11 2c1.6 1 2.6 2.4 2.4 3.8-.2 1-1 1.6-1.8 1.4C10.7 6.9 10.3 6 10.6 5c.2-.9.6-1.8.4-3z" opacity="0.8"/></svg>`,
 };
 
 /** Small square HUD icons for the survival bars. */

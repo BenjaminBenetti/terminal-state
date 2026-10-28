@@ -12,10 +12,21 @@
 // planned from the zombie's storey to the target's (the last known position keeps its height), and
 // path waypoints on another storey are not "reached" by standing above / below them. Worlds that
 // ignore the extra arguments behave exactly as before.
+//
+// Iteration 12 (AI lane, mandate E): LIGHT ATTRACTS ENEMIES — a new 'investigate' state. An idle /
+// wandering / searching enemy that can see a player-made light (flashlight spot or lens, flare;
+// perception in ai/lightLure.ts, checked every ~0.4 s, staggered) walks SLOWLY toward it (wander
+// speed x 1.2 via the normal level-aware pathfinder), stands near it while it stays visible
+// ('hold': a burning flare gathers enemies), and when the light goes out / is lost walks on to the
+// last seen spot (unless stuck / unreachable), lingers there, then returns to wander; it re-acquires a
+// light that reappears. Seeing the player always wins (the normal chase / attack), and gunfire / damage alert
+// it as before. Worlds without `lights` / `seePoint` (older tests) never investigate.
 
 import type {ZombieType} from '../gen/station';
 import type {Waypoint} from '../gen/grid';
 import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
+import type {LightSource, LightSourceKind} from '../world/lightSources';
+import {LURE, perceiveLight, type LurePart, type LureSighting, type SeePoint} from './lightLure';
 
 export interface ZombieStats {
   hp: number;
@@ -42,7 +53,33 @@ export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   coated: {hp: 165, wanderSpeed: 0.55, chaseSpeed: 1.75, attackRange: 1.4, attackDamage: 15, attackDuration: 1.1, attackImpact: 0.45, sightRange: 16, radius: 0.38, chaseAnim: 'Run'},
 };
 
-export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead';
+export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate';
+/** Iteration 12 (AI): states in which an enemy notices light (never while chasing / attacking / staggered / climbing). */
+const LURABLE: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate']);
+
+/** Iteration 12 (AI): an enemy's current light investigation (QA reads it through `brain.lure`). */
+export interface LureState {
+  lightId: number;
+  kind: LightSourceKind;
+  part: LurePart;
+  /** Last seen light point (world, absolute y). */
+  x: number; y: number; z: number;
+  /** Walk goal: a standable point near it on its storey (gy = that floor). */
+  gx: number; gz: number; gy: number;
+  /** Brain time the light was last seen / the investigation began. */
+  seenT: number;
+  startT: number;
+  /** approach = walking to it; hold = standing near a still-visible light; linger = lost it, waiting before wandering off. */
+  phase: 'approach' | 'hold' | 'linger';
+  lingerT: number;
+  /** Stop distance from the light point (m, per enemy). */
+  stop: number;
+  /** Goal of the current path, re-plan timer, stuck time / count. */
+  pathGoal: [number, number] | null;
+  repathT: number;
+  stuckT: number;
+  stucks: number;
+}
 /** Vertical reach of a swipe (m between feet heights). */
 export const ATTACK_REACH_Y = 0.9;
 export type AnimName = 'Idle' | 'Walk' | 'Run' | 'Attack' | 'Hit' | 'Death';
@@ -64,6 +101,12 @@ export interface BrainWorld {
   py?: number;
   /** Ladder geometry for path waypoints that climb one. */
   ladder?(id: number): Ladder | undefined;
+  /** Iteration 12 (AI): player-made lights that can attract enemies this frame (world/lightSources.ts attracting()); absent = no lure. */
+  lights?: readonly LightSource[];
+  /** Iteration 12 (AI): 3D sight from an enemy's eye (feet ay + 1.5 m) to a world point (walls, shutters, sight props, slabs block). */
+  seePoint?: SeePoint;
+  /** Iteration 12 (AI): standable [x, z, floor] near a lit point on the storey containing it (absent / null: the point on the enemy's storey). */
+  lureGoal?(x: number, y: number, z: number): [number, number, number] | null;
 }
 
 export interface BrainOutput {
@@ -107,18 +150,39 @@ export class ZombieBrain {
   aware = false;
   /** Increments every time a new attack swing starts (lets the animator replay the clip). */
   attackSeq = 0;
+  /** Iteration 12 (AI): the light being investigated (state 'investigate', kept through a ladder climb), else null. */
+  lure: LureState | null = null;
+  /** Iteration 12 (AI): investigations started / light checks run (QA counters). */
+  lureStarts = 0;
+  lureChecks = 0;
+  /** Iteration 12 (AI): commanded ground speed of the last update (QA: the investigate walk is slow). */
+  speedCmd = 0;
+  /** Iteration 12 (AI): countdown to the next light check, and a private jitter stream (never consumes world.rand). */
+  private lureCheckT: number;
+  private lureSeed: number;
 
   constructor(readonly type: ZombieType, public x: number, public z: number, public yaw: number, readonly stats: ZombieStats = ZOMBIE_STATS[type]) {
     this.hp = stats.hp;
     this.stateT = 1 + (x * 7.31 + z * 3.17) % 3;
+    this.lureSeed = (Math.imul(Math.round(x * 64) | 0, 0x9e3779b1) ^ Math.imul(Math.round(z * 64) | 0, 0x85ebca6b) ^ 0x2545f491) | 0 || 1;
+    this.lureCheckT = this.lureRnd() * LURE.period; // phase-staggered first check
   }
 
   get alive(): boolean {
     return this.state !== 'dead';
   }
 
+  /** Iteration 12 (AI): xorshift jitter for the lure timers (deterministic per spawn; leaves world.rand untouched). */
+  private lureRnd(): number {
+    let s = this.lureSeed;
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+    this.lureSeed = s;
+    return (s >>> 0) / 4294967296;
+  }
+
   private setState(s: BrainState, t = 0) {
     if (s === 'attack') this.attackSeq++;
+    if (s !== 'investigate' && s !== 'climb') this.lure = null; // Iteration 12 (AI): any other state ends a light investigation
     this.state = s;
     this.stateT = t;
     this.attackDone = false;
@@ -130,7 +194,7 @@ export class ZombieBrain {
     if (Math.hypot(x - this.x, z - this.z) > radius) return;
     this.lastKnown = [x, z, y];
     this.aware = true;
-    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search') {
+    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
       this.setState('chase');
       this.repathT = 0;
     } else if (this.climb) this.climb.resume = 'chase';
@@ -151,7 +215,7 @@ export class ZombieBrain {
     else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0) {
       this.setState('stagger', 0.35);
       this.staggerCd = 0.9;
-    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search') {
+    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
       this.setState('chase');
     }
     this.repathT = 0;
@@ -238,12 +302,24 @@ export class ZombieBrain {
     const moved = Math.hypot(this.x - this.lastX, this.z - this.lastZ);
     this.lastX = this.x; this.lastZ = this.z;
 
+    // Iteration 12 (AI): light check at a modest staggered rate; skipped when the player is in sight (the player wins).
+    this.lureCheckT -= dt;
+    if (this.lureCheckT <= 0) {
+      this.lureCheckT = LURE.period * (0.8 + 0.4 * this.lureRnd());
+      if (!sees && w.lights?.length && w.seePoint && LURABLE.has(this.state)) {
+        this.lureChecks++;
+        const s = perceiveLight(this, w.lights, w.seePoint, this.state === 'investigate' && this.lure ? this.lure.lightId : null);
+        if (s) this.noticeLight(w, s);
+      }
+    }
+
     for (let pass = 0; pass < 2; pass++) {
       const before: BrainState = this.state;
       this.step(dt, w, out, sees, distP, moved);
       // Newly alerted zombies start moving in the same frame.
       if (this.state === before || this.state !== 'chase') break;
     }
+    this.speedCmd = out.speed;
     return out;
   }
 
@@ -337,6 +413,12 @@ export class ZombieBrain {
         if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; }
         break;
       }
+      case 'investigate': {
+        // Iteration 12 (AI): slow walk to a seen light; the player in sight always wins.
+        if (sees) { this.setState('chase'); this.repathT = 0; break; }
+        this.investigate(dt, w, out, moved);
+        break;
+      }
       case 'climb': {
         const c = this.climb;
         if (!c) { this.setState('chase'); break; }
@@ -350,11 +432,78 @@ export class ZombieBrain {
           this.x = end.x; this.y = end.y; this.z = end.z;
           if (this.path.length && this.path[0][2] === c.ladder) this.path.shift();
           this.climb = null;
-          const resume = c.resume === 'wander' || c.resume === 'search' ? c.resume : 'chase';
+          const resume = c.resume === 'wander' || c.resume === 'search' || (c.resume === 'investigate' && this.lure) ? c.resume : 'chase';
           this.setState(resume, resume === 'chase' ? 0 : Math.max(2, c.resumeT));
           this.repathT = 0;
         }
         break;
+      }
+    }
+  }
+
+  /** Iteration 12 (AI): a light was seen — start investigating it, or refresh / re-acquire the one being investigated. */
+  private noticeLight(w: BrainWorld, s: LureSighting): void {
+    const g = w.lureGoal?.(s.x, s.y, s.z) ?? [s.x, s.z, this.y];
+    const L = this.lure;
+    if (this.state !== 'investigate' || !L) {
+      this.lure = {lightId: s.light.id, kind: s.light.kind, part: s.part, x: s.x, y: s.y, z: s.z, gx: g[0], gz: g[1], gy: g[2],
+        seenT: this.t, startT: this.t, phase: 'approach', lingerT: 0, stop: LURE.arrive + this.lureRnd() * LURE.arriveJitter,
+        pathGoal: null, repathT: 0, stuckT: 0, stucks: 0};
+      this.path = [];
+      this.setState('investigate');
+      this.lureStarts++;
+      return;
+    }
+    L.lightId = s.light.id; L.kind = s.light.kind; L.part = s.part;
+    L.x = s.x; L.y = s.y; L.z = s.z; L.gx = g[0]; L.gz = g[1]; L.gy = g[2];
+    L.seenT = this.t;
+    if (L.phase === 'linger') { L.phase = 'approach'; L.stucks = 0; } // re-acquired
+  }
+
+  /**
+   * Iteration 12 (AI): the 'investigate' state body. approach: walk (wander speed x LURE.speedMult) to the goal near the
+   * last seen light point; hold: stand facing a light that is still visible; linger: the light went out / was lost
+   * (out of sight LURE.lostGrace s once at the spot or with no way there, or the LURE.pursueAfterLoss safety cap) —
+   * wait, then wander again.
+   */
+  private investigate(dt: number, w: BrainWorld, out: BrainOutput, moved: number): void {
+    const L = this.lure;
+    if (!L) { this.setState('idle', 1); return; }
+    const lost = this.t - L.seenT;
+    const near = Math.hypot(L.x - this.x, L.z - this.z) <= L.stop && Math.abs(L.gy - this.y) < 1.2;
+    if (L.phase !== 'linger') {
+      // lost: at the spot, or no way there (stuck / no path, LURE.stuckGiveUp times), or the safety cap; a light still in view
+      // that cannot be reached keeps it standing and staring
+      if (lost > LURE.pursueAfterLoss || (lost > LURE.lostGrace && (near || L.stucks >= LURE.stuckGiveUp))) {
+        L.phase = 'linger';
+        L.lingerT = LURE.linger + this.lureRnd() * LURE.lingerJitter;
+      } else L.phase = near ? 'hold' : 'approach';
+    }
+    const faceLight = () => { out.face = Math.atan2(L.x - this.x, L.z - this.z); out.anim = 'Idle'; out.speed = 0; out.dirX = out.dirZ = 0; };
+    if (L.phase === 'approach') {
+      L.repathT -= dt;
+      const goalMoved = L.pathGoal ? Math.hypot(L.pathGoal[0] - L.gx, L.pathGoal[1] - L.gz) : Infinity;
+      if (L.repathT <= 0 && this.pathFailT <= 0 && (!this.path.length || goalMoved > LURE.repathMove)) {
+        L.repathT = LURE.repathMin;
+        const path = w.findPath(this.x, this.z, L.gx, L.gz, {drops: true, ay: this.y, by: L.gy});
+        this.path = path ?? [];
+        L.pathGoal = [L.gx, L.gz];
+        if (!path) { this.pathFailT = 1.5 + this.lureRnd(); L.stucks++; }
+      }
+      const done = this.followPath(w, out, this.stats.wanderSpeed * LURE.speedMult);
+      out.anim = 'Walk';
+      if (out.speed > 0 && moved < 0.002) L.stuckT += dt; else L.stuckT = 0;
+      if (L.stuckT > LURE.stuckTime) { L.stuckT = 0; L.stucks++; this.path = []; L.repathT = 0; }
+      // nothing to walk (path ran out short of the light, unreachable, or waiting to re-plan): stand and look at it
+      if (done) faceLight();
+      return;
+    }
+    faceLight();
+    if (L.phase === 'linger') {
+      L.lingerT -= dt;
+      if (L.lingerT <= 0) {
+        this.setState('idle', 1 + this.lureRnd() * 2);
+        if (this.unseenT > 20) this.aware = false;
       }
     }
   }

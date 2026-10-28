@@ -594,6 +594,46 @@
       "sha256": "b7a1714e6881a8bc39a6a32a57ed03de8dbc8ef58a12fcf2961c8df645370d68"
     },
     {
+      "path": "assets/audio/i12-battery-insert-01.mp3",
+      "bytes": 11598,
+      "sha256": "48b7884bd8046b7cbee0c46a7ee2eec90e3d3b2f78bdae8ac49e33b89bb5410d"
+    },
+    {
+      "path": "assets/audio/i12-flare-burn-01-loop.mp3",
+      "bytes": 57783,
+      "sha256": "2b4c2f05ea49ae665bc4c790d0d96c71a369caa81c49e4c686c499a011d04598"
+    },
+    {
+      "path": "assets/audio/i12-flare-ignite-01.mp3",
+      "bytes": 11285,
+      "sha256": "d56aa9fcd9f2009fc00bab27e5aa5b1bd76e7a00c6f63d6f0ff5169ba5910202"
+    },
+    {
+      "path": "assets/audio/i12-flare-out-01.mp3",
+      "bytes": 27899,
+      "sha256": "a13663d02566d8cf3339b9aa979c4beb92592a906f39acef78b7ebe737fbe610"
+    },
+    {
+      "path": "assets/audio/i12-flashlight-flicker-01-s01.mp3",
+      "bytes": 1881,
+      "sha256": "b1ee6fc79a82ffeaf25445c713104beceae6ad28e40cfe289d0e39a1f55e8cec"
+    },
+    {
+      "path": "assets/audio/i12-flashlight-flicker-01-s02.mp3",
+      "bytes": 940,
+      "sha256": "70105ce12e648a601f5ded6a0983f23a795f431b0449ba8bdb5a73b59c90a097"
+    },
+    {
+      "path": "assets/audio/i12-flashlight-flicker-01-s03.mp3",
+      "bytes": 940,
+      "sha256": "d97acdbe9f140db377c2ef55dab6d7830bead0587cc405eddf90886a3b0f6fdb"
+    },
+    {
+      "path": "assets/audio/i12-flashlight-flicker-01-s04.mp3",
+      "bytes": 940,
+      "sha256": "8dbfefe9ba960efff79f18fb65bfc0d4f103c7920f1398850ed718cca87fbbc4"
+    },
+    {
       "path": "assets/audio/impact-concrete-b-01.mp3",
       "bytes": 5016,
       "sha256": "5244a88e8c54c698e1befd07d3bfe58d554ed426206c9ddc36e7e0c557c93c7e"
@@ -1297,6 +1337,11 @@
       "path": "assets/derivatives/audio-iteration11-pistol.json",
       "bytes": 2338,
       "sha256": "2c451c886bd811fd96142dc07a1dda8d5383bb528f534b9ed539dc180e89c9c0"
+    },
+    {
+      "path": "assets/derivatives/audio-iteration12.json",
+      "bytes": 18565,
+      "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
     },
     {
       "path": "assets/derivatives/creature-ratdog.json",

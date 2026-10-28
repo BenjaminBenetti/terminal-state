@@ -6,11 +6,20 @@
 // divergent flow control: HLSL/ANGLE would otherwise force-unroll or reject it; none of these textures
 // has mipmaps, so the result is identical).
 
+//
+// Iteration 12 (ATMOS): the march and temporal passes are GLSL 3.00 programs with two outputs (MRT): target 0 = in-scatter
+// rgb + view depth (as before), target 1 = volumetric transmittance (dense haze patches + smoke). The medium is vfMedium
+// (render/atmosphere.ts mediumAt: density map x height x two-phase flow-advected patch / wisp noise + ground layer); smoke
+// puffs and scatter lights (render/smoke.ts) are bounded uniform arrays with per-pixel culling, gated by occlusion windows.
+
 import {FIELD_EMAX, fieldHeaderGLSL, fieldPickGLSL} from '../world/lightField';
-import {BILATERAL_K, DENSITY_MAP_RANGE, NOISE_OCTAVE2} from './atmosphere';
+import {BILATERAL_K, DENSITY_MAP_RANGE, FLOW_CYCLE, FLOW_MAX, RISE_MAX} from './atmosphere';
+import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 
 /** Marker in every volumetric program (shader-error fallback + tests). */
 export const VF_MARK = '// last-line volumetric v1';
+/** Uniform array sizes (render/smoke.ts SMOKE_LIMITS). */
+export const VF_LIMITS = {smoke: SMOKE_LIMITS.emitters, puffsPer: SMOKE_LIMITS.puffsPerEmitter, puffs: SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter, scatter: SMOKE_LIMITS.scatterLights, windows: VIS_WINDOWS} as const;
 
 const f = (v: number) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
 
@@ -34,8 +43,9 @@ float vfViewZ( float depth, float near, float far ) {
 }`;
 
 /**
- * Raymarch at reduced resolution. Output: rgb = in-scattered radiance (scene-linear, same units as
- * surface radiance before tone mapping), a = linear view depth of the surface it stopped at.
+ * Raymarch at reduced resolution. Outputs (MRT): vfOut0 rgb = in-scattered radiance (scene-linear, same units as surface
+ * radiance before tone mapping), a = linear view depth of the surface it stopped at; vfOut1 r = volumetric transmittance
+ * from the eye to that surface (1 = clear).
  */
 export const VF_MARCH = /* glsl */ `
 ${COMMON}
@@ -44,6 +54,16 @@ ${COMMON}
 #endif
 #define VF_MAP_RANGE ${f(DENSITY_MAP_RANGE)}
 #define VF_FIELD_EMAX ${f(FIELD_EMAX)}
+#define VF_MAX_SMOKE ${VF_LIMITS.smoke}
+#define VF_PUFFS_PER ${VF_LIMITS.puffsPer}
+#define VF_MAX_PUFFS ${VF_LIMITS.puffs}
+#define VF_PUFF_VECS ${VF_LIMITS.puffs / 4}
+#define VF_MAX_SCAT ${VF_LIMITS.scatter}
+#define VF_WINDOWS ${VF_LIMITS.windows}
+#define VF_PACK_SHIFT 2
+#define VF_PACK_MASK 3
+layout(location = 0) out highp vec4 vfOut0;
+layout(location = 1) out highp vec4 vfOut1;
 uniform sampler2D tDepth;
 uniform vec2 uFullSize;
 uniform vec2 uLowSize;
@@ -60,11 +80,16 @@ uniform vec2 uNearFade;
 uniform float uDensity;
 uniform float uHeightFalloff;
 uniform float uRefHeight;
-uniform float uNoiseScale;
+uniform vec3 uNoiseScale;
 uniform float uNoiseAmount;
 uniform vec3 uWind;
+uniform vec4 uCover;
+uniform vec4 uGround;
+uniform vec2 uFlow;
+uniform vec3 uExt;
 uniform sampler3D tNoise;
 uniform highp sampler2DArray tDensityMap;
+uniform highp sampler2DArray tFlowMap;
 uniform float uMapSlots;
 uniform vec4 uMapXform;
 uniform vec2 uMapFloor;
@@ -86,6 +111,17 @@ uniform float uFieldGain;
 uniform vec3 uMuzzlePos;
 uniform vec3 uMuzzleColor;
 uniform vec2 uMuzzleRange;
+uniform highp sampler2DArray tVis;
+uniform vec4 uWin[ VF_WINDOWS ];
+uniform vec4 uWinY[ VF_WINDOWS ];
+uniform int uScatCount;
+uniform vec4 uScatPos[ VF_MAX_SCAT ];
+uniform vec4 uScatCol[ VF_MAX_SCAT ];
+uniform int uSmokeCount;
+uniform vec4 uSmokeBound[ VF_MAX_SMOKE ];
+uniform vec4 uSmokeTint[ VF_MAX_SMOKE ];
+uniform vec4 uPuff[ VF_MAX_PUFFS ];
+uniform vec4 uPuffD[ VF_PUFF_VECS ];
 varying vec2 vUv;
 
 float vfHG( float c, float g ) {
@@ -107,7 +143,6 @@ float vfDistAtt( float d, float cutoff, float decay ) {
 	}
 	return a;
 }
-// sigma_s: per-area multiplier and local floor (density map), height above that floor, drifting noise.
 // Level slot holding p (lower crossing / main level / upper deck in one column), from the light field's
 // packed band info (one fetch); slot 0 when no field is bound. Shared by the density and field lookups.
 int vfSlot( vec3 p ) {
@@ -120,15 +155,53 @@ int vfSlot( vec3 p ) {
 	if ( uFieldGain > 0.0 ) vfS = lfSlot;
 	return vfS;
 }
-float vfDensity( vec3 p, int slot ) {
+// Iteration 12: the haze at p (render/atmosphere.ts mediumAt). x = sigma_s, y = excess over the unpatterned mean (extra
+// extinction of dense patches), z = detail noise (smoke wisps). Per-area multiplier + local floor (density map), drift
+// (flow map), two-phase advected patch / wisp noise (one RG sample per phase), height profile, ground layer.
+vec3 vfMedium( vec3 p, int slot ) {
 	vec2 muv = ( p.xz - uMapXform.xy ) * uMapXform.zw;
-	vec4 m = textureLod( tDensityMap, vec3( muv, min( float( slot ), uMapSlots - 1.0 ) ), 0.0 );
-	float floorY = uMapFloor.x + m.g * uMapFloor.y;
-	float hf = clamp( exp( - uHeightFalloff * ( p.y - floorY - uRefHeight ) ), 0.2, 3.0 );
-	vec3 q = p * uNoiseScale + uWind * uTime;
-	float n = textureLod( tNoise, q, 0.0 ).r * 0.65 + textureLod( tNoise, q * ${f(NOISE_OCTAVE2.scale)} + vec3( ${NOISE_OCTAVE2.offset.map(f).join(', ')} ), 0.0 ).r * 0.35;
-	float nf = max( 0.0, 1.0 + uNoiseAmount * ( n * 2.0 - 1.0 ) * 1.6 );
-	return uDensity * m.r * VF_MAP_RANGE * hf * nf;
+	float layer = min( float( slot ), uMapSlots - 1.0 );
+	vec4 m = textureLod( tDensityMap, vec3( muv, layer ), 0.0 );
+	float mult = m.r * VF_MAP_RANGE;
+	float h = p.y - ( uMapFloor.x + m.g * uMapFloor.y );
+	float hf = clamp( exp( - uHeightFalloff * ( h - uRefHeight ) ), 0.2, 3.0 );
+	float base0 = uDensity * mult;
+	float groundRef = uGround.x * mult * exp( - max( h, 0.0 ) / max( uGround.y, 0.05 ) );
+	if ( uNoiseAmount <= 0.0 ) return vec3( base0 * ( hf + groundRef ), 0.0, 0.5 );
+	vec4 fl = textureLod( tFlowMap, vec3( muv, layer ), 0.0 );
+	vec3 vel = vec3( ( fl.r * 2.0 - 1.0 ) * ${f(FLOW_MAX)}, fl.b * ${f(RISE_MAX)}, ( fl.g * 2.0 - 1.0 ) * ${f(FLOW_MAX)} ) * uNoiseScale;
+	float ph = fract( uTime / uFlow.x );
+	float ph2 = fract( ph + 0.5 );
+	float wa = 1.0 - abs( 2.0 * ph - 1.0 );
+	vec3 base = p * uNoiseScale - uWind * uTime;
+	// each phase jumps to a fresh noise offset at its own reset (weight 0 there): the field never loops
+	vec3 cyc = vec3( ${FLOW_CYCLE.map(f).join(', ')} );
+	float ca = floor( uTime / uFlow.x );
+	float cb = floor( uTime / uFlow.x + 0.5 );
+	vec2 na = textureLod( tNoise, base - vel * ( ( ph - 0.5 ) * uFlow.x ) + cyc * ca, 0.0 ).rg;
+	vec2 nb = textureLod( tNoise, base - vel * ( ( ph2 - 0.5 ) * uFlow.x ) + cyc * cb, 0.0 ).rg;
+	vec2 n = mix( nb, na, wa );
+	float cover = clamp( uCover.x + uCover.y * ( mult - 1.0 ), 0.12, 0.65 );
+	float dense = smoothstep( 1.0 - cover - uCover.z, 1.0 - cover + uCover.z, n.r );
+	float peak = ( 1.0 - uCover.w * ( 1.0 - cover ) ) / cover;
+	float patchF = 1.0 + uNoiseAmount * ( uCover.w + ( peak - uCover.w ) * dense - 1.0 );
+	float detailF = 1.0 + uNoiseAmount * uFlow.y * ( n.g - 0.5 ) * 2.0;
+	float gh = uGround.y * ( 1.0 + uGround.z * ( n.g - 0.5 ) * 2.0 );
+	float groundT = uGround.x * mult * exp( - max( h, 0.0 ) / max( gh, 0.05 ) ) * ( 1.0 + uNoiseAmount * ( 0.35 + 1.05 * dense - 1.0 ) );
+	float sigma = base0 * ( hf * patchF * detailF + groundT );
+	return vec3( sigma, max( 0.0, sigma - base0 * ( hf + groundRef ) ), n.g );
+}
+// Iteration 12: occlusion window w (render/smoke.ts): 2D line of sight from a scatter light / smoke emitter on its storey
+// grid, faded out above / below that storey's band. 0 outside the window.
+float vfWindow( vec3 p, int w ) {
+	vec4 wn = uWin[ w ];
+	if ( wn.w < 0.0 ) return 1.0;
+	vec2 uv = ( p.xz - wn.xy ) * wn.z;
+	if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) return 0.0;
+	vec2 b = uWinY[ w ].xy;
+	float band = smoothstep( b.x - 0.35, b.x + 0.05, p.y ) * ( 1.0 - smoothstep( b.y - 0.05, b.y + 0.35, p.y ) );
+	if ( band <= 0.0 ) return 0.0;
+	return textureLod( tVis, vec3( uv, wn.w ), 0.0 ).r * band;
 }
 // Flashlight shadow map (three's spot shadow matrix + hardware compare). 1 = lit.
 float vfShadow( vec3 p ) {
@@ -193,16 +266,55 @@ void main() {
 	bool flashOn = uFlashColor.r + uFlashColor.g + uFlashColor.b > 0.0;
 	bool muzzleOn = uMuzzleColor.r + uMuzzleColor.g + uMuzzleColor.b > 0.0;
 	vec3 fieldDims = vec3( textureSize( tField, 0 ) );
+	// Iteration 12: ray interval of each smoke emitter's bounding sphere (puffs are only evaluated inside it).
+	vec2 sRange[ VF_MAX_SMOKE ];
+	for ( int k = 0; k < VF_MAX_SMOKE; k ++ ) {
+		sRange[ k ] = vec2( 1e9, -1e9 );
+		if ( k >= uSmokeCount ) continue;
+		vec4 sb = uSmokeBound[ k ];
+		vec3 oc = uCamPos - sb.xyz;
+		float bq = dot( oc, dir );
+		float cq = dot( oc, oc ) - sb.w * sb.w;
+		float disc = bq * bq - cq;
+		if ( disc <= 0.0 ) continue;
+		float sq = sqrt( disc );
+		sRange[ k ] = vec2( max( - bq - sq, 0.0 ), min( - bq + sq, dist ) );
+	}
 
 	vec3 acc = vec3( 0.0 );
+	float tv = 1.0;
 	for ( int i = 0; i < VF_STEPS; i ++ ) {
 		float u = ( float( i ) + jit ) / float( VF_STEPS );
 		float t = dist * u * u;
 		float w = 2.0 * dist * u / float( VF_STEPS );
 		vec3 p = uCamPos + dir * t;
 		int slot = vfSlot( p );
-		float sigma = vfDensity( p, slot );
-		if ( sigma <= 0.0 ) continue;
+		vec3 med = vfMedium( p, slot );
+		// smoke puffs (tinted scattering, own extinction), gated by their emitter's occlusion window
+		vec3 smokeTint = vec3( 0.0 );
+		float smokeSig = 0.0;
+		for ( int k = 0; k < VF_MAX_SMOKE; k ++ ) {
+			if ( k >= uSmokeCount ) break;
+			if ( t < sRange[ k ].x || t > sRange[ k ].y ) continue;
+			int np = int( uSmokeTint[ k ].w );
+			float s = 0.0;
+			for ( int j = 0; j < VF_PUFFS_PER; j ++ ) {
+				if ( j >= np ) break;
+				int pi = k * VF_PUFFS_PER + j;
+				vec4 pf = uPuff[ pi ];
+				vec3 dv = p - pf.xyz;
+				float q = dot( dv, dv ) / ( pf.w * pf.w );
+				if ( q < 1.0 ) {
+					float fq = 1.0 - q;
+					s += uPuffD[ pi >> VF_PACK_SHIFT ][ pi & VF_PACK_MASK ] * fq * fq;
+				}
+			}
+			if ( s <= 0.0 ) continue;
+			s *= vfWindow( p, VF_MAX_SCAT + k ) * ( 0.45 + 1.1 * med.z );
+			smokeTint += uSmokeTint[ k ].rgb * s;
+			smokeSig += s;
+		}
+		if ( med.x + smokeSig <= 0.0 ) continue;
 		vec3 L = vec3( 0.0 );
 		if ( flashOn ) {
 			vec3 lv = p - uFlashPos;
@@ -226,21 +338,38 @@ void main() {
 			float md = max( length( mv ), 1e-4 );
 			L += uMuzzleColor * ( vfDistAtt( max( md, 0.5 ), uMuzzleRange.x, uMuzzleRange.y ) * vfPhase( dot( mv / md, - dir ) ) );
 		}
+		// Iteration 12: scatter lights (thrown flares), occlusion-windowed, no closer than 0.3 m (no singular glow)
+		for ( int k = 0; k < VF_MAX_SCAT; k ++ ) {
+			if ( k >= uScatCount ) break;
+			vec3 sv = p - uScatPos[ k ].xyz;
+			float sd = max( length( sv ), 1e-4 );
+			if ( uScatPos[ k ].w > 0.0 && sd > uScatPos[ k ].w ) continue;
+			float vis = vfWindow( p, k );
+			if ( vis <= 0.0 ) continue;
+			L += uScatCol[ k ].rgb * ( vfDistAtt( max( sd, 0.3 ), uScatPos[ k ].w, uScatCol[ k ].w ) * vfPhase( dot( sv / sd, - dir ) ) * vis );
+		}
 		float tr = uFogDensity * t;
-		acc += L * ( sigma * w * exp( - tr * tr ) );
+		acc += L * ( ( vec3( med.x ) + smokeTint * uExt.z ) * ( w * exp( - tr * tr ) * tv ) );
+		tv *= exp( - ( med.y * uExt.x + smokeSig * uExt.y ) * w );
 	}
-	gl_FragColor = vec4( acc, viewZ );
+	vfOut0 = vec4( acc, viewZ );
+	vfOut1 = vec4( tv, 0.0, 0.0, 1.0 );
 }`;
 
 /**
  * Temporal accumulation at march resolution: reproject each pixel's surface point into last frame,
  * clamp the history to the current 3x3 neighbourhood (no ghost trails when the camera-held beam
- * sweeps), reject on depth mismatch (disocclusion), blend.
+ * sweeps), reject on depth mismatch (disocclusion), blend. Iteration 12: both MRT targets (in-scatter + depth,
+ * transmittance) with the same weights.
  */
 export const VF_TEMPORAL = /* glsl */ `
 ${COMMON}
+layout(location = 0) out highp vec4 vfOut0;
+layout(location = 1) out highp vec4 vfOut1;
 uniform sampler2D tCurrent;
+uniform sampler2D tCurrentT;
 uniform sampler2D tHistory;
+uniform sampler2D tHistoryT;
 uniform vec2 uLowSize;
 uniform mat4 uProjInv;
 uniform mat4 uCamWorld;
@@ -252,16 +381,24 @@ void main() {
 	ivec2 px = ivec2( gl_FragCoord.xy );
 	ivec2 hi = ivec2( uLowSize ) - 1;
 	vec4 cur = texelFetch( tCurrent, px, 0 );
+	float curT = texelFetch( tCurrentT, px, 0 ).r;
 	vec3 mn = cur.rgb;
 	vec3 mx = cur.rgb;
+	float mnT = curT;
+	float mxT = curT;
 	for ( int j = -1; j <= 1; j ++ ) {
 		for ( int i = -1; i <= 1; i ++ ) {
-			vec3 c = texelFetch( tCurrent, clamp( px + ivec2( i, j ), ivec2( 0 ), hi ), 0 ).rgb;
+			ivec2 q = clamp( px + ivec2( i, j ), ivec2( 0 ), hi );
+			vec3 c = texelFetch( tCurrent, q, 0 ).rgb;
+			float ct = texelFetch( tCurrentT, q, 0 ).r;
 			mn = min( mn, c );
 			mx = max( mx, c );
+			mnT = min( mnT, ct );
+			mxT = max( mxT, ct );
 		}
 	}
 	vec3 outc = cur.rgb;
+	float outT = curT;
 	if ( uHistoryValid > 0.5 ) {
 		vec2 ndc = ( vec2( px ) + 0.5 ) / uLowSize * 2.0 - 1.0;
 		vec4 vf = uProjInv * vec4( ndc, 1.0, 1.0 );
@@ -273,25 +410,30 @@ void main() {
 			vec2 puv = pc.xy / pc.w * 0.5 + 0.5;
 			if ( puv.x >= 0.0 && puv.x <= 1.0 && puv.y >= 0.0 && puv.y <= 1.0 ) {
 				vec4 h = textureLod( tHistory, puv, 0.0 );
+				float hT = textureLod( tHistoryT, puv, 0.0 ).r;
 				float rel = abs( h.a - pc.w ) / max( pc.w, 0.1 );
 				float k = uBlend * ( 1.0 - smoothstep( 0.04, 0.12, rel ) );
 				outc = mix( cur.rgb, clamp( h.rgb, mn, mx ), k );
+				outT = mix( curT, clamp( hT, mnT, mxT ), k );
 			}
 		}
 	}
-	gl_FragColor = vec4( outc, cur.a );
+	vfOut0 = vec4( outc, cur.a );
+	vfOut1 = vec4( outT, 0.0, 0.0, 1.0 );
 }`;
 
 /**
  * Full-resolution composite onto the canvas: depth-aware (bilateral) upsample of the in-scatter, then
  * added in scene-linear space by inverting three's ACES + sRGB output of the scene pixel, adding, and
- * re-applying them. Pixels without in-scatter are copied unchanged (exact r5 output).
+ * re-applying them. Pixels without in-scatter are copied unchanged (exact r5 output). Iteration 12: the scene pixel is
+ * first attenuated by the upsampled volumetric transmittance (same bilateral weights).
  */
 export const VF_COMPOSITE = /* glsl */ `
 ${COMMON}
 uniform sampler2D tScene;
 uniform sampler2D tDepth;
 uniform sampler2D tFog;
+uniform sampler2D tFogT;
 uniform vec2 uFullSize;
 uniform vec2 uLowSize;
 uniform float uNear;
@@ -341,31 +483,39 @@ void main() {
 	vec2 fr = lp - vec2( lb );
 	ivec2 lhi = ivec2( uLowSize ) - 1;
 	vec3 acc = vec3( 0.0 );
+	float accT = 0.0;
 	float wsum = 0.0;
 	vec3 best = vec3( 0.0 );
+	float bestT = 1.0;
 	float bestDz = 1e9;
 	for ( int j = 0; j < 2; j ++ ) {
 		for ( int i = 0; i < 2; i ++ ) {
-			vec4 s = texelFetch( tFog, clamp( lb + ivec2( i, j ), ivec2( 0 ), lhi ), 0 );
+			ivec2 q = clamp( lb + ivec2( i, j ), ivec2( 0 ), lhi );
+			vec4 s = texelFetch( tFog, q, 0 );
+			float st = texelFetch( tFogT, q, 0 ).r;
 			float wb = ( i == 0 ? 1.0 - fr.x : fr.x ) * ( j == 0 ? 1.0 - fr.y : fr.y );
 			float dz = abs( s.a - z ) / max( z, 0.05 );
 			float w = max( wb, 1e-3 ) * exp( - dz * ${f(BILATERAL_K)} );
 			acc += s.rgb * w;
+			accT += st * w;
 			wsum += w;
 			if ( dz < bestDz ) {
 				bestDz = dz;
 				best = s.rgb;
+				bestT = st;
 			}
 		}
 	}
 	vec3 fog = ( wsum > 1e-4 ? acc / wsum : best ) * uIntensity;
-	if ( max( fog.r, max( fog.g, fog.b ) ) <= 1e-6 ) {
+	// transmittance blends toward 1 with the effect's output gain (uIntensity 0 = no effect at all)
+	float tv = mix( 1.0, clamp( wsum > 1e-4 ? accT / wsum : bestT, 0.0, 1.0 ), clamp( uIntensity, 0.0, 1.0 ) );
+	if ( max( fog.r, max( fog.g, fog.b ) ) <= 1e-6 && tv >= ${f(0.9995)} ) {
 		gl_FragColor = vec4( sc.rgb, 1.0 );
 		return;
 	}
 	vec3 hdr = vfAcesInv( vfSrgbDecode( sc.rgb ) );
-	// Never darker than the scene pixel (the inverse clamps saturated highlights); dither against banding.
-	vec3 outc = max( vfSrgbEncode( vfAces( hdr + fog ) ), sc.rgb );
+	// Never darker than the (attenuated) scene pixel (the inverse clamps saturated highlights); dither against banding.
+	vec3 outc = max( vfSrgbEncode( vfAces( hdr * tv + fog ) ), sc.rgb * tv );
 	outc += ( vfIGN( gl_FragCoord.xy ) - 0.5 ) / 255.0;
 	gl_FragColor = vec4( outc, 1.0 );
 }`;

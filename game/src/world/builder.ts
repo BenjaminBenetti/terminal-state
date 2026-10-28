@@ -33,14 +33,33 @@ import type {WallFace} from './wallFaces';
 import {LevelCuller} from './levelCulling';
 import {addShaderHook} from '../render/shaderHooks';
 import {buildWallDetail} from './wallDetail';
+import {applyStationDecay, archShopMaterial} from './decay';
 
 class Accum {
   pos: number[] = [];
   nor: number[] = [];
   uv: number[] = [];
   idx: number[] = [];
+  /** Iteration 12 (ARCH): triangles (quads with one collapsed edge), indexed AFTER every quad (keeps the 6-index quad layout wallDetail cuts rely on). */
+  tri: number[] = [];
   quad(p: number[][], n: readonly number[], uv: number[][]) {
     const base = this.pos.length / 3;
+    // A quad with zero height at one end (stair-wall zone slices) is a triangle: no zero-area triangle.
+    let gone = -1;
+    for (let i = 0; i < 4 && gone < 0; i++) {
+      const a = p[i], b = p[(i + 1) % 4];
+      if (Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7 && Math.abs(a[2] - b[2]) < 1e-7) gone = i;
+    }
+    if (gone >= 0) {
+      for (let k = 1; k <= 3; k++) {
+        const i = (gone + k) % 4;
+        this.pos.push(p[i][0], p[i][1], p[i][2]);
+        this.nor.push(n[0], n[1], n[2]);
+        this.uv.push(uv[i][0], uv[i][1]);
+      }
+      this.tri.push(base, base + 1, base + 2);
+      return;
+    }
     for (let i = 0; i < 4; i++) {
       this.pos.push(p[i][0], p[i][1], p[i][2]);
       this.nor.push(n[0], n[1], n[2]);
@@ -49,12 +68,13 @@ class Accum {
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   geometry(): THREE.BufferGeometry | null {
-    if (!this.idx.length) return null;
+    if (!this.idx.length && !this.tri.length) return null;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setIndex(this.pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
+    const idx = this.tri.length ? this.idx.concat(this.tri) : this.idx;
+    g.setIndex(this.pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
     g.computeBoundingSphere();
     return g;
   }
@@ -330,7 +350,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   for (const [key, e] of shopAcc) {
     const geo = e.a.geometry();
     if (!geo) continue;
-    const mesh = new THREE.Mesh(geo, shapeMaterial(mats, e.k));
+    // Iteration 12 (ARCH): unit interiors age on their own material copy (the shared shape material stays unaged for props).
+    const mesh = new THREE.Mesh(geo, archShopMaterial(mats, e.k));
     mesh.name = `arch-shop-${key}`;
     mesh.userData.level = e.level;
     mesh.matrixAutoUpdate = false;
@@ -340,6 +361,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Iteration 08 (Lane W): zone wall treatments + deterioration over the published faces: insets cut
   // into the arch wall meshes above, plus one merged 'wall-detail' group (world/wallDetail.ts).
   try { buildWallDetail(group, layout, mats, faces); } catch (e) { console.warn('wall detail skipped', e); }
+  // Iteration 12 (ARCH): ~30 years without upkeep on walls / floors / ceilings (world/decay.ts): the station's decay
+  // field (traffic lanes, edges, leaks, neglect) + the architectural materials' decay hook. Surfaces only.
+  try { applyStationDecay(layout, levels, mats); } catch (e) { console.warn('surface decay skipped', e); }
 
   // Tunnel mouths fade to black beyond the platform ends.
   const voidMat = new THREE.MeshBasicMaterial({color: 0x030303});

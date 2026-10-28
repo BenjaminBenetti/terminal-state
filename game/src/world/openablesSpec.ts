@@ -58,6 +58,13 @@ export interface PartSpec {
   /** Back-side liner box revealed while open (static); `cavityRole` tints it (default: the body paint, darkened). */
   cavity?: Box6;
   cavityRole?: MatRole;
+  /**
+   * Iteration 12 (ATMOS, #4): the liner REPLACES the derived model's own interior — body faces strictly inside the cavity (inset
+   * 1 cm) are dropped. The chest freezer's reconstructed model has an inner sheet ~0.45 m up across the whole basin: it hid the
+   * authored frost liner, stock and the loot on it (and kept them in the flashlight's shadow). Only for parts whose cavity lies
+   * clear inside the model's outer walls.
+   */
+  replaceInterior?: boolean;
   /** Round liner (trash can): open cylinder r, y0..y1, back-side. */
   cylinder?: readonly [r: number, y0: number, y1: number];
   /** Static extras revealed while open (trash fill, newspaper stack, shelves, frozen stock). */
@@ -329,7 +336,7 @@ export const OPENABLE_SPECS = {
       name, group: 'panes', doubleSide: true,
       move: {type: 'slide', dir: [-s, 0.036, 0.017], dist: 0.69, min: 0.4},
       region: [s < 0 ? box(-0.705, 0.6, -0.35, 0.0, 0.9, 0.36) : box(0.0, 0.6, -0.35, 0.705, 0.9, 0.36)],
-      cavity: s < 0 ? box(-0.69, 0.14, -0.27, 0.0, 0.84, 0.3) : box(0.0, 0.14, -0.27, 0.69, 0.84, 0.3), cavityRole: 'frost',
+      cavity: s < 0 ? box(-0.69, 0.14, -0.27, 0.0, 0.84, 0.3) : box(0.0, 0.14, -0.27, 0.69, 0.84, 0.3), cavityRole: 'frost', replaceInterior: true,
       inner: s < 0
         ? [B('frost', -0.68, 0.14, -0.26, -0.01, 0.3, 0.29), B('stock', -0.62, 0.3, -0.22, -0.4, 0.36, 0.0), B('stock', -0.3, 0.3, 0.02, -0.12, 0.34, 0.22)]
         : [B('frost', 0.01, 0.14, -0.26, 0.68, 0.3, 0.29), B('stock', 0.12, 0.3, -0.2, 0.34, 0.35, 0.02), B('stock', 0.42, 0.3, 0.04, 0.64, 0.37, 0.24)],

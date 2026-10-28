@@ -46,6 +46,24 @@
     #prompt img.pi { width: 44px; height: 26px; object-fit: contain; vertical-align: middle; margin: -4px 8px -4px -4px; }
     #prompt svg { width: 40px; height: 20px; vertical-align: middle; margin-right: 8px; }
     .fs-status { min-height: 1.2em; }
+    /* Iteration 12 (LIGHT): light panel above the weapon panel — battery meter (hud.ts batteryMeter), light tag, flare count (T). */
+    #light-panel { position: absolute; right: 26px; bottom: 104px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: 11px; letter-spacing: 0.12em; color: var(--cream-dim); }
+    #light-panel #flashlight-tag { position: static; }
+    #light-panel .lrow { display: flex; align-items: center; gap: 6px; }
+    #light-panel .ico { display: flex; width: 14px; height: 14px; }
+    #light-panel .ico svg { width: 14px; height: 14px; }
+    #battery .bar { width: 96px; height: 7px; background: #111315; border: 1px solid #3a3f44; }
+    #battery .fill { height: 100%; width: 80%; background: var(--cream); transition: width 0.4s linear; }
+    #battery .pct { width: 36px; text-align: right; color: var(--cream); font-variant-numeric: tabular-nums; }
+    #battery .spare { width: 18px; color: var(--teal); font-weight: 700; }
+    #battery.low .fill { background: var(--mustard); }
+    #battery.low .pct, #battery.low .ico { color: var(--mustard); }
+    #battery.crit .fill { background: var(--red); }
+    #battery.crit .pct, #battery.crit .ico { color: var(--red); }
+    #battery.crit .bar { animation: surv-pulse 1.2s ease-in-out infinite; }
+    #battery.off .fill { opacity: 0.45; }
+    #flare-tag .n { color: var(--cream); font-weight: 700; }
+    #flare-tag.none { opacity: 0.55; }
   </style>
 </head>
 <body>
@@ -70,7 +88,11 @@
       <div id="hotbar"></div>
       <div id="damage-dir"></div>
       <div id="vignette"></div>
-      <div id="flashlight-tag"></div>
+      <div id="light-panel">
+        <div id="flare-tag" class="lrow" title="Flares (grenade slot): T throws one — red light and smoke for ~50 s; light draws the infected"><span class="ico"></span><span>FLARES <span class="n">0</span> · T<span class="lit"></span></span></div>
+        <div id="battery" class="lrow" title="Flashlight battery: drains while the light is on, flickers below 25 %, dead at 0. Use a battery to refill."><span class="ico"></span><span>BATTERY</span><div class="bar"><div class="fill"></div></div><span class="pct">80%</span><span class="spare"></span></div>
+        <div id="flashlight-tag"></div>
+      </div>
     </div>
 
     <section id="title" class="screen">

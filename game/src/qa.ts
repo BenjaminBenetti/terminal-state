@@ -14,6 +14,8 @@ import {compositionOf, compositionSummary} from './gen/compose';
 import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
 import {creatureQaApi} from './ai/creatureQa';
+import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
+import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
 
 export function installQaHooks(game: Game): void {
@@ -298,6 +300,10 @@ export function installQaHooks(game: Game): void {
     ...damageQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
     // Iteration 07 (Lane Q): rat/dog creature — creatures(), enemyMix(), goCreature(i?), aimCreature(i?, part), DEBUG qaSpawnCreature(dist).
     ...creatureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
+    // Iteration 12 (AI): light lure — lightLure(), lureProbe(i?), goLureVantage({index, dist, ahead}), DEBUG qaLureLight / qaLureLightSet.
+    ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // Iteration 12 (LIGHT): light() — battery / glow / flares / light sources; DEBUG qaSetBattery(charge), qaGiveItem(id, n).
+    ...lightQaApi(game),
     /** Iteration 06 (Lane F): volumetric atmosphere state (enabled/active, resolution, steps, shadow map, GPU/CPU ms). */
     atmosphere: () => game.atmosphere.debug(),
     /**

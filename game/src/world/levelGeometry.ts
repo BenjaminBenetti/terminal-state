@@ -55,7 +55,7 @@ const MIN_H = 0.01;
 
 const isOpenCell = (c: number) => c === FLOOR || c === VOID;
 
-function rampsEqual(a: Ramp, b: Ramp): boolean {
+export function rampsEqual(a: Ramp, b: Ramp): boolean {
   return a === b || (a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && a.axis === b.axis &&
     Math.abs(a.s0 - b.s0) < EPS && Math.abs(a.s1 - b.s1) < EPS && Math.abs(a.h0 - b.h0) < EPS && Math.abs(a.h1 - b.h1) < EPS);
 }
@@ -422,6 +422,8 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, 
             let f: number, c: number, np: number;
             let sloped = false;
             let A: Lin | null = null;
+            /** Skirt included in A's floor line (sloped ramp edges only), so pitch = floor + aSkirt. */
+            let aSkirt = 0;
             if (!isRamp && !anyRampB) {
               // Constant bands (the common case): straight 1D interval subtraction, no allocation.
               f = g.floorOf(i); c = ceilOf(g, i, f);
@@ -434,6 +436,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, 
             } else {
               const Ae = edgeBand(g, i, alongX, plane, t0, t1, isRamp ? WALL_SKIRT : 0);
               if (isRamp && !Ae.sloped) { const B0 = edgeBand(g, i, alongX, plane, t0, t1, 0); Ae.f0 = B0.f0; Ae.f1 = B0.f1; }
+              aSkirt = isRamp && Ae.sloped ? WALL_SKIRT : 0;
               A = Ae;
               sloped = Ae.sloped;
               bandsB.length = 0;
@@ -466,14 +469,22 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, 
             };
             if (sloped) {
               // Stair flights: trapezoids, merged with the previous cell's when they continue the same lines.
+              // Iteration 12 (ARCH, user: "the bricks would always be straight up and down"): the texture base used
+              // to follow the pitch line, so tile courses, the charcoal base and the teal band ran diagonally with
+              // the flight. Every zone now has a CONSTANT texture base (horizontal courses, vertical joints): the
+              // bottom landing's dado continues level into the stairwell, the top landing's dado continues level
+              // back over the flight, plain courses between, and only the skirting follows the pitch as a raked
+              // strip of level-coursed charcoal tile (stairWallZones).
               const Af = A!;
+              const R = isRamp ? g.ramps[g.rampIdx[i]] : null;
+              const lo = R ? Math.min(R.h0, R.h1) : Af.f0, hi = R ? Math.max(R.h0, R.h1) : Af.f0;
+              const pitch = (u: number) => lerp(Af.f0, Af.f1, u) + aSkirt;
               for (const p of pieces) {
                 const kind = pieceKind(p.bt, p.tt);
-                const baseAt = (u: number) => (isRamp ? lerp(Af.f0, Af.f1, u) + WALL_SKIRT : Af.f0);
-                for (const q of kind === 'tile' ? splitAtLine(p, u => baseAt(u) + TILE) : [{...p, upper: false}]) {
+                for (const q of stairWallZones(p, kind, R ? pitch : null, lo, hi, TILE)) {
                   pushSloped(slopedRuns, {
-                    level: Lk, area, kind, voidCell: cellVoid, stair, finish: finishFor(kind, q.upper), ta: t0 + q.ua * CELL, tb: t0 + q.ub * CELL,
-                    b0: q.b0, b1: q.b1, t0: q.t0, t1: q.t1, base0: baseAt(q.ua) + (q.upper ? TILE : 0), base1: baseAt(q.ub) + (q.upper ? TILE : 0),
+                    level: Lk, area, kind, voidCell: cellVoid, stair, finish: q.finish, ta: t0 + q.ua * CELL, tb: t0 + q.ub * CELL,
+                    b0: q.b0, b1: q.b1, t0: q.t0, t1: q.t1, base0: q.base, base1: q.base,
                   });
                 }
               }
@@ -549,31 +560,89 @@ export function finishFor(kind: WallKind, upper: boolean): string {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Iteration 12 (ARCH): gravity-aligned finishes on stair-flight side walls
+
+/** Raked skirting on tiled flight walls: the wall texture's two charcoal base courses, this far above the pitch (m). */
+export const STAIR_BASE_H = 0.3;
+/** Painted block walls: the charcoal base band of canvasTextures.paintedBlock (m). */
+export const PAINT_BASE_H = 0.14;
+
+/** A horizontal texture zone [y0, y1) of a flight's side wall: finish + CONSTANT texture base (v = (y - base) / span). */
+export interface StairZone { y0: number; y1: number; finish: string; base: number }
+
 /**
- * Split a piece at a line s(u) (the tile line): first at the u where s crosses the piece's bottom or
- * top, then each sub-range into the part below and the part above the line.
+ * Horizontal zones (bottom to top) of a flight wall above its raked skirting. `lo` / `hi` = the flight's bottom /
+ * top landing floors. Tiled walls: the bottom landing's dado (tileLower from `lo`: field, teal band, plain courses)
+ * continues level into the stairwell, plain courses (tileUpper) above it, and from the top landing's skirting line
+ * (`hi` + STAIR_BASE_H) up the top landing's dado and plain courses - so the courses meet both landings' flat walls
+ * at their heights. Painted block: the bottom landing's paint below the top landing's base line, the top's above.
+ * A flat cell (lo = hi = floor) gets exactly its flat walls' zones.
  */
-function splitAtLine(p: Piece, s: (u: number) => number): (Piece & {upper: boolean})[] {
-  const at = (a: number, b: number, u: number) => a + (b - a) * (u - p.ua) / Math.max(1e-9, p.ub - p.ua);
+export function stairWallBands(kind: WallKind, lo: number, hi: number, tile: number): StairZone[] {
+  const out: StairZone[] = [];
+  const push = (y0: number, y1: number, finish: string, base: number) => {
+    if (!(y1 - y0 > 1e-6)) return;
+    const p = out[out.length - 1];
+    if (p && p.finish === finish && Math.abs(p.base - base) < 1e-6 && Math.abs(p.y1 - y0) < 1e-6) { p.y1 = y1; return; }
+    out.push({y0, y1, finish, base});
+  };
+  if (kind === 'tile') {
+    const ya = hi + STAIR_BASE_H;
+    push(-Infinity, Math.min(lo + tile, ya), 'tileLower', lo);
+    push(lo + tile, ya, 'tileUpper', lo + tile);
+    push(ya, hi + tile, 'tileLower', hi);
+    push(Math.max(ya, hi + tile), Infinity, 'tileUpper', hi + tile);
+  } else if (kind === 'paint') {
+    push(-Infinity, hi + PAINT_BASE_H, 'paint', lo);
+    push(hi + PAINT_BASE_H, Infinity, 'paint', hi);
+  } else push(-Infinity, Infinity, finishFor(kind, false), lo);
+  return out;
+}
+
+/** A zoned part of a wall piece (u: fractions of the cell edge like Piece.ua/ub) with its finish and texture base. */
+export interface ZonedPiece { ua: number; ub: number; b0: number; b1: number; t0: number; t1: number; finish: string; base: number }
+
+/**
+ * Split a (sloped) wall piece into zone trapezoids. Zone boundaries are horizontal lines (stairWallBands) plus, on
+ * tiled flight walls (`pitch` given), the raked skirting line pitch(u) + STAIR_BASE_H: below it 'tileBase' (charcoal
+ * courses, level joints, cut along the rake). Every texture base is constant, so courses stay horizontal.
+ */
+export function stairWallZones(p: Piece, kind: WallKind, pitch: ((u: number) => number) | null, lo: number, hi: number, tile: number): ZonedPiece[] {
+  const zones = stairWallBands(kind, lo, hi, tile);
+  const rake = pitch && kind === 'tile' ? (u: number) => pitch(u) + STAIR_BASE_H : null;
+  const span = Math.max(1e-9, p.ub - p.ua);
+  const bAt = (u: number) => p.b0 + (p.b1 - p.b0) * (u - p.ua) / span;
+  const tAt = (u: number) => p.t0 + (p.t1 - p.t0) * (u - p.ua) / span;
+  const cuts = zones.slice(1).map(z => z.y0);
   const us = [p.ua, p.ub];
-  const s0 = s(p.ua), s1 = s(p.ub);
-  for (const [y0, y1] of [[p.b0, p.b1], [p.t0, p.t1]]) {
-    const d0 = y0 - s0, d1 = y1 - s1;
+  const cross = (f: (u: number) => number, g: (u: number) => number) => {
+    const d0 = f(p.ua) - g(p.ua), d1 = f(p.ub) - g(p.ub);
     if (d0 * d1 < 0) us.push(p.ua + (p.ub - p.ua) * d0 / (d0 - d1));
-  }
+  };
+  for (const h of cuts) { const H = () => h; cross(bAt, H); cross(tAt, H); if (rake) cross(rake, H); }
+  if (rake) { cross(rake, bAt); cross(rake, tAt); }
   us.sort((a, b) => a - b);
-  const out: (Piece & {upper: boolean})[] = [];
+  const out: ZonedPiece[] = [];
   for (let k = 0; k + 1 < us.length; k++) {
-    const ua = us[k], ub = us[k + 1];
-    if (ub - ua < 1e-6) continue;
-    const b0 = at(p.b0, p.b1, ua), b1 = at(p.b0, p.b1, ub), t0 = at(p.t0, p.t1, ua), t1 = at(p.t0, p.t1, ub);
-    const sa = at(s0, s1, ua), sb = at(s0, s1, ub);
-    const um = (ua + ub) / 2, bm = at(p.b0, p.b1, um), tm = at(p.t0, p.t1, um), sm = at(s0, s1, um);
-    if (sm <= bm) out.push({...p, ua, ub, b0, b1, t0, t1, upper: true});
-    else if (sm >= tm) out.push({...p, ua, ub, b0, b1, t0, t1, upper: false});
-    else {
-      out.push({...p, ua, ub, b0, b1, t0: sa, t1: sb, upper: false});
-      out.push({...p, ua, ub, b0: sa, b1: sb, t0, t1, upper: true});
+    const u0 = us[k], u1 = us[k + 1];
+    if (u1 - u0 < 1e-6) continue;
+    const um = (u0 + u1) / 2, bm = bAt(um), tm = tAt(um);
+    const rm = rake ? rake(um) : -Infinity;
+    const lines: ((u: number) => number)[] = [];
+    if (rake && rm > bm + 1e-6 && rm < tm - 1e-6) lines.push(rake);
+    // Horizontal boundaries only matter above the skirting.
+    for (const h of cuts) if (h > bm + 1e-6 && h < tm - 1e-6 && h > rm + 1e-6) lines.push(() => h);
+    lines.sort((f, g) => f(um) - g(um));
+    lines.unshift(bAt);
+    lines.push(tAt);
+    for (let j = 0; j + 1 < lines.length; j++) {
+      const L0 = lines[j], L1 = lines[j + 1];
+      const b0 = L0(u0), b1 = L0(u1), t0 = L1(u0), t1 = L1(u1);
+      if (t0 - b0 < 1e-4 && t1 - b1 < 1e-4) continue;
+      const ym = (L0(um) + L1(um)) / 2;
+      const z = ym < rm ? {finish: 'tileBase', base: lo} : zones.find(q => ym >= q.y0 && ym < q.y1) ?? zones[zones.length - 1];
+      out.push({ua: u0, ub: u1, b0, b1, t0, t1, finish: z.finish, base: z.base});
     }
   }
   return out;

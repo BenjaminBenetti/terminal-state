@@ -11,6 +11,9 @@
 // small instanced mesh per (archetype, label) while it moves; when it settles its vertices are
 // rewritten in place at the new pose. Physics: physics/fillerStock.ts.
 //
+// Iteration 12 (LOOT lane): ~30 years on, most of it is boxes, trash and broken / spoiled goods, aged and tarnished
+// (world/shelfStockCatalog.ts StockLook, world/shelfStockGeometry.ts aging), so the few real finds stand out.
+//
 // Filler is NOT loot: no pickup, no highlight / glint, no inventory entry, no [E] prompt — the
 // targeting code (world/containers.ts, world/pickups.ts) only ever sees real lots and pickups, and
 // filler never appears in either list. Real loot lots keep their own models / glow / finite ids and
@@ -29,6 +32,11 @@ import {DEVICE_WALL_DECK, measureDecks, stockBoards, stockColliders, toWorldBoxe
 import {archGeometry, archTriangles, stockMaterial, stockTextureBytes} from './shelfStockGeometry';
 import {FILLER_TUNING, FillerStock, type FillerHit, type FillerPiece, type FillerSpec, type FillerView} from '../physics/fillerStock';
 
+/**
+ * Iteration 12 (LOOT lane): per-piece grime / fade tint range (was 0.86..1.06): the filler reads dusty and uneven next to the
+ * fresh real loot (own models and materials, never tinted).
+ */
+export const FILLER_TINT = [0.62, 0.9] as const;
 /** Render chunk size (m), like builder.ts instanced props. */
 const CHUNK = 18;
 /** Holders whose front is glass: a pellet reaching their stock also hits the glass. */
@@ -244,7 +252,7 @@ export class ShelfStock implements FillerView {
         const c = new THREE.Vector3(pl.c[0], pl.c[1], pl.c[2]).applyMatrix4(holderM);
         const q = holderQ.clone().multiply(new THREE.Quaternion(pl.q[0], pl.q[1], pl.q[2], pl.q[3]));
         pieces.push({id, spec, p: c, q, home: c.clone(), holder: hi, above: [], state: 'rest', body: null, moved: false, box: new THREE.Box3(), ...(h.boards[pl.board]?.mode === 'hang' ? {hung: true} : {})});
-        this.arch[id] = pl.arch; this.variant[id] = pl.variant; this.tint[id] = 0.86 + pl.tint * 0.2;
+        this.arch[id] = pl.arch; this.variant[id] = pl.variant; this.tint[id] = FILLER_TINT[0] + pl.tint * (FILLER_TINT[1] - FILLER_TINT[0]);
         this.chunkOf[id] = ci;
         chunkPieces[ci].push(id);
       });

@@ -136,6 +136,21 @@ const ROLE: Record<Exclude<MatRole, 'body' | 'inner' | 'accent'>, {color: number
   wood: {color: 0x7b5d43, map: 'woodVeneer', rough: 0.75, metal: 0},
 };
 
+/**
+ * Iteration 12 (ATMOS, user feedback #4 "my flashlight does not light the inside" of an opened cupboard / fridge / locker):
+ * a revealed interior liner is a closed box drawn BackSide (its inner faces). With `shadowSide` unset, three r186's shadow pass
+ * draws the OPPOSITE side of a material (WebGLShadowMap: `shadowSide ?? {Front: Back, Back: Front}[side]`), i.e. the liner's
+ * OUTWARD faces — including the face spanning the opening. That invisible lid sat in the flashlight's shadow map right where
+ * the door had been, so with the door open every liner wall and every item inside still failed the shadow test and stayed
+ * dark. The shadow pass now draws the same inner faces the colour pass draws: an opened compartment is lit from the real
+ * flashlight direction (shelves / items / the door's own edge still cast onto it), while a CLOSED door — and the holder's
+ * body, which casts from both sides — keep occluding it. Exported for world/containers.ts and tests.
+ */
+export function interiorShadowSide<M extends THREE.Material>(m: M): M {
+  if (m.side === THREE.BackSide) m.shadowSide = THREE.BackSide;
+  return m;
+}
+
 const tmpM = new THREE.Matrix4(), tmpM2 = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
 const AX = {x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0)};
 
@@ -191,6 +206,7 @@ export class OpenableSet {
       const r = ROLE[role];
       m = new THREE.MeshStandardMaterial({color: r.color, roughness: r.rough, metalness: r.metal, side, map: surface(r.map).map});
     }
+    interiorShadowSide(m); // Iteration 12 (ATMOS): back-side parts shadow from the faces they draw (#4)
     m.name = `openable-${role}`;
     this.roleMats.set(key, m);
     return m;
@@ -205,6 +221,7 @@ export class OpenableSet {
     const base = role && role !== 'body' && role !== 'inner' && role !== 'accent' ? new THREE.Color(ROLE[role].color) : paint.clone();
     const k = role === 'frost' || role === 'white' ? 0.75 : 0.42;
     m = new THREE.MeshStandardMaterial({color: base.multiplyScalar(k), roughness: 0.92, metalness: 0.15, side: THREE.BackSide, map: surface(role === 'frost' ? 'plastic' : 'paintedPanel').map});
+    interiorShadowSide(m);
     m.name = 'openable-cavity';
     this.roleMats.set(key, m);
     return m;
@@ -242,9 +259,20 @@ export class OpenableSet {
         all.union(r);
         for (const axis of [0, 1, 2] as const) for (const v of [r.min.getComponent(axis), r.max.getComponent(axis)]) if (!planes.some(q => q.axis === axis && Math.abs(q.value - v) < 1e-6)) planes.push({axis, value: v});
       }
+      const slabs = openingSlabs(spec, regions);
+      // Iteration 12 (ATMOS, #4): liners that replace the model's own interior (openablesSpec replaceInterior)
+      const replaced = spec.parts.filter(p => p.replaceInterior && p.cavity).map(p => new THREE.Box3(new THREE.Vector3(p.cavity![0], p.cavity![1], p.cavity![2]), new THREE.Vector3(p.cavity![3], p.cavity![4], p.cavity![5])).expandByScalar(-0.01));
+      // cut exactly on those boxes too (large triangles straddling a liner wall would otherwise go by their centroid)
+      for (const r of replaced) {
+        all.union(r);
+        for (const axis of [0, 1, 2] as const) for (const v of [r.min.getComponent(axis), r.max.getComponent(axis)]) if (!planes.some(q => q.axis === axis && Math.abs(q.value - v) < 1e-6)) planes.push({axis, value: v});
+      }
+      let remnants = 0;
       for (const {soup, mat} of fittedMeshes(gltf, def.w, def.h, def.d)) {
-        const buckets = partition(soup, planes, all, 1 + spec.parts.length, c => {
+        const buckets = partition(soup, planes, all, 1 + spec.parts.length, (c, _nz, n) => {
           for (let i = 0; i < regions.length; i++) for (const r of regions[i]) if (r.containsPoint(c)) return i + 1;
+          // Iteration 12 (ATMOS, #4): what the split leaves in a lined compartment's opening (see openingSlabs) is dropped.
+          if (inOpeningSlab(c, n, slabs) || replaced.some(b => b.containsPoint(c))) { remnants++; return -1; }
           return 0;
         });
         if (buckets[0].length) body.push({geo: soupGeometry(soup, buckets[0]), mat});
@@ -255,7 +283,7 @@ export class OpenableSet {
           moving[i].push({geo: soupGeometry(soup, buckets[i + 1], pivots[i]), mat: pm});
         });
       }
-      source = `${spec.model}: runtime split into body + ${spec.parts.length} part(s) (approximate; GLB unchanged)`;
+      source = `${spec.model}: runtime split into body + ${spec.parts.length} part(s) (approximate; GLB unchanged)${remnants ? `; ${remnants} face(s) left in lined openings / replaced interiors dropped` : ''}`;
     } else if (spec.body === 'model') {
       // Model missing (node tests / failed optional load): honest placeholder — the footprint box and boxed parts.
       body.push({geo: boxGeo(-def.w / 2, 0, -def.d / 2, def.w / 2, def.h * 0.8, def.d / 2), mat: this.roleMat('steelDark', paint)});
@@ -731,6 +759,48 @@ export function supportPoints(verts: readonly THREE.Vector3[], n: number): THREE
     if (best) out.add(best);
   }
   return [...out].map(v => v.clone());
+}
+
+/**
+ * Iteration 12 (ATMOS, #4): the opening of a LINED compartment (an authored cavity / cylinder liner replaces the model's own
+ * interior) — the slab between the liner's opening face and the inner side of the part's region, over the liner's cross-section.
+ * A model-derived body keeps whatever lay in that slab just inside the region cut: the inner skin of a split-off door, window
+ * backing or lid underside. Facing INTO the holder (n . opening < -0.85), those faces are never front-facing to a viewer
+ * outside it — invisible in the colour pass, open or closed — but the structure shadow marking (shadowSide double) let them
+ * cast across the opening, so e.g. an opened newspaper box stayed in the flashlight's shadow. Only those are dropped (the
+ * legacy cupboard split drops its stray interior surfaces the same way, world/containers.ts cabinetModel). Outward-facing
+ * remnants are visible surfaces (a drawer front's recessed panel just behind the cut): they stay, and are lit like any surface.
+ */
+export interface OpeningSlab { axis: 0 | 1 | 2; sign: number; lo: number; hi: number; min: THREE.Vector3; max: THREE.Vector3; round: number }
+export function openingSlabs(spec: Pick<OpenableSpec, 'parts'>, regions: readonly (readonly THREE.Box3[])[]): OpeningSlab[] {
+  const out: OpeningSlab[] = [];
+  spec.parts.forEach((p, i) => {
+    const liner = p.cavity ?? (p.cylinder ? [-p.cylinder[0], p.cylinder[1], -p.cylinder[0], p.cylinder[0], p.cylinder[2], p.cylinder[0]] as const : null);
+    if (!liner || !regions[i]?.length) return;
+    const cav = new THREE.Box3(new THREE.Vector3(liner[0], liner[1], liner[2]), new THREE.Vector3(liner[3], liner[4], liner[5]));
+    const reg = new THREE.Box3();
+    for (const r of regions[i]) reg.union(r);
+    const d = reg.getCenter(new THREE.Vector3()).sub(cav.getCenter(new THREE.Vector3()));
+    const ad = [Math.abs(d.x), Math.abs(d.y), Math.abs(d.z)];
+    const axis = (ad[0] > ad[1] && ad[0] > ad[2] ? 0 : ad[1] > ad[2] ? 1 : 2) as 0 | 1 | 2;
+    const s = Math.sign(d.getComponent(axis)) || 1;
+    const open = s > 0 ? cav.max.getComponent(axis) : cav.min.getComponent(axis);
+    const near = s > 0 ? reg.min.getComponent(axis) : reg.max.getComponent(axis);
+    const inset = cav.clone().expandByScalar(-0.003);
+    out.push({axis, sign: s, lo: Math.min(open, near) - 0.02, hi: Math.max(open, near) + 0.005, min: inset.min, max: inset.max, round: p.cavity ? 0 : p.cylinder![0] - 0.003});
+  });
+  return out;
+}
+/** A body face (centroid c, unit normal n) left in a lined opening and facing into the holder (see openingSlabs). */
+export function inOpeningSlab(c: THREE.Vector3, n: THREE.Vector3, slabs: readonly OpeningSlab[]): boolean {
+  for (const sl of slabs) {
+    const v = c.getComponent(sl.axis);
+    if (v < sl.lo || v > sl.hi || n.getComponent(sl.axis) * sl.sign >= -0.85) continue;
+    const a = (sl.axis + 1) % 3, b = (sl.axis + 2) % 3;
+    const ca = c.getComponent(a), cb = c.getComponent(b);
+    if (sl.round > 0 ? ca * ca + cb * cb < sl.round * sl.round : ca > sl.min.getComponent(a) && ca < sl.max.getComponent(a) && cb > sl.min.getComponent(b) && cb < sl.max.getComponent(b)) return true;
+  }
+  return false;
 }
 
 function clampBox(b: Box6, def: {w: number; d: number; h: number}): Box6 {

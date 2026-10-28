@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {Inventory, HOTBAR_SIZE, PACK_SIZE} from '../src/items/inventory';
 import {
-  createHolderState, holderPrompt, lotPrompt, nextHolderAction, rollHolderLots, takeAll, takeLot, transferMessage,
+  createHolderState, holderFinds, holderPrompt, lotPrompt, nextHolderAction, rollHolderLots, rollLootItems, rollTableItems, takeAll, takeLot, transferMessage,
   type HolderKind,
 } from '../src/items/loot';
 import {DEFAULT_SHELF, cabinetInsert, holderSurfaces, placementBox, type Dims} from '../src/items/lootLayout';
@@ -26,7 +26,9 @@ const ROOMS = ['storage', 'crew-room', 'utility', 'agent-office', 'supply-closet
 const FOOD_DRINK = new Set(['water', 'cola', 'juice', 'chocolate', 'chips', 'beans', 'noodles']);
 
 describe('visible loot holders', () => {
-  it('most containers, shelves and vending machines hold something; empties are rare', () => {
+  // Iteration 12 (LOOT lane): scarce resources (items/lootEconomy.ts) — most holders are now empty or nearly empty by design
+  // ("searched — empty"); ammo is exempt and rolls exactly as before. Corpus-level numbers: tests/loot-economy.test.ts.
+  it('scarce: most holders near-empty, ammo exactly as rolled, a few finds everywhere', () => {
     for (const kind of ['cabinetTall', 'cabinetLow', 'crate', 'shelf', 'stall', 'vending'] as HolderKind[]) {
       let nonEmpty = 0, lots = 0;
       const N = 300;
@@ -34,21 +36,30 @@ describe('visible loot holders', () => {
         const l = rollHolderLots(4242, i, kind, ROOMS[i % ROOMS.length], surfaces(kind));
         if (l.length) nonEmpty++;
         lots += l.length;
+        // the ammo of the holder's original table roll survives untouched (its own roll), in order
+        const room = ROOMS[i % ROOMS.length];
+        const ammo = rollTableItems(4242, i, kind, room).filter(e => e.itemId.startsWith('ammo_'));
+        expect(holderFinds(4242, i, kind, room).filter(f => f.source === 'roll').map(f => ({itemId: f.itemId, count: f.count}))).toEqual(ammo);
+        // and every rolled entry (finds included) is what rollLootItems reports
+        expect(rollLootItems(4242, i, kind, room)).toEqual(holderFinds(4242, i, kind, room).map(f => ({itemId: f.itemId, count: f.count})));
       }
-      expect(nonEmpty / N, kind).toBeGreaterThan(0.8);
-      expect(lots / N, kind).toBeGreaterThanOrEqual(kind === 'crate' ? 1.4 : 1.8); // crates: one small 0.55 m floor
+      expect(nonEmpty / N, kind).toBeGreaterThan(0.08);
+      expect(nonEmpty / N, kind).toBeLessThan(0.9); // ammo-bearing tables (storage, utility) keep their boxes
+      expect(lots / N, kind).toBeLessThan(1.3);
     }
   });
 
-  it('room type shapes the loot: food courts are food/drink, vending sells no tins or ammo', () => {
-    const items = (kind: HolderKind, room: string) => Array.from({length: 200}, (_, i) => rollHolderLots(9, i, kind, room, surfaces(kind))).flat().map(l => l.itemId);
+  it('room type shapes the loot: food courts are mostly food/drink (some random finds), vending sells no tins or ammo', () => {
+    const items = (kind: HolderKind, room: string) => Array.from({length: 400}, (_, i) => rollHolderLots(9, i, kind, room, surfaces(kind))).flat().map(l => l.itemId);
     const court = items('shelf', 'food-court');
-    expect(court.filter(id => FOOD_DRINK.has(id)).length / court.length).toBeGreaterThan(0.9);
+    const fd = court.filter(id => FOOD_DRINK.has(id)).length / court.length;
+    expect(fd).toBeGreaterThan(0.65);
+    expect(fd).toBeLessThan(1); // off-theme random finds exist
     const vend = items('vending', 'concourse');
-    expect(vend.every(id => FOOD_DRINK.has(id) && id !== 'beans')).toBe(true);
+    expect(vend.every(id => (FOOD_DRINK.has(id) && id !== 'beans') || id === 'battery')).toBe(true);
     const util = items('cabinetTall', 'utility');
     expect(util.some(id => id.startsWith('ammo'))).toBe(true);
-    expect(util.some(id => FOOD_DRINK.has(id))).toBe(true);
+    expect(util.some(id => id === 'battery' || id === 'flare')).toBe(true);
   });
 
   it('every item is placed visibly ON a real surface, inside the holder, without overlaps', () => {

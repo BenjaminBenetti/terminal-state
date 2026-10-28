@@ -114,6 +114,7 @@ function viewFor(itemId: string): {az: number; el: number} {
   if (def?.kind === 'weapon') return {az: 78 * DEG, el: 14 * DEG};
   // Flat goods (chocolate bar, ammo boxes, med kit, bandage) read better from higher up.
   if (['chocolate', 'ammo_rifle', 'ammo_shells', 'ammo_pistol', 'medkit', 'bandage'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG};
+  if (itemId === 'flare') return {az: 12 * DEG, el: 30 * DEG}; // Iteration 12 (LIGHT): the tube lies along X, printed band to the front
   return {az: 30 * DEG, el: 18 * DEG};
 }
 

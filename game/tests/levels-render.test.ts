@@ -507,7 +507,9 @@ describe('render cost: triangle sanity, overdraw, level / fog culling, draw-call
       expect(levelMeshes(w.group, 2).every(m => !shown(m))).toBe(true);
       expect(levelMeshes(w.group, 2).every(m => m.layers.isEnabled(CULL_LAYER))).toBe(true);
       // Inside the crossing looking away from its stair: the main level and the deck are hidden.
-      cu.update(cam(21.5, FIX.lowerY + 1.62, 12, Math.PI), true);
+      // (Iteration 12: yaw 0 looks -z, away from stair core B at z 21.5-23.5; yaw PI looked TOWARD it, where the
+      // run's walls are in view and the whole run is now a main<->lower portal, so main correctly stays drawn.)
+      cu.update(cam(21.5, FIX.lowerY + 1.62, 12, 0), true);
       expect(cu.stats.level).toBe(2);
       expect(levelMeshes(w.group, 2).some(shown)).toBe(true);
       expect(levelMeshes(w.group, 0).every(m => !shown(m))).toBe(true);

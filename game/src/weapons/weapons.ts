@@ -85,7 +85,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
     reload: {kind: 'magazine', time: 1.4, emptyTime: 1.65},
     recoil: {pitch: 0.016, yaw: 0.005, kick: 0.03, recover: 11},
     equipTime: 0.35, aimFov: 58, moveMult: 1.0, noise: 24, sound: 'pistol',
-    view: {model: 'pistol', hip: [0.16, -0.17, -0.36], aim: [0.0, -0.08, -0.36], hipYaw: 0.08, hipPitch: 0.03, hipRoll: -0.04, length: 0.2, sightRelief: 0.32},
+    // Iteration 12 (LIGHT, user #6 "move the pistol lower and slightly more in towards the camera during ADS"): the sights now
+    // sit 14 mm under the screen centre (~2.9 deg, the crosshair stays the aim point) and 40 mm closer (relief 0.32 -> 0.28).
+    view: {model: 'pistol', hip: [0.16, -0.17, -0.36], aim: [0.0, -0.08, -0.36], hipYaw: 0.08, hipPitch: 0.03, hipRoll: -0.04, length: 0.2, sightRelief: 0.28, sightLift: 0.014},
   },
 };
 

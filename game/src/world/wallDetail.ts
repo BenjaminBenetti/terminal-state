@@ -18,6 +18,7 @@ import type {WallFace} from './wallFaces';
 import {thinTrim, type WorldMaterials, type MatKey} from './materials';
 import {cloneWithShaderHooks} from '../render/shaderHooks';
 import {shapeMaterial} from './shapeMaterials';
+import {archShopMaterial} from './decay';
 import {planWallDetail, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
 import {FRIEZE_SIZE, atlasCells, friezeTexture, wallDetailTextures, type CellRect} from './wallDetailAtlas';
 import {Buf, LAYER_OFFSET, cutPolyC, cylinder, faceBox, flatFeature, frameOf, insetPrism, prepareCuts, pt, rimRing, rubble, type CutSpec, type DetailMat, type Frame} from './wallDetailGeometry';
@@ -139,6 +140,7 @@ export function buildWallDetail(world: THREE.Group, layout: StationLayout, mats:
   // --- cuts: find the ONE base-wall quad hosting each outline (walls are only modified at commit) ---
   const baseMats = new Set<THREE.Material>(BASE_KEYS.map(k => { try { return mats.get(k); } catch { return null; } }).filter((m): m is THREE.Material => !!m));
   baseMats.add(shapeMaterial(mats, 'tileShop'));
+  baseMats.add(archShopMaterial(mats, 'tileShop')); // iteration 12 (ARCH): unit interiors use a decayed copy
   const baseMeshes: THREE.Mesh[] = [];
   world.traverse(o => {
     const m = o as THREE.Mesh;

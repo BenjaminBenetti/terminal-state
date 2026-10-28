@@ -67,6 +67,14 @@ function blast(S: ShelfStock, props: PropPlacement[], eye: THREE.Vector3, aim: T
 }
 
 const moved = (p: FillerPiece) => p.p.distanceTo(p.home) > 0.03;
+/**
+ * Floor under a settled piece: the hall floor (0), or the track bed (trench floorY) over the VOID strip — iteration 12: light junk
+ * (open boxes, empty bottles) rebounding off the shelf back can carry across the hall into the track bed; it must rest ON it.
+ */
+const floorUnder = (L: {grid: Grid; trench: {floorY: number}}, p: FillerPiece) => {
+  const [cx, cy] = L.grid.cellOf(p.p.x, p.p.z);
+  return L.grid.inBounds(cx, cy) && L.grid.get(cx, cy) === VOID ? L.trench.floorY : 0;
+};
 
 describe('pellet hits', () => {
   it('a ray wakes exactly the piece it hits and pushes it at the hit point (off-centre hits spin it)', () => {
@@ -122,7 +130,10 @@ describe('pellet hits', () => {
     const sh = stockProp('stockShelf', 8, 3, {variant: 0}), cooler = stockProp('shopCooler', 12, 3);
     const L = hall([sh, cooler]);
     const {S} = scene(L);
-    const eye = new THREE.Vector3(8, 1.2, 6), dir = new THREE.Vector3(0, -0.15, -1).normalize();
+    // iteration 12: abandoned (low junk) stock — aim at a real front piece of the shelf's middle boards rather than a fixed
+    // height over a board (a crushed can or a wrapper is lower than the old fresh packages)
+    const front = S.filler.pieces.filter(p => p.holder === 0 && p.home.y > 0.5 && p.home.y < 1.5).sort((a, b) => b.p.z - a.p.z || Math.abs(a.p.x - 8) - Math.abs(b.p.x - 8))[0];
+    const eye = new THREE.Vector3(front.p.x, 1.2, 6), dir = front.p.clone().sub(eye).normalize();
     // the world hit is the shelf's AABB front face; the pellet continues into it and finds stock
     const tBox = (6 - (3 + sh.hz)) / -dir.z;
     const fh = S.pelletHit(eye, dir, tBox, {t: tBox, kind: 'prop', prop: 0}, L.props, false);
@@ -155,7 +166,7 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
       const sh = stockProp('stockShelf', 8, 3, {variant: 1});
       const L = hall([sh], 2024);
       const {ph, S} = scene(L);
-      expect(S.holders[0].placements.filter(p => p.board === 1).length).toBeGreaterThanOrEqual(40);
+      expect(S.holders[0].placements.filter(p => p.board === 1).length).toBeGreaterThanOrEqual(20); // iteration 12: abandoned (junk) stock — was 41 fresh packages
       const eye = new THREE.Vector3(8, 1.6, 3 + sh.hz + 2.6), aim = new THREE.Vector3(8, SHELF_TIER_Y[1] + 0.12, 3.12);
       // the game's own path: world ray (the shelf box is the hit) -> pelletHit -> shoot
       let hits = 0;
@@ -173,7 +184,7 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
       expect(S.filler.awake + S.filler.stats().frozen).toBe(0);
       const D = S.filler.displacement(ph.statics);
       expect(D.belowFloor + D.outside).toBe(0);
-      for (const p of S.filler.pieces) { expect(p.box.min.y).toBeGreaterThan(-0.025); expect(Math.abs(p.p.z - 3)).toBeLessThan(11); }
+      for (const p of S.filler.pieces) { expect(p.box.min.y).toBeGreaterThan(floorUnder(L, p) - 0.025); expect(Math.abs(p.p.z - 3)).toBeLessThan(11); }
       // the boards above / below keep their stock: the blast is local
       expect(S.filler.pieces.filter(p => p.home.y > SHELF_TIER_Y[3]).every(p => !moved(p))).toBe(true);
       results.push({hits, disp: S.filler.pieces.filter(q => q.p.distanceTo(q.home) > 0.05).length,
@@ -196,7 +207,11 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
       const sh = stockProp('stockShelf', 8, 3, {variant});
       const L = hall([sh], 100 + variant);
       const {ph, S} = scene(L);
-      const eye = new THREE.Vector3(8.1, 1.6, 3 + sh.hz + 2.5), aim = new THREE.Vector3(8, SHELF_TIER_Y[1] + 0.12, 3.1);
+      // iteration 12: aimed at the middle of what stands on the board round x = 8 (the lower, gappier junk stock) — was a fixed
+      // 0.12 m over the board, made for the old full blocks of fresh packages
+      const onBoard = S.filler.pieces.filter(p => S.holders[p.holder].placements[p.id - S.holders[p.holder].first].board === 1 && Math.abs(p.p.x - 8) < 0.3);
+      const mid = onBoard.reduce((v, p) => v.add(p.p), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, onBoard.length));
+      const eye = new THREE.Vector3(8.1, 1.6, 3 + sh.hz + 2.5), aim = new THREE.Vector3(mid.x, mid.y, 3.1);
       const hits = blast(S, L.props, eye, aim, 11 + variant);
       expect(hits.length).toBeGreaterThanOrEqual(4); // most pellets of a 9-pellet shot land in the stock
       let maxAwake = 0;
@@ -219,7 +234,7 @@ describe('an ordinary shotgun blast into a stocked shelf', () => {
       expect(D.outside).toBe(0);
       for (const p of S.filler.pieces) {
         expect(Number.isFinite(p.p.x + p.p.y + p.p.z)).toBe(true);
-        expect(p.box.min.y).toBeGreaterThan(-0.025); // on (not through) the floor
+        expect(p.box.min.y).toBeGreaterThan(floorUnder(L, p) - 0.025); // on (not through) the floor (the hall's, or the track bed's)
       }
       totalMoved += S.filler.pieces.filter(moved).length;
       offShelf += S.filler.pieces.filter(p => p.box.min.y < 0.08 && p.home.y > 0.3).length;
@@ -281,7 +296,7 @@ describe('budget, persistence, no loot', () => {
     expect(st.counts.reactivated).toBeGreaterThan(0);
     expect(S.filler.pieces.length).toBe(n); // nothing erased / duplicated
     expect(new Set(S.filler.pieces.map(p => p.id)).size).toBe(n);
-    for (const p of S.filler.pieces) { expect(Number.isFinite(p.p.y)).toBe(true); expect(p.box.min.y).toBeGreaterThan(-0.025); }
+    for (const p of S.filler.pieces) { expect(Number.isFinite(p.p.y)).toBe(true); expect(p.box.min.y).toBeGreaterThan(floorUnder(L, p) - 0.025); }
     // moved pieces stay where they settled (no respawn on the shelf)
     const rest = S.filler.pieces.map(p => p.p.clone());
     run(ph, 3);
