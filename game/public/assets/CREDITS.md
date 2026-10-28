@@ -11,6 +11,10 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   iteration 05; all sound effects are now Sound Lab clips — see Audio below.)
 
 ## Models and textures (runtime derivatives)
+- Iteration 10: the held/world RIFLE, SHOTGUN and PISTOL models are user-supplied models (uploaded 2026-10-28; upload
+  file names mention Meshy, but the generator, account, settings and licence are NOT verified and no clearance is implied).
+  The game ships re-oriented, re-scaled, simplified derivatives with the embedded textures unchanged
+  (derivatives/user-weapons-20261028.json). The earlier rifle/shotgun derivatives below stay in the repository unused.
 - Zombie body + coat ("Last-shift body" / "Last-shift coat"), rifle ("Kept running"), shotgun
   ("Old reliable"), bench, ceiling light, tall and low cabinets: concept images made with native
   Codex/ChatGPT image generation (model not reported), reconstructed to 3D locally with Pixal3D

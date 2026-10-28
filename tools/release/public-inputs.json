@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 6419,
-      "sha256": "8586163e267be59f71b8bb1eae293ad121d89f17cd839e5af035e3868b90a264"
+      "bytes": 6881,
+      "sha256": "bb2c97c72c06dac531d6d63f3ae77e490ba5e867cf88f86f0f3e5cc75bebe253"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1419,6 +1419,11 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/user-weapons-20261028.json",
+      "bytes": 7154,
+      "sha256": "b6703fcbaf5fce1ce404bdfa9ddf68f9f64937f7c0ce6d34e51b7ff76667d4db"
+    },
+    {
       "path": "assets/derivatives/zombie-body-agent.json",
       "bytes": 35774,
       "sha256": "d7d6a936aeedb656176f38f1e0e6112c373a29287f65ad9124dafc56b72c2846"
@@ -2144,9 +2149,19 @@
       "sha256": "5cbf59bd701d1bedc5af454d2eeb2b3814e2ccdb44fcdc49bb756b30114cae02"
     },
     {
+      "path": "assets/models/pistol.glb",
+      "bytes": 11271212,
+      "sha256": "48a549253787896c3ba8c5bc06310c3091c986a715b0b8e75c846ef161196d86"
+    },
+    {
       "path": "assets/models/rifle-optic.glb",
       "bytes": 3811688,
       "sha256": "296c2e9ab86a3c2ea5aac91ecb5ac35be37a3149c32159e4047ed10d4ce9693c"
+    },
+    {
+      "path": "assets/models/rifle-user.glb",
+      "bytes": 13646036,
+      "sha256": "03949288b81821c0cf0ec7ea31d4f1be737320af195ab0ebe392efa35e67d4c1"
     },
     {
       "path": "assets/models/rifle.glb",
@@ -2187,6 +2202,11 @@
       "path": "assets/models/shop-display.glb",
       "bytes": 791612,
       "sha256": "1322659e8de65cfdeac405ef0b6a5dee3cb5332099d6b81948c9ad28a7818f65"
+    },
+    {
+      "path": "assets/models/shotgun-user.glb",
+      "bytes": 11392428,
+      "sha256": "0e8c2408bb77314a3e1727ab201f45abbe7c3d9c68a8c487a8b36e3ee16f3582"
     },
     {
       "path": "assets/models/shotgun.glb",

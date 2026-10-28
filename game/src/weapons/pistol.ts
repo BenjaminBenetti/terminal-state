@@ -1,34 +1,31 @@
 // Pistol staging (targeted pass 2026-10-28, pistol lane).
 //
-// The pistol's mechanics (item, WeaponDef, ammo, finds, audio mapping) are complete, but its real 3D
-// model is still to be made by the user: it will arrive as public/assets/models/pistol.glb with a
-// `pistol` ModelKey entry in assets/manifest.ts. Until then the game ships with the RIFLE as the
-// starting weapon and the shotgun as a seeded map find, and no pistol appears in normal play.
-//
-// TO FLIP: add the real pistol.glb + its manifest entry, then set PISTOL_ART_READY = true. The
-// pistol becomes the starting weapon and BOTH the rifle and the shotgun become seeded map finds.
+// The pistol's mechanics (item, WeaponDef, ammo, finds, audio mapping) were staged ahead of its art. The user's real
+// pistol model is now in: public/assets/models/pistol.glb with the `pistol` ModelKey entry in assets/manifest.ts
+// (derivatives/user-weapons-20261028.json). With PISTOL_ART_READY the pistol is the starting weapon in normal play and
+// BOTH the rifle and the shotgun are seeded map finds; no URL flag is needed.
 
 import * as THREE from 'three';
 
-/** Staging gate: true only once the user's real pistol model is in the asset manifest. */
-export const PISTOL_ART_READY = false;
+/** Staging gate: true now that the user's real pistol model (pistol.glb) is in the asset manifest. */
+export const PISTOL_ART_READY = true;
 
 export type StartWeapon = 'rifle' | 'pistol';
 
-/** Starting weapon: the pistol when its art is ready or in the dev-only `?devpistol=1` mode, else the rifle. */
+/** Starting weapon: the pistol when its art is ready (or in the legacy dev-only `?devpistol=1` mode), else the rifle. */
 export function startWeaponFor(devPistol: boolean, artReady: boolean = PISTOL_ART_READY): StartWeapon {
   return artReady || devPistol ? 'pistol' : 'rifle';
 }
 
-/** `?devpistol=1` (also with qa=1): browser-test the pistol flow with the internal placeholder. */
+/** Legacy `?devpistol=1` flag (no longer needed: the pistol starts by default now that its art is ready). */
 export function devPistolRequested(search: string = typeof location === 'undefined' ? '' : location.search): boolean {
   return new URLSearchParams(search).get('devpistol') === '1';
 }
 
 /**
- * DEV-ONLY PLACEHOLDER — NOT the user's pistol model and NOT final art. A few authored boxes in one
- * dull flat material, used ONLY when the URL has `?devpistol=1` so the pistol flow can be tested
- * before the real model exists. Never used in normal play. Model space like the gun GLBs: faces -Z,
+ * DEV-ONLY PLACEHOLDER — NOT the user's pistol model and NOT final art. A few authored boxes in one dull flat
+ * material, kept only for the pre-art staging path (game.ts uses it solely if PISTOL_ART_READY were false and the URL
+ * had `?devpistol=1`). Never used while the real pistol.glb is loaded. Model space like the gun GLBs: faces -Z,
  * `Grip` and `Muzzle` markers.
  */
 export function makePistolDevPlaceholder(): THREE.Group {

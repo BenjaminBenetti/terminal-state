@@ -149,7 +149,7 @@ export function partKeyClass(key: string, fallback: DamageClass): DamageClass {
 // Generated GLB models (assets/manifest.ts ModelKey)
 
 export const MODEL_KEY_CLASS: Record<string, DamageClass> = {
-  rifle: 'steel', shotgun: 'steel', bench: 'sheetMetal', light: 'sheetMetal', cabinetTall: 'sheetMetal', cabinetLow: 'sheetMetal', sign: 'sheetMetal',
+  rifle: 'steel', shotgun: 'steel', pistol: 'steel', bench: 'sheetMetal', light: 'sheetMetal', cabinetTall: 'sheetMetal', cabinetLow: 'sheetMetal', sign: 'sheetMetal',
   crate: 'wood', turnstile: 'steel', shelf: 'steel', vending: 'sheetMetal', stall: 'sheetMetal',
   item_water: 'plastic', item_cola: 'sheetMetal', item_juice: 'cardboard', item_chocolate: 'food', item_chips: 'food', item_beans: 'sheetMetal', item_noodles: 'food',
   trashCan: 'sheetMetal', shopCounter: 'laminate', shopBackbar: 'steel', shopCooler: 'sheetMetal', shopDisplay: 'steel',

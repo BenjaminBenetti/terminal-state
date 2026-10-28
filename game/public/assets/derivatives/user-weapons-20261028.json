@@ -1,0 +1,322 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "user-weapons-20261028",
+ "task": "studio-user-weapons-20261028-01",
+ "status": "runtime derivatives of user-supplied models; source provider/settings/licence NOT verified (upload names mention Meshy — not asserted); no licence clearance implied",
+ "rebuild": "node --max-old-space-size=12000 tools/asset-pipeline/props/build-user-weapons-iteration10.mjs",
+ "convention": "muzzle -Z, +Y up, metres, centred at the source origin; game = rotateY(-90deg) * uniform scale: (x,y,z) -> (-z*s, y*s, x*s); source +Z (gun LEFT side) faces game -X",
+ "outputs": [
+  {
+   "key": "rifle",
+   "subject": "AR-style carbine with red-dot sight, vertical foregrip, collapsible stock",
+   "uploadName": "Meshy_AI_Worn_Tactical_Rifle_1028062649_texture.glb",
+   "source": {
+    "file": ".cache/user-weapons-20261028/8a96a73b667e489cae56561060a9b2e0.glb (ignored master; byte-exact originals also kept by Main)",
+    "sha256": "3e5c6112be7f3b497063be80e7c024ba7f9ecf40991224edee00528bf468c485",
+    "bytes": 33500044,
+    "triangles": 806834,
+    "vertices": 442037,
+    "extentX": 1.9015
+   },
+   "output": {
+    "file": "game/public/assets/models/rifle-user.glb",
+    "sha256": "03949288b81821c0cf0ec7ea31d4f1be737320af195ab0ebe392efa35e67d4c1",
+    "bytes": 13646036,
+    "triangles": 112946,
+    "vertices": 81814
+   },
+   "lengthM": 0.88,
+   "scale": 0.462788,
+   "simplify": {
+    "ratio": 0.14,
+    "error": 0.0008,
+    "lockBorder": true,
+    "simplifier": "meshoptimizer (MeshoptSimplifier)"
+   },
+   "textures": [
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3944223,
+     "sha256": "97401105bc7d3f4fd81e57f01311e42848a39583f817f94305a76fe4c23a3db3",
+     "note": "embedded source texture, byte-exact"
+    },
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2680188,
+     "sha256": "cb4e4650a072fcb8efc093ffa6e99d1e001e5838b1cba7167c183b4625516a26",
+     "note": "embedded source texture, byte-exact"
+    },
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3046137,
+     "sha256": "c8a027fc11b22bb3cf7186f98e01f85075c1ff0c8bb281d0727507f6ead7c718",
+     "note": "embedded source texture, byte-exact"
+    }
+   ],
+   "markersSource": {
+    "Muzzle": [
+     -0.949,
+     0.096,
+     0
+    ],
+    "Grip": [
+     0.368,
+     -0.162,
+     0
+    ],
+    "Sight": [
+     0.029,
+     0.306,
+     0
+    ],
+    "Eject": [
+     0.147,
+     0.088,
+     -0.04
+    ]
+   },
+   "markersGame": {
+    "Muzzle": [
+     0,
+     0.04443,
+     -0.43919
+    ],
+    "Grip": [
+     0,
+     -0.07497,
+     0.17031
+    ],
+    "Sight": [
+     0,
+     0.14161,
+     0.01342
+    ],
+    "Eject": [
+     0.01851,
+     0.04073,
+     0.06803
+    ]
+   }
+  },
+  {
+   "key": "shotgun",
+   "subject": "pump-action shotgun with magazine tube, pump fore-end and full stock",
+   "uploadName": "Meshy_AI_Rustbound_Repeater_1028062608_texture.glb",
+   "source": {
+    "file": ".cache/user-weapons-20261028/ee901a08d78a4d9f948698bf0328e62a.glb (ignored master; byte-exact originals also kept by Main)",
+    "sha256": "b1490e3f9429e585648e1ac272af3998874cdc6271b9b904cc7e5e6f2bf2e48e",
+    "bytes": 18934008,
+    "triangles": 327642,
+    "vertices": 180478,
+    "extentX": 1.9031
+   },
+   "output": {
+    "file": "game/public/assets/models/shotgun-user.glb",
+    "sha256": "0e8c2408bb77314a3e1727ab201f45abbe7c3d9c68a8c487a8b36e3ee16f3582",
+    "bytes": 11392428,
+    "triangles": 78632,
+    "vertices": 52932
+   },
+   "lengthM": 0.98,
+   "scale": 0.51495,
+   "simplify": {
+    "ratio": 0.24,
+    "error": 0.0008,
+    "lockBorder": true,
+    "simplifier": "meshoptimizer (MeshoptSimplifier)"
+   },
+   "textures": [
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 4238372,
+     "sha256": "d9993728123ef0f5aac5643e438f0f3120d72bf57ee04bea177907e4a2006ce2",
+     "note": "embedded source texture, byte-exact"
+    },
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2024812,
+     "sha256": "e277346567ca2b7370e4cb73cf0b29cd004e4b79ffa3fdb5434fed7f83b0c479",
+     "note": "embedded source texture, byte-exact"
+    },
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2961543,
+     "sha256": "22ac70fac18b980a13b000bdf58cacb548e6dc2e2389f5b9c8f55ed721bb67d4",
+     "note": "embedded source texture, byte-exact"
+    }
+   ],
+   "markersSource": {
+    "Muzzle": [
+     -0.941,
+     0.169,
+     0
+    ],
+    "Grip": [
+     0.412,
+     0.059,
+     0
+    ],
+    "Sight": [
+     0.257,
+     0.218,
+     0
+    ],
+    "Eject": [
+     0.059,
+     0.132,
+     -0.05
+    ]
+   },
+   "markersGame": {
+    "Muzzle": [
+     0,
+     0.08703,
+     -0.48457
+    ],
+    "Grip": [
+     0,
+     0.03038,
+     0.21216
+    ],
+    "Sight": [
+     0,
+     0.11226,
+     0.13234
+    ],
+    "Eject": [
+     0.02575,
+     0.06797,
+     0.03038
+    ]
+   }
+  },
+  {
+   "key": "pistol",
+   "subject": "compact striker-style semi-automatic pistol",
+   "uploadName": "Meshy_AI_Worn_Tactical_Pistol_1028062601_texture.glb",
+   "source": {
+    "file": ".cache/user-weapons-20261028/97d4f008457a4b77925eb5439d66f866.glb (ignored master; byte-exact originals also kept by Main)",
+    "sha256": "e3f4a6626ae6c369c3bdf59ab89abf3a5b07a99373d1291c748ec888f28e5ae5",
+    "bytes": 27028924,
+    "triangles": 618414,
+    "vertices": 329965,
+    "extentX": 1.9027
+   },
+   "output": {
+    "file": "game/public/assets/models/pistol.glb",
+    "sha256": "48a549253787896c3ba8c5bc06310c3091c986a715b0b8e75c846ef161196d86",
+    "bytes": 11271212,
+    "triangles": 80386,
+    "vertices": 54376
+   },
+   "lengthM": 0.185,
+   "scale": 0.097229,
+   "simplify": {
+    "ratio": 0.13,
+    "error": 0.0008,
+    "lockBorder": true,
+    "simplifier": "meshoptimizer (MeshoptSimplifier)"
+   },
+   "textures": [
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3768326,
+     "sha256": "ad87241d6ae33fe53864f268aeae0d00bca0d07250a9979bb858dccd987b95a0",
+     "note": "embedded source texture, byte-exact"
+    },
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2277625,
+     "sha256": "60367906bd928eb35b41bb2e645109fa1e1d3853b27d3f61456faacfcc35a14c",
+     "note": "embedded source texture, byte-exact"
+    },
+    {
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3000819,
+     "sha256": "dd17b61828ad6254d0168930ab3a2187670c44c1544d2c5333b5a32a564ad991",
+     "note": "embedded source texture, byte-exact"
+    }
+   ],
+   "markersSource": {
+    "Muzzle": [
+     -0.941,
+     0.472,
+     0
+    ],
+    "Grip": [
+     0.559,
+     -0.212,
+     0
+    ],
+    "Sight": [
+     0.743,
+     0.685,
+     0
+    ],
+    "Eject": [
+     -0.088,
+     0.568,
+     -0.12
+    ]
+   },
+   "markersGame": {
+    "Muzzle": [
+     0,
+     0.04589,
+     -0.09149
+    ],
+    "Grip": [
+     0,
+     -0.02061,
+     0.05435
+    ],
+    "Sight": [
+     0,
+     0.0666,
+     0.07224
+    ],
+    "Eject": [
+     0.01167,
+     0.05523,
+     -0.00856
+    ]
+   }
+  }
+ ]
+}

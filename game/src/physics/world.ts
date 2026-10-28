@@ -52,8 +52,10 @@ export const SHELL_EJECT_DELAY = 0.46; // end of the pump back-stroke (Sfx.shot 
 export const EJECTION_PORTS: Record<string, {pos: THREE.Vector3; dir: THREE.Vector3; kind: CasingKind}> = {
   rifle: {pos: new THREE.Vector3(0.0294, 0.1217, -0.1085), dir: new THREE.Vector3(1, 0.55, 0.22).normalize(), kind: 'rifle'},
   shotgun: {pos: new THREE.Vector3(0.0269, 0.0131, -0.1275), dir: new THREE.Vector3(1, 0.5, 0.12).normalize(), kind: 'shell'},
-  // Pistol lane: slide port right of the slide (dev placeholder geometry; re-measure on the real pistol.glb). Reuses the
-  // rifle brass casing kind (same pooled mesh; a 9 mm case is smaller, but a separate mesh is not worth a pool).
+  // Pistol lane: slide port right of the slide (dev placeholder geometry). Reuses the rifle brass casing kind (same
+  // pooled mesh; a 9 mm case is smaller, but a separate mesh is not worth a pool).
+  // 2026-10-28 user weapon models: a held model's `Eject` marker (EjectionPortSource.ejectionMarker) overrides `pos`;
+  // these constants remain the fallback for a model without one. `dir` / `kind` always come from here.
   pistol: {pos: new THREE.Vector3(0.016, 0.058, -0.045), dir: new THREE.Vector3(1, 0.7, 0.15).normalize(), kind: 'rifle'},
 };
 
@@ -66,6 +68,8 @@ export function killImpulseStrength(weaponId: string, pelletsHit: number, pellet
 /** Provided by Viewmodel.ejectionPort (structural, keeps this module testable without assets). */
 export interface EjectionPortSource {
   ejectionPort(main: THREE.PerspectiveCamera, itemId: string, pos: THREE.Vector3, dir: THREE.Vector3, outPos: THREE.Vector3, outDir: THREE.Vector3): boolean;
+  /** The gun model's `Eject` marker in the same grip-relative frame as EJECTION_PORTS[..].pos, or null without one. */
+  ejectionMarker?(itemId: string): THREE.Vector3 | null;
 }
 
 export interface PhysicsAudio extends CasingAudio, PhysAudio {
@@ -295,7 +299,7 @@ export class PhysicsSystem implements BodyHost {
 
   private ejectNow(weaponId: string, port: EjectionPortSource, camera: THREE.PerspectiveCamera, shooter: {vx: number; vy?: number; vz: number}): void {
     const spec = EJECTION_PORTS[weaponId];
-    if (!port.ejectionPort(camera, weaponId, spec.pos, spec.dir, this.tmpPos, this.tmpDir)) return;
+    if (!port.ejectionPort(camera, weaponId, port.ejectionMarker?.(weaponId) ?? spec.pos, spec.dir, this.tmpPos, this.tmpDir)) return;
     // Pull the port back toward the eye if it lies inside a wall/prop (player hugging cover).
     const q = this.query;
     if (q) {

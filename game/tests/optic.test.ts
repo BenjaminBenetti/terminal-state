@@ -20,7 +20,9 @@ const io = new NodeIO();
 const optDoc = await io.read(file('models/rifle-optic.glb'));
 const oldDoc = await io.read(file('models/rifle.glb'));
 const prov = JSON.parse(readFileSync(file('derivatives/rifle-optic-iteration04.json'), 'utf8'));
-const spec = WEAPONS.rifle.view.optic!;
+// 2026-10-28: the rifle def no longer carries the iteration-04 optic spec (the user's red-dot rifle has no see-through
+// optic parts; ADS sights via its `Sight` marker, tests/weapon-sights.test.ts). The optic module + rifle-optic.glb stay.
+const spec = {eyeRelief: 0.105};
 
 const node = (d: Document, name: string) => d.getRoot().listNodes().find(n => n.getName() === name);
 const v3 = (a: number[]) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -150,12 +152,29 @@ describe('ADS alignment math', () => {
   });
 });
 
-describe('Viewmodel with rifle-optic.glb', async () => {
+describe('Viewmodel with rifle-optic.glb (retired optic spec)', async () => {
   const [rifle, shotgun] = await Promise.all([gltfOf('models/rifle-optic.glb'), gltfOf('models/shotgun.glb')]);
   const state = (aiming: boolean) => ({moving: 0, sprint: false, aiming, lookDX: 0, lookDY: 0, reloading: false, reloadProgress: 0, using: false, useProgress: 0, bobT: 0});
 
-  it('wires the lens (depth mask + shader), aligns ADS on the axis, and keeps hip + shotgun iron-sight poses', () => {
+  it('the rifle def has no optic spec now, so rifle-optic.glb is not wired and markerless models use the legacy aim', () => {
+    expect(WEAPONS.rifle.view.optic).toBeUndefined();
     const vm = new Viewmodel({rifle, shotgun}, {});
+    const pivot = vm.camera.children.find(c => c.type === 'Group')!;
+    vm.setItem('rifle');
+    for (let i = 0; i < 60; i++) vm.update(0.05, state(true));
+    expect(vm.heldOptic).toBeNull();
+    expect(vm.opticAim).toBe(0);
+    pivot.position.toArray().forEach((v, k) => expect(v).toBeCloseTo(WEAPONS.rifle.view.aim[k], 6)); // no Sight marker in rifle-optic.glb
+    vm.setItem('shotgun');
+    for (let i = 0; i < 60; i++) vm.update(0.05, state(true));
+    pivot.position.toArray().forEach((v, k) => expect(v).toBeCloseTo(WEAPONS.shotgun.view.aim[k], 6)); // no Sight marker in shotgun.glb
+  });
+
+  it('the optic path still works when a def carries a spec (iteration-04 wiring kept, unused by the shipped defs)', () => {
+    const saved = WEAPONS.rifle.view.optic;
+    WEAPONS.rifle.view.optic = spec;
+    let vm: InstanceType<typeof Viewmodel>;
+    try { vm = new Viewmodel({rifle, shotgun}, {}); } finally { WEAPONS.rifle.view.optic = saved; }
     const pivot = vm.camera.children.find(c => c.type === 'Group')!;
     vm.setItem('rifle');
     for (let i = 0; i < 40; i++) vm.update(0.05, state(false));

@@ -20,6 +20,20 @@ interface HeldModel {
   /** Iteration 04: see-through optic (rifle-optic.glb) and its rear-glass centre relative to the Grip pivot. */
   optic?: RifleOptic;
   opticPoint?: THREE.Vector3;
+  /** User weapon models (2026-10-28): `Sight` / `Eject` markers relative to the Grip pivot (holder frame), when present. */
+  sightPoint?: THREE.Vector3;
+  eject?: THREE.Vector3;
+}
+
+/** Sight relief used when a model has a `Sight` marker but its WeaponDef sets no `view.sightRelief`. */
+const SIGHT_RELIEF_DEFAULT = 0.3;
+
+/**
+ * Sight-based ADS pivot (Grip) position in camera space: puts the `Sight` marker on the camera axis `relief` m in
+ * front of the eye, i.e. aim = (0, 0, -relief) - (Sight - Grip). `sightPoint` = Sight relative to the Grip pivot.
+ */
+export function sightAimPosition(sightPoint: THREE.Vector3, relief: number, out = new THREE.Vector3()): THREE.Vector3 {
+  return out.set(0, 0, -relief).sub(sightPoint);
 }
 
 const ease = (t: number) => t * t * (3 - 2 * t);
@@ -67,7 +81,7 @@ export class Viewmodel {
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpV = new THREE.Vector3();
 
-  /** Pistol lane: `pistol` is optional (no model until PISTOL_ART_READY; `?devpistol=1` passes the dev placeholder). A gun without a model is simply not shown. */
+  /** Pistol lane: `pistol` is optional (game.ts passes the real pistol.glb once PISTOL_ART_READY). A gun without a model is simply not shown. */
   constructor(models: {rifle: GLTF; shotgun: GLTF; pistol?: Pick<GLTF, 'scene'>}, consumables: Record<string, THREE.Object3D>) {
     this.scene.add(this.hemi, this.key, this.camera, this.flashLight);
     this.key.position.set(-1, 2, 1);
@@ -81,8 +95,12 @@ export class Viewmodel {
       const muzzleObj = root.getObjectByName('Muzzle');
       const gp = grip ? grip.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3();
       const mp = muzzleObj ? muzzleObj.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 0, -def.view.length / 2);
-      // see-through optic (model space, before the Grip shift); without one the legacy view.aim is used
+      // see-through optic (model space, before the Grip shift); without one a `Sight` marker drives ADS, else the legacy view.aim
       const optic = def.view.optic ? RifleOptic.attach(root, def.view.optic) : null;
+      const sightObj = optic ? undefined : root.getObjectByName('Sight');
+      const sightPoint = sightObj ? sightObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
+      const ejectObj = root.getObjectByName('Eject');
+      const eject = ejectObj ? ejectObj.getWorldPosition(new THREE.Vector3()).sub(gp) : undefined;
       const holder = new THREE.Group();
       root.position.sub(gp);
       holder.add(root);
@@ -90,8 +108,10 @@ export class Viewmodel {
       holder.visible = false;
       this.pivot.add(holder);
       const opticPoint = optic ? optic.rear.sub(gp) : undefined;
-      const aim = optic ? opticAimPosition(opticPoint!, def.view.optic!) : new THREE.Vector3(...def.view.aim);
-      this.items.set(id, {root: holder, muzzle: mp.sub(gp), def, hip: new THREE.Vector3(...def.view.hip), aim, hipYaw: def.view.hipYaw, hipPitch: def.view.hipPitch, hipRoll: def.view.hipRoll, optic: optic?.optic, opticPoint});
+      const aim = optic ? opticAimPosition(opticPoint!, def.view.optic!)
+        : sightPoint ? sightAimPosition(sightPoint.clone().setY(sightPoint.y + (def.view.sightLift ?? 0)), def.view.sightRelief ?? SIGHT_RELIEF_DEFAULT) // sightLift: eye just over a solid optic/receiver
+        : new THREE.Vector3(...def.view.aim);
+      this.items.set(id, {root: holder, muzzle: mp.sub(gp), def, hip: new THREE.Vector3(...def.view.hip), aim, hipYaw: def.view.hipYaw, hipPitch: def.view.hipPitch, hipRoll: def.view.hipRoll, optic: optic?.optic, opticPoint, sightPoint, eject});
     }
     for (const [id, obj] of Object.entries(consumables)) {
       const holder = new THREE.Group();
@@ -189,6 +209,11 @@ export class Viewmodel {
    * screen so a world-space casing appears where this overlay draws the port despite the narrower
    * viewmodel FOV. Returns false unless `itemId` is the held item.
    */
+  /** User weapon models: the gun's `Eject` marker in the same grip-relative holder frame as EJECTION_PORTS, or null without one. */
+  ejectionMarker(itemId: string): THREE.Vector3 | null {
+    return this.items.get(itemId)?.eject ?? null;
+  }
+
   ejectionPort(main: THREE.PerspectiveCamera, itemId: string, pos: THREE.Vector3, dir: THREE.Vector3, outPos: THREE.Vector3, outDir: THREE.Vector3): boolean {
     const it = this.current === itemId ? this.items.get(itemId) : undefined;
     if (!it) return false;

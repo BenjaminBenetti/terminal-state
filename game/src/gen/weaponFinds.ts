@@ -1,8 +1,8 @@
 // Seeded weapon finds (targeted pass 2026-10-28, pistol lane).
 //
 // The weapons the player does NOT start with are map finds, not a guaranteed spawn-side gift:
-//  - start 'rifle' (shipped default while PISTOL_ART_READY is false): the SHOTGUN is a find;
-//  - start 'pistol' (PISTOL_ART_READY or ?devpistol=1): the SHOTGUN and the RIFLE are finds.
+//  - start 'rifle' (generator default / gate-off fallback if PISTOL_ART_READY were false): the SHOTGUN is a find;
+//  - start 'pistol' (shipped default since the user's pistol.glb landed, PISTOL_ART_READY): the SHOTGUN and the RIFLE are finds.
 // Per non-start weapon: 0 copies in ~6 % of draws, 1 in ~80 %, 2 in ~14 % (never more than 2), each in a
 // plausible back-of-house room (security office / agent control room / gun-locker fronts, locker & staff
 // rooms, maintenance stores and workshops, the platform-end work zones) on any storey, on a flat walkable

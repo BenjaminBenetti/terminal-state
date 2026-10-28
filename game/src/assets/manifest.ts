@@ -1,7 +1,7 @@
 // Runtime asset manifest. Every file here is a derivative under public/assets/ documented in
 // public/assets/derivatives/*.json (sources, hashes, pipeline, limitations).
 
-export type ModelKey = 'rifle' | 'shotgun' | 'bench' | 'light' | 'cabinetTall' | 'cabinetLow' | 'sign' | 'crate' | 'turnstile'
+export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'bench' | 'light' | 'cabinetTall' | 'cabinetLow' | 'sign' | 'crate' | 'turnstile'
   // Iteration 06 zombie wardrobe (ai/outfits.ts + ai/wardrobe.ts): bodies (derivatives/zombie-body-*.json) + slot wearables fitted per body (derivatives/outfit-*.json; summary zombie-wardrobe.json).
   // Iteration 07: refitted outside the posed body + cranium-fitted hats; the puffer fails the fit gate on every body (no model key).
   | 'zombieBody_lastshift' | 'zombieBody_courier' | 'zombieBody_agent' | 'zombieBody_scavenger' | 'zombieBody_heavyset' | 'zombieBody_tall'
@@ -42,8 +42,11 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   outfit_gasmask: {url: 'assets/models/outfit-gasmask.glb', bytes: 491_000},
   outfit_respirator: {url: 'assets/models/outfit-respirator.glb', bytes: 393_000},
   creature_ratdog: {url: 'assets/models/creature-ratdog.glb', bytes: 1_240_000}, // iteration 07 Lane Q: new quadruped rig + procedural clips (unapproved)
-  rifle: {url: 'assets/models/rifle-optic.glb', bytes: 3_810_000}, // iteration 04: see-through optic derivative (derivatives/rifle-optic-iteration04.json); rifle.glb unchanged
-  shotgun: {url: 'assets/models/shotgun.glb', bytes: 2_500_000},
+  // User weapon models (2026-10-28): runtime derivatives of the user-supplied rifle (red-dot sight), pump shotgun and compact
+  // pistol. Muzzle -Z, +Y up, metres, Grip/Muzzle/Sight/Eject markers. rifle.glb / rifle-optic.glb / shotgun.glb stay on disk, unused.
+  rifle: {url: 'assets/models/rifle-user.glb', bytes: 13_646_000},
+  shotgun: {url: 'assets/models/shotgun-user.glb', bytes: 11_392_000},
+  pistol: {url: 'assets/models/pistol.glb', bytes: 11_271_000},
   bench: {url: 'assets/models/bench.glb', bytes: 900_000},
   // Iteration 04: 894-tri fixture re-baked from the dense master (derivatives/light-lod-iteration04.json) replaces the
   // iteration-03 sloppy LOD whose triangles spanned unrelated atlas charts (mangled texture). light.glb/light-lod.glb unchanged.

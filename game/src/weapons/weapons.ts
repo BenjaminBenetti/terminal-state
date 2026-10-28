@@ -46,8 +46,13 @@ export interface WeaponDef {
    * OpticGlassRear + OpticRear anchor) ADS is derived from it instead — the eye on the optic axis
    * `eyeRelief` behind the rear glass (weapons/optic.ts). `aim` stays the fallback for a model
    * without one (the original opaque rifle.glb: optic top ~0.28 m above the grip, sight over it).
+   * `sightRelief` (user weapon models, 2026-10-28): when the loaded model has a `Sight` marker (and no see-through
+   * optic) ADS puts that sight point on the camera axis `sightRelief` m in front of the eye:
+   * aim = (0, 0, -sightRelief) - (Sight + (0, sightLift, 0) - Grip). `sightLift` (m) puts the eye line just OVER a solid
+   * part: the user rifle's red dot has an opaque lens, so the optic sits just under the crosshair instead of filling the view.
+   * `aim` stays the fallback for a model without a Sight marker.
    */
-  view: {model: 'rifle' | 'shotgun' | 'pistol'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec};
+  view: {model: 'rifle' | 'shotgun' | 'pistol'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
 }
 
 export const WEAPONS: Record<string, WeaponDef> = {
@@ -58,7 +63,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
     reload: {kind: 'magazine', time: 2.1, emptyTime: 2.55},
     recoil: {pitch: 0.012, yaw: 0.006, kick: 0.035, recover: 9},
     equipTime: 0.55, aimFov: 52, moveMult: 0.95, noise: 30, sound: 'rifle',
-    view: {model: 'rifle', hip: [0.245, -0.41, -0.7], aim: [0.0, -0.283, -0.42], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 0.92, optic: {eyeRelief: 0.105}},
+    // 2026-10-28: the user's red-dot rifle has no see-through optic parts, so the iteration-04 `optic` spec is retired
+    // (weapons/optic.ts stays for rifle-optic.glb); ADS sights through the red-dot lens centre (`Sight`) instead.
+    view: {model: 'rifle', hip: [0.245, -0.41, -0.7], aim: [0.0, -0.283, -0.42], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 0.92, sightRelief: 0.26, sightLift: 0.04},
   },
   shotgun: {
     id: 'shotgun', itemId: 'shotgun', ammoItem: 'ammo_shells', magazine: 6, auto: false, interval: 0.82,
@@ -67,10 +74,10 @@ export const WEAPONS: Record<string, WeaponDef> = {
     reload: {kind: 'shell', start: 0.38, each: 0.48, end: 0.42},
     recoil: {pitch: 0.06, yaw: 0.015, kick: 0.09, recover: 6},
     equipTime: 0.6, aimFov: 60, moveMult: 0.92, noise: 38, sound: 'shotgun',
-    view: {model: 'shotgun', hip: [0.235, -0.27, -0.66], aim: [0.0, -0.095, -0.45], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 1.0},
+    view: {model: 'shotgun', hip: [0.235, -0.27, -0.66], aim: [0.0, -0.095, -0.45], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 1.0, sightRelief: 0.30, sightLift: 0.022},
   },
-  // Targeted pass 2026-10-28 (pistol lane): compact semi-auto sidearm, 9 mm (ammo_pistol). Starting weapon once
-  // its real model is in (weapons/pistol.ts PISTOL_ART_READY); view offsets suit a short pistol held out in front.
+  // Targeted pass 2026-10-28 (pistol lane): compact semi-auto sidearm, 9 mm (ammo_pistol). The starting weapon now that
+  // the user's pistol.glb is in (weapons/pistol.ts PISTOL_ART_READY); hip brings the 0.185 m pistol in close at the grip.
   pistol: {
     id: 'pistol', itemId: 'pistol', ammoItem: 'ammo_pistol', magazine: 15, auto: false, interval: 0.16,
     damage: 17, pellets: 1, spreadHip: 0.022, spreadAim: 0.006, spreadMove: 0.025,
@@ -78,7 +85,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     reload: {kind: 'magazine', time: 1.4, emptyTime: 1.65},
     recoil: {pitch: 0.016, yaw: 0.005, kick: 0.03, recover: 11},
     equipTime: 0.35, aimFov: 58, moveMult: 1.0, noise: 24, sound: 'pistol',
-    view: {model: 'pistol', hip: [0.17, -0.2, -0.42], aim: [0.0, -0.08, -0.36], hipYaw: 0.08, hipPitch: 0.03, hipRoll: -0.04, length: 0.2},
+    view: {model: 'pistol', hip: [0.16, -0.17, -0.36], aim: [0.0, -0.08, -0.36], hipYaw: 0.08, hipPitch: 0.03, hipRoll: -0.04, length: 0.2, sightRelief: 0.32},
   },
 };
 

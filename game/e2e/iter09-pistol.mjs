@@ -1,5 +1,5 @@
-// Iteration-09 short browser check of the STAGED pistol flow (?qa=1&devpistol=1: dev-only placeholder visual, NOT the
-// user's model) plus the normal default loadout (no devpistol). Real input: frame-synced mouse fire, R reload, G drop,
+// Iteration-09 short browser check of the pistol flow (?qa=1&devpistol=1 — since 2026-10-28 the flag is redundant and the
+// real user pistol.glb is shown, not the placeholder) plus the normal default loadout (no devpistol). Real input: frame-synced mouse fire, R reload, G drop,
 // E pick up, digit slot select. QA hooks only aim/read state.
 // Usage: node game/e2e/iter09-pistol.mjs OUTDIR [--dist=dist/game] [--seed=1A2B3C]
 import fs from 'node:fs';
@@ -47,13 +47,14 @@ await withBrowserLock(async () => {
     const finds0 = await ev(() => window.__LL.weaponFinds?.() ?? null);
     await shot('a1-default-start');
     const nearShotgun = (finds0?.finds ?? finds0 ?? []).filter?.(f => f.itemId === 'shotgun' && (f.distFromSpawn ?? f.dist ?? 99) < 15) ?? [];
-    step('default start: rifle held (pistol staged until the user model exists); no pistol finds; no shotgun beside spawn', h0?.itemId === 'rifle' && !JSON.stringify(finds0 ?? '').includes('"pistol"') && nearShotgun.length === 0, {held: h0, finds: finds0});
+    // 2026-10-28: the user's pistol.glb is in (PISTOL_ART_READY), so the normal default now starts with the real pistol.
+    step('default start: pistol held (user model, no devpistol flag); no pistol finds; no shotgun beside spawn', h0?.itemId === 'pistol' && !JSON.stringify(finds0 ?? '').includes('"pistol"') && nearShotgun.length === 0, {held: h0, finds: finds0});
 
     // B) devpistol: pistol start + real input weapon flow
     step('devpistol build loads to title', !!(await start('&devpistol=1')));
     let h = await held();
     await shot('b1-devpistol-start');
-    step('devpistol: starts holding the pistol (dev-only placeholder visual)', h?.itemId === 'pistol', {held: h, snapshotHeld: (await snap()).held});
+    step('devpistol: starts holding the pistol (real pistol.glb; the flag is redundant now)', h?.itemId === 'pistol', {held: h, snapshotHeld: (await snap()).held});
     const r0 = await ammo('ammo_pistol');
     const m0 = h?.mag;
     for (let k = 0; k < 3; k++) { await page.mouse.down(); await frames(2); await page.mouse.up(); await frames(14); }

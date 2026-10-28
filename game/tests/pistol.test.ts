@@ -34,7 +34,7 @@ describe('pistol weapon', () => {
     expect(p.noise).toBeLessThan(r.noise);
     expect(itemDef('pistol')).toMatchObject({kind: 'weapon', short: 'Pistol', weaponId: 'pistol', stackMax: 1});
     expect(itemDef('ammo_pistol')).toMatchObject({kind: 'ammo', stackMax: ITEMS.ammo_rifle.stackMax});
-    expect(ICONS[itemDef('pistol').icon]).toContain('<svg'); // fallback HUD icon while it has no model
+    expect(ICONS[itemDef('pistol').icon]).toContain('<svg'); // HUD silhouette (and inventory fallback if the model fails)
     expect(EJECTION_PORTS.pistol.kind).toBe('rifle'); // reuses the brass casing kind
     // rifle and shotgun unchanged
     expect(WEAPONS.rifle).toMatchObject({magazine: 30, auto: true, damage: 24, ammoItem: 'ammo_rifle'});
@@ -101,12 +101,14 @@ describe('pistol weapon', () => {
 });
 
 describe('pistol staging gate', () => {
-  it('ships with the gate off and no pistol model; rifle start unless devpistol / the gate', () => {
-    expect(PISTOL_ART_READY).toBe(false);
-    expect((MODEL_FILES as Record<string, unknown>).pistol).toBeUndefined();
-    expect(startWeaponFor(false)).toBe('rifle');
+  it('ships with the gate on and the real pistol model; pistol start without any URL flag', () => {
+    expect(PISTOL_ART_READY).toBe(true);
+    expect(MODEL_FILES.pistol.url).toBe('assets/models/pistol.glb');
+    expect(fs.existsSync(path.join(ROOT, 'game/public', MODEL_FILES.pistol.url))).toBe(true);
+    expect(Math.abs(fs.statSync(path.join(ROOT, 'game/public', MODEL_FILES.pistol.url)).size - MODEL_FILES.pistol.bytes)).toBeLessThan(20_000);
+    expect(startWeaponFor(false)).toBe('pistol'); // normal play: no ?devpistol=1 needed
     expect(startWeaponFor(true)).toBe('pistol');
-    expect(startWeaponFor(false, true)).toBe('pistol');
+    expect(startWeaponFor(false, false)).toBe('rifle'); // gate-off fallback only
     expect(devPistolRequested('?qa=1&devpistol=1')).toBe(true);
     expect(devPistolRequested('?qa=1')).toBe(false);
     const ph = makePistolDevPlaceholder();
@@ -115,15 +117,17 @@ describe('pistol staging gate', () => {
     expect(ph.getObjectByName('Muzzle')).toBeTruthy();
   });
 
-  it('gate off → rifle start: shotgun is a find, no rifle/pistol in the layout; pistol start → rifle + shotgun finds', () => {
+  it('rifle start (generator default / gate-off fallback): shotgun is a find, no rifle/pistol in the layout; pistol start (normal play) → rifle + shotgun finds', () => {
     const seed = 424242;
-    const rifleL = generateStation(seed);
+    const rifleL = generateStation(seed, {startWeapon: startWeaponFor(false, false)});
     expect(rifleL.startWeapon).toBe('rifle');
     expect(rifleL.pickups.some(p => p.itemId === 'pistol' || p.itemId === 'ammo_pistol')).toBe(false);
     expect(rifleL.pickups.some(p => p.itemId === 'rifle')).toBe(false);
     expect(validateLayout(rifleL)).toEqual([]);
-    const pistolL = generateStation(seed, {startWeapon: 'pistol'});
+    const pistolL = generateStation(seed, {startWeapon: startWeaponFor(false)}); // what game.ts passes in normal play
     expect(pistolL.startWeapon).toBe('pistol');
+    expect(pistolL.pickups.some(p => p.itemId === 'rifle') || pistolL.pickups.some(p => p.itemId === 'shotgun')).toBe(true);
+    expect(validateLayout(pistolL)).toEqual([]);
     expect(pistolL.pickups.some(p => p.itemId === 'pistol')).toBe(false);
     expect(pistolL.pickups.some(p => p.itemId === 'ammo_pistol')).toBe(true);
     expect(findWeaponsFor('pistol')).toEqual(['shotgun', 'rifle']);

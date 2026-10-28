@@ -68,9 +68,9 @@ export class Game {
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
   readonly propModels = new PropModelLibrary(P7_FILES);
   private prepared: {seed: number; layout: StationLayout} | null = null;
-  /** Pistol lane: `?devpistol=1` starts with the pistol (dev placeholder model) before its real art exists. */
+  /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
-  /** Starting weapon: the pistol once PISTOL_ART_READY (or in devpistol mode), else the rifle. Generation receives it. */
+  /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */
   readonly startWeapon: StartWeapon = startWeaponFor(this.devPistol);
   mats!: WorldMaterials;
   viewmodel!: Viewmodel;
@@ -193,8 +193,9 @@ export class Game {
       o.traverse(x => { const mm = x as THREE.Mesh; if (mm.isMesh) mm.frustumCulled = false; });
       consumables[id] = o;
     }
-    // Pistol lane: the real pistol.glb once PISTOL_ART_READY; the internal dev placeholder only with ?devpistol=1; else none.
-    const pistolGltf = PISTOL_ART_READY ? (m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>).pistol
+    // Pistol lane: the user's real pistol.glb (PISTOL_ART_READY), like the rifle/shotgun: viewmodel, item icon and pickups.
+    // The dev placeholder is only reachable if the gate were off (pre-art staging with ?devpistol=1); never with the real model.
+    const pistolGltf = PISTOL_ART_READY ? m.pistol
       : this.devPistol ? ({scene: makePistolDevPlaceholder()} as unknown as import('three/addons/loaders/GLTFLoader.js').GLTF) : undefined;
     const guns = {rifle: m.rifle, shotgun: m.shotgun, ...(pistolGltf ? {pistol: pistolGltf} : {})};
     this.viewmodel = new Viewmodel(guns, consumables);
@@ -314,7 +315,7 @@ export class Game {
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
 
     this.inv = new Inventory();
-    // Pistol lane: start with the pistol (15 + 45 x 9 mm) once its art is ready / in devpistol mode, else the rifle as before.
+    // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
     if (this.startWeapon === 'pistol') this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('pistol', 1, WEAPONS.pistol.magazine));
     else this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('rifle', 1, 30));
     this.inv.set({bar: 'hotbar', index: 4}, this.inv.makeStack('bandage', 1));
