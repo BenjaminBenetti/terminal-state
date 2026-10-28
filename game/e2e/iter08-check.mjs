@@ -285,29 +285,6 @@ await withBrowserLock(async () => {
       // wall zones: platform, service, lower, tunnel, concourse — aim at faces published by the builder
       const faces = await ev(() => { const f = window.__game.world?.wallFaces ?? []; const pick = {}; for (const w of f) { if (w.slope) continue; const len = Math.hypot(w.x1 - w.x0, w.z1 - w.z0); if (len < 4 || w.y1 - w.y0 < 1.5) continue; if (!pick[w.zone] || Math.random() < 0.15) pick[w.zone] = {zone: w.zone, level: w.level, finish: w.finish, x: (w.x0 + w.x1) / 2, z: (w.z0 + w.z1) / 2, nx: w.nx, nz: w.nz, y0: w.y0, y1: w.y1}; } return Object.values(pick); });
       // real loot: still highlighted + pickable after a blast (aim at a lot / lifted pickup nearby, ordinary [E])
-      const takeRealLoot = async () => {
-      const lot = await ev(() => {
-        const g = window.__game, p = g.player, cm = g.containers;
-        let best = null;
-        for (const pk of g.pickups.list) { if (Math.abs(pk.y - p.y) > 2.5) continue; const d = Math.hypot(pk.x - p.x, pk.z - p.z); if (d < 4 && (!best || d < best.d)) best = {pickup: pk.stack.itemId, at: {x: pk.x, y: pk.y + 0.05, z: pk.z}, d}; }
-        for (const h of cm.all) {
-          if (h.group !== 'surface' || Math.hypot(h.prop.x - p.x, h.prop.z - p.z) > 6 || Math.abs(h.prop.y - p.y) > 2.5) continue;
-          for (const l of h.state.lots) { const at = cm.lotPoint(h, l); if (at && (!best || Math.hypot(at.x - p.x, at.z - p.z) < best.d)) best = {serial: h.serial, id: l.id, itemId: l.itemId, at, d: Math.hypot(at.x - p.x, at.z - p.z)}; }
-        }
-        return best;
-      });
-      if (lot) {
-        const inv0 = await ev(() => { const g = window.__game; return [...g.inv.hotbar, ...g.inv.pack].reduce((n, s) => n + (s ? s.count : 0), 0); });
-        await ev(l => window.__LL.lookAt(l.at.x, l.at.y, l.at.z), lot); await frames(6);
-        const prompt = await page.$eval('#prompt', e => (e.offsetParent ? e.textContent : '')).catch(() => null);
-        await shot('17-real-loot-highlight-after-blast');
-        await page.keyboard.press('KeyE'); await frames(20);
-        const inv1 = await ev(() => { const g = window.__game; return [...g.inv.hotbar, ...g.inv.pack].reduce((n, s) => n + (s ? s.count : 0), 0); });
-        return {lot, prompt, inv: [inv0, inv1]};
-      }
-      return {lot: null, note: 'no real loot within reach'};
-      };
-      let realLoot = null;
       const shots = [];
       for (const f of faces.slice(0, 8)) {
         const ok = await ev(w => window.__LL.teleport(w.x + w.nx * 2.6, w.z + w.nz * 2.6, undefined, w.level), f);
@@ -451,6 +428,29 @@ await withBrowserLock(async () => {
         }
         return {level, tag, shelf: sh, promptOnShelf: prompt, targetOnShelf: target, floorAim, ammo: [ammo0, ammo1], before: m0, mid, after: m1, liftedLots: [dyn0, dyn1], res: await resources(`after-shotgun-${tag}`)};
       };
+      const takeRealLoot = async () => {
+      const lot = await ev(() => {
+        const g = window.__game, p = g.player, cm = g.containers;
+        let best = null;
+        for (const pk of g.pickups.list) { if (Math.abs(pk.y - p.y) > 2.5) continue; const d = Math.hypot(pk.x - p.x, pk.z - p.z); if (d < 4 && (!best || d < best.d)) best = {pickup: pk.stack.itemId, at: {x: pk.x, y: pk.y + 0.05, z: pk.z}, d}; }
+        for (const h of cm.all) {
+          if (h.group !== 'surface' || Math.hypot(h.prop.x - p.x, h.prop.z - p.z) > 6 || Math.abs(h.prop.y - p.y) > 2.5) continue;
+          for (const l of h.state.lots) { const at = cm.lotPoint(h, l); if (at && (!best || Math.hypot(at.x - p.x, at.z - p.z) < best.d)) best = {serial: h.serial, id: l.id, itemId: l.itemId, at, d: Math.hypot(at.x - p.x, at.z - p.z)}; }
+        }
+        return best;
+      });
+      if (lot) {
+        const inv0 = await ev(() => { const g = window.__game; return [...g.inv.hotbar, ...g.inv.pack].reduce((n, s) => n + (s ? s.count : 0), 0); });
+        await ev(l => window.__LL.lookAt(l.at.x, l.at.y, l.at.z), lot); await frames(6);
+        const prompt = await page.$eval('#prompt', e => (e.offsetParent ? e.textContent : '')).catch(() => null);
+        await shot('17-real-loot-highlight-after-blast');
+        await page.keyboard.press('KeyE'); await frames(20);
+        const inv1 = await ev(() => { const g = window.__game; return [...g.inv.hotbar, ...g.inv.pack].reduce((n, s) => n + (s ? s.count : 0), 0); });
+        return {lot, prompt, inv: [inv0, inv1]};
+      }
+      return {lot: null, note: 'no real loot within reach'};
+      };
+      let realLoot = null;
       const shots = [];
       if (slot >= 0) {
         shots.push(await blast(undefined, 'main'));
