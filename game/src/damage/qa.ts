@@ -38,10 +38,10 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       const a = i / 48 * Math.PI * 2, y = 1.0 + (i % 3) * 0.35;
       const d: Vec3 = {x: Math.sin(a), y: (y - e.y) / 6, z: Math.cos(a)};
       const l = Math.hypot(d.x, d.y, d.z); d.x /= l; d.y /= l; d.z /= l;
-      const wh = raycastWorld(L.grid, L.props, e, d, 25, L.trench.floorY);
+      const wh = raycastWorld(game.levels ?? L.grid, L.props, e, d, 25, L.trench.floorY);
       if (wh.kind !== 'wall') continue;
       const x = e.x + d.x * wh.t, yy = e.y + d.y * wh.t, z = e.z + d.z * wh.t;
-      const key = structuralKeyAt('wall', x, yy, z, wh.nx, wh.nz, {grid: L.grid, areas: L.areas, trenches: L.trenches});
+      const key = structuralKeyAt('wall', x, yy, z, wh.nx, wh.nz, {grid: wh.level !== undefined && wh.level >= 0 && game.levels ? game.levels.grid(wh.level) : L.grid, areas: L.areas, trenches: L.trenches}); // iteration 08: the hit's own level
       if (cls && STRUCTURAL_CLASS[key] !== cls) continue;
       if (!best || wh.t < best.t) best = {x, y: yy, z, t: wh.t, key};
     }
@@ -106,7 +106,7 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       const dir = game.camera.getWorldDirection(new THREE.Vector3());
       const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z}, d: Vec3 = {x: dir.x, y: dir.y, z: dir.z};
       const L = game.layout;
-      const wh = raycastWorld(L.grid, L.props, o, d, 90, L.trench.floorY);
+      const wh = raycastWorld(game.levels ?? L.grid, L.props, o, d, 90, L.trench.floorY);
       let bestT = wh.t, bz: (typeof game.zombies)[number] | null = null, part: 'head' | 'torso' | 'limb' = 'torso';
       for (const z of game.zombies) {
         if (!z.brain.alive) continue;
@@ -167,7 +167,7 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       }
       lookAt(t.at.x, t.at.y, t.at.z);
       const e = eye();
-      const wh = raycastWorld(L.grid, L.props, {x: e.x, y: e.y, z: e.z}, (() => { const v = new THREE.Vector3(t.at.x - e.x, t.at.y - e.y, t.at.z - e.z).normalize(); return {x: v.x, y: v.y, z: v.z}; })(), 30, L.trench.floorY);
+      const wh = raycastWorld(game.levels ?? L.grid, L.props, {x: e.x, y: e.y, z: e.z}, (() => { const v = new THREE.Vector3(t.at.x - e.x, t.at.y - e.y, t.at.z - e.z).normalize(); return {x: v.x, y: v.y, z: v.z}; })(), 30, L.trench.floorY);
       return {...t, dist: Math.hypot(t.at.x - game.player.x, t.at.z - game.player.z), firstHit: wh.kind, firstHitT: wh.t};
     },
     /** Iteration 07 (Lane K): aim at the nearest light dynamic prop (e.g. a trash can), optionally standing in front of it. */

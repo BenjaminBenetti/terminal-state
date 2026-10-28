@@ -221,6 +221,9 @@ export class CasingSystem {
       if (c.mode === 2) c.mode = 1;
       this.impact(c, hitSpeed);
     }
+    // iteration 08: the ceiling of the band the casing is in (a slab underside on stacked levels)
+    const top = q.ceilAbove(c.pos.x, c.pos.z, oy);
+    if (c.pos.y + k.r > top) { c.pos.y = top - k.r; if (c.vel.y > 0) { this.impact(c, c.vel.y); c.vel.y = -c.vel.y * k.restitution; } }
     const ground = q.surfaceBelow(c.pos.x, c.pos.z, Math.max(oy, c.pos.y) - k.r + 0.01);
     if (ground === Infinity) { c.live = false; this.dirty = true; return; } // wedged in a wall: retire
     if (c.mode === 1) {

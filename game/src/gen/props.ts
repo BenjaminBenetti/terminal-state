@@ -272,6 +272,10 @@ export interface PropPlacement {
   mounted?: boolean;
   /** Iteration 07 (P2): low wall-mounted model rendered `lift` m above the placement base (the box still collides from the floor). */
   lift?: number;
+  /** Iteration 08: level the prop stands on (gen/levels.ts; absent = 0, the main level). y is absolute world height after dressing. */
+  level?: number;
+  /** Iteration 08 (Lane P): composition cluster (index into compositionOf(layout).clusters) the prop belongs to. */
+  cluster?: number;
 }
 
 export function footprint(kind: PropKind, rot: number): {hx: number; hz: number} {

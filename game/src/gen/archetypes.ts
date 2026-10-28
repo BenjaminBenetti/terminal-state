@@ -8,7 +8,8 @@
 // (PATH/RÉSO) with units in both walls; food courts as halls with counters on the perimeter;
 // island stations reached from the platform ends; deep stations with long escalator halls.
 
-import {Kit, LATERAL, OPPOSITE, TUN, UNDERPASS_REACH, type TrackBlock} from './stationKit';
+import {Kit, LATERAL, OPPOSITE, TUN, type TrackBlock} from './stationKit';
+import {levelProgram} from './levelGen';
 import type {Archetype, Area, Rect, Side} from './stationTypes';
 import type {Frontage} from './storefronts';
 
@@ -68,7 +69,8 @@ function foodCourt(k: Kit, plan: Plan, parent: Area, side: Side, off: number): A
   const FA = rng.int(52, 80), FD = rng.int(28, 38);
   const F = hall(k, parent, side, FA, FD, off, 'food-court', ceil, {role: 'food-hall'});
   if (!F) return null;
-  if (!k.connect(parent, F, rng.int(12, 16), 4.0, {pick: 'mid', margin: 3})) return null;
+  // Iteration 08 (Lane A): an unconnected hall is undone (it used to stay carved as an unreachable orphan).
+  if (!k.connect(parent, F, rng.int(12, 16), 4.0, {pick: 'mid', margin: 3})) { k.undoLast(F); return null; }
   plan.foods.push(F);
   // Counters on the perimeter: the far wall first (shared service corridor behind it), then the
   // flanks; the entry wall gets units only where there is room beside the entrance.
@@ -84,7 +86,7 @@ function arcade(k: Kit, plan: Plan, parent: Area, side: Side, len: number, off: 
   const RD = rng.int(12, 16);
   const R = hall(k, parent, side, RD, len, off, 'retail-arcade', r1(rng.range(3.4, 3.8)), {role: 'mall', label: label ?? (len > 70 ? 'Underground concourse' : 'Retail arcade')});
   if (!R) return null;
-  if (!k.connect(parent, R, RD - 2, 3.4, {pick: 'mid'})) return null;
+  if (!k.connect(parent, R, RD - 2, 3.4, {pick: 'mid'})) { k.undoLast(R); return null; }
   plan.arcades.push(R);
   plan.washHosts.push(R);
   plan.frontages.push({hall: R, sides: rng.shuffle(LATERAL[side].slice()), mix: 'retail', max: Math.max(4, Math.round(len / 7))});
@@ -96,7 +98,7 @@ function exitHall(k: Kit, plan: Plan, parent: Area, side: Side, off: number): Ar
   const E = hall(k, parent, side, rng.int(26, 34), rng.int(26, 38), off, 'concourse', r1(rng.range(4.2, 4.8)), {role: 'exit-hall', label: 'Exit concourse'});
   if (!E) return null;
   const w = k.sharedWall(parent, E);
-  if (!w || !k.connect(parent, E, Math.min(14, w.s1 - w.s0 - 4), 3.6, {pick: 'mid'})) return null;
+  if (!w || !k.connect(parent, E, Math.min(14, w.s1 - w.s0 - 4), 3.6, {pick: 'mid'})) { k.undoLast(E); return null; }
   plan.exitHalls.push(E);
   plan.washHosts.push(E);
   plan.exits.push({parent: E, side, frac: rng.range(0.3, 0.7)});
@@ -202,12 +204,14 @@ function sideMezzanine(k: Kit, plan: Plan, terms: string[]): boolean {
   const [P1, P2] = blk.platforms;
   P1.platformNo = 1; P2.platformNo = 2; P1.towardsN = terms[1]; P2.towardsS = terms[0];
   setP1(plan, P1, [P2]);
-  const under: ('W' | 'E')[] = rng.chance(0.7) ? ['W', 'E'] : [rng.pick(['W', 'E'] as const)];
-  for (const s of under) if (!k.underpass(blk, s)) return false;
-  for (const s of ['W', 'E'] as const) if (!under.includes(s)) plan.openEnds.push([P1, s], [P2, s]);
+  // Iteration 08 (Lane A): stacked levels — stair cores behind both back walls, upper decks + crossover
+  // bridges over the tracks, a service crossing beneath them (replaces the underpasses beyond the tunnels).
+  const long = rng.chance(0.6);
+  if (!levelProgram(k, blk, {avoid: long ? [] : [[0.03, 0.32], [0.68, 0.97]]})) return false;
+  for (const s of ['W', 'E'] as const) plan.openEnds.push([P1, s], [P2, s]);
   plan.staffWalls.push([P2, 'N']);
   const PL = rng.int(10, 14);
-  if (rng.chance(0.6)) {
+  if (long) {
     const pass = k.stairPassages(P1, 'S', Lp >= 266 ? rng.int(3, 4) : rng.int(2, 3), 0.1, 0.9, PL);
     if (pass.length < 2) return false;
     const M = k.mezzanine(pass, 'S', rng.int(14, 20), [rng.int(6, 18), rng.int(6, 18)], r1(rng.range(4.4, 5.0)), {label: 'Paid concourse', paid: true, role: 'mezzanine'});
@@ -250,6 +254,8 @@ function islandEnds(k: Kit, plan: Plan, terms: string[]): boolean {
   const I = blk.platforms[0];
   I.platformNo = 1; I.towardsN = terms[0]; I.towardsS = terms[1];
   setP1(plan, I, []);
+  // Iteration 08 (Lane A): island stair cores up to the decks over the island + both beds, down to the service level.
+  if (!levelProgram(k, blk)) return false;
   const ends: ('W' | 'E')[] = rng.chance(0.6) ? ['W', 'E'] : [rng.pick(['W', 'E'] as const)];
   for (const s of ['W', 'E'] as const) if (!ends.includes(s)) plan.openEnds.push([I, s]);
   const blockH = blk.y1 - blk.y0 + 1;
@@ -264,7 +270,8 @@ function islandEnds(k: Kit, plan: Plan, terms: string[]): boolean {
     plan.paidHalls.push(MH);
     const TWd = rng.int(40, 56);
     const shift = Math.max(0, Math.min(rng.int(4, 14), Math.floor((TWd - MH.w) / 2) - 1));
-    const T = ticketHall(k, plan, MH, 'S', TWd, rng.int(28, 38), s === 'W' ? shift : -shift, rng.int(4, 6));
+    // Iteration 08 (Lane A): a station with a single fare line draws >= 5 gates (validation needs 5; 4 forced retries).
+    const T = ticketHall(k, plan, MH, 'S', TWd, rng.int(28, 38), s === 'W' ? shift : -shift, rng.int(ends.length === 1 ? 5 : 4, 6));
     if (!T) return false;
     halls.push({s, MH, T});
     if (rng.chance(0.3)) plan.frontages.push({hall: MH, sides: [s], mix: 'kiosk', max: 1});
@@ -289,7 +296,8 @@ function express(k: Kit, plan: Plan, terms: string[]): boolean {
   const rng = k.rng;
   const ceil = r1(rng.range(4.8, 5.4));
   const Lp = rng.int(220, 268);
-  const blk = k.expressBlock(130, 60, Lp, ceil);
+  // Iteration 08 (Lane A): block moved east (was x 130) so a west-end district keeps room for the food court's rear service corridor.
+  const blk = k.expressBlock(190, 60, Lp, ceil);
   plan.blocks.push(blk);
   const [B, A] = blk.platforms;
   B.label = 'Platforms 1 · 2'; A.label = 'Platforms 3 · 4';
@@ -297,6 +305,8 @@ function express(k: Kit, plan: Plan, terms: string[]): boolean {
   B.towardsN = `${terms[1]} express`; B.towardsS = `${terms[1]} local`;
   A.towardsN = `${terms[0]} local`; A.towardsS = `${terms[0]} express`;
   setP1(plan, B, [A]);
+  // Iteration 08 (Lane A): a stair core on each island; decks over both islands, bridges over all four tracks.
+  if (!levelProgram(k, blk)) return false;
   const ends: ('W' | 'E')[] = rng.chance(0.45) ? ['W', 'E'] : [rng.pick(['W', 'E'] as const)];
   for (const s of ['W', 'E'] as const) if (!ends.includes(s)) plan.openEnds.push([A, s], [B, s]);
   let first = true;
@@ -338,10 +348,9 @@ function interchange(k: Kit, plan: Plan, terms: string[]): boolean {
   plan.blocks.push(blkA);
   const [P1, P2] = blkA.platforms;
   P1.platformNo = 1; P2.platformNo = 2; P1.towardsN = terms[1]; P2.towardsS = terms[0];
-  const underSide = rng.pick(['W', 'E'] as const);
-  if (!k.underpass(blkA, underSide)) return false;
-  const other: 'W' | 'E' = underSide === 'W' ? 'E' : 'W';
-  plan.openEnds.push([P1, other], [P2, other]);
+  // Iteration 08 (Lane A): stacked levels on line 1 (line 2 stays single-level: its island is reached by the transfer).
+  if (!levelProgram(k, blkA)) return false;
+  plan.openEnds.push([P1, 'W'], [P2, 'W'], [P1, 'E'], [P2, 'E']);
   plan.staffWalls.push([P2, 'N']);
   const pass = k.stairPassages(P1, 'S', rng.int(2, 3), 0.12, 0.88, rng.int(10, 13));
   if (pass.length < 2) return false;
@@ -354,7 +363,7 @@ function interchange(k: Kit, plan: Plan, terms: string[]): boolean {
   const beyond = rng.int(3, 6);
   const deepB = rng.int(20, 26);
   const tpLen = rng.int(18, 44);
-  const aEnd = Math.max(MA.x + MA.w, blkA.tx1 + (underSide === 'E' ? UNDERPASS_REACH : 0)) + 1;
+  const aEnd = Math.max(MA.x + MA.w, blkA.tx1) + 1;
   const mhbX = aEnd + 1 + tpLen + 1;
   const bpx0 = mhbX + deepB + 1 + TUN + beyond + 1;
   const by0 = MA.y - rng.int(6, 18);
@@ -407,6 +416,8 @@ function split(k: Kit, plan: Plan, terms: string[]): boolean {
   setP1(plan, P1, [P2]);
   const endSide = rng.pick(['W', 'E'] as const);
   const [f0, f1] = endSide === 'W' ? [0.05, 0.42] : [0.58, 0.95];
+  // Iteration 08 (Lane A): stair cores in the other half (the fare passages take this end), decks + service crossing.
+  if (!levelProgram(k, blk, {avoid: [[f0 - 0.03, f1 + 0.03]]})) return false;
   const PL = rng.int(8, 12);
   const passS = k.stairPassages(P1, 'S', rng.int(1, 2), f0, f1, PL);
   const passN = k.stairPassages(P2, 'N', rng.int(1, 2), f0, f1, PL);
@@ -418,11 +429,9 @@ function split(k: Kit, plan: Plan, terms: string[]): boolean {
   const TS = ticketHall(k, plan, MS, 'S', rng.int(40, 56), rng.int(26, 34), rng.int(-8, 8), rng.int(4, 5), 'Ticket hall · Platform 1');
   const TN = ticketHall(k, plan, MN, 'N', rng.int(36, 50), rng.int(22, 30), rng.int(-8, 8), rng.int(3, 4), 'Ticket hall · Platform 2');
   if (!TS || !TN) return false;
+  // Paid side-to-side crossing: the stacked levels (upper bridges / service crossing); otherwise also an unpaid crossunder.
   const paidCross = rng.chance(0.4);
-  if (paidCross) {
-    if (!k.underpass(blk, rng.pick(['W', 'E'] as const))) return false;
-  }
-  for (const s of ['W', 'E'] as const) if (!k.areas.some(a => a.type === 'underpass' && (s === 'W' ? a.x < blk.px0 : a.x > blk.px1))) plan.openEnds.push([P1, s], [P2, s]);
+  for (const s of ['W', 'E'] as const) plan.openEnds.push([P1, s], [P2, s]);
   let laterals: Side[] = ['W', 'E'];
   if (!paidCross) {
     // Unpaid crossunder around the near track end: south leg, cross passage, north leg.
@@ -471,6 +480,8 @@ function deep(k: Kit, plan: Plan, terms: string[]): boolean {
     const I = blk.platforms[0];
     I.platformNo = 1; I.towardsN = terms[0]; I.towardsS = terms[1];
     setP1(plan, I, []);
+    // Iteration 08 (Lane A): deep island — tall stair cores up to the decks, down to the service level.
+    if (!levelProgram(k, blk)) return false;
     const s = rng.pick(['W', 'E'] as const);
     plan.openEnds.push([I, s === 'W' ? 'E' : 'W']);
     const EP = k.endPassage(blk, I, s, rng.int(3, 6));
@@ -486,7 +497,9 @@ function deep(k: Kit, plan: Plan, terms: string[]): boolean {
     const [P1, P2] = blk.platforms;
     P1.platformNo = 1; P2.platformNo = 2; P1.towardsN = terms[1]; P2.towardsS = terms[0];
     setP1(plan, P1, [P2]);
-    for (const s of ['W', 'E'] as const) if (!k.underpass(blk, s)) return false;
+    // Iteration 08 (Lane A): cores clear of the central passages to the lower concourse.
+    if (!levelProgram(k, blk, {avoid: [[0.3, 0.7]]})) return false;
+    for (const s of ['W', 'E'] as const) plan.openEnds.push([P1, s], [P2, s]);
     plan.staffWalls.push([P2, 'N']);
     const pass = k.stairPassages(P1, 'S', rng.int(1, 2), 0.35, 0.65, rng.int(8, 10));
     if (!pass.length) return false;
@@ -502,7 +515,8 @@ function deep(k: Kit, plan: Plan, terms: string[]): boolean {
   const UM = k.attach(ES, dir, rng.int(36, 56), rng.int(14, 20), rng.int(-10, 10), 'concourse', 'concourse', r1(rng.range(4.4, 5.0)), ES.id, {label: 'Upper concourse', paid: true, role: 'mezzanine'});
   if (!UM || !k.connect(ES, UM, ew - 2, 4.0, {pick: 'mid'})) return false;
   plan.paidHalls.push(UM);
-  const T = ticketHall(k, plan, UM, dir, rng.int(44, 60), rng.int(26, 36), rng.int(-8, 8), rng.int(4, 6));
+  // Iteration 08 (Lane A): the deep station's only fare line draws >= 5 gates (validation needs 5).
+  const T = ticketHall(k, plan, UM, dir, rng.int(44, 60), rng.int(26, 36), rng.int(-8, 8), rng.int(5, 6));
   if (!T) return false;
   if (!district(k, plan, T, dir, LATERAL[dir].slice(), rng.weighted([['mall', 1.4], ['wing', 1.2], ['tee', 0.8]] as [Pattern, number][]))) return false;
   plan.notes.push(`escalator:${ES.w > ES.h ? ES.w : ES.h}`);

@@ -66,7 +66,13 @@ slots, sprinting, taking a zombie hit, opening the inventory or pause menu, or d
 — nothing is consumed and the gun returns.
 
 Loot: aim at a cabinet, cupboard or crate and press E to open it — its contents appear as real
-items on the interior shelves/floor. Aim at an item + E to take it, or E on the open body to "Take
+items on the interior shelves/floor. Iteration 08: trash cans and wheelie bins (hinged lids), staff
+lockers, filing cabinets, tool chests, crash carts and desk pedestals (sliding drawers), chest
+freezers (sliding panes), shop coolers (glass door), kitchenettes, safes, newspaper boxes and wall
+first-aid / extinguisher / AED cabinets open the same way, part by part ("[E] Open top drawer"), with
+a visible interior and their own finite seeded contents (`src/world/openables*.ts`; audit of every
+prop kind and the honest exceptions — live electrical panels, the fare vault, appliances, toilet
+stalls … — in `world/openablesSpec.ts` `OPENABLE_AUDIT`). Aim at an item + E to take it, or E on the open body to "Take
 all". Shelves, kiosk counters/back shelves and tables hold visible items too; vending machines need
 "E — Pry open" (~1 s) and their stock spills out in front. Contents are rolled once per station
 (seeded, finite, never rerolled); anything that does not fit stays where it is. Empty containers
@@ -108,17 +114,45 @@ ragdolled bodies; clothing rips show skin and flesh. Shots passing close knock l
 Lighting is deliberately mixed: public areas are lit, service
 corridors/closets/back rooms are often dim or dark — use the flashlight (F).
 
-Vertical traversal (iteration 05): underpasses really go under the tracks — from each platform end
-a stair leg (top landing, two flights of ~0.17 m risers × 0.28 m treads with a landing, handrails)
-descends ~3.9 m to a crossing passage beneath the track line (≈2.5 m clear) and climbs back up to
-the other platform. The track bed is walkable: step off the platform edge (1.15 m drop, no fall
+Stacked levels (iteration 08, `src/gen/levels.ts` + `levelGen*.ts`): every station is a stack of
+real storeys sharing one world: the MAIN level (platforms, track beds, halls), an UPPER concourse
+(decks over the platforms, crossover bridges over the tracks, light wells with railings, a security
+control room and staff room, catwalks on island stations) and a LOWER service level beneath the
+platforms and track beds (a service crossing and gallery with pump / electrical / maintenance / cable
+rooms). Enclosed stair cores join them (0.17 m risers × 0.28 m treads, 1.2 m landings, handrails,
+"UPPER CONCOURSE ↑" / "SERVICE LEVEL ↓" signs) so you can loop platform → bridge → other platform →
+service crossing → back. Free space is the union of each level's open columns: walking, crouch
+headroom, jumping, bullets (a slab stops them; a light well doesn't), sight, hearing (muffled through
+slabs), zombie paths, dropped items, debris and loot all resolve the right storey. No fall damage.
+Interchange line 2 stays single-level; single-island stations' service level is a dead-end branch.
+The old iteration-05 underpasses beyond the tunnel mouths are replaced by the service level.
+
+Walls (iteration 08, `src/world/wallDetail*.ts`): each zone has its own finish and decay — platform
+tile with accent bands, station-name tablets and pilasters; tunnel concrete with seepage, cables and
+niches; service block with conduits, switch boxes and kick scuffs; raw lower-level walls with pipes
+and heavy damp — plus missing-tile patches, spalls, cracks, stains, repairs and a few genuinely broken
+sections showing blockwork and rebar (never near a doorway; collision unchanged).
+
+Props (iteration 08, `src/gen/compose.ts`): placed as clusters anchored to walls, columns and doors
+(waiting spots, security posts, maintenance bays, pump skids, evacuation luggage …) with clear walkways,
+landmarks at the end of sightlines and deliberately sparse halls. Retail shelves, racks and coolers
+carry separate 3D filler stock (cans, bottles, boxes, bags, magazines …; `src/world/shelfStock*.ts`)
+instead of printed product pictures. Filler is physical scenery, not loot (no highlight, no [E]);
+shoot it and it tumbles (`src/physics/fillerStock.ts`); real loot keeps its highlight and stays takeable.
+
+Vertical traversal (iteration 05): the track bed is walkable: step off the platform edge (1.15 m drop, no fall
 damage); yellow steel rescue ladders on the platform faces (near each platform end, ≤ ~34 m apart,
 opposite each other on two-sided beds; hazard marking on the edge above) get you out — look at one
 and press **E** ("Climb ladder" / "Climb down ladder"); **Space** or **S** lets go. Striped
 barricades at the tunnel mouths end the walkable bed. Zombies follow: they take the stairs, drop
 into the track bed after you (they cannot swipe down from the platform) and climb out by ladder.
-Data: `layout.traversal` (stair flights, ladders, underpasses; `gen/traversal.ts`), per-cell floor
-heights + stair ramps + ladder nav links in `gen/grid.ts` (`floorAt`, height-aware `PathFinder`).
+Data: `layout.traversal` (stair flights, ladders; `gen/traversal.ts`), `layout.levels` /
+`levelLinks` / `rails`, per-cell floor heights + stair ramps + ladder nav links in `gen/grid.ts`
+(level-aware `PathFinder`).
+
+Rendering note (iteration 08): on a software WebGL rasterizer (Mesa llvmpipe, SwiftShader …) texture
+anisotropic filtering is capped at 1 (`src/render/softwareGl.ts`) — CPU anisotropic filtering on the
+world-mapped railings/conduits stalled such browsers for minutes per frame. Hardware GPUs are unchanged.
 
 Goal: clear the station (kill every infected). Death → "New station" (fresh seed) or "Retry this
 station" (same seed, this session only).

@@ -6,6 +6,10 @@
 //   loose pickups near the shot line: knocked about (never destroyed).
 // Everything is pooled / bounded; this module owns the debris, crater and damaged-prop groups,
 // all rendered in the normal depth-tested scene pass.
+// Iteration 08 (Lane B): stacked levels — a structural hit reads its material from the grid of the
+// level whose band the bullet was in (WorldHit.level: the upper deck's floor, the slab underside
+// over the platform, a lower-level wall), stair chips land on that flight's treads, blood finds the
+// floor of the storey the body stands on, and knocked loose pickups stay on their own storey.
 
 import * as THREE from 'three';
 import type {StationLayout} from '../gen/station';
@@ -15,6 +19,7 @@ import type {Sfx} from '../audio/sfx';
 import type {WorldMaterials, MatKey} from '../world/materials';
 import {shapeMaterial} from '../world/shapeMaterials';
 import {StaticQuery} from '../physics/staticQuery';
+import type {Grid} from '../gen/grid';
 import {raySphere, rayCapsule, type HitInfo, type Vec3, type WorldHit} from '../combat/hitscan';
 import {CHUNK_PHYS, DAMAGE_MATERIALS, STRUCTURAL_CLASS, itemClass, structuralKeyAt, type DamageClass, type StructuralKey} from './materials';
 import {DebrisSystem, type DebrisSpawn} from './debris';
@@ -169,24 +174,33 @@ export class DamageSystem {
         if (spec.sparks && r.cls === 'screen') this.fx?.sparks(r.point, r.normal, 6);
         this.burst(r.point, r.normal, dir, r.cls, r.color, shot.pellet ? 0.45 : 1);
         if (r.broke) this.breakBurst(prop, r.broke, r.boxes, r.cls, r.color, dir);
-        return {point: v3(r.point), normal: v3(r.normal), object: 'prop', instanceId: wh.prop, material: r.cls, stage: r.stage, broke: r.broke};
+        return {point: v3(r.point), normal: v3(r.normal), object: 'prop', instanceId: wh.prop, material: r.cls, stage: r.stage, broke: r.broke, level: prop.level ?? wh.level ?? 0};
       }
-      // a broken (rubble-height) prop: the floor under it takes the hit
-      return this.hitStructural('floor', point, UP.clone(), dir, shot);
+      // a broken (rubble-height) prop: the floor under it takes the hit (its own storey)
+      return this.hitStructural('floor', point, UP.clone(), dir, shot, prop.level);
     }
     if (wh.kind === 'none') return {point: v3(point), normal: v3(normal), object: 'wall', instanceId: null, material: 'concrete'};
-    return this.hitStructural(wh.kind === 'prop' ? 'wall' : wh.kind, point, normal, dir, shot);
+    return this.hitStructural(wh.kind === 'prop' ? 'wall' : wh.kind, point, normal, dir, shot, wh.level);
   }
 
-  private hitStructural(kind: 'wall' | 'floor' | 'ceiling', point: THREE.Vector3, normal: THREE.Vector3, dir: THREE.Vector3, shot: ShotInput): HitInfo {
+  /** Iteration 08: grid of the level a structural hit belongs to (the ray's band; else the band holding the point). */
+  private levelGrid(level: number | undefined, point: THREE.Vector3): Grid {
+    const L = this.layout!, lv = this.query?.levels;
+    if (!lv || lv.count < 2) return L.grid;
+    const k = level !== undefined && level >= 0 && level < lv.count ? level : lv.levelAt(point.x, point.z, point.y + 0.05, 0.1);
+    return k >= 0 ? lv.grid(k) : L.grid;
+  }
+
+  private hitStructural(kind: 'wall' | 'floor' | 'ceiling', point: THREE.Vector3, normal: THREE.Vector3, dir: THREE.Vector3, shot: ShotInput, level?: number): HitInfo {
     this.counts.structural++;
     const L = this.layout!;
-    const key = structuralKeyAt(kind, point.x, point.y, point.z, normal.x, normal.z, {grid: L.grid, areas: L.areas, trenches: L.trenches, safetyStrip: this.mats?.scale.safetyEdge.v});
+    const G = this.levelGrid(level, point);
+    const key = structuralKeyAt(kind, point.x, point.y, point.z, normal.x, normal.z, {grid: G, areas: L.areas, trenches: L.trenches, safetyStrip: this.mats?.scale.safetyEdge.v});
     const cls = STRUCTURAL_CLASS[key];
     const spec = DAMAGE_MATERIALS[cls];
     // stair flights are a linear ramp for hitscan but drawn as treads: put the chip on the tread top
-    if (key === 'stairs' && kind === 'floor') { point = point.clone(); point.y = L.grid.stepAt(point.x, point.z) + 0.001; }
-    const surface = this.structuralColor(key, kind, point, normal) ?? new THREE.Color(spec.palette[Math.floor(this.rand() * spec.palette.length)]);
+    if (key === 'stairs' && kind === 'floor') { point = point.clone(); point.y = G.stepAt(point.x, point.z) + 0.001; }
+    const surface = this.structuralColor(key, kind, point, normal, G) ?? new THREE.Color(spec.palette[Math.floor(this.rand() * spec.palette.length)]);
     const substrate = new THREE.Color(spec.substrate);
     if (key === 'tileLower' || key === 'tileUpper' || key === 'tileShop' || key === 'quarryTile') substrate.lerp(surface, 0.15);
     const dk = (1 - spec.hardness * 0.55) * (shot.pellet ? 0.22 : 0.38) * Math.min(1.5, shot.damage / 24 + 0.2);
@@ -202,14 +216,13 @@ export class DamageSystem {
       this.fallCue = 0.35;
       this.sfx?.breakage('debrisFall', point.x, point.y, point.z, crater.depth * 0.7);
     }
-    return {point: v3(point), normal: v3(normal), object: kind, instanceId: null, material: cls, stage: crater.depth >= 0.99 ? 2 : 1};
+    return {point: v3(point), normal: v3(normal), object: kind, instanceId: null, material: cls, stage: crater.depth >= 0.99 ? 2 : 1, level: level ?? -1};
   }
 
   /** Fragment colour of a structural surface at the hit: its own texture where it can be read. */
-  private structuralColor(key: StructuralKey, kind: string, p: THREE.Vector3, n: THREE.Vector3): THREE.Color | null {
+  private structuralColor(key: StructuralKey, kind: string, p: THREE.Vector3, n: THREE.Vector3, G: Grid): THREE.Color | null {
     const mats = this.mats;
     if (!mats) return null;
-    const L = this.layout!;
     try {
       if (key === 'tileShop' || key === 'quarryTile') return textureMean((shapeMaterial(mats, key) as THREE.MeshStandardMaterial).map, new THREE.Color());
       const mk: MatKey = key === 'stairs' ? 'concrete' : key;
@@ -218,7 +231,7 @@ export class DamageSystem {
       let u: number, v: number;
       if (kind === 'wall') {
         const along = Math.abs(n.x) > 0.5 ? p.z : p.x;
-        const base = L.grid.floorAt(p.x + n.x * 0.25, p.z + n.z * 0.25) + (mk === 'tileUpper' ? mats.tileLowerHeight : 0);
+        const base = G.floorAt(p.x + n.x * 0.25, p.z + n.z * 0.25) + (mk === 'tileUpper' ? mats.tileLowerHeight : 0);
         u = along / sc.u;
         v = (p.y - base) / sc.v;
       } else if (kind === 'floor') { u = p.x / sc.u; v = -p.z / sc.v; } else { u = p.x / sc.u; v = p.z / sc.v; }
@@ -330,7 +343,9 @@ export class DamageSystem {
     const w = woundsOf(z);
     const r = w?.add({point, dir, part, damage: shot.damage, pellet: shot.pellet}) ?? null;
     const at = r?.entry ?? point;
-    const floorY = this.layout ? this.layout.grid.stepAt(at.x, at.z) : 0;
+    // iteration 08: the floor of the storey the body is on (not the deck above / the floor below)
+    const lv = this.query?.levels;
+    const floorY = !this.layout ? 0 : lv && lv.count > 1 ? (lv.supportAt(at.x, at.z, at.y, 0.1)?.floor ?? this.layout.grid.stepAt(at.x, at.z)) : this.layout.grid.stepAt(at.x, at.z);
     this.fx?.bodyHit(at, dir, floorY);
     const R = this.rand;
     const strength = r?.strength ?? 0.3;
@@ -503,20 +518,25 @@ export class DamageSystem {
   private updateKnocks(dt: number): void {
     const L = this.layout, q = this.query;
     if (!L || !q || !this.knocks.length) { this.knocks.length = 0; return; }
-    const g = L.grid;
+    const g = L.grid, lv = q.levels.count > 1 ? q.levels : null;
     for (const k of this.knocks) {
       k.t += dt;
       const p = k.p;
       const nx = p.x + k.vx * dt, nz = p.z + k.vz * dt;
       // stay on reachable floor at about the same level, never through walls or off into a wall cell
       const [cx, cy] = g.cellOf(nx, nz);
-      const ok = g.passable(cx, cy) && Math.abs(g.floorAt(nx, nz) - g.floorAt(p.x, p.z)) < 0.3 && g.lineOfSight(p.x, p.z, nx, nz) && !q.blocked(nx, p.y + 0.06, nz, 0.06);
+      let ok: boolean;
+      if (lv) {
+        // iteration 08: on the pickup's own storey (never onto the deck above / through to the floor below)
+        const s0 = lv.supportIn(p.x, p.z, p.y + 0.05, 0.3), s1 = lv.supportIn(nx, nz, p.y + 0.05, 0.3);
+        ok = !!s0 && !!s1 && lv.grid(s1.level).passable(cx, cy) && Math.abs(s1.floor - s0.floor) < 0.3 && lv.lineOfSight({x: p.x, y: p.y + 0.1, z: p.z}, {x: nx, y: p.y + 0.1, z: nz}) && !q.blocked(nx, p.y + 0.06, nz, 0.06);
+      } else ok = g.passable(cx, cy) && Math.abs(g.floorAt(nx, nz) - g.floorAt(p.x, p.z)) < 0.3 && g.lineOfSight(p.x, p.z, nx, nz) && !q.blocked(nx, p.y + 0.06, nz, 0.06);
       if (ok) { p.x = nx; p.z = nz; } else { k.vx *= -0.3; k.vz *= -0.3; }
       k.vy -= 9.81 * dt;
       p.y += k.vy * dt;
       const ground = q.surfaceBelow(p.x, p.z, p.y + 0.1);
       if (p.y <= ground) {
-        p.y = ground === Infinity ? g.stepAt(p.x, p.z) : ground;
+        p.y = ground === Infinity ? (lv ? lv.stepAt(p.x, p.z, p.y) || g.stepAt(p.x, p.z) : g.stepAt(p.x, p.z)) : ground;
         k.vy = Math.abs(k.vy) > 1.2 ? Math.abs(k.vy) * 0.25 : 0;
         k.vx *= 0.55; k.vz *= 0.55; k.spin *= 0.5;
       }

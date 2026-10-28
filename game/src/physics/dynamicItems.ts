@@ -23,6 +23,7 @@ import {rayAabb, type Vec3} from '../combat/hitscan';
 import {itemPhysics, propPhysics, type PhysMat} from '../damage/materials';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {isLootHolderKind} from '../items/loot';
+import {isSpillHolderKind} from '../world/openablesSpec';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC} from './ragdoll';
 import {groundClamp, restTime, type BodyHost, type ImpactFamily} from './chunks';
 
@@ -70,7 +71,8 @@ interface Ent {
   pickup?: PickupLike;
   prop?: PropPlacement;
   propIndex?: number;
-  parts?: {mesh: THREE.Mesh; rel: THREE.Matrix4}[];
+  /** Iteration 08 (Lane I): any object driven by its world `matrix` (detached meshes, an openable holder's own root). */
+  parts?: {mesh: THREE.Object3D; rel: THREE.Matrix4}[];
 }
 
 export interface DynHit { t: number; point: THREE.Vector3; normal: THREE.Vector3; pickup?: PickupLike; prop?: PropPlacement; propIndex?: number; ent?: Ent }
@@ -119,6 +121,11 @@ export class DynamicItems {
   pickups: (() => readonly PickupLike[]) | null = null;
   /** Lift the visible loot lots overlapping a box off their holders (as pickups) — a flying can knocks its neighbours over. */
   liftLots: ((box: THREE.Box3) => PickupLike[]) | null = null;
+  /**
+   * Iteration 08 (Lane I): a light loot holder (trash can / wheelie bin) goes loose: the holder system spills its finite lots and
+   * returns its own objects (lid, liner; world-matrix driven) for the body to carry along with the detached meshes.
+   */
+  holderLoose: ((prop: PropPlacement) => THREE.Object3D[]) | null = null;
   private readonly lastPos = new WeakMap<object, {x: number; z: number}>();
   /** Counters (QA/tests). */
   readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0};
@@ -265,6 +272,17 @@ export class DynamicItems {
     return this.shove(e, point, dir, impulse, 0.28);
   }
 
+  /**
+   * Iteration 08 (Lane S): start simulating a pickup without a shot — a loot lot a flying filler piece
+   * lifted off its shelf (physics/fillerStock.ts); the contact itself pushes it.
+   */
+  wakePickup(p: PickupLike): boolean {
+    const e = this.entForPickup(p);
+    if (!this.activate(e)) return false;
+    this.counts.knockOn++;
+    return true;
+  }
+
   /** Bullet into a light dynamic prop (first hit detaches it from shared rendering). */
   shootProp(prop: PropPlacement, index: number, point: THREE.Vector3, dir: THREE.Vector3, impulse: number): boolean {
     const e = this.entForProp(prop, index);
@@ -278,9 +296,10 @@ export class DynamicItems {
    */
   isDynamicProp(prop: PropPlacement): boolean {
     const ph = propPhysics(prop.kind);
-    if (!ph.dynamic || !Number.isFinite(ph.mass) || isLootHolderKind(prop.kind)) return false;
+    // iteration 08 (Lane I): openable trash cans / wheelie bins are loot holders that still go loose (they spill their lots)
+    if (!ph.dynamic || !Number.isFinite(ph.mass) || (isLootHolderKind(prop.kind) && !isSpillHolderKind(prop.kind))) return false;
     if (this.ents.has(prop)) return true;
-    const g = this.host.statics?.cellGround(prop.x, prop.z);
+    const g = this.host.statics?.cellGround(prop.x, prop.z, prop.y + 0.05); // iteration 08: its own storey's floor
     return g === undefined || (Number.isFinite(g) && Math.abs(prop.y - g) < 0.06);
   }
 
@@ -307,7 +326,8 @@ export class DynamicItems {
     if (!body) return null;
     const bm = new THREE.Matrix4().compose(tv.set(body.position.x, body.position.y, body.position.z), tq.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w), ts.set(1, 1, 1));
     const inv = bm.clone().invert();
-    e.parts = meshes.map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
+    const carried = this.holderLoose?.(prop) ?? []; // iteration 08 (Lane I): spill + carry the holder's own lid / liner
+    e.parts = [...meshes, ...carried].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
     // loose from now on: no longer an AABB obstacle for walking / hitscan / statics (hit-tested here)
     prop.h = 0;
     prop.blocksSight = false;

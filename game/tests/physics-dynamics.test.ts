@@ -13,6 +13,7 @@ import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {NodeIO} from '@gltf-transform/core';
 import {installCanvasShim} from './helpers/canvas2d';
 import {FLOOR, Grid, SOLID, VOID} from '../src/gen/grid';
+import {levelsOf} from '../src/gen/levels';
 import {generateStation} from '../src/gen/station';
 import type {PropPlacement} from '../src/gen/props';
 import {PhysicsSystem} from '../src/physics/world';
@@ -249,7 +250,8 @@ describe('loot lots become loose physical items (finite loot preserved)', () => 
     run(ph, 6);
     expect(ph.dynamicItems.stats().itemsAwake).toBe(0);
     const b = new THREE.Box3().setFromObject(pk!.obj);
-    expect(b.min.y).toBeGreaterThan(st!.layout.grid.floorAt(pk!.x, pk!.z) - 0.03); // never through a tier / the floor
+    // never through a tier / the floor (iteration 08: the floor of the holder's own storey)
+    expect(b.min.y).toBeGreaterThan(levelsOf(st!.layout).floorAt(pk!.x, pk!.z, b.min.y + 0.05) - 0.03);
     expect(pk!.obj.position.y).toBeLessThan(y0 + 0.05);
     // finite loot: holders + loose pickup together still hold exactly what was rolled
     const total = cm.all.reduce((n2, x) => n2 + x.state.lots.reduce((m, l) => m + l.count, 0), 0) + pk!.stack.count;

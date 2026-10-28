@@ -58,7 +58,13 @@ float wmNoise( vec3 x ) {
 		mix( mix( wmHash( i + vec3( 0, 0, 1 ) ), wmHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( wmHash( i + vec3( 0, 1, 1 ) ), wmHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
 }`;
 const WM_FRAGMENT_MAP = /* glsl */ `
-float wmFloor = ( 1.0 - smoothstep( 0.0, uWmGrime.y, vWmPos.y ) ) * ( 1.0 - smoothstep( 0.5, 0.8, vWmUp ) );
+// Iteration 08 (Lane G): height above the local level floor (station light field) on multi-level stations.
+#ifdef LF_FLOOR_AT
+float wmLocalY = vWmPos.y - lfFloorAt( vWmPos );
+#else
+float wmLocalY = vWmPos.y;
+#endif
+float wmFloor = ( 1.0 - smoothstep( 0.0, uWmGrime.y, wmLocalY ) ) * ( 1.0 - smoothstep( 0.5, 0.8, vWmUp ) );
 float wmMacro = wmNoise( vWmPos * 0.7 );
 diffuseColor.rgb *= ( 1.0 - uWmGrime.x * wmFloor ) * ( 1.0 + uWmGrime.z * ( wmMacro - 0.5 ) * 2.0 );`;
 
@@ -90,6 +96,25 @@ export function surfaceMaterial(name: SurfaceName, params: THREE.MeshStandardMat
   const m = new THREE.MeshStandardMaterial({map: s.map, roughnessMap: s.roughnessMap, normalMap: s.normalMap, roughness: 1, metalness: 0, ...params});
   if (s.normalMap) m.normalScale.set(mapping.normal ?? 1, mapping.normal ?? 1);
   return worldMapped(m, {span: s.span, ...mapping});
+}
+
+/**
+ * Iteration 08 (primary): world-mapped trim on THIN geometry (railings, handrails, rods, conduits, pipes, rails)
+ * samples its shared surface maps without anisotropic filtering. World mapping switches projection plane around a
+ * thin cylinder/box, so UV derivatives across it are extreme; with 8x anisotropy Mesa llvmpipe spent ~110 s drawing
+ * one 10k-triangle conduit mesh (25 ms at 1x) and a station view with railings stalled the browser. Texture clones
+ * share the canvas image; only this material's GPU copies differ. Broad surfaces keep the 8x shared maps.
+ */
+export function thinTrim<M extends THREE.MeshStandardMaterial>(m: M): M {
+  for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap'] as const) {
+    const t = m[k];
+    if (!t || t.anisotropy <= 1) continue;
+    const c = t.clone();
+    c.anisotropy = 1;
+    c.needsUpdate = true;
+    m[k] = c;
+  }
+  return m;
 }
 
 export type MatKey =
@@ -165,8 +190,8 @@ export class WorldMaterials {
     this.mats.set('ballast', std({map: ballast(seed + 4), roughness: 1}));
     // Iteration 04: trim/columns/track use shared world-mapped surface sets (real-scale, no stretching
     // on instance-scaled columns or long boxes), consistent with the procedural prop materials.
-    this.mats.set('steel', surfaceMaterial('paintedSteel', {metalness: 0.3}, {grime: [0.3, 0.45], macro: 0.15}));
-    this.mats.set('rail', surfaceMaterial('railSteel', {metalness: 0.45}, {grime: [0.12, 0.4], macro: 0.12}));
+    this.mats.set('steel', thinTrim(surfaceMaterial('paintedSteel', {metalness: 0.3}, {grime: [0.3, 0.45], macro: 0.15})));
+    this.mats.set('rail', thinTrim(surfaceMaterial('railSteel', {metalness: 0.45}, {grime: [0.12, 0.4], macro: 0.12})));
     this.mats.set('sleeper', surfaceMaterial('timberTie', {}, {topAlongZ: true, macro: 0.2}));
     this.mats.set('coverboard', surfaceMaterial('coverboard', {}, {macro: 0.2}));
     this.mats.set('crate', std({map: crateWood(seed + 6), roughness: 0.9}));

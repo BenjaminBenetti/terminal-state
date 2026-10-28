@@ -5,12 +5,18 @@
 // each), the track-structure beams over the underpass crossing, and striped barricades at the
 // tunnel mouths that mark the end of the walkable track bed. Everything uses the existing material
 // keys (world/materials.ts) or world-mapped surface sets; merged per material (few draw calls).
+//
+// Iteration 08 (Lane G): flights of every level (a flight carved into two level grids is built once);
+// their side walls are part of the builder's union-of-open-columns wall faces (they follow whatever is
+// beside the flight on any level), and wall handrails only run where that wall really exists.
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {CELL, SOLID, rampHeight, type Grid, type Ramp} from '../gen/grid';
+import {CELL, FLOOR, SOLID, rampHeight, type Grid, type Ramp} from '../gen/grid';
+import type {Level} from '../gen/levels';
 import type {StationLayout} from '../gen/station';
-import {surfaceMaterial, type MatKey, type WorldMaterials} from './materials';
+import type {LevelColumns} from './levelGeometry';
+import {surfaceMaterial, thinTrim, type MatKey, type WorldMaterials} from './materials';
 import {canvasTexture} from './canvasTextures';
 import {flightRailRuns} from '../gen/doorways';
 
@@ -28,7 +34,8 @@ const hazardMats = new WeakMap<WorldMaterials, THREE.MeshStandardMaterial>();
 /** Safety-yellow painted steel (rescue ladders), world-mapped like the other steel keys. */
 function ladderMaterial(mats: WorldMaterials): THREE.Material {
   let m = yellowSteel.get(mats);
-  if (!m) { m = surfaceMaterial('brushedSteel', {color: 0xd6a020, metalness: 0.35}, {grime: [0.3, 0.6], macro: 0.15}); m.name = 'ladder-steel'; yellowSteel.set(mats, m); }
+  // Iteration 08 (primary): thin rungs/stiles sample without anisotropy (see materials.ts thinTrim).
+  if (!m) { m = thinTrim(surfaceMaterial('brushedSteel', {color: 0xd6a020, metalness: 0.35}, {grime: [0.3, 0.6], macro: 0.15})); m.name = 'ladder-steel'; yellowSteel.set(mats, m); }
   return m;
 }
 
@@ -121,8 +128,8 @@ function flatQuad(sink: QuadSink, m: {u: number; v: number}, axisX: boolean, s0:
   }
 }
 
-/** Stair flight geometry for one grid ramp. */
-function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey) => QuadSink, steel: THREE.BufferGeometry[]): void {
+/** Stair flight geometry for one grid ramp (`walls`: the union-aware wall lookup for handrails). */
+function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey) => QuadSink, steel: THREE.BufferGeometry[], walls: Grid): void {
   const area = layout.areas[g.area[g.idx(r.x, r.y)]];
   const pub = area?.publicSpace ?? true;
   const floorMat: MatKey = pub ? 'terrazzo' : 'concrete';
@@ -131,34 +138,10 @@ function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMateria
   const a0 = (axisX ? r.y : r.x) * CELL, a1 = a0 + (axisX ? r.h : r.w) * CELL;
   const H = (s: number) => rampHeight(r, s);
   const kinks = [...new Set([lo, hi, r.s0, r.s1].filter(s => s >= lo - 1e-6 && s <= hi + 1e-6).map(s => Math.round(s * 1e4) / 1e4))].sort((p, q) => p - q);
-  const TILE = mats.tileLowerHeight;
   // Ceiling following the flight (one quad per straight piece across the full width).
   const ceilMat: MatKey = pub ? 'ceiling' : 'ceilingService';
   for (let i = 0; i + 1 < kinks.length; i++) flatQuad(acc(ceilMat), mats.scale[ceilMat], axisX, kinks[i], kinks[i + 1], a0, a1, H(kinks[i]) + r.headroom, H(kinks[i + 1]) + r.headroom, false);
-  // Side walls (sheared tile bands follow the pitch line) where the neighbour across is rock.
-  const n = axisX ? r.w : r.h;
-  for (const side of [-1, 1] as const) {
-    const line = side < 0 ? a0 : a1;
-    const sign: 1 | -1 = side < 0 ? 1 : -1; // wall faces into the flight
-    for (let c = 0; c < n; c++) {
-      const cx = axisX ? r.x + c : side < 0 ? r.x - 1 : r.x + r.w, cy = axisX ? (side < 0 ? r.y - 1 : r.y + r.h) : r.y + c;
-      if (g.get(cx, cy) !== SOLID) continue;
-      const cs = lo + c * CELL, ce = cs + CELL;
-      const pts = [cs, ...kinks.filter(k => k > cs + 1e-6 && k < ce - 1e-6), ce];
-      for (let i = 0; i + 1 < pts.length; i++) {
-        const sa = pts[i], sb = pts[i + 1], fa = H(sa), fb = H(sb);
-        const top = r.headroom;
-        if (pub) {
-          const ml = mats.scale.tileLower, mu = mats.scale.tileUpper;
-          wallQuad(acc('tileLower'), ml, axisX, line, sign, sa, sb, fa - 0.35, fb - 0.35, fa + TILE, fb + TILE, -0.35 / ml.v, -0.35 / ml.v, TILE / ml.v, TILE / ml.v);
-          wallQuad(acc('tileUpper'), mu, axisX, line, sign, sa, sb, fa + TILE, fb + TILE, fa + top, fb + top, 0, 0, (top - TILE) / mu.v, (top - TILE) / mu.v);
-        } else {
-          const mp = mats.scale.paint;
-          wallQuad(acc('paint'), mp, axisX, line, sign, sa, sb, fa - 0.35, fb - 0.35, fa + top, fb + top, -0.35 / mp.v, -0.35 / mp.v, top / mp.v, top / mp.v);
-        }
-      }
-    }
-  }
+  // Side walls: world/levelGeometry.ts wall faces (iteration 08).
   // Treads, risers and safety nosings. Riser k sits at u = k + 0.5 of N (pitch line through tread centres).
   const N = r.risers, dirS = Math.sign(r.s1 - r.s0) || 1;
   const startS = dirS > 0 ? lo : hi, endS = dirS > 0 ? hi : lo;
@@ -184,7 +167,7 @@ function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMateria
   // Handrails on both walls: steel rail along the pitch line + wall brackets.
   // Iteration 07 (Lane DW): only along solid side wall, stopping short of any opening in it
   // (gen/doorways.ts flightRailRuns), so a rail never crosses a doorway or an open join.
-  for (const {side, s0: r0, s1: r1} of flightRailRuns(g, r)) {
+  for (const {side, s0: r0, s1: r1} of flightRailRuns(walls, r)) {
     const across = side < 0 ? a0 + RAIL_OFF : a1 - RAIL_OFF;
     const P = (s: number): V3 => (axisX ? {x: s, y: H(s) + RAIL_Y, z: across} : {x: across, y: H(s) + RAIL_Y, z: s});
     const ss = [r0, ...kinks.filter(k => k > r0 && k < r1), r1];
@@ -198,15 +181,30 @@ function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMateria
 }
 
 /**
- * Builds all traversal geometry into `group`. `acc` is the builder's per-MatKey quad accumulator
- * (merged into the architecture meshes). Returns the number of ladders built.
+ * Builds all traversal geometry into `group`. `acc(k, x, z, level)` is the builder's per-MatKey quad
+ * accumulator for the chunk around (x, z) on a level (merged into the architecture meshes). Returns
+ * the number of ladders built.
  */
-export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey) => QuadSink): number {
-  const g = layout.grid;
+export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey, x: number, z: number, level: number) => QuadSink,
+  ctx?: {levels: Level[]; cols: LevelColumns}): number {
+  const levels = ctx?.levels ?? [{id: 0, role: 'main' as const, grid: layout.grid, baseY: 0}];
   const steel: THREE.BufferGeometry[] = [];
   const ladder: THREE.BufferGeometry[] = [];
   const stripes: THREE.BufferGeometry[] = [];
-  for (const r of g.ramps) buildFlight(g, r, layout, mats, acc, steel);
+  const seen: Ramp[] = [];
+  const same = (a: Ramp, b: Ramp) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && a.axis === b.axis && Math.abs(a.s0 - b.s0) < 1e-4 && Math.abs(a.h0 - b.h0) < 1e-4 && Math.abs(a.h1 - b.h1) < 1e-4;
+  for (const L of levels) {
+    const g = L.grid;
+    for (let ri = 0; ri < g.ramps.length; ri++) {
+      const r = g.ramps[ri];
+      // Level grids may share one ramps array: build from a grid the flight is actually carved into.
+      if (g.rampIdx[g.idx(r.x, r.y)] !== ri) continue;
+      if (seen.some(q => same(q, r))) continue;
+      seen.push(r);
+      const cx = (r.x + r.w / 2) * CELL, cz = (r.y + r.h / 2) * CELL;
+      buildFlight(g, r, layout, mats, k => acc(k, cx, cz, L.id), steel, ctx ? unionWalls(r, ctx.cols) : g);
+    }
+  }
 
   // Rescue ladders: two stiles, rungs every 0.28 m, stand-off brackets; hazard marking on the edge above.
   for (const l of layout.traversal.ladders) {
@@ -246,4 +244,18 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   addMerged(group, ladder, ladderMaterial(mats), 'traversal-ladders');
   addMerged(group, stripes, hazardMaterial(mats), 'traversal-hazard');
   return layout.traversal.ladders.length;
+}
+
+/**
+ * A grid view for flightRailRuns: a side cell counts as wall (SOLID) only when no level is free there
+ * at handrail height over the flight, so wall handrails never hang in front of an open side.
+ */
+function unionWalls(r: Ramp, cols: LevelColumns): Grid {
+  const axisX = r.axis === 'x';
+  return {
+    get: (x: number, y: number) => {
+      const s = ((axisX ? x : y) + 0.5) * CELL;
+      return cols.freeAt(x, y, rampHeight(r, s) + RAIL_Y) ? FLOOR : SOLID;
+    },
+  } as unknown as Grid;
 }

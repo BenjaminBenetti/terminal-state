@@ -23,6 +23,14 @@ import {isLootHolderKind, rollHolderLots} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {PropModelLibrary} from '../src/assets/loader';
 import {p7AreaKey} from '../src/gen/props07Dress';
+import {CLUSTERS, compositionOf, zoneOf} from '../src/gen/compose';
+import {areaLevel, levelGrid} from '../src/gen/placeKit';
+
+/** Iteration 08 (Lane P): kinds a composition cluster type may place (members, mounts, hung props; landmark clocks). */
+const clusterKinds = (type: keyof typeof CLUSTERS): Set<string> => {
+  const c = CLUSTERS[type];
+  return new Set<string>([...c.slots.flatMap(x => x.k), ...(c.mounts ?? []).flatMap(m => m.k), ...(c.hangs ?? []).flatMap(h => h.k), 'platformClock']);
+};
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(GAME, '..');
@@ -130,6 +138,12 @@ describe('iteration07 props in generated stations', () => {
         if (p.host !== undefined) {
           const host = l.props[p.host];
           expect(uses.some(u => u.on?.includes(host.kind) && u.in.includes(host.purpose ?? p7AreaKey(l.areas[host.area]))), `${p.kind} on ${host.kind} in ${key}`).toBe(true);
+        } else if (p.cluster !== undefined) {
+          // Iteration 08: composed vignettes are the second placement authority — the kind belongs to its cluster type, and the
+          // cluster type to the area's zone.
+          const c = compositionOf(l)!.clusters[p.cluster];
+          expect(clusterKinds(c.type).has(p.kind), `${p.kind} in a ${c.type} cluster`).toBe(true);
+          expect(CLUSTERS[c.type].zones, `${c.type} in ${zoneOf(l, a)}`).toContain(zoneOf(l, a));
         } else expect(uses.some(u => u.in.includes(p7AreaKey(a))), `${p.kind} in ${p7AreaKey(a)}`).toBe(true);
         expect(propBlocksDoorway(l, p.x, p.z, p.hx, p.hz, p.y + (p.lift ?? 0), p.h - (p.lift ?? 0)), `${seed} ${p.kind} blocks a doorway`).toBeNull();
       }
@@ -145,10 +159,13 @@ describe('iteration07 props in generated stations', () => {
 
   it('circulation: floor props keep an open approach, chairs/decor never block the walk grid, mounts never block walking', () => {
     for (const seed of SEEDS.slice(0, 6)) {
-      const l = gen(seed), g = l.grid;
+      const l = gen(seed);
+      // Iteration 08: each prop / door is checked on its own level's grid.
+      let g = l.grid;
       const walk = (x: number, z: number) => { const [cx, cy] = g.cellOf(x, z); return g.walkable(cx, cy); };
       for (const p of l.props) {
         if (!isP7Kind(p.kind)) continue;
+        g = levelGrid(l, p.level ?? 0);
         const [cx, cy] = g.cellOf(p.x, p.z);
         if (p.host !== undefined || p.mounted) {
           if (p.host !== undefined && l.props[p.host].kind !== 'table' && p.y === l.props[p.host].y) continue;   // chairs
@@ -164,6 +181,7 @@ describe('iteration07 props in generated stations', () => {
       // Areas stay connected: every walkable cell of every area reaches the area's doors (station validation covers this too).
       for (const d of l.doors) {
         if (d.fare || d.shopfront) continue;
+        g = levelGrid(l, areaLevel(l.areas[d.a]));
         const horiz = d.h === 1;
         for (let k = 0; k < (horiz ? d.w : d.h); k++) expect(g.walkable(horiz ? d.x + k : d.x, horiz ? d.y : d.y + k), `${seed} door ${d.id}`).toBe(true);
       }

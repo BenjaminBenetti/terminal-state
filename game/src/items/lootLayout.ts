@@ -7,6 +7,7 @@
 import {PURPOSE_SURFACES, SHOP_COOLER_SURFACES, SHOP_DISPLAY_SURFACES, type PurposeHolderKind, type SurfaceSpec} from '../gen/props';
 import {itemDims} from './items';
 import {P7_SURFACES, type P7HolderKind} from '../gen/props07';
+import {isOpenableKind, openableSurfaces, type OpenableContainerKind} from '../world/openablesSpec';
 
 export type Orient = 'up' | 'side' | 'back';
 
@@ -19,6 +20,11 @@ export interface Surface {
   clear: number;
   /** Items tumbled out (vending): lie down more often, larger random yaw. */
   spill?: boolean;
+  /**
+   * Iteration 08 (Lane I): compartment of an openable holder (world/openablesSpec.ts part index: lid / door / drawer) the surface
+   * belongs to — its items are only seen / taken while that part is open. Absent: an exposed surface (always open).
+   */
+  part?: number;
 }
 
 /** Placement of one item on a surface (holder-local). y is the resting height. */
@@ -127,7 +133,9 @@ export type SurfaceHolder = 'cabinetTall' | 'cabinetLow' | 'crate' | 'shelf' | '
   // Iteration 05 (Lane R): purpose holders (gen/props.ts PURPOSE_SURFACES).
   | PurposeHolderKind
   // Iteration 07 (Lane P2): generated holders, measured surfaces (gen/props07.ts P7_SURFACES).
-  | P7HolderKind;
+  | P7HolderKind
+  // Iteration 08 (Lane I): openable containers (world/openablesSpec.ts): surfaces inside their compartments.
+  | OpenableContainerKind;
 
 /**
  * Storefront holder surfaces as fractions of the prop height (gen/props.ts SHOP_* constants over
@@ -236,6 +244,8 @@ export function holderSurfaces(kind: SurfaceHolder, def: Dims, o: SurfaceOptions
       if (spec) out.push(...spec.map(s => ({y: s.y + 0.002, x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, clear: s.clear})));
     }
   }
+  // Iteration 08 (Lane I): openable holders — exposed surfaces kept / claimed by a compartment, then each compartment's own.
+  if (isOpenableKind(kind)) return openableSurfaces(kind, out);
   return out;
 }
 

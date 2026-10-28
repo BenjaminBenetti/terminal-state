@@ -409,7 +409,7 @@ describe('station medium (density map, height, noise)', () => {
     const l = station(2), g = l.grid;
     const m = buildDensityMap(l, ATMOSPHERE);
     expect(m.w).toBe(g.w);
-    expect(m.data.length).toBe(g.w * g.h * 2);
+    expect(m.data.length).toBe(g.w * g.h * m.slots * 4); // iteration 08: RGBA layer per level slot
     expect(Buffer.from(buildDensityMap(l, ATMOSPHERE).data).equals(Buffer.from(m.data))).toBe(true);
     const fl = cellFloorFn(g, l.trench.floorY);
     let bed = 0, bedN = 0, plat = 0, platN = 0, floorErr = 0, wallMin = Infinity;
@@ -420,7 +420,7 @@ describe('station medium (density map, height, noise)', () => {
       const [mult, floorY] = sampleDensityMap(m, x, z);
       if (g.cells[i] === SOLID) {
         // solid cells next to open ones carry the neighbour's value (filtering near walls stays smooth)
-        if ([i - 1, i + 1, i - g.w, i + g.w].some(j => j >= 0 && j < g.cells.length && g.cells[j] !== SOLID)) wallMin = Math.min(wallMin, m.data[i * 2] / 255 * DENSITY_MAP_RANGE);
+        if ([i - 1, i + 1, i - g.w, i + g.w].some(j => j >= 0 && j < g.cells.length && g.cells[j] !== SOLID)) wallMin = Math.min(wallMin, m.data[i * 4] / 255 * DENSITY_MAP_RANGE);
         continue;
       }
       floorErr = Math.max(floorErr, Math.abs(floorY - fl(cx, cy)) > 0.6 ? 0 : Math.abs(floorY - fl(cx, cy)));
@@ -600,7 +600,7 @@ describe('VolumetricAtmosphere lifecycle (no GL: fake renderer)', () => {
     a.setStation(l1, null);
     a.render(scene, camera, 0);
     const tex1 = a.march.uniforms.tDensityMap.value as THREE.Texture;
-    expect(tex1).toBeInstanceOf(THREE.DataTexture);
+    expect(tex1).toBeInstanceOf(THREE.DataArrayTexture); // iteration 08: one layer per level slot
     const d1 = disposed(tex1);
     a.setStation(l2, null); // New Station
     expect(d1.n).toBe(1);

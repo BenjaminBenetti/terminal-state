@@ -57,8 +57,11 @@ export interface NavLink {
   pa: StandPoint; pb: StandPoint;
 }
 
-/** Path waypoint: world x/z; `link` = connector id when this point is reached by climbing it. */
-export type Waypoint = [x: number, z: number, link?: number];
+/**
+ * Path waypoint: world x/z; `link` = connector id when this point is reached by climbing it;
+ * `y` (iteration 08, stacked stations only) = floor height of the point (its storey).
+ */
+export type Waypoint = [x: number, z: number, link?: number, y?: number];
 
 export function rampHeight(r: Ramp, s: number): number {
   const t = (s - r.s0) / (r.s1 - r.s0);
@@ -402,7 +405,37 @@ export interface PathOpts {
   drops?: boolean;
   /** Iteration 07 (Lane Q): ignore nav links (rescue ladders) — for actors that cannot climb (the quadruped). */
   noLinks?: boolean;
+  /**
+   * Iteration 08 (Lane B): feet heights of the start / goal. On stacked stations they pick the
+   * level the actor / target stands on (omitted: the main level). Ignored on a single grid.
+   */
+  ay?: number;
+  by?: number;
 }
+
+/** Iteration 08 (Lane B): a cross-level connection that is not a shared cell (a ladder between levels). */
+export interface CrossLink { la: number; a: number; lb: number; b: number; cost: number; id: number; pa: StandPoint; pb: StandPoint }
+
+/**
+ * Iteration 08 (Lane B): multi-level nav source (gen/levels.ts `Levels` implements it). Levels are
+ * same-size grids; list index === level id.
+ */
+export interface NavLevels {
+  readonly list: readonly {readonly id: number; readonly grid: Grid}[];
+  /** Ladder links between levels (node ends as level + cell). */
+  crossLinks(): readonly CrossLink[];
+  /** Level + floor an actor with feet at y stands on at (x, z); null when unsupported. */
+  supportIn(x: number, z: number, y: number, tol?: number): {level: number; floor: number} | null;
+  /** Height-aware straight walk from feet ay at a; `by` = the walk must end at that height. */
+  walkLineClear(ax: number, ay: number, az: number, bx: number, bz: number, r: number, by?: number): boolean;
+  /** Neighbour steps (level, cell a <-> cell b) a railing closes (deck edges, stairwells, flight sides). */
+  blockedEdges?(): readonly {level: number; a: number; b: number}[];
+}
+
+/** Clear height a nav cell must offer on stacked stations (m; zombies stoop). */
+const NAV_CLEAR = 1.6;
+
+interface PathLink { a: number; b: number; cost: number; id: number; pa: StandPoint; pb: StandPoint }
 
 /**
  * A* over passable cells (8-connected, no corner cutting) with a wall/ledge-hugging penalty.
@@ -410,6 +443,12 @@ export interface PathOpts {
  * Walkability is snapshotted at construction (props never move), and the inner loop works on
  * flat typed arrays so long detours on the large station stay cheap. String pulling only looks a
  * bounded distance ahead (agents re-plan long before reaching the end of a long path).
+ *
+ * Iteration 08 (Lane B): nodes are (level, cell) on stacked stations (`new PathFinder(levels)`):
+ * neighbours stay on their level grid; a cell open on two levels at the same floor height (a stair
+ * flight carved into both grids) joins its two nodes with a free edge, so routes change storey only
+ * along real stairs (or ladder links), never through a slab. Waypoints then carry the floor height
+ * of the node as a 4th element. With a plain Grid it is exactly the single-level finder.
  */
 export class PathFinder {
   private readonly g: Float32Array;
@@ -421,47 +460,99 @@ export class PathFinder {
   private readonly walk: Uint8Array;
   private readonly fl: Float32Array;
   private readonly linkFlag: Uint8Array;
+  private readonly twinFlag: Uint8Array;
+  /** Railed edges per node: 1 = +x, 2 = -x, 4 = +y, 8 = -y (stacked stations). */
+  private readonly edgeBlock: Uint8Array | null = null;
+  private readonly twins = new Map<number, number[]>();
+  private readonly links: PathLink[] = [];
+  private readonly linkMap = new Map<number, number[]>();
+  private readonly grids: Grid[];
+  private readonly src: NavLevels | null;
+  private readonly NC: number;
   private cur = 1;
   private heap: Int32Array;
   private heapF: Float32Array;
   private heapSize = 0;
   /** Cells expanded by the last search (diagnostics). */
   lastExpanded = 0;
-  constructor(private readonly grid: Grid) {
-    const n = grid.w * grid.h;
+  constructor(source: Grid | NavLevels) {
+    if (source instanceof Grid) { this.src = null; this.grids = [source]; }
+    else { this.src = source.list.length > 1 ? source : null; this.grids = source.list.map(l => l.grid); }
+    const g0 = this.grids[0];
+    const W = g0.w, H = g0.h, NC = W * H, NL = this.grids.length, n = NC * NL;
+    this.NC = NC;
     this.g = new Float32Array(n);
     this.came = new Int32Array(n);
     this.cameLink = new Int32Array(n);
     this.stamp = new Uint32Array(n);
     this.closed = new Uint32Array(n);
-    this.heap = new Int32Array(n);
-    this.heapF = new Float32Array(n);
+    this.heap = new Int32Array(Math.max(16, NC));
+    this.heapF = new Float32Array(Math.max(16, NC));
     this.wallCost = new Float32Array(n);
     this.walk = new Uint8Array(n);
     this.fl = new Float32Array(n);
     this.linkFlag = new Uint8Array(n);
-    for (let i = 0; i < n; i++) {
-      const c = grid.cells[i];
-      this.walk[i] = (c === FLOOR || c === VOID) && grid.blocked[i] === 0 ? 1 : 0;
-      this.fl[i] = grid.floorOf(i);
-    }
-    const W = grid.w, walk = this.walk, fl = this.fl;
-    for (let y = 0; y < grid.h; y++) {
-      for (let x = 0; x < W; x++) {
-        const i = y * W + x;
-        if (!walk[i]) continue;
-        let open = 1;
-        for (let oy = -1; oy <= 1 && open; oy++) for (let ox = -1; ox <= 1; ox++) {
-          if (!ox && !oy) continue;
-          const nx = x + ox, ny = y + oy;
-          if (nx < 0 || ny < 0 || nx >= W || ny >= grid.h) { open = 0; break; }
-          const k = ny * W + nx;
-          if (!walk[k] || Math.abs(fl[k] - fl[i]) > NAV_STEP) { open = 0; break; }
+    this.twinFlag = new Uint8Array(n);
+    const walk = this.walk, fl = this.fl;
+    this.grids.forEach((grid, k) => {
+      const o = k * NC;
+      for (let i = 0; i < NC; i++) {
+        const c = grid.cells[i];
+        let w = (c === FLOOR || c === VOID) && grid.blocked[i] === 0 ? 1 : 0;
+        // stacked stations: a cell under a low soffit / slab is not a place to stand
+        if (w && NL > 1 && grid.hasCeil(i) && grid.ceil[i] - grid.floorOf(i) < NAV_CLEAR) w = 0;
+        walk[o + i] = w;
+        fl[o + i] = grid.floorOf(i);
+      }
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = o + y * W + x;
+          if (!walk[i]) continue;
+          let open = 1;
+          for (let oy = -1; oy <= 1 && open; oy++) for (let ox = -1; ox <= 1; ox++) {
+            if (!ox && !oy) continue;
+            const nx = x + ox, ny = y + oy;
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) { open = 0; break; }
+            const kk = o + ny * W + nx;
+            if (!walk[kk] || Math.abs(fl[kk] - fl[i]) > NAV_STEP) { open = 0; break; }
+          }
+          this.wallCost[i] = open ? 0 : 0.6;
         }
-        this.wallCost[i] = open ? 0 : 0.6;
+      }
+      for (const l of grid.links) this.addLink({a: o + l.a, b: o + l.b, cost: l.cost, id: l.id, pa: l.pa, pb: l.pb});
+    });
+    if (NL > 1) {
+      // shared stair cells: the same column open on two levels at the same floor height
+      for (let i = 0; i < NC; i++) {
+        for (let a = 0; a < NL; a++) {
+          const na = a * NC + i;
+          if (!walk[na]) continue;
+          for (let b = a + 1; b < NL; b++) {
+            const nb = b * NC + i;
+            if (!walk[nb] || Math.abs(fl[na] - fl[nb]) >= 0.05) continue;
+            for (const [p, q] of [[na, nb], [nb, na]]) { let t = this.twins.get(p); if (!t) this.twins.set(p, (t = [])); t.push(q); this.twinFlag[p] = 1; }
+          }
+        }
+      }
+      for (const l of (source as NavLevels).crossLinks()) this.addLink({a: l.la * NC + l.a, b: l.lb * NC + l.b, cost: l.cost, id: l.id, pa: l.pa, pb: l.pb});
+      // railings close neighbour steps (a drop off a flight side / deck edge the motor could never take)
+      const be = (source as NavLevels).blockedEdges?.() ?? [];
+      if (be.length) {
+        const eb = (this.edgeBlock = new Uint8Array(n));
+        for (const e of be) {
+          const na = e.level * NC + e.a, nb = e.level * NC + e.b, d = e.b - e.a;
+          const bit = d === 1 ? 1 : d === -1 ? 2 : d === W ? 4 : d === -W ? 8 : 0;
+          if (!bit) continue;
+          eb[na] |= bit;
+          eb[nb] |= bit === 1 ? 2 : bit === 2 ? 1 : bit === 4 ? 8 : 4;
+        }
       }
     }
-    for (const l of grid.links) { this.linkFlag[l.a] = 1; this.linkFlag[l.b] = 1; }
+  }
+  private addLink(l: PathLink): void {
+    const li = this.links.length;
+    this.links.push(l);
+    for (const e of [l.a, l.b]) { let m = this.linkMap.get(e); if (!m) this.linkMap.set(e, (m = [])); m.push(li); this.linkFlag[e] = 1; }
   }
   private push(i: number, f: number) {
     if (this.heapSize >= this.heap.length) {
@@ -497,29 +588,42 @@ export class PathFinder {
     this.heapF[k] = lastF;
     return top;
   }
-  /** Returns world-space waypoints (cell centres string-pulled; ladder ends marked) or null. */
+  /** Level index (list position) an actor with feet at y stands on at (x, z); main level when unknown. */
+  private levelOf(x: number, z: number, y: number | undefined): number {
+    if (!this.src || y === undefined) return 0;
+    const s = this.src.supportIn(x, z, y + 0.05, STEP_UP);
+    if (!s) return 0;
+    const k = this.src.list.findIndex(l => l.id === s.level);
+    return k < 0 ? 0 : k;
+  }
+  /**
+   * Returns world-space waypoints (cell centres string-pulled; ladder ends marked; on stacked
+   * stations each with its floor height) or null.
+   */
   find(ax: number, az: number, bx: number, bz: number, radius = 0.3, maxExpand = 12000, opts: PathOpts = {}): Waypoint[] | null {
-    const grid = this.grid;
-    let [sx, sy] = grid.cellOf(ax, az);
-    let [tx, ty] = grid.cellOf(bx, bz);
-    if (!grid.passable(sx, sy)) {
-      const n = nearestPassable(grid, sx, sy, 3, grid.floorAt(ax, az));
+    const multi = this.src !== null;
+    const la = this.levelOf(ax, az, opts.ay), lb = this.levelOf(bx, bz, opts.by);
+    const ga = this.grids[la], gb = this.grids[lb];
+    let [sx, sy] = ga.cellOf(ax, az);
+    let [tx, ty] = gb.cellOf(bx, bz);
+    if (!ga.passable(sx, sy)) {
+      const n = nearestPassable(ga, sx, sy, 3, multi && opts.ay !== undefined ? opts.ay : ga.floorAt(ax, az));
       if (!n) return null;
       [sx, sy] = n;
     }
-    if (!grid.passable(tx, ty)) {
-      const n = nearestPassable(grid, tx, ty, 3, grid.floorAt(bx, bz));
+    if (!gb.passable(tx, ty)) {
+      const n = nearestPassable(gb, tx, ty, 3, multi && opts.by !== undefined ? opts.by : gb.floorAt(bx, bz));
       if (!n) return null;
       [tx, ty] = n;
     }
-    const W = grid.w;
-    const start = sx + sy * W, goal = tx + ty * W;
+    const W = ga.w, H = ga.h, NC = this.NC;
+    const start = la * NC + sx + sy * W, goal = lb * NC + tx + ty * W;
     this.cur++;
     if (this.cur === 0xffffffff) { this.stamp.fill(0); this.closed.fill(0); this.cur = 1; }
     const cur = this.cur;
-    const walk = this.walk, gArr = this.g, stamp = this.stamp, closed = this.closed, came = this.came, cameLink = this.cameLink, wallCost = this.wallCost, fl = this.fl, linkFlag = this.linkFlag;
+    const walk = this.walk, gArr = this.g, stamp = this.stamp, closed = this.closed, came = this.came, cameLink = this.cameLink, wallCost = this.wallCost, fl = this.fl, linkFlag = this.linkFlag, twinFlag = this.twinFlag, eb = this.edgeBlock;
     const drops = !!opts.drops;
-    const links = grid.links, useLinks = !opts.noLinks;
+    const links = this.links, useLinks = !opts.noLinks;
     this.heapSize = 0;
     gArr[start] = 0;
     stamp[start] = cur;
@@ -538,9 +642,11 @@ export class PathFinder {
       closed[c] = cur;
       if (c === goal) { found = true; break; }
       if (++expanded > maxExpand) break;
-      const cx = c % W, cy = (c - cx) / W;
+      const lv = Math.floor(c / NC), ci = c - lv * NC;
+      const cx = ci % W, cy = (ci - cx) / W;
       const gc = gArr[c], fc = fl[c];
       for (let oy = -1; oy <= 1; oy++) {
+        if (cy + oy < 0 || cy + oy >= H) continue;
         for (let ox = -1; ox <= 1; ox++) {
           if (!ox && !oy) continue;
           if (cx + ox < 0 || cx + ox >= W) continue;
@@ -557,6 +663,10 @@ export class PathFinder {
             const a1 = c + ox, a2 = c + oy * W;
             if (!walk[a1] || !walk[a2] || Math.abs(fl[a1] - fc) > NAV_STEP || Math.abs(fl[a2] - fc) > NAV_STEP) continue;
           }
+          if (eb) {
+            const bx = ox > 0 ? 1 : 2, by = oy > 0 ? 4 : 8;
+            if (!diag ? eb[c] & (ox ? bx : by) : (eb[c] & (bx | by)) || (eb[c + ox] & by) || (eb[c + oy * W] & bx)) continue;
+          }
           const ng = gc + (diag ? 1.4142 : 1) + wallCost[n] + extra;
           if (stamp[n] !== cur || ng < gArr[n]) {
             stamp[n] = cur;
@@ -567,8 +677,22 @@ export class PathFinder {
           }
         }
       }
+      if (twinFlag[c]) {
+        // the same stair cell on another level (free hand-over)
+        for (const n of this.twins.get(c)!) {
+          if (closed[n] === cur) continue;
+          const ng = gc + 0.01;
+          if (stamp[n] !== cur || ng < gArr[n]) {
+            stamp[n] = cur;
+            gArr[n] = ng;
+            came[n] = c;
+            cameLink[n] = 0;
+            this.push(n, ng + h(cx, cy));
+          }
+        }
+      }
       if (useLinks && linkFlag[c]) {
-        for (const li of grid.linksAt(c)) {
+        for (const li of this.linkMap.get(c)!) {
           const l = links[li];
           const n = l.a === c ? l.b : l.a;
           if (!walk[n] || closed[n] === cur) continue;
@@ -578,8 +702,8 @@ export class PathFinder {
             gArr[n] = ng;
             came[n] = c;
             cameLink[n] = li + 1;
-            const nx = n % W;
-            this.push(n, ng + h(nx, (n - nx) / W));
+            const nc = n - Math.floor(n / NC) * NC, nx = nc % W;
+            this.push(n, ng + h(nx, (nc - nx) / W));
           }
         }
       }
@@ -593,16 +717,20 @@ export class PathFinder {
     // String pulling per walking segment (skip waypoints while a straight height-aware walk stays
     // clear, bounded look-ahead); ladder links split segments: [start stand point, end stand point + link].
     const out: Waypoint[] = [];
-    let anchor: [number, number] = [ax, az];
-    const segment = (from: number, to: number, end: [number, number]) => {
-      const pts: [number, number][] = [];
-      for (let k = from; k <= to; k++) pts.push(grid.center(cells[k] % W, Math.floor(cells[k] / W)));
+    const src = this.src;
+    let anchor: [number, number, number] = [ax, az, multi && opts.ay !== undefined ? opts.ay : fl[start]];
+    const clear = (a: [number, number, number], b: [number, number, number]) =>
+      src ? src.walkLineClear(a[0], a[2], a[1], b[0], b[1], radius, b[2]) : ga.walkLineClearH(a[0], a[1], b[0], b[1], radius);
+    const emit = (p: [number, number, number], link?: number) => { out.push(multi ? [p[0], p[1], link, p[2]] : link === undefined ? [p[0], p[1]] : [p[0], p[1], link]); };
+    const segment = (from: number, to: number, end: [number, number, number]) => {
+      const pts: [number, number, number][] = [];
+      for (let k = from; k <= to; k++) { const ci = cells[k] % NC; const [x, z] = ga.center(ci % W, Math.floor(ci / W)); pts.push([x, z, fl[cells[k]]]); }
       pts[pts.length - 1] = end;
       let i = 0;
       while (i < pts.length) {
         let j = Math.min(pts.length - 1, i + 48);
-        while (j > i && !grid.walkLineClearH(anchor[0], anchor[1], pts[j][0], pts[j][1], radius)) j--;
-        out.push([pts[j][0], pts[j][1]]);
+        while (j > i && !clear(anchor, pts[j])) j--;
+        emit(pts[j]);
         anchor = pts[j];
         i = j + 1;
       }
@@ -613,12 +741,12 @@ export class PathFinder {
       const l = links[via[k]];
       const fromA = l.a === cells[k - 1];
       const ps = fromA ? l.pa : l.pb, pe = fromA ? l.pb : l.pa;
-      segment(segStart, k - 1, [ps.x, ps.z]);
-      out.push([pe.x, pe.z, l.id]);
-      anchor = [pe.x, pe.z];
+      segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
+      emit([pe.x, pe.z, pe.y], l.id);
+      anchor = [pe.x, pe.z, pe.y];
       segStart = k;
     }
-    segment(segStart, cells.length - 1, [bx, bz]);
+    segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
     return out;
   }
 }

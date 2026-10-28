@@ -20,6 +20,7 @@ import {
   type BakedField, type FieldParams, type FieldSample,
 } from './lightField';
 import {addShaderHook} from '../render/shaderHooks';
+import {stationLevels} from './levelGeometry';
 
 installLightFieldShader();
 
@@ -64,7 +65,7 @@ export interface LightingDebug {
   poolSize: number;
   poolLit: number;
   circuits: [number, number, number];
-  field: {w: number; h: number; layers: number; cellScale: number; bakeMs: number; bytes: number; working: number};
+  field: {w: number; h: number; layers: number; slots: number; cellScale: number; bakeMs: number; bytes: number; working: number; crossRays: number};
   fixtures: {total: number; broken: number; flicker: number; dying: number; dim: number};
   areas: Record<LightProfile, number>;
 }
@@ -79,6 +80,8 @@ export interface StationLightingOptions {
   far?: number;
   /** GPU MAX_3D_TEXTURE_SIZE (WebGL2 guarantees only 256): the field is downsampled to fit if needed. */
   max3DTextureSize?: number;
+  /** Iteration 08: GPU memory cap for the field (bytes); a larger bake is downsampled to fit. Default 32 MB. */
+  maxFieldBytes?: number;
 }
 
 const tmpColor = new THREE.Color();
@@ -102,9 +105,11 @@ export class StationLighting {
   constructor(private readonly scene: THREE.Scene, private readonly layout: StationLayout, private readonly fixtures: Fixture[],
     private readonly tubes: THREE.InstancedMesh | null, private readonly opts: StationLightingOptions = {}) {
     const params: FieldParams = {...DEFAULT_FIELD, gain: DEFAULT_FIELD.gain * MOOD.fixtureGain, bounce: MOOD.bounce, ...opts.params};
-    const full = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY}, params);
+    // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
+    const full = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout)}, params);
     const max = opts.max3DTextureSize ?? 2048;
-    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max));
+    const budget = opts.maxFieldBytes ?? 32e6;
+    const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(full.stats.bytes / budget)));
     this.field = k > 1 ? downsampleField(full, k) : full;
     this.groups = this.field.groups;
     this.volume = new LightFieldVolume(this.field);
@@ -174,7 +179,7 @@ export class StationLighting {
     this.volume.setLevels(this.levels[0], this.levels[1], this.levels[2]);
     this.applyLevels(false);
     if (cam) {
-      const ai = this.layout.grid.areaAt(cam.x, cam.z);
+      const ai = cameraArea(this.layout, cam);
       this.areaIndex = ai;
       const area: Area | undefined = this.layout.areas[ai >= 0 ? ai : this.layout.platform];
       this.profile = area?.lighting ?? 'lit';
@@ -241,7 +246,7 @@ export class StationLighting {
       poolSize: DYNAMIC_LIGHTS,
       poolLit: 0,
       circuits: [this.levels[0], this.levels[1], this.levels[2]],
-      field: {w: this.field.w, h: this.field.h, layers: this.field.layers, cellScale: this.field.cellScale ?? 1, bakeMs: Math.round(st.ms), bytes: st.bytes, working: st.working},
+      field: {w: this.field.w, h: this.field.h, layers: this.field.layers, slots: this.field.slots, cellScale: this.field.cellScale ?? 1, bakeMs: Math.round(st.ms), bytes: st.bytes, working: st.working, crossRays: st.crossRays},
       fixtures: {
         total: fx.length,
         broken: fx.filter(f => f.broken).length,
@@ -252,6 +257,22 @@ export class StationLighting {
       areas,
     };
   }
+}
+
+/** Area of the level band the camera (eye) is in (debug/QA only). */
+function cameraArea(layout: StationLayout, cam: THREE.Vector3): number {
+  const g0 = layout.grid;
+  const [cx, cy] = g0.cellOf(cam.x, cam.z);
+  if (!g0.inBounds(cx, cy)) return -1;
+  const i = cy * g0.w + cx;
+  let best = -1, bestFloor = -Infinity;
+  for (const L of stationLevels(layout)) {
+    const g = L.grid, c = g.cells[i];
+    if (c !== 1 && c !== 2) continue; // FLOOR / VOID
+    const f = g.floorAt(cam.x, cam.z);
+    if (f <= cam.y + 0.2 && f > bestFloor) { bestFloor = f; best = g.area[i]; }
+  }
+  return best;
 }
 
 /** Gentler fog for emissive tubes (they are light sources: they read further through the haze). */

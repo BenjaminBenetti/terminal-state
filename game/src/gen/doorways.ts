@@ -24,6 +24,13 @@
 import {CELL, SOLID, type Grid, type Ramp} from './grid';
 import type {Door, SignKind, SignPlacement, StationLayout} from './stationTypes';
 import {storefrontParts} from './storefronts';
+import {apertureOf} from './levelGen';
+
+/** Iteration 08 (Lane A): grid of the level an opening is carved on (the level of its `a` area). */
+function doorGrid(layout: StationLayout, d: Door): Grid {
+  const lv = d.level ?? layout.areas[d.a]?.level ?? 0;
+  return layout.levels?.[lv]?.grid ?? layout.grid;
+}
 
 export interface Box3 { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }
 
@@ -101,13 +108,12 @@ function doorHeights(g: Grid, d: Door): {floor: number; ceil: number} {
 
 /** Clear volume of every walk-through lane of every opening (sealed openings have none). */
 export function doorClearVolumes(layout: StationLayout, o: DoorClearOpts = DOOR_CLEAR): DoorClearVolume[] {
-  const g = layout.grid;
   const out: DoorClearVolume[] = [];
   layout.doors.forEach((d, door) => {
     const lanes = doorLanes(layout, d);
     if (!lanes) return;
     const alongX = doorAlongX(d);
-    const {floor, ceil} = doorHeights(g, d);
+    const {floor, ceil} = doorHeights(doorGrid(layout, d), d);
     const y0 = floor + o.floor, y1 = Math.min(floor + o.height, ceil - o.lintel);
     if (y1 <= y0) return;
     const base = (alongX ? d.x : d.y) * CELL;
@@ -314,6 +320,8 @@ interface WallRect { x: number; y: number; w: number; h: number }
  * Whether a wall plate spanning [t0, t1] (world m along the wall of `area` on `side`) at heights
  * [yb, yt] is backed by wall: every cell behind it is solid rock, or an opening whose lintel face
  * lies below the plate (signs over doors). Plates never float in an opening or past a corner.
+ * Iteration 08 (Lane A): a cell that is closed on this level but is an APERTURE (a light well: another
+ * level's band rises through it, gen/levelGen.ts) is open air, not wall. Heights are absolute.
  */
 export function wallBacked(g: Grid, area: WallRect, side: WallSide, t0: number, t1: number, yb: number): boolean {
   const alongX = side === 'N' || side === 'S';
@@ -321,11 +329,12 @@ export function wallBacked(g: Grid, area: WallRect, side: WallSide, t0: number, 
   const behind = side === 'N' ? area.y - 1 : side === 'S' ? area.y + area.h : side === 'W' ? area.x - 1 : area.x + area.w;
   const c0 = Math.floor(t0 / CELL + 1e-6), c1 = Math.ceil(t1 / CELL - 1e-6) - 1;
   if (c0 < lo || c1 >= hi) return false;
+  const ap = apertureOf(g);
   for (let c = c0; c <= c1; c++) {
     const [x, y] = alongX ? [c, behind] : [behind, c];
     if (!g.inBounds(x, y)) continue;
     const i = g.idx(x, y);
-    if (g.cells[i] === SOLID) continue;
+    if (g.cells[i] === SOLID) { if (ap?.[i]) return false; continue; }
     // An opening: only the lintel face above it (when lower than the plate) can carry the plate.
     if (g.hasCeil(i) && yb >= g.ceil[i] + 0.02) continue;
     return false;
@@ -400,7 +409,9 @@ export function decorVolumes(layout: StationLayout): DecorVolume[] {
   });
   layout.lights.forEach((l, i) => {
     push(rotatedBox(l.x, l.z, l.rot, FIXTURE.w, FIXTURE.d, l.y - FIXTURE.h, l.y), 'light', `light#${i}`);
-    const local = g.ceilAt(l.x, l.z);
+    // Iteration 08 (Lane A): the rod reaches the ceiling of the fixture's own level.
+    const lg = layout.levels?.[l.level ?? layout.areas[l.area]?.level ?? 0]?.grid ?? g;
+    const local = lg.ceilAt(l.x, l.z);
     const ceil = Math.min(layout.areas[l.area]?.ceil ?? l.y, Number.isFinite(local) ? local : Infinity);
     if (ceil - l.y >= 0.1) {
       const ax = Math.cos(l.rot) * 0.45, az = -Math.sin(l.rot) * 0.45;

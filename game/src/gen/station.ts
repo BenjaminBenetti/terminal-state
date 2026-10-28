@@ -4,8 +4,11 @@
 // long or twin mezzanine, island reached from its ends with a ring concourse, four-track express,
 // two-line interchange with a transfer passage, split shallow station with fare controls on both
 // sides, or deep station with a long escalator hall — each with its own randomized district
-// pattern (food court / arcade / exit hall placement). Then, on one walkable level ("levels" are
-// expressed by layout, ceiling heights and signage): sealed street exits, the agent office,
+// pattern (food court / arcade / exit hall placement). Iteration 08 (Lane A): right after its
+// track block each archetype carves the station's MULTI-LEVEL program (gen/levelGen.ts) — stair
+// cores, an upper concourse with crossover bridges and light wells over the tracks, a lower service
+// crossing beneath them — into stacked level grids (layout.levels). Then, on the main level: sealed
+// street exits, the agent office,
 // washrooms, STOREFRONT BAYS carved into the hall walls (storefronts.ts) with service corridors
 // and stock rooms behind the food court, staff corridors behind platforms, seeded back-of-house
 // growth and loops. The canvas is cropped to the station, then dressed, spawned and lit.
@@ -23,6 +26,8 @@ import {applyLighting, clearAround, dress, placeSpawns} from './stationDress';
 import {finishTraversal, placeLadders, shiftFlight, shiftRamp, traversalIssues} from './traversal';
 import {doorwayIssues} from './doorways';
 import {assignEnemyArchetypes} from '../ai/creatureSpawn';
+import {buildLevelLinks, buildLevels, deriveRails, levelDistance, levelIssues, registerApertures, shiftPlan} from './levelGen';
+import {dressLevels, lightServiceLevel, placeLevelSpawns} from './levelGenDress';
 
 export * from './stationTypes';
 export {ROOM_LABEL};
@@ -250,6 +255,8 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   const paidHalls = new Set(plan.paidHalls.map(a => a.id));
   const unpaidHalls = new Set([...plan.ticketHalls, ...plan.exitHalls].map(a => a.id));
   const parentWeight = (a: Area): number => {
+    // Iteration 08 (Lane A): back-of-house grows on the main level only (not off stair cores or level areas).
+    if (a.level || a.type === 'stair-core') return 0;
     if (a.kind === 'service') return 3.2;
     if (a.kind === 'room') return a.type === 'washroom' || a.type === 'eatery' || a.type === 'shop' ? 0 : 1.4;
     if (a.type === 'passage') return 0.8;
@@ -274,21 +281,23 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   }
   // Every station has the full back-of-house set.
   for (const need of REQUIRED_ROOMS) {
-    if (areas.some(a => a.type === need)) continue;
+    if (areas.some(a => a.type === need && !a.level)) continue;
     const counts = new Map<RoomType, number>();
-    for (const a of areas) if (a.kind === 'room') counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
-    const donor = areas.find(a => a.kind === 'room' && !a.publicSpace && a.type !== 'agent-office' && (counts.get(a.type) ?? 0) >= 2);
+    for (const a of areas) if (a.kind === 'room' && !a.level) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
+    const donor = areas.find(a => a.kind === 'room' && !a.level && !a.publicSpace && a.type !== 'agent-office' && (counts.get(a.type) ?? 0) >= 2);
     if (!donor) return null;
     donor.type = need;
     donor.label = ROOM_LABEL[need];
   }
-  if (areas.filter(a => a.kind === 'room' && !a.publicSpace).length < 6) return null;
+  if (areas.filter(a => a.kind === 'room' && !a.publicSpace && !a.level).length < 6) return null;
 
   // --- Loops: extra doors between back-of-house neighbours separated by one wall ----------------
   const connected = new Set(doors.map(d => `${Math.min(d.a, d.b)}:${Math.max(d.a, d.b)}`));
   const loopOk = (a: Area) => !a.publicSpace || a.type === 'food-court' || a.type === 'retail-arcade' || a.type === 'passage';
-  for (const a of areas) {
-    for (const b of areas) {
+  // Iteration 08 (Lane A): loops join main-level neighbours only (level areas share X/Z, not walls).
+  const mainAreas = areas.filter(a => !a.level && a.type !== 'stair-core');
+  for (const a of mainAreas) {
+    for (const b of mainAreas) {
       if (a.id >= b.id || !loopOk(a) || !loopOk(b) || (a.publicSpace && b.publicSpace)) continue;
       if (a.paid !== b.paid && (a.publicSpace || b.publicSpace)) continue;
       if (connected.has(`${a.id}:${b.id}`)) continue;
@@ -304,23 +313,34 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
     }
   }
 
-  // --- Crop the canvas to the station -------------------------------------------------------------
+  // --- Crop the canvas to the station (iteration 08: every level grid, same bounds) ----------------
+  const srcs = k.levelGrids;
   const src = k.g;
   let x0 = src.w, y0 = src.h, x1 = 0, y1 = 0;
-  for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) if (src.cells[y * src.w + x] !== SOLID) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  const ox = x0 - 2, oy = y0 - 2;
-  const g = new Grid(x1 - x0 + 5, y1 - y0 + 5);
-  for (let y = 0; y < g.h; y++) {
-    const s = (y + oy) * src.w + ox, d = y * g.w;
-    g.cells.set(src.cells.subarray(s, s + g.w), d);
-    g.area.set(src.area.subarray(s, s + g.w), d);
-    g.ceil.set(src.ceil.subarray(s, s + g.w), d);
-    // Lane T (iteration 05): floor heights + stair ramps travel with the crop.
-    g.floor.set(src.floor.subarray(s, s + g.w), d);
-    g.rampIdx.set(src.rampIdx.subarray(s, s + g.w), d);
+  // Every carved cell of every level lies in an area, a door or a track bed rect (cheaper than scanning three canvases).
+  for (const r of [...areas, ...doors, ...k.trenches.map(t => ({x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0}))]) {
+    if (r.w <= 0 || r.h <= 0) continue;
+    x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1);
   }
-  g.voidFloor = src.voidFloor;
-  g.ramps = src.ramps.map(r => shiftRamp(r, ox, oy));
+  const ox = x0 - 2, oy = y0 - 2;
+  const grids = srcs.map(sg => {
+    const out = new Grid(x1 - x0 + 5, y1 - y0 + 5);
+    for (let y = 0; y < out.h; y++) {
+      const s = (y + oy) * sg.w + ox, d = y * out.w;
+      out.cells.set(sg.cells.subarray(s, s + out.w), d);
+      out.area.set(sg.area.subarray(s, s + out.w), d);
+      out.ceil.set(sg.ceil.subarray(s, s + out.w), d);
+      // Lane T (iteration 05): floor heights + stair ramps travel with the crop.
+      out.floor.set(sg.floor.subarray(s, s + out.w), d);
+      out.rampIdx.set(sg.rampIdx.subarray(s, s + out.w), d);
+    }
+    out.voidFloor = sg.voidFloor;
+    return out;
+  });
+  const g = grids[0];
+  // One shared ramps list: a stair between levels has the same ramp index in every level grid.
+  const ramps = src.ramps.map(r => shiftRamp(r, ox, oy));
+  for (const lg of grids) lg.ramps = ramps;
   for (const a of areas) { a.x -= ox; a.y -= oy; }
   for (const d of doors) { d.x -= ox; d.y -= oy; }
   for (const sf of shops.storefronts) { sf.ox -= ox; sf.oy -= oy; sf.ux -= ox; sf.uy -= oy; }
@@ -335,12 +355,26 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
     platforms: plan.platforms.map(p => p.id),
     // Lane T (iteration 05): stair flights + underpasses from the kit; rescue ladders (grid nav links) on every platform face.
     traversal: {stairs: k.flights.map(f => shiftFlight(f, ox, oy)), ladders: [], underpasses: k.underpasses},
+    levels: [], levelLinks: [], rails: [],
   };
+  // Iteration 08 (Lane A): stacked levels (main / upper / lower), stair links, apertures and railings.
+  const lplan = k.levelPlan ? shiftPlan(k.levelPlan, ox, oy) : null;
+  if (lplan) { layout.levelPlan = lplan; layout.spawnEnd = lplan.spawnEnd; }
+  layout.levels = buildLevels(grids, lplan);
+  layout.levelLinks = buildLevelLinks(lplan, layout.traversal.stairs);
+  registerApertures(layout.levels);
+  layout.rails = deriveRails(layout.levels);
   layout.traversal.ladders = placeLadders(layout);
   dress(layout, rng.fork('dress'));
+  // Lane A: wayfinding on and between the levels, high-bay lights over the wells (absolute y, after the dressing lift).
+  dressLevels(layout, rng.fork('levels'));
   placeSpawns(layout, rng.fork('spawns'));
+  // Lane A: a weighted share of the zombies / loose supplies onto the upper and lower levels (totals kept).
+  placeLevelSpawns(layout, rng.fork('levelSpawns'));
   // After spawns so fixtures around the player spawn can be guaranteed working.
   applyLighting(layout, rng.fork('lighting'));
+  // Lane A: the service level stays dark-moody but readable — sparse working dim lamps (crossing, gallery, stair feet, plant-room doors).
+  lightServiceLevel(layout, rng.fork('serviceLights'));
   // Lane T: fixtures follow stepped ceilings, loot/props lifted to local floors, never on stairs; underpass + ladder signs.
   finishTraversal(layout);
   // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed.
@@ -357,29 +391,36 @@ export function validateLayout(layout: StationLayout): string[] {
   const [sx, sy] = g.cellOf(layout.playerSpawn.x, layout.playerSpawn.z);
   if (!clearAround(g, sx, sy, 1)) issues.push('player spawn not clear');
   if (!g.circleClear(layout.playerSpawn.x, layout.playerSpawn.z, 0.35)) issues.push('player spawn intersects geometry');
-  const dist = g.distanceField(sx, sy);
+  // Iteration 08 (Lane A): reachability over every level (stairs carved into two grids, ladders).
+  const levels = layout.levels?.length ? layout.levels : [{id: 0, role: 'main' as const, grid: g, baseY: 0}];
+  const dists = levelDistance(levels, sx, sy);
+  const dist = dists[0];
+  const gridOf = (lv: number | undefined) => levels[lv ?? 0]?.grid ?? g;
   let walk = 0, reached = 0;
   for (let i = 0; i < g.cells.length; i++) {
     if (g.cells[i] === FLOOR && !g.blocked[i]) { walk++; if (dist[i] >= 0) reached++; }
   }
   if (walk !== reached) issues.push(`unreachable walkable cells: ${walk - reached}`);
   for (const a of layout.areas) {
+    const ag = gridOf(a.level), ad = dists[a.level ?? 0] ?? dist;
     let any = false;
-    for (let y = a.y; y < a.y + a.h && !any; y++) for (let x = a.x; x < a.x + a.w; x++) if (dist[g.idx(x, y)] >= 0) { any = true; break; }
+    for (let y = a.y; y < a.y + a.h && !any; y++) for (let x = a.x; x < a.x + a.w; x++) if (ad[ag.idx(x, y)] >= 0) { any = true; break; }
     if (!any) issues.push(`area ${a.id} (${a.type}) unreachable`);
   }
   if (layout.zombies.length < 8) issues.push(`too few zombies: ${layout.zombies.length}`);
   for (const z of layout.zombies) {
-    const [x, y] = g.cellOf(z.x, z.z);
-    const d = dist[g.idx(x, y)];
+    const zg = gridOf(z.level), zd = dists[z.level ?? 0] ?? dist;
+    const [x, y] = zg.cellOf(z.x, z.z);
+    const d = zd[zg.idx(x, y)];
     if (d < 0) issues.push('zombie on unreachable cell');
     else if (d < MIN_ZOMBIE_SPAWN_CELLS) issues.push('zombie too close to player');
-    if (!g.circleClear(z.x, z.z, 0.35)) issues.push('zombie spawn intersects geometry');
+    if (!zg.circleClear(z.x, z.z, 0.35)) issues.push('zombie spawn intersects geometry');
   }
   for (const p of layout.pickups) {
-    if (p.y > 0) continue;
-    const [x, y] = g.cellOf(p.x, p.z);
-    if (dist[g.idx(x, y)] < 0) issues.push(`pickup ${p.itemId} unreachable`);
+    if (!p.level && p.y > 0) continue;
+    const pg = gridOf(p.level), pd = dists[p.level ?? 0] ?? dist;
+    const [x, y] = pg.cellOf(p.x, p.z);
+    if (pd[pg.idx(x, y)] < 0) issues.push(`pickup ${p.itemId} unreachable`);
   }
   if (!layout.pickups.some(p => p.itemId === 'shotgun')) issues.push('no shotgun pickup');
   const plat = layout.areas[layout.platform];
@@ -404,6 +445,8 @@ export function validateLayout(layout: StationLayout): string[] {
   issues.push(...traversalIssues(layout));
   // Iteration 07 (Lane DW): every walk-through opening is free of decor (rails, plates, panels, props).
   issues.push(...doorwayIssues(layout));
+  // Iteration 08 (Lane A): stacked levels — overlap, slabs / headroom, stairs, railings, placements, reachability.
+  if (layout.levels?.length) issues.push(...levelIssues(layout, dists));
   return issues;
 }
 

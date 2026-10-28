@@ -69,7 +69,8 @@ export function restTime(b: CANNON.Body, size: number, prev: number, dt: number)
  */
 export function groundClamp(b: CANNON.Body, statics: StaticQuery | null): boolean {
   if (!statics) return false;
-  const g = statics.cellGround(b.position.x, b.position.z);
+  // iteration 08: the floor of the band the body is in (a deck above, the floor below a slab)
+  const g = statics.cellGround(b.position.x, b.position.z, b.position.y);
   if (!Number.isFinite(g)) return false;
   if (b.aabbNeedsUpdate) b.updateAABB();
   const low = b.aabb.lowerBound.y;

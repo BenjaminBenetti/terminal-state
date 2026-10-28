@@ -54,6 +54,14 @@ export interface P7Use {
   lead?: boolean;
   /** onTop / atHost: at most this many per area (e.g. one till per store). */
   max?: number;
+  /**
+   * Iteration 08 (Lane P) affinities for wall / along / mount uses: try spots right beside these partner fixtures first (a
+   * pegboard by the tool chest, a copier by the desk) and/or beside the area's doors (`door`: extinguishers, punch clocks, coat
+   * racks, baskets at the entrance). `space`: minimum distance between two of this kind in one area (m).
+   */
+  near?: readonly string[];
+  door?: boolean;
+  space?: number;
 }
 
 export interface P7Spec {
@@ -107,12 +115,12 @@ export const P7_SPECS = {
   payphone: {core: true, label: 'payphone', cls: 'sheetMetal', uses: [MOUNT(['platform'], [1, 3], 0.75, {per100: 0.25}), MOUNT(['concourse', 'fare-hall', 'passage', 'retail-arcade', 'paid-concourse', 'underpass'], [1, 2], 0.75, {chance: 0.7})]},
   emergencyCallPoint: {core: true, label: 'emergency call point', cls: 'sheetMetal', uses: [W(['platform'], [1, 3], {per100: 0.2}), W(['concourse', 'paid-concourse', 'passage', 'underpass', 'fare-hall'], [1, 1], {chance: 0.6})]},
   fareValidatorStand: {core: true, label: 'fare validator', cls: 'steel', uses: [ROW(['fare-hall', 'paid-concourse'], [2, 3], {chance: 0.8}), W(['platform'], [1, 2], {per100: 0.12, chance: 0.6}), W(['concourse'], [1, 2], {chance: 0.4})]},
-  newspaperVendingBox: {label: 'newspaper box', cls: 'sheetMetal', uses: [ROW(['concourse', 'passage', 'fare-hall', 'paid-concourse', 'retail-arcade'], [2, 3], {chance: 0.6}), ROW(['exit-stair'], [1, 2], {chance: 0.3})]},
+  newspaperVendingBox: {core: true, label: 'newspaper box', cls: 'sheetMetal', uses: [ROW(['concourse', 'passage', 'fare-hall', 'paid-concourse', 'retail-arcade'], [2, 3], {chance: 0.6}), ROW(['exit-stair'], [1, 2], {chance: 0.3})]},
   atmKiosk: {label: 'cash machine', cls: 'sheetMetal', glassFront: {cls: 'screen', integrity: 25, rect: [0.18, 0.82, 0.6, 0.82]}, uses: [W(['concourse', 'fare-hall', 'retail-arcade', 'paid-concourse', 'food-court', 'passage'], [1, 2], {front: 1.0, chance: 0.6})]},
   infoTouchKiosk: {label: 'information kiosk', cls: 'sheetMetal', uses: [W(['concourse', 'fare-hall', 'paid-concourse', 'retail-arcade', 'food-court'], [1, 1], {front: 1.0, chance: 0.6})]},
   capsuleToyMachine: {label: 'capsule toy machine', cls: 'plastic', uses: [ROW(['concourse', 'passage', 'retail-arcade', 'food-court', 'paid-concourse'], [1, 2], {chance: 0.4}), W(['convenience'], [1, 1], {chance: 0.3})]},
   crowdBarrier: {label: 'crowd barrier', cls: 'steel', uses: [W(['concourse', 'fare-hall', 'paid-concourse', 'passage'], [1, 2], {front: 1.0, chance: 0.6}), W(['service-corridor'], [1, 1], {chance: 0.25})]},
-  securityPodium: {label: 'security podium', cls: 'laminate', uses: [W(['fare-hall', 'paid-concourse', 'concourse'], [1, 1], {front: 1.0, chance: 0.35}), W(['security-office'], [1, 1], {chance: 0.4})]},
+  securityPodium: {core: true, label: 'security podium', cls: 'laminate', uses: [W(['fare-hall', 'paid-concourse', 'concourse'], [1, 1], {front: 1.0, chance: 0.35}), W(['security-office'], [1, 1], {chance: 0.4})]},
   platformClock: {label: 'platform clock', cls: 'sheetMetal', uses: [HANG(['platform'], [1, 2], {per100: 0.12}), HANG(['concourse', 'fare-hall', 'paid-concourse'], [1, 1], {chance: 0.5})]},
   cctvCamera: {core: true, label: 'CCTV camera', cls: 'plastic', uses: [MOUNT(['platform'], [1, 3], 2.45, {per100: 0.2}), MOUNT(['concourse', 'paid-concourse', 'fare-hall', 'passage', 'retail-arcade', 'food-court', 'underpass'], [1, 2], 2.45, {chance: 0.7}), MOUNT(['service-corridor'], [1, 1], 2.15, {chance: 0.35}), MOUNT(['security-office', 'revenue-room'], [1, 1], 2.15, {chance: 0.6})]},
   aedWallCabinet: {label: 'defibrillator cabinet', cls: 'plastic', uses: [MOUNT(['concourse', 'fare-hall', 'paid-concourse', 'platform', 'retail-arcade', 'food-court'], [1, 1], 1.2, {chance: 0.6}), MOUNT(['first-aid-room'], [1, 1], 1.2, {chance: 0.7})]},
@@ -128,7 +136,7 @@ export const P7_SPECS = {
   shoppingCart: {label: 'shopping cart', cls: 'steel', holder: {lots: [1, 3], empty: 0.35, mod: [1.6, 1.4, 0.2, 0]}, uses: [W(['convenience'], [1, 1], {chance: 0.5, front: 0.8}), FREE(['platform', 'concourse', 'passage', 'paid-concourse', 'underpass'], [1, 1], {chance: 0.2})]},
   wheelchair: {label: 'wheelchair', cls: 'steel', uses: [W(['first-aid-room'], [1, 1], {chance: 0.6}), W(['pharmacy'], [1, 1], {chance: 0.3}), FREE(['concourse', 'platform', 'paid-concourse'], [1, 1], {chance: 0.15})]},
   trashBagPile: {label: 'trash bags', cls: 'fabric', uses: [W(['service-corridor', 'storage'], [1, 1], {chance: 0.5}), W(['custodial-room'], [1, 2], {lead: true}), W(['platform', 'passage', 'underpass', 'food-court'], [1, 2], {per100: 0.06, chance: 0.4}), W(['burger', 'pizza'], [1, 1], {chance: 0.2, front: 0.7})]},
-  foldingBarricade: {label: 'folding barricade', cls: 'plastic', uses: [W(['service-corridor', 'storage', 'custodial-room'], [1, 1], {chance: 0.4}), W(['platform', 'passage', 'concourse', 'underpass'], [1, 1], {chance: 0.3, front: 1.0})]},
+  foldingBarricade: {core: true, label: 'folding barricade', cls: 'plastic', uses: [W(['service-corridor', 'storage', 'custodial-room'], [1, 1], {chance: 0.4}), W(['platform', 'passage', 'concourse', 'underpass'], [1, 1], {chance: 0.3, front: 1.0})]},
   wetFloorSign: {label: 'wet floor sign', cls: 'plastic', uses: [FREE(['washroom', 'passage', 'concourse', 'food-court', 'retail-arcade', 'paid-concourse'], [1, 1], {chance: 0.35, ring: 0.8}), W(['janitor-closet', 'custodial-room'], [1, 2], {chance: 0.6, front: 0.5}), W(['service-corridor'], [1, 1], {chance: 0.3, front: 0.5})]},
   // --- washrooms ----------------------------------------------------------------------------------------------------------
   urinal: {core: true, label: 'urinal', cls: 'porcelain', uses: [ROW(['washroom'], [2, 3], {y: 0.25, front: 0.8, chance: 0.75})]},
@@ -217,7 +225,7 @@ export const P7_SPECS = {
   handToolbox: {label: 'toolbox', cls: 'sheetMetal', uses: [TOP(['storage', 'electrical-room', 'signal-room', 'electrical-closet', 'workshop', 'service-corridor'], ['cabinetLow', 'crate', 'desk', 'shelf', 'rollingToolChest'], {chance: 0.6, max: 2})]},
   airCompressor: {label: 'air compressor', cls: 'steel', uses: [W(['workshop', 'storage', 'electrical-room', 'pump-room'], [1, 1], {chance: 0.5, front: 0.6})]},
   gasCylinderCart: {label: 'gas cylinder cart', cls: 'steel', uses: [W(['workshop', 'storage', 'electrical-room'], [1, 1], {chance: 0.4, front: 0.6})]},
-  tripodWorkLight: {label: 'work light', cls: 'steel', uses: [W(['storage', 'electrical-room', 'service-corridor', 'signal-room', 'workshop'], [1, 1], {chance: 0.4, front: 0.6}), FREE(['platform', 'underpass'], [1, 1], {chance: 0.1})]},
+  tripodWorkLight: {core: true, label: 'work light', cls: 'steel', uses: [W(['storage', 'electrical-room', 'service-corridor', 'signal-room', 'workshop'], [1, 1], {chance: 0.4, front: 0.6}), FREE(['platform', 'underpass'], [1, 1], {chance: 0.1})]},
   portableGenerator: {label: 'generator', cls: 'steel', uses: [W(['storage', 'electrical-room', 'service-corridor', 'workshop', 'pump-room'], [1, 1], {chance: 0.5, front: 0.6}), FREE(['platform'], [1, 1], {chance: 0.1})]},
   drumFan: {label: 'drum fan', cls: 'steel', uses: [W(['electrical-room', 'storage', 'service-corridor', 'pump-room', 'workshop'], [1, 1], {chance: 0.4, front: 0.7}), W(['burger'], [1, 1], {chance: 0.2})]},
   waterPumpSkid: {label: 'water pump', cls: 'steel', uses: [W(['pump-room'], [1, 2], {lead: true, front: 0.8}), W(['electrical-room', 'storage'], [1, 1], {chance: 0.3})]},
@@ -293,24 +301,38 @@ export const P7_MODEL_CLASS: Readonly<Record<string, DamageClass>> = Object.from
 // ---------------------------------------------------------------------------------------
 // Placement queries (gen/props07Dress.ts executes them)
 
+const usesMemo = new Map<string, {kind: P7Kind; use: P7Use}[]>();
 /** Area-level uses (everything but host-relative onTop / atHost) of every integrated kind for an area key (purpose id or hall key). */
 export function p7UsesFor(key: string): {kind: P7Kind; use: P7Use}[] {
-  const out: {kind: P7Kind; use: P7Use}[] = [];
-  for (const kind of P7_KINDS) for (const use of SPECS[kind].uses) if (use.at !== 'onTop' && use.at !== 'atHost' && use.in.includes(key)) out.push({kind, use});
-  return out;
+  let out = usesMemo.get(key);
+  if (!out) {
+    out = [];
+    for (const kind of P7_KINDS) for (const use of SPECS[kind].uses) if (use.at !== 'onTop' && use.at !== 'atHost' && use.in.includes(key)) out.push({kind, use});
+    usesMemo.set(key, out);
+  }
+  return out.slice();
 }
+const hostMemo = new Map<string, {kind: P7Kind; use: P7Use}[]>();
 /** Host-relative uses (onTop decor, atHost chairs) of kinds that may go on/at `hostKind` in an area keyed `key`. */
 export function p7HostUsesFor(hostKind: string, key: string): {kind: P7Kind; use: P7Use}[] {
-  const out: {kind: P7Kind; use: P7Use}[] = [];
-  for (const kind of P7_KINDS) for (const use of SPECS[kind].uses) if ((use.at === 'onTop' || use.at === 'atHost') && use.on?.includes(hostKind) && use.in.includes(key)) out.push({kind, use});
-  return out;
+  const mk = `${hostKind}|${key}`;
+  let out = hostMemo.get(mk);
+  if (!out) {
+    out = [];
+    for (const kind of P7_KINDS) for (const use of SPECS[kind].uses) if ((use.at === 'onTop' || use.at === 'atHost') && use.on?.includes(hostKind) && use.in.includes(key)) out.push({kind, use});
+    hostMemo.set(mk, out);
+  }
+  return out.slice();
 }
 /** Integrated kinds with any use (area-level or host-relative) in an area key (tests: store fixtures follow the purpose). */
 export function p7KindsFor(key: string): P7Kind[] {
   return P7_KINDS.filter(k => SPECS[k].uses.some(u => u.in.includes(key)));
 }
-/** Fraction of the non-core, non-signature catalogue each station's palette keeps (seeded per station). */
-export const P7_PALETTE_KEEP = 0.55;
+/**
+ * Fraction of the non-core, non-signature catalogue each station's palette keeps (seeded per station). Iteration 08: 0.55 -> 0.5
+ * because four composition signatures (newspaper box, security podium, folding barricade, work light) became `core`.
+ */
+export const P7_PALETTE_KEEP = 0.5;
 /** Kinds every palette keeps: station infrastructure (`core`) and purpose signatures (`lead` uses). */
 export const P7_ALWAYS: ReadonlySet<string> = new Set(P7_KINDS.filter(k => SPECS[k].core || SPECS[k].uses.some(u => u.lead)));
 /** A station's seeded kind palette. */

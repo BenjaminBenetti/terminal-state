@@ -6,6 +6,12 @@
 // carry the ladder id; the climb follows the same scripted path as the player's). Swipes need the
 // player within ATTACK_REACH_Y vertically, so a zombie on the platform cannot hit a player down in
 // the track bed — it drops in after them, and climbs out by the nearest ladder.
+//
+// Iteration 08 (Lane B, stacked levels): the brain passes feet heights to its world — sight is a 3D
+// line between eye lines (a slab between storeys blocks it, an open stairwell does not), paths are
+// planned from the zombie's storey to the target's (the last known position keeps its height), and
+// path waypoints on another storey are not "reached" by standing above / below them. Worlds that
+// ignore the extra arguments behave exactly as before.
 
 import type {ZombieType} from '../gen/station';
 import type {Waypoint} from '../gen/grid';
@@ -25,6 +31,8 @@ export interface ZombieStats {
   chaseAnim: 'Run' | 'Walk';
   /** Iteration 07 (Lane Q): body turn rate outside attacks (rad/s; default 4.5) — the quadruped turns fast. */
   turnRate?: number;
+  /** Iteration 08 (Lane B): clear height the body needs under soffits / slabs (m; default levels.BODY_CLEAR 1.6). */
+  height?: number;
 }
 
 // Attack duration/impact match the Attack clip (1.1 s, impact 0.45 s) in derivatives/zombie-rigged.json.
@@ -43,11 +51,14 @@ export interface BrainWorld {
   px: number;
   pz: number;
   playerAlive: boolean;
-  los(ax: number, az: number, bx: number, bz: number): boolean;
-  walkClear(ax: number, az: number, bx: number, bz: number, r: number): boolean;
-  /** `drops`: chase paths may jump down ledges (platform edge into the track bed). */
-  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean}): Waypoint[] | null;
-  randomNear(x: number, z: number, r: number): [number, number] | null;
+  /** Iteration 08: `ay` / `by` = feet heights of the two ends (3D sight between eye lines on stacked stations). */
+  los(ax: number, az: number, bx: number, bz: number, ay?: number, by?: number): boolean;
+  /** Iteration 08: `ay` = feet height at a, `by` = the walk must end at that height (same storey). */
+  walkClear(ax: number, az: number, bx: number, bz: number, r: number, ay?: number, by?: number): boolean;
+  /** `drops`: chase paths may jump down ledges (platform edge into the track bed). Iteration 08: `ay` / `by` = start / goal feet heights (storeys). */
+  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean; ay?: number; by?: number}): Waypoint[] | null;
+  /** Iteration 08: `y` = feet height (stay on that storey); the optional 3rd element is the point's floor height. */
+  randomNear(x: number, z: number, r: number, y?: number): [number, number] | [number, number, number] | null;
   rand(): number;
   /** Player feet height (world y); omitted = same level. */
   py?: number;
@@ -81,7 +92,8 @@ export class ZombieBrain {
   private climb: {path: ClimbPath; t: number; ladder: number; yaw: number; resume: BrainState; resumeT: number} | null = null;
   private readonly tmp: Vec3 = {x: 0, y: 0, z: 0};
   private repathT = 0;
-  private lastKnown: [number, number] | null = null;
+  /** Last known player position; iteration 08: with its feet height when known (its storey). */
+  private lastKnown: [number, number, number?] | null = null;
   private unseenT = 0;
   private attackDone = false;
   private staggerCd = 0;
@@ -112,11 +124,11 @@ export class ZombieBrain {
     this.attackDone = false;
   }
 
-  /** Heard a loud noise (gunshot) at a position. */
-  hear(x: number, z: number, radius: number): void {
+  /** Heard a loud noise (gunshot) at a position (iteration 08: `y` = the source's feet height). */
+  hear(x: number, z: number, radius: number, y?: number): void {
     if (!this.alive) return;
     if (Math.hypot(x - this.x, z - this.z) > radius) return;
-    this.lastKnown = [x, z];
+    this.lastKnown = [x, z, y];
     this.aware = true;
     if (this.state === 'idle' || this.state === 'wander' || this.state === 'search') {
       this.setState('chase');
@@ -124,11 +136,11 @@ export class ZombieBrain {
     } else if (this.climb) this.climb.resume = 'chase';
   }
 
-  /** Returns true if this hit killed the zombie. */
-  damage(amount: number, fromX: number, fromZ: number): boolean {
+  /** Returns true if this hit killed the zombie (iteration 08: `fromY` = the shooter's feet height). */
+  damage(amount: number, fromX: number, fromZ: number, fromY?: number): boolean {
     if (!this.alive) return false;
     this.hp -= amount;
-    this.lastKnown = [fromX, fromZ];
+    this.lastKnown = [fromX, fromZ, fromY];
     this.aware = true;
     if (this.hp <= 0) {
       this.hp = 0;
@@ -156,7 +168,7 @@ export class ZombieBrain {
       const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
       if (!this.aware && a > 1.3 && d > 5) return false;
     }
-    return w.los(this.x, this.z, w.px, w.pz);
+    return w.los(this.x, this.z, w.px, w.pz, this.y, w.py);
   }
 
   private steerTo(w: BrainWorld, tx: number, tz: number, out: BrainOutput): boolean {
@@ -172,8 +184,9 @@ export class ZombieBrain {
 
   private followPath(w: BrainWorld, out: BrainOutput, speed: number): boolean {
     while (this.path.length) {
-      const [tx, tz, link] = this.path[0];
-      if (link === undefined && Math.hypot(tx - this.x, tz - this.z) < 0.35) this.path.shift();
+      const [tx, tz, link, ty] = this.path[0];
+      // iteration 08: a waypoint on another storey (directly above / below) is not reached yet
+      if (link === undefined && Math.hypot(tx - this.x, tz - this.z) < 0.35 && (ty === undefined || Math.abs(ty - this.y) < 1.2)) this.path.shift();
       else break;
     }
     if (!this.path.length) return true;
@@ -217,7 +230,7 @@ export class ZombieBrain {
     if (sees) {
       if (!this.aware) out.alerted = true;
       this.aware = true;
-      this.lastKnown = [w.px, w.pz];
+      this.lastKnown = [w.px, w.pz, w.py];
       this.unseenT = 0;
     } else this.unseenT += dt;
 
@@ -241,8 +254,8 @@ export class ZombieBrain {
         out.anim = 'Idle';
         if (sees) { this.setState('chase'); this.repathT = 0; break; }
         if (this.stateT <= 0) {
-          const p = w.randomNear(this.x, this.z, 6);
-          const path = p && w.findPath(this.x, this.z, p[0], p[1]);
+          const p = w.randomNear(this.x, this.z, 6, this.y);
+          const path = p && w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2]));
           if (path && path.length) { this.path = path; this.setState('wander', 12); }
           else this.stateT = 2 + w.rand() * 3;
         }
@@ -270,9 +283,9 @@ export class ZombieBrain {
           out.anim = 'Attack';
           break;
         }
-        const goal = this.lastKnown ?? [w.px, w.pz];
+        const goal = this.lastKnown ?? [w.px, w.pz, w.py];
         out.anim = this.stats.chaseAnim;
-        if (sees && w.walkClear(this.x, this.z, w.px, w.pz, this.stats.radius * 0.9)) {
+        if (sees && w.walkClear(this.x, this.z, w.px, w.pz, this.stats.radius * 0.9, this.y, w.py)) {
           this.steerTo(w, w.px, w.pz, out);
           out.speed = this.stats.chaseSpeed;
           this.path = [];
@@ -281,7 +294,7 @@ export class ZombieBrain {
           if (this.repathT <= 0 || (!this.path.length && this.pathFailT <= 0)) {
             // Far goals re-plan less often (long detours on the large station are costly).
             this.repathT = 0.45 + w.rand() * 0.2 + Math.min(0.9, Math.hypot(goal[0] - this.x, goal[1] - this.z) / 45);
-            const path = w.findPath(this.x, this.z, goal[0], goal[1], {drops: true});
+            const path = w.findPath(this.x, this.z, goal[0], goal[1], {drops: true, ...this.pathOpts(goal[2])});
             this.path = path ?? [];
             if (!path) { this.pathFailT = 1.2 + w.rand() * 0.6; this.repathT = this.pathFailT; }
           }
@@ -289,8 +302,8 @@ export class ZombieBrain {
           if (done && !sees) {
             // Reached the last known position without seeing the player: search around.
             if (this.unseenT > 1.5) {
-              const p = w.randomNear(this.x, this.z, 5);
-              this.path = p ? w.findPath(this.x, this.z, p[0], p[1]) ?? [] : [];
+              const p = w.randomNear(this.x, this.z, 5, this.y);
+              this.path = p ? w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2])) ?? [] : [];
               this.setState('search', 8);
               this.lastKnown = null;
             }
@@ -298,8 +311,8 @@ export class ZombieBrain {
         }
         if (this.unseenT > 9 && this.state === 'chase') {
           this.setState('search', 6);
-          const p = w.randomNear(this.x, this.z, 5);
-          this.path = p ? w.findPath(this.x, this.z, p[0], p[1]) ?? [] : [];
+          const p = w.randomNear(this.x, this.z, 5, this.y);
+          this.path = p ? w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2])) ?? [] : [];
         }
         break;
       }
@@ -313,7 +326,7 @@ export class ZombieBrain {
           this.attackDone = true;
           const ang = Math.atan2(w.px - this.x, w.pz - this.z) - this.yaw;
           const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
-          if (w.playerAlive && distP <= this.stats.attackRange + 0.45 && a < 1.2 && this.reachY(w, 0.15) && w.los(this.x, this.z, w.px, w.pz)) out.attackHit = true;
+          if (w.playerAlive && distP <= this.stats.attackRange + 0.45 && a < 1.2 && this.reachY(w, 0.15) && w.los(this.x, this.z, w.px, w.pz, this.y, w.py)) out.attackHit = true;
         }
         if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; this.attackCd = 0.45; }
         break;
@@ -344,6 +357,11 @@ export class ZombieBrain {
         break;
       }
     }
+  }
+
+  /** Start / goal heights for a path request (the goal's storey when known; else the zombie's own). */
+  private pathOpts(goalY: number | undefined): {ay: number; by: number} {
+    return {ay: this.y, by: goalY ?? this.y};
   }
 
   /** Player within swiping reach vertically (feet heights). */

@@ -9,15 +9,23 @@
 // mounts / ceiling-hung items — under a size-scaled budget so a room reads as furnished for what it is, never as a dump. Then
 // host-relative uses: on-top decor on counters / desks / tables / worktops (the host's loot surface gives up that span) and chairs
 // pulled up to desks and tables (they collide but never block the walk grid).
+//
+// Iteration 08 (Lane P): level-aware (every check runs on the area's own level grid, heights in its local frame) and COMPOSED:
+//  - areas the composer owns (gen/compose.ts COMPOSED_ZONES: halls, platforms, passages, service corridors, upper / lower levels)
+//    only get their wall-mounted / ceiling-hung infrastructure here (CCTV, fire cabinets, clocks …), spaced out per kind; their
+//    floor items come as composed clusters;
+//  - room uses may name AFFINITIES: `near` partner kinds (a pegboard by the tool chest, a copier by the desk, the IV pole by the
+//    couch) and `door` (extinguishers, punch clocks, coat racks and baskets by the entrance) — wall spots are tried nearest the
+//    anchor first, then anywhere.
 
 import type {Rng} from '../core/rng';
-import {CELL} from './grid';
+import {CELL, type Grid} from './grid';
 import {PROP_DEFS, SHELF_TIER_Y, STALL_BACK_SHELF_Y, STALL_BACK_SHELF_Z, STALL_COUNTER_Y, STALL_COUNTER_Z, footprint, type PropDef, type PropKind, type PropPlacement} from './props';
 import {p7HostUsesFor, p7Palette, p7UsesFor, type P7Kind, type P7Use} from './props07';
-import {propBlocksDoorway, wallBacked} from './doorways';
+import {propBlocksDoorway} from './placeKit';
 import {holderSurfaces, type SurfaceOptions} from '../items/lootLayout';
 import {isContainerKind, isLootHolderKind} from '../items/loot';
-import type {Area, Side, StationLayout} from './stationTypes';
+import type {Area, Door, Side, StationLayout} from './stationTypes';
 
 export interface P7DressApi {
   rng: Rng;
@@ -27,6 +35,13 @@ export interface P7DressApi {
   cellsFree(area: Area, x: number, z: number, hx: number, hz: number): boolean;
   /** Wall the area's main door is in (rooms), null for halls. */
   doorSide(area: Area): Side | null;
+  /** Iteration 08: the area's level grid, its floor height (local frame base), whether the composer owns it, its doors. */
+  grid(area: Area): Grid;
+  base(area: Area): number;
+  composed(area: Area): boolean;
+  doors(area: Area): readonly Door[];
+  /** Wall backing on the area's level (absolute yb; apertures never back anything). */
+  backed(area: Area, side: Side, t0: number, t1: number, yb: number): boolean;
 }
 
 const OPP: Record<Side, Side> = {N: 'S', S: 'N', W: 'E', E: 'W'};
@@ -61,13 +76,15 @@ export function dressP7(layout: StationLayout, api: P7DressApi): P7DressStats {
   // GPU texture memory; stations differ). Forked RNG: the palette never shifts the placement draws.
   const prng = api.rng.fork('palette');
   const palette = p7Palette(p => prng.chance(p));
-  const ctx: Ctx = {layout, api, st, palette};
+  const ctx: Ctx = {layout, api, st, palette, kindPos: null};
   for (const a of layout.areas) {
-    const uses = p7UsesFor(p7AreaKey(a)).filter(u => palette.has(u.kind));
+    // Composed areas: only their wall / ceiling infrastructure (floor vignettes come from gen/compose.ts).
+    const composed = api.composed(a);
+    const uses = p7UsesFor(p7AreaKey(a)).filter(u => palette.has(u.kind) && (!composed || ((isHigh(u.use) || u.use.at === 'mount') && !COMPOSED_KINDS.has(u.kind))));
     if (!uses.length) continue;
-    const lead = uses.filter(u => u.use.lead);
-    const floor = api.rng.shuffle(uses.filter(u => !u.use.lead && !isHigh(u.use)));
-    const high = api.rng.shuffle(uses.filter(u => !u.use.lead && isHigh(u.use)));
+    const lead = composed ? [] : uses.filter(u => u.use.lead);
+    const floor = api.rng.shuffle(uses.filter(u => (composed || !u.use.lead) && !isHigh(u.use)));
+    const high = api.rng.shuffle(uses.filter(u => (composed || !u.use.lead) && isHigh(u.use)));
     const budget = p7Budget(a);
     let nf = 0, nh = 0;
     for (const {kind, use} of [...lead, ...floor, ...high]) {
@@ -86,10 +103,15 @@ export function dressP7(layout: StationLayout, api: P7DressApi): P7DressStats {
   return st;
 }
 
-interface Ctx { layout: StationLayout; api: P7DressApi; st: P7DressStats; palette: ReadonlySet<string> }
+interface Ctx {
+  layout: StationLayout; api: P7DressApi; st: P7DressStats; palette: ReadonlySet<string>;
+  /** Positions per `${area}|${kind}` (same-kind spacing), filled lazily from layout.props then by record(). */
+  kindPos: Map<string, number[]> | null;
+}
 
 function record(ctx: Ctx, p: PropPlacement | null): boolean {
   if (!p) return false;
+  ctx.kindPos?.get(`${p.area}|${p.kind}`)?.push(p.x, p.z) ?? ctx.kindPos?.set(`${p.area}|${p.kind}`, [p.x, p.z]);
   ctx.st.placed++;
   ctx.st.byKind.set(p.kind, (ctx.st.byKind.get(p.kind) ?? 0) + 1);
   return true;
@@ -127,17 +149,19 @@ function clearOfDoors(ctx: Ctx, x: number, z: number, hx: number, hz: number, y:
 function tryWall(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, side: Side, t: number): PropPlacement | null {
   const d = def(kind), along = use.at === 'along';
   const extent = along ? d.d : d.w, depth = along ? d.w : d.d;
+  const base = ctx.api.base(a);
   // Any wall-type use with a height (mounts, rows of urinals) is wall-mounted; mounts default to 1.2 m.
   const wantY = use.y ?? (use.at === 'mount' ? 1.2 : null);
-  const mountY = wantY !== null ? clampMount(a, d, wantY) : null;
+  const mountY = wantY !== null ? clampMount(a, d, wantY, base) : null;
   if (wantY !== null && mountY === null) return null;
   const high = mountY !== null && mountY >= 0.9;
   const yb = high ? mountY! : 0;
-  if (!wallBacked(ctx.layout.grid, a, side, t - extent / 2, t + extent / 2, yb)) return null;
+  if (!ctx.api.backed(a, side, t - extent / 2, t + extent / 2, base + yb)) return null;
   const [x, z] = wallXZ(a, side, t, depth / 2 + 0.03);
+  if (!spacedKind(ctx, a, kind, use, x, z)) return null;
   const rot = WALL_ROT[side] + (along ? (ctx.api.rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2) : 0);
   const {hx, hz} = footprint(kind, rot);
-  if (!clearOfDoors(ctx, x, z, hx, hz, high ? mountY! : 0, (mountY ?? 0) + d.h)) return null;
+  if (!clearOfDoors(ctx, x, z, hx, hz, base + (high ? mountY! : 0), (mountY ?? 0) + d.h)) return null;
   if (along) {
     // Long items turned along the wall: keep a 0.9 m strip open in front of their long side.
     const [sx, sz] = wallXZ(a, side, t, depth + 0.03 + 0.45);
@@ -151,9 +175,70 @@ function tryWall(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, side: Side, t: num
   return p;
 }
 
-/** Mount height clamped under the area ceiling (5 cm gap); null when it does not fit. */
-function clampMount(a: Area, d: PropDef, y: number): number | null {
-  const top = a.ceil - 0.05 - d.h;
+/**
+ * Iteration 08: minimum distance (m) between two placements of the same generated kind in one composed area (wall / ceiling
+ * infrastructure is spread along the walls, not bunched): a use's own `space`, else this default, else 6 m. Rooms: `space` only.
+ */
+/** Wall kinds the composer groups into vignettes (safety points, phone banks): never scattered on their own in composed areas. */
+export const COMPOSED_KINDS: ReadonlySet<string> = new Set(['payphone', 'fireExtinguisherCabinet', 'fireHoseReelCabinet', 'aedWallCabinet', 'emergencyCallPoint', 'fareValidatorStand', 'fireExtinguisher']);
+export const P7_SPACING: Readonly<Record<string, number>> = {
+  cctvCamera: 14, fireExtinguisherCabinet: 14, fireHoseReelCabinet: 18, aedWallCabinet: 22, payphone: 10, fieldPhoneBox: 18, platformClock: 14,
+  emergencyCallPoint: 14, disconnectSwitch: 6, firstAidWallKit: 14, punchClock: 20, pipeValveManifold: 10, wallDataCabinet: 8,
+};
+function spacedKind(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, x: number, z: number): boolean {
+  const sp = use.space ?? (ctx.api.composed(a) ? P7_SPACING[kind] ?? 6 : 0);
+  if (sp <= 0) return true;
+  if (!ctx.kindPos) {
+    ctx.kindPos = new Map();
+    for (const p of ctx.layout.props) { const k = `${p.area}|${p.kind}`; const l = ctx.kindPos.get(k); if (l) l.push(p.x, p.z); else ctx.kindPos.set(k, [p.x, p.z]); }
+  }
+  const l = ctx.kindPos.get(`${a.id}|${kind}`);
+  if (l) for (let i = 0; i < l.length; i += 2) if (Math.hypot(l[i] - x, l[i + 1] - z) < sp) return false;
+  return true;
+}
+
+/** Wall side a wall-backed prop stands against, when it really is backed against that wall of the area (else null). */
+function backSide(a: Area, p: PropPlacement): Side | null {
+  const q = ((Math.round(p.rot / (Math.PI / 2)) % 4) + 4) % 4;
+  const side: Side = q === 0 ? 'N' : q === 1 ? 'W' : q === 2 ? 'S' : 'E';
+  const gap = side === 'N' ? p.z - p.hz - a.y * CELL : side === 'S' ? (a.y + a.h) * CELL - (p.z + p.hz) : side === 'W' ? p.x - p.hx - a.x * CELL : (a.x + a.w) * CELL - (p.x + p.hx);
+  return gap >= -0.01 && gap < 0.25 ? side : null;
+}
+
+/**
+ * Affinity candidates (iteration 08): wall spots right beside the use's `near` partner fixtures (same wall, either side) and
+ * just past the door zone beside the area's doors (`door`), nearest first. Empty when the use names no anchor.
+ */
+function anchorSpots(ctx: Ctx, a: Area, use: P7Use, extent: number): {side: Side; t: number}[] {
+  if (!use.near?.length && !use.door) return [];
+  const out: {side: Side; t: number; k: number}[] = [];
+  const jitter = () => ctx.api.rng.next() * 0.5;
+  if (use.near?.length) {
+    for (const p of ctx.layout.props) {
+      if (p.area !== a.id || p.host !== undefined || p.mounted || !use.near.includes(p.kind)) continue;
+      const side = backSide(a, p);
+      if (!side) continue;
+      const ns = side === 'N' || side === 'S', tc = ns ? p.x : p.z, half = ns ? p.hx : p.hz;
+      for (let k = 0; k < 4; k++) for (const dir of [-1, 1]) out.push({side, t: Math.round((tc + dir * (half + extent / 2 + 0.06 + k * 0.25)) * 100) / 100, k: k + jitter()});
+    }
+  }
+  if (use.door) {
+    for (const d of ctx.api.doors(a)) {
+      const side: Side = d.h === 1 && d.w > 1 ? (d.y < a.y ? 'N' : 'S') : d.w === 1 && d.h > 1 ? (d.x < a.x ? 'W' : 'E') : d.y < a.y ? 'N' : d.y >= a.y + a.h ? 'S' : d.x < a.x ? 'W' : 'E';
+      const ns = side === 'N' || side === 'S';
+      const s0 = (ns ? d.x : d.y) * CELL, s1 = s0 + (ns ? d.w : d.h) * CELL;
+      for (let k = 0; k < 4; k++) {
+        out.push({side, t: Math.round((s1 + 1.05 + extent / 2 + k * 0.25) * 100) / 100, k: k + 0.5 + jitter()});
+        out.push({side, t: Math.round((s0 - 1.05 - extent / 2 - k * 0.25) * 100) / 100, k: k + 0.5 + jitter()});
+      }
+    }
+  }
+  return out.sort((p, q) => p.k - q.k).slice(0, 14);
+}
+
+/** Mount height clamped under the area ceiling (5 cm gap; ceilings are absolute, `base` = the area floor); null when it does not fit. */
+function clampMount(a: Area, d: PropDef, y: number, base: number): number | null {
+  const top = a.ceil - base - 0.05 - d.h;
   const m = Math.min(y, top);
   return m < Math.min(y, 0.3) - 1e-6 ? null : Math.round(m * 100) / 100;
 }
@@ -168,7 +253,9 @@ function placeUse(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, n: number): numbe
       const extent = use.at === 'along' ? d.d : d.w;
       for (let i = 0; i < n; i++) {
         let p: PropPlacement | null = null;
-        for (const pool of use.wall && use.wall !== 'any' ? [sides, ALL] : [sides]) {
+        // Affinity: spots beside the anchor fixtures / the entrance first.
+        for (const c of anchorSpots(ctx, a, use, extent)) { p = tryWall(ctx, a, kind, use, c.side, c.t); if (p) break; }
+        for (const pool of p ? [] : use.wall && use.wall !== 'any' ? [sides, ALL] : [sides]) {
           for (let t = 0; t < 16 && !p; t++) {
             const side = api.rng.pick(pool);
             const [lo, hi] = wallRange(a, side);
@@ -200,7 +287,7 @@ function placeUse(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, n: number): numbe
           if (p) break;
           const x = q4(cx + (alongX ? oa : ob)), z = q4(cz + (alongX ? ob : oa));
           const {hx, hz} = footprint(kind, rot);
-          if (!clearOfDoors(ctx, x, z, hx, hz, 0, d.h)) continue;
+          if (!clearOfDoors(ctx, x, z, hx, hz, api.base(a), d.h)) continue;
           p = api.place(a, kind, x, z, rot, {ring: use.ring ?? 1.0});
         }
         if (record(ctx, p)) got++;
@@ -216,7 +303,7 @@ function placeUse(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, n: number): numbe
         for (let t = 0; t < 24 && !p; t++) {
           const x = q4(api.rng.range(x0, x1)), z = q4(api.rng.range(z0, z1)), rot = api.rng.int(0, 3) * Math.PI / 2 - Math.PI / 2;
           const {hx, hz} = footprint(kind, rot);
-          if (!clearOfDoors(ctx, x, z, hx, hz, 0, d.h)) continue;
+          if (!clearOfDoors(ctx, x, z, hx, hz, api.base(a), d.h)) continue;
           p = api.place(a, kind, x, z, rot, {ring: use.ring ?? 0.9});
         }
         if (record(ctx, p)) got++;
@@ -225,7 +312,8 @@ function placeUse(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, n: number): numbe
     }
     case 'hang': {
       // From the ceiling, top touching it; headroom >= 2.2 m; >= 1.5 m from hung signs and light fixtures; faces along the hall.
-      const y = Math.round((a.ceil - d.h - 0.02) * 100) / 100;
+      const base = api.base(a), g = api.grid(a);
+      const y = Math.round((a.ceil - base - d.h - 0.02) * 100) / 100;
       if (y < 2.2) break;
       const alongX = a.w >= a.h;
       const x0 = a.x * CELL + 1.5, x1 = (a.x + a.w) * CELL - 1.5, z0 = a.y * CELL + 1.5, z1 = (a.y + a.h) * CELL - 1.5;
@@ -236,9 +324,13 @@ function placeUse(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, n: number): numbe
         for (let t = 0; t < 24 && !p; t++) {
           const x = q4(api.rng.range(x0, x1)), z = q4(api.rng.range(z0, z1));
           if (busy.some(b => Math.hypot(b.x - x, b.z - z) < 1.5)) continue;
+          if (!spacedKind(ctx, a, kind, use, x, z)) continue;
           const rot = alongX ? (api.rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2) : (api.rng.chance(0.5) ? 0 : Math.PI);
           const {hx, hz} = footprint(kind, rot);
-          if (!clearOfDoors(ctx, x, z, hx, hz, y, d.h)) continue;
+          // Under the local ceiling (a lower soffit / slab edge over part of the hall), never over a stair or into a doorway.
+          const lc = Math.min(g.ceilAt(x - hx, z - hz), g.ceilAt(x + hx, z - hz), g.ceilAt(x - hx, z + hz), g.ceilAt(x + hx, z + hz)) - base;
+          if (lc < y + d.h + 0.01) continue;
+          if (!clearOfDoors(ctx, x, z, hx, hz, base + y, d.h)) continue;
           p = api.place(a, kind, x, z, rot, {y});
           if (p) p.mounted = true;
         }
@@ -329,8 +421,9 @@ function onTop(ctx: Ctx, i: number, top: HostTop, kind: P7Kind): number {
   if (lx === undefined) return 0;
   const [x, z] = toWorld(host, lx, lz);
   const {hx, hz} = footprint(kind, host.rot);
-  if (!clearOfDoors(ctx, x, z, hx, hz, host.y + top.y, d.h)) return 0;
+  if (!clearOfDoors(ctx, x, z, hx, hz, ctx.api.base(ctx.layout.areas[host.area]) + host.y + top.y, d.h)) return 0;
   const p: PropPlacement = {kind, x: r3(x), z: r3(z), y: r3(host.y + top.y), rot: host.rot, area: host.area, hx, hz, h: d.h, blocksSight: false, variant: 0, host: i};
+  if (host.level) p.level = host.level;
   (host.cut ??= []).push({y: r3(top.y), x0: r3(lx - d.w / 2 - 0.02), x1: r3(lx + d.w / 2 + 0.02)});
   layout.props.push(p);
   record(ctx, p);
@@ -364,8 +457,9 @@ function atHost(ctx: Ctx, i: number, hd: PropDef, kind: P7Kind, use: P7Use, chai
     const half = (u1 - u0) / 2, across = d.w / 2 - 0.05;
     if (!api.cellsFree(area, cx, cz, alongX ? half : across, alongX ? across : half)) continue;
     if (chairs.some(c => Math.abs(c.x - x) < c.hx + hx && Math.abs(c.z - z) < c.hz + hz)) continue;
-    if (!clearOfDoors(ctx, x, z, hx, hz, host.y, d.h)) continue;
+    if (!clearOfDoors(ctx, x, z, hx, hz, api.base(area) + host.y, d.h)) continue;
     const p: PropPlacement = {kind, x: r3(x), z: r3(z), y: host.y, rot, area: host.area, hx, hz, h: d.h, blocksSight: false, variant: 0, host: i};
+    if (host.level) p.level = host.level;
     layout.props.push(p);
     chairs.push({x, z, hx, hz});
     record(ctx, p);

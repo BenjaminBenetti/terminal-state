@@ -11,260 +11,37 @@ import {stockVariant} from './purposeShapes';
 import type {Wing} from './stationKit';
 import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
 import {dressP7} from './props07Dress';
+import {p7Palette} from './props07';
+import {COMPOSED_ZONES, compose, zoneOf} from './compose';
 import {passageWallsAlongX, signDims, wallSignSpot} from './doorways';
+import {
+  OPPOSITE, areaBase, areaLevel, cellsOfBox, doorSide, forceProp, levelGrid, levelsOf, mainDoor, makePlaceCtx, placeAgainstWall,
+  rowAlongWall, tryPlaceProp, wallRange, wallSpot, backed, type PlaceCtx,
+} from './placeKit';
 import {
   MIN_ZOMBIE_SPAWN_CELLS, PENDANT_Y, SPAWN_LIT_RADIUS,
   type Area, type Door, type LightPlacement, type RoomType, type Side, type SignPlacement, type StationLayout, type ZombieType,
 } from './stationTypes';
 
-interface Ctx {
-  layout: StationLayout;
-  g: Grid;
-  rng: Rng;
-  /** Door rect +-2 cells: no props unless explicitly allowed. */
-  zone: Uint8Array;
-  /** Door rect +-1 cell: never props. */
-  doorCell: Uint8Array;
-  /** Reserved access strips in front of interactive props (counters, shelves, machines). */
-  keep: Uint8Array;
-  /** Platform safety band along the track edge; also stairs (+1 cell) and ladder stand points (Lane T traversal). */
-  edge: Uint8Array;
-  doorsOf: Map<number, Door[]>;
-}
+/**
+ * Iteration 08 (Lane P): the dresser's placement context is gen/placeKit.ts PlaceCtx — bound to ONE level of the station (its
+ * grid, doors and masks). dress() makes one per level and dresses every area on its own level's context.
+ */
+type Ctx = PlaceCtx;
 
 const EXIT_STREETS = ['Hollis St', 'Wexford Ave', 'Garnet St', 'Linden Ave', 'Carver St', 'Dorset Rd', 'Marlowe St', 'Ashby Ave', 'Fulton St', 'Bramley Rd', 'Pruitt Ave', 'Calder St', '4th Ave', 'King St', 'Queen St', 'Front St'];
 
 // ---------------------------------------------------------------------------------------
-// Placement helpers
-
-function cellsOfBox(x: number, z: number, hx: number, hz: number): [number, number, number, number] {
-  const e = 0.04;
-  return [Math.floor((x - hx + e) / CELL), Math.floor((z - hz + e) / CELL), Math.floor((x + hx - e) / CELL), Math.floor((z + hz - e) / CELL)];
-}
-
-function makeCtx(layout: StationLayout, rng: Rng): Ctx {
-  const g = layout.grid;
-  const n = g.w * g.h;
-  const zone = new Uint8Array(n), doorCell = new Uint8Array(n);
-  const doorsOf = new Map<number, Door[]>();
-  for (const d of layout.doors) {
-    for (let y = d.y - 2; y < d.y + d.h + 2; y++) for (let x = d.x - 2; x < d.x + d.w + 2; x++) {
-      if (!g.inBounds(x, y)) continue;
-      const i = g.idx(x, y);
-      zone[i] = 1;
-      if (y >= d.y - 1 && y <= d.y + d.h && x >= d.x - 1 && x <= d.x + d.w) doorCell[i] = 1;
-    }
-    for (const id of [d.a, d.b]) { let l = doorsOf.get(id); if (!l) doorsOf.set(id, (l = [])); l.push(d); }
-  }
-  const edge = new Uint8Array(n);
-  // Never dress stairs or their landings' first cell, nor the stand points of rescue ladders.
-  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
-    if (g.rampIdx[g.idx(x, y)] < 0) continue;
-    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (g.inBounds(x + ox, y + oy)) edge[g.idx(x + ox, y + oy)] = 1;
-  }
-  for (const l of layout.traversal?.ladders ?? []) {
-    for (const p of [l.top, l.bottom]) {
-      const [cx, cy] = g.cellOf(p.x, p.z);
-      for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) if (g.inBounds(cx + ox, cy + oy)) edge[g.idx(cx + ox, cy + oy)] = 1;
-    }
-  }
-  return {layout, g, rng, zone, doorCell, keep: new Uint8Array(n), edge, doorsOf};
-}
-
-let stamp = new Int32Array(0);
-let stack = new Int32Array(0);
-let stampCur = 0;
-
-/** Area stays fully connected (every walkable cell reachable, every door still touched). */
-function areaConnected(ctx: Ctx, area: Area): boolean {
-  const g = ctx.g;
-  const n = g.w * g.h;
-  if (stamp.length !== n) { stamp = new Int32Array(n); stack = new Int32Array(n); stampCur = 0; }
-  const id = area.id;
-  const free = (i: number) => g.area[i] === id && g.cells[i] === FLOOR && g.blocked[i] === 0;
-  let total = 0, start = -1;
-  for (let y = area.y - 1; y <= area.y + area.h; y++) {
-    for (let x = area.x - 1; x <= area.x + area.w; x++) {
-      const i = y * g.w + x;
-      if (!free(i)) continue;
-      total++;
-      if (start < 0) start = i;
-    }
-  }
-  if (!total) return false;
-  const cur = ++stampCur;
-  stamp[start] = cur;
-  let sp = 0, count = 0;
-  stack[sp++] = start;
-  while (sp) {
-    const c = stack[--sp];
-    count++;
-    const nb0 = c - 1, nb1 = c + 1, nb2 = c - g.w, nb3 = c + g.w;
-    if (stamp[nb0] !== cur && free(nb0)) { stamp[nb0] = cur; stack[sp++] = nb0; }
-    if (stamp[nb1] !== cur && free(nb1)) { stamp[nb1] = cur; stack[sp++] = nb1; }
-    if (stamp[nb2] !== cur && free(nb2)) { stamp[nb2] = cur; stack[sp++] = nb2; }
-    if (stamp[nb3] !== cur && free(nb3)) { stamp[nb3] = cur; stack[sp++] = nb3; }
-  }
-  if (count !== total) return false;
-  for (const d of ctx.doorsOf.get(id) ?? []) {
-    let touch = false;
-    for (let y = d.y - 1; y <= d.y + d.h && !touch; y++) for (let x = d.x - 1; x <= d.x + d.w; x++) {
-      const i = y * g.w + x;
-      if (g.area[i] === id && stamp[i] === cur) { touch = true; break; }
-    }
-    if (!touch) return false;
-  }
-  return true;
-}
-
-/**
- * Fast connectivity proof: if the free cells on the ring around a footprint form a single arc,
- * blocking the footprint cannot disconnect anything (any path through it can follow the arc).
- */
-function ringSafe(g: Grid, id: number, x0: number, y0: number, x1: number, y1: number): boolean {
-  const ok = (x: number, y: number) => { const i = y * g.w + x; return g.area[i] === id && g.cells[i] === FLOOR && g.blocked[i] === 0; };
-  const ring: boolean[] = [];
-  for (let x = x0 - 1; x <= x1 + 1; x++) ring.push(ok(x, y0 - 1));
-  for (let y = y0; y <= y1 + 1; y++) ring.push(ok(x1 + 1, y));
-  for (let x = x1; x >= x0 - 1; x--) ring.push(ok(x, y1 + 1));
-  for (let y = y1; y >= y0; y--) ring.push(ok(x0 - 1, y));
-  let rises = 0;
-  for (let i = 0; i < ring.length; i++) if (ring[i] && !ring[(i + ring.length - 1) % ring.length]) rises++;
-  return rises <= 1;
-}
-
-/**
- * front: clear access strip (m) in front of the prop; ring: walkway (m) kept clear all round a
- * centre island (its cells must be open floor and are reserved); y >= WALL_MOUNT_Y: wall-mounted
- * (notice boards) — reserves its cells for other props but does not block walking.
- */
-interface PlaceOpts { checkZone?: boolean; front?: number; y?: number; variant?: number; h?: number; doorOk?: boolean; ring?: number }
-const WALL_MOUNT_Y = 0.9;
-
-function tryPlaceProp(ctx: Ctx, area: Area, kind: PropKind, x: number, z: number, rot: number, opts: PlaceOpts = {}): PropPlacement | null {
-  const g = ctx.g;
-  const {hx, hz} = footprint(kind, rot);
-  const def = PROP_DEFS[kind];
-  const checkZone = opts.checkZone ?? true;
-  const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
-  for (let cy = y0; cy <= y1; cy++) {
-    for (let cx = x0; cx <= x1; cx++) {
-      if (!g.inBounds(cx, cy)) return null;
-      const i = g.idx(cx, cy);
-      if (g.cells[i] !== FLOOR || g.area[i] !== area.id || g.blocked[i] || ctx.keep[i] || ctx.edge[i]) return null;
-      if (ctx.doorCell[i] && !opts.doorOk) return null;
-      if (checkZone && ctx.zone[i]) return null;
-    }
-  }
-  // Walkway ring around an island: open floor all round (reserved below).
-  let ringBox: [number, number, number, number] | null = null;
-  if (opts.ring) {
-    const rc = Math.max(1, Math.ceil(opts.ring / CELL - 1e-6));
-    ringBox = [x0 - rc, y0 - rc, x1 + rc, y1 + rc];
-    for (let cy = ringBox[1]; cy <= ringBox[3]; cy++) for (let cx = ringBox[0]; cx <= ringBox[2]; cx++) {
-      if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) continue;
-      if (!g.walkable(cx, cy) || ctx.keep[g.idx(cx, cy)] && g.area[g.idx(cx, cy)] !== area.id) return null;
-      if (ctx.doorCell[g.idx(cx, cy)] && g.area[g.idx(cx, cy)] !== area.id) return null;
-    }
-  }
-  const mounted = (opts.y ?? 0) >= WALL_MOUNT_Y;
-  if (mounted) {
-    const p: PropPlacement = {kind, x, z, y: opts.y!, rot, area: area.id, hx, hz, h: opts.h ?? def.h, blocksSight: false, variant: opts.variant ?? 0};
-    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) ctx.keep[g.idx(cx, cy)] = 1;
-    ctx.layout.props.push(p);
-    return p;
-  }
-  // Access strip in front of the prop's front face must be open floor.
-  let strip: [number, number, number, number] | null = null;
-  if (opts.front) {
-    const fx = Math.round(Math.sin(rot)), fz = Math.round(Math.cos(rot));
-    const hd = def.d / 2, hw = def.w / 2 * 0.8, f = opts.front;
-    const sx = x + fx * (hd + f / 2), sz = z + fz * (hd + f / 2);
-    strip = cellsOfBox(sx, sz, fx ? f / 2 : hw, fz ? f / 2 : hw);
-    for (let cy = strip[1]; cy <= strip[3]; cy++) for (let cx = strip[0]; cx <= strip[2]; cx++) {
-      if (!g.walkable(cx, cy)) return null;
-    }
-  }
-  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); g.blocked[i] = 1; if (def.blocksSight) g.sightBlocked[i] = 1; }
-  if (!ringSafe(g, area.id, x0, y0, x1, y1) && !areaConnected(ctx, area)) {
-    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); g.blocked[i] = 0; g.sightBlocked[i] = 0; }
-    return null;
-  }
-  if (strip) for (let cy = strip[1]; cy <= strip[3]; cy++) for (let cx = strip[0]; cx <= strip[2]; cx++) ctx.keep[g.idx(cx, cy)] = 1;
-  if (ringBox) for (let cy = ringBox[1]; cy <= ringBox[3]; cy++) for (let cx = ringBox[0]; cx <= ringBox[2]; cx++) if (g.inBounds(cx, cy) && !g.blocked[g.idx(cx, cy)]) ctx.keep[g.idx(cx, cy)] = 1;
-  const p: PropPlacement = {kind, x, z, y: opts.y ?? 0, rot, area: area.id, hx, hz, h: opts.h ?? def.h, blocksSight: def.blocksSight, variant: opts.variant ?? 0};
-  ctx.layout.props.push(p);
-  return p;
-}
-
-/** Collision blocker placed regardless of door zones (storefront glazing / shutters in an opening). */
-function forceProp(ctx: Ctx, area: Area, kind: PropKind, x: number, z: number, hx: number, hz: number, h: number, blocksSight: boolean): PropPlacement {
-  const g = ctx.g;
-  const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
-  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); g.blocked[i] = 1; if (blocksSight) g.sightBlocked[i] = 1; }
-  const p: PropPlacement = {kind, x, z, y: 0, rot: 0, area: area.id, hx, hz, h, blocksSight, variant: 0};
-  ctx.layout.props.push(p);
-  return p;
-}
-
-/** Position for a prop with its back against one wall of the area; `t` = world coordinate along the wall. */
-function wallSpot(area: Area, side: Side, t: number, kind: PropKind): {x: number; z: number; rot: number} {
-  const d = PROP_DEFS[kind].d, gap = 0.03;
-  const ax0 = area.x * CELL, az0 = area.y * CELL, ax1 = (area.x + area.w) * CELL, az1 = (area.y + area.h) * CELL;
-  if (side === 'N') return {x: t, z: az0 + d / 2 + gap, rot: 0};
-  if (side === 'S') return {x: t, z: az1 - d / 2 - gap, rot: Math.PI};
-  if (side === 'W') return {x: ax0 + d / 2 + gap, z: t, rot: Math.PI / 2};
-  return {x: ax1 - d / 2 - gap, z: t, rot: -Math.PI / 2};
-}
-
-function wallRange(area: Area, side: Side): [number, number] {
-  return side === 'N' || side === 'S' ? [area.x * CELL, (area.x + area.w) * CELL] : [area.y * CELL, (area.y + area.h) * CELL];
-}
-
-/** Random spot against a random (or given) wall. */
-function placeAgainstWall(ctx: Ctx, area: Area, kind: PropKind, opts: PlaceOpts & {sides?: Side[]; tries?: number} = {}): PropPlacement | null {
-  const def = PROP_DEFS[kind];
-  const sides = opts.sides ?? ['N', 'S', 'W', 'E'];
-  for (let t = 0; t < (opts.tries ?? 14); t++) {
-    const side = ctx.rng.pick(sides);
-    const [lo, hi] = wallRange(area, side);
-    if (hi - lo < def.w + 0.3) continue;
-    const along = Math.round(ctx.rng.range(lo + def.w / 2 + 0.1, hi - def.w / 2 - 0.1) * 4) / 4;
-    const s = wallSpot(area, side, along, kind);
-    const p = tryPlaceProp(ctx, area, kind, s.x, s.z, s.rot, opts);
-    if (p) return p;
-  }
-  return null;
-}
-
-/**
- * A row of props side by side against one wall (vending banks, shelving runs, ticket machines).
- * Clusters of `cluster` units separated by `gap` metres; skips doors/zones. Returns placements.
- */
-function rowAlongWall(ctx: Ctx, area: Area, side: Side, kind: PropKind, o: {from?: number; to?: number; cluster?: number; gap?: number; max?: number; front?: number; variant?: () => number} = {}): PropPlacement[] {
-  const def = PROP_DEFS[kind];
-  const [lo, hi] = wallRange(area, side);
-  const from = Math.max(lo + 0.4, o.from ?? lo + 0.4), to = Math.min(hi - 0.4, o.to ?? hi - 0.4);
-  const out: PropPlacement[] = [];
-  let t = from + def.w / 2, inCluster = 0;
-  while (t + def.w / 2 <= to && out.length < (o.max ?? 99)) {
-    const s = wallSpot(area, side, t, kind);
-    const p = tryPlaceProp(ctx, area, kind, s.x, s.z, s.rot, {front: o.front, variant: o.variant?.()});
-    if (p) {
-      out.push(p);
-      inCluster++;
-      t += def.w + 0.02;
-      if (o.cluster && inCluster >= o.cluster) { t += o.gap ?? 1; inCluster = 0; }
-    } else {
-      t += 0.5;
-      inCluster = 0;
-    }
-  }
-  return out;
-}
+// Placement helpers (primitives: gen/placeKit.ts)
 
 function fixtureY(area: Area): number {
   return area.ceil > PENDANT_Y + 0.15 ? PENDANT_Y : area.ceil - 0.02;
+}
+/** Absolute fixture height of an area outside dressing (areas off the main level: their floor + the relative rule). */
+function fixtureYAbs(layout: StationLayout, a: Area): number {
+  if (!areaLevel(a)) return fixtureY(a);
+  const base = areaBase(layout, a), rel = a.ceil - base;
+  return base + (rel > PENDANT_Y + 0.15 ? PENDANT_Y : rel - 0.02);
 }
 
 function addLight(ctx: Ctx, area: Area, x: number, z: number, rot: number, breakChance: number) {
@@ -311,26 +88,23 @@ function wallSign(ctx: Ctx, area: Area, side: Side, t: number, y: number, s: Omi
   // Iteration 07 (Lane DW): a plate never floats across an opening (or past a corner) — it slides
   // along the wall to the nearest wall-backed spot (deterministic, no RNG); where the wall left
   // beside openings is too short it gets a narrower plate (down to 1 m), else it is left out.
-  let spot = wallSignSpot(ctx.g, area, side, t, y, signDims(s));
+  // Iteration 08: plates on another level are authored in its local height frame; wall backing tests absolute heights.
+  const yb = y + (areaLevel(area) ? areaBase(ctx.layout, area) : 0);
+  let spot = wallSignSpot(ctx.g, area, side, t, yb, signDims(s));
   for (const f of [0.8, 0.6, 0.45]) {
     if (spot !== null) break;
     const narrow = {...s, w: Math.round(Math.max(1.0, signDims(s).w * f) * 100) / 100};
-    spot = wallSignSpot(ctx.g, area, side, t, y, signDims(narrow));
+    spot = wallSignSpot(ctx.g, area, side, t, yb, signDims(narrow));
     if (spot !== null) s = narrow;
   }
   if (spot === null) return;
+  // Iteration 08: never a plate over a light well / stairwell edge (closed cells of an upper level are not wall there).
+  if (!backed(ctx, area, side, spot - signDims(s).w / 2, spot + signDims(s).w / 2, yb - signDims(s).h / 2)) return;
   t = spot;
   const ax0 = area.x * CELL, az0 = area.y * CELL, ax1 = (area.x + area.w) * CELL, az1 = (area.y + area.h) * CELL;
   const pos = side === 'N' ? {x: t, z: az0 + 0.02, rot: 0} : side === 'S' ? {x: t, z: az1 - 0.02, rot: Math.PI}
     : side === 'W' ? {x: ax0 + 0.02, z: t, rot: Math.PI / 2} : {x: ax1 - 0.02, z: t, rot: -Math.PI / 2};
   ctx.layout.signs.push({...s, ...pos, y, area: area.id});
-}
-
-/** Which wall of `area` a door sits in. */
-function doorSide(d: Door, area: Area): Side {
-  if (d.h === 1 && d.w > 1) return d.y < area.y ? 'N' : 'S';
-  if (d.w === 1 && d.h > 1) return d.x < area.x ? 'W' : 'E';
-  return d.y < area.y ? 'N' : d.y >= area.y + area.h ? 'S' : d.x < area.x ? 'W' : 'E';
 }
 
 /** Sign on `area`'s side of a door: above the opening when there is a soffit, else beside it. */
@@ -350,52 +124,74 @@ const other = (ctx: Ctx, d: Door, a: Area) => ctx.layout.areas[d.a === a.id ? d.
 // Dressing
 
 export function dress(layout: StationLayout, rng: Rng): void {
-  const ctx = makeCtx(layout, rng);
+  // Iteration 08 (Lane P): one placement context per level (its grid, doors, masks); every area is dressed on its own level.
+  const ctxs = levelsOf(layout).map(L => makePlaceCtx(layout, rng, L.id));
+  const ctx = ctxs[0];
+  const ctxOf = (a: Area): Ctx => ctxs[areaLevel(a)] ?? ctx;
+  const marks = {lights: layout.lights.length, signs: layout.signs.length};
   // Iteration 05: every back-of-house room / closet / corridor gets a purpose (gen/purposes.ts).
   assignPurposes(layout, rng.fork('purposes'));
   // Fare gates first: they sit in the fare-line openings, straddling the paid/unpaid wall.
-  for (const d of layout.doors) if (d.fare) placeFareGates(ctx, d);
+  for (const d of layout.doors) if (d.fare) placeFareGates(ctxOf(layout.areas[d.b]), d);
   placeTrackColumns(ctx);
   const api: ShopDressApi = {
     rng,
-    place: (area, kind, x, z, rot, o = {}) => tryPlaceProp(ctx, area, kind, x, z, rot, {checkZone: false, variant: o.variant, front: o.front, ring: o.ring}),
-    force: (area, kind, x, z, hx, hz, h, blocksSight) => forceProp(ctx, area, kind, x, z, hx, hz, h, blocksSight),
-    light: (area, x, z, rot, breakChance) => addLight(ctx, area, x, z, rot, breakChance),
+    place: (area, kind, x, z, rot, o = {}) => tryPlaceProp(ctxOf(area), area, kind, x, z, rot, {checkZone: false, variant: o.variant, front: o.front, ring: o.ring}),
+    force: (area, kind, x, z, hx, hz, h, blocksSight) => forceProp(ctxOf(area), area, kind, x, z, hx, hz, h, blocksSight),
+    light: (area, x, z, rot, breakChance) => addLight(ctxOf(area), area, x, z, rot, breakChance),
   };
   let kiosk = rng.chance(0.35);
   for (const area of layout.areas) {
-    switch (area.type) {
-      case 'platform': dressPlatform(ctx, area); break;
-      case 'passage': dressPassage(ctx, area); break;
-      case 'underpass': lineLights(ctx, area, 4.5, 0.12); break;
-      case 'concourse': area.paid ? dressPaidConcourse(ctx, area) : dressExitHall(ctx, area); break;
-      case 'fare-hall': if (dressTicketHall(ctx, area, kiosk)) kiosk = false; break;
-      case 'food-court': dressFoodCourt(ctx, area); break;
-      case 'retail-arcade': if (dressArcade(ctx, area, kiosk)) kiosk = false; break;
-      case 'exit-stair': dressExitStair(ctx, area); break;
-      case 'washroom': dressWashroom(ctx, area); break;
-      case 'eatery': case 'shop': if (area.storefront !== undefined) dressStorefront(api, layout, layout.storefronts[area.storefront]); break;
-      default: dressBackOfHouse(ctx, area); break;
-    }
+    const c = ctxOf(area);
+    inLocalFrame(layout, area, () => {
+      switch (area.type) {
+        case 'platform': dressPlatform(c, area); break;
+        case 'passage': dressPassage(c, area); break;
+        case 'underpass': lineLights(c, area, 4.5, 0.12); break;
+        case 'concourse': area.paid ? dressPaidConcourse(c, area) : dressExitHall(c, area); break;
+        case 'fare-hall': if (dressTicketHall(c, area, kiosk)) kiosk = false; break;
+        case 'food-court': dressFoodCourt(c, area); break;
+        case 'retail-arcade': if (dressArcade(c, area, kiosk)) kiosk = false; break;
+        case 'exit-stair': dressExitStair(c, area); break;
+        // Iteration 08 (Lane A): public stair cores between levels — lights only (Lane A adds their wayfinding after dress()).
+        case 'stair-core': lineLights(c, area, 4, 0.06); break;
+        case 'washroom': dressWashroom(c, area); break;
+        case 'eatery': case 'shop': if (area.storefront !== undefined) dressStorefront(api, layout, layout.storefronts[area.storefront]); break;
+        default: dressBackOfHouse(c, area); break;
+      }
+    });
   }
-  // Iteration 07 (Lane P2): NEW generated props by room/store purpose and hall type, then host decor / chairs (gen/props07Dress.ts).
-  // Same placement primitive (door zones, access strips, rings, edge bands, connectivity) on a forked RNG; DW doorway volumes too.
+  // Iteration 07 (Lane P2): the seeded per-station palette of generated kinds (same fork as dressP7 draws it from).
+  const prng = rng.fork('p7');
+  const palRng = prng.fork('palette');
+  const palette = p7Palette(p => palRng.chance(p));
+  // Iteration 08 (Lane P): COMPOSITION — circulation lanes + plazas, landmarks on sightlines, zone activity clusters, cover and
+  // caches for halls, service corridors and the upper / lower levels (gen/compose.ts). Own RNG fork: the rest is unchanged.
+  compose(layout, {rng: rng.fork('compose'), palette, ctxOf});
+  // Iteration 07 (Lane P2): NEW generated props by room/store purpose (rooms keep their purpose scatter, now with affinities;
+  // composed areas only get spaced wall / ceiling infrastructure), then host decor / chairs (gen/props07Dress.ts).
   {
-    const pctx: Ctx = {...ctx, rng: rng.fork('p7')};
-    const g = ctx.g;
+    const pctxs = ctxs.map(c => ({...c, rng: prng}));
+    const pctxOf = (a: Area): Ctx => pctxs[areaLevel(a)] ?? pctxs[0];
     dressP7(layout, {
-      rng: pctx.rng,
-      place: (a, kind, x, z, rot, o = {}) => tryPlaceProp(pctx, a, kind, x, z, rot, o),
+      rng: prng,
+      place: (a, kind, x, z, rot, o = {}) => tryPlaceProp(pctxOf(a), a, kind, x, z, rot, o),
       cellsFree: (a, x, z, hx, hz) => {
+        const c = pctxOf(a), g = c.g;
         const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
         for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
           if (!g.inBounds(cx, cy)) return false;
           const i = g.idx(cx, cy);
-          if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || ctx.zone[i] || ctx.doorCell[i] || ctx.edge[i]) return false;
+          if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || c.zone[i] || c.doorCell[i] || c.edge[i] || c.lane[i] || c.plaza[i]) return false;
         }
         return true;
       },
-      doorSide: a => { const d = mainDoor(pctx, a); return d ? doorSide(d, a) : null; },
+      doorSide: a => { const d = mainDoor(pctxOf(a), a); return d ? doorSide(d, a) : null; },
+      grid: a => pctxOf(a).g,
+      base: a => areaBase(layout, a),
+      composed: a => COMPOSED_ZONES.has(zoneOf(layout, a)),
+      doors: a => pctxOf(a).doorsOf.get(a.id) ?? [],
+      backed: (a, side, t0, t1, yb) => backed(pctxOf(a), a, side, t0, t1, yb),
     });
   }
   // Staff-only plates on the public side of back-of-house doors; purpose plates (SECURITY,
@@ -405,14 +201,60 @@ export function dress(layout: StationLayout, rng: Rng): void {
     const pub = layout.areas[d.a].publicSpace ? layout.areas[d.a] : layout.areas[d.b];
     const priv = pub.id === d.a ? layout.areas[d.b] : layout.areas[d.a];
     const plate = PLATES[priv.purpose ?? ''];
-    signAtDoor(ctx, d, pub, {kind: 'service', text: plate ? `${plate} · STAFF ONLY` : 'STAFF ONLY', w: plate ? 1.6 : 1.0});
+    inLocalFrame(layout, pub, () => signAtDoor(ctxOf(pub), d, pub, {kind: 'service', text: plate ? `${plate} · STAFF ONLY` : 'STAFF ONLY', w: plate ? 1.6 : 1.0}));
   }
   for (const a of layout.areas) {
     const plate = PLATES[a.purpose ?? ''];
     if (!plate || a.publicSpace) continue;
-    const d = (ctx.doorsOf.get(a.id) ?? []).find(q => !q.staff && (q.a === a.parent || q.b === a.parent));
-    if (d) signAtDoor(ctx, d, other(ctx, d, a), {kind: 'service', text: plate, w: 1.3});
+    const d = (ctxOf(a).doorsOf.get(a.id) ?? []).find(q => !q.staff && (q.a === a.parent || q.b === a.parent));
+    if (d) { const o = other(ctx, d, a); inLocalFrame(layout, o, () => signAtDoor(ctxOf(o), d, o, {kind: 'service', text: plate, w: 1.3})); }
   }
+  liftLevels(layout, marks);
+}
+
+/**
+ * Iteration 08: areas on a level other than the main one are dressed in that level's LOCAL height frame — the area ceiling is
+ * made relative to its floor while the (height-relative) dressing rules run — and liftLevels() then moves what they placed to
+ * absolute heights. Main-level areas are dressed exactly as before (finishTraversal lifts them onto local floors).
+ */
+function inLocalFrame(layout: StationLayout, a: Area, fn: () => void): void {
+  if (areaLevel(a) === 0) { fn(); return; }
+  const ceil = a.ceil, base = areaBase(layout, a);
+  a.ceil = ceil - base;
+  try { fn(); } finally { a.ceil = ceil; }
+}
+
+/**
+ * Moves the dressing of non-main levels to absolute heights and tags it with its level: props (tagged at placement) stand on
+ * their level's local floor (flat cells; stairs / unknown cells: the area floor), lights and signs of such areas are lifted by
+ * the area floor. Runs once at the end of dress(); finishTraversal leaves level-tagged entries alone.
+ */
+export function liftLevels(layout: StationLayout, marks: {lights: number; signs: number}): void {
+  if (levelsOf(layout).length < 2) return;
+  for (const p of layout.props) {
+    if (!p.level) continue;
+    const g = levelGrid(layout, p.level), a = layout.areas[p.area];
+    const [cx, cy] = g.cellOf(p.x, p.z);
+    const i = g.inBounds(cx, cy) ? g.idx(cx, cy) : -1;
+    const f = i >= 0 && g.cells[i] === FLOOR && g.rampIdx[i] < 0 ? g.floorOf(i) : a ? areaBase(layout, a) : 0;
+    // On-top decor and chairs follow their host (lifted with it below).
+    if (p.host === undefined) p.y += f;
+  }
+  for (const p of layout.props) if (p.level && p.host !== undefined) {
+    const h = layout.props[p.host];
+    const g = levelGrid(layout, p.level);
+    const [cx, cy] = g.cellOf(h.x, h.z);
+    const i = g.inBounds(cx, cy) ? g.idx(cx, cy) : -1;
+    p.y += i >= 0 && g.cells[i] === FLOOR && g.rampIdx[i] < 0 ? g.floorOf(i) : areaBase(layout, layout.areas[h.area]);
+  }
+  const lift = (o: {area: number; y: number; level?: number}) => {
+    const a = layout.areas[o.area];
+    if (!a || !areaLevel(a) || o.level) return;
+    o.y += areaBase(layout, a);
+    o.level = areaLevel(a);
+  };
+  for (let i = marks.lights; i < layout.lights.length; i++) lift(layout.lights[i] as LightPlacement & {level?: number});
+  for (let i = marks.signs; i < layout.signs.length; i++) lift(layout.signs[i] as SignPlacement & {level?: number});
 }
 
 /** Door plates per room purpose (kept short: they render on 1.0–1.6 m plates). */
@@ -437,12 +279,16 @@ function wingOf(layout: StationLayout, a: Area): Wing {
 /** Purpose per back-of-house area (rooms, closets, corridors, washrooms); labels follow the purpose. */
 export function assignPurposes(layout: StationLayout, rng: Rng): void {
   const slots: RoomSlot[] = [];
+  // Iteration 08: purposes preset by the generator (level rooms: pump room, cable vault, security control …) are kept and count
+  // toward the per-station caps / required purposes.
+  const preset = new Map<string, number>();
   for (const a of layout.areas) {
     if (a.storefront !== undefined) continue;
     if (a.publicSpace && a.type !== 'washroom') continue;
+    if (a.purpose && ROOM_PURPOSES[a.purpose]) { preset.set(a.purpose, (preset.get(a.purpose) ?? 0) + 1); continue; }
     slots.push({id: a.id, type: a.type, kind: a.kind, wing: wingOf(layout, a), wM: a.w * CELL, hM: a.h * CELL});
   }
-  for (const [id, pid] of assignRoomPurposes(slots, () => rng.next())) {
+  for (const [id, pid] of assignRoomPurposes(slots, () => rng.next(), preset)) {
     const a = layout.areas[id];
     a.purpose = pid;
     if (pid !== 'washroom' && pid !== 'service-corridor') a.label = ROOM_PURPOSES[pid].label;
@@ -504,7 +350,7 @@ function dressPlatform(ctx: Ctx, a: Area): void {
     for (let x = ax0 + 4.25; x < ax0 + aw - 3; x += spacing) if (tryPlaceProp(ctx, a, 'column', x, colZ, 0, {checkZone: false, h: a.ceil})) cols.push(x);
     const benchRot = !island ? (edges[0] === 'N' ? Math.PI : 0) : row < a.y + a.h / 2 ? Math.PI : 0;
     for (let i = 0; i + 1 < cols.length; i++) if (cols[i + 1] - cols[i] < spacing + 0.1) benchSlots.push({x: (cols[i] + cols[i + 1]) / 2, z: colZ, rot: island && rows.length === 1 && i % 2 ? Math.PI - benchRot : benchRot});
-    for (const c of cols) if (rng.chance(0.22)) tryPlaceProp(ctx, a, 'bin', c + (rng.chance(0.5) ? 0.75 : -0.75), colZ, 0, {checkZone: false});
+    // Iteration 08 (Lane P): bins / newspaper boxes at the bench bays and barricades in empty bays come from the composer.
   }
   rng.shuffle(benchSlots);
   const benches = Math.min(benchSlots.length, rng.int(6, 11));
@@ -593,8 +439,8 @@ function dressPassage(ctx: Ctx, a: Area): void {
     for (let t = 6; t < len - 4; t += 12) {
       layout.signs.push({x: alongX ? ax0 + t : ax0 + aw / 2, y: Math.min(a.ceil - 0.5, 2.9), z: alongX ? az0 + ah / 2 : az0 + t, rot: alongX ? Math.PI / 2 : 0, kind: 'info', text, area: a.id, hang: true, w: 2.4});
     }
-    for (let i = 0, k = rng.int(1, 3); i < k; i++) placeAgainstWall(ctx, a, rng.chance(0.6) ? 'bin' : 'bench', {sides: alongX ? ['N', 'S'] : ['W', 'E']});
-  } else if (rng.chance(0.3)) placeAgainstWall(ctx, a, 'bin', {sides: alongX ? ['N', 'S'] : ['W', 'E']});
+    // Iteration 08 (Lane P): benches + bins are composed waiting nooks (gen/compose.ts), not random wall spots.
+  }
   for (const d of ctx.doorsOf.get(a.id) ?? []) {
     const o = other(ctx, d, a);
     if (o.paid && o.kind === 'concourse') signAtDoor(ctx, d, o, {kind: 'info', text: `TRAINS · TO ${layout.towards[0].toUpperCase()} / ${layout.towards[1].toUpperCase()}`, arrow: 'up', w: 2.4});
@@ -626,8 +472,7 @@ function dressPaidConcourse(ctx: Ctx, a: Area): void {
     const t0 = rng.range(lo + 2, Math.max(lo + 2.1, hi - 5));
     if (rowAlongWall(ctx, a, side, 'vending', {from: t0, to: t0 + 3.3, max: rng.int(2, 3), front: 1.0, variant: () => rng.int(0, 2)}).length) break;
   }
-  for (let i = 0, n = rng.int(2, 3); i < n; i++) placeAgainstWall(ctx, a, 'bench');
-  for (let i = 0, n = rng.int(3, 4); i < n; i++) placeAgainstWall(ctx, a, 'bin');
+  // Iteration 08 (Lane P): benches / bins are composed waiting clusters (gen/compose.ts).
   gridLights(ctx, a, 5, 4.5, 0.1);
   for (const d of ctx.doorsOf.get(a.id) ?? []) {
     if (d.fare) signAtDoor(ctx, d, a, {kind: 'info', text: 'EXIT · TICKET HALL · FOOD COURT', arrow: 'down', w: 2.6});
@@ -657,9 +502,7 @@ function dressTicketHall(ctx: Ctx, a: Area, kioskAllowed: boolean): boolean {
   }
   if (Math.min(a.w, a.h) >= 34) { columnRow(ctx, a, 0.38, 9, a.ceil); columnRow(ctx, a, 0.72, 9, a.ceil); }
   else columnRow(ctx, a, 0.55, 9, a.ceil);
-  for (let i = 0, n = rng.int(2, 3); i < n; i++) placeAgainstWall(ctx, a, 'bench');
-  for (let i = 0, n = rng.int(3, 4); i < n; i++) placeAgainstWall(ctx, a, 'bin');
-  if (rng.chance(0.6)) placeAgainstWall(ctx, a, 'vending', {front: 1.0, variant: rng.int(0, 2)});
+  // Iteration 08 (Lane P): benches, bins and the odd vending machine are composed (waiting clusters, landmarks; gen/compose.ts).
   let kiosk = false;
   if (kioskAllowed && Math.min(a.w, a.h) >= 40) {
     // Occasional freestanding newsstand island in a big hall.
@@ -746,7 +589,6 @@ function dressFoodCourt(ctx: Ctx, a: Area): void {
     const inward = side === 'N' ? [0, 3.2] : side === 'S' ? [0, -3.2] : side === 'W' ? [3.2, 0] : [-3.2, 0];
     layout.signs.push({x: ex + inward[0], y: Math.min(a.ceil - 0.6, 3.5), z: ez + inward[1], rot: alongE ? 0 : Math.PI / 2, kind: 'info', text: 'FOOD COURT', area: a.id, hang: true, w: 2.4});
   }
-  if (rng.chance(0.5)) placeAgainstWall(ctx, a, 'bench');
   gridLights(ctx, a, 5.5, 5, 0.1, 2.5);
 }
 
@@ -767,8 +609,7 @@ function dressArcade(ctx: Ctx, a: Area, kioskAllowed: boolean): boolean {
   const sides = longSides(a);
   // Walls between storefronts: the odd vending machine / bench / bin.
   for (let i = 0, n = rng.int(1, 2); i < n; i++) placeAgainstWall(ctx, a, 'vending', {sides, front: 1.0, variant: rng.int(0, 2)});
-  placeAgainstWall(ctx, a, 'bench', {sides});
-  for (let i = 0; i < 2; i++) placeAgainstWall(ctx, a, 'bin', {sides});
+  // Iteration 08 (Lane P): the bench / bins are a composed waiting cluster (gen/compose.ts).
   let kiosk = false;
   const alongX = a.w >= a.h;
   const wide = (alongX ? a.h : a.w) * CELL;
@@ -797,8 +638,7 @@ function dressExitHall(ctx: Ctx, a: Area): void {
     placeAgainstWall(ctx, a, 'ticketMachine', {sides: [doorSide(fare, a)], front: 1.0});
   }
   for (let i = 0, n = rng.int(1, 2); i < n; i++) placeAgainstWall(ctx, a, 'vending', {front: 1.0, variant: rng.int(0, 2)});
-  for (let i = 0, n = rng.int(1, 2); i < n; i++) placeAgainstWall(ctx, a, 'bench');
-  for (let i = 0; i < 2; i++) placeAgainstWall(ctx, a, 'bin');
+  // Iteration 08 (Lane P): benches / bins are composed waiting clusters (gen/compose.ts).
   gridLights(ctx, a, 5, 4.5, 0.12);
   for (const d of doorsHere) {
     const o = other(ctx, d, a);
@@ -829,7 +669,7 @@ function dressExitStair(ctx: Ctx, a: Area): void {
   layout.signs.push({x: x + fx * (sd / 2 + 0.06), y: 1.55, z: z + fz * (sd / 2 + 0.06), rot, kind: 'service', text: 'STREET ENTRANCE SEALED', area: a.id, w: 1.6});
   const lx = x + fx * (sd / 2 + 1.6), lz = z + fz * (sd / 2 + 1.6);
   addLight(ctx, a, lx, lz, side === 'N' || side === 'S' ? 0 : Math.PI / 2, 0);
-  if (rng.chance(0.4)) placeAgainstWall(ctx, a, 'bin');
+  // Iteration 08 (Lane P): abandoned luggage piles up in front of the grille (gen/compose.ts evacuation traces).
 }
 
 function dressWashroom(ctx: Ctx, a: Area): void {
@@ -859,19 +699,13 @@ function dressBackOfHouse(ctx: Ctx, a: Area): void {
     lineLights(ctx, a, 5, 0.25);
     wallSign(ctx, a, a.w >= a.h ? 'N' : 'W', a.w >= a.h ? (a.x + a.w / 2) * CELL : (a.y + a.h / 2) * CELL, 2.0, {kind: 'service', text: 'AUTHORIZED PERSONNEL ONLY'});
   }
-  dressByRules(ctx, a, P);
+  // Iteration 08 (Lane P): service corridors (and the lower service level) are composed (gen/compose.ts: maintenance bays, supply
+  // shelving, carts by doors, caches) instead of the purpose rules' random wall spots; rooms keep their purpose rules.
+  if (!COMPOSED_ZONES.has(zoneOf(layout, a))) dressByRules(ctx, a, P);
   if (a.kind === 'closet') {
     const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
     layout.lights.push({x: cx, y: a.ceil - 0.02, z: cz, rot: a.w >= a.h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: rng.chance(0.3), warm: true, power: 1, dying: false});
   } else if (a.kind !== 'service') roomLights(ctx, a);
-}
-
-const OPPOSITE: Record<Side, Side> = {N: 'S', S: 'N', W: 'E', E: 'W'};
-
-/** The door a room is entered by (towards its parent), else its first door. */
-function mainDoor(ctx: Ctx, a: Area): Door | undefined {
-  const ds = ctx.doorsOf.get(a.id) ?? [];
-  return ds.find(d => d.a === a.parent || d.b === a.parent) ?? ds[0];
 }
 
 /** Runs a purpose's placement rules in a room. */
@@ -955,6 +789,8 @@ export const LIGHT_ODDS: Record<RoomType, readonly [number, number, number]> = {
   'storage': [0.12, 0.45, 0.43], 'stock-room': [0.15, 0.45, 0.4], 'utility': [0.08, 0.4, 0.52],
   'supply-closet': [0, 0.35, 0.65], 'janitor-closet': [0, 0.3, 0.7],
   'eatery': [0.55, 0.35, 0.1], 'shop': [0.45, 0.4, 0.15],
+  // Iteration 08 (Lane A): public stair cores between levels.
+  'stair-core': [1, 0, 0],
 };
 
 /**
@@ -988,7 +824,8 @@ export function applyLighting(layout: StationLayout, rng: Rng): void {
   for (const a of areas) {
     const own = byArea.get(a.id) ?? [];
     if (!own.length && a.lighting !== 'dark') {
-      const l: LightPlacement = {x: (a.x + a.w / 2) * CELL, y: fixtureY(a), z: (a.y + a.h / 2) * CELL, rot: a.w >= a.h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: false, warm: true, power: 1, dying: false};
+      const l: LightPlacement = {x: (a.x + a.w / 2) * CELL, y: fixtureYAbs(layout, a), z: (a.y + a.h / 2) * CELL, rot: a.w >= a.h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: false, warm: true, power: 1, dying: false};
+      if (areaLevel(a)) l.level = areaLevel(a);
       layout.lights.push(l);
       own.push(l);
     }
@@ -1044,7 +881,9 @@ export function placeSpawns(layout: StationLayout, rng: Rng): void {
   const g = layout.grid;
   const plat = layout.areas[layout.platform];
   // Platform 1, a fifth of the way along, looking down the platform with the tracks in view.
-  const west = rng.chance(0.5);
+  // Iteration 08 (Lane A): the generator may hint the end (its level program sits at the other end); the draw is kept for stability.
+  const coin = rng.chance(0.5);
+  const west = layout.spawnEnd ? layout.spawnEnd === 'W' : coin;
   const sx = west ? plat.x + Math.round(plat.w * 0.2) : plat.x + plat.w - 1 - Math.round(plat.w * 0.2);
   const sy = plat.y + Math.floor(plat.h * 0.42);
   let spawn: [number, number] | null = null;

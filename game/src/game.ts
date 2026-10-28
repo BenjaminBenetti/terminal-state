@@ -5,16 +5,19 @@ import * as THREE from 'three';
 import {freshSeed, mulberry32, seedToCode} from './core/rng';
 import {PropIndex, moveCircle} from './core/physics';
 import {CELL, PathFinder, nearestWalkable} from './gen/grid';
+import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import {generateStation, type StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorld, type BuiltWorld} from './world/builder';
+import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
 import {VolumetricAtmosphere} from './render/volumetric';
 import {PickupManager, makeSupplyMesh, registerItemModels} from './world/pickups';
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
+import {SoundGate} from './world/openables';
 import {Effects} from './world/fx';
 import {Input} from './player/input';
 import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/player';
@@ -37,6 +40,9 @@ import {InventoryUI} from './ui/inventoryUI';
 import {Sfx, humEmitters, roomKindFor} from './audio/sfx';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
+import {ShelfStock} from './world/shelfStock';
+import {placementBox} from './items/lootLayout';
+import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
 
@@ -69,6 +75,11 @@ export class Game {
   lightPool!: StationLighting;
   propIndex!: PropIndex;
   pathfinder!: PathFinder;
+  /**
+   * Iteration 08 (Lane B): the station's stacked levels — every y-aware world query (support,
+   * collision, ceilings, 3D raycasts / sight, nav). One level on single-storey layouts.
+   */
+  levels!: Levels;
   readonly player = new Player();
   /** Hunger/thirst (FOOD/WATER bars): 80/80 on every spawn, slow drain while playing. */
   readonly survival = new Survival();
@@ -86,6 +97,8 @@ export class Game {
   readonly physics = new PhysicsSystem(this.scene, this.sfx);
   /** Iteration 06 (Lane D): material damage — craters, debris, per-instance prop damage / breaking, zombie wounds. */
   readonly damage = new DamageSystem(this.fx, this.sfx);
+  /** Iteration 08 (Lane S): real 3D filler stock on retail shelving — physical on demand, never loot (world/shelfStock.ts). */
+  readonly stock = new ShelfStock(this.fx, this.sfx);
   readonly invUI: InventoryUI;
   private readonly flashlight: THREE.SpotLight;
   flashlightOn = true;
@@ -114,6 +127,8 @@ export class Game {
   private currentSeed = 0;
   /** Frames rendered while playing (used by QA to confirm the loop runs). */
   frames = 0;
+  /** Iteration 08: renderer string + whether it is a software rasterizer (anisotropy capped at 1 there). */
+  readonly softwareGl: SoftwareGlState;
   lastError: string | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement, readonly qa: boolean) {
@@ -123,6 +138,7 @@ export class Game {
     this.renderer.toneMappingExposure = MOOD.exposure;
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
+    this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers
     this.scene.background = new THREE.Color(0x0a0b0c);
     this.scene.fog = new THREE.FogExp2(MOOD.fogColor, MOOD.fogDensity);
     this.scene.add(this.hemi, this.camera, this.muzzleLight, this.fx.group);
@@ -234,14 +250,22 @@ export class Game {
       this.scene.add(this.containers.group);
     }
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
-    this.containers.build(this.layout);
-    this.propIndex = new PropIndex(this.layout.grid, this.layout.props);
-    this.pathfinder = new PathFinder(this.layout.grid);
+    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>); // iteration 08 (Lane I): openables split the lazy p7 models too
+    this.levels = levelsOf(this.layout);
+    this.propIndex = new PropIndex(this.levels, this.layout.props);
+    this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
     const cm = this.containers;
     // Iteration 07 (Lane K): items / chunks rest on real holder shelves; walkers shove loose light props.
-    this.physics.holderBoxes = p => cm.physicsBoxes(p);
+    // Iteration 08 (Lane S): stocked shelving also collides by its real boards / backs (filler, items, chunks land on the right board).
+    this.physics.holderBoxes = p => this.stock.physicsBoxes(p, cm.physicsBoxes(p));
+    // Iteration 08 (Lane S): 3D filler stock dressed around the real loot lots (rest meshes + bodies on demand; no respawn per station).
+    if (!this.stock.group.parent) { this.scene.add(this.stock.group); this.stock.filler.attach(this.physics); }
+    this.stock.build(this.layout, {models: this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
+      lotsOf: p => cm.holderFor(p)?.state.lots.map(l => placementBox(l.itemId, l)) ?? []});
+    // Iteration 08 (Lane I): a shot trash can / wheelie bin still goes loose — its lid pops, its finite lots spill as pickups.
+    this.physics.dynamicItems.holderLoose = p => { const carried = cm.goLoose(p); this.world.culler.release(carried); return carried; }; // Lane G: moving now
     this.physics.dynamicItems.walkers = () => [{id: this.player, x: this.player.x, z: this.player.z, y: this.player.y, r: this.player.radius},
       ...this.zombies.filter(z => z.brain.alive && !z.ragdolled).map(z => ({id: z, x: z.brain.x, z: z.brain.z, y: z.brain.y, r: z.brain.stats.radius}))];
     this.damage.build(this.layout, this.mats, [this.world.group, cm.group], {
@@ -261,7 +285,7 @@ export class Game {
       },
     });
     // Audio: occlusion-lite (no line of sight -> muffled) + humming vending/stall emitters. Same Sfx/context.
-    this.sfx.setWorld({occlusion: (x, z) => this.layout.grid.lineOfSight(this.player.x, this.player.z, x, z) ? 0 : 1, emitters: humEmitters(this.layout.props)});
+    this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props)});
     // Iteration 05: every fixture baked into a persistent light field (camera-independent; no pooled lights).
     const gl = this.renderer.getContext() as WebGL2RenderingContext;
     this.lightPool = new StationLighting(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: gl.getParameter(gl.MAX_3D_TEXTURE_SIZE) as number});
@@ -269,8 +293,13 @@ export class Game {
     this.atmosphere.setStation(this.layout, this.lightPool.volume);
     this.atmosphere.markShadows(this.world.group, true);
     this.atmosphere.markShadows(this.containers.group, true);
-    const sp = this.layout.playerSpawn;
-    this.player.spawn(sp.x, sp.z, sp.yaw, this.layout.grid.floorAt(sp.x, sp.z));
+    this.atmosphere.markShadows(this.stock.group, false); // Lane S: shelf stock casts the flashlight shadow too
+    // Iteration 08 (Lane G): hide levels behind slabs (portal visibility) and chunks inside opaque fog.
+    this.world.culler.register(this.containers.group);
+    this.world.culler.register(this.stock.group);
+    this.world.culler.maxDistance = fogCullDistance(MOOD.fogDensity);
+    const sp = this.layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};
+    this.player.spawn(sp.x, sp.z, sp.yaw, sp.y ?? this.levels.grid(sp.level ?? 0).floorAt(sp.x, sp.z)); // Lane B: the spawn's own storey
     this.ladderAim = null;
     this.survival.reset(); // food/water 80/80 on spawn, new station and retry
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
@@ -315,7 +344,8 @@ export class Game {
     });
     if (fallback) this.enemyFallbacks++;
     this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
-    z.brain.y = z.root.position.y = this.layout.grid.floorAt(s.x, s.z); // Lane T: spawn on the local floor height
+    // Lane T: spawn on the local floor height; Lane B (iteration 08): of the spawn's own level
+    z.brain.y = z.root.position.y = s.y ?? this.levels.grid(s.level ?? 0).floorAt(s.x, s.z);
     this.zombies.push(z);
     this.scene.add(z.root);
     this.atmosphere.markShadows(z.root, false); // Lane F: enemies block the flashlight beam
@@ -429,6 +459,7 @@ export class Game {
 
   render(): void {
     this.renderer.info.reset();
+    this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still)
     // Iteration 06 (Lane F): station scene + volumetric haze composited onto the canvas (direct r5 path when
     // off/unsupported); the viewmodel overlay is drawn on top afterwards, never fogged.
     this.atmosphere.render(this.scene, this.camera, this.time);
@@ -474,12 +505,23 @@ export class Game {
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
-    const g = this.layout.grid;
+    const g = this.layout.grid, L = this.levels, p = this.player;
     const f = this.forward();
-    let x = this.player.x + f.x * 0.9, z = this.player.z + f.z * 0.9;
-    // Lane T: same level only (not over the platform edge), resting on the local floor / stair tread.
-    if (!g.passable(...g.cellOf(x, z)) || Math.abs(g.floorAt(x, z) - this.player.y) > 0.45 || !g.lineOfSight(this.player.x, this.player.z, x, z)) { x = this.player.x; z = this.player.z; }
-    this.pickups.add(st, x, g.stepAt(x, z), z, this.player.yaw);
+    let x = p.x + f.x * 0.9, z = p.z + f.z * 0.9;
+    let y: number;
+    if (L.count > 1) {
+      // Lane B (iteration 08): on the player's own storey, in sight (not through a railing / slab), on its floor / tread.
+      const s = L.supportIn(x, z, p.y + 0.05);
+      const ok = !!s && L.grid(s.level).passable(...g.cellOf(x, z)) && Math.abs(s.floor - p.y) <= 0.45 && L.lineOfSight({x: p.x, y: p.y + 0.6, z: p.z}, {x, y: p.y + 0.6, z}) && !L.railCrosses(p.x, p.z, x, z, 0.05, p.y);
+      if (!ok) { x = p.x; z = p.z; }
+      y = L.stepAt(x, z, p.y + 0.05);
+      if (!Number.isFinite(y)) y = p.y;
+    } else {
+      // Lane T: same level only (not over the platform edge), resting on the local floor / stair tread.
+      if (!g.passable(...g.cellOf(x, z)) || Math.abs(g.floorAt(x, z) - p.y) > 0.45 || !g.lineOfSight(p.x, p.z, x, z)) { x = p.x; z = p.z; }
+      y = g.stepAt(x, z);
+    }
+    this.pickups.add(st, x, y, z, p.yaw);
     this.hud.toast(`Dropped ${st.count > 1 ? `${st.count} × ` : ''}${itemDef(st.itemId).short}`);
     this.syncHeld();
   }
@@ -551,10 +593,20 @@ export class Game {
    */
   private onContainerEvent(e: ContainerEvent): void {
     if (e.message) this.hud.toast(e.message, e.warn);
-    const sound: string = e.container.kind, cp = e.container.prop;
+    // Iteration 08 (Lane I): openables name an existing holder's door cues (Sound Lab bank reused) and are rate-limited.
+    const sound: string = e.sound ?? e.container.kind, cp = e.container.prop;
     const at = {x: cp.x, y: cp.y + cp.h * 0.5, z: cp.z};
-    if (e.type === 'open') { this.sfx.containerOpen(sound, at); this.sfx.search(); }
-    else if (e.type === 'close') this.sfx.containerClose(sound, at);
+    const door = e.type !== 'open' && e.type !== 'close' || this.doorSounds.allow(e.container.serial, this.time);
+    if (e.type === 'spill') {
+      for (const s of e.spilled ?? []) {
+        const st = this.inv.makeStack(s.lot.itemId, s.lot.count);
+        st.count = s.lot.count; // finite: the same lot (id kept as provenance), never re-rolled
+        this.pickups.addAt(st, s.matrix, {holder: e.container.serial, lot: s.lot.id});
+      }
+    } else if (e.type === 'open') { if (door) this.sfx.containerOpen(sound, at); if (e.rummage !== false && door) this.sfx.search(); }
+    else if (e.type === 'close') { if (door) this.sfx.containerClose(sound, at); }
+    // an openable's item / chunk collision follows its open compartments (world/containers.ts openPhysicsBoxes)
+    if ((e.type === 'open' || e.type === 'close') && e.container.open) this.physics.propsChanged(cp.x, cp.z);
     else if (e.type === 'search') this.sfx.pry(sound, at); // Lane S: pry start (vending): strain + latch snap
     if (e.result?.taken.length) { this.sfx.pickup(); this.syncHeld(); }
     else if (e.result?.remaining.length) this.sfx.denied();
@@ -565,6 +617,7 @@ export class Game {
   ladderAim: {ladder: Ladder; up: boolean; t: number} | null = null;
   containers: ContainerManager | null = null;
   private containerTarget: ContainerTarget | null = null;
+  private readonly doorSounds = new SoundGate();
 
   currentSpread(def: WeaponDef): number {
     const moving = Math.min(1, this.player.speed / WALK_SPEED);
@@ -599,7 +652,7 @@ export class Game {
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
     this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing;
-    const step = p.update(dt, inp, this.layout.grid, this.propIndex, {aiming: this.aiming, speedMult: this.use ? 0.6 : wdef?.moveMult ?? 1, canSprint: !this.use && !inp.mouse[0]});
+    const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: this.use ? 0.6 : wdef?.moveMult ?? 1, canSprint: !this.use && !inp.mouse[0]});
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -663,15 +716,16 @@ export class Game {
 
     const eye = this.camera.getWorldPosition(new THREE.Vector3());
     const look = this.forward();
-    this.currentTarget = this.pickups.target(eye, look, this.layout.grid);
+    const reachWorld = this.levels.count > 1 ? this.levels : this.layout.grid; // Lane B: 3D occlusion on stacked levels
+    this.currentTarget = this.pickups.target(eye, look, reachWorld);
     // Containers under the crosshair within reach; a closer targeted floor pickup wins.
     const tp = this.currentTarget;
-    this.containerTarget = this.containers?.target(eye, look, this.layout.grid, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
+    this.containerTarget = this.containers?.target(eye, look, reachWorld, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
     // Iteration 07 (Lane K): a loose item resting INSIDE a holder's box (shot down to a lower shelf tier) wins over the holder body.
     const ct = this.containerTarget;
     if (ct && !ct.lot && tp && tp.x > ct.container.min.x && tp.x < ct.container.max.x && tp.z > ct.container.min.z && tp.z < ct.container.max.z && tp.y + 0.08 < ct.container.max.y) this.containerTarget = null;
     // Container wins: clear the pickup target + its highlight (an unreachable eye matches nothing).
-    if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, this.layout.grid);
+    if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, reachWorld);
     // Lane T: a rescue ladder under the crosshair (only when nothing else is targeted).
     this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null;
     this.pickups.update(this.time);
@@ -685,7 +739,7 @@ export class Game {
     this.damage.update(dt); // Lane D: debris physics, knocked pickups
     // Audio: listener follows the camera; reverb room + ambience beds follow the current area.
     this.sfx.setListener(eye.x, eye.y, eye.z, p.yaw);
-    const audioArea = this.layout.areas[this.layout.grid.areaAt(p.x, p.z)];
+    const audioArea = this.layout.areas[this.levels.count > 1 ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z)];
     if (audioArea) this.sfx.setRoom(roomKindFor(audioArea), audioArea.type);
     this.sfx.vitals(dt, p.hp / p.maxHp, p.stamina / 100);
     this.sfx.ambience(dt);
@@ -747,14 +801,15 @@ export class Game {
     else if (p.climbing) prompt = '<b>[Space]</b> Let go';
     const spread = wdef ? this.currentSpread(wdef) : 0.02;
     const spreadPx = Math.tan(spread) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * (window.innerHeight / 2);
-    const area = this.layout.grid.areaAt(p.x, p.z);
+    const multi = this.levels.count > 1; // Lane B: the area / track bed of the player's own storey
+    const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       weaponName: def ? def.short : 'Empty hands',
       mag: wdef && st ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
       hint, prompt, promptItem: this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.zombies.length,
-      area: area >= 0 ? `${this.layout.areas[area].label} · ${this.layout.name}` : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z)) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
+      area: area >= 0 ? `${this.layout.areas[area].label} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,
       food: this.survival.hunger, water: this.survival.thirst,
@@ -792,7 +847,8 @@ export class Game {
       const a = this.rand() * Math.PI * 2, r = spread * Math.sqrt(this.rand());
       const dir = fwd.clone().addScaledVector(right, Math.tan(r) * Math.cos(a)).addScaledVector(up, Math.tan(r) * Math.sin(a)).normalize();
       const d: Vec3 = {x: dir.x, y: dir.y, z: dir.z};
-      const wh = raycastWorld(this.layout.grid, this.layout.props, o, d, def.range, this.layout.trench.floorY);
+      // Lane B (iteration 08): through every level's bands — a slab between shooter and target stops the bullet
+      const wh = raycastWorld(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
       let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
       for (const z of this.zombies) {
         if (!z.brain.alive) continue;
@@ -810,10 +866,18 @@ export class Game {
       // Lane D: corpses stop (and tear under) bullets too; shots passing close knock loose pickups about.
       const corpse = this.damage.corpseHit(this.zombies, o, d, bestT);
       if (corpse) { bestT = corpse.t; bestZ = null; }
+      // Iteration 08 (Lane S): a filler stock piece on the pellet line (exact per-piece test; inside a stocked shelf when its box is the
+      // world hit) takes the pellet: its impulse at the hit point. Loot items / pickups in front of it still take it first (Lane K path).
+      const fh = this.stock.pelletHit(o, d, bestT, wh, this.layout.props, !!bestZ || !!corpse);
+      if (fh) { bestT = fh.t; bestZ = null; }
       const end = origin.clone().addScaledVector(dir, bestT);
       const shot = {damage: def.damage * WeaponController.falloff(def, bestT), pellet: def.pellets > 1, weapon: def.id};
       // Iteration 07 (Lane K): items / lots / light props on the shot line take the bullet's impulse (it passes on through them)
-      this.damage.knockPickups(o, d, bestT, wh, shot);
+      if (!fh) this.damage.knockPickups(o, d, bestT, wh, shot);
+      else {
+        if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
+        if (fh.glass) this.damage.hitWorld(wh, origin.clone().addScaledVector(dir, wh.t), dir, shot); // through a cooler's glass
+      }
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
         const amount = def.damage * WeaponController.falloff(def, bestT) * mult;
@@ -824,10 +888,10 @@ export class Game {
         dmg.set(bestZ, e);
         // Lane D: rest-space flesh / clothing wound + blood + flesh pieces (was fx.bodyHit only)
         this.damage.hitZombie(bestZ, end, dir, bestPart as 'head' | 'torso' | 'limb', {...shot, damage: amount});
-      } else if (corpse) {
+      } else if (corpse && !fh) {
         this.damage.hitZombie(corpse.z, end, dir, corpse.part, shot, true);
         this.sfx.impact(end.x, end.y, end.z, 'flesh');
-      } else if (wh.kind !== 'none') {
+      } else if (!fh && wh.kind !== 'none') {
         // Lane D: material-matched persistent damage (craters / per-instance prop damage / breaking) + fx + sound
         this.damage.hitWorld(wh, end, dir, shot);
       }
@@ -835,13 +899,13 @@ export class Game {
     }
     let anyKill = false;
     for (const [z, e] of dmg) {
-      const killed = z.brain.damage(e.total, this.player.x, this.player.z);
+      const killed = z.brain.damage(e.total, this.player.x, this.player.z, this.player.y);
       z.hitFlash = 1;
       this.sfx.impact(e.point.x, e.point.y, e.point.z, 'flesh');
       if (e.head) this.stats.headshots++;
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);
-      if (!z.brain.climbing) [z.brain.x, z.brain.z] = moveCircle(this.layout.grid, this.propIndex, z.brain.x, z.brain.z, fwd.x * k, fwd.z * k, z.brain.stats.radius, z.brain.y);
+      if (!z.brain.climbing) [z.brain.x, z.brain.z] = moveCircle(this.levels, this.propIndex, z.brain.x, z.brain.z, fwd.x * k, fwd.z * k, z.brain.stats.radius, z.brain.y, z.brain.stats.height ?? BODY_CLEAR);
       if (!killed) enemyCues(z).hurt(this.sfx, z); // Lane Q: rat/dog yelp (zombies: none)
       if (killed) {
         anyKill = true;
@@ -856,10 +920,13 @@ export class Game {
       this.hud.hitmarker(anyKill);
       this.sfx.hitTick(anyKill);
     }
-    // gunfire alerts zombies; walls muffle it
+    // gunfire alerts zombies; walls muffle it (Lane B, iteration 08: a slab between storeys muffles it more)
+    const multi = this.levels.count > 1, P = this.player;
     for (const z of this.zombies) {
-      const los = this.layout.grid.lineOfSight(this.player.x, this.player.z, z.brain.x, z.brain.z);
-      z.brain.hear(this.player.x, this.player.z, def.noise * (los ? 1 : 0.6));
+      const b = z.brain;
+      const los = multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z);
+      const muffle = los ? 1 : multi && Math.abs(b.y - P.y) > 2 ? 0.35 : 0.6;
+      b.hear(P.x, P.z, def.noise * muffle, P.y);
     }
   }
 
@@ -872,26 +939,40 @@ export class Game {
   }
 
   private brainWorld(): BrainWorld {
-    const g = this.layout.grid;
+    const g = this.layout.grid, L = this.levels, multi = L.count > 1;
     return {
       px: this.player.x, pz: this.player.z, playerAlive: this.player.alive,
-      los: (ax, az, bx, bz) => g.lineOfSight(ax, az, bx, bz),
-      // Lane T (iteration 05): height-aware lines/paths (stairs, platform-edge drops, rescue-ladder links).
-      walkClear: (ax, az, bx, bz, r) => g.walkLineClearH(ax, az, bx, bz, r),
+      // Lane B (iteration 08): stacked levels — 3D sight between eye lines (1.5 m over the feet), so a slab between storeys blocks it.
+      los: (ax, az, bx, bz, ay, by) => multi && ay !== undefined && by !== undefined ? L.lineOfSight({x: ax, y: ay + 1.5, z: az}, {x: bx, y: by + 1.5, z: bz}) : g.lineOfSight(ax, az, bx, bz),
+      // Lane T (iteration 05): height-aware lines/paths (stairs, platform-edge drops, rescue-ladder links); Lane B: on the right storey.
+      walkClear: (ax, az, bx, bz, r, ay, by) => multi && ay !== undefined ? L.walkLineClear(ax, ay, az, bx, bz, r, by) : g.walkLineClearH(ax, az, bx, bz, r),
       // Large station: cross-track detours via the underpasses need ~20k expansions (brain backs off on failure).
       findPath: (ax, az, bx, bz, opts) => this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, opts),
       py: this.player.y,
       ladder: id => this.layout.traversal.ladders[id],
-      randomNear: (x, z, r) => {
+      randomNear: (x, z, r, y) => {
+        // Lane B: wander targets on the zombie's own storey
+        const lv = multi && y !== undefined ? L.levelAt(x, z, y + 0.05) : 0;
+        const G = lv > 0 ? L.grid(lv) : g;
         for (let i = 0; i < 14; i++) {
           const tx = x + (this.rand() * 2 - 1) * r, tz = z + (this.rand() * 2 - 1) * r;
-          const [cx, cy] = g.cellOf(tx, tz);
-          if (g.walkable(cx, cy) && g.circleClear((cx + 0.5) * CELL, (cy + 0.5) * CELL, 0.36)) return g.center(cx, cy);
+          const [cx, cy] = G.cellOf(tx, tz);
+          if (G.walkable(cx, cy) && G.circleClear((cx + 0.5) * CELL, (cy + 0.5) * CELL, 0.36)) {
+            const c = G.center(cx, cy);
+            return multi ? [c[0], c[1], G.cellFloor(cx, cy)] : c;
+          }
         }
         return null;
       },
       rand: this.rand,
     };
+  }
+
+  /** Lane B (iteration 08): a sound at (x, y, z) is occluded from the player (3D on stacked levels; 2D walls otherwise). */
+  private soundOccluded(x: number, z: number, y?: number): boolean {
+    const p = this.player;
+    if (this.levels.count > 1 && y !== undefined) return !this.levels.lineOfSight({x: p.x, y: p.eye, z: p.z}, {x, y: y + 0.05, z}, {slack: 0.3});
+    return !this.layout.grid.lineOfSight(p.x, p.z, x, z);
   }
 
   private updateZombies(dt: number): void {
@@ -908,7 +989,7 @@ export class Game {
         b.yaw += Math.max(-turn, Math.min(turn, d));
       }
       // Lane T (iteration 05): height-aware motor (stairs, drops into the track bed, ladder climbs by the brain).
-      const moved = moveZombie(b, out, dt, this.layout.grid, this.propIndex);
+      const moved = moveZombie(b, out, dt, this.levels, this.propIndex); // Lane B: stacked levels
       if (b.alive && !b.climbing) {
         // keep bodies apart: other zombies and the player (same level only: platform vs track bed do not shove)
         for (const o of this.zombies) {
@@ -918,7 +999,7 @@ export class Game {
         }
         const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), min = b.stats.radius + p.radius + 0.22;
         if (d > 1e-4 && d < min && sameLevel(b.y, p.y)) { b.x += dx / d * (min - d); b.z += dz / d * (min - d); }
-        settleZombie(b, this.layout.grid, this.propIndex);
+        settleZombie(b, this.levels, this.propIndex);
       }
       // positional (panner) enemy audio: vocals, swings, footfalls — per archetype (Lane Q cue adapter;
       // the zombie adapter makes exactly the previous groan / swing / gait / ladder calls)
@@ -982,9 +1063,9 @@ export class Game {
       .then(() => { this.newStation(seed); void lock.then(() => this.enterPlay()); });
   }
 
-  /** Nearest walkable world point (helper for QA hooks). */
-  snap(x: number, z: number): [number, number] | null {
-    const g = this.layout.grid;
+  /** Nearest walkable world point (helper for QA hooks); Lane B: `level` = on that level's grid. */
+  snap(x: number, z: number, level = 0): [number, number] | null {
+    const g = level > 0 && level < this.levels.count ? this.levels.grid(level) : this.layout.grid;
     const c = nearestWalkable(g, ...g.cellOf(x, z), 4);
     return c ? g.center(c[0], c[1]) : null;
   }

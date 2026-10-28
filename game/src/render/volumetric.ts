@@ -167,7 +167,7 @@ export class VolumetricAtmosphere {
   private history: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget] | null = null;
   private histIndex = 0;
   private historyValid = false;
-  private densityTex: THREE.DataTexture | null = null;
+  private densityTex: THREE.DataArrayTexture | null = null;
   private field: LightFieldVolume | null = null;
   private readonly quad: THREE.Mesh;
   private readonly quadScene = new THREE.Scene();
@@ -218,7 +218,7 @@ export class VolumetricAtmosphere {
       tDepth: {value: null}, uFullSize: {value: V2()}, uLowSize: {value: V2()}, uProjInv: {value: M4()}, uCamWorld: {value: M4()},
       uCamPos: {value: V3()}, uNear: {value: 0.05}, uFar: {value: 70}, uMaxDist: {value: 36}, uFrame: {value: 0}, uTime: {value: 0},
       uFogDensity: {value: 0}, uNearFade: {value: V2()}, uDensity: {value: 0}, uHeightFalloff: {value: 0}, uRefHeight: {value: 1.6},
-      uNoiseScale: {value: 0.1}, uNoiseAmount: {value: 0}, uWind: {value: V3()}, tNoise: {value: noise}, tDensityMap: {value: null},
+      uNoiseScale: {value: 0.1}, uNoiseAmount: {value: 0}, uWind: {value: V3()}, tNoise: {value: noise}, tDensityMap: {value: null}, uMapSlots: {value: 1},
       uMapXform: {value: new THREE.Vector4(0, 0, 1, 1)}, uMapFloor: {value: new THREE.Vector2(0, 1)}, uPhase: {value: V3()},
       uFlashPos: {value: V3()}, uFlashDir: {value: new THREE.Vector3(0, 0, -1)}, uFlashCone: {value: new THREE.Vector2(1, 1)}, uFlashColor: {value: V3()},
       uFlashRange: {value: new THREE.Vector2(30, 1.2)}, tShadow: {value: null}, uShadowMatrix: {value: M4()}, uShadowBias: {value: 0}, uShadowOn: {value: 0},
@@ -304,7 +304,10 @@ export class VolumetricAtmosphere {
     this.densityMap = buildDensityMap(layout, this.params);
     this.densityTex?.dispose();
     const m = this.densityMap;
-    const t = new THREE.DataTexture(m.data, m.w, m.h, THREE.RGFormat, THREE.UnsignedByteType);
+    // Iteration 08: one layer per level slot (RGBA: multiplier, floor, ceiling, presence).
+    const t = new THREE.DataArrayTexture(m.data, m.w, m.h, m.slots);
+    t.format = THREE.RGBAFormat;
+    t.type = THREE.UnsignedByteType;
     t.minFilter = t.magFilter = THREE.LinearFilter;
     t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     t.generateMipmaps = false;
@@ -464,6 +467,7 @@ export class VolumetricAtmosphere {
     if (m) {
       u.uMapXform.value.set(0, 0, 1 / (m.w * m.cell), 1 / (m.h * m.cell));
       u.uMapFloor.value.set(m.yMin, m.yRange);
+      u.uMapSlots.value = m.slots;
     }
     // Flashlight (camera-held spot; same cone/attenuation as its surface lighting).
     const fl = this.lights.flashlight;

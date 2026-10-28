@@ -14,9 +14,17 @@ import {P7_HOLDER_KINDS, P7_HOLDER_META, type P7HolderKind} from '../gen/props07
 import {effectText, itemDef} from './items';
 import type {Inventory} from './inventory';
 import {packItems, type Placement, type Surface} from './lootLayout';
+import {
+  OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind, type OpenableLoot,
+} from '../world/openablesSpec';
 
-export type ContainerKind = 'cabinetTall' | 'cabinetLow' | 'crate';
-export const CONTAINER_KINDS: readonly ContainerKind[] = ['cabinetTall', 'cabinetLow', 'crate'];
+/**
+ * Iteration 08 (Lane I): searchable CONTAINERS now include the openable kinds of world/openablesSpec.ts (trash cans, wheelie
+ * bins, newspaper boxes, staff lockers, filing cabinets, safes, chest freezers, wall first-aid / fire / defibrillator cabinets):
+ * lids / doors / drawers that open per compartment (HolderState.parts).
+ */
+export type ContainerKind = 'cabinetTall' | 'cabinetLow' | 'crate' | OpenableContainerKind;
+export const CONTAINER_KINDS: readonly ContainerKind[] = ['cabinetTall', 'cabinetLow', 'crate', ...OPENABLE_CONTAINER_KINDS];
 export function isContainerKind(kind: string): kind is ContainerKind {
   return (CONTAINER_KINDS as readonly string[]).includes(kind);
 }
@@ -47,13 +55,18 @@ export const HOLDER_LABEL: Record<HolderKind, string> = {
   wokLine: 'wok station', deliLine: 'prep line', blenderBar: 'juice station', kitchenette: 'kitchenette', fridge: 'fridge',
   gunLocker: 'gun locker', monitorDesk: 'security desk', medCabinet: 'first-aid cabinet',
   ...P7_HOLDER_META.label,
+  ...OPENABLE_META.label,
 };
 /** Back-compat alias (iteration 02 name). */
 export const CONTAINER_LABEL = HOLDER_LABEL;
 
 export interface LootEntry { itemId: string; count: number }
 /** One visible item (or ammo box) resting on a holder surface. */
-export interface Lot extends LootEntry, Placement { id: number }
+export interface Lot extends LootEntry, Placement {
+  id: number;
+  /** Iteration 08 (Lane I): compartment (openable part index) the lot rests in; absent = an exposed surface. */
+  part?: number;
+}
 
 export interface HolderState {
   /** Index among holders of the same group (containers / surfaces) in layout order. */
@@ -69,6 +82,9 @@ export interface HolderState {
   lots: Lot[];
   /** Lots rolled at station start (QA/tests). */
   rolled: number;
+  /** Iteration 08 (Lane I): openable compartments (world/openablesSpec.ts parts): open now / ever opened. Persist; never re-roll. */
+  parts?: boolean[];
+  seen?: boolean[];
 }
 
 // ---------------------------------------------------------------------------------------
@@ -110,6 +126,8 @@ const HOLDER_MOD: Record<HolderKind, W4> = {
   wokLine: [1.6, 0.8, 0, 0], deliLine: [1.4, 1, 0, 0], blenderBar: [0.5, 2, 0, 0], kitchenette: [2, 1, 0.1, 0], fridge: [0.6, 2.4, 0, 0],
   gunLocker: [0, 0, 0.4, 3], monitorDesk: [1, 1.2, 0.2, 0.3], medCabinet: [0, 0.2, 3, 0],
   ...P7_HOLDER_META.mod,
+  // Iteration 08 openable containers roll their own tables (world/openablesSpec.ts); these entries are never weighted.
+  ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, [1, 1, 1, 1]])) as unknown as Record<OpenableContainerKind, W4>,
 };
 /** Empties are rare (and clearly labelled when opened). */
 const EMPTY_CHANCE: Record<HolderKind, number> = {
@@ -117,6 +135,7 @@ const EMPTY_CHANCE: Record<HolderKind, number> = {
   stockShelf: 0.12, snackRack: 0.15, hotdogCart: 0.2, grillLine: 0.35, espressoBar: 0.35, wokLine: 0.35, deliLine: 0.35, blenderBar: 0.35,
   kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
   ...P7_HOLDER_META.empty,
+  ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, containerLoot(k)?.empty ?? 1])) as unknown as Record<OpenableContainerKind, number>,
 };
 const LOT_COUNT: Record<HolderKind, readonly [number, number]> = {
   cabinetTall: [2, 5], cabinetLow: [2, 4], crate: [1, 3], shelf: [2, 5], stall: [2, 5], vending: [3, 6], table: [1, 2], desk: [1, 2],
@@ -124,6 +143,7 @@ const LOT_COUNT: Record<HolderKind, readonly [number, number]> = {
   stockShelf: [2, 5], snackRack: [2, 4], hotdogCart: [2, 4], grillLine: [1, 3], espressoBar: [1, 3], wokLine: [1, 3], deliLine: [1, 3], blenderBar: [1, 3],
   kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
   ...P7_HOLDER_META.lots,
+  ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, containerLoot(k)?.lots ?? [0, 0]])) as unknown as Record<OpenableContainerKind, readonly [number, number]>,
 };
 /** Stocked rooms get fuller shelves. */
 const FULL_ROOMS = new Set(['stock-room', 'food-court', 'retail-arcade', 'storage', 'crew-room', 'shop']);
@@ -156,7 +176,36 @@ function holderRng(seed: number, index: number, kind: HolderKind): () => number 
   return mulberry32(hashString(`loot:${kind}:${index}`, seed >>> 0));
 }
 
+/**
+ * Iteration 08 (Lane I): an openable's own table narrowed to what its room / store purpose stocks (a pharmacy trash can holds
+ * pharmacy things, a newsstand's its snacks) — or the purpose's own rows when nothing overlaps. Plain halls keep the table.
+ */
+function purposeRows(own: OpenableLoot, areaType: string, kind: HolderKind): OpenableLoot {
+  const spec = purposeLoot(areaType, kind);
+  if (!spec || !spec.items.length) return own;
+  const allowed = new Set(spec.items.map(r => r[0]));
+  const rows = own.items.filter(r => allowed.has(r[0]));
+  return {...own, items: rows.length ? rows : spec.items};
+}
+
+/** Iteration 08 (Lane I): an openable's own table (junk-tier bins, office drawers, lockers, ...): finite, small, never ammo-heavy. */
+function rollOwn(r: () => number, kind: HolderKind, loot: OpenableLoot): LootEntry[] {
+  if (!loot.items.length || r() < loot.empty) return [];
+  const [lo, hi] = loot.lots;
+  const n = lo + Math.floor(r() * (hi - lo + 1));
+  const out: LootEntry[] = [];
+  for (let i = 0; i < n; i++) {
+    const itemId = pick(loot.items, r);
+    out.push({itemId, count: lotCount(itemId, kind, r)});
+  }
+  return out;
+}
+
 function rollItems(r: () => number, kind: HolderKind, areaType: string): LootEntry[] {
+  // Iteration 08 (Lane I): new openable containers use their own tables whatever the room (a pharmacy bin is still a bin);
+  // fixtures (fire / defibrillator cabinets) hold only what is baked into their model.
+  const own = containerLoot(kind);
+  if (own !== undefined) return own ? rollOwn(r, kind, purposeRows(own, areaType, kind)) : [];
   // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
   // (`areaType` is the purpose id when the area has one; plain room types use the tables below).
   const spec = purposeLoot(areaType, kind);
@@ -194,18 +243,47 @@ export function rollLootItems(seed: number, index: number, kind: HolderKind, are
 
 /** Deterministic contents placed on the holder's surfaces (items that fit nowhere are dropped). */
 export function rollHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[]): Lot[] {
+  // Iteration 08 (Lane I): a surface holder that gained compartments (desk drawers) keeps its exposed surfaces' roll exactly and
+  // rolls the compartments separately (own stream + table) — closed drawers are not where the old loot went.
+  const inside = separateCompartmentLoot(kind);
+  if (inside && surfaces.some(s => s.part !== undefined)) {
+    const exposed = surfaces.map((s, i) => ({s, i})).filter(e => e.s.part === undefined);
+    const parts = surfaces.map((s, i) => ({s, i})).filter(e => e.s.part !== undefined);
+    const a = rollOn(holderRng(seed, index, kind), index * 1000, rollItems, kind, areaType, exposed);
+    const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
+    const b = rollOn(r2, index * 1000 + 500, (r, k, a) => rollOwn(r, k, purposeRows(inside, a, k)), kind, areaType, parts);
+    return [...a, ...b].map(l => tagPart(l, surfaces));
+  }
   const r = holderRng(seed, index, kind);
   const items = rollItems(r, kind, areaType);
   const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
   const lots: Lot[] = [];
-  placed.forEach((p, i) => { if (p) lots.push({id: index * 1000 + i, ...items[i], ...p}); });
+  placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
+  return lots;
+}
+
+function tagPart(l: Lot, surfaces: readonly Surface[]): Lot {
+  const part = surfaces[l.surface]?.part;
+  return part === undefined ? l : {...l, part};
+}
+
+/** Rolls `roll` and packs it onto a subset of the holder's surfaces (placements keep FULL-list surface indices). */
+function rollOn(r: () => number, idBase: number, roll: (r: () => number, kind: HolderKind, areaType: string) => LootEntry[], kind: HolderKind, areaType: string, subset: {s: Surface; i: number}[]): Lot[] {
+  const items = roll(r, kind, areaType);
+  if (!subset.length) return [];
+  const placed = packItems(items.map(e => e.itemId), subset.map(e => e.s), r, false);
+  const lots: Lot[] = [];
+  placed.forEach((p, i) => { if (p) lots.push({id: idBase + i, ...items[i], ...p, surface: subset[p.surface].i}); });
   return lots;
 }
 
 export function createHolderState(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], lots?: Lot[]): HolderState {
   const list = (lots ?? rollHolderLots(seed, index, kind, areaType, surfaces)).map(l => ({...l}));
   const alwaysOpen = isSurfaceKind(kind) && kind !== 'vending';
-  return {index, kind, areaType, open: alwaysOpen, searched: alwaysOpen, lots: list, rolled: list.length};
+  const st: HolderState = {index, kind, areaType, open: alwaysOpen, searched: alwaysOpen, lots: list, rolled: list.length};
+  const spec = openableSpec(kind);
+  if (spec) { st.parts = spec.parts.map(() => false); st.seen = spec.parts.map(() => false); }
+  return st;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -273,6 +351,16 @@ export function takeAll(s: HolderState, inv: Inventory): TransferResult {
   return finish(s, taken, s.lots, firstSearch);
 }
 
+/** Iteration 08 (Lane I): takes everything that fits from the given lots only (one open drawer / locker). Never adds loot. */
+export function takeLots(s: HolderState, ids: readonly number[], inv: Inventory): TransferResult {
+  const firstSearch = !s.searched;
+  s.searched = true;
+  const taken: LootEntry[] = [];
+  const tried = s.lots.filter(l => ids.includes(l.id));
+  for (const l of tried) { const got = transferLot(l, inv); if (got) taken.push({itemId: l.itemId, count: got}); }
+  return finish(s, taken, tried, firstSearch);
+}
+
 export type HolderAction = 'open' | 'pry' | 'take' | 'close' | 'none';
 
 /** What [E] on the holder body does next. */
@@ -280,6 +368,56 @@ export function nextHolderAction(s: HolderState): HolderAction {
   if (isContainerKind(s.kind)) return !s.open ? 'open' : s.lots.length ? 'take' : 'close';
   if (s.kind === 'vending' && !s.open) return 'pry';
   return s.lots.length ? 'take' : 'none';
+}
+
+// ---------------------------------------------------------------------------------------
+// Iteration 08 (Lane I): openable compartments (world/openablesSpec.ts parts: lid / door / drawer / pane)
+
+export type PartAction = 'open' | 'take' | 'close';
+
+/** What [E] on compartment `part` does: open it, take what is in it, or close it again. */
+export function partAction(s: HolderState, part: number): PartAction {
+  if (!s.parts?.[part]) return 'open';
+  return s.lots.some(l => l.part === part) ? 'take' : 'close';
+}
+
+export interface PartInfo {
+  /** HUD name of the part ("trash can", "top drawer", "left locker"). */
+  name: string;
+  /** Holder label ("filing cabinet"). */
+  label: string;
+  /** Has a loot table (fixtures with baked contents do not). */
+  loot: boolean;
+  /** Fixture contents text when opened without loot. */
+  contents?: string;
+  /** Glass door: its lots are visible while closed. */
+  glass?: boolean;
+}
+
+const cap = (t: string) => t[0].toUpperCase() + t.slice(1);
+const lotsIn = (s: HolderState, part: number) => s.lots.filter(l => l.part === part);
+
+/** HUD prompt for a compartment (`key` = show the [E] key cap). */
+export function partPrompt(s: HolderState, part: number, info: PartInfo, o: {roomForAny: boolean}): {key: boolean; text: string} {
+  const n = lotsIn(s, part).length;
+  const seen = !!s.seen?.[part];
+  const room = o.roomForAny ? '' : ' — no room (Tab: inventory)';
+  switch (partAction(s, part)) {
+    case 'open':
+      if (info.glass && n) return {key: true, text: `Open ${info.name} (${n} item${n === 1 ? '' : 's'} inside)`};
+      if (!seen || !info.loot) return {key: true, text: `Open ${info.name}`};
+      return {key: true, text: n ? `Open ${info.name} (${n} item${n === 1 ? '' : 's'} left inside)` : `Open ${info.name} (searched — empty)`};
+    case 'take': return {key: true, text: `Take all (${n})${room} · or aim at an item`};
+    default: return {key: true, text: info.loot ? `Close ${info.name} — empty` : `Close ${info.name}`};
+  }
+}
+
+/** Toast when a compartment is first opened: what is visibly inside, its fixture contents, or a clear "empty". */
+export function partOpenMessage(s: HolderState, part: number, info: PartInfo): {text: string; warn: boolean} {
+  const lots = lotsIn(s, part);
+  if (lots.length) return {text: `Inside: ${short(lotEntries(lots), 4)}`, warn: false};
+  if (info.contents) return {text: `${cap(info.name)}: ${info.contents}`, warn: false};
+  return {text: `${cap(info.name)}: empty`, warn: false};
 }
 
 // ---------------------------------------------------------------------------------------

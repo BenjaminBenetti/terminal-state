@@ -1,12 +1,19 @@
 // Turns a StationLayout into three.js meshes: merged per-material architecture built from the
 // cell grid, instanced prop derivatives, procedural props/trim (frames, rails, stairs, gates) and
 // instanced signage. Draw calls stay bounded for the large station: architecture is one mesh per
-// material, procedural props one instanced mesh per (kind, material), signs one plate mesh plus
-// one face mesh per distinct text.
+// (level, chunk, material), procedural props one instanced mesh per (kind, material), signs one
+// plate mesh plus one face mesh per distinct text.
+//
+// Iteration 08 (Lane G): multi-level stations. Every level (layout.levels; levels[0] = layout.grid)
+// is built from the union-of-open-columns model (world/levelGeometry.ts): wall faces only where a
+// level's open band borders closed space at that height (slab fascias, soffits, stair cores and
+// double-height voids included), ceilings per band (slab undersides), floors per area on its own
+// level, guard railings on drop edges. The faces are published as `wallFaces` for the wall-treatment
+// pass. Architecture and trim are chunked (CHUNK_M, per level) so off-screen chunks are culled.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
-import {CELL, FLOOR, SOLID, VOID, type Grid} from '../gen/grid';
+import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../gen/props';
 import {ACCENT_COLORS, propShape, type ShapeMat} from '../gen/propShapes';
 import {isContainerKind} from '../items/loot';
@@ -18,6 +25,14 @@ import {SHOP_BLOCKERS, SHOP_FURNITURE} from '../gen/storefronts';
 import {buildStorefronts} from './storefrontBuilder';
 import {buildTraversal} from './traversalBuilder';
 import {SIGN_SIZE, passageRails, signDims} from '../gen/doorways';
+import {
+  CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil as cellCeilAt, ceilingRuns, chunkKey, extractWallFaces, levelOf, stationLevels, stationRails,
+  type BuiltFace, type RailRun,
+} from './levelGeometry';
+import type {WallFace} from './wallFaces';
+import {LevelCuller} from './levelCulling';
+import {addShaderHook} from '../render/shaderHooks';
+import {buildWallDetail} from './wallDetail';
 
 class Accum {
   pos: number[] = [];
@@ -45,15 +60,6 @@ class Accum {
   }
 }
 
-const DIRS = [
-  {dx: 0, dy: -1, n: [0, 0, 1]},   // north neighbour; face visible from the south
-  {dx: 0, dy: 1, n: [0, 0, -1]},
-  {dx: -1, dy: 0, n: [1, 0, 0]},
-  {dx: 1, dy: 0, n: [-1, 0, 0]},
-] as const;
-
-/** Wall edge kinds between a cell and its neighbour. */
-const enum Edge { None = 0, Tile = 1, Paint = 2, Tunnel = 3, PlatformFace = 4, Shop = 5 }
 /** Storefront unit interiors use world-mapped shape materials (UV scale irrelevant). */
 const SHOP_SCALE = {u: 1, v: 1};
 
@@ -74,11 +80,24 @@ export interface BuiltWorld {
   group: THREE.Group;
   fixtures: Fixture[];
   tubes: THREE.InstancedMesh | null;
-  stats: {meshes: number; triangles: number; instances: number};
+  stats: {meshes: number; triangles: number; instances: number; levels: number; archMeshes: number};
+  /** Iteration 08: every visible base-wall face (input of the wall-treatment pass). */
+  wallFaces: WallFace[];
+  /** Iteration 08: guard railings on drop edges (layout.rails, else derived from the geometry). */
+  rails: RailRun[];
+  /** Iteration 08: level id of a world point (band holding y) — instanced groups are chunked per level with it. */
+  levelAt: LevelResolver;
+  /** Iteration 08: hides levels behind slabs (portal visibility); register other station groups, update per frame. */
+  culler: LevelCuller;
 }
 
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
 const CHUNK = 18;
+/** Pseudo-level of stair flight geometry (treads, risers, flight ceilings, side walls): seen from both
+ *  levels a flight joins, so the level culler never hides it (frustum / fog culling still apply... via chunks). */
+export const STAIR_LEVEL = -1;
+/** Trim / sleeper chunk size (m): small cheap geometry, coarse chunks. */
+const TRIM_CHUNK_M = 64;
 /** Model keys for props that use a generated derivative when it exists (optional). */
 const MODEL_FOR: Partial<Record<PropKind, string>> = {bench: 'bench', cabinetTall: 'cabinetTall', cabinetLow: 'cabinetLow', stall: 'stall', vending: 'vending', shelf: 'shelf', bin: 'trashCan'};
 
@@ -87,175 +106,240 @@ function floorMatFor(area: Area | undefined): MatKey {
   return area.publicSpace ? 'terrazzo' : 'concrete';
 }
 
+interface Sink { quad(p: number[][], n: readonly number[], uv: number[][]): void }
+
+/**
+ * Vertical quad on a wall plane. `alongX`: the plane is z = plane (normal ±Z), else x = plane
+ * (normal ±X). Bottom/top heights (and texture bases) may differ at the two ends (sloped walls).
+ */
+function wallQuad(a: Sink, m: {u: number; v: number}, alongX: boolean, plane: number, nSign: number, a0: number, a1: number,
+  yb0: number, yb1: number, yt0: number, yt1: number, vb0: number, vb1: number): void {
+  const v0 = (y: number) => (y - vb0) / m.v, v1 = (y: number) => (y - vb1) / m.v;
+  if (alongX) {
+    const z = plane;
+    if (nSign > 0) a.quad([[a0, yb0, z], [a1, yb1, z], [a1, yt1, z], [a0, yt0, z]], [0, 0, 1], [[a0 / m.u, v0(yb0)], [a1 / m.u, v1(yb1)], [a1 / m.u, v1(yt1)], [a0 / m.u, v0(yt0)]]);
+    else a.quad([[a1, yb1, z], [a0, yb0, z], [a0, yt0, z], [a1, yt1, z]], [0, 0, -1], [[-a1 / m.u, v1(yb1)], [-a0 / m.u, v0(yb0)], [-a0 / m.u, v0(yt0)], [-a1 / m.u, v1(yt1)]]);
+  } else {
+    const x = plane;
+    if (nSign > 0) a.quad([[x, yb1, a1], [x, yb0, a0], [x, yt0, a0], [x, yt1, a1]], [1, 0, 0], [[-a1 / m.u, v1(yb1)], [-a0 / m.u, v0(yb0)], [-a0 / m.u, v0(yt0)], [-a1 / m.u, v1(yt1)]]);
+    else a.quad([[x, yb0, a0], [x, yb1, a1], [x, yt1, a1], [x, yt0, a0]], [-1, 0, 0], [[a0 / m.u, v0(yb0)], [a1 / m.u, v1(yb1)], [a1 / m.u, v1(yt1)], [a0 / m.u, v0(yt0)]]);
+  }
+}
+
+/** Split [a, b] at multiples of CHUNK_M. */
+function chunkSpans(a: number, b: number): [number, number][] {
+  const out: [number, number][] = [];
+  while (a < b - 1e-6) {
+    const e = Math.min(b, (Math.floor(a / CHUNK_M + 1e-9) + 1) * CHUNK_M);
+    out.push([a, e]);
+    a = e;
+  }
+  return out;
+}
+
 export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: Record<string, GLTF | undefined>): BuiltWorld {
-  const g = layout.grid;
+  const g0 = layout.grid;
+  const levels = stationLevels(layout);
+  const cols = new LevelColumns(levels);
+  const gridOf = (level: number): Grid => levels[level]?.grid ?? g0;
+  // Level of a world point: the band holding y (else the nearest band below / above) at that column.
+  const levelAt: LevelResolver = (x, y, z) => {
+    const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
+    if (cx < 0 || cy < 0 || cx >= g0.w || cy >= g0.h) return 0;
+    const i = cy * g0.w + cx;
+    let best = 0, bd = Infinity;
+    for (let k = 0; k < cols.count(i); k++) {
+      const L = cols.level(i, k), g = levels[L].grid;
+      const f = g.floorAt(x, z), c = cellCeilAt(g, i);
+      const d = y < f - 0.3 ? f - 0.3 - y : y > c + 0.3 ? y - c - 0.3 : 0;
+      if (d < bd) { bd = d; best = levels[L].id; }
+    }
+    return best;
+  };
+  const instanceModel = (gr: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string) =>
+    addInstancedModel(gr, gltf, placements, fit, name, levelAt);
   const group = new THREE.Group();
   group.name = 'station';
-  const acc = new Map<MatKey, Accum>();
-  const A = (k: MatKey) => { let a = acc.get(k); if (!a) acc.set(k, (a = new Accum())); return a; };
+  // Architecture accumulators per (material, level:chunk).
+  const acc = new Map<string, {k: MatKey; level: number; a: Accum}>();
+  const A = (k: MatKey, chunk: string) => {
+    const key = `${k}@${chunk}`;
+    let e = acc.get(key);
+    if (!e) acc.set(key, (e = {k, level: Number(chunk.split(':')[0]), a: new Accum()}));
+    return e.a;
+  };
   // Storefront unit interiors (shop tile walls, quarry-tile floors): shape-material accumulators.
-  const shopAcc = new Map<string, Accum>();
-  const S = (k: string) => { let a = shopAcc.get(k); if (!a) shopAcc.set(k, (a = new Accum())); return a; };
+  const shopAcc = new Map<string, {k: string; level: number; a: Accum}>();
+  const S = (k: string, chunk: string) => {
+    const key = `${k}@${chunk}`;
+    let e = shopAcc.get(key);
+    if (!e) shopAcc.set(key, (e = {k, level: Number(chunk.split(':')[0]), a: new Accum()}));
+    return e.a;
+  };
   const trenchY = layout.trench.floorY;
   let instancesFromTraversal = 0;
-  const TILE_LOWER_H = mats.tileLowerHeight;
 
-  // --- Walls: merge runs of identical edges along each grid line -------------------------
-  // Edge descriptor for cell (x, y) toward neighbour (nx, ny): kind + vertical span + texture
-  // base (the cell's floor). Iteration 05 (Lane T): heights come from the grid (track bed,
-  // underpass, landings); stair-ramp cells are walled by traversalBuilder (sloped walls).
-  let eKind = Edge.None, eY0 = 0, eY1 = 0, eBase = 0;
-  const edgeAt = (x: number, y: number, nx: number, ny: number) => {
-    eKind = Edge.None;
-    const i = y * g.w + x;
-    const ct = g.cells[i], nt = g.get(nx, ny);
-    if (ct === SOLID || g.rampIdx[i] >= 0) return;
-    const ni = g.inBounds(nx, ny) ? ny * g.w + nx : -1;
-    const f = g.floorOf(i);
-    eBase = f;
-    if (ct === FLOOR) {
-      const cc = g.ceil[i];
-      const area = layout.areas[g.area[i]];
-      const kind = !area ? Edge.Tile : area.type === 'eatery' || area.type === 'shop' ? Edge.Shop : area.publicSpace ? Edge.Tile : Edge.Paint;
-      if (nt === SOLID) { eKind = kind; eY0 = f; eY1 = cc; }
-      else if (ni >= 0 && g.rampIdx[ni] < 0) {
-        const nc = g.ceil[ni], nf = g.floorOf(ni);
-        if (nt === FLOOR && nc < cc - 1e-4) { eKind = kind; eY0 = nc; eY1 = cc; }
-        else if (nf > f + 0.02) { eKind = kind; eY0 = f; eY1 = Math.min(nf, cc); } // face of a higher floor
-      }
-    } else if (ct === VOID) {
-      if (nt === SOLID) { eKind = Edge.Tunnel; eY0 = f; eY1 = g.ceil[i]; }
-      else if (nt === FLOOR) { eKind = Edge.PlatformFace; eY0 = f; eY1 = g.floorOf(ni); }
+  // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
+  const faces: BuiltFace[] = extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight});
+  const emitFace = (f: BuiltFace) => {
+    const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
+    const plane = alongX ? f.z0 : f.x0;
+    const s0 = alongX ? f.x0 : f.z0, s1 = alongX ? f.x1 : f.z1;
+    const nSign = alongX ? f.nz : f.nx;
+    const shop = f.finish === 'tileShop';
+    const m = shop ? SHOP_SCALE : mats.scale[f.finish as MatKey];
+    // Flight side walls belong to both levels a flight joins: the 'stairs' pseudo-level is never level-culled.
+    const lv = f.slope ? STAIR_LEVEL : f.level;
+    const sink = (along: number): Sink => {
+      const ck = alongX ? chunkKey(lv, along, plane) : chunkKey(lv, plane, along);
+      return shop ? S('tileShop', ck) : A(f.finish as MatKey, ck);
+    };
+    if (f.slope) {
+      wallQuad(sink((s0 + s1) / 2), m, alongX, plane, nSign, s0, s1, f.slope.b0, f.slope.b1, f.slope.t0, f.slope.t1, f.vb0, f.vb1);
+      return;
+    }
+    // Solid parts between openings (full height) and over them (lintels).
+    const parts: [number, number, number][] = [];
+    let pos = 0;
+    for (const o of [...f.openings].sort((p, q) => p.s0 - q.s0)) {
+      if (o.s0 > pos + 1e-6) parts.push([pos, o.s0, f.y0]);
+      if (o.top < f.y1 - 1e-4) parts.push([o.s0, o.s1, Math.max(f.y0, o.top)]);
+      pos = Math.max(pos, o.s1);
+    }
+    if (s1 - s0 > pos + 1e-6) parts.push([pos, s1 - s0, f.y0]);
+    for (const [p0, p1, yb] of parts) {
+      for (const [a, b] of chunkSpans(s0 + p0, s0 + p1)) wallQuad(sink((a + b) / 2), m, alongX, plane, nSign, a, b, yb, yb, f.y1, f.y1, f.vb0, f.vb1);
     }
   };
-  const emitEdge = (kind: Edge, y0: number, y1: number, base: number, d: (typeof DIRS)[number], line: number, k0: number, k1: number) => {
-    if (kind === Edge.Paint) emitWall('paint', y0, y1, base, d, line, k0, k1);
-    else if (kind === Edge.Tile) {
-      if (y0 < base + TILE_LOWER_H) emitWall('tileLower', y0, Math.min(y1, base + TILE_LOWER_H), base, d, line, k0, k1);
-      if (y1 > base + TILE_LOWER_H) emitWall('tileUpper', Math.max(y0, base + TILE_LOWER_H), y1, base + TILE_LOWER_H, d, line, k0, k1);
-    } else if (kind === Edge.Shop) emitWallTo(S('tileShop'), SHOP_SCALE, y0, y1, base, d, line, k0, k1);
-    else if (kind === Edge.Tunnel) emitWall('tunnel', y0, y1, base, d, line, k0, k1);
-    else if (kind === Edge.PlatformFace) emitWall('platformFace', y0, y1, base, d, line, k0, k1);
-  };
-  for (const d of DIRS) {
-    const horizontal = d.dy !== 0; // edge runs along X
-    const lines = horizontal ? g.h : g.w;
-    const len = horizontal ? g.w : g.h;
-    for (let l = 0; l < lines; l++) {
-      let runKind = Edge.None, runY0 = 0, runY1 = 0, runBase = 0, runStart = 0;
-      for (let k = 0; k <= len; k++) {
-        const x = horizontal ? k : l, y = horizontal ? l : k;
-        if (k < len) edgeAt(x, y, x + d.dx, y + d.dy); else eKind = Edge.None;
-        if (runKind !== Edge.None && eKind === runKind && Math.abs(eY0 - runY0) < 1e-4 && Math.abs(eY1 - runY1) < 1e-4 && Math.abs(eBase - runBase) < 1e-4) continue;
-        if (runKind !== Edge.None) emitEdge(runKind, runY0, runY1, runBase, d, l, runStart, k);
-        runKind = eKind; runY0 = eY0; runY1 = eY1; runBase = eBase; runStart = k;
-      }
-    }
-  }
-
-  function emitWall(mat: MatKey, y0: number, y1: number, vBase: number, d: (typeof DIRS)[number], line: number, k0: number, k1: number) {
-    emitWallTo(A(mat), mats.scale[mat], y0, y1, vBase, d, line, k0, k1);
-  }
-  function emitWallTo(a: Accum, m: {u: number; v: number}, y0: number, y1: number, vBase: number, d: (typeof DIRS)[number], line: number, k0: number, k1: number) {
-    if (y1 <= y0 + 1e-4) return;
-    const v0 = (y0 - vBase) / m.v, v1 = (y1 - vBase) / m.v;
-    if (d.dy !== 0) {
-      const z = (d.dy < 0 ? line : line + 1) * CELL;
-      const xa = k0 * CELL, xb = k1 * CELL;
-      if (d.n[2] > 0) a.quad([[xa, y0, z], [xb, y0, z], [xb, y1, z], [xa, y1, z]], d.n, [[xa / m.u, v0], [xb / m.u, v0], [xb / m.u, v1], [xa / m.u, v1]]);
-      else a.quad([[xb, y0, z], [xa, y0, z], [xa, y1, z], [xb, y1, z]], d.n, [[-xb / m.u, v0], [-xa / m.u, v0], [-xa / m.u, v1], [-xb / m.u, v1]]);
-    } else {
-      const x = (d.dx < 0 ? line : line + 1) * CELL;
-      const za = k0 * CELL, zb = k1 * CELL;
-      if (d.n[0] > 0) a.quad([[x, y0, zb], [x, y0, za], [x, y1, za], [x, y1, zb]], d.n, [[-zb / m.u, v0], [-za / m.u, v0], [-za / m.u, v1], [-zb / m.u, v1]]);
-      else a.quad([[x, y0, za], [x, y0, zb], [x, y1, zb], [x, y1, za]], d.n, [[za / m.u, v0], [zb / m.u, v0], [zb / m.u, v1], [za / m.u, v1]]);
-    }
-  }
+  for (const f of faces) emitFace(f);
+  // Lane W: the wall treatment runs once the arch meshes exist (buildWallDetail below).
 
   // --- Floors and ceilings ------------------------------------------------------------------
-  const floorQuad = (mat: MatKey, x0: number, z0: number, x1: number, z1: number, y = 0, vFrom?: number, flip = false) => {
-    const m = mats.scale[mat];
+  const floorQuadTo = (a: Accum, m: {u: number; v: number}, x0: number, z0: number, x1: number, z1: number, y: number, vFrom?: number, flip = false) => {
     const vz = (z: number) => vFrom !== undefined ? 1 - (flip ? vFrom - z : z - vFrom) / m.v : -z / m.v;
-    A(mat).quad([[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]], [0, 1, 0], [[x0 / m.u, vz(z0)], [x0 / m.u, vz(z1)], [x1 / m.u, vz(z1)], [x1 / m.u, vz(z0)]]);
+    a.quad([[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]], [0, 1, 0], [[x0 / m.u, vz(z0)], [x0 / m.u, vz(z1)], [x1 / m.u, vz(z1)], [x1 / m.u, vz(z0)]]);
   };
-  const ceilQuad = (mat: MatKey, x0: number, z0: number, x1: number, z1: number, y: number) => {
-    const m = mats.scale[mat];
-    A(mat).quad([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], [0, -1, 0], [[x0 / m.u, z0 / m.v], [x1 / m.u, z0 / m.v], [x1 / m.u, z1 / m.v], [x0 / m.u, z1 / m.v]]);
-  };
-  // Lane T: areas whose cells are not all at one floor/ceiling (stair legs with landings) get
-  // per-row runs of floor/ceiling quads at each cell's height; ramp cells are built by traversalBuilder.
-  const uniform = (a: Area): boolean => {
-    const i0 = g.idx(a.x, a.y), f0 = g.floorOf(i0), c0 = g.ceil[i0];
-    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
-      const i = y * g.w + x;
-      if (g.rampIdx[i] >= 0 || Math.abs(g.floorOf(i) - f0) > 1e-4 || Math.abs(g.ceil[i] - c0) > 1e-4) return false;
+  /** Floor rect split on the chunk grid (world-mapped UVs stay continuous). */
+  const floorRect = (mat: MatKey | {shop: string}, level: number, x0: number, z0: number, x1: number, z1: number, y = 0, vFrom?: number, flip = false) => {
+    const m = typeof mat === 'string' ? mats.scale[mat] : SHOP_SCALE;
+    for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
+      const ck = chunkKey(level, (xa + xb) / 2, (za + zb) / 2);
+      floorQuadTo(typeof mat === 'string' ? A(mat, ck) : S(mat.shop, ck), m, xa, za, xb, zb, y, vFrom, flip);
     }
-    return true;
   };
-  const perCell = (a: Area, mat: MatKey, ceilMat: MatKey) => {
-    for (let y = a.y; y < a.y + a.h; y++) {
-      for (let x = a.x; x < a.x + a.w;) {
-        const i = y * g.w + x;
-        if (g.rampIdx[i] >= 0) { x++; continue; }
-        const f = g.floorOf(i), c = g.ceil[i];
+  const ceilRect = (mat: MatKey, level: number, x0: number, z0: number, x1: number, z1: number, y: number) => {
+    const m = mats.scale[mat];
+    for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
+      A(mat, chunkKey(level, (xa + xb) / 2, (za + zb) / 2)).quad([[xa, y, za], [xb, y, za], [xb, y, zb], [xa, y, zb]], [0, -1, 0],
+        [[xa / m.u, za / m.v], [xb / m.u, za / m.v], [xb / m.u, zb / m.v], [xa / m.u, zb / m.v]]);
+    }
+  };
+  const n0 = g0.w * g0.h;
+  // Floors. Platforms (flat, fully carved on their level): kit slab + mustard safety edge strips along
+  // the track side(s). Every other open, non-ramp cell of every level: merged per-row runs at the cell's
+  // own floor, material by its area (terrazzo public / concrete service / quarry tile eateries / ballast
+  // track bed). Ramp cells are built by traversalBuilder. Floors whose column continues straight down
+  // into another band are not drawn.
+  const covered = levels.map(() => new Uint8Array(n0));
+  // Door openings keep their iteration-7 floor rule (the public side's finish only when both sides are public).
+  const doorFloor = new Map<number, MatKey>();
+  for (const d of layout.doors) {
+    const b = layout.areas[d.b], a = layout.areas[d.a];
+    const L = Math.min(levels.length - 1, (d as {level?: number}).level ?? levelOf(a));
+    const m = floorMatFor(a.publicSpace && b.publicSpace ? a : b);
+    for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) doorFloor.set(L * n0 + y * g0.w + x, m);
+  }
+  for (const id of layout.platforms) {
+    const a = layout.areas[id];
+    const L = levelOf(a), g = gridOf(L);
+    const f0 = g.floorOf(g.idx(a.x, a.y));
+    let flat = true;
+    for (let y = a.y; y < a.y + a.h && flat; y++) for (let x = a.x; x < a.x + a.w; x++) {
+      const i = y * g.w + x;
+      if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || Math.abs(g.floorOf(i) - f0) > 1e-4 || g.area[i] !== a.id) { flat = false; break; }
+    }
+    if (!flat) continue;
+    const x0 = a.x * CELL, z0 = a.y * CELL, x1 = (a.x + a.w) * CELL, z1 = (a.y + a.h) * CELL;
+    const strip = mats.scale.safetyEdge.v;
+    const nE = a.edge !== 'S', sEdge = a.edge === 'S' || a.edge === 'NS';
+    if (sEdge) floorRect('safetyEdge', L, x0, z1 - strip, x1, z1, f0, z1, true);
+    if (nE) floorRect('safetyEdge', L, x0, z0, x1, z0 + strip, f0, z0);
+    floorRect('platformSlab', L, x0, nE ? z0 + strip : z0, x1, sEdge ? z1 - strip : z1, f0);
+    for (let y = a.y; y < a.y + a.h; y++) covered[L].fill(1, y * g.w + a.x, y * g.w + a.x + a.w);
+  }
+  for (let L = 0; L < levels.length; L++) {
+    const g = levels[L].grid, id = levels[L].id, W = g.w;
+    const floorKey = (i: number): string | null => {
+      if (covered[L][i] || g.rampIdx[i] >= 0 || !cols.has(i, L)) return null;
+      const c = g.cells[i];
+      if (c === VOID) return 'ballast';
+      if (c !== FLOOR) return null;
+      // The space continues downward (another band ends right at this floor): no floor surface.
+      const f = g.floorOf(i);
+      for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
+      const dm = doorFloor.get(L * n0 + i);
+      if (dm) return dm;
+      const a = layout.areas[g.area[i]];
+      return a?.type === 'eatery' ? 'shop:quarryTile' : floorMatFor(a);
+    };
+    for (let y = 0; y < g.h; y++) {
+      for (let x = 0; x < W;) {
+        const i = y * W + x;
+        const key = floorKey(i);
+        if (!key) { x++; continue; }
+        const f = g.floorOf(i);
         let e = x + 1;
-        while (e < a.x + a.w && g.rampIdx[y * g.w + e] < 0 && Math.abs(g.floorOf(y * g.w + e) - f) < 1e-4 && Math.abs(g.ceil[y * g.w + e] - c) < 1e-4) e++;
-        floorQuad(mat, x * CELL, y * CELL, e * CELL, (y + 1) * CELL, f);
-        ceilQuad(ceilMat, x * CELL, y * CELL, e * CELL, (y + 1) * CELL, c);
+        while (e < W && floorKey(y * W + e) === key && Math.abs(g.floorOf(y * W + e) - f) < 1e-4) e++;
+        floorRect(key.startsWith('shop:') ? {shop: key.slice(5)} : key as MatKey, id, x * CELL, y * CELL, e * CELL, (y + 1) * CELL, f);
         x = e;
       }
     }
-  };
-  for (const a of layout.areas) {
-    const x0 = a.x * CELL, z0 = a.y * CELL, x1 = (a.x + a.w) * CELL, z1 = (a.y + a.h) * CELL;
-    if (!uniform(a)) { perCell(a, floorMatFor(a), a.publicSpace ? 'ceiling' : 'ceilingService'); continue; }
-    const af = g.floorOf(g.idx(a.x, a.y));
-    if (af !== 0) { floorQuad(floorMatFor(a), x0, z0, x1, z1, af); ceilQuad(a.publicSpace ? 'ceiling' : 'ceilingService', x0, z0, x1, z1, a.ceil); continue; }
-    if (a.kind === 'platform') {
-      // Mustard safety edge along the track side(s), kit slab texture for the rest of the platform.
-      const strip = mats.scale.safetyEdge.v;
-      const n = a.edge !== 'S', sEdge = a.edge === 'S' || a.edge === 'NS';
-      if (sEdge) floorQuad('safetyEdge', x0, z1 - strip, x1, z1, 0, z1, true);
-      if (n) floorQuad('safetyEdge', x0, z0, x1, z0 + strip, 0, z0);
-      floorQuad('platformSlab', x0, n ? z0 + strip : z0, x1, sEdge ? z1 - strip : z1);
-    } else if (a.type === 'eatery') {
-      const m = SHOP_SCALE;
-      S('quarryTile').quad([[x0, 0, z0], [x0, 0, z1], [x1, 0, z1], [x1, 0, z0]], [0, 1, 0], [[x0 / m.u, -z0 / m.v], [x0 / m.u, -z1 / m.v], [x1 / m.u, -z1 / m.v], [x1 / m.u, -z0 / m.v]]);
-    } else floorQuad(floorMatFor(a), x0, z0, x1, z1);
-    ceilQuad(a.publicSpace ? 'ceiling' : 'ceilingService', x0, z0, x1, z1, a.ceil);
   }
+  // Door rects: ceiling at the opening (storefront heads stay at the opening head, not the shutter line).
+  const doorMask = levels.map(() => new Uint8Array(n0));
   for (const d of layout.doors) {
     const b = layout.areas[d.b], a = layout.areas[d.a];
+    const L = Math.min(levels.length - 1, (d as {level?: number}).level ?? levelOf(a)), g = gridOf(L);
     const x0 = d.x * CELL, z0 = d.y * CELL, x1 = (d.x + d.w) * CELL, z1 = (d.y + d.h) * CELL;
-    const df = g.floorOf(g.idx(d.x, d.y));
-    floorQuad(floorMatFor(a.publicSpace && b.publicSpace ? a : b), x0, z0, x1, z1, df);
-    ceilQuad(b.publicSpace ? 'ceiling' : 'ceilingService', x0, z0, x1, z1, df === 0 ? d.height : g.ceil[g.idx(d.x, d.y)]);
+    const i = g.idx(d.x, d.y);
+    const df = g.floorOf(i);
+    for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) doorMask[L][y * g0.w + x] = 1;
+    ceilRect(b.publicSpace ? 'ceiling' : 'ceilingService', levels[L].id, x0, z0, x1, z1, L === 0 && df === 0 ? d.height : g.ceil[i]);
   }
-  // Track beds: ballast floor and the ceiling continuing over the tracks.
-  for (const t of layout.trenches) {
-    floorQuad('ballast', t.x0, t.z0, t.x1, t.z1, t.floorY);
-    ceilQuad('ceiling', t.x0, t.z0, t.x1, t.z1, t.ceil);
+  // Ceilings of every level band (slab undersides between overlapping levels included).
+  for (const r of ceilingRuns(levels, cols, (L, i) => doorMask[L][i] === 1)) {
+    const a = r.voidCell ? undefined : layout.areas[r.area];
+    ceilRect(r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService', levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
   }
-  // Lane T (iteration 05): stair flights (treads, risers, nosings, sloped walls/ceilings, handrails),
-  // rescue ladders, underpass track-structure beams, tunnel-mouth barricades.
-  instancesFromTraversal = buildTraversal(group, layout, mats, A);
+  // Lane T (iteration 05): stair flights (treads, risers, nosings, ceilings, handrails), rescue
+  // ladders, underpass track-structure beams, tunnel-mouth barricades. Iteration 08: every level's
+  // flights once (a flight shared by two levels is built once); side walls come from the faces above.
+  instancesFromTraversal = buildTraversal(group, layout, mats, (k, x, z) => A(k, chunkKey(STAIR_LEVEL, x, z)), {levels, cols});
 
-  for (const [k, a] of acc) {
-    const geo = a.geometry();
+  let archMeshes = 0;
+  for (const [key, e] of acc) {
+    const geo = e.a.geometry();
     if (!geo) continue;
-    const mesh = new THREE.Mesh(geo, mats.get(k));
-    mesh.name = `arch-${k}`;
+    const mesh = new THREE.Mesh(geo, mats.get(e.k));
+    mesh.name = `arch-${key}`;
+    mesh.userData.level = e.level;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
+    archMeshes++;
   }
-  for (const [k, a] of shopAcc) {
-    const geo = a.geometry();
+  for (const [key, e] of shopAcc) {
+    const geo = e.a.geometry();
     if (!geo) continue;
-    const mesh = new THREE.Mesh(geo, shapeMaterial(mats, k));
-    mesh.name = `arch-shop-${k}`;
+    const mesh = new THREE.Mesh(geo, shapeMaterial(mats, e.k));
+    mesh.name = `arch-shop-${key}`;
+    mesh.userData.level = e.level;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
+    archMeshes++;
   }
+  // Iteration 08 (Lane W): zone wall treatments + deterioration over the published faces: insets cut
+  // into the arch wall meshes above, plus one merged 'wall-detail' group (world/wallDetail.ts).
+  try { buildWallDetail(group, layout, mats, faces); } catch (e) { console.warn('wall detail skipped', e); }
 
   // Tunnel mouths fade to black beyond the platform ends.
   const voidMat = new THREE.MeshBasicMaterial({color: 0x030303});
@@ -269,79 +353,106 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
 
   // --- Procedural trim: door frames, rails, sleepers, coverboard, handrails, rods ----------
-  const boxes = new Map<MatKey, THREE.BufferGeometry[]>();
+  // Merged per (material, level, coarse trim chunk): trim is cheap, so its chunks are larger than the
+  // architecture's (fewer draw calls) while off-screen ends of the station and hidden levels still cull.
+  const boxes = new Map<string, {mat: MatKey; level: number; list: THREE.BufferGeometry[]}>();
+  const trimList = (mat: MatKey, x: number, z: number, level: number) => {
+    const key = `${mat}@${level}:${Math.floor(x / TRIM_CHUNK_M)},${Math.floor(z / TRIM_CHUNK_M)}`;
+    let e = boxes.get(key);
+    if (!e) boxes.set(key, (e = {mat, level, list: []}));
+    return e.list;
+  };
   const addBox = (mat: MatKey, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, rotY = 0) => {
     const b = new THREE.BoxGeometry(sx, sy, sz);
     if (rotY) b.rotateY(rotY);
     b.translate(cx, cy, cz);
-    let list = boxes.get(mat);
-    if (!list) boxes.set(mat, (list = []));
-    list.push(b);
+    trimList(mat, cx, cz, levelAt(cx, cy, cz)).push(b);
   };
   for (const d of layout.doors) {
     if (d.shopfront) continue; // storefront frames are built by storefrontBuilder
-    const h = d.height;
+    const g = gridOf((d as {level?: number}).level ?? levelOf(layout.areas[d.a]));
+    const i = g.idx(d.x, d.y), df = g.floorOf(i);
+    // Opening height above the door's own floor (iteration 08: doors on upper/lower levels).
+    const h = df === 0 ? d.height : Math.min(d.height, (g.hasCeil(i) ? g.ceil[i] : df + d.height) - df);
     const ft = 0.09, fd = CELL + 0.06;
     if (d.h === 1) { // wall runs along X; jambs at both X ends of the opening
       const z = (d.y + 0.5) * CELL;
       const xa = d.x * CELL, xb = (d.x + d.w) * CELL;
-      addBox('steel', xa + ft / 2, h / 2, z, ft, h, fd);
-      addBox('steel', xb - ft / 2, h / 2, z, ft, h, fd);
-      addBox('steel', (xa + xb) / 2, h - 0.05, z, xb - xa, 0.1, fd);
+      addBox('steel', xa + ft / 2, df + h / 2, z, ft, h, fd);
+      addBox('steel', xb - ft / 2, df + h / 2, z, ft, h, fd);
+      addBox('steel', (xa + xb) / 2, df + h - 0.05, z, xb - xa, 0.1, fd);
     } else {
       const x = (d.x + 0.5) * CELL;
       const za = d.y * CELL, zb = (d.y + d.h) * CELL;
-      addBox('steel', x, h / 2, za + ft / 2, fd, h, ft);
-      addBox('steel', x, h / 2, zb - ft / 2, fd, h, ft);
-      addBox('steel', x, h - 0.05, (za + zb) / 2, fd, 0.1, zb - za);
+      addBox('steel', x, df + h / 2, za + ft / 2, fd, h, ft);
+      addBox('steel', x, df + h / 2, zb - ft / 2, fd, h, ft);
+      addBox('steel', x, df + h - 0.05, (za + zb) / 2, fd, 0.1, zb - za);
     }
   }
   const railY = trenchY + 0.14 + 0.08;
   for (const t of layout.trenches) {
-    const len = t.x1 - t.x0, cx = (t.x0 + t.x1) / 2;
-    t.tracks.forEach((tc, i) => {
-      for (const off of [-0.72, 0.72]) addBox('rail', cx, railY, tc + off, len, 0.15, 0.07);
-      // Third rail + coverboard on the side away from the platform edge.
-      const side = t.third[i] ?? 1;
-      addBox('rail', cx, trenchY + 0.3, tc + side * 1.4, len, 0.12, 0.08);
-      addBox('coverboard', cx, trenchY + 0.46, tc + side * 1.4, len, 0.035, 0.32);
-    });
+    // Long track members are split on the chunk grid like the architecture.
+    for (const [xa, xb] of chunkSpans(t.x0, t.x1)) {
+      const len = xb - xa, cx = (xa + xb) / 2;
+      t.tracks.forEach((tc, i) => {
+        for (const off of [-0.72, 0.72]) addBox('rail', cx, railY, tc + off, len, 0.15, 0.07);
+        // Third rail + coverboard on the side away from the platform edge.
+        const side = t.third[i] ?? 1;
+        addBox('rail', cx, trenchY + 0.3, tc + side * 1.4, len, 0.12, 0.08);
+        addBox('coverboard', cx, trenchY + 0.46, tc + side * 1.4, len, 0.035, 0.32);
+      });
+    }
   }
   // Platform edge lips (both edges of an island).
   for (const id of layout.platforms) {
     const a = layout.areas[id];
+    const g = gridOf(levelOf(a));
+    const af = g.floorOf(g.idx(a.x, a.y));
     const zs = a.edge === 'NS' ? [a.y * CELL + 0.04, (a.y + a.h) * CELL - 0.04] : [a.edge === 'S' ? (a.y + a.h) * CELL - 0.04 : a.y * CELL + 0.04];
-    for (const z of zs) addBox('platformFace', (a.x + a.w / 2) * CELL, -0.04, z, a.w * CELL, 0.08, 0.08);
+    for (const z of zs) for (const [xa, xb] of chunkSpans(a.x * CELL, (a.x + a.w) * CELL)) addBox('platformFace', (xa + xb) / 2, af - 0.04, z, xb - xa, 0.08, 0.08);
   }
   // Passages (stairs, escalator halls, transfer passages): wall handrails along the side walls.
   // Iteration 07 (Lane DW): rails stop short of every opening (gen/doorways.ts passageRails).
-  for (const b of passageRails(layout)) addBox('steel', (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2, b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
+  // Iteration 08: per level (each level's passages against its own grid, lifted to its floor).
+  for (const L of levels) {
+    const mine = levels.length === 1 ? layout : {...layout, grid: L.grid, areas: layout.areas.map(a => (levelOf(a) === L.id ? a : {...a, type: 'storage' as const}))};
+    for (const b of passageRails(mine)) {
+      const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+      const lift = L.id === 0 ? 0 : L.grid.floorAt(cx, cz);
+      addBox('steel', cx, (b.y0 + b.y1) / 2 + lift, cz, b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
+    }
+  }
   // Pendant rods for fixtures hung below tall ceilings.
   for (const l of layout.lights) {
     // Lane T: the local ceiling (follows flights / landings / the underpass), not the area's top.
-    const local = layout.grid.ceilAt(l.x, l.z);
+    const local = gridOf(levelOf(l)).ceilAt(l.x, l.z);
     const ceil = Math.min(layout.areas[l.area]?.ceil ?? l.y, Number.isFinite(local) ? local : Infinity);
     const rod = ceil - l.y;
     if (rod < 0.1) continue;
     const ax = Math.cos(l.rot) * 0.45, az = -Math.sin(l.rot) * 0.45;
     for (const s of [-1, 1]) addBox('steel', l.x + ax * s, l.y + rod / 2, l.z + az * s, 0.015, rod, 0.015);
   }
+  // Guard railings on drop edges (mezzanine/catwalk edges, light wells, stairwells, open flight sides).
+  const rails = stationRails(layout, levels, cols);
+  for (const r of rails) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
 
   let instances = instancesFromTraversal;
-  // Sleepers (instanced, every track of every bed)
+  // Sleepers (instanced, every track of every bed), one instanced mesh per trim chunk.
   {
-    const total = layout.trenches.reduce((n, t) => n + Math.floor((t.x1 - t.x0) / 0.65) * t.tracks.length, 0);
-    const sleeper = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.14, 2.5), mats.get('sleeper'), total);
     const m4 = new THREE.Matrix4();
-    let n = 0;
+    const sleeperGeo = new THREE.BoxGeometry(0.24, 0.14, 2.5);
+    const byChunk = new Map<string, THREE.Matrix4[]>();
     for (const t of layout.trenches) {
       const per = Math.floor((t.x1 - t.x0) / 0.65);
-      for (const tc of t.tracks) for (let i = 0; i < per; i++) { m4.makeTranslation(t.x0 + 0.3 + i * 0.65, trenchY + 0.07, tc); sleeper.setMatrixAt(n++, m4); }
+      for (const tc of t.tracks) for (let i = 0; i < per; i++) {
+        const x = t.x0 + 0.3 + i * 0.65;
+        const key = `${Math.floor(x / TRIM_CHUNK_M)},${Math.floor(tc / TRIM_CHUNK_M)}`;
+        let l = byChunk.get(key);
+        if (!l) byChunk.set(key, (l = []));
+        l.push(m4.clone().makeTranslation(x, trenchY + 0.07, tc));
+      }
     }
-    sleeper.name = 'sleepers';
-    sleeper.computeBoundingSphere();
-    group.add(sleeper);
-    instances += n;
+    for (const list of byChunk.values()) instances += addInstanced(group, sleeperGeo, mats.get('sleeper'), list, 'sleepers');
   }
 
   // --- Props: model derivatives instanced, simple shapes procedural ----------------------
@@ -365,9 +476,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const modelKey = MODEL_FOR[kind];
     if (kind === 'fareGate' && models.turnstile) {
       const size = new THREE.Box3().setFromObject(models.turnstile.scene).getSize(new THREE.Vector3());
-      instances += addInstancedModel(group, models.turnstile, list.map(p => placeM(p).multiply(TURNSTILE_CABINET_OFFSET)), {w: size.x, h: size.y, d: size.z, anchor: 'bottom'}, kind);
+      instances += instanceModel(group, models.turnstile, list.map(p => placeM(p).multiply(TURNSTILE_CABINET_OFFSET)), {w: size.x, h: size.y, d: size.z, anchor: 'bottom'}, kind);
     } else if (modelKey && models[modelKey]) {
-      instances += addInstancedModel(group, models[modelKey]!, list.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
+      instances += instanceModel(group, models[modelKey]!, list.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
     } else if (kind === 'column') {
       // Unit-height box scaled per instance (platform/concourse columns differ in height).
       const geo = new THREE.BoxGeometry(def.w, 1, def.d);
@@ -379,7 +490,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
       im.computeBoundingSphere();
       group.add(im);
       instances += list.length;
-    } else if (kind === 'bin') {
+    } else if ((kind as PropKind) === 'bin') { // iteration 08 (Lane I): bins are openable holders now (world/openables.ts); dead fallback
       const geo = new THREE.CylinderGeometry(def.w / 2, def.w / 2 * 0.92, def.h, 14, 1);
       geo.translate(0, def.h / 2, 0);
       instances += addInstanced(group, geo, mats.get('bin'), list.map(placeM), 'prop-bin');
@@ -396,7 +507,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   const fixtures: Fixture[] = layout.lights.map((l, i) => ({x: l.x, y: l.y, z: l.z, broken: l.broken, flicker: l.flicker, warm: l.warm, dying: l.dying, power: l.power, area: l.area, phase: i * 1.7, level: l.broken ? 0 : 1}));
   const lightMats = layout.lights.map(l => new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y, l.z), new THREE.Quaternion().setFromAxisAngle(UP, l.rot), new THREE.Vector3(1, 1, 1)));
   let tubes: THREE.InstancedMesh | null = null;
-  if (models.light) instances += addInstancedModel(group, models.light, lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
+  if (models.light) instances += instanceModel(group, models.light, lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
   {
     const geo = new THREE.BoxGeometry(mats.fixture.w * 0.82, 0.025, mats.fixture.d * 0.42);
     geo.translate(0, -mats.fixture.h - 0.004, 0);
@@ -410,15 +521,17 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
 
   // --- Storefront bays (frames, fascias, shutters, glazing, menu boards, counters …) -----------
-  instances += buildStorefronts(group, layout, {mat: k => shapeMaterial(mats, k), models, instanceModel: addInstancedModel});
+  instances += buildStorefronts(group, layout, {mat: k => shapeMaterial(mats, k), models, instanceModel});
 
   // --- Signs (instanced: shared plates, one face mesh per distinct text) --------------------
   instances += buildSigns(group, layout, mats, models.sign, addBox);
 
-  for (const [k, list] of boxes) {
-    const merged = mergeBoxes(list);
-    const mesh = new THREE.Mesh(merged, mats.get(k));
-    mesh.name = `trim-${k}`;
+  for (const [key, e] of boxes) {
+    if (!e.list.length) continue;
+    const merged = mergeBoxes(e.list);
+    const mesh = new THREE.Mesh(merged, mats.get(e.mat));
+    mesh.name = `trim-${key}`;
+    mesh.userData.level = e.level;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
   }
@@ -433,7 +546,11 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const tris = (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
     triangles += tris * ((o as THREE.InstancedMesh).isInstancedMesh ? (o as THREE.InstancedMesh).count : 1);
   });
-  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances}};
+  // Iteration 08: level visibility culling (world/levelCulling.ts); game.ts registers its other station
+  // groups (containers, stock) and calls culler.update(camera) before rendering.
+  const culler = new LevelCuller(levels, cols, levelAt);
+  culler.register(group);
+  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: faces, rails, levelAt, culler};
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -535,13 +652,6 @@ function signTexture(s: SignPlacement, w: number, h: number): THREE.Texture {
   return tex;
 }
 
-const faceMats = new Map<THREE.Texture, THREE.MeshStandardMaterial>();
-function faceMat(tex: THREE.Texture): THREE.MeshStandardMaterial {
-  let m = faceMats.get(tex);
-  if (!m) faceMats.set(tex, (m = new THREE.MeshStandardMaterial({map: tex, roughness: 0.6})));
-  return m;
-}
-
 function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMaterials, signModel: GLTF | undefined,
   addBox: (mat: MatKey, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, rotY?: number) => void): number {
   const plates: THREE.Matrix4[] = [];
@@ -602,9 +712,118 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
   if (stationFrames.length) {
     for (const {mesh, local} of frameLocal) n += addInstanced(group, mesh.geometry, mesh.material as THREE.Material, stationFrames.map(m => m.clone().multiply(local)), 'sign-frame');
   }
-  const plane = new THREE.PlaneGeometry(1, 1);
-  for (const [tex, list] of faces) n += addInstanced(group, faces.size > 1 ? plane.clone() : plane, faceMat(tex), list, 'sign-face');
+  n += buildSignFaces(group, faces);
   return n;
+}
+
+// Iteration 08 (Lane G): sign faces share atlas pages (one draw call per page instead of one per
+// distinct text): every distinct sign texture is redrawn into a padded 512 px-wide cell, and each face
+// instance carries its cell's UV rect (aUvRect) — same plates, same texts, ~30 fewer draw calls.
+const SIGN_CELL_W = 512, SIGN_PAGE_W = 1024, SIGN_PAGE_MAX_H = 2048, SIGN_PAD = 4;
+const signAtlasMat = (atlas: THREE.Texture): THREE.MeshStandardMaterial => {
+  const m = new THREE.MeshStandardMaterial({map: atlas, roughness: 0.6});
+  m.name = 'sign-atlas';
+  addShaderHook(m, 'sign-atlas-v1', sh => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 aUvRect;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n\tvMapUv = ( mapTransform * vec3( uv * aUvRect.zw + aUvRect.xy, 1.0 ) ).xy;\n#endif');
+  });
+  return m;
+};
+
+/** Pack the face textures into atlas cells: [page, x, y, w, h] per texture, plus each page's height. */
+export function packSignAtlas(sizes: readonly {width: number; height: number}[]): {cells: [number, number, number, number, number][]; pages: number[]} {
+  const cells: [number, number, number, number, number][] = [];
+  const pages: number[] = [];
+  let page = 0, col = 0, rowY = 0, rowH = 0;
+  for (const img of sizes) {
+    const w = SIGN_CELL_W, h = Math.max(16, Math.round(SIGN_CELL_W * img.height / Math.max(1, img.width)));
+    if (col + w + 2 * SIGN_PAD > SIGN_PAGE_W) { col = 0; rowY += rowH; rowH = 0; }
+    if (rowY + h + 2 * SIGN_PAD > SIGN_PAGE_MAX_H) { pages.push(rowY); page++; col = 0; rowY = 0; rowH = 0; }
+    cells.push([page, col + SIGN_PAD, rowY + SIGN_PAD, w, h]);
+    col += w + 2 * SIGN_PAD;
+    rowH = Math.max(rowH, h + 2 * SIGN_PAD);
+  }
+  pages.push(rowY + rowH);
+  return {cells, pages: pages.map(hh => Math.max(16, Math.ceil(hh / 4) * 4))};
+}
+
+function buildSignFaces(group: THREE.Group, faces: Map<THREE.Texture, THREE.Matrix4[]>): number {
+  if (!faces.size) return 0;
+  const texs = [...faces.keys()];
+  const imgs = texs.map(t => t.image as {width: number; height: number});
+  const {cells, pages} = packSignAtlas(imgs);
+  let n = 0;
+  pages.forEach((H, pg) => {
+    const mine = cells.map((c, i) => [c, i] as const).filter(([c]) => c[0] === pg);
+    const atlas = canvasTexture(SIGN_PAGE_W, H, 7000 + pg, ctx => {
+      ctx.fillStyle = '#1f2225';
+      ctx.fillRect(0, 0, SIGN_PAGE_W, H);
+      for (const [[, x, y, w, h], i] of mine) {
+        const img = imgs[i] as unknown as CanvasImageSource;
+        // Stretched copy under the padding (no dark seams at low mip levels), then the exact cell.
+        ctx.drawImage(img, x - SIGN_PAD, y - SIGN_PAD, w + 2 * SIGN_PAD, h + 2 * SIGN_PAD);
+        ctx.drawImage(img, x, y, w, h);
+      }
+    });
+    atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
+    const mats4: THREE.Matrix4[] = [], rects: number[] = [];
+    for (const [[, x, y, w, h], i] of mine) for (const m of faces.get(texs[i])!) {
+      mats4.push(m);
+      // Canvas y runs down, texture v up (flipY).
+      rects.push(x / SIGN_PAGE_W, 1 - (y + h) / H, w / SIGN_PAGE_W, h / H);
+    }
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(rects), 4));
+    n += addInstanced(group, geo, signAtlasMat(atlas), mats4, 'sign-face');
+  });
+  return n;
+}
+
+
+// ---------------------------------------------------------------------------------------
+// Guard railings (iteration 08): top rail, mid rail, posts and a toe board along a drop edge; sloped
+// along open flight sides (plus a stringer covering the tread ends). Boxes, merged into the trim.
+
+function beamGeo(a: THREE.Vector3, b: THREE.Vector3, t: number, t2 = t): THREE.BufferGeometry | null {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const len = d.length();
+  if (len < 1e-4) return null;
+  const g = new THREE.BoxGeometry(t, t2, len);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize()));
+  g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  return g;
+}
+
+function railGeometry(r: RailRun): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
+  const P = (s: number, dy: number) => {
+    const u = len > 0 ? s / len : 0;
+    return new THREE.Vector3(r.x0 + (r.x1 - r.x0) * u, r.y0 + (r.y1 - r.y0) * u + dy, r.z0 + (r.z1 - r.z0) * u);
+  };
+  const push = (g: THREE.BufferGeometry | null) => { if (g) out.push(g); };
+  if (r.kind === 'parapet') {
+    // Solid low concrete upstand (0.15 m thick) on the edge.
+    for (const [a, b] of [[0.01, len - 0.01]]) push(beamGeo(P(a, 0.5), P(b, 0.5), 0.15, 1.0));
+  } else {
+    const sloped = Math.abs(r.y1 - r.y0) > 1e-3;
+    push(beamGeo(P(0, RAIL_HEIGHT), P(len, RAIL_HEIGHT), 0.05, 0.05));
+    push(beamGeo(P(0, 0.55), P(len, 0.55), 0.03, 0.03));
+    if (!sloped) push(beamGeo(P(0.02, 0.06), P(len - 0.02, 0.06), 0.02, 0.1)); // toe board
+    else push(beamGeo(P(0, -0.04), P(len, -0.04), 0.06, 0.34)); // stringer over the tread ends
+    const n = Math.max(1, Math.ceil(len / 1.25));
+    for (let k = 0; k <= n; k++) {
+      const s = Math.min(len - 0.03, Math.max(0.03, (len * k) / n));
+      const base = P(s, 0);
+      const g = new THREE.BoxGeometry(0.05, RAIL_HEIGHT, 0.05);
+      g.translate(base.x, base.y + RAIL_HEIGHT / 2, base.z);
+      out.push(g);
+    }
+  }
+  const c = P(len / 2, 0);
+  for (const g of out) { g.userData.cx = c.x; g.userData.cz = c.z; }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -634,11 +853,34 @@ function mergeBoxes(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return g;
 }
 
+/** Level id of a world point (the band holding y; 0 when unknown). See BuiltWorld.levelAt. */
+export type LevelResolver = (x: number, y: number, z: number) => number;
+
+/**
+ * Split instance placements into culling chunks: CHUNK m in X/Z, per level (the band holding the
+ * instance origin). Key `level:cx,cz`. Shared by model props, storefront fittings and shelf stock so
+ * every instanced group culls the same way.
+ */
+export function chunkInstances(placements: readonly THREE.Matrix4[], levelAt?: LevelResolver): Map<string, {level: number; list: THREE.Matrix4[]}> {
+  const chunks = new Map<string, {level: number; list: THREE.Matrix4[]}>();
+  const pos = new THREE.Vector3();
+  for (const p of placements) {
+    pos.setFromMatrixPosition(p);
+    const level = levelAt ? levelAt(pos.x, pos.y, pos.z) : 0;
+    const key = `${level}:${Math.floor(pos.x / CHUNK)},${Math.floor(pos.z / CHUNK)}`;
+    let e = chunks.get(key);
+    if (!e) chunks.set(key, (e = {level, list: []}));
+    e.list.push(p);
+  }
+  return chunks;
+}
+
 /**
  * Instances every mesh of a GLB derivative. The model is fitted to the target footprint
  * (width X, height Y, depth Z) with its base (or top, for hanging fixtures) at the origin.
+ * Instances are split per level and CHUNK-m chunk (chunkInstances) so off-screen chunks are culled.
  */
-export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string): number {
+export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string, levelAt?: LevelResolver): number {
   if (!placements.length) return 0;
   const root = gltf.scene;
   root.updateMatrixWorld(true);
@@ -648,26 +890,18 @@ export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: TH
   const center = box.getCenter(new THREE.Vector3());
   const anchorY = fit.anchor === 'bottom' ? box.min.y : box.max.y;
   const fitM = new THREE.Matrix4().makeScale(s.x, s.y, s.z).multiply(new THREE.Matrix4().makeTranslation(-center.x, -anchorY, -center.z));
-  // Split instances into spatial chunks so off-screen chunks are frustum-culled.
-  const chunks = new Map<string, THREE.Matrix4[]>();
-  const pos = new THREE.Vector3();
-  for (const p of placements) {
-    pos.setFromMatrixPosition(p);
-    const key = `${Math.floor(pos.x / CHUNK)},${Math.floor(pos.z / CHUNK)}`;
-    let list = chunks.get(key);
-    if (!list) chunks.set(key, (list = []));
-    list.push(p);
-  }
+  const chunks = chunkInstances(placements, levelAt);
   let count = 0;
   root.traverse(o => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     const local = new THREE.Matrix4().multiplyMatrices(fitM, mesh.matrixWorld);
     const m = new THREE.Matrix4();
-    for (const list of chunks.values()) {
+    for (const {level, list} of chunks.values()) {
       const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, list.length);
       list.forEach((p, i) => im.setMatrixAt(i, m.multiplyMatrices(p, local)));
       im.name = `prop-${name}`;
+      im.userData.level = level;
       im.computeBoundingSphere();
       group.add(im);
       count += list.length;

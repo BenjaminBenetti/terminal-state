@@ -1,11 +1,15 @@
-// Iteration 05 (Lane T): vertical traversal — real underpasses below the tracks (stairs down and
-// up), a walkable track bed with rescue ladders on both faces, height-aware nav/AI, physics and
-// pickups. Uses generated stations of every archetype plus the pure player/brain models.
+// Iteration 05 (Lane T): vertical traversal — a walkable track bed with rescue ladders on both
+// faces, height-aware nav/AI, physics and pickups. Iteration 08 (Lane A): the old beyond-the-tunnel
+// underpasses are replaced by stacked LEVELS — enclosed stair cores from the platforms up to the
+// upper concourse and down to the service crossing beneath the platforms and track beds. Uses
+// generated stations of every archetype plus the pure player/brain models.
 
 import {describe, expect, it} from 'vitest';
 import {ARCHETYPES, generateStation, type Archetype, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, PathFinder, VOID, rampHeight, stepTop, type Waypoint} from '../src/gen/grid';
-import {LADDER, STAIR, UNDERPASS_FLOOR, climbDuration, ladderClimbPath, ladderTarget, traversalIssues} from '../src/gen/traversal';
+import {LADDER, STAIR, climbDuration, ladderClimbPath, ladderTarget, traversalIssues} from '../src/gen/traversal';
+import {LOWER_FLOOR, SLAB} from '../src/gen/levelGen';
+import {levelsOf, type Levels} from '../src/gen/levels';
 import {Player, type MoveInput} from '../src/player/player';
 import {PropIndex} from '../src/core/physics';
 import {ZombieBrain, type BrainWorld} from '../src/ai/brain';
@@ -25,17 +29,6 @@ const gen = (seed: number, archetype?: Archetype) => {
   return l;
 };
 const PER_ARCH = ARCHETYPES.map((a, i) => gen(9001 + i * 7919, a));
-/** Layouts that have at least one underpass (side-platform archetypes). */
-const WITH_UNDERPASS = (() => {
-  const out: StationLayout[] = [];
-  for (const a of ['side-mezzanine', 'interchange', 'deep', 'split'] as Archetype[]) {
-    for (let s = 0; s < 12 && out.filter(l => l.archetype === a).length < 1; s++) {
-      const l = gen(4000 + s * 131, a);
-      if (l.traversal.underpasses.length) out.push(l);
-    }
-  }
-  return out;
-})();
 
 class Keys implements MoveInput {
   held = new Set<string>();
@@ -48,7 +41,7 @@ const opts = {aiming: false, speedMult: 1, canSprint: true};
 const DT = 1 / 60;
 
 /** Drives the player along waypoints (yaw toward the next one, W held). Returns frames used or -1. */
-function walk(p: Player, l: StationLayout, props: PropIndex, path: Waypoint[], maxFrames: number, each?: (p: Player) => void): number {
+function walk(p: Player, world: StationLayout['grid'] | Levels, props: PropIndex, path: Waypoint[], maxFrames: number, each?: (p: Player) => void): number {
   const k = new Keys();
   k.held.add('KeyW');
   let i = 0;
@@ -56,89 +49,103 @@ function walk(p: Player, l: StationLayout, props: PropIndex, path: Waypoint[], m
     while (i < path.length && Math.hypot(path[i][0] - p.x, path[i][1] - p.z) < 0.3) i++;
     if (i >= path.length) return f;
     p.yaw = Math.atan2(-(path[i][0] - p.x), -(path[i][1] - p.z));
-    p.update(DT, k, l.grid, props, opts);
+    p.update(DT, k, world, props, opts);
     each?.(p);
   }
   return -1;
 }
 
-describe('underpass below the tracks', () => {
-  it('every side-platform archetype sample has a real underpass: floor ~3.9 m down, >= 2.4 m clear, stairs ~0.17 x 0.28', () => {
-    expect(WITH_UNDERPASS.map(l => l.archetype).sort()).toEqual(['deep', 'interchange', 'side-mezzanine', 'split']);
-    for (const l of WITH_UNDERPASS) {
-      const g = l.grid;
-      for (const u of l.traversal.underpasses) {
-        const bar = l.areas[u.bar];
-        const f = g.floorAt((bar.x + bar.w / 2) * CELL, (bar.y + bar.h / 2) * CELL);
-        expect(f).toBeCloseTo(UNDERPASS_FLOOR, 5);
-        expect(bar.ceil - f).toBeGreaterThanOrEqual(2.4);
-        // Below the track bed with room for the track structure.
-        expect(l.trench.floorY - bar.ceil).toBeGreaterThanOrEqual(0.2);
-        // The crossing passage spans the track line (north of it to south of it).
-        const t = l.trenches[0];
-        expect(bar.y * CELL).toBeLessThan(t.z0);
-        expect((bar.y + bar.h) * CELL).toBeGreaterThan(t.z1);
-        expect(u.legs.length).toBe(2);
-        for (const leg of u.legs) {
-          expect(leg.flights.length).toBe(2); // two flights with a landing
-          const fl = leg.flights.map(i => l.traversal.stairs[i]);
-          const risers = fl.reduce((n, x) => n + x.risers, 0);
-          expect(fl[0].h0).toBe(0);
-          expect(fl[fl.length - 1].h1).toBeCloseTo(UNDERPASS_FLOOR, 5);
-          expect(risers).toBe(23);
-          for (const x of fl) {
-            expect(x.riser).toBeGreaterThan(0.15);
-            expect(x.riser).toBeLessThan(0.18);
-            expect(x.tread).toBeCloseTo(STAIR.tread, 5);
-            expect(x.risers).toBeLessThanOrEqual(STAIR.maxRisers);
-            expect(Math.abs(x.s1 - x.s0)).toBeCloseTo(x.risers * x.tread, 5);
-            // Headroom over the whole flight.
-            const r = g.ramps[x.ramp];
+/** Flights of the stair run a level link starts with (same area), in walking order from h0 = 0. */
+const runFlights = (l: StationLayout, traversalId: number) => {
+  const first = l.traversal.stairs[traversalId];
+  return l.traversal.stairs.filter(f => f.area === first.area);
+};
+
+describe('stair cores between levels (iteration 08: replaces the underpass beyond the tunnel)', () => {
+  it('every family: cores up to the upper concourse and down beneath the tracks; 0.17 x 0.28 m steps, >= 1.2 m landings, >= 2.4 m clear', () => {
+    for (const l of PER_ARCH) {
+      const tag = `${l.seed}/${l.archetype}`;
+      const plan = l.levelPlan!;
+      expect(plan, tag).toBeDefined();
+      const P1 = l.areas[l.platform];
+      expect(plan.hu, `${tag} upper floor = platform ceiling + slab`).toBeCloseTo(P1.ceil + SLAB, 5);
+      // The service level lies a slab below the track bed with >= 2.4 m clear.
+      expect(l.trench.floorY - plan.lowerCeil, tag).toBeGreaterThanOrEqual(SLAB - 1e-6);
+      expect(plan.lowerCeil - plan.lowerFloor).toBeGreaterThanOrEqual(2.4);
+      // The service crossing runs BENEATH the visible platforms and beds (not beyond the tunnel mouth).
+      const X = l.areas[plan.crossing];
+      expect(X.level).toBe(2);
+      for (const t of l.trenches.slice(0, 1)) {
+        expect(X.x * CELL, `${tag} crossing within the platform span`).toBeGreaterThanOrEqual(t.platformX0);
+        expect((X.x + X.w) * CELL).toBeLessThanOrEqual(t.platformX1);
+        expect(X.y * CELL, `${tag} crossing spans the bed`).toBeLessThanOrEqual(t.z0);
+        expect((X.y + X.h) * CELL).toBeGreaterThanOrEqual(t.z1);
+      }
+      const ups = l.levelLinks.filter(k => k.upper === 1), downs = l.levelLinks.filter(k => k.lower === 2);
+      expect(ups.length, tag).toBeGreaterThanOrEqual(2);
+      expect(downs.length, tag).toBeGreaterThanOrEqual(1);
+      for (const k of [...ups, ...downs]) {
+        const fl = runFlights(l, k.traversalId!);
+        const up = k.upper === 1;
+        expect(fl[0].h0).toBe(0);
+        expect(fl[fl.length - 1].h1).toBeCloseTo(up ? plan.hu : LOWER_FLOOR, 5);
+        expect(fl.length, `${tag} flights of ${up ? 'up' : 'down'} run`).toBe(Math.ceil(Math.round(Math.abs(fl[fl.length - 1].h1) / STAIR.riser) / STAIR.maxRisers));
+        for (const x of fl) {
+          expect(x.riser).toBeGreaterThan(0.15);
+          expect(x.riser).toBeLessThan(0.18);
+          expect(x.tread).toBeCloseTo(STAIR.tread, 5);
+          expect(x.risers).toBeLessThanOrEqual(STAIR.maxRisers);
+          expect(Math.abs(x.s1 - x.s0)).toBeCloseTo(x.risers * x.tread, 5);
+          expect(Math.abs(x.a1 - x.a0), 'flight width').toBeGreaterThanOrEqual(1.8);
+          // The same ramp, same index, carved into BOTH connected level grids; headroom over the whole flight.
+          for (const lv of [k.lower, k.upper]) {
+            const g = l.levels[lv].grid, r = g.ramps[x.ramp];
+            expect(r).toBe(l.grid.ramps[x.ramp]);
             for (let y = r.y; y < r.y + r.h; y++) for (let cx = r.x; cx < r.x + r.w; cx++) {
               const i = g.idx(cx, y);
+              expect(g.rampIdx[i], `${tag} ramp ${x.ramp} on level ${lv}`).toBe(x.ramp);
               const hi = Math.max(rampHeight(r, cx * CELL), rampHeight(r, (cx + 1) * CELL));
               expect(g.ceil[i] - hi).toBeGreaterThanOrEqual(2.4);
             }
           }
-          // Landing between the flights is at least 1.2 m.
-          expect(Math.abs(fl[1].s0 - fl[0].s1)).toBeGreaterThanOrEqual(STAIR.landing - 1e-6);
         }
+        for (let i = 1; i < fl.length; i++) expect(Math.abs(fl[i].s0 - fl[i - 1].s1), 'landing').toBeGreaterThanOrEqual(STAIR.landing - 1e-6);
       }
     }
   });
 
   it('the step profile matches the pitch line at tread centres and ends at the landings', () => {
-    const l = WITH_UNDERPASS[0];
-    const r = l.grid.ramps[0];
+    const r = PER_ARCH[0].grid.ramps[0];
     const d = (r.s1 - r.s0) / r.risers;
     for (let k = 1; k < r.risers; k++) expect(stepTop(r, r.s0 + d * k)).toBeCloseTo(rampHeight(r, r.s0 + d * k), 6);
     expect(stepTop(r, r.s0 - 0.2)).toBe(r.h0);
     expect(stepTop(r, r.s1 + 0.2)).toBeCloseTo(r.h1, 6);
   });
 
-  it('a player walks down one leg, under the tracks and up the other leg without falling', () => {
-    for (const l of WITH_UNDERPASS) {
-      const props = new PropIndex(l.grid, l.props);
-      const pf = new PathFinder(l.grid);
-      for (const u of l.traversal.underpasses) {
-        const [a, b] = u.legs.map(leg => l.traversal.stairs[leg.flights[0]]);
-        const p = new Player();
-        p.spawn(a.top.x, a.top.z, 0, l.grid.floorAt(a.top.x, a.top.z));
-        // Down to the crossing passage, across, and up to the other platform's door landing.
-        const bar = l.areas[u.bar];
-        const mid: [number, number] = [(bar.x + bar.w / 2) * CELL, (bar.y + bar.h / 2) * CELL];
-        const p1 = pf.find(p.x, p.z, mid[0], mid[1], 0.3, 60000)!;
-        expect(p1, `${l.seed} path down`).not.toBeNull();
-        let minY = 0, airborne = 0;
-        expect(walk(p, l, props, p1, 1200, q => { minY = Math.min(minY, q.y); if (!q.grounded) airborne++; })).toBeGreaterThan(0);
-        expect(p.y).toBeCloseTo(UNDERPASS_FLOOR, 2);
-        expect(minY).toBeGreaterThan(UNDERPASS_FLOOR - 0.01);
-        const p2 = pf.find(p.x, p.z, b.top.x, b.top.z, 0.3, 60000)!;
-        expect(walk(p, l, props, p2, 1500, q => { if (!q.grounded) airborne++; })).toBeGreaterThan(0);
-        expect(p.y).toBeCloseTo(0, 2);
-        expect(airborne, `${l.seed}: stairs must be walked, not fallen down`).toBe(0);
-        expect(l.grid.areaAt(p.x, p.z)).toBe(b.area);
+  it('a player walks the level loop on real stairs: up a core, across the crossover, down again, down beneath the tracks and back up', () => {
+    for (const l of PER_ARCH) {
+      const tag = `${l.seed}/${l.archetype}`;
+      const L = levelsOf(l);
+      const props = new PropIndex(L, l.props);
+      const pf = new PathFinder(L);
+      const ups = l.levelLinks.filter(k => k.upper === 1), downs = l.levelLinks.filter(k => k.lower === 2);
+      // Up core A -> upper level -> down core B (its up run) -> core B / platform -> service level -> back up core A.
+      const a = ups[0], b = ups[1], dn = downs[downs.length - 1], dnA = downs[0];
+      const route = [a.top, b.top, b.bottom, dn.top, dn.bottom, dnA.bottom, dnA.top];
+      const p = new Player();
+      p.spawn(a.bottom.x, a.bottom.z, 0, a.bottom.y);
+      let airborne = 0, minY = Infinity, maxY = -Infinity;
+      for (const t of route) {
+        const path = pf.find(p.x, p.z, t.x, t.z, 0.3, 200000, {ay: p.y, by: t.y});
+        expect(path, `${tag} path to ${t.x.toFixed(1)},${t.y.toFixed(2)},${t.z.toFixed(1)}`).not.toBeNull();
+        const frames = walk(p, L, props, path!, 4000, q => { if (!q.grounded) airborne++; minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y); });
+        expect(frames, `${tag} reached ${t.x.toFixed(1)},${t.y.toFixed(2)},${t.z.toFixed(1)} (at ${p.x.toFixed(1)},${p.y.toFixed(2)},${p.z.toFixed(1)})`).toBeGreaterThanOrEqual(0);
+        expect(p.y, tag).toBeCloseTo(t.y, 1);
       }
+      expect(maxY, `${tag} reached the upper level`).toBeGreaterThan(l.levelPlan!.hu - 0.05);
+      expect(minY, `${tag} reached the service level`).toBeLessThan(LOWER_FLOOR + 0.05);
+      expect(minY).toBeGreaterThan(LOWER_FLOOR - 0.02);
+      expect(airborne, `${tag}: stairs must be walked, not fallen down`).toBeLessThan(6);
     }
   });
 });
@@ -313,13 +320,19 @@ describe('height-aware nav and zombies', () => {
       expect(drop).not.toBeNull();
       expect(drop.length).toBeLessThanOrEqual(down.length + 2);
     }
-    for (const l of WITH_UNDERPASS) {
-      const pf = new PathFinder(l.grid);
-      const u = l.traversal.underpasses[0];
-      const bar = l.areas[u.bar];
+    // Iteration 08: platform -> service crossing (down a core) and platform -> upper concourse (up a core).
+    for (const l of PER_ARCH) {
+      const pf = new PathFinder(levelsOf(l));
+      const X = l.areas[l.levelPlan!.crossing];
+      const D = l.areas[l.levelPlan!.decks[0]];
       const P = l.areas[l.platform];
-      const path = pf.find((P.x + P.w / 2) * CELL, (P.y + P.h / 2) * CELL, (bar.x + bar.w / 2) * CELL, (bar.y + bar.h / 2) * CELL, 0.34, 60000);
-      expect(path, `${l.seed} platform -> underpass`).not.toBeNull();
+      const sp = l.playerSpawn;
+      const down = pf.find(sp.x, sp.z, (X.x + X.w / 2) * CELL, (X.y + X.h / 2) * CELL, 0.34, 200000, {ay: 0, by: LOWER_FLOOR});
+      expect(down, `${l.seed} platform -> service crossing`).not.toBeNull();
+      expect(down!.some(w => (w[3] ?? 0) < -2), 'the route descends').toBe(true);
+      const up = pf.find(sp.x, sp.z, (D.x + D.w / 2) * CELL, (D.y + D.h / 2) * CELL, 0.34, 200000, {ay: 0, by: l.levelPlan!.hu});
+      expect(up, `${l.seed} platform -> upper concourse`).not.toBeNull();
+      void P;
     }
   });
 
@@ -390,18 +403,22 @@ describe('height-aware nav and zombies', () => {
 });
 
 describe('physics, hitscan and loot follow floor heights', () => {
-  it('statics: track bed, stair treads and the underpass floor; casings settle on a stair tread', () => {
-    const l = WITH_UNDERPASS[0];
+  it('statics: track bed, stair treads and the service-level floor; casings settle on a stair tread', () => {
+    const l = PER_ARCH[0];
     const q = new StaticQuery(l);
     const f = l.traversal.stairs[0];
     const r = l.grid.ramps[f.ramp];
     const mid = (f.s0 + f.s1) / 2, across = (f.a0 + f.a1) / 2;
     const [x, z] = f.axis === 'x' ? [mid, across] : [across, mid];
-    expect(q.cellGround(x, z)).toBeCloseTo(stepTop(r, f.axis === 'x' ? x : z), 6);
+    expect(q.cellGround(x, z, stepTop(r, f.axis === 'x' ? x : z) + 0.5)).toBeCloseTo(stepTop(r, f.axis === 'x' ? x : z), 6);
     const t = l.trench;
-    expect(q.cellGround((t.platformX0 + t.platformX1) / 2 + 0.1, (t.z0 + t.z1) / 2 + 0.3)).toBeCloseTo(t.floorY, 6);
-    const bar = l.areas[l.traversal.underpasses[0].bar];
-    expect(q.cellGround((bar.x + bar.w / 2) * CELL, (bar.y + bar.h / 2) * CELL)).toBeCloseTo(UNDERPASS_FLOOR, 6);
+    const bx = (t.platformX0 + t.platformX1) / 2 + 0.1, bz = (t.z0 + t.z1) / 2 + 0.3;
+    expect(q.cellGround(bx, bz, t.floorY + 0.5)).toBeCloseTo(t.floorY, 6);
+    // Iteration 08: the service crossing runs beneath the platforms and track bed.
+    const X = l.areas[l.levelPlan!.crossing];
+    const xx = (X.x + X.w / 2) * CELL, xz = (l.trench.z0 + l.trench.z1) / 2;
+    expect(q.cellGround(xx, xz, LOWER_FLOOR + 0.5)).toBeCloseTo(LOWER_FLOOR, 6);
+    expect(q.cellGround(xx, xz, t.floorY + 0.5)).toBeCloseTo(t.floorY, 6);
     const cs = new CasingSystem();
     cs.setStatics(q);
     cs.rand = () => 0.5;
@@ -409,14 +426,16 @@ describe('physics, hitscan and loot follow floor heights', () => {
     for (let i = 0; i < 400; i++) cs.update(1 / 60);
     const c = cs.list()[0];
     expect(c.mode).toBe(2);
-    const ground = q.cellGround(c.x, c.z);
+    const ground = q.cellGround(c.x, c.z, c.y + 0.05);
     expect(c.y - ground).toBeGreaterThan(-0.002);
     expect(c.y - ground).toBeLessThan(0.02);
-    expect(ground).toBeLessThan(0.01);
+    // It rests on the flight (a tread or a landing of it), not inside the core walls or on the slab above.
+    expect(ground).toBeGreaterThanOrEqual(Math.min(r.h0, r.h1) - 0.01);
+    expect(ground).toBeLessThanOrEqual(Math.max(r.h0, r.h1) + 0.01);
   });
 
   it('ragdoll statics: chunk boxes follow floor heights and stair treads (tread boxes at tread heights, track-bed slab at the bed floor)', () => {
-    const l = WITH_UNDERPASS[0];
+    const l = PER_ARCH[0];
     const ph = new PhysicsSystem(null);
     ph.build(l);
     const f = l.traversal.stairs[1];
@@ -440,7 +459,7 @@ describe('physics, hitscan and loot follow floor heights', () => {
   });
 
   it('bullets hit the track bed, the platform face from below and stair treads at their heights', () => {
-    const l = WITH_UNDERPASS[0];
+    const l = PER_ARCH[0];
     const g = l.grid;
     const t = l.trench;
     const P = l.areas[l.platform];
@@ -460,7 +479,8 @@ describe('physics, hitscan and loot follow floor heights', () => {
     expect(o2.z + -dir * h2.t).toBeCloseTo(zEdge, 3);
     // Down the stairs: a ray from the top landing hits the flight at about the pitch line.
     const f = l.traversal.stairs[0], r = g.ramps[f.ramp];
-    const sgn = Math.sign(f.s1 - f.s0);
+    // Look back down the flight from its top landing (iteration 08 flights may climb: s0 is the low end then).
+    const sgn = Math.sign(f.s1 - f.s0) * (f.h1 > f.h0 ? -1 : 1);
     const o3 = f.axis === 'x' ? {x: f.top.x, y: f.top.y + 1.62, z: f.top.z} : {x: f.top.x, y: f.top.y + 1.62, z: f.top.z};
     const d3 = f.axis === 'x' ? new THREE.Vector3(sgn, -0.9, 0).normalize() : new THREE.Vector3(0, -0.9, sgn).normalize();
     const h3 = raycastWorld(g, l.props, o3, d3, 30, t.floorY);
@@ -471,23 +491,26 @@ describe('physics, hitscan and loot follow floor heights', () => {
   });
 
   it('loose loot, props and zombies sit on their local floor; nothing rests on stairs; deterministic per seed', () => {
-    for (const l of [...PER_ARCH, ...WITH_UNDERPASS]) {
-      const g = l.grid;
+    for (const l of PER_ARCH) {
+      // Iteration 08: every placement on its own level's grid.
+      const gridOf = (lv?: number, area?: number) => l.levels[lv ?? (area !== undefined ? l.areas[area]?.level : 0) ?? 0].grid;
       for (const p of l.pickups) {
+        const g = gridOf(p.level);
         const [cx, cy] = g.cellOf(p.x, p.z);
         expect(g.rampIdx[g.idx(cx, cy)]).toBe(-1);
         expect(p.y).toBeGreaterThanOrEqual(g.floorAt(p.x, p.z) - 1e-6);
       }
       for (const p of l.props) {
+        const g = gridOf(p.level);
         const [cx, cy] = g.cellOf(p.x, p.z);
         expect(g.rampIdx[g.idx(cx, cy)], `${p.kind} on stairs`).toBe(-1);
         expect(p.y).toBeGreaterThanOrEqual(g.floorAt(p.x, p.z) - 1e-6);
       }
-      for (const zs of l.zombies) expect(g.passable(...g.cellOf(zs.x, zs.z))).toBe(true);
-      // Fixtures stay below their local ceilings (flights, landings, the underpass).
-      for (const li of l.lights) expect(li.y).toBeLessThanOrEqual(g.ceilAt(li.x, li.z) + 1e-6);
+      for (const zs of l.zombies) { const g = gridOf(zs.level); expect(g.passable(...g.cellOf(zs.x, zs.z))).toBe(true); }
+      // Fixtures stay below their local ceilings (flights, landings, the wells and the levels).
+      for (const li of l.lights) { const g = gridOf(li.level, li.area); expect(li.y).toBeLessThanOrEqual(g.ceilAt(li.x, li.z) + 1e-6); }
     }
-    const a = generateStation(WITH_UNDERPASS[0].seed), b = generateStation(WITH_UNDERPASS[0].seed);
+    const a = generateStation(PER_ARCH[0].seed), b = generateStation(PER_ARCH[0].seed);
     expect(JSON.stringify(a.traversal)).toBe(JSON.stringify(b.traversal));
     expect(Buffer.from(a.grid.floor.buffer).equals(Buffer.from(b.grid.floor.buffer))).toBe(true);
   });

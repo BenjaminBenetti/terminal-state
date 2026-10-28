@@ -207,6 +207,9 @@ function step(p: Piece, h: number, spec: ShapeSpec, q: StaticQuery | null, rand:
     if (q.blocked(p.pos.x, oy, p.pos.z, p.r)) { p.pos.x = ox; p.pos.z = oz; p.vel.x = p.vel.z = 0; }
     p.w.multiplyScalar(0.6);
   }
+  // iteration 08 (Lane B): the ceiling of the band the piece is in (slab undersides on stacked levels)
+  const top = q.ceilAbove(p.pos.x, p.pos.z, oy);
+  if (p.pos.y + p.r > top) { p.pos.y = top - p.r; if (p.vel.y > 0) p.vel.y *= -0.3; }
   const ground = q.surfaceBelow(p.pos.x, p.pos.z, Math.max(oy, p.pos.y) - p.r + 0.01);
   if (ground === Infinity) { p.age = p.life; return; } // wedged in a wall: retire
   if (p.pos.y - p.r <= ground) floor(p, ground, spec, rand);

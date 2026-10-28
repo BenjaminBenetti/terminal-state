@@ -1,6 +1,8 @@
 // Station layout data types and scale constants (pure data, no three.js). Re-exported by station.ts.
 
 import type {Grid} from './grid';
+import type {Level, LevelLink, RailRun} from './levels';
+import type {LevelPlan} from './levelGen';
 import type {PropPlacement} from './props';
 import type {ShopBox} from './storefronts';
 import type {Traversal} from './traversal';
@@ -14,7 +16,9 @@ export type RoomType =
   | 'exit-stair' | 'washroom' | 'service-corridor'
   | 'agent-office' | 'storage' | 'stock-room' | 'crew-room' | 'utility' | 'supply-closet' | 'janitor-closet'
   // Iteration 04: storefront units built into hall walls (restaurant counter units / retail shops).
-  | 'eatery' | 'shop';
+  | 'eatery' | 'shop'
+  // Iteration 08 (Lane A): enclosed public stair cores between levels (lobby, flights, landings).
+  | 'stair-core';
 
 /**
  * Macro station archetype (iteration 04): recognisably different structures, not one template.
@@ -33,7 +37,10 @@ export type Side = 'N' | 'S' | 'E' | 'W';
 /** Dressing role within an area type (orientation-aware dressing, signage, lighting). */
 export type AreaRole =
   | 'mezzanine' | 'end-hall' | 'transfer' | 'escalator' | 'stair' | 'end-stair' | 'crossunder'
-  | 'ticket-hall' | 'great-hall' | 'exit-hall' | 'mall' | 'food-hall' | 'line-2';
+  | 'ticket-hall' | 'great-hall' | 'exit-hall' | 'mall' | 'food-hall' | 'line-2'
+  // Iteration 08 (Lane A): multi-level program — stair cores (lobby / landing), upper decks over the
+  // platforms, crossover bridges and catwalks over the track beds, lower service crossing + gallery.
+  | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -65,8 +72,15 @@ export interface Area extends Rect {
   /**
    * Iteration 05 (Lane T): floor height (world y) of an area that lies flat below/above the main
    * level (the underpass passage). Areas holding stair flights have per-cell floors (grid.floor).
+   * Iteration 08 (Lane A): set on every area off the main level (absolute floor of its level band).
    */
   floorY?: number;
+  /**
+   * Iteration 08 (Lane A): level the area lies on (layout.levels index; default 0 = main). Its cells
+   * are stamped in that level's grid. Stair runs between levels are level 0 (their cells are carved
+   * identically into both connected grids); `ceil` is absolute on every level.
+   */
+  level?: number;
 }
 
 export interface Door extends Rect {
@@ -81,10 +95,16 @@ export interface Door extends Rect {
   staff?: boolean;
   /** Storefront opening (a = hall, b = unit): framed by the storefront, not a plain door frame. */
   shopfront?: boolean;
+  /** Iteration 08 (Lane A): level the opening is carved on (= areas[a].level; default 0). `height` stays relative to its floor. */
+  level?: number;
 }
 
 /** power: output multiplier (aged tubes < 0.8); dying: mostly-dead tube that sputters in bursts. */
-export interface LightPlacement { x: number; y: number; z: number; rot: number; area: number; broken: boolean; flicker: boolean; warm: boolean; power: number; dying: boolean }
+export interface LightPlacement {
+  x: number; y: number; z: number; rot: number; area: number; broken: boolean; flicker: boolean; warm: boolean; power: number; dying: boolean;
+  /** Iteration 08: level whose grid the fixture hangs in (default 0); y is absolute. */
+  level?: number;
+}
 /**
  * Wall-mounted (default) or hanging (`hang`, double-sided) sign. station = name plate, exit/info =
  * wayfinding (dark field, cream text), service = staff-only plate, platform = platform number plate.
@@ -96,14 +116,31 @@ export interface SignPlacement {
   hang?: boolean;
   /** Plate width override (m). */
   w?: number;
+  /** Iteration 08: level the sign is mounted on (default 0; hang rods reach that level's ceiling); y is absolute. */
+  level?: number;
 }
-export interface PickupPlacement { itemId: string; count: number; x: number; y: number; z: number; area: number }
+export interface PickupPlacement {
+  itemId: string; count: number; x: number; y: number; z: number; area: number;
+  /** Iteration 08: level the pickup rests on (default 0); y is absolute. */
+  level?: number;
+}
 export type ZombieType = 'shambler' | 'coated';
 export interface ZombieSpawn {
   x: number; z: number; yaw: number; type: ZombieType; area: number;
   /** Iteration 07 (Lane Q): enemy archetype drawn per spawn from the level-generic pool (ai/creatureSpawn.ts); absent = zombie. */
   archetype?: EnemyArchetypeId;
+  /** Iteration 08 (Lane A): level of the spawn cell (default 0) and its absolute floor height (default 0). */
+  level?: number;
+  y?: number;
 }
+
+/**
+ * Iteration 08 (Lane A, Lane G's format; the type lives in gen/levels.ts): a railing along a walkable
+ * edge that faces a drop (upper decks / bridges / catwalks onto a light well). The run lies on the
+ * cell boundary from (x0, z0) to (x1, z1); y0 / y1 = walking surface at each end; (nx, nz) = unit
+ * normal toward the walkable side.
+ */
+export type {RailRun} from './levels';
 
 export interface Trench {
   x0: number; x1: number; z0: number; z1: number; floorY: number;
@@ -195,6 +232,19 @@ export interface StationLayout {
   platforms: number[];
   /** Iteration 05 (Lane T): vertical connectors — stair flights, rescue ladders, underpasses (gen/traversal.ts). */
   traversal: Traversal;
+  /**
+   * Iteration 08 (Lane A): stacked levels (gen/levels.ts). levels[0] is the main level and its grid
+   * IS `grid`; upper / lower levels have grids of the same size and origin (gen/levelGen.ts).
+   */
+  levels: Level[];
+  /** Stair runs (and ladders) between levels. */
+  levelLinks: LevelLink[];
+  /** Railings on walkable edges that face a drop on the upper level (light wells). */
+  rails: RailRun[];
+  /** Hint for spawn placement: the platform-1 end the player starts at (the level program sits toward the other end). */
+  spawnEnd?: 'W' | 'E';
+  /** The multi-level program (cells; gen/levelGen.ts): cores, deck range, wells, level areas. QA / tests. */
+  levelPlan?: LevelPlan;
 }
 
 /** Working canvas for generation (cells); the finished layout is cropped to its bounds. */

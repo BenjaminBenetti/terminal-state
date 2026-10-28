@@ -13,9 +13,11 @@
 // from faint glows around working fixtures. The GPU pass lives in volumetric.ts / volumetricShaders.ts;
 // every formula there has a mirror here (tests + CPU previews).
 
-import {CELL, SOLID, VOID} from '../gen/grid';
+import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
+import type {LevelRole} from '../gen/levels';
 import type {AreaKind, Archetype, RoomType, StationLayout} from '../gen/station';
 import {cellFloorFn} from '../world/lightField';
+import {stationLevels} from '../world/levelGeometry';
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
 
@@ -45,6 +47,8 @@ export interface AtmosphereParams {
   intensity: number;
   /** Density multiplier per area type / kind; `trackBed` = track-bed and tunnel cells. */
   areaDensity: Partial<Record<RoomType | AreaKind | 'trackBed' | 'default', number>>;
+  /** Iteration 08: extra multiplier per level band (damp, dusty lower service level; airier upper deck). */
+  levelDensity: Partial<Record<LevelRole, number>>;
   /** Surfaces also receive the flashlight shadow (consistent with the shadowed beam). */
   surfaceShadows: boolean;
 }
@@ -71,8 +75,9 @@ export const ATMOSPHERE: AtmosphereParams = {
     default: 1, trackBed: 1.45, underpass: 1.3, platform: 1, passage: 1.05, 'service-corridor': 1.2, 'exit-stair': 1,
     concourse: 0.85, 'fare-hall': 0.85, 'food-court': 0.8, 'retail-arcade': 0.8, eatery: 0.75, shop: 0.75,
     washroom: 0.9, 'agent-office': 0.9, 'crew-room': 0.95, storage: 1.15, 'stock-room': 1.1, utility: 1.25,
-    'supply-closet': 1.2, 'janitor-closet': 1.2, service: 1.15, room: 1, closet: 1.2,
+    'supply-closet': 1.2, 'janitor-closet': 1.2, service: 1.15, room: 1, closet: 1.2, 'stair-core': 0.95,
   },
+  levelDensity: {main: 1, upper: 0.9, lower: 1.2},
   surfaceShadows: true,
 };
 
@@ -84,7 +89,7 @@ export const ATMOSPHERE_BY_ARCHETYPE: Partial<Record<Archetype, Partial<Atmosphe
 
 export function atmosphereFor(layout: Pick<StationLayout, 'archetype'> | null, base: AtmosphereParams = ATMOSPHERE): AtmosphereParams {
   const o = layout ? ATMOSPHERE_BY_ARCHETYPE[layout.archetype] : undefined;
-  return {...base, ...o, areaDensity: {...base.areaDensity, ...o?.areaDensity}};
+  return {...base, ...o, areaDensity: {...base.areaDensity, ...o?.areaDensity}, levelDensity: {...base.levelDensity, ...o?.levelDensity}};
 }
 
 export interface QualityPreset {
@@ -327,94 +332,128 @@ export function compositePixel(scene: V3, fog: V3, exposure: number): V3 {
 /** Density multiplier range encoded in the map's R channel (0..255 -> 0..MAP_RANGE). */
 export const DENSITY_MAP_RANGE = 2.5;
 
+/**
+ * Per-station medium map, one layer per level slot (iteration 08; slot s = layout.levels[s]): RGBA8
+ * per texel: R = density multiplier / DENSITY_MAP_RANGE, G = local floor, B = local ceiling (both
+ * yMin + v * yRange), A = 255 where the level's band exists (values are dilated into closed cells so
+ * filtering stays smooth; A is not). The march picks the slot whose band holds the sample point.
+ */
 export interface DensityMap {
   w: number; h: number;
-  /** RG8: R = area density multiplier / DENSITY_MAP_RANGE, G = local floor height (yMin + G * yRange). */
+  /** Level slots (layers of the map). */
+  slots: number;
+  /** RGBA8, layer-major: ((slot * h + y) * w + x) * 4. */
   data: Uint8Array;
   yMin: number; yRange: number;
   /** World size of one texel (m). */
   cell: number;
 }
 
-export function areaMultiplier(layout: StationLayout, i: number, p: Pick<AtmosphereParams, 'areaDensity'>): number {
-  const g = layout.grid, ad = p.areaDensity;
+export function areaMultiplier(layout: StationLayout, i: number, p: Pick<AtmosphereParams, 'areaDensity'>, grid: Grid = layout.grid): number {
+  const g = grid, ad = p.areaDensity;
   if (g.cells[i] === VOID) return ad.trackBed ?? ad.default ?? 1;
   const a = layout.areas[g.area[i]];
   if (!a) return ad.default ?? 1;
   return ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1;
 }
 
-export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'>): DensityMap {
-  const g = layout.grid, W = g.w, H = g.h, n = W * H;
-  const floorOf = cellFloorFn(g, layout.trench.floorY);
-  let mult = new Float32Array(n), floor = new Float32Array(n);
-  const open = new Uint8Array(n);
-  let yMin = Infinity, yMax = -Infinity;
-  for (let i = 0; i < n; i++) {
-    if (g.cells[i] === SOLID) continue;
-    open[i] = 1;
-    const cx = i % W, cy = (i - cx) / W;
-    floor[i] = floorOf(cx, cy);
-    mult[i] = areaMultiplier(layout, i, p);
-    yMin = Math.min(yMin, floor[i]); yMax = Math.max(yMax, floor[i]);
-  }
-  if (!Number.isFinite(yMin)) { yMin = 0; yMax = 0; }
-  // Dilate open values into solid cells (no density dip / floor jump when filtering next to walls).
-  let known = open.slice();
-  for (let it = 0; it < 3; it++) {
-    const nk = known.slice(), nm = mult.slice(), nf = floor.slice();
+export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity'>>): DensityMap {
+  const levels = stationLevels(layout).slice(0, 4);
+  const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
+  const per = levels.map(L => {
+    const g = L.grid;
+    const floorOf = cellFloorFn(g, layout.trench.floorY);
+    const lm = p.levelDensity?.[L.role] ?? 1;
+    let mult = new Float32Array(n), floor = new Float32Array(n), ceil = new Float32Array(n);
+    const open = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
-      if (known[i]) continue;
-      const cx = i % W;
-      let s = 0, f = 0, c = 0;
-      for (const j of [i - 1, i + 1, i - W, i + W]) {
-        if (j < 0 || j >= n || !known[j] || Math.abs((j % W) - cx) > 1) continue;
-        s += mult[j]; f += floor[j]; c++;
-      }
-      if (c) { nm[i] = s / c; nf[i] = f / c; nk[i] = 1; }
+      if (g.cells[i] === SOLID) continue;
+      open[i] = 1;
+      const cx = i % W, cy = (i - cx) / W;
+      floor[i] = floorOf(cx, cy);
+      ceil[i] = g.hasCeil(i) && g.ceil[i] > floor[i] + 0.5 ? g.ceil[i] : floor[i] + 3;
+      mult[i] = areaMultiplier(layout, i, p, g) * lm;
     }
-    known = nk; mult = nm; floor = nf;
-  }
-  // Soften area boundaries (two 3x3 box passes on the multiplier).
-  for (let it = 0; it < 2; it++) {
-    const nm = mult.slice();
-    for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
-      const i = cy * W + cx;
-      if (!known[i]) continue;
-      let s = 0, c = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const x = cx + dx, y = cy + dy;
-        if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        const j = y * W + x;
-        if (!known[j]) continue;
-        s += mult[j]; c++;
+    // Dilate open values into closed cells (no density dip / floor jump when filtering next to walls).
+    let known = open.slice();
+    for (let it = 0; it < 3; it++) {
+      const nk = known.slice(), nm = mult.slice(), nf = floor.slice(), nc = ceil.slice();
+      for (let i = 0; i < n; i++) {
+        if (known[i]) continue;
+        const cx = i % W;
+        let s = 0, f = 0, c = 0, k = 0;
+        for (const j of [i - 1, i + 1, i - W, i + W]) {
+          if (j < 0 || j >= n || !known[j] || Math.abs((j % W) - cx) > 1) continue;
+          s += mult[j]; f += floor[j]; c += ceil[j]; k++;
+        }
+        if (k) { nm[i] = s / k; nf[i] = f / k; nc[i] = c / k; nk[i] = 1; }
       }
-      nm[i] = s / c;
+      known = nk; mult = nm; floor = nf; ceil = nc;
     }
-    mult = nm;
-  }
+    // Soften area boundaries (two 3x3 box passes on the multiplier).
+    for (let it = 0; it < 2; it++) {
+      const nm = mult.slice();
+      for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
+        const i = cy * W + cx;
+        if (!known[i]) continue;
+        let s = 0, c = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const x = cx + dx, y = cy + dy;
+          if (x < 0 || y < 0 || x >= W || y >= H) continue;
+          const j = y * W + x;
+          if (!known[j]) continue;
+          s += mult[j]; c++;
+        }
+        nm[i] = s / c;
+      }
+      mult = nm;
+    }
+    return {open, known, mult, floor, ceil, base: L.baseY};
+  });
+  let yMin = Infinity, yMax = -Infinity;
+  for (const q of per) for (let i = 0; i < n; i++) if (q.open[i]) { yMin = Math.min(yMin, q.floor[i]); yMax = Math.max(yMax, q.ceil[i]); }
+  if (!Number.isFinite(yMin)) { yMin = 0; yMax = 3; }
   const yRange = Math.max(0.01, yMax - yMin);
-  const data = new Uint8Array(n * 2);
-  for (let i = 0; i < n; i++) {
-    const m = known[i] ? mult[i] : (p.areaDensity.default ?? 1);
-    data[i * 2] = Math.round(Math.min(1, Math.max(0, m / DENSITY_MAP_RANGE)) * 255);
-    data[i * 2 + 1] = Math.round(Math.min(1, Math.max(0, ((known[i] ? floor[i] : 0) - yMin) / yRange)) * 255);
-  }
-  return {w: W, h: H, data, yMin, yRange, cell: CELL};
+  const data = new Uint8Array(n * S * 4);
+  const u8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+  per.forEach((q, s) => {
+    for (let i = 0; i < n; i++) {
+      const o = (s * n + i) * 4;
+      const m = q.known[i] ? q.mult[i] : (p.areaDensity.default ?? 1);
+      data[o] = u8(m / DENSITY_MAP_RANGE);
+      data[o + 1] = u8(((q.known[i] ? q.floor[i] : q.base) - yMin) / yRange);
+      data[o + 2] = u8(((q.known[i] ? q.ceil[i] : q.base + 3) - yMin) / yRange);
+      data[o + 3] = q.open[i] ? 255 : 0;
+    }
+  });
+  return {w: W, h: H, slots: S, data, yMin, yRange, cell: CELL};
 }
 
-/** Bilinear sample like the GPU (texel centres at cell centres, clamp to edge): [multiplier, floorY]. */
-export function sampleDensityMap(m: DensityMap, x: number, z: number): [number, number] {
+/**
+ * Sample like the GPU (texel centres at cell centres, clamp to edge, per layer): [multiplier, floorY]
+ * of the level slot whose band holds height y (slot 0 when y is omitted or nothing is present).
+ */
+export function sampleDensityMap(m: DensityMap, x: number, z: number, y?: number): [number, number] {
   const u = x / m.cell - 0.5, v = z / m.cell - 0.5;
   const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
-  let r = 0, gch = 0;
-  for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
-    const xx = Math.min(m.w - 1, Math.max(0, iu + a)), yy = Math.min(m.h - 1, Math.max(0, iv + b));
-    const wgt = (a ? fu : 1 - fu) * (b ? fv : 1 - fv);
-    const o = (yy * m.w + xx) * 2;
-    r += wgt * m.data[o]; gch += wgt * m.data[o + 1];
+  const S = m.slots ?? 1;
+  let best = Infinity, out: [number, number] | null = null, first: [number, number] = [0, 0];
+  for (let s = 0; s < S; s++) {
+    let r = 0, gch = 0, bch = 0, ach = 0;
+    for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
+      const xx = Math.min(m.w - 1, Math.max(0, iu + a)), yy = Math.min(m.h - 1, Math.max(0, iv + b));
+      const wgt = (a ? fu : 1 - fu) * (b ? fv : 1 - fv);
+      const o = ((s * m.h + yy) * m.w + xx) * 4;
+      r += wgt * m.data[o]; gch += wgt * m.data[o + 1]; bch += wgt * m.data[o + 2]; ach += wgt * m.data[o + 3];
+    }
+    const res: [number, number] = [r / 255 * DENSITY_MAP_RANGE, m.yMin + gch / 255 * m.yRange];
+    if (s === 0) first = res;
+    if (y === undefined || ach < 127.5) continue;
+    const ce = m.yMin + bch / 255 * m.yRange;
+    const d = Math.max(res[1] - y, y - ce);
+    if (d < best) { best = d; out = res; }
   }
-  return [r / 255 * DENSITY_MAP_RANGE, m.yMin + gch / 255 * m.yRange];
+  return out ?? first;
 }
 
 export const NOISE_SIZE = 32;
@@ -461,7 +500,7 @@ export const NOISE_OCTAVE2: {scale: number; offset: V3} = {scale: 2.71, offset: 
 
 /** Mirror of vfDensity: sigma_s at p. */
 export function densityAt(p: V3, map: DensityMap | null, noise: Uint8Array | null, params: AtmosphereParams, time: number): number {
-  const [mult, floorY] = map ? sampleDensityMap(map, p[0], p[2]) : [1, 0];
+  const [mult, floorY] = map ? sampleDensityMap(map, p[0], p[2], p[1]) : [1, 0];
   const hf = Math.min(3, Math.max(0.2, Math.exp(-params.heightFalloff * (p[1] - floorY - params.refHeight))));
   let nf = 1;
   if (noise && params.noiseAmount > 0) {

@@ -14,11 +14,12 @@ import {generateStation, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, Grid, SOLID, VOID} from '../src/gen/grid';
 import type {Fixture} from '../src/world/builder';
 import {
-  DEFAULT_FIELD, FIELD_EMAX, FixtureVisibility, LAYERS, LIGHT_FIELD_ANCHOR, LIGHT_FIELD_MARK, LightFieldVolume,
+  DEFAULT_FIELD, FIELD_EMAX, FixtureVisibility, LAYERS, LIGHT_FIELD_ANCHOR, LIGHT_FIELD_MARK, LightFieldVolume, SLOT_DEPTH, fieldDepth,
   bakeLightField, cellFloorFn, columnGeometry, fixtureGroup, groupLevel, installLightFieldShader, sampleField, traceExact,
   type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {DYNAMIC_LIGHTS, MOOD, StationLighting} from '../src/world/lights';
+import {stationLevels} from '../src/world/levelGeometry';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(GAME, '..');
@@ -30,7 +31,13 @@ function irr(f: BakedField, x: number, y: number, z: number, n: [number, number,
   return lum(s.amb) + lum(s.dirColor) * ndl;
 }
 const fixturesOf = (l: StationLayout): Fixture[] => l.lights.map((x, i) => ({x: x.x, y: x.y, z: x.z, broken: x.broken, flicker: x.flicker, warm: x.warm, dying: x.dying, power: x.power, area: x.area, phase: i * 1.7, level: x.broken ? 0 : 1}));
-const src = (l: StationLayout): FieldSource => ({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY});
+// Iteration 08: generated stations have upper / lower levels; the bake gets every level (one slot each).
+const src = (l: StationLayout): FieldSource => ({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY, levels: stationLevels(l)});
+/** Floor height under a fixture on its own level. */
+const fixtureFloor = (l: StationLayout, x: {x: number; z: number; level?: number}) => {
+  const g = stationLevels(l)[x.level ?? 0].grid;
+  return cellFloorFn(g, l.trench.floorY)(...g.cellOf(x.x, x.z));
+};
 
 const stations = new Map<number, StationLayout>();
 const station = (seed: number) => { let s = stations.get(seed); if (!s) stations.set(seed, (s = generateStation(seed))); return s; };
@@ -96,9 +103,11 @@ describe('baked light field (camera independent)', () => {
     const l = station(3);
     const a = bakeLightField(src(l)), b = bakeLightField(src(l));
     expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
-    expect(a.depth).toBe(1 + 2 * LAYERS);
+    expect(a.depth).toBe(fieldDepth(a.slots)); // iteration 08: slot mask + one slot per level
+    expect(SLOT_DEPTH).toBe(1 + 2 * LAYERS);
     expect(a.stats.bytes).toBe(l.grid.w * l.grid.h * a.depth * 4);
-    expect(a.stats.bytes).toBeLessThan(7e6);
+    // Iteration 08: one slot per level (main 4 layers, upper/lower AUX_LAYERS): 3-level stations measure 6-13 MB.
+    expect(a.stats.bytes).toBeLessThan(16e6);
     expect(a.stats.ms).toBeLessThan(3000); // node CI budget; typically ~150-350 ms
     expect(Buffer.from(bakeLightField(src(station(4))).data).equals(Buffer.from(a.data))).toBe(false);
     console.log(`light field ${a.w}x${a.h}x${a.depth} RGBA8 = ${(a.stats.bytes / 1e6).toFixed(2)} MB, bake ${a.stats.ms.toFixed(0)} ms (warm ${b.stats.ms.toFixed(0)} ms), working ${a.stats.working}/${a.stats.fixtures}, circuits ${a.stats.circuits.join('/')}`);
@@ -107,14 +116,16 @@ describe('baked light field (camera independent)', () => {
   it('every working fixture lights the floor below it, near or far from the spawn', () => {
     for (const seed of [1, 2, 6]) {
       const l = station(seed), f = baked(seed);
-      const fl = cellFloorFn(l.grid, l.trench.floorY);
       const sp = l.playerSpawn;
       let far = 0;
       for (const x of l.lights) {
         if (x.broken || x.dying) continue;
-        const [cx, cy] = l.grid.cellOf(x.x, x.z);
-        if (l.grid.get(cx, cy) === SOLID) continue;
-        const e = irr(f, x.x, fl(cx, cy) + 0.02, x.z);
+        const g = stationLevels(l)[x.level ?? 0].grid;
+        const [cx, cy] = g.cellOf(x.x, x.z);
+        if (g.get(cx, cy) === SOLID) continue;
+        // Iteration 08: light-well lamps hang ~9 m above the track bed; check them 4.4 m below the lamp
+        // (a normal platform mounting height) instead of on the far floor.
+        const e = irr(f, x.x, Math.max(fixtureFloor(l, x) + 0.02, x.y - 4.4), x.z);
         expect(e, `seed ${seed} fixture @${x.x.toFixed(1)},${x.z.toFixed(1)} power ${x.power.toFixed(2)}`).toBeGreaterThan(0.25 * x.power);
         if (Math.hypot(x.x - sp.x, x.z - sp.z) > 40) far++;
       }
@@ -216,7 +227,7 @@ describe('baked light field (camera independent)', () => {
     // A dying fixture's pool exists only while its circuit sputters.
     const dying = l.lights.find(x => !x.broken && x.dying);
     if (dying) {
-      const fl = cellFloorFn(l.grid, l.trench.floorY)(...l.grid.cellOf(dying.x, dying.z));
+      const fl = fixtureFloor(l, dying);
       const on = irr(f, dying.x, fl + 0.02, dying.z, [0, 1, 0], [1, 1, 1]);
       const off = irr(f, dying.x, fl + 0.02, dying.z, [0, 1, 0], [1, 1, 0]);
       expect(on).toBeGreaterThan(off * 3);
@@ -235,9 +246,8 @@ describe('baked light field (camera independent)', () => {
     expect(sl.volume.boundingBox.max.x).toBeGreaterThanOrEqual(f.w * CELL);
     expect(sl.volume.boundingBox.max.x / sl.field.w).toBeCloseTo(CELL * k, 6);
     // Light under steady fixtures survives the downsample (no fixture goes dark).
-    const fl = cellFloorFn(l.grid, l.trench.floorY);
     for (const x of l.lights.filter(q => !q.broken && !q.flicker && !q.dying && q.power > 0.8).slice(0, 60)) {
-      const y = fl(...l.grid.cellOf(x.x, x.z)) + 0.02;
+      const y = fixtureFloor(l, x) + 0.02;
       expect(irr(sl.field, x.x, y, x.z)).toBeGreaterThan(irr(f, x.x, y, x.z) * 0.3);
     }
     sl.dispose(scene);

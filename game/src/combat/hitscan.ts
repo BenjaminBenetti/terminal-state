@@ -1,8 +1,14 @@
 // Analytic ray tests for hitscan weapons: grid walls, floor/ceiling, prop boxes, body capsules.
 // Iteration 05 (Lane T): floors, ceilings and ledge faces are tested per cell along the ray, at
 // each cell's own heights (platform, track bed + platform face, stair ramps, the underpass).
+// Iteration 08 (Lane B): world rays go through `Levels.raycast` (gen/levels.ts) — the union of every
+// level's open bands — so a slab between shooter and target stops the bullet (its floor or its
+// underside, with the right normal), an open stairwell / aperture lets it through, and props on
+// another storey never catch a ray that a slab already stopped. A plain Grid is one level and gives
+// the iteration-05 results (raycastWorldLegacy keeps that implementation as the reference).
 
 import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
+import {asLevels, type Levels} from '../gen/levels';
 import type {PropPlacement} from '../gen/props';
 
 export interface Vec3 { x: number; y: number; z: number }
@@ -13,6 +19,9 @@ export interface WorldHit {
   nx: number; ny: number; nz: number;
   /** Iteration 06 (Lane D): index into the props list when kind === 'prop'. */
   prop?: number;
+  /** Iteration 08 (Lane B): level whose band the ray was in at the hit (-1 none), and the hit column index. */
+  level?: number;
+  cell?: number;
 }
 
 /**
@@ -31,6 +40,8 @@ export interface HitInfo {
   /** Prop / surface damage stage after the hit (0 intact .. 3 broken) and what broke, if anything. */
   stage?: number;
   broke?: string | null;
+  /** Iteration 08 (Lane B): level of the hit surface / prop (stacked stations; -1 / absent = unknown). */
+  level?: number;
 }
 
 export function rayAabb(o: Vec3, d: Vec3, min: Vec3, max: Vec3): {t: number; n: [number, number, number]} | null {
@@ -141,7 +152,21 @@ export function surfaceHit(grid: Grid, o: Vec3, d: Vec3, tMax: number, trenchY: 
   return null;
 }
 
-export function raycastWorld(grid: Grid, props: PropPlacement[], o: Vec3, d: Vec3, maxDist: number, trenchY: number): WorldHit {
+/**
+ * First world hit along o + d t (d unit length) before maxDist: walls / risers / slab edges,
+ * floors, ceilings and slab undersides of every level, exact prop boxes. `world`: the station's
+ * Levels (or one Grid). Unset ceilings count as 3 m (hand-built test grids), VOID cells without a
+ * height sit at `trenchY`.
+ */
+export function raycastWorld(world: Grid | Levels, props: readonly PropPlacement[], o: Vec3, d: Vec3, maxDist: number, trenchY: number): WorldHit {
+  const h = asLevels(world).raycast(o, d, maxDist, {props, trenchY, unsetCeil: 3});
+  const out: WorldHit = {t: h.t, kind: h.kind, nx: h.nx, ny: h.ny, nz: h.nz, level: h.level, cell: h.cell};
+  if (h.prop !== undefined) out.prop = h.prop;
+  return out;
+}
+
+/** Reference (iteration 05-07) single-grid implementation, kept for regression tests. */
+export function raycastWorldLegacy(grid: Grid, props: readonly PropPlacement[], o: Vec3, d: Vec3, maxDist: number, trenchY: number): WorldHit {
   let best: WorldHit = {t: maxDist, kind: 'none', nx: 0, ny: 0, nz: 0};
   const hl = Math.hypot(d.x, d.z);
   if (hl > 1e-6) {

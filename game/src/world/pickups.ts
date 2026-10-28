@@ -10,7 +10,8 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {DRINK_IDS, FOOD_IDS, itemDef, itemDims} from '../items/items';
 import type {ItemStack} from '../items/inventory';
 import {canvasTexture, pickupLabel, surface} from './canvasTextures';
-import type {Grid} from '../gen/grid';
+import {Grid} from '../gen/grid';
+import type {Levels} from '../gen/levels';
 
 export interface Pickup {
   id: number;
@@ -402,8 +403,14 @@ export class PickupManager {
     for (const p of [...this.list]) this.remove(p);
   }
 
-  /** Best pickup the player is looking at (or standing over), within reach and in sight. */
-  target(eye: THREE.Vector3, dir: THREE.Vector3, grid: Grid): Pickup | null {
+  /**
+   * Best pickup the player is looking at (or standing over), within reach and in sight.
+   * Iteration 08 (Lane B): with the station Levels the sight test is 3D from the eye to the item
+   * (a slab / stair flight between them hides it; 15 cm slack for items lying on stair treads).
+   */
+  target(eye: THREE.Vector3, dir: THREE.Vector3, world: Grid | Levels): Pickup | null {
+    const grid = world instanceof Grid ? world : null;
+    const levels = grid ? null : (world as Levels);
     let best: Pickup | null = null, bestScore = Infinity;
     const v = new THREE.Vector3();
     for (const p of this.list) {
@@ -414,7 +421,7 @@ export class PickupManager {
       const flat = Math.hypot(p.x - eye.x, p.z - eye.z);
       const ok = ang < 0.32 || (flat < 1.0 && ang < 1.0);
       if (!ok) continue;
-      if (!grid.lineOfSight(eye.x, eye.z, p.x, p.z)) continue;
+      if (grid ? !grid.lineOfSight(eye.x, eye.z, p.x, p.z) : !levels!.lineOfSight(eye, {x: p.x, y: p.y + 0.08, z: p.z}, {slack: 0.15})) continue;
       const score = ang + d * 0.08;
       if (score < bestScore) { bestScore = score; best = p; }
     }

@@ -7,9 +7,17 @@
 // Props stay solid columns at any jump height: there is no standing on props. Headroom comes from
 // the grid's absolute per-cell ceiling (area ceilings, lintels, ceilings following flights).
 // Rescue ladders: startClimb() runs a scripted climb (same path as zombies); Space/S lets go.
+//
+// Iteration 08 (Lane B): stacked levels. The body moves through `Levels` (a plain Grid is one
+// level): support is the band holding the feet (stairs hand over between levels without a snap;
+// walking under or over a slab edge never changes storey; an open aperture / unrailed edge drops
+// you to the floor below, without fall damage), collision uses the body's stance height against
+// the band ceilings (crouch under a stair flight or a low soffit), railings stop you at deck edges,
+// and headroom / jumps clamp against the ceiling of the band you are in.
 
 import {ceilingOver, moveCircle, type PropIndex} from '../core/physics';
-import type {Grid} from '../gen/grid';
+import {STEP_UP, type Grid} from '../gen/grid';
+import {asLevels, type Levels} from '../gen/levels';
 import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
 import {CROUCH_KEYS} from './input';
 
@@ -156,7 +164,7 @@ export class Player {
     this.justLetGo = true;
   }
 
-  private updateClimb(dt: number, input: MoveInput, grid: Grid): void {
+  private updateClimb(dt: number, input: MoveInput, L: Levels): void {
     const c = this.climb!;
     if (input.hit('Space') || input.hit('KeyS')) { this.letGo(); return; }
     c.t += dt;
@@ -166,7 +174,7 @@ export class Player {
     if (c.t >= climbDuration(c.path)) {
       const end = c.path.pts[c.path.pts.length - 1];
       this.x = end.x; this.z = end.z;
-      this.y = grid.floorAt(end.x, end.z);
+      this.y = L.supportAt(end.x, end.z, end.y, STEP_UP)?.floor ?? end.y;
       this.climb = null;
       this.grounded = true;
       this.justClimbed = true;
@@ -178,12 +186,18 @@ export class Player {
   }
 
   /** Returns true when a footstep lands this frame. Jump/land/stance events are in the just* fields. */
-  update(dt: number, input: MoveInput, grid: Grid, props: PropIndex | null, opts: {aiming: boolean; speedMult: number; canSprint: boolean}): boolean {
+  /** Clear height of the current stance (collision against soffits / slab undersides). */
+  get bodyHeight(): number {
+    return (this.crouched ? CROUCH_EYE : STAND_EYE) + HEAD_ABOVE_EYE;
+  }
+
+  update(dt: number, input: MoveInput, world: Grid | Levels, props: PropIndex | null, opts: {aiming: boolean; speedMult: number; canSprint: boolean}): boolean {
+    const L = asLevels(world);
     this.justJumped = this.justLanded = this.stanceChanged = false;
     this.justRung = this.justClimbed = this.justLetGo = false;
     this.landSpeed = 0;
     if (this.climb) {
-      this.updateClimb(dt, input, grid);
+      this.updateClimb(dt, input, L);
       if (this.climb || this.justClimbed) {
         this.speed = 0;
         this.landT = Math.min(LAND_DIP_TIME, this.landT + dt);
@@ -199,7 +213,7 @@ export class Player {
     if (input.down('KeyD') || input.down('ArrowRight')) fx += 1;
     const len = Math.hypot(fx, fz);
     if (len > 0) { fx /= len; fz /= len; }
-    const standHeadroom = ceilingOver(grid, this.x, this.z, this.radius) - this.y - STAND_EYE - HEAD_ABOVE_EYE;
+    const standHeadroom = ceilingOver(L, this.x, this.z, this.radius, this.y) - this.y - STAND_EYE - HEAD_ABOVE_EYE;
     const canStand = standHeadroom >= -1e-4;
 
     // --- crouch input: tap C toggles; holding past CROUCH_HOLD_TIME stands on release -
@@ -261,7 +275,7 @@ export class Player {
     const accel = !this.grounded ? AIR_ACCEL : len > 0 ? GROUND_ACCEL : GROUND_DECEL;
     this.vx += (wx * max - this.vx) * Math.min(1, accel * dt);
     this.vz += (wz * max - this.vz) * Math.min(1, accel * dt);
-    const [nx, nz] = moveCircle(grid, props, this.x, this.z, this.vx * dt, this.vz * dt, this.radius, this.y);
+    const [nx, nz] = moveCircle(L, props, this.x, this.z, this.vx * dt, this.vz * dt, this.radius, this.y, this.bodyHeight);
     // Velocity follows what actually happened (sliding along walls).
     if (dt > 0) { this.vx = (nx - this.x) / dt; this.vz = (nz - this.z) / dt; }
     this.x = nx; this.z = nz;
@@ -270,7 +284,9 @@ export class Player {
     // --- vertical: gravity, ceiling clamp, landing ------------------------------------------------
     const blendStep = dt / CROUCH_BLEND_TIME;
     this.crouchBlend += Math.max(-blendStep, Math.min(blendStep, (this.crouched ? 1 : 0) - this.crouchBlend));
-    const ground = grid.floorAt(this.x, this.z);
+    // the band holding the feet (null only inside a slab / wall: keep the height, never drop through)
+    const sup = L.supportIn(this.x, this.z, this.y, STEP_UP) ?? L.supportAt(this.x, this.z, this.y, STEP_UP);
+    const ground = sup ? sup.floor : this.y;
     if (this.grounded) {
       // Feet follow stairs/ramps; walking off a ledge (platform edge) starts a fall.
       if (this.y - ground > SNAP_DOWN) { this.grounded = false; this.vy = 0; }
@@ -279,7 +295,7 @@ export class Player {
     if (!this.grounded) {
       this.vy -= GRAVITY * dt;
       this.y += this.vy * dt;
-      const maxFeet = ceilingOver(grid, this.x, this.z, this.radius) - this.stanceEye - HEAD_ABOVE_EYE;
+      const maxFeet = ceilingOver(L, this.x, this.z, this.radius, this.y) - this.stanceEye - HEAD_ABOVE_EYE;
       if (this.y > maxFeet) { this.y = Math.max(ground, maxFeet); this.vy = Math.min(0, this.vy); }
       if (this.y <= ground) {
         this.landSpeed = Math.max(0, -this.vy);

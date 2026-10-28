@@ -16,7 +16,9 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PROP_DEFS, PURPOSE_MODEL_KEYS, PURPOSE_PROP_KINDS, SHOP_DISPLAY_CASE, type PropKind, type PropPlacement, type PurposePropKind} from '../gen/props';
 import {STORE_PURPOSES} from '../gen/purposes';
 import {isP7Kind, p7ModelKey} from '../gen/props07';
+import {rendersOwnBody} from './openablesSpec';
 import {PURPOSE_ACCENT, isPurposeMat, purposePropShape, shapeVariant, stockShelfStock, type PurposePart} from '../gen/purposeShapes';
+import {AUTHORED_CARCASS, displayTreatment} from './shelfStockCarcass';
 import {SHOP_HOLDERS, shopPropShape, storefrontParts, type ShopBox, type ShopFace} from '../gen/storefronts';
 import type {ShopUse, StationLayout, Storefront} from '../gen/stationTypes';
 import {canvasTexture} from './canvasTextures';
@@ -77,6 +79,7 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
   // --- Furniture holders --------------------------------------------------------------------
   let instances = 0;
   for (const kind of SHOP_HOLDERS) {
+    if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (glass-door cooler) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
     if (!list.length) continue;
     const def = PROP_DEFS[kind];
@@ -112,7 +115,7 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
 function buildP7Props(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): number {
   const byKind = new Map<string, PropPlacement[]>();
   for (const p of layout.props) {
-    if (!isP7Kind(p.kind)) continue;
+    if (!isP7Kind(p.kind) || rendersOwnBody(p.kind, deps.models)) continue; // iteration 08 (Lane I): openables draw their own split body
     let l = byKind.get(p.kind);
     if (!l) byKind.set(p.kind, (l = []));
     l.push(p);
@@ -174,11 +177,13 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
   const shapes = new Map<string, PurposePart[]>();
   const tmp = new THREE.Color(), paintCol = new THREE.Color();
   for (const kind of PURPOSE_PROP_KINDS) {
+    if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (lockers, safe) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
     if (!list.length) continue;
     const def = PROP_DEFS[kind];
     const modelKey = PURPOSE_MODEL_KEYS[kind];
-    const model = modelKey && MODEL_READY.has(kind) ? deps.models[modelKey] : undefined;
+    // Iteration 08 (Lane S): kinds whose model bakes product pictures in (magazine rack) use the derived authored carcass instead.
+    const model = modelKey && MODEL_READY.has(kind) && !AUTHORED_CARCASS.has(kind) ? deps.models[modelKey] : undefined;
     if (model) {
       instances += deps.instanceModel(group, model, list.map(placeM), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
       continue;
@@ -191,7 +196,8 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
       const v = shapeVariant(kind, p.variant);
       const sk = `${kind}:${v}:${stockOnly ? 's' : 'f'}`;
       let parts = shapes.get(sk);
-      if (!parts) shapes.set(sk, (parts = stockOnly ? stockShelfStock(v) : purposePropShape(kind, v) ?? []));
+      // Iteration 08 (Lane S): display treatment derived at runtime — product-picture parts removed (3D filler stock stands on the boards).
+      if (!parts) shapes.set(sk, (parts = displayTreatment(kind, v, stockOnly ? stockShelfStock(v) : purposePropShape(kind, v) ?? [], {model: stockOnly})));
       if (!parts.length) continue;
       instances++;
       const m4 = placeM(p);

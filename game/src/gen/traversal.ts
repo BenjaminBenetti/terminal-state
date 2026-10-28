@@ -8,7 +8,7 @@
 // floor height and keeps loot off stairs; `traversalIssues` validates (generation retry guard).
 // Climbing (player and zombies) follows the same scripted path (`ladderClimbPath`).
 
-import {CELL, FLOOR, VOID, type Grid, type Ramp, type StandPoint} from './grid';
+import {CELL, FLOOR, VOID, rampHeight, type Grid, type Ramp, type StandPoint} from './grid';
 import type {Rect, SignPlacement, StationLayout} from './stationTypes';
 
 export type Vec3 = StandPoint;
@@ -96,12 +96,38 @@ export function stairRunCells(rise: number, spec: StairSpec = STAIR): number {
 }
 
 /**
+ * Iteration 08 (Lane A): stamps an already registered ramp (index `id`) into another level grid —
+ * the same cells, floors and flight-following ceilings `Grid.addRamp` writes. Level grids of one
+ * station share ONE ramps list, so a ramp's index is identical in every level grid.
+ */
+export function stampRamp(g: Grid, r: Ramp, id: number): void {
+  if (g.ramps[id] !== r) {
+    if (g.ramps.length !== id) throw new Error(`stampRamp: ramp ${id} index mismatch (${g.ramps.length})`);
+    g.ramps.push(r);
+  }
+  for (let y = r.y; y < r.y + r.h; y++) {
+    for (let x = r.x; x < r.x + r.w; x++) {
+      const i = g.idx(x, y);
+      g.rampIdx[i] = id;
+      const [cx, cz] = g.center(x, y);
+      g.floor[i] = rampHeight(r, r.axis === 'x' ? cx : cz);
+      const a = (r.axis === 'x' ? x : y) * CELL;
+      g.ceil[i] = Math.max(rampHeight(r, a), rampHeight(r, a + CELL)) + r.headroom;
+    }
+  }
+}
+
+/**
  * Carves a run of flights into a rect of cells (full width): the run starts at the `from` end
  * of the rect at height h0 (top landing there) and ends flush with the far end at h1. Sets every
  * cell's floor and flight-following ceiling (floor + headroom), registers one grid ramp per flight.
  * Coordinates are the grid's own (pre-crop during generation; see shiftFlight).
+ * Iteration 08 (Lane A): `g` may list several level grids (a stair between levels): the identical
+ * run is carved into each, every flight registered once (same ramp index in all of them).
  */
-export function layStairRun(g: Grid, rect: Rect, area: number, axis: 'x' | 'z', from: 'lo' | 'hi', h0: number, h1: number, spec: StairSpec = STAIR): StairFlight[] {
+export function layStairRun(gs: Grid | readonly Grid[], rect: Rect, area: number, axis: 'x' | 'z', from: 'lo' | 'hi', h0: number, h1: number, spec: StairSpec = STAIR): StairFlight[] {
+  const grids: readonly Grid[] = Array.isArray(gs) ? gs : [gs as Grid];
+  const g = grids[0];
   const plan = planStairs(h1 - h0, spec);
   const lo = (axis === 'x' ? rect.x : rect.y) * CELL, hi = lo + (axis === 'x' ? rect.w : rect.h) * CELL;
   const a0 = (axis === 'x' ? rect.y : rect.x) * CELL, a1 = a0 + (axis === 'x' ? rect.h : rect.w) * CELL;
@@ -132,8 +158,7 @@ export function layStairRun(g: Grid, rect: Rect, area: number, axis: 'x' | 'z', 
       const i = g.idx(x, y);
       const c = ((axis === 'x' ? x : y) + 0.5) * CELL;
       const f = profile((c - origin) * sgn);
-      g.floor[i] = f;
-      g.ceil[i] = f + spec.headroom;
+      for (const gg of grids) { gg.floor[i] = f; gg.ceil[i] = f + spec.headroom; }
     }
   }
   const out: StairFlight[] = [];
@@ -144,6 +169,7 @@ export function layStairRun(g: Grid, rect: Rect, area: number, axis: 'x' | 'z', 
       ? {x: c0, y: rect.y, w: c1 - c0, h: rect.h, axis, s0: p, s1: q, h0: s.hA, h1: s.hB, risers: s.n, headroom: spec.headroom}
       : {x: rect.x, y: c0, w: rect.w, h: c1 - c0, axis, s0: p, s1: q, h0: s.hA, h1: s.hB, risers: s.n, headroom: spec.headroom};
     const ramp = g.addRamp(r);
+    for (let k = 1; k < grids.length; k++) stampRamp(grids[k], r, ramp);
     const f: StairFlight = {id: -1, area, ramp, axis, s0: p, s1: q, h0: s.hA, h1: s.hB, a0, a1, risers: s.n, riser: plan.riser, tread: plan.tread, headroom: spec.headroom, top: {x: 0, y: 0, z: 0}, bottom: {x: 0, y: 0, z: 0}};
     standPoints(f);
     out.push(f);
@@ -337,8 +363,12 @@ function rayBox(o: Vec3, d: Vec3, min: Vec3, max: Vec3): number | null {
  * underpass wayfinding and ladder plates are added.
  */
 export function finishTraversal(layout: StationLayout): void {
-  const g = layout.grid;
+  const g0 = layout.grid;
+  // Iteration 08 (Lane A): each placement is finished on its own level's grid; entries tagged with a
+  // level were authored at absolute heights (Lane P's liftLevels / Lane A) and are not lifted again.
+  const gridOf = (level: number | undefined): Grid => layout.levels?.[level ?? 0]?.grid ?? g0;
   for (const l of layout.lights) {
+    const g = gridOf(l.level ?? layout.areas[l.area]?.level);
     const [cx, cy] = g.cellOf(l.x, l.z);
     if (!g.inBounds(cx, cy)) continue;
     const r = g.rampIdx[g.idx(cx, cy)];
@@ -346,40 +376,43 @@ export function finishTraversal(layout: StationLayout): void {
     if (r >= 0) { l.y = c - 0.02; l.rot = g.ramps[r].axis === 'x' ? Math.PI / 2 : 0; }
     else if (Number.isFinite(c) && c < l.y + 0.02) l.y = c - 0.02;
   }
-  const lift = (x: number, z: number): number => {
+  const lift = (g: Grid, x: number, z: number): number => {
     const [cx, cy] = g.cellOf(x, z);
     if (!g.inBounds(cx, cy)) return 0;
     const i = g.idx(cx, cy);
     return g.cells[i] === FLOOR && g.rampIdx[i] < 0 ? g.floorOf(i) : 0;
   };
-  for (const p of layout.props) p.y += lift(p.x, p.z);
-  const used = new Set<number>();
+  for (const p of layout.props) if (!p.level) p.y += lift(g0, p.x, p.z);
+  const used = new Set<string>();
+  // Iteration 08: the landings between the flights of a run count as stairs too (loot rests off the run).
+  const inRun = (g: Grid, i: number) => g.rampIdx[i] >= 0 || layout.areas[g.area[i]]?.role === 'stair';
   for (const p of layout.pickups) {
+    const lv = p.level ?? 0, g = gridOf(lv);
     let [cx, cy] = g.cellOf(p.x, p.z);
-    if (g.inBounds(cx, cy) && g.rampIdx[g.idx(cx, cy)] >= 0) {
-      const spot = nearestLanding(g, cx, cy, g.area[g.idx(cx, cy)], used);
+    if (g.inBounds(cx, cy) && inRun(g, g.idx(cx, cy))) {
+      const spot = nearestLanding(g, cx, cy, -1, used, lv, i => !inRun(g, i));
       if (spot) {
         [cx, cy] = spot;
         [p.x, p.z] = g.center(cx, cy);
-        p.y = 0;
+        p.y = lv ? g.floorOf(g.idx(cx, cy)) : 0;
         p.area = g.area[g.idx(cx, cy)];
       }
     }
-    if (g.inBounds(cx, cy)) used.add(g.idx(cx, cy));
-    p.y += lift(p.x, p.z);
+    if (g.inBounds(cx, cy)) used.add(`${lv}:${g.idx(cx, cy)}`);
+    if (!lv) p.y += lift(g0, p.x, p.z);
   }
   addTraversalSigns(layout);
 }
 
-function nearestLanding(g: Grid, x: number, y: number, area: number, used: Set<number>): [number, number] | null {
+function nearestLanding(g: Grid, x: number, y: number, area: number, used: Set<string>, level = 0, ok: (i: number) => boolean = () => true): [number, number] | null {
   let any: [number, number] | null = null;
-  for (let r = 1; r <= 16; r++) {
+  for (let r = 1; r <= 40; r++) {
     for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
       if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
       const cx = x + ox, cy = y + oy;
       if (!g.walkable(cx, cy)) continue;
       const i = g.idx(cx, cy);
-      if (g.rampIdx[i] >= 0 || used.has(i)) continue;
+      if (g.rampIdx[i] >= 0 || used.has(`${level}:${i}`) || !ok(i)) continue;
       if (g.area[i] === area) return [cx, cy];
       any ??= [cx, cy];
     }
@@ -425,17 +458,24 @@ export function traversalIssues(layout: StationLayout): string[] {
   const issues: string[] = [];
   const g = layout.grid;
   const {stairs, ladders} = layout.traversal;
+  // Iteration 08 (Lane A): a flight between levels lands on another level's grid at one end; its
+  // steps are carved into both grids (props on either one block them).
+  const grids = layout.levels?.length ? layout.levels.map(L => L.grid) : [g];
   for (const f of stairs) {
     for (const [name, p] of [['top', f.top], ['bottom', f.bottom]] as const) {
-      const [cx, cy] = g.cellOf(p.x, p.z);
-      if (!g.passable(cx, cy) || Math.abs(g.floorAt(p.x, p.z) - p.y) > 0.05) issues.push(`flight ${f.id} ${name} landing not walkable`);
+      const ok = grids.some(lg => { const [cx, cy] = lg.cellOf(p.x, p.z); return lg.passable(cx, cy) && Math.abs(lg.floorAt(p.x, p.z) - p.y) <= 0.05; });
+      if (!ok) issues.push(`flight ${f.id} ${name} landing not walkable`);
     }
     const r = g.ramps[f.ramp];
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.blocked[g.idx(x, y)]) issues.push(`flight ${f.id} has a prop on its steps`);
+    for (const lg of grids) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      const i = lg.idx(x, y);
+      if (lg.rampIdx[i] === f.ramp && lg.blocked[i]) issues.push(`flight ${f.id} has a prop on its steps`);
+    }
   }
   for (const p of layout.pickups) {
-    const [cx, cy] = g.cellOf(p.x, p.z);
-    if (g.inBounds(cx, cy) && g.rampIdx[g.idx(cx, cy)] >= 0) issues.push(`pickup ${p.itemId} on stairs`);
+    const lg = grids[p.level ?? 0] ?? g;
+    const [cx, cy] = lg.cellOf(p.x, p.z);
+    if (lg.inBounds(cx, cy) && lg.rampIdx[lg.idx(cx, cy)] >= 0) issues.push(`pickup ${p.itemId} on stairs`);
   }
   for (const l of ladders) {
     const [bx, by] = g.cellOf(l.bottom.x, l.bottom.z), [tx, ty] = g.cellOf(l.top.x, l.top.z);
@@ -465,6 +505,8 @@ export function traversalSummary(layout: StationLayout) {
     stairs: layout.traversal.stairs.map(f => ({id: f.id, area: f.area, label: layout.areas[f.area]?.label, axis: f.axis, risers: f.risers, riser: r2(f.riser), tread: r2(f.tread), top: p3(f.top), bottom: p3(f.bottom)})),
     ladders: layout.traversal.ladders.map(l => ({id: l.id, trench: l.trench, platform: l.platform, x: r2(l.x), faceZ: r2(l.faceZ), pair: l.pair, bottom: p3(l.bottom), top: p3(l.top)})),
     underpasses: layout.traversal.underpasses.map(u => ({bar: u.bar, floor: r2(layout.grid.floorAt((layout.areas[u.bar].x + layout.areas[u.bar].w / 2) * CELL, (layout.areas[u.bar].y + layout.areas[u.bar].h / 2) * CELL)), ceil: r2(layout.areas[u.bar].ceil), legs: u.legs.map(l => ({area: l.area, platform: l.platform, side: l.side, flights: l.flights}))})),
+    // Iteration 08 (Lane A): stair runs between levels (lower / upper level, stand points, first flight).
+    levelLinks: (layout.levelLinks ?? []).map(k => ({id: k.id, kind: k.kind, lower: k.lower, upper: k.upper, ramp: k.ramp, flight: k.traversalId, bottom: p3(k.bottom), top: p3(k.top), area: layout.areas[layout.traversal.stairs[k.traversalId ?? -1]?.area ?? -1]?.label})),
   };
 }
 

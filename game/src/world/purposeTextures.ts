@@ -460,28 +460,13 @@ function noticeBoardTexture(): THREE.CanvasTexture {
   });
 }
 
+// Iteration 08 (Lane S): the bare pegboard of the key-cutting wall and its sign. The painted rows of
+// blanks on hooks are gone — authored hook rods and 3D key blanks hang there now (world/shelfStockCarcass.ts KEY_WALL).
 function keyBlanksTexture(): THREE.CanvasTexture {
   return faceTex(512, 320, 5105, (ctx, w, h, r) => {
     ctx.fillStyle = '#c9b48a'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = 'rgba(60,45,30,0.55)';
     for (let y = 8; y < h; y += 16) for (let x = 8; x < w; x += 16) { ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); }
-    for (let row = 0; row < 6; row++) {
-      const y = 22 + row * 50;
-      for (let col = 0; col < 10; col++) {
-        const x = 18 + col * 49;
-        ctx.fillStyle = '#7a7f84'; ctx.fillRect(x - 1, y - 6, 3, 14);
-        if (r() < 0.15) continue;
-        for (let k = 0; k < 3; k++) {
-          const brass = r() < 0.6, kx = x + k * 2.5 - 3;
-          ctx.fillStyle = brass ? '#c9a64a' : '#c0c4c8';
-          ctx.beginPath(); ctx.arc(kx + 1, y + 12, 7, 0, Math.PI * 2); ctx.fill();
-          ctx.fillRect(kx - 2, y + 17, 6, 22);
-          ctx.fillStyle = 'rgba(40,30,20,0.6)'; ctx.beginPath(); ctx.arc(kx + 1, y + 10, 2, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = brass ? '#b08f3a' : '#a8acb0';
-          for (let n = 0; n < 4; n++) ctx.fillRect(kx + 3, y + 22 + n * 4, 2, 2);
-        }
-      }
-    }
     text(ctx, 'KEYS CUT WHILE U WAIT', w / 2, h - 10, w * 0.7, 13, '#5a2a1a');
     wear(ctx, w, h, r, 0.7);
   });

@@ -213,7 +213,8 @@ export class Sfx {
   private dropped = 0;
   private culled = 0;
   private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}};
-  private occlusion: ((x: number, z: number) => number) | null = null;
+  /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
+  private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   private reloadVoice: Voice | null = null;
   private lastReloadEmpty = false;
   private gait = new WeakMap<object, number>();
@@ -392,7 +393,7 @@ export class Sfx {
   }
 
   /** Per-station hooks: occlusion (0 = clear .. 1 = blocked) and humming fixture positions. */
-  setWorld(o: {occlusion?: ((x: number, z: number) => number) | null; emitters?: Pos[]}): void {
+  setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]}): void {
     if (o.occlusion !== undefined) this.occlusion = o.occlusion;
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
   }
@@ -456,7 +457,7 @@ export class Sfx {
     if (o.at) {
       dist = this.dist(o.at);
       if (dist > (o.maxDist ?? 45)) { this.culled++; return null; }
-      if (o.occlude !== false && this.occlusion && dist > 1.5) occ = clamp01(this.occlusion(o.at.x, o.at.z));
+      if (o.occlude !== false && this.occlusion && dist > 1.5) occ = clamp01(this.occlusion(o.at.x, o.at.z, o.at.y));
     }
     const inp = ctx.createGain();
     inp.gain.value = (o.gain ?? 1) * (1 - 0.45 * occ);

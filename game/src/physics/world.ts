@@ -9,10 +9,17 @@
 //
 // Fixed 1/60 s steps (max 3 substeps per frame, interpolated transforms for rendering); the game
 // only calls update() while playing, so pause/menus freeze physics.
+//
+// Iteration 08 (Lane B): stacked levels. A column's boxes come from its multi-level profile
+// (StaticQuery.columnSolids): the rock under the lowest floor and every slab between a lower
+// band's ceiling and an upper band's floor (so bodies rest on the upper deck, hit the slab
+// underside from below and fall through apertures), stair treads of every distinct flight (from
+// the ceiling of whatever lies under it), railings as thin boxes, props of every level.
 
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import {CELL} from '../gen/grid';
+import {RAIL_H, RAIL_HALF} from '../gen/levels';
 import {StaticQuery, rampPieces, type StaticLayout} from './staticQuery';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC, Ragdoll, RagdollJoint, type KillImpulse, type RagdollTarget} from './ragdoll';
 import {CasingSystem, type CasingAudio, type CasingKind} from './casings';
@@ -31,7 +38,6 @@ const CHUNK = 8; // cells (4 m)
 const ACTIVE_RADIUS = 3; // m around each simulating pelvis
 /** Iteration 07: m around each simulating item / prop / chunk body. */
 const BODY_RADIUS = 1.6;
-const WALL_TOP = 9;
 
 /** Seconds after a shotgun shot until the pump stroke throws the hull (not on the trigger pull). */
 export const SHELL_EJECT_DELAY = 0.46; // end of the pump back-stroke (Sfx.shot schedules pump(0.42))
@@ -79,6 +85,22 @@ export interface PhysicsStats {
 }
 
 interface Chunk { bodies: CANNON.Body[]; active: boolean }
+
+/**
+ * Iteration 08 (Lane B): an external owner of rigid bodies in this bounded world (e.g. Lane S's
+ * filler shelf stock). Register with PhysicsSystem.addSource: the world is stepped while any source
+ * has awake bodies, static collision chunks (all levels: floors, slab undersides, treads, railings,
+ * props) are kept around its active points, update() runs every frame after the step (also while
+ * idle), clear() on New Station. Use GROUP_* filters from ragdoll.ts, `material()` for contacts.
+ */
+export interface BodySource {
+  /** Simulating (dynamic, awake) bodies right now. */
+  readonly awake: number;
+  /** Positions of simulating bodies. */
+  activePoints(out: CANNON.Vec3[]): void;
+  update?(dt: number): void;
+  clear?(): void;
+}
 
 let warmedUp = false;
 /**
@@ -128,6 +150,8 @@ export class PhysicsSystem implements BodyHost {
    */
   holderBoxes: ((p: PropPlacement) => THREE.Box3[] | null) | null = null;
   private readonly physMats = new Map<PhysMat, CANNON.Material>();
+  /** Iteration 08 (Lane B): registered external body owners (see BodySource). */
+  private readonly sources: BodySource[] = [];
   private query: StaticQuery | null = null;
   private readonly ragdollMat = new CANNON.Material('ragdoll');
   private readonly staticMat = new CANNON.Material('static');
@@ -168,6 +192,16 @@ export class PhysicsSystem implements BodyHost {
     this.refreshChunks();
   }
 
+  /** Iteration 08 (Lane B): register an external body owner (stepped / statics kept around it / cleared with the station). */
+  addSource(s: BodySource): void {
+    if (!this.sources.includes(s)) this.sources.push(s);
+  }
+
+  private get sourcesAwake(): boolean {
+    for (const s of this.sources) if (s.awake > 0) return true;
+    return false;
+  }
+
   /** Build the world for a new station (disposes the previous one first). */
   build(layout: StaticLayout): void {
     this.dispose();
@@ -199,6 +233,7 @@ export class PhysicsSystem implements BodyHost {
     const w = this.world;
     this.dynamicItems.clear();
     this.chunks.clear();
+    for (const s of this.sources) s.clear?.();
     if (w) {
       for (const r of this.ragdolls) r.freeze();
       for (const c of w.constraints.slice()) w.removeConstraint(c);
@@ -278,11 +313,12 @@ export class PhysicsSystem implements BodyHost {
     }
     this.casings.update(dt);
     const w = this.world;
-    if (!w || (!this.ragdolls.length && !this.dynamicItems.awake && !this.chunks.awake)) {
+    if (!w || (!this.ragdolls.length && !this.dynamicItems.awake && !this.chunks.awake && !this.sourcesAwake)) {
       this.stepMs *= 0.9;
       // resting chunks still fade / expire, walkers can still shove resting loose props
       this.chunks.update(dt);
       this.dynamicItems.update(dt);
+      for (const s of this.sources) s.update?.(dt);
       return;
     }
     const t0 = performance.now();
@@ -295,7 +331,8 @@ export class PhysicsSystem implements BodyHost {
     }
     this.dynamicItems.update(dt);
     this.chunks.update(dt);
-    if (!this.ragdolls.length && !this.dynamicItems.awake && !this.chunks.awake) this.refreshChunks();
+    for (const s of this.sources) s.update?.(dt);
+    if (!this.ragdolls.length && !this.dynamicItems.awake && !this.chunks.awake && !this.sourcesAwake) this.refreshChunks();
     const ms = performance.now() - t0;
     this.stepMs += (ms - this.stepMs) * 0.1;
     this.stepMsMax = Math.max(this.stepMsMax * 0.995, ms);
@@ -322,6 +359,7 @@ export class PhysicsSystem implements BodyHost {
     const pts: CANNON.Vec3[] = [];
     this.dynamicItems.activePoints(pts);
     this.chunks.activePoints(pts);
+    for (const s of this.sources) s.activePoints(pts);
     for (const p of pts) if (Number.isFinite(p.x + p.z)) around(p, BODY_RADIUS);
     for (const [k, c] of this.staticChunks) {
       if (c.active && !need.has(k)) { for (const b of c.bodies) w.removeBody(b); c.active = false; }
@@ -338,8 +376,12 @@ export class PhysicsSystem implements BodyHost {
     const q = this.query!;
     const cx0 = (key % 8192 - 4096) * CHUNK, cy0 = (Math.floor(key / 8192) - 4096) * CHUNK;
     const base = q.minFloor - 0.5;
+    const WALL_TOP = q.topY;
     const used = new Uint8Array(CHUNK * CHUNK);
-    const cls = (x: number, y: number) => q.cellClass(cx0 + x, cy0 + y);
+    // iteration 08: per-column multi-level profile keys (single level: wall / ramp / floor height, as before)
+    const keys: string[] = [];
+    for (let y = 0; y < CHUNK; y++) for (let x = 0; x < CHUNK; x++) keys.push(q.columnKey(cx0 + x, cy0 + y, base));
+    const cls = (x: number, y: number) => keys[y * CHUNK + x];
     const bodies: CANNON.Body[] = [];
     const ALL = GROUP_RAGDOLL | GROUP_ITEM | GROUP_CHUNK;
     const box = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, mask = ALL) => {
@@ -362,20 +404,34 @@ export class PhysicsSystem implements BodyHost {
         }
         for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) used[(y + j) * CHUNK + x + i] = 1;
         const X0 = (cx0 + x) * CELL, X1 = (cx0 + x + w) * CELL, Z0 = (cy0 + y) * CELL, Z1 = (cy0 + y + h) * CELL;
-        if (c === 0) box(X0, X1, base - 0.1, WALL_TOP, Z0, Z1);
-        else if (c > 0) box(X0, X1, base, q.cellFloor(cx0 + x, cy0 + y), Z0, Z1);
-        // c === -1: stair ramp cells, solid steps below
+        if (c === 'w') { box(X0, X1, base - 0.1, WALL_TOP, Z0, Z1); continue; }
+        // floors / slabs between storeys (stair ramp columns: only the slabs not under the flight; treads below)
+        for (const s of q.columnSolids(cx0 + x, cy0 + y, base).solids) box(X0, X1, s.y0, s.y1, Z0, Z1);
       }
     }
     const span = CHUNK * CELL;
     // Stair steps (tread tops) whose centre lies in this chunk: ragdolls rest on the treads.
-    for (const r of q.grid.ramps) {
+    for (const {ramp: r, bottom} of q.ramps(base)) {
       for (const p of rampPieces(r)) {
         const sm = (p.s0 + p.s1) / 2, am = (p.a0 + p.a1) / 2;
         const wx = r.axis === 'x' ? sm : am, wz = r.axis === 'x' ? am : sm;
         if (Math.floor(wx / span) !== cx0 / CHUNK || Math.floor(wz / span) !== cy0 / CHUNK) continue;
-        if (r.axis === 'x') box(p.s0, p.s1, base, p.h, p.a0, p.a1);
-        else box(p.a0, p.a1, base, p.h, p.s0, p.s1);
+        if (p.h - bottom < 0.02) continue;
+        if (r.axis === 'x') box(p.s0, p.s1, bottom, p.h, p.a0, p.a1);
+        else box(p.a0, p.a1, bottom, p.h, p.s0, p.s1);
+      }
+    }
+    // Iteration 08: railings (deck edges, stairwells, flight sides) — sloped runs in 0.5 m slices
+    for (const rl of q.rails) {
+      const len = Math.hypot(rl.x1 - rl.x0, rl.z1 - rl.z0);
+      const n = Math.abs(rl.y1 - rl.y0) < 0.01 ? 1 : Math.max(1, Math.round(len / CELL));
+      for (let k = 0; k < n; k++) {
+        const a = k / n, b = (k + 1) / n;
+        const xa = rl.x0 + (rl.x1 - rl.x0) * a, xb = rl.x0 + (rl.x1 - rl.x0) * b, za = rl.z0 + (rl.z1 - rl.z0) * a, zb = rl.z0 + (rl.z1 - rl.z0) * b;
+        const mx = (xa + xb) / 2, mz = (za + zb) / 2;
+        if (Math.floor(mx / span) !== cx0 / CHUNK || Math.floor(mz / span) !== cy0 / CHUNK) continue;
+        const ya = rl.y0 + (rl.y1 - rl.y0) * a, yb = rl.y0 + (rl.y1 - rl.y0) * b;
+        box(Math.min(xa, xb) - RAIL_HALF, Math.max(xa, xb) + RAIL_HALF, Math.min(ya, yb), Math.max(ya, yb) + (rl.h ?? RAIL_H), Math.min(za, zb) - RAIL_HALF, Math.max(za, zb) + RAIL_HALF);
       }
     }
     for (const p of q.props) {

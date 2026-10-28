@@ -42,8 +42,10 @@ describe('doorway clearance (iteration 07, Lane DW)', () => {
         }
         if (d.fare) expect(mine).toHaveLength(((doorAlongX(d) ? d.w : d.h) + 1) / 3);
         else expect(mine).toHaveLength(1);
+        // Iteration 08: openings on the upper / lower levels are measured on their own level grid.
+        const lg = l.levels[d.level ?? l.areas[d.a].level ?? 0].grid;
         for (const v of mine) {
-          const floor = l.grid.floorAt((v.x0 + v.x1) / 2, (v.z0 + v.z1) / 2);
+          const floor = lg.floorAt((v.x0 + v.x1) / 2, (v.z0 + v.z1) / 2);
           expect(v.y1 - v.y0).toBeGreaterThan(1.8); // the player (head 1.74 m) walks through every lane
           expect(v.y1).toBeLessThanOrEqual(floor + DOOR_CLEAR.height + 1e-6);
           expect(v.y1).toBeLessThanOrEqual(d.height + floor - DOOR_CLEAR.lintel + 1e-6);
@@ -83,7 +85,7 @@ describe('doorway clearance (iteration 07, Lane DW)', () => {
   it('the checker catches bars, boards, plates and props across an opening (negative controls)', () => {
     const l = PER_ARCH[0];
     const vols = doorClearVolumes(l);
-    const staff = vols.find(v => v.kind === 'staff')!;
+    const staff = vols.find(v => v.kind === 'staff' && !l.doors[v.door].level)!;
     const cx = (staff.x0 + staff.x1) / 2, cz = (staff.z0 + staff.z1) / 2;
     // A full-length handrail at 0.92 m across the opening (the old passage rail bug).
     const rail = staff.alongX ? {x0: staff.x0 - 2, x1: staff.x1 + 2, y0: 0.895, y1: 0.945, z0: cz - 0.025, z1: cz + 0.025} : {x0: cx - 0.025, x1: cx + 0.025, y0: 0.895, y1: 0.945, z0: staff.z0 - 2, z1: staff.z1 + 2};
@@ -153,7 +155,9 @@ describe('doorway clearance (iteration 07, Lane DW)', () => {
         if (Math.abs((side === 'N' || side === 'S' ? s.z : s.x) - plane) > 1e-6) continue; // not a wall plate of its area (grille notice, trench wall, ladder plate)
         const {w, h} = signDims(s);
         const t = side === 'N' || side === 'S' ? s.x : s.z;
-        expect(wallBacked(l.grid, a, side, t - w / 2, t + w / 2, s.y - h / 2), `${l.seed} ${s.kind} "${s.text}" at ${s.x.toFixed(2)},${s.z.toFixed(2)}`).toBe(true);
+        // Iteration 08: plates on the upper / lower levels are backed by their own level's walls (never a light well).
+        const lg = l.levels[a.level ?? 0].grid;
+        expect(wallBacked(lg, a, side, t - w / 2, t + w / 2, s.y - h / 2), `${l.seed} ${s.kind} "${s.text}" at ${s.x.toFixed(2)},${s.z.toFixed(2)} level ${a.level ?? 0}`).toBe(true);
         checked++;
       }
     }
@@ -285,11 +289,11 @@ describe('doorway clearance — built world meshes', () => {
         const world = buildWorld(l, mats, p7BoxModels());
         const vols = doorClearVolumes(l);
         for (const s of meshIntrusions(world.group, vols)) bad.push(`${l.archetype}: ${s}`);
-        // Negative control: a 4 m steel bar at 0.92 m across a staff doorway is reported.
+        // Negative control: a 4 m steel bar at 0.92 m (above the opening's floor) across a staff doorway is reported.
         const v = vols.find(q => q.kind === 'staff')!;
         const bar = new THREE.Mesh(new THREE.BoxGeometry(v.alongX ? 4 : 0.05, 0.05, v.alongX ? 0.05 : 4));
         bar.name = 'probe-bar';
-        bar.position.set((v.x0 + v.x1) / 2, 0.92, (v.z0 + v.z1) / 2);
+        bar.position.set((v.x0 + v.x1) / 2, v.y0 - DOOR_CLEAR.floor + 0.92, (v.z0 + v.z1) / 2);
         world.group.add(bar);
         expect(meshIntrusions(world.group, vols.filter(q => q.door === v.door))).toEqual([`probe-bar in door ${v.door} (staff)`]);
       }

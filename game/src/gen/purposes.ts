@@ -644,11 +644,13 @@ export interface RoomSlot { id: number; type: RoomType; kind: AreaKind; wing: Wi
 /**
  * Picks a purpose for every back-of-house slot: required purposes first (best-fitting slot),
  * then weighted picks with a strong repeat penalty so a level never feels like the same room
- * twice; respects slot types, size minimums, wing preferences and per-level caps.
+ * twice; respects slot types, size minimums, wing preferences and per-level caps. `preset`:
+ * purposes already fixed on other areas (counted as used).
  */
-export function assignRoomPurposes(slots: readonly RoomSlot[], rnd: () => number): Map<number, string> {
+export function assignRoomPurposes(slots: readonly RoomSlot[], rnd: () => number, preset?: ReadonlyMap<string, number>): Map<number, string> {
   const out = new Map<number, string>();
-  const used = new Map<string, number>();
+  // Iteration 08: purposes the generator already preset elsewhere count toward caps / required purposes.
+  const used = new Map<string, number>(preset ?? []);
   const list = Object.values(ROOM_PURPOSES);
   const fits = (p: RoomPurpose, s: RoomSlot) => {
     if (!p.slots.includes(s.type) || !p.kinds.includes(s.kind)) return false;

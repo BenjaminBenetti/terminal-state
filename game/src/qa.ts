@@ -10,9 +10,11 @@ import {killImpulseStrength} from './physics/world';
 import {itemIconStats, itemIconUrl} from './ui/itemIcons';
 import {traversalSummary} from './gen/traversal';
 import {doorClearVolumes, doorwaySummary} from './gen/doorways';
+import {compositionOf, compositionSummary} from './gen/compose';
 import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
 import {creatureQaApi} from './ai/creatureQa';
+import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
 
 export function installQaHooks(game: Game): void {
   const api = {
@@ -24,6 +26,8 @@ export function installQaHooks(game: Game): void {
       return {
         state: game.state, seed: game.seed, name: game.layout?.name, frames: game.frames,
         player: {x: p.x, z: p.z, yaw: p.yaw, pitch: p.pitch, hp: p.hp, stamina: p.stamina, alive: p.alive, speed: p.speed, sprinting: p.sprinting, crouched: p.crouched, standBlocked: p.standBlocked, grounded: p.grounded, y: p.y, vy: p.vy, eye: p.eye},
+        // Iteration 08 (Lane B): storey of the player / zombies (support band at the feet).
+        level: levelQa(),
         selected: game.inv.selected,
         held: st ? {itemId: st.itemId, mag: st.mag ?? null, count: st.count} : null,
         weapon: {id: game.weapon.def?.id ?? null, phase: game.weapon.phase},
@@ -42,6 +46,7 @@ export function installQaHooks(game: Game): void {
         physics: {...game.physics.stats(), ragdolled: game.zombies.filter(z => z.ragdolled).length, ragdolls: game.physics.debugRagdolls(), casings: game.physics.casings.list().slice(-8)},
         stats: game.stats,
         render: {...game.renderer.info.render},
+        softwareGl: game.softwareGl, // iteration 08: software rasterizer detection (anisotropy cap)
         memory: {...game.renderer.info.memory},
         world: game.world?.stats, genMs: game.genMs,
         // Lighting debug: current area profile, hemi (ambient) intensity, pool and fixture states.
@@ -69,27 +74,48 @@ export function installQaHooks(game: Game): void {
     },
     /** Point the view at a world position (stands in for mouse aiming). */
     lookAt: (x: number, y: number, z: number) => {
+      // Iteration 08 (primary): eye from the CURRENT feet height (player.eye only refreshes in update(), so right after a
+      // QA reposition to another storey it still held the old height and the aim pitch was wrong).
+      game.player.eye = game.player.stanceEye + game.player.y - game.player.landDip;
       const eye = new THREE.Vector3(game.player.x, game.player.eye, game.player.z);
       const dx = x - eye.x, dy = y - eye.y, dz = z - eye.z;
       game.player.yaw = Math.atan2(-dx, -dz);
       game.player.pitch = Math.atan2(dy, Math.hypot(dx, dz));
     },
-    /** QA-only: move the player to a walkable point (used for room screenshots, not the playtest flow). */
-    teleport: (x: number, z: number, yaw?: number) => {
-      const p = game.snap(x, z);
+    /** QA-only: move the player to a walkable point (used for room screenshots, not the playtest flow). Iteration 08: `level` = on that storey. */
+    teleport: (x: number, z: number, yaw?: number, level = 0) => {
+      const p = game.snap(x, z, level);
       if (!p) return false;
       game.player.x = p[0]; game.player.z = p[1];
-      // Lane T: land on the local floor height (stairs / underpass), standing.
-      game.player.y = game.layout.grid.floorAt(p[0], p[1]); game.player.vy = 0; game.player.grounded = true; game.player.climb = null;
+      // Lane T: land on the local floor height (stairs / underpass), standing; Lane B: of that level.
+      game.player.y = (game.levels && level > 0 ? game.levels.grid(level) : game.layout.grid).floorAt(p[0], p[1]); game.player.vy = 0; game.player.grounded = true; game.player.climb = null;
       if (yaw !== undefined) game.player.yaw = yaw;
       return true;
     },
-    pathTo: (x: number, z: number) => game.pathfinder.find(game.player.x, game.player.z, x, z, 0.3, 60000),
+    /** Iteration 08: `y` = target feet height (its storey); waypoints then carry [x, z, link, y]. */
+    pathTo: (x: number, z: number, y?: number) => game.pathfinder.find(game.player.x, game.player.z, x, z, 0.3, 60000, {ay: game.player.y, by: y ?? game.player.y}),
+    // --- Iteration 08 (Lane B): stacked levels --------------------------------------------------
+    /** Levels summary (per level open cells / floor / ceiling range, level links, railings, unrailed drops) + who is where. */
+    levels: () => ({...game.levels.summary(), unrailedDrops: game.levels.unrailedDrops().length, ...levelQa()}),
+    /**
+     * QA-only (setup, not traversal proof): stand at the bottom ('bottom') or top ('top') stand point of
+     * level link `i` (default: the nearest), facing along the run toward its other end.
+     */
+    goLevelStairs: (i?: number, end: 'bottom' | 'top' = 'bottom') => {
+      const links = game.layout.levelLinks ?? [];
+      const p = game.player;
+      const k = i !== undefined ? links[i] : [...links].sort((a, b) => Math.hypot(a[end].x - p.x, a[end].z - p.z) - Math.hypot(b[end].x - p.x, b[end].z - p.z))[0];
+      if (!k) return null;
+      const s = k[end], o = end === 'bottom' ? k.top : k.bottom;
+      p.x = s.x; p.z = s.z; p.y = game.levels.supportAt(s.x, s.z, s.y + 0.05)?.floor ?? s.y; p.vy = 0; p.grounded = true; p.climb = null;
+      p.yaw = Math.atan2(-(o.x - s.x), -(o.z - s.z)); p.pitch = end === 'bottom' ? 0.15 : -0.25;
+      return {id: k.id, kind: k.kind, lower: k.lower, upper: k.upper, end, at: {x: p.x, y: p.y, z: p.z}, level: game.levels.levelAt(p.x, p.z, p.y + 0.05), toward: o};
+    },
     // --- Iteration 05 (Lane T): vertical traversal ------------------------------------------
     /** Connectors (stair flights, rescue ladders, underpasses) + the player's height/climb state. */
     traversal: () => ({
       ...traversalSummary(game.layout),
-      player: {x: game.player.x, y: game.player.y, z: game.player.z, grounded: game.player.grounded, climbing: game.player.climbing, floor: game.layout.grid.floorAt(game.player.x, game.player.z)},
+      player: {x: game.player.x, y: game.player.y, z: game.player.z, grounded: game.player.grounded, climbing: game.player.climbing, floor: game.levels.floorAt(game.player.x, game.player.z, game.player.y + 0.05)},
       ladderPrompt: game.ladderAim ? {ladder: game.ladderAim.ladder.id, up: game.ladderAim.up} : null,
       zombies: game.zombies.map(z => ({x: z.brain.x, y: z.brain.y, z: z.brain.z, state: z.brain.state})),
     }),
@@ -102,7 +128,7 @@ export function installQaHooks(game: Game): void {
       const pick = i !== undefined ? st[i] : [...st].filter(f => f.h0 === 0).sort((a, b) => Math.hypot(a.top.x - game.player.x, a.top.z - game.player.z) - Math.hypot(b.top.x - game.player.x, b.top.z - game.player.z))[0];
       if (!pick) return null;
       const p = game.player;
-      p.x = pick.top.x; p.z = pick.top.z; p.y = game.layout.grid.floorAt(p.x, p.z); p.vy = 0; p.grounded = true; p.climb = null;
+      p.x = pick.top.x; p.z = pick.top.z; p.y = game.levels.supportAt(p.x, p.z, pick.top.y + 0.05)?.floor ?? pick.top.y; p.vy = 0; p.grounded = true; p.climb = null; // Lane B: the flight's top storey
       const dx = pick.bottom.x - pick.top.x, dz = pick.bottom.z - pick.top.z;
       p.yaw = Math.atan2(-dx, -dz); p.pitch = -0.25;
       return traversalSummary(game.layout).stairs[pick.id];
@@ -126,6 +152,22 @@ export function installQaHooks(game: Game): void {
     // --- Iteration 07 (Lane DW): doorway clearance --------------------------------------------
     /** Walk-through openings (clear lanes by kind, sealed storefronts) and decor intruding on them (expect []). */
     doorways: () => doorwaySummary(game.layout),
+    // --- Iteration 08 (Lane P): composed dressing (gen/compose.ts) ------------------------------
+    /** Per-area composition: zone, lanes / plazas, coverage vs cap, clusters with their members; landmark views; counts. */
+    composition: () => compositionSummary(game.layout),
+    /**
+     * QA-only (screenshot setup, not traversal proof): stand just inside landmark view `i`'s arrival (default 0) on its level,
+     * looking at the landmark vignette. Returns the view record and the stand point.
+     */
+    goLandmark: (i = 0) => {
+      const v = compositionOf(game.layout)?.landmarks[i];
+      if (!v) return null;
+      const dx = v.to.x - v.from.x, dz = v.to.z - v.from.z, d = Math.hypot(dx, dz) || 1;
+      if (!api.teleport(v.from.x + dx / d * 1.2, v.from.z + dz / d * 1.2, undefined, v.level)) return null;
+      const p = game.player;
+      api.lookAt(v.to.x, p.y + 1.2, v.to.z);
+      return {...v, stand: {x: p.x, y: p.y, z: p.z}};
+    },
     /**
      * QA-only: stand 2.2 m in front of clear lane `i` (index into doorways().lanes; default: the
      * nearest lane of `kind`, default 'staff'), facing through the opening at eye level.
@@ -273,6 +315,33 @@ export function installQaHooks(game: Game): void {
     },
     /** Physics: ragdoll/casing counts, cannon body count and step cost (ms). */
     physics: () => ({...game.physics.stats(), ragdolls: game.physics.debugRagdolls(), casings: game.physics.casings.list()}),
+    // --- Iteration 08 (Lane S): real 3D shelf stock (filler) --------------------------------------
+    /** Stock per station: stocked holders, filler pieces, active / resting / frozen bodies, draw calls (total / in view / moving), tris, MB. */
+    stock: () => {
+      const s = game.stock.stats();
+      const byLevel: Record<number, {holders: number; pieces: number}> = {};
+      for (const h of game.stock.holders) { const e = (byLevel[h.level] ??= {holders: 0, pieces: 0}); e.holders++; e.pieces += h.count; }
+      return {...s, byLevel, draw: game.stock.drawCallsInView(game.camera), pierced: game.stock.pierced,
+        shops: s.shops.map(x => ({...x, use: game.layout.storefronts[x.shop]?.use ?? null, name: game.layout.storefronts[x.shop]?.name ?? null}))};
+    },
+    /**
+     * QA-only (setup, not shot proof): stand ~2.5 m in front of a stocked shelving unit (storefront first; optionally on `level`),
+     * aiming at its fullest middle board. The shot itself must be an ordinary shotgun mouse click.
+     */
+    goStockedShelf: (level?: number) => {
+      const L = game.levels;
+      // stand 2.5 m in front, else 2.0 / 1.6 / 1.3 m (narrow lower-level rooms); sparse back-room boards accepted for a level
+      const t = game.stock.shelfTarget({level, free: (s, aim) => qaStandFree(L, s, aim)});
+      if (!t) return null;
+      const p = game.player;
+      p.x = t.stand.x; p.z = t.stand.z; p.y = L.supportIn(t.stand.x, t.stand.z, t.stand.y + 0.3)?.floor ?? t.stand.y; p.vy = 0; p.grounded = true; p.climb = null;
+      api.lookAt(t.aim.x, t.aim.y, t.aim.z);
+      const h = t.holder;
+      return {holder: h.index, kind: h.kind, category: h.category, level: h.level, shop: h.shop ?? null, tier: t.tier, piecesOnBoard: t.pieces, pieces: h.count,
+        stand: {x: p.x, y: p.y, z: p.z}, aim: {x: t.aim.x, y: t.aim.y, z: t.aim.z}, standOff: t.dist, dist: Math.hypot(t.aim.x - p.x, t.aim.z - p.z)};
+    },
+    /** Filler displaced since load (> 2 cm), max displacement (m), any below their floor / outside the station, + physics counters. */
+    stockMoved: () => ({...game.stock.filler.displacement(game.physics.statics), physics: game.stock.filler.stats()}),
     /**
      * Iteration 04: a full mouse drag through the real pointer listeners (synthetic PointerEvents).
      * Specs: 'hotbar:N' | 'pack:N' (panel slots), 'hud:N' (HUD quick slot), 'panel', 'out' (floor).
@@ -301,6 +370,33 @@ export function installQaHooks(game: Game): void {
       })));
       return c.toDataURL('image/png');
     },
+    // --- Iteration 08 (Lane I): openable holders (lids / doors / drawers) -------------------------------------
+    /** Per-kind openable counts (per level), parts, open parts, cramped openings, lots inside, own-mesh takeovers, model sources. */
+    openables: () => game.containers?.openablesQa() ?? null,
+    /** One openable holder (by holder serial): per-part open / t / opening amount / lots inside / aim + stand points. */
+    openableState: (serial: number) => game.containers?.openableState(serial) ?? null,
+    /**
+     * QA-only (setup, not interaction proof): stand in front of an openable (optionally of `kind`, on `level`, nearest first) and
+     * aim at its part `part` (default 0). [E] itself must be an ordinary key press. Returns its openableState().
+     */
+    goOpenable: (kind?: string, level?: number, part = 0) => {
+      const cm = game.containers, L = game.levels, p = game.player;
+      if (!cm) return null;
+      const list = cm.openList.filter(h => (!kind || h.kind === kind) && (level === undefined || (h.prop.level ?? 0) === level) && h.open && !h.open.loose && part < h.open.parts.length)
+        .sort((a, b) => Math.hypot(a.prop.x - p.x, a.prop.z - p.z) - Math.hypot(b.prop.x - p.x, b.prop.z - p.z));
+      for (const h of list) {
+        const st = cm.openableState(h.serial) as {parts: {aim: {x: number; y: number; z: number}; stand: {x: number; z: number}}[]} | null;
+        const t = st?.parts[part];
+        if (!t) continue;
+        const lv = h.prop.level ?? 0;
+        if (!api.teleport(t.stand.x, t.stand.z, undefined, lv)) continue;
+        if (Math.hypot(p.x - t.stand.x, p.z - t.stand.z) > 0.4) continue;
+        if (L && !L.lineOfSight({x: p.x, y: p.y + 1.6, z: p.z}, t.aim, {slack: 0.3})) continue;
+        api.lookAt(t.aim.x, t.aim.y, t.aim.z);
+        return cm.openableState(h.serial);
+      }
+      return null;
+    },
     /**
      * DEBUG ONLY (exception to the read-only rule above, for the ragdoll browser check): kill the
      * nearest living zombie as if shot from the player, with the rifle/shotgun kill impulse.
@@ -317,4 +413,16 @@ export function installQaHooks(game: Game): void {
     },
   };
   (window as unknown as {__LL: typeof api}).__LL = api;
+
+  /** Iteration 08 (Lane B): storey + support of the player and every zombie. */
+  function levelQa() {
+    const L = game.levels, p = game.player;
+    if (!L) return null;
+    const sup = (x: number, y: number, z: number) => { const s = L.supportAt(x, z, y + 0.05); return s ? {level: s.level, floor: +s.floor.toFixed(3), ceil: +s.ceil.toFixed(3), area: s.area} : null; };
+    return {
+      count: L.count,
+      player: {y: +p.y.toFixed(3), support: sup(p.x, p.y, p.z), headroom: +(L.ceilingOver(p.x, p.z, p.radius, p.y) - p.y).toFixed(3)},
+      zombies: game.zombies.map(z => ({y: +z.brain.y.toFixed(3), level: L.levelAt(z.brain.x, z.brain.z, z.brain.y + 0.05), state: z.brain.state})),
+    };
+  }
 }

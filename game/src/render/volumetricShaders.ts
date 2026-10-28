@@ -6,7 +6,7 @@
 // divergent flow control: HLSL/ANGLE would otherwise force-unroll or reject it; none of these textures
 // has mipmaps, so the result is identical).
 
-import {FIELD_EMAX} from '../world/lightField';
+import {FIELD_EMAX, fieldHeaderGLSL, fieldPickGLSL} from '../world/lightField';
 import {BILATERAL_K, DENSITY_MAP_RANGE, NOISE_OCTAVE2} from './atmosphere';
 
 /** Marker in every volumetric program (shader-error fallback + tests). */
@@ -64,7 +64,8 @@ uniform float uNoiseScale;
 uniform float uNoiseAmount;
 uniform vec3 uWind;
 uniform sampler3D tNoise;
-uniform sampler2D tDensityMap;
+uniform highp sampler2DArray tDensityMap;
+uniform float uMapSlots;
 uniform vec4 uMapXform;
 uniform vec2 uMapFloor;
 uniform vec3 uPhase;
@@ -107,8 +108,21 @@ float vfDistAtt( float d, float cutoff, float decay ) {
 	return a;
 }
 // sigma_s: per-area multiplier and local floor (density map), height above that floor, drifting noise.
-float vfDensity( vec3 p ) {
-	vec2 m = textureLod( tDensityMap, ( p.xz - uMapXform.xy ) * uMapXform.zw, 0.0 ).rg;
+// Level slot holding p (lower crossing / main level / upper deck in one column), from the light field's
+// packed band info (one fetch); slot 0 when no field is bound. Shared by the density and field lookups.
+int vfSlot( vec3 p ) {
+	ivec3 size = textureSize( tField, 0 );
+	vec2 uv = ( p.xz - uFieldMin.xz ) / max( uFieldMax.xz - uFieldMin.xz, vec2( 1e-3 ) );
+	ivec2 ci = clamp( ivec2( floor( uv * vec2( size.xy ) ) ), ivec2( 0 ), size.xy - ivec2( 1 ) );
+	float yr = uFieldMax.y - uFieldMin.y;
+	${fieldPickGLSL('tField', 'ci', 'size', 'p.y', 'uFieldMin.y', 'yr')}
+	int vfS = 0;
+	if ( uFieldGain > 0.0 ) vfS = lfSlot;
+	return vfS;
+}
+float vfDensity( vec3 p, int slot ) {
+	vec2 muv = ( p.xz - uMapXform.xy ) * uMapXform.zw;
+	vec4 m = textureLod( tDensityMap, vec3( muv, min( float( slot ), uMapSlots - 1.0 ) ), 0.0 );
 	float floorY = uMapFloor.x + m.g * uMapFloor.y;
 	float hf = clamp( exp( - uHeightFalloff * ( p.y - floorY - uRefHeight ) ), 0.2, 3.0 );
 	vec3 q = p * uNoiseScale + uWind * uTime;
@@ -125,22 +139,22 @@ float vfShadow( vec3 p ) {
 	if ( c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z < 0.0 || c.z > 1.0 ) return 1.0;
 	return textureLod( tShadow, vec3( c.xy, c.z + uShadowBias ), 0.0 );
 }
-// Baked fixture light field (iteration 05 encoding, world/lightField.ts LIGHT_FIELD_PARS) at a point in
-// the air: isotropic part, directional colour and direction toward the dominant light.
-void vfField( vec3 p, vec3 dims, out vec3 amb, out vec3 dcol, out vec3 ldir ) {
-	float layers = ( dims.z - 1.0 ) * 0.5;
+// Baked fixture light field (world/lightField.ts encoding: per-column level slots, see LIGHT_FIELD_PARS)
+// at a point in the air: isotropic part, directional colour and direction toward the dominant light.
+void vfField( vec3 p, vec3 dims, int lfSlot, out vec3 amb, out vec3 dcol, out vec3 ldir ) {
+	ivec3 size = ivec3( dims );
 	vec2 uv = ( p.xz - uFieldMin.xz ) / max( uFieldMax.xz - uFieldMin.xz, vec2( 1e-3 ) );
-	vec4 hc = textureLod( tField, vec3( uv, 0.5 / dims.z ), 0.0 );
+	ivec2 ci = clamp( ivec2( floor( uv * dims.xy ) ), ivec2( 0 ), size.xy - ivec2( 1 ) );
 	float yr = uFieldMax.y - uFieldMin.y;
-	float fl = uFieldMin.y + hc.r * yr;
-	float ce = uFieldMin.y + hc.g * yr;
-	float rel = clamp( ( p.y - fl ) / max( ce - fl, 0.3 ), 0.0, 1.0 ) * ( layers - 1.0 );
+	${fieldHeaderGLSL('tField', 'ci', 'uFieldMin.y', 'yr')}
+	vec4 hc = textureLod( tField, vec3( uv, ( lfBase + 0.5 ) / dims.z ), 0.0 );
+	float rel = clamp( ( p.y - lfFl ) / max( lfCe - lfFl, 0.3 ), 0.0, 1.0 ) * lfTop;
 	float k0 = floor( rel );
-	float k1 = min( k0 + 1.0, layers - 1.0 );
+	float k1 = min( k0 + 1.0, lfTop );
 	float wk = rel - k0;
-	vec4 a0 = textureLod( tField, vec3( uv, ( 1.5 + 2.0 * k0 ) / dims.z ), 0.0 );
-	vec4 a1 = textureLod( tField, vec3( uv, ( 1.5 + 2.0 * k1 ) / dims.z ), 0.0 );
-	vec4 b = textureLod( tField, vec3( uv, ( 2.5 + 2.0 * ( wk < 0.5 ? k0 : k1 ) ) / dims.z ), 0.0 );
+	vec4 a0 = textureLod( tField, vec3( uv, ( lfBase + 1.5 + 2.0 * k0 ) / dims.z ), 0.0 );
+	vec4 a1 = textureLod( tField, vec3( uv, ( lfBase + 1.5 + 2.0 * k1 ) / dims.z ), 0.0 );
+	vec4 b = textureLod( tField, vec3( uv, ( lfBase + 2.5 + 2.0 * ( wk < 0.5 ? k0 : k1 ) ) / dims.z ), 0.0 );
 	vec3 T = mix( a0.rgb * a0.rgb, a1.rgb * a1.rgb, wk ) * VF_FIELD_EMAX;
 	float rho = mix( a0.a, a1.a, wk );
 	float m = max( 0.0, 1.0 - hc.b * ( 1.0 - uFieldLevels.x ) - hc.a * ( 1.0 - uFieldLevels.y ) - b.a * ( 1.0 - uFieldLevels.z ) );
@@ -186,7 +200,8 @@ void main() {
 		float t = dist * u * u;
 		float w = 2.0 * dist * u / float( VF_STEPS );
 		vec3 p = uCamPos + dir * t;
-		float sigma = vfDensity( p );
+		int slot = vfSlot( p );
+		float sigma = vfDensity( p, slot );
 		if ( sigma <= 0.0 ) continue;
 		vec3 L = vec3( 0.0 );
 		if ( flashOn ) {
@@ -203,7 +218,7 @@ void main() {
 			vec3 amb;
 			vec3 dcol;
 			vec3 ldir;
-			vfField( p, fieldDims, amb, dcol, ldir );
+			vfField( p, fieldDims, slot, amb, dcol, ldir );
 			L += uFieldGain * ( amb * ( 1.0 / VF_PI ) + dcol * vfPhase( dot( ldir, dir ) ) );
 		}
 		if ( muzzleOn ) {

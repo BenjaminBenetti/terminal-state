@@ -15,6 +15,7 @@ import {ITEMS} from '../src/items/items';
 import {isP7Kind, p7KindsFor} from '../src/gen/props07';
 import {createHolderState, isContainerKind, isLootHolderKind, rollLootItems, type HolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
+import {areaLevel, levelGrid} from '../src/gen/placeKit';
 
 const SEEDS = Array.from({length: 14}, (_, i) => (i * 2654435761 + 777) >>> 0);
 const cache = new Map<number, StationLayout>();
@@ -239,9 +240,11 @@ describe('purposes in generated levels', () => {
 
   it('walkways: islands keep >= 0.9 m clear all round, holder fronts and doors stay open', () => {
     for (const l of SAMPLE()) {
-      const g = l.grid;
+      // Iteration 08: every check runs on the level grid the prop / door lies on.
+      let g = l.grid;
       const free = (x: number, z: number) => { const [cx, cy] = g.cellOf(x, z); return g.walkable(cx, cy); };
       for (const p of l.props) {
+        g = levelGrid(l, p.level ?? 0);
         const a: Area = l.areas[p.area];
         const island = p.kind === 'techDisplay' || (p.kind === 'table' && !a.publicSpace) || (p.kind === 'bench' && a.purpose === 'locker-room' && !touchesWall(l, p));
         if (island) {
@@ -255,7 +258,7 @@ describe('purposes in generated levels', () => {
             }
           }
         }
-        if (isPurposePropKind(p.kind) && PURPOSE_HOLDER_KINDS.includes(p.kind as never) && p.y === 0) {
+        if (isPurposePropKind(p.kind) && PURPOSE_HOLDER_KINDS.includes(p.kind as never) && p.host === undefined && !p.mounted && Math.abs(p.y - g.floorAt(p.x, p.z)) < 0.01) {
           // The first grid cell past a holder's front face is open floor (you can reach it).
           const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot));
           const d = (fx ? p.hx : p.hz) + 0.55;
@@ -265,6 +268,7 @@ describe('purposes in generated levels', () => {
       // Door cells and the cells just inside each side stay walkable.
       for (const d of l.doors) {
         if (d.fare || d.shopfront) continue;
+        g = levelGrid(l, areaLevel(l.areas[d.a]));
         const horiz = d.h === 1;
         for (let k = 0; k < (horiz ? d.w : d.h); k++) {
           const x = horiz ? d.x + k : d.x, y = horiz ? d.y : d.y + k;
@@ -316,7 +320,7 @@ describe('purposes in generated levels', () => {
 });
 
 function touchesWall(l: StationLayout, p: PropPlacement): boolean {
-  const g = l.grid;
+  const g = levelGrid(l, p.level ?? 0);
   for (const [dx, dz] of [[p.hx + 0.3, 0], [-p.hx - 0.3, 0], [0, p.hz + 0.3], [0, -p.hz - 0.3]]) {
     const [cx, cy] = g.cellOf(p.x + dx, p.z + dz);
     if (g.cells[g.idx(cx, cy)] !== FLOOR) return true;

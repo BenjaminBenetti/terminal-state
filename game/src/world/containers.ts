@@ -15,6 +15,13 @@
 // boards + posts at the same tier heights. Crates: triangles above a height threshold become the
 // lid, hinged at the back-top edge. This partition is APPROXIMATE (the AI reconstruction has no
 // real door parts). Collision is unchanged: props stay solid AABBs; open doors are visual only.
+//
+// Iteration 08 (Lane I): OPENABLE holders (world/openables.ts, specs world/openablesSpec.ts) — trash cans, wheelie bins,
+// newspaper boxes, staff lockers, filing cabinets, safes, chest freezers, glass-door coolers, wall first-aid / fire /
+// defibrillator cabinets, crash-cart / tool-chest / desk drawers — open per COMPARTMENT (Holder.open, HolderState.parts): [E] on
+// a lid / door / drawer opens it, then takes what lies inside it, then closes it. Contents are the same finite lots (open /
+// close never re-rolls); drawers carry their lots; glass doors show theirs while closed. Closed openables are instanced
+// (no per-holder draw calls); own meshes exist only while aimed at / moving / open / damaged / knocked loose.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -22,15 +29,16 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import * as propsModule from '../gen/props';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {cutSurfaces} from '../gen/props07';
-import {FLOOR, type Grid} from '../gen/grid';
+import {FLOOR, Grid} from '../gen/grid';
+import type {Levels} from '../gen/levels';
 import type {StationLayout} from '../gen/station';
 import {rayAabb} from '../combat/hitscan';
 import type {Inventory} from '../items/inventory';
 import {itemDims} from '../items/items';
 import {
   HOLDER_LABEL, createHolderState, holderPrompt, isContainerKind, isLootHolderKind, lotEntries, lotPrompt,
-  nextHolderAction, openMessage, remainingCount, takeAll, takeLot, transferMessage,
-  type ContainerKind, type HolderKind, type HolderState, type Lot, type SurfaceKind, type TransferResult,
+  nextHolderAction, openMessage, partAction, partOpenMessage, partPrompt, remainingCount, takeAll, takeLot, takeLots, transferMessage,
+  type HolderKind, type HolderState, type Lot, type PartInfo, type SurfaceKind, type TransferResult,
 } from '../items/loot';
 import {
   CABINET_SPECS, DEFAULT_SHELF, cabinetInsert, cabinetInterior, holderSurfaces, placementBox,
@@ -42,6 +50,9 @@ import {LotDisplay, type LotInstance} from './lootDisplay';
 import {cloneWithShaderHooks} from '../render/shaderHooks';
 import {itemModelSources} from './pickups';
 import {holderBoxes} from '../physics/holderShapes';
+import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, type Plane, type Soup} from './meshSplit';
+import {FitIndex, OpenableSet, type OpenRT} from './openables';
+import {openableActive} from './openablesSpec';
 
 /**
  * Lid split for the generated crate model (`models.crate`, assets/models/crate.glb): triangles
@@ -106,41 +117,6 @@ function surfaceOptions(): SurfaceOptions {
   };
 }
 
-/** Average base colour of a material (texture mean × colour factor, linear). Null if unknown. */
-function averageColor(mat: THREE.Material | undefined): THREE.Color | null {
-  const m = mat as THREE.MeshStandardMaterial | undefined;
-  if (!m || !m.isMeshStandardMaterial) return null;
-  const base = m.color.clone();
-  const img = m.map?.image as (CanvasImageSource & {width?: number}) | undefined;
-  if (!img || !img.width || typeof document === 'undefined') return base;
-  try {
-    const c = document.createElement('canvas');
-    c.width = c.height = 24;
-    const ctx = c.getContext('2d', {willReadFrequently: true})!;
-    ctx.drawImage(img, 0, 0, 24, 24);
-    const px = ctx.getImageData(0, 0, 24, 24).data;
-    let r = 0, g = 0, b = 0, n = 0;
-    for (let i = 0; i < px.length; i += 4) {
-      // Skip transparent and near-black texels (unused atlas background).
-      if (px[i + 3] < 128 || px[i] + px[i + 1] + px[i + 2] < 15) continue;
-      r += px[i]; g += px[i + 1]; b += px[i + 2]; n++;
-    }
-    if (!n) return base;
-    return new THREE.Color().setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace).multiply(base);
-  } catch {
-    return base;
-  }
-}
-
-function firstMaterial(gltf: GLTF | undefined): THREE.Material | undefined {
-  let out: THREE.Material | undefined;
-  gltf?.scene.traverse(o => {
-    const mesh = o as THREE.Mesh;
-    if (!out && mesh.isMesh) out = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-  });
-  return out;
-}
-
 // Iteration 04 (Lane C): interiors/door backs/shelving get the shared worn painted-sheet texture (mesh UVs; doors move).
 const std = (color: THREE.Color | number, roughness: number, metalness: number, side: THREE.Side = THREE.FrontSide) =>
   new THREE.MeshStandardMaterial({color, roughness, metalness, side, map: surface('paintedPanel').map});
@@ -169,6 +145,9 @@ interface ContainerModel {
   /** Owned materials (disposed with the cache). */
   owned: THREE.Material[];
 }
+
+/** The iteration-02 door / lid containers (the iteration-08 openables are built by world/openables.ts). */
+type LegacyKind = 'cabinetTall' | 'cabinetLow' | 'crate';
 
 /** A loot holder in the world (cabinet, cupboard, crate, shelf, kiosk, vending machine, table). */
 export interface Holder {
@@ -205,153 +184,35 @@ export interface Holder {
    * they fell, visible and takeable; it can no longer be closed.
    */
   broken?: boolean;
+  /** Iteration 08 (Lane I): openable compartments (lids / doors / drawers / panes), world/openables.ts. */
+  open?: OpenRT;
 }
 /** Back-compat name (iteration 02). */
 export type Container = Holder;
 
 export interface ContainerEvent {
-  /** open: doors/lid start opening or a vending machine gives way. close. search: prying started. take. */
-  type: 'open' | 'close' | 'search' | 'take';
+  /**
+   * open: doors/lid start opening or a vending machine gives way. close. search: prying started. take.
+   * spill (iteration 08): a trash can knocked loose by a shot — `spilled` are its finite lots (lifted off, world matrices) for
+   * the caller to turn into loose pickups (same item id / count; nothing is created or destroyed).
+   */
+  type: 'open' | 'close' | 'search' | 'take' | 'spill';
   container: Holder;
   result?: TransferResult;
   message?: string;
   warn?: boolean;
+  /** Iteration 08 (Lane I): the compartment acted on, its door-sound key (an existing holder key: audio/sfx.ts) and rummage cue. */
+  part?: number;
+  sound?: string;
+  rummage?: boolean;
+  spilled?: {lot: Lot; matrix: THREE.Matrix4}[];
 }
 
-/** What [E] would act on: an aimed item (`lot`) or the holder body. */
-export interface ContainerTarget { container: Holder; t: number; lot: Lot | null }
+/** What [E] would act on: an aimed item (`lot`), the holder body, or (iteration 08) one compartment `part` of an openable. */
+export interface ContainerTarget { container: Holder; t: number; lot: Lot | null; part?: number | null }
 
 // ---------------------------------------------------------------------------------------
-// Geometry helpers
-
-/** Triangle soup: 3 vertices per triangle, `stride` floats per vertex laid out as `attrs`. */
-interface Soup { attrs: {name: string; size: number; offset: number}[]; stride: number; data: Float32Array }
-
-/** Copies a mesh geometry into a soup transformed by `m` (reads interleaved GLB data too). */
-function toSoup(src: THREE.BufferGeometry, m: THREE.Matrix4): Soup {
-  const nm = new THREE.Matrix3().getNormalMatrix(m);
-  const attrs: Soup['attrs'] = [];
-  let stride = 0;
-  for (const [name, a] of Object.entries(src.attributes)) { attrs.push({name, size: a.itemSize, offset: stride}); stride += a.itemSize; }
-  const n = src.index ? src.index.count : src.attributes.position.count;
-  const flip = m.determinant() < 0;
-  const data = new Float32Array(n * stride);
-  const v = new THREE.Vector3();
-  for (let i = 0; i < n; i++) {
-    const corner = flip && i % 3 ? (i % 3 === 1 ? i + 1 : i - 1) : i; // keep winding if mirrored
-    const vi = src.index ? src.index.getX(corner) : corner;
-    const o = i * stride;
-    for (const at of attrs) {
-      const a = src.attributes[at.name];
-      for (let c = 0; c < at.size; c++) data[o + at.offset + c] = a.getComponent(vi, c);
-      if (at.name === 'position') v.fromArray(data, o + at.offset).applyMatrix4(m).toArray(data, o + at.offset);
-      else if (at.name === 'normal') v.fromArray(data, o + at.offset).applyMatrix3(nm).normalize().toArray(data, o + at.offset);
-      else if (at.name === 'tangent') v.fromArray(data, o + at.offset).transformDirection(m).toArray(data, o + at.offset);
-    }
-  }
-  return {attrs, stride, data};
-}
-
-interface Plane { axis: 0 | 1 | 2; value: number }
-
-/** Sutherland-Hodgman split of a convex polygon by an axis plane (attributes interpolated). */
-function clipPoly(poly: Float32Array[], o: number, value: number, stride: number, nOff: number): Float32Array[][] {
-  const below: Float32Array[] = [], above: Float32Array[] = [];
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i], b = poly[(i + 1) % poly.length];
-    const da = a[o] - value, db = b[o] - value;
-    (da < 0 ? below : above).push(a);
-    if ((da < 0) !== (db < 0)) {
-      const t = da / (da - db);
-      const v = new Float32Array(stride);
-      for (let k = 0; k < stride; k++) v[k] = a[k] + (b[k] - a[k]) * t;
-      v[o] = value;
-      if (nOff >= 0) { const l = Math.hypot(v[nOff], v[nOff + 1], v[nOff + 2]) || 1; v[nOff] /= l; v[nOff + 1] /= l; v[nOff + 2] /= l; }
-      below.push(v);
-      above.push(v);
-    }
-  }
-  return [below, above].filter(p => p.length >= 3);
-}
-
-/**
- * Cuts every triangle along the axis planes, then sends each piece to bucket
- * classify(centroid, faceNormalZ) (-1 drops it). Exact cuts keep door/lid edges straight even
- * though the simplified meshes have large triangles spanning the seams.
- */
-function partition(s: Soup, planes: Plane[], region: THREE.Box3, buckets: number, classify: (c: THREE.Vector3, nz: number) => number): number[][] {
-  const out: number[][] = Array.from({length: buckets}, () => []);
-  const {stride, data} = s;
-  const P = s.attrs.find(a => a.name === 'position')!.offset;
-  const N = s.attrs.find(a => a.name === 'normal')?.offset ?? -1;
-  const c = new THREE.Vector3();
-  for (let base = 0; base < data.length; base += 3 * stride) {
-    const tri = [0, 1, 2].map(k => data.subarray(base + k * stride, base + (k + 1) * stride));
-    const [a, b, d] = tri;
-    const ux = b[P] - a[P], uy = b[P + 1] - a[P + 1], uz = b[P + 2] - a[P + 2];
-    const vx = d[P] - a[P], vy = d[P + 1] - a[P + 1], vz = d[P + 2] - a[P + 2];
-    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nzr = ux * vy - uy * vx;
-    const nz = nzr / (Math.hypot(nx, ny, nzr) || 1);
-    let polys: Float32Array[][] = [tri];
-    // Only triangles touching the region of interest are cut; the rest are classified whole.
-    const touches = Math.max(a[P], b[P], d[P]) >= region.min.x && Math.min(a[P], b[P], d[P]) <= region.max.x
-      && Math.max(a[P + 1], b[P + 1], d[P + 1]) >= region.min.y && Math.min(a[P + 1], b[P + 1], d[P + 1]) <= region.max.y
-      && Math.max(a[P + 2], b[P + 2], d[P + 2]) >= region.min.z && Math.min(a[P + 2], b[P + 2], d[P + 2]) <= region.max.z;
-    for (const pl of touches ? planes : []) {
-      const o = P + pl.axis;
-      const lo = Math.min(a[o], b[o], d[o]), hi = Math.max(a[o], b[o], d[o]);
-      if (!(lo < pl.value && hi > pl.value)) continue;
-      polys = polys.flatMap(poly => clipPoly(poly, o, pl.value, stride, N));
-    }
-    for (const poly of polys) {
-      c.set(0, 0, 0);
-      for (const v of poly) c.set(c.x + v[P], c.y + v[P + 1], c.z + v[P + 2]);
-      const bucket = classify(c.divideScalar(poly.length), nz);
-      if (bucket < 0) continue;
-      const dst = out[bucket];
-      for (let i = 1; i + 1 < poly.length; i++) for (const v of [poly[0], poly[i], poly[i + 1]]) for (let k = 0; k < stride; k++) dst.push(v[k]);
-    }
-  }
-  return out;
-}
-
-/** Non-indexed geometry from soup data, translated by -origin. */
-function soupGeometry(s: Soup, data: number[], origin?: THREE.Vector3): THREE.BufferGeometry {
-  const n = data.length / s.stride;
-  const g = new THREE.BufferGeometry();
-  for (const at of s.attrs) {
-    const arr = new Float32Array(n * at.size);
-    for (let i = 0; i < n; i++) for (let c = 0; c < at.size; c++) arr[i * at.size + c] = data[i * s.stride + at.offset + c];
-    if (at.name === 'position' && origin) for (let i = 0; i < n; i++) { arr[i * 3] -= origin.x; arr[i * 3 + 1] -= origin.y; arr[i * 3 + 2] -= origin.z; }
-    g.setAttribute(at.name, new THREE.BufferAttribute(arr, at.size));
-  }
-  g.computeBoundingSphere();
-  return g;
-}
-
-/** Fitted meshes of a GLB: same fit as builder.addInstancedModel (footprint w/h/d, base at y=0). */
-function fittedMeshes(gltf: GLTF, w: number, h: number, d: number): {soup: Soup; mat: THREE.Material}[] {
-  const root = gltf.scene;
-  root.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const fitM = new THREE.Matrix4().makeScale(w / size.x, h / size.y, d / size.z).multiply(new THREE.Matrix4().makeTranslation(-center.x, -box.min.y, -center.z));
-  const out: {soup: Soup; mat: THREE.Material}[] = [];
-  root.traverse(o => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material;
-    out.push({soup: toSoup(mesh.geometry, new THREE.Matrix4().multiplyMatrices(fitM, mesh.matrixWorld)), mat});
-  });
-  return out;
-}
-
-function boxGeo(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, origin?: THREE.Vector3): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0);
-  g.translate((x0 + x1) / 2 - (origin?.x ?? 0), (y0 + y1) / 2 - (origin?.y ?? 0), (z0 + z1) / 2 - (origin?.z ?? 0));
-  return g;
-}
+// Geometry helpers (iteration 08, Lane I: the shared splitting helpers live in world/meshSplit.ts)
 
 /** Flat frame covering the cut wall thickness at the crate opening (outer rect minus hole). */
 function rimGeo(ox: number, oz: number, ix: number, iz: number, y: number): THREE.BufferGeometry {
@@ -386,9 +247,13 @@ export class ContainerManager {
   readonly surfaces: Holder[] = [];
   /** Every loot holder of the station. */
   readonly all: Holder[] = [];
+  /** Iteration 08 (Lane I): openable holders (also in `all`; the new container kinds are not in `list`). */
+  readonly openables = new OpenableSet();
+  readonly openList: Holder[] = [];
+  private highlightPart = -1;
   /** Feedback hook (toasts/sfx live in game.ts). */
   onEvent: ((e: ContainerEvent) => void) | null = null;
-  private readonly cache = new Map<ContainerKind, ContainerModel>();
+  private readonly cache = new Map<LegacyKind, ContainerModel>();
   private readonly bodies: THREE.InstancedMesh[] = [];
   private readonly rimMat = new THREE.MeshStandardMaterial({color: 0x6b5640, roughness: 0.95, map: surface('woodVeneer').map});
   private readonly hiMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
@@ -402,10 +267,11 @@ export class ContainerManager {
   constructor(private readonly models: Record<string, GLTF | undefined>, private readonly mats: WorldMaterials, private readonly inventory: () => Inventory) {
     this.group.name = 'containers';
     this.group.add(this.display.group);
+    this.group.add(this.openables.group);
   }
 
   // --- models ---------------------------------------------------------------------------
-  private model(kind: ContainerKind): ContainerModel {
+  private model(kind: LegacyKind): ContainerModel {
     let m = this.cache.get(kind);
     if (!m) {
       m = kind === 'crate' ? this.crateModel() : this.cabinetModel(kind);
@@ -583,12 +449,17 @@ export class ContainerManager {
   }
 
   // --- station lifecycle ----------------------------------------------------------------
-  build(layout: StationLayout): void {
+  build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}): void {
     this.clear();
     const opts = surfaceOptions();
-    const placements = new Map<ContainerKind, THREE.Matrix4[]>();
+    const placements = new Map<LegacyKind, THREE.Matrix4[]>();
     const counts = new Map<string, number>();
     let ci = 0, si = 0;
+    // Iteration 08 (Lane I): openables split their (lazy p7) models; new container kinds index per kind (legacy indices keep).
+    const allModels = {...this.models, ...extraModels};
+    this.openables.setModels(allModels, this.mats);
+    const fit = new FitIndex(layout);
+    const openIdx = new Map<string, number>();
     for (const p of layout.props) {
       const kind = p.kind as string;
       if (!isLootHolderKind(kind)) continue;
@@ -600,8 +471,11 @@ export class ContainerManager {
       // keys the loot table (gen/purposes.ts); plain halls keep their room type.
       const area = layout.areas[p.area];
       const areaType = p.purpose ?? area?.purpose ?? area?.type ?? 'default';
-      const index = isC ? ci++ : si++;
-      const matrix = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
+      const openable = openableActive(kind, allModels);
+      let index: number;
+      if (isC && openable) { index = openIdx.get(kind) ?? 0; openIdx.set(kind, index + 1); } else index = isC ? ci++ : si++;
+      // openables: the model frame includes a low wall mount's render lift (fire cabinets hang `lift` m above their floor box)
+      const matrix = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (openable ? p.lift ?? 0 : 0), p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
       const h: Holder = {
         group: isC ? 'container' : 'surface', index, serial: this.all.length, kind, prop: p,
         state: createHolderState(layout.seed, index, kind, areaType, surfaces), surfaces, matrix,
@@ -609,12 +483,14 @@ export class ContainerManager {
         min: new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), max: new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz),
         lotMats: new Map(), lotBoxes: new Map(), shown: false,
       };
-      if (kind === 'vending') this.settleSpill(h, layout.grid);
+      if (kind === 'vending') this.settleSpill(h, layout.levels?.[p.level ?? 0]?.grid ?? layout.grid); // iteration 08: the holder's own storey
+      if (openable) { this.openables.attach(h, fit.context(p)); this.openList.push(h); }
       this.placeLots(h);
       for (const l of h.state.lots) counts.set(l.itemId, (counts.get(l.itemId) ?? 0) + 1);
       this.all.push(h);
       if (!isC) { this.surfaces.push(h); continue; }
-      const model = this.model(kind);
+      if (h.open) continue; // iteration 08: drawn by world/openables.ts (instanced body + closed parts)
+      const model = this.model(kind as LegacyKind);
       const root = new THREE.Group();
       root.position.set(p.x, p.y, p.z);
       root.rotation.y = p.rot;
@@ -640,10 +516,11 @@ export class ContainerManager {
       for (const o of h.inner) o.visible = false;
       this.group.add(root);
       this.list.push(h);
-      let l = placements.get(kind);
-      if (!l) placements.set(kind, (l = []));
+      let l = placements.get(kind as LegacyKind);
+      if (!l) placements.set(kind as LegacyKind, (l = []));
       l.push(matrix.clone());
     }
+    this.openables.finish();
     // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props.
     for (const [kind, mats4] of placements) {
       const chunks = new Map<string, THREE.Matrix4[]>();
@@ -687,10 +564,13 @@ export class ContainerManager {
   private placeLots(h: Holder): void {
     h.lotMats.clear();
     h.lotBoxes.clear();
+    const carry = new THREE.Matrix4(), m = new THREE.Matrix4();
     for (const l of h.state.lots) {
-      h.lotMats.set(l.id, new THREE.Matrix4().multiplyMatrices(h.matrix, lotLocalMatrix(l)));
+      // iteration 08 (Lane I): a drawer's lots ride along with it (holder · drawer travel · lot)
+      const base = h.open && l.part !== undefined ? m.multiplyMatrices(h.matrix, this.openables.carryMatrix(h.open, l.part, carry)) : h.matrix;
+      h.lotMats.set(l.id, new THREE.Matrix4().multiplyMatrices(base, lotLocalMatrix(l)));
       const b = placementBox(l.itemId, l);
-      h.lotBoxes.set(l.id, new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)).applyMatrix4(h.matrix).expandByScalar(LOT_MARGIN));
+      h.lotBoxes.set(l.id, new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)).applyMatrix4(base).expandByScalar(LOT_MARGIN));
     }
   }
 
@@ -704,6 +584,8 @@ export class ContainerManager {
     this.list.length = 0;
     this.surfaces.length = 0;
     this.all.length = 0;
+    this.openables.clear();
+    this.openList.length = 0;
     this.display.clear();
   }
 
@@ -716,6 +598,7 @@ export class ContainerManager {
       for (const o of m.owned) o.dispose();
     }
     this.cache.clear();
+    this.openables.dispose();
     this.display.dispose();
     for (const m of [this.rimMat, ...this.hiMats.values()]) m.dispose();
     this.hiMats.clear();
@@ -727,6 +610,82 @@ export class ContainerManager {
     return h.state.open;
   }
 
+  /** Iteration 08 (Lane I): a lot in a compartment is seen while that part is (being) opened, or through intact glass. */
+  private lotVisible(h: Holder, l: Lot): boolean {
+    if (l.part === undefined || !h.open) return this.lotsVisible(h);
+    return h.open.parts[l.part].t > 0.001 || !!h.open.spec.parts[l.part].glass;
+  }
+
+  /** ... and can be taken once that part is open (or its glass is broken). */
+  private lotTakeable(h: Holder, l: Lot): boolean {
+    if (l.part === undefined || !h.open) return this.lotsVisible(h);
+    return !!h.state.parts?.[l.part] || (h.open.glassBroken && !!h.open.spec.parts[l.part].glass);
+  }
+
+  private anyLotVisible(h: Holder): boolean {
+    return h.open ? h.state.lots.some(l => this.lotVisible(h, l)) : this.lotsVisible(h);
+  }
+
+  /** HUD / toast facts of one compartment. */
+  private partInfo(h: Holder, part: number): PartInfo {
+    const spec = h.open!.spec, ps = spec.parts[part];
+    return {name: ps.name, label: HOLDER_LABEL[h.kind], loot: spec.loot !== null || !!spec.shared, contents: spec.contents, glass: ps.glass && !h.open!.glassBroken};
+  }
+
+  /** Compartment under a body hit point: the part whose closed box holds it; containers fall back to the nearest part. */
+  private partAt(h: Holder, eye: THREE.Vector3, dir: THREE.Vector3, t: number): number | null {
+    const rt = h.open!;
+    const p = eye.clone().addScaledVector(dir, t + 0.02).applyMatrix4(new THREE.Matrix4().copy(rt.matrix).invert());
+    let best = -1, bd = Infinity;
+    rt.model.parts.forEach((pm, i) => {
+      const d = pm.bounds.distanceToPoint(p);
+      if (d < bd) { bd = d; best = i; }
+    });
+    if (best < 0) return null;
+    return h.group === 'container' || bd < 0.04 ? best : null;
+  }
+
+  /** [E] on a whole openable (no aimed part: QA / tests): take from an open part, open one with loot, close an open one. */
+  private defaultPart(h: Holder): number {
+    const st = h.state, n = h.open!.parts.length;
+    const has = (i: number) => st.lots.some(l => l.part === i);
+    for (let i = 0; i < n; i++) if (st.parts![i] && has(i)) return i;
+    for (let i = 0; i < n; i++) if (!st.parts![i] && has(i)) return i;
+    for (let i = 0; i < n; i++) if (st.parts![i]) return i;
+    for (let i = 0; i < n; i++) if (!st.seen![i]) return i;
+    return 0;
+  }
+
+  /** Open / take / close one compartment of an openable holder. Never adds or re-rolls loot. */
+  private interactPart(h: Holder, part: number): void {
+    const st = h.state, rt = h.open!, spec = rt.spec;
+    if (rt.loose || !st.parts) return;
+    switch (partAction(st, part)) {
+      case 'open': {
+        const first = !st.seen![part];
+        // sliding panes of one group: opening one slides the other shut
+        const g = spec.parts[part].group;
+        if (g) spec.parts.forEach((q, i) => { if (i !== part && q.group === g) st.parts![i] = false; });
+        st.parts[part] = true;
+        st.seen![part] = true;
+        st.searched = true;
+        st.open = true;
+        const m = first ? partOpenMessage(st, part, this.partInfo(h, part)) : null;
+        this.emit({type: 'open', container: h, part, sound: spec.sound.open, rummage: spec.loot !== null || !!spec.shared, ...(m ? {message: m.text, warn: m.warn} : {})});
+        break;
+      }
+      case 'take':
+        this.afterTake(h, takeLots(st, st.lots.filter(l => l.part === part).map(l => l.id), this.inventory()));
+        break;
+      case 'close':
+        st.parts[part] = false;
+        if (h.group === 'container') st.open = st.parts.some(Boolean);
+        this.emit({type: 'close', container: h, part, sound: spec.sound.close});
+        break;
+    }
+    this.dirty = true;
+  }
+
   private displayId(h: Holder, l: Lot): number {
     return h.serial * 1000 + (l.id % 1000);
   }
@@ -736,19 +695,24 @@ export class ContainerManager {
    * kiosk or vending spill) or a holder body. Not behind a wall, and closer than `maxT` (pass the
    * distance of a targeted floor pickup so a closer pickup wins). Items win over their own holder.
    */
-  target(eye: THREE.Vector3, dir: THREE.Vector3, grid: Grid, maxT = Infinity): ContainerTarget | null {
+  target(eye: THREE.Vector3, dir: THREE.Vector3, world: Grid | Levels, maxT = Infinity): ContainerTarget | null {
     this.lastEye.copy(eye);
     let lotBest: {h: Holder; lot: Lot; t: number} | null = null;
-    let body: {h: Holder; t: number} | null = null;
-    const bodies: {h: Holder; t: number}[] = [];
+    let body: {h: Holder; t: number; part?: number} | null = null;
+    const bodies: {h: Holder; t: number; part?: number}[] = [];
     const range = (LOT_REACH + 2) ** 2;
     for (const h of this.all) {
+      if (h.open?.loose) continue; // iteration 08: a knocked-over trash can is a loose prop now (its lots spilled)
       const dx = h.prop.x - eye.x, dz = h.prop.z - eye.z;
       if (dx * dx + dz * dz > range) continue;
       const hit = rayAabb(eye, dir, h.min, h.max);
       if (hit && hit.t < Math.min(CONTAINER_REACH, maxT)) bodies.push({h, t: hit.t});
-      if (!this.lotsVisible(h)) continue;
+      // iteration 08 (Lane I): compartments — a pulled-out drawer / swung door is aimed at outside the prop box too
+      const pk = h.open ? this.openables.pick(h, eye, dir, Math.min(CONTAINER_REACH, maxT)) : null;
+      if (pk) bodies.push({h, t: pk.t, part: pk.part});
+      if (!this.anyLotVisible(h)) continue;
       for (const lot of h.state.lots) {
+        if (h.open && !this.lotVisible(h, lot)) continue;
         const b = h.lotBoxes.get(lot.id);
         const r = b && rayAabb(eye, dir, b.min, b.max);
         if (r && r.t < Math.min(LOT_REACH, maxT) && (!lotBest || r.t < lotBest.t)) lotBest = {h, lot, t: r.t};
@@ -759,15 +723,23 @@ export class ContainerManager {
     if (lotBest) {
       // Another holder in front (e.g. a crate before a shelf) blocks the item; its own holder does not.
       const blocker = bodies.filter(b => b.h !== lotBest!.h && b.t < lotBest!.t - 0.02).sort((a, b) => a.t - b.t)[0];
-      out = blocker ? {container: blocker.h, t: blocker.t, lot: null} : {container: lotBest.h, t: lotBest.t, lot: lotBest.lot};
-    } else if (body) out = {container: body.h, t: body.t, lot: null};
-    // Empty tables/desks are just furniture.
-    if (out && !out.lot && (out.container.kind === 'table' || out.container.kind === 'desk') && !out.container.state.lots.length) out = null;
+      out = blocker ? {container: blocker.h, t: blocker.t, lot: null, part: blocker.part ?? null} : {container: lotBest.h, t: lotBest.t, lot: lotBest.lot};
+    } else if (body) out = {container: body.h, t: body.t, lot: null, part: body.part ?? null};
+    // Iteration 08 (Lane I): the body of an openable resolves to the compartment under the crosshair.
+    if (out && !out.lot && out.container.open && out.part == null) out.part = this.partAt(out.container, eye, dir, out.t);
+    // Empty tables/desks are just furniture (their drawers are not).
+    if (out && !out.lot && out.part == null && (out.container.kind === 'table' || out.container.kind === 'desk') && !out.container.state.lots.some(l => l.part === undefined)) out = null;
     if (out) {
-      const hl = Math.hypot(dir.x, dir.z);
-      if (hl > 1e-6 && grid.raycast(eye.x, eye.z, dir.x, dir.z, out.t * hl + 0.01, true) < out.t * hl - 0.03) out = null;
+      if (world instanceof Grid) {
+        const hl = Math.hypot(dir.x, dir.z);
+        if (hl > 1e-6 && world.raycast(eye.x, eye.z, dir.x, dir.z, out.t * hl + 0.01, true) < out.t * hl - 0.03) out = null;
+      } else {
+        // iteration 08 (Lane B): 3D occlusion — walls, floors, slab undersides, stair flights between eye and holder
+        const w = world.raycast(eye, dir, out.t + 0.01);
+        if (w.kind !== 'none' && w.t < out.t - 0.03) out = null;
+      }
     }
-    this.setHighlight(out && !out.lot && out.container.group === 'container' && !out.container.broken ? out.container : null);
+    this.setHighlight(out && !out.lot && (out.container.open ? out.part != null : out.container.group === 'container') && !out.container.broken ? out.container : null, out?.part ?? -1);
     const lotId = out?.lot ? this.displayId(out.container, out.lot) : -1;
     if (lotId !== this.highlightLot) { this.highlightLot = lotId; this.dirty = true; }
     return out;
@@ -778,8 +750,18 @@ export class ContainerManager {
     const h = 'container' in target ? target.container : target;
     const lot = 'container' in target ? target.lot : null;
     const inv = this.inventory();
-    if (lot && this.lotsVisible(h) && h.state.lots.includes(lot)) {
+    if (lot && (h.open ? this.lotTakeable(h, lot) : this.lotsVisible(h)) && h.state.lots.includes(lot)) {
       this.afterTake(h, takeLot(h.state, lot.id, inv));
+      return;
+    }
+    // Iteration 08 (Lane I): openable compartments (an item seen through a closed glass door opens the door first).
+    if (h.open) {
+      const aimed = 'container' in target ? (lot && lot.part !== undefined ? lot.part : target.part ?? null) : null;
+      const part = aimed ?? (h.group === 'container' || !h.state.lots.some(l => l.part === undefined) ? this.defaultPart(h) : null);
+      if (part !== null) { this.interactPart(h, part); return; }
+      // the exposed top of a desk / tool chest / kitchenette: take what lies there, never what is shut in its drawers
+      const ids = h.state.lots.filter(l => l.part === undefined).map(l => l.id);
+      if (ids.length) this.afterTake(h, takeLots(h.state, ids, inv));
       return;
     }
     // Lane D: a smashed holder only gives up what is left on the floor (never closes / re-rolls).
@@ -820,6 +802,20 @@ export class ContainerManager {
     const lot = 'container' in target ? target.lot : null;
     const inv = this.inventory();
     if (!lot && h.broken) return h.state.lots.length ? `<b>[E]</b> Take all from the smashed ${HOLDER_LABEL[h.kind]} (${h.state.lots.length})` : `Smashed ${HOLDER_LABEL[h.kind]} — nothing left`;
+    // Iteration 08 (Lane I): openable compartments ("Open trash can", "Open top drawer", "Take all (2)", "Close locker").
+    if (h.open) {
+      const aimed = 'container' in target ? (lot && lot.part !== undefined && !this.lotTakeable(h, lot) ? lot.part : lot ? null : target.part ?? null) : null;
+      const part = aimed ?? (!lot && (h.group === 'container' || !h.state.lots.some(l => l.part === undefined)) ? this.defaultPart(h) : null);
+      if (part !== null) {
+        const q = partPrompt(h.state, part, this.partInfo(h, part), {roomForAny: h.state.lots.some(l => l.part === part && inv.hasRoomFor(l.itemId))});
+        return q.key ? `<b>[E]</b> ${q.text}` : q.text;
+      }
+      if (!lot) {
+        const top = h.state.lots.filter(l => l.part === undefined);
+        const room = top.some(l => inv.hasRoomFor(l.itemId)) ? '' : ' — no room (Tab: inventory)';
+        return top.length ? `<b>[E]</b> Take all (${top.length})${room} · or aim at an item` : `${HOLDER_LABEL[h.kind][0].toUpperCase()}${HOLDER_LABEL[h.kind].slice(1)} — nothing left on top`;
+      }
+    }
     const p = lot
       ? lotPrompt(lot, inv.hasRoomFor(lot.itemId))
       : holderPrompt(h.state, {roomForAny: h.state.lots.some(l => inv.hasRoomFor(l.itemId)), prying: h.pryT > 0});
@@ -838,6 +834,8 @@ export class ContainerManager {
       this.emit({type: 'open', container: h, message: m.text, warn: m.warn});
       this.dirty = true;
     }
+    // Iteration 08 (Lane I): openable compartments animate (taken over while they move); drawers carry their lots along.
+    for (const h of this.openables.update(dt, this.openList, this.highlighted)) { this.placeLots(h); this.dirty = true; }
     for (const c of this.list) {
       const goal = c.state.open ? 1 : 0;
       if (c.t === goal) continue;
@@ -864,11 +862,11 @@ export class ContainerManager {
     const list: LotInstance[] = [];
     const r2 = LOT_VIEW_DIST * LOT_VIEW_DIST;
     for (const h of this.all) {
-      h.shown = this.lotsVisible(h);
+      h.shown = this.anyLotVisible(h);
       if (!h.shown || !h.state.lots.length) continue;
       const dx = h.prop.x - this.lastEye.x, dz = h.prop.z - this.lastEye.z;
       if (dx * dx + dz * dz > r2) continue;
-      for (const l of h.state.lots) list.push({id: this.displayId(h, l), itemId: l.itemId, matrix: h.lotMats.get(l.id)!});
+      for (const l of h.state.lots) if (!h.open || this.lotVisible(h, l)) list.push({id: this.displayId(h, l), itemId: l.itemId, matrix: h.lotMats.get(l.id)!});
     }
     this.display.show(list, this.highlightLot >= 0 ? this.highlightLot : null);
   }
@@ -877,11 +875,14 @@ export class ContainerManager {
     this.onEvent?.(e);
   }
 
-  private setHighlight(c: Holder | null): void {
-    if (c === this.highlighted) return;
+  private setHighlight(c: Holder | null, part = -1): void {
+    if (c === this.highlighted && part === this.highlightPart) return;
     if (this.highlighted) for (const m of this.highlighted.leafMeshes) m.material = (m.userData.baseMat as THREE.Material) ?? m.material;
     this.highlighted = c;
+    this.highlightPart = part;
     if (!c) return;
+    // iteration 08 (Lane I): an openable glows on the aimed part only (its own meshes exist while it is aimed at)
+    if (c.open) { this.openables.takeover(c); c.leafMeshes = part >= 0 ? c.open.parts[part].meshes : []; }
     for (const m of c.leafMeshes) {
       const base = (m.userData.baseMat as THREE.Material | undefined) ?? (m.material as THREE.Material);
       m.userData.baseMat = base;
@@ -901,6 +902,7 @@ export class ContainerManager {
   /** Meshes drawn for this holder alone (doors / lid / interior), for per-instance damage. */
   ownMeshes(prop: PropPlacement): THREE.Mesh[] {
     const h = this.holderFor(prop);
+    if (h?.open) return this.openables.ownMeshes(h); // iteration 08: takes it over for good (pinned)
     const out: THREE.Mesh[] = [];
     h?.root?.traverse(o => { if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh); });
     return out;
@@ -913,6 +915,8 @@ export class ContainerManager {
    * Glass / screen breaks on coolers and display cases change nothing here (lots stay reachable).
    */
   breakHolder(h: Holder, kind: string): void {
+    // Iteration 08 (Lane I): a glazed door's glass shattered: its compartment is reachable through the empty frame.
+    if (h.open) { if (kind === 'shatter') { h.open.glassBroken = true; this.dirty = true; } return; }
     if (kind === 'open') {
       if (h.state.open) return;
       h.pryT = 0;
@@ -942,10 +946,11 @@ export class ContainerManager {
     const out: {holder: Holder; lotId: number; t: number}[] = [];
     const inv = new THREE.Matrix4(), lo = new THREE.Vector3(), ld = new THREE.Vector3();
     for (const h of this.all) {
-      if (!h.state.lots.length || !this.lotsVisible(h)) continue;
+      if (!h.state.lots.length || !this.anyLotVisible(h)) continue;
       const rx = h.prop.x - o.x, rz = h.prop.z - o.z, along = rx * d.x + rz * d.z, reach = Math.max(h.prop.hx, h.prop.hz) + 1.5;
       if (along < -reach || along > maxT + reach || Math.hypot(rx - d.x * along, rz - d.z * along) > reach) continue;
       for (const l of h.state.lots) {
+        if (h.open && !this.lotVisible(h, l)) continue; // iteration 08: closed compartments shield their lots
         const m = h.lotMats.get(l.id);
         if (!m) continue;
         const dm = itemDims(l.itemId);
@@ -966,9 +971,10 @@ export class ContainerManager {
    * loose pickup with the same item id and count. null if it is not there / not visible.
    */
   detachLot(h: Holder, lotId: number): {lot: Lot; matrix: THREE.Matrix4; holder: number} | null {
-    if (!this.lotsVisible(h)) return null;
+    if (!h.open && !this.lotsVisible(h)) return null;
     const i = h.state.lots.findIndex(l => l.id === lotId);
     if (i < 0) return null;
+    if (h.open && !this.lotVisible(h, h.state.lots[i])) return null; // iteration 08: per compartment
     const [lot] = h.state.lots.splice(i, 1);
     const matrix = (h.lotMats.get(lot.id) ?? h.matrix).clone();
     h.lotMats.delete(lot.id);
@@ -983,8 +989,9 @@ export class ContainerManager {
     const out: {holder: Holder; lotId: number}[] = [];
     const c = box.getCenter(new THREE.Vector3()), b = new THREE.Box3();
     for (const h of this.all) {
-      if (!h.state.lots.length || Math.abs(h.prop.x - c.x) > h.prop.hx + 0.8 || Math.abs(h.prop.z - c.z) > h.prop.hz + 0.8 || !this.lotsVisible(h)) continue;
+      if (!h.state.lots.length || Math.abs(h.prop.x - c.x) > h.prop.hx + 0.8 || Math.abs(h.prop.z - c.z) > h.prop.hz + 0.8 || !this.anyLotVisible(h)) continue;
       for (const l of h.state.lots) {
+        if (h.open && !this.lotVisible(h, l)) continue;
         const lb = h.lotBoxes.get(l.id);
         if (lb && b.copy(lb).expandByScalar(-LOT_MARGIN).intersectsBox(box)) out.push({holder: h, lotId: l.id});
       }
@@ -995,12 +1002,120 @@ export class ContainerManager {
   /** Item / chunk collision of a loot holder (its shelves, physics/holderShapes.ts); null: not a holder (solid box). */
   physicsBoxes(prop: PropPlacement): THREE.Box3[] | null {
     const h = this.holderFor(prop);
-    return h ? holderBoxes(prop, h.surfaces, {broken: !!h.broken}) : null;
+    if (!h) return null;
+    if (h.open) return this.openPhysicsBoxes(h, prop);
+    return holderBoxes(prop, h.surfaces, {broken: !!h.broken});
+  }
+
+  /**
+   * Iteration 08 (Lane I): item / chunk collision of an openable. Closed compartments keep the prop one solid box (a closed
+   * trash can stops a flying can, as before); an OPEN lid / door compartment gets its resting surfaces plus walls round its
+   * cavity (no roof; lids keep a front wall, doors are open at the front) so its own lots rest inside and shots knock them
+   * out. Drawer trays travel out of the box and add nothing. The glass cooler keeps its iteration-07 shelves + glass front.
+   * Call physics.propsChanged() when a compartment opens / closes (game.ts does).
+   */
+  private openPhysicsBoxes(h: Holder, prop: PropPlacement): THREE.Box3[] | null {
+    const rt = h.open!;
+    if (rt.loose) return [];
+    const base = Math.abs(rt.matrix.elements[13] - prop.y) > 1e-6 ? {...prop, y: rt.matrix.elements[13]} : prop;
+    if (h.kind === 'shopCooler') return holderBoxes(base, h.surfaces, {broken: !!h.broken, glassBroken: rt.glassBroken});
+    const exposed = h.surfaces.filter(q => q.part === undefined);
+    const open = rt.spec.parts.map((_, i) => i).filter(i => rt.spec.parts[i].move.type === 'hinge' && h.state.parts?.[i]);
+    if (!open.length) return exposed.length ? holderBoxes(base, exposed, {broken: !!h.broken}) : null;
+    const out = holderBoxes(base, [...exposed, ...h.surfaces.filter(q => q.part !== undefined && open.includes(q.part))], {broken: !!h.broken}) ?? [];
+    const T = 0.03, local: [number, number, number, number, number, number][] = [];
+    for (const i of open) {
+      const ps = rt.spec.parts[i];
+      const c = ps.cavity ?? (ps.cylinder ? [-ps.cylinder[0], ps.cylinder[1], -ps.cylinder[0], ps.cylinder[0], ps.cylinder[2], ps.cylinder[0]] as const : null);
+      if (!c) continue;
+      const [x0, , z0, x1, y1, z1] = c;
+      local.push([x0 - T, 0, z0 - T, x0, y1, z1 + T], [x1, 0, z0 - T, x1 + T, y1, z1 + T], [x0 - T, 0, z0 - T, x1 + T, y1, z0]);
+      if (ps.move.type === 'hinge' && ps.move.axis === 'x') local.push([x0 - T, 0, z1, x1 + T, y1, z1 + T]); // a lid: the front wall stays
+    }
+    const v = new THREE.Vector3();
+    for (const [ax, ay, az, bx, by, bz] of local) {
+      const b = new THREE.Box3();
+      for (const x of [ax, bx]) for (const y of [ay, by]) for (const z of [az, bz]) b.expandByPoint(v.set(x, y, z).applyMatrix4(rt.matrix));
+      out.push(b);
+    }
+    return out;
+  }
+
+  // --- Iteration 08 (Lane I): openables ------------------------------------------------------
+  /**
+   * Physics knocked this holder loose (a shot trash can / wheelie bin, physics/dynamicItems.ts): its lid pops part-way open,
+   * its finite lots are lifted off and SPILLED on the floor where it stood (event 'spill' with their world matrices: the game
+   * turns them into loose pickups — same item ids / counts) and its own meshes are returned for the rigid body to carry.
+   */
+  goLoose(prop: PropPlacement): THREE.Object3D[] {
+    const h = this.holderFor(prop);
+    const rt = h?.open;
+    if (!h || !rt || !rt.spec.spill) return [];
+    if (rt.loose) return rt.root ? [rt.root] : [];
+    this.openables.takeover(h);
+    rt.loose = rt.pinned = true;
+    rt.parts.forEach((ps, i) => { ps.amount = Math.sign(ps.amount || -1) * Math.min(Math.abs(ps.amount), 0.6); h.state.parts![i] = true; h.state.seen![i] = true; });
+    h.state.open = h.state.searched = true;
+    const spilled: {lot: Lot; matrix: THREE.Matrix4}[] = [];
+    h.state.lots.forEach((l, k) => {
+      // fallen out where the can stood: lying on its storey's floor, spread around the base
+      const a = k * 2.39996 + (l.id % 7) * 0.9, r = 0.1 + 0.16 * ((k * 0.618 + 0.3) % 1);
+      const shape = itemDims(l.itemId).shape;
+      const flat: Lot = {...l, x: 0, y: 0, z: 0, yaw: a * 1.7, orient: shape === 'cylinder' ? 'side' : shape === 'box' ? 'back' : 'up'};
+      const m = new THREE.Matrix4().makeTranslation(prop.x + Math.cos(a) * r, prop.y + 0.004, prop.z + Math.sin(a) * r).multiply(lotLocalMatrix(flat));
+      spilled.push({lot: l, matrix: m});
+    });
+    h.state.lots = [];
+    h.lotMats.clear();
+    h.lotBoxes.clear();
+    if (this.highlighted === h) this.setHighlight(null);
+    this.highlightLot = -1;
+    this.dirty = true;
+    this.emit({type: 'spill', container: h, spilled, ...(spilled.length ? {message: `The ${HOLDER_LABEL[h.kind]} goes over — ${spilled.length} item${spilled.length === 1 ? '' : 's'} spill out`} : {})});
+    return rt.root ? [rt.root] : [];
+  }
+
+  /** QA: per-kind openable counts, open state, contents and clearance; and one holder's parts. */
+  openablesQa(): unknown {
+    const byKind: Record<string, {count: number; levels: Record<number, number>; parts: number; open: number; cramped: number; lots: number; lotsAtStart: number; taken: number; loose: number}> = {};
+    for (const h of this.openList) {
+      const rt = h.open!;
+      const k = (byKind[h.kind] ??= {count: 0, levels: {}, parts: 0, open: 0, cramped: 0, lots: 0, lotsAtStart: 0, taken: 0, loose: 0});
+      k.count++;
+      k.levels[h.prop.level ?? 0] = (k.levels[h.prop.level ?? 0] ?? 0) + 1;
+      k.parts += rt.parts.length;
+      k.open += h.state.parts!.filter(Boolean).length;
+      k.cramped += rt.parts.filter(p => p.cramped).length;
+      k.lots += h.state.lots.filter(l => l.part !== undefined).length;
+      k.lotsAtStart += h.state.rolled;
+      if (rt.root) k.taken++;
+      if (rt.loose) k.loose++;
+    }
+    return {byKind, models: this.openables.qaModels(), stats: {...this.openables.stats}, active: this.openables.active.size};
+  }
+
+  /** QA: one openable holder (by serial) — per-part state, opening, lots inside, aim / stand points. */
+  openableState(serial: number): unknown {
+    const h = this.all[serial];
+    const rt = h?.open;
+    if (!h || !rt) return null;
+    return {
+      serial, kind: h.kind, label: HOLDER_LABEL[h.kind], level: h.prop.level ?? 0, x: h.prop.x, y: h.prop.y, z: h.prop.z, rot: h.prop.rot, loose: rt.loose, taken: !!rt.root,
+      parts: rt.parts.map((ps, i) => {
+        const a = this.openables.aimPoint(rt, i);
+        return {
+          name: rt.spec.parts[i].name, move: rt.spec.parts[i].move.type, open: !!h.state.parts![i], seen: !!h.state.seen![i], t: +ps.t.toFixed(3),
+          amount: +ps.amount.toFixed(3), cramped: ps.cramped, lots: h.state.lots.filter(l => l.part === i).map(l => ({id: l.id, itemId: l.itemId, count: l.count, at: this.lotPoint(h, l)})),
+          aim: {x: a.aim.x, y: a.aim.y, z: a.aim.z}, stand: {x: a.stand.x, z: a.stand.z},
+        };
+      }),
+    };
   }
 
   // --- QA ---------------------------------------------------------------------------------
   /** Point on the holder to aim at (cabinet door centre / crate lid / shelf middle) and a spot to stand. */
   aimPoint(c: Holder): {aim: {x: number; y: number; z: number}; stand: {x: number; z: number}} {
+    if (c.open) { const a = this.openables.aimPoint(c.open, 0); return {aim: {x: a.aim.x, y: a.aim.y, z: a.aim.z}, stand: {x: a.stand.x, z: a.stand.z}}; }
     const def = holderDims(c.kind);
     const fx = Math.sin(c.prop.rot), fz = Math.cos(c.prop.rot);
     const front = c.kind === 'crate' ? 0 : def.d / 2 - 0.02;
