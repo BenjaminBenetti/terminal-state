@@ -589,6 +589,11 @@
       "sha256": "9cea8752e3af3cfc7c7ee207de1fc22410afc3a836b0e014587ef68b3ba2e251"
     },
     {
+      "path": "assets/audio/i11-pistol-shot-01.mp3",
+      "bytes": 5015,
+      "sha256": "b7a1714e6881a8bc39a6a32a57ed03de8dbc8ef58a12fcf2961c8df645370d68"
+    },
+    {
       "path": "assets/audio/impact-concrete-b-01.mp3",
       "bytes": 5016,
       "sha256": "5244a88e8c54c698e1befd07d3bfe58d554ed426206c9ddc36e7e0c557c93c7e"
@@ -1287,6 +1292,11 @@
       "path": "assets/derivatives/audio-iteration07k.json",
       "bytes": 31990,
       "sha256": "63700d336dba7527e3971f7486df6cb3725aa268572882946316d5d41027a702"
+    },
+    {
+      "path": "assets/derivatives/audio-iteration11-pistol.json",
+      "bytes": 2338,
+      "sha256": "2c451c886bd811fd96142dc07a1dda8d5383bb528f534b9ed539dc180e89c9c0"
     },
     {
       "path": "assets/derivatives/creature-ratdog.json",

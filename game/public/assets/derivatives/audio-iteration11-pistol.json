@@ -1,0 +1,76 @@
+{
+ "task": "studio-pistol-hit-audio-20261028-01",
+ "generatedBy": "tools/audio-pipeline/build-iteration11-pistol.mjs",
+ "policy": "Sound Lab only: derivative of ONE freshly authorized Sound Lab job (no synthesis/stock/hosted audio); replaces the pitched rifle-shot fallback for the pistol.",
+ "license": {
+  "status": "Conditional prototype: Stability AI Community License + Gemma terms; not production/commercial clearance. Unreviewed by ear on the worker.",
+  "gameReady": false
+ },
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/i11-pistol-shot-01.mp3",
+   "url": "assets/audio/i11-pistol-shot-01.mp3",
+   "bytes": 5015,
+   "sha256": "b7a1714e6881a8bc39a6a32a57ed03de8dbc8ef58a12fcf2961c8df645370d68",
+   "cue": "pistolShot",
+   "durationS": 0.2756,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "i11-pistol-shot-01",
+    "rawFile": "reference/tasks/pistol-hit-audio-20261028/audio/raw/i11-pistol-shot-01.wav",
+    "rawSha256": "17a94856d2f2a43846f877f67482fc92e5b20bc6e7013789635459857ae3c868",
+    "labFile": "sfx_a-single-isolated-compact-9mm-semi-autom_w8a8_seed1342955558_070854.wav",
+    "jobId": "20261028T070854-1342955558",
+    "prompt": "TrackType: SFX, a single isolated compact 9mm semi-automatic pistol gunshot, one shot only, a sharp hard supersonic crack with a short punchy body and a quick natural decay, close mic, recorded dry with no echo or reverb, no voices, no music, no ambience.",
+    "negativePrompt": "",
+    "seed": 1342955558,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "profile": "w8a8",
+    "modelRevision": "08b17423649b5714b22eab20f96bf00751f2358a"
+   },
+   "rawMetrics": {
+    "durationS": 2,
+    "peakDb": -0.2,
+    "rmsDb": -31.2,
+    "flatDb": -53.5,
+    "activeS": 0.15,
+    "zcrPerS": 2957,
+    "clippedFrac": 0
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.001,
+     "endS": 0.2766,
+     "mode": "first event"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.1102,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.79
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  }
+ ]
+}

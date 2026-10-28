@@ -81,7 +81,7 @@ export const AMBIENT_LEVEL = 1;
  * relative levels of the mix (first estimates; tune by ear in one place).
  */
 export const CUE_GAIN: Record<CueId, number> = {
-  rifleShot: 1, shotgunShot: 1, shotgunPump: 0.42, shellInsert: 0.4, rifleMagOut: 0.38, rifleMagIn: 0.42, rifleCharge: 0.45,
+  rifleShot: 1, shotgunShot: 1, pistolShot: 1, shotgunPump: 0.42, shellInsert: 0.4, rifleMagOut: 0.38, rifleMagIn: 0.42, rifleCharge: 0.45,
   rifleMagDrop: 0.3, dryFire: 0.35, equip: 0.28, hitTick: 0.22, hitKill: 0.32,
   impactConcrete: 0.55, impactTile: 0.55, impactMetal: 0.5, impactWood: 0.55, impactFlesh: 0.5,
   impactGlass: 0.5, impactSheetMetal: 0.48, fleshTear: 0.42, breakGlass: 0.62, breakWood: 0.58, debrisFall: 0.32,
@@ -160,6 +160,8 @@ interface VoiceOpts {
   maxDist?: number;
   hrtf?: boolean;
   occlude?: boolean;
+  /** Cap on the occlusion amount (0..1) so a slab / wall muffles but never silences (player hit confirm). */
+  occMax?: number;
 }
 type FilterSpec = {type: BiquadFilterType; freq: number; q?: number};
 interface PlayOpts {
@@ -177,24 +179,47 @@ interface PlayOpts {
 const MAX_VOICES = 44;
 const MAX_HRTF = 6;
 /** Token buckets: [refill per second, burst]. */
-const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2]} as const;
+const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2], confirm: [14, 4]} as const;
 type BucketName = keyof typeof BUCKETS;
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
+/** Shared panner ceiling (makePanner): the inverse model clamps distance here, so gain stops falling beyond it. */
+const PANNER_MAX_DIST = 90;
+/**
+ * Player-confirmed enemy hit (hit-audio lane, 2026-10-28): the SAME Sound Lab flesh-impact clip, on a spatial
+ * (panned) voice with the bullet-impact rolloff near, but an audible floor at range. No distance cull; occlusion
+ * is capped (muffled, never silenced). Only the player's bullet hitting a live enemy uses this; world/NPC/chunk
+ * impacts keep `impact()` / `physImpact()` unchanged.
+ */
+export const HIT_CONFIRM = {ref: 2, rolloff: 1.05, floor: 0.4, occMax: 0.5} as const;
+/** Inverse-model panner gain (Web Audio 'inverse' distanceModel), distance clamped to [ref, PANNER_MAX_DIST]. */
+export function pannerInverseGain(dist: number, ref: number, rolloff: number): number {
+  const d = Math.min(PANNER_MAX_DIST, Math.max(ref, dist));
+  return ref / (ref + rolloff * (d - ref));
+}
+/** Effective hit-confirm level relative to a near hit (1 inside ref): the normal rolloff, never below HIT_CONFIRM.floor. */
+export function hitConfirmGain(dist: number): number {
+  return Math.max(HIT_CONFIRM.floor, pannerInverseGain(dist, HIT_CONFIRM.ref, HIT_CONFIRM.rolloff));
+}
+/** Pre-panner input gain that turns the panner's rolloff into hitConfirmGain(dist) (>= 1; 1 while the rolloff is above the floor). */
+export function hitConfirmCompensation(dist: number): number {
+  return hitConfirmGain(dist) / pannerInverseGain(dist, HIT_CONFIRM.ref, HIT_CONFIRM.rolloff);
+}
+
 /** Weapon sound kinds (WeaponDef.sound). */
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
 /**
- * Shot cue per weapon kind. 'pistol' (pistol lane, 2026-10-28) is NOT a dedicated pistol recording: it REUSES the
- * existing Sound Lab rifle-shot clips (assets/audio/rifle-shot-*.mp3) pitched up (playback rate x1.28) at a
- * slightly lower gain. No new audio was generated; its reload/dry cues likewise reuse the rifle/dry Sound Lab clips.
+ * Shot cue per weapon kind. 'pistol' (iteration 11) plays its own dedicated Sound Lab pistol shot ('pistolShot',
+ * assets/audio/i11-pistol-shot-01.mp3, one authorized Sound Lab job; provenance derivatives/audio-iteration11-pistol.json),
+ * replacing the pitched rifle-shot fallback. Its reload/dry cues still reuse the rifle/dry Sound Lab clips.
  */
 export const WEAPON_SHOT_CUES: Record<WeaponSoundKind, {cue: CueId; rate: number; gain: number; reused?: string}> = {
   rifle: {cue: 'rifleShot', rate: 1, gain: 1},
   shotgun: {cue: 'shotgunShot', rate: 1, gain: 1},
-  pistol: {cue: 'rifleShot', rate: 1.28, gain: 0.78, reused: 'Sound Lab rifle-shot clips, pitched (not a dedicated pistol recording)'},
+  pistol: {cue: 'pistolShot', rate: 1, gain: 0.9},
 };
 
 export class Sfx {
@@ -226,7 +251,7 @@ export class Sfx {
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
-  private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}};
+  private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}, confirm: {n: 4, t: 0}};
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   private reloadVoice: Voice | null = null;
@@ -453,7 +478,7 @@ export class Sfx {
     p.distanceModel = 'inverse';
     p.refDistance = ref;
     p.rolloffFactor = rolloff;
-    p.maxDistance = 90;
+    p.maxDistance = PANNER_MAX_DIST;
     this.pannersCreated++;
     return p;
   }
@@ -471,7 +496,7 @@ export class Sfx {
     if (o.at) {
       dist = this.dist(o.at);
       if (dist > (o.maxDist ?? 45)) { this.culled++; return null; }
-      if (o.occlude !== false && this.occlusion && dist > 1.5) occ = clamp01(this.occlusion(o.at.x, o.at.z, o.at.y));
+      if (o.occlude !== false && this.occlusion && dist > 1.5) occ = Math.min(o.occMax ?? 1, clamp01(this.occlusion(o.at.x, o.at.z, o.at.y)));
     }
     const inp = ctx.createGain();
     inp.gain.value = (o.gain ?? 1) * (1 - 0.45 * occ);
@@ -919,6 +944,18 @@ export class Sfx {
     if (!this.live || !this.take('impact')) return;
     const v = this.voice({at: {x, y, z}, ref: 2, rolloff: 1.05, send: 0.5, pri: 0, maxDist: 50});
     this.play(v, IMPACT_CUE[surface], {delay: Math.random() * 0.008, jitter: 0.08});
+  }
+  /**
+   * Player-confirmed enemy hit: the existing flesh-impact clip, once per enemy per shot (game.ts aggregates a
+   * shotgun's pellets per enemy before calling this). Panned/directional near; held at >= HIT_CONFIRM.floor of the
+   * near level at any range (no maxDist cull, occlusion capped). Own token bucket so world-impact pellets of the
+   * same shot cannot starve it, while still bounding multi-enemy bursts. Misses never call this.
+   */
+  hitConfirm(x: number, y: number, z: number): void {
+    if (!this.live || !this.take('confirm')) return;
+    const at = {x, y, z};
+    const v = this.voice({at, ref: HIT_CONFIRM.ref, rolloff: HIT_CONFIRM.rolloff, send: 0.5, pri: 1, maxDist: Infinity, occMax: HIT_CONFIRM.occMax, gain: hitConfirmCompensation(this.dist(at))});
+    this.play(v, 'impactFlesh', {delay: Math.random() * 0.008, jitter: 0.08});
   }
   /**
    * Iteration 06 (Lane D): material breakage at a world point — glass shatter, wood break, rubble

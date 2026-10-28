@@ -1,3 +1,4 @@
+import {CLIP_MANIFEST} from '../src/audio/bank';
 // Pistol lane (targeted pass 2026-10-28): the pistol weapon, its staging gate, the seeded weapon finds
 // that replaced the guaranteed spawn-side shotgun, and the reused (pitched) Sound Lab shot cue.
 import fs from 'node:fs';
@@ -90,11 +91,10 @@ describe('pistol weapon', () => {
     expect(inv.invariants()).toEqual([]);
   });
 
-  it('maps its sound onto the reused, pitched Sound Lab rifle-shot cue (no dedicated recording)', () => {
-    expect(WEAPON_SHOT_CUES.pistol.cue).toBe('rifleShot');
-    expect(WEAPON_SHOT_CUES.pistol.rate).toBeGreaterThan(1);
-    expect(WEAPON_SHOT_CUES.pistol.gain).toBeLessThan(1);
-    expect(WEAPON_SHOT_CUES.pistol.reused).toMatch(/Sound Lab rifle-shot/);
+  it('maps its sound onto its own dedicated Sound Lab pistol shot (iteration 11), with a real clip behind it', () => {
+    expect(WEAPON_SHOT_CUES.pistol).toMatchObject({cue: 'pistolShot', rate: 1});
+    expect(WEAPON_SHOT_CUES.pistol.reused).toBeUndefined();
+    expect(CLIP_MANIFEST.pistolShot?.[0]?.url).toBe('assets/audio/i11-pistol-shot-01.mp3');
     expect(WEAPON_SHOT_CUES.rifle).toMatchObject({cue: 'rifleShot', rate: 1, gain: 1});
     expect(WEAPON_SHOT_CUES.shotgun).toMatchObject({cue: 'shotgunShot', rate: 1, gain: 1});
   });

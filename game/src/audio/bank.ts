@@ -9,16 +9,20 @@ import {CLIP_MANIFEST as CLIP_MANIFEST_I05, type ClipRef} from './manifest.gener
 import {CLIP_MANIFEST_I06} from './manifest.iteration06.generated';
 import {CLIP_MANIFEST_I07K} from './manifest.iteration07k.generated';
 import {CLIP_MANIFEST_I07Q} from './manifest.iteration07q.generated';
+import {CLIP_MANIFEST_I11} from './manifest.iteration11.generated';
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
  * (tools/audio-pipeline/build-iteration06.mjs; provenance derivatives/audio-iteration06.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
-  'rifleShot', 'shotgunShot', 'impactConcrete', 'impactTile', 'impactMetal', 'impactWood', 'impactFlesh',
+  'rifleShot', 'shotgunShot',
+  // Iteration 11 (tools/audio-pipeline/build-iteration11-pistol.mjs): the dedicated Sound Lab pistol shot.
+  'pistolShot',
+  'impactConcrete', 'impactTile', 'impactMetal', 'impactWood', 'impactFlesh',
   // Iteration 06 (Lane D): material breaking — glass hit/shatter, sheet metal, wood break, rubble, flesh tear.
   'impactGlass', 'impactSheetMetal', 'fleshTear', 'breakGlass', 'breakWood', 'debrisFall',
   // Iteration 07 (Lane K, tools/audio-pipeline/build-iteration07k.mjs): shot items / chunks / light props landing.

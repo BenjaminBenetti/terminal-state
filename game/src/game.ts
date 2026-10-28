@@ -913,7 +913,7 @@ export class Game {
     for (const [z, e] of dmg) {
       const killed = z.brain.damage(e.total, this.player.x, this.player.z, this.player.y);
       z.hitFlash = 1;
-      this.sfx.impact(e.point.x, e.point.y, e.point.z, 'flesh');
+      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z); // one range-audible flesh confirm per enemy per shot (pellets aggregated in dmg)
       if (e.head) this.stats.headshots++;
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);

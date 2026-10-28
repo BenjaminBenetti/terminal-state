@@ -9,13 +9,14 @@ import {CLIP_BYTES as CLIP_BYTES_I05, CLIP_GAPS as CLIP_GAPS_I05, CLIP_MANIFEST 
 import {CLIP_BYTES_I06, CLIP_GAPS_I06, CLIP_MANIFEST_I06} from '../src/audio/manifest.iteration06.generated';
 import {CLIP_BYTES_I07K, CLIP_GAPS_I07K, CLIP_MANIFEST_I07K} from '../src/audio/manifest.iteration07k.generated';
 import {CLIP_BYTES_I07Q, CLIP_GAPS_I07Q, CLIP_MANIFEST_I07Q} from '../src/audio/manifest.iteration07q.generated';
+import {CLIP_BYTES_I11, CLIP_GAPS_I11, CLIP_MANIFEST_I11} from '../src/audio/manifest.iteration11.generated';
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
 // Iteration 07 (Lane Q): + rat/dog creature vocals + paw scrabble (i07q).
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q;
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -71,7 +72,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -127,6 +128,7 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       search: () => sfx.search(), eat: () => { for (const k of ['chips', 'chocolate', 'beans', 'noodles', 'other']) sfx.eat(k); },
       drink: () => { for (const k of ['cola', 'water', 'juice', 'other']) sfx.drink(k); }, death: () => sfx.death(), win: () => sfx.win(),
       impact: () => { for (const s of ['concrete', 'tile', 'metal', 'wood', 'flesh', 'glass', 'sheet'] as const) { ctx.currentTime += 1; sfx.impact(3, 1, 3, s); } },
+      hitConfirm: () => { ctx.currentTime += 1; sfx.hitConfirm(3, 1, 3); ctx.currentTime += 1; sfx.hitConfirm(70, 1, 3); },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
       physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },
