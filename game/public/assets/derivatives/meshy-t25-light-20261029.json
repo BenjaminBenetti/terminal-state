@@ -13,11 +13,11 @@
     "files": "plain glTF 2.0 binary (no Draco / meshopt / KTX2); new flat path <old-basename>-t25.glb (cache-busting); logical runtime keys unchanged"
   },
   "restoreNote": "Every replaced runtime file is tracked at the pushed base commit; restore = record.restore.command (git show <base>:<path>).",
-  "tool": "meshy-t25-props-1",
+  "tool": "meshy-t25-props-2",
   "class": "light",
   "counts": {
     "records": 1,
-    "bytes": 345912,
+    "bytes": 348808,
     "triangles": 1199,
     "replacedBytes": 538696,
     "replacedTriangles": 894
@@ -32,8 +32,8 @@
       "output": {
         "path": "game/public/assets/models/light-lod2-t25.glb",
         "url": "assets/models/light-lod2-t25.glb",
-        "sha256": "480095f94483134a9f1f0d3c112a5390e9f6eed0e2bf42e32c27185874738d78",
-        "bytes": 345912,
+        "sha256": "a3bafa8094cee5a07da0a90a3a3ee1245e29ad4569797f065ea1c567ce441fdf",
+        "bytes": 348808,
         "triangles": 1199,
         "vertices": 1871,
         "textures": [
@@ -44,7 +44,7 @@
               1024
             ],
             "mime": "image/jpeg",
-            "bytes": 164196
+            "bytes": 167090
           },
           {
             "slot": "metallicRoughness",
@@ -243,6 +243,10 @@
         }
       },
       "tune": {
+        "colorGrade": {
+          "mode": "tint",
+          "reason": "primary review: the T2.5 diffuser bakes cleaner / whiter than the original aged-ivory fixture (mean tint original 164/152/134 vs 160/154/141): hue moved toward the original ivory, luminance kept"
+        },
         "fit": "uniform-width",
         "reason": "the fixture size is read from the model bbox at load (game.ts WorldMaterials fixture dims -> emissive tube box, instancing fit): keep the 1.2 m length and the round diffuser tube round (a per-axis fit to the old 0.172 m depth would stretch it 30% into an oval); height comes out 0.19 m like the old fixture, depth 0.13 m"
       },
@@ -261,6 +265,31 @@
         "boundaryEdges": 147,
         "nonManifoldEdges": 0,
         "edges": 1872
+      },
+      "colorGrade": {
+        "mode": "tint",
+        "reason": "primary review: the T2.5 diffuser bakes cleaner / whiter than the original aged-ivory fixture (mean tint original 164/152/134 vs 160/154/141): hue moved toward the original ivory, luminance kept",
+        "factors": [
+          1.0239,
+          0.9952,
+          0.9712
+        ],
+        "clamp": [
+          0.85,
+          1.05
+        ],
+        "neutralMask": null,
+        "referenceMeanSRGB": [
+          163.594,
+          152.046,
+          134.17
+        ],
+        "renderMeanSRGBBefore": [
+          159.638,
+          152.647,
+          138.024
+        ],
+        "method": "per-channel multiply of the base-colour map (sRGB) before downsizing; means over the alpha-masked original image and an unshaded 200 px orthographic front render"
       },
       "surfaces": [],
       "conventions": {
@@ -309,7 +338,7 @@
         "Simplified from 2662 to 1199 triangles (Meshy UVs / seams kept).",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     }
   ]
 }

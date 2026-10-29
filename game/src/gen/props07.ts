@@ -202,7 +202,8 @@ export const P7_SPECS = {
   // --- medical ----------------------------------------------------------------------------------------------------------------
   crashCart: {label: 'crash cart', cls: 'sheetMetal', holder: {lots: [1, 3], empty: 0.2, mod: [0, 0.3, 3, 0]}, uses: [W(['first-aid-room'], [1, 1], {chance: 0.85, front: 0.8}), W(['pharmacy'], [1, 1], {chance: 0.3})]},
   // Loot on the flat middle of the mattress (the measured extent includes the raised backrest).
-  wheeledStretcher: {label: 'stretcher', cls: 'steel', holder: {lots: [1, 2], empty: 0.45, mod: [0, 0.3, 3, 0], surfaces: [{y: 0.6, x0: -0.19, x1: 0.19, z0: -0.35, z1: 0.35, clear: 0.35}]}, uses: [ALONG(['first-aid-room'], [1, 1], {chance: 0.7}), FREE(['platform'], [1, 1], {chance: 0.12, ring: 1.0})]},
+  // Meshy T2.5 stretcher (ray-cast 2026-10-29): flat mattress top 0.70 m over z -0.1..0.6, raised backrest toward -z (0.75..0.89)
+  wheeledStretcher: {label: 'stretcher', cls: 'steel', holder: {lots: [1, 2], empty: 0.45, mod: [0, 0.3, 3, 0], surfaces: [{y: 0.7, x0: -0.17, x1: 0.17, z0: -0.1, z1: 0.6, clear: 0.35}]}, uses: [ALONG(['first-aid-room'], [1, 1], {chance: 0.7}), FREE(['platform'], [1, 1], {chance: 0.12, ring: 1.0})]},
   ivPole: {label: 'IV pole', cls: 'steel', uses: [W(['first-aid-room'], [1, 2], {chance: 0.7, front: 0.5}), W(['pharmacy'], [1, 1], {chance: 0.2, front: 0.5})]},
   oxygenCart: {label: 'oxygen cart', cls: 'steel', uses: [W(['first-aid-room', 'pharmacy'], [1, 1], {chance: 0.6, front: 0.5})]},
   physicianScale: {label: 'scale', cls: 'steel', uses: [W(['first-aid-room'], [1, 1], {chance: 0.6}), W(['pharmacy'], [1, 1], {chance: 0.3})]},

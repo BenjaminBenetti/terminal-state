@@ -22,7 +22,14 @@ import {t25Source, T25_SUFFIX} from './lib/t25.mjs';
 //   bodies 0.0045 (~8 mm at 1.78 m), wearables 0.007 (~8 mm in the 1.2-unit nominal garment space).
 export const T25 = {
   heavyset: {asset: 'body:heavyset', attempt: 'a1', sha256: 'a88bad7d4f74038fd4b3f383eefdda5565c2aef21c7f88093c67478c2b9f738c'},
-  hoodie: {asset: 'garment:hoodie', attempt: 'a1', sha256: 'fd09ada122a10c8411fbbe9700082845cbfa51a66d520252b81c7c315d0a04b3', facing: 1},
+  hoodie: {asset: 'garment:hoodie', attempt: 'a1', sha256: 'fd09ada122a10c8411fbbe9700082845cbfa51a66d520252b81c7c315d0a04b3', facing: 1,
+    // accepted deviation fix (primary review vs the ORIGINAL outfitHoodie image: the T2.5 hoodie reads lighter / pinker than
+    // the reference's deep worn red). Measured: the Meshy provider render is lit much brighter, but the T2.5 ALBEDO itself
+    // (UV-covered texels) is already about as bright as the reference photo's garment pixels (lin R .122 vs .131); what is
+    // off is the hue: G/R .25, B/R .30 (B > G: pink / magenta) vs the reference .30 / .30 (brick red). Grade = per-channel
+    // linear gains giving the albedo the reference's mean chromaticity at an unchanged mean luminance (lib/grade.mjs,
+    // computed at build time from the stage atlas + the original image; numbers recorded in outfit-hoodie.json).
+    grade: {mode: 'reference-chroma', luminance: 1, note: 'albedo chromaticity -> the original reference image mean (alpha-masked garment pixels); mean luminance unchanged (the reference is a lit photo)'}},
 };
 export const T25_DENSIFY = {body: 0.0045, wearable: 0.007};
 /**

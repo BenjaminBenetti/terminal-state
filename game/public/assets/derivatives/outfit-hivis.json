@@ -19,11 +19,22 @@
   "provenance": "generated (iteration 05)",
   "slot": "upper",
   "kind": "garment",
+  "t25": {
+    "migration": "studio-meshy-game-replacement-20261029-01",
+    "sourceReplaced": false,
+    "note": "source master unchanged (legacy local Pixal3D); file rebuilt because its per-body fits / masks follow bodies replaced in this migration",
+    "supersedes": {
+      "path": "game/public/assets/models/outfit-hivis.glb",
+      "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+      "blob": "8f95fbd26de923592db5ea4f6e37fc7da759b2c6",
+      "restore": "git show a7a646a:game/public/assets/models/outfit-hivis.glb > game/public/assets/models/outfit-hivis.glb"
+    }
+  },
   "outputs": {
     "glb": {
-      "path": "game/public/assets/models/outfit-hivis.glb",
-      "bytes": 418748,
-      "sha256": "4762bd2048f2bbea45932dd025f661d8984e55abc3ccb7a5b79f3d575875eaf0",
+      "path": "game/public/assets/models/outfit-hivis-t25.glb",
+      "bytes": 418752,
+      "sha256": "862d0a3e3801d31c72b56854d21a434b3e575c10145090e381b228568d91ba9c",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -1072,7 +1083,7 @@
             "coveredOuterWallVertices": 49
           }
         ],
-        "ms": 41798
+        "ms": 12823
       },
       "bulkMBeforeRefit": {
         "torso": 0.0225,
@@ -1107,72 +1118,72 @@
         ],
         "retargetY": [
           0.898,
-          1.533
+          1.531
         ],
         "pushedY": [
-          0.897,
-          1.54
+          0.883,
+          1.576
         ],
         "pushPercentilesM": [
-          0.0065,
-          0.0271,
-          0.0729
+          0.0134,
+          0.0556,
+          0.0725
         ]
       },
       "retarget": {
         "displacementSmoothIters": 12,
-        "headScale": 0.948,
+        "headScale": 0.909,
         "limbRadiusDeltaM": {
-          "L_UpperArm": 0.0091,
-          "L_Forearm": 0.0092,
-          "R_UpperArm": 0.0091,
-          "R_Forearm": 0.0092,
-          "L_Thigh": 0.006,
-          "L_Shin": 0.0114,
-          "R_Thigh": 0.006,
-          "R_Shin": 0.0114
+          "L_UpperArm": 0.0103,
+          "L_Forearm": 0.0078,
+          "R_UpperArm": 0.0103,
+          "R_Forearm": 0.0078,
+          "L_Thigh": 0.0027,
+          "L_Shin": 0.006,
+          "R_Thigh": 0.0027,
+          "R_Shin": 0.006
         },
         "limbsMapped": false,
         "limbLength": {
-          "L_UpperArm": 1.253,
-          "L_Forearm": 1.194,
-          "L_Hand": 0.815,
-          "R_UpperArm": 1.253,
-          "R_Forearm": 1.194,
-          "R_Hand": 0.815,
-          "L_Thigh": 1.004,
-          "L_Shin": 1.003,
-          "L_Foot": 0.927,
-          "R_Thigh": 1.004,
-          "R_Shin": 1.003,
-          "R_Foot": 0.927
+          "L_UpperArm": 1.174,
+          "L_Forearm": 1.156,
+          "L_Hand": 0.828,
+          "R_UpperArm": 1.174,
+          "R_Forearm": 1.156,
+          "R_Hand": 0.828,
+          "L_Thigh": 1.045,
+          "L_Shin": 1.04,
+          "L_Foot": 0.891,
+          "R_Thigh": 1.045,
+          "R_Shin": 1.04,
+          "R_Foot": 0.891
         }
       },
       "sleeveless": true,
       "collisionTarget": "body triangles without arm-dominant vertices + fitted lower garments above the crotch (layering)",
       "pushOut": {
         "marginM": 0.02,
-        "verticesInsideBodyBefore": 191,
-        "verticesMoved": 2301,
-        "maxDisplacementM": 0.0997,
-        "lastRoundViolations": 338,
+        "verticesInsideBodyBefore": 665,
+        "verticesMoved": 2253,
+        "maxDisplacementM": 0.1005,
+        "lastRoundViolations": 203,
         "rounds": 8,
         "smoothIters": 6
       },
       "transfer": {
         "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing; region mask: arm weights on torso panels fade out 3-15 cm below the armpit, sleeves keep their own arm chain + Chest",
-        "maxDistToBodyM": 0.1107,
-        "verticesFartherThan10cm": 3,
+        "maxDistToBodyM": 0.1019,
+        "verticesFartherThan10cm": 1,
         "thighFollowMax": 0.45,
         "smoothIters": 3,
-        "panelVerticesArmFree": 971
+        "panelVerticesArmFree": 1037
       },
       "bulkM": {
-        "torso": 0.0316,
-        "arm": 0.0197
+        "torso": 0.0342,
+        "arm": 0.0302
       },
-      "hiddenBodyTriangles": 3306,
-      "hiddenFraction": 0.221,
+      "hiddenBodyTriangles": 3383,
+      "hiddenFraction": 0.2255,
       "refit07": {
         "method": "region-restricted outer-hull anchors -> body weights at the anchor -> bind clearance (anchor + body/lower vertex driven) -> pose-validated extra clearance -> all-pose masks (lib/fit07.mjs)",
         "params": {
@@ -1189,275 +1200,181 @@
           "maxRoundRaise": 0.04,
           "freezeAfter": 5
         },
-        "ironedVertices": 592,
+        "ironedVertices": 357,
         "skirtVertices": 0,
         "anchorFallbacks": 0,
-        "outerHullBodyVertices": 3681,
+        "outerHullBodyVertices": 7307,
         "anchorDistanceM": {
-          "p50": 0.0261,
-          "p95": 0.0517
+          "p50": 0.0343,
+          "p95": 0.0603
         },
         "offsetM": {
-          "p50": 0.0173,
-          "p95": 0.062,
-          "max": 0.1001,
-          "skinFieldBindMax": 0.09,
+          "p50": 0,
+          "p95": 0.0156,
+          "max": 0.0566,
+          "skinFieldBindMax": 0.0394,
           "skinFieldPoseExtraMax": 0.02
         },
         "bindRounds": [
           {
             "round": 0,
-            "anchorBelowClear": 264,
+            "anchorBelowClear": 9,
             "body": {
-              "covered": 1242,
-              "poke": 762,
-              "close": 69,
-              "exposed": 0,
-              "notAnchoredHere": 3,
-              "directionSkew": 5,
-              "maxDeficit": 0.0611
-            },
-            "layers": [
-              {
-                "id": "cargo",
-                "covered": 46,
-                "poke": 8,
-                "close": 3,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 1,
-                "maxDeficit": 0.0484
-              },
-              {
-                "id": "jeans",
-                "covered": 71,
-                "poke": 14,
-                "close": 6,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0666
-              },
-              {
-                "id": "slacks",
-                "covered": 34,
-                "poke": 3,
-                "close": 0,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0336
-              }
-            ],
-            "skinVerticesRaised": 495,
-            "maxRaiseM": 0.04
-          },
-          {
-            "round": 1,
-            "anchorBelowClear": 231,
-            "body": {
-              "covered": 1261,
-              "poke": 156,
-              "close": 359,
+              "covered": 2572,
+              "poke": 4,
+              "close": 4,
               "exposed": 0,
               "notAnchoredHere": 0,
-              "directionSkew": 0,
-              "maxDeficit": 0.0229
+              "directionSkew": 6,
+              "maxDeficit": 0.0038
             },
             "layers": [
               {
                 "id": "cargo",
                 "covered": 48,
                 "poke": 1,
-                "close": 7,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 1,
-                "maxDeficit": 0.0083
-              },
-              {
-                "id": "jeans",
-                "covered": 71,
-                "poke": 2,
-                "close": 11,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0192
-              },
-              {
-                "id": "slacks",
-                "covered": 34,
-                "poke": 0,
                 "close": 2,
                 "exposed": 0,
                 "notAnchoredHere": 0,
                 "directionSkew": 0,
-                "maxDeficit": 0.0035
+                "maxDeficit": 0.0062
+              },
+              {
+                "id": "jeans",
+                "covered": 74,
+                "poke": 3,
+                "close": 8,
+                "exposed": 0,
+                "notAnchoredHere": 1,
+                "directionSkew": 0,
+                "maxDeficit": 0.0257
+              },
+              {
+                "id": "slacks",
+                "covered": 31,
+                "poke": 0,
+                "close": 1,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0.0008
               }
             ],
-            "skinVerticesRaised": 357,
-            "maxRaiseM": 0.0231
+            "skinVerticesRaised": 50,
+            "maxRaiseM": 0.0257
+          },
+          {
+            "round": 1,
+            "anchorBelowClear": 1,
+            "body": {
+              "covered": 2574,
+              "poke": 4,
+              "close": 3,
+              "exposed": 0,
+              "notAnchoredHere": 0,
+              "directionSkew": 6,
+              "maxDeficit": 0.0056
+            },
+            "layers": [
+              {
+                "id": "cargo",
+                "covered": 48,
+                "poke": 0,
+                "close": 1,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0.0021
+              },
+              {
+                "id": "jeans",
+                "covered": 73,
+                "poke": 1,
+                "close": 6,
+                "exposed": 0,
+                "notAnchoredHere": 1,
+                "directionSkew": 0,
+                "maxDeficit": 0.0037
+              },
+              {
+                "id": "slacks",
+                "covered": 31,
+                "poke": 0,
+                "close": 1,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0.0001
+              }
+            ],
+            "skinVerticesRaised": 30,
+            "maxRaiseM": 0.0056
           },
           {
             "round": 2,
-            "anchorBelowClear": 59,
+            "anchorBelowClear": 0,
             "body": {
-              "covered": 1272,
-              "poke": 1,
-              "close": 195,
+              "covered": 2574,
+              "poke": 4,
+              "close": 4,
               "exposed": 0,
               "notAnchoredHere": 0,
-              "directionSkew": 4,
-              "maxDeficit": 0.006
+              "directionSkew": 7,
+              "maxDeficit": 0.0007
             },
             "layers": [
               {
                 "id": "cargo",
-                "covered": 50,
-                "poke": 0,
-                "close": 3,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0038
-              },
-              {
-                "id": "jeans",
-                "covered": 71,
-                "poke": 0,
-                "close": 10,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0058
-              },
-              {
-                "id": "slacks",
-                "covered": 34,
+                "covered": 48,
                 "poke": 0,
                 "close": 1,
                 "exposed": 0,
                 "notAnchoredHere": 0,
                 "directionSkew": 0,
                 "maxDeficit": 0.0002
+              },
+              {
+                "id": "jeans",
+                "covered": 73,
+                "poke": 1,
+                "close": 6,
+                "exposed": 0,
+                "notAnchoredHere": 1,
+                "directionSkew": 0,
+                "maxDeficit": 0.0056
+              },
+              {
+                "id": "slacks",
+                "covered": 31,
+                "poke": 0,
+                "close": 1,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0
               }
             ],
-            "skinVerticesRaised": 251,
-            "maxRaiseM": 0.0236
+            "skinVerticesRaised": 22,
+            "maxRaiseM": 0.0056
           },
           {
             "round": 3,
-            "anchorBelowClear": 35,
+            "anchorBelowClear": 0,
             "body": {
-              "covered": 1269,
-              "poke": 1,
-              "close": 98,
+              "covered": 2574,
+              "poke": 4,
+              "close": 5,
               "exposed": 0,
               "notAnchoredHere": 0,
-              "directionSkew": 2,
-              "maxDeficit": 0.006
-            },
-            "layers": [
-              {
-                "id": "cargo",
-                "covered": 49,
-                "poke": 0,
-                "close": 1,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0002
-              },
-              {
-                "id": "jeans",
-                "covered": 71,
-                "poke": 0,
-                "close": 6,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0038
-              },
-              {
-                "id": "slacks",
-                "covered": 34,
-                "poke": 0,
-                "close": 0,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0
-              }
-            ],
-            "skinVerticesRaised": 173,
-            "maxRaiseM": 0.0167
-          },
-          {
-            "round": 4,
-            "anchorBelowClear": 27,
-            "body": {
-              "covered": 1269,
-              "poke": 1,
-              "close": 65,
-              "exposed": 0,
-              "notAnchoredHere": 2,
-              "directionSkew": 2,
-              "maxDeficit": 0.006
-            },
-            "layers": [
-              {
-                "id": "cargo",
-                "covered": 49,
-                "poke": 0,
-                "close": 1,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0
-              },
-              {
-                "id": "jeans",
-                "covered": 71,
-                "poke": 0,
-                "close": 5,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0.0022
-              },
-              {
-                "id": "slacks",
-                "covered": 34,
-                "poke": 0,
-                "close": 0,
-                "exposed": 0,
-                "notAnchoredHere": 0,
-                "directionSkew": 0,
-                "maxDeficit": 0
-              }
-            ],
-            "skinVerticesRaised": 123,
-            "maxRaiseM": 0.0079
-          },
-          {
-            "round": 5,
-            "anchorBelowClear": 19,
-            "body": {
-              "covered": 1267,
-              "poke": 2,
-              "close": 48,
-              "exposed": 0,
-              "notAnchoredHere": 2,
-              "directionSkew": 2,
+              "directionSkew": 7,
               "maxDeficit": 0.0058
             },
             "layers": [
               {
                 "id": "cargo",
-                "covered": 49,
+                "covered": 48,
                 "poke": 0,
-                "close": 1,
+                "close": 0,
                 "exposed": 0,
                 "notAnchoredHere": 0,
                 "directionSkew": 0,
@@ -1465,78 +1382,172 @@
               },
               {
                 "id": "jeans",
-                "covered": 71,
-                "poke": 0,
-                "close": 5,
+                "covered": 73,
+                "poke": 1,
+                "close": 4,
                 "exposed": 0,
-                "notAnchoredHere": 0,
+                "notAnchoredHere": 1,
                 "directionSkew": 0,
-                "maxDeficit": 0.0051
+                "maxDeficit": 0.0056
               },
               {
                 "id": "slacks",
-                "covered": 34,
+                "covered": 32,
                 "poke": 0,
-                "close": 0,
+                "close": 1,
                 "exposed": 0,
                 "notAnchoredHere": 0,
                 "directionSkew": 0,
                 "maxDeficit": 0
               }
             ],
-            "skinVerticesRaised": 39,
-            "maxRaiseM": 0.0226
+            "skinVerticesRaised": 10,
+            "maxRaiseM": 0.0058
+          },
+          {
+            "round": 4,
+            "anchorBelowClear": 0,
+            "body": {
+              "covered": 2573,
+              "poke": 4,
+              "close": 3,
+              "exposed": 0,
+              "notAnchoredHere": 0,
+              "directionSkew": 6,
+              "maxDeficit": 0.0048
+            },
+            "layers": [
+              {
+                "id": "cargo",
+                "covered": 48,
+                "poke": 0,
+                "close": 0,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0
+              },
+              {
+                "id": "jeans",
+                "covered": 73,
+                "poke": 1,
+                "close": 5,
+                "exposed": 0,
+                "notAnchoredHere": 1,
+                "directionSkew": 0,
+                "maxDeficit": 0.0056
+              },
+              {
+                "id": "slacks",
+                "covered": 32,
+                "poke": 0,
+                "close": 1,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0
+              }
+            ],
+            "skinVerticesRaised": 12,
+            "maxRaiseM": 0.0056
+          },
+          {
+            "round": 5,
+            "anchorBelowClear": 0,
+            "body": {
+              "covered": 2573,
+              "poke": 4,
+              "close": 3,
+              "exposed": 0,
+              "notAnchoredHere": 0,
+              "directionSkew": 6,
+              "maxDeficit": 0.0034
+            },
+            "layers": [
+              {
+                "id": "cargo",
+                "covered": 48,
+                "poke": 0,
+                "close": 0,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0
+              },
+              {
+                "id": "jeans",
+                "covered": 73,
+                "poke": 1,
+                "close": 5,
+                "exposed": 0,
+                "notAnchoredHere": 1,
+                "directionSkew": 0,
+                "maxDeficit": 0.0024
+              },
+              {
+                "id": "slacks",
+                "covered": 32,
+                "poke": 0,
+                "close": 1,
+                "exposed": 0,
+                "notAnchoredHere": 0,
+                "directionSkew": 0,
+                "maxDeficit": 0
+              }
+            ],
+            "skinVerticesRaised": 7,
+            "maxRaiseM": 0.0034
           }
         ],
         "poseRounds": [
           {
             "round": 0,
-            "skinVerticesNeedingMore": 66,
-            "maxDeficitM": 0.02,
+            "skinVerticesNeedingMore": 60,
+            "maxDeficitM": 0.0074,
             "cappedSkinVertices": 0
           },
           {
             "round": 1,
-            "skinVerticesNeedingMore": 61,
-            "maxDeficitM": 0.02,
-            "cappedSkinVertices": 20
+            "skinVerticesNeedingMore": 52,
+            "maxDeficitM": 0.0176,
+            "cappedSkinVertices": 1
           },
           {
             "round": 2,
-            "skinVerticesNeedingMore": 57,
+            "skinVerticesNeedingMore": 47,
             "maxDeficitM": 0.02,
-            "cappedSkinVertices": 23
+            "cappedSkinVertices": 3
           },
           {
             "round": 3,
-            "skinVerticesNeedingMore": 57,
+            "skinVerticesNeedingMore": 36,
             "maxDeficitM": 0.02
           }
         ],
         "finalPerClip": {
           "Bind": {
             "poses": 1,
-            "covered": 1267,
-            "maxPoke": 1,
-            "maxClose": 11,
+            "covered": 2570,
+            "maxPoke": 4,
+            "maxClose": 1,
             "maxExposed": 0,
             "maxNotAnchoredHere": 0,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 0,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
+                "covered": 73,
+                "maxPoke": 1,
                 "maxExposed": 0
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 0
               }
@@ -1544,55 +1555,55 @@
           },
           "Idle": {
             "poses": 31,
-            "covered": 1267,
-            "maxPoke": 6,
-            "maxClose": 16,
-            "maxExposed": 24,
-            "maxNotAnchoredHere": 5,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
-            "layerMaxExposed": 1,
+            "covered": 2570,
+            "maxPoke": 23,
+            "maxClose": 5,
+            "maxExposed": 56,
+            "maxNotAnchoredHere": 19,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
+            "layerMaxExposed": 2,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
-                "maxExposed": 1
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 0
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
-                "maxExposed": 1
+                "maxExposed": 2
               }
             }
           },
           "Walk": {
             "poses": 13,
-            "covered": 1267,
+            "covered": 2570,
             "maxPoke": 1,
-            "maxClose": 13,
-            "maxExposed": 38,
-            "maxNotAnchoredHere": 3,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "maxClose": 0,
+            "maxExposed": 87,
+            "maxNotAnchoredHere": 0,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 3,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
-                "maxExposed": 2
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 0
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 3
               }
@@ -1600,27 +1611,27 @@
           },
           "Run": {
             "poses": 8,
-            "covered": 1267,
+            "covered": 2570,
             "maxPoke": 1,
-            "maxClose": 13,
-            "maxExposed": 40,
-            "maxNotAnchoredHere": 3,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "maxClose": 1,
+            "maxExposed": 82,
+            "maxNotAnchoredHere": 0,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 3,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
-                "maxExposed": 2
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 3
               }
@@ -1628,83 +1639,83 @@
           },
           "Attack": {
             "poses": 12,
-            "covered": 1267,
-            "maxPoke": 6,
-            "maxClose": 16,
-            "maxExposed": 39,
-            "maxNotAnchoredHere": 4,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
-            "layerMaxExposed": 2,
+            "covered": 2570,
+            "maxPoke": 17,
+            "maxClose": 4,
+            "maxExposed": 68,
+            "maxNotAnchoredHere": 14,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
+            "layerMaxExposed": 3,
             "layers": {
               "cargo": {
-                "covered": 49,
-                "maxPoke": 0,
-                "maxExposed": 0
-              },
-              "jeans": {
-                "covered": 71,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 1
               },
+              "jeans": {
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 1
+              },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
-                "maxExposed": 2
+                "maxExposed": 3
               }
             }
           },
           "Hit": {
             "poses": 4,
-            "covered": 1267,
-            "maxPoke": 5,
-            "maxClose": 15,
-            "maxExposed": 31,
-            "maxNotAnchoredHere": 5,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
-            "layerMaxExposed": 1,
+            "covered": 2570,
+            "maxPoke": 23,
+            "maxClose": 1,
+            "maxExposed": 55,
+            "maxNotAnchoredHere": 18,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
+            "layerMaxExposed": 2,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
-                "maxExposed": 1
+                "maxExposed": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
-                "maxExposed": 1
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 0
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
-                "maxExposed": 1
+                "maxExposed": 2
               }
             }
           },
           "Death": {
             "poses": 17,
-            "covered": 1267,
-            "maxPoke": 4,
-            "maxClose": 17,
-            "maxExposed": 57,
-            "maxNotAnchoredHere": 4,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "covered": 2570,
+            "maxPoke": 17,
+            "maxClose": 1,
+            "maxExposed": 88,
+            "maxNotAnchoredHere": 12,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 3,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
-                "maxExposed": 0
+                "maxExposed": 1
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
-                "maxExposed": 2
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 3
               }
@@ -1712,27 +1723,27 @@
           },
           "ragdoll-sprawl": {
             "poses": 1,
-            "covered": 1267,
-            "maxPoke": 2,
-            "maxClose": 8,
-            "maxExposed": 52,
-            "maxNotAnchoredHere": 1,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "covered": 2570,
+            "maxPoke": 1,
+            "maxClose": 0,
+            "maxExposed": 87,
+            "maxNotAnchoredHere": 0,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 2,
             "layers": {
               "cargo": {
-                "covered": 49,
-                "maxPoke": 0,
-                "maxExposed": 0
-              },
-              "jeans": {
-                "covered": 71,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 1
               },
+              "jeans": {
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 1
+              },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 2
               }
@@ -1740,27 +1751,27 @@
           },
           "ragdoll-crumple": {
             "poses": 1,
-            "covered": 1267,
-            "maxPoke": 5,
-            "maxClose": 8,
-            "maxExposed": 35,
-            "maxNotAnchoredHere": 2,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "covered": 2570,
+            "maxPoke": 12,
+            "maxClose": 5,
+            "maxExposed": 87,
+            "maxNotAnchoredHere": 11,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 3,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxPoke": 0,
-                "maxExposed": 0
+                "maxExposed": 1
               },
               "jeans": {
-                "covered": 71,
-                "maxPoke": 0,
-                "maxExposed": 2
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 3
               }
@@ -1768,27 +1779,27 @@
           },
           "ragdoll-twist": {
             "poses": 1,
-            "covered": 1267,
-            "maxPoke": 0,
-            "maxClose": 10,
-            "maxExposed": 49,
-            "maxNotAnchoredHere": 2,
-            "layerCovered": 71,
-            "layerMaxPoke": 0,
+            "covered": 2570,
+            "maxPoke": 1,
+            "maxClose": 0,
+            "maxExposed": 107,
+            "maxNotAnchoredHere": 0,
+            "layerCovered": 73,
+            "layerMaxPoke": 1,
             "layerMaxExposed": 2,
             "layers": {
               "cargo": {
-                "covered": 49,
-                "maxPoke": 0,
-                "maxExposed": 0
-              },
-              "jeans": {
-                "covered": 71,
+                "covered": 48,
                 "maxPoke": 0,
                 "maxExposed": 1
               },
+              "jeans": {
+                "covered": 73,
+                "maxPoke": 1,
+                "maxExposed": 1
+              },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxPoke": 0,
                 "maxExposed": 2
               }
@@ -1798,190 +1809,190 @@
         "visiblePerClip": {
           "Bind": {
             "poses": 1,
-            "covered": 1267,
-            "maxVisiblePoke": 1,
+            "covered": 2570,
+            "maxVisiblePoke": 4,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "Idle": {
             "poses": 31,
-            "covered": 1267,
-            "maxVisiblePoke": 6,
+            "covered": 2570,
+            "maxVisiblePoke": 23,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "Walk": {
             "poses": 13,
-            "covered": 1267,
+            "covered": 2570,
             "maxVisiblePoke": 1,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "Run": {
             "poses": 8,
-            "covered": 1267,
+            "covered": 2570,
             "maxVisiblePoke": 1,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "Attack": {
             "poses": 12,
-            "covered": 1267,
-            "maxVisiblePoke": 6,
+            "covered": 2570,
+            "maxVisiblePoke": 17,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "Hit": {
             "poses": 4,
-            "covered": 1267,
-            "maxVisiblePoke": 5,
+            "covered": 2570,
+            "maxVisiblePoke": 23,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "Death": {
             "poses": 17,
-            "covered": 1267,
-            "maxVisiblePoke": 4,
+            "covered": 2570,
+            "maxVisiblePoke": 17,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "ragdoll-sprawl": {
             "poses": 1,
-            "covered": 1267,
-            "maxVisiblePoke": 2,
+            "covered": 2570,
+            "maxVisiblePoke": 1,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "ragdoll-crumple": {
             "poses": 1,
-            "covered": 1267,
-            "maxVisiblePoke": 5,
+            "covered": 2570,
+            "maxVisiblePoke": 12,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
           },
           "ragdoll-twist": {
             "poses": 1,
-            "covered": 1267,
-            "maxVisiblePoke": 0,
+            "covered": 2570,
+            "maxVisiblePoke": 1,
             "layers": {
               "cargo": {
-                "covered": 49,
+                "covered": 48,
                 "maxVisiblePoke": 0
               },
               "jeans": {
-                "covered": 71,
-                "maxVisiblePoke": 0
+                "covered": 73,
+                "maxVisiblePoke": 1
               },
               "slacks": {
-                "covered": 34,
+                "covered": 32,
                 "maxVisiblePoke": 0
               }
             }
@@ -1989,48 +2000,49 @@
         },
         "validationPoses": 89,
         "mask": {
-          "hidden": 3306,
-          "droppedNotCoveredInEveryPose": 40
+          "hidden": 3383,
+          "droppedNotCoveredInEveryPose": 49
         },
         "layers": [
           {
             "id": "cargo",
-            "hideWear": 54,
-            "coveredOuterWallVertices": 49
+            "hideWear": 64,
+            "coveredOuterWallVertices": 48
           },
           {
             "id": "jeans",
-            "hideWear": 122,
-            "coveredOuterWallVertices": 71
+            "hideWear": 133,
+            "coveredOuterWallVertices": 73
           },
           {
             "id": "slacks",
-            "hideWear": 39,
-            "coveredOuterWallVertices": 34
+            "hideWear": 42,
+            "coveredOuterWallVertices": 32
           }
         ],
-        "ms": 41038
+        "ms": 13220
       },
       "bulkMBeforeRefit": {
-        "torso": 0.0241,
+        "torso": 0.0322,
         "arm": 0
       },
       "mask": {
-        "hidden": 3306,
-        "total": 14962,
+        "hidden": 3383,
+        "total": 15000,
         "method": "normal + 4 rays tilted 28 deg from 0.03 m below each body triangle centroid; hidden when all hit the fitted garment within 0.09 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden; AND every outer-hull vertex covered (no poke-through, never exposed) in all 89 validation poses (lib/fit07.mjs)"
       },
       "motionStretch": {
         "triangles": 4928,
-        "p50": 1.131,
-        "p99": 4.93,
-        "max": 9.08,
-        "over2x": 280,
-        "over3x": 144,
-        "fractionOver": 0.0292,
+        "p50": 1.136,
+        "p99": 5.734,
+        "max": 19.2,
+        "over2x": 297,
+        "over3x": 161,
+        "fractionOver": 0.0327,
         "worstClips": {
-          "Run": 37,
-          "Death": 14
+          "Attack": 7,
+          "Run": 34,
+          "Death": 10
         },
         "poses": 85
       }

@@ -39,7 +39,7 @@ import {bbox, minAreaYaw} from './lib/orient.mjs';
 import {p7CatalogSource, t25CatalogOverrides, T25_PROPS_PROVENANCE} from './lib/p7-catalog.mjs';
 import {OPEN_FRONT, assembleOpenFront} from './open-front-iteration05.mjs';
 
-const TOOL_VERSION = 'meshy-t25-props-1';
+const TOOL_VERSION = 'meshy-t25-props-2';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const BASE = 'a7a646a1dd62bf1c641fe3dd0d1187ab322afe87';
 const TASK_ID = 'studio-meshy-game-replacement-20261029-01';
@@ -88,7 +88,24 @@ const CLASS_OF = {'openable prop': 'props', prop: 'props', 'shelf/holder': 'prop
  * inner back z -0.331 (the iteration-05 cut fits unchanged); display base top y ~0.175 (old 0.214), canopy from 0.625: the cut
  * starts at 0.172 and a stainless band fills 0.172..0.202 under the iteration-05 base cap (trays / glass / lamps unchanged).
  */
+const EXT_CAB = {key: 'fireExtinguisherCabinet', src: 'T2.5 exterior (fireExtinguisherCabinet)',
+  // window (inside the white door frame) and the cabinet's inner volume, measured on the T2.5 derivative (colour + ray-cast, 2026-10-29)
+  interior: {x0: -0.19, x1: 0.18, y0: 0.045, y1: 0.705, zBack: -0.15, zFront: 0.135, win: [-0.138, 0.088, 0.118, 0.665], zGlass: 0.15},
+  // the painted glass pane (front faces inside the window): removed — a real glass pane + the real extinguisher replace it
+  cut: ([x, y, z], n) => z > 0.12 && Math.abs(n[2]) > 0.5 && x > -0.138 && x < 0.118 && y > 0.088 && y < 0.665,
+  build(g, I) {
+    // inward-facing liner (sides, top, bottom, back): dark, lit like any surface (no emissive cell)
+    g.box('liner', [I.x0, I.y0, I.zBack], [I.x1, I.y1, I.zFront], 'standard', '+x-x+y-y-z', true);
+    // the bracket band the extinguisher hangs in (steel), across the back
+    g.box('bracket', [-0.11, 0.33, I.zBack + 0.001], [0.09, 0.36, I.zBack + 0.012], 'steelDark', '+z+y-y');
+  },
+  glass: I => [{name: 'glass-door', c: [[I.win[0], I.win[1], I.zGlass], [I.win[2], I.win[1], I.zGlass], [I.win[2], I.win[3], I.zGlass], [I.win[0], I.win[3], I.zGlass]], n: [0, 0, 1]}],
+  surfaces: () => [],
+};
 const HYBRID = {
+  'p7:fireExtinguisherCabinet': {name: 'fireExtinguisherCabinetOpen', spec: EXT_CAB,
+    extra: [{name: 'extinguisher', from: 'p7:fireExtinguisher', height: 0.5, at: [-0.012, 0.1, -0.035]}],
+    note: 'Meshy returned the glazed door as a closed red box with a painted reflection and NO extinguisher (lane MESHY flag); the pane is cut, a transparent glass pane + an inward liner + the bracket are authored and the T2.5 fire extinguisher (p7:fireExtinguisher runtime model) stands inside, as in the original image'},
   'base:shopCooler': {name: 'shopCoolerOpen', spec: OPEN_FRONT.shopCoolerOpen},
   'base:shopDisplay': {name: 'shopDisplayOpen', spec: {...OPEN_FRONT.shopDisplayOpen,
     cut: ([, y]) => y > 0.172 && y < 0.624,
@@ -104,8 +121,18 @@ const TUNE = {
       {name: 'lid-skirt-back', c: [[0.268, 0.3615, -0.2045], [-0.268, 0.3615, -0.2045], [-0.268, 0.4185, -0.2045], [0.268, 0.4185, -0.2045]], n: [0, 0, -1], uvAt: [-0.31, 0.39, 0.0]},
     ]}},
   'base:shelf': {yawQuarter: 2, reason: 'the original image is a 3/4 view (the orthographic front check cannot tell front from back: 0.22 vs 0.219); Meshy put the single diagonal brace in its +Z face, but the reference has the braces at the BACK and the shelf is loaded from the front (stock, loot, the cabinet inserts): turned 180 deg'},
+  'base:item_beans': {acceptFlagged: {attempt: 'a2', reason: 'primary 2026-10-29: no more rerolls; fix the extruded label locally (radialClamp) or keep the old model. Fixed locally: the can silhouette is a clean cylinder again and the illustration reads as printed (review sheet review/props/base_item_beans.png)'},
+    radialClamp: {rimBand: 0.08, pad: 0.0004, reason: 'both Meshy attempts (a1, a2; no further rerolls) reconstructed the bowl-of-beans illustration on the label as a solid bowl protruding ~0.3 can widths from the can side; the protruding shell is pressed back onto the can wall (texture kept), so the illustration reads as printed on the label like the original image'}},
+  'p7:fireExtinguisherCabinet': {acceptFlagged: {attempt: 'a1', reason: 'primary 2026-10-29: restore the interior in the derivative / openables refit (no solid baked front when open, a real interior box, no full-bright interior faces): open-front hybrid with glass, liner and the T2.5 extinguisher inside'},
+    budget: {tris: 2300, reason: 'the shell is a plain box; the T2.5 extinguisher placed inside (1.5k tris) shares the medium class budget (4k)'}},
+  'base:shopBackbar': {colorGrade: {mode: 'tint+lum', reason: 'the T2.5 stainless reads as flat light grey, lighter than the original worn stainless back counter (mean 141/140/135 vs 118/111/104): graded toward the original'}},
+  'p7:cctvCamera': {colorGrade: {mode: 'tint+lum', reason: 'the T2.5 housing came out lighter / cleaner than the grimy original camera (mean 98/93/86 vs 74/70/64): graded toward the original'}},
+  'p7:infoTouchKiosk': {simplifyFlags: ['Permissive'], simplifyReason: 'attribute seams stall the seam-preserving collapse at 6228 tris (> the 6k large-class budget); Permissive (attribute-weighted) lets low-error seam collapses through (review sheet checked)'},
+  'p7:toolPegboard': {colorGrade: {mode: 'tint+lum', clamp: [0.55, 1.0], neutralMask: {maxSat: 0.14, luma: [70, 215]}, reason: 'the T2.5 board came back neutral light grey; the original is a brown masonite pegboard (mean 107/83/63 vs 127/120/115). Graded toward the original tint on near-neutral texels only (the board), so the coloured tool handles keep their colours'}},
+  'p7:palletJack': {yawQuarter: 3, reason: 'the original front panel shows the forks toward the camera and the handle behind (as the iteration-07 model); the front check picked the handle side (quarter 1): turned the other way round (quarter 3)'},
   'base:turnstile': {yawQuarter: 1, reason: 'the front check matched the reference (a 3/4 view of the cabinet end) to a side view and turned the cabinet 180 deg from the old model; the game contract is the old orientation: cabinet along Z with the card reader at the +Z end, the tripod arms reaching -X across the gate lane (world/builder.ts TURNSTILE_CABINET_OFFSET centres the cabinet on the fare-gate placement)'},
-  'base:light': {fit: 'uniform-width', reason: 'the fixture size is read from the model bbox at load (game.ts WorldMaterials fixture dims -> emissive tube box, instancing fit): keep the 1.2 m length and the round diffuser tube round (a per-axis fit to the old 0.172 m depth would stretch it 30% into an oval); height comes out 0.19 m like the old fixture, depth 0.13 m'},
+  'base:light': {colorGrade: {mode: 'tint', reason: 'primary review: the T2.5 diffuser bakes cleaner / whiter than the original aged-ivory fixture (mean tint original 164/152/134 vs 160/154/141): hue moved toward the original ivory, luminance kept'},
+    fit: 'uniform-width', reason: 'the fixture size is read from the model bbox at load (game.ts WorldMaterials fixture dims -> emissive tube box, instancing fit): keep the 1.2 m length and the round diffuser tube round (a per-axis fit to the old 0.172 m depth would stretch it 30% into an oval); height comes out 0.19 m like the old fixture, depth 0.13 m'},
 };
 
 // ---- inputs ---------------------------------------------------------------------------------------------------------
@@ -142,12 +169,12 @@ function gitBlob(p) { return execFileSync('git', ['-C', REPO, 'show', `${BASE}:$
 function gitBlobSha(p) { return execFileSync('git', ['-C', REPO, 'rev-parse', `${BASE}:${p}`]).toString().trim(); }
 
 /** First (and only) triangle primitive of a GLB: positions / normals / uvs / indices (world transforms applied) + its textures. */
-async function readMesh(bytesOrFile, {merge = false} = {}) {
+async function readMesh(bytesOrFile, {merge = false, node = null} = {}) {
   const io = new NodeIO();
   const doc = Buffer.isBuffer(bytesOrFile) ? await io.readBinary(new Uint8Array(bytesOrFile)) : await io.read(bytesOrFile);
   const root = doc.getRoot();
   const prims = [];
-  for (const n of root.listNodes()) { const m = n.getMesh(); if (m) for (const p of m.listPrimitives()) prims.push({p, M: n.getWorldMatrix()}); }
+  for (const n of root.listNodes()) { const m = n.getMesh(); if (m && (!node || n.getName() === node)) for (const p of m.listPrimitives()) prims.push({p, M: n.getWorldMatrix()}); }
   if (merge && prims.length > 1) {   // positions / triangle count only (old multi-node hybrids: bbox + budget reference)
     const P = [], I = [];
     for (const {p, M} of prims) {
@@ -212,7 +239,7 @@ function meshStats(P, I) {
 }
 
 /** Seam-preserving simplification on Meshy's own vertex buffer (UVs / normals kept), then compaction. */
-async function simplifyKeepUV(m, targetTris) {
+async function simplifyKeepUV(m, targetTris, flags = []) {
   await MeshoptSimplifier.ready;
   const tris0 = m.I.length / 3;
   if (tris0 <= targetTris) return {...m, simplify: {applied: false, triangles: tris0}};
@@ -221,7 +248,7 @@ async function simplifyKeepUV(m, targetTris) {
   // attribute seams can stop the collapse short of the target: ask for less until the result fits the budget
   let out, err, ask = targetTris;
   for (let k = 0; k < 8; k++) {
-    [out, err] = MeshoptSimplifier.simplifyWithAttributes(m.I, m.P, 3, attrs, 5, [1, 1, 1, 1, 1], null, ask * 3, 1.0, []);
+    [out, err] = MeshoptSimplifier.simplifyWithAttributes(m.I, m.P, 3, attrs, 5, [1, 1, 1, 1, 1], null, ask * 3, 1.0, flags);
     if (out.length / 3 <= targetTris) break;
     ask = Math.floor(ask * Math.min(0.97, targetTris / (out.length / 3)));
   }
@@ -312,6 +339,19 @@ async function frontCheck(m, tex, imagePath) {
   return {scores, best, method: 'native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15'};
 }
 
+// ---- colour vs the original image ---------------------------------------------------------------------------------------
+/** Mean sRGB of the original image (alpha >= 128) and of an unshaded orthographic front render of mesh `m` (same mask rule). */
+async function meanTint(m, tex, imagePath, fromBelow = false) {
+  const {data, info} = await sharp(imagePath).ensureAlpha().resize(256, 256, {fit: 'inside'}).raw().toBuffer({resolveWithObject: true});
+  const ref = [0, 0, 0]; let rn = 0;
+  for (let i = 0; i < info.width * info.height; i++) if (data[4 * i + 3] >= 128) { for (let k = 0; k < 3; k++) ref[k] += data[4 * i + k]; rn++; }
+  const img = rasterize(m.P, m.I, m.UV, tex, fromBelow ? viewYawPitch(0, -20) : VIEWS.front, 200, {shade: false, margin: 0.02});
+  const out = [0, 0, 0]; let on = 0;
+  for (let i = 0; i < 200 * 200; i++) if (img.data[4 * i + 3]) { for (let k = 0; k < 3; k++) out[k] += img.data[4 * i + k]; on++; }
+  const R = ref.map(v => v / rn), O = out.map(v => v / on), lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  return {ref: R, out: O, lumRatio: lum(O) / lum(R)};
+}
+
 // ---- support surfaces (build-props-iteration07.mjs supportSurfaces; output space) ------------------------------------
 // The iteration-07 measure took one centroid per face of a ~1M-triangle dense reconstruction. Smart-topology meshes have few,
 // large faces, so every up-facing face is sampled here on a deterministic barycentric grid (~5 mm spacing, area-weighted
@@ -361,7 +401,11 @@ function supportSurfaces(DP, I, bb) {
     const above = []; for (let i = 0; i < cloud.length; i += 3) { const vy = cloud[i + 1]; if (vy > y + 0.04 && cloud[i] > ix0 && cloud[i] < ix1 && cloud[i + 2] > iz0 && cloud[i + 2] < iz1) above.push(vy); }
     above.sort((p, q) => p - q);
     const clear = above.length < 30 ? 0.6 : above[Math.floor(0.03 * above.length)] - y;
-    out.push({y: r3(y), yTop: r3(c.k1 * bin), areaM2: r4(c.area), x0: r3(x0), x1: r3(x1), z0: r3(z0), z1: r3(z1), clear: r3(Math.min(0.6, clear)), top: false});
+    // fill = support area / its x-z extent: a wire rim or a few rails spread over a wide extent is not a surface to rest items on
+    // (smart-topology meshes keep such thin frames; the iteration-07 dense meshes rarely produced them)
+    const fill = c.area / Math.max(1e-6, (x1 - x0) * (z1 - z0));
+    if (fill < 0.15) continue;
+    out.push({y: r3(y), yTop: r3(c.k1 * bin), areaM2: r4(c.area), x0: r3(x0), x1: r3(x1), z0: r3(z0), z1: r3(z1), clear: r3(Math.min(0.6, clear)), fill: r3(Math.min(1, fill)), top: false});
   }
   if (out.length) out.sort((a, b) => a.y - b.y), out[out.length - 1].top = Math.abs(out[out.length - 1].yTop - bb.max[1]) < 0.04;
   return out;
@@ -405,7 +449,7 @@ async function configFor(master, p7) {
   if (tune.budget) budget = {...budget, ...tune.budget, rule: `${budget.rule}; TUNE: ${tune.budget.reason}`};
   return {id: master.id, cls, p7Key, p7SizeClass: p7Out?.sizeClass ?? null, runtimeKeys: master.runtimeKeys, oldPath, outRel: `game/public/assets/models/${oldBase}-t25.glb`, url: `assets/models/${oldBase}-t25.glb`,
     fit: tune.fit ?? (cls === 'items' ? 'uniform-height' : 'footprint'), fitReason: tune.reason ?? null, dims, anchor, budget, old: {tris: oldTris, bbox: {min: ob.min.map(r4), max: ob.max.map(r4), size: ob.size.map(r4)}, bytes: master.current?.bytes ?? null, textures: master.current?.textures ?? null, sha256: master.current?.sha256 ?? null},
-    yawQuarter: tune.yawQuarter ?? null, yawDeg: tune.yawDeg ?? null, patch: tune.patch ?? null, doubleSided: tune.doubleSided ?? null, limitations: tune.limitations ?? [], tool: TOOL_VERSION};
+    yawQuarter: tune.yawQuarter ?? null, yawDeg: tune.yawDeg ?? null, patch: tune.patch ?? null, radialClamp: tune.radialClamp ?? null, colorGrade: tune.colorGrade ?? null, simplifyFlags: tune.simplifyFlags ?? null, doubleSided: tune.doubleSided ?? null, limitations: tune.limitations ?? [], tool: TOOL_VERSION};
 }
 
 // ---- build one --------------------------------------------------------------------------------------------------------
@@ -451,7 +495,27 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   // own bbox exactly to the target (vertex removal can move the extremes by millimetres).
   const bR0 = bbox(apply(nat.P, R)), pre = cfg.dims[1] / bR0.size[1];
   const oriented = {P: apply(nat.P, R, [pre, pre, pre]), N: applyN(nat.N, R, [1, 1, 1]), UV: nat.UV, I: nat.I};
-  const low0 = await simplifyKeepUV(oriented, cfg.budget.tris);
+  // TUNE radialClamp (cylindrical items): geometry Meshy extruded out of a printed label (a picture read as 3D) is pressed back
+  // onto the can wall: every vertex farther from the can axis than the wall radius (measured on the plain top / bottom rims) is
+  // moved radially onto the wall + `pad` (so it covers the wall behind it). The texture is kept: the picture stays a picture.
+  let clampInfo = null;
+  if (cfg.radialClamp) {
+    const P = oriented.P, b0 = bbox(P), rim = [];
+    for (let i = 0; i < P.length; i += 3) { const f = (P[i + 1] - b0.min[1]) / b0.size[1]; if (f < cfg.radialClamp.rimBand || f > 1 - cfg.radialClamp.rimBand) rim.push([P[i], P[i + 2]]); }
+    const cx = rim.reduce((a, q) => a + q[0], 0) / rim.length, cz = rim.reduce((a, q) => a + q[1], 0) / rim.length;
+    const rr = rim.map(([x, z]) => Math.hypot(x - cx, z - cz)).sort((a, c) => a - c), rc = rr[Math.floor(0.98 * (rr.length - 1))];
+    let moved = 0, maxOut = 0;
+    for (let i = 0; i < P.length; i += 3) {
+      const dx = P[i] - cx, dz = P[i + 2] - cz, r = Math.hypot(dx, dz);
+      if (r <= rc + 1e-5) continue;
+      maxOut = Math.max(maxOut, r - rc); moved++;
+      const k = (rc + cfg.radialClamp.pad) / r; P[i] = cx + dx * k; P[i + 2] = cz + dz * k;
+    }
+    clampInfo = {reason: cfg.radialClamp.reason, axis: [r4(cx), r4(cz)], wallRadiusM: r4(rc), verticesMoved: moved, maxProtrusionM: r4(maxOut), padM: cfg.radialClamp.pad, rimBand: cfg.radialClamp.rimBand};
+    log(`  radial clamp: ${moved} vertices pressed onto the wall r ${rc.toFixed(4)} m (max protrusion ${maxOut.toFixed(4)} m)`);
+  }
+  const low0 = await simplifyKeepUV(oriented, cfg.budget.tris, cfg.simplifyFlags ?? []);
+  if (cfg.simplifyFlags?.length) low0.simplify = {...low0.simplify, flags: cfg.simplifyFlags, flagsReason: TUNE[cfg.id].simplifyReason};
   if (low0.I.length / 3 > cfg.budget.tris) {   // attribute seams stop the collapse: accept up to +10%, recorded
     if (low0.I.length / 3 > 1.1 * cfg.budget.tris) throw new Error(`${cfg.id}: simplification stalls at ${low0.I.length / 3} tris (budget ${cfg.budget.tris}); TUNE a budget`);
     cfg.budget = {...cfg.budget, requestedTris: cfg.budget.tris, tris: low0.I.length / 3, seamLimited: true};
@@ -492,18 +556,57 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   // Closed shells stay single-sided (the game convention); open shells (> 1% boundary edges: thin brackets, handles, tube ends)
   // render double-sided so no see-through holes appear.
   const doubleSided = cfg.doubleSided ?? (lowStats.boundaryEdges > 0.01 * lowStats.edges);
+  // TUNE colorGrade (primary 2026-10-29: assess against the ORIGINAL image; a modest documented grade where the T2.5 bake came out
+  // cleaner / whiter than the reference): per-channel multiply of the base colour from the mean tints (original image vs the
+  // unshaded front render, both alpha-masked). 'tint' keeps the luminance and moves only the hue; 'tint+lum' also darkens toward
+  // the reference (the image is lit, the texture is albedo: the reference mean is lifted x1.08, the median lit/albedo gap of the
+  // set, before the ratio), each factor clamped to [0.85, 1.05].
+  let gradeInfo = null, colorBytes = nat.material.color.bytes;
+  if (cfg.colorGrade) {
+    const st = await meanTint(low, natTex, imgPath, cfg.anchor === 'top');
+    const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    let f = st.ref.map((v, k) => v / st.out[k]);
+    if (cfg.colorGrade.mode === 'tint') { const l = lum(st.ref) / lum(st.out); f = f.map(v => v / l); } else f = f.map(v => v * 1.08);
+    const [lo, hi] = cfg.colorGrade.clamp ?? [0.85, 1.05];
+    f = f.map(v => r4(Math.min(hi, Math.max(lo, v))));
+    const {data, info} = await sharp(colorBytes).removeAlpha().raw().toBuffer({resolveWithObject: true});
+    // optional mask: only near-neutral texels (saturation <= maxSat, luma in [l0, l1]) take the full grade, smoothly blended out
+    const M = cfg.colorGrade.neutralMask;
+    for (let i = 0; i < data.length; i += 3) {
+      let w = 1;
+      if (M) {
+        const r = data[i], g = data[i + 1], b = data[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx ? (mx - mn) / mx : 0, L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        const ws = Math.max(0, Math.min(1, (M.maxSat + 0.06 - sat) / 0.06)), wl = Math.max(0, Math.min(1, (L - M.luma[0] + 15) / 15, (M.luma[1] + 15 - L) / 15));
+        w = ws * wl;
+      }
+      for (let k = 0; k < 3; k++) data[i + k] = Math.min(255, Math.round(data[i + k] * (1 + (f[k] - 1) * w)));
+    }
+    colorBytes = await sharp(data, {raw: {width: info.width, height: info.height, channels: 3}}).png({compressionLevel: 1}).toBuffer();
+    gradeInfo = {mode: cfg.colorGrade.mode, reason: cfg.colorGrade.reason, factors: f, clamp: [lo, hi], neutralMask: M ?? null, referenceMeanSRGB: st.ref.map(r3), renderMeanSRGBBefore: st.out.map(r3), method: 'per-channel multiply of the base-colour map (sRGB) before downsizing; means over the alpha-masked original image and an unshaded 200 px orthographic front render'};
+    log(`  colour grade (${cfg.colorGrade.mode}): x ${f.join(' / ')}`);
+  }
   // Textures: downsized from Meshy's 2048 maps, JPEG; tiers until under the byte budget.
   const tiers = [[86, 88, 90], [80, 82, 86], [74, 76, 82], [66, 70, 76], [58, 62, 70]];
   let glb, textures, tierUsed, hybrid = null;
   const status = 'prototype runtime derivative of a reference-conditioned Meshy T2.5 image-to-3d output (lane MESHY accepted); no license clearance asserted';
   for (const [qc, qm, qn] of tiers) {
-    textures = {color: await resizeJpeg(nat.material.color.bytes, cfg.budget.color, qc, 'color'), orm: nat.material.mr ? await resizeJpeg(nat.material.mr.bytes, cfg.budget.mr, qm, 'mr') : null, normal: nat.material.normal ? await resizeJpeg(nat.material.normal.bytes, cfg.budget.normal, qn, 'normal') : null};
+    textures = {color: await resizeJpeg(colorBytes, cfg.budget.color, qc, 'color'), orm: nat.material.mr ? await resizeJpeg(nat.material.mr.bytes, cfg.budget.mr, qm, 'mr') : null, normal: nat.material.normal ? await resizeJpeg(nat.material.normal.bytes, cfg.budget.normal, qn, 'normal') : null};
     if (!textures.orm) throw new Error(`${cfg.id}: native has no metallic-roughness texture`);
     const extras = {sourceId: cfg.id, meshyTaskId: del.taskId ?? null, nativeSha256: nativeSha, inputImageSha256: imgSha, units: 'meters', front: '+Z', up: '+Y', origin: cfg.anchor === 'top' ? 'top-centre (hangs below y = 0)' : 'bottom-centre (y = 0 floor contact)', status, pipeline: 'tools/asset-pipeline/props/build-meshy-t25.mjs'};
     if (HYBRID[cfg.id]) {
       const H = HYBRID[cfg.id];
+      const extraNodes = [];
+      for (const x of H.extra ?? []) {   // a built T2.5 runtime model placed inside (uniform scale to `height`, bottom-centre at `at`)
+        const rec = loadRecords('props').find(r => r.id === x.from);
+        if (!rec) throw new Error(`${cfg.id}: needs ${x.from} built first`);
+        const xm = await readMesh(fs.readFileSync(path.join(REPO, rec.output.path))), xb = bbox(xm.P), k = x.height / xb.size[1];
+        const P2 = apply(xm.P, [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [k, k, k], [x.at[0] - k * xb.center[0], x.at[1] - k * xb.min[1], x.at[2] - k * xb.center[2]]);
+        extraNodes.push({name: x.name, P: P2, N: xm.N, UV: xm.UV, I: xm.I, tex: {color: xm.material.color, orm: xm.material.mr, normal: xm.material.normal}, metallic: xm.material.metallicFactor, roughness: xm.material.roughnessFactor, doubleSided: xm.material.doubleSided,
+          from: {id: x.from, path: rec.output.path, sha256: rec.output.sha256, scale: r6(k), triangles: xm.I.length / 3, gpuTextureBytesEstimate: rec.output.gpuTextureBytesEstimate}});
+      }
       hybrid = await assembleOpenFront(H.spec, {P: low.P, N: low.N, UV: low.UV, I: low.I, tex: textures, metallic: nat.material.metallicFactor, roughness: nat.material.roughnessFactor},
-        bb => ({...extras, provisionalDimensionsMeters: bb.size, hybrid: `${H.name}: T2.5 exterior cut + authored interior / wire shelves / glass (open-front-iteration05.mjs)`, glassNode: 'glass (alphaMode BLEND; decorative only, never blocks item picking)'}));
+        bb => ({...extras, provisionalDimensionsMeters: bb.size, hybrid: `${H.name}: T2.5 exterior cut + authored interior / glass${extraNodes.length ? ' + ' + extraNodes.map(x => x.name).join(', ') : ''} (open-front-iteration05.mjs)`, glassNode: 'glass (alphaMode BLEND; decorative only, never blocks item picking)'}), extraNodes);
+      hybrid.extraNodes = extraNodes;
       glb = hybrid.bytes;
     } else glb = await writeMeshGlb({name: path.basename(cfg.outRel, '.glb'), mesh: {pos: low.P, nrm: low.N, uv: low.UV, idx: low.I}, textures, material: {metallicFactor: nat.material.metallicFactor, roughnessFactor: nat.material.roughnessFactor}, doubleSided, extras});
     tierUsed = [qc, qm, qn];
@@ -516,7 +619,7 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   else if (!(path.dirname(abs) === MODELS_DIR && /^[a-z0-9-]+-t25\.glb$/.test(path.basename(abs)))) throw new Error(`refusing to write ${abs}`);
   fs.mkdirSync(path.dirname(abs), {recursive: true});
   fs.writeFileSync(abs + '.tmp', glb); fs.renameSync(abs + '.tmp', abs);
-  const gpu = Math.round(4 * 4 / 3 * (cfg.budget.color ** 2 + cfg.budget.mr ** 2 + cfg.budget.normal ** 2));
+  const gpu = Math.round(4 * 4 / 3 * (cfg.budget.color ** 2 + cfg.budget.mr ** 2 + cfg.budget.normal ** 2)) + (hybrid?.extraNodes ?? []).reduce((t, x) => t + (x.from.gpuTextureBytesEstimate ?? 0), 0);
   log(`  wrote ${rel(abs)} ${glb.length} B (budget ${cfg.budget.bytes}${overBudget ? ' OVER' : ''}), ${low.I.length / 3} tris (native ${natStats.triangles}, old ${cfg.old.tris}), ${outBB.size.map(v => v.toFixed(3)).join(' x ')} m, stretch vs uniform ${rel3.join('/')}, doubleSided ${doubleSided}, ${surfaces.length} surfaces (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   // review sheet
   let review = null;
@@ -524,10 +627,11 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   const restoreBlob = dev ? null : gitBlobSha(cfg.oldPath);
   return {
     id: cfg.id, runtimeKeys: cfg.runtimeKeys, ...(cfg.p7Key ? {p7Key: cfg.p7Key, p7SizeClass: cfg.p7SizeClass} : {}), class: master.class,
-    output: {path: rel(abs), url: cfg.url, sha256: sha256(glb), bytes: glb.length, triangles: hybrid ? hybrid.body.kept + hybrid.g.tris + hybrid.gidx.length / 3 : low.I.length / 3, vertices: low.P.length / 3,
+    output: {path: rel(abs), url: cfg.url, sha256: sha256(glb), bytes: glb.length, triangles: hybrid ? hybrid.body.kept + hybrid.g.tris + hybrid.gidx.length / 3 + hybrid.extraNodes.reduce((t, x) => t + x.I.length / 3, 0) : low.I.length / 3, vertices: low.P.length / 3,
       textures: ['color', 'orm', 'normal'].map(k => ({slot: {color: 'baseColor', orm: 'metallicRoughness', normal: 'normal'}[k], size: textures[k].size, mime: textures[k].mime, bytes: textures[k].bytes.length})),
-      gpuTextureBytesEstimate: gpu, doubleSided, dims: outBB.size.map(r4), bbox: {min: outBB.min.map(r4), max: outBB.max.map(r4)}, budget: {...cfg.budget, overBudget, jpegQuality: tierUsed}},
+      gpuTextureBytesEstimate: gpu, doubleSided, dims: outBB.size.map(r4), bbox: {min: outBB.min.map(r4), max: outBB.max.map(r4)}, budget: {...cfg.budget, overBudget, jpegQuality: tierUsed, ...(cfg.p7SizeClass ? {totalTris: P7_CLASSES[cfg.p7SizeClass].tris} : {})}},
     meshy: {taskId: del.taskId ?? null, attempt: del.attempt ?? null, review: del.review ?? null, reviewNote: del.reviewNote ?? null, args: del.args ?? null,
+      ...(TUNE[cfg.id]?.acceptFlagged ? {usedDespiteFlag: TUNE[cfg.id].acceptFlagged} : {}),
       nativeGlb: rel(nativeAbs), nativeSha256: nativeSha, nativeBytes: nativeBytes.length, native: natStats,
       inputImage: {path: rel(imgPath), sha256: imgSha, role: master.originalImage.role}},
     transform: {description: "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.", yawQuarter: q, yawRefineDeg: r4(yawRefine), R: R.map(r => r.map(r6)), S: Stotal.map(r6), t: t.map(r6),
@@ -536,10 +640,11 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
           : `uniform: height ${cfg.dims[1]} m (old runtime height) -> ${cfg.dims.join(' x ')} m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime`,
       oldDims: cfg.old.bbox.size,
       stretchVsUniformHeight: rel3, anchor: cfg.anchor, frontCheck: fc},
-    tune: TUNE[cfg.id] ?? null, simplify: low.simplify, meshAfter: lowStats, ...(patchInfo ? {patch: {reason: cfg.patch.reason, quads: patchInfo}} : {}),
-    ...(hybrid ? {hybrid: {spec: HYBRID[cfg.id].name, nodes: ['body', 'interior', 'glass'], trianglesByNode: {body: hybrid.body.kept, interior: hybrid.g.tris, glass: hybrid.gidx.length / 3}, cut: {removedFaces: hybrid.body.removed, removedAreaM2: hybrid.body.removedAreaM2, rule: HYBRID[cfg.id].spec.cut.toString()},
+    tune: TUNE[cfg.id] ?? null, simplify: low.simplify, meshAfter: lowStats, ...(patchInfo ? {patch: {reason: cfg.patch.reason, quads: patchInfo}} : {}), ...(clampInfo ? {radialClamp: clampInfo} : {}), ...(gradeInfo ? {colorGrade: gradeInfo} : {}),
+    ...(hybrid ? {hybrid: {spec: HYBRID[cfg.id].name, note: HYBRID[cfg.id].note ?? null, nodes: ['body', 'interior', 'glass', ...hybrid.extraNodes.map(x => x.name)], trianglesByNode: {body: hybrid.body.kept, interior: hybrid.g.tris, glass: hybrid.gidx.length / 3, ...Object.fromEntries(hybrid.extraNodes.map(x => [x.name, x.I.length / 3]))},
+      extraNodes: hybrid.extraNodes.map(x => ({name: x.name, ...x.from})), cut: {removedFaces: hybrid.body.removed, removedAreaM2: hybrid.body.removedAreaM2, rule: HYBRID[cfg.id].spec.cut.toString()},
       interior: HYBRID[cfg.id].spec.interior, interiorSurfaces: hybrid.surfaces, authoredParts: hybrid.g.parts.length, note: 'iteration-05 open-front hybrid rebuilt on the T2.5 exterior: authored liner / deck / wire shelves or trays / bezel or posts / emissive strip + a separate transparent "glass" node (BLEND); interior loot surfaces unchanged'}} : {}),
-    surfaces, ...(cfg.p7Key ? {catalog: {url: cfg.url, bytes: glb.length, w: cfg.dims[0], h: cfg.dims[1], d: cfg.dims[2], tris: low.I.length / 3, tex: cfg.budget.color, gpuBytes: gpu, surfaces}} : {}),
+    surfaces, ...(cfg.p7Key ? {catalog: {url: cfg.url, bytes: glb.length, w: cfg.dims[0], h: cfg.dims[1], d: cfg.dims[2], tris: hybrid ? hybrid.body.kept + hybrid.g.tris + hybrid.gidx.length / 3 + hybrid.extraNodes.reduce((t, x) => t + x.I.length / 3, 0) : low.I.length / 3, tex: cfg.budget.color, gpuBytes: gpu, surfaces}} : {}),
     conventions: {units: 'meters', up: '+Y', front: '+Z', origin: cfg.anchor === 'top' ? 'top-centre (y = 0 mounting face; hangs below)' : 'bottom-centre (y = 0 floor contact; x/z bbox centre)'},
     replaces: {path: cfg.oldPath, sha256: cfg.old.sha256, bytes: cfg.old.bytes, triangles: cfg.old.tris, textures: cfg.old.textures, bbox: cfg.old.bbox},
     restore: {path: cfg.oldPath, baseCommit: BASE, blobSha1: restoreBlob, command: `git show ${BASE}:${cfg.oldPath} > ${cfg.oldPath}`},
@@ -666,6 +771,39 @@ async function main() {
     for (const m of mine) { const d = del[m.id]; log(`${m.id.padEnd(34)} ${m.class.padEnd(16)} ${(d ? `${d.status}/${d.review}` : '-').padEnd(26)} ${built.has(m.id) ? `built ${built.get(m.id).output.path}` : ''}`); }
     return;
   }
+  if (args.includes('--removals')) {   // lanes/removals.jsonl: replaced runtime files whose consumers are switched (the primary runs git rm)
+    const L = path.join(TASK, 'lanes/removals.jsonl'), listed = new Set(fs.existsSync(L) ? fs.readFileSync(L, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).path) : []);
+    const src = []; const walk = d => { for (const e of fs.readdirSync(d, {withFileTypes: true})) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/\.(ts|js|mjs|html|json)$/.test(e.name)) src.push(fs.readFileSync(f, 'utf8')); } };
+    walk(path.join(REPO, 'game/src'));
+    const text = src.join('\n'), tests = (arg('--tests') ?? '').split(',').filter(Boolean);
+    let n = 0;
+    for (const r of ['props', 'items', 'light'].flatMap(c => loadRecords(c)).sort((a, b) => a.id.localeCompare(b.id))) {
+      const old = r.restore.path;
+      if (listed.has(old)) continue;
+      if (text.includes(old.replace(/^game\/public\//, ''))) { log(`  not listed (still named in game/src): ${old}`); continue; }
+      execFileSync('git', ['-C', REPO, 'cat-file', '-e', `${BASE}:${old}`]);
+      const blob = gitBlobSha(old);
+      if (blob !== r.restore.blobSha1) throw new Error(`${old}: blob ${blob} != record ${r.restore.blobSha1}`);
+      fs.appendFileSync(L, JSON.stringify({path: old, replacedBy: r.output.path, a7a646aBlob: blob, testsPassed: tests, lane: 'PROPS', id: r.id, trackedInPushedBase: true, liveConsumersSwitched: true}) + '\n');
+      n++;
+    }
+    log(`removals.jsonl: +${n}`);
+    return;
+  }
+  if (args.includes('--tint-report')) {   // mean colour of the ORIGINAL image vs the runtime front view (both alpha-masked, unshaded)
+    const rows = [];
+    for (const r of ['props', 'items', 'light'].flatMap(c => loadRecords(c))) {
+      const m = byId.get(r.id); if (!m) continue;
+      const nm = await readMesh(fs.readFileSync(path.join(REPO, r.output.path)), {node: r.hybrid ? 'body' : null}).catch(() => null);
+      if (!nm?.UV) continue;
+      const t = await decodeRGB(nm.material.color.bytes);
+      const st = await meanTint(nm, t, m.originalImage.absPath, r.transform.anchor === 'top');
+      rows.push({id: r.id, ...st});
+    }
+    rows.sort((a, b) => b.lumRatio - a.lumRatio);
+    for (const q of rows) log(`${q.id.padEnd(30)} lum ratio new/ref ${q.lumRatio.toFixed(2)}  ref ${q.ref.map(v => v.toFixed(0)).join(',')}  new ${q.out.map(v => v.toFixed(0)).join(',')}`);
+    return;
+  }
   if (arg('--contact')) {   // compact review: one row per built id (original | NEW front | NEW 3/4 | NEW back | OLD 3/4)
     const want = arg('--ids')?.split(',') ?? null;
     const recs = ['props', 'items', 'light'].flatMap(c => loadRecords(c)).filter(r => !want || want.includes(r.id)).sort((a, b) => a.id.localeCompare(b.id));
@@ -676,7 +814,7 @@ async function main() {
       const r = recs[i], y = i * (N + LH), m = byId.get(r.id);
       svg += `<text x="4" y="${y + 12}" font-family="DejaVu Sans, sans-serif" font-size="12" fill="#ffd27a">${r.id} · ${r.output.triangles} tris (native ${r.meshy.native.triangles}, old ${r.replaces.triangles}) · ${r.output.dims.join('×')} m · stretch ${r.transform.stretchVsUniformHeight.join('/')}${r.output.doubleSided ? ' · 2-sided' : ''}</text>`;
       layers.push({input: await sharp(path.join(REPO, m.originalImage.path)).resize(N, N, {fit: 'contain', background: {r: bg[0], g: bg[1], b: bg[2], alpha: 1}}).flatten({background: {r: bg[0], g: bg[1], b: bg[2]}}).png().toBuffer(), left: 0, top: y + LH});
-      const nm = await readMesh(fs.readFileSync(path.join(REPO, r.output.path))), nt = await decodeRGB(nm.material.color.bytes);
+      const nm = await readMesh(fs.readFileSync(path.join(REPO, r.output.path)), {node: r.hybrid ? 'body' : null}), nt = await decodeRGB(nm.material.color.bytes);
       const vs = r.transform.anchor === 'top' ? [VIEWS.front, viewYawPitch(0, -35), viewYawPitch(35, -18)] : [VIEWS.front, viewYawPitch(35, 18), VIEWS.back];
       for (let k = 0; k < vs.length; k++) layers.push({input: await toPng(rasterize(nm.P, nm.I, nm.UV, nt, vs[k], N, {bg})), left: (k + 1) * N, top: y + LH});
       try { const om = await readMesh(gitBlob(r.replaces.path)), ot = await decodeRGB(om.material.color.bytes); layers.push({input: await toPng(rasterize(om.P, om.I, om.UV, ot, r.transform.anchor === 'top' ? viewYawPitch(35, -18) : viewYawPitch(35, 18), N, {bg})), left: 4 * N, top: y + LH}); } catch { /* old file not readable */ }
@@ -701,7 +839,9 @@ async function main() {
   for (const m of mine) {
     if (only && !only.includes(m.id)) continue;
     const d = del[m.id];
-    if (!d || d.status !== 'SUCCEEDED' || d.review !== 'accepted') { if (only) skipped.push({id: m.id, reason: d ? `${d.status}/${d.review}` : 'not delivered'}); continue; }
+    const af = TUNE[m.id]?.acceptFlagged;   // a flagged delivery used ONLY with a documented local fix (primary's call)
+    const usable = d && d.status === 'SUCCEEDED' && (d.review === 'accepted' || (af && d.attempt === af.attempt && String(d.review).startsWith('flagged')));
+    if (!usable) { if (only) skipped.push({id: m.id, reason: d ? `${d.status}/${d.review}` : 'not delivered'}); continue; }
     const cls = CLASS_OF[m.class], prev = records[cls].find(r => r.id === m.id);
     if (!force && prev && prev.meshy.nativeSha256 === d.sha256 && prev.tool === TOOL_VERSION && fs.existsSync(path.join(REPO, prev.output.path)) && sha256(fs.readFileSync(path.join(REPO, prev.output.path))) === prev.output.sha256) continue;
     try {

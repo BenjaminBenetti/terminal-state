@@ -17,11 +17,22 @@
   "origin": "iteration-05 generated (Lane A bodyCourier)",
   "provenance": "generated",
   "traits": {},
+  "t25": {
+    "migration": "studio-meshy-game-replacement-20261029-01",
+    "sourceReplaced": false,
+    "note": "source master unchanged (legacy local Pixal3D); file rebuilt because its per-body fits / masks follow bodies replaced in this migration",
+    "supersedes": {
+      "path": "game/public/assets/models/zombie-body-courier.glb",
+      "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+      "blob": "d4ac1217d7af32edf5dfa3ec7355ff4a82bfe7b9",
+      "restore": "git show a7a646a:game/public/assets/models/zombie-body-courier.glb > game/public/assets/models/zombie-body-courier.glb"
+    }
+  },
   "outputs": {
     "glb": {
-      "path": "game/public/assets/models/zombie-body-courier.glb",
+      "path": "game/public/assets/models/zombie-body-courier-t25.glb",
       "bytes": 695128,
-      "sha256": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df",
+      "sha256": "f163e01d3bcdac3d5a17431eca6c26acae8936b39962aadfe9ee8f81f16a4eb7",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -1431,13 +1442,13 @@
   "death": {
     "hipsY": -0.6472,
     "tune": {
-      "hipsPitch": -94.68,
+      "hipsPitch": -94.797,
       "hipsRoll": 9.5,
-      "neck": -25.797,
+      "neck": -26.148,
       "head": -24.75,
       "headYaw": -20,
       "armLz": -0.65,
-      "armRz": -0.281,
+      "armRz": -0.275,
       "footLz": 0.42,
       "footRz": -0.018
     },
@@ -1445,17 +1456,17 @@
       "legL": 0.012,
       "pelvis": 0.116,
       "legR": 0.007,
-      "torso": 0.09,
-      "armL": 0.037,
+      "torso": 0.089,
+      "armL": 0.036,
       "armR": 0.04,
-      "head": 0.062,
-      "outfit.torso": 0.022,
-      "outfit.head": 0.045,
-      "outfit.armL": 0.01,
-      "outfit.armR": 0.01,
+      "head": 0.06,
       "outfit.pelvis": 0.01,
+      "outfit.legL": 0.033,
       "outfit.legR": 0.08,
-      "outfit.legL": 0.033
+      "outfit.torso": 0.025,
+      "outfit.armL": 0.01,
+      "outfit.armR": 0.011,
+      "outfit.head": 0.043
     },
     "solvedAgainst": "body + every fitted wearable"
   },

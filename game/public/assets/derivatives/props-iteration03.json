@@ -2598,6 +2598,13 @@
   "supersededByMeshyT25": {
     "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
     "files": {
+      "game/public/assets/models/item-beans.glb": {
+        "id": "base:item_beans",
+        "replacedBy": "game/public/assets/models/item-beans-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "edc6292a494cde0256b854da8082237246d09fbc",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-beans.glb > game/public/assets/models/item-beans.glb"
+      },
       "game/public/assets/models/item-chips.glb": {
         "id": "base:item_chips",
         "replacedBy": "game/public/assets/models/item-chips-t25.glb",

@@ -86,17 +86,17 @@
   "supersededManifest": "the iteration-07 creature-ratdog.json (Pixal3D quadruped-02 master) is in Git history at the same path (base commit a7a646a)"
  },
  "generatedBy": "tools/asset-pipeline/creature/build-creature.mjs",
- "builtAt": "2026-10-29T21:45:01.632Z",
+ "builtAt": "2026-10-29T22:24:16.462Z",
  "output": {
   "file": "game/public/assets/models/creature-ratdog-t25.glb",
-  "bytes": 896772,
-  "sha256": "c5076349324c2fc90f3a02eb3e6437abd17de97b3c92d40b15f0a0fa3ec83ca6",
+  "bytes": 893544,
+  "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad",
   "triangles": 11998,
-  "vertices": 8041,
+  "vertices": 7989,
   "textures": {
-   "baseColor": "1024² JPEG (149575 B)",
-   "metallicRoughness": "512² JPEG (28507 B)",
-   "normal": "512² JPEG tangent-space, three.js derivative-tangent convention (62634 B)"
+   "baseColor": "1024² JPEG (148384 B)",
+   "metallicRoughness": "512² JPEG (28461 B)",
+   "normal": "512² JPEG tangent-space, three.js derivative-tangent convention (63556 B)"
   },
   "meshNode": "RatdogBody",
   "skin": "RatdogSkin",
@@ -259,6 +259,8 @@
     0.3908
    ]
   },
+  "lengthScale": 0.86,
+  "lengthScaleNote": "non-uniform body-axis (+Z) scale 0.86 after placement: Meshy T2.5 posture is longer / lower than the hunched quadruped-02 concept; shoulder height (0.64 m) kept as the scale contract, nose -> rump length brought back near the established creature (1.03 m)",
   "provisionalSize": "Top of the shoulder bristles at 0.64 m (about a large dog). The concept card gives proposed anatomy but no size; this is a game-scale choice, not approved lore."
  },
  "mesh": {
@@ -272,20 +274,20 @@
     "note": "extra simplifier attribute = position * k: face/jaw and paws keep more triangles"
    },
    "resultTris": 11998,
-   "resultVerts": 6034,
-   "relativeError": 0.00267,
-   "absoluteErrorM": 0.00438,
+   "resultVerts": 6033,
+   "relativeError": 0.00293,
+   "absoluteErrorM": 0.00412,
    "flags": [
     "Prune",
     "Regularize"
    ]
   },
   "unwrap": {
-   "initialCharts": 453,
-   "charts": 189,
-   "mergedSmallCharts": 264,
-   "texelsPerMetreBase": 588.4,
-   "uvAreaFill": 0.474,
+   "initialCharts": 493,
+   "charts": 208,
+   "mergedSmallCharts": 285,
+   "texelsPerMetreBase": 620.3,
+   "uvAreaFill": 0.467,
    "uvMirroredFaces": 0,
    "coneDeg": 66,
    "validDot": 0.15,
@@ -295,17 +297,17 @@
    "packAtlas": 1024
   },
   "bake": {
-   "texels": 1950128,
-   "coverage": 0.465,
+   "texels": 1941885,
+   "coverage": 0.463,
    "missed": 0,
-   "farOver1cm": 3906,
-   "distMedianMm": 0.23,
-   "distP99Mm": 2.82,
+   "farOver1cm": 4150,
+   "distMedianMm": 0.21,
+   "distP99Mm": 2.71,
    "normalDeviationDeg": {
     "median": 1.8,
-    "p90": 7.4
+    "p90": 7.6
    },
-   "cageRayHits": 116563,
+   "cageRayHits": 115762,
    "cageM": 0.012,
    "rayBelowM": 0.004,
    "normalBlend": 0.8,
@@ -313,12 +315,12 @@
    "gridCells": [
     42,
     65,
-    165
+    142
    ],
-   "ms": 59553,
+   "ms": 61212,
    "workers": 1
   },
-  "outVertices": 8041
+  "outVertices": 7989
  },
  "skeleton": {
   "method": "auto-placed from mesh landmarks of the placed master (lib/landmarks.mjs): paw contact patches, midline back/underside profile, slice-tracked leg centrelines, narrowest neck section, nose tip, tail centreline by geodesic distance bands; anatomical ratios for joints inside the body",
@@ -330,180 +332,180 @@
    ],
    "Hips": [
     0,
-    0.3722,
-    -0.4008
+    0.3695,
+    -0.3545
    ],
    "Spine1": [
     0,
-    0.3984,
-    -0.2078
+    0.3977,
+    -0.1856
    ],
    "Spine2": [
     0,
     0.3937,
-    -0.0148
+    -0.0167
    ],
    "Chest": [
     0,
-    0.449,
-    0.1782
+    0.4557,
+    0.1522
    ],
    "Neck": [
     0,
-    0.4613,
-    0.3171
+    0.4591,
+    0.2728
    ],
    "Head": [
     0,
-    0.4482,
-    0.456
+    0.4424,
+    0.3933
    ],
    "Jaw": [
     0,
-    0.387,
-    0.5199
+    0.3883,
+    0.448
    ],
    "Tail1": [
     0,
-    0.2837,
-    -0.5387
+    0.285,
+    -0.4751
    ],
    "Tail2": [
-    -0.0757,
-    0.303,
-    -0.6342
+    -0.0818,
+    0.3055,
+    -0.5605
    ],
    "Tail3": [
-    -0.0874,
-    0.3338,
-    -0.7263
+    -0.0879,
+    0.3483,
+    -0.6362
    ],
    "Tail4": [
-    -0.071,
-    0.4261,
-    -0.784
+    -0.0691,
+    0.437,
+    -0.6792
    ],
    "Tail5": [
-    -0.08,
-    0.447,
-    -0.876
+    -0.0828,
+    0.4417,
+    -0.7605
    ],
    "L_FrontUpper": [
-    0.064,
-    0.5031,
-    0.2382
+    0.0675,
+    0.5037,
+    0.2122
    ],
    "L_FrontLower": [
-    0.1256,
-    0.2619,
-    0.2474
+    0.1236,
+    0.2659,
+    0.2115
    ],
    "L_FrontFoot": [
-    0.1309,
-    0.0864,
-    0.3129
+    0.1305,
+    0.0878,
+    0.2652
    ],
    "L_HindUpper": [
     0.0597,
-    0.3522,
-    -0.4008
+    0.3495,
+    -0.3545
    ],
    "L_HindLower": [
     0.0829,
     0.2253,
-    -0.3218
+    -0.2768
    ],
    "L_HindFoot": [
     0.0994,
     0.1126,
-    -0.3786
+    -0.3256
    ],
    "R_FrontUpper": [
-    -0.064,
-    0.5031,
-    0.2382
+    -0.0675,
+    0.5037,
+    0.2122
    ],
    "R_FrontLower": [
-    -0.0807,
-    0.2619,
-    0.2089
+    -0.0942,
+    0.2659,
+    0.1929
    ],
    "R_FrontFoot": [
     -0.1148,
-    0.0864,
-    0.2884
+    0.0878,
+    0.248
    ],
    "R_HindUpper": [
     -0.0597,
-    0.3522,
-    -0.4008
+    0.3495,
+    -0.3545
    ],
    "R_HindLower": [
     -0.083,
     0.2253,
-    -0.3397
+    -0.2921
    ],
    "R_HindFoot": [
     -0.1006,
     0.1126,
-    -0.5147
+    -0.4426
    ]
   },
   "ends": {
    "Head": [
     0,
     0.3493,
-    0.6844
+    0.5886
    ],
    "Jaw": [
     0,
-    0.3282,
-    0.6494
+    0.321,
+    0.5536
    ],
    "Tail5": [
-    -0.1135,
-    0.3674,
-    -0.9341
+    -0.1146,
+    0.3643,
+    -0.8035
    ],
    "tailTip": [
-    -0.12,
-    0.3512,
-    -0.9379
+    -0.1191,
+    0.3464,
+    -0.8029
    ],
    "headTop": [
     0,
-    0.5325,
-    0.496
+    0.5232,
+    0.4333
    ],
    "earL": [
     0.041,
     0.5367,
-    0.447
+    0.3844
    ],
    "earR": [
     -0.0663,
     0.5194,
-    0.4812
+    0.4139
    ],
    "L_FrontFoot": [
     0.1184,
     0.0137,
-    0.455
+    0.3913
    ],
    "L_HindFoot": [
     0.1272,
     0.0128,
-    -0.1881
+    -0.1618
    ],
    "R_FrontFoot": [
     -0.1297,
     0.012,
-    0.4259
+    0.3663
    ],
    "R_HindFoot": [
     -0.1202,
     0.012,
-    -0.4273
+    -0.3675
    ]
   },
   "hierarchy": [
@@ -609,17 +611,17 @@
    ]
   ],
   "measures": {
-   "zFrontPaws": 0.376,
-   "zHindPaws": -0.3759,
-   "chestBottomY": 0.2619,
+   "zFrontPaws": 0.3233,
+   "zHindPaws": -0.3233,
+   "chestBottomY": 0.2659,
    "groinY": 0.2299,
-   "rumpEndZ": -0.5458,
-   "tailGeodesicLengthM": 0.4828,
-   "noseZ": 0.6844,
-   "neckZ": 0.446,
-   "neckHalfWidth": 0.0718,
-   "backAtChestY": 0.5999,
-   "backAtHipsY": 0.4571,
+   "rumpEndZ": -0.4845,
+   "tailGeodesicLengthM": 0.4206,
+   "noseZ": 0.5886,
+   "neckZ": 0.3833,
+   "neckHalfWidth": 0.0723,
+   "backAtChestY": 0.6105,
+   "backAtHipsY": 0.4533,
    "legSlices": {
     "L_Front": 28,
     "R_Front": 28,
@@ -646,289 +648,289 @@
    "Hips": {
     "from": [
      0,
-     0.3722,
-     -0.4008
+     0.3695,
+     -0.3545
     ],
     "to": [
      0,
-     0.3984,
-     -0.2078
+     0.3977,
+     -0.1856
     ]
    },
    "Spine1": {
     "from": [
      0,
-     0.3984,
-     -0.2078
+     0.3977,
+     -0.1856
     ],
     "to": [
      0,
      0.3937,
-     -0.0148
+     -0.0167
     ]
    },
    "Spine2": {
     "from": [
      0,
      0.3937,
-     -0.0148
+     -0.0167
     ],
     "to": [
      0,
-     0.449,
-     0.1782
+     0.4557,
+     0.1522
     ]
    },
    "Chest": {
     "from": [
      0,
-     0.449,
-     0.1782
+     0.4557,
+     0.1522
     ],
     "to": [
      0,
-     0.4613,
-     0.3171
+     0.4591,
+     0.2728
     ]
    },
    "Neck": {
     "from": [
      0,
-     0.4613,
-     0.3171
+     0.4591,
+     0.2728
     ],
     "to": [
      0,
-     0.4482,
-     0.456
+     0.4424,
+     0.3933
     ]
    },
    "Head": {
     "from": [
      0,
-     0.4482,
-     0.456
+     0.4424,
+     0.3933
     ],
     "to": [
      0,
      0.3493,
-     0.6844
+     0.5886
     ]
    },
    "Jaw": {
     "from": [
      0,
-     0.387,
-     0.5199
+     0.3883,
+     0.448
     ],
     "to": [
      0,
-     0.3282,
-     0.6494
+     0.321,
+     0.5536
     ]
    },
    "Tail1": {
     "from": [
      0,
-     0.2837,
-     -0.5387
+     0.285,
+     -0.4751
     ],
     "to": [
-     -0.0757,
-     0.303,
-     -0.6342
+     -0.0818,
+     0.3055,
+     -0.5605
     ]
    },
    "Tail2": {
     "from": [
-     -0.0757,
-     0.303,
-     -0.6342
+     -0.0818,
+     0.3055,
+     -0.5605
     ],
     "to": [
-     -0.0874,
-     0.3338,
-     -0.7263
+     -0.0879,
+     0.3483,
+     -0.6362
     ]
    },
    "Tail3": {
     "from": [
-     -0.0874,
-     0.3338,
-     -0.7263
+     -0.0879,
+     0.3483,
+     -0.6362
     ],
     "to": [
-     -0.071,
-     0.4261,
-     -0.784
+     -0.0691,
+     0.437,
+     -0.6792
     ]
    },
    "Tail4": {
     "from": [
-     -0.071,
-     0.4261,
-     -0.784
+     -0.0691,
+     0.437,
+     -0.6792
     ],
     "to": [
-     -0.08,
-     0.447,
-     -0.876
+     -0.0828,
+     0.4417,
+     -0.7605
     ]
    },
    "Tail5": {
     "from": [
-     -0.08,
-     0.447,
-     -0.876
+     -0.0828,
+     0.4417,
+     -0.7605
     ],
     "to": [
-     -0.1135,
-     0.3674,
-     -0.9341
+     -0.1146,
+     0.3643,
+     -0.8035
     ]
    },
    "L_FrontUpper": {
     "from": [
-     0.064,
-     0.5031,
-     0.2382
+     0.0675,
+     0.5037,
+     0.2122
     ],
     "to": [
-     0.1256,
-     0.2619,
-     0.2474
+     0.1236,
+     0.2659,
+     0.2115
     ]
    },
    "L_FrontLower": {
     "from": [
-     0.1256,
-     0.2619,
-     0.2474
+     0.1236,
+     0.2659,
+     0.2115
     ],
     "to": [
-     0.1309,
-     0.0864,
-     0.3129
+     0.1305,
+     0.0878,
+     0.2652
     ]
    },
    "L_FrontFoot": {
     "from": [
-     0.1309,
-     0.0864,
-     0.3129
+     0.1305,
+     0.0878,
+     0.2652
     ],
     "to": [
      0.1184,
      0.0137,
-     0.455
+     0.3913
     ]
    },
    "R_FrontUpper": {
     "from": [
-     -0.064,
-     0.5031,
-     0.2382
+     -0.0675,
+     0.5037,
+     0.2122
     ],
     "to": [
-     -0.0807,
-     0.2619,
-     0.2089
+     -0.0942,
+     0.2659,
+     0.1929
     ]
    },
    "R_FrontLower": {
     "from": [
-     -0.0807,
-     0.2619,
-     0.2089
+     -0.0942,
+     0.2659,
+     0.1929
     ],
     "to": [
      -0.1148,
-     0.0864,
-     0.2884
+     0.0878,
+     0.248
     ]
    },
    "R_FrontFoot": {
     "from": [
      -0.1148,
-     0.0864,
-     0.2884
+     0.0878,
+     0.248
     ],
     "to": [
      -0.1297,
      0.012,
-     0.4259
+     0.3663
     ]
    },
    "L_HindUpper": {
     "from": [
      0.0597,
-     0.3522,
-     -0.4008
+     0.3495,
+     -0.3545
     ],
     "to": [
      0.0829,
      0.2253,
-     -0.3218
+     -0.2768
     ]
    },
    "L_HindLower": {
     "from": [
      0.0829,
      0.2253,
-     -0.3218
+     -0.2768
     ],
     "to": [
      0.0994,
      0.1126,
-     -0.3786
+     -0.3256
     ]
    },
    "L_HindFoot": {
     "from": [
      0.0994,
      0.1126,
-     -0.3786
+     -0.3256
     ],
     "to": [
      0.1272,
      0.0128,
-     -0.1881
+     -0.1618
     ]
    },
    "R_HindUpper": {
     "from": [
      -0.0597,
-     0.3522,
-     -0.4008
+     0.3495,
+     -0.3545
     ],
     "to": [
      -0.083,
      0.2253,
-     -0.3397
+     -0.2921
     ]
    },
    "R_HindLower": {
     "from": [
      -0.083,
      0.2253,
-     -0.3397
+     -0.2921
     ],
     "to": [
      -0.1006,
      0.1126,
-     -0.5147
+     -0.4426
     ]
    },
    "R_HindFoot": {
     "from": [
      -0.1006,
      0.1126,
-     -0.5147
+     -0.4426
     ],
     "to": [
      -0.1202,
      0.012,
-     -0.4273
+     -0.3675
     ]
    }
   },
@@ -937,12 +939,12 @@
  "skin": {
   "method": "region flood (legs from the toe, tail by geodesic distance) + chain weights with smooth joint blends + masked Laplacian smoothing, top-4",
   "regionCounts": {
-   "torso": 3107,
-   "tail": 385,
-   "L_Front": 690,
-   "R_Front": 688,
-   "L_Hind": 587,
-   "R_Hind": 577
+   "torso": 2967,
+   "tail": 377,
+   "L_Front": 744,
+   "R_Front": 720,
+   "L_Hind": 612,
+   "R_Hind": 613
   },
   "legRatio": 0.55,
   "jointBlend": 0.025,
@@ -950,21 +952,21 @@
   "smoothLambda": 0.5,
   "maxInfluences": 4,
   "tailJointGeodesicM": [
-   0.018,
-   0.14,
-   0.215,
-   0.315,
-   0.45
+   0.033,
+   0.143,
+   0.197,
+   0.282,
+   0.396
   ],
   "legSeedRadiusM": 0.05,
   "islands": {
    "pieces": 17,
-   "vertices": 151,
+   "vertices": 157,
    "regions": {
     "L_Front": 4,
     "torso": 2,
-    "R_Front": 3,
     "R_Hind": 3,
+    "R_Front": 3,
     "L_Hind": 5
    }
   }
@@ -1082,29 +1084,29 @@
    }
   },
   "deathSolve": {
-   "hipsY": -0.088,
+   "hipsY": -0.0938,
    "hipsX": -0.06,
    "lowestY": 0.01,
    "regionLows": {
-    "torso": 0.091,
+    "torso": 0.104,
+    "head": 0.038,
     "frontR": 0.01,
-    "head": 0.025,
-    "pelvis": 0.116,
-    "hindR": 0.124,
-    "tail": 0.164,
-    "frontL": 0.164,
-    "hindL": 0.254
+    "pelvis": 0.103,
+    "hindR": 0.111,
+    "tail": 0.144,
+    "frontL": 0.166,
+    "hindL": 0.248
    },
    "bounds": {
     "min": [
-     -0.361,
+     -0.355,
      0.01,
-     -0.962
+     -0.839
     ],
     "max": [
-     0.413,
-     0.402,
-     0.62
+     0.4,
+     0.399,
+     0.525
     ]
    }
   },
@@ -1120,8 +1122,8 @@
      "maxLiftM": 0
     },
     "Death": {
-     "frames": 13,
-     "maxLiftM": 0.158
+     "frames": 12,
+     "maxLiftM": 0.1477
     }
    }
   },
@@ -1129,85 +1131,85 @@
    "Idle": {
     "frames": 121,
     "duration": 4,
-    "minYOverClip": 0.0004,
+    "minYOverClip": 0.0002,
     "minAtT": 0,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.625,
-    "firstFrameMinY": 0.0004,
-    "lastFrameMinY": 0.0004,
+    "maxTopY": 0.62,
+    "firstFrameMinY": 0.0002,
+    "lastFrameMinY": 0.0002,
     "maxLegReach": 0.961,
     "groundSpeed": 0
    },
    "Walk": {
     "frames": 20,
     "duration": 0.62,
-    "minYOverClip": 0.0004,
-    "minAtT": 0,
+    "minYOverClip": 0.0002,
+    "minAtT": 0.16667,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.609,
-    "firstFrameMinY": 0.0004,
-    "lastFrameMinY": 0.0004,
-    "maxLegReach": 0.953,
+    "maxTopY": 0.605,
+    "firstFrameMinY": 0.0003,
+    "lastFrameMinY": 0.0003,
+    "maxLegReach": 0.944,
     "groundSpeed": 0.598
    },
    "Run": {
     "frames": 14,
     "duration": 0.42,
-    "minYOverClip": 0.0004,
-    "minAtT": 0,
+    "minYOverClip": 0.0002,
+    "minAtT": 0.26667,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.643,
-    "firstFrameMinY": 0.0004,
-    "lastFrameMinY": 0.0004,
-    "maxLegReach": 1.046,
+    "maxTopY": 0.631,
+    "firstFrameMinY": 0.0003,
+    "lastFrameMinY": 0.0003,
+    "maxLegReach": 1.024,
     "groundSpeed": 2.46
    },
    "Attack": {
     "frames": 28,
     "duration": 0.9,
-    "minYOverClip": 0.0004,
+    "minYOverClip": 0.0002,
     "minAtT": 0,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.616,
-    "firstFrameMinY": 0.0004,
-    "lastFrameMinY": 0.0004,
-    "maxLegReach": 0.971,
+    "maxTopY": 0.612,
+    "firstFrameMinY": 0.0002,
+    "lastFrameMinY": 0.0002,
+    "maxLegReach": 0.966,
     "groundSpeed": 0
    },
    "Hit": {
     "frames": 15,
     "duration": 0.45,
-    "minYOverClip": 0.0004,
+    "minYOverClip": 0.0002,
     "minAtT": 0,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.637,
-    "firstFrameMinY": 0.0004,
-    "lastFrameMinY": 0.0004,
-    "maxLegReach": 0.991,
+    "maxTopY": 0.628,
+    "firstFrameMinY": 0.0002,
+    "lastFrameMinY": 0.0002,
+    "maxLegReach": 0.997,
     "groundSpeed": 0
    },
    "Death": {
     "frames": 46,
     "duration": 1.5,
-    "minYOverClip": 0.0004,
-    "minAtT": 0,
+    "minYOverClip": -0.0002,
+    "minAtT": 0.76667,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.733,
-    "firstFrameMinY": 0.0004,
+    "maxTopY": 0.714,
+    "firstFrameMinY": 0.0002,
     "lastFrameMinY": 0.01,
-    "maxLegReach": 1.01,
+    "maxLegReach": 1.013,
     "groundSpeed": 0
    }
   }
  },
  "hitRadii": {
   "method": "75th percentile of the distance from region vertices to the region bone chain (low mesh, bind pose)",
-  "torso": 0.141,
-  "neck": 0.142,
-  "head": 0.088,
-  "frontLeg": 0.075,
-  "hindLeg": 0.062,
-  "tail": 0.041
+  "torso": 0.138,
+  "neck": 0.137,
+  "head": 0.086,
+  "frontLeg": 0.072,
+  "hindLeg": 0.059,
+  "tail": 0.042
  },
  "runtime": {
   "modelSpace": "+Z forward, +Y up, +X = creature left, paws on y=0; metres",

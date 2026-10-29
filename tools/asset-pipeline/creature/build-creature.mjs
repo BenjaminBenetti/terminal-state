@@ -58,7 +58,14 @@ export const OPTIONS = {
   skin: {smoothIters: 4, smoothLambda: 0.5, legRatio: 0.55, jointBlend: 0.025},
 };
 // T2.5 source: claws / toes are separate mesh pieces -> multi-vertex leg flood seeds (lib/skin.mjs seedRadius)
-if (!process.argv.includes('--legacy-master')) Object.assign(OPTIONS.skin, {seedRadius: 0.05, islands: true});
+if (!process.argv.includes('--legacy-master')) {
+  Object.assign(OPTIONS.skin, {seedRadius: 0.05, islands: true});
+  // accepted proportion fit (primary review vs the ORIGINAL concept image): the T2.5 mesh at the 0.64 m shoulder height is
+  // 1.23 m nose -> rump (1.92 x the shoulder height) where the established creature from the same concept is 1.03 m (1.61 x);
+  // compress the body axis by 0.86 (-> ~1.06 m, 1.65 x) - legs / head get 14 % shorter front-to-back, within sane limits
+  OPTIONS.lengthScale = 0.86;
+  OPTIONS.lengthScaleNote = 'non-uniform body-axis (+Z) scale 0.86 after placement: Meshy T2.5 posture is longer / lower than the hunched quadruped-02 concept; shoulder height (0.64 m) kept as the scale contract, nose -> rump length brought back near the established creature (1.03 m)';
+}
 
 function guardOutput(file) {
   const rel = path.relative(REPO, path.resolve(file));
@@ -72,7 +79,7 @@ const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1
 function codeHash() {
   const h = crypto.createHash('sha256');
   for (const f of ['lib/placement.mjs', 'lib/landmarks.mjs', 'lib/bake.mjs', 'lib/bake-worker.mjs']) h.update(fs.readFileSync(new URL(f, import.meta.url)));
-  h.update(JSON.stringify([OPTIONS.topHeight, OPTIONS.targetTris, OPTIONS.importance, OPTIONS.unwrap, OPTIONS.density, OPTIONS.bake, OPTIONS.textures]));
+  h.update(JSON.stringify([OPTIONS.topHeight, OPTIONS.targetTris, OPTIONS.importance, OPTIONS.unwrap, OPTIONS.density, OPTIONS.bake, OPTIONS.textures, OPTIONS.lengthScale ?? 1]));
   if (!LEGACY) h.update(`${SOURCE.sha256}|${t25LoaderHash()}|${SOURCE.densifyFrac}`);
   return h.digest('hex').slice(0, 16);
 }
@@ -81,9 +88,15 @@ async function meshStage() {
   const m = LEGACY ? await loadSource(MASTER) : await loadAnySource(SOURCE);
   if (m.sha256Verified !== SOURCE.sha256) throw new Error('source sha mismatch');
   const pl = quadrupedPlacement(m.pos, {topHeight: OPTIONS.topHeight});
-  const high = {pos: pl.apply(m.pos), nrm: pl.applyNormals(m.nrm), uv: m.uv, idx: m.idx};
+  // T2.5 proportion fit (lengthScale < 1): the Meshy reconstruction is longer / lower than the original concept; the
+  // placed mesh is compressed along the body axis (+Z) only, so the shoulder height stays the scale contract and the
+  // nose -> rump length returns to the established creature (normals: inverse-transpose)
+  const ls = OPTIONS.lengthScale ?? 1;
+  const sz = P => { const o = Float32Array.from(P); if (ls !== 1) for (let i = 2; i < o.length; i += 3) o[i] *= ls; return o; };
+  const szN = N => { const o = Float32Array.from(N); if (ls !== 1) for (let i = 0; i < o.length; i += 3) { o[i + 2] /= ls; const l = Math.hypot(o[i], o[i + 1], o[i + 2]) || 1; o[i] /= l; o[i + 1] /= l; o[i + 2] /= l; } return o; };
+  const high = {pos: sz(pl.apply(m.pos)), nrm: szN(pl.applyNormals(m.nrm)), uv: m.uv, idx: m.idx};
   const welded = weldByPosition(high.pos, high.nrm, high.idx);
-  const skel = detectQuadruped(welded, pl.paws);
+  const skel = detectQuadruped(welded, Object.fromEntries(Object.entries(pl.paws).map(([k, p]) => [k, [p[0], p[1], +(p[2] * ls).toFixed(4)]])));
   if (skel._sanity.length) throw new Error('skeleton sanity: ' + skel._sanity.join('; '));
   // simplification importance: head (in front of the skull base) and paws (below the foot joints)
   const J = skel.joints;
@@ -103,7 +116,7 @@ async function meshStage() {
   const enc = await encodeAll(bk, {baseSize: OPTIONS.textures.baseColor, mrSize: OPTIONS.textures.metallicRoughness, nrmSize: OPTIONS.textures.normal, quality: OPTIONS.textures.jpegQuality});
   const {debug, _sanity, ...skelOut} = skel;
   void debug; void _sanity;
-  return {skel: skelOut, placement: pl.report(), low, enc,
+  return {skel: skelOut, placement: {...pl.report(), ...(ls !== 1 ? {lengthScale: ls, lengthScaleNote: OPTIONS.lengthScaleNote} : {})}, low, enc,
     stats: {weldedVertices: welded.pos.length / 3, weldedTriangles: welded.idx.length / 3,
       simplify: {targetTris: OPTIONS.targetTris, importance: OPTIONS.importance, resultTris: simp.triangles, resultVerts: simp.vertices, relativeError: +simp.error.toFixed(5), absoluteErrorM: +(simp.error * simp.scale).toFixed(5), flags: ['Prune', 'Regularize']},
       unwrap: uw.stats, bake: bk.stats, outVertices: nv},

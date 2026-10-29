@@ -655,7 +655,9 @@ export class PhysicsSystem implements BodyHost {
     // Iteration 08: railings (deck edges, stairwells, flight sides) — sloped runs in 0.5 m slices
     for (const rl of q.rails) {
       const len = Math.hypot(rl.x1 - rl.x0, rl.z1 - rl.z0);
-      const n = Math.abs(rl.y1 - rl.y0) < 0.01 ? 1 : Math.max(1, Math.round(len / CELL));
+      // flat runs are sliced too: a run's slice is only built with the chunk holding its midpoint, so one long unsliced deck-edge
+      // rail existed only around its middle (Meshy T2.5 migration 2026-10-29: stock knocked off a deck end passed through it)
+      const n = Math.max(1, Math.round(len / CELL));
       for (let k = 0; k < n; k++) {
         const a = k / n, b = (k + 1) / n;
         const xa = rl.x0 + (rl.x1 - rl.x0) * a, xb = rl.x0 + (rl.x1 - rl.x0) * b, za = rl.z0 + (rl.z1 - rl.z0) * a, zb = rl.z0 + (rl.z1 - rl.z0) * b;

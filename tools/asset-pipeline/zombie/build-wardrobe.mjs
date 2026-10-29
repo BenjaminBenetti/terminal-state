@@ -51,7 +51,8 @@ import {Document} from '@gltf-transform/core';
 import {JOINTS} from './lib/skeleton.mjs';
 import {JOINT_NAMES} from './lib/skin.mjs';
 import {CLIP_SPECS} from './lib/clips.mjs';
-import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07, KEEP_BODY_FILES, SKIP_WEARABLES} from './wardrobe.config.mjs';
+import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07, KEEP_BODY_FILES, SKIP_WEARABLES, T25} from './wardrobe.config.mjs';
+import {gradeBase} from './lib/grade.mjs';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {NodeIO} from '@gltf-transform/core';
 
@@ -167,6 +168,12 @@ async function main() {
       const stageCfg = {targetTris: cfg.targetTris, unwrap: cfg.unwrap, bake: cfg.bake, textures: cfg.textures, facing: cfg.facing, trimBehind: cfg.trimBehind};
       g = await makeCache({src: srcKey(src), stageCfg})(`${def.kind}-${def.id}`, async () => (def.kind === 'pants' ? pantsStage : rigidStage)(await loadSource(src), stageCfg));
       console.log('  stage tris', g.low.idx.length / 3, g.frameSummary ? JSON.stringify(g.frameSummary) : '');
+    }
+    if (src.t25 && T25[def.id]?.grade) {
+      // documented colour grade toward the original reference's tint (wardrobe.config.mjs T25 grade)
+      const gr = await gradeBase(g.enc, g.low, T25[def.id].grade, def.textures.jpegQuality, src.t25.inputImage && path.join(REPO, src.t25.inputImage));
+      g = {...g, enc: {...g.enc, baseJpg: gr.jpg}, colourGrade: gr.stats};
+      console.log('  colour grade', JSON.stringify(gr.stats));
     }
     wear.push({id: def.id, def, cfg, src, g});
   }
@@ -499,7 +506,7 @@ function wearableManifest(w, bodies, {glb, bytes, sha, t25}, motion) {
     outputs: {glb: {path: rel(glb), bytes, sha256: sha, format: 'glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body\'s joints); scene extras zombieWearable'}},
     source: srcInfo(w.src, g.master),
     stage: kind === 'garment' ? {canonicalFit: {body: CANONICAL_BODY, global: g.fit, backTaper: g.backTaper, sleeveRetarget: g.retarget, fitSkeleton: g.fitJoints, pushOut: g.pushOut, skin: g.skinStats}} : {nominal: g.nominal, frame: g.frameSummary ?? null, sourceTrim: g.trim ?? null},
-    mesh: {vertices: g.low.pos.length / 3, triangles: g.low.idx.length / 3, simplify: g.stats.simplify, unwrap: g.stats.unwrap, bake: (({ms, ...r}) => r)(g.stats.bake), textures: w.def.textures},
+    mesh: {vertices: g.low.pos.length / 3, triangles: g.low.idx.length / 3, simplify: g.stats.simplify, unwrap: g.stats.unwrap, bake: (({ms, ...r}) => r)(g.stats.bake), textures: w.def.textures, ...(g.colourGrade ? {colourGrade: g.colourGrade} : {})},
     perBody,
     limitations: [
       kind === 'rigid' ? 'Rigid item: follows the Head bone exactly; no strap/brim flex.' : 'No cloth simulation: linear-blend skinned with weights transferred from each body; it cannot drape, swing or collide in motion.',

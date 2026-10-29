@@ -19,11 +19,22 @@
   "provenance": "generated",
   "slot": "face",
   "kind": "rigid",
+  "t25": {
+    "migration": "studio-meshy-game-replacement-20261029-01",
+    "sourceReplaced": false,
+    "note": "source master unchanged (legacy local Pixal3D); file rebuilt because its per-body fits / masks follow bodies replaced in this migration",
+    "supersedes": {
+      "path": "game/public/assets/models/outfit-gasmask.glb",
+      "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+      "blob": "8b910ecfb0368d48f35730112c0e6382a92dd313",
+      "restore": "git show a7a646a:game/public/assets/models/outfit-gasmask.glb > game/public/assets/models/outfit-gasmask.glb"
+    }
+  },
   "outputs": {
     "glb": {
-      "path": "game/public/assets/models/outfit-gasmask.glb",
-      "bytes": 490108,
-      "sha256": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4",
+      "path": "game/public/assets/models/outfit-gasmask-t25.glb",
+      "bytes": 490112,
+      "sha256": "3354d6792cb389b31ead1a74cc85cabade1c088fc4525cebadf04a1c8099bf3b",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -279,9 +290,9 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 14,
+          "Attack": 12,
           "Walk": 6,
-          "Death": 8,
+          "Death": 10,
           "Hit": 2,
           "Idle": 2
         },
@@ -369,38 +380,38 @@
       "kind": "rigid",
       "fit": {
         "head": {
-          "topM": 1.7803,
-          "craniumWidthM": 0.1766,
+          "topM": 1.7801,
+          "craniumWidthM": 0.186,
           "centre": [
-            -0.0062,
-            0.0057
+            -0.0022,
+            -0.019
           ],
-          "noseY": 1.6135,
-          "chinY": 1.5235,
-          "cheekWidthM": 0.1348
+          "noseY": 1.617,
+          "chinY": 1.527,
+          "cheekWidthM": 0.1197
         },
         "itemWidthM": 0.1586,
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1968,
+          "contactCells": 1993,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
             0.011,
-            -0.101
+            -0.097
           ],
-          "itemTopY": 1.6885,
-          "itemBottomY": 1.4935,
-          "headHeightM": 0.2568
+          "itemTopY": 1.692,
+          "itemBottomY": 1.497,
+          "headHeightM": 0.2532
         },
         "bulkHeadM": 0,
         "method": "uniform scale from nose + 0.075 m to chin - 0.03 m (>= cheeks x 1); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
           "scale": 0.77999,
           "translate": [
-            -0.00751,
-            1.49353,
-            0.15532
+            -0.00348,
+            1.49701,
+            0.1319
           ]
         }
       },
@@ -414,11 +425,11 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 14,
-      "hiddenFraction": 0.0009,
+      "hiddenBodyTriangles": 8,
+      "hiddenFraction": 0.0005,
       "mask": {
-        "hidden": 14,
-        "total": 14962,
+        "hidden": 8,
+        "total": 15000,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
       "motionStretch": {
@@ -430,12 +441,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Walk": 5,
-          "Death": 6,
-          "Run": 7,
-          "Attack": 4,
-          "Hit": 8,
-          "Idle": 2
+          "Death": 20,
+          "Hit": 3,
+          "Run": 5,
+          "Idle": 2,
+          "Walk": 4
         },
         "poses": 85
       }

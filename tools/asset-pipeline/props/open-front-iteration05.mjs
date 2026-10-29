@@ -200,7 +200,7 @@ export async function buildOpenFront(name, {REPO, guardedWrite, log, outDir}) {
  * add the authored interior (S.build) and glass (S.glass); the bbox must stay the source's. `extras(bbOut)` -> root node extras
  * (interiorSurfaces is appended). Returns the GLB bytes and the parts for the provenance record.
  */
-export async function assembleOpenFront(S, src, extras) {
+export async function assembleOpenFront(S, src, extras, extraNodes = []) {
   const body = cutFaces(src, S.cut);
   const g = new Geo(); S.build(g, S.interior);
   const glass = S.glass(S.interior);
@@ -224,6 +224,13 @@ export async function assembleOpenFront(S, src, extras) {
   root.addChild(doc.createNode('body').setMesh(doc.createMesh('body').addPrimitive(prim(body.pos, body.nrm, body.uv, body.idx, mBody))));
   root.addChild(doc.createNode('interior').setMesh(doc.createMesh('interior').addPrimitive(prim(Float32Array.from(g.pos), Float32Array.from(g.nrm), Float32Array.from(g.uv), g.idx, mInt))));
   root.addChild(doc.createNode('glass').setMesh(doc.createMesh('glass').addPrimitive(prim(Float32Array.from(gpos), Float32Array.from(gnrm), null, gidx, mGlass))));
+  // optional extra textured meshes (build-meshy-t25.mjs: a fixture placed inside the case), each its own node + material
+  for (const x of extraNodes) {
+    const m = doc.createMaterial(`${S.key}-${x.name}`).setBaseColorFactor([1, 1, 1, 1]).setMetallicFactor(x.metallic).setRoughnessFactor(x.roughness)
+      .setBaseColorTexture(tex(`${x.name}-color`, x.tex.color)).setMetallicRoughnessTexture(tex(`${x.name}-orm`, x.tex.orm)).setDoubleSided(!!x.doubleSided);
+    if (x.tex.normal) m.setNormalTexture(tex(`${x.name}-normal`, x.tex.normal));
+    root.addChild(doc.createNode(x.name).setMesh(doc.createMesh(x.name).addPrimitive(prim(x.P, x.N, x.UV, x.I, m))));
+  }
   const surfaces = S.surfaces(S.interior).map(s => ({...s, y: r3(s.y), x0: r3(s.x0), x1: r3(s.x1), z0: r3(s.z0), z1: r3(s.z1), clearTo: r3(s.clearTo), clearM: r3(s.clearTo - s.y)}));
   root.setExtras({...extras(bbOut), interiorSurfaces: surfaces});
   doc.getRoot().setDefaultScene(doc.createScene('Scene').addChild(root));

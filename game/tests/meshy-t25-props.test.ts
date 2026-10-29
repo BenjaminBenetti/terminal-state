@@ -31,10 +31,10 @@ const HEX64 = /^[0-9a-f]{64}$/, HEX40 = /^[0-9a-f]{40}$/;
 
 interface Rec {
   id: string; runtimeKeys: string[]; p7Key?: string; class: string;
-  output: {path: string; url: string; sha256: string; bytes: number; triangles: number; textures: {slot: string; size: number[]; mime: string}[]; dims: number[]; bbox: {min: number[]; max: number[]}; doubleSided: boolean; budget: {tris: number; color: number; mr: number; normal: number; bytes: number}};
-  meshy: {taskId: string; nativeSha256: string; nativeGlb: string; inputImage: {path: string; sha256: string}; review: string};
+  output: {path: string; url: string; sha256: string; bytes: number; triangles: number; textures: {slot: string; size: number[]; mime: string}[]; dims: number[]; bbox: {min: number[]; max: number[]}; doubleSided: boolean; budget: {tris: number; totalTris?: number; color: number; mr: number; normal: number; bytes: number}};
+  meshy: {taskId: string; nativeSha256: string; nativeGlb: string; inputImage: {path: string; sha256: string}; review: string; usedDespiteFlag?: {reason: string}};
   transform: {anchor: 'bottom' | 'top'};
-  hybrid?: {interiorSurfaces: unknown[]};
+  hybrid?: {interiorSurfaces: unknown[]; nodes: string[]};
   replaces: {path: string; triangles: number; bbox: {size: number[]}};
   restore: {path: string; baseCommit: string; blobSha1: string; command: string};
 }
@@ -67,17 +67,18 @@ describe('Meshy T2.5 prop / item / light derivatives: files, budgets, provenance
       const prims = doc.getRoot().listMeshes().flatMap(m => m.listPrimitives());
       for (const n of doc.getRoot().listNodes()) expect(n.getMatrix(), r.id).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
       expect(prims.reduce((t, q) => t + q.getIndices()!.getCount() / 3, 0), r.id).toBe(r.output.triangles);
+      expect(r.output.triangles, r.id).toBeLessThanOrEqual(r.output.budget.totalTris ?? r.output.budget.tris);
       if (r.hybrid) {
         // open-front hybrid: T2.5 body + authored interior + transparent glass (BLEND), exactly three nodes / materials
-        expect(doc.getRoot().listNodes().filter(n => n.getMesh()).map(n => n.getName()).sort(), r.id).toEqual(['body', 'glass', 'interior']);
+        expect(doc.getRoot().listNodes().filter(n => n.getMesh()).map(n => n.getName()).sort(), r.id).toEqual(r.hybrid.nodes.slice().sort());
+        expect(r.hybrid.nodes.slice(0, 3), r.id).toEqual(['body', 'interior', 'glass']);
         const glass = doc.getRoot().listNodes().find(n => n.getName() === 'glass')!.getMesh()!.listPrimitives()[0].getMaterial()!;
         expect(glass.getAlphaMode(), r.id).toBe('BLEND');
-        expect(r.hybrid.interiorSurfaces.length, r.id).toBeGreaterThan(1);
+        if (r.runtimeKeys.includes('shopCooler') || r.runtimeKeys.includes('shopDisplay')) expect(r.hybrid.interiorSurfaces.length, r.id).toBeGreaterThan(1);
         continue;
       }
       expect(prims.length, r.id).toBe(1);
       const p = prims[0];
-      expect(r.output.triangles, r.id).toBeLessThanOrEqual(r.output.budget.tris);
       expect(r.output.bytes, r.id).toBeLessThanOrEqual(r.output.budget.bytes);
       const m = p.getMaterial()!;
       expect(m.getBaseColorTexture()?.getSize(), r.id).toEqual([r.output.budget.color, r.output.budget.color]);
@@ -108,7 +109,8 @@ describe('Meshy T2.5 prop / item / light derivatives: files, budgets, provenance
     }
     for (const r of RECORDS) {
       expect(r.meshy.taskId, r.id).toMatch(/^[0-9a-f-]{36}$/);
-      expect(r.meshy.review, r.id).toBe('accepted');
+      // accepted by lane MESHY, or a flagged delivery the primary allowed with a documented local fix (e.g. the beans label)
+      if (r.meshy.review !== 'accepted') { expect(r.meshy.review, r.id).toMatch(/^flagged/); expect(r.meshy.usedDespiteFlag?.reason?.length, r.id).toBeGreaterThan(20); }
       expect(r.meshy.nativeSha256, r.id).toMatch(HEX64);
       expect(r.meshy.nativeGlb, r.id).toMatch(/^reference\/tasks\/meshy-game-replacement-20261029\/assets\/raw\/.+\/native\.glb$/);
       expect(r.meshy.inputImage.sha256, r.id).toMatch(HEX64);
@@ -170,7 +172,7 @@ describe('registries use the new files; the gameplay footprint is unchanged', ()
 describe('openables re-cut from the T2.5 geometry', () => {
   let models: Record<string, GLTF> = {};
   beforeAll(async () => {
-    for (const r of RECORDS) for (const k of r.runtimeKeys) if (['trashCan', 'p7_filingCabinet'].includes(k)) models[k] = await loadStripped(r.output.url);
+    for (const r of RECORDS) for (const k of r.runtimeKeys) if (['trashCan', 'p7_filingCabinet', 'p7_fireExtinguisherCabinet'].includes(k)) models[k] = await loadStripped(r.output.url);
   }, 60000);
 
   it('trash can: the hood (above the band) lifts as the lid; the body keeps band, slats and drum', () => {
@@ -186,6 +188,24 @@ describe('openables re-cut from the T2.5 geometry', () => {
     for (const b of m.body) { b.geo.computeBoundingBox(); body.union(b.geo.boundingBox!); }
     expect(body.max.y).toBeLessThan(0.75);
     expect(body.max.x - body.min.x).toBeGreaterThan(0.53);
+  });
+
+  it('fire-extinguisher cabinet: the glazed door frame swings away; the liner, bracket and the real extinguisher stay inside', () => {
+    if (!models.p7_fireExtinguisherCabinet) return;
+    const set = new OpenableSet();
+    set.setModels(models);
+    const m = set.model('fireExtinguisherCabinet' as OpenableKind);
+    const door = m.parts[0];
+    expect(door.moving.map(q => q.mat.name).sort()).toEqual(['fireExtinguisherCabinet-open-baked', 'fireExtinguisherCabinet-open-glass']);
+    expect(door.bounds.min.z).toBeGreaterThanOrEqual(0.14 - 1e-4);   // only the door frame + glass: no solid baked front left behind
+    const bodyMats = m.body.map(b => b.mat.name);
+    expect(bodyMats).toContain('fireExtinguisherCabinet-open-authored');   // inward liner (no emissive cell)
+    expect(bodyMats).toContain('fireExtinguisherCabinet-extinguisher');
+    const ext = m.body.find(b => b.mat.name === 'fireExtinguisherCabinet-extinguisher')!.geo;
+    ext.computeBoundingBox();
+    const bb = ext.boundingBox!;
+    expect(bb.max.z).toBeLessThan(0.135);   // fully inside the liner, behind the door
+    expect(bb.max.y - bb.min.y).toBeGreaterThan(0.45);
   });
 
   it('filing cabinet: each drawer front (z 0.292, handles to 0.32) is cut whole within its seam band', () => {

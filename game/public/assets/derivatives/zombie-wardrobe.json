@@ -5,7 +5,7 @@
     "approved": false,
     "gameReady": false
   },
-  "authoredOn": "2026-10-27",
+  "authoredOn": "2026-10-29",
   "canonicalBody": "lastshift",
   "slots": [
     "lower",
@@ -13,17 +13,36 @@
     "face",
     "head"
   ],
+  "t25Migration": {
+    "task": "studio-meshy-game-replacement-20261029-01",
+    "note": "Meshy T2.5 replacement of the locally generated characters: T2.5-sourced bodies / wearables are rebuilt from the accepted Meshy native GLB with the same CPU rig / fit pipeline; every rebuilt runtime file has a -t25 URL; kept bodies are verified, not rewritten",
+    "t25Bodies": [
+      "heavyset"
+    ],
+    "t25Wearables": [
+      "hoodie"
+    ],
+    "keptBodyFiles": [
+      "scavenger"
+    ],
+    "skippedWearables": [
+      {
+        "id": "puffer",
+        "reason": "excluded on every body by the iteration-07 fit gate; no runtime model key (outfit-puffer.glb is an inert, unreferenced file); not in the T2.5 replacement inventory - left untouched"
+      }
+    ]
+  },
   "counts": {
     "bodies": 6,
-    "wearables": 16,
+    "wearables": 15,
     "perSlotWearables": {
       "lower": 3,
-      "upper": 8,
+      "upper": 7,
       "face": 2,
       "head": 3
     },
-    "pairs": 57,
-    "looks": 657,
+    "pairs": 58,
+    "looks": 717,
     "perBody": {
       "lastshift": {
         "pairs": 12,
@@ -43,7 +62,7 @@
           "face": 2,
           "head": 3
         },
-        "compositions": 95
+        "compositions": 107
       },
       "scavenger": {
         "pairs": 0,
@@ -66,14 +85,14 @@
         "compositions": 47
       },
       "heavyset": {
-        "pairs": 14,
+        "pairs": 15,
         "perSlot": {
           "lower": 3,
-          "upper": 6,
+          "upper": 7,
           "face": 2,
           "head": 3
         },
-        "compositions": 228
+        "compositions": 264
       },
       "tall": {
         "pairs": 13,
@@ -83,7 +102,7 @@
           "face": 2,
           "head": 3
         },
-        "compositions": 192
+        "compositions": 204
       }
     },
     "definitions": {
@@ -432,26 +451,26 @@
       "wearable": "hoodie",
       "slot": "upper",
       "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 1.51% > 0.5%, animated 2.42% > 1%, extreme 2.87% > 2.5% of 1324 covered vertices",
+      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 1.12% > 0.5%, animated 1.20% > 1% of 1247 covered vertices",
       "metrics": {
         "body": "scavenger",
         "wearable": "hoodie",
-        "covered": 1324,
-        "bind": 0.0151,
-        "animated": 0.0242,
-        "extreme": 0.0287,
+        "covered": 1247,
+        "bind": 0.0112,
+        "animated": 0.012,
+        "extreme": 0.0112,
         "layers": {
           "cargo": {
-            "covered": 84,
-            "animated": 0.0833
+            "covered": 140,
+            "animated": 0.0357
           },
           "jeans": {
-            "covered": 117,
-            "animated": 0.1368
+            "covered": 177,
+            "animated": 0.0847
           },
           "slacks": {
-            "covered": 59,
-            "animated": 0.1695
+            "covered": 114,
+            "animated": 0.0614
           }
         },
         "pass": false
@@ -462,25 +481,25 @@
       "wearable": "hoodie",
       "slot": "upper",
       "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 1.48% > 0.5%, animated 1.92% > 1% of 1824 covered vertices",
+      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 1.27% > 0.5%, animated 1.32% > 1% of 1892 covered vertices",
       "metrics": {
         "body": "agent",
         "wearable": "hoodie",
-        "covered": 1824,
-        "bind": 0.0148,
-        "animated": 0.0192,
-        "extreme": 0.0143,
+        "covered": 1892,
+        "bind": 0.0127,
+        "animated": 0.0132,
+        "extreme": 0.0085,
         "layers": {
           "cargo": {
-            "covered": 119,
-            "animated": 0.0084
+            "covered": 178,
+            "animated": 0.0056
           },
           "jeans": {
-            "covered": 153,
-            "animated": 0.0065
+            "covered": 216,
+            "animated": 0.0046
           },
           "slacks": {
-            "covered": 87,
+            "covered": 134,
             "animated": 0
           }
         },
@@ -548,186 +567,6 @@
       }
     },
     {
-      "body": "lastshift",
-      "wearable": "puffer",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 1.84% > 0.5%, animated 1.72% > 1% of 1798 covered vertices",
-      "metrics": {
-        "body": "lastshift",
-        "wearable": "puffer",
-        "covered": 1798,
-        "bind": 0.0184,
-        "animated": 0.0172,
-        "extreme": 0.0161,
-        "layers": {
-          "cargo": {
-            "covered": 96,
-            "animated": 0.0104
-          },
-          "jeans": {
-            "covered": 120,
-            "animated": 0.025
-          },
-          "slacks": {
-            "covered": 60,
-            "animated": 0.0333
-          }
-        },
-        "pass": false
-      }
-    },
-    {
-      "body": "courier",
-      "wearable": "puffer",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 2.09% > 0.5%, animated 2.30% > 1% of 1917 covered vertices",
-      "metrics": {
-        "body": "courier",
-        "wearable": "puffer",
-        "covered": 1917,
-        "bind": 0.0209,
-        "animated": 0.023,
-        "extreme": 0.0214,
-        "layers": {
-          "cargo": {
-            "covered": 93,
-            "animated": 0.0323
-          },
-          "jeans": {
-            "covered": 118,
-            "animated": 0.0508
-          },
-          "slacks": {
-            "covered": 60,
-            "animated": 0.0167
-          }
-        },
-        "pass": false
-      }
-    },
-    {
-      "body": "scavenger",
-      "wearable": "puffer",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 2.31% > 0.5%, animated 4.31% > 1% of 1254 covered vertices",
-      "metrics": {
-        "body": "scavenger",
-        "wearable": "puffer",
-        "covered": 1254,
-        "bind": 0.0231,
-        "animated": 0.0431,
-        "extreme": 0.0239,
-        "layers": {
-          "cargo": {
-            "covered": 102,
-            "animated": 0.0882
-          },
-          "jeans": {
-            "covered": 140,
-            "animated": 0.1
-          },
-          "slacks": {
-            "covered": 80,
-            "animated": 0.1125
-          }
-        },
-        "pass": false
-      }
-    },
-    {
-      "body": "agent",
-      "wearable": "puffer",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 6.19% > 0.5%, animated 5.99% > 1%, extreme 5.33% > 2.5% of 1987 covered vertices",
-      "metrics": {
-        "body": "agent",
-        "wearable": "puffer",
-        "covered": 1987,
-        "bind": 0.0619,
-        "animated": 0.0599,
-        "extreme": 0.0533,
-        "layers": {
-          "cargo": {
-            "covered": 119,
-            "animated": 0.0084
-          },
-          "jeans": {
-            "covered": 142,
-            "animated": 0
-          },
-          "slacks": {
-            "covered": 78,
-            "animated": 0
-          }
-        },
-        "pass": false
-      }
-    },
-    {
-      "body": "heavyset",
-      "wearable": "puffer",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 1.30% > 0.5%, animated 1.77% > 1% of 1698 covered vertices",
-      "metrics": {
-        "body": "heavyset",
-        "wearable": "puffer",
-        "covered": 1698,
-        "bind": 0.013,
-        "animated": 0.0177,
-        "extreme": 0.0135,
-        "layers": {
-          "cargo": {
-            "covered": 61,
-            "animated": 0
-          },
-          "jeans": {
-            "covered": 86,
-            "animated": 0
-          },
-          "slacks": {
-            "covered": 49,
-            "animated": 0.0204
-          }
-        },
-        "pass": false
-      }
-    },
-    {
-      "body": "tall",
-      "wearable": "puffer",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 3.40% > 0.5%, animated 3.25% > 1%, extreme 2.77% > 2.5% of 2091 covered vertices",
-      "metrics": {
-        "body": "tall",
-        "wearable": "puffer",
-        "covered": 2091,
-        "bind": 0.034,
-        "animated": 0.0325,
-        "extreme": 0.0277,
-        "layers": {
-          "cargo": {
-            "covered": 132,
-            "animated": 0
-          },
-          "jeans": {
-            "covered": 179,
-            "animated": 0.0112
-          },
-          "slacks": {
-            "covered": 95,
-            "animated": 0.0211
-          }
-        },
-        "pass": false
-      }
-    },
-    {
       "body": "scavenger",
       "wearable": "flannel",
       "slot": "upper",
@@ -782,36 +621,6 @@
           "slacks": {
             "covered": 135,
             "animated": 0.0074
-          }
-        },
-        "pass": false
-      }
-    },
-    {
-      "body": "heavyset",
-      "wearable": "flannel",
-      "slot": "upper",
-      "rule": "fit07-pose-gate",
-      "reason": "body still visibly pokes through the refitted cloth in the pose validation: bind 0.57% > 0.5% of 2087 covered vertices",
-      "metrics": {
-        "body": "heavyset",
-        "wearable": "flannel",
-        "covered": 2087,
-        "bind": 0.0057,
-        "animated": 0.0067,
-        "extreme": 0.0062,
-        "layers": {
-          "cargo": {
-            "covered": 142,
-            "animated": 0
-          },
-          "jeans": {
-            "covered": 181,
-            "animated": 0
-          },
-          "slacks": {
-            "covered": 104,
-            "animated": 0
           }
         },
         "pass": false
@@ -1059,7 +868,13 @@
   ],
   "skipped": {
     "bodies": [],
-    "wearables": []
+    "wearables": [
+      {
+        "id": "puffer",
+        "slot": "upper",
+        "reason": "excluded on every body by the iteration-07 fit gate; no runtime model key (outfit-puffer.glb is an inert, unreferenced file); not in the T2.5 replacement inventory - left untouched"
+      }
+    ]
   },
   "quality": {
     "stretchRatio": 3,
@@ -1171,22 +986,22 @@
         {
           "body": "heavyset",
           "wearable": "coat",
-          "covered": 2243,
-          "bind": 0.0009,
-          "animated": 0.0031,
-          "extreme": 0.0049,
+          "covered": 4606,
+          "bind": 0.0017,
+          "animated": 0.0037,
+          "extreme": 0.0035,
           "layers": {
             "cargo": {
-              "covered": 542,
-              "animated": 0.0037
+              "covered": 545,
+              "animated": 0.0018
             },
             "jeans": {
-              "covered": 538,
-              "animated": 0.0037
+              "covered": 548,
+              "animated": 0.0036
             },
             "slacks": {
-              "covered": 489,
-              "animated": 0.002
+              "covered": 492,
+              "animated": 0
             }
           },
           "pass": true
@@ -1309,21 +1124,21 @@
         {
           "body": "heavyset",
           "wearable": "trench",
-          "covered": 2322,
-          "bind": 0,
-          "animated": 0.0013,
-          "extreme": 0.0026,
+          "covered": 4659,
+          "bind": 0.0004,
+          "animated": 0.0009,
+          "extreme": 0.0019,
           "layers": {
             "cargo": {
-              "covered": 514,
-              "animated": 0.0019
+              "covered": 504,
+              "animated": 0
             },
             "jeans": {
-              "covered": 487,
-              "animated": 0.0041
+              "covered": 482,
+              "animated": 0.0021
             },
             "slacks": {
-              "covered": 429,
+              "covered": 448,
               "animated": 0
             }
           },
@@ -1447,21 +1262,21 @@
         {
           "body": "heavyset",
           "wearable": "hivis",
-          "covered": 1267,
-          "bind": 0.0008,
-          "animated": 0.0047,
-          "extreme": 0.0039,
+          "covered": 2570,
+          "bind": 0.0016,
+          "animated": 0.0089,
+          "extreme": 0.0047,
           "layers": {
             "cargo": {
-              "covered": 49,
+              "covered": 48,
               "animated": 0
             },
             "jeans": {
-              "covered": 71,
-              "animated": 0
+              "covered": 73,
+              "animated": 0.0137
             },
             "slacks": {
-              "covered": 34,
+              "covered": 32,
               "animated": 0
             }
           },
@@ -1493,21 +1308,21 @@
         {
           "body": "lastshift",
           "wearable": "hoodie",
-          "covered": 1715,
-          "bind": 0.0023,
-          "animated": 0.0041,
+          "covered": 1721,
+          "bind": 0.0012,
+          "animated": 0.0052,
           "extreme": 0.0035,
           "layers": {
             "cargo": {
-              "covered": 102,
-              "animated": 0.0196
+              "covered": 178,
+              "animated": 0.0056
             },
             "jeans": {
-              "covered": 115,
+              "covered": 212,
               "animated": 0
             },
             "slacks": {
-              "covered": 59,
+              "covered": 129,
               "animated": 0
             }
           },
@@ -1516,22 +1331,22 @@
         {
           "body": "courier",
           "wearable": "hoodie",
-          "covered": 1999,
-          "bind": 0.004,
-          "animated": 0.0085,
-          "extreme": 0.0045,
+          "covered": 2095,
+          "bind": 0.0014,
+          "animated": 0.0033,
+          "extreme": 0.0033,
           "layers": {
             "cargo": {
-              "covered": 100,
-              "animated": 0.02
+              "covered": 173,
+              "animated": 0.0058
             },
             "jeans": {
-              "covered": 129,
-              "animated": 0.0388
+              "covered": 214,
+              "animated": 0.0187
             },
             "slacks": {
-              "covered": 67,
-              "animated": 0.0149
+              "covered": 130,
+              "animated": 0.0077
             }
           },
           "pass": true
@@ -1539,22 +1354,22 @@
         {
           "body": "scavenger",
           "wearable": "hoodie",
-          "covered": 1324,
-          "bind": 0.0151,
-          "animated": 0.0242,
-          "extreme": 0.0287,
+          "covered": 1247,
+          "bind": 0.0112,
+          "animated": 0.012,
+          "extreme": 0.0112,
           "layers": {
             "cargo": {
-              "covered": 84,
-              "animated": 0.0833
+              "covered": 140,
+              "animated": 0.0357
             },
             "jeans": {
-              "covered": 117,
-              "animated": 0.1368
+              "covered": 177,
+              "animated": 0.0847
             },
             "slacks": {
-              "covered": 59,
-              "animated": 0.1695
+              "covered": 114,
+              "animated": 0.0614
             }
           },
           "pass": false
@@ -1562,21 +1377,21 @@
         {
           "body": "agent",
           "wearable": "hoodie",
-          "covered": 1824,
-          "bind": 0.0148,
-          "animated": 0.0192,
-          "extreme": 0.0143,
+          "covered": 1892,
+          "bind": 0.0127,
+          "animated": 0.0132,
+          "extreme": 0.0085,
           "layers": {
             "cargo": {
-              "covered": 119,
-              "animated": 0.0084
+              "covered": 178,
+              "animated": 0.0056
             },
             "jeans": {
-              "covered": 153,
-              "animated": 0.0065
+              "covered": 216,
+              "animated": 0.0046
             },
             "slacks": {
-              "covered": 87,
+              "covered": 134,
               "animated": 0
             }
           },
@@ -1585,22 +1400,22 @@
         {
           "body": "heavyset",
           "wearable": "hoodie",
-          "covered": 1782,
-          "bind": 0.0017,
-          "animated": 0.0056,
-          "extreme": 0.0045,
+          "covered": 3882,
+          "bind": 0,
+          "animated": 0.0021,
+          "extreme": 0.0021,
           "layers": {
             "cargo": {
-              "covered": 73,
+              "covered": 154,
               "animated": 0
             },
             "jeans": {
-              "covered": 100,
-              "animated": 0.01
+              "covered": 194,
+              "animated": 0.0103
             },
             "slacks": {
-              "covered": 49,
-              "animated": 0.0204
+              "covered": 109,
+              "animated": 0
             }
           },
           "pass": true
@@ -1608,22 +1423,22 @@
         {
           "body": "tall",
           "wearable": "hoodie",
-          "covered": 2018,
-          "bind": 0.005,
-          "animated": 0.0084,
-          "extreme": 0.0055,
+          "covered": 2047,
+          "bind": 0.0024,
+          "animated": 0.0024,
+          "extreme": 0.0029,
           "layers": {
             "cargo": {
-              "covered": 137,
-              "animated": 0.0219
+              "covered": 229,
+              "animated": 0.0131
             },
             "jeans": {
-              "covered": 181,
-              "animated": 0
+              "covered": 279,
+              "animated": 0.0143
             },
             "slacks": {
-              "covered": 95,
-              "animated": 0
+              "covered": 176,
+              "animated": 0.0114
             }
           },
           "pass": true
@@ -1723,18 +1538,18 @@
         {
           "body": "heavyset",
           "wearable": "blazer",
-          "covered": 1863,
-          "bind": 0,
-          "animated": 0.0016,
-          "extreme": 0.0027,
+          "covered": 3815,
+          "bind": 0.0008,
+          "animated": 0.0013,
+          "extreme": 0.0016,
           "layers": {
             "cargo": {
-              "covered": 111,
-              "animated": 0.009
+              "covered": 117,
+              "animated": 0.0085
             },
             "jeans": {
-              "covered": 141,
-              "animated": 0
+              "covered": 148,
+              "animated": 0.0203
             },
             "slacks": {
               "covered": 81,
@@ -1765,144 +1580,6 @@
             }
           },
           "pass": true
-        },
-        {
-          "body": "lastshift",
-          "wearable": "puffer",
-          "covered": 1798,
-          "bind": 0.0184,
-          "animated": 0.0172,
-          "extreme": 0.0161,
-          "layers": {
-            "cargo": {
-              "covered": 96,
-              "animated": 0.0104
-            },
-            "jeans": {
-              "covered": 120,
-              "animated": 0.025
-            },
-            "slacks": {
-              "covered": 60,
-              "animated": 0.0333
-            }
-          },
-          "pass": false
-        },
-        {
-          "body": "courier",
-          "wearable": "puffer",
-          "covered": 1917,
-          "bind": 0.0209,
-          "animated": 0.023,
-          "extreme": 0.0214,
-          "layers": {
-            "cargo": {
-              "covered": 93,
-              "animated": 0.0323
-            },
-            "jeans": {
-              "covered": 118,
-              "animated": 0.0508
-            },
-            "slacks": {
-              "covered": 60,
-              "animated": 0.0167
-            }
-          },
-          "pass": false
-        },
-        {
-          "body": "scavenger",
-          "wearable": "puffer",
-          "covered": 1254,
-          "bind": 0.0231,
-          "animated": 0.0431,
-          "extreme": 0.0239,
-          "layers": {
-            "cargo": {
-              "covered": 102,
-              "animated": 0.0882
-            },
-            "jeans": {
-              "covered": 140,
-              "animated": 0.1
-            },
-            "slacks": {
-              "covered": 80,
-              "animated": 0.1125
-            }
-          },
-          "pass": false
-        },
-        {
-          "body": "agent",
-          "wearable": "puffer",
-          "covered": 1987,
-          "bind": 0.0619,
-          "animated": 0.0599,
-          "extreme": 0.0533,
-          "layers": {
-            "cargo": {
-              "covered": 119,
-              "animated": 0.0084
-            },
-            "jeans": {
-              "covered": 142,
-              "animated": 0
-            },
-            "slacks": {
-              "covered": 78,
-              "animated": 0
-            }
-          },
-          "pass": false
-        },
-        {
-          "body": "heavyset",
-          "wearable": "puffer",
-          "covered": 1698,
-          "bind": 0.013,
-          "animated": 0.0177,
-          "extreme": 0.0135,
-          "layers": {
-            "cargo": {
-              "covered": 61,
-              "animated": 0
-            },
-            "jeans": {
-              "covered": 86,
-              "animated": 0
-            },
-            "slacks": {
-              "covered": 49,
-              "animated": 0.0204
-            }
-          },
-          "pass": false
-        },
-        {
-          "body": "tall",
-          "wearable": "puffer",
-          "covered": 2091,
-          "bind": 0.034,
-          "animated": 0.0325,
-          "extreme": 0.0277,
-          "layers": {
-            "cargo": {
-              "covered": 132,
-              "animated": 0
-            },
-            "jeans": {
-              "covered": 179,
-              "animated": 0.0112
-            },
-            "slacks": {
-              "covered": 95,
-              "animated": 0.0211
-            }
-          },
-          "pass": false
         },
         {
           "body": "lastshift",
@@ -1999,25 +1676,25 @@
         {
           "body": "heavyset",
           "wearable": "flannel",
-          "covered": 2087,
-          "bind": 0.0057,
-          "animated": 0.0067,
-          "extreme": 0.0062,
+          "covered": 4060,
+          "bind": 0.0007,
+          "animated": 0.0015,
+          "extreme": 0.0017,
           "layers": {
             "cargo": {
-              "covered": 142,
-              "animated": 0
+              "covered": 150,
+              "animated": 0.0067
             },
             "jeans": {
-              "covered": 181,
-              "animated": 0
+              "covered": 192,
+              "animated": 0.0156
             },
             "slacks": {
-              "covered": 104,
+              "covered": 103,
               "animated": 0
             }
           },
-          "pass": false
+          "pass": true
         },
         {
           "body": "tall",
@@ -2137,22 +1814,22 @@
         {
           "body": "heavyset",
           "wearable": "sweater",
-          "covered": 2087,
-          "bind": 0.0005,
-          "animated": 0.0034,
-          "extreme": 0.0029,
+          "covered": 3901,
+          "bind": 0.0008,
+          "animated": 0.0033,
+          "extreme": 0.0049,
           "layers": {
             "cargo": {
               "covered": 102,
               "animated": 0
             },
             "jeans": {
-              "covered": 124,
-              "animated": 0
+              "covered": 131,
+              "animated": 0.0076
             },
             "slacks": {
-              "covered": 65,
-              "animated": 0.0154
+              "covered": 63,
+              "animated": 0
             }
           },
           "pass": true
@@ -2223,10 +1900,10 @@
         {
           "body": "heavyset",
           "wearable": "cargo",
-          "covered": 652,
+          "covered": 2019,
           "bind": 0,
-          "animated": 0,
-          "extreme": 0.0015,
+          "animated": 0.0005,
+          "extreme": 0.0025,
           "layers": {},
           "pass": true
         },
@@ -2283,10 +1960,10 @@
         {
           "body": "heavyset",
           "wearable": "jeans",
-          "covered": 674,
+          "covered": 2079,
           "bind": 0,
-          "animated": 0,
-          "extreme": 0.003,
+          "animated": 0.0005,
+          "extreme": 0.0019,
           "layers": {},
           "pass": true
         },
@@ -2343,10 +2020,10 @@
         {
           "body": "heavyset",
           "wearable": "slacks",
-          "covered": 593,
+          "covered": 1879,
           "bind": 0,
-          "animated": 0.0017,
-          "extreme": 0,
+          "animated": 0.0005,
+          "extreme": 0.0011,
           "layers": {},
           "pass": true
         },
@@ -2391,39 +2068,11 @@
           "covered": 513
         },
         {
-          "body": "lastshift",
-          "upper": "hoodie",
-          "lower": "cargo",
-          "animated": 0.0196,
-          "covered": 102
-        },
-        {
-          "body": "courier",
-          "upper": "hoodie",
-          "lower": "cargo",
-          "animated": 0.02,
-          "covered": 100
-        },
-        {
           "body": "courier",
           "upper": "hoodie",
           "lower": "jeans",
-          "animated": 0.0388,
-          "covered": 129
-        },
-        {
-          "body": "heavyset",
-          "upper": "hoodie",
-          "lower": "slacks",
-          "animated": 0.0204,
-          "covered": 49
-        },
-        {
-          "body": "tall",
-          "upper": "hoodie",
-          "lower": "cargo",
-          "animated": 0.0219,
-          "covered": 137
+          "animated": 0.0187,
+          "covered": 214
         },
         {
           "body": "courier",
@@ -2431,6 +2080,13 @@
           "lower": "jeans",
           "animated": 0.022,
           "covered": 182
+        },
+        {
+          "body": "heavyset",
+          "upper": "blazer",
+          "lower": "jeans",
+          "animated": 0.0203,
+          "covered": 148
         },
         {
           "body": "courier",
@@ -2448,10 +2104,10 @@
         },
         {
           "body": "heavyset",
-          "upper": "sweater",
-          "lower": "slacks",
-          "animated": 0.0154,
-          "covered": 65
+          "upper": "flannel",
+          "lower": "jeans",
+          "animated": 0.0156,
+          "covered": 192
         },
         {
           "body": "tall",
@@ -2463,13 +2119,13 @@
       ]
     }
   },
-  "totalBytes": 12314232,
-  "totalMB": 12.31,
+  "totalBytes": 12271380,
+  "totalMB": 12.27,
   "bodies": {
     "lastshift": {
-      "glb": "game/public/assets/models/zombie-body-lastshift.glb",
+      "glb": "game/public/assets/models/zombie-body-lastshift-t25.glb",
       "bytes": 732068,
-      "sha256": "b91e2c0bd56effec6d2f7a825e4c26da6e2c5d4fc1e80ef87730e6fee6246559",
+      "sha256": "d933046c9d12376d5bce53aef5b8e635479a02fea53289e72eb7e76ae5e6c241",
       "triangles": 14912,
       "vertices": 11784,
       "heightM": 1.78,
@@ -2482,6 +2138,7 @@
       },
       "traits": {},
       "provenance": "generated",
+      "t25Source": false,
       "skeletonIssues": [],
       "lowestSkinnedVertexM": -0.005,
       "motion": {
@@ -2502,9 +2159,9 @@
       }
     },
     "courier": {
-      "glb": "game/public/assets/models/zombie-body-courier.glb",
+      "glb": "game/public/assets/models/zombie-body-courier-t25.glb",
       "bytes": 695128,
-      "sha256": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df",
+      "sha256": "f163e01d3bcdac3d5a17431eca6c26acae8936b39962aadfe9ee8f81f16a4eb7",
       "triangles": 14956,
       "vertices": 11165,
       "heightM": 1.8,
@@ -2517,6 +2174,7 @@
       },
       "traits": {},
       "provenance": "generated",
+      "t25Source": false,
       "skeletonIssues": [],
       "lowestSkinnedVertexM": 0.0032,
       "motion": {
@@ -2537,6 +2195,7 @@
     },
     "scavenger": {
       "glb": "game/public/assets/models/zombie-body-scavenger.glb",
+      "kept": true,
       "bytes": 832684,
       "sha256": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869",
       "triangles": 14767,
@@ -2578,6 +2237,7 @@
     },
     "agent": {
       "glb": "game/public/assets/models/zombie-body-agent.glb",
+      "kept": true,
       "bytes": 662524,
       "sha256": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45",
       "triangles": 14972,
@@ -2612,17 +2272,17 @@
       }
     },
     "heavyset": {
-      "glb": "game/public/assets/models/zombie-body-heavyset.glb",
-      "bytes": 627580,
-      "sha256": "a55889055287c4e852ff52de72d15af3fc3788b1b278da5e05f5760f66ffab6c",
-      "triangles": 14962,
-      "vertices": 10878,
+      "glb": "game/public/assets/models/zombie-body-heavyset-t25.glb",
+      "bytes": 588444,
+      "sha256": "cd3b21eaff60c28fcf2a6931e5d2b4c688c5b3302c3edd785db5dd43d237fb3a",
+      "triangles": 15000,
+      "vertices": 9615,
       "heightM": 1.78,
       "hit": {
-        "head": 0.1137,
-        "torso": 0.1889,
-        "arm": 0.0846,
-        "leg": 0.1238,
+        "head": 0.109,
+        "torso": 0.1944,
+        "arm": 0.0844,
+        "leg": 0.1177,
         "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
       },
       "traits": {
@@ -2631,27 +2291,30 @@
         ],
         "baseLayer": true
       },
-      "provenance": "generated",
+      "provenance": "generated (Meshy T2.5 replacement of the local Pixal3D master)",
+      "t25Source": true,
       "skeletonIssues": [],
-      "lowestSkinnedVertexM": -0.0032,
+      "lowestSkinnedVertexM": -0.0186,
       "motion": {
-        "triangles": 14962,
-        "p50": 1.041,
-        "p99": 3.134,
-        "max": 11.98,
-        "over2x": 456,
-        "over3x": 160,
+        "triangles": 15000,
+        "p50": 1.044,
+        "p99": 3.082,
+        "max": 14.67,
+        "over2x": 601,
+        "over3x": 161,
         "fractionOver": 0.0107,
         "worstClips": {
-          "Run": 77,
-          "Attack": 36,
-          "Death": 38
+          "Attack": 43,
+          "Death": 45,
+          "Run": 61,
+          "Hit": 2
         },
         "poses": 85
       }
     },
     "tall": {
       "glb": "game/public/assets/models/zombie-body-tall.glb",
+      "kept": true,
       "bytes": 628536,
       "sha256": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281",
       "triangles": 14960,
@@ -2696,13 +2359,14 @@
     "coat": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-coat.glb",
-      "bytes": 821396,
-      "sha256": "e8a6462714d12a3d1c278d400b3d31760b83b3743571955ba67f6964743f88ed",
+      "glb": "game/public/assets/models/outfit-coat-t25.glb",
+      "bytes": 821404,
+      "sha256": "b3fb92626f90e872f48e32fa953a287c6c7e8931d7df9aa1cd6438b9404fa5e8",
       "triangles": 8856,
       "vertices": 7189,
       "heavy": true,
       "provenance": "generated (iteration 01)",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "heavyset",
@@ -2712,13 +2376,14 @@
     "trench": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-trench.glb",
+      "glb": "game/public/assets/models/outfit-trench-t25.glb",
       "bytes": 761772,
-      "sha256": "87904fb00ee3370d76a4fd5ee552a3f7314101d044b1e1d178c15a3c07a6d601",
+      "sha256": "5c411aa8fdf19381a82f3e8def6bc8791fbf31c89fc1d20eca955ea8dfa9c175",
       "triangles": 8490,
       "vertices": 6474,
       "heavy": true,
       "provenance": "generated (iteration 05)",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "heavyset",
@@ -2728,13 +2393,14 @@
     "hivis": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-hivis.glb",
-      "bytes": 418748,
-      "sha256": "4762bd2048f2bbea45932dd025f661d8984e55abc3ccb7a5b79f3d575875eaf0",
+      "glb": "game/public/assets/models/outfit-hivis-t25.glb",
+      "bytes": 418752,
+      "sha256": "862d0a3e3801d31c72b56854d21a434b3e575c10145090e381b228568d91ba9c",
       "triangles": 4928,
       "vertices": 3641,
       "heavy": false,
       "provenance": "generated (iteration 05)",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "heavyset"
@@ -2743,13 +2409,14 @@
     "hoodie": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-hoodie.glb",
-      "bytes": 823720,
-      "sha256": "5364d68aaeabec4dfd4fa8a2dfc4636f5bb63fc574de35efad2c7c3330e55988",
-      "triangles": 7386,
-      "vertices": 6158,
+      "glb": "game/public/assets/models/outfit-hoodie-t25.glb",
+      "bytes": 697116,
+      "sha256": "96ea924e3fea37144e5bb2d97b6654734225744992a0d5acbb09cfc42f37054b",
+      "triangles": 7489,
+      "vertices": 5084,
       "heavy": false,
-      "provenance": "generated (iteration 05)",
+      "provenance": "generated (Meshy T2.5 replacement of the local Pixal3D master)",
+      "t25Source": true,
       "bodies": [
         "lastshift",
         "courier",
@@ -2760,13 +2427,14 @@
     "blazer": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-blazer.glb",
-      "bytes": 730644,
-      "sha256": "972a3f48a8ffae01c76f547ed8d8eb1123bb7836bb198b63150336b91afa44bd",
+      "glb": "game/public/assets/models/outfit-blazer-t25.glb",
+      "bytes": 730676,
+      "sha256": "afb0c4aaf4ee469eeda0fb5d36385a9c4aa8e23b4717438acb50158f45e24484",
       "triangles": 7460,
       "vertices": 5359,
       "heavy": false,
       "provenance": "generated (iteration 05)",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "courier",
@@ -2774,41 +2442,34 @@
         "tall"
       ]
     },
-    "puffer": {
-      "slot": "upper",
-      "kind": "garment",
-      "glb": "game/public/assets/models/outfit-puffer.glb",
-      "bytes": 372,
-      "sha256": "3902e0e2dcc5993e6151abbfbf222e6c3bc0df99d31ead7070ad0595d3e35049",
-      "triangles": 0,
-      "excludedOnEveryBody": true,
-      "bodies": []
-    },
     "flannel": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-flannel.glb",
-      "bytes": 428204,
-      "sha256": "0303a2698c8b530d8f6f81c407ad359f5ab29514938f012973afc26c67082b23",
+      "glb": "game/public/assets/models/outfit-flannel-t25.glb",
+      "bytes": 551424,
+      "sha256": "775bcae22af0e1994a6c1b1605f94dcea76375bf4fce6ba299aeb2e52a07f040",
       "triangles": 6468,
       "vertices": 4743,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
-        "courier"
+        "courier",
+        "heavyset"
       ]
     },
     "sweater": {
       "slot": "upper",
       "kind": "garment",
-      "glb": "game/public/assets/models/outfit-sweater.glb",
-      "bytes": 594220,
-      "sha256": "543b57efeedc53007cc3a9b821d77630594cbc4119fbeb38d46ce53f3560fb45",
+      "glb": "game/public/assets/models/outfit-sweater-t25.glb",
+      "bytes": 594192,
+      "sha256": "ebf20c428f9273b51b95ddd71c33399b0f698e0623c5ecc4006fc5fcd0044e92",
       "triangles": 6394,
       "vertices": 5111,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "heavyset",
@@ -2818,13 +2479,14 @@
     "cargo": {
       "slot": "lower",
       "kind": "pants",
-      "glb": "game/public/assets/models/outfit-cargo.glb",
-      "bytes": 612752,
-      "sha256": "68851c3eed45291936121d6770e37538c1ff1fe9989ecd9185d7b614878d2d06",
+      "glb": "game/public/assets/models/outfit-cargo-t25.glb",
+      "bytes": 612756,
+      "sha256": "21cefe8bcb3fe6adf85606d043b975b19b2cd741afb02483f9d778424d4155fe",
       "triangles": 5988,
       "vertices": 4342,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "courier",
         "agent",
@@ -2835,13 +2497,14 @@
     "jeans": {
       "slot": "lower",
       "kind": "pants",
-      "glb": "game/public/assets/models/outfit-jeans.glb",
+      "glb": "game/public/assets/models/outfit-jeans-t25.glb",
       "bytes": 583696,
-      "sha256": "1563d11941520228862247e7acc2e08533d6bfea6cb77237bbb4fc0ba9292e35",
+      "sha256": "fd44828dc0992210f2ec3e58722f058255f7b48e1dd4341fa0c28e6dffe37823",
       "triangles": 5990,
       "vertices": 4036,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "courier",
         "agent",
@@ -2852,13 +2515,14 @@
     "slacks": {
       "slot": "lower",
       "kind": "pants",
-      "glb": "game/public/assets/models/outfit-slacks.glb",
+      "glb": "game/public/assets/models/outfit-slacks-t25.glb",
       "bytes": 490088,
-      "sha256": "54bc4ad60d795ba9cb473fa0dda4517e7d8b9d2eb4c5ff9169a1b7923635101e",
+      "sha256": "1b4e29bc6fd43a470e6550bf1429f3a27eb835ca224bc57be4bdf15c397da586",
       "triangles": 5974,
       "vertices": 4320,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "agent",
         "heavyset",
@@ -2868,13 +2532,14 @@
     "hardhat": {
       "slot": "head",
       "kind": "rigid",
-      "glb": "game/public/assets/models/outfit-hardhat.glb",
-      "bytes": 349096,
-      "sha256": "c94ed2035aa144330e5307b4bb00db6ef5b5d6ae16f3953c0f3040679e5ad640",
+      "glb": "game/public/assets/models/outfit-hardhat-t25.glb",
+      "bytes": 349100,
+      "sha256": "9053a0ed59bbc86f3ae34b1a892ae81bf35f29570d2872e037070c4651d34fe1",
       "triangles": 2190,
       "vertices": 1841,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "courier",
@@ -2886,13 +2551,14 @@
     "cap": {
       "slot": "head",
       "kind": "rigid",
-      "glb": "game/public/assets/models/outfit-cap.glb",
-      "bytes": 341468,
-      "sha256": "4fdb02fccf121e22fadfa81cef6754d46d6d91d16f12f59295744ed848e3ddb7",
+      "glb": "game/public/assets/models/outfit-cap-t25.glb",
+      "bytes": 341472,
+      "sha256": "cb94cdf250ea7f4c58623853519412ce7f79900f26a41dd415829e5bb91080eb",
       "triangles": 2188,
       "vertices": 1938,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "courier",
@@ -2904,13 +2570,14 @@
     "beanie": {
       "slot": "head",
       "kind": "rigid",
-      "glb": "game/public/assets/models/outfit-beanie.glb",
-      "bytes": 296552,
-      "sha256": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a",
+      "glb": "game/public/assets/models/outfit-beanie-t25.glb",
+      "bytes": 296556,
+      "sha256": "e54ffc1b911b7213c1a5e269565bb85d93953f766eba99bbd679586843cec818",
       "triangles": 2194,
       "vertices": 1540,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "courier",
@@ -2922,13 +2589,14 @@
     "gasmask": {
       "slot": "face",
       "kind": "rigid",
-      "glb": "game/public/assets/models/outfit-gasmask.glb",
-      "bytes": 490108,
-      "sha256": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4",
+      "glb": "game/public/assets/models/outfit-gasmask-t25.glb",
+      "bytes": 490112,
+      "sha256": "3354d6792cb389b31ead1a74cc85cabade1c088fc4525cebadf04a1c8099bf3b",
       "triangles": 2936,
       "vertices": 2943,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "courier",
@@ -2940,13 +2608,14 @@
     "respirator": {
       "slot": "face",
       "kind": "rigid",
-      "glb": "game/public/assets/models/outfit-respirator.glb",
-      "bytes": 392876,
-      "sha256": "12b7b25a197f555be624c754836fa3b29c85cb8d8d3a9f96620dfc083390577e",
+      "glb": "game/public/assets/models/outfit-respirator-t25.glb",
+      "bytes": 392880,
+      "sha256": "11175f96a9fee11cae662d92d386d2606f3e0bae447e700707dabda37e448f10",
       "triangles": 2193,
       "vertices": 2257,
       "heavy": false,
       "provenance": "generated",
+      "t25Source": false,
       "bodies": [
         "lastshift",
         "courier",
@@ -2976,15 +2645,15 @@
       "body": "heavyset",
       "wearable": "coat",
       "slot": "upper",
-      "hiddenBodyTriangles": 3806,
+      "hiddenBodyTriangles": 5818,
       "bulkM": {
-        "torso": 0.0404,
-        "arm": 0.0288
+        "torso": 0.0358,
+        "arm": 0.0253
       },
       "motion": {
-        "over": 266,
-        "fraction": 0.03,
-        "max": 23.78
+        "over": 284,
+        "fraction": 0.0321,
+        "max": 20.33
       }
     },
     {
@@ -3021,15 +2690,15 @@
       "body": "heavyset",
       "wearable": "trench",
       "slot": "upper",
-      "hiddenBodyTriangles": 5347,
+      "hiddenBodyTriangles": 6611,
       "bulkM": {
-        "torso": 0.0336,
-        "arm": 0.0291
+        "torso": 0.0276,
+        "arm": 0.023
       },
       "motion": {
-        "over": 153,
-        "fraction": 0.018,
-        "max": 91.68
+        "over": 187,
+        "fraction": 0.022,
+        "max": 28.57
       }
     },
     {
@@ -3066,75 +2735,75 @@
       "body": "heavyset",
       "wearable": "hivis",
       "slot": "upper",
-      "hiddenBodyTriangles": 3306,
+      "hiddenBodyTriangles": 3383,
       "bulkM": {
-        "torso": 0.0316,
-        "arm": 0.0197
+        "torso": 0.0342,
+        "arm": 0.0302
       },
       "motion": {
-        "over": 144,
-        "fraction": 0.0292,
-        "max": 9.08
+        "over": 161,
+        "fraction": 0.0327,
+        "max": 19.2
       }
     },
     {
       "body": "lastshift",
       "wearable": "hoodie",
       "slot": "upper",
-      "hiddenBodyTriangles": 3712,
+      "hiddenBodyTriangles": 3417,
       "bulkM": {
-        "torso": 0.0405,
-        "arm": 0.0259
+        "torso": 0.0342,
+        "arm": 0.0236
       },
       "motion": {
-        "over": 101,
-        "fraction": 0.0137,
-        "max": 13.85
+        "over": 119,
+        "fraction": 0.0159,
+        "max": 13.31
       }
     },
     {
       "body": "courier",
       "wearable": "hoodie",
       "slot": "upper",
-      "hiddenBodyTriangles": 4617,
+      "hiddenBodyTriangles": 4592,
       "bulkM": {
-        "torso": 0.0376,
-        "arm": 0.0258
+        "torso": 0.0316,
+        "arm": 0.0224
       },
       "motion": {
-        "over": 116,
-        "fraction": 0.0157,
-        "max": 13.13
+        "over": 138,
+        "fraction": 0.0184,
+        "max": 23.6
       }
     },
     {
       "body": "heavyset",
       "wearable": "hoodie",
       "slot": "upper",
-      "hiddenBodyTriangles": 4359,
+      "hiddenBodyTriangles": 5681,
       "bulkM": {
-        "torso": 0.0422,
-        "arm": 0.026
+        "torso": 0.0381,
+        "arm": 0.0221
       },
       "motion": {
-        "over": 123,
-        "fraction": 0.0167,
-        "max": 9.58
+        "over": 158,
+        "fraction": 0.0211,
+        "max": 12.65
       }
     },
     {
       "body": "tall",
       "wearable": "hoodie",
       "slot": "upper",
-      "hiddenBodyTriangles": 4835,
+      "hiddenBodyTriangles": 4872,
       "bulkM": {
-        "torso": 0.0357,
-        "arm": 0.0247
+        "torso": 0.0307,
+        "arm": 0.0217
       },
       "motion": {
-        "over": 82,
-        "fraction": 0.0111,
-        "max": 27.85
+        "over": 105,
+        "fraction": 0.014,
+        "max": 11.81
       }
     },
     {
@@ -3171,15 +2840,15 @@
       "body": "heavyset",
       "wearable": "blazer",
       "slot": "upper",
-      "hiddenBodyTriangles": 3875,
+      "hiddenBodyTriangles": 5619,
       "bulkM": {
-        "torso": 0.0412,
-        "arm": 0.0269
+        "torso": 0.0352,
+        "arm": 0.024
       },
       "motion": {
-        "over": 166,
-        "fraction": 0.0223,
-        "max": 14.12
+        "over": 134,
+        "fraction": 0.018,
+        "max": 33.88
       }
     },
     {
@@ -3228,6 +2897,21 @@
       }
     },
     {
+      "body": "heavyset",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 6164,
+      "bulkM": {
+        "torso": 0.0239,
+        "arm": 0.0204
+      },
+      "motion": {
+        "over": 136,
+        "fraction": 0.021,
+        "max": 13.27
+      }
+    },
+    {
       "body": "lastshift",
       "wearable": "sweater",
       "slot": "upper",
@@ -3246,15 +2930,15 @@
       "body": "heavyset",
       "wearable": "sweater",
       "slot": "upper",
-      "hiddenBodyTriangles": 4410,
+      "hiddenBodyTriangles": 6063,
       "bulkM": {
-        "torso": 0.0297,
-        "arm": 0.028
+        "torso": 0.0257,
+        "arm": 0.0229
       },
       "motion": {
-        "over": 111,
-        "fraction": 0.0174,
-        "max": 21.28
+        "over": 112,
+        "fraction": 0.0175,
+        "max": 13.57
       }
     },
     {
@@ -3308,16 +2992,16 @@
       "body": "heavyset",
       "wearable": "cargo",
       "slot": "lower",
-      "hiddenBodyTriangles": 1783,
+      "hiddenBodyTriangles": 3194,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "leg": 0.0234
+        "leg": 0.0324
       },
       "motion": {
-        "over": 9,
-        "fraction": 0.0015,
-        "max": 5.43
+        "over": 17,
+        "fraction": 0.0028,
+        "max": 5.45
       }
     },
     {
@@ -3372,16 +3056,16 @@
       "body": "heavyset",
       "wearable": "jeans",
       "slot": "lower",
-      "hiddenBodyTriangles": 1961,
+      "hiddenBodyTriangles": 3460,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "leg": 0.0207
+        "leg": 0.027
       },
       "motion": {
-        "over": 3,
-        "fraction": 0.0005,
-        "max": 3.45
+        "over": 6,
+        "fraction": 0.001,
+        "max": 3.35
       }
     },
     {
@@ -3420,16 +3104,16 @@
       "body": "heavyset",
       "wearable": "slacks",
       "slot": "lower",
-      "hiddenBodyTriangles": 1648,
+      "hiddenBodyTriangles": 2918,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "leg": 0.0222
+        "leg": 0.0322
       },
       "motion": {
-        "over": 45,
-        "fraction": 0.0075,
-        "max": 6.2
+        "over": 76,
+        "fraction": 0.0127,
+        "max": 7.08
       }
     },
     {
@@ -3500,11 +3184,11 @@
       "body": "heavyset",
       "wearable": "hardhat",
       "slot": "head",
-      "hiddenBodyTriangles": 290,
+      "hiddenBodyTriangles": 255,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0162
+        "head": 0.0157
       },
       "motion": {
         "over": 0,
@@ -3580,11 +3264,11 @@
       "body": "heavyset",
       "wearable": "cap",
       "slot": "head",
-      "hiddenBodyTriangles": 339,
+      "hiddenBodyTriangles": 280,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.016
+        "head": 0.0176
       },
       "motion": {
         "over": 0,
@@ -3660,11 +3344,11 @@
       "body": "heavyset",
       "wearable": "beanie",
       "slot": "head",
-      "hiddenBodyTriangles": 318,
+      "hiddenBodyTriangles": 255,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0058
+        "head": 0.0072
       },
       "motion": {
         "over": 0,
@@ -3740,7 +3424,7 @@
       "body": "heavyset",
       "wearable": "gasmask",
       "slot": "face",
-      "hiddenBodyTriangles": 14,
+      "hiddenBodyTriangles": 8,
       "bulkM": {
         "torso": 0,
         "arm": 0,
@@ -3820,7 +3504,7 @@
       "body": "heavyset",
       "wearable": "respirator",
       "slot": "face",
-      "hiddenBodyTriangles": 3,
+      "hiddenBodyTriangles": 1,
       "bulkM": {
         "torso": 0,
         "arm": 0,
@@ -3913,18 +3597,17 @@
           "poses": 85
         },
         "hoodie": {
-          "triangles": 7386,
-          "p50": 1.088,
-          "p99": 3.369,
-          "max": 13.85,
-          "over2x": 303,
-          "over3x": 101,
-          "fractionOver": 0.0137,
+          "triangles": 7489,
+          "p50": 1.094,
+          "p99": 3.387,
+          "max": 13.31,
+          "over2x": 318,
+          "over3x": 119,
+          "fractionOver": 0.0159,
           "worstClips": {
-            "Run": 12,
-            "Attack": 19,
-            "Death": 43,
-            "Idle": 2
+            "Run": 28,
+            "Death": 23,
+            "Attack": 25
           },
           "poses": 85
         },
@@ -4076,17 +3759,17 @@
       },
       "wearables": {
         "hoodie": {
-          "triangles": 7386,
-          "p50": 1.082,
-          "p99": 3.483,
-          "max": 13.13,
-          "over2x": 358,
-          "over3x": 116,
-          "fractionOver": 0.0157,
+          "triangles": 7489,
+          "p50": 1.088,
+          "p99": 4.011,
+          "max": 23.6,
+          "over2x": 369,
+          "over3x": 138,
+          "fractionOver": 0.0184,
           "worstClips": {
-            "Death": 40,
-            "Attack": 30,
-            "Run": 5
+            "Attack": 43,
+            "Death": 27,
+            "Run": 6
           },
           "poses": 85
         },
@@ -4110,7 +3793,7 @@
           "p50": 1.105,
           "p99": 3.615,
           "max": 11.93,
-          "over2x": 234,
+          "over2x": 235,
           "over3x": 83,
           "fractionOver": 0.0128,
           "worstClips": {
@@ -4158,10 +3841,10 @@
           "fractionOver": 0,
           "worstClips": {
             "Walk": 2,
-            "Death": 4,
             "Attack": 12,
             "Run": 2,
-            "Idle": 6
+            "Death": 8,
+            "Idle": 2
           },
           "poses": 85
         },
@@ -4174,9 +3857,9 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Attack": 8,
+            "Attack": 14,
             "Idle": 8,
-            "Death": 6,
+            "Death": 2,
             "Walk": 2
           },
           "poses": 85
@@ -4190,8 +3873,8 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Death": 9,
-            "Walk": 2,
+            "Death": 6,
+            "Hit": 4,
             "Run": 10,
             "Attack": 4
           },
@@ -4206,9 +3889,9 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Attack": 14,
+            "Attack": 12,
             "Walk": 6,
-            "Death": 8,
+            "Death": 10,
             "Hit": 2,
             "Idle": 2
           },
@@ -4225,10 +3908,9 @@
           "worstClips": {
             "Hit": 8,
             "Idle": 6,
-            "Death": 2,
             "Attack": 4,
             "Walk": 2,
-            "Run": 2
+            "Run": 4
           },
           "poses": 85
         }
@@ -4404,152 +4086,169 @@
     },
     "heavyset": {
       "body": {
-        "triangles": 14962,
-        "p50": 1.041,
-        "p99": 3.134,
-        "max": 11.98,
-        "over2x": 456,
-        "over3x": 160,
+        "triangles": 15000,
+        "p50": 1.044,
+        "p99": 3.082,
+        "max": 14.67,
+        "over2x": 601,
+        "over3x": 161,
         "fractionOver": 0.0107,
         "worstClips": {
-          "Run": 77,
-          "Attack": 36,
-          "Death": 38
+          "Attack": 43,
+          "Death": 45,
+          "Run": 61,
+          "Hit": 2
         },
         "poses": 85
       },
       "wearables": {
         "coat": {
           "triangles": 8856,
-          "p50": 1.108,
-          "p99": 5.02,
-          "max": 23.78,
-          "over2x": 576,
-          "over3x": 266,
-          "fractionOver": 0.03,
+          "p50": 1.11,
+          "p99": 5.224,
+          "max": 20.33,
+          "over2x": 608,
+          "over3x": 284,
+          "fractionOver": 0.0321,
           "worstClips": {
-            "Run": 68,
-            "Attack": 8,
-            "Death": 14
+            "Run": 62,
+            "Attack": 10,
+            "Death": 18
           },
           "poses": 85
         },
         "trench": {
           "triangles": 8490,
-          "p50": 1.121,
-          "p99": 3.526,
-          "max": 91.68,
-          "over2x": 426,
-          "over3x": 153,
-          "fractionOver": 0.018,
+          "p50": 1.115,
+          "p99": 3.82,
+          "max": 28.57,
+          "over2x": 533,
+          "over3x": 187,
+          "fractionOver": 0.022,
           "worstClips": {
-            "Run": 37,
-            "Attack": 10,
-            "Death": 39
+            "Run": 22,
+            "Death": 41,
+            "Attack": 24
           },
           "poses": 85
         },
         "hivis": {
           "triangles": 4928,
-          "p50": 1.131,
-          "p99": 4.93,
-          "max": 9.08,
-          "over2x": 280,
-          "over3x": 144,
-          "fractionOver": 0.0292,
+          "p50": 1.136,
+          "p99": 5.734,
+          "max": 19.2,
+          "over2x": 297,
+          "over3x": 161,
+          "fractionOver": 0.0327,
           "worstClips": {
-            "Run": 37,
-            "Death": 14
+            "Attack": 7,
+            "Run": 34,
+            "Death": 10
           },
           "poses": 85
         },
         "hoodie": {
-          "triangles": 7386,
-          "p50": 1.104,
-          "p99": 3.538,
-          "max": 9.58,
-          "over2x": 447,
-          "over3x": 123,
-          "fractionOver": 0.0167,
+          "triangles": 7489,
+          "p50": 1.101,
+          "p99": 4.405,
+          "max": 12.65,
+          "over2x": 400,
+          "over3x": 158,
+          "fractionOver": 0.0211,
           "worstClips": {
-            "Run": 11,
-            "Attack": 17,
-            "Death": 47
+            "Attack": 39,
+            "Run": 20,
+            "Death": 18
           },
           "poses": 85
         },
         "blazer": {
           "triangles": 7460,
-          "p50": 1.15,
-          "p99": 4.099,
-          "max": 14.12,
-          "over2x": 466,
-          "over3x": 166,
-          "fractionOver": 0.0223,
+          "p50": 1.142,
+          "p99": 3.797,
+          "max": 33.88,
+          "over2x": 380,
+          "over3x": 134,
+          "fractionOver": 0.018,
           "worstClips": {
-            "Death": 21,
-            "Attack": 34,
+            "Attack": 37,
+            "Death": 16,
+            "Run": 23
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6468,
+          "p50": 1.136,
+          "p99": 4.18,
+          "max": 13.27,
+          "over2x": 347,
+          "over3x": 136,
+          "fractionOver": 0.021,
+          "worstClips": {
+            "Death": 23,
+            "Attack": 22,
             "Run": 21
           },
           "poses": 85
         },
         "sweater": {
           "triangles": 6394,
-          "p50": 1.123,
-          "p99": 3.518,
-          "max": 21.28,
-          "over2x": 300,
-          "over3x": 111,
-          "fractionOver": 0.0174,
+          "p50": 1.121,
+          "p99": 3.578,
+          "max": 13.57,
+          "over2x": 270,
+          "over3x": 112,
+          "fractionOver": 0.0175,
           "worstClips": {
-            "Attack": 21,
-            "Run": 25,
-            "Death": 20
+            "Run": 42,
+            "Attack": 9,
+            "Death": 14
           },
           "poses": 85
         },
         "cargo": {
           "triangles": 5988,
-          "p50": 1.076,
-          "p99": 1.959,
-          "max": 5.43,
-          "over2x": 53,
-          "over3x": 9,
-          "fractionOver": 0.0015,
+          "p50": 1.069,
+          "p99": 2.383,
+          "max": 5.45,
+          "over2x": 194,
+          "over3x": 17,
+          "fractionOver": 0.0028,
           "worstClips": {
-            "Death": 37,
-            "Run": 18,
-            "Attack": 6
+            "Death": 40,
+            "Run": 12,
+            "Attack": 10
           },
           "poses": 85
         },
         "jeans": {
           "triangles": 5990,
-          "p50": 1.07,
-          "p99": 1.987,
-          "max": 3.45,
-          "over2x": 57,
-          "over3x": 3,
-          "fractionOver": 0.0005,
+          "p50": 1.063,
+          "p99": 2.397,
+          "max": 3.35,
+          "over2x": 188,
+          "over3x": 6,
+          "fractionOver": 0.001,
           "worstClips": {
-            "Death": 43,
-            "Attack": 6,
-            "Run": 12
+            "Death": 33,
+            "Run": 21,
+            "Attack": 8
           },
           "poses": 85
         },
         "slacks": {
           "triangles": 5974,
-          "p50": 1.067,
-          "p99": 2.691,
-          "max": 6.2,
-          "over2x": 108,
-          "over3x": 45,
-          "fractionOver": 0.0075,
+          "p50": 1.049,
+          "p99": 3.411,
+          "max": 7.08,
+          "over2x": 200,
+          "over3x": 76,
+          "fractionOver": 0.0127,
           "worstClips": {
-            "Death": 33,
-            "Run": 24,
-            "Attack": 5
+            "Death": 54,
+            "Attack": 3,
+            "Run": 4
           },
           "poses": 85
         },
@@ -4562,10 +4261,12 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Idle": 4,
-            "Death": 6,
-            "Walk": 4,
-            "Attack": 10
+            "Attack": 4,
+            "Death": 14,
+            "Hit": 2,
+            "Walk": 2,
+            "Run": 4,
+            "Idle": 2
           },
           "poses": 85
         },
@@ -4578,11 +4279,10 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Run": 2,
-            "Death": 8,
-            "Walk": 4,
-            "Attack": 6,
-            "Idle": 4
+            "Attack": 8,
+            "Walk": 6,
+            "Death": 6,
+            "Run": 4
           },
           "poses": 85
         },
@@ -4595,11 +4295,12 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Attack": 5,
-            "Death": 12,
-            "Run": 4,
-            "Walk": 2,
-            "Hit": 2
+            "Hit": 1,
+            "Death": 6,
+            "Run": 1,
+            "Idle": 6,
+            "Attack": 6,
+            "Walk": 4
           },
           "poses": 85
         },
@@ -4612,12 +4313,11 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Walk": 5,
-            "Death": 6,
-            "Run": 7,
-            "Attack": 4,
-            "Hit": 8,
-            "Idle": 2
+            "Death": 20,
+            "Hit": 3,
+            "Run": 5,
+            "Idle": 2,
+            "Walk": 4
           },
           "poses": 85
         },
@@ -4630,10 +4330,11 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
+            "Walk": 2,
+            "Death": 10,
+            "Attack": 2,
             "Idle": 6,
-            "Attack": 6,
-            "Run": 4,
-            "Death": 8
+            "Run": 4
           },
           "poses": 85
         }
@@ -4689,17 +4390,17 @@
           "poses": 85
         },
         "hoodie": {
-          "triangles": 7386,
-          "p50": 1.084,
-          "p99": 3.216,
-          "max": 27.85,
-          "over2x": 292,
-          "over3x": 82,
-          "fractionOver": 0.0111,
+          "triangles": 7489,
+          "p50": 1.092,
+          "p99": 3.548,
+          "max": 11.81,
+          "over2x": 305,
+          "over3x": 105,
+          "fractionOver": 0.014,
           "worstClips": {
-            "Attack": 36,
-            "Run": 15,
-            "Death": 24
+            "Attack": 44,
+            "Run": 20,
+            "Death": 13
           },
           "poses": 85
         },
@@ -4862,5 +4563,5 @@
     }
   },
   "rebuild": "node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs",
-  "buildSeconds": 504
+  "buildSeconds": 512
 }

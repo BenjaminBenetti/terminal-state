@@ -13,16 +13,321 @@
     "files": "plain glTF 2.0 binary (no Draco / meshopt / KTX2); new flat path <old-basename>-t25.glb (cache-busting); logical runtime keys unchanged"
   },
   "restoreNote": "Every replaced runtime file is tracked at the pushed base commit; restore = record.restore.command (git show <base>:<path>).",
-  "tool": "meshy-t25-props-1",
+  "tool": "meshy-t25-props-2",
   "class": "items",
   "counts": {
-    "records": 6,
-    "bytes": 1028308,
-    "triangles": 12215,
-    "replacedBytes": 974536,
-    "replacedTriangles": 5070
+    "records": 7,
+    "bytes": 1213508,
+    "triangles": 14317,
+    "replacedBytes": 1119280,
+    "replacedTriangles": 5762
   },
   "records": [
+    {
+      "id": "base:item_beans",
+      "runtimeKeys": [
+        "item_beans"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-beans-t25.glb",
+        "url": "assets/models/item-beans-t25.glb",
+        "sha256": "b2f381479c81bdbf73b21a33757fbbd7284b36707a456da9f5a7c5f4f7ff6bf8",
+        "bytes": 185200,
+        "triangles": 2102,
+        "vertices": 2255,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 65184
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 24638
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 8382
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": false,
+        "dims": [
+          0.0801,
+          0.11,
+          0.08
+        ],
+        "bbox": {
+          "min": [
+            -0.0401,
+            0,
+            -0.04
+          ],
+          "max": [
+            0.0401,
+            0.11,
+            0.04
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a1899d-9295-7595-85eb-a717ded13d70",
+        "attempt": "a2",
+        "review": "flagged:unusable:label-bowl-extruded",
+        "reviewNote": "a2 repeats the a1 defect: the label bowl illustration is again a solid bowl protruding from the can side (side/top views). Same input image => systematic, not random. NO further Meshy attempts (limit reached). Can body itself is a clean cylinder with red/cream label (a2 back face also carries the bowl art): a local CPU trim of geometry outside the can radius is feasible at integration, or keep the existing model - PRIMARY decides.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "usedDespiteFlag": {
+          "attempt": "a2",
+          "reason": "primary 2026-10-29: no more rerolls; fix the extruded label locally (radialClamp) or keep the old model. Fixed locally: the can silhouette is a clean cylinder again and the illustration reads as printed (review sheet review/props/base_item_beans.png)"
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_beans/a2/native.glb",
+        "nativeSha256": "7ef151ce857c7a70545e77880be277038f068869b7995f28c272b8c96e03b182",
+        "nativeBytes": 7581356,
+        "native": {
+          "triangles": 2102,
+          "vertices": 2255,
+          "bbox": [
+            0.6934,
+            0.9517,
+            0.9165
+          ],
+          "components": 1,
+          "largestComponentFaces": 2102,
+          "boundaryEdges": 4,
+          "nonManifoldEdges": 0,
+          "edges": 3155,
+          "mr": {
+            "meanRoughness": 0.385,
+            "meanMetalness": 0.206
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 3408649
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1728143
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2344861
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/beans/image/beans-original.png",
+          "sha256": "2f6588b97ba81cf0127606a797a0d769568ccb04bff060e34690757c3faee66e",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.115588,
+          0.115588,
+          0.115588
+        ],
+        "t": [
+          -0.000028,
+          0.055,
+          0.012982
+        ],
+        "fit": "uniform: height 0.11 m (old runtime height) -> 0.0801 x 0.11 x 0.08 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.075,
+          0.11,
+          0.075
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.913,
+              "lumaCorrelation": 0.235,
+              "chromaDiff": 0.13,
+              "aspectLogDiff": 0.133,
+              "score": 0.905
+            },
+            "right": {
+              "iou": 0.811,
+              "lumaCorrelation": 0.212,
+              "chromaDiff": 0.118,
+              "aspectLogDiff": 0.412,
+              "score": 0.656
+            },
+            "back": {
+              "iou": 0.913,
+              "lumaCorrelation": 0.241,
+              "chromaDiff": 0.119,
+              "aspectLogDiff": 0.133,
+              "score": 0.921
+            },
+            "left": {
+              "iou": 0.802,
+              "lumaCorrelation": 0.236,
+              "chromaDiff": 0.117,
+              "aspectLogDiff": 0.412,
+              "score": 0.668
+            }
+          },
+          "best": "back",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": {
+        "acceptFlagged": {
+          "attempt": "a2",
+          "reason": "primary 2026-10-29: no more rerolls; fix the extruded label locally (radialClamp) or keep the old model. Fixed locally: the can silhouette is a clean cylinder again and the illustration reads as printed (review sheet review/props/base_item_beans.png)"
+        },
+        "radialClamp": {
+          "rimBand": 0.08,
+          "pad": 0.0004,
+          "reason": "both Meshy attempts (a1, a2; no further rerolls) reconstructed the bowl-of-beans illustration on the label as a solid bowl protruding ~0.3 can widths from the can side; the protruding shell is pressed back onto the can wall (texture kept), so the illustration reads as printed on the label like the original image"
+        }
+      },
+      "simplify": {
+        "applied": false,
+        "triangles": 2102
+      },
+      "meshAfter": {
+        "components": 1,
+        "largestComponentFaces": 2102,
+        "boundaryEdges": 4,
+        "nonManifoldEdges": 0,
+        "edges": 3155
+      },
+      "radialClamp": {
+        "reason": "both Meshy attempts (a1, a2; no further rerolls) reconstructed the bowl-of-beans illustration on the label as a solid bowl protruding ~0.3 can widths from the can side; the protruding shell is pressed back onto the can wall (texture kept), so the illustration reads as printed on the label like the original image",
+        "axis": [
+          0.0003,
+          -0.0152
+        ],
+        "wallRadiusM": 0.0418,
+        "verticesMoved": 982,
+        "maxProtrusionM": 0.0264,
+        "padM": 0.0004,
+        "rimBand": 0.08
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-beans.glb",
+        "sha256": "898e388bce1fbb57478d0e97a714cb1f5171a9237ebbb9f93aa8553289ae97c4",
+        "bytes": 144744,
+        "triangles": 692,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.0375,
+            0,
+            -0.0375
+          ],
+          "max": [
+            0.0375,
+            0.11,
+            0.0375
+          ],
+          "size": [
+            0.075,
+            0.11,
+            0.075
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-beans.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "edc6292a494cde0256b854da8082237246d09fbc",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-beans.glb > game/public/assets/models/item-beans.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_beans.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
     {
       "id": "base:item_chips",
       "runtimeKeys": [
@@ -300,7 +605,7 @@
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     },
     {
       "id": "base:item_chocolate",
@@ -579,7 +884,7 @@
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     },
     {
       "id": "base:item_cola",
@@ -858,7 +1163,7 @@
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     },
     {
       "id": "base:item_juice",
@@ -1137,7 +1442,7 @@
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     },
     {
       "id": "base:item_noodles",
@@ -1416,7 +1721,7 @@
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     },
     {
       "id": "base:item_water",
@@ -1695,7 +2000,7 @@
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
-      "tool": "meshy-t25-props-1"
+      "tool": "meshy-t25-props-2"
     }
   ]
 }

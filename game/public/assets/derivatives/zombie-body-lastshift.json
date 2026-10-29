@@ -17,11 +17,22 @@
   "origin": "iteration-01 generated master (zombie-body-03)",
   "provenance": "generated",
   "traits": {},
+  "t25": {
+    "migration": "studio-meshy-game-replacement-20261029-01",
+    "sourceReplaced": false,
+    "note": "source master unchanged (legacy local Pixal3D); file rebuilt because its per-body fits / masks follow bodies replaced in this migration",
+    "supersedes": {
+      "path": "game/public/assets/models/zombie-body-lastshift.glb",
+      "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+      "blob": "c83ba7228a06a35a5fe82a519e8efc7eb49966c0",
+      "restore": "git show a7a646a:game/public/assets/models/zombie-body-lastshift.glb > game/public/assets/models/zombie-body-lastshift.glb"
+    }
+  },
   "outputs": {
     "glb": {
-      "path": "game/public/assets/models/zombie-body-lastshift.glb",
+      "path": "game/public/assets/models/zombie-body-lastshift-t25.glb",
       "bytes": 732068,
-      "sha256": "b91e2c0bd56effec6d2f7a825e4c26da6e2c5d4fc1e80ef87730e6fee6246559",
+      "sha256": "d933046c9d12376d5bce53aef5b8e635479a02fea53289e72eb7e76ae5e6c241",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -1372,14 +1383,14 @@
       "head": -23.5,
       "headYaw": -23,
       "armLz": -0.694,
-      "armRz": -0.244,
+      "armRz": -0.256,
       "footLz": 0.5,
       "footRz": 0.12
     },
     "lowestPointPerRegionM": {
       "torso": 0.078,
       "pelvis": 0.11,
-      "armR": 0.049,
+      "armR": 0.046,
       "armL": 0.059,
       "legR": -0.003,
       "legL": -0.004,
