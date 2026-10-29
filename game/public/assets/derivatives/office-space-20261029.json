@@ -1433,6 +1433,7 @@
    "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
    "front": "-Z",
    "up": "+Y",
+   "note": "generated as a 2x2-drawer lateral steel cabinet (about 1.32 x 1.32 x 0.80 m at the table height)",
    "textures": [
     {
      "slot": "baseColor",
@@ -1823,6 +1824,7 @@
    "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
    "front": "-Z",
    "up": "+Y",
+   "note": "bottom-load style cabinet with the cracked blue bottle inside (no bottle on top)",
    "textures": [
     {
      "slot": "baseColor",
@@ -1953,6 +1955,7 @@
    "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
    "front": "-Z",
    "up": "+Y",
+   "note": "pedestal / panel base; top at about 0.83 m",
    "textures": [
     {
      "slot": "baseColor",
@@ -2213,6 +2216,7 @@
    "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
    "front": "-Z",
    "up": "+Y",
+   "note": "deep counter (about 2.6 x 1.12 x 1.78 m)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2343,6 +2347,7 @@
    "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
    "front": "-Z",
    "up": "+Y",
+   "note": "squat cabinet (about 1.23 x 2.0 x 1.48 m); broken glass door on the -Z side; generated at 1157 tris (below target)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2375,45 +2380,925 @@
      "sha256": "c1528a506cae56620cf1987b87205ae34c8e018a7ee092d34525cd6cef6fb376"
     }
    ]
-  }
- ],
- "missing": [
+  },
   {
-   "id": "whiteboard",
    "code": "B11",
-   "reason": "preview only"
+   "id": "whiteboard",
+   "key": "office-whiteboard",
+   "use": "office",
+   "subject": "office whiteboard on a wheeled stand, smeared marker writing",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "office whiteboard on a wheeled stand, smeared marker writing, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "office whiteboard on a wheeled stand, smeared marker writing, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-955c-7371-9647-5903094aeb2f",
+    "refine": "01a18644-c96a-777a-a160-c41acc8d6b16"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/whiteboard/refine/whiteboard-refine.glb (raw original, outside Git)",
+    "sha256": "73a028d7615b4a9edc3650b4d1d380f90f0dd6b916d0b0c7398a9c93bfbc3fa9",
+    "bytes": 6641488,
+    "triangles": 1932,
+    "extent": [
+     0.9565,
+     0.8608,
+     0.4932
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2863041
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1537252
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2145495
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/whiteboard/preview/whiteboard-preview.glb",
+    "previewSha256": "9feff1b50530eeb82d285b5ae22999d279a98078591f993095f5f3a0df2c6748",
+    "previewTriangles": 1932
+   },
+   "output": {
+    "file": "game/public/assets/models/office-whiteboard.glb",
+    "url": "assets/models/office-whiteboard.glb",
+    "sha256": "e6fc2f6bac5e59a78aff09992490453ffbf09276b5cf6f662301b18579864c36",
+    "bytes": 556256,
+    "triangles": 1932,
+    "dims": [
+     1.8,
+     1.6199,
+     0.928
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 1.8,
+   "sizeAxis": "w",
+   "scale": 1.881776,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "board plane faces -Z; marker writing barely visible",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 215326,
+     "sha256": "b310df746319e6a913478026ecf0c9a5437d2343ef2d0cffd290740b751ae328"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 142280,
+     "sha256": "1b6b309f03bd9107de4fdcd319ace25c852be2d19ad6ee03de6d5b7d72ff1012"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 115115,
+     "sha256": "7dd185b48bd3d5411543ea2b6db3ab83ee5011012eab4ecba93aa39ad93b6e27"
+    }
+   ]
   },
   {
-   "id": "office-shelf",
    "code": "B12",
-   "reason": "preview only"
+   "id": "office-shelf",
+   "key": "office-office-shelf",
+   "use": "office",
+   "subject": "metal office bookshelf with a few binders and loose papers, dusty",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "metal office bookshelf with a few binders and loose papers, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "metal office bookshelf with a few binders and loose papers, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-9d49-71c9-95e9-6a7facd2a550",
+    "refine": "01a18644-d027-7322-a79c-eb930c9b8d94"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/office-shelf/refine/office-shelf-refine.glb (raw original, outside Git)",
+    "sha256": "e260c7979dd75475d114daf963ceb0f79298ea56c9d3ce2fd6e3e7947dc99bd8",
+    "bytes": 5515496,
+    "triangles": 3888,
+    "extent": [
+     0.9556,
+     0.7764,
+     0.3267
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2279459
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1335509
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1671355
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/office-shelf/preview/office-shelf-preview.glb",
+    "previewSha256": "f19eb8c233b91fe56e7237b278afc7a50dade1b7b102fb68b0487d33c506292b",
+    "previewTriangles": 3888
+   },
+   "output": {
+    "file": "game/public/assets/models/office-office-shelf.glb",
+    "url": "assets/models/office-office-shelf.glb",
+    "sha256": "69e63b9079762b82be688a844ab598287996a2b41108ae3a2757ccda644bdb34",
+    "bytes": 554884,
+    "triangles": 3888,
+    "dims": [
+     2.2155,
+     1.8,
+     0.7574
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1.8,
+   "sizeAxis": "h",
+   "scale": 2.318488,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "wide double shelving unit (about 2.22 x 1.8 x 0.76 m); open side -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 165966,
+     "sha256": "d2e45f2e17af25d94f61a87ec22ca55c485ed372c71d3af2265bc7b85d5c8d4f"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 101757,
+     "sha256": "28bbf28137e4eb02cd1df3baa9ce694c1b0d0790919f06e4482a8d7cf4b52006"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 81865,
+     "sha256": "dd5d29898bb601af73255b43f4d18f25c0de205c96c89a407caee1e51a8722b2"
+    }
+   ]
   },
   {
-   "id": "car-wreck",
    "code": "C1",
-   "reason": "preview only"
+   "id": "car-wreck",
+   "key": "office-car-wreck",
+   "use": "exterior",
+   "subject": "burnt-out rusted sedan wreck, no glass, flat tyres",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "burnt-out rusted sedan wreck, no glass, flat tyres, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "burnt-out rusted sedan wreck, no glass, flat tyres, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 8000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-a66d-7591-9e4f-db400dee4e93",
+    "refine": "01a18644-d730-7067-8231-098091ea471e"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/car-wreck/refine/car-wreck-refine.glb (raw original, outside Git)",
+    "sha256": "77f5594ea3d522d55b95518b1f9d968dcd002e6b384ec05364c282c08709e049",
+    "bytes": 8302172,
+    "triangles": 7762,
+    "extent": [
+     0.9497,
+     0.2695,
+     0.3677
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3572162
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1789055
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2608811
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/car-wreck/preview/car-wreck-preview.glb",
+    "previewSha256": "bd8e2f3818918db4ddba447d1c4e34acafae2c3f8cfd2bb61f63d3395193108d",
+    "previewTriangles": 7791
+   },
+   "output": {
+    "file": "game/public/assets/models/office-car-wreck.glb",
+    "url": "assets/models/office-car-wreck.glb",
+    "sha256": "ae2135b7957103c58a9bc1188afb47b27a6837633b0e5876d8098ad0a40ac848",
+    "bytes": 831852,
+    "triangles": 7762,
+    "dims": [
+     4.6,
+     1.3055,
+     1.7809
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 8000,
+   "sizeM": 4.6,
+   "sizeAxis": "longest",
+   "scale": 4.843594,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "vehicle length along X with the nose toward +X (its side faces -Z)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 252799,
+     "sha256": "c00a66d5381a70ca0e91e9fb2a912757644b995d7c9fbebdadde98e6e9ffc168"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 158103,
+     "sha256": "13ba5665224089cae144feb8708e91b0619c9199eefa8dabf2d0fbbc25f3f0da"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 135940,
+     "sha256": "947269256974b91a101b6e498eee362cf63db3894c1f2c8fec5b50bb5441b0c0"
+    }
+   ]
   },
   {
-   "id": "rubble-pile",
    "code": "C2",
-   "reason": "preview only"
+   "id": "rubble-pile",
+   "key": "office-rubble-pile",
+   "use": "exterior",
+   "subject": "large pile of broken concrete rubble with bent rebar",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "large pile of broken concrete rubble with bent rebar, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "large pile of broken concrete rubble with bent rebar, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 6000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-af2e-7447-8ad1-0aab6f8c471a",
+    "refine": "01a18644-de3a-7275-be8d-2612a1ba9aa7"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/rubble-pile/refine/rubble-pile-refine.glb (raw original, outside Git)",
+    "sha256": "f5ef2e856c08d8a5ca3867b8db5a047bdb5c9dc18cf30591afb68729d1c0abe8",
+    "bytes": 5512340,
+    "triangles": 5486,
+    "extent": [
+     0.957,
+     0.3447,
+     0.9082
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1879204
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1706367
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1597039
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/rubble-pile/preview/rubble-pile-preview.glb",
+    "previewSha256": "e51ac31affcad6c9f1e913705c139404946654290cd8a8e77c1f52a0faa49fd1",
+    "previewTriangles": 5486
+   },
+   "output": {
+    "file": "game/public/assets/models/office-rubble-pile.glb",
+    "url": "assets/models/office-rubble-pile.glb",
+    "sha256": "defcee5b755ba0c073ee55ecef3bbf4fe51fb481ead62cdcef35e394563e201b",
+    "bytes": 569708,
+    "triangles": 5486,
+    "dims": [
+     5,
+     1.801,
+     4.7449
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 6000,
+   "sizeM": 5,
+   "sizeAxis": "longest",
+   "scale": 5.224491,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 103958,
+     "sha256": "5dbf6b6a00574eb0f26b4b0eec0862be99a2b83bcf362e76e8c6e43baa02c568"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 127416,
+     "sha256": "07a6300a98e1617696ad13791cce4cc81deeb4c9e5425a7a8944f085e159a4b2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42143,
+     "sha256": "00673ef510a6f05a93411856a0f7200ce57f5faeeca822d0fc82921f313fc3e8"
+    }
+   ]
   },
   {
-   "id": "ruined-tower",
    "code": "C3",
-   "reason": "preview only"
+   "id": "ruined-tower",
+   "key": "office-ruined-tower",
+   "use": "exterior",
+   "subject": "ruined office skyscraper, collapsed upper floors, blown-out windows, exposed floor slabs, background asset",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "ruined office skyscraper, collapsed upper floors, blown-out windows, exposed floor slabs, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "ruined office skyscraper, collapsed upper floors, blown-out windows, exposed floor slabs, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 20000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-b67a-76f6-a06d-d17889270b90",
+    "refine": "01a18644-e5a7-748e-a5f4-286e5b344a30"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-tower/refine/ruined-tower-refine.glb (raw original, outside Git)",
+    "sha256": "c5c9ab4868f39d7a87150e145239aa3988125a209a63ac4d7873ad771dca9401",
+    "bytes": 7344716,
+    "triangles": 15841,
+    "extent": [
+     0.5894,
+     0.9507,
+     0.7168
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2520295
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1930089
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2016612
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-tower/preview/ruined-tower-preview.glb",
+    "previewSha256": "62fbcffef4c6d2660f7a0803f7bd9e5be47d54f745cc9463d88d3191bec3f7bf",
+    "previewTriangles": 16100
+   },
+   "output": {
+    "file": "game/public/assets/models/office-ruined-tower.glb",
+    "url": "assets/models/office-ruined-tower.glb",
+    "sha256": "8eca841138d89e49b243137421e283c25e94f8d57f4f907ed5d99634f9a924f7",
+    "bytes": 1237744,
+    "triangles": 15841,
+    "dims": [
+     37.1957,
+     60,
+     45.2388
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 20000,
+   "sizeM": 60,
+   "sizeAxis": "h",
+   "scale": 63.112455,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "background scenery: hollow window-grid frame with debris at the base",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 188317,
+     "sha256": "2d3be8bfcf855ddbfc7524d213c6c7b9a19943dcbea76816491bde52d2da38ec"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 155473,
+     "sha256": "e44ff26d283ec83d5731d963337575a0f411cf191d01fed291120c27d4f63a2d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 111796,
+     "sha256": "5e81a8bbc88b19f1c6aeb99e9e50aed530e50adfa1614c925158836ba2c46ba6"
+    }
+   ]
   },
   {
-   "id": "ruined-midrise",
    "code": "C4",
-   "reason": "preview only"
+   "id": "ruined-midrise",
+   "key": "office-ruined-midrise",
+   "use": "exterior",
+   "subject": "burnt mid-rise apartment block, collapsed corner, broken windows, background asset",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "burnt mid-rise apartment block, collapsed corner, broken windows, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "burnt mid-rise apartment block, collapsed corner, broken windows, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 20000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-bd66-703e-8c23-0941c6b867a7",
+    "refine": "01a18644-ece0-71dc-a1d4-81fc42799d26"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-midrise/refine/ruined-midrise-refine.glb (raw original, outside Git)",
+    "sha256": "6cfae2f13067beb430ed44f6d93afd38222d1898bc311d27177e291c28a0a358",
+    "bytes": 6745924,
+    "triangles": 15378,
+    "extent": [
+     0.7832,
+     0.9531,
+     0.7388
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2244690
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1729497
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1810701
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-midrise/preview/ruined-midrise-preview.glb",
+    "previewSha256": "34eefa34e94ec0c36d0ad13282de0c0761b3627f7580fab116fc0259b8c45fd0",
+    "previewTriangles": 15530
+   },
+   "output": {
+    "file": "game/public/assets/models/office-ruined-midrise.glb",
+    "url": "assets/models/office-ruined-midrise.glb",
+    "sha256": "abe1c68e55ab60e3136354629932ecddd698c77d35f0caf98a7df31b517472cb",
+    "bytes": 1269108,
+    "triangles": 15378,
+    "dims": [
+     24.6517,
+     30,
+     23.2531
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 20000,
+   "sizeM": 30,
+   "sizeAxis": "h",
+   "scale": 31.47541,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "background scenery: facade with blown-out windows and one open, collapsed side exposing floor slabs",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 159860,
+     "sha256": "16601388df1b5e5674271a10949e5feec1ed1fe2484764c8b336b2f74d26667c"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 148289,
+     "sha256": "6ba84e27b8cc51019cf8b3d40c1d3d568424332ba022eaa261cc9e7310444f1d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 92717,
+     "sha256": "8934a06ab20a89b69a858aafc0adaea2fdfa70d9c7df468d92fccb6272a0ad4b"
+    }
+   ]
   },
   {
-   "id": "bus-wreck",
    "code": "C5",
-   "reason": "preview only"
+   "id": "bus-wreck",
+   "key": "office-bus-wreck",
+   "use": "exterior",
+   "subject": "burnt, rusted city bus wreck, no glass",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "burnt, rusted city bus wreck, no glass, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "burnt, rusted city bus wreck, no glass, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 10000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-c4b1-7538-9f37-2c435b78ef2f",
+    "refine": "01a18644-f305-7711-b59f-985687b1cad5"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/bus-wreck/refine/bus-wreck-refine.glb (raw original, outside Git)",
+    "sha256": "6c56823df9e387f75af2719eb9b6f55fbb3b853085a66078414bb2acc93b54db",
+    "bytes": 5697664,
+    "triangles": 9565,
+    "extent": [
+     0.9487,
+     0.3433,
+     0.2974
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2097301
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1609601
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1479262
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/bus-wreck/preview/bus-wreck-preview.glb",
+    "previewSha256": "314a98da18ac7d8c833da854d5c4aa8c74c1fc9b174f91ea0c06052f0208bd6d",
+    "previewTriangles": 9574
+   },
+   "output": {
+    "file": "game/public/assets/models/office-bus-wreck.glb",
+    "url": "assets/models/office-bus-wreck.glb",
+    "sha256": "90332d9e31edadc3e7891c28e018b3afaa2e300cbf1ac6412e0c1a779d0d21e7",
+    "bytes": 757148,
+    "triangles": 9565,
+    "dims": [
+     12,
+     4.3417,
+     3.7612
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 10000,
+   "sizeM": 12,
+   "sizeAxis": "longest",
+   "scale": 12.648488,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "vehicle length along X with the nose toward +X (its side faces -Z); chunky proportions: about 4.3 m tall at 12 m long",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 120874,
+     "sha256": "1207a84749966d1e8197e257e55860b6e94dcb15e8f49deb1c1f3c294ea69432"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 133130,
+     "sha256": "b6c1320257cd70e205872d5831a4acf4960029bae6789e4d48d86ad5b2945ce8"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 49582,
+     "sha256": "2e9471fa5c808a131aa544d38c429121c16f95c7c937489bab235df9e897c81f"
+    }
+   ]
   }
  ],
+ "missing": [],
  "textures": [
   {
    "code": "T1",

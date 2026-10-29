@@ -73,6 +73,20 @@ const ASSETS = [
   ['C5', 'bus-wreck', 'burnt, rusted city bus wreck, no glass', 10000, 12.0, 'longest', 'exterior', 1024],
 ].map(([code, id, subject, tris, sizeM, sizeAxis, use, texPx]) => ({code, id, subject, tris, sizeM, sizeAxis, use, texPx, prompt: `${subject}, ${STYLE}`}));
 const BYTE_BUDGET = id => (id === 'ruined-tower' || id === 'ruined-midrise' ? 3_000_000 : 1_500_000);
+// Per-asset observations from the CPU-rendered QA views (tools/asset-pipeline/props/lib/ortho-render.mjs); for integrators.
+const NOTES = {
+  'filing-cabinet': 'generated as a 2x2-drawer lateral steel cabinet (about 1.32 x 1.32 x 0.80 m at the table height)',
+  'water-cooler': 'bottom-load style cabinet with the cracked blue bottle inside (no bottle on top)',
+  'conference-table': 'pedestal / panel base; top at about 0.83 m',
+  'reception-desk': 'deep counter (about 2.6 x 1.12 x 1.78 m)',
+  'server-rack': 'squat cabinet (about 1.23 x 2.0 x 1.48 m); broken glass door on the -Z side; generated at 1157 tris (below target)',
+  'office-shelf': 'wide double shelving unit (about 2.22 x 1.8 x 0.76 m); open side -Z',
+  'whiteboard': 'board plane faces -Z; marker writing barely visible',
+  'car-wreck': 'vehicle length along X with the nose toward +X (its side faces -Z)',
+  'bus-wreck': 'vehicle length along X with the nose toward +X (its side faces -Z); chunky proportions: about 4.3 m tall at 12 m long',
+  'ruined-tower': 'background scenery: hollow window-grid frame with debris at the base',
+  'ruined-midrise': 'background scenery: facade with blown-out windows and one open, collapsed side exposing floor slabs',
+};
 
 // Codex textures (design.md T1-T6) -> runtime texture ids (game/src/assets/officeAssets.ts OfficeTextureId)
 const TEXTURES = [
@@ -164,7 +178,7 @@ for (const a of ASSETS) {
     output: {file: `game/public/${outRel}`, url: outRel, sha256: sha(glb), bytes: glb.length, triangles: tris, dims, overBudget},
     targetTriangles: a.tris, sizeM: a.sizeM, sizeAxis: a.sizeAxis, scale: +s.toFixed(6),
     transform: 'rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices', front: '-Z', up: '+Y',
-    textures});
+    ...(NOTES[a.id] ? {note: NOTES[a.id]} : {}), textures});
   newFiles.push({path: outRel, buf: glb});
   console.log(`${a.code} ${a.id}: ${rawTris} tris, ${(rawBytes.length / 1e6).toFixed(2)} MB -> ${(glb.length / 1e6).toFixed(2)} MB, dims ${dims.join(' x ')}${overBudget ? '  OVER BUDGET' : ''}`);
 }
@@ -262,7 +276,7 @@ for (const a of ASSETS) {
   const o = outputs.find(x => x.id === a.id), m = missing.find(x => x.id === a.id);
   delivered[a.id] = {kind: 'model', code: a.code, key: `office-${a.id}`, url: o ? o.output.url : null, tris: o ? o.output.triangles : 0, bytes: o ? o.output.bytes : 0,
     sizeM: a.sizeM, sizeAxis: a.sizeAxis, dims: o ? o.output.dims : null, use: a.use,
-    status: o ? 'ready' : /failed/.test(m?.reason ?? '') ? 'failed' : 'missing', note: o ? `front -Z, grounded, centred${o.output.overBudget ? '; OVER byte budget' : ''}` : m.reason};
+    status: o ? 'ready' : /failed/.test(m?.reason ?? '') ? 'failed' : 'missing', note: o ? `front -Z, grounded, centred${NOTES[a.id] ? `; ${NOTES[a.id]}` : ''}${o.output.overBudget ? '; OVER byte budget' : ''}` : m.reason};
 }
 for (const t of TEXTURES) {
   const o = texOutputs.find(x => x.id === t.id);

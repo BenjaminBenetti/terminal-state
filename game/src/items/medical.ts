@@ -34,11 +34,15 @@ export const MEDICAL_ITEMS: Record<string, ItemDef> = {
     description: 'Rare compact trauma pouch: splint, sling and wraps. Treats an injured arm AND an injured leg in one go. Slow to work through.'},
 };
 
+// The splint / sling dims keep the delivered Meshy derivatives' proportions in the item frame world/medicalItems.ts turns them
+// into, scaled to real-world sizes that also place reliably (a lot that fits no surface of its holder is not placed): splint
+// x0.6 of the delivered 0.24 m (a rolled SAM splint is ~11-14 cm), sling packet x0.85 of the delivered 0.20 m. Procedural
+// fallbacks are built to the same boxes.
 export const MEDICAL_DIMS: Record<string, ItemDims> = {
-  // a rolled SAM splint lying on its side (roll axis along X): ~12 cm wide, 10 cm across
-  [LEG_SPLINT]: {w: 0.12, d: 0.1, h: 0.1, shape: 'flat'},
-  // a flat sealed packet (sling folded inside, the wrap roll making a bulge)
-  [ARM_SLING]: {w: 0.2, d: 0.14, h: 0.05, shape: 'flat'},
+  // the splint roll lying on its side, roll axis along X
+  [LEG_SPLINT]: {w: 0.144, d: 0.092, h: 0.111, shape: 'flat'},
+  // the sealed sling + wrap packet lying flat, printed face up
+  [ARM_SLING]: {w: 0.136, d: 0.17, h: 0.07, shape: 'flat'},
   // a zipped soft pouch with a grab handle
   [TRAUMA_KIT]: {w: 0.24, d: 0.15, h: 0.095, shape: 'flat'},
 };

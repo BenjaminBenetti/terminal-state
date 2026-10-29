@@ -24,7 +24,7 @@ const SAMPLE = () => SEEDS.map(gen);
 
 const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles']);
 const DRINK = new Set(['water', 'cola', 'juice']);
-const MED = new Set(['bandage', 'medkit']);
+const MED = new Set(['bandage', 'medkit', 'leg_splint', 'arm_sling', 'trauma_kit']); // Iteration 16: + limb treatments (a share of med finds)
 const isAmmo = (id: string) => id.startsWith('ammo_');
 
 /** Holder contents exactly as world/containers.ts rolls them (index per group, purpose key). */

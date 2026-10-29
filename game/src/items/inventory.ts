@@ -54,6 +54,8 @@ export interface InventoryJSON {
   nextUid: number;
 }
 
+/** Frozen empty slot list for refs that are not inventory slots. */
+const NO_SLOTS: (ItemStack | null)[] = Object.freeze([]) as unknown as (ItemStack | null)[];
 const CHEST = GEAR_SLOTS.indexOf('chest');
 const BACK = GEAR_SLOTS.indexOf('backpack');
 
@@ -113,8 +115,14 @@ export class Inventory {
     return this.nextUid++;
   }
 
+  /** Iteration 16: keep the uid counter above stacks restored from elsewhere (grounded bags from section memory). */
+  reserveUids(maxUid: number): void {
+    if (Number.isFinite(maxUid) && maxUid >= this.nextUid) this.nextUid = Math.floor(maxUid) + 1;
+  }
+
   private list(bar: Bar): (ItemStack | null)[] {
-    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : this.pack;
+    // strict: any other bar (e.g. a stray 'bag' ref) is no slot at all — it never aliases the pockets
+    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : bar === 'pack' ? this.pack : NO_SLOTS;
   }
   get(ref: SlotRef): ItemStack | null {
     return this.list(ref.bar)[ref.index] ?? null;

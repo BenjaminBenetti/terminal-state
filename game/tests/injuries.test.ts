@@ -314,6 +314,48 @@ describe('treatment', () => {
   });
 });
 
+describe('treatment models (Meshy A7 / A8 derivatives in the item frame)', () => {
+  it('fitted into the item dims: grounded, centred, splint roll along X, sling packet lying flat print-up and readable', async () => {
+    const THREE = await import('three');
+    const {fitMedicalDerivative, MEDICAL_MODEL_ASSET} = await import('../src/world/medicalItems');
+    const {OFFICE_ASSETS} = await import('../src/assets/officeAssets');
+    /** A stand-in derivative: a box of the delivered dims (grounded, centred) + a marker on its front (-Z) face, near its top. */
+    const fake = (x: number, y: number, z: number) => {
+      const scene = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(x, y, z));
+      body.position.y = y / 2;
+      const front = new THREE.Object3D();
+      front.name = 'front-marker';
+      front.position.set(0, y * 0.9, -z / 2);
+      scene.add(body, front);
+      return {scene, front};
+    };
+    for (const id of [LEG_SPLINT, ARM_SLING]) {
+      const asset = OFFICE_ASSETS[MEDICAL_MODEL_ASSET[id]];
+      const [x, y, z] = asset.dims ?? (id === LEG_SPLINT ? [0.1539, 0.1846, 0.24] : [0.1604, 0.2, 0.0813]);
+      const f = fake(x, y, z);
+      const g = fitMedicalDerivative(f, id);
+      g.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(g);
+      const size = box.getSize(new THREE.Vector3());
+      const d = MEDICAL_DIMS[id];
+      expect(box.min.y).toBeCloseTo(0, 6);
+      expect((box.min.x + box.max.x) / 2).toBeCloseTo(0, 6);
+      expect((box.min.z + box.max.z) / 2).toBeCloseTo(0, 6);
+      expect(size.y).toBeCloseTo(d.h, 3); // height exact
+      expect(size.x).toBeLessThanOrEqual(d.w * 1.25 + 1e-6);
+      expect(size.z).toBeLessThanOrEqual(d.d * 1.25 + 1e-6);
+      expect(Math.abs(size.x / d.w - 1)).toBeLessThan(0.05); // the dims match the delivered proportions
+      expect(Math.abs(size.z / d.d - 1)).toBeLessThan(0.05);
+      const m = g.getObjectByName('front-marker')!.getWorldPosition(new THREE.Vector3()); // the fitted model holds a clone
+      if (id === ARM_SLING) {
+        expect(m.y).toBeCloseTo(size.y, 3); // the printed front faces up
+        expect(m.z).toBeLessThan(0); // its top edge away from the viewer (+Z): readable from the front
+      } else expect(size.x).toBeGreaterThan(size.z); // the roll's length along X
+    }
+  });
+});
+
 describe('persistence (lane RUN)', () => {
   it('snapshot / restore round trip (JSON-safe, deep), invalid input = healthy, reset = NewGame', () => {
     const s = fixed(0);
@@ -355,8 +397,8 @@ function medCount(l: StationLayout): MedCount {
 
 describe('loot: treatments are findable, ≈ as common as med kits, rarer than bandages', () => {
   it('the conversion only touches HP-med finds and leaves every other find of every holder exactly as before', () => {
-    const share = LIMB_ECONOMY.share as Record<string, number>;
-    const saved = {...share};
+    const share = LIMB_ECONOMY.share as Record<string, number>, holder = LIMB_ECONOMY.holder as Record<string, number>;
+    const saved = {...share}, savedHolder = {...holder};
     const layouts = [generateStation(ECONOMY_CORPUS[0].seed, {startWeapon: 'pistol'}), generateStation(ECONOMY_CORPUS[9].seed, {startWeapon: 'pistol'})];
     const finds = (l: StationLayout) => {
       const out: {itemId: string; count: number; source: string}[][] = [];
@@ -377,8 +419,9 @@ describe('loot: treatments are findable, ≈ as common as med kits, rarer than b
       for (const l of layouts) {
         const now = finds(l);
         for (const k of Object.keys(share)) share[k] = 0;
+        for (const k of Object.keys(holder)) holder[k] = 0;
         const before = finds(l);
-        Object.assign(share, saved);
+        Object.assign(share, saved); Object.assign(holder, savedHolder);
         expect(now.length).toBe(before.length);
         now.forEach((h, i) => {
           expect(h.length).toBe(before[i].length);
@@ -394,8 +437,9 @@ describe('loot: treatments are findable, ≈ as common as med kits, rarer than b
         });
       }
     } finally {
-      Object.assign(share, saved);
+      Object.assign(share, saved); Object.assign(holder, savedHolder);
     }
+    for (const id of LIMB_TREATMENT_IDS) expect(econCat(id)).toBe('med');
     expect(converted).toBeGreaterThan(0);
     expect(converted / med).toBeGreaterThan(0.1); expect(converted / med).toBeLessThan(0.35);
   });
@@ -411,7 +455,7 @@ describe('loot: treatments are findable, ≈ as common as med kits, rarer than b
     const f = (k: keyof MedCount) => per[k] / n;
     const treatments = f('leg_splint') + f('arm_sling') + f('trauma_kit');
     console.info(`[injury loot] Subway per station (n=${n}): bandage ${f('bandage').toFixed(2)} · medkit ${f('medkit').toFixed(2)} · leg splint ${f('leg_splint').toFixed(2)} · arm sling ${f('arm_sling').toFixed(2)} · trauma kit ${f('trauma_kit').toFixed(2)} · treatments ${treatments.toFixed(2)}`);
-    // measured 2026-10-29: bandage 8.00 · medkit 1.67 · leg splint 0.89 · arm sling 1.00 · trauma kit 0.17 · treatments 2.06
+    // measured 2026-10-29: bandage 7.67 · medkit 1.61 · leg splint 1.06 · arm sling 1.11 · trauma kit 0.17 · treatments 2.33
     expect(treatments).toBeGreaterThan(1.5);
     expect(treatments).toBeLessThan(2.8);
     expect(treatments / f('medkit')).toBeGreaterThan(0.8); // ≈ med kits
@@ -435,6 +479,22 @@ describe.skipIf(process.env.INJURY_REPORT !== '1')('injury loot report', () => {
     };
     const subway = ECONOMY_CORPUS.map(c => generateStation(c.seed, {startWeapon: 'pistol'}));
     console.info(`[injury loot report] Subway per station (n=${subway.length}): ${fmt(sum(subway), subway.length)}`);
+    // rolled finds (before placement) vs placed lots: an item too big for a holder's surfaces is not placed
+    const rolled = zero();
+    for (const l of subway) {
+      let ci = 0, si = 0;
+      const oi = new Map<string, number>();
+      for (const p of l.props) {
+        if (!isLootHolderKind(p.kind)) continue;
+        const isC = isContainerKind(p.kind);
+        let index: number;
+        if (isC && openableActive(p.kind, ALL_MODELS)) { index = oi.get(p.kind) ?? 0; oi.set(p.kind, index + 1); } else index = isC ? ci++ : si++;
+        const a = l.areas[p.area];
+        for (const f of holderFinds(l.seed, index, p.kind as HolderKind, p.purpose ?? a?.purpose ?? a?.type ?? 'default', true)) if (f.itemId in rolled) rolled[f.itemId as keyof MedCount] += f.count;
+      }
+    }
+    const placed = sum(subway);
+    console.info(`[injury loot report] Subway placed / rolled (holders): ${(Object.keys(rolled) as (keyof MedCount)[]).map(k => `${k} ${placed[k] - (k === 'bandage' || k === 'medkit' ? subway.reduce((n, l) => n + l.pickups.filter(q => q.itemId === k).length, 0) : 0)}/${rolled[k]}`).join(' · ')}`);
     const {LEVELS} = await import('../src/levels/registry');
     const levels = Number(process.env.INJURY_OFFICE_LEVELS ?? 4);
     const office: StationLayout[] = [];

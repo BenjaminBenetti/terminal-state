@@ -15,6 +15,8 @@ import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
 import {creatureQaApi} from './ai/creatureQa';
 import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
+import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
+import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
 import {renderStats} from './render/backend'; // Iteration 13 (CORE)
@@ -311,6 +313,8 @@ export function installQaHooks(game: Game): void {
     ...creatureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
     // Iteration 12 (AI): light lure — lightLure(), lureProbe(i?), goLureVantage({index, dist, ahead}), DEBUG qaLureLight / qaLureLightSet.
     ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
+    ...towerQaApi(game), // Iteration 16 (lane TOWER): tower(), towerGoCall(), towerGoCab(), towerGoStairs(), towerInteract(), towerPick(5 | 'open')
     // Iteration 12 (LIGHT): light() — battery / glow / flares / light sources; DEBUG qaSetBattery(charge), qaGiveItem(id, n).
     ...lightQaApi(game),
     /**

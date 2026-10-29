@@ -103,8 +103,9 @@ async function boot(): Promise<void> {
     choosing = true;
     markChoice(level);
     void game.newGame(level, {seeds: {...game.run.seeds}}).then(w => {
-      if (w && w.status !== 'cancelled' && game.state === 'loading') { $('#title').dataset.mode = 'new-run'; game.setState('title'); }
-      markChoice(game.run.current.level);
+      if (game.state === 'loading' || game.state === 'title') $('#title').dataset.mode = 'new-run';
+      if (w && w.status !== 'cancelled' && game.state === 'loading') game.setState('title');
+      markChoice(game.run.current.level); // a failed build keeps the prepared run (and its level)
     }).finally(() => { choosing = false; });
   });
   const bindRange = (id: string, key: 'sens' | 'fov' | 'volume', fmt: (v: number) => string) => {

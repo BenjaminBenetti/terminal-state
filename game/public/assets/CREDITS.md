@@ -77,3 +77,16 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
 - The reused scavenger (original upload) was re-derived (repose v2, proximity arm skinning, arm-torso bridge trim,
   rigid mask filter) to remove sheet-like webbing in motion; its built-in hood and mask fill its head/face slots.
   Unapproved prototypes, gameReady false; no commercial clearance implied.
+
+## Office Space, gear and medical items (iteration 16)
+- 25 models (gear: armored vest, chest rig, backpack, hard hat, boots, gloves; medical: leg splint, arm sling;
+  office: desk, chair, filing cabinet, monitor, photocopier, water cooler, conference table, dead plant, reception
+  desk, server rack, whiteboard, shelf; exterior: car wreck, rubble pile, ruined tower, ruined mid-rise, bus wreck)
+  were generated with the user's Meshy account (Meshy T2.5, Smart Topology, text-to-3D preview + texture refine) under
+  the user's authorization and API-key limit. Runtime derivatives were scaled, grounded and texture-downsized by
+  `tools/asset-pipeline/props/build-office-iteration16.mjs`; per-asset provenance:
+  `assets/derivatives/office-space-20261029.json`.
+- 6 textures (office carpet, ceiling tile, cubicle fabric, office wall, ruined skyline panorama, window-glass grime)
+  are native Codex image generations, downsized for runtime.
+- Original native downloads and generation ledgers are kept outside the repository (studio reference task folder).
+  Unapproved prototypes; no commercial clearance implied.

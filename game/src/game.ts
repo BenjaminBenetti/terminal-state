@@ -50,6 +50,8 @@ import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, r
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
+import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
+import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -58,12 +60,13 @@ import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, floorOfSection, sectionLabel
 import {rollLevelGear} from './levels/gearAdapter';
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import {createRun, type RunState} from './run/runState';
-import {mergeKilled, pickupPlan} from './run/memory';
+import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
 import {starterInventory} from './run/starter';
 import {applyHolders, captureHolders, capturePickups, restorePickup} from './run/worldMemory';
 import {runBagStore} from './run/bagStore';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
+import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 // Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
@@ -120,7 +123,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary(P7_FILES);
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS)
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
   /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */
@@ -185,8 +188,16 @@ export class Game {
   readonly aimOffset = {yaw: 0, pitch: 0};
   /** Per-frame lane updates while playing (after the player moved, before the camera update). */
   readonly frameHooks: ((dt: number) => void)[] = [];
+  /** Iteration 16 (lane GEAR; TOWER may use them too): lane prompts shown before the pickup / container / ladder prompt (the matching interactHandler takes E first). */
+  readonly promptProviders: (() => string | null)[] = [];
+  /** Iteration 16 (lane GEAR): a lane UI / action owns the mouse buttons (readied / open backpack): no fire, ADS, item use or flare while any returns true. */
+  readonly inputOwners: (() => boolean)[] = [];
+  /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
+  readonly gear: GearSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
   readonly injuries: InjurySystem;
+  /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
+  readonly tower: TowerRuntime;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
   run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
@@ -198,6 +209,8 @@ export class Game {
   readonly stateListeners: ((state: GameState, prev: GameState) => void)[] = [];
   /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
   readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
+  /** Extra `propModels` keys a section needs besides its p7 props (lane WORLD-GEN: office models): fetched before the build, kept by the trim. */
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [];
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -314,6 +327,8 @@ export class Game {
     });
     // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
     this.injuries = installInjuries(this, {aiming: () => this.aiming});
+    this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
+    this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => { if (this.state === 'playing' && !this.qa) this.setState('paused'); });
@@ -405,11 +420,17 @@ export class Game {
    */
   async prepareSection(key: SectionKey, run: RunState = this.run, onProgress?: (frac: number, label: string) => void): Promise<StationLayout> {
     const layout = this.generateSection(key, run);
-    await this.propModels.ensure(p7ModelKeysFor(layout), onProgress);
+    await this.propModels.ensure(this.modelKeysFor(layout), onProgress);
     for (const pre of this.sectionPreloads) {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
     return layout;
+  }
+
+  /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
+  private modelKeysFor(layout: StationLayout): string[] {
+    const extra = this.sectionModelKeys.flatMap(f => { try { return [...f(layout)]; } catch (err) { console.warn('Iteration 16: section model keys failed', err); return []; } });
+    return [...new Set([...p7ModelKeysFor(layout), ...extra])];
   }
 
   /**
@@ -477,9 +498,9 @@ export class Game {
     this.currentSeed = layout.seed >>> 0;
     this.rand = mulberry32(layout.seed ^ 0x5bd1e995);
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
-    const p7Keys = p7ModelKeysFor(this.layout);
+    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout));
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
-    this.propModels.trim(new Set(p7Keys));
+    this.propModels.trim(keep);
     this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     this.scene.add(this.world.group);
     if (!this.containers) {
@@ -562,8 +583,7 @@ export class Game {
     // Iteration 07 (Lane Q): each spawn's archetype comes from the layout (~5 % rat/dog, ai/creatureSpawn.ts).
     // Iteration 16 (RUN): enemies killed earlier in this run stay dead (not spawned again).
     this.enemyFallbacks = 0;
-    const killed = new Set(mem.killed);
-    this.layout.zombies.forEach((s, i) => { if (!killed.has(i)) this.enemyIndex.set(this.spawnEnemy(s, i), i); });
+    for (const i of enemiesToSpawn(this.layout.zombies.length, mem)) this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
@@ -687,6 +707,7 @@ export class Game {
   newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void} = {}): Promise<WarmupResult | null> {
     if (this.lifecycle.busy) return Promise.resolve(null);
     const lock = o.enter ? this.beginGesture() : null;
+    const back = this.state;
     const flight = this.lifecycle.run(async () => {
       this.wireRunLanes();
       const def = LEVELS[level];
@@ -695,7 +716,8 @@ export class Game {
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
       const ui = this.showLoading(`New run · ${def.name}. ${def.blurb}`, `Generating ${def.name}…`);
       await nextPaint();
-      const layout = await this.prepareSection(key, run, o.onProgress ?? this.progressTo(ui, 'Loading station props'));
+      let layout: StationLayout;
+      try { layout = await this.prepareSection(key, run, o.onProgress ?? this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return null; }
       await this.warmRun; // Iteration 14: never rebuild under a running warm-up (it owns the renderer state)
       this.leaveSection(false); // the old run is discarded (lane teardown still runs against it)
       this.run = run;
@@ -730,13 +752,13 @@ export class Game {
       const def = LEVELS[key.level];
       const ui = this.showLoading(`Retry · ${def.name}: back to how you entered it — the same kit, health and supplies as then.`, `Rebuilding ${def.name}…`);
       await nextPaint();
-      const layout = await this.prepareSection(key, this.run, this.progressTo(ui, 'Loading station props'));
+      let layout: StationLayout;
+      try { layout = await this.prepareSection(key, this.run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, 'dead', ui); return null; }
       await this.warmRun;
       this.leaveSection(false); // this level's memories are replaced by the snapshot's
       this.run.restoreLevelMemories(snap.level, snap.memories);
       this.restoreCarryFrom(snap);
-      this.buildSection(key, layout, snap.arrival, false);
-      this.updateStationIntro();
+      this.buildSection(key, layout, snap.arrival, false); // (the loading screen keeps saying what Retry restores)
       const w = await this.prepareGraphics(ui);
       if (w.status === 'cancelled') return w;
       this.readyLine(ui, w);
@@ -744,6 +766,19 @@ export class Game {
       return w;
     });
     return flight ?? Promise.resolve(null);
+  }
+
+  /** Iteration 16: generating / preparing a section failed BEFORE the live world was touched: back to `back` (the error screen at boot). */
+  private lifecycleFailed(err: unknown, back: GameState, ui: WarmupUi): void {
+    console.error('Iteration 16: building a section failed', err);
+    this.lastError = String((err as Error)?.stack ?? err);
+    const msg = String((err as Error)?.message ?? err).slice(0, 160);
+    ui.label.textContent = `Could not build that level (${msg})`;
+    if (ui.button) ui.button.disabled = !this.world;
+    if (!this.world) {
+      $('#error-msg').textContent = `Building the level failed: ${msg}`;
+      this.setState('error');
+    } else this.setState(back === 'loading' ? 'title' : back);
   }
 
   /** Iteration 16: a travel is in flight. */
@@ -792,8 +827,7 @@ export class Game {
         built = true;
         this.buildSection(req.to, layout, req.arrival, false);
         if (levelChange) { this.run.entered.push(req.to.level); this.run.entry = this.levelEntrySnapshot(); }
-        this.updateStationIntro();
-        const w = await this.prepareGraphics(ui);
+        const w = await this.prepareGraphics(ui); // (a menu travel's loading screen keeps its carry-over line)
         if (w.status === 'cancelled') return {ok: false, reason: 'cancelled'};
         if (!local) this.readyLine(ui, w);
         const ok = await lock;
@@ -807,7 +841,7 @@ export class Game {
         console.error('Iteration 16: travel failed', err);
         this.lastError = String((err as Error)?.stack ?? err);
         if (!built) { this.setState('paused'); $('#pause .fine').textContent = `Travel failed (${String((err as Error)?.message ?? err).slice(0, 120)}) — you are still here.`; }
-        else this.setState('error');
+        else { $('#error-msg').textContent = `Travel failed while building the next area: ${String((err as Error)?.message ?? err).slice(0, 160)}`; this.setState('error'); }
         return {ok: false, reason: 'failed'};
       } finally {
         this.travelReq = null;
@@ -1230,17 +1264,18 @@ export class Game {
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
       ?? (def.treats?.length ? this.injuries.refuseReason(def) : this.survival.blockReason(def, this.player.hp, this.player.maxHp));
-    if (blocked) { this.hud.toast(blocked); this.sfx.denied(); return; }
-    this.use = {uid: st.uid, itemId: st.itemId, t: 0, total: def.useTime ?? 1};
+    if (blocked) { this.hud.toast(`${blocked}${def.heal ? this.injuries.healNote() : ''}`); this.sfx.denied(); return; } // a bandage never fixes a limb
+    const useTime = (def.useTime ?? 1) * this.mods.handlingMult; // Iteration 16 (lane GEAR): gloves x0.92 / arm injury (combined mods)
+    this.use = {uid: st.uid, itemId: st.itemId, t: 0, total: useTime};
     // Consume view: the held gun/item lowers and this item's model comes up to the face.
     const held = this.inv.selectedStack();
-    this.consumeView.start(st.itemId, def.useTime ?? 1, held === st ? 'hand' : held ? 'swap' : 'empty');
+    this.consumeView.start(st.itemId, useTime, held === st ? 'hand' : held ? 'swap' : 'empty');
     if (this.state === 'inventory') this.closeInventory();
   }
 
   private quickHeal(): void {
     const missing = this.player.maxHp - this.player.hp;
-    if (missing <= 0) { this.hud.toast('Already at full health'); this.sfx.denied(); return; }
+    if (missing <= 0) { this.hud.toast(`Already at full health${this.injuries.healNote()}`); this.sfx.denied(); return; } // Iteration 16: limbs need a splint / sling
     const order = missing <= 25 ? ['bandage', 'medkit'] : ['medkit', 'bandage'];
     for (const id of order) {
       for (const bar of ['hotbar', 'pack'] as const) {
@@ -1349,10 +1384,11 @@ export class Game {
     const heldDef = held ? itemDef(held.itemId) : null;
     const wdef = heldDef?.kind === 'weapon' ? WEAPONS[heldDef.weaponId!] : null;
     // Iteration 15: flares are readied while T / left click (flare in hand) is held and thrown on release (weapons/flareHold.ts)
+    const laneOwns = this.inputOwners.some(f => f()); // Iteration 16 (lane GEAR): a readied / open backpack owns the mouse buttons
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
     for (const e of this.flareHold.update(dt, {
       keyDown: inp.down('KeyT'), keyPressed: inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0],
-      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing,
+      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns,
       flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
     })) {
       if (e.type === 'ready') { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
@@ -1362,12 +1398,12 @@ export class Game {
       else { this.hud.toast('Three flares already burning — wait for one to burn out', true); this.sfx.denied(); }
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
-    const flareOwns = this.flareHold.active || this.lmbLatch;
+    const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
-    this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active;
+    this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]});
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
@@ -1537,7 +1573,9 @@ export class Game {
     } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
     let prompt = '';
-    if (this.currentTarget) {
+    for (const f of this.promptProviders) { const lp = f(); if (lp) { prompt = lp; break; } } // Iteration 16: lane prompts (grounded bag, elevator, …)
+    const lanePrompt = !!prompt;
+    if (lanePrompt) { /* the lane's interactHandler takes E */ } else if (this.currentTarget) {
       const d = itemDef(this.currentTarget.stack.itemId);
       const n = this.currentTarget.stack.count;
       prompt = `<b>[E]</b> Take ${d.kind === 'weapon' ? d.name : `${n > 1 ? n + ' × ' : ''}${d.name}`}`;
@@ -1552,7 +1590,7 @@ export class Game {
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       weaponName: def ? def.short : 'Empty hands',
       mag: wdef && st ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
-      hint, prompt, promptItem: this.currentTarget?.stack.itemId,
+      hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       area: area >= 0 ? `${this.layout.areas[area].label} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,

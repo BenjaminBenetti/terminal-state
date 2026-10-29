@@ -211,7 +211,7 @@ export function scarceFinds(raw: readonly Entry[], ctx: FindContext, s: Rnd): Fi
     const count = cat !== 'ammo' ? 1 : on ? ctx.boxCount(itemId, s) : range(s, HANDFUL[itemId] ?? [3, 6]);
     out.push({itemId, count, source: 'find'});
   }
-  limbTreatments(out, theme, s); // Iteration 16 (lane INJURY)
+  limbTreatments(out, theme, ctx.kind, s); // Iteration 16 (lane INJURY)
   return out;
 }
 
@@ -225,11 +225,14 @@ export function scarceFinds(raw: readonly Entry[], ctx: FindContext, s: Rnd): Fi
  */
 export const LIMB_ECONOMY = {
   share: {medical: 0.27, personal: 0.2, security: 0.2, service: 0.2, tech: 0.2, public: 0.19, food: 0.14} as Readonly<Record<LootTheme, number>>,
-  pool: [[LEG_SPLINT, 1], [ARM_SLING, 1], [TRAUMA_KIT, 0.3]] as readonly (readonly [string, number])[],
+  /** First-aid fixtures hold treatments whatever room they hang in (a wall first-aid kit in an office break room / corridor). */
+  holder: {firstAidWallKit: 0.36, medCabinet: 0.3, crashCart: 0.36, wheeledStretcher: 0.36} as Readonly<Partial<Record<string, number>>>,
+  /** Splints a little ahead of slings: legs are hurt more often (hard landings, rat / dog bites go low). */
+  pool: [[LEG_SPLINT, 1.1], [ARM_SLING, 0.9], [TRAUMA_KIT, 0.3]] as readonly (readonly [string, number])[],
 };
 
-function limbTreatments(out: Find[], theme: LootTheme, s: Rnd): void {
-  const share = LIMB_ECONOMY.share[theme] ?? 0;
+function limbTreatments(out: Find[], theme: LootTheme, kind: string, s: Rnd): void {
+  const share = Math.max(LIMB_ECONOMY.share[theme] ?? 0, LIMB_ECONOMY.holder[kind] ?? 0);
   for (const f of out) {
     if (f.source !== 'find' || !HP_MED.has(f.itemId)) continue;
     if (s() < share) { f.itemId = pickRow(LIMB_ECONOMY.pool, s); f.count = 1; }

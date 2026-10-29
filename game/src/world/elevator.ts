@@ -239,10 +239,12 @@ export function planElevator(info: ElevatorInfo, g: Grid): ElevatorPlan {
   // heights: the cab ceiling (visual) under the storey ceiling; the opening's lintel
   const ci = g.idx(Math.floor((cab.x0 + cab.x1) / 2 / CELL), Math.floor((cab.z0 + cab.z1) / 2 / CELL));
   const gridCeil = g.hasCeil(ci) && g.ceil[ci] > floorY + 2 ? g.ceil[ci] : floorY + 2.8;
-  const ceilY = Math.min(gridCeil - 0.04, floorY + 2.5);
+  // the cab's own ceiling sits just under the storey ceiling (WORLD-GEN hangs the cab's light fixture there)
+  const ceilY = Math.min(gridCeil - 0.045, floorY + 2.9);
   const di = g.idx(Math.floor((cx + nx * depth * 0.5) / CELL), Math.floor((cz + nz * depth * 0.5) / CELL));
   const lintel = g.inBounds(Math.floor((cx + nx * depth * 0.5) / CELL), Math.floor((cz + nz * depth * 0.5) / CELL)) && g.hasCeil(di) && g.ceil[di] > floorY + 1.9 ? g.ceil[di] : floorY + 2.2;
-  const doorTop = Math.min(lintel, ceilY - 0.12, floorY + 2.15);
+  // the doors fill the opening up to its lintel (no slot above them)
+  const doorTop = Math.min(lintel - 0.005, ceilY - 0.1, floorY + 2.45);
   // inside panel: on a cab wall (normal toward the cab interior)
   let panelN = wallNormalAt(g, info.panel.x, info.panel.z);
   if (!panelN || !insideRect(cab, info.panel.x + panelN[0] * 0.3, info.panel.z + panelN[1] * 0.3, -0.05)) {
@@ -352,7 +354,7 @@ function merged(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 /** Builds the cab, doors, frames, indicators and panels for a plan (materials: shared station shape materials). */
-export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floor: number, floors: readonly number[]): ElevatorView {
+export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floor: number, floors: readonly number[], opts: {fixture?: boolean} = {}): ElevatorView {
   const {info, gate: G, ceilY, doorTop} = plan;
   const {cab, floorY} = info;
   const root = new THREE.Group(); root.name = 'tower-elevator';
@@ -393,8 +395,11 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   // floor (rubber, slightly proud of the storey floor) and ceiling with a light diffuser
   add(shell, boxAt((cx0 + cx1) / 2, floorY + 0.006, (cz0 + cz1) / 2, (cx1 - cx0) / 2 - 0.005, 0.006, (cz1 - cz0) / 2 - 0.005), floorMat, 'tower-cab-floor');
   add(shell, boxAt((cx0 + cx1) / 2, ceilY + 0.02, (cz0 + cz1) / 2, (cx1 - cx0) / 2, 0.02, (cz1 - cz0) / 2), panel, 'tower-cab-ceiling');
-  const lightW = Math.min(cx1 - cx0, cz1 - cz0) * 0.32;
-  add(root, boxAt((cx0 + cx1) / 2, ceilY - 0.004, (cz0 + cz1) / 2, lightW, 0.004, lightW * 0.7), cabLightMaterial(), 'tower-cab-light');
+  // a light diffuser only where no station fixture hangs in the cab (WORLD-GEN places one: its baked light + model)
+  if (!opts.fixture) {
+    const lightW = Math.min(cx1 - cx0, cz1 - cz0) * 0.32;
+    add(root, boxAt((cx0 + cx1) / 2, ceilY - 0.004, (cz0 + cz1) / 2, lightW, 0.004, lightW * 0.7), cabLightMaterial(), 'tower-cab-light');
+  }
   // handrail: back and side walls at 0.9 m
   const rails: THREE.BufferGeometry[] = [];
   const ry = floorY + 0.9, inset = T + 0.06, rr = 0.018;
@@ -420,6 +425,7 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   add(shell, merged(fr), frame, 'tower-landing-frame');
   // indicators: inside over the door, outside over the landing frame (one live texture)
   const ind = getIndicator();
+  ind.draw(floorLabel(floor), 0);
   add(root, gateBox(G, -T - 0.012, -T - 0.002, -0.16, 0.16, doorTop + 0.06, doorTop + 0.2), ind.material, 'tower-indicator-in');
   add(root, gateBox(G, G.depth + fd, G.depth + fd + 0.01, -0.16, 0.16, doorTop + fw + 0.06, doorTop + fw + 0.2), ind.material, 'tower-indicator-out');
   // floor panel (inside) and call panel (outside): plates + lit buttons

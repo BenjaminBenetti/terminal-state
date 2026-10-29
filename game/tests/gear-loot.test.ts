@@ -66,6 +66,30 @@ describe('gear rarity (rollLevelGear)', () => {
   });
 });
 
+describe('gear spots by room (gearAreaWeight)', () => {
+  const area = (kind: string, type: string, purpose?: string, extra: Record<string, unknown> = {}) =>
+    ({id: 1, x: 0, y: 0, w: 8, h: 8, kind, type, label: type, ceil: 3, parent: 0, depth: 1, publicSpace: false, lighting: 'dim', ...(purpose ? {purpose} : {}), ...extra}) as never;
+  it('office tower: storage / back rooms first, open plan and meeting rooms rarely, never corridors / cab / stairwell', () => {
+    const w = (k: string, t: string, p?: string, e?: Record<string, unknown>) => gearAreaWeight(area(k, t, p, e));
+    expect(w('room', 'office-room', 'office-storage')).toBe(3);
+    expect(w('room', 'office-room', 'office-storage')).toBeGreaterThan(w('room', 'office-room', 'office-exec'));
+    expect(w('room', 'office-room', 'office-exec')).toBeGreaterThan(w('room', 'office-open', 'office-open'));
+    expect(w('room', 'office-open', 'office-open')).toBeGreaterThan(w('room', 'office-room', 'office-meeting'));
+    expect(w('room', 'office-room', 'office-meeting')).toBeGreaterThan(w('room', 'office-lobby', undefined, {publicSpace: true}));
+    expect(w('passage', 'office-corridor', 'office-corridor')).toBe(0);
+    expect(w('room', 'office-elevator', 'office-elevator')).toBe(0);
+    expect(w('room', 'office-stair', 'office-stair')).toBe(0);
+    expect(w('closet', 'janitor-closet', 'janitor-closet')).toBeGreaterThan(0);
+  });
+  it('subway: back-of-house rooms yes; platforms, passages, concourses, stair cores no', () => {
+    expect(gearAreaWeight(area('room', 'storage', 'security-office'))).toBe(3);
+    expect(gearAreaWeight(area('platform', 'platform'))).toBe(0);
+    expect(gearAreaWeight(area('passage', 'passage'))).toBe(0);
+    expect(gearAreaWeight(area('concourse', 'fare-hall'))).toBe(0);
+    expect(gearAreaWeight(area('room', 'stair-core'))).toBe(0);
+  });
+});
+
 describe('gear placement (placeGear)', () => {
   const seeds = [11, 4242, 90210];
   const items = [{itemId: 'armor_vest'}, {itemId: 'backpack'}, {itemId: 'helmet'}, {itemId: 'gloves'}, {itemId: 'boots'}];

@@ -138,6 +138,8 @@ export class WeaponController {
   private interruptReload = false;
   /** 0..1 progress for HUD/viewmodel. */
   progress = 0;
+  /** Iteration 16 (lane GEAR): reload time multiplier — gloves x0.92, an arm injury slower (Game.mods.handlingMult, set every frame). */
+  handling = 1;
 
   equip(stack: ItemStack | null, defs = WEAPONS): void {
     if (stack === this.stack && stack) return;
@@ -174,7 +176,7 @@ export class WeaponController {
     }
     if (this.phase === 'reloading') {
       if (input.pressed && d.reload.kind === 'shell' && (s.mag ?? 0) > 0) this.interruptReload = true;
-      this.phaseT -= dt;
+      this.phaseT -= dt / Math.max(0.25, this.handling); // Iteration 16: handling scales the whole reload (magazine and shell by shell)
       if (d.reload.kind === 'magazine') {
         const total = (s.mag ?? 0) === 0 ? d.reload.emptyTime : d.reload.time;
         this.progress = 1 - Math.max(0, this.phaseT) / total;

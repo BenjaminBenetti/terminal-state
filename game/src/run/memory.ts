@@ -119,6 +119,14 @@ export function takenLayoutPickups(layoutCount: number, mem: SectionMemory): num
   return out;
 }
 
+/** layout.zombies indices to spawn when a section is built: every enemy not killed earlier in the run. */
+export function enemiesToSpawn(count: number, mem: SectionMemory): number[] {
+  const killed = new Set(mem.killed);
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) if (!killed.has(i)) out.push(i);
+  return out;
+}
+
 /** Union of killed indices (sorted, unique). A kill is permanent for the run. */
 export function mergeKilled(prev: readonly number[], now: readonly number[]): number[] {
   return [...new Set([...prev, ...now])].sort((a, b) => a - b);

@@ -3,8 +3,9 @@
 // fails, a small procedural stand-in of primitives is used (asset-method rule: simple shapes may be geometry).
 //
 // Frame of every template (same as world/pickups.ts item models): origin bottom-centre, front +Z, metres. The office
-// derivatives face -Z, so they are turned half a turn; the vest and the chest rig lie on their back (front up), the
-// backpack, hard hat and boots stand, the gloves lie flat as generated.
+// derivatives face -Z, so they are turned half a turn. They keep their generated pose: the vest, rig and backpack stand
+// upright (they are shaped 3D pieces — laid on their back they would be a 0.4 m hump), hat and boots stand, the gloves
+// lie flat.
 //
 // preloadGearModels() is awaited before the icon renders (ui/itemIcons.ts), so the very first template (icons, pickups,
 // grounded bags, warm-up prototypes) already uses the delivered model; templates are cached by world/pickups.ts.
@@ -19,8 +20,6 @@ export const GEAR_ASSET: Readonly<Record<string, OfficeAssetId>> = {
   armor_vest: 'gear-armor-vest', chest_rig: 'gear-chest-rig', backpack: 'gear-backpack',
   helmet: 'gear-helmet', boots: 'gear-boots', gloves: 'gear-gloves',
 };
-/** Upright derivatives laid on their back (front up) as world pickups. */
-const LIE_FLAT = new Set(['armor_vest', 'chest_rig']);
 
 const loaded = new Map<string, GLTF>();
 let preload: Promise<void> | null = null;
@@ -36,19 +35,24 @@ export function preloadGearModels(): Promise<void> {
   return preload;
 }
 
+/** Use an already-loaded model for a gear item (tests; a future tier's preload). Call before its template is first built. */
+export function registerGearModel(itemId: string, gltf: GLTF | null): void {
+  if (gltf) loaded.set(itemId, gltf); else loaded.delete(itemId);
+}
+
 /** 'office-gear-… (Meshy T2.5 derivative)' or 'procedural stand-in' (QA / item model report). */
 export function gearModelSource(itemId: string): string {
   return loaded.has(itemId) ? `assets/officeAssets.ts ${GEAR_ASSET[itemId]} (Meshy T2.5 derivative)` : 'procedural gear stand-in (gear/models.ts)';
 }
 
-/** Icon camera for a gear item (ui/itemIcons.ts): flat pieces from higher up. */
+/** Icon camera for a gear item (ui/itemIcons.ts): upright pieces from the front three-quarter, the flat gloves from above. */
 export function gearIconView(itemId: string): {az: number; el: number} {
   const D = Math.PI / 180;
-  if (itemId === 'armor_vest' || itemId === 'chest_rig') return {az: 18 * D, el: 58 * D};
+  if (!loaded.has(itemId) && (itemId === 'armor_vest' || itemId === 'chest_rig')) return {az: 18 * D, el: 58 * D}; // flat stand-ins
   if (itemId === 'gloves') return {az: 24 * D, el: 52 * D};
   if (itemId === 'helmet') return {az: 32 * D, el: 26 * D};
   if (itemId === 'boots') return {az: 38 * D, el: 22 * D};
-  return {az: 28 * D, el: 16 * D};
+  return {az: 24 * D, el: 12 * D};
 }
 
 /** A fresh template object for a gear item (the caller caches / clones it). */
@@ -67,7 +71,6 @@ function fitDerivative(gltf: GLTF, itemId: string): THREE.Object3D {
   turn.rotation.y = Math.PI; // derivative front -Z -> item front +Z
   const lay = new THREE.Group();
   lay.add(turn);
-  if (LIE_FLAT.has(itemId)) lay.rotation.x = -Math.PI / 2; // front (+Z) turns up
   const root = new THREE.Group();
   root.add(lay);
   root.updateMatrixWorld(true);

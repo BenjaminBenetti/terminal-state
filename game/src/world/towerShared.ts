@@ -23,7 +23,8 @@ export interface ElevatorInfo {
 }
 
 export interface StairDoorInfo { dir: 'up' | 'down'; x: number; z: number; yaw: number; toFloor: number }
-export interface WindowSpan extends Rect2 { side: Side; sill: number; head: number }
+/** kind 'entrance' = the lobby's street doors (sill 0): boarded up (scenery only; the wall cells are solid). */
+export interface WindowSpan extends Rect2 { side: Side; sill: number; head: number; kind?: 'window' | 'entrance' }
 
 /** The office part of a section layout, normalised (TOWER's view of design.md OfficeSectionInfo). */
 export interface TowerInfo {
@@ -43,6 +44,8 @@ export interface TowerInfo {
   /** Street level (absolute y) seen from this storey: baseY - floorHeight * (floor - 1). */
   groundY: number;
   seed: number;
+  /** Tower name (signs / HUD), when WORLD-GEN provides one. */
+  name: string;
 }
 
 /** Office section name of a tower floor (floor 1 = the lobby, the upper storey of the 'street' section). */
@@ -98,7 +101,7 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
   if (!floors.includes(floor)) floors.push(floor), floors.sort((a, b) => a - b);
   const levelId = Math.max(0, Math.round(num(o.levelId, 0)));
   const lv = layout.levels?.find(l => l.id === levelId) ?? layout.levels?.[levelId];
-  const baseY = lv ? lv.baseY : 0;
+  const baseY = num(o.baseY, lv ? lv.baseY : 0);
   const floorHeight = Math.max(2.5, num(o.floorHeight, 3.8));
   let elevator: ElevatorInfo | null = null;
   const e = o.elevator as Record<string, unknown> | undefined;
@@ -127,10 +130,10 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
     if (!r || !isSide(w.side)) return [];
     const sill = num(w.sill, 0.9), head = num(w.head, 2.4);
     if (head <= sill + 0.2) return [];
-    return [{...r, side: w.side, sill, head}];
+    return [{...r, side: w.side, sill, head, kind: w.kind === 'entrance' ? 'entrance' as const : 'window' as const}];
   }) : [];
   const exterior = normRect(o.exterior) ?? boundsOf(layout.grid, windows, cab);
-  return {floor, floors, floorHeight, levelId, baseY, elevator, stairDoors, windows, exterior, groundY: baseY - floorHeight * (floor - 1), seed: layout.seed >>> 0};
+  return {floor, floors, floorHeight, levelId, baseY, elevator, stairDoors, windows, exterior, groundY: baseY - floorHeight * (floor - 1), seed: layout.seed >>> 0, name: typeof o.name === 'string' ? o.name : ''};
 }
 
 /** Fallback footprint: the window spans' (or the grid's) bounds. */
@@ -170,7 +173,7 @@ export function wallNormalAt(g: Grid, x: number, z: number, probe = 0.35): [numb
     for (let k = 1; k <= 4; k++) {
       const d = probe * k / 4;
       if (solidAt(g, x + dx * d, z + dz * d)) {
-        if (d < bestD && !solidAt(g, x - dx * 0.2, z - dz * 0.2)) { bestD = d; best = [-dx, -dz]; }
+        if (d < bestD && !solidAt(g, x - dx * 0.2, z - dz * 0.2)) { bestD = d; best = [-dx || 0, -dz || 0]; }
         break;
       }
     }
@@ -204,10 +207,16 @@ export function gateSideOf(g: DoorGate, x: number, z: number): GateSide {
   return gateLocal(g, x, z)[0] < g.depth * 0.5 ? 'in' : 'out';
 }
 
-/** A body (radius r) overlaps the doorway band (between the two door planes, within the opening). */
+/** Margin (m) a closed gate keeps a body clear of the door planes (so a pushed-back body is not "in the doorway"). */
+export const GATE_CLEAR = 0.02;
+
+/**
+ * A body (radius r) stands in the doorway: its centre within 0.4 r of the door planes or between them (a body merely
+ * touching the doors from inside the cab does not hold them; the gate pushes it clear as the gap narrows).
+ */
 export function inDoorway(g: DoorGate, x: number, z: number, r: number): boolean {
   const [s, l] = gateLocal(g, x, z);
-  return s > -r && s < g.depth + r && Math.abs(l) < g.hw;
+  return s > -r * 0.4 && s < g.depth + r * 0.4 && Math.abs(l) < g.hw;
 }
 
 /**
@@ -225,8 +234,8 @@ export function constrainGate(g: DoorGate, open: number, x: number, z: number, r
       // the gap admits the body: keep it between the door edges (the doors re-open long before this squeezes)
       if (Math.abs(l) > halfGap && s > -r * 0.5 && s < g.depth + r * 0.5) { l = Math.sign(l) * halfGap; pushed = true; }
     } else if (side === 'in') {
-      if (s > -r) { s = -r; pushed = true; }
-    } else if (s < g.depth + r) { s = g.depth + r; pushed = true; }
+      if (s > -r - GATE_CLEAR) { s = -r - GATE_CLEAR; pushed = true; }
+    } else if (s < g.depth + r + GATE_CLEAR) { s = g.depth + r + GATE_CLEAR; pushed = true; }
   }
   const nx = g.cx + g.nx * s + g.tx * l, nz = g.cz + g.nz * s + g.tz * l;
   const out = s < -r * 0.25 ? 'in' : s > g.depth + r * 0.25 ? 'out' : side;

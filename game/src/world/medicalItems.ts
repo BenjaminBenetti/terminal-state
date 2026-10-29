@@ -42,13 +42,29 @@ export function medicalModelSource(itemId: string): string {
   return loaded.has(itemId) && asset ? `office ${asset} (${OFFICE_ASSETS[asset].code}, meshy-t2.5)` : 'authored procedural geometry (world/medicalItems.ts)';
 }
 
+/**
+ * The derivative turned into the item frame (derivatives: grounded, front -Z). Splint: the roll's length (derivative Z) along X,
+ * resting on its side. Sling packet (delivered standing upright): laid flat, printed face up, the top of the print away from
+ * the viewer (readable from the front).
+ */
+function orient(itemId: string, src: THREE.Object3D): THREE.Object3D {
+  if (itemId === LEG_SPLINT) { src.rotation.y = Math.PI / 2; return src; }
+  if (itemId === ARM_SLING) {
+    src.rotation.x = Math.PI / 2; // front (-Z) -> up, top (+Y) -> +Z
+    const turn = new THREE.Group();
+    turn.rotation.y = Math.PI; // top -> -Z
+    turn.add(src);
+    return turn;
+  }
+  src.rotation.y = Math.PI;
+  return src;
+}
+
 /** Uniform fit into the item's dims box (height exact, 25 % slack on w / d like pickups.ts), bottom-centre, front +Z. */
-function fitDerivative(gltf: GLTF, itemId: string): THREE.Group {
+export function fitMedicalDerivative(gltf: Pick<GLTF, 'scene'>, itemId: string): THREE.Group {
   const dims = MEDICAL_DIMS[itemId];
-  const src = gltf.scene.clone(true);
-  src.rotation.y = Math.PI; // derivatives face -Z; item frames face +Z
   const pivot = new THREE.Group();
-  pivot.add(src);
+  pivot.add(orient(itemId, gltf.scene.clone(true)));
   pivot.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(pivot);
   const size = box.getSize(new THREE.Vector3());
@@ -86,7 +102,7 @@ function grime(ctx: CanvasRenderingContext2D, w: number, h: number, r: () => num
 /** SAM-style splint roll: orange outer layer, blue inner foam visible as a spiral at the ends, two black velcro straps. */
 function splintModel(): THREE.Group {
   const d = MEDICAL_DIMS[LEG_SPLINT];
-  const r = d.h / 2, len = d.w * 0.95;
+  const r = Math.min(d.h, d.d) / 2, len = d.w * 0.95;
   const side = mat('splint.side', () => new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.78, map: canvasTexture(256, 64, 7101, (ctx, w, h, rr) => {
     ctx.fillStyle = '#d4642a'; ctx.fillRect(0, 0, w, h);
     // the foam's dimple pattern + the outer layer's seam
@@ -129,21 +145,21 @@ function splintModel(): THREE.Group {
   return g;
 }
 
-/** Sealed sling + wrap packet: a flat printed pouch with the wrap roll making a bulge at one end. */
+/** Sealed sling + wrap packet lying flat (portrait, print up): the wrap roll makes a bulge across its far end. */
 function slingModel(): THREE.Group {
   const d = MEDICAL_DIMS[ARM_SLING];
   const flatH = d.h * 0.42;
-  const label = mat('sling.label', () => new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.42, metalness: 0.02, map: canvasTexture(256, 180, 7201, (ctx, w, h, rr) => {
+  const label = mat('sling.label', () => new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.42, metalness: 0.02, map: canvasTexture(180, 224, 7201, (ctx, w, h, rr) => {
     ctx.fillStyle = '#e9e6dc'; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = '#2b6aa8'; ctx.fillRect(0, 0, w, 34);
-    ctx.fillStyle = '#f4f2ea'; ctx.font = 'bold 19px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('ARM SLING + WRAP', w / 2, 17);
-    // red cross + the triangle sling diagram
-    ctx.fillStyle = '#c4312a'; ctx.fillRect(26, 62, 14, 42); ctx.fillRect(12, 76, 42, 14);
-    ctx.strokeStyle = '#3b3f45'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(80, 60); ctx.lineTo(170, 60); ctx.lineTo(125, 128); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = '#3b3f45'; ctx.font = '12px Arial'; ctx.fillText('TRIANGULAR BANDAGE', 125, 146); ctx.fillText('ELASTIC COMPRESSION 7.5 cm', 125, 162);
+    ctx.fillStyle = '#2b6aa8'; ctx.fillRect(0, 54, w, 30);
+    ctx.fillStyle = '#f4f2ea'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('ARM SLING + WRAP', w / 2, 69);
+    // red cross + the triangle sling diagram (the far end, canvas top, sits under the wrap roll)
+    ctx.fillStyle = '#c4312a'; ctx.fillRect(24, 100, 12, 36); ctx.fillRect(12, 112, 36, 12);
+    ctx.strokeStyle = '#3b3f45'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(66, 98); ctx.lineTo(160, 98); ctx.lineTo(113, 160); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = '#3b3f45'; ctx.font = '11px Arial'; ctx.fillText('TRIANGULAR BANDAGE', w / 2, 180); ctx.fillText('ELASTIC COMPRESSION 7.5 cm', w / 2, 196);
     ctx.fillStyle = 'rgba(60,60,60,0.5)'; ctx.fillRect(0, h - 10, w, 10);
-    grime(ctx, w, h, rr, 300);
+    grime(ctx, w, h, rr, 260);
   })}));
   const film = mat('sling.film', () => new THREE.MeshStandardMaterial({color: 0xd9d6cc, roughness: 0.35, metalness: 0.02}));
   const wrap = mat('sling.wrap', () => new THREE.MeshStandardMaterial({color: 0xc9b79a, roughness: 0.92}));
@@ -152,16 +168,16 @@ function slingModel(): THREE.Group {
   const packet = new THREE.Mesh(geo('sling.packet', () => new THREE.BoxGeometry(w, flatH, dd)), [film, film, label, film, film, film]);
   packet.position.y = flatH / 2;
   g.add(packet);
-  // crimped seal edges
+  // crimped seal edges (near and far end)
   for (const sz of [-1, 1]) {
     const seal = new THREE.Mesh(geo('sling.seal', () => new THREE.BoxGeometry(w * 1.01, flatH * 0.3, 0.012)), film);
     seal.position.set(0, flatH * 0.5, sz * (dd / 2 - 0.004));
     g.add(seal);
   }
-  // the compression wrap roll under the film at the +X end
+  // the compression wrap roll under the film, across the far (-Z) end
   const rollR = (d.h - flatH * 0.35) / 2;
-  const roll = new THREE.Mesh(geo('sling.roll', () => { const c = new THREE.CylinderGeometry(rollR, rollR, dd * 0.82, 18); c.rotateX(Math.PI / 2); return c; }), wrap);
-  roll.position.set(w / 2 - rollR - 0.008, rollR + flatH * 0.12, 0);
+  const roll = new THREE.Mesh(geo('sling.roll', () => { const c = new THREE.CylinderGeometry(rollR, rollR, w * 0.82, 18); c.rotateZ(Math.PI / 2); return c; }), wrap);
+  roll.position.set(0, rollR + flatH * 0.12, -dd / 2 + rollR + 0.012);
   g.add(roll);
   return g;
 }
@@ -198,7 +214,7 @@ function traumaKitModel(): THREE.Group {
 /** A NEW group for a limb-treatment item: the fitted Meshy derivative when preloaded, else the authored model. */
 export function medicalItemModel(itemId: string): THREE.Group {
   const gltf = loaded.get(itemId);
-  const g = gltf ? fitDerivative(gltf, itemId) : itemId === LEG_SPLINT ? splintModel() : itemId === ARM_SLING ? slingModel() : traumaKitModel();
+  const g = gltf ? fitMedicalDerivative(gltf, itemId) : itemId === LEG_SPLINT ? splintModel() : itemId === ARM_SLING ? slingModel() : traumaKitModel();
   g.name ||= `medical-${itemId}`;
   g.userData.medical = itemId;
   return g;

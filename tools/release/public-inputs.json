@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 6881,
-      "sha256": "bb2c97c72c06dac531d6d63f3ae77e490ba5e867cf88f86f0f3e5cc75bebe253"
+      "bytes": 7996,
+      "sha256": "64b7da629dbf2f7b3db3aa91e019613670699567d26614250bf486ca42e94181"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1360,8 +1360,8 @@
     },
     {
       "path": "assets/derivatives/office-space-20261029.json",
-      "bytes": 78954,
-      "sha256": "927763fb1a082a50e6e570b04bb8339f6ce4a9ba6361067e233c769b7f0ecd6c"
+      "bytes": 104224,
+      "sha256": "252540af368b047e07d1014141f96b50f97b8a7df0e35abf6ffe2677160e113c"
     },
     {
       "path": "assets/derivatives/outfit-beanie.json",
@@ -1629,6 +1629,16 @@
       "sha256": "ef5f410fe9d2d36e117526d4be958b089d35004307774ad241436bc14f726a0d"
     },
     {
+      "path": "assets/models/office-bus-wreck.glb",
+      "bytes": 757148,
+      "sha256": "90332d9e31edadc3e7891c28e018b3afaa2e300cbf1ac6412e0c1a779d0d21e7"
+    },
+    {
+      "path": "assets/models/office-car-wreck.glb",
+      "bytes": 831852,
+      "sha256": "ae2135b7957103c58a9bc1188afb47b27a6837633b0e5876d8098ad0a40ac848"
+    },
+    {
       "path": "assets/models/office-conference-table.glb",
       "bytes": 334936,
       "sha256": "44088452635a260f6355a1ee6b1fc6a77c079f9c64354955990af24b90cba02d"
@@ -1699,6 +1709,11 @@
       "sha256": "dc0909c67f501d746e44deac67e78bdde389955ef66578f35fff8857c3933b42"
     },
     {
+      "path": "assets/models/office-office-shelf.glb",
+      "bytes": 554884,
+      "sha256": "69e63b9079762b82be688a844ab598287996a2b41108ae3a2757ccda644bdb34"
+    },
+    {
       "path": "assets/models/office-photocopier.glb",
       "bytes": 697956,
       "sha256": "3879debc91188bc5dd991654450a35d973d41dd3e4901e816be7ef14da6a3277"
@@ -1709,6 +1724,21 @@
       "sha256": "8560d15a1017b4b95295b8a07e87906fdc6f223cb063aecc8ed8a55c67a08158"
     },
     {
+      "path": "assets/models/office-rubble-pile.glb",
+      "bytes": 569708,
+      "sha256": "defcee5b755ba0c073ee55ecef3bbf4fe51fb481ead62cdcef35e394563e201b"
+    },
+    {
+      "path": "assets/models/office-ruined-midrise.glb",
+      "bytes": 1269108,
+      "sha256": "abe1c68e55ab60e3136354629932ecddd698c77d35f0caf98a7df31b517472cb"
+    },
+    {
+      "path": "assets/models/office-ruined-tower.glb",
+      "bytes": 1237744,
+      "sha256": "8eca841138d89e49b243137421e283c25e94f8d57f4f907ed5d99634f9a924f7"
+    },
+    {
       "path": "assets/models/office-server-rack.glb",
       "bytes": 354588,
       "sha256": "f8b6c779da94accadd71fd3bf164e0a40ad5163f6a7ca202b5a6d8f2feed14cf"
@@ -1717,6 +1747,11 @@
       "path": "assets/models/office-water-cooler.glb",
       "bytes": 233012,
       "sha256": "0ea1120c61adffe7754a05bdca9fc7450bf4e20fd4e4a07d587a1c2a0efe9fb2"
+    },
+    {
+      "path": "assets/models/office-whiteboard.glb",
+      "bytes": 556256,
+      "sha256": "e6fc2f6bac5e59a78aff09992490453ffbf09276b5cf6f662301b18579864c36"
     },
     {
       "path": "assets/models/outfit-beanie.glb",

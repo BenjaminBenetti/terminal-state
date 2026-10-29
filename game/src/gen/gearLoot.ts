@@ -75,17 +75,22 @@ const PURPOSE_W: Record<string, number> = {
 const TYPE_W: Partial<Record<string, number>> = {
   'storage': 2, 'crew-room': 2, 'stock-room': 1.5, 'agent-office': 1.5, 'utility': 1, 'supply-closet': 1, 'janitor-closet': 1,
   'service-corridor': 0.5, 'washroom': 0.4, 'shop': 0.4, 'eatery': 0.25,
+  // office tower (lane WORLD-GEN, gen/office/*): enclosed rooms by purpose below; the lobby hall is a public reception space
+  'office-room': 1, 'office-open': 0.9, 'office-lobby': 0.3,
 };
-/** Office words (lane WORLD-GEN's room types / purposes / labels) -> weight factor. */
-const OFFICE_W: [RegExp, number][] = [
-  [/storage|supply|store ?room|locker|closet|archive|mail|copy|janitor/i, 3],
+/** Office room purposes (gen/office/tower.ts ROOM_INFO): storage and back rooms first, open-plan / meeting rooms rarely. */
+const OFFICE_PURPOSE_W: Record<string, number> = {
+  'office-storage': 3, 'office-copy': 1.8, 'office-server': 1.6, 'office-break': 1.6, 'office-exec': 1.6, 'office-private': 1.3,
+  'office-open': 0.9, 'office-meeting': 0.6,
+};
+/** Unknown future room words -> weight factor (only ever raises a weight). */
+const WORD_W: [RegExp, number][] = [
+  [/storage|supply|store ?room|locker|closet|archive|janitor/i, 3],
   [/security|guard|facilit|maint/i, 3],
-  [/it\b|it-|server|tech|data/i, 1.6],
-  [/break|kitchen|pantry|lounge|staff/i, 1.6],
-  [/private|manager|executive|office/i, 1.4],
+  [/server|copy|mail|break|kitchen|pantry|lounge|staff/i, 1.6],
   [/cubicle|open-plan|workstation|bullpen/i, 1],
-  [/meeting|conference|board/i, 0.7],
-  [/reception|lobby|waiting/i, 0.35],
+  [/meeting|conference|board/i, 0.6],
+  [/reception|lobby|waiting/i, 0.3],
 ];
 /** Never: walkways and vertical circulation. */
 const EXCLUDED = /stair|elevator|lift|escalator|landing|passage|underpass|concourse|platform|fare-hall|exit|corridor-public|walkway|bridge|catwalk|crossover|overlook/i;
@@ -98,8 +103,10 @@ export function gearAreaWeight(a: Area): number {
   if (a.storefront !== undefined && a.type !== 'shop' && a.type !== 'eatery') return 0;
   const words = `${a.type} ${a.role ?? ''} ${a.purpose ?? ''}`;
   if (a.role === 'stair' || a.type === 'stair-core' || a.type === 'exit-stair' || EXCLUDED.test(words)) return 0;
-  let w = (a.purpose ? PURPOSE_W[a.purpose] : undefined) ?? TYPE_W[a.type] ?? (a.publicSpace ? 0.25 : 1);
-  for (const [re, f] of OFFICE_W) if (re.test(`${words} ${a.label}`)) { w = Math.max(w, f * (a.publicSpace ? 0.4 : 1)); break; }
+  const known = a.purpose ? PURPOSE_W[a.purpose] ?? OFFICE_PURPOSE_W[a.purpose] : undefined;
+  if (known !== undefined) return known;
+  let w = TYPE_W[a.type] ?? (a.publicSpace ? 0.25 : 1);
+  for (const [re, f] of WORD_W) if (re.test(`${words} ${a.label}`)) { w = Math.max(w, f * (a.publicSpace ? 0.4 : 1)); break; }
   return w;
 }
 

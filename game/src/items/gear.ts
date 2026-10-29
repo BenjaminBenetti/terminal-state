@@ -1,13 +1,13 @@
 // Iteration 16 (lane GEAR): character gear item definitions — base ("crappiest") tier only.
 // Gear lives in the GEAR SLOTS (helmet / chest / gloves / boots / backpack; items/inventory.ts), though spare pieces can
 // ride in the pockets / quick slots like any item. Stats are applied ONLY as a PlayerModifiers contribution computed
-// from the worn items every frame (gearModifiers below -> Game.modifierSources -> combineModifiers from BASE values), so
+// from the worn items every frame (gearModifiersFor below -> Game.modifierSources -> combineModifiers from BASE values), so
 // equipping, unequipping, travelling or retrying can never stack a bonus.
 //
 // Base-tier stats (exact; documented in reference/tasks/office-space-survival-20261029/lanes/gear.done):
 //   armor_vest  chest     torso armor 0.20 (torso hits lose 20 % of their damage; torso = ~50 % of melee hits)
 //   chest_rig   chest     +4 pocket slots (12 -> 16); refused off while those 4 pockets hold anything
-//   backpack    backpack  its own 12-slot container, only reachable while it lies on the ground (6, then E)
+//   backpack    backpack  its own 12-slot container, only reachable while it lies on the ground (6, click, then E)
 //   helmet      helmet    head armor 0.25 (head = ~10 % of melee hits)
 //   boots       boots     move speed x1.05 (walk / sprint / crouch)
 //   gloves      gloves    weapon spread x0.92 · reload / item-use time x0.92
@@ -62,14 +62,14 @@ export const GEAR_ITEMS: Record<string, ItemDef> = {
     'Leather-palmed work gloves. A steadier grip: tighter spread and slightly quicker reloads and item use.'),
 };
 
-/** Resting sizes (m) as a pickup / ground model (vest, rig and gloves lie flat; backpack, hat and boots stand). */
+/** Resting sizes (m) as a pickup / ground model = the delivered Meshy derivatives' bounds (vest, rig, backpack, hat and boots stand; gloves lie flat). */
 export const GEAR_DIMS: Record<string, ItemDims> = {
-  armor_vest: {w: 0.5, d: 0.62, h: 0.12, shape: 'flat'},
-  chest_rig: {w: 0.42, d: 0.55, h: 0.1, shape: 'flat'},
-  backpack: {w: 0.34, d: 0.22, h: 0.52, shape: 'box'},
-  helmet: {w: 0.26, d: 0.3, h: 0.17, shape: 'box'},
-  boots: {w: 0.26, d: 0.32, h: 0.22, shape: 'box'},
-  gloves: {w: 0.2, d: 0.26, h: 0.05, shape: 'flat'},
+  armor_vest: {w: 0.46, d: 0.41, h: 0.62, shape: 'box'},
+  chest_rig: {w: 0.41, d: 0.39, h: 0.55, shape: 'box'},
+  backpack: {w: 0.33, d: 0.32, h: 0.52, shape: 'box'},
+  helmet: {w: 0.23, d: 0.3, h: 0.19, shape: 'box'},
+  boots: {w: 0.3, d: 0.32, h: 0.19, shape: 'box'},
+  gloves: {w: 0.26, d: 0.2, h: 0.06, shape: 'flat'},
 };
 
 export const GEAR_IDS = Object.keys(GEAR_ITEMS);

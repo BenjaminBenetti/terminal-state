@@ -4,6 +4,9 @@
 // which also rewrites the GENERATED block below.
 //
 // Conventions of every model: metres at real size (sizeM along sizeAxis), +Y up, grounded (min y = 0), centred on x/z, front -Z.
+// Exceptions / shapes worth knowing (per-asset `note` in the derivatives JSON): car-wreck and bus-wreck run along X with the nose at
+// +X (their side faces -Z); filing-cabinet is a 2x2-drawer lateral cabinet; office-shelf and server-rack are deep (~0.76 / ~1.48 m).
+// Use `dims` (measured runtime bounds) for collision / placement footprints.
 // `url` is null until the derivative is delivered (or when its generation failed): consumers MUST keep a geometry fallback.
 // Nothing here is preloaded: loadOfficeAsset / loadOfficeTexture fetch on demand, cache per id, resolve null on any failure and
 // never throw. (A url string is only listed for a file that exists, because the CI packager rejects bundle literals that
@@ -75,13 +78,13 @@ export const OFFICE_ASSETS: Record<OfficeAssetId, OfficeAssetEntry> = {
   'dead-plant': {url: 'assets/models/office-dead-plant.glb', bytes: 207348, tris: 2246, sizeM: 1.1, use: 'office', code: 'B8', sizeAxis: 'h', dims: [0.8567, 1.1, 0.8933]},
   'reception-desk': {url: 'assets/models/office-reception-desk.glb', bytes: 498784, tris: 6067, sizeM: 2.6, use: 'office', code: 'B9', sizeAxis: 'w', dims: [2.6, 1.1189, 1.7846]},
   'server-rack': {url: 'assets/models/office-server-rack.glb', bytes: 354588, tris: 1157, sizeM: 2, use: 'office', code: 'B10', sizeAxis: 'h', dims: [1.2346, 2, 1.4826]},
-  'whiteboard': {url: null, bytes: 0, tris: 0, sizeM: 1.8, use: 'office', code: 'B11', sizeAxis: 'w', dims: null},
-  'office-shelf': {url: null, bytes: 0, tris: 0, sizeM: 1.8, use: 'office', code: 'B12', sizeAxis: 'h', dims: null},
-  'car-wreck': {url: null, bytes: 0, tris: 0, sizeM: 4.6, use: 'exterior', code: 'C1', sizeAxis: 'longest', dims: null},
-  'rubble-pile': {url: null, bytes: 0, tris: 0, sizeM: 5, use: 'exterior', code: 'C2', sizeAxis: 'longest', dims: null},
-  'ruined-tower': {url: null, bytes: 0, tris: 0, sizeM: 60, use: 'exterior', code: 'C3', sizeAxis: 'h', dims: null},
-  'ruined-midrise': {url: null, bytes: 0, tris: 0, sizeM: 30, use: 'exterior', code: 'C4', sizeAxis: 'h', dims: null},
-  'bus-wreck': {url: null, bytes: 0, tris: 0, sizeM: 12, use: 'exterior', code: 'C5', sizeAxis: 'longest', dims: null},
+  'whiteboard': {url: 'assets/models/office-whiteboard.glb', bytes: 556256, tris: 1932, sizeM: 1.8, use: 'office', code: 'B11', sizeAxis: 'w', dims: [1.8, 1.6199, 0.928]},
+  'office-shelf': {url: 'assets/models/office-office-shelf.glb', bytes: 554884, tris: 3888, sizeM: 1.8, use: 'office', code: 'B12', sizeAxis: 'h', dims: [2.2155, 1.8, 0.7574]},
+  'car-wreck': {url: 'assets/models/office-car-wreck.glb', bytes: 831852, tris: 7762, sizeM: 4.6, use: 'exterior', code: 'C1', sizeAxis: 'longest', dims: [4.6, 1.3055, 1.7809]},
+  'rubble-pile': {url: 'assets/models/office-rubble-pile.glb', bytes: 569708, tris: 5486, sizeM: 5, use: 'exterior', code: 'C2', sizeAxis: 'longest', dims: [5, 1.801, 4.7449]},
+  'ruined-tower': {url: 'assets/models/office-ruined-tower.glb', bytes: 1237744, tris: 15841, sizeM: 60, use: 'exterior', code: 'C3', sizeAxis: 'h', dims: [37.1957, 60, 45.2388]},
+  'ruined-midrise': {url: 'assets/models/office-ruined-midrise.glb', bytes: 1269108, tris: 15378, sizeM: 30, use: 'exterior', code: 'C4', sizeAxis: 'h', dims: [24.6517, 30, 23.2531]},
+  'bus-wreck': {url: 'assets/models/office-bus-wreck.glb', bytes: 757148, tris: 9565, sizeM: 12, use: 'exterior', code: 'C5', sizeAxis: 'longest', dims: [12, 4.3417, 3.7612]},
 };
 
 export const OFFICE_TEXTURES: Record<OfficeTextureId, OfficeTextureEntry> = {

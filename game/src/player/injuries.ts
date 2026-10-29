@@ -194,6 +194,12 @@ export class InjurySystem {
     return this.injure('leg', 'fall');
   }
 
+  /** QA / spot checks only (`__game.injuries.force('leg')` with ?qa): injure a limb now, bypassing the roll and the cooldown. */
+  force(limb: Limb, side: LimbSide = 'right', cause: InjuryCause = 'hit'): void {
+    this.limbs[limb] = {side, cause};
+    this.version++;
+  }
+
   /** Advance play time (only while playing: the frame hook). */
   tick(dt: number): void {
     if (!(dt > 0)) return;
@@ -363,6 +369,7 @@ export function installInjuries(game: InjuryHost, access: InjuryAccess, sys = ne
     const limb = sys.onHit(hit);
     if (limb) announce(limb);
   });
+  let tipVersion = -1, tip = '';
   game.frameHooks.push(dt => {
     const p = game.player;
     sys.tick(dt);
@@ -374,7 +381,8 @@ export function installInjuries(game: InjuryHost, access: InjuryAccess, sys = ne
     const o = sys.sway.update(dt, game.mods.swayAmp, game.mods.swayHz, {aiming: access.aiming(), crouched: p.crouched});
     game.aimOffset.yaw = o.yaw;
     game.aimOffset.pitch = o.pitch;
-    game.hud.setLimbs?.(sys.limbs.arm, sys.limbs.leg, injuryStatusText(sys));
+    if (tipVersion !== sys.version) { tipVersion = sys.version; tip = injuryStatusText(sys); }
+    game.hud.setLimbs?.(sys.limbs.arm, sys.limbs.leg, tip); // writes the DOM only on change (Hud.set cache)
   });
   return sys;
 }
