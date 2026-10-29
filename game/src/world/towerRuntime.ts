@@ -70,6 +70,9 @@ interface ElevatorRt {
   pushT: number;
   /** Indicator arrow (+1 / -1) while departing. */
   dir: number;
+  /** The player is the doorway obstruction this frame; last "stand clear" hint time. */
+  playerBlocks: boolean;
+  hintT: number;
 }
 
 interface SectionRt {
@@ -108,6 +111,8 @@ export class TowerRuntime {
   private upgradeQueued = false;
   private readonly frustum = new THREE.Frustum();
   private readonly pm = new THREE.Matrix4();
+  private readonly vEye = new THREE.Vector3();
+  private readonly vDir = new THREE.Vector3();
 
   constructor(readonly host: TowerHost) {}
 
@@ -145,7 +150,10 @@ export class TowerRuntime {
       const plan = planElevator(info.elevator, g);
       const cab = info.elevator.cab;
       const fixture = layout.lights.some(l => insideRect(cab, l.x, l.z, -0.05) && Math.abs(l.y - info.elevator!.floorY) < 3.5);
-      const view = buildElevatorView(plan, h.mats, info.floor, info.floors, {fixture});
+      // the station builder frames Door records (steel jambs + head): is the elevator opening one?
+      const G = plan.gate, oc = g.cellOf(G.cx + G.nx * G.depth * 0.5, G.cz + G.nz * G.depth * 0.5);
+      const builderFrame = layout.doors.some(d => !d.shopfront && oc[0] >= d.x && oc[0] < d.x + d.w && oc[1] >= d.y && oc[1] < d.y + d.h);
+      const view = buildElevatorView(plan, h.mats, info.floor, info.floors, {fixture, builderFrame});
       const logic = new ElevatorLogic(info.floor, info.floors);
       if (sec.arrival?.kind === 'elevator') logic.arrive();
       view.setDoor(logic.door);
@@ -154,7 +162,7 @@ export class TowerRuntime {
       sec.geometries.push(...view.geometries);
       h.atmosphere?.markShadows(view.shell, false);
       h.atmosphere?.markShadows(view.doors, false);
-      sec.elevator = {plan, view, logic, sides: new WeakMap(), pushT: 0, dir: 0};
+      sec.elevator = {plan, view, logic, sides: new WeakMap(), pushT: 0, dir: 0, playerBlocks: false, hintT: 1e9};
     }
     // --- stairwell doors ---
     if (info.stairDoors.length) {
@@ -173,6 +181,7 @@ export class TowerRuntime {
       const view = buildWindows(plans, h.mats, this.glassTex ?? null);
       root.add(view.root);
       sec.geometries.push(...view.geometries);
+      h.atmosphere?.markShadows(view.root, false); // frames / sills / boards block the torch like the walls (glass is skipped: not opaque)
       const boxes = plans.map(p => p.along === 'x'
         ? new THREE.Box3(new THREE.Vector3(p.a0, p.y0, Math.min(p.glass, p.inner) - 0.15), new THREE.Vector3(p.a1, p.y1, Math.max(p.glass, p.inner) + 0.15))
         : new THREE.Box3(new THREE.Vector3(Math.min(p.glass, p.inner) - 0.15, p.y0, p.a0), new THREE.Vector3(Math.max(p.glass, p.inner) + 0.15, p.y1, p.a1)));
@@ -321,6 +330,8 @@ export class TowerRuntime {
     const playerOn = this.onLevel(sec, P.y);
     const occupant = P.alive && playerOn && insideRect(cab, P.x, P.z) && gateLocal(G, P.x, P.z)[0] < -0.02;
     let doorway = P.alive && playerOn && inDoorway(G, P.x, P.z, P.radius);
+    e.playerBlocks = doorway;
+    e.hintT += dt;
     let enemyInside = false;
     for (const z of h.zombies) {
       const b = z.brain;
@@ -364,16 +375,21 @@ export class TowerRuntime {
     const at: P3 = {x: G.cx + G.nx * G.depth * 0.5, y: info.floorY + 1.2, z: G.cz + G.nz * G.depth * 0.5};
     for (const x of ev) {
       switch (x.type) {
+        // door motor slide (a metal cabinet door, pitched down) and the closing clunk when the leaves meet
         case 'opening': towerCue(h.sfx, 'cabinetOpen', at, {rate: 0.72, gain: 0.8}); break;
-        case 'closing': towerCue(h.sfx, 'cabinetClose', at, {rate: 0.7, gain: 0.8, delay: 0.9}); break;
-        case 'reopen': if (x.why === 'enemy') h.hud.toast('The doors won’t close with something inside', true); break;
+        case 'closing': towerCue(h.sfx, 'cabinetOpen', at, {rate: 0.62, gain: 0.55}); break;
+        case 'closed': towerCue(h.sfx, 'cabinetClose', at, {rate: 0.7, gain: 0.8}); break;
+        case 'reopen':
+          if (x.why === 'enemy') h.hud.toast('The doors won’t close with something inside', true);
+          else if (e.playerBlocks && e.logic.target !== null && e.hintT > 4) { e.hintT = 0; h.hud.toast('Stand clear of the doors'); }
+          break;
         case 'chime':
           towerCue(h.sfx, 'click', at, {rate: 2.1, gain: 1});
           towerCue(h.sfx, 'click', at, {rate: 1.6, gain: 0.9, delay: 0.22});
           break;
         case 'depart':
           e.dir = x.floor > sec.info.floor ? 1 : -1;
-          towerCue(h.sfx, 'trainDistant', at, {rate: 1.35, gain: 0.55});
+          towerCue(h.sfx, 'trainDistant', at, {rate: 1.35, gain: 0.4}); // the motor's rumble (runs on under the travel overlay)
           towerCue(h.sfx, 'clank', at, {rate: 0.8, gain: 0.5});
           break;
         case 'ride': void this.ride(sec, e, x.floor); break;
@@ -423,7 +439,7 @@ export class TowerRuntime {
 
   private eyeRay(): {o: P3; d: P3} {
     const cam = this.host.camera;
-    const o = cam.getWorldPosition(new THREE.Vector3()), d = cam.getWorldDirection(new THREE.Vector3());
+    const o = cam.getWorldPosition(this.vEye), d = cam.getWorldDirection(this.vDir);
     return {o: {x: o.x, y: o.y, z: o.z}, d: {x: d.x, y: d.y, z: d.z}};
   }
 
@@ -465,12 +481,12 @@ export class TowerRuntime {
     if (!t) return false;
     const h = this.host, e = sec.elevator;
     if (t.kind === 'call' && e) {
-      towerCue(h.sfx, 'click', e.plan.info.callPanel, {rate: 1.4});
+      towerCue(h.sfx, 'click', e.plan.callAt, {rate: 1.4});
       this.onElevatorEvents(sec, e, e.logic.call());
       return true;
     }
     if (t.kind === 'panel' && e) {
-      towerCue(h.sfx, 'click', e.plan.info.panel, {rate: 1.4});
+      towerCue(h.sfx, 'click', e.plan.panelAt, {rate: 1.4});
       this.openFloorList(sec, e);
       return true;
     }
@@ -491,7 +507,9 @@ export class TowerRuntime {
       key: f <= 9 ? f : undefined, current: f === info.floor,
     }));
     items.push({id: 'open', label: '◀ ▶  open doors'});
-    const start = Math.max(0, items.findIndex(i => i.id === `f${e.logic.target ?? info.floor}`));
+    // highlight: the pending target, else the next floor up (down from the top floor)
+    const top = Math.max(...info.floors), next = e.logic.target ?? (info.floor < top ? info.floor + 1 : info.floor - 1);
+    const start = Math.max(0, items.findIndex(i => i.id === `f${next}`));
     this.choiceCtx = () => this.section === sec && !e.logic.busy && this.host.player.alive && insideRect(e.plan.info.cab, this.host.player.x, this.host.player.z, -0.6);
     this.choice.open(`Elevator · floor ${floorLabel(info.floor)}`, items, start, id => this.pickFloor(sec, e, id));
   }
@@ -508,7 +526,7 @@ export class TowerRuntime {
   private pickFloor(sec: SectionRt, e: ElevatorRt, id: string): void {
     if (this.section !== sec) return;
     const h = this.host;
-    towerCue(h.sfx, 'click', e.plan.info.panel, {rate: 1.5});
+    towerCue(h.sfx, 'click', e.plan.panelAt, {rate: 1.5});
     if (id === 'open') { this.onElevatorEvents(sec, e, e.logic.requestOpen()); return; }
     const floor = Number(id.slice(1));
     const r = e.logic.select(floor);
@@ -568,7 +586,7 @@ export class TowerRuntime {
 
   private updateExterior(sec: SectionRt, dt: number): void {
     const ex = sec.exterior!, cam = this.host.camera;
-    const eye = cam.getWorldPosition(new THREE.Vector3());
+    const eye = cam.getWorldPosition(this.vEye);
     ex.view.dome.position.copy(eye);
     ex.checkT -= dt;
     if (ex.checkT > 0) return;

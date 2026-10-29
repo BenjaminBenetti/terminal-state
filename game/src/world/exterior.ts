@@ -24,6 +24,7 @@ import {MOOD} from './lights';
 import {canvasTexture} from './canvasTextures';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Rect2} from './towerShared';
+import {OFFICE_ASSETS} from '../assets/officeAssets';
 
 type N = Node<'float'> & Node;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,6 +66,25 @@ export const EXTERIOR = {
   /** Meshy hero buildings / props placed at most (tris budget: C3/C4 20k, C1 8k, C5 10k, C2 6k). */
   maxTowers: 2, maxMidrise: 3, cars: 6, buses: 2, rubble: 5,
 } as const;
+
+/** Footprints (x, z, m) of the Meshy hero buildings (ASSETS' measured runtime dims; manifest sizes as fallback). */
+const HERO_DIMS: Record<'tower' | 'midrise', [number, number]> = {
+  tower: [OFFICE_ASSETS['ruined-tower'].dims?.[0] ?? 37, OFFICE_ASSETS['ruined-tower'].dims?.[2] ?? 45],
+  midrise: [OFFICE_ASSETS['ruined-midrise'].dims?.[0] ?? 25, OFFICE_ASSETS['ruined-midrise'].dims?.[2] ?? 23],
+};
+/** Lot fit at scale >= 0.85 (either orientation). */
+function heroFits(kind: 'tower' | 'midrise', w: number, d: number): boolean {
+  const [dx, dz] = HERO_DIMS[kind], k = 0.85;
+  return (dx * k <= w && dz * k <= d) || (dz * k <= w && dx * k <= d);
+}
+/** Hero scale + extra yaw so the model fits its lot (0.85 .. 1.12). */
+export function heroFit(kind: 'tower' | 'midrise', b: {w: number; d: number; seed: number}): {scale: number; turn: number} {
+  const [dx, dz] = HERO_DIMS[kind];
+  const want = 0.92 + (b.seed % 1000) / 1000 * 0.2;
+  const s0 = Math.min(b.w / dx, b.d / dz), s1 = Math.min(b.w / dz, b.d / dx);
+  const turn = s1 > s0 ? Math.PI / 2 : 0;
+  return {scale: Math.max(0.6, Math.min(want, Math.max(s0, s1))), turn};
+}
 
 /** 1D block intervals outward from a centre block [-c, c]: ring k -> [start, end] on the positive side. */
 function blockSpan(c: number, k: number): [number, number] {
@@ -131,10 +151,12 @@ export function planExterior(o: {foot: Rect2; groundY: number; eyeAbove: number;
         let kind: BuildingKind = r < 0.22 ? 'collapsed' : 'block';
         let h = ringK === 1 ? 12 + rnd() * 34 : ringK === 2 ? 16 + rnd() * 52 : 20 + rnd() * 70;
         // Meshy hero models on the inner rings (when delivered; the runtime falls back to blocks otherwise)
-        if (kind === 'block' && ringK <= 2 && towers < EXTERIOR.maxTowers && r > 0.86) { kind = 'tower'; h = 60; towers++; }
-        else if (kind === 'block' && ringK <= 2 && mids < EXTERIOR.maxMidrise && r > 0.62 && r <= 0.86) { kind = 'midrise'; h = 30; mids++; }
+        // (only on lots their real footprint fits, ASSETS' measured dims; turned 90 deg when that fits better)
+        if (kind === 'block' && ringK <= 2 && towers < EXTERIOR.maxTowers && r > 0.86 && heroFits('tower', w, d)) { kind = 'tower'; h = 60; towers++; }
+        else if (kind === 'block' && ringK <= 2 && mids < EXTERIOR.maxMidrise && r > 0.62 && r <= 0.86 && heroFits('midrise', w, d)) { kind = 'midrise'; h = 30; mids++; }
         if (kind === 'collapsed') h = 3 + rnd() * 9;
-        const yaw = (Math.floor(rnd() * 4) * Math.PI) / 2 + (rnd() - 0.5) * 0.05;
+        // facing 0 / 180 deg (+ a little jitter): the lot's w stays along x (a quarter turn would swap w / d into the streets)
+        const yaw = (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 0.05;
         buildings.push({kind, x, z, w, d, h, yaw, seed: Math.floor(rnd() * 1e9)});
       }
     }
@@ -353,7 +375,8 @@ function groundMaterial(first: THREE.Texture): MeshBasicNodeMaterial {
   groundMapNode ??= texture(first);
   return basic('ground', Fn(() => {
     const muv = positionWorld.xz.sub(vec2(groundXform.x, groundXform.y)).mul(vec2(groundXform.z, groundXform.w));
-    const base = groundMapNode.sample(vec2(muv.x, muv.y)).rgb;
+    // canvas row 0 = the north edge (min z); texture v = 0 is the image bottom (flipY)
+    const base = groundMapNode.sample(vec2(muv.x, float(1).sub(muv.y))).rgb;
     const det = texture(groundDetail(), positionWorld.xz.div(6)).r.mul(0.7).add(0.65);
     return vec3(exteriorFog(base.mul(det).mul(outdoorLight(vec3(0, 1, 0)))));
   })());
@@ -591,8 +614,10 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
     if (gltf) {
       for (const part of modelParts(gltf)) {
         const mat = modelMaterial(part.material);
+        // ASSETS' vehicles are long along X (nose +X); the plan's yaw is for a Z-long body like the stand-ins
+        const turn = kind === 'rubble' ? 0 : -Math.PI / 2;
         quadsList.forEach((ql, qi) => addInstanced(`tower-ext-${kind}-${qi}`, part.geometry, mat,
-          ql.map(p => placeMatrix(p.x, gy, p.z, p.yaw, [p.scale, p.scale, p.scale]).clone().multiply(part.matrix)), false));
+          ql.map(p => placeMatrix(p.x, gy, p.z, p.yaw + turn, [p.scale, p.scale, p.scale]).clone().multiply(part.matrix)), false));
       }
     } else {
       const g = fallbackPropGeometry(kind);
@@ -643,7 +668,7 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
     for (const part of modelParts(gltf)) {
       const mat = modelMaterial(part.material);
       ql.forEach((list, qi) => addInstanced(`tower-ext-${kind}-${qi}`, part.geometry, mat,
-        list.map(b => { const s = 0.85 + (b.seed % 1000) / 1000 * 0.3; return placeMatrix(b.x, gy, b.z, b.yaw, [s, s, s]).clone().multiply(part.matrix); }), false));
+        list.map(b => { const f = heroFit(kind, b); return placeMatrix(b.x, gy, b.z, b.yaw + f.turn, [f.scale, f.scale, f.scale]).clone().multiply(part.matrix); }), false));
     }
   }
   const unit = new THREE.BoxGeometry(1, 1, 1); unit.translate(0, 0.5, 0); unit.deleteAttribute('uv');
@@ -664,11 +689,12 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
   const dome = new THREE.Mesh(domeGeo, skyMaterial());
   dome.name = 'tower-ext-sky';
   dome.frustumCulled = false;
-  dome.renderOrder = -10;
+  // drawn after every other opaque (the interior is 0, the city 5): early-z rejects the dome / city behind walls
+  dome.renderOrder = 10;
   dome.position.set(c.x, gy, c.z);
   root.add(dome);
   tris += triCount(domeGeo);
-  root.traverse(o => { o.castShadow = false; o.receiveShadow = false; });
+  root.traverse(o => { o.castShadow = false; o.receiveShadow = false; if (o !== dome) o.renderOrder = 5; });
   return {root, dome, geometries, instanced, used: {props: usedProps, heroes: usedHeroes}, tris};
 }
 

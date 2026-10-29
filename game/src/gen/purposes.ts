@@ -754,7 +754,7 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
         {kind: 'officeWaterCooler', at: 'wall', wall: 'any', n: [0, 1], chance: 0.35, front: 0.6},
         {kind: 'bin', at: 'wall', wall: 'any', n: [0, 1], chance: 0.4},
       ],
-      loot: {}, floor: {med: 0.2, ammo: 0.15},
+      loot: {bin: {items: [['chips', 1], ['cola', 1], ['water', 0.6], ['bandage', 0.3]], lots: [0, 2], empty: 0.6}}, floor: {med: 0.2, ammo: 0.15},
     },
     'office-open': {
       id: 'office-open', category: 'back', theme: 'personal', label: 'Open-plan office', slots: OPEN, kinds: ['concourse', 'room'], weight: 1, max: 99,

@@ -110,3 +110,17 @@ export function officeShape(kind: OfficeKind): ShapePart[] | null {
     case 'cubiclePartition': return null;
   }
 }
+
+/**
+ * Lazy model-library keys (ASSETS' OFFICE_MODEL_FILES) the layout's office props render with — for a preload hook
+ * (game.sectionPreloads: `propModels.ensure(officeModelKeysFor(layout))` once the library knows OFFICE_MODEL_FILES).
+ * `desk` maps to the office desk only inside office sections (the Subway keeps its procedural desk).
+ */
+export function officeModelKeysFor(layout: {props: readonly {kind: string}[]; office?: unknown}): string[] {
+  const s = new Set<string>();
+  for (const p of layout.props) {
+    const id = OFFICE_KIND_ASSET[p.kind as OfficeKind | 'desk'];
+    if (id && (p.kind !== 'desk' || layout.office)) s.add(officeModelKey(id));
+  }
+  return [...s].sort();
+}

@@ -9,12 +9,12 @@
 import {generateStation} from '../gen/station';
 import type {StationLayout} from '../gen/stationTypes';
 import {placeSectionGear} from './gearAdapter';
-import {generateOfficeSection} from './officeFallback'; // TEMPORARY until gen/office/index.ts (WORLD-GEN) lands
+import {OFFICE_SECTIONS as WORLDGEN_OFFICE_SECTIONS, OFFICE_TOP_FLOOR as WORLDGEN_TOP_FLOOR, generateOfficeSection} from '../gen/office/index'; // lane WORLD-GEN
 import type {Arrival, LevelDef, LevelId, SectionGenContext, SectionKey} from './types';
 
-/** Floors of the office tower: 1 = the lobby (upper storey of 'street'), 2..8 = office floors. */
-export const OFFICE_TOP_FLOOR = 8;
-export const OFFICE_SECTIONS: readonly string[] = ['street', ...Array.from({length: OFFICE_TOP_FLOOR - 1}, (_, i) => `floor-${i + 2}`)];
+/** Floors of the office tower: 1 = the lobby (upper storey of 'street'), 2..8 = office floors (WORLD-GEN's tower frame). */
+export const OFFICE_TOP_FLOOR: number = WORLDGEN_TOP_FLOOR;
+export const OFFICE_SECTIONS: readonly string[] = WORLDGEN_OFFICE_SECTIONS;
 
 export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office'];
 

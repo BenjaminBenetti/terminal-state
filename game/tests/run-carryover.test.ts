@@ -78,6 +78,25 @@ describe('levels registry', () => {
     expect(() => LEVELS.subway.generate('floor-2', {levelSeed: 1})).toThrow();
   });
 
+  it('office sections come from WORLD-GEN through the registry: deterministic, arrivals per kind, gear appended once', () => {
+    const levelSeed = 0x0ff1ce;
+    const street = LEVELS.office.generate('street', {levelSeed, startWeapon: 'pistol'});
+    const office = (street as typeof street & {office?: {floor: number; arrivals: Record<string, {x: number; z: number; yaw: number; level: number}>}}).office;
+    expect(office?.floor).toBe(1);
+    expect(arrivalPose(street, {kind: 'start'}).source).toBe('start');
+    const f5 = LEVELS.office.generate('floor-5', {levelSeed, startWeapon: 'pistol'});
+    const o5 = (f5 as typeof f5 & {office?: {floor: number}}).office;
+    expect(o5?.floor).toBe(5);
+    const el = arrivalPose(f5, {kind: 'elevator', floor: 5});
+    expect(el.source).toBe('elevator');
+    const again = LEVELS.office.generate('floor-5', {levelSeed, startWeapon: 'pistol'});
+    expect(again.pickups).toEqual(f5.pickups);
+    expect(again.zombies).toEqual(f5.zombies);
+    const geared = LEVELS.office.generate('floor-5', {levelSeed, startWeapon: 'pistol', gear: [{itemId: 'gloves'}]});
+    expect(geared.pickups.slice(0, f5.pickups.length)).toEqual(f5.pickups);
+    expect(geared.pickups.slice(f5.pickups.length).map(p => p.itemId)).toEqual(['gloves']);
+  });
+
   it('arrival poses come from layout.office.arrivals (exact kind, else start), else playerSpawn', () => {
     const l = generateStation(99, {startWeapon: 'pistol'});
     const sp = l.playerSpawn;

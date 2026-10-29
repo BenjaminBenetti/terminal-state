@@ -228,9 +228,10 @@ export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials,
       else if (pane.state === 'cracked') crackedParts.push(paneQuad(p, ia0, ia1, iy0, iy1, facing));
       else if (pane.state === 'broken') { const s = shards(p, {...pane, a0: ia0, a1: ia1, y0: iy0, y1: iy1}, facing); if (s) crackedParts.push(s); }
       else {
-        // boarded: 3-4 plywood planks on the room side, slightly askew (the pane behind is gone)
+        // boarded: plywood planks on the room side, slightly askew (the pane behind is gone)
         const rnd = mulberry32(pane.seed ^ 0xb0a2d);
-        const nb = 3 + Math.floor(rnd() * 2);
+        // ~1 plank per 0.34 m of height (narrow gaps show the street through them), a little irregular
+        const nb = Math.max(3, Math.round((pane.y1 - pane.y0) / 0.34)) - (rnd() < 0.3 ? 1 : 0);
         const bc0 = p.inner - out * 0.01, bc1 = p.inner - out * 0.035;
         for (let k = 0; k < nb; k++) {
           const yc = pane.y0 + (pane.y1 - pane.y0) * ((k + 0.5) / nb) + (rnd() - 0.5) * 0.08;
@@ -254,7 +255,9 @@ export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials,
     geometries.push(g);
     const m = new THREE.Mesh(g, mat);
     m.name = name;
-    if (isGlass) { m.renderOrder = 1; glass.push(m); }
+    // glass first among the transparents: every other transparent (tube glow, particles, decals) is inside the room,
+    // in front of it, and must blend over it
+    if (isGlass) { m.renderOrder = -1; glass.push(m); }
     root.add(m);
   };
   const cracked = crackedParts.length ? crackedGlassMaterial(glassTex) : null;

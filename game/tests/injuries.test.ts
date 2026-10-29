@@ -496,18 +496,21 @@ describe.skipIf(process.env.INJURY_REPORT !== '1')('injury loot report', () => {
     const placed = sum(subway);
     console.info(`[injury loot report] Subway placed / rolled (holders): ${(Object.keys(rolled) as (keyof MedCount)[]).map(k => `${k} ${placed[k] - (k === 'bandage' || k === 'medkit' ? subway.reduce((n, l) => n + l.pickups.filter(q => q.itemId === k).length, 0) : 0)}/${rolled[k]}`).join(' · ')}`);
     const {LEVELS} = await import('../src/levels/registry');
+    // WORLD-GEN's generator directly when it exists (before the registry switches to it), else the registry's
+    const real = Object.values(import.meta.glob<{generateOfficeSection?: typeof LEVELS.office.generate}>('../src/gen/office/index.ts'))[0];
+    const gen = (await real?.())?.generateOfficeSection ?? LEVELS.office.generate;
     const levels = Number(process.env.INJURY_OFFICE_LEVELS ?? 4);
     const office: StationLayout[] = [];
-    let real = 0;
+    let realSections = 0;
     for (let i = 0; i < levels; i++) {
       const levelSeed = (90001 + i * 7919) >>> 0;
       for (const section of LEVELS.office.sections(levelSeed)) {
-        const l = LEVELS.office.generate(section, {levelSeed, startWeapon: 'pistol'});
-        if ((l as {office?: unknown}).office) real++;
+        const l = gen(section, {levelSeed, startWeapon: 'pistol'});
+        if ((l as {office?: unknown}).office) realSections++;
         office.push(l);
       }
     }
-    console.info(`[injury loot report] Office per LEVEL (n=${levels} levels, ${office.length} sections, ${real ? 'WORLD-GEN generator' : 'RUN placeholder stations — not the real office'}): ${fmt(sum(office), levels)}`);
+    console.info(`[injury loot report] Office per LEVEL (n=${levels} levels, ${office.length} sections, ${realSections ? `WORLD-GEN generator, ${realSections} real office sections` : 'RUN placeholder stations — not the real office'}): ${fmt(sum(office), levels)}`);
   });
 });
 

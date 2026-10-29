@@ -259,7 +259,7 @@ export function p7Model(kind: P7Kind): P7Model { return MODELS[kind]; }
 // Appended AFTER the kind list is derived (only kinds that already have uses): the set of integrated kinds, the per-station palette
 // and every station-purpose use stay exactly as before — these uses only match office purpose keys.
 {
-  const ADD: Partial<Record<P7Kind, P7Use[]>> = {
+  const ADD: Readonly<Record<string, P7Use[]>> = {
     coatRack: [W(['office-private', 'office-exec', 'office-reception'], [1, 1], {chance: 0.4, front: 0.6})],
     filingCabinet: [ROW(['office-private', 'office-exec', 'office-copy'], [1, 2], {front: 0.8}), ROW(['office-open'], [2, 4], {front: 0.8}), W(['office-security'], [1, 1], {chance: 0.6, front: 0.8})],
     paperShredder: [W(['office-copy', 'office-exec'], [1, 1], {chance: 0.5, front: 0.5})],

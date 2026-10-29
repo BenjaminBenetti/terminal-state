@@ -4,6 +4,11 @@
 
 import type {TowerRuntime} from './towerRuntime';
 import {floorLabel} from './towerShared';
+import {EXT_U} from './exterior';
+
+type Rgb = [number, number, number];
+/** Exterior look knobs (uniform values only: no rebuild). Colours are LINEAR rgb. */
+export interface ExteriorTune { haze?: Rgb; hazeDensity?: number; sun?: Rgb; sky?: Rgb; ground?: Rgb; zenith?: Rgb; skyGain?: number; sunDir?: [number, number, number] }
 
 interface QaGame {
   tower: TowerRuntime;
@@ -42,7 +47,7 @@ export function towerQaApi(game: unknown) {
     towerGoCall: () => {
       const e = rt().section?.elevator;
       if (!e) return false;
-      const c = e.plan.info.callPanel, [nx, nz] = e.plan.callN;
+      const c = e.plan.callAt, [nx, nz] = e.plan.callN;
       g.player.x = c.x + nx * 0.9; g.player.z = c.z + nz * 0.9;
       face(g, c.x, c.y, c.z);
       return true;
@@ -51,7 +56,7 @@ export function towerQaApi(game: unknown) {
     towerGoCab: () => {
       const e = rt().section?.elevator;
       if (!e) return false;
-      const cab = e.plan.info.cab, p = e.plan.info.panel;
+      const cab = e.plan.info.cab, p = e.plan.panelAt;
       g.player.x = (cab.x0 + cab.x1) / 2; g.player.z = (cab.z0 + cab.z1) / 2;
       face(g, p.x, p.y, p.z);
       return true;
@@ -68,5 +73,13 @@ export function towerQaApi(game: unknown) {
     towerInteract: () => rt().interact(),
     /** In the cab: pick a floor from the panel list ('open' = open doors). */
     towerPick: (floor: number | 'open') => rt().panelPick(floor),
+    /** Spot-check tuning of the exterior's dusk light / haze (uniforms only); returns the current values. */
+    towerExteriorTune: (o: ExteriorTune = {}) => {
+      const col = (k: 'haze' | 'sun' | 'sky' | 'ground' | 'zenith') => { const v = o[k]; if (v) EXT_U[k].value.setRGB(...v); return (EXT_U[k].value as {toArray(): number[]}).toArray(); };
+      if (typeof o.hazeDensity === 'number') EXT_U.hazeDensity.value = o.hazeDensity;
+      if (typeof o.skyGain === 'number') EXT_U.skyGain.value = o.skyGain;
+      if (o.sunDir) EXT_U.sunDir.value.set(...o.sunDir).normalize();
+      return {haze: col('haze'), sun: col('sun'), sky: col('sky'), ground: col('ground'), zenith: col('zenith'), hazeDensity: EXT_U.hazeDensity.value, skyGain: EXT_U.skyGain.value, sunDir: EXT_U.sunDir.value.toArray()};
+    },
   };
 }

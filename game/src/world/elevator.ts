@@ -209,6 +209,9 @@ export interface ElevatorPlan {
   panelN: [number, number];
   callN: [number, number];
   /** Interaction boxes (E): inside floor panel, outside call panel. */
+  /** Where the panels actually mount: on the cab's own wall panelling (inside) / the corridor wall face (outside). */
+  panelAt: P3;
+  callAt: P3;
   panelBox: Box3Like;
   callBox: Box3Like;
   /** Points just in front of the panels (line-of-sight targets). */
@@ -256,13 +259,35 @@ export function planElevator(info: ElevatorInfo, g: Grid): ElevatorPlan {
   // call panel: on the landing-side wall face (normal away from the shaft, i.e. along the door normal by default)
   let callN = wallNormalAt(g, info.callPanel.x, info.callPanel.z) ?? [nx, nz];
   if (insideRect(cab, info.callPanel.x + callN[0] * 0.3, info.callPanel.z + callN[1] * 0.3)) callN = [nx, nz];
-  const panelBox = wallBox(info.panel, panelN, 0.34, 0.62, 0.12);
-  const callBox = wallBox(info.callPanel, callN, 0.26, 0.36, 0.12);
+  // mounting surfaces: the cab's front panelling sits CAB_FRONT inside the cab plane, its other walls CAB_WALL inside the
+  // shaft faces; the call panel goes flat on the corridor face of the shaft wall
+  const onDoorWall = panelN[0] === -nx && panelN[1] === -nz;
+  const panelAt = onFace(g, info.panel, panelN, onDoorWall ? CAB_FRONT : CAB_WALL);
+  const callAt = onFace(g, info.callPanel, callN, 0);
+  const panelBox = wallBox(panelAt, panelN, 0.34, 0.62, 0.12);
+  const callBox = wallBox(callAt, callN, 0.26, 0.36, 0.12);
   return {
-    info, gate: {cx, cz, nx, nz, tx, tz, hw, depth}, ceilY, doorTop, panelN, callN, panelBox, callBox,
-    panelEye: {x: info.panel.x + panelN[0] * 0.12, y: info.panel.y, z: info.panel.z + panelN[1] * 0.12},
-    callEye: {x: info.callPanel.x + callN[0] * 0.12, y: info.callPanel.y, z: info.callPanel.z + callN[1] * 0.12},
+    info, gate: {cx, cz, nx, nz, tx, tz, hw, depth}, ceilY, doorTop, panelN, callN, panelAt, callAt, panelBox, callBox,
+    panelEye: {x: panelAt.x + panelN[0] * 0.12, y: panelAt.y, z: panelAt.z + panelN[1] * 0.12},
+    callEye: {x: callAt.x + callN[0] * 0.12, y: callAt.y, z: callAt.z + callN[1] * 0.12},
   };
+}
+
+/** Cab panelling depth (m): the front (door) wall panels end CAB_FRONT inside the cab plane, the others CAB_WALL. */
+export const CAB_FRONT = 0.065;
+export const CAB_WALL = 0.03;
+
+/** The wall face behind a wall-mounted point (snapped to the solid cell's boundary along -n), plus `off` along n. */
+export function onFace(g: Grid, p: P3, n: [number, number], off: number): P3 {
+  for (let k = 0; k <= 30; k++) {
+    const x = p.x - n[0] * k * 0.02, z = p.z - n[1] * k * 0.02;
+    if (!solidAt(g, x, z)) continue;
+    let fx = p.x, fz = p.z;
+    if (n[0] > 0) fx = (Math.floor(x / CELL) + 1) * CELL; else if (n[0] < 0) fx = Math.floor(x / CELL) * CELL;
+    if (n[1] > 0) fz = (Math.floor(z / CELL) + 1) * CELL; else if (n[1] < 0) fz = Math.floor(z / CELL) * CELL;
+    return {x: fx + n[0] * off, y: p.y, z: fz + n[1] * off};
+  }
+  return {x: p.x + n[0] * off, y: p.y, z: p.z + n[1] * off};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -354,7 +379,7 @@ function merged(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 /** Builds the cab, doors, frames, indicators and panels for a plan (materials: shared station shape materials). */
-export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floor: number, floors: readonly number[], opts: {fixture?: boolean} = {}): ElevatorView {
+export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floor: number, floors: readonly number[], opts: {fixture?: boolean; builderFrame?: boolean} = {}): ElevatorView {
   const {info, gate: G, ceilY, doorTop} = plan;
   const {cab, floorY} = info;
   const root = new THREE.Group(); root.name = 'tower-elevator';
@@ -367,7 +392,7 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   };
   const steel = shapeMaterial(mats, 'steelBright'), dark = shapeMaterial(mats, 'steelDark'), frame = shapeMaterial(mats, 'shopFrame');
   const floorMat = shapeMaterial(mats, 'black'), rail = shapeMaterial(mats, 'kitchenSteel'), panel = shapeMaterial(mats, 'panel');
-  const T = 0.03; // wall panel thickness
+  const T = CAB_WALL; // wall panel thickness
   const wallH0 = floorY + 0.002, wallH1 = ceilY;
   // --- cab shell: back + side walls (inset into the cab), front wall pieces beside the opening, header ---
   const walls: THREE.BufferGeometry[] = [], kicks: THREE.BufferGeometry[] = [];
@@ -387,9 +412,11 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   const sideLen = Math.abs(G.nx) > 0.5 ? cz1 - cz0 : cx1 - cx0;
   const lc = Math.abs(G.nx) > 0.5 ? (G.cz - (cz0 + cz1) / 2) * G.tz : (G.cx - (cx0 + cx1) / 2) * G.tx; // opening centre along l, relative to the side centre
   const lMin = -sideLen / 2 - lc, lMax = sideLen / 2 - lc;
-  if (lMin < -G.hw - 0.01) walls.push(gateBox(G, -T, 0, lMin, -G.hw, wallH0, wallH1));
-  if (lMax > G.hw + 0.01) walls.push(gateBox(G, -T, 0, G.hw, lMax, wallH0, wallH1));
-  walls.push(gateBox(G, -T, 0, -G.hw, G.hw, doorTop, wallH1));
+  // (5 mm inside the cab plane: the station builder's door frame reaches 3 cm into the cab, its faces stay behind these)
+  const f0 = -CAB_FRONT, f1 = -CAB_FRONT + T;
+  if (lMin < -G.hw - 0.01) walls.push(gateBox(G, f0, f1, lMin, -G.hw, wallH0, wallH1));
+  if (lMax > G.hw + 0.01) walls.push(gateBox(G, f0, f1, G.hw, lMax, wallH0, wallH1));
+  walls.push(gateBox(G, f0, f1, -G.hw, G.hw, doorTop, wallH1));
   add(shell, merged(walls), steel, 'tower-cab-walls');
   add(shell, merged(kicks), dark, 'tower-cab-kick');
   // floor (rubber, slightly proud of the storey floor) and ceiling with a light diffuser
@@ -416,7 +443,8 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   fr.push(gateBox(G, G.depth, G.depth + fd, -G.hw - fw, -G.hw, floorY, doorTop + fw));
   fr.push(gateBox(G, G.depth, G.depth + fd, G.hw, G.hw + fw, floorY, doorTop + fw));
   fr.push(gateBox(G, G.depth, G.depth + fd, -G.hw - fw, G.hw + fw, doorTop, doorTop + fw));
-  if (G.depth > 0.1) {
+  // jamb linings through the wall, unless the opening is a station Door record (the builder frames those: steel jambs + head)
+  if (G.depth > 0.1 && !opts.builderFrame) {
     fr.push(gateBox(G, 0, G.depth, -G.hw - 0.01, -G.hw + 0.005, floorY, doorTop));
     fr.push(gateBox(G, 0, G.depth, G.hw - 0.005, G.hw + 0.01, floorY, doorTop));
     fr.push(gateBox(G, 0, G.depth, -G.hw, G.hw, doorTop - 0.005, doorTop + 0.01));
@@ -426,7 +454,7 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   // indicators: inside over the door, outside over the landing frame (one live texture)
   const ind = getIndicator();
   ind.draw(floorLabel(floor), 0);
-  add(root, gateBox(G, -T - 0.012, -T - 0.002, -0.16, 0.16, doorTop + 0.06, doorTop + 0.2), ind.material, 'tower-indicator-in');
+  add(root, gateBox(G, f0 - 0.012, f0 - 0.002, -0.16, 0.16, doorTop + 0.06, doorTop + 0.2), ind.material, 'tower-indicator-in');
   add(root, gateBox(G, G.depth + fd, G.depth + fd + 0.01, -0.16, 0.16, doorTop + fw + 0.06, doorTop + fw + 0.2), ind.material, 'tower-indicator-out');
   // floor panel (inside) and call panel (outside): plates + lit buttons
   const plate = (p: P3, n: [number, number], w: number, h: number, name: string, buttons: [number, number][]): void => {
@@ -441,8 +469,8 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, floo
   };
   const rows = Math.ceil(floors.length / 2);
   const grid: [number, number][] = floors.map((_, i) => [((i % 2) - 0.5) * 0.08, -0.2 + Math.floor(i / 2) * (0.38 / Math.max(1, rows - 1 || 1))]);
-  plate(info.panel, plan.panelN, 0.26, 0.56, 'tower-floor-panel', grid);
-  plate(info.callPanel, plan.callN, 0.14, 0.26, 'tower-call-panel', [[0, 0.05], [0, -0.05]]);
+  plate(plan.panelAt, plan.panelN, 0.26, 0.56, 'tower-floor-panel', grid);
+  plate(plan.callAt, plan.callN, 0.14, 0.26, 'tower-call-panel', [[0, 0.05], [0, -0.05]]);
   // doors: cab pair (just outside the cab plane) and landing pair (just inside the landing plane); each leaf covers
   // half the opening + overlap and slides into the wall
   const doorMeshes: {mesh: THREE.Mesh; sign: number}[] = [];

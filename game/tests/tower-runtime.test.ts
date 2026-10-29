@@ -18,7 +18,6 @@ import {markShadows} from '../src/render/volumetric';
 import type {TravelRequest} from '../src/levels/types';
 import {ARRIVE_CHIME, ARRIVE_OPEN, CALL_DELAY, DEPART_DELAY, DOOR_TIME, ElevatorLogic, planElevator, type ElevatorEvent} from '../src/world/elevator';
 import {constrainGate, gateSideOf, pushOutRect, readTowerInfo, sectionForFloor, floorOfSection, type GateSide} from '../src/world/towerShared';
-import {planStairDoors} from '../src/world/stairDoors';
 import {planWindows} from '../src/world/officeWindows';
 import {EXTERIOR, buildExterior, planExterior} from '../src/world/exterior';
 import {TowerRuntime, installTower, type TowerHost} from '../src/world/towerRuntime';
@@ -446,6 +445,13 @@ describe('exterior', () => {
     for (const b of plan.buildings) {
       const near = dist(b.x, b.z) - Math.hypot(b.w, b.d) / 2;
       expect(near).toBeGreaterThan(EXTERIOR.pavement + EXTERIOR.road - 4);
+    }
+    // every building's rotated footprint stays inside its lot's band: never across the ring road onto the tower block
+    for (const b of plan.buildings) {
+      const c = Math.abs(Math.cos(b.yaw)), sn = Math.abs(Math.sin(b.yaw));
+      const hx = (b.w * c + b.d * sn) / 2, hz = (b.w * sn + b.d * c) / 2;
+      const gap = Math.max(foot.x0 - (b.x + hx), (b.x - hx) - foot.x1, foot.z0 - (b.z + hz), (b.z - hz) - foot.z1);
+      expect(gap).toBeGreaterThan(EXTERIOR.pavement + EXTERIOR.road - 2.5);
     }
     expect(plan.props.length).toBeGreaterThan(8);
     expect(plan.buildings.length).toBeGreaterThan(40);

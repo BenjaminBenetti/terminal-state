@@ -35,6 +35,7 @@ import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; //
 import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
 import {buildWallDetail} from './wallDetail';
 import {applyStationDecay, archShopMaterial} from './decay';
+import {buildOfficeProp, buildOfficeSurfaces, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 
 class Accum {
   pos: number[] = [];
@@ -201,7 +202,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   let instancesFromTraversal = 0;
 
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
-  const faces: BuiltFace[] = extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight});
+  // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
+  const faces: BuiltFace[] = cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout);
   const emitFace = (f: BuiltFace) => {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     const plane = alongX ? f.z0 : f.x0;
@@ -449,6 +451,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
   // Pendant rods for fixtures hung below tall ceilings.
   for (const l of layout.lights) {
+    if (l.virtual) continue; // Iteration 16 (WORLD-GEN): fixture-less daylight sources have no rods
     // Lane T: the local ceiling (follows flights / landings / the underpass), not the area's top.
     const local = gridOf(levelOf(l)).ceilAt(l.x, l.z);
     const ceil = Math.min(layout.areas[l.area]?.ceil ?? l.y, Number.isFinite(local) ? local : Infinity);
@@ -495,6 +498,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   for (const [kind, list] of byKind) {
     // Cabinets and crates are searchable containers: built and animated by world/containers.ts.
     if (isContainerKind(kind)) continue;
+    // Iteration 16 (WORLD-GEN): office furniture (Meshy models / procedural fallbacks; the office desk inside office sections).
+    if (isOfficeBuilt(kind, layout)) { instances += buildOfficeProp(group, kind, list, mats, layout, instanceModel, models); continue; }
     // Storefront furniture / glazing / shutters: built by storefrontBuilder.
     if (SHOP_FURNITURE.includes(kind) || SHOP_BLOCKERS.includes(kind)) continue;
     const def = PROP_DEFS[kind];
@@ -529,8 +534,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
 
   // --- Light fixtures (model derivative) + emissive tubes ----------------------------------
-  const fixtures: Fixture[] = layout.lights.map((l, i) => ({x: l.x, y: l.y, z: l.z, broken: l.broken, flicker: l.flicker, warm: l.warm, dying: l.dying, power: l.power, area: l.area, phase: i * 1.7, level: l.broken ? 0 : 1}));
-  const lightMats = layout.lights.map(l => new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y, l.z), new THREE.Quaternion().setFromAxisAngle(UP, l.rot), new THREE.Vector3(1, 1, 1)));
+  // Iteration 16 (WORLD-GEN): `virtual` lights (office daylight) bake into the field but show no fixture, tube or glow card.
+  const fixtures: Fixture[] = layout.lights.map((l, i) => ({x: l.x, y: l.y, z: l.z, broken: l.broken, flicker: l.flicker, warm: l.warm, dying: l.dying, power: l.virtual ? 0 : l.power, area: l.area, phase: i * 1.7, level: l.broken ? 0 : 1}));
+  const lightMats = layout.lights.map(l => new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y, l.z), new THREE.Quaternion().setFromAxisAngle(UP, l.rot), l.virtual ? HIDDEN : new THREE.Vector3(1, 1, 1)));
   let tubes: THREE.InstancedMesh | null = null;
   if (models.light) instances += instanceModel(group, models.light, lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
   {
@@ -547,6 +553,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 
   // --- Storefront bays (frames, fascias, shutters, glazing, menu boards, counters …) -----------
   instances += buildStorefronts(group, layout, {mat: k => shapeMaterial(mats, k), models, instanceModel});
+  // Iteration 16 (WORLD-GEN): office carpet, drop ceilings and window reveals (no-op without layout.office).
+  buildOfficeSurfaces(group, layout, mats);
 
   // --- Signs (instanced: shared plates, one face mesh per distinct text) --------------------
   instances += buildSigns(group, layout, mats, models.sign, addBox);
@@ -583,6 +591,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
+/** Iteration 16: zero scale (hidden instance) for fixture-less lights. */
+const HIDDEN = new THREE.Vector3(1e-4, 1e-4, 1e-4);
 
 function addInstanced(group: THREE.Group, geo: THREE.BufferGeometry, mat: THREE.Material, placements: THREE.Matrix4[], name: string, colors?: (THREE.Color | null)[]): number {
   const im = new THREE.InstancedMesh(geo, mat, placements.length);

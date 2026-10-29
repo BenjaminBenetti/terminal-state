@@ -284,7 +284,8 @@ export function postDress(d: OfficeDress): void {
     const z = (MARGIN) * CELL + 1.0;
     for (let tx = d.entrance.x0; tx < d.entrance.x1; tx += 2) {
       const kind: PropKind = ctx.rng.pick(['crate', 'cartonStack', 'crate'] as PropKind[]);
-      tryPlaceProp(ctx, hall, kind, q4((tx + MARGIN + 1) * CELL), q4(z + ctx.rng.range(0, 0.5)), ctx.rng.pick([0, Math.PI / 2]), {checkZone: false});
+      const p = tryPlaceProp(ctx, hall, kind, q4((tx + MARGIN + 1) * CELL), q4(z + ctx.rng.range(0, 0.5)), ctx.rng.pick([0, Math.PI / 2]), {checkZone: false});
+      if (p) p.y += d.base; // placed after dress() lifted the storey: absolute height
     }
   }
   officeLights(d);

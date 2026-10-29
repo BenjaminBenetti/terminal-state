@@ -1,5 +1,5 @@
 // Iteration 16 (lane TOWER): stairwell doors of the office tower (layout.office.stairDoors, WORLD-GEN). A steel fire
-// door in the wall with a photoluminescent sign ("STAIRS ↑ 6 · ↓ 4"); E travels to the adjacent floor (lane RUN's
+// door in the wall with a photoluminescent sign above it ("STAIRS ↑ 6 · ↓ 4"); E travels to the adjacent floor (lane RUN's
 // game.travel, arrival 'stairs-up' / 'stairs-down' = the direction travelled). Two entries at one spot (up + down) are
 // ONE door with a two-choice list. The lobby's way down is the physical stair to the subway (no door: WORLD-GEN).
 
@@ -127,13 +127,15 @@ export function buildStairDoors(plans: readonly StairDoorPlan[], mats: WorldMate
     const pb = new THREE.Mesh(geo(new THREE.BoxGeometry(W * 0.7, 0.05, 0.05)), bar); pb.position.set(W / 2 + 0.05, 1.0, 0.05); pivot.add(pb);
     const vision = new THREE.Mesh(geo(new THREE.BoxGeometry(0.16, 0.5, 0.05)), dark); vision.position.set(W * 0.72, 1.55, 0.003); pivot.add(vision);
     leaves.push(pivot);
-    // sign beside the latch side at eye height (photoluminescent: faint emissive)
+    // the dark stairwell "beyond" (seen only while the leaf swings open; the wall behind is solid)
+    const voidBox = new THREE.Mesh(geo(new THREE.BoxGeometry(W - 0.02, H - 0.02, 0.01)), dark); voidBox.position.set(0, H / 2, 0.006); g.add(voidBox);
+    // sign above the door (photoluminescent: faint emissive)
     const tex = signTexture(p.sign);
     const sm = new MeshStandardNodeMaterial({map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35, roughness: 0.6, metalness: 0});
     sm.name = 'tower-stair-sign';
     disposables.push(tex, sm);
     const sign = new THREE.Mesh(geo(new THREE.BoxGeometry(0.4, 0.25, 0.015)), [dark, dark, dark, dark, sm, dark]);
-    sign.position.set(W / 2 + fw + 0.32, 1.62, 0.008);
+    sign.position.set(0, H + fw + 0.16, 0.008);
     g.add(sign);
   }
   return {root, leaves, geometries, disposables};
