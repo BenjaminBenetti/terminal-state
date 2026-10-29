@@ -11,7 +11,8 @@ export async function encodeImage(raw, width, height, kind) {
 }
 
 // mesh: {pos, nrm, uv, idx}; textures: {color, orm, normal?} each {mime, bytes}; children: [{name, translation}]
-export async function writeMeshGlb({name, mesh, textures, material, children = [], extras}) {
+// doubleSided (default false; a top-level option so older builders that spread a source material keep their exact output).
+export async function writeMeshGlb({name, mesh, textures, material, children = [], extras, doubleSided = false}) {
   const doc = new Document();
   const buffer = doc.createBuffer();
   const acc = (type, arr) => doc.createAccessor().setType(type).setArray(arr).setBuffer(buffer);
@@ -22,7 +23,7 @@ export async function writeMeshGlb({name, mesh, textures, material, children = [
     .setIndices(acc('SCALAR', mesh.pos.length / 3 <= 65535 ? Uint16Array.from(mesh.idx) : mesh.idx));
   const mat = doc.createMaterial(`${name}-baked`)
     .setBaseColorFactor([1, 1, 1, 1]).setMetallicFactor(material.metallicFactor).setRoughnessFactor(material.roughnessFactor)
-    .setDoubleSided(false).setAlphaMode('OPAQUE');
+    .setDoubleSided(!!doubleSided).setAlphaMode('OPAQUE');
   const tex = (n, t) => doc.createTexture(n).setImage(new Uint8Array(t.bytes)).setMimeType(t.mime);
   mat.setBaseColorTexture(tex(`${name}-color`, textures.color));
   mat.setMetallicRoughnessTexture(tex(`${name}-orm`, textures.orm));

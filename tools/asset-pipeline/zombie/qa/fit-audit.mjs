@@ -14,6 +14,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {prepareInner, bindCoverage, auditPose, skin, unionHide, outerWallMask} from '../lib/penetration.mjs';
 import {EXTREME_POSES, euler} from '../lib/extreme-poses.mjs';
+import {liveModelFiles, liveFile} from '../lib/live-files.mjs'; // T2.5 migration: live file per id (manifest / -t25), not by pattern
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..');
 const io = new NodeIO().registerExtensions([KHRMeshQuantization]);
@@ -132,8 +133,8 @@ export function bodyEligible(B) {
 
 // ------------------------------------------------------------------------------------- audit job
 const cache = new Map();
-async function body(models, id) { const k = 'b:' + id; if (!cache.has(k)) cache.set(k, await loadBodyGeo(path.join(models, `zombie-body-${id}.glb`))); return cache.get(k); }
-async function wearable(models, id) { const k = 'w:' + id; if (!cache.has(k)) cache.set(k, await loadWearGeo(path.join(models, `outfit-${id}.glb`))); return cache.get(k); }
+async function body(models, id) { const k = 'b:' + id; if (!cache.has(k)) cache.set(k, await loadBodyGeo(liveFile(models, 'body', id))); return cache.get(k); }
+async function wearable(models, id) { const k = 'w:' + id; if (!cache.has(k)) cache.set(k, await loadWearGeo(liveFile(models, 'wearable', id))); return cache.get(k); }
 
 /**
  * job {models, body, wear: [ids...] (the worn set), inner: 'body' | <lower wearable id>, every}
@@ -198,10 +199,10 @@ if (!isMainThread) {
   const models = path.resolve(REPO, args.models || 'game/public/assets/models');
   const out = path.resolve(REPO, args.out || 'qa-artifacts/iter07-wardrobe/fit-audit.json');
   const every = +(args.every || 2);
-  const files = fs.readdirSync(models);
-  const bodies = files.filter(f => /^zombie-body-.+\.glb$/.test(f)).map(f => f.slice(12, -4));
+  const live = liveModelFiles(models);
+  const bodies = Object.keys(live.bodies).sort();
   const wears = [];
-  for (const f of files.filter(f => /^outfit-.+\.glb$/.test(f))) { const W = await loadWearGeo(path.join(models, f)); wears.push({id: W.extras.id, slot: W.extras.slot, bodies: Object.keys(W.variants), incompatible: Object.fromEntries(Object.entries(W.variants).map(([b, v]) => [b, v.extras.incompatibleWear ?? []]))}); }
+  for (const f of Object.values(live.wearables).sort()) { const W = await loadWearGeo(f); wears.push({id: W.extras.id, slot: W.extras.slot, bodies: Object.keys(W.variants), incompatible: Object.fromEntries(Object.entries(W.variants).map(([b, v]) => [b, v.extras.incompatibleWear ?? []]))}); }
   const only = args.pairs ? new Set(String(args.pairs).split(',')) : null;
   const jobs = [];
   for (const w of wears) for (const b of w.bodies) if (!only || only.has(`${b}:${w.id}`)) jobs.push({key: `${b}:${w.id}`, models, body: b, wear: [w.id], inner: 'body', every});

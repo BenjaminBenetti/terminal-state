@@ -2930,5 +2930,31 @@
     "modelMap": "public/vision-board/local-model-map.json",
     "catalog": "public/vision-board/core-assets.json",
     "note": "Masters read-only; no file under public/vision-board/ or reference/ was written."
+  },
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/bench.glb": {
+        "id": "base:bench",
+        "replacedBy": "game/public/assets/models/bench-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "0b1009b4de7282c96378fad0a8f33a1b9f2f96f9",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/bench.glb > game/public/assets/models/bench.glb"
+      },
+      "game/public/assets/models/cabinet-low.glb": {
+        "id": "base:cabinetLow",
+        "replacedBy": "game/public/assets/models/cabinet-low-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "338cb0f5e2126034360d92d8aa7763709d4f26e1",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/cabinet-low.glb > game/public/assets/models/cabinet-low.glb"
+      },
+      "game/public/assets/models/cabinet-tall.glb": {
+        "id": "base:cabinetTall",
+        "replacedBy": "game/public/assets/models/cabinet-tall-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "0f2b4946f31e6b900389d5ea7e0ad16030706d8e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/cabinet-tall.glb > game/public/assets/models/cabinet-tall.glb"
+      }
+    }
   }
 }

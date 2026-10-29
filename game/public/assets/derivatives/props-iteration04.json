@@ -1729,5 +1729,31 @@
       ]
     }
   ],
-  "note": "Native masters stay in reference/tasks/vertical-slice-iteration04-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public."
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration04-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public.",
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/shop-backbar.glb": {
+        "id": "base:shopBackbar",
+        "replacedBy": "game/public/assets/models/shop-backbar-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "82ac0ced5f97487d5aabff2e7003574b75f3331d",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shop-backbar.glb > game/public/assets/models/shop-backbar.glb"
+      },
+      "game/public/assets/models/shop-counter.glb": {
+        "id": "base:shopCounter",
+        "replacedBy": "game/public/assets/models/shop-counter-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "943f4d8172940b323930cb16586093e43e3e4ea1",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shop-counter.glb > game/public/assets/models/shop-counter.glb"
+      },
+      "game/public/assets/models/trash-can.glb": {
+        "id": "base:trashCan",
+        "replacedBy": "game/public/assets/models/trash-can-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "d004c83db8d4b9a5312aa0f21cb0b2011d34d14a",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/trash-can.glb > game/public/assets/models/trash-can.glb"
+      }
+    }
+  }
 }

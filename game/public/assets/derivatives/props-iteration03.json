@@ -2594,5 +2594,73 @@
       ]
     }
   ],
-  "note": "Native masters stay in reference/tasks/vertical-slice-iteration03-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public."
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration03-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public.",
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/item-chips.glb": {
+        "id": "base:item_chips",
+        "replacedBy": "game/public/assets/models/item-chips-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "00b640eacbb1b4afb8d13b68f5c5d0b8528b7c6e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-chips.glb > game/public/assets/models/item-chips.glb"
+      },
+      "game/public/assets/models/item-chocolate.glb": {
+        "id": "base:item_chocolate",
+        "replacedBy": "game/public/assets/models/item-chocolate-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "937caa77816d6902ce1cafd934fceb8667b280f2",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-chocolate.glb > game/public/assets/models/item-chocolate.glb"
+      },
+      "game/public/assets/models/item-cola.glb": {
+        "id": "base:item_cola",
+        "replacedBy": "game/public/assets/models/item-cola-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "e31a4c390c0dbf358be419d88c25ed779ad7dbae",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-cola.glb > game/public/assets/models/item-cola.glb"
+      },
+      "game/public/assets/models/item-juice.glb": {
+        "id": "base:item_juice",
+        "replacedBy": "game/public/assets/models/item-juice-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "5a430d9ff1097a1299f008323cc505c924d87fe7",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-juice.glb > game/public/assets/models/item-juice.glb"
+      },
+      "game/public/assets/models/item-noodles.glb": {
+        "id": "base:item_noodles",
+        "replacedBy": "game/public/assets/models/item-noodles-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "3cefd6623fcea1c9b7bbf8a14bd33a3be184da36",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-noodles.glb > game/public/assets/models/item-noodles.glb"
+      },
+      "game/public/assets/models/item-water.glb": {
+        "id": "base:item_water",
+        "replacedBy": "game/public/assets/models/item-water-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-items-20261029.json",
+        "restoreBlobSha1": "63850babed84a67b71c72d1502d7c7caf29d914c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-water.glb > game/public/assets/models/item-water.glb"
+      },
+      "game/public/assets/models/shelf.glb": {
+        "id": "base:shelf",
+        "replacedBy": "game/public/assets/models/shelf-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "f00354a8870b3136ea8fadc26f5cd786fbafd620",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shelf.glb > game/public/assets/models/shelf.glb"
+      },
+      "game/public/assets/models/stall.glb": {
+        "id": "base:stall",
+        "replacedBy": "game/public/assets/models/stall-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "80de847ef7e3ebf1381103b273b29288a4de7e82",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/stall.glb > game/public/assets/models/stall.glb"
+      },
+      "game/public/assets/models/vending.glb": {
+        "id": "base:vending",
+        "replacedBy": "game/public/assets/models/vending-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "766b518763e7beb86d242584825ec5daee4e7520",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/vending.glb > game/public/assets/models/vending.glb"
+      }
+    }
+  }
 }

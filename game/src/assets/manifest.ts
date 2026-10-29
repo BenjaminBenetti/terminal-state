@@ -41,52 +41,55 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   outfit_beanie: {url: 'assets/models/outfit-beanie.glb', bytes: 297_000},
   outfit_gasmask: {url: 'assets/models/outfit-gasmask.glb', bytes: 491_000},
   outfit_respirator: {url: 'assets/models/outfit-respirator.glb', bytes: 393_000},
-  creature_ratdog: {url: 'assets/models/creature-ratdog.glb', bytes: 1_240_000}, // iteration 07 Lane Q: new quadruped rig + procedural clips (unapproved)
+  // Meshy T2.5 migration (lane CHARS): rebuilt from the accepted Meshy T2.5 replacement of the same concept image (derivatives/creature-ratdog.json,
+  // meshy-t25-chars-20261029.json); same 25-joint rig contract + procedural clips; creature-ratdog.glb restorable from a7a646a.
+  creature_ratdog: {url: 'assets/models/creature-ratdog-t25.glb', bytes: 897_000},
   // User weapon models (2026-10-28): runtime derivatives of the user-supplied rifle (red-dot sight), pump shotgun and compact
   // pistol. Muzzle -Z, +Y up, metres, Grip/Muzzle/Sight/Eject markers. rifle.glb / rifle-optic.glb / shotgun.glb stay on disk, unused.
   rifle: {url: 'assets/models/rifle-user.glb', bytes: 13_646_000},
   shotgun: {url: 'assets/models/shotgun-user.glb', bytes: 11_392_000},
   pistol: {url: 'assets/models/pistol.glb', bytes: 11_271_000},
-  bench: {url: 'assets/models/bench.glb', bytes: 900_000},
-  // Iteration 04: 894-tri fixture re-baked from the dense master (derivatives/light-lod-iteration04.json) replaces the
-  // iteration-03 sloppy LOD whose triangles spanned unrelated atlas charts (mangled texture). light.glb/light-lod.glb unchanged.
-  light: {url: 'assets/models/light-lod2.glb', bytes: 540_000},
-  cabinetTall: {url: 'assets/models/cabinet-tall.glb', bytes: 900_000},
-  cabinetLow: {url: 'assets/models/cabinet-low.glb', bytes: 900_000},
+  bench: {url: 'assets/models/bench-t25.glb', bytes: 624_000},
+  // Meshy T2.5 replacement (2026-10-29; derivatives/meshy-t25-light-20261029.json): the fixture rebuilt from Meshy T2.5 conditioned
+  // on the original env-light-03 front view; 1.2 m long, top-centre origin (its bbox sizes the fixture material / tubes). The
+  // iteration-04 LOD it replaces is restorable from Git (record.restore); light.glb / light-lod.glb stay unreferenced on disk.
+  light: {url: 'assets/models/light-lod2-t25.glb', bytes: 346_000},
+  cabinetTall: {url: 'assets/models/cabinet-tall-t25.glb', bytes: 446_000},
+  cabinetLow: {url: 'assets/models/cabinet-low-t25.glb', bytes: 650_000},
   sign: {url: 'assets/models/sign.glb', bytes: 300_000},
   // Iteration 02 generated props (derivatives/props-iteration02.json).
-  crate: {url: 'assets/models/crate.glb', bytes: 800_000},
-  turnstile: {url: 'assets/models/turnstile.glb', bytes: 820_000},
+  crate: {url: 'assets/models/crate-t25.glb', bytes: 517_000},
+  turnstile: {url: 'assets/models/turnstile-t25.glb', bytes: 531_000},
   // Iteration 03 generated props/items (derivatives/props-iteration03.json). Front +Z, origin bottom-centre, metres.
-  shelf: {url: 'assets/models/shelf.glb', bytes: 855_000},
-  vending: {url: 'assets/models/vending.glb', bytes: 1_035_000},
-  stall: {url: 'assets/models/stall.glb', bytes: 840_000},
-  item_water: {url: 'assets/models/item-water.glb', bytes: 205_000},
-  item_cola: {url: 'assets/models/item-cola.glb', bytes: 140_000},
-  item_juice: {url: 'assets/models/item-juice.glb', bytes: 145_000},
-  item_chocolate: {url: 'assets/models/item-chocolate.glb', bytes: 120_000},
-  item_chips: {url: 'assets/models/item-chips.glb', bytes: 215_000},
+  shelf: {url: 'assets/models/shelf-t25.glb', bytes: 374_000},
+  vending: {url: 'assets/models/vending-t25.glb', bytes: 317_000},
+  stall: {url: 'assets/models/stall-t25.glb', bytes: 647_000},
+  item_water: {url: 'assets/models/item-water-t25.glb', bytes: 150_000}, // Meshy T2.5 (derivatives/meshy-t25-items-20261029.json)
+  item_cola: {url: 'assets/models/item-cola-t25.glb', bytes: 176_000},
+  item_juice: {url: 'assets/models/item-juice-t25.glb', bytes: 173_000},
+  item_chocolate: {url: 'assets/models/item-chocolate-t25.glb', bytes: 177_000},
+  item_chips: {url: 'assets/models/item-chips-t25.glb', bytes: 171_000},
   item_beans: {url: 'assets/models/item-beans.glb', bytes: 145_000},
-  item_noodles: {url: 'assets/models/item-noodles.glb', bytes: 160_000},
+  item_noodles: {url: 'assets/models/item-noodles-t25.glb', bytes: 184_000},
   // Iteration 04 generated (derivatives/props-iteration04.json; straight-on conditioning images). Front +Z, origin bottom-centre, metres.
   // trashCan 0.55 x 0.95 x 0.55; shopCounter 1.5 x 1.05 x 0.75 (top 1.04); shopBackbar 1.77 x 1.83 x 0.70 (worktop 0.86);
   // shopCooler 0.75 x 2.0 x 0.75; shopDisplay 1.1 x 0.70 x 0.62 countertop unit (sits on shopCounter).
-  trashCan: {url: 'assets/models/trash-can.glb', bytes: 666_000},
-  shopCounter: {url: 'assets/models/shop-counter.glb', bytes: 743_000},
-  shopBackbar: {url: 'assets/models/shop-backbar.glb', bytes: 933_000},
+  trashCan: {url: 'assets/models/trash-can-t25.glb', bytes: 396_000}, // Meshy T2.5 (derivatives/meshy-t25-props-20261029.json; same 0.55 x 0.95 x 0.55 fit)
+  shopCounter: {url: 'assets/models/shop-counter-t25.glb', bytes: 459_000},
+  shopBackbar: {url: 'assets/models/shop-backbar-t25.glb', bytes: 510_000},
   // Iteration 05 (Lane A; derivatives/props-iteration05.json): open-front hybrids — no stock picture / opaque pane; transparent glass node
   // 'glass', authored interior + real wire shelves/trays (same bbox). shop-cooler.glb / shop-display.glb stay unchanged on disk.
-  shopCooler: {url: 'assets/models/shop-cooler-open.glb', bytes: 649_000},
-  shopDisplay: {url: 'assets/models/shop-display-open.glb', bytes: 654_000},
+  shopCooler: {url: 'assets/models/shop-cooler-open-t25.glb', bytes: 279_000},
+  shopDisplay: {url: 'assets/models/shop-display-open-t25.glb', bytes: 141_000},
   // Iteration 05 purpose-specific props (Lane A; derivatives/props-iteration05.json; straight-on inputs). Front +Z, origin bottom-centre, metres.
   // (generated, not loaded in r5: authored loot-verified version used; see iteration05 REPORT) hotdogCart 1.72 x 1.19 x 0.80 (work top 0.93; steam-well lids to 1.19; wheel -X, handle +X).
   // hotdogCart: {url: 'assets/models/hotdog-cart.glb', bytes: 800_000},
   // janitorCart 1.42 x 1.34 x 0.55 (cart top 0.87; open compartment shelves ~0.20 / ~0.51 hold baked bottles; bag caddy -X, mop bucket +X).
-  janitorCart: {url: 'assets/models/janitor-cart.glb', bytes: 879_000},
+  janitorCart: {url: 'assets/models/janitor-cart-t25.glb', bytes: 649_000},
   // magazineRack 0.99 x 1.40 x 0.45 (slanted wire-lipped tiers ~0.38 / 0.61 / 0.87 / 1.14, newspaper bin floor 0.055; baked magazines).
   magazineRack: {url: 'assets/models/magazine-rack.glb', bytes: 783_000},
   // techDisplay 1.10 x 2.00 x 0.58 (cabinet deck 0.86 with baked phones/tablets at the front; narrow shelf 1.25; dark screen at the top).
-  techDisplay: {url: 'assets/models/tech-display.glb', bytes: 793_000},
+  techDisplay: {url: 'assets/models/tech-display-t25.glb', bytes: 501_000},
   // (generated, not loaded in r5: authored loot-verified version used; see iteration05 REPORT) gunLocker 0.95 x 1.90 x 0.50 open-front weapons rack cabinet (EMPTY rack: floor 0.415, notched butt rest top 0.55, barrel brackets ~1.27-1.37; top shelf 1.53 with baked ammo cans).
   // gunLocker: {url: 'assets/models/gun-locker.glb', bytes: 850_000},
 };

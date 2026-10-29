@@ -11,6 +11,7 @@ import {ARCH_INDEX, CATEGORY_STOCK, STOCK_ARCHES, type StockLook} from '../src/w
 import {AGE, ageColor, ageRGB, archGeometry, atlasLayout, disposeStockAssets, stockMaterial} from '../src/world/shelfStockGeometry';
 import {FILLER_TINT, ShelfStock} from '../src/world/shelfStock';
 import {ITEMS} from '../src/items/items';
+import {MODEL_FILES, type ModelKey} from '../src/assets/manifest';
 
 const SEEDS = [9001, 424242, 24839];
 const sat = (r: number, g: number, b: number) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx <= 0 ? 0 : (mx - mn) / mx; };
@@ -118,11 +119,11 @@ describe('aged and tarnished print, colours and materials (the real loot stays f
         }
       }
       const filler = s / n;
-      // the real loot items' base-colour textures (generated item models, public/assets/models/item-*.glb)
+      // the real loot items' base-colour textures (generated item models: the manifest's item_* files)
       let rs = 0, rn = 0;
       const io = new NodeIO();
-      for (const f of ['item-water', 'item-cola', 'item-juice', 'item-chocolate', 'item-chips', 'item-beans', 'item-noodles']) {
-        const doc = await io.read(fileURLToPath(new URL(`../public/assets/models/${f}.glb`, import.meta.url)));
+      for (const f of ['water', 'cola', 'juice', 'chocolate', 'chips', 'beans', 'noodles']) {
+        const doc = await io.read(fileURLToPath(new URL(`../public/${MODEL_FILES[`item_${f}` as ModelKey].url}`, import.meta.url)));
         const tex = doc.getRoot().listMaterials()[0].getBaseColorTexture()!;
         const {data, info} = await sharp(Buffer.from(tex.getImage()!)).resize(128, 128, {fit: 'fill'}).removeAlpha().raw().toBuffer({resolveWithObject: true});
         for (let i = 0; i < info.width * info.height * 3; i += 3) { rs += sat(data[i], data[i + 1], data[i + 2]); rn++; }

@@ -38,6 +38,8 @@ const PROV_PATH = path.join(GAME, 'public/assets/derivatives/props-iteration07.j
 type Out = {key: string; output: string; sha256: string; bytes: number; mode: 'SV' | 'MV'; sizeClass: 'small' | 'medium' | 'large'; triangles: number;
   textures: {baseColor: {size: number[]}; metallicRoughness: {size: number[]}; normal: {size: number[]}};
   source: {nativeJobId: string | null; sha256: string; reviewStatus: string; gameReady: boolean}; dimensionsMeters: {measured: {w: number; h: number; d: number}}};
+const T25_PATH = path.join(GAME, 'public/assets/derivatives/meshy-t25-props-20261029.json');
+const T25 = fs.existsSync(T25_PATH) ? JSON.parse(fs.readFileSync(T25_PATH, 'utf8')) as {records: {p7Key?: string; output: {url: string; sha256: string; bytes: number; triangles: number}; restore: {path: string}}[]} : {records: []};
 const PROV = fs.existsSync(PROV_PATH) ? JSON.parse(fs.readFileSync(PROV_PATH, 'utf8')) as {outputs: Out[]; budgets: Record<string, {tris: number; atlas: number; bytes: number}>} : {outputs: [] as Out[], budgets: {}};
 const MODELS = P7_MODELS as Record<string, {url: string; bytes: number; w: number; h: number; d: number; tris: number; tex: number; mode: string}>;
 const SPECS = P7_SPECS as Record<string, {uses: readonly {in: readonly string[]; at: string; on?: readonly string[]}[]}>;
@@ -55,6 +57,24 @@ describe('iteration07 props: catalog, provenance, registry agree', () => {
     expect(Object.keys(MODELS).sort()).toEqual(PROV.outputs.map(o => o.key).sort());
     for (const o of PROV.outputs) {
       const m = MODELS[o.key];
+      if (m.mode === 'T25') {
+        // Meshy T2.5 replacement (2026-10-29): the row is the T2.5 derivative's (meshy-t25-props-20261029.json), same footprint and
+        // size-class budgets as the iteration-07 record it supersedes (whose file is restorable from Git: record.restore).
+        const t = T25.records.find(r => r.p7Key === o.key);
+        expect(t, `${o.key} T2.5 record`).toBeTruthy();
+        const file = path.join(GAME, 'public', m.url);
+        expect(m.url, o.key).toBe(t!.output.url);
+        expect(sha(file), o.key).toBe(t!.output.sha256);
+        expect(fs.statSync(file).size, o.key).toBe(t!.output.bytes);
+        expect(m.bytes).toBe(t!.output.bytes);
+        expect([m.w, m.h, m.d]).toEqual([o.dimensionsMeters.measured.w, o.dimensionsMeters.measured.h, o.dimensionsMeters.measured.d]);
+        const b = PROV.budgets[o.sizeClass];
+        expect(t!.output.triangles, o.key).toBeLessThanOrEqual(b.tris);
+        expect(t!.output.bytes, o.key).toBeLessThanOrEqual(b.bytes);
+        expect(m.tex).toBe(b.atlas);
+        expect(t!.restore.path).toBe(o.output);
+        continue;
+      }
       const file = path.join(GAME, 'public', m.url);
       expect(m.url, o.key).toBe(o.output.replace(/^game\/public\//, ''));
       expect(fs.existsSync(file), o.key).toBe(true);

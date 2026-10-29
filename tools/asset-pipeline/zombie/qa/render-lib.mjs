@@ -109,7 +109,7 @@ export function renderLook(body, wear, {clip = null, t = 0, yaw = 0, W = 220, H 
     if (!v) throw new Error(`no ${o.extras.id} variant for ${body.extras.id}`);
     if (v.extras.bodyGeometryHash !== body.extras.geometryHash) throw new Error(`mask/body hash mismatch ${o.extras.id} x ${body.extras.id}`);
   }
-  const cam = {yawDeg: yaw, cx: frame?.cx ?? 0, cy: frame?.cy ?? 0.92, cz: 0, height: frame?.h ?? 2.0};
+  const cam = {yawDeg: yaw, cx: frame?.cx ?? 0, cy: frame?.cy ?? 0.92, cz: frame?.cz ?? 0, height: frame?.h ?? 2.0};
   if (!noBody) c.draw({pos: skinMesh(body.mesh, body, world), idx: maskedIndex(body.mesh.idx, worn.map(w => w.v.extras.hideBodyTriangles)), uv: body.mesh.uv, tex: body.tex, cullBack}, cam);
   for (const {o, v} of worn.sort((a, b) => (LAYER[a.o.extras.slot] ?? 2) - (LAYER[b.o.extras.slot] ?? 2))) {
     const over = worn.filter(w => w !== undefined && w.o !== o).map(w => w.v.extras.hideWear?.[o.extras.id]).filter(Boolean);

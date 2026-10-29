@@ -160,5 +160,17 @@
     "Source is an unapproved AI reconstruction; inferred hidden surfaces. Prototype derivative, not approved art, no license clearance asserted.",
     "Simplified from 979562 to 894 triangles (max error ~6.8 mm); small fasteners/strap relief survive only in the baked normal/colour maps.",
     "Provisional 1.2 m length chosen in iteration 01, not measured/approved."
-  ]
+  ],
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/light-lod2.glb": {
+        "id": "base:light",
+        "replacedBy": "game/public/assets/models/light-lod2-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-light-20261029.json",
+        "restoreBlobSha1": "dc4af79c296905beee612e823d73eb222c4b4807",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/light-lod2.glb > game/public/assets/models/light-lod2.glb"
+      }
+    }
+  }
 }

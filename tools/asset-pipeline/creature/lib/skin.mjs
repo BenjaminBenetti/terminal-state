@@ -9,7 +9,7 @@
 //     line in front of the hinge; tail by geodesic distance along the actual curl.
 //  3. masked Laplacian smoothing (a vertex never gains bones outside its region set), top-4, normalised.
 import {JOINT_NAMES} from './skeleton.mjs';
-import {vertexAdjacency} from '../../zombie/lib/mesh.mjs';
+import {vertexAdjacency, components} from '../../zombie/lib/mesh.mjs';
 import {geodesic} from './landmarks.mjs';
 
 const JI = Object.fromEntries(JOINT_NAMES.map((n, i) => [n, i]));
@@ -55,7 +55,12 @@ function chainWeights(bones, lengths, s, h) {
  * @param skel {joints, ends, measures}
  */
 export function computeQuadrupedWeights(mesh, skel, opts = {}) {
-  const {smoothIters = 4, smoothLambda = 0.5, legRatio = 0.55, jointBlend = 0.025} = opts;
+  // seedRadius (Meshy T2.5 migration): flood each leg from EVERY vertex within this distance of its foot -> toe segment
+  // (low-poly sources carry claws / toes as separate mesh pieces, so the single vertex nearest the toe tip can sit on an
+  // isolated claw and the flood never reaches the leg); 0 = the iteration-07 single nearest-vertex seed
+  // islands (Meshy T2.5 migration): every small disconnected mesh piece (claws, toes, whiskers of a low-poly source) takes
+  // the region of the nearest vertex of the main body, so it moves with the paw / snout it belongs to (default off)
+  const {smoothIters = 4, smoothLambda = 0.5, legRatio = 0.55, jointBlend = 0.025, seedRadius = 0, islands = false} = opts;
   const P = mesh.pos, n = P.length / 3, J = skel.joints, E = skel.ends, M = skel.measures;
   const p = i => [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]];
   const {offs, adj} = vertexAdjacency(n, mesh.idx);
@@ -76,6 +81,10 @@ export function computeQuadrupedWeights(mesh, skel, opts = {}) {
     let seed = -1, bd = Infinity;
     for (let i = 0; i < n; i++) { const d = len(sub(p(i), E[leg + 'Foot'])); if (d < bd) { bd = d; seed = i; } }
     const stack = [seed], seen = new Uint8Array(n); seen[seed] = 1;
+    if (seedRadius > 0) {
+      const foot = [J[leg + 'Foot'], E[leg + 'Foot']], yMax = J[leg + 'Foot'][1] + 0.03;
+      for (let i = 0; i < n; i++) if (!seen[i] && region[i] === REG.torso && P[i * 3 + 1] < yMax && onPolyline(p(i), foot).dist < seedRadius && ok(i)) { seen[i] = 1; stack.push(i); }
+    }
     let count = 0;
     while (stack.length) {
       const v = stack.pop();
@@ -84,6 +93,27 @@ export function computeQuadrupedWeights(mesh, skel, opts = {}) {
       for (let k = offs[v]; k < offs[v + 1]; k++) { const u = adj[k]; if (!seen[u] && ok(u)) { seen[u] = 1; stack.push(u); } }
     }
     legInfo[leg] = {chain, count, lengths: chain.slice(0, -1).map((a, i) => len(sub(chain[i + 1], a)))};
+  }
+  let islandStats = null;
+  if (islands) {
+    const {label, sizes} = components(n, mesh.idx);
+    let main = -1, best = -1;
+    for (const [r, c] of sizes) if (c > best) { best = c; main = r; }
+    const mainIds = [];
+    for (let i = 0; i < n; i++) if (label[i] === main) mainIds.push(i);
+    const byComp = new Map();
+    for (let i = 0; i < n; i++) if (label[i] !== main) { let l = byComp.get(label[i]); if (!l) byComp.set(label[i], (l = [])); l.push(i); }
+    islandStats = {pieces: byComp.size, vertices: 0, regions: {}};
+    for (const ids of byComp.values()) {
+      // nearest main-body vertex to the piece (over all its vertices)
+      let bi = -1, bd = Infinity;
+      for (const i of ids) for (const j of mainIds) { const dx = P[i * 3] - P[j * 3], dy = P[i * 3 + 1] - P[j * 3 + 1], dz = P[i * 3 + 2] - P[j * 3 + 2], d = dx * dx + dy * dy + dz * dz; if (d < bd) { bd = d; bi = j; } }
+      for (const i of ids) region[i] = region[bi];
+      islandStats.vertices += ids.length;
+      const key = Object.keys(REG).find(k => REG[k] === region[bi]);
+      islandStats.regions[key] = (islandStats.regions[key] ?? 0) + 1;
+    }
+    for (const leg of Object.keys(legInfo)) legInfo[leg].count = region.reduce((a, r) => a + (r === REG[leg]), 0);
   }
   // ---- tail: connected vertices behind the rump end, geodesic from the root ring -------------
   const rootZ = J.Tail1[2] + 0.02;
@@ -178,5 +208,5 @@ export function computeQuadrupedWeights(mesh, skel, opts = {}) {
     top.forEach(([b, w], k) => { joints[i * 4 + k] = b; weights[i * 4 + k] = w / s; });
   }
   const regionCounts = Object.fromEntries(Object.entries(REG).map(([k, v]) => [k, region.reduce((a, r) => a + (r === v ? 1 : 0), 0)]));
-  return {joints, weights, region, stats: {method: 'region flood (legs from the toe, tail by geodesic distance) + chain weights with smooth joint blends + masked Laplacian smoothing, top-4', regionCounts, legRatio, jointBlend, smoothIters, smoothLambda, maxInfluences: maxInfl, tailJointGeodesicM: jd.map(v => +v.toFixed(3))}};
+  return {joints, weights, region, stats: {method: 'region flood (legs from the toe, tail by geodesic distance) + chain weights with smooth joint blends + masked Laplacian smoothing, top-4', regionCounts, legRatio, jointBlend, smoothIters, smoothLambda, maxInfluences: maxInfl, tailJointGeodesicM: jd.map(v => +v.toFixed(3)), ...(seedRadius ? {legSeedRadiusM: seedRadius} : {}), ...(islandStats ? {islands: islandStats} : {})}};
 }

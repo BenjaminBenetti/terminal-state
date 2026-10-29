@@ -10,8 +10,14 @@ import {ContainerManager} from '../../src/world/containers';
 import {placementBox} from '../../src/items/lootLayout';
 import {ShelfStock} from '../../src/world/shelfStock';
 import type {OBB, V3} from '../../src/world/shelfStockLayout';
+import {MODEL_FILES} from '../../src/assets/manifest';
 
 const cache = new Map<string, Promise<GLTF>>();
+/**
+ * Logical model files the shelf-stock tests ask for by their historical name -> the LIVE runtime file of that manifest key
+ * (Meshy T2.5 replacement 2026-10-29: shelf.glb -> shelf-t25.glb, tech-display.glb -> tech-display-t25.glb).
+ */
+const LIVE: Record<string, string> = {'shelf.glb': MODEL_FILES.shelf.url, 'tech-display.glb': MODEL_FILES.techDisplay.url};
 
 /** A model from public/assets/models (geometry only; textures disposed so Node can parse it). */
 export function loadModel(file: string): Promise<GLTF> {
@@ -19,7 +25,8 @@ export function loadModel(file: string): Promise<GLTF> {
   if (!p) {
     p = (async () => {
       const io = new NodeIO();
-      const doc = await io.read(fileURLToPath(new URL(`../../public/assets/models/${file}`, import.meta.url)));
+      const rel = LIVE[file] ?? `assets/models/${file}`;
+      const doc = await io.read(fileURLToPath(new URL(`../../public/${rel}`, import.meta.url)));
       for (const t of doc.getRoot().listTextures()) t.dispose();
       const bin = await io.writeBinary(doc);
       return new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));

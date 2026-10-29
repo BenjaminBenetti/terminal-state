@@ -9,12 +9,15 @@ import {loadSource} from '../../zombie/lib/source.mjs';
 import {weldByPosition} from '../../zombie/lib/mesh.mjs';
 import {Canvas} from '../../zombie/lib/raster.mjs';
 import {MASTER} from '../lib/master.mjs';
+import {t25Source, loadAnySource} from '../../zombie/lib/t25.mjs';
 import {quadrupedPlacement} from '../lib/placement.mjs';
 import {detectQuadruped} from '../lib/landmarks.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')));
 const OUT = args.out || '/tmp/ll-creature/skeleton.png';
-const m = await loadSource(MASTER);
+// --t25: the pinned Meshy T2.5 source of build-creature.mjs (densified), instead of the legacy Pixal3D master
+const T25 = {asset: 'creature:ratdog', attempt: 'a1', sha256: '62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b', densifyFrac: 0.009};
+const m = args.t25 ? await loadAnySource(t25Source(T25.asset, T25, T25.densifyFrac)) : await loadSource(MASTER);
 const pl = quadrupedPlacement(m.pos, {topHeight: +(args.top || 0.64)});
 console.log(JSON.stringify(pl.report()));
 const pos = pl.apply(m.pos), nrm = pl.applyNormals(m.nrm);

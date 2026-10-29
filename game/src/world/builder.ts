@@ -532,7 +532,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Generated turnstile: kept at its derivative scale (arms are visual only). Its origin is the
   // bounding-box centre including the arms, so shift the cabinet (x 0.142..0.459, z -0.478..0.502
   // per derivatives/props-iteration02.json) onto the collision footprint.
-  const TURNSTILE_CABINET_OFFSET = new THREE.Matrix4().makeTranslation(-0.3005, 0, -0.012);
+  // Centres the turnstile CABINET (not the arms) on the fare-gate placement: turnstile-t25.glb cabinet top x 0.17..0.45, z +-0.49
+  // (Meshy T2.5, 2026-10-29; iteration 02: -0.3005, 0, -0.012).
+  const TURNSTILE_CABINET_OFFSET = new THREE.Matrix4().makeTranslation(-0.31, 0, 0);
   const placeM = (p: PropPlacement) => new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
   for (const [kind, list] of byKind) {
     // Cabinets and crates are searchable containers: built and animated by world/containers.ts.

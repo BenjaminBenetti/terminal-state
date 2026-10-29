@@ -119,7 +119,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
   zombie: {id: 'zombie', label: 'Infected', model: null, stats: null, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.6,
     source: 'zombie wardrobe registry (ai/outfits.ts); stats ZOMBIE_STATS by shambler / coated type'},
   ratdog: {id: 'ratdog', label: 'Tunnel scavenger (rat/dog)', model: 'creature_ratdog', stats: RATDOG_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.35,
-    source: 'Field Notes core asset quadruped-02 -> derivative creature-ratdog.glb (new rig + procedural clips)'},
+    source: 'Field Notes core asset quadruped-02 concept -> Meshy T2.5 replacement -> derivative creature-ratdog-t25.glb (new rig + procedural clips)'},
 };
 
 /**

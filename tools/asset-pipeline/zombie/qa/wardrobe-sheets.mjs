@@ -10,15 +10,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {REPO} from '../lib/master.mjs';
 import {loadBody, loadWearable, renderLook, sheet} from './render-lib.mjs';
+import {liveModelFiles} from '../lib/live-files.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, ...v]) => [k, v.length ? v.join('=') : true]));
 const MODELS = path.resolve(REPO, args.models || 'game/public/assets/models');
 const OUT = path.resolve(REPO, args.out || 'qa-artifacts/iter06-zombies');
 fs.mkdirSync(OUT, {recursive: true});
-const files = fs.readdirSync(MODELS);
+// T2.5 migration: the LIVE file per id (runtime manifest / -t25 in dev dirs), not every file matching the pattern
+const live = liveModelFiles(MODELS);
 const bodies = [], wear = [];
-for (const f of files.filter(f => /^zombie-body-.+\.glb$/.test(f)).sort()) bodies.push(await loadBody(path.join(MODELS, f)));
-for (const f of files.filter(f => /^outfit-.+\.glb$/.test(f)).sort()) wear.push(await loadWearable(path.join(MODELS, f)));
+for (const f of Object.values(live.bodies).sort()) bodies.push(await loadBody(f));
+for (const f of Object.values(live.wearables).sort()) { const w = await loadWearable(f); if (Object.keys(w.variants).length) wear.push(w); }
 const BORDER = ['lastshift', 'courier', 'agent', 'scavenger', 'heavyset', 'tall'];
 bodies.sort((a, b) => (BORDER.indexOf(a.extras.id) + 1 || 99) - (BORDER.indexOf(b.extras.id) + 1 || 99));
 const SORDER = ['upper', 'lower', 'head', 'face'];

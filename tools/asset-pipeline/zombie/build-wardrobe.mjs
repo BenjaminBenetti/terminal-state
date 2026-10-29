@@ -21,12 +21,18 @@
 // Writes ONLY game/public/assets/models/{zombie-body,outfit}-<id>.glb and
 // game/public/assets/derivatives/{zombie-body-<id>,outfit-<id>,zombie-wardrobe,zombie-variants}.json.
 // Sources (masters / native outputs) are read-only and sha256-verified before and after.
+// Meshy T2.5 migration (2026-10-29, lane CHARS): bodies / wearables pinned in wardrobe.config.mjs T25 are built from
+// the accepted Meshy T2.5 native GLB (lib/t25.mjs: densified, same stages); rebuilt files get the '-t25' suffix
+// (new URLs; derivative JSON names unchanged), KEEP_BODY_FILES bodies are verified but not rewritten, SKIP_WEARABLES
+// are left out. LL_THREADS=N caps worker threads (1-CPU pod); --reuse also caches per-pair fit results.
 import fs from 'node:fs';
+import os from 'node:os';
+import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import v8 from 'node:v8';
 import {REPO, sha256File} from './lib/master.mjs';
-import {loadSource} from './lib/source.mjs';
+import {loadAnySource as loadSource, t25LoaderHash, restoreRecord, T25_TASK, T25_SUFFIX} from './lib/t25.mjs';
 import {bodyStage, bodySkin, bodyProfile, spreadWeights, rigFor, trimArmTorsoBridges} from './lib/autorig.mjs';
 import {garmentCanonical} from './lib/garment.mjs';
 import {pantsStage} from './lib/pants.mjs';
@@ -45,7 +51,17 @@ import {Document} from '@gltf-transform/core';
 import {JOINTS} from './lib/skeleton.mjs';
 import {JOINT_NAMES} from './lib/skin.mjs';
 import {CLIP_SPECS} from './lib/clips.mjs';
-import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07} from './wardrobe.config.mjs';
+import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07, KEEP_BODY_FILES, SKIP_WEARABLES} from './wardrobe.config.mjs';
+import {KHRMeshQuantization} from '@gltf-transform/extensions';
+import {NodeIO} from '@gltf-transform/core';
+
+// 1-CPU pod: bake.mjs sizes its worker pool from os.cpus() (the host's 48 cores); LL_THREADS caps it without
+// touching the stage code (its hash keys the stage cache)
+if (+process.env.LL_THREADS > 0) { const cpus = os.cpus; os.cpus = () => cpus().slice(0, +process.env.LL_THREADS); }
+/** Stage-cache identity of a source: T2.5 sources add the loader (densify) hash and density. */
+const srcKey = src => (src.t25 ? `${src.sha256}|t25:${t25LoaderHash()}|${src.densifyFrac}` : src.sha256);
+const git = args => execFileSync('git', ['-C', REPO, ...args], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']});
+const T25_TAG = src => src.t25 ? ` + Meshy T2.5 replacement ${src.t25.asset} ${src.t25.attempt} (task ${src.t25.taskId}; ${T25_TASK})` : '';
 
 const ARGS = new Set(process.argv.slice(2));
 const OPT = Object.fromEntries(process.argv.slice(2).filter(a => a.includes('=')).map(a => a.replace(/^--/, '').split('=')));
@@ -61,7 +77,7 @@ const SLOT_ORDER = ['lower', 'upper', 'face', 'head'];
 function guard(file) {
   if (OUT_ROOT) { if (!path.resolve(file).startsWith(OUT_ROOT + path.sep)) throw new Error('dev output outside --out: ' + file); return file; }
   const rel = path.relative(REPO, path.resolve(file));
-  const ok = /^game\/public\/assets\/models\/(zombie-body|outfit)-[a-z0-9]+\.glb$/.test(rel) || /^game\/public\/assets\/derivatives\/(zombie-body-[a-z0-9]+|outfit-[a-z0-9]+|zombie-wardrobe|zombie-variants)\.json$/.test(rel);
+  const ok = /^game\/public\/assets\/models\/(zombie-body|outfit)-[a-z0-9]+(-t25)?\.glb$/.test(rel) || /^game\/public\/assets\/derivatives\/(zombie-body-[a-z0-9]+|outfit-[a-z0-9]+|zombie-wardrobe|zombie-variants)\.json$/.test(rel);
   if (!ok) throw new Error('refusing to write outside the wardrobe derivative outputs: ' + rel);
   return file;
 }
@@ -101,7 +117,7 @@ async function main() {
     const opts = cfgOf(def);
     // stage cache key: only what the mesh/bake stage depends on (labels, traits, weights, skin overrides excluded)
     const stageKey = Object.fromEntries(['heightM', 'targetTris', 'importance', 'unwrap', 'density', 'bake', 'textures', 'facing', 'repose'].map(k => [k, opts[k] ?? null]));
-    const stage = await makeCache({src: src.sha256, stageKey})('body-' + def.id, async () => {
+    const stage = await makeCache({src: srcKey(src), stageKey})('body-' + def.id, async () => {
       const m = await loadSource(src);
       const r = def.repose === 'T' ? reposeTtoA(m) : m;
       const st = await bodyStage(r, opts);
@@ -136,6 +152,8 @@ async function main() {
   const wear = [];
   for (const def of WEARABLES) {
     if (onlyW && !onlyW.has(def.id)) continue;
+    const skip = SKIP_WEARABLES.find(x => x.id === def.id);
+    if (skip) { skipped.wearables.push({id: def.id, slot: def.slot, reason: skip.reason}); console.log(`[${def.slot} ${def.id}] skipped: ${skip.reason}`); continue; }
     const src = def.source();
     if (!src) { skipped.wearables.push({id: def.id, slot: def.slot, reason: 'source not available yet'}); console.log(`[${def.slot} ${def.id}] skipped: no source`); continue; }
     sources.push(src);
@@ -143,11 +161,11 @@ async function main() {
     const cfg = cfgOf(def);
     let g;
     if (def.kind === 'garment') {
-      g = await garmentCanonical(() => loadSource(src), cfg, {skel: C.skel, rigDesc: C.rigDesc, welded: C.low.welded, weights: C.weldedWeights}, makeCache({src: src.sha256, cfg, canonical: geometryHash(C.low.pos, C.low.idx)}), SKIN);
+      g = await garmentCanonical(() => loadSource(src), cfg, {skel: C.skel, rigDesc: C.rigDesc, welded: C.low.welded, weights: C.weldedWeights}, makeCache({src: srcKey(src), cfg, canonical: geometryHash(C.low.pos, C.low.idx)}), SKIN);
       console.log('  fit', JSON.stringify(g.fit.scale), 'sleeved', g.garment.sleeved, 'tris', g.low.idx.length / 3);
     } else {
       const stageCfg = {targetTris: cfg.targetTris, unwrap: cfg.unwrap, bake: cfg.bake, textures: cfg.textures, facing: cfg.facing, trimBehind: cfg.trimBehind};
-      g = await makeCache({src: src.sha256, stageCfg})(`${def.kind}-${def.id}`, async () => (def.kind === 'pants' ? pantsStage : rigidStage)(await loadSource(src), stageCfg));
+      g = await makeCache({src: srcKey(src), stageCfg})(`${def.kind}-${def.id}`, async () => (def.kind === 'pants' ? pantsStage : rigidStage)(await loadSource(src), stageCfg));
       console.log('  stage tris', g.low.idx.length / 3, g.frameSummary ? JSON.stringify(g.frameSummary) : '');
     }
     wear.push({id: def.id, def, cfg, src, g});
@@ -178,7 +196,7 @@ async function main() {
         }});
       }
     }
-    await fitVariantsParallel(jobs);
+    await fitVariantsParallel(jobs, {cacheDir: ARGS.has('--reuse') ? path.join(TMP, 'fit-cache') : null});
   };
   // lower-garment collision proxy per body: fitted pants triangles above the crotch (welded)
   const lowerCollision = B => {
@@ -297,14 +315,29 @@ async function main() {
       }
     }
     const extras = {id: B.id, label: B.def.label, heightM: r4(B.skel.H), hit: B.profile.hit, bodyTriangles: B.low.idx.length / 3, geometryHash: geometryHash(B.low.pos, B.low.idx),
-      clips: Object.keys(CLIP_SPECS), traits: B.def.traits ?? {}, provenance: B.def.provenance, approved: false, gameReady: false, origin: B.def.origin};
+      clips: Object.keys(CLIP_SPECS), traits: B.def.traits ?? {}, provenance: provenanceOf(B), approved: false, gameReady: false, origin: originOf(B)};
     const doc = buildBodyDocument({id: B.id, skel: B.skel, mesh: {pos: B.low.pos, nrm: B.low.nrm, uv: B.low.uv, idx: B.low.idx, joints: B.joints, weights: B.weights, baseColor: B.stage.enc.baseJpg, metallicRoughness: B.stage.enc.mrJpg}, clips, extras, generator: GENERATOR, quantizeNormals: true});
-    const glb = guard(path.join(MODELS, `zombie-body-${B.id}.glb`));
+    // T2.5 migration: every CHANGED runtime file gets a new (-t25) URL; a rebuild that is byte-identical to the shipped
+    // legacy file keeps that file (not rewritten). KEEP_BODY_FILES bodies (no T2.5 replacement) must also keep their
+    // geometry exactly (every wearable variant fitted here indexes it).
+    const legacyBody = path.join(REPO, 'game/public/assets/models', `zombie-body-${B.id}.glb`);
+    if (KEEP_BODY_FILES.includes(B.id)) {
+      const ex = await shippedBodyExtras(legacyBody);
+      if (ex.geometryHash !== extras.geometryHash) throw new Error(`kept body ${B.id}: rebuilt geometry ${extras.geometryHash} != shipped ${ex.geometryHash} (${path.relative(REPO, legacyBody)})`);
+    }
+    if (!B.src.t25 && await sameAsShipped(doc, legacyBody)) {
+      if (OUT_ROOT) fs.copyFileSync(legacyBody, path.join(MODELS, path.basename(legacyBody)));
+      const bytes = fs.statSync(legacyBody).size, sha = sha256File(legacyBody);
+      summary.bodies[B.id] = {glb: path.relative(REPO, legacyBody), kept: true, bytes, sha256: sha, triangles: extras.bodyTriangles, vertices: B.low.pos.length / 3, heightM: extras.heightM, hit: B.profile.hit, traits: extras.traits, provenance: B.def.provenance, skeletonIssues: B.stage.issues, lowestSkinnedVertexM: +worst.toFixed(4), motion: audit.body};
+      console.log(`  KEPT ${path.relative(REPO, legacyBody)} (rebuild byte-identical; not rewritten)`);
+      continue;
+    }
+    const glb = guard(path.join(MODELS, `zombie-body-${B.id}${T25_SUFFIX}.glb`));
     await writeDoc(doc, glb);
     const bytes = fs.statSync(glb).size, sha = sha256File(glb);
-    const manifest = bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit: audit.body});
+    const manifest = bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit: audit.body, t25: await t25Block(B.src, `game/public/assets/models/zombie-body-${B.id}.glb`, glb)});
     fs.writeFileSync(guard(path.join(DERIV, `zombie-body-${B.id}.json`)), JSON.stringify(manifest, null, 2) + '\n');
-    summary.bodies[B.id] = {glb: rel(glb), bytes, sha256: sha, triangles: extras.bodyTriangles, vertices: B.low.pos.length / 3, heightM: extras.heightM, hit: B.profile.hit, traits: extras.traits, provenance: B.def.provenance, skeletonIssues: B.stage.issues, lowestSkinnedVertexM: +worst.toFixed(4), motion: audit.body};
+    summary.bodies[B.id] = {glb: rel(glb), bytes, sha256: sha, triangles: extras.bodyTriangles, vertices: B.low.pos.length / 3, heightM: extras.heightM, hit: B.profile.hit, traits: extras.traits, provenance: provenanceOf(B), t25Source: !!B.src.t25, skeletonIssues: B.stage.issues, lowestSkinnedVertexM: +worst.toFixed(4), motion: audit.body};
     console.log(`  wrote ${rel(glb)} ${bytes} bytes`);
   }
   // ---------------------------------------------------------------- wearable GLBs
@@ -317,10 +350,10 @@ async function main() {
       const doc = new Document();
       doc.getRoot().getAsset().generator = GENERATOR;
       doc.createScene('Outfit_' + w.id).setExtras({zombieWearable: {id: w.id, label: w.def.label, slot: w.def.slot, kind: w.def.kind, bodies: [], excludedOnEveryBody: true, approved: false, gameReady: false}});
-      const glb = guard(path.join(MODELS, `outfit-${w.id}.glb`));
+      const glb = guard(path.join(MODELS, `outfit-${w.id}${T25_SUFFIX}.glb`));
       await writeDoc(doc, glb);
       const bytes = fs.statSync(glb).size, sha = sha256File(glb);
-      fs.writeFileSync(guard(path.join(DERIV, `outfit-${w.id}.json`)), JSON.stringify({schema: 'the-last-line/derivative-manifest@1', asset: 'outfit-' + w.id, title: `Zombie wearable "${w.def.label}" (${w.def.slot}) - EXCLUDED on every body (iteration 07 fit gate)`, status: STATUS, origin: w.def.origin, provenance: w.def.provenance, slot: w.def.slot, kind: w.def.kind,
+      fs.writeFileSync(guard(path.join(DERIV, `outfit-${w.id}.json`)), JSON.stringify({schema: 'the-last-line/derivative-manifest@1', asset: 'outfit-' + w.id, title: `Zombie wearable "${w.def.label}" (${w.def.slot}) - EXCLUDED on every body (iteration 07 fit gate)`, status: STATUS, origin: originOf(w), provenance: provenanceOf(w), slot: w.def.slot, kind: w.def.kind, t25: await t25Block(w.src, `game/public/assets/models/outfit-${w.id}.glb`, glb),
         outputs: {glb: {path: rel(glb), bytes, sha256: sha, format: 'inert glTF 2.0 binary: scene extras only, no meshes / textures (not in the runtime manifest)'}}, source: srcInfo(w.src, w.g.master), perBody: {}, excludedOnEveryBody: reasons}, null, 2) + '\n');
       summary.wearables[w.id] = {slot: w.def.slot, kind: w.def.kind, glb: rel(glb), bytes, sha256: sha, triangles: 0, excludedOnEveryBody: true, bodies: []};
       console.log(`  wrote INERT ${rel(glb)} (excluded on every body)`);
@@ -334,13 +367,21 @@ async function main() {
       return {bodyId: B.id, skel: B.skel, pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights,
         extras: {outfit: w.id, slot: w.def.slot, body: B.id, bodyTriangles: B.low.idx.length / 3, bodyGeometryHash: geometryHash(B.low.pos, B.low.idx), hideBodyTriangles: bitsetBase64(v.mask.hide), hiddenCount: v.mask.hidden, bulkM: v.stats.bulkM, ...(ex.hideWear ? {hideWear: ex.hideWear, hideWearCounts: ex.hideWearCounts} : {}), ...(v.incompatibleWear?.length ? {incompatibleWear: v.incompatibleWear} : {})}};
     });
-    const extras = {id: w.id, label: w.def.label, slot: w.def.slot, kind, heavy: !!w.def.heavy, bodies: bs.map(b => b.id), triangles: idx.length / 3, provenance: w.def.provenance, approved: false, gameReady: false, origin: w.def.origin};
+    const extras = {id: w.id, label: w.def.label, slot: w.def.slot, kind, heavy: !!w.def.heavy, bodies: bs.map(b => b.id), triangles: idx.length / 3, provenance: provenanceOf(w), approved: false, gameReady: false, origin: originOf(w)};
     const doc = buildOutfitDocument({id: w.id, uv, idx, baseColor: w.g.enc.baseJpg, metallicRoughness: w.g.enc.mrJpg, variants: vs, extras, generator: GENERATOR, extrasKey: 'zombieWearable', quantizeNormals: true});
-    const glb = guard(path.join(MODELS, `outfit-${w.id}.glb`));
+    const legacyWear = path.join(REPO, 'game/public/assets/models', `outfit-${w.id}.glb`);
+    if (!w.src.t25 && await sameAsShipped(doc, legacyWear)) {
+      if (OUT_ROOT) fs.copyFileSync(legacyWear, path.join(MODELS, path.basename(legacyWear)));
+      summary.wearables[w.id] = {slot: w.def.slot, kind, glb: path.relative(REPO, legacyWear), kept: true, bytes: fs.statSync(legacyWear).size, sha256: sha256File(legacyWear), triangles: extras.triangles, vertices: w.g.low.pos.length / 3, heavy: extras.heavy, provenance: w.def.provenance, bodies: extras.bodies};
+      for (const B of bs) summary.pairs.push({body: B.id, wearable: w.id, slot: w.def.slot, hiddenBodyTriangles: fits[w.id][B.id].mask.hidden, bulkM: fits[w.id][B.id].stats.bulkM, motion: summary.motionAudit[B.id].wearables[w.id] && {over: summary.motionAudit[B.id].wearables[w.id][`over${QUALITY.stretchRatio}x`], fraction: summary.motionAudit[B.id].wearables[w.id].fractionOver, max: summary.motionAudit[B.id].wearables[w.id].max}});
+      console.log(`  KEPT ${path.relative(REPO, legacyWear)} (rebuild byte-identical; not rewritten)`);
+      continue;
+    }
+    const glb = guard(path.join(MODELS, `outfit-${w.id}${T25_SUFFIX}.glb`));
     await writeDoc(doc, glb);
     const bytes = fs.statSync(glb).size, sha = sha256File(glb);
-    fs.writeFileSync(guard(path.join(DERIV, `outfit-${w.id}.json`)), JSON.stringify(wearableManifest(w, bs, {glb, bytes, sha}, summary.motionAudit), null, 2) + '\n');
-    summary.wearables[w.id] = {slot: w.def.slot, kind, glb: rel(glb), bytes, sha256: sha, triangles: extras.triangles, vertices: w.g.low.pos.length / 3, heavy: extras.heavy, provenance: w.def.provenance, bodies: extras.bodies};
+    fs.writeFileSync(guard(path.join(DERIV, `outfit-${w.id}.json`)), JSON.stringify(wearableManifest(w, bs, {glb, bytes, sha, t25: await t25Block(w.src, `game/public/assets/models/outfit-${w.id}.glb`, glb)}, summary.motionAudit), null, 2) + '\n');
+    summary.wearables[w.id] = {slot: w.def.slot, kind, glb: rel(glb), bytes, sha256: sha, triangles: extras.triangles, vertices: w.g.low.pos.length / 3, heavy: extras.heavy, provenance: provenanceOf(w), t25Source: !!w.src.t25, bodies: extras.bodies};
     for (const B of bs) summary.pairs.push({body: B.id, wearable: w.id, slot: w.def.slot, hiddenBodyTriangles: fits[w.id][B.id].mask.hidden, bulkM: fits[w.id][B.id].stats.bulkM, motion: summary.motionAudit[B.id].wearables[w.id] && {over: summary.motionAudit[B.id].wearables[w.id][`over${QUALITY.stretchRatio}x`], fraction: summary.motionAudit[B.id].wearables[w.id].fractionOver, max: summary.motionAudit[B.id].wearables[w.id].max}});
     console.log(`  wrote ${rel(glb)} ${bytes} bytes`);
   }
@@ -349,6 +390,7 @@ async function main() {
   const counts = countLooks(bodies, wear, fits);
   const out = {schema: 'the-last-line/zombie-wardrobe@1', title: 'Zombie wardrobe: bodies x slot wearables (iteration 07 refit) - prototype derivatives', status: {approved: false, gameReady: false},
     authoredOn: new Date().toISOString().slice(0, 10), canonicalBody: CANONICAL_BODY, slots: SLOT_ORDER,
+    t25Migration: {task: T25_TASK, note: 'Meshy T2.5 replacement of the locally generated characters: T2.5-sourced bodies / wearables are rebuilt from the accepted Meshy native GLB with the same CPU rig / fit pipeline; every rebuilt runtime file has a -t25 URL; kept bodies are verified, not rewritten', t25Bodies: bodies.filter(B => B.src.t25).map(B => B.id), t25Wearables: wear.filter(w => w.src.t25).map(w => w.id), keptBodyFiles: KEEP_BODY_FILES, skippedWearables: SKIP_WEARABLES},
     counts, excluded, skipped, quality: QUALITY, fit07: {method: 'lib/fit07.mjs (garments, pants) + lib/headwear.mjs (hats); validation poses = every ' + FIT07.everyFrames + 'rd frame of the six clips + 3 ragdoll-like extremes', gate: fitGate}, totalBytes, totalMB: +(totalBytes / 1e6).toFixed(2), ...summary,
     rebuild: 'node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs',
     buildSeconds: Math.round((Date.now() - t0) / 1000)};
@@ -357,6 +399,36 @@ async function main() {
   console.log(`done: ${bodies.length} bodies, ${wear.length} wearables, ${counts.pairs} supported pairs, ${counts.looks} valid looks; ${(totalBytes / 1e6).toFixed(2)} MB (${out.buildSeconds} s)`);
 }
 const rel = f => OUT_ROOT ? path.relative(OUT_ROOT, f) : path.relative(REPO, f);
+const originOf = X => X.def.origin + T25_TAG(X.src);
+const provenanceOf = X => (X.src.t25 ? 'generated (Meshy T2.5 replacement of the local Pixal3D master)' : X.def.provenance);
+/** True when `doc` serialises to exactly the bytes of the shipped file (then that file is kept, not rewritten). */
+async function sameAsShipped(doc, file) {
+  if (!fs.existsSync(file)) return false;
+  fs.mkdirSync(TMP, {recursive: true});
+  const probe = path.join(TMP, `probe-${process.pid}-${path.basename(file)}`);
+  await writeDoc(doc, probe);
+  const same = sha256File(probe) === sha256File(file);
+  fs.rmSync(probe, {force: true});
+  return same;
+}
+async function shippedBodyExtras(file) {
+  const doc = await new NodeIO().registerExtensions([KHRMeshQuantization]).read(file);
+  return doc.getRoot().listScenes()[0].getExtras().zombieBody;
+}
+/**
+ * T2.5 migration record of one written runtime file: the Meshy source (when this asset was replaced) incl. the
+ * densification actually applied, and the pushed-history restore record of the superseded runtime path.
+ */
+async function t25Block(src, oldRel, glb) {
+  const out = {migration: T25_TASK, sourceReplaced: !!src.t25};
+  if (src.t25) {
+    const m = await loadSource(src); // deterministic: re-derives the densification stats of this exact source
+    out.source = {...src.t25, densify: m.densify};
+  } else out.note = 'source master unchanged (legacy local Pixal3D); file rebuilt because its per-body fits / masks follow bodies replaced in this migration';
+  const newRel = OUT_ROOT ? null : path.relative(REPO, glb);
+  if (newRel && newRel !== oldRel) out.supersedes = restoreRecord(oldRel, git) ?? {path: oldRel, note: 'not tracked in the base commit'};
+  return out;
+}
 
 /** Exact counts of supported pairs and valid slot compositions (non-base) per body. */
 function countLooks(bodies, wear, fits) {
@@ -393,10 +465,10 @@ function srcInfo(s, stageMaster) {
     triangles: stageMaster?.triangles, vertices: stageMaster?.vertices, textures: stageMaster?.textures, material: stageMaster?.material};
 }
 
-function bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit}) {
+function bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit, t25}) {
   const J = B.skel.joints;
   const boneLengthsM = Object.fromEntries(JOINTS.filter(([, p]) => p).map(([n, p]) => [n, r4(Math.hypot(J[n][0] - J[p][0], J[n][1] - J[p][1], J[n][2] - J[p][2]))]));
-  return {schema: 'the-last-line/derivative-manifest@1', asset: 'zombie-body-' + B.id, title: `Zombie body "${B.def.label}" - rigged runtime derivative (prototype)`, status: STATUS, honesty: HONESTY, origin: B.def.origin, provenance: B.def.provenance, traits: B.def.traits ?? {},
+  return {schema: 'the-last-line/derivative-manifest@1', asset: 'zombie-body-' + B.id, title: `Zombie body "${B.def.label}" - rigged runtime derivative (prototype)`, status: STATUS, honesty: HONESTY, origin: originOf(B), provenance: provenanceOf(B), traits: B.def.traits ?? {}, t25,
     outputs: {glb: {path: rel(glb), bytes, sha256: sha, format: 'glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8'}},
     conventions: {units: 'metres', up: '+Y', facing: '+Z', floor: 'y = 0', origin: 'midpoint between the feet', handedness: 'L_ = character left = +X', heightM: extras.heightM, bindPose: 'A-pose (arm angles in skeleton.estimation)'},
     source: srcInfo(B.src, B.stage.master), placement: {...B.stage.placement, nativeBounds: undefined}, facing: B.stage.facing, poseCorrection: B.stage.repose ?? null, bridgeTrim: B.stage.bridgeTrim ?? null, skinOverrides: B.def.skin ?? null,
@@ -418,12 +490,12 @@ function bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit})
     ]};
 }
 
-function wearableManifest(w, bodies, {glb, bytes, sha}, motion) {
+function wearableManifest(w, bodies, {glb, bytes, sha, t25}, motion) {
   const g = w.g, kind = w.def.kind;
   const perBody = Object.fromEntries(bodies.map(B => { const v = fits0(w, B); return [B.id, {node: `Outfit_${w.id}__${B.id}`, ...v.stats, mask: {hidden: v.mask.hidden, total: v.mask.total, method: v.mask.method}, motionStretch: motion[B.id]?.wearables[w.id]}]; }));
   return {schema: 'the-last-line/derivative-manifest@1', asset: 'outfit-' + w.id, title: `Zombie wearable "${w.def.label}" (${w.def.slot}) - fitted per body (prototype)`, status: STATUS,
     honesty: {...HONESTY, garment: kind === 'rigid' ? 'item source is a separate empty (ghost) reconstruction; scaled and placed per body (rigid, no deformation)' : 'garment source is a separate ghost-mannequin reconstruction; fitted and skinned per body by this pipeline (no cloth simulation)'},
-    origin: w.def.origin, provenance: w.def.provenance, slot: w.def.slot, kind,
+    origin: originOf(w), provenance: provenanceOf(w), slot: w.def.slot, kind, t25,
     outputs: {glb: {path: rel(glb), bytes, sha256: sha, format: 'glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body\'s joints); scene extras zombieWearable'}},
     source: srcInfo(w.src, g.master),
     stage: kind === 'garment' ? {canonicalFit: {body: CANONICAL_BODY, global: g.fit, backTaper: g.backTaper, sleeveRetarget: g.retarget, fitSkeleton: g.fitJoints, pushOut: g.pushOut, skin: g.skinStats}} : {nominal: g.nominal, frame: g.frameSummary ?? null, sourceTrim: g.trim ?? null},

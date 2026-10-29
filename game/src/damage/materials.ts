@@ -200,7 +200,8 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   crate: {cls: 'wood', integrity: 110, breaks: 'splinter'},
   bin: NEVER('sheetMetal'), fareGate: NEVER('steel'), stall: NEVER('sheetMetal'),
   // Vending: glass front (baked into the model) cracks, then gives way like a pry (contents spill, nothing re-rolled).
-  vending: {...NEVER('sheetMetal', {cls: 'glass', integrity: 75, on: 'open'}), glassFront: [-0.45, 0.25, 0.3, 0.92]},
+  // glass front of vending-t25.glb (Meshy T2.5, ray-cast 2026-10-29): x -0.41..0.24 m, y 0.48..1.78 m (iteration 03: [-0.45, 0.25, 0.3, 0.92])
+  vending: {...NEVER('sheetMetal', {cls: 'glass', integrity: 75, on: 'open'}), glassFront: [-0.43, 0.25, 0.26, 0.96]},
   shelf: NEVER('steel'), table: NEVER('laminate'), desk: NEVER('laminate', SCREEN(20)), booth: NEVER('sheetMetal', SHATTER(40)),
   ticketMachine: NEVER('sheetMetal', SCREEN(25)), exitStair: NEVER('concrete'), toiletStall: NEVER('laminate'),
   washCounter: NEVER('laminate', SHATTER(35)),
