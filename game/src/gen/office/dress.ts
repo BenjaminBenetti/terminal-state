@@ -1,4 +1,5 @@
-// Iteration 16 (WORLD-GEN): office dressing around the station dresser (gen/stationDress.ts dress()). Pure data.
+// Iteration 16 (WORLD-GEN) / seamless (GEN): office dressing around the station dresser (gen/stationDress.ts dress()), one
+// OfficeDress per tower storey of the one layout (preDress for every storey → ONE dress() → postDress for every storey). Pure data.
 //
 //  preDress  (before dress()): the perimeter strip along the facade walls is held blocked (so the room rules / generated props
 //            never stand a tall cabinet in front of a window), then the program furniture the purpose rules cannot express:
@@ -33,8 +34,13 @@ export interface OfficeDress {
   rng: Rng;
   /** Street entrance (lobby only; tower-local columns on the north facade). */
   entrance?: {x0: number; x1: number};
-  /** Perimeter strip cells held blocked during dress(). */
+  /** Perimeter strip (+ elevator landing strip) cells held blocked during dress(). */
   held: number[];
+}
+
+/** Elevator landing strip in front of the shaft door (tower-local cells): 5 cols x 3 rows, kept walkable and prop-free. */
+export function landingStrip(f: TowerFrame): {x: number; y: number; w: number; h: number} {
+  return {x: f.door.x - 1, y: f.cy0 - 4, w: f.door.w + 2, h: 3};
 }
 
 const q4 = (v: number) => Math.round(v * 4) / 4;
@@ -59,6 +65,10 @@ function perimeterStrip(d: OfficeDress): number[] {
 export function preDress(d: OfficeDress): void {
   const g = officeGrid(d);
   d.held = perimeterStrip(d);
+  // The row of the elevator landing strip farthest from the shaft (the rows nearer to it are the shaft opening's door zone,
+  // gen/office/index.ts withShaftOpenings).
+  const ls = landingStrip(d.frame);
+  for (let x = ls.x; x < ls.x + ls.w; x++) { const i = g.idx(x + MARGIN, ls.y + MARGIN); if (g.cells[i] === FLOOR && !g.blocked[i]) d.held.push(i); }
   for (const i of d.held) g.blocked[i] = 1;
   const ctx = makePlaceCtx(d.layout, d.rng.fork('office-pre'), d.level);
   for (const a of d.layout.areas) {
@@ -192,8 +202,8 @@ function conferenceTable(_d: OfficeDress, ctx: PlaceCtx, a: Area): void {
 /** Lobby main hall: the reception desk on the axis between the entrance and the elevators, a waiting area, plants. */
 function reception(d: OfficeDress, ctx: PlaceCtx, a: Area): void {
   const rng = ctx.rng;
-  const cab = d.tower.core.cab;
-  const tx = (cab.x + cab.w / 2) * CELL + rng.pick([-7, -5, 5, 7]);
+  const cab = d.frame.cab;
+  const tx = (cab.x + MARGIN + cab.w / 2) * CELL + rng.pick([-7, -5, 5, 7]);
   const tz = (a.y + a.h * 0.45) * CELL;
   let desk: PropPlacement | null = null;
   for (const dx of [0, 1, -1, 2, -2, 3, -3]) {
@@ -352,18 +362,20 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
   const lv = d.level ? {level: d.level} : {};
   const core = d.tower.core;
   const N = d.tower.north;
+  const label = floor === 1 ? 'LOBBY' : `FLOOR ${floor}`;
   const put = (a: Area, side: Side, t: number, yRel: number, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>) => wallSign(ctx, layout, a, side, t, base + yRel, {...s, ...lv});
-  // Elevator: floor plate beside the door on the lobby / corridor side; the call panel itself is TOWER's.
-  const door = core.cabDoor;
-  const dx = (door.x + door.w / 2) * CELL;
-  put(N, 'S', dx, CEIL.door + 0.3, {kind: 'info', text: `ELEVATOR · FLOORS 1–${8}`, w: 2.2});
-  put(N, 'S', dx + 2.6, 1.75, {kind: 'service', text: `FLOOR ${floor}`, w: 1.0});
-  // Stairwell door (corridor side) and the floor plate inside the vestibule beside the stair door.
-  const vd = core.vestDoor;
-  put(N, 'S', (vd.x + vd.w / 2) * CELL, CEIL.door + 0.3, {kind: 'exit', text: 'STAIRS · EXIT', w: 1.4});
-  const v = core.vest;
-  put(v, 'S', (v.x + v.w / 2) * CELL - 1.15, 1.6, {kind: 'service', text: `FLOOR ${floor}`, w: 0.9});
-  put(v, 'S', (v.x + v.w / 2) * CELL + 1.15, 1.6, {kind: 'service', text: floor >= 8 ? 'STAIR B · ROOF CLOSED' : floor <= 1 ? 'STAIR B · UP' : 'STAIR B · UP / DOWN', w: 1.0});
+  // Elevator: a floor plate on the shaft pier on the side away from the call panel (lane LIFT owns the door face: indicator +
+  // call panel on the other pier); the stairwell doorway gets its exit sign over the lintel.
+  const f = frame, stairWest = f.well.x < f.cab.x;
+  const doorX0 = (f.door.x + MARGIN) * CELL, doorX1 = (f.door.x + f.door.w + MARGIN) * CELL;
+  put(N, 'S', stairWest ? doorX0 - 0.5 : doorX1 + 0.5, 1.6, {kind: 'service', text: floor === 1 ? 'L' : String(floor), w: 0.6});
+  const ld = core.landingDoor;
+  put(N, 'S', (ld.x + ld.w / 2) * CELL, CEIL.door + 0.25, {kind: 'exit', text: 'STAIRS', w: 1.0});
+  // Inside the landing: floor plate + direction plate on the well's end wall, facing the flights.
+  const L = core.landing, endW = L.x - MARGIN === f.well.x;
+  const z = (L.y + L.h / 2) * CELL;
+  put(L, endW ? 'W' : 'E', z - 0.75, 1.6, {kind: 'service', text: label, w: 1.0});
+  put(L, endW ? 'W' : 'E', z + 0.75, 1.6, {kind: 'service', text: floor >= 8 ? 'STAIRS · DOWN' : floor <= 1 ? 'STAIRS · UP' : 'STAIRS · UP / DOWN', w: 1.1});
   // Washrooms / rooms: plates beside their doors (corridor side).
   const plates = new Map<OfficeAreaMeta['role'], string>([['meeting', 'MEETING ROOM'], ['break', 'STAFF BREAK ROOM'], ['copy', 'COPY · MAIL'], ['storage', 'SUPPLY STORAGE'],
     ['server', 'SERVER ROOM · AUTHORIZED ONLY'], ['security', 'BUILDING SECURITY'], ['exec', 'EXECUTIVE SUITE']]);
@@ -389,7 +401,7 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
   // Lobby: the tower name over the reception side of the hall, transit wayfinding.
   if (floor === 1) {
     const hall = d.tower.north;
-    put(hall, 'S', (frame.TW / 2 + MARGIN) * CELL + (core.cab.x + core.cab.w / 2 - frame.TW / 2 - MARGIN > 0 ? -6 : 6), 3.2, {kind: 'station', text: frame.name, w: 3.6});
+    put(hall, 'S', (frame.TW / 2 + MARGIN) * CELL + (frame.cab.x + frame.cab.w / 2 - frame.TW / 2 > 0 ? -6 : 6), 3.2, {kind: 'station', text: frame.name, w: 3.6});
   }
 }
 

@@ -1,7 +1,8 @@
 // Iteration 13 (LIGHTING): the baked light field and station lights under three r186's WebGPURenderer (node materials).
 // - the TSL lighting node is registered for the session's single LightFieldLight and builds into every lit node material
-//   on BOTH backends (WGSL = WebGPU, GLSL = WebGL2 fallback), with one 3D texture binding, 2 texel fetches + 5 trilinear
-//   samples and no per-slot loop; unlit materials / scenes without the light get nothing;
+//   on BOTH backends (WGSL = WebGPU, GLSL = WebGL2 fallback), with one 3D texture binding, 3 texel fetches (column header, the
+//   extended-column group texel - read only inside the extended-column branch -, slot header) + 5 trilinear samples and no
+//   per-slot loop; unlit materials / scenes without the light get nothing;
 // - its isotropic part goes to the indirect irradiance and its directional part through the lighting model's direct term;
 // - slot selection / band floors (the no-leak contract) and the CPU mirror against the baked texels;
 // - the scene's light set (LightsNode cache key) is identical across new stations, flare throws / burn-out, flashlight
@@ -23,7 +24,7 @@ import {generateStation, type StationLayout} from '../src/gen/station';
 import {CELL} from '../src/gen/grid';
 import type {Fixture} from '../src/world/builder';
 import {
-  AUX_SLOT_DEPTH, FIELD_EMAX, LightFieldVolume, SLOT_DEPTH, bakeLightField, fieldSlot, levelGeometries, sampleField, slotBase, slotLayers,
+  AUX_SLOT_DEPTH, FIELD_EMAX, LightFieldVolume, MAX_SLOTS, SLOT_DEPTH, bakeLightField, fieldDepth, fieldSlot, isExtendedHeader, levelGeometries, sampleField, slotBase, slotLayers,
   type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {
@@ -128,14 +129,15 @@ describe('light-field lighting node (WebGPURenderer node library)', () => {
     expect(three('nodes/core/LightingModel.js')).toContain('builder.lightsNode.setupLights( builder, builder.lightsNode.getLightNodes( builder ) );');
   });
 
-  it('every lit node material builds with the field on WGSL and GLSL: one 3D binding, 2 fetches + 5 trilinear samples', () => {
+  it('every lit node material builds with the field on WGSL and GLSL: one 3D binding, 3 fetches + 5 trilinear samples', () => {
     const lit = [MeshStandardNodeMaterial, MeshPhysicalNodeMaterial, MeshLambertNodeMaterial, MeshPhongNodeMaterial, MeshToonNodeMaterial];
     const rows: string[] = [];
     for (const backend of ['wgsl', 'glsl'] as const) {
       for (const M of lit) {
         const withField = compile(backend, box(new M()), [stationFieldLight(), new THREE.HemisphereLight()]);
         const f = field3D(backend, withField.fragment);
-        expect(f, `${backend} ${M.name}`).toEqual({decls: 1, fetches: 2, samples: 5});
+        // task office-seamless-20261029: + the extended-column group texel (N storeys), inside its branch
+        expect(f, `${backend} ${M.name}`).toEqual({decls: 1, fetches: 3, samples: 5});
         expect(/[^\x00-\x7F]/.test(withField.fragment), `${backend} ${M.name}: ASCII-only shader`).toBe(false);
         const without = compile(backend, box(new M()), [new THREE.HemisphereLight()]);
         expect(field3D(backend, without.fragment).decls, `${backend} ${M.name} without the field light`).toBe(0);
@@ -179,10 +181,10 @@ describe('light-field lighting node (WebGPURenderer node library)', () => {
       const band = lfBandAt(positionWorld);
       m.colorNode = vec4(band.slot as Node<'float'>, band.floor as Node<'float'>, band.ceil as Node<'float'>, lfFloorAt(positionWorld) as Node<'float'>);
       const a = compile(backend, box(m), []);
-      expect(field3D(backend, a.fragment).fetches, backend).toBe(4); // two per helper call (pick + header)
+      expect(field3D(backend, a.fragment).fetches, backend).toBe(6); // three per helper call (pick: header + group texel; slot header)
       const m2 = new MeshBasicNodeMaterial();
       m2.colorNode = vec4(lfSlotAt(positionWorld) as Node<'float'>, 0, 0, 1);
-      expect(field3D(backend, compile(backend, box(m2), []).fragment)).toEqual({decls: 1, fetches: 1, samples: 0});
+      expect(field3D(backend, compile(backend, box(m2), []).fragment)).toEqual({decls: 1, fetches: 2, samples: 0});
       const m3 = new MeshBasicNodeMaterial();
       const s = lightFieldSample(positionWorld);
       m3.colorNode = vec4((s.amb as unknown as {add(x: unknown): unknown}).add(s.dirColor) as never, 1);
@@ -201,8 +203,13 @@ describe('slot selection, CPU mirror and the no-leak contract (baked data)', () 
   it('the TSL float slot decode equals the packed bit layout for every byte and band', () => {
     // pickSlot: min(mod(floor(pk / 2^(2 band)), 4), slots - 1) == (pk >> 2 band) & 3
     for (let pk = 0; pk < 256; pk++) for (let band = 0; band < 3; band++) expect(Math.floor(pk / 2 ** (2 * band)) % 4).toBe((pk >> (2 * band)) & 3);
-    // header slice: mix(1, 1 + SLOT_DEPTH - AUX + slot * AUX, min(slot, 1)) == slotBase(slot)
-    for (let s = 0; s < 4; s++) { const aux = Math.min(s, 1); expect(1 + (1 + SLOT_DEPTH - AUX_SLOT_DEPTH + s * AUX_SLOT_DEPTH - 1) * aux).toBe(slotBase(s)); }
+    // header slice: mix(1, 1 + SLOT_DEPTH - AUX + slot * AUX, min(slot, 1)) == slotBase(slot) (every slot, N storeys)
+    for (let s = 0; s < MAX_SLOTS; s++) { const aux = Math.min(s, 1); expect(1 + (1 + SLOT_DEPTH - AUX_SLOT_DEPTH + s * AUX_SLOT_DEPTH - 1) * aux).toBe(slotBase(s)); }
+    // task office-seamless-20261029, extended columns: A in 1..63 (count bits 0) never collides with a legacy byte; the group
+    // slice 1 + SLOT_DEPTH - AUX + slots * AUX + g == fieldDepth(slots) + g; the slot-id pair byte splits exactly in floats
+    for (let pk = 0; pk < 256; pk++) expect(isExtendedHeader(pk)).toBe(pk > 0 && Math.floor(pk / 64) === 0);
+    for (let S = 1; S <= MAX_SLOTS; S++) expect(1 + SLOT_DEPTH - AUX_SLOT_DEPTH + S * AUX_SLOT_DEPTH).toBe(fieldDepth(S));
+    for (let b = 0; b < 256; b++) { const hi = Math.floor(b / 16); expect([b - hi * 16, hi]).toEqual([b & 15, b >> 4]); }
   });
 
   it('every open band of every level picks its own slot at mid-height (multi-level stations; never the band above / below)', () => {

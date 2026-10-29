@@ -25,6 +25,18 @@
 // - every shared column (identical band in both grids: the whole run) is a portal tile of that pair, so
 //   just off either end the run and the level it came from stay visible through it;
 // - a portal tile right next to the eye counts as visible without the frustum / sight-line test.
+//
+// Task office-seamless-20261029 (ENGINE): N storeys (the 9-storey Office Space tower in one world).
+// - Portals are built in one pass over the columns for every level pair (identical tiles to the per-pair loop).
+// - Visibility propagates through any number of portal hops (breadth-first over levels; each tile's frustum / sight test
+//   runs at most once per update), not just two: looking up a scissor stair shows each storey whose run is in sight.
+// - Multi-level meshes: `userData.levels` (the builder tags every stair flight with the two storeys it joins) renders when
+//   any of those levels is current or seen through a portal near it - a flight is drawn only when one of its storeys is,
+//   instead of never being culled. In stacks of more than LEGACY_STACK levels an untagged mesh spanning several bands
+//   (or taller than 4.5 m) is tagged with every level whose walking zone its box reaches, instead of never being culled;
+//   Subway stations (<= 3 levels) keep the iteration-08 rule.
+// Culling only moves meshes to CULL_LAYER (render visibility); it never touches actors, items or any world state, and the
+// iteration-14 warm-up still finds culled meshes there (render/warmup.ts planWarmup 'full').
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -51,6 +63,8 @@ const ZONE: [number, number] = [0.2, 2.4];
 export const PORTAL_NEAR = 1.0;
 /** Band tolerance when deciding which levels the eye stands on (as the builder's levelAt). */
 const EYE_TOL = 0.3;
+/** Stacks up to this many levels (every Subway station) keep the iteration-08 rule for untagged multi-level meshes. */
+export const LEGACY_STACK = 3;
 
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
 
@@ -68,7 +82,11 @@ export function sharedColumn(ga: Grid, gb: Grid, i: number): boolean {
 }
 
 interface Tile { a: number; b: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; cells: number[] }
-interface Entry { obj: THREE.Mesh; level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; mask: number; culled: boolean }
+interface Entry {
+  obj: THREE.Mesh; level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; mask: number; culled: boolean;
+  /** Multi-level mesh (stair flight, tall shaft piece): renders when any of these levels does (level is NaN then). */
+  levels?: readonly number[];
+}
 
 export class LevelCuller {
   readonly entries: Entry[] = [];
@@ -78,56 +96,90 @@ export class LevelCuller {
   private readonly pm = new THREE.Matrix4();
   private readonly box = new THREE.Box3();
   private readonly eye = new THREE.Vector3();
-  private last = {x: NaN, y: NaN, z: NaN, qx: 0, qy: 0, qz: 0, qw: 0};
+  private last = {x: NaN, y: NaN, z: NaN, qx: 0, qy: 0, qz: 0, qw: 0, ov: null as number | null};
   /** Levels the eye stands on (scratch of update). */
   private readonly here = new Set<number>();
   /** Diagnostics of the last update (`level`: the resolver's level; `levels`: every level the eye stands on). */
-  stats = {level: 0, levels: [0] as number[], tilesTested: 0, tilesVisible: 0, culled: 0, fogged: 0, registered: 0, uncullable: 0};
+  stats = {level: 0, levels: [0] as number[], tilesTested: 0, tilesVisible: 0, culled: 0, fogged: 0, registered: 0, uncullable: 0,
+    /** Levels rendered this update (current + seen through portals), portal hops used, multi-level entries. */
+    visibleLevels: [0] as number[], hops: 0, multi: 0};
   enabled = true;
   /** Hide registered meshes entirely beyond this distance (m); set from the scene fog (fogCullDistance). */
   maxDistance = Infinity;
+  /**
+   * Task office-seamless-20261029: the level id the eye is on regardless of the grids, or null (resolve from the level
+   * bands, the default). The moving elevator cab (world/towerRuntime.ts) sets it while the camera is inside the cab: its
+   * shaft is SOLID on every storey grid, so the grid lookup alone would put the eye on the station. Never set in a Subway
+   * station.
+   */
+  eyeOverride: number | null = null;
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver) {
     this.levelIds = levels.map(l => l.id);
     if (levels.length > 1) this.buildPortals();
   }
 
-  /** Portal tiles between every pair of levels (columns whose free band reaches both walking zones). */
+  /**
+   * Portal tiles between every pair of levels (columns whose free band reaches both walking zones, and stair-run columns
+   * shared by both grids). One pass over the columns; per pair, tiles keep the column order of the iteration-08 loop.
+   */
   private buildPortals(): void {
     const {W, H} = this.cols;
-    const L = this.levels;
-    const zone = (k: number): [number, number] => [L[k].baseY + ZONE[0], L[k].baseY + ZONE[1]];
-    for (let a = 0; a < L.length; a++) for (let b = a + 1; b < L.length; b++) {
-      const za = zone(a), zb = zone(b);
-      const tiles = new Map<number, Tile>();
-      for (let i = 0; i < W * H; i++) {
-        let y0 = Infinity, y1 = -Infinity, portal = false;
-        for (let k = 0; k < this.cols.count(i); k++) {
-          const g = L[this.cols.level(i, k)].grid;
-          if (g.cells[i] !== FLOOR && g.cells[i] !== VOID) continue;
-          const f = g.floorOf(i), c = cellCeil(g, i);
-          const ra = ramp(g, i);
-          // A flight's column sweeps its whole pitch: test its lowest floor / highest ceiling.
-          const lo = ra ? ra[0] : f, hi = ra ? ra[1] : c;
-          if (lo <= za[1] && hi >= za[0] && lo <= zb[1] && hi >= zb[0]) { portal = true; y0 = Math.min(y0, lo); y1 = Math.max(y1, hi); }
-        }
-        // Iteration 12 (ARCH): every column of a stair run shared by both grids joins the two levels.
-        if (sharedColumn(L[a].grid, L[b].grid, i)) {
-          const [lo, hi] = bandOf(L[a].grid, i);
-          portal = true; y0 = Math.min(y0, lo); y1 = Math.max(y1, hi);
-        }
-        if (!portal) continue;
-        const cx = i % W, cy = (i - cx) / W;
-        const key = Math.floor(cy / TILE) * 100000 + Math.floor(cx / TILE);
-        let t = tiles.get(key);
-        if (!t) tiles.set(key, (t = {a: L[a].id, b: L[b].id, x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity, y0, y1, cells: []}));
+    const L = this.levels, NL = L.length;
+    const zone = L.map(l => [l.baseY + ZONE[0], l.baseY + ZONE[1]] as const);
+    const pairTiles = new Map<number, Map<number, Tile>>();
+    const lo = new Float64Array(NL * NL).fill(Infinity), hi = new Float64Array(NL * NL).fill(-Infinity);
+    const touched: number[] = [];
+    const bandLo: number[] = [], bandHi: number[] = [], reach: number[] = [], open: number[] = [];
+    for (let i = 0; i < W * H; i++) {
+      const cnt = this.cols.count(i);
+      if (!cnt) continue;
+      touched.length = 0;
+      const hit = (a: number, b: number, y0: number, y1: number) => {
+        const k = a * NL + b;
+        if (lo[k] === Infinity) touched.push(k);
+        if (y0 < lo[k]) lo[k] = y0;
+        if (y1 > hi[k]) hi[k] = y1;
+      };
+      bandLo.length = bandHi.length = 0;
+      for (let k = 0; k < cnt; k++) {
+        const g = L[this.cols.level(i, k)].grid;
+        if (g.cells[i] !== FLOOR && g.cells[i] !== VOID) continue;
+        // A flight's column sweeps its whole pitch: test its lowest floor / highest ceiling.
+        const ra = ramp(g, i);
+        bandLo.push(ra ? ra[0] : g.floorOf(i)); bandHi.push(ra ? ra[1] : cellCeil(g, i));
+      }
+      // a band reaching the walking zones of several levels joins each pair of them
+      for (let q = 0; q < bandLo.length; q++) {
+        const y0 = bandLo[q], y1 = bandHi[q];
+        reach.length = 0;
+        for (let a = 0; a < NL; a++) if (y0 <= zone[a][1] && y1 >= zone[a][0]) reach.push(a);
+        for (let x = 0; x < reach.length; x++) for (let y = x + 1; y < reach.length; y++) hit(reach[x], reach[y], y0, y1);
+      }
+      // Iteration 12 (ARCH): every column of a stair run shared by both grids joins the two levels.
+      open.length = 0;
+      for (let a = 0; a < NL; a++) if (isOpen(L[a].grid, i)) open.push(a);
+      for (let x = 0; x < open.length; x++) for (let y = x + 1; y < open.length; y++) {
+        const a = open[x], b = open[y];
+        if (sharedColumn(L[a].grid, L[b].grid, i)) { const [y0, y1] = bandOf(L[a].grid, i); hit(a, b, y0, y1); }
+      }
+      if (!touched.length) continue;
+      const cx = i % W, cy = (i - cx) / W;
+      const key = Math.floor(cy / TILE) * 100000 + Math.floor(cx / TILE);
+      for (const k of touched) {
+        const a = Math.floor(k / NL), b = k - a * NL;
+        let m = pairTiles.get(k);
+        if (!m) pairTiles.set(k, (m = new Map()));
+        let t = m.get(key);
+        if (!t) m.set(key, (t = {a: L[a].id, b: L[b].id, x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity, y0: lo[k], y1: hi[k], cells: []}));
         t.x0 = Math.min(t.x0, cx * CELL); t.x1 = Math.max(t.x1, (cx + 1) * CELL);
         t.z0 = Math.min(t.z0, cy * CELL); t.z1 = Math.max(t.z1, (cy + 1) * CELL);
-        t.y0 = Math.min(t.y0, y0); t.y1 = Math.max(t.y1, y1);
+        t.y0 = Math.min(t.y0, lo[k]); t.y1 = Math.max(t.y1, hi[k]);
         t.cells.push(i);
+        lo[k] = Infinity; hi[k] = -Infinity;
       }
-      this.tiles.push(...tiles.values());
     }
+    for (const k of [...pairTiles.keys()].sort((p, q) => p - q)) this.tiles.push(...pairTiles.get(k)!.values());
   }
 
   get portalTiles(): number { return this.tiles.length; }
@@ -149,16 +201,25 @@ export class LevelCuller {
         this.box.copy(im.boundingBox!).applyMatrix4(m.matrixWorld);
       } else this.box.setFromObject(m);
       if (this.box.isEmpty()) { this.stats.uncullable++; return; }
+      const b = this.box, entry = {obj: m, level: NaN, x0: b.min.x, z0: b.min.z, x1: b.max.x, z1: b.max.z, y0: b.min.y, y1: b.max.y, mask: m.layers.mask, culled: false} as Entry;
+      // Task office-seamless-20261029: a mesh tagged with several levels (stair flights) renders with any of them.
+      const tag = Array.isArray(m.userData.levels) ? (m.userData.levels as unknown[]).filter((l): l is number => typeof l === 'number' && this.levelIds.includes(l)) : [];
+      if (tag.length) { entry.levels = tag; this.stats.multi++; this.entries.push(entry); return; }
       let level = typeof m.userData.level === 'number' ? m.userData.level : NaN;
       if (Number.isNaN(level)) {
-        const lo = this.levelAt((this.box.min.x + this.box.max.x) / 2, this.box.min.y + 0.05, (this.box.min.z + this.box.max.z) / 2);
-        const hi = this.levelAt((this.box.min.x + this.box.max.x) / 2, this.box.max.y - 0.05, (this.box.min.z + this.box.max.z) / 2);
-        if (lo !== hi || this.box.max.y - this.box.min.y > 4.5) { this.stats.uncullable++; return; }
+        const lo = this.levelAt((b.min.x + b.max.x) / 2, b.min.y + 0.05, (b.min.z + b.max.z) / 2);
+        const hi = this.levelAt((b.min.x + b.max.x) / 2, b.max.y - 0.05, (b.min.z + b.max.z) / 2);
+        if (lo !== hi || b.max.y - b.min.y > 4.5) {
+          // Iteration 08: never level-culled. Tall stacks: render with every level whose storey (base .. base + 4.5 m) it spans.
+          const span = this.levels.length > LEGACY_STACK ? this.levels.filter(l => l.baseY <= b.max.y + 0.3 && l.baseY + 4.5 >= b.min.y).map(l => l.id) : [];
+          if (!span.length || span.length === this.levels.length) { this.stats.uncullable++; return; }
+          entry.levels = span; this.stats.multi++; this.entries.push(entry); return;
+        }
         level = lo;
       }
       // Not a station level (e.g. builder STAIR_LEVEL flights, seen from both levels): fog culling only.
-      if (!this.levelIds.includes(level)) level = NaN;
-      this.entries.push({obj: m, level, x0: this.box.min.x, z0: this.box.min.z, x1: this.box.max.x, z1: this.box.max.z, y0: this.box.min.y, y1: this.box.max.y, mask: m.layers.mask, culled: false});
+      entry.level = this.levelIds.includes(level) ? level : NaN;
+      this.entries.push(entry);
     });
   }
 
@@ -168,17 +229,20 @@ export class LevelCuller {
     camera.updateMatrixWorld();
     const e = this.eye.setFromMatrixPosition(camera.matrixWorld);
     const q = camera.quaternion, l = this.last;
-    if (!force && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
+    const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
+    if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
       && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) return;
-    Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w});
-    const camLevel = this.levelAt(e.x, e.y, e.z);
-    // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both).
-    const here = this.eyeLevels(e, camLevel);
+    Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, ov});
+    const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
+    // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
+    // (the eye in the elevator cab) is the only current level.
+    const here = ov !== null ? this.onlyLevel(ov) : this.eyeLevels(e, camLevel);
     this.stats.level = camLevel;
     this.stats.levels = [...here];
     // Visible portal tiles from the camera's level(s), per other level.
     const vis = new Map<number, Tile[]>();
-    let tested = 0, visible = 0;
+    const shown = new Set<number>(here);
+    let tested = 0, visible = 0, hops = 0;
     if (this.enabled) {
       this.pm.multiplyMatrices((camera as THREE.PerspectiveCamera).projectionMatrix, camera.matrixWorldInverse);
       this.fr.setFromProjectionMatrix(this.pm);
@@ -195,20 +259,24 @@ export class LevelCuller {
         return true;
       };
       const add = (other: number, t: Tile) => { let list = vis.get(other); if (!list) vis.set(other, (list = [])); list.push(t); };
-      for (const t of this.tiles) {
-        const ha = here.has(t.a), hb = here.has(t.b);
-        if (ha === hb) continue; // neither level is current, or both already are
-        if (seen(t)) add(ha ? t.b : t.a, t);
-      }
-      // Iteration 12 (ARCH): one more hop - a level seen through a portal shows a further level through ITS
-      // portals when those are in view and in sight too (the lower level down the second run of a stair
-      // core, seen from the upper landing across the main-level lobby).
-      const hop1 = vis.size ? new Set(vis.keys()) : null;
-      if (hop1) for (const t of this.tiles) {
-        if (here.has(t.a) || here.has(t.b)) continue;
-        const sa = hop1.has(t.a), sb = hop1.has(t.b);
-        if (sa === sb) continue;
-        if (seen(t)) add(sa ? t.b : t.a, t);
+      // Breadth-first over levels (iteration 12: one extra hop, the lower level down the second run of a stair core seen
+      // from the upper landing; task office-seamless-20261029: as many hops as storeys, e.g. up a scissor stair). A hop
+      // tests the tiles with exactly one side among the levels shown so far; each tile's test runs at most once.
+      const memo = new Int8Array(this.tiles.length);
+      for (let added = true; added && hops < this.levels.length;) {
+        added = false;
+        const before = new Set(shown);
+        for (let k = 0; k < this.tiles.length; k++) {
+          const t = this.tiles[k];
+          const ha = before.has(t.a), hb = before.has(t.b);
+          if (ha === hb) continue; // neither level is shown yet, or both already are
+          if (!memo[k]) memo[k] = seen(t) ? 1 : -1;
+          if (memo[k] < 0) continue;
+          const other = ha ? t.b : t.a;
+          add(other, t);
+          if (!shown.has(other)) { shown.add(other); added = true; }
+        }
+        hops++;
       }
     }
     let culled = 0, fogged = 0;
@@ -224,23 +292,35 @@ export class LevelCuller {
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
+      else if (en.levels) show = en.levels.some(l => here.has(l)) || en.levels.some(l => this.nearPortal(en, vis.get(l)));
       else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
-      else {
-        // Another level: only near a portal tile the camera can see.
-        show = false;
-        const list = vis.get(en.level);
-        if (list) for (const t of list) {
-          if (en.x1 >= t.x0 - PORTAL_MARGIN && en.x0 <= t.x1 + PORTAL_MARGIN && en.z1 >= t.z0 - PORTAL_MARGIN && en.z0 <= t.z1 + PORTAL_MARGIN) { show = true; break; }
-        }
-      }
+      // Another level: only near a portal tile the camera can see.
+      else show = this.nearPortal(en, vis.get(en.level));
       if (show === !en.culled) continue;
       if (show) { en.obj.layers.mask = en.mask; en.culled = false; } else { en.mask = en.obj.layers.mask; en.obj.layers.set(CULL_LAYER); en.culled = true; }
     }
     for (const en of this.entries) if (en.culled) culled++;
     this.stats.tilesTested = tested;
     this.stats.tilesVisible = visible;
+    this.stats.visibleLevels = [...shown];
+    this.stats.hops = hops;
     this.stats.culled = culled;
     this.stats.fogged = fogged;
+  }
+
+  /** The eye's level set holding just `level` (eyeOverride). */
+  private onlyLevel(level: number): Set<number> {
+    this.here.clear();
+    this.here.add(level);
+    return this.here;
+  }
+
+  /** Whether an entry's X/Z box comes within PORTAL_MARGIN of one of these visible portal tiles. */
+  private nearPortal(en: Entry, list: readonly Tile[] | undefined): boolean {
+    if (list) for (const t of list) {
+      if (en.x1 >= t.x0 - PORTAL_MARGIN && en.x0 <= t.x1 + PORTAL_MARGIN && en.z1 >= t.z0 - PORTAL_MARGIN && en.z0 <= t.z1 + PORTAL_MARGIN) return true;
+    }
+    return false;
   }
 
   /**

@@ -1,39 +1,59 @@
-// Iteration 16 (WORLD-GEN): validation of an office section (generation retry guard + tests). Pure data.
+// Seamless Office Space (lane GEN): validation of the ONE office layout (generation retry guard + tests). Pure data.
 //
-// Every walkable cell of every storey and every area is reachable from the section's primary arrival (street: the platform
-// spawn; floors: the elevator cab); every arrival pose stands clear on a reachable cell of its storey; the elevator cab is clear
-// floor of its own area enclosed by solid shaft walls except the door opening; the stair door has open floor in front; windows
-// lie on the perimeter wall ring only (solid cells with open interior behind them, never in front of a door); enemies / loot on
-// reachable flat floor away from the arrivals; the shared traversal / doorway / storey rules (gen/traversal.ts, gen/doorways.ts,
-// gen/levelGen.ts) with the checks that only make sense for the three-storey station program filtered out.
+// - Storeys: 9 levels (station 'main' y 0, lobby 'upper' y hu, office floors 2..8 'office' at hu + 4.4 (n - 1)); same grid size.
+// - Reachability: every walkable cell of every storey and every area reachable from the platform start by walking + stairs only
+//   (levelDistance over all storeys; the elevator is not in the grids, so it is excluded by construction).
+// - Scissor stair: one run per storey pair (lanes alternate), each a LevelLink 'stairs' carved into both grids; flights 24 x
+//   4.4/24 m risers (≤ 0.19 m) on 0.28 m treads, ≤ 12 per flight; ≥ 2.5 m headroom over every run cell with no other storey's
+//   band intruding (no ceiling / slab collision); landings walkable, ≥ 1.2 x 1.8 m, reachable, with a doorway to the storey.
+// - No void falls: no walkable edge anywhere drops more than the rail height without a railing (gen/levels.ts unrailedDrops).
+// - Elevator: the shaft is SOLID on every tower storey grid; every stop's landing strip is walkable floor without props; the stop
+//   records match the storeys.
+// - Nothing (props, pickups, enemies, signs below head height) inside the stairwell, on the landings' door fronts, in the shaft or
+//   on the landing strips; windows lie on the perimeter wall ring of their storey only.
+// - Populations: enemies 5-8 on the station + lobby, 3-6 per office floor, ≥ 18 m walking from the start; loot reachable; the
+//   start weapon is never a pickup. Shared traversal / doorway / storey rules (gen/traversal.ts, gen/doorways.ts, gen/levelGen.ts).
 
 import {CELL, FLOOR, SOLID} from '../grid';
 import {doorwayIssues} from '../doorways';
-import {levelDistance, levelIssues} from '../levelGen';
+import {levelArrays, levelDistance, levelIssues, SLAB} from '../levelGen';
+import {levelsOf} from '../levels';
 import {traversalIssues} from '../traversal';
 import type {StationLayout} from '../stationTypes';
-import {MARGIN, type TowerFrame} from './frame';
+import {FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, SCISSOR_STAIR, landingRect, type TowerFrame} from './frame';
+import {landingStrip} from './dress';
 import {ENEMY_MIN_CELLS, OFFICE_ENEMIES} from './spawns';
 
 export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   const issues: string[] = [];
   const info = layout.office;
-  if (!info) return ['no office info'];
-  const levels = layout.levels;
-  const lvO = info.levelId;
-  const gO = levels[lvO]?.grid;
-  if (!gO) return [`office level ${lvO} missing`];
-  // Reachability from the primary arrival.
-  const prim = info.arrivals.start ?? info.arrivals.elevator!;
-  const pg = levels[prim.level].grid;
-  const [sx, sy] = pg.cellOf(prim.x, prim.z);
-  const dist = levelDistance(levels, sx, sy, prim.level);
+  if (!info || info.version !== 2) return ['no office info (v2)'];
+  const levels = layout.levels, g0 = layout.grid;
+  // --- Storeys and elevations ---------------------------------------------------------------------------------------------
+  if (levels.length !== 1 + OFFICE_FLOORS.length) return [`${levels.length} levels (want ${1 + OFFICE_FLOORS.length})`];
+  if (levels[0].grid !== g0 || levels[0].role !== 'main' || levels[0].baseY !== 0) issues.push('level 0 is not the station main level');
+  if (levels[1].role !== 'upper') issues.push('level 1 (lobby) role');
+  const hu = levels[1].baseY;
+  if (hu < 5.4 - 1e-6 || hu > 5.9 + 1e-6) issues.push(`lobby height ${hu}`);
+  for (const L of levels) {
+    if (L.id !== levels.indexOf(L)) issues.push(`level ${L.id} id mismatch`);
+    if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);
+    if (L.id >= 2 && (L.role !== 'office' || Math.abs(L.baseY - (hu + FLOOR_HEIGHT * (L.id - 1))) > 1e-3)) issues.push(`level ${L.id} role ${L.role} / baseY ${L.baseY} not contiguous`);
+  }
+  for (const s of info.storeys) if (s.levelId !== s.floor || Math.abs(levels[s.levelId].baseY - s.baseY) > 1e-6) issues.push(`storey ${s.floor} record`);
+  if (Math.abs(info.groundY - hu) > 1e-6) issues.push('groundY is not the lobby floor');
+
+  // --- Reachability from the platform start (walking + stairs) ---------------------------------------------------------------
+  const st = info.start;
+  const [sx, sy] = g0.cellOf(st.x, st.z);
+  const dist = levelDistance(levels, sx, sy, st.level);
+  if (st.level !== 0 || Math.abs(st.x - layout.playerSpawn.x) > 1e-6 || Math.abs(st.z - layout.playerSpawn.z) > 1e-6) issues.push('start is not the platform spawn');
+  if (!g0.circleClear(st.x, st.z, 0.34)) issues.push('start not clear');
   for (const L of levels) {
     const g = L.grid;
     let bad = 0;
     for (let i = 0; i < g.cells.length; i++) {
-      if (g.cells[i] !== FLOOR || g.blocked[i]) continue;
-      if (dist[L.id][i] >= 0) continue;
+      if (g.cells[i] !== FLOOR || g.blocked[i] || dist[L.id][i] >= 0) continue;
       // A stair-run cell may be reached through its twin on the other storey.
       if (g.rampIdx[i] >= 0 && levels.some(M => M.id !== L.id && dist[M.id][i] >= 0)) continue;
       bad++;
@@ -41,81 +61,164 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
     if (bad) issues.push(`level ${L.id}: ${bad} walkable cells unreachable`);
   }
   for (const a of layout.areas) {
-    const lv = a.level ?? 0, g = levels[lv].grid, d = dist[lv];
-    let any = false;
-    for (let y = a.y; y < a.y + a.h && !any; y++) for (let x = a.x; x < a.x + a.w; x++) if (d[g.idx(x, y)] >= 0) { any = true; break; }
-    if (!any && !(a.role === 'stair' && levels.some(M => { const gm = M.grid; for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (dist[M.id][gm.idx(x, y)] >= 0) return true; return false; })))
-      issues.push(`area ${a.id} (${a.type} ${a.label}) unreachable`);
+    const lv = a.level ?? 0;
+    const seen = (M: number) => { const gm = levels[M].grid; for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (dist[M][gm.idx(x, y)] >= 0) return true; return false; };
+    if (!seen(lv) && !(a.role === 'stair' && levels.some(M => M.id !== lv && seen(M.id)))) issues.push(`area ${a.id} (${a.type} ${a.label}) unreachable`);
   }
-  // Arrivals.
-  for (const [k, p] of Object.entries(info.arrivals)) {
-    if (!p) continue;
-    const g = levels[p.level]?.grid;
-    if (!g) { issues.push(`arrival ${k} on missing level ${p.level}`); continue; }
-    const [cx, cy] = g.cellOf(p.x, p.z);
-    if (!g.inBounds(cx, cy) || dist[p.level][g.idx(cx, cy)] < 0) issues.push(`arrival ${k} unreachable`);
-    if (!g.circleClear(p.x, p.z, 0.34)) issues.push(`arrival ${k} not clear`);
+
+  // --- Scissor stair -------------------------------------------------------------------------------------------------------
+  const scissorFlights = new Set<number>();
+  const {open, fl, cl} = levelArrays(levels);
+  const wantRuns = OFFICE_FLOORS.slice(0, -1).map(n => `${n}-${n + 1}`).join(',');
+  if (info.stairs.runs.map(r => `${r.lower}-${r.upper}`).join(',') !== wantRuns) issues.push('scissor runs do not join every storey pair');
+  for (const r of info.stairs.runs) {
+    const k = layout.levelLinks[r.link];
+    if (!k || k.kind !== 'stairs' || k.lower !== r.lower || k.upper !== r.upper || k.ramp === undefined) { issues.push(`run ${r.lower}-${r.upper}: link`); continue; }
+    if (r.lane !== (r.lower % 2 === 1 ? 'A' : 'B')) issues.push(`run ${r.lower}-${r.upper}: lane ${r.lane}`);
+    const flights = layout.traversal.stairs.filter(q => layout.areas[q.area]?.level === r.lower && layout.areas[q.area]?.role === 'stair' && q.h0 >= levels[r.lower].baseY - 1e-3 && q.h1 <= levels[r.upper].baseY + 1e-3);
+    for (const q of flights) scissorFlights.add(q.id);
+    const risers = flights.reduce((s, q) => s + q.risers, 0);
+    if (risers !== 24) issues.push(`run ${r.lower}-${r.upper}: ${risers} risers`);
+    for (const q of flights) {
+      if (q.riser > 0.19 + 1e-6 || q.riser < 0.15 || Math.abs(q.tread - SCISSOR_STAIR.tread) > 1e-6 || q.risers > SCISSOR_STAIR.maxRisers) issues.push(`run ${r.lower}-${r.upper}: flight ${q.id} off spec`);
+      if (q.a1 - q.a0 < 1.5 - 1e-6) issues.push(`run ${r.lower}-${r.upper}: flight ${q.id} narrower than 1.5 m`);
+    }
+    // Headroom over every run cell on both grids, and no other storey's band inside it (slab collision).
+    const a = layout.areas[flights[0]?.area ?? -1];
+    if (!a) { issues.push(`run ${r.lower}-${r.upper}: no flights`); continue; }
+    let headBad = 0, slabBad = 0;
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+      const i = g0.idx(x, y);
+      for (const lv of [r.lower, r.upper]) {
+        const g = levels[lv].grid;
+        if (g.cells[i] !== FLOOR) { headBad++; continue; }
+        const ri = g.rampIdx[i];
+        if (ri >= 0 ? g.ramps[ri].headroom < SCISSOR_STAIR.headroom - 1e-6 : g.ceil[i] - g.floor[i] < SCISSOR_STAIR.headroom - 1e-3) headBad++;
+      }
+      const lo = levels[r.lower].grid.floor[i], hi = levels[r.lower].grid.ceil[i];
+      for (const M of levels) {
+        if (M.id === r.lower || M.id === r.upper || !open[M.id][i]) continue;
+        if (!(fl[M.id][i] >= hi + SLAB - 1e-3 || cl[M.id][i] <= lo - SLAB + 1e-3)) slabBad++;
+      }
+    }
+    if (headBad) issues.push(`run ${r.lower}-${r.upper}: ${headBad} cells without 2.5 m headroom`);
+    if (slabBad) issues.push(`run ${r.lower}-${r.upper}: ${slabBad} cells with another storey inside the headroom`);
   }
-  // Elevator cab: clear floor of its area, solid walls around except the door cells.
+  // Landings: one per storey, walkable, reachable, a doorway to the storey.
+  for (const n of OFFICE_FLOORS) {
+    const p = info.stairs.landings.find(q => q.floor === n);
+    const g = levels[n].grid;
+    if (!p) { issues.push(`storey ${n}: no stair landing`); continue; }
+    const [cx, cy] = g.cellOf(p.x, p.z), i = g.idx(cx, cy);
+    if (!g.walkable(cx, cy) || dist[n][i] < 0) issues.push(`storey ${n}: stair landing not walkable / reachable`);
+    const lr = landingRect(f, n), a = layout.areas[g.area[i]];
+    if (!a || a.x !== lr.x + MARGIN || a.y !== lr.y + MARGIN || a.w !== lr.w || a.h !== lr.h) { issues.push(`storey ${n}: landing area`); continue; }
+    if (!layout.doors.some(d => (d.a === a.id || d.b === a.id) && (d.level ?? 0) === n)) issues.push(`storey ${n}: landing has no doorway`);
+  }
+
+  // --- No void falls ---------------------------------------------------------------------------------------------------------
+  const drops = levelsOf(layout).unrailedDrops();
+  if (drops.length) issues.push(`${drops.length} unrailed drops (first: level ${drops[0].level} at ${drops[0].x0.toFixed(1)},${drops[0].z0.toFixed(1)})`);
+
+  // --- Elevator shaft + stops -------------------------------------------------------------------------------------------------
   const e = info.elevator;
-  const cab = layout.areas[e.area];
-  if (!cab || cab.type !== 'office-elevator') issues.push('elevator area missing');
-  else {
-    for (let y = cab.y; y < cab.y + cab.h; y++) for (let x = cab.x; x < cab.x + cab.w; x++) {
-      const i = gO.idx(x, y);
-      if (gO.cells[i] !== FLOOR || gO.blocked[i] || gO.area[i] !== cab.id) issues.push(`elevator cab cell ${x},${y} not clear`);
-    }
-    const doorCells = new Set<number>();
-    for (const d of layout.doors) if (d.a === cab.id || d.b === cab.id) for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) doorCells.add(gO.idx(x, y));
-    for (let y = cab.y - 1; y <= cab.y + cab.h; y++) for (let x = cab.x - 1; x <= cab.x + cab.w; x++) {
-      if (x >= cab.x && x < cab.x + cab.w && y >= cab.y && y < cab.y + cab.h) continue;
-      const i = gO.idx(x, y);
-      if (gO.cells[i] !== SOLID && !doorCells.has(i)) issues.push(`elevator shaft wall open at ${x},${y}`);
-    }
-    if (Math.abs(e.cab.x0 - cab.x * CELL) > 1e-6 || Math.abs(e.cab.x1 - (cab.x + cab.w) * CELL) > 1e-6) issues.push('elevator cab rect mismatch');
-    if (layout.props.some(p => (p.level ?? 0) === lvO && p.x > e.cab.x0 - 0.05 && p.x < e.cab.x1 + 0.05 && p.z > e.cab.z0 - 0.05 && p.z < e.cab.z1 + 0.05)) issues.push('prop inside the elevator cab');
-    const want = {x0: (f.cab.x + MARGIN) * CELL, z0: (f.cab.y + MARGIN) * CELL};
-    if (Math.abs(e.cab.x0 - want.x0) > 1e-6 || Math.abs(e.cab.z0 - want.z0) > 1e-6) issues.push('elevator not at the frame position');
-    if (!layout.lights.some(l => l.area === cab.id && !l.broken && !l.virtual)) issues.push('elevator cab unlit');
+  const cellsIn = (r: {x0: number; z0: number; x1: number; z1: number}): number[] => {
+    const out: number[] = [];
+    for (let y = Math.round(r.z0 / CELL); y < Math.round(r.z1 / CELL); y++) for (let x = Math.round(r.x0 / CELL); x < Math.round(r.x1 / CELL); x++) out.push(g0.idx(x, y));
+    return out;
+  };
+  const shaftCells = cellsIn(e.shaft);
+  if (shaftCells.length !== (f.cab.w + 2) * (f.cab.h + 2)) issues.push('shaft rect');
+  for (const n of OFFICE_FLOORS) {
+    const g = levels[n].grid;
+    if (shaftCells.some(i => g.cells[i] !== SOLID)) issues.push(`storey ${n}: shaft not solid`);
   }
-  // Stair doors: open floor in front, reachable.
-  for (const s of info.stairDoors) {
-    const fx = s.x + Math.sin(s.yaw) * 0.6, fz = s.z + Math.cos(s.yaw) * 0.6;
-    const [cx, cy] = gO.cellOf(fx, fz);
-    if (!gO.walkable(cx, cy) || dist[lvO][gO.idx(cx, cy)] < 0) issues.push(`stair door ${s.dir} has no reachable floor in front`);
+  if (e.stops.map(s => s.floor).join(',') !== OFFICE_FLOORS.join(',')) issues.push('elevator stops');
+  const strip = landingStrip(f);
+  const stripBox = {x0: (strip.x + MARGIN) * CELL, z0: (strip.y + MARGIN) * CELL, x1: (strip.x + strip.w + MARGIN) * CELL, z1: (strip.y + strip.h + MARGIN) * CELL};
+  for (const s of e.stops) {
+    const g = levels[s.levelId]?.grid;
+    if (!g || s.levelId !== s.floor || Math.abs(s.y - levels[s.levelId].baseY) > 1e-6) { issues.push(`stop ${s.floor} record`); continue; }
+    for (const i of cellsIn(stripBox)) if (g.cells[i] !== FLOOR || g.blocked[i] || dist[s.levelId][i] < 0 || Math.abs(g.floor[i] - s.y) > 1e-3) { issues.push(`stop ${s.floor}: landing strip not clear walkable floor`); break; }
+    const [lx, ly] = g.cellOf(s.landing.x, s.landing.z);
+    if (g.area[g.idx(lx, ly)] !== s.area) issues.push(`stop ${s.floor}: landing area`);
+    if (Math.abs(s.callPanel.z - (e.shaft.z0 - 0.03)) > 1e-6 || s.callPanel.x < e.shaft.x0 || s.callPanel.x > e.shaft.x1) issues.push(`stop ${s.floor}: call panel off the shaft face`);
   }
-  // Windows on the perimeter ring only.
+  if (Math.abs(e.door.z - e.cab.z0) > 1e-9 || e.door.x - e.door.width / 2 < e.cab.x0 || e.door.x + e.door.width / 2 > e.cab.x1) issues.push('elevator door record');
+
+  // --- Keep-clear zones: stairwell, landing door fronts, shaft, landing strips ------------------------------------------------
+  const well = info.stairs.well;
+  const inBox = (b: {x0: number; z0: number; x1: number; z1: number}, x0: number, z0: number, x1: number, z1: number, pad = 0) =>
+    x1 > b.x0 - pad && x0 < b.x1 + pad && z1 > b.z0 - pad && z0 < b.z1 + pad;
+  const fronts = layout.doors.filter(d => (d.level ?? 0) >= 1 && layout.areas[d.b]?.type === 'office-stair').map(d => ({lv: d.level ?? 0, box: {x0: d.x * CELL, z0: (d.y - 2) * CELL, x1: (d.x + d.w) * CELL, z1: (d.y + d.h) * CELL}}));
+  const shaftFace = {x0: e.shaft.x0, z0: e.shaft.z0 - 0.4, x1: e.shaft.x1, z1: e.shaft.z1};
+  for (const p of layout.props) {
+    const lv = p.level ?? 0;
+    if (lv < 1) continue;
+    const x0 = p.x - p.hx, x1 = p.x + p.hx, z0 = p.z - p.hz, z1 = p.z + p.hz;
+    if (inBox(well, x0, z0, x1, z1)) issues.push(`prop ${p.kind} in the stairwell (level ${lv})`);
+    // The strip is walking space: a prop counts when it intrudes > 0.1 m; high wall mounts on the corridor's far wall do not.
+    const high = p.mounted && p.y - levels[lv].baseY >= 2.0 && Math.abs(p.z - e.shaft.z0) > 0.6;
+    if (!high && inBox(stripBox, x0, z0, x1, z1, -0.1)) issues.push(`prop ${p.kind} on the elevator landing (level ${lv})`);
+    if (inBox(shaftFace, x0, z0, x1, z1) && (p.mounted || inBox(e.shaft, x0, z0, x1, z1) || Math.abs(p.x - e.door.x) < e.door.width / 2 + 0.3)) issues.push(`prop ${p.kind} on the elevator shaft / door (level ${lv})`);
+    for (const fr of fronts) if (fr.lv === lv && inBox(fr.box, x0, z0, x1, z1)) issues.push(`prop ${p.kind} in front of a stairwell doorway (level ${lv})`);
+  }
+  for (const s of layout.signs) {
+    const lv = s.level ?? 0;
+    if (lv < 1) continue;
+    const base = levels[lv].baseY, hw = (s.w ?? 1.2) / 2;
+    // Plates on the shaft face beside the door are fine; nothing may cover the opening below its head.
+    if (Math.abs(s.z - e.shaft.z0) < 0.1 && Math.abs(s.x - e.door.x) < e.door.width / 2 + hw && s.y - base < 2.45) issues.push(`sign '${s.text}' over the elevator door (level ${lv})`);
+    if (inBox(well, s.x, s.z, s.x, s.z, -0.05) && s.hang) issues.push(`hanging sign in the stairwell (level ${lv})`);
+  }
+  for (const p of layout.pickups) if ((p.level ?? 0) >= 1 && (inBox(well, p.x, p.z, p.x, p.z) || inBox(stripBox, p.x, p.z, p.x, p.z) || inBox(e.shaft, p.x, p.z, p.x, p.z))) issues.push(`pickup ${p.itemId} in the stairwell / elevator landing`);
+  for (const z of layout.zombies) if ((z.level ?? 0) >= 1 && (inBox(well, z.x, z.z, z.x, z.z) || inBox(e.shaft, z.x, z.z, z.x, z.z))) issues.push('enemy in the stairwell / shaft');
+
+  // --- Windows: perimeter ring of their own storey only -----------------------------------------------------------------------
   const {TW, TD} = f;
+  const ring = (x: number, y: number) => (x === MARGIN - 1 || x === MARGIN + TW || y === MARGIN - 1 || y === MARGIN + TD) && x >= MARGIN - 1 && x <= MARGIN + TW && y >= MARGIN - 1 && y <= MARGIN + TD;
   for (const w of info.windows) {
+    const L = levels[w.level];
+    if (!L || w.level < 1 || Math.abs(L.baseY - w.baseY) > 1e-6) { issues.push(`window on level ${w.level}: record`); continue; }
+    const gO = L.grid;
     const [c0x, c0y] = gO.cellOf(w.x0 + 0.01, w.z0 + 0.01), [c1x, c1y] = gO.cellOf(w.x1 - 0.01, w.z1 - 0.01);
-    const ring = (x: number, y: number) => (x === MARGIN - 1 || x === MARGIN + TW || y === MARGIN - 1 || y === MARGIN + TD) && x >= MARGIN - 1 && x <= MARGIN + TW && y >= MARGIN - 1 && y <= MARGIN + TD;
     for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) {
-      if (!ring(x, y)) { issues.push(`window cell ${x},${y} not on the exterior wall`); continue; }
-      if (gO.cells[gO.idx(x, y)] !== SOLID) issues.push(`window cell ${x},${y} not solid`);
+      if (!ring(x, y)) { issues.push(`window cell ${x},${y} (level ${w.level}) not on the exterior wall`); continue; }
+      if (gO.cells[gO.idx(x, y)] !== SOLID) issues.push(`window cell ${x},${y} (level ${w.level}) not solid`);
       const ix = x === MARGIN - 1 ? x + 1 : x === MARGIN + TW ? x - 1 : x, iy = y === MARGIN - 1 ? y + 1 : y === MARGIN + TD ? y - 1 : y;
-      if (w.kind === 'window' && gO.cells[gO.idx(ix, iy)] !== FLOOR) issues.push(`window cell ${x},${y} has no room behind it`);
+      if (w.kind === 'window' && gO.cells[gO.idx(ix, iy)] !== FLOOR) issues.push(`window cell ${x},${y} (level ${w.level}) has no room behind it`);
     }
   }
-  // Enemies / loot.
-  const [eLo, eHi] = info.floor === 1 ? OFFICE_ENEMIES.street : OFFICE_ENEMIES.floor;
-  if (layout.zombies.length < eLo || layout.zombies.length > eHi) issues.push(`enemy count ${layout.zombies.length} outside ${eLo}-${eHi}`);
-  const arrivalCells = Object.entries(info.arrivals).filter(([k]) => k !== 'start').map(([, p]) => p!);
-  const fromArr = arrivalCells.map(p => { const g = levels[p.level].grid; const [x, y] = g.cellOf(p.x, p.z); return levelDistance(levels, x, y, p.level); });
+  if (info.windows.filter(w => w.kind === 'entrance').some(w => w.level !== 1)) issues.push('entrance span off the lobby');
+
+  // --- Populations ----------------------------------------------------------------------------------------------------------
+  const count = (lvs: number[]) => layout.zombies.filter(z => lvs.includes(z.level ?? 0)).length;
+  const street = count([0, 1]);
+  if (street < OFFICE_ENEMIES.street[0] || street > OFFICE_ENEMIES.street[1]) issues.push(`station + lobby enemy count ${street}`);
+  for (let n = 2; n <= OFFICE_FLOORS.length; n++) {
+    const c = count([n]);
+    if (c < OFFICE_ENEMIES.floor[0] || c > OFFICE_ENEMIES.floor[1]) issues.push(`floor ${n} enemy count ${c}`);
+  }
   for (const z of layout.zombies) {
     const lv = z.level ?? 0, g = levels[lv].grid, [x, y] = g.cellOf(z.x, z.z), i = g.idx(x, y);
     if (dist[lv][i] < 0) issues.push('enemy on unreachable cell');
+    else if (dist[lv][i] < ENEMY_MIN_CELLS.start) issues.push('enemy too close to the start');
     if (!g.circleClear(z.x, z.z, 0.35)) issues.push('enemy spawn intersects geometry');
-    if (info.arrivals.start && dist[lv][i] < ENEMY_MIN_CELLS.start) issues.push('enemy too close to the start');
-    if (fromArr.some(d => d[lv][i] >= 0 && d[lv][i] < ENEMY_MIN_CELLS.arrival)) issues.push('enemy too close to an arrival');
   }
   for (const p of layout.pickups) {
     const lv = p.level ?? 0, g = levels[lv].grid, [x, y] = g.cellOf(p.x, p.z);
     if (!g.inBounds(x, y) || dist[lv][g.idx(x, y)] < 0) issues.push(`pickup ${p.itemId} unreachable`);
   }
   if (layout.pickups.some(p => p.itemId === (layout.startWeapon ?? 'rifle'))) issues.push('start weapon placed as a pickup');
-  // Shared rules.
+
+  // --- Shared rules -----------------------------------------------------------------------------------------------------------
   issues.push(...traversalIssues(layout));
   issues.push(...doorwayIssues(layout));
-  if (levels.length > 1) issues.push(...levelIssues(layout, dist).filter(s => !/^only \d+ levels$|overlaps the main level by only|level 2 has no stairs|walkable cells unreachable/.test(s)));
+  issues.push(...levelIssues(layout, dist).filter(s => {
+    if (/^only \d+ levels$|overlaps the main level by only|walkable cells unreachable/.test(s)) return false;
+    // The scissor flights are 4.4/24 m risers by design (design.md "Stairs"), checked above.
+    const m = /^flight (\d+) off spec$/.exec(s);
+    return !(m && scissorFlights.has(Number(m[1])));
+  }));
   return issues;
 }

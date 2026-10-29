@@ -122,6 +122,27 @@ export interface BrainOutput {
   alerted: boolean;
 }
 
+/**
+ * Task office-seamless-20261029 (ENGINE): how far gunfire carries (multiplier of the weapon's noise radius). In sight: 1;
+ * behind walls on the same storey: `wall` (0.6, as iteration 08); through n slabs (storey floors between the shooter's
+ * and the listener's feet): `slab`^n (0.35 for one slab, as iteration 08; a shot on floor 8 never reaches the station).
+ */
+export const HEARING = {wall: 0.6, slab: 0.35} as const;
+
+/** Storey floors strictly between two feet heights: level base heights in (min + 1, max + 1] (a stair landing counts). */
+export function slabsBetween(bases: readonly number[], ya: number, yb: number): number {
+  const lo = Math.min(ya, yb) + 1, hi = Math.max(ya, yb) + 1;
+  let n = 0;
+  for (const b of bases) if (b > lo && b <= hi) n++;
+  return n;
+}
+
+/** Noise-radius multiplier for a listener (see HEARING). */
+export function hearingMuffle(los: boolean, slabs: number): number {
+  if (los) return 1;
+  return slabs > 0 ? HEARING.slab ** slabs : HEARING.wall;
+}
+
 export class ZombieBrain {
   state: BrainState = 'idle';
   hp: number;
@@ -188,10 +209,14 @@ export class ZombieBrain {
     this.attackDone = false;
   }
 
-  /** Heard a loud noise (gunshot) at a position (iteration 08: `y` = the source's feet height). */
+  /**
+   * Heard a loud noise (gunshot) at a position (iteration 08: `y` = the source's feet height). Task office-seamless-20261029
+   * (ENGINE): the distance is 3D when `y` is given (a shot two storeys up is 8.8 m further away than its plan distance);
+   * the caller's radius already carries the walls / slabs between (hearingMuffle).
+   */
   hear(x: number, z: number, radius: number, y?: number): void {
     if (!this.alive) return;
-    if (Math.hypot(x - this.x, z - this.z) > radius) return;
+    if (Math.hypot(x - this.x, z - this.z, y === undefined ? 0 : y - this.y) > radius) return;
     this.lastKnown = [x, z, y];
     this.aware = true;
     if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {

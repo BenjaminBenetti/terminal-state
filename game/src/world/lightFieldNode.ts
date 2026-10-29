@@ -14,16 +14,20 @@
 //    (the sampled-texture binding follows the node's value; no rebuild).
 //  - Shared TSL for other lanes: lfSlotAt / lfBandAt / lfFloorAt (decay floor grime, world-mapped grime, fog density
 //    layer) and lightFieldSample (surfaces and the volumetric in-scattering). The CPU mirror is sampleField().
-// Slot selection is the iteration-08 packed column texel (slice 0: band thresholds + slot ids, one fetch, no per-slot
-// loop), done with float arithmetic (no integer shifts: identical on WGSL and GLSL ES 3.0).
+// Slot selection is the iteration-08 packed column texel (slice 0: band thresholds + slot ids, no per-slot loop), done with
+// float arithmetic (no integer shifts: identical on WGSL and GLSL ES 3.0). Task office-seamless-20261029 (ENGINE): N storeys.
+// An extended column (slice 0 A = band count 1..63) names its group texel (3 bands: two inner splits, three slot ids) from
+// the coarse splits in R / G / B; the pick always issues that second fetch (a legacy column re-reads slice 0, a cached
+// texel), so there is no branch around a texture read on either backend. Slot header heights use the bound field's
+// per-slot range (LF.slotY; the global range for a legacy field: the same floats as before).
 
 import * as THREE from 'three';
 import {LightingNode, MeshBasicNodeMaterial, NodeMaterial, PhongLightingModel, PhysicalLightingModel, QuadMesh, RenderTarget, type Node, type NodeBuilder} from 'three/webgpu';
 import {
   Fn, If, cameraViewMatrix, clamp, float, floor, int, ivec2, ivec3, length, max, min, mix, mod, normalWorld, positionWorld, renderGroup,
-  screenCoordinate, select, texture3D, textureLoad, uniform, vec2, vec3, vec4,
+  screenCoordinate, select, texture3D, textureLoad, uniform, uniformArray, vec2, vec3, vec4,
 } from 'three/tsl';
-import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_EMAX, LAYERS, SLOT_DEPTH, configureFieldTexture, fieldDepth, type LightFieldVolume} from './lightField';
+import {AUX_LAYERS, AUX_SLOT_DEPTH, FIELD_EMAX, GROUP_BANDS, LAYERS, MAX_SLOTS, SLOT_DEPTH, configureFieldTexture, fieldDepth, slotRange, type LightFieldVolume} from './lightField';
 
 /** Zero field (1 x 1 column, one slot): what materials compile and sample against before a station is bound. */
 const PLACEHOLDER = configureFieldTexture(new THREE.Data3DTexture(new Uint8Array(fieldDepth(1) * 4), 1, 1, fieldDepth(1)));
@@ -32,10 +36,14 @@ PLACEHOLDER.name = 'light-field-placeholder';
 /** Unbound band fallback (slot, floor, ceiling): the station floor at y 0, a 3.2 m storey. */
 export const UNBOUND_BAND = [0, 0, 3.2] as const;
 
+/** Per-slot header height range [lo, hi] (x, y; z / w unused), one vec4 per level slot (LF.slotY). */
+const SLOT_Y = Array.from({length: MAX_SLOTS}, () => new THREE.Vector4(0, 1, 0, 0));
+
 /**
  * The global light-field nodes. `tex` is the BASE texture node (its .value is swapped per station; every .load / .sample
  * clone references it). min/max = world bounds (x, y, z), dims = texture size (w, h, depth), levels = flicker-circuit
- * levels 0..2, slots = level slots in the texture, gain = output scale (LightFieldLight.intensity), bound = 0 / 1.
+ * levels 0..2, slots = level slots in the texture, gain = output scale (LightFieldLight.intensity), bound = 0 / 1,
+ * slotY = per-slot header height range (x = lo, y = hi; the bounds' y range in a legacy field).
  */
 export const LF = {
   tex: texture3D(PLACEHOLDER),
@@ -46,6 +54,7 @@ export const LF = {
   slots: uniform(1).setGroup(renderGroup),
   gain: uniform(1).setGroup(renderGroup),
   bound: uniform(0).setGroup(renderGroup),
+  slotY: uniformArray(SLOT_Y, 'vec4').setGroup(renderGroup),
 };
 
 let active: LightFieldVolume | null = null;
@@ -61,6 +70,7 @@ export function bindLightField(v: LightFieldVolume | null): void {
     LF.levels.value.set(1, 1, 1);
     LF.slots.value = 1;
     LF.bound.value = 0;
+    for (const q of SLOT_Y) q.set(0, 1, 0, 0);
     return;
   }
   LF.tex.value = v.texture;
@@ -70,6 +80,12 @@ export function bindLightField(v: LightFieldVolume | null): void {
   LF.levels.value.copy(v.resolution);
   LF.slots.value = v.field.slots;
   LF.bound.value = 1;
+  SLOT_Y.forEach((q, s) => { const [lo, hi] = slotRange(v.field, Math.min(s, v.field.slots - 1)); q.set(lo, hi, 0, 0); });
+}
+
+/** The per-slot header ranges currently bound (QA / tests: [lo, hi] per slot of the bound field). */
+export function boundSlotRanges(): [number, number][] {
+  return SLOT_Y.slice(0, Math.max(1, LF.slots.value as number)).map(q => [q.x, q.y]);
 }
 
 /** The station field currently bound to the TSL nodes (null before the first station / after dispose). */
@@ -99,22 +115,42 @@ const columnOf = (pxz: N, cell: N) => clamp(floor(n(pxz).sub(n(LF.min).xz).div(c
 const fetch = (ci: N, slice: N | number) => n(LF.tex).load(ivec3(int(n(ci).x), int(n(ci).y), int(n(float(slice)).add(0.5))));
 
 /**
- * Level slot (float) of column `ci` for height `py`: slice 0 G / B = heights between consecutive bands, A = band count << 6
- * | slot of band k in bits 2k. Clamped to the texture's slots.
+ * Level slot (float) of column `ci` for height `py` (mirror of fieldSlot). Legacy column (slice 0 A >= 64): G / B = heights
+ * between consecutive bands, A = band count << 6 | slot of band k in bits 2k. Extended column (A = band count 1..63):
+ * R / G / B = the splits above bands 2 / 5 / 8 pick group g; group texel g = (split above band 3g, split above 3g + 1,
+ * slot ids of bands 3g / 3g + 1 as low / high nibble, slot id of band 3g + 2). Two fetches; clamped to the texture's slots.
  */
 function pickSlot(ci: N, py: N): N {
   const K = n(fetch(ci, 0)).toVar();
-  const yr = n(n(LF.max).y).sub(n(LF.min).y);
+  const y0 = n(LF.min).y;
+  const yr = n(n(LF.max).y).sub(y0).toVar();
   const pk = floor(n(K.a).mul(255).add(0.5)).toVar();
-  const cnt = floor(n(pk).div(64));
+  const cnt = floor(n(pk).div(64)).toVar();
   // every select() is materialised (.toVar()): inside a uniformFlow context the GLSL builder prints unparenthesised ternaries
-  const up1 = n(select(n(cnt).greaterThan(1).and(n(py).greaterThan(n(n(LF.min).y).add(n(K.g).mul(yr)))), float(1), float(0))).toVar();
-  const up2 = n(select(n(cnt).greaterThan(2).and(n(py).greaterThan(n(n(LF.min).y).add(n(K.b).mul(yr)))), float(1), float(0))).toVar();
+  const up1 = n(select(n(cnt).greaterThan(1).and(n(py).greaterThan(n(y0).add(n(K.g).mul(yr)))), float(1), float(0))).toVar();
+  const up2 = n(select(n(cnt).greaterThan(2).and(n(py).greaterThan(n(y0).add(n(K.b).mul(yr)))), float(1), float(0))).toVar();
   const band = n(up1).add(up2);
   // 4^band as exact constants (exp2 is not guaranteed exact on every GPU: 4 - ulp would floor 4N / 4 to N - 1)
   const div4 = n(select(n(band).greaterThan(0.5), float(4), float(1))).toVar();
   const div = n(select(n(band).greaterThan(1.5), float(16), div4)).toVar();
-  return min(mod(floor(n(pk).div(div)), 4), n(LF.slots).sub(1));
+  const legacy = n(mod(floor(n(pk).div(div)), 4)).toVar();
+  // extended column: 1 when the column holds more than k bands and py lies above the split height v (unorm)
+  const ext = n(select(n(cnt).lessThan(0.5).and(n(pk).greaterThan(0.5)), float(1), float(0))).toVar();
+  const over = (v: N, k: N) => n(select(n(pk).greaterThan(k).and(n(py).greaterThan(n(y0).add(n(v).mul(yr)))), float(1), float(0))).toVar();
+  const g = n(over(K.r, float(GROUP_BANDS)).add(over(K.g, float(2 * GROUP_BANDS))).add(over(K.b, float(3 * GROUP_BANDS)))).mul(ext).toVar();
+  // group slice after the last slot (legacy: slice 0 again); clamped into the texture
+  const gs = n(select(n(ext).greaterThan(0.5), float(1 + SLOT_DEPTH - AUX_SLOT_DEPTH).add(n(LF.slots).mul(AUX_SLOT_DEPTH)).add(g), float(0))).toVar();
+  const G = n(fetch(ci, min(gs, n(n(LF.dims).z).sub(1)))).toVar();
+  const k1 = n(g).mul(GROUP_BANDS).add(1).toVar();
+  const j = n(over(G.r, k1)).add(over(G.g, n(k1).add(1))).toVar();
+  const ids = floor(n(G.b).mul(255).add(0.5)).toVar();
+  const hiId = floor(n(ids).div(16)).toVar();
+  const loId = n(ids).sub(n(hiId).mul(16));
+  const third = floor(n(G.a).mul(255).add(0.5));
+  const pair = n(select(n(j).greaterThan(0.5), hiId, loId)).toVar();
+  const extSlot = n(select(n(j).greaterThan(1.5), third, pair)).toVar();
+  const slot = n(select(n(ext).greaterThan(0.5), extSlot, legacy)).toVar();
+  return min(slot, n(LF.slots).sub(1));
 }
 
 /** Header of `slot` at column `ci`: first slice (float), top layer index, band floor / ceiling (world y). */
@@ -123,13 +159,15 @@ function slotHeader(ci: N, slot: N): {base: N; top: N; floor: N; ceil: N} {
   const base = n(mix(float(1), float(1 + SLOT_DEPTH - AUX_SLOT_DEPTH).add(n(slot).mul(AUX_SLOT_DEPTH)), aux)).toVar();
   const top = mix(float(LAYERS - 1), float(AUX_LAYERS - 1), aux);
   const H = n(fetch(ci, base)).toVar();
-  const yr = n(n(LF.max).y).sub(n(LF.min).y);
-  return {base, top, floor: n(n(LF.min).y).add(n(H.r).mul(yr)), ceil: n(n(LF.min).y).add(n(H.g).mul(yr))};
+  // the slot's own header range (legacy field: LF.min.y / LF.max.y, the iteration-08 maths)
+  const R = n(n(LF.slotY).element(int(slot))).toVar();
+  const yr = n(R.y).sub(R.x);
+  return {base, top, floor: n(R.x).add(n(H.r).mul(yr)), ceil: n(R.x).add(n(H.g).mul(yr))};
 }
 
 const bound = () => n(LF.bound).greaterThan(0.5);
 
-/** Level slot of the band holding world point p (0 when no field is bound). One texel fetch. */
+/** Level slot of the band holding world point p (0 when no field is bound). Two texel fetches. */
 export function lfSlotAt(p: Node): Node {
   const P = n(p);
   const slot = pickSlot(columnOf(P.xz, texelSize()), P.y);
@@ -140,7 +178,7 @@ export function lfSlotAt(p: Node): Node {
 export interface LightFieldBand { slot: Node; floor: Node; ceil: Node }
 
 /**
- * Level band holding world point p (two texel fetches; declares vars: use inside a material / Fn stack). UNBOUND_BAND
+ * Level band holding world point p (three texel fetches; declares vars: use inside a material / Fn stack). UNBOUND_BAND
  * ({slot 0, floor 0, ceil 3.2}) when no field is bound. Replaces the iteration-12 GLSL slot / band block (lfSlot / lfFl / lfCe).
  */
 export function lfBandAt(p: Node): LightFieldBand {

@@ -25,11 +25,11 @@ import {NodeMaterial, NodeUpdateType, QuadMesh, RenderPipeline, RenderTarget, Re
 import {pass, passTexture, texture} from 'three/tsl';
 import type {StationLayout} from '../gen/station';
 import {SOLID, type Grid} from '../gen/grid';
-import type {LightFieldVolume} from '../world/lightField';
+import {MAX_SLOTS, type LightFieldVolume} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {
   ATMOSPHERE_QUALITY, NOISE_CHANNELS, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS, atmosphereFor, buildAirMap, buildDensityMap,
-  buildNoiseVolume, densitySlot, fieldOffsets, fogMotion, marchSize, mediumAt, mediumStats, noiseScales, sampleAirMap, shadowBiasFor,
+  buildNoiseVolume, densityLayerRange, densitySlot, fieldOffsets, fogMotion, marchSize, mediumAt, mediumStats, noiseScales, sampleAirMap, shadowBiasFor,
   type AirMap, type AreaClass, type AtmosphereParams, type AtmosphereQuality, type DensityMap, type FogMotion, type MediumMaps,
   type QualityPreset,
 } from './atmosphere';
@@ -366,7 +366,9 @@ export class VolumetricAtmosphere {
     this.densityMap = buildDensityMap(layout, this.params);
     this.airMap = buildAirMap(layout);
     this.motion = fogMotion(layout.seed, this.params);
-    this.levelGrids = stationLevels(layout).slice(0, 4).map(L => L.grid);
+    // Task office-seamless-20261029: every storey (the density map's layers = light-field slots; was capped at 4, so a flare
+    // on storey 4+ had no occlusion window: no storey band, glow through the slabs).
+    this.levelGrids = stationLevels(layout).slice(0, MAX_SLOTS).map(L => L.grid);
     if (this.densityTex !== this.placeholderDensity) this.densityTex.dispose();
     if (this.airTex !== this.placeholderAir) this.airTex.dispose();
     const m = this.densityMap;
@@ -463,7 +465,8 @@ export class VolumetricAtmosphere {
     if (cx < 0 || cy < 0 || cx >= m.w || cy >= m.h) return null;
     const slot = densitySlot(m, x, z, y);
     const o = ((slot * m.h + cy) * m.w + cx) * 4;
-    return {floor: m.yMin + m.data[o + 1] / 255 * m.yRange, ceil: m.yMin + m.data[o + 2] / 255 * m.yRange, slot};
+    const [y0, yr] = densityLayerRange(m, slot);
+    return {floor: y0 + m.data[o + 1] / 255 * yr, ceil: y0 + m.data[o + 2] / 255 * yr, slot};
   }
 
   private openAt(x: number, y: number, z: number): boolean {
@@ -814,6 +817,7 @@ export class VolumetricAtmosphere {
       u.mapXform.value.set(0, 0, 1 / (m.w * m.cell), 1 / (m.h * m.cell));
       u.mapFloor.value.set(m.yMin, m.yRange);
       u.mapSlots.value = m.slots;
+      (u.mapFloors.array as THREE.Vector4[]).forEach((v, s) => { const [y0, yr] = densityLayerRange(m, Math.min(s, m.slots - 1)); v.set(y0, yr, 0, 0); });
     }
     // Flashlight (camera-held spot; same cone / attenuation as its surface lighting; battery flicker / off via intensity).
     const fl = this.lights.flashlight;

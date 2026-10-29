@@ -15,7 +15,7 @@
 // iteration-05 answers (ceilings only matter where a cell sets one).
 
 import {CELL, FLOOR, SOLID, VOID, type Grid, type Ramp} from '../gen/grid';
-import {ceilNearCell, levelsOf, Levels, type Level, type LevelLink, type RailRun} from '../gen/levels';
+import {ceilNearCell, levelsOf, Levels, type DynamicVolume, type Level, type LevelLink, type RailRun, type VolumeColumn} from '../gen/levels';
 import {stepTop} from '../gen/grid';
 import type {PropPlacement} from '../gen/props';
 
@@ -67,11 +67,19 @@ export class StaticQuery {
   private readonly grids: Grid[];
   private readonly fb: number[] = [];
   private readonly cb: number[] = [];
+  /**
+   * Task office-seamless (lane LIFT): tower worlds (a level with role 'office': the continuous Office Space) cap a column
+   * whose grid is SOLID on a storey ABOVE its top open band with a wall box up to topY — the lobby / office walls standing
+   * over the station hall and the elevator shaft over it would otherwise have no physics wall at their height (static
+   * boxes stop at a column's top band). The Subway (no 'office' storey) keeps exactly its statics.
+   */
+  readonly capAbove: boolean;
 
   constructor(layout: StaticLayout) {
     this.grid = layout.grid;
     this.levels = levelsOf(layout);
     this.grids = this.levels.list.map(l => l.grid);
+    this.capAbove = this.levels.list.some(l => l.role === 'office');
     this.props = layout.props;
     this.trenchY = layout.trench.floorY;
     this.minFloor = Math.min(...this.grids.map(g => g.minFloor()), this.trenchY);
@@ -101,20 +109,57 @@ export class StaticQuery {
     const g0 = this.grid;
     if (!g0.inBounds(cx, cy)) return -1;
     const i = cy * g0.w + cx;
-    const fb = this.fb, cb = this.cb;
     let n = 0;
-    for (const g of this.grids) {
+    // task office-seamless (lane LIFT): the moving elevator cab (a Levels dynamic volume) hides / gates grid bands here
+    const vc = this.levels.volumeColumn(i);
+    for (let gi = 0; gi < this.grids.length; gi++) {
+      const g = this.grids[gi];
       if (!isOpen(g, i)) continue;
       let f: number;
       if (g.rampIdx[i] >= 0) { const R = g.ramps[g.rampIdx[i]]; f = stepTop(R, R.axis === 'x' ? x : z); }
       else f = g.cells[i] === VOID && g.floor[i] === 0 ? this.trenchY : g.floorOf(i);
-      const c = ceilNearCell(g, i, cx, cy, x, z);
-      // insertion by floor
-      let k = n++;
-      while (k > 0 && fb[k - 1] > f) { fb[k] = fb[k - 1]; cb[k] = cb[k - 1]; k--; }
-      fb[k] = f; cb[k] = c;
+      if (vc && this.levels.gridBandHidden(i, gi, f)) continue;
+      n = this.insertBand(n, f, ceilNearCell(g, i, cx, cy, x, z));
     }
+    if (vc) for (const c of vc) if (this.levels.volumeBandOf(c, this.vb)) n = this.insertBand(n, this.vb.floor, this.vb.ceil);
     return n;
+  }
+  private readonly vb = {floor: 0, ceil: 0};
+
+  /** Insertion by floor into fb / cb; returns the new count. */
+  private insertBand(n: number, f: number, c: number): number {
+    const fb = this.fb, cb = this.cb;
+    let k = n;
+    while (k > 0 && fb[k - 1] > f) { fb[k] = fb[k - 1]; cb[k] = cb[k - 1]; k--; }
+    fb[k] = f; cb[k] = c;
+    return n + 1;
+  }
+
+  /**
+   * Lane LIFT: the dynamic-volume role of column (cx, cy) for the static boxes — 'cab' (interior: no static box, the cab's
+   * kinematic floor / ceiling carry bodies), 'gate' (the doorway through the shaft wall: solid except an opening at each
+   * stop, filled while that landing's doors are shut), or null.
+   */
+  volumeRole(cx: number, cy: number): {role: 'cab' | 'gate' | 'ring'; v: DynamicVolume; col: VolumeColumn | null} | null {
+    if (!this.grid.inBounds(cx, cy)) return null;
+    const vc = this.levels.volumeColumn(cy * this.grid.w + cx);
+    if (vc && vc.length) {
+      const gate = vc.find(c => c.gate);
+      return gate ? {role: 'gate', v: gate.v, col: gate} : {role: 'cab', v: vc[0].v, col: vc[0]};
+    }
+    // the shaft walls around the interior ('ring': solid over the whole shaft height, whatever lies under the shaft)
+    const mx = (cx + 0.5) * CELL, mz = (cy + 0.5) * CELL;
+    for (const v of this.levels.dynamicVolumes) {
+      const sh = v.shell ?? CELL;
+      if (mx > v.x0 - sh && mx < v.x1 + sh && mz > v.z0 - sh && mz < v.z1 + sh) return {role: 'ring', v, col: null};
+    }
+    return null;
+  }
+
+  /** Lane LIFT: the vertical range of a volume's shaft (lowest stop floor minus the cab slab .. top stop's cab roof). */
+  static shaftRange(v: DynamicVolume, slab: number): [number, number] {
+    const stops = v.stops?.length ? v.stops : [v.floorY];
+    return [Math.min(...stops) - slab - 0.05, Math.max(...stops) + (v.ceilY - v.floorY) + slab + 0.05];
   }
 
   /** Index of the band holding height y (with tolerance), else -1. */
@@ -256,6 +301,14 @@ export class StaticQuery {
       else if (b.f > below + 1e-4) solids.push({y0: below, y1: b.f});
       below = b.c;
       if (!Number.isFinite(below)) break;
+    }
+    // tower worlds: a storey solid here above the top band is a wall up there (see capAbove)
+    if (this.capAbove && Number.isFinite(below) && below < this.topY) {
+      for (const L of this.levels.list) {
+        if (isOpen(L.grid, i) || L.baseY < below - 0.05) continue;
+        solids.push({y0: below, y1: this.topY});
+        break;
+      }
     }
     return {wall: false, ramp, solids};
   }

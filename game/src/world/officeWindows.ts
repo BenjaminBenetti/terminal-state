@@ -1,8 +1,10 @@
-// Iteration 16 (lane TOWER): office windows — glass panes in WORLD-GEN's perimeter wall openings
-// (layout.office.windows), with frames, mullions, transoms, an interior sill, some panes cracked (lane ASSETS' T6
-// window-glass texture, or a procedural cracked-glass fallback), some broken out (jagged shards left in the frame) and
-// some boarded up. Collision: the window cells are solid in the grid; every span also gets a collision box that the
-// runtime enforces on the player and enemies (a broken pane is never a way out).
+// Iteration 16 (lane TOWER) / task office-seamless (lane LIFT): office windows — glass panes in GEN's perimeter wall openings
+// of EVERY storey of the continuous tower (layout.office.windows: each span carries its storey `level` and floor `baseY`),
+// with frames, mullions, transoms, an interior sill, some panes cracked (lane ASSETS' T6 window-glass texture, or a
+// procedural cracked-glass fallback), some broken out (jagged shards left in the frame) and some boarded up. Built merged
+// per storey and material (meshes tagged userData.level: the storey culler hides other floors' windows). Collision: the
+// window cells are solid in the grid; every span also gets a collision box that the runtime enforces on the player and
+// enemies of that storey (a broken pane is never a way out).
 // Transparency follows the storefront glass rules (world/shapeMaterials 'glassShopfront'): transparent, depthWrite off
 // — the fog march / composite read the depth BEHIND the glass (the exterior), exactly like the existing shop glazing.
 
@@ -20,6 +22,9 @@ export interface PanePlan { a0: number; a1: number; y0: number; y1: number; stat
 
 export interface WindowPlan {
   span: WindowSpan;
+  /** Storey (layout.levels index) and its floor (absolute y). */
+  level: number;
+  baseY: number;
   /** Outward unit normal (x, z). */
   n: [number, number];
   /** The span runs along this world axis; a0..a1 = its range. */
@@ -37,7 +42,7 @@ export interface WindowPlan {
   collider: Rect2;
 }
 
-/** Plans every window span of a section: panes, states, frames, colliders (deterministic per section seed). */
+/** Plans every window span of the tower (every storey): panes, states, frames, colliders (deterministic per level seed). */
 export function planWindows(info: TowerInfo): WindowPlan[] {
   return info.windows.map((span, si) => {
     const n = sideNormal(span.side);
@@ -48,7 +53,7 @@ export function planWindows(info: TowerInfo): WindowPlan[] {
     const inner = out > 0 ? c0 : c1;
     const thick = Math.max(0.05, c1 - c0);
     const glass = inner + out * Math.min(thick * 0.55, thick - 0.03);
-    const [y0, y1] = windowYs(span, info.baseY);
+    const [y0, y1] = windowYs(span);
     const len = a1 - a0;
     const count = Math.max(1, Math.round(len / 1.5));
     const mullions = Array.from({length: count - 1}, (_, i) => a0 + len * (i + 1) / count);
@@ -71,7 +76,7 @@ export function planWindows(info: TowerInfo): WindowPlan[] {
     // collider: the span box, at least 0.35 m thick, extended outward (never into the room)
     const cMin = out > 0 ? inner : Math.min(c0, inner - 0.35), cMax = out > 0 ? Math.max(c1, inner + 0.35) : inner;
     const collider: Rect2 = along === 'x' ? {x0: a0, x1: a1, z0: cMin, z1: cMax} : {x0: cMin, x1: cMax, z0: a0, z1: a1};
-    return {span, n, along, a0, a1, glass, inner, y0, y1, mullions, transom, panes, collider};
+    return {span, level: span.level, baseY: span.baseY, n, along, a0, a1, glass, inner, y0, y1, mullions, transom, panes, collider};
   });
 }
 
@@ -205,6 +210,18 @@ function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
 export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null): WindowView {
   const root = new THREE.Group(); root.name = 'tower-windows';
   const geometries: THREE.BufferGeometry[] = [];
+  const glass: THREE.Mesh[] = [], meshes: THREE.Mesh[] = [];
+  let cracked: SurfaceNodeMaterial | null = null;
+  // merged per storey (culling) and material
+  const byLevel = new Map<number, WindowPlan[]>();
+  for (const p of plans) { let l = byLevel.get(p.level); if (!l) byLevel.set(p.level, (l = [])); l.push(p); }
+  for (const [level, list] of byLevel) cracked = buildStorey(list, mats, glassTex, level, geometries, glass, meshes) ?? cracked;
+  for (const m of meshes) root.add(m);
+  return {root, glass, geometries, cracked};
+}
+
+/** One storey's windows, merged per material (meshes tagged with the storey). Returns the cracked-glass material if used. */
+function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null, level: number, geometries: THREE.BufferGeometry[], glass: THREE.Mesh[], meshes: THREE.Mesh[]): SurfaceNodeMaterial | null {
   const intact: THREE.BufferGeometry[] = [], crackedParts: THREE.BufferGeometry[] = [], frames: THREE.BufferGeometry[] = [], sills: THREE.BufferGeometry[] = [], boards: THREE.BufferGeometry[] = [];
   for (const p of plans) {
     const facing: [number, number] = [-p.n[0], -p.n[1]]; // glass faces the room
@@ -248,17 +265,17 @@ export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials,
       }
     }
   }
-  const glass: THREE.Mesh[] = [];
   const mk = (parts: THREE.BufferGeometry[], mat: THREE.Material, name: string, isGlass = false): void => {
     const g = mergeAll(parts);
     if (!g) return;
     geometries.push(g);
     const m = new THREE.Mesh(g, mat);
     m.name = name;
+    m.userData.level = level;
     // glass first among the transparents: every other transparent (tube glow, particles, decals) is inside the room,
     // in front of it, and must blend over it
     if (isGlass) { m.renderOrder = -1; glass.push(m); }
-    root.add(m);
+    meshes.push(m);
   };
   const cracked = crackedParts.length ? crackedGlassMaterial(glassTex) : null;
   mk(frames, shapeMaterial(mats, 'shopFrame'), 'tower-window-frames');
@@ -266,5 +283,5 @@ export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials,
   mk(boards, shapeMaterial(mats, 'wood'), 'tower-window-boards');
   mk(intact, shapeMaterial(mats, 'glassShopfront'), 'tower-window-glass', true);
   if (cracked) mk(crackedParts, cracked, 'tower-window-glass-cracked', true);
-  return {root, glass, geometries, cracked};
+  return cracked;
 }

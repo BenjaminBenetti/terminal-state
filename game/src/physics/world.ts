@@ -16,10 +16,17 @@
 // underside from below and fall through apertures), stair treads of every distinct flight (from
 // the ceiling of whatever lies under it), railings as thin boxes, props of every level.
 
+// Task office-seamless-20261029 (lane LIFT): the moving elevator cab (a Levels dynamic volume, gen/levels.ts). Its interior
+// columns get NO static boxes; a KINEMATIC body (floor slab under the cab floor + ceiling slab over it) follows the cab
+// every frame; the doorway columns (gate) are solid except an opening at each stop, filled by a static box while that
+// landing's doors are shut. RIDERS: before stepping, every simulating body inside the cab (ragdoll parts, loose items,
+// chunks, flares, filler stock), resting casings / flesh chunks and frozen corpses are carried by the cab's dy, so the
+// cab frame is exact (no penetration, no falling behind the floor).
+
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import {CELL} from '../gen/grid';
-import {RAIL_H, RAIL_HALF} from '../gen/levels';
+import {RAIL_H, RAIL_HALF, type DynamicVolume, type VolumeGate} from '../gen/levels';
 import {StaticQuery, rampPieces, type StaticLayout} from './staticQuery';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC, Ragdoll, RagdollJoint, type KillImpulse, type RagdollTarget} from './ragdoll';
 import {CasingSystem, type CasingAudio, type CasingKind} from './casings';
@@ -93,6 +100,36 @@ export interface PhysicsStats {
 
 interface Chunk { bodies: CANNON.Body[]; active: boolean }
 
+/** Lane LIFT: the cannon side of one dynamic volume (the elevator cab). */
+interface CabBodies {
+  body: CANNON.Body;
+  /** Floor / ceiling the bodies were last placed at (riders: dy). */
+  last: number;
+  lastCeil: number;
+  fillers: {body: CANNON.Body; gate: VolumeGate; stop: number; inWorld: boolean}[];
+}
+/** Slab thickness of the cab's kinematic floor / ceiling (m; thick: no tunnelling even at a flare's 9 m/s). */
+export const CAB_SLAB = 0.5;
+
+/** The passage rect (x / z) of a volume gate: beyond its side by `depth`, over its opening range. */
+export function gateRect(v: DynamicVolume, g: VolumeGate): {x0: number; z0: number; x1: number; z1: number} {
+  const a0 = Math.min(g.a0, g.a1), a1 = Math.max(g.a0, g.a1), d = Math.max(0, g.depth);
+  if (g.side === 'N') return {x0: a0, x1: a1, z0: v.z0 - d, z1: v.z0};
+  if (g.side === 'S') return {x0: a0, x1: a1, z0: v.z1, z1: v.z1 + d};
+  if (g.side === 'W') return {x0: v.x0 - d, x1: v.x0, z0: a0, z1: a1};
+  return {x0: v.x1, x1: v.x1 + d, z0: a0, z1: a1};
+}
+
+/**
+ * Riders region: a point inside a volume's interior box between the given floor and ceiling, padded by RIDE_PAD so a thing
+ * straddling the cab door plane (a flare lying across the threshold) rides too — the band beyond the interior is shaft wall
+ * or doorway, never a landing (that starts a whole shaft wall further out).
+ */
+export const RIDE_PAD = 0.15;
+function inCab(v: DynamicVolume, floor: number, ceil: number, x: number, y: number, z: number, pad = RIDE_PAD): boolean {
+  return x > v.x0 - pad && x < v.x1 + pad && z > v.z0 - pad && z < v.z1 + pad && y > floor - 0.12 && y < ceil + 0.12;
+}
+
 /**
  * Iteration 08 (Lane B): an external owner of rigid bodies in this bounded world (e.g. Lane S's
  * filler shelf stock). Register with PhysicsSystem.addSource: the world is stepped while any source
@@ -107,6 +144,32 @@ export interface BodySource {
   activePoints(out: CANNON.Vec3[]): void;
   update?(dt: number): void;
   clear?(): void;
+  /** Lane LIFT: carry resting things inside the moving elevator cab by dy (`inside(x, y, z)`; simulating bodies are carried by the physics system). */
+  carry?(inside: (x: number, y: number, z: number) => boolean, dy: number): void;
+  /** Lane LIFT: move resting things out of a doorway the landing doors just shut on (`move` -> new x / z, or null). */
+  relocate?(move: DoorwayMove): void;
+}
+
+/** Where a point in a shutting doorway goes (new x / z: just inside the cab or just onto the landing), or null when it is not in it. */
+export type DoorwayMove = (x: number, y: number, z: number) => [number, number] | null;
+
+/**
+ * Lane LIFT: the doorway sweep of a volume gate at one stop — a point inside the passage (the shaft wall's doorway, from the
+ * floor to the opening's head) is moved to the nearer side: 10 cm into the cab, or 10 cm out onto the landing.
+ */
+export function doorwayMover(v: DynamicVolume, g: VolumeGate, stop: number): DoorwayMove {
+  const r = gateRect(v, g), d = Math.max(0, g.depth);
+  return (x, y, z) => {
+    if (x <= r.x0 || x >= r.x1 || z <= r.z0 || z >= r.z1 || y < stop - 0.3 || y > stop + g.height) return null;
+    // s: depth from the cab plane outward (0 .. d)
+    const s = g.side === 'N' ? v.z0 - z : g.side === 'S' ? z - v.z1 : g.side === 'W' ? v.x0 - x : x - v.x1;
+    const to = s < d / 2 ? -0.1 : d + 0.1;
+    const ds = to - s;
+    if (g.side === 'N') return [x, z - ds];
+    if (g.side === 'S') return [x, z + ds];
+    if (g.side === 'W') return [x - ds, z];
+    return [x + ds, z];
+  };
 }
 
 let warmedUp = false;
@@ -166,6 +229,11 @@ export class PhysicsSystem implements BodyHost {
   private frozen: Ragdoll[] = [];
   private failedCount = 0;
   private readonly staticChunks = new Map<number, Chunk>();
+  /** Lane LIFT: cannon bodies of the Levels dynamic volumes (elevator cabs), and the volume set they were built for. */
+  private readonly cabs = new Map<DynamicVolume, CabBodies>();
+  private volVersion = -1;
+  /** Lane LIFT safety net (QA / tests): simulating bodies put back on the cab floor after sinking below it. */
+  cabClamps = 0;
   private chunkTimer = 0;
   private time = 0;
   private stepMs = 0;
@@ -250,6 +318,8 @@ export class PhysicsSystem implements BodyHost {
     this.frozen = [];
     this.failedCount = 0;
     this.staticChunks.clear();
+    this.cabs.clear();
+    this.volVersion = -1;
     this.pending = [];
     this.world = null;
     this.query = null;
@@ -312,6 +382,7 @@ export class PhysicsSystem implements BodyHost {
   // -------------------------------------------------------------------------------------------
   update(dt: number): void {
     this.time += dt;
+    this.syncVolumes(); // lane LIFT: the moving cab (kinematic slabs, doorway fillers) + its riders, before anything steps
     if (this.pending.length) {
       for (const p of this.pending) p.t -= dt;
       const due = this.pending.filter(p => p.t <= 0);
@@ -343,6 +414,136 @@ export class PhysicsSystem implements BodyHost {
     const ms = performance.now() - t0;
     this.stepMs += (ms - this.stepMs) * 0.1;
     this.stepMsMax = Math.max(this.stepMsMax * 0.995, ms);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Lane LIFT: dynamic volumes (the moving elevator cab)
+
+  /** Volumes registered on the station's Levels; their cannon bodies follow them, riders ride along. */
+  private syncVolumes(): void {
+    const q = this.query, w = this.world;
+    if (!q || !w) return;
+    const L = q.levels;
+    if (L.volumeVersion !== this.volVersion) {
+      this.volVersion = L.volumeVersion;
+      // the static boxes around the shaft depend on the volumes: rebuild cached chunks lazily, new cab bodies
+      for (const c of this.staticChunks.values()) if (c.active) for (const b of c.bodies) w.removeBody(b);
+      this.staticChunks.clear();
+      for (const cab of this.cabs.values()) { w.removeBody(cab.body); for (const f of cab.fillers) if (f.inWorld) w.removeBody(f.body); }
+      this.cabs.clear();
+      this.chunkTimer = 0;
+    }
+    const vols = L.dynamicVolumes;
+    if (!vols.length) return;
+    for (const v of vols) {
+      let cab = this.cabs.get(v);
+      if (!cab) { cab = this.makeCab(v); this.cabs.set(v, cab); }
+      const dy = v.floorY - cab.last;
+      if (dy !== 0) this.carryRiders(v, cab.last, cab.lastCeil, dy);
+      cab.last = v.floorY; cab.lastCeil = v.ceilY;
+      const b = cab.body;
+      b.position.set((v.x0 + v.x1) / 2, v.floorY, (v.z0 + v.z1) / 2);
+      b.previousPosition.copy(b.position); b.interpolatedPosition.copy(b.position);
+      b.velocity.setZero();
+      b.aabbNeedsUpdate = true;
+      for (const f of cab.fillers) {
+        const want = !(f.gate.open && Math.abs(v.floorY - f.stop) < 0.05);
+        if (want === f.inWorld) continue;
+        if (want) { this.clearDoorway(doorwayMover(v, f.gate, f.stop)); w.addBody(f.body); } else w.removeBody(f.body);
+        f.inWorld = want;
+      }
+      this.keepAboveCabFloor(v);
+    }
+  }
+
+  /**
+   * Safety net: a simulating body whose centre is inside the cab footprint never stays below the cab floor (a deep contact
+   * or a frame hitch can push it into the slab): it is put back on the floor, not let through into the shaft.
+   */
+  private keepAboveCabFloor(v: DynamicVolume): void {
+    for (const b of this.world!.bodies) {
+      if (b.type !== CANNON.Body.DYNAMIC) continue;
+      const p = b.position;
+      if (p.x <= v.x0 || p.x >= v.x1 || p.z <= v.z0 || p.z >= v.z1 || p.y > v.floorY + 0.6 || p.y < v.floorY - CAB_SLAB - 0.3) continue;
+      if (b.aabbNeedsUpdate) b.updateAABB();
+      const low = b.aabb.lowerBound.y;
+      if (low >= v.floorY - 0.02) continue;
+      const lift = v.floorY - low + 0.001;
+      p.y += lift; b.previousPosition.y += lift; b.interpolatedPosition.y += lift;
+      if (b.velocity.y < 0) b.velocity.y = 0;
+      b.aabbNeedsUpdate = true;
+      this.cabClamps++;
+    }
+  }
+
+  /** The cab's kinematic floor + ceiling slabs and one doorway filler per gate and stop. */
+  private makeCab(v: DynamicVolume): CabBodies {
+    const w = this.world!;
+    const ALL = GROUP_RAGDOLL | GROUP_ITEM | GROUP_CHUNK;
+    const hx = (v.x1 - v.x0) / 2, hz = (v.z1 - v.z0) / 2, h = v.ceilY - v.floorY;
+    const body = new CANNON.Body({mass: 0, type: CANNON.Body.KINEMATIC, material: this.staticMat, collisionFilterGroup: GROUP_STATIC, collisionFilterMask: ALL});
+    body.addShape(new CANNON.Box(new CANNON.Vec3(hx + 0.05, CAB_SLAB / 2, hz + 0.05)), new CANNON.Vec3(0, -CAB_SLAB / 2, 0));
+    body.addShape(new CANNON.Box(new CANNON.Vec3(hx + 0.05, CAB_SLAB / 2, hz + 0.05)), new CANNON.Vec3(0, h + CAB_SLAB / 2, 0));
+    body.position.set((v.x0 + v.x1) / 2, v.floorY, (v.z0 + v.z1) / 2);
+    w.addBody(body);
+    const fillers: CabBodies['fillers'] = [];
+    for (const g of v.gates) {
+      const r = gateRect(v, g);
+      for (const stop of v.stops ?? [v.floorY]) {
+        const fb = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, material: this.staticMat, collisionFilterGroup: GROUP_STATIC, collisionFilterMask: ALL});
+        fb.addShape(new CANNON.Box(new CANNON.Vec3((r.x1 - r.x0) / 2, g.height / 2, (r.z1 - r.z0) / 2)));
+        fb.position.set((r.x0 + r.x1) / 2, stop + g.height / 2, (r.z0 + r.z1) / 2);
+        fb.aabbNeedsUpdate = true;
+        fillers.push({body: fb, gate: g, stop, inWorld: false});
+      }
+    }
+    return {body, last: v.floorY, lastCeil: v.ceilY, fillers};
+  }
+
+  /** The landing doors shut on a doorway: simulating bodies and resting things in it go to the nearer side (never left inside the wall). */
+  private clearDoorway(move: DoorwayMove): void {
+    for (const b of this.world!.bodies) {
+      if (b.type !== CANNON.Body.DYNAMIC) continue;
+      const p = b.position, to = move(p.x, p.y, p.z);
+      if (!to) continue;
+      const dx = to[0] - p.x, dz = to[1] - p.z;
+      p.x += dx; p.z += dz; b.previousPosition.x += dx; b.previousPosition.z += dz; b.interpolatedPosition.x += dx; b.interpolatedPosition.z += dz;
+      b.aabbNeedsUpdate = true;
+    }
+    this.casings.relocate(move);
+    this.chunks.relocate(move);
+    for (const s of this.sources) s.relocate?.(move);
+  }
+
+  /** Everything resting / moving inside the cab rides its dy (the cab frame stays exact). */
+  private carryRiders(v: DynamicVolume, floor: number, ceil: number, dy: number): void {
+    const w = this.world!;
+    const shift = (b: CANNON.Body) => {
+      b.position.y += dy; b.previousPosition.y += dy; b.interpolatedPosition.y += dy;
+      b.aabbNeedsUpdate = true;
+    };
+    for (const b of w.bodies) {
+      if (b.type !== CANNON.Body.DYNAMIC) continue;
+      const p = b.position;
+      if (inCab(v, floor, ceil, p.x, p.y, p.z)) shift(b);
+    }
+    // corpses no longer simulating: their bones are posed relative to the actor root
+    for (const r of this.frozen) {
+      const p = r.pelvis.position;
+      if (!inCab(v, floor, ceil, p.x, p.y, p.z)) continue;
+      for (const part of r.parts) part.body.position.y += dy;
+      const root = (r.target as {root?: THREE.Object3D}).root;
+      if (root) { root.position.y += dy; root.updateMatrixWorld(true); }
+    }
+    const test = (x: number, y: number, z: number) => inCab(v, floor, ceil, x, y, z);
+    this.casings.carry(test, dy);
+    this.chunks.carry(test, dy);
+    for (const s of this.sources) s.carry?.(test, dy);
+  }
+
+  /** QA / tests: the cannon bodies of the dynamic volumes. */
+  cabBodies(): {floor: number; fillersIn: number; fillers: number}[] {
+    return [...this.cabs.values()].map(c => ({floor: c.body.position.y, fillersIn: c.fillers.filter(f => f.inWorld).length, fillers: c.fillers.length}));
   }
 
   // -------------------------------------------------------------------------------------------
@@ -387,7 +588,15 @@ export class PhysicsSystem implements BodyHost {
     const used = new Uint8Array(CHUNK * CHUNK);
     // iteration 08: per-column multi-level profile keys (single level: wall / ramp / floor height, as before)
     const keys: string[] = [];
-    for (let y = 0; y < CHUNK; y++) for (let x = 0; x < CHUNK; x++) keys.push(q.columnKey(cx0 + x, cy0 + y, base));
+    // lane LIFT: elevator columns. Below the shaft each keeps its grid profile (e.g. a station hall under the tower); over
+    // the shaft's height the cab interior is free (its kinematic slabs move with it, roofed above the top stop), the shaft
+    // walls ('ring') are solid, every doorway column is solid except an opening per stop (filled while shut).
+    const vrs: (ReturnType<StaticQuery['volumeRole']>)[] = [];
+    for (let y = 0; y < CHUNK; y++) for (let x = 0; x < CHUNK; x++) {
+      const vr = q.volumeRole(cx0 + x, cy0 + y);
+      vrs.push(vr);
+      keys.push(vr ? `v${vr.role[0]}${vr.role === 'gate' ? `${x},${y}` : ''}:${q.columnKey(cx0 + x, cy0 + y, base)}` : q.columnKey(cx0 + x, cy0 + y, base));
+    }
     const cls = (x: number, y: number) => keys[y * CHUNK + x];
     const bodies: CANNON.Body[] = [];
     const ALL = GROUP_RAGDOLL | GROUP_ITEM | GROUP_CHUNK;
@@ -412,6 +621,21 @@ export class PhysicsSystem implements BodyHost {
         for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) used[(y + j) * CHUNK + x + i] = 1;
         const X0 = (cx0 + x) * CELL, X1 = (cx0 + x + w) * CELL, Z0 = (cy0 + y) * CELL, Z1 = (cy0 + y + h) * CELL;
         if (c === 'w') { box(X0, X1, base - 0.1, WALL_TOP, Z0, Z1); continue; }
+        const vr = vrs[y * CHUNK + x];
+        if (vr) {
+          const [sb, st] = StaticQuery.shaftRange(vr.v, CAB_SLAB);
+          // under the shaft: the column's own grid profile, clipped below the shaft (a wall column: solid up to it)
+          const prof = q.columnSolids(cx0 + x, cy0 + y, base);
+          if (prof.wall) box(X0, X1, base - 0.1, sb, Z0, Z1);
+          else for (const so of prof.solids) if (so.y0 < sb - 1e-3) box(X0, X1, so.y0, Math.min(so.y1, sb), Z0, Z1);
+          if (vr.role === 'cab') { if (WALL_TOP > st + 1e-3) box(X0, X1, st, WALL_TOP, Z0, Z1); continue; }
+          if (vr.role === 'ring') { box(X0, X1, sb, WALL_TOP, Z0, Z1); continue; }
+          const gate = vr.col!.gate!, stops = [...(vr.v.stops ?? [vr.v.floorY])].sort((a, b) => a - b);
+          let below = sb;
+          for (const s of stops) { if (s > below + 1e-3) box(X0, X1, below, s, Z0, Z1); below = Math.max(below, s + gate.height); }
+          if (WALL_TOP > below + 1e-3) box(X0, X1, below, WALL_TOP, Z0, Z1);
+          continue;
+        }
         // floors / slabs between storeys (stair ramp columns: only the slabs not under the flight; treads below)
         for (const s of q.columnSolids(cx0 + x, cy0 + y, base).solids) box(X0, X1, s.y0, s.y1, Z0, Z1);
       }

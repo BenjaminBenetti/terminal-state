@@ -22,7 +22,8 @@
 //    seam to a wavy faint tide line, rising damp at the foot, salt bloom along those evaporation fronts; floor dust
 //    vs worn lanes, irregular dried puddle marks, cracks, peeling paint, lost / lifted / discoloured floor tiles,
 //    soft brown ceiling leak stains. Stains come from level sets of a smooth stain field: no stamped circles.
-//    Bounded cost: 2 light-field texel fetches (level slot + band floor / ceiling; world/lightFieldNode.ts lfBandAt),
+//    Bounded cost: 3 light-field texel fetches (level slot pick: column header + extended-column group texel, which the
+//    shader only reads for a tower column; band floor / ceiling; world/lightFieldNode.ts lfBandAt),
 //    4 texture fetches, no loops, no branches around texture samples (uniform control flow, WGSL-safe).
 //    The detail texture has anisotropy 1 (render/softwareGl.ts, materials.ts thinTrim).
 // The wall-treatment pass (world/wallDetailPlan.ts) adds the discrete pieces on walls (cracks, chips, lost tiles,
@@ -133,13 +134,17 @@ export function areaNeglect(area: Area | undefined, levelRole: Level['role'], vo
   else n = 0.48;
   if (levelRole === 'lower') n += 0.12;
   else if (levelRole === 'upper') n -= 0.05;
+  // Task office-seamless-20261029: tower storeys keep the main-level rule (iteration 16 built them as 'main' sections).
   if (area?.lighting === 'dark') n += 0.1;
   else if (area?.lighting === 'dim') n += 0.05;
   return Math.max(0, Math.min(1, n));
 }
 
-/** Leak density per level role (relative): water finds its way down. */
-export const LEVEL_WETNESS: Record<Level['role'], number> = {upper: 0.6, main: 1, lower: 1.4};
+/**
+ * Leak density per level role (relative): water finds its way down. Task office-seamless-20261029: 'office' = the dry,
+ * heated tower storeys above the street (fewer leaks than the upper deck; no seepage).
+ */
+export const LEVEL_WETNESS: Record<Level['role'], number> = {upper: 0.6, main: 1, lower: 1.4, office: 0.35};
 /** Wetness never exceeds this (the lower level must still read as tile / paint with stains, not as a pattern). */
 export const WET_CAP = 0.7;
 
@@ -149,6 +154,8 @@ export const WET_CAP = 0.7;
 export interface DecayField {
   /** Cells per level row / rows per level / levels; texel (x, y + level * h). */
   w: number; h: number; levels: number;
+  /** World size of one texel (m; default CELL). Task office-seamless-20261029: > CELL only for a stack too tall for one texture. */
+  cell?: number;
   /** RGBA8: traffic, openness, wetness, neglect. */
   data: Uint8Array;
   stats: {ms: number; sources: number[]; leaks: number[]};
@@ -328,7 +335,8 @@ export function buildDecayField(layout: StationLayout, levels: readonly Level[])
 
 /** Field channels at a world point of a level (bilinear like the shader; 0..1). Tests / QA. */
 export function sampleDecay(f: DecayField, level: number, x: number, z: number): {traffic: number; open: number; wet: number; neglect: number} {
-  const fx = x / CELL - 0.5, fz = Math.max(0, Math.min(f.h - 1, z / CELL - 0.5));
+  const C = f.cell ?? CELL;
+  const fx = x / C - 0.5, fz = Math.max(0, Math.min(f.h - 1, z / C - 0.5));
   const x0 = Math.max(0, Math.min(f.w - 1, Math.floor(fx))), z0 = Math.floor(fz), x1 = Math.min(f.w - 1, x0 + 1), z1 = Math.min(f.h - 1, z0 + 1);
   const tx = Math.max(0, Math.min(1, fx - x0)), tz = fz - z0;
   const at = (cx: number, cz: number, c: number) => f.data[((level * f.h + cz) * f.w + cx) * 4 + c] / 255;
@@ -696,12 +704,45 @@ export function decayWorldMaterials(mats: WorldMaterials): void {
   for (const k of DECAY_MAT_KEYS) applyDecay(mats.get(k), DECAY_PROFILES[k]);
 }
 
+/**
+ * Most texture rows of the decay field (levels are stacked in v): WebGPU's default maxTextureDimension2D. Task
+ * office-seamless-20261029: a taller stack (many storeys x a deep grid) is box-downsampled in X/Z until it fits (the
+ * shader reads the texel size from uDecayGrid.w, so it needs no change); every Subway station and the tower fit as is.
+ */
+export const MAX_DECAY_ROWS = 8192;
+
+/** Box-downsample a decay field by k in X/Z (per level; texel = k cells). */
+export function downsampleDecay(f: DecayField, k: number): DecayField {
+  if (k <= 1) return f;
+  const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), data = new Uint8Array(W * H * f.levels * 4);
+  for (let L = 0; L < f.levels; L++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const acc = [0, 0, 0, 0];
+    let n = 0;
+    for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
+      const sx = Math.min(f.w - 1, x * k + dx), sy = Math.min(f.h - 1, y * k + dy), o = ((L * f.h + sy) * f.w + sx) * 4;
+      for (let c = 0; c < 4; c++) acc[c] += f.data[o + c];
+      n++;
+    }
+    const o = ((L * H + y) * W + x) * 4;
+    for (let c = 0; c < 4; c++) data[o + c] = Math.round(acc[c] / n);
+  }
+  return {...f, w: W, h: H, data, cell: (f.cell ?? CELL) * k};
+}
+
+/** The field as uploaded: downsampled until its stacked rows fit MAX_DECAY_ROWS (identity for every station today). */
+export function fitDecayField(f: DecayField, maxRows = MAX_DECAY_ROWS): DecayField {
+  let k = 1;
+  while (Math.ceil(f.h / k) * f.levels > maxRows && k < f.h) k++;
+  return downsampleDecay(f, k);
+}
+
 let fieldTex: THREE.DataTexture | null = null;
 let currentField: DecayField | null = null;
 /** The decay field bound to the shared inputs (QA / tests). */
 export const activeDecayField = (): DecayField | null => currentField;
 /** Upload a station's decay field to the shared decay inputs (disposes the previous station's texture). */
-export function setDecayField(f: DecayField): THREE.DataTexture {
+export function setDecayField(field: DecayField): THREE.DataTexture {
+  const f = fitDecayField(field);
   currentField = f;
   const t = new THREE.DataTexture(f.data, f.w, f.h * f.levels, THREE.RGBAFormat, THREE.UnsignedByteType);
   t.magFilter = t.minFilter = THREE.LinearFilter;
@@ -714,7 +755,7 @@ export function setDecayField(f: DecayField): THREE.DataTexture {
   if (fieldTex) fieldTex.dispose();
   fieldTex = t;
   DECAY_UNIFORMS.uDecayMap.value = t;
-  DECAY_UNIFORMS.uDecayGrid.value.set(f.w, f.h, f.levels, CELL);
+  DECAY_UNIFORMS.uDecayGrid.value.set(f.w, f.h, f.levels, f.cell ?? CELL);
   if (DECAY_UNIFORMS.uDecayTex.value !== detailTex || !detailTex) DECAY_UNIFORMS.uDecayTex.value = decayDetailTexture();
   return t;
 }

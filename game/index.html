@@ -79,12 +79,6 @@
     .confirm .actions { margin: 10px 0 8px; }
     .confirm.danger { border-left-color: var(--red); }
     .run-line { color: var(--cream); }
-    #travel-overlay { position: absolute; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center; background: rgba(5, 6, 7, 0.9); pointer-events: none; }
-    #travel-overlay .card { min-width: 280px; padding: 14px 20px 12px; background: rgba(21, 23, 26, 0.92); border-left: 4px solid var(--mustard); }
-    #travel-overlay .label { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mustard); font-weight: 700; }
-    #travel-overlay .track { height: 4px; margin: 10px 0 6px; background: #111315; border: 1px solid #3a3f44; }
-    #travel-overlay .fill { height: 100%; width: 0; background: var(--teal); transition: width 0.15s linear; }
-    #travel-overlay .sub { font-size: 12px; color: var(--cream-dim); }
   </style>
 </head>
 <body>
@@ -116,8 +110,6 @@
       </div>
     </div>
 
-    <!-- Iteration 16 (lane RUN): in-world travel (elevator / stairwell) while the next section is built and warmed up -->
-    <div id="travel-overlay" class="hidden" aria-live="polite"><div class="card"><div class="label"></div><div class="track"><div class="fill"></div></div><div class="sub"></div></div></div>
 
     <section id="title" class="screen" data-mode="new-run">
       <div class="panel title-panel">
@@ -128,7 +120,7 @@
           <h3>New run — choose where to start</h3>
           <div class="levels">
             <button type="button" class="level-card" data-level="subway" role="radio" aria-checked="true"><b>Subway</b><span>A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.</span></button>
-            <button type="button" class="level-card" data-level="office" role="radio" aria-checked="false"><b>Office Space</b><span>A small subway stop under an office tower — climb into the lobby, then explore the floors by elevator and stairwell.</span></button>
+            <button type="button" class="level-card" data-level="office" role="radio" aria-checked="false"><b>Office Space</b><span>A small subway stop under an office tower — climb the stairs into the lobby, then work up eight floors by stairwell or elevator. One continuous level.</span></button>
           </div>
         </div>
         <p id="station-intro" class="intro"></p>

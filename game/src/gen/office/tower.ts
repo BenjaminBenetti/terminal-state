@@ -1,14 +1,17 @@
-// Iteration 16 (WORLD-GEN): carving the office tower into the generator canvas (gen/stationKit.ts Kit) — the core shared by
-// the lobby and every office floor, the corridor rings and the seeded room program of an office floor. Pure data.
+// Seamless Office Space (lane GEN): carving the office tower into the generator canvas (gen/stationKit.ts Kit, one level grid
+// per storey) — the core shared by the lobby and every office floor (scissor stair landing, washrooms, closets; the elevator
+// shaft stays SOLID), the corridor rings, the seeded room program of an office floor, and the scissor stair runs that join
+// consecutive storeys. Pure data.
 //
-// Everything is carved at a canvas offset (ox, oy) = canvas cell of tower-local (0, 0), on one level grid (`level`, floor `base`):
-// the lobby is the street section's upper storey (level 1 at the lobby height), an office floor is a single main storey (level 0
-// at y 0). The section's crop later puts tower-local (0, 0) at grid cell (MARGIN, MARGIN) in both cases.
+// Everything is carved at a canvas offset (ox, oy) = canvas cell of tower-local (0, 0), on the storey's level grid (`level`,
+// absolute floor `base`): the lobby is level 1 at the lobby height, office floor n is level n at lobby + 4.4 (n - 1). The level
+// crop later puts tower-local (0, 0) at grid cell (MARGIN, MARGIN) on every storey.
 
 import type {Rng} from '../../core/rng';
 import {Kit, type AreaOpts} from '../stationKit';
+import {layStairRun, type StairFlight} from '../traversal';
 import type {Area, AreaKind, Door, Rect, RoomType} from '../stationTypes';
-import {CEIL, type TowerFrame} from './frame';
+import {CEIL, SCISSOR_STAIR, WELL, landingEnd, landingRect, laneOf, type TowerFrame} from './frame';
 
 export interface TowerAt { ox: number; oy: number; level: number; base: number }
 
@@ -16,19 +19,20 @@ export interface TowerAt { ox: number; oy: number; level: number; base: number }
 export interface OfficeAreaMeta {
   /** Program role (signage / dressing / spawns). */
   role: 'open' | 'bay' | 'private' | 'exec' | 'meeting' | 'break' | 'copy' | 'storage' | 'server' | 'corridor' | 'lobby' | 'reception'
-    | 'security' | 'transit' | 'wc' | 'closet' | 'cab' | 'vestibule' | 'collapsed';
+    | 'security' | 'transit' | 'wc' | 'closet' | 'landing' | 'collapsed';
   /** Facade sides of the area (perimeter walls = window walls). */
   facade: ('N' | 'S' | 'E' | 'W')[];
 }
 
 export interface CoreAreas {
-  cab: Area; vest: Area; wcM: Area; wcW: Area; janitor: Area; closets: Area[];
-  /** Elevator door (cab -> north host) and vestibule door records. */
-  cabDoor: Door; vestDoor: Door;
+  /** The storey's scissor-stair landing and its doorway onto the north host (N corridor / lobby hall). */
+  landing: Area; landingDoor: Door;
+  wcM: Area; wcW: Area; closets: Area[];
 }
 
 export interface CarvedTower {
   at: TowerAt;
+  floor: number;
   core: CoreAreas;
   meta: Map<number, OfficeAreaMeta>;
   /** Areas north / south of the core the core doors open onto (N corridor / lobby hall, S corridor / transit hall). */
@@ -36,6 +40,7 @@ export interface CarvedTower {
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
+export const storeyLabel = (floor: number): string => (floor === 1 ? 'L' : String(floor));
 
 function add(k: Kit, at: TowerAt, r: Rect, kind: AreaKind, type: RoomType, clear: number, parent: number, opts: AreaOpts & {purpose?: string} = {}): Area {
   const rect = {x: at.ox + r.x, y: at.oy + r.y, w: r.w, h: r.h};
@@ -51,48 +56,69 @@ function door(k: Kit, at: TowerAt, gap: Rect, a: Area, b: Area, height: number, 
 }
 
 /**
- * The core: stairwell vestibule (door onto the north host; stair door on its back wall) with a riser closet behind it, the
- * elevator cab (north end of its unit, 3-cell door onto the north host; the rest of the unit is the solid shaft), men's and
- * women's washrooms (doors onto the south host), the janitor closet (north) and a supply closet (south). Same cells on every floor.
+ * The core of one storey: the scissor-stair landing at this storey's end of the well (doorway onto the north host), the
+ * washrooms and closets of the core's south strip (doors onto the south host). The elevator shaft and the well's lanes are NOT
+ * carved here (shaft: solid on every storey; lanes: the stair runs, carveScissor). Same cells on every storey.
  */
-export function carveCore(k: Kit, f: TowerFrame, at: TowerAt, north: Area, south: Area, meta: Map<number, OfficeAreaMeta>): CoreAreas {
-  const {cy0, cy1} = f;
-  const CH = cy1 - cy0;
-  const unit = (kind: string) => f.units.find(u => u.kind === kind)!;
-  const st = unit('stair'), el = unit('elevator'), wm = unit('wc-m'), ww = unit('wc-w'), cl = unit('closet');
+export function carveCore(k: Kit, f: TowerFrame, at: TowerAt, floor: number, north: Area, south: Area, meta: Map<number, OfficeAreaMeta>): CoreAreas {
+  const lr = landingRect(f, floor), end = landingEnd(f, floor);
+  const landing = add(k, at, lr, 'room', 'office-stair', CEIL.stair, north.id,
+    {label: `Stairwell · ${floor === 1 ? 'Lobby' : `Floor ${floor}`}`, publicSpace: false, purpose: 'office-stair', role: 'landing'});
+  meta.set(landing.id, {role: 'landing', facade: []});
+  // Doorway in the core's north wall; the pier stays on the side of the well's end wall / the shaft.
+  const landingDoor = door(k, at, {x: lr.x + (end === 'W' ? 1 : 0), y: f.cy0 - 1, w: 3, h: 1}, north, landing, CEIL.door);
   const closets: Area[] = [];
-  // Stairwell vestibule + riser closet behind it.
-  const vest = add(k, at, {x: f.vest.x, y: f.vest.y, w: f.vest.w, h: f.vest.h}, 'room', 'office-stair', CEIL.stair, north.id, {label: 'Stairwell', publicSpace: false, purpose: 'office-stair'});
-  meta.set(vest.id, {role: 'vestibule', facade: []});
-  const vestDoor = door(k, at, {x: st.x0 + 2, y: cy0 - 1, w: 3, h: 1}, north, vest, CEIL.door);
-  const riserY = f.vest.y + f.vest.h + 1;
-  if (cy1 - riserY >= 3) {
-    const riser = add(k, at, {x: st.x0, y: riserY, w: st.x1 - st.x0, h: cy1 - riserY}, 'closet', 'supply-closet', CEIL.core, south.id, {label: 'Electrical riser', purpose: 'electrical-closet'});
-    meta.set(riser.id, {role: 'closet', facade: []});
-    door(k, at, {x: st.x0 + 2, y: cy1, w: 2, h: 1}, south, riser, CEIL.door, {staff: false});
-    closets.push(riser);
+  let wcM: Area | null = null, wcW: Area | null = null;
+  const h = f.cy1 - f.sy0;
+  for (const u of f.units) {
+    const r: Rect = {x: u.x0, y: f.sy0, w: u.x1 - u.x0, h};
+    if (u.kind === 'wc-m' || u.kind === 'wc-w') {
+      const a = add(k, at, r, 'room', 'washroom', CEIL.core, south.id, {label: u.kind === 'wc-m' ? "Men's washroom" : "Women's washroom", publicSpace: true});
+      meta.set(a.id, {role: 'wc', facade: []});
+      door(k, at, {x: u.x0 + 2, y: f.cy1, w: 3, h: 1}, south, a, CEIL.door);
+      if (u.kind === 'wc-m') wcM = a; else wcW = a;
+      continue;
+    }
+    const spec = u.kind === 'janitor' ? {type: 'janitor-closet' as const, label: 'Janitor closet', purpose: 'janitor-closet'}
+      : u.kind === 'supply' ? {type: 'supply-closet' as const, label: 'Supply closet', purpose: 'supply-closet'}
+      : {type: 'supply-closet' as const, label: 'Electrical riser', purpose: 'electrical-closet'};
+    const a = add(k, at, r, 'closet', spec.type, CEIL.core, south.id, {label: spec.label, purpose: spec.purpose});
+    meta.set(a.id, {role: 'closet', facade: []});
+    door(k, at, {x: u.x0 + 1, y: f.cy1, w: 2, h: 1}, south, a, CEIL.door, {staff: false});
+    closets.push(a);
   }
-  // Elevator cab: its unit's north end; the shaft below it stays solid.
-  const cab = add(k, at, {x: f.cab.x, y: f.cab.y, w: f.cab.w, h: f.cab.h}, 'room', 'office-elevator', CEIL.cab, north.id, {label: 'Elevator', publicSpace: false, purpose: 'office-elevator'});
-  meta.set(cab.id, {role: 'cab', facade: []});
-  const cabDoor = door(k, at, {x: el.x0 + 1, y: cy0 - 1, w: 3, h: 1}, cab, north, CEIL.door);
-  // Washrooms (full core depth), doors onto the south host.
-  const wcM = add(k, at, {x: wm.x0, y: cy0, w: wm.x1 - wm.x0, h: CH}, 'room', 'washroom', CEIL.core, south.id, {label: "Men's washroom", publicSpace: true});
-  const wcW = add(k, at, {x: ww.x0, y: cy0, w: ww.x1 - ww.x0, h: CH}, 'room', 'washroom', CEIL.core, south.id, {label: "Women's washroom", publicSpace: true});
-  for (const [a, u] of [[wcM, wm], [wcW, ww]] as const) {
-    meta.set(a.id, {role: 'wc', facade: []});
-    door(k, at, {x: u.x0 + 2, y: cy1, w: 3, h: 1}, south, a, CEIL.door);
+  return {landing, landingDoor, wcM: wcM!, wcW: wcW!, closets};
+}
+
+// ---------------------------------------------------------------------------------------------
+// Scissor stair runs
+
+export interface ScissorRun {
+  lower: number; upper: number; lane: 'A' | 'B';
+  area: Area;
+  /** Flights of the run (canvas coordinates until the crop; indices into kit.flights). */
+  flights: number[];
+}
+
+/**
+ * The scissor stair: for every storey L = 1..7 one straight run L → L+1 in lane A (odd L) or lane B (even L), carved into BOTH
+ * storey grids (layStairRun, 24 risers of 4.4/24 m), rising from storey L's landing end toward storey L+1's landing end.
+ * `bases[n]` = absolute floor of storey n; `landings[n]` = storey n's landing area (the run's parent).
+ */
+export function carveScissor(k: Kit, f: TowerFrame, ox: number, oy: number, bases: readonly number[], landings: readonly Area[]): ScissorRun[] {
+  const out: ScissorRun[] = [];
+  for (let L = 1; L < bases.length - 1; L++) {
+    const lane = laneOf(L), rows = lane === 'A' ? f.laneA : f.laneB;
+    const rect: Rect = {x: ox + f.rx0, y: oy + rows.y, w: WELL.run, h: rows.h};
+    const from = landingEnd(f, L) === 'W' ? 'lo' : 'hi';
+    const area = k.addArea(rect, 'room', 'stair-core', r2(bases[L] + SCISSOR_STAIR.headroom), landings[L].id,
+      {level: L, floorY: bases[L], also: [L + 1], role: 'stair', publicSpace: false, label: `Stairs · ${storeyLabel(L)} – ${storeyLabel(L + 1)}`});
+    const fl: StairFlight[] = layStairRun([k.grid(L), k.grid(L + 1)], rect, area.id, 'x', from, bases[L], bases[L + 1], SCISSOR_STAIR);
+    const ids: number[] = [];
+    for (const q of fl) { q.id = k.flights.length; ids.push(q.id); k.flights.push(q); }
+    out.push({lower: L, upper: L + 1, lane, area, flights: ids});
   }
-  // Closet unit: janitor closet (north door) + supply closet (south door).
-  const jh = Math.floor((CH - 1) / 2);
-  const janitor = add(k, at, {x: cl.x0, y: cy0, w: cl.x1 - cl.x0, h: jh}, 'closet', 'janitor-closet', CEIL.core, north.id, {label: 'Janitor closet', purpose: 'janitor-closet'});
-  meta.set(janitor.id, {role: 'closet', facade: []});
-  door(k, at, {x: cl.x0 + 1, y: cy0 - 1, w: 2, h: 1}, north, janitor, CEIL.door, {staff: false});
-  const sup = add(k, at, {x: cl.x0, y: cy0 + jh + 1, w: cl.x1 - cl.x0, h: CH - jh - 1}, 'closet', 'supply-closet', CEIL.core, south.id, {label: 'Supply closet', purpose: 'supply-closet'});
-  meta.set(sup.id, {role: 'closet', facade: []});
-  door(k, at, {x: cl.x0 + 1, y: cy1, w: 2, h: 1}, south, sup, CEIL.door, {staff: false});
-  closets.push(janitor, sup);
-  return {cab, vest, wcM, wcW, janitor, closets, cabDoor, vestDoor};
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -152,7 +178,7 @@ const ROOM_INFO: Record<Exclude<SegType, 'open' | 'run' | 'collapsed'>, {purpose
 
 /**
  * One office floor: corridors (N = elevator lobby, S, W, E), the core, both end zones and both bands, by a seeded program.
- * Returns the carved tower (areas + their dressing meta).
+ * Returns the carved tower storey (areas + their dressing meta).
  */
 export function carveOfficeFloor(k: Kit, f: TowerFrame, at: TowerAt, floor: number, top: boolean, rng: Rng): CarvedTower {
   const meta = new Map<number, OfficeAreaMeta>();
@@ -166,7 +192,7 @@ export function carveOfficeFloor(k: Kit, f: TowerFrame, at: TowerAt, floor: numb
   const S = corr({x: 0, y: cy1 + 1, w: TW, h: K}, 'Corridor', N.id);
   const Wc = corr({x: cx0 - 1 - K, y: cy0 - 1, w: K, h: cy1 - cy0 + 2}, 'Corridor', N.id);
   const Ec = corr({x: cx1 + 1, y: cy0 - 1, w: K, h: cy1 - cy0 + 2}, 'Corridor', N.id);
-  const core = carveCore(k, f, at, N, S, meta);
+  const core = carveCore(k, f, at, floor, N, S, meta);
 
   // --- End zones (rooms between the corridors at both ends) --------------------------------------
   const endTypes: SegType[] = top ? rng.shuffle(['break', 'server'] as SegType[]) : rng.shuffle([rng.chance(0.6) ? 'break' : 'meeting', rng.pick(['server', 'copy', 'storage', 'server'])] as SegType[]);
@@ -194,8 +220,7 @@ export function carveOfficeFloor(k: Kit, f: TowerFrame, at: TowerAt, floor: numb
   const [nt, st] = programs();
   carveBand(k, f, at, rng, meta, {x: 0, y: 0, w: TW, h: nB}, 'N', N, nt);
   carveBand(k, f, at, rng, meta, {x: 0, y: TD - sB, w: TW, h: sB}, 'S', S, st);
-  void floor;
-  return {at, core, meta, north: N, south: S};
+  return {at, floor, core, meta, north: N, south: S};
 }
 
 /** Carves one band's segments; `face` = the facade side ('N' band: facade north, corridor south). */

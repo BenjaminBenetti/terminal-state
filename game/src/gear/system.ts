@@ -40,6 +40,8 @@ type CloseReason = 'user' | 'wear' | 'hit' | 'distance' | 'state' | 'travel' | '
 
 interface OfficeInfoLike {
   levelId?: number;
+  /** v2 (seamless): every tower storey (levelId === floor). */
+  storeys?: {levelId: number}[];
   elevator?: {cab?: {x0: number; z0: number; x1: number; z1: number}; shaft?: {x0: number; z0: number; x1: number; z1: number}};
 }
 
@@ -279,7 +281,7 @@ export class GearSystem {
     const here = L.supportIn(p.x, p.z, p.y + 0.05);
     if (!here) return 'You cannot set the backpack down here.';
     if (L.grid(here.level).rampIdx[here.cell] >= 0) return 'Not on the stairs — set the backpack down on level floor.';
-    if (this.inCab(p.x, p.z, here.level)) return 'Not inside the elevator — set the backpack down on a floor.';
+    if (here.volume || this.inCab(p.x, p.z, here.level, p.y)) return 'Not inside the elevator — set the backpack down on a floor.';
     const f = g.camera.getWorldDirection(new THREE.Vector3());
     const len = Math.hypot(f.x, f.z);
     const fx = len > 1e-3 ? f.x / len : -Math.sin(p.yaw), fz = len > 1e-3 ? f.z / len : -Math.cos(p.yaw);
@@ -296,7 +298,7 @@ export class GearSystem {
       if (!Number.isFinite(y) || Math.abs(y - p.y) > 0.2) continue;
       if (!L.lineOfSight({x: p.x, y: p.y + 0.6, z: p.z}, {x, y: p.y + 0.6, z}) || L.railCrosses(p.x, p.z, x, z, 0.05, p.y)) continue;
       if (!L.circleClear(x, z, 0.15, y)) continue;
-      if (this.inCab(x, z, s.level)) { why = 'Not inside the elevator — set the backpack down on a floor.'; continue; }
+      if (s.volume || this.inCab(x, z, s.level, y)) { why = 'Not inside the elevator — set the backpack down on a floor.'; continue; }
       if (this.bags.some(b => Math.hypot(b.pose.x - x, b.pose.z - z) < 0.45 && Math.abs(b.pose.y - y) < 0.5)) { why = 'Another bag is already lying there.'; continue; }
       let ruled: string | null = null;
       for (const r of this.placeRules) { ruled = r(x, y, z, s.level); if (ruled) break; }
@@ -306,10 +308,18 @@ export class GearSystem {
     return why;
   }
 
-  private inCab(x: number, z: number, level: number): boolean {
+  /**
+   * Task office-seamless (lane LIFT): the elevator cab / shaft refuses a set-down — the moving cab (a Levels dynamic volume:
+   * support from it, or its footprint at that height) and the v2 shaft footprint on every tower storey (layout.office.storeys;
+   * the station under the tower is not part of the shaft).
+   */
+  private inCab(x: number, z: number, level: number, y?: number): boolean {
+    const L = this.game.levels;
+    if (L?.dynamicVolumes?.length && L.volumeAt(x, z, y)) return true;
     const o = (this.game.layout as StationLayout & {office?: OfficeInfoLike}).office;
     const r = o?.elevator?.shaft ?? o?.elevator?.cab;
-    if (!r || (o?.levelId !== undefined && o.levelId !== level)) return false;
+    if (!r) return false;
+    if (o?.storeys?.length ? !o.storeys.some(s => s.levelId === level) : o?.levelId !== undefined && o.levelId !== level) return false;
     return x >= r.x0 - 0.05 && x <= r.x1 + 0.05 && z >= r.z0 - 0.05 && z <= r.z1 + 0.05;
   }
 
@@ -425,8 +435,7 @@ export class GearSystem {
   private sectionIdFor(layout: StationLayout): string {
     const run = (this.game as unknown as {run?: {sectionId?: string}}).run;
     if (run?.sectionId) return run.sectionId;
-    const o = (layout as StationLayout & {office?: {floor?: number}}).office;
-    return o?.floor ? `office:${o.floor === 1 ? 'street' : `floor-${o.floor}`}` : 'subway:main';
+    return layout.office ? 'office:main' : 'subway:main'; // iteration 17: every level is one section
   }
 
   onBuild(layout: StationLayout): void {

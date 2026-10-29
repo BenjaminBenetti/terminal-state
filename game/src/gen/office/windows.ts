@@ -1,4 +1,5 @@
-// Iteration 16 (WORLD-GEN): perimeter WINDOW spans of an office storey and the dim cool DAYLIGHT falling in through them.
+// Iteration 16 (WORLD-GEN) / seamless (GEN): perimeter WINDOW spans of every tower storey of the one office layout (each span
+// tagged with its storey level + baseY) and the dim cool DAYLIGHT falling in through them.
 //
 // The tower's perimeter wall ring stays SOLID in the grid (collision, bullets, sight and the light field stop there); a window
 // is a span of ring cells behind a room's facade wall run. The builder cuts the hole out of the wall faces and adds the reveals
@@ -13,17 +14,20 @@ import type {LightPlacement, OfficeWindowSpan, Side, StationLayout} from '../sta
 import {MARGIN, WINDOW, type TowerFrame} from './frame';
 import type {CarvedTower, OfficeAreaMeta} from './tower';
 
-const NO_WINDOWS = new Set<OfficeAreaMeta['role']>(['wc', 'closet', 'cab', 'vestibule', 'server']);
+const NO_WINDOWS = new Set<OfficeAreaMeta['role']>(['wc', 'closet', 'landing', 'server']);
 /** Daylight tint (linear RGB, ~unit luminance): overcast sky through grimy glass. */
 export const DAYLIGHT_TINT: readonly [number, number, number] = [0.74, 0.9, 1.2];
 const PANE_MAX = 8;
 
-export function windowSpans(layout: StationLayout, f: TowerFrame, tower: CarvedTower, level: number, lobby: {x0: number; x1: number} | null): OfficeWindowSpan[] {
+export type StoreyWindow = OfficeWindowSpan & {level: number; baseY: number};
+
+/** Window spans of the storey on layout level `level` (lobby: `lobby` = the street entrance span on the north facade). */
+export function windowSpans(layout: StationLayout, f: TowerFrame, tower: CarvedTower, level: number, lobby: {x0: number; x1: number} | null): StoreyWindow[] {
   const g = layout.levels[level].grid;
   const {TW, TD} = f;
   const sill = lobby ? WINDOW.lobbySill : WINDOW.sill, head = lobby ? WINDOW.lobbyHead : WINDOW.head;
   const base = layout.levels[level].baseY;
-  const out: OfficeWindowSpan[] = [];
+  const out: StoreyWindow[] = [];
   // Wall-plane obstacles: signs, mounted props and tall props within 0.35 m of the facade (world coordinates along the wall).
   const blockedAlong = (side: Side, t: number): boolean => {
     const plane = side === 'N' ? MARGIN * CELL : side === 'S' ? (MARGIN + TD) * CELL : side === 'W' ? MARGIN * CELL : (MARGIN + TW) * CELL;
@@ -69,13 +73,13 @@ export function windowSpans(layout: StationLayout, f: TowerFrame, tower: CarvedT
       void tx0;
       while (b - a >= 2) {
         const n = Math.min(PANE_MAX, b - a);
-        out.push(span(side, a, a + n, f, sill, head, 'window'));
+        out.push({...span(side, a, a + n, f, sill, head, 'window'), level, baseY: base});
         a += n + 1;
       }
       s = e;
     }
   }
-  if (lobby) out.push(span('N', lobby.x0, lobby.x1, f, 0, WINDOW.entranceHead, 'entrance'));
+  if (lobby) out.push({...span('N', lobby.x0, lobby.x1, f, 0, WINDOW.entranceHead, 'entrance'), level, baseY: base});
   return out;
   function isOpenAt(gg: typeof g, [tx, ty]: [number, number]): boolean {
     return gg.cells[gg.idx(tx + MARGIN, ty + MARGIN)] === FLOOR;

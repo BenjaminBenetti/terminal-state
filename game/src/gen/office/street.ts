@@ -1,15 +1,17 @@
-// Iteration 16 (WORLD-GEN): the 'street' section — a COMPACT subway stop (same Kit / archetype pieces / dressers / storefronts as
-// gen/station.ts, about one sixth of the base Subway's walkable area) whose UPPER storey is the office tower's LOBBY, joined by a
-// real stair run (one Ramp per flight carved into both level grids, the iteration-08 stair-core pattern: lobby → run → landing).
+// Iteration 16 (WORLD-GEN) / seamless (GEN): the station + lobby part of the ONE office layout — a COMPACT subway stop (same Kit /
+// archetype pieces / dressers / storefronts as gen/station.ts, about one sixth of the base Subway's walkable area) on level 0 whose
+// level 1 storey is the office tower's LOBBY, joined by a real stair run (one Ramp per flight carved into both level grids, the
+// iteration-08 stair-core pattern: lobby → run → landing). Office floors 2..8 and the scissor stair are carved into the same kit
+// afterwards (gen/office/index.ts); the crop happens once for every storey there.
 //
 // Main level (y 0), south of the tower footprint (tower-local rows >= TD): an island platform between two one-track beds, an end
 // passage through the tunnel walls to a paid concourse, a fare line into the ticket hall, washrooms, the station agent office, a
 // sealed street exit, kiosk storefronts, a utility room and a closet; the tower connection: a stair-core lobby off the ticket
 // hall's north wall and the run climbing east under the tower's south edge to its top landing in the lobby.
 // Upper level (the lobby, y = hu): the main hall (reception, waiting area, boarded street entrance on the north facade), the
-// core (elevator, stairwell vestibule with the stair door UP to floor 2, washrooms, closets), the building security office, the
+// core (the solid elevator shaft, the scissor stair's lobby landing, washrooms, closets), the building security office, the
 // east wing and the transit concourse with the landing door "to the trains".
-// Pure data: carving only (gen/office/index.ts dresses, spawns, lights and validates).
+// Pure data: carving only (gen/office/index.ts crops, dresses, spawns, lights and validates).
 
 import type {Rng} from '../../core/rng';
 import {Kit} from '../stationKit';
@@ -17,8 +19,8 @@ import {carveStorefronts} from '../storefronts';
 import {CORE, SLAB} from '../levelGen';
 import {STAIR, layStairRun, stairRunCells} from '../traversal';
 import {DOOR_HEIGHT, type Area, type Rect, type Side, type Storefront} from '../stationTypes';
-import {CEIL, MARGIN, type TowerFrame} from './frame';
-import {TOWER_CANVAS, cropKit, type Cropped} from './common';
+import {CEIL, type TowerFrame} from './frame';
+import {TOWER_CANVAS} from './common';
 import {carveCore, type CarvedTower, type OfficeAreaMeta, type TowerAt} from './tower';
 
 const STREETS = ['Hollis', 'Wexford', 'Garnet', 'Linden', 'Carver', 'Dorset', 'Marlowe', 'Ashby', 'Kessler', 'Fulton', 'Bramley', 'Ostend', 'Pruitt', 'Calder', 'Halsey', 'Juniper', 'Rowan', 'Tilden'];
@@ -42,16 +44,17 @@ export interface StreetCarve {
   hall: Area; transit: Area; security: Area; east: Area;
   /** Street entrance span (tower-local cells on the north facade). */
   entrance: {x0: number; x1: number};
-  cropped: Cropped;
 }
 
-/** One carving attempt; null when the program does not fit (the caller retries with another seed). */
 /** Why the last attempts failed (QA / tests). */
 export const STREET_FAILS: Record<string, number> = {};
 const fail = (why: string): null => { STREET_FAILS[why] = (STREET_FAILS[why] ?? 0) + 1; return null; };
 
-export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
-  const k = new Kit(rng);
+/**
+ * One carving attempt into a FRESH kit (levels 0 = station, 1 = lobby); null when the program does not fit (the caller drops the
+ * kit and retries with another seed).
+ */
+export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null {
   const TX = TOWER_CANVAS.x, TY = TOWER_CANVAS.y;
   const {TW, TD, cx0, cx1, cy0, cy1} = f;
   const name = `${rng.pick(STREETS)} ${rng.pick(SUFFIX)}`;
@@ -79,7 +82,7 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   const hall = lobbyArea({x: 0, y: 0, w: TW, h: cy0 - 1}, 'Lobby', 'office-reception', -1, 'reception', ['N', 'W', 'E']);
   const transit = lobbyArea({x: 0, y: cy1 + 1, w: TW, h: TD - 6 - (cy1 + 1)}, 'Transit concourse', 'office-lobby', hall.id, 'transit', ['W', 'E']);
   if (transit.h < 5) return fail('transit-too-shallow');
-  const core = carveCore(k, f, at, hall, transit, meta);
+  const core = carveCore(k, f, at, 1, hall, transit, meta);
   const security = k.addArea({x: TX, y: TY + cy0, w: cx0 - 1, h: cy1 - cy0}, 'room', 'office-room', r2(hu + CEIL.office), hall.id, {...up, label: 'Building security office', publicSpace: false});
   security.purpose = 'office-security';
   meta.set(security.id, {role: 'security', facade: ['W']});
@@ -211,21 +214,13 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   // No main-level ceiling may reach the lobby slab.
   for (const a of k.areas) if (!a.level && a.role !== 'stair' && a.ceil > hu - SLAB - 0.05) return fail('ceiling-into-lobby-slab');
 
-  // --- Crop: tower interior NW corner at grid cell (MARGIN, MARGIN) -------------------------------------------------------
-  let x1 = TX + TW, y1 = TY + TD;
-  for (const r of [...k.areas, ...k.doors, ...k.trenches.map(t => ({x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0}))]) {
-    if (r.w <= 0 || r.h <= 0) continue;
-    x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1);
-  }
-  const ox = TX - MARGIN, oy = TY - MARGIN;
-  const cropped = cropKit(k, [0, 1], ox, oy, x1 - ox + 3, y1 - oy + 3, shops.storefronts);
   // Street entrance: the north facade, centred on the main hall with a little jitter (boarded scenery).
   const ew = rng.int(6, 8);
   const ec = Math.round(TW / 2 + rng.int(-6, 6));
-  const tower: CarvedTower = {at: {ox: MARGIN, oy: MARGIN, level: 1, base: hu}, core, meta, north: hall, south: transit};
+  const tower: CarvedTower = {at, floor: 1, core, meta, north: hall, south: transit};
   return {
     kit: k, name, towards: [terms[0], terms[1]], hu, tower, storefronts: shops.storefronts, platform: I,
     coreLobby, run, landing, ticketHall: ticket, paidHall: paid, hall, transit, security, east,
-    entrance: {x0: ec - Math.floor(ew / 2), x1: ec - Math.floor(ew / 2) + ew}, cropped,
+    entrance: {x0: ec - Math.floor(ew / 2), x1: ec - Math.floor(ew / 2) + ew},
   };
 }

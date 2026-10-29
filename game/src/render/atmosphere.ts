@@ -33,6 +33,7 @@ import type {LevelRole} from '../gen/levels';
 import type {AreaKind, Archetype, RoomType, StationLayout} from '../gen/station';
 import {cellFloorFn} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
+import {MAX_SLOTS} from '../world/lightField';
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
 
@@ -168,7 +169,9 @@ export const ATMOSPHERE: AtmosphereParams = {
     // Iteration 16 (WORLD-GEN): office tower — daylit floors read airier than the station's back-of-house.
     'office-lobby': 0.7, 'office-open': 0.8, 'office-corridor': 0.85, 'office-room': 0.9, 'office-elevator': 0.6, 'office-stair': 1.05,
   },
-  levelDensity: {main: 1, upper: 0.85, lower: 1.25},
+  // Task office-seamless-20261029: 'office' = the tower storeys above the lobby: indoor office air, a light haze (less than
+  // the station's main level and the lobby deck).
+  levelDensity: {main: 1, upper: 0.85, lower: 1.25, office: 0.75},
   classDensity: {clear: 0.05, normal: 1, dense: 1.4},
   classOdds: {
     hall: {clear: 0.45, dense: 0.1},
@@ -417,6 +420,14 @@ export function compositeLinear(scene: V3, fog: V3, transmittance = 1, intensity
 
 /** Density multiplier range encoded in the map's R channel (0..255 -> 0..MAP_RANGE). */
 export const DENSITY_MAP_RANGE = 3;
+/** Height range (m) above which the density map encodes each layer's heights over its own range (see DensityMap.layerY). */
+export const DENSITY_LAYER_RANGE = 16;
+
+/** [y0, yRange] of density-map layer s (G / B height = y0 + byte / 255 * yRange). */
+export function densityLayerRange(m: Pick<DensityMap, 'yMin' | 'yRange' | 'layerY'>, s: number): [number, number] {
+  const r = m.layerY;
+  return r && r.length >= 2 * (s + 1) ? [r[2 * s], r[2 * s + 1]] : [m.yMin, m.yRange];
+}
 
 /**
  * Per-station medium map, one layer per level slot (slot s = layout.levels[s]): RGBA8 per texel: R = density multiplier /
@@ -431,6 +442,12 @@ export interface DensityMap {
   /** RGBA8, layer-major: ((slot * h + y) * w + x) * 4. */
   data: Uint8Array;
   yMin: number; yRange: number;
+  /**
+   * Task office-seamless-20261029: per layer [y0, yRange] of its G / B heights (absent = [yMin, yRange] on every layer). A
+   * stack taller than DENSITY_LAYER_RANGE (the 9-storey tower: ~42 m, 0.16 m steps over one range) encodes each layer over
+   * its own band range instead; a Subway station (< 16 m) keeps the single range and its bytes.
+   */
+  layerY?: Float64Array;
   /** World size of one texel (m). */
   cell: number;
   /** Iteration 13: the class each area drew (index = area id) and its final multiplier (before the level factor). */
@@ -478,7 +495,8 @@ export function areaMultiplier(layout: StationLayout, i: number, p: Pick<Atmosph
 }
 
 export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds'>>): DensityMap {
-  const levels = stationLevels(layout).slice(0, 4);
+  // Task office-seamless-20261029: every level (the light field's slots; was capped at 4).
+  const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
   const per = levels.map(L => {
     const g = L.grid;
@@ -534,15 +552,26 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
   for (const q of per) for (let i = 0; i < n; i++) if (q.open[i]) { yMin = Math.min(yMin, q.floor[i]); yMax = Math.max(yMax, q.ceil[i]); }
   if (!Number.isFinite(yMin)) { yMin = 0; yMax = 3; }
   const yRange = Math.max(0.01, yMax - yMin);
+  // Per-layer height ranges for a tall stack (every value a layer writes: its known floors / ceilings and the default band).
+  let layerY: Float64Array | undefined;
+  if (yRange > DENSITY_LAYER_RANGE) {
+    layerY = new Float64Array(2 * S);
+    per.forEach((q, s) => {
+      let lo = q.base, hi = q.base + 3;
+      for (let i = 0; i < n; i++) if (q.known[i]) { lo = Math.min(lo, q.floor[i]); hi = Math.max(hi, q.ceil[i]); }
+      layerY![2 * s] = lo - 0.25; layerY![2 * s + 1] = Math.max(0.01, hi - lo + 0.5);
+    });
+  }
   const data = new Uint8Array(n * S * 4);
   const u8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
   per.forEach((q, s) => {
+    const y0 = layerY ? layerY[2 * s] : yMin, yr = layerY ? layerY[2 * s + 1] : yRange;
     for (let i = 0; i < n; i++) {
       const o = (s * n + i) * 4;
       const m = q.known[i] ? q.mult[i] : (p.areaDensity.default ?? 1);
       data[o] = u8(m / DENSITY_MAP_RANGE);
-      data[o + 1] = u8(((q.known[i] ? q.floor[i] : q.base) - yMin) / yRange);
-      data[o + 2] = u8(((q.known[i] ? q.ceil[i] : q.base + 3) - yMin) / yRange);
+      data[o + 1] = u8(((q.known[i] ? q.floor[i] : q.base) - y0) / yr);
+      data[o + 2] = u8(((q.known[i] ? q.ceil[i] : q.base + 3) - y0) / yr);
       data[o + 3] = q.open[i] ? 255 : 0;
     }
   });
@@ -551,7 +580,7 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
     const ad = p.areaDensity;
     return {cls, group: areaGroup(a), mult: (ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1) * p.classDensity![cls]};
   }) : undefined;
-  return {w: W, h: H, slots: S, data, yMin, yRange, cell: CELL, areas};
+  return {w: W, h: H, slots: S, data, yMin, yRange, cell: CELL, areas, ...(layerY ? {layerY} : {})};
 }
 
 /**
@@ -577,7 +606,8 @@ export function densitySlot(m: DensityMap, x: number, z: number, y: number): num
       gch += wgt * m.data[o + 1]; bch += wgt * m.data[o + 2]; ach += wgt * m.data[o + 3];
     }
     if (ach < 127.5) continue;
-    const fl = m.yMin + gch / 255 * m.yRange, ce = m.yMin + bch / 255 * m.yRange;
+    const [y0, yr] = densityLayerRange(m, s);
+    const fl = y0 + gch / 255 * yr, ce = y0 + bch / 255 * yr;
     const d = Math.max(fl - y, y - ce);
     if (d < best) { best = d; slot = s; }
   }
@@ -596,7 +626,8 @@ export function sampleDensityLayer(m: DensityMap, x: number, z: number, s: numbe
     const o = ((L * m.h + yy) * m.w + xx) * 4;
     r += wgt * m.data[o]; gch += wgt * m.data[o + 1];
   }
-  return [r / 255 * DENSITY_MAP_RANGE, m.yMin + gch / 255 * m.yRange];
+  const [y0, yr] = densityLayerRange(m, L);
+  return [r / 255 * DENSITY_MAP_RANGE, y0 + gch / 255 * yr];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -620,7 +651,7 @@ export function stationDraft(seed: number): 1 | -1 {
 }
 
 export function buildAirMap(layout: StationLayout): AirMap {
-  const levels = stationLevels(layout).slice(0, 4);
+  const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
   const data = new Uint8Array(n * S);
   levels.forEach((L, s) => {
@@ -876,7 +907,7 @@ export function densityAt(p: V3, map: DensityMap | null, noise: Uint8Array | nul
 export function mediumStats(layout: StationLayout, maps: MediumMaps, params: AtmosphereParams, t: number, stride = 7): {
   mean: number; clearFrac: number; denseFrac: number; samples: number; byClass: Record<AreaClass | 'track', number>;
 } {
-  const levels = stationLevels(layout).slice(0, 4);
+  const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   let sum = 0, nClear = 0, nDense = 0, count = 0;
   const cls: Record<AreaClass | 'track', [number, number]> = {clear: [0, 0], normal: [0, 0], dense: [0, 0], track: [0, 0]};
   const lo = 0.2 * ATMOSPHERE_ITER12.density, hi = 2 * params.density;

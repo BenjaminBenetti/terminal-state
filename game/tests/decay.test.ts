@@ -185,7 +185,7 @@ describe('decay node hooks: architectural materials only, bounded cost', () => {
 
   // Iteration 13 (MAT-A): the GLSL hook is a TSL node-hook pair; this checks the GENERATED shader (three r186 GLSLNodeBuilder,
   // the WebGL2-backend path of WebGPURenderer). tests/surface-nodes.test.ts covers ordering / determinism / sharing.
-  it('colour + roughness hooks at order 200; bounded cost: 2 light-field fetches, 4 texture fetches, no loops, no branches', () => {
+  it('colour + roughness hooks at order 200; bounded cost: 3 light-field fetches, 4 texture fetches, no loops, no branches', () => {
     const m = new SurfaceNodeMaterial({map: new THREE.DataTexture(new Uint8Array(4), 1, 1), roughness: 0.62});
     applyDecay(m, DECAY_PROFILES.terrazzo);
     expect(nodeHookKeys(m)).toEqual([DECAY_HOOK, DECAY_ROUGH_HOOK]);
@@ -198,8 +198,9 @@ describe('decay node hooks: architectural materials only, bounded cost', () => {
     const count = (code: string, s: string) => code.split(s).length - 1;
     expect(sh.vertex).toContain('vDecayN = ');
     expect(main).not.toMatch(/\bfor\s*\(|\bwhile\s*\(/);
-    // Station light field (level slot + band header): two texel fetches.
-    expect(count(main, 'texelFetch(') - count(plain.fragmentMain, 'texelFetch(')).toBe(2);
+    // Station light field (level slot: column header + the extended-column group texel, read only in a tower column -
+    // task office-seamless-20261029; band header): three texel fetches.
+    expect(count(main, 'texelFetch(') - count(plain.fragmentMain, 'texelFetch(')).toBe(3);
     // Decay field + two detail samples + the 1D along-wall edge lookup (the albedo map is still sampled once).
     expect(count(main, 'texture(') - count(plain.fragmentMain, 'texture(')).toBe(4);
     // The decay maths never branches around a texture sample (WGSL uniformity): samples are top-level statements.

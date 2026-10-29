@@ -275,6 +275,8 @@ export function wallZone(level: Level, area: Area | undefined, voidCell: boolean
   if (area && ((area.type as string) === 'exit-stair' || (area.type as string) === 'stair-core' || (area.role && STAIR_ROLES.has(area.role)))) return 'stair';
   if (level.role === 'lower' || area?.type === 'underpass') return 'lower';
   if (level.role === 'upper') return 'upper';
+  // Task office-seamless-20261029: 'office' storeys (tower floors 2..8) take the main-level zones (public -> concourse,
+  // back-of-house -> service), exactly as iteration 16 built them (each floor was a 'main' section then).
   if (area?.kind === 'platform') return 'platform';
   return !area || area.publicSpace ? 'concourse' : 'service';
 }

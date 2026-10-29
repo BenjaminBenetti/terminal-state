@@ -4,6 +4,9 @@
 // Poisson(1) draw capped at GEAR_CAP_PER_LEVEL: mean ~1.0, zero in ~37 % of levels, two or more in ~26 %, five at most.
 // Items are drawn by GEAR_WEIGHTS (a repeat of the same piece within one level is half as likely each time) and dealt
 // to the level's sections uniformly. There is no guaranteed starter backpack (or any other piece).
+// Seamless office (lane GEN): every level is ONE section ('main'), so the one roll lands in the one layout; its storeys are
+// layout levels, and placement below works across all of them (shaft / elevator-landing exclusion on every tower storey, the
+// spawn distance in 3D for the office, where the start is on the station platform far below the tower floors).
 //
 // placeGear: puts a section's assigned items into the layout as ordinary layout pickups (so the run's per-section memory
 // of "layout pickup index taken" covers them) in plausible spots: back-of-house / storage / staff / office rooms, beside
@@ -27,7 +30,7 @@ export const GEAR_MEAN_PER_LEVEL = 1;
 export const GEAR_CAP_PER_LEVEL = 5;
 /** Relative draw weights (the backpack a little more likely: it is the piece that changes play the most). */
 export const GEAR_WEIGHTS: Readonly<Record<string, number>> = {armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1};
-/** Minimum straight-line distance (m) of a gear find from the section's player spawn. */
+/** Minimum straight-line distance (m) of a gear find from the section's player spawn (3D for the office level). */
 export const GEAR_MIN_SPAWN_M = 6;
 
 /** Inverse-CDF Poisson(mean) draw from a uniform u in [0, 1), capped. */
@@ -126,17 +129,28 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
   const levels = layout.levels?.length ? layout.levels : [{id: 0, role: 'main' as const, grid: layout.grid, baseY: 0}];
   const g0 = layout.grid, W = g0.w;
   const gridOf = (lv: number): Grid => levels[lv]?.grid ?? g0;
-  const sp = layout.playerSpawn as {x: number; z: number; level?: number};
+  type Box = {x0: number; z0: number; x1: number; z1: number};
+  const office = (layout as {office?: {start?: {x: number; z: number; level: number}; elevator?: {cab?: Box; shaft?: Box; doorSide?: string; stops?: {levelId: number}[]}}}).office;
+  const sp = (office?.start ?? layout.playerSpawn) as {x: number; z: number; level?: number};
+  const spLevel = sp.level ?? 0;
   const [sx, sy] = g0.cellOf(sp.x, sp.z);
   let dist: Int32Array[];
-  try { dist = levelDistance(levels, sx, sy, sp.level ?? 0); } catch { dist = [g0.distanceField(sx, sy)]; }
+  try { dist = levelDistance(levels, sx, sy, spLevel); } catch { dist = [g0.distanceField(sx, sy)]; }
   // reachability is known when the spawn cell seeded the search (else: any walkable cell, e.g. a spawn on a special cell)
   const reachKnown = dist.some(d => d && d.some(v => v >= 0));
-  const cab = (layout as {office?: {elevator?: {cab?: {x0: number; z0: number; x1: number; z1: number}}; levelId?: number}}).office;
+  // The elevator shaft (+ 0.6 m) and the landing strip in front of its door (1.6 m) on every storey it serves: no gear there.
+  const shaft = office?.elevator?.shaft ?? office?.elevator?.cab;
+  const stopLevels = new Set(office?.elevator?.stops?.map(q => q.levelId) ?? []);
+  const doorSide = office?.elevator?.doorSide ?? 'N';
   const inCab = (lv: number, x: number, z: number) => {
-    const c = cab?.elevator?.cab;
-    return !!c && (cab?.levelId === undefined || cab.levelId === lv) && x > c.x0 - 0.6 && x < c.x1 + 0.6 && z > c.z0 - 0.6 && z < c.z1 + 0.6;
+    if (!shaft || (stopLevels.size && !stopLevels.has(lv))) return false;
+    const m = 0.6, fr = 1.6;
+    return x > shaft.x0 - m - (doorSide === 'W' ? fr : 0) && x < shaft.x1 + m + (doorSide === 'E' ? fr : 0)
+      && z > shaft.z0 - m - (doorSide === 'N' ? fr : 0) && z < shaft.z1 + m + (doorSide === 'S' ? fr : 0);
   };
+  // Spawn distance: straight line on the Subway (unchanged), in 3D for the office (other storeys are metres above the start).
+  const spY = office ? gridOf(spLevel).floorAt(sp.x, sp.z) : 0;
+  const spawnDist = (lv: number, i: number, x: number, z: number) => (office ? Math.hypot(x - sp.x, z - sp.z, gridOf(lv).floorOf(i) - spY) : Math.hypot(x - sp.x, z - sp.z));
   const doorZone = levels.map(L => {
     const m = new Uint8Array(W * g0.h);
     for (const d of layout.doors) {
@@ -161,7 +175,7 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
     if (inCab(lv, cx, cz)) return false;
     if (strict) {
       if (doorZone[lv]?.[i] || !clear1(g, x, y)) return false;
-      if (Math.hypot(cx - sp.x, cz - sp.z) < GEAR_MIN_SPAWN_M) return false;
+      if (spawnDist(lv, i, cx, cz) < GEAR_MIN_SPAWN_M) return false;
       if (near(lv, cx, cz, 1.2)) return false;
     }
     return true;
