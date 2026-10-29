@@ -17,7 +17,7 @@
   "class": "props",
   "counts": {
     "records": 115,
-    "bytes": 38614448,
+    "bytes": 38622484,
     "triangles": 454988,
     "replacedBytes": 58653948,
     "replacedTriangles": 448981
@@ -32260,6 +32260,18 @@
           "target_polycount": 6000,
           "pose_mode": null
         },
+        "attempts": [
+          {
+            "attempt": "a1",
+            "taskId": "01a189b7-a253-7778-ac65-29a5f92344dd",
+            "review": "flagged:unusable:wrong-object"
+          },
+          {
+            "attempt": "a2",
+            "taskId": "01a189ba-c80d-7026-b8cc-c0b1450f30a5",
+            "review": "accepted"
+          }
+        ],
         "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/p7:popcornMachine/a2/native.glb",
         "nativeSha256": "ca54c90ca895569bcfba5cdfc2ba40b77050becb68659d3708adebf0f9028de0",
         "nativeBytes": 7089600,
@@ -34693,10 +34705,10 @@
       "output": {
         "path": "game/public/assets/models/p7-security-podium-t25.glb",
         "url": "assets/models/p7-security-podium-t25.glb",
-        "sha256": "829b40424f23eba9748d63c7bbf1c67a12679a88b03acbf8cf83b82771917836",
-        "bytes": 279796,
+        "sha256": "6ebc61461afe0e77cd2489e4a1e90b681a0f446dc6d4ef57726dd3bd76160b0e",
+        "bytes": 287832,
         "triangles": 4000,
-        "vertices": 4431,
+        "vertices": 4748,
         "textures": [
           {
             "slot": "baseColor",
@@ -34705,7 +34717,7 @@
               768
             ],
             "mime": "image/jpeg",
-            "bytes": 90310
+            "bytes": 85720
           },
           {
             "slot": "metallicRoughness",
@@ -34714,7 +34726,7 @@
               256
             ],
             "mime": "image/jpeg",
-            "bytes": 17055
+            "bytes": 19923
           },
           {
             "slot": "normal",
@@ -34723,11 +34735,11 @@
               256
             ],
             "mime": "image/jpeg",
-            "bytes": 4373
+            "bytes": 4003
           }
         ],
         "gpuTextureBytesEstimate": 3844779,
-        "doubleSided": true,
+        "doubleSided": false,
         "dims": [
           0.75,
           1.2,
@@ -34763,33 +34775,45 @@
         }
       },
       "meshy": {
-        "taskId": "01a189ba-b0b9-732e-9b26-05fef3a40b9b",
-        "attempt": "a1",
+        "taskId": "01a189d0-26e9-7799-af1e-4e34daccc9fc",
+        "attempt": "a2",
         "review": "accepted",
-        "reviewNote": "Same dark-blue security podium with gooseneck lamp and steel kick base; top is pitched/gabled instead of the reference's flat slanted desk top.",
+        "reviewNote": "Better than a1: front silhouette now matches the reference (rectangular blue podium, top edge reads as the lectern lip, steel kick plate) and the gooseneck lamp has a proper lamp head. Remaining deviation: side views show a symmetric two-slope (ridge left-right) top instead of the single front-sloping reading desk - document as deviation; no further attempt (primary limit: one replacement).",
         "args": {
           "target_polycount": 6000,
           "pose_mode": null
         },
-        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/p7:securityPodium/a1/native.glb",
-        "nativeSha256": "7566016c0d178f2f572a1e98c70b3cc3c82dc55e3f242982bde910147e764cbf",
-        "nativeBytes": 6320752,
+        "attempts": [
+          {
+            "attempt": "a1",
+            "taskId": "01a189ba-b0b9-732e-9b26-05fef3a40b9b",
+            "review": "flagged:unusable:design-lost (primary re-review, batch replace-1)"
+          },
+          {
+            "attempt": "a2",
+            "taskId": "01a189d0-26e9-7799-af1e-4e34daccc9fc",
+            "review": "accepted"
+          }
+        ],
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/p7:securityPodium/a2/native.glb",
+        "nativeSha256": "b505ea7db6e2ab45493e7b414ffaf6bdf4d7a793b6a93668112dc7cf5ecee9ac",
+        "nativeBytes": 5987768,
         "native": {
-          "triangles": 6117,
-          "vertices": 5760,
+          "triangles": 6179,
+          "vertices": 6081,
           "bbox": [
-            0.5112,
+            0.436,
             0.9507,
-            0.4497
+            0.4712
           ],
-          "components": 19,
-          "largestComponentFaces": 3090,
-          "boundaryEdges": 157,
+          "components": 27,
+          "largestComponentFaces": 1129,
+          "boundaryEdges": 77,
           "nonManifoldEdges": 0,
-          "edges": 9254,
+          "edges": 9307,
           "mr": {
-            "meanRoughness": 0.55,
-            "meanMetalness": 0.005
+            "meanRoughness": 0.566,
+            "meanMetalness": 0.024
           },
           "textures": [
             {
@@ -34799,7 +34823,7 @@
                 2048,
                 2048
               ],
-              "bytes": 2570290
+              "bytes": 2364207
             },
             {
               "slot": "mr",
@@ -34808,7 +34832,7 @@
                 2048,
                 2048
               ],
-              "bytes": 1499184
+              "bytes": 1497472
             },
             {
               "slot": "normal",
@@ -34817,7 +34841,7 @@
                 2048,
                 2048
               ],
-              "bytes": 1991324
+              "bytes": 1855101
             }
           ]
         },
@@ -34829,11 +34853,11 @@
       },
       "transform": {
         "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
-        "yawQuarter": 0,
+        "yawQuarter": 2,
         "yawRefineDeg": 0,
         "R": [
           [
-            1,
+            -1,
             0,
             0
           ],
@@ -34845,18 +34869,18 @@
           [
             0,
             0,
-            1
+            -1
           ]
         ],
         "S": [
-          1.46705,
+          1.720042,
           1.262249,
-          1.334202
+          1.273366
         ],
         "t": [
           0,
           0.6,
-          -0.001954
+          -0.002487
         ],
         "fit": "per-axis to the existing footprint 0.75 x 1.2 x 0.6 m (P7_PROP_DEFS / catalog dims)",
         "oldDims": [
@@ -34865,80 +34889,98 @@
           0.6
         ],
         "stretchVsUniformHeight": [
-          1.1623,
+          1.3627,
           1,
-          1.057
+          1.0088
         ],
         "anchor": "bottom",
         "frontCheck": {
           "scores": {
             "front": {
-              "iou": 0.81,
-              "lumaCorrelation": 0.742,
-              "chromaDiff": 0.014,
-              "aspectLogDiff": 0.012,
-              "score": 1.383
+              "iou": 0.96,
+              "lumaCorrelation": 0.713,
+              "chromaDiff": 0.009,
+              "aspectLogDiff": 0.146,
+              "score": 1.449
             },
             "right": {
-              "iou": 0.961,
-              "lumaCorrelation": 0.712,
-              "chromaDiff": 0.014,
-              "aspectLogDiff": 0.118,
-              "score": 1.458
+              "iou": 0.821,
+              "lumaCorrelation": 0.459,
+              "chromaDiff": 0.019,
+              "aspectLogDiff": 0.064,
+              "score": 1.137
             },
             "back": {
-              "iou": 0.81,
-              "lumaCorrelation": 0.735,
-              "chromaDiff": 0.016,
-              "aspectLogDiff": 0.012,
-              "score": 1.376
+              "iou": 0.981,
+              "lumaCorrelation": 0.719,
+              "chromaDiff": 0.013,
+              "aspectLogDiff": 0.146,
+              "score": 1.471
             },
             "left": {
-              "iou": 0.98,
-              "lumaCorrelation": 0.681,
-              "chromaDiff": 0.011,
-              "aspectLogDiff": 0.118,
-              "score": 1.455
+              "iou": 0.821,
+              "lumaCorrelation": 0.352,
+              "chromaDiff": 0.019,
+              "aspectLogDiff": 0.064,
+              "score": 1.051
             }
           },
-          "best": "right",
+          "best": "back",
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
         }
       },
-      "tune": null,
+      "tune": {
+        "yawQuarter": 2,
+        "reason": "a2 (replace-1; a1 flagged design-lost by the primary re-review: symmetric gable top, lamp lost) has identical plain long sides, so the orthographic front check is a tie (front 1.449 / back 1.471); the original front panel has the gooseneck lamp at the viewer's LEFT, which puts the lamp / lectern side of the native at -Z: turned 180 deg so it faces the game's prop front (+Z), lamp at -X like the iteration-07 model",
+        "limitations": [
+          "Documented deviation (primary, no further attempts): seen from the side the top is a symmetric two-slope ridge instead of the original single slanted reading top; the back has no cabinet door (the original back view shows one). Front silhouette, lectern lip, gooseneck lamp with its head and the steel kick plate match the original."
+        ]
+      },
       "simplify": {
         "applied": true,
         "tool": "meshoptimizer simplifyWithAttributes (normals x0.5 + UV weights; attribute seams preserved, Meshy UVs kept)",
-        "fromTriangles": 6117,
+        "fromTriangles": 6179,
         "triangles": 4000,
         "targetTriangles": 4000,
-        "errorRelative": 0.001289,
-        "errorMeters": 0.001547
+        "errorRelative": 0.001315,
+        "errorMeters": 0.001578
       },
       "meshAfter": {
-        "components": 19,
-        "largestComponentFaces": 1627,
-        "boundaryEdges": 140,
-        "nonManifoldEdges": 0,
-        "edges": 6070
+        "components": 27,
+        "largestComponentFaces": 802,
+        "boundaryEdges": 53,
+        "nonManifoldEdges": 1,
+        "edges": 6026
       },
       "surfaces": [
         {
-          "y": 0.976,
-          "yTop": 1.035,
-          "areaM2": 0.336,
-          "x0": -0.278,
-          "x1": 0.278,
-          "z0": -0.264,
-          "z1": 0.261,
-          "clear": 0.045,
+          "y": 1.027,
+          "yTop": 1.04,
+          "areaM2": 0.0217,
+          "x0": -0.328,
+          "x1": 0.319,
+          "z0": -0.008,
+          "z1": 0.002,
+          "clear": 0.09,
           "fill": 1,
           "top": false
+        },
+        {
+          "y": 1.195,
+          "yTop": 1.2,
+          "areaM2": 0.0104,
+          "x0": -0.172,
+          "x1": -0.054,
+          "z0": -0.036,
+          "z1": 0.033,
+          "clear": 0.6,
+          "fill": 1,
+          "top": true
         }
       ],
       "catalog": {
         "url": "assets/models/p7-security-podium-t25.glb",
-        "bytes": 279796,
+        "bytes": 287832,
         "w": 0.75,
         "h": 1.2,
         "d": 0.6,
@@ -34947,16 +34989,28 @@
         "gpuBytes": 3844779,
         "surfaces": [
           {
-            "y": 0.976,
-            "yTop": 1.035,
-            "areaM2": 0.336,
-            "x0": -0.278,
-            "x1": 0.278,
-            "z0": -0.264,
-            "z1": 0.261,
-            "clear": 0.045,
+            "y": 1.027,
+            "yTop": 1.04,
+            "areaM2": 0.0217,
+            "x0": -0.328,
+            "x1": 0.319,
+            "z0": -0.008,
+            "z1": 0.002,
+            "clear": 0.09,
             "fill": 1,
             "top": false
+          },
+          {
+            "y": 1.195,
+            "yTop": 1.2,
+            "areaM2": 0.0104,
+            "x0": -0.172,
+            "x1": -0.054,
+            "z0": -0.036,
+            "z1": 0.033,
+            "clear": 0.6,
+            "fill": 1,
+            "top": true
           }
         ]
       },
@@ -35003,8 +35057,10 @@
       "review": "reference/tasks/meshy-game-replacement-20261029/review/props/p7_securityPodium.png",
       "limitations": [
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
-        "Simplified from 6117 to 4000 triangles (Meshy UVs / seams kept).",
-        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+        "Fitted per axis to the existing gameplay footprint; relative stretch vs a uniform height fit 1.3627 / 1 / 1.0088 (x / y / z).",
+        "Simplified from 6179 to 4000 triangles (Meshy UVs / seams kept).",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs.",
+        "Documented deviation (primary, no further attempts): seen from the side the top is a symmetric two-slope ridge instead of the original single slanted reading top; the back has no cabinet door (the original back view shows one). Front silhouette, lectern lip, gooseneck lamp with its head and the steel kick plate match the original."
       ],
       "tool": "meshy-t25-props-2"
     },

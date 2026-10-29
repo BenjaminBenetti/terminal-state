@@ -1359,9 +1359,14 @@
       "sha256": "685156860b4caa08f0f3b2e2463313e4697262b69987e71e32a13c599fbab854"
     },
     {
+      "path": "assets/derivatives/meshy-t25-chars-20261029.json",
+      "bytes": 48974,
+      "sha256": "e54a8a70c0d082c09f7804db594ee5585f4d4eb693df740f2b4b4195c803fef5"
+    },
+    {
       "path": "assets/derivatives/meshy-t25-items-20261029.json",
-      "bytes": 58380,
-      "sha256": "c595f412f3a9084f332b6631068b8d43241d10cf69c66e68d92f137f088b109a"
+      "bytes": 58766,
+      "sha256": "f1d9b0e913dee8dca28a0de31de80257279b235200c75e988e0bd151f6bc1c25"
     },
     {
       "path": "assets/derivatives/meshy-t25-light-20261029.json",
@@ -1370,8 +1375,8 @@
     },
     {
       "path": "assets/derivatives/meshy-t25-props-20261029.json",
-      "bytes": 1202781,
-      "sha256": "cae90a621c5f1081ce07f8db7d7da3a801e0f54443193675c09a8a28a7dddffc"
+      "bytes": 1205635,
+      "sha256": "b806743e03407573c1276a2ad58848732eb9e8002e2bedae836f037dea124bbb"
     },
     {
       "path": "assets/derivatives/office-space-20261029.json",
@@ -1386,7 +1391,7 @@
     {
       "path": "assets/derivatives/outfit-blazer.json",
       "bytes": 113724,
-      "sha256": "f46ab156694b45d2302cbf6452eabb2d6873fbc9745fcfa7f030dc7656cf8a5b"
+      "sha256": "792543c76431c28521fbf8ddf50866760fc8277a2435bb4f06a6567af22e968d"
     },
     {
       "path": "assets/derivatives/outfit-cap.json",
@@ -1401,12 +1406,12 @@
     {
       "path": "assets/derivatives/outfit-coat.json",
       "bytes": 87660,
-      "sha256": "ed74f67ebc05a5a444c117fda3f4f89c1b201bd85d7aeed2d353f0add1fe6bc9"
+      "sha256": "5a52118d19c9efb50d5aa3b75c121c0649ee6273e51bcdee85e66ce254dcc454"
     },
     {
       "path": "assets/derivatives/outfit-flannel.json",
       "bytes": 88092,
-      "sha256": "66afb0563fdfcf57f5bfe6e7848d130d64ea6d78f87f4d322802cc2203ab0f8e"
+      "sha256": "589c4512a0aed6265be08bc66631f53b8a86664825d4009b88489c83065ca0e1"
     },
     {
       "path": "assets/derivatives/outfit-gasmask.json",
@@ -1421,12 +1426,12 @@
     {
       "path": "assets/derivatives/outfit-hivis.json",
       "bytes": 58094,
-      "sha256": "7ffa032f3bd706a44942a2b76662ade002a43efd07ff6b20de0c7088d82f3b4c"
+      "sha256": "baf939328362afad9b011359f5752aa997e465ee110014f511fa0ed9ad978b4b"
     },
     {
       "path": "assets/derivatives/outfit-hoodie.json",
-      "bytes": 116105,
-      "sha256": "39a4a7bf587dfb0112d5113512a6093df26d0d037ca37d34d48d4e8dbfaa048a"
+      "bytes": 116571,
+      "sha256": "8ff226d2cbd429483a661d73f707871b2869e1176f2dda35dd07112d866be550"
     },
     {
       "path": "assets/derivatives/outfit-jeans.json",
@@ -1451,12 +1456,12 @@
     {
       "path": "assets/derivatives/outfit-sweater.json",
       "bytes": 88044,
-      "sha256": "e212626dabd43880132b66a7e8ad8fc05aaf2f9f9187b8ef0f4927df279cf4ac"
+      "sha256": "0a93a41b060321dcca063b63a81773f9a9fd6e82d09e6769901a7be969353fef"
     },
     {
       "path": "assets/derivatives/outfit-trench.json",
       "bytes": 88531,
-      "sha256": "958b4c6ba96346c36e957e507c61fab67da7c233fab16ceb913fe40dd9d63379"
+      "sha256": "d4b1cd93235749ea4f91b5f8bdd4558fb8dc931f30e6bf2b3650fae86523d7cd"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -1546,7 +1551,7 @@
     {
       "path": "assets/derivatives/zombie-wardrobe.json",
       "bytes": 107624,
-      "sha256": "4dfd925bc7dd7a99ea0a955c5ec9c6dff53c0bae359991b00fb810eef1076407"
+      "sha256": "1b510859b8f5523656366585cc6a9df8bffc7c1adda7323476e56d2536be8d79"
     },
     {
       "path": "assets/models/bench-t25.glb",
@@ -1865,8 +1870,8 @@
     },
     {
       "path": "assets/models/outfit-hoodie-t25.glb",
-      "bytes": 688812,
-      "sha256": "afae6735cb3203292db4ada80886f55d9e3d7c77c1777ae814e2cb35d74eb99f"
+      "bytes": 697116,
+      "sha256": "96ea924e3fea37144e5bb2d97b6654734225744992a0d5acbb09cfc42f37054b"
     },
     {
       "path": "assets/models/outfit-hoodie.glb",
@@ -2315,8 +2320,8 @@
     },
     {
       "path": "assets/models/p7-security-podium-t25.glb",
-      "bytes": 279796,
-      "sha256": "829b40424f23eba9748d63c7bbf1c67a12679a88b03acbf8cf83b82771917836"
+      "bytes": 287832,
+      "sha256": "6ebc61461afe0e77cd2489e4a1e90b681a0f446dc6d4ef57726dd3bd76160b0e"
     },
     {
       "path": "assets/models/p7-shoe-shine-chair-t25.glb",

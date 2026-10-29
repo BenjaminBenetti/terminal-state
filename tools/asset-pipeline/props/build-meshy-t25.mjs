@@ -130,6 +130,8 @@ const TUNE = {
   'p7:infoTouchKiosk': {simplifyFlags: ['Permissive'], simplifyReason: 'attribute seams stall the seam-preserving collapse at 6228 tris (> the 6k large-class budget); Permissive (attribute-weighted) lets low-error seam collapses through (review sheet checked)'},
   'p7:toolPegboard': {colorGrade: {mode: 'tint+lum', clamp: [0.55, 1.0], neutralMask: {maxSat: 0.14, luma: [70, 215]}, reason: 'the T2.5 board came back neutral light grey; the original is a brown masonite pegboard (mean 107/83/63 vs 127/120/115). Graded toward the original tint on near-neutral texels only (the board), so the coloured tool handles keep their colours'}},
   'p7:palletJack': {yawQuarter: 3, reason: 'the original front panel shows the forks toward the camera and the handle behind (as the iteration-07 model); the front check picked the handle side (quarter 1): turned the other way round (quarter 3)'},
+  'p7:securityPodium': {yawQuarter: 2, reason: 'a2 (replace-1; a1 flagged design-lost by the primary re-review: symmetric gable top, lamp lost) has identical plain long sides, so the orthographic front check is a tie (front 1.449 / back 1.471); the original front panel has the gooseneck lamp at the viewer\'s LEFT, which puts the lamp / lectern side of the native at -Z: turned 180 deg so it faces the game\'s prop front (+Z), lamp at -X like the iteration-07 model',
+    limitations: ['Documented deviation (primary, no further attempts): seen from the side the top is a symmetric two-slope ridge instead of the original single slanted reading top; the back has no cabinet door (the original back view shows one). Front silhouette, lectern lip, gooseneck lamp with its head and the steel kick plate match the original.']},
   'base:turnstile': {yawQuarter: 1, reason: 'the front check matched the reference (a 3/4 view of the cabinet end) to a side view and turned the cabinet 180 deg from the old model; the game contract is the old orientation: cabinet along Z with the card reader at the +Z end, the tripod arms reaching -X across the gate lane (world/builder.ts TURNSTILE_CABINET_OFFSET centres the cabinet on the fare-gate placement)'},
   'base:light': {colorGrade: {mode: 'tint', reason: 'primary review: the T2.5 diffuser bakes cleaner / whiter than the original aged-ivory fixture (mean tint original 164/152/134 vs 160/154/141): hue moved toward the original ivory, luminance kept'},
     fit: 'uniform-width', reason: 'the fixture size is read from the model bbox at load (game.ts WorldMaterials fixture dims -> emissive tube box, instancing fit): keep the 1.2 m length and the round diffuser tube round (a per-axis fit to the old 0.172 m depth would stretch it 30% into an oval); height comes out 0.19 m like the old fixture, depth 0.13 m'},
@@ -154,13 +156,14 @@ function delivered() {
     if (['intent', 'ack', 'done', 'failed', 'review'].includes(e.event)) t[e.event] = e;
   }
   for (const [id, atts] of Object.entries(by)) {
-    const cur = Object.values(atts).sort((x, y) => +x.attempt.slice(1) - +y.attempt.slice(1)).pop();
+    const all = Object.values(atts).sort((x, y) => +x.attempt.slice(1) - +y.attempt.slice(1)), cur = all[all.length - 1];
     out.assets[id] = {...(out.assets[id] ?? {}), attempt: cur.attempt, taskId: cur.ack?.task_id ?? null,
       status: cur.done ? 'SUCCEEDED' : cur.failed ? 'FAILED' : cur.ack?.task_id ? 'SUBMITTED' : 'PENDING',
       review: cur.review?.verdict ?? (cur.done ? 'pending-review' : null), reviewNote: cur.review?.note ?? null,
       nativeGlb: cur.done?.nativeGlb?.file ?? null, sha256: cur.done?.nativeGlb?.sha256 ?? null,
       inputImage: cur.intent?.inputImage?.path ?? null, inputImageSha256: cur.intent?.inputImage?.sha256 ?? null,
-      args: cur.intent?.args ? {target_polycount: cur.intent.args.target_polycount, pose_mode: cur.intent.args.pose_mode ?? null} : null};
+      args: cur.intent?.args ? {target_polycount: cur.intent.args.target_polycount, pose_mode: cur.intent.args.pose_mode ?? null} : null,
+      attempts: all.map(t => ({attempt: t.attempt, taskId: t.ack?.task_id ?? null, review: t.review?.verdict ?? null}))};
   }
   return out;
 }
@@ -632,6 +635,7 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
       gpuTextureBytesEstimate: gpu, doubleSided, dims: outBB.size.map(r4), bbox: {min: outBB.min.map(r4), max: outBB.max.map(r4)}, budget: {...cfg.budget, overBudget, jpegQuality: tierUsed, ...(cfg.p7SizeClass ? {totalTris: P7_CLASSES[cfg.p7SizeClass].tris} : {})}},
     meshy: {taskId: del.taskId ?? null, attempt: del.attempt ?? null, review: del.review ?? null, reviewNote: del.reviewNote ?? null, args: del.args ?? null,
       ...(TUNE[cfg.id]?.acceptFlagged ? {usedDespiteFlag: TUNE[cfg.id].acceptFlagged} : {}),
+      ...((del.attempts?.length ?? 0) > 1 ? {attempts: del.attempts} : {}),
       nativeGlb: rel(nativeAbs), nativeSha256: nativeSha, nativeBytes: nativeBytes.length, native: natStats,
       inputImage: {path: rel(imgPath), sha256: imgSha, role: master.originalImage.role}},
     transform: {description: "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.", yawQuarter: q, yawRefineDeg: r4(yawRefine), R: R.map(r => r.map(r6)), S: Stotal.map(r6), t: t.map(r6),

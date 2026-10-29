@@ -112,6 +112,18 @@
           "attempt": "a2",
           "reason": "primary 2026-10-29: no more rerolls; fix the extruded label locally (radialClamp) or keep the old model. Fixed locally: the can silhouette is a clean cylinder again and the illustration reads as printed (review sheet review/props/base_item_beans.png)"
         },
+        "attempts": [
+          {
+            "attempt": "a1",
+            "taskId": "01a18997-0071-71e4-bcf4-a5a8337f0fd9",
+            "review": "flagged:unusable:label-bowl-extruded"
+          },
+          {
+            "attempt": "a2",
+            "taskId": "01a1899d-9295-7595-85eb-a717ded13d70",
+            "review": "flagged:unusable:label-bowl-extruded"
+          }
+        ],
         "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_beans/a2/native.glb",
         "nativeSha256": "7ef151ce857c7a70545e77880be277038f068869b7995f28c272b8c96e03b182",
         "nativeBytes": 7581356,

@@ -1,0 +1,1500 @@
+{
+ "schema": "the-last-line/meshy-t25-class-provenance@1",
+ "class": "chars",
+ "task": "studio-meshy-game-replacement-20261029-01",
+ "lane": "CHARS",
+ "generatedAt": "2026-10-29T22:39:59.873Z",
+ "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+ "method": "Accepted Meshy T2.5 native GLBs (single original front/reference image) are rebuilt by the EXISTING local CPU rig pipelines: densified (zombie/lib/densify.mjs, same surface + UV mapping) -> placement (metres, +Y up, +Z facing, feet / paws on y = 0) -> slice-landmark skeleton (18-joint humanoid / 25-joint quadruped, A-pose / bind as generated) -> simplify + new UV atlas + texture bake from the native textures -> automatic skin weights -> procedural clips (Idle/Walk/Run/Attack/Hit/Death) -> per-body garment fits (fit07 pose gate, masks, layering) recomputed for the new topology. No paid rigging / animation / remesh, no network.",
+ "status": {
+  "approved": false,
+  "gameReady": false,
+  "note": "prototype derivatives; reference fidelity reviewed on CPU renders (reference/tasks/meshy-game-replacement-20261029/review/chars/)"
+ },
+ "counts": {
+  "masters": 22,
+  "replaced": 3,
+  "kept": 1,
+  "pending": 18,
+  "rebuiltWithoutSourceChange": 16
+ },
+ "keptBodyFiles": [
+  "scavenger"
+ ],
+ "skippedWearables": [
+  {
+   "id": "puffer",
+   "reason": "excluded on every body by the iteration-07 fit gate; no runtime model key (outfit-puffer.glb is an inert, unreferenced file); not in the T2.5 replacement inventory - left untouched"
+  }
+ ],
+ "masters": [
+  {
+   "asset": "body:lastshift",
+   "class": "character body (rigged)",
+   "displayName": "Last-shift worker",
+   "oldRuntimePath": "game/public/assets/models/zombie-body-lastshift.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/zombie-body-lastshift-t25.glb",
+    "sha256": "d933046c9d12376d5bce53aef5b8e635479a02fea53289e72eb7e76ae5e6c241",
+    "bytes": 732068,
+    "triangles": 14912,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "ZombieBodyMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 140197
+     },
+     {
+      "name": "ZombieBodyMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 27994
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/zombie-body-lastshift.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)"
+   },
+   "restore": {
+    "path": "game/public/assets/models/zombie-body-lastshift.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "c83ba7228a06a35a5fe82a519e8efc7eb49966c0",
+    "restore": "git show a7a646a:game/public/assets/models/zombie-body-lastshift.glb > game/public/assets/models/zombie-body-lastshift.glb"
+   }
+  },
+  {
+   "asset": "body:courier",
+   "class": "character body (rigged)",
+   "displayName": "Bike courier",
+   "oldRuntimePath": "game/public/assets/models/zombie-body-courier.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/zombie-body-courier-t25.glb",
+    "sha256": "f163e01d3bcdac3d5a17431eca6c26acae8936b39962aadfe9ee8f81f16a4eb7",
+    "bytes": 695128,
+    "triangles": 14956,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "ZombieBodyMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 123035
+     },
+     {
+      "name": "ZombieBodyMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 27773
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/zombie-body-courier.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)"
+   },
+   "restore": {
+    "path": "game/public/assets/models/zombie-body-courier.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "d4ac1217d7af32edf5dfa3ec7355ff4a82bfe7b9",
+    "restore": "git show a7a646a:game/public/assets/models/zombie-body-courier.glb > game/public/assets/models/zombie-body-courier.glb"
+   }
+  },
+  {
+   "asset": "body:agent",
+   "class": "character body (rigged)",
+   "displayName": "Station agent",
+   "oldRuntimePath": "game/public/assets/models/zombie-body-agent.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": false,
+   "runtime": {
+    "path": "game/public/assets/models/zombie-body-agent.glb",
+    "sha256": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45",
+    "bytes": 662524,
+    "triangles": 14972,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "ZombieBodyMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 104035
+     },
+     {
+      "name": "ZombieBodyMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 1303
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/zombie-body-agent.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)"
+   }
+  },
+  {
+   "asset": "body:scavenger",
+   "class": "character body (rigged)",
+   "displayName": "Masked scavenger (reused original upload)",
+   "oldRuntimePath": "game/public/assets/models/zombie-body-scavenger.glb",
+   "status": "kept (no T2.5 replacement yet)",
+   "reason": "its T2.5 job uses a RECREATED reference (recreated-from-existing-model-guide (user authorized update01); not an original) and is not delivered / integrated yet; the shipped file is verified unchanged by every wardrobe build",
+   "runtimeRebuilt": false,
+   "runtime": {
+    "path": "game/public/assets/models/zombie-body-scavenger.glb",
+    "sha256": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869",
+    "bytes": 832684,
+    "triangles": 14767,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "ZombieBodyMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 144212
+     },
+     {
+      "name": "ZombieBodyMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 33240
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/zombie-body-scavenger.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)"
+   }
+  },
+  {
+   "asset": "body:heavyset",
+   "class": "character body (rigged)",
+   "displayName": "Heavyset man (base layer)",
+   "oldRuntimePath": "game/public/assets/models/zombie-body-heavyset.glb",
+   "status": "replaced",
+   "runtimeRebuilt": true,
+   "meshy": {
+    "meshyTaskId": "01a18990-83dc-7402-bd9b-b272de79acc1",
+    "attempt": "a1",
+    "provider": "Meshy meshy_image_to_3d, ai_model meshy-t2.5, model_type smart-topology, should_texture + enable_pbr, texture_resolution 2k, target_formats [glb]",
+    "args": {
+     "target_polycount": 20000,
+     "pose_mode": "a-pose"
+    },
+    "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/body:heavyset/a1/native.glb",
+    "nativeSha256": "a88bad7d4f74038fd4b3f383eefdda5565c2aef21c7f88093c67478c2b9f738c",
+    "nativeBytes": 7434480,
+    "nativeTriangles": 20996,
+    "nativeTextures": [
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     },
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     },
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     }
+    ],
+    "inputImage": "reference/tasks/vertical-slice-iteration06-20261026/generation/bodyUnderwearA/image/bodyUnderwearA-original.png",
+    "inputImageSha256": "e9d0e9dc116d8278bb0d4825c0188b1a5498f4fcc590a29c2a7697ae8a233302",
+    "review": "accepted",
+    "reviewNote": "Same heavyset man: grey stained tank top, dark boxer briefs, grey socks, bald, A-pose, belly reads in profile. Static mesh (no skin/skeleton) - local re-rig required per integration contract."
+   },
+   "runtime": {
+    "path": "game/public/assets/models/zombie-body-heavyset-t25.glb",
+    "sha256": "cd3b21eaff60c28fcf2a6931e5d2b4c688c5b3302c3edd785db5dd43d237fb3a",
+    "bytes": 588444,
+    "triangles": 15000,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "ZombieBodyMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 85589
+     },
+     {
+      "name": "ZombieBodyMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 7597
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/zombie-body-heavyset.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)"
+   },
+   "densify": {
+    "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+    "maxEdge": 0.0042759,
+    "passes": 4,
+    "sourceTriangles": 20996,
+    "sourceVertices": 13806,
+    "triangles": 283754,
+    "vertices": 150442,
+    "longestEdge": 0.0042752,
+    "maxEdgeFractionOfHeight": 0.0045,
+    "sourceHeightUnits": 0.950196
+   },
+   "restore": {
+    "path": "game/public/assets/models/zombie-body-heavyset.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "80f979e0932d3fb7d3c726d8308f2a791d85332d",
+    "restore": "git show a7a646a:game/public/assets/models/zombie-body-heavyset.glb > game/public/assets/models/zombie-body-heavyset.glb"
+   }
+  },
+  {
+   "asset": "body:tall",
+   "class": "character body (rigged)",
+   "displayName": "Tall woman (base layer)",
+   "oldRuntimePath": "game/public/assets/models/zombie-body-tall.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": false,
+   "runtime": {
+    "path": "game/public/assets/models/zombie-body-tall.glb",
+    "sha256": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281",
+    "bytes": 628536,
+    "triangles": 14960,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "ZombieBodyMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 82848
+     },
+     {
+      "name": "ZombieBodyMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 7479
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/zombie-body-tall.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)"
+   }
+  },
+  {
+   "asset": "garment:coat",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Hi-vis parka (long coat)",
+   "oldRuntimePath": "game/public/assets/models/outfit-coat.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-coat-t25.glb",
+    "sha256": "b3fb92626f90e872f48e32fa953a287c6c7e8931d7df9aa1cd6438b9404fa5e8",
+    "bytes": 821404,
+    "triangles": 26568,
+    "meshNodes": 3,
+    "perNodeTriangles": 8856,
+    "textures": [
+     {
+      "name": "Outfit_coatMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 165359
+     },
+     {
+      "name": "Outfit_coatMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 1433
+     }
+    ],
+    "skins": 3,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-coat.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-coat.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "99ceb7605e6bf8b6529349d15d633a4fa0e963ba",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-coat.glb > game/public/assets/models/outfit-coat.glb"
+   }
+  },
+  {
+   "asset": "garment:trench",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Trench coat",
+   "oldRuntimePath": "game/public/assets/models/outfit-trench.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-trench-t25.glb",
+    "sha256": "5c411aa8fdf19381a82f3e8def6bc8791fbf31c89fc1d20eca955ea8dfa9c175",
+    "bytes": 761772,
+    "triangles": 25470,
+    "meshNodes": 3,
+    "perNodeTriangles": 8490,
+    "textures": [
+     {
+      "name": "Outfit_trenchMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 153938
+     },
+     {
+      "name": "Outfit_trenchMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 12600
+     }
+    ],
+    "skins": 3,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-trench.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-trench.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "155cb6799d65d3b6c76f409c725679407f2cc6e6",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-trench.glb > game/public/assets/models/outfit-trench.glb"
+   }
+  },
+  {
+   "asset": "garment:hivis",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Hi-vis vest",
+   "oldRuntimePath": "game/public/assets/models/outfit-hivis.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-hivis-t25.glb",
+    "sha256": "862d0a3e3801d31c72b56854d21a434b3e575c10145090e381b228568d91ba9c",
+    "bytes": 418752,
+    "triangles": 9856,
+    "meshNodes": 2,
+    "perNodeTriangles": 4928,
+    "textures": [
+     {
+      "name": "Outfit_hivisMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 145311
+     },
+     {
+      "name": "Outfit_hivisMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 22891
+     }
+    ],
+    "skins": 2,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-hivis.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "heavyset"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-hivis.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "8f95fbd26de923592db5ea4f6e37fc7da759b2c6",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-hivis.glb > game/public/assets/models/outfit-hivis.glb"
+   }
+  },
+  {
+   "asset": "garment:hoodie",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Zip hoodie",
+   "oldRuntimePath": "game/public/assets/models/outfit-hoodie.glb",
+   "status": "replaced",
+   "runtimeRebuilt": true,
+   "meshy": {
+    "meshyTaskId": "01a18990-d5e5-74d2-8462-1019a4e7109f",
+    "attempt": "a1",
+    "provider": "Meshy meshy_image_to_3d, ai_model meshy-t2.5, model_type smart-topology, should_texture + enable_pbr, texture_resolution 2k, target_formats [glb]",
+    "args": {
+     "target_polycount": 15000,
+     "pose_mode": null
+    },
+    "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:hoodie/a1/native.glb",
+    "nativeSha256": "fd09ada122a10c8411fbbe9700082845cbfa51a66d520252b81c7c315d0a04b3",
+    "nativeBytes": 7502820,
+    "nativeTriangles": 15430,
+    "nativeTextures": [
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     },
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     },
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     }
+    ],
+    "inputImage": "reference/tasks/vertical-slice-iteration05-20261026/generation/outfitHoodie/image/outfitHoodie-original.png",
+    "inputImageSha256": "b8508022c9a949783ce4a776bd8114b166d10d0a20ecbeec807acaef6060f2fa",
+    "review": "accepted",
+    "reviewNote": "Same worn brick-red zip hoodie: hood, drawstrings, kangaroo pocket, frayed cuffs/hem, dirt. Standalone garment shape; must be refit/skinned to each body (old masks/weights invalid)."
+   },
+   "runtime": {
+    "path": "game/public/assets/models/outfit-hoodie-t25.glb",
+    "sha256": "96ea924e3fea37144e5bb2d97b6654734225744992a0d5acbb09cfc42f37054b",
+    "bytes": 697116,
+    "triangles": 29956,
+    "meshNodes": 4,
+    "perNodeTriangles": 7489,
+    "textures": [
+     {
+      "name": "Outfit_hoodieMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 81142
+     },
+     {
+      "name": "Outfit_hoodieMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 7461
+     }
+    ],
+    "skins": 4,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-hoodie.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "densify": {
+    "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+    "maxEdge": 0.0057935,
+    "passes": 5,
+    "sourceTriangles": 15430,
+    "sourceVertices": 11046,
+    "triangles": 403154,
+    "vertices": 215591,
+    "longestEdge": 0.0057933,
+    "maxEdgeFractionOfHeight": 0.007,
+    "sourceHeightUnits": 0.827637
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-hoodie.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "57c5a055d606c8ce926b757862938b273a1cded8",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-hoodie.glb > game/public/assets/models/outfit-hoodie.glb"
+   }
+  },
+  {
+   "asset": "garment:blazer",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Office blazer",
+   "oldRuntimePath": "game/public/assets/models/outfit-blazer.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-blazer-t25.glb",
+    "sha256": "afb0c4aaf4ee469eeda0fb5d36385a9c4aa8e23b4717438acb50158f45e24484",
+    "bytes": 730676,
+    "triangles": 29840,
+    "meshNodes": 4,
+    "perNodeTriangles": 7460,
+    "textures": [
+     {
+      "name": "Outfit_blazerMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 92963
+     },
+     {
+      "name": "Outfit_blazerMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 915
+     }
+    ],
+    "skins": 4,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-blazer.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-blazer.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "ffb917de72b2318ee0a87cb640d57fe46dfeeccc",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-blazer.glb > game/public/assets/models/outfit-blazer.glb"
+   }
+  },
+  {
+   "asset": "garment:flannel",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Plaid flannel shirt",
+   "oldRuntimePath": "game/public/assets/models/outfit-flannel.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-flannel-t25.glb",
+    "sha256": "775bcae22af0e1994a6c1b1605f94dcea76375bf4fce6ba299aeb2e52a07f040",
+    "bytes": 551424,
+    "triangles": 19404,
+    "meshNodes": 3,
+    "perNodeTriangles": 6468,
+    "textures": [
+     {
+      "name": "Outfit_flannelMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 106690
+     },
+     {
+      "name": "Outfit_flannelMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 1019
+     }
+    ],
+    "skins": 3,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-flannel.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "heavyset"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-flannel.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "97a91be3b6adae5d1a13cd279f2fd4b1eec4684c",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-flannel.glb > game/public/assets/models/outfit-flannel.glb"
+   }
+  },
+  {
+   "asset": "garment:sweater",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Cable-knit sweater",
+   "oldRuntimePath": "game/public/assets/models/outfit-sweater.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-sweater-t25.glb",
+    "sha256": "ebf20c428f9273b51b95ddd71c33399b0f698e0623c5ecc4006fc5fcd0044e92",
+    "bytes": 594192,
+    "triangles": 19182,
+    "meshNodes": 3,
+    "perNodeTriangles": 6394,
+    "textures": [
+     {
+      "name": "Outfit_sweaterMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 119633
+     },
+     {
+      "name": "Outfit_sweaterMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 949
+     }
+    ],
+    "skins": 3,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-sweater.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-sweater.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "9c83144c47328523cf88f627ea85667eb824e859",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-sweater.glb > game/public/assets/models/outfit-sweater.glb"
+   }
+  },
+  {
+   "asset": "garment:cargo",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Olive cargo work pants",
+   "oldRuntimePath": "game/public/assets/models/outfit-cargo.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-cargo-t25.glb",
+    "sha256": "21cefe8bcb3fe6adf85606d043b975b19b2cd741afb02483f9d778424d4155fe",
+    "bytes": 612756,
+    "triangles": 23952,
+    "meshNodes": 4,
+    "perNodeTriangles": 5988,
+    "textures": [
+     {
+      "name": "Outfit_cargoMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 92396
+     },
+     {
+      "name": "Outfit_cargoMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 6599
+     }
+    ],
+    "skins": 4,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-cargo.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-cargo.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "9680da55eb7b097fdfd0b14d9251b4a7a538daf2",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-cargo.glb > game/public/assets/models/outfit-cargo.glb"
+   }
+  },
+  {
+   "asset": "garment:jeans",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Dark-wash jeans",
+   "oldRuntimePath": "game/public/assets/models/outfit-jeans.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-jeans-t25.glb",
+    "sha256": "fd44828dc0992210f2ec3e58722f058255f7b48e1dd4341fa0c28e6dffe37823",
+    "bytes": 583696,
+    "triangles": 23960,
+    "meshNodes": 4,
+    "perNodeTriangles": 5990,
+    "textures": [
+     {
+      "name": "Outfit_jeansMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 100704
+     },
+     {
+      "name": "Outfit_jeansMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 1051
+     }
+    ],
+    "skins": 4,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-jeans.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-jeans.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "624cd3f23d8e881f68c1fae7ce777a616bfcc5f9",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-jeans.glb > game/public/assets/models/outfit-jeans.glb"
+   }
+  },
+  {
+   "asset": "garment:slacks",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Grey office slacks",
+   "oldRuntimePath": "game/public/assets/models/outfit-slacks.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-slacks-t25.glb",
+    "sha256": "1b4e29bc6fd43a470e6550bf1429f3a27eb835ca224bc57be4bdf15c397da586",
+    "bytes": 490088,
+    "triangles": 17922,
+    "meshNodes": 3,
+    "perNodeTriangles": 5974,
+    "textures": [
+     {
+      "name": "Outfit_slacksMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 87324
+     },
+     {
+      "name": "Outfit_slacksMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       256,
+       256
+      ],
+      "bytes": 1288
+     }
+    ],
+    "skins": 3,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-slacks.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-slacks.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "f7647c4e4ec6a48084866b05a5108abef62bbd40",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-slacks.glb > game/public/assets/models/outfit-slacks.glb"
+   }
+  },
+  {
+   "asset": "garment:hardhat",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Transit hard hat",
+   "oldRuntimePath": "game/public/assets/models/outfit-hardhat.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-hardhat-t25.glb",
+    "sha256": "9053a0ed59bbc86f3ae34b1a892ae81bf35f29570d2872e037070c4651d34fe1",
+    "bytes": 349100,
+    "triangles": 10950,
+    "meshNodes": 5,
+    "perNodeTriangles": 2190,
+    "textures": [
+     {
+      "name": "Outfit_hardhatMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 54803
+     },
+     {
+      "name": "Outfit_hardhatMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       128,
+       128
+      ],
+      "bytes": 8211
+     }
+    ],
+    "skins": 5,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-hardhat.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-hardhat.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "89d23c849bee9e174e7e6c4ae5128eacc0940fe0",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-hardhat.glb > game/public/assets/models/outfit-hardhat.glb"
+   }
+  },
+  {
+   "asset": "garment:cap",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Faded baseball cap",
+   "oldRuntimePath": "game/public/assets/models/outfit-cap.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-cap-t25.glb",
+    "sha256": "cb94cdf250ea7f4c58623853519412ce7f79900f26a41dd415829e5bb91080eb",
+    "bytes": 341472,
+    "triangles": 10940,
+    "meshNodes": 5,
+    "perNodeTriangles": 2188,
+    "textures": [
+     {
+      "name": "Outfit_capMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 42565
+     },
+     {
+      "name": "Outfit_capMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       128,
+       128
+      ],
+      "bytes": 498
+     }
+    ],
+    "skins": 5,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-cap.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-cap.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "8de8769a991495baf963a5a985a7b9e4f9b1129b",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-cap.glb > game/public/assets/models/outfit-cap.glb"
+   }
+  },
+  {
+   "asset": "garment:beanie",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Knit beanie",
+   "oldRuntimePath": "game/public/assets/models/outfit-beanie.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-beanie-t25.glb",
+    "sha256": "e54ffc1b911b7213c1a5e269565bb85d93953f766eba99bbd679586843cec818",
+    "bytes": 296556,
+    "triangles": 10970,
+    "meshNodes": 5,
+    "perNodeTriangles": 2194,
+    "textures": [
+     {
+      "name": "Outfit_beanieMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 48497
+     },
+     {
+      "name": "Outfit_beanieMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       128,
+       128
+      ],
+      "bytes": 506
+     }
+    ],
+    "skins": 5,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-beanie.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-beanie.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "eb8e43bcc755738fcd31345858edad510b06a53f",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-beanie.glb > game/public/assets/models/outfit-beanie.glb"
+   }
+  },
+  {
+   "asset": "garment:gasmask",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Full-face gas mask",
+   "oldRuntimePath": "game/public/assets/models/outfit-gasmask.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-gasmask-t25.glb",
+    "sha256": "3354d6792cb389b31ead1a74cc85cabade1c088fc4525cebadf04a1c8099bf3b",
+    "bytes": 490112,
+    "triangles": 14680,
+    "meshNodes": 5,
+    "perNodeTriangles": 2936,
+    "textures": [
+     {
+      "name": "Outfit_gasmaskMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 49919
+     },
+     {
+      "name": "Outfit_gasmaskMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       128,
+       128
+      ],
+      "bytes": 13356
+     }
+    ],
+    "skins": 5,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-gasmask.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-gasmask.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "8b910ecfb0368d48f35730112c0e6382a92dd313",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-gasmask.glb > game/public/assets/models/outfit-gasmask.glb"
+   }
+  },
+  {
+   "asset": "garment:respirator",
+   "class": "garment/outfit (fitted/rigged)",
+   "displayName": "Half-face respirator",
+   "oldRuntimePath": "game/public/assets/models/outfit-respirator.glb",
+   "status": "pending (old local Pixal3D source still used)",
+   "runtimeRebuilt": true,
+   "runtime": {
+    "path": "game/public/assets/models/outfit-respirator-t25.glb",
+    "sha256": "11175f96a9fee11cae662d92d386d2606f3e0bae447e700707dabda37e448f10",
+    "bytes": 392880,
+    "triangles": 10965,
+    "meshNodes": 5,
+    "perNodeTriangles": 2193,
+    "textures": [
+     {
+      "name": "Outfit_respiratorMaterial_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 46451
+     },
+     {
+      "name": "Outfit_respiratorMaterial_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       128,
+       128
+      ],
+      "bytes": 11786
+     }
+    ],
+    "skins": 5,
+    "animations": [],
+    "derivativeManifest": "game/public/assets/derivatives/outfit-respirator.json",
+    "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
+    "fittedBodies": [
+     "lastshift",
+     "courier",
+     "agent",
+     "heavyset",
+     "tall"
+    ]
+   },
+   "restore": {
+    "path": "game/public/assets/models/outfit-respirator.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "c608b575221c90fb8723e9c6777fad38f671d969",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-respirator.glb > game/public/assets/models/outfit-respirator.glb"
+   }
+  },
+  {
+   "asset": "creature:ratdog",
+   "class": "creature (rigged)",
+   "displayName": "Tunnel scavenger (rat/dog)",
+   "oldRuntimePath": "game/public/assets/models/creature-ratdog.glb",
+   "status": "replaced",
+   "runtimeRebuilt": true,
+   "meshy": {
+    "meshyTaskId": "01a18991-2a61-76ab-b1dd-7bd10d9e4bef",
+    "attempt": "a1",
+    "provider": "Meshy meshy_image_to_3d, ai_model meshy-t2.5, model_type smart-topology, should_texture + enable_pbr, texture_resolution 2k, target_formats [glb]",
+    "args": {
+     "target_polycount": 15000,
+     "pose_mode": null
+    },
+    "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/creature:ratdog/a1/native.glb",
+    "nativeSha256": "62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b",
+    "nativeBytes": 7898584,
+    "nativeTriangles": 15774,
+    "nativeTextures": [
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     },
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     },
+     {
+      "mime": "image/jpeg",
+      "size": [
+       2048,
+       2048
+      ]
+     }
+    ],
+    "inputImage": "reference/assets/generated/quadruped-02-24step-01/input.png",
+    "inputImageSha256": "d47f4eedbd17f41062f69ef61bc2754a8f5a59741d64cc03cb54546d8706d349",
+    "review": "accepted",
+    "reviewNote": "Same grizzled dark-grey rat-dog: long curled tail, pale flank streaks, clawed feet (side views confirm; provider thumbnail lighting reads paler). Posture somewhat longer/lower than the hunched reference. Static mesh - local re-rig required."
+   },
+   "runtime": {
+    "path": "game/public/assets/models/creature-ratdog-t25.glb",
+    "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad",
+    "bytes": 893544,
+    "triangles": 11998,
+    "meshNodes": 1,
+    "textures": [
+     {
+      "name": "RatdogBody_baseColor",
+      "mime": "image/jpeg",
+      "size": [
+       1024,
+       1024
+      ],
+      "bytes": 148384
+     },
+     {
+      "name": "RatdogBody_metallicRoughness",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 28461
+     },
+     {
+      "name": "RatdogBody_normal",
+      "mime": "image/jpeg",
+      "size": [
+       512,
+       512
+      ],
+      "bytes": 63556
+     }
+    ],
+    "skins": 1,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run",
+     "Attack",
+     "Hit",
+     "Death"
+    ],
+    "derivativeManifest": "game/public/assets/derivatives/creature-ratdog.json",
+    "buildTool": "tools/asset-pipeline/creature/build-creature.mjs"
+   },
+   "densify": {
+    "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+    "maxEdge": 0.0033354,
+    "passes": 4,
+    "sourceTriangles": 15774,
+    "sourceVertices": 14653,
+    "triangles": 306351,
+    "vertices": 170971,
+    "longestEdge": 0.0033349,
+    "maxEdgeFractionOfHeight": 0.009,
+    "sourceHeightUnits": 0.370605
+   },
+   "restore": {
+    "path": "game/public/assets/models/creature-ratdog.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "d1cba8accf7ecead94004985a3f761ab5e593e23",
+    "restore": "git show a7a646a:game/public/assets/models/creature-ratdog.glb > game/public/assets/models/creature-ratdog.glb"
+   }
+  }
+ ],
+ "rebuiltWithoutSourceChange": [
+  {
+   "asset": "body:lastshift",
+   "runtime": "game/public/assets/models/zombie-body-lastshift-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/zombie-body-lastshift.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "c83ba7228a06a35a5fe82a519e8efc7eb49966c0",
+    "restore": "git show a7a646a:game/public/assets/models/zombie-body-lastshift.glb > game/public/assets/models/zombie-body-lastshift.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "body:courier",
+   "runtime": "game/public/assets/models/zombie-body-courier-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/zombie-body-courier.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "d4ac1217d7af32edf5dfa3ec7355ff4a82bfe7b9",
+    "restore": "git show a7a646a:game/public/assets/models/zombie-body-courier.glb > game/public/assets/models/zombie-body-courier.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:coat",
+   "runtime": "game/public/assets/models/outfit-coat-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-coat.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "99ceb7605e6bf8b6529349d15d633a4fa0e963ba",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-coat.glb > game/public/assets/models/outfit-coat.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:trench",
+   "runtime": "game/public/assets/models/outfit-trench-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-trench.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "155cb6799d65d3b6c76f409c725679407f2cc6e6",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-trench.glb > game/public/assets/models/outfit-trench.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:hivis",
+   "runtime": "game/public/assets/models/outfit-hivis-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-hivis.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "8f95fbd26de923592db5ea4f6e37fc7da759b2c6",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-hivis.glb > game/public/assets/models/outfit-hivis.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:blazer",
+   "runtime": "game/public/assets/models/outfit-blazer-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-blazer.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "ffb917de72b2318ee0a87cb640d57fe46dfeeccc",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-blazer.glb > game/public/assets/models/outfit-blazer.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:flannel",
+   "runtime": "game/public/assets/models/outfit-flannel-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-flannel.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "97a91be3b6adae5d1a13cd279f2fd4b1eec4684c",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-flannel.glb > game/public/assets/models/outfit-flannel.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:sweater",
+   "runtime": "game/public/assets/models/outfit-sweater-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-sweater.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "9c83144c47328523cf88f627ea85667eb824e859",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-sweater.glb > game/public/assets/models/outfit-sweater.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:cargo",
+   "runtime": "game/public/assets/models/outfit-cargo-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-cargo.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "9680da55eb7b097fdfd0b14d9251b4a7a538daf2",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-cargo.glb > game/public/assets/models/outfit-cargo.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:jeans",
+   "runtime": "game/public/assets/models/outfit-jeans-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-jeans.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "624cd3f23d8e881f68c1fae7ce777a616bfcc5f9",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-jeans.glb > game/public/assets/models/outfit-jeans.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:slacks",
+   "runtime": "game/public/assets/models/outfit-slacks-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-slacks.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "f7647c4e4ec6a48084866b05a5108abef62bbd40",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-slacks.glb > game/public/assets/models/outfit-slacks.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:hardhat",
+   "runtime": "game/public/assets/models/outfit-hardhat-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-hardhat.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "89d23c849bee9e174e7e6c4ae5128eacc0940fe0",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-hardhat.glb > game/public/assets/models/outfit-hardhat.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:cap",
+   "runtime": "game/public/assets/models/outfit-cap-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-cap.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "8de8769a991495baf963a5a985a7b9e4f9b1129b",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-cap.glb > game/public/assets/models/outfit-cap.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:beanie",
+   "runtime": "game/public/assets/models/outfit-beanie-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-beanie.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "eb8e43bcc755738fcd31345858edad510b06a53f",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-beanie.glb > game/public/assets/models/outfit-beanie.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:gasmask",
+   "runtime": "game/public/assets/models/outfit-gasmask-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-gasmask.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "8b910ecfb0368d48f35730112c0e6382a92dd313",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-gasmask.glb > game/public/assets/models/outfit-gasmask.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  },
+  {
+   "asset": "garment:respirator",
+   "runtime": "game/public/assets/models/outfit-respirator-t25.glb",
+   "restore": {
+    "path": "game/public/assets/models/outfit-respirator.glb",
+    "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+    "blob": "c608b575221c90fb8723e9c6777fad38f671d969",
+    "restore": "git show a7a646a:game/public/assets/models/outfit-respirator.glb > game/public/assets/models/outfit-respirator.glb"
+   },
+   "reason": "source master unchanged; per-body variants / masks (or the body clips solved against them) follow bodies / wearables replaced in this migration"
+  }
+ ]
+}

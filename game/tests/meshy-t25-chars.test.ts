@@ -193,11 +193,13 @@ describe('Meshy T2.5 bodies: rig, skin, clips, hit zones', () => {
           const head = bone('Head').getWorldPosition(new THREE.Vector3()), hips = bone('Hips').getWorldPosition(new THREE.Vector3());
           expect([head.x, head.y, head.z, hips.y].every(Number.isFinite), `${id} ${clip.name}`).toBe(true);
           if (['Idle', 'Walk', 'Run', 'Attack', 'Hit'].includes(clip.name)) {
-            expect(head.y, `${id} ${clip.name} upright`).toBeGreaterThan(0.75 * H);
+            // locomotion upright; the attack lunge / hit flinch bend forward (procedural clips, same specs for every body)
+            expect(head.y, `${id} ${clip.name} upright`).toBeGreaterThan((['Attack', 'Hit'].includes(clip.name) ? 0.6 : 0.75) * H);
             expect(hips.y, `${id} ${clip.name} hips`).toBeGreaterThan(0.38 * H);
           }
         }
-        if (clip.name === 'Death') { mixer.setTime(clip.duration); root.updateMatrixWorld(true); expect(bone('Head').getWorldPosition(new THREE.Vector3()).y, `${id} death lies down`).toBeLessThan(0.45); }
+        // (the default LoopRepeat wraps to t = 0 at the exact end, so sample just before it)
+        if (clip.name === 'Death') { mixer.setTime(clip.duration * 0.999); root.updateMatrixWorld(true); expect(bone('Head').getWorldPosition(new THREE.Vector3()).y, `${id} death lies down`).toBeLessThan(0.45); }
       }
       const m = deriv<{verification: {cpuSkinningFloor: Record<string, Record<string, {minY?: number} | unknown>>}; clips: {name: string}[]}>(`zombie-body-${id}.json`);
       expect(m.clips.map(c => c.name).sort()).toEqual(CLIPS);

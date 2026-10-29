@@ -63,9 +63,10 @@ for (const m of masters) {
   const liveFile = cls === 'body' ? live.bodies[id] : cls === 'garment' ? live.wearables[id] : path.join(REPO, 'game/public', fs.readFileSync(path.join(REPO, 'game/src/assets/manifest.ts'), 'utf8').match(/creature_ratdog:\s*\{url:\s*'([^']+)'/)[1]);
   const replaced = !!pinned && !!liveFile && path.basename(liveFile).includes('-t25');
   if (cls === 'body' && KEEP_BODY_FILES.includes(id)) {
-    rec.status = 'kept (no T2.5 replacement)';
-    rec.reason = (inventory.missingReferences ?? []).find(x => x.id === m.id)?.reason ?? 'missing original reference image: not regenerated (inventory missingReferences)';
-  } else rec.status = replaced ? 'replaced' : 'pending (old local master still live)';
+    rec.status = 'kept (no T2.5 replacement yet)';
+    rec.reason = m.originalImage?.notOriginal ? `its T2.5 job uses a RECREATED reference (${m.originalImage.origin}; not an original) and is not delivered / integrated yet; the shipped file is verified unchanged by every wardrobe build` : 'no accepted T2.5 delivery integrated yet; shipped file verified unchanged';
+  } else rec.status = replaced ? 'replaced' : 'pending (old local Pixal3D source still used)';
+  rec.runtimeRebuilt = !!liveFile && !!oldPath && rel(liveFile) !== oldPath;
   if (pinned) rec.meshy = nativeRecord(pinned.asset ?? m.id);
   if (liveFile) {
     rec.runtime = {...await glbInfo(liveFile), derivativeManifest: `game/public/assets/derivatives/${deriv}`,
