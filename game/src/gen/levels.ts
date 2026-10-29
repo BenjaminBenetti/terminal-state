@@ -276,6 +276,8 @@ export class Levels implements NavLevels {
   /** Lane LIFT: registered dynamic volumes and their column index (null = none: every query takes the plain grid path). */
   private volList: DynamicVolume[] = [];
   private volCells: Map<number, VolumeColumn[]> | null = null;
+  /** Per column: 1 = some volume covers it (a typed-array test before the map lookup on hot paths). */
+  private volMask: Uint8Array | null = null;
   /** Bumped whenever a volume is added / removed (physics rebuilds its static boxes around the shaft). */
   volumeVersion = 0;
   /** Generator railings (layout.rails); undefined = derive. */
@@ -334,12 +336,17 @@ export class Levels implements NavLevels {
 
   /** Volume memberships of column index i (undefined: none). */
   volumeColumn(i: number): readonly VolumeColumn[] | undefined {
-    return this.volCells?.get(i);
+    return this.vcol(i);
+  }
+
+  private vcol(i: number): VolumeColumn[] | undefined {
+    const m = this.volMask;
+    return m !== null && m[i] === 1 ? this.volCells!.get(i) : undefined;
   }
 
   /** Physics / statics: whether the grid band of level index k (floor f) in column i is hidden by a volume right now. */
   gridBandHidden(i: number, k: number, f: number): boolean {
-    const vc = this.volCells?.get(i);
+    const vc = this.vcol(i);
     return !!vc && gridHidden(vc, k, f);
   }
 
@@ -352,9 +359,10 @@ export class Levels implements NavLevels {
 
   private reindexVolumes(): void {
     this.volumeVersion++;
-    if (!this.volList.length) { this.volCells = null; return; }
+    if (!this.volList.length) { this.volCells = null; this.volMask = null; return; }
     const m = new Map<number, VolumeColumn[]>();
     const g0 = this.main, nl = this.list.length;
+    const mask = new Uint8Array(g0.w * g0.h);
     const add = (cx: number, cy: number, v: DynamicVolume, gate: VolumeGate | null) => {
       if (!g0.inBounds(cx, cy)) return;
       const i = cy * g0.w + cx;
@@ -371,6 +379,7 @@ export class Levels implements NavLevels {
       let list = m.get(i);
       if (!list) m.set(i, (list = []));
       if (list.length < VOL_MAX) list.push({v, gate, hide, at});
+      mask[i] = 1;
     };
     const cellsOf = (x0: number, z0: number, x1: number, z1: number, fn: (cx: number, cy: number) => void) => {
       for (let cy = Math.floor(z0 / CELL); cy <= Math.floor(z1 / CELL); cy++) {
@@ -391,6 +400,7 @@ export class Levels implements NavLevels {
       }
     }
     this.volCells = m;
+    this.volMask = mask;
   }
 
   /** Column index of world (x, z), or -1 outside. */
@@ -407,7 +417,7 @@ export class Levels implements NavLevels {
     const cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
     if (!g0.inBounds(cx, cy)) return out;
     const i = cy * g0.w + cx;
-    const vc = this.volCells?.get(i);
+    const vc = this.vcol(i);
     for (let k = 0; k < this.list.length; k++) {
       const L = this.list[k], g = L.grid;
       if (!isOpen(g, i)) continue;
@@ -426,7 +436,7 @@ export class Levels implements NavLevels {
     const cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
     if (!g0.inBounds(cx, cy)) return false;
     const i = cy * g0.w + cx;
-    const vc = this.volCells?.get(i);
+    const vc = this.vcol(i);
     for (let k = 0; k < this.list.length; k++) {
       const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
@@ -463,7 +473,7 @@ export class Levels implements NavLevels {
     if (!g0.inBounds(cx, cy)) return null;
     const i = cy * g0.w + cx;
     let best: Support | null = null, loose: Support | null = null;
-    const vc = this.volCells?.get(i);
+    const vc = this.vcol(i);
     for (let k = 0; k < this.list.length; k++) {
       const L = this.list[k], g = L.grid;
       if (!isOpen(g, i)) continue;
@@ -531,7 +541,7 @@ export class Levels implements NavLevels {
     const g0 = this.main;
     if (!g0.inBounds(cx, cy)) return true;
     const i = cy * g0.w + cx;
-    const vc = this.volCells?.get(i);
+    const vc = this.vcol(i);
     for (let k = 0; k < this.list.length; k++) {
       const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
@@ -552,7 +562,7 @@ export class Levels implements NavLevels {
     if (!g0.inBounds(cx, cy)) return NaN;
     const i = cy * g0.w + cx;
     let bf = -Infinity, bc = NaN;
-    const vc = this.volCells?.get(i);
+    const vc = this.vcol(i);
     for (let k = 0; k < this.list.length; k++) {
       const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
@@ -598,9 +608,9 @@ export class Levels implements NavLevels {
 
   /** Static derivations (railings) never see the moving volumes. */
   private withoutVolumes<T>(fn: () => T): T {
-    const saved = this.volCells;
-    this.volCells = null;
-    try { return fn(); } finally { this.volCells = saved; }
+    const saved = this.volCells, mask = this.volMask;
+    this.volCells = null; this.volMask = null;
+    try { return fn(); } finally { this.volCells = saved; this.volMask = mask; }
   }
 
   /** Solid parapet runs (block rays below their top). */
@@ -780,7 +790,7 @@ export class Levels implements NavLevels {
     const {fA, cA, fB, cB, open, lid} = this.rayScratch;
     const evalCol = (i: number, ccx: number, ccy: number, ax: number, az: number, bx: number, bz: number) => {
       let any = false;
-      const vc = vols?.get(i);
+      const vc = vols ? this.vcol(i) : undefined;
       for (let k = 0; k < nl; k++) {
         const g = L[k].grid;
         if (!isOpen(g, i)) { open[k] = 0; continue; }
@@ -923,7 +933,7 @@ export class Levels implements NavLevels {
         let ok = false;
         if (g0.inBounds(cx, cy)) {
           const i = cy * g0.w + cx;
-          const vc = this.volCells?.get(i);
+          const vc = this.vcol(i);
           for (let k = 0; k < this.list.length; k++) {
             const g = this.list[k].grid;
             if (!isOpen(g, i) || g.blocked[i]) continue;

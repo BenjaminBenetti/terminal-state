@@ -488,12 +488,18 @@ export class PathFinder {
   lastExpanded = 0;
   /**
    * Task office-seamless-20261029: per goal level, the exact least cost from every walkable node to ANY node of that level
-   * over a superset of the search's edges (steps, drops, stair hand-overs, links; no wall / rail penalties), indexed by
+   * over a superset of the search's edges (steps with their wall penalty, drops, stair hand-overs, links; corner and rail
+   * rules ignored), indexed by
    * levelNode. The heuristic max(octile, levelDist[goal level][node]) is admissible and consistent, so routes across many
    * storeys expand little more than the route itself (a 2D-only heuristic floods every storey below the goal).
    */
   private levelDist: Float32Array[] | null = null;
   private levelNode: Int32Array | null = null;
+  /**
+   * Per level: its entry cells (nodes with a stair hand-over or a link: every route from another level enters through one).
+   * Off the goal's level the heuristic is max(octile, levelDist + the octile distance of the goal's nearest entry cell).
+   */
+  private levelEntries: Int32Array[] | null = null;
   /** Build time of the level distance fields (ms; 0 when unused). */
   readonly levelHeuristicMs: number = 0;
   constructor(source: Grid | NavLevels, opts: PathFinderOptions = {}) {
@@ -586,6 +592,12 @@ export class PathFinder {
     for (let i = 0; i < n; i++) if (idx[i] >= 0) nodes[idx[i]] = i;
     this.levelNode = idx;
     this.levelDist = [];
+    this.levelEntries = [];
+    for (let L = 0; L < NL; L++) {
+      const e: number[] = [];
+      for (let ci = 0; ci < NC; ci++) { const v = L * NC + ci; if (walk[v] && (this.twinFlag[v] || this.linkFlag[v])) e.push(ci); }
+      this.levelEntries.push(Int32Array.from(e));
+    }
     let heap = new Int32Array(Math.max(16, M)), heapF = new Float32Array(Math.max(16, M)), size = 0;
     const push = (v: number, f: number) => {
       if (size >= heap.length) { const h2 = new Int32Array(heap.length * 2), f2 = new Float32Array(heap.length * 2); h2.set(heap); f2.set(heapF); heap = h2; heapF = f2; }
@@ -613,7 +625,7 @@ export class PathFinder {
       while (size > 0) {
         const f = heapF[0], v = pop(), dv = D[idx[v]];
         if (f > dv) continue;
-        const lv = Math.floor(v / NC), ci = v - lv * NC, cx = ci % W, cy = (ci - cx) / W, fv = fl[v];
+        const lv = Math.floor(v / NC), ci = v - lv * NC, cx = ci % W, cy = (ci - cx) / W, fv = fl[v], wc = this.wallCost[v];
         const relax = (u: number, c: number) => { const k = idx[u], nd = dv + c; if (k >= 0 && nd < D[k]) { D[k] = nd; push(u, nd); } };
         // walking predecessors u -> v (steps either way within NAV_STEP; a straight drop from above)
         for (let oy = -1; oy <= 1; oy++) {
@@ -622,9 +634,10 @@ export class PathFinder {
             if ((!ox && !oy) || cx + ox < 0 || cx + ox >= W) continue;
             const u = v + ox + oy * W;
             if (!walk[u]) continue;
+            // the search's step cost into v, wall-hugging penalty included (corner / rail rules only remove edges)
             const dh = fv - fl[u], diag = ox !== 0 && oy !== 0;
-            if (dh <= NAV_STEP && dh >= -NAV_STEP) relax(u, diag ? 1.4142 : 1);
-            else if (!diag && dh < -NAV_STEP && dh >= -MAX_DROP) relax(u, 1 + DROP_COST);
+            if (dh <= NAV_STEP && dh >= -NAV_STEP) relax(u, (diag ? 1.4142 : 1) + wc);
+            else if (!diag && dh < -NAV_STEP && dh >= -MAX_DROP) relax(u, 1 + wc + DROP_COST);
           }
         }
         if (this.twinFlag[v]) for (const u of this.twins.get(v)!) relax(u, 0.01);
@@ -720,7 +733,20 @@ export class PathFinder {
     // Task office-seamless-20261029: tall stacks add the exact least cost to reach the goal's level (Infinity: that node
     // can never reach it - not pushed).
     const LD = this.levelDist ? this.levelDist[lb] : null, LN = this.levelNode!;
-    const h = LD ? (node: number, x: number, y: number) => { const d = LD[LN[node]], o = h2(x, y); return d > o ? d : o; } : (_node: number, x: number, y: number) => h2(x, y);
+    let entry = 0;
+    if (LD) {
+      // a route from another level enters the goal's level at one of its entry cells, then still walks to the goal
+      entry = Infinity;
+      for (const ci of this.levelEntries![lb]) { const v = h2(ci % W, (ci - ci % W) / W); if (v < entry) entry = v; }
+      if (entry === Infinity) entry = 0;
+    }
+    const lo = lb * NC, hi = lo + NC;
+    const h = LD ? (node: number, x: number, y: number) => {
+      const o = h2(x, y);
+      if (node >= lo && node < hi) return o;
+      const d = LD[LN[node]] + entry;
+      return d > o ? d : o;
+    } : (_node: number, x: number, y: number) => h2(x, y);
     this.push(start, h(start, sx, sy));
     let expanded = 0;
     let found = false;

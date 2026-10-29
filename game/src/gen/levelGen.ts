@@ -637,9 +637,9 @@ export const MIN_OVERLAP_M2 = 150;
  */
 /**
  * Task office-seamless-20261029 (ENGINE): what `levelIssues` requires of a stack. Defaults = the Subway station rules (3
- * levels; upper / lower decks overlapping the main level; 0.15-0.18 m risers; flights >= 1.8 m wide); a tower layout
- * (`layout.office`) defaults to its own: any storey count >= 2, no deck-overlap rule, the scissor stair's 0.19 m code-limit
- * risers and 1.5 m lanes. Every other check runs over every storey either way.
+ * levels; upper / lower decks overlapping the main level; flights >= 1.8 m wide); a tower layout (`layout.office`) defaults
+ * to its own: any storey count >= 2, no deck-overlap rule, 1.5 m scissor lanes. Risers: 0.15 .. 0.19 m (building-code
+ * limit) for both. Every other check runs over every storey either way.
  */
 export interface LevelRules {
   minLevels: number;
@@ -648,7 +648,9 @@ export interface LevelRules {
   maxRiser: number;
   minFlightWidth: number;
 }
-export const SUBWAY_LEVEL_RULES: LevelRules = {minLevels: 3, overlapRoles: ['upper', 'lower'], maxRiser: 0.18, minFlightWidth: 1.8};
+// maxRiser: the building-code limit 0.19 m for every stack (the scissor stair's 4.4 m / 24 = 0.183 m risers; Subway flights
+// are <= 0.18 m, so their outcome is unchanged).
+export const SUBWAY_LEVEL_RULES: LevelRules = {minLevels: 3, overlapRoles: ['upper', 'lower'], maxRiser: 0.19, minFlightWidth: 1.8};
 export const TOWER_LEVEL_RULES: LevelRules = {minLevels: 2, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
 export function levelIssues(layout: StationLayout, dist?: Int32Array[], rules?: Partial<LevelRules>): string[] {

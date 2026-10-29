@@ -159,6 +159,8 @@ export interface FieldSource {
   levels?: readonly Level[];
   /** Cross-level light (other slots through the union free space). Default true. */
   crossLevel?: boolean;
+  /** Skip cross-level rays the per-fixture reachability flood proves dark (exact; default true; tests compare both). */
+  crossCull?: boolean;
 }
 
 export interface BakedField {
@@ -420,7 +422,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   let yMin = Infinity, yMax = -Infinity;
   for (const q of geos) { yMin = Math.min(yMin, q.yMin); yMax = Math.max(yMax, q.yMax); }
   const U = S > 1 && src.crossLevel !== false ? unionBands(geos, n) : null;
-  const flood = U ? new BandFlood(U, W, H) : null;
+  const flood = U && src.crossCull !== false ? new BandFlood(U, W, H) : null;
 
   // --- Direct light (per slot) -------------------------------------------------------------
   const LS = geos.map((_, s) => slotLayers(s));
@@ -481,7 +483,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
           } else {
             if (!U) continue;
             const ub = U.of[s * n + i];
-            if (ub < 0 || flood!.mark[ub] !== reach) { crossCulled++; continue; }
+            if (flood && (ub < 0 || flood.mark[ub] !== reach)) { crossCulled++; continue; }
             crossRays++;
             if (!traceUnion(W, H, U, l.x, l.z, fy, cx, cy, geo.layerY, i * L, L, trans)) continue;
           }

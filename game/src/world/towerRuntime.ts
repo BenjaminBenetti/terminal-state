@@ -95,7 +95,7 @@ export interface OfficeRt {
 
 const EXT_MODEL_IDS: Record<keyof ExteriorModels, OfficeAssetId> = {car: 'car-wreck', bus: 'bus-wreck', rubble: 'rubble-pile', tower: 'ruined-tower', midrise: 'ruined-midrise'};
 
-interface CullerLike { enabled?: boolean; eyeOverride?: number | null; register?(root: THREE.Object3D): void }
+interface CullerLike { enabled?: boolean; eyeOverride?: number | null; register?(root: THREE.Object3D): void; levelAt?: (x: number, y: number, z: number) => number }
 
 export class TowerRuntime {
   /** The built office tower (null on the Subway / between worlds). */
@@ -110,6 +110,7 @@ export class TowerRuntime {
   private retired: (() => void)[] = [];
   private farWas: number | null = null;
   private cullerOff = false;
+  private cullerRestore: (() => void) | null = null;
   /** Loaded exterior assets (missing = not resolved yet; null = not delivered / failed). */
   private readonly models: ExteriorModels = {};
   private glassTex: THREE.Texture | null | undefined = undefined;
@@ -203,6 +204,14 @@ export class TowerRuntime {
       if (o.elevator) for (const g of o.elevator.view.landings) culler.register(g);
       if (o.windows) culler.register(o.windows.view.root);
     }
+    // the culler's level resolver only knows the storey grids (the shaft is solid on all of them: an eye in the cab would
+    // resolve to the station): a point inside the cab is on the cab's storey. (Unless the culler takes an eyeOverride.)
+    const e = o.elevator;
+    if (culler && e && !('eyeOverride' in culler) && typeof culler.levelAt === 'function') {
+      const orig = culler.levelAt, cab = e.plan.info.cab;
+      culler.levelAt = (x, y, z) => (insideRect(cab, x, z, -0.05) && y > e.vol.floorY - 0.1 && y < e.vol.ceilY + 0.2 ? e.vol.level : orig(x, y, z));
+      this.cullerRestore = () => { culler.levelAt = orig; };
+    }
   }
 
   teardown(): void {
@@ -221,6 +230,8 @@ export class TowerRuntime {
       if (c) c.enabled = true;
       this.cullerOff = false;
     }
+    this.cullerRestore?.();
+    this.cullerRestore = null;
     if (!o) return;
     if (o.elevator) o.elevator.levels.removeDynamicVolume(o.elevator.vol);
     this.host.scene.remove(o.root);
@@ -420,10 +431,14 @@ export class TowerRuntime {
     for (const z of h.zombies) if (z.brain.alive && !z.ragdolled) fix(z.brain, z.brain.stats.radius);
   }
 
-  /** The storey culler places an eye inside the solid shaft at level 0: while the camera is in the cab, it is the cab's storey. */
+  /**
+   * The storey culler would place an eye inside the solid shaft at level 0: while the camera is in the cab, its storey is the
+   * cab's (LevelCuller.eyeOverride when the culler has one; else the wrapped resolver installed at build; else culling is
+   * switched off while the eye is in the cab).
+   */
   private updateCuller(o: OfficeRt): void {
     const c = this.host.world?.culler as CullerLike | undefined, e = o.elevator;
-    if (!c || !e) return;
+    if (!c || !e || this.cullerRestore) return;
     const eye = this.host.camera.getWorldPosition(this.vEye);
     const inCab = insideRect(e.plan.info.cab, eye.x, eye.z, -0.05) && eye.y > e.vol.floorY - 0.1 && eye.y < e.vol.ceilY + 0.2;
     if ('eyeOverride' in c) {

@@ -435,8 +435,7 @@ export class GearSystem {
   private sectionIdFor(layout: StationLayout): string {
     const run = (this.game as unknown as {run?: {sectionId?: string}}).run;
     if (run?.sectionId) return run.sectionId;
-    const o = (layout as StationLayout & {office?: {floor?: number}}).office;
-    return o?.floor ? `office:${o.floor === 1 ? 'street' : `floor-${o.floor}`}` : 'subway:main';
+    return layout.office ? 'office:main' : 'subway:main'; // iteration 17: every level is one section
   }
 
   onBuild(layout: StationLayout): void {

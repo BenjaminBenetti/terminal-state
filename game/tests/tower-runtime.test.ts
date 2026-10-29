@@ -143,7 +143,7 @@ describe('elevator logic: a physically travelling cab (pure)', () => {
   it('motion profile: eases in / out within the limits and ends exactly at the target', () => {
     for (const [y0, y1] of [[5.6, 23.2], [36.4, 5.6], [5.6, 10], [10, 10.5]] as const) {
       const p = planMotion(y0, 0, y1);
-      let prev = y0, pv = 0;
+      let prev: number = y0, pv = 0;
       const dt = 1 / 60;
       for (let t = dt; ; t += dt) {
         const s = sampleMotion(p, t);
@@ -598,6 +598,19 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     stepHooks(host, DT);
     expect(c2.eyeOverride).toBe(1);
     expect(rt).toBeInstanceOf(TowerRuntime);
+    // a culler with only its grid resolver: a point inside the cab resolves to the cab's storey, elsewhere unchanged
+    host.sectionHooks[0].teardown!();
+    const c3 = {enabled: true, register: () => {}, levelAt: (_x: number, _y: number, _z: number) => 0};
+    const orig = c3.levelAt;
+    (host.world as {culler: unknown}).culler = c3;
+    host.sectionHooks[0].build!(layout);
+    expect(c3.levelAt(11.25, baseOf(1) + 1.6, 11.2)).toBe(1);
+    expect(c3.levelAt(5, 1.6, 20)).toBe(0);
+    aim(host, [11.25, baseOf(1) + 1.6, 11.2], [11.25, baseOf(1) + 1.6, 9]);
+    stepHooks(host, DT);
+    expect(c3.enabled).toBe(true); // culling stays on
+    host.sectionHooks[0].teardown!();
+    expect(c3.levelAt).toBe(orig);
   });
 
   it('the floor list: digits pick floors (1 = lobby), arrows + E confirm, Esc closes', () => {
