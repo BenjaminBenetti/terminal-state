@@ -114,6 +114,9 @@ unit tests. The original game README retains some historical tooling commands.
 - `game/tests/`, `game/e2e/`, `tools/qa/`: tests and diagnostic scripts.
 - `tools/asset-pipeline/`, `tools/audio-pipeline/`: historical authoring utilities.
 - `docs/history/`, project skills: nonoperative history and asset-method guardrails.
+- `docs/meshy.mcp.json` + `docs/meshy-mcp.md`: the Meshy MCP server entry for Claude Code's project `.mcp.json`
+  (pinned `@meshy-ai/meshy-mcp-server@0.6.6`, key only from `MESHY_API_KEY` in Claude Code's environment, never
+  committed). Not used by the build or CI, and no paid generation is authorized by it.
 - `.devcontainer/`: optional plain Node 22 environment; no assistant install,
   injected credentials, shared login or Fleet-specific mounts.
 

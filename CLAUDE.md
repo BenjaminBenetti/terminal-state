@@ -17,6 +17,13 @@ local assistant settings. Main backs up old .git/root docs and verifies GitHub
 source/asset hashes before adoption. Never git clean/reset away existing work or
 stage external archives. Never reuse old generation budgets.
 
+## Meshy MCP — key from the environment only
+
+The project MCP entry for Meshy (`docs/meshy.mcp.json`, activated as root `.mcp.json`; see `docs/meshy-mcp.md`) reads
+`MESHY_API_KEY` from Claude Code's startup environment via `${MESHY_API_KEY}`. Never write a key into any repo file,
+browser/public/`VITE_*` file or CI; `.env` is not auto-loaded. Having the server configured authorizes no paid
+generation: every Meshy job needs explicit user approval with a budget and the normal original/provenance rules.
+
 ## Browser QA — serial spot checks only
 
 Standing user rule (2026-10-29): **Serial spot checks with a browser. No heavy
