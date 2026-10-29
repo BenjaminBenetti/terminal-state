@@ -13,7 +13,7 @@ import {WEAPONS} from '../src/weapons/weapons';
 import {Survival} from '../src/player/survival';
 import {FlashlightBattery} from '../src/player/flashlight';
 import {Player} from '../src/player/player';
-import {LEVELS, OFFICE_SECTIONS, arrivalPose, floorOfSection, otherLevel, sectionForFloor} from '../src/levels/registry';
+import {LEVELS, arrivalPose, otherLevel, storeyLabel} from '../src/levels/registry';
 import {sectionId, type LevelId, type TravelRequest} from '../src/levels/types';
 import {createRun, RunState} from '../src/run/runState';
 import {createMemory, enemiesToSpawn, mergeKilled, pickupPlan, takenLayoutPickups, type SectionMemory} from '../src/run/memory';
@@ -65,46 +65,42 @@ describe('levels registry', () => {
     expect(geared.props).toEqual(base.props);
   });
 
-  it('describes both logical levels, their sections, entries and floors', () => {
+  it('describes both logical levels: each is ONE continuous world (section main)', () => {
     expect(LEVELS.subway.sections(1)).toEqual(['main']);
     expect(LEVELS.subway.entry).toBe('main');
-    expect(LEVELS.office.entry).toBe('street');
-    expect(LEVELS.office.sections(1)).toEqual(['street', 'floor-2', 'floor-3', 'floor-4', 'floor-5', 'floor-6', 'floor-7', 'floor-8']);
-    expect(OFFICE_SECTIONS.map(s => floorOfSection({level: 'office', section: s}))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(sectionForFloor(1)).toBe('street');
-    expect(sectionForFloor(5)).toBe('floor-5');
+    expect(LEVELS.office.entry).toBe('main');
+    expect(LEVELS.office.sections(1)).toEqual(['main']);
     expect(otherLevel('subway')).toBe('office');
     expect(otherLevel('office')).toBe('subway');
     expect(() => LEVELS.subway.generate('floor-2', {levelSeed: 1})).toThrow();
+    expect(() => LEVELS.office.generate('floor-5', {levelSeed: 1})).toThrow(); // iteration 17: no per-floor sections
+    expect(() => LEVELS.office.generate('street', {levelSeed: 1})).toThrow();
   });
 
-  it('office sections come from WORLD-GEN through the registry: deterministic, arrivals per kind, gear appended once', () => {
+  it('Office Space comes from GEN through the registry: one world (station + lobby + floors 2-8), deterministic, gear appended once', () => {
     const levelSeed = 0x0ff1ce;
-    const street = LEVELS.office.generate('street', {levelSeed, startWeapon: 'pistol'});
-    const office = (street as typeof street & {office?: {floor: number; arrivals: Record<string, {x: number; z: number; yaw: number; level: number}>}}).office;
-    expect(office?.floor).toBe(1);
-    expect(arrivalPose(street, {kind: 'start'}).source).toBe('start');
-    const f5 = LEVELS.office.generate('floor-5', {levelSeed, startWeapon: 'pistol'});
-    const o5 = (f5 as typeof f5 & {office?: {floor: number}}).office;
-    expect(o5?.floor).toBe(5);
-    const el = arrivalPose(f5, {kind: 'elevator', floor: 5});
-    expect(el.source).toBe('elevator');
-    const again = LEVELS.office.generate('floor-5', {levelSeed, startWeapon: 'pistol'});
-    expect(again.pickups).toEqual(f5.pickups);
-    expect(again.zombies).toEqual(f5.zombies);
-    const geared = LEVELS.office.generate('floor-5', {levelSeed, startWeapon: 'pistol', gear: [{itemId: 'gloves'}]});
-    expect(geared.pickups.slice(0, f5.pickups.length)).toEqual(f5.pickups);
-    expect(geared.pickups.slice(f5.pickups.length).map(p => p.itemId)).toEqual(['gloves']);
+    const office = LEVELS.office.generate('main', {levelSeed, startWeapon: 'pistol'});
+    expect(office.office?.storeys.map(s => s.floor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(office.levels.length).toBe(9);
+    expect(storeyLabel(office, 1)).toBe('L');
+    expect(storeyLabel(office, 5)).toBe('5');
+    expect(storeyLabel(office, 0)).toBe('');
+    expect(arrivalPose(office, {kind: 'start'})).toMatchObject({source: 'start', level: 0});
+    const again = LEVELS.office.generate('main', {levelSeed, startWeapon: 'pistol'});
+    expect(again.pickups).toEqual(office.pickups);
+    expect(again.zombies).toEqual(office.zombies);
+    const geared = LEVELS.office.generate('main', {levelSeed, startWeapon: 'pistol', gear: [{itemId: 'gloves'}]});
+    expect(geared.pickups.slice(0, office.pickups.length)).toEqual(office.pickups);
+    expect(geared.pickups.slice(office.pickups.length).map(p => p.itemId)).toEqual(['gloves']);
   });
 
-  it('arrival poses come from layout.office.arrivals (exact kind, else start), else playerSpawn', () => {
+  it('the start pose is layout.office.start, else playerSpawn', () => {
     const l = generateStation(99, {startWeapon: 'pistol'});
     const sp = l.playerSpawn;
     expect(arrivalPose(l, {kind: 'start'})).toMatchObject({x: sp.x, z: sp.z, yaw: sp.yaw, source: 'playerSpawn'});
-    expect(arrivalPose(l, {kind: 'elevator', floor: 3})).toMatchObject({x: sp.x, z: sp.z, source: 'playerSpawn'});
-    const office = Object.assign(l, {office: {arrivals: {start: {x: 1, z: 2, yaw: 0.5, level: 0}, elevator: {x: 7, z: 8, yaw: 1, level: 1}}}});
-    expect(arrivalPose(office, {kind: 'elevator', floor: 4})).toMatchObject({x: 7, z: 8, yaw: 1, level: 1, source: 'elevator'});
-    expect(arrivalPose(office, {kind: 'stairs-up'})).toMatchObject({x: 1, z: 2, source: 'start'});
+    expect(arrivalPose(l, {kind: 'return'})).toMatchObject({x: sp.x, z: sp.z, source: 'playerSpawn'});
+    const office = Object.assign(l, {office: {start: {x: 1, z: 2, yaw: 0.5, level: 0}}}) as unknown as typeof l;
+    expect(arrivalPose(office, {kind: 'start'})).toMatchObject({x: 1, z: 2, yaw: 0.5, level: 0, source: 'start'});
     expect(arrivalPose(office, {kind: 'return'})).toMatchObject({x: 1, z: 2, source: 'start'});
   });
 });
@@ -112,15 +108,15 @@ describe('levels registry', () => {
 describe('run state: NewGame vs travel', () => {
   const newRun = (seeds = SEEDS, level: LevelId = 'subway') => createRun({seeds, start: {level, section: LEVELS[level].entry}, levels: LEVELS, rollGear: rollLevelGear});
 
-  it('a run holds one seed per logical level and one level-wide gear roll covering every section', () => {
+  it('a run holds one seed per logical level and ONE level-wide gear roll per level (all in its one section)', () => {
     const r = newRun();
     expect(r.seeds).toEqual(SEEDS);
     expect(Object.keys(r.gear.subway!)).toEqual(['main']);
-    expect(Object.keys(r.gear.office!).sort()).toEqual([...OFFICE_SECTIONS].sort());
+    expect(Object.keys(r.gear.office!)).toEqual(['main']);
     const again = newRun();
     expect(again.gear).toEqual(r.gear); // deterministic for the seeds
     expect(again.id).toBeGreaterThan(r.id);
-    for (const s of OFFICE_SECTIONS) expect(r.gearFor({level: 'office', section: s})).toEqual(r.gear.office![s]);
+    expect(r.gearFor({level: 'office', section: 'main'})).toEqual(r.gear.office!.main);
   });
 
   it('travel keeps every section memory; a NewGame run starts with none', () => {
@@ -129,15 +125,14 @@ describe('run state: NewGame vs travel', () => {
     main.killed = [0, 2];
     main.pickups = [];
     r.setLaneStore('gear.bags', {bags: [{id: 1}]});
-    // travel: subway -> office street -> floor 5 -> back
-    r.current = {level: 'office', section: 'street'};
+    // travel: subway -> office -> back
+    r.current = {level: 'office', section: 'main'};
     r.memory().visits++;
-    r.current = {level: 'office', section: 'floor-5'};
-    expect(r.sectionId).toBe('office:floor-5');
+    expect(r.sectionId).toBe('office:main');
     r.current = {level: 'subway', section: 'main'};
     expect(r.memory().killed).toEqual([0, 2]);
     expect(r.laneStore('gear.bags')).toEqual({bags: [{id: 1}]});
-    expect(r.memoryIds()).toEqual(['office:street', 'subway:main']); // floor 5 was only passed through (nothing remembered yet)
+    expect(r.memoryIds()).toEqual(['office:main', 'subway:main']);
     const fresh = newRun({subway: 1, office: 2});
     expect(fresh.memoryIds()).toEqual([]);
     expect(fresh.peekMemory({level: 'subway', section: 'main'})).toBeUndefined();
@@ -146,37 +141,37 @@ describe('run state: NewGame vs travel', () => {
 
   it('level memories are deep copies; restoring one level never touches the other', () => {
     const r = newRun();
-    r.memory({level: 'office', section: 'street'}).killed = [1];
-    r.memory({level: 'office', section: 'floor-3'}).pickups = [];
+    const O = {level: 'office', section: 'main'} as const;
+    r.memory(O).killed = [1];
+    r.memory(O).pickups = [];
     r.memory({level: 'subway', section: 'main'}).killed = [4];
     const entry = r.levelMemories('office'); // taken when the level is entered
-    expect(Object.keys(entry).sort()).toEqual(['office:floor-3', 'office:street']);
+    expect(Object.keys(entry)).toEqual(['office:main']);
     const probe = r.levelMemories('office');
-    probe['office:street'].killed.push(9);
-    expect(r.memory({level: 'office', section: 'street'}).killed).toEqual([1]);
-    // later in the level: more kills, a new floor visited
-    r.memory({level: 'office', section: 'street'}).killed = [1, 2, 3];
-    r.memory({level: 'office', section: 'floor-7'}).cleared = true;
+    probe['office:main'].killed.push(9);
+    expect(r.memory(O).killed).toEqual([1]);
+    // later in the level: more kills, the level cleared
+    r.memory(O).killed = [1, 2, 3];
+    r.memory(O).cleared = true;
     r.restoreLevelMemories('office', entry); // Retry level
-    expect(r.memory({level: 'office', section: 'street'}).killed).toEqual([1]);
-    expect(r.memory({level: 'office', section: 'floor-3'}).pickups).toEqual([]);
-    expect(r.peekMemory({level: 'office', section: 'floor-7'})).toBeUndefined();
+    expect(r.memory(O).killed).toEqual([1]);
+    expect(r.memory(O).pickups).toEqual([]);
+    expect(r.memory(O).cleared).toBe(false);
     expect(r.memory({level: 'subway', section: 'main'}).killed).toEqual([4]);
     // the snapshot itself is never handed out: restoring again gives the same state
-    r.memory({level: 'office', section: 'street'}).killed.push(5);
+    r.memory(O).killed.push(5);
     r.restoreLevelMemories('office', entry);
-    expect(r.memory({level: 'office', section: 'street'}).killed).toEqual([1]);
+    expect(r.memory(O).killed).toEqual([1]);
   });
 
-  it('a level counts as clear only when every one of its sections was cleared', () => {
+  it('a level counts as clear when its one world was cleared', () => {
     const r = newRun();
     expect(r.levelCleared('subway', ['main'])).toBe(false);
     r.memory({level: 'subway', section: 'main'}).cleared = true;
     expect(r.levelCleared('subway', ['main'])).toBe(true);
-    for (const s of OFFICE_SECTIONS.slice(0, -1)) r.memory({level: 'office', section: s}).cleared = true;
-    expect(r.levelCleared('office', OFFICE_SECTIONS)).toBe(false);
-    r.memory({level: 'office', section: 'floor-8'}).cleared = true;
-    expect(r.levelCleared('office', OFFICE_SECTIONS)).toBe(true);
+    expect(r.levelCleared('office', LEVELS.office.sections(1))).toBe(false);
+    r.memory({level: 'office', section: 'main'}).cleared = true;
+    expect(r.levelCleared('office', LEVELS.office.sections(1))).toBe(true);
   });
 });
 
@@ -221,7 +216,7 @@ describe('carry state: starter kit, Retry snapshot, participants', () => {
     const resets: string[] = [];
     const injuries: RunParticipant = {id: 'injuries', save: () => ({...limb}), load: d => { limb = {...(d as typeof limb)}; }, reset: () => { limb = {arm: null}; resets.push('injuries'); }};
     const stats = {shots: 12, hits: 7, kills: 2, time: 900, headshots: 1, healed: 10, itemsUsed: 3};
-    const snap = takeSnapshot({level: 'office', section: 'street', arrival: {kind: 'start'}}, {inv, player, survival, battery, participants: [injuries], stats}, {});
+    const snap = takeSnapshot({level: 'office', section: 'main', arrival: {kind: 'start'}}, {inv, player, survival, battery, participants: [injuries], stats}, {});
     const at = invItems(inv);
 
     // play on: use things, get hurt, drain, injure the other arm
@@ -361,7 +356,7 @@ describe('section memory: taken loot stays taken, dropped items come back exactl
   it('taken lots never return and remembered ids that are not in the rolled holder are ignored (never added)', () => {
     const layout = levelFixture();
     const inv = new Inventory();
-    const mem = createMemory({level: 'office', section: 'floor-2'});
+    const mem = createMemory({level: 'office', section: 'main'});
     const v1 = visit(layout, mem, inv);
     leave(v1, mem);
     const key = Object.keys(mem.holders).find(k => mem.holders[k].lots.length > 0)!;
@@ -384,43 +379,47 @@ describe('section memory: taken loot stays taken, dropped items come back exactl
 });
 
 describe('grounded bags live in the run memory (lane GEAR store adapter)', () => {
-  it('per section, deep copies, cleared with the run, restored with a level on Retry', () => {
-    const run = new RunState({seeds: SEEDS, start: {level: 'office', section: 'street'}});
+  it('per level, deep copies, cleared with the run, restored with a level on Retry', () => {
+    const run = new RunState({seeds: SEEDS, start: {level: 'office', section: 'main'}});
     const store = runBagStore(() => run);
     const rec = {bags: [{x: 1, z: 2, contents: [{itemId: 'water', count: 1}]}]};
-    store.save('office:floor-4', rec);
+    store.save('office:main', rec);
     rec.bags[0].x = 99;
-    expect((store.load('office:floor-4') as typeof rec).bags[0].x).toBe(1);
-    expect(store.load('office:floor-5')).toBeUndefined();
-    expect(run.laneStore(BAG_LANE, {level: 'office', section: 'floor-4'})).toBeTruthy();
-    expect(parseSectionId('office:floor-4')).toEqual({level: 'office', section: 'floor-4'});
+    expect((store.load('office:main') as typeof rec).bags[0].x).toBe(1);
+    expect(store.load('subway:main')).toBeUndefined();
+    expect(run.laneStore(BAG_LANE, {level: 'office', section: 'main'})).toBeTruthy();
+    expect(parseSectionId('office:main')).toEqual({level: 'office', section: 'main'});
     const entry = run.levelMemories('office'); // level-entry snapshot
-    store.save('office:floor-4', {bags: []}); // the bag was picked up later
-    store.save('office:floor-6', {bags: [{x: 0, z: 0, contents: []}]});
-    run.restoreLevelMemories('office', entry); // Retry level
-    expect((store.load('office:floor-4') as typeof rec).bags[0].x).toBe(1);
-    expect(store.load('office:floor-6')).toBeUndefined();
-    expect(Object.keys(store.toJSON())).toEqual(['office:floor-4']);
+    store.save('office:main', {bags: []}); // the bag was picked up later
+    store.save('subway:main', {bags: [{x: 0, z: 0, contents: []}]});
+    run.restoreLevelMemories('office', entry); // Retry level (the Subway's memory is untouched)
+    expect((store.load('office:main') as typeof rec).bags[0].x).toBe(1);
+    expect((store.load('subway:main') as {bags: unknown[]}).bags).toHaveLength(1);
+    expect(Object.keys(store.toJSON()).sort()).toEqual(['office:main', 'subway:main']);
     store.clear();
     expect(store.toJSON()).toEqual({});
   });
 });
 
 describe('travel gating', () => {
-  const req: TravelRequest = {to: {level: 'office', section: 'floor-3'}, arrival: {kind: 'elevator', floor: 3}, label: 'Elevator · floor 3', via: 'local'};
-  const ok: TravelGateState = {busy: false, alive: true, state: 'playing', ready: true, sections: l => LEVELS[l].sections(1)};
+  const req: TravelRequest = {to: {level: 'office', section: 'main'}, arrival: {kind: 'start'}, label: 'Travelling to Office Space', via: 'menu'};
+  const ok: TravelGateState = {busy: false, alive: true, state: 'playing', ready: true, sections: l => LEVELS[l].sections(1), current: 'subway'};
 
-  it('dead players never travel; one travel at a time; only from gameplay / pause / clear screens; known sections only', () => {
+  it('dead players never travel; one travel at a time; only from gameplay / pause / clear screens; only to ANOTHER level', () => {
     expect(travelRefusal(req, ok)).toBeNull();
     expect(travelRefusal(req, {...ok, alive: false})).toBe('dead');
     expect(travelRefusal(req, {...ok, state: 'dead'})).toBe('dead');
     expect(travelRefusal(req, {...ok, busy: true})).toBe('busy');
-    for (const state of ['title', 'loading', 'travelling', 'error']) expect(travelRefusal(req, {...ok, state})).toBe('not-ready');
+    for (const state of ['title', 'loading', 'error']) expect(travelRefusal(req, {...ok, state})).toBe('not-ready');
     for (const state of ['paused', 'won', 'inventory']) expect(travelRefusal(req, {...ok, state})).toBeNull();
     expect(travelRefusal(req, {...ok, ready: false})).toBe('not-ready');
-    expect(travelRefusal({...req, to: {level: 'office', section: 'floor-9'}}, ok)).toBe('unknown-section');
-    expect(travelRefusal({...req, to: {level: 'subway', section: 'main'}}, ok)).toBeNull();
-    expect(sectionId(req.to)).toBe('office:floor-3');
+    // iteration 17: there are no floor sections, and nothing inside a level is a travel
+    expect(travelRefusal({...req, to: {level: 'office', section: 'floor-3'}}, ok)).toBe('unknown-section');
+    expect(travelRefusal({...req, to: {level: 'office', section: 'street'}}, ok)).toBe('unknown-section');
+    expect(travelRefusal(req, {...ok, current: 'office'})).toBe('same-level');
+    expect(travelRefusal({...req, to: {level: 'subway', section: 'main'}}, ok)).toBe('same-level');
+    expect(travelRefusal({...req, to: {level: 'subway', section: 'main'}}, {...ok, current: 'office'})).toBeNull();
+    expect(sectionId(req.to)).toBe('office:main');
   });
 
   it('single flight: a second operation while one runs is refused; the slot frees afterwards, also after a failure', async () => {

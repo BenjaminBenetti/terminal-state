@@ -36,7 +36,8 @@
 
 import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, type Grid, type NavLevels, type CrossLink, type StandPoint} from './grid';
 
-export type LevelRole = 'main' | 'upper' | 'lower';
+/** 'office' (task office-seamless-20261029): a tower storey above the lobby (dry indoor air, office walls). */
+export type LevelRole = 'main' | 'upper' | 'lower' | 'office';
 
 export interface Level {
   /** Index into layout.levels (0 = main; ascending ids are NOT height-ordered). */

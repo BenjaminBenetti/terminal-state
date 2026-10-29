@@ -258,45 +258,16 @@ export interface StationLayout {
   spawnEnd?: 'W' | 'E';
   /** The multi-level program (cells; gen/levelGen.ts): cores, deck range, wells, level areas. QA / tests. */
   levelPlan?: LevelPlan;
-  /** Iteration 16 (WORLD-GEN): office-tower section data (gen/office/index.ts); absent on the Subway. */
-  office?: OfficeSectionInfo;
+  /** Iteration 16 / seamless (GEN): the office tower of the ONE continuous Office Space layout (gen/office/index.ts); absent on the Subway. */
+  office?: OfficeTowerInfo;
 }
 
 // ---------------------------------------------------------------------------------------
-// Iteration 16 (WORLD-GEN): office tower sections (gen/office/*). World metres in the section's grid frame.
+// Office tower (gen/office/*, seamless Office Space: ONE layout, 9 storeys). World metres in the layout's grid frame.
 
 export interface OfficeRect { x0: number; z0: number; x1: number; z1: number }
 /** Player pose: yaw in the camera convention (forward = (-sin yaw, -cos yaw)); level = layout.levels index. */
 export interface OfficePose { x: number; z: number; yaw: number; level: number }
-export type OfficeArrivalKey = 'start' | 'elevator' | 'stairs-up' | 'stairs-down';
-
-export interface OfficeElevatorInfo {
-  /** Cab interior: walkable FLOOR cells at floorY on the office storey, no props, enclosed by SOLID shaft walls but the door. */
-  cab: OfficeRect;
-  /** Cab wall holding the door ('N': the door is on the cab's north edge, you step out toward -Z). */
-  doorSide: Side;
-  /** Centre of the door opening on the cab edge of doorSide, and its width (m). The opening cells are walkable. */
-  door: {x: number; z: number; width: number};
-  /** Floor panel inside the cab (door wall's inner face, beside the opening); absolute y. */
-  panel: {x: number; y: number; z: number};
-  /** Call button outside, on the shaft wall's corridor face beside the opening; absolute y. */
-  callPanel: {x: number; y: number; z: number};
-  /** Cab floor (absolute) = the storey floor. */
-  floorY: number;
-  /** Cab area id. */
-  area: number;
-  /** Shaft outer box (walls included). */
-  shaft: OfficeRect;
-}
-
-export interface OfficeStairDoor {
-  dir: 'up' | 'down';
-  /** Door centre on the walkable side of the wall face. */
-  x: number; z: number;
-  /** Yaw of a player standing in front of it FACING the door. */
-  yaw: number;
-  toFloor: number;
-}
 
 export interface OfficeWindowSpan extends OfficeRect {
   /** Outward facing direction of the wall. The span box covers the (SOLID) wall cells. */
@@ -308,31 +279,90 @@ export interface OfficeWindowSpan extends OfficeRect {
   kind: 'window' | 'entrance';
 }
 
-export interface OfficeSectionInfo {
-  /** 1 = lobby (the street section's upper storey), 2.. = office floors. */
+/** One tower storey of the continuous layout: levelId === floor (lobby = 1, office floors 2..8). */
+export interface OfficeStorey {
   floor: number;
-  /** Every floor of the tower ([1..8]). */
-  floors: number[];
-  /** Storey height (m), uniform: exterior ground y = baseY - floorHeight * (floor - 1). */
-  floorHeight: number;
-  /** layout.levels index of the office storey (street: 1, the lobby; floors: 0). */
+  /** layout.levels index (=== floor). */
   levelId: number;
-  /** Storey floor height (= levels[levelId].baseY). */
+  /** Storey floor (absolute world y) = levels[levelId].baseY. */
   baseY: number;
+  /** Floor label: 'L' (lobby), '2' … '8'. */
+  label: string;
+  /** Typical room clear height above baseY (m): lobby 4.0, office floors 2.9. */
+  clear: number;
+}
+
+/** One elevator stop: the cab floor level with a storey. */
+export interface OfficeElevatorStop {
+  floor: number;
+  levelId: number;
+  /** Cab floor at this stop (absolute) = that storey's baseY. */
+  y: number;
+  /** Area id of the landing strip in front of the shaft door on that storey (walkable, prop-free). */
+  area: number;
+  /** Call panel on the landing wall beside the door (absolute y = baseY + 1.2). */
+  callPanel: {x: number; y: number; z: number};
+  /** Walkable stand point just outside the door on that storey. */
+  landing: {x: number; z: number};
+}
+
+export interface OfficeElevatorInfo {
+  /** Cab interior footprint (world m) — same X/Z on every storey (the cells are SOLID shaft in every storey grid). */
+  cab: OfficeRect;
+  /** Shaft outer box incl. its walls; SOLID on every tower storey grid (lobby and floors 2..8). */
+  shaft: OfficeRect;
+  /** Cab / shaft wall holding the door ('N': the door is on the cab's north edge, you step out toward -Z). */
+  doorSide: Side;
+  /** Opening centre on the cab edge of doorSide, and its width (m); same X/Z at every stop. */
+  door: {x: number; z: number; width: number};
+  /** Interior clear height of the cab (m). */
+  cabHeight: number;
+  /** Floor panel inside the cab (door wall's inner face beside the opening); dy above the cab floor. */
+  panel: {x: number; dy: number; z: number};
+  /** Stops bottom-up (floors 1..8). */
+  stops: OfficeElevatorStop[];
+}
+
+/** One straight scissor-stair run (one layStairRun carved into its two storey grids + one LevelLink kind 'stairs'). */
+export interface OfficeStairRun {
+  /** Storey levelIds it joins (upper = lower + 1). */
+  lower: number;
+  upper: number;
+  /** layout.levelLinks id of the run. */
+  link: number;
+  /** Stairwell lane ('A' / 'B' alternate). */
+  lane: 'A' | 'B';
+}
+
+export interface OfficeStairsInfo {
+  /** Stairwell box (both lanes + divider + end landings), world m. */
+  well: OfficeRect;
+  runs: OfficeStairRun[];
+  /** Stand point on each storey's landing (lobby .. 8). */
+  landings: {floor: number; levelId: number; x: number; z: number}[];
+}
+
+/** layout.office v2 (seamless): the whole tower in ONE layout (design.md "Contract"). */
+export interface OfficeTowerInfo {
+  version: 2;
+  /** [1..8]; storey levelId === floor. */
+  floors: number[];
+  /** Storey height (m), uniform: 4.4. */
+  floorHeight: number;
+  /** Street / lobby floor y (the exterior ground). */
+  groundY: number;
+  storeys: OfficeStorey[];
   elevator: OfficeElevatorInfo;
-  /** Stairwell door(s): one door per floor (up + down entries share its spot); none 'down' in the lobby. */
-  stairDoors: OfficeStairDoor[];
-  /** Perimeter window spans (the wall faces are cut open by the builder; glass = lane TOWER). */
-  windows: OfficeWindowSpan[];
+  stairs: OfficeStairsInfo;
+  /** Perimeter window spans of every storey; sill / head RELATIVE to that span's baseY. Wall cells stay SOLID. */
+  windows: (OfficeWindowSpan & {level: number; baseY: number})[];
   /** Tower footprint: outer faces of the perimeter wall ring. Scenery goes outside it. */
   exterior: OfficeRect;
-  /** Player arrival poses per ArrivalKind (levels/types.ts); 'return' = 'start'. */
-  arrivals: Partial<Record<OfficeArrivalKey, OfficePose>>;
+  /** Platform start (station, level 0) = layout.playerSpawn. */
+  start: OfficePose;
   /** Tower name (signage / HUD). */
   name: string;
-  /** Section seed (= layout.seed). */
-  sectionSeed: number;
-  /** Optional candidate gear spots (lane GEAR may use them): flat reachable floor in back-of-house office rooms. */
+  /** Candidate gear spots (flat reachable floor in back-of-house office rooms), every storey. */
   gearSpots?: {x: number; y: number; z: number; level: number; area: number}[];
 }
 

@@ -56,7 +56,7 @@ import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
-import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, floorOfSection, sectionLabel} from './levels/registry';
+import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import {createRun, type RunState} from './run/runState';
@@ -78,8 +78,7 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 
-/** Iteration 16 (RUN): 'travelling' = an in-world (elevator / stair door) travel is building the next section: gameplay frozen, pointer lock kept. */
-export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'travelling';
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
 
 export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high' }
 
@@ -207,7 +206,7 @@ export class Game {
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
   readonly runParticipants: RunParticipant[] = [];
-  /** Called on every setState (lanes close their UIs when the state leaves 'playing'; travel uses 'travelling'). */
+  /** Called on every setState (lanes close their UIs when the state leaves 'playing'). */
   readonly stateListeners: ((state: GameState, prev: GameState) => void)[] = [];
   /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
   readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
@@ -249,6 +248,13 @@ export class Game {
   private currentSeed = 0;
   /** Frames rendered while playing (used by QA to confirm the loop runs). */
   frames = 0;
+  /** Gameplay clock (s; advances only while the world updates). Iteration 17: QA / tests prove traversal never stops it. */
+  get clock(): number { return this.time; }
+  /**
+   * Iteration 17 (seamless): how often each world-lifecycle entry point ran. Traversal inside a level (stairs, the moving
+   * elevator) must never move any of these — tests and the browser spot check compare them before / after.
+   */
+  readonly lifecycleCounts = {generate: 0, prepare: 0, build: 0, leave: 0, travel: 0, warmup: 0, loading: 0};
   /** Iteration 14 (primary): the loading-screen render warm-up is running (render/warmup.ts); the loop neither updates nor renders. */
   warming = false;
   /** Iteration 14: the last warm-up's result (loading note, QA `__LL.warmup()`). */
@@ -413,6 +419,7 @@ export class Game {
 
   /** Generate a section of `run` (levels/registry.ts; the section's gear from the run's level-wide roll). Deterministic. */
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
+    this.lifecycleCounts.generate++;
     return LEVELS[key.level].generate(key.section, {levelSeed: run.seeds[key.level], startWeapon: this.startWeapon, gear: run.gearFor(key)});
   }
 
@@ -422,6 +429,7 @@ export class Game {
    * the section, never boxed.
    */
   async prepareSection(key: SectionKey, run: RunState = this.run, onProgress?: (frac: number, label: string) => void): Promise<StationLayout> {
+    this.lifecycleCounts.prepare++;
     const layout = this.generateSection(key, run);
     await this.propModels.ensure(this.modelKeysFor(layout), onProgress);
     for (const pre of this.sectionPreloads) {
@@ -441,6 +449,7 @@ export class Game {
    * lanes save their section data), then — on a travel — RUN's memory of it, then the world itself.
    */
   private leaveSection(save: boolean): void {
+    this.lifecycleCounts.leave++;
     this.stationGen++; // Iteration 14: invalidates a warm-up of the previous station
     // Iteration 14 (user: "when I load a new station the stutters come back"): three r186 frees a node build / pipeline /
     // program when its LAST user is disposed, and the next station needs the same ones (zombie + wound materials, glow,
@@ -496,6 +505,7 @@ export class Game {
    * The section's memory is applied: killed enemies stay dead, taken loot stays taken, dropped items come back once.
    */
   private buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void {
+    this.lifecycleCounts.build++;
     const t0 = performance.now();
     this.layout = layout;
     this.currentSeed = layout.seed >>> 0;
@@ -565,7 +575,7 @@ export class Game {
     this.world.culler.register(this.stock.group);
     this.world.culler.maxDistance = fogCullDistance(MOOD.fogDensity);
 
-    // Iteration 16 (RUN): the section is now the run's current one; the player arrives by `arrival` (layout.office.arrivals)
+    // Iteration 16 (RUN) / 17: the level's world is now the run's current one; the player starts at its start pose
     this.run.current = {...key};
     this.run.arrival = {...arrival};
     this.arrival = {...arrival};
@@ -606,7 +616,7 @@ export class Game {
     const codes = LEVEL_IDS.map(l => `${LEVELS[l].name} ${seedToCode(this.run.seeds[l])}`).join(' · ');
     $('#seed-line').textContent = `${LEVELS[key.level].name} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
-    if (obj) obj.textContent = key.level === 'office' ? (key.section === 'street' ? 'Clear the street station' : `Clear floor ${floorOfSection(key)}`) : 'Clear the station';
+    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : 'Clear the station';
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.updateCamera(0);
   }
@@ -677,6 +687,7 @@ export class Game {
 
   /** Iteration 16: the title panel as the loading screen (menu travel, new game, retry). */
   private showLoading(intro: string, label: string): WarmupUi {
+    this.lifecycleCounts.loading++;
     const ui = titleWarmupUi();
     $('#station-intro').textContent = intro;
     if (ui.bar) ui.bar.style.width = '0%';
@@ -791,21 +802,20 @@ export class Game {
   private travelReq: TravelRequest | null = null;
 
   /**
-   * Iteration 16 (RUN): TRAVEL to another section (elevator / stair door: via 'local'; the pause menu's level change: via
-   * 'menu'). Single flight; refused when dead. Cancels transient actions (timed use, flare hold, ADS, open UIs), freezes
-   * gameplay, saves the current section's memory, generates + builds the target, applies its memory, places the player
-   * by `arrival` (nothing about the player is reset), runs the iteration-14 warm-up (full loading screen for 'menu', the
-   * compact #travel-overlay for 'local'), then resumes play. Entering another LOGICAL level takes its Retry snapshot.
+   * Iteration 16 (RUN) / 17: TRAVEL to another LOGICAL level (the pause / clear menus). Nothing inside a level travels:
+   * its storeys are one continuous world (stairs, the moving elevator). Single flight; refused when dead. Cancels
+   * transient actions (timed use, flare hold, ADS, open UIs), saves the current level's memory, generates + builds the
+   * target behind the full loading screen, applies its memory, places the player at its start (nothing about the player
+   * is reset), runs the iteration-14 warm-up, then resumes play. Entering another level takes its Retry snapshot.
    */
   travel(req: TravelRequest): Promise<TravelResult> {
+    this.lifecycleCounts.travel++;
     const refusal = travelRefusal(req, {
       busy: this.lifecycle.busy, alive: this.player.alive, state: this.state, ready: !!this.world && !!this.gpu,
-      sections: l => LEVELS[l]?.sections(this.run.seeds[l]) ?? null,
+      sections: l => LEVELS[l]?.sections(this.run.seeds[l]) ?? null, current: this.run.current.level,
     });
     if (refusal) return Promise.resolve({ok: false, reason: refusal});
-    const local = req.via === 'local';
-    // menu: a click — lock inside the gesture; local (E / a floor-list click): keep the lock, or re-request it now
-    const lock = local ? (this.input.locked ? Promise.resolve(true) : this.input.lock()) : this.beginGesture();
+    const lock = this.beginGesture(); // a menu click: pointer lock is requested inside the gesture
     const flight = this.lifecycle.run(async (): Promise<TravelResult> => {
       const from = {...this.run.current};
       const levelChange = req.to.level !== from.level;
@@ -814,13 +824,7 @@ export class Game {
       this.cancelUse('travel');
       this.cancelFlareHold();
       this.aiming = false;
-      let ui: WarmupUi;
-      if (local) {
-        ui = this.travelOverlay(req.label);
-        this.setState('travelling'); // frozen; pointer lock kept
-      } else {
-        ui = this.showLoading(`${req.label}. Your inventory, gear, health, food and water, battery and injuries come with you.`, `Building ${def.name} · ${sectionLabel(req.to)}…`);
-      }
+      const ui = this.showLoading(`${req.label}. Your inventory, gear, health, food and water, battery and injuries come with you.`, `Building ${def.name} · ${sectionLabel(req.to)}…`);
       let built = false;
       try {
         await nextPaint();
@@ -832,10 +836,9 @@ export class Game {
         if (levelChange) { this.run.entered.push(req.to.level); this.run.entry = this.levelEntrySnapshot(); }
         const w = await this.prepareGraphics(ui); // (a menu travel's loading screen keeps its carry-over line)
         if (w.status === 'cancelled') return {ok: false, reason: 'cancelled'};
-        if (!local) this.readyLine(ui, w);
+        this.readyLine(ui, w);
         const ok = await lock;
-        if (local) this.setState(ok && (this.input.locked || this.qa) ? 'playing' : 'paused');
-        else if (ok) await this.enterPlay();
+        if (ok) await this.enterPlay();
         else this.setState('paused');
         if (this.state === 'paused') $('#pause .fine').textContent = 'The browser did not capture the mouse — click Resume to try again.';
         this.hud.toast(levelChange ? `${def.name} · ${sectionLabel(req.to)} — your kit and condition came with you` : req.label);
@@ -848,21 +851,9 @@ export class Game {
         return {ok: false, reason: 'failed'};
       } finally {
         this.travelReq = null;
-        $('#travel-overlay')?.classList.add('hidden');
       }
     });
     return flight ?? Promise.resolve({ok: false, reason: 'busy'});
-  }
-
-  /** Iteration 16: the compact in-world travel overlay ("Elevator · floor 5"), with the warm-up progress. */
-  private travelOverlay(label: string): WarmupUi {
-    const root = $('#travel-overlay');
-    root.querySelector('.label')!.textContent = label;
-    const bar = root.querySelector('.fill') as HTMLElement;
-    bar.style.width = '0%';
-    const sub = root.querySelector('.sub') as HTMLElement;
-    sub.textContent = 'Moving…';
-    return {bar, label: sub, button: null};
   }
 
   /**
@@ -905,10 +896,10 @@ export class Game {
 
   /** Iteration 14: the title / loading screen's station line (boot and restarts). */
   updateStationIntro(): void {
-    // Iteration 16 (RUN): per section — what is still alive here (kills earlier in the run stay dead)
+    // Iteration 16 (RUN) / 17: per level — what is still alive here (kills earlier in the run stay dead)
     const k = this.run.current, n = this.zombies.filter(z => z.brain.alive).length;
     $('#station-intro').textContent = k.level === 'office'
-      ? `Office Space · ${sectionLabel(k)} — ${this.layout.name}. ${n} infected reported ${k.section === 'street' ? 'in the station under the tower' : 'on this floor'}. Clear them out.`
+      ? `Office Space — ${this.layout.name} and the tower above it, lobby to floor 8. ${n} infected reported in the station and on the floors. Clear them out.`
       : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
   }
 
@@ -928,6 +919,7 @@ export class Game {
   }
 
   private async runWarmup(ui: WarmupUi): Promise<WarmupResult> {
+    this.lifecycleCounts.warmup++;
     const {bar, label, button} = ui;
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
@@ -997,12 +989,11 @@ export class Game {
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
     if (screen[s]) $('#' + screen[s]).classList.remove('hidden');
-    $('#travel-overlay')?.classList.toggle('hidden', s !== 'travelling'); // Iteration 16 (RUN): in-world travel overlay
     this.hud.show(s === 'playing' || s === 'paused' || s === 'inventory');
-    // Only frozen menus silence audio; any other (incl. future overlay) state keeps it running. Iteration 16: a travel is a load.
-    this.sfx.suspend(s === 'paused' || s === 'inventory' || s === 'title' || s === 'loading' || s === 'error' || s === 'travelling');
+    // Only frozen menus silence audio; any other (incl. future overlay) state keeps it running.
+    this.sfx.suspend(s === 'paused' || s === 'inventory' || s === 'title' || s === 'loading' || s === 'error');
     if (s === 'inventory') { this.invUI.selected = null; this.invUI.render(); }
-    if (s !== 'playing' && s !== 'travelling' && prev === 'playing') this.input.unlock(); // Iteration 16: an in-world travel keeps the lock
+    if (s !== 'playing' && prev === 'playing') this.input.unlock();
     this.lastFrame = performance.now();
     for (const fn of this.stateListeners) { try { fn(s, prev); } catch (err) { console.warn('Iteration 16: a state listener failed', err); } }
   }
@@ -1542,10 +1533,6 @@ export class Game {
       this.wonShown = true;
       const lvl = this.run.current.level, secs = LEVELS[lvl].sections(this.run.seeds[lvl]);
       if (this.run.levelCleared(lvl, secs)) this.showEnd('won');
-      else {
-        const done = secs.filter(sec => this.run.peekMemory({level: lvl, section: sec})?.cleared).length;
-        this.hud.toast(`${LEVELS[lvl].name}: ${done} of ${secs.length} areas clear — the elevator and stairwell lead on`);
-      }
     }
   }
   private wonShown = false;
@@ -1589,13 +1576,16 @@ export class Game {
     const spreadPx = Math.tan(spread) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * (window.innerHeight / 2);
     const multi = this.levels.count > 1; // Lane B: the area / track bed of the player's own storey
     const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
+    // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House")
+    const storey = this.layout.office && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
+    const storeyText = storey ? ` · ${storey === 'L' ? 'Lobby' : `Floor ${storey}`}` : '';
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       weaponName: def ? def.short : 'Empty hands',
       mag: wdef && st ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
-      area: area >= 0 ? `${this.layout.areas[area].label} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
+      area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,
       food: this.survival.hunger, water: this.survival.thirst,
