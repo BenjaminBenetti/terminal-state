@@ -24,18 +24,14 @@ dot; a plain `mcp.json` is not read). The Meshy entry for it is `docs/meshy.mcp.
 It isn't a game dependency: `package.json` / the lockfile, the build and GitHub CI don't use it. To upgrade, change
 the pinned version deliberately.
 
-## Activate it (one time)
+## Project configuration
 
-Copy the template to the repo root as `.mcp.json`, or merge its `meshy` entry into an existing `.mcp.json`:
+The repo already includes the project `.mcp.json`. `docs/meshy.mcp.json` is a matching reference template; no copy
+step is needed after cloning this repo. The project entry was registered using Claude Code's supported
+`claude mcp add-json --scope project` command, with the API key represented only by `${MESHY_API_KEY}`.
 
-```sh
-cp docs/meshy.mcp.json .mcp.json
-```
-
-Claude Code treats `.mcp.json` as a sensitive file (it makes Claude Code start commands), so an agent cannot write it
-without your approval. The automated session that prepared this could not get that approval, so this step is yours or
-an interactively approved session's. `game/tests/repo-mcp-config.test.ts` checks the template, and `.mcp.json` once it
-exists, so it stays key-free.
+The server still requires the environment key and project-server approval below. Configuration alone does not
+mean authentication has been verified. The config regression test checks both files for environment-only keys.
 
 ## The API key never goes in the repo
 
@@ -62,7 +58,7 @@ Claude Code's startup environment.
 - **Never** use `VITE_*` variables, `game/public/`, the built site or anything shipped to browsers.
 - **Never** put it in GitHub Actions; the game's CI does not need Meshy.
 
-After setting the key and creating `.mcp.json`, restart or reload Claude Code. The first time, Claude Code asks you to
+After setting the key, restart or reload Claude Code. The first time, Claude Code asks you to
 approve the project's `meshy` server (project servers need approval); `/mcp` shows its status. Until then the server is
 **not connected**.
 
