@@ -5,7 +5,7 @@
 // backpack find becomes a bag exactly once; warm-up prototypes; the modifier source.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
-import {installGear, type GearSystem} from '../src/gear/system';
+import {installGear} from '../src/gear/system';
 import {Inventory, type ItemStack, stacksIn} from '../src/items/inventory';
 import {GEAR_IDS, GEAR_SLOTS} from '../src/items/gear';
 import {BASE_MODIFIERS, combineModifiers} from '../src/player/modifiers';

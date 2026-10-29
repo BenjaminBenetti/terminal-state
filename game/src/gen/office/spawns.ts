@@ -10,7 +10,7 @@
 // holds what one station would (0-2 per weapon), each found in a plausible room far from the arrivals.
 
 import {Rng, hashString} from '../../core/rng';
-import {CELL, FLOOR, type Grid} from '../grid';
+import {FLOOR, type Grid} from '../grid';
 import {levelDistance} from '../levelGen';
 import {purposeById} from '../purposes';
 import {clearAround} from '../stationDress';
@@ -19,7 +19,6 @@ import {ITEMS} from '../../items/items';
 import {WEAPON_FIND_AMMO, findWeaponsFor, type StartWeaponId} from '../weaponFinds';
 import type {Area, PickupPlacement, StationLayout, ZombieType} from '../stationTypes';
 import {OFFICE_SECTIONS} from './frame';
-import type {CarvedTower} from './tower';
 
 export const OFFICE_ENEMIES = {street: [5, 8] as const, floor: [3, 6] as const};
 /** Path distance (cells) every enemy keeps from the arrival points: platform spawn (street), elevator / stair arrivals. */
@@ -181,7 +180,7 @@ const FIND_W: Partial<Record<string, number>> = {
 };
 
 /** Places this section's planned weapon finds (+ matching ammo beside each) at least `minCells` from the arrivals. */
-export function placeOfficeWeapons(layout: StationLayout, rng: Rng, weapons: readonly string[], src: SpawnSources, minCells: number, tower: CarvedTower): PickupPlacement[] {
+export function placeOfficeWeapons(layout: StationLayout, rng: Rng, weapons: readonly string[], src: SpawnSources, minCells: number): PickupPlacement[] {
   const placed: PickupPlacement[] = [];
   if (!weapons.length) return placed;
   const slack = keepOut(layout, {cells: src.cells.map(c => ({...c, min: minCells}))});
@@ -220,7 +219,5 @@ export function placeOfficeWeapons(layout: StationLayout, rng: Rng, weapons: rea
       break;
     }
   }
-  void tower;
-  void CELL;
   return placed;
 }

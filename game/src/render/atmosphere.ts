@@ -165,6 +165,8 @@ export const ATMOSPHERE: AtmosphereParams = {
     concourse: 0.7, 'fare-hall': 0.75, 'food-court': 0.65, 'retail-arcade': 0.68, eatery: 0.75, shop: 0.78,
     washroom: 0.95, 'agent-office': 0.85, 'crew-room': 0.95, storage: 1.2, 'stock-room': 1.15, utility: 1.4,
     'supply-closet': 1.25, 'janitor-closet': 1.3, service: 1.25, room: 1, closet: 1.25, 'stair-core': 0.9,
+    // Iteration 16 (WORLD-GEN): office tower — daylit floors read airier than the station's back-of-house.
+    'office-lobby': 0.7, 'office-open': 0.8, 'office-corridor': 0.85, 'office-room': 0.9, 'office-elevator': 0.6, 'office-stair': 1.05,
   },
   levelDensity: {main: 1, upper: 0.85, lower: 1.25},
   classDensity: {clear: 0.05, normal: 1, dense: 1.4},

@@ -145,7 +145,7 @@ function finish(layout: StationLayout, f: TowerFrame, tower: CarvedTower, floor:
   placeOfficeSupplies(layout, rng.fork('office-supplies'), src, floor === 1);
   const sw = layout.startWeapon ?? 'rifle';
   const section = floor === 1 ? 'street' : `floor-${floor}`;
-  placeOfficeWeapons(layout, rng.fork('office-weapons'), officeWeaponPlan(ctx.levelSeed, sw)[section] ?? [], src, 30, tower);
+  placeOfficeWeapons(layout, rng.fork('office-weapons'), officeWeaponPlan(ctx.levelSeed, sw)[section] ?? [], src, 30);
   applyLighting(layout, rng.fork('lighting'));
   // The cab light always works (TOWER adds the emissive panel; the baked field lights the cab).
   for (const l of layout.lights) if (l.area === tower.core.cab.id) { l.broken = false; l.dying = false; l.flicker = false; l.power = 1; }

@@ -496,9 +496,8 @@ describe.skipIf(process.env.INJURY_REPORT !== '1')('injury loot report', () => {
     const placed = sum(subway);
     console.info(`[injury loot report] Subway placed / rolled (holders): ${(Object.keys(rolled) as (keyof MedCount)[]).map(k => `${k} ${placed[k] - (k === 'bandage' || k === 'medkit' ? subway.reduce((n, l) => n + l.pickups.filter(q => q.itemId === k).length, 0) : 0)}/${rolled[k]}`).join(' · ')}`);
     const {LEVELS} = await import('../src/levels/registry');
-    // WORLD-GEN's generator directly when it exists (before the registry switches to it), else the registry's
-    const real = Object.values(import.meta.glob<{generateOfficeSection?: typeof LEVELS.office.generate}>('../src/gen/office/index.ts'))[0];
-    const gen = (await real?.())?.generateOfficeSection ?? LEVELS.office.generate;
+    // The registry's office generator (WORLD-GEN's generateOfficeSection)
+    const gen = LEVELS.office.generate;
     const levels = Number(process.env.INJURY_OFFICE_LEVELS ?? 4);
     const office: StationLayout[] = [];
     let realSections = 0;

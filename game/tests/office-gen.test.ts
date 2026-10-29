@@ -280,7 +280,7 @@ describe('office sections build (world/builder.ts + world/officeProps.ts, Node, 
       const names = new Set<string>();
       w.group.traverse(q => names.add(q.name));
       for (const n of ['office-carpet', 'office-drop-ceiling', 'office-window-reveals']) expect(names.has(n), `${s} ${n}`).toBe(true);
-      expect([...names].some(n => n.startsWith('prop-officeChair'))).toBe(true);
+      expect([...names].some(n => n.startsWith(s === 'street' ? 'prop-receptionDesk' : 'prop-officeChair')), `${s} office props`).toBe(true);
       if (s !== 'street') expect(names.has('prop-cubiclePartition')).toBe(true);
       // No built wall face covers a window opening (sill..head) on the facade plane.
       for (const win of o.windows) {

@@ -15,7 +15,7 @@ import {CELL, FLOOR, type Grid} from '../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {signDims, wallSignSpot} from '../doorways';
 import {
-  backed, cellsOfBox, doorSide, forceProp, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, wallSpot, type PlaceCtx,
+  backed, cellsOfBox, doorSide, forceProp, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
 } from '../placeKit';
 import type {Area, Door, LightPlacement, Side, SignPlacement, StationLayout} from '../stationTypes';
 import {CEIL, MARGIN, type TowerFrame} from './frame';
@@ -38,7 +38,6 @@ export interface OfficeDress {
 }
 
 const q4 = (v: number) => Math.round(v * 4) / 4;
-const OPP: Record<Side, Side> = {N: 'S', S: 'N', E: 'W', W: 'E'};
 const roleOf = (d: OfficeDress, a: Area): OfficeAreaMeta['role'] | undefined => d.tower.meta.get(a.id)?.role;
 const officeGrid = (d: OfficeDress): Grid => d.layout.levels[d.level].grid;
 const doorsOf = (layout: StationLayout, a: Area): Door[] => layout.doors.filter(q => q.a === a.id || q.b === a.id);
@@ -407,5 +406,3 @@ export function wallSign(ctx: PlaceCtx, layout: StationLayout, area: Area, side:
   layout.signs.push({...s, ...pos, y, area: area.id});
   return true;
 }
-export {OPP};
-export const wallSpotOf = wallSpot;

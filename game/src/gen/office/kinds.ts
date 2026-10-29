@@ -20,19 +20,23 @@ export function isOfficeKind(kind: string): kind is OfficeKind {
   return (OFFICE_KINDS as readonly string[]).includes(kind);
 }
 
-/** Footprints (m; local frame front +Z): the manifest's real sizes (design.md Part 1, B1-B12). */
+/**
+ * Footprints (m; local frame front +Z) = the delivered Meshy derivatives' measured bounds (assets/officeAssets.ts `dims`, real
+ * size): collision, placement and the procedural stand-ins all use them, so a model and its fallback occupy the same box.
+ */
 export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
-  officeChair: {w: 0.62, d: 0.62, h: 1.0, blocksSight: false},
-  officeMonitor: {w: 0.55, d: 0.42, h: 0.45, blocksSight: false},
-  officeFiling: {w: 0.47, d: 0.62, h: 1.32, blocksSight: false},
-  officePhotocopier: {w: 1.0, d: 0.68, h: 1.1, blocksSight: false},
-  officeWaterCooler: {w: 0.36, d: 0.36, h: 1.3, blocksSight: false},
-  conferenceTable: {w: 3.0, d: 1.2, h: 0.76, blocksSight: false},
-  deadPlant: {w: 0.5, d: 0.5, h: 1.1, blocksSight: false},
-  receptionDesk: {w: 2.6, d: 0.9, h: 1.1, blocksSight: false},
-  serverRack: {w: 0.62, d: 1.0, h: 2.0, blocksSight: true},
-  officeWhiteboard: {w: 1.8, d: 0.55, h: 1.8, blocksSight: false},
-  officeShelf: {w: 0.9, d: 0.36, h: 1.8, blocksSight: false},
+  officeChair: {w: 0.78, d: 0.73, h: 1.0, blocksSight: false},
+  officeMonitor: {w: 0.55, d: 0.39, h: 0.41, blocksSight: false},
+  /** Lateral filing cabinet (B3 is 1.32 m wide). */
+  officeFiling: {w: 1.32, d: 0.8, h: 1.32, blocksSight: false},
+  officePhotocopier: {w: 0.85, d: 0.94, h: 1.1, blocksSight: false},
+  officeWaterCooler: {w: 0.67, d: 0.66, h: 1.3, blocksSight: false},
+  conferenceTable: {w: 3.0, d: 1.35, h: 0.83, blocksSight: false},
+  deadPlant: {w: 0.86, d: 0.89, h: 1.1, blocksSight: false},
+  receptionDesk: {w: 2.6, d: 1.78, h: 1.12, blocksSight: false},
+  serverRack: {w: 1.23, d: 1.48, h: 2.0, blocksSight: true},
+  officeWhiteboard: {w: 1.8, d: 0.93, h: 1.62, blocksSight: false},
+  officeShelf: {w: 2.22, d: 0.76, h: 1.8, blocksSight: false},
   /** Unit length (one cell); placements carry their run length in hx / hz. */
   cubiclePartition: {w: 0.5, d: 0.08, h: 1.45, blocksSight: false},
 };

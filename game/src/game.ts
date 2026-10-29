@@ -68,6 +68,7 @@ import {runBagStore} from './run/bagStore';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {officeModelKeysFor} from './gen/office/index'; // Iteration 16 (lane WORLD-GEN): the office models a section placed
+import {preloadOfficeAssets} from './world/officeProps'; // Iteration 16 (lane WORLD-GEN): carpet / ceiling / partition textures
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 // Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
@@ -330,6 +331,7 @@ export class Game {
     this.injuries = installInjuries(this, {aiming: () => this.aiming});
     this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
+    this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => { if (this.state === 'playing' && !this.qa) this.setState('paused'); });

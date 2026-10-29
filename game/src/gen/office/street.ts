@@ -65,7 +65,7 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   // --- Stair strip geometry (tower-local): [core lobby LB][run UL][landing TL], rows [TD-5, TD-1) -------------------------
   const LB = CORE.lobby, TL = CORE.top, CW = CORE.width, UL = stairRunCells(hu);
   const stripLen = LB + UL + TL;
-  if (stripLen + 4 > TW) return fail('r1');
+  if (stripLen + 4 > TW) return fail('strip-too-long');
   const csx = rng.int(2, TW - stripLen - 2);
   const sy = TD - 1 - CW;
 
@@ -78,12 +78,12 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   };
   const hall = lobbyArea({x: 0, y: 0, w: TW, h: cy0 - 1}, 'Lobby', 'office-reception', -1, 'reception', ['N', 'W', 'E']);
   const transit = lobbyArea({x: 0, y: cy1 + 1, w: TW, h: TD - 6 - (cy1 + 1)}, 'Transit concourse', 'office-lobby', hall.id, 'transit', ['W', 'E']);
-  if (transit.h < 5) return fail('r2');
+  if (transit.h < 5) return fail('transit-too-shallow');
   const core = carveCore(k, f, at, hall, transit, meta);
   const security = k.addArea({x: TX, y: TY + cy0, w: cx0 - 1, h: cy1 - cy0}, 'room', 'office-room', r2(hu + CEIL.office), hall.id, {...up, label: 'Building security office', publicSpace: false});
   security.purpose = 'office-security';
   meta.set(security.id, {role: 'security', facade: ['W']});
-  if (!k.connect(security, hall, 3, CEIL.door, {arch: false, margin: 2})) return fail('r3');
+  if (!k.connect(security, hall, 3, CEIL.door, {arch: false, margin: 2})) return fail('security-door');
   const east = lobbyArea({x: cx1 + 1, y: cy0 - 1, w: TW - cx1 - 1, h: cy1 - cy0 + 2}, 'Lobby', 'office-lobby', hall.id, 'lobby', ['E']);
   void east;
   // Pockets of the transit concourse beside the stair strip (touch the concourse directly: one open floor).
@@ -95,14 +95,14 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   const thw = rng.int(28, 36), thd = rng.int(24, 30);
   const thx = Math.max(0, Math.min(csx - 1, rng.int(csx + LB + 1 - thw, csx - 1)));
   const T: Rect = {x: TX + thx, y: TY + TD, w: thw, h: thd};
-  if (T.x + T.w < TX + csx + LB || !k.rectFree(T)) return fail('r4');
+  if (T.x + T.w < TX + csx + LB || !k.rectFree(T)) return fail('ticket-hall');
   const ticket = k.addArea(T, 'concourse', 'fare-hall', r1(rng.range(4.0, 4.6)), -1, {role: 'ticket-hall', label: 'Ticket hall'});
 
   // --- Tower connection: stair-core lobby (main), the run (main + upper), the top landing (upper) ---------------------------
   const lobbyR: Rect = {x: TX + csx, y: TY + sy, w: LB, h: CW};
   const runR: Rect = {x: TX + csx + LB, y: TY + sy, w: UL, h: CW};
   const landR: Rect = {x: TX + csx + LB + UL, y: TY + sy, w: TL, h: CW};
-  if (!k.rectFree(lobbyR) || !k.solid({...runR, x: runR.x - 1, y: runR.y - 1, w: runR.w + 2, h: runR.h + 2})) return fail('r5');
+  if (!k.rectFree(lobbyR) || !k.solid({...runR, x: runR.x - 1, y: runR.y - 1, w: runR.w + 2, h: runR.h + 2})) return fail('stair-strip');
   const coreLobby = k.addArea(lobbyR, 'passage', 'stair-core', CORE.lobbyCeil, ticket.id, {role: 'stair-core', label: 'Stairs · Office tower'});
   k.carveDoor({x: lobbyR.x + 1, y: lobbyR.y + CW, w: LB - 2, h: 1}, ticket, coreLobby, CORE.doorH, true);
   const run = k.addArea(runR, 'passage', 'stair-core', STAIR.headroom, coreLobby.id, {role: 'stair', label: 'Stairs · Tower lobby', also: [1]});
@@ -115,9 +115,9 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   // --- Paid concourse east of the ticket hall, fare line in the shared wall ---------------------------------------------------
   const mw = rng.int(16, 22), mh = rng.int(30, 38);
   const M: Rect = {x: T.x + T.w + 1, y: T.y + rng.int(0, 3), w: mw, h: mh};
-  if (!k.rectFree(M)) return fail('r6');
+  if (!k.rectFree(M)) return fail('paid-concourse');
   const paid = k.addArea(M, 'concourse', 'concourse', r1(rng.range(3.9, 4.4)), ticket.id, {paid: true, role: 'end-hall', label: 'Paid concourse'});
-  if (!k.fareLine(paid, ticket, rng.int(4, 5))) return fail('r7');
+  if (!k.fareLine(paid, ticket, rng.int(4, 5))) return fail('fare-line');
 
   // --- Island platform east of it, reached through an end passage between the tunnel walls ------------------------------------
   const beyond = rng.int(3, 6);
@@ -125,12 +125,12 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
   const Lp = rng.int(84, 104);
   const px0 = M.x + M.w + 2 + len;
   const y0 = M.y + Math.floor(mh / 2) - 9 - 11;
-  if (!k.rectFree({x: px0 - 12, y: y0, w: Lp + 24, h: 18 + 26})) return fail('r8');
+  if (!k.rectFree({x: px0 - 12, y: y0, w: Lp + 24, h: 18 + 26})) return fail('island-block');
   const blk = k.islandBlock(px0, y0, Lp, r1(rng.range(4.2, 4.6)), 'Platforms 1 · 2');
   const I = blk.platforms[0];
   I.platformNo = 1; I.towardsN = terms[0]; I.towardsS = terms[1];
   const EP = k.endPassage(blk, I, 'W', beyond, rng.int(10, 12));
-  if (!EP || !k.connect(EP, paid, EP.h - 2, 3.2, {pick: 'mid'})) return fail('r9');
+  if (!EP || !k.connect(EP, paid, EP.h - 2, 3.2, {pick: 'mid'})) return fail('end-passage');
 
   // The ticket hall's west wall takes rooms only when it stands far enough east of the tower's west facade.
   const westOk = T.x - TX >= 16;
@@ -207,9 +207,9 @@ export function carveStreet(rng: Rng, f: TowerFrame): StreetCarve | null {
     ...(rng.chance(0.5) ? [{hall: paid, sides: ['S'] as Side[], mix: 'kiosk' as const, max: 1}] : []),
   ], new Set<string>(), STREETS);
   // Storefront units / service corridors must stay on the station side (south of the tower, east of its west facade).
-  for (const a of k.areas) if (!a.level && a.type !== 'stair-core' && (a.x < TX || a.y < TY + TD)) return fail('r14');
+  for (const a of k.areas) if (!a.level && a.type !== 'stair-core' && (a.x < TX || a.y < TY + TD)) return fail('outside-station-side');
   // No main-level ceiling may reach the lobby slab.
-  for (const a of k.areas) if (!a.level && a.role !== 'stair' && a.ceil > hu - SLAB - 0.05) return fail('r15');
+  for (const a of k.areas) if (!a.level && a.role !== 'stair' && a.ceil > hu - SLAB - 0.05) return fail('ceiling-into-lobby-slab');
 
   // --- Crop: tower interior NW corner at grid cell (MARGIN, MARGIN) -------------------------------------------------------
   let x1 = TX + TW, y1 = TY + TD;

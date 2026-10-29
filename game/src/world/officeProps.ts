@@ -38,10 +38,11 @@ const textures = new Map<OfficeTextureId, THREE.Texture>();
  * Loads the office models / textures a layout uses (Promise; never rejects). Register it as a section preload
  * (game.sectionPreloads) so the synchronous build finds them; a missing / failed file keeps its procedural fallback.
  */
-export async function preloadOfficeAssets(layout: StationLayout): Promise<void> {
+export async function preloadOfficeAssets(layout: StationLayout, opts: {models?: boolean} = {}): Promise<void> {
   if (!layout.office) return;
   const ids = new Set<OfficeAssetId>();
-  for (const p of layout.props) {
+  // The Game loads the models through propModels (officeModelKeysFor); it preloads only the textures here (models: false).
+  if (opts.models !== false) for (const p of layout.props) {
     const id = OFFICE_KIND_ASSET[p.kind as OfficeKind | 'desk'] as OfficeAssetId | undefined;
     if (id) ids.add(id);
   }
@@ -55,6 +56,13 @@ export async function preloadOfficeAssets(layout: StationLayout): Promise<void> 
 /** Office kinds (and `desk` inside office sections) this module renders. */
 export function isOfficeBuilt(kind: PropKind, layout: StationLayout): boolean {
   return isOfficeKind(kind) || (kind === 'desk' && !!layout.office);
+}
+
+const sizes = new WeakMap<GLTF, THREE.Vector3>();
+function modelSize(g: GLTF): THREE.Vector3 {
+  let v = sizes.get(g);
+  if (!v) { g.scene.updateMatrixWorld(true); v = new THREE.Box3().setFromObject(g.scene).getSize(new THREE.Vector3()); sizes.set(g, v); }
+  return v;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -112,7 +120,14 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
   // The game's lazy prop library (office-<assetId> keys, ASSETS' OFFICE_MODEL_FILES) first, then this module's preload cache.
   const gltf = asset ? lib[officeModelKey(asset)] ?? models.get(asset) : undefined;
   const def = PROP_DEFS[kind];
-  if (gltf) return instanceModel(group, gltf, list.map(p => placeM(p).multiply(FLIP)), {w: def.w, h: def.h, d: def.d, anchor: 'bottom'}, kind);
+  if (gltf) {
+    // The derivatives are at real size and the footprints are their measured bounds: a uniform fit to the footprint keeps the
+    // proportions (the desk's 0.77 m work top stays the `desk` loot surface; its privacy panel rises behind it).
+    const size = modelSize(gltf);
+    const k = Math.min(def.w / size.x, def.d / size.z);
+    const fit = k > 0 && Number.isFinite(k) ? {w: size.x * k, h: size.y * k, d: size.z * k, anchor: 'bottom' as const} : {w: def.w, h: def.h, d: def.d, anchor: 'bottom' as const};
+    return instanceModel(group, gltf, list.map(p => placeM(p).multiply(FLIP)), fit, kind);
+  }
   const parts = isOfficeKind(kind) ? officeShape(kind) : propShape(kind);
   if (!parts) return 0;
   const pm = shapeMaterials(wm);
