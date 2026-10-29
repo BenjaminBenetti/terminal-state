@@ -80,6 +80,96 @@ export interface Support {
   /** Grid cell index (same indexing on every level). */
   cell: number;
   area: number;
+  /** Task office-seamless (lane LIFT): set when the support is a dynamic volume (the moving elevator cab), not a grid band. */
+  volume?: DynamicVolume;
+}
+
+// -------------------------------------------------------------------------------------------------
+// Task office-seamless-20261029 (lane LIFT): dynamic free-space volumes — the moving elevator cab.
+//
+// A volume is an axis-aligned box over grid columns (its footprint cell aligned; a cell belongs to it when its centre lies
+// inside) whose free band [floorY, ceilY] may move every frame (the cab rides the shaft). Inside the footprint, grid bands
+// whose floor lies within the volume's stop range are HIDDEN (the shaft is solid on every storey grid anyway) and the
+// volume band replaces them: support, collision, headroom, nav helpers, raycasts and sight see the cab interior as free
+// space bounded by the surrounding solid cells (walls), its floor and its ceiling. A GATE is an opening on one side of the
+// footprint (the cab door through the shaft wall): in its passage columns every grid band whose floor sits at a stop is
+// SOLID unless the gate is open and that band's floor is the volume floor (the cab level at that stop, doors open); when
+// the gate is open and no grid band is there (a doorway kept solid in the grids), the passage band [floorY, floorY +
+// height] is added instead. So the landing doors are solid whenever they are not open, and nobody walks, falls, shoots or
+// sees into the shaft. Path finding (PathFinder / reachable) ignores volumes (enemies never ride). No volume = no cost.
+
+/** Side of a footprint ('N' = -z, 'S' = +z, 'W' = -x, 'E' = +x). */
+export type VolumeSide = 'N' | 'S' | 'E' | 'W';
+
+/** An opening on one side of a dynamic volume (the cab door + the landing door in the shaft wall). */
+export interface VolumeGate {
+  side: VolumeSide;
+  /** Opening range along the side (world m: x for N / S, z for E / W). */
+  a0: number;
+  a1: number;
+  /** Passage depth beyond the side (m): the shaft wall up to the landing. */
+  depth: number;
+  /** Clear height of the opening above the volume floor (m). */
+  height: number;
+  /** Passable only while open (the runtime: cab level at a stop and the doors open). */
+  open: boolean;
+}
+
+/** A moving free-space box (Levels.addDynamicVolume). Mutate floorY / ceilY / level / area / gate.open in place. */
+export interface DynamicVolume {
+  /** Interior footprint (world m, cell aligned). */
+  x0: number; z0: number; x1: number; z1: number;
+  /** Current floor / ceiling (absolute y). */
+  floorY: number;
+  ceilY: number;
+  /** Storey the volume reports for support (levelAt / Support.level). */
+  level: number;
+  /** Area id it reports (default -1). */
+  area?: number;
+  gates: VolumeGate[];
+  /** Absolute floor y of every stop (gates open there; grid bands hidden in that range). Default: [floorY] when added. */
+  stops?: readonly number[];
+  name?: string;
+}
+
+/** One column's membership of a volume (Levels.volumeColumn; read-only for callers). */
+export interface VolumeColumn {
+  readonly v: DynamicVolume;
+  /** null: interior column; else the gate whose passage this column is. */
+  readonly gate: VolumeGate | null;
+  /** Per level index: 1 = that grid's open band here belongs to the volume (interior: hidden; passage: gated). */
+  readonly hide: Uint8Array;
+  /** Per level index: that grid band's floor (passage match test). */
+  readonly at: Float64Array;
+}
+
+/** Most volume bands one column can hold (scratch sizing; a column is in at most this many volumes). */
+const VOL_MAX = 4;
+/** Floor match tolerance between a passage band and the volume floor (m). */
+const GATE_MATCH = 0.05;
+/** A grid band within this of a stop (passage) / of the stop range (interior) belongs to the volume. */
+const STOP_TOL = 0.3;
+/** Scratch out of volumeBand(). */
+const VB = {floor: 0, ceil: 0};
+
+/** Volume band of a membership right now into VB; false = none (closed gate, or the grid's own passage band serves). */
+function volumeBand(c: VolumeColumn, nl: number): boolean {
+  const v = c.v, g = c.gate;
+  if (!g) { VB.floor = v.floorY; VB.ceil = v.ceilY; return true; }
+  if (!g.open) return false;
+  for (let k = 0; k < nl; k++) if (c.hide[k] && Math.abs(c.at[k] - v.floorY) < GATE_MATCH) return false;
+  VB.floor = v.floorY; VB.ceil = v.floorY + g.height;
+  return true;
+}
+
+/** The grid band of level index k (floor f) in a volume column is hidden right now. */
+function gridHidden(vc: readonly VolumeColumn[], k: number, f: number): boolean {
+  for (const c of vc) {
+    if (!c.hide[k]) continue;
+    if (!c.gate) return true;
+    if (!(c.gate.open && Math.abs(f - c.v.floorY) < GATE_MATCH)) return true;
+  }
+  return false;
 }
 
 /** A free vertical interval of one column, tagged with the level whose band it is. */
@@ -182,7 +272,12 @@ export class Levels implements NavLevels {
   private railIndex: Map<number, RailRun[]> | null = null;
   private parapetList: RailRun[] | null = null;
   private edgeList: {level: number; a: number; b: number}[] | null = null;
-  private rayScratch: {fA: Float64Array; cA: Float64Array; fB: Float64Array; cB: Float64Array; open: Uint8Array} | null = null;
+  private rayScratch: {fA: Float64Array; cA: Float64Array; fB: Float64Array; cB: Float64Array; open: Uint8Array; lid: Int32Array} | null = null;
+  /** Lane LIFT: registered dynamic volumes and their column index (null = none: every query takes the plain grid path). */
+  private volList: DynamicVolume[] = [];
+  private volCells: Map<number, VolumeColumn[]> | null = null;
+  /** Bumped whenever a volume is added / removed (physics rebuilds its static boxes around the shaft). */
+  volumeVersion = 0;
   /** Generator railings (layout.rails); undefined = derive. */
   private readonly explicitRails: readonly RailRun[] | undefined;
   /** The rails array this instance was built from (levelsOf cache check). */
@@ -204,6 +299,100 @@ export class Levels implements NavLevels {
     return this.list[level].grid;
   }
 
+  // -------------------------------------------------------------------------------------------
+  // Dynamic volumes (lane LIFT)
+
+  /** Registers a moving free-space box (the elevator cab). Its footprint / gates / stops are indexed now; floorY / ceilY / level / gate.open are read live. */
+  addDynamicVolume(v: DynamicVolume): DynamicVolume {
+    if (!this.volList.includes(v)) {
+      if (!v.stops || !v.stops.length) v.stops = [v.floorY];
+      this.volList.push(v);
+      this.reindexVolumes();
+    }
+    return v;
+  }
+
+  removeDynamicVolume(v: DynamicVolume): void {
+    const i = this.volList.indexOf(v);
+    if (i < 0) return;
+    this.volList.splice(i, 1);
+    this.reindexVolumes();
+  }
+
+  get dynamicVolumes(): readonly DynamicVolume[] {
+    return this.volList;
+  }
+
+  /** The volume whose interior footprint holds (x, z) (and, given y, whose band holds y within `pad`); null when none. */
+  volumeAt(wx: number, wz: number, y?: number, pad = 0.3): DynamicVolume | null {
+    for (const v of this.volList) {
+      if (wx < v.x0 || wx > v.x1 || wz < v.z0 || wz > v.z1) continue;
+      if (y === undefined || (y >= v.floorY - pad && y <= v.ceilY + pad)) return v;
+    }
+    return null;
+  }
+
+  /** Volume memberships of column index i (undefined: none). */
+  volumeColumn(i: number): readonly VolumeColumn[] | undefined {
+    return this.volCells?.get(i);
+  }
+
+  /** Physics / statics: whether the grid band of level index k (floor f) in column i is hidden by a volume right now. */
+  gridBandHidden(i: number, k: number, f: number): boolean {
+    const vc = this.volCells?.get(i);
+    return !!vc && gridHidden(vc, k, f);
+  }
+
+  /** Physics / statics: the band a volume membership adds right now ({floor, ceil} into `out`); false = none. */
+  volumeBandOf(c: VolumeColumn, out: {floor: number; ceil: number}): boolean {
+    if (!volumeBand(c, this.list.length)) return false;
+    out.floor = VB.floor; out.ceil = VB.ceil;
+    return true;
+  }
+
+  private reindexVolumes(): void {
+    this.volumeVersion++;
+    if (!this.volList.length) { this.volCells = null; return; }
+    const m = new Map<number, VolumeColumn[]>();
+    const g0 = this.main, nl = this.list.length;
+    const add = (cx: number, cy: number, v: DynamicVolume, gate: VolumeGate | null) => {
+      if (!g0.inBounds(cx, cy)) return;
+      const i = cy * g0.w + cx;
+      const hide = new Uint8Array(nl), at = new Float64Array(nl);
+      const stops = v.stops ?? [v.floorY];
+      const lo = Math.min(...stops) - STOP_TOL, hi = Math.max(...stops) + (v.ceilY - v.floorY) + STOP_TOL;
+      for (let k = 0; k < nl; k++) {
+        const g = this.list[k].grid;
+        if (!isOpen(g, i)) continue;
+        const f = g.floorOf(i);
+        at[k] = f;
+        if (gate ? stops.some(s => Math.abs(f - s) <= STOP_TOL) : f >= lo && f <= hi) hide[k] = 1;
+      }
+      let list = m.get(i);
+      if (!list) m.set(i, (list = []));
+      if (list.length < VOL_MAX) list.push({v, gate, hide, at});
+    };
+    const cellsOf = (x0: number, z0: number, x1: number, z1: number, fn: (cx: number, cy: number) => void) => {
+      for (let cy = Math.floor(z0 / CELL); cy <= Math.floor(z1 / CELL); cy++) {
+        for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+          const mx = (cx + 0.5) * CELL, mz = (cy + 0.5) * CELL;
+          if (mx > x0 && mx < x1 && mz > z0 && mz < z1) fn(cx, cy);
+        }
+      }
+    };
+    for (const v of this.volList) {
+      cellsOf(v.x0, v.z0, v.x1, v.z1, (cx, cy) => add(cx, cy, v, null));
+      for (const g of v.gates) {
+        const a0 = Math.min(g.a0, g.a1), a1 = Math.max(g.a0, g.a1), d = Math.max(0, g.depth);
+        if (g.side === 'N') cellsOf(a0, v.z0 - d, a1, v.z0, (cx, cy) => add(cx, cy, v, g));
+        else if (g.side === 'S') cellsOf(a0, v.z1, a1, v.z1 + d, (cx, cy) => add(cx, cy, v, g));
+        else if (g.side === 'W') cellsOf(v.x0 - d, a0, v.x0, a1, (cx, cy) => add(cx, cy, v, g));
+        else cellsOf(v.x1, a0, v.x1 + d, a1, (cx, cy) => add(cx, cy, v, g));
+      }
+    }
+    this.volCells = m;
+  }
+
   /** Column index of world (x, z), or -1 outside. */
   cellIndex(wx: number, wz: number): number {
     const g0 = this.main;
@@ -218,11 +407,15 @@ export class Levels implements NavLevels {
     const cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
     if (!g0.inBounds(cx, cy)) return out;
     const i = cy * g0.w + cx;
-    for (const L of this.list) {
-      const g = L.grid;
+    const vc = this.volCells?.get(i);
+    for (let k = 0; k < this.list.length; k++) {
+      const L = this.list[k], g = L.grid;
       if (!isOpen(g, i)) continue;
-      out.push({level: L.id, floor: floorNearCell(g, i, cx, cy, wx, wz), ceil: ceilNearCell(g, i, cx, cy, wx, wz)});
+      const f = floorNearCell(g, i, cx, cy, wx, wz);
+      if (vc && gridHidden(vc, k, f)) continue;
+      out.push({level: L.id, floor: f, ceil: ceilNearCell(g, i, cx, cy, wx, wz)});
     }
+    if (vc) for (const c of vc) if (volumeBand(c, this.list.length)) out.push({level: c.v.level, floor: VB.floor, ceil: VB.ceil});
     out.sort((a, b) => a.floor - b.floor);
     return out;
   }
@@ -233,11 +426,15 @@ export class Levels implements NavLevels {
     const cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
     if (!g0.inBounds(cx, cy)) return false;
     const i = cy * g0.w + cx;
-    for (const L of this.list) {
-      const g = L.grid;
+    const vc = this.volCells?.get(i);
+    for (let k = 0; k < this.list.length; k++) {
+      const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
-      if (y >= floorNearCell(g, i, cx, cy, wx, wz) - 1e-4 && y <= ceilNearCell(g, i, cx, cy, wx, wz) + 1e-4) return true;
+      const f = floorNearCell(g, i, cx, cy, wx, wz);
+      if (vc && gridHidden(vc, k, f)) continue;
+      if (y >= f - 1e-4 && y <= ceilNearCell(g, i, cx, cy, wx, wz) + 1e-4) return true;
     }
+    if (vc) for (const c of vc) if (volumeBand(c, this.list.length) && y >= VB.floor - 1e-4 && y <= VB.ceil + 1e-4) return true;
     return false;
   }
 
@@ -266,15 +463,27 @@ export class Levels implements NavLevels {
     if (!g0.inBounds(cx, cy)) return null;
     const i = cy * g0.w + cx;
     let best: Support | null = null, loose: Support | null = null;
-    for (const L of this.list) {
-      const g = L.grid;
+    const vc = this.volCells?.get(i);
+    for (let k = 0; k < this.list.length; k++) {
+      const L = this.list[k], g = L.grid;
       if (!isOpen(g, i)) continue;
       const f = floorNearCell(g, i, cx, cy, wx, wz);
       if (f > y + tol) continue;
+      if (vc && gridHidden(vc, k, f)) continue;
       const c = ceilNearCell(g, i, cx, cy, wx, wz);
       if (c >= y - CAP_TOL) {
         if (!best || f > best.floor) best = {level: L.id, floor: f, ceil: c, cell: i, area: g.area[i]};
       } else if (!strict && c >= f + 0.5 && (!loose || f > loose.floor)) loose = {level: L.id, floor: f, ceil: c, cell: i, area: g.area[i]};
+    }
+    if (vc) {
+      for (const cv of vc) {
+        if (!volumeBand(cv, this.list.length)) continue;
+        const f = VB.floor, c = VB.ceil, v = cv.v;
+        if (f > y + tol) continue;
+        if (c >= y - CAP_TOL) {
+          if (!best || f > best.floor) best = {level: v.level, floor: f, ceil: c, cell: i, area: v.area ?? -1, volume: v};
+        } else if (!strict && c >= f + 0.5 && (!loose || f > loose.floor)) loose = {level: v.level, floor: f, ceil: c, cell: i, area: v.area ?? -1, volume: v};
+      }
     }
     return best ?? loose;
   }
@@ -299,13 +508,14 @@ export class Levels implements NavLevels {
   stepAt(wx: number, wz: number, y: number, tol = STEP_UP): number {
     const s = this.supportAt(wx, wz, y, tol);
     if (!s) return NaN;
+    if (s.volume) return s.floor; // the cab floor is flat
     const g = this.grid(s.level), cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
     return stepNearCell(g, s.cell, cx, cy, wx, wz);
   }
   /** Grid cell value (SOLID / FLOOR / VOID) of the level an actor at height y stands on (SOLID when unsupported). */
   cellKindAt(wx: number, wz: number, y: number): number {
     const s = this.supportAt(wx, wz, y);
-    return s ? this.grid(s.level).cells[s.cell] : 0;
+    return s ? (s.volume ? FLOOR : this.grid(s.level).cells[s.cell]) : 0;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -321,15 +531,18 @@ export class Levels implements NavLevels {
     const g0 = this.main;
     if (!g0.inBounds(cx, cy)) return true;
     const i = cy * g0.w + cx;
-    for (const L of this.list) {
-      const g = L.grid;
+    const vc = this.volCells?.get(i);
+    for (let k = 0; k < this.list.length; k++) {
+      const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
       const f = floorNearCell(g, i, cx, cy, x, z);
       if (f > feet + STEP_UP) continue;
+      if (vc && gridHidden(vc, k, f)) continue;
       const c = ceilNearCell(g, i, cx, cy, x, z);
       if (c < Math.max(feet, f) + height - 0.02) continue;
       return false;
     }
+    if (vc) for (const c of vc) if (volumeBand(c, this.list.length) && VB.floor <= feet + STEP_UP && VB.ceil >= Math.max(feet, VB.floor) + height - 0.02) return false;
     return true;
   }
 
@@ -339,15 +552,18 @@ export class Levels implements NavLevels {
     if (!g0.inBounds(cx, cy)) return NaN;
     const i = cy * g0.w + cx;
     let bf = -Infinity, bc = NaN;
-    for (const L of this.list) {
-      const g = L.grid;
+    const vc = this.volCells?.get(i);
+    for (let k = 0; k < this.list.length; k++) {
+      const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
       const f = floorNearCell(g, i, cx, cy, x, z);
       if (f > feet + STEP_UP || f <= bf) continue;
+      if (vc && gridHidden(vc, k, f)) continue;
       const c = ceilNearCell(g, i, cx, cy, x, z);
       if (c <= feet) continue;
       bf = f; bc = c;
     }
+    if (vc) for (const c of vc) if (volumeBand(c, this.list.length) && VB.floor <= feet + STEP_UP && VB.floor > bf && VB.ceil > feet) { bf = VB.floor; bc = VB.ceil; }
     return bc;
   }
 
@@ -376,8 +592,15 @@ export class Levels implements NavLevels {
 
   /** Every railing run: the layout's list when it has one, else Level.rails / derived per level (cached). */
   get rails(): readonly RailRun[] {
-    if (!this.railList) this.railList = this.explicitRails ? [...this.explicitRails] : this.buildRails();
+    if (!this.railList) this.railList = this.explicitRails ? [...this.explicitRails] : this.withoutVolumes(() => this.buildRails());
     return this.railList;
+  }
+
+  /** Static derivations (railings) never see the moving volumes. */
+  private withoutVolumes<T>(fn: () => T): T {
+    const saved = this.volCells;
+    this.volCells = null;
+    try { return fn(); } finally { this.volCells = saved; }
   }
 
   /** Solid parapet runs (block rays below their top). */
@@ -392,6 +615,10 @@ export class Levels implements NavLevels {
    */
   unrailedDrops(): RailRun[] {
     if (!this.explicitRails) return [];
+    return this.withoutVolumes(() => this.unrailedDropsNow());
+  }
+
+  private unrailedDropsNow(): RailRun[] {
     const out: RailRun[] = [];
     for (const L of this.list) {
       for (const e of this.deriveRails(L)) {
@@ -539,28 +766,46 @@ export class Levels implements NavLevels {
   private structuralRay(o: Vec3, d: Vec3, tMax: number, opts: RaycastOpts): LevelHit {
     const g0 = this.main, W = g0.w;
     const L = this.list, nl = L.length;
+    // bands per column: the grid levels, then (lane LIFT) up to VOL_MAX dynamic-volume bands (none: exactly the old path)
+    const vols = this.volCells, nb = vols ? nl + VOL_MAX : nl;
     const voidY = opts.trenchY, unset = opts.unsetCeil ?? Infinity;
     const none = (): LevelHit => ({t: tMax, kind: 'none', level: -1, nx: 0, ny: 0, nz: 0, cell: -1});
     let cx = Math.floor(o.x / CELL), cy = Math.floor(o.z / CELL);
     const hl = Math.hypot(d.x, d.z);
     if (!g0.inBounds(cx, cy)) return {t: 0, kind: 'wall', level: -1, nx: hl > 1e-9 ? -d.x / hl : 0, ny: 0, nz: hl > 1e-9 ? -d.z / hl : 0, cell: -1};
-    const sc = (this.rayScratch ??= {fA: new Float64Array(nl), cA: new Float64Array(nl), fB: new Float64Array(nl), cB: new Float64Array(nl), open: new Uint8Array(nl)});
-    const {fA, cA, fB, cB, open} = sc;
+    if (!this.rayScratch || this.rayScratch.open.length !== nb) {
+      this.rayScratch = {fA: new Float64Array(nb), cA: new Float64Array(nb), fB: new Float64Array(nb), cB: new Float64Array(nb), open: new Uint8Array(nb), lid: new Int32Array(nb)};
+      for (let k = 0; k < nl; k++) this.rayScratch.lid[k] = L[k].id;
+    }
+    const {fA, cA, fB, cB, open, lid} = this.rayScratch;
     const evalCol = (i: number, ccx: number, ccy: number, ax: number, az: number, bx: number, bz: number) => {
       let any = false;
+      const vc = vols?.get(i);
       for (let k = 0; k < nl; k++) {
         const g = L[k].grid;
         if (!isOpen(g, i)) { open[k] = 0; continue; }
+        fA[k] = floorNearCell(g, i, ccx, ccy, ax, az, voidY);
+        if (vc && gridHidden(vc, k, fA[k])) { open[k] = 0; continue; }
         open[k] = 1; any = true;
-        fA[k] = floorNearCell(g, i, ccx, ccy, ax, az, voidY); cA[k] = ceilNearCell(g, i, ccx, ccy, ax, az, unset);
+        cA[k] = ceilNearCell(g, i, ccx, ccy, ax, az, unset);
         fB[k] = floorNearCell(g, i, ccx, ccy, bx, bz, voidY); cB[k] = ceilNearCell(g, i, ccx, ccy, bx, bz, unset);
+      }
+      if (vols) {
+        let k = nl;
+        if (vc) for (const c of vc) {
+          if (k >= nb || !volumeBand(c, nl)) continue;
+          open[k] = 1; any = true; lid[k] = c.v.level;
+          fA[k] = fB[k] = VB.floor; cA[k] = cB[k] = VB.ceil;
+          k++;
+        }
+        for (; k < nb; k++) open[k] = 0;
       }
       return any;
     };
     // band holding height y at the entry point (prefer `prefer`); -1 none
     const pick = (y: number, prefer: number, tol: number): number => {
       if (prefer >= 0 && open[prefer] && y >= fA[prefer] - tol && y <= cA[prefer] + tol) return prefer;
-      for (let k = 0; k < nl; k++) if (open[k] && y >= fA[k] - tol && y <= cA[k] + tol) return k;
+      for (let k = 0; k < nb; k++) if (open[k] && y >= fA[k] - tol && y <= cA[k] + tol) return k;
       return -1;
     };
     let i = cy * W + cx;
@@ -568,19 +813,19 @@ export class Levels implements NavLevels {
     if (hl < 1e-6) {
       if (!evalCol(i, cx, cy, o.x, o.z, o.x, o.z)) return {t: 0, kind: 'wall', level: -1, nx: 0, ny: 0, nz: 0, cell: i};
       let k = pick(o.y, -1, 1e-3);
-      if (k < 0) k = nearestBand(o.y, open, fA, cA, nl);
+      if (k < 0) k = nearestBand(o.y, open, fA, cA, nb);
       // effective floor / ceiling through chained overlapping bands
       let f = fA[k], c = cA[k];
       for (let changed = true; changed;) {
         changed = false;
-        for (let m = 0; m < nl; m++) {
+        for (let m = 0; m < nb; m++) {
           if (!open[m]) continue;
           if (fA[m] < f && cA[m] >= f - 1e-4) { f = fA[m]; changed = true; }
           if (cA[m] > c && fA[m] <= c + 1e-4) { c = cA[m]; changed = true; }
         }
       }
-      if (d.y < 0) { const t = (f - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'floor', level: L[k].id, nx: 0, ny: 1, nz: 0, cell: i} : none(); }
-      if (d.y > 0) { const t = (c - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'ceiling', level: L[k].id, nx: 0, ny: -1, nz: 0, cell: i} : none(); }
+      if (d.y < 0) { const t = (f - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'floor', level: lid[k], nx: 0, ny: 1, nz: 0, cell: i} : none(); }
+      if (d.y > 0) { const t = (c - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'ceiling', level: lid[k], nx: 0, ny: -1, nz: 0, cell: i} : none(); }
       return none();
     }
     const ux = d.x / hl, uz = d.z / hl;
@@ -591,23 +836,25 @@ export class Levels implements NavLevels {
     let tA = 0, lastX = false, cur = -1;
     const sight = !!opts.sightProps;
     for (let guard = 0; guard < 8192 && tA < tMax; guard++) {
-      if (!g0.inBounds(cx, cy)) return {t: tA, kind: 'wall', level: cur >= 0 ? L[cur].id : -1, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: -1};
+      if (!g0.inBounds(cx, cy)) return {t: tA, kind: 'wall', level: cur >= 0 ? lid[cur] : -1, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: -1};
       i = cy * W + cx;
       const tB = Math.min(tMax, Math.min(mX, mY) / hl);
       const ax = o.x + d.x * tA, ay = o.y + d.y * tA, az = o.z + d.z * tA;
       const bx = o.x + d.x * tB, by = o.y + d.y * tB, bz = o.z + d.z * tB;
+      // (cur's level id is read before evalCol may reuse a volume slot)
+      const curLevel = cur >= 0 ? lid[cur] : -1;
       const any = evalCol(i, cx, cy, ax, az, bx, bz);
-      if (!any) return {t: tA, kind: 'wall', level: cur >= 0 ? L[cur].id : -1, nx: lastX ? -stepX : (tA > 0 ? 0 : -ux), ny: 0, nz: lastX ? 0 : (tA > 0 ? -stepY : -uz), cell: i};
+      if (!any) return {t: tA, kind: 'wall', level: curLevel, nx: lastX ? -stepX : (tA > 0 ? 0 : -ux), ny: 0, nz: lastX ? 0 : (tA > 0 ? -stepY : -uz), cell: i};
       if (tA > 1e-6) {
         // entering this column below every floor / above every ceiling at this height: a face
         const k = pick(ay, cur, 1e-3);
-        if (k < 0) return {t: tA, kind: 'wall', level: cur >= 0 ? L[cur].id : -1, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: i};
+        if (k < 0) return {t: tA, kind: 'wall', level: curLevel, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: i};
         cur = k;
       } else {
         cur = pick(ay, -1, 1e-3);
-        if (cur < 0) cur = nearestBand(ay, open, fA, cA, nl);
+        if (cur < 0) cur = nearestBand(ay, open, fA, cA, nb);
       }
-      if (sight && L[cur].grid.sightBlocked[i] === 1) return {t: tA, kind: 'prop', level: L[cur].id, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: i};
+      if (sight && cur < nl && L[cur].grid.sightBlocked[i] === 1) return {t: tA, kind: 'prop', level: lid[cur], nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: i};
       // in-cell: leave the band through its floor or ceiling (chain into an overlapping band)
       let t0 = tA;
       for (let pass = 0; pass < 4; pass++) {
@@ -624,12 +871,12 @@ export class Levels implements NavLevels {
         const down = tf <= tc, th = down ? tf : tc;
         const yh = o.y + d.y * th, uh = span > 1e-12 ? (th - tA) / span : 0;
         let next = -1;
-        for (let m = 0; m < nl; m++) {
+        for (let m = 0; m < nb; m++) {
           if (m === cur || !open[m]) continue;
           const fm = fA[m] + (fB[m] - fA[m]) * uh, cm = cA[m] + (cB[m] - cA[m]) * uh;
           if (down ? fm < yh - 1e-4 && cm >= yh - 1e-4 : cm > yh + 1e-4 && fm <= yh + 1e-4) { next = m; break; }
         }
-        if (next < 0) return down ? {t: th, kind: 'floor', level: L[cur].id, nx: 0, ny: 1, nz: 0, cell: i} : {t: th, kind: 'ceiling', level: L[cur].id, nx: 0, ny: -1, nz: 0, cell: i};
+        if (next < 0) return down ? {t: th, kind: 'floor', level: lid[cur], nx: 0, ny: 1, nz: 0, cell: i} : {t: th, kind: 'ceiling', level: lid[cur], nx: 0, ny: -1, nz: 0, cell: i};
         cur = next; t0 = th;
       }
       if (tB >= tMax) return none();
@@ -676,15 +923,18 @@ export class Levels implements NavLevels {
         let ok = false;
         if (g0.inBounds(cx, cy)) {
           const i = cy * g0.w + cx;
-          for (const L of this.list) {
-            const g = L.grid;
+          const vc = this.volCells?.get(i);
+          for (let k = 0; k < this.list.length; k++) {
+            const g = this.list[k].grid;
             if (!isOpen(g, i) || g.blocked[i]) continue;
             const f = floorNearCell(g, i, cx, cy, wx, wz);
             if (Math.abs(f - feet) > NAV_STEP) continue;
+            if (vc && gridHidden(vc, k, f)) continue;
             if (ceilNearCell(g, i, cx, cy, wx, wz) < Math.max(f, feet) + BODY_CLEAR) continue;
             ok = true;
             break;
           }
+          if (!ok && vc) for (const c of vc) if (volumeBand(c, this.list.length) && Math.abs(VB.floor - feet) <= NAV_STEP && VB.ceil >= Math.max(VB.floor, feet) + BODY_CLEAR) { ok = true; break; }
         }
         if (ok) continue;
         const nx = Math.max(cx * CELL, Math.min(wx, (cx + 1) * CELL));

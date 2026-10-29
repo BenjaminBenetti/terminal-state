@@ -542,15 +542,16 @@ describe('render cost: triangle sanity, overdraw, level / fog culling, draw-call
     } finally { un(); }
   });
 
-  it('shader cost: the surface and march decodes pick the level slot with one packed texel, no per-slot loops', () => {
+  it('shader cost: the surface and march decodes pick the level slot from the packed column header, no per-slot loops', () => {
     // iteration 13: the surface decode is TSL (tests/lighting-node.test.ts); the fog march is TSL too (render/volumetricShaders.ts):
-    // compiled here for the WebGL2 backend, the station light field is read with exactly two texel fetches per step (the
-    // packed slot pick, shared by the density map and the field, + the slot header) and no loop runs over slots.
+    // compiled here for the WebGL2 backend, the station light field is read with exactly three texel fetches per step (the
+    // packed slot pick, shared by the density map and the field: column header + the extended-column group texel, read only
+    // in a tower column (task office-seamless-20261029); + the slot header) and no loop runs over slots.
     const arr = (c: number) => new THREE.DataArrayTexture(new Uint8Array(4 * c), 1, 1, 4);
     const f = compileQuad(createMarchMaterial(createFogUniforms(), {depth: new THREE.DepthTexture(4, 4), noise: new THREE.Data3DTexture(new Uint8Array(64), 2, 2, 4), density: arr(4), air: arr(1), vis: arr(1), shadow: null}, {steps: 8}), 'glsl').fragment;
     const sampler3D = [...f.matchAll(/uniform (?:highp )?sampler3D (\w+);/g)].map(m => m[1]);
     const fetches = sampler3D.reduce((n, name) => n + (f.match(new RegExp(`texelFetch\\( ${name},`, 'g')) ?? []).length, 0);
-    expect(fetches).toBe(2);
+    expect(fetches).toBe(3);
     const loops = [...f.matchAll(/for \( int (\w+) = 0; \1 < (\w+); \1 \+\+ \)/g)].map(m => m[2]);
     expect(loops).toEqual(['8', '4', '8', '4']); // steps; smoke emitters + their puffs; scatter lights (no per-slot loop)
   });

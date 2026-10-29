@@ -15,7 +15,7 @@
 // iteration-05 answers (ceilings only matter where a cell sets one).
 
 import {CELL, FLOOR, SOLID, VOID, type Grid, type Ramp} from '../gen/grid';
-import {ceilNearCell, levelsOf, Levels, type Level, type LevelLink, type RailRun} from '../gen/levels';
+import {ceilNearCell, levelsOf, Levels, type Level, type LevelLink, type RailRun, type VolumeColumn} from '../gen/levels';
 import {stepTop} from '../gen/grid';
 import type {PropPlacement} from '../gen/props';
 
@@ -101,20 +101,43 @@ export class StaticQuery {
     const g0 = this.grid;
     if (!g0.inBounds(cx, cy)) return -1;
     const i = cy * g0.w + cx;
-    const fb = this.fb, cb = this.cb;
     let n = 0;
-    for (const g of this.grids) {
+    // task office-seamless (lane LIFT): the moving elevator cab (a Levels dynamic volume) hides / gates grid bands here
+    const vc = this.levels.volumeColumn(i);
+    for (let gi = 0; gi < this.grids.length; gi++) {
+      const g = this.grids[gi];
       if (!isOpen(g, i)) continue;
       let f: number;
       if (g.rampIdx[i] >= 0) { const R = g.ramps[g.rampIdx[i]]; f = stepTop(R, R.axis === 'x' ? x : z); }
       else f = g.cells[i] === VOID && g.floor[i] === 0 ? this.trenchY : g.floorOf(i);
-      const c = ceilNearCell(g, i, cx, cy, x, z);
-      // insertion by floor
-      let k = n++;
-      while (k > 0 && fb[k - 1] > f) { fb[k] = fb[k - 1]; cb[k] = cb[k - 1]; k--; }
-      fb[k] = f; cb[k] = c;
+      if (vc && this.levels.gridBandHidden(i, gi, f)) continue;
+      n = this.insertBand(n, f, ceilNearCell(g, i, cx, cy, x, z));
     }
+    if (vc) for (const c of vc) if (this.levels.volumeBandOf(c, this.vb)) n = this.insertBand(n, this.vb.floor, this.vb.ceil);
     return n;
+  }
+  private readonly vb = {floor: 0, ceil: 0};
+
+  /** Insertion by floor into fb / cb; returns the new count. */
+  private insertBand(n: number, f: number, c: number): number {
+    const fb = this.fb, cb = this.cb;
+    let k = n;
+    while (k > 0 && fb[k - 1] > f) { fb[k] = fb[k - 1]; cb[k] = cb[k - 1]; k--; }
+    fb[k] = f; cb[k] = c;
+    return n + 1;
+  }
+
+  /**
+   * Lane LIFT: the dynamic-volume role of column (cx, cy) for the static boxes — 'cab' (interior: no static box, the cab's
+   * kinematic floor / ceiling carry bodies), 'gate' (the doorway through the shaft wall: solid except an opening at each
+   * stop, filled while that landing's doors are shut), or null.
+   */
+  volumeRole(cx: number, cy: number): {role: 'cab' | 'gate'; col: VolumeColumn} | null {
+    if (!this.grid.inBounds(cx, cy)) return null;
+    const vc = this.levels.volumeColumn(cy * this.grid.w + cx);
+    if (!vc || !vc.length) return null;
+    const gate = vc.find(c => c.gate);
+    return gate ? {role: 'gate', col: gate} : {role: 'cab', col: vc[0]};
   }
 
   /** Index of the band holding height y (with tolerance), else -1. */

@@ -1,6 +1,7 @@
-// Iteration 16 (lane TOWER): the destroyed city seen from the office tower windows — SCENERY ONLY (never walkable;
-// the windows are solid). Layers, by real geometry so parallax is true:
-//  - street level at groundY = storey floor - floorHeight * (floor - 1) (the lobby is at street level): a ground
+// Iteration 16 (lane TOWER) / task office-seamless (lane LIFT): the destroyed city seen from the office tower windows —
+// SCENERY ONLY (never walkable; the windows are solid). Built ONCE for the continuous Office Space world in real world
+// coordinates: from floor 8 the street really is ~31 m below (true height and parallax; no per-floor offsets). Layers:
+//  - street level at groundY = layout.office.groundY (the lobby floor: the lobby is at street level): a ground
 //    "city map" (ring road around the tower, cross streets, pavements, scorched lots) with the tower footprint cut out;
 //  - near street props on the ring road / cross streets: wrecked cars (C1), buses (C5), rubble piles (C2) — lane ASSETS'
 //    Meshy models via officeAssets when delivered, simple procedural stand-ins otherwise;
@@ -696,6 +697,11 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
   tris += triCount(domeGeo);
   root.traverse(o => { o.castShadow = false; o.receiveShadow = false; if (o !== dome) o.renderOrder = 5; });
   return {root, dome, geometries, instanced, used: {props: usedProps, heroes: usedHeroes}, tris};
+}
+
+/** The skyline band's horizon dip follows the eye's height above the street (uniform only; per frame while riding). */
+export function setExteriorEye(eyeAbove: number): void {
+  EXT_U.skyline.value.z = -0.035 - Math.min(0.06, Math.max(0, eyeAbove) / 600);
 }
 
 /** Footprint uniform (the station fog applies inside it). */

@@ -1,7 +1,7 @@
-// Iteration 16 (lane TOWER): shared pieces of the office tower runtime — the normalised `layout.office` contract
-// (design.md OfficeSectionInfo, WORLD-GEN), section names, the 2D body constraints the elevator doors / windows use
-// (side-memory gates: no tunnelling through a thin door at sprint speed), ray-box targeting and small helpers.
-// Pure (no three.js scene work) so the logic is unit-testable.
+// Office tower runtime shared pieces (task office-seamless-20261029, lane LIFT; iteration 16 lane TOWER before it): the
+// normalised `layout.office` v2 contract (gen/stationTypes.ts OfficeTowerInfo, lane GEN — ONE continuous Office Space
+// world: levels[0] station, levels[1] lobby, levels[2..8] office floors, levelId === floor), the doorway gate geometry the
+// elevator uses, window push-out, ray-box targeting and small helpers. Pure (no three.js scene work): unit-testable.
 
 import {CELL, SOLID, type Grid} from '../gen/grid';
 
@@ -9,55 +9,66 @@ export type Side = 'N' | 'S' | 'E' | 'W';
 export interface Rect2 { x0: number; z0: number; x1: number; z1: number }
 export interface P3 { x: number; y: number; z: number }
 
-export interface ElevatorInfo {
-  /** Cab interior (world metres, x0 < x1, z0 < z1). */
-  cab: Rect2;
-  doorSide: Side;
-  /** Centre of the door opening ON the cab edge of doorSide, and its clear width. */
-  door: {x: number; z: number; width: number};
-  /** Floor panel inside the cab / call panel outside (absolute y). */
-  panel: P3;
+/** One elevator stop (cab floor level with a storey). */
+export interface StopInfo {
+  floor: number;
+  /** layout.levels index of the storey (=== floor in the tower). */
+  levelId: number;
+  /** Cab floor at this stop (absolute y) = the storey's baseY. */
+  y: number;
+  /** Landing strip area id on that storey (-1 unknown). */
+  area: number;
+  label: string;
+  /** Call panel on the landing wall beside the door (absolute y). */
   callPanel: P3;
-  /** Cab floor (absolute y). */
-  floorY: number;
+  /** Walkable stand point just outside the door. */
+  landing: {x: number; z: number};
 }
 
-export interface StairDoorInfo { dir: 'up' | 'down'; x: number; z: number; yaw: number; toFloor: number }
-/** kind 'entrance' = the lobby's street doors (sill 0): boarded up (scenery only; the wall cells are solid). */
-export interface WindowSpan extends Rect2 { side: Side; sill: number; head: number; kind?: 'window' | 'entrance' }
+export interface ElevatorInfo {
+  /** Cab interior footprint (world m; SOLID shaft cells on every storey grid — the cab is a Levels dynamic volume). */
+  cab: Rect2;
+  /** Shaft outer box incl. its walls. */
+  shaft: Rect2;
+  doorSide: Side;
+  /** Opening centre ON the cab edge of doorSide and its clear width (same X/Z at every stop). */
+  door: {x: number; z: number; width: number};
+  /** Interior clear height of the cab (m). */
+  cabHeight: number;
+  /** Floor panel inside the cab (door wall's inner face); dy above the cab floor. */
+  panel: {x: number; dy: number; z: number};
+  /** Stops, bottom-up. */
+  stops: StopInfo[];
+}
 
-/** The office part of a section layout, normalised (TOWER's view of design.md OfficeSectionInfo). */
+export interface StoreyInfo { floor: number; levelId: number; baseY: number; label: string; clear: number }
+
+/** kind 'entrance' = the lobby's street doors (sill 0): boarded up (scenery only; the wall cells are solid). */
+export interface WindowSpan extends Rect2 {
+  side: Side;
+  /** Sill / head above `baseY`. */
+  sill: number;
+  head: number;
+  kind?: 'window' | 'entrance';
+  /** Storey (layout.levels index) and its floor (absolute y). */
+  level: number;
+  baseY: number;
+}
+
+/** LIFT's view of layout.office (v2, normalised). */
 export interface TowerInfo {
-  /** 1 = lobby (street section), 2..N = office floors. */
-  floor: number;
   floors: number[];
   floorHeight: number;
-  /** layout.levels index of the office storey. */
-  levelId: number;
-  /** Floor (absolute y) of the office storey. */
-  baseY: number;
+  /** Street / lobby floor (absolute y): the exterior ground. */
+  groundY: number;
+  storeys: StoreyInfo[];
   elevator: ElevatorInfo | null;
-  stairDoors: StairDoorInfo[];
   windows: WindowSpan[];
   /** Tower footprint (outer wall faces). */
   exterior: Rect2;
-  /** Street level (absolute y) seen from this storey: baseY - floorHeight * (floor - 1). */
-  groundY: number;
+  stairs: {well: Rect2 | null; landings: {floor: number; levelId: number; x: number; z: number}[]};
   seed: number;
-  /** Tower name (signs / HUD), when WORLD-GEN provides one. */
   name: string;
-}
-
-/** Office section name of a tower floor (floor 1 = the lobby, the upper storey of the 'street' section). */
-export function sectionForFloor(floor: number): string {
-  return floor <= 1 ? 'street' : `floor-${floor}`;
-}
-
-/** Tower floor of an office section name (null for anything else). */
-export function floorOfSection(section: string): number | null {
-  if (section === 'street') return 1;
-  const m = /^floor-(\d+)$/.exec(section);
-  return m ? Number(m[1]) : null;
 }
 
 /** Floor label for panels / lists ("L" for the lobby). */
@@ -92,48 +103,81 @@ export interface TowerLayoutLike {
   office?: unknown;
 }
 
-/** Reads and validates `layout.office` (null when the section is not part of the office tower). */
+/** Reads and validates `layout.office` v2 (null when the layout has no office tower: the Subway). */
 export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
   const o = layout.office as Record<string, unknown> | undefined;
   if (!o || typeof o !== 'object') return null;
-  const floor = Math.max(1, Math.round(num(o.floor, 1)));
-  const floors = Array.isArray(o.floors) && o.floors.length ? (o.floors as unknown[]).map(f => Math.round(num(f, 1))).filter((f, i, a) => a.indexOf(f) === i).sort((a, b) => a - b) : [1, floor];
-  if (!floors.includes(floor)) floors.push(floor), floors.sort((a, b) => a - b);
-  const levelId = Math.max(0, Math.round(num(o.levelId, 0)));
-  const lv = layout.levels?.find(l => l.id === levelId) ?? layout.levels?.[levelId];
-  const baseY = num(o.baseY, lv ? lv.baseY : 0);
-  const floorHeight = Math.max(2.5, num(o.floorHeight, 3.8));
+  const lv = (id: number) => layout.levels?.find(l => l.id === id) ?? layout.levels?.[id];
+  const floorHeight = Math.max(2.5, num(o.floorHeight, 4.4));
+  // storeys: the contract's list, else one per floor on layout.levels[floor]
+  const rawFloors = Array.isArray(o.floors) && o.floors.length ? (o.floors as unknown[]).map(f => Math.round(num(f, 1))) : [];
+  let storeys: StoreyInfo[] = Array.isArray(o.storeys) ? (o.storeys as Record<string, unknown>[]).flatMap(s => {
+    if (!s || typeof s !== 'object') return [];
+    const floor = Math.round(num(s.floor, NaN));
+    if (!Number.isFinite(floor)) return [];
+    const levelId = Math.round(num(s.levelId, floor));
+    const baseY = num(s.baseY, lv(levelId)?.baseY ?? 0);
+    return [{floor, levelId, baseY, label: typeof s.label === 'string' ? s.label : floorLabel(floor), clear: num(s.clear, floor <= 1 ? 4 : 2.9)}];
+  }) : [];
+  if (!storeys.length) {
+    const fl = rawFloors.length ? rawFloors : (layout.levels ?? []).map(l => l.id).filter(id => id >= 1);
+    storeys = fl.map(f => ({floor: f, levelId: f, baseY: lv(f)?.baseY ?? 0, label: floorLabel(f), clear: f <= 1 ? 4 : 2.9}));
+  }
+  storeys.sort((a, b) => a.baseY - b.baseY);
+  const floors = (rawFloors.length ? rawFloors : storeys.map(s => s.floor)).filter((f, i, a) => a.indexOf(f) === i).sort((a, b) => a - b);
+  const storeyOf = (floor: number) => storeys.find(s => s.floor === floor);
+  const groundY = num(o.groundY, storeys[0]?.baseY ?? 0);
+  // elevator
   let elevator: ElevatorInfo | null = null;
   const e = o.elevator as Record<string, unknown> | undefined;
   const cab = e ? normRect(e.cab) : null;
   if (e && cab && isSide(e.doorSide)) {
-    const d = (e.door ?? {}) as Record<string, unknown>;
-    const cx = (cab.x0 + cab.x1) / 2, cz = (cab.z0 + cab.z1) / 2;
-    const floorY = num(e.floorY, baseY);
     const [nx, nz] = sideNormal(e.doorSide);
+    const cx = (cab.x0 + cab.x1) / 2, cz = (cab.z0 + cab.z1) / 2;
     const edge = {x: nx > 0 ? cab.x1 : nx < 0 ? cab.x0 : cx, z: nz > 0 ? cab.z1 : nz < 0 ? cab.z0 : cz};
-    elevator = {
-      cab, doorSide: e.doorSide, floorY,
-      door: {x: num(d.x, edge.x), z: num(d.z, edge.z), width: Math.max(0.8, num(d.width, 1.1))},
-      panel: p3(e.panel, {x: cx, y: floorY + 1.2, z: cz}),
-      callPanel: p3(e.callPanel, {x: edge.x + nx * 0.6, y: floorY + 1.2, z: edge.z + nz * 0.6}),
-    };
+    const d = (e.door ?? {}) as Record<string, unknown>;
+    const door = {x: num(d.x, edge.x), z: num(d.z, edge.z), width: Math.max(0.8, num(d.width, 1.5))};
+    const shaft = normRect(e.shaft) ?? {x0: cab.x0 - CELL, z0: cab.z0 - CELL, x1: cab.x1 + CELL, z1: cab.z1 + CELL};
+    const pn = (e.panel ?? {}) as Record<string, unknown>;
+    const panel = {x: num(pn.x, door.x + (nz !== 0 ? door.width / 2 + 0.3 : 0)), dy: num(pn.dy, 1.2), z: num(pn.z, door.z + (nx !== 0 ? door.width / 2 + 0.3 : 0))};
+    const depth = Math.max(0.1, nx > 0 ? shaft.x1 - cab.x1 : nx < 0 ? cab.x0 - shaft.x0 : nz > 0 ? shaft.z1 - cab.z1 : cab.z0 - shaft.z0);
+    const rawStops = Array.isArray(e.stops) && e.stops.length ? (e.stops as Record<string, unknown>[]) : storeys.map(s => ({floor: s.floor} as Record<string, unknown>));
+    const stops: StopInfo[] = rawStops.flatMap(s => {
+      if (!s || typeof s !== 'object') return [];
+      const floor = Math.round(num(s.floor, NaN));
+      if (!Number.isFinite(floor)) return [];
+      const st = storeyOf(floor);
+      const levelId = Math.round(num(s.levelId, st?.levelId ?? floor));
+      const y = num(s.y, st?.baseY ?? lv(levelId)?.baseY ?? 0);
+      const out = {x: door.x + nx * (depth + 1), z: door.z + nz * (depth + 1)};
+      return [{
+        floor, levelId, y, area: Math.round(num(s.area, -1)), label: st?.label ?? floorLabel(floor),
+        callPanel: p3(s.callPanel, {x: door.x + nx * depth + (nz !== 0 ? door.width / 2 + 0.35 : 0), y: y + 1.2, z: door.z + nz * depth + (nx !== 0 ? door.width / 2 + 0.35 : 0)}),
+        landing: {x: num((s.landing as Record<string, unknown> | undefined)?.x, out.x), z: num((s.landing as Record<string, unknown> | undefined)?.z, out.z)},
+      }];
+    }).sort((a, b) => a.y - b.y);
+    if (stops.length) elevator = {cab, shaft, doorSide: e.doorSide, door, cabHeight: Math.max(2.2, num(e.cabHeight, 2.6)), panel, stops};
   }
-  const stairDoors: StairDoorInfo[] = Array.isArray(o.stairDoors) ? (o.stairDoors as Record<string, unknown>[]).flatMap(s => {
-    if (!s || (s.dir !== 'up' && s.dir !== 'down')) return [];
-    const x = num(s.x, NaN), z = num(s.z, NaN), toFloor = Math.round(num(s.toFloor, NaN));
-    if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(toFloor)) return [];
-    return [{dir: s.dir, x, z, yaw: num(s.yaw, 0), toFloor}];
-  }) : [];
+  // windows: every span of every storey (sill / head relative to its own storey floor)
   const windows: WindowSpan[] = Array.isArray(o.windows) ? (o.windows as Record<string, unknown>[]).flatMap(w => {
     const r = normRect(w);
     if (!r || !isSide(w.side)) return [];
     const sill = num(w.sill, 0.9), head = num(w.head, 2.4);
     if (head <= sill + 0.2) return [];
-    return [{...r, side: w.side, sill, head, kind: w.kind === 'entrance' ? 'entrance' as const : 'window' as const}];
+    const level = Math.round(num(w.level, storeys[0]?.levelId ?? 0));
+    const baseY = num(w.baseY, lv(level)?.baseY ?? storeys.find(s => s.levelId === level)?.baseY ?? 0);
+    return [{...r, side: w.side, sill, head, kind: w.kind === 'entrance' ? 'entrance' as const : 'window' as const, level, baseY}];
   }) : [];
   const exterior = normRect(o.exterior) ?? boundsOf(layout.grid, windows, cab);
-  return {floor, floors, floorHeight, levelId, baseY, elevator, stairDoors, windows, exterior, groundY: baseY - floorHeight * (floor - 1), seed: layout.seed >>> 0, name: typeof o.name === 'string' ? o.name : ''};
+  const st = (o.stairs ?? {}) as Record<string, unknown>;
+  const landings = Array.isArray(st.landings) ? (st.landings as Record<string, unknown>[]).flatMap(l => {
+    const floor = Math.round(num(l?.floor, NaN)), x = num(l?.x, NaN), z = num(l?.z, NaN);
+    return Number.isFinite(floor) && Number.isFinite(x) && Number.isFinite(z) ? [{floor, levelId: Math.round(num(l.levelId, floor)), x, z}] : [];
+  }) : [];
+  return {
+    floors, floorHeight, groundY, storeys, elevator, windows, exterior, stairs: {well: normRect(st.well), landings},
+    seed: layout.seed >>> 0, name: typeof o.name === 'string' ? o.name : '',
+  };
 }
 
 /** Fallback footprint: the window spans' (or the grid's) bounds. */
@@ -147,9 +191,9 @@ function boundsOf(grid: Grid, windows: readonly WindowSpan[], cab: Rect2 | null)
   return {x0: 0, z0: 0, x1: grid.w * CELL, z1: grid.h * CELL};
 }
 
-/** Window y range (absolute): sill / head are heights above the storey floor. */
-export function windowYs(w: WindowSpan, baseY: number): [number, number] {
-  return [baseY + w.sill, baseY + w.head];
+/** Window y range (absolute): sill / head above the span's own storey floor. */
+export function windowYs(w: WindowSpan): [number, number] {
+  return [w.baseY + w.sill, w.baseY + w.head];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -161,28 +205,8 @@ export function solidAt(g: Grid, x: number, z: number): boolean {
   return !g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] === SOLID;
 }
 
-/**
- * The room-facing normal of a wall point (x, z) (e.g. a panel or a door on a wall face): the axis direction whose
- * probe at `probe` m is solid while the opposite one is open, preferring the one with the nearest wall. null when
- * the point is not next to a wall.
- */
-export function wallNormalAt(g: Grid, x: number, z: number, probe = 0.35): [number, number] | null {
-  const dirs: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  let best: [number, number] | null = null, bestD = Infinity;
-  for (const [dx, dz] of dirs) {
-    for (let k = 1; k <= 4; k++) {
-      const d = probe * k / 4;
-      if (solidAt(g, x + dx * d, z + dz * d)) {
-        if (d < bestD && !solidAt(g, x - dx * 0.2, z - dz * 0.2)) { bestD = d; best = [-dx || 0, -dz || 0]; }
-        break;
-      }
-    }
-  }
-  return best;
-}
-
 // ---------------------------------------------------------------------------------------------
-// Constraints (applied AFTER a body's own grid/prop collision in a frame hook)
+// The elevator doorway
 
 /** A doorway gate: the cab-side plane at s = 0 (s = distance along the outward normal), the landing plane at s = depth. */
 export interface DoorGate {
@@ -195,51 +219,24 @@ export interface DoorGate {
   depth: number;
 }
 
-export type GateSide = 'in' | 'out';
-
 /** Local gate coordinates of (x, z): s along the normal, l along the opening. */
 export function gateLocal(g: DoorGate, x: number, z: number): [number, number] {
   const dx = x - g.cx, dz = z - g.cz;
   return [dx * g.nx + dz * g.nz, dx * g.tx + dz * g.tz];
 }
 
-export function gateSideOf(g: DoorGate, x: number, z: number): GateSide {
-  return gateLocal(g, x, z)[0] < g.depth * 0.5 ? 'in' : 'out';
+/** World (x, z) of gate-local (s, l). */
+export function gateWorld(g: DoorGate, s: number, l: number): [number, number] {
+  return [g.cx + g.nx * s + g.tx * l, g.cz + g.nz * s + g.tz * l];
 }
-
-/** Margin (m) a closed gate keeps a body clear of the door planes (so a pushed-back body is not "in the doorway"). */
-export const GATE_CLEAR = 0.02;
 
 /**
  * A body (radius r) stands in the doorway: its centre within 0.4 r of the door planes or between them (a body merely
- * touching the doors from inside the cab does not hold them; the gate pushes it clear as the gap narrows).
+ * touching the doors from inside the cab does not hold them).
  */
 export function inDoorway(g: DoorGate, x: number, z: number, r: number): boolean {
   const [s, l] = gateLocal(g, x, z);
   return s > -r * 0.4 && s < g.depth + r * 0.4 && Math.abs(l) < g.hw;
-}
-
-/**
- * Keep a body on its side of a (partly) closed doorway. `open` = 0 closed … 1 fully open (the gap is centred).
- * `side` = the side the body was on before this move. Returns the corrected position, the side after the move and
- * whether it was pushed (moving into the doors).
- */
-export function constrainGate(g: DoorGate, open: number, x: number, z: number, r: number, side: GateSide): {x: number; z: number; side: GateSide; pushed: boolean} {
-  let [s, l] = gateLocal(g, x, z);
-  const halfGap = g.hw * Math.max(0, Math.min(1, open)) - r;
-  const inBand = s > -r && s < g.depth + r;
-  let pushed = false;
-  if (Math.abs(l) < g.hw + r && inBand) {
-    if (halfGap >= 0.02) {
-      // the gap admits the body: keep it between the door edges (the doors re-open long before this squeezes)
-      if (Math.abs(l) > halfGap && s > -r * 0.5 && s < g.depth + r * 0.5) { l = Math.sign(l) * halfGap; pushed = true; }
-    } else if (side === 'in') {
-      if (s > -r - GATE_CLEAR) { s = -r - GATE_CLEAR; pushed = true; }
-    } else if (s < g.depth + r + GATE_CLEAR) { s = g.depth + r + GATE_CLEAR; pushed = true; }
-  }
-  const nx = g.cx + g.nx * s + g.tx * l, nz = g.cz + g.nz * s + g.tz * l;
-  const out = s < -r * 0.25 ? 'in' : s > g.depth + r * 0.25 ? 'out' : side;
-  return {x: nx, z: nz, side: out, pushed};
 }
 
 /** Box (x, z) push-out of a circle, axis-aligned (core/physics.ts pushOutOfBox semantics, with a preferred side). */
@@ -290,6 +287,11 @@ export function wallBox(p: P3, n: [number, number], w: number, h: number, d: num
   const hx = Math.abs(nx) > 0.5 ? d / 2 : w / 2, hz = Math.abs(nx) > 0.5 ? w / 2 : d / 2;
   const cx = p.x + nx * d / 2, cz = p.z + nz * d / 2;
   return {min: {x: cx - hx, y: p.y - h / 2, z: cz - hz}, max: {x: cx + hx, y: p.y + h / 2, z: cz + hz}};
+}
+
+/** A box shifted up by dy (the cab panel: planned relative to the cab floor). */
+export function liftBox(b: Box3Like, dy: number): Box3Like {
+  return {min: {x: b.min.x, y: b.min.y + dy, z: b.min.z}, max: {x: b.max.x, y: b.max.y + dy, z: b.max.z}};
 }
 
 // ---------------------------------------------------------------------------------------------

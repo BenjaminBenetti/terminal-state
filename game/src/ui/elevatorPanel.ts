@@ -1,6 +1,6 @@
-// Iteration 16 (lane TOWER): the elevator floor list / stairwell choice (a small in-world list: the world keeps
-// running, pointer lock stays) and the short stairwell fade.
-// Keyboard only works: 1-9 pick a floor directly (1 = lobby), arrows / mouse wheel move the highlight, E / Enter /
+// Iteration 16 (lane TOWER) / task office-seamless (lane LIFT): the elevator floor list (a small in-world list: the world
+// keeps running, pointer lock stays; choosing a floor only queues it — the cab then really travels there).
+// Keyboard only works: 1-8 pick a floor directly (1 = lobby), arrows / mouse wheel move the highlight, E / Enter /
 // left click confirm, Esc / Tab / Backspace / right click close. While open, those keys are captured (window capture
 // phase) so they never reach the game's Input (no weapon switch, no inventory). Items are also clickable buttons when
 // a cursor is visible. Logic (ChoiceModel) is DOM-free for tests.
@@ -11,6 +11,8 @@ export interface ChoiceItem {
   /** Direct hotkey digit (e.g. the floor number). */
   key?: number;
   current?: boolean;
+  /** Already requested (its button is lit). */
+  lit?: boolean;
   disabled?: boolean;
 }
 
@@ -158,7 +160,7 @@ export class TowerChoice {
     m.items.forEach((it, i) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `tc-item${i === m.index ? ' sel' : ''}${it.current ? ' cur' : ''}`;
+      b.className = `tc-item${i === m.index ? ' sel' : ''}${it.current ? ' cur' : ''}${it.lit ? ' lit' : ''}`;
       b.disabled = !!it.disabled;
       b.textContent = it.label;
       b.addEventListener('click', ev => { ev.stopPropagation(); const cb = this.onPick; this.close(); cb?.(it.id); });
@@ -166,36 +168,7 @@ export class TowerChoice {
     });
     el.appendChild(list);
     const hint = document.createElement('div'); hint.className = 'tc-hint';
-    hint.textContent = '1–9 or ↑↓ + E / click · Esc closes';
+    hint.textContent = '1–8 (1 = L) or ↑↓ + E / click · Esc closes';
     el.appendChild(hint);
   }
-}
-
-/** Full-screen fade for the stairwell (CSS opacity transition). */
-export class TowerFade {
-  private el: HTMLElement | null = null;
-  private ensure(): HTMLElement | null {
-    if (this.el || !hasDom()) return this.el;
-    const el = document.createElement('div');
-    el.id = 'tower-fade';
-    (document.getElementById('app') ?? document.body).appendChild(el);
-    this.el = el;
-    return el;
-  }
-  /** Fade to black (resolves after `ms`). */
-  out(ms = 320): Promise<void> {
-    const el = this.ensure();
-    if (!el) return Promise.resolve();
-    el.style.transitionDuration = `${ms}ms`;
-    el.classList.add('on');
-    return new Promise(r => setTimeout(r, ms));
-  }
-  /** Fade back in. */
-  in(ms = 520): void {
-    const el = this.ensure();
-    if (!el) return;
-    el.style.transitionDuration = `${ms}ms`;
-    el.classList.remove('on');
-  }
-  get dark(): boolean { return !!this.el?.classList.contains('on'); }
 }

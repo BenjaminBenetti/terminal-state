@@ -635,19 +635,40 @@ export const MIN_OVERLAP_M2 = 150;
  * landings ≥ 1.2 m deep and ≥ 1.8 m wide on the right levels; railings on every well edge; nothing
  * placed in a stair run or over an aperture; every walkable cell on every level reachable.
  */
-export function levelIssues(layout: StationLayout, dist?: Int32Array[]): string[] {
+/**
+ * Task office-seamless-20261029 (ENGINE): what `levelIssues` requires of a stack. Defaults = the Subway station rules (3
+ * levels; upper / lower decks overlapping the main level; 0.15-0.18 m risers; flights >= 1.8 m wide); a tower layout
+ * (`layout.office`) defaults to its own: any storey count >= 2, no deck-overlap rule, the scissor stair's 0.19 m code-limit
+ * risers and 1.5 m lanes. Every other check runs over every storey either way.
+ */
+export interface LevelRules {
+  minLevels: number;
+  /** Level roles whose overlap with the main level must reach MIN_OVERLAP_M2. */
+  overlapRoles: readonly Level['role'][];
+  maxRiser: number;
+  minFlightWidth: number;
+}
+export const SUBWAY_LEVEL_RULES: LevelRules = {minLevels: 3, overlapRoles: ['upper', 'lower'], maxRiser: 0.18, minFlightWidth: 1.8};
+export const TOWER_LEVEL_RULES: LevelRules = {minLevels: 2, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
+
+export function levelIssues(layout: StationLayout, dist?: Int32Array[], rules?: Partial<LevelRules>): string[] {
   const issues: string[] = [];
   const levels = layout.levels;
   if (!levels?.length || levels[0].grid !== layout.grid) return ['levels[0] is not the main grid'];
-  if (levels.length < 3) issues.push(`only ${levels.length} levels`);
+  const R: LevelRules = {...((layout as {office?: unknown}).office ? TOWER_LEVEL_RULES : SUBWAY_LEVEL_RULES), ...rules};
+  if (levels.length < R.minLevels) issues.push(`only ${levels.length} levels`);
   const g0 = layout.grid;
   for (const L of levels) if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);
   for (const L of levels) if (L.grid.ramps !== g0.ramps && L.grid.ramps.some((r, i) => g0.ramps[i] !== r)) issues.push(`level ${L.id} ramp list differs`);
   if (levels.length < 2) return issues;
-  for (const lv of [LEVEL_UPPER, LEVEL_LOWER]) {
-    if (!levels[lv]) continue;
-    const ov = overlapArea(layout, lv);
-    if (ov < MIN_OVERLAP_M2) issues.push(`level ${lv} overlaps the main level by only ${ov.toFixed(0)} m²`);
+  // Every storey above / below the main level: deck overlap (Subway roles) and a stair link.
+  for (const L of levels) {
+    const lv = L.id;
+    if (!lv) continue;
+    if (R.overlapRoles.includes(L.role)) {
+      const ov = overlapArea(layout, lv);
+      if (ov < MIN_OVERLAP_M2) issues.push(`level ${lv} overlaps the main level by only ${ov.toFixed(0)} m²`);
+    }
     if (!layout.levelLinks.some(l => l.kind === 'stairs' && (l.upper === lv || l.lower === lv))) issues.push(`level ${lv} has no stairs`);
   }
   // Bands: slabs between stacked bands of different levels, headroom on walkable bands.
@@ -683,8 +704,8 @@ export function levelIssues(layout: StationLayout, dist?: Int32Array[]): string[
   }
   // Flights: spec, landings, headroom.
   for (const f of layout.traversal.stairs) {
-    if (f.riser < 0.15 || f.riser > 0.18 + 1e-6 || Math.abs(f.tread - STAIR.tread) > 1e-6 || f.risers > STAIR.maxRisers) issues.push(`flight ${f.id} off spec`);
-    if (Math.abs(f.a1 - f.a0) < 1.8 - 1e-6) issues.push(`flight ${f.id} narrower than 1.8 m`);
+    if (f.riser < 0.15 || f.riser > R.maxRiser + 1e-6 || Math.abs(f.tread - STAIR.tread) > 1e-6 || f.risers > STAIR.maxRisers) issues.push(`flight ${f.id} off spec`);
+    if (Math.abs(f.a1 - f.a0) < R.minFlightWidth - 1e-6) issues.push(`flight ${f.id} narrower than ${R.minFlightWidth} m`);
     const r = g0.ramps[f.ramp];
     if (r.headroom < FLIGHT_HEADROOM) issues.push(`flight ${f.id} headroom ${r.headroom}`);
     for (const [name, p] of [['top', f.top], ['bottom', f.bottom]] as const) {

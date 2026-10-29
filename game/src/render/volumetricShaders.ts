@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import {NodeMaterial, type Node} from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import {lfSlotAt, lightFieldSample} from '../world/lightFieldNode';
+import {MAX_SLOTS} from '../world/lightField';
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
 import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 
@@ -56,6 +57,8 @@ export function createFogUniforms() {
     cover: uniform(V4()), peak: uniform(2.3), pocketDense: uniform(0.55), detail: uniform(0.4), ground: uniform(V3()), warp: uniform(2),
     ext: uniform(V3()), phase: uniform(V3()),
     mapXform: uniform(new THREE.Vector4(0, 0, 1, 1)), mapFloor: uniform(new THREE.Vector2(0, 1)), mapSlots: uniform(1),
+    // Task office-seamless-20261029: per density-map layer [y0, yRange] of its floor heights (render/atmosphere.ts densityLayerRange)
+    mapFloors: uniformArray(arr4(MAX_SLOTS), 'vec4'),
     // flashlight
     flashPos: uniform(V3()), flashDir: uniform(new THREE.Vector3(0, 0, -1)), flashCone: uniform(new THREE.Vector2(1, 1)),
     flashColor: uniform(V3()), flashRange: uniform(new THREE.Vector2(30, 1.2)), shadowMatrix: uniform(M4()), shadowBias: uniform(0), shadowOn: uniform(0),
@@ -189,7 +192,8 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
       const muv = n(p).xz.sub(n(u.mapXform).xy).mul(n(u.mapXform).zw).toVar();
       const m = n(densT.sample(muv).depth(layer).level(0)).toVar();
       const mult = m.r.mul(DENSITY_MAP_RANGE).toVar();
-      const h = n(p).y.sub(n(u.mapFloor).x.add(m.g.mul(n(u.mapFloor).y))).toVar();
+      const mf = n(u.mapFloors).element(layer).toVar();
+      const h = n(p).y.sub(n(mf).x.add(m.g.mul(n(mf).y))).toVar();
       const hf = clamp(exp(n(u.heightFalloff).negate().mul(h.sub(u.refHeight))), 0.25, 2.5);
       const base0 = n(u.density).mul(mult).toVar();
       const D = n(noiseT.sample(n(p).mul(sc.d).add(u.offDet)).level(0)).toVar();

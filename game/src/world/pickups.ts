@@ -427,6 +427,22 @@ export class PickupManager {
   }
 
   /**
+   * Task office-seamless (lane LIFT): loose items lying inside the moving elevator cab ride its dy (anchor + model). A
+   * pickup that is simulating as a physics body is carried with its body and re-synced from it right after.
+   */
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number {
+    let n = 0;
+    for (const p of this.list) {
+      if (!inside(p.x, p.y, p.z)) continue;
+      p.y += dy;
+      p.obj.position.y += dy;
+      p.obj.updateMatrix();
+      n++;
+    }
+    return n;
+  }
+
+  /**
    * Best pickup the player is looking at (or standing over), within reach and in sight.
    * Iteration 08 (Lane B): with the station Levels the sight test is 3D from the eye to the item
    * (a slab / stair flight between them hides it; 15 cm slack for items lying on stair treads).

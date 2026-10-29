@@ -1,92 +1,121 @@
-// Iteration 16 (lane TOWER): the office tower runtime — elevator state machine (call, open, close with the passenger,
-// exactly one ride request, arrival opens, doorway obstruction re-opens, enemies never ride, never trapped), door
-// collision (no tunnelling at sprint speed), stairwell door travel requests (2-choice list, refusal), window collision
-// boxes over every span (a broken pane is no way out), exterior ground offset per floor and scenery placement, build /
-// teardown leaves nothing behind (deferred InstancedMesh release, camera far restored), and the warm-up discovers the
-// cab / doors / glass / exterior (render/warmup.ts planWarmup, including a hidden exterior through the 'tower' pool).
-// No GPU / browser: a fake Game host and a hand-made one-storey office floor grid.
+// Task office-seamless-20261029 (lane LIFT): the physically travelling elevator of the ONE continuous Office Space world.
+// A synthetic 9-storey tower (station hall at 0, lobby 5.6, floors 2..8 at +4.4 each, one SOLID shaft through every tower
+// storey) and a fake Game host stepping dt:
+//  - ElevatorLogic: a call from floor 1 to 5 moves the cab continuously and monotonically within the speed / acceleration
+//    limits and stops EXACTLY at stop.y; collective (SCAN) service order and on-the-way stops; door interlock (never moving
+//    with the doors open, landing doors shut when the cab is away), obstruction re-open, an enemy inside holds the doors;
+//  - Levels dynamic volume: support / collision / headroom / raycast / sight inside and outside the cab, through an open
+//    vs a shut doorway; with no volume every query is unchanged (Subway);
+//  - the runtime with the REAL Player body: walk in, choose 5, ride (carried by the cab's dy: never below its floor, never
+//    through its ceiling, y continuous), walk out on floor 5 — and the host's travel / setState are NEVER called;
+//  - riders: a pickup and a resting flare (real PickupManager / FlareSystem / PhysicsSystem) ride along;
+//  - per-storey windows, the exterior built once at street level (hidden in the station), the warm-up discovers every mesh,
+//    teardown leaves nothing, TSL builds on both backends, QA hooks.
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
-import {FLOOR, Grid} from '../src/gen/grid';
-import {levelsOf} from '../src/gen/levels';
+import {CELL, FLOOR, Grid, SOLID} from '../src/gen/grid';
+import {Levels, levelsOf, type DynamicVolume} from '../src/gen/levels';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {WorldMaterials} from '../src/world/materials';
 import {WarmupRegistry, planWarmup, warmKeys} from '../src/render/warmup';
 import {markShadows} from '../src/render/volumetric';
-import type {TravelRequest} from '../src/levels/types';
-import {ARRIVE_CHIME, ARRIVE_OPEN, CALL_DELAY, DEPART_DELAY, DOOR_TIME, ElevatorLogic, planElevator, type ElevatorEvent} from '../src/world/elevator';
-import {constrainGate, gateSideOf, pushOutRect, readTowerInfo, sectionForFloor, floorOfSection, type GateSide} from '../src/world/towerShared';
+import {
+  CAB_ACCEL, CAB_SPEED, DOOR_TIME, DWELL, GATE_OPEN, START_DELAY, ElevatorLogic, planElevator, planMotion, sampleMotion, type ElevatorSense,
+} from '../src/world/elevator';
+import {readTowerInfo} from '../src/world/towerShared';
 import {planWindows} from '../src/world/officeWindows';
-import {EXTERIOR, buildExterior, planExterior} from '../src/world/exterior';
+import {EXTERIOR} from '../src/world/exterior';
 import {TowerRuntime, installTower, type TowerHost} from '../src/world/towerRuntime';
+import {towerQaApi} from '../src/world/towerQa';
 import {ChoiceModel} from '../src/ui/elevatorPanel';
+import {Player} from '../src/player/player';
+import {PickupManager} from '../src/world/pickups';
+import {Inventory} from '../src/items/inventory';
+import {PhysicsSystem} from '../src/physics/world';
+import {StaticQuery} from '../src/physics/staticQuery';
+import {FlareSystem} from '../src/weapons/throwables';
+import {LightSources} from '../src/world/lightSources';
 import {buildBoth} from './helpers/tslShaders';
+import {installGear} from '../src/gear/system';
+import {WeaponController} from '../src/weapons/weapons';
+import {BASE_MODIFIERS} from '../src/player/modifiers';
+import {MemoryBagStore} from '../src/gear/bagStore';
+import type {Game} from '../src/game';
 
 installCanvasShim(false);
 let mats: WorldMaterials;
-beforeAll(() => { mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}); });
+beforeAll(() => {
+  mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+  // the item label atlas clips its cells (the no-raster shim has no clip): a no-op is enough here
+  const ctx = (document as unknown as {createElement(t: string): {getContext(k: string): object}}).createElement('canvas').getContext('2d');
+  const proto = Object.getPrototypeOf(ctx) as {clip?: () => void};
+  proto.clip ??= () => {};
+});
 
 // ---------------------------------------------------------------------------------------------
-// Fixture: a 30 x 25 m office floor (cells 0.5 m). Perimeter wall ring (solid) with window spans; an elevator shaft
-// (cab x 10..12.5, z 10..12, door N, 1.5 m opening through a 0.5 m wall); a stairwell block with its door on the N face.
+// Fixture: 30 x 25 m, levels 0 (station hall, floor 0, ceil 4.4 — also under the tower) and 1..8 (lobby 5.6 + 4.4 n).
+// Shaft cells x 19..25, y 19..24 (x 9.5..13, z 9.5..12.5) SOLID on every tower storey; cab interior x 10..12.5,
+// z 10..12; door N (z = 10), 1.5 m wide at x 11.25 (doorway cells x 21..23, y 19: z 9.5..10, solid in the grids).
 
-const W = 60, H = 50;
+const W = 60, H = 50, FLOORS = [1, 2, 3, 4, 5, 6, 7, 8], LOBBY = 5.6, FH = 4.4;
+const baseOf = (f: number) => (f === 0 ? 0 : LOBBY + FH * (f - 1));
 const CAB = {x0: 10, z0: 10, x1: 12.5, z1: 12};
-function officeLayout(o: {floor?: number; baseY?: number; arrival?: string; noStairs?: boolean} = {}): StationLayout {
-  const g = new Grid(W, H);
-  const open = (x0: number, y0: number, x1: number, y1: number, ceil: number) => {
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { g.set(x, y, FLOOR); g.ceil[g.idx(x, y)] = ceil; }
-  };
-  const solid = (x0: number, y0: number, x1: number, y1: number) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g.set(x, y, 0); };
-  open(2, 2, 57, 47, 2.9);
-  solid(19, 19, 25, 24); // shaft
-  open(20, 20, 24, 23, 2.6); // cab
-  open(21, 19, 23, 19, 2.2); // door opening through the shaft wall (lintel 2.2)
-  solid(30, 20, 35, 24); // stairwell block (its N face at z = 10)
-  const floor = o.floor ?? 3;
+const SHAFT = {x0: 9.5, z0: 9.5, x1: 13, z1: 12.5};
+const DOOR = {x: 11.25, z: 10, width: 1.5};
+const LANDING = {x: 11.25, z: 8.6};
+
+function towerLayout(): StationLayout {
+  const levels = [0, ...FLOORS].map(L => {
+    const g = new Grid(W, H);
+    const base = baseOf(L), ceil = base + (L === 0 ? 4.4 : L === 1 ? 4.0 : 2.9);
+    for (let y = 2; y <= 47; y++) for (let x = 2; x <= 57; x++) { g.set(x, y, FLOOR); const i = g.idx(x, y); g.floor[i] = base; g.ceil[i] = ceil; }
+    if (L >= 1) for (let y = 19; y <= 24; y++) for (let x = 19; x <= 25; x++) g.set(x, y, SOLID);
+    return {id: L, role: L === 0 ? 'main' : L === 1 ? 'upper' : 'office', grid: g, baseY: base};
+  });
+  const storeys = FLOORS.map(f => ({floor: f, levelId: f, baseY: baseOf(f), label: f === 1 ? 'L' : String(f), clear: f === 1 ? 4 : 2.9}));
+  const windows = FLOORS.flatMap(f => [
+    {x0: 3, x1: 9, z0: 0.5, z1: 1.0, side: 'N', sill: 0.85, head: 2.55, kind: 'window', level: f, baseY: baseOf(f)},
+    {x0: 0.5, x1: 1.0, z0: 5, z1: 15, side: 'W', sill: 0.85, head: 2.55, kind: f === 1 ? 'entrance' : 'window', level: f, baseY: baseOf(f)},
+  ]);
   const layout = {
-    seed: 4242 + floor, grid: g, levels: [{id: 0, role: 'main', grid: g, baseY: 0}], levelLinks: [], rails: [],
+    seed: 4242, grid: levels[0].grid, levels, levelLinks: [], rails: [], trench: {floorY: -1.15},
     lights: [], props: [], areas: [], doors: [], signs: [], pickups: [], zombies: [], storefronts: [], decor: [],
     office: {
-      floor, floors: [1, 2, 3, 4, 5, 6, 7, 8], floorHeight: 4.4, levelId: 0, baseY: o.baseY ?? 0,
-      elevator: {cab: CAB, doorSide: 'N', door: {x: 11.25, z: 10, width: 1.5}, panel: {x: 12.2, y: 1.2, z: 10.02}, callPanel: {x: 12.3, y: 1.2, z: 9.48}, floorY: 0},
-      stairDoors: o.noStairs ? [] : [{dir: 'up', x: 16.5, z: 9.98, yaw: Math.PI, toFloor: floor + 1}, {dir: 'down', x: 16.5, z: 9.98, yaw: Math.PI, toFloor: floor - 1}],
-      windows: [
-        {x0: 3, x1: 10.5, z0: 0.5, z1: 1.0, side: 'N', sill: 0.85, head: 2.55, kind: 'window'},
-        {x0: 0.5, x1: 1.0, z0: 5, z1: 15, side: 'W', sill: 0.85, head: 2.55, kind: 'window'},
-        {x0: 5, x1: 20, z0: 24, z1: 24.5, side: 'S', sill: 0, head: 2.6, kind: 'entrance'},
-      ],
-      exterior: {x0: 0.5, z0: 0.5, x1: 29.5, z1: 24.5},
-      arrivals: {elevator: {x: 11.25, z: 11, yaw: 0, level: 0}},
+      version: 2, floors: FLOORS, floorHeight: FH, groundY: LOBBY, storeys,
+      elevator: {
+        cab: CAB, shaft: SHAFT, doorSide: 'N', door: DOOR, cabHeight: 2.6, panel: {x: 12.2, dy: 1.2, z: 10.02},
+        stops: FLOORS.map(f => ({floor: f, levelId: f, y: baseOf(f), area: -1, callPanel: {x: 12.6, y: baseOf(f) + 1.2, z: 9.5}, landing: LANDING})),
+      },
+      stairs: {well: {x0: 15, z0: 9.5, x1: 18, z1: 14}, runs: [], landings: []},
+      windows, exterior: {x0: 0.5, z0: 0.5, x1: 29.5, z1: 24.5}, start: {x: 5, z: 20, yaw: 0, level: 0}, name: 'Test Tower',
     },
   };
   return layout as unknown as StationLayout;
 }
 
-interface FakeZombie { brain: {x: number; z: number; y: number; alive: boolean; stats: {radius: number}}; ragdolled: boolean }
+interface FakeZombie { brain: {x: number; z: number; y: number; alive: boolean; stats: {radius: number}}; ragdolled: boolean; root: {position: {y: number}} }
 
-function makeHost(layout: StationLayout, travel?: (req: TravelRequest) => Promise<{ok: boolean; reason?: string}>) {
+function makeHost(layout: StationLayout, player: {x: number; z: number; y: number; vx: number; vz: number; radius: number; alive: boolean; eye?: number} = {x: 5, z: 20, y: 0, vx: 0, vz: 0, radius: 0.3, alive: true}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 70);
   scene.add(camera);
   const toasts: string[] = [];
-  const calls: TravelRequest[] = [];
+  const culler = {enabled: true, register: vi.fn()};
   const host = {
-    scene, camera, player: {x: 11.25, z: 8.6, y: 0, vx: 0, vz: 0, radius: 0.3, alive: true},
-    zombies: [] as FakeZombie[], levels: levelsOf(layout as never), layout, mats, sfx: null,
+    scene, camera, player, zombies: [] as FakeZombie[], levels: levelsOf(layout as never), layout, mats, sfx: null,
     hud: {toast: (t: string) => { toasts.push(t); }}, warmRegistry: new WarmupRegistry(),
     atmosphere: {markShadows: (root: THREE.Object3D, s: boolean) => { markShadows(root, true, s); }},
     interactHandlers: [] as (() => boolean)[], frameHooks: [] as ((dt: number) => void)[],
     sectionHooks: [] as {build?(l: StationLayout): void; teardown?(): void}[], promptProviders: [] as (() => string | null)[],
     stateListeners: [] as ((s: never, p: never) => void)[], sectionPreloads: [] as ((l: StationLayout) => Promise<void>)[],
-    travel: async (req: TravelRequest) => { calls.push(req); return travel ? travel(req) : {ok: true}; },
-    arrival: {kind: 'start'} as {kind: 'start' | 'elevator' | 'stairs-up' | 'stairs-down'; floor?: number},
-    state: 'playing', warming: false,
-    prepareBeforeShow: async () => {},
+    state: 'playing', warming: false, prepareBeforeShow: async () => {},
+    pickups: new PickupManager({}), world: {culler},
+    // the iteration-16 section travel paths: must NEVER be used now
+    travel: vi.fn(async () => ({ok: true})), setState: vi.fn(), fade: vi.fn(),
   };
-  return {host, toasts, calls};
+  return {host, toasts, culler};
 }
 
 const aim = (host: {camera: THREE.PerspectiveCamera}, eye: [number, number, number], at: [number, number, number]) => {
@@ -94,293 +123,481 @@ const aim = (host: {camera: THREE.PerspectiveCamera}, eye: [number, number, numb
   host.camera.lookAt(new THREE.Vector3(...at));
   host.camera.updateMatrixWorld(true);
 };
-const step = (host: {frameHooks: ((dt: number) => void)[]}, seconds: number, dt = 1 / 30) => {
+const DT = 1 / 30;
+const stepHooks = (host: {frameHooks: ((dt: number) => void)[]}, seconds: number, dt = DT) => {
   for (let t = 0; t < seconds - 1e-9; t += dt) for (const f of host.frameHooks) f(dt);
 };
-const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+const keys = (...k: string[]) => ({down: (c: string) => k.includes(c), hit: () => false, clears: 0});
+const SENSE0: ElevatorSense = {occupant: false, doorway: false, enemyInside: false};
+const STOPS = FLOORS.map(f => ({floor: f, y: baseOf(f)}));
 
 // ---------------------------------------------------------------------------------------------
 
-describe('elevator state machine (pure)', () => {
-  const run = (l: ElevatorLogic, s: number, sense = {occupant: false, doorway: false, enemyInside: false}, dt = 1 / 60): ElevatorEvent[] => {
-    const ev: ElevatorEvent[] = [];
-    for (let t = 0; t < s - 1e-9; t += dt) ev.push(...l.update(dt, sense));
+describe('elevator logic: a physically travelling cab (pure)', () => {
+  const run = (l: ElevatorLogic, s: number, sense: ElevatorSense = SENSE0, dt = 1 / 60, each?: () => void) => {
+    const ev = [];
+    for (let t = 0; t < s - 1e-9; t += dt) { ev.push(...l.update(dt, sense)); each?.(); }
     return ev;
   };
 
-  it('call: the cab arrives (chime) and the doors open; an empty cab closes again by itself', () => {
-    const l = new ElevatorLogic(3, [1, 2, 3, 4]);
-    expect(l.state).toBe('closed');
-    l.call();
-    let ev = run(l, CALL_DELAY + 0.05);
-    expect(ev.map(e => e.type)).toEqual(['chime', 'opening']);
-    ev = run(l, DOOR_TIME + 0.05);
-    expect(ev.map(e => e.type)).toContain('opened');
-    expect(l.door).toBe(1);
-    ev = run(l, 7);
-    expect(ev.map(e => e.type)).toContain('closing');
-    run(l, DOOR_TIME + 0.1);
-    expect(l.state).toBe('closed');
-    expect(l.rides).toBe(0);
+  it('motion profile: eases in / out within the limits and ends exactly at the target', () => {
+    for (const [y0, y1] of [[5.6, 23.2], [36.4, 5.6], [5.6, 10], [10, 10.5]] as const) {
+      const p = planMotion(y0, 0, y1);
+      let prev = y0, pv = 0;
+      const dt = 1 / 60;
+      for (let t = dt; ; t += dt) {
+        const s = sampleMotion(p, t);
+        const v = (s.y - prev) / dt;
+        expect(Math.abs(v)).toBeLessThanOrEqual(CAB_SPEED + 1e-6);
+        expect(Math.abs(v - pv) / dt).toBeLessThanOrEqual(CAB_ACCEL + 1e-6);
+        expect((s.y - prev) * Math.sign(y1 - y0)).toBeGreaterThanOrEqual(-1e-12); // monotonic
+        prev = s.y; pv = v;
+        if (s.done) { expect(s.y).toBe(y1); break; }
+        expect(t).toBeLessThan(60);
+      }
+    }
   });
 
-  it('choose a floor with the passenger inside: doors close, ONE ride request, nothing more', () => {
-    const l = new ElevatorLogic(3, [1, 2, 3, 4, 5], {open: true});
-    const inside = {occupant: true, doorway: false, enemyInside: false};
-    expect(l.select(5).ok).toBe(true);
-    let ev = run(l, DOOR_TIME + 0.05, inside);
-    expect(ev.map(e => e.type)).toEqual(['closed', 'depart']);
-    ev = run(l, DEPART_DELAY + 0.05, inside);
-    expect(ev.filter(e => e.type === 'ride')).toEqual([{type: 'ride', floor: 5}]);
-    ev = run(l, 5, inside);
-    expect(ev.filter(e => e.type === 'ride')).toHaveLength(0);
-    expect(l.rides).toBe(1);
-    expect(l.busy).toBe(true);
-    expect(l.select(2).ok).toBe(false); // riding: input ignored
+  it('a landing call on floor 5 brings the cab up from the lobby: continuous, monotonic, limited, exact stop; doors only at the stop', () => {
+    const l = new ElevatorLogic(STOPS, {floor: 1});
+    expect(l.y).toBe(baseOf(1));
+    expect(l.call(5).map(e => e.type)).toEqual(['called']);
+    const ys: number[] = [];
+    let maxV = 0, maxA = 0, pv = 0;
+    const ev = run(l, START_DELAY + 13 + DOOR_TIME + 0.4, SENSE0, 1 / 60, () => {
+      ys.push(l.y);
+      if (l.moving) { expect(l.door).toBe(0); expect(l.gateOpen).toBe(false); for (let i = 0; i < 8; i++) expect(l.landingDoor(i)).toBe(0); }
+      if (ys.length > 1) {
+        const v = (ys[ys.length - 1] - ys[ys.length - 2]) * 60;
+        maxV = Math.max(maxV, Math.abs(v)); maxA = Math.max(maxA, Math.abs(v - pv) * 60); pv = v;
+      }
+    });
+    for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThanOrEqual(ys[i - 1] - 1e-12);
+    expect(maxV).toBeLessThanOrEqual(CAB_SPEED + 1e-6);
+    expect(maxV).toBeGreaterThan(CAB_SPEED - 0.05); // it really cruised
+    expect(maxA).toBeLessThanOrEqual(CAB_ACCEL + 1e-6);
+    expect(l.y).toBe(baseOf(5));
+    expect(l.stop).toBe(4);
+    const types = ev.map(e => e.type);
+    expect(types.slice(0, 2)).toEqual(['depart', 'arrive']);
+    expect(types).toContain('chime');
+    expect(types).toContain('opened');
+    expect(l.landingDoor(4)).toBe(1);
+    expect(l.landingDoor(0)).toBe(0);
+    expect(l.trips).toBe(1);
   });
 
-  it('a body in the doorway re-opens closing doors; it closes again once clear', () => {
-    const l = new ElevatorLogic(3, [1, 2, 3, 4], {open: true});
-    l.select(4);
-    run(l, DOOR_TIME * 0.5, {occupant: true, doorway: false, enemyInside: false});
+  it('collective service: requests ahead first (with on-the-way stops), then it turns round', () => {
+    const l = new ElevatorLogic(STOPS, {floor: 1});
+    l.select(7); l.call(3); l.call(5);
+    const order: number[] = [];
+    let t = 0;
+    while (order.length < 3 && t < 120) { for (const e of l.update(1 / 30, {...SENSE0, occupant: true})) if (e.type === 'arrive') order.push(e.floor); t += 1 / 30; }
+    expect(order).toEqual([3, 5, 7]);
+    // a call below while still serving above is taken after the turn
+    const m = new ElevatorLogic(STOPS, {floor: 4});
+    m.select(8);
+    run(m, 2.5, SENSE0, 1 / 30); // started up toward 8
+    expect(m.moving).toBe(true);
+    m.call(2);
+    m.call(6); // ahead and still brakeable: taken on the way
+    const seq: number[] = [];
+    for (let i = 0; i < 4000 && seq.length < 3; i++) for (const e of m.update(1 / 30, SENSE0)) if (e.type === 'arrive') seq.push(e.floor);
+    expect(seq).toEqual([6, 8, 2]);
+  });
+
+  it('door interlock: doors open only level at a stop; the cab moves only sealed; obstruction re-opens; enemies never ride', () => {
+    const l = new ElevatorLogic(STOPS, {floor: 3, open: true});
+    l.select(6);
+    // doors start closing quickly after a floor was chosen inside; a body in the doorway re-opens them
+    run(l, 0.7, SENSE0, 1 / 60);
     expect(l.state).toBe('closing');
-    const ev = l.update(1 / 60, {occupant: true, doorway: true, enemyInside: false});
+    const ev = l.update(1 / 60, {...SENSE0, doorway: true});
     expect(ev).toEqual([{type: 'reopen', why: 'doorway'}]);
     expect(l.state).toBe('opening');
-    run(l, 4, {occupant: true, doorway: false, enemyInside: false});
-    expect(l.phase === 'departing' || l.phase === 'riding').toBe(true);
-    expect(l.rides).toBeLessThanOrEqual(1);
+    // while the doorway stays occupied, the cab never leaves
+    run(l, 10, {...SENSE0, doorway: true}, 1 / 60);
+    expect(l.moving).toBe(false);
+    expect(l.stop).toBe(2);
+    // an enemy inside holds the doors open: no departure
+    run(l, 10, {...SENSE0, enemyInside: true}, 1 / 60, () => expect(l.moving).toBe(false));
+    expect(l.door).toBe(1);
+    expect(l.trips).toBe(0);
+    // clear: it closes, waits START_DELAY sealed, then rides
+    let sealedSince = -1, t = 0;
+    run(l, 20, SENSE0, 1 / 60, () => {
+      t += 1 / 60;
+      if (l.sealed && !l.moving && sealedSince < 0) sealedSince = t;
+      if (l.moving) { expect(l.door).toBe(0); expect(l.sealed).toBe(true); }
+    });
+    expect(l.trips).toBe(1);
+    expect(l.y).toBe(baseOf(6));
+    expect(START_DELAY).toBeGreaterThan(0);
+    expect(GATE_OPEN).toBeGreaterThan(0.5);
   });
 
-  it('enemies never ride: an enemy inside holds the doors open', () => {
-    const l = new ElevatorLogic(3, [1, 2, 3, 4], {open: true});
-    l.select(1);
-    const ev = run(l, 6, {occupant: true, doorway: false, enemyInside: true});
-    expect(ev.some(e => e.type === 'reopen' && e.why === 'enemy')).toBe(true);
-    expect(ev.some(e => e.type === 'ride')).toBe(false);
-    expect(l.rides).toBe(0);
-  });
-
-  it('doors closing with nobody inside cancel the trip (no ride)', () => {
-    const l = new ElevatorLogic(3, [1, 2, 3], {open: true});
-    l.select(1);
-    const ev = run(l, DOOR_TIME + DEPART_DELAY + 0.5, {occupant: false, doorway: false, enemyInside: false});
-    expect(ev.some(e => e.type === 'cancelled' && e.why === 'empty')).toBe(true);
-    expect(l.rides).toBe(0);
-  });
-
-  it('arrival: rebuilt closed around the passenger, chime, then the doors open', () => {
-    const l = new ElevatorLogic(5, [1, 5, 8]);
-    l.arrive();
-    expect(l.sealed).toBe(true);
-    const ev = run(l, ARRIVE_OPEN + DOOR_TIME + 0.1, {occupant: true, doorway: false, enemyInside: false});
-    const types = ev.map(e => e.type);
-    expect(types.indexOf('chime')).toBeLessThan(types.indexOf('opening'));
-    expect(types).toContain('opened');
-    expect(ARRIVE_CHIME).toBeLessThan(ARRIVE_OPEN);
-    expect(l.rides).toBe(0); // an arrival never re-issues a ride
-  });
-
-  it('current floor = open; a refused travel re-opens; open cancels a departure', () => {
-    const l = new ElevatorLogic(2, [1, 2, 3]);
+  it('dwell, current-floor buttons, "open doors", never trapped (standing at the doors of an idle cab opens them)', () => {
+    const l = new ElevatorLogic(STOPS, {floor: 2});
     expect(l.select(2).events.map(e => e.type)).toEqual(['opening']);
-    const m = new ElevatorLogic(2, [1, 2, 3]);
-    m.select(3);
-    run(m, 0.1, {occupant: true, doorway: false, enemyInside: false});
-    expect(m.phase).toBe('departing');
-    expect(m.requestOpen().map(e => e.type)).toEqual(['cancelled', 'opening']);
-    const r = new ElevatorLogic(2, [1, 2, 3]);
-    r.select(1);
-    run(r, DEPART_DELAY + 0.1, {occupant: true, doorway: false, enemyInside: false});
-    expect(r.phase).toBe('riding');
-    expect(r.rideFailed().map(e => e.type)).toEqual(['cancelled', 'opening']);
-    expect(r.phase).toBe('idle');
-    expect(new ElevatorLogic(2, [1, 2]).select(9).ok).toBe(false);
+    run(l, DOOR_TIME + 0.05);
+    expect(l.state).toBe('open');
+    run(l, DWELL + DOOR_TIME + 0.2);
+    expect(l.state).toBe('closed'); // auto-closed after the dwell
+    // a hall call at the floor it stands at opens it (chime)
+    expect(l.call(2).map(e => e.type)).toEqual(['chime', 'opening']);
+    run(l, DOOR_TIME + DWELL + DOOR_TIME + 0.3);
+    expect(l.state).toBe('closed');
+    run(l, 0.5, {...SENSE0, occupant: true, pushOpen: true});
+    expect(l.state).toBe('closed'); // a brush against the doors is not enough
+    run(l, 0.3, {...SENSE0, occupant: true, pushOpen: true});
+    expect(l.state).toBe('opening');
+    expect(new ElevatorLogic(STOPS).select(9).ok).toBe(false);
   });
 });
 
-describe('elevator geometry + door collision', () => {
-  it('plans the gate from the contract and the grid (0.5 m wall, panels facing their rooms)', () => {
-    const layout = officeLayout();
-    const info = readTowerInfo(layout)!;
-    const plan = planElevator(info.elevator!, layout.grid);
-    expect(plan.gate.depth).toBeCloseTo(0.5, 5);
-    expect(plan.gate.hw).toBeCloseTo(0.75, 5);
-    expect([plan.gate.nx, plan.gate.nz]).toEqual([0, -1]);
-    expect(plan.panelN).toEqual([0, 1]); // inside the cab, on the door wall's inner face
-    expect(plan.callN).toEqual([0, -1]); // corridor face
-    expect(plan.doorTop).toBeCloseTo(2.195, 3); // the doors fill the opening to its lintel
+// ---------------------------------------------------------------------------------------------
+
+describe('Levels dynamic volume (the cab as moving free space)', () => {
+  const setup = () => {
+    const layout = towerLayout();
+    const L = levelsOf(layout as never);
+    const vol: DynamicVolume = {...CAB, floorY: baseOf(3), ceilY: baseOf(3) + 2.6, level: 3, gates: [{side: 'N', a0: 10.5, a1: 12, depth: 0.5, height: 2.2, open: false}], stops: FLOORS.map(baseOf)};
+    return {layout, L, vol};
+  };
+
+  it('support / collision / headroom inside the cab; the shaft stays solid elsewhere; the station band below is untouched', () => {
+    const {L, vol} = setup();
+    const y3 = baseOf(3);
+    expect(L.supportIn(11.2, 11, y3)).toBeNull(); // shaft cells are solid on every storey grid
+    L.addDynamicVolume(vol);
+    const s = L.supportIn(11.2, 11, y3 + 0.01)!;
+    expect(s.floor).toBe(y3);
+    expect(s.level).toBe(3);
+    expect(s.volume).toBe(vol);
+    expect(L.levelAt(11.2, 11, y3)).toBe(3);
+    expect(L.ceilAt(11.2, 11, y3)).toBeCloseTo(y3 + 2.6, 9);
+    const [cx, cy] = [Math.floor(11.2 / CELL), Math.floor(11 / CELL)];
+    expect(L.blocksAt(cx, cy, 11.2, 11, y3, 1.74)).toBe(false);
+    expect(L.blocksAt(cx, cy, 11.2, 11, baseOf(5), 1.74)).toBe(true); // the shaft at floor 5 while the cab is at 3
+    expect(L.ceilingOver(11.2, 11, 0.3, y3)).toBeCloseTo(y3 + 2.6, 9);
+    expect(L.circleClear(11.25, 11, 0.3, y3)).toBe(true);
+    expect(L.supportIn(11.2, 11, baseOf(5) + 0.01)).toBeNull();
+    // the station hall band under the tower is not part of the shaft
+    expect(L.supportIn(11.2, 11, 0.01)!.level).toBe(0);
+    // the cab moves: the free space follows
+    vol.floorY = 20.1; vol.ceilY = 22.7;
+    expect(L.supportIn(11.2, 11, 20.11)!.floor).toBe(20.1);
+    expect(L.supportIn(11.2, 11, y3 + 0.01)).toBeNull();
+    // walls of the cab are the surrounding solid cells
+    expect(L.blocksAt(Math.floor(9.7 / CELL), cy, 9.7, 11, 20.1, 1.74)).toBe(true);
   });
 
-  it('no tunnelling: a sprinting body stays in the cab while the doors are shut, and outside stays outside', () => {
-    const info = readTowerInfo(officeLayout())!;
-    const G = planElevator(info.elevator!, officeLayout().grid).gate;
-    // inside, running north (toward the doors) at 5.8 m/s for 1 s
-    let p = {x: 11.25, z: 11.2}, side: GateSide = gateSideOf(G, p.x, p.z);
-    for (let i = 0; i < 20; i++) { const r = constrainGate(G, 0, p.x, p.z - 0.29, 0.3, side); p = {x: r.x, z: r.z}; side = r.side; }
-    expect(side).toBe('in');
-    expect(p.z).toBeGreaterThanOrEqual(10.3 - 1e-6);
-    // outside, running south into the shut doors
-    p = {x: 11.0, z: 8.5}; side = gateSideOf(G, p.x, p.z);
-    for (let i = 0; i < 20; i++) { const r = constrainGate(G, 0.1, p.x, p.z + 0.29, 0.3, side); p = {x: r.x, z: r.z}; side = r.side; }
-    expect(side).toBe('out');
-    expect(p.z).toBeLessThanOrEqual(9.5 - 0.3 + 1e-6);
-    // open doors: walks straight through
-    p = {x: 11.25, z: 8.5}; side = 'out';
-    for (let i = 0; i < 12; i++) { const r = constrainGate(G, 1, p.x, p.z + 0.25, 0.3, side); p = {x: r.x, z: r.z}; side = r.side; }
-    expect(side).toBe('in');
-    expect(p.z).toBeGreaterThan(10.5);
+  it('the doorway: solid while shut (nobody walks / falls into the shaft), free only with the cab level there and the doors open', () => {
+    const {L, vol} = setup();
+    L.addDynamicVolume(vol);
+    const gate = vol.gates[0], y3 = baseOf(3);
+    const [dx, dy] = [Math.floor(11.25 / CELL), Math.floor(9.75 / CELL)];
+    expect(L.blocksAt(dx, dy, 11.25, 9.75, y3, 1.74)).toBe(true);
+    gate.open = true;
+    expect(L.blocksAt(dx, dy, 11.25, 9.75, y3, 1.74)).toBe(false);
+    expect(L.supportIn(11.25, 9.75, y3)!.floor).toBe(y3);
+    expect(L.ceilAt(11.25, 9.75, y3)).toBeCloseTo(y3 + 2.2, 9);
+    // another storey's doorway stays shut
+    expect(L.blocksAt(dx, dy, 11.25, 9.75, baseOf(4), 1.74)).toBe(true);
+    // the real movement path: walk from the landing into the cab through the open doorway, then the doors shut
+    const P = new Player();
+    P.spawn(11.25, 8.6, Math.PI, y3); // facing +z (the doors)
+    for (let i = 0; i < 60; i++) P.update(DT, keys('KeyW'), L, null, {aiming: false, speedMult: 1, canSprint: true});
+    expect(P.z).toBeGreaterThan(10.3);
+    expect(P.y).toBeCloseTo(y3, 5);
+    gate.open = false;
+    for (let i = 0; i < 60; i++) P.update(DT, keys('KeyS', 'ShiftLeft'), L, null, {aiming: false, speedMult: 1, canSprint: true});
+    expect(P.z).toBeGreaterThan(10 + 0.3 - 1e-6); // kept in by the shut doors
+    // from the landing nobody gets in while it is shut (and the cab away: no void to fall into)
+    const Q = new Player();
+    Q.spawn(11.25, 8.6, Math.PI, baseOf(5));
+    for (let i = 0; i < 60; i++) Q.update(DT, keys('KeyW', 'ShiftLeft'), L, null, {aiming: false, speedMult: 1, canSprint: true});
+    expect(Q.z).toBeLessThanOrEqual(9.5 - 0.3 + 1e-6);
+    expect(Q.y).toBeCloseTo(baseOf(5), 5);
+  });
+
+  it('raycast / line of sight: cab walls, floor and ceiling; through the doorway only while open', () => {
+    const {L, vol, layout: setupLayout} = setup();
+    L.addDynamicVolume(vol);
+    const y3 = baseOf(3), eyeIn = {x: 11.25, y: y3 + 1.6, z: 11.2};
+    const east = L.raycast(eyeIn, {x: 1, y: 0, z: 0}, 10);
+    expect(east.kind).toBe('wall');
+    expect(eyeIn.x + east.t).toBeCloseTo(CAB.x1, 6);
+    const up = L.raycast(eyeIn, {x: 0, y: 1, z: 0}, 10);
+    expect(up.kind).toBe('ceiling');
+    expect(eyeIn.y + up.t).toBeCloseTo(y3 + 2.6, 6);
+    const down = L.raycast(eyeIn, {x: 0, y: -1, z: 0}, 10);
+    expect(down.kind).toBe('floor');
+    expect(down.level).toBe(3);
+    // landing -> cab: the shut landing doors stop rays and sight at the shaft face
+    const eyeOut = {x: 11.25, y: y3 + 1.6, z: 8};
+    const r = L.raycast(eyeOut, {x: 0, y: 0, z: 1}, 10);
+    expect(r.kind).toBe('wall');
+    expect(eyeOut.z + r.t).toBeCloseTo(SHAFT.z0, 6);
+    expect(L.lineOfSight(eyeOut, eyeIn)).toBe(false);
+    vol.gates[0].open = true;
+    expect(L.lineOfSight(eyeOut, eyeIn)).toBe(true);
+    const r2 = L.raycast(eyeOut, {x: 0, y: 0, z: 1}, 10);
+    expect(eyeOut.z + r2.t).toBeCloseTo(CAB.z1, 6); // across the cab to its back wall
+    // another storey never sees into the cab
+    expect(L.lineOfSight({x: 11.25, y: baseOf(4) + 1.6, z: 8}, eyeIn)).toBe(false);
+    // physics statics (casings, item ground clamp, flares) follow too
+    const q = new StaticQuery(setupLayout as never);
+    expect(q.cellGround(11.2, 11, y3 + 0.5)).toBe(y3);
+    expect(q.insideSolid(11.2, y3 + 1, 11)).toBe(false);
+    expect(q.insideSolid(11.2, baseOf(5) + 1, 11)).toBe(true);
+  });
+
+  it('no volume = no change (Subway): every query is identical before adding and after removing', () => {
+    const {L, vol} = setup();
+    const sample = () => {
+      const out: unknown[] = [];
+      for (let x = 0.3; x < 29.7; x += 1.37) for (let z = 0.3; z < 24.7; z += 1.13) for (const y of [0.01, 5.61, 14.41, 34.21]) {
+        const s = L.supportIn(x, z, y);
+        out.push(s ? [s.level, s.floor, s.ceil] : null, L.isFree(x, y + 0.5, z), L.blocksAt(Math.floor(x / CELL), Math.floor(z / CELL), x, z, y, 1.74));
+        const h = L.raycast({x, y: y + 1.5, z}, {x: 0.6, y: -0.1, z: 0.79}, 12);
+        out.push(h.kind, +h.t.toFixed(6));
+      }
+      return out;
+    };
+    const before = sample();
+    L.addDynamicVolume(vol);
+    L.removeDynamicVolume(vol);
+    expect(L.dynamicVolumes).toHaveLength(0);
+    expect(sample()).toEqual(before);
+    // with the volume present, columns away from the shaft answer exactly as before
+    L.addDynamicVolume(vol);
+    const s = L.supportIn(3, 3, baseOf(3) + 0.01)!;
+    expect(s.level).toBe(3);
+    expect(s.floor).toBeCloseTo(baseOf(3), 5);
+    expect(s.volume).toBeUndefined();
   });
 });
 
-describe('tower runtime with a fake Game host', () => {
-  it('installs into the iteration-16 registries', () => {
-    const {host} = makeHost(officeLayout());
-    installTower(host as unknown as TowerHost);
+// ---------------------------------------------------------------------------------------------
+
+describe('tower runtime with a fake Game host (ONE continuous world)', () => {
+  it('installs into the registries; builds once: the cab volume, culler registration, far plane', () => {
+    const layout = towerLayout();
+    const {host, culler} = makeHost(layout);
+    const rt = installTower(host as unknown as TowerHost);
     expect(host.sectionHooks).toHaveLength(1);
     expect(host.frameHooks).toHaveLength(1);
     expect(host.interactHandlers).toHaveLength(1);
     expect(host.promptProviders).toHaveLength(1);
     expect(host.stateListeners).toHaveLength(1);
-    expect(host.sectionPreloads).toHaveLength(1);
     expect(host.warmRegistry.names.pools).toContain('tower');
+    host.sectionHooks[0].build!(layout);
+    expect(host.levels.dynamicVolumes).toHaveLength(1);
+    expect(rt.office!.elevator!.view.landings).toHaveLength(8);
+    expect(culler.register).toHaveBeenCalledTimes(9); // 8 landings + the windows
+    expect(host.camera.far).toBeGreaterThanOrEqual(EXTERIOR.far);
+    expect(host.travel).not.toHaveBeenCalled();
   });
 
-  it('call -> walk in -> choose floor 5 -> doors shut (cannot leave) -> exactly one travel request', async () => {
-    const layout = officeLayout({floor: 3});
-    const {host, calls} = makeHost(layout, async () => ({ok: true}));
+  it('call -> walk in -> choose 5 -> RIDE (carried, continuous, never below the floor / through the ceiling) -> walk out on 5; no travel / state change ever', () => {
+    const layout = towerLayout();
+    const P = new Player();
+    P.spawn(LANDING.x, LANDING.z, 0, baseOf(1)); // facing -z: turn toward the doors below
+    const {host} = makeHost(layout, P);
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    const e = rt.section!.elevator!;
-    expect(e.logic.state).toBe('closed');
-    // outside: aim at the call panel
-    host.player.x = 12.3; host.player.z = 8.5;
-    aim(host, [12.3, 1.62, 8.5], [12.3, 1.2, 9.45]);
-    step(host, 0.05);
+    const e = rt.office!.elevator!, L = host.levels;
+    // E on the lobby call panel (the cab waits there with the doors shut)
+    const call = e.plan.calls[0].at;
+    aim(host, [call.x, baseOf(1) + 1.62, 8.6], [call.x, call.y, call.z]);
+    P.x = call.x;
+    stepHooks(host, DT);
+    expect(rt.target?.kind).toBe('call');
     expect(host.promptProviders[0]()).toMatch(/Call the elevator/);
     expect(host.interactHandlers[0]()).toBe(true);
-    step(host, CALL_DELAY + DOOR_TIME + 0.2);
-    expect(e.logic.door).toBe(1);
-    // in the cab (doors open: walking in is free)
-    host.player.x = 11.6; host.player.z = 11.3;
-    step(host, 0.1);
-    aim(host, [11.6, 1.62, 11.3], [12.2, 1.2, 10.08]);
+    stepHooks(host, DOOR_TIME + 0.2);
+    expect(e.logic.state).toBe('open');
+    expect(e.gate.open).toBe(true);
+    // walk in with the real movement path (yaw pi: facing +z)
+    P.x = LANDING.x; P.yaw = Math.PI;
+    const frame = (k: string[]) => { P.update(DT, keys(...k), L, null, {aiming: false, speedMult: 1, canSprint: true}); for (const f of host.frameHooks) f(DT); };
+    for (let i = 0; i < 40 && !rt.playerInCab(); i++) frame(['KeyW']);
+    for (let i = 0; i < 8; i++) frame(['KeyW']);
+    expect(rt.playerInCab()).toBe(true);
+    for (let i = 0; i < 10; i++) frame([]);
+    // the floor panel: E opens the list, digit 5 queues floor 5
+    P.yaw = 0; // face the door wall (the panel is on it)
+    host.camera.position.set(P.x, P.eye, P.z);
+    host.camera.lookAt(e.plan.panelLocal.x, e.plan.panelLocal.y + e.logic.y, e.plan.panelLocal.z);
+    host.camera.updateMatrixWorld(true);
+    stepHooks(host, DT);
+    expect(rt.target?.kind).toBe('panel');
     expect(host.interactHandlers[0]()).toBe(true);
     expect(rt.choice.isOpen).toBe(true);
     expect(rt.choice.handleKey('Digit5')).toBe(true);
-    expect(rt.choice.isOpen).toBe(false);
-    expect(e.logic.target).toBe(5);
-    // try to sprint out while the doors close: the gate keeps the player in (the doorway band is never entered)
-    for (let i = 0; i < Math.ceil((DOOR_TIME + DEPART_DELAY + 0.3) * 30); i++) {
-      if (e.logic.door < 0.3) host.player.z -= 0.19;
-      step(host, 1 / 30);
+    expect(e.logic.car.has(4)).toBe(true);
+    // ride: the world keeps running, the player stands still inside
+    const ys: number[] = [];
+    let moved = false;
+    for (let i = 0; i < 30 * 30 && !(moved && !e.logic.moving && e.logic.state === 'open'); i++) {
+      frame([]);
+      const f = e.logic.y;
+      ys.push(P.y);
+      if (e.logic.moving) {
+        moved = true;
+        expect(e.gate.open).toBe(false);
+        for (let k = 0; k < 8; k++) expect(e.logic.landingDoor(k)).toBe(0);
+      }
+      expect(P.y).toBeGreaterThanOrEqual(f - 1e-6); // never below the cab floor
+      expect(P.y + 1.74).toBeLessThanOrEqual(f + e.plan.cabH + 1e-6); // never through its ceiling
+      expect(Math.abs(P.y - f)).toBeLessThan(1e-6); // standing: exactly on the moving floor
+      expect(host.state).toBe('playing');
     }
-    await flush();
-    expect(host.player.z).toBeGreaterThanOrEqual(10.3 - 1e-6);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({to: {level: 'office', section: 'floor-5'}, arrival: {kind: 'elevator', floor: 5}, label: 'Elevator · floor 5', via: 'local'});
-    step(host, 3);
-    await flush();
-    expect(calls).toHaveLength(1);
+    expect(moved).toBe(true);
+    expect(e.logic.y).toBe(baseOf(5));
+    for (let i = 1; i < ys.length; i++) expect(Math.abs(ys[i] - ys[i - 1])).toBeLessThanOrEqual(CAB_SPEED * DT + 1e-6); // continuous
+    expect(P.y).toBe(baseOf(5));
+    expect(e.carried.player).toBe(true);
+    // walk out onto floor 5's landing
+    P.yaw = 0;
+    for (let i = 0; i < 60; i++) frame(['KeyW']);
+    expect(P.z).toBeLessThan(9.3);
+    expect(L.levelAt(P.x, P.z, P.y)).toBe(5);
+    expect(P.y).toBeCloseTo(baseOf(5), 5); // the storey grid's (float32) floor
+    // the seamless invariant: nothing ever asked the host to travel / fade / change state
+    expect(host.travel).not.toHaveBeenCalled();
+    expect(host.setState).not.toHaveBeenCalled();
+    expect(host.fade).not.toHaveBeenCalled();
+    expect(host.levels).toBe(levelsOf(layout as never));
   });
 
-  it('a refused travel re-opens the doors (no ride lost in limbo); doorway obstruction re-opens', async () => {
-    const layout = officeLayout();
-    const {host, calls, toasts} = makeHost(layout, async () => ({ok: false, reason: 'not-ready'}));
+  it('doorway obstruction re-opens; an enemy inside holds the doors (enemies never ride); landing doors stay shut where the cab is not', () => {
+    const layout = towerLayout();
+    const {host, toasts} = makeHost(layout);
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    const e = rt.section!.elevator!;
-    e.logic.door = 1;
-    host.player.x = 11.25; host.player.z = 11.2;
-    step(host, 0.1);
-    e.logic.select(1);
-    step(host, DOOR_TIME + DEPART_DELAY + 0.2);
-    await flush();
-    expect(calls).toHaveLength(1);
-    expect(e.logic.phase).toBe('idle');
-    expect(e.logic.state === 'opening' || e.logic.state === 'open').toBe(true);
-    expect(toasts.some(t => /won.t move/.test(t))).toBe(true);
-    // obstruction: stand in the doorway while it closes
-    step(host, DOOR_TIME + 0.2);
-    e.logic.select(2);
-    host.player.z = 9.75; // in the opening
-    step(host, 0.4);
+    const e = rt.office!.elevator!;
+    rt.callFloor(1); // at the lobby already: opens
+    stepHooks(host, DOOR_TIME + 0.2);
+    expect(e.logic.state).toBe('open');
+    rt.callFloor(6); // wanted upstairs
+    host.player.x = 11.25; host.player.z = 9.75; host.player.y = baseOf(1); // standing in the doorway
+    stepHooks(host, 12);
+    expect(e.logic.moving).toBe(false);
     expect(e.logic.door).toBeGreaterThan(0.5);
-  });
-
-  it('never trapped: pushing on the shut doors from inside opens them; enemies stay out of a shut cab', () => {
-    const layout = officeLayout();
-    const {host} = makeHost(layout);
-    const rt = installTower(host as unknown as TowerHost);
-    host.sectionHooks[0].build!(layout);
-    const e = rt.section!.elevator!;
-    host.player.x = 11.25; host.player.z = 11.0;
-    step(host, 0.05);
-    const zb: FakeZombie = {brain: {x: 11.25, z: 8.8, y: 0, alive: true, stats: {radius: 0.33}}, ragdolled: false};
+    // an enemy inside (player away)
+    host.player.x = 5; host.player.z = 20;
+    const zb: FakeZombie = {brain: {x: 11.6, z: 11.4, y: baseOf(1), alive: true, stats: {radius: 0.33}}, ragdolled: false, root: {position: {y: baseOf(1)}}};
     host.zombies.push(zb);
-    step(host, 0.05);
-    for (let i = 0; i < 20; i++) { zb.brain.z += 0.25; step(host, 1 / 30); }
-    expect(zb.brain.z).toBeLessThanOrEqual(9.5 - 0.33 + 1e-6); // kept on the landing
-    for (let i = 0; i < 40 && e.logic.state === 'closed'; i++) { host.player.z -= 0.2; step(host, 1 / 30); }
-    expect(e.logic.state).not.toBe('closed');
+    stepHooks(host, 15, DT);
+    expect(e.logic.moving).toBe(false);
+    expect(e.logic.trips).toBe(0);
+    expect(toasts.some(t => /won.t close/.test(t))).toBe(true);
+    // the enemy dies: the doors close and the cab leaves (the corpse rides; it is not "inside" any more for the rule)
+    zb.brain.alive = false;
+    let sawMoving = false;
+    for (let i = 0; i < 30 * 40 && e.logic.stop !== 5; i++) {
+      for (const f of host.frameHooks) f(DT);
+      if (e.logic.moving) { sawMoving = true; for (let k = 0; k < 8; k++) expect(e.logic.landingDoor(k)).toBe(0); }
+    }
+    expect(sawMoving).toBe(true);
+    expect(e.logic.y).toBe(baseOf(6));
+    expect(zb.brain.y).toBeCloseTo(baseOf(6), 6); // carried
+    expect(zb.root.position.y).toBeCloseTo(baseOf(6), 6);
+    expect(e.logic.landingDoor(0)).toBe(0);
   });
 
-  it('elevator arrival: built with the doors shut around the player, then they open', () => {
-    const layout = officeLayout({floor: 6});
-    const {host} = makeHost(layout);
-    host.arrival = {kind: 'elevator', floor: 6};
+  it('riders: a resting pickup and a resting flare ride along (real PickupManager / FlareSystem / PhysicsSystem)', () => {
+    const layout = towerLayout();
+    const P = new Player();
+    P.spawn(11.6, 11.5, 0, baseOf(1));
+    const {host} = makeHost(layout, P);
+    const physics = new PhysicsSystem(null);
+    physics.build(layout as never);
+    const flares = new FlareSystem(new THREE.Group(), physics, new LightSources());
+    Object.assign(host, {physics, flares});
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    const e = rt.section!.elevator!;
-    expect(e.logic.sealed).toBe(true);
-    expect(e.logic.phase).toBe('arriving');
-    host.player.x = 11.25; host.player.z = 11;
-    step(host, ARRIVE_OPEN + DOOR_TIME + 0.2);
-    expect(e.logic.door).toBe(1);
+    const e = rt.office!.elevator!, L = host.levels;
+    const inv = new Inventory();
+    const pk = host.pickups.add(inv.makeStack('water', 1), 10.5, baseOf(1), 11.6);
+    const outside = host.pickups.add(inv.makeStack('cola', 1), 5, baseOf(1), 20);
+    // a flare tossed onto the cab floor (doors shut): it bounces and settles on the cab's kinematic floor
+    expect(flares.throw({x: 11.0, y: baseOf(1) + 1.5, z: 10.9}, {x: 0.05, y: -1, z: 0.05}).ok).toBe(true);
+    const fl = flares.flares[0];
+    const frame = () => { P.update(DT, keys(), L, null, {aiming: false, speedMult: 1, canSprint: true}); for (const f of host.frameHooks) f(DT); physics.update(DT); flares.tick(DT); };
+    for (let i = 0; i < 30 * 12 && fl.body; i++) frame();
+    expect(fl.body).toBeNull();
+    expect(fl.pos.y).toBeGreaterThan(baseOf(1) - 0.01);
+    expect(fl.pos.y).toBeLessThan(baseOf(1) + 0.1);
+    expect(physics.cabBodies()[0]).toEqual({floor: baseOf(1), fillersIn: 8, fillers: 8});
+    const flareAbove = fl.pos.y - baseOf(1);
+    // ride 1 -> 4 from inside
+    expect(rt.panelPick(4)).toBe(true);
+    for (let i = 0; i < 30 * 30 && e.logic.stop !== 3; i++) frame();
+    expect(e.logic.y).toBe(baseOf(4));
+    expect(pk.y).toBeCloseTo(baseOf(4), 6);
+    expect(pk.obj.position.y).toBeCloseTo(baseOf(4), 6);
+    expect(outside.y).toBe(baseOf(1)); // nothing outside the cab moved
+    expect(fl.pos.y - baseOf(4)).toBeCloseTo(flareAbove, 3);
+    expect(flares.flares[0].model.root.position.y).toBeGreaterThan(baseOf(4) - 0.05);
+    expect(P.y).toBe(baseOf(4));
+    // the cab's physics floor and the doorway fillers follow (open doors at floor 4: that filler leaves)
+    for (let i = 0; i < 60; i++) frame();
+    expect(physics.cabBodies()[0].floor).toBe(baseOf(4));
+    expect(e.gate.open).toBe(true);
+    expect(physics.cabBodies()[0].fillersIn).toBe(7);
+    expect(host.travel).not.toHaveBeenCalled();
   });
 
-  it('stair door: one door with up + down -> 2-choice list -> travel request (arrival = direction travelled)', async () => {
-    const layout = officeLayout({floor: 3});
-    const {host, calls} = makeHost(layout);
+  it('QA hooks: tower() state, towerCall / towerPick / towerGoLanding / towerGoCab drive the real logic', () => {
+    const layout = towerLayout();
+    const P = new Player();
+    const {host} = makeHost(layout, P);
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    const plans = rt.section!.stairs!.plans;
-    expect(plans).toHaveLength(1);
-    expect(plans[0].choices.map(c => `${c.dir}${c.toFloor}`)).toEqual(['up4', 'down2']);
-    expect(plans[0].n).toEqual([0, -1]);
-    expect(plans[0].z).toBeCloseTo(10, 5); // snapped onto the wall face
-    host.player.x = 16.5; host.player.z = 8.7;
-    aim(host, [16.5, 1.62, 8.7], [16.5, 1.2, 10]);
-    step(host, 0.05);
-    expect(host.promptProviders[0]()).toMatch(/Stairwell/);
-    expect(host.interactHandlers[0]()).toBe(true);
-    expect(rt.choice.isOpen).toBe(true);
-    rt.choice.handleKey('Digit1');
-    await flush();
-    await new Promise(r => setTimeout(r, 20));
-    await flush();
-    expect(calls).toEqual([{to: {level: 'office', section: 'floor-4'}, arrival: {kind: 'stairs-up', floor: 4}, label: 'Stairs · floor 4', via: 'local'}]);
+    const qa = towerQaApi({tower: rt, player: P, levels: host.levels, camera: host.camera});
+    expect(qa.towerGoLanding(3)).toBe(true);
+    expect(P.y).toBe(baseOf(3));
+    expect(host.levels.levelAt(P.x, P.z, P.y)).toBe(3);
+    expect(qa.towerPick(5)).toBe(false); // not in the cab
+    expect(qa.towerCall(3)).toBe(true);
+    let s = qa.tower() as {cab: {queue: number[]; phase: string}};
+    expect(s.cab.queue).toEqual([3]);
+    stepHooks(host, 1.2);
+    s = qa.tower() as {cab: {queue: number[]; phase: string}};
+    expect(s.cab.phase).toBe('moving');
+    stepHooks(host, 10.5);
+    const t = qa.tower() as {cab: {y: number; stop: number; doors: number}; player: {inCab: boolean}; landingDoors: Record<number, number>};
+    expect(t.cab.stop).toBe(3);
+    expect(t.cab.y).toBeCloseTo(baseOf(3), 6);
+    expect(t.landingDoors[3]).toBeGreaterThan(0.5);
+    expect(t.landingDoors[1]).toBe(0);
+    expect(qa.towerGoCab()).toBe(true);
+    expect(rt.playerInCab()).toBe(true);
+    expect(qa.towerPick(8)).toBe(true);
+    expect((qa.tower() as {cab: {queue: number[]}}).cab.queue).toEqual([8]);
   });
 
-  it('stair door with one way (the lobby: up only) travels directly; a wall between blocks the E target', async () => {
-    const layout = officeLayout({floor: 1, baseY: 0});
-    (layout as unknown as {office: {stairDoors: unknown[]}}).office.stairDoors = [{dir: 'up', x: 16.5, z: 9.98, yaw: Math.PI, toFloor: 2}];
-    const {host, calls} = makeHost(layout);
+  it('the culler: while the eye is inside the cab its storey is current (override, else culling off), restored outside', () => {
+    const layout = towerLayout();
+    const P = new Player();
+    const {host, culler} = makeHost(layout, P);
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    // from inside the stairwell block's far side (z 13, behind the solid block): no target through the wall
-    host.player.x = 16.5; host.player.z = 13;
-    aim(host, [16.5, 1.62, 13], [16.5, 1.2, 10]);
-    step(host, 0.05);
-    expect(rt.target).toBeNull();
-    expect(host.interactHandlers[0]()).toBe(false);
-    host.player.z = 8.8;
-    aim(host, [16.5, 1.62, 8.8], [16.5, 1.2, 10]);
-    expect(host.interactHandlers[0]()).toBe(true);
-    await flush();
-    await new Promise(r => setTimeout(r, 20));
-    await flush();
-    expect(calls.map(c => [c.to.section, c.arrival.kind])).toEqual([['floor-2', 'stairs-up']]);
+    aim(host, [11.25, baseOf(1) + 1.6, 11.2], [11.25, baseOf(1) + 1.6, 9]);
+    stepHooks(host, DT);
+    expect(culler.enabled).toBe(false);
+    aim(host, [5, 1.6, 20], [5, 1.6, 10]);
+    stepHooks(host, DT);
+    expect(culler.enabled).toBe(true);
+    const c2 = {eyeOverride: null as number | null, register: () => {}};
+    (host.world as {culler: unknown}).culler = c2;
+    aim(host, [11.25, baseOf(1) + 1.6, 11.2], [11.25, baseOf(1) + 1.6, 9]);
+    stepHooks(host, DT);
+    expect(c2.eyeOverride).toBe(1);
+    expect(rt).toBeInstanceOf(TowerRuntime);
   });
 
   it('the floor list: digits pick floors (1 = lobby), arrows + E confirm, Esc closes', () => {
@@ -393,199 +610,168 @@ describe('tower runtime with a fake Game host', () => {
   });
 });
 
-describe('windows', () => {
-  it('every span gets a collision box covering it (>= 0.35 m, extended outward); the entrance is boarded', () => {
-    const info = readTowerInfo(officeLayout())!;
+// ---------------------------------------------------------------------------------------------
+
+describe('windows of every storey, the exterior once at street level', () => {
+  it('every span of every storey is planned at its own height; colliders per storey; meshes tagged per storey', () => {
+    const layout = towerLayout();
+    const info = readTowerInfo(layout)!;
     const plans = planWindows(info);
-    expect(plans).toHaveLength(info.windows.length);
+    expect(plans).toHaveLength(16);
     for (const p of plans) {
-      const s = p.span, c = p.collider;
-      expect(c.x0).toBeLessThanOrEqual(s.x0 + 1e-9); expect(c.x1).toBeGreaterThanOrEqual(s.x1 - 1e-9);
-      expect(c.z0).toBeLessThanOrEqual(s.z0 + 1e-9); expect(c.z1).toBeGreaterThanOrEqual(s.z1 - 1e-9);
+      expect(p.y0).toBeCloseTo(p.baseY + p.span.sill, 6);
+      expect(p.y1).toBeCloseTo(p.baseY + p.span.head, 6);
+      expect(p.baseY).toBe(baseOf(p.level));
+      if (p.span.kind === 'entrance') expect(p.panes.every(q => q.state === 'boarded')).toBe(true);
+      const c = p.collider;
       expect(Math.min(c.x1 - c.x0, c.z1 - c.z0)).toBeGreaterThanOrEqual(0.35 - 1e-9);
-      expect(p.panes.length).toBeGreaterThan(0);
-      if (s.kind === 'entrance') expect(p.panes.every(q => q.state === 'boarded')).toBe(true);
-      expect(p.y0).toBeCloseTo(info.baseY + s.sill, 6);
-      expect(p.y1).toBeCloseTo(info.baseY + s.head, 6);
     }
-  });
-
-  it('a body pushing into any pane (even a broken one) is put back inside', () => {
-    const info = readTowerInfo(officeLayout())!;
-    for (const p of planWindows(info)) {
-      const mid = (p.a0 + p.a1) / 2;
-      // a body that tunnelled deep into the wall (center inside the span box)
-      const x = p.along === 'x' ? mid : (p.span.x0 + p.span.x1) / 2, z = p.along === 'x' ? (p.span.z0 + p.span.z1) / 2 : mid;
-      const o = pushOutRect(x, z, 0.3, p.collider, [-p.n[0], -p.n[1]])!;
-      expect(o).not.toBeNull();
-      const s = (o[0] - x) * -p.n[0] + (o[1] - z) * -p.n[1];
-      expect(s).toBeGreaterThan(0); // moved toward the room
-      const inner = p.inner;
-      if (p.along === 'x') expect(Math.abs(o[1] - inner)).toBeCloseTo(0.3, 6); else expect(Math.abs(o[0] - inner)).toBeCloseTo(0.3, 6);
-    }
-  });
-});
-
-describe('exterior', () => {
-  it('street level per floor = storey floor - floorHeight * (floor - 1); section names', () => {
-    for (const floor of [1, 2, 5, 8]) {
-      const baseY = floor === 1 ? 5.6 : 0;
-      const info = readTowerInfo(officeLayout({floor, baseY}))!;
-      expect(info.groundY).toBeCloseTo(baseY - 4.4 * (floor - 1), 6);
-      expect(floorOfSection(sectionForFloor(floor))).toBe(floor);
-    }
-    expect(sectionForFloor(1)).toBe('street');
-  });
-
-  it('scenery stays outside the tower (and its pavement); the ground has the footprint cut out', () => {
-    const foot = {x0: 0.5, z0: 0.5, x1: 29.5, z1: 24.5};
-    const plan = planExterior({foot, groundY: -8.8, eyeAbove: 10.4, seed: 99});
-    const dist = (x: number, z: number) => Math.hypot(Math.max(foot.x0 - x, 0, x - foot.x1), Math.max(foot.z0 - z, 0, z - foot.z1));
-    for (const p of plan.props) expect(dist(p.x, p.z)).toBeGreaterThan(EXTERIOR.pavement - 0.5);
-    for (const b of plan.buildings) {
-      const near = dist(b.x, b.z) - Math.hypot(b.w, b.d) / 2;
-      expect(near).toBeGreaterThan(EXTERIOR.pavement + EXTERIOR.road - 4);
-    }
-    // every building's rotated footprint stays inside its lot's band: never across the ring road onto the tower block
-    for (const b of plan.buildings) {
-      const c = Math.abs(Math.cos(b.yaw)), sn = Math.abs(Math.sin(b.yaw));
-      const hx = (b.w * c + b.d * sn) / 2, hz = (b.w * sn + b.d * c) / 2;
-      const gap = Math.max(foot.x0 - (b.x + hx), (b.x - hx) - foot.x1, foot.z0 - (b.z + hz), (b.z - hz) - foot.z1);
-      expect(gap).toBeGreaterThan(EXTERIOR.pavement + EXTERIOR.road - 2.5);
-    }
-    expect(plan.props.length).toBeGreaterThan(8);
-    expect(plan.buildings.length).toBeGreaterThan(40);
-    const view = buildExterior(plan);
-    const ground = view.root.getObjectByName('tower-ext-ground') as THREE.Mesh;
-    const pos = ground.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i += 3) {
-      const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3, cz = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
-      expect(cx > foot.x0 && cx < foot.x1 && cz > foot.z0 && cz < foot.z1).toBe(false);
-      expect(pos.getY(i)).toBeCloseTo(-8.8, 6);
-    }
-    expect(view.tris).toBeLessThan(150_000); // procedural stand-ins
-    expect(view.dome.frustumCulled).toBe(false);
-    let shadows = 0;
-    view.root.traverse(o => { if (o.castShadow || o.receiveShadow) shadows++; });
-    expect(shadows).toBe(0); // scenery never takes part in the flashlight shadow
-    for (const g of view.geometries) g.dispose();
-  });
-
-  it('Meshy budget: with stand-in models of the manifest tri counts, any half of the city stays near 150k tris', () => {
-    const fake = (tris: number) => {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(tris * 9), 3));
-      const scene = new THREE.Group(); scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial()));
-      return {scene} as never;
-    };
-    const plan = planExterior({foot: {x0: 0.5, z0: 0.5, x1: 29.5, z1: 24.5}, groundY: 0, eyeAbove: 1.6, seed: 5});
-    const view = buildExterior(plan, {car: fake(8000), bus: fake(10000), rubble: fake(6000), tower: fake(20000), midrise: fake(20000)});
-    const quad = [0, 0, 0, 0];
-    for (const im of view.instanced) {
-      const q = Number(/-(\d)$/.exec(im.name)?.[1] ?? -1);
-      const t = (im.geometry.index ? im.geometry.index.count : im.geometry.attributes.position.count) / 3 * im.count;
-      if (q >= 0) quad[q] += t;
-    }
-    const halves = [quad[0] + quad[1], quad[1] + quad[2], quad[2] + quad[3], quad[3] + quad[0]];
-    expect(Math.max(...halves)).toBeLessThan(160_000);
-    expect(view.used).toEqual({props: true, heroes: true});
-  });
-});
-
-describe('section lifecycle + warm-up discovery', () => {
-  it('build adds everything (cab, doors, glass, exterior) and the warm-up plan discovers it, hidden exterior included', () => {
-    const layout = officeLayout({floor: 4});
     const {host} = makeHost(layout);
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    expect(host.camera.far).toBeGreaterThanOrEqual(EXTERIOR.far);
+    const levels = new Set<number>();
+    rt.office!.windows!.view.root.traverse(o => { if ((o as THREE.Mesh).isMesh) levels.add(o.userData.level); });
+    expect([...levels].sort((a, b) => a - b)).toEqual(FLOORS);
+    // a body on floor 6 pushing into its window is put back inside; floor 2's windows never touch it
+    host.player.x = 6; host.player.z = 1.1; host.player.y = baseOf(6);
+    stepHooks(host, DT);
+    expect(host.player.z).toBeGreaterThan(1.25);
+  });
+
+  it('the city is built once with its ground at the lobby floor (real height from floor 8); hidden down in the station', () => {
+    const layout = towerLayout();
+    const {host} = makeHost(layout);
+    const rt = installTower(host as unknown as TowerHost);
+    host.sectionHooks[0].build!(layout);
+    const ex = rt.office!.exterior!;
+    expect(ex.plan.groundY).toBe(LOBBY);
+    let exteriors = 0;
+    host.scene.traverse(o => { if (o.name === 'tower-exterior') exteriors++; });
+    expect(exteriors).toBe(1);
+    const ground = ex.view.root.getObjectByName('tower-ext-ground') as THREE.Mesh;
+    expect(ground.geometry.attributes.position.getY(0)).toBeCloseTo(LOBBY, 6);
+    // floor 8, looking out of its north window
+    aim(host, [6, baseOf(8) + 1.6, 2.5], [6, baseOf(8) + 1.4, -5]);
+    stepHooks(host, 0.2);
+    expect(ex.view.root.visible).toBe(true);
+    // the station below the street: never
+    aim(host, [6, 1.6, 2.5], [6, 1.4, -5]);
+    stepHooks(host, 0.2);
+    expect(ex.view.root.visible).toBe(false);
+  });
+});
+
+describe('lifecycle, warm-up discovery, shaders', () => {
+  it('the warm-up plan discovers every mesh (cab, landing doors of every stop, hidden lit buttons, glass, exterior)', () => {
+    const layout = towerLayout();
+    const {host} = makeHost(layout);
+    const rt = installTower(host as unknown as TowerHost);
+    host.sectionHooks[0].build!(layout);
     const plan = planWarmup(host.scene, {mode: 'full', cameraMask: host.camera.layers.mask, pools: host.warmRegistry.poolRoots()});
-    // every renderable of the section (cab, doors, panels, glass, frames, boards, stair doors, exterior) is covered by a
-    // planned representative of its three cache-key group (doors share the cab walls' material + layout: one compile)
     const planned = new Set(plan.items.flatMap(i => warmKeys(i.object as THREE.Mesh)));
     const names = new Set<string>();
-    rt.section!.root.traverse(o => {
+    rt.office!.root.traverse(o => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       names.add(m.name);
       for (const k of warmKeys(m)) expect(planned.has(k), `${m.name} ${k}`).toBe(true);
     });
-    for (const n of ['tower-cab-walls', 'tower-door-cab-l', 'tower-door-landing-r', 'tower-landing-frame', 'tower-indicator-in', 'tower-window-glass', 'tower-window-glass-cracked', 'tower-window-frames', 'tower-window-boards', 'tower-ext-ground', 'tower-ext-sky']) expect(names.has(n), n).toBe(true);
-    expect([...names].some(n => n.startsWith('tower-ext-blocks-'))).toBe(true);
-    expect(plan.items.some(i => i.object.name === 'tower-ext-sky')).toBe(true);
-    // the exterior hidden (no window in view) is still planned through the 'tower' pool
-    rt.section!.exterior!.view.root.visible = false;
-    const hidden = planWarmup(host.scene, {mode: 'view', cameraMask: host.camera.layers.mask, pools: host.warmRegistry.poolRoots(), near: {center: new THREE.Vector3(11, 1.6, 11), radius: 5}});
-    const hn = hidden.items.map(i => i.object.name);
-    expect(hn).toContain('tower-ext-sky');
-    expect(hidden.items.find(i => i.object.name === 'tower-ext-sky')!.flips.length).toBeGreaterThan(0);
+    for (const n of ['tower-cab-walls', 'tower-cab-light', 'tower-door-cab-l', 'tower-door-landing-r', 'tower-landing-frame', 'tower-landing-lining', 'tower-indicator-in', 'tower-indicator-out',
+      'tower-call-panel-lit', 'tower-floor-button-lit-5', 'tower-window-glass', 'tower-window-frames', 'tower-ext-ground', 'tower-ext-sky']) expect(names.has(n), n).toBe(true);
   });
 
-  it('teardown leaves nothing behind: scene restored, far plane restored, instanced meshes released after the next warm-up', () => {
-    const layout = officeLayout({floor: 2});
+  it('teardown: the volume leaves Levels, nothing is left in the scene, geometries released, far plane restored', () => {
+    const layout = towerLayout();
     const {host} = makeHost(layout);
     const rt = installTower(host as unknown as TowerHost);
     const before = host.scene.children.length;
     host.sectionHooks[0].build!(layout);
-    const sec = rt.section!;
     const geos: THREE.BufferGeometry[] = [];
-    sec.root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) geos.push(m.geometry); });
-    const geoSpies = geos.map(g => vi.spyOn(g, 'dispose'));
-    const inst = sec.exterior!.view.instanced;
-    const instSpies = inst.map(im => vi.spyOn(im, 'dispose'));
+    rt.office!.root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !(m as THREE.InstancedMesh).isInstancedMesh) geos.push(m.geometry); });
+    const spies = [...new Set(geos)].map(g => vi.spyOn(g, 'dispose'));
     host.sectionHooks[0].teardown!();
+    expect(host.levels.dynamicVolumes).toHaveLength(0);
     expect(host.scene.children.length).toBe(before);
-    let leftovers = 0;
-    host.scene.traverse(o => { if (o.name.startsWith('tower-')) leftovers++; });
-    expect(leftovers).toBe(0);
     expect(host.camera.far).toBe(70);
-    expect(rt.section).toBeNull();
-    expect(geoSpies.filter(s => s.mock.calls.length > 0).length).toBe(geos.length); // every per-section geometry released
-    expect(instSpies.every(s => s.mock.calls.length === 0)).toBe(true); // instanced: deferred (shared programs survive the next warm-up)
-    // next section built + warmed, first played frame: released
-    const next = officeLayout({floor: 3});
-    host.layout = next; host.levels = levelsOf(next as never);
-    host.sectionHooks[0].build!(next);
-    expect(instSpies.every(s => s.mock.calls.length === 0)).toBe(true);
-    step(host, 1 / 30);
-    expect(instSpies.every(s => s.mock.calls.length === 1)).toBe(true);
-    // a non-office section (the subway): nothing is built, far plane back to the station value
-    host.sectionHooks[0].teardown!();
-    const sub = {...officeLayout(), office: undefined} as unknown as StationLayout;
-    host.sectionHooks[0].build!(sub);
-    expect(rt.section).toBeNull();
-    expect(host.camera.far).toBe(70);
-    expect(host.scene.children.length).toBe(before);
-    expect(rt).toBeInstanceOf(TowerRuntime);
+    expect(rt.office).toBeNull();
+    expect(spies.every(s => s.mock.calls.length > 0)).toBe(true);
+    // the Subway: nothing built
+    host.sectionHooks[0].build!({...towerLayout(), office: undefined} as unknown as StationLayout);
+    expect(rt.office).toBeNull();
   });
-});
 
-describe('tower node materials build on both backends (WGSL + GLSL fallback)', () => {
-  it('every distinct material of a built section (cab, glass, signs, exterior incl. Meshy model shading) compiles cleanly', () => {
-    const layout = officeLayout({floor: 5});
+  it('every distinct tower material builds cleanly on WGSL + GLSL', () => {
+    const layout = towerLayout();
     const {host} = makeHost(layout);
     const rt = installTower(host as unknown as TowerHost);
     host.sectionHooks[0].build!(layout);
-    // plus the Meshy-model exterior path (a textured standard material, as GLTFLoader produces)
-    const tex = new THREE.DataTexture(new Uint8Array(16).fill(128), 2, 2); tex.needsUpdate = true;
-    const fake = () => { const g = new THREE.BoxGeometry(1, 1, 1); const sc = new THREE.Group(); sc.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({map: tex}))); return {scene: sc} as never; };
-    const ext = buildExterior(rt.section!.exterior!.plan, {car: fake(), tower: fake()});
     const seen = new Map<THREE.Material, THREE.Mesh>();
-    for (const root of [rt.section!.root, ext.root]) root.traverse(o => {
+    rt.office!.root.traverse(o => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (!seen.has(mat)) seen.set(mat, m);
     });
     expect(seen.size).toBeGreaterThan(10);
-    const sky = [...seen].find(([m]) => m.name === 'tower-ext-sky')!;
-    const [wgsl] = buildBoth(sky[1], {material: sky[0]});
-    expect(wgsl.fragment).toMatch(/atan2?\(/); // the skyline azimuth
-    expect(wgsl.fragment).toMatch(/exp\(/); // the footprint fog + haze
     for (const [mat, mesh] of seen) {
+      if (!/^tower-(cab|door|button|indicator|call|floor)/.test(mat.name) && !/^tower-ext-sky$/.test(mat.name)) continue;
       for (const b of buildBoth(mesh, {material: mat})) {
         expect(b.errors, `${mat.name} on ${mesh.name} (${b.backend})`).toEqual([]);
         expect(b.fragment.length, `${mat.name} ${b.backend}`).toBeGreaterThan(100);
       }
     }
+  });
+});
+
+describe('backpack: never set down in the cab (the moving cab volume; the v2 shaft on any storey)', () => {
+  it('refused inside the cab at a stop and between floors; allowed on the landing outside', () => {
+    const layout = towerLayout();
+    const levels = levelsOf(layout as never);
+    const vol: DynamicVolume = {...CAB, floorY: baseOf(4), ceilY: baseOf(4) + 2.6, level: 4, gates: [{side: 'N', a0: 10.5, a1: 12, depth: 0.5, height: 2.2, open: true}], stops: FLOORS.map(baseOf)};
+    levels.addDynamicVolume(vol);
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 70);
+    camera.rotation.order = 'YXZ';
+    const player = {x: 11.25, y: baseOf(4), z: 11.4, yaw: Math.PI, pitch: -0.5, climbing: false, grounded: true, alive: true, eye: 1.6};
+    const g = {
+      scene: new THREE.Scene(), modifierSources: [], frameHooks: [], interactHandlers: [], hitListeners: [], sectionHooks: [], stateListeners: [], promptProviders: [], inputOwners: [],
+      warmRegistry: {addPool: () => {}}, invUI: {gear: null},
+      input: {onLockChange: () => {}, clears: 0, pressed: new Set<string>(), mouse: [false, false, false], mousePressed: [false, false, false], wheel: 0, locked: true, hit: () => false, unlock() {}, lock: () => Promise.resolve(true)},
+      inv: new Inventory(), weapon: new WeaponController(), mods: {...BASE_MODIFIERS}, player, consumeView: {busy: false}, viewmodel: {setItem: () => {}},
+      sfx: {equip() {}, denied() {}, pickup() {}, search() {}}, hud: {toast: () => {}}, flareHold: {active: false, cancel: () => false}, syncHeld() {},
+      camera, levels, layout, pickups: new PickupManager({}), qa: true, state: 'playing',
+    };
+    const sys = installGear(g as unknown as Game);
+    sys.setStore(new MemoryBagStore());
+    const view = () => { camera.position.set(player.x, player.y + player.eye, player.z); camera.rotation.set(player.pitch, player.yaw, 0); camera.updateMatrixWorld(true); };
+    view();
+    expect(sys.placeSpot()).toMatch(/elevator/);
+    // between floors (riding)
+    vol.floorY = 20.3; vol.ceilY = 22.9; vol.gates[0].open = false; player.y = 20.3;
+    view();
+    expect(sys.placeSpot()).toMatch(/elevator/);
+    // on floor 4's landing, facing away from the shaft: fine
+    Object.assign(player, {x: 11.25, z: 8.2, y: baseOf(4), yaw: 0});
+    view();
+    expect(typeof sys.placeSpot()).toBe('object');
+    // facing the shut doors from the landing: never into the doorway / shaft
+    player.yaw = Math.PI; player.z = 9.0;
+    view();
+    expect(typeof sys.placeSpot()).toBe('string');
+  });
+});
+
+describe('plan from the contract', () => {
+  it('gate from the cab edge to the shaft face; panels beside the opening facing their rooms', () => {
+    const info = readTowerInfo(towerLayout())!;
+    expect(info.elevator!.stops.map(s => s.y)).toEqual(FLOORS.map(baseOf));
+    const plan = planElevator(info.elevator!);
+    expect(plan.gate.depth).toBeCloseTo(0.5, 6);
+    expect(plan.gate.hw).toBeCloseTo(0.75, 6);
+    expect([plan.gate.nx, plan.gate.nz]).toEqual([0, -1]);
+    expect(plan.panelN).toEqual([0, 1]);
+    expect(plan.calls[0].n).toEqual([0, -1]);
+    expect(plan.calls[4].at.y).toBeCloseTo(baseOf(5) + 1.2, 6);
+    expect(Math.abs(plan.calls[0].at.x - plan.gate.cx)).toBeGreaterThan(plan.gate.hw);
+    expect(plan.passage).toEqual({x0: 10.5, z0: 9.5, x1: 12, z1: 10});
+    expect(new Levels(towerLayout().levels!).count).toBe(9);
   });
 });

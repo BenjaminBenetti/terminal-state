@@ -126,6 +126,11 @@ export class CasingSystem {
     return n;
   }
 
+  /** Lane LIFT: live casings inside the moving elevator cab ride its dy. */
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number): void {
+    for (const c of this.pool) if (c.live && inside(c.pos.x, c.pos.y, c.pos.z)) { c.pos.y += dy; this.dirty = true; }
+  }
+
   /** QA/tests: snapshot of live casings. */
   list(): {kind: CasingKind; x: number; y: number; z: number; mode: number; age: number; speed: number; bounces: number}[] {
     return this.pool.filter(c => c.live).map(c => ({kind: c.kind, x: c.pos.x, y: c.pos.y, z: c.pos.z, mode: c.mode, age: c.age, speed: c.vel.length(), bounces: c.bounces}));

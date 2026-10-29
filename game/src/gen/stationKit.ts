@@ -51,11 +51,20 @@ export interface TrackBlock {
 /** Track continues this far (cells) into the tunnel beyond each platform end. */
 export const TUN = 12;
 
+/** Seamless office (lane GEN): canvas options. Defaults = the Subway's (3 level grids of GEN_W x GEN_H). */
+export interface KitOptions {
+  /** Number of level canvases (default 3: main, upper, lower). The office tower uses 9 (station, lobby, floors 2..8). */
+  levels?: number;
+  /** Canvas size in cells (default GEN_W x GEN_H); a smaller canvas keeps N level grids cheap. */
+  w?: number; h?: number;
+}
+
 export class Kit {
-  readonly g = new Grid(GEN_W, GEN_H);
+  readonly g: Grid;
   /**
    * Iteration 08 (Lane A): canvases of every level (0 = main = g, 1 = upper, 2 = lower), same size,
    * sharing ONE ramps list (a stair between levels has the same ramp index in every grid).
+   * Seamless office: N level canvases (KitOptions.levels), all sharing that ramps list.
    */
   readonly levelGrids: Grid[];
   readonly areas: Area[] = [];
@@ -66,15 +75,22 @@ export class Kit {
   readonly underpasses: Underpass[] = [];
   readonly wing = new Map<number, Wing>();
   /** Wall cells that later doors must not cut through (storefront fronts and their piers). */
-  readonly reserved = new Uint8Array(GEN_W * GEN_H);
+  readonly reserved: Uint8Array;
   /** Iteration 08 (Lane A): main-level cells that must stay rock (an upper-only landing sits above them). */
-  readonly keepRock = new Uint8Array(GEN_W * GEN_H);
+  readonly keepRock: Uint8Array;
   /** Iteration 08 (Lane A): the multi-level program of the station (gen/levelGen.ts), canvas coordinates. */
   levelPlan: LevelPlan | null = null;
-  constructor(readonly rng: Rng) {
-    const up = new Grid(GEN_W, GEN_H), lo = new Grid(GEN_W, GEN_H);
-    up.ramps = lo.ramps = this.g.ramps;
-    this.levelGrids = [this.g, up, lo];
+  constructor(readonly rng: Rng, opts: KitOptions = {}) {
+    const W = opts.w ?? GEN_W, H = opts.h ?? GEN_H, n = Math.max(1, opts.levels ?? 3);
+    this.g = new Grid(W, H);
+    this.reserved = new Uint8Array(W * H);
+    this.keepRock = new Uint8Array(W * H);
+    this.levelGrids = [this.g];
+    for (let i = 1; i < n; i++) {
+      const L = new Grid(W, H);
+      L.ramps = this.g.ramps;
+      this.levelGrids.push(L);
+    }
   }
 
   /** Grid of a level (0 = main). */

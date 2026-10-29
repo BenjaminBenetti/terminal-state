@@ -70,6 +70,12 @@ export function walkerQaApi(game: unknown) {
       path = found; i = 0; best = Infinity; bestT = g.clock; status = 'walking';
       return path.length;
     },
+    /** Walk (real input) STRAIGHT to (x, z) — e.g. through the open elevator doors into the moving cab, which is not on the nav grid. */
+    walkDirect: (x: number, z: number): number => {
+      release();
+      path = [[x, z]]; i = 0; best = Infinity; bestT = g.clock; status = 'walking';
+      return 1;
+    },
     walkStop: () => { status = 'idle'; release(); },
     walkStatus: () => ({status, index: i, waypoints: path.length, next: path[i] ?? null, player: {x: +g.player.x.toFixed(2), y: +g.player.y.toFixed(3), z: +g.player.z.toFixed(2)}}),
     /** Start (clearing) / stop the per-frame trace. */

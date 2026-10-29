@@ -1,12 +1,17 @@
-// Iteration 16 (lane GEAR): level-wide gear rarity (rollLevelGear) and deterministic, plausible placement (placeGear).
+// Iteration 16 (lane GEAR) / seamless (GEN): level-wide gear rarity (rollLevelGear) and deterministic, plausible placement
+// (placeGear) — the office is ONE section now ('main', one layout of 9 storeys), so its one roll lands in the one layout.
 import {describe, expect, it} from 'vitest';
-import {GEAR_CAP_PER_LEVEL, GEAR_WEIGHTS, gearAreaWeight, gearCountFor, placeGear, placeSectionGear, rollLevelGear} from '../src/gen/gearLoot';
+import {GEAR_CAP_PER_LEVEL, GEAR_MIN_SPAWN_M, GEAR_WEIGHTS, gearAreaWeight, gearCountFor, placeGear, placeSectionGear, rollLevelGear} from '../src/gen/gearLoot';
 import {generateStation} from '../src/gen/station';
+import {generateOfficeLevel} from '../src/gen/office/index';
 import {Rng, hashString} from '../src/core/rng';
 import {GEAR_ITEMS} from '../src/items/gear';
 import {levelsOf} from '../src/gen/levels';
 
-const OFFICE_SECTIONS = ['street', 'floor-2', 'floor-3', 'floor-4', 'floor-5', 'floor-6', 'floor-7', 'floor-8'];
+/** The office level's sections (levels/registry.ts LEVELS.office.sections()): ONE. */
+const OFFICE_SECTIONS = ['main'];
+/** Iteration-16 style multi-section deal (still supported by rollLevelGear for any section list). */
+const MANY = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
 function stats(level: 'subway' | 'office', sections: string[], seeds: number) {
   const hist = new Array(GEAR_CAP_PER_LEVEL + 2).fill(0);
@@ -47,17 +52,18 @@ describe('gear rarity (rollLevelGear)', () => {
       expect(st.hist[GEAR_CAP_PER_LEVEL + 1]).toBe(0);
       expect(st.hist[GEAR_CAP_PER_LEVEL]).toBeGreaterThan(0); // occasionally several (up to 5)
       for (const id of Object.keys(GEAR_WEIGHTS)) expect(st.per[id]).toBeGreaterThan(0.1 * st.total);
-      if (level === 'office') for (const s of OFFICE_SECTIONS) expect(st.perSection[s]).toBeGreaterThan(0.08 * st.total); // dealt across the whole tower
+      if (level === 'office') expect(st.perSection.main).toBe(st.total); // the one section holds the whole tower's roll
     }
   });
 
   it('the whole office tower is ONE level: the count does not grow with the number of sections', () => {
-    const one = stats('office', ['street'], 6000), eight = stats('office', OFFICE_SECTIONS, 6000);
+    const one = stats('office', OFFICE_SECTIONS, 6000), eight = stats('office', MANY, 6000);
     expect(Math.abs(one.mean - eight.mean)).toBeLessThan(0.06);
+    for (const s of MANY) expect(eight.perSection[s]).toBeGreaterThan(0.08 * eight.total);
   });
 
   it('is deterministic and level-specific', () => {
-    const a = rollLevelGear(1234, 'office', OFFICE_SECTIONS), b = rollLevelGear(1234, 'office', OFFICE_SECTIONS);
+    const a = rollLevelGear(1234, 'office', MANY), b = rollLevelGear(1234, 'office', MANY);
     expect(a).toEqual(b);
     let differs = 0;
     for (let s = 0; s < 200; s++) if (JSON.stringify(rollLevelGear(s, 'office', ['main'])['main']) !== JSON.stringify(rollLevelGear(s, 'subway', ['main'])['main'])) differs++;
@@ -124,6 +130,37 @@ describe('gear placement (placeGear)', () => {
       const c = generateStation(seed, {startWeapon: 'pistol'});
       const placedC = placeGear(c, items, new Rng(999));
       expect(placedC.length).toBe(items.length);
+    }
+  });
+
+  it('office level: placed across the storeys of the ONE layout, reachable on foot, off the shaft / landing strip, 3D-far from the start', () => {
+    for (const seed of [11, 4242]) {
+      const a = generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'});
+      const o = a.office!, e = o.elevator;
+      const n0 = a.pickups.length;
+      const placed = placeSectionGear(a, items);
+      expect(placed.length).toBe(items.length);
+      expect(a.pickups.length).toBe(n0 + items.length);
+      const b = generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'});
+      expect(placeSectionGear(b, items)).toEqual(placed);
+      const L = levelsOf(a);
+      const reach = L.reachable(0, ...a.grid.cellOf(o.start.x, o.start.z), {drops: true});
+      for (const p of placed) {
+        const area = a.areas[p.area], lv = p.level ?? 0, g = L.grid(lv);
+        expect(gearAreaWeight(area), `${area.type}/${area.purpose ?? '-'}`).toBeGreaterThan(0);
+        expect(area.level ?? 0).toBe(lv);
+        const [cx, cy] = g.cellOf(p.x, p.z);
+        expect(g.walkable(cx, cy)).toBe(true);
+        expect(g.rampIdx[g.idx(cx, cy)]).toBeLessThan(0);
+        expect(Math.abs(p.y - g.floorAt(p.x, p.z))).toBeLessThan(0.05);
+        expect(reach[L.node(lv, g.idx(cx, cy))]).toBeGreaterThanOrEqual(0);
+        // never in / at the shaft or on the elevator landing strip of any storey; never in the stairwell
+        const inShaftZone = p.x > e.shaft.x0 - 0.6 && p.x < e.shaft.x1 + 0.6 && p.z > e.shaft.z0 - 2.2 && p.z < e.shaft.z1 + 0.6;
+        expect(lv >= 1 && inShaftZone).toBe(false);
+        const w = o.stairs.well;
+        expect(lv >= 1 && p.x > w.x0 && p.x < w.x1 && p.z > w.z0 && p.z < w.z1).toBe(false);
+        expect(Math.hypot(p.x - o.start.x, p.z - o.start.z, p.y - 0)).toBeGreaterThanOrEqual(GEAR_MIN_SPAWN_M);
+      }
     }
   });
 

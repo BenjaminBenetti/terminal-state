@@ -187,6 +187,22 @@ export class FlareSystem implements BodySource {
     for (const f of this.flares) if (f.body) out.push(f.body.position);
   }
 
+  /**
+   * BodySource.carry (task office-seamless, lane LIFT): flares lying inside the moving elevator cab ride its dy — the model,
+   * the burning head (light / smoke / sound / AI source follow it in tick) and the last good pose. Flying flares are bodies
+   * (carried by the physics system).
+   */
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number): void {
+    for (const f of this.flares) {
+      if (f.body || !inside(f.pos.x, f.pos.y, f.pos.z)) continue;
+      f.model.root.position.y += dy;
+      f.model.root.updateMatrixWorld(true);
+      f.pos.y += dy;
+      f.last.y += dy;
+      if (f.light) f.light.position.y += dy;
+    }
+  }
+
   /** Why a throw would be refused right now (null = OK). */
   refusal(): ThrowRefusal | null {
     if (!this.host.world) return 'unavailable';

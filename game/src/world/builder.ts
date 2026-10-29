@@ -26,11 +26,11 @@ import {buildStorefronts} from './storefrontBuilder';
 import {buildTraversal} from './traversalBuilder';
 import {SIGN_SIZE, passageRails, signDims} from '../gen/doorways';
 import {
-  CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil as cellCeilAt, ceilingRuns, chunkKey, extractWallFaces, levelOf, stationLevels, stationRails,
+  CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil as cellCeilAt, ceilingRuns, chunkKey, extractWallFaces, levelOf, rampsEqual, stationLevels, stationRails,
   type BuiltFace, type RailRun,
 } from './levelGeometry';
 import type {WallFace} from './wallFaces';
-import {LevelCuller} from './levelCulling';
+import {LEGACY_STACK, LevelCuller} from './levelCulling';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
 import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
 import {buildWallDetail} from './wallDetail';
@@ -116,12 +116,21 @@ export interface BuiltWorld {
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
 const CHUNK = 18;
 /** Pseudo-level of stair flight geometry (treads, risers, flight ceilings, side walls): seen from both
- *  levels a flight joins, so the level culler never hides it (frustum / fog culling still apply... via chunks). */
+ *  levels a flight joins, so in a Subway station the level culler never hides it. Task office-seamless-20261029: in a
+ *  taller stack (> LEGACY_STACK levels) flight meshes are split per joined level pair and tagged `userData.levels` = those
+ *  storeys, so the culler draws a flight only when one of its storeys is visible (a 9-storey scissor stair is not drawn
+ *  whole from every floor). userData.level stays STAIR_LEVEL. */
 export const STAIR_LEVEL = -1;
 /** Trim / sleeper chunk size (m): small cheap geometry, coarse chunks. */
 const TRIM_CHUNK_M = 64;
 /** Model keys for props that use a generated derivative when it exists (optional). */
 const MODEL_FOR: Partial<Record<PropKind, string>> = {bench: 'bench', cabinetTall: 'cabinetTall', cabinetLow: 'cabinetLow', stall: 'stall', vending: 'vending', shelf: 'shelf', bin: 'trashCan'};
+
+/** Storeys tagged on an accumulator chunk key ('level:cx,cz#a-b'), else undefined. */
+function chunkLevels(chunk: string): number[] | undefined {
+  const h = chunk.indexOf('#');
+  return h < 0 ? undefined : chunk.slice(h + 1).split('-').map(Number);
+}
 
 function floorMatFor(area: Area | undefined): MatKey {
   if (!area) return 'concrete';
@@ -183,23 +192,40 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   const group = new THREE.Group();
   group.name = 'station';
   // Architecture accumulators per (material, level:chunk).
-  const acc = new Map<string, {k: MatKey; level: number; a: Accum}>();
+  const acc = new Map<string, {k: MatKey; level: number; levels?: number[]; a: Accum}>();
   const A = (k: MatKey, chunk: string) => {
     const key = `${k}@${chunk}`;
     let e = acc.get(key);
-    if (!e) acc.set(key, (e = {k, level: Number(chunk.split(':')[0]), a: new Accum()}));
+    if (!e) acc.set(key, (e = {k, level: Number(chunk.split(':')[0]), levels: chunkLevels(chunk), a: new Accum()}));
     return e.a;
   };
+  // Task office-seamless-20261029: the storeys a stair flight joins (every level grid its ramp is carved into), from a
+  // point on the flight; its chunk key carries them ('-1:cx,cz#lower-upper').
+  const flightLevels = (x: number, z: number, level: number): number[] => {
+    const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
+    if (cx < 0 || cy < 0 || cx >= g0.w || cy >= g0.h) return [level];
+    const i = cy * g0.w + cx, ref = gridOf(level), ri = ref.rampIdx[i];
+    if (ri < 0) return [level];
+    const R = ref.ramps[ri];
+    const out = levels.filter(L => { const r = L.grid.rampIdx[i]; return r >= 0 && rampsEqual(L.grid.ramps[r], R); }).map(L => L.id);
+    return out.length ? out : [level];
+  };
+  // Subway stations (<= LEGACY_STACK levels) keep one merged, never level-culled flight chunk per material (draw calls).
+  const tagFlights = levels.length > LEGACY_STACK;
+  const stairChunk = (x: number, z: number, ids: number[]) => (tagFlights ? `${chunkKey(STAIR_LEVEL, x, z)}#${ids.join('-')}` : chunkKey(STAIR_LEVEL, x, z));
   // Storefront unit interiors (shop tile walls, quarry-tile floors): shape-material accumulators.
-  const shopAcc = new Map<string, {k: string; level: number; a: Accum}>();
+  const shopAcc = new Map<string, {k: string; level: number; levels?: number[]; a: Accum}>();
   const S = (k: string, chunk: string) => {
     const key = `${k}@${chunk}`;
     let e = shopAcc.get(key);
-    if (!e) shopAcc.set(key, (e = {k, level: Number(chunk.split(':')[0]), a: new Accum()}));
+    if (!e) shopAcc.set(key, (e = {k, level: Number(chunk.split(':')[0]), levels: chunkLevels(chunk), a: new Accum()}));
     return e.a;
   };
   const trenchY = layout.trench.floorY;
   let instancesFromTraversal = 0;
+  // Task office-seamless-20261029: a tower world (Office Space: storeys above the lobby) measures door heads from each
+  // storey's base; Subway stations keep the iteration-08 rule (level 0 at y 0, else the carved cell ceiling).
+  const storeyDoors = !!(layout as {office?: unknown}).office || levels.length > 3;
 
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
@@ -211,10 +237,14 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const nSign = alongX ? f.nz : f.nx;
     const shop = f.finish === 'tileShop';
     const m = shop ? SHOP_SCALE : mats.scale[f.finish as MatKey];
-    // Flight side walls belong to both levels a flight joins: the 'stairs' pseudo-level is never level-culled.
+    // Flight side walls belong to both levels a flight joins (the 'stairs' pseudo-level, tagged with those storeys: the
+    // flight cell in front of the face, on the side its normal faces).
     const lv = f.slope ? STAIR_LEVEL : f.level;
+    const mid = (s0 + s1) / 2;
+    const tag = f.slope && tagFlights ? flightLevels(alongX ? mid : plane + nSign * CELL / 2, alongX ? plane + nSign * CELL / 2 : mid, f.level) : null;
     const sink = (along: number): Sink => {
-      const ck = alongX ? chunkKey(lv, along, plane) : chunkKey(lv, plane, along);
+      let ck = alongX ? chunkKey(lv, along, plane) : chunkKey(lv, plane, along);
+      if (tag) ck += `#${tag.join('-')}`;
       return shop ? S('tileShop', ck) : A(f.finish as MatKey, ck);
     };
     if (f.slope) {
@@ -327,7 +357,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const i = g.idx(d.x, d.y);
     const df = g.floorOf(i);
     for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) doorMask[L][y * g0.w + x] = 1;
-    ceilRect(b.publicSpace ? 'ceiling' : 'ceilingService', levels[L].id, x0, z0, x1, z1, L === 0 && df === 0 ? d.height : g.ceil[i]);
+    // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
+    // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
+    const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
+    ceilRect(b.publicSpace ? 'ceiling' : 'ceilingService', levels[L].id, x0, z0, x1, z1, atBase ? df + d.height : g.ceil[i]);
   }
   // Ceilings of every level band (slab undersides between overlapping levels included).
   for (const r of ceilingRuns(levels, cols, (L, i) => doorMask[L][i] === 1)) {
@@ -337,7 +370,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Lane T (iteration 05): stair flights (treads, risers, nosings, ceilings, handrails), rescue
   // ladders, underpass track-structure beams, tunnel-mouth barricades. Iteration 08: every level's
   // flights once (a flight shared by two levels is built once); side walls come from the faces above.
-  instancesFromTraversal = buildTraversal(group, layout, mats, (k, x, z) => A(k, chunkKey(STAIR_LEVEL, x, z)), {levels, cols});
+  instancesFromTraversal = buildTraversal(group, layout, mats, (k, x, z, level) => A(k, stairChunk(x, z, flightLevels(x, z, level))), {levels, cols});
 
   let archMeshes = 0;
   for (const [key, e] of acc) {
@@ -346,6 +379,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const mesh = new THREE.Mesh(geo, mats.get(e.k));
     mesh.name = `arch-${key}`;
     mesh.userData.level = e.level;
+    if (e.levels) mesh.userData.levels = e.levels;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
     archMeshes++;
@@ -357,6 +391,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const mesh = new THREE.Mesh(geo, archShopMaterial(mats, e.k));
     mesh.name = `arch-shop-${key}`;
     mesh.userData.level = e.level;
+    if (e.levels) mesh.userData.levels = e.levels;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
     archMeshes++;
@@ -399,8 +434,11 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     if (d.shopfront) continue; // storefront frames are built by storefrontBuilder
     const g = gridOf((d as {level?: number}).level ?? levelOf(layout.areas[d.a]));
     const i = g.idx(d.x, d.y), df = g.floorOf(i);
-    // Opening height above the door's own floor (iteration 08: doors on upper/lower levels).
-    const h = df === 0 ? d.height : Math.min(d.height, (g.hasCeil(i) ? g.ceil[i] : df + d.height) - df);
+    // Opening height above the door's own floor (iteration 08: doors on upper/lower levels; task office-seamless-20261029:
+    // in a tower world a door at its storey's base keeps its full opening height, as on level 0 at y 0).
+    const dl = storeyDoors ? levels.find(L => L.id === ((d as {level?: number}).level ?? levelOf(layout.areas[d.a]))) : undefined;
+    const atBase = df === 0 || (dl !== undefined && Math.abs(df - dl.baseY) < 1e-4);
+    const h = atBase ? d.height : Math.min(d.height, (g.hasCeil(i) ? g.ceil[i] : df + d.height) - df);
     const ft = 0.09, fd = CELL + 0.06;
     if (d.h === 1) { // wall runs along X; jambs at both X ends of the opening
       const z = (d.y + 0.5) * CELL;
@@ -445,7 +483,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const mine = levels.length === 1 ? layout : {...layout, grid: L.grid, areas: layout.areas.map(a => (levelOf(a) === L.id ? a : {...a, type: 'storage' as const}))};
     for (const b of passageRails(mine)) {
       const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-      const lift = L.id === 0 ? 0 : L.grid.floorAt(cx, cz);
+      // passageRails heights are above y 0: lifted to the level's floor there (level 0: its base, y 0 in every station).
+      const lift = L.id === 0 ? L.baseY : L.grid.floorAt(cx, cz);
       addBox('steel', cx, (b.y0 + b.y1) / 2 + lift, cz, b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
     }
   }

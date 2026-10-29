@@ -27,6 +27,18 @@
 // lintels, slab undersides; light wells and voids that rise through the level count as open), and
 // every other level by exact rays through the union of free bands, so light never leaks through a
 // slab but does fall through apertures, light wells and stairwells.
+//
+// Task office-seamless-20261029 (ENGINE): N storeys (one world for the 9-storey Office Space tower). Up to MAX_SLOTS (16)
+// level slots and up to MAX_BANDS (12) bands per column. A column that fits the iteration-08 header (<= 3 bands, slot ids
+// <= 3: every Subway column) keeps it byte for byte; any other column is EXTENDED: slice 0 A = its band count (1..63, the
+// top two bits 0 - never a legacy byte), R / G / B = the coarse split heights above bands 2 / 5 / 8, and one GROUP texel per
+// 3 bands (slices fieldDepth(slots) + g, after every slot) holds that group's two inner split heights and its three slot ids
+// (4-bit pair + byte). The shader picks the group from the coarse splits and the band inside it from the group texel: two
+// texel fetches for the slot pick on every column (a legacy column re-reads its own cached texel), float maths only. Slot
+// header heights are 8-bit per slot over that slot's own height range (`slotY`) in extended fields (a 42 m tower over one
+// global range would quantise floors to 0.16 m); legacy fields keep the global range (identical bytes and maths). Cross-level
+// rays are culled per fixture by a reachability flood over the union bands within its range (exact: a ray can only end
+// in a band the flood reached), so a tall stack of closed storeys bakes in about the time of its storeys.
 
 import * as THREE from 'three';
 import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
@@ -46,8 +58,15 @@ export const SLOT_DEPTH = 1 + 2 * LAYERS;
  */
 export const AUX_LAYERS = 3;
 export const AUX_SLOT_DEPTH = 1 + 2 * AUX_LAYERS;
-/** Most level slots the shader decodes. */
-export const MAX_SLOTS = 4;
+/** Most level slots a field holds (extended column headers store 4-bit slot ids). */
+export const MAX_SLOTS = 16;
+/** Slots / bands the iteration-08 (legacy) column header can name: 2-bit slot ids, a 2-bit band count. */
+export const LEGACY_SLOTS = 4;
+export const LEGACY_BANDS = 3;
+/** Extended column header: bands per group texel, group texels per column, most bands per column. */
+export const GROUP_BANDS = 3;
+export const MAX_GROUPS = 4;
+export const MAX_BANDS = GROUP_BANDS * MAX_GROUPS;
 /** Layers / first slice of level slot s; texture depth for S slots. */
 export const slotLayers = (s: number) => (s === 0 ? LAYERS : AUX_LAYERS);
 export const slotBase = (s: number) => (s === 0 ? 1 : 1 + SLOT_DEPTH + (s - 1) * AUX_SLOT_DEPTH);
@@ -144,22 +163,46 @@ export interface FieldSource {
 
 export interface BakedField {
   w: number; h: number; layers: number; depth: number;
-  /** Level slots (one per station level); depth = fieldDepth(slots). */
+  /** Level slots (one per station level); depth = fieldDepth(slots) + hdr. */
   slots: number;
   /**
-   * RGBA8 voxels, slice-major: ((slice * h + y) * w + x) * 4. Slice 0 R = bitmask of the slots present
-   * in the column. Slot s starts at slice slotBase(s): its header (floor, ceil, circuit 0/1 shares),
-   * then per layer k < slotLayers(s): (irradiance rgb + directional share) and (direction, dying share).
+   * RGBA8 voxels, slice-major: ((slice * h + y) * w + x) * 4. Slice 0 = the column header: legacy columns R = bitmask of
+   * the slots present, G / B = split heights, A = band count << 6 | 2-bit slot ids; extended columns (A in 1..63) R / G / B =
+   * coarse split heights, A = band count. Slot s starts at slice slotBase(s): its header (floor, ceil, circuit 0/1 shares),
+   * then per layer k < slotLayers(s): (irradiance rgb + directional share) and (direction, dying share). Extended columns'
+   * group texels follow the last slot (slices fieldDepth(slots) .. depth - 1).
    */
   data: Uint8Array;
-  /** Height encoding range (header R/G). */
+  /** Height encoding range of the column header split heights (and of every slot header in a legacy field). */
   yMin: number; yMax: number;
+  /** Extended column-header group slices after the slots (0 = every column uses the iteration-08 header). */
+  hdr?: number;
+  /** Per slot [lo, hi]: the slot header's 8-bit floor / ceiling range (absent = [yMin, yMax] for every slot). */
+  slotY?: Float64Array;
+  /** Per column: bitmask of the slots present (slice 0 R holds the same in legacy columns). */
+  masks?: Uint16Array;
   /** Grid cells per texel in X/Z (1 = full resolution; see downsampleField). */
   cellScale?: number;
   /** Flicker circuit per light (-1 steady/broken). */
   groups: Int8Array;
-  stats: {ms: number; bytes: number; fixtures: number; working: number; steady: number; circuits: [number, number, number]; rays: number; crossRays: number; slots: number};
+  stats: {ms: number; bytes: number; fixtures: number; working: number; steady: number; circuits: [number, number, number]; rays: number; crossRays: number; slots: number;
+    /** Most bands in one column, extended columns, columns with bands past MAX_BANDS (dropped), cross rays skipped by the flood. */
+    bands?: number; extCols?: number; cut?: number; crossCulled?: number};
 }
+
+/** [lo, hi] of slot s's header heights (floor = lo + byte / 255 * (hi - lo)). */
+export function slotRange(f: Pick<BakedField, 'yMin' | 'yMax' | 'slotY'>, s: number): [number, number] {
+  const r = f.slotY;
+  return r && r.length >= 2 * (s + 1) ? [r[2 * s], r[2 * s + 1]] : [f.yMin, f.yMax];
+}
+
+/** Band count of a column header (slice 0 A byte): legacy count << 6, or the extended count 1..63. */
+export function headerBands(a: number): number {
+  return a >= 64 ? a >> 6 : a;
+}
+
+/** Whether a column header (slice 0 A byte) is extended. */
+export const isExtendedHeader = (a: number): boolean => a > 0 && a < 64;
 
 /**
  * Per-cell floor height: uses the grid's own per-cell floor data when present (iteration 05 traversal
@@ -222,24 +265,83 @@ export function levelGeometries(src: FieldSource): ColumnGeometry[] {
  * Union of free bands per column (all levels, identical bands merged): flat arrays for the exact
  * cross-level rays. Band b of column i: start[i] <= b < start[i + 1].
  */
-interface UnionBands { start: Int32Array; f: Float32Array; c: Float32Array; prop: Uint8Array }
+interface UnionBands {
+  start: Int32Array; f: Float32Array; c: Float32Array; prop: Uint8Array;
+  /** Union band holding slot s's band at column i: of[s * n + i] (-1 = slot closed there). */
+  of: Int32Array;
+}
 
 function unionBands(geos: readonly ColumnGeometry[], n: number): UnionBands {
   const start = new Int32Array(n + 1);
+  const of = new Int32Array(geos.length * n).fill(-1);
   const f: number[] = [], c: number[] = [], prop: number[] = [];
   for (let i = 0; i < n; i++) {
     start[i] = f.length;
     const s0 = f.length;
-    for (const g of geos) {
+    for (let s = 0; s < geos.length; s++) {
+      const g = geos[s];
       if (!g.open[i]) continue;
-      let dup = false;
-      for (let b = s0; b < f.length; b++) if (Math.abs(f[b] - g.floorH[i]) < 1e-3 && Math.abs(c[b] - g.ceilH[i]) < 1e-3) { dup = true; if (g.open[i] === 2) prop[b] = 1; break; }
-      if (dup) continue;
+      let dup = -1;
+      for (let b = s0; b < f.length; b++) if (Math.abs(f[b] - g.floorH[i]) < 1e-3 && Math.abs(c[b] - g.ceilH[i]) < 1e-3) { dup = b; if (g.open[i] === 2) prop[b] = 1; break; }
+      if (dup >= 0) { of[s * n + i] = dup; continue; }
+      of[s * n + i] = f.length;
       f.push(g.floorH[i]); c.push(g.ceilH[i]); prop.push(g.open[i] === 2 ? 1 : 0);
     }
   }
   start[n] = f.length;
-  return {start, f: Float32Array.from(f), c: Float32Array.from(c), prop: Uint8Array.from(prop)};
+  return {start, f: Float32Array.from(f), c: Float32Array.from(c), prop: Uint8Array.from(prop), of};
+}
+
+/**
+ * Union bands a straight ray from a fixture can reach within `R` (m): flood from the bands holding the emitter (fx, fz at
+ * height fy) over 4-neighbour columns whose bands share a height (within the rays' 2 x CLEAR_EPS grazing tolerance). Every
+ * column a traceUnion ray crosses is a 4-neighbour of the previous one and both its height spans contain their common
+ * boundary height, so a ray can only succeed into a band this flood stamped (cross-level work outside it is skipped:
+ * exact, not a heuristic). Stamps `mark[b] = stamp` per reached band; returns how many bands were reached.
+ */
+class BandFlood {
+  private readonly queue: Int32Array;
+  readonly mark: Int32Array;
+  private stamp = 0;
+  constructor(private readonly U: UnionBands, private readonly W: number, private readonly H: number) {
+    this.mark = new Int32Array(U.f.length);
+    this.queue = new Int32Array(Math.max(16, U.f.length) * 2);
+  }
+  /** Floods from the emitter; the current stamp is returned (compare `mark[b] === stamp`). */
+  run(fx: number, fz: number, fy: number, R: number): number {
+    const {U, W, H, mark, queue} = this;
+    const st = ++this.stamp;
+    const cx0 = Math.floor(fx / CELL), cy0 = Math.floor(fz / CELL);
+    if (cx0 < 0 || cy0 < 0 || cx0 >= W || cy0 >= H) return st;
+    const reach = R + 1.5 * CELL, r2 = reach * reach, tol = 2 * CLEAR_EPS;
+    let qh = 0, qt = 0;
+    const i0 = cy0 * W + cx0;
+    for (let b = U.start[i0]; b < U.start[i0 + 1]; b++) if (fy >= U.f[b] - CLEAR_EPS && fy <= U.c[b] + CLEAR_EPS) { mark[b] = st; queue[qt++] = i0; queue[qt++] = b; }
+    while (qh < qt) {
+      const i = queue[qh++], b = queue[qh++];
+      const cx = i % W, cy = (i - cx) / W, bf = U.f[b], bc = U.c[b];
+      for (let k = 0; k < 4; k++) {
+        const nx = k === 0 ? cx - 1 : k === 1 ? cx + 1 : cx, ny = k === 2 ? cy - 1 : k === 3 ? cy + 1 : cy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const px = (nx + 0.5) * CELL - fx, pz = (ny + 0.5) * CELL - fz;
+        if (px * px + pz * pz > r2) continue;
+        const j = ny * W + nx;
+        for (let q = U.start[j], e = U.start[j + 1]; q < e; q++) {
+          if (mark[q] === st) continue;
+          if (Math.max(bf, U.f[q]) > Math.min(bc, U.c[q]) + tol) continue;
+          mark[q] = st;
+          if (qt + 2 > queue.length) return this.overflow(st);
+          queue[qt++] = j; queue[qt++] = q;
+        }
+      }
+    }
+    return st;
+  }
+  /** Queue exhausted (cannot happen: each band is queued once): mark everything reachable. */
+  private overflow(st: number): number {
+    this.mark.fill(st);
+    return st;
+  }
 }
 
 /**
@@ -318,6 +420,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   let yMin = Infinity, yMax = -Infinity;
   for (const q of geos) { yMin = Math.min(yMin, q.yMin); yMax = Math.max(yMax, q.yMax); }
   const U = S > 1 && src.crossLevel !== false ? unionBands(geos, n) : null;
+  const flood = U ? new BandFlood(U, W, H) : null;
 
   // --- Direct light (per slot) -------------------------------------------------------------
   const LS = geos.map((_, s) => slotLayers(s));
@@ -329,7 +432,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   const groups = new Int8Array(src.lights.length);
   const trans = new Float32Array(LAYERS);
   const circuits: [number, number, number] = [0, 0, 0];
-  let working = 0, steady = 0, rays = 0, crossRays = 0;
+  let working = 0, steady = 0, rays = 0, crossRays = 0, crossCulled = 0;
   const vis = geos.map((q, F) => {
     const eff = passThrough(geos, levels, F, n);
     return new FixtureVisibility(g, eff.open, eff.floorH, eff.ceilH, q.layerY, LS[F]);
@@ -358,6 +461,8 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     // Fixtures hang just under their own cell's ceiling (pendants lower): keep the emitter inside the cell.
     const fy = Math.max(geoF.floorH[fi] + 0.3, Math.min(l.y - 0.05, geoF.ceilH[fi] - 0.06));
     vis[F].begin(l.x, l.z, fy);
+    // Cross-level reach of this fixture (union bands a straight ray from it can end in, within its range).
+    const reach = flood ? flood.run(l.x, l.z, fy, R) : 0;
     const x0 = Math.max(0, Math.floor((l.x - R) / CELL)), x1 = Math.min(W - 1, Math.floor((l.x + R) / CELL));
     const y0 = Math.max(0, Math.floor((l.z - R) / CELL)), y1 = Math.min(H - 1, Math.floor((l.z + R) / CELL));
     for (let cy = y0; cy <= y1; cy++) {
@@ -375,6 +480,8 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
             if (!vis[F].query(cx, cy, Math.sqrt(h2), trans)) continue;
           } else {
             if (!U) continue;
+            const ub = U.of[s * n + i];
+            if (ub < 0 || flood!.mark[ub] !== reach) { crossCulled++; continue; }
             crossRays++;
             if (!traceUnion(W, H, U, l.x, l.z, fy, cx, cy, geo.layerY, i * L, L, trans)) continue;
           }
@@ -469,59 +576,100 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     return B;
   });
 
-  // --- Slot mask: which slots are really present per column (a flight carved into two level grids is
-  // one band: it belongs to the level whose walking height is nearer, so the shader's choice is unique).
-  const depth = fieldDepth(S);
-  const data = new Uint8Array(W * H * depth * 4);
-  for (let i = 0; i < n; i++) {
-    let mask = 0;
-    for (let s = 0; s < S; s++) {
-      const q = geos[s];
-      if (!q.open[i]) continue;
-      let dupOf = -1;
-      for (let t = 0; t < s; t++) if (geos[t].open[i] && Math.abs(geos[t].floorH[i] - q.floorH[i]) < 1e-3 && Math.abs(geos[t].ceilH[i] - q.ceilH[i]) < 1e-3) { dupOf = t; break; }
-      if (dupOf < 0) { mask |= 1 << s; continue; }
-      if (Math.abs(q.floorH[i] - levels[s].baseY) < Math.abs(q.floorH[i] - levels[dupOf].baseY)) { mask &= ~(1 << dupOf); mask |= 1 << s; }
-    }
-    data[i * 4] = mask;
-  }
-  // Packed slot choice in the same texel (one fetch picks the slot, no per-slot loop in the shader):
-  // G / B = heights between consecutive bands (mid-slab), A = band count << 6 | slot of band k in bits 2k.
-  // Closed columns copy an open neighbour's packing (filtering near walls reads that neighbour's slot).
+  // --- Column headers: which slots are really present per column (a flight carved into two level grids is one band: it
+  // belongs to the level whose walking height is nearer, so the shader's choice is unique), sorted by floor.
+  const masks = new Uint16Array(n), bandCnt = new Uint8Array(n), bandSlot = new Uint8Array(n * MAX_BANDS), legacyCol = new Uint8Array(n);
+  let maxBands = 0, extCols = 0, cut = 0, hdr = 0;
   {
-    const yr0 = yMax - yMin, q8 = (v: number) => Math.round(Math.min(1, Math.max(0, (v - yMin) / yr0)) * 255);
     const order: number[] = [];
     for (let i = 0; i < n; i++) {
-      const mask = data[i * 4];
+      let mask = 0;
+      for (let s = 0; s < S; s++) {
+        const q = geos[s];
+        if (!q.open[i]) continue;
+        let dupOf = -1;
+        for (let t = 0; t < s; t++) if (geos[t].open[i] && Math.abs(geos[t].floorH[i] - q.floorH[i]) < 1e-3 && Math.abs(geos[t].ceilH[i] - q.ceilH[i]) < 1e-3) { dupOf = t; break; }
+        if (dupOf < 0) { mask |= 1 << s; continue; }
+        if (Math.abs(q.floorH[i] - levels[s].baseY) < Math.abs(q.floorH[i] - levels[dupOf].baseY)) { mask &= ~(1 << dupOf); mask |= 1 << s; }
+      }
       if (!mask) continue;
       order.length = 0;
       for (let s = 0; s < S; s++) if ((mask >> s) & 1) order.push(s);
       order.sort((p, q) => geos[p].floorH[i] - geos[q].floorH[i]);
-      const cnt = Math.min(3, order.length);
-      let pk = cnt << 6;
-      for (let k = 0; k < cnt; k++) pk |= order[k] << (2 * k);
-      data[i * 4 + 3] = pk;
-      if (cnt > 1) data[i * 4 + 1] = q8((geos[order[0]].ceilH[i] + geos[order[1]].floorH[i]) / 2);
-      if (cnt > 2) data[i * 4 + 2] = q8((geos[order[1]].ceilH[i] + geos[order[2]].floorH[i]) / 2);
+      if (order.length > MAX_BANDS) { cut++; order.length = MAX_BANDS; mask = 0; for (const s of order) mask |= 1 << s; }
+      masks[i] = mask;
+      bandCnt[i] = order.length;
+      for (let k = 0; k < order.length; k++) bandSlot[i * MAX_BANDS + k] = order[k];
+      maxBands = Math.max(maxBands, order.length);
+      if (order.length <= LEGACY_BANDS && order.every(s => s < LEGACY_SLOTS)) legacyCol[i] = 1;
+      else { extCols++; hdr = Math.max(hdr, Math.ceil(order.length / GROUP_BANDS)); }
+    }
+  }
+  const depth = fieldDepth(S) + hdr, gs0 = fieldDepth(S);
+  const data = new Uint8Array(W * H * depth * 4);
+  // Packed slot choice (no per-slot loop in the shader). Legacy columns (the iteration-08 texel, byte for byte): R = slot
+  // mask, G / B = heights between consecutive bands (mid-slab), A = band count << 6 | slot of band k in bits 2k. Extended
+  // columns: A = band count, R / G / B = the splits above bands 2 / 5 / 8; group texel g (slice gs0 + g) = the splits above
+  // bands 3g / 3g + 1 and the slot ids of bands 3g, 3g + 1 (B: low / high nibble) and 3g + 2 (A).
+  // Closed columns copy an open neighbour's packing (filtering near walls reads that neighbour's slot).
+  {
+    const yr0 = yMax - yMin, q8 = (v: number) => Math.round(Math.min(1, Math.max(0, (v - yMin) / yr0)) * 255);
+    const split = (i: number, lo: number, up: number) => q8((geos[lo].ceilH[i] + geos[up].floorH[i]) / 2);
+    for (let i = 0; i < n; i++) {
+      const cnt = bandCnt[i];
+      if (!cnt) continue;
+      const ids = bandSlot.subarray(i * MAX_BANDS, i * MAX_BANDS + cnt), o = i * 4;
+      if (legacyCol[i]) {
+        data[o] = masks[i];
+        let pk = cnt << 6;
+        for (let k = 0; k < cnt; k++) pk |= ids[k] << (2 * k);
+        data[o + 3] = pk;
+        if (cnt > 1) data[o + 1] = split(i, ids[0], ids[1]);
+        if (cnt > 2) data[o + 2] = split(i, ids[1], ids[2]);
+        continue;
+      }
+      data[o + 3] = cnt;
+      for (let c = 0; c < 3; c++) { const b = GROUP_BANDS * (c + 1); if (cnt > b) data[o + c] = split(i, ids[b - 1], ids[b]); }
+      for (let g = 0; g * GROUP_BANDS < cnt; g++) {
+        const go = ((gs0 + g) * n + i) * 4, b0 = g * GROUP_BANDS;
+        if (b0 + 1 < cnt) data[go] = split(i, ids[b0], ids[b0 + 1]);
+        if (b0 + 2 < cnt) data[go + 1] = split(i, ids[b0 + 1], ids[b0 + 2]);
+        data[go + 2] = ids[b0] + 16 * (b0 + 1 < cnt ? ids[b0 + 1] : 0);
+        data[go + 3] = b0 + 2 < cnt ? ids[b0 + 2] : 0;
+      }
     }
     for (let i = 0; i < n; i++) {
-      if (data[i * 4]) continue;
+      if (masks[i]) continue;
       const cx = i % W;
-      for (const j of [i - 1, i + 1, i - W, i + W]) if (j >= 0 && j < n && data[j * 4] && Math.abs((j % W) - cx) <= 1) {
+      for (const j of [i - 1, i + 1, i - W, i + W]) if (j >= 0 && j < n && masks[j] && Math.abs((j % W) - cx) <= 1) {
+        if (!legacyCol[j]) {
+          data[i * 4] = data[j * 4];
+          for (let g = 0; g < hdr; g++) for (let c = 0; c < 4; c++) data[((gs0 + g) * n + i) * 4 + c] = data[((gs0 + g) * n + j) * 4 + c];
+        }
         data[i * 4 + 1] = data[j * 4 + 1]; data[i * 4 + 2] = data[j * 4 + 2]; data[i * 4 + 3] = data[j * 4 + 3];
         break;
       }
     }
   }
+  // Slot header height ranges: the global range in a legacy field (iteration-08 bytes and maths), each slot's own range
+  // (its open floors / ceilings and the closed-cell default band) in an extended one.
+  const slotY = new Float64Array(2 * S);
+  for (let s = 0; s < S; s++) {
+    if (!hdr) { slotY[2 * s] = yMin; slotY[2 * s + 1] = yMax; continue; }
+    const {open, floorH, ceilH} = geos[s], b = levels[s].baseY;
+    let lo = b, hi = b + 3;
+    for (let i = 0; i < n; i++) if (open[i]) { if (floorH[i] < lo) lo = floorH[i]; if (ceilH[i] > hi) hi = ceilH[i]; }
+    slotY[2 * s] = lo - 0.25; slotY[2 * s + 1] = hi + 0.25;
+  }
 
   // --- Encode --------------------------------------------------------------------------------
-  const yr = yMax - yMin;
   const enc = (v: number) => Math.round(Math.sqrt(Math.min(1, Math.max(0, v / FIELD_EMAX))) * 255);
   const u8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
   for (let s = 0; s < S; s++) {
     const {open, floorH, ceilH} = geos[s];
     const Es = E[s], Ds = D[s], ELs = EL[s], GLs = GL[s], G2Ls = G2L[s], B = bounce[s];
     const base = slotBase(s), L = LS[s];
+    const ylo = slotY[2 * s], yr = slotY[2 * s + 1] - ylo;
     for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
       const i = cy * W + cx;
       // Closed cells: zero light; heights borrowed from an open neighbour so filtering near walls stays sane.
@@ -532,8 +680,8 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
       }
       const o0 = ((base * H + cy) * W + cx) * 4;
       const dfl = levels[s].baseY;
-      data[o0] = hi >= 0 ? u8((floorH[hi] - yMin) / yr) : u8((dfl - yMin) / yr);
-      data[o0 + 1] = hi >= 0 ? u8((ceilH[hi] - yMin) / yr) : u8((dfl + 3 - yMin) / yr);
+      data[o0] = hi >= 0 ? u8((floorH[hi] - ylo) / yr) : u8((dfl - ylo) / yr);
+      data[o0 + 1] = hi >= 0 ? u8((ceilH[hi] - ylo) / yr) : u8((dfl + 3 - ylo) / yr);
       if (!open[i]) continue;
       let tot = 0;
       for (let k = 0; k < L; k++) tot += ELs[i * L + k];
@@ -561,8 +709,9 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     }
   }
   return {
-    w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups,
-    stats: {ms: performance.now() - t0, bytes: data.byteLength, fixtures: src.lights.length, working, steady, circuits, rays, crossRays, slots: S},
+    w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,
+    stats: {ms: performance.now() - t0, bytes: data.byteLength, fixtures: src.lights.length, working, steady, circuits, rays, crossRays, slots: S,
+      bands: maxBands, extCols, cut, crossCulled},
   };
 }
 
@@ -734,16 +883,37 @@ const dec = (b: number) => { const v = b / 255; return v * v * FIELD_EMAX; };
 /**
  * Level slot whose band at texel column (ci, cj) contains height y (else the nearest band); only slots
  * present in the column's mask count (a fully closed column considers every slot's borrowed header).
+ * Exact mirror of lightFieldNode.ts pickSlot: every split comparison is independent (y > split, gated by the band count),
+ * so a column whose quantised splits are not monotone decodes identically on the CPU and the GPU.
  */
 export function fieldSlot(f: BakedField, ci: number, cj: number, y: number): {slot: number; floor: number; ceil: number} {
   const W = f.w, H = f.h, d = f.data, yr = f.yMax - f.yMin;
   const o = (cj * W + ci) * 4, pk = d[o + 3], cnt = pk >> 6;
-  let band = 0;
-  if (cnt > 1 && y > f.yMin + d[o + 1] / 255 * yr) band++;
-  if (cnt > 2 && y > f.yMin + d[o + 2] / 255 * yr) band++;
-  const slot = Math.min((f.slots ?? 1) - 1, (pk >> (2 * band)) & 3);
+  const over = (v: number, k: number) => (pk > k && y > f.yMin + v / 255 * yr ? 1 : 0);
+  let slot: number;
+  if (cnt === 0 && pk > 0) {
+    // extended column: the group from the coarse splits (R / G / B), the band inside it from the group texel
+    const g = over(d[o], 3) + over(d[o + 1], 6) + over(d[o + 2], 9);
+    const slice = Math.min(f.depth - 1, fieldDepth(f.slots) + g);
+    const go = ((slice * H + cj) * W + ci) * 4, k1 = 3 * g + 1;
+    const j = over(d[go], k1) + over(d[go + 1], k1 + 1);
+    const B = d[go + 2];
+    slot = j === 0 ? B - Math.floor(B / 16) * 16 : j === 1 ? Math.floor(B / 16) : d[go + 3];
+  } else {
+    let band = 0;
+    if (cnt > 1 && y > f.yMin + d[o + 1] / 255 * yr) band++;
+    if (cnt > 2 && y > f.yMin + d[o + 2] / 255 * yr) band++;
+    slot = (pk >> (2 * band)) & 3;
+  }
+  slot = Math.min((f.slots ?? 1) - 1, slot);
   const h0 = ((slotBase(slot) * H + cj) * W + ci) * 4;
-  return {slot, floor: f.yMin + d[h0] / 255 * yr, ceil: f.yMin + d[h0 + 1] / 255 * yr};
+  const [lo, hi] = slotRange(f, slot), sr = hi - lo;
+  return {slot, floor: lo + d[h0] / 255 * sr, ceil: lo + d[h0 + 1] / 255 * sr};
+}
+
+/** Slots present in texel column i (bit s = slot s): BakedField.masks, else slice 0 R (legacy fields). */
+export function columnMask(f: BakedField, i: number): number {
+  return f.masks ? f.masks[i] : f.data[i * 4];
 }
 
 /** Sample like the shader: slot by height, bilinear in XZ (texel centres = cell centres), linear between layers. */
@@ -787,28 +957,42 @@ export function sampleField(f: BakedField, x: number, y: number, z: number, leve
  * Box-downsample a baked field by `k` in X/Z (fallback for GPUs whose MAX_3D_TEXTURE_SIZE is below the
  * station grid: WebGL2 only guarantees 256). The shader derives the texel size from the texture size,
  * so a coarser volume needs no shader change; light bleeds up to k/2 cells further near walls. The slot
- * mask (slice 0 R) is OR-ed and its slot packing (G/B/A) taken from the texel with the most bands;
- * every other slice is averaged.
+ * masks are OR-ed; the column header (slice 0 G / B / A, and R + the group slices of an extended column) is taken from the
+ * texel with the most bands; every slot slice is averaged.
  */
 export function downsampleField(f: BakedField, k: number): BakedField {
   if (k <= 1) return f;
-  const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), D = f.depth;
+  const W = Math.ceil(f.w / k), H = Math.ceil(f.h / k), D = f.depth, gs0 = fieldDepth(f.slots);
   const data = new Uint8Array(W * H * D * 4);
+  const masks = new Uint16Array(W * H);
+  const pickOf = new Int32Array(W * H).fill(-1);
   for (let s = 0; s < D; s++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const o = ((s * H + y) * W + x) * 4;
+    if (s >= gs0) { // extended-header group slices: the picked column's
+      const p = pickOf[y * W + x];
+      if (p >= 0 && isExtendedHeader(f.data[p * 4 + 3])) for (let c = 0; c < 4; c++) data[o + c] = f.data[((s * f.h) * f.w + p) * 4 + c];
+      continue;
+    }
     const acc = [0, 0, 0, 0];
     let n = 0, mask = 0, pick = -1;
     for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
       const sx = Math.min(f.w - 1, x * k + dx), sy = Math.min(f.h - 1, y * k + dy);
-      const o = ((s * f.h + sy) * f.w + sx) * 4;
-      if (s === 0) { mask |= f.data[o]; if ((f.data[o + 3] >> 6) > (pick >= 0 ? f.data[pick + 3] >> 6 : -1)) pick = o; }
-      for (let c = 0; c < 4; c++) acc[c] += f.data[o + c];
+      const o2 = ((s * f.h + sy) * f.w + sx) * 4;
+      if (s === 0) { mask |= columnMask(f, sy * f.w + sx); if (headerBands(f.data[o2 + 3]) > (pick >= 0 ? headerBands(f.data[pick * 4 + 3]) : -1)) pick = sy * f.w + sx; }
+      for (let c = 0; c < 4; c++) acc[c] += f.data[o2 + c];
       n++;
     }
-    const o = ((s * H + y) * W + x) * 4;
-    if (s === 0) { data[o] = mask; if (pick >= 0) { data[o + 1] = f.data[pick + 1]; data[o + 2] = f.data[pick + 2]; data[o + 3] = f.data[pick + 3]; } continue; }
+    if (s === 0) {
+      masks[y * W + x] = mask;
+      pickOf[y * W + x] = pick;
+      const pe = pick >= 0 && isExtendedHeader(f.data[pick * 4 + 3]);
+      data[o] = pe ? f.data[pick * 4] : mask & 255;
+      if (pick >= 0) { data[o + 1] = f.data[pick * 4 + 1]; data[o + 2] = f.data[pick * 4 + 2]; data[o + 3] = f.data[pick * 4 + 3]; }
+      continue;
+    }
     for (let c = 0; c < 4; c++) data[o + c] = Math.round(acc[c] / n);
   }
-  return {...f, w: W, h: H, data, stats: {...f.stats, bytes: data.byteLength}, cellScale: k};
+  return {...f, w: W, h: H, data, masks, stats: {...f.stats, bytes: data.byteLength}, cellScale: k};
 }
 
 // ---------------------------------------------------------------------------------------------

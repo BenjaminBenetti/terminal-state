@@ -438,6 +438,17 @@ const NAV_CLEAR = 1.6;
 interface PathLink { a: number; b: number; cost: number; id: number; pa: StandPoint; pb: StandPoint }
 
 /**
+ * Task office-seamless-20261029 (ENGINE): stacks of more than this many levels (the 9-storey Office Space tower) give A* an
+ * exact vertical term (PathFinder level distance fields); Subway stations (<= 3 levels) keep the 2D heuristic unchanged.
+ */
+export const LEVEL_HEURISTIC_MIN_LEVELS = 4;
+
+export interface PathFinderOptions {
+  /** Level distance fields for the A* heuristic (default: when the stack has >= LEVEL_HEURISTIC_MIN_LEVELS levels). */
+  levelHeuristic?: boolean;
+}
+
+/**
  * A* over passable cells (8-connected, no corner cutting) with a wall/ledge-hugging penalty.
  * Height-aware: neighbours within NAV_STEP, optional one-way drops, nav links (ladders).
  * Walkability is snapshotted at construction (props never move), and the inner loop works on
@@ -475,7 +486,17 @@ export class PathFinder {
   private heapSize = 0;
   /** Cells expanded by the last search (diagnostics). */
   lastExpanded = 0;
-  constructor(source: Grid | NavLevels) {
+  /**
+   * Task office-seamless-20261029: per goal level, the exact least cost from every walkable node to ANY node of that level
+   * over a superset of the search's edges (steps, drops, stair hand-overs, links; no wall / rail penalties), indexed by
+   * levelNode. The heuristic max(octile, levelDist[goal level][node]) is admissible and consistent, so routes across many
+   * storeys expand little more than the route itself (a 2D-only heuristic floods every storey below the goal).
+   */
+  private levelDist: Float32Array[] | null = null;
+  private levelNode: Int32Array | null = null;
+  /** Build time of the level distance fields (ms; 0 when unused). */
+  readonly levelHeuristicMs: number = 0;
+  constructor(source: Grid | NavLevels, opts: PathFinderOptions = {}) {
     if (source instanceof Grid) { this.src = null; this.grids = [source]; }
     else { this.src = source.list.length > 1 ? source : null; this.grids = source.list.map(l => l.grid); }
     const g0 = this.grids[0];
@@ -547,6 +568,69 @@ export class PathFinder {
           eb[nb] |= bit === 1 ? 2 : bit === 2 ? 1 : bit === 4 ? 8 : 4;
         }
       }
+    }
+    if (NL > 1 && (opts.levelHeuristic ?? NL >= LEVEL_HEURISTIC_MIN_LEVELS)) {
+      const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+      this.buildLevelDistance(W, H);
+      (this as {levelHeuristicMs: number}).levelHeuristicMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
+    }
+  }
+
+  /** Least cost from every walkable node to any node of each level (reverse Dijkstra per level; see levelDist). */
+  private buildLevelDistance(W: number, H: number): void {
+    const NC = this.NC, NL = this.grids.length, n = NC * NL, walk = this.walk, fl = this.fl;
+    const idx = new Int32Array(n).fill(-1);
+    let M = 0;
+    for (let i = 0; i < n; i++) if (walk[i]) idx[i] = M++;
+    const nodes = new Int32Array(M);
+    for (let i = 0; i < n; i++) if (idx[i] >= 0) nodes[idx[i]] = i;
+    this.levelNode = idx;
+    this.levelDist = [];
+    let heap = new Int32Array(Math.max(16, M)), heapF = new Float32Array(Math.max(16, M)), size = 0;
+    const push = (v: number, f: number) => {
+      if (size >= heap.length) { const h2 = new Int32Array(heap.length * 2), f2 = new Float32Array(heap.length * 2); h2.set(heap); f2.set(heapF); heap = h2; heapF = f2; }
+      let k = size++;
+      while (k > 0) { const p = (k - 1) >> 1; if (heapF[p] <= f) break; heap[k] = heap[p]; heapF[k] = heapF[p]; k = p; }
+      heap[k] = v; heapF[k] = f;
+    };
+    const pop = (): number => {
+      const top = heap[0], lastI = heap[--size], lastF = heapF[size];
+      let k = 0;
+      for (;;) {
+        let c = 2 * k + 1;
+        if (c >= size) break;
+        if (c + 1 < size && heapF[c + 1] < heapF[c]) c++;
+        if (heapF[c] >= lastF) break;
+        heap[k] = heap[c]; heapF[k] = heapF[c]; k = c;
+      }
+      heap[k] = lastI; heapF[k] = lastF;
+      return top;
+    };
+    for (let L = 0; L < NL; L++) {
+      const D = new Float32Array(M).fill(Infinity);
+      size = 0;
+      for (let i = L * NC; i < (L + 1) * NC; i++) if (idx[i] >= 0) { D[idx[i]] = 0; push(i, 0); }
+      while (size > 0) {
+        const f = heapF[0], v = pop(), dv = D[idx[v]];
+        if (f > dv) continue;
+        const lv = Math.floor(v / NC), ci = v - lv * NC, cx = ci % W, cy = (ci - cx) / W, fv = fl[v];
+        const relax = (u: number, c: number) => { const k = idx[u], nd = dv + c; if (k >= 0 && nd < D[k]) { D[k] = nd; push(u, nd); } };
+        // walking predecessors u -> v (steps either way within NAV_STEP; a straight drop from above)
+        for (let oy = -1; oy <= 1; oy++) {
+          if (cy + oy < 0 || cy + oy >= H) continue;
+          for (let ox = -1; ox <= 1; ox++) {
+            if ((!ox && !oy) || cx + ox < 0 || cx + ox >= W) continue;
+            const u = v + ox + oy * W;
+            if (!walk[u]) continue;
+            const dh = fv - fl[u], diag = ox !== 0 && oy !== 0;
+            if (dh <= NAV_STEP && dh >= -NAV_STEP) relax(u, diag ? 1.4142 : 1);
+            else if (!diag && dh < -NAV_STEP && dh >= -MAX_DROP) relax(u, 1 + DROP_COST);
+          }
+        }
+        if (this.twinFlag[v]) for (const u of this.twins.get(v)!) relax(u, 0.01);
+        if (this.linkFlag[v]) for (const li of this.linkMap.get(v)!) { const l = this.links[li]; relax(l.a === v ? l.b : l.a, l.cost); }
+      }
+      this.levelDist.push(D);
     }
   }
   private addLink(l: PathLink): void {
@@ -629,11 +713,15 @@ export class PathFinder {
     stamp[start] = cur;
     came[start] = -1;
     cameLink[start] = 0;
-    const h = (x: number, y: number) => {
+    const h2 = (x: number, y: number) => {
       const dx = x > tx ? x - tx : tx - x, dy = y > ty ? y - ty : ty - y;
       return dx > dy ? dx + 0.4142 * dy : dy + 0.4142 * dx;
     };
-    this.push(start, h(sx, sy));
+    // Task office-seamless-20261029: tall stacks add the exact least cost to reach the goal's level (Infinity: that node
+    // can never reach it - not pushed).
+    const LD = this.levelDist ? this.levelDist[lb] : null, LN = this.levelNode!;
+    const h = LD ? (node: number, x: number, y: number) => { const d = LD[LN[node]], o = h2(x, y); return d > o ? d : o; } : (_node: number, x: number, y: number) => h2(x, y);
+    this.push(start, h(start, sx, sy));
     let expanded = 0;
     let found = false;
     while (this.heapSize > 0) {
@@ -669,11 +757,13 @@ export class PathFinder {
           }
           const ng = gc + (diag ? 1.4142 : 1) + wallCost[n] + extra;
           if (stamp[n] !== cur || ng < gArr[n]) {
+            const hn = h(n, cx + ox, cy + oy);
+            if (hn === Infinity) continue;
             stamp[n] = cur;
             gArr[n] = ng;
             came[n] = c;
             cameLink[n] = 0;
-            this.push(n, ng + h(cx + ox, cy + oy));
+            this.push(n, ng + hn);
           }
         }
       }
@@ -683,11 +773,13 @@ export class PathFinder {
           if (closed[n] === cur) continue;
           const ng = gc + 0.01;
           if (stamp[n] !== cur || ng < gArr[n]) {
+            const hn = h(n, cx, cy);
+            if (hn === Infinity) continue;
             stamp[n] = cur;
             gArr[n] = ng;
             came[n] = c;
             cameLink[n] = 0;
-            this.push(n, ng + h(cx, cy));
+            this.push(n, ng + hn);
           }
         }
       }
@@ -698,12 +790,14 @@ export class PathFinder {
           if (!walk[n] || closed[n] === cur) continue;
           const ng = gc + l.cost;
           if (stamp[n] !== cur || ng < gArr[n]) {
+            const nc = n - Math.floor(n / NC) * NC, nx = nc % W;
+            const hn = h(n, nx, (nc - nx) / W);
+            if (hn === Infinity) continue;
             stamp[n] = cur;
             gArr[n] = ng;
             came[n] = c;
             cameLink[n] = li + 1;
-            const nc = n - Math.floor(n / NC) * NC, nx = nc % W;
-            this.push(n, ng + h(nx, (nc - nx) / W));
+            this.push(n, ng + hn);
           }
         }
       }

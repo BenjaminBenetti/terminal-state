@@ -32,7 +32,7 @@ import {ZombieActor} from './ai/zombieActor';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
-import type {BrainWorld} from './ai/brain';
+import {hearingMuffle, slabsBetween, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
@@ -1699,12 +1699,15 @@ export class Game {
       this.hud.hitmarker(anyKill);
       this.sfx.hitTick(anyKill);
     }
-    // gunfire alerts zombies; walls muffle it (Lane B, iteration 08: a slab between storeys muffles it more)
-    const multi = this.levels.count > 1, P = this.player;
+    // gunfire alerts zombies; walls muffle it (Lane B, iteration 08: a slab between storeys muffles it more). Task
+    // office-seamless-20261029 (ENGINE): 3D distance, x0.35 per slab between the storeys (ai/brain.ts hearingMuffle); no
+    // sight test for a zombie already beyond earshot (9 storeys of zombies per shot).
+    const multi = this.levels.count > 1, P = this.player, bases = multi ? this.levels.list.map(l => l.baseY) : null;
     for (const z of this.zombies) {
       const b = z.brain;
+      if (!b.alive || Math.hypot(b.x - P.x, b.z - P.z, b.y - P.y) > def.noise) continue;
       const los = multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z);
-      const muffle = los ? 1 : multi && Math.abs(b.y - P.y) > 2 ? 0.35 : 0.6;
+      const muffle = hearingMuffle(los, bases ? slabsBetween(bases, P.y, b.y) : 0);
       b.hear(P.x, P.z, def.noise * muffle, P.y);
     }
   }

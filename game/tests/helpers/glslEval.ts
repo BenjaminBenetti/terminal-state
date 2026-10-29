@@ -209,6 +209,56 @@ export function runBlock(code: string, env: Env, fns: Record<string, Fn> = {}, s
   return undefined;
 }
 
+/**
+ * Task office-seamless-20261029 (ENGINE): like runBlock, plus `if ( cond ) { ... } else { ... }` blocks (nested; the
+ * branch not taken is skipped), which three r186's GLSL builder emits for materialised select() nodes. Returns the
+ * `return` value or, with `stopAfter`, the first value assigned to that variable.
+ */
+export function runFlow(code: string, env: Env, fns: Record<string, Fn> = {}, stopAfter?: string): Val | undefined {
+  const done = {hit: false, v: undefined as Val | undefined};
+  const block = (src: string): boolean => {
+    let i = 0;
+    const skipWs = () => { while (i < src.length && /\s/.test(src[i])) i++; };
+    const braces = (from: number): number => { // index just past the matching '}' of the '{' at `from`
+      let d = 0;
+      for (let k = from; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && --d === 0) return k + 1; }
+      throw new Error('glslEval: unbalanced braces');
+    };
+    while (i < src.length) {
+      skipWs();
+      if (i >= src.length) break;
+      if (src.startsWith('//', i)) { const e = src.indexOf('\n', i); i = e < 0 ? src.length : e + 1; continue; }
+      if (/^if\s*\(/.test(src.slice(i))) {
+        const open = src.indexOf('(', i);
+        let d = 0, k = open;
+        for (; k < src.length; k++) { if (src[k] === '(') d++; else if (src[k] === ')' && --d === 0) break; }
+        const cond = num(evalExpr(src.slice(open + 1, k), env, fns)) !== 0;
+        let b0 = src.indexOf('{', k), b1 = braces(b0);
+        const thenSrc = src.slice(b0 + 1, b1 - 1);
+        i = b1; skipWs();
+        let elseSrc: string | null = null;
+        if (/^else\b/.test(src.slice(i))) {
+          i += 4; skipWs();
+          if (src[i] === '{') { b0 = i; b1 = braces(b0); elseSrc = src.slice(b0 + 1, b1 - 1); i = b1; }
+          else throw new Error('glslEval: else-if not supported');
+        }
+        if (block(cond ? thenSrc : elseSrc ?? '')) return true;
+        continue;
+      }
+      const e = src.indexOf(';', i);
+      const stmt = src.slice(i, e < 0 ? src.length : e);
+      i = e < 0 ? src.length : e + 1;
+      const r = /^\s*return\s+([\s\S]+)$/.exec(stmt);
+      if (r) { done.hit = true; done.v = evalExpr(r[1], env, fns); return true; }
+      const v = runBlock(stmt + ';', env, fns, stopAfter);
+      if (stopAfter && v !== undefined && /^\s*(\w+)/.exec(stmt)?.[1] === stopAfter) { done.hit = true; done.v = v; return true; }
+    }
+    return false;
+  };
+  block(code);
+  return done.v;
+}
+
 /** User functions defined in a generated shader ("float name ( vec3 p ) { ... }"), evaluable by name. */
 export function shaderFunctions(code: string): Record<string, Fn> {
   const fns: Record<string, Fn> = {};
