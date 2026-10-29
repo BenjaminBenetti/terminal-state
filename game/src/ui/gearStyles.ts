@@ -35,6 +35,7 @@ const CSS = `
 #bagview .slot img.ico3d { height: 36px; }
 #bagview .slot svg { width: 44px; height: 24px; }
 #bagview .slot .nm { font-size: 10.5px; }
+#bagview .slot .count { top: 3px; bottom: auto; font-size: 11px; }
 #bagview .slot.filled { cursor: grab; touch-action: none; }
 #bagview.dragging, #bagview.dragging .slot { cursor: grabbing; }
 #bagview .bv-note { min-height: 1.2em; margin-top: 6px; color: var(--mustard); }

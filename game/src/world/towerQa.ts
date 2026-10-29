@@ -12,8 +12,14 @@ export interface ExteriorTune { haze?: Rgb; hazeDensity?: number; sun?: Rgb; sky
 
 interface QaGame {
   tower: TowerRuntime;
-  player: {x: number; z: number; y: number; yaw: number; pitch: number; eye: number};
+  player: {x: number; z: number; y: number; yaw: number; pitch: number; eye: number; vy: number; grounded: boolean; climb: unknown};
   camera: {updateMatrixWorld(force?: boolean): void};
+}
+
+/** Put the player at (x, z) standing on the floor at height `y` (the street section has two storeys: the lobby is the upper one). */
+function stand(g: QaGame, x: number, z: number, y: number): void {
+  const p = g.player;
+  p.x = x; p.z = z; p.y = y; p.vy = 0; p.grounded = true; p.climb = null;
 }
 
 /** Face (x, y, z) from the player's eye (camera convention: forward = (-sin yaw cos pitch, sin pitch, -cos yaw cos pitch)). */
@@ -48,7 +54,7 @@ export function towerQaApi(game: unknown) {
       const e = rt().section?.elevator;
       if (!e) return false;
       const c = e.plan.callAt, [nx, nz] = e.plan.callN;
-      g.player.x = c.x + nx * 0.9; g.player.z = c.z + nz * 0.9;
+      stand(g, c.x + nx * 0.9, c.z + nz * 0.9, e.plan.info.floorY);
       face(g, c.x, c.y, c.z);
       return true;
     },
@@ -57,7 +63,7 @@ export function towerQaApi(game: unknown) {
       const e = rt().section?.elevator;
       if (!e) return false;
       const cab = e.plan.info.cab, p = e.plan.panelAt;
-      g.player.x = (cab.x0 + cab.x1) / 2; g.player.z = (cab.z0 + cab.z1) / 2;
+      stand(g, (cab.x0 + cab.x1) / 2, (cab.z0 + cab.z1) / 2, e.plan.info.floorY);
       face(g, p.x, p.y, p.z);
       return true;
     },
@@ -65,7 +71,7 @@ export function towerQaApi(game: unknown) {
     towerGoStairs: () => {
       const d = rt().section?.stairs?.plans[0];
       if (!d) return false;
-      g.player.x = d.x + d.n[0] * 1.0; g.player.z = d.z + d.n[1] * 1.0;
+      stand(g, d.x + d.n[0] * 1.0, d.z + d.n[1] * 1.0, d.y);
       face(g, d.x, d.y + 1.2, d.z);
       return true;
     },
