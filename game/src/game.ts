@@ -47,6 +47,9 @@ import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
+import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
+import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
+import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 // Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
@@ -150,6 +153,22 @@ export class Game {
   readonly flareHold = new FlareHold();
   /** Iteration 15: the left button belonged to a flare hold; the gun ignores it until it is released. */
   private lmbLatch = false;
+
+  // ==== Iteration 16 shared plumbing (primary) — lanes REGISTER into these; they do not rewrite each other's code ====
+  /** Per-frame modifier contributors (lane GEAR: worn gear; lane INJURY: limb injuries). Combined from base values each frame. */
+  readonly modifierSources: ModifierSource[] = [];
+  /** This frame's combined modifiers (player/modifiers.ts). */
+  mods: PlayerModifiers = {...BASE_MODIFIERS};
+  /** Called with every resolved hit on the player, after armor and HP (lane INJURY rolls limb injuries here). */
+  readonly hitListeners: ((hit: ResolvedHit) => void)[] = [];
+  /** E-key handlers tried before the default interaction (lane GEAR: grounded backpack; lane TOWER: elevator / stair doors). Return true when handled. */
+  readonly interactHandlers: (() => boolean)[] = [];
+  /** Per-section build hooks: `build` after a section's world is built (before warm-up), `teardown` before it is torn down. */
+  readonly sectionHooks: {build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
+  /** Aim offset (radians) added to the camera every frame (lane INJURY: restrained arm-injury sway). Shots use the camera, so it is honest. */
+  readonly aimOffset = {yaw: 0, pitch: 0};
+  /** Per-frame lane updates while playing (after the player moved, before the camera update). */
+  readonly frameHooks: ((dt: number) => void)[] = [];
   /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
   get flashlightOn(): boolean { return this.torch.battery.on; }
   set flashlightOn(v: boolean) { this.torch.battery.setOn(v); }
@@ -349,6 +368,7 @@ export class Game {
     // instanced variants). The old station leaves the scene now; its GPU releases are queued and run only after the new
     // station's warm-up re-used those programs (prepareGraphics), instead of rebuilding them at the start of the level.
     this.flushRetired(); // anything still queued from an earlier station
+    if (this.world) for (const h of this.sectionHooks) h.teardown?.(); // Iteration 16: lane section state (elevator, grounded bags, …)
     if (this.world) {
       const oldGroup = this.world.group;
       this.scene.remove(oldGroup);
@@ -471,6 +491,7 @@ export class Game {
     // Lane F: enemies block the flashlight beam — marked once per actor in spawnEnemy (iteration 07, Lane Q)
     this.genMs = performance.now() - t0;
     $('#seed-line').textContent = `Station: ${this.layout.name} · code ${seedToCode(seed)} (debug/share only; reloading the page always makes a new station)`;
+    for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.updateCamera(0);
   }
   genMs = 0;
@@ -893,6 +914,7 @@ export class Game {
   }
 
   private interact(): void {
+    for (const h of this.interactHandlers) if (h()) return; // Iteration 16: lane handlers first (grounded backpack, elevator, stair doors)
     if (this.containerTarget) { this.containers?.interact(this.containerTarget); return; }
     const p = this.currentTarget;
     if (!p) {
@@ -959,13 +981,15 @@ export class Game {
   currentSpread(def: WeaponDef): number {
     const moving = Math.min(1, this.player.speed / WALK_SPEED);
     const base = this.aiming ? def.spreadAim : def.spreadHip;
-    return (base + def.spreadMove * moving * (this.aiming ? 0.4 : 1) + this.bloom + (this.player.sprinting ? 0.05 : 0)) * stanceSpreadMult(this.player.crouched);
+    return (base + def.spreadMove * moving * (this.aiming ? 0.4 : 1) + this.bloom + (this.player.sprinting ? 0.05 : 0)) * stanceSpreadMult(this.player.crouched)
+      * this.mods.spreadMult; // Iteration 16: gloves / arm injury
   }
 
   // ---------------------------------------------------------------------------------------
   update(dt: number): void {
     this.time += dt;
     this.stats.time += dt;
+    this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
     const inp = this.input;
     const p = this.player;
     const sens = this.settings.sens * 0.0022 * (this.aiming ? 0.65 : 1);
@@ -1004,7 +1028,7 @@ export class Game {
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
     this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active;
-    const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: this.use ? 0.6 : wdef?.moveMult ?? 1, canSprint: !this.use && !inp.mouse[0]});
+    const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]});
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -1063,6 +1087,7 @@ export class Game {
     for (const w of surv.warnings) this.hud.toast(w.text, w.warn);
 
     this.updateZombies(dt);
+    for (const fn of this.frameHooks) fn(dt); // Iteration 16: lane per-frame systems (gear / backpack, injuries, elevator)
     this.physics.update(dt); // ragdolls (fixed 1/60 steps) + casings; update() only runs while playing
     this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
 
@@ -1135,7 +1160,8 @@ export class Game {
     this.camera.position.set(p.x, p.eye + bob, p.z);
     const sh = this.shake * this.shake;
     const t = this.time;
-    this.camera.rotation.set(p.pitch + this.recoilPitch + Math.sin(t * 37) * 0.02 * sh, p.yaw + this.recoilYaw + Math.sin(t * 29) * 0.02 * sh, Math.sin(t * 23) * 0.015 * sh);
+    // Iteration 16: `aimOffset` (lane INJURY: arm-injury sway) moves the real aim — shots, crosshair and the optic dot follow it
+    this.camera.rotation.set(p.pitch + this.recoilPitch + this.aimOffset.pitch + Math.sin(t * 37) * 0.02 * sh, p.yaw + this.recoilYaw + this.aimOffset.yaw + Math.sin(t * 29) * 0.02 * sh, Math.sin(t * 23) * 0.015 * sh);
     const targetFov = this.aiming ? (WEAPONS[this.weapon.def?.id ?? 'rifle']?.aimFov ?? 60) : this.settings.fov;
     const fov = this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 14 || 1);
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
@@ -1385,8 +1411,10 @@ export class Game {
 
   private hurtPlayer(z: EnemyActor): void {
     const p = this.player;
-    const amount = z.brain.stats.attackDamage;
-    p.takeDamage(amount);
+    // Iteration 16: one hit pipeline — location -> armor (worn gear) -> HP -> listeners (limb injuries)
+    const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: 'zombie', location: meleeHitLocation(this.rand(), p.crouched), attacker: z.brain.stats.chaseAnim};
+    const resolved = this.applyPlayerHit(hit);
+    const amount = resolved.applied;
     const dx = z.brain.x - p.x, dz = z.brain.z - p.z;
     const s = Math.sin(p.yaw), c = Math.cos(p.yaw);
     const fwd = -dx * s - dz * c, right = dx * c - dz * s;
@@ -1397,6 +1425,15 @@ export class Game {
     this.recoilYaw += Math.sign(right) * 0.03;
     this.sfx.hurt();
     this.cancelUse('hit'); // a zombie hit knocks the item away from the face (nothing consumed)
+  }
+
+  /** Iteration 16: apply a hit to the player through armor; notifies hitListeners. Other damage sources (falls) use this too. */
+  applyPlayerHit(hit: PlayerHit): ResolvedHit {
+    const {applied, absorbed} = armorFor(hit, this.mods.armorHead, this.mods.armorTorso);
+    this.player.takeDamage(applied);
+    const resolved: ResolvedHit = {...hit, applied, absorbed};
+    for (const fn of this.hitListeners) fn(resolved);
+    return resolved;
   }
 
   private die(): void {
