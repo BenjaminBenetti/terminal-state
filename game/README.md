@@ -39,7 +39,7 @@ The built folder is fully static: open `index.html` through any static HTTP serv
 ## Controls
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use · right click
 aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) · 1–5 / wheel quick slots · Q last item · Tab or I inventory · H quick
-heal · G drop held item · F flashlight · T throw flare · M mute · Esc pause. Desktop keyboard + mouse only; touch
+heal · G drop held item · F flashlight · hold T, release to throw a flare · M mute · Esc pause. Desktop keyboard + mouse only; touch
 is not supported.
 
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
@@ -49,9 +49,11 @@ the light-on time grows linearly from 0 at 25 % to 40 % near 0 % (dips 0.10–0.
 only near empty, plus a slight brown-out); at 0 % it is dead and F only clicks. A found **battery** (D cell) is used like
 food (left click while held, or Use in the inventory): it refills to 100 %, consumes one, and is refused at ≥ 99 %. A
 faint warm-orange **body glow** (0.22 cd, 2 m reach) keeps the floor right around you from pitch black; it never draws
-enemies. **Flares** are the grenade slot: **T** strikes and throws one from anywhere in the inventory (or left click with a
-flare in the held quick slot); it bounces and settles physically, burns red with red smoke for 50 s (fading over the last
-6 s) and lures enemies that can see it (28 m). At most 3 burn at once (a 4th throw is refused, nothing used). The
+enemies. **Flares** are the grenade slot. Iteration 15: **hold T** (from anywhere in the inventory) or **hold left click**
+with a flare in the held quick slot to ready it (drawn back like a grenade), **release** to throw; a quick tap throws on
+release, holding never throws twice, and switching item / pausing / opening the inventory drops it unspent. It bounces and
+settles physically, burns red with red smoke for 50 s (fading over the last 6 s) — a strong red light (42 cd, 11.5 m,
+iteration 15; walls and other storeys stay dark) — and lures enemies that can see it (28 m). At most 3 burn at once (a 4th throw is refused, nothing used). The
 flashlight beam lures too (20 m around where it lands, scaled by its brightness). G still drops the held item.
 
 Crouch: **C** (iteration 05: back from Ctrl, which collided with the browser's Ctrl+W) — tap to
@@ -200,6 +202,12 @@ station" (same seed, this session only).
   rifle and shotgun are seeded map finds. The old `?devpistol=1` flag is redundant; the internal box
   placeholder (`pistol-dev-placeholder`) is never used while the real model is loaded.
   `__LL.weaponFinds()` lists the station's weapon pickups (position, level, spawn distance).
+- Iteration 15: the rifle's **see-through red-dot optic** is back on the user's rifle model (aim down sights to look
+  through it: coated glass, fine duplex and the red dot on the aim line, eye relief 0.105 m as in iteration 04). The
+  model's sight is one solid mesh, so a runtime rear aperture + depth mask (`src/weapons/optic.ts`, measured from
+  `rifle-user.glb`, no asset change) cuts the view through it; it is compiled by the loading-screen warm-up. **Recoil**
+  is 1.5x for every gun (camera kick + viewmodel kick; `RECOIL_SCALE` in `src/weapons/weapons.ts`); recovery, damage,
+  spread and fire rate are unchanged. The fog drifts at half the iteration-13 speed.
 - Weapon finds: the guaranteed spawn-side shotgun is gone. Weapons you do not start with are seeded
   map finds (0-2 copies each, ~95 % of stations have at least one) in back-of-house rooms or platform-end
   work zones on any storey, ≥ 25 m from the spawn, each with matching ammo (`src/gen/weaponFinds.ts`).

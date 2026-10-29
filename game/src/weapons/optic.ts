@@ -13,9 +13,19 @@
 //
 // Iteration 13 (CORE): the lens is a TSL node material (MeshBasicNodeMaterial) — the same math as the iteration-04 GLSL,
 // compiled by WebGPURenderer to WGSL (WebGPU) or GLSL (its WebGL 2 backend). `lens.uniforms.<name>.value` stays the API.
-// No shipped weapon def carries an optic spec now (rifle-optic.glb stays wired for a def that does). Limitation: the
-// renderer tone-maps in its output pass over the whole frame, so `toneMapped = false` no longer exempts the reticle
-// from ACES (the red dot reads a little deeper than the old untone-mapped GLSL).
+// Limitation: the renderer tone-maps in its output pass over the whole frame, so `toneMapped = false` no longer exempts
+// the reticle from ACES (the red dot reads a little deeper than the old untone-mapped GLSL).
+//
+// Iteration 15 (user: "the assault rifle the scope doesn't work anymore after we replaced the model ... I want the scope
+// to work just like it worked in the original where you could see through it and have the dot"): the user's red-dot
+// rifle (rifle-user.glb, ONE opaque mesh: the sight is a solid capped cylinder) gets the same optic at runtime — no asset
+// change. `OpticSpec.aperture` (measured from the derivative: tests/optic.test.ts re-measures it) places a glass disk
+// just eye-side of the sight's rear cap, on its axis; the depth mask behind it hides the cap / body inside the aperture
+// (the viewmodel overlay stays transparent there, so the station shows through) and the lens draws the coated glass,
+// fine duplex and the red dot, exactly as the iteration-04 optic. The rim of the housing stays around it. It only
+// attaches when the model's `Sight` marker sits on that axis (the original rifle.glb keeps its legacy ADS,
+// rifle-optic.glb its authored glass). The lens / mask live in the viewmodel scene under the rifle's holder, so the
+// warm-up's viewmodel pass (render/warmup.ts) compiles them before the first ADS.
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
@@ -24,7 +34,15 @@ import {abs, dot, exp, float, fwidth, length, max, mix, normalize, positionView,
 export interface OpticSpec {
   /** Eye distance (m) behind the rear glass (OpticRear) at full ADS; the eye sits on the optic axis. */
   eyeRelief: number;
+  /**
+   * Iteration 15: for a model WITHOUT an authored see-through optic (no OpticGlassRear / OpticRear): a runtime rear
+   * aperture — a glass disk of `radius` (m) at model-space (x, y, z), facing +Z (the eye), on a bore-parallel axis.
+   */
+  aperture?: {x: number; y: number; z: number; radius: number};
 }
+
+/** Iteration 15: the runtime aperture attaches only when the model's `Sight` marker is within this distance (m) of its axis. */
+export const APERTURE_SIGHT_TOLERANCE = 0.01;
 
 /** Reticle/lens look. Reticle sizes are angles (radians, tangent plane about the aim direction). */
 export const OPTIC_LOOK = {
@@ -187,11 +205,33 @@ export class RifleOptic {
    * ADS) when the model has no see-through optic — e.g. the original rifle.glb.
    */
   static attach(model: THREE.Object3D, spec: OpticSpec): {optic: RifleOptic; rear: THREE.Vector3} | null {
-    const glass = model.getObjectByName('OpticGlassRear') as THREE.Mesh | undefined;
-    const anchor = model.getObjectByName('OpticRear');
+    let glass = model.getObjectByName('OpticGlassRear') as THREE.Mesh | undefined;
+    let anchor = model.getObjectByName('OpticRear');
+    if ((!glass?.isMesh || !anchor) && spec.aperture) {
+      // Iteration 15: no authored optic (the user's red-dot rifle) -> runtime aperture on the sight's axis
+      const made = RifleOptic.runtimeAperture(model, spec.aperture);
+      if (made) ({glass, anchor} = made);
+    }
     if (!glass?.isMesh || !anchor) return null;
     model.updateMatrixWorld(true);
     return {optic: new RifleOptic(glass, spec), rear: anchor.getWorldPosition(new THREE.Vector3())};
+  }
+
+  /** Iteration 15: glass disk + OpticRear anchor at the spec'd aperture, if the model's `Sight` marker is on its axis. */
+  private static runtimeAperture(model: THREE.Object3D, a: NonNullable<OpticSpec['aperture']>): {glass: THREE.Mesh; anchor: THREE.Object3D} | null {
+    model.updateMatrixWorld(true);
+    const sight = model.getObjectByName('Sight');
+    if (!sight) return null;
+    const s = sight.getWorldPosition(new THREE.Vector3());
+    if (Math.hypot(s.x - a.x, s.y - a.y) > APERTURE_SIGHT_TOLERANCE) return null;
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(a.radius, 48));
+    glass.name = 'OpticGlassRear';
+    glass.position.set(a.x, a.y, a.z);
+    const anchor = new THREE.Object3D();
+    anchor.name = 'OpticRear';
+    anchor.position.set(a.x, a.y, a.z);
+    model.add(glass, anchor);
+    return {glass, anchor};
   }
 
   /**

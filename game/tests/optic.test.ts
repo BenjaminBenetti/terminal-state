@@ -19,9 +19,10 @@ const sha = (f: string) => crypto.createHash('sha256').update(readFileSync(f)).d
 const io = new NodeIO();
 const optDoc = await io.read(file('models/rifle-optic.glb'));
 const oldDoc = await io.read(file('models/rifle.glb'));
+const userDoc = await io.read(file('models/rifle-user.glb')); // iteration 15: the user's red-dot rifle
 const prov = JSON.parse(readFileSync(file('derivatives/rifle-optic-iteration04.json'), 'utf8'));
-// 2026-10-28: the rifle def no longer carries the iteration-04 optic spec (the user's red-dot rifle has no see-through
-// optic parts; ADS sights via its `Sight` marker, tests/weapon-sights.test.ts). The optic module + rifle-optic.glb stay.
+// Iteration 15: the rifle def carries the optic spec again (eye relief 0.105 as iteration 04) plus a runtime rear aperture
+// for the user's red-dot rifle (rifle-user.glb has no authored optic parts); rifle-optic.glb still uses its authored glass.
 const spec = {eyeRelief: 0.105};
 
 const node = (d: Document, name: string) => d.getRoot().listNodes().find(n => n.getName() === name);
@@ -152,19 +153,19 @@ describe('ADS alignment math', () => {
   });
 });
 
-describe('Viewmodel with rifle-optic.glb (retired optic spec)', async () => {
+describe('Viewmodel with rifle-optic.glb (authored optic)', async () => {
   const [rifle, shotgun] = await Promise.all([gltfOf('models/rifle-optic.glb'), gltfOf('models/shotgun.glb')]);
   const state = (aiming: boolean) => ({moving: 0, sprint: false, aiming, lookDX: 0, lookDY: 0, reloading: false, reloadProgress: 0, using: false, useProgress: 0, bobT: 0});
 
-  it('the rifle def has no optic spec now, so rifle-optic.glb is not wired and markerless models use the legacy aim', () => {
-    expect(WEAPONS.rifle.view.optic).toBeUndefined();
+  it('an authored optic (rifle-optic.glb) wins over the runtime aperture; markerless guns keep the legacy aim', () => {
+    expect(WEAPONS.rifle.view.optic?.eyeRelief).toBe(spec.eyeRelief);
     const vm = new Viewmodel({rifle, shotgun}, {});
     const pivot = vm.camera.children.find(c => c.type === 'Group')!;
     vm.setItem('rifle');
     for (let i = 0; i < 60; i++) vm.update(0.05, state(true));
-    expect(vm.heldOptic).toBeNull();
-    expect(vm.opticAim).toBe(0);
-    pivot.position.toArray().forEach((v, k) => expect(v).toBeCloseTo(WEAPONS.rifle.view.aim[k], 6)); // no Sight marker in rifle-optic.glb
+    expect(vm.heldOptic).toBeTruthy();
+    expect((vm.heldOptic!.glass.geometry as THREE.BufferGeometry).type).not.toBe('CircleGeometry'); // the authored glass
+    expect(vm.opticAim).toBeGreaterThan(0.99);
     vm.setItem('shotgun');
     for (let i = 0; i < 60; i++) vm.update(0.05, state(true));
     pivot.position.toArray().forEach((v, k) => expect(v).toBeCloseTo(WEAPONS.shotgun.view.aim[k], 6)); // no Sight marker in shotgun.glb
@@ -229,5 +230,92 @@ describe('Viewmodel with rifle-optic.glb (retired optic spec)', async () => {
     for (let i = 0; i < 60; i++) vm.update(0.05, state(true));
     expect(vm.heldOptic).toBeNull();
     pivot.position.toArray().forEach((v, k) => expect(v).toBeCloseTo(WEAPONS.rifle.view.aim[k], 6));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+describe("iteration 15: the user's red-dot rifle (rifle-user.glb) sees through its optic again (runtime aperture)", async () => {
+  const user = await gltfOf('models/rifle-user.glb');
+  const shotgun = await gltfOf('models/shotgun.glb');
+  const ap = WEAPONS.rifle.view.optic!.aperture!;
+  const state = (aiming: boolean) => ({moving: 0, sprint: false, aiming, lookDX: 0, lookDY: 0, reloading: false, reloadProgress: 0, using: false, useProgress: 0, bobT: 0});
+  /** Every vertex of the derivative in model / game space (the node's rotation + scale applied). */
+  const verts = (() => {
+    const d = userDoc;
+    const out: THREE.Vector3[] = [];
+    for (const n of d.getRoot().listNodes()) {
+      const m = n.getMesh();
+      if (!m) continue;
+      const W = new THREE.Matrix4().fromArray(n.getWorldMatrix());
+      for (const p of m.listPrimitives()) {
+        const P = p.getAttribute('POSITION')!.getArray()!;
+        for (let i = 0; i < P.length; i += 3) out.push(new THREE.Vector3(P[i], P[i + 1], P[i + 2]).applyMatrix4(W));
+      }
+    }
+    return out;
+  })();
+
+  it('the measured aperture sits on the sight axis, just eye-side of its rear cap, with a housing rim around it', () => {
+    const sight = user.scene.getObjectByName('Sight')!.getWorldPosition(new THREE.Vector3());
+    expect(Math.hypot(sight.x - ap.x, sight.y - ap.y)).toBeLessThan(0.01); // APERTURE_SIGHT_TOLERANCE
+    const r = (v: THREE.Vector3) => Math.hypot(v.x - ap.x, v.y - ap.y);
+    const inside = verts.filter(v => r(v) < ap.radius + 0.002 && v.y > 0.1);
+    const rearmost = Math.max(...inside.map(v => v.z));
+    // nothing of the rifle between the depth mask and the eye inside the aperture; the glass hugs the cap (< 4 mm)
+    expect(rearmost).toBeLessThan(ap.z - OPTIC_LOOK.maskOffset);
+    expect(ap.z - rearmost).toBeLessThan(0.004);
+    // the solid sight body really is there behind it (what the mask cuts away), and wider than the aperture (a rim)
+    expect(inside.filter(v => v.z > -0.06 && v.z < rearmost).length).toBeGreaterThan(20);
+    expect(verts.filter(v => r(v) > ap.radius + 0.002 && r(v) < ap.radius + 0.012 && v.z > rearmost - 0.012 && v.z <= rearmost + 1e-4).length).toBeGreaterThan(20);
+  });
+
+  it('hip: dark lens; full ADS: eye on the axis 0.105 m behind the glass, glass centre at screen centre, dot on the aim line, also under the 1.5x recoil', () => {
+    const vm = new Viewmodel({rifle: user, shotgun}, {});
+    vm.setItem('rifle');
+    for (let i = 0; i < 40; i++) vm.update(0.05, state(false));
+    const optic = vm.heldOptic!;
+    expect(optic).toBeTruthy();
+    expect((optic.glass.geometry as THREE.BufferGeometry).type).toBe('CircleGeometry'); // runtime aperture
+    expect(optic.glass.material).toBe(optic.lens);
+    expect((optic.mask.material as THREE.Material).colorWrite).toBe(false);
+    expect(optic.mask.renderOrder).toBeLessThan(0);
+    expect(optic.clarity).toBe(0);
+    for (let i = 0; i < 60; i++) vm.update(0.05, state(true));
+    expect(optic.clarity).toBeGreaterThan(0.999);
+    expect(optic.eye.x).toBeCloseTo(0, 4);
+    expect(optic.eye.y).toBeCloseTo(0, 4);
+    expect(optic.eye.z).toBeCloseTo(0.105, 4);
+    expect(vm.opticAim).toBeGreaterThan(0.99); // game.ts hides the HUD crosshair (> 0.6): the lens dot is the aim point
+    vm.scene.updateMatrixWorld(true);
+    const rear = optic.glass.getWorldPosition(new THREE.Vector3()).applyMatrix4(vm.camera.matrixWorldInverse);
+    expect(Math.hypot(rear.x, rear.y)).toBeLessThan(1e-4);
+    expect(rear.z).toBeCloseTo(-0.105, 4);
+    expect((optic.lens.uniforms.uDir.value as THREE.Vector3).distanceTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(1e-4);
+    vm.fire(WEAPONS.rifle);
+    let minClarity = 1;
+    for (let i = 0; i < 12; i++) { vm.update(1 / 60, state(true)); minClarity = Math.min(minClarity, optic.clarity); }
+    expect(minClarity).toBeGreaterThan(0.85);
+    expect((optic.lens.uniforms.uDir.value as THREE.Vector3).distanceTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(1e-4);
+  });
+
+  it('the lens and mask are in the viewmodel pass under a warm root: the loading-screen warm-up compiles them before the first ADS', () => {
+    const vm = new Viewmodel({rifle: user, shotgun}, {});
+    const roots = new Set(vm.warmRoots());
+    const glass = vm.scene.getObjectByName('OpticGlassRear') as THREE.Mesh, mask = vm.scene.getObjectByName('OpticLensMask') as THREE.Mesh;
+    for (const m of [glass, mask]) {
+      expect(m?.isMesh).toBe(true);
+      let a: THREE.Object3D | null = m, under = false;
+      while (a) { if (roots.has(a)) under = true; a = a.parent; }
+      expect(under, m.name).toBe(true);
+    }
+    // the rifle (and so its lens) is hidden until held: exactly what the pass makes visible for its compile
+    expect(roots.has(glass.parent!.parent!) || roots.has(glass.parent!)).toBe(true);
+  });
+
+  it('the original rifle.glb (no Sight marker) never gets a runtime aperture', async () => {
+    const legacy = await gltfOf('models/rifle.glb');
+    const vm = new Viewmodel({rifle: legacy, shotgun}, {});
+    vm.setItem('rifle');
+    expect(vm.heldOptic).toBeNull();
   });
 });

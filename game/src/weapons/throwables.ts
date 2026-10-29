@@ -24,6 +24,7 @@ import {groundClamp, restTime, type BodyHost} from '../physics/chunks';
 import type {BodySource} from '../physics/world';
 import type {LightSource, LightSources} from '../world/lightSources';
 import {FLARE_AXIS_Y, thrownFlareModel, type ThrownFlareModel} from '../world/authoredItems';
+import {FlareLight} from '../world/flareLight'; // Iteration 15: occluded like its fog glow
 
 export const FLARE = {
   /** Seconds of burn (incl. the fade), seconds of fade at the end, strike flare-up, husk lifetime after burn-out. */
@@ -44,7 +45,10 @@ export const FLARE = {
   length: 0.255,
   maxFlight: 10,
   restAfter: 0.5,
-  light: {color: 0xff2a12, intensity: 7, distance: 10, decay: 2, lift: 0.1},
+  // Iteration 15 (user: "a very strong red light ... really light up an area"): 7 cd / 10 m -> 42 cd (6x) / 11.5 m (inside
+  // the +-11.75 m occlusion window: world/flareLight.ts keeps walls / other storeys dark), same red, physical decay 2.
+  // At 2 / 5 / 8 m: 10.5 / 1.7 / 0.66 (was 1.75 / 0.28 / 0.11); the fog glow is rebalanced in ATMOSPHERE.scatterLightScatter.
+  light: {color: 0xff2a12, intensity: 42, distance: 11.5, decay: 2, lift: 0.1},
   /** Enemies with line of sight within this range notice a burning flare (scaled by the fade). */
   attractRange: 28,
   /** Smoke emitter request (render/atmosphere smoke API; bounded there). */
@@ -156,7 +160,7 @@ export class FlareSystem implements BodySource {
     this.group.name = 'flares';
     parent.add(this.group);
     for (let i = 0; i < FLARE.maxActive; i++) {
-      const l = new THREE.PointLight(FLARE.light.color, 0, FLARE.light.distance, FLARE.light.decay);
+      const l = new FlareLight(FLARE.light.color, 0, FLARE.light.distance, FLARE.light.decay);
       l.name = `flare-light-${i}`;
       l.castShadow = false;
       this.lights.push(l);
@@ -297,6 +301,7 @@ export class FlareSystem implements BodySource {
     f.level01 = 0;
     if (f.light) {
       f.light.intensity = 0;
+      (f.light as FlareLight).clearWindow?.();
       this.env.smoke?.removeScatterLight?.(f.light);
       this.free.push(f.light);
       f.light = null;
@@ -420,7 +425,7 @@ export class FlareSystem implements BodySource {
     for (const f of this.flares) this.dispose(f);
     this.flares.length = 0;
     this.free.length = 0;
-    for (const l of this.lights) { l.intensity = 0; this.free.push(l); }
+    for (const l of this.lights) { l.intensity = 0; (l as FlareLight).clearWindow?.(); this.free.push(l); }
     this.cooldown = 0;
     this.counts.cleared++;
   }

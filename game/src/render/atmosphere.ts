@@ -144,14 +144,19 @@ export const ATMOSPHERE: AtmosphereParams = {
   groundHeight: 0.55,
   groundVariation: 0.5,
   warp: 2.2,
-  drift: 0.38,
-  trackDrift: 0.75,
-  detailDrift: 0.6,
-  rise: 0.08,
+  // Iteration 15 (user: "the fog is moving too much ... half the speed"): every fog motion rate halved ONCE here (the
+  // only source: fogMotion -> field offsets / shader uniforms / smoke drift): air 0.38 -> 0.19 m/s, tunnel draft
+  // 0.75 -> 0.375, wisp / warp billowing 0.6 -> 0.3, rise 0.08 -> 0.04. Amount, pattern, warp size and clock unchanged.
+  drift: 0.19,
+  trackDrift: 0.375,
+  detailDrift: 0.3,
+  rise: 0.04,
   patchExtinction: 1.5,
   smokeExtinction: 1,
   smokeScatter: 1,
-  scatterLightScatter: 1,
+  // Iteration 15: flares (the only scatter lights) are 6x brighter on surfaces (FLARE.light 7 -> 42 cd); their fog glow
+  // goes up 2.4x (1 -> 0.4 per cd), a stronger red halo without washing the view red.
+  scatterLightScatter: 0.4,
   nearFade: [0.5, 3.2],
   maxDistance: 36,
   intensity: 1,

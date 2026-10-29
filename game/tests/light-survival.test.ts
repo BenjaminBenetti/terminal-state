@@ -501,9 +501,9 @@ describe('battery / flare items and their authored models', () => {
     expect(ITEM_DIMS.flare.w).toBeCloseTo(0.255, 4);
     expect(useHint(b)).toMatch(/Click to use · flashlight battery 100 %/);
     expect(effectText(b)).toBe('flashlight battery 100 %');
-    expect(throwHint(f)).toMatch(/T to throw/);
+    expect(throwHint(f)).toMatch(/Hold click or T to ready .* release to throw/); // iteration 15: hold to ready, release to throw
     expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare']);
-    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && k.startsWith('T'))).toBe(true);
+    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && /release to throw/.test(a) && k.startsWith('Hold T'))).toBe(true);
     expect(CONTROLS.some(([a]) => /battery/i.test(a))).toBe(true);
   });
 

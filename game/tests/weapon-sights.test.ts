@@ -41,7 +41,9 @@ describe('user weapon models in the manifest', () => {
       expect(Math.abs(statSync(pub(FILES[id])).size - MODEL_FILES[id].bytes), id).toBeLessThan(20_000);
     }
     for (const old of ['rifle.glb', 'rifle-optic.glb', 'shotgun.glb']) expect(existsSync(pub(`assets/models/${old}`)), old).toBe(true);
-    for (const id of GUNS) expect(WEAPONS[id].view.optic, id).toBeUndefined();
+    // iteration 15: the rifle's see-through optic is back (runtime aperture on rifle-user.glb, tests/optic.test.ts)
+    expect(WEAPONS.rifle.view.optic).toMatchObject({eyeRelief: 0.105, aperture: {radius: 0.016}});
+    for (const id of ['shotgun', 'pistol'] as const) expect(WEAPONS[id].view.optic, id).toBeUndefined();
     expect(Object.fromEntries(GUNS.map(id => [id, WEAPONS[id].view.sightRelief]))).toEqual(RELIEF);
     expect(Object.fromEntries(GUNS.map(id => [id, WEAPONS[id].view.sightLift]))).toEqual(LIFT);
   });
@@ -68,7 +70,7 @@ describe('user weapon models: markers and sight-based ADS', async () => {
   it('keeps the hip pose, then at full ADS puts the Sight marker on the screen centre `sightRelief` in front of the eye', () => {
     const vm = new Viewmodel(models, {});
     const pivot = vm.camera.children.find(c => c.type === 'Group')!;
-    for (const id of GUNS) {
+    for (const id of ['shotgun', 'pistol'] as const) { // (iteration 15: the rifle aims through its optic, tests/optic.test.ts)
       const g = models[id], view = WEAPONS[id].view;
       vm.setItem(id);
       for (let i = 0; i < 40; i++) vm.update(0.05, state(false));

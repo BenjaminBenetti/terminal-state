@@ -55,24 +55,40 @@ export interface WeaponDef {
   view: {model: 'rifle' | 'shotgun' | 'pistol'; hip: [number, number, number]; aim: [number, number, number]; hipYaw: number; hipPitch: number; hipRoll: number; length: number; optic?: OpticSpec; sightRelief?: number; sightLift?: number};
 }
 
+/**
+ * Iteration 15 (user: "increase the recoil a little bit basically across the board ... fifty percent recoil to
+ * everything"): every gun's FIRING recoil amplitudes x1.5, applied ONCE here at the definition — camera kick (pitch, yaw)
+ * and the viewmodel's visual kick (kick); the application code (game.fire, Viewmodel.fire) is unchanged, so nothing is
+ * scaled twice. Recovery rate, damage, spread, fire rate, ammo, knockback and every other motion are unchanged.
+ * Base values (iteration 14) stay readable at each def.
+ */
+export const RECOIL_SCALE = 1.5;
+export function firingRecoil(base: WeaponDef['recoil']): WeaponDef['recoil'] {
+  return {pitch: base.pitch * RECOIL_SCALE, yaw: base.yaw * RECOIL_SCALE, kick: base.kick * RECOIL_SCALE, recover: base.recover};
+}
+
 export const WEAPONS: Record<string, WeaponDef> = {
   rifle: {
     id: 'rifle', itemId: 'rifle', ammoItem: 'ammo_rifle', magazine: 30, auto: true, interval: 0.1,
     damage: 24, pellets: 1, spreadHip: 0.028, spreadAim: 0.004, spreadMove: 0.03,
     range: 90, falloffStart: 40, falloffMin: 0.7, headMult: 2.5, limbMult: 0.7, knockback: 0.25,
     reload: {kind: 'magazine', time: 2.1, emptyTime: 2.55},
-    recoil: {pitch: 0.012, yaw: 0.006, kick: 0.035, recover: 9},
+    recoil: firingRecoil({pitch: 0.012, yaw: 0.006, kick: 0.035, recover: 9}),
     equipTime: 0.55, aimFov: 52, moveMult: 0.95, noise: 30, sound: 'rifle',
-    // 2026-10-28: the user's red-dot rifle has no see-through optic parts, so the iteration-04 `optic` spec is retired
-    // (weapons/optic.ts stays for rifle-optic.glb); ADS sights through the red-dot lens centre (`Sight`) instead.
-    view: {model: 'rifle', hip: [0.245, -0.41, -0.7], aim: [0.0, -0.283, -0.42], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 0.92, sightRelief: 0.26, sightLift: 0.04},
+    // Iteration 15 (user: "the scope doesn't work anymore after we replaced the model"): the iteration-04 see-through optic
+    // is back (same eye relief 0.105 m) on the user's red-dot rifle via a runtime rear aperture (weapons/optic.ts), measured
+    // from rifle-user.glb: the sight is a solid capped cylinder on axis (-0.0035, 0.1394), rear cap face r ~24 mm ending at
+    // z 0.0833; the glass sits 2.2 mm eye-side of it, r 16 mm (an 8 mm housing rim stays). `sightRelief` / `sightLift`
+    // remain the fallback for a rifle model without that sight.
+    view: {model: 'rifle', hip: [0.245, -0.41, -0.7], aim: [0.0, -0.283, -0.42], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 0.92, sightRelief: 0.26, sightLift: 0.04,
+      optic: {eyeRelief: 0.105, aperture: {x: -0.0035, y: 0.1394, z: 0.0855, radius: 0.016}}},
   },
   shotgun: {
     id: 'shotgun', itemId: 'shotgun', ammoItem: 'ammo_shells', magazine: 6, auto: false, interval: 0.82,
     damage: 15, pellets: 9, spreadHip: 0.075, spreadAim: 0.052, spreadMove: 0.02,
     range: 30, falloffStart: 7, falloffMin: 0.25, headMult: 1.8, limbMult: 0.75, knockback: 0.55,
     reload: {kind: 'shell', start: 0.38, each: 0.48, end: 0.42},
-    recoil: {pitch: 0.06, yaw: 0.015, kick: 0.09, recover: 6},
+    recoil: firingRecoil({pitch: 0.06, yaw: 0.015, kick: 0.09, recover: 6}),
     equipTime: 0.6, aimFov: 60, moveMult: 0.92, noise: 38, sound: 'shotgun',
     view: {model: 'shotgun', hip: [0.235, -0.27, -0.66], aim: [0.0, -0.095, -0.45], hipYaw: 0.12, hipPitch: 0.03, hipRoll: -0.05, length: 1.0, sightRelief: 0.30, sightLift: 0.022},
   },
@@ -83,7 +99,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     damage: 17, pellets: 1, spreadHip: 0.022, spreadAim: 0.006, spreadMove: 0.025,
     range: 60, falloffStart: 22, falloffMin: 0.6, headMult: 2.4, limbMult: 0.7, knockback: 0.18,
     reload: {kind: 'magazine', time: 1.4, emptyTime: 1.65},
-    recoil: {pitch: 0.016, yaw: 0.005, kick: 0.03, recover: 11},
+    recoil: firingRecoil({pitch: 0.016, yaw: 0.005, kick: 0.03, recover: 11}),
     equipTime: 0.35, aimFov: 58, moveMult: 1.0, noise: 24, sound: 'pistol',
     // Iteration 12 (LIGHT, user #6 "move the pistol lower and slightly more in towards the camera during ADS"): the sights now
     // sit 14 mm under the screen centre (~2.9 deg, the crosshair stays the aim point) and 40 mm closer (relief 0.32 -> 0.28).

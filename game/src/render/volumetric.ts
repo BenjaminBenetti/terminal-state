@@ -37,6 +37,7 @@ import {
   SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, VIS_WINDOWS, computeVisWindow, windowStale,
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
 } from './smoke';
+import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iteration 15
 import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, type FogUniforms} from './volumetricShaders';
 
 export interface AtmosphereLights {
@@ -272,6 +273,7 @@ export class VolumetricAtmosphere {
     this.noise = noise;
     this.visTex = layerTexture(this.visData, VIS_RES, VIS_RES, VIS_WINDOWS, THREE.RedFormat);
     this.visTex.name = 'fog-vis-windows';
+    bindFlareVisibility(this.visTex); // Iteration 15: flare surface light uses the same occlusion windows (world/flareLight.ts)
     this.placeholderDensity = layerTexture(new Uint8Array(4), 1, 1, 1, THREE.RGBAFormat);
     this.placeholderAir = layerTexture(new Uint8Array(1), 1, 1, 1, THREE.RedFormat);
     this.densityTex = this.placeholderDensity;
@@ -524,6 +526,11 @@ export class VolumetricAtmosphere {
       pos[n].set(this.tmp.x, this.tmp.y, this.tmp.z, l.distance);
       col[n].set(l.color.r * k, l.color.g * k, l.color.b * k, l.decay);
       setWin(n, layer);
+      // Iteration 15: the same window occludes the flare's light on surfaces (no glow through walls / slabs)
+      if (isFlareLight(l)) {
+        const w = this.winState[layer];
+        if (w.ok) { l.window.set(w.x0, w.z0, size, layer); l.band.set(w.floor, w.ceil); } else l.clearWindow();
+      }
       n++;
     }
     for (let k = n; k < VF_LIMITS.scatter; k++) { pos[k].set(0, -1e4, 0, 0.01); col[k].set(0, 0, 0, 2); }

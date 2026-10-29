@@ -217,7 +217,7 @@ export const CONTROLS: [string, string][] = [
   ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
   ['Last item', 'Q'], ['Inventory', 'Tab or I'], ['Quick heal', 'H'], ['Drop held item', 'G'],
   // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items; T throws a flare
-  ['Flashlight (battery meter, bottom right)', 'F'], ['Throw flare (grenade slot)', 'T · or click while held'],
+  ['Flashlight (battery meter, bottom right)', 'F'], ['Throw flare: hold to ready, release to throw', 'Hold T · or hold click while held'],
   ['Swap in a battery (refills the light)', 'Click while held · inventory Use'],
   ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
 ];

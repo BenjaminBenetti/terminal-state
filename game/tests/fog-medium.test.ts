@@ -189,13 +189,25 @@ describe('(b) slightly less fog, with genuinely clear and dense areas', () => {
 
 // ---------------------------------------------------------------------------------------------
 describe('(c) visible slow motion in world space, on the fog clock', () => {
-  it('moves at the seeded drift speeds (0.3-0.8 m/s) and the patch field TRANSLATES (no re-roll, no fade)', () => {
+  it('iteration 15: every fog motion rate is exactly HALF of iteration 13 (user: "half the speed"), halved once', () => {
+    const ITER13 = {drift: 0.38, trackDrift: 0.75, detailDrift: 0.6, rise: 0.08};
+    for (const k of Object.keys(ITER13) as (keyof typeof ITER13)[]) expect(ATMOSPHERE[k], k).toBeCloseTo(ITER13[k] / 2, 10);
+    const l = station(0x1a2b3c), p = atmosphereFor(l), mo = fogMotion(l.seed, p), old = fogMotion(l.seed, {...p, ...ITER13});
+    const speed = (v: V3) => Math.hypot(v[0], v[1], v[2]);
+    for (const f of ['air', 'track', 'detail'] as const) expect(speed(mo[f]) / speed(old[f]), f).toBeCloseTo(0.5, 10);
+    // the field offsets (what the shader receives) advance at half the iteration-13 rate: same offset at twice the time
+    for (const t of [3, 17, 120]) expect(fieldOffsets(mo, p, 2 * t)).toEqual(fieldOffsets(old, p, t));
+    // unchanged: pattern scales / warp size (only rates moved; the amount is checked by (a) / (b) above)
+    expect([p.warp, p.noiseScale, p.detailScale]).toEqual([2.2, 1 / 30, 1 / 18]);
+  });
+
+  it('moves at the seeded drift speeds (0.15-0.4 m/s) and the patch field TRANSLATES (no re-roll, no fade)', () => {
     const l = station(0x1a2b3c), p = atmosphereFor(l), mo = fogMotion(l.seed, p);
     const speed = (v: V3) => Math.hypot(v[0], v[1], v[2]);
-    expect(speed(mo.air)).toBeGreaterThanOrEqual(0.3);
-    expect(speed(mo.air)).toBeLessThanOrEqual(0.8);
-    expect(speed(mo.track)).toBeGreaterThanOrEqual(0.3);
-    expect(speed(mo.track)).toBeLessThanOrEqual(0.8);
+    expect(speed(mo.air)).toBeGreaterThanOrEqual(0.15);
+    expect(speed(mo.air)).toBeLessThanOrEqual(0.4);
+    expect(speed(mo.track)).toBeGreaterThanOrEqual(0.15);
+    expect(speed(mo.track)).toBeLessThanOrEqual(0.4);
     expect(speed(mo.detail)).toBeGreaterThan(speed(mo.air)); // wisps / warp outrun the patches: billowing
     // with the warp off, the patch value at p + v dt, t + dt equals the value at p, t exactly (pure translation)
     const pw = {...p, warp: 0};
@@ -210,10 +222,10 @@ describe('(c) visible slow motion in world space, on the fog clock', () => {
     }
   });
 
-  it('changes visibly within 2-4 s at a fixed point (not a numerically-nonzero crawl), from time only', () => {
+  it('changes visibly within 4-8 s at a fixed point (half the iteration-13 pace, still not a crawl), from time only', () => {
     const l = station(0x1a2b3c), p = atmosphereFor(l), maps = mapsOf(l, p);
     const pts = walkingPoints(l, 11).filter(q => !q.track);
-    for (const dt of [2, 3, 4]) {
+    for (const dt of [4, 6, 8]) {
       let changed = 0, foggy = 0;
       for (const q of pts) {
         const a = mediumAt(q.p, maps, p, 100, q.slot).sigma, b = mediumAt(q.p, maps, p, 100 + dt, q.slot).sigma;
@@ -221,8 +233,8 @@ describe('(c) visible slow motion in world space, on the fog clock', () => {
         foggy++;
         if (Math.abs(a - b) / Math.max(a, b) > 0.2) changed++;
       }
-      // a fifth or more of the foggy points change by > 20 % within 2 s, more by 4 s
-      expect(changed / foggy, `dt ${dt}`).toBeGreaterThan(dt === 2 ? 0.2 : 0.3);
+      // a fifth or more of the foggy points change by > 20 % within 4 s, more by 8 s (iteration 13: 2 / 4 s)
+      expect(changed / foggy, `dt ${dt}`).toBeGreaterThan(dt === 4 ? 0.2 : 0.3);
     }
   });
 

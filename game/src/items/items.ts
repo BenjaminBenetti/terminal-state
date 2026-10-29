@@ -101,7 +101,7 @@ export function effectText(def: ItemDef): string {
 
 /** Iteration 12 (LIGHT): weapon-panel hint while a throwable (flare) is held. */
 export function throwHint(def: ItemDef): string {
-  return `Click or T to throw ${def.short.toLowerCase()}`;
+  return `Hold click or T to ready ${def.short.toLowerCase()} · release to throw`; // Iteration 15: grenade-style
 }
 
 /** Weapon-panel hint while a consumable is held. */

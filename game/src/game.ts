@@ -46,12 +46,14 @@ import {ShelfStock} from './world/shelfStock';
 import {LightSources} from './world/lightSources';
 import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 12 (LIGHT): flashlight battery + body glow
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
+import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 // Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
 import type {WebGPURenderer} from 'three/webgpu';
 import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, rendererRequest, watchDevice, type GameRenderer, type GpuInfo} from './render/backend';
 import {OverlayPass} from './render/overlay';
+import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
@@ -144,6 +146,10 @@ export class Game {
   readonly torch: PlayerLight;
   /** Iteration 12 (LIGHT): thrown road flares (weapons/throwables.ts; a cannon BodySource of `physics`). */
   readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
+  /** Iteration 15: grenade-style flare input (T, or left click with a flare in hand): hold readies, release throws once. */
+  readonly flareHold = new FlareHold();
+  /** Iteration 15: the left button belonged to a flare hold; the gun ignores it until it is released. */
+  private lmbLatch = false;
   /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
   get flashlightOn(): boolean { return this.torch.battery.on; }
   set flashlightOn(v: boolean) { this.torch.battery.setOn(v); }
@@ -271,6 +277,7 @@ export class Game {
       this.gpu = gpu;
       watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.onDeviceLost?.(text); }});
       this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers / adapters
+      installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
       console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
       return gpu;
@@ -365,6 +372,8 @@ export class Game {
     this.use = null;
     this.consumeView?.reset();
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
+    this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
+    this.lmbLatch = false;
 
     const t0 = performance.now();
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
@@ -589,7 +598,7 @@ export class Game {
     const prev = this.state;
     this.state = s;
     this.input.active = s === 'playing';
-    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); }
+    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); }
     this.invUI.cancelDrag();
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
@@ -759,6 +768,13 @@ export class Game {
       this.weapon.equip(null);
       this.viewmodel.setItem(def?.kind === 'consumable' || def?.kind === 'throwable' ? st!.itemId : null); // Iteration 12 (LIGHT): a held flare shows
     }
+    // Iteration 15: while a flare is readied the hand shows it (whatever pickups / inventory changes happen meanwhile)
+    if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
+  }
+
+  /** Iteration 15: drop a readied flare without throwing (nothing spent); the held item comes back. */
+  private cancelFlareHold(): void {
+    if (this.flareHold.cancel()) this.syncHeld();
   }
 
   /**
@@ -961,7 +977,6 @@ export class Game {
     if (inp.wheel) { const i = (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
     if (inp.hit('KeyQ')) this.selectSlot(this.lastSlot);
     if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
-    if (inp.hit('KeyT')) this.throwFlare(false); // Iteration 12 (LIGHT): grenade slot — throw a flare from the inventory
     if (inp.hit('KeyG')) this.dropRef({bar: 'hotbar', index: this.inv.selected});
     if (inp.hit('KeyH')) this.quickHeal();
     if (inp.hit('KeyE')) this.interact();
@@ -969,11 +984,26 @@ export class Game {
     const held = this.inv.selectedStack();
     const heldDef = held ? itemDef(held.itemId) : null;
     const wdef = heldDef?.kind === 'weapon' ? WEAPONS[heldDef.weaponId!] : null;
+    // Iteration 15: flares are readied while T / left click (flare in hand) is held and thrown on release (weapons/flareHold.ts)
+    if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
+    for (const e of this.flareHold.update(dt, {
+      keyDown: inp.down('KeyT'), keyPressed: inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0],
+      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing,
+      flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
+    })) {
+      if (e.type === 'ready') { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
+      else if (e.type === 'release') this.throwFlare(e.source === 'mouse');
+      else if (e.type === 'cancel') this.syncHeld();
+      else if (e.reason === 'none') { this.hud.toast('No flares — find one first', true); this.sfx.denied(); }
+      else { this.hud.toast('Three flares already burning — wait for one to burn out', true); this.sfx.denied(); }
+      if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
+    }
+    const flareOwns = this.flareHold.active || this.lmbLatch;
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
-    this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing;
+    this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active;
     const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: this.use ? 0.6 : wdef?.moveMult ?? 1, canSprint: !this.use && !inp.mouse[0]});
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
@@ -981,8 +1011,8 @@ export class Game {
     if (p.justRung) this.sfx.ladder(); // Lane T: hand/foot on a ladder rung (Lane S: Sound Lab rung clip)
     if (p.stanceChanged) this.sfx.crouch(p.crouched);
 
-    if (wdef) {
-      const ev = this.weapon.update(dt, {held: inp.mouse[0], pressed: inp.mousePressed[0], reload: inp.hit('KeyR') && !vmBusy, lowered: p.sprinting || vmBusy || p.climbing}, this.inv);
+    if (wdef && !this.flareHold.active) {
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns, pressed: inp.mousePressed[0] && !flareOwns, reload: inp.hit('KeyR') && !vmBusy, lowered: p.sprinting || vmBusy || p.climbing}, this.inv);
       for (const e of ev) {
         if (e.type === 'fire') this.fire(e.def);
         else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (this.inv.count(e.def.ammoItem) === 0) this.hud.toast(`Out of ${itemDef(e.def.ammoItem).name.toLowerCase()}`, true); }
@@ -990,10 +1020,8 @@ export class Game {
         else if (e.type === 'shellIn') { this.sfx.shellIn(); this.viewmodel.shellBump(); }
         else if (e.type === 'reloadEnd') this.sfx.reloadEnd(e.def.sound);
       }
-    } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use) {
+    } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
       this.startUse({bar: 'hotbar', index: this.inv.selected});
-    } else if (heldDef?.kind === 'throwable' && inp.mousePressed[0] && !this.use) {
-      this.throwFlare(true); // Iteration 12 (LIGHT): a flare in the held quick slot throws with left click
     }
 
     if (this.use) {
@@ -1082,6 +1110,7 @@ export class Game {
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx, lookDY: inp.dy,
       reloading: this.weapon.reloading, reloadProgress: this.weapon.progress, using: !!this.use, useProgress: this.use ? this.use.t / this.use.total : 0, bobT: p.bobT,
       crouch: p.crouchBlend, vy: p.grounded ? 0 : p.vy, landDip: p.landDip,
+      throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back
     });
     this.hud.setStance(p.crouched, p.standBlocked);
     this.updateHud(wdef);

@@ -55,6 +55,8 @@ export interface ViewState {
   vy?: number;
   /** Landing camera dip (m), echoed by the gun. */
   landDip?: number;
+  /** Iteration 15: grenade-style flare pull-back while T / left click is held (0 .. 1, weapons/flareHold.ts). */
+  throwReady?: number;
 }
 
 export class Viewmodel {
@@ -309,6 +311,21 @@ export class Viewmodel {
       pos.y += Math.sin(p * Math.PI) * 0.06;
       rot.x += Math.sin(p * Math.PI * 3) * 0.12;
     }
+    // Iteration 15: flare held back like a grenade — raised to the right shoulder line and drawn back toward the eye, head
+    // tipped back, a slight wind-up tremble at full draw; eased both ways (a cancel lowers it smoothly). Kept inside the
+    // 54 deg viewmodel frustum (the first browser check showed a larger draw-back leaving the frame).
+    this.throwK += ((s.throwReady ?? 0) - this.throwK) * Math.min(1, dt * 16);
+    const tk = ease(Math.max(0, Math.min(1, this.throwK)));
+    if (tk > 0.001) {
+      const tremble = tk > 0.95 ? Math.sin(this.bobClock * 23) * 0.0025 : 0;
+      pos.x += tk * 0.025;
+      pos.y += tk * 0.085 + tremble;
+      pos.z += tk * 0.08;
+      rot.x += tk * 0.7;
+      rot.y -= tk * 0.2;
+      rot.z -= tk * 0.35;
+    }
+    this.bobClock += dt;
     // optic ADS: rotate (kick/sway) about the eyepiece instead of the grip, so the lens stays on the eye
     if (it.optic && optK > 0) {
       const o = it.opticPoint!;
@@ -328,4 +345,7 @@ export class Viewmodel {
     this.pivot.visible = this.holster < 0.999;
   }
   private holster = 0;
+  /** Iteration 15: eased flare pull-back and a clock for its full-draw tremble. */
+  private throwK = 0;
+  private bobClock = 0;
 }
