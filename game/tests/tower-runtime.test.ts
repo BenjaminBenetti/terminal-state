@@ -598,18 +598,19 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     stepHooks(host, DT);
     expect(c2.eyeOverride).toBe(1);
     expect(rt).toBeInstanceOf(TowerRuntime);
-    // a culler with only its grid resolver: a point inside the cab resolves to the cab's storey, elsewhere unchanged
+    // ENGINE (task office-seamless-20261029): LevelCuller has a public eyeOverride, so the runtime never patches a culler's
+    // private grid resolver; a culler without the override only switches culling off while the eye is in the cab.
     host.sectionHooks[0].teardown!();
     const c3 = {enabled: true, register: () => {}, levelAt: (_x: number, _y: number, _z: number) => 0};
     const orig = c3.levelAt;
     (host.world as {culler: unknown}).culler = c3;
     host.sectionHooks[0].build!(layout);
-    expect(c3.levelAt(11.25, baseOf(1) + 1.6, 11.2)).toBe(1);
-    expect(c3.levelAt(5, 1.6, 20)).toBe(0);
+    expect(c3.levelAt).toBe(orig);
     aim(host, [11.25, baseOf(1) + 1.6, 11.2], [11.25, baseOf(1) + 1.6, 9]);
     stepHooks(host, DT);
-    expect(c3.enabled).toBe(true); // culling stays on
+    expect(c3.enabled).toBe(false);
     host.sectionHooks[0].teardown!();
+    expect(c3.enabled).toBe(true);
     expect(c3.levelAt).toBe(orig);
   });
 

@@ -204,14 +204,8 @@ export class TowerRuntime {
       if (o.elevator) for (const g of o.elevator.view.landings) culler.register(g);
       if (o.windows) culler.register(o.windows.view.root);
     }
-    // the culler's level resolver only knows the storey grids (the shaft is solid on all of them: an eye in the cab would
-    // resolve to the station): a point inside the cab is on the cab's storey. (Unless the culler takes an eyeOverride.)
-    const e = o.elevator;
-    if (culler && e && !('eyeOverride' in culler) && typeof culler.levelAt === 'function') {
-      const orig = culler.levelAt, cab = e.plan.info.cab;
-      culler.levelAt = (x, y, z) => (insideRect(cab, x, z, -0.05) && y > e.vol.floorY - 0.1 && y < e.vol.ceilY + 0.2 ? e.vol.level : orig(x, y, z));
-      this.cullerRestore = () => { culler.levelAt = orig; };
-    }
+    // An eye in the cab (inside the shaft, solid on every storey grid) is on the cab's storey: updateCuller sets the
+    // culler's public LevelCuller.eyeOverride each frame (ENGINE, task office-seamless-20261029; no private-field patch).
   }
 
   teardown(): void {
@@ -433,7 +427,7 @@ export class TowerRuntime {
 
   /**
    * The storey culler would place an eye inside the solid shaft at level 0: while the camera is in the cab, its storey is the
-   * cab's (LevelCuller.eyeOverride when the culler has one; else the wrapped resolver installed at build; else culling is
+   * cab's (LevelCuller.eyeOverride, the culler's public hook; a culler without one: culling is
    * switched off while the eye is in the cab).
    */
   private updateCuller(o: OfficeRt): void {

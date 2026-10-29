@@ -38,7 +38,8 @@
 // header heights are 8-bit per slot over that slot's own height range (`slotY`) in extended fields (a 42 m tower over one
 // global range would quantise floors to 0.16 m); legacy fields keep the global range (identical bytes and maths). Cross-level
 // rays are culled per fixture by a reachability flood over the union bands within its range (exact: a ray can only end
-// in a band the flood reached), so a tall stack of closed storeys bakes in about the time of its storeys.
+// in a band the flood reached), so a tall stack of closed storeys bakes in about the time of its storeys (stacks of more
+// than 3 levels; a Subway station traces its few cross rays as before).
 
 import * as THREE from 'three';
 import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
@@ -159,7 +160,11 @@ export interface FieldSource {
   levels?: readonly Level[];
   /** Cross-level light (other slots through the union free space). Default true. */
   crossLevel?: boolean;
-  /** Skip cross-level rays the per-fixture reachability flood proves dark (exact; default true; tests compare both). */
+  /**
+   * Skip cross-level rays the per-fixture reachability flood proves dark (exact: identical bytes; tests compare both).
+   * Default: stacks of more than LEGACY_BANDS levels (the tower: ~20x fewer rays); a Subway station's few cross rays are
+   * cheaper to trace than to flood.
+   */
   crossCull?: boolean;
 }
 
@@ -422,7 +427,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   let yMin = Infinity, yMax = -Infinity;
   for (const q of geos) { yMin = Math.min(yMin, q.yMin); yMax = Math.max(yMax, q.yMax); }
   const U = S > 1 && src.crossLevel !== false ? unionBands(geos, n) : null;
-  const flood = U && src.crossCull !== false ? new BandFlood(U, W, H) : null;
+  const flood = U && (src.crossCull ?? S > LEGACY_BANDS) ? new BandFlood(U, W, H) : null;
 
   // --- Direct light (per slot) -------------------------------------------------------------
   const LS = geos.map((_, s) => slotLayers(s));

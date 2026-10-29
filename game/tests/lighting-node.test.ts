@@ -24,7 +24,7 @@ import {generateStation, type StationLayout} from '../src/gen/station';
 import {CELL} from '../src/gen/grid';
 import type {Fixture} from '../src/world/builder';
 import {
-  AUX_SLOT_DEPTH, FIELD_EMAX, LightFieldVolume, SLOT_DEPTH, bakeLightField, fieldSlot, levelGeometries, sampleField, slotBase, slotLayers,
+  AUX_SLOT_DEPTH, FIELD_EMAX, LightFieldVolume, MAX_SLOTS, SLOT_DEPTH, bakeLightField, fieldDepth, fieldSlot, isExtendedHeader, levelGeometries, sampleField, slotBase, slotLayers,
   type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {
@@ -203,8 +203,13 @@ describe('slot selection, CPU mirror and the no-leak contract (baked data)', () 
   it('the TSL float slot decode equals the packed bit layout for every byte and band', () => {
     // pickSlot: min(mod(floor(pk / 2^(2 band)), 4), slots - 1) == (pk >> 2 band) & 3
     for (let pk = 0; pk < 256; pk++) for (let band = 0; band < 3; band++) expect(Math.floor(pk / 2 ** (2 * band)) % 4).toBe((pk >> (2 * band)) & 3);
-    // header slice: mix(1, 1 + SLOT_DEPTH - AUX + slot * AUX, min(slot, 1)) == slotBase(slot)
-    for (let s = 0; s < 4; s++) { const aux = Math.min(s, 1); expect(1 + (1 + SLOT_DEPTH - AUX_SLOT_DEPTH + s * AUX_SLOT_DEPTH - 1) * aux).toBe(slotBase(s)); }
+    // header slice: mix(1, 1 + SLOT_DEPTH - AUX + slot * AUX, min(slot, 1)) == slotBase(slot) (every slot, N storeys)
+    for (let s = 0; s < MAX_SLOTS; s++) { const aux = Math.min(s, 1); expect(1 + (1 + SLOT_DEPTH - AUX_SLOT_DEPTH + s * AUX_SLOT_DEPTH - 1) * aux).toBe(slotBase(s)); }
+    // task office-seamless-20261029, extended columns: A in 1..63 (count bits 0) never collides with a legacy byte; the group
+    // slice 1 + SLOT_DEPTH - AUX + slots * AUX + g == fieldDepth(slots) + g; the slot-id pair byte splits exactly in floats
+    for (let pk = 0; pk < 256; pk++) expect(isExtendedHeader(pk)).toBe(pk > 0 && Math.floor(pk / 64) === 0);
+    for (let S = 1; S <= MAX_SLOTS; S++) expect(1 + SLOT_DEPTH - AUX_SLOT_DEPTH + S * AUX_SLOT_DEPTH).toBe(fieldDepth(S));
+    for (let b = 0; b < 256; b++) { const hi = Math.floor(b / 16); expect([b - hi * 16, hi]).toEqual([b & 15, b >> 4]); }
   });
 
   it('every open band of every level picks its own slot at mid-height (multi-level stations; never the band above / below)', () => {

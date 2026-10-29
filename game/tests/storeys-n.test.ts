@@ -9,6 +9,8 @@
 //  - level culling per storey (flights tagged to their two storeys, portal hops up the stair), the warm-up still plans
 //    culled meshes, culling never touches world state;
 //  - A* from storey 0 to storey 8 within the game's expansion budget; 3D hearing attenuated per slab;
+//  - the REAL Office Space layout (LEVELS.office.generate('main')): ~1000 fixtures in one bake under budget, every storey
+//    picks its own slot, A* from the platform to every storey within the game budget, portals between consecutive storeys;
 //  - Subway regression: the iteration-08 bytes of the render fixture and a generated station's field, density, air and
 //    decay maps are unchanged (FNV-1a pinned before the N-storey engine change).
 import {describe, expect, it} from 'vitest';
@@ -34,10 +36,14 @@ import {LEVEL_WETNESS, buildDecayField, fitDecayField, sampleDecay} from '../src
 import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, STAIR_LEVEL} from '../src/world/builder';
-import {CULL_LAYER} from '../src/world/levelCulling';
-import {stationLevels} from '../src/world/levelGeometry';
 import {planWarmup} from '../src/render/warmup';
 import {HEARING, ZombieBrain, hearingMuffle, slabsBetween} from '../src/ai/brain';
+import {LEVELS} from '../src/levels/registry';
+import {LevelColumns, stationLevels} from '../src/world/levelGeometry';
+import {CULL_LAYER, LevelCuller} from '../src/world/levelCulling';
+import {VolumetricAtmosphere} from '../src/render/volumetric';
+import {FlareLight} from '../src/world/flareLight';
+import {FLARE} from '../src/weapons/throwables';
 
 const fnv = (bytes: ArrayLike<number>): string => {
   let h = 0x811c9dc5 >>> 0;
@@ -283,6 +289,30 @@ describe('fog, air and decay over every storey', () => {
     expect(buildDensityMap(renderFixture().layout, ATMOSPHERE).layerY).toBeUndefined();
   });
 
+  it('a burning flare on any storey gets its occlusion window and storey band (was: none above storey 3)', () => {
+    const flashlight = new THREE.SpotLight(0xffffff, 0), muzzle = new THREE.PointLight(0xffffff, 0);
+    const a = new VolumetricAtmosphere(null, {flashlight, muzzle}, 'high');
+    a.setSize(640, 360);
+    a.setStation(T.layout, null);
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.05, 200);
+    scene.add(camera, flashlight, muzzle);
+    for (const L of [1, 4, 6, 8]) {
+      expect(a.bandAt(20, storeyY(L) + 0.5, 10)?.slot, `band at storey ${L}`).toBe(L);
+      camera.position.set(20, storeyY(L) + 1.6, 12); camera.updateMatrixWorld(true);
+      const f = new FlareLight(FLARE.light.color, FLARE.light.intensity, FLARE.light.distance, FLARE.light.decay);
+      f.position.set(20, storeyY(L) + 0.3, 10);
+      scene.add(f);
+      expect(a.addScatterLight(f)).toBe(true);
+      a.sync(scene, camera, L);
+      expect(f.window.w, `storey ${L} window`).toBeGreaterThanOrEqual(0);
+      expect(Math.abs(f.band.x - storeyY(L)), `storey ${L} band floor`).toBeLessThan(0.05);
+      expect(Math.abs(f.band.y - storeyCeil(L)), `storey ${L} band ceiling`).toBeLessThan(0.05);
+      a.removeScatterLight(f);
+      scene.remove(f);
+    }
+    a.dispose();
+  });
+
   it('decay field: every storey a layer; the office storeys are dry; the texture-row guard keeps sampling', () => {
     const f = buildDecayField(T.layout, stationLevels(T.layout));
     expect(f.levels).toBe(9);
@@ -345,6 +375,15 @@ describe('level culling over 9 storeys', () => {
       cu.update(place(20, storeyY(8) + 1.62, 8, Math.PI), true);
       expect(byLevel(0).every(culled)).toBe(true);
       expect(byLevel(8).some(m => !culled(m))).toBe(true);
+      // the eye inside the elevator cab (its shaft is SOLID on every storey grid): the public override names its storey
+      const shaftX = (TOWER.shaft.x + 2) * CELL, shaftZ = (TOWER.shaft.y + 2) * CELL;
+      cu.eyeOverride = 6;
+      cu.update(place(shaftX, storeyY(6) + 1.62, shaftZ, 0), true);
+      expect(cu.stats.levels).toEqual([6]);
+      for (const L of [0, 4, 8]) expect(byLevel(L).every(culled), `storey ${L} from the cab`).toBe(true);
+      cu.eyeOverride = null;
+      cu.update(place(shaftX, storeyY(6) + 1.62, shaftZ, 0)); // the override change alone re-evaluates
+      expect(cu.stats.levels).toEqual([0]); // (grid lookup in a solid column: the station)
       // render visibility only: nothing's `visible` flag changed
       w.group.traverse(o => expect(o.visible).toBe(visibleBefore.get(o)));
       // the iteration-14 'full' warm-up still plans every group, culled or not
@@ -412,6 +451,56 @@ describe('AI across 9 storeys', () => {
     expect(hearingMuffle(false, slabsBetween(sub, 0, RFIX.upperY))).toBe(0.35);
     expect(hearingMuffle(false, slabsBetween(sub, RFIX.lowerY, 0))).toBe(0.35);
     expect(hearingMuffle(false, slabsBetween(sub, 0, 0))).toBe(0.6);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+describe('the real Office Space layout (one 9-storey world)', () => {
+  it('one bake for ~1000 fixtures under the field budget; every storey its own slot and lit; A* to every storey; portals', () => {
+    const l = LEVELS.office.generate('main', {levelSeed: 11, startWeapon: 'pistol'});
+    const lv = stationLevels(l);
+    expect(lv.length).toBe(9);
+    expect(lv.map(L => L.role)).toEqual(['main', 'upper', 'office', 'office', 'office', 'office', 'office', 'office', 'office']);
+    const t0 = performance.now();
+    const f = bakeLightField({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY, levels: lv});
+    const ms = performance.now() - t0;
+    expect(f.slots).toBe(9);
+    expect(f.stats.cut).toBe(0);
+    expect(f.stats.bytes).toBeLessThan(32e6); // StationLighting's default budget: no downsampling
+    expect(l.lights.length).toBeGreaterThan(600);
+    // no fixture dropped or clamped: every working fixture's level is a slot of the field
+    expect(l.lights.every(x => (x.level ?? 0) < f.slots)).toBe(true);
+    for (let L = 0; L < 9; L++) {
+      const g = lv[L].grid;
+      let n = 0, own = 0, lit = 0;
+      for (let i = 0; i < g.w * g.h; i += 5) {
+        if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || !((columnMask(f, i) >> L) & 1)) continue;
+        const ci = i % g.w, cj = (i - ci) / g.w;
+        n++;
+        if (fieldSlot(f, ci, cj, g.floorOf(i) + 1.2).slot === L) own++;
+        lit += irr(f, (ci + 0.5) * CELL, g.floorOf(i) + 0.05, (cj + 0.5) * CELL);
+      }
+      expect(n, `storey ${L} cells`).toBeGreaterThan(200);
+      expect(own, `storey ${L} slot pick`).toBe(n);
+      expect(lit / n, `storey ${L} mean light`).toBeGreaterThan(0.2);
+    }
+    console.log(`real office (seed 11): ${l.lights.length} fixtures, bake ${ms.toFixed(0)} ms, ${f.w}x${f.h}x${f.depth} ${(f.stats.bytes / 1e6).toFixed(1)} MB, bands ${f.stats.bands}`);
+    // A* from the player spawn to a floor cell of every storey, inside the game's budget
+    const pf = new PathFinder(levelsOf(l));
+    const sp = l.playerSpawn;
+    for (let L = 1; L < 9; L++) {
+      const g = lv[L].grid;
+      let t = -1;
+      for (let i = Math.floor(g.w * g.h / 2); i < g.w * g.h && t < 0; i++) if (g.cells[i] === FLOOR && g.rampIdx[i] < 0 && g.passable(i % g.w, (i / g.w) | 0)) t = i;
+      const p = pf.find(sp.x, sp.z, (t % g.w + 0.5) * CELL, (Math.floor(t / g.w) + 0.5) * CELL, 0.34, 26000, {ay: lv[0].grid.floorAt(sp.x, sp.z), by: g.floorOf(t)});
+      expect(p, `spawn -> storey ${L} (${pf.lastExpanded} expansions)`).not.toBeNull();
+    }
+    // portal tiles join every pair of consecutive storeys (their stair runs), and the fog / decay maps cover them all
+    const cu = new LevelCuller(lv, new LevelColumns(lv), () => 0) as unknown as {tiles: {a: number; b: number}[]};
+    for (let L = 0; L < 8; L++) expect(cu.tiles.some(t => t.a === L && t.b === L + 1), `portal ${L}-${L + 1}`).toBe(true);
+    expect(buildDensityMap(l, atmosphereFor(l)).slots).toBe(9);
+    expect(buildDecayField(l, lv).levels).toBe(9);
+    expect(levelIssues(l)).toEqual([]);
   });
 });
 

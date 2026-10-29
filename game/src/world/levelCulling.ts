@@ -96,7 +96,7 @@ export class LevelCuller {
   private readonly pm = new THREE.Matrix4();
   private readonly box = new THREE.Box3();
   private readonly eye = new THREE.Vector3();
-  private last = {x: NaN, y: NaN, z: NaN, qx: 0, qy: 0, qz: 0, qw: 0};
+  private last = {x: NaN, y: NaN, z: NaN, qx: 0, qy: 0, qz: 0, qw: 0, ov: null as number | null};
   /** Levels the eye stands on (scratch of update). */
   private readonly here = new Set<number>();
   /** Diagnostics of the last update (`level`: the resolver's level; `levels`: every level the eye stands on). */
@@ -106,6 +106,13 @@ export class LevelCuller {
   enabled = true;
   /** Hide registered meshes entirely beyond this distance (m); set from the scene fog (fogCullDistance). */
   maxDistance = Infinity;
+  /**
+   * Task office-seamless-20261029: the level id the eye is on regardless of the grids, or null (resolve from the level
+   * bands, the default). The moving elevator cab (world/towerRuntime.ts) sets it while the camera is inside the cab: its
+   * shaft is SOLID on every storey grid, so the grid lookup alone would put the eye on the station. Never set in a Subway
+   * station.
+   */
+  eyeOverride: number | null = null;
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver) {
     this.levelIds = levels.map(l => l.id);
@@ -222,12 +229,14 @@ export class LevelCuller {
     camera.updateMatrixWorld();
     const e = this.eye.setFromMatrixPosition(camera.matrixWorld);
     const q = camera.quaternion, l = this.last;
-    if (!force && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
+    const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
+    if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
       && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) return;
-    Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w});
-    const camLevel = this.levelAt(e.x, e.y, e.z);
-    // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both).
-    const here = this.eyeLevels(e, camLevel);
+    Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, ov});
+    const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
+    // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
+    // (the eye in the elevator cab) is the only current level.
+    const here = ov !== null ? this.onlyLevel(ov) : this.eyeLevels(e, camLevel);
     this.stats.level = camLevel;
     this.stats.levels = [...here];
     // Visible portal tiles from the camera's level(s), per other level.
@@ -297,6 +306,13 @@ export class LevelCuller {
     this.stats.hops = hops;
     this.stats.culled = culled;
     this.stats.fogged = fogged;
+  }
+
+  /** The eye's level set holding just `level` (eyeOverride). */
+  private onlyLevel(level: number): Set<number> {
+    this.here.clear();
+    this.here.add(level);
+    return this.here;
   }
 
   /** Whether an entry's X/Z box comes within PORTAL_MARGIN of one of these visible portal tiles. */
