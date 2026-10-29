@@ -1578,7 +1578,8 @@ export class Game {
     const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
     // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House")
     const storey = this.layout.office && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
-    const storeyText = storey ? ` · ${storey === 'L' ? 'Lobby' : `Floor ${storey}`}` : '';
+    const storeyName = storey ? (storey === 'L' ? 'Lobby' : `Floor ${storey}`) : '';
+    const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       weaponName: def ? def.short : 'Empty hands',

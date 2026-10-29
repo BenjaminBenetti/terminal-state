@@ -33,7 +33,7 @@ finishes building. `game/tests/warmup.test.ts` covers this by injecting an unfam
 | **Effects hidden until first use** (pools with `visible = false`) | keep them under a registered pool root: `warmRegistry.addPool(name, () => [root])`. The default `'effects'` pool is `fx.group`, so new effects added there are covered | sparks, smoke, blood, tracers, decals |
 | Something **created on use** (thrown, spawned, attached later) | build a hidden **prototype** with the same factory, keep it in the scene (meshes hidden, `raycast` disabled, far away), and register it as a pool | `FlareSystem.warmPrototypes()` (`'flares'`) |
 | Content **added mid-play** that no pool or prototype covers | add it hidden, `await game.prepareBeforeShow(root)`, then show it | the office exterior swapping in late-arriving Meshy models (`world/towerRuntime.ts`, iteration 16) |
-| Section content that may be **hidden at warm-up time** (e.g. scenery shown only while a window is in view) | keep it under a registered pool root | the `'tower'` pool: elevator, stair doors, windows, exterior city (iteration 16) |
+| Section content that may be **hidden at warm-up time** (e.g. scenery shown only while a window is in view) | keep it under a registered pool root | the `'tower'` pool: the moving elevator cab, landing doors, windows, exterior city (iteration 16; iteration 17: one continuous tower, all storeys warmed up front) |
 | A **shader-affecting configuration change** (quality, MSAA, render targets, light set) | call the warm-up again before control returns (`game.rewarmAfterSettings()` / `prepareGraphics()`) | the pause menu's Quality setting |
 
 ### Rules
@@ -54,7 +54,7 @@ finishes building. `game/tests/warmup.test.ts` covers this by injecting an unfam
   - `cancelled` (station replaced or device lost);
   - `failed`;
   - `skipped` (`?warmup=off`).
-- "Start run" (title) is enabled, a travel resumes, and the loading text says *Ready* only after it resolves. A partial or failed result says
+- "Start run" (title) is enabled, a level travel (menu) resumes, and the loading text says *Ready* only after it resolves. A partial or failed result says
   so on the loading line.
 - The game loop neither updates nor renders while it runs (`Game.warming`). The canvas is hidden during the hidden
   frames.
