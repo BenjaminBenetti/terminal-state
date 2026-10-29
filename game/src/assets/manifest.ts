@@ -27,7 +27,7 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   zombieBody_tall: {url: 'assets/models/zombie-body-tall.glb', bytes: 629_000}, // iteration 06 generated base-layer body (always wears pants)
   // iteration 07 refit (fewer per-body variants: pairs that still clipped are not shipped)
   outfit_coat: {url: 'assets/models/outfit-coat-t25.glb', bytes: 821_000},
-  outfit_hivis: {url: 'assets/models/outfit-hivis-t25.glb', bytes: 419_000},
+  outfit_hivis: {url: 'assets/models/outfit-hivis-t25.glb', bytes: 322_000},
   outfit_hoodie: {url: 'assets/models/outfit-hoodie-t25.glb', bytes: 697_000},
   outfit_blazer: {url: 'assets/models/outfit-blazer-t25.glb', bytes: 731_000},
   outfit_trench: {url: 'assets/models/outfit-trench-t25.glb', bytes: 762_000},

@@ -22,6 +22,26 @@ import {t25Source, T25_SUFFIX} from './lib/t25.mjs';
 //   bodies 0.0045 (~8 mm at 1.78 m), wearables 0.007 (~8 mm in the 1.2-unit nominal garment space).
 export const T25 = {
   heavyset: {asset: 'body:heavyset', attempt: 'a1', sha256: 'a88bad7d4f74038fd4b3f383eefdda5565c2aef21c7f88093c67478c2b9f738c'},
+  // batch2-chars (lanes/batches/batch2-chars.json): remaining bodies (a-pose) and wearables, accepted deliveries
+  lastshift: {asset: 'body:lastshift', attempt: 'a1', sha256: 'ec77a1c28537a87d68ae4ea496a6dd48427051b5e195365999fc6804730b0d1b'},
+  courier: {asset: 'body:courier', attempt: 'a1', sha256: '5608e648e52874a5d28f61c0117464353f47374449ae433b995eaec8636c8cde'},
+  agent: {asset: 'body:agent', attempt: 'a1', sha256: 'be24a4f07016c05412e37bb10d5ba9ceb6a8f7b60b462d2f6c1af8700ba8a53d'},
+  tall: {asset: 'body:tall', attempt: 'a1', sha256: 'dfd58b18c055c0aab164daa41ba06bf8de381f136aa49fc925efd22f06c01875'},
+  scavenger: {asset: 'body:scavenger', attempt: 'a1', sha256: 'b93da7c038fded9b23edf88ce9e139adbc0af06148b5cd818b03fe0b630d5892'}, // RECREATED reference (user update 01), not an original
+  coat: {asset: 'garment:coat', attempt: 'a1', sha256: '8dab13875cc683af3a3eaba4c2ace27436f09c1870458d11e4ee648b5e94a4b0', facing: 1},
+  trench: {asset: 'garment:trench', attempt: 'a1', sha256: '0745c0388be7f09da591cc9ff685067defaaf9b19544e06629648d89ddc6b9b9', facing: 1},
+  hivis: {asset: 'garment:hivis', attempt: 'a1', sha256: '2b706bf354ef481332efeef9c7b6f404227e2a8b28fa559a4e78eb861b909f99', facing: 1},
+  blazer: {asset: 'garment:blazer', attempt: 'a1', sha256: '05f04056f2abc0dbae09a10a841cf8a9cfd12f7386a519022079524d650f5020', facing: 1},
+  flannel: {asset: 'garment:flannel', attempt: 'a1', sha256: 'ccf22d234ff534c7448c1edc6730706d4fa2166df63bae0bd230db53c1cc6638', facing: 1},
+  sweater: {asset: 'garment:sweater', attempt: 'a1', sha256: '1a11c7865ed0eea91e5f07efae1e5d61d9a39660d15a84713e69a4c8a59934e0', facing: 1},
+  cargo: {asset: 'garment:cargo', attempt: 'a1', sha256: '11933bb04879b4dba67c5c2ed44a08efd1a78340d46730500ebb7eb6f7cc845f', facing: 1},
+  jeans: {asset: 'garment:jeans', attempt: 'a1', sha256: '23aa400234c5a08dda51919151b297052459f124ea5f3a4e840c04c05ad39adc', facing: 1},
+  slacks: {asset: 'garment:slacks', attempt: 'a1', sha256: 'e0a8ac124a8da2368385097ada48df5e7b92a3b85e9ba0a8fb0d283c651c44be', facing: 1},
+  hardhat: {asset: 'garment:hardhat', attempt: 'a1', sha256: '0dcde4fed2151fe1697ff91b202f144520a753e2890fad3d0ed179185e6751f6', facing: 1},
+  cap: {asset: 'garment:cap', attempt: 'a1', sha256: '4f6009e9dda1e4cd67935aaa2d4335cafd29107fd09b4b1f358a9c8acd7724e8', facing: 1},
+  beanie: {asset: 'garment:beanie', attempt: 'a1', sha256: '266a4e571fccfa1476f28d95df3a3130fd957153f799e8163106bcccc6733b20', facing: 1},
+  gasmask: {asset: 'garment:gasmask', attempt: 'a1', sha256: '123161cea8c08200e15caf270accec2ee815da9c52cc8070ac31db50d300a8dc', facing: 1},
+  respirator: {asset: 'garment:respirator', attempt: 'a1', sha256: '6d53a2c3db3ae118e9f845917b92cdbddfd8fa489a5c9ee2c559acc362f2dbbe', facing: 1},
   hoodie: {asset: 'garment:hoodie', attempt: 'a1', sha256: 'fd09ada122a10c8411fbbe9700082845cbfa51a66d520252b81c7c315d0a04b3', facing: 1,
     // accepted deviation fix (primary review vs the ORIGINAL outfitHoodie image: the T2.5 hoodie reads lighter / pinker than
     // the reference's deep worn red). Measured: the Meshy provider render is lit much brighter, but the T2.5 ALBEDO itself
@@ -147,7 +167,12 @@ function pick(o, keys) { return Object.fromEntries(keys.filter(k => o[k] !== und
  * Pairs the build refuses to fit (reason recorded in zombie-variants.json). Use only for real,
  * evidenced problems (QA contact sheets / stretch audit), never to hide by rarity.
  */
-export const EXCLUDED_PAIRS = [];
+export const EXCLUDED_PAIRS = [
+  // T2.5 migration: the LEGACY hivis refit onto the new T2.5 heavyset passes the build's fit07 gate (animated 0.89 %,
+  // every 3rd frame) but the independent audit (qa/fit-audit.mjs, every 2nd frame) measures 1.21 % > its 1.2 % limit;
+  // excluded while hivis still uses its old master (re-evaluated when the T2.5 hivis is pinned)
+  ...(T25.hivis ? [] : [{body: 'heavyset', wearable: 'hivis', reason: 'independent fit audit (every 2nd clip frame): animated visible poke-through 1.21 % > 1.2 % on the T2.5 heavyset (legacy hivis master)'}]),
+];
 
 /** Motion-quality gate per fitted variant (stretch audit over every clip, lib/stretch.mjs). */
 export const QUALITY = {stretchRatio: 3, maxFractionOver: 0.05};

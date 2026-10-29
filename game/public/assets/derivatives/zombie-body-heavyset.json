@@ -1609,11 +1609,6 @@
           "atT": 0.5,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_hivis": {
-          "minY": 0,
-          "atT": 0.5,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0,
           "atT": 0.5,
@@ -1688,11 +1683,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_trench": {
-          "minY": 0,
-          "atT": 0.5,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
           "minY": 0,
           "atT": 0.5,
           "framesBelowMinus1cm": 0
@@ -1775,11 +1765,6 @@
           "atT": 0.06667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_hivis": {
-          "minY": 0,
-          "atT": 0.06667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0,
           "atT": 0.06667,
@@ -1854,11 +1839,6 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_trench": {
-          "minY": 0,
-          "atT": 0,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_hivis": {
           "minY": 0,
           "atT": 0,
           "framesBelowMinus1cm": 0
@@ -1941,11 +1921,6 @@
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
         },
-        "Outfit_hivis": {
-          "minY": 0,
-          "atT": 0.26667,
-          "framesBelowMinus1cm": 0
-        },
         "Outfit_hoodie": {
           "minY": 0,
           "atT": 0.26667,
@@ -2023,11 +1998,6 @@
           "minY": -0.0186,
           "atT": 1.1,
           "framesBelowMinus1cm": 8
-        },
-        "Outfit_hivis": {
-          "minY": -0.0025,
-          "atT": 1.1,
-          "framesBelowMinus1cm": 0
         },
         "Outfit_hoodie": {
           "minY": -0.0025,

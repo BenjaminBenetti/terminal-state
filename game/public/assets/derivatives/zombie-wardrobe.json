@@ -41,8 +41,8 @@
       "face": 2,
       "head": 3
     },
-    "pairs": 58,
-    "looks": 717,
+    "pairs": 57,
+    "looks": 681,
     "perBody": {
       "lastshift": {
         "pairs": 12,
@@ -85,14 +85,14 @@
         "compositions": 47
       },
       "heavyset": {
-        "pairs": 15,
+        "pairs": 14,
         "perSlot": {
           "lower": 3,
-          "upper": 7,
+          "upper": 6,
           "face": 2,
           "head": 3
         },
-        "compositions": 264
+        "compositions": 228
       },
       "tall": {
         "pairs": 13,
@@ -145,6 +145,13 @@
       "slot": "face",
       "rule": "body-covers-slot",
       "reason": "body scavenger covers the face slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "heavyset",
+      "wearable": "hivis",
+      "slot": "upper",
+      "rule": "qa-exclusion",
+      "reason": "independent fit audit (every 2nd clip frame): animated visible poke-through 1.21 % > 1.2 % on the T2.5 heavyset (legacy hivis master)"
     },
     {
       "body": "courier",
@@ -1260,29 +1267,6 @@
           "pass": false
         },
         {
-          "body": "heavyset",
-          "wearable": "hivis",
-          "covered": 2570,
-          "bind": 0.0016,
-          "animated": 0.0089,
-          "extreme": 0.0047,
-          "layers": {
-            "cargo": {
-              "covered": 48,
-              "animated": 0
-            },
-            "jeans": {
-              "covered": 73,
-              "animated": 0.0137
-            },
-            "slacks": {
-              "covered": 32,
-              "animated": 0
-            }
-          },
-          "pass": true
-        },
-        {
           "body": "tall",
           "wearable": "hivis",
           "covered": 1271,
@@ -2119,8 +2103,8 @@
       ]
     }
   },
-  "totalBytes": 12271380,
-  "totalMB": 12.27,
+  "totalBytes": 12174648,
+  "totalMB": 12.17,
   "bodies": {
     "lastshift": {
       "glb": "game/public/assets/models/zombie-body-lastshift-t25.glb",
@@ -2394,16 +2378,15 @@
       "slot": "upper",
       "kind": "garment",
       "glb": "game/public/assets/models/outfit-hivis-t25.glb",
-      "bytes": 418752,
-      "sha256": "862d0a3e3801d31c72b56854d21a434b3e575c10145090e381b228568d91ba9c",
+      "bytes": 322020,
+      "sha256": "254e7b0e4f711befcdf5a81bda036051d8ea16f18b5a1a4ac984dae8624bab8a",
       "triangles": 4928,
       "vertices": 3641,
       "heavy": false,
       "provenance": "generated (iteration 05)",
       "t25Source": false,
       "bodies": [
-        "lastshift",
-        "heavyset"
+        "lastshift"
       ]
     },
     "hoodie": {
@@ -2729,21 +2712,6 @@
         "over": 79,
         "fraction": 0.016,
         "max": 10.61
-      }
-    },
-    {
-      "body": "heavyset",
-      "wearable": "hivis",
-      "slot": "upper",
-      "hiddenBodyTriangles": 3383,
-      "bulkM": {
-        "torso": 0.0342,
-        "arm": 0.0302
-      },
-      "motion": {
-        "over": 161,
-        "fraction": 0.0327,
-        "max": 19.2
       }
     },
     {
@@ -4132,21 +4100,6 @@
           },
           "poses": 85
         },
-        "hivis": {
-          "triangles": 4928,
-          "p50": 1.136,
-          "p99": 5.734,
-          "max": 19.2,
-          "over2x": 297,
-          "over3x": 161,
-          "fractionOver": 0.0327,
-          "worstClips": {
-            "Attack": 7,
-            "Run": 34,
-            "Death": 10
-          },
-          "poses": 85
-        },
         "hoodie": {
           "triangles": 7489,
           "p50": 1.101,
@@ -4563,5 +4516,5 @@
     }
   },
   "rebuild": "node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs",
-  "buildSeconds": 512
+  "buildSeconds": 325
 }

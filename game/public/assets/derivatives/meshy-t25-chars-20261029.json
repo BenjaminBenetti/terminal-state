@@ -3,7 +3,7 @@
  "class": "chars",
  "task": "studio-meshy-game-replacement-20261029-01",
  "lane": "CHARS",
- "generatedAt": "2026-10-29T22:39:59.873Z",
+ "generatedAt": "2026-10-29T23:21:16.381Z",
  "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
  "method": "Accepted Meshy T2.5 native GLBs (single original front/reference image) are rebuilt by the EXISTING local CPU rig pipelines: densified (zombie/lib/densify.mjs, same surface + UV mapping) -> placement (metres, +Y up, +Z facing, feet / paws on y = 0) -> slice-landmark skeleton (18-joint humanoid / 25-joint quadruped, A-pose / bind as generated) -> simplify + new UV atlas + texture bake from the native textures -> automatic skin weights -> procedural clips (Idle/Walk/Run/Attack/Hit/Death) -> per-body garment fits (fit07 pose gate, masks, layering) recomputed for the new topology. No paid rigging / animation / remesh, no network.",
  "status": {
@@ -14,13 +14,11 @@
  "counts": {
   "masters": 22,
   "replaced": 3,
-  "kept": 1,
-  "pending": 18,
+  "kept": 0,
+  "pending": 19,
   "rebuiltWithoutSourceChange": 16
  },
- "keptBodyFiles": [
-  "scavenger"
- ],
+ "keptBodyFiles": [],
  "skippedWearables": [
   {
    "id": "puffer",
@@ -35,6 +33,10 @@
    "oldRuntimePath": "game/public/assets/models/zombie-body-lastshift.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "body:lastshift",
+    "sha256": "ec77a1c28537a87d68ae4ea496a6dd48427051b5e195365999fc6804730b0d1b"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-lastshift-t25.glb",
     "sha256": "d933046c9d12376d5bce53aef5b8e635479a02fea53289e72eb7e76ae5e6c241",
@@ -87,6 +89,10 @@
    "oldRuntimePath": "game/public/assets/models/zombie-body-courier.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "body:courier",
+    "sha256": "5608e648e52874a5d28f61c0117464353f47374449ae433b995eaec8636c8cde"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-courier-t25.glb",
     "sha256": "f163e01d3bcdac3d5a17431eca6c26acae8936b39962aadfe9ee8f81f16a4eb7",
@@ -139,6 +145,10 @@
    "oldRuntimePath": "game/public/assets/models/zombie-body-agent.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": false,
+   "pinnedNotYetBuilt": {
+    "asset": "body:agent",
+    "sha256": "be24a4f07016c05412e37bb10d5ba9ceb6a8f7b60b462d2f6c1af8700ba8a53d"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-agent.glb",
     "sha256": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45",
@@ -183,9 +193,12 @@
    "class": "character body (rigged)",
    "displayName": "Masked scavenger (reused original upload)",
    "oldRuntimePath": "game/public/assets/models/zombie-body-scavenger.glb",
-   "status": "kept (no T2.5 replacement yet)",
-   "reason": "its T2.5 job uses a RECREATED reference (recreated-from-existing-model-guide (user authorized update01); not an original) and is not delivered / integrated yet; the shipped file is verified unchanged by every wardrobe build",
+   "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": false,
+   "pinnedNotYetBuilt": {
+    "asset": "body:scavenger",
+    "sha256": "b93da7c038fded9b23edf88ce9e139adbc0af06148b5cd818b03fe0b630d5892"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-scavenger.glb",
     "sha256": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869",
@@ -336,6 +349,10 @@
    "oldRuntimePath": "game/public/assets/models/zombie-body-tall.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": false,
+   "pinnedNotYetBuilt": {
+    "asset": "body:tall",
+    "sha256": "dfd58b18c055c0aab164daa41ba06bf8de381f136aa49fc925efd22f06c01875"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-tall.glb",
     "sha256": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281",
@@ -382,6 +399,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-coat.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:coat",
+    "sha256": "8dab13875cc683af3a3eaba4c2ace27436f09c1870458d11e4ee648b5e94a4b0"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-coat-t25.glb",
     "sha256": "b3fb92626f90e872f48e32fa953a287c6c7e8931d7df9aa1cd6438b9404fa5e8",
@@ -433,6 +454,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-trench.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:trench",
+    "sha256": "0745c0388be7f09da591cc9ff685067defaaf9b19544e06629648d89ddc6b9b9"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-trench-t25.glb",
     "sha256": "5c411aa8fdf19381a82f3e8def6bc8791fbf31c89fc1d20eca955ea8dfa9c175",
@@ -484,13 +509,16 @@
    "oldRuntimePath": "game/public/assets/models/outfit-hivis.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:hivis",
+    "sha256": "2b706bf354ef481332efeef9c7b6f404227e2a8b28fa559a4e78eb861b909f99"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-hivis-t25.glb",
-    "sha256": "862d0a3e3801d31c72b56854d21a434b3e575c10145090e381b228568d91ba9c",
-    "bytes": 418752,
-    "triangles": 9856,
-    "meshNodes": 2,
-    "perNodeTriangles": 4928,
+    "sha256": "254e7b0e4f711befcdf5a81bda036051d8ea16f18b5a1a4ac984dae8624bab8a",
+    "bytes": 322020,
+    "triangles": 4928,
+    "meshNodes": 1,
     "textures": [
      {
       "name": "Outfit_hivisMaterial_baseColor",
@@ -511,13 +539,12 @@
       "bytes": 22891
      }
     ],
-    "skins": 2,
+    "skins": 1,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-hivis.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
     "fittedBodies": [
-     "lastshift",
-     "heavyset"
+     "lastshift"
     ]
    },
    "restore": {
@@ -638,6 +665,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-blazer.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:blazer",
+    "sha256": "05f04056f2abc0dbae09a10a841cf8a9cfd12f7386a519022079524d650f5020"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-blazer-t25.glb",
     "sha256": "afb0c4aaf4ee469eeda0fb5d36385a9c4aa8e23b4717438acb50158f45e24484",
@@ -690,6 +721,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-flannel.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:flannel",
+    "sha256": "ccf22d234ff534c7448c1edc6730706d4fa2166df63bae0bd230db53c1cc6638"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-flannel-t25.glb",
     "sha256": "775bcae22af0e1994a6c1b1605f94dcea76375bf4fce6ba299aeb2e52a07f040",
@@ -741,6 +776,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-sweater.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:sweater",
+    "sha256": "1a11c7865ed0eea91e5f07efae1e5d61d9a39660d15a84713e69a4c8a59934e0"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-sweater-t25.glb",
     "sha256": "ebf20c428f9273b51b95ddd71c33399b0f698e0623c5ecc4006fc5fcd0044e92",
@@ -792,6 +831,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-cargo.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:cargo",
+    "sha256": "11933bb04879b4dba67c5c2ed44a08efd1a78340d46730500ebb7eb6f7cc845f"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-cargo-t25.glb",
     "sha256": "21cefe8bcb3fe6adf85606d043b975b19b2cd741afb02483f9d778424d4155fe",
@@ -844,6 +887,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-jeans.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:jeans",
+    "sha256": "23aa400234c5a08dda51919151b297052459f124ea5f3a4e840c04c05ad39adc"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-jeans-t25.glb",
     "sha256": "fd44828dc0992210f2ec3e58722f058255f7b48e1dd4341fa0c28e6dffe37823",
@@ -896,6 +943,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-slacks.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:slacks",
+    "sha256": "e0a8ac124a8da2368385097ada48df5e7b92a3b85e9ba0a8fb0d283c651c44be"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-slacks-t25.glb",
     "sha256": "1b4e29bc6fd43a470e6550bf1429f3a27eb835ca224bc57be4bdf15c397da586",
@@ -947,6 +998,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-hardhat.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:hardhat",
+    "sha256": "0dcde4fed2151fe1697ff91b202f144520a753e2890fad3d0ed179185e6751f6"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-hardhat-t25.glb",
     "sha256": "9053a0ed59bbc86f3ae34b1a892ae81bf35f29570d2872e037070c4651d34fe1",
@@ -1000,6 +1055,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-cap.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:cap",
+    "sha256": "4f6009e9dda1e4cd67935aaa2d4335cafd29107fd09b4b1f358a9c8acd7724e8"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-cap-t25.glb",
     "sha256": "cb94cdf250ea7f4c58623853519412ce7f79900f26a41dd415829e5bb91080eb",
@@ -1053,6 +1112,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-beanie.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:beanie",
+    "sha256": "266a4e571fccfa1476f28d95df3a3130fd957153f799e8163106bcccc6733b20"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-beanie-t25.glb",
     "sha256": "e54ffc1b911b7213c1a5e269565bb85d93953f766eba99bbd679586843cec818",
@@ -1106,6 +1169,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-gasmask.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:gasmask",
+    "sha256": "123161cea8c08200e15caf270accec2ee815da9c52cc8070ac31db50d300a8dc"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-gasmask-t25.glb",
     "sha256": "3354d6792cb389b31ead1a74cc85cabade1c088fc4525cebadf04a1c8099bf3b",
@@ -1159,6 +1226,10 @@
    "oldRuntimePath": "game/public/assets/models/outfit-respirator.glb",
    "status": "pending (old local Pixal3D source still used)",
    "runtimeRebuilt": true,
+   "pinnedNotYetBuilt": {
+    "asset": "garment:respirator",
+    "sha256": "6d53a2c3db3ae118e9f845917b92cdbddfd8fa489a5c9ee2c559acc362f2dbbe"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-respirator-t25.glb",
     "sha256": "11175f96a9fee11cae662d92d386d2606f3e0bae447e700707dabda37e448f10",

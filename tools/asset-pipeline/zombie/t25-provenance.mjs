@@ -61,13 +61,18 @@ for (const m of masters) {
   const pinned = cls === 'creature' ? CREATURE_PIN : T25[id];
   const deriv = cls === 'body' ? `zombie-body-${id}.json` : cls === 'garment' ? `outfit-${id}.json` : 'creature-ratdog.json';
   const liveFile = cls === 'body' ? live.bodies[id] : cls === 'garment' ? live.wearables[id] : path.join(REPO, 'game/public', fs.readFileSync(path.join(REPO, 'game/src/assets/manifest.ts'), 'utf8').match(/creature_ratdog:\s*\{url:\s*'([^']+)'/)[1]);
-  const replaced = !!pinned && !!liveFile && path.basename(liveFile).includes('-t25');
+  // replaced = the LIVE runtime file was actually built from the T2.5 source (its derivative manifest says so), not
+  // merely pinned in the config
+  const dj = liveFile ? JSON.parse(fs.readFileSync(path.join(DERIV, deriv), 'utf8')) : null;
+  const builtFrom = dj?.t25?.source?.nativeSha256 ?? null;
+  const replaced = !!dj?.t25?.sourceReplaced && !!builtFrom && builtFrom === (pinned?.sha256 ?? builtFrom) && rel(liveFile) === (dj.outputs?.glb?.path ?? dj.output?.file);
   if (cls === 'body' && KEEP_BODY_FILES.includes(id)) {
     rec.status = 'kept (no T2.5 replacement yet)';
     rec.reason = m.originalImage?.notOriginal ? `its T2.5 job uses a RECREATED reference (${m.originalImage.origin}; not an original) and is not delivered / integrated yet; the shipped file is verified unchanged by every wardrobe build` : 'no accepted T2.5 delivery integrated yet; shipped file verified unchanged';
   } else rec.status = replaced ? 'replaced' : 'pending (old local Pixal3D source still used)';
   rec.runtimeRebuilt = !!liveFile && !!oldPath && rel(liveFile) !== oldPath;
-  if (pinned) rec.meshy = nativeRecord(pinned.asset ?? m.id);
+  if (replaced) rec.meshy = nativeRecord(m.id);
+  else if (pinned) rec.pinnedNotYetBuilt = {asset: pinned.asset ?? m.id, sha256: pinned.sha256};
   if (liveFile) {
     rec.runtime = {...await glbInfo(liveFile), derivativeManifest: `game/public/assets/derivatives/${deriv}`,
       buildTool: cls === 'creature' ? 'tools/asset-pipeline/creature/build-creature.mjs' : 'tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)'};

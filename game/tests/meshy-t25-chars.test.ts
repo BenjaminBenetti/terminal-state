@@ -209,7 +209,7 @@ describe('Meshy T2.5 bodies: rig, skin, clips, hit zones', () => {
     }
   });
 
-  it('hit zones: measured radii in human ranges, runtime volumes derived from them; the calibration reference body matches', () => {
+  it('hit zones: measured radii in human ranges, runtime volumes derived from them; the calibration mapping is kept', () => {
     for (const id of replacedBodies) {
       const hit = (models[bodyModel(id)].scene.userData.zombieBody as {hit: Record<string, number>}).hit;
       expect(hit.head).toBeGreaterThan(0.09); expect(hit.head).toBeLessThan(0.17);
@@ -220,9 +220,16 @@ describe('Meshy T2.5 bodies: rig, skin, clips, hit zones', () => {
       expect(app.hit.head).toBeCloseTo((hit.head + 0) * HIT_CALIBRATION.head, 5);
       expect(app.girth.torso).toBeCloseTo(hit.torso / REFERENCE_HIT.torso, 5);
     }
-    // REFERENCE_HIT = the measured radii of the live calibration body (Last-shift)
-    const ref = (models[bodyModel('lastshift')].scene.userData.zombieBody as {hit: Record<string, number>}).hit;
-    for (const k of ['head', 'torso', 'arm', 'leg'] as const) expect(Math.abs(ref[k] - REFERENCE_HIT[k]) / REFERENCE_HIT[k], k).toBeLessThan(0.03);
+    // calibration KEPT through the migration (ai/wardrobe.ts): the mapping measured -> gameplay radius reproduces the
+    // iteration-01..07 tuned Last-shift volumes from its measured reference radii; rebuilt bodies use their OWN radii
+    const tuned = {head: 0.135, torso: 0.2, arm: 0.075, leg: 0.1};
+    for (const k of ['head', 'torso', 'arm', 'leg'] as const) expect(REFERENCE_HIT[k] * HIT_CALIBRATION[k], k).toBeCloseTo(tuned[k], 2);
+    // every live body: plausible gameplay volumes (radius x calibration) - no body loses its hit zones to a bad measurement
+    for (const b of lib.bodies) {
+      const hit = (models[b.model].scene.userData.zombieBody as {hit: Record<string, number>}).hit;
+      expect(hit.head * HIT_CALIBRATION.head, b.id).toBeGreaterThan(0.1); expect(hit.torso * HIT_CALIBRATION.torso, b.id).toBeGreaterThan(0.13);
+      expect(hit.arm * HIT_CALIBRATION.arm, b.id).toBeGreaterThan(0.045); expect(hit.leg * HIT_CALIBRATION.leg, b.id).toBeGreaterThan(0.06);
+    }
   });
 });
 
