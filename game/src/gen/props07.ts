@@ -255,6 +255,44 @@ export function isP7Kind(kind: string): kind is P7Kind { return KIND_SET.has(kin
 export function p7Spec(kind: P7Kind): P7Spec { return SPECS[kind]; }
 export function p7Model(kind: P7Kind): P7Model { return MODELS[kind]; }
 
+// Iteration 16 (WORLD-GEN): the office tower's purposes (gen/purposes.ts 'office-*', gen/office/*) reuse these generated props.
+// Appended AFTER the kind list is derived (only kinds that already have uses): the set of integrated kinds, the per-station palette
+// and every station-purpose use stay exactly as before — these uses only match office purpose keys.
+{
+  const ADD: Readonly<Record<string, P7Use[]>> = {
+    coatRack: [W(['office-private', 'office-exec', 'office-reception'], [1, 1], {chance: 0.4, front: 0.6})],
+    filingCabinet: [ROW(['office-private', 'office-exec', 'office-copy'], [1, 2], {front: 0.8}), ROW(['office-open'], [2, 4], {front: 0.8}), W(['office-security'], [1, 1], {chance: 0.6, front: 0.8})],
+    paperShredder: [W(['office-copy', 'office-exec'], [1, 1], {chance: 0.5, front: 0.5})],
+    mailCubby: [MOUNT(['office-copy', 'office-reception'], [1, 1], 1.1, {chance: 0.6})],
+    keyCabinet: [MOUNT(['office-security'], [1, 1], 1.3, {chance: 0.7})],
+    officeSwivelChair: [AT(['office-security'], ['desk', 'monitorDesk'], [1, 1], {max: 2})],
+    crtTerminal: [TOP(['office-security'], ['desk', 'monitorDesk'], {max: 2})],
+    radioChargerRack: [TOP(['office-security'], ['desk', 'monitorDesk', 'cabinetLow'], {chance: 0.6})],
+    cctvCamera: [MOUNT(['office-security', 'office-reception', 'office-corridor'], [1, 1], 2.15, {chance: 0.5})],
+    fireExtinguisherCabinet: [MOUNT(['office-corridor', 'office-open', 'office-reception'], [1, 1], 0.6, {chance: 0.6})],
+    fireExtinguisher: [W(['office-copy', 'office-storage', 'office-server'], [1, 1], {chance: 0.5, front: 0.5})],
+    partsBinRack: [MOUNT(['office-server', 'office-storage'], [1, 1], 0.95, {chance: 0.5})],
+    microwaveOven: [TOP(['office-break'], ['kitchenette', 'cabinetLow', 'table'], {chance: 0.8})],
+    dripCoffeeMaker: [TOP(['office-break'], ['kitchenette', 'cabinetLow', 'table'], {chance: 0.7})],
+    firstAidWallKit: [MOUNT(['office-break', 'office-corridor'], [1, 1], 1.3, {chance: 0.45})],
+    aedWallCabinet: [MOUNT(['office-reception', 'office-corridor'], [1, 1], 1.2, {chance: 0.35})],
+    wallDataCabinet: [MOUNT(['office-server', 'office-copy'], [1, 2], 1.4, {chance: 0.7})],
+    pedestalFan: [W(['office-private', 'office-open', 'office-server'], [1, 1], {chance: 0.35, front: 0.6})],
+    wetFloorSign: [FREE(['office-corridor', 'office-reception'], [1, 1], {chance: 0.3, ring: 0.8})],
+    plasticStackChair: [W(['office-break', 'office-meeting'], [1, 2], {chance: 0.5, front: 0.5})],
+    stepLadder: [W(['office-storage', 'office-copy'], [1, 1], {chance: 0.5, front: 0.6})],
+    crtTvCart: [W(['office-meeting'], [1, 1], {chance: 0.4, front: 0.8})],
+    atmKiosk: [W(['office-reception', 'office-lobby'], [1, 1], {chance: 0.45, front: 1.0})],
+    punchClock: [MOUNT(['office-security'], [1, 1], 1.2, {chance: 0.6})],
+    securityPodium: [W(['office-reception'], [1, 1], {chance: 0.4, front: 1.0})],
+    trashBagPile: [W(['office-storage', 'office-corridor'], [1, 1], {chance: 0.3})],
+    wheelieBin: [W(['office-storage'], [1, 1], {chance: 0.4})],
+    emergencyCallPoint: [W(['office-corridor'], [1, 1], {chance: 0.4})],
+    infoTouchKiosk: [W(['office-lobby'], [1, 1], {front: 1.0, chance: 0.3})],
+  };
+  for (const [k, us] of Object.entries(ADD)) if (KIND_SET.has(k) && SPECS[k].uses.length) (SPECS[k].uses as P7Use[]).push(...us!);
+}
+
 /** Runtime model key of a kind (lazy library key). */
 export const p7ModelKey = (kind: string): string => `p7_${kind}`;
 /** Lazy model files (assets/loader.ts PropModelLibrary). */

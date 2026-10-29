@@ -615,6 +615,9 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     },
     floor: {ammo: 0.7, med: 0.3},
   },
+  // --- Iteration 16 (WORLD-GEN): OFFICE TOWER rooms (gen/office/*). Their slots are office room types only, so the subway's
+  // back-of-house assignment never picks them; the office generator presets them per area (assignPurposes keeps presets).
+  ...OFFICE_PURPOSES(),
 };
 
 export const ALL_PURPOSES: readonly Purpose[] = [...Object.values(STORE_PURPOSES), ...Object.values(ROOM_PURPOSES)];
@@ -699,4 +702,179 @@ export function assignRoomPurposes(slots: readonly RoomSlot[], rnd: () => number
     take(pick, s);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------
+// Iteration 16 (WORLD-GEN): office tower purposes (gen/office/*). Hoisted: spread into ROOM_PURPOSES above.
+//
+// Same scarcity as the station (items/lootEconomy.ts keeps ~1 in 5 non-ammo entries): office holders are mostly empty —
+// a desk drawer with a chocolate bar, a staff fridge with a bottle of water, the security office's ammo. Limb treatments
+// come through the economy's med finds (lane INJURY). Furniture the generator places itself (cubicles, the reception desk,
+// conference tables) is not listed here; `props` are the purpose rules the station dresser runs (gen/stationDress.ts).
+
+function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
+  const OPEN: readonly RoomType[] = ['office-open'];
+  const ROOM: readonly RoomType[] = ['office-room'];
+  const DESK: LootSpec = {items: [['chocolate', 1], ['water', 1], ['cola', 0.8], ['chips', 0.6], ['bandage', 0.4], ['juice', 0.3]], lots: [1, 1], empty: 0.62};
+  const DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['ammo_pistol', 0.25]], lots: [1, 2], empty: 0.35};
+  return {
+    'office-reception': {
+      id: 'office-reception', category: 'back', theme: 'personal', label: 'Lobby', slots: ['office-lobby'], kinds: ['room'], weight: 1, max: 1,
+      light: [0.4, 0.45, 0.15], props: [],
+      loot: {desk: DESK, cabinetLow: DRAWERS, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_pistol', 0.4]], lots: [1, 2], empty: 0.4}},
+      floor: {med: 0.3, ammo: 0.2},
+    },
+    'office-lobby': {
+      id: 'office-lobby', category: 'back', theme: 'public', label: 'Lobby', slots: ['office-lobby'], kinds: ['room'], weight: 1, max: 9,
+      light: [0.35, 0.5, 0.15], props: [], loot: {vending: {items: [['chocolate', 2], ['chips', 2], ['cola', 2], ['water', 1]], lots: [3, 6], empty: 0.15}},
+      floor: {med: 0.2, ammo: 0.2},
+    },
+    'office-security': {
+      id: 'office-security', category: 'back', theme: 'security', label: 'Building security office', slots: ROOM, kinds: ['room'], weight: 1, max: 1,
+      light: [0.3, 0.45, 0.25],
+      props: [
+        {kind: 'monitorDesk', at: 'wall', wall: 'far', n: [1, 1], front: 0.9},
+        {kind: 'cabinetTall', at: 'wall', wall: 'side', n: [1, 2], front: 0.8},
+        {kind: 'gunLocker', at: 'wall', wall: 'side', n: [1, 1], chance: 0.45, front: 0.9},
+        {kind: 'staffLockers', at: 'row', wall: 'near', n: [1, 2], chance: 0.6, front: 0.8},
+        {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
+      ],
+      loot: {
+        gunLocker: {items: [['ammo_pistol', 2.4], ['ammo_shells', 1.6], ['ammo_rifle', 1.2], ['medkit', 0.3]], lots: [2, 4], empty: 0.1},
+        monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_pistol', 0.6]], lots: [1, 2], empty: 0.4},
+        cabinetTall: {items: [['ammo_pistol', 1.4], ['bandage', 1], ['medkit', 0.3], ['water', 0.6]], lots: [2, 4], empty: 0.12},
+        crate: CACHE_CRATE,
+      },
+      floor: {ammo: 2.2, med: 0.5},
+    },
+    'office-corridor': {
+      id: 'office-corridor', category: 'back', theme: 'public', label: 'Corridor', slots: ['office-corridor'], kinds: ['passage'], weight: 1, max: 99,
+      props: [
+        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 2], chance: 0.6, front: 0.5},
+        {kind: 'officeWaterCooler', at: 'wall', wall: 'any', n: [0, 1], chance: 0.35, front: 0.6},
+        {kind: 'bin', at: 'wall', wall: 'any', n: [0, 1], chance: 0.4},
+      ],
+      loot: {bin: {items: [['chips', 1], ['cola', 1], ['water', 0.6], ['bandage', 0.3]], lots: [0, 2], empty: 0.6}}, floor: {med: 0.2, ammo: 0.15},
+    },
+    'office-open': {
+      id: 'office-open', category: 'back', theme: 'personal', label: 'Open-plan office', slots: OPEN, kinds: ['concourse', 'room'], weight: 1, max: 99,
+      light: [0.3, 0.45, 0.25], props: [],
+      loot: {desk: DESK, cabinetLow: DRAWERS, cabinetTall: {items: [['water', 1], ['bandage', 0.8], ['chocolate', 0.8], ['ammo_pistol', 0.3]], lots: [1, 3], empty: 0.2}},
+      floor: {med: 0.4, ammo: 0.3},
+    },
+    'office-private': {
+      id: 'office-private', category: 'back', theme: 'personal', label: 'Private office', slots: ROOM, kinds: ['room'], min: [2.5, 3], weight: 3, max: 12,
+      light: [0.2, 0.45, 0.35],
+      props: [
+        {kind: 'desk', at: 'center', n: [1, 1], ring: 0.7},
+        {kind: 'cabinetLow', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 0.7},
+        {kind: 'officeShelf', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 0.6},
+        {kind: 'cabinetTall', at: 'wall', wall: 'near', n: [0, 1], chance: 0.3, front: 0.8},
+        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.4},
+      ],
+      loot: {desk: {...DESK, empty: 0.5}, cabinetLow: DRAWERS, cabinetTall: {items: [['water', 1], ['bandage', 1], ['chocolate', 1], ['ammo_pistol', 0.4]], lots: [1, 3], empty: 0.18}},
+      floor: {med: 0.5, ammo: 0.3},
+    },
+    'office-exec': {
+      id: 'office-exec', category: 'back', theme: 'personal', label: 'Executive office', slots: ROOM, kinds: ['room'], min: [4, 5], weight: 1, max: 3,
+      light: [0.15, 0.45, 0.4], warm: true,
+      props: [
+        {kind: 'desk', at: 'center', n: [1, 1], ring: 0.8},
+        {kind: 'couch', at: 'wall', wall: 'side', n: [1, 1], chance: 0.8, front: 0.7},
+        {kind: 'cabinetLow', at: 'wall', wall: 'side', n: [1, 1], front: 0.7},
+        {kind: 'officeShelf', at: 'row', wall: 'near', n: [1, 3], front: 0.6},
+        {kind: 'safe', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.6},
+        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [1, 2], front: 0.4},
+      ],
+      loot: {
+        desk: {items: [['chocolate', 1], ['water', 1], ['juice', 0.8], ['medkit', 0.3], ['ammo_pistol', 0.5]], lots: [1, 2], empty: 0.35},
+        cabinetLow: {items: [['juice', 1], ['water', 1], ['bandage', 1], ['ammo_pistol', 0.5]], lots: [1, 2], empty: 0.25},
+      },
+      floor: {med: 0.6, ammo: 0.6},
+    },
+    'office-meeting': {
+      id: 'office-meeting', category: 'back', theme: 'public', label: 'Meeting room', slots: ROOM, kinds: ['room'], min: [3, 4], weight: 2, max: 3,
+      light: [0.25, 0.45, 0.3],
+      props: [
+        {kind: 'officeWhiteboard', at: 'wall', wall: 'side', n: [1, 1], chance: 0.8, front: 0.6},
+        {kind: 'cabinetLow', at: 'wall', wall: 'near', n: [0, 1], chance: 0.5, front: 0.7},
+        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 1], chance: 0.4, front: 0.4},
+      ],
+      loot: {cabinetLow: {items: [['water', 1], ['cola', 1], ['chocolate', 0.6]], lots: [1, 2], empty: 0.4}},
+      floor: {med: 0.2},
+    },
+    'office-break': {
+      id: 'office-break', category: 'back', theme: 'food', label: 'Break room', slots: ROOM, kinds: ['room'], min: [3, 4], weight: 2, max: 1,
+      light: [0.35, 0.45, 0.2], warm: true,
+      props: [
+        {kind: 'kitchenette', at: 'wall', wall: 'far', n: [1, 1], front: 0.9},
+        {kind: 'fridge', at: 'wall', wall: 'any', n: [1, 1], front: 0.6},
+        {kind: 'table', at: 'center', n: [1, 1], ring: 0.9},
+        {kind: 'vending', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 1.0},
+        {kind: 'couch', at: 'wall', wall: 'side', n: [0, 1], chance: 0.5, front: 0.6},
+        {kind: 'officeWaterCooler', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.6},
+      ],
+      loot: {
+        fridge: {items: [['juice', 2], ['water', 2], ['cola', 2], ['beans', 0.6]], lots: [2, 5], empty: 0.15},
+        kitchenette: {items: [['noodles', 2], ['chocolate', 1], ['beans', 1]], lots: [1, 3], empty: 0.25},
+        table: {items: [['cola', 1], ['chocolate', 1], ['water', 0.5]], lots: [1, 2], empty: 0.5},
+        vending: {items: [['chocolate', 2], ['chips', 2], ['cola', 2], ['water', 1]], lots: [3, 6], empty: 0.12},
+      },
+      floor: {med: 0.3},
+    },
+    'office-copy': {
+      id: 'office-copy', category: 'back', theme: 'service', label: 'Copy & mail room', slots: ROOM, kinds: ['room'], min: [2.5, 3], weight: 1.6, max: 2,
+      light: [0.15, 0.45, 0.4], stock: 'cartons',
+      props: [
+        {kind: 'officePhotocopier', at: 'wall', wall: 'far', n: [1, 2], front: 0.9},
+        {kind: 'shelf', at: 'wall', wall: 'side', n: [1, 1], front: 0.8},
+        {kind: 'cabinetLow', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.7},
+        {kind: 'cartonStack', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5},
+      ],
+      loot: {
+        shelf: {items: [['water', 1], ['bandage', 0.8], ['chocolate', 0.6]], lots: [1, 3], empty: 0.3},
+        cabinetLow: {items: [['bandage', 1], ['water', 1]], lots: [1, 2], empty: 0.3},
+      },
+      floor: {ammo: 0.4, med: 0.4},
+    },
+    'office-storage': {
+      id: 'office-storage', category: 'back', theme: 'service', label: 'Supply storage', slots: ROOM, kinds: ['room'], weight: 1.4, max: 2,
+      light: [0.1, 0.45, 0.45], stock: 'cartons',
+      props: [
+        {kind: 'shelf', at: 'row', wall: 'far', n: [2, 3], front: 0.8},
+        {kind: 'cabinetTall', at: 'wall', wall: 'side', n: [1, 1], front: 0.8},
+        {kind: 'crate', at: 'wall', wall: 'any', n: [1, 2]},
+        {kind: 'cartonStack', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6},
+      ],
+      loot: {
+        shelf: {items: [['water', 1.4], ['beans', 1], ['bandage', 1], ['ammo_pistol', 0.6], ['ammo_shells', 0.4]], lots: [2, 4], empty: 0.12},
+        cabinetTall: {items: [['ammo_pistol', 1], ['bandage', 1], ['medkit', 0.3], ['water', 1]], lots: [2, 4], empty: 0.1},
+        crate: CACHE_CRATE,
+      },
+      floor: {ammo: 1.2, med: 0.8},
+    },
+    'office-server': {
+      id: 'office-server', category: 'back', theme: 'tech', label: 'Server room', slots: ROOM, kinds: ['room'], min: [2.5, 3], weight: 1.2, max: 1,
+      light: [0.05, 0.35, 0.6],
+      props: [
+        {kind: 'serverRack', at: 'row', wall: 'far', n: [2, 5], front: 1.0},
+        {kind: 'serverRack', at: 'row', wall: 'side', n: [0, 3], chance: 0.6, front: 1.0},
+        {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.8},
+        {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5},
+      ],
+      loot: {
+        cabinetTall: {items: [['water', 1], ['bandage', 0.6], ['ammo_pistol', 0.4]], lots: [1, 3], empty: 0.2},
+        crate: CACHE_CRATE,
+      },
+      floor: {ammo: 0.6, med: 0.3},
+    },
+    'office-elevator': {
+      id: 'office-elevator', category: 'back', theme: 'public', label: 'Elevator', slots: ['office-elevator'], kinds: ['room'], weight: 1, max: 99,
+      light: [1, 0, 0], props: [], loot: {},
+    },
+    'office-stair': {
+      id: 'office-stair', category: 'back', theme: 'public', label: 'Stairwell', slots: ['office-stair'], kinds: ['room'], weight: 1, max: 99,
+      light: [0.5, 0.4, 0.1], props: [], loot: {}, floor: {med: 0.2, ammo: 0.2},
+    },
+  };
 }

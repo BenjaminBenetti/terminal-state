@@ -15,10 +15,16 @@ import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
 import {creatureQaApi} from './ai/creatureQa';
 import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
+import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
+import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
 import {renderStats} from './render/backend'; // Iteration 13 (CORE)
 import {probeDecayGPU, type DecayProbe} from './world/decay'; // Iteration 13 (MAT-A): decay inputs as the GPU sees them
+import {seedToCode} from './core/rng'; // Iteration 16 (lane RUN)
+import {memorySummary} from './run/memory'; // Iteration 16 (lane RUN)
+import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
+import type {Arrival, LevelId} from './levels/types'; // Iteration 16 (lane RUN)
 
 export function installQaHooks(game: Game): void {
   const api = {
@@ -307,6 +313,8 @@ export function installQaHooks(game: Game): void {
     ...creatureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
     // Iteration 12 (AI): light lure — lightLure(), lureProbe(i?), goLureVantage({index, dist, ahead}), DEBUG qaLureLight / qaLureLightSet.
     ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
+    ...towerQaApi(game), // Iteration 16 (lane TOWER): tower(), towerGoCall(), towerGoCab(), towerGoStairs(), towerInteract(), towerPick(5 | 'open'), towerExteriorTune({...})
     // Iteration 12 (LIGHT): light() — battery / glow / flares / light sources; DEBUG qaSetBattery(charge), qaGiveItem(id, n).
     ...lightQaApi(game),
     /**
@@ -450,6 +458,28 @@ export function installQaHooks(game: Game): void {
       const ok = game.physics.ragdoll(z, {dir, point: chest, strength: killImpulseStrength(weapon, weapon === 'shotgun' ? 9 : 1, weapon === 'shotgun' ? 9 : 1)});
       return {index: game.zombies.indexOf(z), ragdoll: ok, at: chest};
     },
+    // --- Iteration 16 (lane RUN): the run (levels / sections, carryover, memories) and test travel ---------------------
+    /** Current section, arrival, level seeds (+ codes), gear roll, the Retry snapshot summary and every section memory. */
+    run: () => {
+      const r = game.run, cur = r.current;
+      const mem = r.peekMemory(cur);
+      return {
+        id: r.id, current: {...cur}, sectionId: r.sectionId, arrival: {...game.arrival}, travelling: game.travelling, state: game.state,
+        seeds: {...r.seeds}, codes: Object.fromEntries(Object.entries(r.seeds).map(([k, v]) => [k, seedToCode(v)])), gear: r.gear, entered: [...r.entered],
+        entry: r.entry && {level: r.entry.level, section: r.entry.section, arrival: r.entry.arrival, hp: r.entry.vitals.hp, survival: r.entry.survival,
+          battery: r.entry.battery, lanes: Object.keys(r.entry.lanes), memories: Object.keys(r.entry.memories), items: r.entry.inventory.hotbar.concat(r.entry.inventory.pack).filter(Boolean).map(st => `${st!.itemId}x${st!.count}`)},
+        here: {name: game.layout?.name, zombies: game.layout?.zombies.length ?? 0, alive: game.zombies.filter(z => z.brain.alive).length, pickups: game.pickups.list.length, layoutPickups: game.layout?.pickups.length ?? 0},
+        memory: mem ? memorySummary(mem, game.layout?.pickups.length) : null,
+        memories: r.memoryIds().map(id => memorySummary(r.peekMemory(parseSectionId(id))!)),
+        participants: game.runParticipants.map(p => p.id),
+        carry: {hp: game.player.hp, alive: game.player.alive, hunger: game.survival.hunger, thirst: game.survival.thirst, battery: game.torch.battery.charge,
+          items: game.inv.hotbar.concat(game.inv.pack).filter(Boolean).map(st => `${st!.itemId}x${st!.count}`)},
+      };
+    },
+    /** QA travel (via 'local': the compact overlay, pointer lock untouched). Resolves with the TravelResult. */
+    travel: (level: LevelId, section: string, arrival?: Arrival) => game.travel({to: {level, section}, arrival: arrival ?? {kind: 'start'}, label: `QA travel · ${level}:${section}`, via: 'local'}),
+    /** QA: NewGame in a level (seeds optional) without entering play; resolves with the warm-up status. */
+    newGame: (level: LevelId, seeds?: Partial<Record<LevelId, number>>) => game.newGame(level, {seeds}).then(w => w?.status ?? null),
   };
   (window as unknown as {__LL: typeof api}).__LL = api;
 

@@ -24,6 +24,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {ITEMS} from '../items/items';
 import {makeSupplyMesh} from '../world/pickups';
 import {ICONS} from './icons';
+import {gearIconView, preloadGearModels} from '../gear/models'; // Iteration 16 (lane GEAR)
 
 /** Icon bitmap size (CSS shows them at roughly half size, so they stay sharp at DPR 1.5–2). */
 export const ICON_W = 192;
@@ -129,8 +130,9 @@ function viewFor(itemId: string): {az: number; el: number} {
   // Guns: camera on the detailed +X side (muzzle at -Z appears on the right), a touch from above/behind.
   if (def?.kind === 'weapon') return {az: 78 * DEG, el: 14 * DEG};
   // Flat goods (chocolate bar, ammo boxes, med kit, bandage) read better from higher up.
-  if (['chocolate', 'ammo_rifle', 'ammo_shells', 'ammo_pistol', 'medkit', 'bandage'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG};
+  if (['chocolate', 'ammo_rifle', 'ammo_shells', 'ammo_pistol', 'medkit', 'bandage', 'arm_sling', 'trauma_kit', 'leg_splint'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG}; // + Iteration 16 treatments
   if (itemId === 'flare') return {az: 12 * DEG, el: 30 * DEG}; // Iteration 12 (LIGHT): the tube lies along X, printed band to the front
+  if (def?.kind === 'gear') return gearIconView(itemId); // Iteration 16 (lane GEAR): per-piece angles (front three-quarter; the flat gloves from above)
   return {az: 30 * DEG, el: 18 * DEG};
 }
 
@@ -258,6 +260,7 @@ async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record
  */
 export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS)): Promise<IconStats> {
   const t0 = performance.now();
+  await preloadGearModels(); // Iteration 16 (lane GEAR): the delivered Meshy gear models before their first template (icons, pickups, bags)
   let failed: string[] = [];
   let shots: Shot[] = [];
   const api = (renderer.backend as {isWebGPUBackend?: boolean}).isWebGPUBackend ? 'WebGPU' : 'WebGL2'; // Iteration 13 (CORE)

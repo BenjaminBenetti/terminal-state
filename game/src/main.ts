@@ -1,6 +1,8 @@
-import {Game} from './game';
+import {Game, type GameState} from './game';
 import {AssetLoadError} from './assets/loader';
-import {codeToSeed, freshSeed} from './core/rng';
+import {codeToSeed} from './core/rng';
+import {LEVELS, isLevelId, otherLevel, sectionLabel} from './levels/registry'; // Iteration 16 (lane RUN)
+import type {LevelId} from './levels/types';
 import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
@@ -49,13 +51,63 @@ async function boot(): Promise<void> {
   (window as unknown as {__game?: Game}).__game = qa ? game : undefined;
 
   // --- menus and settings ---
+  // Iteration 16 (lane RUN): the title starts a NEW RUN in the chosen level; the pause menu travels to the other level (the run
+  // carries over) or starts a new game (confirmed: it resets everything); the death screen offers Retry level (the snapshot
+  // taken when the level was entered) or a new game; the clear screen lets the run go on.
   $('#btn-start').addEventListener('click', () => void game.enterPlay());
   $('#btn-resume').addEventListener('click', () => void game.enterPlay());
-  $('#btn-new-station').addEventListener('click', () => game.restart(false));
-  $('#btn-death-new').addEventListener('click', () => game.restart(false));
-  $('#btn-death-retry').addEventListener('click', () => game.restart(true));
-  $('#btn-win-new').addEventListener('click', () => game.restart(false));
+  const confirms = ['#confirm-travel', '#confirm-new', '#confirm-win-new'];
+  const closeConfirms = () => { for (const c of confirms) $(c).classList.add('hidden'); };
+  const openConfirm = (id: string) => { closeConfirms(); $(id).classList.remove('hidden'); };
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.confirm .btn-cancel')) b.addEventListener('click', closeConfirms);
+  const travelToOther = () => {
+    const to = otherLevel(game.run.current.level);
+    closeConfirms();
+    void game.travel({to: {level: to, section: LEVELS[to].entry}, arrival: {kind: 'start'}, label: `Travelling to ${LEVELS[to].name}`, via: 'menu'});
+  };
+  $('#btn-travel').addEventListener('click', () => openConfirm('#confirm-travel'));
+  $('#btn-travel-go').addEventListener('click', travelToOther);
+  $('#btn-new-game').addEventListener('click', () => openConfirm('#confirm-new'));
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.btn-new-level')) {
+    b.addEventListener('click', () => { const l = b.dataset.level; closeConfirms(); if (isLevelId(l)) void game.newGame(l, {enter: true}); });
+  }
+  $('#btn-death-retry').addEventListener('click', () => void game.retryLevel());
+  $('#btn-death-new').addEventListener('click', () => void game.newGame(game.run.current.level, {enter: true}));
+  $('#btn-death-new-other').addEventListener('click', () => void game.newGame(otherLevel(game.run.current.level), {enter: true}));
   $('#btn-win-stay').addEventListener('click', () => game.keepExploring());
+  $('#btn-win-travel').addEventListener('click', travelToOther);
+  $('#btn-win-new').addEventListener('click', () => openConfirm('#confirm-win-new'));
+  // menu wording follows the run (current level, the other level, what Retry restores)
+  game.stateListeners.push((s: GameState) => {
+    if (s !== 'paused' && s !== 'dead' && s !== 'won') return;
+    closeConfirms();
+    const cur = game.run.current, other = otherLevel(cur.level);
+    for (const id of ['#btn-travel', '#btn-win-travel']) $(id).textContent = `Travel to ${LEVELS[other].name}`;
+    $('#confirm-travel .to').textContent = LEVELS[other].name;
+    $('#pause-run').textContent = `This run: ${LEVELS[cur.level].name} · ${sectionLabel(cur)}. Travelling keeps everything you carry and your condition; only New game resets them. Nothing is saved when the page reloads.`;
+    $('#btn-death-new').textContent = `New game · ${LEVELS[cur.level].name}`;
+    $('#btn-death-new-other').textContent = `New game · ${LEVELS[other].name}`;
+    const entry = game.run.entry;
+    $('#death-note').textContent = entry
+      ? `Retry level puts you back where you entered ${LEVELS[entry.level].name}, exactly as you were then — the same kit, health, food and water, battery and injuries (no free heal or refill) — and the level as you found it. New game resets everything.`
+      : 'New game resets everything.';
+    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : 'Station clear';
+  });
+  // the title's level choice (before the run starts): rebuilds the prepared run's start (same seeds) and warms it up
+  const choice = document.querySelectorAll<HTMLButtonElement>('.level-card');
+  const markChoice = (level: LevelId) => { for (const c of choice) c.setAttribute('aria-checked', String(c.dataset.level === level)); };
+  let choosing = false;
+  for (const c of choice) c.addEventListener('click', () => {
+    const level = c.dataset.level;
+    if (!isLevelId(level) || choosing || game.state !== 'title' || level === game.run.current.level) return;
+    choosing = true;
+    markChoice(level);
+    void game.newGame(level, {seeds: {...game.run.seeds}}).then(w => {
+      if (game.state === 'loading' || game.state === 'title') $('#title').dataset.mode = 'new-run';
+      if (w && w.status !== 'cancelled' && game.state === 'loading') game.setState('title');
+      markChoice(game.run.current.level); // a failed build keeps the prepared run (and its level)
+    }).finally(() => { choosing = false; });
+  });
   const bindRange = (id: string, key: 'sens' | 'fov' | 'volume', fmt: (v: number) => string) => {
     const input = $(id) as HTMLInputElement;
     const out = input.parentElement!.querySelector('output')!;
@@ -108,22 +160,22 @@ async function boot(): Promise<void> {
     game.state = 'error';
     return;
   }
-  // Session-only debug/share seed via ?seed=CODE; otherwise a brand-new station every load.
-  const seedParam = params.get('seed');
-  const parsed = seedParam ? codeToSeed(seedParam) : null;
-  const seed = parsed ?? freshSeed();
-  // Iteration 07 (Lane P2): only this station's lazy prop models are fetched (with progress) before it is built and revealed.
-  await game.prepareStation(seed, (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; });
-  game.newStation(seed);
-  game.updateStationIntro();
-  // Iteration 14 (primary): prepare the station's pipelines, shadow variants, fog passes, held items and effects on the
-  // loading screen (render/warmup.ts) before "Enter station" becomes available; partial / failed results say so.
-  const warm = await game.prepareGraphics();
-  if (game.state === 'error') return; // the device was lost meanwhile (error screen already shown)
+  // Session-only debug/share seeds via ?seed=CODE (Subway) and ?officeSeed=CODE (Office Space); otherwise a brand-new run every
+  // load. ?level=office starts the title's run in Office Space. Iteration 16 (lane RUN): boot = a NewGame (not entered yet).
+  const seedOf = (k: string) => { const v = params.get(k); return v ? codeToSeed(v) ?? undefined : undefined; };
+  const startLevel: LevelId = isLevelId(params.get('level')) ? params.get('level') as LevelId : 'subway';
+  markChoice(startLevel);
+  // Iteration 07 (Lane P2): only this section's lazy prop models are fetched (with progress) before it is built and revealed.
+  // Iteration 14 (primary): its pipelines, shadow variants, fog passes, held items and effects are prepared on the loading
+  // screen (render/warmup.ts) before "Start run" becomes available; partial / failed results say so.
+  const warm = await game.newGame(startLevel, {seeds: {subway: seedOf('seed'), office: seedOf('officeSeed')},
+    onProgress: (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; }});
+  if (game.state === 'error' || !warm) return; // the device was lost meanwhile (error screen already shown)
   const note = warmupNote(warm);
   label.textContent = `Ready · ${game.layout.areas.length} spaces generated${note ? ` · ${note}` : ''}`;
   bar.style.width = '100%';
   ($('#btn-start') as HTMLButtonElement).disabled = false;
+  $('#title').dataset.mode = 'new-run';
   game.setState('title');
   requestAnimationFrame(loop);
 }

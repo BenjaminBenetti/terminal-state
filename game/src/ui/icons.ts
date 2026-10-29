@@ -1,6 +1,8 @@
 // Inline SVG item icons (simple silhouettes drawn for the HUD).
 
 import type {IconKey} from '../items/items';
+import {GEAR_ICONS} from './gearIcons'; // Iteration 16 (lane GEAR)
+import {MEDICAL_ICONS} from './medicalIcons'; // Iteration 16 (lane INJURY)
 
 const S = (body: string) => `<svg viewBox="0 0 64 32" fill="currentColor" aria-hidden="true">${body}</svg>`;
 const DARK = '#15171a';
@@ -26,6 +28,8 @@ export const ICONS: Record<IconKey, string> = {
   // Iteration 12 (LIGHT): D cell (upright, + nub) and road flare (tube, striker cap at the right).
   battery: S(`<rect x="25" y="7" width="14" height="22" rx="2"/><rect x="29" y="3" width="6" height="4" rx="1"/><rect x="25" y="12" width="14" height="6" fill="${DARK}" opacity="0.45"/>`),
   flare: S(`<rect x="6" y="12" width="40" height="9" rx="2"/><rect x="45" y="11" width="11" height="11" rx="2" opacity="0.75"/><rect x="14" y="13" width="18" height="7" fill="${DARK}" opacity="0.4"/>`),
+  ...GEAR_ICONS,
+  ...MEDICAL_ICONS,
 };
 
 /** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */

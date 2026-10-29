@@ -64,6 +64,27 @@
     #battery.off .fill { opacity: 0.45; }
     #flare-tag .n { color: var(--cream); font-weight: 700; }
     #flare-tag.none { opacity: 0.55; }
+    /* Iteration 16 (lane RUN): level choice (title), confirmations (pause / clear screen), the run line, the in-world travel overlay. */
+    .level-choice { margin: 6px 0 4px; }
+    .level-choice h3 { margin-top: 4px; }
+    .level-choice .levels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .level-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 14px; background: #15171a; }
+    .level-card b { font-size: 16px; letter-spacing: 0.04em; }
+    .level-card span { font-size: 12.5px; line-height: 1.35; color: var(--cream-dim); }
+    .level-card[aria-checked="true"] { border-color: var(--mustard); box-shadow: inset 0 0 0 1px var(--mustard); }
+    .level-card[aria-checked="true"] b { color: var(--mustard); }
+    #title[data-mode="loading"] .level-choice { display: none; }
+    .confirm { margin: 4px 0 8px; padding: 10px 14px 2px; background: #15171a; border-left: 3px solid var(--mustard); font-size: 14px; line-height: 1.45; }
+    .confirm p { margin: 0; }
+    .confirm .actions { margin: 10px 0 8px; }
+    .confirm.danger { border-left-color: var(--red); }
+    .run-line { color: var(--cream); }
+    #travel-overlay { position: absolute; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center; background: rgba(5, 6, 7, 0.9); pointer-events: none; }
+    #travel-overlay .card { min-width: 280px; padding: 14px 20px 12px; background: rgba(21, 23, 26, 0.92); border-left: 4px solid var(--mustard); }
+    #travel-overlay .label { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mustard); font-weight: 700; }
+    #travel-overlay .track { height: 4px; margin: 10px 0 6px; background: #111315; border: 1px solid #3a3f44; }
+    #travel-overlay .fill { height: 100%; width: 0; background: var(--teal); transition: width 0.15s linear; }
+    #travel-overlay .sub { font-size: 12px; color: var(--cream-dim); }
   </style>
 </head>
 <body>
@@ -95,20 +116,30 @@
       </div>
     </div>
 
-    <section id="title" class="screen">
+    <!-- Iteration 16 (lane RUN): in-world travel (elevator / stairwell) while the next section is built and warmed up -->
+    <div id="travel-overlay" class="hidden" aria-live="polite"><div class="card"><div class="label"></div><div class="track"><div class="fill"></div></div><div class="sub"></div></div></div>
+
+    <section id="title" class="screen" data-mode="new-run">
       <div class="panel title-panel">
         <div class="stripe"></div>
         <h1>TERMINAL STATE</h1>
         <p class="subtitle">First playable vertical slice</p>
+        <div class="level-choice" role="radiogroup" aria-label="Where the new run starts">
+          <h3>New run — choose where to start</h3>
+          <div class="levels">
+            <button type="button" class="level-card" data-level="subway" role="radio" aria-checked="true"><b>Subway</b><span>A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.</span></button>
+            <button type="button" class="level-card" data-level="office" role="radio" aria-checked="false"><b>Office Space</b><span>A small subway stop under an office tower — climb into the lobby, then explore the floors by elevator and stairwell.</span></button>
+          </div>
+        </div>
         <p id="station-intro" class="intro"></p>
         <div id="load"><div class="track"><div class="fill"></div></div><div class="label">Loading…</div></div>
         <div class="actions">
-          <button id="btn-start" class="primary" disabled>Enter station</button>
+          <button id="btn-start" class="primary" disabled>Start run</button>
           <button class="btn-fullscreen" type="button">Fullscreen</button>
         </div>
         <p class="fine fs-status"></p>
         <div class="controls-grid" id="controls-title"></div>
-        <p class="fine">Desktop keyboard and mouse only — touch is not supported. Crouch is C. Each page load generates a new station; nothing is saved. Audio starts after you click.</p>
+        <p class="fine">Desktop keyboard and mouse only — touch is not supported. Crouch is C. A run carries your inventory, gear, health, food and water, battery and injuries from level to level (Pause → Travel); only New game resets them. Nothing is saved: reloading the page starts a new run. Audio starts after you click.</p>
       </div>
     </section>
 
@@ -117,10 +148,20 @@
         <div class="stripe"></div>
         <h2>Paused</h2>
         <p class="fine">Combat is frozen while this menu is open.</p>
+        <p class="fine run-line" id="pause-run"></p>
         <div class="actions">
           <button id="btn-resume" class="primary">Resume</button>
-          <button id="btn-new-station">New station</button>
+          <button id="btn-travel">Travel to Office Space</button>
+          <button id="btn-new-game">New game</button>
           <button class="btn-fullscreen" type="button">Fullscreen</button>
+        </div>
+        <div class="confirm hidden" id="confirm-travel">
+          <p>Travel to <b class="to">Office Space</b>? Your inventory, gear and backpack, health, food and water, battery and injuries come with you. This level stays as you leave it.</p>
+          <div class="actions"><button id="btn-travel-go" class="primary">Travel</button><button class="btn-cancel" type="button">Cancel</button></div>
+        </div>
+        <div class="confirm danger hidden" id="confirm-new">
+          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and both levels are generated anew. This run is lost.</p>
+          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
         <p class="fine fs-status"></p>
         <div class="settings">
@@ -162,9 +203,11 @@
         <div class="stripe red"></div>
         <h2>You didn't make it out</h2>
         <p class="stats" id="death-stats"></p>
+        <p class="fine" id="death-note"></p>
         <div class="actions">
-          <button id="btn-death-new" class="primary">New station</button>
-          <button id="btn-death-retry">Retry this station</button>
+          <button id="btn-death-retry" class="primary">Retry level</button>
+          <button id="btn-death-new">New game · Subway</button>
+          <button id="btn-death-new-other">New game · Office Space</button>
         </div>
       </div>
     </section>
@@ -172,11 +215,17 @@
     <section id="win" class="screen hidden">
       <div class="panel">
         <div class="stripe teal"></div>
-        <h2>Station clear</h2>
+        <h2 id="win-title">Station clear</h2>
         <p class="stats" id="win-stats"></p>
+        <p class="fine" id="win-note">The run goes on: keep exploring, travel on with everything you carry, or start over.</p>
         <div class="actions">
-          <button id="btn-win-new" class="primary">New station</button>
-          <button id="btn-win-stay">Keep exploring</button>
+          <button id="btn-win-stay" class="primary">Keep exploring</button>
+          <button id="btn-win-travel">Travel to Office Space</button>
+          <button id="btn-win-new">New game</button>
+        </div>
+        <div class="confirm danger hidden" id="confirm-win-new">
+          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and both levels are generated anew. This run is lost.</p>
+          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
       </div>
     </section>

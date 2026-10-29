@@ -5,6 +5,25 @@ import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
 import type {Inventory} from '../items/inventory';
 import {CRITICAL, LOW} from '../player/survival';
+import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
+
+// Iteration 16 (lane INJURY): limb indicator — a row of the vitals (shown only while injured, so the healthy HUD is unchanged):
+// a small body silhouette (seen from behind: your left on the left) with the injured arm / leg in red, and short labels.
+// Built here (no index.html markup needed); styles injected once.
+const LIMB_CSS = `
+#vitals #limbs { margin-top: 5px; font-size: 10.5px; letter-spacing: 0.12em; white-space: nowrap; }
+#vitals #limbs.none { display: none; }
+#limbs .tag { display: flex; justify-content: center; }
+#limbs svg { width: 12px; height: 22px; }
+#limbs svg .p { fill: rgba(185, 177, 156, 0.45); }
+#limbs svg .p.hurt { fill: var(--red); }
+#limbs .txt { display: flex; gap: 14px; }
+#limbs .txt span { display: none; color: var(--red); }
+#limbs .txt span.on { display: inline; }
+#limbs .txt small { color: var(--cream-dim); font-size: 10px; letter-spacing: 0.06em; margin-left: 3px; }`;
+const LIMB_SVG = `<svg viewBox="0 0 20 38" aria-hidden="true"><circle class="p" cx="10" cy="4" r="3.4"/><rect class="p" x="6.4" y="8.3" width="7.2" height="12.4" rx="1.6"/>`
+  + `<rect class="p arm-left" x="2.3" y="8.8" width="3.3" height="11.6" rx="1.6"/><rect class="p arm-right" x="14.4" y="8.8" width="3.3" height="11.6" rx="1.6"/>`
+  + `<rect class="p leg-left" x="6.4" y="21.4" width="3.4" height="16" rx="1.6"/><rect class="p leg-right" x="10.2" y="21.4" width="3.4" height="16" rx="1.6"/></svg>`;
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -51,6 +70,54 @@ export class Hud {
       const ico = document.querySelector(sel);
       if (ico) ico.innerHTML = svg;
     }
+    this.buildLimbs(); // Iteration 16 (lane INJURY)
+  }
+
+  /** Iteration 16 (lane INJURY): the limb indicator row (last row of #vitals) and its styles. */
+  private buildLimbs(): void {
+    const vitals = document.querySelector('#vitals');
+    if (!vitals || document.querySelector('#limbs')) return;
+    if (!document.querySelector('#limbs-css')) {
+      const st = document.createElement('style');
+      st.id = 'limbs-css';
+      st.textContent = LIMB_CSS;
+      document.head.appendChild(st);
+    }
+    const el = document.createElement('div');
+    el.id = 'limbs';
+    el.className = 'row none';
+    el.title = 'Limbs OK — no arm or leg injuries';
+    el.innerHTML = `<span class="tag">${LIMB_SVG}</span><span class="txt"><span class="arm"></span><span class="leg"></span></span>`;
+    vitals.appendChild(el);
+  }
+
+  /**
+   * Iteration 16 (lane INJURY): show the injured arm / leg (player/injuries.ts; called every frame by its frame hook, writes only
+   * on change). A new injury flashes the silhouette.
+   */
+  setLimbs(arm: LimbInjury | null, leg: LimbInjury | null, tip: string): void {
+    const key = `${arm?.side ?? '-'}|${leg?.side ?? '-'}`;
+    const before = this.cache.get('limbs');
+    this.set('limbs', key, () => {
+      const el = document.querySelector('#limbs') as HTMLElement | null;
+      if (!el) return;
+      el.title = tip;
+      for (const side of ['left', 'right'] as const) {
+        el.querySelector(`.arm-${side}`)?.classList.toggle('hurt', arm?.side === side);
+        el.querySelector(`.leg-${side}`)?.classList.toggle('hurt', leg?.side === side);
+      }
+      for (const [cls, inj, what, fx] of [['arm', arm, 'ARM', 'aim sway'], ['leg', leg, 'LEG', 'limping']] as const) {
+        const span = el.querySelector(`.txt .${cls}`);
+        if (!span) continue;
+        span.classList.toggle('on', !!inj);
+        if (inj) span.innerHTML = `${inj.side === 'left' ? 'L' : 'R'} ${what}<small>${fx}</small>`;
+      }
+      el.classList.toggle('none', !arm && !leg);
+      const was = before?.split('|') ?? ['-', '-'];
+      if (before !== undefined && ((arm && was[0] === '-') || (leg && was[1] === '-'))) {
+        el.animate?.([{filter: 'brightness(2.4)'}, {filter: 'brightness(1)'}], {duration: 1100, easing: 'ease-out'});
+      }
+    });
   }
 
   show(v: boolean): void {
@@ -219,6 +286,10 @@ export const CONTROLS: [string, string][] = [
   // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items; T throws a flare
   ['Flashlight (battery meter, bottom right)', 'F'], ['Throw flare: hold to ready, release to throw', 'Hold T · or hold click while held'],
   ['Swap in a battery (refills the light)', 'Click while held · inventory Use'],
+  // Iteration 16 (lane INJURY): bandages / med kits heal HP only; an injured arm / leg needs its own treatment
+  ['Injured arm / leg (red on the HUD): apply an arm sling / leg splint', 'Click while held · inventory Use'],
+  // Iteration 16 (lane GEAR): gear is worn from the inventory's gear panel; a backpack is only opened on the ground
+  ['Backpack: take it off · set it down · open it (world keeps running)', '6 · click · E'],
   ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
 ];
 

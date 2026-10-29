@@ -89,7 +89,9 @@ export const TINT = {
   warm: [1.38, 0.86, 0.42] as const,
 };
 
-export function fixtureTint(l: Pick<LightPlacement, 'warm' | 'power'>): readonly [number, number, number] {
+export function fixtureTint(l: Pick<LightPlacement, 'warm' | 'power'> & {tint?: LightPlacement['tint']}): readonly [number, number, number] {
+  // Iteration 16 (WORLD-GEN): an explicit tint (office daylight through the windows) wins.
+  if (l.tint) return l.tint;
   return l.warm ? TINT.warm : l.power < 0.8 ? TINT.aged : TINT.cool;
 }
 

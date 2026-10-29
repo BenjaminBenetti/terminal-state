@@ -579,6 +579,13 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
     'disconnectSwitch', 'dryTransformer', 'benchGrinderStand', 'toolPegboard', 'partsBinRack', 'airCompressor', 'gasCylinderCart', 'tripodWorkLight',
     'portableGenerator', 'drumFan', 'waterPumpSkid', 'waterHeaterTank', 'pipeValveManifold', 'fireExtinguisher']
     .map(k => ({kind: k, cls: 'none' as const, how: 'no door, lid or drawer (fixture / equipment / furniture / open frame)'})),
+  // Iteration 16 (WORLD-GEN office kinds, gen/office/kinds.ts): one fused Meshy mesh each, not loot holders
+  {kind: 'officeFiling', cls: 'exception', how: 'lateral filing cabinet: one fused mesh, no separable drawers (the openable filingCabinet is the searchable one)'},
+  {kind: 'receptionDesk', cls: 'exception', how: 'reception counter: one fused mesh with no separable drawers; decor only'},
+  {kind: 'serverRack', cls: 'exception', how: 'server rack front door: one fused mesh; equipment, nothing to search'},
+  {kind: 'officePhotocopier', cls: 'exception', how: 'copier paper trays: appliance, one fused mesh'},
+  ...['officeChair', 'officeMonitor', 'officeWaterCooler', 'conferenceTable', 'deadPlant', 'officeWhiteboard', 'officeShelf', 'cubiclePartition']
+    .map(k => ({kind: k, cls: 'none' as const, how: 'no door, lid or drawer (office furniture / equipment / open shelving)'})),
 ];
 
 function describe(k: OpenableKind): string {

@@ -3,13 +3,15 @@
 // short slice never forces eating, but each item visibly moves its bar.
 
 // Iteration 12 (LIGHT): 'throwable' = the grenade slot (the road flare: T throws it, or left click while it is held).
-export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable';
+// Iteration 16: 'gear' = character gear worn in a gear slot (items/gear.ts; lane GEAR).
+export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
   | 'rifle' | 'shotgun' | 'pistol' | 'rounds' | 'rounds9' | 'shells' | 'medkit' | 'bandage'
   | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles'
-  | 'battery' | 'flare';
+  | 'battery' | 'flare'
+  | GearIconKey | MedicalIconKey; // Iteration 16 (lanes GEAR / INJURY)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -32,7 +34,14 @@ export interface ItemDef {
   /** Iteration 12 (LIGHT): flashlight battery charge set by using it (1 = refill to 100 %; player/flashlight.ts). */
   recharge?: number;
   icon: IconKey;
+  /** Iteration 16 (lane GEAR): gear slot + base-tier stats (items/gear.ts). */
+  gear?: GearSpec;
+  /** Iteration 16 (lane INJURY): limb injuries this item treats (items/medical.ts); HP-only items never treat limbs. */
+  treats?: readonly Limb[];
 }
+
+import {GEAR_DIMS, GEAR_ITEMS, type GearIconKey, type GearSpec} from './gear';
+import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey} from './medical';
 
 export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles'] as const;
 export const DRINK_IDS = ['water', 'cola', 'juice'] as const;
@@ -75,6 +84,9 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
   flare: {id: 'flare', name: 'Road flare', short: 'Flare', kind: 'throwable', stackMax: 3, icon: 'flare',
     description: 'Red highway flare. T strikes and throws one (or left click while it is held): about 50 s of red light and smoke. Light draws the infected.'},
+  // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
+  ...GEAR_ITEMS,
+  ...MEDICAL_ITEMS,
 };
 
 export function itemDef(id: string): ItemDef {
@@ -96,6 +108,7 @@ export function effectText(def: ItemDef): string {
   if (def.hunger) out.push(`${signed(def.hunger)} food`);
   if (def.thirst) out.push(`${signed(def.thirst)} water`);
   if (def.recharge) out.push(`flashlight battery ${Math.round(def.recharge * 100)} %`); // Iteration 12 (LIGHT)
+  if (def.treats?.length) out.push(`treats ${def.treats.length > 1 ? `${treatsText(def.treats)} injuries` : `a ${treatsText(def.treats)} injury`}`); // Iteration 16 (lane INJURY)
   return out.join(' · ');
 }
 
@@ -114,6 +127,7 @@ export function useHint(def: ItemDef): string {
 /** Use-bar label: "Drinking water…", "Eating chips…", "Using bandage…". */
 export function useLabel(def: ItemDef): string {
   const verb = def.verb === 'eat' ? 'Eating' : def.verb === 'drink' ? 'Drinking' : 'Using';
+  if (def.treats?.length) return `Applying ${def.short.toLowerCase()}…`; // Iteration 16 (lane INJURY): limb treatment
   return `${verb} ${def.short.toLowerCase()}…`;
 }
 
@@ -150,6 +164,9 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // Iteration 12 (LIGHT): authored models (world/authoredItems.ts): a D cell standing upright, a capped road flare lying along X.
   battery: {w: 0.0346, d: 0.0346, h: 0.0615, shape: 'cylinder'},
   flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
+  // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
+  ...GEAR_DIMS,
+  ...MEDICAL_DIMS,
 };
 
 export function itemDims(id: string): ItemDims {

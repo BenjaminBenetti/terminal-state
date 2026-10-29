@@ -1,5 +1,5 @@
 // Inventory screen (iteration 04: drag and drop, user feedback #6).
-// - Drag a stack with the mouse (pointer events) onto any quick slot or backpack slot: an empty
+// - Drag a stack with the mouse (pointer events) onto any quick slot or pocket slot: an empty
 //   slot takes it, the same item stacks up to its cap (the rest stays), a different item swaps.
 //   Shift-drag takes half the stack (split). The HUD quick-slot bar under the screen accepts drops too.
 // - Drop it outside the inventory panel: it is dropped on the floor in front of the player.
@@ -7,12 +7,22 @@
 //   Double-click or right-click food, drink or medicine to use it; right-click a gun to equip it.
 //   Keyboard: Tab-focus a slot, Enter/Space selects it, Delete drops it.
 // Icons are renders of the runtime 3D models (ui/itemIcons.ts), with the SVG set as fallback.
+//
+// Iteration 16 (lane GEAR): a GEAR panel (head / chest / hands / feet / back). Drag gear onto its slot (or double-click /
+// right-click / Wear) to wear it, off again onto a pocket / quick slot (or Take off) or out of the panel to drop it.
+// Refusals are explained in the detail line (red): wrong slot, a chest rig whose extra pockets still hold items, a
+// backpack into the pockets. The pockets heading shows their live count (12, +4 with a chest rig; extra pockets are
+// dashed). The WORN BACKPACK's contents are never shown or reachable here: its slot says to put it down (6) to open it;
+// dragging it out of the panel sets it down on the ground (gear/system.ts), exactly like 6 + click.
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
-import type {Bar, Inventory, SlotRef} from '../items/inventory';
+import {PACK_SIZE, type Bar, type Inventory, type SlotRef} from '../items/inventory';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem} from '../items/gear';
 import {WEAPONS} from '../weapons/weapons';
 import {CRITICAL, LOW} from '../player/survival';
+import {GEAR_ICONS} from './gearIcons';
+import {ensureGearStyles} from './gearStyles';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -23,8 +33,16 @@ export interface InventoryActions {
   equip(ref: SlotRef): void;
   close(): void;
   changed(): void;
-  /** Health / food / water for the status line (optional). */
-  vitals?(): {hp: number; maxHp: number; food: number; water: number};
+  /** Health / food / water for the status line (optional). Iteration 16 (lane INJURY): `limbs` = limb status HTML. */
+  vitals?(): {hp: number; maxHp: number; food: number; water: number; limbs?: string};
+}
+
+/** Iteration 16 (lane GEAR): hooks the gear system installs (gear/system.ts). */
+export interface GearUiHooks {
+  /** Set the worn backpack down on the ground in front of the player; null = done, else the refusal text. */
+  dropBag(): string | null;
+  /** Gear changed through this screen (no "now wearing" toast for it). */
+  changed(): void;
 }
 
 /** Where a drag ends: a slot, `'out'` (outside the panel = drop to the floor) or null (cancel). */
@@ -45,19 +63,25 @@ interface DragState {
 }
 
 const same = (a: SlotRef | null | undefined, b: SlotRef | null | undefined) => !!a && !!b && a.bar === b.bar && a.index === b.index;
-const slotSel = (r: SlotRef) => `#inv-${r.bar === 'hotbar' ? 'hotbar' : 'pack'} .slot[data-index="${r.index}"]`;
+const slotSel = (r: SlotRef) => `#inv-${r.bar === 'hotbar' ? 'hotbar' : r.bar === 'gear' ? 'gear' : 'pack'} .slot[data-index="${r.index}"]`;
+const GEAR_GHOST: Record<string, string> = {helmet: GEAR_ICONS.helmet, chest: GEAR_ICONS.vest, gloves: GEAR_ICONS.gloves, boots: GEAR_ICONS.boots, backpack: GEAR_ICONS.backpack};
 
 export class InventoryUI {
   selected: SlotRef | null = null;
   /** Last drop (QA / browser check). */
   lastDrop: {from: SlotRef; to: DropTarget; count: number; result: string} | null = null;
+  /** Iteration 16 (lane GEAR): installed by gear/system.ts. */
+  gear: GearUiHooks | null = null;
   private lastClick: {bar: string; index: number; at: number} | null = null;
   private drag: DragState | null = null;
   private suppressClick = false;
   private note = '';
+  /** Iteration 16: the note is a refusal (shown in red). */
+  private noteBad = false;
   private hoverEl: HTMLElement | null = null;
 
   constructor(private readonly inv: () => Inventory, private readonly actions: InventoryActions) {
+    this.mountGearPanel(); // Iteration 16 (lane GEAR)
     const refOf = (e: Event): SlotRef | null => {
       const el = (e.target as HTMLElement | null)?.closest?.('.slot') as HTMLElement | null;
       return el && el.dataset.bar ? {bar: el.dataset.bar as Bar, index: Number(el.dataset.index)} : null;
@@ -70,12 +94,15 @@ export class InventoryUI {
       const now = performance.now();
       const last = this.lastClick;
       this.lastClick = {bar: ref.bar, index: ref.index, at: now};
-      if (last && last.bar === ref.bar && last.index === ref.index && now - last.at < DOUBLE_CLICK_MS && this.isConsumable(ref)) {
-        this.lastClick = null;
-        this.selected = null;
-        this.actions.use(ref);
-        this.render();
-        return;
+      if (last && last.bar === ref.bar && last.index === ref.index && now - last.at < DOUBLE_CLICK_MS) {
+        if (this.isConsumable(ref)) {
+          this.lastClick = null;
+          this.selected = null;
+          this.actions.use(ref);
+          this.render();
+          return;
+        }
+        if (this.isGear(ref)) { this.lastClick = null; this.toggleWear(ref); return; } // Iteration 16: wear / take off
       }
       this.click(ref);
     };
@@ -90,6 +117,7 @@ export class InventoryUI {
       this.selected = null;
       if (def.kind === 'consumable') this.actions.use(ref);
       else if (def.kind === 'weapon') this.actions.equip(ref);
+      else if (def.kind === 'gear') { this.toggleWear(ref); return; } // Iteration 16
       this.render();
     };
     const onDown = (e: PointerEvent) => {
@@ -108,8 +136,9 @@ export class InventoryUI {
       if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); this.click(ref); }
       else if ((e.code === 'Delete' || e.code === 'Backspace') && this.inv().get(ref)) { e.preventDefault(); this.dropAt(ref, 'out'); }
     };
-    for (const id of ['#inv-hotbar', '#inv-pack']) {
+    for (const id of ['#inv-hotbar', '#inv-pack', '#inv-gear']) {
       const el = $(id);
+      if (!el) continue;
       el.addEventListener('click', onClick);
       el.addEventListener('contextmenu', onContext);
       el.addEventListener('pointerdown', onDown);
@@ -143,13 +172,65 @@ export class InventoryUI {
     window.addEventListener('blur', () => this.cancelDrag());
     $('#btn-inv-use').addEventListener('click', () => { if (this.selected) this.actions.use(this.selected); this.render(); });
     $('#btn-inv-drop').addEventListener('click', () => { if (this.selected) this.dropAt(this.selected, 'out'); });
-    $('#btn-inv-equip').addEventListener('click', () => { if (this.selected) this.actions.equip(this.selected); this.render(); });
+    $('#btn-inv-equip').addEventListener('click', () => {
+      if (!this.selected) return;
+      if (this.isGear(this.selected)) { this.toggleWear(this.selected); return; } // Iteration 16: Wear / Take off
+      this.actions.equip(this.selected);
+      this.render();
+    });
     $('#btn-inv-close').addEventListener('click', () => this.actions.close());
+  }
+
+  /** Iteration 16 (lane GEAR): the gear panel (built here: no markup change in index.html), above the quick slots. */
+  private mountGearPanel(): void {
+    if (typeof document === 'undefined' || document.querySelector('#inv-gear')) return;
+    const hot = document.querySelector('#inv-hotbar');
+    const heading = hot?.previousElementSibling;
+    if (!hot?.parentElement) return;
+    ensureGearStyles();
+    const wrap = document.createElement('div');
+    wrap.id = 'inv-gear-wrap';
+    wrap.innerHTML = '<h3>Gear <span class="gear-sum"></span></h3><div class="slots" id="inv-gear"></div><div id="inv-gear-note"></div>';
+    hot.parentElement.insertBefore(wrap, heading && heading.tagName === 'H3' ? heading : hot);
   }
 
   private isConsumable(ref: SlotRef): boolean {
     const st = this.inv().get(ref);
     return !!st && itemDef(st.itemId).kind === 'consumable';
+  }
+
+  private isGear(ref: SlotRef): boolean {
+    const st = this.inv().get(ref);
+    return !!st && itemDef(st.itemId).kind === 'gear';
+  }
+
+  /** Iteration 16: wear a gear item from a slot, or take worn gear off (refusals explained). */
+  toggleWear(ref: SlotRef): string {
+    const inv = this.inv();
+    const st = inv.get(ref);
+    if (!st) return 'empty';
+    let result: string;
+    this.note = '';
+    this.noteBad = false;
+    if (ref.bar === 'gear') {
+      const slot = GEAR_SLOTS[ref.index];
+      result = inv.takeOff(slot);
+      if (result === 'refused') this.refused(inv);
+      else if (result !== 'none') { this.selected = inv.find(st.uid); this.note = `Took off the ${itemDef(st.itemId).short.toLowerCase()}.`; }
+    } else {
+      result = inv.wearFrom(ref);
+      if (result === 'refused') this.refused(inv);
+      else if (result !== 'none') { this.selected = inv.find(st.uid); this.note = `Wearing the ${itemDef(st.itemId).short.toLowerCase()}.`; }
+    }
+    if (result !== 'refused' && result !== 'none') { this.gear?.changed(); this.actions.changed(); }
+    this.lastDrop = {from: ref, to: null, count: 1, result: `wear:${result}`};
+    this.render();
+    return result;
+  }
+
+  private refused(inv: Inventory): void {
+    this.note = inv.refusal?.text ?? 'That does not fit there.';
+    this.noteBad = true;
   }
 
   private isOpen(): boolean {
@@ -165,6 +246,7 @@ export class InventoryUI {
   click(ref: SlotRef): void {
     this.selected = same(this.selected, ref) || !this.inv().get(ref) ? null : ref;
     this.note = '';
+    this.noteBad = false;
     this.render();
   }
 
@@ -179,23 +261,35 @@ export class InventoryUI {
    * The drop step of every drag (also used by the Drop button, Delete, 1-5 and the QA hook):
    * slot -> Inventory.moveCount (move / split / merge / swap), 'out' -> drop to the floor,
    * null -> nothing. Afterwards the held item is re-synced and the screen redrawn.
+   * Iteration 16: gear validation (refusal shown in red); the worn backpack dropped 'out' is set down as a ground bag.
    */
   dropAt(from: SlotRef, to: DropTarget, count?: number): string {
     const inv = this.inv();
     const st = inv.get(from);
     let result = 'none';
     this.note = '';
+    this.noteBad = false;
     if (!st) result = 'empty';
     else if (to === 'out') {
       const n = Math.min(st.count, count ?? st.count);
-      this.actions.drop(from, n);
-      result = 'dropped';
+      if (isBagItem(st.itemId)) {
+        // Iteration 16: a backpack leaves only as a grounded bag (same rules as 6 + click)
+        const refusal = this.gear ? this.gear.dropBag() : 'Put a backpack down with 6, then click.';
+        if (refusal) { this.note = refusal; this.noteBad = true; result = 'refused'; }
+        else { result = 'placed'; this.gear?.changed(); }
+      } else {
+        inv.refusal = null;
+        this.actions.drop(from, n);
+        if (inv.get(from) === st && st.count >= n && inv.refusal) { this.refused(inv); result = 'refused'; }
+        else { result = 'dropped'; if (from.bar === 'gear') this.gear?.changed(); }
+      }
       if (same(this.selected, from) && !inv.get(from)) this.selected = null;
     } else if (to) {
       result = inv.moveCount(from, to, count);
-      if (result === 'refused') this.note = 'A split stack can only go to an empty slot or onto the same item.';
+      if (result === 'refused') this.refused(inv);
       else if (result !== 'none') {
         this.selected = inv.get(to) ? to : null;
+        if (from.bar === 'gear' || to.bar === 'gear') this.gear?.changed();
         this.actions.changed();
       }
     }
@@ -215,7 +309,7 @@ export class InventoryUI {
       return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     };
     const hit = (el: HTMLElement) => ({target: {bar: el.dataset.bar as Bar, index: Number(el.dataset.index)}, el});
-    for (const el of document.querySelectorAll<HTMLElement>('#inv-hotbar .slot, #inv-pack .slot')) if (inside(el)) return hit(el);
+    for (const el of document.querySelectorAll<HTMLElement>('#inv-hotbar .slot, #inv-pack .slot, #inv-gear .slot')) if (inside(el)) return hit(el);
     const panel = document.querySelector('#inventory .inv-panel');
     if (panel && inside(panel)) return {target: null, el: null};
     for (const el of document.querySelectorAll<HTMLElement>('#hotbar .slot[data-bar]')) if (inside(el)) return hit(el);
@@ -223,7 +317,7 @@ export class InventoryUI {
   }
 
   /**
-   * QA / browser check: viewport centre of a slot spec — 'hotbar:N' / 'pack:N' (inventory panel),
+   * QA / browser check: viewport centre of a slot spec — 'hotbar:N' / 'pack:N' / 'gear:N' (inventory panel),
    * 'hud:N' (HUD quick slot), 'panel' (inside the panel, not a slot), 'out' (outside the panel).
    */
   pointFor(spec: string): {x: number; y: number} | null {
@@ -233,7 +327,7 @@ export class InventoryUI {
       return r.width > 0 ? {x: r.left + r.width / 2, y: r.top + r.height / 2} : null;
     };
     const [kind, n] = spec.split(':');
-    if (kind === 'hotbar' || kind === 'pack') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
+    if (kind === 'hotbar' || kind === 'pack' || kind === 'gear') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
     if (kind === 'hud') return centre(document.querySelector(`#hotbar .slot[data-index="${Number(n)}"]`));
     if (kind === 'panel') return centre(document.querySelector('#inv-detail'));
     const p = document.querySelector('#inventory .inv-panel')?.getBoundingClientRect();
@@ -287,17 +381,22 @@ export class InventoryUI {
     if (g) g.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
-  /** Drop-target feedback: slot outline (red when a split cannot go there), "Drop on floor" outside. */
+  /** Drop-target feedback: slot outline (red when a split / that item cannot go there), "Drop on floor" outside. */
   private hover(t: DropTarget, el: HTMLElement | null): void {
     this.hoverEl?.classList.remove('drop-target', 'drop-bad');
     this.hoverEl = null;
     const d = this.drag;
     document.querySelector('#inventory')?.classList.toggle('drop-out', !!d && t === 'out');
     const hint = d?.ghost?.querySelector('.hint');
-    if (hint) hint.textContent = t === 'out' ? 'Drop on floor' : '';
+    const dragged = d ? this.inv().get(d.from) : null;
+    if (hint) hint.textContent = t === 'out' ? (dragged && isBagItem(dragged.itemId) ? 'Set the backpack down' : 'Drop on floor') : '';
     if (!d || !t || t === 'out' || !el) return;
     const inv = this.inv(), a = inv.get(d.from), b = inv.get(t);
-    const bad = !!a && !!b && !same(t, d.from) && d.count < a.count && (b.itemId !== a.itemId || b.count >= itemDef(a.itemId).stackMax);
+    let bad = !!a && !!b && !same(t, d.from) && d.count < a.count && (b.itemId !== a.itemId || b.count >= itemDef(a.itemId).stackMax);
+    // Iteration 16: gear slots take only their gear; a backpack never goes into the quick slots / pockets
+    if (a && t.bar === 'gear' && itemDef(a.itemId).gear?.slot !== GEAR_SLOTS[t.index]) bad = true;
+    if (a && t.bar !== 'gear' && isBagItem(a.itemId)) bad = true;
+    if (a && b && d.from.bar === 'gear' && itemDef(b.itemId).gear?.slot !== GEAR_SLOTS[d.from.index]) bad = true;
     el.classList.add(bad ? 'drop-bad' : 'drop-target');
     this.hoverEl = el;
   }
@@ -313,29 +412,64 @@ export class InventoryUI {
       const held = ref.bar === 'hotbar' && ref.index === inv.selected;
       const usable = def?.kind === 'consumable';
       const count = def ? (def.kind === 'weapon' ? `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>` : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      const title = def ? ` title="${def.name}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
-      return `<div class="slot${sel ? ' selected' : ''}${held ? ' held' : ''}${usable ? ' usable' : ''}${def ? ' filled' : ''}" data-bar="${ref.bar}" data-index="${ref.index}" role="button" tabindex="0"${title}>${ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : ''}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
+      let title = def ? ` title="${def.name}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
+      // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
+      let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
+      let cls = '';
+      if (ref.bar === 'gear') {
+        const slot = GEAR_SLOTS[ref.index];
+        lead = `<span class="gslot">${GEAR_SLOT_NAMES[slot]}</span>${def ? '' : `<span class="ghost">${GEAR_GHOST[slot] ?? ''}</span>`}`;
+        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${def.name} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then E to open it (or drag it out of this panel)."`; }
+        else if (!def) title = ` title="${GEAR_SLOT_NAMES[slot]}: drag ${slot === 'chest' ? 'an armor vest or a chest rig' : slot === 'backpack' ? 'a backpack' : `${slot === 'helmet' ? 'a helmet' : slot}`} here to wear it"`;
+      } else if (ref.bar === 'pack' && ref.index >= PACK_SIZE) cls = ' gear-extra';
+      return `<div class="slot${sel ? ' selected' : ''}${held ? ' held' : ''}${usable ? ' usable' : ''}${def ? ' filled' : ''}${cls}" data-bar="${ref.bar}" data-index="${ref.index}" role="button" tabindex="0"${title}>${lead}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
     $('#inv-hotbar').innerHTML = inv.hotbar.map((_, i) => cell({bar: 'hotbar', index: i})).join('');
     $('#inv-pack').innerHTML = inv.pack.map((_, i) => cell({bar: 'pack', index: i})).join('');
+    this.renderGear(inv, cell);
     if (refocus) (document.querySelector(`#inventory .slot[data-bar="${refocus.bar}"][data-index="${refocus.index}"]`) as HTMLElement | null)?.focus();
     if (this.selected && !inv.get(this.selected)) this.selected = null;
     const st = this.selected ? inv.get(this.selected) : null;
     const def = st ? itemDef(st.itemId) : null;
-    $('#inv-detail .name').textContent = def ? `${def.name}${def.kind !== 'weapon' ? ` ×${st!.count}` : ` — ${st!.mag} loaded`}` : 'Nothing selected';
+    const worn = this.selected?.bar === 'gear';
+    $('#inv-detail .name').textContent = def ? `${def.name}${def.kind === 'weapon' ? ` — ${st!.mag} loaded` : def.kind === 'gear' ? (worn ? ' — worn' : '') : ` ×${st!.count}`}` : 'Nothing selected';
     $('#inv-detail .desc').textContent = def ? def.description : `Rifle rounds: ${inv.count('ammo_rifle')} · Shells: ${inv.count('ammo_shells')}`;
     const fx = document.querySelector('#inv-detail .fx');
-    if (fx) fx.textContent = this.note || (def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : '');
+    if (fx) {
+      fx.textContent = this.note || (def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
+        : def?.kind === 'gear' ? `${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}` : '');
+      fx.classList.toggle('refused', !!this.note && this.noteBad);
+    }
     const useBtn = $('#btn-inv-use') as HTMLButtonElement;
     useBtn.textContent = useButtonLabel(def);
     useBtn.disabled = !def || def.kind !== 'consumable';
-    ($('#btn-inv-equip') as HTMLButtonElement).disabled = !def || def.kind === 'ammo';
+    const eq = $('#btn-inv-equip') as HTMLButtonElement;
+    eq.textContent = def?.kind === 'gear' ? (worn ? 'Take off' : 'Wear') : 'Equip'; // Iteration 16
+    eq.disabled = !def || def.kind === 'ammo' || (worn && !!def && isBagItem(def.id));
     ($('#btn-inv-drop') as HTMLButtonElement).disabled = !def;
     const v = this.actions.vitals?.();
     const vit = document.querySelector('#inv-vitals');
     if (vit && v) {
       const tone = (x: number) => (x <= CRITICAL ? 'crit' : x <= LOW ? 'low' : '');
-      vit.innerHTML = `<span>Health <b>${Math.ceil(v.hp)}</b>/${v.maxHp}</span><span class="${tone(v.food)}">Food <b>${Math.round(v.food)}%</b></span><span class="${tone(v.water)}">Water <b>${Math.round(v.water)}%</b></span>`;
+      vit.innerHTML = `<span>Health <b>${Math.ceil(v.hp)}</b>/${v.maxHp}</span><span class="${tone(v.food)}">Food <b>${Math.round(v.food)}%</b></span><span class="${tone(v.water)}">Water <b>${Math.round(v.water)}%</b></span>${v.limbs ?? ''}`;
+    }
+  }
+
+  /** Iteration 16 (lane GEAR): gear slots, the pockets heading (live count) and the worn-backpack line. */
+  private renderGear(inv: Inventory, cell: (ref: SlotRef) => string): void {
+    const box = document.querySelector('#inv-gear');
+    if (box) box.innerHTML = GEAR_SLOTS.map((_, i) => cell({bar: 'gear', index: i})).join('');
+    const ex = inv.extraPockets;
+    const ph = document.querySelector('#inv-pack')?.previousElementSibling;
+    if (ph && ph.tagName === 'H3') ph.textContent = `Pockets · ${inv.pack.length}${ex ? ` (${PACK_SIZE} + ${ex} from the chest rig)` : ''}`;
+    const mods: string[] = [];
+    for (const st of inv.gearSlots) if (st) { const t = gearStatText(itemDef(st.itemId).gear!); if (t) mods.push(t); }
+    const sum = document.querySelector('#inv-gear-wrap .gear-sum');
+    if (sum) sum.textContent = mods.length ? mods.join(' · ') : 'nothing worn — gear is rare: armor vest, chest rig, backpack, hard hat, boots, gloves';
+    const note = document.querySelector('#inv-gear-note');
+    if (note) {
+      const bag = inv.worn('backpack');
+      note.innerHTML = bag ? `<b>${itemDef(bag.itemId).short}</b> — put it down (<b>6</b>, then click) to open it. Its contents are not reachable while you wear it.` : '';
     }
   }
 }

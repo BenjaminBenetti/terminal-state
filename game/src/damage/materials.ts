@@ -10,6 +10,7 @@
 
 import {PROP_DEFS, type PropKind} from '../gen/props';
 import {P7_MODEL_CLASS, P7_PROP_DAMAGE} from '../gen/props07';
+import {OFFICE_PROP_DAMAGE} from '../gen/office/kinds'; // Iteration 16 (WORLD-GEN)
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -217,6 +218,8 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   cartonStack: {cls: 'cardboard', integrity: 80, breaks: 'collapse'},
   // Iteration 07 (Lane P2): generated prop types (class / breaks per type in gen/props07.ts).
   ...P7_PROP_DAMAGE,
+  // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts).
+  ...OFFICE_PROP_DAMAGE,
 };
 
 /** Spec for any prop kind (unknown future kinds: painted sheet metal, never breaks). */
@@ -234,6 +237,9 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   rifle: 'steel', shotgun: 'steel', pistol: 'steel', ammo_rifle: 'cardboard', ammo_shells: 'cardboard', ammo_pistol: 'cardboard', medkit: 'plastic', bandage: 'fabric',
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
   battery: 'sheetMetal', flare: 'cardboard', // Iteration 12 (LIGHT): steel-jacketed D cell; waxed-paper road flare
+  leg_splint: 'plastic', arm_sling: 'fabric', trauma_kit: 'fabric', // Iteration 16 (lane INJURY): foam splint roll; sling packet; nylon pouch
+  // Iteration 16 (primary, for lane GEAR's items): soft armor / nylon / boots / gloves = fabric; the hard hat = plastic
+  armor_vest: 'fabric', chest_rig: 'fabric', backpack: 'fabric', helmet: 'plastic', boots: 'fabric', gloves: 'fabric',
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -270,6 +276,11 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},
   // Iteration 12 (LIGHT): D cell ~140 g (upright cylinder); road flare ~220 g lying along X (box collider when shot as a pickup)
   battery: {mass: 0.14, shape: 'cylinder', mat: 'metal'}, flare: {mass: 0.22, shape: 'box', mat: 'soft'},
+  // Iteration 16 (lane INJURY): rolled SAM splint ~120 g, sling + wrap packet ~150 g, trauma pouch ~0.7 kg
+  leg_splint: {mass: 0.12, shape: 'box', mat: 'soft'}, arm_sling: {mass: 0.15, shape: 'box', mat: 'soft'}, trauma_kit: {mass: 0.7, shape: 'box', mat: 'cloth'},
+  // Iteration 16 (primary, lane GEAR's items): soft vest ~2 kg, rig ~1 kg, empty daypack ~0.8 kg, hard hat ~0.4 kg, boots ~1.6 kg, gloves ~0.2 kg
+  armor_vest: {mass: 2.0, shape: 'box', mat: 'cloth'}, chest_rig: {mass: 1.0, shape: 'box', mat: 'cloth'}, backpack: {mass: 0.8, shape: 'box', mat: 'cloth'},
+  helmet: {mass: 0.4, shape: 'box', mat: 'soft'}, boots: {mass: 1.6, shape: 'box', mat: 'soft'}, gloves: {mass: 0.2, shape: 'box', mat: 'cloth'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

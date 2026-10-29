@@ -24,7 +24,7 @@ const SAMPLE = () => SEEDS.map(gen);
 
 const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles']);
 const DRINK = new Set(['water', 'cola', 'juice']);
-const MED = new Set(['bandage', 'medkit']);
+const MED = new Set(['bandage', 'medkit', 'leg_splint', 'arm_sling', 'trauma_kit']); // Iteration 16: + limb treatments (a share of med finds)
 const isAmmo = (id: string) => id.startsWith('ammo_');
 
 /** Holder contents exactly as world/containers.ts rolls them (index per group, purpose key). */
@@ -308,7 +308,8 @@ describe('purposes in generated levels', () => {
     expect(Math.min(...storeSets)).toBeGreaterThanOrEqual(6);
     expect(seenStores.size).toBeGreaterThanOrEqual(16);
     // Iteration 07: purposes built around generated props count once their signature model is integrated (gen/props07.ts).
-    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => !p.requires || p.requires.some(isP7Kind)).length - 2);
+    // Iteration 16: the office tower's purposes ('office-*', gen/office/*) never fill station slots.
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-')).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

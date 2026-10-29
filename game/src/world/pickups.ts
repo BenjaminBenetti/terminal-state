@@ -11,6 +11,9 @@ import {DRINK_IDS, FOOD_IDS, itemDef, itemDims} from '../items/items';
 import type {ItemStack} from '../items/inventory';
 import {canvasTexture, pickupLabel, surface} from './canvasTextures';
 import {authoredItemModel, isAuthoredItem} from './authoredItems'; // Iteration 12 (LIGHT)
+import {isMedicalItem, medicalItemModel, medicalModelSource} from './medicalItems'; // Iteration 16 (lane INJURY)
+import {gearItemModel, gearModelSource} from '../gear/models'; // Iteration 16 (lane GEAR)
+import {isGearItem} from '../items/gear';
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 
@@ -253,6 +256,14 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // Iteration 12 (LIGHT): battery / road flare are authored procedural geometry (world/authoredItems.ts), never generated.
     t = authoredItemModel(itemId);
     templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
+  } else if (isMedicalItem(itemId)) {
+    // Iteration 16 (lane INJURY): splint / sling = Meshy A7 / A8 when delivered (preloaded), else authored; trauma kit authored
+    t = medicalItemModel(itemId);
+    templateSource.set(itemId, medicalModelSource(itemId));
+  } else if (isGearItem(itemId)) {
+    // Iteration 16 (lane GEAR): Meshy T2.5 gear derivative A1-A6 once delivered (preloaded), else a procedural stand-in
+    t = gearItemModel(itemId);
+    templateSource.set(itemId, gearModelSource(itemId));
   } else if (gltf) {
     t = fitItemModel(gltf, itemId);
     templateSource.set(itemId, `models.${key} (generated)`);

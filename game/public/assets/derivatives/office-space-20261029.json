@@ -1,0 +1,3491 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "office-space-20261029",
+ "task": "studio-office-space-survival-20261029-01",
+ "lane": "ASSETS (iteration 16)",
+ "status": "runtime derivatives of models generated for this project with Meshy T2.5 (smart topology) through the Meshy MCP, and textures generated with Codex native image generation, under the user's batch authorization (budget-authorization.txt); provider terms apply; no licence clearance implied",
+ "rebuild": "node tools/asset-pipeline/props/build-office-iteration16.mjs",
+ "rawStorage": "reference/tasks/office-space-survival-20261029/assets/raw/<id>/ (immutable originals, task JSON, thumbnails) + reference/tasks/office-space-survival-20261029/assets/ledger.jsonl (fsynced intent/ack/download records); outside Git",
+ "convention": "metres at real size, +Y up, front -Z, grounded (min y = 0), centred on x/z; Meshy native front +Z rotated 180 deg about Y",
+ "modelProof": {
+  "requested": {
+   "ai_model": "meshy-t2.5",
+   "model_type": "smart-topology",
+   "topology": "triangle",
+   "target_formats": [
+    "glb"
+   ],
+   "refine": "texture_resolution 2k, enable_pbr true, ai_model omitted (inherits the preview model)"
+  },
+  "evidence": [
+   "exact create arguments recorded in the fsynced ledger (intent line) before every paid call",
+   "meshy_text_to_3d (MCP 0.6.6) forwards ai_model and model_type verbatim in the preview request; its resolveGenerationOptions rejects smart-topology with a non-smart model (source hashes below)",
+   "every preview billed 5 credits (the T2 / T2.5 / 6-lite tier; meshy-6, meshy-7.1 and latest bill 20) and every refine 10 (2K texture)",
+   "every preview returned a triangle-only mesh within about 10% of target_polycount (smart-topology behaviour), kept unchanged by its refine",
+   "the Meshy task GET response surfaced by the MCP does not echo ai_model / model_type, so the request record is the model proof"
+  ],
+  "mcpSource": {
+   "version": "0.6.6",
+   "dist/tools/generation.js": "d2b4b32f3f2a2269be90d1ed8aa5402ce5e582498b4dbabbecca6e8dfdebffcd",
+   "dist/utils/generation-options.js": "8815a63be666ff86e4651fe57e2fb45ea47f413d45951a7b706329fed1816f6c"
+  }
+ },
+ "manifest": {
+  "assets": 25,
+  "creditsPerAsset": 15,
+  "runCap": 450
+ },
+ "outputs": [
+  {
+   "code": "A1",
+   "id": "gear-armor-vest",
+   "key": "office-gear-armor-vest",
+   "use": "gear",
+   "subject": "worn soft body-armor vest, faded dark navy fabric, frayed velcro, scuffed front panel, upright, no body",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "worn soft body-armor vest, faded dark navy fabric, frayed velcro, scuffed front panel, upright, no body, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "worn soft body-armor vest, faded dark navy fabric, frayed velcro, scuffed front panel, upright, no body, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a1862f-3a47-7015-a1d1-d73f1ccf9c13",
+    "refine": "01a18635-a523-748d-8706-3d935146ae84"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/gear-armor-vest/refine/gear-armor-vest-refine.glb (raw original, outside Git)",
+    "sha256": "6d72c97e0eba7167747a202e3712bb0a421f3eaababa6d5f74ef0b7ad836ffb2",
+    "bytes": 5398416,
+    "triangles": 4173,
+    "extent": [
+     0.7036,
+     0.9512,
+     0.6255
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2242473
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1286985
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1652127
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/gear-armor-vest/preview/gear-armor-vest-preview.glb",
+    "previewSha256": "bb27285f136e83ae8436d4ef77a4d5288882ea0a69eb30c46c210c77911d20a2",
+    "previewTriangles": 4173
+   },
+   "output": {
+    "file": "game/public/assets/models/office-gear-armor-vest.glb",
+    "url": "assets/models/office-gear-armor-vest.glb",
+    "sha256": "f0086088cdc2b3b2b340ea520309804bc95a98c0651f3dc616f2584231c58102",
+    "bytes": 263456,
+    "triangles": 4173,
+    "dims": [
+     0.4586,
+     0.62,
+     0.4077
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 0.62,
+   "sizeAxis": "h",
+   "scale": 0.651827,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 33960,
+     "sha256": "2c05ee05c370120ce88cbd5b2cef29bbf777237ee387d24cff407a9bd983d68d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 27953,
+     "sha256": "c890e8650a51c389e7bcb19d9f514c70cdbfed6abf9e1e8f02a0f7b36e24cff3"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10332,
+     "sha256": "5176a13c3d5cb9a8dffd5ab61c6a577312837e30f57a66d83352aea1641438f2"
+    }
+   ]
+  },
+  {
+   "code": "A2",
+   "id": "gear-chest-rig",
+   "key": "office-gear-chest-rig",
+   "use": "gear",
+   "subject": "worn load-bearing chest rig with magazine and utility pouches, olive drab nylon, dirty, upright, no body",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "worn load-bearing chest rig with magazine and utility pouches, olive drab nylon, dirty, upright, no body, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "worn load-bearing chest rig with magazine and utility pouches, olive drab nylon, dirty, upright, no body, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a1862f-4122-72f7-a94e-61def06b0d92",
+    "refine": "01a18635-abeb-77b6-ab09-b4828cc43f0d"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/gear-chest-rig/refine/gear-chest-rig-refine.glb (raw original, outside Git)",
+    "sha256": "84e6080e2760a9284806dfd8267c5e4512499fe0f4ce548e747fafd1ff8489bf",
+    "bytes": 5829504,
+    "triangles": 3351,
+    "extent": [
+     0.7183,
+     0.9521,
+     0.6733
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2386613
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1546848
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1713780
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/gear-chest-rig/preview/gear-chest-rig-preview.glb",
+    "previewSha256": "dbd5187f8cac3c85ef426a5b14d68bee6910bacbbb7f23c86c96dff491f91f7b",
+    "previewTriangles": 3351
+   },
+   "output": {
+    "file": "game/public/assets/models/office-gear-chest-rig.glb",
+    "url": "assets/models/office-gear-chest-rig.glb",
+    "sha256": "260382fb852a66ea4f7b0cdf384983537bdd047368a55b92b67b52ab0ac942a7",
+    "bytes": 229176,
+    "triangles": 3351,
+    "dims": [
+     0.4149,
+     0.55,
+     0.3889
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 0.55,
+   "sizeAxis": "h",
+   "scale": 0.577641,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 23510,
+     "sha256": "a8571c4ccfb7dd1cf1c34ed1131922a786c3aa67be11a47616e18ac737caaae0"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 38483,
+     "sha256": "4c60056479549d527628ace6f4b0f6ba72feea6a098e3ebbe7a00f8eb450f597"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5616,
+     "sha256": "4c7934a5eb084fef257e370b2208e46ab4d8580f0c4e2e6bd77664c8dc2686e2"
+    }
+   ]
+  },
+  {
+   "code": "A3",
+   "id": "gear-backpack",
+   "key": "office-gear-backpack",
+   "use": "gear",
+   "subject": "worn hiking daypack, faded red nylon, dirt stains, side mesh pockets, zipped, standing upright",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "worn hiking daypack, faded red nylon, dirt stains, side mesh pockets, zipped, standing upright, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "worn hiking daypack, faded red nylon, dirt stains, side mesh pockets, zipped, standing upright, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a1862f-483a-735d-b679-1a7e80170cf3",
+    "refine": "01a18635-b35d-76a6-89d0-03eb9aebef04"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/gear-backpack/refine/gear-backpack-refine.glb (raw original, outside Git)",
+    "sha256": "35edc6598e6b88ca9b028aed9872ebf41c6a38fef30ec587c6a09819195179f1",
+    "bytes": 6979024,
+    "triangles": 3732,
+    "extent": [
+     0.605,
+     0.9526,
+     0.5928
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3152192
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1525673
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2125111
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/gear-backpack/preview/gear-backpack-preview.glb",
+    "previewSha256": "0f9bacc927a8f4bd2043e9d5626fcc64fc2208f12dd4fa768a24162023bde171",
+    "previewTriangles": 3732
+   },
+   "output": {
+    "file": "game/public/assets/models/office-gear-backpack.glb",
+    "url": "assets/models/office-gear-backpack.glb",
+    "sha256": "f61d3a85d94bb01314f42cc8c5662dc5b57d20b3754d4c45bd02f13105613be5",
+    "bytes": 224144,
+    "triangles": 3732,
+    "dims": [
+     0.3302,
+     0.52,
+     0.3236
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 0.52,
+   "sizeAxis": "h",
+   "scale": 0.545854,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 31458,
+     "sha256": "dafd7799b493274b922deafaef5e54ee06fac5a3f8a194f704740516fe515160"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 32862,
+     "sha256": "e5dd0b4ee2e91727bd5da3bcd857eb454d5788832f23d7bf904a4d8d217e5cf4"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 6759,
+     "sha256": "636c97ea9ae4e8b1f2a85c486b1c219f249d4fbef88ccee30ee9af517fdbc60d"
+    }
+   ]
+  },
+  {
+   "code": "A4",
+   "id": "gear-helmet",
+   "key": "office-gear-helmet",
+   "use": "gear",
+   "subject": "dented, scuffed yellow construction hard hat with chin strap, dirty",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "dented, scuffed yellow construction hard hat with chin strap, dirty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "dented, scuffed yellow construction hard hat with chin strap, dirty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a1862f-5079-771a-bafd-60f0a80256cf",
+    "refine": "01a18635-ba64-70b1-a8f4-c8dd7f298717"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/gear-helmet/refine/gear-helmet-refine.glb (raw original, outside Git)",
+    "sha256": "3209ab71c5c6c6bd19246953bd429affb6eca84d939f49e7d61e4755cfbc33cc",
+    "bytes": 8960164,
+    "triangles": 3158,
+    "extent": [
+     0.7329,
+     0.6021,
+     0.9512
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3912984
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2262159
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2635298
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/gear-helmet/preview/gear-helmet-preview.glb",
+    "previewSha256": "ccc8225db354ef3a465eefaa5b2f42ae17c83828bc4f79a363af5f26cd78074a",
+    "previewTriangles": 3158
+   },
+   "output": {
+    "file": "game/public/assets/models/office-gear-helmet.glb",
+    "url": "assets/models/office-gear-helmet.glb",
+    "sha256": "29078199ba70e0f6940748b6f5be1c9c0cfbddd7f758243e0244cb1df285d6aa",
+    "bytes": 318628,
+    "triangles": 3158,
+    "dims": [
+     0.2312,
+     0.1899,
+     0.3
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 0.3,
+   "sizeAxis": "longest",
+   "scale": 0.3154,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 84042,
+     "sha256": "ff4b9f52fbbc9b23cc7ae98d38999fbde9f187433164a7c3ffe88cc047737c81"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 77309,
+     "sha256": "4cb7ac7dc63341a0c0aa95645d0ee948e2f2d54c06b9ce65127878dec6ab2dd8"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 27146,
+     "sha256": "d8de359d354e481f3ce80ae0d714f5fc98584d51c7e21f515f292839bbd9b74b"
+    }
+   ]
+  },
+  {
+   "code": "A5",
+   "id": "gear-boots",
+   "key": "office-gear-boots",
+   "use": "gear",
+   "subject": "pair of worn leather work boots, scuffed, mud-stained, laces",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "pair of worn leather work boots, scuffed, mud-stained, laces, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "pair of worn leather work boots, scuffed, mud-stained, laces, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a1862f-5616-71cd-91ec-f5b49931f4eb",
+    "refine": "01a18635-c1d7-7768-9dbd-a1508bc97330"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/gear-boots/refine/gear-boots-refine.glb (raw original, outside Git)",
+    "sha256": "e760605c4e590f3b606f2bf9de823a8cb0c34982b6d1d2ee3273d5490ea37243",
+    "bytes": 5427980,
+    "triangles": 3670,
+    "extent": [
+     0.897,
+     0.5801,
+     0.9541
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2282770
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1328969
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1635751
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/gear-boots/preview/gear-boots-preview.glb",
+    "previewSha256": "759972f33f2b8d68b699bfb940c0919371805b876e98185c1266100a926dc14d",
+    "previewTriangles": 3670
+   },
+   "output": {
+    "file": "game/public/assets/models/office-gear-boots.glb",
+    "url": "assets/models/office-gear-boots.glb",
+    "sha256": "f90ab36a8c9653ad78f1ee3cc969545a37cce467d108bcbbb7562e202a2ff7e8",
+    "bytes": 243920,
+    "triangles": 3670,
+    "dims": [
+     0.3008,
+     0.1946,
+     0.32
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 0.32,
+   "sizeAxis": "longest",
+   "scale": 0.335394,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41312,
+     "sha256": "0a1bc9c46e71a90f26a1d650070bb582d1366640922cf640062a7df307af443d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 33607,
+     "sha256": "1a633355ac0e4f5ff9b38e947cf87b474e5d267ae826639f9b1182cde74f2323"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 11131,
+     "sha256": "af4c0e42a0b4ec8fe284c4400f2ff8fbfbf3657b866392361430a8d2ecfb061d"
+    }
+   ]
+  },
+  {
+   "code": "A6",
+   "id": "gear-gloves",
+   "key": "office-gear-gloves",
+   "use": "gear",
+   "subject": "pair of worn work gloves, leather palms, cloth backs, dirty, lying flat",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "pair of worn work gloves, leather palms, cloth backs, dirty, lying flat, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "pair of worn work gloves, leather palms, cloth backs, dirty, lying flat, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a1862f-5c56-7542-8ca8-21d000447a23",
+    "refine": "01a18635-c81e-7295-9b2d-1a6b24a213ad"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/gear-gloves/refine/gear-gloves-refine.glb (raw original, outside Git)",
+    "sha256": "75b65abbd906abf3213dbdef5f4af17eeec049cf70e8bc83d312dd5c44d469b9",
+    "bytes": 7478584,
+    "triangles": 2626,
+    "extent": [
+     0.9565,
+     0.2236,
+     0.7378
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3508307
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1287721
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2561745
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/gear-gloves/preview/gear-gloves-preview.glb",
+    "previewSha256": "e83e0ba8379ad076c6bc44c14b22ee0447dd70f944543188be0e4d5e43c27c9b",
+    "previewTriangles": 2626
+   },
+   "output": {
+    "file": "game/public/assets/models/office-gear-gloves.glb",
+    "url": "assets/models/office-gear-gloves.glb",
+    "sha256": "9b9100ba4244055da3d31a83e3a18466e6857fbd3ec3b6c4d5aea50364c936f1",
+    "bytes": 193796,
+    "triangles": 2626,
+    "dims": [
+     0.26,
+     0.0608,
+     0.2005
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2500,
+   "sizeM": 0.26,
+   "sizeAxis": "longest",
+   "scale": 0.271812,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 45171,
+     "sha256": "ed94228ea06cb43eee8b0df3b17009c4ff9147a255c8060d5e1e5c24668a0118"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 33442,
+     "sha256": "3b7ac9bfafc3a213872b76bdb1336e89cba47909062c00240e5d391bee8807cf"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10771,
+     "sha256": "e41235809f97428ed206e6b705944db6ecfc03ccd2cd20c254c8b72a527d904e"
+    }
+   ]
+  },
+  {
+   "code": "A7",
+   "id": "med-leg-splint",
+   "key": "office-med-leg-splint",
+   "use": "medical",
+   "subject": "rolled orange SAM malleable aluminium-foam splint with two velcro straps",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "rolled orange SAM malleable aluminium-foam splint with two velcro straps, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "rolled orange SAM malleable aluminium-foam splint with two velcro straps, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18636-8623-75ea-983d-b1b68c1f7213",
+    "refine": "01a18639-76b6-7285-b453-4ab4144fd5f6"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/med-leg-splint/refine/med-leg-splint-refine.glb (raw original, outside Git)",
+    "sha256": "0a1dac99561d89f1e42d6cc0d6660f7428298deb1208fcca1d7dada3ff5b2428",
+    "bytes": 7038864,
+    "triangles": 2094,
+    "extent": [
+     0.6089,
+     0.7305,
+     0.9497
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3121468
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1612674
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2187037
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/med-leg-splint/preview/med-leg-splint-preview.glb",
+    "previewSha256": "8fb7b4934bca2989fd2e40b17c76ff129239fb8f6606ab72825c0e23ed502746",
+    "previewTriangles": 2094
+   },
+   "output": {
+    "file": "game/public/assets/models/office-med-leg-splint.glb",
+    "url": "assets/models/office-med-leg-splint.glb",
+    "sha256": "f983f679db3dd976bd8e256241cd8e21f8ea68bd97ef9f2892afa0243756e045",
+    "bytes": 232476,
+    "triangles": 2094,
+    "dims": [
+     0.1539,
+     0.1846,
+     0.24
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 0.24,
+   "sizeAxis": "longest",
+   "scale": 0.252709,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 65686,
+     "sha256": "3f7e1b273188e01fe3badb0c5d6b3b5ff076aba57d369561bd732a1fea648376"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 46001,
+     "sha256": "50d97ad40ac65da4f70adb310126fcfdf31b5c1cab1a18a71b76e7d72574b2bb"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16291,
+     "sha256": "11c5b709d602431d63570ea3fd4f1e039492eabc342faa54020dfce17a4b1691"
+    }
+   ]
+  },
+  {
+   "code": "A8",
+   "id": "med-arm-sling",
+   "key": "office-med-arm-sling",
+   "use": "medical",
+   "subject": "sealed plastic medical packet with a triangular arm sling and an elastic compression wrap roll",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "sealed plastic medical packet with a triangular arm sling and an elastic compression wrap roll, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "sealed plastic medical packet with a triangular arm sling and an elastic compression wrap roll, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18636-8d26-7794-a1e6-7f1b2cdf5af2",
+    "refine": "01a18639-7d96-73ab-8f64-49f14b089f15"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/med-arm-sling/refine/med-arm-sling-refine.glb (raw original, outside Git)",
+    "sha256": "7370b00b32f694e05ec4a3939e49ba1a36a59688957b93ea3f068ff349ff144d",
+    "bytes": 6409260,
+    "triangles": 1969,
+    "extent": [
+     0.7632,
+     0.9517,
+     0.3867
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2787284
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1554976
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1974336
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/med-arm-sling/preview/med-arm-sling-preview.glb",
+    "previewSha256": "52bd76bc0b6295a282b6cd3528adc6a349ac3c4cf22dc75b86fc016c8d22c094",
+    "previewTriangles": 1975
+   },
+   "output": {
+    "file": "game/public/assets/models/office-med-arm-sling.glb",
+    "url": "assets/models/office-med-arm-sling.glb",
+    "sha256": "fb93726f0f47bce3d67de71eda41dc224e015a8ce7b97e0e0694fe36fa2e114a",
+    "bytes": 159544,
+    "triangles": 1969,
+    "dims": [
+     0.1604,
+     0.2,
+     0.0813
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 0.2,
+   "sizeAxis": "longest",
+   "scale": 0.210159,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 30292,
+     "sha256": "1cad5ae125aad8509a54de1edac91d9437a37fc94e8da38c82ee52df2a2b00b7"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42122,
+     "sha256": "fcb6852e9dcf04af87417843a0629ef29b2367f6eb25413aa1ab922c8c40bd6a"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 6912,
+     "sha256": "3fee2a7c4301041b95096c73006c64a2642233d411f9b56b3571304a99b7ef31"
+    }
+   ]
+  },
+  {
+   "code": "B1",
+   "id": "office-desk",
+   "key": "office-office-desk",
+   "use": "office",
+   "subject": "worn office cubicle desk, laminate top, metal drawer pedestal, scratched, dusty",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "worn office cubicle desk, laminate top, metal drawer pedestal, scratched, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "worn office cubicle desk, laminate top, metal drawer pedestal, scratched, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 5000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18636-94bf-7558-b6a3-51e17c2d7c01",
+    "refine": "01a18639-84fb-7187-ae7a-6c9e49c88918"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/office-desk/refine/office-desk-refine.glb (raw original, outside Git)",
+    "sha256": "a10d7b3cf87384925e8fec4db57e595d50681ff21005c18ed5cf10d0eec4c96b",
+    "bytes": 5058096,
+    "triangles": 4620,
+    "extent": [
+     0.957,
+     0.7871,
+     0.4888
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1836592
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1569370
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1421056
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/office-desk/preview/office-desk-preview.glb",
+    "previewSha256": "23e0ad1273397746e3f872c33c37628f30001936f28ca50bb27a3a37c3d375b0",
+    "previewTriangles": 4977
+   },
+   "output": {
+    "file": "game/public/assets/models/office-office-desk.glb",
+    "url": "assets/models/office-office-desk.glb",
+    "sha256": "3196eb2837e548fc1d75dbe7217c26545fa1807001c5877b7aecf991dc61042b",
+    "bytes": 485528,
+    "triangles": 4620,
+    "dims": [
+     1.5,
+     1.2337,
+     0.7661
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 5000,
+   "sizeM": 1.5,
+   "sizeAxis": "w",
+   "scale": 1.567347,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 107132,
+     "sha256": "3ec02c6f8d0b9a9a1c4b177fb55e7c633cf65c0236aeb7ce0a9e00e9f7aea5e9"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 131478,
+     "sha256": "eb96b7fcc3358443b722f4ba60193b8e8807c399005f9caf18f78d530eb7a5df"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 44112,
+     "sha256": "51617a3e715be56e76423f237ac8870879c0c4449e4f2529511af5c5f8cd5a49"
+    }
+   ]
+  },
+  {
+   "code": "B2",
+   "id": "office-chair",
+   "key": "office-office-chair",
+   "use": "office",
+   "subject": "abandoned office swivel chair, torn fabric seat, five-star base",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "abandoned office swivel chair, torn fabric seat, five-star base, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "abandoned office swivel chair, torn fabric seat, five-star base, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18636-9bfa-7062-8e14-4d33473d5226",
+    "refine": "01a18639-8c07-758a-a15b-ac5487cbf98a"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/office-chair/refine/office-chair-refine.glb (raw original, outside Git)",
+    "sha256": "00d185a544cd0d245656ab2e255b24669bdbc2f7742752f63fc0f1e8cd8633a1",
+    "bytes": 7768968,
+    "triangles": 4120,
+    "extent": [
+     0.7451,
+     0.9517,
+     0.6909
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3391072
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1663940
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2530742
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/office-chair/preview/office-chair-preview.glb",
+    "previewSha256": "346d4bc072b1880c78b4d4d837ccfe6cfa5b48e47351b1c0f935597dd52c6b58",
+    "previewTriangles": 4120
+   },
+   "output": {
+    "file": "game/public/assets/models/office-office-chair.glb",
+    "url": "assets/models/office-office-chair.glb",
+    "sha256": "5977f3b5685549198e4e2d9f7f7d3d8b2e1f3af54a9fc5bb8d86e8f9ea6d987c",
+    "bytes": 276800,
+    "triangles": 4120,
+    "dims": [
+     0.783,
+     1,
+     0.726
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1,
+   "sizeAxis": "h",
+   "scale": 1.050795,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 52842,
+     "sha256": "51b210569afda16e55413ccd2c36671803f550b56ce7e37c71eb15776073cd60"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 50375,
+     "sha256": "7393d2a8c480e88729c782a607fa0c77086a406c4b7447b8bd82bda8a2c1cbb4"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 15712,
+     "sha256": "ea424a451bf25a33fdbfc521db7cc262afb485c9b578286eb6020eb1454df7ed"
+    }
+   ]
+  },
+  {
+   "code": "B3",
+   "id": "filing-cabinet",
+   "key": "office-filing-cabinet",
+   "use": "office",
+   "subject": "four-drawer grey steel filing cabinet, dented, rust stains",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "four-drawer grey steel filing cabinet, dented, rust stains, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "four-drawer grey steel filing cabinet, dented, rust stains, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18636-a489-7325-a0a4-0e94f47403ba",
+    "refine": "01a18639-9316-7341-be19-227255769347"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/filing-cabinet/refine/filing-cabinet-refine.glb (raw original, outside Git)",
+    "sha256": "0727ffb2d1a09e8c025f407f2325c239fd6b65f7768729f11a7680626e7758e6",
+    "bytes": 5440336,
+    "triangles": 2931,
+    "extent": [
+     0.9546,
+     0.9531,
+     0.5786
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2034116
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1622883
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1639044
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/filing-cabinet/preview/filing-cabinet-preview.glb",
+    "previewSha256": "bcc4145f769fca26fcfb787106892ffa1ff1ab52cd40663bba5548b76b8341a0",
+    "previewTriangles": 2931
+   },
+   "output": {
+    "file": "game/public/assets/models/office-filing-cabinet.glb",
+    "url": "assets/models/office-filing-cabinet.glb",
+    "sha256": "87e21227dc16bcb4e40526ef84b106bccfd6254e73c86f28fafa3d87c122df27",
+    "bytes": 505980,
+    "triangles": 2931,
+    "dims": [
+     1.322,
+     1.32,
+     0.8013
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.32,
+   "sizeAxis": "h",
+   "scale": 1.384918,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "generated as a 2x2-drawer lateral steel cabinet (about 1.32 x 1.32 x 0.80 m at the table height)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 143270,
+     "sha256": "626a6faf9b7939ecf2e512810933c796c191a0aef478b54580104e4bfb5cf7ab"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 166024,
+     "sha256": "bf52011ed7afa343cf1fb8ed9a11d130bef76f18b1c662b33834f127de047ab7"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 70563,
+     "sha256": "4e5d297344d0a8c814dad1abfc19d153832d9947f421de005f3d0a25d4b2d63d"
+    }
+   ]
+  },
+  {
+   "code": "B4",
+   "id": "office-monitor",
+   "key": "office-office-monitor",
+   "use": "office",
+   "subject": "old desktop computer monitor with keyboard, dusty, cracked screen",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "old desktop computer monitor with keyboard, dusty, cracked screen, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "old desktop computer monitor with keyboard, dusty, cracked screen, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18636-ad9c-711c-b7fe-1505298d595f",
+    "refine": "01a18639-994e-7797-8d1b-bee73a44e61d"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/office-monitor/refine/office-monitor-refine.glb (raw original, outside Git)",
+    "sha256": "c8480b250826f30049c154600e63c890a3761cdd804cc60afdc0adeff0a11a5f",
+    "bytes": 5937864,
+    "triangles": 2690,
+    "extent": [
+     0.957,
+     0.7085,
+     0.686
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2413113
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1578825
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1809018
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/office-monitor/preview/office-monitor-preview.glb",
+    "previewSha256": "b43840a296deccb4a334512fd79b0a9bfa9308c46dcb08b4faf53a3b2face9e1",
+    "previewTriangles": 2690
+   },
+   "output": {
+    "file": "game/public/assets/models/office-office-monitor.glb",
+    "url": "assets/models/office-office-monitor.glb",
+    "sha256": "dc0909c67f501d746e44deac67e78bdde389955ef66578f35fff8857c3933b42",
+    "bytes": 240652,
+    "triangles": 2690,
+    "dims": [
+     0.55,
+     0.4072,
+     0.3943
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 0.55,
+   "sizeAxis": "w",
+   "scale": 0.574694,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 54763,
+     "sha256": "f083ca302f159cf5508451ef774a64120c4a4d254f4eeb92fe32f443eb73ddae"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 46157,
+     "sha256": "042149498f144ca5da03dd11763dc7e06f693d13dc55260d3ffa1d0b26fcae1b"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 19570,
+     "sha256": "f2c4f44d8831f060b73dafb539cfd26019665d903afd59bdad77137092852b92"
+    }
+   ]
+  },
+  {
+   "code": "B5",
+   "id": "photocopier",
+   "key": "office-photocopier",
+   "use": "office",
+   "subject": "large office photocopier, beige plastic, dusty",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "large office photocopier, beige plastic, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "large office photocopier, beige plastic, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 5000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18639-c5aa-702e-a9a0-efbb41d01080",
+    "refine": "01a18640-28a1-7452-be61-e99806987ccb"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/photocopier/refine/photocopier-refine.glb (raw original, outside Git)",
+    "sha256": "d57c065d149fa7a7f4590ec9f17899d858c3be5972774af91f8b23bdbac182d3",
+    "bytes": 6878272,
+    "triangles": 4983,
+    "extent": [
+     0.7373,
+     0.9541,
+     0.8135
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2706867
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1851168
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2083201
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/photocopier/preview/photocopier-preview.glb",
+    "previewSha256": "d71e80f37f9960919ca490b67f326a50dda5b26758d4fd289cd899692b48e94d",
+    "previewTriangles": 4985
+   },
+   "output": {
+    "file": "game/public/assets/models/office-photocopier.glb",
+    "url": "assets/models/office-photocopier.glb",
+    "sha256": "3879debc91188bc5dd991654450a35d973d41dd3e4901e816be7ef14da6a3277",
+    "bytes": 697956,
+    "triangles": 4983,
+    "dims": [
+     0.85,
+     1.1,
+     0.9379
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 5000,
+   "sizeM": 1.1,
+   "sizeAxis": "h",
+   "scale": 1.152917,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 207485,
+     "sha256": "4c5e2a4afc0133396aa6e77899f5e550ba697d362437b32707f2c0f126f15fe2"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 159393,
+     "sha256": "7ed08ad726ddf6b719097892ae58b0ebd676d4a69e718e8731ee8b4f581e9e63"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 124486,
+     "sha256": "bc2d6b4e36e79d43c25b9c56be508af2d49147b33724ba524927ae1d46cdb48e"
+    }
+   ]
+  },
+  {
+   "code": "B6",
+   "id": "water-cooler",
+   "key": "office-water-cooler",
+   "use": "office",
+   "subject": "office water cooler with an empty cracked blue bottle",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "office water cooler with an empty cracked blue bottle, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "office water cooler with an empty cracked blue bottle, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18639-ce90-7242-a486-5dc614fc7674",
+    "refine": "01a18640-3244-70d9-9314-d30331884a19"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/water-cooler/refine/water-cooler-refine.glb (raw original, outside Git)",
+    "sha256": "33cb7d9c1addb556508ead8103ad7d5582ee6b7289e14dd1b3686edf740d03bc",
+    "bytes": 5324992,
+    "triangles": 3152,
+    "extent": [
+     0.4893,
+     0.9526,
+     0.4839
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2228519
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1307190
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1647472
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/water-cooler/preview/water-cooler-preview.glb",
+    "previewSha256": "8cf9cd5b1ac085dec437a7ee80963e3c0e5875431b6526ac36d9ca2064e42641",
+    "previewTriangles": 3152
+   },
+   "output": {
+    "file": "game/public/assets/models/office-water-cooler.glb",
+    "url": "assets/models/office-water-cooler.glb",
+    "sha256": "0ea1120c61adffe7754a05bdca9fc7450bf4e20fd4e4a07d587a1c2a0efe9fb2",
+    "bytes": 233012,
+    "triangles": 3152,
+    "dims": [
+     0.6677,
+     1.3,
+     0.6603
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.3,
+   "sizeAxis": "h",
+   "scale": 1.364635,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "bottom-load style cabinet with the cracked blue bottle inside (no bottle on top)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 49804,
+     "sha256": "6a28a757f01a9ce84216fb31e7459762f036a85b6ba65101d117bd48d81ba907"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 43591,
+     "sha256": "e7bc84b949fcd3d5200692a921245ec7cddd0894e94b7844642bf9acb7469da9"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 17333,
+     "sha256": "682574a52cab89e16e5e7a338849e1c567351cd0d6daa83ad1d8b44d5d39e6a4"
+    }
+   ]
+  },
+  {
+   "code": "B7",
+   "id": "conference-table",
+   "key": "office-conference-table",
+   "use": "office",
+   "subject": "long conference table, scratched wood laminate, dusty",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "long conference table, scratched wood laminate, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "long conference table, scratched wood laminate, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18639-d619-72bd-ab5a-12bc00cea78a",
+    "refine": "01a18640-3710-7768-9439-aa307e24cc39"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/conference-table/refine/conference-table-refine.glb (raw original, outside Git)",
+    "sha256": "27202b3b027736027ad20b25e787eb3a027fd2edf5d51b0944fd02d9d4dcff02",
+    "bytes": 5219568,
+    "triangles": 3178,
+    "extent": [
+     0.9497,
+     0.2627,
+     0.4287
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2144241
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1350955
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1586869
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/conference-table/preview/conference-table-preview.glb",
+    "previewSha256": "c391b46854e86f135586a2dbbe7d812802832a101ea714a1eec797236fe6d763",
+    "previewTriangles": 4129
+   },
+   "output": {
+    "file": "game/public/assets/models/office-conference-table.glb",
+    "url": "assets/models/office-conference-table.glb",
+    "sha256": "44088452635a260f6355a1ee6b1fc6a77c079f9c64354955990af24b90cba02d",
+    "bytes": 334936,
+    "triangles": 3178,
+    "dims": [
+     3,
+     0.8298,
+     1.3542
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 3,
+   "sizeAxis": "w",
+   "scale": 3.158866,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "pedestal / panel base; top at about 0.83 m",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 85303,
+     "sha256": "7ddd29c7a0789927579712d527315199422a97a68a7619cbc8ecf32c50981c6d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 98112,
+     "sha256": "163c3be66e37bdd13d80fb630385c196249e80f8ac1eb7d3be80918ab1586838"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 33614,
+     "sha256": "80930bd83eb43a949c2a2df3a6bcd39eca35e9732fb03d7f5916540f17b37338"
+    }
+   ]
+  },
+  {
+   "code": "B8",
+   "id": "dead-plant",
+   "key": "office-dead-plant",
+   "use": "office",
+   "subject": "potted dead office plant, dry brown leaves, cracked pot",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "potted dead office plant, dry brown leaves, cracked pot, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "potted dead office plant, dry brown leaves, cracked pot, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18639-df76-729f-a48d-2aff9b042648",
+    "refine": "01a18640-3d02-724c-bc5a-de2890597e2b"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/dead-plant/refine/dead-plant-refine.glb (raw original, outside Git)",
+    "sha256": "ef6e1d41aa7b25d77cf803b89bcf015c970202a407704a3fe5df1f23f4348d62",
+    "bytes": 8125080,
+    "triangles": 2246,
+    "extent": [
+     0.7427,
+     0.9536,
+     0.7744
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3558535
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1800042
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2644813
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/dead-plant/preview/dead-plant-preview.glb",
+    "previewSha256": "88211d6d47cd74faffce3ff29e19860b631fbcc863c1cd03fe12dba7023d8378",
+    "previewTriangles": 2246
+   },
+   "output": {
+    "file": "game/public/assets/models/office-dead-plant.glb",
+    "url": "assets/models/office-dead-plant.glb",
+    "sha256": "eced2a56c0e93b2409ebb580095ec681219786e2ce245f58cc8812412e25de0b",
+    "bytes": 207348,
+    "triangles": 2246,
+    "dims": [
+     0.8567,
+     1.1,
+     0.8933
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.1,
+   "sizeAxis": "h",
+   "scale": 1.153507,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 46368,
+     "sha256": "88ad1a1d4622b4b180124e4cf1ae0cf535b7fa8da847ed04e47b36c4dc47e580"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41874,
+     "sha256": "1b704541f105156c4070a445cb04d405df557d0c1f988e01bdd03d3195a41dc7"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 11480,
+     "sha256": "1d9a16d66b3e29de13059b10119c73dd14950c25cd7d697b8647850c05abd049"
+    }
+   ]
+  },
+  {
+   "code": "B9",
+   "id": "reception-desk",
+   "key": "office-reception-desk",
+   "use": "office",
+   "subject": "office lobby reception counter, chipped marble-look front panel, debris on top",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "office lobby reception counter, chipped marble-look front panel, debris on top, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "office lobby reception counter, chipped marble-look front panel, debris on top, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 6000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18639-e669-733c-ba60-3b2cae221e51",
+    "refine": "01a18640-43fc-75f3-b595-45063898ea25"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/reception-desk/refine/reception-desk-refine.glb (raw original, outside Git)",
+    "sha256": "36d19bf35eb513ab4d67b4fafb2ffc315d99666ac4c25f360065dbe23d9da766",
+    "bytes": 4696952,
+    "triangles": 6067,
+    "extent": [
+     0.9497,
+     0.4087,
+     0.6519
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1733038
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1241984
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1397247
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/reception-desk/preview/reception-desk-preview.glb",
+    "previewSha256": "dc8e629d95c56cc726eb2aaa32d18ee17ae98c52511f4dcb56e80674e293f238",
+    "previewTriangles": 6146
+   },
+   "output": {
+    "file": "game/public/assets/models/office-reception-desk.glb",
+    "url": "assets/models/office-reception-desk.glb",
+    "sha256": "8560d15a1017b4b95295b8a07e87906fdc6f223cb063aecc8ed8a55c67a08158",
+    "bytes": 498784,
+    "triangles": 6067,
+    "dims": [
+     2.6,
+     1.1189,
+     1.7846
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 6000,
+   "sizeM": 2.6,
+   "sizeAxis": "w",
+   "scale": 2.737684,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "deep counter (about 2.6 x 1.12 x 1.78 m)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 82791,
+     "sha256": "8656955f848cf0a6b11e42c48a6ae2682f03fd4ab7a5877182b9920a15bf3813"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 87013,
+     "sha256": "426dea326b56c88538af92fe9e138158ec49bcd6ad7f7c5891f4569609eb4fbb"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41198,
+     "sha256": "3c819cab2248ba929026e7c59f24e0a69b21b7f8c32abb424f943d34ef7882fb"
+    }
+   ]
+  },
+  {
+   "code": "B10",
+   "id": "server-rack",
+   "key": "office-server-rack",
+   "use": "office",
+   "subject": "office server rack cabinet, broken glass door, tangled cables",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "office server rack cabinet, broken glass door, tangled cables, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "office server rack cabinet, broken glass door, tangled cables, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 5000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18639-ec4f-74a3-a3fd-27e1a23bd7e7",
+    "refine": "01a18640-4a65-7339-aea7-ef25e4427abb"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/server-rack/refine/server-rack-refine.glb (raw original, outside Git)",
+    "sha256": "efd0a90ab98ca9522cf02693ecd6ad921cc16a9c335a63bae90029d44edfd643",
+    "bytes": 4963664,
+    "triangles": 1157,
+    "extent": [
+     0.5884,
+     0.9531,
+     0.7065
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1870871
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1504154
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1522914
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/server-rack/preview/server-rack-preview.glb",
+    "previewSha256": "ae1fd45a44305d268d79f55acb6e98125d546c691d5f87bc14468e43be17fae4",
+    "previewTriangles": 1167
+   },
+   "output": {
+    "file": "game/public/assets/models/office-server-rack.glb",
+    "url": "assets/models/office-server-rack.glb",
+    "sha256": "f8b6c779da94accadd71fd3bf164e0a40ad5163f6a7ca202b5a6d8f2feed14cf",
+    "bytes": 354588,
+    "triangles": 1157,
+    "dims": [
+     1.2346,
+     2,
+     1.4826
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 5000,
+   "sizeM": 2,
+   "sizeAxis": "h",
+   "scale": 2.098361,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "squat cabinet (about 1.23 x 2.0 x 1.48 m); broken glass door on the -Z side; generated at 1157 tris (below target)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 115272,
+     "sha256": "464c6b794dc3c5b19f3cd747a42475b993750d567b77bb177a9e3987eb7821ae"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 106739,
+     "sha256": "dae50fd3625369792a8466331e54de40be96e5e132e7214609e3a462755b24a0"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 74345,
+     "sha256": "c1528a506cae56620cf1987b87205ae34c8e018a7ee092d34525cd6cef6fb376"
+    }
+   ]
+  },
+  {
+   "code": "B11",
+   "id": "whiteboard",
+   "key": "office-whiteboard",
+   "use": "office",
+   "subject": "office whiteboard on a wheeled stand, smeared marker writing",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "office whiteboard on a wheeled stand, smeared marker writing, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "office whiteboard on a wheeled stand, smeared marker writing, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-955c-7371-9647-5903094aeb2f",
+    "refine": "01a18644-c96a-777a-a160-c41acc8d6b16"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/whiteboard/refine/whiteboard-refine.glb (raw original, outside Git)",
+    "sha256": "73a028d7615b4a9edc3650b4d1d380f90f0dd6b916d0b0c7398a9c93bfbc3fa9",
+    "bytes": 6641488,
+    "triangles": 1932,
+    "extent": [
+     0.9565,
+     0.8608,
+     0.4932
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2863041
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1537252
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2145495
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/whiteboard/preview/whiteboard-preview.glb",
+    "previewSha256": "9feff1b50530eeb82d285b5ae22999d279a98078591f993095f5f3a0df2c6748",
+    "previewTriangles": 1932
+   },
+   "output": {
+    "file": "game/public/assets/models/office-whiteboard.glb",
+    "url": "assets/models/office-whiteboard.glb",
+    "sha256": "e6fc2f6bac5e59a78aff09992490453ffbf09276b5cf6f662301b18579864c36",
+    "bytes": 556256,
+    "triangles": 1932,
+    "dims": [
+     1.8,
+     1.6199,
+     0.928
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 1.8,
+   "sizeAxis": "w",
+   "scale": 1.881776,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "board plane faces -Z; marker writing barely visible",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 215326,
+     "sha256": "b310df746319e6a913478026ecf0c9a5437d2343ef2d0cffd290740b751ae328"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 142280,
+     "sha256": "1b6b309f03bd9107de4fdcd319ace25c852be2d19ad6ee03de6d5b7d72ff1012"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 115115,
+     "sha256": "7dd185b48bd3d5411543ea2b6db3ab83ee5011012eab4ecba93aa39ad93b6e27"
+    }
+   ]
+  },
+  {
+   "code": "B12",
+   "id": "office-shelf",
+   "key": "office-office-shelf",
+   "use": "office",
+   "subject": "metal office bookshelf with a few binders and loose papers, dusty",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "metal office bookshelf with a few binders and loose papers, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "metal office bookshelf with a few binders and loose papers, dusty, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-9d49-71c9-95e9-6a7facd2a550",
+    "refine": "01a18644-d027-7322-a79c-eb930c9b8d94"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/office-shelf/refine/office-shelf-refine.glb (raw original, outside Git)",
+    "sha256": "e260c7979dd75475d114daf963ceb0f79298ea56c9d3ce2fd6e3e7947dc99bd8",
+    "bytes": 5515496,
+    "triangles": 3888,
+    "extent": [
+     0.9556,
+     0.7764,
+     0.3267
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2279459
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1335509
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1671355
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/office-shelf/preview/office-shelf-preview.glb",
+    "previewSha256": "f19eb8c233b91fe56e7237b278afc7a50dade1b7b102fb68b0487d33c506292b",
+    "previewTriangles": 3888
+   },
+   "output": {
+    "file": "game/public/assets/models/office-office-shelf.glb",
+    "url": "assets/models/office-office-shelf.glb",
+    "sha256": "69e63b9079762b82be688a844ab598287996a2b41108ae3a2757ccda644bdb34",
+    "bytes": 554884,
+    "triangles": 3888,
+    "dims": [
+     2.2155,
+     1.8,
+     0.7574
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1.8,
+   "sizeAxis": "h",
+   "scale": 2.318488,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "wide double shelving unit (about 2.22 x 1.8 x 0.76 m); open side -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 165966,
+     "sha256": "d2e45f2e17af25d94f61a87ec22ca55c485ed372c71d3af2265bc7b85d5c8d4f"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 101757,
+     "sha256": "28bbf28137e4eb02cd1df3baa9ce694c1b0d0790919f06e4482a8d7cf4b52006"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 81865,
+     "sha256": "dd5d29898bb601af73255b43f4d18f25c0de205c96c89a407caee1e51a8722b2"
+    }
+   ]
+  },
+  {
+   "code": "C1",
+   "id": "car-wreck",
+   "key": "office-car-wreck",
+   "use": "exterior",
+   "subject": "burnt-out rusted sedan wreck, no glass, flat tyres",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "burnt-out rusted sedan wreck, no glass, flat tyres, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "burnt-out rusted sedan wreck, no glass, flat tyres, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 8000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-a66d-7591-9e4f-db400dee4e93",
+    "refine": "01a18644-d730-7067-8231-098091ea471e"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/car-wreck/refine/car-wreck-refine.glb (raw original, outside Git)",
+    "sha256": "77f5594ea3d522d55b95518b1f9d968dcd002e6b384ec05364c282c08709e049",
+    "bytes": 8302172,
+    "triangles": 7762,
+    "extent": [
+     0.9497,
+     0.2695,
+     0.3677
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3572162
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1789055
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2608811
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/car-wreck/preview/car-wreck-preview.glb",
+    "previewSha256": "bd8e2f3818918db4ddba447d1c4e34acafae2c3f8cfd2bb61f63d3395193108d",
+    "previewTriangles": 7791
+   },
+   "output": {
+    "file": "game/public/assets/models/office-car-wreck.glb",
+    "url": "assets/models/office-car-wreck.glb",
+    "sha256": "ae2135b7957103c58a9bc1188afb47b27a6837633b0e5876d8098ad0a40ac848",
+    "bytes": 831852,
+    "triangles": 7762,
+    "dims": [
+     4.6,
+     1.3055,
+     1.7809
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 8000,
+   "sizeM": 4.6,
+   "sizeAxis": "longest",
+   "scale": 4.843594,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "vehicle length along X with the nose toward +X (its side faces -Z)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 252799,
+     "sha256": "c00a66d5381a70ca0e91e9fb2a912757644b995d7c9fbebdadde98e6e9ffc168"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 158103,
+     "sha256": "13ba5665224089cae144feb8708e91b0619c9199eefa8dabf2d0fbbc25f3f0da"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 135940,
+     "sha256": "947269256974b91a101b6e498eee362cf63db3894c1f2c8fec5b50bb5441b0c0"
+    }
+   ]
+  },
+  {
+   "code": "C2",
+   "id": "rubble-pile",
+   "key": "office-rubble-pile",
+   "use": "exterior",
+   "subject": "large pile of broken concrete rubble with bent rebar",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "large pile of broken concrete rubble with bent rebar, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "large pile of broken concrete rubble with bent rebar, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 6000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-af2e-7447-8ad1-0aab6f8c471a",
+    "refine": "01a18644-de3a-7275-be8d-2612a1ba9aa7"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/rubble-pile/refine/rubble-pile-refine.glb (raw original, outside Git)",
+    "sha256": "f5ef2e856c08d8a5ca3867b8db5a047bdb5c9dc18cf30591afb68729d1c0abe8",
+    "bytes": 5512340,
+    "triangles": 5486,
+    "extent": [
+     0.957,
+     0.3447,
+     0.9082
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1879204
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1706367
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1597039
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/rubble-pile/preview/rubble-pile-preview.glb",
+    "previewSha256": "e51ac31affcad6c9f1e913705c139404946654290cd8a8e77c1f52a0faa49fd1",
+    "previewTriangles": 5486
+   },
+   "output": {
+    "file": "game/public/assets/models/office-rubble-pile.glb",
+    "url": "assets/models/office-rubble-pile.glb",
+    "sha256": "defcee5b755ba0c073ee55ecef3bbf4fe51fb481ead62cdcef35e394563e201b",
+    "bytes": 569708,
+    "triangles": 5486,
+    "dims": [
+     5,
+     1.801,
+     4.7449
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 6000,
+   "sizeM": 5,
+   "sizeAxis": "longest",
+   "scale": 5.224491,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 103958,
+     "sha256": "5dbf6b6a00574eb0f26b4b0eec0862be99a2b83bcf362e76e8c6e43baa02c568"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 127416,
+     "sha256": "07a6300a98e1617696ad13791cce4cc81deeb4c9e5425a7a8944f085e159a4b2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42143,
+     "sha256": "00673ef510a6f05a93411856a0f7200ce57f5faeeca822d0fc82921f313fc3e8"
+    }
+   ]
+  },
+  {
+   "code": "C3",
+   "id": "ruined-tower",
+   "key": "office-ruined-tower",
+   "use": "exterior",
+   "subject": "ruined office skyscraper, collapsed upper floors, blown-out windows, exposed floor slabs, background asset",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "ruined office skyscraper, collapsed upper floors, blown-out windows, exposed floor slabs, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "ruined office skyscraper, collapsed upper floors, blown-out windows, exposed floor slabs, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 20000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-b67a-76f6-a06d-d17889270b90",
+    "refine": "01a18644-e5a7-748e-a5f4-286e5b344a30"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-tower/refine/ruined-tower-refine.glb (raw original, outside Git)",
+    "sha256": "c5c9ab4868f39d7a87150e145239aa3988125a209a63ac4d7873ad771dca9401",
+    "bytes": 7344716,
+    "triangles": 15841,
+    "extent": [
+     0.5894,
+     0.9507,
+     0.7168
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2520295
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1930089
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2016612
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-tower/preview/ruined-tower-preview.glb",
+    "previewSha256": "62fbcffef4c6d2660f7a0803f7bd9e5be47d54f745cc9463d88d3191bec3f7bf",
+    "previewTriangles": 16100
+   },
+   "output": {
+    "file": "game/public/assets/models/office-ruined-tower.glb",
+    "url": "assets/models/office-ruined-tower.glb",
+    "sha256": "8eca841138d89e49b243137421e283c25e94f8d57f4f907ed5d99634f9a924f7",
+    "bytes": 1237744,
+    "triangles": 15841,
+    "dims": [
+     37.1957,
+     60,
+     45.2388
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 20000,
+   "sizeM": 60,
+   "sizeAxis": "h",
+   "scale": 63.112455,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "background scenery: hollow window-grid frame with debris at the base",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 188317,
+     "sha256": "2d3be8bfcf855ddbfc7524d213c6c7b9a19943dcbea76816491bde52d2da38ec"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 155473,
+     "sha256": "e44ff26d283ec83d5731d963337575a0f411cf191d01fed291120c27d4f63a2d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 111796,
+     "sha256": "5e81a8bbc88b19f1c6aeb99e9e50aed530e50adfa1614c925158836ba2c46ba6"
+    }
+   ]
+  },
+  {
+   "code": "C4",
+   "id": "ruined-midrise",
+   "key": "office-ruined-midrise",
+   "use": "exterior",
+   "subject": "burnt mid-rise apartment block, collapsed corner, broken windows, background asset",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "burnt mid-rise apartment block, collapsed corner, broken windows, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "burnt mid-rise apartment block, collapsed corner, broken windows, background asset, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 20000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-bd66-703e-8c23-0941c6b867a7",
+    "refine": "01a18644-ece0-71dc-a1d4-81fc42799d26"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-midrise/refine/ruined-midrise-refine.glb (raw original, outside Git)",
+    "sha256": "6cfae2f13067beb430ed44f6d93afd38222d1898bc311d27177e291c28a0a358",
+    "bytes": 6745924,
+    "triangles": 15378,
+    "extent": [
+     0.7832,
+     0.9531,
+     0.7388
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2244690
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1729497
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1810701
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/ruined-midrise/preview/ruined-midrise-preview.glb",
+    "previewSha256": "34eefa34e94ec0c36d0ad13282de0c0761b3627f7580fab116fc0259b8c45fd0",
+    "previewTriangles": 15530
+   },
+   "output": {
+    "file": "game/public/assets/models/office-ruined-midrise.glb",
+    "url": "assets/models/office-ruined-midrise.glb",
+    "sha256": "abe1c68e55ab60e3136354629932ecddd698c77d35f0caf98a7df31b517472cb",
+    "bytes": 1269108,
+    "triangles": 15378,
+    "dims": [
+     24.6517,
+     30,
+     23.2531
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 20000,
+   "sizeM": 30,
+   "sizeAxis": "h",
+   "scale": 31.47541,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "background scenery: facade with blown-out windows and one open, collapsed side exposing floor slabs",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 159860,
+     "sha256": "16601388df1b5e5674271a10949e5feec1ed1fe2484764c8b336b2f74d26667c"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 148289,
+     "sha256": "6ba84e27b8cc51019cf8b3d40c1d3d568424332ba022eaa261cc9e7310444f1d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 92717,
+     "sha256": "8934a06ab20a89b69a858aafc0adaea2fdfa70d9c7df468d92fccb6272a0ad4b"
+    }
+   ]
+  },
+  {
+   "code": "C5",
+   "id": "bus-wreck",
+   "key": "office-bus-wreck",
+   "use": "exterior",
+   "subject": "burnt, rusted city bus wreck, no glass",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (texture, inherits the preview model)",
+   "previewPrompt": "burnt, rusted city bus wreck, no glass, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "texturePrompt": "burnt, rusted city bus wreck, no glass, realistic game asset, abandoned post-apocalyptic, dusty and worn, muted colours, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 10000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18640-c4b1-7538-9f37-2c435b78ef2f",
+    "refine": "01a18644-f305-7711-b59f-985687b1cad5"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/bus-wreck/refine/bus-wreck-refine.glb (raw original, outside Git)",
+    "sha256": "6c56823df9e387f75af2719eb9b6f55fbb3b853085a66078414bb2acc93b54db",
+    "bytes": 5697664,
+    "triangles": 9565,
+    "extent": [
+     0.9487,
+     0.3433,
+     0.2974
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2097301
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1609601
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1479262
+     }
+    ],
+    "previewFile": "reference/tasks/office-space-survival-20261029/assets/raw/bus-wreck/preview/bus-wreck-preview.glb",
+    "previewSha256": "314a98da18ac7d8c833da854d5c4aa8c74c1fc9b174f91ea0c06052f0208bd6d",
+    "previewTriangles": 9574
+   },
+   "output": {
+    "file": "game/public/assets/models/office-bus-wreck.glb",
+    "url": "assets/models/office-bus-wreck.glb",
+    "sha256": "90332d9e31edadc3e7891c28e018b3afaa2e300cbf1ac6412e0c1a779d0d21e7",
+    "bytes": 757148,
+    "triangles": 9565,
+    "dims": [
+     12,
+     4.3417,
+     3.7612
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 10000,
+   "sizeM": 12,
+   "sizeAxis": "longest",
+   "scale": 12.648488,
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "note": "vehicle length along X with the nose toward +X (its side faces -Z); chunky proportions: about 4.3 m tall at 12 m long",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 120874,
+     "sha256": "1207a84749966d1e8197e257e55860b6e94dcb15e8f49deb1c1f3c294ea69432"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 133130,
+     "sha256": "b6c1320257cd70e205872d5831a4acf4960029bae6789e4d48d86ad5b2945ce8"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 49582,
+     "sha256": "2e9471fa5c808a131aa544d38c429121c16f95c7c937489bab235df9e897c81f"
+    }
+   ]
+  }
+ ],
+ "missing": [],
+ "textures": [
+  {
+   "code": "T1",
+   "id": "office-carpet",
+   "subject": "worn, stained grey-blue office carpet tile (seamless)",
+   "tileable": true,
+   "alpha": false,
+   "tool": "Codex CLI built-in native image_gen (one call, no retries; model not reported by the tool)",
+   "promptSha256": "8231c2618e02027ab6dc0056dc29eb4d0b17c75df8967a8a1ba3822c649b2777",
+   "prompt": "A seamless tileable texture of worn, stained grey-blue commercial office carpet tile: dense low loop-pile carpet fibres with a subtle fine tweed pattern, faded and flattened along trodden areas, scattered dark water and coffee stains, ground-in grey dust and grime, a few small dried spatters. Uniform carpet surface only, without tile grid lines or tile seams. Seamless, tileable texture: the left edge must continue perfectly into the right edge and the top edge into the bottom edge, with no visible seam, border, frame or vignette when repeated. Viewed perfectly straight-on, orthographic and flat with no perspective, filling the entire square canvas edge to edge. Even, flat, shadowless, albedo-like lighting with no highlights or cast shadows. Realistic photographic material texture for a gritty first-person survival game set in an abandoned, post-apocalyptic office tower: dusty, worn, muted colours. No objects, no people, no text, no logos, no signage, no labels, no watermarks. Square 1024x1024 canvas.",
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/T1-carpet-tile/T1-carpet-tile-original.png (raw original, outside Git)",
+    "sha256": "8d042cb980b2b1dabd327fa66f5a4f1535ad2a5578ea553dce861a263e97f0dd",
+    "bytes": 4579754,
+    "size": [
+     1254,
+     1254
+    ],
+    "byteExactNativeCopy": true
+   },
+   "output": {
+    "file": "game/public/assets/textures/office/office-carpet.jpg",
+    "url": "assets/textures/office/office-carpet.jpg",
+    "sha256": "abccdb433c1061eb30af6e76eda813a1d2a861741ecd7f15a410ab431d304d22",
+    "bytes": 458609,
+    "size": [
+     1024,
+     1024
+    ],
+    "format": "JPEG q85 (Lanczos resize)"
+   }
+  },
+  {
+   "code": "T2",
+   "id": "ceiling-tile",
+   "subject": "water-stained drop-ceiling tile (seamless)",
+   "tileable": true,
+   "alpha": false,
+   "tool": "Codex CLI built-in native image_gen (one call, no retries; model not reported by the tool)",
+   "promptSha256": "7da80759d97a721d2c33861fd783fefecfb996c5bec98fb3d6f8f134d4b882c6",
+   "prompt": "A seamless tileable texture of a water-stained mineral-fibre acoustic drop-ceiling tile face: off-white fissured and pin-holed acoustic surface, irregular yellow-brown water stain rings and blotches, faint mould speckles, grey dust and age discolouration. Only the tile face material, with no metal grid, no T-bar, no bevelled edge, no light fixture. Seamless, tileable texture: the left edge must continue perfectly into the right edge and the top edge into the bottom edge, with no visible seam, border, frame or vignette when repeated. Viewed perfectly straight-on, orthographic and flat with no perspective, filling the entire square canvas edge to edge. Even, flat, shadowless, albedo-like lighting with no highlights or cast shadows. Realistic photographic material texture for a gritty first-person survival game set in an abandoned, post-apocalyptic office tower: dusty, worn, muted colours. No objects, no people, no text, no logos, no signage, no labels, no watermarks. Square 1024x1024 canvas.",
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/T2-ceiling-tile/T2-ceiling-tile-original.png (raw original, outside Git)",
+    "sha256": "640b5a0535cb5ac7bf246c2de73abe38b05b253f39476bb536587f929498d72c",
+    "bytes": 3864548,
+    "size": [
+     1254,
+     1254
+    ],
+    "byteExactNativeCopy": true
+   },
+   "output": {
+    "file": "game/public/assets/textures/office/ceiling-tile.jpg",
+    "url": "assets/textures/office/ceiling-tile.jpg",
+    "sha256": "2fd7395e16f146cddea3c97585213c8e8f075a54637ef75018576c3eb94f5d62",
+    "bytes": 393102,
+    "size": [
+     1024,
+     1024
+    ],
+    "format": "JPEG q85 (Lanczos resize)"
+   }
+  },
+  {
+   "code": "T3",
+   "id": "cubicle-fabric",
+   "subject": "grey-blue cubicle partition fabric (seamless)",
+   "tileable": true,
+   "alpha": false,
+   "tool": "Codex CLI built-in native image_gen (one call, no retries; model not reported by the tool)",
+   "promptSha256": "39cd824d978cd36ea91ebc36e726bf7ec54f729353865e60f9f05272db969e66",
+   "prompt": "A seamless tileable texture of grey-blue office cubicle partition fabric: tightly woven upholstery fabric with a fine visible weave and slight fibre fuzz, faded and sun-bleached unevenly, light grey dust, a few faint stains and small pills. Close-up fabric surface only. Seamless, tileable texture: the left edge must continue perfectly into the right edge and the top edge into the bottom edge, with no visible seam, border, frame or vignette when repeated. Viewed perfectly straight-on, orthographic and flat with no perspective, filling the entire square canvas edge to edge. Even, flat, shadowless, albedo-like lighting with no highlights or cast shadows. Realistic photographic material texture for a gritty first-person survival game set in an abandoned, post-apocalyptic office tower: dusty, worn, muted colours. No objects, no people, no text, no logos, no signage, no labels, no watermarks. Square 1024x1024 canvas.",
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/T3-partition-fabric/T3-partition-fabric-original.png (raw original, outside Git)",
+    "sha256": "1a94ff60f8f47803d1acf3a08dd1a04b61f69427cf237d5baa0240427064d723",
+    "bytes": 4312223,
+    "size": [
+     1254,
+     1254
+    ],
+    "byteExactNativeCopy": true
+   },
+   "output": {
+    "file": "game/public/assets/textures/office/cubicle-fabric.jpg",
+    "url": "assets/textures/office/cubicle-fabric.jpg",
+    "sha256": "f283e2346eea466bd1b57a5f650aa8172241027e9385dfd79d0314761b551a24",
+    "bytes": 416586,
+    "size": [
+     1024,
+     1024
+    ],
+    "format": "JPEG q85 (Lanczos resize)"
+   }
+  },
+  {
+   "code": "T4",
+   "id": "office-wall",
+   "subject": "peeling painted office drywall (seamless)",
+   "tileable": true,
+   "alpha": false,
+   "tool": "Codex CLI built-in native image_gen (one call, no retries; model not reported by the tool)",
+   "promptSha256": "c1c26690f099319dab4ce1d103be893ccb8826c87387864b928fed0fac01a520",
+   "prompt": "A seamless tileable texture of peeling painted office drywall: a dirty pale beige-grey painted wall with patches of curling, flaking and peeling paint revealing grey gypsum and brown paper facing underneath, scuffs, grime, faint water streaks and small dents. Flat wall surface only, with no outlets, trim, corners or skirting. Seamless, tileable texture: the left edge must continue perfectly into the right edge and the top edge into the bottom edge, with no visible seam, border, frame or vignette when repeated. Viewed perfectly straight-on, orthographic and flat with no perspective, filling the entire square canvas edge to edge. Even, flat, shadowless, albedo-like lighting with no highlights or cast shadows. Realistic photographic material texture for a gritty first-person survival game set in an abandoned, post-apocalyptic office tower: dusty, worn, muted colours. No objects, no people, no text, no logos, no signage, no labels, no watermarks. Square 1024x1024 canvas.",
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/T4-drywall-peeling/T4-drywall-peeling-original.png (raw original, outside Git)",
+    "sha256": "847a44a4a4a9f547cf8e8a1e1d53c62a11a698d3a230bdb5e46f60be1332042f",
+    "bytes": 3350518,
+    "size": [
+     1254,
+     1254
+    ],
+    "byteExactNativeCopy": true
+   },
+   "output": {
+    "file": "game/public/assets/textures/office/office-wall.jpg",
+    "url": "assets/textures/office/office-wall.jpg",
+    "sha256": "f1d33227e73dd7900274c5649c13efab9a1ed518eb34458d8477ac9ce138976f",
+    "bytes": 271942,
+    "size": [
+     1024,
+     1024
+    ],
+    "format": "JPEG q85 (Lanczos resize)"
+   }
+  },
+  {
+   "code": "T5",
+   "id": "skyline",
+   "subject": "wide panorama of a destroyed city skyline at overcast dusk with smoke columns (distant backdrop)",
+   "tileable": false,
+   "alpha": false,
+   "tool": "Codex CLI built-in native image_gen (one call, no retries; model not reported by the tool)",
+   "promptSha256": "a677b4bfb2706edbda2aa667ad2a97145fa713b2c95715fa69560f58245c0219",
+   "prompt": "A wide panoramic matte-painting backdrop of a destroyed, abandoned city skyline at overcast dusk, as seen from high up inside an office tower looking out across the city. Many ruined skyscrapers and mid-rise office and apartment blocks in the middle distance and far distance, some with collapsed upper floors, blown-out windows, exposed floor slabs and broken steel frames; several tall dark smoke columns rising and drifting; low heavy grey-orange overcast clouds with a dim muted dusk glow near the horizon; hazy atmospheric depth with distant buildings fading into smog; no lights on in any window. The horizon and city sit across the middle band of the image, sky in the upper part and ruined lower city rooftops in the lower part, so it can be cropped to a 2:1 strip. The left and right edges should look continuous for wrapping. Realistic, gritty, muted desaturated colours, post-apocalyptic survival game. No people, no vehicles in the sky, no text, no logos, no signage, no watermark, no window frame and no foreground interior. Widest landscape canvas available (1536x1024 if selectable).",
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/T5-skyline-panorama/T5-skyline-panorama-original.png (raw original, outside Git)",
+    "sha256": "636f84ea35df9a5d1853f63001bad09e3a666879bf52cabf647350b8457cfd19",
+    "bytes": 2593071,
+    "size": [
+     2048,
+     768
+    ],
+    "byteExactNativeCopy": true
+   },
+   "output": {
+    "file": "game/public/assets/textures/office/skyline.jpg",
+    "url": "assets/textures/office/skyline.jpg",
+    "sha256": "edb6d7bde41ce4214f3cc913003099b6c6653451af1e753c666852bc3af43fda",
+    "bytes": 300406,
+    "size": [
+     2048,
+     768
+    ],
+    "format": "JPEG q85 (Lanczos resize)"
+   }
+  },
+  {
+   "code": "T6",
+   "id": "window-glass",
+   "subject": "grimy, cracked window glass with dust (RGBA overlay)",
+   "tileable": false,
+   "alpha": true,
+   "tool": "Codex CLI built-in native image_gen (one call, no retries; model not reported by the tool)",
+   "promptSha256": "c9b8be59d322e84978e4e2c06125da8a6b2dd89b5af9ddd0c4b49202b2f4b11a",
+   "prompt": "A square RGBA overlay texture of grimy, cracked window glass, on a genuinely transparent background (real alpha). The clean glass areas are fully transparent; only the dirt and damage are visible: a film of grey-brown dust and smudges, dried dirty-water streaks running down, fingerprint smears, specks of grime, and a few sharp hairline cracks radiating from one impact point near one corner. The dirt is semi-transparent and denser toward the bottom edge. No window frame, no background scene, no reflections of a room, no text, no logos. Even flat lighting. Square 1024x1024 canvas.",
+   "source": {
+    "file": "reference/tasks/office-space-survival-20261029/assets/raw/T6-window-grime/T6-window-grime-original.png (raw original, outside Git)",
+    "sha256": "a22a846cfedd66aeefcd4d29ee3bd5a11230ddc6b1f17fdf56fb601e208ff309",
+    "bytes": 3047050,
+    "size": [
+     1254,
+     1254
+    ],
+    "byteExactNativeCopy": true
+   },
+   "output": {
+    "file": "game/public/assets/textures/office/window-glass.png",
+    "url": "assets/textures/office/window-glass.png",
+    "sha256": "cc8c2c220b9a10859f50a5760e5f14512daa60ea16025affea05f52e9ae00513",
+    "bytes": 466309,
+    "size": [
+     1024,
+     1024
+    ],
+    "format": "PNG palette (RGBA, Lanczos resize)"
+   }
+  }
+ ],
+ "texturesMissing": []
+}

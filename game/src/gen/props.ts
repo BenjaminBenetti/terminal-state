@@ -2,6 +2,7 @@
 // Mesh derivatives are scaled to match these provisional dimensions at build time.
 
 import {P7_PROP_DEFS, type P7Kind} from './props07';
+import {OFFICE_PROP_DEFS, type OfficeKind} from './office/kinds'; // Iteration 16 (WORLD-GEN)
 
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
@@ -20,7 +21,9 @@ export type PropKind =
   // textured parts (gen/purposeShapes.ts) otherwise. Holders among them have PURPOSE_SURFACES.
   | PurposePropKind
   // Iteration 07 (Lane P2): NEW generated prop types (gen/props07.ts; lazy-loaded p7-*.glb models, measured footprints).
-  | P7Kind;
+  | P7Kind
+  // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts; Meshy office models, procedural fallbacks).
+  | OfficeKind;
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -136,6 +139,8 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   cartonStack: {w: 1.0, d: 0.8, h: 1.3, blocksSight: false},
   // --- Iteration 07 generated props (Lane P2): footprints = measured runtime model bounds (gen/props07.ts) ---
   ...P7_PROP_DEFS,
+  // --- Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts) ---
+  ...OFFICE_PROP_DEFS,
 };
 
 /**

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 6881,
-      "sha256": "bb2c97c72c06dac531d6d63f3ae77e490ba5e867cf88f86f0f3e5cc75bebe253"
+      "bytes": 7996,
+      "sha256": "64b7da629dbf2f7b3db3aa91e019613670699567d26614250bf486ca42e94181"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1359,6 +1359,11 @@
       "sha256": "b0bca74834e3246feeac4bf040db884c2f518b343d7ffbe1375f7928d27c68c1"
     },
     {
+      "path": "assets/derivatives/office-space-20261029.json",
+      "bytes": 104224,
+      "sha256": "252540af368b047e07d1014141f96b50f97b8a7df0e35abf6ffe2677160e113c"
+    },
+    {
       "path": "assets/derivatives/outfit-beanie.json",
       "bytes": 23833,
       "sha256": "dd9d4b883ef2f6310e7a30790e3f4945baa0164e2be5da4a4057d265865e0437"
@@ -1622,6 +1627,131 @@
       "path": "assets/models/magazine-rack.glb",
       "bytes": 783032,
       "sha256": "ef5f410fe9d2d36e117526d4be958b089d35004307774ad241436bc14f726a0d"
+    },
+    {
+      "path": "assets/models/office-bus-wreck.glb",
+      "bytes": 757148,
+      "sha256": "90332d9e31edadc3e7891c28e018b3afaa2e300cbf1ac6412e0c1a779d0d21e7"
+    },
+    {
+      "path": "assets/models/office-car-wreck.glb",
+      "bytes": 831852,
+      "sha256": "ae2135b7957103c58a9bc1188afb47b27a6837633b0e5876d8098ad0a40ac848"
+    },
+    {
+      "path": "assets/models/office-conference-table.glb",
+      "bytes": 334936,
+      "sha256": "44088452635a260f6355a1ee6b1fc6a77c079f9c64354955990af24b90cba02d"
+    },
+    {
+      "path": "assets/models/office-dead-plant.glb",
+      "bytes": 207348,
+      "sha256": "eced2a56c0e93b2409ebb580095ec681219786e2ce245f58cc8812412e25de0b"
+    },
+    {
+      "path": "assets/models/office-filing-cabinet.glb",
+      "bytes": 505980,
+      "sha256": "87e21227dc16bcb4e40526ef84b106bccfd6254e73c86f28fafa3d87c122df27"
+    },
+    {
+      "path": "assets/models/office-gear-armor-vest.glb",
+      "bytes": 263456,
+      "sha256": "f0086088cdc2b3b2b340ea520309804bc95a98c0651f3dc616f2584231c58102"
+    },
+    {
+      "path": "assets/models/office-gear-backpack.glb",
+      "bytes": 224144,
+      "sha256": "f61d3a85d94bb01314f42cc8c5662dc5b57d20b3754d4c45bd02f13105613be5"
+    },
+    {
+      "path": "assets/models/office-gear-boots.glb",
+      "bytes": 243920,
+      "sha256": "f90ab36a8c9653ad78f1ee3cc969545a37cce467d108bcbbb7562e202a2ff7e8"
+    },
+    {
+      "path": "assets/models/office-gear-chest-rig.glb",
+      "bytes": 229176,
+      "sha256": "260382fb852a66ea4f7b0cdf384983537bdd047368a55b92b67b52ab0ac942a7"
+    },
+    {
+      "path": "assets/models/office-gear-gloves.glb",
+      "bytes": 193796,
+      "sha256": "9b9100ba4244055da3d31a83e3a18466e6857fbd3ec3b6c4d5aea50364c936f1"
+    },
+    {
+      "path": "assets/models/office-gear-helmet.glb",
+      "bytes": 318628,
+      "sha256": "29078199ba70e0f6940748b6f5be1c9c0cfbddd7f758243e0244cb1df285d6aa"
+    },
+    {
+      "path": "assets/models/office-med-arm-sling.glb",
+      "bytes": 159544,
+      "sha256": "fb93726f0f47bce3d67de71eda41dc224e015a8ce7b97e0e0694fe36fa2e114a"
+    },
+    {
+      "path": "assets/models/office-med-leg-splint.glb",
+      "bytes": 232476,
+      "sha256": "f983f679db3dd976bd8e256241cd8e21f8ea68bd97ef9f2892afa0243756e045"
+    },
+    {
+      "path": "assets/models/office-office-chair.glb",
+      "bytes": 276800,
+      "sha256": "5977f3b5685549198e4e2d9f7f7d3d8b2e1f3af54a9fc5bb8d86e8f9ea6d987c"
+    },
+    {
+      "path": "assets/models/office-office-desk.glb",
+      "bytes": 485528,
+      "sha256": "3196eb2837e548fc1d75dbe7217c26545fa1807001c5877b7aecf991dc61042b"
+    },
+    {
+      "path": "assets/models/office-office-monitor.glb",
+      "bytes": 240652,
+      "sha256": "dc0909c67f501d746e44deac67e78bdde389955ef66578f35fff8857c3933b42"
+    },
+    {
+      "path": "assets/models/office-office-shelf.glb",
+      "bytes": 554884,
+      "sha256": "69e63b9079762b82be688a844ab598287996a2b41108ae3a2757ccda644bdb34"
+    },
+    {
+      "path": "assets/models/office-photocopier.glb",
+      "bytes": 697956,
+      "sha256": "3879debc91188bc5dd991654450a35d973d41dd3e4901e816be7ef14da6a3277"
+    },
+    {
+      "path": "assets/models/office-reception-desk.glb",
+      "bytes": 498784,
+      "sha256": "8560d15a1017b4b95295b8a07e87906fdc6f223cb063aecc8ed8a55c67a08158"
+    },
+    {
+      "path": "assets/models/office-rubble-pile.glb",
+      "bytes": 569708,
+      "sha256": "defcee5b755ba0c073ee55ecef3bbf4fe51fb481ead62cdcef35e394563e201b"
+    },
+    {
+      "path": "assets/models/office-ruined-midrise.glb",
+      "bytes": 1269108,
+      "sha256": "abe1c68e55ab60e3136354629932ecddd698c77d35f0caf98a7df31b517472cb"
+    },
+    {
+      "path": "assets/models/office-ruined-tower.glb",
+      "bytes": 1237744,
+      "sha256": "8eca841138d89e49b243137421e283c25e94f8d57f4f907ed5d99634f9a924f7"
+    },
+    {
+      "path": "assets/models/office-server-rack.glb",
+      "bytes": 354588,
+      "sha256": "f8b6c779da94accadd71fd3bf164e0a40ad5163f6a7ca202b5a6d8f2feed14cf"
+    },
+    {
+      "path": "assets/models/office-water-cooler.glb",
+      "bytes": 233012,
+      "sha256": "0ea1120c61adffe7754a05bdca9fc7450bf4e20fd4e4a07d587a1c2a0efe9fb2"
+    },
+    {
+      "path": "assets/models/office-whiteboard.glb",
+      "bytes": 556256,
+      "sha256": "e6fc2f6bac5e59a78aff09992490453ffbf09276b5cf6f662301b18579864c36"
     },
     {
       "path": "assets/models/outfit-beanie.glb",
@@ -2362,6 +2492,36 @@
       "path": "assets/textures/ceiling-working-face-orm.jpg",
       "bytes": 160656,
       "sha256": "bd068b213befd43bbb63b06e77c86c6bb12b697810c4a4d81a921b8abd02f7a3"
+    },
+    {
+      "path": "assets/textures/office/ceiling-tile.jpg",
+      "bytes": 393102,
+      "sha256": "2fd7395e16f146cddea3c97585213c8e8f075a54637ef75018576c3eb94f5d62"
+    },
+    {
+      "path": "assets/textures/office/cubicle-fabric.jpg",
+      "bytes": 416586,
+      "sha256": "f283e2346eea466bd1b57a5f650aa8172241027e9385dfd79d0314761b551a24"
+    },
+    {
+      "path": "assets/textures/office/office-carpet.jpg",
+      "bytes": 458609,
+      "sha256": "abccdb433c1061eb30af6e76eda813a1d2a861741ecd7f15a410ab431d304d22"
+    },
+    {
+      "path": "assets/textures/office/office-wall.jpg",
+      "bytes": 271942,
+      "sha256": "f1d33227e73dd7900274c5649c13efab9a1ed518eb34458d8477ac9ce138976f"
+    },
+    {
+      "path": "assets/textures/office/skyline.jpg",
+      "bytes": 300406,
+      "sha256": "edb6d7bde41ce4214f3cc913003099b6c6653451af1e753c666852bc3af43fda"
+    },
+    {
+      "path": "assets/textures/office/window-glass.png",
+      "bytes": 466309,
+      "sha256": "cc8c2c220b9a10859f50a5760e5f14512daa60ea16025affea05f52e9ae00513"
     },
     {
       "path": "assets/textures/platform-authored-backing-color.jpg",
