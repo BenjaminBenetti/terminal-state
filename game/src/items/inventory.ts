@@ -1,7 +1,21 @@
-// Inventory: five hotbar slots (keys 1-5) plus a small backpack. Pure logic, no DOM.
+// Inventory: five hotbar slots (keys 1-5) plus the pockets ("pack", 12 slots). Pure logic, no DOM.
+//
+// Iteration 16 (lane GEAR):
+// - GEAR SLOTS (helmet / chest / gloves / boots / backpack; items/gear.ts GEAR_SLOTS order) — SlotRef {bar: 'gear', index}.
+//   A gear slot only takes gear of its type. Worn gear's stats come from gearModifiersFor(inv.gear) (a ModifierSource).
+// - DYNAMIC POCKETS: `pack.length` = PACK_SIZE + the worn chest rig's pockets (the same array, resized in place). Any
+//   change that would shrink the pockets while the extra ones hold something is REFUSED (nothing is dropped or lost).
+// - BACKPACK: a backpack ItemStack carries its own contents in `stack.bag` (one level: a bag never goes inside a bag,
+//   and a bag never goes into the pockets / quick slots). No Inventory method reads or writes the contents of the WORN
+//   backpack (add / take / count / find / move / moveCount / detach / consumeAt / hasRoomFor all ignore them); they are
+//   only reachable through `bagMove` / `bagQuick` on a backpack that is NOT worn, which gear/bagSession.ts calls only for
+//   a bag lying on the ground whose transfer view is open.
+// - SNAPSHOTS for run carryover / Retry level (lane RUN): toJSON / fromJSON / loadJSON / clone — deep, same uids, and
+//   nextUid restored above every uid. Every change bumps `version`.
 
 import {itemDef} from './items';
 import {WEAPONS} from '../weapons/weapons';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isBagItem, type GearSlot} from './gear';
 
 export interface ItemStack {
   uid: number;
@@ -9,37 +23,121 @@ export interface ItemStack {
   count: number;
   /** Rounds currently loaded (weapons only). */
   mag?: number;
+  /** Iteration 16 (GEAR): a backpack's own contents (backpack stacks only; never holds another backpack). */
+  bag?: (ItemStack | null)[];
 }
 
-export type Bar = 'hotbar' | 'pack';
+export type Bar = 'hotbar' | 'pack' | 'gear';
 export interface SlotRef { bar: Bar; index: number }
+/** Iteration 16 (GEAR): a slot of a (grounded, open) backpack's own contents. */
+export interface BagRef { bar: 'bag'; index: number }
+export type AnyRef = SlotRef | BagRef;
 
 export const HOTBAR_SIZE = 5;
 export const PACK_SIZE = 12;
 
+export type MoveResult = 'none' | 'moved' | 'split' | 'merged' | 'swapped' | 'refused';
+
+/** Why the last move / detach / wear was refused (the UI shows `text`). */
+export type RefusalCode = 'split' | 'wrong-slot' | 'not-gear' | 'pockets-occupied' | 'bag-not-pocketable' | 'bag-in-bag'
+  | 'worn-bag' | 'not-a-bag' | 'slot-taken' | 'no-room' | 'bad-ref';
+export interface Refusal { code: RefusalCode; text: string }
+
+/** Plain-data stack (snapshots). */
+export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[] }
+export interface InventoryJSON {
+  v: 1;
+  hotbar: (StackJSON | null)[];
+  pack: (StackJSON | null)[];
+  gear: Record<GearSlot, StackJSON | null>;
+  selected: number;
+  nextUid: number;
+}
+
+const CHEST = GEAR_SLOTS.indexOf('chest');
+const BACK = GEAR_SLOTS.indexOf('backpack');
+
+/** Deep plain copy of a stack (bag contents included). */
+export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
+  if (!s) return null;
+  const j: StackJSON = {uid: s.uid, itemId: s.itemId, count: s.count};
+  if (s.mag !== undefined) j.mag = s.mag;
+  if (s.bag) j.bag = s.bag.map(stackToJSON);
+  return j;
+}
+
+/** Deep copy back into live stacks (fresh objects, same uids). */
+export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null {
+  if (!j) return null;
+  const s: ItemStack = {uid: j.uid, itemId: j.itemId, count: j.count};
+  if (j.mag !== undefined) s.mag = j.mag;
+  if (j.bag) s.bag = j.bag.map(stackFromJSON);
+  return s;
+}
+
+/** Every stack in a stack (itself + bag contents), for uid / count audits. */
+export function stacksIn(s: ItemStack | null | undefined): ItemStack[] {
+  if (!s) return [];
+  return [s, ...(s.bag ?? []).filter((x): x is ItemStack => !!x)];
+}
+
+/** Iteration 16: each inventory instance starts on its own version range, so a swapped-in restored one always redraws. */
+let versionEpoch = 0;
+
+interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag'; list: (ItemStack | null)[]; index: number }
+
 export class Inventory {
   readonly hotbar: (ItemStack | null)[] = new Array(HOTBAR_SIZE).fill(null);
+  /** Pockets: PACK_SIZE + the worn chest rig's extra pockets (resized in place). */
   readonly pack: (ItemStack | null)[] = new Array(PACK_SIZE).fill(null);
+  /** Iteration 16 (GEAR): worn gear, GEAR_SLOTS order (helmet, chest, gloves, boots, backpack). */
+  readonly gearSlots: (ItemStack | null)[] = new Array(GEAR_SLOTS.length).fill(null);
   selected = 0;
   private nextUid = 1;
   /** Bumped on every change so the UI knows when to redraw. */
-  version = 0;
+  version = ++versionEpoch * 1_000_000;
+  /** Iteration 16 (GEAR): why the last refused operation was refused (null after a success). */
+  refusal: Refusal | null = null;
 
   makeStack(itemId: string, count: number, mag?: number): ItemStack {
     const def = itemDef(itemId);
     const s: ItemStack = {uid: this.nextUid++, itemId, count: Math.min(count, def.stackMax)};
     if (def.kind === 'weapon') s.mag = mag ?? WEAPONS[def.weaponId!].magazine;
+    const bagSlots = def.gear?.bagSlots ?? 0;
+    if (bagSlots > 0) s.bag = new Array(bagSlots).fill(null);
     return s;
   }
 
-  private list(bar: Bar) {
-    return bar === 'hotbar' ? this.hotbar : this.pack;
+  /** Iteration 16: a fresh uid from this run's counter (splits made outside the inventory, e.g. a bag transfer). */
+  allocUid(): number {
+    return this.nextUid++;
+  }
+
+  private list(bar: Bar): (ItemStack | null)[] {
+    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : this.pack;
   }
   get(ref: SlotRef): ItemStack | null {
     return this.list(ref.bar)[ref.index] ?? null;
   }
+  /**
+   * Raw slot write (starter loadouts, tests). A gear slot only takes matching gear (or null), a backpack never goes into
+   * the quick slots / pockets, and the pockets never shrink over an occupied extra pocket: an invalid write is refused
+   * (no change, `refusal` says why).
+   */
   set(ref: SlotRef, s: ItemStack | null): void {
-    this.list(ref.bar)[ref.index] = s;
+    const list = this.list(ref.bar);
+    if (ref.index < 0 || ref.index >= list.length) { this.refuse('bad-ref', 'No such slot.'); return; }
+    if (s) {
+      const r = this.acceptsText({kind: ref.bar, list, index: ref.index}, s.itemId);
+      if (r) { this.refuse(r.code, r.text); return; }
+    }
+    if (ref.bar === 'gear' && ref.index === CHEST) {
+      const cap = PACK_SIZE + this.pocketsOf(s);
+      if (!this.pocketsFree(cap)) { this.refuse('pockets-occupied', this.pocketsText()); return; }
+      list[ref.index] = s;
+      this.resizePack(cap);
+    } else list[ref.index] = s;
+    this.refusal = null;
     this.version++;
   }
   selectedStack(): ItemStack | null {
@@ -54,9 +152,100 @@ export class Inventory {
     this.select((this.selected + dir + HOTBAR_SIZE) % HOTBAR_SIZE);
   }
 
-  /** Adds as much of the stack as fits. Returns the count that did not fit. */
-  add(stack: ItemStack): number {
+  // --- Iteration 16 (GEAR): gear slots ----------------------------------------------------------------------------------
+
+  /** Worn gear by slot (a fresh record; the stacks are the live ones). */
+  get gear(): Record<GearSlot, ItemStack | null> {
+    const out = {} as Record<GearSlot, ItemStack | null>;
+    GEAR_SLOTS.forEach((slot, i) => { out[slot] = this.gearSlots[i]; });
+    return out;
+  }
+  worn(slot: GearSlot): ItemStack | null {
+    return this.gearSlots[GEAR_SLOTS.indexOf(slot)] ?? null;
+  }
+  /** Pocket capacity right now: PACK_SIZE + the worn chest gear's extra pockets. */
+  get capacity(): number {
+    return PACK_SIZE + this.pocketsOf(this.gearSlots[CHEST]);
+  }
+  /** Extra pockets the worn chest gear adds (0 without a rig). */
+  get extraPockets(): number {
+    return this.pocketsOf(this.gearSlots[CHEST]);
+  }
+  /** Whether `stack` is the backpack being worn right now (its contents are then out of reach). */
+  isWornBag(stack: ItemStack | null | undefined): boolean {
+    return !!stack && this.gearSlots[BACK] === stack;
+  }
+
+  /**
+   * Wear a piece of gear taken from a slot (Tab: double-click / right-click / Wear button, drag onto the gear panel).
+   * Swaps with what is worn there (the old piece goes to the source slot) under the usual validation.
+   */
+  wearFrom(ref: SlotRef): MoveResult {
+    const st = this.get(ref);
+    const spec = gearSpec(st?.itemId);
+    if (!st || !spec) return this.refuse('not-gear', 'That is not something you can wear.');
+    return this.moveCount(ref, {bar: 'gear', index: GEAR_SLOTS.indexOf(spec.slot)});
+  }
+
+  /** Take off worn gear into the first free pocket (then quick slot). Refused for a backpack (6 puts it down) or a rig with full extra pockets. */
+  takeOff(slot: GearSlot): MoveResult {
+    const k = GEAR_SLOTS.indexOf(slot), st = this.gearSlots[k];
+    if (!st) return 'none';
+    if (isBagItem(st.itemId)) return this.refuse('bag-not-pocketable', 'A backpack does not fit in your pockets — press 6, then click to put it down.');
+    const cap = slot === 'chest' ? PACK_SIZE : this.capacity;
+    for (const bar of ['pack', 'hotbar'] as const) {
+      const list = this.list(bar);
+      const n = bar === 'pack' ? Math.min(cap, list.length) : list.length;
+      for (let i = 0; i < n; i++) if (!list[i]) return this.moveCount({bar: 'gear', index: k}, {bar, index: i});
+    }
+    return this.refuse('no-room', `No free pocket to take the ${itemDef(st.itemId).short.toLowerCase()} off into — drop it instead.`);
+  }
+
+  /** Wear a backpack that is NOT in this inventory (a grounded bag's "Wear"): the very same stack (identity + contents). */
+  wearBag(stack: ItemStack): boolean {
+    if (!isBagItem(stack.itemId)) { this.refuse('not-a-bag', 'That is not a backpack.'); return false; }
+    if (this.gearSlots[BACK]) { this.refuse('slot-taken', 'You are already wearing a backpack — put yours down first (6, then click).'); return false; }
+    if (this.holds(stack)) { this.refuse('bad-ref', 'That backpack is already yours.'); return false; }
+    this.gearSlots[BACK] = stack;
+    this.refusal = null;
+    this.version++;
+    return true;
+  }
+
+  /** Take the worn backpack off (to set it on the ground: gear/system.ts). Returns the same stack, contents untouched. */
+  takeOffBag(): ItemStack | null {
+    const st = this.gearSlots[BACK];
+    if (!st) return null;
+    this.gearSlots[BACK] = null;
+    this.version++;
+    return st;
+  }
+
+  /** Whether a stack object is anywhere in the quick slots / pockets / gear slots. */
+  holds(stack: ItemStack): boolean {
+    return this.hotbar.includes(stack) || this.pack.includes(stack) || this.gearSlots.includes(stack);
+  }
+
+  /**
+   * Adds as much of the stack as fits. Returns the count that did not fit.
+   * Iteration 16: gear is WORN straight away when its slot is empty (`opts.wear`, default true; a picked-up vest goes on);
+   * otherwise it goes to the pockets first. A backpack is never pocketed: it is worn if the back slot is free, else refused.
+   */
+  add(stack: ItemStack, opts: {wear?: boolean} = {}): number {
     const def = itemDef(stack.itemId);
+    if (def.kind === 'gear' && def.gear) {
+      const k = GEAR_SLOTS.indexOf(def.gear.slot);
+      if ((opts.wear ?? true) && !this.gearSlots[k] && !this.holds(stack)) {
+        if (k !== CHEST || this.pocketsFree(PACK_SIZE + this.pocketsOf(stack))) {
+          this.gearSlots[k] = stack;
+          if (k === CHEST) this.resizePack(PACK_SIZE + this.pocketsOf(stack));
+          this.refusal = null;
+          this.version++;
+          return 0;
+        }
+      }
+      if (isBagItem(stack.itemId)) { this.refuse('bag-not-pocketable', 'You are already wearing a backpack.'); return stack.count; }
+    }
     let left = stack.count;
     if (def.stackMax > 1) {
       for (const s of [...this.pack, ...this.hotbar]) {
@@ -67,7 +256,7 @@ export class Inventory {
         if (!left) break;
       }
     }
-    const order: Bar[] = def.kind === 'ammo' ? ['pack', 'hotbar'] : ['hotbar', 'pack'];
+    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' ? ['pack', 'hotbar'] : ['hotbar', 'pack'];
     for (const bar of order) {
       const list = this.list(bar);
       for (let i = 0; i < list.length && left > 0; i++) {
@@ -108,6 +297,7 @@ export class Inventory {
 
   /** Consume one from a specific slot (used for consumables in hand). */
   consumeAt(ref: SlotRef): boolean {
+    if (ref.bar === 'gear') return false; // Iteration 16: worn gear is never consumed
     const s = this.get(ref);
     if (!s) return false;
     s.count--;
@@ -116,20 +306,25 @@ export class Inventory {
     return true;
   }
 
+  /** Empties a slot and returns what was there (null, and nothing changes, when that is refused: a full rig's chest slot). */
   remove(ref: SlotRef): ItemStack | null {
     const s = this.get(ref);
-    if (s) this.set(ref, null);
-    return s;
+    if (!s) return null;
+    this.set(ref, null);
+    return this.get(ref) === s ? null : s;
   }
 
   /**
    * Takes `count` (default: all) out of a slot, e.g. to drop it into the world. Taking the whole
    * stack returns the same object (uid and loaded magazine kept); a partial take leaves the rest
    * in place and returns a new stack with a fresh uid.
+   * Iteration 16: refused (null + `refusal`) for a rig whose extra pockets hold items, and for a backpack unless
+   * `opts.bag` (a backpack leaves only as a grounded bag: gear/system.ts).
    */
-  detach(ref: SlotRef, count?: number): ItemStack | null {
+  detach(ref: SlotRef, count?: number, opts: {bag?: boolean} = {}): ItemStack | null {
     const s = this.get(ref);
     if (!s) return null;
+    if (isBagItem(s.itemId) && !opts.bag) { this.refuse('bag-not-pocketable', 'Put a backpack down with 6 (then click) — it lands on the ground as a bag you can open.'); return null; }
     const n = Math.max(1, Math.min(s.count, Math.floor(count ?? s.count)));
     if (n >= s.count) return this.remove(ref);
     s.count -= n;
@@ -151,45 +346,197 @@ export class Inventory {
    * - anything else: the two whole stacks swap. A split onto a different (or full) stack is
    *   refused, because the remainder would have nowhere to go.
    * Selection (`selected`) is a slot index and never changes here: the caller re-syncs what is held.
+   * Iteration 16: gear slots validate the item type; a backpack never enters the quick slots / pockets; the pockets
+   * never shrink over occupied extra pockets (refused, `refusal` says why).
    */
-  moveCount(from: SlotRef, to: SlotRef, count?: number): 'none' | 'moved' | 'split' | 'merged' | 'swapped' | 'refused' {
-    if (from.bar === to.bar && from.index === to.index) return 'none';
-    const a = this.get(from), b = this.get(to);
+  moveCount(from: SlotRef, to: SlotRef, count?: number): MoveResult {
+    const a = this.end(from), b = this.end(to);
+    if (!a || !b) return from.bar === to.bar && from.index === to.index ? 'none' : this.refuse('bad-ref', 'No such slot.');
+    return this.moveEnds(a, b, count);
+  }
+
+  // --- Iteration 16 (GEAR): grounded-bag transfers (called only through gear/bagSession.ts) ------------------------------
+
+  /**
+   * Move between this inventory and a backpack's own contents (or within them). `bag` must be a backpack stack that is
+   * NOT worn by this inventory (a worn bag's contents are out of reach: refused 'worn-bag').
+   */
+  bagMove(bag: ItemStack, from: AnyRef, to: AnyRef, count?: number): MoveResult {
+    const g = this.bagGuard(bag);
+    if (g) return g;
+    const a = this.end(from, bag), b = this.end(to, bag);
+    if (!a || !b) return this.refuse('bad-ref', 'No such slot.');
+    return this.moveEnds(a, b, count);
+  }
+
+  /**
+   * Click-to-transfer: a bag slot's stack goes into the pockets / quick slots (merging, never auto-worn; what does not fit
+   * stays in the bag), or a quick-slot / pocket stack goes into the bag (merging, then the first empty bag slot).
+   * Returns how many items moved.
+   */
+  bagQuick(bag: ItemStack, from: AnyRef): number {
+    if (this.bagGuard(bag)) return 0;
+    const src = this.end(from, bag);
+    const st = src?.list[src.index];
+    if (!src || !st) return 0;
+    if (src.kind === 'bag') {
+      // bag -> quick slots / pockets: add() places the same object when it fits whole (uid kept), else merges / copies
+      const before = st.count;
+      const left = this.add(st, {wear: false});
+      if (left >= before) { this.refuse('no-room', 'No room in your pockets or quick slots.'); return 0; }
+      if (left > 0) st.count = left; // the rest stays in the bag
+      else src.list[src.index] = null;
+      this.refusal = null;
+      this.version++;
+      return before - left;
+    }
+    if (src.kind === 'gear') { this.refuse('not-gear', 'Take worn gear off in the inventory (Tab) first.'); return 0; }
+    const r = this.acceptsText({kind: 'bag', list: bag.bag!, index: 0}, st.itemId);
+    if (r) { this.refuse(r.code, r.text); return 0; }
+    // quick slots / pockets -> bag: merge onto the same item, the rest (same object, uid kept) into the first empty slot
+    const def = itemDef(st.itemId), list = bag.bag!;
+    const before = st.count;
+    let left = before;
+    if (def.stackMax > 1) for (const s of list) {
+      if (!s || s.itemId !== st.itemId || s.count >= def.stackMax) continue;
+      const k = Math.min(left, def.stackMax - s.count);
+      s.count += k;
+      left -= k;
+      if (!left) break;
+    }
+    if (left > 0) {
+      const i = list.indexOf(null);
+      st.count = left;
+      if (i >= 0) { list[i] = st; src.list[src.index] = null; left = 0; }
+    } else src.list[src.index] = null;
+    const moved = before - left;
+    if (moved <= 0) { this.refuse('no-room', 'The backpack is full.'); return 0; }
+    this.refusal = null;
+    this.version++;
+    return moved;
+  }
+
+  private bagGuard(bag: ItemStack): MoveResult | null {
+    if (!bag || !isBagItem(bag.itemId) || !bag.bag) return this.refuse('not-a-bag', 'That is not a backpack.');
+    if (this.isWornBag(bag) || this.holds(bag)) return this.refuse('worn-bag', 'You cannot reach into a backpack you are wearing — put it down first (6, then click).');
+    return null;
+  }
+
+  // --- move engine ------------------------------------------------------------------------------------------------------
+
+  private end(ref: AnyRef, bag?: ItemStack): End | null {
+    if (ref.bar === 'bag') {
+      const list = bag?.bag;
+      return list && ref.index >= 0 && ref.index < list.length ? {kind: 'bag', list, index: ref.index} : null;
+    }
+    const list = this.list(ref.bar);
+    return ref.index >= 0 && ref.index < list.length ? {kind: ref.bar, list, index: ref.index} : null;
+  }
+
+  private acceptsText(e: End, itemId: string): Refusal | null {
+    const def = itemDef(itemId);
+    if (e.kind === 'gear') {
+      const slot = GEAR_SLOTS[e.index];
+      const spec = def.gear;
+      if (!spec) return {code: 'not-gear', text: `Only gear goes in the ${GEAR_SLOT_NAMES[slot].toLowerCase()} slot.`};
+      if (spec.slot !== slot) return {code: 'wrong-slot', text: `The ${def.short.toLowerCase()} goes in the ${GEAR_SLOT_NAMES[spec.slot].toLowerCase()} slot.`};
+      return null;
+    }
+    if (isBagItem(itemId)) {
+      return e.kind === 'bag' ? {code: 'bag-in-bag', text: 'A backpack cannot hold a backpack.'}
+        : {code: 'bag-not-pocketable', text: 'A backpack does not fit in your pockets — wear it, or put it down (6, then click).'};
+    }
+    return null;
+  }
+
+  private pocketsOf(s: ItemStack | null | undefined): number {
+    const spec = gearSpec(s?.itemId);
+    return spec && spec.slot === 'chest' ? Math.max(0, Math.floor(spec.pockets ?? 0)) : 0;
+  }
+
+  private pocketsText(): string {
+    const ex = this.extraPockets;
+    return ex > 0 ? `Empty the chest rig's extra pockets (${PACK_SIZE + 1}–${PACK_SIZE + ex}) first — nothing is dropped.` : 'Those pockets are in use.';
+  }
+
+  /** The pockets at index >= cap are all empty (so the pockets can shrink to cap). */
+  private pocketsFree(cap: number): boolean {
+    for (let i = cap; i < this.pack.length; i++) if (this.pack[i]) return false;
+    return true;
+  }
+
+  private resizePack(cap: number): void {
+    while (this.pack.length < cap) this.pack.push(null);
+    if (this.pack.length > cap && this.pocketsFree(cap)) this.pack.length = cap;
+  }
+
+  private refuse(code: RefusalCode, text: string): 'refused' {
+    this.refusal = {code, text};
+    return 'refused';
+  }
+
+  private moveEnds(from: End, to: End, count?: number): MoveResult {
+    if (from.list === to.list && from.index === to.index) return 'none';
+    const a = from.list[from.index], b = to.list[to.index];
     if (!a) return 'none';
     const n = Math.max(1, Math.min(a.count, Math.floor(count ?? a.count)));
     const whole = n >= a.count;
-    if (b && b.itemId === a.itemId) {
-      const max = itemDef(a.itemId).stackMax;
-      if (max > 1 && b.count < max) {
-        const k = Math.min(n, max - b.count);
-        b.count += k;
-        a.count -= k;
-        this.list(from.bar)[from.index] = a.count > 0 ? a : null;
-        this.version++;
-        return 'merged';
-      }
+    let plan: 'merge' | 'move' | 'split' | 'swap';
+    let k = 0;
+    const max = itemDef(a.itemId).stackMax;
+    if (b && b.itemId === a.itemId && max > 1 && b.count < max) { plan = 'merge'; k = Math.min(n, max - b.count); }
+    else if (!b) plan = whole ? 'move' : 'split';
+    else if (!whole) return this.refuse('split', 'A split stack can only go to an empty slot or onto the same item.');
+    else plan = 'swap';
+    if (plan !== 'merge') {
+      const r = this.acceptsText(to, a.itemId);
+      if (r) return this.refuse(r.code, r.text);
     }
-    if (!b) {
-      if (whole) {
-        this.list(to.bar)[to.index] = a;
-        this.list(from.bar)[from.index] = null;
-        this.version++;
-        return 'moved';
-      }
+    if (plan === 'swap') {
+      const r = this.acceptsText(from, b!.itemId);
+      if (r) return this.refuse(r.code, r.text);
+    }
+    // pockets after the move: chest gear decides the capacity; nothing may sit beyond it
+    const fromAfter = plan === 'move' ? null : plan === 'swap' ? b : plan === 'merge' && a.count - k <= 0 ? null : a;
+    const toAfter: ItemStack = plan === 'merge' ? b! : a;
+    const chestAfter = to.kind === 'gear' && to.index === CHEST ? toAfter : from.kind === 'gear' && from.index === CHEST ? fromAfter : this.gearSlots[CHEST];
+    const cap = PACK_SIZE + this.pocketsOf(chestAfter);
+    for (let i = cap; i < this.pack.length; i++) {
+      const occ = to.list === this.pack && to.index === i ? toAfter : from.list === this.pack && from.index === i ? fromAfter : this.pack[i];
+      if (occ) return this.refuse('pockets-occupied', this.pocketsText());
+    }
+    if (to.list === this.pack && to.index >= cap) return this.refuse('pockets-occupied', this.pocketsText());
+    let result: MoveResult;
+    if (plan === 'merge') {
+      b!.count += k;
+      a.count -= k;
+      from.list[from.index] = a.count > 0 ? a : null;
+      result = 'merged';
+    } else if (plan === 'move') {
+      to.list[to.index] = a;
+      from.list[from.index] = null;
+      result = 'moved';
+    } else if (plan === 'split') {
       a.count -= n;
-      this.list(to.bar)[to.index] = {...a, uid: this.nextUid++, count: n};
-      this.version++;
-      return 'split';
+      const piece: ItemStack = {...a, uid: this.nextUid++, count: n};
+      delete piece.bag;
+      to.list[to.index] = piece;
+      result = 'split';
+    } else {
+      to.list[to.index] = a;
+      from.list[from.index] = b;
+      result = 'swapped';
     }
-    if (!whole) return 'refused';
-    this.list(to.bar)[to.index] = a;
-    this.list(from.bar)[from.index] = b;
+    this.resizePack(cap);
+    this.refusal = null;
     this.version++;
-    return 'swapped';
+    return result;
   }
 
   hasRoomFor(itemId: string): boolean {
     const def = itemDef(itemId);
+    if (def.gear && !this.gearSlots[GEAR_SLOTS.indexOf(def.gear.slot)]) return true; // worn straight away
+    if (isBagItem(itemId)) return false;
     for (const s of [...this.hotbar, ...this.pack]) {
       if (!s) return true;
       if (s.itemId === itemId && s.count < def.stackMax) return true;
@@ -198,29 +545,101 @@ export class Inventory {
   }
 
   find(uid: number): SlotRef | null {
-    for (const bar of ['hotbar', 'pack'] as Bar[]) {
+    for (const bar of ['hotbar', 'pack', 'gear'] as Bar[]) {
       const i = this.list(bar).findIndex(s => s?.uid === uid);
       if (i >= 0) return {bar, index: i};
     }
     return null;
   }
 
+  // --- Iteration 16 (GEAR): snapshots for lane RUN (carryover, Retry level) ---------------------------------------------
+
+  toJSON(): InventoryJSON {
+    const gear = {} as Record<GearSlot, StackJSON | null>;
+    GEAR_SLOTS.forEach((slot, i) => { gear[slot] = stackToJSON(this.gearSlots[i]); });
+    return {v: 1, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), gear, selected: this.selected, nextUid: this.nextUid};
+  }
+
+  /** A new inventory from a snapshot (deep; same uids; nextUid above every uid). */
+  static fromJSON(j: InventoryJSON): Inventory {
+    const inv = new Inventory();
+    inv.loadJSON(j);
+    return inv;
+  }
+
+  /** Restore a snapshot IN PLACE (keeps this object, which the UI / container closures hold). */
+  loadJSON(j: InventoryJSON): void {
+    const hot = (j.hotbar ?? []).map(stackFromJSON);
+    const gear = GEAR_SLOTS.map(slot => stackFromJSON(j.gear?.[slot] ?? null));
+    const pack = (j.pack ?? []).map(stackFromJSON);
+    this.hotbar.fill(null);
+    for (let i = 0; i < HOTBAR_SIZE; i++) this.hotbar[i] = hot[i] ?? null;
+    this.gearSlots.fill(null);
+    gear.forEach((s, i) => { if (s && gearSpec(s.itemId)?.slot === GEAR_SLOTS[i]) this.gearSlots[i] = s; });
+    const cap = this.capacity;
+    this.pack.length = 0;
+    for (let i = 0; i < cap; i++) this.pack.push(pack[i] ?? null);
+    let maxUid = 0;
+    const all = [...this.hotbar, ...this.pack, ...this.gearSlots].flatMap(stacksIn);
+    for (const s of all) maxUid = Math.max(maxUid, s.uid);
+    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...gear.filter((s, i) => s && this.gearSlots[i] !== s)].filter((s): s is ItemStack => !!s);
+    for (const s of stray) for (const x of stacksIn(s)) maxUid = Math.max(maxUid, x.uid);
+    this.nextUid = Math.max(j.nextUid ?? 1, maxUid + 1);
+    this.selected = Math.max(0, Math.min(HOTBAR_SIZE - 1, Math.floor(j.selected ?? 0)));
+    // a malformed snapshot never loses items silently: strays go back in through add()
+    for (const s of stray) if (this.add(s) > 0) console.warn(`Inventory.loadJSON: no room for ${s.itemId} ×${s.count}`);
+    this.refusal = null;
+    this.version = ++versionEpoch * 1_000_000;
+  }
+
+  /** Deep copy (same uids and uid counter). */
+  clone(): Inventory {
+    return Inventory.fromJSON(this.toJSON());
+  }
+
+  /** Every stack held (quick slots, pockets, worn gear; `withBag`: the worn backpack's contents too — audits / tests only). */
+  allStacks(withBag = false): ItemStack[] {
+    const top = [...this.hotbar, ...this.pack, ...this.gearSlots].filter((s): s is ItemStack => !!s);
+    return withBag ? top.flatMap(stacksIn) : top;
+  }
+
   /** Debug/test invariant check. */
   invariants(): string[] {
     const out: string[] = [];
     const uids = new Set<number>();
-    for (const s of [...this.hotbar, ...this.pack]) {
-      if (!s) continue;
+    const check = (s: ItemStack, where: string) => {
       const def = itemDef(s.itemId);
       if (uids.has(s.uid)) out.push(`duplicate uid ${s.uid}`);
       uids.add(s.uid);
+      if (s.uid >= this.nextUid) out.push(`uid ${s.uid} not below nextUid ${this.nextUid}`);
       if (s.count < 1 || s.count > def.stackMax) out.push(`bad count ${s.itemId}:${s.count}`);
       if (def.kind === 'weapon') {
         const w = WEAPONS[def.weaponId!];
         if (s.mag === undefined || s.mag < 0 || s.mag > w.magazine) out.push(`bad mag ${s.itemId}:${s.mag}`);
       }
-    }
-    if (this.hotbar.length !== HOTBAR_SIZE || this.pack.length !== PACK_SIZE) out.push('slot arrays resized');
+      const slots = def.gear?.bagSlots ?? 0;
+      if (slots > 0) {
+        if (where !== 'gear:backpack') out.push(`backpack in ${where}`);
+        if (!s.bag || s.bag.length !== slots) out.push(`backpack ${s.uid} contents size ${s.bag?.length ?? 'missing'} != ${slots}`);
+        for (const c of s.bag ?? []) {
+          if (!c) continue;
+          if (isBagItem(c.itemId)) out.push(`backpack inside backpack ${s.uid}`);
+          if (c.bag) out.push(`nested contents in ${c.itemId}`);
+          check(c, 'bag');
+        }
+      } else if (s.bag) out.push(`non-bag ${s.itemId} carries contents`);
+    };
+    this.hotbar.forEach(s => s && check(s, 'hotbar'));
+    this.pack.forEach(s => s && check(s, 'pack'));
+    this.gearSlots.forEach((s, i) => {
+      if (!s) return;
+      const slot = GEAR_SLOTS[i];
+      if (gearSpec(s.itemId)?.slot !== slot) out.push(`${s.itemId} in gear slot ${slot}`);
+      check(s, `gear:${slot}`);
+    });
+    if (this.hotbar.length !== HOTBAR_SIZE) out.push('slot arrays resized');
+    if (this.pack.length !== this.capacity) out.push(`pockets ${this.pack.length} != capacity ${this.capacity}`);
+    if (this.gearSlots.length !== GEAR_SLOTS.length) out.push('gear slots resized');
     if (this.selected < 0 || this.selected >= HOTBAR_SIZE) out.push('bad selection');
     return out;
   }

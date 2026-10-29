@@ -41,7 +41,7 @@ export interface ItemDef {
 }
 
 import {GEAR_DIMS, GEAR_ITEMS, type GearIconKey, type GearSpec} from './gear';
-import {MEDICAL_DIMS, MEDICAL_ITEMS, type Limb, type MedicalIconKey} from './medical';
+import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey} from './medical';
 
 export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles'] as const;
 export const DRINK_IDS = ['water', 'cola', 'juice'] as const;
@@ -108,6 +108,7 @@ export function effectText(def: ItemDef): string {
   if (def.hunger) out.push(`${signed(def.hunger)} food`);
   if (def.thirst) out.push(`${signed(def.thirst)} water`);
   if (def.recharge) out.push(`flashlight battery ${Math.round(def.recharge * 100)} %`); // Iteration 12 (LIGHT)
+  if (def.treats?.length) out.push(`treats ${def.treats.length > 1 ? `${treatsText(def.treats)} injuries` : `a ${treatsText(def.treats)} injury`}`); // Iteration 16 (lane INJURY)
   return out.join(' · ');
 }
 
@@ -126,6 +127,7 @@ export function useHint(def: ItemDef): string {
 /** Use-bar label: "Drinking water…", "Eating chips…", "Using bandage…". */
 export function useLabel(def: ItemDef): string {
   const verb = def.verb === 'eat' ? 'Eating' : def.verb === 'drink' ? 'Drinking' : 'Using';
+  if (def.treats?.length) return `Applying ${def.short.toLowerCase()}…`; // Iteration 16 (lane INJURY): limb treatment
   return `${verb} ${def.short.toLowerCase()}…`;
 }
 

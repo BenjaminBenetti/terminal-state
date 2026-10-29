@@ -18,7 +18,11 @@ export type RoomType =
   // Iteration 04: storefront units built into hall walls (restaurant counter units / retail shops).
   | 'eatery' | 'shop'
   // Iteration 08 (Lane A): enclosed public stair cores between levels (lobby, flights, landings).
-  | 'stair-core';
+  | 'stair-core'
+  // Iteration 16 (WORLD-GEN): office tower (gen/office/*) — lobby halls, corridors / elevator lobbies, open-plan cubicle
+  // farms, enclosed office rooms (private / meeting / break / copy / storage / server / executive: by purpose), the elevator
+  // cab and the stairwell vestibule. Never produced by generateStation.
+  | 'office-lobby' | 'office-corridor' | 'office-open' | 'office-room' | 'office-elevator' | 'office-stair';
 
 /**
  * Macro station archetype (iteration 04): recognisably different structures, not one template.
@@ -104,6 +108,13 @@ export interface LightPlacement {
   x: number; y: number; z: number; rot: number; area: number; broken: boolean; flicker: boolean; warm: boolean; power: number; dying: boolean;
   /** Iteration 08: level whose grid the fixture hangs in (default 0); y is absolute. */
   level?: number;
+  /**
+   * Iteration 16 (WORLD-GEN): a light-field source with NO fixture (no fixture model, no tube): the dim cool daylight that
+   * falls in through the office windows. Baked like any fixture (state from applyLighting is overridden: steady).
+   */
+  virtual?: boolean;
+  /** Iteration 16 (WORLD-GEN): light colour override (linear RGB, ~unit luminance) for the baked field (daylight). */
+  tint?: readonly [number, number, number];
 }
 /**
  * Wall-mounted (default) or hanging (`hang`, double-sided) sign. station = name plate, exit/info =
@@ -247,6 +258,82 @@ export interface StationLayout {
   spawnEnd?: 'W' | 'E';
   /** The multi-level program (cells; gen/levelGen.ts): cores, deck range, wells, level areas. QA / tests. */
   levelPlan?: LevelPlan;
+  /** Iteration 16 (WORLD-GEN): office-tower section data (gen/office/index.ts); absent on the Subway. */
+  office?: OfficeSectionInfo;
+}
+
+// ---------------------------------------------------------------------------------------
+// Iteration 16 (WORLD-GEN): office tower sections (gen/office/*). World metres in the section's grid frame.
+
+export interface OfficeRect { x0: number; z0: number; x1: number; z1: number }
+/** Player pose: yaw in the camera convention (forward = (-sin yaw, -cos yaw)); level = layout.levels index. */
+export interface OfficePose { x: number; z: number; yaw: number; level: number }
+export type OfficeArrivalKey = 'start' | 'elevator' | 'stairs-up' | 'stairs-down';
+
+export interface OfficeElevatorInfo {
+  /** Cab interior: walkable FLOOR cells at floorY on the office storey, no props, enclosed by SOLID shaft walls but the door. */
+  cab: OfficeRect;
+  /** Cab wall holding the door ('N': the door is on the cab's north edge, you step out toward -Z). */
+  doorSide: Side;
+  /** Centre of the door opening on the cab edge of doorSide, and its width (m). The opening cells are walkable. */
+  door: {x: number; z: number; width: number};
+  /** Floor panel inside the cab (door wall's inner face, beside the opening); absolute y. */
+  panel: {x: number; y: number; z: number};
+  /** Call button outside, on the shaft wall's corridor face beside the opening; absolute y. */
+  callPanel: {x: number; y: number; z: number};
+  /** Cab floor (absolute) = the storey floor. */
+  floorY: number;
+  /** Cab area id. */
+  area: number;
+  /** Shaft outer box (walls included). */
+  shaft: OfficeRect;
+}
+
+export interface OfficeStairDoor {
+  dir: 'up' | 'down';
+  /** Door centre on the walkable side of the wall face. */
+  x: number; z: number;
+  /** Yaw of a player standing in front of it FACING the door. */
+  yaw: number;
+  toFloor: number;
+}
+
+export interface OfficeWindowSpan extends OfficeRect {
+  /** Outward facing direction of the wall. The span box covers the (SOLID) wall cells. */
+  side: Side;
+  /** Sill / head heights ABOVE the storey floor (m). */
+  sill: number;
+  head: number;
+  /** 'entrance': the lobby's street doors (sill 0) — boarded scenery, the wall cells stay solid. */
+  kind: 'window' | 'entrance';
+}
+
+export interface OfficeSectionInfo {
+  /** 1 = lobby (the street section's upper storey), 2.. = office floors. */
+  floor: number;
+  /** Every floor of the tower ([1..8]). */
+  floors: number[];
+  /** Storey height (m), uniform: exterior ground y = baseY - floorHeight * (floor - 1). */
+  floorHeight: number;
+  /** layout.levels index of the office storey (street: 1, the lobby; floors: 0). */
+  levelId: number;
+  /** Storey floor height (= levels[levelId].baseY). */
+  baseY: number;
+  elevator: OfficeElevatorInfo;
+  /** Stairwell door(s): one door per floor (up + down entries share its spot); none 'down' in the lobby. */
+  stairDoors: OfficeStairDoor[];
+  /** Perimeter window spans (the wall faces are cut open by the builder; glass = lane TOWER). */
+  windows: OfficeWindowSpan[];
+  /** Tower footprint: outer faces of the perimeter wall ring. Scenery goes outside it. */
+  exterior: OfficeRect;
+  /** Player arrival poses per ArrivalKind (levels/types.ts); 'return' = 'start'. */
+  arrivals: Partial<Record<OfficeArrivalKey, OfficePose>>;
+  /** Tower name (signage / HUD). */
+  name: string;
+  /** Section seed (= layout.seed). */
+  sectionSeed: number;
+  /** Optional candidate gear spots (lane GEAR may use them): flat reachable floor in back-of-house office rooms. */
+  gearSpots?: {x: number; y: number; z: number; level: number; area: number}[];
 }
 
 /** Working canvas for generation (cells); the finished layout is cropped to its bounds. */

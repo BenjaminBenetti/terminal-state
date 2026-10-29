@@ -29,6 +29,7 @@
 
 import {purposeById, type LootTheme} from '../gen/purposes';
 import {ITEMS} from './items';
+import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical'; // Iteration 16 (lane INJURY)
 
 export type {LootTheme};
 
@@ -41,7 +42,9 @@ export const FLARE_ID = 'flare';
 
 const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles']);
 const DRINK = new Set(['water', 'cola', 'juice']);
-const MED = new Set(['bandage', 'medkit']);
+/** HP medicine (bandage / med kit). Iteration 16 (lane INJURY): the limb treatments (items/medical.ts) are 'med' too. */
+export const HP_MED: ReadonlySet<string> = new Set(['bandage', 'medkit']);
+const MED = new Set([...HP_MED, ...LIMB_TREATMENT_IDS]);
 
 export function econCat(itemId: string): EconCat | null {
   if (itemId.startsWith('ammo_')) return 'ammo';
@@ -208,7 +211,29 @@ export function scarceFinds(raw: readonly Entry[], ctx: FindContext, s: Rnd): Fi
     const count = cat !== 'ammo' ? 1 : on ? ctx.boxCount(itemId, s) : range(s, HANDFUL[itemId] ?? [3, 6]);
     out.push({itemId, count, source: 'find'});
   }
+  limbTreatments(out, theme, s); // Iteration 16 (lane INJURY)
   return out;
+}
+
+/**
+ * Iteration 16 (lane INJURY): LIMB TREATMENTS (items/medical.ts). After every original decision, each HP-med find (bandage / med
+ * kit) becomes a limb treatment with probability `share[theme]` — a leg splint or an arm sling, now and then a trauma kit. Its draws
+ * are APPENDED to the holder's scarcity stream (after the loop), so every other find of every holder is exactly as before; the
+ * med total is unchanged (some dressings become treatments). Medical rooms (first-aid rooms, pharmacies, supply closets, wall
+ * first-aid kits there) lead. Tuned so treatments are about as common as med kits and rarer than bandages (lanes/injury.done:
+ * measured per Subway station and per Office level).
+ */
+export const LIMB_ECONOMY = {
+  share: {medical: 0.27, personal: 0.2, security: 0.2, service: 0.2, tech: 0.2, public: 0.19, food: 0.14} as Readonly<Record<LootTheme, number>>,
+  pool: [[LEG_SPLINT, 1], [ARM_SLING, 1], [TRAUMA_KIT, 0.3]] as readonly (readonly [string, number])[],
+};
+
+function limbTreatments(out: Find[], theme: LootTheme, s: Rnd): void {
+  const share = LIMB_ECONOMY.share[theme] ?? 0;
+  for (const f of out) {
+    if (f.source !== 'find' || !HP_MED.has(f.itemId)) continue;
+    if (s() < share) { f.itemId = pickRow(LIMB_ECONOMY.pool, s); f.count = 1; }
+  }
 }
 
 // ---------------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import {freshSeed, mulberry32, seedToCode} from './core/rng';
 import {PropIndex, moveCircle} from './core/physics';
 import {CELL, PathFinder, nearestWalkable} from './gen/grid';
 import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
-import {generateStation, type StationLayout} from './gen/station';
+import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorld, type BuiltWorld} from './world/builder';
@@ -14,7 +14,7 @@ import {fogCullDistance} from './world/levelCulling';
 import {WorldMaterials} from './world/materials';
 import {MOOD, StationLighting} from './world/lights';
 import {VolumetricAtmosphere} from './render/volumetric';
-import {PickupManager, makeSupplyMesh, registerItemModels} from './world/pickups';
+import {PickupManager, makeSupplyMesh, registerItemModels, type Pickup} from './world/pickups';
 import {Survival, survivalTicks} from './player/survival';
 import {ContainerManager, type ContainerEvent, type ContainerTarget} from './world/containers';
 import {SoundGate} from './world/openables';
@@ -49,7 +49,21 @@ import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwab
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
+import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
+import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
+import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
+// Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
+import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, floorOfSection, sectionLabel} from './levels/registry';
+import {rollLevelGear} from './levels/gearAdapter';
+import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
+import {createRun, type RunState} from './run/runState';
+import {mergeKilled, pickupPlan} from './run/memory';
+import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
+import {starterInventory} from './run/starter';
+import {applyHolders, captureHolders, capturePickups, restorePickup} from './run/worldMemory';
+import {runBagStore} from './run/bagStore';
+import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 // Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
@@ -59,7 +73,8 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 
-export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
+/** Iteration 16 (RUN): 'travelling' = an in-world (elevator / stair door) travel is building the next section: gameplay frozen, pointer lock kept. */
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'travelling';
 
 export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high' }
 
@@ -72,6 +87,8 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 /** Iteration 14: where a warm-up shows its progress (the title's loading bar, or the pause panel's status line). */
 export interface WarmupUi { bar: HTMLElement | null; label: HTMLElement; button: HTMLButtonElement | null }
 const titleWarmupUi = (): WarmupUi => ({bar: $('#load .fill'), label: $('#load .label'), button: $('#btn-start') as HTMLButtonElement});
+/** Iteration 16: let the browser paint a loading screen / overlay before a long synchronous generation. */
+const nextPaint = () => new Promise<void>(r => setTimeout(r, 30));
 
 export function warmupMode(search: string, software: boolean): WarmupMode {
   const v = new URLSearchParams(search).get('warmup');
@@ -104,7 +121,6 @@ export class Game {
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
   readonly propModels = new PropModelLibrary(P7_FILES);
-  private prepared: {seed: number; layout: StationLayout} | null = null;
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
   /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */
@@ -169,6 +185,27 @@ export class Game {
   readonly aimOffset = {yaw: 0, pitch: 0};
   /** Per-frame lane updates while playing (after the player moved, before the camera update). */
   readonly frameHooks: ((dt: number) => void)[] = [];
+  /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
+  readonly injuries: InjurySystem;
+  // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
+  /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+  /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
+  arrival: Arrival = {kind: 'start'};
+  /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
+  readonly runParticipants: RunParticipant[] = [];
+  /** Called on every setState (lanes close their UIs when the state leaves 'playing'; travel uses 'travelling'). */
+  readonly stateListeners: ((state: GameState, prev: GameState) => void)[] = [];
+  /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
+  readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
+  /** One lifecycle operation at a time: travel, new game, retry level. */
+  private readonly lifecycle = new SingleFlight();
+  /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
+  private readonly layoutPickup = new Map<Pickup, number>();
+  /** Live enemies -> their layout.zombies index (kills are remembered per index). */
+  private readonly enemyIndex = new Map<EnemyActor, number>();
+  /** The current section was already cleared in this run (no second clear moment). */
+  private sectionCleared = false;
   /** Flashlight switched on (Iteration 12: backed by the battery; a flat battery keeps it off). */
   get flashlightOn(): boolean { return this.torch.battery.on; }
   set flashlightOn(v: boolean) { this.torch.battery.setOn(v); }
@@ -211,7 +248,6 @@ export class Game {
   private retired: (() => void)[] = [];
   /** Iteration 14: bumped by newStation (a running warm-up for the previous station stops at its next chunk). */
   private stationGen = 0;
-  private restarting = false;
   /** Iteration 08: renderer string + whether it is a software rasterizer (anisotropy capped at 1 there). Iteration 13: set by initRenderer(). */
   softwareGl: SoftwareGlState | null = null;
   lastError: string | null = null;
@@ -274,8 +310,11 @@ export class Game {
       equip: ref => this.equipRef(ref),
       close: () => this.closeInventory(),
       changed: () => this.syncHeld(),
-      vitals: () => ({hp: this.player.hp, maxHp: this.player.maxHp, food: this.survival.hunger, water: this.survival.thirst}),
+      vitals: () => ({hp: this.player.hp, maxHp: this.player.maxHp, food: this.survival.hunger, water: this.survival.thirst, limbs: injuryStatusHtml(this.injuries)}),
     });
+    // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
+    this.injuries = installInjuries(this, {aiming: () => this.aiming});
+    void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => { if (this.state === 'playing' && !this.qa) this.setState('paused'); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') this.setState('paused'); });
@@ -315,6 +354,7 @@ export class Game {
     const lb = new THREE.Box3().setFromObject(m.light.scene).getSize(new THREE.Vector3());
     this.mats = new WorldMaterials(this.assets.textures, 20261025, {w: lb.x, h: lb.y, d: lb.z});
     // Food/drink use the generated item models when the manifest has them (else stand-ins).
+    await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
     for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
@@ -348,27 +388,43 @@ export class Game {
     return this.currentSeed;
   }
 
-  /**
-   * Iteration 07 (Lane P2): generates the station for `seed` and fetches exactly the lazy prop models it placed BEFORE it is built and
-   * revealed (newStation reuses this layout). Cached models resolve at once; a model that fails is dropped from the station, never boxed.
-   */
-  async prepareStation(seed: number, onProgress?: (frac: number, label: string) => void): Promise<void> {
-    const layout = generateStation(seed >>> 0, {startWeapon: this.startWeapon});
-    await this.propModels.ensure(p7ModelKeysFor(layout), onProgress);
-    this.prepared = {seed: seed >>> 0, layout};
+  // ==== Iteration 16 (lane RUN): sections, travel and run carryover =====================================================
+  // A RUN lasts from NewGame to the next NewGame. Travel (elevator / stair door / pause-menu level change) moves the SAME
+  // live player state (inventory with gear and backpack contents, hp / stamina, hunger / thirst, battery, injuries) to
+  // another section; only NewGame resets it, and Retry level restores the snapshot taken when the level was entered.
+
+  /** Generate a section of `run` (levels/registry.ts; the section's gear from the run's level-wide roll). Deterministic. */
+  generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
+    return LEVELS[key.level].generate(key.section, {levelSeed: run.seeds[key.level], startWeapon: this.startWeapon, gear: run.gearFor(key)});
   }
 
-  newStation(seed: number): void {
+  /**
+   * Iteration 07 (Lane P2) / 16: generates a section and fetches exactly the lazy prop models it placed (plus the lanes'
+   * section preloads) BEFORE it is built and revealed. Cached models resolve at once; a model that fails is dropped from
+   * the section, never boxed.
+   */
+  async prepareSection(key: SectionKey, run: RunState = this.run, onProgress?: (frac: number, label: string) => void): Promise<StationLayout> {
+    const layout = this.generateSection(key, run);
+    await this.propModels.ensure(p7ModelKeysFor(layout), onProgress);
+    for (const pre of this.sectionPreloads) {
+      try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
+    }
+    return layout;
+  }
+
+  /**
+   * Iteration 16: tear the live section down. Lane hooks first (run.current is still this section and its world is alive:
+   * lanes save their section data), then — on a travel — RUN's memory of it, then the world itself.
+   */
+  private leaveSection(save: boolean): void {
     this.stationGen++; // Iteration 14: invalidates a warm-up of the previous station
-    this.currentSeed = seed >>> 0;
-    this.rand = mulberry32(seed ^ 0x5bd1e995);
-    // tear down the previous run
     // Iteration 14 (user: "when I load a new station the stutters come back"): three r186 frees a node build / pipeline /
     // program when its LAST user is disposed, and the next station needs the same ones (zombie + wound materials, glow,
     // instanced variants). The old station leaves the scene now; its GPU releases are queued and run only after the new
     // station's warm-up re-used those programs (prepareGraphics), instead of rebuilding them at the start of the level.
     this.flushRetired(); // anything still queued from an earlier station
     if (this.world) for (const h of this.sectionHooks) h.teardown?.(); // Iteration 16: lane section state (elevator, grounded bags, …)
+    if (this.world && save) this.saveSectionMemory();
     if (this.world) {
       const oldGroup = this.world.group;
       this.scene.remove(oldGroup);
@@ -384,9 +440,12 @@ export class Game {
     }
     for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
+    this.enemyIndex.clear();
     this.pickups.clear();
+    this.layoutPickup.clear();
     this.containers?.clear();
     this.containerTarget = null;
+    this.currentTarget = null;
     this.fx.clear();
     this.damage.clear(fn => this.retire(fn)); // Iteration 14: the zombies' wound material clones are released after the warm-up too
     this.use = null;
@@ -394,11 +453,30 @@ export class Game {
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
     this.lmbLatch = false;
+    this.aiming = false;
+  }
 
+  /** Iteration 16: what the player changed in the live section -> its run memory (loose items with poses, holder lots, kills). */
+  private saveSectionMemory(): void {
+    const mem = this.run.memory(this.run.current);
+    mem.pickups = capturePickups(this.pickups.list, p => this.layoutPickup.get(p));
+    if (this.containers) mem.holders = captureHolders(this.containers);
+    const dead = this.zombies.filter(z => !z.brain.alive).map(z => this.enemyIndex.get(z)).filter((i): i is number => i !== undefined);
+    mem.killed = mergeKilled(mem.killed, dead);
+  }
+
+  /**
+   * Iteration 16: build `layout` as the live section `key` and put the player in it by `arrival`. `fresh` = NewGame
+   * (Player.spawn: full health); otherwise Player.place keeps hp / stamina. The inventory, survival, battery and lane
+   * state are NOT touched here (callers: newGame resets them before, retryLevel restores them before, travel keeps them).
+   * The section's memory is applied: killed enemies stay dead, taken loot stays taken, dropped items come back once.
+   */
+  private buildSection(key: SectionKey, layout: StationLayout, arrival: Arrival, fresh: boolean): void {
     const t0 = performance.now();
+    this.layout = layout;
+    this.currentSeed = layout.seed >>> 0;
+    this.rand = mulberry32(layout.seed ^ 0x5bd1e995);
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
-    this.layout = this.prepared?.seed === (seed >>> 0) ? this.prepared.layout : generateStation(seed, {startWeapon: this.startWeapon});
-    this.prepared = null;
     const p7Keys = p7ModelKeysFor(this.layout);
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
     this.propModels.trim(new Set(p7Keys));
@@ -424,6 +502,9 @@ export class Game {
     if (!this.stock.group.parent) { this.scene.add(this.stock.group); this.stock.filler.attach(this.physics); }
     this.stock.build(this.layout, {models: this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>,
       lotsOf: p => cm.holderFor(p)?.state.lots.map(l => placementBox(l.itemId, l)) ?? []});
+    // Iteration 16 (RUN): holders as the player left them (taken lots stay taken; the shelf filler keeps the gaps)
+    const mem = this.run.memory(key);
+    applyHolders(cm, mem.holders);
     // Iteration 08 (Lane I): a shot trash can / wheelie bin still goes loose — its lid pops, its finite lots spill as pickups.
     this.physics.dynamicItems.holderLoose = p => { const carried = cm.goLoose(p); this.world.culler.release(carried); return carried; }; // Lane G: moving now
     this.physics.dynamicItems.walkers = () => [{id: this.player, x: this.player.x, z: this.player.z, y: this.player.y, r: this.player.radius},
@@ -459,42 +540,293 @@ export class Game {
     this.world.culler.register(this.containers.group);
     this.world.culler.register(this.stock.group);
     this.world.culler.maxDistance = fogCullDistance(MOOD.fogDensity);
-    const sp = this.layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};
-    this.player.spawn(sp.x, sp.z, sp.yaw, sp.y ?? this.levels.grid(sp.level ?? 0).floorAt(sp.x, sp.z)); // Lane B: the spawn's own storey
-    this.ladderAim = null;
-    this.survival.reset(); // food/water 80/80 on spawn, new station and retry
-    this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
 
-    this.lightSources.clear(); // Iteration 12: lights of the previous station / life (re-registered by the light lane)
-    this.torch.reset(); // Iteration 12 (LIGHT): battery back to its 80 % start, light on, no dip in progress
-    this.inv = new Inventory();
-    // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
-    if (this.startWeapon === 'pistol') this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('pistol', 1, WEAPONS.pistol.magazine));
-    else this.inv.set({bar: 'hotbar', index: 0}, this.inv.makeStack('rifle', 1, 30));
-    this.inv.set({bar: 'hotbar', index: 4}, this.inv.makeStack('bandage', 1));
-    this.inv.add(this.startWeapon === 'pistol' ? this.inv.makeStack('ammo_pistol', 45) : this.inv.makeStack('ammo_rifle', 60));
-    this.inv.add(this.inv.makeStack('flare', 1)); // Iteration 12 (primary): ONE starting flare teaches T-throw; all others are scarce finds
-    this.inv.select(0);
-    this.lastSlot = 0;
+    // Iteration 16 (RUN): the section is now the run's current one; the player arrives by `arrival` (layout.office.arrivals)
+    this.run.current = {...key};
+    this.run.arrival = {...arrival};
+    this.arrival = {...arrival};
+    mem.visits++;
+    const pose = arrivalPose(this.layout, arrival);
+    const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
+    const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
+    if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
+    this.ladderAim = null;
+    this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
+    this.lightSources.clear(); // Iteration 12: lights of the previous section (the flashlight / body glow re-register on the next update)
+    // A fresh controller re-equips the held weapon (a reload in progress is cancelled: ammo is only taken when it completes)
     this.weapon = new WeaponController();
     this.syncHeld();
 
     // Iteration 05: each zombie wears a seeded body x outfit look (deterministic per station seed + spawn index; 'coated' = heavy coat outfit).
     // Falls back to the legacy single template (zombie-rigged.glb: Last-shift body + coat) when no registry body model is loaded.
     // Iteration 07 (Lane Q): each spawn's archetype comes from the layout (~5 % rat/dog, ai/creatureSpawn.ts).
+    // Iteration 16 (RUN): enemies killed earlier in this run stay dead (not spawned again).
     this.enemyFallbacks = 0;
-    this.layout.zombies.forEach((s, i) => this.spawnEnemy(s, i));
-    for (const p of this.layout.pickups) this.pickups.add(this.inv.makeStack(p.itemId, p.count), p.x, p.y, p.z, this.rand() * Math.PI * 2);
-    this.stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
+    const killed = new Set(mem.killed);
+    this.layout.zombies.forEach((s, i) => { if (!killed.has(i)) this.enemyIndex.set(this.spawnEnemy(s, i), i); });
+    // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
+    const plan = pickupPlan(this.layout.pickups.length, mem);
+    for (const i of plan.fromLayout) {
+      const p = this.layout.pickups[i];
+      this.layoutPickup.set(this.pickups.add(this.inv.makeStack(p.itemId, p.count), p.x, p.y, p.z, this.rand() * Math.PI * 2), i);
+    }
+    for (const rec of plan.restored) {
+      const pk = restorePickup(this.pickups, this.inv, rec);
+      if (rec.layoutIndex !== undefined) this.layoutPickup.set(pk, rec.layoutIndex);
+    }
     this.wonAt = -1;
+    this.wonShown = false;
+    this.sectionCleared = mem.cleared;
     this.hud.reset();
     // Lane F: enemies block the flashlight beam — marked once per actor in spawnEnemy (iteration 07, Lane Q)
     this.genMs = performance.now() - t0;
-    $('#seed-line').textContent = `Station: ${this.layout.name} · code ${seedToCode(seed)} (debug/share only; reloading the page always makes a new station)`;
+    const codes = LEVEL_IDS.map(l => `${LEVELS[l].name} ${seedToCode(this.run.seeds[l])}`).join(' · ');
+    $('#seed-line').textContent = `${LEVELS[key.level].name} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
+    const obj = document.querySelector('#objective .obj-title');
+    if (obj) obj.textContent = key.level === 'office' ? (key.section === 'street' ? 'Clear the street station' : `Clear floor ${floorOfSection(key)}`) : 'Clear the station';
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.updateCamera(0);
   }
   genMs = 0;
+
+  /** Iteration 16: run-scoped lane systems that exist but registered no participant (INJURY / GEAR) — wired once, idempotent. */
+  private wireRunLanes(): void {
+    const self = this as unknown as {
+      injuries?: {snapshot?(): unknown; restore?(d: unknown): void; reset?(): void};
+      gear?: {reset?(): void; setStore?(s: unknown): void};
+    };
+    const inj = self.injuries;
+    if (inj?.snapshot && inj.restore && inj.reset && !this.runParticipants.some(p => p.id === 'injuries')) {
+      this.runParticipants.push({id: 'injuries', save: () => inj.snapshot!(), load: d => inj.restore!(d), reset: () => inj.reset!()});
+    }
+    const gear = self.gear;
+    if (gear?.setStore && !this.bagStoreWired) { gear.setStore(runBagStore(() => this.run)); this.bagStoreWired = true; }
+    // GEAR's own state (open bag view, readied bag) is closed by its section teardown; NewGame resets it. Its bags and worn
+    // gear live in RUN memory / the Inventory, so a snapshot needs nothing from it.
+    if (gear?.reset && !this.runParticipants.some(p => p.id === 'gear')) this.runParticipants.push({id: 'gear', save: () => null, load: () => {}, reset: () => gear.reset!()});
+  }
+  private bagStoreWired = false;
+
+  /** Iteration 16: install an inventory (in place when lane GEAR's loadJSON exists, keeping the object identity; else replace). */
+  private installInventory(inv: Inventory): void {
+    const live = this.inv as unknown as {loadJSON?(j: unknown): void};
+    const next = inv as unknown as {toJSON?(): unknown};
+    if (typeof live.loadJSON === 'function' && typeof next.toJSON === 'function') live.loadJSON(next.toJSON());
+    else this.inv = inv;
+    this.lastSlot = this.inv.selected;
+  }
+
+  /** Iteration 16: NewGame state — fresh starter kit, survival 80/80, battery 80 %, lane state reset, run stats zeroed (hp: Player.spawn). */
+  private resetCarry(): void {
+    this.survival.reset(); // food/water 80/80
+    this.torch.reset(); // Iteration 12 (LIGHT): battery back to its 80 % start, light on, no dip in progress
+    // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
+    this.installInventory(starterInventory(this.startWeapon));
+    this.lastSlot = 0;
+    this.stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
+    resetParticipants(this.runParticipants);
+  }
+
+  /** Iteration 16: Retry level — the carry state exactly as it was when the level was entered (no free heal or refill). */
+  private restoreCarryFrom(snap: RunSnapshot): void {
+    this.torch.reset(snap.battery.charge); // re-registers the light sources; the exact on / died flags follow
+    this.survival.reset();
+    const inv = restoreCarry(snap, {player: this.player, survival: this.survival, battery: this.torch.battery, stats: this.stats});
+    this.torch.battery.update(0); // output from the restored flags
+    this.installInventory(inv);
+    this.player.alive = this.player.hp > 0;
+    restoreParticipants(snap, this.runParticipants);
+  }
+
+  /** Iteration 16: the Retry-level snapshot of the level just entered (carry state + that level's section memories). */
+  private levelEntrySnapshot(): RunSnapshot {
+    const k = this.run.current;
+    return takeSnapshot({level: k.level, section: k.section, arrival: this.arrival},
+      {inv: this.inv, player: this.player, survival: this.survival, battery: this.torch.battery, participants: this.runParticipants, stats: this.stats},
+      this.run.levelMemories(k.level));
+  }
+
+  /** Iteration 16: from a click — audio resumes and pointer lock is requested inside the gesture (the rebuild can outlast it). */
+  private beginGesture(): Promise<boolean> {
+    this.sfx.init();
+    return this.input.lock();
+  }
+
+  /** Iteration 16: the title panel as the loading screen (menu travel, new game, retry). */
+  private showLoading(intro: string, label: string): WarmupUi {
+    const ui = titleWarmupUi();
+    $('#station-intro').textContent = intro;
+    if (ui.bar) ui.bar.style.width = '0%';
+    ui.label.textContent = label;
+    if (ui.button) ui.button.disabled = true;
+    $('#title').dataset.mode = 'loading';
+    if (this.state !== 'loading') this.setState('loading');
+    return ui;
+  }
+
+  /** Iteration 16: lazy-model progress on a warm-up UI. */
+  private progressTo(ui: WarmupUi, what: string): (f: number, file: string) => void {
+    return (f, file) => { if (ui.bar) ui.bar.style.width = `${Math.round(f * 100)}%`; ui.label.textContent = `${what} · ${file} · ${Math.round(f * 100)}%`; };
+  }
+
+  /** Iteration 16: the warm-up is done — the loading screen's ready line (and the start button). */
+  private readyLine(ui: WarmupUi, w: WarmupResult): void {
+    const note = warmupNote(w);
+    ui.label.textContent = `Ready · ${this.layout.areas.length} spaces generated${note ? ` · ${note}` : ''}`;
+    if (ui.bar) ui.bar.style.width = '100%';
+    if (ui.button) ui.button.disabled = false;
+  }
+
+  /**
+   * Iteration 16 (RUN): NEW GAME — a fresh run starting at `level`'s entry section: the iteration-15 starter kit, full
+   * health, survival 80/80, battery 80 %, no injuries / gear, new level seeds (unless given) with a new gear roll, no
+   * section memories. `enter` (a click): pointer lock is requested inside the gesture and play starts after the
+   * warm-up; otherwise the caller shows the title (boot, the title's level choice). Single flight with travel / retry:
+   * resolves null if another lifecycle operation is running.
+   */
+  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void} = {}): Promise<WarmupResult | null> {
+    if (this.lifecycle.busy) return Promise.resolve(null);
+    const lock = o.enter ? this.beginGesture() : null;
+    const flight = this.lifecycle.run(async () => {
+      this.wireRunLanes();
+      const def = LEVELS[level];
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed()};
+      const key: SectionKey = {level, section: def.entry};
+      const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
+      const ui = this.showLoading(`New run · ${def.name}. ${def.blurb}`, `Generating ${def.name}…`);
+      await nextPaint();
+      const layout = await this.prepareSection(key, run, o.onProgress ?? this.progressTo(ui, 'Loading station props'));
+      await this.warmRun; // Iteration 14: never rebuild under a running warm-up (it owns the renderer state)
+      this.leaveSection(false); // the old run is discarded (lane teardown still runs against it)
+      this.run = run;
+      this.resetCarry();
+      this.buildSection(key, layout, {kind: 'start'}, true);
+      this.run.entered.push(level);
+      this.run.entry = this.levelEntrySnapshot();
+      this.updateStationIntro();
+      // Iteration 14: the new station's first-use graphics are prepared on the loading screen before play (pipelines
+      // already built for the previous station are cache hits; new instanced meshes / models are not)
+      const w = await this.prepareGraphics(ui);
+      if (w.status === 'cancelled') return w; // the device was lost
+      this.readyLine(ui, w);
+      if (lock) void lock.then(() => this.enterPlay());
+      return w;
+    });
+    return flight ?? Promise.resolve(null);
+  }
+
+  /**
+   * Iteration 16 (RUN): RETRY LEVEL (death screen) — back to the snapshot taken when this logical level was entered: the
+   * inventory, hp / stamina, hunger / thirst, battery, injuries and run stats as they were then, and the level's
+   * sections as they were then. Nothing is healed or refilled beyond that state. Single flight.
+   */
+  retryLevel(): Promise<WarmupResult | null> {
+    const snap = this.run.entry;
+    if (!snap) return this.newGame(this.run.current.level, {enter: true});
+    if (this.lifecycle.busy) return Promise.resolve(null);
+    const lock = this.beginGesture();
+    const flight = this.lifecycle.run(async () => {
+      const key: SectionKey = {level: snap.level, section: snap.section};
+      const def = LEVELS[key.level];
+      const ui = this.showLoading(`Retry · ${def.name}: back to how you entered it — the same kit, health and supplies as then.`, `Rebuilding ${def.name}…`);
+      await nextPaint();
+      const layout = await this.prepareSection(key, this.run, this.progressTo(ui, 'Loading station props'));
+      await this.warmRun;
+      this.leaveSection(false); // this level's memories are replaced by the snapshot's
+      this.run.restoreLevelMemories(snap.level, snap.memories);
+      this.restoreCarryFrom(snap);
+      this.buildSection(key, layout, snap.arrival, false);
+      this.updateStationIntro();
+      const w = await this.prepareGraphics(ui);
+      if (w.status === 'cancelled') return w;
+      this.readyLine(ui, w);
+      void lock.then(() => this.enterPlay());
+      return w;
+    });
+    return flight ?? Promise.resolve(null);
+  }
+
+  /** Iteration 16: a travel is in flight. */
+  get travelling(): boolean {
+    return this.travelReq !== null;
+  }
+  private travelReq: TravelRequest | null = null;
+
+  /**
+   * Iteration 16 (RUN): TRAVEL to another section (elevator / stair door: via 'local'; the pause menu's level change: via
+   * 'menu'). Single flight; refused when dead. Cancels transient actions (timed use, flare hold, ADS, open UIs), freezes
+   * gameplay, saves the current section's memory, generates + builds the target, applies its memory, places the player
+   * by `arrival` (nothing about the player is reset), runs the iteration-14 warm-up (full loading screen for 'menu', the
+   * compact #travel-overlay for 'local'), then resumes play. Entering another LOGICAL level takes its Retry snapshot.
+   */
+  travel(req: TravelRequest): Promise<TravelResult> {
+    const refusal = travelRefusal(req, {
+      busy: this.lifecycle.busy, alive: this.player.alive, state: this.state, ready: !!this.world && !!this.gpu,
+      sections: l => LEVELS[l]?.sections(this.run.seeds[l]) ?? null,
+    });
+    if (refusal) return Promise.resolve({ok: false, reason: refusal});
+    const local = req.via === 'local';
+    // menu: a click — lock inside the gesture; local (E / a floor-list click): keep the lock, or re-request it now
+    const lock = local ? (this.input.locked ? Promise.resolve(true) : this.input.lock()) : this.beginGesture();
+    const flight = this.lifecycle.run(async (): Promise<TravelResult> => {
+      const from = {...this.run.current};
+      const levelChange = req.to.level !== from.level;
+      const def = LEVELS[req.to.level];
+      this.travelReq = req;
+      this.cancelUse('travel');
+      this.cancelFlareHold();
+      this.aiming = false;
+      let ui: WarmupUi;
+      if (local) {
+        ui = this.travelOverlay(req.label);
+        this.setState('travelling'); // frozen; pointer lock kept
+      } else {
+        ui = this.showLoading(`${req.label}. Your inventory, gear, health, food and water, battery and injuries come with you.`, `Building ${def.name} · ${sectionLabel(req.to)}…`);
+      }
+      let built = false;
+      try {
+        await nextPaint();
+        const layout = await this.prepareSection(req.to, this.run, this.progressTo(ui, 'Loading props'));
+        await this.warmRun;
+        this.leaveSection(true);
+        built = true;
+        this.buildSection(req.to, layout, req.arrival, false);
+        if (levelChange) { this.run.entered.push(req.to.level); this.run.entry = this.levelEntrySnapshot(); }
+        this.updateStationIntro();
+        const w = await this.prepareGraphics(ui);
+        if (w.status === 'cancelled') return {ok: false, reason: 'cancelled'};
+        if (!local) this.readyLine(ui, w);
+        const ok = await lock;
+        if (local) this.setState(ok && (this.input.locked || this.qa) ? 'playing' : 'paused');
+        else if (ok) await this.enterPlay();
+        else this.setState('paused');
+        if (this.state === 'paused') $('#pause .fine').textContent = 'The browser did not capture the mouse — click Resume to try again.';
+        this.hud.toast(levelChange ? `${def.name} · ${sectionLabel(req.to)} — your kit and condition came with you` : req.label);
+        return {ok: true};
+      } catch (err) {
+        console.error('Iteration 16: travel failed', err);
+        this.lastError = String((err as Error)?.stack ?? err);
+        if (!built) { this.setState('paused'); $('#pause .fine').textContent = `Travel failed (${String((err as Error)?.message ?? err).slice(0, 120)}) — you are still here.`; }
+        else this.setState('error');
+        return {ok: false, reason: 'failed'};
+      } finally {
+        this.travelReq = null;
+        $('#travel-overlay')?.classList.add('hidden');
+      }
+    });
+    return flight ?? Promise.resolve({ok: false, reason: 'busy'});
+  }
+
+  /** Iteration 16: the compact in-world travel overlay ("Elevator · floor 5"), with the warm-up progress. */
+  private travelOverlay(label: string): WarmupUi {
+    const root = $('#travel-overlay');
+    root.querySelector('.label')!.textContent = label;
+    const bar = root.querySelector('.fill') as HTMLElement;
+    bar.style.width = '0%';
+    const sub = root.querySelector('.sub') as HTMLElement;
+    sub.textContent = 'Moving…';
+    return {bar, label: sub, button: null};
+  }
 
   /**
    * Iteration 14: a quality change (pause menu) rebuilds the atmosphere's targets — a new render context, so every
@@ -536,7 +868,11 @@ export class Game {
 
   /** Iteration 14: the title / loading screen's station line (boot and restarts). */
   updateStationIntro(): void {
-    $('#station-intro').textContent = `${this.layout.name}. ${this.layout.zombies.length} infected reported below street level. Clear them out.`;
+    // Iteration 16 (RUN): per section — what is still alive here (kills earlier in the run stay dead)
+    const k = this.run.current, n = this.zombies.filter(z => z.brain.alive).length;
+    $('#station-intro').textContent = k.level === 'office'
+      ? `Office Space · ${sectionLabel(k)} — ${this.layout.name}. ${n} infected reported ${k.section === 'street' ? 'in the station under the tower' : 'on this floor'}. Clear them out.`
+      : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
   }
 
   /**
@@ -624,12 +960,14 @@ export class Game {
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
     if (screen[s]) $('#' + screen[s]).classList.remove('hidden');
+    $('#travel-overlay')?.classList.toggle('hidden', s !== 'travelling'); // Iteration 16 (RUN): in-world travel overlay
     this.hud.show(s === 'playing' || s === 'paused' || s === 'inventory');
-    // Only frozen menus silence audio; any other (incl. future overlay) state keeps it running.
-    this.sfx.suspend(s === 'paused' || s === 'inventory' || s === 'title' || s === 'loading' || s === 'error');
+    // Only frozen menus silence audio; any other (incl. future overlay) state keeps it running. Iteration 16: a travel is a load.
+    this.sfx.suspend(s === 'paused' || s === 'inventory' || s === 'title' || s === 'loading' || s === 'error' || s === 'travelling');
     if (s === 'inventory') { this.invUI.selected = null; this.invUI.render(); }
-    if (s !== 'playing' && prev === 'playing') this.input.unlock();
+    if (s !== 'playing' && s !== 'travelling' && prev === 'playing') this.input.unlock(); // Iteration 16: an in-world travel keeps the lock
     this.lastFrame = performance.now();
+    for (const fn of this.stateListeners) { try { fn(s, prev); } catch (err) { console.warn('Iteration 16: a state listener failed', err); } }
   }
 
   /** Called from a click (user gesture): audio + pointer lock, then play. */
@@ -889,7 +1227,9 @@ export class Game {
     const def = itemDef(st.itemId);
     if (def.kind !== 'consumable') return;
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
-    const blocked = (def.recharge ? this.torch.battery.refuseReason() : null) ?? this.survival.blockReason(def, this.player.hp, this.player.maxHp);
+    // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
+    const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
+      ?? (def.treats?.length ? this.injuries.refuseReason(def) : this.survival.blockReason(def, this.player.hp, this.player.maxHp));
     if (blocked) { this.hud.toast(blocked); this.sfx.denied(); return; }
     this.use = {uid: st.uid, itemId: st.itemId, t: 0, total: def.useTime ?? 1};
     // Consume view: the held gun/item lowers and this item's model comes up to the face.
@@ -1056,7 +1396,11 @@ export class Game {
         // Iteration 12 (LIGHT): a battery is applied by applyBatteryItem — refused at >= 99 % (nothing used), else exactly one removed
         const refused = def.recharge ? applyBatteryItem(this.torch.battery, () => !!ref && this.inv.consumeAt(ref), def.recharge) : null;
         if (refused) this.hud.toast(refused);
-        const used = def.recharge ? !refused : !!ref && this.inv.consumeAt(ref);
+        // Iteration 16 (lane INJURY): a limb treatment re-checks its injury, is consumed exactly once and cures only its limbs
+        const treat = def.treats?.length ? this.injuries.completeTreatment(def, () => !!ref && this.inv.consumeAt(ref)) : null;
+        if (treat?.text) this.hud.toast(treat.text, !treat.ok);
+        if (treat?.ok) { this.stats.itemsUsed++; this.sfx.heal(); }
+        const used = treat ? false : def.recharge ? !refused : !!ref && this.inv.consumeAt(ref);
         if (used && def.recharge) {
           this.stats.itemsUsed++;
           this.sfx.batteryInsert?.();
@@ -1072,7 +1416,7 @@ export class Game {
           this.stats.healed += healed;
           this.stats.itemsUsed++;
           this.sfx.heal();
-          this.hud.toast(`${def.short} used: +${Math.round(healed)} health`);
+          this.hud.toast(`${def.short} used: +${Math.round(healed)} health${this.injuries.healNote()}`); // Iteration 16: HP only, never a limb
         }
         // Item lowers away (or back into the hand if the held stack remains), then the gun returns.
         this.consumeView.complete(this.inv.selectedStack()?.uid === this.use.uid);
@@ -1145,11 +1489,24 @@ export class Game {
     if (crosshair && (crosshair.style.visibility === 'hidden') !== opticHide) crosshair.style.visibility = opticHide ? 'hidden' : '';
 
     if (!p.alive) this.die();
+    // Iteration 16 (RUN): a SECTION is cleared once per run (remembered); the clear screen shows when its whole LEVEL is clear
+    // (the subway: its one station; the office: the street station and every floor), else a toast points onward.
     const remaining = this.zombies.filter(z => z.brain.alive).length;
-    if (remaining === 0 && this.wonAt < 0) { this.wonAt = this.time; this.sfx.win(); this.hud.toast('Station clear'); }
+    if (remaining === 0 && this.wonAt < 0 && !this.sectionCleared && this.layout.zombies.length > 0 && this.state === 'playing') {
+      this.wonAt = this.time;
+      this.sectionCleared = true;
+      this.run.memory().cleared = true;
+      this.sfx.win();
+      this.hud.toast(clearLabel(this.run.current));
+    }
     if (this.wonAt >= 0 && this.time - this.wonAt > 1.6 && this.wonAt > -1 && !this.wonShown) {
       this.wonShown = true;
-      this.showEnd('won');
+      const lvl = this.run.current.level, secs = LEVELS[lvl].sections(this.run.seeds[lvl]);
+      if (this.run.levelCleared(lvl, secs)) this.showEnd('won');
+      else {
+        const done = secs.filter(sec => this.run.peekMemory({level: lvl, section: sec})?.cleared).length;
+        this.hud.toast(`${LEVELS[lvl].name}: ${done} of ${secs.length} areas clear — the elevator and stairwell lead on`);
+      }
     }
   }
   private wonShown = false;
@@ -1177,7 +1534,7 @@ export class Game {
       if (this.weapon.reloading) hint = 'Reloading…';
       else if ((st.mag ?? 0) === 0) hint = this.inv.count(wdef.ammoItem) ? 'Empty — press R' : 'No ammo';
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && this.inv.count(wdef.ammoItem)) hint = 'Low — R to reload';
-    } else if (def?.kind === 'consumable') hint = useHint(def);
+    } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
     let prompt = '';
     if (this.currentTarget) {
@@ -1196,7 +1553,7 @@ export class Game {
       weaponName: def ? def.short : 'Empty hands',
       mag: wdef && st ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
       hint, prompt, promptItem: this.currentTarget?.stack.itemId,
-      remaining: this.zombies.filter(z => z.brain.alive).length, total: this.zombies.length,
+      remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       area: area >= 0 ? `${this.layout.areas[area].label} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,
@@ -1412,7 +1769,10 @@ export class Game {
   private hurtPlayer(z: EnemyActor): void {
     const p = this.player;
     // Iteration 16: one hit pipeline — location -> armor (worn gear) -> HP -> listeners (limb injuries)
-    const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: 'zombie', location: meleeHitLocation(this.rand(), p.crouched), attacker: z.brain.stats.chaseAnim};
+    // Iteration 16 (lane INJURY): rat / dog bites are 'creature' hits that land low (legs ~58 %, player/injuries.ts biteHitLocation)
+    const creature = archetypeOf(z) !== 'zombie';
+    const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie',
+      location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature ? archetypeOf(z) : z.brain.type};
     const resolved = this.applyPlayerHit(hit);
     const amount = resolved.applied;
     const dx = z.brain.x - p.x, dz = z.brain.z - p.z;
@@ -1443,9 +1803,13 @@ export class Game {
   }
 
   private showEnd(kind: 'dead' | 'won'): void {
-    const s = this.stats;
+    const s = this.stats, k = this.run.current;
     const acc = s.shots ? Math.round(s.hits / s.shots * 100) : 0;
-    const text = `${this.layout.name} · code ${seedToCode(this.currentSeed)}\nTime ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} · Infected down ${s.kills}/${this.zombies.length}\nShots ${s.shots} · Hits ${s.hits} (${acc}%) · Headshot hits ${s.headshots} · Damage taken ${Math.round(this.player.damageTaken)}`;
+    const total = this.layout.zombies.length, down = total - this.zombies.filter(z => z.brain.alive).length;
+    // Iteration 16 (RUN): the section / level, its code, this section's kills and the run totals (time, kills, shots, damage)
+    const text = `${LEVELS[k.level].name} · ${sectionLabel(k)} · ${this.layout.name} · code ${seedToCode(this.run.seeds[k.level])}\n`
+      + `Run time ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} · Infected down here ${down}/${total} · this run ${s.kills}\n`
+      + `Shots ${s.shots} · Hits ${s.hits} (${acc}%) · Headshot hits ${s.headshots} · Damage taken ${Math.round(this.player.damageTaken)}`;
     $(kind === 'dead' ? '#death-stats' : '#win-stats').textContent = text;
     this.setState(kind);
   }
@@ -1454,32 +1818,9 @@ export class Game {
     void this.enterPlay();
   }
 
+  /** Back-compat (iteration 14 callers): restart(true) = Retry level, restart(false) = New game in the current level. */
   restart(sameSeed: boolean): void {
-    if (this.restarting) return; // Iteration 14: a rebuild + warm-up is already under way (double click)
-    this.restarting = true;
-    this.wonShown = false;
-    // Resume audio at the very start of the click gesture, before the long synchronous rebuild.
-    this.sfx.init();
-    // Request pointer lock inside the click gesture too; the rebuild can outlast the gesture window.
-    const lock = this.input.lock();
-    const seed = sameSeed ? this.currentSeed : freshSeed();
-    // Iteration 07 (Lane P2): fetch the new station's lazy prop models first (cached ones resolve at once), then rebuild.
-    let told = false;
-    void this.prepareStation(seed, () => { if (!told) { told = true; this.hud.toast('Loading station props…'); } })
-      .then(async () => {
-        await this.warmRun; // Iteration 14: never rebuild under a running warm-up (it owns the renderer state)
-        this.newStation(seed);
-        // Iteration 14: the new station's first-use graphics are prepared on the loading screen before play (pipelines
-        // already built for the previous station are cache hits; new instanced meshes / models are not)
-        this.updateStationIntro();
-        this.setState('loading');
-        const w = await this.prepareGraphics();
-        ($('#btn-start') as HTMLButtonElement).disabled = false;
-        if (w.status === 'cancelled') return; // replaced by another station or the device was lost
-        $('#load .label').textContent = `Ready · ${this.layout.areas.length} spaces generated`;
-        void lock.then(() => this.enterPlay());
-      })
-      .finally(() => { this.restarting = false; });
+    void (sameSeed ? this.retryLevel() : this.newGame(this.run.current.level, {enter: true}));
   }
 
   /** Nearest walkable world point (helper for QA hooks); Lane B: `level` = on that level's grid. */

@@ -5,6 +5,23 @@ import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
 import type {Inventory} from '../items/inventory';
 import {CRITICAL, LOW} from '../player/survival';
+import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
+
+// Iteration 16 (lane INJURY): limb indicator — a small body silhouette right of the vitals; the injured arm / leg (its side)
+// turns red with a short label. Built here (no index.html markup needed); styles injected once.
+const LIMB_CSS = `
+#limbs { position: absolute; left: calc(100% + 12px); bottom: 0; display: flex; align-items: flex-end; gap: 7px; font-size: 10.5px; letter-spacing: 0.12em; color: var(--cream-dim); white-space: nowrap; }
+#limbs svg { width: 20px; height: 38px; overflow: visible; }
+#limbs svg .p { fill: rgba(185, 177, 156, 0.42); transition: fill 0.4s; }
+#limbs svg .p.hurt { fill: var(--red); }
+#limbs .txt { display: flex; flex-direction: column; gap: 2px; padding-bottom: 1px; }
+#limbs .txt span { display: none; color: var(--red); }
+#limbs .txt span.on { display: block; }
+#limbs .txt span small { color: var(--cream-dim); font-size: 10px; letter-spacing: 0.06em; }`;
+const LIMB_SVG = `<svg viewBox="0 0 20 38" aria-hidden="true"><circle class="p" cx="10" cy="4" r="3.4"/><rect class="p" x="6.4" y="8.3" width="7.2" height="12.4" rx="1.6"/>`
+  // seen from behind (first person): your left limbs on the left
+  + `<rect class="p arm-left" x="2.3" y="8.8" width="3.3" height="11.6" rx="1.6"/><rect class="p arm-right" x="14.4" y="8.8" width="3.3" height="11.6" rx="1.6"/>`
+  + `<rect class="p leg-left" x="6.4" y="21.4" width="3.4" height="16" rx="1.6"/><rect class="p leg-right" x="10.2" y="21.4" width="3.4" height="16" rx="1.6"/></svg>`;
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -51,6 +68,52 @@ export class Hud {
       const ico = document.querySelector(sel);
       if (ico) ico.innerHTML = svg;
     }
+    this.buildLimbs(); // Iteration 16 (lane INJURY)
+  }
+
+  /** Iteration 16 (lane INJURY): the limb indicator element (inside #vitals) and its styles. */
+  private buildLimbs(): void {
+    const vitals = document.querySelector('#vitals');
+    if (!vitals || document.querySelector('#limbs')) return;
+    if (!document.querySelector('#limbs-css')) {
+      const st = document.createElement('style');
+      st.id = 'limbs-css';
+      st.textContent = LIMB_CSS;
+      document.head.appendChild(st);
+    }
+    const el = document.createElement('div');
+    el.id = 'limbs';
+    el.title = 'Limbs OK — no arm or leg injuries';
+    el.innerHTML = `${LIMB_SVG}<div class="txt"><span class="arm">ARM <small>aim sway</small></span><span class="leg">LEG <small>limping</small></span></div>`;
+    vitals.appendChild(el);
+  }
+
+  /**
+   * Iteration 16 (lane INJURY): show the injured arm / leg (player/injuries.ts; called every frame by its frame hook, writes only
+   * on change). A new injury flashes the silhouette.
+   */
+  setLimbs(arm: LimbInjury | null, leg: LimbInjury | null, tip: string): void {
+    const key = `${arm?.side ?? '-'}|${leg?.side ?? '-'}`;
+    const before = this.cache.get('limbs');
+    this.set('limbs', key, () => {
+      const el = document.querySelector('#limbs') as HTMLElement | null;
+      if (!el) return;
+      el.title = tip;
+      for (const side of ['left', 'right'] as const) {
+        el.querySelector(`.arm-${side}`)?.classList.toggle('hurt', arm?.side === side);
+        el.querySelector(`.leg-${side}`)?.classList.toggle('hurt', leg?.side === side);
+      }
+      for (const [cls, inj, what, fx] of [['arm', arm, 'ARM', 'aim sway'], ['leg', leg, 'LEG', 'limping']] as const) {
+        const span = el.querySelector(`.txt .${cls}`);
+        if (!span) continue;
+        span.classList.toggle('on', !!inj);
+        if (inj) span.innerHTML = `${inj.side === 'left' ? 'L' : 'R'} ${what} <small>${fx}</small>`;
+      }
+      const was = before?.split('|') ?? ['-', '-'];
+      if (before !== undefined && ((arm && was[0] === '-') || (leg && was[1] === '-'))) {
+        el.animate?.([{filter: 'brightness(2.2)', transform: 'scale(1.12)'}, {filter: 'brightness(1)', transform: 'scale(1)'}], {duration: 900, easing: 'ease-out'});
+      }
+    });
   }
 
   show(v: boolean): void {

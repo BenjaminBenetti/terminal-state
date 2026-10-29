@@ -117,7 +117,20 @@ export class Player {
   private stepPhase = 0;
   damageTaken = 0;
 
+  /** A fresh life (NewGame): placed at the pose with full health / stamina. */
   spawn(x: number, z: number, yaw: number, y = 0): void {
+    this.place(x, z, yaw, y);
+    this.hp = this.maxHp;
+    this.stamina = 100;
+    this.alive = true;
+    this.damageTaken = 0;
+  }
+
+  /**
+   * Iteration 16 (lane RUN): put the player at a pose — motion, stance, climb and camera dip reset — WITHOUT touching
+   * health, stamina, alive or damage taken (travel between sections / levels carries the player's state over).
+   */
+  place(x: number, z: number, yaw: number, y = 0): void {
     this.x = x; this.z = z; this.yaw = yaw; this.pitch = 0;
     this.vx = this.vz = 0;
     this.y = y;
@@ -129,11 +142,8 @@ export class Player {
     this.landDip = 0;
     this.landT = LAND_DIP_TIME;
     this.eye = STAND_EYE;
-    this.hp = this.maxHp;
-    this.stamina = 100;
-    this.alive = true;
     this.sprinting = false;
-    this.damageTaken = 0;
+    this.justJumped = this.justLanded = this.justRung = this.justClimbed = this.justLetGo = this.stanceChanged = false;
   }
 
   /** Eye height of the current (blended) stance, without jump or dip. */

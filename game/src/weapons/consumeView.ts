@@ -93,6 +93,8 @@ function styleFor(itemId: string, box: THREE.Box3): Style {
   if (def.recharge) return {...s, motion: 'insert', anchor: centre, target: new THREE.Vector3(0.035, -0.095, -0.27)};
   // Medical: held low in front of the body.
   if (itemId === 'medkit') return {...s, motion: 'medkit', anchor: centre, target: new THREE.Vector3(0.0, -0.22, -0.46)};
+  // Iteration 16 (lane INJURY): the sling packet / trauma pouch are worked open low in front (the splint roll unrolls like a bandage)
+  if (itemId === 'arm_sling' || itemId === 'trauma_kit') return {...s, motion: 'medkit', anchor: centre, target: new THREE.Vector3(0.0, -0.2, -0.4)};
   return {...s, motion: 'bandage', anchor: centre, target: new THREE.Vector3(0.02, -0.2, -0.3)};
 }
 

@@ -32,7 +32,8 @@ export const ECONOMY_CORPUS: readonly {seed: number; archetype: Archetype}[] = (
 export type EconCat = 'food' | 'drink' | 'med' | 'ammo' | 'battery' | 'flare' | 'weapon' | 'other';
 const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles']);
 const DRINK = new Set(['water', 'cola', 'juice']);
-const MED = new Set(['bandage', 'medkit']);
+// Iteration 16 (lane INJURY): the limb treatments are med finds too (a share of the old dressings; the med total is unchanged)
+const MED = new Set(['bandage', 'medkit', 'leg_splint', 'arm_sling', 'trauma_kit']);
 const WEAPONS = new Set(['rifle', 'shotgun', 'pistol']);
 export function econCat(itemId: string): EconCat {
   if (FOOD.has(itemId)) return 'food';

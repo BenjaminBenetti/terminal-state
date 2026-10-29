@@ -18,6 +18,9 @@ export const ROOM_LABEL: Record<RoomType, string> = {
   'agent-office': 'Station agent office', 'storage': 'Storage room', 'stock-room': 'Stock room', 'crew-room': 'Crew room',
   'utility': 'Utility room', 'supply-closet': 'Supply closet', 'janitor-closet': 'Janitor closet',
   'eatery': 'Food counter', 'shop': 'Shop', 'stair-core': 'Stairs',
+  // Iteration 16 (WORLD-GEN): office tower areas (gen/office/*; purposes give the final labels).
+  'office-lobby': 'Lobby', 'office-corridor': 'Corridor', 'office-open': 'Open-plan office', 'office-room': 'Office',
+  'office-elevator': 'Elevator', 'office-stair': 'Stairwell',
 };
 
 export type Wing = 'food' | 'north' | 'agent' | 'misc';
