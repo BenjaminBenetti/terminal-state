@@ -8,6 +8,8 @@
 // small particle chips (decal: false where a persistent mark exists; glass / soft styles added).
 
 import * as THREE from 'three';
+import {LineBasicNodeMaterial, MeshLambertNodeMaterial, PointsNodeMaterial} from 'three/webgpu';
+import {Discard, Fn, attribute, cameraProjectionMatrix, exp, float, instancedDynamicBufferAttribute, materialOpacity, mix, positionView, select, smoothstep, texture, uniform, uv, vec4} from 'three/tsl';
 import {canvasTexture} from './canvasTextures';
 
 export type FxSurface = 'concrete' | 'tile' | 'metal' | 'flesh' | 'wood' | 'glass' | 'soft';
@@ -25,51 +27,50 @@ export interface ImpactOptions {
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
-const VERT = /* glsl */`
-attribute float aSize;
-attribute float aAlpha;
-attribute vec3 aColor;
-uniform float uHalfH;
-varying float vAlpha;
-varying vec3 vColor;
-#include <fog_pars_vertex>
-void main() {
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-  gl_Position = projectionMatrix * mvPosition;
-  gl_PointSize = aAlpha > 0.0 ? aSize * projectionMatrix[1][1] * uHalfH / max(0.05, -mvPosition.z) : 0.0;
-  vAlpha = aAlpha;
-  vColor = aColor;
-  #include <fog_vertex>
-}`;
-const FRAG = /* glsl */`
-uniform sampler2D uMap;
-varying float vAlpha;
-varying vec3 vColor;
-#include <fog_pars_fragment>
-void main() {
-  vec4 t = texture2D(uMap, gl_PointCoord);
-  float a = t.a * vAlpha;
-  if (a < 0.004) discard;
-  gl_FragColor = vec4(vColor * t.rgb, a);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  #ifdef USE_FOG
-    #ifdef FOG_EXP2
-      float ff = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
-    #else
-      float ff = smoothstep(fogNear, fogFar, vFogDepth);
-    #endif
-    #ifdef ADDITIVE
-      gl_FragColor.rgb *= 1.0 - ff;
-    #else
-      gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, ff);
-    #endif
-  #endif
-}`;
+// biome-ignore lint: loosely typed TSL nodes
+type TNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/**
+ * Iteration 13 (MAT-B): the particle ring as ONE instanced sprite draw on WebGPURenderer (was a GLSL ShaderMaterial on
+ * THREE.Points: WebGPU — and three's WebGL 2 node backend — rasterise points at 1 px, so `gl_PointSize` cannot carry).
+ * A THREE.Sprite with `count = cap` + PointsNodeMaterial draws a camera-facing quad per particle from per-instance
+ * attributes. Same look as the GLSL: screen size = aSize * P[1][1] * (viewport height / 2) / depth (PointsNodeMaterial
+ * supplies height / 2 / depth, sizeNode the aSize * P[1][1]), dead particles (alpha 0) collapse to nothing, the soft
+ * disc texture x colour, alpha cut at 0.004, and the scene fog by view depth of the particle centre (exp2 or linear):
+ * mixed toward the fog colour, or for the ADDITIVE ring faded to black (adding fog colour would brighten the haze).
+ */
+function particleMaterial(tex: THREE.Texture, additive: boolean, attrs: {pos: THREE.InstancedBufferAttribute; col: THREE.InstancedBufferAttribute; size: THREE.InstancedBufferAttribute; alpha: THREE.InstancedBufferAttribute}, fogU: ParticleFog): PointsNodeMaterial {
+  const mat = new PointsNodeMaterial({transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, sizeAttenuation: true});
+  mat.name = additive ? 'fx-particles-additive' : 'fx-particles';
+  const aPos = instancedDynamicBufferAttribute(attrs.pos as never) as TNode;
+  const aCol = instancedDynamicBufferAttribute(attrs.col as never) as TNode;
+  const aSize = instancedDynamicBufferAttribute(attrs.size as never) as TNode;
+  const aAlpha = instancedDynamicBufferAttribute(attrs.alpha as never) as TNode;
+  mat.positionNode = aPos;
+  // PointsNodeMaterial divides by the raw view depth; the GLSL clamped it at 5 cm (a puff crossing the eye never fills the screen)
+  const depth = (positionView as TNode).z.negate();
+  mat.sizeNode = select(aAlpha.greaterThan(0), aSize.mul((cameraProjectionMatrix as TNode).element(1).y).mul(depth.div(depth.max(0.05))), float(0));
+  mat.fog = false; // applied below (additive rings fade to black instead of mixing toward the fog colour)
+  mat.colorNode = Fn(() => {
+    const t = texture(tex, uv()) as TNode;
+    const a = t.a.mul(aAlpha);
+    Discard(a.lessThan(0.004));
+    const rgb = aCol.mul(t.rgb);
+    const d = (positionView as TNode).z.negate();
+    const ff = select(fogU.mode.greaterThan(1.5), smoothstep(fogU.near, fogU.far, d), select(fogU.mode.greaterThan(0.5), exp(fogU.density.mul(fogU.density).mul(d).mul(d).negate()).oneMinus(), float(0)));
+    const fogged = additive ? rgb.mul(ff.oneMinus()) : mix(rgb, fogU.color, ff);
+    return vec4(fogged, a);
+  })();
+  return mat;
+}
+
+/** Scene fog as seen by the particle shader (FogExp2: mode 1, density; Fog: mode 2, near / far). */
+interface ParticleFog { mode: TNode; density: TNode; near: TNode; far: TNode; color: TNode }
 
 /** Fixed-capacity point particle ring rendered in one draw call. */
 class Particles {
-  readonly points: THREE.Points;
+  /** Iteration 13 (MAT-B): an instanced sprite (one quad per particle), not THREE.Points. */
+  readonly points: THREE.Sprite;
   private readonly pos: Float32Array;
   private readonly vel: Float32Array;
   private readonly col: Float32Array;
@@ -81,7 +82,7 @@ class Particles {
   private readonly grav: Float32Array;
   private readonly drag: Float32Array;
   private readonly a0: Float32Array;
-  private readonly geo = new THREE.BufferGeometry();
+  private readonly attrs: Record<'position' | 'aSize' | 'aAlpha' | 'aColor', THREE.InstancedBufferAttribute>;
   private next = 0;
   live = 0;
 
@@ -97,23 +98,25 @@ class Particles {
     this.grav = new Float32Array(cap);
     this.drag = new Float32Array(cap);
     this.a0 = new Float32Array(cap);
-    const attr = (name: string, arr: Float32Array, n: number) => this.geo.setAttribute(name, new THREE.BufferAttribute(arr, n).setUsage(THREE.DynamicDrawUsage));
-    attr('position', this.pos, 3);
-    attr('aColor', this.col, 3);
-    attr('aSize', this.size, 1);
-    attr('aAlpha', this.alpha, 1);
-    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {uHalfH: {value: 400}}]);
-    uniforms.uMap = {value: tex};
-    const mat = new THREE.ShaderMaterial({
-      uniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, fog: true,
-      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, defines: additive ? {ADDITIVE: 1} : {},
-    });
-    this.points = new THREE.Points(this.geo, mat);
+    const attr = (arr: Float32Array, n: number) => new THREE.InstancedBufferAttribute(arr, n).setUsage(THREE.DynamicDrawUsage) as THREE.InstancedBufferAttribute;
+    this.attrs = {position: attr(this.pos, 3), aColor: attr(this.col, 3), aSize: attr(this.size, 1), aAlpha: attr(this.alpha, 1)};
+    const fogU: ParticleFog = {mode: uniform(0), density: uniform(0), near: uniform(1), far: uniform(1000), color: uniform(new THREE.Color())};
+    const mat = particleMaterial(tex, additive, {pos: this.attrs.position, col: this.attrs.aColor, size: this.attrs.aSize, alpha: this.attrs.aAlpha}, fogU);
+    this.points = new THREE.Sprite(mat as unknown as THREE.SpriteMaterial);
+    this.points.name = additive ? 'fx-sparks' : 'fx-particles';
+    this.points.count = cap;
     this.points.frustumCulled = false;
     this.points.renderOrder = additive ? 3 : 2;
     this.points.visible = false;
-    const v2 = new THREE.Vector2();
-    this.points.onBeforeRender = renderer => { renderer.getDrawingBufferSize(v2); uniforms.uHalfH.value = v2.y / 2; };
+    this.points.raycast = () => {}; // never a hitscan / pick target (Sprite.raycast needs raycaster.camera)
+    this.points.onBeforeRender = (_r, scene) => {
+      const f = scene.fog as (THREE.Fog | THREE.FogExp2 | null);
+      const u = fogU as unknown as Record<keyof ParticleFog, {value: number | THREE.Color}>;
+      if (f && (f as THREE.FogExp2).isFogExp2) { u.mode.value = 1; u.density.value = (f as THREE.FogExp2).density; }
+      else if (f && (f as THREE.Fog).isFog) { u.mode.value = 2; u.near.value = (f as THREE.Fog).near; u.far.value = (f as THREE.Fog).far; }
+      else u.mode.value = 0;
+      if (f) (u.color.value as THREE.Color).copy(f.color);
+    };
   }
 
   spawn(p: THREE.Vector3, vx: number, vy: number, vz: number, size: number, life: number, color: THREE.Color, alpha: number, grow = 0, grav = 0, drag = 3): void {
@@ -153,7 +156,7 @@ class Particles {
       this.alpha[i] = this.a0[i] * Math.min(1, this.life[i] / this.max[i] * 1.6);
     }
     this.live = live;
-    for (const n of ['position', 'aSize', 'aAlpha', 'aColor']) (this.geo.attributes[n] as THREE.BufferAttribute).needsUpdate = true;
+    for (const a of Object.values(this.attrs)) a.needsUpdate = true;
     if (live === 0) this.points.visible = false;
   }
 
@@ -161,7 +164,7 @@ class Particles {
     this.life.fill(0);
     this.alpha.fill(0);
     this.live = 0;
-    (this.geo.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
+    this.attrs.aAlpha.needsUpdate = true;
     this.points.visible = false;
   }
 }
@@ -184,12 +187,10 @@ class Decals {
     this.fade = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
     this.fade.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aFade', this.fade);
-    const mat = new THREE.MeshLambertMaterial({map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
-    mat.onBeforeCompile = sh => {
-      sh.vertexShader = 'attribute float aFade;\nvarying float vFade;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vFade = aFade;');
-      sh.fragmentShader = 'varying float vFade;\n' + sh.fragmentShader.replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\n  diffuseColor.a *= vFade;');
-    };
-    mat.customProgramCacheKey = () => 'fx-decal-fade';
+    // Iteration 13 (MAT-B): node material; the per-instance fade multiplies the alpha (was GLSL `diffuseColor.a *= vFade`)
+    const mat = new MeshLambertNodeMaterial({map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
+    mat.name = `fx-decal-${name}`;
+    mat.opacityNode = (materialOpacity as TNode).mul(attribute('aFade', 'float'));
     this.mesh = new THREE.InstancedMesh(geo, mat, cap);
     this.mesh.name = `fx-decals-${name}`;
     this.mesh.count = 0;
@@ -329,7 +330,8 @@ export class Effects {
     this.tracerLife = new Float32Array(this.tracerCap);
     this.tracerGeo.setAttribute('position', new THREE.BufferAttribute(this.tracerPos, 3).setUsage(THREE.DynamicDrawUsage));
     this.tracerGeo.setAttribute('color', new THREE.BufferAttribute(this.tracerCol, 4).setUsage(THREE.DynamicDrawUsage));
-    this.tracerLines = new THREE.LineSegments(this.tracerGeo, new THREE.LineBasicMaterial({vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending}));
+    // Iteration 13 (MAT-B): node line material (per-vertex rgba: faint muzzle tail, bright head)
+    this.tracerLines = new THREE.LineSegments(this.tracerGeo, new LineBasicNodeMaterial({vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending}) as unknown as THREE.LineBasicMaterial);
     this.tracerLines.frustumCulled = false;
     this.tracerLines.visible = false;
     this.group.add(this.tracerLines);

@@ -4,7 +4,7 @@
 survival prototype set in a procedurally generated North American subway station.
 Explore, scavenge supplies, manage your inventory and fight the infected.
 
-This repository contains the **iteration 12** game source and all cooked runtime
+This repository contains the **iteration 13** game source and all cooked runtime
 inputs (later iterations add the user-supplied weapon models of iteration 10 and new
 Sound Lab cues of iterations 11-12, each with provenance under `game/public/assets/derivatives/`).
 Portable repository packaging and the CI pipeline are separate from gameplay.
@@ -88,7 +88,11 @@ WASD move · mouse look · Shift sprint · Space jump · C crouch · left click 
 · right click aim · R reload · E interact · 1–5 / wheel quick slots · Q last item
 · Tab/I inventory · H heal · G drop · F flashlight · M mute · Esc pause.
 
-Iteration 12 adds a decayed, foggier station (30 years of neglect on walls/floors/ceilings, patchy drifting
+Iteration 13 moves rendering to three's **WebGPURenderer** with TSL node shaders (WGSL on WebGPU; the same shaders
+as GLSL on its WebGL 2 fallback, labelled "WebGL2 fallback" on the title screen and HUD; `?renderer=webgl2` forces it).
+The volumetric fog is a GPU march that stays put when you leave and come back (it drifts slowly through the world
+instead of re-rolling), is a little thinner overall with clear and dense areas, and is lit by fixtures, the
+flashlight and flares. Iteration 12 adds a decayed, foggier station (30 years of neglect on walls/floors/ceilings, patchy drifting
 volumetric fog), a flashlight battery with a dim body glow, throwable red flares (T), enemies drawn to light, twice
 the enemies and far scarcer non-ammo supplies placed by room purpose. Iteration 8 adds stacked station levels (an upper concourse over the platforms and
 tracks, a lower service level beneath them, stair cores and light wells), zone-specific

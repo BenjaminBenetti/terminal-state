@@ -22,7 +22,7 @@ import {AUTHORED_CARCASS, displayTreatment} from './shelfStockCarcass';
 import {SHOP_HOLDERS, shopPropShape, storefrontParts, type ShopBox, type ShopFace} from '../gen/storefronts';
 import type {ShopUse, StationLayout, Storefront} from '../gen/stationTypes';
 import {canvasTexture} from './canvasTextures';
-import {surfaceMaterial} from './materials';
+import {SurfaceNodeMaterial, surfaceMaterial} from './materials';
 import {PAINT, purposeMaterial, purposeMenuMaterial} from './purposeTextures';
 
 export interface StorefrontDeps {
@@ -324,7 +324,7 @@ function faceMesh(faces: ShopFace[], tex: {texture: THREE.Texture; rects?: Map<S
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeBoundingSphere();
-  const mat = new THREE.MeshStandardMaterial({map: tex.texture, emissive: 0xffffff, emissiveMap: tex.texture, emissiveIntensity: 0.75, roughness: 0.45, metalness: 0});
+  const mat = new SurfaceNodeMaterial({map: tex.texture, emissive: 0xffffff, emissiveMap: tex.texture, emissiveIntensity: 0.75, roughness: 0.45, metalness: 0}); // Iteration 13 (MAT-A)
   const mesh = new THREE.Mesh(g, mat);
   mesh.name = name;
   mesh.matrixAutoUpdate = false;

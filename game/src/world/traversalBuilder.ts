@@ -16,7 +16,7 @@ import {CELL, FLOOR, SOLID, rampHeight, type Grid, type Ramp} from '../gen/grid'
 import type {Level} from '../gen/levels';
 import type {StationLayout} from '../gen/station';
 import type {LevelColumns} from './levelGeometry';
-import {surfaceMaterial, thinTrim, type MatKey, type WorldMaterials} from './materials';
+import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, type MatKey, type WorldMaterials} from './materials';
 import {canvasTexture} from './canvasTextures';
 import {flightRailRuns} from '../gen/doorways';
 
@@ -29,7 +29,7 @@ interface V3 { x: number; y: number; z: number }
 const RAIL_Y = 0.9, RAIL_OFF = 0.07;
 
 const yellowSteel = new WeakMap<WorldMaterials, THREE.Material>();
-const hazardMats = new WeakMap<WorldMaterials, THREE.MeshStandardMaterial>();
+const hazardMats = new WeakMap<WorldMaterials, SurfaceNodeMaterial>();
 
 /** Safety-yellow painted steel (rescue ladders), world-mapped like the other steel keys. */
 function ladderMaterial(mats: WorldMaterials): THREE.Material {
@@ -40,7 +40,7 @@ function ladderMaterial(mats: WorldMaterials): THREE.Material {
 }
 
 /** Yellow/black hazard stripes (ladder edge markings, tunnel barricade planks); repeats along u. */
-function hazardMaterial(mats: WorldMaterials): THREE.MeshStandardMaterial {
+function hazardMaterial(mats: WorldMaterials): SurfaceNodeMaterial {
   let m = hazardMats.get(mats);
   if (!m) {
     const tex = canvasTexture(256, 128, 5051, (ctx, w, h, rnd) => {
@@ -51,7 +51,7 @@ function hazardMaterial(mats: WorldMaterials): THREE.MeshStandardMaterial {
       // wear: scuffs and grime specks
       for (let i = 0; i < 260; i++) { ctx.fillStyle = `rgba(${rnd() < 0.5 ? '40,36,30' : '120,110,90'},${0.08 + rnd() * 0.2})`; ctx.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 5, 1 + rnd() * 3); }
     });
-    m = new THREE.MeshStandardMaterial({map: tex, roughness: 0.8, metalness: 0.05});
+    m = new SurfaceNodeMaterial({map: tex, roughness: 0.8, metalness: 0.05}); // Iteration 13 (MAT-A): node material
     m.name = 'hazard-stripes';
     hazardMats.set(mats, m);
   }

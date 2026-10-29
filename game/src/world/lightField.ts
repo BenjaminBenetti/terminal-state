@@ -9,15 +9,14 @@
 // props), its dominant light direction and a share for the time-varying "flicker circuits", plus a
 // cheap wall-respecting bounce fill.
 //
-// At runtime the field is handed to three r186's built-in light-probe-grid path (WebGLRenderer pushes
-// any scene object with `isLightProbeGrid`, defines USE_LIGHT_PROBES_GRID for every lit material and
-// uploads probesSH/probesMin/probesMax/probesResolution) - so static world, storefronts, GLB props,
-// zombies, items and every future lit material sample it automatically with no per-material patches.
-// The decoding chunk (lightprobes_pars_fragment) is replaced by ours, and lights_fragment_begin feeds
-// the field's directional part through RE_Direct (N.L diffuse + GGX specular) and the rest into the
-// indirect irradiance. `probesResolution` carries the three flicker-circuit levels (see
-// LightFieldVolume). Nothing here depends on the camera: a fixture 60 m away lights its pool exactly
-// as it does when you stand under it.
+// At runtime (iteration 13: three r186 WebGPURenderer, world/lightFieldNode.ts) the field is a TSL
+// lighting node registered for one persistent scene light, so static world, storefronts, GLB props,
+// zombies, items and every future lit node material sample it automatically with no per-material
+// patches: its directional part goes through the lighting model's direct term (N.L diffuse + GGX
+// specular), the rest into the indirect irradiance; the three flicker-circuit levels are uniforms
+// (LightFieldVolume.resolution). Iterations 05-12 rode three's WebGL light-probe-grid ShaderChunks.
+// Nothing here depends on the camera: a fixture 60 m away lights its pool exactly as it does when you
+// stand under it.
 //
 // Iteration 08 (Lane G): multi-level stations. The volume holds one SLOT per station level (slot s =
 // layout.levels[s]), each with its own per-column floor..ceiling header and LAYERS layers, and slice 0
@@ -810,67 +809,37 @@ export function downsampleField(f: BakedField, k: number): BakedField {
   return {...f, w: W, h: H, data, stats: {...f.stats, bytes: data.byteLength}, cellScale: k};
 }
 
-/**
- * GLSL (ES 3.00) that picks the level slot of a field texel column for a height with two texel
- * fetches and no loop: slice 0 G/B/A pack the column's band thresholds and slot ids (see the bake).
- * Declares lfSlot, lfFl / lfCe (band floor / ceiling), lfBase (first slice of the slot) and lfTop
- * (top layer index) from sampler `tex` at texel column `ci` and height `py` (height range `ymin` /
- * `yr`, slot count from the texture depth `size.z`). Shared by the surface decode (LIGHT_FIELD_PARS)
- * and the volumetric march (render/volumetricShaders.ts).
- */
-export function fieldSlotGLSL(tex: string, ci: string, size: string, py: string, ymin: string, yr: string): string {
-  return `${fieldPickGLSL(tex, ci, size, py, ymin, yr)}
-	${fieldHeaderGLSL(tex, ci, ymin, yr)}`;
-}
-
-/** Slot choice only (declares lfSlot): one texel fetch of the column's packed band info. */
-export function fieldPickGLSL(tex: string, ci: string, size: string, py: string, ymin: string, yr: string): string {
-  return `vec4 lfK = texelFetch( ${tex}, ivec3( ${ci}, 0 ), 0 );
-	int lfPk = int( lfK.a * 255.0 + 0.5 );
-	int lfN = lfPk >> 6;
-	int lfBand = ( lfN > 1 && ${py} > ${ymin} + lfK.g * ${yr} ? 1 : 0 ) + ( lfN > 2 && ${py} > ${ymin} + lfK.b * ${yr} ? 1 : 0 );
-	int lfSlot = max( 0, min( ( lfPk >> ( 2 * lfBand ) ) & 3, ( ${size}.z - ${1 + SLOT_DEPTH} ) / ${AUX_SLOT_DEPTH} ) );`;
-}
-
-/** Header of slot lfSlot (declares lfAux, lfFl, lfCe, lfBase, lfTop): one texel fetch. */
-export function fieldHeaderGLSL(tex: string, ci: string, ymin: string, yr: string): string {
-  return `int lfAux = min( lfSlot, 1 );
-	vec4 lfH = texelFetch( ${tex}, ivec3( ${ci}, ${1 + SLOT_DEPTH - AUX_SLOT_DEPTH} * lfAux + ${AUX_SLOT_DEPTH} * lfSlot + 1 - lfAux ), 0 );
-	float lfFl = ${ymin} + lfH.r * ${yr};
-	float lfCe = ${ymin} + lfH.g * ${yr};
-	float lfBase = mix( 1.0, ${(1 + SLOT_DEPTH - AUX_SLOT_DEPTH).toFixed(1)} + float( lfSlot ) * ${AUX_SLOT_DEPTH.toFixed(1)}, float( lfAux ) );
-	float lfTop = mix( ${(LAYERS - 1).toFixed(1)}, ${(AUX_LAYERS - 1).toFixed(1)}, float( lfAux ) );`;
-}
-
 // ---------------------------------------------------------------------------------------------
-// three.js integration
+// three.js integration (iteration 13: WebGPURenderer node lighting, world/lightFieldNode.ts)
+
+/** Field texture settings shared by every station volume and the TSL placeholder (same binding / sampler state). */
+export function configureFieldTexture(t: THREE.Data3DTexture): THREE.Data3DTexture {
+  t.format = THREE.RGBAFormat;
+  t.type = THREE.UnsignedByteType;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.wrapS = t.wrapT = t.wrapR = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.unpackAlignment = 1;
+  t.colorSpace = THREE.NoColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
 
 /**
- * The baked field as a scene object three r186's WebGLRenderer treats as a light probe grid
- * (`isLightProbeGrid`, `texture`, `boundingBox`, `resolution`). It must be in the rendered scene.
- * `resolution` is NOT a probe resolution here: the renderer copies it into the `probesResolution`
- * uniform on every material refresh (at least once per material per frame) and our decoding chunk
- * reads it as the three flicker-circuit levels. Texture dims come from textureSize() in the shader.
+ * One station's baked field on the GPU: the RGBA8 3D texture, its world bounds and the live flicker-circuit levels
+ * (`resolution` x / y / z = circuits 0 / 1 / 2; the historical name of the WebGL probe-grid protocol it used to ride on).
+ * Iteration 13: no longer a scene object. StationLighting binds it to the global TSL nodes (lightFieldNode.ts
+ * bindLightField) and puts the session's single LightFieldLight in the scene; the volumetric pass reads it directly.
  */
-export class LightFieldVolume extends THREE.Object3D {
-  readonly isLightProbeGrid = true;
+export class LightFieldVolume {
+  readonly name = 'light-field';
   readonly texture: THREE.Data3DTexture;
   readonly boundingBox: THREE.Box3;
-  /** Flicker circuit levels (x, y, z = circuits 0, 1, 2); see class doc. */
+  /** Flicker circuit levels (x, y, z = circuits 0, 1, 2). */
   readonly resolution = new THREE.Vector3(1, 1, 1);
   constructor(readonly field: BakedField) {
-    super();
-    this.name = 'light-field';
-    const t = new THREE.Data3DTexture(field.data, field.w, field.h, field.depth);
-    t.format = THREE.RGBAFormat;
-    t.type = THREE.UnsignedByteType;
-    t.minFilter = t.magFilter = THREE.LinearFilter;
-    t.wrapS = t.wrapT = t.wrapR = THREE.ClampToEdgeWrapping;
-    t.generateMipmaps = false;
-    t.unpackAlignment = 1;
-    t.colorSpace = THREE.NoColorSpace;
-    t.needsUpdate = true;
-    this.texture = t;
+    this.texture = configureFieldTexture(new THREE.Data3DTexture(field.data, field.w, field.h, field.depth));
+    this.texture.name = 'light-field';
     const span = CELL * (field.cellScale ?? 1);
     this.boundingBox = new THREE.Box3(new THREE.Vector3(0, field.yMin, 0), new THREE.Vector3(field.w * span, field.yMax, field.h * span));
   }
@@ -880,100 +849,4 @@ export class LightFieldVolume extends THREE.Object3D {
   dispose(): void {
     this.texture.dispose();
   }
-}
-
-/** Marker so tests (and a second install) can tell the chunks are ours. */
-export const LIGHT_FIELD_MARK = '// last-line light field v2 (level slots)';
-/** three r186 anchor replaced in lights_fragment_begin (tests assert it still exists upstream). */
-export const LIGHT_FIELD_ANCHOR = 'irradiance += getLightProbeGridIrradiance( probeWorldPos, probeWorldNormal );';
-
-export const LIGHT_FIELD_PARS = /* glsl */ `
-#ifdef USE_LIGHT_PROBES_GRID
-${LIGHT_FIELD_MARK}
-// Station light field (world/lightField.ts): slice 0 R = bitmask of the level slots present per column;
-// level slot s starts at slice lfBase (main: 1, ${LAYERS} layers; others ${AUX_LAYERS} layers): header (floor, ceil, circuit0
-// share, circuit1 share), then per height layer k: (sqrt-encoded irradiance rgb, directional share) and
-// (direction to light, dying-circuit share).
-// probesResolution = circuit levels.
-uniform highp sampler3D probesSH;
-uniform vec3 probesMin;
-uniform vec3 probesMax;
-uniform vec3 probesResolution;
-vec3 lfDirColor = vec3( 0.0 );
-vec3 lfDirWorld = vec3( 0.0, 1.0, 0.0 );
-vec3 lfDecode( vec3 v ) { return v * v * ${FIELD_EMAX.toFixed(1)}; }
-// Floor of the level band holding a world point (world-mapped floor grime follows every level's floor).
-#define LF_FLOOR_AT
-float lfFloorAt( vec3 p ) {
-	ivec3 size = textureSize( probesSH, 0 );
-	vec2 cell = ( probesMax.xz - probesMin.xz ) / vec2( size.xy );
-	ivec2 ci = clamp( ivec2( floor( ( p.xz - probesMin.xz ) / cell ) ), ivec2( 0 ), size.xy - 1 );
-	float yr = probesMax.y - probesMin.y;
-	${fieldSlotGLSL('probesSH', 'ci', 'size', 'p.y', 'probesMin.y', 'yr')}
-	return lfFl;
-}
-vec3 getLightProbeGridIrradiance( vec3 worldPos, vec3 worldNormal ) {
-	ivec3 size = textureSize( probesSH, 0 );
-	vec3 dims = vec3( size );
-	vec2 cell = ( probesMax.xz - probesMin.xz ) / dims.xy;
-	// Offset along the normal: wall faces read the cell in front of them, never the rock behind.
-	vec3 p = worldPos + worldNormal * vec3( cell.x * 0.5, 0.2, cell.y * 0.5 );
-	vec2 cxy = ( p.xz - probesMin.xz ) / cell;
-	ivec2 ci = clamp( ivec2( floor( cxy ) ), ivec2( 0 ), size.xy - 1 );
-	float yr = probesMax.y - probesMin.y;
-	// Level slot whose band holds the point (upper deck / main level / lower crossing in one column).
-	${fieldSlotGLSL('probesSH', 'ci', 'size', 'p.y', 'probesMin.y', 'yr')}
-	float rel = clamp( ( p.y - lfFl ) / max( lfCe - lfFl, 0.3 ), 0.0, 1.0 ) * lfTop;
-	float k0 = floor( rel );
-	float k1 = min( k0 + 1.0, lfTop );
-	float wk = rel - k0;
-	vec2 uv = cxy / dims.xy;
-	vec4 a0 = texture( probesSH, vec3( uv, ( lfBase + 1.5 + 2.0 * k0 ) / dims.z ) );
-	vec4 a1 = texture( probesSH, vec3( uv, ( lfBase + 1.5 + 2.0 * k1 ) / dims.z ) );
-	vec4 b0 = texture( probesSH, vec3( uv, ( lfBase + 2.5 + 2.0 * k0 ) / dims.z ) );
-	vec4 b1 = texture( probesSH, vec3( uv, ( lfBase + 2.5 + 2.0 * k1 ) / dims.z ) );
-	vec2 fr = texture( probesSH, vec3( uv, ( lfBase + 0.5 ) / dims.z ) ).ba;
-	vec3 T = mix( lfDecode( a0.rgb ), lfDecode( a1.rgb ), wk );
-	float rho = mix( a0.a, a1.a, wk );
-	vec4 b = mix( b0, b1, wk );
-	float m = max( 0.0, 1.0 - fr.x * ( 1.0 - probesResolution.x ) - fr.y * ( 1.0 - probesResolution.y ) - b.a * ( 1.0 - probesResolution.z ) );
-	vec3 dir = b.rgb * 2.0 - 1.0;
-	float dl = length( dir );
-	lfDirWorld = dl > 1e-4 ? dir / dl : vec3( 0.0, 1.0, 0.0 );
-	lfDirColor = T * rho * m;
-	return T * ( 1.0 - rho ) * m;
-}
-#endif
-`;
-
-export const LIGHT_FIELD_BEGIN = /* glsl */ `irradiance += getLightProbeGridIrradiance( probeWorldPos, probeWorldNormal );
-		${LIGHT_FIELD_MARK}
-		#if defined( RE_Direct )
-		{
-			#if defined( STANDARD ) && !( NUM_SUN_LIGHTS > 0 || NUM_DIR_LIGHTS > 0 || NUM_POINT_LIGHTS > 0 || NUM_SPOT_LIGHTS > 0 )
-				material.multiScatteringCompensation = 1.0 + material.specularColorBlended * ( 1.0 / ( material.dfg.x + material.dfg.y ) - 1.0 );
-			#endif
-			IncidentLight lfLight;
-			lfLight.color = lfDirColor;
-			lfLight.direction = normalize( ( viewMatrix * vec4( lfDirWorld, 0.0 ) ).xyz );
-			lfLight.visible = true;
-			RE_Direct( lfLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
-		}
-		#endif`;
-
-/**
- * Replace three's light-probe-grid decoding with the station light field (idempotent). Must run before
- * the first program with USE_LIGHT_PROBES_GRID compiles (i.e. before a LightFieldVolume is rendered).
- * Only programs compiled with that define (scenes containing a LightFieldVolume) are affected.
- */
-export function installLightFieldShader(): boolean {
-  const C = THREE.ShaderChunk as unknown as Record<string, string>;
-  if (C.lightprobes_pars_fragment.includes(LIGHT_FIELD_MARK)) return true;
-  if (!C.lights_fragment_begin.includes(LIGHT_FIELD_ANCHOR)) {
-    console.warn('light field: three lights_fragment_begin anchor missing; station lighting falls back to the probe-grid default');
-    return false;
-  }
-  C.lightprobes_pars_fragment = LIGHT_FIELD_PARS;
-  C.lights_fragment_begin = C.lights_fragment_begin.replace(LIGHT_FIELD_ANCHOR, LIGHT_FIELD_BEGIN);
-  return true;
 }

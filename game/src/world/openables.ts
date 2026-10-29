@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A): node materials, same shadowSide fix
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {SOLID, type Grid} from '../gen/grid';
 import type {Door} from '../gen/stationTypes';
@@ -199,12 +200,12 @@ export class OpenableSet {
     const side = o.back ? THREE.BackSide : o.double ? THREE.DoubleSide : THREE.FrontSide;
     if (role === 'body' || role === 'inner') {
       const c = paint.clone().multiplyScalar(role === 'body' ? 0.62 : 0.5);
-      m = new THREE.MeshStandardMaterial({color: c, roughness: 0.88, metalness: 0.2, side, map: surface('paintedPanel').map});
+      m = new MeshStandardNodeMaterial({color: c, roughness: 0.88, metalness: 0.2, side, map: surface('paintedPanel').map});
     } else if (role === 'accent') {
-      m = new THREE.MeshStandardMaterial({color: o.accent ?? 0xffffff, roughness: 0.6, metalness: 0.3, side, map: surface('paintedSteel').map});
+      m = new MeshStandardNodeMaterial({color: o.accent ?? 0xffffff, roughness: 0.6, metalness: 0.3, side, map: surface('paintedSteel').map});
     } else {
       const r = ROLE[role];
-      m = new THREE.MeshStandardMaterial({color: r.color, roughness: r.rough, metalness: r.metal, side, map: surface(r.map).map});
+      m = new MeshStandardNodeMaterial({color: r.color, roughness: r.rough, metalness: r.metal, side, map: surface(r.map).map});
     }
     interiorShadowSide(m); // Iteration 12 (ATMOS): back-side parts shadow from the faces they draw (#4)
     m.name = `openable-${role}`;
@@ -220,7 +221,7 @@ export class OpenableSet {
     if (m) return m;
     const base = role && role !== 'body' && role !== 'inner' && role !== 'accent' ? new THREE.Color(ROLE[role].color) : paint.clone();
     const k = role === 'frost' || role === 'white' ? 0.75 : 0.42;
-    m = new THREE.MeshStandardMaterial({color: base.multiplyScalar(k), roughness: 0.92, metalness: 0.15, side: THREE.BackSide, map: surface(role === 'frost' ? 'plastic' : 'paintedPanel').map});
+    m = new MeshStandardNodeMaterial({color: base.multiplyScalar(k), roughness: 0.92, metalness: 0.15, side: THREE.BackSide, map: surface(role === 'frost' ? 'plastic' : 'paintedPanel').map});
     interiorShadowSide(m);
     m.name = 'openable-cavity';
     this.roleMats.set(key, m);

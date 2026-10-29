@@ -38,6 +38,16 @@ function walk(dir, base = dir) {
   });
 }
 
+// Iteration 13: three r186's WebGPURenderer bundle. Exact citation comment lines inside shader strings (iteration 06
+// jcgt; WGSLNodeBuilder's polyfill credit), three exact shader-comment fragments and one exact console message text.
+// None is ever requested; any other URL / root path still fails.
+const SHADER_CITATION = /^\s*\/\/ https:\/\/(?:jcgt\.org\/published\/0007\/04\/01\/|www\.shadertoy\.com\/view\/WtyXRy)\s*$/;
+// Shader-code comment fragments the node builders emit (DebugNode, NodeBuilder recursion guard): not paths.
+const SHADER_COMMENT = new Set(['/*', '/* ... */ ', '/* Recursion detected. */']);
+const INERT_TEXT = new Set([
+  'Renderer: waitForGPU() has been removed. Read https://github.com/mrdoob/three.js/issues/32012 for more information.',
+]);
+
 export function checkRuntime(text, rel, files) {
   const local = value => {
     // The reviewed source embeds this exact inert SVG favicon; no remote fetch.
@@ -71,10 +81,10 @@ export function checkRuntime(text, rel, files) {
         const use = literal === parent ? grandparent : parent;
         const nsUse = namespace && use?.type === 'CallExpression' && use.arguments[0] === literal
           && use.callee.type === 'MemberExpression' && use.callee.property.name === 'createElementNS';
-        // Shader strings contain a literature citation on a // comment line.
-        const nonCommentLines = s.split(/\r?\n/).filter(l => !/^\s*\/\/ https:\/\/jcgt\.org\/published\/0007\/04\/01\/\s*$/.test(l)).join('\n');
-        if (!nsUse && /(?:https?:\/\/|\b(?:ftp|wss?):\/\/|^\/\/[^\s/])/i.test(nonCommentLines)) fail(`External runtime URL in ${rel}`);
-        if (/^\/[^\s/]/.test(s)) fail(`Root-absolute runtime URL in ${rel}: ${s.slice(0,100)}`);
+        // Shader strings contain literature citations on // comment lines (three's GLSL / WGSL builders); exact lines only.
+        const nonCommentLines = s.split(/\r?\n/).filter(l => !SHADER_CITATION.test(l)).join('\n');
+        if (!nsUse && !INERT_TEXT.has(s) && /(?:https?:\/\/|\b(?:ftp|wss?):\/\/|^\/\/[^\s/])/i.test(nonCommentLines)) fail(`External runtime URL in ${rel}`);
+        if (/^\/[^\s/]/.test(s) && !SHADER_COMMENT.has(s)) fail(`Root-absolute runtime URL in ${rel}: ${s.slice(0,100)}`);
         if (/^(?:\.\/)?assets\/[A-Za-z0-9_/-]+\.(?:glb|mp3|png|jpg|json)$/.test(s)) local(s);
         if (use?.type === 'ImportDeclaration' || use?.type === 'ExportNamedDeclaration' || use?.type === 'ExportAllDeclaration'
           || use?.type === 'ImportExpression') local(s);

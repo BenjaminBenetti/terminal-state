@@ -140,6 +140,8 @@ await withBrowserLock(async () => {
     }
     result.hudText = await page.evaluate(() => (document.querySelector('#hud')?.innerText ?? '').replace(/\s+/g, ' ').slice(0, 300));
     result.webglRenderer = await page.evaluate(() => { try { const c = document.createElement('canvas'); const g = c.getContext('webgl2') || c.getContext('webgl'); return g ? g.getParameter(g.RENDERER) : null; } catch { return null; } });
+    // Iteration 13 (CORE): the backend the game's WebGPURenderer actually initialized, from its own indicator (not a probe canvas)
+    result.gameRenderer = await page.evaluate(() => ({badge: document.querySelector('.gpu-badge')?.textContent ?? null, backend: document.querySelector('.gpu-badge')?.dataset.backend ?? null, hudTag: document.getElementById('gpu-tag')?.textContent ?? null}));
   } catch (e) { result.exception = red(String(e)).slice(0, 400); }
   finally { await browser.close(); }
 });

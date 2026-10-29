@@ -43,7 +43,9 @@ await withBrowserLock(async () => {
     await page.goto(report.url, {waitUntil: 'load'});
     const ready = await waitFor(() => page.evaluate(() => !!window.__LL && window.__LL.ready() && window.__LL.state() === 'title'), 180000, 500);
     step('loads all assets and reaches title screen', !!ready, {ms: Date.now()});
-    report.renderer = await page.evaluate(() => { const gl = document.createElement('canvas').getContext('webgl2'); const e = gl.getExtension('WEBGL_debug_renderer_info'); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); });
+    // Iteration 13 (CORE): the backend the game's WebGPURenderer actually initialized (not a probe canvas / navigator.gpu)
+    report.gpu = await page.evaluate(() => window.__LL.gpu());
+    report.renderer = report.gpu ? `${report.gpu.label}${report.gpu.glRenderer ? ` · ${report.gpu.glRenderer}` : ''}${report.gpu.adapter ? ` · ${[report.gpu.adapter.vendor, report.gpu.adapter.description].filter(Boolean).join(' ')}` : ''}` : null;
     await shot('01-title');
     const saveMap = async (name) => { const d = await page.evaluate(() => window.__LL.mapImage(4)); const f = path.join(outDir, name); fs.writeFileSync(f, Buffer.from(d.split(',')[1], 'base64')); report.screenshots.push(f); };
     await saveMap('map-seed-fixed.png');

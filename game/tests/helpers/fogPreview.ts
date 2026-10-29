@@ -10,8 +10,8 @@
 import {castRay, renderPreview, type PreviewCamera, type PreviewMood, type PreviewScene} from './lightPreview';
 import {sampleField, type BakedField} from '../../src/world/lightField';
 import {
-  compositePixel, distanceAttenuation, fixtureRadiance, flashlightRadiance, ign, integrateMedium, mediumAt, phase,
-  type AtmosphereParams, type DensityMap, type FlowMap, type SpotInput, type V3,
+  compositeLinear, distanceAttenuation, fixtureRadiance, flashlightRadiance, ign, integrateMedium, mediumAt, phase,
+  type AirMap, type AtmosphereParams, type DensityMap, type FogMotion, type SpotInput, type V3,
 } from '../../src/render/atmosphere';
 import type {SmokeField} from '../../src/render/smoke';
 
@@ -28,8 +28,9 @@ export interface FogPreviewOptions {
   time: number;
   steps?: number;
   levels?: number[];
-  /** Iteration 12: drift map (null: rigid wind only). */
-  flow?: FlowMap | null;
+  /** Iteration 13: air map + the station's fog motion (null: no moving fields => the unpatterned medium). */
+  air?: AirMap | null;
+  motion?: FogMotion | null;
   /** Iteration 12: smoke puffs and a scatter light (flare): position, linear colour x intensity, distance, decay. */
   smoke?: SmokeField | null;
   scatterLight?: {pos: V3; color: V3; distance: number; decay: number} | null;
@@ -73,7 +74,7 @@ export function renderFogPreview(sc: PreviewScene, cam: PreviewCamera, o: FogPre
     let lastP: V3 | null = null, lastM = {sigma: 0, excess: 0, detail: 0.5, smoke: 0, tint: [0, 0, 0] as V3};
     const med = (p: V3) => {
       if (lastP && lastP[0] === p[0] && lastP[1] === p[1] && lastP[2] === p[2]) return lastM;
-      const m = mediumAt(p, o.density, o.flow ?? null, o.noise, P, o.time);
+      const m = mediumAt(p, {map: o.density, air: o.air ?? null, noise: o.noise, motion: o.motion ?? null}, P, o.time);
       let smoke = 0, tint: V3 = [0, 0, 0];
       if (o.smoke?.emitters.length) {
         const s = o.smoke.densityAt(p);
@@ -110,10 +111,36 @@ export function renderFogPreview(sc: PreviewScene, cam: PreviewCamera, o: FogPre
     });
     const i = (py * W + px) * 3;
     const fog: V3 = [r.inscatter[0] * P.intensity, r.inscatter[1] * P.intensity, r.inscatter[2] * P.intensity];
-    const c = compositePixel([base[i] / 255, base[i + 1] / 255, base[i + 2] / 255], fog, o.mood.exposure, r.transmittance);
+    const c = compositeSrgb([base[i] / 255, base[i + 1] / 255, base[i + 2] / 255], fog, o.mood.exposure, r.transmittance);
     out[i] = Math.round(Math.min(1, Math.max(0, c[0])) * 255);
     out[i + 1] = Math.round(Math.min(1, Math.max(0, c[1])) * 255);
     out[i + 2] = Math.round(Math.min(1, Math.max(0, c[2])) * 255);
   }
   return out;
+}
+
+// --- preview-only composite: the preview image is already tone-mapped sRGB, so invert three's ACES (at the exposure), apply
+// the linear composite (render/atmosphere.ts compositeLinear, what the GPU does before its output transform), re-apply ACES.
+const ACES_IN = [0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777];
+const ACES_OUT = [1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602];
+const mul3 = (m: readonly number[], v: readonly number[]): V3 => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+function inv3(m: readonly number[]): number[] {
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
+  return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det, B / det, (a * i - c * g) / det, -(a * f - c * d) / det, C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
+}
+const ACES_IN_INV = inv3(ACES_IN), ACES_OUT_INV = inv3(ACES_OUT);
+const rrt = (v: number) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.4329510) + 0.238081);
+const rrtInv = (y: number) => { const yy = Math.min(0.99, Math.max(0, y)); const A = yy * 0.983729 - 1, B = yy * 0.4329510 - 0.0245786, C = yy * 0.238081 + 0.000090537; return (-B - Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A); };
+const dec = (c: number) => c <= 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4);
+const enc = (c: number) => c <= 0.0031308 ? c * 12.92 : Math.pow(c, 0.41666) * 1.055 - 0.055;
+function compositeSrgb(scene: V3, fog: V3, exposure: number, transmittance: number): V3 {
+  const lin3: V3 = [dec(scene[0]), dec(scene[1]), dec(scene[2])];
+  const u = mul3(ACES_OUT_INV, lin3);
+  const v = mul3(ACES_IN_INV, [rrtInv(u[0]), rrtInv(u[1]), rrtInv(u[2])]);
+  const hdr: V3 = [Math.max(0, v[0] * 0.6 / exposure), Math.max(0, v[1] * 0.6 / exposure), Math.max(0, v[2] * 0.6 / exposure)];
+  const c = compositeLinear(hdr, fog, transmittance);
+  const k = exposure / 0.6, w = mul3(ACES_IN, [c[0] * k, c[1] * k, c[2] * k]);
+  const o = mul3(ACES_OUT, [rrt(w[0]), rrt(w[1]), rrt(w[2])]);
+  return [enc(Math.min(1, Math.max(0, o[0]))), enc(Math.min(1, Math.max(0, o[1]))), enc(Math.min(1, Math.max(0, o[2])))];
 }

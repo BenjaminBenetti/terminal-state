@@ -15,14 +15,15 @@
 //                halls) modulated by a coarse world-space value noise: coherent patches, not uniform noise.
 // 2. DETAIL TEXTURE (generated once, 512 px, tiling): R smooth warped fBm stain field (no stamped shapes), G hairline
 //    cracks, B fine grain, A vertical grime runs. Sampled in world metres at two incommensurate scales.
-// 3. ONE SHADER HOOK ('arch-decay-v1', render/shaderHooks.ts) on the architectural materials only, with a
+// 3. ONE NODE HOOK PAIR ('arch-decay-v1' colour + roughness, render/nodeHooks.ts order 200; iteration 13: TSL on node
+//    materials, the iteration-12 GLSL maths unchanged) on the architectural materials only, with a
 //    per-material profile (DECAY_PROFILES): glaze yellowing / paint fade, grime toward the floor and into
 //    corners, vertical grime runs strongest under the ceiling line; where wet only: seepage hanging from the ceiling
 //    seam to a wavy faint tide line, rising damp at the foot, salt bloom along those evaporation fronts; floor dust
 //    vs worn lanes, irregular dried puddle marks, cracks, peeling paint, lost / lifted / discoloured floor tiles,
 //    soft brown ceiling leak stains. Stains come from level sets of a smooth stain field: no stamped circles.
-//    Bounded cost: 2 light-field texel fetches (level slot + band floor / ceiling, only where the station light
-//    field is installed), 4 texture fetches, no loops.
+//    Bounded cost: 2 light-field texel fetches (level slot + band floor / ceiling; world/lightFieldNode.ts lfBandAt),
+//    4 texture fetches, no loops, no branches around texture samples (uniform control flow, WGSL-safe).
 //    The detail texture has anisotropy 1 (render/softwareGl.ts, materials.ts thinTrim).
 // The wall-treatment pass (world/wallDetailPlan.ts) adds the discrete pieces on walls (cracks, chips, lost tiles,
 // leak streaks, rust bleed below wall-mounted steel) at its 30-year condition (WALL_AGE_30Y).
@@ -32,10 +33,15 @@ import {CELL, FLOOR, VOID} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/station';
 import {hashString, mulberry32} from '../core/rng';
-import {addShaderHook, cloneWithShaderHooks} from '../render/shaderHooks';
-import {fieldSlotGLSL} from './lightField';
-import type {MatKey, WorldMaterials} from './materials';
+import {NodeMaterial, QuadMesh, RenderTarget, type Node} from 'three/webgpu';
+import {
+  Fn, clamp, dot, float, floor, fract, int, ivec2, materialColor, materialRoughness, max, min, mix, modelWorldMatrix, normalLocal, positionWorld, pow,
+  screenCoordinate, smoothstep, step, texture, textureLoad, uniform, varying, vec2, vec3, vec4,
+} from 'three/tsl';
+import {addNodeHook} from '../render/nodeHooks';
+import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type MatKey, type WorldMapping, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
+import {asColor, isNodeMaterial, lfBandNode, matRef, pick, sharedStage, skipInShadowPass} from './surfaceNodes';
 
 // ---------------------------------------------------------------------------------------------
 // Profiles
@@ -461,16 +467,7 @@ export function decayDetailTexture(): THREE.DataTexture {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Shader hook
-
-/** Uniforms shared by every decayed material (the station's field is swapped in per station). */
-export const DECAY_UNIFORMS = {
-  uDecayMap: {value: null as THREE.Texture | null},
-  /** (cells x, cells z per level, levels, cell size m). */
-  uDecayGrid: {value: new THREE.Vector4(1, 1, 1, CELL)},
-  uDecayTex: {value: null as THREE.Texture | null},
-  uDecayAge: {value: DECAY_AGE},
-};
+// Decay node hooks (Iteration 13, MAT-A: the iteration-12 GLSL hook 'arch-decay-v1' ported to TSL; same maths)
 
 let neutralMap: THREE.DataTexture | null = null;
 function neutral(): THREE.DataTexture {
@@ -482,182 +479,194 @@ function neutral(): THREE.DataTexture {
   return neutralMap;
 }
 
+/**
+ * Inputs shared by every decayed material (the station's field is swapped in per station): TSL texture / uniform nodes
+ * (`.value` is the bound texture / vector, as the GLSL uniforms were).
+ */
+export const DECAY_UNIFORMS = {
+  uDecayMap: texture(neutral()),
+  /** (cells x, cells z per level, levels, cell size m). */
+  uDecayGrid: uniform(new THREE.Vector4(1, 1, 1, CELL)),
+  /**
+   * The generated detail texture (bound on first applyDecay). Its own placeholder: three shares one sampler uniform between
+   * texture nodes whose textures have the same uuid at build time, so the two inputs must never start on one texture.
+   */
+  uDecayTex: texture(Object.assign(new THREE.DataTexture(new Uint8Array([128, 0, 128, 0]), 1, 1), {needsUpdate: true, name: 'decay-detail-placeholder'})),
+  uDecayAge: uniform(DECAY_AGE),
+};
+
+/** Hook keys: decay colour stage (iteration-12 name) and its roughness stage; order 200 (render/nodeHooks.ts). */
 export const DECAY_HOOK = 'arch-decay-v1';
+export const DECAY_ROUGH_HOOK = 'arch-decay-v1-roughness';
+export const DECAY_ORDER = 200;
 
-export const DECAY_VERTEX = /* glsl */ `
-{
-	vec4 dcP = vec4( transformed, 1.0 );
-	vec3 dcN = objectNormal;
-	#ifdef USE_INSTANCING
-		dcP = instanceMatrix * dcP;
-		dcN = mat3( instanceMatrix ) * dcN;
-	#endif
-	dcP = modelMatrix * dcP;
-	vDecayPos = dcP.xyz;
-	vDecayN = normalize( mat3( modelMatrix ) * dcN );
-}`;
+/** GLSL dcHash: 2D -> [0, 1) hash per floor tile. */
+const dcHash = Fn(([p]: [Node<'vec2'>]) => {
+  const p3 = fract(vec3(p.x, p.y, p.x).mul(0.1031)).toVar();
+  p3.addAssign(dot(p3, p3.yzx.add(33.33)));
+  return fract(p3.x.add(p3.y).mul(p3.z));
+}).setLayout({name: 'dcHash', type: 'float', inputs: [{name: 'p', type: 'vec2'}]});
 
-export const DECAY_FRAGMENT_PARS = /* glsl */ `
-uniform sampler2D uDecayMap;
-uniform vec4 uDecayGrid;
-uniform sampler2D uDecayTex;
-uniform float uDecayAge;
-uniform vec4 uDecayP0;
-uniform vec4 uDecayP1;
-uniform vec4 uDecayP2;
-uniform vec3 uDecayTint;
-varying vec3 vDecayPos;
-varying vec3 vDecayN;
-float dcHash( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }`;
+const dcP0 = matRef('decayP0', 'vec4'), dcP1 = matRef('decayP1', 'vec4'), dcP2 = matRef('decayP2', 'vec4'), dcTint = matRef('decayTint', 'vec3');
+const f1 = float(1);
+const sat = (x: Node<'float'>, hi = 1) => clamp(x, 0.0, hi);
 
 /**
- * Fragment code after <map_fragment> (diffuseColor holds the textured albedo); declares dcRough (roughness offset,
- * applied after <roughnessmap_fragment>). P0 = grime, streaks, efflorescence, stains; P1 = wear, dust, cracks,
- * peel; P2 = tile grid (m), tile loss, fade, paint wear.
+ * Everything of the decay that does not depend on the surface colour, shared (module singletons) by every decayed
+ * material: surface orientation, the level band in front of the surface (station light field), the decay field texel,
+ * the two detail samples + the along-wall edge lookup, and the roughness offset. Same maths as iteration 12.
  */
-export const DECAY_FRAGMENT = /* glsl */ `
-float dcRough = 0.0;
-{
-	vec3 dn = normalize( vDecayN );
-	float wallK = 1.0 - smoothstep( 0.45, 0.75, abs( dn.y ) );
-	float floorK = smoothstep( 0.6, 0.85, dn.y );
-	float ceilK = smoothstep( 0.6, 0.85, - dn.y );
-	// The open cell in front of the surface: its level slot and floor (station light field, when installed).
-	vec3 dp = vDecayPos + dn * 0.2;
-	float dcSlot = 0.0;
-	float dcFloor = 0.0;
-	float dcCeil = 3.2;
-	#ifdef LF_FLOOR_AT
-	{
-		ivec3 size = textureSize( probesSH, 0 );
-		vec2 cell = ( probesMax.xz - probesMin.xz ) / vec2( size.xy );
-		ivec2 ci = clamp( ivec2( floor( ( dp.xz - probesMin.xz ) / cell ) ), ivec2( 0 ), size.xy - 1 );
-		float yr = probesMax.y - probesMin.y;
-		${fieldSlotGLSL('probesSH', 'ci', 'size', 'dp.y', 'probesMin.y', 'yr')}
-		dcSlot = float( lfSlot );
-		dcFloor = lfFl;
-		dcCeil = lfCe;
-	}
-	#endif
-	vec2 dcCell = dp.xz / uDecayGrid.w;
-	float dcRow = clamp( dcCell.y, 0.5, uDecayGrid.y - 0.5 ) + min( dcSlot, uDecayGrid.z - 1.0 ) * uDecayGrid.y;
-	vec4 D = texture2D( uDecayMap, vec2( dcCell.x / uDecayGrid.x, dcRow / ( uDecayGrid.y * uDecayGrid.z ) ) );
-	float traffic = D.r, open = D.g, wet = D.b;
-	float k = uDecayAge * mix( 0.55, 1.35, D.a );
-	float h = max( 0.0, vDecayPos.y - dcFloor );
-	float hTop = max( 0.0, dcCeil - vDecayPos.y );
-	vec2 wuv = wallK > 0.5 ? vec2( abs( dn.x ) > abs( dn.z ) ? vDecayPos.z : vDecayPos.x, vDecayPos.y ) : vDecayPos.xz;
-	vec4 TA = texture2D( uDecayTex, wuv * ${(1 / DETAIL_SPANS[0]).toFixed(5)} );
-	vec4 TB = texture2D( uDecayTex, wuv * ${(1 / DETAIL_SPANS[1]).toFixed(5)} + vec2( 0.43, 0.17 ) );
-	// Irregular stain field (smooth warped fBm at two incommensurate scales: no stamps, no visible repeat).
-	float S = TA.r * 0.65 + TB.r * 0.35;
-	float grain = TB.b;
-	float run = max( TA.a, TB.a * 0.6 );
-	vec3 c = diffuseColor.rgb;
-	float lum = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-	float corner = 1.0 - smoothstep( 0.32, 0.7, open );
-	float wetM = smoothstep( 0.15, 0.65, wet );
-	// Colours are LINEAR (diffuseColor after the sRGB map decode).
-	// Colour aging: glaze yellowing / chalky paint, bounded so finishes keep their identity.
-	c = mix( c, vec3( lum ) * vec3( 1.08, 1.0, 0.84 ), clamp( uDecayP2.z * k * 0.45, 0.0, 0.5 ) );
-	// Grime film: walls darken toward the floor and into corners; ceilings toward the walls (soot); floors soiled.
-	// Large-scale variation from the stain field is gentle (no shapes).
-	float lowH = 1.0 - smoothstep( 0.0, 1.4, h );
-	float gr = uDecayP0.x * k * ( wallK * ( 0.32 + 0.75 * lowH + 0.45 * corner + 0.3 * ( S - 0.5 ) ) + ceilK * ( 0.3 + 0.6 * corner + 0.3 * ( S - 0.5 ) ) + floorK * ( 0.25 + 0.3 * corner ) );
-	gr *= 0.8 + 0.4 * grain;
-	c = mix( c, c * uDecayTint, clamp( gr, 0.0, 0.85 ) );
-	// Walls: vertical grime runs, strongest just under the ceiling line / seams, heavier where wet.
-	float topRun = 1.0 - 0.6 * smoothstep( 0.3, 2.6, hTop );
-	float st = uDecayP0.y * k * wallK * run * ( 0.6 + 1.0 * wetM ) * topRun * smoothstep( 0.1, 0.5, h );
-	c = mix( c, c * uDecayTint * 0.6, clamp( st, 0.0, 0.7 ) );
-	// Walls, only where wet: seepage hanging from the ceiling seam down to a wavy edge (a faint tide line there) with
-	// runs inside it, and rising damp at the foot below a faint wavy tide line. Edges vary along the wall only.
-	float edgeN = texture2D( uDecayTex, vec2( wuv.x * ${(1 / EDGE_SPAN).toFixed(5)}, 0.31 ) ).r;
-	float wW = smoothstep( 0.3, 0.75, wet ) * wallK;
-	float seepL = ( 0.4 + 1.6 * wW ) * ( 0.5 + edgeN );
-	float curtain = wW * ( 1.0 - smoothstep( seepL - 0.25, seepL + 0.05, hTop ) ) * ( 0.6 + 0.4 * run );
-	float tideT = wW * exp( - pow( ( hTop - seepL ) / 0.03, 2.0 ) );
-	float foot = 0.25 + 0.55 * wW * ( 0.4 + edgeN );
-	float damp = wW * ( 1.0 - smoothstep( foot - 0.12, foot, h ) );
-	float tideF = wW * exp( - pow( ( h - foot ) / 0.03, 2.0 ) );
-	float sw = uDecayP0.w * k;
-	c = mix( c, c * vec3( 0.8, 0.74, 0.62 ), clamp( sw * ( curtain * 0.45 + damp * 0.35 ), 0.0, 0.4 ) );
-	c = mix( c, c * vec3( 0.66, 0.58, 0.46 ), clamp( sw * ( tideT + tideF ) * 0.3, 0.0, 0.25 ) );
-	dcRough -= 0.12 * clamp( curtain + damp, 0.0, 1.0 );
-	// Efflorescence: salt left along the evaporation fronts (wall tide lines); sparse irregular bloom on wet floors /
-	// ceilings.
-	float S2 = smoothstep( 0.62, 0.76, S );
-	float ef = uDecayP0.z * k * ( ( tideT * 0.6 + tideF ) * smoothstep( 0.3, 0.7, grain + 0.2 ) + ( floorK * 0.35 + ceilK * 0.2 ) * wetM * S2 );
-	c = mix( c, vec3( 0.7, 0.68, 0.61 ), clamp( ef * 0.6, 0.0, 0.45 ) );
-	dcRough += 0.2 * clamp( ef, 0.0, 1.0 );
-	// Water stains, only where wet: irregular dried puddle marks (floors) and brown leak stains (ceilings), each with a
-	// faint irregular tide edge (a level set of the stain field).
-	float stain = smoothstep( 0.56, 0.7, S );
-	float rim = 1.0 - smoothstep( 0.0, 0.02, abs( S - 0.56 ) );
-	float sf = uDecayP0.w * k * floorK * ( 0.12 + 0.8 * wetM );
-	c = mix( c, c * vec3( 0.66, 0.6, 0.5 ), clamp( sf * stain * 0.5, 0.0, 0.4 ) );
-	c = mix( c, c * vec3( 0.6, 0.54, 0.44 ), clamp( sf * rim * 0.25, 0.0, 0.2 ) );
-	float sc = uDecayP0.w * k * ceilK * ( 0.05 + wetM );
-	c = mix( c, c * vec3( 0.85, 0.72, 0.52 ), clamp( sc * stain * 0.6, 0.0, 0.45 ) );
-	c = mix( c, c * vec3( 0.58, 0.46, 0.32 ), clamp( sc * rim * 0.35, 0.0, 0.3 ) );
-	dcRough -= 0.1 * clamp( sf * stain, 0.0, 1.0 );
-	// Floors: worn lanes (polished, ground-in grime; painted edges wear through) vs dust where nobody walks.
-	float lane = traffic * floorK;
-	c *= 1.0 - 0.22 * uDecayP1.x * lane;
-	dcRough -= 0.2 * uDecayP1.x * lane;
-	c = mix( c, vec3( 0.18, 0.17, 0.16 ) * ( 0.85 + 0.3 * grain ), clamp( uDecayP2.w * uDecayP1.x * lane * smoothstep( 0.3, 0.7, grain + 0.25 * ( S - 0.5 ) ), 0.0, 0.75 ) );
-	float dust = uDecayP1.y * k * floorK * ( 0.18 + 0.82 * pow( 1.0 - traffic, 1.5 ) * ( 0.4 + 0.6 * corner + 0.25 * ( 1.0 - open ) ) );
-	dust *= 0.7 + 0.6 * grain;
-	c = mix( c, vec3( 0.21, 0.19, 0.15 ) * ( 0.8 + 0.4 * grain ), clamp( dust, 0.0, 0.75 ) );
-	dcRough += 0.3 * clamp( dust, 0.0, 1.0 );
-	// Hairline cracks (worst where neglected).
-	float cr = uDecayP1.z * k * smoothstep( 0.45, 0.85, TB.g ) * ( 0.5 + 0.5 * D.a );
-	c *= 1.0 - clamp( cr * 0.75, 0.0, 0.75 );
-	// Peeling paint: irregular flakes (stain-field level set, grain-broken edges) in damp, neglected patches.
-	float pe = uDecayP1.w * k * ( wallK + ceilK );
-	float pv = S + 0.15 * ( grain - 0.5 ) + 0.12 * wet + 0.06 * D.a;
-	float peel = smoothstep( 0.82 - 0.1 * pe, 0.85 - 0.1 * pe, pv ) * step( 0.05, pe );
-	c = mix( c, vec3( 0.32, 0.31, 0.29 ) * ( 0.8 + 0.4 * grain ), peel * 0.5 );
-	c += vec3( 0.02 ) * peel * ( 1.0 - peel ) * 4.0;
-	dcRough += 0.2 * peel;
-	// Floor tiles: lost tiles (dark bedding, chipped edges), lifted / discoloured ones with grimy joints.
-	if ( uDecayP2.x > 0.0 && floorK > 0.5 ) {
-		vec2 tc = wuv / uDecayP2.x;
-		vec2 tf = fract( tc );
-		float r = dcHash( floor( tc ) );
-		float loss = uDecayP2.y * k;
-		float edge = 1.0 - smoothstep( 0.0, 0.05, min( min( tf.x, tf.y ), min( 1.0 - tf.x, 1.0 - tf.y ) ) );
-		if ( r < loss ) {
-			c = mix( vec3( 0.064, 0.059, 0.051 ) * ( 0.7 + 0.6 * grain ), c * 0.35, edge );
-			dcRough += 0.35;
-		} else if ( r < loss * 3.5 ) {
-			c *= mix( vec3( 0.8, 0.76, 0.68 ), vec3( 0.45, 0.42, 0.38 ), edge );
-		}
-	}
-	diffuseColor.rgb = c;
-}`;
+/**
+ * The decay field texel for the open cell at `dp` (in front of the surface): the level band holding it (station light
+ * field) picks the level's rows of the field texture. Shared by the material graph and the GPU probe (probeDecayGPU).
+ */
+function decayFieldAt(dp: Node<'vec3'>): {band: Node<'vec3'>; uv: Node<'vec2'>} {
+  const band = lfBandNode(dp).toVar('dcBand');
+  const G = DECAY_UNIFORMS.uDecayGrid as unknown as Node<'vec4'>;
+  const cell = dp.xz.div(G.w);
+  const row = clamp(cell.y, 0.5, G.y.sub(0.5)).add(min(band.x, G.z.sub(1.0)).mul(G.y));
+  return {band, uv: vec2(cell.x.div(G.x), row.div(G.y.mul(G.z)))};
+}
 
-export const DECAY_ANCHORS = {vertex: ['#include <common>', '#include <fog_vertex>'], fragment: ['#include <common>', '#include <map_fragment>', '#include <roughnessmap_fragment>']};
+const DC = (() => {
+  const pos = positionWorld;
+  const dn = varying(normalLocal.transformDirection(modelWorldMatrix), 'vDecayN').normalize().toVar('dcN');
+  const wallK = f1.sub(smoothstep(0.45, 0.75, dn.y.abs())).toVar('dcWallK');
+  const floorK = smoothstep(0.6, 0.85, dn.y).toVar('dcFloorK');
+  const ceilK = smoothstep(0.6, 0.85, dn.y.negate()).toVar('dcCeilK');
+  // The open cell in front of the surface: its level slot, floor and ceiling (station light field, when installed).
+  const dp = pos.add(dn.mul(0.2)).toVar('dcP');
+  const {band, uv: fieldUv} = decayFieldAt(dp);
+  const D = (DECAY_UNIFORMS.uDecayMap.sample(fieldUv) as unknown as Node<'vec4'>).toVar('dcD');
+  const traffic = D.x, open = D.y, wet = D.z;
+  const k = (DECAY_UNIFORMS.uDecayAge as unknown as Node<'float'>).mul(mix(0.55, 1.35, D.w)).toVar('dcK');
+  const h = max(0.0, pos.y.sub(band.y)).toVar('dcH');
+  const hTop = max(0.0, band.z.sub(pos.y)).toVar('dcHTop');
+  const wuv = pick(wallK.greaterThan(0.5), vec2(pick(dn.x.abs().greaterThan(dn.z.abs()), pos.z, pos.x), pos.y), pos.xz);
+  const tex = DECAY_UNIFORMS.uDecayTex;
+  const TA = (tex.sample(wuv.mul(1 / DETAIL_SPANS[0])) as unknown as Node<'vec4'>).toVar('dcTA');
+  const TB = (tex.sample(wuv.mul(1 / DETAIL_SPANS[1]).add(vec2(0.43, 0.17))) as unknown as Node<'vec4'>).toVar('dcTB');
+  const edgeN = (tex.sample(vec2(wuv.x.mul(1 / EDGE_SPAN), 0.31)) as unknown as Node<'vec4'>).x.toVar('dcEdge');
+  // Irregular stain field (smooth warped fBm at two incommensurate scales: no stamps, no visible repeat).
+  const S = TA.x.mul(0.65).add(TB.x.mul(0.35)).toVar('dcS');
+  const grain = TB.z, run = max(TA.w, TB.w.mul(0.6));
+  const corner = f1.sub(smoothstep(0.32, 0.7, open)).toVar('dcCorner');
+  const wetM = smoothstep(0.15, 0.65, wet).toVar('dcWetM');
+  // Grime film: walls toward the floor and into corners; ceilings toward the walls (soot); floors soiled.
+  const lowH = f1.sub(smoothstep(0.0, 1.4, h));
+  const gr = dcP0.x.mul(k).mul(
+    wallK.mul(lowH.mul(0.75).add(0.32).add(corner.mul(0.45)).add(S.sub(0.5).mul(0.3)))
+      .add(ceilK.mul(corner.mul(0.6).add(0.3).add(S.sub(0.5).mul(0.3))))
+      .add(floorK.mul(corner.mul(0.3).add(0.25)))).mul(grain.mul(0.4).add(0.8));
+  // Walls: vertical grime runs, strongest just under the ceiling line / seams, heavier where wet.
+  const topRun = f1.sub(smoothstep(0.3, 2.6, hTop).mul(0.6));
+  const st = dcP0.y.mul(k).mul(wallK).mul(run).mul(wetM.add(0.6)).mul(topRun).mul(smoothstep(0.1, 0.5, h));
+  // Walls, only where wet: seepage curtain from the ceiling seam to a wavy faint tide line, rising damp at the foot.
+  const wW = smoothstep(0.3, 0.75, wet).mul(wallK).toVar('dcWW');
+  const seepL = wW.mul(1.6).add(0.4).mul(edgeN.add(0.5));
+  const curtain = wW.mul(f1.sub(smoothstep(seepL.sub(0.25), seepL.add(0.05), hTop))).mul(run.mul(0.4).add(0.6)).toVar('dcCurtain');
+  const tT = hTop.sub(seepL).div(0.03), tideT = wW.mul(tT.mul(tT).negate().exp()).toVar('dcTideT');
+  const foot = wW.mul(0.55).mul(edgeN.add(0.4)).add(0.25);
+  const damp = wW.mul(f1.sub(smoothstep(foot.sub(0.12), foot, h))).toVar('dcDamp');
+  const tF = h.sub(foot).div(0.03), tideF = wW.mul(tF.mul(tF).negate().exp()).toVar('dcTideF');
+  const sw = dcP0.w.mul(k);
+  // Efflorescence: salt along the evaporation fronts (wall tide lines); sparse irregular bloom on wet floors / ceilings.
+  const S2 = smoothstep(0.62, 0.76, S);
+  const ef = dcP0.z.mul(k).mul(tideT.mul(0.6).add(tideF).mul(smoothstep(0.3, 0.7, grain.add(0.2)))
+    .add(floorK.mul(0.35).add(ceilK.mul(0.2)).mul(wetM).mul(S2))).toVar('dcEf');
+  // Water stains (wet only): dried puddle marks (floors), brown leak stains (ceilings), faint tide edges.
+  const stain = smoothstep(0.56, 0.7, S).toVar('dcStain');
+  const rim = f1.sub(smoothstep(0.0, 0.02, S.sub(0.56).abs()));
+  const sf = dcP0.w.mul(k).mul(floorK).mul(wetM.mul(0.8).add(0.12)).toVar('dcSf');
+  const sc = dcP0.w.mul(k).mul(ceilK).mul(wetM.add(0.05));
+  // Floors: worn lanes (polished, ground-in; painted edges wear through) vs dust where nobody walks.
+  const lane = traffic.mul(floorK).toVar('dcLane');
+  const laneWear = sat(dcP2.w.mul(dcP1.x).mul(lane).mul(smoothstep(0.3, 0.7, grain.add(S.sub(0.5).mul(0.25)))), 0.75);
+  const dust = dcP1.y.mul(k).mul(floorK).mul(pow(f1.sub(traffic), 1.5).mul(corner.mul(0.6).add(0.4).add(f1.sub(open).mul(0.25))).mul(0.82).add(0.18))
+    .mul(grain.mul(0.6).add(0.7)).toVar('dcDust');
+  // Hairline cracks (worst where neglected).
+  const cr = dcP1.z.mul(k).mul(smoothstep(0.45, 0.85, TB.y)).mul(D.w.mul(0.5).add(0.5));
+  // Peeling paint: irregular flakes (stain-field level set, grain-broken edges) in damp, neglected patches.
+  const pe = dcP1.w.mul(k).mul(wallK.add(ceilK));
+  const pv = S.add(grain.sub(0.5).mul(0.15)).add(wet.mul(0.12)).add(D.w.mul(0.06));
+  const peel = smoothstep(pe.mul(-0.1).add(0.82), pe.mul(-0.1).add(0.85), pv).mul(step(0.05, pe)).toVar('dcPeel');
+  // Floor tiles: lost tiles (dark bedding, chipped edges), lifted / discoloured ones with grimy joints.
+  const tc = wuv.div(max(dcP2.x, 1e-3));
+  const tf = fract(tc);
+  const r = dcHash(floor(tc));
+  const loss = dcP2.y.mul(k);
+  const tileOn = dcP2.x.greaterThan(0.0).and(floorK.greaterThan(0.5));
+  const lost = float(tileOn.and(r.lessThan(loss))).toVar('dcLost');
+  const lifted = float(tileOn.and(r.greaterThanEqual(loss)).and(r.lessThan(loss.mul(3.5)))).toVar('dcLifted');
+  const edge = f1.sub(smoothstep(0.0, 0.05, min(min(tf.x, tf.y), min(f1.sub(tf.x), f1.sub(tf.y))))).toVar('dcEdge2');
+  const rough = sat(curtain.add(damp)).mul(-0.12)
+    .add(sat(ef).mul(0.2))
+    .add(sat(sf.mul(stain)).mul(-0.1))
+    .add(dcP1.x.mul(lane).mul(-0.2))
+    .add(sat(dust).mul(0.3))
+    .add(peel.mul(0.2))
+    .add(lost.mul(0.35));
+  return {D, k, wallK, floorK, ceilK, S, grain, corner, wetM, gr, st, curtain, damp, tideT, tideF, sw, ef, stain, rim, sf, sc, lane, laneWear, dust, cr, peel, lost, lifted, edge, rough: rough.toVar('dcRough')};
+})();
 
-/** Install the decay hook on one material with a profile (idempotent; replaces an earlier profile). */
+/** The decayed albedo of linear colour `c0` (iteration-12 order of operations). */
+function decayColor(c0: Node<'vec3'>): Node<'vec3'> {
+  const d = DC;
+  let c: Node<'vec3'> = c0;
+  const lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  // Colour aging: glaze yellowing / chalky paint, bounded so finishes keep their identity.
+  c = mix(c, vec3(lum).mul(vec3(1.08, 1.0, 0.84)), sat(dcP2.z.mul(d.k).mul(0.45), 0.5));
+  c = mix(c, c.mul(dcTint), sat(d.gr, 0.85));
+  c = mix(c, c.mul(dcTint).mul(0.6), sat(d.st, 0.7));
+  c = mix(c, c.mul(vec3(0.8, 0.74, 0.62)), sat(d.sw.mul(d.curtain.mul(0.45).add(d.damp.mul(0.35))), 0.4));
+  c = mix(c, c.mul(vec3(0.66, 0.58, 0.46)), sat(d.sw.mul(d.tideT.add(d.tideF)).mul(0.3), 0.25));
+  c = mix(c, vec3(0.7, 0.68, 0.61), sat(d.ef.mul(0.6), 0.45));
+  c = mix(c, c.mul(vec3(0.66, 0.6, 0.5)), sat(d.sf.mul(d.stain).mul(0.5), 0.4));
+  c = mix(c, c.mul(vec3(0.6, 0.54, 0.44)), sat(d.sf.mul(d.rim).mul(0.25), 0.2));
+  c = mix(c, c.mul(vec3(0.85, 0.72, 0.52)), sat(d.sc.mul(d.stain).mul(0.6), 0.45));
+  c = mix(c, c.mul(vec3(0.58, 0.46, 0.32)), sat(d.sc.mul(d.rim).mul(0.35), 0.3));
+  c = c.mul(f1.sub(dcP1.x.mul(d.lane).mul(0.22)));
+  c = mix(c, vec3(0.18, 0.17, 0.16).mul(d.grain.mul(0.3).add(0.85)), d.laneWear);
+  c = mix(c, vec3(0.21, 0.19, 0.15).mul(d.grain.mul(0.4).add(0.8)), sat(d.dust, 0.75));
+  c = c.mul(f1.sub(sat(d.cr.mul(0.75), 0.75)));
+  c = mix(c, vec3(0.32, 0.31, 0.29).mul(d.grain.mul(0.4).add(0.8)), d.peel.mul(0.5));
+  c = c.add(vec3(0.02).mul(d.peel.mul(f1.sub(d.peel)).mul(4.0)));
+  // Lost tile: bedding with chipped edges; lifted / discoloured: tinted with grimy joints. 0 / 1 masks with mix (exact
+  // selection; TSL select() isolates its branches, which would duplicate this whole colour chain per branch).
+  const cLost = mix(vec3(0.064, 0.059, 0.051).mul(d.grain.mul(0.6).add(0.7)), c.mul(0.35), d.edge);
+  const cLifted = c.mul(mix(vec3(0.8, 0.76, 0.68), vec3(0.45, 0.42, 0.38), d.edge));
+  return mix(mix(c, cLifted, d.lifted), cLost, d.lost);
+}
+
+const decayColorStage = sharedStage(prev => {
+  const c = asColor(prev, materialColor);
+  return skipInShadowPass(vec4(decayColor(c.rgb), c.a), c, 'vec4');
+});
+const decayRoughStage = sharedStage(prev => clamp(float((prev ?? materialRoughness) as Node<'float'>).add(DC.rough), 0.04, 1.0));
+
+type DecayTarget = NodeMaterial & Pick<SurfaceNodeMaterial, 'decayP0' | 'decayP1' | 'decayP2' | 'decayTint'>;
+
+/**
+ * Install the decay hooks on one (node) material with a profile (idempotent; replaces an earlier profile). The profile
+ * lives in the material's decay properties (SurfaceNodeMaterial), so every decayed material shares the program.
+ */
 export function applyDecay(m: THREE.Material, profile: DecayProfile): void {
-  if (!DECAY_UNIFORMS.uDecayTex.value) DECAY_UNIFORMS.uDecayTex.value = decayDetailTexture();
-  if (!DECAY_UNIFORMS.uDecayMap.value) DECAY_UNIFORMS.uDecayMap.value = neutral();
-  const p0 = new THREE.Vector4(profile.grime, profile.streaks, profile.efflor, profile.stains);
-  const p1 = new THREE.Vector4(profile.wear, profile.dust, profile.cracks, profile.peel);
-  const p2 = new THREE.Vector4(profile.tile, profile.tileLoss, profile.fade, profile.paintWear);
-  const tint = new THREE.Vector3(...profile.tint);
+  if (!isNodeMaterial(m)) throw new Error(`applyDecay: ${m.type} "${m.name}" is not a node material`);
+  if (DECAY_UNIFORMS.uDecayTex.value !== detailTex || !detailTex) DECAY_UNIFORMS.uDecayTex.value = decayDetailTexture();
+  const t = m as DecayTarget;
+  // Plain node materials get the properties too (clones keep them only on SurfaceNodeMaterial).
+  if (!(t.decayP0 instanceof THREE.Vector4)) Object.assign(t, {decayP0: new THREE.Vector4(0, 0, 0, 0), decayP1: new THREE.Vector4(0, 0, 0, 0), decayP2: new THREE.Vector4(0, 0, 0, 0), decayTint: new THREE.Vector3(1, 1, 1)});
+  t.decayP0.set(profile.grime, profile.streaks, profile.efflor, profile.stains);
+  t.decayP1.set(profile.wear, profile.dust, profile.cracks, profile.peel);
+  t.decayP2.set(profile.tile, profile.tileLoss, profile.fade, profile.paintWear);
+  t.decayTint.set(...profile.tint);
   m.userData.decay = profile;
-  addShaderHook(m, DECAY_HOOK, sh => {
-    Object.assign(sh.uniforms, DECAY_UNIFORMS, {uDecayP0: {value: p0}, uDecayP1: {value: p1}, uDecayP2: {value: p2}, uDecayTint: {value: tint}});
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vDecayPos;\nvarying vec3 vDecayN;')
-      .replace('#include <fog_vertex>', '#include <fog_vertex>\n' + DECAY_VERTEX);
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + DECAY_FRAGMENT_PARS)
-      .replace('#include <map_fragment>', '#include <map_fragment>\n' + DECAY_FRAGMENT)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp( roughnessFactor + dcRough, 0.04, 1.0 );');
-  });
+  addNodeHook(m, {key: DECAY_HOOK, stage: 'color', order: DECAY_ORDER, fn: decayColorStage});
+  addNodeHook(m, {key: DECAY_ROUGH_HOOK, stage: 'roughness', order: DECAY_ORDER, fn: decayRoughStage});
+  // World-mapped finishes (storefront-unit tile / quarry tile): iteration 12 applied the decay BEFORE the world-mapping
+  // floor grime / tone variation (both GLSL hooks patched after <map_fragment>, the later one landing first); keep that.
+  const wm = m.userData.worldMapping as WorldMapping | undefined;
+  if (wm && m instanceof SurfaceNodeMaterial) worldMapped(m, wm, DECAY_ORDER + 50);
 }
 
 const shopCopies = new WeakMap<WorldMaterials, Map<string, THREE.Material>>();
@@ -670,7 +679,7 @@ export function archShopMaterial(mats: WorldMaterials, key: string): THREE.Mater
   if (!cache) shopCopies.set(mats, (cache = new Map()));
   let m = cache.get(key);
   if (!m) {
-    m = cloneWithShaderHooks(shapeMaterial(mats, key));
+    m = cloneSurfaceMaterial(shapeMaterial(mats, key));
     m.name = `arch-shop-${key}`;
     const prof = (DECAY_PROFILES as Record<string, DecayProfile>)[key];
     if (prof) applyDecay(m, prof);
@@ -688,8 +697,12 @@ export function decayWorldMaterials(mats: WorldMaterials): void {
 }
 
 let fieldTex: THREE.DataTexture | null = null;
-/** Upload a station's decay field to the shared uniforms (disposes the previous station's texture). */
+let currentField: DecayField | null = null;
+/** The decay field bound to the shared inputs (QA / tests). */
+export const activeDecayField = (): DecayField | null => currentField;
+/** Upload a station's decay field to the shared decay inputs (disposes the previous station's texture). */
 export function setDecayField(f: DecayField): THREE.DataTexture {
+  currentField = f;
   const t = new THREE.DataTexture(f.data, f.w, f.h * f.levels, THREE.RGBAFormat, THREE.UnsignedByteType);
   t.magFilter = t.minFilter = THREE.LinearFilter;
   t.generateMipmaps = false;
@@ -702,7 +715,7 @@ export function setDecayField(f: DecayField): THREE.DataTexture {
   fieldTex = t;
   DECAY_UNIFORMS.uDecayMap.value = t;
   DECAY_UNIFORMS.uDecayGrid.value.set(f.w, f.h, f.levels, CELL);
-  if (!DECAY_UNIFORMS.uDecayTex.value) DECAY_UNIFORMS.uDecayTex.value = decayDetailTexture();
+  if (DECAY_UNIFORMS.uDecayTex.value !== detailTex || !detailTex) DECAY_UNIFORMS.uDecayTex.value = decayDetailTexture();
   return t;
 }
 
@@ -712,4 +725,70 @@ export function applyStationDecay(layout: StationLayout, levels: readonly Level[
   const f = buildDecayField(layout, levels);
   setDecayField(f);
   return f;
+}
+
+// ---------------------------------------------------------------------------------------------
+// QA: the decay inputs as the GPU sees them (Iteration 13, MAT-A)
+
+export interface DecayProbe {
+  /** World point on a surface and its outward normal (the shader reads the open cell at p + 0.2 n). */
+  p: readonly [number, number, number]; n: readonly [number, number, number];
+}
+export interface DecayProbeValue {
+  /** GPU: decay field texel (traffic, open, wet, neglect) and level band (slot, floor, ceiling). */
+  gpu: {field: [number, number, number, number]; band: [number, number, number]};
+  /** CPU: sampleDecay of the bound field at the same point, on the GPU-picked level slot. */
+  cpu: {traffic: number; open: number; wet: number; neglect: number} | null;
+}
+interface ProbeRenderer {
+  getRenderTarget(): unknown; setRenderTarget(t: unknown): void;
+  readRenderTargetPixelsAsync(rt: unknown, x: number, y: number, w: number, h: number): Promise<ArrayLike<number>>;
+}
+
+/**
+ * Render the decay inputs of `pts` (the same TSL as the materials: decayFieldAt + the decay field texture) into float
+ * targets and read them back, next to the CPU field sample. Browser QA proof that the station field, its level rows and
+ * the light-field band reach the surface shaders on the running backend.
+ */
+export async function probeDecayGPU(renderer: ProbeRenderer, pts: readonly DecayProbe[]): Promise<DecayProbeValue[]> {
+  const N = pts.length;
+  const P = new Float32Array(N * 4);
+  pts.forEach((q, i) => P.set([q.p[0] + q.n[0] * 0.2, q.p[1] + q.n[1] * 0.2, q.p[2] + q.n[2] * 0.2, 1], i * 4));
+  const posT = new THREE.DataTexture(P, N, 1, THREE.RGBAFormat, THREE.FloatType);
+  posT.minFilter = posT.magFilter = THREE.NearestFilter;
+  posT.generateMipmaps = false;
+  posT.needsUpdate = true;
+  const row = uniform(0);
+  const mat = new NodeMaterial();
+  mat.name = 'decay-probe';
+  mat.depthTest = mat.depthWrite = false;
+  mat.blending = THREE.NoBlending;
+  mat.fragmentNode = Fn(() => {
+    const i = int(floor((screenCoordinate as unknown as Node<'vec2'>).x));
+    const dp = (textureLoad(posT, ivec2(i, 0)) as unknown as Node<'vec4'>).xyz;
+    const {band, uv} = decayFieldAt(dp);
+    const D = DECAY_UNIFORMS.uDecayMap.sample(uv) as unknown as Node<'vec4'>;
+    return mix(D, vec4(band, 1), (row as unknown as Node<'float'>));
+  })();
+  const quad = new QuadMesh(mat);
+  const rts = [0, 1].map(() => new RenderTarget(N, 1, {type: THREE.FloatType, format: THREE.RGBAFormat, depthBuffer: false,
+    minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false, samples: 0}));
+  const prev = renderer.getRenderTarget();
+  try {
+    rts.forEach((rt, k) => { row.value = k; renderer.setRenderTarget(rt); quad.render(renderer as never); });
+    renderer.setRenderTarget(prev);
+    const [d, b] = await Promise.all(rts.map(rt => renderer.readRenderTargetPixelsAsync(rt, 0, 0, N, 1)));
+    const f = currentField;
+    return pts.map((_, i) => {
+      const field = [0, 1, 2, 3].map(c => +Number(d[i * 4 + c]).toFixed(4)) as [number, number, number, number];
+      const band = [0, 1, 2].map(c => +Number(b[i * 4 + c]).toFixed(3)) as [number, number, number];
+      const cpu = f ? sampleDecay(f, Math.min(f.levels - 1, Math.round(band[0])), P[i * 4], P[i * 4 + 2]) : null;
+      return {gpu: {field, band}, cpu};
+    });
+  } finally {
+    renderer.setRenderTarget(prev);
+    for (const rt of rts) rt.dispose();
+    posT.dispose();
+    mat.dispose();
+  }
 }

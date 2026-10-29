@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import {SHAPE_MAT_KEYS, type ShapeMat} from '../gen/propShapes';
 import {fareScreenTexture, menuBoardTexture, vendFrontTexture} from './canvasTextures';
-import {surfaceMaterial, worldMapped, type WorldMaterials} from './materials';
+import {SurfaceNodeMaterial, surfaceMaterial, worldMapped, type WorldMaterials} from './materials';
 
 export type ShapeUv = 'world' | 'face';
 
@@ -20,8 +20,9 @@ const WORN = {grime: [0.35, 0.45] as [number, number], macro: 0.15};
 
 type Spec = {uv: ShapeUv; make: (mats: WorldMaterials) => THREE.Material} | {alias: ShapeMat};
 
+// Iteration 13 (MAT-A): node materials (SurfaceNodeMaterial: other lanes' node hooks layer onto them).
 const glow = (map: THREE.Texture, intensity: number, roughness: number) =>
-  new THREE.MeshStandardMaterial({map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: intensity, roughness, metalness: 0});
+  new SurfaceNodeMaterial({map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: intensity, roughness, metalness: 0});
 const menu = (variant: number): Spec => ({uv: 'face', make: () => glow(menuBoardTexture(variant), 0.6, 0.3)});
 
 const SPECS: Record<ShapeMat, Spec> = {
@@ -38,7 +39,7 @@ const SPECS: Record<ShapeMat, Spec> = {
   porcelain: {uv: 'world', make: () => surfaceMaterial('porcelain', {}, {grime: [0.25, 0.3], macro: 0.08})},
   partition: {uv: 'world', make: () => surfaceMaterial('paintedPanel', {color: 0xa3b3ae, metalness: 0.15}, WORN)},
   // Same concrete texture as the service floors, world-mapped for stair blocks.
-  concrete: {uv: 'world', make: mats => worldMapped(new THREE.MeshStandardMaterial({map: (mats.get('concrete') as THREE.MeshStandardMaterial).map, roughness: 0.92, metalness: 0}), {span: [2, 2], grime: [0.2, 0.3], macro: 0.15})},
+  concrete: {uv: 'world', make: mats => worldMapped(new SurfaceNodeMaterial({map: (mats.get('concrete') as THREE.MeshStandardMaterial).map, roughness: 0.92, metalness: 0}), {span: [2, 2], grime: [0.2, 0.3], macro: 0.15})},
   grille: {uv: 'world', make: () => surfaceMaterial('paintedSteel', {color: 0xa6a6a6, metalness: 0.35}, WORN)},
   black: {uv: 'world', make: () => surfaceMaterial('black', {}, {macro: 0.1})},
   wood: {uv: 'world', make: () => surfaceMaterial('woodVeneer', {}, WORN)},

@@ -1,210 +1,134 @@
-// Iteration 06 (Lane F): volumetric atmosphere + chained shader hooks.
-// - render/shaderHooks.ts chains onBeforeCompile hooks (keeps earlier direct hooks, extends cache keys);
-// - the volumetric GLSL is self-contained, ASCII, balanced, int/float-clean and every uniform is wired;
-// - three still exposes what the pass relies on (XR-flagged targets render like the canvas, spot shadow
-//   depth textures with hardware compare, shadow.matrix convention);
-// - CPU mirrors: phase normalisation, depth-limited march (nothing behind the surface contributes),
-//   shadow-map occlusion of the beam (and no acne on grazing floors with the chosen bias), bilateral
-//   upsample never paints far fog over a near silhouette, composite is exact where there is no fog;
-// - lifecycle: quality/resize/new station/dispose without leaks, shader-error fallback, no lights added.
-// FOG_PREVIEW=1 additionally CPU-renders flashlight on/off views into qa-artifacts/iter06-fog/.
-// Iteration 12 (ATMOS): patchy world-space medium (dense patches / clear pockets by area, ground fog), the drift map and
-// two-phase advection (moves with the draft, no jump at phase resets), extinction + transmittance composite, MRT passes,
-// and the flashlight shadow map existing before anything samples it. FOG12_PREVIEW=1 renders qa-artifacts/iter12-fog/.
+// Volumetric atmosphere (iteration 06 Lane F, iteration 12 ATMOS, iteration 13 FOG).
+// The iteration-06 GLSL shader-hook chaining tests (render/shaderHooks.ts) are retired with that module: node materials
+// compose through render/nodeHooks.ts (covered in surface-nodes / lighting-node / damage tests).
+// Iteration 13 (FOG): the passes are TSL node graphs on WebGPURenderer (render/volumetricShaders.ts). The GLSL-string lint
+// tests are replaced by: compiling every graph with three r186's real node builders for BOTH backends (GLSL ES 3.0 for the
+// WebGL2 fallback, WGSL for WebGPU) in Node, structural checks of the generated code (bounded loop, one shadow compare in
+// uniform control flow, no implicit-derivative lookups), the three r186 behaviour the pipeline relies on, the CPU mirrors
+// (phase, attenuation, depth-limited march, shadow lookup, bilateral upsample, linear composite) and the module lifecycle
+// with a fake renderer. The user-facing fog behaviour (persistence, clear / dense areas, motion, lights on / off) is in
+// tests/fog-medium.test.ts.
 import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
+import {texture} from 'three/tsl';
+import {RenderTarget} from 'three/webgpu';
 import {generateStation, type StationLayout} from '../src/gen/station';
-import {CELL, SOLID, VOID} from '../src/gen/grid';
-import type {Fixture} from '../src/world/builder';
-import {MOOD, StationLighting, glowFog} from '../src/world/lights';
-import {cellFloorFn} from '../src/world/lightField';
-import {worldMapped} from '../src/world/materials';
-import {addShaderHook, cloneWithShaderHooks, hasShaderHook, removeShaderHook, shaderHookKeys} from '../src/render/shaderHooks';
+import {MOOD} from '../src/world/lights';
 import {
-  ATMOSPHERE, ATMOSPHERE_QUALITY, DENSITY_MAP_RANGE, FLOW_SPEED, NOISE_SIZE, acesForward, acesInverse, atmosphereFor, bilateralUpsample, buildDensityMap,
-  buildFlowMap, buildNoiseVolume, compositePixel, densityAt, distanceAttenuation, fixtureRadiance, flashlightRadiance, integrateInscatter, integrateMedium,
-  marchSamples, marchSize, mediumAt, phase, sampleDensityMap, sampleFlowMap, sampleNoise, shadowBiasFor, srgbDecode, srgbEncode, SHADOW_NEAR, SHADOW_NORMAL_BIAS,
-  viewZFromDepth, type SpotInput, type V3,
+  ATMOSPHERE, ATMOSPHERE_QUALITY, bilateralUpsample, compositeLinear, distanceAttenuation, fixtureRadiance, flashlightRadiance,
+  integrateInscatter, marchSamples, marchSize, phase, shadowBiasFor, SHADOW_NEAR, SHADOW_NORMAL_BIAS, viewZFromDepth, type SpotInput, type V3,
 } from '../src/render/atmosphere';
 import {VolumetricAtmosphere, configureFlashlightShadow, fogOverrideFromUrl, markShadows} from '../src/render/volumetric';
-import {VF_COMPOSITE, VF_MARCH, VF_MARK, VF_TEMPORAL, VF_VERTEX} from '../src/render/volumetricShaders';
+import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial} from '../src/render/volumetricShaders';
+import {compileOutputNode, compileQuad} from './helpers/fogCompile';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(GAME, '..');
 const T3 = (p: string) => fs.readFileSync(path.join(REPO, 'node_modules/three/src', p), 'utf8');
-const shaderOf = (sh: string) => ({uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: sh} as unknown as THREE.WebGLProgramParametersWithUniforms);
-const fixturesOf = (l: StationLayout): Fixture[] => l.lights.map((x, i) => ({x: x.x, y: x.y, z: x.z, broken: x.broken, flicker: x.flicker, warm: x.warm, dying: x.dying, power: x.power, area: x.area, phase: i * 1.7, level: x.broken ? 0 : 1}));
 const stations = new Map<number, StationLayout>();
 const station = (seed: number) => { let s = stations.get(seed); if (!s) stations.set(seed, (s = generateStation(seed))); return s; };
 
 // ---------------------------------------------------------------------------------------------
-describe('shader hook chaining (render/shaderHooks.ts)', () => {
-  it('keeps an earlier direct hook, runs hooks in order and extends the cache key', () => {
-    const m = new THREE.MeshStandardMaterial();
-    m.onBeforeCompile = sh => { sh.fragmentShader += '\n//direct'; };
-    m.customProgramCacheKey = () => 'world-mapped-v1';
-    addShaderHook(m, 'wounds', sh => { sh.fragmentShader += '\n//wounds'; });
-    addShaderHook(m, 'chips', sh => { sh.fragmentShader += '\n//chips'; });
-    const sh = shaderOf('void main(){}');
-    m.onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-    expect(sh.fragmentShader.endsWith('//direct\n//wounds\n//chips')).toBe(true);
-    expect(m.customProgramCacheKey()).toBe('world-mapped-v1|hooks:wounds,chips');
-    expect(shaderHookKeys(m)).toEqual(['wounds', 'chips']);
-    // Same key again replaces in place (no double patching).
-    addShaderHook(m, 'wounds', s => { s.fragmentShader += '\n//wounds2'; });
-    const sh2 = shaderOf('');
-    m.onBeforeCompile(sh2, {} as THREE.WebGLRenderer);
-    expect(sh2.fragmentShader).toBe('\n//direct\n//wounds2\n//chips');
-    expect(removeShaderHook(m, 'chips')).toBe(true);
-    expect(hasShaderHook(m, 'chips')).toBe(false);
-    expect(m.customProgramCacheKey()).toBe('world-mapped-v1|hooks:wounds');
-    expect(() => addShaderHook(m, 'a|b', () => {})).toThrow();
-  });
-
-  it('distinguishes materials whose direct hooks only differ in source (three default cache key)', () => {
-    const a = new THREE.MeshLambertMaterial(), b = new THREE.MeshLambertMaterial(), c = new THREE.MeshLambertMaterial();
-    a.onBeforeCompile = sh => { sh.fragmentShader += 'A'; };
-    b.onBeforeCompile = sh => { sh.fragmentShader += 'B'; };
-    const before = [a.customProgramCacheKey(), b.customProgramCacheKey()];
-    expect(before[0]).not.toBe(before[1]);
-    for (const m of [a, b, c]) addShaderHook(m, 'x', () => {});
-    expect(a.customProgramCacheKey()).not.toBe(b.customProgramCacheKey());
-    expect(a.customProgramCacheKey()).toBe(`${before[0]}|hooks:x`);
-    expect(c.customProgramCacheKey()).toBe('|hooks:x'); // no prior hook: key = hook set only
-  });
-
-  it('adopts a later direct overwrite as the new base without losing registered hooks', () => {
-    const m = new THREE.MeshStandardMaterial();
-    addShaderHook(m, 'one', sh => { sh.fragmentShader += '1'; });
-    const prev = m.onBeforeCompile;
-    m.onBeforeCompile = (sh, r) => { prev.call(m, sh, r); sh.fragmentShader += 'D'; }; // a well-behaved manual chain
-    addShaderHook(m, 'two', sh => { sh.fragmentShader += '2'; });
-    const sh = shaderOf('');
-    m.onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-    // the manual chain (which already calls the old wrapper -> '1') runs first, then the registered hooks
-    expect(sh.fragmentShader.startsWith('1D')).toBe(true);
-    expect(sh.fragmentShader.endsWith('2')).toBe(true);
-    expect(shaderHookKeys(m)).toEqual(['one', 'two']);
-  });
-
-  it('clones keep hooks (three copy() drops callbacks) and compose with world mapping + glow fog', () => {
-    const m = worldMapped(new THREE.MeshStandardMaterial(), {span: [2, 3], grime: [0.3, 0.6], macro: 0.1});
-    addShaderHook(m, 'chips', sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n// chips'); });
-    const c = cloneWithShaderHooks(m);
-    expect(c).not.toBe(m);
-    expect(c.customProgramCacheKey()).toBe(m.customProgramCacheKey());
-    expect(c.customProgramCacheKey()).toBe('world-mapped-v1|hooks:chips');
-    for (const mat of [m, c]) {
-      const sh = {uniforms: {} as Record<string, THREE.IUniform>, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader} as unknown as THREE.WebGLProgramParametersWithUniforms;
-      mat.onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-      expect(sh.fragmentShader).toContain('wmNoise'); // iteration-04 world mapping still applied
-      expect(sh.fragmentShader).toContain('// chips');
-      expect(sh.uniforms.uWmMap).toBeTruthy();
-    }
-    // Iteration-05 glow fog now goes through the helper too (idempotent per factor, key in the cache key).
-    const tm = new THREE.MeshBasicMaterial();
-    addShaderHook(tm, 'damage', () => {});
-    glowFog(tm, MOOD.glowFog);
-    glowFog(tm, MOOD.glowFog);
-    expect(shaderHookKeys(tm)).toEqual(['damage', `glow-fog-${MOOD.glowFog}`]);
-    const sh = shaderOf(THREE.ShaderLib.basic.fragmentShader);
-    tm.onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-    expect(sh.fragmentShader).toContain(`vFogDepth * vFogDepth * ${(MOOD.glowFog ** 2).toFixed(4)}`);
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
-describe('volumetric GLSL (static checks; no GL in node)', () => {
-  const programs = () => {
-    const a = new VolumetricAtmosphere(null, {flashlight: new THREE.SpotLight()});
-    return [{name: 'march', mat: a.march, src: VF_MARCH}, {name: 'temporal', mat: a.temporal, src: VF_TEMPORAL}, {name: 'composite', mat: a.composite, src: VF_COMPOSITE}];
+describe('iteration 13: the TSL passes compile for both WebGPURenderer backends (no GPU)', () => {
+  const textures = (shadow: boolean) => {
+    const sh = new THREE.DepthTexture(8, 8);
+    sh.compareFunction = THREE.LessEqualCompare;
+    const arr = (c: number) => new THREE.DataArrayTexture(new Uint8Array(4 * c), 1, 1, 4);
+    return {depth: new THREE.DepthTexture(8, 8), noise: new THREE.Data3DTexture(new Uint8Array(64), 2, 2, 4), density: arr(4), air: arr(1), vis: arr(1), shadow: shadow ? sh : null};
   };
-  const strip = (s: string) => s.replace(/\/\/[^\n]*/g, '');
+  const lines = (src: string) => src.split('\n');
+  const indent = (l: string) => (l.match(/^\t*/)?.[0].length ?? 0);
 
-  it('is self-contained, ASCII, balanced and marked', () => {
-    for (const {name, src} of [...programs(), {name: 'vertex', src: VF_VERTEX}]) {
-      expect(/[^\x00-\x7F]/.test(src), `${name}: ASCII-only GLSL`).toBe(false);
-      expect(src, name).toContain(VF_MARK);
-      expect(src, name).not.toContain('#include');
-      const s = strip(src);
-      const count = (re: RegExp) => (s.match(re) ?? []).length;
-      expect(count(/\{/g), `${name} braces`).toBe(count(/\}/g));
-      expect(count(/\(/g), `${name} parens`).toBe(count(/\)/g));
-      // never redeclare names three's ShaderMaterial prefix already provides
-      for (const taken of ['cameraPosition', 'viewMatrix', 'sRGBTransferOETF', 'sRGBTransferEOTF', 'LinearTransferOETF', 'saturate(', 'toneMappingExposure', 'linearToOutputTexel']) {
-        expect(new RegExp(`\\b(uniform|vec[234]|float|mat[34])\\s+${taken.replace('(', '\\(')}`).test(s), `${name} redeclares ${taken}`).toBe(false);
+  it('march: GLSL ES 3.0 + WGSL, bounded loop, marked, both MRT outputs, with and without the flashlight shadow', () => {
+    const u = createFogUniforms();
+    for (const backend of ['glsl', 'wgsl'] as const) for (const shadow of [false, true]) for (const steps of [14, 24]) {
+      const c = compileQuad(createMarchMaterial(u, textures(shadow), {steps}), backend);
+      const f = c.fragment;
+      expect(f, `${backend} ${steps}`).toContain(VF_MARK.march);
+      expect(f).toMatch(backend === 'glsl' ? new RegExp(`for \\( int i = 0; i < ${steps}; i \\+\\+ \\)`) : new RegExp(`for \\( var i : i32 = 0; i < ${steps}; i \\+\\+ \\)`));
+      // two colour outputs (in-scatter + depth, transmittance)
+      expect(backend === 'glsl' ? /layout\( location = 1 \) out/.test(f) || /out highp vec4 m1|m1 =/.test(f) : /@location\( 1 \)/.test(f), `${backend} MRT`).toBe(true);
+      if (backend === 'wgsl') {
+        const cmp = lines(f).filter(l => l.includes('textureSampleCompare('));
+        expect(cmp.length, 'one shadow compare per step').toBe(shadow ? 1 : 0);
+        if (shadow) {
+          // uniform control flow: directly in the step loop's body (one level below the loop), never inside an `if`
+          const loop = lines(f).find(l => /for \( var i : i32/.test(l))!;
+          expect(indent(cmp[0])).toBe(indent(loop) + 1);
+        }
+        // every other lookup is textureSampleLevel / textureLoad (no implicit derivatives in per-pixel branches)
+        expect(lines(f).filter(l => /textureSample\(/.test(l))).toEqual([]);
+      } else {
+        expect(/uniform sampler2DShadow/.test(f)).toBe(shadow);
       }
     }
   });
 
-  it('every declared uniform is supplied by its material and vice versa', () => {
-    for (const {name, mat, src} of programs()) {
-      const declared = [...strip(src).matchAll(/^\s*uniform\s+(?:highp\s+|mediump\s+|lowp\s+)?\w+\s+(\w+)\s*(?:\[[^\]]*\])?\s*;/gm)].map(m => m[1]).sort();
-      expect(declared, name).toEqual(Object.keys(mat.uniforms).sort());
-      expect(mat.vertexShader).toBe(VF_VERTEX);
-      expect(mat.depthTest && mat.depthWrite, name).toBe(false);
-      expect(mat.toneMapped, name).toBe(false);
+  it('temporal + composite compile for both backends; the composite loads the scene pass before the fog', () => {
+    const u = createFogUniforms();
+    const rt = new RenderTarget(4, 4, {count: 2, type: THREE.HalfFloatType});
+    const scene = new RenderTarget(8, 8, {type: THREE.HalfFloatType});
+    scene.depthTexture = new THREE.DepthTexture(8, 8);
+    for (const backend of ['glsl', 'wgsl'] as const) {
+      const t = compileQuad(createTemporalMaterial(u, rt.textures[0], rt.textures[1], texture(new THREE.Texture()), texture(new THREE.Texture())), backend);
+      expect(t.fragment).toContain(VF_MARK.temporal);
+      const comp = compileOutputNode(createCompositeNode(u, texture(scene.texture), texture(scene.depthTexture), texture(rt.textures[0]), texture(rt.textures[1])), backend);
+      expect(comp.fragment).toContain(VF_MARK.composite);
+      if (backend === 'glsl') for (const f of [t.fragment, comp.fragment]) {
+        // GLSL textureSize() is ivec2 (three r186 types the node uvec2 and emits it uncast): no unsigned vector maths, or
+        // WebGL2 rejects the program ("no operation for highp ivec2 and const uvec2", the resume-time fallback bug)
+        expect(f).not.toMatch(/\buvec[234]\b/);
+        expect(f).toMatch(/ivec2\( textureSize\(/);
+      }
     }
   });
 
-  it('has no implicit int -> float mixing (GLSL ES 3.00 has no implicit conversions)', () => {
-    // Heuristic lint: integer literals may only appear in int contexts (loops, ivec, texelFetch,
-    // textureSize, bit ops, defines) - every float literal is written with a decimal point.
-    const intContext = /\b(int|ivec[234]|texelFetch|textureSize)\b|^\s*#(define|ifndef|endif|if)\b|&\s*1|\b[ij]\s*(<=?|\+\+|=)|lo\.[xy]|uFullSize \) - 1|uLowSize \) - 1|\) - 1,|^\s*layout\(location = \d\)/;
-    for (const {name, src} of [...programs(), {name: 'vertex', src: VF_VERTEX}]) {
-      const lines = strip(src).split('\n');
-      lines.forEach((line, i) => {
-        const ints = [...line.matchAll(/(?<![\w.])(?<!e[-+])\d+(?![\w.])/g)];
-        if (!ints.length) return;
-        expect(intContext.test(line), `${name}:${i + 1} integer literal outside an int context: ${line.trim()}`).toBe(true);
-      });
-    }
-  });
-
-  it('marches only in front of the surface and composites before the overlay (pass structure)', () => {
-    expect(VF_MARCH).toContain('float dist = min( sceneDist, uMaxDist );');
-    expect(VF_MARCH).toContain('float t = dist * u * u;');
-    expect(VF_MARCH).toContain('vfShadow( p )');
-    expect(VF_MARCH).toContain('textureLod( tShadow, vec3( c.xy, c.z + uShadowBias ), 0.0 )');
-    // No implicit-derivative lookups in loops/branches (HLSL via ANGLE rejects or force-unrolls them).
-    for (const src of [VF_MARCH, VF_TEMPORAL, VF_COMPOSITE]) expect(src).not.toMatch(/\btexture\s*\(/);
-    expect(VF_MARCH).toContain('#define VF_STEPS 24');
-    expect(VF_MARCH).toMatch(/for \( int i = 0; i < VF_STEPS; i \+\+ \)/);
-    expect(VF_COMPOSITE).toContain('gl_FragColor = vec4( sc.rgb, 1.0 );'); // exact passthrough where no fog
-    const game = fs.readFileSync(path.join(GAME, 'src/game.ts'), 'utf8');
-    const render = game.slice(game.indexOf('  render(): void {'), game.indexOf('  render(): void {') + 700);
-    const iA = render.indexOf('this.atmosphere.render('), iD = render.indexOf('this.renderer.clearDepth()'), iV = render.indexOf('this.renderer.render(this.viewmodel.scene');
-    expect(iA).toBeGreaterThan(0);
-    expect(iA).toBeLessThan(iD);
-    expect(iD).toBeLessThan(iV);
+  it('uniform arrays match the smoke / scatter limits', () => {
+    const u = createFogUniforms();
+    expect(u.puff.array.length).toBe(VF_LIMITS.puffs);
+    expect(u.puffD.array.length).toBe(VF_LIMITS.puffs);
+    expect(u.scatPos.array.length).toBe(VF_LIMITS.scatter);
+    expect(u.smokeBound.array.length).toBe(VF_LIMITS.smoke);
+    expect(u.win.array.length).toBe(VF_LIMITS.windows);
   });
 });
 
 // ---------------------------------------------------------------------------------------------
-describe('three r186 protocol the pass relies on', () => {
-  it('XR-flagged render targets tone-map and encode like the canvas; internalFormat is honoured', () => {
-    const progs = T3('renderers/webgl/WebGLPrograms.js');
-    expect(progs).toContain('if ( currentRenderTarget === null || currentRenderTarget.isXRRenderTarget === true )');
-    expect(progs).toContain('outputColorSpace: ( currentRenderTarget === null ) ? renderer.outputColorSpace : ( currentRenderTarget.isXRRenderTarget === true ? currentRenderTarget.texture.colorSpace : ColorManagement.workingColorSpace )');
-    const r = T3('renderers/WebGLRenderer.js');
-    expect(r).toContain('if ( _currentRenderTarget === null || _currentRenderTarget.isXRRenderTarget === true )');
-    expect(T3('renderers/webxr/WebXRManager.js')).toContain('newRenderTarget.isXRRenderTarget = true;');
-    expect(T3('renderers/shaders/UniformsUtils.js')).toContain('if ( currentRenderTarget.isXRRenderTarget === true )');
-    const tex = T3('renderers/webgl/WebGLTextures.js');
-    expect(tex).toContain("if ( _gl[ internalFormatName ] !== undefined ) return _gl[ internalFormatName ];");
-    expect(tex).toContain('if ( renderTarget.resolveDepthBuffer )'); // MSAA depth resolved into the depth texture
+describe('three r186 behaviour the fog pipeline relies on', () => {
+  it('RenderPipeline tone-maps once in its output node (linear scene pass, NoToneMapping while the quad draws)', () => {
+    const rp = T3('renderers/common/RenderPipeline.js');
+    expect(rp).toContain('outputNode = renderOutput( outputNode, toneMapping, outputColorSpace );');
+    expect(rp).toContain('renderer.toneMapping = NoToneMapping;');
+    const pn = T3('nodes/display/PassNode.js');
+    expect(pn).toContain('this.updateBeforeType = NodeUpdateType.FRAME;');
+    expect(pn).toMatch(/getTexture\( name \)/);
   });
 
-  it('spot shadows: depth texture with hardware compare, [0,1] shadow matrix, light hash recompiles', () => {
-    const sm = T3('renderers/webgl/WebGLShadowMap.js');
-    expect(sm).toContain('shadow.map.depthTexture.compareFunction = reversedDepthBuffer ? GreaterEqualCompare : LessEqualCompare;');
-    expect(sm).toContain('if ( shadow.autoUpdate === false && shadow.needsUpdate === false ) continue;');
-    expect(T3('lights/LightShadow.js')).toMatch(/0\.0, 0\.0, 0\.5, 0\.5,/); // xy -> [0,1] uv, z -> [0,1] window depth
-    expect(T3('renderers/webgl/WebGLUniforms.js')).toContain('emptyShadowTexture');
-    expect(T3('renderers/webgl/WebGLProgram.js')).toContain('renderer.debug.onShaderError( gl, program, glVertexShader, glFragmentShader );');
+  it('FRAME updates run once per frame id (FogPassNode can force the scene pass first without a second render)', () => {
+    const nf = T3('nodes/core/NodeFrame.js');
+    expect(nf).toContain('if ( nodeUpdateBeforeMap.frameId !== this.frameId ) {');
+    expect(T3('nodes/core/NodeBuilder.js')).toContain('This function should be called after \'setup()\' in the \'build()\' process to ensure that the child nodes are processed first.');
+  });
+
+  it('spot shadows: compare depth texture, y-flipped [0,1] coords, coordinate-system aware shadow.matrix, castShadow in the light hash', () => {
+    const sn = T3('nodes/lighting/ShadowNode.js');
+    expect(sn).toContain('shadowCoord.y.oneMinus(), // follow webgpu standards');
+    expect(sn).toContain("depthTexture.compareFunction = builder.renderer.reversedDepthBuffer ? GreaterEqualCompare : LessEqualCompare;");
+    expect(sn).toContain('this.shadow.map = shadowMap;');
+    expect(T3('lights/LightShadow.js')).toContain('if ( shadowCamera.coordinateSystem === WebGPUCoordinateSystem || shadowCamera.reversedDepth ) {');
+    expect(T3('nodes/lighting/LightsNode.js')).toContain('_hashData.push( light.castShadow ? 1 : 0 );');
+    // WGSL compares only in the fragment stage, with implicit derivatives (=> uniform control flow in our loop)
+    expect(T3('renderers/webgpu/nodes/WGSLNodeBuilder.js')).toContain('return `textureSampleCompare( ${ textureProperty }, ${ textureProperty }_sampler, ${ uvSnippet }, ${ compareSnippet } )`;');
+  });
+
+  it('getViewPosition / getScreenPosition handle both clip conventions; WebGL2 backend reports shader errors through debug.onShaderError', () => {
+    const pp = T3('nodes/utils/PostProcessingUtils.js');
+    expect(pp).toContain('if ( builder.renderer.coordinateSystem === WebGPUCoordinateSystem ) {');
+    expect(pp).toContain('return vec2( sampleUv.x, sampleUv.y.oneMinus() );');
+    expect(T3('renderers/webgl-fallback/WebGLBackend.js')).toContain('this.renderer.debug.onShaderError( gl, programGPU, glVertexShader, glFragmentShader );');
   });
 });
 
@@ -261,25 +185,14 @@ describe('in-scattering math (CPU mirror of the march)', () => {
     expect(fixtureRadiance([0, 0, 0], [0, 0, 0], [0, 1, 0], [0, 0, -1], P)).toEqual([0, 0, 0]);
   });
 
-  it('composite: exact where there is no fog, adds light monotonically, ACES inverse round-trips', () => {
-    for (const v of [0, 0.02, 0.1, 0.4, 0.8, 1]) expect(compositePixel([v, v * 0.9, v * 0.8], [0, 0, 0], MOOD.exposure)).toEqual([v, v * 0.9, v * 0.8]);
-    for (const x of [0.01, 0.05, 0.2, 0.7, 1.5, 3]) {
-      const d = acesForward([x, x * 0.8, x * 0.6], MOOD.exposure);
-      const back = acesInverse(d, MOOD.exposure);
-      expect(back[0]).toBeCloseTo(x, 3);
-      expect(back[2]).toBeCloseTo(x * 0.6, 3);
-    }
-    for (let i = 0; i <= 20; i++) {
-      const v = i / 20;
-      const a = compositePixel([v, v, v], [0.01, 0.01, 0.01], MOOD.exposure), b = compositePixel([v, v, v], [0.05, 0.05, 0.05], MOOD.exposure);
-      expect(a[1]).toBeGreaterThanOrEqual(v - 1e-6);
-      expect(b[1]).toBeGreaterThanOrEqual(a[1] - 1e-6);
-    }
-    // Haze reads on black, barely changes a bright wall (no global wash-out).
-    const dark = compositePixel([0.02, 0.02, 0.02], [0.03, 0.03, 0.03], MOOD.exposure)[1] - 0.02;
-    const bright = compositePixel([0.85, 0.85, 0.85], [0.03, 0.03, 0.03], MOOD.exposure)[1] - 0.85;
-    expect(dark).toBeGreaterThan(bright * 2);
-    expect(srgbEncode(srgbDecode(0.5))).toBeCloseTo(0.5, 4);
+  it('composite (iteration 13): linear HDR scene x transmittance + in-scatter, exact without fog, tone-mapped once after', () => {
+    for (const v of [0, 0.02, 0.1, 0.4, 0.8, 3]) expect(compositeLinear([v, v * 0.9, v * 0.8], [0, 0, 0])).toEqual([v, v * 0.9, v * 0.8]);
+    expect(compositeLinear([1, 1, 1], [0.2, 0.1, 0.05], 0.5)).toEqual([0.7, 0.6, 0.55]);
+    // intensity 0 = the effect off (scene unchanged even through a dense patch)
+    expect(compositeLinear([0.4, 0.4, 0.4], [0.3, 0.3, 0.3], 0.2, 0)).toEqual([0.4, 0.4, 0.4]);
+    // monotonic in the in-scatter; never brighter than scene + fog
+    let prev = -1;
+    for (let i = 0; i <= 20; i++) { const o = compositeLinear([0.3, 0.3, 0.3], [i / 40, i / 40, i / 40], 0.9)[0]; expect(o).toBeGreaterThan(prev); prev = o; }
   });
 
   it('depth-aware upsample never paints far beam haze over a near silhouette', () => {
@@ -296,7 +209,7 @@ describe('in-scattering math (CPU mirror of the march)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-describe('flashlight shadow map: occluded beam, bias without acne', () => {
+describe('flashlight shadow map: occluded beam, bias without acne (CPU mirror of the march\'s shadow lookup)', () => {
   /** Spot like game.ts's flashlight, at `pos`, aimed at `target`, with the pass's shadow config. */
   function spot(pos: V3, target: V3, mapSize: number) {
     const l = new THREE.SpotLight(0xfff4e2, 34, 30, 0.58, 0.7, 1.2);
@@ -407,248 +320,19 @@ describe('flashlight shadow map: occluded beam, bias without acne', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-describe('station medium (density map, height, noise)', () => {
-  it('per-area density, local floors (track bed / underpass), no dips at walls; deterministic', () => {
-    const l = station(2), g = l.grid;
-    const m = buildDensityMap(l, ATMOSPHERE);
-    expect(m.w).toBe(g.w);
-    expect(m.data.length).toBe(g.w * g.h * m.slots * 4); // iteration 08: RGBA layer per level slot
-    expect(Buffer.from(buildDensityMap(l, ATMOSPHERE).data).equals(Buffer.from(m.data))).toBe(true);
-    const fl = cellFloorFn(g, l.trench.floorY);
-    let bed = 0, bedN = 0, plat = 0, platN = 0, floorErr = 0, wallMin = Infinity;
-    const P = l.areas[l.platform];
-    for (let cy = 0; cy < g.h; cy++) for (let cx = 0; cx < g.w; cx++) {
-      const i = cy * g.w + cx;
-      const x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
-      const [mult, floorY] = sampleDensityMap(m, x, z);
-      if (g.cells[i] === SOLID) {
-        // solid cells next to open ones carry the neighbour's value (filtering near walls stays smooth)
-        if ([i - 1, i + 1, i - g.w, i + g.w].some(j => j >= 0 && j < g.cells.length && g.cells[j] !== SOLID)) wallMin = Math.min(wallMin, m.data[i * 4] / 255 * DENSITY_MAP_RANGE);
-        continue;
-      }
-      floorErr = Math.max(floorErr, Math.abs(floorY - fl(cx, cy)) > 0.6 ? 0 : Math.abs(floorY - fl(cx, cy)));
-      if (g.cells[i] === VOID) { bed += mult; bedN++; }
-      else if (g.area[i] === P.id && cx > P.x + 2 && cx < P.x + P.w - 3 && cy > P.y + 2 && cy < P.y + P.h - 3) { plat += mult; platN++; }
-    }
-    expect(bedN).toBeGreaterThan(100);
-    expect(bed / bedN).toBeGreaterThan(plat / platN * 1.2);
-    expect(wallMin).toBeGreaterThan(0.5);
-    expect(floorErr).toBeLessThan(0.12);
-    // Track bed floor decodes near the trench floor.
-    const vi = g.cells.findIndex((c, i) => c === VOID && g.cells[i - 1] === VOID && g.cells[i + 1] === VOID && g.cells[i - g.w] === VOID && g.cells[i + g.w] === VOID);
-    const vx = vi % g.w, vy = (vi - vx) / g.w;
-    expect(sampleDensityMap(m, (vx + 0.5) * CELL, (vy + 0.5) * CELL)[1]).toBeCloseTo(fl(vx, vy), 1);
-  });
-
-  it('denser near the floor, thinner under the ceiling; noise drifts but keeps the mean', () => {
-    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), noise = buildNoiseVolume();
-    const sp = l.playerSpawn;
-    const low = densityAt([sp.x, 0.2, sp.z], m, null, ATMOSPHERE, 0), mid = densityAt([sp.x, 1.6, sp.z], m, null, ATMOSPHERE, 0), high = densityAt([sp.x, 3.6, sp.z], m, null, ATMOSPHERE, 0);
-    expect(low).toBeGreaterThan(mid);
-    expect(mid).toBeGreaterThan(high);
-    let s = 0, n = 0, changed = 0;
-    for (let i = 0; i < 400; i++) {
-      const p: V3 = [sp.x + (i % 20) * 0.7, 1.6, sp.z + Math.floor(i / 20) * 0.7];
-      const a = densityAt(p, m, noise, ATMOSPHERE, 0), b = densityAt(p, m, noise, ATMOSPHERE, 20);
-      s += a / densityAt(p, m, null, ATMOSPHERE, 0); n++;
-      if (Math.abs(a - b) > 1e-4) changed++;
-    }
-    // iteration 12: a high-contrast patch field; one instant over a 13 x 13 m patch of floor can sit in a dense or a clear
-    // region (the long-run mean is tested in the iteration-12 block)
-    expect(s / n).toBeGreaterThan(0.5);
-    expect(s / n).toBeLessThan(1.8);
-    expect(changed).toBeGreaterThan(300);
-    expect(atmosphereFor({archetype: 'deep'}).density).toBeGreaterThan(ATMOSPHERE.density);
-    expect(atmosphereFor({archetype: 'deep'}).areaDensity.trackBed).toBe(ATMOSPHERE.areaDensity.trackBed);
-  });
-});
-
-
-// ---------------------------------------------------------------------------------------------
-describe('iteration 12: patchy, flowing medium (render/atmosphere.ts mediumAt)', () => {
-  const noise = buildNoiseVolume();
-  it('noise tile: RG8 48^3, tileable, both channels equalised (thresholds are coverage fractions), deterministic', () => {
-    expect(noise.length).toBe(NOISE_SIZE ** 3 * 2);
-    expect(Buffer.from(buildNoiseVolume()).equals(Buffer.from(noise))).toBe(true);
-    for (const ch of [0, 1]) {
-      let mean = 0, above = 0;
-      const n = NOISE_SIZE ** 3;
-      for (let i = 0; i < n; i++) { const v = noise[i * 2 + ch] / 255; mean += v; if (v > 0.64) above++; }
-      expect(mean / n).toBeCloseTo(0.5, 2);
-      expect(above / n).toBeCloseTo(0.36, 1);
-    }
-    for (const q of [[0.13, 0.42, 0.77], [0.9, 0.05, 0.31]] as V3[]) {
-      expect(sampleNoise(noise, q, NOISE_SIZE, 0)).toBeCloseTo(sampleNoise(noise, [q[0] + 1, q[1] - 2, q[2] + 1], NOISE_SIZE, 0), 9);
-    }
-  });
-
-  it('dense patches and clear pockets in world space (not a uniform knob); smooth, with the long-run mean kept', () => {
-    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), flow = buildFlowMap(l);
-    const P = l.areas[l.platform];
-    const pts: V3[] = [];
-    for (let cx = P.x + 1; cx < P.x + P.w - 1; cx += 1) for (let cy = P.y + 1; cy < P.y + P.h - 1; cy += 1) pts.push([(cx + 0.5) * CELL, 1.6, (cy + 0.5) * CELL]);
-    const ratio = pts.map(p => mediumAt(p, m, flow, noise, ATMOSPHERE, 3).sigma / mediumAt(p, m, flow, null, ATMOSPHERE, 3).sigma);
-    const clear = ratio.filter(r => r < 0.35).length / ratio.length, dense = ratio.filter(r => r > 1.8).length / ratio.length;
-    const mean = ratio.reduce((a, b) => a + b, 0) / ratio.length;
-    console.log(`platform at 1.6 m: ${(clear * 100).toFixed(0)} % clear pockets (< 0.35 x base), ${(dense * 100).toFixed(0)} % dense (> 1.8 x), mean ${mean.toFixed(2)} x, ${pts.length} points`);
-    expect(pts.length).toBeGreaterThan(200);
-    expect(clear).toBeGreaterThan(0.2);
-    expect(dense).toBeGreaterThan(0.15);
-    expect(Math.max(...ratio) / Math.min(...ratio)).toBeGreaterThan(8);
-    // spatially coherent: neighbours 0.5 m apart differ far less than random pairs (patches, not speckle)
-    const at = (x: number, z: number) => mediumAt([x, 1.6, z], m, flow, noise, ATMOSPHERE, 3).sigma;
-    let near = 0, far = 0, k = 0;
-    for (let i = 0; i < 200; i++) {
-      const p = pts[(i * 37) % pts.length], q = pts[(i * 101 + 17) % pts.length];
-      near += Math.abs(at(p[0], p[2]) - at(p[0] + 0.5, p[2])); far += Math.abs(at(p[0], p[2]) - at(q[0], q[2])); k++;
-    }
-    expect(near / k).toBeLessThan(far / k * 0.4);
-    // long-run mean over time and space stays near the unpatterned medium (the old knob), so the station is not just darker
-    let s = 0, n = 0;
-    for (let t = 0; t < 60; t += 7.3) for (const p of pts.slice(0, 120)) { s += mediumAt(p, m, flow, noise, ATMOSPHERE, t).sigma / mediumAt(p, m, flow, null, ATMOSPHERE, t).sigma; n++; }
-    expect(s / n).toBeGreaterThan(0.7);
-    expect(s / n).toBeLessThan(1.4);
-  });
-
-  it('thicker and more often dense over track beds / service levels, airier in big halls; ground fog hugs the floor', () => {
-    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), flow = buildFlowMap(l), g = l.grid;
-    // averaged over several moments (the field drifts through): a station is only a few noise tiles across
-    const avg = (cells: number[], y: (i: number) => number) => {
-      let s = 0, d = 0, n = 0;
-      for (const t of [0, 23, 47, 71, 95]) for (const i of cells) {
-        const cx = i % g.w, cy = (i - cx) / g.w;
-        const p: V3 = [(cx + 0.5) * CELL, y(i), (cy + 0.5) * CELL];
-        const r = mediumAt(p, m, flow, noise, ATMOSPHERE, t);
-        s += r.sigma; d += r.dense; n++;
-      }
-      return {sigma: s / n, dense: d / n};
-    };
-    const floorOf = cellFloorFn(g, l.trench.floorY);
-    const idx = Array.from({length: g.cells.length}, (_, i) => i); // (g.cells is a Uint8Array: never .map it into indices)
-    const bed = idx.filter(i => g.cells[i] === VOID).filter((_, k) => k % 7 === 0);
-    const hallIds = new Set(l.areas.filter(a => a.type === 'concourse' || a.type === 'fare-hall' || a.type === 'food-court').map(a => a.id));
-    const hall = idx.filter(i => g.cells[i] !== SOLID && g.cells[i] !== VOID && hallIds.has(g.area[i])).filter((_, k) => k % 7 === 0);
-    expect(bed.length).toBeGreaterThan(50);
-    expect(hall.length).toBeGreaterThan(50);
-    const fy = (i: number) => floorOf(i % g.w, Math.floor(i / g.w));
-    const bedLow = avg(bed, i => fy(i) + 0.25), bedHigh = avg(bed, i => fy(i) + 1.8);
-    const hallLow = avg(hall, i => fy(i) + 0.25), hallHigh = avg(hall, i => fy(i) + 1.8);
-    console.log(`sigma track bed 0.25 m ${bedLow.sigma.toFixed(4)} / 1.8 m ${bedHigh.sigma.toFixed(4)} (dense ${bedHigh.dense.toFixed(2)}); halls ${hallLow.sigma.toFixed(4)} / ${hallHigh.sigma.toFixed(4)} (dense ${hallHigh.dense.toFixed(2)})`);
-    expect(bedLow.sigma).toBeGreaterThan(bedHigh.sigma * 1.6);   // ground fog in the track bed
-    expect(bedLow.sigma).toBeGreaterThan(hallLow.sigma * 1.8);   // thick low over the tracks, thin in halls
-    expect(bedHigh.sigma).toBeGreaterThan(hallHigh.sigma * 1.25);
-    expect(bedHigh.dense).toBeGreaterThan(hallHigh.dense * 1.3); // more often inside a dense patch
-    expect(ATMOSPHERE.levelDensity.lower!).toBeGreaterThan(ATMOSPHERE.levelDensity.main!);
-    expect(ATMOSPHERE.levelDensity.upper!).toBeLessThan(ATMOSPHERE.levelDensity.main!);
-  });
-
-  it('drift map: the tunnel draft along the tracks (seeded direction), slower on platforms, rising over working fixtures', () => {
-    const drafts = new Set<number>();
-    for (const seed of [1, 2, 3, 6]) {
-      const l = station(seed), f = buildFlowMap(l), g = l.grid;
-      drafts.add(f.draft);
-      expect(Buffer.from(buildFlowMap(l).data).equals(Buffer.from(f.data))).toBe(true);
-      const vi = g.cells.findIndex((c, i) => c === VOID && [1, 2, 3].every(k => g.cells[i + k] === VOID && g.cells[i - k] === VOID && g.cells[i + k * g.w] === VOID && g.cells[i - k * g.w] === VOID));
-      const vx = vi % g.w, vy = (vi - vx) / g.w;
-      const [fx, fz] = sampleFlowMap(f, (vx + 0.5) * CELL, (vy + 0.5) * CELL, 0);
-      expect(Math.sign(fx)).toBe(f.draft);
-      expect(Math.abs(fx)).toBeGreaterThan(FLOW_SPEED.track * 0.6);
-      expect(Math.abs(fz)).toBeLessThan(Math.abs(fx) * 0.3);
-      const lit = l.lights.find(x => !x.broken && (x.level ?? 0) === 0)!;
-      expect(sampleFlowMap(f, lit.x, lit.z, 0)[2]).toBeGreaterThan(0.02);
-    }
-    expect(drafts.size).toBe(2); // both directions occur across stations
-  });
-
-  it('flows: the patch field moves with the drift, never jumps at a phase reset, and changes shape over time', () => {
-    const l = station(2), m = buildDensityMap(l, ATMOSPHERE), flow = buildFlowMap(l), g = l.grid;
-    const vi = g.cells.findIndex((c, i) => c === VOID && [1, 2, 3, 4].every(k => g.cells[i + k] === VOID && g.cells[i - k] === VOID));
-    const vx = vi % g.w, vy = (vi - vx) / g.w;
-    const y = cellFloorFn(g, l.trench.floorY)(vx, vy) + 1.2;
-    const xs = Array.from({length: 120}, (_, i) => (vx - 30 + i * 0.5) * CELL);
-    const z = (vy + 0.5) * CELL;
-    const P = {...ATMOSPHERE, wind: [0, 0, 0] as const}; // local flow only
-    const row = (t: number) => xs.map(x => mediumAt([x, y, z], m, flow, noise, P, t).sigma);
-    // advected: the profile at t + 3 s matches the one at t shifted downstream (draft direction), not upstream
-    const a = row(4), b = row(7), shift = Math.round(Math.abs(sampleFlowMap(flow, xs[60], z, 0)[0]) * 3 / (0.5 * CELL));
-    const err = (k: number) => { let e = 0, n = 0; for (let i = 10; i < 110; i++) { e += Math.abs(b[i] - a[i - k]); n++; } return e / n; };
-    const down = err(shift * flow.draft), up = err(-shift * flow.draft);
-    expect(shift).toBeGreaterThanOrEqual(1);
-    expect(down).toBeLessThan(up);
-    // continuous through a phase reset (t = flowPeriod: one phase jumps by v x period, its weight is 0 there)
-    const T = ATMOSPHERE.flowPeriod;
-    const pre = row(T - 0.02), post = row(T + 0.02);
-    let maxJump = 0;
-    for (let i = 0; i < xs.length; i++) maxJump = Math.max(maxJump, Math.abs(post[i] - pre[i]) / Math.max(pre[i], 1e-4));
-    expect(maxJump).toBeLessThan(0.1);
-    // over a minute the field reshapes (not a frozen pattern)
-    const c = row(60);
-    let diff = 0;
-    for (let i = 0; i < xs.length; i++) diff += Math.abs(c[i] - a[i]) / Math.max(a[i], 1e-4);
-    expect(diff / xs.length).toBeGreaterThan(0.2);
-  });
-
-  it('dense patches and smoke dim what is behind them; clear air does not; the composite is exact without them', () => {
-    const ray = {origin: [0, 1.6, 0] as V3, dir: [0, 0, -1] as V3, steps: 24, jitter: 0.5, maxDistance: 36, fogDensity: 0.043};
-    const dense = integrateMedium({...ray, sceneDist: 12, sigma: () => 0.09, radiance: () => [0.05, 0.05, 0.05], extinction: () => (0.09 - 0.03) * ATMOSPHERE.patchExtinction});
-    const clear = integrateMedium({...ray, sceneDist: 12, sigma: () => 0.004, radiance: () => [0.05, 0.05, 0.05], extinction: () => 0});
-    expect(dense.transmittance).toBeLessThan(0.45);
-    expect(clear.transmittance).toBe(1);
-    expect(integrateInscatter({...ray, sceneDist: 12, sigma: () => 0.02, radiance: () => [1, 1, 1]})[0]).toBeCloseTo(integrateMedium({...ray, sceneDist: 12, sigma: () => 0.02, radiance: () => [1, 1, 1]}).inscatter[0], 12);
-    // light behind a dense stretch reaches the eye attenuated by it
-    const lamp = (ext: number) => integrateMedium({...ray, sceneDist: 12, sigma: () => 0.03, radiance: (_p, t) => (t > 8 ? [1, 1, 1] : [0, 0, 0]), extinction: (p) => (-p[2] < 6 ? ext : 0)}).inscatter[0];
-    expect(lamp(0.2)).toBeLessThan(lamp(0) * 0.45);
-    for (const v of [0.05, 0.3, 0.8]) {
-      const px: V3 = [v, v, v];
-      expect(compositePixel(px, [0, 0, 0], MOOD.exposure, 1)).toEqual(px);
-      const t7 = compositePixel(px, [0, 0, 0], MOOD.exposure, 0.7), t4 = compositePixel(px, [0, 0, 0], MOOD.exposure, 0.4);
-      expect(t7[0]).toBeLessThan(v);
-      expect(t4[0]).toBeLessThan(t7[0]);
-      expect(t4[0]).toBeGreaterThanOrEqual(v * 0.4 - 1e-9);
-    }
-  });
-
-  it('MRT passes: march + temporal write in-scatter/depth and transmittance; the composite applies scene x T + in-scatter', () => {
-    const a = new VolumetricAtmosphere(null, {flashlight: new THREE.SpotLight()});
-    expect(a.march.glslVersion).toBe(THREE.GLSL3);
-    expect(a.temporal.glslVersion).toBe(THREE.GLSL3);
-    expect(a.composite.glslVersion).toBe(null);
-    for (const src of [VF_MARCH, VF_TEMPORAL]) {
-      expect(src).toContain('layout(location = 0) out highp vec4 vfOut0;');
-      expect(src).toContain('layout(location = 1) out highp vec4 vfOut1;');
-      expect(src).not.toContain('gl_FragColor');
-    }
-    expect(VF_MARCH).toContain('vfOut1 = vec4( tv, 0.0, 0.0, 1.0 );');
-    expect(VF_MARCH).toContain('tv *= exp( - ( med.y * uExt.x + smokeSig * uExt.y ) * w );');
-    expect(VF_TEMPORAL).toContain('outT = mix( curT, clamp( hT, mnT, mxT ), k );');
-    expect(VF_COMPOSITE).toContain('vfAces( hdr * tv + fog )');
-    expect(VF_COMPOSITE).toContain('texelFetch( tFogT, q, 0 ).r');
-    // two noise samples per step (one per flow phase), each two channels: same step count as before
-    expect((VF_MARCH.match(/textureLod\( tNoise,/g) ?? []).length).toBe(2);
-    a.dispose();
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
-describe('VolumetricAtmosphere lifecycle (no GL: fake renderer)', () => {
+describe('VolumetricAtmosphere lifecycle (fake renderer, no GPU)', () => {
   interface Call { op: string; target?: string; what?: string }
-  function fakeRenderer(opts: {floatRT?: boolean; failOn?: string} = {}) {
+  function fakeRenderer(opts: {webgl?: boolean; floatRT?: boolean} = {}) {
     const calls: Call[] = [];
-    let target: THREE.WebGLRenderTarget | null = null;
-    const gl = {getExtension: () => null, getShaderSource: () => `${VF_MARK}`, getProgramInfoLog: () => '', getShaderInfoLog: () => ''} as unknown as WebGL2RenderingContext;
+    let target: {texture?: THREE.Texture} | null = null;
     const r = {
-      calls, toneMappingExposure: MOOD.exposure,
-      extensions: {has: (n: string) => opts.floatRT !== false && n === 'EXT_color_buffer_float'},
-      getContext: () => gl,
-      debug: {checkShaderErrors: true, onShaderError: null as null | ((...a: unknown[]) => void)},
-      shadowMap: {enabled: false, type: THREE.PCFShadowMap},
-      setRenderTarget: (t: THREE.WebGLRenderTarget | null) => { target = t; calls.push({op: 'target', target: t?.texture.name ?? 'canvas'}); },
-      clear: () => calls.push({op: 'clear', target: target?.texture.name ?? 'canvas'}),
-      render: (scene: THREE.Scene) => {
-        const what = scene.name || (scene.children[0] as THREE.Mesh | undefined)?.material && ((scene.children[0] as THREE.Mesh).material as THREE.Material).name || 'scene';
-        calls.push({op: 'render', target: target?.texture.name ?? 'canvas', what});
-        if (opts.failOn && what === opts.failOn) r.debug.onShaderError?.(gl, {}, {}, {});
-      },
+      calls, initialized: true, toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace, toneMappingExposure: MOOD.exposure,
+      xr: {enabled: false}, debug: {onShaderError: null as null | ((...a: unknown[]) => void)},
+      shadowMap: {enabled: true, type: THREE.PCFShadowMap},
+      backend: opts.webgl === false ? {isWebGPUBackend: true} : {isWebGLBackend: true, extensions: {has: (n: string) => opts.floatRT !== false && n === 'EXT_color_buffer_float'}},
+      getDrawingBufferSize: (v: THREE.Vector2) => v.set(1280, 720),
+      setRenderTarget: (t: {texture?: THREE.Texture} | null) => { target = t; calls.push({op: 'target', target: t?.texture?.name ?? 'canvas'}); },
+      render: (scene: THREE.Object3D) => calls.push({op: 'render', target: target?.texture?.name ?? 'canvas', what: scene.name || scene.type}),
     };
     return r;
   }
@@ -666,163 +350,128 @@ describe('VolumetricAtmosphere lifecycle (no GL: fake renderer)', () => {
     return {scene, camera, flashlight, muzzle};
   }
   const lightsIn = (o: THREE.Object3D) => { let n = 0; o.traverse(x => { if ((x as THREE.Light).isLight) n++; }); return n; };
-  const disposed = (o: {addEventListener: (t: 'dispose', f: () => void) => void}) => { const s = {n: 0}; o.addEventListener('dispose', () => s.n++); return s; };
+  type Fake = ReturnType<typeof fakeRenderer>;
+  const make = (r: Fake | null, lights: {flashlight: THREE.SpotLight; muzzle?: THREE.PointLight}, q: 'off' | 'low' | 'high' = 'high') => new VolumetricAtmosphere(r as never, lights, q);
 
-  it('quality presets drive march size, steps, MSAA and the flashlight shadow map; ?fog= overrides', () => {
+  it('quality presets drive march size, steps, MSAA and the flashlight shadow; ?fog= overrides; backend reported', () => {
     const {flashlight} = rig();
     const r = fakeRenderer();
-    const a = new VolumetricAtmosphere(r as unknown as THREE.WebGLRenderer, {flashlight}, 'high');
+    const a = make(r, {flashlight});
     a.setSize(1920, 1080);
     let d = a.debug();
-    expect(d.quality).toBe('high');
+    expect(d).toMatchObject({backend: 'webgl2-fallback', quality: 'high', steps: 24, msaa: 4});
     expect(d.resolution.march).toEqual([960, 540]);
-    expect(d.steps).toBe(24);
     expect(d.shadow).toMatchObject({enabled: true, mapSize: 1024, near: SHADOW_NEAR, normalBias: SHADOW_NORMAL_BIAS});
-    expect(r.shadowMap.enabled).toBe(true);
-    a.setSize(2880, 1620); // DPR 1.5 at 1080p: capped pixel budget
+    a.setSize(2880, 1620);
     expect(a.debug().resolution.march[0] * a.debug().resolution.march[1]).toBeLessThanOrEqual(ATMOSPHERE_QUALITY.high.maxPixels);
     a.setQuality('low');
-    d = a.debug();
-    expect(d).toMatchObject({quality: 'low', steps: 14, msaa: 0});
+    expect(a.debug()).toMatchObject({quality: 'low', steps: 14, msaa: 0});
     expect(flashlight.shadow.mapSize.x).toBe(512);
-    expect(a.march.defines.VF_STEPS).toBe(14);
     expect(flashlight.shadow.bias).toBeCloseTo(shadowBiasFor(512, 0.58), 9);
     a.setQuality('off');
     expect(a.debug()).toMatchObject({quality: 'off', active: false, steps: 0});
     expect(flashlight.castShadow).toBe(false);
-    expect(r.shadowMap.enabled).toBe(false);
+    expect(r.shadowMap.enabled).toBe(true); // iteration 13: only castShadow follows the quality (light hash => rebuild)
     a.override = 'high';
     a.setQuality('low');
     expect(a.quality).toBe('high');
     expect(fogOverrideFromUrl('?qa=1&fog=off')).toBe('off');
     expect(fogOverrideFromUrl('?fog=ultra')).toBe(null);
     expect(marchSize(1280, 720, ATMOSPHERE_QUALITY.low)).toEqual([320, 180]);
-    // Unsupported float targets: stays on the r5 path (no shadow map either).
-    const u = new VolumetricAtmosphere(fakeRenderer({floatRT: false}) as unknown as THREE.WebGLRenderer, {flashlight: new THREE.SpotLight()}, 'high');
+    expect(make(fakeRenderer({webgl: false}), {flashlight: new THREE.SpotLight()}).debug().backend).toBe('webgpu');
+    // WebGL2 backend without float colour targets: direct rendering, reported
+    const u = make(fakeRenderer({floatRT: false}), {flashlight: new THREE.SpotLight()});
     expect(u.debug()).toMatchObject({supported: false, quality: 'off', active: false});
     expect(u.reason).toContain('float');
+    expect(make(null, {flashlight: new THREE.SpotLight()}).debug().backend).toBe('none');
   });
 
-  it('frame: scene -> target, march, temporal, composite to canvas; direct path when disabled; no lights added', () => {
+  it('frame: the RenderPipeline draws to the canvas when active; direct scene render when disabled / off / failed; no lights added', () => {
     const {scene, camera, flashlight, muzzle} = rig();
     const r = fakeRenderer();
-    const a = new VolumetricAtmosphere(r as unknown as THREE.WebGLRenderer, {flashlight, muzzle}, 'high');
+    const a = make(r, {flashlight, muzzle});
     a.setSize(1280, 720);
-    const l = station(1);
-    const sl = new StationLighting(scene, l, fixturesOf(l), null, {hemi: new THREE.HemisphereLight()});
-    a.setStation(l, sl.volume);
+    // before a station: not active -> direct
+    a.render(scene, camera, 0);
+    expect(r.calls.filter(c => c.op === 'render').map(c => c.what)).toEqual(['station']);
+    a.setStation(station(1), null);
     const lights0 = lightsIn(scene), children0 = scene.children.length;
-    for (let f = 0; f < 120; f++) {
-      flashlight.intensity = f % 40 < 20 ? MOOD.flashlight : 0;
-      muzzle.intensity = f % 7 === 0 ? 18 : 0;
+    for (let f = 0; f < 30; f++) {
+      flashlight.intensity = f % 10 < 5 ? MOOD.flashlight : 0;
       r.calls.length = 0;
       a.render(scene, camera, f / 60);
       const renders = r.calls.filter(c => c.op === 'render');
-      expect(renders.map(c => `${c.what}@${c.target}`)).toEqual([
-        'station@volumetric-scene', 'volumetric-march@volumetric-march',
-        `volumetric-temporal@volumetric-history-${f % 2 ? 'b' : 'a'}`, 'volumetric-composite@canvas',
-      ]);
-      expect(flashlight.shadow.autoUpdate).toBe(flashlight.intensity > 0);
-      const u = a.march.uniforms;
-      expect((u.uFlashColor.value as THREE.Vector3).length() > 0).toBe(flashlight.intensity > 0);
-      expect((u.uMuzzleColor.value as THREE.Vector3).length() > 0).toBe(muzzle.intensity > 0);
-      for (const [k, v] of Object.entries(u)) if (typeof v.value === 'number') expect(Number.isFinite(v.value), k).toBe(true);
+      // the pipeline's quad renders to the canvas (its scene / fog passes run as node updates on a real renderer)
+      expect(renders.length).toBe(1);
+      expect(renders[0].target).toBe('canvas');
+      expect(renders[0].what).not.toBe('station');
     }
-    expect(lightsIn(scene)).toBe(lights0);           // no light added per frame
-    expect(scene.children.length).toBe(children0);   // nothing added to the station scene
-    expect(lightsIn((a as unknown as {quadScene: THREE.Scene}).quadScene)).toBe(0);
-    expect(a.march.uniforms.tField.value).toBe(sl.volume.texture);
-    expect(a.march.uniforms.uFieldGain.value).toBe(ATMOSPHERE.fixtureScatter);
-    expect((a.march.uniforms.uFieldLevels.value as THREE.Vector3).toArray()).toEqual(sl.volume.resolution.toArray());
-    expect(a.composite.uniforms.uExposure.value).toBe(MOOD.exposure);
-    // Before/after toggle: direct path, exactly the r5 calls.
+    expect(lightsIn(scene)).toBe(lights0);
+    expect(scene.children.length).toBe(children0);
     a.enabled = false;
     r.calls.length = 0;
-    a.render(scene, camera, 3);
-    expect(r.calls).toEqual([{op: 'target', target: 'canvas'}, {op: 'clear', target: 'canvas'}, {op: 'render', target: 'canvas', what: 'station'}]);
-    sl.dispose(scene);
-  });
-
-  it('shader error in a volumetric program falls back to the direct path in the same frame', () => {
-    const {scene, camera, flashlight} = rig();
-    const r = fakeRenderer({failOn: 'volumetric-march'});
-    const prevHandler = () => {};
-    r.debug.onShaderError = null;
-    const a = new VolumetricAtmosphere(r as unknown as THREE.WebGLRenderer, {flashlight}, 'high');
-    a.setSize(640, 360);
-    a.setStation(station(1), null);
-    a.render(scene, camera, 0);
-    expect(a.failed).toBeTruthy();
-    expect(a.active).toBe(false);
-    const last = r.calls.filter(c => c.op === 'render').at(-1);
-    expect(last).toEqual({op: 'render', target: 'canvas', what: 'station'});
-    expect(r.calls.some(c => c.what === 'volumetric-composite')).toBe(false);
+    a.render(scene, camera, 1);
+    expect(r.calls.filter(c => c.op === 'render').map(c => c.what)).toEqual(['station']);
+    a.enabled = true;
+    a.failed = 'test';
+    r.calls.length = 0;
+    a.render(scene, camera, 1.1);
+    expect(r.calls.filter(c => c.op === 'render').map(c => c.what)).toEqual(['station']);
     a.dispose();
-    expect(r.debug.onShaderError).toBe(null); // handler restored
-    void prevHandler;
   });
 
-  it('resize / new station / quality change / dispose release everything (no leaks)', () => {
+  it('a WebGL2 shader error in a fog program flags the module (direct path next frame) and chains the previous handler', () => {
     const {scene, camera, flashlight} = rig();
     const r = fakeRenderer();
-    const a = new VolumetricAtmosphere(r as unknown as THREE.WebGLRenderer, {flashlight}, 'high');
-    a.setSize(1280, 720);
-    const l1 = station(1), l2 = station(3);
-    a.setStation(l1, null);
-    a.render(scene, camera, 0);
-    const tex1 = a.march.uniforms.tDensityMap.value as THREE.Texture;
-    expect(tex1).toBeInstanceOf(THREE.DataArrayTexture); // iteration 08: one layer per level slot
-    const d1 = disposed(tex1);
-    a.setStation(l2, null); // New Station
-    expect(d1.n).toBe(1);
-    a.render(scene, camera, 0);
-    const rt = (a as unknown as {sceneRT: THREE.WebGLRenderTarget}).sceneRT;
-    const march = (a as unknown as {marchRT: THREE.WebGLRenderTarget}).marchRT;
-    const hist = (a as unknown as {history: THREE.WebGLRenderTarget[]}).history;
-    expect((rt as unknown as {isXRRenderTarget: boolean}).isXRRenderTarget).toBe(true);
-    expect(rt.texture.internalFormat).toBe('RGBA8');
-    expect(rt.samples).toBe(4);
-    expect(rt.depthTexture).toBeInstanceOf(THREE.DepthTexture);
-    expect(march.texture.type).toBe(THREE.HalfFloatType);
-    a.setSize(1600, 900);
-    expect([rt.width, rt.height]).toEqual([1600, 900]);
-    expect([march.width, march.height]).toEqual([800, 450]);
-    const seen = [rt, rt.depthTexture!, march, ...hist].map(disposed);
-    a.setQuality('low'); // targets rebuilt lazily for the new MSAA / size
-    expect(seen.every(s => s.n >= 1)).toBe(true);
-    a.render(scene, camera, 0);
-    const rt2 = (a as unknown as {sceneRT: THREE.WebGLRenderTarget}).sceneRT;
-    expect(rt2).not.toBe(rt);
-    expect(rt2.samples).toBe(0);
-    const all = [rt2, rt2.depthTexture!, (a as unknown as {marchRT: THREE.WebGLRenderTarget}).marchRT, ...(a as unknown as {history: THREE.WebGLRenderTarget[]}).history,
-      a.march, a.temporal, a.composite, a.noise, a.march.uniforms.tDensityMap.value as THREE.Texture,
-      ((a as unknown as {quad: THREE.Mesh}).quad.geometry)].map(disposed);
+    const seen: unknown[] = [];
+    const a = make(r, {flashlight});
+    r.debug.onShaderError = (...x: unknown[]) => seen.push(x); // CORE installs its handler during renderer init (after our ctor)
+    a.render(scene, camera, 0); // first frame after init: the fog module chains in front of it
+    const gl = {getShaderSource: (s: string) => s, getShaderInfoLog: () => ''};
+    r.debug.onShaderError!(gl, {}, 'void main(){}', 'other program');
+    expect(a.failed).toBe(null);
+    r.debug.onShaderError!(gl, {}, 'void main(){}', `vec3 ${VF_MARK.march} = vec3(0.0);`);
+    expect(a.failed).toContain('fog');
+    expect(seen.length).toBe(2);
     a.dispose();
-    expect(all.map(s => s.n >= 1)).toEqual(all.map(() => true));
-    expect(a.active).toBe(false);
-    a.dispose(); // idempotent
+    expect(seen.length).toBe(2);
+    expect(r.debug.onShaderError).not.toBe(null); // restored to the previous (CORE) handler
   });
 
-  it('iteration 12: the flashlight shadow map is created even while the light is dark (no shadow sampler without a map)', () => {
+  it('the flashlight shadow map is requested even while the light is dark; no per-frame shadow pass while dark', () => {
     const {scene, camera, flashlight} = rig();
-    flashlight.intensity = 0; // title screen / flat battery / switched off from the first frame
-    const a = new VolumetricAtmosphere(fakeRenderer() as unknown as THREE.WebGLRenderer, {flashlight}, 'high');
+    flashlight.intensity = 0;
+    const a = make(fakeRenderer(), {flashlight});
     a.setSize(640, 360);
     a.setStation(station(1), null);
-    expect(flashlight.shadow.map).toBe(null);
     a.render(scene, camera, 0);
-    expect(flashlight.shadow.autoUpdate).toBe(false);  // no per-frame shadow pass while dark...
-    expect(flashlight.shadow.needsUpdate).toBe(true);  // ...but one forced update creates the map
-    flashlight.shadow.needsUpdate = false;
-    (flashlight.shadow as unknown as {map: object}).map = {};    // three created it
-    a.render(scene, camera, 0.1);
-    expect(flashlight.shadow.needsUpdate).toBe(false);
-    a.enabled = false; // the direct (r5) path samples the same map
-    (flashlight.shadow as unknown as {map: object | null}).map = null;
-    a.render(scene, camera, 0.2);
+    expect(flashlight.shadow.autoUpdate).toBe(false);
     expect(flashlight.shadow.needsUpdate).toBe(true);
-    (flashlight.shadow as unknown as {map: object | null}).map = null;
     a.dispose();
+  });
+
+  it('resize / new station / quality change / dispose release the GPU objects', () => {
+    const {scene, camera, flashlight} = rig();
+    const a = make(fakeRenderer(), {flashlight});
+    a.setSize(1280, 720);
+    a.setStation(station(1), null);
+    a.render(scene, camera, 0);
+    const internals = a as unknown as {marchRT: THREE.EventDispatcher<{dispose: object}> | null; history: THREE.EventDispatcher<{dispose: object}>[] | null};
+    expect(internals.marchRT).not.toBe(null);
+    expect(internals.history?.length).toBe(2);
+    let n = 0;
+    for (const t of [internals.marchRT!, ...internals.history!]) t.addEventListener('dispose', () => n++);
+    a.setQuality('low');
+    expect(n).toBe(3);
+    expect(internals.marchRT).toBe(null);
+    a.render(scene, camera, 0.1);
+    expect(internals.marchRT).not.toBe(null);
+    const dens = a.densityMap;
+    a.setStation(station(2), null);
+    expect(a.densityMap).not.toBe(dens);
+    a.dispose();
+    expect(a.active).toBe(false);
+    a.dispose(); // idempotent
   });
 
   it('shadow casters: opaque lit meshes cast (structure double-sided), glow/tubes/decals do not', () => {
@@ -840,107 +489,9 @@ describe('VolumetricAtmosphere lifecycle (no GL: fake renderer)', () => {
     const actor = new THREE.SkinnedMesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
     markShadows(actor, false, false);
     expect([actor.castShadow, actor.receiveShadow, (actor.material as THREE.Material).shadowSide]).toEqual([true, false, null]);
-    // configureFlashlightShadow without a renderer (tests) still sets the light up.
     const l = new THREE.SpotLight();
     configureFlashlightShadow(l, 'high', null);
     expect(l.castShadow).toBe(true);
     expect(l.shadow.bias).toBeLessThan(0);
   });
-});
-
-// ---------------------------------------------------------------------------------------------
-describe.runIf(!!process.env.FOG_PREVIEW)('CPU fog previews (FOG_PREVIEW=1)', () => {
-  it('renders flashlight on/off with and without haze', async () => {
-    const sharp = (await import('sharp')).default;
-    const {renderFogPreview} = await import('./helpers/fogPreview');
-    const {previewScene} = await import('./helpers/lightPreview');
-    const {bakeLightField} = await import('../src/world/lightField');
-    const out = path.join(REPO, 'qa-artifacts', 'iter06-fog');
-    fs.mkdirSync(out, {recursive: true});
-    const W = Number(process.env.FOG_PREVIEW_W ?? 360), H = Math.round(W * 9 / 16);
-    const noise = buildNoiseVolume();
-    for (const seed of (process.env.FOG_PREVIEW_SEEDS ?? '1,6').split(',').map(Number)) {
-      const l = station(seed), field = bakeLightField({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY});
-      const sc = previewScene(l), params = {...atmosphereFor(l), ...JSON.parse(process.env.FOG_PREVIEW_PARAMS ?? '{}')}, dmap = buildDensityMap(l, params);
-      const P = l.areas[l.platform], sp = l.playerSpawn;
-      const pz = (P.y + P.h / 2) * CELL;
-      const views = [
-        {label: 'spawn', cam: {x: sp.x, y: 1.6, z: sp.z, yaw: sp.yaw, pitch: 0.0, fov: 75}},
-        {label: 'platform length', cam: {x: (P.x + 3) * CELL, y: 1.6, z: pz, yaw: -Math.PI / 2, pitch: 0.02, fov: 75}},
-      ];
-      const dark = l.areas.find(a => a.lighting === 'dark' && a.w * a.h > 40);
-      if (dark) views.push({label: `dark ${dark.type}`, cam: {x: (dark.x + 1.2) * CELL, y: 1.6, z: (dark.y + dark.h / 2) * CELL, yaw: -Math.PI / 2, pitch: -0.05, fov: 75}});
-      const cols = [
-        {t: 'flashlight ON, no haze (r5)', fog: false, flash: true}, {t: 'flashlight ON + haze', fog: true, flash: true},
-        {t: 'flashlight OFF, no haze (r5)', fog: false, flash: false}, {t: 'flashlight OFF + haze', fog: true, flash: false},
-      ];
-      const LH = 18, TW = W * cols.length, TH = views.length * (H + LH) + LH;
-      const big = Buffer.alloc(TW * TH * 3, 16);
-      const labels: string[] = [];
-      views.forEach((v, row) => {
-        cols.forEach((c, col) => {
-          const img = renderFogPreview(sc, v.cam, {mood: MOOD, field, params, density: dmap, noise, width: W, height: H, flashlight: c.flash, fog: c.fog, time: 0});
-          for (let y = 0; y < H; y++) img.copy(big, ((LH + row * (H + LH) + LH + y) * TW + col * W) * 3 - LH * TW * 3, y * W * 3, (y + 1) * W * 3);
-        });
-        labels.push(`<text x="6" y="${LH + row * (H + LH) + 13}" font-family="DejaVu Sans" font-size="12" fill="#ddd">seed ${seed} - ${v.label}</text>`);
-      });
-      const head = cols.map((c, i) => `<text x="${i * W + 6}" y="13" font-family="DejaVu Sans" font-size="12" fill="#ddd">${c.t}</text>`).join('');
-      const svg = `<svg width="${TW}" height="${TH}">${head}${labels.join('')}</svg>`;
-      await sharp(big, {raw: {width: TW, height: TH, channels: 3}}).composite([{input: Buffer.from(svg)}]).png().toFile(path.join(out, `fog-preview-seed${seed}${process.env.FOG_PREVIEW_TAG ?? ''}.png`));
-    }
-  }, 900000);
-});
-
-// ---------------------------------------------------------------------------------------------
-describe.runIf(!!process.env.FOG12_PREVIEW)('iteration 12 CPU fog previews (FOG12_PREVIEW=1; qa-artifacts/iter12-fog)', () => {
-  it('renders before-like / after (torch on / off, two moments) / flare smoke views', async () => {
-    const sharp = (await import('sharp')).default;
-    const {renderFogPreview} = await import('./helpers/fogPreview');
-    const {previewScene} = await import('./helpers/lightPreview');
-    const {bakeLightField} = await import('../src/world/lightField');
-    const {SmokeField} = await import('../src/render/smoke');
-    const out = path.join(REPO, 'qa-artifacts', 'iter12-fog');
-    fs.mkdirSync(out, {recursive: true});
-    const W = Number(process.env.FOG_PREVIEW_W ?? 288), H = Math.round(W * 9 / 16);
-    const noise = buildNoiseVolume();
-    for (const seed of (process.env.FOG_PREVIEW_SEEDS ?? '1').split(',').map(Number)) {
-      const l = station(seed), field = bakeLightField({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY});
-      const sc = previewScene(l), params = {...atmosphereFor(l), ...JSON.parse(process.env.FOG_PREVIEW_PARAMS ?? '{}')}, dmap = buildDensityMap(l, params), flow = buildFlowMap(l);
-      const before = {...params, density: 0.02, noiseAmount: 0, ground: 0, patchExtinction: 0, fixtureScatter: 0.5, flashlightScatter: 0.45};
-      const P = l.areas[l.platform], sp = l.playerSpawn, pz = (P.y + P.h / 2) * CELL;
-      const views = [
-        {label: 'spawn', cam: {x: sp.x, y: 1.6, z: sp.z, yaw: sp.yaw, pitch: 0.0, fov: 75}},
-        {label: 'platform length', cam: {x: (P.x + 3) * CELL, y: 1.6, z: pz, yaw: -Math.PI / 2, pitch: -0.02, fov: 75}},
-      ];
-      const hall = l.areas.find(a => (a.type === 'concourse' || a.type === 'fare-hall') && a.w * a.h > 200);
-      if (hall) views.push({label: hall.type, cam: {x: (hall.x + 2) * CELL, y: 1.6, z: (hall.y + hall.h / 2) * CELL, yaw: -Math.PI / 2, pitch: -0.03, fov: 75}});
-      const cols = [
-        {t: 'before-like uniform haze, torch off', p: before, flash: false, time: 0, flare: false},
-        {t: 'iteration 12, torch on', p: params, flash: true, time: 0, flare: false},
-        {t: 'iteration 12, torch off', p: params, flash: false, time: 0, flare: false},
-        {t: 'iteration 12, torch off, 20 s later', p: params, flash: false, time: 20, flare: false},
-        {t: 'iteration 12 + flare smoke (6 s)', p: params, flash: false, time: 6, flare: true},
-      ];
-      const LH = 18, TW = W * cols.length, TH = views.length * (H + LH) + LH;
-      const big = Buffer.alloc(TW * TH * 3, 16);
-      const labels: string[] = [];
-      views.forEach((v, row) => {
-        cols.forEach((c, col) => {
-          let smoke = null, scatterLight = null;
-          if (c.flare) {
-            const fx = v.cam.x - Math.sin(v.cam.yaw) * 4.5, fz = v.cam.z - Math.cos(v.cam.yaw) * 4.5, fy = v.cam.y - 1.55;
-            smoke = new SmokeField();
-            smoke.add({x: fx, y: fy + 0.05, z: fz, color: 0xc0261a, rate: 1, radius: 1.4, life: 7});
-            for (let t = 0; t < 6; t += 1 / 30) smoke.step(1 / 30);
-            scatterLight = {pos: [fx, fy + 0.15, fz] as V3, color: [7, 7 * 0.0232, 7 * 0.006] as V3, distance: 10, decay: 2};
-          }
-          const img = renderFogPreview(sc, v.cam, {mood: MOOD, field, params: c.p, density: dmap, flow, noise, width: W, height: H, flashlight: c.flash, fog: true, time: c.time, smoke, scatterLight});
-          for (let y = 0; y < H; y++) img.copy(big, ((LH + row * (H + LH) + LH + y) * TW + col * W) * 3 - LH * TW * 3, y * W * 3, (y + 1) * W * 3);
-        });
-        labels.push(`<text x="6" y="${LH + row * (H + LH) + 13}" font-family="DejaVu Sans" font-size="12" fill="#ddd">seed ${seed} - ${v.label}</text>`);
-      });
-      const head = cols.map((c, i) => `<text x="${i * W + 6}" y="13" font-family="DejaVu Sans" font-size="12" fill="#ddd">${c.t}</text>`).join('');
-      await sharp(big, {raw: {width: TW, height: TH, channels: 3}}).composite([{input: Buffer.from(`<svg width="${TW}" height="${TH}">${head}${labels.join('')}</svg>`)}]).png().toFile(path.join(out, `fog-iter12-seed${seed}${process.env.FOG_PREVIEW_TAG ?? ''}.png`));
-    }
-  }, 1800000);
 });

@@ -34,7 +34,7 @@ await withBrowserLock(async () => {
   const frames = n => ev(k => new Promise(res => { let i = 0; const t = setTimeout(() => res(i), 60000); const f = () => { if (++i >= k) { clearTimeout(t); res(i); } else requestAnimationFrame(f); }; requestAnimationFrame(f); }), n);
   const click = async (button = 'left') => { await page.mouse.down({button}); await frames(2); await page.mouse.up({button}); await frames(6); };
   const pl = () => ev(() => { const p = window.__game.player, L = window.__game.levels; const s = L.supportAt(p.x, p.z, p.y + 0.05); return {x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), level: s?.level ?? -1}; });
-  const calls = () => ev(() => window.__game.renderer.info.render.calls);
+  const calls = () => ev(() => window.__game.renderer.info.render.drawCalls); // Iteration 13 (CORE): WebGPURenderer draw calls this frame
   const lum = async file => { const sharp = (await import('sharp')).default; const {data, info} = await sharp(file).extract({left: 440, top: 200, width: 400, height: 320}).greyscale().raw().toBuffer({resolveWithObject: true}); let s = 0; for (const v of data) s += v; return +(s / (info.width * info.height)).toFixed(1); };
   const walkTo = async (target, timeout = 90000) => {
     let prev = await pl(), maxDy = 0, minCalls = Infinity;

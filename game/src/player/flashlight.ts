@@ -25,6 +25,8 @@
 // 2.0 m nothing (the 34 cd flashlight stays the only real torch).
 
 import * as THREE from 'three';
+import {clamp, dot, float, length, lightPosition, max, min, normalWorld, positionWorld, reference, renderGroup, sqrt} from 'three/tsl';
+import type {Node} from 'three/webgpu';
 import type {LightSource, LightSources} from '../world/lightSources';
 
 export const BATTERY = {
@@ -294,6 +296,68 @@ export interface PlayerLightWorld {
   raycast(o: V3, d: V3, max: number): number;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Iteration 13 (LIGHTING): flashlight spot shadow bias for WebGPURenderer.
+//
+// three r186's node PCF filter takes 5 hardware-compared taps on a Vogel disk of `radius` texels, rotated per pixel by
+// interleaved gradient noise. With iteration 12's single CONSTANT depth bias (shadowBiasFor: ~4.5e-4 depth = 2 cm at 3 m but
+// only 2 mm at 1 m, since perspective depth goes ~ near / z^2) the taps on a curved receiver close to the torch (zombies,
+// props at 1-3 m) read their own surface: dithered jagged self-shadow streaks (MAT-B's browser check; gone with castShadow
+// off), while far receivers got a 0.2-0.5 m offset (peter-panning hidden behind the caster). The bias below is
+// RECEIVER-PLANE / SLOPE-SCALED in world terms: the receiver moves toward the light by the depth its surface spans across
+// the filter footprint at this distance (texel size x (radius + 1.5) x tan(angle to the light), clamped at grazing), plus a
+// small constant; converted to depth units at the receiver's distance. Normal offset (normalBias) stays for the terminator.
+// Only the SURFACE lookup changes: `shadow.bias` (read by the volumetric march) keeps its value; the shadow-pass side rule
+// (`shadowSide ?? flip(side)`, the iteration-12 container-liner fix) is untouched.
+
+export const FLASH_SHADOW = {
+  /** Constant world offset toward the light (m). */
+  offset: 0.004,
+  /** Filter footprint in texels the slope term covers (node PCF disk radius 1 + bilinear tap + margin). */
+  footprint: 2.5,
+  /** Grazing clamp of tan(angle between the normal and the light): ~80 deg. */
+  maxSlope: 5.5,
+  /** Normal offset (m), as iteration 12. */
+  normalBias: 0.02,
+} as const;
+
+/** CPU mirror: depth-units bias (negative = toward the light) at distance `dist` (m), cos of the light incidence `cosT`. */
+export function flashShadowBiasCPU(dist: number, cosT: number, o: {angle: number; mapSize: number; near: number; far: number}): {worldOffset: number; depthBias: number} {
+  const c = Math.min(1, Math.max(0.05, cosT));
+  const tanT = Math.min(FLASH_SHADOW.maxSlope, Math.sqrt(Math.max(0, 1 - c * c)) / c);
+  const texel = 2 * Math.tan(o.angle) * dist / o.mapSize;
+  const worldOffset = FLASH_SHADOW.offset + FLASH_SHADOW.footprint * texel * (1 + tanT);
+  const dPerM = o.near * o.far / ((o.far - o.near) * Math.max(dist, o.near) ** 2);
+  return {worldOffset, depthBias: -worldOffset * dPerM};
+}
+
+/** TSL bias node for `light.shadow.biasNode` (the mirror of flashShadowBiasCPU, per receiver fragment). */
+export function flashShadowBiasNode(light: THREE.SpotLight): Node {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type N = any;
+  const sh = light.shadow;
+  const ref = (name: string, type: string, obj: object): N => (reference(name, type as 'float', obj as never) as N).setGroup(renderGroup);
+  const angle = ref('angle', 'float', light);
+  const mapSize = ref('mapSize', 'vec2', sh);
+  const near = ref('near', 'float', sh.camera);
+  const far = ref('far', 'float', sh.camera);
+  const toLight = (lightPosition(light) as N).sub(positionWorld) as N;
+  const dist = max(length(toLight), near) as N;
+  const c = clamp(dot(normalWorld, toLight.div(dist)), 0.05, 1) as N;
+  const tanT = min(sqrt(max(float(1).sub(c.mul(c)), 0)).div(c), FLASH_SHADOW.maxSlope) as N;
+  const texel = angle.tan().mul(2).mul(dist).div(mapSize.x) as N;
+  const worldOffset = float(FLASH_SHADOW.offset).add(texel.mul(FLASH_SHADOW.footprint).mul(tanT.add(1))) as N;
+  const dPerM = near.mul(far).div(far.sub(near).mul(dist.mul(dist))) as N;
+  return worldOffset.mul(dPerM).negate() as Node;
+}
+
+/** Install the WebGPURenderer surface shadow bias on the flashlight (idempotent). */
+export function applyFlashShadowBias(light: THREE.SpotLight): void {
+  const sh = light.shadow as unknown as {biasNode?: Node | null; normalBias: number};
+  if (!sh.biasNode) sh.biasNode = flashShadowBiasNode(light);
+  sh.normalBias = FLASH_SHADOW.normalBias;
+}
+
 export class PlayerLight {
   readonly battery: FlashlightBattery;
   readonly glow: THREE.PointLight;
@@ -308,6 +372,7 @@ export class PlayerLight {
 
   constructor(readonly spot: THREE.SpotLight, readonly candela: number, rng: () => number = Math.random) {
     this.battery = new FlashlightBattery(rng);
+    applyFlashShadowBias(spot); // Iteration 13 (LIGHTING): node-PCF-safe surface shadow bias
     this.glow = new THREE.PointLight(BODY_GLOW.color, BODY_GLOW.intensity, BODY_GLOW.distance, BODY_GLOW.decay);
     this.glow.name = 'body-glow';
     this.glow.castShadow = false;

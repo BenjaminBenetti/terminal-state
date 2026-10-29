@@ -31,7 +31,8 @@ import {
 } from './levelGeometry';
 import type {WallFace} from './wallFaces';
 import {LevelCuller} from './levelCulling';
-import {addShaderHook} from '../render/shaderHooks';
+import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
+import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
 import {buildWallDetail} from './wallDetail';
 import {applyStationDecay, archShopMaterial} from './decay';
 
@@ -366,7 +367,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   try { applyStationDecay(layout, levels, mats); } catch (e) { console.warn('surface decay skipped', e); }
 
   // Tunnel mouths fade to black beyond the platform ends.
-  const voidMat = new THREE.MeshBasicMaterial({color: 0x030303});
+  const voidMat = new MeshBasicNodeMaterial({color: 0x030303}); // Iteration 13 (MAT-A): node material
   for (const t of layout.trenches) {
     for (const x of [t.x0 + 0.01, t.x1 - 0.01]) {
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(t.z1 - t.z0, t.ceil - trenchY), voidMat);
@@ -748,14 +749,12 @@ function buildSigns(group: THREE.Group, layout: StationLayout, mats: WorldMateri
 // distinct text): every distinct sign texture is redrawn into a padded 512 px-wide cell, and each face
 // instance carries its cell's UV rect (aUvRect) — same plates, same texts, ~30 fewer draw calls.
 const SIGN_CELL_W = 512, SIGN_PAGE_W = 1024, SIGN_PAGE_MAX_H = 2048, SIGN_PAD = 4;
-const signAtlasMat = (atlas: THREE.Texture): THREE.MeshStandardMaterial => {
-  const m = new THREE.MeshStandardMaterial({map: atlas, roughness: 0.6});
+// Iteration 13 (MAT-A): the iteration-08 GLSL hook 'sign-atlas-v1' as a node-material context: the map samples
+// uv * aUvRect.zw + aUvRect.xy (per-instance rect, then the map transform), surfaceNodes.ts SIGN_ATLAS_CONTEXT.
+export const signAtlasMat = (atlas: THREE.Texture): MeshStandardNodeMaterial => {
+  const m = new MeshStandardNodeMaterial({map: atlas, roughness: 0.6});
   m.name = 'sign-atlas';
-  addShaderHook(m, 'sign-atlas-v1', sh => {
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aUvRect;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n\tvMapUv = ( mapTransform * vec3( uv * aUvRect.zw + aUvRect.xy, 1.0 ) ).xy;\n#endif');
-  });
+  m.contextNode = SIGN_ATLAS_CONTEXT;
   return m;
 };
 

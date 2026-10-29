@@ -44,10 +44,10 @@ import {
   CABINET_SPECS, DEFAULT_SHELF, cabinetInsert, cabinetInterior, holderSurfaces, placementBox,
   type Dims, type ShelfInfo, type Surface, type SurfaceOptions,
 } from '../items/lootLayout';
-import type {WorldMaterials} from './materials';
+import {MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
+import {cloneSurfaceMaterial, type WorldMaterials} from './materials';
 import {surface} from './canvasTextures';
 import {LotDisplay, type LotInstance} from './lootDisplay';
-import {cloneWithShaderHooks} from '../render/shaderHooks';
 import {itemModelSources} from './pickups';
 import {holderBoxes} from '../physics/holderShapes';
 import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, type Plane, type Soup} from './meshSplit';
@@ -118,8 +118,9 @@ function surfaceOptions(): SurfaceOptions {
 }
 
 // Iteration 04 (Lane C): interiors/door backs/shelving get the shared worn painted-sheet texture (mesh UVs; doors move).
+// Iteration 13 (MAT-A): node materials; side / shadowSide semantics unchanged (WebGPURenderer: shadowSide ?? flip(side)).
 const std = (color: THREE.Color | number, roughness: number, metalness: number, side: THREE.Side = THREE.FrontSide) =>
-  new THREE.MeshStandardMaterial({color, roughness, metalness, side, map: surface('paintedPanel').map});
+  new MeshStandardNodeMaterial({color, roughness, metalness, side, map: surface('paintedPanel').map});
 
 interface Part { geo: THREE.BufferGeometry; mat: THREE.Material }
 interface LeafDef {
@@ -255,7 +256,7 @@ export class ContainerManager {
   onEvent: ((e: ContainerEvent) => void) | null = null;
   private readonly cache = new Map<LegacyKind, ContainerModel>();
   private readonly bodies: THREE.InstancedMesh[] = [];
-  private readonly rimMat = new THREE.MeshStandardMaterial({color: 0x6b5640, roughness: 0.95, map: surface('woodVeneer').map});
+  private readonly rimMat = new MeshStandardNodeMaterial({color: 0x6b5640, roughness: 0.95, map: surface('woodVeneer').map});
   private readonly hiMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   private readonly display = new LotDisplay();
   private highlighted: Holder | null = null;
@@ -893,7 +894,7 @@ export class ContainerManager {
       m.userData.baseMat = base;
       if (!(base as THREE.MeshStandardMaterial).isMeshStandardMaterial) continue;
       let hi = this.hiMats.get(base);
-      if (!hi) { hi = cloneWithShaderHooks(base as THREE.MeshStandardMaterial); this.hiMats.set(base, hi); } // Lane D: keeps damage / wound shader hooks
+      if (!hi) { hi = cloneSurfaceMaterial(base as THREE.MeshStandardMaterial); this.hiMats.set(base, hi); } // Lane D: keeps damage / wound hooks (iteration 13: node hooks)
       m.material = hi;
     }
   }

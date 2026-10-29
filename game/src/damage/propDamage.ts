@@ -21,10 +21,12 @@
 // Bounded: at most MAX_DETACHED props are detached (further hits fall back to fx decals).
 
 import * as THREE from 'three';
+import type {NodeMaterial} from 'three/webgpu';
+import {Break, Discard, Fn, If, Loop, abs, atan, clamp, cross, dot, float, floor, fract, int, length, mat4, materialColor, materialEmissive, materialMetalness, materialNormal, materialOpacity, materialRoughness, max, min, mix, normalize, positionGeometry, positionView, select, smoothstep, step, varying, vec2, vec3, vec4} from 'three/tsl';
 import type {PropPlacement} from '../gen/props';
-import {addShaderHook, cloneWithShaderHooks} from '../render/shaderHooks';
+import {addNodeHook, nodeHookKeys} from '../render/nodeHooks';
 import {DAMAGE_MATERIALS, SHADE_MODES, damageStage, partKeyClass, propDamageSpec, propHitDamage, type DamageClass, type PropDamageSpec} from './materials';
-import {DMG_COMMON, DMG_PERTURB, after} from './glsl';
+import {dmgHash, dmgNoise, dmgPerturb, isStandardLike, memoNode, objectData, toNodeMaterial, writeMat4, type TNode} from './tsl';
 import {materialBaseColor} from './sample';
 
 export const DMG_MAX = 10;
@@ -70,20 +72,44 @@ export interface PropHitResult {
   rubble: boolean;
 }
 
-interface PartUniforms {
-  uDmgA: {value: THREE.Vector4[]};
-  uDmgB: {value: THREE.Vector4[]};
-  uDmgC: {value: THREE.Vector4[]};
-  uDmgN: {value: number};
-  uDmgRest: {value: THREE.Matrix4};
-  uDmgMode: {value: number};
-  uDmgSub: {value: THREE.Color};
-  uDmgDead: {value: number};
-  uDmgLocal: {value: THREE.Matrix4};
-  uDmgFront: {value: THREE.Vector4};
-  uDmgFrontOn: {value: number};
-  uDmgFrontBroken: {value: number};
+/**
+ * Iteration 13 (MAT-B): one detached part's damage state as PER-OBJECT data (`mesh.userData.dmgProp`, PROP_DATA vec4),
+ * read at every draw by the ONE shared prop-damage node graph (damage/tsl.ts objectData) — the WebGPU replacement for the
+ * per-clone GLSL uniforms. Layout (vec4 index): 0 (lines, shade mode, dead screen, front on) · 1 (front broken, substrate
+ * rgb) · 2 front region (x0, x1, y0, y1) · 3..6 rest matrix · 7..10 prop-local matrix · 11.. A[DMG_MAX] (start, radius) ·
+ * B[DMG_MAX] (dir, length) · C[DMG_MAX] (strength, seed, crack, 0).
+ */
+export class PartData {
+  readonly data = new Float32Array(PROP_DATA * 4);
+  constructor(mode: number, sub: THREE.Color, rest: THREE.Matrix4) {
+    this.data[1] = mode;
+    this.data[5] = sub.r; this.data[6] = sub.g; this.data[7] = sub.b;
+    writeMat4(this.data, 3, rest);
+  }
+  /** Damage lines in use. */
+  get n(): number { return this.data[0]; }
+  set n(v: number) { this.data[0] = v; }
+  get mode(): number { return this.data[1]; }
+  /** Screen died (emissive off). */
+  get dead(): number { return this.data[2]; }
+  set dead(v: number) { this.data[2] = v; }
+  get frontOn(): number { return this.data[3]; }
+  set frontOn(v: number) { this.data[3] = v; }
+  get frontBroken(): number { return this.data[4]; }
+  set frontBroken(v: number) { this.data[4] = v; }
+  setFront(x0: number, x1: number, y0: number, y1: number): void { this.data.set([x0, x1, y0, y1], 8); }
+  setLocal(m: THREE.Matrix4): void { writeMat4(this.data, 7, m); }
+  setLine(i: number, l: Line): void {
+    this.data.set([l.a.x, l.a.y, l.a.z, l.r], (DATA_A + i) * 4);
+    this.data.set([l.d.x, l.d.y, l.d.z, l.len], (DATA_B + i) * 4);
+    this.data.set([l.strength, l.seed, l.crack, 0], (DATA_C + i) * 4);
+  }
 }
+const DATA_A = 11, DATA_B = DATA_A + DMG_MAX, DATA_C = DATA_B + DMG_MAX;
+/** vec4 per part. */
+export const PROP_DATA = DATA_C + DMG_MAX;
+/** mesh.userData key of a part's PartData.data. */
+export const PROP_DATA_KEY = 'dmgProp';
 
 interface Line { a: THREE.Vector3; d: THREE.Vector3; len: number; r: number; strength: number; seed: number; crack: number }
 
@@ -91,7 +117,7 @@ interface Part {
   mesh: THREE.Mesh;
   cls: DamageClass;
   glass: boolean;
-  u: PartUniforms;
+  u: PartData;
   /** World matrix at detach time (rest frame of the damage lines). */
   rest: THREE.Matrix4;
   /** Moving part (container door / lid): convert world hits through its current matrix. */
@@ -125,155 +151,184 @@ export interface PropState {
 }
 
 // ---------------------------------------------------------------------------------------
-// Shader
+// Shader — Iteration 13 (MAT-B): TSL node stages on the part's own node-material clone (was GLSL onBeforeCompile):
+// colour / opacity / roughness / metalness / normal / emissive, order 300 (render/nodeHooks.ts). Same maths as the
+// iteration-06 GLSL: damage lines in the part's rest frame, per shade mode dents / splinters / cracks / frost / chips /
+// tears, punched holes, bump-mapped relief, vending front given way, dead screens. ONE graph per base node (memoNode):
+// every clone of a shared material draws with the same pipeline; the per-part state is per-object data (PartData).
 
-const PROP_PARS = /* glsl */ `
-#define DMG_MAX ${DMG_MAX}
-uniform vec4 uDmgA[ DMG_MAX ];
-uniform vec4 uDmgB[ DMG_MAX ];
-uniform vec4 uDmgC[ DMG_MAX ];
-uniform int uDmgN;
-uniform mat4 uDmgRest;
-varying vec3 vDmgP;
-`;
-const PROP_FRAG_PARS = /* glsl */ `
-uniform int uDmgMode;
-uniform vec3 uDmgSub;
-uniform float uDmgDead;
-uniform mat4 uDmgLocal;
-uniform vec4 uDmgFront;
-uniform float uDmgFrontOn;
-uniform float uDmgFrontBroken;
-${DMG_COMMON}
-${DMG_PERTURB}
-// x: hole core, y: damaged ring (dent / chip / splinter / tear), z: cracks, w: strength
-vec4 dmgField( vec3 p, bool cracks ) {
-	vec4 acc = vec4( 0.0 );
-	for ( int i = 0; i < DMG_MAX; i ++ ) {
-		if ( i >= uDmgN ) break;
-		vec4 A = uDmgA[ i ]; vec4 B = uDmgB[ i ]; vec4 C = uDmgC[ i ];
-		vec3 rel = p - A.xyz;
-		float t = clamp( dot( rel, B.xyz ), 0.0, B.w );
-		vec3 q = rel - B.xyz * t;
-		float d = length( q );
-		float n = dmgNoise( p * 55.0 + C.y );
-		float r = A.w * ( 0.75 + 0.5 * n );
-		float core = 1.0 - smoothstep( r * 0.28, r * 0.4, d );
-		float ring = 1.0 - smoothstep( r * 0.4, r, d );
-		acc.x = max( acc.x, core );
-		acc.y = max( acc.y, ring );
-		acc.w = max( acc.w, ring * C.x );
-		if ( cracks && d < A.w * C.z ) {
-			vec3 ax = abs( B.y ) < 0.9 ? vec3( 0.0, 1.0, 0.0 ) : vec3( 1.0, 0.0, 0.0 );
-			vec3 u = normalize( cross( B.xyz, ax ) ), v = cross( B.xyz, u );
-			vec2 pl = vec2( dot( q, u ), dot( q, v ) );
-			float rad = length( pl ) + 1e-5;
-			float N = 9.0 + floor( C.y * 0.37 );
-			float ang = atan( pl.y, pl.x ) + 0.35 * ( dmgNoise( vec3( rad * 40.0, C.y, 1.0 ) ) - 0.5 );
-			float sector = ang * N / 6.2831853 + C.y;
-			float jit = dmgHash( vec3( floor( sector ), C.y, 3.0 ) );
-			float spoke = abs( fract( sector ) - 0.5 + ( jit - 0.5 ) * 0.5 ) * 6.2831853 / N * rad;
-			float spacing = A.w * ( 0.75 + 0.5 * jit );
-			float ringc = abs( fract( rad / spacing ) - 0.5 ) * spacing;
-			float ringOn = step( 0.45, dmgHash( vec3( floor( rad / spacing ), floor( sector * 0.5 ), C.y ) ) );
-			float fadeOut = 1.0 - smoothstep( A.w * C.z * 0.55, A.w * C.z, rad );
-			float line = max( 1.0 - smoothstep( 0.0006, 0.0018, spoke ), ( 1.0 - smoothstep( 0.0005, 0.0015, ringc ) ) * ringOn * step( r * 0.6, rad ) );
-			acc.z = max( acc.z, line * fadeOut );
-		}
-	}
-	return acc;
+interface PropShared {
+  /** Rest-frame position (vertex varying, GLSL vDmgP). */
+  p: TNode;
+  front: TNode; frontGone: TNode; frontBox: TNode; dLocal: TNode;
+  isMode(k: number): TNode;
+  /** x hole core, y damaged ring, z cracks, w strength (zero on a given-way front). */
+  df: TNode;
+  grain: TNode; sub: TNode; dead: TNode;
 }
-`;
+let propShared: PropShared | null = null;
 
-const PROP_COLOR = /* glsl */ `
-int dMode = uDmgMode;
-vec3 dLocal = ( uDmgLocal * vec4( vDmgP, 1.0 ) ).xyz;
-bool dFront = uDmgFrontOn > 0.5 && dLocal.z > 0.42 && dLocal.x > uDmgFront.x && dLocal.x < uDmgFront.y && dLocal.y > uDmgFront.z && dLocal.y < uDmgFront.w;
-if ( dFront ) dMode = 2;
-vec4 df = uDmgN > 0 ? dmgField( vDmgP, dMode == 2 || dMode == 3 ) : vec4( 0.0 );
-float dGrain = 0.0;
-if ( dFront && uDmgFrontBroken > 0.5 ) {
-	// vending front given way: dark interior behind jagged glass remains at the frame
-	float dEdge = min( min( dLocal.x - uDmgFront.x, uDmgFront.y - dLocal.x ), min( dLocal.y - uDmgFront.z, uDmgFront.w - dLocal.y ) );
-	float dJag = 0.012 + 0.03 * dmgNoise( vDmgP * 60.0 );
-	diffuseColor.rgb = dEdge < dJag ? vec3( 0.55, 0.6, 0.6 ) : diffuseColor.rgb * 0.08;
-	df = vec4( 0.0 );
+function propNodes(): PropShared {
+  if (propShared) return propShared;
+  const D = objectData(PROP_DATA_KEY, PROP_DATA);
+  const h0 = D.element(0), h1 = D.element(1), fr = D.element(2);
+  const rest = mat4(D.element(3), D.element(4), D.element(5), D.element(6));
+  const local = mat4(D.element(7), D.element(8), D.element(9), D.element(10));
+  const p = varying(rest.mul(vec4(positionGeometry, 1)).xyz) as TNode;
+  const lines = int(h0.x);
+  const dLocal = local.mul(vec4(p, 1)).xyz.toVar();
+  const front = h0.w.greaterThan(0.5).and(dLocal.z.greaterThan(0.42)).and(dLocal.x.greaterThan(fr.x)).and(dLocal.x.lessThan(fr.y))
+    .and(dLocal.y.greaterThan(fr.z)).and(dLocal.y.lessThan(fr.w)).toVar();
+  // the baked glass front of a vending machine shades as glass
+  const mode = select(front, float(2), h0.y).toVar();
+  const isMode = (k: number) => abs(mode.sub(k)).lessThan(0.5);
+  const field = Fn(([P, cracks]: [TNode, TNode]) => {
+    const acc = vec4(0).toVar();
+    Loop(DMG_MAX, ({i}: {i: TNode}) => {
+      If(i.greaterThanEqual(lines), () => { Break(); });
+      const A = D.element(i.add(DATA_A)), B = D.element(i.add(DATA_B)), C = D.element(i.add(DATA_C));
+      const rel = P.sub(A.xyz).toVar();
+      const t = clamp(dot(rel, B.xyz), 0, B.w);
+      const q = rel.sub(B.xyz.mul(t)).toVar();
+      const d = length(q).toVar();
+      const r = A.w.mul(dmgNoise(P.mul(55).add(C.y)).mul(0.5).add(0.75)).toVar();
+      const ring = smoothstep(r.mul(0.4), r, d).oneMinus().toVar();
+      acc.x.assign(max(acc.x, smoothstep(r.mul(0.28), r.mul(0.4), d).oneMinus()));
+      acc.y.assign(max(acc.y, ring));
+      acc.w.assign(max(acc.w, ring.mul(C.x)));
+      If(cracks.and(d.lessThan(A.w.mul(C.z))), () => {
+        // spiderweb: radial spokes + broken concentric rings around the line, in its cross-section plane
+        const ax = select(abs(B.y).lessThan(0.9), vec3(0, 1, 0), vec3(1, 0, 0));
+        const u = normalize(cross(B.xyz, ax)).toVar();
+        const v = cross(B.xyz, u);
+        const pl = vec2(dot(q, u), dot(q, v)).toVar();
+        const rad = length(pl).add(1e-5).toVar();
+        const N = floor(C.y.mul(0.37)).add(9).toVar();
+        const ang = atan(pl.y, pl.x).add(dmgNoise(vec3(rad.mul(40), C.y, 1)).sub(0.5).mul(0.35));
+        const sector = ang.mul(N).div(6.2831853).add(C.y).toVar();
+        const jit = dmgHash(vec3(floor(sector), C.y, 3)).toVar();
+        const spoke = abs(fract(sector).sub(0.5).add(jit.sub(0.5).mul(0.5))).mul(6.2831853).div(N).mul(rad);
+        const spacing = A.w.mul(jit.mul(0.5).add(0.75)).toVar();
+        const ringc = abs(fract(rad.div(spacing)).sub(0.5)).mul(spacing);
+        const ringOn = step(0.45, dmgHash(vec3(floor(rad.div(spacing)), floor(sector.mul(0.5)), C.y)));
+        const fadeOut = smoothstep(A.w.mul(C.z).mul(0.55), A.w.mul(C.z), rad).oneMinus();
+        const line = max(smoothstep(0.0006, 0.0018, spoke).oneMinus(), smoothstep(0.0005, 0.0015, ringc).oneMinus().mul(ringOn).mul(step(r.mul(0.6), rad)));
+        acc.z.assign(max(acc.z, line.mul(fadeOut)));
+      });
+    });
+    return acc;
+  });
+  const dfRaw = Fn(() => {
+    const r = vec4(0).toVar();
+    If(lines.greaterThan(0), () => { r.assign(field(p, isMode(2).or(isMode(3)))); });
+    return r;
+  })();
+  const frontGone = front.and(h1.x.greaterThan(0.5));
+  const df = select(frontGone, vec4(0), dfRaw).toVar();
+  propShared = {p, front, frontGone, frontBox: fr, dLocal, isMode, df, grain: dmgNoise(p.mul(140)), sub: h1.yzw, dead: h0.z};
+  return propShared;
 }
-if ( df.x + df.y + df.z > 0.001 ) {
-	dGrain = dmgNoise( vDmgP * 140.0 );
-	vec3 dBase = diffuseColor.rgb;
-	float dRing = df.y * ( 1.0 - df.x );
-	vec3 dCol = dBase;
-	if ( dMode == 0 ) {
-		// metal: dent shadow, paint chipped back to bare steel, dark punched hole
-		vec3 dBare = vec3( 0.5, 0.51, 0.5 ) * ( 0.75 + 0.5 * dGrain );
-		dCol = mix( dBase * 0.7, dBare, step( 0.35, dmgNoise( vDmgP * 70.0 ) ) * smoothstep( 0.0, 0.6, dRing ) );
-	} else if ( dMode == 1 || dMode == 5 ) {
-		// wood / laminate: raw fibres (uDmgSub) with grain streaks
-		float dStreak = dmgNoise( vec3( vDmgP.x * 260.0, vDmgP.y * 30.0, vDmgP.z * 260.0 ) );
-		dCol = mix( dBase, uDmgSub * ( 0.7 + 0.5 * dStreak ), smoothstep( 0.05, 0.5, dRing ) * ( dMode == 5 ? step( 0.3, dGrain ) : 1.0 ) );
-	} else if ( dMode == 2 || dMode == 3 ) {
-		// glass / screen: frosted crush dRing + crack lines
-		vec3 dFrost = dMode == 2 ? vec3( 0.86, 0.9, 0.9 ) : vec3( 0.32, 0.34, 0.35 );
-		dCol = mix( dBase, dFrost, clamp( dRing * 0.8 + df.z, 0.0, 1.0 ) );
-	} else if ( dMode == 4 ) {
-		dCol = mix( dBase, mix( dBase, vec3( 0.86, 0.85, 0.82 ), 0.6 ), smoothstep( 0.0, 0.7, dRing ) );
-	} else if ( dMode == 6 ) {
-		dCol = mix( dBase, uDmgSub * ( 0.8 + 0.35 * dGrain ), smoothstep( 0.05, 0.45, dRing ) );
-	} else {
-		// soft: frayed fibres / torn card (uDmgSub)
-		dCol = mix( dBase, mix( dBase * 1.3 + 0.03, uDmgSub, 0.5 ) * ( 0.75 + 0.5 * dGrain ), smoothstep( 0.1, 0.6, dRing ) );
-	}
-	// punched hole: near-black (glass: see-through)
-	dCol = mix( dCol, vec3( 0.015, 0.014, 0.013 ), df.x );
-	diffuseColor.rgb = dCol;
-	if ( dMode == 2 && !dFront ) {
-		diffuseColor.a = max( diffuseColor.a, clamp( dRing * 0.75 + df.z * 0.9, 0.0, 0.92 ) );
-		diffuseColor.a *= 1.0 - df.x;
-		if ( diffuseColor.a < 0.015 ) discard;
-	}
-}
-`;
-const PROP_ROUGH = /* glsl */ `
-if ( df.y > 0.001 ) {
-	if ( dMode == 0 ) roughnessFactor = mix( roughnessFactor, 0.38, df.y * ( 1.0 - df.x ) );
-	else if ( dMode != 2 ) roughnessFactor = mix( roughnessFactor, 0.95, df.y );
-}
-`;
-const PROP_METAL = /* glsl */ `
-if ( dMode == 0 && df.y > 0.001 ) metalnessFactor = mix( metalnessFactor, 0.75, df.y * ( 1.0 - df.x ) * 0.8 );
-`;
-const PROP_NORMAL = /* glsl */ `
-if ( df.y > 0.001 ) {
-	float dH = - ( df.y * ( dMode == 0 ? 0.9 : 0.45 ) + df.x * 0.8 ) * ( 0.7 + 0.3 * dGrain );
-	normal = dmgPerturb( - vViewPosition, normal, vec2( dFdx( dH ), dFdy( dH ) ) * 1.4, faceDirection );
-}
-`;
-const PROP_EMISSIVE = /* glsl */ `
-totalEmissiveRadiance *= ( 1.0 - uDmgDead ) * ( 1.0 - clamp( df.y * 1.2 + df.z, 0.0, 1.0 ) * ( dMode == 3 ? 1.0 : 0.6 ) );
-`;
 
-function patchPart(mat: THREE.Material, u: PartUniforms): void {
-  addShaderHook(mat, PROP_DAMAGE_HOOK, shader => {
-    Object.assign(shader.uniforms, u);
-    shader.vertexShader = after(after(shader.vertexShader, '#include <common>', PROP_PARS), '#include <begin_vertex>', 'vDmgP = ( uDmgRest * vec4( transformed, 1.0 ) ).xyz;');
-    let f = shader.fragmentShader;
-    f = after(f, '#include <common>', PROP_PARS + PROP_FRAG_PARS);
-    f = after(f, '#include <color_fragment>', PROP_COLOR);
-    f = after(f, '#include <roughnessmap_fragment>', PROP_ROUGH);
-    f = after(f, '#include <metalnessmap_fragment>', PROP_METAL);
-    f = after(f, '#include <normal_fragment_maps>', PROP_NORMAL);
-    f = after(f, '#include <emissivemap_fragment>', PROP_EMISSIVE);
-    shader.fragmentShader = f;
+/** Glass (non-front) fragments whose alpha the colour stage rewrote (the opacity stage then passes 1). */
+const glassAlpha = (S: PropShared) => S.isMode(2).and(S.front.not()).and(S.df.x.add(S.df.y).add(S.df.z).greaterThan(0.001));
+
+export function propColorNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'prop-color', () => Fn(() => {
+    const S = propNodes(), df = S.df, g = S.grain, fr = S.frontBox, L = S.dLocal;
+    const base = vec4(prev ?? materialColor).toVar();
+    const rgb = vec3(base.rgb).toVar();
+    const alpha = float(base.a).toVar();
+    If(S.frontGone, () => {
+      // vending front given way: dark interior behind jagged glass remains at the frame
+      const edge = min(min(L.x.sub(fr.x), fr.y.sub(L.x)), min(L.y.sub(fr.z), fr.w.sub(L.y)));
+      const jag = dmgNoise(S.p.mul(60)).mul(0.03).add(0.012);
+      rgb.assign(select(edge.lessThan(jag), vec3(0.55, 0.6, 0.6), rgb.mul(0.08)));
+    });
+    If(df.x.add(df.y).add(df.z).greaterThan(0.001), () => {
+      const dBase = vec3(rgb).toVar();
+      const ring = df.y.mul(df.x.oneMinus()).toVar();
+      const c = vec3(dBase).toVar();
+      If(S.isMode(0), () => {
+        // metal: dent shadow, paint chipped back to bare steel, dark punched hole
+        const bare = vec3(0.5, 0.51, 0.5).mul(g.mul(0.5).add(0.75));
+        c.assign(mix(dBase.mul(0.7), bare, step(0.35, dmgNoise(S.p.mul(70))).mul(smoothstep(0, 0.6, ring))));
+      }).ElseIf(S.isMode(1).or(S.isMode(5)), () => {
+        // wood / laminate: raw fibres (substrate) with grain streaks
+        const streak = dmgNoise(vec3(S.p.x.mul(260), S.p.y.mul(30), S.p.z.mul(260)));
+        c.assign(mix(dBase, S.sub.mul(streak.mul(0.5).add(0.7)), smoothstep(0.05, 0.5, ring).mul(select(S.isMode(5), step(0.3, g), float(1)))));
+      }).ElseIf(S.isMode(2).or(S.isMode(3)), () => {
+        // glass / screen: frosted crush ring + crack lines
+        c.assign(mix(dBase, select(S.isMode(2), vec3(0.86, 0.9, 0.9), vec3(0.32, 0.34, 0.35)), clamp(ring.mul(0.8).add(df.z), 0, 1)));
+      }).ElseIf(S.isMode(4), () => {
+        c.assign(mix(dBase, mix(dBase, vec3(0.86, 0.85, 0.82), 0.6), smoothstep(0, 0.7, ring)));
+      }).ElseIf(S.isMode(6), () => {
+        c.assign(mix(dBase, S.sub.mul(g.mul(0.35).add(0.8)), smoothstep(0.05, 0.45, ring)));
+      }).Else(() => {
+        // soft: frayed fibres / torn card
+        c.assign(mix(dBase, mix(dBase.mul(1.3).add(0.03), S.sub, 0.5).mul(g.mul(0.5).add(0.75)), smoothstep(0.1, 0.6, ring)));
+      });
+      // punched hole: near-black (glass: see-through)
+      rgb.assign(mix(c, vec3(0.015, 0.014, 0.013), df.x));
+      If(S.isMode(2).and(S.front.not()), () => {
+        // GLSL: alpha here already carried the material opacity (the opacity stage passes 1 for these fragments)
+        const a = max(alpha.mul(materialOpacity), clamp(ring.mul(0.75).add(df.z.mul(0.9)), 0, 0.92)).mul(df.x.oneMinus()).toVar();
+        Discard(a.lessThan(0.015));
+        alpha.assign(a);
+      });
+    });
+    return vec4(rgb, alpha);
+  })());
+}
+
+export function propOpacityNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'prop-opacity', () => select(glassAlpha(propNodes()), float(1), float(prev ?? materialOpacity)));
+}
+
+export function propRoughnessNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'prop-rough', () => {
+    const S = propNodes(), df = S.df, r = float(prev ?? materialRoughness);
+    const dented = select(S.isMode(0), mix(r, 0.38, df.y.mul(df.x.oneMinus())), select(S.isMode(2), r, mix(r, 0.95, df.y)));
+    return select(df.y.greaterThan(0.001), dented, r);
   });
 }
 
-function makeUniforms(mode: number, sub: THREE.Color, rest: THREE.Matrix4): PartUniforms {
-  const vec = () => Array.from({length: DMG_MAX}, () => new THREE.Vector4());
-  return {
-    uDmgA: {value: vec()}, uDmgB: {value: vec()}, uDmgC: {value: vec()}, uDmgN: {value: 0}, uDmgRest: {value: rest.clone()}, uDmgMode: {value: mode},
-    uDmgSub: {value: sub}, uDmgDead: {value: 0}, uDmgLocal: {value: new THREE.Matrix4()}, uDmgFront: {value: new THREE.Vector4()}, uDmgFrontOn: {value: 0}, uDmgFrontBroken: {value: 0},
-  };
+export function propMetalnessNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'prop-metal', () => {
+    const S = propNodes(), df = S.df, m = float(prev ?? materialMetalness);
+    return select(S.isMode(0).and(df.y.greaterThan(0.001)), mix(m, 0.75, df.y.mul(df.x.oneMinus()).mul(0.8)), m);
+  });
+}
+
+export function propNormalNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'prop-normal', () => Fn(() => {
+    const S = propNodes(), df = S.df;
+    const n = vec3(prev ?? materialNormal).toVar();
+    const dH = df.y.mul(select(S.isMode(0), float(0.9), float(0.45))).add(df.x.mul(0.8)).mul(S.grain.mul(0.3).add(0.7)).negate().toVar();
+    const bumped = dmgPerturb(positionView, n, vec2(dH.dFdx(), dH.dFdy()).mul(1.4));
+    return select(df.y.greaterThan(0.001), bumped, n);
+  })());
+}
+
+export function propEmissiveNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'prop-emissive', () => {
+    const S = propNodes(), df = S.df;
+    const e = vec3(prev ?? materialEmissive);
+    return e.mul(S.dead.oneMinus()).mul(clamp(df.y.mul(1.2).add(df.z), 0, 1).mul(select(S.isMode(3), float(1), float(0.6))).oneMinus());
+  });
+}
+
+const PROP_STAGES = [
+  ['color', propColorNode], ['opacity', propOpacityNode], ['roughness', propRoughnessNode], ['metalness', propMetalnessNode], ['normal', propNormalNode], ['emissive', propEmissiveNode],
+] as const;
+
+/** Adds the prop-damage stages (keys `prop-damage-v1.<stage>`, order 300) to a part's own node material. */
+export function addPropDamageHooks(mat: NodeMaterial): void {
+  for (const [stage, make] of PROP_STAGES) addNodeHook(mat, {key: `${PROP_DAMAGE_HOOK}.${stage}`, stage, order: 300, fn: prev => make(prev)});
+}
+
+/** True when `mat` carries the prop-damage node stages. */
+export function hasPropDamage(mat: THREE.Material | null | undefined): boolean {
+  return !!mat && (mat as unknown as NodeMaterial).isNodeMaterial === true && nodeHookKeys(mat as unknown as NodeMaterial).some(k => k.startsWith(`${PROP_DAMAGE_HOOK}.`));
 }
 
 const MODE_INDEX: Record<string, number> = {metal: 0, wood: 1, glass: 2, screen: 3, plastic: 4, laminate: 5, stone: 6, soft: 7};
@@ -418,17 +473,21 @@ export class PropDamage {
    * (with the damage hook) so the renderer compiles the damage shader variants during the first
    * frames after a station loads instead of stalling on the first hit. The warm materials are kept
    * for the page (programs stay cached across stations); the meshes are dropped by dropWarmup().
+   * Iteration 13 (MAT-B): the warm clone shares its node graph with every later damage clone of the
+   * same source (memoNode), so the node build + pipeline it triggers is the one the first hit uses.
+   * It carries no PartData (reads zeros: no damage).
    */
   warmup(): number {
     const seen = new Set<THREE.Material>();
     const add = (geo: THREE.BufferGeometry, src: THREE.Material | THREE.Material[]) => {
       const m = (Array.isArray(src) ? src[0] : src) as THREE.Material;
-      if (seen.has(m) || PropDamage.warmMats.has(m) || !(m as THREE.MeshStandardMaterial).isMeshStandardMaterial) return;
+      if (seen.has(m) || PropDamage.warmMats.has(m) || !isStandardLike(m)) return;
       seen.add(m);
-      const c = cloneWithShaderHooks(m);
-      patchPart(c, makeUniforms(0, new THREE.Color(), IDENT));
-      PropDamage.warmMats.set(m, c);
-      const mesh = new THREE.Mesh(geo, c);
+      const c = toNodeMaterial(m);
+      if (!c) return;
+      addPropDamageHooks(c);
+      PropDamage.warmMats.set(m, c as unknown as THREE.Material);
+      const mesh = new THREE.Mesh(geo, c as unknown as THREE.Material);
       mesh.matrixAutoUpdate = false;
       mesh.matrix.copy(ZERO);
       mesh.frustumCulled = false;
@@ -483,12 +542,15 @@ export class PropDamage {
       const src = (Array.isArray(cur) ? cur[0] : cur) as THREE.Material;
       const cls = partKeyClass(key || src.name || '', partKeyClass(src.name || '', s.spec.cls));
       const glass = cls === 'glass' || cls === 'screen' || (!!(src as THREE.MeshStandardMaterial).transparent && cls !== 'plastic' && /glass/i.test(src.name || key));
-      const mat = cloneWithShaderHooks(src);
+      // Iteration 13 (MAT-B): own node-material copy + the prop-damage node stages; the part's state is per-object data
+      const nodeMat = toNodeMaterial(src);
+      if (nodeMat) addPropDamageHooks(nodeMat);
+      const mat = (nodeMat as unknown as THREE.Material | null) ?? src.clone(); // no node counterpart: drawn as before, unmarked
       this.clones++;
       if (tint && (mat as THREE.MeshStandardMaterial).color) (mat as THREE.MeshStandardMaterial).color.multiply(tint);
       mesh.updateMatrixWorld(true);
-      const u = makeUniforms(shadeIndex(glass && cls !== 'screen' ? 'glass' : cls), new THREE.Color(DAMAGE_MATERIALS[cls].substrate), mesh.matrixWorld);
-      patchPart(mat, u);
+      const u = new PartData(shadeIndex(glass && cls !== 'screen' ? 'glass' : cls), new THREE.Color(DAMAGE_MATERIALS[cls].substrate), mesh.matrixWorld);
+      mesh.userData[PROP_DATA_KEY] = u.data;
       const prevMat = created ? null : cur;
       mesh.material = mat;
       if (!created && mesh.userData.baseMat) mesh.userData.baseMat = mat; // containers.ts highlight restores this
@@ -548,7 +610,7 @@ export class PropDamage {
       const w = quarter ? p.hz * 2 : p.hx * 2, d = quarter ? p.hx * 2 : p.hz * 2;
       local.premultiply(new THREE.Matrix4().makeScale(1 / w, 1 / p.h, 1 / d));
       const [x0, x1, y0, y1] = s.spec.glassFront;
-      for (const part of parts) { part.u.uDmgLocal.value.copy(local); part.u.uDmgFront.value.set(x0, x1, y0, y1); part.u.uDmgFrontOn.value = 1; }
+      for (const part of parts) { part.u.setLocal(local); part.u.setFront(x0, x1, y0, y1); part.u.frontOn = 1; }
     }
     return true;
   }
@@ -675,12 +737,8 @@ export class PropDamage {
   }
 
   private upload(q: Part): void {
-    q.lines.forEach((l, i) => {
-      q.u.uDmgA.value[i].set(l.a.x, l.a.y, l.a.z, l.r);
-      q.u.uDmgB.value[i].set(l.d.x, l.d.y, l.d.z, l.len);
-      q.u.uDmgC.value[i].set(l.strength, l.seed, l.crack, 0);
-    });
-    q.u.uDmgN.value = q.lines.length;
+    q.lines.forEach((l, i) => q.u.setLine(i, l));
+    q.u.n = q.lines.length;
   }
 
   private breakGlass(s: PropState, res: PropHitResult): void {
@@ -691,9 +749,9 @@ export class PropDamage {
       for (const q of parts) if (q.glass) { q.mesh.visible = false; res.boxes.push(new THREE.Box3().setFromObject(q.mesh)); }
       if (s.prop.kind === 'shopGlazing') { s.prop.h = Math.min(s.prop.h, 0.3); }
     } else if (g.on === 'dead') {
-      for (const q of parts) if (q.cls === 'screen') { q.u.uDmgDead.value = 1; res.boxes.push(new THREE.Box3().setFromObject(q.mesh)); }
+      for (const q of parts) if (q.cls === 'screen') { q.u.dead = 1; res.boxes.push(new THREE.Box3().setFromObject(q.mesh)); }
     } else if (g.on === 'open') {
-      for (const q of parts) q.u.uDmgFrontBroken.value = 1;
+      for (const q of parts) q.u.frontBroken = 1;
       const p = s.prop, quarter = Math.round(p.rot / (Math.PI / 2)) & 1;
       const fx = Math.sin(p.rot), fz = Math.cos(p.rot), dHalf = quarter ? p.hx : p.hz;
       const c = new THREE.Vector3(p.x + fx * dHalf, p.y + p.h * 0.6, p.z + fz * dHalf);
@@ -726,6 +784,7 @@ export class PropDamage {
       for (const q of s.parts ?? []) {
         if (q.created) this.group.remove(q.mesh);
         else if (q.prevMat) { q.mesh.material = q.prevMat; if (q.mesh.userData.baseMat === q.mat) q.mesh.userData.baseMat = q.prevMat; }
+        if (!q.created) delete q.mesh.userData[PROP_DATA_KEY]; // Iteration 13 (MAT-B)
         if (q.ownGeometry) q.mesh.geometry.dispose();
         q.mat.dispose();
       }

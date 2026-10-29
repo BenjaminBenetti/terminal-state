@@ -19,9 +19,11 @@
 // point (the dominant influence there): rest = (M · B⁻¹ · bone.matrixWorld · boneInverse · B)⁻¹ · world.
 
 import * as THREE from 'three';
-import {cloneWithShaderHooks, addShaderHook} from '../render/shaderHooks';
+import type {NodeMaterial} from 'three/webgpu';
+import {Break, Fn, If, Loop, clamp, dot, float, int, length, materialColor as matColor, materialMetalness, materialNormal, materialRoughness, max, mix, normalLocal, positionGeometry, positionLocal, positionView, select, smoothstep, step, vec2, vec3, vec4} from 'three/tsl';
+import {addNodeHook, nodeHookKeys} from '../render/nodeHooks';
 import {DAMAGE_MATERIALS, zombieMeshClass, type DamageClass} from './materials';
-import {DMG_COMMON, DMG_PERTURB, after} from './glsl';
+import {dmgNoise, dmgPerturb, memoNode, objectData, toNodeMaterial, type TNode} from './tsl';
 
 export const WOUND_MAX = 14;
 export const WOUND_HOOK = 'zombie-wounds-v1';
@@ -137,122 +139,168 @@ export function materialColor(mat: THREE.Material | undefined, fallback = 0x6e6a
   return base.multiply(avg);
 }
 
-const WOUND_PARS = /* glsl */ `
-#define WOUND_MAX ${WOUND_MAX}
-uniform vec4 uWoundA[ WOUND_MAX ];
-uniform vec4 uWoundB[ WOUND_MAX ];
-uniform vec4 uWoundC[ WOUND_MAX ];
-uniform int uWoundN;
-uniform float uWoundK;
-varying vec3 vWoundP;
-${DMG_COMMON}
-float woundDisp( vec3 p ) {
-	float h = 0.0;
-	for ( int i = 0; i < WOUND_MAX; i ++ ) {
-		if ( i >= uWoundN ) break;
-		vec4 A = uWoundA[ i ]; vec4 B = uWoundB[ i ]; vec4 C = uWoundC[ i ];
-		vec3 rel = p - A.xyz;
-		float t = clamp( dot( rel, B.xyz ), - C.z, B.w );
-		float d = length( rel - B.xyz * t );
-		h = max( h, ( 1.0 - smoothstep( A.w * 0.2, A.w * 0.95, d ) ) * C.w );
-	}
-	return h;
-}
-`;
+// ---------------------------------------------------------------------------------------------
+// Iteration 13 (MAT-B): the wound shader as TSL node stages (was GLSL onBeforeCompile), order 300 (render/nodeHooks.ts).
+// Bind (rest) space = the geometry's own `position` attribute (positionGeometry, before morphs / skinning), exactly the
+// GLSL `transformed` at begin_vertex. The vertex dent moves the SKINNED position along the SKINNED (unnormalised)
+// normal: skinning is affine per vertex, skin(p - n h) = skin(p) - L n h with L its linear part, and three's skinned
+// normalLocal is exactly L n, so this equals the GLSL dent-before-skinning. The actor's wounds are per-object data
+// (`mesh.userData.dmgWound`, shared by the actor's layers): one node graph per layer mode serves every zombie.
+//
+// Data (vec4): 0 (count, rest units per metre k, gore, 0) · 1.. A[WOUND_MAX] (centre, radius) · B[WOUND_MAX] (dir, length)
+// · C[WOUND_MAX] (strength, seed, back, depth).
+export const WOUND_DATA_KEY = 'dmgWound';
+const W_A = 1, W_B = W_A + WOUND_MAX, W_C = W_B + WOUND_MAX;
+/** vec4 per actor. */
+export const WOUND_DATA = W_C + WOUND_MAX;
 
-const WOUND_FRAG_PARS = /* glsl */ `
-uniform int uWoundMode;
-uniform float uWoundGore;
-${DMG_PERTURB}
-// x: torn core 0..1, y: blood halo, z: deep (dark cavity), w: strength-weighted core
-vec4 woundField( vec3 p ) {
-	vec4 acc = vec4( 0.0 );
-	for ( int i = 0; i < WOUND_MAX; i ++ ) {
-		if ( i >= uWoundN ) break;
-		vec4 A = uWoundA[ i ]; vec4 B = uWoundB[ i ]; vec4 C = uWoundC[ i ];
-		vec3 rel = p - A.xyz;
-		float t = clamp( dot( rel, B.xyz ), - C.z, B.w );
-		float d = length( rel - B.xyz * t );
-		vec3 q = p * ( 38.0 / uWoundK ) + C.y * 13.0;
-		float n = dmgNoise( q ), n2 = dmgNoise( q * 2.7 + 5.1 );
-		float rr = A.w * ( 0.7 + 0.42 * n + 0.16 * n2 );
-		float core = 1.0 - smoothstep( rr * 0.6, rr, d );
-		float halo = 1.0 - smoothstep( rr, rr * ( 1.55 + 0.5 * C.x ) * ( 0.85 + 0.3 * n2 ), d );
-		float deep = 1.0 - smoothstep( 0.0, rr * 0.55, d );
-		acc.x = max( acc.x, core );
-		acc.y = max( acc.y, halo * ( 0.45 + 0.55 * C.x ) );
-		acc.z = max( acc.z, deep * C.x );
-		acc.w = max( acc.w, core * C.x );
-	}
-	return acc;
-}
-`;
+interface WoundShared { n: TNode; k: TNode; gore: TNode; disp(p: TNode): TNode; field(p: TNode): TNode; wf: TNode }
+let woundShared: WoundShared | null = null;
 
-const WOUND_COLOR = /* glsl */ `
-vec4 wf = uWoundN > 0 ? woundField( vWoundP ) : vec4( 0.0 );
-float wFib = 0.0;
-if ( wf.y + wf.x > 0.002 ) {
-	wFib = dmgNoise( vWoundP * ( 150.0 / uWoundK ) );
-	vec3 wBase = diffuseColor.rgb;
-	// blood-soaked halo: darker, browner, a little wetter
-	diffuseColor.rgb = mix( wBase, wBase * vec3( 0.42, 0.2, 0.17 ), wf.y * 0.85 * uWoundGore );
-	vec3 wFlesh = mix( vec3( 0.26, 0.05, 0.04 ), vec3( 0.42, 0.1, 0.075 ), wFib );
-	vec3 wCav = mix( wFlesh, vec3( 0.06, 0.012, 0.01 ), smoothstep( 0.25, 0.9, wf.z ) );
-	float wLip = clamp( wf.x * ( 1.0 - wf.x ) * 4.0, 0.0, 1.0 );
-	if ( uWoundMode == 0 ) {
-		// skin: torn lip darker, raw flesh inside, bone flecks deep in strong wounds
-		vec3 wc = wCav * ( 1.0 - 0.3 * wLip );
-		wc = mix( wc, vec3( 0.58, 0.54, 0.46 ), step( 0.8, wFib ) * smoothstep( 0.6, 0.95, wf.z ) );
-		diffuseColor.rgb = mix( diffuseColor.rgb, wc, wf.x * uWoundGore );
-	} else {
-		// clothing / rubber: frayed (cloth: lighter threads, rubber: dark torn edge), skin ring, flesh core
-		vec3 wFray = uWoundMode == 1 ? wBase * 1.35 + 0.035 * wFib : wBase * 0.45;
-		vec3 wSkin = vec3( 0.36, 0.36, 0.3 );
-		float wOpen = smoothstep( 0.18, 0.55, wf.x );
-		float wMeat = smoothstep( 0.55, 0.95, wf.x );
-		vec3 wc = mix( wFray, wSkin, wOpen );
-		wc = mix( wc, wCav, wMeat * uWoundGore );
-		diffuseColor.rgb = mix( diffuseColor.rgb, wc, smoothstep( 0.02, 0.2, wf.x ) );
-	}
-}
-`;
-
-const WOUND_ROUGH = /* glsl */ `
-roughnessFactor = mix( roughnessFactor, 0.34, clamp( wf.x * 0.9 + wf.y * 0.25, 0.0, 1.0 ) );
-`;
-const WOUND_METAL = /* glsl */ `
-metalnessFactor *= 1.0 - wf.x;
-`;
-const WOUND_NORMAL = /* glsl */ `
-if ( wf.x > 0.001 ) {
-	float wH = - ( wf.x * 0.6 + wf.z * 0.4 ) * ( 0.6 + 0.4 * wFib );
-	normal = dmgPerturb( - vViewPosition, normal, vec2( dFdx( wH ), dFdy( wH ) ) * 0.9, faceDirection );
-}
-`;
-
-/** Shared uniform objects of one actor (every material of that actor points at the same arrays). */
-export interface WoundUniforms {
-  uWoundA: {value: THREE.Vector4[]};
-  uWoundB: {value: THREE.Vector4[]};
-  uWoundC: {value: THREE.Vector4[]};
-  uWoundN: {value: number};
-  uWoundK: {value: number};
-  uWoundGore: {value: number};
-}
-
-function patchMaterial(mat: THREE.Material, u: WoundUniforms, mode: number): void {
-  addShaderHook(mat, WOUND_HOOK, shader => {
-    Object.assign(shader.uniforms, u, {uWoundMode: {value: mode}});
-    shader.vertexShader = after(after(shader.vertexShader, '#include <common>', WOUND_PARS), '#include <begin_vertex>',
-      'vWoundP = transformed;\ntransformed -= normal * woundDisp( transformed );');
-    let f = shader.fragmentShader;
-    f = after(f, '#include <common>', WOUND_PARS + WOUND_FRAG_PARS);
-    f = after(f, '#include <color_fragment>', WOUND_COLOR);
-    f = after(f, '#include <roughnessmap_fragment>', WOUND_ROUGH);
-    f = after(f, '#include <metalnessmap_fragment>', WOUND_METAL);
-    f = after(f, '#include <normal_fragment_maps>', WOUND_NORMAL);
-    shader.fragmentShader = f;
+function woundNodes(): WoundShared {
+  if (woundShared) return woundShared;
+  const D = objectData(WOUND_DATA_KEY, WOUND_DATA);
+  const h = D.element(0);
+  const n = int(h.x), k = h.y, gore = h.z;
+  const each = (body: (A: TNode, B: TNode, C: TNode) => void) => Loop(WOUND_MAX, ({i}: {i: TNode}) => {
+    If(i.greaterThanEqual(n), () => { Break(); });
+    body(D.element(i.add(W_A)), D.element(i.add(W_B)), D.element(i.add(W_C)));
   });
+  const disp = Fn(([p]: [TNode]) => {
+    const acc = float(0).toVar();
+    each((A, B, C) => {
+      const rel = p.sub(A.xyz).toVar();
+      const t = clamp(dot(rel, B.xyz), C.z.negate(), B.w);
+      const d = length(rel.sub(B.xyz.mul(t)));
+      acc.assign(max(acc, smoothstep(A.w.mul(0.2), A.w.mul(0.95), d).oneMinus().mul(C.w)));
+    });
+    return acc;
+  }) as unknown as (p: TNode) => TNode;
+  // x: torn core 0..1, y: blood halo, z: deep (dark cavity), w: strength-weighted core
+  const field = Fn(([p]: [TNode]) => {
+    const acc = vec4(0).toVar();
+    each((A, B, C) => {
+      const rel = p.sub(A.xyz).toVar();
+      const t = clamp(dot(rel, B.xyz), C.z.negate(), B.w);
+      const d = length(rel.sub(B.xyz.mul(t))).toVar();
+      const q = p.mul(float(38).div(k)).add(C.y.mul(13)).toVar();
+      const n1 = dmgNoise(q), n2 = dmgNoise(q.mul(2.7).add(5.1)).toVar();
+      const rr = A.w.mul(float(0.7).add(n1.mul(0.42)).add(n2.mul(0.16))).toVar();
+      const core = smoothstep(rr.mul(0.6), rr, d).oneMinus().toVar();
+      const halo = smoothstep(rr, rr.mul(C.x.mul(0.5).add(1.55)).mul(n2.mul(0.3).add(0.85)), d).oneMinus();
+      const deep = smoothstep(0, rr.mul(0.55), d).oneMinus();
+      acc.x.assign(max(acc.x, core));
+      acc.y.assign(max(acc.y, halo.mul(C.x.mul(0.55).add(0.45))));
+      acc.z.assign(max(acc.z, deep.mul(C.x)));
+      acc.w.assign(max(acc.w, core.mul(C.x)));
+    });
+    return acc;
+  }) as unknown as (p: TNode) => TNode;
+  const wf = Fn(() => {
+    const r = vec4(0).toVar();
+    If(n.greaterThan(0), () => { r.assign(field(positionGeometry)); });
+    return r;
+  })().toVar();
+  woundShared = {n, k, gore, disp, field, wf};
+  return woundShared;
+}
+
+/** Vertex stage: material lost inside a wound (pushed in along the skinned normal by the bind-space dent depth). */
+export function woundPositionNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'wound-pos', () => {
+    const S = woundNodes();
+    const base = prev ?? positionLocal;
+    return vec3(base).sub(normalLocal.mul(select(S.n.greaterThan(0), S.disp(positionGeometry), float(0))));
+  });
+}
+
+/** Colour stage per layer mode (0 skin, 1 cloth, 2 rubber / plastic). */
+export function woundColorNode(prev: TNode | null, mode: number): TNode {
+  return memoNode(prev, `wound-color-${mode}`, () => Fn(() => {
+    const S = woundNodes(), wf = S.wf, gore = S.gore;
+    const base = vec4(prev ?? matColor).toVar();
+    const rgb = vec3(base.rgb).toVar();
+    If(wf.y.add(wf.x).greaterThan(0.002), () => {
+      const fib = dmgNoise(positionGeometry.mul(float(150).div(S.k))).toVar();
+      const wBase = vec3(rgb).toVar();
+      // blood-soaked halo: darker, browner, a little wetter
+      rgb.assign(mix(wBase, wBase.mul(vec3(0.42, 0.2, 0.17)), wf.y.mul(0.85).mul(gore)));
+      const flesh = mix(vec3(0.26, 0.05, 0.04), vec3(0.42, 0.1, 0.075), fib);
+      const cav = mix(flesh, vec3(0.06, 0.012, 0.01), smoothstep(0.25, 0.9, wf.z)).toVar();
+      const lip = clamp(wf.x.mul(wf.x.oneMinus()).mul(4), 0, 1);
+      if (mode === 0) {
+        // skin: torn lip darker, raw flesh inside, bone flecks deep in strong wounds
+        const wc = mix(cav.mul(lip.mul(0.3).oneMinus()), vec3(0.58, 0.54, 0.46), step(0.8, fib).mul(smoothstep(0.6, 0.95, wf.z)));
+        rgb.assign(mix(rgb, wc, wf.x.mul(gore)));
+      } else {
+        // clothing / rubber: frayed (cloth: lighter threads, rubber: dark torn edge), skin ring, flesh core
+        const fray = mode === 1 ? wBase.mul(1.35).add(fib.mul(0.035)) : wBase.mul(0.45);
+        const wc = mix(mix(fray, vec3(0.36, 0.36, 0.3), smoothstep(0.18, 0.55, wf.x)), cav, smoothstep(0.55, 0.95, wf.x).mul(gore));
+        rgb.assign(mix(rgb, wc, smoothstep(0.02, 0.2, wf.x)));
+      }
+    });
+    return vec4(rgb, base.a);
+  })());
+}
+
+export function woundRoughnessNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'wound-rough', () => {
+    const wf = woundNodes().wf;
+    return mix(float(prev ?? materialRoughness), 0.34, clamp(wf.x.mul(0.9).add(wf.y.mul(0.25)), 0, 1));
+  });
+}
+
+export function woundMetalnessNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'wound-metal', () => float(prev ?? materialMetalness).mul(woundNodes().wf.x.oneMinus()));
+}
+
+export function woundNormalNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'wound-normal', () => Fn(() => {
+    const S = woundNodes(), wf = S.wf;
+    const nrm = vec3(prev ?? materialNormal).toVar();
+    const fib = dmgNoise(positionGeometry.mul(float(150).div(S.k)));
+    const h = wf.x.mul(0.6).add(wf.z.mul(0.4)).mul(fib.mul(0.4).add(0.6)).negate().toVar();
+    const bumped = dmgPerturb(positionView, nrm, vec2(h.dFdx(), h.dFdy()).mul(0.9));
+    return select(wf.x.greaterThan(0.001), bumped, nrm);
+  })());
+}
+
+/** Adds the wound stages (keys `zombie-wounds-v1.<stage>`, order 300) to one of an actor's own node materials. */
+export function addWoundHooks(mat: NodeMaterial, mode: number): void {
+  const key = (stage: string) => `${WOUND_HOOK}.${stage}`;
+  addNodeHook(mat, {key: key('position'), stage: 'position', order: 300, fn: prev => woundPositionNode(prev)});
+  addNodeHook(mat, {key: key('color'), stage: 'color', order: 300, fn: prev => woundColorNode(prev, mode)});
+  addNodeHook(mat, {key: key('roughness'), stage: 'roughness', order: 300, fn: prev => woundRoughnessNode(prev)});
+  addNodeHook(mat, {key: key('metalness'), stage: 'metalness', order: 300, fn: prev => woundMetalnessNode(prev)});
+  addNodeHook(mat, {key: key('normal'), stage: 'normal', order: 300, fn: prev => woundNormalNode(prev)});
+}
+
+/** True when `mat` carries the wound node stages. */
+export function hasWounds(mat: THREE.Material | null | undefined): boolean {
+  return !!mat && (mat as unknown as NodeMaterial).isNodeMaterial === true && nodeHookKeys(mat as unknown as NodeMaterial).some(x => x.startsWith(`${WOUND_HOOK}.`));
+}
+
+/** One actor's wound data (shared by every layer mesh of that actor). */
+export class WoundData {
+  readonly data = new Float32Array(WOUND_DATA * 4);
+  constructor(gore: number) { this.data[2] = gore; }
+  get n(): number { return this.data[0]; }
+  set n(v: number) { this.data[0] = v; }
+  /** Rest units per world metre. */
+  get k(): number { return this.data[1]; }
+  set k(v: number) { this.data[1] = v; }
+  get gore(): number { return this.data[2]; }
+  set gore(v: number) { this.data[2] = v; }
+  set(i: number, w: {c: THREE.Vector3; r: number; d: THREE.Vector3; len: number; strength: number; seed: number; back: number; depth: number}): void {
+    this.data.set([w.c.x, w.c.y, w.c.z, w.r], (W_A + i) * 4);
+    this.data.set([w.d.x, w.d.y, w.d.z, w.len], (W_B + i) * 4);
+    this.data.set([w.strength, w.seed, w.back, w.depth], (W_C + i) * 4);
+  }
+  /** vec4 j of wound i: 0 A (centre, radius), 1 B (dir, length), 2 C (strength, seed, back, depth). */
+  get4(i: number, j: 0 | 1 | 2): number[] {
+    const at = ([W_A, W_B, W_C][j] + i) * 4;
+    return Array.from(this.data.subarray(at, at + 4));
+  }
 }
 
 const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
@@ -260,7 +308,8 @@ const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpV2 = new THREE.
 export class WoundController {
   readonly wounds: Wound[] = [];
   readonly layers: Layer[] = [];
-  readonly uniforms: WoundUniforms;
+  /** Iteration 13 (MAT-B): per-actor wound data (every layer mesh's userData.dmgWound points at it). */
+  readonly uniforms: WoundData;
   readonly max: number;
   private readonly maxDepth: number;
   private seed = 1;
@@ -272,8 +321,8 @@ export class WoundController {
   constructor(readonly actor: WoundableActor, opts: WoundOptions = {}) {
     this.max = Math.max(1, Math.min(WOUND_MAX, opts.maxWounds ?? WOUND_MAX));
     this.maxDepth = opts.maxDepth ?? 0.03;
-    const vec = () => Array.from({length: WOUND_MAX}, () => new THREE.Vector4());
-    this.uniforms = {uWoundA: {value: vec()}, uWoundB: {value: vec()}, uWoundC: {value: vec()}, uWoundN: {value: 0}, uWoundK: {value: 1}, uWoundGore: {value: opts.gore ?? 1}};
+    this.uniforms = new WoundData(opts.gore ?? 1);
+    this.uniforms.k = 1;
   }
 
   /** Clone + patch every mesh's material (called once by installWounds). */
@@ -293,11 +342,14 @@ export class WoundController {
       const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material;
       let mat = replaced.get(src);
       if (!mat) {
-        mat = cloneWithShaderHooks(src);
-        patchMaterial(mat, this.uniforms, MODE[DAMAGE_MATERIALS[cls].shade] ?? MODE[cls] ?? 1);
+        // Iteration 13 (MAT-B): own node-material copy (GLTF standard -> MeshStandardNodeMaterial) + the wound node stages
+        const nm = toNodeMaterial(src);
+        if (nm) addWoundHooks(nm, MODE[DAMAGE_MATERIALS[cls].shade] ?? MODE[cls] ?? 1);
+        mat = (nm as unknown as THREE.Material | null) ?? src.clone();
         replaced.set(src, mat);
       }
       mesh.material = mat;
+      mesh.userData[WOUND_DATA_KEY] = this.uniforms.data;
       this.layers.push({mesh, slot, cls, material: mat, color: materialColor(src)});
       if (!this.skeleton && mesh.skeleton) this.skeleton = mesh.skeleton;
     }
@@ -314,7 +366,7 @@ export class WoundController {
     if (!l || !this.skeleton) return;
     this.actor.root.updateMatrixWorld(true);
     this.restMatrix(l.mesh, 0, tmpM).setPosition(0, 0, 0);
-    this.uniforms.uWoundK.value = tmpV.set(1, 0, 0).applyMatrix4(tmpM).length() || 1;
+    this.uniforms.k = tmpV.set(1, 0, 0).applyMatrix4(tmpM).length() || 1;
   }
 
   /** World -> rest-space matrix of `mesh` through bone j (inverse of the skinning transform). */
@@ -440,12 +492,12 @@ export class WoundController {
   tear(index: number, restRadius: number, restCenter?: THREE.Vector3): void {
     const w = this.wounds[index];
     if (!w) return;
-    const cap = DAMAGE_MATERIALS.flesh.markMax * 1.5 * this.uniforms.uWoundK.value;
+    const cap = DAMAGE_MATERIALS.flesh.markMax * 1.5 * this.uniforms.k;
     if (restCenter) w.c.lerp(restCenter, 0.5);
     w.r = Math.min(cap, Math.max(w.r, restRadius * 1.05));
     w.strength = 1;
     w.len = Math.max(w.len, w.r * 1.6);
-    w.depth = Math.max(w.depth, this.maxDepth * 1.5 * this.uniforms.uWoundK.value);
+    w.depth = Math.max(w.depth, this.maxDepth * 1.5 * this.uniforms.k);
     w.torn = true;
     this.tears++;
     this.upload();
@@ -455,12 +507,8 @@ export class WoundController {
 
   private upload(): void {
     const u = this.uniforms;
-    this.wounds.forEach((w, i) => {
-      u.uWoundA.value[i].set(w.c.x, w.c.y, w.c.z, w.r);
-      u.uWoundB.value[i].set(w.d.x, w.d.y, w.d.z, w.len);
-      u.uWoundC.value[i].set(w.strength, w.seed, w.back, w.depth);
-    });
-    u.uWoundN.value = this.wounds.length;
+    this.wounds.forEach((w, i) => u.set(i, w));
+    u.n = this.wounds.length;
   }
 
   get count(): number {

@@ -51,6 +51,11 @@ test('allow namespace and shader comment but never external fetch of namespace',
   const files=new Set();
   checkRuntime('document.createElementNS("http://www.w3.org/1999/xhtml","div"); const shader=`// https://jcgt.org/published/0007/04/01/\nvoid main(){}`;','assets/index-test.js',files);
   assert.throws(()=>checkRuntime('fetch("http://www.w3.org/1999/xhtml")','assets/index-test.js',files),/External/);
+  // iteration 13 (three r186 WebGPURenderer): exact shader citation line + exact console message only
+  checkRuntime('const w=`fn f(){\n\t// https://www.shadertoy.com/view/WtyXRy\n}`; console.error("Renderer: waitForGPU() has been removed. Read https://github.com/mrdoob/three.js/issues/32012 for more information.");','assets/index-test.js',files);
+  checkRuntime('const a="/*", b="/* ... */ ", c="/* Recursion detected. */";','assets/index-test.js',files);
+  for(const s of ['const a="/* x */"','const a="/assets/x.glb"']) assert.throws(()=>checkRuntime(s,'assets/index-test.js',files),/Root-absolute/);
+  for(const s of ['const w=`// https://www.shadertoy.com/view/WtyXRy?x=1`','const w=`x // https://www.shadertoy.com/view/WtyXRy`','fetch("https://www.shadertoy.com/view/WtyXRy")','fetch("https://github.com/mrdoob/three.js/issues/32012")','console.error("Renderer: waitForGPU() has been removed. Read https://github.com/mrdoob/three.js/issues/32012")']) assert.throws(()=>checkRuntime(s,'assets/index-test.js',files),/External/);
 });
 test('require commit and all copied public inputs',t=>{
   const f=fixture(t);assert.throws(()=>packageSite({root:f.root,commit:'main'}),/40-hex/);

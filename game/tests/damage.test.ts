@@ -1,7 +1,12 @@
 // Iteration 06 (Lane D): material-strength damage / breaking. Node tests (no WebGL): registry
 // coverage, shared-instance isolation, integrity staging + breaks, finite loot preserved on break,
 // bounded debris / crater / wound pools, rest-space wounds, shader-hook chaining, determinism.
+// Iteration 13 (MAT-B): the damage shaders are TSL node stages now (WebGPURenderer): the GLSL string checks became
+// node-graph checks — per-object damage data, hook chaining over a base node, one shared graph per source material,
+// and real WGSL + GLSL generated in Node (tests/helpers/tslShaders.ts) — plus a CPU check of the skinned wound dent.
 import * as THREE from 'three';
+import {MeshStandardNodeMaterial, type NodeMaterial} from 'three/webgpu';
+import {materialColor, mix, vec3} from 'three/tsl';
 import {describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {generateStation, type StationLayout} from '../src/gen/station';
@@ -14,19 +19,19 @@ import {Inventory} from '../src/items/inventory';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {ContainerManager} from '../src/world/containers';
-import {shapeMaterial} from '../src/world/shapeMaterials';
 import {StaticQuery} from '../src/physics/staticQuery';
 import {raycastWorld, rayAabb} from '../src/combat/hitscan';
-import {addShaderHook, shaderHookKeys} from '../src/render/shaderHooks';
+import {addNodeHook, nodeHookKeys} from '../src/render/nodeHooks';
+import {buildBoth} from './helpers/tslShaders';
 import {
   ALL_PROP_KINDS, DAMAGE_CLASSES, DAMAGE_MATERIALS, ITEM_CLASS, PROP_DAMAGE, PURPOSE_KEY_CLASS, SHAPE_KEY_CLASS, STRUCTURAL_CLASS, STRUCTURAL_KEYS,
   WORLD_MAT_CLASS, damageStage, modelClass, partKeyClass, structuralKeyAt, wearableClass, zombieMeshClass,
 } from '../src/damage/materials';
-import {DMG_ANCHORS} from '../src/damage/glsl';
 import {DEBRIS_CAPS, DEBRIS_SPAWN_BUDGET, DEBRIS_TOTAL_CAP, DebrisSystem} from '../src/damage/debris';
-import {CRATER_CAP, CraterField} from '../src/damage/craters';
-import {DMG_MAX, MAX_DETACHED, PROP_DAMAGE_HOOK} from '../src/damage/propDamage';
-import {WOUND_HOOK, WOUND_MAX, installWounds, woundsOf} from '../src/damage/wounds';
+import {CRATER_CAP, CRATER_HOOK, CraterField} from '../src/damage/craters';
+import {DMG_MAX, MAX_DETACHED, PROP_DAMAGE_HOOK, PROP_DATA, PROP_DATA_KEY, hasPropDamage, propColorNode} from '../src/damage/propDamage';
+import {WOUND_DATA, WOUND_DATA_KEY, WOUND_HOOK, WOUND_MAX, hasWounds, installWounds, woundColorNode, woundsOf} from '../src/damage/wounds';
+import {toNodeMaterial} from '../src/damage/tsl';
 import {DamageSystem} from '../src/damage/system';
 
 installCanvasShim(false);
@@ -87,13 +92,9 @@ function shootProp(st: Station, i: number, local: [number, number, number], dama
   return st.sys.hitWorld({t: h!.t, kind: 'prop', nx: h!.n[0], ny: h!.n[1], nz: h!.n[2], prop: i}, point, dir, {damage, pellet, weapon: pellet ? 'shotgun' : 'rifle'});
 }
 
-const fakeShader = () => ({vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader, uniforms: {} as Record<string, THREE.IUniform>});
-type ShaderArg = Parameters<THREE.Material['onBeforeCompile']>[0];
-function compile(m: THREE.Material): ReturnType<typeof fakeShader> {
-  const sh = fakeShader();
-  m.onBeforeCompile(sh as unknown as ShaderArg, {} as THREE.WebGLRenderer);
-  return sh;
-}
+/** Fragment `main` of a generated shader (WGSL `fn main` / GLSL `void main`). */
+const mainOf = (src: string) => src.slice(Math.max(0, src.search(/fn main\(|void main\(\)/)));
+const asNode = (m: THREE.Material | THREE.Material[]) => m as unknown as NodeMaterial;
 
 // ---------------------------------------------------------------------------------------
 
@@ -213,10 +214,23 @@ describe('per-instance prop damage on a built station (Node, procedural props)',
     // A drawn with its own patched clones; the shared material stays unpatched
     for (const q of sA.parts!) {
       expect(q.mesh.material).not.toBe(sharedMat);
-      expect(shaderHookKeys(q.mesh.material as THREE.Material)).toContain(PROP_DAMAGE_HOOK);
+      expect(hasPropDamage(q.mesh.material as THREE.Material)).toBe(true);
+      expect(nodeHookKeys(asNode(q.mesh.material)).filter(k => k.startsWith(`${PROP_DAMAGE_HOOK}.`)).length).toBe(6);
+      // Iteration 13: the part's damage state is per-object data on ITS mesh (read per draw by the shared graph)
+      expect(q.mesh.userData[PROP_DATA_KEY]).toBe(q.u.data);
+      expect(q.u.data.length).toBe(PROP_DATA * 4);
     }
-    expect(shaderHookKeys(sharedMat)).not.toContain(PROP_DAMAGE_HOOK);
-    expect(sA.parts!.some(q => q.u.uDmgN.value === 1)).toBe(true);
+    expect(hasPropDamage(sharedMat)).toBe(false);
+    expect(sA.parts!.some(q => q.u.n === 1)).toBe(true);
+    // the line went into the part data: start (rest frame) + radius, direction + length, strength / seed / crack
+    const marked = sA.parts!.find(q => q.u.n === 1)!;
+    const d = marked.u.data, iA = 11 * 4, iB = (11 + DMG_MAX) * 4, iC = (11 + 2 * DMG_MAX) * 4;
+    expect(d[iA + 3]).toBeCloseTo(marked.lines[0].r, 6);
+    expect(Math.hypot(d[iB], d[iB + 1], d[iB + 2])).toBeCloseTo(1, 5);
+    expect(d[iB + 3]).toBeCloseTo(marked.lines[0].len, 6);
+    expect(d[iC]).toBeCloseTo(marked.lines[0].strength, 6);
+    // B's meshes never carry damage data
+    for (const e of entriesB) expect(e.mesh.userData[PROP_DATA_KEY]).toBeUndefined();
     console.info(`[damage] first hit on a table: detach ${sA.parts!.length} parts in ${ms.toFixed(1)} ms`);
   });
 
@@ -483,8 +497,18 @@ describe('zombie wounds (rest-space, per actor)', () => {
     expect(A.body.material).not.toBe(shared[0]);
     expect(A.body.material).not.toBe(B.body.material);
     expect(A.wear.material).not.toBe(B.wear.material);
-    expect(shaderHookKeys(A.body.material as THREE.Material)).toContain(WOUND_HOOK);
-    expect(shaderHookKeys(shared[0])).not.toContain(WOUND_HOOK);
+    expect(hasWounds(A.body.material as THREE.Material)).toBe(true);
+    expect(hasWounds(shared[0])).toBe(false);
+    // Iteration 13: node-material copies (GLTF standard -> MeshStandardNodeMaterial), the source colour copied not shared
+    expect(asNode(A.body.material).isNodeMaterial).toBe(true);
+    expect((A.body.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x8a8f7a);
+    expect((A.body.material as THREE.MeshStandardMaterial).color).not.toBe(shared[0].color);
+    // every layer of one actor reads the SAME per-actor wound data; the other actor has its own
+    expect(A.body.userData[WOUND_DATA_KEY]).toBe(wa.uniforms.data);
+    expect(A.wear.userData[WOUND_DATA_KEY]).toBe(wa.uniforms.data);
+    expect(B.body.userData[WOUND_DATA_KEY]).toBe(wb.uniforms.data);
+    expect(wa.uniforms.data).not.toBe(wb.uniforms.data);
+    expect(wa.uniforms.data.length).toBe(WOUND_DATA * 4);
     // the actor's own material list (hit flash / dispose) points at the clones
     expect(A.mats).toContain(A.body.material);
     expect(wa.layers.map(l => [l.slot, l.cls])).toEqual([['body', 'flesh'], ['upper', 'cloth']]);
@@ -497,8 +521,9 @@ describe('zombie wounds (rest-space, per actor)', () => {
     expect(r.cls).toBe('cloth');
     expect(r.entry.distanceTo(world)).toBeLessThan(0.02);
     expect(wa.count).toBe(1);
-    expect(wa.uniforms.uWoundN.value).toBe(1);
-    expect(wb.uniforms.uWoundN.value).toBe(0);
+    expect(wa.uniforms.n).toBe(1);
+    expect(wb.uniforms.n).toBe(0);
+    expect(wa.uniforms.get4(0, 0).slice(0, 3)).toEqual(wa.wounds[0].c.toArray().map(v => Math.fround(v)));
     // a torso hit below the garment hem enters the skin
     const restLow = new THREE.Vector3(0, 0.45, 0.15);
     const r2 = wa.add({point: skinPoint(A.body, 0, restLow).add(new THREE.Vector3(0, 0, 0.05)), dir: new THREE.Vector3(0, 0, -1), part: 'torso', damage: 24})!;
@@ -554,84 +579,145 @@ describe('zombie wounds (rest-space, per actor)', () => {
     for (const x of wa.wounds) expect(x.r).toBeLessThanOrEqual(DAMAGE_MATERIALS.flesh.markMax * 1.15 + 1e-6);
   });
 
-  it('chains with earlier hooks (other lanes / iteration-04 world mapping) and keeps three anchors', () => {
-    for (const m of [THREE.ShaderLib.standard.vertexShader, THREE.ShaderLib.standard.fragmentShader]) expect(m.length).toBeGreaterThan(100);
-    for (const a of DMG_ANCHORS.vertex) expect(THREE.ShaderLib.standard.vertexShader).toContain(a);
-    for (const a of DMG_ANCHORS.fragment) expect(THREE.ShaderLib.standard.fragmentShader).toContain(a);
-    const src = new THREE.MeshStandardMaterial();
-    addShaderHook(src, 'lane-x-test', sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n// LANE_X_MARK'); });
-    const A = rig([src, new THREE.MeshStandardMaterial()]);
+  it('chains over earlier node hooks (other lanes / world mapping) and shares ONE graph per source material', () => {
+    // another lane's colour stage on the source (order 100) stays the base the wound stage (order 300) wraps
+    const laneNode = mix(vec3(materialColor), vec3(0.2, 0.3, 0.4), 0.25);
+    const src = new MeshStandardNodeMaterial({color: 0x8a8f7a});
+    addNodeHook(src, {key: 'lane-x-test', stage: 'color', order: 100, fn: () => laneNode});
+    const A = rig([src as unknown as THREE.MeshStandardMaterial, new THREE.MeshStandardMaterial()]);
+    const B = rig([src as unknown as THREE.MeshStandardMaterial, new THREE.MeshStandardMaterial()]);
     installWounds(A);
-    const mat = A.body.material as THREE.Material;
-    expect(shaderHookKeys(mat)).toEqual(['lane-x-test', WOUND_HOOK]);
-    expect(mat.customProgramCacheKey()).toContain(WOUND_HOOK);
-    expect(mat.customProgramCacheKey()).toContain('lane-x-test');
-    const sh = compile(mat);
-    expect(sh.fragmentShader).toContain('// LANE_X_MARK');
-    expect(sh.fragmentShader).toContain('woundField( vWoundP )');
-    expect(sh.vertexShader).toContain('vWoundP = transformed;');
-    expect(sh.vertexShader.indexOf('vWoundP = transformed;')).toBeLessThan(sh.vertexShader.indexOf('#include <skinning_vertex>'));
-    expect(sh.fragmentShader).toContain('#include <lights_fragment_begin>'); // light-field chunk path intact
-    expect(sh.uniforms.uWoundA).toBeTruthy();
-    // prop damage clone of a world-mapped shape material keeps the iteration-04 mapping
+    installWounds(B);
+    const ma = asNode(A.body.material), mb = asNode(B.body.material);
+    expect(ma).not.toBe(src);
+    expect(nodeHookKeys(src)).toEqual(['lane-x-test']);
+    expect(nodeHookKeys(ma)).toEqual(['position', 'color', 'roughness', 'metalness', 'normal'].map(k => `${WOUND_HOOK}.${k}`));
+    expect(ma.colorNode).toBe(woundColorNode(laneNode, 0)); // skin mode over the lane's node
+    // both actors draw with the same node objects (one node build / pipeline), their wounds differ only by data
+    expect(mb.colorNode).toBe(ma.colorNode);
+    expect(mb.positionNode).toBe(ma.positionNode);
+    expect(mb.normalNode).toBe(ma.normalNode);
+    // prop damage clones of a world-mapped shape material wrap the SOURCE material's own colour node
     const st = station(2);
     const L = st.layout;
-    const ti = L.props.findIndex(p => p.kind === 'table');
-    shootProp(st, ti, [0, PROP_DEFS.table.h - 0.01, 0.5]);
-    const part = st.sys.props.states.get(L.props[ti])!.parts!.find(q => (q.mesh.material as THREE.Material).userData.worldMapping)!;
-    expect(part).toBeTruthy();
-    const pm = part.mesh.material as THREE.Material;
-    expect(pm.customProgramCacheKey()).toContain('world-mapped-v1');
-    expect(pm.customProgramCacheKey()).toContain(PROP_DAMAGE_HOOK);
-    const ps = compile(pm);
-    expect(ps.vertexShader).toContain('vWmPos');
-    expect(ps.fragmentShader).toContain('dmgField( vDmgP');
-    expect(ps.uniforms.uWmMap).toBeTruthy();
-    expect(ps.uniforms.uDmgA).toBeTruthy();
-    expect(shapeMaterial(st.mats, 'counter').customProgramCacheKey()).not.toContain(PROP_DAMAGE_HOOK);
+    const tables = L.props.map((p, i) => ({p, i})).filter(({p}) => p.kind === 'table').slice(0, 2);
+    for (const t of tables) shootProp(st, t.i, [0, PROP_DEFS.table.h - 0.01, 0.5]);
+    const nodesBySource = new Map<THREE.Material, unknown>();
+    for (const t of tables) {
+      const entries = st.sys.props.index.inst.get(t.p)!;
+      for (const q of st.sys.props.states.get(t.p)!.parts!) {
+        const e = entries.find(x => x.mesh.geometry === q.mesh.geometry);
+        if (!e) continue;
+        const srcMat = e.mesh.material as THREE.Material;
+        const pm = asNode(q.mesh.material);
+        expect(pm).not.toBe(srcMat);
+        expect(pm.colorNode).toBe(propColorNode(asNode(srcMat).colorNode ?? null));
+        if (nodesBySource.has(srcMat)) expect(pm.colorNode).toBe(nodesBySource.get(srcMat)); // second table: same graph
+        nodesBySource.set(srcMat, pm.colorNode);
+      }
+    }
+    expect(nodesBySource.size).toBeGreaterThan(0);
+    for (const m of nodesBySource.keys()) expect(hasPropDamage(m)).toBe(false);
+  });
+
+  it('the skinned wound dent equals the bind-space dent, and wounded vertices stay glued to the posed body (CPU skinning)', () => {
+    const A = rig();
+    const w = installWounds(A, {maxDepth: 0.03});
+    const rest = new THREE.Vector3(0, 1.0, 0.15);
+    A.root.updateMatrixWorld(true);
+    w.add({point: skinPoint(A.body, 1, rest).add(new THREE.Vector3(0, 0, 0.04)), dir: new THREE.Vector3(0, 0, -1), part: 'torso', damage: 30});
+    expect(w.count).toBe(1);
+    const data = A.body.userData[WOUND_DATA_KEY] as Float32Array;
+    // JS mirror of the vertex stage woundDisp (bind-space position in, dent depth out)
+    const ss = (e0: number, e1: number, x: number) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+    const disp = (p: THREE.Vector3) => {
+      let h = 0;
+      for (let i = 0; i < data[0]; i++) {
+        const a = (1 + i) * 4, b = (1 + WOUND_MAX + i) * 4, c = (1 + 2 * WOUND_MAX + i) * 4;
+        const rel = new THREE.Vector3(p.x - data[a], p.y - data[a + 1], p.z - data[a + 2]);
+        const dir = new THREE.Vector3(data[b], data[b + 1], data[b + 2]);
+        const t = Math.min(data[b + 3], Math.max(-data[c + 2], rel.dot(dir)));
+        h = Math.max(h, (1 - ss(data[a + 3] * 0.2, data[a + 3] * 0.95, rel.sub(dir.multiplyScalar(t)).length())) * data[c + 3]);
+      }
+      return h;
+    };
+    const g = A.body.geometry, pos = g.attributes.position as THREE.BufferAttribute, nrm = g.attributes.normal as THREE.BufferAttribute;
+    const dented: number[] = [];
+    for (let i = 0; i < pos.count; i++) if (disp(new THREE.Vector3().fromBufferAttribute(pos, i)) > 1e-4) dented.push(i);
+    expect(dented.length).toBeGreaterThan(3);
+    const centreWorld = (j: number) => skinPoint(A.body, j, w.wounds[0].c);
+    for (const pose of [[0.4, 0, -0.6, -2.1, new THREE.Vector3(-4, 0.3, 7)], [-0.2, 0.5, 0.3, 0.7, new THREE.Vector3(1, 0, -2)]] as const) {
+      A.spine.rotation.set(pose[0], pose[1], pose[2]);
+      A.root.rotation.y = pose[3];
+      A.root.position.copy(pose[4]);
+      A.root.updateMatrixWorld(true);
+      A.skeleton.update();
+      const c = centreWorld(1);
+      for (const i of dented) {
+        const p = new THREE.Vector3().fromBufferAttribute(pos, i), n = new THREE.Vector3().fromBufferAttribute(nrm, i), h = disp(p);
+        // GLSL path: dent the bind-space vertex, then skin it
+        const glsl = A.body.applyBoneTransform(i, p.clone().addScaledVector(n, -h));
+        // node path: skin the vertex, then subtract the skinned (unnormalised) normal L n times the same depth
+        const skinned = A.body.applyBoneTransform(i, p.clone());
+        const Ln = A.body.applyBoneTransform(i, p.clone().add(n)).sub(skinned);
+        expect(skinned.clone().addScaledVector(Ln, -h).distanceTo(glsl)).toBeLessThan(1e-6);
+        // the wounded vertex is still at the wound on the posed body (bind-space data never moves)
+        const world = skinned.applyMatrix4(A.body.matrixWorld);
+        expect(world.distanceTo(c)).toBeLessThan(w.wounds[0].r + 0.02);
+      }
+    }
   });
 });
 
-describe('damage shaders resolve in order (no WebGL in Node: declaration-before-use check)', () => {
-  const resolve = (src: string): string => src.replace(/#include <(\w+)>/g, (_m, n: string) => resolve((THREE.ShaderChunk as unknown as Record<string, string>)[n] ?? ''));
-  const before = (src: string, decl: string, use: string) => {
-    const a = src.indexOf(decl), b = src.indexOf(use);
-    expect(a, `declares ${decl}`).toBeGreaterThanOrEqual(0);
-    expect(b, `uses ${use}`).toBeGreaterThanOrEqual(0);
-    expect(a, `${decl} before ${use}`).toBeLessThan(b);
-  };
-  it('wound, prop-damage and crater hooks insert after the declarations they use', () => {
-    // wounds (skinned standard material)
+describe('damage node graphs build into real WGSL + GLSL (Node, no GPU)', () => {
+  it('craters, prop-damage parts and skinned wounds compile cleanly on both backends', () => {
+    const lights = [new THREE.PointLight(0xffffff, 1, 8)];
+    // wounds on a skinned body: the bind-space varying is the raw position attribute, the dent follows skinning
     const A = rig();
     installWounds(A);
-    const w = compile(A.body.material as THREE.Material);
-    const wv = resolve(w.vertexShader), wfr = resolve(w.fragmentShader);
-    before(wv, 'vec3 transformed', 'vWoundP = transformed;');
-    before(wv, 'vWoundP = transformed;', 'skinVertex');
-    before(wv, 'float woundDisp', 'woundDisp( transformed )');
-    for (const [d, u] of [['vec4 diffuseColor', 'vec4 wf ='], ['float dmgNoise', 'dmgNoise( q )'], ['vec4 woundField', 'woundField( vWoundP )'], ['float roughnessFactor', 'roughnessFactor = mix( roughnessFactor, 0.34'],
-      ['float metalnessFactor', 'metalnessFactor *= 1.0 - wf.x'], ['float faceDirection', 'faceDirection );'], ['vec3 dmgPerturb', 'normal = dmgPerturb'], ['varying vec3 vViewPosition', '- vViewPosition, normal']] as const) before(wfr, d, u);
-    expect(wfr.match(/#define DMG_COMMON/g)?.length).toBe(1);
-    // prop damage (world-mapped shape material clone)
+    for (const sh of buildBoth(A.body, {lights})) {
+      expect(sh.errors, `${sh.backend} wound`).toEqual([]);
+      const v = mainOf(sh.vertex), f = mainOf(sh.fragment);
+      expect(f.match(new RegExp(`< ${WOUND_MAX}[;)]`, 'g'))?.length, `${sh.backend}: wound field computed once`).toBe(1);
+      expect(sh.fragment).toMatch(/dmgNoise/);
+      expect(v.indexOf('skinIndex')).toBeGreaterThanOrEqual(0);
+      expect(v.indexOf('skinIndex'), 'dent after skinning').toBeLessThan(v.search(new RegExp(`< ${WOUND_MAX}[;)]`)));
+      expect(v).toMatch(/nodeVarying\d+ = position;/);
+    }
+    // a prop part (world-mapped shape material clone)
     const st = station(3);
     const ti = st.layout.props.findIndex(p => p.kind === 'table');
     shootProp(st, ti, [0, PROP_DEFS.table.h - 0.01, 0.5]);
-    for (const q of st.sys.props.states.get(st.layout.props[ti])!.parts!) {
-      const sh = compile(q.mesh.material as THREE.Material);
-      const pv = resolve(sh.vertexShader), pf = resolve(sh.fragmentShader);
-      before(pv, 'vec3 transformed', 'vDmgP = ( uDmgRest');
-      for (const [d, u] of [['vec4 diffuseColor', 'int dMode = uDmgMode'], ['vec4 dmgField', 'dmgField( vDmgP'], ['float roughnessFactor', 'roughnessFactor = mix( roughnessFactor, 0.38'], ['float metalnessFactor', 'metalnessFactor = mix( metalnessFactor, 0.75'],
-        ['vec3 normal', 'normal = dmgPerturb'], ['vec3 totalEmissiveRadiance', 'totalEmissiveRadiance *= ( 1.0 - uDmgDead )'], ['uniform vec3 uDmgSub', 'uDmgSub *']] as const) before(pf, d, u);
-      expect(pf).toContain('vWmPos'); // iteration-04 world mapping still there
+    const part = st.sys.props.states.get(st.layout.props[ti])!.parts![0];
+    for (const sh of buildBoth(part.mesh, {lights})) {
+      expect(sh.errors, `${sh.backend} prop`).toEqual([]);
+      expect(mainOf(sh.fragment).match(new RegExp(`< ${DMG_MAX}[;)]`, 'g'))?.length, `${sh.backend}: damage field computed once`).toBe(1);
     }
-    // craters (instanced decal)
-    const c = new CraterField();
-    const cs = compile(c.mesh.material as THREE.Material);
-    const cf = resolve(cs.fragmentShader), cv = resolve(cs.vertexShader);
-    before(cv, 'vec3 transformed', 'vCrUv = uv');
-    before(cf, 'vec4 diffuseColor', 'crP = vCrUv');
-    before(cf, 'float crR;', 'crR = length( crP )');
-    before(cf, 'vec3 normal', 'normal = normalize( T * nT.x');
+    // the instanced crater decal
+    const c = new CraterField(8);
+    for (const sh of buildBoth(c.mesh, {lights})) {
+      expect(sh.errors, `${sh.backend} crater`).toEqual([]);
+      for (const a of ['aCrater', 'aRim', 'aSub', 'aCrT', 'aCrB']) expect(sh.vertex, `${sh.backend} ${a}`).toContain(a);
+      expect(mainOf(sh.fragment)).toContain('discard');
+    }
+    expect(nodeHookKeys(asNode(c.mesh.material))).toEqual([`${CRATER_HOOK}.color`, `${CRATER_HOOK}.normal`]);
+  });
+
+  it('classic GLTF materials convert to node materials without sharing value objects or listeners', () => {
+    const src = new THREE.MeshStandardMaterial({color: 0x336699, roughness: 0.4, metalness: 0.2, alphaTest: 0.3, transparent: true});
+    src.addEventListener('dispose', () => {});
+    const n = toNodeMaterial(src)! as unknown as THREE.MeshStandardMaterial & NodeMaterial;
+    expect(n.isNodeMaterial).toBe(true);
+    expect(n.color.getHex()).toBe(0x336699);
+    expect(n.color).not.toBe(src.color);
+    expect(n.emissive).not.toBe(src.emissive);
+    expect(n.alphaTest).toBe(0.3);
+    expect(n.roughness).toBe(0.4);
+    expect(n.transparent).toBe(true);
+    expect((n as unknown as {_listeners?: unknown})._listeners).not.toBe((src as unknown as {_listeners?: unknown})._listeners);
+    const phys = toNodeMaterial(new THREE.MeshPhysicalMaterial({clearcoat: 0.5}))! as unknown as {isMeshPhysicalNodeMaterial: boolean; clearcoat: number};
+    expect(phys.isMeshPhysicalNodeMaterial).toBe(true);
+    expect(phys.clearcoat).toBe(0.5);
   });
 });
 

@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import type {MenuSpec} from '../gen/purposes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import {canvasTexture} from './canvasTextures';
-import {surfaceMaterial, worldMapped} from './materials';
+import {SurfaceNodeMaterial, surfaceMaterial, worldMapped} from './materials';
 
 type Ctx = CanvasRenderingContext2D;
 type R = () => number;
@@ -591,9 +591,10 @@ function cardboardTexture(): THREE.CanvasTexture {
 // ---------------------------------------------------------------------------------------
 // Materials
 
+// Iteration 13 (MAT-A): node materials (SurfaceNodeMaterial: other lanes' node hooks layer onto them).
 const glow = (map: THREE.Texture, intensity: number, roughness: number) =>
-  new THREE.MeshStandardMaterial({map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: intensity, roughness, metalness: 0});
-const printed = (map: THREE.Texture, roughness = 0.78) => new THREE.MeshStandardMaterial({map, roughness, metalness: 0});
+  new SurfaceNodeMaterial({map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: intensity, roughness, metalness: 0});
+const printed = (map: THREE.Texture, roughness = 0.78) => new SurfaceNodeMaterial({map, roughness, metalness: 0});
 const WORN = {grime: [0.35, 0.45] as [number, number], macro: 0.15};
 /** Painted-panel tints (also used as vertex colours when purpose parts are merged per chunk). */
 export const PAINT: Partial<Record<PurposeMat, number>> = {paintRed: 0xb23a2e, paintYellow: 0xd9a520, paintGreen: 0x3f7d4a, paintWhite: 0xe8e4da, paintBlue: 0x2f5f9a, paintOrange: 0xd9732a};
@@ -607,7 +608,7 @@ function make(key: PurposeMat): THREE.Material {
     case 'deviceScreen': return glow(deviceScreenTexture(), 0.5, 0.2);
     case 'cctv': return glow(cctvTexture(), 0.55, 0.25);
     case 'noticeBoard': return printed(noticeBoardTexture(), 0.9);
-    case 'keyBlanks': return new THREE.MeshStandardMaterial({map: keyBlanksTexture(), roughness: 0.6, metalness: 0.25});
+    case 'keyBlanks': return new SurfaceNodeMaterial({map: keyBlanksTexture(), roughness: 0.6, metalness: 0.25});
     case 'flowers': return printed(flowersTexture(), 0.8);
     case 'bread': return printed(breadTexture(), 0.85);
     case 'donuts': return printed(donutsTexture(), 0.7);
@@ -616,7 +617,7 @@ function make(key: PurposeMat): THREE.Material {
     case 'hazardLabel': return printed(hazardTexture(), 0.6);
     case 'firstAid': return printed(firstAidTexture(), 0.5);
     case 'vinyl': return surfaceMaterial('plastic', {color: 0x56604a}, {grime: [0.2, 0.3], macro: 0.12});
-    case 'cardboard': return worldMapped(new THREE.MeshStandardMaterial({map: cardboardTexture(), roughness: 0.95, metalness: 0}), {span: [0.6, 0.6], grime: [0.25, 0.35], macro: 0.15});
+    case 'cardboard': return worldMapped(new SurfaceNodeMaterial({map: cardboardTexture(), roughness: 0.95, metalness: 0}), {span: [0.6, 0.6], grime: [0.25, 0.35], macro: 0.15});
     default: return printed(magazinesTexture());
   }
 }

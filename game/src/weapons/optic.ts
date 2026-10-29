@@ -10,7 +10,16 @@
 //    the eye is off the axis, e.g. at the hip) and a collimated reticle (red dot + fine duplex) drawn at a fixed
 //    angular size along the aim direction, so it sits exactly at screen centre (= the hitscan line) when sighted.
 
+//
+// Iteration 13 (CORE): the lens is a TSL node material (MeshBasicNodeMaterial) — the same math as the iteration-04 GLSL,
+// compiled by WebGPURenderer to WGSL (WebGPU) or GLSL (its WebGL 2 backend). `lens.uniforms.<name>.value` stays the API.
+// No shipped weapon def carries an optic spec now (rifle-optic.glb stays wired for a def that does). Limitation: the
+// renderer tone-maps in its output pass over the whole frame, so `toneMapped = false` no longer exempts the reticle
+// from ACES (the red dot reads a little deeper than the old untone-mapped GLSL).
+
 import * as THREE from 'three';
+import {MeshBasicNodeMaterial} from 'three/webgpu';
+import {abs, dot, exp, float, fwidth, length, max, mix, normalize, positionView, smoothstep as tslSmoothstep, uniform, uv, vec2, vec3, vec4} from 'three/tsl';
 
 export interface OpticSpec {
   /** Eye distance (m) behind the rear glass (OpticRear) at full ADS; the eye sits on the optic axis. */
@@ -75,79 +84,76 @@ export function reticleFrame(gun: THREE.Quaternion, aimBlend: number, dir: THREE
 const _fwd = new THREE.Vector3(0, 0, -1);
 const _right = new THREE.Vector3(1, 0, 0);
 
-const VERT = /* glsl */ `
-varying vec3 vView;
-varying vec2 vLens;
-void main() {
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vView = mv.xyz;
-  vLens = uv * 2.0 - 1.0;
-  gl_Position = projectionMatrix * mv;
-}`;
+/** Lens uniforms (TSL uniform nodes; `.value` is live). */
+export interface OpticLensUniforms {
+  uDir: {value: THREE.Vector3};
+  uRight: {value: THREE.Vector3};
+  uUp: {value: THREE.Vector3};
+  uClarity: {value: number};
+  uLight: {value: number};
+  uDot: {value: THREE.Color};
+}
 
-const FRAG = /* glsl */ `
-uniform vec3 uDir;
-uniform vec3 uRight;
-uniform vec3 uUp;
-uniform float uClarity;
-uniform float uLight;
-uniform vec3 uDot;
-varying vec3 vView;
-varying vec2 vLens;
-float band(float d, float halfW, float aa) { return 1.0 - smoothstep(halfW - aa, halfW + aa, d); }
-vec4 over(vec4 dst, vec3 c, float a) { return vec4(c * a + dst.rgb * (1.0 - a), a + dst.a * (1.0 - a)); }
-void main() {
-  vec3 v = normalize(vView);
-  float c = max(dot(v, uDir), 1e-3);
-  vec2 t = vec2(dot(v, uRight), dot(v, uUp)) / c;
-  float aa = max(fwidth(t.x), fwidth(t.y)) * 0.75 + 1e-6;
-  float lr = length(vLens);
-  float clr = uClarity;
-  vec4 acc = vec4(0.0);
-  // coated glass: faint tint inside the exit pupil, a dark lens outside it
-  acc = over(acc, vec3(0.012, 0.016, 0.02), mix(0.92, 0.07, clr));
-  // eyepiece edge shadow
-  acc = over(acc, vec3(0.0), smoothstep(mix(0.55, 0.8, clr), 1.0, lr) * 0.9);
-  // coating sheen (mostly off-axis)
-  float s = vLens.x * 0.6 + vLens.y * 0.8 - 0.35;
-  acc = over(acc, vec3(0.55, 0.62, 0.7) * (0.4 + uLight), exp(-s * s * 10.24) * mix(0.22, 0.035, clr));
-  // collimated reticle: fine duplex (thick posts left/right/bottom) + illuminated dot
-  float ax = abs(t.x), ay = abs(t.y);
-  float ink = max(
-    max(band(ay, THIN, aa) * smoothstep(GAP - aa, GAP + aa, ax), band(ax, THIN, aa) * smoothstep(GAP - aa, GAP + aa, ay)),
-    max(band(ay, THICK, aa) * smoothstep(POST - aa, POST + aa, ax), band(ax, THICK, aa) * smoothstep(POST - aa, POST + aa, -t.y)));
-  acc = over(acc, vec3(0.01), ink * 0.85 * clr);
-  float r = length(t);
-  float lit = max(band(r, DOT_R, aa), exp(-r * r / (2.0 * GLOW_R * GLOW_R)) * 0.45) * clr;
-  acc = over(acc, uDot, lit);
-  gl_FragColor = vec4(acc.rgb / max(acc.a, 1e-4), acc.a);
-  #include <colorspace_fragment>
-}`;
+/** The rear-lens node material (+ its uniforms). */
+export type OpticLensMaterial = MeshBasicNodeMaterial & {readonly uniforms: OpticLensUniforms};
 
-const f = (x: number) => x.toFixed(6);
+// three's TSL typings are per node kind (float / vec2 / vec4 ...) and reject this graph's free mixing of them; the graph is
+// checked by building it (tests/optic.test.ts) and by the renderer's shader compile instead.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type N = any;
 
-/** The rear-lens material: transparent, no depth write, untone-mapped reticle colour. */
-export function createOpticLensMaterial(): THREE.ShaderMaterial {
+/**
+ * The lens colour (straight RGB + alpha) as a TSL node graph — the iteration-04 GLSL fragment, term for term:
+ * coated-glass tint / dark lens outside the exit pupil, eyepiece edge shadow, coating sheen, the collimated fine duplex
+ * reticle and the illuminated dot, accumulated front-to-back with `over`, then un-premultiplied.
+ */
+export function opticLensNode(u: OpticLensUniforms): N {
   const L = OPTIC_LOOK;
-  return new THREE.ShaderMaterial({
-    name: 'rifle-optic-lens',
-    uniforms: {
-      uDir: {value: new THREE.Vector3(0, 0, -1)},
-      uRight: {value: new THREE.Vector3(1, 0, 0)},
-      uUp: {value: new THREE.Vector3(0, 1, 0)},
-      uClarity: {value: 0},
-      uLight: {value: 0.5},
-      uDot: {value: new THREE.Color().setRGB(...L.dotColor)},
-    },
-    defines: {THIN: f(L.thinHalf), THICK: f(L.thickHalf), GAP: f(L.gap), POST: f(L.post), DOT_R: f(L.dotRadius), GLOW_R: f(L.glowRadius)},
-    vertexShader: VERT,
-    fragmentShader: FRAG,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    toneMapped: false,
-    side: THREE.FrontSide,
-  });
+  const uDir: N = uniform(u.uDir.value), uRight: N = uniform(u.uRight.value), uUp: N = uniform(u.uUp.value);
+  const uClarity: N = uniform(u.uClarity.value), uLight: N = uniform(u.uLight.value), uDot: N = uniform(u.uDot.value);
+  // the material keeps these node uniforms as its `uniforms` (same objects -> `.value` edits reach the shader)
+  Object.assign(u, {uDir, uRight, uUp, uClarity, uLight, uDot});
+  const one: N = float(1);
+  const band = (d: N, halfW: number, aa: N): N => one.sub(tslSmoothstep(float(halfW).sub(aa), float(halfW).add(aa), d));
+  const step2 = (e: number, aa: N, x: N): N => tslSmoothstep(float(e).sub(aa), float(e).add(aa), x);
+  const over = (dst: N, c: N, a: N): N => vec4(c.mul(a).add(dst.rgb.mul(one.sub(a))), a.add(dst.a.mul(one.sub(a))));
+  const v: N = normalize(positionView);
+  const c: N = max(dot(v, uDir), 1e-3);
+  const t: N = vec2(dot(v, uRight), dot(v, uUp)).div(c);
+  const aa: N = max(fwidth(t.x), fwidth(t.y)).mul(0.75).add(1e-6);
+  const lens: N = uv().mul(2).sub(1);
+  const lr: N = length(lens);
+  const clr: N = uClarity;
+  let acc: N = vec4(0);
+  // coated glass: faint tint inside the exit pupil, a dark lens outside it
+  acc = over(acc, vec3(0.012, 0.016, 0.02), mix(float(0.92), float(0.07), clr));
+  // eyepiece edge shadow
+  acc = over(acc, vec3(0), tslSmoothstep(mix(float(0.55), float(0.8), clr), one, lr).mul(0.9));
+  // coating sheen (mostly off-axis)
+  const s: N = lens.x.mul(0.6).add(lens.y.mul(0.8)).sub(0.35);
+  acc = over(acc, vec3(0.55, 0.62, 0.7).mul(uLight.add(0.4)), exp(s.mul(s).mul(-10.24)).mul(mix(float(0.22), float(0.035), clr)));
+  // collimated reticle: fine duplex (thick posts left/right/bottom) + illuminated dot
+  const ax: N = abs(t.x), ay: N = abs(t.y);
+  const ink: N = max(
+    max(band(ay, L.thinHalf, aa).mul(step2(L.gap, aa, ax)), band(ax, L.thinHalf, aa).mul(step2(L.gap, aa, ay))),
+    max(band(ay, L.thickHalf, aa).mul(step2(L.post, aa, ax)), band(ax, L.thickHalf, aa).mul(step2(L.post, aa, t.y.negate()))));
+  acc = over(acc, vec3(0.01), ink.mul(0.85).mul(clr));
+  const r: N = length(t);
+  const lit: N = max(band(r, L.dotRadius, aa), exp(r.mul(r).div(-2 * L.glowRadius * L.glowRadius)).mul(0.45)).mul(clr);
+  acc = over(acc, vec3(uDot), lit);
+  return vec4(acc.rgb.div(max(acc.a, 1e-4)), acc.a);
+}
+
+/** The rear-lens material: transparent, no depth write, TSL lens + reticle (see the module header for tone mapping). */
+export function createOpticLensMaterial(): OpticLensMaterial {
+  const u: OpticLensUniforms = {
+    uDir: {value: new THREE.Vector3(0, 0, -1)}, uRight: {value: new THREE.Vector3(1, 0, 0)}, uUp: {value: new THREE.Vector3(0, 1, 0)},
+    uClarity: {value: 0}, uLight: {value: 0.5}, uDot: {value: new THREE.Color().setRGB(...OPTIC_LOOK.dotColor)},
+  };
+  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: false, depthTest: true, toneMapped: false, side: THREE.FrontSide, fog: false});
+  m.name = 'rifle-optic-lens';
+  m.colorNode = opticLensNode(u);
+  return Object.assign(m, {uniforms: u}) as OpticLensMaterial;
 }
 
 /** Depth-only mask: colour writes off, depth on; drawn before the gun (renderOrder -1). */
@@ -157,7 +163,7 @@ export function createOpticMaskMaterial(): THREE.MeshBasicMaterial {
 
 /** Runtime state for one held optic weapon (viewmodel clone). */
 export class RifleOptic {
-  readonly lens: THREE.ShaderMaterial;
+  readonly lens: OpticLensMaterial;
   readonly mask: THREE.Mesh;
   /** Exit-pupil clarity and eye position in the optic frame from the last update. */
   clarity = 0;

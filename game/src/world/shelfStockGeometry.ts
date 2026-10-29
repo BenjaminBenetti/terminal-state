@@ -17,6 +17,7 @@
 // rotten fruit, mouldy jar fills, dead flowers / plants, tarnished key blanks. Real loot keeps its own fresh models / materials.
 
 import * as THREE from 'three';
+import {MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
 import {canvasTexture} from './canvasTextures';
 import {LABEL_VARIANTS, STOCK_ARCHES, type LabelKind, type StockArch} from './shelfStockCatalog';
 
@@ -611,7 +612,7 @@ function ageCell(ctx: Ctx, x: number, y: number, w: number, h: number, label: st
 
 let colorTex: THREE.CanvasTexture | null = null;
 let ormTex: THREE.CanvasTexture | null = null;
-let material: THREE.MeshStandardMaterial | null = null;
+let material: MeshStandardNodeMaterial | null = null;
 
 function drawAtlas(): THREE.CanvasTexture {
   const L = atlasLayout();
@@ -665,12 +666,12 @@ function drawOrm(): THREE.CanvasTexture {
   return t;
 }
 
-/** The one shared filler material (atlas print x vertex colour; roughness / metalness per packaging). */
-export function stockMaterial(): THREE.MeshStandardMaterial {
+/** The one shared filler material (atlas print x vertex colour; roughness / metalness per packaging). Iteration 13: node material. */
+export function stockMaterial(): MeshStandardNodeMaterial {
   if (!material) {
     colorTex = drawAtlas();
     ormTex = drawOrm();
-    material = new THREE.MeshStandardMaterial({map: colorTex, vertexColors: true, roughnessMap: ormTex, metalnessMap: ormTex, roughness: 1, metalness: 1});
+    material = new MeshStandardNodeMaterial({map: colorTex, vertexColors: true, roughnessMap: ormTex, metalnessMap: ormTex, roughness: 1, metalness: 1});
     material.name = 'shelf-stock';
   }
   return material;

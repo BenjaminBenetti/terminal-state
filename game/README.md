@@ -166,6 +166,14 @@ Rendering note (iteration 08): on a software WebGL rasterizer (Mesa llvmpipe, Sw
 anisotropic filtering is capped at 1 (`src/render/softwareGl.ts`) — CPU anisotropic filtering on the
 world-mapped railings/conduits stalled such browsers for minutes per frame. Hardware GPUs are unchanged.
 
+Rendering (iteration 13, `src/render/backend.ts`): three r186 `WebGPURenderer` with TSL node materials. On a browser
+with WebGPU the shaders compile to WGSL; otherwise three's WebGL 2 backend runs the same node graphs as GLSL ES 3.0. The
+backend that actually initialized is shown on the title screen and HUD ("WebGL2 fallback" plus the reason) and in
+`__LL.gpu()`. The fog (`src/render/atmosphere.ts` medium, `src/render/volumetric*.ts` passes) is a world-anchored,
+seeded medium that translates with the station's draft (no re-rolling, so a room looks the same when you come back
+at the same fog time), with clear / normal / dense areas, lit in the march by the baked fixture light field, the
+flashlight cone (shadowed, follows the battery) and burning flares.
+
 Goal: clear the station (kill every infected). Death → "New station" (fresh seed) or "Retry this
 station" (same seed, this session only).
 
@@ -173,6 +181,7 @@ station" (same seed, this session only).
 - `?seed=CODE` — replay a station code shown in the pause menu (debug/share). Reloading without it
   always makes a new station.
 - `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset).
+- `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):
   `off` renders exactly like release 5 (no haze, no flashlight shadow map).
 - `?qa=1` — **test automation only**: exposes read-only `window.__LL` state + a camera aim helper

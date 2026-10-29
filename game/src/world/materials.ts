@@ -3,9 +3,13 @@
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {MeshBasicNodeMaterial, MeshStandardNodeMaterial, type MeshStandardNodeMaterialParameters, type Node, type NodeMaterial} from 'three/webgpu';
+import {Fn, float, materialColor, materialRoughness, min, positionWorld, smoothstep, vec4} from 'three/tsl';
 import type {TextureKey} from '../assets/manifest';
 import {ENV_TEXTURE_LAYOUT} from '../assets/manifest';
+import {addNodeHook, copyNodeHooks, hasNodeHook} from '../render/nodeHooks';
 import {ballast, concreteFloor, crateWood, paintedBlock, signPlate, terrazzo, canvasTexture, surface, type SurfaceName} from './canvasTextures';
+import {WM_CONTEXT, WM_NORMAL, asColor, isNodeMaterial, lfFloorAtNode, matRef, sharedStage, skipInShadowPass, wmNoise, wmUp} from './surfaceNodes';
 
 /**
  * World-space box mapping for procedural geometry whose own UVs are 0..1 per face (BoxGeometry
@@ -27,73 +31,78 @@ export interface WorldMapping {
   topAlongZ?: boolean;
 }
 
-const WM_UV = ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'alphaMap', 'aoMap'].map(n => {
-  const v = 'v' + n[0].toUpperCase() + n.slice(1) + 'Uv', d = 'USE_' + n.toUpperCase();
-  return `#ifdef ${d}\n\t${v} = ( ${n}Transform * vec3( wmUv, 1.0 ) ).xy;\n#endif`;
-}).join('\n');
-export const WM_VERTEX = /* glsl */ `
-{
-	vec4 wmP = vec4( position, 1.0 );
-	vec3 wmN = normal;
-	#ifdef USE_INSTANCING
-		wmP = instanceMatrix * wmP;
-		wmN = mat3( instanceMatrix ) * wmN;
-	#endif
-	wmP = modelMatrix * wmP;
-	wmN = abs( normalize( mat3( modelMatrix ) * wmN ) );
-	vWmPos = wmP.xyz;
-	vWmUp = wmN.y;
-	vec2 wmUv = ( wmN.x >= wmN.y && wmN.x >= wmN.z ) ? wmP.zy : ( wmN.y >= wmN.z ? ( uWmMap.w > 0.5 ? wmP.zx : wmP.xz ) : wmP.xy );
-	wmUv *= uWmMap.xy;
-${WM_UV}
-}`;
-const WM_FRAGMENT_PARS = /* glsl */ `
-uniform vec3 uWmGrime;
-varying vec3 vWmPos;
-varying float vWmUp;
-float wmHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
-float wmNoise( vec3 x ) {
-	vec3 i = floor( x ); vec3 f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );
-	return mix( mix( mix( wmHash( i ), wmHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( wmHash( i + vec3( 0, 1, 0 ) ), wmHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
-		mix( mix( wmHash( i + vec3( 0, 0, 1 ) ), wmHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( wmHash( i + vec3( 0, 1, 1 ) ), wmHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
-}`;
-const WM_FRAGMENT_MAP = /* glsl */ `
-// Iteration 08 (Lane G): height above the local level floor (station light field) on multi-level stations.
-#ifdef LF_FLOOR_AT
-float wmLocalY = vWmPos.y - lfFloorAt( vWmPos );
-#else
-float wmLocalY = vWmPos.y;
-#endif
-float wmFloor = ( 1.0 - smoothstep( 0.0, uWmGrime.y, wmLocalY ) ) * ( 1.0 - smoothstep( 0.5, 0.8, vWmUp ) );
-float wmMacro = wmNoise( vWmPos * 0.7 );
-diffuseColor.rgb *= ( 1.0 - uWmGrime.x * wmFloor ) * ( 1.0 + uWmGrime.z * ( wmMacro - 0.5 ) * 2.0 );`;
+// Iteration 13 (MAT-A): the iteration-04 GLSL hook (WM_VERTEX / WM_FRAGMENT_*, onBeforeCompile) is now TSL on node
+// materials (world/surfaceNodes.ts): the same per-vertex projection (instance + model matrices, dominant world axis,
+// span, topAlongZ) feeds every material map through the material context; the normal map's tangent frame follows the
+// world coordinate; floor grime / macro tone are the 'world-mapped' colour + roughness hooks (render/nodeHooks.ts,
+// order 100). Every world-mapped material still shares ONE program per map set (singleton graphs; per-material values
+// are SurfaceNodeMaterial properties read through materialReference).
 
-/** The shader anchors world mapping hooks into; tests assert three still provides them. */
-export const WM_ANCHORS = {vertex: ['#include <common>', '#include <fog_vertex>'], fragment: ['#include <common>', '#include <map_fragment>', '#include <roughnessmap_fragment>']};
+/**
+ * Standard node material of the surface factories: per-material values of the shared surface graphs live here as
+ * properties (copied by clone(); read per draw through materialReference), so materials differing only in values
+ * share one program. Classic MeshStandardMaterial properties (map, color, roughness, normalScale, side, shadowSide,
+ * vertexColors ...) behave as before.
+ */
+export class SurfaceNodeMaterial extends MeshStandardNodeMaterial {
+  /** World mapping: (1 / span u, 1 / span v, unused, topAlongZ 0 / 1). */
+  readonly wmMap = new THREE.Vector4(1, 1, 0, 0);
+  /** World-mapping grime: (floor grime strength, grime height m, macro tone variation). */
+  readonly wmGrime = new THREE.Vector3(0, 0.5, 0);
+  /** 30-year decay profile (world/decay.ts applyDecay): grime, streaks, efflorescence, stains. */
+  readonly decayP0 = new THREE.Vector4(0, 0, 0, 0);
+  /** Decay: wear, dust, cracks, peel. */
+  readonly decayP1 = new THREE.Vector4(0, 0, 0, 0);
+  /** Decay: tile grid (m), tile loss, fade, paint wear. */
+  readonly decayP2 = new THREE.Vector4(0, 0, 0, 0);
+  /** Decay grime / water tint. */
+  readonly decayTint = new THREE.Vector3(1, 1, 1);
 
-export function worldMapped<M extends THREE.MeshStandardMaterial>(m: M, o: WorldMapping): M {
-  const map = new THREE.Vector4(1 / o.span[0], 1 / o.span[1], 0, o.topAlongZ ? 1 : 0);
-  const grime = new THREE.Vector3(o.grime?.[0] ?? 0, Math.max(0.01, o.grime?.[1] ?? 0.5), o.macro ?? 0);
+  /** three r186 NodeMaterial.copy() drops alphaTest (its accessor lives on Material.prototype, `_alphaTest` is skipped). */
+  copy(source: this): this {
+    super.copy(source);
+    this.alphaTest = source.alphaTest;
+    return this;
+  }
+}
+
+/** World-mapping hook keys (colour / roughness) and their stage order (render/nodeHooks.ts: surface mapping = 100). */
+export const WM_HOOK = 'world-mapped';
+export const WM_ROUGH_HOOK = 'world-mapped-roughness';
+export const WM_ORDER = 100;
+
+const wmGrime = matRef('wmGrime', 'vec3');
+/** Floor grime weight: height above the local level floor (station light field) on vertical faces only. */
+const WM_FLOOR = (Fn(() => {
+  const local = positionWorld.y.sub(lfFloorAtNode(positionWorld));
+  return float(1).sub(smoothstep(0.0, wmGrime.y, local)).mul(float(1).sub(smoothstep(0.5, 0.8, wmUp)));
+}, 'float')() as unknown as Node<'float'>).toVar('wmFloor');
+/** Albedo factor: floor grime and low-frequency world-space tone variation (GLSL WM_FRAGMENT_MAP). */
+const WM_SHADE = float(1).sub(wmGrime.x.mul(WM_FLOOR)).mul(float(1).add(wmGrime.z.mul(wmNoise(positionWorld.mul(0.7)).sub(0.5)).mul(2.0)));
+const wmColorStage = sharedStage(prev => {
+  const c = asColor(prev, materialColor);
+  return skipInShadowPass(vec4(c.rgb.mul(WM_SHADE), c.a), c, 'vec4');
+});
+const wmRoughStage = sharedStage(prev => min(1.0, float((prev ?? materialRoughness) as Node<'float'>).add(wmGrime.x.mul(0.3).mul(WM_FLOOR))));
+
+export function worldMapped<M extends SurfaceNodeMaterial>(m: M, o: WorldMapping, order = WM_ORDER): M {
+  m.wmMap.set(1 / o.span[0], 1 / o.span[1], 0, o.topAlongZ ? 1 : 0);
+  m.wmGrime.set(o.grime?.[0] ?? 0, Math.max(0.01, o.grime?.[1] ?? 0.5), o.macro ?? 0);
   m.userData.worldMapping = o;
-  m.onBeforeCompile = shader => {
-    shader.uniforms.uWmMap = {value: map};
-    shader.uniforms.uWmGrime = {value: grime};
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform vec4 uWmMap;\nvarying vec3 vWmPos;\nvarying float vWmUp;')
-      .replace('#include <fog_vertex>', '#include <fog_vertex>\n' + WM_VERTEX);
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + WM_FRAGMENT_PARS)
-      .replace('#include <map_fragment>', '#include <map_fragment>\n' + WM_FRAGMENT_MAP)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = min( 1.0, roughnessFactor + 0.3 * uWmGrime.x * wmFloor );');
-  };
-  m.customProgramCacheKey = () => 'world-mapped-v1';
+  m.contextNode = WM_CONTEXT;
+  m.normalNode = WM_NORMAL;
+  addNodeHook(m, {key: WM_HOOK, stage: 'color', order, fn: wmColorStage});
+  addNodeHook(m, {key: WM_ROUGH_HOOK, stage: 'roughness', order, fn: wmRoughStage});
   return m;
 }
 
+/** Whether `m` is a world-mapped surface material. */
+export const isWorldMapped = (m: THREE.Material): boolean => hasNodeHook(m as NodeMaterial, WM_HOOK);
+
 /** A shared generated surface set as a (world-mapped unless `face`) standard material. */
-export function surfaceMaterial(name: SurfaceName, params: THREE.MeshStandardMaterialParameters = {}, mapping: Omit<WorldMapping, 'span'> & {normal?: number} = {}): THREE.MeshStandardMaterial {
+export function surfaceMaterial(name: SurfaceName, params: MeshStandardNodeMaterialParameters = {}, mapping: Omit<WorldMapping, 'span'> & {normal?: number} = {}): SurfaceNodeMaterial {
   const s = surface(name);
-  const m = new THREE.MeshStandardMaterial({map: s.map, roughnessMap: s.roughnessMap, normalMap: s.normalMap, roughness: 1, metalness: 0, ...params});
+  const m = new SurfaceNodeMaterial({map: s.map, roughnessMap: s.roughnessMap, normalMap: s.normalMap, roughness: 1, metalness: 0, ...params});
   if (s.normalMap) m.normalScale.set(mapping.normal ?? 1, mapping.normal ?? 1);
   return worldMapped(m, {span: s.span, ...mapping});
 }
@@ -105,7 +114,7 @@ export function surfaceMaterial(name: SurfaceName, params: THREE.MeshStandardMat
  * one 10k-triangle conduit mesh (25 ms at 1x) and a station view with railings stalled the browser. Texture clones
  * share the canvas image; only this material's GPU copies differ. Broad surfaces keep the 8x shared maps.
  */
-export function thinTrim<M extends THREE.MeshStandardMaterial>(m: M): M {
+export function thinTrim<M extends MeshStandardNodeMaterial>(m: M): M {
   for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap'] as const) {
     const t = m[k];
     if (!t || t.anisotropy <= 1) continue;
@@ -115,6 +124,19 @@ export function thinTrim<M extends THREE.MeshStandardMaterial>(m: M): M {
     m[k] = c;
   }
   return m;
+}
+
+/**
+ * Iteration 13 (MAT-A): clone a (node) material with its node hooks: Material.clone() copies the folded node slots and
+ * SurfaceNodeMaterial values, copyNodeHooks the hook chain (so later hooks on the clone fold over the same stages).
+ * Replaces render/shaderHooks.ts cloneWithShaderHooks for surface materials.
+ */
+export function cloneSurfaceMaterial<M extends THREE.Material>(m: M): M {
+  const c = m.clone() as M;
+  // three r186 NodeMaterial.copy() drops alphaTest (side / shadowSide / transparent / depthWrite / polygon offset survive).
+  c.alphaTest = m.alphaTest;
+  if (isNodeMaterial(m)) copyNodeHooks(m, c as unknown as NodeMaterial);
+  return c;
 }
 
 export type MatKey =
@@ -178,8 +200,9 @@ export class WorldMaterials {
       steel: {u: 1, v: 1}, rail: {u: 1, v: 1}, sleeper: {u: 1, v: 1}, coverboard: {u: 1, v: 1},
       crate: {u: 1, v: 1}, bin: {u: 1, v: 1}, gate: {u: 1, v: 1}, tube: {u: 1, v: 1},
     };
-    const std = (o: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial({roughness: 0.85, metalness: 0, ...o});
-    const pbr = (color: THREE.Texture, orm: THREE.Texture, normal: THREE.Texture, extra: THREE.MeshStandardMaterialParameters = {}) =>
+    // Iteration 13 (MAT-A): node materials (decay and other lanes' hooks layer onto them).
+    const std = (o: MeshStandardNodeMaterialParameters) => new SurfaceNodeMaterial({roughness: 0.85, metalness: 0, ...o});
+    const pbr = (color: THREE.Texture, orm: THREE.Texture, normal: THREE.Texture, extra: MeshStandardNodeMaterialParameters = {}) =>
       std({map: color, roughnessMap: orm, metalnessMap: orm, normalMap: normal, normalScale: new THREE.Vector2(L.normalScale, L.normalScale), roughness: 1, metalness: 1, ...extra});
 
     this.mats.set('tileLower', pbr(tex.wallColor, tex.wallOrm, tex.wallNormal));
@@ -221,7 +244,7 @@ export class WorldMaterials {
       ctx.fillStyle = '#4f8a87'; ctx.fillRect(w * 0.2, h * 0.25, w * 0.6, h * 0.08);
     });
     this.mats.set('gate', std({map: gateTex, roughness: 0.5, metalness: 0.4}));
-    this.mats.set('tube', new THREE.MeshBasicMaterial({color: 0xfff4dc}));
+    this.mats.set('tube', new MeshBasicNodeMaterial({color: 0xfff4dc}));
   }
 
   get(k: MatKey): THREE.Material {
@@ -245,13 +268,13 @@ export class WorldMaterials {
       const center = box.getCenter(new THREE.Vector3());
       s.position.set(-center.x * s.scale.x, -center.y * s.scale.y, -box.min.z);
       group.add(s);
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.94, h * 0.8), new THREE.MeshStandardMaterial({map: tex, roughness: 0.6}));
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.94, h * 0.8), new MeshStandardNodeMaterial({map: tex, roughness: 0.6}));
       face.position.z = size.z + 0.004;
       group.add(face);
     } else {
       const plate = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.02), [
         this.get('steel'), this.get('steel'), this.get('steel'), this.get('steel'),
-        new THREE.MeshStandardMaterial({map: tex, roughness: 0.6}), this.get('steel'),
+        new MeshStandardNodeMaterial({map: tex, roughness: 0.6}), this.get('steel'),
       ]);
       plate.position.z = 0.012;
       group.add(plate);

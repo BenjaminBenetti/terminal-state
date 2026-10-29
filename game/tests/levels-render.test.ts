@@ -15,12 +15,13 @@ import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {CHUNK_M, LevelColumns, cellCeil, deriveRails, extractWallFaces, stationLevels, subtractBands, type BuiltFace} from '../src/world/levelGeometry';
-import {LIGHT_FIELD_PARS, bakeLightField, downsampleField, fieldDepth, sampleField, type BakedField} from '../src/world/lightField';
+import {bakeLightField, downsampleField, fieldDepth, sampleField, type BakedField} from '../src/world/lightField';
 import {ATMOSPHERE, buildDensityMap, densityAt, sampleDensityMap} from '../src/render/atmosphere';
 import {StationLighting} from '../src/world/lights';
 import {CULL_LAYER, fogCullDistance} from '../src/world/levelCulling';
 import {MOOD} from '../src/world/lights';
-import {VF_MARCH} from '../src/render/volumetricShaders';
+import {createFogUniforms, createMarchMaterial} from '../src/render/volumetricShaders';
+import {compileQuad} from './helpers/fogCompile';
 import {overdraw} from './helpers/overdraw';
 import {codeToSeed} from '../src/core/rng';
 
@@ -179,8 +180,8 @@ describe('multi-level light field (one slot per level)', () => {
       const mask = f.data[i * 4];
       expect(mask.toString(2).split('').filter(c => c === '1').length).toBe(cols.count(i));
     }
-    expect(LIGHT_FIELD_PARS).toContain('lfPk'); // one packed texel picks the slot (no per-slot loop)
-    expect(LIGHT_FIELD_PARS).not.toContain('for (');
+    // (iteration 13: the surface decode is TSL; one packed texel fetch picks the slot, no per-slot loop —
+    // tests/lighting-node.test.ts counts the fetches / loops in the generated WGSL and GLSL)
   });
 
   it('a main fixture lights the platform under the deck but neither the deck above nor the crossing below', () => {
@@ -542,12 +543,16 @@ describe('render cost: triangle sanity, overdraw, level / fog culling, draw-call
   });
 
   it('shader cost: the surface and march decodes pick the level slot with one packed texel, no per-slot loops', () => {
-    for (const src of [LIGHT_FIELD_PARS, VF_MARCH.slice(VF_MARCH.indexOf('int vfSlot'), VF_MARCH.indexOf('void main'))]) {
-      expect(src).toContain('lfPk');
-      expect(src).not.toMatch(/for \( int s = 0; s < \d; s \+\+ \)/);
-    }
-    // One slot pick per march step, shared by density and field.
-    expect(VF_MARCH.split('vfSlot( p )').length).toBe(2);
+    // iteration 13: the surface decode is TSL (tests/lighting-node.test.ts); the fog march is TSL too (render/volumetricShaders.ts):
+    // compiled here for the WebGL2 backend, the station light field is read with exactly two texel fetches per step (the
+    // packed slot pick, shared by the density map and the field, + the slot header) and no loop runs over slots.
+    const arr = (c: number) => new THREE.DataArrayTexture(new Uint8Array(4 * c), 1, 1, 4);
+    const f = compileQuad(createMarchMaterial(createFogUniforms(), {depth: new THREE.DepthTexture(4, 4), noise: new THREE.Data3DTexture(new Uint8Array(64), 2, 2, 4), density: arr(4), air: arr(1), vis: arr(1), shadow: null}, {steps: 8}), 'glsl').fragment;
+    const sampler3D = [...f.matchAll(/uniform (?:highp )?sampler3D (\w+);/g)].map(m => m[1]);
+    const fetches = sampler3D.reduce((n, name) => n + (f.match(new RegExp(`texelFetch\\( ${name},`, 'g')) ?? []).length, 0);
+    expect(fetches).toBe(2);
+    const loops = [...f.matchAll(/for \( int (\w+) = 0; \1 < (\w+); \1 \+\+ \)/g)].map(m => m[2]);
+    expect(loops).toEqual(['8', '4', '8', '4']); // steps; smoke emitters + their puffs; scatter lights (no per-slot loop)
   });
 
   it('draw-call budget with level + fog culling (no GLB models; every family, cameras on every level)', () => {

@@ -13,7 +13,9 @@ import {renderProps, type RenderBox} from './helpers/propRender';
 import {ACCENT_COLORS, SHAPE_MAT_KEYS, propShape, type ShapeMat} from '../src/gen/propShapes';
 import {PROP_DEFS, type PropKind} from '../src/gen/props';
 import {MODEL_FILES, TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
-import {WM_ANCHORS, WorldMaterials, type MatKey} from '../src/world/materials';
+import {WM_HOOK, WM_ROUGH_HOOK, WorldMaterials, isWorldMapped, type MatKey} from '../src/world/materials';
+import {nodeHookKeys} from '../src/render/nodeHooks';
+import {compileNodeMaterial} from './helpers/nodeCompile';
 import {SHAPE_MAT_UV, shapeMaterial, shapeMaterials} from '../src/world/shapeMaterials';
 import {SURFACE_NAMES, fareScreenTexture, menuBoardTexture, resetSurfaceCache, surface, vendFrontTexture, MENUS} from '../src/world/canvasTextures';
 
@@ -45,10 +47,15 @@ describe('procedural surfaces are textured (iteration 04)', () => {
       expect(m.map, k).toBeInstanceOf(THREE.Texture);
       expect(record[k], k).toBe(m);
       expect(shapeMaterial(mats, k), k).toBe(m); // cached, never per instance
+      // Iteration 13 (MAT-A): node materials (WebGPURenderer); world mapping = TSL context + 'world-mapped' hooks.
+      expect((m as unknown as {isNodeMaterial?: boolean}).isNodeMaterial, k).toBe(true);
       if (SHAPE_MAT_UV[k] === 'world') {
         expect(m.userData.worldMapping?.span?.length, k).toBe(2);
-        expect(typeof m.onBeforeCompile, k).toBe('function');
-      } else expect(m.emissiveMap, k).toBe(m.map);
+        expect(isWorldMapped(m), k).toBe(true);
+      } else {
+        expect(m.emissiveMap, k).toBe(m.map);
+        expect(isWorldMapped(m), k).toBe(false);
+      }
     }
     // Aliases share one material; unknown future keys still render with a related one.
     expect(shapeMaterial(mats, 'shutterSteel')).toBe(shapeMaterial(mats, 'shutter'));
@@ -74,23 +81,28 @@ describe('procedural surfaces are textured (iteration 04)', () => {
     }
   });
 
-  it('world mapping hooks into three r186 physical shader chunks', () => {
+  // Iteration 13 (MAT-A): the iteration-04 GLSL hook is TSL now; this checks the GENERATED shader (three r186 GLSLNodeBuilder,
+  // the WebGL2-backend code path of WebGPURenderer; tests/surface-nodes.test.ts covers the maths).
+  it('world mapping: per-vertex world projection after instancing feeds every map; one program for all world-mapped keys', () => {
     const m = shapeMaterial(mats, 'steelDark') as THREE.MeshStandardMaterial;
-    const lib = THREE.ShaderLib.physical;
-    for (const a of WM_ANCHORS.vertex) expect(lib.vertexShader).toContain(a);
-    for (const a of WM_ANCHORS.fragment) expect(lib.fragmentShader).toContain(a);
-    // Our UV override runs after three writes its varyings.
-    expect(lib.vertexShader.indexOf('#include <uv_vertex>')).toBeLessThan(lib.vertexShader.indexOf('#include <fog_vertex>'));
-    for (const v of ['vMapUv', 'vRoughnessMapUv', 'vNormalMapUv', 'vEmissiveMapUv']) expect(THREE.ShaderChunk.uv_pars_vertex).toContain(v);
-    const shader = {uniforms: {} as Record<string, THREE.IUniform>, vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader} as unknown as THREE.WebGLProgramParametersWithUniforms;
-    m.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-    expect(shader.vertexShader).toContain('vWmPos = wmP.xyz');
-    expect(shader.vertexShader).toContain('vNormalMapUv = ( normalMapTransform * vec3( wmUv, 1.0 ) ).xy');
-    expect(shader.fragmentShader).toContain('float wmFloor');
-    expect(shader.fragmentShader).toContain('roughnessFactor = min( 1.0, roughnessFactor + 0.3 * uWmGrime.x * wmFloor )');
-    expect(shader.uniforms.uWmMap).toBeTruthy();
-    expect(shader.uniforms.uWmGrime).toBeTruthy();
-    expect(m.customProgramCacheKey()).toBe((shapeMaterial(mats, 'kitchenSteel') as THREE.Material).customProgramCacheKey());
+    expect(nodeHookKeys(m as never)).toEqual([WM_HOOK, WM_ROUGH_HOOK]);
+    const sh = compileNodeMaterial(new THREE.InstancedMesh(new THREE.BoxGeometry(), m, 2), [new THREE.PointLight()]);
+    const v = sh.vertex.slice(sh.vertex.indexOf('void main'));
+    // The instance matrix is applied before the projection is chosen (instance-scaled columns keep their texel scale).
+    expect(v.indexOf('gl_InstanceID')).toBeGreaterThan(0);
+    expect(v.indexOf('vWm = ')).toBeGreaterThan(v.indexOf('gl_InstanceID'));
+    // Colour, roughness and normal maps all sample at the world coordinate (through each texture's transform).
+    expect(sh.fragmentMain.match(/vec3\( vWm\.xy, 1\.0 \)/g)?.length).toBe(3);
+    expect(sh.fragmentMain).toContain('dFdx( vWm.xy )'); // tangent frame from the world coordinate
+    expect(sh.fragmentMain).toContain('wmFloor = ');
+    expect(sh.fragmentMain).toContain('wmNoise(');
+    // Same node graph (per-material values are material properties) -> same program key and identical code.
+    const k = shapeMaterial(mats, 'kitchenSteel') as THREE.Material;
+    expect(m.customProgramCacheKey()).toBe(k.customProgramCacheKey());
+    const sk = compileNodeMaterial(new THREE.InstancedMesh(new THREE.BoxGeometry(), k, 2), [new THREE.PointLight()]);
+    const norm = (code: string) => code.replace(/(NodeBuffer_|buffer)\d+/g, '$1N'); // per-object instance-matrix buffer names
+    expect(norm(sk.fragment)).toBe(norm(sh.fragment));
+    expect(norm(sk.vertex)).toBe(norm(sh.vertex));
   });
 
   it('texture sets are power-of-two, mipmapped and shared', () => {
@@ -251,12 +263,10 @@ describe.skipIf(!process.env.TEXTURE_PREVIEW)('texture preview sheets', () => {
       await sharp(big, {raw: {width: W2, height: H2, channels: 3}}).composite([{input: Buffer.from(svg2)}]).png().toFile(path.join(out, 'props.png'));
     } finally { uninstall(); }
     expect(fs.existsSync(path.join(out, 'surfaces.png'))).toBe(true);
-    // Include-expanded patched shaders for manual GLSL review (no WebGL in node).
-    const expand = (src: string): string => src.replace(/#include <(\w+)>/g, (_, k: string) => expand((THREE.ShaderChunk as unknown as Record<string, string>)[k] ?? `// missing ${k}`));
+    // Generated node-material shaders (WebGL2-backend GLSL) for manual review (no WebGL in node).
     const pmats = new WorldMaterials(fakeEnvTextures(), 3, {w: 1.2, h: 0.19, d: 0.17});
-    const sh = {uniforms: {}, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader} as unknown as THREE.WebGLProgramParametersWithUniforms;
-    shapeMaterial(pmats, 'signBand').onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-    fs.writeFileSync(path.join(out, 'world-mapped.vert.glsl'), expand(sh.vertexShader));
-    fs.writeFileSync(path.join(out, 'world-mapped.frag.glsl'), expand(sh.fragmentShader));
+    const sh = compileNodeMaterial(new THREE.Mesh(new THREE.BoxGeometry(), shapeMaterial(pmats, 'signBand')), [new THREE.PointLight()]);
+    fs.writeFileSync(path.join(out, 'world-mapped.vert.glsl'), sh.vertex);
+    fs.writeFileSync(path.join(out, 'world-mapped.frag.glsl'), sh.fragment);
   }, 600000);
 });

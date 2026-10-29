@@ -15,8 +15,7 @@
 import * as THREE from 'three';
 import type {StationLayout} from '../gen/station';
 import type {WallFace} from './wallFaces';
-import {thinTrim, type WorldMaterials, type MatKey} from './materials';
-import {cloneWithShaderHooks} from '../render/shaderHooks';
+import {SurfaceNodeMaterial, cloneSurfaceMaterial, thinTrim, type WorldMaterials, type MatKey} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {archShopMaterial} from './decay';
 import {planWallDetail, type FeatureKind, type Treatment, type WallDetailPlan, type Feature} from './wallDetailPlan';
@@ -48,9 +47,11 @@ export interface WallDetailResult { group: THREE.Group; stats: WallDetailStats; 
 /** Base-wall finishes the builder renders (meshes with these materials may be cut). */
 const BASE_KEYS: MatKey[] = ['tileLower', 'tileUpper', 'paint', 'tunnel', 'platformFace', 'concrete'];
 
-interface DetailMaterials { flush: THREE.MeshStandardMaterial; decal: THREE.MeshStandardMaterial; soft: THREE.MeshStandardMaterial; cavity: THREE.MeshStandardMaterial }
+// Iteration 13 (MAT-A): node materials (same maps, flags and polygon offsets; WebGPURenderer node path). SurfaceNodeMaterial so
+// clones keep alphaTest (three r186 NodeMaterial.copy drops it).
+interface DetailMaterials { flush: SurfaceNodeMaterial; decal: SurfaceNodeMaterial; soft: SurfaceNodeMaterial; cavity: SurfaceNodeMaterial }
 const shared = new WeakMap<WorldMaterials, DetailMaterials>();
-const friezeMats = new Map<THREE.Texture, THREE.MeshStandardMaterial>();
+const friezeMats = new Map<THREE.Texture, SurfaceNodeMaterial>();
 
 /** The shared wall-detail materials (created on first use; one set per WorldMaterials). */
 export function wallDetailMaterials(mats: WorldMaterials): DetailMaterials {
@@ -61,7 +62,7 @@ export function wallDetailMaterials(mats: WorldMaterials): DetailMaterials {
   // (no z-fighting at any distance), they never cast flashlight shadows onto the wall they sit on,
   // and their meshes draw after the walls (renderOrder 1) so the wall can never cover them.
   const cutout = (units: number, name: string) => {
-    const mat = new THREE.MeshStandardMaterial({map: t.detail.map, roughnessMap: t.detail.roughnessMap, normalMap: t.detail.normalMap, vertexColors: true,
+    const mat = new SurfaceNodeMaterial({map: t.detail.map, roughnessMap: t.detail.roughnessMap, normalMap: t.detail.normalMap, vertexColors: true,
       alphaTest: 0.5, roughness: 1, metalness: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -units, polygonOffsetUnits: -units});
     mat.normalScale.set(0.9, 0.9);
     mat.name = name;
@@ -69,10 +70,10 @@ export function wallDetailMaterials(mats: WorldMaterials): DetailMaterials {
   };
   // Same feature set as the cut-out layers (alphaTest on opaque cells is a no-op): one shader program
   // serves flush / decal / cavity / tablet (fewer program variants to compile, notably on software GL).
-  const cavity = new THREE.MeshStandardMaterial({map: t.detail.map, roughnessMap: t.detail.roughnessMap, normalMap: t.detail.normalMap, vertexColors: true, alphaTest: 0.5, roughness: 1, metalness: 0});
+  const cavity = new SurfaceNodeMaterial({map: t.detail.map, roughnessMap: t.detail.roughnessMap, normalMap: t.detail.normalMap, vertexColors: true, alphaTest: 0.5, roughness: 1, metalness: 0});
   cavity.normalScale.set(0.9, 0.9);
   cavity.name = 'wall-detail-cavity';
-  const soft = new THREE.MeshStandardMaterial({map: t.soft, vertexColors: true, transparent: true, depthWrite: false, roughness: 0.95, metalness: 0,
+  const soft = new SurfaceNodeMaterial({map: t.soft, vertexColors: true, transparent: true, depthWrite: false, roughness: 0.95, metalness: 0,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
   soft.name = 'wall-detail-soft';
   m = {flush: cutout(1, 'wall-detail-flush'), decal: cutout(2, 'wall-detail-decal'), soft, cavity};
@@ -81,7 +82,7 @@ export function wallDetailMaterials(mats: WorldMaterials): DetailMaterials {
 }
 
 let flatMaps: {normal: THREE.DataTexture; rough: THREE.DataTexture} | null = null;
-function friezeMaterial(tex: THREE.Texture): THREE.MeshStandardMaterial {
+function friezeMaterial(tex: THREE.Texture): SurfaceNodeMaterial {
   let m = friezeMats.get(tex);
   if (!m) {
     for (const old of friezeMats.values()) old.dispose(); // one station at a time
@@ -91,7 +92,7 @@ function friezeMaterial(tex: THREE.Texture): THREE.MeshStandardMaterial {
       const one = (r: number, g: number, b: number) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
       flatMaps = {normal: one(128, 128, 255), rough: one(140, 140, 140)};
     }
-    m = new THREE.MeshStandardMaterial({map: tex, normalMap: flatMaps.normal, roughnessMap: flatMaps.rough, vertexColors: true, alphaTest: 0.5, roughness: 1, metalness: 0,
+    m = new SurfaceNodeMaterial({map: tex, normalMap: flatMaps.normal, roughnessMap: flatMaps.rough, vertexColors: true, alphaTest: 0.5, roughness: 1, metalness: 0,
       depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1});
     m.normalScale.set(0.9, 0.9);
     m.name = 'wall-detail-frieze';
@@ -113,7 +114,7 @@ const thinCable = new WeakMap<WorldMaterials, THREE.Material>();
 function cableMaterial(mats: WorldMaterials): THREE.Material {
   let m = thinCable.get(mats);
   if (!m) {
-    m = thinTrim(cloneWithShaderHooks(shapeMaterial(mats, 'black') as THREE.MeshStandardMaterial));
+    m = thinTrim(cloneSurfaceMaterial(shapeMaterial(mats, 'black') as SurfaceNodeMaterial));
     m.name = 'shape-black-thin'; // same program as the shared black material (anisotropy is sampler state)
     thinCable.set(mats, m);
   }

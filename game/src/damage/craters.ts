@@ -10,10 +10,13 @@
 // Bounded: one InstancedMesh (1 draw call), CRATER_CAP slots, the oldest recycled when full.
 
 import * as THREE from 'three';
-import {addShaderHook} from '../render/shaderHooks';
-import {DMG_COMMON} from './glsl';
+import {MeshStandardNodeMaterial} from 'three/webgpu';
+import {Discard, Fn, atan, attribute, clamp, cos, cross, dot, float, length, materialColor, materialNormal, max, mix, modelViewMatrix, normalize, select, sin, smoothstep, step, uv, varying, vec2, vec3, vec4} from 'three/tsl';
+import {addNodeHook} from '../render/nodeHooks';
+import {dmgNoise, memoNode, type TNode} from './tsl';
 
 export const CRATER_CAP = 220;
+/** Node-hook key prefix on the crater material (stages `.color` / `.normal`, order 300). */
 export const CRATER_HOOK = 'damage-craters-v1';
 
 export interface Crater {
@@ -40,121 +43,122 @@ export interface CraterSpec {
   style: 0 | 1 | 2;
 }
 
-const VERT_PARS = /* glsl */ `
-attribute vec4 aCrater;
-attribute vec3 aRim;
-varying vec4 vCrater;
-varying vec3 vRim;
-varying vec2 vCrUv;
-varying vec3 vCrT;
-varying vec3 vCrB;
-`;
-const VERT_MAIN = /* glsl */ `
-vCrater = aCrater;
-vRim = aRim;
-vCrUv = uv * 2.0 - 1.0;
-vCrT = normalize( ( modelViewMatrix * instanceMatrix * vec4( 1.0, 0.0, 0.0, 0.0 ) ).xyz );
-vCrB = normalize( ( modelViewMatrix * instanceMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
-`;
-const FRAG_PARS = /* glsl */ `
-varying vec4 vCrater;
-varying vec3 vRim;
-varying vec2 vCrUv;
-varying vec3 vCrT;
-varying vec3 vCrB;
-${DMG_COMMON}
-float crR; float crDepth; float crOutline; vec2 crP; float crGrain;
-`;
-const FRAG_COLOR = /* glsl */ `
-{
-	crP = vCrUv;
-	crDepth = vCrater.x;
-	float seed = vCrater.y * 37.0;
-	float style = vCrater.z;
-	float ang = atan( crP.y, crP.x );
-	vec3 ap = vec3( cos( ang ) * 1.6, sin( ang ) * 1.6, seed );
-	// irregular chipped outline: low + high frequency around the rim
-	float outline = 0.68 + 0.2 * dmgNoise( ap ) + 0.12 * dmgNoise( ap * 3.1 + 7.0 );
-	if ( style > 1.5 ) outline = mix( outline, 0.78 + 0.16 * step( 0.5, dmgNoise( ap * 1.7 + 3.0 ) ), 0.6 ); // tile: angular flakes
-	crOutline = outline;
-	crR = length( crP ) / outline;
-	float inside = 1.0 - smoothstep( 0.92, 1.02, crR );
-	if ( inside * vCrater.w < 0.004 ) discard;
-	crGrain = dmgNoise( vec3( crP * 22.0, seed ) );
-	vec3 sub = diffuseColor.rgb;
-	vec3 col;
-	if ( style > 0.5 && style < 1.5 ) {
-		// gravel scatter: darker disturbed stones, no bowl
-		col = mix( vRim * 0.55, vRim * 1.1, step( 0.55, crGrain ) );
-		diffuseColor.a *= inside * 0.75 * vCrater.w;
-	} else {
-		float bowl = 1.0 - crR * crR;
-		float ao = mix( 1.0, 0.32, clamp( crDepth * bowl * 1.25, 0.0, 1.0 ) );
-		col = sub * ao * ( 0.82 + 0.36 * crGrain );
-		// flaked edge: the surface finish broken back in an irregular ring (glaze / paint / skim)
-		float rim = smoothstep( 0.6, 0.95, crR ) * step( 0.42 - 0.2 * style, dmgNoise( vec3( crP * 9.0, seed + 3.0 ) ) );
-		col = mix( col, vRim * ( 0.8 + 0.25 * crGrain ), rim * 0.75 );
-		// dark bullet core / deep pit
-		float core = 1.0 - smoothstep( 0.06, 0.16 + 0.22 * crDepth, crR );
-		col = mix( col, vec3( 0.018, 0.016, 0.014 ), core * ( 0.65 + 0.3 * crDepth ) );
-		diffuseColor.a *= inside * vCrater.w;
-	}
-	diffuseColor.rgb = col;
+// ---------------------------------------------------------------------------------------------
+// Iteration 13 (MAT-B): the crater shading as TSL nodes (was GLSL onBeforeCompile). Per-instance attributes:
+//   aCrater (depth, seed, style, alive), aRim (rim / surface colour), aSub (exposed substrate colour; was instanceColor,
+//   which node materials multiply AFTER colorNode and would tint the gravel scatter), aCrT / aCrB (the instance's local
+//   X / Y axes: the decal's tangent frame, was modelViewMatrix * instanceMatrix * axis in the vertex shader).
+// Fragment work mirrors the GLSL line by line: irregular chipped outline, substrate + AO bowl, flaked rim, dark core,
+// gravel scatter, concave bowl normal in the decal tangent frame.
+
+const aCrater = attribute('aCrater', 'vec4') as TNode;
+const aRim = attribute('aRim', 'vec3') as TNode;
+const aSub = attribute('aSub', 'vec3') as TNode;
+/** View-space tangent / bitangent of the decal plane (vertex stage). */
+const vCrT = varying(modelViewMatrix.mul(vec4(attribute('aCrT', 'vec3'), 0)).xyz) as TNode;
+const vCrB = varying(modelViewMatrix.mul(vec4(attribute('aCrB', 'vec3'), 0)).xyz) as TNode;
+
+/** Shared crater fields (fragment): P (-1..1 across the decal), outline, R = |P| / outline, inside mask. */
+function craterShape(): {P: TNode; seed: TNode; style: TNode; depth: TNode; outline: TNode; R: TNode; inside: TNode} {
+  const P = (uv() as TNode).mul(2).sub(1);
+  const depth = aCrater.x, seed = aCrater.y.mul(37), style = aCrater.z;
+  const ang = atan(P.y, P.x);
+  const ap = vec3(cos(ang).mul(1.6), sin(ang).mul(1.6), seed);
+  // irregular chipped outline: low + high frequency around the rim; tile: angular flakes
+  const o0 = float(0.68).add(dmgNoise(ap).mul(0.2)).add(dmgNoise(ap.mul(3.1).add(7)).mul(0.12));
+  const outline = select(style.greaterThan(1.5), mix(o0, float(0.78).add(step(0.5, dmgNoise(ap.mul(1.7).add(3))).mul(0.16)), 0.6), o0);
+  const R = length(P).div(outline);
+  const inside = smoothstep(0.92, 1.02, R).oneMinus();
+  return {P, seed, style, depth, outline, R, inside};
 }
-`;
-const FRAG_NORMAL = /* glsl */ `
-{
-	if ( vCrater.z < 0.5 || vCrater.z > 1.5 ) {
-		// concave bowl: height h = -depth (1 - r^2) -> slope 2 depth r, plus chip roughness
-		float k = 1.6 * crDepth;
-		vec2 g = crP * ( 2.0 * k ) / max( 0.25, crOutline * crOutline );
-		g += ( vec2( dmgNoise( vec3( crP * 14.0, 1.0 ) ), dmgNoise( vec3( crP * 14.0, 9.0 ) ) ) - 0.5 ) * 0.9 * ( 0.3 + crDepth );
-		float inner = 1.0 - smoothstep( 0.85, 1.0, crR );
-		vec3 nT = normalize( vec3( - g * inner, 1.0 ) );
-		vec3 T = normalize( vCrT - normal * dot( vCrT, normal ) );
-		vec3 B = normalize( cross( normal, T ) ) * sign( dot( cross( normal, T ), vCrB ) );
-		normal = normalize( T * nT.x + B * nT.y + normal * nT.z );
-	}
+
+/** Colour stage: substrate bowl / gravel scatter, alpha = inside x alive (discarded outside the outline). */
+export function craterColorNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'crater-color', () => Fn(() => {
+    const {P, seed, style, depth, R, inside} = craterShape();
+    Discard(inside.mul(aCrater.w).lessThan(0.004));
+    const base = vec4(prev ?? materialColor);
+    const grain = dmgNoise(vec3(P.mul(22), seed)).toVar();
+    const sub = aSub.mul(base.rgb);
+    // gravel scatter: darker disturbed stones, no bowl
+    const gravel = mix(aRim.mul(0.55), aRim.mul(1.1), step(0.55, grain));
+    // crater: AO bowl in the substrate, flaked surface finish at the edge, dark bullet core
+    const bowl = R.mul(R).oneMinus();
+    const ao = mix(float(1), float(0.32), clamp(depth.mul(bowl).mul(1.25), 0, 1));
+    const c0 = sub.mul(ao).mul(grain.mul(0.36).add(0.82));
+    const rim = smoothstep(0.6, 0.95, R).mul(step(float(0.42).sub(style.mul(0.2)), dmgNoise(vec3(P.mul(9), seed.add(3)))));
+    const c1 = mix(c0, aRim.mul(grain.mul(0.25).add(0.8)), rim.mul(0.75));
+    const core = smoothstep(0.06, depth.mul(0.22).add(0.16), R).oneMinus();
+    const c2 = mix(c1, vec3(0.018, 0.016, 0.014), core.mul(depth.mul(0.3).add(0.65)));
+    const isGravel = style.greaterThan(0.5).and(style.lessThan(1.5));
+    const col: TNode = select(isGravel, gravel, c2);
+    const a = base.a.mul(inside).mul(aCrater.w).mul(select(isGravel, float(0.75), float(1)));
+    return vec4(col, a);
+  })());
 }
-`;
+
+/** Normal stage: concave bowl (h = -depth (1 - r^2) -> slope 2 depth r) plus chip roughness, in the decal tangent frame. */
+export function craterNormalNode(prev: TNode | null): TNode {
+  return memoNode(prev, 'crater-normal', () => Fn(() => {
+    const {P, style, depth, outline, R} = craterShape();
+    const n = normalize(vec3(prev ?? materialNormal)).toVar();
+    const k = depth.mul(1.6);
+    const g0 = P.mul(k.mul(2)).div(max(0.25, outline.mul(outline)));
+    const g = g0.add(vec2(dmgNoise(vec3(P.mul(14), 1)), dmgNoise(vec3(P.mul(14), 9))).sub(0.5).mul(depth.add(0.3).mul(0.9)));
+    const inner = smoothstep(0.85, 1.0, R).oneMinus();
+    const nT: TNode = normalize(vec3(g.mul(inner).negate() as TNode, 1));
+    const T: TNode = normalize(vCrT.sub(n.mul(dot(vCrT, n))));
+    const c: TNode = cross(n, T);
+    const B = normalize(c).mul(select(dot(c, vCrB).lessThan(0), float(-1), float(1)));
+    const bent = normalize(T.mul(nT.x).add(B.mul(nT.y)).add(n.mul(nT.z)));
+    // gravel scatter keeps the surface normal
+    return select(style.lessThan(0.5).or(style.greaterThan(1.5)), bent, n);
+  })());
+}
 
 export class CraterField {
   readonly mesh: THREE.InstancedMesh;
   readonly list: Crater[] = [];
   private readonly aCrater: THREE.InstancedBufferAttribute;
   private readonly aRim: THREE.InstancedBufferAttribute;
+  /** Iteration 13 (MAT-B): substrate colour (was instanceColor) and the decal tangent frame (instance X / Y axes). */
+  private readonly aSub: THREE.InstancedBufferAttribute;
+  private readonly aCrT: THREE.InstancedBufferAttribute;
+  private readonly aCrB: THREE.InstancedBufferAttribute;
   private serial = 0;
   private next = 0;
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
   private readonly q2 = new THREE.Quaternion();
+  private readonly ax = new THREE.Vector3();
   private static readonly Z = new THREE.Vector3(0, 0, 1);
   /** Hits that deepened an existing crater (QA/tests). */
   merges = 0;
 
   constructor(readonly cap = CRATER_CAP) {
     const geo = new THREE.PlaneGeometry(1, 1);
-    this.aCrater = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
-    this.aRim = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-    this.aCrater.setUsage(THREE.DynamicDrawUsage);
-    this.aRim.setUsage(THREE.DynamicDrawUsage);
+    const inst = (n: number) => new THREE.InstancedBufferAttribute(new Float32Array(cap * n), n).setUsage(THREE.DynamicDrawUsage) as THREE.InstancedBufferAttribute;
+    this.aCrater = inst(4);
+    this.aRim = inst(3);
+    this.aSub = inst(3);
+    this.aCrT = inst(3);
+    this.aCrB = inst(3);
     geo.setAttribute('aCrater', this.aCrater);
     geo.setAttribute('aRim', this.aRim);
-    const mat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.96, metalness: 0, transparent: true, depthWrite: false,
+    geo.setAttribute('aSub', this.aSub);
+    geo.setAttribute('aCrT', this.aCrT);
+    geo.setAttribute('aCrB', this.aCrB);
+    // Iteration 13 (MAT-B): node material + TSL stages (render/nodeHooks.ts, order 300 = damage)
+    const mat = new MeshStandardNodeMaterial({color: 0xffffff, roughness: 0.96, metalness: 0, transparent: true, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3});
     mat.name = 'damage-craters';
-    addShaderHook(mat, CRATER_HOOK, sh => {
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_PARS).replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_MAIN);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + FRAG_PARS)
-        .replace('#include <color_fragment>', '#include <color_fragment>\n' + FRAG_COLOR)
-        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + FRAG_NORMAL);
-    });
+    addNodeHook(mat, {key: `${CRATER_HOOK}.color`, stage: 'color', order: 300, fn: prev => craterColorNode(prev)});
+    addNodeHook(mat, {key: `${CRATER_HOOK}.normal`, stage: 'normal', order: 300, fn: prev => craterNormalNode(prev)});
     this.mesh = new THREE.InstancedMesh(geo, mat, cap);
     this.mesh.name = 'damage-craters';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 1; // stays visible at count 0: its program compiles with the station, not on the first hit
-    this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.mesh.renderOrder = 1; // stays visible at count 0: its pipeline builds with the station, not on the first hit
   }
 
   /**
@@ -205,11 +209,16 @@ export class CraterField {
     this.m.compose(new THREE.Vector3().copy(c.pos).addScaledVector(c.normal, 0.004), this.q, new THREE.Vector3(d, d, 1));
     this.mesh.setMatrixAt(c.slot, this.m);
     this.mesh.instanceMatrix.needsUpdate = true;
+    // Iteration 13 (MAT-B): the decal tangent frame for the bowl normal (instance-local axes, the mesh is not scaled)
+    this.ax.set(1, 0, 0).applyQuaternion(this.q);
+    this.aCrT.setXYZ(c.slot, this.ax.x, this.ax.y, this.ax.z);
+    this.ax.set(0, 1, 0).applyQuaternion(this.q);
+    this.aCrB.setXYZ(c.slot, this.ax.x, this.ax.y, this.ax.z);
+    this.aCrT.needsUpdate = this.aCrB.needsUpdate = true;
     if (fresh) {
-      this.mesh.setColorAt(c.slot, spec.substrate);
-      this.mesh.instanceColor!.needsUpdate = true;
+      this.aSub.setXYZ(c.slot, spec.substrate.r, spec.substrate.g, spec.substrate.b);
       this.aRim.setXYZ(c.slot, spec.surface.r, spec.surface.g, spec.surface.b);
-      this.aRim.needsUpdate = true;
+      this.aSub.needsUpdate = this.aRim.needsUpdate = true;
     }
     this.aCrater.setXYZW(c.slot, c.depth, fresh ? rand() : this.aCrater.getY(c.slot), spec.style, 1);
     this.aCrater.needsUpdate = true;

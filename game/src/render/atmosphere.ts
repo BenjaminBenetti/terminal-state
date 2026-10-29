@@ -1,37 +1,32 @@
-// Iteration 06 (Lane F): station atmosphere - tunables and the CPU mirror of the volumetric pass.
+// Station atmosphere: tunables, the per-station medium maps and the CPU mirror of the volumetric pass (render/volumetric.ts).
 //
-// The haze is a participating medium raymarched in front of the visible surface (render/volumetric.ts). Light reaches the
-// camera by single in-scattering (Henyey-Greenstein dual-lobe phase function) from
+// The haze is a participating medium raymarched in front of the visible surface. Light reaches the camera by single
+// in-scattering (Henyey-Greenstein dual-lobe phase function) from
 //   (a) the flashlight spot cone - shadowed by the flashlight's shadow map, so the beam stops at walls, props and zombies;
-//   (b) the baked fixture light field (world/lightField.ts, iteration 05) - lit fixtures get soft halos;
+//   (b) the baked fixture light field (world/lightField.ts) - lit fixtures light the haze around them, no light through
+//       walls or slabs (the field is baked with line of sight, one band per storey);
 //   (c) the muzzle flash pulse;
-//   (d) iteration 12: registered scatter lights (the thrown flare's red PointLight), occlusion-windowed (render/smoke.ts).
-// The scene's FogExp2 (MOOD.fogDensity) stays the base extinction of the whole station.
+//   (d) registered scatter lights (the thrown flare's red PointLight), occlusion-windowed (render/smoke.ts), and smoke.
+// The scene's FogExp2 (MOOD.fogDensity) stays the near-black distance falloff of every surface.
 //
-// Iteration 12 (ATMOS) — "volumetric fog ... I just don't feel it. It should be dense in spots, in others sparser. It should
-// flow and move slowly." What changed, honestly stated (no fluid simulation; a textured, advected density field):
-//  - WORLD-SPACE PATCHES: sigma_s = density x area/storey multiplier (the per-level density map, unchanged as the base) x
-//    height profile x PATCH(p) x DETAIL(p) + a GROUND layer. PATCH thresholds a low-frequency 3D gradient noise (one 48^3 RG8
-//    tile = 1 / noiseScale = 16.7 m, lattice periods 2 + 4 => ~8 m blobs, histogram-equalised so `coverage` is the fraction of
-//    space that is dense): clear pockets keep `clear` (12 %) of the base, dense patches ~2.4x, mean ~1. Coverage follows the
-//    area multiplier (track beds / tunnels / service rooms more often dense, big halls more often clear). DETAIL is the
-//    texture's second channel (periods 6 + 12 => 2.8 / 1.4 m wisps), +-45 %.
-//  - GROUND FOG: an extra layer hugging the local floor (e-folding height 0.55 m, undulating +-50 % with the detail
-//    channel), proportional to the area multiplier SQUARED: thick on track beds and in the lower service level, faint in
-//    halls; it breaks up in the patch field's clear pockets too.
-//  - FLOW: a per-storey drift map (buildFlowMap, RGBA8 like the density map: x / z drift up to 0.4 m/s, rise up to 0.15 m/s)
-//    — the tunnel draft along the tracks (the station's draft direction is seeded), slower along platforms, the long axis
-//    of every corridor / room, smoothed across area boundaries, plus gentle rising columns over working light fixtures (warm
-//    spots). The patch field is advected by it with the standard two-phase flow-map scheme (two samples offset by
-//    v * (phase - 0.5) * flowPeriod, phases half a period apart, triangle cross-fade), so local flow never shears the field
-//    over time (each phase also jumps to a fresh noise offset at its own reset, so the field never loops), plus a slow rigid
-//    station-wide drift (`wind`). Two texture samples per march step (each RG) instead of the previous two R samples: same
-//    step counts.
-//  - EXTINCTION: dense patches now also dim what is behind them (extra optical depth `patchExtinction` x the excess of
-//    sigma over its unpatterned mean; clear pockets add none) and smoke has its own extinction — the march writes a
-//    transmittance target (MRT) next to the in-scatter and the composite applies scene x T + in-scatter. The rest of the
-//    view keeps the FogExp2 look, so geometry is never hidden wholesale.
-// Every GLSL formula has a CPU mirror here (tests + CPU previews in tests/helpers/fogPreview.ts).
+// Iteration 13 (FOG) — user: "the fog seems to disappear after I move into an area ... running back the fog seems to go
+// away? it should not. Also I want slightly less fog. I want foggy areas, and non foggy areas. The fog does not appear to
+// move it should. Lighting should light the fog." Root cause (reference/tasks/fog-webgpu-20261028/lanes/fog.notes): the
+// iteration-12 two-phase flow-map cross-fade jumped to a fresh noise offset every 14 s, so patches were re-rolled instead of
+// moved, and the station-wide amount swung 3x as the sampled slice of the noise tile moved. The medium is now:
+//  - PERSISTENT: sigma(x, y, z, t) is a pure function of the world point, the station seed and the station's fog clock
+//    (game time since the station started; pause freezes it). No history, no camera input, no resets, no offset jumps.
+//  - MOVING: every noise field TRANSLATES with a constant world velocity (no shear, no re-roll): the air drifts at
+//    `drift` m/s in a seeded direction, the track beds carry the tunnel draft along the tracks at `trackDrift` m/s (a
+//    spatial blend between the two, fixed in time), and a faster wisp / warp field (`detailDrift`, rising slowly) bends
+//    the patch field as it passes through it (domain warp: billowing / swirl). The field offsets are folded mod one tile
+//    on the CPU in double precision and handed to the shader (no float32 drift after hours of play).
+//  - AREAS: each area gets a seeded class (clear / normal / dense, by area type: halls and shops are often clear, service
+//    rooms often dense; track beds always carry the draft fog, the lower level is damper). Clear areas keep a few % of the
+//    base density with almost no dense patches; inside normal / dense areas dense patches alternate with clear pockets.
+//  - STATIONARY: the patch noise has 4 + 8 lattice periods per 30 m tile and only translates horizontally, so the
+//    station-wide amount stays steady (tests: < +-10 % over 5 min vs 3.5x before).
+// Every TSL formula has a CPU mirror here (tests, CPU previews, __LL.fogSample).
 
 import {CELL, SOLID, VOID, type Grid} from '../gen/grid';
 import type {LevelRole} from '../gen/levels';
@@ -41,10 +36,12 @@ import {stationLevels} from '../world/levelGeometry';
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
 
+export type AreaClass = 'clear' | 'normal' | 'dense';
+
 export interface AtmosphereParams {
-  /** Scattering coefficient sigma_s (1/m) at `refHeight` above the floor in an area with multiplier 1. */
+  /** Scattering coefficient sigma_s (1/m) at `refHeight` above the floor in an area with multiplier 1 (mean patch level). */
   density: number;
-  /** Height falloff (1/m): density x exp(-k (h - refHeight)) with h above the LOCAL floor, clamped 0.2..3. */
+  /** Height falloff (1/m): density x exp(-k (h - refHeight)) with h above the LOCAL floor, clamped 0.25..2.5. */
   heightFalloff: number;
   refHeight: number;
   /** Henyey-Greenstein forward lobe g, backward lobe g, and the backward lobe's weight (0..1). */
@@ -55,33 +52,42 @@ export interface AtmosphereParams {
   flashlightScatter: number;
   fixtureScatter: number;
   muzzleScatter: number;
-  /**
-   * Drifting 3D noise: 1/m scale of one noise tile (iteration 12: the patch tile, 0.06 = 16.7 m), how patterned the medium is
-   * (0 = uniform, 1 = full patches / wisps), and the rigid station-wide drift (m/s; its x follows the station's draft sign).
-   */
+  /** 1/m scale of one PATCH noise tile (1/30: a 30 m tile, lattice periods 4 + 8 => 3.5-7 m patches). */
   noiseScale: number;
+  /** 1/m scale of one WISP / WARP noise tile (1/18). */
+  detailScale: number;
+  /** How patterned the medium is (0 = uniform per area, 1 = full patches / wisps). */
   noiseAmount: number;
-  wind: readonly [number, number, number];
-  /** Iteration 12: vertical squash of the noise (> 1: patches flatter than wide, like layered haze). */
+  /** Vertical squash of the noise (> 1: patches flatter than wide, like layered haze). */
   noiseAnisotropy: number;
-  /** Iteration 12: dense fraction at area multiplier 1, change per unit multiplier, and the patch edge softness (+-). */
+  /** Dense fraction at area multiplier 1, change per unit multiplier, patch edge softness (+-). */
   coverage: number;
   coverageSlope: number;
   coverageSoftness: number;
-  /** Iteration 12: density kept in the clear pockets (fraction of the base). */
+  /**
+   * Patch level of the clear pockets (x base) in a normal area, rising to `pocketDense` in dense areas / track beds
+   * (multiplier 1 -> 1.6: a foggy area never drains while its patches drift through), and of the dense patches.
+   */
   clear: number;
-  /** Iteration 12: wisp modulation (+- fraction) from the noise's detail channel. */
+  pocketDense: number;
+  peak: number;
+  /** Wisp modulation (+- fraction) from the wisp channel. */
   detail: number;
-  /** Iteration 12: ground layer — strength (x base density x area multiplier), e-folding height (m), height variation (+-). */
+  /** Ground layer: strength (x base x area multiplier), e-folding height (m), height variation (+-). */
   ground: number;
   groundHeight: number;
   groundVariation: number;
-  /** Iteration 12: seconds of one flow-map phase (two-phase advection). */
-  flowPeriod: number;
-  /** Iteration 12: extra extinction per unit excess sigma in dense patches; smoke extinction per unit smoke sigma. */
+  /** Domain-warp amplitude (m) of the patch field by the moving wisp / warp field (swirl / billowing). */
+  warp: number;
+  /** Air drift (m/s, seeded horizontal direction), tunnel draft along the tracks (m/s), wisp / warp field drift (m/s), rise (m/s). */
+  drift: number;
+  trackDrift: number;
+  detailDrift: number;
+  rise: number;
+  /** Extra extinction per unit excess sigma in dense patches; smoke extinction per unit smoke sigma. */
   patchExtinction: number;
   smokeExtinction: number;
-  /** Iteration 12: gains on smoke in-scattering and on registered scatter lights (thrown flares). */
+  /** Gains on smoke in-scattering and on registered scatter lights (thrown flares). */
   smokeScatter: number;
   scatterLightScatter: number;
   /** Flashlight in-scatter fades in between these distances from the eye (no veil right at the lens). */
@@ -92,39 +98,56 @@ export interface AtmosphereParams {
   intensity: number;
   /** Density multiplier per area type / kind; `trackBed` = track-bed and tunnel cells. */
   areaDensity: Partial<Record<RoomType | AreaKind | 'trackBed' | 'default', number>>;
-  /** Iteration 08: extra multiplier per level band (damp, dusty lower service level; airier upper deck). */
+  /** Extra multiplier per level band (damp, dusty lower service level; airier upper deck). */
   levelDensity: Partial<Record<LevelRole, number>>;
+  /** Iteration 13: multiplier of a clear / dense area (normal = 1). */
+  classDensity: Record<AreaClass, number>;
+  /** Iteration 13: chance of an area being clear / dense, per area group (seeded per station + area). */
+  classOdds: Record<AreaGroup, {clear: number; dense: number}>;
   /** Surfaces also receive the flashlight shadow (consistent with the shadowed beam). */
   surfaceShadows: boolean;
 }
 
-/** Default (per-level) atmosphere: a dusty, patchy, slowly flowing haze (iteration 12). */
+/** Area groups for the clear / dense draw. */
+export type AreaGroup = 'hall' | 'room' | 'service' | 'corridor' | 'platform';
+
+/**
+ * Default atmosphere (iteration 13). Before -> after (documented in lanes/fog.notes):
+ *  - density 0.030 -> 0.020 base (deep 0.034 -> 0.023, express 0.027 -> 0.019), ~40 % of halls / rooms are now CLEAR
+ *    (x 0.05), ~20 % of rooms and half the service rooms DENSE (x 1.4), track beds x 1.5: the station-mean sigma at walking
+ *    height drops to ~0.65-0.8 of the iteration-12 time average (measured per seed in tests/fog-medium.test.ts) and no
+ *    longer swings with time; the clear areas hold almost none;
+ *  - fixture / flashlight scatter up (0.95 -> 1.15, 0.32 -> 0.4) so the remaining haze reads as lit where the light is.
+ */
 export const ATMOSPHERE: AtmosphereParams = {
-  density: 0.03,
+  density: 0.02,
   heightFalloff: 0.32,
   refHeight: 1.6,
   anisotropy: 0.6,
   backAnisotropy: -0.3,
   backScatter: 0.3,
-  // Iteration 06: tuned on CPU previews (qa-artifacts/iter06-fog). Iteration 12 (qa-artifacts/iter12-fog): denser, patchier
-  // medium; fixtures scatter more so lit areas show the patches with the torch off; the beam's gain comes down (0.45 -> 0.32)
-  // so a dense patch right in front of the lens does not veil the view.
-  flashlightScatter: 0.32,
-  fixtureScatter: 0.95,
+  flashlightScatter: 0.4,
+  fixtureScatter: 1.15,
   muzzleScatter: 0.6,
-  noiseScale: 0.06,
+  noiseScale: 1 / 30,
+  detailScale: 1 / 18,
   noiseAmount: 1,
-  wind: [0.06, 0.012, 0.025],
   noiseAnisotropy: 1.7,
-  coverage: 0.36,
-  coverageSlope: 0.45,
-  coverageSoftness: 0.12,
-  clear: 0.12,
-  detail: 0.45,
-  ground: 1.3,
+  coverage: 0.32,
+  coverageSlope: 0.42,
+  coverageSoftness: 0.1,
+  clear: 0.2,
+  pocketDense: 0.55,
+  peak: 2.3,
+  detail: 0.42,
+  ground: 1.1,
   groundHeight: 0.55,
   groundVariation: 0.5,
-  flowPeriod: 14,
+  warp: 2.2,
+  drift: 0.38,
+  trackDrift: 0.75,
+  detailDrift: 0.6,
+  rise: 0.08,
   patchExtinction: 1.5,
   smokeExtinction: 1,
   smokeScatter: 1,
@@ -132,26 +155,40 @@ export const ATMOSPHERE: AtmosphereParams = {
   nearFade: [0.5, 3.2],
   maxDistance: 36,
   intensity: 1,
-  // Iteration 12: wider spread between thick (track bed, tunnels, service / utility rooms) and airy (big halls).
   areaDensity: {
-    default: 1, trackBed: 1.6, underpass: 1.45, platform: 1, passage: 1.1, 'service-corridor': 1.35, 'exit-stair': 0.95,
-    concourse: 0.65, 'fare-hall': 0.7, 'food-court': 0.6, 'retail-arcade': 0.62, eatery: 0.7, shop: 0.72,
+    default: 1, trackBed: 1.5, underpass: 1.45, platform: 1, passage: 1.1, 'service-corridor': 1.35, 'exit-stair': 0.95,
+    concourse: 0.7, 'fare-hall': 0.75, 'food-court': 0.65, 'retail-arcade': 0.68, eatery: 0.75, shop: 0.78,
     washroom: 0.95, 'agent-office': 0.85, 'crew-room': 0.95, storage: 1.2, 'stock-room': 1.15, utility: 1.4,
     'supply-closet': 1.25, 'janitor-closet': 1.3, service: 1.25, room: 1, closet: 1.25, 'stair-core': 0.9,
   },
-  levelDensity: {main: 1, upper: 0.85, lower: 1.3},
+  levelDensity: {main: 1, upper: 0.85, lower: 1.25},
+  classDensity: {clear: 0.05, normal: 1, dense: 1.4},
+  classOdds: {
+    hall: {clear: 0.45, dense: 0.1},
+    room: {clear: 0.4, dense: 0.25},
+    service: {clear: 0, dense: 0.5},
+    corridor: {clear: 0.3, dense: 0.15},
+    platform: {clear: 0, dense: 0},
+  },
   surfaceShadows: true,
 };
 
+/** Iteration-12 defaults that matter for the before / after comparison (tests, notes). */
+export const ATMOSPHERE_ITER12 = {density: 0.03, fixtureScatter: 0.95, flashlightScatter: 0.32} as const;
+
 /** Per-level overrides (station archetype = "level" today; future levels add their own entries). */
 export const ATMOSPHERE_BY_ARCHETYPE: Partial<Record<Archetype, Partial<AtmosphereParams>>> = {
-  deep: {density: 0.034, coverage: 0.42},
-  express: {density: 0.027},
+  deep: {density: 0.023, coverage: 0.36},
+  express: {density: 0.019},
 };
 
 export function atmosphereFor(layout: Pick<StationLayout, 'archetype'> | null, base: AtmosphereParams = ATMOSPHERE): AtmosphereParams {
   const o = layout ? ATMOSPHERE_BY_ARCHETYPE[layout.archetype] : undefined;
-  return {...base, ...o, areaDensity: {...base.areaDensity, ...o?.areaDensity}, levelDensity: {...base.levelDensity, ...o?.levelDensity}};
+  return {
+    ...base, ...o,
+    areaDensity: {...base.areaDensity, ...o?.areaDensity}, levelDensity: {...base.levelDensity, ...o?.levelDensity},
+    classDensity: {...base.classDensity, ...o?.classDensity}, classOdds: {...base.classOdds, ...o?.classOdds},
+  };
 }
 
 export interface QualityPreset {
@@ -164,7 +201,7 @@ export interface QualityPreset {
   shadowMapSize: number;
   /** Reprojected temporal accumulation of the jittered march. */
   temporal: boolean;
-  /** MSAA samples of the scene render target (the canvas uses 4x). */
+  /** MSAA samples of the scene pass. */
   msaa: number;
 }
 
@@ -197,7 +234,7 @@ export const SHADOW_NEAR = 0.2;
 export const SHADOW_NORMAL_BIAS = 0.02;
 
 // ---------------------------------------------------------------------------------------------
-// Math mirrors (identical formulas to volumetricShaders.ts)
+// Math mirrors (identical formulas to volumetricNodes.ts)
 
 export type V3 = [number, number, number];
 
@@ -223,7 +260,7 @@ export function smoothstep(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** three's perspectiveDepthToViewZ, as a positive distance in front of the camera. */
+/** three's perspectiveDepthToViewZ (depth in [0, 1]), as a positive distance in front of the camera. */
 export function viewZFromDepth(depth: number, near: number, far: number): number {
   return -(near * far) / ((far - near) * depth - far);
 }
@@ -262,18 +299,15 @@ export interface MarchInput {
   sigma: (p: V3) => number;
   /** In-scattered radiance per unit sigma at p toward the eye (rgb), t = distance from the eye. */
   radiance: (p: V3, t: number) => V3;
-  /**
-   * Iteration 12: per-channel scattering weight at p (default [sigma, sigma, sigma]): the haze plus tinted smoke. When given,
-   * `sigma` is only the early-out test.
-   */
+  /** Per-channel scattering weight at p (default [sigma, sigma, sigma]): the haze plus tinted smoke. */
   scatter?: (p: V3) => V3;
-  /** Iteration 12: extra extinction coefficient (1/m) at p (dense-patch excess + smoke); default none. */
+  /** Extra extinction coefficient (1/m) at p (dense-patch excess + smoke); default none. */
   extinction?: (p: V3) => number;
 }
 
 /**
- * Iteration 12: mirror of the march loop — sum T_fog(t) T_vol(t) scatter(p) L(p) w over samples in front of the surface only,
- * with T_vol the volumetric transmittance accumulated so far (dense patches, smoke); returns it at the surface as well.
+ * Mirror of the march loop — sum T_fog(t) T_vol(t) scatter(p) L(p) w over samples in front of the surface only, with T_vol the
+ * volumetric transmittance accumulated so far (dense patches, smoke); returns it at the surface as well.
  */
 export function integrateMedium(m: MarchInput): {inscatter: V3; transmittance: number} {
   const dist = Math.min(m.sceneDist, m.maxDistance);
@@ -294,7 +328,7 @@ export function integrateMedium(m: MarchInput): {inscatter: V3; transmittance: n
   return {inscatter: acc, transmittance: tv};
 }
 
-/** Mirror of the march loop's in-scatter (iteration 06 signature): integrateMedium without extinction terms. */
+/** Mirror of the march loop's in-scatter (no extinction terms). */
 export function integrateInscatter(m: MarchInput): V3 {
   return integrateMedium(m).inscatter;
 }
@@ -304,7 +338,7 @@ export interface SpotInput {
   dir: V3;
   coneCos: number;
   penumbraCos: number;
-  /** Linear colour x intensity x flashlightScatter. */
+  /** Linear colour x intensity x flashlightScatter (0 when the torch is off / the battery cut it). */
   color: V3;
   distance: number;
   decay: number;
@@ -329,47 +363,13 @@ export function fixtureRadiance(amb: V3, dirColor: V3, dirToLight: V3, viewDir: 
   return [g * (amb[0] / Math.PI + dirColor[0] * ph), g * (amb[1] / Math.PI + dirColor[1] * ph), g * (amb[2] / Math.PI + dirColor[2] * ph)];
 }
 
-// --- Composite: in-scatter is added in scene-linear space "before" three's ACES tone mapping ---------
-
-/** three's ACES matrices (row-major here). */
-export const ACES_IN: readonly number[] = [0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777];
-export const ACES_OUT: readonly number[] = [1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602];
-
-export function mul3(m: readonly number[], v: readonly number[]): V3 {
-  return [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
-}
-
-export function inv3(m: readonly number[]): number[] {
-  const [a, b, c, d, e, f, g, h, i] = m;
-  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
-  const det = a * A + b * B + c * C;
-  return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det, B / det, (a * i - c * g) / det, -(a * f - c * d) / det, C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
-}
-export const ACES_IN_INV = inv3(ACES_IN);
-export const ACES_OUT_INV = inv3(ACES_OUT);
-
-const rrt = (v: number) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.4329510) + 0.238081);
-/** Inverse of RRTAndODTFit on [0, 0.99] (positive root of the quadratic). */
-export function rrtInv(y: number): number {
-  const yy = Math.min(0.99, Math.max(0, y));
-  const A = yy * 0.983729 - 1, B = yy * 0.4329510 - 0.0245786, C = yy * 0.238081 + 0.000090537;
-  return (-B - Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A);
-}
-
-/** three's ACESFilmicToneMapping (scene-linear rgb -> display-linear, clamped). */
-export function acesForward(c: V3, exposure: number): V3 {
-  const k = exposure / 0.6;
-  const v = mul3(ACES_IN, [c[0] * k, c[1] * k, c[2] * k]);
-  const o = mul3(ACES_OUT, [rrt(v[0]), rrt(v[1]), rrt(v[2])]);
-  return [Math.min(1, Math.max(0, o[0])), Math.min(1, Math.max(0, o[1])), Math.min(1, Math.max(0, o[2]))];
-}
-
-/** Approximate inverse of acesForward (exact for unclamped values). */
-export function acesInverse(d: V3, exposure: number): V3 {
-  const u = mul3(ACES_OUT_INV, d);
-  const v = mul3(ACES_IN_INV, [rrtInv(u[0]), rrtInv(u[1]), rrtInv(u[2])]);
-  const k = 0.6 / exposure;
-  return [Math.max(0, v[0] * k), Math.max(0, v[1] * k), Math.max(0, v[2] * k)];
+/** Mirror of a scatter light (flare) term: colour x three's distance attenuation (>= 0.3 m) x phase x occlusion window. */
+export function pointRadiance(p: V3, viewDir: V3, light: {pos: V3; color: V3; distance: number; decay: number}, params: AtmosphereParams, vis = 1): V3 {
+  const v: V3 = [p[0] - light.pos[0], p[1] - light.pos[1], p[2] - light.pos[2]];
+  const d = Math.max(Math.hypot(v[0], v[1], v[2]), 1e-4);
+  if (light.distance > 0 && d > light.distance) return [0, 0, 0];
+  const k = distanceAttenuation(Math.max(d, 0.3), light.distance, light.decay) * phase(-(v[0] * viewDir[0] + v[1] * viewDir[1] + v[2] * viewDir[2]) / d, params) * vis;
+  return [light.color[0] * k, light.color[1] * k, light.color[2] * k];
 }
 
 /** Depth similarity sharpness of the composite's bilateral upsample (exp(-k * relative depth gap)). */
@@ -393,38 +393,29 @@ export function bilateralUpsample(samples: readonly {fog: V3; z: number; wb: num
   return wsum > 1e-4 ? [acc[0] / wsum, acc[1] / wsum, acc[2] / wsum] : best;
 }
 
-export const srgbDecode = (c: number) => c <= 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4);
-export const srgbEncode = (c: number) => c <= 0.0031308 ? c * 12.92 : Math.pow(c, 0.41666) * 1.055 - 0.055;
-
-/** Transmittance at or above which the composite treats the medium as clear (exact passthrough without in-scatter). */
-export const CLEAR_T = 0.9995;
-
 /**
- * Mirror of the composite: scene pixel (sRGB-encoded, as the canvas would show it) x volumetric transmittance + in-scatter,
- * in scene-linear space under three's ACES curve. Iteration 12: `transmittance` (dense patches / smoke between the eye and
- * the surface; 1 = the iteration-06 composite).
+ * Iteration 13: mirror of the composite. The scene pass is LINEAR HDR (WebGPURenderer renders into its own target without
+ * tone mapping); the fog is applied there — scene x volumetric transmittance + in-scatter x intensity — and the render
+ * pipeline's output transform then applies ACES (renderer exposure) + sRGB once, exactly like the station without fog.
+ * intensity 0 => the scene unchanged.
  */
-export function compositePixel(scene: V3, fog: V3, exposure: number, transmittance = 1): V3 {
-  const tv = Math.min(1, Math.max(0, transmittance));
-  if (Math.max(fog[0], fog[1], fog[2]) <= 1e-6 && tv >= CLEAR_T) return scene;
-  const lin: V3 = [srgbDecode(scene[0]), srgbDecode(scene[1]), srgbDecode(scene[2])];
-  const hdr = acesInverse(lin, exposure);
-  const out = acesForward([hdr[0] * tv + fog[0], hdr[1] * tv + fog[1], hdr[2] * tv + fog[2]], exposure);
-  // Never darker than the (attenuated) scene pixel (the inverse clamps saturated highlights).
-  return [Math.max(scene[0] * tv, srgbEncode(out[0])), Math.max(scene[1] * tv, srgbEncode(out[1])), Math.max(scene[2] * tv, srgbEncode(out[2]))];
+export function compositeLinear(scene: V3, fog: V3, transmittance = 1, intensity = 1): V3 {
+  const k = Math.min(1, Math.max(0, intensity));
+  const tv = 1 + (Math.min(1, Math.max(0, transmittance)) - 1) * k;
+  return [scene[0] * tv + fog[0] * intensity, scene[1] * tv + fog[1] * intensity, scene[2] * tv + fog[2] * intensity];
 }
 
 // ---------------------------------------------------------------------------------------------
-// Per-station density map (area multiplier + local floor height) and the shared noise volume
+// Per-station density map (area multiplier incl. its clear / dense class + local floor and ceiling)
 
 /** Density multiplier range encoded in the map's R channel (0..255 -> 0..MAP_RANGE). */
-export const DENSITY_MAP_RANGE = 2.5;
+export const DENSITY_MAP_RANGE = 3;
 
 /**
- * Per-station medium map, one layer per level slot (iteration 08; slot s = layout.levels[s]): RGBA8
- * per texel: R = density multiplier / DENSITY_MAP_RANGE, G = local floor, B = local ceiling (both
- * yMin + v * yRange), A = 255 where the level's band exists (values are dilated into closed cells so
- * filtering stays smooth; A is not). The march picks the slot whose band holds the sample point.
+ * Per-station medium map, one layer per level slot (slot s = layout.levels[s]): RGBA8 per texel: R = density multiplier /
+ * DENSITY_MAP_RANGE (area type x level band x the area's clear / dense class), G = local floor, B = local ceiling (both
+ * yMin + v * yRange), A = 255 where the level's band exists (values are dilated into closed cells so filtering stays smooth;
+ * A is not). The march picks the layer of the level slot holding the sample point (light-field band pick).
  */
 export interface DensityMap {
   w: number; h: number;
@@ -435,17 +426,51 @@ export interface DensityMap {
   yMin: number; yRange: number;
   /** World size of one texel (m). */
   cell: number;
+  /** Iteration 13: the class each area drew (index = area id) and its final multiplier (before the level factor). */
+  areas?: {cls: AreaClass; mult: number; group: AreaGroup | 'track'}[];
 }
 
-export function areaMultiplier(layout: StationLayout, i: number, p: Pick<AtmosphereParams, 'areaDensity'>, grid: Grid = layout.grid): number {
+const HALLS = new Set(['concourse', 'fare-hall', 'food-court', 'retail-arcade']);
+const CORRIDORS = new Set(['passage', 'underpass', 'exit-stair', 'stair-core']);
+const SERVICE = new Set(['service-corridor', 'storage', 'stock-room', 'utility', 'supply-closet', 'janitor-closet', 'service', 'closet']);
+
+/** Group of an area for the clear / dense draw. */
+export function areaGroup(a: {kind: AreaKind; type: RoomType}): AreaGroup {
+  if (a.kind === 'platform' || a.type === 'platform') return 'platform';
+  if (SERVICE.has(a.type) || SERVICE.has(a.kind)) return 'service';
+  if (HALLS.has(a.type) || a.kind === 'concourse') return 'hall';
+  if (CORRIDORS.has(a.type) || a.kind === 'passage') return 'corridor';
+  return 'room';
+}
+
+function hash32(x: number): number {
+  let h = x >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+  h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** Seeded class of area `index` (deterministic per station seed + area; never depends on time or the camera). */
+export function areaClassOf(layout: Pick<StationLayout, 'seed' | 'areas'>, index: number, p: Pick<AtmosphereParams, 'classOdds'>): AreaClass {
+  const a = layout.areas[index];
+  if (!a) return 'normal';
+  const odds = p.classOdds[areaGroup(a)];
+  const u = hash32((layout.seed >>> 0) ^ Math.imul(index + 1, 0x9e3779b1) ^ 0x5f0c1a7d) / 4294967296;
+  return u < odds.clear ? 'clear' : u < odds.clear + odds.dense ? 'dense' : 'normal';
+}
+
+export function areaMultiplier(layout: StationLayout, i: number, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'classDensity' | 'classOdds'>>, grid: Grid = layout.grid): number {
   const g = grid, ad = p.areaDensity;
   if (g.cells[i] === VOID) return ad.trackBed ?? ad.default ?? 1;
-  const a = layout.areas[g.area[i]];
+  const ai = g.area[i];
+  const a = layout.areas[ai];
   if (!a) return ad.default ?? 1;
-  return ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1;
+  const base = ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1;
+  if (!p.classDensity || !p.classOdds) return base;
+  return base * p.classDensity[areaClassOf(layout, ai, p as Pick<AtmosphereParams, 'classOdds'>)];
 }
 
-export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity'>>): DensityMap {
+export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds'>>): DensityMap {
   const levels = stationLevels(layout).slice(0, 4);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
   const per = levels.map(L => {
@@ -478,7 +503,7 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
       }
       known = nk; mult = nm; floor = nf; ceil = nc;
     }
-    // Soften area boundaries (two 3x3 box passes on the multiplier).
+    // Soften area boundaries (two 3x3 box passes on the multiplier: ~1 m transitions through doorways).
     for (let it = 0; it < 2; it++) {
       const nm = mult.slice();
       for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
@@ -514,7 +539,12 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
       data[o + 3] = q.open[i] ? 255 : 0;
     }
   });
-  return {w: W, h: H, slots: S, data, yMin, yRange, cell: CELL};
+  const areas = p.classDensity && p.classOdds ? layout.areas.map((a, i) => {
+    const cls = areaClassOf(layout, i, p as Pick<AtmosphereParams, 'classOdds'>);
+    const ad = p.areaDensity;
+    return {cls, group: areaGroup(a), mult: (ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1) * p.classDensity![cls]};
+  }) : undefined;
+  return {w: W, h: H, slots: S, data, yMin, yRange, cell: CELL, areas};
 }
 
 /**
@@ -522,212 +552,8 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
  * of the level slot whose band holds height y (slot 0 when y is omitted or nothing is present).
  */
 export function sampleDensityMap(m: DensityMap, x: number, z: number, y?: number): [number, number] {
-  const u = x / m.cell - 0.5, v = z / m.cell - 0.5;
-  const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
-  const S = m.slots ?? 1;
-  let best = Infinity, out: [number, number] | null = null, first: [number, number] = [0, 0];
-  for (let s = 0; s < S; s++) {
-    let r = 0, gch = 0, bch = 0, ach = 0;
-    for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
-      const xx = Math.min(m.w - 1, Math.max(0, iu + a)), yy = Math.min(m.h - 1, Math.max(0, iv + b));
-      const wgt = (a ? fu : 1 - fu) * (b ? fv : 1 - fv);
-      const o = ((s * m.h + yy) * m.w + xx) * 4;
-      r += wgt * m.data[o]; gch += wgt * m.data[o + 1]; bch += wgt * m.data[o + 2]; ach += wgt * m.data[o + 3];
-    }
-    const res: [number, number] = [r / 255 * DENSITY_MAP_RANGE, m.yMin + gch / 255 * m.yRange];
-    if (s === 0) first = res;
-    if (y === undefined || ach < 127.5) continue;
-    const ce = m.yMin + bch / 255 * m.yRange;
-    const d = Math.max(res[1] - y, y - ce);
-    if (d < best) { best = d; out = res; }
-  }
-  return out ?? first;
-}
-
-/** Iteration 12: the shared noise tile — 48^3 texels, two channels (RG8). */
-export const NOISE_SIZE = 48;
-export const NOISE_CHANNELS = 2;
-/** Lattice periods per tile: R = patch field (~8 m / ~4 m features at the default 16.7 m tile), G = wisps (~2.8 / 1.4 m). */
-export const NOISE_OCTAVES = {patch: [{p: 2, w: 0.62}, {p: 4, w: 0.38}], detail: [{p: 6, w: 0.6}, {p: 12, w: 0.4}]} as const;
-
-function mulberry32(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
-
-/** Tileable 3D gradient (Perlin-style) noise, octaves of lattice period P per `size` texels, quintic fade. */
-function gradientNoiseTile(size: number, octaves: readonly {p: number; w: number}[], rnd: () => number): Float32Array {
-  const out = new Float32Array(size ** 3);
-  const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
-  for (const o of octaves) {
-    const P = o.p, g = new Float32Array(P ** 3 * 3);
-    for (let i = 0; i < P ** 3; i++) {
-      // uniform direction on the sphere
-      const z = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
-      g[i * 3] = Math.cos(a) * r; g[i * 3 + 1] = Math.sin(a) * r; g[i * 3 + 2] = z;
-    }
-    const k = P / size;
-    for (let zz = 0; zz < size; zz++) for (let yy = 0; yy < size; yy++) for (let xx = 0; xx < size; xx++) {
-      const fx = xx * k, fy = yy * k, fz = zz * k;
-      const ix = Math.floor(fx), iy = Math.floor(fy), iz = Math.floor(fz);
-      const tx = fx - ix, ty = fy - iy, tz = fz - iz;
-      const u = fade(tx), v = fade(ty), w = fade(tz);
-      let acc = 0;
-      for (let c = 0; c < 2; c++) for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
-        const gi = ((((iz + c) % P) * P + ((iy + b) % P)) * P + ((ix + a) % P)) * 3;
-        const d = g[gi] * (tx - a) + g[gi + 1] * (ty - b) + g[gi + 2] * (tz - c);
-        acc += d * (a ? u : 1 - u) * (b ? v : 1 - v) * (c ? w : 1 - w);
-      }
-      out[(zz * size + yy) * size + xx] += o.w * acc;
-    }
-  }
-  return out;
-}
-
-/** Histogram equalisation to a uniform [0, 255] (ranks): thresholds on the channel are coverage fractions. */
-function equalise(v: Float32Array): Uint8Array {
-  const sorted = Float32Array.from(v).sort();
-  const out = new Uint8Array(v.length), n = v.length;
-  for (let i = 0; i < n; i++) {
-    let lo = 0, hi = n - 1;
-    const x = v[i];
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < x) lo = mid + 1; else hi = mid; }
-    out[i] = Math.round(lo / (n - 1) * 255);
-  }
-  return out;
-}
-
-/**
- * Iteration 12: tileable 3D noise as interleaved RG8 (texel i: [2i] patch, [2i + 1] detail), both channels gradient-noise
- * octaves histogram-equalised to uniform. Deterministic.
- */
-export function buildNoiseVolume(size = NOISE_SIZE, seed = 0x6c6c6e): Uint8Array {
-  const rnd = mulberry32(seed);
-  const r = equalise(gradientNoiseTile(size, NOISE_OCTAVES.patch, rnd));
-  const g = equalise(gradientNoiseTile(size, NOISE_OCTAVES.detail, rnd));
-  const out = new Uint8Array(size ** 3 * NOISE_CHANNELS);
-  for (let i = 0; i < r.length; i++) { out[i * 2] = r[i]; out[i * 2 + 1] = g[i]; }
-  return out;
-}
-
-/** Trilinear, repeat-wrapped sample of one channel (texture coords: 1 = one tile), like the GPU. */
-export function sampleNoise(vol: Uint8Array, q: V3, size = NOISE_SIZE, channel = 0): number {
-  const ch = vol.length >= size ** 3 * NOISE_CHANNELS ? NOISE_CHANNELS : 1;
-  const u = q[0] * size - 0.5, v = q[1] * size - 0.5, w = q[2] * size - 0.5;
-  const iu = Math.floor(u), iv = Math.floor(v), iw = Math.floor(w), fu = u - iu, fv = v - iv, fw = w - iw;
-  const wrap = (i: number) => ((i % size) + size) % size;
-  let acc = 0;
-  for (let c = 0; c < 2; c++) for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
-    acc += (a ? fu : 1 - fu) * (b ? fv : 1 - fv) * (c ? fw : 1 - fw) * vol[((wrap(iw + c) * size + wrap(iv + b)) * size + wrap(iu + a)) * ch + Math.min(channel, ch - 1)];
-  }
-  return acc / 255;
-}
-
-// ---------------------------------------------------------------------------------------------
-// Iteration 12: per-storey drift map (the "flow" of the haze)
-
-/** Drift encoding range: x / z drift +-FLOW_MAX m/s (R, G at 0.5 = still), rise 0..RISE_MAX m/s (B). */
-export const FLOW_MAX = 0.4;
-export const RISE_MAX = 0.15;
-/** Noise offset (tile units) a flow phase jumps by at each of its resets (invisible: its weight is 0 there). */
-export const FLOW_CYCLE: V3 = [0.37, 0.21, 0.53];
-/** Drift speeds (m/s): along the track bed / tunnels (the draft), along platforms, corridors, rooms, big halls. */
-export const FLOW_SPEED = {track: 0.26, platform: 0.13, corridor: 0.11, room: 0.06, hall: 0.045, rise: 0.07} as const;
-
-export interface FlowMap {
-  w: number; h: number; slots: number;
-  /** RGBA8, layer-major like DensityMap: R / G = x / z drift, B = rise, A = 255 where the storey is open. */
-  data: Uint8Array;
-  /** Station draft direction along the tracks (+1 = toward +x), seeded. */
-  draft: 1 | -1;
-}
-
-const HALLS = new Set(['concourse', 'fare-hall', 'food-court', 'retail-arcade']);
-const CORRIDORS = new Set(['passage', 'service-corridor', 'underpass', 'exit-stair']);
-
-/**
- * Builds the drift map per level slot (same texel grid as the density map): the tunnel draft runs along the tracks (x; the
- * direction is seeded per station), platforms carry it more slowly, every other area drifts along its long axis (toward +x
- * with the draft, or away from the track bed along z: the tunnels push air out to the exits), slower in rooms and big halls;
- * four 3 x 3 smoothing passes blend area boundaries; working fixtures add a gentle rising column (warm spots).
- */
-export function buildFlowMap(layout: StationLayout): FlowMap {
-  const levels = stationLevels(layout).slice(0, 4);
-  const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
-  const draft: 1 | -1 = ((layout.seed >>> 0) * 2654435761 >>> 0) % 2 === 0 ? 1 : -1;
-  const trenchZ = layout.trenches?.length ? layout.trenches.reduce((a, t) => a + (t.z0 + t.z1) / 2, 0) / layout.trenches.length : (layout.trench ? (layout.trench.z0 + layout.trench.z1) / 2 : H * CELL / 2);
-  const data = new Uint8Array(n * S * 4);
-  const u8 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
-  levels.forEach((L, s) => {
-    const g = L.grid;
-    let vx = new Float32Array(n), vz = new Float32Array(n);
-    const open = new Uint8Array(n), rise = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      if (g.cells[i] === SOLID) continue;
-      open[i] = 1;
-      if (g.cells[i] === VOID) { vx[i] = draft * FLOW_SPEED.track; continue; }
-      const a = layout.areas[g.area[i]];
-      if (!a) continue;
-      if (a.kind === 'platform') { vx[i] = draft * FLOW_SPEED.platform; continue; }
-      const speed = CORRIDORS.has(a.type) || CORRIDORS.has(a.kind) ? FLOW_SPEED.corridor : HALLS.has(a.type) ? FLOW_SPEED.hall : FLOW_SPEED.room;
-      if (a.w >= a.h) vx[i] = draft * speed;
-      else vz[i] = ((a.y + a.h / 2) * CELL >= trenchZ ? 1 : -1) * speed;
-    }
-    for (let it = 0; it < 4; it++) {
-      const nx = vx.slice(), nz = vz.slice();
-      for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
-        const i = cy * W + cx;
-        if (!open[i]) continue;
-        let sx = 0, sz = 0, c = 0;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-          const x = cx + dx, y = cy + dy;
-          if (x < 0 || y < 0 || x >= W || y >= H) continue;
-          const j = y * W + x;
-          if (!open[j]) continue;
-          sx += vx[j]; sz += vz[j]; c++;
-        }
-        nx[i] = sx / c; nz[i] = sz / c;
-      }
-      vx = nx; vz = nz;
-    }
-    // warm spots: working fixtures of this storey heat a column of air (Gaussian, ~1.2 m radius)
-    for (const l of layout.lights) {
-      if (l.broken) continue;
-      const slot = Math.max(0, levels.findIndex(q => q.id === (l.level ?? 0)));
-      if (slot !== s) continue;
-      const cx0 = Math.floor(l.x / CELL), cy0 = Math.floor(l.z / CELL);
-      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
-        const x = cx0 + dx, y = cy0 + dy;
-        if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        const j = y * W + x;
-        if (!open[j]) continue;
-        rise[j] = Math.min(RISE_MAX, rise[j] + FLOW_SPEED.rise * (0.4 + 0.6 * (l.power ?? 1)) * Math.exp(-(dx * dx + dy * dy) * CELL * CELL / (2 * 0.6 * 0.6)));
-      }
-    }
-    for (let i = 0; i < n; i++) {
-      const o = (s * n + i) * 4;
-      data[o] = u8(0.5 + vx[i] / (2 * FLOW_MAX));
-      data[o + 1] = u8(0.5 + vz[i] / (2 * FLOW_MAX));
-      data[o + 2] = u8(rise[i] / RISE_MAX);
-      data[o + 3] = open[i] ? 255 : 0;
-    }
-  });
-  return {w: W, h: H, slots: S, data, draft};
-}
-
-/** Bilinear sample of one flow layer like the GPU: [vx, vz, rise] in m/s. */
-export function sampleFlowMap(f: FlowMap, x: number, z: number, slot: number): V3 {
-  const u = x / CELL - 0.5, v = z / CELL - 0.5;
-  const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
-  const s = Math.min(Math.max(0, slot), f.slots - 1);
-  let r = 0, gch = 0, b = 0;
-  for (let bb = 0; bb < 2; bb++) for (let a = 0; a < 2; a++) {
-    const xx = Math.min(f.w - 1, Math.max(0, iu + a)), yy = Math.min(f.h - 1, Math.max(0, iv + bb));
-    const wgt = (a ? fu : 1 - fu) * (bb ? fv : 1 - fv);
-    const o = ((s * f.h + yy) * f.w + xx) * 4;
-    r += wgt * f.data[o]; gch += wgt * f.data[o + 1]; b += wgt * f.data[o + 2];
-  }
-  return [(r / 255 * 2 - 1) * FLOW_MAX, (gch / 255 * 2 - 1) * FLOW_MAX, b / 255 * RISE_MAX];
+  if (y === undefined) return sampleDensityLayer(m, x, z, 0);
+  return sampleDensityLayer(m, x, z, densitySlot(m, x, z, y));
 }
 
 /** Level slot whose band holds height y at (x, z) — the CPU stand-in for the march's light-field band pick. */
@@ -752,74 +578,315 @@ export function densitySlot(m: DensityMap, x: number, z: number, y: number): num
 }
 
 /** Bilinear [multiplier, floorY] of one density layer. */
-function sampleDensityLayer(m: DensityMap, x: number, z: number, s: number): [number, number] {
+export function sampleDensityLayer(m: DensityMap, x: number, z: number, s: number): [number, number] {
   const u = x / m.cell - 0.5, v = z / m.cell - 0.5;
   const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
+  const L = Math.min(Math.max(0, s), m.slots - 1);
   let r = 0, gch = 0;
   for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
     const xx = Math.min(m.w - 1, Math.max(0, iu + a)), yy = Math.min(m.h - 1, Math.max(0, iv + b));
     const wgt = (a ? fu : 1 - fu) * (b ? fv : 1 - fv);
-    const o = ((s * m.h + yy) * m.w + xx) * 4;
+    const o = ((L * m.h + yy) * m.w + xx) * 4;
     r += wgt * m.data[o]; gch += wgt * m.data[o + 1];
   }
   return [r / 255 * DENSITY_MAP_RANGE, m.yMin + gch / 255 * m.yRange];
 }
 
-const smooth01 = (e0: number, e1: number, x: number) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+// ---------------------------------------------------------------------------------------------
+// Air map: where the tunnel draft (track beds) carries the haze instead of the slow air drift
+
+/**
+ * Per level slot (same texel grid as the density map), R8: weight 0..1 of the TRACK draft field at the texel (1 over the
+ * track beds / tunnels, 0 in rooms and halls; platforms ~0.35 so the draft spills over the platform edge), smoothed with
+ * four 3x3 passes. Fixed in time: the two moving fields are blended in SPACE, so nothing shears or re-rolls.
+ */
+export interface AirMap {
+  w: number; h: number; slots: number;
+  /** R8, layer-major like DensityMap: ((slot * h + y) * w + x). */
+  data: Uint8Array;
+  /** Station draft direction along the tracks (+1 = toward +x), seeded. */
+  draft: 1 | -1;
+}
+
+export function stationDraft(seed: number): 1 | -1 {
+  return ((seed >>> 0) * 2654435761 >>> 0) % 2 === 0 ? 1 : -1;
+}
+
+export function buildAirMap(layout: StationLayout): AirMap {
+  const levels = stationLevels(layout).slice(0, 4);
+  const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
+  const data = new Uint8Array(n * S);
+  levels.forEach((L, s) => {
+    const g = L.grid;
+    let wt = new Float32Array(n);
+    const open = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      if (g.cells[i] === SOLID) continue;
+      open[i] = 1;
+      if (g.cells[i] === VOID) { wt[i] = 1; continue; }
+      const a = layout.areas[g.area[i]];
+      if (a && a.kind === 'platform') wt[i] = 0.35;
+    }
+    for (let it = 0; it < 4; it++) {
+      const nw = wt.slice();
+      for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
+        const i = cy * W + cx;
+        if (!open[i]) continue;
+        let sw = 0, c = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const x = cx + dx, y = cy + dy;
+          if (x < 0 || y < 0 || x >= W || y >= H) continue;
+          const j = y * W + x;
+          if (!open[j]) continue;
+          sw += wt[j]; c++;
+        }
+        nw[i] = sw / c;
+      }
+      wt = nw;
+    }
+    for (let i = 0; i < n; i++) data[s * n + i] = Math.round(Math.min(1, Math.max(0, wt[i])) * 255);
+  });
+  return {w: W, h: H, slots: S, data, draft: stationDraft(layout.seed)};
+}
+
+/** Bilinear track weight of one air-map layer, like the GPU. */
+export function sampleAirMap(f: AirMap, x: number, z: number, slot: number): number {
+  const u = x / CELL - 0.5, v = z / CELL - 0.5;
+  const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
+  const s = Math.min(Math.max(0, slot), f.slots - 1);
+  let r = 0;
+  for (let bb = 0; bb < 2; bb++) for (let a = 0; a < 2; a++) {
+    const xx = Math.min(f.w - 1, Math.max(0, iu + a)), yy = Math.min(f.h - 1, Math.max(0, iv + bb));
+    r += (a ? fu : 1 - fu) * (bb ? fv : 1 - fv) * f.data[(s * f.h + yy) * f.w + xx];
+  }
+  return r / 255;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Noise volume (shared, built once per session) and the station's motion
+
+/** 64^3 RGBA8 tileable noise: R = patches (periods 4 + 8 per tile), G = wisps (8 + 16), B / A = warp x / z (5 + 10). */
+export const NOISE_SIZE = 64;
+export const NOISE_CHANNELS = 4;
+export const NOISE_OCTAVES: readonly (readonly {p: number; w: number}[])[] = [
+  [{p: 4, w: 0.68}, {p: 8, w: 0.32}],
+  [{p: 8, w: 0.6}, {p: 16, w: 0.4}],
+  [{p: 5, w: 0.7}, {p: 10, w: 0.3}],
+  [{p: 5, w: 0.7}, {p: 10, w: 0.3}],
+];
+
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+/** Tileable 3D gradient (Perlin-style) noise, octaves of lattice period P per `size` texels, quintic fade. */
+function gradientNoiseTile(size: number, octaves: readonly {p: number; w: number}[], rnd: () => number): Float32Array {
+  const out = new Float32Array(size ** 3);
+  const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+  for (const o of octaves) {
+    const P = o.p, g = new Float32Array(P ** 3 * 3);
+    for (let i = 0; i < P ** 3; i++) {
+      const z = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
+      g[i * 3] = Math.cos(a) * r; g[i * 3 + 1] = Math.sin(a) * r; g[i * 3 + 2] = z;
+    }
+    const k = P / size;
+    // per-axis lattice cell + fade weights (separable precompute)
+    const ix = new Int32Array(size), tx = new Float32Array(size), fx = new Float32Array(size);
+    for (let i = 0; i < size; i++) { const f = i * k; ix[i] = Math.floor(f); tx[i] = f - ix[i]; fx[i] = fade(tx[i]); }
+    for (let zz = 0; zz < size; zz++) for (let yy = 0; yy < size; yy++) for (let xx = 0; xx < size; xx++) {
+      const x0 = ix[xx], y0 = ix[yy], z0 = ix[zz], dx = tx[xx], dy = tx[yy], dz = tx[zz], u = fx[xx], v = fx[yy], w = fx[zz];
+      let acc = 0;
+      for (let c = 0; c < 2; c++) for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
+        const gi = ((((z0 + c) % P) * P + ((y0 + b) % P)) * P + ((x0 + a) % P)) * 3;
+        const d = g[gi] * (dx - a) + g[gi + 1] * (dy - b) + g[gi + 2] * (dz - c);
+        acc += d * (a ? u : 1 - u) * (b ? v : 1 - v) * (c ? w : 1 - w);
+      }
+      out[(zz * size + yy) * size + xx] += o.w * acc;
+    }
+  }
+  return out;
+}
+
+/** Histogram equalisation to a uniform [0, 255] (ranks): thresholds on the channel are coverage fractions. */
+function equalise(v: Float32Array): Uint8Array {
+  const n = v.length;
+  const idx = new Uint32Array(n);
+  for (let i = 0; i < n; i++) idx[i] = i;
+  idx.sort((a, b) => v[a] - v[b]);
+  const out = new Uint8Array(n);
+  for (let r = 0; r < n; r++) out[idx[r]] = Math.round(r / (n - 1) * 255);
+  return out;
+}
+
+let sharedNoise: {size: number; seed: number; data: Uint8Array} | null = null;
+
+/** Tileable 3D noise, interleaved RGBA8 (texel i: [4i] patch, [4i+1] wisp, [4i+2] / [4i+3] warp x / z), equalised. Cached. */
+export function buildNoiseVolume(size = NOISE_SIZE, seed = 0x6c6c6e): Uint8Array {
+  if (sharedNoise && sharedNoise.size === size && sharedNoise.seed === seed) return sharedNoise.data;
+  const rnd = mulberry32(seed);
+  const ch = NOISE_OCTAVES.map(o => equalise(gradientNoiseTile(size, o, rnd)));
+  const out = new Uint8Array(size ** 3 * NOISE_CHANNELS);
+  for (let i = 0; i < size ** 3; i++) for (let c = 0; c < NOISE_CHANNELS; c++) out[i * NOISE_CHANNELS + c] = ch[c][i];
+  sharedNoise = {size, seed, data: out};
+  return out;
+}
+
+/** Trilinear, repeat-wrapped sample of all channels (texture coords: 1 = one tile), like the GPU. */
+export function sampleNoise4(vol: Uint8Array, q: V3, size = NOISE_SIZE): [number, number, number, number] {
+  const ch = Math.round(vol.length / size ** 3);
+  const u = q[0] * size - 0.5, v = q[1] * size - 0.5, w = q[2] * size - 0.5;
+  const iu = Math.floor(u), iv = Math.floor(v), iw = Math.floor(w), fu = u - iu, fv = v - iv, fw = w - iw;
+  const wrap = (i: number) => ((i % size) + size) % size;
+  const out: [number, number, number, number] = [0, 0, 0, 0];
+  for (let c = 0; c < 2; c++) for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
+    const wt = (a ? fu : 1 - fu) * (b ? fv : 1 - fv) * (c ? fw : 1 - fw);
+    const o = ((wrap(iw + c) * size + wrap(iv + b)) * size + wrap(iu + a)) * ch;
+    for (let k = 0; k < Math.min(4, ch); k++) out[k] += wt * vol[o + k];
+  }
+  return [out[0] / 255, out[1] / 255, out[2] / 255, out[3] / 255];
+}
+
+/** One channel of sampleNoise4 (iteration-12 signature). */
+export function sampleNoise(vol: Uint8Array, q: V3, size = NOISE_SIZE, channel = 0): number {
+  return sampleNoise4(vol, q, size)[Math.min(3, channel)];
+}
+
+/** The station's fog motion (seeded): velocities (m/s) and per-field tile offsets at fog time 0. */
+export interface FogMotion {
+  draft: 1 | -1;
+  /** Air drift, tunnel draft along the tracks, wisp / warp field (x, y, z m/s). */
+  air: V3;
+  track: V3;
+  detail: V3;
+  /** Field offsets (tile units) at fog time 0: patch (air), patch (track), wisps / warp. */
+  offAir: V3;
+  offTrack: V3;
+  offDetail: V3;
+}
+
+export function fogMotion(seed: number, p: Pick<AtmosphereParams, 'drift' | 'trackDrift' | 'detailDrift' | 'rise'>): FogMotion {
+  const rnd = mulberry32(hash32((seed >>> 0) ^ 0x2f6b1d93));
+  const draft = stationDraft(seed);
+  // air: within +-35 deg of the draft direction (the station's long axis); wisps: 50-90 deg off it, either side
+  const a = (rnd() * 2 - 1) * 0.61;
+  const b = a + (rnd() < 0.5 ? -1 : 1) * (0.87 + rnd() * 0.7);
+  const off = (): V3 => [rnd(), rnd(), rnd()];
+  return {
+    draft,
+    air: [draft * Math.cos(a) * p.drift, 0, Math.sin(a) * p.drift],
+    track: [draft * p.trackDrift, 0, 0],
+    detail: [draft * Math.cos(b) * p.detailDrift, p.rise, Math.sin(b) * p.detailDrift],
+    offAir: off(), offTrack: off(), offDetail: off(),
+  };
+}
+
+/** Per-axis noise scale (1/m) of the patch / wisp fields (vertical squash applied). */
+export function noiseScales(p: Pick<AtmosphereParams, 'noiseScale' | 'detailScale' | 'noiseAnisotropy'>): {patch: V3; detail: V3} {
+  const A = p.noiseAnisotropy;
+  return {patch: [p.noiseScale, p.noiseScale * A, p.noiseScale], detail: [p.detailScale, p.detailScale * A * 0.8, p.detailScale]};
+}
+
+const frac = (v: number) => v - Math.floor(v);
+
+/**
+ * Field offsets at fog time t (tile units, folded into [0, 1) in double precision): offset - velocity x scale x t. The
+ * shader receives exactly these (uniforms), so a sample is q = p x scale + offset.
+ */
+export function fieldOffsets(m: FogMotion, p: Pick<AtmosphereParams, 'noiseScale' | 'detailScale' | 'noiseAnisotropy'>, t: number): {air: V3; track: V3; detail: V3} {
+  const s = noiseScales(p);
+  const at = (o: V3, v: V3, k: V3): V3 => [frac(o[0] - v[0] * k[0] * t), frac(o[1] - v[1] * k[1] * t), frac(o[2] - v[2] * k[2] * t)];
+  return {air: at(m.offAir, m.air, s.patch), track: at(m.offTrack, m.track, s.patch), detail: at(m.offDetail, m.detail, s.detail)};
+}
 
 export interface MediumSample {
   /** Haze scattering coefficient sigma_s (1/m). */
   sigma: number;
-  /** Its excess over the unpatterned mean (dense patches; drives the extra extinction). */
+  /** Its excess over the unpatterned level (dense patches; drives the extra extinction). */
   excess: number;
-  /** Detail channel (0..1) at p (smoke wisps). */
+  /** Wisp channel (0..1) at p (smoke wisps). */
   detail: number;
   /** Patch field 0 (clear pocket) .. 1 (dense patch). */
   dense: number;
+  /** Area multiplier (density map) and level slot used. */
+  mult: number;
+  slot: number;
+}
+
+export interface MediumMaps {
+  map: DensityMap | null;
+  air: AirMap | null;
+  noise: Uint8Array | null;
+  motion: FogMotion | null;
 }
 
 /**
- * Mirror of vfMedium (iteration 12): the haze at p and game time `time`. `flow` null = no local drift (rigid `wind` only);
- * `draft` = the station draft sign applied to wind.x.
+ * Iteration 13: the haze at world point p and fog time t (mirror of the TSL medium in volumetricNodes.ts). Pure: no camera,
+ * no history, no visibility input. `slot` overrides the level-slot pick (the GPU uses the light field's band pick).
  */
-export function mediumAt(p: V3, map: DensityMap | null, flow: FlowMap | null, noise: Uint8Array | null, params: AtmosphereParams, time: number): MediumSample {
-  const slot = map ? densitySlot(map, p[0], p[2], p[1]) : 0;
+export function mediumAt(p: V3, maps: MediumMaps, params: AtmosphereParams, t: number, slotOverride?: number): MediumSample {
+  const {map, air, noise, motion} = maps;
+  const slot = slotOverride ?? (map ? densitySlot(map, p[0], p[2], p[1]) : 0);
   const [mult, floorY] = map ? sampleDensityLayer(map, p[0], p[2], slot) : [1, 0];
   const h = p[1] - floorY;
-  const hf = Math.min(3, Math.max(0.2, Math.exp(-params.heightFalloff * (h - params.refHeight))));
+  const hf = Math.min(2.5, Math.max(0.25, Math.exp(-params.heightFalloff * (h - params.refHeight))));
   const base0 = params.density * mult;
-  const groundRef = params.ground * mult * Math.exp(-Math.max(h, 0) / Math.max(params.groundHeight, 0.05));
-  if (!noise || params.noiseAmount <= 0) {
-    const sigma = base0 * (hf + groundRef);
-    return {sigma, excess: 0, detail: 0.5, dense: 0.5};
-  }
-  const S = params.noiseScale, A = params.noiseAnisotropy, sv: V3 = [S, S * A, S];
-  const draft = flow?.draft ?? 1;
-  const wind: V3 = [params.wind[0] * draft * sv[0], params.wind[1] * sv[1], params.wind[2] * sv[2]];
-  const v = flow ? sampleFlowMap(flow, p[0], p[2], slot) : [0, 0, 0] as V3;
-  const vel: V3 = [v[0], v[2], v[1]]; // (x drift, rise, z drift)
-  const P = Math.max(1, params.flowPeriod);
-  const ph = ((time / P) % 1 + 1) % 1, ph2 = (ph + 0.5) % 1, wa = 1 - Math.abs(2 * ph - 1);
-  // each phase jumps to a fresh noise offset at its own reset (where its weight is 0): the field never loops
-  const ca = Math.floor(time / P), cb = Math.floor(time / P + 0.5);
-  const base: V3 = [p[0] * sv[0] - wind[0] * time, p[1] * sv[1] - wind[1] * time, p[2] * sv[2] - wind[2] * time];
-  const at = (k: number, c: number): V3 => [base[0] - vel[0] * sv[0] * k + c * FLOW_CYCLE[0], base[1] - vel[1] * sv[1] * k + c * FLOW_CYCLE[1], base[2] - vel[2] * sv[2] * k + c * FLOW_CYCLE[2]];
-  const qa = at((ph - 0.5) * P, ca), qb = at((ph2 - 0.5) * P, cb);
-  const nr = sampleNoise(noise, qb, NOISE_SIZE, 0) * (1 - wa) + sampleNoise(noise, qa, NOISE_SIZE, 0) * wa;
-  const ng = sampleNoise(noise, qb, NOISE_SIZE, 1) * (1 - wa) + sampleNoise(noise, qa, NOISE_SIZE, 1) * wa;
-  const cover = Math.min(0.65, Math.max(0.12, params.coverage + params.coverageSlope * (mult - 1)));
-  const dense = smooth01(1 - cover - params.coverageSoftness, 1 - cover + params.coverageSoftness, nr);
-  const peak = (1 - params.clear * (1 - cover)) / cover;
   const amt = params.noiseAmount;
-  const patchF = 1 + amt * (params.clear + (peak - params.clear) * dense - 1);
-  const detailF = 1 + amt * params.detail * (ng - 0.5) * 2;
-  const gh = params.groundHeight * (1 + params.groundVariation * (ng - 0.5) * 2);
-  const groundT = params.ground * mult * Math.exp(-Math.max(h, 0) / Math.max(gh, 0.05)) * (1 + amt * (0.35 + 1.05 * dense - 1));
+  if (!noise || !motion || amt <= 0) {
+    const g0 = params.ground * mult * Math.exp(-Math.max(h, 0) / Math.max(params.groundHeight, 0.05));
+    return {sigma: base0 * (hf + g0), excess: 0, detail: 0.5, dense: 0.5, mult, slot};
+  }
+  const sc = noiseScales(params), off = fieldOffsets(motion, params, t);
+  // wisps + warp: one fetch of the fast field
+  const D = sampleNoise4(noise, [p[0] * sc.detail[0] + off.detail[0], p[1] * sc.detail[1] + off.detail[1], p[2] * sc.detail[2] + off.detail[2]]);
+  const wk = params.warp * amt * 2;
+  const wp: V3 = [p[0] + (D[2] - 0.5) * wk, p[1] + (D[0] - 0.5) * wk * 0.3, p[2] + (D[3] - 0.5) * wk];
+  const q = (o: V3): V3 => [wp[0] * sc.patch[0] + o[0], wp[1] * sc.patch[1] + o[1], wp[2] * sc.patch[2] + o[2]];
+  const wt = air ? sampleAirMap(air, p[0], p[2], slot) : 0;
+  let n = sampleNoise4(noise, q(off.air))[0];
+  if (wt > 0.002) n += (sampleNoise4(noise, q(off.track))[0] - n) * wt;
+  const cover = Math.min(0.7, Math.max(0.03, params.coverage + params.coverageSlope * (mult - 1)));
+  const dense = smoothstep(1 - cover - params.coverageSoftness, 1 - cover + params.coverageSoftness, n);
+  const pocket = params.clear + (params.pocketDense - params.clear) * smoothstep(1, 1.6, mult);
+  const patchF = 1 + amt * (pocket + (params.peak - pocket) * dense - 1);
+  const detailF = 1 + amt * params.detail * (D[1] - 0.5) * 2;
+  const gh = params.groundHeight * (1 + params.groundVariation * (D[1] - 0.5) * 2);
+  const groundT = params.ground * mult * Math.exp(-Math.max(h, 0) / Math.max(gh, 0.05)) * (1 + amt * (0.3 + 1.2 * dense - 1));
   const sigma = base0 * (hf * patchF * detailF + groundT);
-  return {sigma, excess: Math.max(0, sigma - base0 * (hf + groundRef)), detail: ng, dense};
+  return {sigma, excess: Math.max(0, sigma - base0 * hf), detail: D[1], dense, mult, slot};
 }
 
-/** Mirror of the haze's sigma_s at p (iteration-06 signature; iteration 12: mediumAt without local flow). */
-export function densityAt(p: V3, map: DensityMap | null, noise: Uint8Array | null, params: AtmosphereParams, time: number, flow: FlowMap | null = null): number {
-  return mediumAt(p, map, flow, noise, params, time).sigma;
+/** Haze sigma_s at p (iteration-06 signature, kept for callers / tests): mediumAt without the moving fields when noise is null. */
+export function densityAt(p: V3, map: DensityMap | null, noise: Uint8Array | null, params: AtmosphereParams, time: number, air: AirMap | null = null, motion: FogMotion | null = null): number {
+  return mediumAt(p, {map, air, noise, motion: noise ? motion ?? fogMotion(0, params) : null}, params, time).sigma;
+}
+
+/**
+ * Station statistics of the medium at walking height (QA / notes / tests): mean sigma over open cells 1.4 m above the local
+ * floor of every level, the fraction of that volume that is clear (sigma < 20 % of the iteration-12 base) / dense
+ * (sigma > 2x the base), and the per-class means. Deterministic sample set (every `stride`-th open cell).
+ */
+export function mediumStats(layout: StationLayout, maps: MediumMaps, params: AtmosphereParams, t: number, stride = 7): {
+  mean: number; clearFrac: number; denseFrac: number; samples: number; byClass: Record<AreaClass | 'track', number>;
+} {
+  const levels = stationLevels(layout).slice(0, 4);
+  let sum = 0, nClear = 0, nDense = 0, count = 0;
+  const cls: Record<AreaClass | 'track', [number, number]> = {clear: [0, 0], normal: [0, 0], dense: [0, 0], track: [0, 0]};
+  const lo = 0.2 * ATMOSPHERE_ITER12.density, hi = 2 * params.density;
+  levels.forEach((L, s) => {
+    const g = L.grid, floorOf = cellFloorFn(g, layout.trench.floorY);
+    for (let i = 0; i < g.w * g.h; i += stride) {
+      if (g.cells[i] === SOLID) continue;
+      const cx = i % g.w, cy = (i - cx) / g.w;
+      const pt: V3 = [(cx + 0.5) * CELL, floorOf(cx, cy) + 1.4, (cy + 0.5) * CELL];
+      const m = mediumAt(pt, maps, params, t, s);
+      sum += m.sigma; count++;
+      if (m.sigma < lo) nClear++;
+      if (m.sigma > hi) nDense++;
+      const k: AreaClass | 'track' = g.cells[i] === VOID ? 'track' : (maps.map?.areas?.[g.area[i]]?.cls ?? 'normal');
+      cls[k][0] += m.sigma; cls[k][1]++;
+    }
+  });
+  const byClass = Object.fromEntries(Object.entries(cls).map(([k, [a, b]]) => [k, b ? a / b : 0])) as Record<AreaClass | 'track', number>;
+  return {mean: count ? sum / count : 0, clearFrac: count ? nClear / count : 0, denseFrac: count ? nDense / count : 0, samples: count, byClass};
 }

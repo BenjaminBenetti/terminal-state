@@ -1,49 +1,54 @@
-// Iteration 06 (Lane F): depth-aware volumetric atmosphere (light haze, strongest in the flashlight).
+// Volumetric atmosphere pass (iteration 06, Lane F; iteration 13, FOG lane: a TSL RenderPipeline on WebGPURenderer).
 //
-// Frame (quality low/high, see ATMOSPHERE_QUALITY):
-//   1. the station scene renders into `sceneRT` (MSAA like the canvas, + a depth texture). The target
-//      is flagged like three's own WebXR targets (isXRRenderTarget) so every material tone-maps and
-//      sRGB-encodes exactly as it does on the canvas (same programs, identical r5 pixels);
-//      three renders the flashlight's spot shadow map during this pass;
-//   2. raymarch at 1/2 (high) or 1/4 (low) resolution, capped pixel budget, 24 / 14 jittered steps:
-//      reconstruct each pixel's surface from depth and integrate single in-scattering in FRONT of it
-//      only - flashlight cone (shadow-mapped), baked fixture light field, muzzle pulse, iteration 12: scatter lights
-//      (thrown flares) - over a medium with per-area / height / flow-advected patch-noise density + ground layer and the
-//      smoke puffs (render/atmosphere.ts, render/smoke.ts). Iteration 12: two outputs (MRT) - in-scatter + view depth,
-//      and the transmittance of the dense patches / smoke in front of the surface;
-//   3. temporal accumulation (reprojected, neighbourhood-clamped, depth-rejected) at march resolution, both targets;
-//   4. full-resolution composite onto the canvas: bilateral (depth-aware) upsample, scene x transmittance + in-scatter
-//      in scene-linear space under three's ACES curve. game.ts then clears depth and draws the
-//      viewmodel overlay on top, so the gun and the DOM HUD are never fogged.
-// Quality 'off' (or unsupported float render targets, or a shader error) renders straight to the
-// canvas as in r5, without the flashlight shadow map. The pass adds no lights and no objects to the
-// station scene; its fullscreen triangle lives in a private scene.
+// Frame (quality low / high, see ATMOSPHERE_QUALITY), one three r186 RenderPipeline (three/webgpu) per scene + camera:
+//   1. scene pass: pass(scene, camera) renders the station into an HDR half-float target (MSAA like the canvas) with its
+//      depth texture, LINEAR (WebGPURenderer tone-maps in the pipeline's output transform, once); three renders the
+//      flashlight's spot shadow map during it;
+//   2. fog pass (FogPassNode, a TempNode run once per frame after the scene pass): the half / quarter-res raymarch
+//      (render/volumetricShaders.ts createMarchMaterial: world-anchored moving medium, smoke, in-scattering from the
+//      flashlight cone + shadow map, the baked fixture light field, the muzzle flash and the flares, extinction), then the
+//      reprojected temporal accumulation (ping-pong targets);
+//   3. composite = the pipeline's output node: depth-aware upsample, scene x transmittance + in-scatter in linear HDR, then
+//      the pipeline's output transform (ACES at renderer.toneMappingExposure + sRGB) to the canvas. CORE then composites the
+//      viewmodel overlay on top (render/overlay.ts), never fogged.
+// Quality 'off', a disabled pass, an unsupported backend or a failed fog shader render the station straight to the canvas
+// (the renderer's own output pass tone-maps). The pass adds no lights or objects to the station scene.
+// One TSL graph compiles to WGSL on the WebGPU backend and to GLSL on the WebGL2 fallback; `backend` says which one ran.
 //
-// Iteration 12 (ATMOS) API for the light lane (design.md): addSmokeEmitter / clearSmoke, addScatterLight /
-// removeScatterLight. Bounded (render/smoke.ts SMOKE_LIMITS); cleared on setStation (new station / retry) and dispose.
+// Iteration 13 (FOG): the medium is persistent (pure function of world point, station seed and the station's fog clock =
+// game time since the station started; pause freezes it), moves (constant world velocities: air drift, tunnel draft on the
+// track beds, a faster wisp / warp field), and has clear / normal / dense areas (render/atmosphere.ts). Smoke / scatter API
+// unchanged (render/smoke.ts): addSmokeEmitter / clearSmoke / addScatterLight / removeScatterLight.
 
 import * as THREE from 'three';
+import {NodeMaterial, NodeUpdateType, QuadMesh, RenderPipeline, RenderTarget, RendererUtils, TempNode, type PassNode, type WebGPURenderer} from 'three/webgpu';
+import {pass, passTexture, texture} from 'three/tsl';
 import type {StationLayout} from '../gen/station';
 import {SOLID, type Grid} from '../gen/grid';
 import type {LightFieldVolume} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {
-  ACES_IN, ACES_IN_INV, ACES_OUT, ACES_OUT_INV, ATMOSPHERE_QUALITY, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS,
-  atmosphereFor, buildDensityMap, buildFlowMap, buildNoiseVolume, densitySlot, marchSize, sampleFlowMap, shadowBiasFor,
-  type AtmosphereParams, type AtmosphereQuality, type DensityMap, type FlowMap, type QualityPreset,
+  ATMOSPHERE_QUALITY, NOISE_CHANNELS, NOISE_SIZE, SHADOW_NEAR, SHADOW_NORMAL_BIAS, atmosphereFor, buildAirMap, buildDensityMap,
+  buildNoiseVolume, densitySlot, fieldOffsets, fogMotion, marchSize, mediumAt, mediumStats, noiseScales, sampleAirMap, shadowBiasFor,
+  type AirMap, type AreaClass, type AtmosphereParams, type AtmosphereQuality, type DensityMap, type FogMotion, type MediumMaps,
+  type QualityPreset,
 } from './atmosphere';
 import {
   SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, VIS_WINDOWS, computeVisWindow, windowStale,
   type SmokeEmitterOptions, type SmokeHandle, type VisLookup,
 } from './smoke';
-import {VF_COMPOSITE, VF_LIMITS, VF_MARCH, VF_MARK, VF_TEMPORAL, VF_VERTEX} from './volumetricShaders';
+import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, type FogUniforms} from './volumetricShaders';
 
 export interface AtmosphereLights {
   flashlight: THREE.SpotLight;
   muzzle?: THREE.PointLight | null;
 }
 
+export type AtmosphereBackend = 'webgpu' | 'webgl2-fallback' | 'none';
+
 export interface AtmosphereDebug {
+  /** Iteration 13: the renderer backend the fog pass runs on (never inferred from navigator.gpu). */
+  backend: AtmosphereBackend;
   requested: AtmosphereQuality;
   quality: AtmosphereQuality;
   enabled: boolean;
@@ -55,18 +60,23 @@ export interface AtmosphereDebug {
   steps: number;
   temporal: boolean;
   msaa: number;
-  shadow: {enabled: boolean; mapSize: number; bias: number; normalBias: number; near: number; updating: boolean; casters: number; receivers: number};
-  station: {bound: boolean; densityMap: [number, number] | null; field: boolean; flowMap: boolean; draft: number};
-  params: Omit<AtmosphereParams, 'areaDensity'>;
-  /** Iteration 12: smoke emitters / puffs and scatter lights in the march (bounded: SMOKE_LIMITS). */
+  shadow: {enabled: boolean; mapSize: number; bias: number; normalBias: number; near: number; updating: boolean; casters: number; receivers: number; sampled: boolean};
+  station: {bound: boolean; densityMap: [number, number] | null; field: boolean; airMap: boolean; draft: number; seed: number | null};
+  /** Iteration 13: the station fog clock (s since the station started; frozen while paused) and the medium's motion. */
+  time: {fog: number; game: number; epoch: number | null};
+  motion: {air: number[]; track: number[]; detail: number[]; speeds: {air: number; track: number; detail: number}} | null;
+  /** Iteration 13: medium statistics at walking height (station mean sigma, clear / dense volume fractions, per area class). */
+  density: {base: number; mean: number; clearFrac: number; denseFrac: number; byClass: Record<AreaClass | 'track', number>; areas: Record<AreaClass, number>} | null;
+  params: Omit<AtmosphereParams, 'areaDensity' | 'classOdds'>;
+  /** Smoke emitters / puffs and scatter lights in the march (bounded: SMOKE_LIMITS). */
   smoke: {emitters: number; puffs: number; limits: typeof SMOKE_LIMITS; stats: SmokeField['stats']; list: {id: number; emitting: boolean; puffs: number; x: number; y: number; z: number}[]};
   scatter: {lights: number; active: number; windows: number};
-  /** gpu: volumetric passes (timer query, Chrome only); cpu: submission time of the volumetric passes / the scene pass. */
+  /** cpu: submission time (ms) of the fog passes / the whole pipeline frame. */
   ms: {gpu: number | null; cpu: number; cpuScene: number};
   frames: number;
+  /** Fog pass runs and material (re)builds (QA). */
+  passes: {fog: number; marchBuilds: number};
 }
-
-const mat3 = (rowMajor: readonly number[]) => new THREE.Matrix3().set(...(rowMajor as [number, number, number, number, number, number, number, number, number]));
 
 /** `?fog=off|low|high` session override (QA / slow renderers). */
 export function fogOverrideFromUrl(search: string | undefined = (globalThis as {location?: Location}).location?.search): AtmosphereQuality | null {
@@ -74,11 +84,15 @@ export function fogOverrideFromUrl(search: string | undefined = (globalThis as {
   return v === 'off' || v === 'low' || v === 'high' ? v : null;
 }
 
-/** Flashlight spot shadow for a quality level (off: no shadow map at all, as in r5). */
-export function configureFlashlightShadow(light: THREE.SpotLight, q: AtmosphereQuality, renderer: THREE.WebGLRenderer | null): void {
+/**
+ * Flashlight spot shadow for a quality level (off: no shadow map at all). Iteration 13: the renderer's shadowMap stays
+ * enabled (CORE); only the light's castShadow follows the quality (it is part of three's light hash, so lit materials
+ * rebuild with / without the shadow). `renderer` is accepted for the iteration-12 signature and only checked.
+ */
+export function configureFlashlightShadow(light: THREE.SpotLight, q: AtmosphereQuality, renderer: {shadowMap?: {enabled: boolean; type: THREE.ShadowMapType}} | null): void {
   const on = q !== 'off';
-  if (renderer) {
-    renderer.shadowMap.enabled = on;
+  if (renderer?.shadowMap && on) {
+    renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
   }
   light.castShadow = on;
@@ -101,6 +115,9 @@ function litOpaque(m: THREE.Material | null | undefined): boolean {
 /**
  * Flashlight shadow casters/receivers under `root`: opaque lit meshes cast; they receive when
  * `receive`. `structure`: single-sided architecture also casts from its lit side (shadowSide double).
+ * Iteration 13 (FOG): skinned meshes (zombie bodies / clothing) cast but never RECEIVE the flashlight shadow: under
+ * WebGPURenderer their thin, animated clothing self-shadowed into jagged streaks (MAT-B A/B, lanes/matb.notes); they still
+ * block the beam and shadow the world behind them.
  */
 export function markShadows(root: THREE.Object3D, receive: boolean, structure: boolean): {casters: number; receivers: number} {
   let casters = 0, receivers = 0;
@@ -110,52 +127,54 @@ export function markShadows(root: THREE.Object3D, receive: boolean, structure: b
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     if (!mats.length || !mats.every(litOpaque)) return;
     m.castShadow = true;
-    m.receiveShadow = receive;
+    const rec = receive && !(m as THREE.SkinnedMesh).isSkinnedMesh;
+    m.receiveShadow = rec;
     casters++;
-    if (receive) receivers++;
+    if (rec) receivers++;
     if (structure) for (const x of mats) if (x.shadowSide === null && x.side === THREE.FrontSide) x.shadowSide = THREE.DoubleSide;
   });
   return {casters, receivers};
 }
 
-interface TimerExt { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
+/** RG / R data textures for the medium maps (linear filtering, clamp, no mipmaps). */
+function layerTexture(data: Uint8Array, w: number, h: number, n: number, format: THREE.PixelFormat): THREE.DataArrayTexture {
+  const t = new THREE.DataArrayTexture(data, w, h, n);
+  t.format = format;
+  t.type = THREE.UnsignedByteType;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.unpackAlignment = 1;
+  t.colorSpace = THREE.NoColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
 
-/** Optional GPU timing of the volumetric passes (EXT_disjoint_timer_query_webgl2; Chrome, not Firefox). */
-class GpuTimer {
-  private readonly ext: TimerExt | null;
-  private query: WebGLQuery | null = null;
-  private pending = false;
-  ms: number | null = null;
-  constructor(private readonly gl: WebGL2RenderingContext) {
-    this.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null;
+/** The per-frame fog pass inside the RenderPipeline: runs after the scene pass (it forces that order), once per frame. */
+class FogPassNode extends TempNode {
+  static get type(): string { return 'FogPassNode'; }
+  readonly tex0: ReturnType<typeof passTexture>;
+  readonly tex1: ReturnType<typeof passTexture>;
+  constructor(private readonly owner: VolumetricAtmosphere, private readonly scenePass: PassNode, t0: THREE.Texture, t1: THREE.Texture) {
+    super('vec4');
+    this.updateBeforeType = NodeUpdateType.FRAME;
+    this.tex0 = passTexture(this as never, t0);
+    this.tex1 = passTexture(this as never, t1);
   }
-  begin(): boolean {
-    if (!this.ext || this.pending) return false;
-    this.query ??= this.gl.createQuery();
-    if (!this.query) return false;
-    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.query);
-    return true;
+  updateBefore(frame: unknown): boolean | undefined {
+    const f = frame as {renderer: WebGPURenderer; updateBeforeNode(n: unknown): void};
+    f.updateBeforeNode(this.scenePass); // the scene (depth + shadow map) of THIS frame first; no-op when already done
+    this.owner.runFog(f.renderer);
+    return undefined;
   }
-  end(): void {
-    if (!this.ext) return;
-    this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
-    this.pending = true;
-  }
-  poll(): void {
-    if (!this.ext || !this.pending || !this.query) return;
-    const gl = this.gl;
-    if (!gl.getQueryParameter(this.query, gl.QUERY_RESULT_AVAILABLE)) return;
-    const disjoint = gl.getParameter(this.ext.GPU_DISJOINT_EXT) as boolean;
-    if (!disjoint) this.ms = Math.round((gl.getQueryParameter(this.query, gl.QUERY_RESULT) as number) / 1e4) / 100;
-    this.pending = false;
-  }
-  dispose(): void {
-    if (this.query) this.gl.deleteQuery(this.query);
-    this.query = null;
+  setup(): never {
+    return this.tex0 as never;
   }
 }
 
-type ShaderErrorFn = (gl: WebGLRenderingContext, program: WebGLProgram, vs: WebGLShader, fs: WebGLShader) => void;
+interface WebGPUDeviceLike { pushErrorScope(f: string): void; popErrorScope(): Promise<{message: string} | null> }
+
+let rendererState: unknown;
 
 export class VolumetricAtmosphere {
   /** Tunables of the current station (atmosphereFor(layout)); may be edited live (QA). */
@@ -165,146 +184,145 @@ export class VolumetricAtmosphere {
   /** Session override (?fog=, QA) that wins over the settings quality. */
   override: AtmosphereQuality | null = fogOverrideFromUrl();
   failed: string | null = null;
-  readonly supported: boolean;
-  readonly reason: string | null;
+  supported = true;
+  reason: string | null = null;
   requested: AtmosphereQuality;
   quality: AtmosphereQuality = 'off';
   densityMap: DensityMap | null = null;
-  /** Iteration 12: per-storey drift map of the current station (render/atmosphere.ts buildFlowMap). */
-  flowMap: FlowMap | null = null;
+  /** Iteration 13: where the tunnel draft carries the haze (render/atmosphere.ts buildAirMap). */
+  airMap: AirMap | null = null;
+  /** Iteration 13: the station's seeded fog motion. */
+  motion: FogMotion | null = null;
+  readonly noiseData: Uint8Array;
   readonly noise: THREE.Data3DTexture;
-  readonly march: THREE.ShaderMaterial;
-  readonly temporal: THREE.ShaderMaterial;
-  readonly composite: THREE.ShaderMaterial;
-  /** Iteration 12: smoke puffs and scatter lights (render/smoke.ts); use the methods below. */
+  /** Iteration 13: every TSL uniform of the passes (CPU objects; set by sync()). */
+  readonly u: FogUniforms = createFogUniforms();
+  /** Smoke puffs and scatter lights (render/smoke.ts); use the methods below. */
   readonly smoke = new SmokeField();
   readonly scatter = new ScatterLights();
   private full: [number, number] = [1, 1];
   private low: [number, number] = [1, 1];
-  private sceneRT: THREE.WebGLRenderTarget | null = null;
-  private marchRT: THREE.WebGLRenderTarget | null = null;
-  private history: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget] | null = null;
-  private histIndex = 0;
-  private historyValid = false;
-  private densityTex: THREE.DataArrayTexture | null = null;
-  private flowTex: THREE.DataArrayTexture | null = null;
+  private densityTex: THREE.DataArrayTexture;
+  private airTex: THREE.DataArrayTexture;
+  private readonly placeholderDensity: THREE.DataArrayTexture;
+  private readonly placeholderAir: THREE.DataArrayTexture;
   private readonly visData = new Uint8Array(VIS_RES * VIS_RES * VIS_WINDOWS);
   readonly visTex: THREE.DataArrayTexture;
-  /** Window layer of each scatter light / smoke emitter id (layers 0..3 lights, 4..7 emitters). */
   private readonly lightLayer = new Map<THREE.PointLight, number>();
   private readonly smokeLayer = new Map<number, number>();
   private readonly winState: {x0: number; z0: number; floor: number; ceil: number; ok: boolean}[] = Array.from({length: VIS_WINDOWS}, () => ({x0: 0, z0: 0, floor: -1e3, ceil: 1e3, ok: false}));
   private levelGrids: Grid[] = [];
-  private lastTime = Number.NaN;
+  private lastFogTime = Number.NaN;
   private field: LightFieldVolume | null = null;
-  private readonly quad: THREE.Mesh;
-  private readonly quadScene = new THREE.Scene();
-  private readonly quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private layout: StationLayout | null = null;
+  /** Game time at which the current station's fog clock started (set on the first frame after setStation). */
+  private epoch: number | null = null;
+  private gameTime = 0;
+  private statsCache: AtmosphereDebug['density'] = null;
+  // pipeline / passes (created on the first active frame; rebuilt on scene / camera / MSAA change)
+  private pipeline: RenderPipeline | null = null;
+  private scenePass: PassNode | null = null;
+  private fogNode: FogPassNode | null = null;
+  private pipeKey = '';
+  private pipeScene: THREE.Scene | null = null;
+  private pipeCamera: THREE.Camera | null = null;
+  private marchRT: RenderTarget | null = null;
+  private history: [RenderTarget, RenderTarget] | null = null;
+  private histIndex = 0;
+  private historyValid = false;
+  private marchMat: NodeMaterial | null = null;
+  private marchKey = '';
+  private temporalMat: NodeMaterial | null = null;
+  private readonly hist0 = texture(new THREE.Texture());
+  private readonly hist1 = texture(new THREE.Texture());
+  private readonly quad = new QuadMesh(new NodeMaterial());
   private frame = 0;
-  private readonly prevViewProj = new THREE.Matrix4();
+  private readonly prevView = new THREE.Matrix4();
+  private readonly prevProj = new THREE.Matrix4();
   private readonly prevCamPos = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
-  private readonly timer: GpuTimer | null;
+  private readonly size = new THREE.Vector2();
   private cpuMs = 0;
   private cpuSceneMs = 0;
   private casters = 0;
   private receivers = 0;
-  private readonly prevShaderError: ShaderErrorFn | null = null;
-  private readonly onShaderError: ShaderErrorFn | null = null;
+  private fogRuns = 0;
+  private marchBuilds = 0;
+  private errorChecks = 0;
   private disposed = false;
   private configured = false;
+  private attached = false;
+  private prevShaderError: ((...a: unknown[]) => void) | null = null;
+  private onShaderError: ((...a: unknown[]) => void) | null = null;
 
-  constructor(private readonly renderer: THREE.WebGLRenderer | null, private readonly lights: AtmosphereLights, quality: AtmosphereQuality = 'high') {
-    let supported = true, reason: string | null = null;
-    if (renderer) {
-      if (!renderer.extensions.has('EXT_color_buffer_float') && !renderer.extensions.has('EXT_color_buffer_half_float')) {
-        supported = false;
-        reason = 'no float colour render targets (EXT_color_buffer_float / _half_float)';
-      }
-    }
-    this.supported = supported;
-    this.reason = reason;
+  constructor(private readonly renderer: WebGPURenderer | null, private readonly lights: AtmosphereLights, quality: AtmosphereQuality = 'high') {
+    this.checkBackend();
     this.requested = quality;
-
-    // Iteration 12: two-channel (RG8) noise tile: patch field + wisps (render/atmosphere.ts buildNoiseVolume).
-    const noise = new THREE.Data3DTexture(buildNoiseVolume(), NOISE_SIZE, NOISE_SIZE, NOISE_SIZE);
-    noise.format = THREE.RGFormat;
+    this.noiseData = buildNoiseVolume();
+    const noise = new THREE.Data3DTexture(this.noiseData, NOISE_SIZE, NOISE_SIZE, NOISE_SIZE);
+    noise.format = NOISE_CHANNELS === 4 ? THREE.RGBAFormat : THREE.RGFormat;
     noise.type = THREE.UnsignedByteType;
     noise.minFilter = noise.magFilter = THREE.LinearFilter;
     noise.wrapS = noise.wrapT = noise.wrapR = THREE.RepeatWrapping;
     noise.generateMipmaps = false;
     noise.unpackAlignment = 1;
     noise.colorSpace = THREE.NoColorSpace;
+    noise.name = 'fog-noise';
     noise.needsUpdate = true;
     this.noise = noise;
-    // Iteration 12: occlusion windows of the scatter lights / smoke emitters (R8 layers, render/smoke.ts).
-    const vis = new THREE.DataArrayTexture(this.visData, VIS_RES, VIS_RES, VIS_WINDOWS);
-    vis.format = THREE.RedFormat;
-    vis.type = THREE.UnsignedByteType;
-    vis.minFilter = vis.magFilter = THREE.LinearFilter;
-    vis.wrapS = vis.wrapT = THREE.ClampToEdgeWrapping;
-    vis.generateMipmaps = false;
-    vis.unpackAlignment = 1;
-    vis.colorSpace = THREE.NoColorSpace;
-    vis.needsUpdate = true;
-    this.visTex = vis;
-
-    const V2 = () => new THREE.Vector2(1, 1), V3 = () => new THREE.Vector3(), V4 = () => new THREE.Vector4(), M4 = () => new THREE.Matrix4();
-    const arr = (n: number) => Array.from({length: n}, V4);
-    const pass = (name: string, fragmentShader: string, uniforms: Record<string, THREE.IUniform>, defines: Record<string, number> = {}, mrt = false) => new THREE.ShaderMaterial({
-      name, vertexShader: VF_VERTEX, fragmentShader, uniforms, defines,
-      depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false,
-      ...(mrt ? {glslVersion: THREE.GLSL3} : {}),
-    });
-    this.march = pass('volumetric-march', VF_MARCH, {
-      tDepth: {value: null}, uFullSize: {value: V2()}, uLowSize: {value: V2()}, uProjInv: {value: M4()}, uCamWorld: {value: M4()},
-      uCamPos: {value: V3()}, uNear: {value: 0.05}, uFar: {value: 70}, uMaxDist: {value: 36}, uFrame: {value: 0}, uTime: {value: 0},
-      uFogDensity: {value: 0}, uNearFade: {value: V2()}, uDensity: {value: 0}, uHeightFalloff: {value: 0}, uRefHeight: {value: 1.6},
-      uNoiseScale: {value: V3()}, uNoiseAmount: {value: 0}, uWind: {value: V3()}, uCover: {value: V4()}, uGround: {value: V4()}, uFlow: {value: new THREE.Vector2(14, 0)},
-      uExt: {value: V3()}, tNoise: {value: noise}, tDensityMap: {value: null}, tFlowMap: {value: null}, uMapSlots: {value: 1},
-      uMapXform: {value: new THREE.Vector4(0, 0, 1, 1)}, uMapFloor: {value: new THREE.Vector2(0, 1)}, uPhase: {value: V3()},
-      uFlashPos: {value: V3()}, uFlashDir: {value: new THREE.Vector3(0, 0, -1)}, uFlashCone: {value: new THREE.Vector2(1, 1)}, uFlashColor: {value: V3()},
-      uFlashRange: {value: new THREE.Vector2(30, 1.2)}, tShadow: {value: null}, uShadowMatrix: {value: M4()}, uShadowBias: {value: 0}, uShadowOn: {value: 0},
-      tField: {value: null}, uFieldMin: {value: V3()}, uFieldMax: {value: new THREE.Vector3(1, 1, 1)}, uFieldLevels: {value: new THREE.Vector3(1, 1, 1)}, uFieldGain: {value: 0},
-      uMuzzlePos: {value: V3()}, uMuzzleColor: {value: V3()}, uMuzzleRange: {value: new THREE.Vector2(8, 2)},
-      tVis: {value: vis}, uWin: {value: arr(VF_LIMITS.windows)}, uWinY: {value: arr(VF_LIMITS.windows)},
-      uScatCount: {value: 0}, uScatPos: {value: arr(VF_LIMITS.scatter)}, uScatCol: {value: arr(VF_LIMITS.scatter)},
-      uSmokeCount: {value: 0}, uSmokeBound: {value: arr(VF_LIMITS.smoke)}, uSmokeTint: {value: arr(VF_LIMITS.smoke)},
-      uPuff: {value: arr(VF_LIMITS.puffs)}, uPuffD: {value: arr(VF_LIMITS.puffs / 4)},
-    }, {VF_STEPS: 24}, true);
-    this.temporal = pass('volumetric-temporal', VF_TEMPORAL, {
-      tCurrent: {value: null}, tCurrentT: {value: null}, tHistory: {value: null}, tHistoryT: {value: null}, uLowSize: {value: V2()}, uProjInv: {value: M4()}, uCamWorld: {value: M4()},
-      uPrevViewProj: {value: M4()}, uHistoryValid: {value: 0}, uBlend: {value: 0.85},
-    }, {}, true);
-    this.composite = pass('volumetric-composite', VF_COMPOSITE, {
-      tScene: {value: null}, tDepth: {value: null}, tFog: {value: null}, tFogT: {value: null}, uFullSize: {value: V2()}, uLowSize: {value: V2()},
-      uNear: {value: 0.05}, uFar: {value: 70}, uExposure: {value: 1}, uIntensity: {value: 1},
-      uAcesIn: {value: mat3(ACES_IN)}, uAcesOut: {value: mat3(ACES_OUT)}, uAcesInInv: {value: mat3(ACES_IN_INV)}, uAcesOutInv: {value: mat3(ACES_OUT_INV)},
-    });
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
-    this.quad = new THREE.Mesh(geo, this.march);
-    this.quad.frustumCulled = false;
-    this.quadScene.add(this.quad);
-
-    this.timer = renderer ? new GpuTimer(renderer.getContext() as WebGL2RenderingContext) : null;
-    if (renderer) {
-      // A failing volumetric program must never leave the canvas black: flag it and fall back to the
-      // direct path within the same frame (three calls this synchronously on the program's first use).
-      const dbg = renderer.debug as {onShaderError: ShaderErrorFn | null};
-      this.prevShaderError = dbg.onShaderError;
-      const prev = this.prevShaderError;
-      this.onShaderError = (gl, program, vs, fs) => {
-        if ((gl.getShaderSource(fs) ?? '').includes(VF_MARK) || (gl.getShaderSource(vs) ?? '').includes(VF_MARK)) {
-          this.failed = 'volumetric shader failed to compile/link; rendering without atmosphere';
-        }
-        if (prev) { prev(gl, program, vs, fs); return; }
-        console.error('THREE.WebGLProgram: shader error', gl.getProgramInfoLog(program), '\nvertex:', gl.getShaderInfoLog(vs), '\nfragment:', gl.getShaderInfoLog(fs));
-      };
-      dbg.onShaderError = this.onShaderError;
-    }
+    this.visTex = layerTexture(this.visData, VIS_RES, VIS_RES, VIS_WINDOWS, THREE.RedFormat);
+    this.visTex.name = 'fog-vis-windows';
+    this.placeholderDensity = layerTexture(new Uint8Array(4), 1, 1, 1, THREE.RGBAFormat);
+    this.placeholderAir = layerTexture(new Uint8Array(1), 1, 1, 1, THREE.RedFormat);
+    this.densityTex = this.placeholderDensity;
+    this.airTex = this.placeholderAir;
     this.setQuality(quality);
+  }
+
+  /**
+   * Support check against the renderer's ACTUAL backend (WebGPURenderer swaps in its WebGL2 backend during init() when
+   * WebGPU is unavailable, so this runs again on the first frame after init): half-float colour targets are core in WebGPU;
+   * the WebGL2 backend needs EXT_color_buffer_float / _half_float.
+   */
+  private checkBackend(): void {
+    const b = this.renderer?.backend as unknown as {isWebGLBackend?: boolean; extensions?: {has(n: string): boolean}} | undefined;
+    if (b?.isWebGLBackend && b.extensions && !b.extensions.has('EXT_color_buffer_float') && !b.extensions.has('EXT_color_buffer_half_float')) {
+      this.supported = false;
+      this.reason = 'no float colour render targets on the WebGL2 backend (EXT_color_buffer_float / _half_float)';
+    } else {
+      this.supported = true;
+      this.reason = null;
+    }
+  }
+
+  /**
+   * After the renderer initialized: re-check support on the real backend and chain a WebGL2 shader-error handler in front of
+   * the one already installed (CORE records errors into game.gpu): a failing fog program flags the module and the station
+   * renders directly from the next frame on (never a black canvas, never a fake success). Idempotent.
+   */
+  private attach(): void {
+    if (this.attached || !this.renderer || !(this.renderer as unknown as {initialized?: boolean}).initialized) return;
+    this.attached = true;
+    const was = this.supported;
+    this.checkBackend();
+    if (was !== this.supported) { this.configured = false; this.setQuality(this.requested); }
+    const dbg = this.renderer.debug as unknown as {onShaderError: ((...a: unknown[]) => void) | null};
+    this.prevShaderError = dbg.onShaderError ?? null;
+    const prev = this.prevShaderError;
+    this.onShaderError = (...a: unknown[]) => {
+      const [gl, , vs, fs] = a as [WebGL2RenderingContext, unknown, WebGLShader, WebGLShader];
+      const src = `${gl?.getShaderSource?.(fs) ?? ''}${gl?.getShaderSource?.(vs) ?? ''}`;
+      if (Object.values(VF_MARK).some(m => src.includes(m))) this.failed = 'volumetric fog program failed to compile/link (WebGL2 backend); rendering without atmosphere';
+      if (prev) prev(...a);
+      else console.error('THREE.WebGLBackend: shader error', gl?.getShaderInfoLog?.(fs));
+    };
+    dbg.onShaderError = this.onShaderError;
+  }
+
+  /** Iteration 13: backend of the renderer the passes run on (from the initialized backend object). */
+  get backend(): AtmosphereBackend {
+    const b = this.renderer?.backend as unknown as {isWebGPUBackend?: boolean; isWebGLBackend?: boolean} | undefined;
+    return b?.isWebGPUBackend ? 'webgpu' : b?.isWebGLBackend ? 'webgl2-fallback' : 'none';
   }
 
   /** Preset of the current (non-off) quality. */
@@ -312,9 +330,9 @@ export class VolumetricAtmosphere {
     return this.quality === 'off' ? null : ATMOSPHERE_QUALITY[this.quality];
   }
 
-  /** The volumetric pass runs this frame (otherwise: direct r5 rendering). */
+  /** The volumetric pass runs this frame (otherwise: direct rendering). */
   get active(): boolean {
-    return this.enabled && this.quality !== 'off' && !this.failed && this.supported && !!this.densityTex && !this.disposed;
+    return this.enabled && this.quality !== 'off' && !this.failed && this.supported && !!this.densityMap && !this.disposed && !!this.renderer;
   }
 
   /** Settings quality ('low' | 'high') or explicit 'off'; the session override wins. */
@@ -324,13 +342,8 @@ export class VolumetricAtmosphere {
     if (q === this.quality && this.configured) return;
     this.configured = true;
     this.quality = q;
-    configureFlashlightShadow(this.lights.flashlight, q, this.renderer);
-    const p = this.preset;
-    if (p && this.march.defines.VF_STEPS !== p.steps) {
-      this.march.defines.VF_STEPS = p.steps;
-      this.march.needsUpdate = true;
-    }
-    this.dropTargets(); // recreated lazily with the new MSAA / resolution
+    configureFlashlightShadow(this.lights.flashlight, q, this.renderer as never);
+    this.dropTargets(); // recreated lazily with the new MSAA / resolution / step count
     this.setSize(this.full[0], this.full[1]);
   }
 
@@ -339,44 +352,37 @@ export class VolumetricAtmosphere {
     this.full = [Math.max(1, Math.floor(w)), Math.max(1, Math.floor(h))];
     const p = this.preset;
     this.low = p ? marchSize(this.full[0], this.full[1], p) : [1, 1];
-    this.sceneRT?.setSize(this.full[0], this.full[1]);
     this.marchRT?.setSize(this.low[0], this.low[1]);
     for (const h2 of this.history ?? []) h2.setSize(this.low[0], this.low[1]);
     this.historyValid = false;
   }
 
-  /** New station: per-level tunables, density + flow maps (areas, floors, drift) and the baked light field. Drops smoke. */
+  /** New station: per-level tunables, density + air maps, seeded motion, the baked light field; drops smoke; restarts the fog clock. */
   setStation(layout: StationLayout, field: LightFieldVolume | null): void {
+    this.layout = layout;
     this.params = atmosphereFor(layout);
     this.densityMap = buildDensityMap(layout, this.params);
-    this.flowMap = buildFlowMap(layout);
+    this.airMap = buildAirMap(layout);
+    this.motion = fogMotion(layout.seed, this.params);
     this.levelGrids = stationLevels(layout).slice(0, 4).map(L => L.grid);
-    this.densityTex?.dispose();
-    this.flowTex?.dispose();
-    const layerTex = (data: Uint8Array, w: number, h: number, n: number) => {
-      const t = new THREE.DataArrayTexture(data, w, h, n);
-      t.format = THREE.RGBAFormat;
-      t.type = THREE.UnsignedByteType;
-      t.minFilter = t.magFilter = THREE.LinearFilter;
-      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-      t.generateMipmaps = false;
-      t.unpackAlignment = 1;
-      t.colorSpace = THREE.NoColorSpace;
-      t.needsUpdate = true;
-      return t;
-    };
+    if (this.densityTex !== this.placeholderDensity) this.densityTex.dispose();
+    if (this.airTex !== this.placeholderAir) this.airTex.dispose();
     const m = this.densityMap;
-    // Iteration 08: one layer per level slot (RGBA: multiplier, floor, ceiling, presence). Iteration 12: + drift layers.
-    this.densityTex = layerTex(m.data, m.w, m.h, m.slots);
-    this.flowTex = layerTex(this.flowMap.data, this.flowMap.w, this.flowMap.h, this.flowMap.slots);
+    this.densityTex = layerTexture(m.data, m.w, m.h, m.slots, THREE.RGBAFormat);
+    this.densityTex.name = 'fog-density-map';
+    this.airTex = layerTexture(this.airMap.data, this.airMap.w, this.airMap.h, this.airMap.slots, THREE.RedFormat);
+    this.airTex.name = 'fog-air-map';
     this.field = field;
+    this.epoch = null; // the fog clock restarts at the station's first frame
+    this.statsCache = null;
     this.historyValid = false;
     this.casters = this.receivers = 0;
-    // Iteration 12: smoke / scatter lights belong to the previous station (the light lane re-adds its flares' lights).
+    this.marchKey = ''; // the march samples the new maps (texture objects changed)
+    // smoke / scatter lights belong to the previous station (the light lane re-adds its flares' lights)
     this.clearSmoke();
     this.scatter.clear();
     this.lightLayer.clear();
-    this.lastTime = Number.NaN;
+    this.lastFogTime = Number.NaN;
     this.smoke.env = {
       band: (x, y, z) => this.bandAt(x, y, z),
       open: (x, y, z) => this.openAt(x, y, z),
@@ -391,7 +397,28 @@ export class VolumetricAtmosphere {
     this.receivers += r.receivers;
   }
 
-  // --- Iteration 12 (ATMOS): smoke + scatter-light API (design.md; the light lane's thrown flares) -----------------------
+  // --- fog clock + density queries (iteration 13) ------------------------------------------------------------------
+
+  /** The station fog clock for game time `time` (s since the station's first frame; game time freezes in menus). */
+  fogTime(time = this.gameTime): number {
+    return this.epoch === null ? 0 : Math.max(0, time - this.epoch);
+  }
+
+  private maps(): MediumMaps {
+    return {map: this.densityMap, air: this.airMap, noise: this.noiseData, motion: this.motion};
+  }
+
+  /**
+   * The world haze at (x, y, z) — exactly what the march integrates there (CPU mirror) — at the current fog time (or `t`).
+   * Depends only on the point, the station and the fog clock: never on the camera, visited rooms or render history.
+   */
+  fogSample(x: number, y: number, z: number, t = this.fogTime()): {sigma: number; dense: number; detail: number; mult: number; slot: number; time: number} {
+    if (!this.densityMap) return {sigma: 0, dense: 0, detail: 0, mult: 0, slot: 0, time: t};
+    const s = mediumAt([x, y, z], this.maps(), this.params, t);
+    return {sigma: s.sigma, dense: s.dense, detail: s.detail, mult: s.mult, slot: s.slot, time: t};
+  }
+
+  // --- smoke + scatter-light API (iteration 12, unchanged) ----------------------------------------------------------
 
   /**
    * World-space smoke rising from (x, y, z): soft analytic puffs in the volumetric march, tinted by `color`, lit by the
@@ -445,12 +472,13 @@ export class VolumetricAtmosphere {
     return g.inBounds(cx, cy) && g.cells[g.idx(cx, cy)] !== SOLID;
   }
 
-  /** Air drift at a point (m/s): the flow map + the station-wide drift (smoke puffs ride it). */
-  private driftAt(x: number, y: number, z: number): readonly [number, number, number] {
-    const f = this.flowMap, b = this.bandAt(x, y, z);
-    const v = f && b ? sampleFlowMap(f, x, z, b.slot) : [0, 0, 0];
-    const w = this.params.wind, d = f?.draft ?? 1;
-    return [v[0] + w[0] * d, 0, v[1] + w[2]];
+  /** Air drift at a point (m/s): the haze's own motion there (air drift, blended into the tunnel draft over track beds). */
+  driftAt(x: number, y: number, z: number): readonly [number, number, number] {
+    const mo = this.motion;
+    if (!mo) return [0, 0, 0];
+    const b = this.bandAt(x, y, z);
+    const wt = this.airMap && b ? sampleAirMap(this.airMap, x, z, b.slot) : 0;
+    return [mo.air[0] + (mo.track[0] - mo.air[0]) * wt, 0, mo.air[2] + (mo.track[2] - mo.air[2]) * wt];
   }
 
   private readonly visLookup: VisLookup = {
@@ -468,24 +496,22 @@ export class VolumetricAtmosphere {
     const n = VIS_RES * VIS_RES;
     const w = computeVisWindow({x, y: y + 0.25, z}, this.visLookup, this.visData.subarray(layer * n, (layer + 1) * n));
     this.winState[layer] = w ? {...w, ok: true} : {x0: 0, z0: 0, floor: -1e3, ceil: 1e3, ok: false};
-    this.visTex.addLayerUpdate(layer);
     this.visTex.needsUpdate = true;
   }
 
-  /** Smoke simulation + packing of puffs / scatter lights / windows into the march uniforms (each frame, `time` = game time). */
+  /** Smoke simulation + packing of puffs / scatter lights / windows into the march uniforms (each frame; `time` = fog time). */
   private syncSmoke(time: number): void {
-    const dt = Number.isFinite(this.lastTime) ? time - this.lastTime : 0;
-    this.lastTime = time;
+    const dt = Number.isFinite(this.lastFogTime) ? time - this.lastFogTime : 0;
+    this.lastFogTime = time;
     if (dt > 0) this.smoke.step(dt);
-    const u = this.march.uniforms, p = this.params;
-    const win = u.uWin.value as THREE.Vector4[], winY = u.uWinY.value as THREE.Vector4[];
+    const u = this.u, p = this.params;
+    const win = u.win.array as THREE.Vector4[], winY = u.winY.array as THREE.Vector4[];
     const size = 1 / (VIS_RES * (this.densityMap?.cell ?? 0.5));
     const setWin = (k: number, layer: number) => {
       const w = this.winState[layer];
       if (w.ok) { win[k].set(w.x0, w.z0, size, layer); winY[k].set(w.floor, w.ceil, 0, 0); } else { win[k].set(0, 0, 1, -1); winY[k].set(-1e3, 1e3, 0, 0); }
     };
-    // scatter lights
-    const pos = u.uScatPos.value as THREE.Vector4[], col = u.uScatCol.value as THREE.Vector4[];
+    const pos = u.scatPos.array as THREE.Vector4[], col = u.scatCol.array as THREE.Vector4[];
     let n = 0;
     for (const s of this.scatter.list) {
       const l = s.light;
@@ -500,10 +526,10 @@ export class VolumetricAtmosphere {
       setWin(n, layer);
       n++;
     }
-    u.uScatCount.value = n;
-    // smoke emitters with puffs
-    const bound = u.uSmokeBound.value as THREE.Vector4[], tint = u.uSmokeTint.value as THREE.Vector4[];
-    const puff = u.uPuff.value as THREE.Vector4[], dens = u.uPuffD.value as THREE.Vector4[];
+    for (let k = n; k < VF_LIMITS.scatter; k++) { pos[k].set(0, -1e4, 0, 0.01); col[k].set(0, 0, 0, 2); }
+    u.scatCount.value = n;
+    const bound = u.smokeBound.array as THREE.Vector4[], tint = u.smokeTint.array as THREE.Vector4[];
+    const puff = u.puff.array as THREE.Vector4[], dens = u.puffD.array as number[];
     for (const id of [...this.smokeLayer.keys()]) if (!this.smoke.emitters.some(e => e.id === id)) this.smokeLayer.delete(id);
     let m = 0;
     for (const e of this.smoke.emitters) {
@@ -518,113 +544,63 @@ export class VolumetricAtmosphere {
       }
       if (this.densityMap) this.refreshWindow(layer, e, e.x, e.y, e.z, time);
       bound[m].set(b[0], b[1], b[2], b[3]);
-      tint[m].set(e.tint[0], e.tint[1], e.tint[2], Math.min(e.puffs.length, VF_LIMITS.puffsPer));
-      e.puffs.slice(0, VF_LIMITS.puffsPer).forEach((q, j) => {
-        const i = m * VF_LIMITS.puffsPer + j;
-        puff[i].set(q.x, q.y, q.z, q.r);
-        dens[i >> 2].setComponent(i & 3, q.d);
-      });
+      const np = Math.min(e.puffs.length, VF_LIMITS.puffsPer);
+      tint[m].set(e.tint[0], e.tint[1], e.tint[2], np);
+      for (let j = 0; j < VF_LIMITS.puffsPer; j++) {
+        const i = m * VF_LIMITS.puffsPer + j, q = e.puffs[j];
+        if (j < np && q) { puff[i].set(q.x, q.y, q.z, q.r); dens[i] = q.d; } else { puff[i].set(0, -1e4, 0, 0.01); dens[i] = 0; }
+      }
       setWin(VF_LIMITS.scatter + m, layer);
       m++;
     }
-    u.uSmokeCount.value = m;
+    for (let k = m; k < VF_LIMITS.smoke; k++) { bound[k].set(0, -1e4, 0, 0); tint[k].set(0, 0, 0, 0); }
+    u.smokeCount.value = m;
   }
 
+  // --- frame ---------------------------------------------------------------------------------------------------------
+
   /**
-   * Render the station scene to the canvas (with or without atmosphere). The caller clears depth and
-   * draws the viewmodel overlay afterwards. `time` = game time (frozen in menus: the haze stops too).
+   * Render the station scene to the canvas (with or without atmosphere). CORE composites the viewmodel overlay afterwards.
+   * `time` = game time (frozen in menus: the haze stops too); the fog clock starts at the station's first frame.
    */
   render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, time: number): void {
     const r = this.renderer;
+    this.gameTime = time;
+    if (this.densityMap && this.epoch === null) this.epoch = time;
     if (!r) return;
+    this.attach();
     const fl = this.lights.flashlight;
-    // No shadow pass while the flashlight is off (the map is unused then).
+    // No shadow pass while the flashlight is dark (the map is unused then; the march's beam term is zero).
     if (fl.castShadow) fl.shadow.autoUpdate = fl.intensity > 0 && fl.visible;
-    // Iteration 12 (ATMOS): ...but the map must EXIST before anything samples it. With the light dark from the first frame
-    // (title screen, a flat battery, the torch switched off) three never creates it and binds its never-uploaded placeholder
-    // to every shadow sampler: WebGL 2 then rejects those draws (INVALID_OPERATION; measured in Firefox: the station and the
-    // march did not draw at all). One forced update creates it; afterwards it simply goes stale while the light is off.
     if (fl.castShadow && !fl.shadow.map) fl.shadow.needsUpdate = true;
-    if (!this.active) { this.syncSmoke(time); this.direct(scene, camera); return; }
+    if (!this.active) { this.syncSmoke(this.fogTime(time)); this.direct(scene, camera); return; }
     const t0 = performance.now();
     this.ensureTargets();
-    r.setRenderTarget(this.sceneRT);
-    r.clear();
-    r.render(scene, camera);
-    const t1 = performance.now();
+    this.ensurePipeline(scene, camera);
     this.sync(scene, camera, time);
-    const timing = this.timer?.begin() ?? false;
-    const marchRT = this.marchRT!, history = this.history;
-    this.draw(this.march, marchRT);
-    let fog = marchRT.textures[0], fogT = marchRT.textures[1];
-    if (history && !this.failed) {
-      const dst = history[this.histIndex], src = history[1 - this.histIndex];
-      this.temporal.uniforms.tHistory.value = src.textures[0];
-      this.temporal.uniforms.tHistoryT.value = src.textures[1];
-      this.draw(this.temporal, dst);
-      fog = dst.textures[0];
-      fogT = dst.textures[1];
-      this.histIndex = 1 - this.histIndex;
-      this.historyValid = true;
-    }
-    if (!this.failed) {
-      this.composite.uniforms.tFog.value = fog;
-      this.composite.uniforms.tFogT.value = fogT;
-      this.draw(this.composite, null);
-    }
-    if (timing) this.timer!.end();
-    this.timer?.poll();
-    if (this.failed) {
-      // One of our programs failed on first use: redo this frame directly, free the targets.
-      this.direct(scene, camera);
-      this.dropTargets();
-      return;
-    }
-    this.prevViewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    r.setRenderTarget(null); // the finished frame goes to the canvas (the pipeline's quad draws into the current target)
+    this.pipeline!.render();
+    if (this.failed) { this.direct(scene, camera); this.dropTargets(); return; }
+    camera.updateMatrixWorld();
+    this.prevView.copy(camera.matrixWorldInverse);
+    this.prevProj.copy(camera.projectionMatrix);
     this.prevCamPos.setFromMatrixPosition(camera.matrixWorld);
     this.frame++;
-    const t2 = performance.now();
-    // Exponential moving averages (ms) of CPU submission time: scene pass / volumetric passes.
-    this.cpuSceneMs += ((t1 - t0) - this.cpuSceneMs) * 0.1;
-    this.cpuMs += ((t2 - t1) - this.cpuMs) * 0.1;
+    this.cpuMs += ((performance.now() - t0) - this.cpuMs) * 0.1;
   }
 
   private direct(scene: THREE.Scene, camera: THREE.Camera): void {
     const r = this.renderer!;
     r.setRenderTarget(null);
-    r.clear();
     r.render(scene, camera);
     this.historyValid = false;
   }
 
-  private draw(mat: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null): void {
-    const r = this.renderer!;
-    this.quad.material = mat;
-    r.setRenderTarget(target);
-    r.render(this.quadScene, this.quadCam);
-  }
-
+  /** Low-res march / history targets (MRT: in-scatter + view depth, transmittance). */
   private ensureTargets(): void {
-    const p = this.preset!;
-    const [w, h] = this.full, [lw, lh] = this.low;
-    if (!this.sceneRT) {
-      const depth = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
-      depth.format = THREE.DepthFormat;
-      const rt = new THREE.WebGLRenderTarget(w, h, {
-        type: THREE.UnsignedByteType, format: THREE.RGBAFormat, colorSpace: THREE.SRGBColorSpace, internalFormat: 'RGBA8',
-        depthBuffer: true, stencilBuffer: false, depthTexture: depth, samples: p.msaa,
-        minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false,
-      });
-      // Render like the canvas: three applies tone mapping + the target's (sRGB) output encoding in
-      // every material for XR-flagged targets (the flag three's WebXRManager sets on its own plain
-      // WebGLRenderTarget). Storage is plain RGBA8, so the encoded values are stored and read raw.
-      (rt as THREE.WebGLRenderTarget & {isXRRenderTarget: boolean}).isXRRenderTarget = true;
-      rt.texture.name = 'volumetric-scene';
-      this.sceneRT = rt;
-    }
-    // Iteration 12: two colour attachments (in-scatter + depth, transmittance).
-    const lowTarget = (name: string, filter: THREE.MagnificationTextureFilter) => {
-      const rt = new THREE.WebGLRenderTarget(lw, lh, {
+    const [lw, lh] = this.low;
+    const make = (name: string, filter: THREE.MagnificationTextureFilter) => {
+      const rt = new RenderTarget(lw, lh, {
         type: THREE.HalfFloatType, format: THREE.RGBAFormat, colorSpace: THREE.NoColorSpace, depthBuffer: false, stencilBuffer: false,
         minFilter: filter, magFilter: filter, generateMipmaps: false, count: 2,
       });
@@ -632,143 +608,264 @@ export class VolumetricAtmosphere {
       rt.textures[1].name = `${name}-transmittance`;
       return rt;
     };
-    this.marchRT ??= lowTarget('volumetric-march', THREE.NearestFilter);
-    if (p.temporal && !this.history) {
-      this.history = [lowTarget('volumetric-history-a', THREE.LinearFilter), lowTarget('volumetric-history-b', THREE.LinearFilter)];
+    this.marchRT ??= make('volumetric-march', THREE.NearestFilter);
+    if (this.preset?.temporal && !this.history) {
+      this.history = [make('volumetric-history-a', THREE.LinearFilter), make('volumetric-history-b', THREE.LinearFilter)];
       this.historyValid = false;
+      this.temporalMat?.dispose();
+      this.temporalMat = null;
     }
   }
 
-  /** Release the GPU targets (they are recreated on demand). */
+  /** The RenderPipeline for this scene + camera (scene pass -> fog pass -> composite + output transform). */
+  private ensurePipeline(scene: THREE.Scene, camera: THREE.Camera): void {
+    const msaa = this.preset?.msaa ?? 0;
+    const key = `${msaa}|${this.history ? 't' : 'n'}`;
+    if (this.pipeline && this.pipeScene === scene && this.pipeCamera === camera && this.pipeKey === key) return;
+    this.disposePipeline();
+    const r = this.renderer!;
+    const scenePass = pass(scene, camera, {samples: msaa}) as unknown as PassNode;
+    const color = (scenePass as unknown as {getTextureNode(n: string): unknown}).getTextureNode('output');
+    const depth = (scenePass as unknown as {getTextureNode(n: string): unknown}).getTextureNode('depth');
+    const src = this.history ? this.history[0] : this.marchRT!;
+    this.fogNode = new FogPassNode(this, scenePass, src.textures[0], src.textures[1]);
+    const out = createCompositeNode(this.u, color, depth, this.fogNode.tex0, this.fogNode.tex1);
+    this.pipeline = new RenderPipeline(r, out as never);
+    this.pipeline.outputColorTransform = true; // ACES (renderer.toneMappingExposure) + sRGB once, after the fog
+    this.scenePass = scenePass;
+    this.pipeScene = scene;
+    this.pipeCamera = camera;
+    this.pipeKey = key;
+    this.marchKey = '';
+  }
+
+  /** The march material for the current inputs (steps, scene depth, maps, the flashlight's shadow map). */
+  private ensureMarch(): NodeMaterial {
+    const fl = this.lights.flashlight;
+    const shadowTex = fl.castShadow ? (fl.shadow.map as unknown as {depthTexture?: THREE.Texture} | null)?.depthTexture ?? null : null;
+    const depthTex = (this.scenePass as unknown as {getTexture(n: string): THREE.Texture}).getTexture('depth');
+    const steps = this.preset?.steps ?? 24;
+    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}`;
+    if (this.marchMat && key === this.marchKey) return this.marchMat;
+    this.marchMat?.dispose();
+    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex}, {steps});
+    this.marchKey = key;
+    this.marchBuilds++;
+    this.errorChecks = 3; // watch the next frames for WebGPU validation / compilation errors of the new program
+    return this.marchMat;
+  }
+
+  /** Fog pass body (FogPassNode.updateBefore): march + temporal into the low-res targets, after this frame's scene pass. */
+  runFog(renderer: WebGPURenderer): void {
+    if (!this.marchRT || this.failed) return;
+    rendererState = RendererUtils.resetRendererState(renderer, rendererState as never);
+    const device = (renderer.backend as unknown as {device?: WebGPUDeviceLike}).device;
+    const scoped = !!device && this.errorChecks > 0;
+    if (scoped) device!.pushErrorScope('validation');
+    try {
+      const fl = this.lights.flashlight;
+      // the shadow matrix / map of THIS frame (three updated them in the scene pass)
+      const u = this.u;
+      u.shadowMatrix.value.copy(fl.shadow.matrix);
+      u.shadowBias.value = fl.shadow.bias;
+      const march = this.ensureMarch();
+      u.shadowOn.value = fl.castShadow && fl.shadow.map && (u.flashColor.value as THREE.Vector3).lengthSq() > 0 ? 1 : 0;
+      renderer.setRenderTarget(this.marchRT);
+      this.quad.material = march;
+      this.quad.render(renderer);
+      let out: RenderTarget = this.marchRT;
+      if (this.history) {
+        const dst = this.history[this.histIndex], src = this.history[1 - this.histIndex];
+        this.temporalMat ??= createTemporalMaterial(u, this.marchRT.textures[0], this.marchRT.textures[1], this.hist0, this.hist1);
+        this.hist0.value = src.textures[0];
+        this.hist1.value = src.textures[1];
+        u.historyValid.value = this.historyValid ? 1 : 0;
+        renderer.setRenderTarget(dst);
+        this.quad.material = this.temporalMat;
+        this.quad.render(renderer);
+        out = dst;
+        this.histIndex = 1 - this.histIndex;
+        this.historyValid = true;
+      }
+      if (this.fogNode) {
+        (this.fogNode.tex0 as unknown as {value: THREE.Texture}).value = out.textures[0];
+        (this.fogNode.tex1 as unknown as {value: THREE.Texture}).value = out.textures[1];
+      }
+      this.fogRuns++;
+    } finally {
+      RendererUtils.restoreRendererState(renderer, rendererState as never);
+      if (scoped) {
+        this.errorChecks--;
+        device!.popErrorScope().then(err => {
+          if (err && !this.failed) {
+            this.failed = `volumetric fog pass rejected by WebGPU: ${err.message.slice(0, 300)}`;
+            console.error(this.failed);
+          }
+        }).catch(() => {});
+      }
+    }
+  }
+
+  /** Release the GPU targets and pipeline (recreated on demand). */
   private dropTargets(): void {
-    if (this.sceneRT) { this.sceneRT.depthTexture?.dispose(); this.sceneRT.dispose(); }
+    this.disposePipeline();
     this.marchRT?.dispose();
     for (const h of this.history ?? []) h.dispose();
-    this.sceneRT = this.marchRT = null;
+    this.marchRT = null;
     this.history = null;
     this.historyValid = false;
+    this.temporalMat?.dispose();
+    this.temporalMat = null;
+    this.marchMat?.dispose();
+    this.marchMat = null;
+    this.marchKey = '';
   }
 
-  /** Per-frame uniform sync (no scene changes; also used by tests without a GL context). */
+  private disposePipeline(): void {
+    this.pipeline?.dispose();
+    (this.scenePass as unknown as {dispose?(): void} | null)?.dispose?.();
+    (this.fogNode as unknown as {dispose?(): void} | null)?.dispose?.();
+    this.pipeline = null;
+    this.scenePass = null;
+    this.fogNode = null;
+    this.pipeScene = this.pipeCamera = null;
+    this.pipeKey = '';
+  }
+
+  /** Per-frame uniform sync (no scene changes; also used by tests without a GPU). Nothing here reads visited areas. */
   sync(scene: THREE.Scene, camera: THREE.PerspectiveCamera, time: number): void {
-    const p = this.params, u = this.march.uniforms, [w, h] = this.full, [lw, lh] = this.low;
+    const p = this.params, u = this.u;
+    this.gameTime = time;
+    if (this.densityMap && this.epoch === null) this.epoch = time;
+    const ft = this.fogTime(time);
     camera.updateMatrixWorld();
-    u.tDepth.value = this.sceneRT?.depthTexture ?? null;
-    u.uFullSize.value.set(w, h);
-    u.uLowSize.value.set(lw, lh);
-    u.uProjInv.value.copy(camera.projectionMatrixInverse);
-    u.uCamWorld.value.copy(camera.matrixWorld);
-    u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
-    u.uNear.value = camera.near;
-    u.uFar.value = camera.far;
-    u.uMaxDist.value = Math.min(p.maxDistance, camera.far);
-    u.uFrame.value = this.frame % 1024;
-    u.uTime.value = time;
+    if (this.renderer) {
+      const db = this.renderer.getDrawingBufferSize(this.size);
+      if (db.x > 0 && db.y > 0 && (db.x !== this.full[0] || db.y !== this.full[1])) this.setSize(db.x, db.y);
+    }
+    u.fullSize.value.set(this.full[0], this.full[1]);
+    u.lowSize.value.set(this.low[0], this.low[1]);
+    if (this.marchRT && (this.marchRT.width !== this.low[0] || this.marchRT.height !== this.low[1])) {
+      this.marchRT.setSize(this.low[0], this.low[1]);
+      for (const h2 of this.history ?? []) h2.setSize(this.low[0], this.low[1]);
+      this.historyValid = false;
+    }
+    u.projInv.value.copy(camera.projectionMatrixInverse);
+    u.camWorld.value.copy(camera.matrixWorld);
+    (u.camPos.value as THREE.Vector3).setFromMatrixPosition(camera.matrixWorld);
+    u.near.value = camera.near;
+    u.far.value = camera.far;
+    u.maxDist.value = Math.min(p.maxDistance, camera.far);
+    u.frame.value = this.frame % 1024;
     const fog = scene.fog as THREE.FogExp2 | null;
-    u.uFogDensity.value = fog && (fog as THREE.FogExp2).isFogExp2 ? fog.density : 0;
-    u.uNearFade.value.set(p.nearFade[0], p.nearFade[1]);
-    u.uDensity.value = p.density;
-    u.uHeightFalloff.value = p.heightFalloff;
-    u.uRefHeight.value = p.refHeight;
-    // Iteration 12: anisotropic patch-noise scale, the rigid station drift (x along the seeded draft), coverage / ground /
-    // flow / extinction tunables (render/atmosphere.ts mediumAt).
-    const S = p.noiseScale, A = p.noiseAnisotropy, draft = this.flowMap?.draft ?? 1;
-    u.uNoiseScale.value.set(S, S * A, S);
-    u.uNoiseAmount.value = p.noiseAmount;
-    u.uWind.value.set(p.wind[0] * draft * S, p.wind[1] * S * A, p.wind[2] * S);
-    u.uCover.value.set(p.coverage, p.coverageSlope, p.coverageSoftness, p.clear);
-    u.uGround.value.set(p.ground, p.groundHeight, p.groundVariation, 0);
-    u.uFlow.value.set(Math.max(1, p.flowPeriod), p.detail);
-    u.uExt.value.set(p.patchExtinction, p.smokeExtinction, p.smokeScatter);
-    u.uPhase.value.set(p.anisotropy, p.backAnisotropy, p.backScatter);
-    u.tNoise.value = this.noise;
-    u.tDensityMap.value = this.densityTex;
-    u.tFlowMap.value = this.flowTex;
-    u.tVis.value = this.visTex;
+    u.fogDensity.value = fog && fog.isFogExp2 ? fog.density : 0;
+    u.nearFade.value.set(p.nearFade[0], p.nearFade[1]);
+    // the medium: base, height profile, patch / wisp scales, the moving field offsets at the fog clock, coverage
+    u.density.value = p.density;
+    u.heightFalloff.value = p.heightFalloff;
+    u.refHeight.value = p.refHeight;
+    u.noiseAmount.value = p.noiseAmount;
+    const s = noiseScales(p);
+    u.scaleP.value.set(...s.patch);
+    u.scaleD.value.set(...s.detail);
+    if (this.motion) {
+      const o = fieldOffsets(this.motion, p, ft);
+      u.offAir.value.set(...o.air);
+      u.offTrack.value.set(...o.track);
+      u.offDet.value.set(...o.detail);
+    }
+    u.cover.value.set(p.coverage, p.coverageSlope, p.coverageSoftness, p.clear);
+    u.peak.value = p.peak;
+    u.pocketDense.value = p.pocketDense;
+    u.detail.value = p.detail;
+    u.ground.value.set(p.ground, p.groundHeight, p.groundVariation);
+    u.warp.value = p.warp;
+    u.ext.value.set(p.patchExtinction, p.smokeExtinction, p.smokeScatter);
+    u.phase.value.set(p.anisotropy, p.backAnisotropy, p.backScatter);
     const m = this.densityMap;
     if (m) {
-      u.uMapXform.value.set(0, 0, 1 / (m.w * m.cell), 1 / (m.h * m.cell));
-      u.uMapFloor.value.set(m.yMin, m.yRange);
-      u.uMapSlots.value = m.slots;
+      u.mapXform.value.set(0, 0, 1 / (m.w * m.cell), 1 / (m.h * m.cell));
+      u.mapFloor.value.set(m.yMin, m.yRange);
+      u.mapSlots.value = m.slots;
     }
-    // Flashlight (camera-held spot; same cone/attenuation as its surface lighting).
+    // Flashlight (camera-held spot; same cone / attenuation as its surface lighting; battery flicker / off via intensity).
     const fl = this.lights.flashlight;
     fl.updateWorldMatrix(true, false);
     fl.target.updateWorldMatrix(true, false);
-    fl.getWorldPosition(u.uFlashPos.value);
-    u.uFlashDir.value.copy(fl.target.getWorldPosition(this.tmp)).sub(u.uFlashPos.value).normalize();
-    u.uFlashCone.value.set(Math.cos(fl.angle), Math.cos(fl.angle * (1 - fl.penumbra)));
+    fl.getWorldPosition(u.flashPos.value);
+    u.flashDir.value.copy(fl.target.getWorldPosition(this.tmp)).sub(u.flashPos.value).normalize();
+    u.flashCone.value.set(Math.cos(fl.angle), Math.cos(fl.angle * (1 - fl.penumbra)));
     const fk = fl.visible && fl.intensity > 0 ? fl.intensity * p.flashlightScatter : 0;
-    u.uFlashColor.value.set(fl.color.r * fk, fl.color.g * fk, fl.color.b * fk);
-    u.uFlashRange.value.set(fl.distance, fl.decay);
-    const smap = fl.castShadow ? fl.shadow.map?.depthTexture ?? null : null;
-    u.tShadow.value = smap;
-    u.uShadowMatrix.value.copy(fl.shadow.matrix);
-    u.uShadowBias.value = fl.shadow.bias;
-    u.uShadowOn.value = smap && fk > 0 ? 1 : 0;
-    // Baked fixture field (iteration 05): texture, bounds and live flicker-circuit levels.
-    const fv = this.field;
-    u.tField.value = fv?.texture ?? null;
-    if (fv) {
-      u.uFieldMin.value.copy(fv.boundingBox.min);
-      u.uFieldMax.value.copy(fv.boundingBox.max);
-      u.uFieldLevels.value.copy(fv.resolution);
-    }
-    u.uFieldGain.value = fv ? p.fixtureScatter : 0;
+    u.flashColor.value.set(fl.color.r * fk, fl.color.g * fk, fl.color.b * fk);
+    u.flashRange.value.set(fl.distance, fl.decay);
+    u.shadowMatrix.value.copy(fl.shadow.matrix);
+    u.shadowBias.value = fl.shadow.bias;
+    u.shadowOn.value = fl.castShadow && fl.shadow.map && fk > 0 ? 1 : 0;
+    // Baked fixture field (world/lightFieldNode.ts global nodes, bound by StationLighting): our gain only.
+    u.fieldGain.value = this.field ? p.fixtureScatter : 0;
     // Muzzle flash pulse.
     const mz = this.lights.muzzle;
     const mk = mz && mz.visible && mz.intensity > 0 ? mz.intensity * p.muzzleScatter : 0;
     if (mz && mk > 0) {
-      mz.getWorldPosition(u.uMuzzlePos.value);
-      u.uMuzzleRange.value.set(mz.distance, mz.decay);
+      mz.getWorldPosition(u.muzzlePos.value);
+      u.muzzleRange.value.set(mz.distance, mz.decay);
     }
-    u.uMuzzleColor.value.set(mz ? mz.color.r * mk : 0, mz ? mz.color.g * mk : 0, mz ? mz.color.b * mk : 0);
-    // Iteration 12: smoke puffs + scatter lights + their occlusion windows.
-    this.syncSmoke(time);
-    // Temporal: camera cuts (teleport / respawn) drop the history.
-    const camPos = u.uCamPos.value as THREE.Vector3;
+    u.muzzleColor.value.set(mz ? mz.color.r * mk : 0, mz ? mz.color.g * mk : 0, mz ? mz.color.b * mk : 0);
+    // smoke puffs + scatter lights + their occlusion windows (fog clock: frozen in menus)
+    this.syncSmoke(ft);
+    // temporal: camera cuts (teleport / respawn) drop the history
+    const camPos = u.camPos.value as THREE.Vector3;
     if (this.historyValid && camPos.distanceTo(this.prevCamPos) > 3) this.historyValid = false;
-    const t = this.temporal.uniforms;
-    t.tCurrent.value = this.marchRT?.textures[0] ?? null;
-    t.tCurrentT.value = this.marchRT?.textures[1] ?? null;
-    t.uLowSize.value.set(lw, lh);
-    t.uProjInv.value.copy(camera.projectionMatrixInverse);
-    t.uCamWorld.value.copy(camera.matrixWorld);
-    t.uPrevViewProj.value.copy(this.prevViewProj);
-    t.uHistoryValid.value = this.historyValid ? 1 : 0;
-    const c = this.composite.uniforms;
-    c.tScene.value = this.sceneRT?.texture ?? null;
-    c.tDepth.value = this.sceneRT?.depthTexture ?? null;
-    c.uFullSize.value.set(w, h);
-    c.uLowSize.value.set(lw, lh);
-    c.uNear.value = camera.near;
-    c.uFar.value = camera.far;
-    c.uExposure.value = this.renderer?.toneMappingExposure ?? 1;
-    c.uIntensity.value = p.intensity;
+    u.prevView.value.copy(this.prevView);
+    u.prevProj.value.copy(this.prevProj);
+    u.historyValid.value = this.historyValid ? 1 : 0;
+    u.intensity.value = p.intensity;
+  }
+
+  /** Medium statistics of the current station (lazy, cached; deterministic). */
+  private densityStats(): AtmosphereDebug['density'] {
+    if (this.statsCache || !this.layout || !this.densityMap) return this.statsCache;
+    const s = mediumStats(this.layout, this.maps(), this.params, 0, 13);
+    const areas: Record<AreaClass, number> = {clear: 0, normal: 0, dense: 0};
+    for (const a of this.densityMap.areas ?? []) areas[a.cls]++;
+    const r = (v: number) => Math.round(v * 1e5) / 1e5;
+    this.statsCache = {
+      base: this.params.density, mean: r(s.mean), clearFrac: Math.round(s.clearFrac * 1000) / 1000, denseFrac: Math.round(s.denseFrac * 1000) / 1000,
+      byClass: Object.fromEntries(Object.entries(s.byClass).map(([k, v]) => [k, r(v)])) as Record<AreaClass | 'track', number>, areas,
+    };
+    return this.statsCache;
   }
 
   debug(): AtmosphereDebug {
     const fl = this.lights.flashlight, p = this.preset;
-    const {areaDensity: _ad, ...params} = this.params;
-    void _ad;
+    const {areaDensity: _ad, classOdds: _co, ...params} = this.params;
+    void _ad; void _co;
+    const mo = this.motion;
+    const sp = (v: number[]) => Math.round(Math.hypot(v[0], v[1], v[2]) * 1000) / 1000;
+    const r3 = (v: number[]) => v.map(x => Math.round(x * 1000) / 1000);
     return {
+      backend: this.backend,
       requested: this.requested, quality: this.quality, enabled: this.enabled, active: this.active, supported: this.supported,
       reason: this.reason, failed: this.failed,
       resolution: {full: [this.full[0], this.full[1]], march: [this.low[0], this.low[1]], scale: p ? Math.round(this.low[0] / this.full[0] * 1000) / 1000 : 0},
       steps: p?.steps ?? 0, temporal: !!p?.temporal, msaa: p?.msaa ?? 0,
       shadow: {
         enabled: fl.castShadow, mapSize: fl.shadow.mapSize.x, bias: fl.shadow.bias, normalBias: fl.shadow.normalBias, near: fl.shadow.camera.near,
-        updating: fl.castShadow && fl.shadow.autoUpdate, casters: this.casters, receivers: this.receivers,
+        updating: fl.castShadow && fl.shadow.autoUpdate, casters: this.casters, receivers: this.receivers, sampled: this.marchKey.includes('|none|') === false && !!this.marchMat,
       },
-      station: {bound: !!this.densityTex, densityMap: this.densityMap ? [this.densityMap.w, this.densityMap.h] : null, field: !!this.field, flowMap: !!this.flowTex, draft: this.flowMap?.draft ?? 0},
+      station: {bound: !!this.densityMap, densityMap: this.densityMap ? [this.densityMap.w, this.densityMap.h] : null, field: !!this.field, airMap: !!this.airMap, draft: mo?.draft ?? 0, seed: this.layout?.seed ?? null},
+      time: {fog: Math.round(this.fogTime() * 1000) / 1000, game: Math.round(this.gameTime * 1000) / 1000, epoch: this.epoch},
+      motion: mo ? {air: r3(mo.air), track: r3(mo.track), detail: r3(mo.detail), speeds: {air: sp(mo.air), track: sp(mo.track), detail: sp(mo.detail)}} : null,
+      density: this.densityStats(),
       params,
       smoke: {
         emitters: this.smoke.emitters.length, puffs: this.smoke.puffCount, limits: SMOKE_LIMITS, stats: {...this.smoke.stats},
         list: this.smoke.emitters.map(e => ({id: e.id, emitting: e.emitting, puffs: e.puffs.length, x: Math.round(e.x * 100) / 100, y: Math.round(e.y * 100) / 100, z: Math.round(e.z * 100) / 100})),
       },
-      scatter: {lights: this.scatter.list.length, active: this.march.uniforms.uScatCount.value as number, windows: this.winState.filter(w => w.ok).length},
-      ms: {gpu: this.timer?.ms ?? null, cpu: Math.round(this.cpuMs * 100) / 100, cpuScene: Math.round(this.cpuSceneMs * 100) / 100},
+      scatter: {lights: this.scatter.list.length, active: this.u.scatCount.value as number, windows: this.winState.filter(w => w.ok).length},
+      ms: {gpu: null, cpu: Math.round(this.cpuMs * 100) / 100, cpuScene: Math.round(this.cpuSceneMs * 100) / 100},
       frames: this.frame,
+      passes: {fog: this.fogRuns, marchBuilds: this.marchBuilds},
     };
   }
 
@@ -776,23 +873,18 @@ export class VolumetricAtmosphere {
     if (this.disposed) return;
     this.disposed = true;
     this.dropTargets();
-    this.densityTex?.dispose();
-    this.densityTex = null;
-    this.flowTex?.dispose();
-    this.flowTex = null;
+    if (this.densityTex !== this.placeholderDensity) this.densityTex.dispose();
+    if (this.airTex !== this.placeholderAir) this.airTex.dispose();
+    this.placeholderDensity.dispose();
+    this.placeholderAir.dispose();
+    this.densityMap = null;
     this.noise.dispose();
     this.visTex.dispose();
-    this.march.dispose();
-    this.temporal.dispose();
-    this.composite.dispose();
-    this.quad.geometry.dispose();
-    this.quadScene.remove(this.quad);
-    this.timer?.dispose();
     this.clearSmoke();
     this.scatter.clear();
     this.lightLayer.clear();
     if (this.renderer) {
-      const dbg = this.renderer.debug as {onShaderError: ShaderErrorFn | null};
+      const dbg = this.renderer.debug as unknown as {onShaderError: ((...a: unknown[]) => void) | null};
       if (dbg.onShaderError === this.onShaderError) dbg.onShaderError = this.prevShaderError;
     }
     this.field = null;

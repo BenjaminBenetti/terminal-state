@@ -10,7 +10,8 @@ import {
   PUFF_DENSITY, SMOKE_LIMITS, ScatterLights, SmokeField, VIS_RES, computeVisWindow, gridLineOfSight, puffKernel, smokeTint, spawnInterval, windowStale,
 } from '../src/render/smoke';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
-import {VF_LIMITS, VF_MARCH} from '../src/render/volumetricShaders';
+import {VF_LIMITS, createFogUniforms, createMarchMaterial} from '../src/render/volumetricShaders';
+import {compileQuad} from './helpers/fogCompile';
 
 const run = (f: SmokeField, s: number, dt = 1 / 60) => { for (let t = 0; t < s; t += dt) f.step(dt); };
 const stations = new Map<number, StationLayout>();
@@ -188,15 +189,15 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     expect(a.addScatterLight(light)).toBe(true);
     const h = a.addSmokeEmitter({x: sp.x + 1, y: 0.05, z: sp.z, ...FLARE});
     for (let i = 0; i < 180; i++) { h.update({x: sp.x + 1, y: 0.05, z: sp.z}); a.sync(scene, camera, i / 60); }
-    const u = a.march.uniforms;
-    expect(u.uScatCount.value).toBe(1);
-    expect(u.uSmokeCount.value).toBe(1);
-    const tint = (u.uSmokeTint.value as THREE.Vector4[])[0];
+    const u = a.u; // iteration 13: the TSL march's uniform nodes
+    expect(u.scatCount.value).toBe(1);
+    expect(u.smokeCount.value).toBe(1);
+    const tint = (u.smokeTint.array as THREE.Vector4[])[0];
     expect(tint.x).toBe(1);
     expect(tint.w).toBeGreaterThanOrEqual(2); // puffs in this emitter
-    const col = (u.uScatCol.value as THREE.Vector4[])[0];
+    const col = (u.scatCol.array as THREE.Vector4[])[0];
     expect(col.x).toBeGreaterThan(col.y * 10); // red
-    const win = u.uWin.value as THREE.Vector4[];
+    const win = u.win.array as THREE.Vector4[];
     expect(win[0].w).toBeGreaterThanOrEqual(0);                  // light window bound
     expect(win[VF_LIMITS.scatter].w).toBeGreaterThanOrEqual(SMOKE_LIMITS.scatterLights); // smoke window layer 4..7
     const d = a.debug();
@@ -206,14 +207,14 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     // a light that is off is not packed
     light.intensity = 0;
     a.sync(scene, camera, 4);
-    expect(u.uScatCount.value).toBe(0);
+    expect(u.scatCount.value).toBe(0);
     light.intensity = 7;
     // the flare burns out: the light lane removes its light and stops the smoke
     expect(a.removeScatterLight(light)).toBe(true);
     h.stop(1);
     for (let i = 0; i < 90; i++) a.sync(scene, camera, 4 + i / 60);
-    expect(u.uScatCount.value).toBe(0);
-    expect(u.uSmokeCount.value).toBe(0);
+    expect(u.scatCount.value).toBe(0);
+    expect(u.smokeCount.value).toBe(0);
     expect(h.alive).toBe(false);
     // new station / retry drops anything left over
     a.addScatterLight(light);
@@ -222,22 +223,26 @@ describe('atmosphere API (game.atmosphere, no GL)', () => {
     expect(h2.alive).toBe(false);
     expect(a.scatter.list.length).toBe(0);
     a.sync(scene, camera, 0);
-    expect(u.uSmokeCount.value + u.uScatCount.value).toBe(0);
+    expect((u.smokeCount.value as number) + (u.scatCount.value as number)).toBe(0);
     a.clearSmoke();
     a.dispose();
     expect(a.smoke.emitters.length).toBe(0);
   });
 
-  it('the march declares exactly the bounded arrays it is fed (no unbounded loops)', () => {
-    expect(VF_MARCH).toContain(`#define VF_MAX_SMOKE ${SMOKE_LIMITS.emitters}`);
-    expect(VF_MARCH).toContain(`#define VF_PUFFS_PER ${SMOKE_LIMITS.puffsPerEmitter}`);
-    expect(VF_MARCH).toContain(`#define VF_MAX_SCAT ${SMOKE_LIMITS.scatterLights}`);
-    expect(VF_MARCH).toMatch(/for \( int k = 0; k < VF_MAX_SMOKE; k \+\+ \)/);
-    expect(VF_MARCH).toMatch(/for \( int j = 0; j < VF_PUFFS_PER; j \+\+ \)/);
-    expect(VF_MARCH).toMatch(/for \( int k = 0; k < VF_MAX_SCAT; k \+\+ \)/);
+  it('the march is fed exactly the bounded arrays it loops over (compiled TSL: fixed trip counts, no unbounded loops)', () => {
     const {a} = rig();
-    expect((a.march.uniforms.uPuff.value as unknown[]).length).toBe(SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter);
-    expect((a.march.uniforms.uPuffD.value as unknown[]).length).toBe(SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter / 4);
+    expect(a.u.puff.array.length).toBe(SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter);
+    expect(a.u.puffD.array.length).toBe(SMOKE_LIMITS.emitters * SMOKE_LIMITS.puffsPerEmitter);
+    expect(a.u.scatPos.array.length).toBe(SMOKE_LIMITS.scatterLights);
+    expect(a.u.smokeBound.array.length).toBe(SMOKE_LIMITS.emitters);
     a.dispose();
+    const arr = (c: number) => new THREE.DataArrayTexture(new Uint8Array(4 * c), 1, 1, 4);
+    const m = createMarchMaterial(createFogUniforms(), {depth: new THREE.DepthTexture(4, 4), noise: new THREE.Data3DTexture(new Uint8Array(64), 2, 2, 4), density: arr(4), air: arr(1), vis: arr(1), shadow: null}, {steps: 8});
+    const f = compileQuad(m, 'glsl').fragment;
+    // every loop has a constant bound: the step loop, then per step the emitter loop with its puff loop and the
+    // scatter-light loop (counts gate the work inside: uniform trip counts)
+    const loops = [...f.matchAll(/for \( int (\w+) = 0; \1 < (\w+); \1 \+\+ \)/g)].map(x => x[2]);
+    expect(loops).toEqual(['8', String(SMOKE_LIMITS.emitters), String(SMOKE_LIMITS.puffsPerEmitter), String(SMOKE_LIMITS.scatterLights)]);
+    expect(f).not.toMatch(/while \(/);
   });
 });

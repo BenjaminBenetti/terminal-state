@@ -133,7 +133,11 @@ export class Viewmodel {
         ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(w * 0.48, 0); ctx.lineTo(0, 4); ctx.fill(); ctx.restore();
       }
     });
-    this.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), new THREE.MeshBasicMaterial({map: flashTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false}));
+    // Iteration 13 (CORE): additive in colour (as AdditiveBlending) but leaves alpha untouched, so over empty overlay pixels the
+    // flash stays pure added light when render/overlay.ts composites the viewmodel target onto the frame.
+    this.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), new THREE.MeshBasicMaterial({map: flashTex, transparent: true, depthWrite: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor}));
     this.flash.visible = false;
     this.flash.renderOrder = 2;
   }

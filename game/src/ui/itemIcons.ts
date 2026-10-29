@@ -3,17 +3,23 @@
 // procedural ammo / med kit / bandage models — exactly the objects the world and the hands show
 // (world/pickups.ts makeSupplyMesh, the gun GLTF scenes).
 //
-// Method: ONCE at load, reusing the game's WebGLRenderer (no extra WebGL context, no renderer per
+// Method: ONCE at load, reusing the game's renderer (no extra context / device, no renderer per
 // slot): one offscreen multisampled render target, one small icon scene with fixed product
 // lighting, one camera at a consistent 3/4 product angle (guns: near side-on, muzzle right;
 // items: front three-quarter from above). Each model is normalised, the projection is fitted to
-// its projected vertices, rendered, read back with readRenderTargetPixels and converted to
+// its projected vertices, rendered, read back and converted to
 // straight-alpha sRGB with the same ACES filmic curve as the game renderer, then cached as a PNG
 // blob URL (transparent background). The render target is disposed afterwards; nothing renders
 // per frame. Inventory slots, the HUD quick slots, the drag ghost and the pickup prompt all use
-// these images; ui/icons.ts SVGs remain the fallback (e.g. if WebGL readback fails).
+// these images; ui/icons.ts SVGs remain the fallback (e.g. if the readback fails).
+//
+// Iteration 13 (CORE): WebGPURenderer — a `RenderTarget` per icon (8-bit sRGB storage, 4x MSAA) and
+// `readRenderTargetPixelsAsync`, all awaited before the title. Render targets are never tone-mapped by
+// WebGPURenderer (output transform only on the canvas), so the CPU ACES + sRGB conversion stays. Row order
+// follows the backend: WebGL 2 reads bottom-up, WebGPU top-down (rows padded to 256 bytes there).
 
 import * as THREE from 'three';
+import {RenderTarget, type WebGPURenderer} from 'three/webgpu';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {ITEMS} from '../items/items';
 import {makeSupplyMesh} from '../world/pickups';
@@ -75,20 +81,30 @@ export function acesFilmic(r: number, g: number, b: number, exposure = 1): [numb
 
 const srgbEncode = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
 
+/** Iteration 13 (CORE): readback layout — row order and row stride (elements; WebGPU pads rows to 256 bytes). */
+export interface PixelLayout { topDown?: boolean; stride?: number }
+
+/** Row stride (elements) of a readback buffer of `len` RGBA8 elements for a w x h copy (three's WebGPU size formula). */
+export function readbackStride(len: number, w: number, h: number): number {
+  return h > 1 ? Math.max(w * 4, Math.round((len - w * 4) / (h - 1))) : w * 4;
+}
+
 /**
- * Render-target bytes (bottom-up rows, colour premultiplied by coverage; sRGB-encoded storage when
+ * Render-target bytes (bottom-up rows unless `layout.topDown`, colour premultiplied by coverage; sRGB-encoded storage when
  * `srcSrgb`, else linear) -> top-down, straight-alpha sRGB RGBA with ACES filmic.
  */
-export function encodeIconPixels(src: Uint8Array, w: number, h: number, srcSrgb: boolean, exposure = 1): Uint8ClampedArray {
+export function encodeIconPixels(src: Uint8Array, w: number, h: number, srcSrgb: boolean, exposure = 1, layout: PixelLayout = {}): Uint8ClampedArray {
   const lin = new Float32Array(256);
   for (let i = 0; i < 256; i++) {
     const c = i / 255;
     lin[i] = srcSrgb ? (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)) : c;
   }
+  const stride = layout.stride ?? w * 4;
   const out = new Uint8ClampedArray(w * h * 4);
   for (let y = 0; y < h; y++) {
+    const row = (layout.topDown ? y : h - 1 - y) * stride;
     for (let x = 0; x < w; x++) {
-      const si = ((h - 1 - y) * w + x) * 4, di = (y * w + x) * 4;
+      const si = row + x * 4, di = (y * w + x) * 4;
       const a8 = src[si + 3];
       if (a8 === 0) continue;
       const a = a8 / 255;
@@ -160,9 +176,12 @@ async function toUrl(canvas: HTMLCanvasElement): Promise<{url: string; bytes: nu
 
 interface Shot { id: string; pixels: Uint8ClampedArray }
 
-function renderShots(renderer: THREE.WebGLRenderer, ids: string[], guns: Record<string, GLTF | undefined>, srgbTarget: boolean, failed: string[]): Shot[] {
+async function renderShots(renderer: WebGPURenderer, ids: string[], guns: Record<string, GLTF | undefined>, srgbTarget: boolean, failed: string[]): Promise<Shot[]> {
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(18, ICON_W / ICON_H, 0.5, 30);
+  // Iteration 13 (CORE): match the backend's clip-space convention up front — on a mismatch WebGPURenderer re-derives the
+  // projection at render time, which would discard the per-icon fit below.
+  cam.coordinateSystem = renderer.coordinateSystem;
   scene.add(cam, new THREE.HemisphereLight(0xf2e8d6, 0x3a352e, 2.1));
   // Lights ride on the camera, so every icon gets the same key (upper left), fill and rim.
   const key = new THREE.DirectionalLight(0xfff2dd, 2.4);
@@ -174,9 +193,11 @@ function renderShots(renderer: THREE.WebGLRenderer, ids: string[], guns: Record<
   cam.add(key, fill, rim);
   // One small target PER ICON: reusing a single multisampled target returned the first icon's
   // resolved pixels for every later readback in Firefox (all 13 icons showed the rifle).
-  const makeTarget = () => new THREE.WebGLRenderTarget(ICON_W, ICON_H, srgbTarget ? {samples: 4, colorSpace: THREE.SRGBColorSpace} : {samples: 0});
-  let rt: THREE.WebGLRenderTarget | null = null;
-  const buf = new Uint8Array(ICON_W * ICON_H * 4);
+  // Iteration 13 (CORE): three/webgpu RenderTarget, 8-bit (sRGB storage = hardware encode on write, as before).
+  const makeTarget = () => new RenderTarget(ICON_W, ICON_H, {type: THREE.UnsignedByteType, format: THREE.RGBAFormat, generateMipmaps: false, depthBuffer: true,
+    ...(srgbTarget ? {samples: renderer.samples ? 4 : 0, colorSpace: THREE.SRGBColorSpace} : {samples: 0, colorSpace: THREE.NoColorSpace})});
+  const topDown = (renderer.backend as {isWebGPUBackend?: boolean}).isWebGPUBackend === true; // WebGPU copies rows from the top
+  let rt: RenderTarget | null = null;
   const prevTarget = renderer.getRenderTarget();
   const prevColor = renderer.getClearColor(new THREE.Color());
   const prevAlpha = renderer.getClearAlpha();
@@ -208,13 +229,20 @@ function renderShots(renderer: THREE.WebGLRenderer, ids: string[], guns: Record<
       fitProjection(cam, wrap);
       renderer.clear(true, true, true);
       renderer.render(scene, cam);
-      buf.fill(0); // a refused readback (it only logs) must not reuse the previous icon's pixels
-      renderer.readRenderTargetPixels(rt!, 0, 0, ICON_W, ICON_H, buf);
+      // Iteration 13 (CORE): async readback (a fresh buffer per icon, so a failed one never reuses the previous pixels)
+      let buf: Uint8Array | null = null;
+      try {
+        const px = await renderer.readRenderTargetPixelsAsync(rt!, 0, 0, ICON_W, ICON_H);
+        buf = px instanceof Uint8Array ? px : null;
+      } catch (err) {
+        console.warn(`item icon readback failed for ${id}:`, err);
+      }
       scene.remove(wrap); // clones share geometry/materials with the live templates: nothing to dispose
+      const stride = buf ? readbackStride(buf.length, ICON_W, ICON_H) : 0;
       let covered = 0;
-      for (let i = 3; i < buf.length; i += 4) if (buf[i]) covered++;
-      if (covered < 20) { failed.push(id); continue; }
-      shots.push({id, pixels: encodeIconPixels(buf, ICON_W, ICON_H, srgbTarget, 1)});
+      if (buf) for (let y = 0; y < ICON_H; y++) for (let x = 0; x < ICON_W; x++) if (buf[y * stride + x * 4 + 3]) covered++;
+      if (!buf || covered < 20) { failed.push(id); continue; }
+      shots.push({id, pixels: encodeIconPixels(buf, ICON_W, ICON_H, srgbTarget, 1, {topDown, stride})});
     }
   } finally {
     renderer.setRenderTarget(prevTarget);
@@ -228,21 +256,23 @@ function renderShots(renderer: THREE.WebGLRenderer, ids: string[], guns: Record<
  * Renders every catalogue item once (call after assets load and registerItemModels()). Safe to
  * await before the title screen; on any failure the affected items keep their SVG icon.
  */
-export async function buildItemIcons(renderer: THREE.WebGLRenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS)): Promise<IconStats> {
+export async function buildItemIcons(renderer: WebGPURenderer, guns: Record<string, GLTF | undefined>, ids: string[] = Object.keys(ITEMS)): Promise<IconStats> {
   const t0 = performance.now();
   let failed: string[] = [];
   let shots: Shot[] = [];
-  let method = 'shared renderer · MSAA sRGB render target · readRenderTargetPixels';
+  const api = (renderer.backend as {isWebGPUBackend?: boolean}).isWebGPUBackend ? 'WebGPU' : 'WebGL2'; // Iteration 13 (CORE)
+  let method = `shared renderer (${api}) · MSAA sRGB RenderTarget · readRenderTargetPixelsAsync`;
   try {
-    shots = renderShots(renderer, ids, guns, true, failed);
-  } catch {
+    shots = await renderShots(renderer, ids, guns, true, failed);
+  } catch (err) {
+    console.warn('item icons: sRGB render target failed', err);
     shots = [];
   }
   if (shots.length === 0 && ids.length) {
     // Fallback target (no MSAA, linear 8-bit) for drivers that reject the first one.
     failed = [];
-    method = 'shared renderer · linear render target · readRenderTargetPixels';
-    try { shots = renderShots(renderer, ids, guns, false, failed); } catch { shots = []; }
+    method = `shared renderer (${api}) · linear RenderTarget · readRenderTargetPixelsAsync`;
+    try { shots = await renderShots(renderer, ids, guns, false, failed); } catch (err) { console.warn('item icons: linear render target failed', err); shots = []; }
   }
   const canvas = document.createElement('canvas');
   canvas.width = ICON_W;

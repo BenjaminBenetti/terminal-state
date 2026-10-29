@@ -3,6 +3,7 @@ import {AssetLoadError} from './assets/loader';
 import {codeToSeed, freshSeed} from './core/rng';
 import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
+import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -31,8 +32,11 @@ async function boot(): Promise<void> {
     showError('This page was opened directly from disk.', ['Serve the folder over HTTP, e.g. `npx vite preview` or any static web server.']);
     return;
   }
-  if (!webgl2()) {
-    showError('WebGL 2 is not available in this browser.', ['Enable hardware acceleration or try a current desktop Chrome, Edge or Firefox.']);
+  // Iteration 13 (CORE): the renderer needs WebGPU (navigator.gpu + an adapter) or, as its fallback, WebGL 2.
+  const req = rendererRequest(location.search, navigator as {gpu?: unknown}, isSecureContext);
+  if ((req.forceWebGL || !req.webgpuApi) && !webgl2()) {
+    showError(req.forceWebGL ? 'WebGL 2 is not available in this browser (?renderer=webgl2 forces the WebGL 2 backend).' : 'Neither WebGPU nor WebGL 2 is available in this browser.',
+      ['Enable hardware acceleration or try a current desktop Chrome, Edge or Firefox.']);
     return;
   }
   if (matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches) {
@@ -80,10 +84,21 @@ async function boot(): Promise<void> {
 
   game.setState('loading');
   const bar = $('#load .fill'), label = $('#load .label');
+  // Iteration 13 (CORE): renderer.init() (WebGPU adapter + device, else the WebGL 2 fallback) runs while the assets download;
+  // game.load awaits it before the first GPU work (the item icons). A lost device stops rendering and shows the error screen.
+  game.onDeviceLost = text => {
+    if (game.gpu) installBackendIndicator(document, game.gpu);
+    showError('The graphics device was lost — rendering stopped.', [text, 'Reload the page to restart (your browser or GPU driver reset the device).']);
+    game.state = 'error';
+  };
+  const gpuReady = game.initRenderer().then(gpu => { installBackendIndicator(document, gpu); return gpu; });
+  gpuReady.catch(() => {}); // handled below (awaited together with the asset load)
   try {
-    await game.load((f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading ${file} · ${Math.round(f * 100)}%`; });
+    await Promise.all([gpuReady, game.load((f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading ${file} · ${Math.round(f * 100)}%`; })]);
   } catch (err) {
-    if (err instanceof AssetLoadError) showError('Some game files could not be loaded.', err.failures.map(f => `${f.url} — ${f.reason}`));
+    const gpuFailed = await gpuReady.then(() => null, (e: unknown) => e);
+    if (gpuFailed) showError('The renderer could not start (neither WebGPU nor its WebGL 2 fallback initialized).', [String((gpuFailed as Error)?.message ?? gpuFailed), 'Enable hardware acceleration or try a current desktop Chrome, Edge or Firefox.']);
+    else if (err instanceof AssetLoadError) showError('Some game files could not be loaded.', err.failures.map(f => `${f.url} — ${f.reason}`));
     else showError('The game failed to start.', [String((err as Error)?.message ?? err)]);
     game.state = 'error';
     return;

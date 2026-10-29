@@ -365,6 +365,9 @@ describe('#4 flashlight inside opened containers (the shadow pass draws what the
           if (mat.side !== THREE.BackSide) continue;
           backSided++;
           expect(shadowPassSide(mat), `${m.name || mat.name}: back-side interior shadows from the faces it draws`).toBe(THREE.BackSide);
+          // Iteration 13 (MAT-A): liners are node materials; WebGPURenderer applies the same rule (Renderer.renderObject:
+          // overrideMaterial.side = shadowSide ?? flip(side); tests/surface-nodes.test.ts pins it).
+          expect((mat as {isNodeMaterial?: boolean}).isNodeMaterial, `${m.name || mat.name}: node material`).toBe(true);
         }
       });
       expect(backSided).toBeGreaterThan(0);

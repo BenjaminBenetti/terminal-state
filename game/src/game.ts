@@ -48,6 +48,10 @@ import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
+// Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
+import type {WebGPURenderer} from 'three/webgpu';
+import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, rendererRequest, watchDevice, type GameRenderer, type GpuInfo} from './render/backend';
+import {OverlayPass} from './render/overlay';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
 
@@ -58,7 +62,16 @@ const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 interface UseAction { uid: number; itemId: string; t: number; total: number }
 
 export class Game {
-  readonly renderer: THREE.WebGLRenderer;
+  /** Iteration 13 (CORE): three r186 WebGPURenderer — usable only after `await initRenderer()` (main.ts boot). */
+  readonly renderer: WebGPURenderer;
+  /** Iteration 13 (CORE): the backend that actually initialized (render/backend.ts); null until initRenderer() resolves. */
+  gpu: GpuInfo | null = null;
+  private readonly gpuBoot: GameRenderer;
+  private gpuInit: Promise<GpuInfo> | null = null;
+  /** Iteration 13 (CORE): viewmodel overlay target + composite (render/overlay.ts). */
+  readonly overlay: OverlayPass;
+  /** Iteration 13 (CORE): set when the atmosphere module cannot run on this renderer; the station then renders directly. */
+  atmosphereBypass: string | null = null;
   readonly scene = new THREE.Scene();
   // Far plane just past where FogExp2(0.038) is ~99.8% opaque: on the 130 m+ platforms this lets
   // chunked instancing cull far fixtures/props that would be invisible anyway.
@@ -144,18 +157,23 @@ export class Game {
   private currentSeed = 0;
   /** Frames rendered while playing (used by QA to confirm the loop runs). */
   frames = 0;
-  /** Iteration 08: renderer string + whether it is a software rasterizer (anisotropy capped at 1 there). */
-  readonly softwareGl: SoftwareGlState;
+  /** Iteration 08: renderer string + whether it is a software rasterizer (anisotropy capped at 1 there). Iteration 13: set by initRenderer(). */
+  softwareGl: SoftwareGlState | null = null;
   lastError: string | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement, readonly qa: boolean) {
-    this.renderer = new THREE.WebGLRenderer({canvas, antialias: true, powerPreference: 'high-performance'});
+    // Iteration 13 (CORE): WebGPURenderer (three/webgpu): WebGPU when the browser yields an adapter + device, else its built-in
+    // WebGL 2 backend; ?renderer=webgl2 forces the fallback. Nothing renders / compiles before initRenderer() resolves.
+    this.gpuBoot = createGameRenderer(canvas, rendererRequest(location.search, globalThis.navigator as {gpu?: unknown} | undefined, globalThis.isSecureContext !== false));
+    this.renderer = this.gpuBoot.renderer;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = MOOD.exposure;
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
-    this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers
+    this.renderer.shadowMap.enabled = true; // Iteration 13 (CORE): the atmosphere switches it per quality (flashlight shadow)
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.overlay = new OverlayPass(this.renderer.samples); // Iteration 13 (CORE)
     this.scene.background = new THREE.Color(0x0a0b0c);
     this.scene.fog = new THREE.FogExp2(MOOD.fogColor, MOOD.fogDensity);
     this.scene.add(this.hemi, this.camera, this.muzzleLight, this.fx.group);
@@ -166,7 +184,18 @@ export class Game {
     this.flashlight.position.set(0.2, -0.15, 0.1);
     this.flashlight.target.position.set(0.04, -0.12, -6);
     this.camera.add(this.flashlight, this.flashlight.target);
-    this.atmosphere = new VolumetricAtmosphere(this.renderer, {flashlight: this.flashlight, muzzle: this.muzzleLight}, this.settings.quality);
+    // Iteration 13 (CORE): guarded. An atmosphere (render/volumetric.ts TSL pipeline) that cannot be built on this renderer
+    // is kept CPU-side only (smoke / scatter API, shadow marking), the station renders directly and the bypass is recorded.
+    const atmoLights = {flashlight: this.flashlight, muzzle: this.muzzleLight};
+    let atmosphere: VolumetricAtmosphere;
+    try {
+      atmosphere = new VolumetricAtmosphere(this.renderer as unknown as ConstructorParameters<typeof VolumetricAtmosphere>[0], atmoLights, this.settings.quality);
+    } catch (err) {
+      this.atmosphereBypass = `atmosphere module unavailable on WebGPURenderer (${String((err as Error)?.message ?? err).slice(0, 200)}); rendering the station directly`;
+      console.warn(`Iteration 13: ${this.atmosphereBypass}`);
+      atmosphere = new VolumetricAtmosphere(null, atmoLights, this.settings.quality);
+    }
+    this.atmosphere = atmosphere;
     // Iteration 12 (LIGHT): battery-driven flashlight + warm body glow (always in the scene: the light count never changes);
     // flares get the atmosphere smoke / scatter API, the Sound Lab flare cues and the storey / sight queries.
     this.torch = new PlayerLight(this.flashlight, MOOD.flashlight);
@@ -193,6 +222,27 @@ export class Game {
     window.addEventListener('blur', () => { if (this.state === 'playing' && !this.qa) this.setState('paused'); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') this.setState('paused'); });
     this.resize();
+  }
+
+  /** Iteration 13 (CORE): called once when the GPU device / WebGL context is lost (main.ts shows the error overlay). */
+  onDeviceLost: ((text: string) => void) | null = null;
+
+  /**
+   * Iteration 13 (CORE): `await renderer.init()` (WebGPU adapter + device, or the WebGL 2 fallback), then record what actually
+   * runs (game.gpu, read from the backend object), hook device-lost / GPU-error reporting and the software-rasterizer
+   * anisotropy cap. Idempotent: every caller gets the same promise; rejects only when neither backend starts.
+   */
+  initRenderer(): Promise<GpuInfo> {
+    this.gpuInit ??= this.renderer.init().then(() => {
+      const gpu = describeBackend(this.renderer.backend as never, this.gpuBoot.request, this.gpuBoot.fallbackError());
+      this.gpu = gpu;
+      watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.onDeviceLost?.(text); }});
+      this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers / adapters
+      this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
+      console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
+      return gpu;
+    });
+    return this.gpuInit;
   }
 
   /** First-person consume animation (weapons/consumeView.ts); visual only, `use` stays authoritative. */
@@ -224,6 +274,7 @@ export class Game {
     // Lane D (iteration 04): eat/drink/apply with the real item model in hand, and inventory icons
     // rendered once from the runtime models through this renderer (ui/itemIcons.ts).
     this.consumeView = new ConsumeView(this.viewmodel, makeSupplyMesh);
+    await this.initRenderer(); // Iteration 13 (CORE): the icon renders are the first GPU work (init overlapped the download)
     await buildItemIcons(this.renderer, guns); // a pistol without a model keeps its SVG icon (ui/icons.ts)
     this.pickups = new PickupManager(guns);
     this.scene.add(this.pickups.group);
@@ -320,8 +371,9 @@ export class Game {
     // Audio: occlusion-lite (no line of sight -> muffled) + humming vending/stall emitters. Same Sfx/context.
     this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props)});
     // Iteration 05: every fixture baked into a persistent light field (camera-independent; no pooled lights).
-    const gl = this.renderer.getContext() as WebGL2RenderingContext;
-    this.lightPool = new StationLighting(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: gl.getParameter(gl.MAX_3D_TEXTURE_SIZE) as number});
+    const max3D = maxTexture3DSize(this.renderer.backend as never); // Iteration 13 (CORE): WebGPU device limit / WebGL 2 MAX_3D_TEXTURE_SIZE
+    // Iteration 13 (LIGHTING): `renderer` registers the TSL light-field node (world/lightFieldNode.ts) in its node library.
+    this.lightPool = new StationLighting(this.scene, this.layout, this.world.fixtures, this.world.tubes, {hemi: this.hemi, fogDensity: MOOD.fogDensity, far: this.camera.far, max3DTextureSize: max3D, renderer: this.renderer});
     // Iteration 06 (Lane F): haze density map + light-field rebind; station structure/containers cast the flashlight shadow.
     this.atmosphere.setStation(this.layout, this.lightPool.volume);
     this.atmosphere.markShadows(this.world.group, true);
@@ -392,6 +444,7 @@ export class Game {
 
   // ---------------------------------------------------------------------------------------
   setState(s: GameState): void {
+    if (this.gpu?.deviceLost) s = 'error'; // Iteration 13 (CORE): a lost device keeps the error screen up (nothing can render)
     const prev = this.state;
     this.state = s;
     this.input.active = s === 'playing';
@@ -469,6 +522,7 @@ export class Game {
     const db = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     this.atmosphere.setQuality(this.settings.quality);
     this.atmosphere.setSize(db.x, db.y);
+    this.overlay.setSize(db.x, db.y); // Iteration 13 (CORE): viewmodel overlay target tracks the drawing buffer
   }
 
   applySettings(): void {
@@ -496,13 +550,44 @@ export class Game {
   }
 
   render(): void {
+    if (this.gpu?.deviceLost || !this.renderer.initialized) return; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
     this.renderer.info.reset();
     this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still)
     // Iteration 06 (Lane F): station scene + volumetric haze composited onto the canvas (direct r5 path when
     // off/unsupported); the viewmodel overlay is drawn on top afterwards, never fogged.
-    this.atmosphere.render(this.scene, this.camera, this.time);
-    this.renderer.clearDepth();
-    this.renderer.render(this.viewmodel.scene, this.viewmodel.camera);
+    // Iteration 13 (CORE): an atmosphere that throws on this renderer is bypassed (recorded, logged) -> direct scene render.
+    if (!this.atmosphereBypass) {
+      const sceneState = {background: this.scene.background, backgroundNode: this.scene.backgroundNode, fog: this.scene.fog};
+      try {
+        this.atmosphere.render(this.scene, this.camera, this.time);
+      } catch (err) {
+        this.atmosphereBypass = `atmosphere render failed: ${String((err as Error)?.message ?? err).slice(0, 300)}`;
+        if (this.gpu) recordGpuError(this.gpu, this.atmosphereBypass);
+        console.error('Iteration 13: atmosphere render failed; rendering the station directly', err);
+        // a pipeline that threw mid-pass may have left the output transform switched off (RenderPipeline does that per pass)
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.autoClear = false;
+        // Iteration 13 (primary): three r186's ShadowNode.updateShadow has no finally. A throw inside the flashlight
+        // shadow pass leaves its render-object function (casters only, shadow material), the override material, MRT /
+        // render target and the scene's cleared background in place, and every later frame draws nothing. Put them back.
+        this.renderer.setRenderObjectFunction(null);
+        this.renderer.setMRT(null);
+        this.renderer.setRenderTarget(null);
+        this.renderer.setClearColor(0x000000, 1);
+        Object.assign(this.scene, sceneState, {overrideMaterial: null});
+        this.renderDirect();
+      }
+    } else this.renderDirect();
+    // Iteration 13 (CORE): the viewmodel renders into its own target and is composited over the frame (render/overlay.ts),
+    // replacing clearDepth() + a second canvas render (WebGPURenderer tone-maps in a separate output pass).
+    if (OverlayPass.hasVisible(this.viewmodel.scene)) this.overlay.render(this.renderer, this.viewmodel.scene, this.viewmodel.camera);
+  }
+
+  /** Iteration 13 (CORE): the station straight to the canvas (scene background clears; the renderer's output pass tone-maps). */
+  private renderDirect(): void {
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.scene, this.camera);
   }
 
   // ---------------------------------------------------------------------------------------

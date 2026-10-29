@@ -7,22 +7,33 @@
 // - flickering/dying fixtures belong to one of three flicker circuits; the field, tubes and glow all
 //   follow the circuit level, so no light is ever switched or reassigned by camera proximity;
 // - the hemisphere is a constant dim ambient floor (no follow-the-player pumping);
-// - the only real dynamic lights are the flashlight and muzzle flash (owned by game.ts).
+// - the only real dynamic lights are the flashlight and muzzle flash (owned by game.ts), plus the
+//   iteration-12 body glow and the pooled flare lights (player/flashlight.ts, weapons/throwables.ts).
 // Iteration 04 and earlier used a pool of 3-8 PointLights reassigned every 0.2 s to the fixtures
 // nearest the camera, and drove the hemisphere from the player's current area: pools of light popped
 // on around the player and the whole scene brightened/darkened when crossing doorways.
+//
+// Iteration 13 (LIGHTING): three r186 WebGPURenderer + TSL. The field is a lighting node on ONE persistent scene light
+// (world/lightFieldNode.ts); tubes / glow cards are node materials. WebGPURenderer applies tone mapping as a frame output
+// pass and ignores Material.toneMapped, so the iteration-12 "not tone mapped" tubes and glow cards pre-compensate with
+// displayLinear() (inverse of three's ACES at the renderer exposure). The scene's light set never changes during a
+// session (stable LightsNode cache key: no node / pipeline rebuild on new station, flare throw or flashlight toggle).
 
 import * as THREE from 'three';
+import {MeshBasicNodeMaterial, type Node, type NodeBuilder, type NodeMaterial} from 'three/webgpu';
+import {
+  Fn, cameraProjectionMatrix, clamp, dot, exp, float, length, mat3, max, min, mix, modelViewMatrix, normalize, output, positionGeometry,
+  positionLocal, positionView, renderGroup, smoothstep, sqrt, toneMappingExposure, uniform, uv, varying, vec2, vec3, vec4,
+} from 'three/tsl';
 import type {Area, LightProfile, StationLayout} from '../gen/station';
 import type {Fixture} from './builder';
 import {
-  DEFAULT_FIELD, LightFieldVolume, bakeLightField, downsampleField, fixtureTint, groupLevel, installLightFieldShader, sampleField,
+  DEFAULT_FIELD, LightFieldVolume, bakeLightField, downsampleField, fixtureTint, groupLevel, sampleField,
   type BakedField, type FieldParams, type FieldSample,
 } from './lightField';
-import {addShaderHook} from '../render/shaderHooks';
+import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, type LightFieldLight} from './lightFieldNode';
+import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
-
-installLightFieldShader();
 
 /**
  * Mood tunables (the primary's knobs). r4 values in comments. Darker overall, deeper falloff between
@@ -51,7 +62,7 @@ export const MOOD = {
   glowFog: 0.6,
 } as const;
 
-/** Real dynamic lights in the station scene, all owned by game.ts (flashlight, muzzle flash). */
+/** Real dynamic lights owned by game.ts (flashlight, muzzle flash); body glow + flare lights live in their systems. */
 export const DYNAMIC_LIGHTS = 2;
 
 export interface LightingDebug {
@@ -66,29 +77,187 @@ export interface LightingDebug {
   poolLit: number;
   circuits: [number, number, number];
   field: {w: number; h: number; layers: number; slots: number; cellScale: number; bakeMs: number; bytes: number; working: number; crossRays: number};
+  /** Iteration 13: TSL light node registered in the renderer's node library / this station's field bound / light in the scene. */
+  node: {registered: boolean; bound: boolean; inScene: boolean; max3D: number};
   fixtures: {total: number; broken: number; flicker: number; dying: number; dim: number};
   areas: Record<LightProfile, number>;
+}
+
+/** The parts of a WebGPURenderer StationLighting uses (node library, backend limits, tone mapping). */
+export interface LightingRenderer {
+  library?: unknown;
+  backend?: unknown;
+  toneMapping?: THREE.ToneMapping;
 }
 
 export interface StationLightingOptions {
   hemi?: THREE.HemisphereLight;
   /** Field bake parameters (defaults: DEFAULT_FIELD with MOOD gain/bounce). */
   params?: Partial<FieldParams>;
-  /** Scene fog density used for the tube/glow fog curve. */
+  /** Scene fog density used for the tube/glow fog curve before scene.fog is read (default MOOD.fogDensity). */
   fogDensity?: number;
   /** Camera far plane: glow cards are faded out before it (no far-plane pop). */
   far?: number;
-  /** GPU MAX_3D_TEXTURE_SIZE (WebGL2 guarantees only 256): the field is downsampled to fit if needed. */
+  /** GPU 3D texture size limit (WebGL2 guarantees only 256): the field is downsampled to fit. Default: from `renderer`. */
   max3DTextureSize?: number;
   /** Iteration 08: GPU memory cap for the field (bytes); a larger bake is downsampled to fit. Default 32 MB. */
   maxFieldBytes?: number;
+  /** Iteration 13: the (initialised) WebGPURenderer: registers the light-field node and reads the 3D texture limit. */
+  renderer?: LightingRenderer | null;
 }
+
+/**
+ * Largest 3D texture edge of an initialised WebGPURenderer: WebGPU device limit maxTextureDimension3D, or the WebGL2
+ * backend's MAX_3D_TEXTURE_SIZE. `fallback` when unknown (no renderer / not initialised).
+ */
+export function max3DTextureSize(renderer: LightingRenderer | null | undefined, fallback = 2048): number {
+  const b = renderer?.backend as {device?: {limits?: {maxTextureDimension3D?: number}}; gl?: WebGL2RenderingContext} | undefined;
+  const lim = b?.device?.limits?.maxTextureDimension3D;
+  if (typeof lim === 'number' && lim > 0) return lim;
+  const gl = b?.gl;
+  if (gl && typeof gl.getParameter === 'function') {
+    const v = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE) as number;
+    if (typeof v === 'number' && v > 0) return v;
+  }
+  return fallback;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Display-referred colours under WebGPURenderer's output tone mapping
+
+// TSL nodes are chained untyped here (three's TSL typings reject most mixed-type chains).
+type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+const n = (x: unknown): N => x;
+
+/** three r186 TSL ACESFilmic (renderers apply it as the frame output pass; display/ToneMappingFunctions.js). */
+const ACES_IN = new THREE.Matrix3().set(0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777);
+const ACES_OUT = new THREE.Matrix3().set(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602);
+const ACES_IN_INV = ACES_IN.clone().invert();
+const ACES_OUT_INV = ACES_OUT.clone().invert();
+/** Highest display value displayLinear aims for (ACES only approaches 1 asymptotically). */
+export const DISPLAY_MAX = 0.985;
+/** RRT/ODT fit as three's TSL writes it: a(v) / b(v), b(v) = 0.983729 v^2 + 0.983729 * 0.432951 v + 0.238081. */
+const FIT = {a1: 0.0245786, a0: 0.000090537, b2: 0.983729, b1: 0.983729 * 0.432951, b0: 0.238081};
+
+/** CPU mirror of three r186's TSL ACES output (linear rgb in, display-linear rgb out). */
+export function acesDisplayCPU(c: readonly [number, number, number], exposure: number): [number, number, number] {
+  const v = new THREE.Vector3(...c).multiplyScalar(exposure / 0.6).applyMatrix3(ACES_IN);
+  const f = (x: number) => (x * (x + FIT.a1) - FIT.a0) / (x * x * FIT.b2 + x * FIT.b1 + FIT.b0);
+  v.set(f(v.x), f(v.y), f(v.z)).applyMatrix3(ACES_OUT);
+  const cl = (x: number) => Math.min(1, Math.max(0, x));
+  return [cl(v.x), cl(v.y), cl(v.z)];
+}
+
+/** Inverse of the fit for one channel (y in [0, 1 / b2)). */
+const fitInv = (y: number) => {
+  const A = 1 - FIT.b2 * y, B = FIT.a1 - FIT.b1 * y, C = -(FIT.a0 + FIT.b0 * y);
+  return (-B + Math.sqrt(B * B - 4 * A * C)) / (2 * A);
+};
+
+/** CPU mirror of displayLinear: the scene-linear colour that ACES (at `exposure`) displays as `d` (clamped to DISPLAY_MAX). */
+export function displayLinearCPU(d: readonly [number, number, number], exposure: number): [number, number, number] {
+  const cl = (x: number) => Math.min(DISPLAY_MAX, Math.max(0, x));
+  const y = new THREE.Vector3(cl(d[0]), cl(d[1]), cl(d[2])).applyMatrix3(ACES_OUT_INV);
+  const yc = (x: number) => fitInv(Math.min(0.99, Math.max(0, x)));
+  const v = new THREE.Vector3(yc(y.x), yc(y.y), yc(y.z)).applyMatrix3(ACES_IN_INV).multiplyScalar(0.6 / exposure);
+  return [Math.max(0, v.x), Math.max(0, v.y), Math.max(0, v.z)];
+}
+
+const m3 = (m: THREE.Matrix3) => mat3(m);
+
+/**
+ * TSL: the scene-linear colour that the renderer's output tone mapping displays as `color` (display-linear, 0..1). Use it
+ * where iteration 12 relied on `toneMapped: false` (emissive tubes, glow cards): with ACESFilmic it inverts three's TSL
+ * ACES at renderer.toneMappingExposure; with no tone mapping it is the identity. Other curves: identity (logged).
+ */
+export const displayLinear = Fn(([color]: [Node], builder: NodeBuilder) => {
+  const tm = (builder.renderer as unknown as {toneMapping?: THREE.ToneMapping}).toneMapping ?? THREE.NoToneMapping;
+  if (tm !== THREE.ACESFilmicToneMapping) {
+    if (tm !== THREE.NoToneMapping) console.warn('displayLinear: only ACESFilmic is inverted; colour passed through');
+    return color;
+  }
+  const d = clamp(n(color).rgb, 0, DISPLAY_MAX);
+  const y = clamp(n(m3(ACES_OUT_INV)).mul(d), 0, 0.99);
+  const A = n(float(1)).sub(n(y).mul(FIT.b2));
+  const B = n(float(FIT.a1)).sub(n(y).mul(FIT.b1));
+  const C = n(n(y).mul(FIT.b0).add(FIT.a0)).negate();
+  const v = n(B).negate().add(sqrt(max(n(B).mul(B).sub(n(A).mul(C).mul(4)), 0))).div(n(A).mul(2));
+  return max(n(n(m3(ACES_IN_INV)).mul(v)).mul(0.6).div(toneMappingExposure), 0);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Glow fog: tubes and glow cards fog at a fraction of the scene fog density
+
+/** Scene fog as seen by the glow-fog hooks (synced from scene.fog by StationLighting; density 0 = none). */
+export const GLOW_FOG = {
+  density: uniform(MOOD.fogDensity).setGroup(renderGroup),
+  color: uniform(new THREE.Color(MOOD.fogColor)).setGroup(renderGroup),
+};
+
+/** Copy scene.fog (FogExp2) into GLOW_FOG; any other / no fog disables the analytic tube fog. */
+export function syncGlowFog(fog: THREE.Fog | THREE.FogExp2 | null | undefined): void {
+  const f = fog as THREE.FogExp2 | null | undefined;
+  if (f && f.isFogExp2) {
+    GLOW_FOG.density.value = f.density;
+    (GLOW_FOG.color.value as THREE.Color).copy(f.color);
+  } else GLOW_FOG.density.value = 0;
+}
+
+const isNodeMaterial = (m: THREE.Material | null | undefined): m is NodeMaterial => !!(m as {isNodeMaterial?: boolean} | null)?.isNodeMaterial;
+
+/**
+ * Gentler fog for emissive tubes (they are light sources: they read further through the haze). Node materials only:
+ * material.fog = false and an 'output' hook (render/nodeHooks.ts, order 400) that mixes toward the scene fog colour with
+ * exp2 density x factor (iteration 12: three's fog_fragment with density^2 x factor^2). Idempotent per material.
+ */
+export function glowFog(m: THREE.Material, factor: number): void {
+  if (!isNodeMaterial(m)) { console.warn('glowFog: not a node material', m.type); return; }
+  if (m.userData.glowFog === factor) return; // shared material: hook once
+  m.userData.glowFog = factor;
+  m.fog = false;
+  addNodeHook(m, {
+    key: 'glow-fog', stage: 'output', order: 400,
+    fn: prev => {
+      const c = n(prev ?? output);
+      const dz = n(n(positionView).z).negate();
+      const fd = n(GLOW_FOG.density).mul(factor).mul(dz);
+      const f = n(float(1)).sub(exp(n(fd).mul(fd).negate()));
+      return vec4(mix(c.rgb, GLOW_FOG.color, f), c.a);
+    },
+  });
+}
+
+/** Display `m` like iteration 12's `toneMapped: false` under WebGPURenderer's output tone mapping ('output' hook, 450). */
+export function displayReferred(m: THREE.Material): void {
+  if (!isNodeMaterial(m)) { console.warn('displayReferred: not a node material', m.type); return; }
+  m.toneMapped = false; // documents intent (WebGPURenderer ignores it)
+  if (m.userData.displayReferred) return;
+  m.userData.displayReferred = true;
+  addNodeHook(m, {key: 'display-referred', stage: 'output', order: 450, fn: prev => { const c = n(prev ?? output); return vec4(n(displayLinear(c.rgb)), c.a); }});
+}
+
+/** Node twin of a plain (WebGL-era) MeshBasicMaterial, cached per source (the tube material is shared across stations). */
+const nodeTwins = new WeakMap<THREE.Material, MeshBasicNodeMaterial>();
+function asNodeMaterial(m: THREE.Material): NodeMaterial {
+  if (isNodeMaterial(m)) return m;
+  let t = nodeTwins.get(m);
+  if (!t) {
+    const b = m as THREE.MeshBasicMaterial;
+    t = new MeshBasicNodeMaterial({name: b.name || 'light-tubes', color: b.color, map: b.map ?? null, side: b.side, transparent: b.transparent, opacity: b.opacity});
+    nodeTwins.set(m, t);
+  }
+  return t;
+}
+
+// ---------------------------------------------------------------------------------------------
 
 const tmpColor = new THREE.Color();
 
 export class StationLighting {
   readonly field: BakedField;
   readonly volume: LightFieldVolume;
+  /** Iteration 13: the session's single light-field scene light (world/lightFieldNode.ts). */
+  readonly fieldLight: LightFieldLight;
   /** Soft glow cards, one per working fixture (camera-facing, additive). */
   readonly glow: THREE.InstancedMesh | null;
   /** Kept for API compatibility: no pooled lights exist any more. */
@@ -100,38 +269,44 @@ export class StationLighting {
   private readonly groups: Int8Array;
   private readonly glowIndex: Int32Array;
   private readonly animated: number[] = [];
-  private readonly glowUniforms: {uFogDensity: {value: number}; uFar: {value: number}; uIntensity: {value: number}};
+  private readonly registered: boolean;
+  private readonly max3D: number;
 
   constructor(private readonly scene: THREE.Scene, private readonly layout: StationLayout, private readonly fixtures: Fixture[],
     private readonly tubes: THREE.InstancedMesh | null, private readonly opts: StationLightingOptions = {}) {
     const params: FieldParams = {...DEFAULT_FIELD, gain: DEFAULT_FIELD.gain * MOOD.fixtureGain, bounce: MOOD.bounce, ...opts.params};
     // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
     const full = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout)}, params);
-    const max = opts.max3DTextureSize ?? 2048;
+    const max = this.max3D = opts.max3DTextureSize ?? max3DTextureSize(opts.renderer);
     const budget = opts.maxFieldBytes ?? 32e6;
     const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(full.stats.bytes / budget)));
     this.field = k > 1 ? downsampleField(full, k) : full;
     this.groups = this.field.groups;
     this.volume = new LightFieldVolume(this.field);
-    scene.add(this.volume);
+    // Iteration 13: TSL lighting node on the persistent field light; this station's texture on the global nodes.
+    this.registered = installLightFieldNode(opts.renderer);
+    this.fieldLight = stationFieldLight();
+    scene.add(this.fieldLight);
+    bindLightField(this.volume);
     if (opts.hemi) {
       opts.hemi.intensity = MOOD.ambient;
       opts.hemi.color.setHex(MOOD.hemiSky);
       opts.hemi.groundColor.setHex(MOOD.hemiGround);
     }
     for (let i = 0; i < fixtures.length; i++) if (this.groups[i] >= 0) this.animated.push(i);
-    const fogDensity = opts.fogDensity ?? MOOD.fogDensity;
+    GLOW_FOG.density.value = opts.fogDensity ?? MOOD.fogDensity;
+    if (scene.fog) syncGlowFog(scene.fog);
     if (tubes) {
-      const m = tubes.material as THREE.MeshBasicMaterial;
-      m.toneMapped = false;
+      const m = asNodeMaterial(tubes.material as THREE.Material);
+      if (tubes.material !== m) tubes.material = m;
       glowFog(m, MOOD.glowFog);
+      displayReferred(m);
     }
     // Glow cards for every working fixture.
     this.glowIndex = new Int32Array(fixtures.length).fill(-1);
-    this.glowUniforms = {uFogDensity: {value: fogDensity}, uFar: {value: opts.far ?? 70}, uIntensity: {value: MOOD.glow}};
     const working = fixtures.map((_, i) => i).filter(i => !fixtures[i].broken && fixtures[i].power > 0.01);
     if (working.length && MOOD.glow > 0) {
-      const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial(this.glowUniforms), working.length);
+      const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial(opts.far ?? 70), working.length);
       const m4 = new THREE.Matrix4();
       working.forEach((fi, k) => {
         const f = fixtures[fi];
@@ -141,17 +316,19 @@ export class StationLighting {
       });
       im.name = 'light-glow';
       im.renderOrder = 2;
+      im.castShadow = im.receiveShadow = false;
       im.computeBoundingSphere();
       scene.add(im);
       this.glow = im;
     } else this.glow = null;
     for (let g = 0; g < 3; g++) this.levels[g] = groupLevel(g, 0);
-    this.volume.setLevels(this.levels[0], this.levels[1], this.levels[2]);
+    this.setFieldLevels();
     this.applyLevels(true);
   }
 
   dispose(scene: THREE.Scene = this.scene): void {
-    scene.remove(this.volume);
+    if (this.fieldLight.parent === scene) scene.remove(this.fieldLight);
+    if (activeLightField() === this.volume) bindLightField(null);
     this.volume.dispose();
     if (this.glow) { scene.remove(this.glow); this.glow.geometry.dispose(); (this.glow.material as THREE.Material).dispose(); this.glow.dispose(); }
   }
@@ -176,13 +353,24 @@ export class StationLighting {
   update(dt: number, cam?: THREE.Vector3): void {
     this.t += dt;
     for (let g = 0; g < 3; g++) this.levels[g] = groupLevel(g, this.t);
-    this.volume.setLevels(this.levels[0], this.levels[1], this.levels[2]);
+    this.setFieldLevels();
     this.applyLevels(false);
+    syncGlowFog(this.scene.fog);
     if (cam) {
       const ai = cameraArea(this.layout, cam);
       this.areaIndex = ai;
       const area: Area | undefined = this.layout.areas[ai >= 0 ? ai : this.layout.platform];
       this.profile = area?.lighting ?? 'lit';
+    }
+  }
+
+  /** Circuit levels -> the volume (volumetric pass) and the bound TSL field; field-light intensity -> its gain. */
+  private setFieldLevels(): void {
+    const [l0, l1, l2] = this.levels;
+    this.volume.setLevels(l0, l1, l2);
+    if (activeLightField() === this.volume) {
+      setLightFieldLevels(l0, l1, l2);
+      LF.gain.value = this.fieldLight.intensity;
     }
   }
 
@@ -247,6 +435,7 @@ export class StationLighting {
       poolLit: 0,
       circuits: [this.levels[0], this.levels[1], this.levels[2]],
       field: {w: this.field.w, h: this.field.h, layers: this.field.layers, slots: this.field.slots, cellScale: this.field.cellScale ?? 1, bakeMs: Math.round(st.ms), bytes: st.bytes, working: st.working, crossRays: st.crossRays},
+      node: {registered: this.registered, bound: activeLightField() === this.volume, inScene: this.fieldLight.parent === this.scene, max3D: this.max3D},
       fixtures: {
         total: fx.length,
         broken: fx.filter(f => f.broken).length,
@@ -275,55 +464,27 @@ function cameraArea(layout: StationLayout, cam: THREE.Vector3): number {
   return best;
 }
 
-/** Gentler fog for emissive tubes (they are light sources: they read further through the haze). */
-export function glowFog(m: THREE.Material, factor: number): void {
-  if (m.userData.glowFog === factor) return; // shared material: patch once
-  m.userData.glowFog = factor;
-  // Iteration 06: chained via render/shaderHooks.ts (keeps any earlier hook; the key joins the program cache key).
-  addShaderHook(m, `glow-fog-${factor}`, sh => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', THREE.ShaderChunk.fog_fragment
-      .replace('fogDensity * fogDensity * vFogDepth * vFogDepth', `fogDensity * fogDensity * vFogDepth * vFogDepth * ${(factor * factor).toFixed(4)}`));
-  });
-}
-
-const GLOW_VERT = /* glsl */ `
-uniform float uFogDensity;
-uniform float uFar;
-varying vec3 vColor;
-varying vec2 vUv;
-varying float vFade;
-void main() {
-	vec4 c = modelViewMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
-	float dist = length( c.xyz );
-	// Pull the card toward the camera so the ceiling does not slice it.
-	c.xyz -= normalize( c.xyz ) * min( 0.6, dist * 0.25 );
-	c.xy += position.xy * vec2( 1.5, 0.75 );
-	gl_Position = projectionMatrix * c;
-	vUv = uv;
-	#ifdef USE_INSTANCING_COLOR
-		vColor = instanceColor;
-	#else
-		vColor = vec3( 1.0 );
-	#endif
-	float fd = uFogDensity * ${MOOD.glowFog.toFixed(3)} * dist;
-	vFade = exp( - fd * fd ) * smoothstep( 1.5, 5.0, dist ) * ( 1.0 - smoothstep( uFar * 0.75, uFar * 0.95, dist ) );
-}`;
-
-const GLOW_FRAG = /* glsl */ `
-uniform float uIntensity;
-varying vec3 vColor;
-varying vec2 vUv;
-varying float vFade;
-void main() {
-	vec2 q = ( vUv - 0.5 ) * 2.0;
-	float a = max( 0.0, exp( - dot( q, q ) * 3.0 ) - 0.05 );
-	if ( a * vFade <= 0.0 ) discard;
-	gl_FragColor = vec4( vColor * ( a * uIntensity * vFade ), 1.0 );
-}`;
-
-function glowMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    name: 'light-glow', uniforms, vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false,
-  });
+/**
+ * Soft additive glow card per working fixture (iteration 05 GLSL ShaderMaterial -> node material): a camera-facing
+ * 1.5 x 0.75 m card pulled toward the camera so the ceiling never slices it, a gaussian falloff, the fixture's circuit
+ * colour (instance colour), faded by the gentler glow fog, near the camera and before the far plane. Display-referred
+ * (iteration 12 drew it un-tone-mapped).
+ */
+export function glowMaterial(far: number): MeshBasicNodeMaterial {
+  const m = new MeshBasicNodeMaterial({name: 'light-glow', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false});
+  m.toneMapped = false;
+  // Card centre = the instance translation (the instanced position minus the raw corner).
+  const centre = n(positionLocal).sub(positionGeometry);
+  const c = n(n(modelViewMatrix).mul(vec4(centre, 1)).xyz);
+  const dist = length(c);
+  const pulled = n(c.sub(n(normalize(c)).mul(min(0.6, n(dist).mul(0.25))))).add(vec3(n(n(positionGeometry).xy).mul(vec2(1.5, 0.75)), 0));
+  m.vertexNode = n(cameraProjectionMatrix).mul(vec4(pulled, 1));
+  const fd = n(GLOW_FOG.density).mul(MOOD.glowFog).mul(dist);
+  const farU = uniform(far);
+  const fade = varying(n(exp(n(fd).mul(fd).negate())).mul(smoothstep(1.5, 5.0, dist)).mul(n(float(1)).sub(smoothstep(n(farU).mul(0.75), n(farU).mul(0.95), dist))));
+  const q = n(n(uv()).sub(0.5)).mul(2);
+  const a = max(0, n(exp(n(dot(q, q)).mul(-3))).sub(0.05));
+  m.colorNode = vec4(vec3(n(a).mul(MOOD.glow).mul(fade)), 1); // x instance colour (NodeMaterial.setupDiffuseColor)
+  m.outputNode = vec4(n(displayLinear(n(output).rgb)), 1);
+  return m;
 }

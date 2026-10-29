@@ -17,6 +17,8 @@ import {creatureQaApi} from './ai/creatureQa';
 import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
+import {renderStats} from './render/backend'; // Iteration 13 (CORE)
+import {probeDecayGPU, type DecayProbe} from './world/decay'; // Iteration 13 (MAT-A): decay inputs as the GPU sees them
 
 export function installQaHooks(game: Game): void {
   const api = {
@@ -47,8 +49,11 @@ export function installQaHooks(game: Game): void {
         // Iteration 03 physics: {ragdollsActive, ragdollsFrozen, ragdollsFailed, casingsLive, bodies, staticBodies, stepMs, stepMsMax}
         physics: {...game.physics.stats(), ragdolled: game.zombies.filter(z => z.ragdolled).length, ragdolls: game.physics.debugRagdolls(), casings: game.physics.casings.list().slice(-8)},
         stats: game.stats,
-        render: {...game.renderer.info.render},
+        // Iteration 13 (CORE): WebGPURenderer info — `calls` keeps meaning draw calls this frame (r186 `drawCalls`)
+        render: renderStats(game.renderer.info),
         softwareGl: game.softwareGl, // iteration 08: software rasterizer detection (anisotropy cap)
+        // Iteration 13 (CORE): the backend that actually initialized ({backend: 'webgpu' | 'webgl2-fallback', adapter, reason, label, …})
+        gpu: gpuQa(),
         memory: {...game.renderer.info.memory},
         world: game.world?.stats, genMs: game.genMs,
         // Lighting debug: current area profile, hemi (ambient) intensity, pool and fixture states.
@@ -70,7 +75,7 @@ export function installQaHooks(game: Game): void {
         icons: itemIconStats(),
         crouchInput: {down: ['KeyC'].filter(k => game.input.down(k))},
         // Iteration 04 (Lane E): see-through rifle optic — ADS blend, exit-pupil clarity, eye in the optic frame (m), reticle dir (view space), HUD crosshair hidden.
-        optic: {aimBlend: game.viewmodel.aimBlend, opticAim: game.viewmodel.opticAim, clarity: game.viewmodel.heldOptic?.clarity ?? null, eye: game.viewmodel.heldOptic?.eye.toArray() ?? null, reticleDir: game.viewmodel.heldOptic ? (game.viewmodel.heldOptic.lens.uniforms.uDir.value as THREE.Vector3).toArray() : null, crosshairHidden: document.getElementById('crosshair')?.style.visibility === 'hidden'},
+        optic: {aimBlend: game.viewmodel.aimBlend, opticAim: game.viewmodel.opticAim, clarity: game.viewmodel.heldOptic?.clarity ?? null, eye: game.viewmodel.heldOptic?.eye.toArray() ?? null, reticleDir: game.viewmodel.heldOptic ? game.viewmodel.heldOptic.lens.uniforms.uDir.value.toArray() : null, crosshairHidden: document.getElementById('crosshair')?.style.visibility === 'hidden'},
         lastError: game.lastError,
       };
     },
@@ -304,8 +309,24 @@ export function installQaHooks(game: Game): void {
     ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // Iteration 12 (LIGHT): light() — battery / glow / flares / light sources; DEBUG qaSetBattery(charge), qaGiveItem(id, n).
     ...lightQaApi(game),
-    /** Iteration 06 (Lane F): volumetric atmosphere state (enabled/active, resolution, steps, shadow map, GPU/CPU ms). */
+    /**
+     * Iteration 06 (Lane F): volumetric atmosphere state (enabled/active, resolution, steps, shadow map, ms). Iteration 13 (FOG):
+     * + backend the fog pass runs on, fog clock {fog, game, epoch}, motion (m/s), density stats, pass counters.
+     */
     atmosphere: () => game.atmosphere.debug(),
+    /**
+     * Iteration 13 (FOG): the world haze at (x, y, z) — sigma (1/m), patch / wisp values, area multiplier, level slot — at the
+     * current fog time, or at fog time `t` (s). The CPU mirror of what the march integrates there; independent of the camera,
+     * so a value read before walking away and again on return (same t) must be identical (persistence check).
+     */
+    fogSample: (x: number, y: number, z: number, t?: number) => game.atmosphere.fogSample(x, y, z, t),
+    /**
+     * Iteration 13 (CORE): renderer backend that actually initialized — read from three's backend object, not navigator.gpu:
+     * {backend: 'webgpu' | 'webgl2-fallback', adapter, reason, requested, webgpuApi, glRenderer, label, deviceLost, errors, …}.
+     */
+    gpu: () => gpuQa(),
+    /** Iteration 13 (MAT-A): decay field texel + level band the surface shaders read at world points (GPU) vs the CPU field. */
+    decayProbe: (pts: DecayProbe[]) => probeDecayGPU(game.renderer as never, pts),
     /**
      * Iteration 06 (Lane F) before/after toggle: `enabled` switches only the volumetric pass (flashlight
      * shadows stay); `quality` 'off'|'low'|'high' overrides the settings quality ('off' = exact r5 path);
@@ -429,6 +450,16 @@ export function installQaHooks(game: Game): void {
     },
   };
   (window as unknown as {__LL: typeof api}).__LL = api;
+
+  /** Iteration 13 (CORE): backend diagnostics (null until renderer.init() resolved) + live renderer facts. */
+  function gpuQa() {
+    const g = game.gpu, r = game.renderer;
+    if (!g) return null;
+    const be = r.backend as {isWebGPUBackend?: boolean; isWebGLBackend?: boolean};
+    return {...g, adapter: g.adapter && {...g.adapter}, errors: [...g.errors],
+      live: {isWebGPUBackend: be.isWebGPUBackend === true, isWebGLBackend: be.isWebGLBackend === true, coordinateSystem: r.coordinateSystem, samples: r.samples,
+        pixelRatio: r.getPixelRatio(), toneMapping: r.toneMapping, outputColorSpace: r.outputColorSpace, shadowMap: {...r.shadowMap}, atmosphereBypass: game.atmosphereBypass, overlayDraws: game.overlay.draws}};
+  }
 
   /** Iteration 08 (Lane B): storey + support of the player and every zombie. */
   function levelQa() {

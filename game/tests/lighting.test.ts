@@ -3,7 +3,8 @@
 //   distance, respects walls/doors/lintels/per-cell floor heights, and is cheap enough to bake on load;
 // - StationLighting (world/lights.ts) never reassigns or switches lights by camera position and adds no
 //   dynamic lights (flashlight + muzzle stay the only ones);
-// - the three r186 shader hook (light-probe-grid path) is installed and expands to sane GLSL.
+// - iteration 13: the WebGL ShaderChunk hook is gone; the TSL lighting node (WebGPURenderer) is covered by
+//   tests/lighting-node.test.ts.
 // LIGHT_PREVIEW=1 additionally CPU-renders before/after views into qa-artifacts/iter05-lighting/.
 import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
@@ -14,11 +15,14 @@ import {generateStation, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, Grid, SOLID, VOID} from '../src/gen/grid';
 import type {Fixture} from '../src/world/builder';
 import {
-  DEFAULT_FIELD, FIELD_EMAX, FixtureVisibility, LAYERS, LIGHT_FIELD_ANCHOR, LIGHT_FIELD_MARK, LightFieldVolume, SLOT_DEPTH, fieldDepth,
-  bakeLightField, cellFloorFn, columnGeometry, fixtureGroup, groupLevel, installLightFieldShader, sampleField, traceExact,
+  DEFAULT_FIELD, FIELD_EMAX, FixtureVisibility, LAYERS, SLOT_DEPTH, fieldDepth,
+  bakeLightField, cellFloorFn, columnGeometry, fixtureGroup, groupLevel, sampleField, traceExact,
   type BakedField, type FieldSource,
 } from '../src/world/lightField';
 import {DYNAMIC_LIGHTS, MOOD, StationLighting} from '../src/world/lights';
+import {LightFieldLight, activeLightField} from '../src/world/lightFieldNode';
+import {nodeHookKeys} from '../src/render/nodeHooks';
+import {MeshBasicNodeMaterial} from 'three/webgpu';
 import {stationLevels} from '../src/world/levelGeometry';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,59 +47,6 @@ const stations = new Map<number, StationLayout>();
 const station = (seed: number) => { let s = stations.get(seed); if (!s) stations.set(seed, (s = generateStation(seed))); return s; };
 const bakes = new Map<number, BakedField>();
 const baked = (seed: number) => { let b = bakes.get(seed); if (!b) bakes.set(seed, (b = bakeLightField(src(station(seed))))); return b; };
-
-// ---------------------------------------------------------------------------------------------
-describe('light field shader hook (three r186 light-probe-grid path)', () => {
-  it('three still exposes the probe-grid protocol we hand the field to', () => {
-    const r = fs.readFileSync(path.join(REPO, 'node_modules/three/src/renderers/WebGLRenderer.js'), 'utf8');
-    expect(r).toContain('object.isLightProbeGrid');
-    expect(r).toContain('m_uniforms.probesSH.value = volume.texture');
-    expect(r).toContain('m_uniforms.probesResolution.value.copy( volume.resolution )');
-    expect(r).toContain('_currentMaterialId = - 1;'); // per-render material refresh (circuit levels reach every program each frame)
-    const lights = THREE.UniformsLib.lights as Record<string, THREE.IUniform>;
-    for (const u of ['probesSH', 'probesMin', 'probesMax', 'probesResolution']) expect(lights[u], u).toBeTruthy();
-    for (const lib of ['physical', 'standard', 'lambert', 'phong', 'toon']) {
-      const fsrc = (THREE.ShaderLib as Record<string, {fragmentShader: string}>)[lib].fragmentShader;
-      expect(fsrc, lib).toContain('#include <lights_pars_begin>');
-      expect(fsrc, lib).toContain('#include <lights_fragment_begin>');
-    }
-    expect(THREE.ShaderChunk.lights_pars_begin).toContain('#include <lightprobes_pars_fragment>');
-  });
-
-  it('is installed once, replaces the SH decoding and feeds RE_Direct', () => {
-    expect(installLightFieldShader()).toBe(true);
-    expect(installLightFieldShader()).toBe(true); // idempotent
-    const C = THREE.ShaderChunk as unknown as Record<string, string>;
-    expect(C.lightprobes_pars_fragment).toContain(LIGHT_FIELD_MARK);
-    expect(C.lightprobes_pars_fragment).not.toContain('atlasDepth'); // upstream SH atlas decode gone
-    expect(C.lights_fragment_begin.split(LIGHT_FIELD_MARK).length).toBe(2);
-    expect(C.lights_fragment_begin).toContain(LIGHT_FIELD_ANCHOR);
-    expect(C.lights_fragment_begin).toContain('RE_Direct( lfLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight )');
-  });
-
-  it('expands to balanced GLSL for every lit material with USE_LIGHT_PROBES_GRID', () => {
-    const expand = (s: string): string => s.replace(/#include <(\w+)>/g, (_, k: string) => expand((THREE.ShaderChunk as unknown as Record<string, string>)[k] ?? `#error missing ${k}`));
-    for (const lib of ['physical', 'lambert', 'phong', 'toon']) {
-      const full = '#define USE_LIGHT_PROBES_GRID\n' + expand((THREE.ShaderLib as Record<string, {fragmentShader: string}>)[lib].fragmentShader);
-      expect(full, lib).not.toContain('#error missing');
-      expect(/[^\x00-\x7F]/.test(full), `${lib}: ASCII-only GLSL (ANGLE rejects anything else)`).toBe(false);
-      expect(full.split('vec3 getLightProbeGridIrradiance(').length, lib).toBe(2);
-      expect(full, lib).toContain('lfDirColor = T * rho * m;');
-      expect(full, lib).toContain('texelFetch( probesSH');
-      // Our chunks add balanced code (upstream preprocessor branches are not brace-balanced on their own).
-      const upstream = expand((THREE.ShaderLib as Record<string, {fragmentShader: string}>)[lib].fragmentShader.replace('#include <lights_fragment_begin>', '').replace('#include <lights_pars_begin>', ''));
-      const braces = (t: string) => (t.match(/\{/g) ?? []).length - (t.match(/\}/g) ?? []).length;
-      expect(braces(full), lib).toBe(braces(upstream) + braces(THREE.ShaderChunk.lights_pars_begin) + braces(THREE.ShaderChunk.lights_fragment_begin) + braces(THREE.ShaderChunk.lightprobes_pars_fragment));
-      // Globals the hook relies on are declared before use.
-      expect(full.indexOf('vec3 lfDirColor'), lib).toBeLessThan(full.indexOf('lfLight.color = lfDirColor'));
-      if (process.env.LIGHT_PREVIEW) {
-        const out = path.join(REPO, 'qa-artifacts', 'iter05-lighting');
-        fs.mkdirSync(out, {recursive: true});
-        fs.writeFileSync(path.join(out, `light-field.${lib}.frag.glsl`), full);
-      }
-    }
-  });
-});
 
 // ---------------------------------------------------------------------------------------------
 describe('baked light field (camera independent)', () => {
@@ -159,12 +110,12 @@ describe('baked light field (camera independent)', () => {
     console.log(`floor irradiance: lit areas ${lit.toFixed(2)}, dark areas ${dark.toFixed(3)}, platform pools ${med.toFixed(2)} vs darkest ${lo.toFixed(3)}`);
   });
 
-  it('StationLighting renders identical state wherever the camera is, with no pooled/dynamic lights', () => {
+  it('StationLighting renders identical state wherever the camera is, with no pooled/dynamic lights (one field light)', () => {
     const l = station(1);
     const run = (cams: THREE.Vector3[]) => {
       const scene = new THREE.Scene();
       const fixtures = fixturesOf(l);
-      const tubes = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.02, 0.05), new THREE.MeshBasicMaterial(), fixtures.length);
+      const tubes = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.02, 0.05), new MeshBasicNodeMaterial(), fixtures.length);
       const hemi = new THREE.HemisphereLight();
       const sl = new StationLighting(scene, l, fixtures, tubes, {hemi, fogDensity: MOOD.fogDensity, far: 70});
       const frames: string[] = [];
@@ -177,35 +128,38 @@ describe('baked light field (camera independent)', () => {
           fix: fixtures.map(x => x.level.toFixed(3)).join(','),
         }));
       }
-      let lights = 0;
-      scene.traverse(o => { if ((o as THREE.Light).isLight) lights++; });
-      return {frames, lights, scene, sl};
+      let lights = 0, fieldLights = 0;
+      scene.traverse(o => { if ((o as THREE.Light).isLight) { lights++; if (o instanceof LightFieldLight) fieldLights++; } });
+      return {frames, lights, fieldLights, scene, sl};
     };
     const sp = l.playerSpawn, g = l.grid;
     const near = Array.from({length: 120}, () => new THREE.Vector3(sp.x, 1.6, sp.z));
     const far = Array.from({length: 120}, (_, i) => new THREE.Vector3((i * 37) % (g.w * CELL), 1.6, (i * 53) % (g.h * CELL)));
-    const a = run(near), b = run(far);
+    const a = run(near);
+    expect(a.lights).toBe(1); // iteration 13: only the session's static field light (no pooled / dynamic lights)
+    expect(a.fieldLights).toBe(1);
+    expect(activeLightField()).toBe(a.sl.volume);
+    const b = run(far);
     expect(b.frames).toEqual(a.frames);
-    expect(a.lights).toBe(0); // StationLighting adds no lights at all
     expect(a.sl.lights.length).toBe(0);
     expect(DYNAMIC_LIGHTS).toBe(2); // flashlight + muzzle flash (game.ts) are the only dynamic lights
-    expect(a.scene.children.filter(o => o instanceof LightFieldVolume).length).toBe(1);
     // Hemisphere is a constant floor, never driven by the camera's area.
     expect(new Set(a.frames.map(fr => JSON.parse(fr).hemi)).size).toBe(1);
     // Flickering circuits actually animate (and identically for both cameras).
     expect(new Set(a.frames.map(fr => JSON.parse(fr).levels.join())).size).toBeGreaterThan(1);
-    a.sl.dispose(a.scene);
-    expect(a.scene.children.length).toBe(0);
-    // Tubes: never tone-mapped down, and a gentler fog curve so working lights read through the haze.
-    const tm = new THREE.MeshBasicMaterial();
+    b.sl.dispose(b.scene);
+    expect(b.scene.children.length).toBe(0);
+    // Tubes: display-referred (iteration 12: never tone-mapped down) and a gentler fog curve so working lights read through
+    // the haze — node hooks under WebGPURenderer (tests/lighting-node.test.ts compiles them).
+    const tm = new MeshBasicNodeMaterial();
     const tubes = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.02, 0.05), tm, l.lights.length);
-    const sl2 = new StationLighting(new THREE.Scene(), l, fixturesOf(l), tubes);
+    const sc2 = new THREE.Scene();
+    const sl2 = new StationLighting(sc2, l, fixturesOf(l), tubes);
     expect(tm.toneMapped).toBe(false);
-    const sh = {uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader} as unknown as THREE.WebGLProgramParametersWithUniforms;
-    tm.onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-    expect(sh.fragmentShader).not.toContain('#include <fog_fragment>');
-    expect(sh.fragmentShader).toContain(`vFogDepth * vFogDepth * ${(MOOD.glowFog ** 2).toFixed(4)}`);
-    void sl2;
+    expect(tm.fog).toBe(false);
+    expect(tm.userData.glowFog).toBe(MOOD.glowFog);
+    expect(nodeHookKeys(tm)).toEqual(['glow-fog', 'display-referred']);
+    sl2.dispose(sc2);
   });
 
   it('flicker circuits: tubes, glow and field follow layout state + circuit level', () => {

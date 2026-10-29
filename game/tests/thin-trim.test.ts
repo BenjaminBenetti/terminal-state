@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
-import {WorldMaterials, surfaceMaterial, thinTrim} from '../src/world/materials';
+import {WorldMaterials, isWorldMapped, surfaceMaterial, thinTrim} from '../src/world/materials';
 import {surface} from '../src/world/canvasTextures';
 
 installCanvasShim(false);
@@ -25,21 +25,24 @@ describe('thin trim materials', () => {
       const m = mats.get(key) as THREE.MeshStandardMaterial;
       expect(maps(m).length).toBeGreaterThan(0);
       for (const t of maps(m)) expect(t.anisotropy).toBe(1);
-      expect(m.userData.worldMapping).toBeTruthy(); // still world-mapped (hook kept)
+      expect(m.userData.worldMapping).toBeTruthy(); // still world-mapped (hooks kept)
+      expect(isWorldMapped(m)).toBe(true);
     }
     for (const t of [surface('paintedSteel').map, surface('railSteel').map]) expect(t!.anisotropy).toBe(8);
   });
-  it('thinTrim clones maps (same image) and keeps the world-mapping hook', () => {
+  it('thinTrim clones maps (same image) and keeps the world-mapping nodes (same program)', () => {
     const m = surfaceMaterial('brushedSteel', {metalness: 0.4});
-    const hook = m.onBeforeCompile, key = m.customProgramCacheKey;
+    // Iteration 13 (MAT-A): node material; the world mapping is its context / normal / hook nodes.
+    const nodes = [m.contextNode, m.normalNode, m.colorNode, m.roughnessNode], key = m.customProgramCacheKey();
     const src = m.map!;
     thinTrim(m);
     expect(m.map).not.toBe(src);
     expect(m.map!.image).toBe(src.image);
     expect(m.map!.anisotropy).toBe(1);
     expect(src.anisotropy).toBe(8);
-    expect(m.onBeforeCompile).toBe(hook);
-    expect(m.customProgramCacheKey).toBe(key);
+    expect([m.contextNode, m.normalNode, m.colorNode, m.roughnessNode]).toEqual(nodes);
+    expect(nodes.every(n => n !== null)).toBe(true);
+    expect(m.customProgramCacheKey()).toBe(key);
   });
 });
 

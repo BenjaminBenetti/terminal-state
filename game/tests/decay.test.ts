@@ -13,11 +13,17 @@ import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {stationLevels} from '../src/world/levelGeometry';
 import {shapeMaterial} from '../src/world/shapeMaterials';
-import {hasShaderHook} from '../src/render/shaderHooks';
+import {hasNodeHook, nodeHookKeys} from '../src/render/nodeHooks';
+import {compileNodeMaterial} from './helpers/nodeCompile';
+import {SurfaceNodeMaterial, WM_HOOK, WM_ROUGH_HOOK} from '../src/world/materials';
 import {
-  DECAY_ANCHORS, DECAY_FRAGMENT, DECAY_HOOK, DECAY_MAT_KEYS, DECAY_PROFILES, DECAY_SHOP_KEYS, DECAY_UNIFORMS, DETAIL_SIZE, LEVEL_WETNESS, WET_CAP,
-  applyDecay, areaNeglect, buildDecayField, decayDetailData, decayDetailTexture, sampleDecay, type DecayField, type DecayProfile,
+  DECAY_HOOK, DECAY_MAT_KEYS, DECAY_ORDER, DECAY_PROFILES, DECAY_ROUGH_HOOK, DECAY_SHOP_KEYS, DECAY_UNIFORMS, DETAIL_SIZE, LEVEL_WETNESS, WET_CAP,
+  applyDecay, archShopMaterial, areaNeglect, buildDecayField, decayDetailData, decayDetailTexture, sampleDecay, type DecayField, type DecayProfile,
 } from '../src/world/decay';
+import type {NodeMaterial} from 'three/webgpu';
+
+/** Iteration 13 (MAT-A): decay is a node-hook pair on node materials. */
+const hasShaderHook = (m: THREE.Material, key: string) => hasNodeHook(m as NodeMaterial, key);
 import {WALL_AGE_30Y, planWallDetail} from '../src/world/wallDetailPlan';
 
 function fakeEnvTextures(): Record<TextureKey, THREE.Texture> {
@@ -153,7 +159,7 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
   });
 });
 
-describe('decay shader hook: architectural materials only, bounded cost', () => {
+describe('decay node hooks: architectural materials only, bounded cost', () => {
   it('hooks every wall / floor / ceiling material and NOT trim steel, track, props, signs or the shared shop materials', () => {
     const un = installCanvasShim(false);
     try {
@@ -177,28 +183,47 @@ describe('decay shader hook: architectural materials only, bounded cost', () => 
     } finally { un(); }
   });
 
-  it('patches three anchors (still present upstream), no loops, light-field reads guarded, cheap texture state', () => {
-    for (const a of DECAY_ANCHORS.vertex) expect(THREE.ShaderLib.standard.vertexShader).toContain(a);
-    for (const a of DECAY_ANCHORS.fragment) expect(THREE.ShaderLib.standard.fragmentShader).toContain(a);
-    const m = new THREE.MeshStandardMaterial();
+  // Iteration 13 (MAT-A): the GLSL hook is a TSL node-hook pair; this checks the GENERATED shader (three r186 GLSLNodeBuilder,
+  // the WebGL2-backend path of WebGPURenderer). tests/surface-nodes.test.ts covers ordering / determinism / sharing.
+  it('colour + roughness hooks at order 200; bounded cost: 2 light-field fetches, 4 texture fetches, no loops, no branches', () => {
+    const m = new SurfaceNodeMaterial({map: new THREE.DataTexture(new Uint8Array(4), 1, 1), roughness: 0.62});
     applyDecay(m, DECAY_PROFILES.terrazzo);
-    const sh = {uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader} as unknown as THREE.WebGLProgramParametersWithUniforms;
-    m.onBeforeCompile(sh, {} as THREE.WebGLRenderer);
-    expect(sh.vertexShader).toContain('vDecayPos = dcP.xyz');
-    expect(sh.fragmentShader).toContain('diffuseColor.rgb = c;');
-    expect(sh.fragmentShader).toContain('roughnessFactor = clamp( roughnessFactor + dcRough');
-    for (const u of ['uDecayMap', 'uDecayGrid', 'uDecayTex', 'uDecayAge', 'uDecayP0', 'uDecayP1', 'uDecayP2', 'uDecayTint']) expect((sh.uniforms as Record<string, unknown>)[u], u).toBeDefined();
-    expect(DECAY_FRAGMENT).not.toMatch(/\bfor\s*\(|\bwhile\s*\(/);
-    // The level-slot / floor reads use the light field's packed pick and only exist where it is installed.
-    const lf = DECAY_FRAGMENT.slice(DECAY_FRAGMENT.indexOf('#ifdef LF_FLOOR_AT'), DECAY_FRAGMENT.indexOf('#endif'));
-    expect(lf).toContain('lfPk');
-    expect(DECAY_FRAGMENT.split('texelFetch').length - 1).toBe(2);
-    // Field + two detail samples + the 1D along-wall lookup that shapes seepage edges.
-    expect(DECAY_FRAGMENT.split('texture2D(').length - 1).toBe(4);
+    expect(nodeHookKeys(m)).toEqual([DECAY_HOOK, DECAY_ROUGH_HOOK]);
+    expect(DECAY_ORDER).toBe(200);
+    expect(m.decayP0.toArray()).toEqual([0.4, 0, 0.25, 0.55]);
+    expect(m.decayP2.x).toBe(1);
+    const sh = compileNodeMaterial(new THREE.Mesh(new THREE.BoxGeometry(), m), [new THREE.PointLight()]);
+    const plain = compileNodeMaterial(new THREE.Mesh(new THREE.BoxGeometry(), new SurfaceNodeMaterial({map: m.map, roughness: 0.62})), [new THREE.PointLight()]);
+    const main = sh.fragmentMain;
+    const count = (code: string, s: string) => code.split(s).length - 1;
+    expect(sh.vertex).toContain('vDecayN = ');
+    expect(main).not.toMatch(/\bfor\s*\(|\bwhile\s*\(/);
+    // Station light field (level slot + band header): two texel fetches.
+    expect(count(main, 'texelFetch(') - count(plain.fragmentMain, 'texelFetch(')).toBe(2);
+    // Decay field + two detail samples + the 1D along-wall edge lookup (the albedo map is still sampled once).
+    expect(count(main, 'texture(') - count(plain.fragmentMain, 'texture(')).toBe(4);
+    // The decay maths never branches around a texture sample (WGSL uniformity): samples are top-level statements.
+    for (const line of main.split('\n').filter(l => /= texture\(/.test(l))) expect(line, line).toMatch(/^\t\w+ = texture\(/);
+    expect(main).toContain('dcRough = ');
+    expect(main).toMatch(/Roughness = .*clamp\( \( nodeUniform\d+ \+ dcRough \), 0\.04, 1\.0 \)/);
     const t = decayDetailTexture();
     expect(t.anisotropy).toBe(1);
     expect(t.generateMipmaps).toBe(true);
     expect(t.image.width).toBe(DETAIL_SIZE);
+    expect(DECAY_UNIFORMS.uDecayTex.value).toBe(t);
+  });
+
+  it('storefront-unit finishes keep the iteration-12 composition: decay below the world-mapping grime', () => {
+    const un = installCanvasShim(false);
+    try {
+      const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+      const shared = shapeMaterial(mats, 'tileShop'), arch = archShopMaterial(mats, 'tileShop');
+      expect(arch).not.toBe(shared);
+      expect(nodeHookKeys(shared as NodeMaterial)).toEqual([WM_HOOK, WM_ROUGH_HOOK]);
+      expect(nodeHookKeys(arch as NodeMaterial)).toEqual([DECAY_HOOK, DECAY_ROUGH_HOOK, WM_HOOK, WM_ROUGH_HOOK]);
+      expect((arch as SurfaceNodeMaterial).wmMap.toArray()).toEqual((shared as SurfaceNodeMaterial).wmMap.toArray());
+      expect(arch.userData.worldMapping).toEqual(shared.userData.worldMapping);
+    } finally { un(); }
   });
 });
 
