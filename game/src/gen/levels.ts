@@ -129,6 +129,8 @@ export interface DynamicVolume {
   gates: VolumeGate[];
   /** Absolute floor y of every stop (gates open there; grid bands hidden in that range). Default: [floorY] when added. */
   stops?: readonly number[];
+  /** Shaft wall thickness around the interior (m, default one cell): physics keeps it solid over the whole shaft height. */
+  shell?: number;
   name?: string;
 }
 

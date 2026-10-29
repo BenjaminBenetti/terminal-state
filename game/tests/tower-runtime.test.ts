@@ -529,6 +529,7 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     const frame = () => { P.update(DT, keys(), L, null, {aiming: false, speedMult: 1, canSprint: true}); for (const f of host.frameHooks) f(DT); physics.update(DT); flares.tick(DT); };
     for (let i = 0; i < 30 * 12 && fl.body; i++) frame();
     expect(fl.body).toBeNull();
+    expect(fl.pos.x > CAB.x0 && fl.pos.x < CAB.x1 && fl.pos.z > CAB.z0 && fl.pos.z < CAB.z1).toBe(true);
     expect(fl.pos.y).toBeGreaterThan(baseOf(1) - 0.01);
     expect(fl.pos.y).toBeLessThan(baseOf(1) + 0.1);
     expect(physics.cabBodies()[0]).toEqual({floor: baseOf(1), fillersIn: 8, fillers: 8});
@@ -550,6 +551,103 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     expect(physics.cabBodies()[0].fillersIn).toBe(7);
     expect(host.travel).not.toHaveBeenCalled();
   });
+
+  // Regression (primary, full suite): with a station hall open UNDER the shaft, a flare rolling into a cab corner left the
+  // cab footprint and fell through the shaft wall to the station floor — the cannon statics had no wall above that column's
+  // top band. Seeded (deterministic rng): flares, a shot loose item and a flesh chunk, in a stationary and a moving cab.
+  const lcg = (seed: number) => { let s = seed * 9301 + 49297; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; };
+  function cabScenario(seed: number, moving: boolean) {
+    const layout = towerLayout();
+    const P = new Player();
+    P.spawn(5, 20, 0, 0); // in the station, out of the way
+    const {host} = makeHost(layout, P);
+    const physics = new PhysicsSystem(null);
+    physics.build(layout as never);
+    const rng = lcg(seed);
+    const flares = new FlareSystem(new THREE.Group(), physics, new LightSources(), rng);
+    Object.assign(host, {physics, flares});
+    const rt = installTower(host as unknown as TowerHost);
+    host.sectionHooks[0].build!(layout);
+    const e = rt.office!.elevator!, L = host.levels;
+    const frame = () => { P.update(DT, keys(), L, null, {aiming: false, speedMult: 1, canSprint: true}); for (const f of host.frameHooks) f(DT); physics.update(DT); flares.tick(DT); };
+    if (moving) rt.callFloor(3); // the empty cab rides up to floor 3 (8.8 m: accelerate, cruise, brake)
+    const tThrow = moving ? Math.round((1.2 + rng() * 6) / DT) : 1;
+    let pk: ReturnType<typeof host.pickups.add> | null = null;
+    let lowest = Infinity;
+    // flares (where the tube lies: its centre x / z, its head's height), the item's lowest point (its pickup anchor sits 8 cm
+    // under the body centre), chunk centres
+    const itemBox = new THREE.Box3();
+    const objects = () => [...flares.flares.map(f => ({x: f.model.root.position.x, y: f.pos.y, z: f.model.root.position.z})),
+      ...(pk ? [(() => { itemBox.setFromObject(pk.obj); const c = itemBox.getCenter(new THREE.Vector3()); return {x: c.x, y: itemBox.min.y + 0.01, z: c.z}; })()] : []),
+      ...physics.chunks.listFlesh().map(c => ({x: c.x, y: c.y, z: c.z}))];
+    for (let i = 0; i < 30 * 26; i++) {
+      if (i === tThrow) {
+        const y = e.logic.y;
+        // the reported throw (straight down into the cab; first use of the rng, exactly as the primary's repro) and a seeded
+        // one at the walls / corners
+        expect(flares.throw({x: 11.0, y: y + 1.5, z: 10.9}, {x: 0.05, y: -1, z: 0.05}).ok).toBe(true);
+        const cx = 10.4 + rng() * 1.7, cz = 10.4 + rng() * 1.2;
+        const d = new THREE.Vector3(rng() - 0.5, -0.4 - rng() * 0.6, rng() - 0.5).normalize();
+        flares.cooldown = 0;
+        expect(flares.throw({x: cx, y: y + 1.4, z: cz}, d).ok).toBe(true);
+        // a loose item on the cab floor, shot across it
+        pk = host.pickups.add(new Inventory().makeStack('cola', 1), 10.6 + rng() * 1.3, y, 10.5 + rng() * 1.0);
+        const sd = new THREE.Vector3(rng() - 0.5, rng() * 0.3, rng() - 0.5).normalize();
+        physics.dynamicItems.shootPickup(pk as never, new THREE.Vector3(pk.x, y + 0.06, pk.z), sd, 2 + rng() * 5);
+        // a flesh chunk flung at the walls
+        physics.chunks.spawnFlesh(new THREE.BoxGeometry(0.1, 0.06, 0.08), new THREE.MeshStandardMaterial(), new THREE.Vector3(11.25, y + 1.2, 11), new THREE.Quaternion(),
+          new THREE.Vector3(0.05, 0.03, 0.04), {vel: new THREE.Vector3((rng() - 0.5) * 8, (rng() - 0.5) * 6, (rng() - 0.5) * 8), spin: new THREE.Vector3(rng() * 9, rng() * 9, rng() * 9), mat: 'flesh', density: 1000}, 60);
+      }
+      frame();
+      if (i > tThrow) for (const o of objects()) lowest = Math.min(lowest, o.y - e.logic.y);
+      const settled = i > tThrow && flares.flares.every(f => !f.body) && physics.dynamicItems.awake === 0 && physics.chunks.awake === 0;
+      if (settled && !e.logic.moving && (!moving || e.logic.stop === 2)) break;
+    }
+    return {e, objects: objects(), lowest, physics, flares};
+  }
+
+  /** In the cab on its floor — or (doors open at its stop) rolled out over the threshold onto that storey's floor; never in the shaft. */
+  const expectSafe = (o: {x: number; y: number; z: number}, e: ReturnType<typeof cabScenario>['e'], seed: number) => {
+    const y = e.logic.y, inCabXZ = o.x > CAB.x0 - 0.02 && o.x < CAB.x1 + 0.02 && o.z > CAB.z0 - 0.02 && o.z < CAB.z1 + 0.02;
+    if (inCabXZ) {
+      expect(o.y, `seed ${seed} on the cab floor (${o.y.toFixed(3)} vs ${y})`).toBeGreaterThan(y - 0.02);
+      expect(o.y, `seed ${seed} under the cab ceiling`).toBeLessThan(y + 2.6);
+      return;
+    }
+    expect(e.gate.open, `seed ${seed} out of the cab (${o.x.toFixed(3)}, ${o.z.toFixed(3)}) only through open doors`).toBe(true);
+    expect(o.z, `seed ${seed} out on the door side`).toBeLessThan(CAB.z0 + 0.02);
+    expect(Math.abs(o.x - DOOR.x) < DOOR.width / 2 + 0.05 || o.z < SHAFT.z0, `seed ${seed} through the doorway, not the shaft wall`).toBe(true);
+    expect(o.y, `seed ${seed} on the landing floor`).toBeGreaterThan(y - 0.02);
+    expect(o.y, `seed ${seed} at that storey`).toBeLessThan(y + 2.2);
+  };
+
+  it('seeded regression: nothing thrown / shot / flung inside a STATIONARY cab ends below its floor or in the shaft (40 seeds)', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const {e, objects, lowest} = cabScenario(seed, false);
+      const y = e.logic.y;
+      expect(objects.length, `seed ${seed}`).toBe(4);
+      for (const o of objects) {
+        expect(o.x > CAB.x0 - 0.02 && o.x < CAB.x1 + 0.02 && o.z > CAB.z0 - 0.02 && o.z < CAB.z1 + 0.02, `seed ${seed} in the cab: ${o.x.toFixed(3)}, ${o.z.toFixed(3)}`).toBe(true);
+        expect(o.y, `seed ${seed} on the cab floor`).toBeGreaterThan(y - 0.02);
+        expect(o.y, `seed ${seed} under the cab ceiling`).toBeLessThan(y + 2.6);
+      }
+      // (an end-first 9 m/s impact dents the contact a few cm for a step: never anywhere near through the 0.5 m slab)
+      expect(lowest, `seed ${seed} never sank`).toBeGreaterThan(-0.15);
+    }
+  });
+
+  it('seeded regression: the same in a MOVING cab (thrown while it accelerates / cruises / brakes; 40 seeds)', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const {e, objects, lowest, physics} = cabScenario(seed, true);
+      expect(e.logic.stop, `seed ${seed} arrived`).toBe(2);
+      const y = e.logic.y;
+      expect(y).toBe(baseOf(3));
+      expect(objects.length, `seed ${seed}`).toBe(4);
+      for (const o of objects) expectSafe(o, e, seed);
+      expect(lowest, `seed ${seed} never sank below the moving floor`).toBeGreaterThan(-0.15);
+      expect(physics.cabBodies()[0].floor).toBe(y);
+    }
+  }, 120000);
 
   it('QA hooks: tower() state, towerCall / towerPick / towerGoLanding / towerGoCab drive the real logic', () => {
     const layout = towerLayout();

@@ -301,6 +301,15 @@ export class PhysChunks {
     for (const c of this.flesh) if (!c.body && inside(c.mesh.position.x, c.mesh.position.y, c.mesh.position.z)) c.mesh.position.y += dy;
   }
 
+  /** Lane LIFT: resting flesh / cloth chunks in a doorway the landing doors shut on go to the nearer side (bodies: the physics system). */
+  relocate(move: (x: number, y: number, z: number) => [number, number] | null): void {
+    for (const c of this.flesh) {
+      if (c.body) continue;
+      const to = move(c.mesh.position.x, c.mesh.position.y, c.mesh.position.z);
+      if (to) { c.mesh.position.x = to[0]; c.mesh.position.z = to[1]; }
+    }
+  }
+
   /** Remove every chunk body + flesh mesh (New Station); driven debris pieces are released to rest. */
   clear(): void {
     for (const c of this.world) { this.host.world?.removeBody(c.body); if (c.piece.serial === c.serial) this.release(c.piece, true); }

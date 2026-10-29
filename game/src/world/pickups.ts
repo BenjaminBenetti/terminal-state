@@ -430,6 +430,20 @@ export class PickupManager {
    * Task office-seamless (lane LIFT): loose items lying inside the moving elevator cab ride its dy (anchor + model). A
    * pickup that is simulating as a physics body is carried with its body and re-synced from it right after.
    */
+  /** Lane LIFT: loose items in a doorway the landing doors shut on go to the nearer side (`move` -> new x / z, or null). */
+  relocate(move: (x: number, y: number, z: number) => [number, number] | null): number {
+    let n = 0;
+    for (const p of this.list) {
+      const to = move(p.x, p.y + 0.05, p.z);
+      if (!to) continue;
+      p.obj.position.x += to[0] - p.x; p.obj.position.z += to[1] - p.z;
+      p.x = to[0]; p.z = to[1];
+      p.obj.updateMatrix();
+      n++;
+    }
+    return n;
+  }
+
   carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number {
     let n = 0;
     for (const p of this.list) {

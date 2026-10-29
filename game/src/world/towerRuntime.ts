@@ -24,6 +24,7 @@ import {buildWindows, planWindows, type WindowPlan, type WindowView} from './off
 import {EXTERIOR, buildExterior, planExterior, setExteriorEye, setExteriorFootprint, setSkylineTexture, type ExteriorModels, type ExteriorPlan, type ExteriorView} from './exterior';
 import {floorLabel, gateLocal, gateWorld, inDoorway, insideRect, liftBox, pushOutRect, rayBox, readTowerInfo, towerCue, type Box3Like, type P3, type TowerInfo} from './towerShared';
 import {TowerChoice, type ChoiceItem} from '../ui/elevatorPanel';
+import {RIDE_PAD, doorwayMover} from '../physics/world';
 
 /** What the tower needs from Game (structural: tests drive it with a fake host). */
 export interface TowerHost {
@@ -50,7 +51,11 @@ export interface TowerHost {
   warming?: boolean;
   prepareBeforeShow?(root: THREE.Object3D): Promise<void>;
   /** Loose pickups (world/pickups.ts): resting ones inside the cab ride along. */
-  pickups?: {carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number; list: readonly {x: number; y: number; z: number}[]};
+  pickups?: {
+    carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number;
+    relocate?(move: (x: number, y: number, z: number) => [number, number] | null): number;
+    list: readonly {x: number; y: number; z: number}[];
+  };
   /** Thrown flares (QA rider counts; physics carries them). */
   flares?: {flares: readonly {pos: {x: number; y: number; z: number}; body: unknown}[]};
   /** The built world: its storey culler (landings / windows registered; eye-in-cab override). */
@@ -79,6 +84,8 @@ export interface ElevatorRt {
   hintT: number;
   humT: number;
   litKey: string;
+  /** The doorway was open last frame (its shutting sweeps loose things out of it). */
+  gateWas: boolean;
   /** Riders carried on the last frame the cab moved (QA). */
   carried: {player: boolean; zombies: number; pickups: number};
 }
@@ -167,7 +174,7 @@ export class TowerRuntime {
       root.add(view.root);
       o.geometries.push(...view.geometries);
       h.atmosphere?.markShadows(view.root, false);
-      o.elevator = {plan, view, logic, vol, gate, levels: h.levels, playerBlocks: false, hintT: 1e9, humT: 0, litKey: '', carried: {player: false, zombies: 0, pickups: 0}};
+      o.elevator = {plan, view, logic, vol, gate, levels: h.levels, playerBlocks: false, hintT: 1e9, humT: 0, litKey: '', gateWas: false, carried: {player: false, zombies: 0, pickups: 0}};
     }
     // --- windows: every span of every storey ---
     if (info.windows.length) {
@@ -319,6 +326,8 @@ export class TowerRuntime {
     const h = this.host, P = h.player, L = e.logic, G = e.plan.gate, cab = e.plan.info.cab, cabH = e.plan.cabH;
     const prevY = L.y;
     const inside = (x: number, y: number, z: number): boolean => insideRect(cab, x, z) && y > prevY - 0.3 && y < prevY + cabH;
+    // loose things ride when their centre is within RIDE_PAD of the cab (lying across the door plane included)
+    const insideLoose = (x: number, y: number, z: number): boolean => insideRect(cab, x, z, -RIDE_PAD) && y > prevY - 0.3 && y < prevY + cabH;
     const stopY = !L.moving && L.stop !== null ? L.stops[L.stop].y : NaN;
     const atStop = (y: number) => Math.abs(y - stopY) < 1.2;
     // --- sense ---
@@ -341,6 +350,9 @@ export class TowerRuntime {
     const v = e.vol, near = e.plan.info.stops[L.nearest];
     v.floorY = L.y; v.ceilY = L.y + cabH; v.level = near.levelId; v.area = near.area;
     e.gate.open = L.gateOpen;
+    // the landing doors shut: loose things lying in the doorway go to the nearer side (into the cab / onto the landing)
+    if (e.gateWas && !e.gate.open && L.stop !== null) h.pickups?.relocate?.(doorwayMover(v, e.gate, L.stops[L.stop].y));
+    e.gateWas = e.gate.open;
     // --- riders: carried by the cab's dy (the cab frame is exact: no jitter, no falling through, no ceiling crush) ---
     if (dy !== 0) {
       e.carried = {player: false, zombies: 0, pickups: 0};
@@ -352,7 +364,7 @@ export class TowerRuntime {
         if (z.root) z.root.position.y += dy;
         e.carried.zombies++;
       }
-      e.carried.pickups = h.pickups?.carry(inside, dy) ?? 0;
+      e.carried.pickups = h.pickups?.carry(insideLoose, dy) ?? 0;
     }
     // --- views ---
     e.view.setCab(L.y, L.door);

@@ -194,12 +194,30 @@ export class FlareSystem implements BodySource {
    */
   carry(inside: (x: number, y: number, z: number) => boolean, dy: number): void {
     for (const f of this.flares) {
-      if (f.body || !inside(f.pos.x, f.pos.y, f.pos.z)) continue;
-      f.model.root.position.y += dy;
+      // tested at the tube's centre (the model root ~ the body centre), not the burning head: a flare lying across the cab
+      // door plane has its head past it while its body rests on the cab floor
+      const c = f.model.root.position;
+      if (f.body || !inside(c.x, c.y, c.z)) continue;
+      c.y += dy;
       f.model.root.updateMatrixWorld(true);
       f.pos.y += dy;
       f.last.y += dy;
       if (f.light) f.light.position.y += dy;
+    }
+  }
+
+  /** BodySource.relocate (lane LIFT): a flare lying in a doorway the landing doors shut on goes to the nearer side (its centre decides). */
+  relocate(move: (x: number, y: number, z: number) => [number, number] | null): void {
+    for (const f of this.flares) {
+      if (f.body) continue;
+      const c = f.model.root.position, to = move(c.x, c.y, c.z);
+      if (!to) continue;
+      const dx = to[0] - c.x, dz = to[1] - c.z;
+      c.x += dx; c.z += dz;
+      f.model.root.updateMatrixWorld(true);
+      f.pos.x += dx; f.pos.z += dz;
+      f.last.x += dx; f.last.z += dz;
+      if (f.light) { f.light.position.x += dx; f.light.position.z += dz; }
     }
   }
 
