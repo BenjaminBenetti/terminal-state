@@ -4,6 +4,7 @@ import {codeToSeed, freshSeed} from './core/rng';
 import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
+import {warmupNote} from './render/warmup'; // Iteration 14
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -67,7 +68,11 @@ async function boot(): Promise<void> {
   bindRange('#set-vol', 'volume', v => `${Math.round(v * 100)}`);
   ($('#set-mute') as HTMLInputElement).addEventListener('change', e => { game.settings.muted = (e.target as HTMLInputElement).checked; game.applySettings(); });
   ($('#set-invert') as HTMLInputElement).addEventListener('change', e => { game.settings.invertY = (e.target as HTMLInputElement).checked; });
-  ($('#set-quality') as HTMLSelectElement).addEventListener('change', e => { game.settings.quality = (e.target as HTMLSelectElement).value as 'low' | 'high'; game.applySettings(); });
+  ($('#set-quality') as HTMLSelectElement).addEventListener('change', e => {
+    game.settings.quality = (e.target as HTMLSelectElement).value as 'low' | 'high';
+    game.applySettings();
+    void game.rewarmAfterSettings(); // Iteration 14: new render targets -> prepare their pipelines before Resume
+  });
 
   // Session-only quality override (?quality=low), e.g. for slow software renderers.
   if (params.get('quality') === 'low') { game.settings.quality = 'low'; ($('#set-quality') as HTMLSelectElement).value = 'low'; game.applySettings(); }
@@ -110,9 +115,13 @@ async function boot(): Promise<void> {
   // Iteration 07 (Lane P2): only this station's lazy prop models are fetched (with progress) before it is built and revealed.
   await game.prepareStation(seed, (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; });
   game.newStation(seed);
-  const n = game.layout.zombies.length;
-  $('#station-intro').textContent = `${game.layout.name}. ${n} infected reported below street level. Clear them out.`;
-  label.textContent = `Ready · ${game.layout.areas.length} spaces generated`;
+  game.updateStationIntro();
+  // Iteration 14 (primary): prepare the station's pipelines, shadow variants, fog passes, held items and effects on the
+  // loading screen (render/warmup.ts) before "Enter station" becomes available; partial / failed results say so.
+  const warm = await game.prepareGraphics();
+  if (game.state === 'error') return; // the device was lost meanwhile (error screen already shown)
+  const note = warmupNote(warm);
+  label.textContent = `Ready · ${game.layout.areas.length} spaces generated${note ? ` · ${note}` : ''}`;
   bar.style.width = '100%';
   ($('#btn-start') as HTMLButtonElement).disabled = false;
   game.setState('title');

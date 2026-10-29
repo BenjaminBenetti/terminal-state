@@ -133,12 +133,18 @@ export class DamageSystem {
   }
   private warmFrames = 0;
 
-  clear(): void {
+  /**
+   * `retire` (iteration 14): when given, the wound material clones' GPU release is handed to it (the game runs it after
+   * the next station's warm-up, so three keeps the shared zombie programs instead of rebuilding them); else immediate.
+   */
+  clear(retire?: (release: () => void) => void): void {
     this.debris.clear();
     this.craters.clear();
     this.props.clear();
     this.knocks = [];
-    for (const w of this.actors) w.dispose();
+    const actors = this.actors;
+    if (retire) retire(() => { for (const w of actors) w.dispose(); });
+    else for (const w of actors) w.dispose();
     this.actors = [];
     for (const k in this.counts) (this.counts as Record<string, number>)[k] = 0;
   }

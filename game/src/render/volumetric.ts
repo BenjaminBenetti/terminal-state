@@ -589,6 +589,26 @@ export class VolumetricAtmosphere {
     this.cpuMs += ((performance.now() - t0) - this.cpuMs) * 0.1;
   }
 
+  /**
+   * Iteration 14 (primary, render/warmup.ts): the render target the station is drawn into on the next frame — the
+   * scene pass's own target (its pipeline built now, exactly as the first frame would) — or null when the frame
+   * renders directly (off / unsupported / failed: three's framebuffer target). three keys node builds and pipelines
+   * by that render context, so the warm-up compiles into it.
+   */
+  warmTarget(scene: THREE.Scene, camera: THREE.PerspectiveCamera): unknown {
+    if (!this.renderer) return null;
+    this.attach();
+    if (!this.active) return null;
+    this.ensureTargets();
+    this.ensurePipeline(scene, camera);
+    return (this.scenePass as unknown as {renderTarget: unknown}).renderTarget;
+  }
+
+  /** Iteration 14: forget the temporal history (the warm-up's hidden frames drew other geometry at this pose). */
+  resetHistory(): void {
+    this.historyValid = false;
+  }
+
   private direct(scene: THREE.Scene, camera: THREE.Camera): void {
     const r = this.renderer!;
     r.setRenderTarget(null);

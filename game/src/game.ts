@@ -52,12 +52,27 @@ import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
 import type {WebGPURenderer} from 'three/webgpu';
 import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, rendererRequest, watchDevice, type GameRenderer, type GpuInfo} from './render/backend';
 import {OverlayPass} from './render/overlay';
+import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
 
 export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high' }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
+
+/**
+ * Iteration 14: warm-up scope. `?warmup=off|view|full` overrides; otherwise the whole station on a hardware GPU and only
+ * the spawn neighbourhood on a software rasterizer (it JITs every program into system memory; render/warmup.ts).
+ */
+/** Iteration 14: where a warm-up shows its progress (the title's loading bar, or the pause panel's status line). */
+export interface WarmupUi { bar: HTMLElement | null; label: HTMLElement; button: HTMLButtonElement | null }
+const titleWarmupUi = (): WarmupUi => ({bar: $('#load .fill'), label: $('#load .label'), button: $('#btn-start') as HTMLButtonElement});
+
+export function warmupMode(search: string, software: boolean): WarmupMode {
+  const v = new URLSearchParams(search).get('warmup');
+  if (v === 'off' || v === 'view' || v === 'full') return v;
+  return software ? 'view' : 'full';
+}
 
 interface UseAction { uid: number; itemId: string; t: number; total: number }
 
@@ -157,6 +172,21 @@ export class Game {
   private currentSeed = 0;
   /** Frames rendered while playing (used by QA to confirm the loop runs). */
   frames = 0;
+  /** Iteration 14 (primary): the loading-screen render warm-up is running (render/warmup.ts); the loop neither updates nor renders. */
+  warming = false;
+  /** Iteration 14: the last warm-up's result (loading note, QA `__LL.warmup()`). */
+  warmup: WarmupResult | null = null;
+  private warmRun: Promise<WarmupResult> | null = null;
+  /**
+   * Iteration 14: what the warm-up prepares besides the discovered station scene (docs/rendering-warmup.md): effect pools /
+   * runtime prototypes in the scene, and render passes with their own scene / camera / target.
+   */
+  readonly warmRegistry = new WarmupRegistry();
+  /** Iteration 14: the previous station's GPU-side releases, run after the new station's warm-up (see newStation). */
+  private retired: (() => void)[] = [];
+  /** Iteration 14: bumped by newStation (a running warm-up for the previous station stops at its next chunk). */
+  private stationGen = 0;
+  private restarting = false;
   /** Iteration 08: renderer string + whether it is a software rasterizer (anisotropy capped at 1 there). Iteration 13: set by initRenderer(). */
   softwareGl: SoftwareGlState | null = null;
   lastError: string | null = null;
@@ -205,6 +235,9 @@ export class Game {
       levelAt: (x, z, y) => this.levels ? this.levels.levelAt(x, z, y) : 0,
       lineOfSight: (a, b) => !this.levels || this.levels.lineOfSight(a, b),
     };
+    // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
+    this.warmRegistry.addPool('effects', () => [this.fx.group]);
+    this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -274,6 +307,10 @@ export class Game {
     // Lane D (iteration 04): eat/drink/apply with the real item model in hand, and inventory icons
     // rendered once from the runtime models through this renderer (ui/itemIcons.ts).
     this.consumeView = new ConsumeView(this.viewmodel, makeSupplyMesh);
+    // Iteration 14: the viewmodel overlay is its own render pass (own scene / camera / target): every held item and the
+    // muzzle flash compile there on the loading screen
+    const vm = this.viewmodel;
+    this.warmRegistry.addPass({name: 'weapons and held items', scene: vm.scene, camera: vm.camera, target: () => this.overlay.target, hidden: () => vm.warmRoots()});
     await this.initRenderer(); // Iteration 13 (CORE): the icon renders are the first GPU work (init overlapped the download)
     await buildItemIcons(this.renderer, guns); // a pistol without a model keeps its SVG icon (ui/icons.ts)
     this.pickups = new PickupManager(guns);
@@ -296,25 +333,35 @@ export class Game {
   }
 
   newStation(seed: number): void {
+    this.stationGen++; // Iteration 14: invalidates a warm-up of the previous station
     this.currentSeed = seed >>> 0;
     this.rand = mulberry32(seed ^ 0x5bd1e995);
     // tear down the previous run
+    // Iteration 14 (user: "when I load a new station the stutters come back"): three r186 frees a node build / pipeline /
+    // program when its LAST user is disposed, and the next station needs the same ones (zombie + wound materials, glow,
+    // instanced variants). The old station leaves the scene now; its GPU releases are queued and run only after the new
+    // station's warm-up re-used those programs (prepareGraphics), instead of rebuilding them at the start of the level.
+    this.flushRetired(); // anything still queued from an earlier station
     if (this.world) {
-      this.scene.remove(this.world.group);
-      this.world.group.traverse(o => {
+      const oldGroup = this.world.group;
+      this.scene.remove(oldGroup);
+      const instanced: THREE.InstancedMesh[] = [];
+      oldGroup.traverse(o => {
         const mesh = o as THREE.Mesh;
-        if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
+        if ((o as THREE.InstancedMesh).isInstancedMesh) instanced.push(o as THREE.InstancedMesh);
+        // geometry buffers go now (a geometry dispose never releases three's node builds / pipelines)
         if (mesh.isMesh && !this.sharedGeometries.has(mesh.geometry) && !this.propModels.ownsGeometry(mesh.geometry)) mesh.geometry.dispose();
       });
-      this.lightPool.dispose(this.scene);
+      this.retire(() => { for (const im of instanced) im.dispose(); }); // the object 'dispose' event frees its render objects
+      this.lightPool.dispose(this.scene, fn => this.retire(fn));
     }
-    for (const z of this.zombies) { this.scene.remove(z.root); z.dispose(); }
+    for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
     this.pickups.clear();
     this.containers?.clear();
     this.containerTarget = null;
     this.fx.clear();
-    this.damage.clear();
+    this.damage.clear(fn => this.retire(fn)); // Iteration 14: the zombies' wound material clones are released after the warm-up too
     this.use = null;
     this.consumeView?.reset();
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
@@ -418,6 +465,100 @@ export class Game {
     this.updateCamera(0);
   }
   genMs = 0;
+
+  /**
+   * Iteration 14: a quality change (pause menu) rebuilds the atmosphere's targets — a new render context, so every
+   * station pipeline would compile again on the first frames after Resume. Re-run the warm-up right here (progress in
+   * the pause panel, Resume held until it finishes). Shader-affecting configuration changes call this hook.
+   */
+  async rewarmAfterSettings(): Promise<void> {
+    if (!this.world || this.state !== 'paused') return;
+    const line = $('#pause .fine'), resume = $('#btn-resume') as HTMLButtonElement;
+    const was = line.textContent;
+    const w = await this.prepareGraphics({bar: null, label: line, button: resume});
+    const note = warmupNote(w);
+    line.textContent = w.status === 'complete' || !note ? was : `${was} (${note})`;
+  }
+
+  /** Iteration 14: queue a GPU-side release of the previous station (run after the next warm-up). */
+  private retire(fn: () => void): void {
+    this.retired.push(fn);
+  }
+
+  /** Iteration 14: run the queued releases (after the new station's warm-up, or before the next teardown). */
+  private flushRetired(): void {
+    const list = this.retired;
+    this.retired = [];
+    for (const fn of list) {
+      try { fn(); } catch (err) { console.warn('Iteration 14: releasing previous-station GPU resources failed', err); }
+    }
+  }
+
+  /**
+   * Iteration 14: readiness boundary for content added AFTER the loading screen (render/warmup.ts prepareObjects): add
+   * `root` to the scene hidden, await this, then show it. Things created on use that recur (effects, thrown items) should
+   * instead be registered as warm-up pools / prototypes (warmRegistry) so the loading screen covers them.
+   */
+  prepareBeforeShow(root: THREE.Object3D): Promise<void> {
+    const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+    return prepareObjects(this.renderer as unknown as WarmupRenderer, this.scene, this.camera, root, target);
+  }
+
+  /** Iteration 14: the title / loading screen's station line (boot and restarts). */
+  updateStationIntro(): void {
+    $('#station-intro').textContent = `${this.layout.name}. ${this.layout.zombies.length} infected reported below street level. Clear them out.`;
+  }
+
+  /**
+   * Iteration 14 (primary): the loading-screen render warm-up for the current station (render/warmup.ts) on the
+   * backend / quality that will actually run, with its truthful progress on the loading bar. Single flight (a second
+   * call while one runs gets the same promise); resolves (never rejects) once the renderer state is restored, with the
+   * status — complete / partial (time budget) / cancelled (station replaced, device lost) / failed / skipped. Only
+   * renderer-side preparation: no update tick, AI, physics, loot, battery / flare timers or sound. A later quality
+   * change rebuilds the atmosphere's targets (a new render context), so those first frames compile again.
+   */
+  prepareGraphics(ui: WarmupUi = titleWarmupUi()): Promise<WarmupResult> {
+    if (this.warmRun) return this.warmRun;
+    const run = this.runWarmup(ui).finally(() => { this.warming = false; this.warmRun = null; this.flushRetired(); });
+    this.warmRun = run;
+    return run;
+  }
+
+  private async runWarmup(ui: WarmupUi): Promise<WarmupResult> {
+    const {bar, label, button} = ui;
+    const mode = warmupMode(location.search, this.softwareGl?.software === true);
+    if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
+    if (!this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return (this.warmup = skippedWarmup('renderer or station not ready'));
+    this.warming = true;
+    if (button) button.disabled = true;
+    // a quality change mid-run would dispose the render target being compiled into
+    const quality = document.querySelector<HTMLSelectElement>('#set-quality');
+    const qualityWas = quality?.disabled ?? false;
+    if (quality) quality.disabled = true;
+    if (bar) bar.style.width = '0%';
+    label.textContent = 'Preparing graphics…';
+    const gen = this.stationGen;
+    const res = await runWarmup({
+      renderer: this.renderer as unknown as WarmupRenderer,
+      scene: this.scene, camera: this.camera, mode, registry: this.warmRegistry,
+      near: {center: this.camera.getWorldPosition(new THREE.Vector3()), radius: 24},
+      sceneTarget: () => this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera),
+      torch: this.flashlight, torchIntensity: MOOD.flashlight,
+      frame: () => this.drawFrame(),
+      finish: () => { this.world.culler.update(this.camera, true); this.atmosphere.resetHistory(); this.render(); },
+      hide: hidden => { this.canvas.style.visibility = hidden ? 'hidden' : ''; },
+      alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
+    }, {
+      onProgress: (p: WarmupProgress) => { if (bar) bar.style.width = `${Math.floor(p.done / Math.max(1, p.total) * 100)}%`; label.textContent = warmupLabel(p); },
+    });
+    this.warmup = res;
+    const st = res.stages;
+    if (button) button.disabled = false;
+    if (quality) quality.disabled = qualityWas;
+    console.info(`Terminal State: graphics warm-up ${res.status}${res.reason ? ` (${res.reason})` : ''} · ${res.mode} · ${(res.ms / 1000).toFixed(1)} s · `
+      + `materials ${st.materials.done}/${st.materials.total} · passes ${st.passes.done}/${st.passes.total} · shadow frames ${st.shadows.done}/${st.shadows.total}`);
+    return res;
+  }
 
   /**
    * Iteration 07 (Lane Q): build + register one enemy for a spawn (zombie look or archetype actor).
@@ -537,6 +678,8 @@ export class Game {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
+    // Iteration 14: the warm-up owns the renderer (render target / layers / hidden frames) until it resolves
+    if (this.warming) { this.input.endFrame(); return; }
     if (this.state === 'playing' || (this.state === 'won' && this.wonAt >= 0)) {
       if (this.state === 'playing') this.update(dt);
       this.render();
@@ -551,8 +694,14 @@ export class Game {
 
   render(): void {
     if (this.gpu?.deviceLost || !this.renderer.initialized) return; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
-    this.renderer.info.reset();
     this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still)
+    this.drawFrame();
+  }
+
+  /** Iteration 14: the frame itself (station + atmosphere, then the viewmodel overlay); the warm-up's hidden frames call it without the culler. */
+  private drawFrame(): void {
+    if (this.gpu?.deviceLost || !this.renderer.initialized) return;
+    this.renderer.info.reset();
     // Iteration 06 (Lane F): station scene + volumetric haze composited onto the canvas (direct r5 path when
     // off/unsupported); the viewmodel overlay is drawn on top afterwards, never fogged.
     // Iteration 13 (CORE): an atmosphere that throws on this renderer is bypassed (recorded, logged) -> direct scene render.
@@ -1240,6 +1389,8 @@ export class Game {
   }
 
   restart(sameSeed: boolean): void {
+    if (this.restarting) return; // Iteration 14: a rebuild + warm-up is already under way (double click)
+    this.restarting = true;
     this.wonShown = false;
     // Resume audio at the very start of the click gesture, before the long synchronous rebuild.
     this.sfx.init();
@@ -1249,7 +1400,20 @@ export class Game {
     // Iteration 07 (Lane P2): fetch the new station's lazy prop models first (cached ones resolve at once), then rebuild.
     let told = false;
     void this.prepareStation(seed, () => { if (!told) { told = true; this.hud.toast('Loading station props…'); } })
-      .then(() => { this.newStation(seed); void lock.then(() => this.enterPlay()); });
+      .then(async () => {
+        await this.warmRun; // Iteration 14: never rebuild under a running warm-up (it owns the renderer state)
+        this.newStation(seed);
+        // Iteration 14: the new station's first-use graphics are prepared on the loading screen before play (pipelines
+        // already built for the previous station are cache hits; new instanced meshes / models are not)
+        this.updateStationIntro();
+        this.setState('loading');
+        const w = await this.prepareGraphics();
+        ($('#btn-start') as HTMLButtonElement).disabled = false;
+        if (w.status === 'cancelled') return; // replaced by another station or the device was lost
+        $('#load .label').textContent = `Ready · ${this.layout.areas.length} spaces generated`;
+        void lock.then(() => this.enterPlay());
+      })
+      .finally(() => { this.restarting = false; });
   }
 
   /** Nearest walkable world point (helper for QA hooks); Lane B: `level` = on that level's grid. */

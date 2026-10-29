@@ -174,6 +174,13 @@ seeded medium that translates with the station's draft (no re-rolling, so a room
 at the same fog time), with clear / normal / dense areas, lit in the march by the baked fixture light field, the
 flashlight cone (shadowed, follows the battery) and burning flares.
 
+Loading (iteration 14, `src/render/warmup.ts`, contract in [docs/rendering-warmup.md](../docs/rendering-warmup.md)): before
+the first station, after New station / Retry and after a quality change, a "Preparing graphics" step compiles the
+station's materials (discovered from the scene, one per three cache-key group, in the real render target), the
+viewmodel pass, effect pools / thrown-flare prototypes and the torch shadow variants, so the first minute of a level
+does not stutter on shader / pipeline compilation. The bar counts real work; it says Ready only when that work is
+done (or says it is partial / failed). `?warmup=off|view|full` overrides (software rasterizers default to `view`).
+
 Goal: clear the station (kill every infected). Death → "New station" (fresh seed) or "Retry this
 station" (same seed, this session only).
 
@@ -181,6 +188,7 @@ station" (same seed, this session only).
 - `?seed=CODE` — replay a station code shown in the pause menu (debug/share). Reloading without it
   always makes a new station.
 - `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset).
+- `?warmup=off|view|full` — loading-screen graphics warm-up scope (iteration 14; default `full`, `view` on software GL).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):
   `off` renders exactly like release 5 (no haze, no flashlight shadow map).

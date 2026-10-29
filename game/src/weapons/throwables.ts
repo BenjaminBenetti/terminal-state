@@ -425,6 +425,27 @@ export class FlareSystem implements BodySource {
     this.counts.cleared++;
   }
 
+  /**
+   * Iteration 14 (render/warmup.ts pool 'flares'): hidden prototypes of a burning and a burnt-out thrown flare, built by
+   * the same factory as a throw, so the loading-screen warm-up compiles them (the first throw no longer builds its
+   * pipelines mid-play). Never shown (every mesh hidden), never simulated, far below the station, never a raycast hit.
+   */
+  warmPrototypes(): THREE.Object3D[] {
+    if (!this.protos) {
+      this.protos = [true, false].map(burning => {
+        const m = thrownFlareModel();
+        m.setBurning(burning);
+        m.root.name = `flare-warm-prototype-${burning ? 'burning' : 'husk'}`;
+        m.root.position.set(0, -1000, 0);
+        for (const c of m.root.children) { c.visible = false; c.raycast = () => {}; }
+        this.group.add(m.root);
+        return m.root;
+      });
+    }
+    return this.protos;
+  }
+  private protos: THREE.Object3D[] | null = null;
+
   qa(): {burning: number; total: number; cooldown: number; counts: FlareSystem['counts']; list: {id: number; age: number; burning: boolean; moving: boolean; x: number; y: number; z: number; level?: number; light: number; attract: number}[]} {
     return {
       burning: this.burningCount, total: this.flares.length, cooldown: +this.cooldown.toFixed(2), counts: {...this.counts},

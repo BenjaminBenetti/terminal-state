@@ -197,6 +197,16 @@ export class Viewmodel {
     this.bump = 1;
   }
 
+  /**
+   * Iteration 14 (primary, render/warmup.ts): the roots hidden until used — every held-item holder (rifle / shotgun /
+   * pistol, consumables, flare), the muzzle flash and the (holstered) pivot. The loading-screen warm-up makes them
+   * visible for one compileAsync call (which draws nothing) and restores them, so equipping a found weapon, eating or
+   * the first shot does not build its pipeline mid-play.
+   */
+  warmRoots(): THREE.Object3D[] {
+    return [this.pivot, this.flash, ...[...this.items.values()].map(i => i.root)];
+  }
+
   /** Muzzle position in world space, given the main camera. */
   muzzleWorld(main: THREE.Camera, out = new THREE.Vector3()): THREE.Vector3 {
     if (!this.current) return main.getWorldPosition(out);

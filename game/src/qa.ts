@@ -325,6 +325,8 @@ export function installQaHooks(game: Game): void {
      * {backend: 'webgpu' | 'webgl2-fallback', adapter, reason, requested, webgpuApi, glRenderer, label, deviceLost, errors, …}.
      */
     gpu: () => gpuQa(),
+    /** Iteration 14: the loading-screen render warm-up's result (status, mode, plan counts, per-stage done / total / ms) and whether one runs now. */
+    warmup: () => ({running: game.warming, result: game.warmup}),
     /** Iteration 13 (MAT-A): decay field texel + level band the surface shaders read at world points (GPU) vs the CPU field. */
     decayProbe: (pts: DecayProbe[]) => probeDecayGPU(game.renderer as never, pts),
     /**

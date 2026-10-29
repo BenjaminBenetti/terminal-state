@@ -326,11 +326,20 @@ export class StationLighting {
     this.applyLevels(true);
   }
 
-  dispose(scene: THREE.Scene = this.scene): void {
+  /**
+   * `retire` (iteration 14): when given, the GPU releases (field volume, glow mesh / material) are handed to it — the
+   * scene removal stays immediate — so the game can run them after the next station's warm-up; else immediate.
+   */
+  dispose(scene: THREE.Scene = this.scene, retire?: (release: () => void) => void): void {
     if (this.fieldLight.parent === scene) scene.remove(this.fieldLight);
     if (activeLightField() === this.volume) bindLightField(null);
-    this.volume.dispose();
-    if (this.glow) { scene.remove(this.glow); this.glow.geometry.dispose(); (this.glow.material as THREE.Material).dispose(); this.glow.dispose(); }
+    const volume = this.volume, glow = this.glow;
+    if (glow) scene.remove(glow);
+    const release = () => {
+      volume.dispose();
+      if (glow) { glow.geometry.dispose(); (glow.material as THREE.Material).dispose(); glow.dispose(); }
+    };
+    if (retire) retire(release); else release();
   }
 
   /** Hemisphere intensity (constant ambient floor). */
