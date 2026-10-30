@@ -313,6 +313,14 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
 - **Damage:** without protection it costs up to **8 hp/s** above 0.12 concentration (about 6 hp/s in a filled room). There is
   one damage calculation per frame, and gas never causes limb injuries.
 - **HUD:** shows **TOXIC GAS** with a hint, or **FILTERING**.
+- **Cough (audio feedback):** while gas is hurting you unprotected (window gas or the toxic roof), the player coughs
+  (`src/audio/cough.ts`).
+  - **Timing:** the first cough comes 0.15–0.4 s after the damage starts. After that it plays one cough at a time, with a
+    2.4–4.2 s gap after each and at least 1.2 s of rest, so going in and out of gas or several sources never stack coughs.
+  - **Never** while a working mask protects you, in clean air, in menus, while loading or when dead. Leaving play stops a
+    cough mid-way.
+  - **Clips:** Sound Lab takes `cough-*.mp3`, chosen so the same take never plays twice in a row (provenance
+    `assets/derivatives/audio-cough.json`).
 - **Cost:** the field ticks at 10 Hz on its active cells and only on gassed storeys, which go to sleep once settled. Each
   gassed storey uploads one R8 texture layer.
 - **Not modelled:** intact windows and the green sky are harmless, and there is no ambient damage indoors or on the street.
