@@ -8,12 +8,13 @@
 //    cell); every office opening is an open gap in the grid (no door leaves except the elevator's), so gas passes through
 //    real openings only and the flux scales with their width. Storeys never exchange gas (stair cores are stamped into both
 //    grids, but each storey's field is separate).
-//  - explicit diffusion (D) with first-order decay, on a fixed 10 Hz tick split into stable substeps (explicit 2D diffusion
-//    needs D·dt/dx² ≤ 1/4: 3 substeps per 0.1 s tick at D 1.6 m²/s, dx 0.5 m), only over an active bounding box that grows
-//    one cell per substep where the front reaches it (so cost ∝ cells the gas has reached, not the storey).
-//  - pool / spill: the cells of the breach's ROOM within POOL_RADIUS_M walking metres of the pane decay slowly (K_POOL), so
-//    the room fills; everything else decays fast (K_SPILL: a spill length sqrt(D / K_SPILL) ≈ 3.4 m), so a doorway lets
-//    a modest tongue into the hallway and an open plan / corridor-end window still fills only ~10 m of its space.
+//  - explicit diffusion (D) with first-order decay (+ the pool fill below), on a fixed 10 Hz tick split into stable
+//    substeps (explicit 2D diffusion needs D·dt/dx² ≤ 1/4: 3 substeps per 0.1 s tick at D 1.6 m²/s, dx 0.5 m), only over an
+//    active bounding box that grows one cell per substep where the front reaches it (cost ∝ cells the gas has reached).
+//  - pool / spill: the cells of the breach's ROOM within POOL_RADIUS_M walking metres of the pane are its pool: what reaches
+//    them keeps growing toward the cap (FILL_RATE: the breach's inflow fills the room behind the front) and decays slowly
+//    (K_POOL); everything else only decays, fast (K_SPILL: a spill length sqrt(D / K_SPILL) ≈ 1.8 m), so a doorway lets a
+//    modest tongue into the hallway and an open plan / corridor-end window still fills only ~10 m of its space.
 //  - sources: the room-side cells along a broken pane inject c += SOURCE_RATE·(1 − c)·dt. Overlapping breaches share the
 //    field: they combine and saturate at the cap (1), never stack beyond it; cost does not grow with the breach count.
 //  - a storey whose field stopped changing sleeps (no ticks, no uploads) until another breach on it.
@@ -31,9 +32,19 @@ export const GAS = {
   D: 1.6,
   /** Pool region: the breach room's cells within this walking distance of the pane decay at K_POOL (m). */
   POOL_RADIUS_M: 10,
-  /** Decay in the pool region / everywhere else (1/s). */
+  /**
+   * Decay in the pool region / everywhere else (1/s). K_SPILL 0.5 (design first pass: 0.14) = a spill length
+   * sqrt(D / K_SPILL) ≈ 1.8 m: measured on generated offices (tests/gas-field.test.ts), < 0.15 by 3.5 m beyond every
+   * room's doorways, dead-end corridors included (0.14 / 0.35 left 0.27 / 0.19 there).
+   */
   K_POOL: 0.004,
-  K_SPILL: 0.14,
+  K_SPILL: 0.5,
+  /**
+   * Pool fill (1/s): in the pool region c += FILL_RATE · c · (1 − c) · dt — the breach's inflow fills the room behind the
+   * diffusion front (a travelling front, asymptotically 2·sqrt(D · FILL_RATE) ≈ 1.1 m/s); never outside the pool region.
+   * Diffusion from the pane alone filled a meeting room to only ~0.3 in 120 s against its doorway leak (measured).
+   */
+  FILL_RATE: 0.2,
   /** Source cells: c += SOURCE_RATE · (1 − c) · dt (1/s). */
   SOURCE_RATE: 1.4,
   /** Concentration cap (overlapping breaches saturate here). */
@@ -121,8 +132,8 @@ export class StoreyGas {
   c: Float32Array;
   private next: Float32Array;
   readonly open: Uint8Array;
-  /** Decay per cell (1/s): K_SPILL, K_POOL inside a breach room's pool region. */
-  readonly k: Float32Array;
+  /** 1 = pool region of a breach room (fill + K_POOL), 0 = spill (K_SPILL). */
+  readonly pool: Uint8Array;
   readonly src: Uint8Array;
   readonly breaches: string[] = [];
   /** Active box (domain-local, inclusive); x0 > x1 = empty. */
@@ -136,7 +147,7 @@ export class StoreyGas {
     this.c = new Float32Array(n);
     this.next = new Float32Array(n);
     this.open = new Uint8Array(n);
-    this.k = new Float32Array(n).fill(GAS.K_SPILL);
+    this.pool = new Uint8Array(n);
     this.src = new Uint8Array(n);
     // a closed one-cell ring round the domain: interior cells never index outside the arrays
     for (let y = 1; y < dh - 1; y++) for (let x = 1; x < dw - 1; x++) {
@@ -200,7 +211,7 @@ export class StoreyGas {
       for (let q = 0; q < b.length; q++) {
         const i = b[q];
         if (dist.get(i) !== d) continue;
-        this.k[i] = GAS.K_POOL;
+        this.pool[i] = 1;
         for (const [dx, dy, w] of NEIGH) {
           const j = i + dx + dy * dw;
           if (!ok(j)) continue;
@@ -217,10 +228,10 @@ export class StoreyGas {
   /** One explicit substep of length dt over the active box (grows it where the front reaches its edge). Returns max |Δc|. */
   step(dt: number): number {
     if (!this.active) return 0;
-    const dw = this.dw, c = this.c, nx = this.next, open = this.open, k = this.k, src = this.src;
+    const dw = this.dw, c = this.c, nx = this.next, open = this.open, pool = this.pool, src = this.src;
     const r = GAS.D * dt / (CELL * CELL);
     const keep = Math.exp(-GAS.SOURCE_RATE * dt);
-    const cap = GAS.CAP, flush = GAS.FLUSH;
+    const cap = GAS.CAP, flush = GAS.FLUSH, fill = GAS.FILL_RATE * dt, kPool = GAS.K_POOL * dt, kSpill = GAS.K_SPILL * dt;
     const {x0, y0, x1, y1} = this;
     let maxD = 0, gx0 = false, gx1 = false, gy0 = false, gy1 = false;
     for (let y = y0; y <= y1; y++) {
@@ -234,7 +245,8 @@ export class StoreyGas {
         if (open[i - dw]) lap += c[i - dw] - ci;
         if (open[i + dw]) lap += c[i + dw] - ci;
         let v = ci + r * lap;
-        v -= k[i] * dt * v;
+        // pool: the breach keeps pushing gas in — what reached the room grows toward the cap behind the front; spill: decays
+        if (pool[i]) v += fill * v * (cap - v) - kPool * v; else v -= kSpill * v;
         if (src[i]) v = cap - (cap - v) * keep;
         if (v < flush) v = 0; else if (v > cap) v = cap;
         nx[i] = v;
@@ -270,7 +282,7 @@ export class StoreyGas {
       if (v > max) max = v;
       if (v > 0.15) over++;
     }
-    for (let i = 0; i < this.k.length; i++) if (this.open[i] && this.k[i] === GAS.K_POOL) { poolSum += this.c[i]; poolN++; }
+    for (let i = 0; i < this.pool.length; i++) if (this.pool[i]) { poolSum += this.c[i]; poolN++; }
     return {
       level: this.level, breaches: this.breaches.length, activeCells: active, max, poolMean: poolN ? poolSum / poolN : 0, poolCells: poolN, over015: over,
       asleep: this.asleep, box: this.active ? [this.x0 + this.ox, this.y0 + this.oy, this.x1 + this.ox, this.y1 + this.oy] : null,
