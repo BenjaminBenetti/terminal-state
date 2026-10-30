@@ -296,7 +296,7 @@ ${knobsTable(site, `Tuning knobs for the ${slot.label} slot`, slot.knobs, 'slot-
     heading: `${level.label}: ${slot.label}`,
     description: `${level.label} ${slot.label} holders: tables, stage gates and expected contents before fit.`,
     crumbs: crumbsFor(site, level, slot.label),
-    lede: `Every ${esc(slot.label.toLowerCase())} holder context in ${esc(level.label)}: the table it draws from in each room, its stage gates, and the exact expected contents before fit.`,
+    lede: `Every holder context of the ${esc(slot.label.toLowerCase())} slot in ${esc(level.label)}: the table it draws from in each room, its stage gates, and the exact expected contents before fit.`,
     body,
   });
 }
