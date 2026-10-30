@@ -1361,7 +1361,7 @@
     {
       "path": "assets/derivatives/meshy-t25-chars-20261029.json",
       "bytes": 76584,
-      "sha256": "c51a302147fb15fae9020a2af1f6f3a12cdd5d19491527522ca293070db87d7f"
+      "sha256": "918a6a2e71ce0458585fec9fc34c1d05bc82d4a4e4730209af851d4f4651c4a5"
     },
     {
       "path": "assets/derivatives/meshy-t25-items-20261029.json",
@@ -1385,58 +1385,58 @@
     },
     {
       "path": "assets/derivatives/outfit-beanie.json",
-      "bytes": 32007,
-      "sha256": "4454bde80f6bcb08329aee558a123f0b9bf890a69e3919a175c615d873001853"
+      "bytes": 32020,
+      "sha256": "5347f0ae333402c3e398285a7f806ce78ba5973ed5aad116183d0b3f2e7a696f"
     },
     {
       "path": "assets/derivatives/outfit-blazer.json",
       "bytes": 138071,
-      "sha256": "3a2e5f5a09caeb08443d57570eb101f2f611e77d53712191ea96e32adb73a550"
+      "sha256": "0629b347cfa7c5b2064c9b62b9d87ca931c063f8994dbc1a0c6c981ebc941993"
     },
     {
       "path": "assets/derivatives/outfit-cap.json",
-      "bytes": 26560,
-      "sha256": "651da84cedcc467414d683087b65e7ae1c1c1ab2216d51c40ffb9a5873be7e7d"
+      "bytes": 26555,
+      "sha256": "9cf5deacb446bbb7d852f0d32acdb991cf4cfdac91427b1c2e1e5bdd4dcefbce"
     },
     {
       "path": "assets/derivatives/outfit-cargo.json",
       "bytes": 71462,
-      "sha256": "7727f5b262b6d26329d050fba59cc5875c970fcefcdde798e08c7aae59022757"
+      "sha256": "52c18334214b32a7294e2b4372426d6743f3ba70b6b817126bfa333a49b7bd88"
     },
     {
       "path": "assets/derivatives/outfit-coat.json",
       "bytes": 139824,
-      "sha256": "3f22723eccf670379990a3bfcad3df188126b34f4f8c439851ec33361bd7f263"
+      "sha256": "c17e513cbc56d6381ce96f352b089c830572e74a1953bf7971b5c3420fb6ccf1"
     },
     {
       "path": "assets/derivatives/outfit-flannel.json",
       "bytes": 116580,
-      "sha256": "8042e9b19153253fbd032df7da1870a64e9112ae5bd6f1c10617e448b0eb9fa5"
+      "sha256": "e2df729f1839fcf2a1c0d08a44fd5b69041c82bf368a7054757facfb868f520d"
     },
     {
       "path": "assets/derivatives/outfit-gasmask.json",
-      "bytes": 19283,
-      "sha256": "75652c4831536b499a312aef4339730595d3affd986a85e231f78a1c925d44b1"
+      "bytes": 19301,
+      "sha256": "117627deeebf627d2bd06fa37dcfc89969b478ddf02e32e587e85b4670db1448"
     },
     {
       "path": "assets/derivatives/outfit-hardhat.json",
-      "bytes": 31099,
-      "sha256": "0ee03606ae95fc864cdaedb6916199c5cb3da14ff2008f52e0870c341b2d730a"
+      "bytes": 31216,
+      "sha256": "eb5155692776ba7059cb83b23237faa3dc8e4b4cc00cbd89595eb59ff957b29f"
     },
     {
       "path": "assets/derivatives/outfit-hivis.json",
       "bytes": 113689,
-      "sha256": "d5d7944caeefc5a120b84e1eb8e8fe42d14d431d273b8d7d8d8135d39cf65399"
+      "sha256": "2a744d0e52e153cfb35235e03d97648e36e22294166a37d43d3cca3e27061423"
     },
     {
       "path": "assets/derivatives/outfit-hoodie.json",
       "bytes": 134101,
-      "sha256": "2bc85445e2d5e45ece83964fa83c61ef23897a847f9e19493225c51a9ed2b750"
+      "sha256": "0422637997667c13fabe13130892d756ad406c72b5cb29053d2ce9bbe9d931c9"
     },
     {
       "path": "assets/derivatives/outfit-jeans.json",
-      "bytes": 72214,
-      "sha256": "60c9bc73ec78b1ec56f30df77916a1e4579253664de30c355b8cdffab1448c57"
+      "bytes": 72213,
+      "sha256": "87edf82c382199cd83183416ac4910274b897db0dc158f8f2569f430d8649526"
     },
     {
       "path": "assets/derivatives/outfit-puffer.json",
@@ -1445,23 +1445,23 @@
     },
     {
       "path": "assets/derivatives/outfit-respirator.json",
-      "bytes": 19688,
-      "sha256": "fa26adf3829343ad81ecc5225d06b4fd629a539af54e430694a8fbc50451d6f9"
+      "bytes": 19710,
+      "sha256": "3051753fc79ad42b0af5ad131a27acf63c525afab539d80facf514a287a239a1"
     },
     {
       "path": "assets/derivatives/outfit-slacks.json",
       "bytes": 71473,
-      "sha256": "0f9e17706ce1398ce948287f97db21deea8378141483b523c60543c885de04e7"
+      "sha256": "bc9e4e9e538d0643edcce25ea6dc14854f0b048f3cbe6ef7176de50ba65ffb65"
     },
     {
       "path": "assets/derivatives/outfit-sweater.json",
       "bytes": 91200,
-      "sha256": "7657f280dea50f6c1403fe951d6388dd5a157aa434ca993f9f1a8caa39d293b0"
+      "sha256": "e88324058647c8980e1a5a2634dd60656298f8963c068ea84405e421b3baeafb"
     },
     {
       "path": "assets/derivatives/outfit-trench.json",
       "bytes": 89505,
-      "sha256": "5a93524c10d90548e0a1363f963d7f5b075c4d4448332322fd43e7ae70e87f17"
+      "sha256": "a235f2c1db27345365ebd751f6dd87f1c852c3ea5eabfdc42ed52c293045fd43"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -1505,33 +1505,33 @@
     },
     {
       "path": "assets/derivatives/zombie-body-agent.json",
-      "bytes": 39609,
-      "sha256": "dc27e3107ce04672fef4b6a41c8324ceeeeda06a32e3bbb86af47d8415d68f05"
+      "bytes": 39731,
+      "sha256": "d679ffc281d60a2fae73bacfc43497976f2b59b3555719f8a3bc7d05285b2bd7"
     },
     {
       "path": "assets/derivatives/zombie-body-courier.json",
-      "bytes": 45263,
-      "sha256": "0c35db9a633a1a78f2e17e3f56c0590c66548abb86125cdeb516a701d2be5c04"
+      "bytes": 45394,
+      "sha256": "15f5f0571a70f51f9eab5c82dfb0310e95dc14910592e5ddadd840e1735435df"
     },
     {
       "path": "assets/derivatives/zombie-body-heavyset.json",
-      "bytes": 45314,
-      "sha256": "34fe556c6097021dc9d304ad0dd44a3f906eecb571b6dd3d16733cb2dfbb0477"
+      "bytes": 45445,
+      "sha256": "2dcbeb02e5b22eace9edd1bcfd3d5e856a824e2be8c6db7624507b40960e3e3b"
     },
     {
       "path": "assets/derivatives/zombie-body-lastshift.json",
-      "bytes": 43166,
-      "sha256": "516ed6ee51e17ede71e0c3f62842afe6b56e1f1307884d2c1a465537ed6fef0a"
+      "bytes": 43298,
+      "sha256": "7909f53bddf2c39585d9cfe6d797afc8e380ad766d20811949497d91a19620c7"
     },
     {
       "path": "assets/derivatives/zombie-body-scavenger.json",
-      "bytes": 39801,
-      "sha256": "7987f2eea8fe54fdfc6c5bb363be8d4d6a39c22b13597e40807bbca6af56928e"
+      "bytes": 39933,
+      "sha256": "e96095716a623afb678b045696e9e61d2585bef776660965416a74d2fcb314d6"
     },
     {
       "path": "assets/derivatives/zombie-body-tall.json",
-      "bytes": 44272,
-      "sha256": "6ecf53264ee1af7099d9140b4a6efb07d4cc7fa174ee8a568ebe6311883d954d"
+      "bytes": 44404,
+      "sha256": "a49628ea440b68f6325a70058eded2ba6a3073bee8d04449b680a6b58e6b424d"
     },
     {
       "path": "assets/derivatives/zombie-rigged.json",
@@ -1545,13 +1545,13 @@
     },
     {
       "path": "assets/derivatives/zombie-wardrobe-fit-audit.json",
-      "bytes": 89552,
-      "sha256": "3cccaef3a3a1ec0aa55b3fcc1a04ad5d36c2318c8ecb72fae9abdb1814148ba1"
+      "bytes": 128746,
+      "sha256": "387b09852aa0d468a7069779ca7ddbf03c5c46d0b57eac5ec414ba7f474f4335"
     },
     {
       "path": "assets/derivatives/zombie-wardrobe.json",
-      "bytes": 106572,
-      "sha256": "088553a8398576cffb827f816099a8ddddc0a342bdc74505d3e3e522d9b04f81"
+      "bytes": 106589,
+      "sha256": "e9ca0d440576c98bd9d63cd6a2889c752dd018ad6ab3d98f405afb0d5277d7b6"
     },
     {
       "path": "assets/models/bench-t25.glb",
@@ -1577,11 +1577,6 @@
       "path": "assets/models/creature-ratdog-t25.glb",
       "bytes": 893544,
       "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad"
-    },
-    {
-      "path": "assets/models/creature-ratdog.glb",
-      "bytes": 1238220,
-      "sha256": "7bf1649d02762365e2849de9690f32afdf91e152517384c88c94270fd78809d9"
     },
     {
       "path": "assets/models/gun-locker.glb",
@@ -1781,12 +1776,7 @@
     {
       "path": "assets/models/outfit-beanie-t25.glb",
       "bytes": 262260,
-      "sha256": "ee8a69c5148e7345c860ed61e6312f583ea43e5b804d104f129ac6860509c837"
-    },
-    {
-      "path": "assets/models/outfit-beanie.glb",
-      "bytes": 296552,
-      "sha256": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a"
+      "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6"
     },
     {
       "path": "assets/models/outfit-blazer-t25.glb",
@@ -1794,19 +1784,9 @@
       "sha256": "8a25514379680f4a2b8aa2940253f996c1b99f35bef253c7573a0197b0937b24"
     },
     {
-      "path": "assets/models/outfit-blazer.glb",
-      "bytes": 730644,
-      "sha256": "972a3f48a8ffae01c76f547ed8d8eb1123bb7836bb198b63150336b91afa44bd"
-    },
-    {
       "path": "assets/models/outfit-cap-t25.glb",
       "bytes": 250812,
-      "sha256": "85d41cf35dada0f44ca9ca529794b5d93fad26444076a72ef235e800b30aae32"
-    },
-    {
-      "path": "assets/models/outfit-cap.glb",
-      "bytes": 341468,
-      "sha256": "4fdb02fccf121e22fadfa81cef6754d46d6d91d16f12f59295744ed848e3ddb7"
+      "sha256": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d"
     },
     {
       "path": "assets/models/outfit-cargo-t25.glb",
@@ -1814,19 +1794,9 @@
       "sha256": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788"
     },
     {
-      "path": "assets/models/outfit-cargo.glb",
-      "bytes": 612752,
-      "sha256": "68851c3eed45291936121d6770e37538c1ff1fe9989ecd9185d7b614878d2d06"
-    },
-    {
       "path": "assets/models/outfit-coat-t25.glb",
       "bytes": 1044436,
       "sha256": "0f8dd368762e5f7e8bda487e4113451731b8e06a6f1dff7da0f1c8401104c34c"
-    },
-    {
-      "path": "assets/models/outfit-coat.glb",
-      "bytes": 821396,
-      "sha256": "e8a6462714d12a3d1c278d400b3d31760b83b3743571955ba67f6964743f88ed"
     },
     {
       "path": "assets/models/outfit-flannel-t25.glb",
@@ -1834,29 +1804,14 @@
       "sha256": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3"
     },
     {
-      "path": "assets/models/outfit-flannel.glb",
-      "bytes": 428204,
-      "sha256": "0303a2698c8b530d8f6f81c407ad359f5ab29514938f012973afc26c67082b23"
-    },
-    {
       "path": "assets/models/outfit-gasmask-t25.glb",
-      "bytes": 423748,
-      "sha256": "3eb89dfaff77b0042475ac212483ea209cb066cf8a9eb08ad2fa84fff5c0a06b"
-    },
-    {
-      "path": "assets/models/outfit-gasmask.glb",
-      "bytes": 490108,
-      "sha256": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4"
+      "bytes": 423752,
+      "sha256": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed"
     },
     {
       "path": "assets/models/outfit-hardhat-t25.glb",
       "bytes": 273028,
-      "sha256": "bc540bfc8357c1a448baceb87bfe7d8b5aff8b61dce44e4d4b49dbd620bde82f"
-    },
-    {
-      "path": "assets/models/outfit-hardhat.glb",
-      "bytes": 349096,
-      "sha256": "c94ed2035aa144330e5307b4bb00db6ef5b5d6ae16f3953c0f3040679e5ad640"
+      "sha256": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a"
     },
     {
       "path": "assets/models/outfit-hivis-t25.glb",
@@ -1864,29 +1819,14 @@
       "sha256": "1208db45cf9fc9ecaf86687799578358fefa3f0cb3341e2862eb5c7385a518d7"
     },
     {
-      "path": "assets/models/outfit-hivis.glb",
-      "bytes": 418748,
-      "sha256": "4762bd2048f2bbea45932dd025f661d8984e55abc3ccb7a5b79f3d575875eaf0"
-    },
-    {
       "path": "assets/models/outfit-hoodie-t25.glb",
       "bytes": 822928,
       "sha256": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b"
     },
     {
-      "path": "assets/models/outfit-hoodie.glb",
-      "bytes": 823720,
-      "sha256": "5364d68aaeabec4dfd4fa8a2dfc4636f5bb63fc574de35efad2c7c3330e55988"
-    },
-    {
       "path": "assets/models/outfit-jeans-t25.glb",
       "bytes": 766276,
       "sha256": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401"
-    },
-    {
-      "path": "assets/models/outfit-jeans.glb",
-      "bytes": 583696,
-      "sha256": "1563d11941520228862247e7acc2e08533d6bfea6cb77237bbb4fc0ba9292e35"
     },
     {
       "path": "assets/models/outfit-puffer.glb",
@@ -1896,12 +1836,7 @@
     {
       "path": "assets/models/outfit-respirator-t25.glb",
       "bytes": 351120,
-      "sha256": "fcde48adc8c8f8ccf05cf92d60bfc6fab1aad5cb2f463dd34cf5b8891352c256"
-    },
-    {
-      "path": "assets/models/outfit-respirator.glb",
-      "bytes": 392876,
-      "sha256": "12b7b25a197f555be624c754836fa3b29c85cb8d8d3a9f96620dfc083390577e"
+      "sha256": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687"
     },
     {
       "path": "assets/models/outfit-slacks-t25.glb",
@@ -1909,29 +1844,14 @@
       "sha256": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096"
     },
     {
-      "path": "assets/models/outfit-slacks.glb",
-      "bytes": 490088,
-      "sha256": "54bc4ad60d795ba9cb473fa0dda4517e7d8b9d2eb4c5ff9169a1b7923635101e"
-    },
-    {
       "path": "assets/models/outfit-sweater-t25.glb",
       "bytes": 518580,
       "sha256": "7c597f531fd3dbabcb2b70e9f922eb6baebbead57abfcf1398cbadb339f66760"
     },
     {
-      "path": "assets/models/outfit-sweater.glb",
-      "bytes": 594220,
-      "sha256": "543b57efeedc53007cc3a9b821d77630594cbc4119fbeb38d46ce53f3560fb45"
-    },
-    {
       "path": "assets/models/outfit-trench-t25.glb",
       "bytes": 698072,
       "sha256": "2a280c631f4eabd0f6d59873013511f623577d6cb20a438037b95ff5bde42959"
-    },
-    {
-      "path": "assets/models/outfit-trench.glb",
-      "bytes": 761772,
-      "sha256": "87904fb00ee3370d76a4fd5ee552a3f7314101d044b1e1d178c15a3c07a6d601"
     },
     {
       "path": "assets/models/p7-aed-wall-cabinet-t25.glb",
@@ -2531,12 +2451,7 @@
     {
       "path": "assets/models/zombie-body-agent-t25.glb",
       "bytes": 657976,
-      "sha256": "99fbc4ab0f39989b480e74f1a36e7f52926b36dd221dfe583431bf06d1972b5e"
-    },
-    {
-      "path": "assets/models/zombie-body-agent.glb",
-      "bytes": 662524,
-      "sha256": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45"
+      "sha256": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e"
     },
     {
       "path": "assets/models/zombie-body-courier-t25.glb",
@@ -2544,19 +2459,9 @@
       "sha256": "be7b01ecd1259293b4f34713a2a76821514f55fef7cbcae504b27dfbafa2fc04"
     },
     {
-      "path": "assets/models/zombie-body-courier.glb",
-      "bytes": 695128,
-      "sha256": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df"
-    },
-    {
       "path": "assets/models/zombie-body-heavyset-t25.glb",
       "bytes": 588444,
       "sha256": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f"
-    },
-    {
-      "path": "assets/models/zombie-body-heavyset.glb",
-      "bytes": 627580,
-      "sha256": "a55889055287c4e852ff52de72d15af3fc3788b1b278da5e05f5760f66ffab6c"
     },
     {
       "path": "assets/models/zombie-body-lastshift-t25.glb",
@@ -2564,29 +2469,14 @@
       "sha256": "8214232e2bcda8f40b6828b0468be9b51373f9f988cdff8ffb4573c0496cc7f7"
     },
     {
-      "path": "assets/models/zombie-body-lastshift.glb",
-      "bytes": 732068,
-      "sha256": "b91e2c0bd56effec6d2f7a825e4c26da6e2c5d4fc1e80ef87730e6fee6246559"
-    },
-    {
       "path": "assets/models/zombie-body-scavenger-t25.glb",
       "bytes": 700768,
       "sha256": "b8acc6a5937a3e96d053be9845bbf0b520d1584c5f642142da7f909b579a376d"
     },
     {
-      "path": "assets/models/zombie-body-scavenger.glb",
-      "bytes": 832684,
-      "sha256": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869"
-    },
-    {
       "path": "assets/models/zombie-body-tall-t25.glb",
       "bytes": 632528,
       "sha256": "fa26aa32701d1eae50a6ee0f54299a0b9810e74d9afd0c41c136e970e5cda314"
-    },
-    {
-      "path": "assets/models/zombie-body-tall.glb",
-      "bytes": 628536,
-      "sha256": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281"
     },
     {
       "path": "assets/models/zombie-rigged.glb",

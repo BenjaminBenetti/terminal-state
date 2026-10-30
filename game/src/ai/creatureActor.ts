@@ -148,7 +148,7 @@ export class CreatureActor {
   constructor(gltf: GLTF, spawn: ZombieSpawn, rand: () => number) {
     this.root = SkeletonUtils.clone(gltf.scene);
     this.extras = (gltf.scene.userData.creatureRatdog ?? {}) as CreatureExtras;
-    if (!this.extras.clips || !this.extras.ends) throw new Error('creature-ratdog.glb: missing creatureRatdog extras');
+    if (!this.extras.clips || !this.extras.ends) throw new Error('creature-ratdog-t25.glb: missing creatureRatdog extras');
     this.root.name = 'creature-ratdog';
     this.brain = new CreatureBrain(spawn.x, spawn.z, spawn.yaw);
     this.scale = 0.94 + rand() * 0.12;

@@ -1803,7 +1803,7 @@
           "droppedNotCoveredInEveryPose": 116
         },
         "layers": [],
-        "ms": 5135
+        "ms": 5072
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1818,14 +1818,14 @@
       "motionStretch": {
         "triangles": 5999,
         "p50": 1.067,
-        "p99": 2.548,
+        "p99": 2.51,
         "max": 5.89,
         "over2x": 205,
         "over3x": 40,
         "fractionOver": 0.0067,
         "worstClips": {
-          "Death": 32,
-          "Run": 29
+          "Death": 30,
+          "Run": 32
         },
         "poses": 85
       }
@@ -2159,7 +2159,7 @@
           "droppedNotCoveredInEveryPose": 191
         },
         "layers": [],
-        "ms": 5242
+        "ms": 5187
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2500,7 +2500,7 @@
           "droppedNotCoveredInEveryPose": 24
         },
         "layers": [],
-        "ms": 5024
+        "ms": 5029
       },
       "bulkMBeforeRefit": {
         "torso": 0,

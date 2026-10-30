@@ -106,7 +106,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-respirator-t25.glb",
       "bytes": 351120,
-      "sha256": "fcde48adc8c8f8ccf05cf92d60bfc6fab1aad5cb2f463dd34cf5b8891352c256",
+      "sha256": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -429,20 +429,20 @@
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
             0.017,
-            -0.207
+            -0.141
           ],
-          "itemTopY": 1.4653,
-          "itemBottomY": 1.3803,
+          "itemTopY": 1.531,
+          "itemBottomY": 1.446,
           "headHeightM": 0.2615
         },
         "bulkHeadM": 0,
-        "method": "uniform scale from nose + 0.022 m to chin - 0.008 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
+        "method": "uniform scale from nose + 0.0877 m to chin - -0.057699999999999994 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
           "scale": 0.3425,
           "translate": [
             -0.00921,
-            1.38016,
-            0.07553
+            1.44586,
+            0.06584
           ]
         }
       },
@@ -456,10 +456,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 0,
-      "hiddenFraction": 0,
+      "hiddenBodyTriangles": 40,
+      "hiddenFraction": 0.0027,
       "mask": {
-        "hidden": 0,
+        "hidden": 40,
         "total": 14991,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -472,11 +472,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Run": 4,
           "Walk": 6,
-          "Idle": 6,
+          "Run": 4,
           "Death": 4,
-          "Attack": 4
+          "Attack": 4,
+          "Idle": 8
         },
         "poses": 85
       }

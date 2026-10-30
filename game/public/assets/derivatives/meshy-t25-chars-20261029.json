@@ -3,7 +3,7 @@
  "class": "chars",
  "task": "studio-meshy-game-replacement-20261029-01",
  "lane": "CHARS",
- "generatedAt": "2026-10-30T01:34:11.284Z",
+ "generatedAt": "2026-10-30T02:12:16.558Z",
  "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
  "method": "Accepted Meshy T2.5 native GLBs (single original front/reference image) are rebuilt by the EXISTING local CPU rig pipelines: densified (zombie/lib/densify.mjs, same surface + UV mapping) -> placement (metres, +Y up, +Z facing, feet / paws on y = 0) -> slice-landmark skeleton (18-joint humanoid / 25-joint quadruped, A-pose / bind as generated) -> simplify + new UV atlas + texture bake from the native textures -> automatic skin weights -> procedural clips (Idle/Walk/Run/Attack/Hit/Death) -> per-body garment fits (fit07 pose gate, masks, layering) recomputed for the new topology. No paid rigging / animation / remesh, no network.",
  "status": {
@@ -295,7 +295,7 @@
    },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-agent-t25.glb",
-    "sha256": "99fbc4ab0f39989b480e74f1a36e7f52926b36dd221dfe583431bf06d1972b5e",
+    "sha256": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e",
     "bytes": 657976,
     "triangles": 14991,
     "meshNodes": 1,
@@ -1816,7 +1816,7 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-hardhat-t25.glb",
-    "sha256": "bc540bfc8357c1a448baceb87bfe7d8b5aff8b61dce44e4d4b49dbd620bde82f",
+    "sha256": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a",
     "bytes": 273028,
     "triangles": 10990,
     "meshNodes": 5,
@@ -1925,7 +1925,7 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-cap-t25.glb",
-    "sha256": "85d41cf35dada0f44ca9ca529794b5d93fad26444076a72ef235e800b30aae32",
+    "sha256": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d",
     "bytes": 250812,
     "triangles": 11000,
     "meshNodes": 5,
@@ -2034,7 +2034,7 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-beanie-t25.glb",
-    "sha256": "ee8a69c5148e7345c860ed61e6312f583ea43e5b804d104f129ac6860509c837",
+    "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
     "bytes": 262260,
     "triangles": 10995,
     "meshNodes": 5,
@@ -2143,8 +2143,8 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-gasmask-t25.glb",
-    "sha256": "3eb89dfaff77b0042475ac212483ea209cb066cf8a9eb08ad2fa84fff5c0a06b",
-    "bytes": 423748,
+    "sha256": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed",
+    "bytes": 423752,
     "triangles": 15000,
     "meshNodes": 5,
     "perNodeTriangles": 3000,
@@ -2252,7 +2252,7 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-respirator-t25.glb",
-    "sha256": "fcde48adc8c8f8ccf05cf92d60bfc6fab1aad5cb2f463dd34cf5b8891352c256",
+    "sha256": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687",
     "bytes": 351120,
     "triangles": 10970,
     "meshNodes": 5,

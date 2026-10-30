@@ -1699,7 +1699,7 @@
       "layerIncompatible": []
     }
   },
-  "totalBytes": 13023824,
+  "totalBytes": 13023828,
   "totalMB": 13.02,
   "bodies": {
     "lastshift": {
@@ -1817,7 +1817,7 @@
     "agent": {
       "glb": "game/public/assets/models/zombie-body-agent-t25.glb",
       "bytes": 657976,
-      "sha256": "99fbc4ab0f39989b480e74f1a36e7f52926b36dd221dfe583431bf06d1972b5e",
+      "sha256": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e",
       "triangles": 14991,
       "vertices": 10664,
       "heightM": 1.65,
@@ -1836,15 +1836,15 @@
       "motion": {
         "triangles": 14991,
         "p50": 1.062,
-        "p99": 2.596,
+        "p99": 2.664,
         "max": 4.94,
-        "over2x": 494,
-        "over3x": 71,
-        "fractionOver": 0.0047,
+        "over2x": 543,
+        "over3x": 83,
+        "fractionOver": 0.0055,
         "worstClips": {
-          "Death": 58,
-          "Run": 60,
-          "Attack": 33
+          "Death": 73,
+          "Run": 50,
+          "Attack": 28
         },
         "poses": 85
       }
@@ -2126,7 +2126,7 @@
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-hardhat-t25.glb",
       "bytes": 273028,
-      "sha256": "bc540bfc8357c1a448baceb87bfe7d8b5aff8b61dce44e4d4b49dbd620bde82f",
+      "sha256": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a",
       "triangles": 2198,
       "vertices": 1387,
       "heavy": false,
@@ -2145,7 +2145,7 @@
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-cap-t25.glb",
       "bytes": 250812,
-      "sha256": "85d41cf35dada0f44ca9ca529794b5d93fad26444076a72ef235e800b30aae32",
+      "sha256": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d",
       "triangles": 2200,
       "vertices": 1345,
       "heavy": false,
@@ -2164,7 +2164,7 @@
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-beanie-t25.glb",
       "bytes": 262260,
-      "sha256": "ee8a69c5148e7345c860ed61e6312f583ea43e5b804d104f129ac6860509c837",
+      "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
       "triangles": 2199,
       "vertices": 1363,
       "heavy": false,
@@ -2182,8 +2182,8 @@
       "slot": "face",
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-gasmask-t25.glb",
-      "bytes": 423748,
-      "sha256": "3eb89dfaff77b0042475ac212483ea209cb066cf8a9eb08ad2fa84fff5c0a06b",
+      "bytes": 423752,
+      "sha256": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed",
       "triangles": 3000,
       "vertices": 2529,
       "heavy": false,
@@ -2202,7 +2202,7 @@
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-respirator-t25.glb",
       "bytes": 351120,
-      "sha256": "fcde48adc8c8f8ccf05cf92d60bfc6fab1aad5cb2f463dd34cf5b8891352c256",
+      "sha256": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687",
       "triangles": 2194,
       "vertices": 2018,
       "heavy": false,
@@ -2992,7 +2992,7 @@
       "body": "agent",
       "wearable": "hardhat",
       "slot": "head",
-      "hiddenBodyTriangles": 1401,
+      "hiddenBodyTriangles": 461,
       "bulkM": {
         "torso": 0,
         "arm": 0,
@@ -3072,7 +3072,7 @@
       "body": "agent",
       "wearable": "cap",
       "slot": "head",
-      "hiddenBodyTriangles": 1437,
+      "hiddenBodyTriangles": 531,
       "bulkM": {
         "torso": 0,
         "arm": 0,
@@ -3152,11 +3152,11 @@
       "body": "agent",
       "wearable": "beanie",
       "slot": "head",
-      "hiddenBodyTriangles": 1552,
+      "hiddenBodyTriangles": 564,
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0078
+        "head": 0.0064
       },
       "motion": {
         "over": 0,
@@ -3232,7 +3232,7 @@
       "body": "agent",
       "wearable": "gasmask",
       "slot": "face",
-      "hiddenBodyTriangles": 24,
+      "hiddenBodyTriangles": 149,
       "bulkM": {
         "torso": 0,
         "arm": 0,
@@ -3312,7 +3312,7 @@
       "body": "agent",
       "wearable": "respirator",
       "slot": "face",
-      "hiddenBodyTriangles": 0,
+      "hiddenBodyTriangles": 40,
       "bulkM": {
         "torso": 0,
         "arm": 0,
@@ -3959,15 +3959,15 @@
       "body": {
         "triangles": 14991,
         "p50": 1.062,
-        "p99": 2.596,
+        "p99": 2.664,
         "max": 4.94,
-        "over2x": 494,
-        "over3x": 71,
-        "fractionOver": 0.0047,
+        "over2x": 543,
+        "over3x": 83,
+        "fractionOver": 0.0055,
         "worstClips": {
-          "Death": 58,
-          "Run": 60,
-          "Attack": 33
+          "Death": 73,
+          "Run": 50,
+          "Attack": 28
         },
         "poses": 85
       },
@@ -3989,14 +3989,14 @@
         "jeans": {
           "triangles": 5999,
           "p50": 1.067,
-          "p99": 2.548,
+          "p99": 2.51,
           "max": 5.89,
           "over2x": 205,
           "over3x": 40,
           "fractionOver": 0.0067,
           "worstClips": {
-            "Death": 32,
-            "Run": 29
+            "Death": 30,
+            "Run": 32
           },
           "poses": 85
         },
@@ -4023,11 +4023,11 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Death": 10,
-            "Idle": 6,
-            "Run": 2,
-            "Walk": 2,
-            "Attack": 4
+            "Death": 8,
+            "Attack": 8,
+            "Run": 5,
+            "Walk": 4,
+            "Idle": 2
           },
           "poses": 85
         },
@@ -4041,10 +4041,10 @@
           "fractionOver": 0,
           "worstClips": {
             "Death": 8,
-            "Run": 4,
-            "Idle": 4,
-            "Attack": 5,
-            "Walk": 2
+            "Idle": 6,
+            "Attack": 6,
+            "Walk": 2,
+            "Run": 2
           },
           "poses": 85
         },
@@ -4057,11 +4057,12 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Walk": 2,
-            "Idle": 10,
-            "Death": 6,
-            "Attack": 4,
-            "Hit": 2
+            "Death": 2,
+            "Idle": 8,
+            "Run": 4,
+            "Walk": 4,
+            "Hit": 4,
+            "Attack": 2
           },
           "poses": 85
         },
@@ -4074,11 +4075,11 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Attack": 6,
-            "Death": 4,
-            "Walk": 8,
-            "Idle": 11,
-            "Run": 2
+            "Death": 6,
+            "Attack": 4,
+            "Idle": 12,
+            "Walk": 4,
+            "Run": 6
           },
           "poses": 85
         },
@@ -4091,11 +4092,11 @@
           "over3x": 0,
           "fractionOver": 0,
           "worstClips": {
-            "Run": 4,
             "Walk": 6,
-            "Idle": 6,
+            "Run": 4,
             "Death": 4,
-            "Attack": 4
+            "Attack": 4,
+            "Idle": 8
           },
           "poses": 85
         }
@@ -4610,5 +4611,5 @@
     }
   },
   "rebuild": "node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs",
-  "buildSeconds": 1201
+  "buildSeconds": 612
 }

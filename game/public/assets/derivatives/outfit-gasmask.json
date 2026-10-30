@@ -105,8 +105,8 @@
   "outputs": {
     "glb": {
       "path": "game/public/assets/models/outfit-gasmask-t25.glb",
-      "bytes": 423748,
-      "sha256": "3eb89dfaff77b0042475ac212483ea209cb066cf8a9eb08ad2fa84fff5c0a06b",
+      "bytes": 423752,
+      "sha256": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -409,24 +409,24 @@
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 1964,
+          "contactCells": 1956,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.007,
-            -0.137
+            0.039,
+            -0.167
           ],
-          "itemTopY": 1.5183,
-          "itemBottomY": 1.3583,
+          "itemTopY": 1.584,
+          "itemBottomY": 1.424,
           "headHeightM": 0.2615
         },
         "bulkHeadM": 0,
-        "method": "uniform scale from nose + 0.075 m to chin - 0.03 m (>= cheeks x 1); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
+        "method": "uniform scale from nose + 0.1407 m to chin - -0.035699999999999996 m (>= cheeks x 1); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
           "scale": 0.63961,
           "translate": [
             -0.00876,
-            1.35837,
-            0.06773
+            1.42407,
+            0.04563
           ]
         }
       },
@@ -440,10 +440,10 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 24,
-      "hiddenFraction": 0.0016,
+      "hiddenBodyTriangles": 149,
+      "hiddenFraction": 0.0099,
       "mask": {
-        "hidden": 24,
+        "hidden": 149,
         "total": 14991,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
@@ -456,11 +456,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 6,
-          "Death": 4,
-          "Walk": 8,
-          "Idle": 11,
-          "Run": 2
+          "Death": 6,
+          "Attack": 4,
+          "Idle": 12,
+          "Walk": 4,
+          "Run": 6
         },
         "poses": 85
       }

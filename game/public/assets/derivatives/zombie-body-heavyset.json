@@ -1539,6 +1539,13 @@
       "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
     }
   },
+  "noseLandmarkCheck": {
+    "plainY": 1.617,
+    "robustY": 1.6251,
+    "shift": 0,
+    "tolM": 0.005,
+    "minShiftM": 0.03
+  },
   "clips": [
     {
       "name": "Idle",

@@ -104,7 +104,7 @@
     "glb": {
       "path": "game/public/assets/models/zombie-body-agent-t25.glb",
       "bytes": 657976,
-      "sha256": "99fbc4ab0f39989b480e74f1a36e7f52926b36dd221dfe583431bf06d1972b5e",
+      "sha256": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -1476,6 +1476,13 @@
       "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
     }
   },
+  "noseLandmarkCheck": {
+    "plainY": 1.4433,
+    "robustY": 1.509,
+    "shift": 0.0657,
+    "tolM": 0.005,
+    "minShiftM": 0.03
+  },
   "clips": [
     {
       "name": "Idle",
@@ -1517,35 +1524,35 @@
       "durationS": 1.6,
       "loop": false,
       "keyframes": 49,
-      "maxLegReach": 1.1044
+      "maxLegReach": 1.1065
     }
   ],
   "death": {
-    "hipsY": -0.6463,
+    "hipsY": -0.6483,
     "tune": {
-      "hipsPitch": -91.75,
-      "hipsRoll": 11,
+      "hipsPitch": -89.875,
+      "hipsRoll": 12,
       "neck": -15.25,
-      "head": -9.75,
-      "headYaw": -41.75,
-      "armLz": -0.662,
-      "armRz": -0.106,
+      "head": -21,
+      "headYaw": -53,
+      "armLz": -0.694,
+      "armRz": -0.156,
       "footLz": 0.5,
       "footRz": 0.12
     },
     "lowestPointPerRegionM": {
       "legL": 0.003,
-      "pelvis": 0.021,
+      "pelvis": 0.02,
       "legR": 0.009,
-      "torso": 0.011,
-      "armR": 0.016,
-      "armL": 0.016,
-      "head": 0.015,
+      "torso": 0.019,
+      "armR": 0.015,
+      "armL": 0.03,
+      "head": 0.03,
       "outfit.pelvis": 0.01,
       "outfit.legL": -0.01,
-      "outfit.torso": 0.015,
-      "outfit.legR": 0.051,
-      "outfit.head": 0.027
+      "outfit.torso": 0.02,
+      "outfit.legR": 0.049,
+      "outfit.head": 0.01
     },
     "solvedAgainst": "body + every fitted wearable"
   },
@@ -1792,14 +1799,14 @@
         }
       },
       "Death": {
-        "maxLegReach": 1.1044,
+        "maxLegReach": 1.1065,
         "body": {
-          "minY": -0.0033,
-          "atT": 1.1,
+          "minY": 0.0004,
+          "atT": 0.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_cargo": {
-          "minY": -0.0033,
+          "minY": -0.0021,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
@@ -1814,28 +1821,28 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_hardhat": {
-          "minY": -0.0033,
+          "minY": -0.0073,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_cap": {
-          "minY": -0.0033,
-          "atT": 1.1,
+          "minY": 0.0004,
+          "atT": 0.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_beanie": {
-          "minY": -0.0033,
-          "atT": 1.1,
+          "minY": 0.0004,
+          "atT": 0.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_gasmask": {
-          "minY": -0.0033,
-          "atT": 1.1,
+          "minY": 0.0004,
+          "atT": 0.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_respirator": {
-          "minY": -0.0033,
-          "atT": 1.1,
+          "minY": 0.0004,
+          "atT": 0.1,
           "framesBelowMinus1cm": 0
         }
       }
@@ -1843,15 +1850,15 @@
     "motionStretch": {
       "triangles": 14991,
       "p50": 1.062,
-      "p99": 2.596,
+      "p99": 2.664,
       "max": 4.94,
-      "over2x": 494,
-      "over3x": 71,
-      "fractionOver": 0.0047,
+      "over2x": 543,
+      "over3x": 83,
+      "fractionOver": 0.0055,
       "worstClips": {
-        "Death": 58,
-        "Run": 60,
-        "Attack": 33
+        "Death": 73,
+        "Run": 50,
+        "Attack": 28
       },
       "poses": 85,
       "method": "per triangle: worst edge length ratio posed/bind over every 3rd frame of all six clips (CPU skinning); body alone"

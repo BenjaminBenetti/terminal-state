@@ -53,6 +53,7 @@ import {JOINT_NAMES} from './lib/skin.mjs';
 import {CLIP_SPECS} from './lib/clips.mjs';
 import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07, KEEP_BODY_FILES, SKIP_WEARABLES, T25, T25_GRADE} from './wardrobe.config.mjs';
 import {gradeBase} from './lib/grade.mjs';
+import {noseCheck, shiftHeadCfg} from './lib/nose-check.mjs';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {NodeIO} from '@gltf-transform/core';
 
@@ -141,7 +142,10 @@ async function main() {
     const profile = bodyProfile(stage.skel, stage.low.welded, sw);
     profile.hit = hitRadii(profile, stage.skel);
     console.log('  tris', stage.low.idx.length / 3, 'hit', JSON.stringify(profile.hit));
-    bodies.push({id: def.id, def, src, stage, skel: stage.skel, rigDesc: rigFor(stage.skel), low: stage.low, weldedWeights: sw, joints: spread.joints, weights: spread.weights, profile});
+    const Bn = {id: def.id, def, src, stage, skel: stage.skel, rigDesc: rigFor(stage.skel), low: stage.low, weldedWeights: sw, joints: spread.joints, weights: spread.weights, profile};
+    Bn.noseCheck = noseCheck(Bn);
+    if (Bn.noseCheck.shift) console.log('  nose landmark corrected for head / face items:', JSON.stringify(Bn.noseCheck));
+    bodies.push(Bn);
   }
   const C = bodies.find(b => b.id === CANONICAL_BODY);
   if (!C) throw new Error('canonical body missing');
@@ -203,7 +207,9 @@ async function main() {
         const s = supports(w, B);
         if (!s.ok) { excluded.push({body: B.id, wearable: w.id, slot: w.def.slot, rule: s.rule, reason: s.reason}); continue; }
         const up = w.def.slot === 'upper';
-        jobs.push({key: `${w.id}|${B.id}`, g: w.g, cfg: w.cfg, C, B, extraCollide: up ? lowerCollision(B) : undefined, poses: B.validation, layers: up ? lowerLayers(B) : undefined, layerUV: up ? lowerUV(B) : undefined, onDone: (v, ms) => {
+        // T2.5 migration: face-landmark sanity check (lib/nose-check.mjs) for head / face items
+        const jcfg = w.def.kind === 'rigid' ? shiftHeadCfg(w.cfg, B.noseCheck?.shift ?? 0) : w.cfg;
+        jobs.push({key: `${w.id}|${B.id}`, g: w.g, cfg: jcfg, C, B, extraCollide: up ? lowerCollision(B) : undefined, poses: B.validation, layers: up ? lowerLayers(B) : undefined, layerUV: up ? lowerUV(B) : undefined, onDone: (v, ms) => {
           fits[w.id][B.id] = v;
           const rf = v.stats.refit07;
           console.log(`  fit ${w.id} x ${B.id}: hidden ${v.mask.hidden}/${v.mask.total} bulk ${JSON.stringify(v.stats.bulkM)}${rf ? ` refit: offset p50 ${rf.offsetM.p50} p95 ${rf.offsetM.p95} max ${rf.offsetM.max}; bind rounds ${rf.bindRounds.map(r => r.skinVerticesRaised).join('>')}; pose rounds ${rf.poseRounds.map(r => r.skinVerticesNeedingMore).join('>')}` : ''} (${ms} ms)`);
@@ -489,7 +495,7 @@ function bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit, 
     mesh: {node: 'ZombieBody', vertices: B.low.pos.length / 3, triangles: B.low.idx.length / 3, simplify: B.stage.stats.simplify, unwrap: B.stage.stats.unwrap, bake: (({ms, ...r}) => r)(B.stage.stats.bake), textures: B.def.textures, ...(B.stage.colourGrade ? {colourGrade: B.stage.colourGrade} : {})},
     skeleton: {jointCount: JOINTS.length, joints: JOINTS.map(([n, p]) => ({name: n, parent: p, bindWorldPosition: r4(J[n])})), ends: B.skel.ends, boneLengthsM, validationIssues: B.stage.issues, estimation: B.skel.log},
     skinning: {method: 'skin.mjs region classification + chain weights + masked Laplacian smoothing (same as zombie-rigged body)', ...B.weldedWeights.stats},
-    profile: B.profile,
+    profile: B.profile, noseLandmarkCheck: B.noseCheck,
     clips: clips.map(c => ({name: c.name, durationS: c.duration, loop: c.loop, keyframes: c.times.length, maxLegReach: c.maxLegReach})),
     death: {hipsY: r4(death.hipsY), tune: death.tune, lowestPointPerRegionM: death.contact, solvedAgainst: 'body + every fitted wearable'},
     verification: {cpuSkinningFloor: verify, motionStretch: {...audit, method: 'per triangle: worst edge length ratio posed/bind over every 3rd frame of all six clips (CPU skinning); body alone'}},
