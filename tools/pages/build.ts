@@ -1,10 +1,13 @@
 // Task loot-reference-pages-20261030 (lane SITE): build the static reference site IN MEMORY from the current game source.
 //
 // buildSite() = DATA's buildLootReference() (reads the real exported game values) -> renderSite() (pure rendering of that ONE object).
+// Task enemy-spawn-tables-20261030 (lane SITE): + SPAWN's buildEnemyReference() (the real spawn profile API) for the Enemy spawns
+// section; both references are built for the same commit and rendered together.
 // The result maps site paths to UTF-8 text and is deterministic for a fixed source tree and commit: no timestamps, no environment
 // reads, no absolute paths. Writing it to disk (dist/pages/) is the CLI's job (tools/pages/cli.ts).
 import fs from 'node:fs';
 import path from 'node:path';
+import {buildEnemyReference} from './enemyReference';
 import {buildLootReference} from './lootReference';
 import {renderSite} from './render/site';
 
@@ -17,7 +20,8 @@ export interface SiteBuildOptions {
 
 export function buildSite(opts: SiteBuildOptions): Map<string, string> {
   const reference = buildLootReference({commit: opts.commit, readSource: opts.readSource});
-  return renderSite(reference);
+  const enemies = buildEnemyReference({commit: opts.commit, readSource: opts.readSource});
+  return renderSite(reference, enemies);
 }
 
 /**

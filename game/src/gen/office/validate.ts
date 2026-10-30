@@ -25,11 +25,12 @@ import {ROOM_MIN_CELLS} from './floorplan'; // Task office-interactions-layout-2
 import {roofIssues} from './roof'; // Task office-overhaul-20261030 (lane STRUCT): the roof storey
 import {transitIssues} from './transit'; // Task office-overhaul-20261030 (lane STRUCT): the transit hall
 import {landingStrip, signOverlaps} from './dress';
-import {ENEMY_MIN_CELLS, OFFICE_ENEMIES} from './spawns';
+// Task enemy-spawn-tables-20261030 (lane SPAWN): enemy counts / keep-away are validated against the level's spawn profile.
+import {acceptedPlaced, spawnContext, spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
 import {CORRIDOR_CLEAR_M, isNarrowPassage, isPlantKind, passageClear} from './companyDress';
 import {COMPANIES} from './companies';
 
-export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
+export function officeIssues(layout: StationLayout, f: TowerFrame, spawns: SpawnProfile = spawnProfile('office')): string[] {
   const issues: string[] = [];
   const info = layout.office;
   if (!info || info.version !== 2) return ['no office info (v2)'];
@@ -200,16 +201,18 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
 
   // --- Populations ----------------------------------------------------------------------------------------------------------
   const count = (lvs: number[]) => layout.zombies.filter(z => lvs.includes(z.level ?? 0)).length;
-  const street = count([0, 1]);
-  if (street < OFFICE_ENEMIES.street[0] || street > OFFICE_ENEMIES.street[1]) issues.push(`station + lobby enemy count ${street}`);
+  const outside = (n: number, c: {min: number | null; max: number | null}) => (c.min !== null && n < c.min) || (c.max !== null && n > c.max);
+  const street = count([0, 1]), streetCtx = spawnContext(spawns, 'street'), floorCtx = spawnContext(spawns, 'floor');
+  if (outside(street, acceptedPlaced(streetCtx))) issues.push(`station + lobby enemy count ${street}`);
   for (let n = 2; n <= OFFICE_FLOORS.length; n++) {
     const c = count([n]);
-    if (c < OFFICE_ENEMIES.floor[0] || c > OFFICE_ENEMIES.floor[1]) issues.push(`floor ${n} enemy count ${c}`);
+    if (outside(c, acceptedPlaced(floorCtx))) issues.push(`floor ${n} enemy count ${c}`);
   }
+  const keepCells = (lv: number) => spawnContext(spawns, lv <= 1 ? 'street' : lv === OFFICE_ROOF_LEVEL ? 'roof' : 'floor').placement.startCells;
   for (const z of layout.zombies) {
     const lv = z.level ?? 0, g = levels[lv].grid, [x, y] = g.cellOf(z.x, z.z), i = g.idx(x, y);
     if (dist[lv][i] < 0) issues.push('enemy on unreachable cell');
-    else if (dist[lv][i] < ENEMY_MIN_CELLS.start) issues.push('enemy too close to the start');
+    else if (dist[lv][i] < keepCells(lv)) issues.push('enemy too close to the start');
     if (!g.circleClear(z.x, z.z, 0.35)) issues.push('enemy spawn intersects geometry');
   }
   for (const p of layout.pickups) {
@@ -224,7 +227,7 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   issues.push(...layoutIssues(layout));
   // --- Task office-overhaul-20261030 (lane STRUCT): the roof (reachable by the ladder, parapet closed, hatch zone clear) and the
   // transit hall (widths, walkable stair + escalators, carved hand-over, clear mouths, gate gaps) -------------------------------
-  issues.push(...roofIssues(layout, f, dist), ...transitIssues(layout, f));
+  issues.push(...roofIssues(layout, f, dist, acceptedPlaced(spawnContext(spawns, 'roof')).max), ...transitIssues(layout, f));
 
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
   issues.push(...traversalIssues(layout));

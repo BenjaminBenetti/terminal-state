@@ -88,22 +88,32 @@ not a general JavaScript sandbox or a licensing audit.
 
 ## Reference website (GitHub Pages)
 
-A public reference site, a landing page plus a **loot explorer**, is generated from the game source and published with GitHub
-Pages at **https://benjaminbenetti.github.io/terminal-state/**. The project path is expected; every link on the site is relative.
-The source repository stays private: the site publishes only generated reference pages and data, never the game or its source.
+A public reference site, a landing page plus a **loot explorer** and an **Enemy spawns** section, is generated from the game
+source and published with GitHub Pages at **https://benjaminbenetti.github.io/terminal-state/**. The project path is expected;
+every link on the site is relative. The source repository stays private: the site publishes only generated reference pages
+and data, never the game or its source.
 
 - **Generated, not hand-written.** `tools/pages/` builds one `LootReference` object from the real exported game values
   (`buildLootReference`, see [docs/loot-reference.md](docs/loot-reference.md)). It then renders static HTML/CSS/JS from that
   object only. Levels, tables, items and special sources appear automatically. A loot source the generator does not know
   fails the tests instead of vanishing.
+- **Enemy spawns.** `buildEnemyReference` (`tools/pages/enemyReference.ts`, see [docs/enemy-spawns.md](docs/enemy-spawns.md))
+  reads the per-level spawn profiles the real generators use. The section shows a levels overview (`enemies/index.html`), one
+  profile page per level (`enemies/<level>.html`: generation contexts with exact count ranges and E[count], the family pool
+  with conditional shares and denominator, the zombie type split, baseline placement rules, room modifiers, a labelled sampled
+  census and tuning locations), every family (`enemies/families.html`) and the units (`enemies/how-to-read.html`). The data
+  is published as `data/enemies.json`. A level, context, family or room key without its rendered place fails the check.
 - **Local build.** `npm run pages:build` writes `dist/pages/` (git-ignored, separate from `dist/game/`). Vite SSR-bundles the
   generator into a temporary module under `node_modules/.cache/`, so no new dependency is needed. The output is deterministic
-  for a fixed source. Every page shows the source commit (`GITHUB_SHA`, else `git rev-parse HEAD`, else `local`) and a data digest.
+  for a fixed source. Every page shows the source commit (`GITHUB_SHA`, else `git rev-parse HEAD`, else `local`) and the loot
+  and enemy data digests.
 - **Checks.** `npm run pages:check` validates `dist/pages/` and proves it is byte-identical to a fresh build. It checks the
   output allowlist (html / css / js / json and one authored svg; no source maps, TypeScript, game assets or dotfiles), leaks
   (workspace paths, `reference/`, env files, key-like secrets), links (all internal links and #fragments resolve; no
-  root-absolute or unlabelled external URLs), page structure and the `data/manifest.json` hashes. `npm run pages:test` runs
-  `game/tests/pages-output.test.ts` and `game/tests/loot-reference.test.ts`. Both also run in the normal `npm test`.
+  root-absolute or unlabelled external URLs; the site navigation of every page reaches every section), page structure,
+  enemy-section coverage against `data/enemies.json` and the `data/manifest.json` hashes and data digests.
+  `npm run pages:test` runs `game/tests/pages-output.test.ts` and `game/tests/loot-reference.test.ts`. Both also run in the
+  normal `npm test`.
 - **Preview.** `npm run pages:preview` serves `dist/pages/` at http://127.0.0.1:4190/terminal-state/ (the published
   sub-path). Opening `dist/pages/index.html` directly also works.
 - **Publication.** [`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs separately from the game build. Its

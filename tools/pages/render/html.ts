@@ -3,6 +3,7 @@
 // Everything here is pure string building: no DOM, no timestamps, no environment reads. Every internal link is RELATIVE (computed
 // from the page's own site path), so the same output works under https://benjaminbenetti.github.io/terminal-state/, any other
 // sub-path, a local static server and file://. Links point at explicit `…/index.html` files for the same reason.
+// Task enemy-spawn-tables-20261030 (lane SITE): + the "Enemy spawns" section in the site nav and the enemy data digest in the footer.
 import path from 'node:path';
 
 /** The private source repository. Links into it are always labelled "repository access required". */
@@ -85,8 +86,10 @@ export const badge = (label: string, tone: BadgeTone = 'info'): string => `<span
 export interface SiteContext {
   /** Full commit SHA, or `local` when built outside Git. */
   commit: string;
-  /** Short digest of data/loot.json — identifies the exact generated data. */
+  /** Short digest of data/loot.json — identifies the exact generated loot data. */
   dataDigest: string;
+  /** Short digest of data/enemies.json — identifies the exact generated enemy spawn data (task enemy-spawn-tables-20261030). */
+  enemyDigest: string;
   /** Game title (from the data's build info). */
   gameTitle: string;
 }
@@ -96,7 +99,7 @@ export interface Crumb {
   path?: string;
 }
 
-export type Section = 'home' | 'loot' | 'read' | 'playtest';
+export type Section = 'home' | 'loot' | 'enemies' | 'read' | 'playtest';
 
 export interface PageSpec {
   /** Site path of this page, e.g. `loot/office/index.html`. */
@@ -111,10 +114,12 @@ export interface PageSpec {
   lede?: string;
 }
 
-const NAV: Array<{section: Section; label: string; path: string}> = [
+/** The site navigation shown on every page (tools/pages/validate.ts checks that every page links to each entry). */
+export const NAV: ReadonlyArray<{section: Section; label: string; path: string}> = [
   {section: 'home', label: 'Home', path: 'index.html'},
   {section: 'loot', label: 'Loot tables', path: 'loot/index.html'},
-  {section: 'read', label: 'How to read the numbers', path: 'loot/how-to-read.html'},
+  {section: 'enemies', label: 'Enemy spawns', path: 'enemies/index.html'},
+  {section: 'read', label: 'How to read loot numbers', path: 'loot/how-to-read.html'},
   {section: 'playtest', label: 'Playtest', path: 'playtest.html'},
 ];
 
@@ -164,7 +169,7 @@ ${spec.body}
 </main>
 <footer class="site-footer">
 <div class="wrap">
-<p class="build-id">Generated from the game source at commit ${commitHtml} · data digest <code>${esc(ctx.dataDigest)}</code> · <a href="${esc(href(p, 'data/loot.json'))}">data/loot.json</a></p>
+<p class="build-id">Generated from the game source at commit ${commitHtml} · loot data digest <code>${esc(ctx.dataDigest)}</code> (<a href="${esc(href(p, 'data/loot.json'))}">data/loot.json</a>) · enemy spawn data digest <code>${esc(ctx.enemyDigest)}</code> (<a href="${esc(href(p, 'data/enemies.json'))}">data/enemies.json</a>)</p>
 <p>Every value on this site is generated from the current game source when the site is built; nothing is hand-copied. The game source repository is private. ${esc(ctx.gameTitle)} is an early prototype; numbers change as the game is tuned.</p>
 </div>
 </footer>
