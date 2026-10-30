@@ -136,8 +136,13 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
 });
 
 // Recorded on main ed4f9b7 (before the gen/levels.ts hot-spot change).
-const OFFICE_SHUT = {lines: 'c9f3c098', circles: '75e6b2f8', support: 'a9ea28e1', rails: '9c7ef718', finds: '46231f70'};
-const OFFICE_OPEN = {lines: 'c9f3c098', circles: '75e6b2f8', support: 'a9ea28e1', rails: '9c7ef718', finds: '46231f70'};
+// Task office-props-physics-scale-20261030: the OFFICE world (not the queries) changed — user-requested furniture rescales, the
+// server rack r2 footprint, host-top clutter and a turning square kept free in small office rooms re-lay seed 4242's props, so the
+// same queries walk a different world. gen/levels.ts and gen/grid.ts are byte-identical to main 932624e (the query code is
+// unchanged) and the Subway / fixture fingerprints below did not move. Was {lines c9f3c098, circles 75e6b2f8, support a9ea28e1,
+// rails 9c7ef718, finds 46231f70} (shut = open, as now).
+const OFFICE_SHUT = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
+const OFFICE_OPEN = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};
 /** The fixture runs no PathFinder (finds = the empty hash). */
