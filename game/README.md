@@ -262,8 +262,19 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
   review-accepted in the authorized Meshy T2.5 model replacement. Its derivative record still says approved: false, not game-ready
   and no licence clearance; those flags are unchanged, and delivery acceptance is not legal clearance. The filter is a small
   procedural canister.
-- **Camera mask:** a DOM layer under the HUD, slid onto the view. It has a rubber bezel and tinted glass, and its edge warns
-  amber or red when the filter is low or empty.
+- **Mask view (what you see wearing it):** you look out through the real mask's visor (`src/gear/maskView.ts`). It is a local
+  viewmodel derivative of the same shipped outfit mask, built at load time. The visor glass is cut out, so its own rubber rim,
+  nose bridge and inner walls frame the view; the inner glass sheet becomes a tinted lens. The lens is clear in the middle and
+  darker toward the rim, with a little condensation low in the corners. The strap pieces are dropped, and a small dark cowl
+  covers the gaps past the mask's upper edge.
+  - **Rendering:** the view is drawn in the existing viewmodel overlay pass, fixed to the face. The HUD, crosshair and hints stay
+    on top. It is compiled on the loading screen with the held items, so the first Q does not stutter.
+  - **Q:** the mask comes up from below onto the face and goes back the same way (same 0.6 s / 0.45 s timings).
+  - **Aiming:** your eye moves toward the glass, so the rim recedes and the lens clears a little. The rifle optic stays in the
+    clear middle.
+  - **Filter warning:** the lens rim glows faint amber when the filter is low and pulses red when it is empty. The Q cell is
+    unchanged.
+  - This replaced the earlier CSS / SVG camera overlay. Nothing new was generated, and the provenance flags above still apply.
 
 ### Breached windows
 - **Which panes:** only the Office's exterior window panes. The entrance, shop / cooler / prop glass, elevator glass and

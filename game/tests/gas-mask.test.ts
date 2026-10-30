@@ -2,7 +2,8 @@
 // Node tests over the REAL GasMaskSystem (gear/gasMask.ts) installed on a minimal Game shell (registries + the real Inventory /
 // WeaponController), the real snapshot / run-participant code (run/snapshot.ts), section-memory records (run/worldMemory.ts),
 // the level loot roll / placement (gen/maskLoot.ts through levels/gearAdapter.ts + registry.ts on generated levels), the HUD Q cell
-// and the camera mask layer on the tiny fake DOM, and source checks of the Q binding in game.ts / gear/system.ts.
+// on the tiny fake DOM, and source checks of the Q binding in game.ts / gear/system.ts. (The first-person mask view that replaced
+// the camera mask layer: tests/gas-mask-view.test.ts.)
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
@@ -655,7 +656,7 @@ describe('loot: level-wide mask / filter rolls with their own rng (existing loot
   });
 });
 
-describe('HUD Q cell (ui/hud.ts) and the camera mask (ui/maskOverlay.ts) on the fake DOM', () => {
+describe('HUD Q cell (ui/hud.ts) on the fake DOM; the old camera mask layer is gone', () => {
   let dom: FakeDom;
   beforeAll(() => { dom = installFakeDom(); });
   afterAll(() => dom.uninstall());
@@ -699,33 +700,20 @@ describe('HUD Q cell (ui/hud.ts) and the camera mask (ui/maskOverlay.ts) on the 
     expect(q.classList.contains('low')).toBe(false);
   });
 
-  it('the camera mask is the FIRST child of #hud, slides with the transition, hides when off, tints the visor edge low / empty', () => {
+  it('task gas-mask-roof-feedback-20261030 (item 4): no DOM camera layer any more — the cover / tone go to the first-person mask view', () => {
     const hudEl = dom.el('#hud');
-    const vitals = dom.doc.createElement('div');
-    vitals.id = 'vitals';
-    hudEl.appendChild(vitals);
     const s = shell();
     s.giveMask(0.15 * FILTER_LIFE_S);
     s.sys.press();
     s.step(0.3);
-    const view = hudEl.children[0];
-    expect(view.id).toBe('mask-view');
-    expect(hudEl.children.indexOf(vitals)).toBeGreaterThan(0);
-    expect(view.classList.contains('show')).toBe(true);
-    expect(s.sys.overlay.shown).toBeGreaterThan(0.3);
-    expect(s.sys.overlay.shown).toBeLessThan(0.7);
-    expect(view.innerHTML).toMatch(/<svg class="gm-glass"/);
-    expect(view.innerHTML).toMatch(/clip-path="url\(#gm-visor\)"/);
+    expect(s.sys.qa().overlay).toBeGreaterThan(0.3); // the cover handed to the view (gear/maskView.ts; tests/gas-mask-view.test.ts)
+    expect(s.sys.qa().overlay).toBeLessThan(0.7);
     s.step(0.4);
-    expect(s.sys.overlay.shown).toBe(1);
-    expect(view.classList.contains('low')).toBe(true);
-    s.step(0.15 * FILTER_LIFE_S + 1, 0.05);
-    expect(view.classList.contains('empty')).toBe(true);
+    expect(s.sys.qa().overlay).toBe(1);
     s.toggle();
-    expect(s.sys.overlay.shown).toBe(0);
-    expect(view.classList.contains('show')).toBe(false);
-    expect(view.classList.contains('empty')).toBe(false); // off the face: no warning tint
-    expect(hudEl.children.filter(c => c.id === 'mask-view')).toHaveLength(1);
+    expect(s.sys.qa().overlay).toBe(0);
+    expect(s.sys.maskView).toBeNull(); // a Node shell has no viewmodel: nothing attached, nothing drawn
+    expect(hudEl.children.filter(c => c.id === 'mask-view')).toHaveLength(0);
   });
 
   it('inventory screen: the gear panel has a Face slot; filters cannot be used or equipped; a mask shows its fitted filter', async () => {

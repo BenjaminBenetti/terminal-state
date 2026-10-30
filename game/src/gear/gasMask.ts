@@ -1,9 +1,10 @@
 // Task gasmask-breach-20261030 (mask lane): the GAS MASK system — Q on / off, filter charge, auto-fitting spares, the HUD Q slot
-// state and the camera mask overlay.
+// state and the first-person mask view (task gas-mask-roof-feedback-20261030, item 4: gear/maskView.ts — the real mask model seen
+// from the inside, rendered in the viewmodel overlay pass; it replaced the CSS / SVG camera overlay).
 //
 // installGasMask(game, access) is called ONCE from the Game constructor (after installGear); it only REGISTERS into the
 // iteration-16 registries, like installGear / installInjuries:
-// - frameHooks: the state machine (play dt only), filter drain, auto-fit, warnings, HUD Q slot + camera overlay;
+// - frameHooks: the state machine (play dt only), filter drain, auto-fit, warnings, HUD Q slot + the mask view's pose;
 // - inputOwners: no fire / ADS / melee / flare / click-use while the mask goes on or comes off (a running reload continues);
 // - stateListeners + sectionHooks: any state but 'playing' (pause, Tab, death, loading) and every section build / teardown
 //   (travel, Retry, NewGame) cancel a transition — it ends OFF (a donning mask goes back off, a doffing one finishes off);
@@ -34,7 +35,10 @@ import {FILTER_LIFE_S, isFilterMask} from '../items/gear';
 import {makeSupplyMesh} from '../world/pickups';
 import type {ItemStack} from '../items/inventory';
 import type {RunParticipant} from '../run/snapshot';
-import {MaskOverlay, type MaskTone} from '../ui/maskOverlay';
+import type {MaskView} from './maskView';
+
+/** Lens-rim / HUD warning tone: ok, low filter (amber), empty filter on the face (red, pulsing). */
+export type MaskTone = 'ok' | 'low' | 'empty';
 
 /** Gas-mask tuning (first pass; all in one place). */
 export const GAS_MASK = {
@@ -101,11 +105,32 @@ export class GasMaskSystem {
   private protos: THREE.Object3D[] | null = null;
   /** The HUD view (one object, refreshed in place every frame). */
   private readonly view: MaskHudView = {state: 'off', cover: 0, protects: false, tone: 'ok'};
-  readonly overlay = new MaskOverlay();
+  /** Item 4: the first-person mask view (Game.load attaches it once the viewmodel exists; null in Node shells). */
+  private faceView: MaskView | null = null;
+  private aimOf: () => number = () => 0;
+  /** Last cover handed to the mask view (QA / tests; also tracked without a view). */
+  shownCover = 0;
 
   constructor(private readonly game: Game, private readonly access: GasMaskAccess) {}
 
   // --- registration --------------------------------------------------------------------------------------------------
+
+  /**
+   * Item 4 (Game.load, after the Viewmodel is built and before the warm-up): the first-person mask view joins the viewmodel's
+   * face roots (rendered in its overlay pass, compiled by its 'weapons and held items' warm-up pass); `aim` = the viewmodel's
+   * ADS blend. Applies the current state at once (e.g. a restored on-face mask).
+   */
+  attachView(view: MaskView, host: {addFaceRoot(root: THREE.Object3D): void}, aim: () => number): void {
+    this.faceView = view;
+    this.aimOf = aim;
+    host.addFaceRoot(view.root);
+    this.present();
+  }
+
+  /** The attached first-person mask view (null before Game.load / in Node shells). */
+  get maskView(): MaskView | null {
+    return this.faceView;
+  }
 
   install(): this {
     const g = this.game;
@@ -178,7 +203,7 @@ export class GasMaskSystem {
     return this.state === 'on' && !!m && m.uid === this.faceUid && (m.filter ?? 0) > 0;
   }
 
-  /** 0 = off the face .. 1 = on (the overlay / transition progress). */
+  /** 0 = off the face .. 1 = on (the mask view / transition progress). */
   get cover(): number {
     if (this.state === 'on') return 1;
     if (this.state === 'donning') return clamp01(this.t / GAS_MASK.donS);
@@ -243,6 +268,7 @@ export class GasMaskSystem {
       if (this.state === 'on') this.fitSpare(); // donned with 0, or drained to 0 this frame
     }
     this.present();
+    this.faceView?.update(dt, this.aimOf());
   }
 
   /** On the face: the fitted filter drains by play dt; the low warning once per filter. */
@@ -302,7 +328,7 @@ export class GasMaskSystem {
     this.present();
   }
 
-  /** HUD Q slot + camera overlay (each writes the DOM only on change). */
+  /** HUD Q slot (writes the DOM only on change) + the first-person mask view's cover / lens-rim tone. */
   present(): void {
     const v = this.view;
     v.state = this.state;
@@ -310,7 +336,8 @@ export class GasMaskSystem {
     v.protects = this.protects();
     v.tone = this.tone;
     (this.game.hud as {setMask?: (v: MaskHudView) => void}).setMask?.(v);
-    this.overlay.set(v.cover, this.state === 'off' ? 'ok' : v.tone);
+    this.shownCover = v.cover;
+    this.faceView?.set(v.cover, this.state === 'off' ? 'ok' : v.tone);
   }
 
   /** Hidden filter-canister prototype for the loading-screen warm-up (same factory + material clones as a pickup). */
@@ -337,7 +364,7 @@ export class GasMaskSystem {
     const m = this.worn;
     return {
       state: this.state, on: this.on, protects: this.protects(), transition: +this.cover.toFixed(3), equipped: m?.itemId ?? null, uid: m?.uid ?? null,
-      filterS: +this.filterSeconds.toFixed(2), filterFrac: +(this.filterSeconds / GAS_MASK.filterLifeS).toFixed(4), spares: this.spares, tone: this.tone, overlay: this.overlay.shown,
+      filterS: +this.filterSeconds.toFixed(2), filterFrac: +(this.filterSeconds / GAS_MASK.filterLifeS).toFixed(4), spares: this.spares, tone: this.tone, overlay: this.shownCover,
     };
   }
 }
