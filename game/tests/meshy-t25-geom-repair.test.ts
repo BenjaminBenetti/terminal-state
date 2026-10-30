@@ -189,11 +189,22 @@ describe('platform bench: clean backrest', () => {
   });
 
   it('seat, rail, plates, legs untouched: outside the rebuilt backrest zone every vertex is original (or a clip point on an original edge)', async () => {
+    // Digest of every vertex outside the rebuilt backrest zone (sorted, 4-decimal keys), pinned where the full comparison against the
+    // pre-repair file passed. CI checks out a shallow clone without REPAIR_BASE, so there the pin is the regression guard; wherever
+    // the base commit is available the full vertex-by-vertex comparison below runs as well.
+    const M = meshes['base:bench'];
+    const key = (P: ArrayLike<number>, i: number) => `${P[3 * i].toFixed(4)},${P[3 * i + 1].toFixed(4)},${P[3 * i + 2].toFixed(4)}`;
+    const inZone = (q: number[]) => q[1] > 0.32 && q[1] < 0.735 && q[2] < -0.08 && q[2] > -0.26;   // the backrest zone (rebuilt / cut)
+    const outsideKeys: string[] = [];
+    for (let i = 0; i < M.P.length / 3; i++) if (!inZone([M.P[3 * i], M.P[3 * i + 1], M.P[3 * i + 2]])) outsideKeys.push(key(M.P, i));
+    const digest = crypto.createHash('sha256').update(outsideKeys.sort().join('|')).digest('hex');
+    expect(outsideKeys.length).toBe(4664);
+    expect(digest).toBe('464e32f6f8c65c607f348e0ead23b397828289e8a9ac8e33f524f2d6a6193769');
     const {execFileSync} = await import('node:child_process');
-    const old = execFileSync('git', ['-C', REPO, 'show', `${REPAIR_BASE}:${BEFORE['base:bench'].path}`], {maxBuffer: 1 << 28});
+    let old: Buffer;
+    try { old = execFileSync('git', ['-C', REPO, 'show', `${REPAIR_BASE}:${BEFORE['base:bench'].path}`], {maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore']}); } catch { return; }
     const p0 = (await new NodeIO().readBinary(new Uint8Array(old))).getRoot().listMeshes()[0].listPrimitives()[0];
     const P0 = p0.getAttribute('POSITION')!.getArray()!, I0 = p0.getIndices()!.getArray()!;
-    const key = (P: ArrayLike<number>, i: number) => `${P[3 * i].toFixed(4)},${P[3 * i + 1].toFixed(4)},${P[3 * i + 2].toFixed(4)}`;
     const orig = new Set<string>(); for (let i = 0; i < P0.length / 3; i++) orig.add(key(P0, i));
     const onOldEdge = (q: number[]) => {
       for (let t = 0; t < I0.length; t += 3) for (const [a, b] of [[I0[t], I0[t + 1]], [I0[t + 1], I0[t + 2]], [I0[t + 2], I0[t]]]) {
@@ -204,11 +215,10 @@ describe('platform bench: clean backrest', () => {
       }
       return false;
     };
-    const M = meshes['base:bench'];
     let outside = 0, clipPoints = 0;
     for (let i = 0; i < M.P.length / 3; i++) {
       const q = [M.P[3 * i], M.P[3 * i + 1], M.P[3 * i + 2]];
-      if (q[1] > 0.32 && q[1] < 0.735 && q[2] < -0.08 && q[2] > -0.26) continue;   // the backrest zone (rebuilt / cut)
+      if (inZone(q)) continue;
       outside++;
       if (orig.has(key(M.P, i))) continue;
       clipPoints++;
