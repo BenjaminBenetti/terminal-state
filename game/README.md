@@ -39,7 +39,7 @@ The built folder is fully static: open `index.html` through any static HTTP serv
 ## Controls
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use · right click
 aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) / open a stall door · 1–5 / wheel quick slots · 6 backpack
-(hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q last item · Tab or I inventory · H quick
+(hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q gas mask on / off · Tab or I inventory · H quick
 heal · F flashlight · hold G, release to throw the grenade-slot item (flares) · elevator: aim at a button and click or press E · M mute · Esc pause.
 Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
 is not supported.
@@ -237,6 +237,61 @@ station" (same seed, this session only).
   are gated by walking distance from the player (`src/ai/vocalReach.ts`; ≤ 32 m of route, ≤ 3 at once); combat sounds are not.
   QA hooks: `liftButtons()`, `liftPress(id)`, `goRoofLadder()`, `goTransit(end, lane)`, `bagHoldE(s)`, `flareGive(n)`,
   `stallOpen()`, `officeArch()`.
+
+## Gas mask, filters and breached office windows
+Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_MASK` (`src/gear/gasMask.ts`), `MASK_LOOT`
+(`src/gen/maskLoot.ts`), `WINDOW_BREACH` (`src/world/windowBreach.ts`) and `GAS` (`src/world/gas/field.ts`).
+
+### Gas mask and filters
+- **Items:** the **gas mask** is gear for a new mask slot (Tab: gear panel). Wearing it in that slot does not put it on your
+  face. **Q** puts it on (0.6 s) or takes it off (0.45 s); Q no longer cycles to the last item.
+- **The Q cell** sits at the left of the hotbar. It shows the mask, ON / OFF, the fitted filter's charge and your spare
+  filters.
+- **Without a mask:** Q is refused with a message, and nothing is created.
+- **While it goes on or off:** you cannot fire, aim, swing, throw or start a use. Your weapon and slot do not change, and a
+  running reload finishes.
+- **Ignored or interrupted:** Q does nothing mid-swing, mid-transition or while a grounded bag is open. Pausing, death,
+  travel, Retry and New game stop a transition with the mask off.
+- **Filters:** a filter lasts **150 s of play while on the face**, whether or not there is gas. The mask draws a spare by itself
+  from your quick slots and pockets (never from a worn backpack's contents).
+- **Warnings:** low at 20 %; empty with no spare. **A mask on your face with an empty filter does not protect you.**
+- **Charge belongs to the mask:** taking it off, re-wearing it, swapping masks, dropping it, travel and Retry never refill it.
+- **Loot:** masks and filters are level-wide floor finds with their own rolls. The Office has 1–2 masks and 2–5 filters; the
+  Subway has 0–1 masks and 0–2 filters. A found mask carries 35–75 % of a filter. There is no starter mask.
+- **Art:** the pickup and icon reuse the shipped zombie-outfit gas mask (`outfit-gasmask-t25.glb`). It was delivered and
+  review-accepted in the authorized Meshy T2.5 model replacement. Its derivative record still says approved: false, not game-ready
+  and no licence clearance; those flags are unchanged, and delivery acceptance is not legal clearance. The filter is a small
+  procedural canister.
+- **Camera mask:** a DOM layer under the HUD, slid onto the view. It has a rubber bezel and tinted glass, and its edge warns
+  amber or red when the filter is low or empty.
+
+### Breached windows
+- **Which panes:** only the Office's exterior window panes. The entrance, shop / cooler / prop glass, elevator glass and
+  the roof are excluded.
+- **Breaking:** a pane breaks on its **3rd bullet impact**. It cracks on the first, then on the third shatters with a glass
+  burst and the break-glass cue.
+- **Shotgun:** each trigger pull counts at most once per pane. Nine pellets on one pane count as one impact, so a shotgun
+  also needs three blasts; one blast spread across two panes counts one on each.
+- **Never counted:** the knife; panes that were broken or boarded at generation.
+- **What blocks a shot:** whatever is nearer than the glass takes the bullet (enemies, props, corpses).
+- **Boundary:** a broken pane is never a way out; collision is unchanged.
+- **Persistence:** pane hits and breaks persist in the one Office world and across Subway↔Office travel. Retry restores the
+  level-entry state, and New game resets them.
+
+### Infectious gas
+- **Spread:** a breach lets the green outdoor gas flow in. It fills that room over ~25–40 s, starting at the window, and
+  spills a little through its real openings. Spill stays under 0.15 about 3.5 m past a doorway.
+- **Model:** a per-storey diffusion field on the 0.5 m level grid. Walls, other rooms and other storeys block it. A pool
+  region (the breach room within 10 m) holds the gas; everywhere else it decays quickly. Concentration is capped at 1, so
+  overlapping breaches never stack.
+- **Rendering and damage share the same field.** The volumetric fog draws it as a green term (WebGPU and WebGL 2). When
+  volumetrics are off, a screen haze is shown instead.
+- **Damage:** without protection it costs up to **8 hp/s** above 0.12 concentration (about 6 hp/s in a filled room). There is
+  one damage calculation per frame, and gas never causes limb injuries.
+- **HUD:** shows **TOXIC GAS** with a hint, or **FILTERING**.
+- **Cost:** the field ticks at 10 Hz on its active cells and only on gassed storeys, which go to sleep once settled. Each
+  gassed storey uploads one R8 texture layer.
+- **Not modelled:** intact windows and the green sky are harmless, and there is no roof or ambient damage.
 
 ## Performance overlay (Ctrl+Shift+P)
 Off by default; Ctrl+Shift+P toggles it in any state without pausing the game (held keys toggle once; the shortcut never

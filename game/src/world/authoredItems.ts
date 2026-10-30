@@ -10,6 +10,9 @@
 //    plug at -X and a black plastic striker cap over the ignition end at +X (33 mm x 50 mm, gritty striker face); 0.255 m
 //    overall. `thrownFlareModel` is the struck flare: cap pushed onto the base, the burning head exposed (hot emissive slag
 //    + an additive glow sprite), switched to ash when it burns out.
+//  - gas_filter (task gasmask-breach-20261030, mask lane): a screw-in 40 mm respirator filter canister standing on its intake
+//    face, threaded neck up: olive-drab painted steel can (96 mm x 52 mm) with a cream stencilled band ("GAS FILTER · 40 mm
+//    THREAD · KEEP SEALED", generic), a steel top lid, a ridged threaded neck and a dark rubber seal plug; 72 mm overall.
 // Frames follow world/pickups.ts: origin bottom-centre, front +Z, metres. Geometry / materials are shared (cached once);
 // pickups clone materials for their highlight, the held view / item icons / thrown flare clone the object.
 
@@ -18,13 +21,15 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {canvasTexture} from './canvasTextures';
 
 /** Item ids with an authored model here (pickups.ts itemTemplate checks this first). */
-export const AUTHORED_ITEM_IDS = ['battery', 'flare'] as const;
+export const AUTHORED_ITEM_IDS = ['battery', 'flare', 'gas_filter'] as const;
 export type AuthoredItemId = (typeof AUTHORED_ITEM_IDS)[number];
 export const isAuthoredItem = (id: string): id is AuthoredItemId => (AUTHORED_ITEM_IDS as readonly string[]).includes(id);
 
 /** Authored dimensions (m). */
 export const BATTERY_DIMS = {r: 0.0173, h: 0.06, nubR: 0.0045, nubH: 0.0015, crimp: 0.0024} as const;
 export const FLARE_DIMS = {bodyR: 0.0145, bodyLen: 0.215, capR: 0.0165, capLen: 0.05, capOverlap: 0.01, headLen: 0.007, total: 0.255} as const;
+/** Mask lane: the filter canister (body radius / height, lid, threaded neck radius / height / ridges, seal plug height). */
+export const FILTER_DIMS = {r: 0.048, h: 0.052, lid: 0.004, neckR: 0.02, neckH: 0.014, ridges: 3, seal: 0.002} as const;
 
 /** The flare tube axis height above its resting floor (the cap is the widest part) and the X of its ignition head. */
 export const FLARE_AXIS_Y = FLARE_DIMS.capR;
@@ -136,6 +141,27 @@ function flareLabel(): THREE.Texture {
   }));
 }
 
+/** Mask lane: olive-drab filter can wrap — canvas x = around the can (u; front = centre), top = the neck end. */
+function filterLabel(): THREE.Texture {
+  return tex('filterLabel', () => canvasTexture(256, 96, 6211, (ctx, w, h, r) => {
+    ctx.fillStyle = '#4b5133';
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 700; i++) { ctx.fillStyle = `rgba(${r() < 0.5 ? '255,255,235' : '0,0,0'},${0.03 + r() * 0.05})`; ctx.fillRect(r() * w, r() * h, 1 + r() * 2, 1); }
+    // rolled seams top and bottom, stencilled band in front (u 0.5) and a lot number on the back (wraps the seam)
+    ctx.fillStyle = 'rgba(20,22,14,0.55)';
+    ctx.fillRect(0, 0, w, 5); ctx.fillRect(0, h - 5, w, 5);
+    ctx.fillStyle = '#d8d0b0';
+    ctx.fillRect(w * 0.18, 30, w * 0.64, 30);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#2a2d1d'; ctx.font = 'bold 15px Arial'; ctx.fillText('GAS FILTER', w * 0.5, 39);
+    ctx.font = '9px Arial'; ctx.fillText('40 mm THREAD · KEEP SEALED', w * 0.5, 53);
+    ctx.fillStyle = 'rgba(216,208,176,0.75)'; ctx.font = '10px Arial';
+    for (const cx of [0, w]) ctx.fillText('LOT 07-31', cx, 45);
+    ctx.fillStyle = 'rgba(216,208,176,0.6)'; ctx.font = 'bold 11px Arial'; ctx.fillText('▲ THIS END TO MASK', w * 0.5, 18);
+    wear(ctx, w, h, r, {scratches: 80, fades: 10, grime: 'bottom', specks: 'rgba(120,70,30,A)'});
+  }));
+}
+
 /** Black plastic cap with a gritty striker end (canvas = the end disc + side). */
 function strikerTex(): THREE.Texture {
   return tex('striker', () => canvasTexture(128, 128, 4409, (ctx, w, h, r) => {
@@ -176,6 +202,10 @@ const M = {
   /** The struck head: hot slag (emissive) while burning, grey ash once out. */
   hot: () => mat('hot', () => new THREE.MeshStandardMaterial({name: 'authored-flare-hot', color: 0xffb08a, emissive: 0xff4422, emissiveIntensity: 3.2, roughness: 0.9, metalness: 0})),
   ash: () => mat('ash', () => new THREE.MeshStandardMaterial({name: 'authored-flare-ash', color: 0x6d6862, roughness: 1, metalness: 0})),
+  // mask lane: filter canister
+  filterLabel: () => mat('filterLabel', () => new THREE.MeshStandardMaterial({name: 'authored-filter-can', map: filterLabel(), roughness: 0.62, metalness: 0.25})),
+  filterSteel: () => mat('filterSteel', () => new THREE.MeshStandardMaterial({name: 'authored-filter-steel', color: 0x8f918a, roughness: 0.42, metalness: 0.4})),
+  filterSeal: () => mat('filterSeal', () => new THREE.MeshStandardMaterial({name: 'authored-filter-seal', color: 0x1e1f1c, roughness: 0.85, metalness: 0})),
   glow: () => mat('glow', () => new THREE.SpriteMaterial({name: 'authored-flare-glow', map: glowTex(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending})),
 };
 
@@ -234,6 +264,26 @@ function flareGeometry(capOnBase: boolean): Record<'label' | 'plug' | 'cap' | 's
   return {label, plug, cap, striker, head};
 }
 
+/** Mask lane: the filter canister — painted can (label), steel lid + intake face + threaded neck, rubber seal plug. */
+function filterGeometry(): {can: THREE.BufferGeometry; steel: THREE.BufferGeometry; seal: THREE.BufferGeometry} {
+  const {r, h, lid, neckR, neckH, ridges, seal} = FILTER_DIMS;
+  const can = geo('filter.can', () => merged([tube(r, r, h, 0, 32)]));
+  const steel = geo('filter.steel', () => {
+    const parts = [
+      disc(r, 0, false, 32), // intake face (on the floor)
+      tube(r * 0.97, r, lid, h, 32), ring(neckR, r * 0.97, h + lid, true, 32), // domed lid shoulder + top
+      tube(neckR, neckR, neckH, h + lid, 20), // threaded neck core
+    ];
+    for (let k = 0; k < ridges; k++) { // thread ridges
+      const y = h + lid + (k + 0.5) * (neckH / ridges) - 0.0012;
+      parts.push(tube(neckR + 0.0018, neckR + 0.0018, 0.0024, y, 20), ring(neckR, neckR + 0.0018, y + 0.0024, true, 20), ring(neckR, neckR + 0.0018, y, false, 20));
+    }
+    return merged(parts);
+  });
+  const sealGeo = geo('filter.seal', () => merged([tube(neckR * 0.9, neckR * 0.9, seal, h + lid + neckH, 20), disc(neckR * 0.9, h + lid + neckH + seal, true, 20), ring(neckR * 0.9, neckR, h + lid + neckH, true, 20)]));
+  return {can, steel, seal: sealGeo};
+}
+
 function mesh(g: THREE.BufferGeometry, m: THREE.Material, name: string): THREE.Mesh {
   const o = new THREE.Mesh(g, m);
   o.name = name;
@@ -248,6 +298,9 @@ export function authoredItemModel(id: AuthoredItemId): THREE.Group {
   if (id === 'battery') {
     const b = batteryGeometry();
     g.add(mesh(b.label, M.batteryLabel(), 'battery-label'), mesh(b.steel, M.steel(), 'battery-steel'));
+  } else if (id === 'gas_filter') { // mask lane
+    const f = filterGeometry();
+    g.add(mesh(f.can, M.filterLabel(), 'filter-can'), mesh(f.steel, M.filterSteel(), 'filter-steel'), mesh(f.seal, M.filterSeal(), 'filter-seal'));
   } else {
     const f = flareGeometry(false);
     g.add(mesh(f.label, M.flareLabel(), 'flare-body'), mesh(f.plug, M.plug(), 'flare-plug'), mesh(f.cap, M.cap(), 'flare-cap'), mesh(f.striker, M.striker(), 'flare-striker'));

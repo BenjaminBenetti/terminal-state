@@ -143,6 +143,8 @@ export interface PickupPlacement {
   itemId: string; count: number; x: number; y: number; z: number; area: number;
   /** Iteration 08: level the pickup rests on (default 0); y is absolute. */
   level?: number;
+  /** Task gasmask-breach-20261030 (mask lane): a found gas mask's fitted-filter charge (seconds left; gen/maskLoot.ts). */
+  filter?: number;
 }
 export type ZombieType = 'shambler' | 'coated';
 export interface ZombieSpawn {

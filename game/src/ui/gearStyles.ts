@@ -6,7 +6,7 @@ const CSS = `
 #inv-gear-wrap { margin: 6px 0 2px; }
 #inv-gear-wrap h3 { display: flex; align-items: baseline; gap: 10px; }
 #inv-gear-wrap h3 .gear-sum { font-size: 12px; font-weight: 400; color: var(--cream-dim); letter-spacing: 0; text-transform: none; }
-#inv-gear { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+#inv-gear { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; } /* mask lane: + the face (gas mask) slot */
 #inv-gear .slot { height: 70px; }
 #inv-gear .slot .gslot { position: absolute; left: 5px; top: 3px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal); }
 #inv-gear .slot .ghost { color: #3a4046; display: flex; }

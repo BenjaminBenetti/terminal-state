@@ -1031,6 +1031,12 @@ export class Sfx {
    * as the arm's slash; the contact itself is the existing flesh confirm / impact cues. Never a gunshot.
    */
   meleeSwing(): void { this.play(this.voice(), 'crouch', {rate: 1.38, gain: 0.95, jitter: 0.05}); }
+  /**
+   * Task gasmask-breach-20261030 (mask lane): the gas mask pulled on / taken off (Q). No mask / strap clip exists in the Sound Lab
+   * bank and no generation is authorized, so the existing 'crouch' rustle is reused, lower and softer (rubber and straps). The
+   * hit-confirm mix is untouched.
+   */
+  maskRustle(on: boolean): void { this.play(this.voice(), 'crouch', {rate: on ? 0.8 : 0.9, gain: on ? 0.75 : 0.6, jitter: 0.03}); }
   /** Container/holder opened; kind is the holder kind (cabinet*, crate, vending, fridge, desk, shelf...). */
   containerOpen(kind: string, at?: Pos): void {
     const cue = OPEN_CUE[kind];
