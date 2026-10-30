@@ -64,6 +64,12 @@ export interface RoofInfo {
    * was found (roofIssues rejects the attempt).
    */
   reward?: {kind: string; key: string; x: number; y: number; z: number; rot: number; anchor: string} | null;
+  /**
+   * Task gas-mask-roof-feedback-20261030 (item 10): the roof FIND (gen/office/roof.ts placeRoofFind) — the item laid on the deck
+   * (a non-starter weapon + its own ammo box, or a gear piece), as placed: the two layout pickups carry `reward: key`. Absent: the
+   * level's loot profile has no roof find; null: no verified spot was found (roofIssues rejects the attempt).
+   */
+  find?: {key: string; itemId: string; x: number; y: number; z: number; ammo: {itemId: string; count: number; x: number; z: number} | null} | null;
 }
 
 /** One escalator of the station <-> lobby transit hall (lane STRUCT carves it as a stair run; the render adds the escalator). */

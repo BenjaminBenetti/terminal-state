@@ -12,7 +12,8 @@ import {buildWorld} from '../src/world/builder';
 import {
   OFFICE_FLOORS, OFFICE_GEN_STATS, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, generateOfficeLevel, generateOfficeSection, officeIssues, officeSeed, towerFrame,
 } from '../src/gen/office/index';
-import {FLOOR_HEIGHT, MARGIN, SCISSOR_STAIR, WELL, landingEnd} from '../src/gen/office/frame';
+import {FLOOR_HEIGHT, MARGIN, OFFICE_ROOF_LEVEL, SCISSOR_STAIR, WELL, landingEnd} from '../src/gen/office/frame';
+import {ROOF_FIND_KEY} from '../src/items/lootTables';
 import {OFFICE_ENEMIES, officeWeaponPlan} from '../src/gen/office/spawns';
 import {isOfficeKind} from '../src/gen/office/kinds';
 import {generateStation} from '../src/gen/station';
@@ -288,6 +289,8 @@ describe('office level (one continuous layout)', () => {
       pickups += l.pickups.length;
       for (const p of l.pickups) {
         expect(ITEMS[p.itemId], p.itemId).toBeDefined();
+        // (task gas-mask-roof-feedback-20261030: the roof find may be a gear piece — the explicit roof exception, on the roof only)
+        if (p.reward === ROOF_FIND_KEY) { expect(p.level).toBe(OFFICE_ROOF_LEVEL); continue; }
         expect(ITEMS[p.itemId].kind).not.toBe('gear');
       }
       for (const p of l.props) expect(PROP_DEFS[p.kind], p.kind).toBeDefined();
@@ -340,7 +343,8 @@ describe('office level (one continuous layout)', () => {
     expect(l.pickups.some(p => p.itemId === 'rifle')).toBe(false);
     const plan = officeWeaponPlan(222, 'rifle');
     const want = Object.values(plan).flat().sort();
-    const got = l.pickups.filter(p => ITEMS[p.itemId]?.kind === 'weapon').map(p => p.itemId).sort();
+    // (the planned weapon finds; the roof find — task gas-mask-roof-feedback-20261030 — is its own curated source, never the start weapon)
+    const got = l.pickups.filter(p => ITEMS[p.itemId]?.kind === 'weapon' && !p.reward).map(p => p.itemId).sort();
     expect(got.length).toBeLessThanOrEqual(want.length);
   });
 

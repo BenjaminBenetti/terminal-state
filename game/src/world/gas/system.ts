@@ -1,21 +1,26 @@
 // Task gasmask-breach-20261030 (lane GAS): breached office windows let the infectious green fog in. installGas(game) is called
 // ONCE from the Game constructor (after installTower: its section build reads the tower's windows) and only REGISTERS:
-// - bulletHitHandlers (Game.fire, before the damage system): a bullet / pellet into an office window opening —
-//   world/windowBreach.ts attributes it to a pane and counts at most one impact per pane per trigger pull; a counted impact
-//   plays the existing glass impact cue + glass chips, the first cracks the pane, the third breaks it (shards, a bounded
-//   glass burst, the existing breakGlass cue) and starts its gas. Pane hits leave no plaster crater in the opening;
+// - bulletHitHandlers (Game.fire, before the damage system): a bullet / pellet ray into an office window opening, with the
+//   damage Game.fire deals for it — world/windowBreach.ts attributes it to a pane and subtracts that real damage from the
+//   pane's health once (task gas-mask-roof-feedback-20261030: PANE_MAX_HP = 3 pistol bullets; no per-pull counting); the
+//   pull's first ray on a pane plays the existing glass impact cue + a small burst, every ray glass chips; the first damage
+//   cracks the pane, reaching PANE_MAX_HP breaks it (shards, a bounded glass burst, the existing breakGlass cue) and starts its
+//   gas. Pane hits leave no plaster crater in the opening;
 // - frameHooks (play dt only: menus / loading / warm-up / death never tick): the gas field's fixed 10 Hz tick
 //   (world/gas/field.ts) — off-camera storeys keep simulating — uploads of the changed storeys' layers to the volumetric
-//   pass (render/volumetric.ts setGasLayer), and ONE exposure calculation from concentrationAt(eye):
+//   pass (render/volumetric.ts setGasLayer), and ONE exposure calculation at the eye: c = max(concentrationAt(eye), the roof's
+//   outside atmosphere GAS.ROOF_OUTDOOR_C · roofBlend(eye) — task gas-mask-roof-feedback-20261030, item 10: the roof deck is
+//   outdoors, the same weight as its green fog, ramping through the hatch, 0 on every indoor floor);
 //   dps = DPS_MAX · clamp((c − THRESHOLD) / (1 − THRESHOLD), 0, 1) -> player.takeDamage(dps · dt) unless `protection()`
-//   (never the hit pipeline: no limb trauma; never per breach); the HUD tag / hint / green vignette (ui/gasHud.ts) and, when
-//   the volumetric pass is not running, a green haze ∝ the eye concentration;
+//   (never the hit pipeline: no limb trauma; never per breach / per source); `exposure` (c, protected, dps, source) for QA and
+//   the cough feedback; the HUD tag / hint / green vignette (ui/gasHud.ts) and, when the volumetric pass is not running, a green
+//   haze ∝ the eye concentration of the breach gas;
 // - sectionHooks: build = the office world's panes (the tower built its windows just before) + the saved pane state from RUN's
 //   lane store WINDOWS_LANE, with the gas fast-forwarded from the saved breaches (ages capped at AGE_CAP_S, coarse steps);
 //   teardown = save it (Subway <-> Office travel; Retry restores the level-entry memories, NewGame starts a fresh run);
 // - stateListeners: leaving play hides the HUD.
-// The Subway (no office windows) is inert: no handler ever claims a hit, no field exists.
-// No infection state, enemy effect or AI change; intact windows, the green sky and the roof do nothing.
+// The Subway (no office windows, no roof) is inert: no handler ever claims a hit, no field exists, no outdoor exposure.
+// No infection state, enemy effect or AI change; intact windows and the green sky do nothing.
 
 import * as THREE from 'three';
 import type {Vec3, WorldHit} from '../../combat/hitscan';
@@ -23,6 +28,7 @@ import type {StationLayout} from '../../gen/stationTypes';
 import {CELL} from '../../gen/grid';
 import type {WindowPlan, WindowView} from '../officeWindows';
 import {WINDOWS_LANE, WindowBreaches, paneCentre, sourceCells, type Breach, type PaneRef} from '../windowBreach';
+import {roofAirOf, roofBlend, type RoofAir} from '../roofAir'; // task gas-mask-roof-feedback-20261030 (item 10): the toxic roof
 import {GasHud} from '../../ui/gasHud';
 import {GAS, GasField} from './field';
 
@@ -45,11 +51,19 @@ export interface GasHost {
   frameHooks: ((dt: number) => void)[];
   sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
   stateListeners?: ((state: never, prev: never) => void)[];
-  bulletHitHandlers?: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number) => boolean)[];
+  /** `shot` = the trigger pull; `damage` = what Game.fire deals for this ray (weapon damage x range falloff). */
+  bulletHitHandlers?: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[];
 }
 
-/** This frame's exposure (QA / HUD). */
-export interface GasExposure { c: number; protected: boolean; dps: number; damage: number }
+/** Where this frame's exposure comes from: the breach-gas field, the roof's outside atmosphere, or nothing (clean air). */
+export type GasSource = 'field' | 'outdoor' | null;
+
+/**
+ * This frame's exposure (QA / HUD / the cough player): `c` = max(field c at the eye, outdoor c), `outdoor` = the outdoor part
+ * (GAS.ROOF_OUTDOOR_C x the roof blend), `source` = which one `c` is (null below GAS.HUD_MIN), `dps` = the damage being applied
+ * (0 when protected / below the threshold), `damage` = total gas damage dealt.
+ */
+export interface GasExposure { c: number; protected: boolean; dps: number; damage: number; outdoor: number; source: GasSource }
 
 const GLASS = new THREE.Color(0xc9d8dc);
 const tv = new THREE.Vector3(), tn = new THREE.Vector3(), td = new THREE.Vector3();
@@ -67,9 +81,11 @@ export class GasSystem {
   /** Integration point: the HUD hint while in gas ("Put on your gas mask (Q)" / "No filter" …). */
   hintFor: (protectedNow: boolean) => string = p => (p ? '' : 'Put on your gas mask (Q)');
   /** This frame's exposure. */
-  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0};
+  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null};
+  /** Task gas-mask-roof-feedback-20261030 (item 10): the office roof (its outside atmosphere; null on the Subway / between worlds). */
+  roof: RoofAir | null = null;
   /** Counters (QA / tests). */
-  readonly counts = {impacts: 0, cracked: 0, broken: 0, passThrough: 0, uploads: 0};
+  readonly counts = {impacts: 0, damage: 0, cracked: 0, broken: 0, passThrough: 0, uploads: 0};
   readonly hud = new GasHud();
 
   constructor(readonly host: GasHost) {}
@@ -78,7 +94,7 @@ export class GasSystem {
     const h = this.host;
     h.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     h.frameHooks.push(dt => this.frame(dt));
-    h.bulletHitHandlers?.push((wh, point, dir, shot) => this.bulletHit(wh, point, dir, shot));
+    h.bulletHitHandlers?.push((wh, point, dir, shot, damage) => this.bulletHit(wh, point, dir, shot, damage));
     h.stateListeners?.push(((s: string) => { if (s !== 'playing') this.hud.clear(); }) as (state: never, prev: never) => void);
     return this;
   }
@@ -88,6 +104,7 @@ export class GasSystem {
 
   build(layout: StationLayout): void {
     this.clear();
+    this.roof = roofAirOf(layout);
     const o = this.host.tower.office, w = o?.windows;
     if (!o || !w) return;
     this.windows = new WindowBreaches(w.plans, w.view);
@@ -115,7 +132,8 @@ export class GasSystem {
   private clear(): void {
     this.windows = null;
     this.field = null;
-    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0});
+    this.roof = null;
+    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null});
     this.hud.clear();
   }
 
@@ -154,8 +172,11 @@ export class GasSystem {
   // -------------------------------------------------------------------------------------------
   // Bullets (Game.fire)
 
-  /** A bullet / pellet's world hit: true = a window opening took it (no crater). */
-  bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number): boolean {
+  /**
+   * A bullet / pellet ray's world hit dealing `damage` (Game.fire: weapon damage x range falloff for that ray): true = a window
+   * opening took it (no crater). On a breakable pane the ray's damage counts once (windowBreach.ts PANE_MAX_HP).
+   */
+  bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number): boolean {
     const W = this.windows;
     if (!W) return false;
     const hit = W.attribute(wh, point, dir);
@@ -167,15 +188,16 @@ export class GasSystem {
       return false;
     }
     if (W.broken(hit.ref.id)) { this.counts.passThrough++; return true; } // out through the breach
-    const r = W.impact(hit.ref, shot, this.host.clock);
-    // every pellet on the glass: a few chips at the glass; the pull's counted impact: the glass cue + a small burst
+    const r = W.impact(hit.ref, damage, shot, this.host.clock);
+    // every ray on the glass: a few chips at the glass; the pull's first ray on this pane: the glass cue + a small burst (cosmetic
+    // once per pane per pull — the damage of every ray counts)
     this.host.fx?.impact(at, normal, 'glass', {decal: false, chips: 1});
-    if (r.counted) {
-      this.counts.impacts++;
+    if (r.applied > 0) { this.counts.impacts++; this.counts.damage += r.applied; }
+    if (r.first) {
       this.host.sfx?.impact(at.x, at.y, at.z, 'glass');
       this.host.damage?.burst(at, normal, td.copy(dir), 'glass', GLASS, 0.5);
-      if (r.look === 'cracked') this.counts.cracked++;
     }
+    if (r.look === 'cracked') this.counts.cracked++;
     if (r.broke) this.onBreak(hit.ref, dir);
     return true;
   }
@@ -197,7 +219,7 @@ export class GasSystem {
     this.upload();
   }
 
-  /** QA / debug: break a pane outright (its shards, burst, cue and gas as from a third impact). */
+  /** QA / debug: break a pane outright (its shards, burst, cue and gas as from its last damage). */
   breakPane(id: string): boolean {
     const W = this.windows;
     if (!W || !W.breakNow(id, this.host.clock)) return false;
@@ -209,19 +231,24 @@ export class GasSystem {
   // Per frame (play dt)
 
   frame(dt: number): void {
-    const f = this.field;
-    if (!f) { this.hud.clear(); return; }
-    f.tick(dt);
-    this.upload();
-    // ONE exposure calculation per frame at the eye
+    const f = this.field, roof = this.roof;
+    if (!f && !roof) { this.hud.clear(); return; }
+    if (f) { f.tick(dt); this.upload(); }
+    // ONE exposure calculation per frame at the eye: the breach-gas field and (task gas-mask-roof-feedback-20261030, item 10) the
+    // roof's outside atmosphere — c = max(field, outdoor), never a sum (the field has no storey on the roof, the outdoor weight is
+    // 0 below the hatch: indoor floors never see the outside air)
     const P = this.host.player, e = this.exposure;
-    const c = P.alive ? f.concentrationAt(P.x, P.eye, P.z) : 0;
+    const cField = P.alive && f ? f.concentrationAt(P.x, P.eye, P.z) : 0;
+    const cOut = P.alive && roof ? GAS.ROOF_OUTDOOR_C * roofBlend(P.x, P.eye, P.z, roof) : 0;
+    const c = Math.max(cField, cOut);
     const raw = GAS.DPS_MAX * Math.min(1, Math.max(0, (c - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
     const prot = c >= Math.min(GAS.HUD_MIN, GAS.THRESHOLD) ? this.protection() : false;
     const dps = prot ? 0 : raw;
-    e.c = c; e.protected = prot; e.dps = dps;
+    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut;
+    e.source = c < GAS.HUD_MIN ? null : cOut > cField ? 'outdoor' : 'field';
     if (dps > 0 && dt > 0 && P.alive) { P.takeDamage(dps * dt); e.damage += dps * dt; }
-    const haze = !!this.host.atmosphereBypass || !this.host.atmosphere.active;
+    // the fallback haze stands in for the volumetric breach gas only: the roof's outdoor murk is the scene fog, always drawn
+    const haze = (!!this.host.atmosphereBypass || !this.host.atmosphere.active) && e.source === 'field';
     this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze});
   }
 }

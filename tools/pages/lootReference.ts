@@ -5,7 +5,7 @@
 // kinds + lootTables HOLDER_SLOTS), every table (named lootTables exports, OPENABLE_TABLES, purpose tables of gen/purposes.ts,
 // legacy room-type tables, pools, reward picks), resolved through the real resolution API (items/loot.ts holderTable /
 // compartmentTable, lootTables resolveRows / slotEmpty / ...), the loose-floor programs, rare gear, gas masks / filters, weapon
-// finds, the starter kit, the roof cache and the non-loot interaction rules. Which holder / purpose contexts occur in which level
+// finds, the starter kit, the roof cache, the roof find (curated find rewards) and the non-loot interaction rules. Which holder / purpose contexts occur in which level
 // comes from a SMALL fixed-seed census of the real level generators (labelled "observed in N sample levels"; not exhaustive).
 //
 // The contract is tools/pages/lootReferenceTypes.ts; the guide (how new sources become discoverable, probability definitions) is
@@ -16,7 +16,7 @@
 import * as LT from '../../game/src/items/lootTables';
 import {
   BASE_TABLES, CONTAINER_THEMED, ECON_CATS, HOLDER_ALLOW, HOLDER_SLOTS, HP_MED, LEGACY_CATS, OPENABLE_TABLES, RANDOM_HOLDERS,
-  REWARD_TABLES, SLOT_CATEGORIES, THEME_OF_TYPE, COMPARTMENT_SLOT,
+  REWARD_FINDS, REWARD_TABLES, SLOT_CATEGORIES, THEME_OF_TYPE, COMPARTMENT_SLOT,
   catWeight, econCat, floorChance, floorCount, gearParams, keepChance, lootProfile, resolveRows, validateLootProfile,
   type EconCat, type ItemRows, type LootProfile, type LootSpec, type LotRange, type OwnTable, type RewardTable, type SlotCategory,
 } from '../../game/src/items/lootTables';
@@ -133,11 +133,13 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   weapons: 'station' | 'office-plan';
   pistolBoxes: boolean;
   rewards: readonly string[];
+  /** Task gas-mask-roof-feedback-20261030 (item 10): curated FIND reward keys the level's generator lays out (gen/office/roof.ts placeRoofFind). */
+  rewardFinds: readonly string[];
   storeys: boolean;
   floorMoved: boolean;
 }>> = {
-  subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], storeys: false, floorMoved: true},
-  office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], storeys: true, floorMoved: false},
+  subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: true},
+  office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], rewardFinds: [LT.ROOF_FIND_KEY], storeys: true, floorMoved: false},
 };
 
 /**
@@ -161,10 +163,12 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   OFFICE_FLOOR: 'floor program (office)', PUBLIC_FLOOR_WEIGHTS: 'floor placement weights', GEAR_MEAN_PER_LEVEL: 'special: rare gear',
   GEAR_CAP_PER_LEVEL: 'special: rare gear', GEAR_WEIGHTS: 'special: rare gear', GEAR_LOOT: 'special: rare gear',
   ROOF_CACHE_KEY: 'special: roof cache (reward key)', ROOF_CACHE: 'special: roof cache + reward-pick tables', REWARD_TABLES: 'rewards (special + contexts)',
+  // task gas-mask-roof-feedback-20261030 (item 10): the roof find (ROOF_FIND itself is a row table: auto-detected)
+  ROOF_FIND_KEY: 'special: roof find (find reward key)', REWARD_FINDS: 'find rewards (special: reward-find:<key>)',
   BASE_TABLES: 'profile tables', BASELINE_PROFILE: 'level-agnostic default profile (not a level)', PROFILES: 'levels (profiles)', lootProfile: 'levels (profiles)',
   // resolution API (the reference resolves every value through it)
   resolveRows: 'API', catWeight: 'API', keepChance: 'API', slotEmpty: 'API', slotLots: 'API', floorChance: 'API', floorCount: 'API', gearParams: 'API',
-  rewardTable: 'API', validateLootProfile: 'levels (profile validation)',
+  rewardTable: 'API', rewardFind: 'API', validateLootProfile: 'levels (profile validation)',
 };
 
 const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {
@@ -831,7 +835,7 @@ function levelContexts(level: LevelId): LevelInfo['contexts'] {
     {id: 'station', label: 'Station (platform storey)', layoutLevels: [0], floorVariant: 'street', note: 'Runs the street program together with the lobby (one run for both).'},
     {id: 'lobby', label: `Lobby (floor ${OFFICE_FLOORS[0]})`, layoutLevels: [OFFICE_FLOORS[0]], floorVariant: 'street'},
     ...TENANT_FLOORS.map(f => ({id: `floor-${f}`, label: `Floor ${f}`, layoutLevels: [f], floorVariant: 'tower (tenant tilt)', note: 'The floor\'s tenant company decides the tilt (seeded per level).'})),
-    {id: 'roof', label: 'Roof', layoutLevels: [OFFICE_ROOF_LEVEL], floorVariant: 'none', note: 'No floor program; the roof cache reward crate.'},
+    {id: 'roof', label: 'Roof', layoutLevels: [OFFICE_ROOF_LEVEL], floorVariant: 'none', note: 'No floor program; the roof cache reward crate and the roof find laid beside it (a gun + its own ammo, or a gear piece). The deck is outdoors: toxic without a working mask.'},
   ];
   const companies: CompanyInfo[] = COMPANY_IDS.map(id => ({id, name: COMPANIES[id].name, tilt: COMPANIES[id].loot, note: COMPANIES[id].note}));
   return {
@@ -1116,6 +1120,41 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
       probability: 'Each pick: guaranteed when empty 0 and lots >= 1; `share` = the conditional share within its pick. Stack sizes follow BOX_COUNT (big boxes: the crate).',
       knobs: [{what: 'reward table', value: key, at: T('ROOF_CACHE'), overrides: ['itemWeight', 'categoryWeight', 'rewards']}, {what: 'placement', value: 'placeRoofReward', at: B.src.at(F.roof, 'placeRoofReward'), overrides: ['none']}],
       at: [T('ROOF_CACHE'), T('REWARD_TABLES'), B.src.at(F.roof, 'placeRoofReward'), B.src.at(F.loot, 'REWARD_REPACKS')],
+    });
+  }
+
+  // --- task gas-mask-roof-feedback-20261030 (item 10): curated FIND rewards (the roof find) — one source per find key a level lays out
+  const findKeys = new Set<string>();
+  for (const l of levels) for (const k of Object.keys(profiles.get(l)!.tables.rewardFinds ?? {})) findKeys.add(k);
+  for (const key of [...findKeys].sort()) {
+    const ls = levels.filter(l => profiles.get(l)!.tables.rewardFinds?.[key] && LEVEL_ADAPTER[l].rewardFinds.includes(key));
+    const rf = (ls.length ? LT.rewardFind(profiles.get(ls[0])!, key) : undefined) ?? REWARD_FINDS[key];
+    if (!rf) continue;
+    const base = (ls.length ? profiles.get(ls[0])!.tables.rewardFinds?.[key] : undefined) ?? REWARD_FINDS[key];
+    const sym = Object.entries(LT as unknown as Record<string, unknown>).find(([, v]) => v === base)?.[0] ?? `REWARD_FINDS.${key}`;
+    const tid = B.idOf(base);
+    if (tid) B.use(tid, `reward-find:${key}`);
+    // exactly one row is laid out: the placeable rows (weight > 0, never the shipped start weapon) by weight
+    const rows = rf.items.filter(([id, w]) => w > 0 && id !== start), skipped = rf.items.filter(([id]) => id === start).map(r => r[0]);
+    const pr = pickProbs(rows.map(r => r[1]));
+    add({
+      id: `reward-find:${key}`, family: 'reward', label: `${rf.label} (curated find reward)`, class: rows.length ? 'guaranteed' : 'conditional', levels: ls,
+      summary: `ONE item per logical level, rolled once on its own stream (\`reward-find:${key}\` x the level's layout seed: Retry / revisits never re-roll it, a New Game seed rolls again) and laid on the floor beside the roof cache as layout pickups: a gun ${rf.pairedAmmo ? 'with a box of its OWN caliber beside it (the weapon-find convention, WEAPON_FIND_AMMO)' : 'alone'}, or a gear piece alone. Never the start weapon (${start}${skipped.length ? `: row ${skipped.join(', ')} skipped` : ''}). Verified after placement — a reachable deck spot clear of props / structures / the hatch, else the generator retries the level —; finite (layout pickup memory); not a holder roll, no scarcity cut, separate from the level's one rare-gear roll.${ls.length ? '' : ' NOT placed by any registered level generator.'}`,
+      items: rows.flatMap(([itemId, weight], j) => {
+        const pair = rf.pairedAmmo ? WEAPON_FIND_AMMO[itemId] : undefined;
+        return [
+          {itemId, count: 1, weight, share: rd(pr[j]), note: pair ? 'gun' : 'gear piece'},
+          ...(pair ? [{itemId: pair[0], count: pair[1], note: `paired with the ${itemId} (its own caliber)`}] : []),
+        ];
+      }),
+      denominator: rd(rows.reduce((s, r) => s + r[1], 0)),
+      probability: 'Exactly one row is laid out per level: `share` = its probability (weight over the placeable rows); a gun brings its paired box with it.',
+      knobs: [
+        {what: 'find table', value: key, at: T(sym), overrides: ['itemWeight', 'tables']},
+        {what: 'placement (beside the roof cache, verified)', value: 'placeRoofFind', at: B.src.at(F.roof, 'placeRoofFind'), overrides: ['none']},
+        {what: 'paired ammo box', value: 'WEAPON_FIND_AMMO', at: B.src.at(F.weaponFinds, 'WEAPON_FIND_AMMO'), overrides: ['none']},
+      ],
+      at: [T(sym), T('REWARD_FINDS'), B.src.at(F.roof, 'rollRoofFind'), B.src.at(F.roof, 'placeRoofFind')],
     });
   }
 

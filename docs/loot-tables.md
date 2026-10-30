@@ -24,6 +24,7 @@ unchanged; a tuning change will move it.
 | Loose floor finds | `FLOOR_ECONOMY`, `SUBWAY_FLOOR`, `OFFICE_FLOOR` (with `OFFICE_FLOOR_TILT`), `PUBLIC_FLOOR_WEIGHTS` (where finds land) |
 | Rare gear | `GEAR_LOOT` (mean / cap / weights) |
 | Curated rewards (the Office roof cache) | `REWARD_TABLES`, `ROOF_CACHE`, `ROOF_CACHE_KEY`, `rewardTable()`; `LootTables.rewards` |
+| Curated find rewards (the Office roof find: a gun + its own ammo, or gear) | `REWARD_FINDS`, `ROOF_FIND`, `ROOF_FIND_KEY`, `rewardFind()`; `LootTables.rewardFinds` |
 
 Per-room stock stays with its room in `gen/purposes.ts` (each purpose's `loot` per holder kind). That is where "this room
 makes sense" lives. Purposes reference the named shared tables above.
@@ -189,7 +190,8 @@ The Subway's loose pickups were byte-identical (its floor program has no food).
 
 ## Roof reward
 
-The Office roof is the end of the level, so it holds one guaranteed reward.
+The Office roof is the end of the level, so it holds two guaranteed rewards: the cache (below) and the roof find beside it (next
+subsection). The deck is outdoors and toxic without a working mask.
 
 - **Where it is.** One supply crate stands on the roof deck, its back to the water tower (other roof plant if the tower has no
   free side). The lid faces out, with 0.8 m of open deck in front of it. The crate keeps clear of the hatch, the ladder head, the
@@ -208,7 +210,8 @@ The Office roof is the end of the level, so it holds one guaranteed reward.
 
   The crate floor is 0.55 m wide. A first-aid kit and one box fit together in at least 93 % of packs. A third item fits beside a
   first-aid kit in under 15 %, so the cache has no third item.
-- **No gear.** The reward adds no rare-gear roll. Gear stays one roll per logical level.
+- **No gear in the cache.** The cache adds no rare-gear roll. Gear stays one roll per logical level. The roof find (below)
+  is a separate curated item laid beside it.
 - **Finite and remembered.** The crate rolls once on its holder stream (`loot:crate:<index>`), like every holder. Run memory
   remembers taken lots by holder key and lot id, so they stay taken after climbing the ladder, changing floors, or leaving the
   level and coming back. Retry and New Game behave as for all loot.
@@ -216,6 +219,37 @@ The Office roof is the end of the level, so it holds one guaranteed reward.
   or drop the reward, replace `tables.rewards`: `{}` means no roof reward.
 - **Tests.** `tests/office-roof-reward.test.ts` covers placement, reachability, contents, the scarcity exemption, fit, memory,
   that no other storey changes, and that the Subway is unchanged.
+
+### Roof find (a gun or gear beside the cache)
+
+User feedback (2026-10-30): "I got just a med kit in this run ... It should have at least 1 gear or weapon item up there."
+
+- **Why a run showed only a medkit.** Nothing was lost. The cache always held its two lots, one medicine and one small ammo
+  box (3–12 rounds of a random caliber, unusable with the pistol start in about 2 runs in 3). Nothing else was ever placed
+  on the roof. A gun cannot go in the crate either: holders draw no gun models, and the crate floor fits one row.
+- **What it is.** `ROOF_FIND` (`REWARD_FINDS`, `BASE_TABLES.rewardFinds`, key `ROOF_FIND_KEY` `'roof-find'`). Exactly one
+  item per logical Office run:
+  - a non-starter long gun (2 in 3): the rifle or the shotgun, each with a box of its own caliber beside it (the weapon-find
+    convention, `WEAPON_FIND_AMMO`: 20 × 5.56 or 6 shells);
+  - or a protective gear piece (1 in 3): an armor vest or a hard hat.
+
+  A row naming the run's start weapon is never placed.
+- **Where it is.** `placeRoofFind` in `gen/office/roof.ts` lays it on the deck right beside the cache, at the cache's sides or
+  front corners. Otherwise it goes to the nearest spot round the cache, then any deck spot.
+  - It uses ordinary layout pickups with `reward: 'roof-find'`, appended after every other pickup, so nothing else changes
+    index.
+  - Spots are verified after placement: a walkable deck cell reachable from the start, a clear square (0.48 m half-size for
+    the gun, 0.22 m for its box), clear of roof plant, plinths, vents, the hatch and ladder head, and the core.
+  - `roofRewardIssues` re-checks the result. The generator retries a level without it, so the find can never silently vanish.
+  - `layout.office.roof.find` records it.
+- **Deterministic and finite.** The item is rolled once on its own stream (`reward-find:roof-find` × the layout seed). Retry,
+  revisits, the ladder, pause and bag use never re-roll it, and run memory keeps it taken. A New Game seed rolls again.
+- **The exception.** The roof find is an explicit roof exception. It is not a holder roll, it has no scarcity cut, and it is
+  separate from the level's one rare-gear roll. Every storey's holders, floor finds, weapon finds and gear placement are
+  byte-identical to before (`tests/loot-golden.test.ts` stage 4).
+- **Tuning.** Item weight overrides reach its rows. To drop it, replace `tables.rewardFinds` with `{}`. It appears in the
+  loot reference as `reward-find:roof-find`.
+- **Tests.** `tests/office-roof-reward.test.ts` (roof find blocks) and `tests/loot-reference.test.ts`.
 
 ## Ammo
 

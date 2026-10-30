@@ -550,6 +550,41 @@ export const ROOF_CACHE: RewardTable = {
 export const REWARD_TABLES: Readonly<Record<string, RewardTable>> = {[ROOF_CACHE_KEY]: ROOF_CACHE};
 
 // ---------------------------------------------------------------------------------------
+// Task gas-mask-roof-feedback-20261030 (user item 10): "Roof also needs more loot. I got just a med kit in this run which is a little
+// anti climatic. It should have at least 1 gear or weapon item up there." docs/loot-tables.md "Roof reward".
+//
+// Why a run showed "just a med kit": the roof cache (above) always holds exactly one medicine + one small generic ammo box (BOX_COUNT
+// big: 3-12 rounds, a 2-in-3 chance of a caliber the pistol start cannot use) — nothing is ever lost at runtime (every lot is packed,
+// shown and takeable), and nothing else is placed on the roof (weapon finds / supplies are tower-storey programs, rare gear never
+// picks the roof). A gun cannot be a crate lot either (no gun display in holders; the crate floor fits one row). So the payoff gets
+// a REWARD FIND: one meaningful item laid on the deck beside the cache as an ordinary layout pickup.
+
+/**
+ * A curated FIND reward: ONE item rolled from `items` (exactly once per logical level, on its own seeded stream: never a holder roll,
+ * no scarcity cut) and laid on the floor as an ordinary layout pickup — finite, remembered by run memory (layout pickup index),
+ * never re-rolled. A weapon row also lays a box of the weapon's OWN caliber beside it when `pairedAmmo` (gen/weaponFinds.ts
+ * WEAPON_FIND_AMMO — the weapon-find convention); a gear row is the piece alone. Rows naming the run's START weapon are never
+ * placed (the starter kit has it; gen/office/validate.ts forbids it as a pickup). Item weight overrides apply to its rows.
+ */
+export interface RewardFind { label: string; items: ItemRows; pairedAmmo: boolean }
+
+/** Key of the Office roof find (PickupPlacement.reward; gen/office/roof.ts placeRoofFind). */
+export const ROOF_FIND_KEY = 'roof-find';
+/**
+ * THE ROOF FIND (Office Space, beside the roof cache): ONE non-starter long gun with a box of its own ammunition (the rifle + 20
+ * 5.56 rounds, the shotgun + 6 shells: 2 in 3 runs) or one piece of protective gear (an armor vest or a hard hat: 1 in 3). Always
+ * placed — verified on the reachable deck after placement (gen/office/roof.ts roofRewardIssues rejects an attempt without it).
+ * An explicit roof exception: the level's ONE rare-gear roll and every storey's loot are unchanged.
+ */
+export const ROOF_FIND: RewardFind = {
+  label: 'roof weapon / gear find',
+  items: [['rifle', 2], ['shotgun', 2], ['armor_vest', 1], ['helmet', 1]],
+  pairedAmmo: true,
+};
+/** Every curated find reward by key (BASE_TABLES.rewardFinds). */
+export const REWARD_FINDS: Readonly<Record<string, RewardFind>> = {[ROOF_FIND_KEY]: ROOF_FIND};
+
+// ---------------------------------------------------------------------------------------
 // Profiles
 
 /** The rate tables a profile rolls with. BASE_TABLES = today's numbers; a future level may swap one wholesale (`{...BASE_TABLES, ...}`). */
@@ -579,6 +614,8 @@ export interface LootTables {
   gear: GearLoot;
   /** Task office-interactions-layout-20261030 (lane ROOF): curated rewards by loot key (REWARD_TABLES; absent / {} = none). */
   rewards?: Readonly<Record<string, RewardTable>>;
+  /** Task gas-mask-roof-feedback-20261030 (item 10): curated find rewards by key (REWARD_FINDS; absent / {} = none). */
+  rewardFinds?: Readonly<Record<string, RewardFind>>;
 }
 export const BASE_TABLES: LootTables = {
   areaWeights: AREA_WEIGHTS, holderMod: HOLDER_MOD, holderEmpty: HOLDER_EMPTY, holderLots: HOLDER_LOTS, fullRooms: FULL_ROOMS,
@@ -588,6 +625,7 @@ export const BASE_TABLES: LootTables = {
   floor: {subway: SUBWAY_FLOOR, office: OFFICE_FLOOR},
   gear: GEAR_LOOT,
   rewards: REWARD_TABLES, // lane ROOF (office-interactions-layout-20261030)
+  rewardFinds: REWARD_FINDS, // task gas-mask-roof-feedback-20261030 (item 10)
 };
 
 /** Multiplier tables (all optional; 1 = unchanged, 0 = never). */
@@ -723,6 +761,17 @@ export function rewardTable(profile: LootProfile, key: string): RewardTable | un
   if (!t) return undefined;
   const picks = t.picks.map(p => { const items = resolveRows(profile, p.items); return items === p.items ? p : {...p, items}; });
   return picks.every((p, i) => p === t.picks[i]) ? t : {...t, picks};
+}
+
+/**
+ * Task gas-mask-roof-feedback-20261030 (item 10): the curated find reward `key` under `profile` (undefined: none). The tables' own
+ * object when no item / category weight override touches its rows; otherwise a copy with the rows resolved (resolveRows).
+ */
+export function rewardFind(profile: LootProfile, key: string): RewardFind | undefined {
+  const t = profile.tables.rewardFinds?.[key];
+  if (!t) return undefined;
+  const items = resolveRows(profile, t.items);
+  return items === t.items ? t : {...t, items};
 }
 
 // ---------------------------------------------------------------------------------------
@@ -861,6 +910,14 @@ export function validateLootProfile(p: LootProfile): string[] {
     if (!rw.picks.some(q => q.empty === 0 && isRange(q.lots) && q.lots[0] >= 1 && Array.isArray(q.items) && q.items.some((r: ItemRow) => finiteNonNeg(r[1]) && r[1] > 0))) {
       bad(path, 'no guaranteed pick (empty 0, lots lo >= 1, a row with weight > 0)');
     }
+  }
+  // --- task gas-mask-roof-feedback-20261030 (item 10): curated find rewards — valid rows, at least one placeable item
+  for (const [k, rf] of Object.entries(t.rewardFinds ?? {})) {
+    const path = `tables.rewardFinds.${k}`;
+    if (!rf || typeof rf !== 'object' || !Array.isArray(rf.items)) { bad(path, 'not a find reward'); continue; }
+    rows(`${path}.items`, rf.items);
+    if (typeof rf.pairedAmmo !== 'boolean') bad(`${path}.pairedAmmo`, 'not a boolean');
+    if (!rf.items.some((r: ItemRow) => finiteNonNeg(r[1]) && r[1] > 0)) bad(path, 'no item with weight > 0 (the find is guaranteed)');
   }
   return issues;
 }
