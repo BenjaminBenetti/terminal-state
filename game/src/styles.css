@@ -125,12 +125,14 @@ button:disabled { opacity: 0.45; cursor: default; }
 #hotbar .slot svg { width: clamp(28px, calc(var(--hb-w) - 22px), 52px); height: 28px; }
 body #hotbar .slot img.ico3d { width: calc(var(--hb-w) - 6px); }
 #hotbar .slot .nm { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#hotbar .slot .count { top: 3px; bottom: auto; } /* rounds / stack size top right, clear of the centred name (as in the bag view) */
 #hotbar .slot.selected { background: rgba(48, 44, 30, 0.75); }
 @media (max-width: 1280px) {
   #vitals { width: 210px; }
   #weapon-hint, #weapon-name { max-width: 190px; }
   #hotbar { --hb-gap: 4px; --hb-sep: 6px; --hb-sep2: 3px; --hb-w: clamp(40px, calc((100vw - 523px) / 8), 84px); }
   #hotbar .slot .nm { font-size: 10.5px; }
+  #hotbar .slot .count { font-size: 11px; }
 }
 #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 20, 15, 0.75) 100%); }
 #vignette.low { animation: pulse 1.1s infinite; }
