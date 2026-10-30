@@ -242,8 +242,20 @@ export class Viewmodel {
    * the first shot does not build its pipeline mid-play.
    */
   warmRoots(): THREE.Object3D[] {
-    return [this.pivot, this.flash, ...[...this.items.values()].map(i => i.root)];
+    return [this.pivot, this.flash, ...[...this.items.values()].map(i => i.root), ...this.faceRoots];
   }
+
+  /**
+   * Task gas-mask-roof-feedback-20261030 (item 4): a root fixed to the FACE — the first-person gas-mask view (gear/maskView.ts).
+   * It hangs off the camera, not the held-item pivot, so it never bobs, kicks, holsters or swaps with the weapon; it draws in
+   * this scene's overlay pass and is one of warmRoots() (compiled on the loading screen while hidden). Added once.
+   */
+  addFaceRoot(root: THREE.Object3D): void {
+    if (this.faceRoots.includes(root)) return;
+    this.camera.add(root);
+    this.faceRoots.push(root);
+  }
+  private readonly faceRoots: THREE.Object3D[] = [];
 
   /** Muzzle position in world space, given the main camera. */
   muzzleWorld(main: THREE.Camera, out = new THREE.Vector3()): THREE.Vector3 {
