@@ -11,11 +11,20 @@
 //   helmet      helmet    head armor 0.25 (head = ~10 % of melee hits)
 //   boots       boots     move speed x1.05 (walk / sprint / crouch)
 //   gloves      gloves    weapon spread x0.92 · reload / item-use time x0.92
+//
+// Task gasmask-breach-20261030 (mask lane): the GAS MASK (`gas_mask`, slot 'mask', APPENDED to GEAR_SLOTS so the backpack keeps
+// its index and older snapshots load unchanged). Worn in the mask slot = EQUIPPED; Q puts it on / takes it off the face
+// (gear/gasMask.ts). It has no PlayerModifiers stats: on the face with a working filter it protects from infectious gas. The
+// fitted filter's charge (seconds left) lives on the mask's own ItemStack (`filter`, items/inventory.ts), so it travels with
+// that very mask. Spare filters are the passive supply item `gas_filter` (items/items.ts).
 import type {ItemDef, ItemDims} from './items';
 import type {PlayerModifiers} from '../player/modifiers';
 
-export type GearSlot = 'chest' | 'backpack' | 'boots' | 'gloves' | 'helmet';
-export const GEAR_SLOTS: readonly GearSlot[] = ['helmet', 'chest', 'gloves', 'boots', 'backpack'];
+export type GearSlot = 'chest' | 'backpack' | 'boots' | 'gloves' | 'helmet' | 'mask';
+export const GEAR_SLOTS: readonly GearSlot[] = ['helmet', 'chest', 'gloves', 'boots', 'backpack', 'mask'];
+
+/** Task gasmask-breach-20261030 (mask lane): seconds of on-face use one gas-mask filter gives (drains only while the mask is on). */
+export const FILTER_LIFE_S = 150;
 
 export interface GearSpec {
   slot: GearSlot;
@@ -33,13 +42,15 @@ export interface GearSpec {
   handlingMult?: number;
   /** Backpack: slots of its own (separate container; only accessible while grounded). */
   bagSlots?: number;
+  /** Gas mask (mask lane): seconds one fitted filter lasts on the face (FILTER_LIFE_S). */
+  filterLife?: number;
 }
 
-/** Icon keys the gear lane adds (ui/gearIcons.ts). */
-export type GearIconKey = 'vest' | 'rig' | 'backpack' | 'helmet' | 'boots' | 'gloves';
+/** Icon keys the gear lane adds (ui/gearIcons.ts). Mask lane: + 'gasmask'. */
+export type GearIconKey = 'vest' | 'rig' | 'backpack' | 'helmet' | 'boots' | 'gloves' | 'gasmask';
 
 /** Slot display names (inventory gear panel). */
-export const GEAR_SLOT_NAMES: Record<GearSlot, string> = {helmet: 'Head', chest: 'Chest', gloves: 'Hands', boots: 'Feet', backpack: 'Back'};
+export const GEAR_SLOT_NAMES: Record<GearSlot, string> = {helmet: 'Head', chest: 'Chest', gloves: 'Hands', boots: 'Feet', backpack: 'Back', mask: 'Face'};
 
 /** Base-tier backpack size (its own container). */
 export const BACKPACK_SLOTS = 12;
@@ -60,6 +71,9 @@ export const GEAR_ITEMS: Record<string, ItemDef> = {
     'Worn leather work boots, laces knotted. Sure footing: you move a little faster.'),
   gloves: gear('gloves', 'Worn work gloves', 'Work gloves', 'gloves', {slot: 'gloves', tier: 1, spreadMult: 0.92, handlingMult: 0.92},
     'Leather-palmed work gloves. A steadier grip: tighter spread and slightly quicker reloads and item use.'),
+  // Task gasmask-breach-20261030 (mask lane)
+  gas_mask: gear('gas_mask', 'Full-face gas mask', 'Gas mask', 'gasmask', {slot: 'mask', tier: 1, filterLife: FILTER_LIFE_S},
+    'Black rubber full-face respirator with a wide visor. Worn in the face slot; Q pulls it on or off. It only protects while it is on your face AND its fitted filter has charge left — it draws a spare filter from your pockets / quick slots when one runs out (never from a worn backpack).'),
 };
 
 /** Resting sizes (m) as a pickup / ground model = the delivered Meshy derivatives' bounds (vest, rig, backpack, hat and boots stand; gloves lie flat). */
@@ -70,9 +84,16 @@ export const GEAR_DIMS: Record<string, ItemDims> = {
   helmet: {w: 0.23, d: 0.3, h: 0.19, shape: 'box'},
   boots: {w: 0.3, d: 0.32, h: 0.19, shape: 'box'},
   gloves: {w: 0.26, d: 0.2, h: 0.06, shape: 'flat'},
+  // mask lane: the shipped zombie outfit mask's bind-pose bounds (outfit-gasmask-t25.glb Outfit_gasmask__lastshift), standing on its chin
+  gas_mask: {w: 0.18, d: 0.13, h: 0.18, shape: 'box'},
 };
 
 export const GEAR_IDS = Object.keys(GEAR_ITEMS);
+
+/** Mask lane: gear that takes gas-mask filters (a `filter` charge on its stack). */
+export function isFilterMask(itemId: string | null | undefined): boolean {
+  return (gearSpec(itemId)?.filterLife ?? 0) > 0;
+}
 
 export function isGearItem(itemId: string | null | undefined): boolean {
   return !!itemId && itemId in GEAR_ITEMS;
@@ -98,6 +119,7 @@ export function gearStatText(spec: GearSpec): string {
   if (spec.speedMult && spec.speedMult !== 1) out.push(`speed ${spec.speedMult > 1 ? '+' : '−'}${pct(spec.speedMult - 1)}`);
   if (spec.spreadMult && spec.spreadMult !== 1) out.push(`spread ${spec.spreadMult < 1 ? '−' : '+'}${pct(spec.spreadMult - 1)}`);
   if (spec.handlingMult && spec.handlingMult !== 1) out.push(`reload / use time ${spec.handlingMult < 1 ? '−' : '+'}${pct(spec.handlingMult - 1)}`);
+  if (spec.filterLife) out.push(`blocks infectious gas while on (Q) with a working filter · one filter lasts ${spec.filterLife % 60 ? `${(spec.filterLife / 60).toFixed(1)}` : spec.filterLife / 60} min on the face`); // mask lane
   return out.join(' · ');
 }
 

@@ -55,6 +55,7 @@ import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifi
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
+import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters, camera mask
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
@@ -210,6 +211,8 @@ export class Game {
   readonly inputOwners: (() => boolean)[] = [];
   /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
   readonly gear: GearSystem;
+  /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, camera mask; protects() (gear/gasMask.ts). */
+  readonly gasMask: GasMaskSystem;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
@@ -253,7 +256,6 @@ export class Game {
   private shake = 0;
   private muzzleT = 0;
   private use: UseAction | null = null;
-  private lastSlot = 0;
   private aiming = false;
   private wonAt = -1;
   private rand: () => number = Math.random;
@@ -355,6 +357,8 @@ export class Game {
     // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
     this.injuries = installInjuries(this, {aiming: () => this.aiming});
     this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
+    // Task gasmask-breach-20261030 (mask lane): after GEAR (wraps its inventory-screen hook); frame hook, input owner, lifecycle, run participant 'gas.mask'
+    this.gasMask = installGasMask(this, {cancelUse: reason => this.cancelUse(reason), cancelFlareHold: () => this.cancelFlareHold()});
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
@@ -625,7 +629,9 @@ export class Game {
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
-      this.layoutPickup.set(this.pickups.add(this.inv.makeStack(p.itemId, p.count), p.x, p.y, p.z, this.rand() * Math.PI * 2), i);
+      const st = this.inv.makeStack(p.itemId, p.count);
+      if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
+      this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, this.rand() * Math.PI * 2), i);
     }
     for (const rec of plan.restored) {
       const pk = restorePickup(this.pickups, this.inv, rec);
@@ -670,7 +676,6 @@ export class Game {
     const next = inv as unknown as {toJSON?(): unknown};
     if (typeof live.loadJSON === 'function' && typeof next.toJSON === 'function') live.loadJSON(next.toJSON());
     else this.inv = inv;
-    this.lastSlot = this.inv.selected;
   }
 
   /** Iteration 16: NewGame state — fresh starter kit, survival 80/80, battery 80 %, lane state reset, run stats zeroed (hp: Player.spawn). */
@@ -679,7 +684,6 @@ export class Game {
     this.torch.reset(); // Iteration 12 (LIGHT): battery back to its 80 % start, light on, no dip in progress
     // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
     this.installInventory(starterInventory(this.startWeapon));
-    this.lastSlot = 0;
     this.stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
     resetParticipants(this.runParticipants);
   }
@@ -1176,7 +1180,6 @@ export class Game {
   // ---------------------------------------------------------------------------------------
   private selectSlot(i: number): void {
     if (i === this.inv.selected) return;
-    this.lastSlot = this.inv.selected;
     this.inv.select(i);
     this.cancelUse('slot');
     this.syncHeld();
@@ -1300,6 +1303,7 @@ export class Game {
     if (!st) return;
     const def = itemDef(st.itemId);
     if (def.kind !== 'consumable') return;
+    if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -1414,7 +1418,7 @@ export class Game {
 
     for (let i = 0; i < 5; i++) if (inp.hit(`Digit${i + 1}`)) this.selectSlot(i);
     if (inp.wheel) { const i = (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
-    if (inp.hit('KeyQ')) this.selectSlot(this.lastSlot);
+    if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
     if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
     // Task office-overhaul-20261030 (lane INTERACT, #6): G = the grenade slot (hold / release below; T a silent alias). The old
     // G = drop binding is gone (drop by dragging out of the inventory screen). An empty grenade slot takes a carried throwable first.

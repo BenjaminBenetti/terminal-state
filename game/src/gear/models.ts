@@ -9,12 +9,29 @@
 //
 // preloadGearModels() is awaited before the icon renders (ui/itemIcons.ts), so the very first template (icons, pickups,
 // grounded bags, warm-up prototypes) already uses the delivered model; templates are cached by world/pickups.ts.
+//
+// Task gasmask-breach-20261030 (mask lane): the GAS MASK item reuses the shipped zombie outfit model (assets/manifest.ts
+// `outfit_gasmask` = assets/models/outfit-gasmask-t25.glb, part of the main asset load): its mesh `Outfit_gasmask__lastshift`
+// (fitted to the lastshift body) is made STATIC (skin attributes dropped, bind pose baked), re-centred to the item frame (origin
+// bottom-centre, +Z front — the outfit already faces +Z — metres) and kept at its real size (fitted only if grossly mis-scaled).
+// It inherits that model's recorded provenance (Meshy T2.5 replacement garment, approved: false, gameReady: false; no licence
+// clearance). world/pickups.ts registerItemModels hands it over; without it (Node tests, a failed file) a procedural stand-in
+// is used. Nothing new was generated.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {loadOfficeAsset, OFFICE_ASSETS, type OfficeAssetId} from '../assets/officeAssets';
 import {GEAR_DIMS, GEAR_IDS} from '../items/gear';
+
+/** Mask lane: the outfit mesh used as the gas-mask item (the lastshift fit: the default body's proportions). */
+export const GAS_MASK_OUTFIT_MESH = 'Outfit_gasmask__lastshift';
+let maskOutfit: GLTF | null = null;
+
+/** Mask lane: the loaded zombie outfit GLTF (main assets `outfit_gasmask`) or null. Call before the mask's template is first built. */
+export function registerGasMaskOutfit(gltf: GLTF | null | undefined): void {
+  maskOutfit = gltf ?? null;
+}
 
 export const GEAR_ASSET: Readonly<Record<string, OfficeAssetId>> = {
   armor_vest: 'gear-armor-vest', chest_rig: 'gear-chest-rig', backpack: 'gear-backpack',
@@ -42,6 +59,7 @@ export function registerGearModel(itemId: string, gltf: GLTF | null): void {
 
 /** 'office-gear-… (Meshy T2.5 derivative)' or 'procedural stand-in' (QA / item model report). */
 export function gearModelSource(itemId: string): string {
+  if (itemId === 'gas_mask' && maskOutfit) return `assets/models/outfit-gasmask-t25.glb ${GAS_MASK_OUTFIT_MESH} (shipped zombie outfit made static; Meshy T2.5, unapproved provenance)`;
   return loaded.has(itemId) ? `assets/officeAssets.ts ${GEAR_ASSET[itemId]} (Meshy T2.5 derivative)` : 'procedural gear stand-in (gear/models.ts)';
 }
 
@@ -57,11 +75,50 @@ export function gearIconView(itemId: string): {az: number; el: number} {
 
 /** A fresh template object for a gear item (the caller caches / clones it). */
 export function gearItemModel(itemId: string): THREE.Object3D {
+  if (itemId === 'gas_mask' && maskOutfit) {
+    try { return fitMaskOutfit(maskOutfit); } catch (err) { console.warn('gear model gas_mask: outfit mesh unusable, using the stand-in', err); }
+  }
   const gltf = loaded.get(itemId);
   if (gltf) {
     try { return fitDerivative(gltf, itemId); } catch (err) { console.warn(`gear model ${itemId}: derivative unusable, using the stand-in`, err); }
   }
   return proceduralGear(itemId);
+}
+
+/**
+ * Mask lane: the zombie outfit's gas mask as a static item. The skinned mesh's bind pose IS its rest pose in the outfit's model
+ * space (head height, facing +Z), so its world matrix is baked into a geometry copy without the skin attributes; then it is
+ * re-centred (bottom-centre origin) and only a grossly mis-scaled file is fitted to GEAR_DIMS.gas_mask.
+ */
+function fitMaskOutfit(gltf: GLTF): THREE.Object3D {
+  gltf.scene.updateMatrixWorld(true);
+  let src: THREE.Mesh | null = null;
+  gltf.scene.traverse(o => { if (!src && (o as THREE.Mesh).isMesh && o.name === GAS_MASK_OUTFIT_MESH) src = o as THREE.Mesh; });
+  const mesh = src as THREE.Mesh | null;
+  if (!mesh) throw new Error(`${GAS_MASK_OUTFIT_MESH} not in the outfit file`);
+  const geo = mesh.geometry.clone();
+  for (const a of ['skinIndex', 'skinWeight']) if (geo.getAttribute(a)) geo.deleteAttribute(a);
+  geo.applyMatrix4(mesh.matrixWorld);
+  geo.computeBoundingBox();
+  const box = geo.boundingBox!;
+  if (box.isEmpty()) throw new Error('empty mask mesh');
+  const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const d = GEAR_DIMS.gas_mask, longest = Math.max(size.x, size.y, size.z), want = Math.max(d.w, d.d, d.h);
+  const s = longest > 0 && (longest > want * 2 || longest < want / 2) ? want / longest : 1;
+  geo.translate(-c.x, -box.min.y, -c.z);
+  if (s !== 1) geo.scale(s, s, s);
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+  const m0 = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const mat = m0.clone(); // its own copy: the wardrobe's outfit material stays untouched
+  mat.name = 'gear-gas_mask';
+  const out = new THREE.Mesh(geo, mat);
+  out.name = 'gear-gas_mask';
+  out.castShadow = false;
+  out.receiveShadow = true;
+  const root = new THREE.Group();
+  root.add(out);
+  return root;
 }
 
 function fitDerivative(gltf: GLTF, itemId: string): THREE.Object3D {
@@ -181,6 +238,20 @@ function proceduralGear(itemId: string): THREE.Object3D {
         g.rotateY(yaw); g.translate(sx, 0, 0);
         P.push(g);
       }
+      break;
+    }
+    case 'gas_mask': { // mask lane stand-in: rubber face piece standing on its chin, wide visor and chin filter facing +Z
+      const rubber = 0x1f2221, rim = 0x111312, glass = 0x6b7a70, olive = 0x4b5133, strap = 0x2a2c2a;
+      const face = new THREE.SphereGeometry(0.088, 18, 12);
+      face.scale(1, 1.03, 0.7); face.translate(0, 0.092, 0);
+      P.push(tinted(face, rubber));
+      P.push(box(0.142, 0.068, 0.02, 0, 0.085, 0.045, rim)); // visor frame
+      P.push(box(0.124, 0.052, 0.012, 0, 0.093, 0.056, glass)); // visor glass
+      P.push(box(0.022, 0.016, 0.014, 0, 0.083, 0.059, rim)); // nose-bridge dip
+      const can = new THREE.CylinderGeometry(0.03, 0.03, 0.032, 16);
+      can.rotateX(Math.PI / 2); can.translate(0, 0.036, 0.07);
+      P.push(tinted(can, olive));
+      P.push(box(0.015, 0.012, 0.11, -0.078, 0.085, -0.03, strap), box(0.015, 0.012, 0.11, 0.078, 0.085, -0.03, strap)); // head straps
       break;
     }
     default:

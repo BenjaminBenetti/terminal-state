@@ -8,15 +8,22 @@
 
 import {generateStation} from '../gen/station';
 import type {StationLayout} from '../gen/stationTypes';
-import {placeSectionGear} from './gearAdapter';
+import {isMaskLootItem, placeMaskLoot, placeSectionGear} from './gearAdapter';
 import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
 import type {Arrival, LevelDef, LevelId, SectionGenContext, SectionKey} from './types';
 
 export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office'];
 
-/** Gear of the level-wide roll (lane GEAR), placed once, after generation. */
+/**
+ * Gear of the level-wide roll (lane GEAR), placed once, after generation. Task gasmask-breach-20261030 (mask lane): the roll's
+ * gas masks / filters (gen/maskLoot.ts, appended to it by levels/gearAdapter.ts) are placed AFTER the gear with their own rng,
+ * so every gear placement is exactly what it was.
+ */
 function withGear(layout: StationLayout, ctx: SectionGenContext): StationLayout {
-  if (ctx.gear && ctx.gear.length) placeSectionGear(layout, ctx.gear);
+  if (ctx.gear && ctx.gear.length) {
+    placeSectionGear(layout, ctx.gear.filter(g => !isMaskLootItem(g.itemId)));
+    placeMaskLoot(layout, ctx.gear.filter(g => isMaskLootItem(g.itemId)));
+  }
   return layout;
 }
 

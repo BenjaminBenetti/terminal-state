@@ -18,4 +18,6 @@ export const GEAR_ICONS: Record<GearIconKey, string> = {
   boots: S(`<path d="M14 6h8v14l8 3v5H12V8z"/><path d="M36 6h8v14l8 3v5H34V8z" opacity="0.75"/><rect x="12" y="26" width="18" height="2" fill="${DARK}" opacity="0.5"/><rect x="34" y="26" width="18" height="2" fill="${DARK}" opacity="0.5"/>`),
   // pair of gloves (fingers up)
   gloves: S(`<path d="M14 28V14l-3-4 2-1 3 3V5h2v8h1V3h2v10h1V5h2v10h1V8h2v12l-3 8z"/><path d="M38 28V14l-3-4 2-1 3 3V5h2v8h1V3h2v10h1V5h2v10h1V8h2v12l-3 8z" opacity="0.75"/>`),
+  // Task gasmask-breach-20261030 (mask lane): full-face gas mask from the front — wide visor with a nose-bridge dip, chin filter, head straps
+  gasmask: S(`<path d="M19 9l-7-4M19 15h-8M45 9l7-4M45 15h8" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.7"/><path d="M25 3h14c4 0 7 3 7 7v7c0 5-4 9-9 12H27c-5-3-9-7-9-12v-7c0-4 3-7 7-7z"/><path d="M24 7.5h16c1.6 0 2.8 1.2 2.8 2.8v3.6c0 1.6-1.2 2.8-2.8 2.8h-5.4L32 14.6l-2.6 2.1H24c-1.6 0-2.8-1.2-2.8-2.8v-3.6c0-1.6 1.2-2.8 2.8-2.8z" fill="${DARK}" opacity="0.55"/><circle cx="32" cy="24" r="5.2" opacity="0.9"/><circle cx="32" cy="24" r="3.1" fill="${DARK}" opacity="0.45"/>`),
 };
