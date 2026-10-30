@@ -306,7 +306,10 @@ describe('light dynamic props', () => {
     expect(Math.hypot(p.x - 8, p.z - 6) + (1 - up.y)).toBeGreaterThan(0.05);
     expect(p.y).toBeGreaterThan(0.2); // centre above the floor (standing 0.475 / lying 0.275)
     expect(ph.dynamicItems.stats().propsAwake).toBe(0); // resting: static body
-    expect(ph.stats().bodies).toBeGreaterThanOrEqual(1);
+    // task office-props-physics-scale-20261030 (lane PHYS): kept as a resting static body, in the cannon world only while its
+    // static chunk is (nothing simulates now: out of the broadphase until something moves near it)
+    expect(ph.dynamicItems.stats().resting).toBe(1);
+    expect(ph.dynamicItems.stats().restingInWorld).toBe(0);
     // hit-tested as an oriented box at its new pose
     expect(ph.dynamicItems.rayHits(new THREE.Vector3(p.x, 2, p.z), new THREE.Vector3(0, -1, 0), 3, []).length).toBe(1);
     // a walker pushes it

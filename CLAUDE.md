@@ -19,7 +19,8 @@ stage external archives. Never reuse old generation budgets.
 
 ## Props — core design rules (standing user rule, 2026-10-30)
 
-Every new or changed prop must meet both affordance rules below. They are acceptance requirements for prop work, not
+Every new or changed prop must meet both affordance rules below (1, 2) and both authoring rules (4, 5: no baked loose
+clutter, checked human scale). They are acceptance requirements for prop work, not
 polish: a prop that looks usable must not silently ship as decoration-only. Checklist and file pointers:
 `docs/prop-affordances.md`.
 
@@ -47,8 +48,25 @@ polish: a prop that looks usable must not silently ship as decoration-only. Chec
    (`OPENABLE_AUDIT`, `game/src/world/openablesSpec.ts`) and in the physics-affordance classification (see
    `docs/prop-affordances.md`), and the audit tests fail for an unclassified kind. No blanket destructibility,
    durability, fire or explosion system is implied.
-4. **Check it.** New props need:
+4. **Never bake loose items into furniture.** Removable loose items and clutter (beakers and lab glassware, monitors,
+   keyboards, bread and other food, papers, books, tools, bottles, cups) are never part of a furniture model. Separate them
+   (local mesh separation; no regeneration without approval) and place them as separate runtime props or loot items on
+   the furniture's real support surface: seeded, supported, not floating or overlapping, so they move (rule 2) or can be
+   taken. Permanent structural parts (handles, hinges, shelves, built-in fixtures) stay in the model and need not become
+   pickups. A remaining baked case is listed as an explicit exception, never silently shipped.
+5. **Real-world scale, checked beside a zombie.** Every new or changed prop is inspected in a rendered size comparison
+   beside an actual runtime-scaled standing zombie: `node tools/asset-pipeline/props/scale-check.mjs --kind <kind>` (CPU
+   render at the game's runtime fit; usage in `docs/prop-affordances.md`).
+   - Record its dimensions (W×H×D) and grounded contact points (no floating or sunk base).
+   - Size furniture by the furniture itself (work top, seat, carcass), never by a box that includes loose items on it
+     (`--below` / `--exclude` give furniture-only bounds). Typical: desk / worktop 0.72–0.76 m, lab bench ~0.9 m,
+     counters 0.9–1.0 m, chair seat ~0.45 m, doors ~2.0 m.
+   - Look at the render: a bounding-box number or unit test alone is not the check. Never rescale the reference zombie
+     (the game's 0.95–1.05) to make a prop look right.
+   - A size change moves its footprint, collider, surface / slot heights and hinge transforms with the visual.
+6. **Check it.** New props need:
    - focused unit tests for openability, contents theme, fit and the physics class;
+   - the scale-check render beside a zombie (rule 5), viewed, with its dimensions and contact recorded;
    - a short serial browser spot check of one representative prop when visuals change (browser rules below).
 
 ## Meshy MCP — key from the environment only

@@ -34,6 +34,7 @@ import {MELEE_REF, PACK_SIZE, THROW_REF, isMeleeItem, type Bar, type Inventory, 
 import {FILTER_LIFE_S, GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem, isFilterMask} from '../items/gear';
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
+import {MATERIAL_NOTE} from '../items/craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
 import {ICONS} from './icons';
@@ -509,7 +510,8 @@ export class InventoryUI {
         : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
         : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
-        : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` : ''); // mask lane
+        : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
+        : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` : ''); // lane RACK (office-props-physics-scale-20261030)
       fx.classList.toggle('refused', !!this.note && this.noteBad);
     }
     const useBtn = $('#btn-inv-use') as HTMLButtonElement;
@@ -517,7 +519,7 @@ export class InventoryUI {
     useBtn.disabled = !def || def.kind !== 'consumable';
     const eq = $('#btn-inv-equip') as HTMLButtonElement;
     eq.textContent = def?.kind === 'gear' ? (worn ? 'Take off' : 'Wear') : 'Equip'; // Iteration 16
-    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
+    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || def.kind === 'material' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
     ($('#btn-inv-drop') as HTMLButtonElement).disabled = !def;
     const v = this.actions.vitals?.();
     const vit = document.querySelector('#inv-vitals');

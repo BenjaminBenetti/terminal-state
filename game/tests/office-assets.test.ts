@@ -10,7 +10,8 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {getBounds} from '@gltf-transform/functions';
 import {OFFICE_ASSETS, OFFICE_ASSET_IDS, OFFICE_TEXTURES, OFFICE_TEXTURE_IDS, OFFICE_MODEL_FILES, loadOfficeAsset, loadOfficeTexture, officeAssetsReady, type OfficeAssetId} from '../src/assets/officeAssets';
-import {COMPANY_ASSETS} from '../src/assets/companyAssets';
+import {OFFICE_LOCAL_MODELS} from '../src/assets/officeAssets'; // lane RACK (office-props-physics-scale-20261030): local rebuilds
+import {COMPANY_ASSETS, COMPANY_PART_ASSETS} from '../src/assets/companyAssets';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(GAME, '..');
@@ -124,10 +125,40 @@ describe('iteration16 office assets', () => {
     // only delivered office files exist on disk (no stray, unallowlisted office outputs). The office-overhaul company / supporting
     // models share the flat office-<id>.glb naming and are covered by company-assets.test.ts, so they are excluded here.
     const companyUrls = new Set(Object.values(COMPANY_ASSETS).map(a => a.url).filter(Boolean));
+    const localUrls = new Set<string>(Object.values(OFFICE_LOCAL_MODELS).map(a => a.url)); // lane RACK: covered by the local-rebuild test below
+    const partUrls = new Set<string>(Object.values(COMPANY_PART_ASSETS).map(a => a.url)); // lane FURN: separated clutter (company-assets.test.ts)
     const onDisk = fs.readdirSync(path.join(PUB, 'assets/models')).filter(f => f.startsWith('office-')).map(f => `assets/models/${f}`)
-      .filter(p => !companyUrls.has(p));
+      .filter(p => !companyUrls.has(p) && !localUrls.has(p) && !partUrls.has(p));
     expect(onDisk.sort()).toEqual(ready.map(id => OFFICE_ASSETS[id].url!).sort());
     for (const p of onDisk) expect(ALLOW.has(p)).toBe(true);
+  });
+
+  // Task office-props-physics-scale-20261030 (lane RACK): LOCAL rebuilds (procedural, no generation) registered next to the Meshy set.
+  it('local rebuilt derivatives: on disk, allowlisted, sidecar-backed (sha / bytes / tris / dims), real size, library keys', async () => {
+    const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+    for (const [id, a] of Object.entries(OFFICE_LOCAL_MODELS)) {
+      expect(a.url).toBe(`assets/models/office-${id}.glb`);
+      expect(publicPath(a.url) && publicPath(a.provenance)).toBe(true);
+      expect(OFFICE_MODEL_FILES[`office-${id}`]).toEqual({url: a.url, bytes: a.bytes});
+      expect(OFFICE_ASSETS[a.replaces], `${id} replaces a registered asset`).toBeDefined();
+      expect(fs.existsSync(path.join(ROOT, a.script)), `${id} rebuild script`).toBe(true);
+      const buf = fs.readFileSync(path.join(PUB, a.url));
+      expect(buf.length).toBe(a.bytes);
+      const side = JSON.parse(fs.readFileSync(path.join(PUB, a.provenance), 'utf8')) as {generation: {provider: unknown; credits: number}; output: {url: string; sha256: string; bytes: number; triangles: number; dims: number[]}};
+      expect(side.generation).toMatchObject({provider: null, credits: 0});
+      expect(side.output).toMatchObject({url: a.url, sha256: sha(buf), bytes: buf.length, triangles: a.tris, dims: [...a.dims]});
+      expect(fs.readFileSync(path.join(PUB, a.provenance), 'utf8')).not.toMatch(/https?:/i);
+      // the primary regenerates tools/release/public-inputs.json at integration (lanes never edit it)
+      expect(ALLOW.get(a.url), `${id} allowlisted`).toEqual({path: a.url, bytes: buf.length, sha256: sha(buf)});
+      const doc = await io.read(path.join(PUB, a.url));
+      const {min, max} = getBounds(doc.getRoot().getDefaultScene()!);
+      for (let k = 0; k < 3; k++) expect(max[k] - min[k], `${id} dims ${k}`).toBeCloseTo(a.dims[k], 3);
+      expect(Math.abs(min[1])).toBeLessThan(1e-4);
+      let tris = 0;
+      for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) tris += p.getIndices()!.getCount() / 3;
+      expect(tris).toBe(a.tris);
+      for (const t of doc.getRoot().listTextures()) expect(Math.max(...t.getSize()!), `${id} texture size`).toBeLessThanOrEqual(1024);
+    }
   });
 
   it('lazy loaders never throw: null for undelivered ids and outside a browser', async () => {

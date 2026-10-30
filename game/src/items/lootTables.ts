@@ -35,6 +35,7 @@ import {ITEMS} from './items';
 import {GEAR_ITEMS} from './gear';
 import {genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030): pure data, no imports
 import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical';
+import {BIO_MATER, ELECTRICAL_PARTS, SCRAP_METAL, isMaterialItem} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 import type {LootTheme} from '../gen/purposes';
 import type {LootTilt} from '../gen/office/companies';
 import type {LevelId} from '../levels/types';
@@ -57,9 +58,14 @@ export type CatWeights = readonly [food: number, drink: number, med: number, amm
 export type LegacyCat = 'food' | 'drink' | 'med' | 'ammo';
 export const LEGACY_CATS: readonly LegacyCat[] = ['food', 'drink', 'med', 'ammo'];
 
-/** Economy category of an item (null: weapons / anything that is not a consumable resource). */
-export type EconCat = 'food' | 'drink' | 'med' | 'ammo' | 'battery' | 'flare';
-export const ECON_CATS: readonly EconCat[] = ['food', 'drink', 'med', 'ammo', 'battery', 'flare'];
+/**
+ * Economy category of an item (null: weapons / anything that is not a consumable resource). Task office-props-physics-scale-20261030
+ * (lane RACK): 'material' = the crafting materials (items/craftMaterials.ts) — kept exactly as rolled by the scarcity economy (like
+ * ammo), never an off-theme re-pick (OFF_THEME_WEIGHTS 0) and on no theme's re-pick list, so only the holders whose OWN rows list
+ * them (server racks / cupboards, lab storage) ever hold one.
+ */
+export type EconCat = 'food' | 'drink' | 'med' | 'ammo' | 'battery' | 'flare' | 'material';
+export const ECON_CATS: readonly EconCat[] = ['food', 'drink', 'med', 'ammo', 'battery', 'flare', 'material'];
 
 /** Named slot categories every loot-holder kind plugs into (HOLDER_SLOTS). */
 export const SLOT_CATEGORIES = ['surface', 'countertop', 'shelf', 'container', 'foodPrep', 'vend', 'cold', 'medical', 'arms', 'junk', 'stash', 'fixture'] as const;
@@ -71,7 +77,7 @@ export type SlotCategory = (typeof SLOT_CATEGORIES)[number];
 /** The light lane's item ids (items/items.ts): a consumable torch battery and the throwable flare. */
 export const BATTERY_ID = 'battery';
 export const FLARE_ID = 'flare';
-const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles']);
+const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles', 'bread']); // + bread: lane FURN (office-props-physics-scale-20261030), bakery cases only
 const DRINK = new Set(['water', 'cola', 'juice']);
 /** HP medicine (bandage / med kit). Iteration 16 (lane INJURY): the limb treatments (items/medical.ts) are 'med' too. */
 export const HP_MED: ReadonlySet<string> = new Set(['bandage', 'medkit']);
@@ -84,6 +90,7 @@ export function econCat(itemId: string): EconCat | null {
   if (MED.has(itemId)) return 'med';
   if (itemId === BATTERY_ID) return 'battery';
   if (itemId === FLARE_ID) return 'flare';
+  if (isMaterialItem(itemId)) return 'material'; // lane RACK
   return null;
 }
 
@@ -113,6 +120,8 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   // Task office-interactions-layout-20261030 (lane OPEN): the office-overhaul storage that opens now (world/openablesSpec.ts)
   officeFiling: 'container', executiveDesk: 'container', serverCabinet: 'container', serverRack: 'container', archiveBoxes: 'container',
   vaultSafe: 'arms', labBench: 'medical', examTable: 'medical', biohazardFridge: 'medical',
+  // Task office-props-physics-scale-20261030 (lane FURN): the bakery display case (its trays of loaves are a shop display)
+  bakeryCase: 'vend',
 };
 /** Separate compartment rolls (desk / security-desk drawers, kitchenette cupboards) are closed storage. */
 export const COMPARTMENT_SLOT: SlotCategory = 'container';
@@ -217,6 +226,8 @@ export const BOX_COUNT: Readonly<Record<string, {small: LotRange; big: LotRange}
   // 9mm: lane AMMO (knife-melee-20261030) — now ~1/3 of every generic ammo pick (it used to be a rare security find at 10-15 / 6-12),
   // so a holder's 9mm lot is ~half a magazine like the other calibers (4-8 / 6-10): total holder ammo stays in its band (tests).
   ammo_9mm: {small: [4, 8], big: [6, 10]},
+  // Task office-props-physics-scale-20261030 (lane RACK): crafting materials come a few to a lot (a handful of parts / offcuts; a jar or two)
+  [ELECTRICAL_PARTS]: {small: [1, 2], big: [2, 3]}, [SCRAP_METAL]: {small: [1, 2], big: [1, 3]}, [BIO_MATER]: {small: [1, 1], big: [1, 2]},
 };
 /** Holders that hold full-size boxes (crates, gun lockers). */
 export const BIG_BOX_HOLDERS: ReadonlySet<string> = new Set(['crate', 'gunLocker']);
@@ -256,7 +267,7 @@ export const THEME_ECONOMY: Readonly<Record<LootTheme, ThemeEconomy>> = {
 };
 
 /** Off-theme random finds (and every find in public halls): category weights; the theme's own categories are excluded. */
-export const OFF_THEME_WEIGHTS: Readonly<Record<EconCat, number>> = {food: 0.32, drink: 0.37, med: 0.09, ammo: 0.035, battery: 0.006, flare: 0.004};
+export const OFF_THEME_WEIGHTS: Readonly<Record<EconCat, number>> = {food: 0.32, drink: 0.37, med: 0.09, ammo: 0.035, battery: 0.006, flare: 0.004, material: 0}; // lane RACK: materials never off-theme
 
 /**
  * Items of a category when the holder's own table has none. Lane AMMO (knife-melee-20261030): ammo is generic — ~1/3 each 9mm /
@@ -269,6 +280,8 @@ export const GLOBAL_POOL: Readonly<Record<EconCat, ItemRows>> = {
   ammo: genericAmmo(3.1),
   battery: [[BATTERY_ID, 1]],
   flare: [[FLARE_ID, 1]],
+  // lane RACK (office-props-physics-scale-20261030): no theme / off-theme weight re-picks into 'material', so this pool is never drawn today
+  material: [[ELECTRICAL_PARTS, 1], [SCRAP_METAL, 1], [BIO_MATER, 1]],
 };
 
 /** Theme of room types that have no purpose (public halls, generic store units). */
@@ -298,11 +311,14 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
   // deliberate rule) / dressings / flares / batteries; clinic and lab storage medicine and bottled water (lab drawers also spare
   // cells); server cupboards and racks spares (cells, flares, a dressing, bottled water); an archive box a forgotten snack / cell /
   // dressing / flare. Each list covers its own rows' categories (a kept original roll is never re-themed away).
-  vaultSafe: ['ammo', 'med', 'flare', 'battery'], examTable: ['med', 'drink'], biohazardFridge: ['med', 'drink'], labBench: ['med', 'battery', 'drink'],
+  vaultSafe: ['ammo', 'med', 'flare', 'battery'], examTable: ['med', 'drink'], biohazardFridge: ['med', 'drink'], labBench: ['med', 'battery', 'drink', 'material'], // + material: bio mater (lane FURN)
   // office drawers hold personal stock (snacks, a drink, a dressing, a cell) — never a flare; only the executive desk keeps the
   // generic sidearm rows (the deliberate desk stock)
   officeFiling: ['food', 'drink', 'med', 'battery'], executiveDesk: ['food', 'drink', 'med', 'ammo', 'battery'],
-  serverCabinet: ['battery', 'flare', 'med', 'drink'], serverRack: ['battery', 'flare', 'med', 'drink'], archiveBoxes: ['food', 'med', 'battery', 'flare'],
+  // lane RACK (office-props-physics-scale-20261030): server racks / cupboards also hold crafting materials (electrical parts, scrap)
+  serverCabinet: ['battery', 'flare', 'med', 'drink', 'material'], serverRack: ['battery', 'flare', 'material'], archiveBoxes: ['food', 'med', 'battery', 'flare'],
+  // lane FURN (office-props-physics-scale-20261030): a bakery display case only ever holds food (its own rows: bread)
+  bakeryCase: ['food'],
 };
 /**
  * Task office-interactions-layout-20261030 (lane OPEN): openable containers whose OWN table is never narrowed to the room purpose's
@@ -310,7 +326,8 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
  * it is"); the room's theme still steers the scarce re-themes within HOLDER_ALLOW. (A bin keeps the narrowing: a pharmacy bin holds
  * pharmacy things.)
  */
-export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes']);
+export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
+  'bakeryCase']); // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
@@ -379,14 +396,32 @@ export const SECURITY_DRAWER_ROWS: ItemRows = [...genericAmmo(1.2), ['bandage', 
 export const LATERAL_FILE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ['battery', 0.2]];
 /** Executive desk drawers: personal stock — snacks, a drink, a dressing, a spare cell, a few rounds of the deliberate desk sidearm stock. */
 export const EXEC_DESK_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['juice', 0.6], ['bandage', 0.7], ['battery', 0.3], ...genericAmmo(0.45)];
-/** Lab bench drawers: dressings and spare cells (shallow drawers: a first-aid kit does not fit). */
-export const LAB_DRAWER_ROWS: ItemRows = [['bandage', 2], ['battery', 0.45], ['water', 0.3]];
+/**
+ * Lab bench drawers: dressings and spare cells (rows unchanged by the bench's rescale). Task office-props-physics-scale-20261030 (lane
+ * FURN, user: "Include new resource hear. "Bio mater" for the player to collect"): + a sealed specimen jar of bio mater now and then
+ * (a crafting material: kept exactly as rolled, one jar per lot — lootTables BOX_COUNT; finite like every holder).
+ */
+export const LAB_DRAWER_ROWS: ItemRows = [['bandage', 2], ['battery', 0.45], ['water', 0.3], [BIO_MATER, 0.6]];
 /** Exam table drawers: clinic dressings (limb treatments come through LIMB_ECONOMY.holder). */
 export const CLINIC_DRAWER_ROWS: ItemRows = [['bandage', 3], ['water', 0.3]];
 /** Specimen fridge: cold-chain medicine. */
 export const COLD_MED_ROWS: ItemRows = [['bandage', 1.6], ['medkit', 0.6], ['water', 0.4]];
-/** Server room cupboards / racks: spares — torch cells, a flare, a dressing, bottled water. */
-export const SERVER_SPARES_ROWS: ItemRows = [['battery', 1.4], ['flare', 0.6], ['bandage', 0.5], ['water', 0.6]];
+/**
+ * Server room cupboards: spares — torch cells, a flare, a dressing, bottled water; task office-props-physics-scale-20261030 (lane RACK):
+ * plus salvaged electrical parts and some scrap metal (crafting materials, kept as rolled: ~25 % of the cupboard lots).
+ */
+/**
+ * Task office-props-physics-scale-20261030 (lane FURN): bakery display case trays — stale loaves (the `bread` FOOD item, cut out of the
+ * case model). Thinned by the scarcity economy like all food (keep ~0.27 in a food-themed room): ~1 loaf left per case on average.
+ */
+export const BAKERY_ROWS: ItemRows = [['bread', 1]];
+export const SERVER_SPARES_ROWS: ItemRows = [['battery', 1.4], ['flare', 0.6], ['bandage', 0.5], ['water', 0.6], [ELECTRICAL_PARTS, 0.8], [SCRAP_METAL, 0.25]];
+/**
+ * Task office-props-physics-scale-20261030 (lane RACK): the rebuilt 42U rack's three empty bays — mostly salvage: electrical parts
+ * (the common find), some scrap metal (bent rails / brackets), now and then a spare torch cell or a flare left on a shelf. The
+ * materials are kept as rolled (scarcity: category 'material'); the cell / flare rows are thinned like every consumable.
+ */
+export const SERVER_RACK_ROWS: ItemRows = [[ELECTRICAL_PARTS, 3], [SCRAP_METAL, 1.2], ['battery', 0.6], ['flare', 0.2]];
 /** Vault safe: the deliberate ammo rule (generic calibre rows) plus dressings / a first-aid kit / a flare — no snacks in a vault. */
 export const VAULT_ROWS: ItemRows = [...genericAmmo(2), ['bandage', 0.6], ['medkit', 0.3], ['flare', 0.2]];
 /** Archive box: mostly paper; rarely something forgotten. */
@@ -414,17 +449,20 @@ export const OPENABLE_TABLES = {
   monitorDesk: {lots: [1, 1], empty: 0.5, items: SECURITY_DRAWER_ROWS},
   // Task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage (themed by container: CONTAINER_THEMED; finite,
   // thinned again by the scarcity economy like every holder). The kinds placed in numbers (filing cabinets ~30, lab benches ~20,
-  // server racks ~34 per Office level) are emptier, so the new storage adds ~10 % to the Office's holder lots, not a new economy
-  // (tests/office-openables.test.ts measures it).
+  // server racks ~25-60 per Office level since lane RACK's 0.6 m rebuild) are emptier, so the new storage adds ~10 % to the Office's
+  // consumable holder lots, not a new economy (tests/office-openables.test.ts measures it); the racks' crafting materials (lane RACK,
+  // office-props-physics-scale-20261030) are a separate, bounded resource (~10-40 units per Office level, same test).
   officeFiling: {lots: [1, 2], empty: 0.55, items: LATERAL_FILE_ROWS},
   executiveDesk: {lots: [1, 3], empty: 0.3, items: EXEC_DESK_ROWS},
   labBench: {lots: [1, 2], empty: 0.7, items: LAB_DRAWER_ROWS},
   examTable: {lots: [1, 2], empty: 0.3, items: CLINIC_DRAWER_ROWS},
   vaultSafe: {lots: [1, 3], empty: 0.3, items: VAULT_ROWS},
   serverCabinet: {lots: [1, 3], empty: 0.35, items: SERVER_SPARES_ROWS},
-  serverRack: {lots: [1, 1], empty: 0.86, items: SERVER_SPARES_ROWS},
+  serverRack: {lots: [1, 2], empty: 0.7, items: SERVER_RACK_ROWS}, // lane RACK: three real empty bays now (was 1 lot, 0.86 empty, spares)
   biohazardFridge: {lots: [1, 1], empty: 0.6, items: COLD_MED_ROWS},
   archiveBoxes: {lots: [1, 1], empty: 0.7, items: ARCHIVE_ROWS},
+  // lane FURN (office-props-physics-scale-20261030): the bakery case's three display trays (a handful of goldencrust floors only)
+  bakeryCase: {lots: [3, 6], empty: 0.1, items: BAKERY_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------

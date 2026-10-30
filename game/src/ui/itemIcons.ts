@@ -137,6 +137,7 @@ function viewFor(itemId: string): {az: number; el: number} {
   if (def?.kind === 'weapon') return {az: 78 * DEG, el: 14 * DEG};
   // Flat goods (chocolate bar, ammo boxes, med kit, bandage) read better from higher up.
   if (['chocolate', 'medkit', 'bandage', 'arm_sling', 'trauma_kit', 'leg_splint'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG}; // + Iteration 16 treatments
+  if (itemId === 'electrical_parts' || itemId === 'scrap_metal') return {az: 24 * DEG, el: 42 * DEG}; // lane RACK (office-props-physics-scale-20261030): flat salvage
   const ammo = AMMO_ICON_VIEW[itemId];
   if (ammo) return {az: ammo.az * DEG, el: ammo.el * DEG}; // lane AMMO: the caliber's printed face / stencil toward the camera
   if (itemId === 'flare') return {az: 12 * DEG, el: 30 * DEG}; // Iteration 12 (LIGHT): the tube lies along X, printed band to the front

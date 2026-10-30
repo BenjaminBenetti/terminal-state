@@ -30,9 +30,13 @@ import {seedToCode} from './core/rng'; // Iteration 16 (lane RUN)
 import {memorySummary} from './run/memory'; // Iteration 16 (lane RUN)
 import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
 import type {Arrival, LevelId} from './levels/types'; // Iteration 16 (lane RUN)
+import {propPhysics} from './damage/materials'; // Task office-props-physics-scale-20261030 (lane PHYS): goWalkInto
+import type {PropPlacement} from './gen/props'; // lane PHYS
 import {SPAN_ABOUT, SPAN_COUNT} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE)
 
 export function installQaHooks(game: Game): void {
+  // task office-props-physics-scale-20261030 (lane PHYS): the goWalkInto target (walkIntoCheck)
+  let walkInto: {prop: PropPlacement; index: number; x: number; z: number; contacts: number; shots: number; lots: number} | null = null;
   const api = {
     ready: () => game.state !== 'loading' && !!game.layout,
     state: () => game.state,
@@ -529,6 +533,54 @@ export function installQaHooks(game: Game): void {
         return cm.openableState(h.serial);
       }
       return null;
+    },
+    /**
+     * Task office-props-physics-scale-20261030 (lane PHYS): stand 1.2 m off a free side of the nearest untouched light physics prop
+     * of `kind` (default: any contact kind — e.g. 'rollingSuitcase' in the Subway, 'officeChair' / 'plasticStackChair' in the
+     * Office; a spill holder: 'bin', 'wheelieBin', 'archiveBoxes') on `level` (default the player's storey), facing it. Then hold
+     * W (a real key) ~1 s and read walkIntoCheck(): the prop must be loose and moved with `shots` 0 (no shot / aim needed); a
+     * spill holder's `spilled` equals its `lotsBefore` and `lotsLeft` is 0. Returns the target or null.
+     */
+    goWalkInto: (kind?: string, level?: number) => {
+      const p = game.player, L = game.levels, props = game.layout.props, di = game.physics.dynamicItems;
+      const lv = level ?? Math.max(0, L.levelAt(p.x, p.z, p.y + 0.05));
+      const cands = props.map((q, i) => ({q, i})).filter(({q}) => (q.level ?? 0) === lv && q.h > 0.02 && (!kind || q.kind === kind) && !!propPhysics(q.kind).contact
+        && di.isDynamicProp(q)).sort((a, b) => Math.hypot(a.q.x - p.x, a.q.z - p.z) - Math.hypot(b.q.x - p.x, b.q.z - p.z)).slice(0, 40);
+      const near = new Set<number>(), r = 0.36;
+      const free = (t: PropPlacement, x: number, z: number) => {
+        for (let cz = Math.floor((z - r) / CELL); cz <= Math.floor((z + r) / CELL); cz++) for (let cx = Math.floor((x - r) / CELL); cx <= Math.floor((x + r) / CELL); cx++) if (L.blocksAt(cx, cz, x, z, t.y)) return false;
+        for (const k of game.propIndex.near(x - r, z - r, x + r, z + r, near)) {
+          const q = props[k];
+          if (q !== t && q.h > 0.05 && q.y < t.y + 1.8 && q.y + q.h > t.y + 0.05 && Math.abs(q.x - x) < q.hx + r && Math.abs(q.z - z) < q.hz + r) return false;
+        }
+        return true;
+      };
+      for (const {q, i} of cands) {
+        const f = {x: Math.sin(q.rot), z: Math.cos(q.rot)};
+        for (const [ax, az] of [[f.x, f.z], [-f.x, -f.z], [f.z, -f.x], [-f.z, f.x]].map(([a, b]) => [Math.round(a), Math.round(b)])) {
+          const face = Math.abs(ax) * q.hx + Math.abs(az) * q.hz;
+          let ok = true;
+          for (let s = -(face + 0.6); s <= face + 1.6 && ok; s += 0.1) if (Math.abs(s) >= face + r) ok = free(q, q.x + ax * s, q.z + az * s);
+          if (!ok || !api.teleport(q.x + ax * (face + 1.5), q.z + az * (face + 1.5), undefined, lv)) continue;
+          api.lookAt(q.x, q.y + Math.min(0.5, q.h * 0.6), q.z);
+          const st = di.stats();
+          const lots = game.containers?.holderFor(q)?.state.lots.length ?? 0;
+          walkInto = {prop: q, index: i, x: q.x, z: q.z, contacts: st.counts.contacts, shots: st.counts.shots, lots};
+          return {kind: q.kind, index: i, level: lv, at: {x: q.x, y: q.y, z: q.z}, mat: propPhysics(q.kind).mat, lots, hint: 'hold W ~1 s, then __LL.walkIntoCheck()'};
+        }
+      }
+      return null;
+    },
+    /** Lane PHYS: the goWalkInto target now — loose, how far it moved, contact wakes / shots since, prop physics + reclaim counters. */
+    walkIntoCheck: () => {
+      const t = walkInto;
+      if (!t) return null;
+      const st = game.physics.dynamicItems.stats();
+      const h = game.containers?.holderFor(t.prop);
+      const holder = h ? {lotsBefore: t.lots, lotsLeft: h.state.lots.length, spilled: game.pickups.list.filter(q => q.fromLot?.holder === h.serial).length} : {};
+      return {kind: t.prop.kind, index: t.index, loose: t.prop.h === 0, moved: +Math.hypot(t.prop.x - t.x, t.prop.z - t.z).toFixed(3), ...holder, contacts: st.counts.contacts - t.contacts,
+        shots: st.counts.shots - t.shots, propsAwake: st.propsAwake, resting: st.resting, restingInWorld: st.restingInWorld, reclaimed: st.counts.reclaimed, redetached: st.counts.redetached,
+        detached: game.damage.props.detachedCount, stepMs: game.physics.stats().stepMs};
     },
     /**
      * DEBUG ONLY (exception to the read-only rule above, for the ragdoll browser check): kill the

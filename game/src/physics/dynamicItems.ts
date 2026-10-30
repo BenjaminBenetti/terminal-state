@@ -19,7 +19,8 @@
 //
 // Task office-interactions-layout-20261030 (lane PHYS): the office's movable furniture (gen/office/physics.ts OFFICE_PHYS ->
 // PROP_PHYSICS; every kind classified in damage/physicsAudit.ts PROP_PHYSICS_AUDIT). In office (tower) worlds only
-// (`contactOn`: StaticQuery.capAbove, or the `contactWake` override) — the Subway keeps exactly its iteration-07 / 08 rules:
+// (`contactOn`: StaticQuery.capAbove, or the `contactWake` override) — the Subway keeps exactly its iteration-07 / 08 rules
+// [superseded by task office-props-physics-scale-20261030 below: contact wake in every world, the Subway kinds calibrated]:
 //  - CONTACT WAKE: a walker moving into a light dynamic floor prop of a `contact` kind (the office kinds, calibrated castor / pad
 //    contacts) wakes it (not only a shot): within CONTACT_MARGIN of its box and heading for it, the prop goes loose (static body,
 //    no AABB) and the walker shove moves it from then on (iteration-07 kinds placed in the office keep the shot-first rule: their
@@ -34,6 +35,26 @@
 //    armchair) and pushes within the body's own height (a low bean bag is not flipped).
 //  - riders: resting (static-body) loose props inside the moving elevator cab ride its dy, and are swept out of a doorway the
 //    landing doors shut on (PhysicsSystem.carryRiders / clearDoorway call carry() / relocate()).
+//
+// Task office-props-physics-scale-20261030 (lane PHYS; user: "All physics objects should always be interactable, without needing to
+// be shot first"):
+//  - CONTACT WAKE IN EVERY WORLD: the Subway's light kinds carry calibrated castor / pad contacts too (damage/materials.ts
+//    SUBWAY_CONTACT), so walking into a suitcase, stroller, chair, sign … wakes it in the Subway and in the Office (imported kinds)
+//    exactly like the office furniture. A `contact` kind follows the office shove rules in every world; the iteration-07 kinds left
+//    uncalibrated keep their world's rules. The placement rules (on the floor or an on-host decor, nothing resting on it) hold in
+//    every world. SPILL HOLDERS (trash can, wheelie bin, archive boxes) wake by contact too (coordinator follow-up: the rule is
+//    literal): a walk-in knocks one loose like a shot — holderLoose (ContainerManager.goLoose) spills its finite lots as the same
+//    pickups, once. Pickups lying under a prop when it goes loose (its spilled lots, a pickup on the floor beneath it) are not
+//    knocked by it while they are still inside its box (`under`: they would start inside its collider and pop out).
+//  - DETACH SLOTS ARE RECLAIMED: a resting loose prop (static body, also a budget-frozen one) can hand its own meshes back to its
+//    shared instances AT ITS CURRENT POSE (damage/propDamage.ts reattach: instance matrix = its drawn pose, no pop, its material
+//    clones dropped) and stays loose (entity, body, pose kept: walking into it / shooting it re-detaches it and moves it again).
+//    Reclaimed lazily — in the background while fewer than CONTACT_RESERVE + RECLAIM_AHEAD soft slots are left, and on demand
+//    when a wake needs a slot — oldest at rest first, a bullet-marked one only far from the player (its marks go), then the damage
+//    system's own far marked props. So the detach budget never runs out for good.
+//  - BOUNDED WORK: the simulating bodies are a set (no per-frame scan of every entity); resting loose props are indexed by their
+//    4 m static collision chunk (chunks.ts staticChunkKey) and their static bodies join the cannon world only while that chunk is
+//    active (PhysicsSystem.refreshChunks -> chunkToggled), like the station statics — SAP's pair loop is quadratic in static bodies.
 
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
@@ -43,17 +64,27 @@ import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {isLootHolderKind} from '../items/loot';
 import {isSpillHolderKind} from '../world/openablesSpec';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC} from './ragdoll';
-import {groundClamp, restTime, type BodyHost, type ImpactFamily} from './chunks';
+import {STATIC_CHUNK_M, groundClamp, restTime, staticChunkKey, type BodyHost, type ImpactFamily} from './chunks';
 import type {StaticQuery} from './staticQuery';
 
 export const MAX_DYNAMIC_ITEMS = 16;
 export const MAX_DYNAMIC_PROPS = 4;
-/** Lane PHYS (office worlds): a walker this close to a prop box (beyond its radius, m) and heading for it wakes it. */
+/** Lane PHYS: a walker this close to a prop box (beyond its radius, m) and heading for it wakes it. */
 export const CONTACT_MARGIN = 0.12;
 /** Lane PHYS: contact wakes stop while fewer soft detach slots than this remain (bullet damage marks keep their headroom). */
 export const CONTACT_RESERVE = 16;
 /** Lane PHYS: AI walkers wake props by contact only within this distance of a `wake` walker (the player), m. */
 export const CONTACT_RANGE = 10;
+/** Task office-props-physics-scale-20261030 (lane PHYS): background reclaim keeps this many soft detach slots above CONTACT_RESERVE. */
+export const RECLAIM_AHEAD = 8;
+/** Lane PHYS: a bullet-marked prop is reclaimed (its marks dropped) only this far from every `wake` walker (m; another storey: far). */
+export const RECLAIM_MARK_FAR = 25;
+/** Lane PHYS: candidates looked at per reclaim call (bounded work). */
+const RECLAIM_CHECKS = 8;
+/** Lane PHYS: entities swept per frame for taken pickups (round robin; simulating ones are checked every frame). */
+const SWEEP_PER_FRAME = 8;
+/** Lane PHYS: a box collider may start this deep inside a static neighbour's box before it is clipped (m). */
+const START_PEN = 0.02;
 /** Lane PHYS (office worlds): a loose prop whose bottom is this far above a walker's feet is out of reach of its legs (m). */
 const RAISED_SHOVE = 0.5;
 /** Lane PHYS (office worlds): a moving prop faster than this knocks resting lots / pickups it touches (m/s). */
@@ -91,12 +122,23 @@ export interface PickupLike {
  */
 export interface Walker { id: object; x: number; z: number; y: number; r: number; wake?: boolean }
 
+/** Lane PHYS (task office-props-physics-scale-20261030): outcome of PropDetacher.reattach. */
+export type ReattachResult = 'ok' | 'marked' | 'never';
+
 /** What dynamic props need from the prop damage system (damage/propDamage.ts). */
 export interface PropDetacher {
   /** Detach the prop's render instances into its own meshes (marks them moving); null if impossible. */
   detachForPhysics(prop: PropPlacement, index: number): THREE.Mesh[] | null;
   /** Lane PHYS: soft detach slots left (contact wakes keep CONTACT_RESERVE of them for bullet marks); absent = unlimited. */
   detachRoom?(): number;
+  /**
+   * Task office-props-physics-scale-20261030 (lane PHYS): hand a resting loose prop's own meshes back to its shared instances at
+   * their current pose (its slot freed). 'marked': it has bullet marks and `dropMarks` is false; 'never': it cannot (broken, glass
+   * gone, moved merged-mesh triangles, nothing detached). Absent: nothing is ever reclaimed.
+   */
+  reattach?(prop: PropPlacement, dropMarks: boolean): ReattachResult;
+  /** Lane PHYS: reclaim up to `n` of the damage system's own (non-physics) marked props for which `far` holds; returns slots freed. */
+  reclaimMarked?(far: (x: number, y: number, z: number) => boolean, n: number): number;
 }
 
 interface Ent {
@@ -119,8 +161,20 @@ interface Ent {
   pickup?: PickupLike;
   prop?: PropPlacement;
   propIndex?: number;
-  /** Iteration 08 (Lane I): any object driven by its world `matrix` (detached meshes, an openable holder's own root). */
+  /**
+   * Iteration 08 (Lane I): any object driven by its world `matrix` (detached meshes, an openable holder's own root). Task
+   * office-props-physics-scale-20261030 (lane PHYS): undefined on a loose prop whose render was reattached (reclaimed); waking
+   * it detaches it again.
+   */
   parts?: {mesh: THREE.Object3D; rel: THREE.Matrix4}[];
+  /** Lane PHYS: a calibrated `contact` kind (castor / pad): office shove / knock-on rules in every world. */
+  contact?: boolean;
+  /** Lane PHYS: rest-index key (chunks.ts staticChunkKey) while a prop's body is static, else null. */
+  restKey?: number | null;
+  /** Lane PHYS: bounding radius of the collider (m). */
+  rad?: number;
+  /** Lane PHYS: pickups lying under it when it went loose (its spilled lots): not knocked by it until it has moved off them. */
+  under?: Set<PickupLike>;
 }
 
 export interface DynHit { t: number; point: THREE.Vector3; normal: THREE.Vector3; pickup?: PickupLike; prop?: PropPlacement; propIndex?: number; ent?: Ent }
@@ -176,9 +230,10 @@ export class DynamicItems {
   holderLoose: ((prop: PropPlacement) => THREE.Object3D[]) | null = null;
   private readonly lastPos = new WeakMap<object, {x: number; z: number}>();
   /**
-   * Lane PHYS: office-world interaction rules (contact wake, on-host decor, prop knock-on, no leg shove of raised props, no
-   * loose prop under another). null = automatic: on in tower worlds (StaticQuery.capAbove: a level with role 'office'), off in
-   * the Subway. Tests / QA may force it.
+   * Lane PHYS: contact wake + office-world interaction rules. Task office-props-physics-scale-20261030: null = automatic — contact
+   * wake in EVERY world (contactOn), the office rules for uncalibrated kinds (prop knock-on, shove gain / height, no leg shove of
+   * raised props) in tower worlds (StaticQuery.capAbove: a level with role 'office'); `contact` kinds follow those rules everywhere.
+   * true = both on (tests emulate an office room with it); false = both off. Tests / QA may force it.
    */
   contactWake: boolean | null = null;
   /** Lane PHYS: contact-wake candidates (prop indices per CB-metre bucket) of the current statics. */
@@ -188,11 +243,38 @@ export class DynamicItems {
   private readonly hostSlabs = new Map<PropPlacement, CANNON.Body>();
   /** Lane PHYS: props that something rests on (never go loose: no floating stacks). */
   private readonly supportsMemo = new WeakMap<PropPlacement, boolean>();
-  /** Counters (QA/tests). Lane PHYS: + contacts (props woken by a walker), carried (cab riders), hostSlabs. */
-  readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0, contacts: 0, carried: 0, hostSlabs: 0};
+  /** Task office-props-physics-scale-20261030 (lane PHYS): entities with a SIMULATING (dynamic) body. */
+  private readonly active = new Set<Ent>();
+  /** Lane PHYS: loose props with a static body (resting / budget-frozen) per static chunk key (chunks.ts staticChunkKey). */
+  private readonly rest = new Map<number, Set<Ent>>();
+  /** Lane PHYS: resting loose props still drawn by their own meshes, oldest at rest first (reclaim candidates). */
+  private readonly reclaimQ = new Set<Ent>();
+  /** Lane PHYS: budget-frozen entities waiting for a slot. */
+  private readonly pendingSet = new Set<Ent>();
+  /** Lane PHYS: largest collider radius of any loose prop (walker shove search radius). */
+  private maxRad = 0;
+  /** Lane PHYS: seconds since the world was built (impact-sound throttle). */
+  private clock = 0;
+  /** Lane PHYS: positions of the `wake` walkers this frame (x, y, z triples; reclaim distance). */
+  private readonly wakePts: number[] = [];
+  private sweep: IterableIterator<Ent> | null = null;
+  private readonly scratch: Ent[] = [];
+  private readonly nearBuf: Ent[] = [];
+  /**
+   * Counters (QA/tests). Lane PHYS: + contacts (props woken by a walker), carried (cab riders), hostSlabs. Task
+   * office-props-physics-scale-20261030: + reclaimed (renders handed back), redetached (reclaimed props woken again), riders
+   * (pickups on a prop's top woken with it).
+   */
+  readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0, contacts: 0, carried: 0, hostSlabs: 0,
+    reclaimed: 0, redetached: 0, riders: 0, clipped: 0};
 
-  /** Lane PHYS: whether the office-world interaction rules apply (see contactWake). */
+  /** Lane PHYS: whether walking into a light prop wakes it (see contactWake; task office-props-physics-scale-20261030: every world). */
   get contactOn(): boolean {
+    return this.contactWake ?? true;
+  }
+
+  /** Lane PHYS: the office-world rules for the uncalibrated (iteration-07) kinds (see contactWake). */
+  get officeRules(): boolean {
     return this.contactWake ?? !!this.host.statics?.capAbove;
   }
 
@@ -243,10 +325,10 @@ export class DynamicItems {
     body.interpolatedQuaternion.copy(body.quaternion);
     body.aabbNeedsUpdate = true;
     body.addEventListener('collide', (ev: {contact: CANNON.ContactEquation}) => {
-      if (e.soundT > 0) return;
+      if (e.soundT > this.clock) return; // lane PHYS: a time stamp (resting entities are no longer ticked every frame)
       const v = Math.abs(ev.contact.getImpactVelocityAlongNormal());
       if (v < 0.75) return;
-      e.soundT = 0.14;
+      e.soundT = this.clock + 0.14;
       this.counts.impacts++;
       this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, e.kind === 'prop' ? 'prop' : e.fam);
     });
@@ -255,19 +337,170 @@ export class DynamicItems {
 
   private bodies(kind: 'item' | 'prop'): Ent[] {
     const out: Ent[] = [];
-    for (const e of this.ents.values()) if (e.kind === kind && e.body && e.body.type === CANNON.Body.DYNAMIC) out.push(e);
+    for (const e of this.active) if (e.kind === kind) out.push(e);
     return out;
   }
 
   get awake(): number {
-    let n = 0;
-    for (const e of this.ents.values()) if (e.body && e.body.type === CANNON.Body.DYNAMIC) n++;
-    return n;
+    return this.active.size;
   }
 
   /** Positions of simulating bodies (static collision chunks are kept around them). */
   activePoints(out: CANNON.Vec3[]): void {
-    for (const e of this.ents.values()) if (e.body && e.body.type === CANNON.Body.DYNAMIC) out.push(e.body.position);
+    for (const e of this.active) out.push(e.body!.position);
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task office-props-physics-scale-20261030 (lane PHYS): the rest index (resting loose props by static chunk) and reclaiming
+
+  /** A loose prop's body went static (resting / frozen): index it by its chunk; it stays in the cannon world only with that chunk. */
+  private toRest(e: Ent): void {
+    const b = e.body!;
+    const key = staticChunkKey(b.position.x, b.position.z);
+    if (e.restKey !== key) {
+      this.unrest(e);
+      let set = this.rest.get(key);
+      if (!set) this.rest.set(key, (set = new Set()));
+      set.add(e);
+      e.restKey = key;
+    }
+    if (b.world && this.host.chunkActive && !this.host.chunkActive(key)) b.world.removeBody(b);
+    else if (!b.world && (!this.host.chunkActive || this.host.chunkActive(key))) this.host.world?.addBody(b);
+  }
+
+  private unrest(e: Ent): void {
+    if (e.restKey === null || e.restKey === undefined) return;
+    const set = this.rest.get(e.restKey);
+    set?.delete(e);
+    if (set && !set.size) this.rest.delete(e.restKey);
+    e.restKey = null;
+  }
+
+  /** PhysicsSystem.refreshChunks: static chunk `key` joined / left the world — its resting loose props' bodies follow. */
+  chunkToggled(key: number, on: boolean): void {
+    const set = this.rest.get(key), w = this.host.world;
+    if (!set || !w) return;
+    for (const e of set) {
+      const b = e.body;
+      if (!b || b.type === CANNON.Body.DYNAMIC) continue;
+      if (on && !b.world) w.addBody(b);
+      else if (!on && b.world) w.removeBody(b);
+    }
+  }
+
+  /** Loose props whose collider may come within `reach` of (x, z): every simulating one + the rest index around. */
+  private looseNear(x: number, z: number, reach: number, out: Ent[]): Ent[] {
+    out.length = 0;
+    for (const e of this.active) if (e.prop) out.push(e);
+    if (!this.rest.size) return out;
+    const r = reach + this.maxRad, S = STATIC_CHUNK_M;
+    for (let cz = Math.floor((z - r) / S); cz <= Math.floor((z + r) / S); cz++) {
+      for (let cx = Math.floor((x - r) / S); cx <= Math.floor((x + r) / S); cx++) {
+        const set = this.rest.get((cz + 4096) * 8192 + (cx + 4096));
+        if (set) for (const e of set) out.push(e);
+      }
+    }
+    return out;
+  }
+
+  /** Lane PHYS: whether (x, y, z) is far from every `wake` walker of this frame (a bullet-marked render may be reclaimed). */
+  private farFromWakers(x: number, y: number, z: number): boolean {
+    const p = this.wakePts;
+    for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i + 1] - y) < 3 && Math.hypot(p[i] - x, p[i + 2] - z) < RECLAIM_MARK_FAR) return false;
+    return true;
+  }
+
+  /** Lane PHYS: next to an elevator shaft (its riders / doorway sweep move resting props: keep those drawn by their own meshes). */
+  private nearCab(x: number, z: number): boolean {
+    for (const v of this.host.statics?.levels.dynamicVolumes ?? []) if (x > v.x0 - 1.5 && x < v.x1 + 1.5 && z > v.z0 - 1.5 && z < v.z1 + 1.5) return true;
+    return false;
+  }
+
+  /**
+   * Lane PHYS: give up to `n` detach slots back. Resting loose props (static bodies, also budget-frozen ones) still drawn by their
+   * own meshes hand them back to their shared instances at their current pose (PropDetacher.reattach) and stay loose; oldest at
+   * rest first, none beside an elevator shaft. `marks` (on demand: a wake needs the slot now): a bullet-marked one too when far
+   * from every `wake` walker (its marks go), then, as the last resort, the damage system's own far marked props. Without it (the
+   * background reclaim) marks are never dropped. At most RECLAIM_CHECKS candidates per call. Returns slots freed.
+   */
+  private reclaim(n: number, except?: Ent, marks = true): number {
+    const d = this.detacher;
+    if (!d?.reattach || n <= 0) return 0;
+    let freed = 0, checks = 0;
+    for (const e of this.reclaimQ) {
+      if (freed >= n || checks >= RECLAIM_CHECKS) break;
+      const b = e.body;
+      if (!b || b.type === CANNON.Body.DYNAMIC || !e.parts || !e.prop) { this.reclaimQ.delete(e); continue; }
+      if (e === except) continue;
+      checks++;
+      if (this.nearCab(b.position.x, b.position.z)) continue;
+      const r = d.reattach(e.prop, marks && this.farFromWakers(b.position.x, b.position.y, b.position.z));
+      if (r === 'marked') { this.reclaimQ.delete(e); this.reclaimQ.add(e); continue; } // kept: to the back, the next call looks further
+      this.reclaimQ.delete(e);
+      if (r !== 'ok') continue;
+      e.parts = undefined;
+      freed++;
+      this.counts.reclaimed++;
+    }
+    if (marks && freed < n && d.reclaimMarked) freed += d.reclaimMarked((x, y, z) => this.farFromWakers(x, y, z), n - freed);
+    return freed;
+  }
+
+  /** Lane PHYS: a reclaimed loose prop is about to move: draw it by its own meshes again (same pose; reclaiming another if full). */
+  private redetach(e: Ent): boolean {
+    const d = this.detacher, b = e.body, prop = e.prop;
+    if (!d || !b || !prop) return false;
+    let meshes = d.detachForPhysics(prop, e.propIndex ?? 0);
+    if ((!meshes || !meshes.length) && this.reclaim(1, e) > 0) meshes = d.detachForPhysics(prop, e.propIndex ?? 0);
+    if (!meshes || !meshes.length) return false;
+    const carried = this.holderLoose?.(prop) ?? [];
+    const inv = new THREE.Matrix4().compose(tv.set(b.position.x, b.position.y, b.position.z), tq.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w), ts.set(1, 1, 1)).invert();
+    e.parts = [...meshes, ...carried].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
+    this.counts.redetached++;
+    return true;
+  }
+
+  /**
+   * Lane PHYS: background reclaim — keep CONTACT_RESERVE + RECLAIM_AHEAD soft slots free with resting unmarked props (one per frame
+   * at most; bullet marks are only ever dropped on demand, when a wake needs the slot).
+   */
+  private reclaimAhead(): void {
+    const room = this.detacher?.detachRoom?.();
+    if (room !== undefined && room < CONTACT_RESERVE + RECLAIM_AHEAD && this.reclaimQ.size) this.reclaim(1, undefined, false);
+  }
+
+  /**
+   * Lane PHYS: pickups lying on the floor under a prop that just went loose (a spill holder's lots, spilled around its base; a
+   * pickup beneath it): its knock-on leaves them alone while they are inside its box, so they never get a body inside its collider.
+   */
+  private markUnder(e: Ent, b: CANNON.Body): void {
+    const list = this.pickups?.();
+    if (!list || !list.length) return;
+    b.updateAABB();
+    const lb = b.aabb.lowerBound, ub = b.aabb.upperBound;
+    for (const pk of list) {
+      const o = pk.obj.position;
+      if (o.x < lb.x - 0.03 || o.x > ub.x + 0.03 || o.z < lb.z - 0.03 || o.z > ub.z + 0.03 || o.y < lb.y - 0.08 || o.y >= lb.y + 0.05) continue;
+      (e.under ??= new Set()).add(pk);
+    }
+  }
+
+  /** Lane PHYS: a prop starts to move — pickups lying on its top are woken with it (they fall / ride, never float). */
+  private wakeRiders(e: Ent): void {
+    const b = e.body, list = this.pickups?.();
+    if (!b || !list || !list.length) return;
+    if (b.aabbNeedsUpdate) b.updateAABB();
+    const lb = b.aabb.lowerBound, ub = b.aabb.upperBound;
+    let n = 0;
+    for (const pk of list) {
+      if (n >= 4) break;
+      const o = pk.obj.position;
+      // on (or in) it above its base: a seat, its top — never one lying on the floor beside / under it
+      if (o.x < lb.x - 0.02 || o.x > ub.x + 0.02 || o.z < lb.z - 0.02 || o.z > ub.z + 0.02 || o.y < lb.y + 0.05 || o.y > ub.y + 0.25) continue;
+      const it = this.entForPickup(pk);
+      if (this.active.has(it)) continue;
+      if (this.activate(it)) { this.counts.riders++; n++; }
+    }
   }
 
   /** Make room for one more simulating body of `kind` (retire the oldest at rest, else freeze it). */
@@ -288,9 +521,14 @@ export class DynamicItems {
     const w = this.host.world;
     if (!w) return null;
     if (e.body && e.body.type === CANNON.Body.DYNAMIC) { e.body.wakeUp(); return e.body; }
+    // task office-props-physics-scale-20261030 (lane PHYS): a reclaimed loose prop is drawn by its own meshes again first
+    if (e.prop && !e.parts && !this.redetach(e)) return null;
     this.makeRoom(e.kind);
     if (e.body) {
-      // a resting loose prop (static body): back to dynamic
+      // a resting loose prop (static body): back to dynamic (lane PHYS: back in the cannon world if its chunk was inactive)
+      this.unrest(e);
+      this.reclaimQ.delete(e);
+      if (!e.body.world) w.addBody(e.body);
       e.body.type = CANNON.Body.DYNAMIC;
       e.body.mass = e.mass;
       e.body.updateMassProperties();
@@ -299,11 +537,14 @@ export class DynamicItems {
       e.body = this.makeBody(e, this.objMatrix(e, new THREE.Matrix4()));
       w.addBody(e.body);
     }
+    this.active.add(e);
+    this.pendingSet.delete(e);
     e.serial = ++this.serial;
     e.t = 0;
     e.sleepT = 0;
     this.counts.activated++;
     this.host.bodiesChanged();
+    if (e.prop) this.wakeRiders(e);
     return e.body;
   }
 
@@ -312,6 +553,7 @@ export class DynamicItems {
     const b = e.body;
     if (!b) return;
     this.syncEnt(e, false);
+    this.active.delete(e);
     // props keep their body as a STATIC obstacle at the current pose (also while frozen by the budget)
     if (e.kind === 'prop') {
       b.velocity.setZero();
@@ -320,11 +562,14 @@ export class DynamicItems {
       b.mass = 0;
       b.updateMassProperties();
       b.aabbNeedsUpdate = true;
+      // lane PHYS: indexed by chunk (in the cannon world only with it), a reclaim candidate while drawn by its own meshes
+      this.toRest(e);
+      if (e.parts) { this.reclaimQ.delete(e); this.reclaimQ.add(e); }
     } else {
       this.host.world?.removeBody(b);
       e.body = null;
     }
-    if (!frozen) e.pending = null;
+    if (!frozen) { e.pending = null; this.pendingSet.delete(e); } else this.pendingSet.add(e);
     this.counts.retired++;
   }
 
@@ -366,8 +611,8 @@ export class DynamicItems {
     if (this.ents.has(prop)) return true;
     const g = this.host.statics?.cellGround(prop.x, prop.z, prop.y + 0.05); // iteration 08: its own storey's floor
     const onFloor = g === undefined || (Number.isFinite(g) && Math.abs(prop.y - g) < 0.06);
-    if (!this.contactOn) return onFloor; // the Subway: exactly the iteration-07 / 08 rule
-    // Lane PHYS (office worlds): on-host decor may go loose on its static host's top; nothing that carries another prop does
+    // Lane PHYS: on-host decor may go loose on its static host's top; nothing that carries another prop does (task
+    // office-props-physics-scale-20261030: in every world — the Subway wakes by contact too, never leaving a floating stack)
     if (!onFloor && !(propPhysics(prop.kind).onHost && this.restsOnStaticHost(prop))) return false;
     return !this.supportsOther(prop);
   }
@@ -401,7 +646,9 @@ export class DynamicItems {
     if (e) return e;
     const ph = propPhysics(prop.kind);
     if (!this.isDynamicProp(prop) || prop.h <= 0.02) return null;
-    const meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
+    let meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
+    // task office-props-physics-scale-20261030 (lane PHYS): the detach budget is full — hand a resting prop's render back first
+    if ((!meshes || !meshes.length) && this.reclaim(1) > 0) meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
     if (!meshes || !meshes.length) return null;
     const def = (PROP_DEFS as unknown as Record<string, {w: number; d: number; h: number} | undefined>)[prop.kind];
     const quarter = Math.round(prop.rot / (Math.PI / 2)) & 1;
@@ -409,27 +656,68 @@ export class DynamicItems {
     const w = (def?.w ?? (quarter ? prop.hz * 2 : prop.hx * 2)) * fit, d = (def?.d ?? (quarter ? prop.hx * 2 : prop.hz * 2)) * fit, h = prop.h;
     const shape = ph.shape ?? 'box';
     const half = shape === 'cylinder' ? new THREE.Vector3(Math.min(w, d) / 2, h / 2, Math.min(w, d) / 2) : new THREE.Vector3(w / 2, h / 2, d / 2);
-    e = {kind: 'prop', serial: 0, body: null, pending: null, center: new THREE.Vector3(0, h / 2, 0), half, shape, mass: ph.mass, mat: ph.mat ?? 'metal', fam: 'prop',
-      t: 0, sleepT: 0, soundT: 0, shots: 0, prop, propIndex: index};
+    const center = new THREE.Vector3(0, h / 2, 0);
+    if (shape === 'box') this.clearStart(prop, center, half);
+    e = {kind: 'prop', serial: 0, body: null, pending: null, center, half, shape, mass: ph.mass, mat: ph.mat ?? 'metal', fam: 'prop',
+      t: 0, sleepT: 0, soundT: 0, shots: 0, prop, propIndex: index, contact: !!ph.contact, restKey: null, rad: half.length()};
+    this.maxRad = Math.max(this.maxRad, e.rad!);
     const body = this.host.world ? this.makeBody(e, this.objMatrix(e, new THREE.Matrix4())) : null;
     if (!body) return null;
     const bm = new THREE.Matrix4().compose(tv.set(body.position.x, body.position.y, body.position.z), tq.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w), ts.set(1, 1, 1));
     const inv = bm.clone().invert();
     const carried = this.holderLoose?.(prop) ?? []; // iteration 08 (Lane I): spill + carry the holder's own lid / liner
     e.parts = [...meshes, ...carried].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
+    this.markUnder(e, body); // lane PHYS: its spilled lots (and anything on the floor beneath it) lie inside its collider
     // loose from now on: no longer an AABB obstacle for walking / hitscan / statics (hit-tested here)
     prop.h = 0;
     prop.blocksSight = false;
     body.type = CANNON.Body.STATIC;
     body.mass = 0;
     body.updateMassProperties();
-    this.host.world!.addBody(body);
     e.body = body;
     this.ents.set(prop, e);
+    this.toRest(e); // lane PHYS: a resting loose prop (in the cannon world with its chunk); a walker / bullet activates it next
+    this.reclaimQ.add(e);
     this.counts.props++;
     if (ph.onHost) this.hostSupport(prop); // lane PHYS: a monitor on a desk rests on the desk's top
     this.host.propsChanged?.(prop.x, prop.z);
     return e;
+  }
+
+  /**
+   * Task office-props-physics-scale-20261030 (lane PHYS): a box collider that would START more than START_PEN inside a static
+   * neighbour's box (a stacking / folding chair tucked under its table: ~12 cm, more than its `fit` absorbs) is clipped on that
+   * side — the face away from it stays where the model is, so the walker still meets it there — instead of popping out of the
+   * neighbour when it wakes. One pass over the storey's props when the prop goes loose (an event, not per frame). Office kinds start
+   * within START_PEN (tests/office-physics.test.ts), so their colliders are unchanged.
+   */
+  private clearStart(prop: PropPlacement, center: THREE.Vector3, half: THREE.Vector3): void {
+    const props = this.host.statics?.props;
+    if (!props) return;
+    const c = Math.cos(prop.rot), sn = Math.sin(prop.rot);
+    const quarter = Math.abs(sn) > 0.7;
+    if (Math.abs(c) > 0.02 && Math.abs(sn) > 0.02) return; // not an axis-aligned quarter turn: leave it
+    // the collider's world x / z interval
+    let x0 = prop.x - (quarter ? half.z : half.x), x1 = prop.x + (quarter ? half.z : half.x);
+    let z0 = prop.z - (quarter ? half.x : half.z), z1 = prop.z + (quarter ? half.x : half.z);
+    const ox0 = x0, ox1 = x1, oz0 = z0, oz1 = z1;
+    const y0 = prop.y + 0.02, y1 = prop.y + prop.h - 0.02, level = prop.level ?? 0;
+    for (const q of props) {
+      if (q === prop || q.h <= 0.02 || q.mounted || (q.level ?? 0) !== level || q.y >= y1 || q.y + q.h <= y0) continue;
+      const px = Math.min(x1, q.x + q.hx) - Math.max(x0, q.x - q.hx), pz = Math.min(z1, q.z + q.hz) - Math.max(z0, q.z - q.hz);
+      if (px <= START_PEN || pz <= START_PEN) continue;
+      // clip along the shallower axis, on the neighbour's side
+      if (px <= pz) { if (q.x > prop.x) x1 = Math.min(x1, q.x - q.hx + START_PEN); else x0 = Math.max(x0, q.x + q.hx - START_PEN); }
+      else if (q.z > prop.z) z1 = Math.min(z1, q.z - q.hz + START_PEN); else z0 = Math.max(z0, q.z + q.hz - START_PEN);
+    }
+    // never below half of the original footprint (a prop placed deep inside another stays as it was)
+    if (x1 - x0 < (ox1 - ox0) * 0.5 || z1 - z0 < (oz1 - oz0) * 0.5 || (x0 === ox0 && x1 === ox1 && z0 === oz0 && z1 === oz1)) return;
+    const wx = (x0 + x1) / 2 - prop.x, wz = (z0 + z1) / 2 - prop.z;
+    // world offset -> object frame (yaw by -rot)
+    center.x = wx * c - wz * sn;
+    center.z = wx * sn + wz * c;
+    if (quarter) { half.z = (x1 - x0) / 2; half.x = (z1 - z0) / 2; } else { half.x = (x1 - x0) / 2; half.z = (z1 - z0) / 2; }
+    this.counts.clipped++;
   }
 
   /**
@@ -536,24 +824,33 @@ export class DynamicItems {
     }
   }
 
+  /** Taken by the player (or cleared): drop its body, forget it. */
+  private forget(key: object, e: Ent): void {
+    if (e.body) this.host.world?.removeBody(e.body);
+    this.active.delete(e);
+    this.pendingSet.delete(e);
+    this.ents.delete(key);
+  }
+
   /** Per frame after the world step: render sync, sleep / age retirement, pending re-activation, removed pickups, walker shoves. */
   update(dt: number): void {
     const w = this.host.world;
-    for (const [key, e] of this.ents) {
-      if (e.pickup && !e.pickup.obj.parent) {
-        // taken by the player (or cleared): drop its body, forget it
-        if (e.body) w?.removeBody(e.body);
-        this.ents.delete(key);
-        continue;
-      }
-      e.soundT = Math.max(0, e.soundT - dt);
+    this.clock += dt;
+    // lane PHYS (task office-props-physics-scale-20261030): only the simulating entities are stepped here; taken pickups that no
+    // longer simulate are swept a few per frame (round robin), so the per-frame cost does not grow with every entity ever touched
+    const live = this.scratch;
+    live.length = 0;
+    for (const e of this.active) live.push(e);
+    for (const e of live) {
+      if (e.pickup && !e.pickup.obj.parent) { this.forget(e.pickup.obj, e); continue; }
       const b = e.body;
-      if (!b || b.type !== CANNON.Body.DYNAMIC) continue;
+      if (!b || b.type !== CANNON.Body.DYNAMIC) { this.active.delete(e); continue; }
       e.t += dt;
       if (!Number.isFinite(b.position.x + b.position.y + b.position.z + b.quaternion.w)) {
         // solver blew up: put it back where it was last finite (never lose loot)
         w?.removeBody(b);
         e.body = null;
+        this.active.delete(e);
         continue;
       }
       if (groundClamp(b, this.host.statics)) this.counts.clamped++;
@@ -563,20 +860,32 @@ export class DynamicItems {
       const slow = b.velocity.length() < 0.3 && b.angularVelocity.length() < 3;
       if (e.sleepT > RETIRE_SLEEP || (e.t > 12 && slow) || e.t > 20) this.retire(e);
     }
+    for (let k = 0; k < SWEEP_PER_FRAME && this.ents.size; k++) {
+      let n = this.sweep?.next();
+      if (!n || n.done) { this.sweep = this.ents.values(); n = this.sweep.next(); }
+      if (n.done) break;
+      const e = n.value;
+      if (e.pickup && !e.pickup.obj.parent) this.forget(e.pickup.obj, e);
+    }
     // frozen-while-moving items / props resume when there is room again
-    for (const kind of ['item', 'prop'] as const) {
-      const room = (kind === 'item' ? MAX_DYNAMIC_ITEMS : MAX_DYNAMIC_PROPS) - this.bodies(kind).length;
-      if (room <= 0) continue;
-      const waiting = [...this.ents.values()].filter(e => e.kind === kind && e.pending && (!e.body || e.body.type !== CANNON.Body.DYNAMIC)).sort((a, b) => a.serial - b.serial).slice(0, room);
-      for (const e of waiting) {
-        const saved = e.pending!;
-        const b = this.activate(e);
-        if (b) { b.velocity.copy(saved.v); b.angularVelocity.copy(saved.w); this.counts.reactivated++; }
-        e.pending = null;
+    if (this.pendingSet.size) {
+      for (const kind of ['item', 'prop'] as const) {
+        const room = (kind === 'item' ? MAX_DYNAMIC_ITEMS : MAX_DYNAMIC_PROPS) - this.bodies(kind).length;
+        if (room <= 0) continue;
+        const waiting = [...this.pendingSet].filter(e => e.kind === kind && e.pending && (!e.body || e.body.type !== CANNON.Body.DYNAMIC)).sort((a, b) => a.serial - b.serial).slice(0, room);
+        for (const e of waiting) {
+          const saved = e.pending!;
+          const b = this.activate(e);
+          if (!b) continue; // lane PHYS: no render slot right now (a reclaimed prop): it keeps waiting
+          b.velocity.copy(saved.v); b.angularVelocity.copy(saved.w); this.counts.reactivated++;
+          e.pending = null;
+          this.pendingSet.delete(e);
+        }
       }
     }
     this.wakeNeighbours();
     this.shoveByWalkers(dt);
+    this.reclaimAhead();
   }
 
   /**
@@ -584,15 +893,17 @@ export class DynamicItems {
    * loose prop (a shoved chair, a toppling monitor) does too, above PROP_KNOCK_SPEED.
    */
   private wakeNeighbours(): void {
-    if (!this.pickups && !this.liftLots) return;
+    if ((!this.pickups && !this.liftLots) || !this.active.size) return;
     let budget = 4;
-    const box = new THREE.Box3(), other = new THREE.Box3(), m = new THREE.Matrix4();
-    const props = this.contactOn;
-    for (const e of [...this.ents.values()]) {
+    const box = new THREE.Box3(), other = new THREE.Box3(), cur = new THREE.Box3(), m = new THREE.Matrix4();
+    const props = this.officeRules;
+    const live = [...this.active]; // lane PHYS: the simulating entities only (activations below add to the set)
+    for (const e of live) {
       const b = e.body;
       if (budget <= 0) break;
       if (!b || b.type !== CANNON.Body.DYNAMIC || b.velocity.length() < 0.25) continue;
-      if (e.kind !== 'item' && !(props && e.kind === 'prop' && b.velocity.length() >= PROP_KNOCK_SPEED)) continue;
+      // task office-props-physics-scale-20261030 (lane PHYS): a calibrated `contact` kind knocks lots on in every world
+      if (e.kind !== 'item' && !((props || e.contact) && e.kind === 'prop' && b.velocity.length() >= PROP_KNOCK_SPEED)) continue;
       const win = 0.6 + (e.kind === 'prop' ? Math.max(e.half.x, e.half.z) : 0);
       if (b.aabbNeedsUpdate) b.updateAABB();
       // predictive: the box swept ~2 fixed steps ahead, so a neighbour gets its body BEFORE the contact
@@ -610,18 +921,31 @@ export class DynamicItems {
         if (n.body && n.body.type === CANNON.Body.DYNAMIC) continue;
         obbBox(this.objMatrix(n, m), n.center, n.half, other);
         if (!other.intersectsBox(box)) continue;
+        if (e.under?.has(pk)) {
+          // lane PHYS: it lay under this prop when it went loose (a spilled lot): left alone until the prop has moved off it
+          cur.min.set(b.aabb.lowerBound.x, b.aabb.lowerBound.y, b.aabb.lowerBound.z);
+          cur.max.set(b.aabb.upperBound.x, b.aabb.upperBound.y, b.aabb.upperBound.z);
+          if (other.intersectsBox(cur)) continue;
+          e.under.delete(pk);
+        }
         if (this.activate(n)) { this.counts.knockOn++; budget--; }
       }
     }
   }
 
-  /** Walkers push loose props (and sprinters kick loose items lying at their feet). Lane PHYS: office worlds also contact-wake. */
+  /**
+   * Walkers push loose props (and sprinters kick loose items lying at their feet). Lane PHYS: walkers also contact-wake (task
+   * office-props-physics-scale-20261030: in every world). Loose props come from the simulating set + the rest index around each
+   * walker (never a scan of every loose prop per walker).
+   */
   private shoveByWalkers(dt: number): void {
-    const contact = this.contactOn;
-    if (!this.counts.props && !contact) return; // no loose prop yet (cheap idle path; office worlds scan for contact wakes)
+    const contact = this.contactOn, office = this.officeRules;
+    if (!this.counts.props && !contact) return; // no loose prop yet and no contact wake (cheap idle path)
     const list = this.walkers?.();
+    this.wakePts.length = 0;
     if (!list || !list.length || dt <= 0) return;
-    const wakers = contact ? list.filter(w => w.wake) : [];
+    const wakers = list.filter(w => w.wake);
+    for (const w of wakers) this.wakePts.push(w.x, w.y, w.z);
     for (const a of list) {
       const last = this.lastPos.get(a.id);
       this.lastPos.set(a.id, {x: a.x, z: a.z});
@@ -630,7 +954,8 @@ export class DynamicItems {
       if (sp < 0.3 || sp > 12) continue;
       // lane PHYS: walking into a light prop wakes it (the player; AI only near the player)
       if (contact && (a.wake || wakers.some(w => Math.abs(w.y - a.y) < 3 && Math.hypot(w.x - a.x, w.z - a.z) < CONTACT_RANGE))) this.contactScan(a, vx / sp, vz / sp);
-      for (const e of this.ents.values()) {
+      if (!this.counts.props) continue;
+      for (const e of this.looseNear(a.x, a.z, a.r + 0.03, this.nearBuf)) {
         if (!e.prop || !e.body) continue;
         const b = e.body;
         if (Math.abs(b.position.y - a.y) > 1.2) continue;
@@ -638,7 +963,9 @@ export class DynamicItems {
         if (b.aabbNeedsUpdate) b.updateAABB();
         const lb = b.aabb.lowerBound, ub = b.aabb.upperBound;
         if (lb.y > a.y + 1.6 || ub.y < a.y + 0.05) continue;
-        if (contact && lb.y > a.y + RAISED_SHOVE) continue; // lane PHYS: a monitor on a desk is out of reach of the legs
+        // lane PHYS: office rules — every world for a calibrated `contact` kind (task office-props-physics-scale-20261030)
+        const cal = office || !!e.contact;
+        if (cal && lb.y > a.y + RAISED_SHOVE) continue; // lane PHYS: a monitor on a desk is out of reach of the legs
         const nx = Math.max(lb.x, Math.min(a.x, ub.x)), nz = Math.max(lb.z, Math.min(a.z, ub.z));
         const dx = nx - a.x, dz = nz - a.z, dist = Math.hypot(dx, dz);
         if (dist > a.r + 0.03) continue;
@@ -651,11 +978,11 @@ export class DynamicItems {
         const along = body.velocity.x * ux + body.velocity.z * uz;
         const need = sp * 1.1 - along;
         if (need <= 0) continue;
-        // lane PHYS: office worlds close the speed gap faster (calibrated carpet friction: the walker would reach into a 20 kg piece)
-        const j = Math.min(need, 2.5) * e.mass * (contact ? OFFICE_SHOVE_GAIN : 0.35);
+        // lane PHYS: office rules close the speed gap faster (calibrated carpet friction: the walker would reach into a 20 kg piece)
+        const j = Math.min(need, 2.5) * e.mass * (cal ? OFFICE_SHOVE_GAIN : 0.35);
         cv.set(ux * j, 0, uz * j);
-        // lane PHYS: office worlds push within the body's own height (a 39 cm bean bag is not flipped by a push above its top)
-        cv2.set(nx - body.position.x, Math.min(0.25, a.y + 0.6 - body.position.y, contact ? e.half.y * 0.5 : Infinity), nz - body.position.z);
+        // lane PHYS: office rules push within the body's own height (a 39 cm bean bag is not flipped by a push above its top)
+        cv2.set(nx - body.position.x, Math.min(0.25, a.y + 0.6 - body.position.y, cal ? e.half.y * 0.5 : Infinity), nz - body.position.z);
         body.applyImpulse(cv, cv2);
         this.counts.pushes++;
       }
@@ -663,10 +990,11 @@ export class DynamicItems {
   }
 
   /**
-   * Lane PHYS: wake the light floor props `a` is walking into (office worlds). Candidates come from a per-world bucket index of
-   * the dynamic, non-holder kinds; a prop wakes when the walker is within CONTACT_MARGIN of its box, heading for it, at its
-   * height, and the damage system still has CONTACT_RESERVE detach slots. The woken prop loses its AABB (the walker no longer
-   * stops at it) and the loose-prop shove above moves it from the next frame on.
+   * Lane PHYS: wake the light floor props `a` is walking into (task office-props-physics-scale-20261030: every world). Candidates
+   * come from a per-world bucket index of the dynamic `contact` kinds (spill holders spill); a prop wakes when the walker is within
+   * CONTACT_MARGIN of its box, heading for it, at its height, and the damage system still has CONTACT_RESERVE detach slots (resting
+   * props' renders are reclaimed first when it has not). The woken prop loses its AABB (the walker no longer stops at it) and the
+   * loose-prop shove above moves it from this frame on.
    */
   private contactScan(a: Walker, ux: number, uz: number): void {
     const s = this.host.statics;
@@ -687,7 +1015,7 @@ export class DynamicItems {
           const dx = nx - a.x, dz = nz - a.z, dist = Math.hypot(dx, dz);
           if (dist > reach) continue;
           if ((dist > 1e-4 ? (dx * ux + dz * uz) / dist : 1) < 0.2) continue; // only when moving into it
-          if ((this.detacher?.detachRoom?.() ?? Infinity) <= CONTACT_RESERVE) return;
+          if (!this.contactRoom()) return;
           if (!this.isDynamicProp(p)) continue;
           if (this.entForProp(p, i)) this.counts.contacts++;
         }
@@ -696,19 +1024,52 @@ export class DynamicItems {
   }
 
   /**
+   * Lane PHYS (task office-props-physics-scale-20261030): whether a contact wake may detach one more prop — more than
+   * CONTACT_RESERVE soft slots left (bullet marks keep their headroom), after reclaiming resting props' renders if not.
+   */
+  private contactRoom(): boolean {
+    const d = this.detacher;
+    if (!d?.detachRoom) return true;
+    let room = d.detachRoom();
+    // reclaim right now (bounded): a walker stopped at the prop's box no longer moves, so a later frame would not wake it
+    for (let k = 0; room <= CONTACT_RESERVE && k < 3; k++) {
+      if (!this.reclaim(CONTACT_RESERVE + 1 - room)) break;
+      room = d.detachRoom();
+    }
+    return room > CONTACT_RESERVE;
+  }
+
+  /** Lane PHYS: loose props whose body centre lies in `area` (x / z): the simulating set + the rest index over it (or every one). */
+  private looseIn(area: {x0: number; z0: number; x1: number; z1: number} | undefined, out: Ent[]): Ent[] {
+    out.length = 0;
+    if (!area) { for (const e of this.ents.values()) if (e.prop && e.body) out.push(e); return out; }
+    for (const e of this.active) if (e.prop) out.push(e);
+    const S = STATIC_CHUNK_M, pad = 0.01;
+    for (let cz = Math.floor((area.z0 - pad) / S); cz <= Math.floor((area.z1 + pad) / S); cz++) {
+      for (let cx = Math.floor((area.x0 - pad) / S); cx <= Math.floor((area.x1 + pad) / S); cx++) {
+        const set = this.rest.get((cz + 4096) * 8192 + (cx + 4096));
+        if (set) for (const e of set) out.push(e);
+      }
+    }
+    return out;
+  }
+
+  /**
    * Lane LIFT riders (lane PHYS): resting loose props (STATIC bodies, also budget-frozen ones) inside the moving cab ride its dy
    * (simulating bodies are carried by PhysicsSystem.carryRiders); every loose prop inside keeps its placement height in step.
-   * Call BEFORE the simulating bodies are shifted (the test uses the pre-move positions). Returns the props carried.
+   * Call BEFORE the simulating bodies are shifted (the test uses the pre-move positions). Returns the props carried. Task
+   * office-props-physics-scale-20261030: `area` (the cab's x / z box) bounds the search to the rest index there.
    */
-  carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number {
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number, area?: {x0: number; z0: number; x1: number; z1: number}): number {
     let n = 0;
-    for (const e of this.ents.values()) {
+    for (const e of this.looseIn(area, this.nearBuf)) {
       const b = e.body;
       if (!e.prop || !b) continue;
       const p = b.position;
       if (!inside(p.x, p.y, p.z)) continue;
       e.prop.y += dy;
       if (b.type !== CANNON.Body.DYNAMIC) {
+        if (!e.parts) this.redetach(e); // lane PHYS: reclaimed (never beside a shaft — defensive): drawn by its own meshes to ride
         p.y += dy; b.previousPosition.y += dy; b.interpolatedPosition.y += dy;
         b.aabbNeedsUpdate = true;
         this.syncEnt(e, false);
@@ -719,18 +1080,20 @@ export class DynamicItems {
     return n;
   }
 
-  /** Lane LIFT (lane PHYS): resting loose props in a doorway the landing doors shut on go to the nearer side. */
-  relocate(move: (x: number, y: number, z: number) => [number, number] | null): number {
+  /** Lane LIFT (lane PHYS): resting loose props in a doorway the landing doors shut on go to the nearer side (`area`: the doorway). */
+  relocate(move: (x: number, y: number, z: number) => [number, number] | null, area?: {x0: number; z0: number; x1: number; z1: number}): number {
     let n = 0;
-    for (const e of this.ents.values()) {
+    for (const e of this.looseIn(area, this.nearBuf)) {
       const b = e.body;
       if (!e.prop || !b || b.type === CANNON.Body.DYNAMIC) continue;
       const p = b.position, to = move(p.x, p.y, p.z);
       if (!to) continue;
+      if (!e.parts) this.redetach(e); // lane PHYS: defensive, as in carry()
       const dx = to[0] - p.x, dz = to[1] - p.z;
       p.x += dx; p.z += dz; b.previousPosition.x += dx; b.previousPosition.z += dz; b.interpolatedPosition.x += dx; b.interpolatedPosition.z += dz;
       b.aabbNeedsUpdate = true;
       this.syncEnt(e, false);
+      this.toRest(e); // lane PHYS: its chunk may have changed
       n++;
     }
     return n;
@@ -743,12 +1106,20 @@ export class DynamicItems {
     for (const b of this.hostSlabs.values()) this.host.world?.removeBody(b); // lane PHYS
     this.hostSlabs.clear();
     this.contactIndex = null;
+    // task office-props-physics-scale-20261030 (lane PHYS)
+    this.active.clear(); this.rest.clear(); this.reclaimQ.clear(); this.pendingSet.clear();
+    this.maxRad = 0; this.sweep = null; this.wakePts.length = 0;
   }
 
-  stats(): {items: number; itemsAwake: number; props: number; propsAwake: number; pending: number; counts: Record<string, number>} {
-    let items = 0, props = 0, pending = 0;
+  /**
+   * QA / tests. Task office-props-physics-scale-20261030 (lane PHYS): + resting (loose props with a static body), restingInWorld
+   * (of those, in the cannon world now: their chunk is active), ownRender (resting ones still drawn by their own meshes).
+   */
+  stats(): {items: number; itemsAwake: number; props: number; propsAwake: number; pending: number; resting: number; restingInWorld: number; ownRender: number; counts: Record<string, number>} {
+    let items = 0, props = 0, pending = 0, resting = 0, inWorld = 0, own = 0;
     for (const e of this.ents.values()) { if (e.kind === 'item') items++; else props++; if (e.pending) pending++; }
-    return {items, itemsAwake: this.bodies('item').length, props, propsAwake: this.bodies('prop').length, pending, counts: {...this.counts}};
+    for (const set of this.rest.values()) for (const e of set) { resting++; if (e.body?.world) inWorld++; if (e.parts) own++; }
+    return {items, itemsAwake: this.bodies('item').length, props, propsAwake: this.bodies('prop').length, pending, resting, restingInWorld: inWorld, ownRender: own, counts: {...this.counts}};
   }
 
   /** QA: tracked entities (bounded). */
@@ -769,13 +1140,14 @@ const tv2 = new THREE.Vector3();
 /** Lane PHYS: bucket key of a CB-metre cell. */
 const cellKey = (cx: number, cz: number) => (cz + 4096) * 8192 + (cx + 4096);
 
-/** Lane PHYS: contact-wake candidates — indices of the dynamic, non-holder `contact` props with a box, per CB-metre bucket they overlap. */
+/** Lane PHYS: contact-wake candidates — indices of the dynamic `contact` props (spill holders included) with a box, per CB-metre bucket they overlap. */
 function contactCells(props: readonly PropPlacement[]): Map<number, number[]> {
   const cells = new Map<number, number[]>();
   const kinds = new Map<string, boolean>();
   props.forEach((p, i) => {
     let ok = kinds.get(p.kind);
-    if (ok === undefined) kinds.set(p.kind, (ok = !!propPhysics(p.kind).contact && dynamicKind(p.kind) && !isLootHolderKind(p.kind)));
+    // task office-props-physics-scale-20261030 (lane PHYS): spill holders too (dynamicKind keeps every other holder out)
+    if (ok === undefined) kinds.set(p.kind, (ok = !!propPhysics(p.kind).contact && dynamicKind(p.kind)));
     if (!ok || p.h <= 0.02 || p.mounted) return;
     for (let cz = Math.floor((p.z - p.hz) / CB); cz <= Math.floor((p.z + p.hz) / CB); cz++) {
       for (let cx = Math.floor((p.x - p.hx) / CB); cx <= Math.floor((p.x + p.hx) / CB); cx++) {

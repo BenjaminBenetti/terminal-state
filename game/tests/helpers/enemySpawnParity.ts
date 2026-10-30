@@ -76,10 +76,11 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
   '40677:rifle:split': ['280e6a9b', '314cffa5', 'station 23 (L0 18 L1 2 L2 3)'],
   '48596:rifle:deep': ['41e72df3', 'ff5eebea', 'station 32 (L0 25 L1 2 L2 5)'],
 };
+// Office: stage 2 (task office-props-physics-scale-20261030) — see the pin history in tests/enemy-spawn-parity.test.ts.
 export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = {
-  '11:pistol': ['2f57fea3', '6cfc51c0', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
-  '222:pistol': ['3f4ffaaa', '0183e6f5', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1'],
-  '3333:pistol': ['49c5890e', '8290c0dd', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2'],
-  '4242:pistol': ['c008ba55', 'ef25f3cf', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0'],
-  '11:rifle': ['2f57fea3', '9e782ad4', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
+  '11:pistol': ['5d274546', 'ef270423', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
+  '222:pistol': ['24f81c38', '3e9001ac', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1'],
+  '3333:pistol': ['73e3a9b0', 'bc96b5e2', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2'],
+  '4242:pistol': ['8f127b50', 'ba008081', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0'],
+  '11:rifle': ['5d274546', '7cb613ae', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
 };

@@ -91,9 +91,10 @@ describe('hunger and thirst', () => {
     expect([s.hunger, s.thirst, s.time]).toEqual([80, 80, 0]);
   });
 
-  it('defines 3 drinks and 4 foods with effects, use times, stacks and icons', () => {
+  // + bread (task office-props-physics-scale-20261030, lane FURN: the bakery case's loaves are a food item now)
+  it('defines 3 drinks and 5 foods with effects, use times, stacks and icons', () => {
     expect(DRINK_IDS.length).toBe(3);
-    expect(FOOD_IDS.length).toBe(4);
+    expect(FOOD_IDS.length).toBe(5);
     for (const id of [...DRINK_IDS, ...FOOD_IDS]) {
       const d = ITEMS[id];
       expect(d.kind).toBe('consumable');

@@ -123,6 +123,18 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceC
   const stand = (p: {x: number; z: number}) => { const [cx, cy] = g.cellOf(p.x, p.z); for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) mark(cx + ox, cy + oy); };
   if (level === 0) for (const l of layout.traversal?.ladders ?? []) { stand(l.top); stand(l.bottom); }
   for (const k of levelLinksOf(layout)) { if (k.lower === level) stand(k.bottom); if (k.upper === level) stand(k.top); }
+  // Task office-props-physics-scale-20261030: an office room under 16 m2 (closets, small offices) keeps a 1.5 m turning square
+  // (3 x 3 cells) free just inside its main door. It held only by luck before; resized company props reshuffled a scrubber into it.
+  if (levelRole(layout, level) === 'office') for (const a of layout.areas) { // (layout.office is set after dressing)
+    if ((a.level ?? 0) !== level || a.kind === 'passage' || a.w < 3 || a.h < 3 || a.w * a.h * CELL * CELL >= 16) continue;
+    const d = (doorsOf.get(a.id) ?? []).find(q => doorLevel(layout, q) === level);
+    if (!d) continue;
+    const side = doorSide(d, a), across = side === 'N' || side === 'S';
+    const along = (c0: number, len: number, lo: number, hi: number) => Math.max(lo, Math.min(hi - 3, c0 + Math.floor(len / 2) - 1));
+    const x0 = across ? along(d.x, d.w, a.x, a.x + a.w) : side === 'W' ? a.x : a.x + a.w - 3;
+    const y0 = across ? (side === 'N' ? a.y : a.y + a.h - 3) : along(d.y, d.h, a.y, a.y + a.h);
+    for (let y = y0; y < y0 + 3; y++) for (let x = x0; x < x0 + 3; x++) mark(x, y);
+  }
   // Apertures (stairwells, light wells, overlook edges): a cell closed on this level while another level's band rises through it.
   // Floor cells next to one keep a one-cell setback (railings stay readable, nothing half over a drop).
   const levels = levelsOf(layout);

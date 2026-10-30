@@ -13,6 +13,7 @@ import type {ItemStack} from '../items/inventory';
 import {canvasTexture, pickupLabel, surface} from './canvasTextures';
 import {authoredItemModel, isAuthoredItem} from './authoredItems'; // Iteration 12 (LIGHT)
 import {isMedicalItem, medicalItemModel, medicalModelSource} from './medicalItems'; // Iteration 16 (lane INJURY)
+import {MATERIAL_MODEL_SOURCE, isMaterialItem, materialItemModel} from './materialItems'; // lane RACK (office-props-physics-scale-20261030)
 import {gearItemModel, gearModelSource, registerGasMaskOutfit} from '../gear/models'; // Iteration 16 (lane GEAR); mask lane: the outfit gas mask
 import {isGearItem} from '../items/gear';
 import {Grid} from '../gen/grid';
@@ -262,6 +263,10 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // Iteration 12 (LIGHT): battery / road flare are authored procedural geometry (world/authoredItems.ts), never generated.
     t = authoredItemModel(itemId);
     templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
+  } else if (isMaterialItem(itemId)) {
+    // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — authored procedural geometry (world/materialItems.ts)
+    t = materialItemModel(itemId);
+    templateSource.set(itemId, MATERIAL_MODEL_SOURCE);
   } else if (isMedicalItem(itemId)) {
     // Iteration 16 (lane INJURY): splint / sling = Meshy A7 / A8 when delivered (preloaded), else authored; trauma kit authored
     t = medicalItemModel(itemId);
