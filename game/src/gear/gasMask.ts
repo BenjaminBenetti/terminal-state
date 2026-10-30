@@ -8,7 +8,9 @@
 // - stateListeners + sectionHooks: any state but 'playing' (pause, Tab, death, loading) and every section build / teardown
 //   (travel, Retry, NewGame) cancel a transition — it ends OFF (a donning mask goes back off, a doffing one finishes off);
 // - runParticipants: lane 'gas.mask' = whether the mask is ON the face (Retry restores it, NewGame resets it to off);
-// - invUI.gear.changed (wrapped): taking the mask off / swapping / dropping it in the inventory screen forces it off.
+// - invUI.gear.changed (wrapped): taking the mask off / swapping / dropping it in the inventory screen forces it off;
+// - warmRegistry pool 'gas-mask': a hidden filter-canister prototype (a dropped / carried-over filter never compiles cold; the
+//   mask itself is in the gear pool with every gear model).
 //
 // EQUIPPED != ON THE FACE. The mask worn in the gear slot 'mask' is equipped (a picked-up mask goes there when it is empty, OFF
 // the face). Q (game.ts -> press()) toggles the face state: off -> donning (GAS_MASK.donS) -> on -> doffing (GAS_MASK.doffS)
@@ -26,8 +28,10 @@
 // PROTECTION (protects()): fully on the face AND the fitted filter > 0. Donning is unprotected until complete, doffing at once;
 // an on-face mask with an empty filter is UNPROTECTED. The gas lane asks game.gasMask.protects() once per frame.
 
+import type * as THREE from 'three';
 import type {Game} from '../game';
 import {FILTER_LIFE_S, isFilterMask} from '../items/gear';
+import {makeSupplyMesh} from '../world/pickups';
 import type {ItemStack} from '../items/inventory';
 import type {RunParticipant} from '../run/snapshot';
 import {MaskOverlay, type MaskTone} from '../ui/maskOverlay';
@@ -94,6 +98,9 @@ export class GasMaskSystem {
   private emptyWarned = false;
   /** inv.version of the last failed spare draw (no retry until the inventory changes). */
   private drawFailedAt = -1;
+  private protos: THREE.Object3D[] | null = null;
+  /** The HUD view (one object, refreshed in place every frame). */
+  private readonly view: MaskHudView = {state: 'off', cover: 0, protects: false, tone: 'ok'};
   readonly overlay = new MaskOverlay();
 
   constructor(private readonly game: Game, private readonly access: GasMaskAccess) {}
@@ -108,6 +115,7 @@ export class GasMaskSystem {
     reg.stateListeners?.push(s => { if (s !== 'playing') this.cancelTransition(); });
     reg.inputOwners?.push(() => this.transitioning);
     reg.runParticipants?.push(this.participant());
+    g.warmRegistry.addPool('gas-mask', () => this.warmPrototypes());
     const ui = reg.invUI;
     const prev = ui?.gear;
     if (ui && prev) ui.gear = {...prev, changed: () => { prev.changed(); this.checkWorn(); }};
@@ -293,10 +301,32 @@ export class GasMaskSystem {
 
   /** HUD Q slot + camera overlay (each writes the DOM only on change). */
   present(): void {
-    const g = this.game;
-    const view: MaskHudView = {state: this.state, cover: this.cover, protects: this.protects(), tone: this.tone};
-    (g.hud as {setMask?: (v: MaskHudView) => void}).setMask?.(view);
-    this.overlay.set(view.cover, this.state === 'off' ? 'ok' : view.tone);
+    const v = this.view;
+    v.state = this.state;
+    v.cover = this.cover;
+    v.protects = this.protects();
+    v.tone = this.tone;
+    (this.game.hud as {setMask?: (v: MaskHudView) => void}).setMask?.(v);
+    this.overlay.set(v.cover, this.state === 'off' ? 'ok' : v.tone);
+  }
+
+  /** Hidden filter-canister prototype for the loading-screen warm-up (same factory + material clones as a pickup). */
+  warmPrototypes(): THREE.Object3D[] {
+    if (!this.protos) {
+      const root = makeSupplyMesh(GAS_MASK.filterItem);
+      root.name = 'gas-mask-warm-prototype-filter';
+      root.position.set(0, -1000, 0);
+      root.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone(); // like a pickup
+        m.visible = false;
+        m.raycast = () => {};
+      });
+      this.game.scene.add(root);
+      this.protos = [root];
+    }
+    return this.protos;
   }
 
   /** QA / tests: a compact state report. */

@@ -97,7 +97,7 @@ export class MaskOverlay {
   /** Creates the layer as the first child of #hud (no-op without a DOM / #hud). */
   mount(): boolean {
     if (this.el) return true;
-    if (typeof document === 'undefined') return false;
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return false; // Node (no / canvas-only DOM)
     const host = document.querySelector('#hud');
     if (!host) return false;
     ensureStyles();
