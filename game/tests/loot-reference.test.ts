@@ -15,7 +15,7 @@ import {describe, expect, it} from 'vitest';
 import {existsSync, readFileSync} from 'node:fs';
 import * as LT from '../src/items/lootTables';
 import {
-  BASE_TABLES, HOLDER_SLOTS, OFFICE_FLOOR, OPENABLE_TABLES, PROFILES, REWARD_TABLES, SLOT_CATEGORIES, SUBWAY_FLOOR, THEME_ECONOMY,
+  BASE_TABLES, HOLDER_SLOTS, OFFICE_FLOOR, OPENABLE_TABLES, PROFILES, REWARD_FINDS, REWARD_TABLES, SLOT_CATEGORIES, SUBWAY_FLOOR, THEME_ECONOMY,
   OFF_THEME_WEIGHTS, BOX_COUNT, gearParams, lootProfile, type LootProfile, type LootSpec, type OwnTable,
 } from '../src/items/lootTables';
 import {ITEMS} from '../src/items/items';
@@ -32,6 +32,7 @@ import {MASK_LOOT, rollMaskLoot} from '../src/gen/maskLoot';
 import {FIND_COPY_THRESHOLDS, FIND_MAX_PER_WEAPON, PISTOL_START_BOXES, WEAPON_FIND_AMMO, findWeaponsFor} from '../src/gen/weaponFinds';
 import {officeWeaponPlan, scarceOdds} from '../src/gen/office/spawns';
 import {COMPANIES} from '../src/gen/office/companies';
+import {OFFICE_ROOF_LEVEL} from '../src/gen/office/frame';
 import {startWeaponFor} from '../src/weapons/pistol';
 import {
   CENSUS_SEEDS, LEVEL_ADAPTER, LOOT_TABLES_EXPORT_ROLES, buildLootReference, censusLayout, censusSeedsFor,
@@ -177,6 +178,32 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
     const roof = level('office').holders.find(h => h.source === 'reward')!;
     expect(roof.class).toBe('guaranteed');
     expect(roof.occurrence.levelsObserved).toBe(roof.occurrence.samples); // the roof cache is in every sample Office level
+  });
+
+  it('has every find reward key (task gas-mask-roof-feedback-20261030: the roof find) as a guaranteed special source with its exact rows + paired ammo', () => {
+    const r = ref();
+    const keys = new Set([...Object.keys(REWARD_FINDS), ...LEVEL_IDS.flatMap(l => Object.keys(lootProfile(l).tables.rewardFinds ?? {}))]);
+    expect(keys.size).toBeGreaterThan(0);
+    const start = startWeaponFor(false);
+    for (const key of keys) {
+      const s = r.specials.find(x => x.id === `reward-find:${key}`);
+      expect(s, key).toBeDefined();
+      expect(s!.levels.length, `find ${key} is not laid out by any level (tools/pages/lootReference.ts LEVEL_ADAPTER.rewardFinds)`).toBeGreaterThan(0);
+      expect(s!.class).toBe('guaranteed');
+      const rf = REWARD_FINDS[key];
+      const rowsShown = s!.items.filter(i => i.weight !== undefined).map(i => [i.itemId, i.weight]);
+      expect(rowsShown).toEqual(rf.items.filter(x => x[0] !== start && x[1] > 0).map(x => [x[0], x[1]]));
+      expect(s!.items.filter(i => i.share !== undefined).reduce((t, i) => t + i.share!, 0)).toBeCloseTo(1, 3);
+      for (const [id] of rf.items) if (rf.pairedAmmo && WEAPON_FIND_AMMO[id] && id !== start) expect(s!.items).toContainEqual(expect.objectContaining({itemId: WEAPON_FIND_AMMO[id][0], count: WEAPON_FIND_AMMO[id][1]}));
+      expect(rows(key === LT.ROOF_FIND_KEY ? 'ROOF_FIND' : `REWARD_FINDS.${key}`)).toEqual(rf.items.map(x => [x[0], x[1]]));
+    }
+    // the census: every sample Office level lays out the roof find on the roof
+    for (const seed of censusSeedsFor('office')) {
+      const c = censusLayout('office', seed);
+      expect(c.pickups.filter(p => p.level === OFFICE_ROOF_LEVEL).length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
+    }
+    expect(level('office').specials).toContain(`reward-find:${LT.ROOF_FIND_KEY}`);
+    expect(level('subway').specials).not.toContain(`reward-find:${LT.ROOF_FIND_KEY}`);
   });
 
   it('has the floor programs of every level, every Office company tilt and every special-source family', () => {

@@ -268,15 +268,28 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
 ### Breached windows
 - **Which panes:** only the Office's exterior window panes. The entrance, shop / cooler / prop glass, elevator glass and
   the roof are excluded.
-- **Breaking:** a pane breaks on its **3rd bullet impact**. It cracks on the first, then on the third shatters with a glass
-  burst and the break-glass cue.
-- **Shotgun:** each trigger pull counts at most once per pane. Nine pellets on one pane count as one impact, so a shotgun
-  also needs three blasts; one blast spread across two panes counts one on each.
-- **Never counted:** the knife; panes that were broken or boarded at generation.
+- **Health:** a pane has the health of **3 pistol bullets**: `PANE_MAX_HP` = 3 × the pistol's damage in the weapon table
+  (17 → 51). It is derived, so a pistol retune moves the panes with it.
+- **Damage:** every bullet or pellet that reaches the glass takes off its real damage once, the same damage `Game.fire`
+  deals there, including range falloff. The pane cracks on its first damage and shatters at full damage, with a glass burst
+  and the break-glass cue.
+- **Shots to break it at close range:**
+
+  | Weapon | Damage per hit | Shots to break |
+  |---|---|---|
+  | Pistol | 17 | 3 |
+  | Rifle | 24 | 3 (2 rounds do 48) |
+  | Shotgun | 15 per pellet | 4 pellets: a centred blast breaks it |
+
+  A blast that lands only some pellets on the pane counts only those. Misses, frame hits and blocked pellets count nothing.
+  The glass cue plays once per pane per trigger pull.
+- **Never damaged:** by the knife; panes that were broken or boarded at generation. A pane that was cracked at generation
+  starts at full health.
 - **What blocks a shot:** whatever is nearer than the glass takes the bullet (enemies, props, corpses).
 - **Boundary:** a broken pane is never a way out; collision is unchanged.
-- **Persistence:** pane hits and breaks persist in the one Office world and across Subway↔Office travel. Retry restores the
-  level-entry state, and New game resets them.
+- **Persistence:** pane damage and breaks persist in the one Office world and across Subway↔Office travel. The lane
+  `office.windows` stores them as v2 `damage` records. An older v1 hit counter converts to `hits × 51 / 3` damage, and a broken
+  pane stays broken. Retry restores the level-entry state, and New game resets them.
 
 ### Infectious gas
 - **Spread:** a breach lets the green outdoor gas flow in. It fills that room over ~25–40 s, starting at the window, and
@@ -291,7 +304,24 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
 - **HUD:** shows **TOXIC GAS** with a hint, or **FILTERING**.
 - **Cost:** the field ticks at 10 Hz on its active cells and only on gassed storeys, which go to sleep once settled. Each
   gassed storey uploads one R8 texture layer.
-- **Not modelled:** intact windows and the green sky are harmless, and there is no roof or ambient damage.
+- **Not modelled:** intact windows and the green sky are harmless, and there is no ambient damage indoors or on the street.
+
+### Toxic roof
+- **The deck is outdoors.** On the Office roof the outside atmosphere reaches you through the same exposure as breach gas:
+  the same mask protection, HUD tag, hint and damage.
+- **How much:** concentration = `GAS.ROOF_OUTDOOR_C` (0.6) × the roof's outdoor weight. That weight is the same `roofBlend`
+  (`src/world/roofAir.ts`) that turns the roof fog green. It is 1 on the deck, 0 indoors, and ramps as your head comes up
+  through the ladder hatch. Unprotected, that is about **4.4 hp/s** on the deck.
+- **Protection:** a worn mask with filter charge protects you. A mask that is off, has an empty filter, or is missing does
+  not.
+- **Indoor floors** under the roof are never affected. Your exposure is the larger of the breach gas and the outside air,
+  never their sum.
+- **For audio:** `gas.exposure.source` reports `'field'`, `'outdoor'` or `null`.
+
+### Roof reward
+The roof cache (a first-aid or trauma kit plus an ammo box) now has a **roof find** beside it. This is one non-starter long
+gun with a box of its own ammo (2 in 3), or an armor vest or hard hat (1 in 3). It is placed once per Office run, verified
+reachable on the deck after placement, and never re-rolled by Retry or revisits. See `docs/loot-tables.md` "Roof find".
 
 ## Performance overlay (Ctrl+Shift+P)
 Off by default; Ctrl+Shift+P toggles it in any state without pausing the game (held keys toggle once; the shortcut never

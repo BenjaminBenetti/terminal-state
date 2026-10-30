@@ -44,6 +44,8 @@ const SEEDS = [11, 222, 3333, 0x5ea1e55, 90210];
 const OFFICE = PROFILES.office;
 /** The Office profile with no roof reward (the comparison build: same tables otherwise). */
 const NO_REWARD: LootProfile = {id: 'office', label: 'Office (no roof reward)', tables: {...BASE_TABLES, rewards: {}, rewardFinds: {}}, overrides: {}};
+/** The Office profile without the roof find only (task gas-mask-roof-feedback-20261030): the cache stays. */
+const NO_FIND: LootProfile = {id: 'office', label: 'Office (no roof find)', tables: {...BASE_TABLES, rewardFinds: {}}, overrides: {}};
 
 const cache = new Map<string, StationLayout>();
 const gen = (seed: number, profile: LootProfile = OFFICE): StationLayout => {
@@ -411,6 +413,8 @@ describe('the roof find on the real Office Space level: guaranteed AFTER placeme
       expect(dc, `seed ${seed}: near the cache`).toBeLessThan(4.5);
       if (dc < 1.6) beside++;
       expect(roofRewardIssues(l, dist, f), `seed ${seed}`).toEqual([]);
+      // the find never forced a regeneration retry: the same attempt as a build without it (every other storey unchanged)
+      expect(l.attempt, `seed ${seed}: attempt`).toBe(generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}, NO_FIND).attempt);
     }
     console.info(`roof find over ${MANY.length} seeds: ${JSON.stringify(items)}; beside the cache (< 1.6 m) ${beside}/${MANY.length}`);
     expect(beside).toBeGreaterThanOrEqual(MANY.length * 0.8);

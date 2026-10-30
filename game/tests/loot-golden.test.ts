@@ -25,6 +25,12 @@
 //     gearPlaced 1a7b07f0 -> da46e2b8: the same floor-plan
 //     change moves the loose floor supplies and gear spots (the per-storey supply programs and the one gear roll per logical
 //     level are unchanged). Subway hashes f94f99ea / 574dd442 and gearRolls 77148ba3 are byte-identical.
+//  4. Task gas-mask-roof-feedback-20261030 (user item 10, the explicit ROOF exception): the Office appends its roof FIND (one gun +
+//     its own ammo box, or a gear piece: PickupPlacement.reward = ROOF_FIND_KEY) LAST in layout.pickups. Every other hash is
+//     byte-identical — officeHolders bebd9642, gearRolls 77148ba3, gearPlaced da46e2b8, both Subway hashes — and officePickups
+//     f0e0d3d4 is now pinned over the NON-reward pickups (identical: no storey's floor supplies / weapon finds moved); the roof
+//     find's own pickups get the new pin officeRoofFind 3ba3548d (4 pickups over the 3 seeds; all pickups together would read
+//     8fe99b7a).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -33,13 +39,17 @@ import {placeSectionGear, rollLevelGear} from '../src/gen/gearLoot';
 import type {PickupPlacement, StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
 import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
+import {ROOF_FIND_KEY} from '../src/items/lootTables';
 
-/** Stage 3: office-interactions-layout (stages 1 / 2 in the header). */
+/** Stage 3: office-interactions-layout; stage 4: + the roof find (stages 1 / 2 / 4 in the header). */
 const GOLDEN = {
   subwayHolders: 'f94f99ea',
   subwayPickups: '574dd442',
   officeHolders: 'bebd9642',
+  /** The Office's layout pickups WITHOUT the roof find's (stage 4: unchanged since stage 3). */
   officePickups: 'f0e0d3d4',
+  /** Stage 4: the roof find's own pickups (PickupPlacement.reward). */
+  officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
   gearPlaced: 'da46e2b8',
 };
@@ -91,19 +101,26 @@ describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
     expect(fp.hex()).toBe(GOLDEN.subwayPickups);
   });
 
-  it('Office holder lots + pickups (level seeds 11 / 222 / 3333)', () => {
-    const fh = fnv(), fp = fnv();
-    let holders = 0, lots = 0, pickups = 0;
+  it('Office holder lots + pickups (level seeds 11 / 222 / 3333); the roof find hashed on its own (stage 4)', () => {
+    const fh = fnv(), fp = fnv(), fr = fnv();
+    let holders = 0, lots = 0, pickups = 0, finds = 0;
     for (const l of office()) {
       const n = mixHolders(fh, l);
       holders += n.holders; lots += n.lots;
-      mixPickups(fp, l.pickups);
-      pickups += l.pickups.length;
+      // the roof find comes LAST: every earlier pickup keeps its index
+      const own = l.pickups.filter(p => p.reward === ROOF_FIND_KEY), rest = l.pickups.slice(0, l.pickups.length - own.length);
+      expect(l.pickups.slice(rest.length).every(p => p.reward === ROOF_FIND_KEY)).toBe(true);
+      mixPickups(fp, rest);
+      pickups += rest.length;
+      mixPickups(fr, own);
+      finds += own.length;
     }
     report('officeHolders', fh.hex(), `${holders} holders, ${lots} lots`);
     report('officePickups', fp.hex(), `${pickups} pickups`);
+    report('officeRoofFind', fr.hex(), `${finds} pickups`);
     expect(fh.hex()).toBe(GOLDEN.officeHolders);
     expect(fp.hex()).toBe(GOLDEN.officePickups);
+    expect(fr.hex()).toBe(GOLDEN.officeRoofFind);
   });
 
   it('rare gear: one roll per logical level (400 seeds each) and its placement on the layouts', () => {
