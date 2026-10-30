@@ -10,14 +10,20 @@
 import type {PropDef} from '../props';
 import type {ShapeMat, ShapePart} from '../propShapes';
 import type {DamageClass} from '../../damage/materials';
+// Task office-overhaul-20261030 (lane TENANTS): the company / supporting kinds join the office kinds (same render path, PROP_DEFS,
+// damage specs); their footprints, model ids and stand-ins live in gen/office/companyKinds.ts.
+import {COMPANY_KINDS, COMPANY_KIND_ASSET, COMPANY_PROP_DAMAGE, COMPANY_PROP_DEFS, companyShape, isCompanyKind, type CompanyKind} from './companyKinds';
 
-export const OFFICE_KINDS = [
+const BASE_OFFICE_KINDS = [
   'officeChair', 'officeMonitor', 'officeFiling', 'officePhotocopier', 'officeWaterCooler', 'conferenceTable', 'deadPlant',
   'receptionDesk', 'serverRack', 'officeWhiteboard', 'officeShelf', 'cubiclePartition',
 ] as const;
-export type OfficeKind = (typeof OFFICE_KINDS)[number];
+type BaseOfficeKind = (typeof BASE_OFFICE_KINDS)[number];
+export type OfficeKind = BaseOfficeKind | CompanyKind;
+export const OFFICE_KINDS: readonly OfficeKind[] = [...BASE_OFFICE_KINDS, ...COMPANY_KINDS];
+const OFFICE_KIND_SET: ReadonlySet<string> = new Set(OFFICE_KINDS);
 export function isOfficeKind(kind: string): kind is OfficeKind {
-  return (OFFICE_KINDS as readonly string[]).includes(kind);
+  return OFFICE_KIND_SET.has(kind);
 }
 
 /**
@@ -25,6 +31,7 @@ export function isOfficeKind(kind: string): kind is OfficeKind {
  * size): collision, placement and the procedural stand-ins all use them, so a model and its fallback occupy the same box.
  */
 export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
+  ...COMPANY_PROP_DEFS,
   officeChair: {w: 0.78, d: 0.73, h: 1.0, blocksSight: false},
   officeMonitor: {w: 0.55, d: 0.39, h: 0.41, blocksSight: false},
   /** Lateral filing cabinet (B3 is 1.32 m wide). */
@@ -42,17 +49,22 @@ export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
 };
 
 /** Asset id (assets/officeAssets.ts) a kind renders with; `desk` uses 'office-desk' inside office sections. */
-export const OFFICE_KIND_ASSET: Readonly<Partial<Record<OfficeKind | 'desk', string>>> = {
+export const OFFICE_KIND_ASSET: Readonly<Partial<Record<BaseOfficeKind | 'desk', string>>> = {
   desk: 'office-desk', officeChair: 'office-chair', officeMonitor: 'office-monitor', officeFiling: 'filing-cabinet',
   officePhotocopier: 'photocopier', officeWaterCooler: 'water-cooler', conferenceTable: 'conference-table', deadPlant: 'dead-plant',
   receptionDesk: 'reception-desk', serverRack: 'server-rack', officeWhiteboard: 'whiteboard', officeShelf: 'office-shelf',
 };
-/** Lazy model-library key of an office asset id (ASSETS' OFFICE_MODEL_FILES keys). */
+/** Lazy model-library key of an office asset id (ASSETS' OFFICE_MODEL_FILES / COMPANY_MODEL_FILES keys). */
 export const officeModelKey = (assetId: string): string => `office-${assetId}`;
+/** Asset id a kind renders with: the iteration-16 office models (OFFICE_KIND_ASSET) or lane ASSETS' company models (companyKinds). */
+export function officeKindAsset(kind: string): string | undefined {
+  return OFFICE_KIND_ASSET[kind as BaseOfficeKind | 'desk'] ?? COMPANY_KIND_ASSET[kind as CompanyKind];
+}
 
 const NEVER = (cls: DamageClass) => ({cls, integrity: Infinity, breaks: 'never' as const});
 /** Damage specs (damage/materials.ts PROP_DAMAGE spreads this). */
 export const OFFICE_PROP_DAMAGE = {
+  ...COMPANY_PROP_DAMAGE,
   officeChair: NEVER('fabric'), officeMonitor: {...NEVER('plastic'), glass: {cls: 'screen' as const, integrity: 18, on: 'dead' as const}},
   officeFiling: NEVER('sheetMetal'), officePhotocopier: NEVER('plastic'), officeWaterCooler: NEVER('plastic'), conferenceTable: NEVER('laminate'),
   deadPlant: NEVER('plastic'), receptionDesk: NEVER('laminate'), serverRack: NEVER('sheetMetal'), officeWhiteboard: NEVER('laminate'),
@@ -63,6 +75,7 @@ const box = (m: ShapeMat, s: [number, number, number], p: [number, number, numbe
 
 /** Procedural stand-in forms (box parts, prop frame: origin bottom centre, front +Z). Partitions are built per placement. */
 export function officeShape(kind: OfficeKind): ShapePart[] | null {
+  if (isCompanyKind(kind)) return companyShape(kind);
   const D = OFFICE_PROP_DEFS[kind];
   const {w, d, h} = D;
   switch (kind) {
@@ -123,7 +136,9 @@ export function officeShape(kind: OfficeKind): ShapePart[] | null {
 export function officeModelKeysFor(layout: {props: readonly {kind: string}[]; office?: unknown}): string[] {
   const s = new Set<string>();
   for (const p of layout.props) {
-    const id = OFFICE_KIND_ASSET[p.kind as OfficeKind | 'desk'];
+    // Task office-overhaul-20261030 (lane TENANTS): + the company / supporting models of the kinds this layout placed (only the
+    // tenants present: lazy per layout; keys of undelivered models are ignored by the library).
+    const id = officeKindAsset(p.kind);
     if (id && (p.kind !== 'desk' || layout.office)) s.add(officeModelKey(id));
   }
   return [...s].sort();

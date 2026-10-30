@@ -6,19 +6,27 @@
 //
 // Main level (y 0), south of the tower footprint (tower-local rows >= TD): an island platform between two one-track beds, an end
 // passage through the tunnel walls to a paid concourse, a fare line into the ticket hall, washrooms, the station agent office, a
-// sealed street exit, kiosk storefronts, a utility room and a closet; the tower connection: a stair-core lobby off the ticket
-// hall's north wall and the run climbing east under the tower's south edge to its top landing in the lobby.
+// sealed street exit, kiosk storefronts, a utility room and a closet; the tower connection (see TRANSIT HALL below).
 // Upper level (the lobby, y = hu): the main hall (reception, waiting area, boarded street entrance on the north facade), the
 // core (the solid elevator shaft, the scissor stair's lobby landing, washrooms, closets), the building security office, the
-// east wing and the transit concourse with the landing door "to the trains".
+// east wing and the transit concourse in front of the escalator mouth.
 // Pure data: carving only (gen/office/index.ts crops, dresses, spawns, lights and validates).
+//
+// TRANSIT HALL (task office-overhaul-20261030, lane STRUCT; replaces the single 2 m stair core): a broad public-transit
+// connection sized for crowds — a fixed stair 4.5-5 m wide flanked by two (stopped: the power is out) escalators, side by side on
+// ONE shared 30 degree pitch line (gen/traversal.ts transitSpecs: each lane its own straight layStairRun, so the lanes meet with no
+// wall or drop and the glass balustrades between them are railings). The run rises NORTH from the ticket hall — its bottom mouth
+// is the full lane width (7.5-8 m) of the ticket hall's north wall — under the street and the lobby floor (level 0 only while its
+// ceiling, following the pitch, stays a slab below the lobby) into a walled BOX in the lobby's south band (the run's top rows,
+// carved into both grids: the stair hand-over), whose open north end (7.5-8 m) is the arrival onto the lobby's transit concourse.
 
 import type {Rng} from '../../core/rng';
 import {Kit} from '../stationKit';
+import {CELL, FLOOR} from '../grid';
 import {carveStorefronts} from '../storefronts';
-import {CORE, SLAB} from '../levelGen';
-import {STAIR, layStairRun, stairRunCells} from '../traversal';
-import {DOOR_HEIGHT, type Area, type Rect, type Side, type Storefront} from '../stationTypes';
+import {SLAB} from '../levelGen';
+import {TRANSIT, layStairRun, transitSpecs} from '../traversal';
+import {DOOR_HEIGHT, type Area, type Door, type Rect, type Side, type Storefront} from '../stationTypes';
 import {CEIL, type TowerFrame} from './frame';
 import {TOWER_CANVAS} from './common';
 import {carveCore, type CarvedTower, type OfficeAreaMeta, type TowerAt} from './tower';
@@ -29,6 +37,22 @@ const TERMINALS = ['Northgate', 'Harbourfront', 'Elm Park', 'Union Yards', 'King
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
+/** Task office-overhaul-20261030 (lane STRUCT): one lane of the transit run (tower-local columns [x0, x1); kit.flights ids). */
+export interface TransitLane { kind: 'escalator' | 'stair'; x0: number; x1: number; flights: number[] }
+/** Task office-overhaul-20261030 (lane STRUCT): the transit hall's run (tower-local cells: x0..x1 lanes, rows y0..y0 + len). */
+export interface TransitCarve {
+  /** The run area (level 0; its top `box` rows are carved into the lobby grid too). */
+  run: Area;
+  lanes: TransitLane[];
+  x0: number; x1: number; y0: number; len: number;
+  /** Rows of the run (from y0) open on the lobby grid: the walled box in the lobby's south band. */
+  box: number;
+  /** Flat top landing (m) before the flights begin; pitch (rise per metre). */
+  lead: number; slope: number;
+  /** The bottom mouth (the full-width opening in the ticket hall's north wall). */
+  mouth: Door;
+}
+
 export interface StreetCarve {
   kit: Kit;
   name: string;
@@ -37,8 +61,10 @@ export interface StreetCarve {
   tower: CarvedTower;
   storefronts: Storefront[];
   platform: Area;
-  /** Station areas (main level) and stair-core ids. */
-  coreLobby: Area; run: Area; landing: Area;
+  /** Task office-overhaul-20261030 (lane STRUCT): the transit hall run (station <-> lobby). */
+  hallRun: TransitCarve;
+  /** Lobby concourse pockets beside the escalator box (west / east; null when absent). */
+  pockets: (Area | null)[];
   ticketHall: Area; paidHall: Area;
   /** Lobby halls (upper level). */
   hall: Area; transit: Area; security: Area; east: Area;
@@ -65,12 +91,17 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
   const up = {level: 1, floorY: hu};
   const meta = new Map<number, OfficeAreaMeta>();
 
-  // --- Stair strip geometry (tower-local): [core lobby LB][run UL][landing TL], rows [TD-5, TD-1) -------------------------
-  const LB = CORE.lobby, TL = CORE.top, CW = CORE.width, UL = stairRunCells(hu);
-  const stripLen = LB + UL + TL;
-  if (stripLen + 4 > TW) return fail('strip-too-long');
-  const csx = rng.int(2, TW - stripLen - 2);
-  const sy = TD - 1 - CW;
+  // --- Transit hall geometry (tower-local): lanes [escalator 3][fixed stair 9-10][escalator 3] between 1-cell walls --------------
+  const spec = transitSpecs(hu);
+  const rl = spec.cells, lead = r2(rl * CELL - spec.length);
+  // Rows of the run whose ceiling (pitch + headroom, max over the cell) is not yet a slab below the lobby floor: the box.
+  const box = Math.ceil(2 * (lead + (TRANSIT.headroom + SLAB) / spec.slope) - 1e-9);
+  const SW = rng.int(9, 10), EW = 3, LW = EW + SW + EW;
+  const ry0 = TD - box;
+  if (ry0 - (cy1 + 1) < 6) return fail('transit-box-deep');
+  const bxLo = Math.max(7, cx0 - 8), bxHi = Math.min(TW - 7 - LW, cx1 + 8 - LW);
+  if (bxHi < bxLo) return fail('transit-box-wide');
+  const bx0 = rng.int(bxLo, bxHi), bx1 = bx0 + LW;
 
   // --- Lobby (upper level) -----------------------------------------------------------------------------------------------
   const lobbyArea = (r: Rect, label: string, purpose: string, parent: number, role: OfficeAreaMeta['role'], facade: OfficeAreaMeta['facade']) => {
@@ -80,8 +111,8 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
     return a;
   };
   const hall = lobbyArea({x: 0, y: 0, w: TW, h: cy0 - 1}, 'Lobby', 'office-reception', -1, 'reception', ['N', 'W', 'E']);
-  const transit = lobbyArea({x: 0, y: cy1 + 1, w: TW, h: TD - 6 - (cy1 + 1)}, 'Transit concourse', 'office-lobby', hall.id, 'transit', ['W', 'E']);
-  if (transit.h < 5) return fail('transit-too-shallow');
+  // The transit concourse: the full-width strip in front of the escalator box (the arrival) + pockets beside the box.
+  const transit = lobbyArea({x: 0, y: cy1 + 1, w: TW, h: ry0 - (cy1 + 1)}, 'Transit concourse', 'office-lobby', hall.id, 'transit', ['W', 'E']);
   const core = carveCore(k, f, at, 1, hall, transit, meta);
   const security = k.addArea({x: TX, y: TY + cy0, w: cx0 - 1, h: cy1 - cy0}, 'room', 'office-room', r2(hu + CEIL.office), hall.id, {...up, label: 'Building security office', publicSpace: false});
   security.purpose = 'office-security';
@@ -89,31 +120,46 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
   if (!k.connect(security, hall, 3, CEIL.door, {arch: false, margin: 2})) return fail('security-door');
   const east = lobbyArea({x: cx1 + 1, y: cy0 - 1, w: TW - cx1 - 1, h: cy1 - cy0 + 2}, 'Lobby', 'office-lobby', hall.id, 'lobby', ['E']);
   void east;
-  // Pockets of the transit concourse beside the stair strip (touch the concourse directly: one open floor).
-  if (csx - 1 >= 4) lobbyArea({x: 0, y: TD - 6, w: csx - 1, h: 6}, 'Transit concourse', 'office-lobby', transit.id, 'transit', ['W', 'S']);
-  const ex0 = csx + stripLen + 1;
-  if (TW - ex0 >= 4) lobbyArea({x: ex0, y: TD - 6, w: TW - ex0, h: 6}, 'Transit concourse', 'office-lobby', transit.id, 'transit', ['E', 'S']);
+  // Pockets of the transit concourse beside the escalator box (touch the concourse strip directly: one open floor).
+  const pockets: (Area | null)[] = [
+    bx0 - 1 >= 4 ? lobbyArea({x: 0, y: ry0, w: bx0 - 1, h: TD - ry0}, 'Transit concourse', 'office-lobby', transit.id, 'transit', ['W', 'S']) : null,
+    TW - bx1 - 1 >= 4 ? lobbyArea({x: bx1 + 1, y: ry0, w: TW - bx1 - 1, h: TD - ry0}, 'Transit concourse', 'office-lobby', transit.id, 'transit', ['E', 'S']) : null,
+  ];
 
-  // --- Station hall under the street, south of the tower: the ticket hall first (the stair core opens off its north wall) ---
+  // --- Station hall under the street, south of the tower: the ticket hall first; the transit run opens off its north wall ----
   const thw = rng.int(28, 36), thd = rng.int(24, 30);
-  const thx = Math.max(0, Math.min(csx - 1, rng.int(csx + LB + 1 - thw, csx - 1)));
-  const T: Rect = {x: TX + thx, y: TY + TD, w: thw, h: thd};
-  if (T.x + T.w < TX + csx + LB || !k.rectFree(T)) return fail('ticket-hall');
+  const thLo = Math.max(0, bx1 + 3 - thw), thHi = bx0 - 3;
+  if (thHi < thLo) return fail('ticket-hall-width');
+  const thx = rng.int(thLo, thHi);
+  const T: Rect = {x: TX + thx, y: TY + ry0 + rl + 1, w: thw, h: thd};
+  if (!k.rectFree(T)) return fail('ticket-hall');
   const ticket = k.addArea(T, 'concourse', 'fare-hall', r1(rng.range(4.0, 4.6)), -1, {role: 'ticket-hall', label: 'Ticket hall'});
 
-  // --- Tower connection: stair-core lobby (main), the run (main + upper), the top landing (upper) ---------------------------
-  const lobbyR: Rect = {x: TX + csx, y: TY + sy, w: LB, h: CW};
-  const runR: Rect = {x: TX + csx + LB, y: TY + sy, w: UL, h: CW};
-  const landR: Rect = {x: TX + csx + LB + UL, y: TY + sy, w: TL, h: CW};
-  if (!k.rectFree(lobbyR) || !k.solid({...runR, x: runR.x - 1, y: runR.y - 1, w: runR.w + 2, h: runR.h + 2})) return fail('stair-strip');
-  const coreLobby = k.addArea(lobbyR, 'passage', 'stair-core', CORE.lobbyCeil, ticket.id, {role: 'stair-core', label: 'Stairs · Office tower'});
-  k.carveDoor({x: lobbyR.x + 1, y: lobbyR.y + CW, w: LB - 2, h: 1}, ticket, coreLobby, CORE.doorH, true);
-  const run = k.addArea(runR, 'passage', 'stair-core', STAIR.headroom, coreLobby.id, {role: 'stair', label: 'Stairs · Tower lobby', also: [1]});
-  for (const fl of layStairRun([k.grid(0), k.grid(1)], runR, run.id, 'x', 'lo', 0, hu)) { fl.id = k.flights.length; k.flights.push(fl); }
-  const landing = k.addArea(landR, 'passage', 'stair-core', r2(hu + CORE.landingClear), run.id, {...up, role: 'landing', label: 'Stairs · To the trains'});
-  for (let y = landR.y - 1; y <= landR.y + CW; y++) for (let x = landR.x; x < landR.x + TL; x++) k.keepRock[k.g.idx(x, y)] = 1;
-  k.carveDoor({x: landR.x, y: landR.y - 1, w: TL, h: 1}, transit, landing, CORE.landingDoorH, true);
-  meta.set(landing.id, {role: 'transit', facade: []});
+  // --- Transit run: one area on the station grid, its top rows (the box) also open on the lobby grid; three shared-pitch lanes --
+  const runR: Rect = {x: TX + bx0, y: TY + ry0, w: LW, h: rl};
+  if (!k.solid({x: runR.x - 1, y: runR.y - 1, w: runR.w + 2, h: runR.h + 1})) return fail('transit-run');
+  const run = k.addArea(runR, 'passage', 'stair-core', TRANSIT.headroom, ticket.id, {role: 'stair', label: 'Escalators · Office tower', publicSpace: true});
+  const g0 = k.grid(0), g1 = k.grid(1);
+  for (let y = runR.y; y < runR.y + box; y++) for (let x = runR.x; x < runR.x + runR.w; x++) { const i = g1.idx(x, y); g1.cells[i] = FLOOR; g1.area[i] = run.id; }
+  const lanes: TransitLane[] = [
+    {kind: 'escalator', x0: bx0, x1: bx0 + EW, flights: []},
+    {kind: 'stair', x0: bx0 + EW, x1: bx0 + EW + SW, flights: []},
+    {kind: 'escalator', x0: bx0 + EW + SW, x1: bx1, flights: []},
+  ];
+  for (const ln of lanes) {
+    const r: Rect = {x: TX + ln.x0, y: runR.y, w: ln.x1 - ln.x0, h: rl};
+    const cls = ln.kind === 'stair' ? 'transit' as const : 'escalator' as const;
+    for (const fl of layStairRun([g0, g1], r, run.id, 'z', 'lo', hu, 0, ln.kind === 'stair' ? spec.stair : spec.escalator)) {
+      fl.id = k.flights.length; fl.spec = cls; ln.flights.push(fl.id); k.flights.push(fl);
+    }
+  }
+  // Below the box the run is on the station grid only: clear what layStairRun stamped into the (solid) lobby cells there, and
+  // check the run's ceiling really is a slab below the lobby floor from the box down (else the lobby floor would cut into it).
+  for (let y = runR.y; y < runR.y + rl; y++) for (let x = runR.x; x < runR.x + runR.w; x++) {
+    const i = g1.idx(x, y);
+    if (y >= runR.y + box) { g1.rampIdx[i] = -1; g1.floor[i] = 0; g1.ceil[i] = 0; if (g0.ceil[i] > hu - SLAB + 1e-6) return fail('transit-slab'); }
+  }
+  const mouth = k.carveDoor({x: runR.x, y: runR.y + rl, w: LW, h: 1}, ticket, run, 3.0, true);
 
   // --- Paid concourse east of the ticket hall, fare line in the shared wall ---------------------------------------------------
   const mw = rng.int(16, 22), mh = rng.int(30, 38);
@@ -220,7 +266,8 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
   const tower: CarvedTower = {at, floor: 1, core, meta, north: hall, south: transit};
   return {
     kit: k, name, towards: [terms[0], terms[1]], hu, tower, storefronts: shops.storefronts, platform: I,
-    coreLobby, run, landing, ticketHall: ticket, paidHall: paid, hall, transit, security, east,
+    hallRun: {run, lanes, x0: bx0, x1: bx1, y0: ry0, len: rl, box, lead, slope: spec.slope, mouth}, pockets,
+    ticketHall: ticket, paidHall: paid, hall, transit, security, east,
     entrance: {x0: ec - Math.floor(ew / 2), x1: ec - Math.floor(ew / 2) + ew},
   };
 }

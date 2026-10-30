@@ -18,8 +18,9 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {CELL, FLOOR} from '../gen/grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../gen/props';
-import {propShape, type ShapeMat} from '../gen/propShapes';
-import {OFFICE_KIND_ASSET, isOfficeKind, officeModelKey, officeShape, type OfficeKind} from '../gen/office/kinds';
+import {propShape, type ShapeMat, type ShapePart} from '../gen/propShapes';
+import {WATER_TOWER_STAND, waterTowerStand} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS)
+import {OFFICE_KIND_ASSET, isOfficeKind, officeKindAsset, officeModelKey, officeShape} from '../gen/office/kinds';
 import type {StationLayout} from '../gen/stationTypes';
 import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId, type OfficeTextureId} from '../assets/officeAssets';
 import {canvasTexture} from './canvasTextures';
@@ -44,7 +45,7 @@ export async function preloadOfficeAssets(layout: StationLayout, opts: {models?:
   const ids = new Set<OfficeAssetId>();
   // The Game loads the models through propModels (officeModelKeysFor); it preloads only the textures here (models: false).
   if (opts.models !== false) for (const p of layout.props) {
-    const id = OFFICE_KIND_ASSET[p.kind as OfficeKind | 'desk'] as OfficeAssetId | undefined;
+    const id = (OFFICE_KIND_ASSET as Readonly<Record<string, string | undefined>>)[p.kind] as OfficeAssetId | undefined;
     if (id) ids.add(id);
   }
   const texIds: OfficeTextureId[] = ['office-carpet', 'ceiling-tile', 'cubicle-fabric'];
@@ -117,9 +118,11 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
   const level = list[0].level ?? 0;
   void layout;
   if (kind === 'cubiclePartition') return partitions(group, list, wm, level);
-  const asset = OFFICE_KIND_ASSET[kind as OfficeKind | 'desk'];
+  // Task office-overhaul-20261030 (lane TENANTS): company / supporting kinds map to lane ASSETS' company models (companyAssets.ts
+  // COMPANY_MODEL_FILES, the same `office-<assetId>` library keys, loaded before entry via officeModelKeysFor); box forms until then.
+  const asset = officeKindAsset(kind);
   // The game's lazy prop library (office-<assetId> keys, ASSETS' OFFICE_MODEL_FILES) first, then this module's preload cache.
-  const gltf = asset ? lib[officeModelKey(asset)] ?? models.get(asset) : undefined;
+  const gltf = asset ? lib[officeModelKey(asset)] ?? models.get(asset as OfficeAssetId) : undefined;
   const def = PROP_DEFS[kind];
   if (gltf) {
     // The derivatives are at real size and the footprints are their measured bounds: a uniform fit to the footprint keeps the
@@ -127,10 +130,23 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
     const size = modelSize(gltf);
     const k = Math.min(def.w / size.x, def.d / size.z);
     const fit = k > 0 && Number.isFinite(k) ? {w: size.x * k, h: size.y * k, d: size.z * k, anchor: 'bottom' as const} : {w: def.w, h: def.h, d: def.d, anchor: 'bottom' as const};
+    // TENANTS: the delivered water tank has no stand — it sits on the kind's steel stand (legs built here, the tank lifted onto them).
+    if (kind === 'waterTower') {
+      const up = new THREE.Matrix4().makeTranslation(0, WATER_TOWER_STAND, 0);
+      const n = instanceModel(group, gltf, list.map(p => placeM(p).multiply(up).multiply(FLIP)), fit, kind);
+      boxParts(group, waterTowerStand(def.w, def.d), list, wm, 'prop-waterTower-stand', level);
+      return n;
+    }
     return instanceModel(group, gltf, list.map(p => placeM(p).multiply(FLIP)), fit, kind);
   }
   const parts = isOfficeKind(kind) ? officeShape(kind) : propShape(kind);
   if (!parts) return 0;
+  boxParts(group, parts, list, wm, `prop-${kind}`, level);
+  return list.length;
+}
+
+/** Box-part forms instanced over the placements (one merged geometry per shape material). */
+function boxParts(group: THREE.Group, parts: readonly ShapePart[], list: PropPlacement[], wm: WorldMaterials, name: string, level: number): void {
   const pm = shapeMaterials(wm);
   const byMat = new Map<ShapeMat, THREE.BufferGeometry[]>();
   for (const p of parts) {
@@ -142,8 +158,7 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
     l.push(b);
   }
   const placements = list.map(placeM);
-  for (const [m, geos] of byMat) instanced(group, mergeBoxGeos(geos), pm[m], placements, `prop-${kind}-${m}`, level);
-  return list.length;
+  for (const [m, geos] of byMat) instanced(group, mergeBoxGeos(geos), pm[m], placements, `${name}-${m}`, level);
 }
 
 let fabricMat: THREE.Material | null = null;

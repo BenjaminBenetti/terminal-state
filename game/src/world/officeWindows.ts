@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {mulberry32} from '../core/rng';
 import {canvasTexture} from './canvasTextures';
-import {SurfaceNodeMaterial, worldMapped, type WorldMaterials} from './materials';
+import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {hash01, sideNormal, windowYs, type Rect2, type TowerInfo, type WindowSpan} from './towerShared';
 
@@ -125,9 +125,26 @@ export function crackedGlassMaterial(tex: THREE.Texture | null): SurfaceNodeMate
   const t = tex ?? crackedGlassTexture();
   let m = glassMats.get(t);
   if (!m) {
-    m = worldMapped(new SurfaceNodeMaterial({map: t, color: 0xdfe6e4, transparent: true, opacity: 0.85, depthWrite: false, roughness: 0.3, metalness: 0.1, side: THREE.DoubleSide}), {span: [1.6, 1.6], macro: 0.08});
+    // Task office-overhaul-20261030 (lane ARCH): a faint green-grey cast (the murk outside), was 0xdfe6e4
+    m = worldMapped(new SurfaceNodeMaterial({map: t, color: 0xd3ddcf, transparent: true, opacity: 0.85, depthWrite: false, roughness: 0.3, metalness: 0.1, side: THREE.DoubleSide}), {span: [1.6, 1.6], macro: 0.08});
     m.name = 'tower-glass-cracked';
     glassMats.set(t, m);
+  }
+  return m;
+}
+
+const officeGlass = new WeakMap<WorldMaterials, THREE.Material>();
+/**
+ * Task office-overhaul-20261030 (lane ARCH): the tower's intact panes — the shop glazing (same program, values only) with a
+ * faint green-grey cast from the infected murk outside. Its own copy: the station's shop glass is untouched.
+ */
+export function officeGlassMaterial(mats: WorldMaterials): THREE.Material {
+  let m = officeGlass.get(mats);
+  if (!m) {
+    const c = cloneSurfaceMaterial(shapeMaterial(mats, 'glassShopfront') as SurfaceNodeMaterial);
+    c.color.setHex(0xcbd9c4);
+    c.name = 'tower-window-glass-office';
+    officeGlass.set(mats, (m = c));
   }
   return m;
 }
@@ -281,7 +298,7 @@ function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTe
   mk(frames, shapeMaterial(mats, 'shopFrame'), 'tower-window-frames');
   mk(sills, shapeMaterial(mats, 'laminate'), 'tower-window-sills');
   mk(boards, shapeMaterial(mats, 'wood'), 'tower-window-boards');
-  mk(intact, shapeMaterial(mats, 'glassShopfront'), 'tower-window-glass', true);
+  mk(intact, officeGlassMaterial(mats), 'tower-window-glass', true);
   if (cracked) mk(crackedParts, cracked, 'tower-window-glass-cracked', true);
   return cracked;
 }

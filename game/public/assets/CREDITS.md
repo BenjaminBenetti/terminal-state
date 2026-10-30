@@ -105,3 +105,15 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   - The superseded files are removed from the current game and remain in Git history.
 - Native downloads, generation ledgers and the reference mapping are kept outside the repository (studio reference
   task folder). Unapproved prototypes; no commercial clearance implied.
+
+## Office overhaul: company tenant props and supporting models
+- 58 models were generated with the user's Meshy account (Meshy T2.5, Smart Topology, text-to-3D preview + 2K PBR
+  texture refine) under the user's authorization for this brief and its API-key limit:
+  - 40 signature props for the 20 fictional office tenant companies (two per company);
+  - 18 supporting models: executive suite, server room, lobby, leisure, a small plant, rooftop plant and a toilet.
+- Two previews that produced the wrong object were replaced once each with identical settings (documented).
+- Runtime derivatives were scaled to real size, oriented, grounded and texture-downsized by
+  `tools/asset-pipeline/props/build-office-overhaul.mjs`; per-asset provenance:
+  `assets/derivatives/office-overhaul-20261030.json`.
+- Company names, logos and products are fictional. Native downloads and the generation ledger are kept outside the
+  repository (studio reference task folder). Unapproved prototypes; no commercial clearance implied.

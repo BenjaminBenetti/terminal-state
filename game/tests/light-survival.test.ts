@@ -491,19 +491,19 @@ describe('flares: physical toss on the right storey, burn, cap, cleanup, exactly
 
 // ---------------------------------------------------------------------------------------------
 describe('battery / flare items and their authored models', () => {
-  it('defines the battery (consumable, verb use, refills to 100 %) and the flare (throwable, stack 3) with icons and dims', () => {
+  it('defines the battery (consumable, verb use, refills to 100 %) and the flare (throwable, stack 10) with icons and dims', () => {
     const b = itemDef('battery'), f = itemDef('flare');
     expect(b).toMatchObject({kind: 'consumable', verb: 'use', recharge: 1, icon: 'battery'});
-    expect(f).toMatchObject({kind: 'throwable', stackMax: 3, icon: 'flare'});
+    expect(f).toMatchObject({kind: 'throwable', stackMax: 10, icon: 'flare'}); // task office-overhaul-20261030 (INTERACT #6): stacks of 10
     expect(ICONS.battery).toContain('<svg');
     expect(ICONS.flare).toContain('<svg');
     expect(ITEM_DIMS.battery.h).toBeCloseTo(0.0615, 4);
     expect(ITEM_DIMS.flare.w).toBeCloseTo(0.255, 4);
     expect(useHint(b)).toMatch(/Click to use · flashlight battery 100 %/);
     expect(effectText(b)).toBe('flashlight battery 100 %');
-    expect(throwHint(f)).toMatch(/Hold click or T to ready .* release to throw/); // iteration 15: hold to ready, release to throw
+    expect(throwHint(f)).toMatch(/Hold click or G to ready .* release to throw/); // iteration 15: hold to ready, release to throw; INTERACT #6: G (was T)
     expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare']);
-    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && /release to throw/.test(a) && k.startsWith('Hold T'))).toBe(true);
+    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && /release to throw/.test(a) && k.startsWith('Hold G'))).toBe(true); // INTERACT #6: G (was T)
     expect(CONTROLS.some(([a]) => /battery/i.test(a))).toBe(true);
   });
 

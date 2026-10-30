@@ -528,6 +528,30 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, 
       for (const s of slopedRuns) emitFace(s.level, s.area, s.kind, s.voidCell, s.stair, s.ta / CELL, s.tb / CELL, 0, 0, 0, [], s);
     }
   }
+  return clipSkyFaces(out, levels, W);
+}
+
+/**
+ * Task office-overhaul-20261030 (lane STRUCT): faces of an OPEN-SKY storey (Level.sky: the tower roof) stand only as high as the
+ * closed column behind them is solid there — the parapet (sky.top) or a taller structure (sky.tops: the elevator overrun) —
+ * instead of running up to the storey's nominal band top; above that is open sky. No sky storey: the list is returned as is.
+ */
+function clipSkyFaces(faces: BuiltFace[], levels: Level[], W: number): BuiltFace[] {
+  const skyLv = levels.find(l => l.sky);
+  if (!skyLv) return faces;
+  const sky = skyLv.sky!;
+  const out: BuiltFace[] = [];
+  for (const f of faces) {
+    if (f.level !== skyLv.id) { out.push(f); continue; }
+    // The column behind the face at its midpoint (the face normal points into the open band).
+    const bx = (f.x0 + f.x1) / 2 - f.nx * CELL / 2, bz = (f.z0 + f.z1) / 2 - f.nz * CELL / 2;
+    const cx = Math.floor(bx / CELL), cy = Math.floor(bz / CELL);
+    const t = sky.tops && cx >= 0 && cy >= 0 ? sky.tops[cy * W + cx] : 0;
+    const top = t > 0 ? t : sky.top;
+    if (f.y0 >= top - MIN_H) continue;
+    if (f.y1 <= top) { out.push(f); continue; }
+    out.push({...f, y1: top, openings: f.openings.map(o => ({...o, top: Math.min(o.top, top)})), ...(f.slope ? {slope: {...f.slope, t0: Math.min(f.slope.t0, top), t1: Math.min(f.slope.t1, top)}} : {})});
+  }
   return out;
 }
 
@@ -662,10 +686,13 @@ export interface CeilRun { level: number; row: number; x0: number; x1: number; y
  */
 export function ceilingRuns(levels: Level[], cols: LevelColumns, skip?: (level: number, i: number) => boolean): CeilRun[] {
   const out: CeilRun[] = [];
+  const sky = levels.find(l => l.sky)?.sky;
   const W = cols.W, H = cols.H;
   const ok = (L: number, i: number): number => {
     const g = levels[L].grid;
     if (!isOpenCell(g.cells[i]) || g.rampIdx[i] >= 0 || (skip && skip(L, i))) return NaN;
+    // Task office-overhaul-20261030 (lane STRUCT): open sky (the roof's nominal band top, the hatch shaft above it): no ceiling.
+    if (sky && cellCeil(g, i) >= sky.ceil - 0.01) return NaN;
     // Deduplicated away (identical band of a lower level id)?
     let mine = false;
     for (let k = 0; k < cols.count(i); k++) if (cols.level(i, k) === L) { mine = true; break; }

@@ -29,6 +29,14 @@ import {STAIR, stairRunCells, type StairSpec} from '../traversal';
 
 export const OFFICE_TOP_FLOOR = 8;
 export const OFFICE_FLOORS: readonly number[] = Array.from({length: OFFICE_TOP_FLOOR}, (_, i) => i + 1);
+/**
+ * Task office-overhaul-20261030 (lane STRUCT): the ROOF storey — layout level 9 (role 'roof'), its deck one storey height above
+ * the top office floor, reached by the access ladder from that floor (gen/office/roof.ts). Not an elevator stop, not in
+ * OfficeTowerInfo.storeys (the elevator still serves L-8); described by layout.office.roof.
+ */
+export const OFFICE_ROOF_LEVEL = 9;
+/** Roof geometry (m): parapet height, nominal open-sky band top above the deck, elevator overrun height, hatch opening (cells). */
+export const ROOF = {parapet: 1.1, sky: 6.0, overrun: 2.8, hatch: 2};
 /** The office level is ONE section (seamless): 'main'. */
 export const OFFICE_SECTIONS: readonly string[] = ['main'];
 /** Grid cells between the layout grid's edge and the tower interior (the wall ring is cell MARGIN - 1). */

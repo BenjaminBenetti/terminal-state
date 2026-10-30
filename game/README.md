@@ -38,8 +38,10 @@ The built folder is fully static: open `index.html` through any static HTTP serv
 
 ## Controls
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use · right click
-aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) · 1–5 / wheel quick slots · Q last item · Tab or I inventory · H quick
-heal · G drop held item · F flashlight · hold T, release to throw a flare · M mute · Esc pause. Desktop keyboard + mouse only; touch
+aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) / open a stall door · 1–5 / wheel quick slots · 6 backpack
+(hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q last item · Tab or I inventory · H quick
+heal · F flashlight · hold G, release to throw the grenade-slot item (flares) · elevator: aim at a button and click or press E · M mute · Esc pause.
+Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
 is not supported.
 
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
@@ -49,12 +51,14 @@ the light-on time grows linearly from 0 at 25 % to 40 % near 0 % (dips 0.10–0.
 only near empty, plus a slight brown-out); at 0 % it is dead and F only clicks. A found **battery** (D cell) is used like
 food (left click while held, or Use in the inventory): it refills to 100 %, consumes one, and is refused at ≥ 99 %. A
 faint warm-orange **body glow** (0.22 cd, 2 m reach) keeps the floor right around you from pitch black; it never draws
-enemies. **Flares** are the grenade slot. Iteration 15: **hold T** (from anywhere in the inventory) or **hold left click**
+enemies. **Flares** are the grenade slot. Office overhaul: flares stack to **10** and live in a dedicated **grenade slot** (the
+HUD's "G" cell; picked-up flares fill it first); **hold G** to ready the slot's flare (iteration 15 used T, which still works
+silently) or **hold left click**
 with a flare in the held quick slot to ready it (drawn back like a grenade), **release** to throw; a quick tap throws on
 release, holding never throws twice, and switching item / pausing / opening the inventory drops it unspent. It bounces and
 settles physically, burns red with red smoke for 50 s (fading over the last 6 s) — a strong red light (42 cd, 11.5 m,
 iteration 15; walls and other storeys stay dark) — and lures enemies that can see it (28 m). At most 3 burn at once (a 4th throw is refused, nothing used). The
-flashlight beam lures too (20 m around where it lands, scaled by its brightness). G still drops the held item.
+flashlight beam lures too (20 m around where it lands, scaled by its brightness).
 
 Crouch: **C** (iteration 05: back from Ctrl, which collided with the browser's Ctrl+W) — tap to
 toggle; hold longer than 0.3 s to crouch only while held. Crouched = half speed, ~30% less recoil and
@@ -214,6 +218,22 @@ station" (same seed, this session only).
 - Pistol audio: the pistol shot is the existing Sound Lab rifle-shot clips (`assets/audio/rifle-shot-*.mp3`)
   replayed at a higher playback rate and slightly lower gain; its reload/dry cues reuse the rifle magazine
   and dry-fire Sound Lab clips. It is a reused, pitched rifle cue, not a dedicated pistol recording.
+- Office Space overhaul (task office-overhaul-20261030): floors 2–8 are leased to **20 fictional companies**
+  (`src/gen/office/companies.ts`; seeded assignment `tenants.ts` — distinct per floor, sometimes one company on two floors;
+  the lobby stays neutral with a tenant directory). Each company carves its own rooms (trading floor, law library, labs, game
+  lounge, gym, clinic, studio, test kitchen, archive and vault, atelier…), gets a reception with a logo wall, its palette /
+  finish, styled signage, two signature Meshy T2.5 props (`src/assets/companyAssets.ts`, lazy per layout) and a loot tilt within
+  the same scarcity. Executive suites have dedicated furniture, server rooms hold rows of racks, plants never narrow a corridor
+  below 1.5 m. Office storeys use office finishes (`src/world/officeArch.ts`) and the exterior sits in heavy green height fog
+  (`src/world/officeAtmosphere.ts`; `__LL.exteriorFogTune({...})`). The station joins the lobby through a broad **transit hall**
+  (fixed stair between two stopped escalators, `src/gen/office/transit.ts`); a caged **ladder** in floor 8's roof-access room
+  climbs to the **roof** (level 9, `roof.ts`; enemies never use it). The **elevator** (`src/world/elevator.ts`) is a full-size car:
+  aim at any car / hall button within 1.7 m and click or press E (no floor list; the click never fires). **Backpack**: slot 6,
+  held in front, click to set down, tap E opens a grounded bag, hold E 0.5 s wears it. **Grenade slot** "G": flares stack to 10,
+  hold G to throw. **Stall doors** open with E and toilets sometimes hold a finite find (`src/world/stalls.ts`). Enemy **vocals**
+  are gated by walking distance from the player (`src/ai/vocalReach.ts`; ≤ 32 m of route, ≤ 3 at once); combat sounds are not.
+  QA hooks: `liftButtons()`, `liftPress(id)`, `goRoofLadder()`, `goTransit(end, lane)`, `bagHoldE(s)`, `flareGive(n)`,
+  `stallOpen()`, `officeArch()`.
 
 ## Layout
 `src/gen` deterministic generator + grid/A*/LOS (pure, unit-tested) · `src/world` mesh building,

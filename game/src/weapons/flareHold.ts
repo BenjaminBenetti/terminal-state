@@ -1,8 +1,9 @@
 // Iteration 15 (user: "right now you click and the flare [throws] right away; it should be more like a video game where you
 // click and you hold and ... the flare's held back just like the grenade ... and when you let go it throws the flare").
 //
-// Grenade-style flare input, for BOTH the T shortcut (from the inventory, whatever is in the hand) and left click with a flare
-// in the held quick slot:
+// Grenade-style flare input, for BOTH the G key (task office-overhaul-20261030, lane INTERACT: the grenade slot's throwable,
+// whatever is in the hand; it replaced the iteration-12 T shortcut, which stays a silent alias) and left click with a flare in
+// the held quick slot:
 //  - press: the flare comes up and is pulled back (viewmodel pose `ready01`); nothing is struck, consumed, lit, lured or
 //    heard yet;
 //  - release: ONE throw (the caller strikes and tosses exactly one flare: throwables.throwOneFlare). A quick tap throws on
@@ -23,7 +24,7 @@ export type FlareHoldSource = 'key' | 'mouse';
 export type FlareHoldCancel = 'input-cleared' | 'busy' | 'slot' | 'no-flare';
 
 export interface FlareHoldInput {
-  /** T held / pressed this frame. */
+  /** G (grenade slot key; T silent alias) held / pressed this frame. */
   keyDown: boolean;
   keyPressed: boolean;
   /** Left mouse button held / pressed this frame. */
@@ -33,7 +34,7 @@ export interface FlareHoldInput {
   heldIsFlare: boolean;
   /** Hands busy: timed use, consume animation, ladder. */
   busy: boolean;
-  /** Flares in the inventory. */
+  /** Throwables the source can use (inventory flares; the grenade slot is refilled from them on a G press). */
   flares: number;
   /** FlareSystem.refusal(): 'cap' | 'cooldown' | 'unavailable' | null. */
   refusal: 'cap' | 'cooldown' | 'unavailable' | null;

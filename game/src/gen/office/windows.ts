@@ -15,8 +15,9 @@ import {MARGIN, WINDOW, type TowerFrame} from './frame';
 import type {CarvedTower, OfficeAreaMeta} from './tower';
 
 const NO_WINDOWS = new Set<OfficeAreaMeta['role']>(['wc', 'closet', 'landing', 'server']);
-/** Daylight tint (linear RGB, ~unit luminance): overcast sky through grimy glass. */
-export const DAYLIGHT_TINT: readonly [number, number, number] = [0.74, 0.9, 1.2];
+/** Daylight tint (linear RGB, ~unit luminance): overcast sky through grimy glass. Task office-overhaul-20261030 (lane STRUCT, per
+ *  ARCH / primary): a faint green cast matching the infectious green exterior fog (was the cool blue [0.74, 0.9, 1.2]). */
+export const DAYLIGHT_TINT: readonly [number, number, number] = [0.78, 0.98, 0.86];
 const PANE_MAX = 8;
 
 export type StoreyWindow = OfficeWindowSpan & {level: number; baseY: number};

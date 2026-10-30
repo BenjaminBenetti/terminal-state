@@ -27,8 +27,10 @@ import {faceFrame, normalizeFaces, stationWallFaces, type TreatFace} from './wal
 import {CHUNK_M, stationLevels} from './levelGeometry';
 import {FRIEZE_SIZE, type AtlasCell} from './wallDetailAtlas';
 
-export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete';
-export type Finish = 'tile' | 'shopTile' | 'paint' | 'concrete';
+export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete'
+  // Task office-overhaul-20261030 (lane ARCH): office storey walls (painted plasterboard / feature finishes) and the roof parapets.
+  | 'officeWall' | 'officeRoof';
+export type Finish = 'tile' | 'shopTile' | 'paint' | 'concrete' | 'office';
 export type Layer = 'flush' | 'decal' | 'soft' | 'cut' | 'proud';
 export type FeatureKind =
   | 'band' | 'frieze' | 'pilaster' | 'joint' | 'formwork'
@@ -52,6 +54,7 @@ export const ZONE_TREATMENT: Record<WallZone, Treatment> = {
 };
 
 export function finishFamily(finish: string): Finish {
+  if (/^office-/.test(finish)) return 'office'; // task office-overhaul-20261030 (lane ARCH): world/officeArch.ts finish keys
   if (/shop/i.test(finish)) return 'shopTile';
   if (/tile/i.test(finish)) return 'tile';
   if (/paint|plaster|block/i.test(finish)) return 'paint';
@@ -59,6 +62,9 @@ export function finishFamily(finish: string): Finish {
 }
 
 export function treatmentOf(face: Pick<WallFace, 'zone' | 'finish'>): Treatment {
+  // Task office-overhaul-20261030 (lane ARCH): office finishes never take a station treatment (whatever their zone).
+  if (/^office-roof/.test(face.finish)) return 'officeRoof';
+  if (/^office-/.test(face.finish)) return 'officeWall';
   if (face.zone === 'trackbed' && /platformFace/i.test(face.finish)) return 'trackFace';
   return ZONE_TREATMENT[face.zone] ?? 'servicePaint';
 }
@@ -93,6 +99,13 @@ export const RECIPES: Record<Treatment, Recipe> = {
   stairCore: {bay: 0, pilaster: 0, joint: 0.2, band: 'none', frieze: false, formwork: false, condition: [0.35, 0.7], hotspots: 0.9, tileLoss: 0.8, spall: 1.0, crack: 1.2, patch: 0.6, streak: 0.9, edgeChips: 0.6, cornerChips: 0.9, wear: 'rub', soot: 0.2, damp: 0.2, conduit: 0, switchBox: 0, pipe: 0, cables: false, breach: 0.5, recess: 0},
   upperFinish: {bay: 4.8, pilaster: 0.3, joint: 0.3, band: 'area', frieze: false, formwork: false, condition: [0.15, 0.45], hotspots: 0.35, tileLoss: 0.5, spall: 0.6, crack: 0.6, patch: 0.5, streak: 0.4, edgeChips: 0.35, cornerChips: 0.6, wear: 'grime', soot: 0.1, damp: 0, conduit: 0.25, switchBox: 0.3, pipe: 0, cables: false, breach: 0.2, recess: 0.05},
   lowerConcrete: {bay: 4.8, pilaster: 0, joint: 0.5, band: 'none', frieze: false, formwork: true, condition: [0.55, 0.9], hotspots: 1.0, tileLoss: 0, spall: 1.5, crack: 0.8, patch: 0.6, streak: 1.2, edgeChips: 0.2, cornerChips: 0.7, wear: 'kick', soot: 0.5, damp: 0.7, conduit: 0.7, switchBox: 0.6, pipe: 0.55, cables: false, breach: 1.2, recess: 0.3},
+  // Task office-overhaul-20261030 (lane ARCH): an abandoned office's plasterboard — no station identity (no tile bands, pilasters,
+  // friezes, formwork), no service fittings (conduits, switch boxes, pipes, cables) and no cut damage (spalled block, lost tiles,
+  // breaches, recesses: the T4 paint failure is in the wall shader). Wear stays: water damage runs from ceiling leaks with
+  // cracks around them, damp tide marks, kick-line scuffs, chipped outside corners, a little soot.
+  officeWall: {bay: 0, pilaster: 0, joint: 0, band: 'none', frieze: false, formwork: false, condition: [0.3, 0.7], hotspots: 0.45, tileLoss: 0, spall: 0, crack: 0.7, patch: 0, streak: 0.5, edgeChips: 0.15, cornerChips: 0.6, wear: 'kick', soot: 0.12, damp: 0.15, conduit: 0, switchBox: 0, pipe: 0, cables: false, breach: 0, recess: 0},
+  // The roof's precast parapets / housings: weathering runs, damp at the foot, cracks; nothing mounted.
+  officeRoof: {bay: 0, pilaster: 0, joint: 0.35, band: 'none', frieze: false, formwork: false, condition: [0.5, 0.85], hotspots: 0.6, tileLoss: 0, spall: 0, crack: 0.9, patch: 0, streak: 1.4, edgeChips: 0.3, cornerChips: 0.6, wear: 'none', soot: 0.3, damp: 0.6, conduit: 0, switchBox: 0, pipe: 0, cables: false, breach: 0, recess: 0},
 };
 
 /** Iteration 12 (ARCH): condition added to every wall for ~30 years without upkeep (world/decay.ts ages the surfaces). */
@@ -813,6 +826,7 @@ export function perFaceCutCap(len: number): number {
 /** Missing tiles (tile walls) or spalled finish (paint / concrete) around (sc, yc). */
 function finishDamage(st: FaceState, ctx: PlanCtx, sc: number, yc: number, scale: number, id?: number): void {
   const pf = st.pf;
+  if (pf.finish === 'office') return; // task office-overhaul-20261030 (lane ARCH): plasterboard leaks show as runs + cracks, never cut block
   if (st.placed.filter(p => p.layer === 'cut').length >= perFaceCutCap(pf.len)) return;
   if (pf.finish === 'tile') tileLoss(st, ctx, sc, yc, scale, id);
   else if (pf.finish === 'shopTile') shopTileLoss(st, ctx, sc, yc, id);

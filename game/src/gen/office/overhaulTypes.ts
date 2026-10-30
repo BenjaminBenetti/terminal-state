@@ -1,0 +1,83 @@
+// Task office-overhaul-20261030 (Studio Beta): shared pure-data contracts of the office overhaul — company tenants, the roof
+// storey and the high-capacity transit connection (escalators). Types only; written by the primary, read by every lane.
+// Producers: lane TENANTS (tenants), lane STRUCT (roof, transit). Consumers: ARCH (materials / palette / fog), LIFT, render.
+
+/** Company ids of the 20-company tenant pool (gen/office/companies.ts holds the definitions). */
+export type CompanyId =
+  | 'bubblr' | 'pixelforge' | 'halden' | 'crestmark' | 'verdant' | 'arcline' | 'metro9' | 'ember' | 'stride' | 'wonderbox'
+  | 'lowtide' | 'calloway' | 'ardent' | 'tidewater' | 'nimbus' | 'ironclad' | 'pemberton' | 'pawprint' | 'goldencrust' | 'orbital';
+
+/** Linear-ish sRGB hex colours (0xRRGGBB) a tenant's spaces are finished in. */
+export interface TenantPalette {
+  /** Main wall paint. */
+  wall: number;
+  /** Accent / feature wall (reception logo wall, one wall per room). */
+  accent: number;
+  /** Carpet / floor tint (multiplied over the carpet texture). */
+  floor: number;
+  /** Trim: door frames, skirting, signage plates. */
+  trim: number;
+  /** Signage text / logo colour. */
+  sign: number;
+}
+
+/** Wall / floor finish family of a tenant (lane ARCH maps these to materials; all office, never the station's tile / block). */
+export type TenantFinish = 'corporate' | 'warm-wood' | 'industrial' | 'clinical' | 'creative' | 'luxury';
+
+/** One company floor of the tower (floors 2..8; the lobby, floor 1, is neutral and never a tenant). */
+export interface TenantFloor {
+  floor: number;
+  company: CompanyId;
+  /** Display name, e.g. "Bubblr Gum Co.". */
+  name: string;
+  /** Short tagline / division shown on the reception sign ("Confectionery · Brand HQ"). */
+  tagline: string;
+  palette: TenantPalette;
+  finish: TenantFinish;
+  /** Index of this floor within the company's run of floors (0 = its first / reception floor), and the run length (1 or 2). */
+  part: number;
+  parts: number;
+}
+
+/** Roof storey (layout level = OFFICE_ROOF_LEVEL): open sky, parapet, reached by an access ladder from the top office floor. */
+export interface RoofInfo {
+  level: number;
+  /** Roof deck y (absolute) = top floor + floorHeight. */
+  baseY: number;
+  /** Parapet height above the deck (m). */
+  parapet: number;
+  /** The access ladder: bottom (top office floor) and top (roof hatch) stand points, the hatch opening rect (world m). */
+  ladder: {
+    bottom: {x: number; y: number; z: number};
+    top: {x: number; y: number; z: number};
+    /** Ladder face direction (yaw the climber faces while on it). */
+    yaw: number;
+    hatch: {x0: number; z0: number; x1: number; z1: number};
+    /** layout.traversal.ladders index / layout.levelLinks id of the climb (STRUCT decides the exact representation). */
+    link?: number;
+  };
+  /** Rooftop structures the render dresses (HVAC, water tower, dish, stair/hatch housing): world footprint + yaw. */
+  structures: {kind: string; x: number; z: number; yaw: number}[];
+}
+
+/** One escalator of the station <-> lobby transit hall (lane STRUCT carves it as a stair run; the render adds the escalator). */
+export interface EscalatorInfo {
+  /** layout.traversal.stairs flight ids the escalator dresses (walkable as stairs: power is out, the steps are stopped). */
+  flights: number[];
+  lower: {x: number; y: number; z: number};
+  upper: {x: number; y: number; z: number};
+  /** Inner width between balustrades (m). */
+  width: number;
+  /** Rising direction yaw. */
+  yaw: number;
+}
+
+/** The high-capacity station <-> lobby connection (replaces the single narrow stair core). */
+export interface TransitInfo {
+  /** Broad fixed stair runs (layout.levelLinks ids). */
+  stairLinks: number[];
+  escalators: EscalatorInfo[];
+  /** Concourse areas on the station level and the lobby level (layout.areas ids). */
+  lowerHall: number;
+  upperHall: number;
+}

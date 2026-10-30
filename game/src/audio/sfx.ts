@@ -25,6 +25,16 @@
 import {ClipBank, type Clip, type CueId} from './bank';
 import {makeIR} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
+import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
+
+/**
+ * Task office-overhaul-20261030 (lane AUDIO, user #4 "over grunting" through the office floors): navigable route (m) from the
+ * listener's player to a world point; Infinity = out of reach. The game passes its shared field (ai/vocalReach.ts VocalReach);
+ * without one (tests, tools) enemy vocals keep the straight-line behaviour (the vocal voice cap still applies).
+ */
+export interface VocalReachQuery { pathTo(x: number, y: number, z: number): number }
+/** Enemy vocal category (VOCAL_GATE in ai/vocalReach.ts): idle / chase moans and growls, or the alert when it first sees the player. */
+export type VocalKind = 'idle' | 'alert';
 
 type Desired = 'running' | 'suspended';
 export type RoomKind = 'large' | 'medium' | 'small' | 'tunnel';
@@ -151,8 +161,11 @@ const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater'
 const PHYS_CUE: Record<ImpactFamily, CueId> = {can: 'itemCan', light: 'itemLight', heavy: 'impactMetal', prop: 'propTopple', flesh: 'chunkFlesh', stone: 'debrisFall', wood: 'impactWood', glass: 'impactGlass', metal: 'impactSheetMetal'};
 const IMPACT_CUE: Record<Surface, CueId> = {concrete: 'impactConcrete', tile: 'impactTile', metal: 'impactMetal', wood: 'impactWood', flesh: 'impactFlesh', glass: 'impactGlass', sheet: 'impactSheetMetal'};
 
-/** `fg` = a foreground (listener-relative) player hit confirm, bounded by HIT_CONFIRM.maxVoices. */
-interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean; fg?: boolean }
+/**
+ * `fg` = a foreground (listener-relative) player hit confirm, bounded by HIT_CONFIRM.maxVoices. `vocal` (task
+ * office-overhaul-20261030, lane AUDIO) = an enemy vocal's rank distance (m) in the VOCAL_GATE.cap simultaneous vocals.
+ */
+interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean; fg?: boolean; vocal?: number }
 interface VoiceOpts {
   /** World position; omitted = at the listener (player's own sounds, UI). */
   at?: Pos;
@@ -326,6 +339,9 @@ export class Sfx {
   private flareLoops: FlareLoop[] = [];
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
+  // Task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + counters (debugState().vocal).
+  private reach: VocalReachQuery | null = null;
+  private vstats = {played: 0, gated: 0, sight: 0, capped: 0, stolen: 0, steps: 0};
   private reloadVoice: Voice | null = null;
   private lastReloadEmpty = false;
   private gait = new WeakMap<object, number>();
@@ -462,7 +478,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -472,6 +488,7 @@ export class Sfx {
       convolvers: this.convolversCreated, dropped: this.dropped, culled: this.culled, emitters: this.emitters.length, emitterOn: this.emitterOn,
       beds, bedsPlaying: (Object.keys(this.bedSources) as BedName[]), listener: {...this.listener}, bank: this.bank.stats(),
       confirmVoices: this.voices.filter(v => v.fg).length, confirms: this.confirms, flareLoops: this.flareLoops.filter(l => !l.stopped).length,
+      vocal: {voices: this.voices.filter(v => v.vocal !== undefined && v.end > (this.ctx?.currentTime ?? 0)).length, gate: !!this.reach, ...this.vstats},
     };
   }
 
@@ -511,6 +528,11 @@ export class Sfx {
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]}): void {
     if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); }
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
+  }
+
+  /** Task office-overhaul-20261030 (lane AUDIO): the built world's navigable-route source for enemy vocals (null = straight line). */
+  setVocalReach(r: VocalReachQuery | null): void {
+    this.reach = r;
   }
 
   private prune(now: number): void {
@@ -1121,15 +1143,75 @@ export class Sfx {
     const v = this.voice({at: {x, y, z}, ref: 1.8, rolloff: 1.1, send: 0.45, pri: 1, maxDist: 30, gain: 0.25 + 0.75 * s});
     this.play(v, 'bodyFall', {rate: 1.02 - s * 0.08, jitter: 0.06});
   }
-  /** Zombie vocal, HRTF-positioned; `deep` = heavy/coated build. */
+  /**
+   * Task office-overhaul-20261030 (lane AUDIO, user #4: zombies moaning through the floors above — "over grunting"): one enemy
+   * VOCAL voice (idle / chase moan or growl, or the alert). With a reach source (the game's ai/vocalReach.ts field) it is heard
+   * along the NAVIGABLE route: silent beyond VOCAL_GATE[kind].limit m of path, otherwise the panner's straight-line roll-off is
+   * corrected to the route length (vocalGain: a slab with a long stair route between = strongly attenuated or silent). A source
+   * in clear 3D line of sight (the occlusion test: no wall / slab between) is heard by the straight line as before. At most
+   * VOCAL_GATE.cap vocals sound at once: a nearer (alert-biased) one fades out the farthest playing one, else it is dropped.
+   * Spatial panning, HRTF, occlusion filter and reverb send are unchanged (voice()). Returns the voice or null.
+   */
+  private vocal(kind: VocalKind, o: VoiceOpts & {at: Pos}): Voice | null {
+    const ctx = this.live;
+    if (!ctx) return null;
+    const straight = this.dist(o.at);
+    if (straight > (o.maxDist ?? 45)) { this.culled++; return null; }
+    let gain = 1, rank = straight;
+    if (this.reach) {
+      const spec = VOCAL_GATE[kind], path = this.reach.pathTo(o.at.x, o.at.y, o.at.z);
+      gain = vocalGain(path, straight, spec.limit, spec.fade, o.ref ?? 1.6, o.rolloff ?? 1);
+      if (gain >= VOCAL_GATE.minGain) rank = Math.max(straight, path);
+      else if (this.occlusion && (straight <= 1.5 || this.occlusion(o.at.x, o.at.z, o.at.y) <= 0)) { gain = 1; this.vstats.sight++; } // in sight
+      else { this.vstats.gated++; return null; }
+    }
+    if (kind === 'alert') rank *= VOCAL_GATE.alertBias;
+    // vocal voice cap: the nearest / most relevant win
+    const now = ctx.currentTime;
+    let n = 0, far: Voice | null = null;
+    for (const v of this.voices) {
+      if (v.vocal === undefined || v.end <= now) continue;
+      n++;
+      if (!far || v.vocal > far.vocal!) far = v;
+    }
+    if (n >= VOCAL_GATE.cap) {
+      if (!far || rank >= far.vocal! - VOCAL_GATE.steal) { this.vstats.capped++; return null; }
+      const t = now, s = VOCAL_GATE.stealFade;
+      far.inp.gain.cancelScheduledValues(t);
+      far.inp.gain.setTargetAtTime(0, t, s / 3);
+      for (const src of far.srcs) { try { src.stop(t + s + 0.02); } catch { /* already stopped */ } }
+      far.vocal = undefined;
+      far.end = Math.min(far.end, t + s + 0.03);
+      this.vstats.stolen++;
+    }
+    const v = this.voice({...o, gain: (o.gain ?? 1) * gain});
+    if (v) { v.vocal = rank; this.vstats.played++; }
+    return v;
+  }
+
+  /**
+   * Task office-overhaul-20261030 (lane AUDIO): an enemy footfall / rung clank at feet height `y`. Same storey as the listener
+   * (within ~1.8 m of the player's feet): unchanged. Another storey: only with a navigable route of <= VOCAL_GATE.steps m (no
+   * footsteps through the slab from the floor above). No reach source: unchanged.
+   */
+  private stepHeard(x: number, y: number, z: number): boolean {
+    if (!this.reach || Math.abs(y - (this.listener.y - 1.3)) <= 2.1) return true;
+    if (this.reach.pathTo(x, y, z) <= VOCAL_GATE.steps) return true;
+    this.vstats.steps++;
+    return false;
+  }
+
   /**
    * Iteration 07 (Lane Q): the rat/dog creature's positional Sound Lab vocals (growl idle/threat,
    * snarl on alert, bite on the lunge, yelp when hit, death). Missing clips stay silent (bank gaps).
+   * Task office-overhaul-20261030 (lane AUDIO): growl / snarl are enemy vocals (vocal(): navigable-route gate + cap; `alert` =
+   * it just saw the player); bite / yelp / death are combat cues and never gated.
    */
-  creature(cue: 'growl' | 'snarl' | 'bite' | 'yelp' | 'death', x: number, y: number, z: number): void {
+  creature(cue: 'growl' | 'snarl' | 'bite' | 'yelp' | 'death', x: number, y: number, z: number, alert = false): void {
     const id: CueId = cue === 'growl' ? 'creatureGrowl' : cue === 'snarl' ? 'creatureSnarl' : cue === 'bite' ? 'creatureBite' : cue === 'yelp' ? 'creatureYelp' : 'creatureDeath';
     const near = cue === 'bite' || cue === 'yelp';
-    const v = this.voice({at: {x, y, z}, hrtf: true, ref: near ? 1.8 : 2.2, rolloff: 1.15, send: 0.5, pri: cue === 'growl' ? 0 : 1, maxDist: cue === 'growl' ? 26 : 36});
+    const o = {at: {x, y, z}, hrtf: true, ref: near ? 1.8 : 2.2, rolloff: 1.15, send: 0.5, pri: cue === 'growl' ? 0 : 1, maxDist: cue === 'growl' ? 26 : 36};
+    const v = cue === 'growl' || cue === 'snarl' ? this.vocal(alert ? 'alert' : 'idle', o) : this.voice(o);
     this.play(v, id, {jitter: 0.06});
   }
   /** Rat/dog paw scrabble: per-creature stride accumulator (short quick strides), positional, low. */
@@ -1140,15 +1222,19 @@ export class Sfx {
     if (d >= stride) {
       d -= stride;
       const L = this.listener;
-      if (Math.hypot(x - L.x, z - L.z) <= 16 && this.take('step')) {
+      if (Math.hypot(x - L.x, z - L.z) <= 16 && this.stepHeard(x, y, z) && this.take('step')) { // lane AUDIO: cross-storey gate
         const v = this.voice({at: {x, y: y + 0.03, z}, ref: 1.2, rolloff: 1.5, send: 0.22, pri: 0, maxDist: 16, gain: Math.min(1.2, 0.55 + speed * 0.12)});
         this.play(v, 'creatureStep', {jitter: 0.1, gainJitter: 2});
       }
     }
     this.gait.set(id, d);
   }
-  groan(x: number, y: number, z: number, deep: boolean): void {
-    const v = this.voice({at: {x, y, z}, hrtf: true, ref: 2.2, rolloff: 1.1, send: 0.6, pri: 1, maxDist: 34});
+  /**
+   * Zombie vocal, HRTF-positioned; `deep` = heavy/coated build. Task office-overhaul-20261030 (lane AUDIO): an enemy vocal
+   * (vocal(): navigable-route gate + vocal cap); `alert` = the groan when it first sees the player.
+   */
+  groan(x: number, y: number, z: number, deep: boolean, alert = false): void {
+    const v = this.vocal(alert ? 'alert' : 'idle', {at: {x, y, z}, hrtf: true, ref: 2.2, rolloff: 1.1, send: 0.6, pri: 1, maxDist: 34});
     this.play(v, deep ? 'zombieGroanDeep' : 'zombieGroan', {jitter: 0.07});
   }
   zombieAttack(x: number, y: number, z: number): void {
@@ -1168,6 +1254,7 @@ export class Sfx {
   zombieStep(x: number, z: number, heavy: boolean, speed = 1, y = 0): void {
     const L = this.listener;
     if (Math.hypot(x - L.x, z - L.z) > 18) return;
+    if (!this.stepHeard(x, y, z)) return; // lane AUDIO: no footsteps through the slab from another storey
     if (!this.take('step')) return;
     const v = this.voice({at: {x, y: y + 0.05, z}, ref: 1.4, rolloff: 1.4, send: 0.25, pri: 0, maxDist: 18, gain: Math.min(1.3, 0.6 + speed * 0.25)});
     this.play(v, heavy ? 'zombieStepHeavy' : 'zombieStep', {jitter: 0.06, gainJitter: 1.5});
@@ -1179,7 +1266,7 @@ export class Sfx {
     if (t >= 0.45) {
       t -= 0.45;
       const L = this.listener;
-      if (Math.hypot(x - L.x, z - L.z) <= 20 && this.take('step')) this.ladder({x, y: y + 0.6, z});
+      if (Math.hypot(x - L.x, z - L.z) <= 20 && this.stepHeard(x, y, z) && this.take('step')) this.ladder({x, y: y + 0.6, z}); // lane AUDIO gate
     }
     this.gait.set(id, t);
   }

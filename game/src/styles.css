@@ -111,11 +111,15 @@ button:disabled { opacity: 0.45; cursor: default; }
 #ammo .sep { color: var(--cream-dim); margin: 0 6px; font-size: 26px; }
 #reserve { font-size: 24px; color: var(--cream-dim); }
 #ammo.empty #mag { color: var(--red); }
-#weapon-hint { font-size: 13px; color: var(--mustard); min-height: 1em; }
+#weapon-hint { font-size: 13px; color: var(--mustard); min-height: 1em; max-width: 250px; margin-left: auto; }
 #hotbar { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 6px; }
 #hotbar .slot { width: 84px; height: 62px; background: rgba(20, 22, 24, 0.62); cursor: default; }
 #hotbar .slot svg { width: 52px; height: 28px; }
 #hotbar .slot.selected { background: rgba(48, 44, 30, 0.75); }
+/* Task office-overhaul-20261030: the hotbar grew to 7 cells (1-5, 6 backpack, G grenade slot) — narrower cells on smaller
+   viewports so it never runs under the weapon panel's (wrapped, <= 250 px) hint at the bottom right. */
+@media (max-width: 1400px) { #hotbar .slot { width: 72px; } #hotbar .slot svg { width: 46px; } body #hotbar .slot img.ico3d { width: 66px; } #hotbar .slot .nm { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } }
+@media (max-width: 1100px) { #hotbar .slot { width: 62px; } #hotbar .slot svg { width: 40px; } body #hotbar .slot img.ico3d { width: 56px; } #weapon-hint { max-width: 190px; } }
 #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 20, 15, 0.75) 100%); }
 #vignette.low { animation: pulse 1.1s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }
@@ -123,14 +127,3 @@ button:disabled { opacity: 0.45; cursor: default; }
 .dmg-arc { position: absolute; width: 180px; height: 180px; left: -90px; top: -90px; border-radius: 50%; border-top: 6px solid rgba(210, 50, 40, 0.85); animation: fade 0.9s forwards; }
 @keyframes fade { from { opacity: 1; } to { opacity: 0; } }
 #flashlight-tag { position: absolute; right: 26px; bottom: 108px; font-size: 11px; letter-spacing: 0.12em; color: var(--cream-dim); }
-
-/* ---------- Iteration 16 TOWER / office-seamless LIFT: elevator floor list (the world keeps running; no fades) ---------- */
-#tower-choice { position: absolute; left: calc(50% + 70px); top: 50%; transform: translateY(-50%); min-width: 190px; background: rgba(18, 20, 22, 0.86); border-left: 4px solid var(--mustard); padding: 10px 12px 8px; pointer-events: auto; }
-#tower-choice .tc-title { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mustard); margin-bottom: 6px; }
-#tower-choice .tc-list { display: flex; flex-direction: column; gap: 2px; }
-#tower-choice .tc-item { font: inherit; font-size: 15px; text-align: left; color: var(--cream); background: rgba(40, 44, 48, 0.55); border: 1px solid transparent; padding: 4px 10px; cursor: pointer; }
-#tower-choice .tc-item.cur { color: var(--cream-dim); }
-#tower-choice .tc-item.sel { background: rgba(72, 62, 30, 0.85); border-color: var(--mustard); color: #fff3d6; }
-#tower-choice .tc-item:disabled { opacity: 0.4; cursor: default; }
-#tower-choice .tc-hint { margin-top: 6px; font-size: 11px; color: var(--cream-dim); font-weight: 400; }
-#tower-choice .tc-item.lit { color: #ffd08a; }

@@ -21,7 +21,7 @@ import {SoundGate} from './world/openables';
 import {Effects} from './world/fx';
 import {Input} from './player/input';
 import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/player';
-import {Inventory, type SlotRef} from './items/inventory';
+import {Inventory, THROW_REF, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, type WeaponDef} from './weapons/weapons';
 import {Viewmodel} from './weapons/viewmodel';
@@ -30,6 +30,7 @@ import {ConsumeView} from './weapons/consumeView';
 import {buildItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
+import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
 import {hearingMuffle, slabsBetween, type BrainWorld} from './ai/brain';
@@ -51,7 +52,9 @@ import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifi
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
+import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
+import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -67,6 +70,7 @@ import {applyHolders, captureHolders, capturePickups, restorePickup} from './run
 import {runBagStore} from './run/bagStore';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
+import {COMPANY_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor)
 import {officeModelKeysFor} from './gen/office/index'; // Iteration 16 (lane WORLD-GEN): the office models a section placed
 import {preloadOfficeAssets} from './world/officeProps'; // Iteration 16 (lane WORLD-GEN): carpet / ceiling / partition textures
 import {placementBox} from './items/lootLayout';
@@ -124,7 +128,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS)
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
   /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */
@@ -137,6 +141,8 @@ export class Game {
   lightPool!: StationLighting;
   propIndex!: PropIndex;
   pathfinder!: PathFinder;
+  /** Task office-overhaul-20261030 (lane AUDIO): the shared navigable-distance field from the player (enemy vocal gate; ai/vocalReach.ts). */
+  vocalReach: VocalReach | null = null;
   /**
    * Iteration 08 (Lane B): the station's stacked levels — every y-aware world query (support,
    * collision, ceilings, 3D raycasts / sight, nav). One level on single-storey layouts.
@@ -183,6 +189,12 @@ export class Game {
   readonly hitListeners: ((hit: ResolvedHit) => void)[] = [];
   /** E-key handlers tried before the default interaction (lane GEAR: grounded backpack; lane TOWER: elevator / stair doors). Return true when handled. */
   readonly interactHandlers: (() => boolean)[] = [];
+  /**
+   * Task office-overhaul-20261030 (lane LIFT): left-click handlers for in-world targets (the elevator's physical buttons), tried
+   * right after E and before fire / flare / item use / the lane frame hooks. True = handled: the press is consumed (mousePressed
+   * cleared) and lmbLatch keeps the gun off the button until it is released.
+   */
+  readonly pointerHandlers: (() => boolean)[] = [];
   /** Per-section build hooks: `build` after a section's world is built (before warm-up), `teardown` before it is torn down. */
   readonly sectionHooks: {build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
   /** Aim offset (radians) added to the camera every frame (lane INJURY: restrained arm-injury sway). Shots use the camera, so it is honest. */
@@ -195,6 +207,8 @@ export class Game {
   readonly inputOwners: (() => boolean)[] = [];
   /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
   readonly gear: GearSystem;
+  /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
+  readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
   readonly injuries: InjurySystem;
   /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
@@ -336,7 +350,9 @@ export class Game {
     // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
     this.injuries = installInjuries(this, {aiming: () => this.aiming});
     this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
+    this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
+    installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -526,6 +542,8 @@ export class Game {
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
+    this.vocalReach = new VocalReach(this.levels); // lane AUDIO: one bounded, time-sliced route field from the player (no search here)
+    this.sfx.setVocalReach(this.vocalReach);
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
     const cm = this.containers;
@@ -1157,6 +1175,8 @@ export class Game {
     }
     // Iteration 15: while a flare is readied the hand shows it (whatever pickups / inventory changes happen meanwhile)
     if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
+    // Task office-overhaul-20261030 (INTERACT, #1): the readied backpack (6) is what the hands hold (gear/system.ts)
+    else if (this.gear?.readied) { this.weapon.equip(null); this.viewmodel.setItem('backpack'); }
   }
 
   /** Iteration 15: drop a readied flare without throwing (nothing spent); the held item comes back. */
@@ -1165,11 +1185,13 @@ export class Game {
   }
 
   /**
-   * Iteration 12 (LIGHT): strike + toss one flare (T from anywhere in the inventory; left click with a flare held). Exactly one
+   * Iteration 12 (LIGHT): strike + toss one flare (G: the grenade slot — INTERACT #6, was T from anywhere; left click with a flare held). Exactly one
    * item is removed, and only once the throw happened: at the cap / cooldown / without physics nothing is used (HUD message).
    */
   private throwFlare(fromHeld: boolean): void {
-    const ref = fromHeld && this.inv.selectedStack()?.itemId === 'flare' ? {bar: 'hotbar' as const, index: this.inv.selected} : null;
+    // Task office-overhaul-20261030 (INTERACT, #6): G throws the grenade slot's flare; left click the held one
+    const ref = fromHeld && this.inv.selectedStack()?.itemId === 'flare' ? {bar: 'hotbar' as const, index: this.inv.selected}
+      : !fromHeld && this.inv.thrown?.itemId === 'flare' ? THROW_REF : null;
     if (this.use || this.consumeView.busy || this.player.climbing) return;
     const p = this.player;
     // throwOneFlare: refused (cap / cooldown / no physics / none) -> nothing removed; else exactly one removed, then thrown
@@ -1223,7 +1245,7 @@ export class Game {
     return this.camera.getWorldDirection(out);
   }
 
-  /** Drop `count` (default: all) of a slot on the floor in front of the player (G, inventory drag-out / Drop). */
+  /** Drop `count` (default: all) of a slot on the floor in front of the player (inventory drag-out / Drop / Delete; G no longer drops). */
   dropRef(ref: SlotRef, count?: number): void {
     const st = this.inv.detach(ref, count);
     if (!st) return;
@@ -1370,18 +1392,23 @@ export class Game {
     if (inp.wheel) { const i = (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
     if (inp.hit('KeyQ')) this.selectSlot(this.lastSlot);
     if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
-    if (inp.hit('KeyG')) this.dropRef({bar: 'hotbar', index: this.inv.selected});
+    // Task office-overhaul-20261030 (lane INTERACT, #6): G = the grenade slot (hold / release below; T a silent alias). The old
+    // G = drop binding is gone (drop by dragging out of the inventory screen). An empty grenade slot takes a carried throwable first.
+    if ((inp.hit('KeyG') || inp.hit('KeyT')) && !this.inv.thrown && this.inv.refillThrowSlot()) this.syncHeld();
     if (inp.hit('KeyH')) this.quickHeal();
     if (inp.hit('KeyE')) this.interact();
+    // Task office-overhaul-20261030 (lane LIFT): a left click on an in-world button under the crosshair (elevator) belongs to that
+    // button: the press is consumed and latched until release — no shot, flare, item use or backpack placement below / in the hooks.
+    if (inp.mousePressed[0] && this.pointerHandlers.some(h => h())) { inp.mousePressed[0] = false; this.lmbLatch = true; }
 
     const held = this.inv.selectedStack();
     const heldDef = held ? itemDef(held.itemId) : null;
     const wdef = heldDef?.kind === 'weapon' ? WEAPONS[heldDef.weaponId!] : null;
-    // Iteration 15: flares are readied while T / left click (flare in hand) is held and thrown on release (weapons/flareHold.ts)
+    // Iteration 15: flares are readied while G (INTERACT #6; was T) / left click (flare in hand) is held and thrown on release (weapons/flareHold.ts)
     const laneOwns = this.inputOwners.some(f => f()); // Iteration 16 (lane GEAR): a readied / open backpack owns the mouse buttons
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
     for (const e of this.flareHold.update(dt, {
-      keyDown: inp.down('KeyT'), keyPressed: inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0],
+      keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
       heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns,
       flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
     })) {
@@ -1562,6 +1589,7 @@ export class Game {
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && this.inv.count(wdef.ammoItem)) hint = 'Low — R to reload';
     } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
+    if (this.gear?.readied) hint = '6 slings it back on · 1-5 switch'; // Task office-overhaul-20261030 (INTERACT, #1)
     let prompt = '';
     for (const f of this.promptProviders) { const lp = f(); if (lp) { prompt = lp; break; } } // Iteration 16: lane prompts (grounded bag, elevator, …)
     const lanePrompt = !!prompt;
@@ -1582,8 +1610,8 @@ export class Game {
     const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
-      weaponName: def ? def.short : 'Empty hands',
-      mag: wdef && st ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
+      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? def.short : 'Empty hands', // INTERACT (#1): slot 6 in the hands
+      mag: wdef && st && !this.gear?.readied ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
@@ -1763,6 +1791,7 @@ export class Game {
   private updateZombies(dt: number): void {
     const w = this.brainWorld();
     const p = this.player;
+    this.vocalReach?.update(dt, p.x, p.y, p.z); // lane AUDIO: refresh the route field (<= 2.5 Hz, budgeted per frame) before vocals
     for (const z of this.zombies) {
       const b = z.brain;
       const seqBefore = b.attackSeq;

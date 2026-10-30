@@ -21,6 +21,8 @@ export const ROOM_LABEL: Record<RoomType, string> = {
   // Iteration 16 (WORLD-GEN): office tower areas (gen/office/*; purposes give the final labels).
   'office-lobby': 'Lobby', 'office-corridor': 'Corridor', 'office-open': 'Open-plan office', 'office-room': 'Office',
   'office-elevator': 'Elevator', 'office-stair': 'Stairwell',
+  // Task office-overhaul-20261030 (lane STRUCT): the open-sky roof deck of the tower.
+  'office-roof': 'Roof',
 };
 
 export type Wing = 'food' | 'north' | 'agent' | 'misc';

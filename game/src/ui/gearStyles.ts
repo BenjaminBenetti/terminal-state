@@ -12,7 +12,6 @@ const CSS = `
 #inv-gear .slot .ghost { color: #3a4046; display: flex; }
 #inv-gear .slot .ghost svg { width: 46px; height: 24px; }
 #inv-gear .slot.worn-bag { background: #1d1c18; }
-#inv-gear .slot.worn-bag::after { content: 'contents hidden'; position: absolute; right: 5px; top: 3px; font-size: 9px; letter-spacing: 0.06em; color: var(--mustard); text-transform: uppercase; }
 #inv-gear-note { font-size: 12.5px; color: var(--cream-dim); margin-top: 4px; min-height: 1.1em; }
 #inv-gear-note b { color: var(--mustard); }
 #inv-detail .fx.refused, #bagview .bv-note.refused { color: var(--red); font-weight: 700; }
@@ -48,6 +47,24 @@ const CSS = `
 #gear-resume { position: fixed; inset: 0; z-index: 44; display: flex; align-items: center; justify-content: center; cursor: crosshair; }
 #gear-resume.hidden { display: none; }
 #gear-resume span { padding: 8px 16px; background: rgba(20, 22, 24, 0.82); border: 1px solid var(--teal); color: var(--cream); font-size: 14px; }
+/* Task office-overhaul-20261030 (lane INTERACT): HUD slot 6 (worn backpack) + G (grenade slot) after quick slots 1-5; the
+   inventory's quick-slot row gains the grenade slot; the crosshair hold ring (hold E on a grounded bag to wear it). */
+#hotbar .slot.bagslot { margin-left: 10px; }
+#hotbar .slot.throwslot { margin-left: 4px; }
+#hotbar .slot.throwslot .key, #inv-hotbar .slot[data-bar="throw"] .key { color: var(--teal); }
+#hotbar .slot.vacant { opacity: 0.55; }
+#hotbar .slot.vacant .nm { color: var(--cream-dim); }
+#hotbar .slot .ghost, #inv-hotbar .slot .ghost { color: #4a5157; display: flex; }
+#hotbar .slot .ghost svg { width: 46px; height: 24px; }
+#inv-hotbar { grid-template-columns: repeat(6, 1fr); }
+#inv-hotbar .slot[data-bar="throw"] { border-style: dashed; }
+#inv-hotbar .slot[data-bar="throw"].filled { border-style: solid; }
+#hold-ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; pointer-events: none; opacity: 0; transition: opacity 0.08s linear; }
+#hold-ring.show { opacity: 1; }
+#hold-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+#hold-ring circle { fill: none; stroke-width: 3; }
+#hold-ring .track { stroke: rgba(20, 22, 24, 0.55); }
+#hold-ring .arc { stroke: var(--mustard); stroke-linecap: round; }
 `;
 
 let injected = false;

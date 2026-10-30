@@ -20,6 +20,7 @@ import {isContainerKind} from '../items/loot';
 import type {Area, SignPlacement, StationLayout} from '../gen/station';
 import type {WorldMaterials, MatKey} from './materials';
 import {canvasTexture, signPlate} from './canvasTextures';
+import {companySignTexture, signStyleKey} from './companySigns'; // Task office-overhaul-20261030 (lane TENANTS)
 import {shapeMaterial, shapeMaterials} from './shapeMaterials';
 import {SHOP_BLOCKERS, SHOP_FURNITURE} from '../gen/storefronts';
 import {buildStorefronts} from './storefrontBuilder';
@@ -35,7 +36,9 @@ import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; //
 import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
 import {buildWallDetail} from './wallDetail';
 import {applyStationDecay, archShopMaterial} from './decay';
-import {buildOfficeProp, buildOfficeSurfaces, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
+import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
+import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
+import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 
 class Accum {
   pos: number[] = [];
@@ -111,6 +114,8 @@ export interface BuiltWorld {
   levelAt: LevelResolver;
   /** Iteration 08: hides levels behind slabs (portal visibility); register other station groups, update per frame. */
   culler: LevelCuller;
+  /** Task office-overhaul-20261030 (lane ARCH): the office storeys' architecture (styles, finish keys, materials); office layouts only. */
+  officeArch?: OfficeArch;
 }
 
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
@@ -191,9 +196,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     addInstancedModel(gr, gltf, placements, fit, name, levelAt);
   const group = new THREE.Group();
   group.name = 'station';
-  // Architecture accumulators per (material, level:chunk).
-  const acc = new Map<string, {k: MatKey; level: number; levels?: number[]; a: Accum}>();
-  const A = (k: MatKey, chunk: string) => {
+  // Architecture accumulators per (material, level:chunk). Task office-overhaul-20261030 (lane ARCH): keys are MatKeys or the
+  // office finish keys of world/officeArch.ts ('office-…', office storeys only), resolved by scaleOf / matOf.
+  const acc = new Map<string, {k: string; level: number; levels?: number[]; a: Accum}>();
+  const A = (k: string, chunk: string) => {
     const key = `${k}@${chunk}`;
     let e = acc.get(key);
     if (!e) acc.set(key, (e = {k, level: Number(chunk.split(':')[0]), levels: chunkLevels(chunk), a: new Accum()}));
@@ -226,17 +232,24 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Task office-seamless-20261029: a tower world (Office Space: storeys above the lobby) measures door heads from each
   // storey's base; Subway stations keep the iteration-08 rule (level 0 at y 0, else the carved cell ceiling).
   const storeyDoors = !!(layout as {office?: unknown}).office || levels.length > 3;
+  // Task office-overhaul-20261030 (lane ARCH): the office storeys' architecture (null for the Subway: nothing changes there).
+  const office = OfficeArch.for(layout, mats, levels);
+  setExteriorRoof(office?.roofY ?? null);
+  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mats.scale[k as MatKey];
+  const matOf = (k: string): THREE.Material => office?.material(k) ?? mats.get(k as MatKey);
 
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
-  const faces: BuiltFace[] = cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout);
+  const cutFaces: BuiltFace[] = cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout);
+  // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
+  const faces: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : cutFaces;
   const emitFace = (f: BuiltFace) => {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     const plane = alongX ? f.z0 : f.x0;
     const s0 = alongX ? f.x0 : f.z0, s1 = alongX ? f.x1 : f.z1;
     const nSign = alongX ? f.nz : f.nx;
     const shop = f.finish === 'tileShop';
-    const m = shop ? SHOP_SCALE : mats.scale[f.finish as MatKey];
+    const m = shop ? SHOP_SCALE : scaleOf(f.finish);
     // Flight side walls belong to both levels a flight joins (the 'stairs' pseudo-level, tagged with those storeys: the
     // flight cell in front of the face, on the side its normal faces).
     const lv = f.slope ? STAIR_LEVEL : f.level;
@@ -245,7 +258,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const sink = (along: number): Sink => {
       let ck = alongX ? chunkKey(lv, along, plane) : chunkKey(lv, plane, along);
       if (tag) ck += `#${tag.join('-')}`;
-      return shop ? S('tileShop', ck) : A(f.finish as MatKey, ck);
+      return shop ? S('tileShop', ck) : A(f.finish, ck);
     };
     if (f.slope) {
       wallQuad(sink((s0 + s1) / 2), m, alongX, plane, nSign, s0, s1, f.slope.b0, f.slope.b1, f.slope.t0, f.slope.t1, f.vb0, f.vb1);
@@ -273,15 +286,15 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     a.quad([[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]], [0, 1, 0], [[x0 / m.u, vz(z0)], [x0 / m.u, vz(z1)], [x1 / m.u, vz(z1)], [x1 / m.u, vz(z0)]]);
   };
   /** Floor rect split on the chunk grid (world-mapped UVs stay continuous). */
-  const floorRect = (mat: MatKey | {shop: string}, level: number, x0: number, z0: number, x1: number, z1: number, y = 0, vFrom?: number, flip = false) => {
-    const m = typeof mat === 'string' ? mats.scale[mat] : SHOP_SCALE;
+  const floorRect = (mat: MatKey | string | {shop: string}, level: number, x0: number, z0: number, x1: number, z1: number, y = 0, vFrom?: number, flip = false) => {
+    const m = typeof mat === 'string' ? scaleOf(mat) : SHOP_SCALE;
     for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
       const ck = chunkKey(level, (xa + xb) / 2, (za + zb) / 2);
       floorQuadTo(typeof mat === 'string' ? A(mat, ck) : S(mat.shop, ck), m, xa, za, xb, zb, y, vFrom, flip);
     }
   };
-  const ceilRect = (mat: MatKey, level: number, x0: number, z0: number, x1: number, z1: number, y: number) => {
-    const m = mats.scale[mat];
+  const ceilRect = (mat: MatKey | string, level: number, x0: number, z0: number, x1: number, z1: number, y: number) => {
+    const m = scaleOf(mat);
     for (const [xa, xb] of chunkSpans(x0, x1)) for (const [za, zb] of chunkSpans(z0, z1)) {
       A(mat, chunkKey(level, (xa + xb) / 2, (za + zb) / 2)).quad([[xa, y, za], [xb, y, za], [xb, y, zb], [xa, y, zb]], [0, -1, 0],
         [[xa / m.u, za / m.v], [xb / m.u, za / m.v], [xb / m.u, zb / m.v], [xa / m.u, zb / m.v]]);
@@ -330,6 +343,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
       // The space continues downward (another band ends right at this floor): no floor surface.
       const f = g.floorOf(i);
       for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
+      // Task office-overhaul-20261030 (lane ARCH): office storey floors (carpet tiles, vinyl, tile, stone, concrete, roof deck ...).
+      const of = office?.floorKey(L, i);
+      if (of) return of;
       const dm = doorFloor.get(L * n0 + i);
       if (dm) return dm;
       const a = layout.areas[g.area[i]];
@@ -343,7 +359,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
         const f = g.floorOf(i);
         let e = x + 1;
         while (e < W && floorKey(y * W + e) === key && Math.abs(g.floorOf(y * W + e) - f) < 1e-4) e++;
-        floorRect(key.startsWith('shop:') ? {shop: key.slice(5)} : key as MatKey, id, x * CELL, y * CELL, e * CELL, (y + 1) * CELL, f);
+        floorRect(key.startsWith('shop:') ? {shop: key.slice(5)} : key, id, x * CELL, y * CELL, e * CELL, (y + 1) * CELL, f);
         x = e;
       }
     }
@@ -360,12 +376,15 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
     // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
     const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
-    ceilRect(b.publicSpace ? 'ceiling' : 'ceilingService', levels[L].id, x0, z0, x1, z1, atBase ? df + d.height : g.ceil[i]);
+    ceilRect(office?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), levels[L].id, x0, z0, x1, z1, atBase ? df + d.height : g.ceil[i]);
   }
   // Ceilings of every level band (slab undersides between overlapping levels included).
   for (const r of ceilingRuns(levels, cols, (L, i) => doorMask[L][i] === 1)) {
     const a = r.voidCell ? undefined : layout.areas[r.area];
-    ceilRect(r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService', levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
+    // Task office-overhaul-20261030 (lane ARCH): office ceilings (T-bar grid, plaster, exposed slab, core); none on the open roof.
+    const oc = r.voidCell ? null : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null;
+    if (oc === false) continue;
+    ceilRect(oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService'), levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
   }
   // Lane T (iteration 05): stair flights (treads, risers, nosings, ceilings, handrails), rescue
   // ladders, underpass track-structure beams, tunnel-mouth barricades. Iteration 08: every level's
@@ -376,8 +395,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   for (const [key, e] of acc) {
     const geo = e.a.geometry();
     if (!geo) continue;
-    const mesh = new THREE.Mesh(geo, mats.get(e.k));
-    mesh.name = `arch-${key}`;
+    const mesh = new THREE.Mesh(geo, matOf(e.k));
+    mesh.name = office?.meshName(e.k) ?? `arch-${key}`;
     mesh.userData.level = e.level;
     if (e.levels) mesh.userData.levels = e.levels;
     mesh.matrixAutoUpdate = false;
@@ -417,14 +436,14 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // --- Procedural trim: door frames, rails, sleepers, coverboard, handrails, rods ----------
   // Merged per (material, level, coarse trim chunk): trim is cheap, so its chunks are larger than the
   // architecture's (fewer draw calls) while off-screen ends of the station and hidden levels still cull.
-  const boxes = new Map<string, {mat: MatKey; level: number; list: THREE.BufferGeometry[]}>();
-  const trimList = (mat: MatKey, x: number, z: number, level: number) => {
+  const boxes = new Map<string, {mat: MatKey | string; level: number; list: THREE.BufferGeometry[]}>();
+  const trimList = (mat: MatKey | string, x: number, z: number, level: number) => {
     const key = `${mat}@${level}:${Math.floor(x / TRIM_CHUNK_M)},${Math.floor(z / TRIM_CHUNK_M)}`;
     let e = boxes.get(key);
     if (!e) boxes.set(key, (e = {mat, level, list: []}));
     return e.list;
   };
-  const addBox = (mat: MatKey, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, rotY = 0) => {
+  const addBox = (mat: MatKey | string, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, rotY = 0) => {
     const b = new THREE.BoxGeometry(sx, sy, sz);
     if (rotY) b.rotateY(rotY);
     b.translate(cx, cy, cz);
@@ -440,18 +459,20 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const atBase = df === 0 || (dl !== undefined && Math.abs(df - dl.baseY) < 1e-4);
     const h = atBase ? d.height : Math.min(d.height, (g.hasCeil(i) ? g.ceil[i] : df + d.height) - df);
     const ft = 0.09, fd = CELL + 0.06;
+    // Task office-overhaul-20261030 (lane ARCH): office doors get painted / timber joinery frames in the tenant's trim, not steel.
+    const fm = office?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel';
     if (d.h === 1) { // wall runs along X; jambs at both X ends of the opening
       const z = (d.y + 0.5) * CELL;
       const xa = d.x * CELL, xb = (d.x + d.w) * CELL;
-      addBox('steel', xa + ft / 2, df + h / 2, z, ft, h, fd);
-      addBox('steel', xb - ft / 2, df + h / 2, z, ft, h, fd);
-      addBox('steel', (xa + xb) / 2, df + h - 0.05, z, xb - xa, 0.1, fd);
+      addBox(fm, xa + ft / 2, df + h / 2, z, ft, h, fd);
+      addBox(fm, xb - ft / 2, df + h / 2, z, ft, h, fd);
+      addBox(fm, (xa + xb) / 2, df + h - 0.05, z, xb - xa, 0.1, fd);
     } else {
       const x = (d.x + 0.5) * CELL;
       const za = d.y * CELL, zb = (d.y + d.h) * CELL;
-      addBox('steel', x, df + h / 2, za + ft / 2, fd, h, ft);
-      addBox('steel', x, df + h / 2, zb - ft / 2, fd, h, ft);
-      addBox('steel', x, df + h - 0.05, (za + zb) / 2, fd, 0.1, zb - za);
+      addBox(fm, x, df + h / 2, za + ft / 2, fd, h, ft);
+      addBox(fm, x, df + h / 2, zb - ft / 2, fd, h, ft);
+      addBox(fm, x, df + h - 0.05, (za + zb) / 2, fd, 0.1, zb - za);
     }
   }
   const railY = trenchY + 0.14 + 0.08;
@@ -501,7 +522,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
   // Guard railings on drop edges (mezzanine/catwalk edges, light wells, stairwells, open flight sides).
   const rails = stationRails(layout, levels, cols);
-  for (const r of rails) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
+  // (task office-overhaul-20261030, lane STRUCT: collision-only rails — escalator balustrades, roof fixtures — draw their own geometry)
+  for (const r of rails) if (!(r as {hidden?: boolean}).hidden) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
 
   let instances = instancesFromTraversal;
   // Sleepers (instanced, every track of every bed), one instanced mesh per trim chunk.
@@ -594,8 +616,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 
   // --- Storefront bays (frames, fascias, shutters, glazing, menu boards, counters …) -----------
   instances += buildStorefronts(group, layout, {mat: k => shapeMaterial(mats, k), models, instanceModel});
-  // Iteration 16 (WORLD-GEN): office carpet, drop ceilings and window reveals (no-op without layout.office).
-  buildOfficeSurfaces(group, layout, mats);
+  // Iteration 16 (WORLD-GEN): office carpet, drop ceilings and window reveals (no-op without layout.office). Task
+  // office-overhaul-20261030 (lane ARCH): the carpet / ceilings are the office storeys' own floors / ceilings now (office keys
+  // above, no overlay over station finishes); only the window reveals are added here, in the storey's wall finish.
+  office?.buildReveals(group);
 
   // --- Signs (instanced: shared plates, one face mesh per distinct text) --------------------
   instances += buildSigns(group, layout, mats, models.sign, addBox);
@@ -603,7 +627,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   for (const [key, e] of boxes) {
     if (!e.list.length) continue;
     const merged = mergeBoxes(e.list);
-    const mesh = new THREE.Mesh(merged, mats.get(e.mat));
+    const mesh = new THREE.Mesh(merged, matOf(e.mat));
     mesh.name = `trim-${key}`;
     mesh.userData.level = e.level;
     mesh.matrixAutoUpdate = false;
@@ -628,7 +652,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // groups (containers, stock) and calls culler.update(camera) before rendering.
   const culler = new LevelCuller(levels, cols, levelAt);
   culler.register(group);
-  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: faces, rails, levelAt, culler};
+  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: faces, rails, levelAt, culler, ...(office ? {officeArch: office} : {})};
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -680,10 +704,11 @@ function addProceduralProp(group: THREE.Group, kind: PropKind, list: PropPlaceme
 const signTexCache = new Map<string, THREE.Texture>();
 
 function signTexture(s: SignPlacement, w: number, h: number): THREE.Texture {
-  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}`;
+  const key = `${s.kind}|${s.text}|${s.arrow ?? ''}|${w.toFixed(2)}${signStyleKey(s)}`;
   let tex = signTexCache.get(key);
   if (tex) return tex;
-  if (s.kind === 'station') tex = signPlate(s.text.toUpperCase(), 'station', s.text.length * 31 + 7);
+  if (s.style) tex = companySignTexture(s, w, h); // Task office-overhaul-20261030 (lane TENANTS): company / directory plates
+  else if (s.kind === 'station') tex = signPlate(s.text.toUpperCase(), 'station', s.text.length * 31 + 7);
   else {
     const W = 1024, H = Math.max(160, Math.round(1024 * h / w));
     tex = canvasTexture(W, H, s.text.length * 17 + s.kind.length, (ctx, cw, ch) => {

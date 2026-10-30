@@ -6,13 +6,17 @@
 // Proves: one layout holds every storey at its real height; every floor is reachable on foot; the player's height changes
 // continuously (no jump bigger than one frame of motion) while crossing every floor boundary; nothing about the world is
 // replaced while walking; the tower code has no travel / fade path left (source guard).
+// Task office-overhaul-20261030 (lane STRUCT): the station -> lobby leg is the broad transit hall (fixed stair + escalators), and
+// the walk continues from floor 8 up the roof access ladder onto the ROOF (level 9) — the same continuous world, no load.
 
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {LEVELS} from '../src/levels/registry';
 import {levelsOf} from '../src/gen/levels';
 import {PathFinder, type Waypoint} from '../src/gen/grid';
-import {Player} from '../src/player/player';
+import {Player, STAND_EYE} from '../src/player/player';
+import {ladderTarget} from '../src/gen/traversal';
+import {roofLadderPose} from '../src/gen/office/roof';
 
 const SEED = 0x5ea1e55;
 const DT = 1 / 60;
@@ -28,8 +32,11 @@ describe('seamless Office Space: one world, walked floor to floor', () => {
   const office = layout.office!;
   const L = levelsOf(layout);
 
-  it('holds the station, the lobby and floors 2-8 in ONE layout at their real, contiguous heights', () => {
-    expect(layout.levels.map(l => l.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  it('holds the station, the lobby, floors 2-8 and the roof in ONE layout at their real, contiguous heights', () => {
+    expect(layout.levels.map(l => l.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(layout.levels[9].role).toBe('roof');
+    expect(layout.levels[9].baseY).toBeCloseTo(layout.levels[8].baseY + office.floorHeight, 3);
+    expect(office.roof?.level).toBe(9);
     expect(office.storeys.map(s => [s.floor, s.levelId])).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map(f => [f, f]));
     const lobby = layout.levels[1].baseY;
     expect(lobby).toBeGreaterThan(5);
@@ -80,6 +87,41 @@ describe('seamless Office Space: one world, walked floor to floor', () => {
     expect(p.y).toBeGreaterThan(30); // floor 8 at its real height
     expect(maxDy).toBeLessThan(0.12); // stairs: no snap / teleport between storeys, one frame of motion at most
     expect(minVy).toBeGreaterThan(-3); // never fell (no void / missing slab on the way up)
+    expect(p.alive).toBe(true);
+
+    // Lane STRUCT: on to the roof — walk to the roof access closet's ladder (PathFinder route on floor 8), aim at the ladder, climb.
+    const foot = roofLadderPose(layout, 'bottom')!;
+    const route = pf.find(p.x, p.z, foot.x, foot.z, 0.3, 400000, {ay: p.y, by: foot.y});
+    expect(route, 'route to the roof ladder').not.toBeNull();
+    let i = 0;
+    const cap = steps + 60 * 90;
+    while (i < route!.length && steps < cap) {
+      const [wx, wz] = route![i];
+      if (Math.hypot(wx - p.x, wz - p.z) < 0.3) { i++; continue; }
+      p.yaw = Math.atan2(-(wx - p.x), -(wz - p.z));
+      keys.held.add('KeyW');
+      const y0 = p.y;
+      p.update(DT, keys, L, null, {aiming: false, speedMult: 1, canSprint: false});
+      maxDy = Math.max(maxDy, Math.abs(p.y - y0));
+      steps++;
+    }
+    keys.held.clear();
+    expect(i).toBe(route!.length);
+    p.yaw = foot.yaw; p.pitch = foot.pitch;
+    const look = {x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch)};
+    const aim = ladderTarget(layout.traversal.ladders, {x: p.x, y: p.y + STAND_EYE, z: p.z}, look, p.y);
+    expect(aim?.ladder.kind).toBe('roof');
+    p.startClimb(aim!.ladder, aim!.up);
+    let climbSteps = 0;
+    while (p.climbing && climbSteps < 60 * 20) {
+      const y0 = p.y;
+      p.update(DT, keys, L, null, {aiming: false, speedMult: 1, canSprint: false});
+      maxDy = Math.max(maxDy, Math.abs(p.y - y0));
+      climbSteps++;
+    }
+    expect(L.levelAt(p.x, p.z, p.y + 0.05)).toBe(9);
+    expect(p.y).toBeCloseTo(layout.levels[9].baseY, 2);
+    expect(maxDy).toBeLessThan(0.12); // the climb is continuous too
     expect(p.alive).toBe(true);
   });
 
