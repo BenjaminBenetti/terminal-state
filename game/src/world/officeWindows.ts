@@ -7,6 +7,13 @@
 // enemies of that storey (a broken pane is never a way out).
 // Transparency follows the storefront glass rules (world/shapeMaterials 'glassShopfront'): transparent, depthWrite off
 // — the fog march / composite read the depth BEHIND the glass (the exterior), exactly like the existing shop glazing.
+//
+// Task gasmask-breach-20261030 (lane GAS): every BREAKABLE pane (paneBreakable: an exterior window of a tower storey, generated
+// intact or cracked) has a stable identity (paneId = `level:span:column:row`) and three pre-built looks in the merged storey
+// meshes — its intact quad (generated intact only), its cracked quad and its broken shards — whose vertex ranges are recorded
+// (WindowView.panes). Only the current look has area; the others are collapsed to a point (zero-area triangles draw nothing).
+// setPaneLook switches looks by rewriting those positions (a partial upload): no new mesh, material or pipeline mid-play, so
+// the loading-screen warm-up already covers every look. Collision is never touched (world/windowBreach.ts counts the hits).
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -18,9 +25,12 @@ import {hash01, sideNormal, windowYs, type Rect2, type TowerInfo, type WindowSpa
 
 export type PaneState = 'intact' | 'cracked' | 'broken' | 'boarded';
 
-export interface PanePlan { a0: number; a1: number; y0: number; y1: number; state: PaneState; seed: number }
+/** `col` / `row`: the pane's column along the span and its row (0 = lower; the lobby's transom splits a column in two). */
+export interface PanePlan { a0: number; a1: number; y0: number; y1: number; state: PaneState; seed: number; col: number; row: number }
 
 export interface WindowPlan {
+  /** Index of the span in layout.office.windows (TowerInfo.windows). */
+  index: number;
   span: WindowSpan;
   /** Storey (layout.levels index) and its floor (absolute y). */
   level: number;
@@ -70,14 +80,27 @@ export function planWindows(info: TowerInfo): WindowPlan[] {
       rows.forEach(([py0, py1], j) => {
         const rc = hash01(info.seed, si * 131 + 11, i * 7 + j);
         const state: PaneState = col !== 'intact' ? col : rc < 0.42 ? 'cracked' : 'intact';
-        panes.push({a0: pa0, a1: pa1, y0: py0, y1: py1, state, seed: Math.floor(rc * 1e6)});
+        panes.push({a0: pa0, a1: pa1, y0: py0, y1: py1, state, seed: Math.floor(rc * 1e6), col: i, row: j});
       });
     }
     // collider: the span box, at least 0.35 m thick, extended outward (never into the room)
     const cMin = out > 0 ? inner : Math.min(c0, inner - 0.35), cMax = out > 0 ? Math.max(c1, inner + 0.35) : inner;
     const collider: Rect2 = along === 'x' ? {x0: a0, x1: a1, z0: cMin, z1: cMax} : {x0: cMin, x1: cMax, z0: a0, z1: a1};
-    return {span, level: span.level, baseY: span.baseY, n, along, a0, a1, glass, inner, y0, y1, mullions, transom, panes, collider};
+    return {index: si, span, level: span.level, baseY: span.baseY, n, along, a0, a1, glass, inner, y0, y1, mullions, transom, panes, collider};
   });
+}
+
+/** Task gasmask-breach-20261030: a pane's stable identity `level:span:column:row` (deterministic per office seed). */
+export function paneId(p: WindowPlan, pane: PanePlan): string {
+  return `${p.level}:${p.index}:${pane.col}:${pane.row}`;
+}
+
+/**
+ * Task gasmask-breach-20261030: bullets can crack and break this pane — an exterior window (not the lobby's boarded street
+ * entrance) generated intact or cracked. Generated broken / boarded panes are inert.
+ */
+export function paneBreakable(p: WindowPlan, pane: PanePlan): boolean {
+  return (p.span.kind ?? 'window') === 'window' && (pane.state === 'intact' || pane.state === 'cracked');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -152,6 +175,15 @@ export function officeGlassMaterial(mats: WorldMaterials): THREE.Material {
 // ---------------------------------------------------------------------------------------------
 // three.js
 
+/** Task gasmask-breach-20261030: what a breakable pane shows. */
+export type PaneLook = 'intact' | 'cracked' | 'broken';
+
+/** Vertex range of one pane look inside a merged storey mesh (`base`: the mesh's uncollapsed positions). */
+interface LookRange { attr: THREE.BufferAttribute; base: Float32Array; start: number; count: number }
+
+/** Task gasmask-breach-20261030: the pre-built looks of one breakable pane and the one shown. */
+export interface PaneView { looks: Partial<Record<PaneLook, LookRange>>; look: PaneLook }
+
 export interface WindowView {
   root: THREE.Group;
   /** Intact + cracked glass meshes (shown through by the exterior). */
@@ -159,6 +191,30 @@ export interface WindowView {
   geometries: THREE.BufferGeometry[];
   /** Material of the cracked panes (its map is swapped to T6 when the texture arrives late). */
   cracked: SurfaceNodeMaterial | null;
+  /** Task gasmask-breach-20261030: every breakable pane by paneId (setPaneLook). */
+  panes: Map<string, PaneView>;
+}
+
+/**
+ * Task gasmask-breach-20261030: show `look` on a breakable pane (the other looks collapse). Rewrites only that pane's vertex
+ * ranges (partial buffer upload). False when the pane has no such look or already shows it.
+ */
+export function setPaneLook(view: WindowView, id: string, look: PaneLook): boolean {
+  const p = view.panes.get(id);
+  if (!p || p.look === look || !p.looks[look]) return false;
+  for (const k of ['intact', 'cracked', 'broken'] as const) { const r = p.looks[k]; if (r) shapeLook(r, k === look, true); }
+  p.look = look;
+  return true;
+}
+
+/** Restore a look's positions (show) or collapse them onto its first vertex (zero-area: nothing is drawn). */
+function shapeLook(r: LookRange, show: boolean, upload: boolean): void {
+  const a = r.attr.array as Float32Array, s = r.start * 3, e = (r.start + r.count) * 3;
+  if (show) a.set(r.base.subarray(s, e), s);
+  else for (let i = s; i < e; i += 3) { a[i] = r.base[s]; a[i + 1] = r.base[s + 1]; a[i + 2] = r.base[s + 2]; }
+  if (!upload) return;
+  r.attr.addUpdateRange(s, e - s);
+  r.attr.needsUpdate = true;
 }
 
 /** World-space quad facing `facing` (unit x, z) in the vertical plane. */
@@ -211,14 +267,20 @@ function shards(p: WindowPlan, pane: PanePlan, facing: [number, number]): THREE.
   return g;
 }
 
-function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+/** A part to merge; `tag` (`paneId|look`) records its vertex range in the merged geometry. */
+interface Part { g: THREE.BufferGeometry; tag?: string }
+
+function mergeAll(parts: readonly Part[], ranges?: Map<string, [number, number]>): THREE.BufferGeometry | null {
   if (!parts.length) return null;
-  if (parts.length === 1) return parts[0];
   // quads / boxes are indexed, shards are not: merge them all non-indexed when mixed
-  const mixed = parts.some(p => p.index) && parts.some(p => !p.index);
-  const src = mixed ? parts.map(p => (p.index ? p.toNonIndexed() : p)) : parts;
+  const mixed = parts.some(p => p.g.index) && parts.some(p => !p.g.index);
+  const src = mixed ? parts.map(p => (p.g.index ? p.g.toNonIndexed() : p.g)) : parts.map(p => p.g);
+  // vertex ranges in merge order (mergeGeometries concatenates the attributes; indexed parts keep their own vertices)
+  let at = 0;
+  src.forEach((g, i) => { const n = g.getAttribute('position').count; const tag = parts[i].tag; if (tag) ranges?.set(tag, [at, n]); at += n; });
+  if (src.length === 1) { if (src[0] !== parts[0].g) parts[0].g.dispose(); return src[0]; }
   const m = mergeGeometries(src, false);
-  for (const p of new Set([...parts, ...src])) if (p !== m) p.dispose();
+  for (const p of new Set([...parts.map(q => q.g), ...src])) if (p !== m) p.dispose();
   if (!m) throw new Error('tower windows: incompatible pane geometries');
   return m;
 }
@@ -228,39 +290,50 @@ export function buildWindows(plans: readonly WindowPlan[], mats: WorldMaterials,
   const root = new THREE.Group(); root.name = 'tower-windows';
   const geometries: THREE.BufferGeometry[] = [];
   const glass: THREE.Mesh[] = [], meshes: THREE.Mesh[] = [];
+  const panes = new Map<string, PaneView>();
   let cracked: SurfaceNodeMaterial | null = null;
   // merged per storey (culling) and material
   const byLevel = new Map<number, WindowPlan[]>();
   for (const p of plans) { let l = byLevel.get(p.level); if (!l) byLevel.set(p.level, (l = [])); l.push(p); }
-  for (const [level, list] of byLevel) cracked = buildStorey(list, mats, glassTex, level, geometries, glass, meshes) ?? cracked;
+  for (const [level, list] of byLevel) cracked = buildStorey(list, mats, glassTex, level, geometries, glass, meshes, panes) ?? cracked;
   for (const m of meshes) root.add(m);
-  return {root, glass, geometries, cracked};
+  return {root, glass, geometries, cracked, panes};
 }
 
 /** One storey's windows, merged per material (meshes tagged with the storey). Returns the cracked-glass material if used. */
-function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null, level: number, geometries: THREE.BufferGeometry[], glass: THREE.Mesh[], meshes: THREE.Mesh[]): SurfaceNodeMaterial | null {
-  const intact: THREE.BufferGeometry[] = [], crackedParts: THREE.BufferGeometry[] = [], frames: THREE.BufferGeometry[] = [], sills: THREE.BufferGeometry[] = [], boards: THREE.BufferGeometry[] = [];
+function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTex: THREE.Texture | null, level: number, geometries: THREE.BufferGeometry[], glass: THREE.Mesh[], meshes: THREE.Mesh[], panes: Map<string, PaneView>): SurfaceNodeMaterial | null {
+  const intact: Part[] = [], crackedParts: Part[] = [], frames: Part[] = [], sills: Part[] = [], boards: Part[] = [];
   for (const p of plans) {
     const facing: [number, number] = [-p.n[0], -p.n[1]]; // glass faces the room
     const out = p.n[0] + p.n[1];
     const fd = 0.07, fwid = 0.06; // frame depth across the wall, frame width
     const g0 = p.glass - fd / 2, g1 = p.glass + fd / 2;
     // outer frame + mullions + transom
-    frames.push(planBox(p, p.a0, p.a1, g0, g1, p.y0, p.y0 + fwid));
-    frames.push(planBox(p, p.a0, p.a1, g0, g1, p.y1 - fwid, p.y1));
-    frames.push(planBox(p, p.a0, p.a0 + fwid, g0, g1, p.y0, p.y1));
-    frames.push(planBox(p, p.a1 - fwid, p.a1, g0, g1, p.y0, p.y1));
-    for (const m of p.mullions) frames.push(planBox(p, m - fwid / 2, m + fwid / 2, g0, g1, p.y0, p.y1));
-    if (p.transom !== null) frames.push(planBox(p, p.a0, p.a1, g0, g1, p.transom - fwid / 2, p.transom + fwid / 2));
+    const frame = (a0: number, a1: number, y0: number, y1: number) => frames.push({g: planBox(p, a0, a1, g0, g1, y0, y1)});
+    frame(p.a0, p.a1, p.y0, p.y0 + fwid);
+    frame(p.a0, p.a1, p.y1 - fwid, p.y1);
+    frame(p.a0, p.a0 + fwid, p.y0, p.y1);
+    frame(p.a1 - fwid, p.a1, p.y0, p.y1);
+    for (const m of p.mullions) frame(m - fwid / 2, m + fwid / 2, p.y0, p.y1);
+    if (p.transom !== null) frame(p.a0, p.a1, p.transom - fwid / 2, p.transom + fwid / 2);
     // interior sill board (laminate ledge proud of the wall face)
     const s0 = p.inner - out * 0.02, s1 = p.inner - out * 0.2;
-    sills.push(planBox(p, p.a0 - 0.05, p.a1 + 0.05, Math.min(s0, s1), Math.max(s0, s1), p.y0 - 0.035, p.y0));
+    sills.push({g: planBox(p, p.a0 - 0.05, p.a1 + 0.05, Math.min(s0, s1), Math.max(s0, s1), p.y0 - 0.035, p.y0)});
     for (const pane of p.panes) {
       const ia0 = pane.a0 + fwid / 2, ia1 = pane.a1 - fwid / 2, iy0 = pane.y0 + fwid / 2, iy1 = pane.y1 - fwid / 2;
       if (ia1 <= ia0 + 0.05 || iy1 <= iy0 + 0.05) continue;
-      if (pane.state === 'intact') intact.push(paneQuad(p, ia0, ia1, iy0, iy1, facing));
-      else if (pane.state === 'cracked') crackedParts.push(paneQuad(p, ia0, ia1, iy0, iy1, facing));
-      else if (pane.state === 'broken') { const s = shards(p, {...pane, a0: ia0, a1: ia1, y0: iy0, y1: iy1}, facing); if (s) crackedParts.push(s); }
+      if (paneBreakable(p, pane)) {
+        // task gasmask-breach-20261030: every look of a breakable pane (generated cracked: no intact look); the current one
+        // is the generated state, the others are collapsed once merged
+        const id = paneId(p, pane);
+        panes.set(id, {looks: {}, look: pane.state === 'cracked' ? 'cracked' : 'intact'});
+        if (pane.state === 'intact') intact.push({g: paneQuad(p, ia0, ia1, iy0, iy1, facing), tag: `${id}|intact`});
+        crackedParts.push({g: paneQuad(p, ia0, ia1, iy0, iy1, facing), tag: `${id}|cracked`});
+        const s = shards(p, {...pane, a0: ia0, a1: ia1, y0: iy0, y1: iy1}, facing);
+        if (s) crackedParts.push({g: s, tag: `${id}|broken`});
+      } else if (pane.state === 'intact') intact.push({g: paneQuad(p, ia0, ia1, iy0, iy1, facing)});
+      else if (pane.state === 'cracked') crackedParts.push({g: paneQuad(p, ia0, ia1, iy0, iy1, facing)});
+      else if (pane.state === 'broken') { const s = shards(p, {...pane, a0: ia0, a1: ia1, y0: iy0, y1: iy1}, facing); if (s) crackedParts.push({g: s}); }
       else {
         // boarded: plywood planks on the room side, slightly askew (the pane behind is gone)
         const rnd = mulberry32(pane.seed ^ 0xb0a2d);
@@ -277,15 +350,31 @@ function buildStorey(plans: readonly WindowPlan[], mats: WorldMaterials, glassTe
             .multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(p.n[0], 0, p.n[1]), tilt))
             .multiply(new THREE.Matrix4().makeTranslation(-(p.along === 'x' ? ac : cc), -yc, -(p.along === 'x' ? cc : ac)));
           b.applyMatrix4(m);
-          boards.push(b);
+          boards.push({g: b});
         }
       }
     }
   }
-  const mk = (parts: THREE.BufferGeometry[], mat: THREE.Material, name: string, isGlass = false): void => {
-    const g = mergeAll(parts);
+  const mk = (parts: Part[], mat: THREE.Material, name: string, isGlass = false): void => {
+    const ranges = new Map<string, [number, number]>();
+    const g = mergeAll(parts, ranges);
     if (!g) return;
     geometries.push(g);
+    if (ranges.size) {
+      // task gasmask-breach-20261030: bounds of every look (culling never misses a look shown later), then all but the
+      // current look of each pane collapse (before the first upload)
+      g.computeBoundingBox();
+      g.computeBoundingSphere();
+      const attr = g.getAttribute('position') as THREE.BufferAttribute;
+      const base = (attr.array as Float32Array).slice();
+      for (const [tag, [start, count]] of ranges) {
+        const [id, look] = tag.split('|') as [string, PaneLook];
+        const pv = panes.get(id)!;
+        const r: LookRange = {attr, base, start, count};
+        pv.looks[look] = r;
+        if (look !== pv.look) shapeLook(r, false, false);
+      }
+    }
     const m = new THREE.Mesh(g, mat);
     m.name = name;
     m.userData.level = level;
