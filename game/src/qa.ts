@@ -30,6 +30,7 @@ import {seedToCode} from './core/rng'; // Iteration 16 (lane RUN)
 import {memorySummary} from './run/memory'; // Iteration 16 (lane RUN)
 import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
 import type {Arrival, LevelId} from './levels/types'; // Iteration 16 (lane RUN)
+import {SPAN_ABOUT, SPAN_COUNT} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE)
 
 export function installQaHooks(game: Game): void {
   const api = {
@@ -378,6 +379,30 @@ export function installQaHooks(game: Game): void {
     gpu: () => gpuQa(),
     /** Iteration 14: the loading-screen render warm-up's result (status, mode, plan counts, per-stage done / total / ms) and whether one runs now. */
     warmup: () => ({running: game.warming, result: game.warmup}),
+    /**
+     * Task frame-budget-deferral-20261030 (lane SCHED): the frame-budget scheduler (core/frameBudget.ts) — refresh detection,
+     * budget, hold, generation, queued jobs + oldest age, last run frame (chunks / ms / deferred / overdue runs / remaining),
+     * totals (chunks, ms, overdue runs, drops, cancellations, errors, overruns), per-kind estimates; plus this frame's frameCpu.
+     */
+    frameBudget: () => ({...game.frameBudget.diagnostics(), frameCpu: {...game.frameCpu}}),
+    /** Lane SCHED: the brains' path requests (ai/pathService.ts) — immediate / queued far re-plans / delivered / reissued / skipped / refused. */
+    pathService: () => game.pathService ? {...game.pathService.stats, pending: game.pathService.pending} : null,
+    /**
+     * Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler (debug/updateProfile.ts). Start (clears the
+     * window: a ring of the newest 600 play frames), read, stop. updateProfile({reset, window, spikes}) -> per span avg / p95 /
+     * max ms per frame, frames entered, calls, share of frame time over the newest `window` frames (default all), the `spikes`
+     * slowest frames (default 5) with their dominant spans, hook names, clock note; `reset` clears after reading.
+     */
+    updateProfileStart: () => {
+      game.prof.startRecording();
+      return {on: true, capacity: game.prof.capacity, spans: SPAN_COUNT, hooks: [...game.prof.hookNames]};
+    },
+    updateProfile: (o: {reset?: boolean; window?: number; spikes?: number} = {}) => {
+      const r = game.prof.report(o);
+      if (o.reset) game.prof.reset();
+      return {...r, about: SPAN_ABOUT};
+    },
+    updateProfileStop: () => { const r = game.prof.report(); game.prof.stopRecording(); return r; },
     /** Iteration 13 (MAT-A): decay field texel + level band the surface shaders read at world points (GPU) vs the CPU field. */
     decayProbe: (pts: DecayProbe[]) => probeDecayGPU(game.renderer as never, pts),
     /**

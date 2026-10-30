@@ -20,12 +20,21 @@ import {backendTag} from '../render/backend';
 import {FrameHistory, HISTORY_FRAMES, TARGET_LINES_MS, graphScaleMs, type FrameSummary} from './frameHistory';
 import {GpuTimer, type TimingRendererLike} from './gpuTimer';
 import {CpuPressureWatch, LongFrameWatch, summarizeLongFrames} from './browserSignals';
+import type {FrameBudgetDiagnostics} from '../core/frameBudget'; // task frame-budget-deferral-20261030 (lane SCHED)
+
+/** Task frame-budget-deferral-20261030 (lane SCHED): the scheduler numbers the overlay reads (core/frameBudget.ts FrameBudget). */
+export interface DeferralView {
+  diagnostics(): Pick<FrameBudgetDiagnostics, 'refresh' | 'budgetMs' | 'held' | 'queued' | 'oldestAgeMs' | 'totals'>;
+}
 
 /** What the overlay reads from the game (Game satisfies it). */
 export interface PerfHost {
   readonly state: string;
   readonly warming: boolean;
-  readonly frameCpu: {readonly updateMs: number; readonly renderMs: number; readonly rendered: boolean};
+  /** deferredMs (lane SCHED): background chunks inside the same callback (part of its main-thread time). */
+  readonly frameCpu: {readonly updateMs: number; readonly renderMs: number; readonly rendered: boolean; readonly deferredMs?: number};
+  /** Lane SCHED: the frame-budget scheduler (read only by the 4 Hz text rows while shown). */
+  readonly frameBudget?: DeferralView | null;
   readonly gpu: GpuInfo | null;
   readonly settings: {readonly quality: string};
   readonly canvas: {readonly width: number; readonly height: number};
@@ -56,6 +65,7 @@ const ROWS = [
   ['frame', 'Frame ms'],
   ['spikes', 'Spikes'],
   ['cpu', 'Game CPU ms'],
+  ['defer', 'Deferred'], // lane SCHED: background work queue (core/frameBudget.ts)
   ['gpu', 'GPU ms'],
   ['syscpu', 'System CPU'],
   ['loaf', 'Long frames'],
@@ -92,7 +102,8 @@ const CSS = `
 #perf-overlay .po-note { margin-top: 6px; font-size: 9.5px; line-height: 1.35; color: #8f887a; }
 `;
 
-const NOTE = 'System CPU % and GPU utilization % are not exposed to web pages. Game CPU = this game’s main-thread JS; '
+const NOTE = 'System CPU % and GPU utilization % are not exposed to web pages. Game CPU = this game’s main-thread JS, '
+  + 'deferred background chunks included (Deferred = their queue); '
   + 'render submit is CPU encoding, not GPU work. Draws / triangles: every pass (shadow map, scene, fog / post, viewmodel) '
   + 'after frustum culling, not unique visible triangles.';
 
@@ -142,7 +153,7 @@ export class PerfOverlay {
    */
   frame(time: number, cpuMs: number): void {
     const c = this.host.frameCpu;
-    this.history.push({time, cpuMs, updateMs: c.updateMs, renderMs: c.renderMs, rendered: c.rendered, frameId: c.rendered ? this.host.renderer.info.frame : -1});
+    this.history.push({time, cpuMs, updateMs: c.updateMs, renderMs: c.renderMs, deferredMs: c.deferredMs ?? 0, rendered: c.rendered, frameId: c.rendered ? this.host.renderer.info.frame : -1});
     if (!this.visible) return;
     try {
       // no GPU queries during the loading-screen warm-up (it owns the renderer) or after a device loss
@@ -275,8 +286,11 @@ export class PerfOverlay {
     this.set('frame', s.frames === 0 ? '—' : `${fms(s.lastMs)} now · ${fms(s.avgMs)} avg · ${fms(s.p99Ms)} p99 · ${fms(s.maxMs)} max`);
     this.set('spikes', `${s.over33} >33 ms · ${s.over50} >50 ms in ${fmt(s.spanMs / 1000)} s`
       + (s.gaps > 0 ? ` · ${s.gaps} gap${s.gaps > 1 ? 's' : ''} (${fmt((s.lastGapMs ?? 0) / 1000)} s, not counted)` : ''));
+    // lane SCHED: deferred background chunks are already inside the game CPU avg / max (same callback); shown as their share
     this.set('cpu', s.cpuAvgMs === null ? '—'
-      : `${fmt(s.cpuAvgMs)} avg · ${fmt(s.cpuMaxMs)} max · update ${fmt(s.updateAvgMs)} · render submit ${fmt(s.renderAvgMs)}`);
+      : `${fmt(s.cpuAvgMs)} avg · ${fmt(s.cpuMaxMs)} max · update ${fmt(s.updateAvgMs)} · render submit ${fmt(s.renderAvgMs)}`
+        + (h.frameBudget ? ` · deferred ${fmt(s.deferredAvgMs, 2)} (max ${fmt(s.deferredMaxMs)})` : ''));
+    this.set('defer', this.deferText(now));
     this.set('gpu', this.gpuText(s));
     const p = this.pressure;
     this.set('syscpu', p.state ? `pressure ${p.state} (Compute Pressure; coarse, no %)` : `n/a — ${p.note ?? 'unavailable'}`);
@@ -298,6 +312,24 @@ export class PerfOverlay {
       : h.state === 'playing' ? 'playing'
         : h.state === 'paused' || h.state === 'inventory' || h.state === 'dead' || h.state === 'won' ? `${h.state} (menu: frame redrawn 4/s)` : h.state);
   }
+
+  /**
+   * Lane SCHED: the background-work queue — jobs waiting and the oldest one's age, chunks / overdue (forced) chunks per
+   * second since the last text refresh, drops, and the budget it runs against. Counts and measured times only.
+   */
+  private deferText(now: number): string {
+    const fb = this.host.frameBudget;
+    if (!fb) return 'n/a — no scheduler';
+    const d = fb.diagnostics(), t = d.totals, p = this.deferPrev;
+    const dt = (now - p.time) / 1000;
+    const rate = (v: number, was: number) => p.time >= 0 && dt > 0 ? fmt((v - was) / dt, 0) : '—';
+    const text = `${d.queued} queued${d.queued ? ` (oldest ${fmt(d.oldestAgeMs / 1000, 2)} s)` : ''} · ${rate(t.chunks, p.chunks)} chunks/s`
+      + ` · ${rate(t.overdueRuns, p.overdue)} overdue/s · ${t.drops} drops · budget ${fmt(d.budgetMs)} ms @ ${fmt(d.refresh.hz, 0)} Hz`
+      + `${d.refresh.measured ? '' : ' (default)'}${d.held ? ` · held: ${d.held}` : ''}`;
+    p.time = now; p.chunks = t.chunks; p.overdue = t.overdueRuns;
+    return text;
+  }
+  private readonly deferPrev = {time: -1, chunks: 0, overdue: 0};
 
   private gpuText(s: FrameSummary): string {
     const st = this.gpuTimer.status();
