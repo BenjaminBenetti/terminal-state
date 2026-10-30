@@ -1,12 +1,13 @@
 // Task gasmask-breach-20261030 (lane GAS): QA hooks for short, bounded browser spot checks, spread into window.__LL by qa.ts.
 // windows() lists the panes; windowAim(id) only PLACES the player (QA positioning, like the tower's go* helpers) in the room in
-// front of a pane and aims the view at it — the shots are then fired through the normal input / Game.fire path (each pull
-// counts at most once per pane); windowBreak(id) is a DEBUG shortcut (as if its third impact landed now). gas() reports the
-// exposure at the eye and per gassed storey; gasTune() edits the gas term's look live (uniform values only, no rebuild).
+// front of a pane and aims the view at it — the shots are then fired through the normal input / Game.fire path (each ray's real
+// damage counts against the pane's health, PANE_MAX_HP); windowBreak(id) is a DEBUG shortcut (as if its last damage landed now).
+// gas() reports the exposure at the eye (breach field / the roof's outside air) and per gassed storey; gasTune() edits the gas
+// term's look live (uniform values only, no rebuild).
 
 import type {GasSystem} from './system';
 import {GAS} from './field';
-import {paneCentre} from '../windowBreach';
+import {PANE_MAX_HP, paneCentre} from '../windowBreach';
 import type {GasLook} from '../../render/volumetric';
 
 interface QaGame {
@@ -30,8 +31,8 @@ export function gasQaApi(game: unknown) {
       if (!W) return {office: false, panes: []};
       const panes = [...W.refs.values()].filter(r => level === undefined || r.plan.level === level).map(r => {
         const s = W.state.get(r.id), c = paneCentre(r);
-        const state = s?.broken ? 'broken' : (s?.hits ?? 0) > 0 || r.pane.state === 'cracked' ? 'cracked' : 'intact';
-        return {id: r.id, level: r.plan.level, side: r.plan.span.side, state, generated: r.pane.state, hits: s?.hits ?? 0, centre: [r3(c.x), r3(c.y), r3(c.z)], normal: [c.nx, c.nz]};
+        const state = s?.broken ? 'broken' : (s?.damage ?? 0) > 0 || r.pane.state === 'cracked' ? 'cracked' : 'intact';
+        return {id: r.id, level: r.plan.level, side: r.plan.span.side, state, generated: r.pane.state, damage: r3(s?.damage ?? 0), hp: r3(PANE_MAX_HP - (s?.damage ?? 0)), maxHp: PANE_MAX_HP, centre: [r3(c.x), r3(c.y), r3(c.z)], normal: [c.nx, c.nz]};
       });
       const perStorey: Record<number, number> = {};
       for (const p of panes) perStorey[p.level] = (perStorey[p.level] ?? 0) + 1;
@@ -70,6 +71,7 @@ export function gasQaApi(game: unknown) {
       const s = sys(), f = s.field, e = s.exposure;
       return {
         office: !!f, eye: r3(e.c), protected: e.protected, dps: r3(e.dps), damage: r3(e.damage), threshold: GAS.THRESHOLD, dpsMax: GAS.DPS_MAX,
+        source: e.source, outdoor: r3(e.outdoor), roof: !!s.roof, roofOutdoorC: GAS.ROOF_OUTDOOR_C,
         volumetric: g.atmosphere?.active ?? false, ticks: f?.ticks ?? 0, counts: {...s.counts}, hud: {...s.hud.shown},
         storeys: f ? f.storeys.map(st => { const x = st.stats(); return {...x, max: r3(x.max), poolMean: r3(x.poolMean)}; }) : [],
         layers: g.atmosphere?.gasDebug?.() ?? null,

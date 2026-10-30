@@ -1,0 +1,832 @@
+{
+ "task": "studio-alpha-gas-mask-roof-feedback-20261030-01 + studio-alpha-cough-completion-20261030-01",
+ "generatedBy": "tools/audio-pipeline/build-cough.mjs",
+ "policy": "Sound Lab only: one derivative per freshly authorized Sound Lab cough job (distinct prompts / seeds; no pitch / rate variants, no stacking). Original 10-job allowance (closed): five takes failed the structural cough gate and are excluded; the user then authorized regenerations, and completion batch 1 (5 jobs, whole-second durations) replaced them. Takes failing the gate are never shipped",
+ "license": {
+  "status": "Conditional prototype: Stability AI Community License + Gemma terms; not production/commercial clearance. Not listened to on the worker: structural analysis only (see structural / similarity).",
+  "gameReady": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "lab": "http://10.0.0.59:7871 (Last Line Sound Lab CPU 0.1.0; stabilityai/stable-audio-3-small-sfx @ 05ca3857, weights stable-audio-3-optimized @ 08b17423, profile w8a8)",
+ "rawArchive": [
+  "reference/tasks/gas-mask-roof-feedback-20261030/audio/ (raw WAVs + lab sidecars in raw/, intents/ACKs/terminals in ledger/, runner.log, queue.json, PLAN.json)",
+  "reference/tasks/cough-completion-20261030/audio/batch1/ (raw WAVs + lab sidecars in raw/, intents/ACKs/terminals in ledger/, runner.log, queue.json, PLAN.json)"
+ ],
+ "auditioned": false,
+ "gaps": [],
+ "excluded": [
+  {
+   "id": "cough-01-dry-single",
+   "batch": "original 10-job allowance (closed)",
+   "jobId": "20261030T184643-2013033533",
+   "rawSha256": "4a375b919d46b3fe41cbfc7cf6e564b7e801529f5778ad933614aca771f24027",
+   "seconds": 1.5,
+   "reason": "structural QC: continuous signal — only 0.0 % of 5 ms frames are 30 dB below the peak (cough takes need >= 15 %); no discrete cough bursts",
+   "rawQc": {
+    "durationS": 1.5,
+    "peakDb": -2.6,
+    "rmsDb": -20.6,
+    "flatDb": -14.7,
+    "activeS": 1.498,
+    "zcrPerS": 1783,
+    "clippedFrac": 0
+   }
+  },
+  {
+   "id": "cough-02-chesty-triple",
+   "batch": "original 10-job allowance (closed)",
+   "jobId": "20261030T184648-94877476",
+   "rawSha256": "65e3efd3e8aed912c6050d1f2979eb2e55b5600abde089796e2ed0be82e264d7",
+   "seconds": 2.5,
+   "reason": "structural QC: continuous signal — only 1.6 % of 5 ms frames are 30 dB below the peak (cough takes need >= 15 %); no discrete cough bursts",
+   "rawQc": {
+    "durationS": 2.5,
+    "peakDb": -7.8,
+    "rmsDb": -26.6,
+    "flatDb": -23.2,
+    "activeS": 2.456,
+    "zcrPerS": 957,
+    "clippedFrac": 0
+   }
+  },
+  {
+   "id": "cough-04-throat-rasp",
+   "batch": "original 10-job allowance (closed)",
+   "jobId": "20261030T184657-790206384",
+   "rawSha256": "c8b1291f8856222515306a14a7ddc537a7464b57ca0b6ae78202e4e9794e0437",
+   "seconds": 1.5,
+   "reason": "structural QC: continuous signal — only 0.0 % of 5 ms frames are 30 dB below the peak (cough takes need >= 15 %); no discrete cough bursts",
+   "rawQc": {
+    "durationS": 1.5,
+    "peakDb": -4.5,
+    "rmsDb": -19,
+    "flatDb": -10.8,
+    "activeS": 1.498,
+    "zcrPerS": 1587,
+    "clippedFrac": 0
+   }
+  },
+  {
+   "id": "cough-07-muffled",
+   "batch": "original 10-job allowance (closed)",
+   "jobId": "20261030T184711-953123333",
+   "rawSha256": "24bc5f1cdb90056297f56a03049110c2a28ef4bc1b271aad230b48a256d09742",
+   "seconds": 1.5,
+   "reason": "structural QC: continuous signal — only 0.0 % of 5 ms frames are 30 dB below the peak (cough takes need >= 15 %); no discrete cough bursts",
+   "rawQc": {
+    "durationS": 1.5,
+    "peakDb": -7.1,
+    "rmsDb": -20.8,
+    "flatDb": -12.3,
+    "activeS": 1.498,
+    "zcrPerS": 1533,
+    "clippedFrac": 0
+   }
+  },
+  {
+   "id": "cough-10-bark",
+   "batch": "original 10-job allowance (closed)",
+   "jobId": "20261030T184725-604700259",
+   "rawSha256": "f81e9177c8f454254bc523a225ac5dfaee84c8dbd8b39b43d78b359ee9bd6a78",
+   "seconds": 1.5,
+   "reason": "structural QC: continuous signal — only 0.0 % of 5 ms frames are 30 dB below the peak (cough takes need >= 15 %); no discrete cough bursts",
+   "rawQc": {
+    "durationS": 1.5,
+    "peakDb": -7.9,
+    "rmsDb": -21.1,
+    "flatDb": -11.3,
+    "activeS": 1.498,
+    "zcrPerS": 1656,
+    "clippedFrac": 0
+   }
+  }
+ ],
+ "qcGate": {
+  "quietDb": -30,
+  "quietMinFrac": 0.15,
+  "note": "continuous takes are not shipped; their replacements came from completion batch 1"
+ },
+ "totalBytes": 195606,
+ "similarity": {
+  "method": "48-point mean-removed, unit-norm 5 ms envelope signatures; Pearson r",
+  "highest": [
+   {
+    "a": "cc1-cough-01-dry-single",
+    "b": "cc1-cough-10-bark",
+    "envelopeCorr": 0.603
+   },
+   {
+    "a": "cc1-cough-04-throat-rasp",
+    "b": "cc1-cough-07-muffled",
+    "envelopeCorr": 0.504
+   },
+   {
+    "a": "cough-09-weak-hoarse",
+    "b": "cc1-cough-01-dry-single",
+    "envelopeCorr": 0.472
+   },
+   {
+    "a": "cough-03-choke-gasp",
+    "b": "cc1-cough-02-chesty-triple",
+    "envelopeCorr": 0.462
+   },
+   {
+    "a": "cough-03-choke-gasp",
+    "b": "cough-09-weak-hoarse",
+    "envelopeCorr": 0.46
+   }
+  ]
+ },
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/cough-03-choke-gasp.mp3",
+   "url": "assets/audio/cough-03-choke-gasp.mp3",
+   "bytes": 25078,
+   "sha256": "87eb685285cc2dc954ea62971e98d7159198ef177077d99c1b14330f19a46e2e",
+   "cue": "cough",
+   "durationS": 2.039,
+   "source": {
+    "clip": "cough-03-choke-gasp",
+    "batch": "original 10-job allowance (closed)",
+    "task": "studio-alpha-gas-mask-roof-feedback-20261030-01",
+    "rawFile": "reference/tasks/gas-mask-roof-feedback-20261030/audio/raw/cough-03-choke-gasp.wav",
+    "rawSha256": "7fbf2158d1481d3dee3d36da79469f6c45d034b5f260faa053ce043549074f83",
+    "jobId": "20261030T184653-713032374",
+    "labFile": "sfx_a-man-choking-and-coughing-on-toxic-smok_w8a8_seed713032374_184653.wav",
+    "prompt": "TrackType: SFX, a man choking and coughing on toxic smoke, two strained coughs followed by a sharp gasping breath in, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 713032374,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 3,
+     "peakDb": -3.8,
+     "rmsDb": -27.4,
+     "flatDb": -50.7,
+     "activeS": 1.133,
+     "zcrPerS": 3627,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.622,
+    "coughEvents": 9,
+    "activeS": 1.133,
+    "peakDb": -1,
+    "rmsDb": -23,
+    "centroidHz": 1278,
+    "zcrPerS": 4321
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.055,
+     "endS": 2.095,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 2.75
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cough-05-wet-deep.mp3",
+   "url": "assets/audio/cough-05-wet-deep.mp3",
+   "bytes": 14733,
+   "sha256": "2f5d96955d454c6e8431172ef140ae862b770120b8bae4f82a931cb8b305d98c",
+   "cue": "cough",
+   "durationS": 1.187,
+   "source": {
+    "clip": "cough-05-wet-deep",
+    "batch": "original 10-job allowance (closed)",
+    "task": "studio-alpha-gas-mask-roof-feedback-20261030-01",
+    "rawFile": "reference/tasks/gas-mask-roof-feedback-20261030/audio/raw/cough-05-wet-deep.wav",
+    "rawSha256": "afe5107cd8d2dffad5893e85b0d5dc6c814a17d78381ba6b687da072b6aa9b88",
+    "jobId": "20261030T184702-1764497524",
+    "labFile": "sfx_a-man-s-deep-wet-cough-from-the-chest-tw_w8a8_seed1764497524_184702.wav",
+    "prompt": "TrackType: SFX, a man's deep wet cough from the chest, two low phlegmy coughs, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1764497524,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -6.6,
+     "rmsDb": -28.5,
+     "flatDb": -48.5,
+     "activeS": 0.581,
+     "zcrPerS": 3441,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.709,
+    "coughEvents": 3,
+    "activeS": 0.581,
+    "peakDb": -1,
+    "rmsDb": -20.7,
+    "centroidHz": 1251,
+    "zcrPerS": 3702
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.187,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 5.58
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cough-06-sputter.mp3",
+   "url": "assets/audio/cough-06-sputter.mp3",
+   "bytes": 16614,
+   "sha256": "0596805dbccd643a5e8f99a93d5755586cccf29c163c494b1dc288b4473528de",
+   "cue": "cough",
+   "durationS": 1.353,
+   "source": {
+    "clip": "cough-06-sputter",
+    "batch": "original 10-job allowance (closed)",
+    "task": "studio-alpha-gas-mask-roof-feedback-20261030-01",
+    "rawFile": "reference/tasks/gas-mask-roof-feedback-20261030/audio/raw/cough-06-sputter.wav",
+    "rawSha256": "2cd9c46a5682ebf39aa224f638bf496deec687fe8ecff32fb8f697d44f0c0355",
+    "jobId": "20261030T184706-1452786929",
+    "labFile": "sfx_a-man-sputtering-a-rapid-burst-of-four-s_w8a8_seed1452786929_184706.wav",
+    "prompt": "TrackType: SFX, a man sputtering a rapid burst of four small irritated coughs, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1452786929,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -3.9,
+     "rmsDb": -25.1,
+     "flatDb": -52,
+     "activeS": 0.837,
+     "zcrPerS": 3863,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.581,
+    "coughEvents": 4,
+    "activeS": 0.832,
+    "peakDb": -1,
+    "rmsDb": -20.5,
+    "centroidHz": 1976,
+    "zcrPerS": 4689
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.045,
+     "endS": 1.398,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 2.91
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cough-08-fit-gag.mp3",
+   "url": "assets/audio/cough-08-fit-gag.mp3",
+   "bytes": 27585,
+   "sha256": "d3e2966d6d4b7624c1e8cf16a3b5897070b3e37fe3c79b833d84172f1cc291fb",
+   "cue": "cough",
+   "durationS": 2.265,
+   "source": {
+    "clip": "cough-08-fit-gag",
+    "batch": "original 10-job allowance (closed)",
+    "task": "studio-alpha-gas-mask-roof-feedback-20261030-01",
+    "rawFile": "reference/tasks/gas-mask-roof-feedback-20261030/audio/raw/cough-08-fit-gag.wav",
+    "rawSha256": "3e57c78a187bf65af6540f5863d5af31b4183f1a118a6f539467123004e00f98",
+    "jobId": "20261030T184715-1276069851",
+    "labFile": "sfx_a-man-in-a-short-violent-coughing-fit-th_w8a8_seed1276069851_184715.wav",
+    "prompt": "TrackType: SFX, a man in a short violent coughing fit that ends with a gag, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1276069851,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 3,
+     "peakDb": -0.2,
+     "rmsDb": -24,
+     "flatDb": -53.3,
+     "activeS": 1.403,
+     "zcrPerS": 4116,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.532,
+    "coughEvents": 11,
+    "activeS": 1.403,
+    "peakDb": -1,
+    "rmsDb": -23.6,
+    "centroidHz": 1199,
+    "zcrPerS": 4692
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.296,
+     "endS": 2.561,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.78
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cough-09-weak-hoarse.mp3",
+   "url": "assets/audio/cough-09-weak-hoarse.mp3",
+   "bytes": 17554,
+   "sha256": "787f62d9ca01ab732994ccfd1a86381bee6286964446d5167f9745993d01b30f",
+   "cue": "cough",
+   "durationS": 1.413,
+   "source": {
+    "clip": "cough-09-weak-hoarse",
+    "batch": "original 10-job allowance (closed)",
+    "task": "studio-alpha-gas-mask-roof-feedback-20261030-01",
+    "rawFile": "reference/tasks/gas-mask-roof-feedback-20261030/audio/raw/cough-09-weak-hoarse.wav",
+    "rawSha256": "fd25d7142766fb9e1297a07a2bbc4c58c7e48af7fa7a25ab6d047c22ab14cc2f",
+    "jobId": "20261030T184720-1555681032",
+    "labFile": "sfx_a-tired-man-giving-two-weak-hoarse-cough_w8a8_seed1555681032_184720.wav",
+    "prompt": "TrackType: SFX, a tired man giving two weak hoarse coughs, quiet and strained, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1555681032,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -1.3,
+     "rmsDb": -23.8,
+     "flatDb": -53.1,
+     "activeS": 0.682,
+     "zcrPerS": 3780,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.659,
+    "coughEvents": 4,
+    "activeS": 0.682,
+    "peakDb": -1,
+    "rmsDb": -21.9,
+    "centroidHz": 806,
+    "zcrPerS": 4488
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.025,
+     "endS": 1.438,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 0.35
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cc1-cough-01-dry-single.mp3",
+   "url": "assets/audio/cc1-cough-01-dry-single.mp3",
+   "bytes": 15047,
+   "sha256": "ff17f8c430576352383e3d17ea5f799ebf5c5213f25eb5527825bafae6643c59",
+   "cue": "cough",
+   "durationS": 1.218,
+   "source": {
+    "clip": "cc1-cough-01-dry-single",
+    "batch": "completion batch 1 (5 jobs)",
+    "task": "studio-alpha-cough-completion-20261030-01",
+    "rawFile": "reference/tasks/cough-completion-20261030/audio/batch1/raw/cc1-cough-01-dry-single.wav",
+    "rawSha256": "d77af9ba9aa41983633e1fa5c53d616fa072b23bdcc18e268afdf8a544b3fe0f",
+    "jobId": "20261030T211741-543348191",
+    "labFile": "sfx_a-man-giving-one-short-dry-hacking-cough_w8a8_seed543348191_211741.wav",
+    "prompt": "TrackType: SFX, a man giving one short dry hacking cough from irritated lungs, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 543348191,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -2.2,
+     "rmsDb": -24.3,
+     "flatDb": -52.2,
+     "activeS": 0.727,
+     "zcrPerS": 3286,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.637,
+    "coughEvents": 5,
+    "activeS": 0.722,
+    "peakDb": -1,
+    "rmsDb": -20.9,
+    "centroidHz": 1357,
+    "zcrPerS": 4069
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.218,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.22
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cc1-cough-02-chesty-triple.mp3",
+   "url": "assets/audio/cc1-cough-02-chesty-triple.mp3",
+   "bytes": 25078,
+   "sha256": "223f61798fa2ed63d0bc79325eb6f631a0f89cec9f9ce7705dea207c7efbc5d5",
+   "cue": "cough",
+   "durationS": 2.054,
+   "source": {
+    "clip": "cc1-cough-02-chesty-triple",
+    "batch": "completion batch 1 (5 jobs)",
+    "task": "studio-alpha-cough-completion-20261030-01",
+    "rawFile": "reference/tasks/cough-completion-20261030/audio/batch1/raw/cc1-cough-02-chesty-triple.wav",
+    "rawSha256": "55f981bc97ec4ab7fe0aad0c630833a218a937cff1a38ef4d01e22b55129ff0e",
+    "jobId": "20261030T211745-1138355455",
+    "labFile": "sfx_a-man-s-harsh-chesty-cough-three-heavy-c_w8a8_seed1138355455_211745.wav",
+    "prompt": "TrackType: SFX, a man's harsh chesty cough, three heavy coughs in a row with a rough rattle, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1138355455,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 3,
+     "peakDb": -2,
+     "rmsDb": -25.4,
+     "flatDb": -52.1,
+     "activeS": 1.173,
+     "zcrPerS": 3115,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.609,
+    "coughEvents": 8,
+    "activeS": 1.173,
+    "peakDb": -1,
+    "rmsDb": -22.8,
+    "centroidHz": 1213,
+    "zcrPerS": 3549
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.035,
+     "endS": 2.09,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 1.04
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cc1-cough-04-throat-rasp.mp3",
+   "url": "assets/audio/cc1-cough-04-throat-rasp.mp3",
+   "bytes": 17868,
+   "sha256": "eabc55a1d832d87a9c4f531db7fbcfa0cae9510427d07b040b220f7da20e0f80",
+   "cue": "cough",
+   "durationS": 1.443,
+   "source": {
+    "clip": "cc1-cough-04-throat-rasp",
+    "batch": "completion batch 1 (5 jobs)",
+    "task": "studio-alpha-cough-completion-20261030-01",
+    "rawFile": "reference/tasks/cough-completion-20261030/audio/batch1/raw/cc1-cough-04-throat-rasp.wav",
+    "rawSha256": "e6d205ebe1c19aae0a2819fc636ca4c3582449b039afbb6fa1943d5defe02ef8",
+    "jobId": "20261030T211750-660507220",
+    "labFile": "sfx_a-man-clearing-his-throat-with-one-raspy_w8a8_seed660507220_211750.wav",
+    "prompt": "TrackType: SFX, a man clearing his throat with one raspy rough cough, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 660507220,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -4.7,
+     "rmsDb": -23.2,
+     "flatDb": -50.3,
+     "activeS": 1.123,
+     "zcrPerS": 3322,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.439,
+    "coughEvents": 5,
+    "activeS": 1.123,
+    "peakDb": -1,
+    "rmsDb": -18.1,
+    "centroidHz": 1025,
+    "zcrPerS": 3907
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.01,
+     "endS": 1.453,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 3.75
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cc1-cough-07-muffled.mp3",
+   "url": "assets/audio/cc1-cough-07-muffled.mp3",
+   "bytes": 13793,
+   "sha256": "d122188cbe453985ac406a4ed9ad34018c40a24a65651c1fd623b37a4b66849b",
+   "cue": "cough",
+   "durationS": 1.117,
+   "source": {
+    "clip": "cc1-cough-07-muffled",
+    "batch": "completion batch 1 (5 jobs)",
+    "task": "studio-alpha-cough-completion-20261030-01",
+    "rawFile": "reference/tasks/cough-completion-20261030/audio/batch1/raw/cc1-cough-07-muffled.wav",
+    "rawSha256": "b761a59521662e62f3e62e8fb23cdf156e3aa1af1250d0f088a92c866fdbb50d",
+    "jobId": "20261030T211755-2106952160",
+    "labFile": "sfx_a-man-coughing-once-into-his-sleeve-a-si_w8a8_seed2106952160_211755.wav",
+    "prompt": "TrackType: SFX, a man coughing once into his sleeve, a single muffled cough, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 2106952160,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -0.2,
+     "rmsDb": -25.6,
+     "flatDb": -53.4,
+     "activeS": 0.596,
+     "zcrPerS": 3197,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.702,
+    "coughEvents": 4,
+    "activeS": 0.596,
+    "peakDb": -1,
+    "rmsDb": -23.9,
+    "centroidHz": 675,
+    "zcrPerS": 4090
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 1.117,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": -0.8
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/cc1-cough-10-bark.mp3",
+   "url": "assets/audio/cc1-cough-10-bark.mp3",
+   "bytes": 22256,
+   "sha256": "b51fc1195c01c47f4346565dec9ca2b043b9580bdda6e23afdac718023b63627",
+   "cue": "cough",
+   "durationS": 1.804,
+   "source": {
+    "clip": "cc1-cough-10-bark",
+    "batch": "completion batch 1 (5 jobs)",
+    "task": "studio-alpha-cough-completion-20261030-01",
+    "rawFile": "reference/tasks/cough-completion-20261030/audio/batch1/raw/cc1-cough-10-bark.wav",
+    "rawSha256": "16191deeaa444b6829fd020a73639f164d850d6f4db49f41affeba8ec2de7d14",
+    "jobId": "20261030T211759-54345528",
+    "labFile": "sfx_a-man-giving-a-single-sharp-barking-coug_w8a8_seed54345528_211759.wav",
+    "prompt": "TrackType: SFX, a man giving a single sharp barking cough, loud and abrupt, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 54345528,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1,
+    "rawQc": {
+     "durationS": 2,
+     "peakDb": -1.6,
+     "rmsDb": -23.9,
+     "flatDb": -50.8,
+     "activeS": 1.007,
+     "zcrPerS": 4439,
+     "clippedFrac": 0
+    }
+   },
+   "structural": {
+    "quietFrac": 0.496,
+    "coughEvents": 5,
+    "activeS": 1.007,
+    "peakDb": -1,
+    "rmsDb": -22.9,
+    "centroidHz": 1653,
+    "zcrPerS": 4673
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono"
+    },
+    {
+     "op": "trim",
+     "startS": 0.035,
+     "endS": 1.839,
+     "note": "first onset to the end of the last cough above -42 dB re peak (+90 ms)"
+    },
+    {
+     "op": "fade",
+     "inS": 0.004,
+     "outS": 0.09,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "peakDbfs": -1,
+     "gainDb": 0.57
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 96
+    }
+   ]
+  }
+ ]
+}

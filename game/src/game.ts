@@ -58,11 +58,13 @@ import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifi
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
-import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters, camera mask
+import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
+import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
+import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -218,7 +220,7 @@ export class Game {
   readonly inputOwners: (() => boolean)[] = [];
   /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
   readonly gear: GearSystem;
-  /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, camera mask; protects() (gear/gasMask.ts). */
+  /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, the first-person mask view; protects() (gear/gasMask.ts). */
   readonly gasMask: GasMaskSystem;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
@@ -228,11 +230,14 @@ export class Game {
   readonly tower: TowerRuntime;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
-   * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it).
+   * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
+   * `damage` = what this ray deals (weapon damage x range falloff; task gas-mask-roof-feedback-20261030: pane health).
    */
-  readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number) => boolean)[] = [];
+  readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[] = [];
   /** Task gasmask-breach-20261030 (lane GAS): breakable office windows, the breach gas field and its exposure (`gas.protection`). */
   readonly gas: GasSystem;
+  /** Task gas-mask-roof-feedback-20261030 (item 1): coughing while toxic gas hurts the unprotected player (audio/cough.ts). */
+  readonly cough: CoughFeedback;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
   run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
@@ -409,6 +414,8 @@ export class Game {
       if (!m.worn) return 'No gas mask — get out of the gas';
       return m.on ? 'No filter — the mask is not protecting you' : 'Put on your gas mask (Q)';
     };
+    this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
+    hookName('cough');
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -474,6 +481,9 @@ export class Game {
     // muzzle flash compile there on the loading screen
     const vm = this.viewmodel;
     this.warmRegistry.addPass({name: 'weapons and held items', scene: vm.scene, camera: vm.camera, target: () => this.overlay.target, hidden: () => vm.warmRoots()});
+    // Task gas-mask-roof-feedback-20261030 (item 4): the first-person gas-mask view — a viewmodel derivative of the real outfit mask
+    // (gear/maskView.ts), fixed to the face in this overlay pass; one of vm.warmRoots(), so it compiles with the held items.
+    this.gasMask.attachView(new MaskView(m.outfit_gasmask), vm, () => vm.aimBlend);
     await this.initRenderer(); // Iteration 13 (CORE): the icon renders are the first GPU work (init overlapped the download)
     await buildItemIcons(this.renderer, guns); // a pistol without a model keeps its SVG icon (ui/icons.ts)
     this.pickups = new PickupManager(guns);
@@ -1855,7 +1865,7 @@ export class Game {
       if (!fh) this.damage.knockPickups(o, d, bestT, wh, shot);
       else {
         if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
-        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
+        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir, shot.damage)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
       }
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
@@ -1873,7 +1883,7 @@ export class Game {
       } else if (!fh && wh.kind !== 'none') {
         // Lane D: material-matched persistent damage (craters / per-instance prop damage / breaking) + fx + sound
         // (task gasmask-breach-20261030: unless a lane handler takes the hit — an office window pane)
-        if (!this.bulletHit(wh, end, dir)) this.damage.hitWorld(wh, end, dir, shot);
+        if (!this.bulletHit(wh, end, dir, shot.damage)) this.damage.hitWorld(wh, end, dir, shot);
       }
       if (def.pellets === 1 ? this.shotCounter % 3 === 0 : i < 3) this.fx.tracer(muzzle, end);
     }
@@ -1906,9 +1916,12 @@ export class Game {
     this.alertZombies(def.noise);
   }
 
-  /** Task gasmask-breach-20261030: offer a bullet's world hit to the lane handlers (this trigger pull's id); true = handled. */
-  private bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3): boolean {
-    for (const h of this.bulletHitHandlers) if (h(wh, point, dir, this.shotCounter)) return true;
+  /**
+   * Task gasmask-breach-20261030: offer a bullet's world hit to the lane handlers (this trigger pull's id + the ray's damage after
+   * falloff, task gas-mask-roof-feedback-20261030); true = handled.
+   */
+  private bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, damage: number): boolean {
+    for (const h of this.bulletHitHandlers) if (h(wh, point, dir, this.shotCounter, damage)) return true;
     return false;
   }
 

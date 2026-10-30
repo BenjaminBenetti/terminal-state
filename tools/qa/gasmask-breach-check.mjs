@@ -65,7 +65,7 @@ await withBrowserLock(async () => {
     /** A real Q press, then wait (game clock; llvmpipe frames are slow after new views compile) until the mask reaches `want`. */
     const qTo = async want => { await q(); return waitFor(w => window.__LL.mask().state === w, 240, want); };
     const hud = () => ev(() => ({gasTag: document.querySelector('#gas-tag')?.textContent ?? null, qCell: document.querySelector('#hotbar .slot.maskslot')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
-      overlay: (() => { const el = document.getElementById('mask-view'); return el ? {cls: el.className?.baseVal ?? el.className, transform: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity} : null; })()}));
+      overlay: window.__LL.mask().view ?? null})); // the first-person mask view (gear/maskView.ts) replaced the #mask-view overlay
     const shot = name => page.screenshot({path: path.join(out, name)});
 
     await page.click('#btn-start');

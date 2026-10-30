@@ -7,6 +7,7 @@
 // the Subway's level moves of the zombies (gen/levelGenDress.ts placeLevelSpawns), so they are downstream RNG state of the spawns.
 
 import type {StationLayout} from '../../src/gen/stationTypes';
+import {ROOF_FIND_KEY} from '../../src/items/lootTables';
 
 export function fnv(s: string, h = 0x811c9dc5): number {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -26,9 +27,15 @@ export function spawnSpecHash(l: StationLayout): string {
   return h.toString(16).padStart(8, '0');
 }
 
+/**
+ * The layout's downstream pickups. The Office roof FIND (task gas-mask-roof-feedback-20261030: PickupPlacement.reward =
+ * ROOF_FIND_KEY, appended last) is left out: it is a deliberate new reward pinned in loot-golden.test.ts (officeRoofFind) and
+ * office-roof-reward.test.ts, so every other pickup stays held to the same byte-identical parity.
+ */
 export function pickupHash(l: StationLayout): string {
-  let h = fnv(`${l.pickups.length}`);
-  for (const p of l.pickups) h = fnv(`${p.itemId}|${p.count}|${p.x}|${p.y}|${p.z}|${p.area}|${p.level ?? 0}`, h);
+  const list = l.pickups.filter(p => p.reward !== ROOF_FIND_KEY);
+  let h = fnv(`${list.length}`);
+  for (const p of list) h = fnv(`${p.itemId}|${p.count}|${p.x}|${p.y}|${p.z}|${p.area}|${p.level ?? 0}`, h);
   return h.toString(16).padStart(8, '0');
 }
 

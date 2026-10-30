@@ -12,9 +12,10 @@ import type {StationLayout} from '../gen/stationTypes';
 import {MOOD, syncGlowFog} from './lights';
 import {EXT_U, exteriorFogTune, type ExteriorFogTune} from './exterior';
 import {preloadOfficeArch, type OfficeArch, type OfficeSurfaceMaterial} from './officeArch';
-
-/** Scene fog on the roof: FogExp2 density (1/m). Colour = the outdoor murk (EXT_U.haze). */
-export const ROOF_FOG = {density: 0.016, below: 0.6, above: 0.9} as const;
+// Task gas-mask-roof-feedback-20261030 (item 10): ROOF_FOG / roofBlend live in the pure world/roofAir.ts, shared with the roof's
+// outside-atmosphere exposure (world/gas/system.ts) — the fog and the hazard use ONE outdoor weight.
+import {ROOF_FOG, roofAirOf, roofBlend, type RoofAir} from './roofAir';
+export {ROOF_FOG, roofBlend};
 
 interface AtmosphereHost {
   scene: THREE.Scene;
@@ -24,18 +25,8 @@ interface AtmosphereHost {
   sectionPreloads?: ((layout: StationLayout) => Promise<void>)[];
 }
 
-/** Roof blend 0..1 for an eye at (x, y, z): 1 standing on the deck inside the tower footprint, 0 indoors; ramps over the hatch. */
-export function roofBlend(x: number, y: number, z: number, roof: {baseY: number; foot: {x0: number; z0: number; x1: number; z1: number}} | null): number {
-  if (!roof) return 0;
-  const f = roof.foot;
-  if (x < f.x0 - 1.5 || x > f.x1 + 1.5 || z < f.z0 - 1.5 || z > f.z1 + 1.5) return 0;
-  const t = (y - (roof.baseY - ROOF_FOG.below)) / (ROOF_FOG.below + ROOF_FOG.above);
-  const k = Math.min(1, Math.max(0, t));
-  return k * k * (3 - 2 * k);
-}
-
 export class OfficeAtmosphere {
-  private roof: {baseY: number; foot: {x0: number; z0: number; x1: number; z1: number}} | null = null;
+  private roof: RoofAir | null = null;
   private exterior: THREE.Object3D | null = null;
   private searched = false;
   private applied = 0;
@@ -51,9 +42,7 @@ export class OfficeAtmosphere {
   }
 
   private build(layout: StationLayout): void {
-    const o = layout.office;
-    const roof = o?.roof;
-    this.roof = roof && o ? {baseY: roof.baseY, foot: o.exterior} : null;
+    this.roof = roofAirOf(layout);
     this.exterior = null;
     this.searched = false;
     this.restore();

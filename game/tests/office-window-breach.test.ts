@@ -5,12 +5,16 @@
 //  - attribution through the REAL hitscan (combat/hitscan raycastWorld -> Levels.raycast): the room-side face of the window wall
 //    cell, the ray continued to the glass plane inside a pane (mullion margin); frames, interior walls, other storeys and the
 //    outside face are not panes; a prop in front takes the bullet (nearest hit);
-//  - counting: at most one impact per pane per trigger pull (9 shotgun pellets on one pane = 1; one blast across two panes =
-//    one each), panes independent, the third impact breaks it once, later bullets pass out (no crater, no count, no cue);
-//    generated broken / boarded panes are inert; a generated-cracked pane counts from 0;
+//  - health (task gas-mask-roof-feedback-20261030, user item 2): PANE_MAX_HP = 3 x the weapon table's pistol damage; every
+//    unobstructed bullet / pellet ray on a pane contributes ITS real damage (Game.fire's def.damage x range falloff) once — 3
+//    pistol shots break it, a rifle needs 3 (2 x 24 < 51), a centred shotgun blast (>= 4 pellets on the glass) breaks it, a
+//    partial blast contributes only its pellets on the pane, misses / blocked rays nothing; panes independent; it breaks once
+//    and later bullets pass out (no crater, no damage, no cue); generated broken / boarded panes are inert; a generated-cracked
+//    pane starts at full health;
 //  - looks: every breakable pane's intact / cracked / broken looks are pre-built in the merged storey meshes and switched by
 //    rewriting their vertex ranges (no new mesh / material / pipeline mid-play), glass rules kept;
-//  - Game wiring (source): world hits only (after enemies / corpses / stock), never the knife; persistence of the hit counts.
+//  - Game wiring (source): world hits only (after enemies / corpses / stock), never the knife, each ray offered once with its
+//    damage; persistence of the pane damage (v 2) and the legacy hit-count conversion (v 1), never refilled.
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,8 +30,10 @@ import {WorldMaterials} from '../src/world/materials';
 import {markShadows} from '../src/render/volumetric';
 import {buildWindows, paneBreakable, paneId, planWindows, setPaneLook, type WindowPlan, type WindowView} from '../src/world/officeWindows';
 import {readTowerInfo} from '../src/world/towerShared';
-import {WINDOWS_LANE, WINDOW_BREACH, WindowBreaches, paneCentre, type PaneRef} from '../src/world/windowBreach';
+import {PANE_MAX_HP, WINDOWS_LANE, WINDOW_BREACH, WindowBreaches, paneCentre, type PaneRef} from '../src/world/windowBreach';
 import {installGas, type GasHost, type GasSystem} from '../src/world/gas/system';
+import {WEAPONS, WeaponController, type WeaponDef} from '../src/weapons/weapons';
+import {mulberry32} from '../src/core/rng';
 
 installCanvasShim(false);
 let mats: WorldMaterials;
@@ -59,7 +65,7 @@ function gasHost(w: World) {
     get clock() { return clock; }, set clock(v: number) { clock = v; },
     state: 'playing', frameHooks: [] as ((dt: number) => void)[], sectionHooks: [] as {build?(l: StationLayout): void; teardown?(): void}[],
     stateListeners: [] as ((s: never, p: never) => void)[],
-    bulletHitHandlers: [] as ((wh: WorldHit, p: THREE.Vector3, d: THREE.Vector3, shot: number) => boolean)[],
+    bulletHitHandlers: [] as ((wh: WorldHit, p: THREE.Vector3, d: THREE.Vector3, shot: number, damage: number) => boolean)[],
   };
   const sys = installGas(h as unknown as GasHost);
   h.sectionHooks[0].build!(w.L);
@@ -96,14 +102,42 @@ function clearPanes(w: World, W: WindowBreaches, filter: (r: PaneRef) => boolean
   return out;
 }
 
-/** A pull of `n` pellets (shot id `shot`) spread inside a pane through the real hitscan + the gas system's handler. */
-function pull(w: World, h: ReturnType<typeof gasHost>['h'], ref: PaneRef, shot: number, n = 1, spread = 0.25): boolean[] {
+/** The damage Game.fire deals for one ray of `def` whose nearest hit is `t` m away (def.damage x range falloff). */
+const rayDamage = (def: WeaponDef, t: number) => def.damage * WeaponController.falloff(def, t);
+
+type Host = ReturnType<typeof gasHost>['h'];
+
+/** One ray through the real hitscan offered to the handlers with Game.fire's damage for it (false: not a window's: a crater). */
+function ray(w: World, h: Host, o: Vec3, at: Vec3, shot: number, def: WeaponDef): boolean {
+  const s = shoot(w, o, at);
+  return h.bulletHitHandlers.some(fn => fn(s.wh, s.point, s.dir, shot, rayDamage(def, s.wh.t)));
+}
+
+/** `n` rays of trigger pull `shot` (weapon `def`) spread inside a pane (golden-angle points within `spread` m of its centre). */
+function pull(w: World, h: Host, ref: PaneRef, shot: number, def: WeaponDef = WEAPONS.pistol, n = 1, spread = 0.25): boolean[] {
   const out: boolean[] = [];
   for (let i = 0; i < n; i++) {
     const a = n === 1 ? 0 : Math.cos(i * 2.39996) * spread * Math.sqrt(i / n), y = n === 1 ? 0 : Math.sin(i * 2.39996) * spread * Math.sqrt(i / n);
     const {o, at} = aimAt(ref, a, y);
-    const s = shoot(w, o, at);
-    out.push(h.bulletHitHandlers.some(fn => fn(s.wh, s.point, s.dir, shot)));
+    out.push(ray(w, h, o, at, shot, def));
+  }
+  return out;
+}
+
+/**
+ * One trigger pull of `def` from the eye `dist` m into the room, aimed at the pane's centre, with Game.fire's own pellet pattern
+ * (dir = fwd + right·tan(r)·cos(a) + up·tan(r)·sin(a), r = spread·sqrt(u), hip spread), seeded. Returns per pellet whether a
+ * window opening took it.
+ */
+function blast(w: World, h: Host, ref: PaneRef, shot: number, def: WeaponDef, seed: number, dist = 1.6): boolean[] {
+  const {o, at} = aimAt(ref, 0, 0, dist), rand = mulberry32(seed);
+  const fwd = new THREE.Vector3(at.x - o.x, at.y - o.y, at.z - o.z).normalize();
+  const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize(), up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+  const out: boolean[] = [];
+  for (let i = 0; i < def.pellets; i++) {
+    const a = rand() * Math.PI * 2, r = def.spreadHip * Math.sqrt(rand());
+    const d = fwd.clone().addScaledVector(right, Math.tan(r) * Math.cos(a)).addScaledVector(up, Math.tan(r) * Math.sin(a)).normalize();
+    out.push(ray(w, h, o, {x: o.x + d.x, y: o.y + d.y, z: o.z + d.z}, shot, def));
   }
   return out;
 }
@@ -204,60 +238,166 @@ describe('attribution through the REAL hitscan: the window wall face, continued 
   });
 });
 
-describe('counting: one impact per pane per trigger pull, third breaks once, inert generated panes', () => {
-  it('shotgun: 9 pellets of one pull on a pane = 1 impact (1 glass cue, chips per pellet); 3 pulls break it; then pellets pass out', () => {
+const dmgOf = (sys: GasSystem, id: string) => sys.windows!.state.get(id)?.damage ?? 0;
+
+describe('pane health: 3 pistol bullets of damage; every ray its real damage once; breaks once; inert generated panes', () => {
+  it('PANE_MAX_HP = 3 x the weapon table\'s pistol damage (derived); pistol 3 shots, rifle 3 (2 is not enough), shotgun >= 4 pellets; falloff counts', () => {
+    expect(WINDOW_BREACH.PISTOL_SHOTS).toBe(3);
+    expect(PANE_MAX_HP).toBe(3 * WEAPONS.pistol.damage);
+    expect(PANE_MAX_HP).toBe(51); // pistol 17 today (a pistol retune moves the panes with it)
+    const W = new WindowBreaches(getWorld().plans);
+    const refs = [...W.refs.values()].filter(r => r.pane.state === 'intact');
+    const shots = (def: WeaponDef, ref: PaneRef, dist: number) => {
+      let n = 0;
+      while (!W.broken(ref.id) && n < 50) W.impact(ref, rayDamage(def, dist), 1000 + n++, 0);
+      return n;
+    };
+    // point blank (inside every gun's falloff start): the design table
+    expect(shots(WEAPONS.pistol, refs[0], 3)).toBe(3);
+    expect(shots(WEAPONS.rifle, refs[1], 3)).toBe(3);
+    expect(2 * WEAPONS.rifle.damage).toBeLessThan(PANE_MAX_HP); // 48 < 51
+    expect(shots(WEAPONS.shotgun, refs[2], 3)).toBe(4); // pellets: 4 x 15 = 60 >= 51, 3 x 15 = 45 < 51
+    // range falloff is real damage too: a pistol bullet from 40 m deals 17 x 0.81 ≈ 13.8 -> 4 bullets
+    expect(rayDamage(WEAPONS.pistol, 40)).toBeLessThan(17);
+    expect(shots(WEAPONS.pistol, refs[3], 40)).toBe(4);
+    // a broken pane takes nothing; zero / non-finite damage contributes nothing (and never cracks)
+    expect(W.impact(refs[0], 17, 2000, 0)).toMatchObject({applied: 0, broke: false});
+    expect(W.impact(refs[4], 0, 2001, 0)).toMatchObject({applied: 0, look: null});
+    expect(W.impact(refs[4], Number.NaN, 2002, 0)).toMatchObject({applied: 0, look: null});
+    expect(W.state.get(refs[4].id)!.damage).toBe(0);
+  });
+
+  it('pistol through the real hitscan: 3 bullets crack then break it (once); later bullets pass out — no crater, no damage, no cue', () => {
     const w = getWorld();
-    const {h, sys, sfx, fx, damage} = gasHost(w);
-    const [r] = clearPanes(w, sys.windows!, x => x.pane.state === 'intact' && x.plan.level === 3 && x.pane.a1 - x.pane.a0 > 1);
+    const {h, sys, sfx, damage} = gasHost(w);
+    const [r] = clearPanes(w, sys.windows!, x => x.pane.state === 'intact' && x.plan.level === 2);
     expect(r).toBeDefined();
-    expect(pull(w, h, r, 101, 9, 0.2).every(Boolean)).toBe(true); // every pellet on the glass: no crater
-    expect(sys.windows!.state.get(r.id)!.hits).toBe(1);
-    expect(sfx.impact).toHaveBeenCalledTimes(1);
-    expect(sfx.impact.mock.calls[0][3]).toBe('glass');
-    expect(fx.impact).toHaveBeenCalledTimes(9);
-    expect(w.view.panes.get(r.id)!.look).toBe('cracked'); // the first impact cracks it
-    pull(w, h, r, 102, 9, 0.2);
-    expect(sys.windows!.state.get(r.id)!.hits).toBe(2);
+    expect(pull(w, h, r, 1)).toEqual([true]);
+    expect(dmgOf(sys, r.id)).toBe(17);
+    expect(w.view.panes.get(r.id)!.look).toBe('cracked'); // the first damage cracks it
+    pull(w, h, r, 2);
+    expect(dmgOf(sys, r.id)).toBe(34);
     expect(sys.windows!.broken(r.id)).toBe(false);
     expect(sfx.breakage).not.toHaveBeenCalled();
-    pull(w, h, r, 103, 9, 0.2);
+    pull(w, h, r, 3);
     expect(sys.windows!.broken(r.id)).toBe(true);
     expect(w.view.panes.get(r.id)!.look).toBe('broken');
     expect(sfx.breakage).toHaveBeenCalledTimes(1);
     expect(sfx.breakage.mock.calls[0][0]).toBe('breakGlass');
-    expect(sys.counts).toMatchObject({impacts: 3, broken: 1});
+    expect(sfx.impact).toHaveBeenCalledTimes(3); // the glass cue: once per pull on the pane
+    expect(sys.counts).toMatchObject({impacts: 3, damage: 51, broken: 1, cracked: 1});
     expect(sys.field!.storey(r.plan.level)!.breaches).toEqual([r.id]); // its gas started, once
     const bursts = damage.burst.mock.calls.length;
-    expect(bursts).toBeLessThanOrEqual(3 + 4); // a small burst per counted impact + 4 on the break (each bounded by the debris pool)
-    // once broken: never counts / cues / bursts again; the bullets leave through the hole (no crater)
-    expect(pull(w, h, r, 104, 9, 0.2).every(Boolean)).toBe(true);
-    expect(sys.windows!.state.get(r.id)!.hits).toBe(WINDOW_BREACH.HITS_TO_BREAK);
+    expect(pull(w, h, r, 4)).toEqual([true]); // out through the hole
+    expect(dmgOf(sys, r.id)).toBe(PANE_MAX_HP);
     expect(sfx.breakage).toHaveBeenCalledTimes(1);
     expect(damage.burst.mock.calls.length).toBe(bursts);
-    expect(sys.field!.storey(r.plan.level)!.breaches).toEqual([r.id]);
-    expect(sys.counts.passThrough).toBe(8 + 9); // the breaking blast's 8 later pellets + the next blast
+    expect(sys.counts.passThrough).toBe(1);
   });
 
-  it('single-bullet guns: 3 trigger pulls = break; the same pull id never counts twice; panes count independently; one blast across two panes counts one each', () => {
+  it('rifle through the real hitscan: 2 rounds (48) do not break it, the 3rd does', () => {
+    const w = getWorld();
+    const {h, sys} = gasHost(w);
+    const [r] = clearPanes(w, sys.windows!, x => x.pane.state === 'intact' && x.plan.level === 4);
+    pull(w, h, r, 1, WEAPONS.rifle); pull(w, h, r, 2, WEAPONS.rifle);
+    expect(dmgOf(sys, r.id)).toBe(48);
+    expect(sys.windows!.broken(r.id)).toBe(false);
+    pull(w, h, r, 3, WEAPONS.rifle);
+    expect(sys.windows!.broken(r.id)).toBe(true);
+  });
+
+  it('shotgun: a centred hip blast (Game.fire\'s pellet pattern) breaks a pane in ONE pull — every pellet counts until the break, the rest pass out; chips per pellet, one glass cue', () => {
+    const w = getWorld();
+    const {h, sys, sfx, fx} = gasHost(w);
+    const panes = clearPanes(w, sys.windows!, x => x.pane.state === 'intact' && x.plan.level === 3 && x.pane.a1 - x.pane.a0 > 1);
+    expect(panes.length).toBeGreaterThan(2);
+    let broken = 0;
+    for (const [k, r] of panes.slice(0, 3).entries()) {
+      const before = {pass: sys.counts.passThrough, impacts: sys.counts.impacts};
+      const took = blast(w, h, r, 100 + k, WEAPONS.shotgun, 77 + k);
+      expect(took.every(Boolean), r.id).toBe(true); // every pellet on the glass: no crater
+      expect(sys.windows!.broken(r.id), r.id).toBe(true);
+      // 15-damage pellets: the 4th breaks it (60 >= 51), the other 5 leave through the hole
+      expect(sys.counts.impacts - before.impacts).toBe(4);
+      expect(sys.counts.passThrough - before.pass).toBe(WEAPONS.shotgun.pellets - 4);
+      broken++;
+    }
+    expect(broken).toBe(3);
+    expect(sfx.breakage).toHaveBeenCalledTimes(3);
+    expect(sfx.impact).toHaveBeenCalledTimes(3); // one glass cue per pane per pull
+    expect(fx.impact).toHaveBeenCalledTimes(3 * 4); // chips: every pellet that hit glass
+  });
+
+  it('shotgun partial hits and misses: only the pellets on the pane count (3 pellets = 45 crack it; misses / frame hits add nothing); the next pellet breaks it', () => {
+    const w = getWorld();
+    const {h, sys} = gasHost(w);
+    const [r] = clearPanes(w, sys.windows!, x => x.pane.state === 'intact' && x.plan.level === 7 && x.plan.mullions.length > 0);
+    const p = r.plan, c = paneCentre(r), {o} = aimAt(r);
+    // one blast: 3 pellets on the pane, 2 on the mullion / frame (a crater: the damage system), 4 into the room's far side
+    const S = WEAPONS.shotgun, shot = 300;
+    expect(pull(w, h, r, shot, S, 3, 0.15)).toEqual([true, true, true]);
+    const m = p.mullions.reduce((best, x) => Math.abs(x - (r.pane.a0 + r.pane.a1) / 2) < Math.abs(best - (r.pane.a0 + r.pane.a1) / 2) ? x : best);
+    const onFrame = (dy: number) => ray(w, h, o, {x: p.along === 'x' ? m : c.x, y: c.y + dy, z: p.along === 'x' ? c.z : m}, shot, S);
+    expect([onFrame(0), onFrame(0.2)]).toEqual([false, false]);
+    for (let i = 0; i < 4; i++) expect(ray(w, h, o, {x: 2 * o.x - c.x + i * 0.3, y: c.y, z: 2 * o.z - c.z + i * 0.3}, shot, S)).toBe(false);
+    expect(dmgOf(sys, r.id)).toBe(45);
+    expect(sys.windows!.broken(r.id)).toBe(false);
+    expect(w.view.panes.get(r.id)!.look).toBe('cracked');
+    // the next blast: one pellet on it -> 60 >= 51
+    pull(w, h, r, shot + 1, S, 1);
+    expect(sys.windows!.broken(r.id)).toBe(true);
+  });
+
+  it('blocked rays contribute nothing (a prop in front takes the bullet: the pane is never offered it); every ray at most once, to at most one pane', () => {
+    const w = getWorld();
+    const {h, sys} = gasHost(w);
+    let blocked = 0;
+    for (const r of sys.windows!.refs.values()) {
+      const {o, at} = aimAt(r, 0, -0.55, 1.2);
+      const s = shoot(w, o, at);
+      if (s.wh.kind !== 'prop') continue;
+      expect(h.bulletHitHandlers[0](s.wh, s.point, s.dir, 1, 17)).toBe(false); // the damage system's (the prop's) hit
+      expect(sys.windows!.state.has(r.id)).toBe(false);
+      if (++blocked > 5) break;
+    }
+    expect(blocked).toBeGreaterThan(0);
+    // rays swept across a span's panes and mullions (one ray = one nearest hit = at most one pane): the summed pane damage equals
+    // the damage of the rays that were attributed to a pane — no ray ever counts twice or on two panes
+    const W = new WindowBreaches(w.plans);
+    const [r] = clearPanes(w, W, x => x.plan.level === 5 && x.plan.mullions.length > 1 && x.pane.state === 'intact');
+    const p = r.plan, c = paneCentre(r), back = 1.6 + Math.abs(p.glass - p.inner);
+    let attributed = 0, total = 0;
+    for (let a = p.a0 + 0.05, k = 0; a < p.a1 - 0.05; a += 0.037, k++) {
+      const o = {x: (p.along === 'x' ? a : c.x) + c.nx * back, y: c.y, z: (p.along === 'x' ? c.z : a) + c.nz * back};
+      const s = shoot(w, o, {x: p.along === 'x' ? a : c.x, y: c.y, z: p.along === 'x' ? c.z : a});
+      const hit = W.attribute(s.wh, s.point, s.dir);
+      if (!hit?.ref) continue;
+      attributed++;
+      W.impact(hit.ref, 1, k, 0); // 1 damage per ray: the total is the number of contributions
+    }
+    for (const st of W.state.values()) total += st.damage;
+    expect(attributed).toBeGreaterThan(10);
+    expect(total).toBe(attributed);
+  });
+
+  it('panes take damage independently (one blast across two panes: each gets its own pellets)', () => {
     const w = getWorld();
     const {h, sys} = gasHost(w);
     const panes = clearPanes(w, sys.windows!, x => x.plan.level === 6 && x.pane.state === 'intact');
     const pair = panes.find(a => panes.some(b => b.plan === a.plan && b.pane.col === a.pane.col + 1 && b.pane.row === a.pane.row));
     expect(pair).toBeDefined();
     const A = pair!, B = panes.find(b => b.plan === A.plan && b.pane.col === A.pane.col + 1 && b.pane.row === A.pane.row)!;
-    pull(w, h, A, 1); pull(w, h, A, 1); // the same pull twice (e.g. a duplicated callback): one impact
-    expect(sys.windows!.state.get(A.id)!.hits).toBe(1);
-    expect(sys.windows!.state.get(B.id)).toBeUndefined(); // independent
-    // one "blast" (shot 2) with pellets on A and on B: one each
-    pull(w, h, A, 2); pull(w, h, B, 2); pull(w, h, A, 2);
-    expect(sys.windows!.state.get(A.id)!.hits).toBe(2);
-    expect(sys.windows!.state.get(B.id)!.hits).toBe(1);
-    pull(w, h, A, 3);
-    expect(sys.windows!.broken(A.id)).toBe(true);
-    expect(sys.windows!.broken(B.id)).toBe(false);
+    const S = WEAPONS.shotgun;
+    pull(w, h, A, 1, S, 3, 0.15); pull(w, h, B, 1, S, 2, 0.15); // one blast: 3 pellets on A, 2 on B
+    expect(dmgOf(sys, A.id)).toBe(45);
+    expect(dmgOf(sys, B.id)).toBe(30);
+    pull(w, h, B, 2); pull(w, h, B, 3); // two pistol bullets on B: 64
+    expect(sys.windows!.broken(B.id)).toBe(true);
+    expect(sys.windows!.broken(A.id)).toBe(false);
+    expect(dmgOf(sys, A.id)).toBe(45);
   });
 
-  it('a generated-cracked pane counts from 0 (three pulls); generated broken panes let bullets out (no crater, no count, no gas); boarded panes stay the damage system\'s', () => {
+  it('a generated-cracked pane starts at full health (three pistol bullets); generated broken panes let bullets out (no crater, no damage, no gas); boarded panes stay the damage system\'s', () => {
     const w = getWorld();
     const {h, sys, sfx} = gasHost(w);
     const [c] = clearPanes(w, sys.windows!, x => x.pane.state === 'cracked' && x.plan.level === 5);
@@ -279,29 +419,70 @@ describe('counting: one impact per pane per trigger pull, third breaks once, ine
     };
     const before = sfx.impact.mock.calls.length, br = sys.counts.broken;
     const hole = inert('broken')!;
-    expect(h.bulletHitHandlers[0](hole.wh, hole.point, hole.dir, 50)).toBe(true); // out through the hole: no crater
+    expect(h.bulletHitHandlers[0](hole.wh, hole.point, hole.dir, 50, 17)).toBe(true); // out through the hole: no crater
     const boards = inert('boarded')!;
-    expect(h.bulletHitHandlers[0](boards.wh, boards.point, boards.dir, 51)).toBe(false); // the boards: crater / chips as before
+    expect(h.bulletHitHandlers[0](boards.wh, boards.point, boards.dir, 51, 17)).toBe(false); // the boards: crater / chips as before
     expect(sfx.impact.mock.calls.length).toBe(before);
     expect(sys.counts.broken).toBe(br);
     expect(sys.field!.storeys.flatMap(s => s.breaches)).toEqual([c.id]);
   });
 
-  it('pane hit counts persist through the lane store (2 hits saved -> restored -> the next pull breaks it); unknown ids are ignored', () => {
+  it('pane damage persists through the lane store (v 2: saved -> restored -> the next bullet breaks it; revisits never refill); unknown ids are ignored', () => {
     const w = getWorld();
     const {h, sys, store} = gasHost(w);
-    const [r] = clearPanes(w, sys.windows!, x => x.plan.level === 7 && x.pane.state === 'intact');
-    pull(w, h, r, 1); pull(w, h, r, 2);
+    const [r, s] = clearPanes(w, sys.windows!, x => x.plan.level === 7 && x.pane.state === 'intact');
+    pull(w, h, r, 1); pull(w, h, r, 2); // 2 pistol bullets: 34
+    pull(w, h, s, 3, WEAPONS.shotgun, 3, 0.12); // 3 shotgun pellets: 45
     h.sectionHooks[0].teardown!();
-    const rec = store.get(WINDOWS_LANE) as {hits: Record<string, number>};
-    expect(rec.hits[r.id]).toBe(2);
-    store.set(WINDOWS_LANE, {...rec, hits: {...rec.hits, '9:999:0:0': 2}, broken: {'4:999:1:0': 10}});
+    const rec = store.get(WINDOWS_LANE) as {v: number; damage: Record<string, number>; broken: Record<string, number>};
+    expect(rec).toEqual({v: 2, damage: {[r.id]: 34, [s.id]: 45}, broken: {}});
+    store.set(WINDOWS_LANE, {...rec, damage: {...rec.damage, '9:999:0:0': 20}, broken: {'4:999:1:0': 10}});
     h.sectionHooks[0].build!(w.L);
-    expect(sys.windows!.state.get(r.id)!.hits).toBe(2);
-    expect(sys.windows!.state.size).toBe(1);
+    expect(dmgOf(sys, r.id)).toBe(34);
+    expect(dmgOf(sys, s.id)).toBe(45);
+    expect(sys.windows!.state.size).toBe(2);
     expect(w.view.panes.get(r.id)!.look).toBe('cracked');
-    pull(w, h, r, 3);
+    pull(w, h, r, 4); // 51: breaks
     expect(sys.windows!.broken(r.id)).toBe(true);
+    // revisit (Subway <-> Office travel rebuilds the world): broken stays broken, the damaged pane keeps its damage
+    h.sectionHooks[0].teardown!();
+    h.sectionHooks[0].build!(w.L);
+    expect(sys.windows!.broken(r.id)).toBe(true);
+    expect(w.view.panes.get(r.id)!.look).toBe('broken');
+    expect(dmgOf(sys, s.id)).toBe(45);
+    expect(sys.field!.storey(r.plan.level)!.breaches).toEqual([r.id]);
+  });
+
+  it('a legacy v 1 record (the old trigger-pull counter) converts safely: damage = min(max, hits x max / 3), broken stays broken, never refilled', () => {
+    const w = getWorld();
+    const {h, sys, store} = gasHost(w);
+    const [a, b, c, d] = clearPanes(w, sys.windows!, x => x.plan.level === 8 && x.pane.state === 'intact');
+    expect(d).toBeDefined();
+    h.sectionHooks[0].teardown!();
+    store.set(WINDOWS_LANE, {v: 1, hits: {[a.id]: 1, [b.id]: 2, [c.id]: 7, [d.id]: 2, '9:999:0:0': 2}, broken: {[d.id]: 12}});
+    h.sectionHooks[0].build!(w.L);
+    expect(dmgOf(sys, a.id)).toBeCloseTo(PANE_MAX_HP / 3, 9); // 17
+    expect(dmgOf(sys, b.id)).toBeCloseTo(2 * PANE_MAX_HP / 3, 9); // 34
+    expect(dmgOf(sys, c.id)).toBe(PANE_MAX_HP); // capped: not broken yet, the next damage breaks it
+    expect(sys.windows!.broken(c.id)).toBe(false);
+    expect(sys.windows!.broken(d.id)).toBe(true); // broken wins over its hit count
+    for (const p of [a, b, c]) expect(w.view.panes.get(p.id)!.look).toBe('cracked');
+    pull(w, h, a, 1); // 34: still whole
+    expect(sys.windows!.broken(a.id)).toBe(false);
+    pull(w, h, b, 2); // 51: breaks — exactly as 2 old hits + 1 more bullet did
+    pull(w, h, c, 3, WEAPONS.shotgun, 1);
+    expect(sys.windows!.broken(b.id)).toBe(true);
+    expect(sys.windows!.broken(c.id)).toBe(true);
+    // the next save is the v 2 record
+    h.sectionHooks[0].teardown!();
+    expect((store.get(WINDOWS_LANE) as {v: number}).v).toBe(2);
+    // unknown versions / junk: nothing restored, nothing thrown
+    for (const junk of [null, 5, 'x', {v: 3, damage: {[a.id]: 10}}, {v: 2, damage: {[a.id]: 'lots'}, broken: {[b.id]: 'old'}}]) {
+      store.set(WINDOWS_LANE, junk);
+      h.sectionHooks[0].build!(w.L);
+      expect(sys.windows!.state.has(a.id)).toBe(false);
+      h.sectionHooks[0].teardown!();
+    }
   });
 });
 
@@ -369,13 +550,21 @@ describe('looks: pre-built per pane, switched by rewriting vertex ranges (no new
 describe('Game wiring (source): world hits only — after enemies / corpses / shelf stock — never the knife; installed after the tower', () => {
   const src = fs.readFileSync(path.join(GAME, 'src/game.ts'), 'utf8');
   const body = (name: string) => { const i = src.indexOf(`  private ${name}(`); return src.slice(i, src.indexOf('\n  }\n', i)); };
-  it('fire(): the handlers get the world hit in the world branch only; meleeContact never; one pull id per trigger pull', () => {
+  it('fire(): the handlers get the world hit in the world branch only, with the ray\'s real damage (def.damage x falloff); meleeContact never; one pull id per trigger pull', () => {
     const fire = body('fire');
-    expect(fire).toContain('if (!this.bulletHit(wh, end, dir)) this.damage.hitWorld(wh, end, dir, shot);');
-    expect(fire.indexOf('this.bulletHit(wh, end, dir)')).toBeGreaterThan(fire.indexOf('} else if (corpse && !fh) {'));
+    // the ray's damage = what hitWorld / a zombie hit would get for it: `shot.damage` = def.damage x WeaponController.falloff(def, bestT)
+    expect(fire).toContain('const shot = {damage: def.damage * WeaponController.falloff(def, bestT), pellet: def.pellets > 1, weapon: def.id};');
+    expect(fire).toContain('if (!this.bulletHit(wh, end, dir, shot.damage)) this.damage.hitWorld(wh, end, dir, shot);');
+    expect(fire.indexOf('this.bulletHit(wh, end, dir, shot.damage)')).toBeGreaterThan(fire.indexOf('} else if (corpse && !fh) {'));
+    // one offer per ray at most: the two call sites are exclusive branches of the same pellet (`fh` set: the stock / cooler path
+    // only; `!fh`: the world branch only) — no duplicate contribution from one ray
+    expect(fire.match(/this\.bulletHit\(/g)?.length).toBe(2);
+    expect(fire).toContain('} else if (!fh && wh.kind !== \'none\') {');
+    expect(fire.indexOf('if (fh.glass) {')).toBeGreaterThan(fire.indexOf('if (!fh) this.damage.knockPickups('));
+    expect(fire.indexOf('if (fh.glass) {')).toBeLessThan(fire.indexOf('if (bestZ) {'));
     expect(fire.match(/this\.shotCounter\+\+/g)?.length).toBe(1);
     expect(body('meleeContact')).not.toContain('bulletHit');
-    expect(body('bulletHit')).toContain('h(wh, point, dir, this.shotCounter)');
+    expect(body('bulletHit')).toContain('h(wh, point, dir, this.shotCounter, damage)');
     expect(src.indexOf('this.gas = installGas(this)')).toBeGreaterThan(src.indexOf('this.tower = installTower(this)'));
   });
 });
@@ -391,6 +580,6 @@ describe('the gas system offers no pane on the Subway', () => {
     const [r] = [...new WindowBreaches(w.plans).refs.values()];
     const {o, at} = aimAt(r);
     const s = shoot(w, o, at);
-    expect(h.bulletHitHandlers[0](s.wh, s.point, s.dir, 1)).toBe(false);
+    expect(h.bulletHitHandlers[0](s.wh, s.point, s.dir, 1, 17)).toBe(false);
   });
 });

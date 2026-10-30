@@ -10,8 +10,8 @@
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1024,
-      "sha256": "e71d39feb1bf0cc961558e55c09efb8c3b696f3a3845afe5334033fdba4d8bcd"
+      "bytes": 1088,
+      "sha256": "a89089b2dbc2c682077da7de9f618731c976d5b5d73e5fb275e2cb7a420c233e"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -144,6 +144,31 @@
       "sha256": "918c51010c6abde5df985e26b961d220bec574a1eb2af7baaf6b51ffb471f8f5"
     },
     {
+      "path": "assets/audio/cc1-cough-01-dry-single.mp3",
+      "bytes": 15047,
+      "sha256": "ff17f8c430576352383e3d17ea5f799ebf5c5213f25eb5527825bafae6643c59"
+    },
+    {
+      "path": "assets/audio/cc1-cough-02-chesty-triple.mp3",
+      "bytes": 25078,
+      "sha256": "223f61798fa2ed63d0bc79325eb6f631a0f89cec9f9ce7705dea207c7efbc5d5"
+    },
+    {
+      "path": "assets/audio/cc1-cough-04-throat-rasp.mp3",
+      "bytes": 17868,
+      "sha256": "eabc55a1d832d87a9c4f531db7fbcfa0cae9510427d07b040b220f7da20e0f80"
+    },
+    {
+      "path": "assets/audio/cc1-cough-07-muffled.mp3",
+      "bytes": 13793,
+      "sha256": "d122188cbe453985ac406a4ed9ad34018c40a24a65651c1fd623b37a4b66849b"
+    },
+    {
+      "path": "assets/audio/cc1-cough-10-bark.mp3",
+      "bytes": 22256,
+      "sha256": "b51fc1195c01c47f4346565dec9ca2b043b9580bdda6e23afdac718023b63627"
+    },
+    {
       "path": "assets/audio/clank-01.mp3",
       "bytes": 6269,
       "sha256": "fd5ec36475426507a2ca4d7575c3485cc3f82932e78ef297bbf752b50089cfad"
@@ -162,6 +187,31 @@
       "path": "assets/audio/cooler-open-01.mp3",
       "bytes": 21943,
       "sha256": "6054daf5fdf831326bcf04ea0888c21edffd24d653c3a3a06ab9bdd9a4a43967"
+    },
+    {
+      "path": "assets/audio/cough-03-choke-gasp.mp3",
+      "bytes": 25078,
+      "sha256": "87eb685285cc2dc954ea62971e98d7159198ef177077d99c1b14330f19a46e2e"
+    },
+    {
+      "path": "assets/audio/cough-05-wet-deep.mp3",
+      "bytes": 14733,
+      "sha256": "2f5d96955d454c6e8431172ef140ae862b770120b8bae4f82a931cb8b305d98c"
+    },
+    {
+      "path": "assets/audio/cough-06-sputter.mp3",
+      "bytes": 16614,
+      "sha256": "0596805dbccd643a5e8f99a93d5755586cccf29c163c494b1dc288b4473528de"
+    },
+    {
+      "path": "assets/audio/cough-08-fit-gag.mp3",
+      "bytes": 27585,
+      "sha256": "d3e2966d6d4b7624c1e8cf16a3b5897070b3e37fe3c79b833d84172f1cc291fb"
+    },
+    {
+      "path": "assets/audio/cough-09-weak-hoarse.mp3",
+      "bytes": 17554,
+      "sha256": "787f62d9ca01ab732994ccfd1a86381bee6286964446d5167f9745993d01b30f"
     },
     {
       "path": "assets/audio/crate-close-b-01.mp3",
@@ -1312,6 +1362,11 @@
       "path": "assets/audio/zombie-stomp-01-s06.mp3",
       "bytes": 3448,
       "sha256": "51d536d39b4627c65f823504f60417ed0a6c7e05b8f8f8d8c98d8770e43866bc"
+    },
+    {
+      "path": "assets/derivatives/audio-cough.json",
+      "bytes": 24088,
+      "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
     },
     {
       "path": "assets/derivatives/audio-iteration05.json",

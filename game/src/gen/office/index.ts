@@ -41,7 +41,7 @@ import {officeIssues} from './validate';
 import {officeTenants} from './tenants'; // Task office-overhaul-20261030 (lane TENANTS)
 // Task office-overhaul-20261030 (lane STRUCT): the roof storey and the transit hall.
 import {carveRoof, dressRoof, roofCoreCells, roofDaylight, roofHold, roofInfo, roofLadder, roofSky, roofStrip, type RoofCarve} from './roof';
-import {placeRoofReward} from './roof'; // Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache
+import {placeRoofFind, placeRoofReward} from './roof'; // Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache (+ the roof find: gas-mask-roof-feedback-20261030)
 import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, transitRails, transitSigns} from './transit';
 
 export {OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
@@ -199,6 +199,9 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   }
   for (const t of towers) placeOfficeSupplies(layout, rng.fork(`office-supplies-${t.floor}`), field, storeyLevels(t.floor), t.floor === 1, loot);
   for (const t of towers) placeOfficeWeapons(layout, rng.fork(`office-weapons-${t.floor}`), plan[t.floor] ?? [], field, storeyLevels(t.floor), 30);
+  // Task gas-mask-roof-feedback-20261030 (item 10): the roof FIND beside the cache — a non-starter gun + its own ammo or a gear piece,
+  // verified on the reachable deck; LAST (every earlier pickup keeps its index; its own fork and roll stream: nothing else moves).
+  const roofFind = placeRoofFind(layout, f, rc, roofDress.structures, field.dist, rng.fork('roof-find'), loot);
 
   // --- Lighting, traversal finishing, archetypes, windows + daylight, the tower record -------------------------------------
   applyLighting(layout, rng.fork('lighting'));
@@ -215,7 +218,7 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   }
   roofDaylight(layout, f, rc);
   layout.office = officeInfo(layout, f, towers, bases, runs, runLinks, windows, start);
-  layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures, roofReward); // (lane ROOF: + the reward record)
+  layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures, roofReward, roofFind); // (lane ROOF: + the reward record; + the roof find)
   layout.office.transit = transitInfo(layout, s, transitLinkIds);
   streetSigns(layout, s, f, rc);
   return layout;

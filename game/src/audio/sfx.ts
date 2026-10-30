@@ -103,7 +103,7 @@ export const CUE_GAIN: Record<CueId, number> = {
   jump: 0.16, land: 0.3, crouch: 0.13, ladder: 0.24,
   zombieGroan: 0.55, zombieGroanDeep: 0.6, zombieAttack: 0.6, zombieDeath: 0.6, zombieStep: 0.26, zombieStepHeavy: 0.3,
   creatureGrowl: 0.5, creatureSnarl: 0.6, creatureBite: 0.58, creatureYelp: 0.55, creatureDeath: 0.6, creatureStep: 0.24, // iteration 07 (Lane Q)
-  hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12,
+  hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
   cabinetOpen: 0.4, cabinetClose: 0.42, crateOpen: 0.4, crateClose: 0.42, vendingPry: 0.42, vendingClose: 0.4,
@@ -324,6 +324,7 @@ export class Sfx {
   private floor: 'tile' | 'concrete' = 'concrete';
   private listener: Pos & {yaw: number} = {x: 0, y: 1.6, z: 0, yaw: 0};
   private voices: Voice[] = [];
+  private coughVoice: Voice | null = null; // task gas-mask-roof-feedback-20261030: the one cough that may be sounding
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
@@ -1016,6 +1017,24 @@ export class Sfx {
   hitTick(kill: boolean): void { this.play(this.voice(), kill ? 'hitKill' : 'hitTick', {jitter: 0.02, gainJitter: 0.5}); }
   /** Pain grunt (varied). */
   hurt(): void { this.play(this.voice({send: 0.2, pri: 2}), 'hurt', {jitter: 0.04}); }
+  /**
+   * Task gas-mask-roof-feedback-20261030: one player cough (listener-relative, a little room send), never two at once — the
+   * previous one is cut. Returns the clip's length (s; 0 = nothing played) so the caller can pace the next one (audio/cough.ts).
+   */
+  cough(): number {
+    this.stopCough();
+    const v = this.voice({send: 0.08, pri: 1});
+    const clip = this.play(v, 'cough', {jitter: 0.03, gainJitter: 1.5});
+    this.coughVoice = clip ? v : null;
+    return clip ? clip.dur : 0;
+  }
+  /** Silence a cough that is still sounding (lifecycle: death, menus, a new section). */
+  stopCough(): void {
+    const v = this.coughVoice;
+    this.coughVoice = null;
+    if (!v) return;
+    for (const s of v.srcs) { try { s.stop(); } catch { /* already stopped */ } }
+  }
   /** Push-off scuff when leaving the ground. */
   jump(): void { this.play(this.voice({send: 0.2}), 'jump'); }
   /** Landing thud; strength 0..1 (fall impact). */

@@ -16,6 +16,8 @@
 //     unchanged and every per-context count (street, f2..f8, roof) is identical. Office spec / pickup hashes: 11:pistol 2f57fea3 /
 //     6cfc51c0 -> 5d274546 / ef270423, 222 3f4ffaaa / 0183e6f5 -> 24f81c38 / 3e9001ac, 3333 49c5890e / 8290c0dd -> 73e3a9b0 /
 //     bc96b5e2, 4242 c008ba55 / ef25f3cf -> 8f127b50 / ba008081, 11:rifle 2f57fea3 / 9e782ad4 -> 5d274546 / 7cb613ae.
+//  (merge of task gas-mask-roof-feedback-20261030, no re-pin): the Office roof FIND's reward pickups (appended last, pinned in
+//     loot-golden officeRoofFind) are left out of pickupHash (helpers/enemySpawnParity.ts); every hash above is reproduced as is.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';

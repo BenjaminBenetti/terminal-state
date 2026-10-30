@@ -67,6 +67,7 @@ The generator-level paths are code, not data:
 - station weapon finds or the Office weapon plan;
 - the pistol-start 9mm boxes;
 - which reward keys a generator places;
+- which find reward keys (`rewardFinds`, e.g. the roof find) a generator lays out as pickups;
 - storey / tenant contexts.
 
 These are declared in `LEVEL_ADAPTER` (`tools/pages/lootReference.ts`). Its type is `Record<LevelId, ...>`, so a new level fails
@@ -84,6 +85,7 @@ to typecheck until it is documented. The test then checks every census pickup an
 | an **openable table** | it is added to `OPENABLE_TABLES`. | — |
 | a **purpose** / purpose table | it is in `ALL_PURPOSES`. Census-observed contexts link to it. | — |
 | a **reward** | it is in `REWARD_TABLES` / a profile's `tables.rewards`, and the placing level lists the key in `LEVEL_ADAPTER.rewards`. | The test fails for a reward no level places. |
+| a **find reward** (a curated item laid out as pickups, e.g. the roof find) | it is in `REWARD_FINDS` / a profile's `tables.rewardFinds`, and the laying level lists the key in `LEVEL_ADAPTER.rewardFinds`. It becomes a `reward-find:<key>` source with its rows and paired ammo. | The test fails for a find no level lays out, or whose shown rows / paired ammo differ from the table. |
 | an Office **company tilt** | it is in `OFFICE_FLOOR_TILT`. | The test fails for a company whose tilt has no program variant. |
 | a new **pickup source** (any generated floor pickup) | its item and count appear in a floor program or special source of that level. | The census check fails: "pickup … has no documented source". |
 | a **fixture** (`loot: null`) | it is in `OPENABLE_SPECS`. It becomes a `fixture:<kind>` source. | — |
@@ -95,7 +97,7 @@ read it. Do not hand-write its numbers.
 
 | Label | Meaning |
 |---|---|
-| guaranteed | Always yields its contents. Examples: the starter kit; the roof cache, whose picks have empty 0 and lots ≥ 1. |
+| guaranteed | Always yields its contents. Examples: the starter kit; the roof cache, whose picks have empty 0 and lots ≥ 1; the roof find, which is always laid out and verified after placement. |
 | conditional | Table-driven and gated by chances. Examples: holders, floor programs. |
 | special | An explicit exception outside the holder tables. Examples: rare gear, gas masks / filters, weapon finds and their paired ammo, the pistol-start boxes. |
 | non-loot | Rolls nothing or only moves existing lots. Examples: fire / AED cabinets, compartments with baked contents, vending pry / spill, light holders spilling when shot, shot lots detaching, the multi-level floor move. |

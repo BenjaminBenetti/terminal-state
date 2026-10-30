@@ -7,12 +7,20 @@
 //  - the REAL generated office (gen/office): rooms with a breakable pane fill to ~0.8 in 25-40 s and the spill beyond their
 //    doorways falls below 0.15 within ~3.5 m (the measured numbers are printed), no other storey ever gets gas;
 //  - exposure: one damage calculation per frame from the eye concentration (threshold, dps, protection, never per breach,
-//    never the hit pipeline), the HUD tag / hint / haze, persistence through RUN's lane store with a bounded fast-forward.
+//    never the hit pipeline), the HUD tag / hint / haze, persistence through RUN's lane store with a bounded fast-forward;
+//  - task gas-mask-roof-feedback-20261030 (item 10): the Office ROOF deck is outdoors — the outside atmosphere
+//    (GAS.ROOF_OUTDOOR_C x the roof fog's own outdoor weight, world/roofAir.ts roofBlend) through the SAME exposure: unprotected it
+//    hurts, a working worn mask protects, an exhausted / missing one does not; it ramps through the ladder hatch; no indoor floor
+//    ever gets it; the window-breach gas is unchanged; the source is reported for the cough feedback.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {CELL, FLOOR, Grid, SOLID} from '../src/gen/grid';
 import {GAS, GasField, gasProfile} from '../src/world/gas/field';
 import {GasSystem, installGas, type GasHost} from '../src/world/gas/system';
+import {ROOF_FOG, roofAirOf, roofBlend} from '../src/world/roofAir';
+import {roofBlend as fogRoofBlend} from '../src/world/officeAtmosphere';
+import {OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR} from '../src/gen/office/frame';
+import {generateStation} from '../src/gen/station';
 import {WINDOWS_LANE, WindowBreaches, sourceCells} from '../src/world/windowBreach';
 import {planWindows, type WindowPlan, type WindowView} from '../src/world/officeWindows';
 import {readTowerInfo} from '../src/world/towerShared';
@@ -298,9 +306,9 @@ function host(L: StationLayout) {
     frameHooks: [] as ((dt: number) => void)[],
     sectionHooks: [] as {build?(l: StationLayout): void; teardown?(): void}[],
     stateListeners: [] as ((s: never, p: never) => void)[],
-    bulletHitHandlers: [] as ((wh: WorldHit, p: THREE.Vector3, d: THREE.Vector3, shot: number) => boolean)[],
+    bulletHitHandlers: [] as ((wh: WorldHit, p: THREE.Vector3, d: THREE.Vector3, shot: number, damage: number) => boolean)[],
   };
-  const step = (seconds: number, dt = 1 / 60) => { for (let t = 0; t < seconds - 1e-9; t += dt) { clock += dt; for (const fn of h.frameHooks) fn(dt); } };
+  const step =(seconds: number, dt = 1 / 60) => { for (let t = 0; t < seconds - 1e-9; t += dt) { clock += dt; for (const fn of h.frameHooks) fn(dt); } };
   return {h, store, layers, hits, step, plans};
 }
 
@@ -402,20 +410,20 @@ describe('exposure: one damage calculation per frame from the eye concentration;
     const p = roomPane(L, sys, 3);
     sys.breakPane(p.ref.id);
     const cracked = [...sys.windows!.refs.values()].find(r => r.plan.level === 6)!;
-    sys.windows!.impact(cracked, 1, 0);
+    sys.windows!.impact(cracked, 17, 1, 0); // one pistol bullet's damage (task gas-mask-roof-feedback-20261030: pane health)
     step(30, 0.1);
     const live = sys.field!.storey(3)!.stats();
     h.sectionHooks[0].teardown!();
     expect(sys.field).toBe(null);
-    const rec = store.get(WINDOWS_LANE) as {v: number; hits: Record<string, number>; broken: Record<string, number>};
-    expect(rec.v).toBe(1);
-    expect(rec.hits).toEqual({[cracked.id]: 1});
+    const rec = store.get(WINDOWS_LANE) as {v: number; damage: Record<string, number>; broken: Record<string, number>};
+    expect(rec.v).toBe(2);
+    expect(rec.damage).toEqual({[cracked.id]: 17});
     expect(Object.keys(rec.broken)).toEqual([p.ref.id]);
     expect(rec.broken[p.ref.id]).toBeCloseTo(30, 0);
     // rebuild (Subway -> Office travel): restored at section build, the gas fast-forwarded by the breach age
     h.sectionHooks[0].build!(L);
     expect(sys.windows!.broken(p.ref.id)).toBe(true);
-    expect(sys.windows!.state.get(cracked.id)?.hits).toBe(1);
+    expect(sys.windows!.state.get(cracked.id)?.damage).toBe(17);
     const back = sys.field!.storey(3)!.stats();
     expect(Math.abs(back.poolMean - live.poolMean)).toBeLessThan(0.05);
     expect(Math.abs(back.activeCells - live.activeCells)).toBeLessThan(live.activeCells * 0.1);
@@ -487,8 +495,156 @@ describe('exposure: one damage calculation per frame from the eye concentration;
     h.sectionHooks[0].build!(L);
     expect(sys.field).toBe(null);
     const wh = {t: 1, kind: 'wall', nx: 0, ny: 0, nz: 1, level: 3} as WorldHit;
-    expect(h.bulletHitHandlers[0](wh, new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 1)).toBe(false);
+    expect(h.bulletHitHandlers[0](wh, new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 1, 17)).toBe(false);
     step(1);
     expect(sys.hud.shown.tag).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Task gas-mask-roof-feedback-20261030 (item 10): the toxic roof (the outside atmosphere on the Office roof deck).
+
+describe('the Office roof is outdoors: the outside atmosphere through the same exposure (protection, HUD, damage), indoor floors never', () => {
+  /** The expected outdoor dps with the existing formula: 8 x (0.6 − 0.12) / 0.88 ≈ 4.36 hp/s. */
+  const ROOF_DPS = GAS.DPS_MAX * Math.min(1, Math.max(0, (GAS.ROOF_OUTDOOR_C - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
+  const roofOf = (L: StationLayout) => {
+    const r = L.office!.roof!, top = r.ladder.top;
+    return {base: r.baseY, x: top.x, z: top.z - 1.5}; // on the deck, 1.5 m past the ladder head
+  };
+
+  it('ONE outdoor weight: the roof fog and the hazard share roofBlend (re-exported); ROOF_OUTDOOR_C 0.6 -> ~4.4 hp/s unprotected', () => {
+    expect(fogRoofBlend).toBe(roofBlend);
+    expect(GAS.ROOF_OUTDOOR_C).toBe(0.6);
+    expect(ROOF_DPS).toBeCloseTo(4.36, 2);
+    const L = officeLevel(12345), air = roofAirOf(L)!;
+    expect(air).toEqual({baseY: L.office!.roof!.baseY, foot: L.office!.exterior});
+    expect(roofAirOf(generateStation(4242, {startWeapon: 'pistol'}))).toBe(null); // the Subway: no roof, no outdoor exposure
+  });
+
+  it('on the deck unprotected: c = 0.6 (source outdoor), ~4.4 hp/s through ONE takeDamage per frame; TOXIC GAS + hint; no breach needed', () => {
+    const L = officeLevel(12345);
+    const {h, hits, step} = host(L);
+    const sys = installGas(h as unknown as GasHost);
+    h.sectionHooks[0].build!(L);
+    const R = roofOf(L);
+    Object.assign(h.player, {x: R.x, z: R.z, y: R.base, eye: R.base + 1.6});
+    step(1);
+    expect(sys.exposure).toMatchObject({c: GAS.ROOF_OUTDOOR_C, outdoor: GAS.ROOF_OUTDOOR_C, source: 'outdoor', protected: false});
+    expect(sys.exposure.dps).toBeCloseTo(ROOF_DPS, 6);
+    expect(hits.length).toBe(60);
+    expect(hits.reduce((s, x) => s + x, 0)).toBeCloseTo(ROOF_DPS, 3);
+    expect(sys.hud.shown.tag).toBe('TOXIC GAS');
+    expect(sys.hud.shown.hint).toBe('Put on your gas mask (Q)');
+    expect(sys.hud.shown.vignette).toBeGreaterThan(0);
+    // the outdoor murk is the scene fog (always drawn): no fallback screen haze, even with volumetrics off
+    h.atmosphere.active = false;
+    step(0.1);
+    expect(sys.hud.shown.haze).toBe(0);
+    expect(sys.field!.storeys).toEqual([]); // no window broke: the roof needs no breach
+  });
+
+  it('a working worn mask protects (FILTERING, no damage); exhausted filter / no mask: damage again; dead: nothing', () => {
+    const L = officeLevel(12345);
+    const {h, hits, step} = host(L);
+    const sys = installGas(h as unknown as GasHost);
+    h.sectionHooks[0].build!(L);
+    const R = roofOf(L);
+    Object.assign(h.player, {x: R.x, z: R.z, y: R.base, eye: R.base + 1.6});
+    // the primary's wiring shape: protected = mask on the face with filter charge left (gear/gasMask.ts protects())
+    const mask = {worn: true, on: true, filter: 2};
+    sys.protection = () => mask.worn && mask.on && mask.filter > 0;
+    const drain = (dt: number) => { if (mask.on) mask.filter = Math.max(0, mask.filter - dt); };
+    h.frameHooks.unshift(drain); // the mask's frame hook runs first (installed earlier in Game)
+    step(1.5);
+    expect(hits.length).toBe(0);
+    expect(sys.exposure).toMatchObject({protected: true, dps: 0, source: 'outdoor'});
+    expect(sys.hud.shown.tag).toBe('FILTERING');
+    step(1); // the filter ran out at 2 s: exposed again
+    expect(mask.filter).toBe(0);
+    expect(sys.exposure.protected).toBe(false);
+    expect(sys.exposure.dps).toBeCloseTo(ROOF_DPS, 6);
+    expect(hits.length).toBeGreaterThan(20);
+    mask.filter = 100; mask.on = false; // a full filter but the mask off the face: no protection
+    const n = hits.length;
+    step(0.5);
+    expect(hits.length - n).toBe(30);
+    mask.worn = false; // no mask at all
+    step(0.5);
+    expect(hits.length - n).toBe(60);
+    // death stops it (the exposure reads 0)
+    h.player.alive = false;
+    const m = hits.length;
+    step(1);
+    expect(hits.length).toBe(m);
+    expect(sys.exposure).toMatchObject({c: 0, dps: 0, source: null});
+  });
+
+  it('the hatch ramp: climbing the ladder the outdoor exposure rises smoothly from 0 (floor 8) to 0.6 (deck); off the deck footprint 0', () => {
+    const L = officeLevel(12345);
+    const {h, step} = host(L);
+    const sys = installGas(h as unknown as GasHost);
+    h.sectionHooks[0].build!(L);
+    const lad = L.office!.roof!.ladder, base = L.office!.roof!.baseY;
+    let prev = -1;
+    const seen: number[] = [];
+    for (let eye = base - 4.4 + 1.6; eye <= base + 1.6 + 1e-9; eye += 0.1) {
+      Object.assign(h.player, {x: lad.bottom.x, z: lad.bottom.z, y: eye - 1.6, eye});
+      step(1 / 60);
+      const c = sys.exposure.outdoor;
+      expect(c).toBeCloseTo(GAS.ROOF_OUTDOOR_C * roofBlend(lad.bottom.x, eye, lad.bottom.z, roofAirOf(L)), 9);
+      expect(c).toBeGreaterThanOrEqual(prev - 1e-9);
+      prev = c;
+      seen.push(c);
+    }
+    expect(seen[0]).toBe(0); // on floor 8 at the ladder foot
+    expect(seen.some(c => c > 0.05 && c < GAS.ROOF_OUTDOOR_C - 0.05)).toBe(true); // a ramp, not a step
+    expect(seen[seen.length - 1]).toBeCloseTo(GAS.ROOF_OUTDOOR_C, 9);
+    // the ramp spans the hatch climb: 0 below base − ROOF_FOG.below, full above base + ROOF_FOG.above; nothing outside the footprint
+    expect(roofBlend(lad.bottom.x, base - ROOF_FOG.below - 0.01, lad.bottom.z, roofAirOf(L))).toBe(0);
+    expect(roofBlend(lad.bottom.x, base + ROOF_FOG.above + 0.01, lad.bottom.z, roofAirOf(L))).toBe(1);
+    const ex = L.office!.exterior;
+    expect(roofBlend(ex.x1 + 5, base + 1.6, (ex.z0 + ex.z1) / 2, roofAirOf(L))).toBe(0);
+  });
+
+  it('indoor floors under the roof (lobby .. floor 8, the station) get NO outdoor exposure — anywhere, at any standing / jumping eye height', () => {
+    const L = officeLevel(12345);
+    const {h, step} = host(L);
+    const sys = installGas(h as unknown as GasHost);
+    h.sectionHooks[0].build!(L);
+    let samples = 0;
+    for (let lv = 0; lv <= OFFICE_TOP_FLOOR; lv++) {
+      const g = L.levels[lv].grid;
+      for (let y = 0; y < g.h; y += 7) for (let x = 0; x < g.w; x += 7) {
+        if (!g.walkable(x, y)) continue;
+        const [wx, wz] = g.center(x, y), fl = g.floor[g.idx(x, y)];
+        for (const e of [0.9, 1.6, 2.6]) {
+          Object.assign(h.player, {x: wx, z: wz, y: fl, eye: fl + e});
+          step(1 / 60);
+          expect(sys.exposure.outdoor, `level ${lv} (${wx}, ${wz}) eye +${e}`).toBe(0);
+          samples++;
+        }
+      }
+    }
+    expect(samples).toBeGreaterThan(500);
+    expect(sys.exposure.damage).toBe(0);
+    expect(L.levels[OFFICE_ROOF_LEVEL].baseY).toBeCloseTo(L.office!.roof!.baseY, 6);
+  });
+
+  it('the window-breach gas is unchanged indoors: source field, the same dps, the roof adds nothing (c = max, never a sum)', () => {
+    const L = officeLevel(12345);
+    const {h, step} = host(L);
+    const sys = installGas(h as unknown as GasHost);
+    h.sectionHooks[0].build!(L);
+    const p = roomPane(L, sys, 8); // the top floor, right under the roof
+    Object.assign(h.player, {x: p.x, z: p.z, y: p.floor, eye: p.floor + 1.6});
+    sys.breakPane(p.ref.id);
+    step(40);
+    const e = sys.exposure, cf = sys.field!.concentrationAt(p.x, p.floor + 1.6, p.z);
+    expect(e.source).toBe('field');
+    expect(e.outdoor).toBe(0);
+    expect(e.c).toBe(cf);
+    expect(e.dps).toBeCloseTo(GAS.DPS_MAX * Math.min(1, Math.max(0, (cf - GAS.THRESHOLD) / (1 - GAS.THRESHOLD))), 9);
+    // the field's tuning is untouched by the roof pass
+    expect([GAS.D, GAS.K_POOL, GAS.K_SPILL, GAS.FILL_RATE, GAS.SOURCE_RATE, GAS.POOL_RADIUS_M, GAS.THRESHOLD, GAS.DPS_MAX, GAS.HUD_MIN]).toEqual([1.6, 0.004, 0.5, 0.2, 1.4, 10, 0.12, 8, 0.06]);
   });
 });

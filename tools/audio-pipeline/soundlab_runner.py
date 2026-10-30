@@ -51,6 +51,10 @@ BUSY_POLL_S = 5.0      # while a (user) job is running
 MAX_BUSY_ATTEMPTS = 4  # definitive 409-busy rejections per clip
 DOWN_LIMIT_S = 20 * 60 # lab unreachable this long -> stop (blocker)
 JOB_LIMIT_S = 1900     # lab's own timeout is 1800 s
+# Optional finite allowance (e.g. a task authorizing "at most N generation calls"): the total number of POSTs this queue may
+# ever make, counted from the durable attempt intent files in the ledger (every POST has one, written before it is sent), so the
+# cap holds across busy re-attempts, restarts and reconciliation. Unset = unlimited (previous behaviour).
+MAX_POSTS = int(os.environ["SOUND_LAB_MAX_POSTS"]) if os.environ.get("SOUND_LAB_MAX_POSTS") else None
 
 
 def now() -> str:
@@ -383,6 +387,8 @@ class Runner:
             return
         while True:
             prior = self.attempts(cid)
+            if MAX_POSTS is not None and len(list(LEDGER.glob("*/attempt-*.intent.json"))) >= MAX_POSTS:
+                raise SystemExit(self.stop("blocked", f"generation allowance exhausted: {MAX_POSTS} POSTs already intended; not submitting {cid}"))
             if len(prior) >= MAX_BUSY_ATTEMPTS:
                 self.record_terminal(cid, {"state": "failed", "error": f"{len(prior)} definitive busy rejections; giving up on this clip"})
                 self.counts["failed"] += 1
