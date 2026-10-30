@@ -21,7 +21,7 @@ import {SoundGate} from './world/openables';
 import {Effects} from './world/fx';
 import {Input} from './player/input';
 import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/player';
-import {Inventory, THROW_REF, type SlotRef} from './items/inventory';
+import {Inventory, MELEE_REF, THROW_REF, isMeleeItem, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, caliberLabel, reserveFor, type WeaponDef} from './weapons/weapons';
 import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based ammo
@@ -1032,7 +1032,7 @@ export class Game {
     const prev = this.state;
     this.state = s;
     this.input.active = s === 'playing';
-    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE: no stale contact after a menu / death / loading
+    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading
     this.invUI.cancelDrag();
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
@@ -1073,6 +1073,7 @@ export class Game {
       if (code === 'Tab' || code === 'KeyI' || code === 'Escape') this.closeInventory();
       const m = /^Digit([1-5])$/.exec(code);
       if (m) this.invUI.assign(Number(m[1]) - 1);
+      else if (code === 'Backquote') this.invUI.assignMelee(); // lane SLOT: ~ puts the selected melee weapon into the melee slot
     } else if (this.state === 'paused' && code === 'Escape' && this.qa) {
       void this.enterPlay();
     }
@@ -1199,13 +1200,38 @@ export class Game {
 
   // ---------------------------------------------------------------------------------------
   private selectSlot(i: number): void {
-    if (i === this.inv.selected) return;
-    this.inv.select(i);
+    if (i === this.inv.selected && !this.inv.meleeSelected) return;
+    this.inv.select(i); // (leaves the melee slot)
     this.cancelUse('slot');
     this.syncHeld();
   }
 
-  /** Equip whatever is in the selected quick slot. */
+  /**
+   * Selection keys, once per playing frame: 1-5 quick slots; the wheel cycles quick slots 1-5 only (task knife-windup-20261030,
+   * lane SLOT: from the melee slot it first returns to the remembered quick slot); ~ (Backquote; player/input.ts isMeleeKey drops
+   * Ctrl / Alt / Meta combos and typing) draws the melee slot's weapon. (Q is the gas mask, not a selection key: gear/gasMask.ts.)
+   */
+  private slotKeys(inp: Pick<Input, 'hit' | 'wheel'>): void {
+    for (let i = 0; i < 5; i++) if (inp.hit(`Digit${i + 1}`)) this.selectSlot(i);
+    if (inp.wheel) { const i = this.inv.meleeSelected ? this.inv.selected : (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
+    if (inp.hit('Backquote')) this.selectMelee();
+  }
+
+  /**
+   * Task knife-windup-20261030 (lane SLOT): ~ (Backquote) — draw the melee slot's weapon, like 1-5 draw a quick slot's. An empty
+   * melee slot first takes a carried melee weapon (Inventory.refillMeleeSlot, like G and the grenade slot); with none anywhere:
+   * "No melee weapon" and nothing changes (the held item stays; nothing stale is equipped). Already drawn: nothing to do.
+   */
+  selectMelee(): boolean {
+    if (this.inv.meleeSelected) return true;
+    if (!this.inv.melee && !this.inv.refillMeleeSlot()) { this.hud.toast('No melee weapon', true); this.sfx.denied(); return false; }
+    this.inv.selectMelee();
+    this.cancelUse('slot');
+    this.syncHeld();
+    return true;
+  }
+
+  /** Equip whatever is in the selected quick slot (or the melee slot while it is selected: Inventory.selectedStack). */
   syncHeld(): void {
     const st = this.inv.selectedStack();
     const def = st ? itemDef(st.itemId) : null;
@@ -1237,7 +1263,7 @@ export class Game {
    */
   private throwFlare(fromHeld: boolean): void {
     // Task office-overhaul-20261030 (INTERACT, #6): G throws the grenade slot's flare; left click the held one
-    const ref = fromHeld && this.inv.selectedStack()?.itemId === 'flare' ? {bar: 'hotbar' as const, index: this.inv.selected}
+    const ref = fromHeld && this.inv.selectedStack()?.itemId === 'flare' ? this.inv.selectedRef()
       : !fromHeld && this.inv.thrown?.itemId === 'flare' ? THROW_REF : null;
     if (this.use || this.consumeView.busy || this.player.climbing) return;
     const p = this.player;
@@ -1282,8 +1308,18 @@ export class Game {
   }
 
   private equipRef(ref: SlotRef): void {
+    // Task knife-windup-20261030 (lane SLOT): a melee weapon is equipped INTO the melee slot (a swap sends the one there to `ref`)
+    // and drawn — it never takes a quick slot; the melee slot's own weapon is simply drawn (like ~).
+    if (ref.bar === 'melee' || isMeleeItem(this.inv.get(ref)?.itemId)) {
+      if (this.inv.equipMeleeFrom(ref) === 'refused') return;
+      this.invUI.selected = MELEE_REF;
+      this.selectMelee();
+      return;
+    }
     if (ref.bar === 'hotbar') { this.selectSlot(ref.index); return; }
+    const wasMelee = this.inv.meleeSelected;
     this.inv.move(ref, {bar: 'hotbar', index: this.inv.selected});
+    if (wasMelee) { this.inv.select(this.inv.selected); this.cancelUse('slot'); } // SLOT: the equipped gun is drawn
     this.invUI.selected = {bar: 'hotbar', index: this.inv.selected};
     this.syncHeld();
   }
@@ -1380,6 +1416,9 @@ export class Game {
       if (def.kind === 'weapon' && ref?.bar === 'hotbar') {
         this.hud.toast(`${def.short} → quick slot ${ref.index + 1}${prevSelectedEmpty ? '' : ` (press ${ref.index + 1})`}`);
         if (prevSelectedEmpty) { this.selectSlot(ref.index); }
+      } else if (ref?.bar === 'melee') { // lane SLOT: a melee weapon fills the empty melee slot
+        this.hud.toast(`${def.short} → melee slot${prevSelectedEmpty ? '' : ' (press ~)'}`);
+        if (prevSelectedEmpty) this.selectMelee();
       } else this.hud.toast(def.kind === 'weapon' ? `${def.short} stored in backpack` : `+${got} ${def.name}`);
     }
     this.syncHeld();
@@ -1436,8 +1475,7 @@ export class Game {
     p.pitch -= inp.dy * sens * (this.settings.invertY ? -1 : 1);
     p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch));
 
-    for (let i = 0; i < 5; i++) if (inp.hit(`Digit${i + 1}`)) this.selectSlot(i);
-    if (inp.wheel) { const i = (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
+    this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot)
     if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
     if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
     // Task office-overhaul-20261030 (lane INTERACT, #6): G = the grenade slot (hold / release below; T a silent alias). The old
@@ -1481,11 +1519,16 @@ export class Game {
     if (p.stanceChanged) this.sfx.crouch(p.crouched);
 
     if (wdef && !this.flareHold.active) {
+      // Lane KNIFE / FEEL (knife-windup-20261030): a melee weapon winds up while held and swings on release. A lane UI taking the
+      // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
+      // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
+      // one frame still starts the full windup -> swing -> recovery.
       const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns, pressed: inp.mousePressed[0] && !flareOwns, reload: inp.hit('KeyR') && !vmBusy,
-        lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && laneOwns)}, this.inv); // lane KNIFE: a lane UI taking the buttons cancels a slash
+        lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
       for (const e of ev) {
         if (e.type === 'fire') this.fire(e.def);
-        else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE: the slash (no gunfire, no bullets, no flash / recoil)
+        else if (e.type === 'windup') { /* lane FEEL: the raise is silent (no whoosh while held); the viewmodel shows it */ }
+        else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE / FEEL: the whoosh at the RELEASE (no gunfire, bullets, flash or recoil)
         else if (e.type === 'contact') this.meleeContact(e.def);
         else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (e.def.caliber && reserveFor(e.def, this.inv) === 0) this.hud.toast(`Out of ${caliberLabel(e.def)} ${CALIBERS[e.def.caliber].unit[1]}`, true); }
         else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.sound, e.empty);
@@ -1493,7 +1536,7 @@ export class Game {
         else if (e.type === 'reloadEnd') this.sfx.reloadEnd(e.def.sound);
       }
     } else if (heldDef?.kind === 'consumable' && inp.mousePressed[0] && !this.use && !flareOwns) {
-      this.startUse({bar: 'hotbar', index: this.inv.selected});
+      this.startUse(this.inv.selectedRef());
     }
 
     if (this.use) {
@@ -1588,7 +1631,7 @@ export class Game {
       reloading: this.weapon.reloading, reloadProgress: this.weapon.progress, using: !!this.use, useProgress: this.use ? this.use.t / this.use.total : 0, bobT: p.bobT,
       crouch: p.crouchBlend, vy: p.grounded ? 0 : p.vy, landDip: p.landDip,
       throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back
-      swing: this.weapon.swingTime, // lane KNIFE: slash animation (weapons/meleeView.ts)
+      melee: this.weapon.meleePose, // lane KNIFE / FEEL: windup / ready / slash / recovery pose (weapons/meleeView.ts)
     });
     this.hud.setStance(p.crouched, p.standBlocked);
     this.updateHud(wdef);
@@ -1636,13 +1679,13 @@ export class Game {
     const def = st ? itemDef(st.itemId) : null;
     let hint = '';
     if (wdef && st) {
-      if (wdef.melee) hint = 'Click to slash · no ammo'; // lane KNIFE (short: the long form overlapped the hotbar at 960 px)
+      if (wdef.melee) hint = this.weapon.winding ? 'Release to slash' : 'Hold · release to slash'; // lane KNIFE / FEEL (short: a long hint overlapped the hotbar at 960 px)
       else if (this.weapon.reloading) hint = 'Reloading…';
       else if ((st.mag ?? 0) === 0) hint = reserveFor(wdef, this.inv) ? 'Empty — press R' : `No ${caliberLabel(wdef)} ammo`;
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && reserveFor(wdef, this.inv)) hint = 'Low — R to reload';
     } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
-    if (this.gear?.readied) hint = '6 slings it back on · 1-5 switch'; // Task office-overhaul-20261030 (INTERACT, #1)
+    if (this.gear?.readied) hint = '6 slings it back on · 1-5 / ~ switch'; // Task office-overhaul-20261030 (INTERACT, #1); SLOT: ~ too
     let prompt = '';
     for (const f of this.promptProviders) { const lp = f(); if (lp) { prompt = lp; break; } } // Iteration 16: lane prompts (grounded bag, elevator, …)
     const lanePrompt = !!prompt;

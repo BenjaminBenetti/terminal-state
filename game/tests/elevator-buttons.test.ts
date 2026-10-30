@@ -400,7 +400,8 @@ describe('input ownership: a click on a targeted button never fires the weapon',
     const hook = update.indexOf('if (inp.mousePressed[0] && this.pointerHandlers.some(h => h())) { inp.mousePressed[0] = false; this.lmbLatch = true; }');
     expect(hook).toBeGreaterThan(0);
     expect(update.indexOf("if (inp.hit('KeyE')) this.interact();")).toBeLessThan(hook);
-    for (const later of ['this.flareHold.update(', 'this.weapon.update(', 'this.startUse({bar', 'for (const fn of this.frameHooks)']) {
+    // (task knife-windup-20261030, lane SLOT: item use starts from the held slot ref, `this.startUse(this.inv.selectedRef())`)
+    for (const later of ['this.flareHold.update(', 'this.weapon.update(', 'this.startUse(this.inv.selectedRef())', 'for (const fn of this.frameHooks)']) {
       const at = update.indexOf(later);
       expect(at, later).toBeGreaterThan(hook);
     }

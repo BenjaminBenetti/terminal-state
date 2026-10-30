@@ -59,7 +59,7 @@ interface OfficeInfoLike {
 
 // Task gasmask-breach-20261030 (mask lane): KeyQ is the gas mask now (no last-item cycling); a Q press slings a readied bag back
 // on through cancelReady (gear/gasMask.ts press), so it is no longer a "shoulder" key here.
-const KEYS_SHOULDER = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
+const KEYS_SHOULDER = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Backquote']; // + ~ (melee slot, task knife-windup-20261030 SLOT)
 /** Task office-overhaul-20261030 (INTERACT, #1): seconds E must be held on a grounded bag to pick it up and wear it. */
 export const BAG_HOLD_S = 0.5;
 /** The hold ring appears after this much of the hold (a quick tap never flashes it). */

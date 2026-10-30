@@ -1,8 +1,11 @@
 // Lane KNIFE (task knife-melee-20261030): the user's knife as the first melee weapon — the runtime derivative contract, the
 // NewGame kit (knife IN ADDITION to the unchanged pistol kit) and its carryover, the damage numbers against the real enemy
-// stats (1 head / 2 body hits for an ordinary zombie), the contact sweep (reach, walls / props / slabs, misses), one target
-// and one damage per swing at the swing cadence, ammo independence, cancellation (switch / menus / lowering), and the
-// first-person viewmodel (held model, slash through the crosshair, warm-up coverage). CPU only (no renderer, no browser).
+// stats, the contact sweep (reach, walls / props / slabs, misses), one target and one damage per swing at the swing cadence,
+// ammo independence, cancellation (switch / menus / lowering), and the first-person viewmodel (held model, slash through the
+// crosshair, warm-up coverage). CPU only (no renderer, no browser).
+// Lane FEEL (task knife-windup-20261030): updated to the new contract — 30 body / 60 head (2 head / 4 body hits on a standard
+// zombie), reach 1.125 m, hold to wind up / release to swing (no auto-repeat), the upright carry; knife-windup.test.ts has the
+// detailed windup / tap / cancellation / pose coverage.
 
 import {describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
@@ -18,18 +21,19 @@ import {levelFixture, FIX} from './helpers/levelFixture';
 vi.mock('../src/world/canvasTextures', async orig => ({...(await orig<object>()), canvasTexture: () => new THREE.Texture()}));
 installCanvasShim(false);
 
-const {WEAPONS, WeaponController, meleeDefOf, weaponAmmoItem, reserveFor} = await import('../src/weapons/weapons');
+const {WEAPONS, WeaponController, meleeDefOf, weaponAmmoItem, reserveFor, meleeCadence} = await import('../src/weapons/weapons');
 type TriggerInput = import('../src/weapons/weapons').TriggerInput;
 type WeaponEvent = import('../src/weapons/weapons').WeaponEvent;
 const {KNIFE_RAYS, meleeDamage, meleeHitsToKill, meleeRayDirs, resolveMelee} = await import('../src/combat/melee');
 type MeleeTarget<T> = import('../src/combat/melee').MeleeTarget<T>;
-const {knifeSwingOffset, knifeSwingTimes} = await import('../src/weapons/meleeView');
+const {KNIFE_POSES, meleePoseOffset} = await import('../src/weapons/meleeView'); // lane FEEL: stage-driven poses
 const {Viewmodel} = await import('../src/weapons/viewmodel');
-const {Inventory} = await import('../src/items/inventory');
+const {Inventory, MELEE_REF} = await import('../src/items/inventory');
 const {ITEMS, itemDef} = await import('../src/items/items');
 const {ICONS} = await import('../src/ui/icons');
 const {MODEL_FILES} = await import('../src/assets/manifest');
-const {starterInventory, KNIFE_SLOT} = await import('../src/run/starter');
+// task knife-windup-20261030 (lane SLOT): the knife lives in the dedicated melee slot (MELEE_REF, key ~), no longer quick slot 3
+const {starterInventory} = await import('../src/run/starter');
 const {takeSnapshot, restoreCarry} = await import('../src/run/snapshot');
 const {capturePickups, restorePickup} = await import('../src/run/worldMemory');
 const {PickupManager} = await import('../src/world/pickups');
@@ -122,19 +126,25 @@ describe('knife derivative (user upload -> knife-user.glb): file, hash, triangle
 // ---------------------------------------------------------------------------------------------------------------------
 describe('NewGame kit: the knife IN ADDITION to the unchanged pistol kit; carryover / Retry / NewGame / dropped', () => {
   // (the grenade slot counts: since the office overhaul the starting flare lives there, thrown with G)
-  const kitWithoutKnife = (inv: InstanceType<typeof Inventory>) => inv.hotbar.concat(inv.pack, inv.throwSlot).filter(s => s && s.itemId !== 'knife')
+  // task knife-windup-20261030 (lane SLOT): the knife lives in the dedicated melee slot (~), not quick slot 3 — the kit checks
+  // below follow it there; melee-slot.test.ts covers the slot itself (rules, ~ key, snapshot v3 / legacy migration, HUD).
+  const kitWithoutKnife = (inv: InstanceType<typeof Inventory>) => inv.hotbar.concat(inv.pack, inv.throwSlot, inv.meleeSlot).filter(s => s && s.itemId !== 'knife')
     .map(s => `${s!.itemId}x${s!.count}${s!.mag !== undefined ? `@${s!.mag}` : ''}`).sort();
   const knives = (inv: InstanceType<typeof Inventory>) => inv.allStacks(true).filter(s => s.itemId === 'knife');
 
-  it('fresh spawn: pistol (full magazine, selected), 45 x 9mm, flare, bandage — plus the knife in quick slot 3', () => {
+  it('fresh spawn: pistol (full magazine, selected), 45 x 9mm, flare, bandage — plus the knife in the melee slot (quick slot 3 stays empty)', () => {
     const inv = starterInventory('pistol');
-    expect(KNIFE_SLOT).toBe(2);
     expect(inv.hotbar[0]).toMatchObject({itemId: 'pistol', count: 1, mag: WEAPONS.pistol.magazine});
     expect(inv.selected).toBe(0);
+    expect(inv.meleeSelected).toBe(false);
+    expect(inv.selectedStack()).toBe(inv.hotbar[0]);
     expect(inv.count(weaponAmmoItem(WEAPONS.pistol)!)).toBe(45);
     expect(inv.count('flare')).toBe(1);
     expect(inv.hotbar[4]).toMatchObject({itemId: 'bandage', count: 1});
-    expect(inv.hotbar[KNIFE_SLOT]).toMatchObject({itemId: 'knife', count: 1, mag: 0});
+    expect(inv.melee).toMatchObject({itemId: 'knife', count: 1, mag: 0});
+    expect(inv.get(MELEE_REF)).toBe(inv.melee);
+    expect(inv.hotbar[2]).toBeNull();
+    expect(inv.hotbar.some(s => s?.itemId === 'knife')).toBe(false);
     expect(knives(inv).length).toBe(1);
     expect(inv.invariants()).toEqual([]);
     expect(itemDef('knife')).toMatchObject({kind: 'weapon', weaponId: 'knife', stackMax: 1, icon: 'knife'});
@@ -142,7 +152,8 @@ describe('NewGame kit: the knife IN ADDITION to the unchanged pistol kit; carryo
     // the rifle fallback kit (pistol art gate off) gets it too
     const rifle = starterInventory('rifle');
     expect(rifle.hotbar[0]).toMatchObject({itemId: 'rifle', mag: 30});
-    expect(rifle.hotbar[KNIFE_SLOT]).toMatchObject({itemId: 'knife'});
+    expect(rifle.melee).toMatchObject({itemId: 'knife'});
+    expect(rifle.hotbar.some(s => s?.itemId === 'knife')).toBe(false);
   });
 
   it('the rest of the kit is exactly what it was before the knife (nothing removed or reduced)', () => {
@@ -156,12 +167,12 @@ describe('NewGame kit: the knife IN ADDITION to the unchanged pistol kit; carryo
     const survival = new Survival(), battery = new FlashlightBattery(() => 0.5);
     const stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
     const snap = takeSnapshot({level: 'subway', section: 'main', arrival: {kind: 'start'}}, {inv, player, survival, battery, participants: [], stats}, {});
-    inv.detach({bar: 'hotbar', index: KNIFE_SLOT}); // dropped after entering the level
+    inv.detach(MELEE_REF); // dropped after entering the level
     expect(knives(inv).length).toBe(0);
     for (let round = 0; round < 2; round++) {
       const restored = restoreCarry(snap, {player, survival, battery, stats});
       expect(knives(restored).length).toBe(1);
-      expect(restored.hotbar[KNIFE_SLOT]).toMatchObject({itemId: 'knife', mag: 0});
+      expect(restored.melee).toMatchObject({itemId: 'knife', mag: 0});
       expect(restored.invariants()).toEqual([]);
     }
     for (let i = 0; i < 3; i++) expect(knives(starterInventory('pistol')).length).toBe(1);
@@ -169,15 +180,16 @@ describe('NewGame kit: the knife IN ADDITION to the unchanged pistol kit; carryo
 
   it('travel keeps the same inventory (in-place snapshot load): one knife, no duplicate, same uid', () => {
     const inv = starterInventory('pistol');
-    const uid = inv.hotbar[KNIFE_SLOT]!.uid;
+    const uid = inv.melee!.uid;
     inv.loadJSON(inv.toJSON()); // Game.installInventory path
     expect(knives(inv).map(s => s.uid)).toEqual([uid]);
+    expect(inv.melee!.uid).toBe(uid);
   });
 
-  it('a dropped knife is a normal pickup: remembered by the section and restored once (mag 0, no ammo)', () => {
+  it('a dropped knife is a normal pickup: remembered by the section and restored once (mag 0, no ammo) — back into the melee slot', () => {
     const inv = starterInventory('pistol');
     const pm = new PickupManager({});
-    const dropped = inv.detach({bar: 'hotbar', index: KNIFE_SLOT})!;
+    const dropped = inv.detach(MELEE_REF)!;
     pm.add(dropped, 1, 0, 2, 0.4);
     const recs = capturePickups(pm.list, () => undefined);
     expect(recs.map(r => r.stack.itemId)).toEqual(['knife']);
@@ -185,40 +197,50 @@ describe('NewGame kit: the knife IN ADDITION to the unchanged pistol kit; carryo
     const back = restorePickup(pm2, inv, recs[0]);
     expect(back.stack).toMatchObject({itemId: 'knife', count: 1, mag: 0});
     expect(inv.add(back.stack)).toBe(0);
+    expect(inv.melee).toBe(back.stack); // fills the empty melee slot (same object), no quick slot used
     expect(knives(inv).length).toBe(1);
     expect(inv.invariants()).toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-describe('knife damage vs the real enemy numbers (user: one head hit or two body hits)', () => {
-  it('ordinary zombie (shambler, 100 hp): 1 head hit, 2 body hits (torso and limbs alike), 1 body hit is not enough', () => {
+describe('knife damage vs the real enemy numbers (lane FEEL nerf: two head hits, body hits scaled up)', () => {
+  it('30 body / 60 head: an ordinary zombie (shambler, 100 hp) takes 2 head hits or 4 body hits (torso and limbs alike)', () => {
     const hp = ZOMBIE_STATS.shambler.hp;
     expect(hp).toBe(100);
-    expect(meleeDamage(KNIFE, 'head')).toBeGreaterThanOrEqual(hp);
-    expect(meleeDamage(KNIFE, 'torso')).toBeLessThan(hp);
-    expect(meleeHitsToKill(KNIFE, 'head', hp)).toBe(1);
-    expect(meleeHitsToKill(KNIFE, 'torso', hp)).toBe(2);
-    expect(meleeHitsToKill(KNIFE, 'limb', hp)).toBe(2);
-    expect([KNIFE.damage, KNIFE.headMult, KNIFE.limbMult]).toEqual([60, 2, 1]);
+    expect([KNIFE.damage, KNIFE.headMult, KNIFE.limbMult]).toEqual([30, 2, 1]);
+    expect([meleeDamage(KNIFE, 'torso'), meleeDamage(KNIFE, 'limb'), meleeDamage(KNIFE, 'head')]).toEqual([30, 30, 60]);
+    expect(meleeDamage(KNIFE, 'head')).toBeLessThan(hp); // no more one-hit head kill
+    expect(meleeHitsToKill(KNIFE, 'head', hp)).toBe(2);
+    expect(meleeHitsToKill(KNIFE, 'torso', hp)).toBe(4);
+    expect(meleeHitsToKill(KNIFE, 'limb', hp)).toBe(4);
+    expect(meleeDamage(KNIFE, 'head') + 2 * meleeDamage(KNIFE, 'torso')).toBeGreaterThanOrEqual(hp); // or 1 head + 2 body
   });
 
-  it('documented exceptions: the coated zombie (165 hp) takes 2 head / 3 body hits; rats / dogs (44 hp) die to any hit', () => {
+  it('documented other enemies (stats unchanged): coated zombie 165 hp = 3 head / 6 body hits; rats / dogs 44 hp = 1 head / 2 body', () => {
     expect(ZOMBIE_STATS.coated.hp).toBe(165);
-    expect(meleeHitsToKill(KNIFE, 'head', ZOMBIE_STATS.coated.hp)).toBe(2);
-    expect(meleeHitsToKill(KNIFE, 'torso', ZOMBIE_STATS.coated.hp)).toBe(3);
-    expect(meleeDamage(KNIFE, 'head') + meleeDamage(KNIFE, 'torso')).toBeGreaterThanOrEqual(ZOMBIE_STATS.coated.hp); // head + body also kills
+    expect(meleeHitsToKill(KNIFE, 'head', ZOMBIE_STATS.coated.hp)).toBe(3);
+    expect(meleeHitsToKill(KNIFE, 'torso', ZOMBIE_STATS.coated.hp)).toBe(6);
+    expect(meleeHitsToKill(KNIFE, 'limb', ZOMBIE_STATS.coated.hp)).toBe(6);
     expect(RATDOG_STATS.hp).toBe(44);
-    for (const part of ['head', 'torso', 'limb'] as const) expect(meleeHitsToKill(KNIFE, part, RATDOG_STATS.hp)).toBe(1);
+    expect(meleeHitsToKill(KNIFE, 'head', RATDOG_STATS.hp)).toBe(1);
+    expect(meleeHitsToKill(KNIFE, 'torso', RATDOG_STATS.hp)).toBe(2);
+    expect(meleeHitsToKill(KNIFE, 'limb', RATDOG_STATS.hp)).toBe(2);
+    expect(Object.keys(ZOMBIE_STATS).sort()).toEqual(['coated', 'shambler']); // every enemy type is documented above
   });
 
-  it('end to end on ZombieBrain: a head hit kills; the first body hit does not (and does not stagger), the second kills', () => {
+  it('end to end on ZombieBrain: one head hit does NOT kill, the second does; body hits 1-3 do not (no stagger), the 4th does', () => {
     const head = new ZombieBrain('shambler', 0, 0, 0);
+    expect(head.damage(meleeDamage(KNIFE, 'head'), 1, 0, 0, {stagger: false})).toBe(false);
+    expect(head.alive).toBe(true);
+    expect(head.state).not.toBe('stagger');
     expect(head.damage(meleeDamage(KNIFE, 'head'), 1, 0, 0, {stagger: false})).toBe(true);
     expect(head.alive).toBe(false);
     const body = new ZombieBrain('shambler', 0, 0, 0);
-    expect(body.damage(meleeDamage(KNIFE, 'torso'), 1, 0, 0, {stagger: false})).toBe(false);
-    expect(body.state).not.toBe('stagger'); // no stun-lock: it keeps closing / swinging
+    for (let i = 0; i < 3; i++) {
+      expect(body.damage(meleeDamage(KNIFE, 'torso'), 1, 0, 0, {stagger: false})).toBe(false);
+      expect(body.state).not.toBe('stagger'); // no stun-lock: it keeps closing / swinging
+    }
     expect(body.aware).toBe(true);
     expect(body.damage(meleeDamage(KNIFE, 'torso'), 1, 0, 0, {stagger: false})).toBe(true);
     // contrast: the same amount from a gun path staggers (unchanged gun behaviour)
@@ -262,7 +284,18 @@ describe('contact sweep: reach, occlusion by walls / props / slabs, misses stay 
     expect(KNIFE.melee!.rays).toBe(KNIFE_RAYS);
     expect(KNIFE_RAYS[0]).toEqual([0, 0]);
     for (const [y, p] of KNIFE_RAYS) { expect(Math.abs(y)).toBeLessThanOrEqual(0.18); expect(Math.abs(p)).toBeLessThanOrEqual(0.07); }
-    expect(KNIFE.range).toBe(1.5);
+    expect(KNIFE.range).toBe(1.125); // lane FEEL: exactly 25 % less than the original 1.5 m
+    expect(KNIFE.range).toBeCloseTo(1.5 * 0.75, 12);
+  });
+
+  it('lane FEEL reach 1.125 m: just inside hits, just outside misses; a head 1.3 m out (hit by the old 1.5 m reach) is now a miss', () => {
+    const g = openGrid();
+    // head sphere (r 0.12) at eye height 1.65 vs eye 1.62: its near surface is ~ (feet distance - 0.12) along the centre ray
+    const at = (dx: number) => resolveMelee(EYE, basis(1, 0.03, 0).slice(0, 1), KNIFE.range, [zombieAt('z', EYE.x + dx, 5)], world(g));
+    expect(at(1.2)).toMatchObject({kind: 'enemy', part: 'head'}); // surface ~1.08 m
+    expect(at(1.2)!.t).toBeLessThanOrEqual(KNIFE.range);
+    expect(at(1.3)).toBeNull(); // surface ~1.18 m: beyond 1.125
+    expect(resolveMelee(EYE, basis(1, 0.03, 0).slice(0, 1), 1.5, [zombieAt('z', EYE.x + 1.3, 5)], world(g))).toMatchObject({kind: 'enemy'});
   });
 
   it('in reach: the head (aimed at it) and the body (aimed lower) — classified by the zombie hit zones', () => {
@@ -304,11 +337,12 @@ describe('contact sweep: reach, occlusion by walls / props / slabs, misses stay 
     expect(res).toMatchObject({kind: 'world', surface: 'prop'});
   });
 
-  it('a slab between storeys stops it (stacked levels: crouched on the deck, a target just under the deck slab)', () => {
+  it('a slab between storeys stops it (stacked levels: a blade ray low over the deck, a target just under the deck slab)', () => {
     const fx = levelFixture();
     const L = levelsOf(fx);
     const x = 21, z = 6; // on the upper deck (level 1), over platform A
-    const eye = {x, y: FIX.upperY + 1.02, z};
+    // lane FEEL: from 0.6 m over the deck (crouched eye height 1.02 m + the 0.35 m slab would put the target beyond the 1.125 m reach)
+    const eye = {x, y: FIX.upperY + 0.6, z};
     const below: MeleeTarget<Z> = {id: {name: 'below'}, alive: true, x, z, volumes: [{part: 'head', a: {x, y: FIX.underDeckCeil - 0.15, z}, b: null, r: 0.12}]};
     const down = [{x: 0, y: -1, z: 0}];
     const res = resolveMelee(eye, down, KNIFE.range, [below], (o, d, max) => raycastWorld(L, fx.props, o, d, max, fx.trench.floorY));
@@ -321,7 +355,8 @@ describe('contact sweep: reach, occlusion by walls / props / slabs, misses stay 
     const g = openGrid();
     const dead = {...zombieAt('dead', 6.1, 5), alive: false};
     expect(resolveMelee(EYE, basis(1, 0.03, 0), KNIFE.range, [dead], world(g))).toBeNull();
-    const live = zombieAt('live', 6.4, 5);
+    const live = zombieAt('live', 6.0, 5); // in reach (lane FEEL: 1.125 m), but behind the corpse
+    expect(resolveMelee(EYE, basis(1, 0.02, 0).slice(0, 1), KNIFE.range, [live], world(g))).toMatchObject({kind: 'enemy'}); // control
     const corpse = (_o: unknown, _d: unknown, maxT: number) => (0.6 < maxT ? {t: 0.6, tag: 'corpse'} : null);
     const res = resolveMelee(EYE, basis(1, 0.02, 0).slice(0, 1), KNIFE.range, [live], world(g), corpse);
     expect(res).toMatchObject({kind: 'corpse', corpse: {tag: 'corpse'}});
@@ -333,7 +368,7 @@ function equippedKnife(withAmmo = false) {
   const inv = starterInventory('pistol');
   if (!withAmmo) for (const s of inv.allStacks()) if (itemDef(s.itemId).kind === 'ammo') inv.take(s.itemId, s.count);
   const wc = new WeaponController();
-  wc.equip(inv.hotbar[KNIFE_SLOT]);
+  wc.equip(inv.melee); // lane SLOT: the knife lives in the melee slot (~)
   wc.update(1, idle, inv); // finish the 0.3 s equip
   expect(wc.phase).toBe('idle');
   return {inv, wc};
@@ -344,36 +379,55 @@ function run(wc: InstanceType<typeof WeaponController>, inv: InstanceType<typeof
   for (let i = 0; i < n; i++) for (const e of wc.update(DT, {...idle, ...input}, inv)) out.push({t: (i + 1) * DT, e});
   return out;
 }
+/** Lane FEEL: click spam — a fresh press (down) every other frame, up in between (Input.mousePressed is one frame long). */
+function clicks(wc: InstanceType<typeof WeaponController>, inv: InstanceType<typeof Inventory>, seconds: number, input: Partial<TriggerInput> = {}) {
+  const out: {t: number; e: WeaponEvent}[] = [];
+  const n = Math.round(seconds / DT);
+  for (let i = 0; i < n; i++) for (const e of wc.update(DT, {...idle, ...input, ...(i % 2 ? {} : {pressed: true, held: true})}, inv)) out.push({t: (i + 1) * DT, e});
+  return out;
+}
 
 describe('one target, one damage per swing, at the swing cadence', () => {
   it('two zombies in a line: only the nearer one is struck (no area clear)', () => {
     const g = openGrid();
-    const res = resolveMelee({x: 5, y: 1.62, z: 5}, basis(1, 0.03, 0), KNIFE.range, [zombieAt('far', 6.3, 5), zombieAt('near', 5.9, 5)],
+    const res = resolveMelee({x: 5, y: 1.62, z: 5}, basis(1, 0.03, 0), KNIFE.range, [zombieAt('far', 6.05, 5), zombieAt('near', 5.75, 5)],
       (o, d, max) => raycastWorld(g, [], o, d, max, -1));
     expect(res).toMatchObject({kind: 'enemy', target: {name: 'near'}});
   });
 
-  it('holding the button swings every 0.65 s; each swing has exactly ONE contact, 0.18 s after it starts', () => {
+  it('lane FEEL: holding the button never repeats — ONE windup, nothing until the release, then ONE swing with ONE contact', () => {
     const {inv, wc} = equippedKnife();
-    const ev = run(wc, inv, 2.05, {held: true, pressed: true});
+    const ev = [...run(wc, inv, DT, {held: true, pressed: true}), ...run(wc, inv, 2.0, {held: true})];
+    expect(ev.map(x => x.e.type)).toEqual(['windup']);
+    const rel = run(wc, inv, 1.0, {});
+    expect(rel.map(x => x.e.type)).toEqual(['swing', 'contact']);
+    expect((rel[0].e as {swing: number}).swing).toBe((rel[1].e as {swing: number}).swing);
+    expect(rel[1].t - rel[0].t).toBeGreaterThanOrEqual(KNIFE.melee!.strike - DT - 1e-9);
+    expect(rel[1].t - rel[0].t).toBeLessThanOrEqual(KNIFE.melee!.strike + 1e-9);
+    expect([...ev, ...rel].some(x => x.e.type === 'fire' || x.e.type === 'dry' || x.e.type === 'reloadStart')).toBe(false);
+  });
+
+  it('lane FEEL: one tap per cycle swings every 0.65 s (windup + sweep + recovery); each swing has exactly ONE contact', () => {
+    const {inv, wc} = equippedKnife();
+    expect(meleeCadence(KNIFE.melee!)).toBeCloseTo(KNIFE.interval, 9);
+    const ev: {t: number; e: WeaponEvent}[] = [];
+    for (let i = 0; i < Math.round(2.05 / DT); i++) for (const e of wc.update(DT, i % 39 === 0 ? {...idle, pressed: true} : idle, inv)) ev.push({t: (i + 1) * DT, e});
     const swings = ev.filter(x => x.e.type === 'swing'), contacts = ev.filter(x => x.e.type === 'contact');
-    expect(swings.length).toBe(4); // t = 0, 0.65, 1.30, 1.95
-    expect(contacts.length).toBe(3); // the 4th swing's contact is still ahead at 2.0 s
+    // taps at 0, 0.65, 1.30, 1.95 s -> 4 windups; swings at ~0.15, 0.80, 1.45 s (the 4th tap's swing is still ahead at 2.05 s)
+    expect(ev.filter(x => x.e.type === 'windup').length).toBe(4);
+    expect(swings.length).toBe(3);
+    expect(contacts.length).toBe(3);
+    expect(swings[0].t).toBeCloseTo(KNIFE.melee!.windup, 1);
     for (let i = 1; i < swings.length; i++) expect(swings[i].t - swings[i - 1].t).toBeCloseTo(KNIFE.interval, 1);
-    contacts.forEach((c, i) => {
-      expect((c.e as {swing: number}).swing).toBe((swings[i].e as {swing: number}).swing);
-      expect(c.t - swings[i].t).toBeGreaterThanOrEqual(KNIFE.melee!.windup - 1e-9);
-      expect(c.t - swings[i].t).toBeLessThan(KNIFE.melee!.windup + DT + 1e-9);
-    });
+    contacts.forEach((c, i) => expect((c.e as {swing: number}).swing).toBe((swings[i].e as {swing: number}).swing));
     expect(new Set(contacts.map(c => (c.e as {swing: number}).swing)).size).toBe(contacts.length);
-    expect(ev.some(x => x.e.type === 'fire' || x.e.type === 'dry' || x.e.type === 'reloadStart')).toBe(false);
   });
 
   it('spamming clicks cannot beat the cadence', () => {
     const {inv, wc} = equippedKnife();
     let swings = 0; // a click every other frame (down, up, down, ...)
     for (let i = 0; i < 60; i++) swings += wc.update(DT, i % 2 ? idle : {...idle, pressed: true, held: true}, inv).filter(e => e.type === 'swing').length;
-    expect(swings).toBe(2); // 1 s: t = 0 and 0.65
+    expect(swings).toBe(2); // 1 s: windup + swing at ~0.15 s, the remembered click's windup after the recovery -> swing at ~0.80 s
   });
 });
 
@@ -383,7 +437,7 @@ describe('ammo independence: the knife never needs, counts or takes ammo', () =>
     const {inv, wc} = equippedKnife(false);
     expect(inv.allStacks().filter(s => itemDef(s.itemId).kind === 'ammo')).toEqual([]);
     const before = JSON.stringify(inv.toJSON());
-    const ev = run(wc, inv, 3, {held: true, pressed: true, reload: true});
+    const ev = clicks(wc, inv, 3, {reload: true});
     expect(ev.filter(x => x.e.type === 'contact').length).toBeGreaterThanOrEqual(4);
     expect(JSON.stringify(inv.toJSON())).toBe(before);
     expect(wc.stack!.mag).toBe(0);
@@ -398,7 +452,7 @@ describe('ammo independence: the knife never needs, counts or takes ammo', () =>
     const {inv, wc} = equippedKnife(true);
     const ammo = weaponAmmoItem(WEAPONS.pistol)!;
     const n = inv.count(ammo), mag = inv.hotbar[0]!.mag;
-    run(wc, inv, 3, {held: true, pressed: true, reload: true});
+    expect(clicks(wc, inv, 3, {reload: true}).filter(x => x.e.type === 'contact').length).toBeGreaterThanOrEqual(4);
     expect(inv.count(ammo)).toBe(n);
     expect(inv.hotbar[0]!.mag).toBe(mag);
   });
@@ -414,47 +468,58 @@ describe('ammo independence: the knife never needs, counts or takes ammo', () =>
 describe('cancellation: switching, menus / death / travel and lowering never leave a stale contact or a gun shot', () => {
   const contactsIn = (ev: {e: WeaponEvent}[]) => ev.filter(x => x.e.type === 'contact').length;
 
-  it('switching to the pistol mid-windup: no contact ever arrives and the pistol does not fire on its own', () => {
+  it('switching to the pistol mid-windup (button still held, then released): no swing / contact ever arrives and the pistol does not fire', () => {
     const {inv, wc} = equippedKnife(true);
-    const ev0 = run(wc, inv, DT * 3, {pressed: true, held: true});
-    expect(ev0.map(x => x.e.type)).toEqual(['swing']);
+    const ev0 = [...run(wc, inv, DT, {pressed: true, held: true}), ...run(wc, inv, DT * 2, {held: true})];
+    expect(ev0.map(x => x.e.type)).toEqual(['windup']);
     const mag = inv.hotbar[0]!.mag;
-    wc.equip(inv.hotbar[0]); // key 1 / wheel / Q
-    const ev = run(wc, inv, 1.5, {});
+    wc.equip(inv.hotbar[0]); // key 1 / wheel / Q (Game latches the still-held button: the gun sees no trigger until a new press)
+    const ev = [...run(wc, inv, 0.5, {}), ...run(wc, inv, 1.0, {})]; // the release afterwards
     expect(contactsIn(ev)).toBe(0);
-    expect(ev.some(x => x.e.type === 'fire')).toBe(false);
+    expect(ev.some(x => x.e.type === 'fire' || x.e.type === 'swing')).toBe(false);
     expect(inv.hotbar[0]!.mag).toBe(mag);
     expect(wc.swinging).toBe(false);
   });
 
-  it('cancelSwing (Game.setState leaving play: pause, inventory, focus loss, death, loading / travel): no contact afterwards', () => {
-    const {inv, wc} = equippedKnife();
-    run(wc, inv, DT * 4, {pressed: true, held: true});
-    expect(wc.swinging).toBe(true);
-    expect(wc.cancelSwing()).toBe(true); // a contact was pending
-    const ev = run(wc, inv, 1, {});
-    expect(contactsIn(ev)).toBe(0);
-    expect(wc.cancelSwing()).toBe(false); // nothing to cancel
-  });
-
-  it('a cancel keeps the remaining swing time as cooldown (re-opening a menu never skips the recovery)', () => {
+  it('cancelSwing (Game.setState leaving play: pause, inventory, focus loss, death, loading / travel): no swing or contact afterwards', () => {
     const {inv, wc} = equippedKnife();
     run(wc, inv, DT, {pressed: true, held: true});
-    wc.cancelSwing();
-    const early = run(wc, inv, KNIFE.interval - 0.1, {held: true});
-    expect(early.filter(x => x.e.type === 'swing').length).toBe(0);
-    const later = run(wc, inv, 0.2, {held: true});
-    expect(later.filter(x => x.e.type === 'swing').length).toBe(1);
+    run(wc, inv, DT * 3, {held: true});
+    expect(wc.swinging).toBe(true);
+    expect(wc.cancelSwing()).toBe(true); // a windup (an attack) was pending
+    const ev = run(wc, inv, 1, {}); // the mouse comes up later: nothing
+    expect(ev).toEqual([]);
+    expect(wc.cancelSwing()).toBe(false); // nothing to cancel
+    // a released swing cancelled before its contact: no contact either
+    run(wc, inv, DT, {pressed: true});
+    run(wc, inv, KNIFE.melee!.windup + DT, {}); // the tap's swing has started
+    expect(wc.meleeStage).toBe('swing');
+    expect(wc.cancelSwing()).toBe(true);
+    expect(contactsIn(run(wc, inv, 1, {}))).toBe(0);
   });
 
-  it('lowered before contact (sprint / item use / climbing / a lane UI) cancels; after contact the recovery just runs out', () => {
+  it('a cancel after the release keeps the remaining swing + recovery time as cooldown (re-opening a menu never skips it)', () => {
+    const {inv, wc} = equippedKnife();
+    run(wc, inv, DT, {pressed: true});
+    run(wc, inv, KNIFE.melee!.windup + DT, {}); // the swing has started
+    expect(wc.meleeStage).toBe('swing');
+    wc.cancelSwing();
+    const early = run(wc, inv, DT, {pressed: true}); // a click right away is remembered, but the windup waits for the cooldown
+    expect(early.filter(x => x.e.type === 'windup').length).toBe(0);
+    const wait = run(wc, inv, KNIFE.melee!.sweep + KNIFE.melee!.recovery - 0.1, {});
+    expect(wait.filter(x => x.e.type === 'windup').length).toBe(0);
+    const later = run(wc, inv, 0.2, {});
+    expect(later.filter(x => x.e.type === 'windup').length).toBe(1);
+  });
+
+  it('lowered (sprint / item use / climbing / a lane UI) cancels a windup or a swing before contact; after contact the recovery runs out', () => {
     const a = equippedKnife();
-    run(a.wc, a.inv, DT * 2, {pressed: true, held: true});
-    const ev = run(a.wc, a.inv, 1, {lowered: true});
+    run(a.wc, a.inv, DT, {pressed: true, held: true});
+    const ev = [...run(a.wc, a.inv, 0.5, {lowered: true, held: true}), ...run(a.wc, a.inv, 1, {})]; // then released: nothing
     expect(contactsIn(ev)).toBe(0);
     expect(ev.filter(x => x.e.type === 'swing').length).toBe(0);
     const b = equippedKnife();
-    const evb = run(b.wc, b.inv, 0.3, {pressed: true, held: true});
+    const evb = [...run(b.wc, b.inv, DT, {pressed: true}), ...run(b.wc, b.inv, 0.3, {})];
     expect(contactsIn(evb)).toBe(1);
     expect(contactsIn(run(b.wc, b.inv, 1, {lowered: true}))).toBe(0);
   });
@@ -468,6 +533,12 @@ describe('cancellation: switching, menus / death / travel and lowering never lea
     expect(src).toMatch(/this\.aiming = !!wdef && !wdef\.melee &&/); // right click does nothing with the knife
     expect(src).toMatch(/\{stagger: false\}/);
     expect(fn.length).toBeGreaterThan(0);
+    // lane FEEL: wiped input / a lane UI / a button latched away mid-windup cancel (never a release that swings); the whoosh is
+    // the release ('swing'), the windup is silent; the viewmodel gets the melee stage
+    expect(src).toMatch(/lowered: [^\n]*\(!!wdef\.melee && \(laneOwns \|\| \(this\.lmbLatch && this\.weapon\.winding\)\)\), clears: inp\.clears\}/);
+    expect(src).toMatch(/e\.type === 'swing'\) this\.sfx\.meleeSwing\(\)/);
+    expect(src).not.toMatch(/e\.type === 'windup'\)[^\n]*sfx/);
+    expect(src).toMatch(/melee: this\.weapon\.meleePose/);
   });
 });
 
@@ -482,12 +553,14 @@ describe('first-person knife: held model, carry pose in view, slash through the 
   }
   const knife = await gltfOf(MODEL_FILES.knife.url);
   const stub = {scene: new THREE.Group()} as unknown as GLTF;
-  const view = (swing: number) => ({moving: 0, sprint: false, aiming: false, lookDX: 0, lookDY: 0, reloading: false, reloadProgress: 0, using: false, useProgress: 0, bobT: 0, swing});
+  // lane FEEL: the viewmodel reads the melee stage (WeaponController.meleePose) instead of a swing time
+  type Stage = 'windup' | 'ready' | 'swing' | 'recover' | null;
+  const view = (stage: Stage, t = 0) => ({moving: 0, sprint: false, aiming: false, lookDX: 0, lookDY: 0, reloading: false, reloadProgress: 0, using: false, useProgress: 0, bobT: 0, melee: {stage, t}});
   function make() {
     const vm = new Viewmodel({rifle: stub, shotgun: stub, knife}, {});
     vm.setAspect(16 / 9);
     vm.setItem('knife');
-    vm.update(1, view(-1)); // equip raise done
+    vm.update(1, view(null)); // equip raise done
     return vm;
   }
   const tipNdc = (vm: InstanceType<typeof Viewmodel>) => {
@@ -507,40 +580,37 @@ describe('first-person knife: held model, carry pose in view, slash through the 
     expect(mesh.frustumCulled).toBe(false); // never culled away in the overlay pass
   });
 
-  it('carry pose: the blade is on screen, lower right of the crosshair, inside the viewmodel near / far range', () => {
+  it('lane FEEL carry pose: the blade stands up (tip well above the guard), right of the crosshair, inside the near / far range', () => {
     const vm = make();
     const p = tipNdc(vm);
-    expect(p.x).toBeGreaterThan(0);
+    expect(p.x).toBeGreaterThan(0.1);
     expect(p.x).toBeLessThan(0.6);
-    expect(p.y).toBeLessThan(0);
-    expect(p.y).toBeGreaterThan(-0.9);
+    expect(Math.abs(p.y)).toBeLessThan(0.3);
     expect(p.z).toBeGreaterThan(-1);
     expect(p.z).toBeLessThan(1);
   });
 
-  it('swing: cocked out to the right, the tip on the crosshair at contact, swept to the left after, back at rest at the end', () => {
-    const {cockEnd, contact, sweepEnd, end} = knifeSwingTimes(KNIFE.melee!.windup, KNIFE.interval);
-    expect(contact).toBe(KNIFE.melee!.windup);
-    expect(cockEnd).toBeLessThan(contact);
-    expect(sweepEnd).toBeGreaterThan(contact);
-    expect(end).toBe(KNIFE.interval);
+  it('swing: raised out to the right, the tip on the crosshair at contact, swept to the left after, back at rest at the end', () => {
+    const m = KNIFE.melee!;
     const vm = make();
     const rest = tipNdc(vm);
-    vm.update(0, view(cockEnd));
+    vm.update(0, view('ready', 0));
     const cocked = tipNdc(vm);
-    vm.update(0, view(contact));
+    vm.update(0, view('swing', m.strike));
     const hit = tipNdc(vm);
-    vm.update(0, view(sweepEnd));
+    vm.update(0, view('swing', m.sweep));
     const through = tipNdc(vm);
-    vm.update(0, view(end - 1e-6));
+    vm.update(0, view('recover', m.recovery - 1e-6));
     const back = tipNdc(vm);
     expect(cocked.x).toBeGreaterThan(rest.x); // drawn back to the right
+    expect(cocked.y).toBeGreaterThan(rest.y + 0.4); // and raised
     expect(Math.hypot(hit.x, hit.y)).toBeLessThan(0.12); // the blade point crosses the crosshair at contact
     expect(through.x).toBeLessThan(hit.x); // swept on to the left
     expect(back.distanceTo(rest)).toBeLessThan(0.01);
-    // pure offsets: zero outside a swing, continuous across the key times
-    expect(knifeSwingOffset(-1, 0.18, 0.65)).toEqual({x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0});
-    const a = knifeSwingOffset(cockEnd - 1e-4, 0.18, 0.65), b = knifeSwingOffset(cockEnd + 1e-4, 0.18, 0.65);
-    expect(Math.abs(a.ry - b.ry)).toBeLessThan(0.01);
+    // pure offsets: zero in the carry, continuous across the stage boundaries
+    expect(meleePoseOffset(null, 0, m)).toEqual({x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0});
+    const a = meleePoseOffset('windup', m.windup, m), b = meleePoseOffset('ready', 0, m), c = meleePoseOffset('swing', 0, m);
+    for (const k of ['x', 'y', 'z', 'rx', 'ry', 'rz'] as const) { expect(a[k]).toBeCloseTo(b[k], 6); expect(b[k]).toBeCloseTo(c[k], 6); }
+    expect(KNIFE.view.hip).toEqual([...KNIFE_POSES.carry.pos]);
   });
 });

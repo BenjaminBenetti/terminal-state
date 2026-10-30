@@ -9,10 +9,12 @@
 // ground or the view was closed. Refusals are shown in red under the slots.
 // Task office-overhaul-20261030 (lane INTERACT): the grenade slot (G) sits after the quick slots (throwables only; the
 // inventory validates every move). The view opens on a TAP of E (a held E picks the bag up instead: gear/system.ts).
+// Task knife-windup-20261030 (lane SLOT): + the melee slot (~; melee weapons only, validated by the inventory), shown first.
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef} from '../items/items';
 import {PACK_SIZE, type AnyRef, type Inventory, type ItemStack} from '../items/inventory';
+import {ICONS} from './icons';
 import {WEAPONS} from '../weapons/weapons';
 import type {BagSession} from '../gear/bagSession';
 import {ensureGearStyles} from './gearStyles';
@@ -29,7 +31,7 @@ export interface BagViewHost {
   changed(): void;
 }
 
-type Side = 'hotbar' | 'pack' | 'bag' | 'throw';
+type Side = 'hotbar' | 'pack' | 'bag' | 'throw' | 'melee';
 const refOf = (el: HTMLElement | null): AnyRef | null => el && el.dataset.bar ? {bar: el.dataset.bar as Side, index: Number(el.dataset.index)} as AnyRef : null;
 
 export class BagView {
@@ -71,7 +73,7 @@ export class BagView {
     el.innerHTML = `<div class="bv-panel">
       <div class="bv-head"><b>Backpack on the ground</b><span class="bv-live">● Not paused — keep an eye out</span></div>
       <div class="bv-cols">
-        <div class="bv-side"><h4>Quick slots · grenade slot</h4><div class="slots bv-g6" data-side="hotbar"></div><h4 class="bv-pockets">Pockets</h4><div class="slots bv-g6" data-side="pack"></div></div>
+        <div class="bv-side"><h4>Melee · quick slots · grenade slot</h4><div class="slots bv-g7" data-side="hotbar"></div><h4 class="bv-pockets">Pockets</h4><div class="slots bv-g6" data-side="pack"></div></div>
         <div class="bv-arrow">⇄</div>
         <div class="bv-side"><h4 class="bv-bagtitle">Backpack</h4><div class="slots bv-g6" data-side="bag"></div></div>
       </div>
@@ -196,15 +198,19 @@ export class BagView {
       const fx = def?.kind === 'consumable' ? effectText(def) : '';
       const title = def ? ` title="${def.name}${fx ? ` — ${fx}` : ''}. Click to move it ${ref.bar === 'bag' ? 'to you' : 'into the backpack'} · drag to a slot"` : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';
-      const held = ref.bar === 'hotbar' && ref.index === inv.selected ? ' held' : '';
-      const key = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : (ref.bar as Side) === 'throw' ? '<span class="key">G</span>' : '';
+      const sel = inv.selectedRef(); // SLOT: the melee slot while its weapon is drawn
+      const held = ref.bar === sel.bar && ref.index === sel.index ? ' held' : '';
+      const melee = (ref.bar as Side) === 'melee';
+      const key = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : (ref.bar as Side) === 'throw' ? '<span class="key">G</span>'
+        : melee ? `<span class="key">~</span>${def ? '' : `<span class="ghost">${ICONS.knife}</span>`}` : '';
       return `<div class="slot${def ? ' filled' : ''}${extra}${held}" data-bar="${ref.bar}" data-index="${ref.index}"${title}>${key}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
     const side = (name: Side, list: readonly (ItemStack | null)[], extra = '') => {
       const box = root.querySelector(`[data-side="${name}"]`);
       if (box) box.innerHTML = list.map((st, i) => cell({bar: name, index: i} as AnyRef, st)).join('') + extra;
     };
-    side('hotbar', inv.hotbar, inv.throwSlot.map((st, i) => cell({bar: 'throw', index: i} as AnyRef, st)).join('')); // + grenade slot (INTERACT)
+    side('hotbar', inv.hotbar, inv.throwSlot.map((st, i) => cell({bar: 'throw', index: i} as AnyRef, st)).join('') // + grenade slot (INTERACT)
+      + inv.meleeSlot.map((st, i) => cell({bar: 'melee', index: i} as AnyRef, st)).join('')); // + melee slot (SLOT; shown first by CSS)
     side('pack', inv.pack);
     side('bag', s.slots());
     const ex = inv.extraPockets;

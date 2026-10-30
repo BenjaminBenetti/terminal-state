@@ -4,10 +4,10 @@
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
-import {WEAPONS, type WeaponDef} from './weapons';
+import {WEAPONS, type MeleeStage, type WeaponDef} from './weapons';
 import {canvasTexture} from '../world/canvasTextures';
 import {OPTIC_ADS_KICK, RifleOptic, opticAimPosition} from './optic';
-import {knifeSwingOffset, type PoseOffset} from './meleeView'; // lane KNIFE
+import {KNIFE_POSES, MELEE_POSES, meleePoseOffset, type PoseOffset} from './meleeView'; // lane KNIFE / FEEL
 
 interface HeldModel {
   root: THREE.Object3D;
@@ -58,8 +58,11 @@ export interface ViewState {
   landDip?: number;
   /** Iteration 15: grenade-style flare pull-back while T / left click is held (0 .. 1, weapons/flareHold.ts). */
   throwReady?: number;
-  /** Lane KNIFE: seconds into the held melee weapon's swing (weapons.ts WeaponController.swingTime), < 0 / absent = none. */
-  swing?: number;
+  /**
+   * Lane FEEL (knife-windup-20261030): the held melee weapon's cycle stage and seconds into it (weapons.ts
+   * WeaponController.meleePose: windup / ready / swing / recover; stage null / absent = the carry pose).
+   */
+  melee?: {stage: MeleeStage | null; t: number};
 }
 
 export class Viewmodel {
@@ -188,6 +191,7 @@ export class Viewmodel {
     }
     this.flash.visible = false;
     this.equipT = 0;
+    Object.assign(this.meleeApplied, {x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0}); // lane FEEL: a new item starts from its carry
   }
 
   setAspect(a: number): void {
@@ -358,11 +362,17 @@ export class Viewmodel {
       rot.z -= tk * 0.35;
     }
     this.bobClock += dt;
-    // Lane KNIFE: the slash (weapons/meleeView.ts) — cock back right, sweep through the crosshair at contact, recover
-    if (it.def?.melee && (s.swing ?? -1) >= 0) {
-      const k = knifeSwingOffset(s.swing!, it.def.melee.windup, it.def.interval, this.swingPose);
-      pos.x += k.x; pos.y += k.y; pos.z += k.z;
-      rot.x += k.rx; rot.y += k.ry; rot.z += k.rz;
+    // Lane KNIFE / FEEL: the melee cycle (weapons/meleeView.ts) — windup raise, ready hold, the slash through the crosshair at
+    // contact, recovery to the upright carry. Exact while a stage runs; a cancelled windup / swing (menu, sprint, switch...)
+    // eases back to the carry instead of snapping (no pop).
+    if (it.def?.melee) {
+      const st = s.melee?.stage ?? null;
+      const k = meleePoseOffset(st, s.melee?.t ?? 0, it.def.melee, MELEE_POSES[it.def.view.model] ?? KNIFE_POSES, this.swingPose);
+      const a = this.meleeApplied, f = st ? 1 : Math.min(1, dt * 14);
+      a.x += (k.x - a.x) * f; a.y += (k.y - a.y) * f; a.z += (k.z - a.z) * f;
+      a.rx += (k.rx - a.rx) * f; a.ry += (k.ry - a.ry) * f; a.rz += (k.rz - a.rz) * f;
+      pos.x += a.x; pos.y += a.y; pos.z += a.z;
+      rot.x += a.rx; rot.y += a.ry; rot.z += a.rz;
     }
     // optic ADS: rotate (kick/sway) about the eyepiece instead of the grip, so the lens stays on the eye
     if (it.optic && optK > 0) {
@@ -388,4 +398,6 @@ export class Viewmodel {
   private bobClock = 0;
   /** Lane KNIFE: scratch pose of the melee swing. */
   private readonly swingPose: PoseOffset = {x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0};
+  /** Lane FEEL: the melee offset actually applied (eases back to zero after a cancel; reset when the held item changes). */
+  private readonly meleeApplied: PoseOffset = {x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0};
 }

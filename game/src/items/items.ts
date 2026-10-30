@@ -64,7 +64,8 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Semi-automatic 9mm (9×19mm) service pistol. 15-round magazine; quick to raise and reload.'},
   // Lane KNIFE (knife-melee-20261030): the user's survival knife — the first melee weapon; no ammo, never used up (weapons.ts knife).
   knife: {id: 'knife', name: 'Knife — "Last resort"', short: 'Knife', kind: 'weapon', stackMax: 1, weaponId: 'knife', icon: 'knife',
-    description: 'Survival knife with a serrated spine. Melee: click to slash (hold to keep slashing) — no ammo, never runs out. One slash to the head or two to the body drops an ordinary zombie — but you have to get close enough to be hit back.'},
+    // lane FEEL (knife-windup-20261030): hold to wind up / release to slash; 30 body / 60 head -> 2 head or 4 body slashes, reach 1.125 m
+    description: 'Survival knife with a serrated spine. Melee: hold the button to wind up, release to slash (a quick tap slashes too) — no ammo, never runs out. Two slashes to the head or four to the body drop an ordinary zombie — and you have to get close enough to be hit back.'},
   // Lane AMMO (knife-melee-20261030): ammo items ARE calibers (items/calibers.ts); any weapon chambering that caliber loads from
   // them. Old ids ammo_pistol / ammo_rifle / ammo_shells migrate 1:1 (LEGACY_AMMO_IDS); stack limits unchanged (120 / 120 / 32).
   ammo_9mm: {id: 'ammo_9mm', name: '9mm rounds (9×19mm)', short: '9mm', kind: 'ammo', stackMax: 120, icon: 'ammo9mm', caliber: '9x19mm',
