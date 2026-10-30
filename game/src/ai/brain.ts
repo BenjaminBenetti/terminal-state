@@ -230,6 +230,7 @@ export class ZombieBrain {
     if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
       this.setState('chase');
       this.repathT = 0;
+      this.path = []; // lane SCHED: the old wander / search path is no chase route (an immediate re-plan replaced it this frame anyway)
     } else if (this.climb) this.climb.resume = 'chase';
   }
 
@@ -254,6 +255,7 @@ export class ZombieBrain {
       this.staggerCd = 0.9;
     } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
       this.setState('chase');
+      this.path = []; // lane SCHED: as in hear()
     }
     this.repathT = 0;
     return false;
@@ -421,6 +423,8 @@ export class ZombieBrain {
             }
           }
           const done = this.followPath(w, out, this.stats.chaseSpeed);
+          // lane SCHED: a queued re-plan with nothing to follow yet: stand facing the goal (no running on the spot)
+          if (done && pending) { out.anim = 'Idle'; out.face = Math.atan2(goal[0] - this.x, goal[1] - this.z); }
           if (done && !sees && !pending) {
             // Reached the last known position without seeing the player: search around.
             if (this.unseenT > 1.5) {

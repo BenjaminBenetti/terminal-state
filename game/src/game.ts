@@ -33,7 +33,7 @@ import {ZombieActor} from './ai/zombieActor';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {FrameBudget} from './core/frameBudget'; // Task frame-budget-deferral-20261030 (lane SCHED): deferred background work
-import {PATH_DEFER, PathService} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
+import {PathService, nearPlayerRule} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
 import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
@@ -603,8 +603,11 @@ export class Game {
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
     this.vocalReach = new VocalReach(this.levels); // lane AUDIO: one bounded, time-sliced route field from the player (no search here)
     this.vocalReach.attachScheduler(this.frameBudget); // lane SCHED: its build slices run in spare frame time (this world's generation)
-    // lane SCHED: the same search as below (brainWorld findPath); only far, not-in-sight chase re-plans are queued
-    this.pathService = new PathService((ax, az, bx, bz, o) => this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, o), this.frameBudget, (x, z, y) => this.nearPlayer(x, z, y));
+    // lane SCHED: the same search as below (brainWorld findPath); only far, not-in-sight chase re-plans are queued — and run
+    // resumably on a fork of the finder (its own search buffers, allocated here on the loading screen; ~20 B per node)
+    const farFinder = this.pathfinder.fork(), near = (x: number, z: number, y: number | undefined) => this.nearPlayer(x, z, y);
+    this.pathService = new PathService((ax, az, bx, bz, o) => this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, o),
+      (ax, az, bx, bz, o, chunk) => farFinder.search(ax, az, bx, bz, 0.34, 26000, o, chunk), this.frameBudget, near);
     this.sfx.setVocalReach(this.vocalReach);
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
@@ -2037,16 +2040,12 @@ export class Game {
   }
 
   /**
-   * Lane SCHED (ai/pathService.ts PATH_DEFER): a path requester at (x, z, feet y) is NEAR the player — its re-plan is never
-   * deferred: closer than nearM, or closer than midM with a navigable route (the vocal-reach field) <= nearRouteM or unknown.
+   * Lane SCHED (ai/pathService.ts nearPlayerRule): a path requester at (x, z, feet y) is NEAR the player — its re-plan is never
+   * deferred: a few metres away, or a short navigable route by the vocal-reach field (straight line without a field).
    */
   private nearPlayer(x: number, z: number, y: number | undefined): boolean {
-    const p = this.player, D = PATH_DEFER, fy = y ?? p.y;
-    const d = Math.hypot(x - p.x, z - p.z, fy - p.y);
-    if (d < D.nearM) return true;
-    if (d >= D.midM) return false;
-    const r = this.vocalReach;
-    return !r || !r.ready || r.pathTo(x, fy + 1.2, z) <= D.nearRouteM;
+    const p = this.player, fy = y ?? p.y, r = this.vocalReach;
+    return nearPlayerRule(Math.hypot(x - p.x, z - p.z, fy - p.y), () => r?.ready ? r.pathTo(x, fy + 1.2, z) : null);
   }
 
   private updateZombies(dt: number): void {
