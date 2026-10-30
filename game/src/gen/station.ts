@@ -29,6 +29,7 @@ import {doorwayIssues} from './doorways';
 import {assignEnemyArchetypes} from '../ai/creatureSpawn';
 import {buildLevelLinks, buildLevels, deriveRails, levelDistance, levelIssues, registerApertures, shiftPlan} from './levelGen';
 import {dressLevels, lightServiceLevel, placeLevelSpawns} from './levelGenDress';
+import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 
 export * from './stationTypes';
 export {ROOM_LABEL};
@@ -52,18 +53,23 @@ export function pickArchetype(seed: number): Archetype {
   return new Rng(hashString('archetype', seed >>> 0)).weighted(ARCH_WEIGHTS);
 }
 
-/** Pistol lane: `startWeapon` (default 'rifle') decides which weapons are seeded map finds; deterministic per seed for a given option. */
-export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId} = {}): StationLayout {
+/**
+ * Pistol lane: `startWeapon` (default 'rifle') decides which weapons are seeded map finds; deterministic per seed for a given option.
+ * Task loot-tables-20261030 (lane LOOT): `loot` = the logical level's loot profile for the generated floor finds (default: the
+ * Subway's; a future level built on this generator passes its own).
+ */
+export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId; loot?: LootProfile} = {}): StationLayout {
   const arch = opts.archetype ?? pickArchetype(seed);
   const sw = opts.startWeapon ?? 'rifle';
+  const loot = opts.loot ?? lootProfile('subway');
   for (let attempt = 0; attempt < 24; attempt++) {
     const s = attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed);
-    const layout = tryGenerate(s, seed >>> 0, attempt, arch, sw);
+    const layout = tryGenerate(s, seed >>> 0, attempt, arch, sw, loot);
     if (layout && validateLayout(layout).length === 0) return layout;
   }
   // Extremely unlikely; fall back to a deterministic layout even with warnings.
   for (let attempt = 24; attempt < 60; attempt++) {
-    const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine', sw);
+    const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine', sw, loot);
     if (layout) return layout;
   }
   throw new Error('station generation failed');
@@ -74,11 +80,11 @@ export function generateStation(seed: number, opts: {archetype?: Archetype; star
  * no validation retry — tests use it to catch issues (e.g. decor in doorways) that a retry would
  * otherwise hide by silently picking another layout.
  */
-export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed), startWeapon: StartWeaponId = 'rifle'): StationLayout | null {
-  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch, startWeapon);
+export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed), startWeapon: StartWeaponId = 'rifle', loot: LootProfile = lootProfile('subway')): StationLayout | null {
+  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch, startWeapon, loot);
 }
 
-function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype, startWeapon: StartWeaponId = 'rifle'): StationLayout | null {
+function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype, startWeapon: StartWeaponId = 'rifle', loot: LootProfile = lootProfile('subway')): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng);
   const {areas, doors, wing} = k;
@@ -371,7 +377,7 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   dress(layout, rng.fork('dress'));
   // Lane A: wayfinding on and between the levels, high-bay lights over the wells (absolute y, after the dressing lift).
   dressLevels(layout, rng.fork('levels'));
-  placeSpawns(layout, rng.fork('spawns'));
+  placeSpawns(layout, rng.fork('spawns'), loot);
   // Lane A: a weighted share of the zombies / loose supplies onto the upper and lower levels (totals kept).
   placeLevelSpawns(layout, rng.fork('levelSpawns'));
   // Pistol lane: the non-starting weapons (+ matching ammo) as seeded map finds, away from the spawn, on any storey.

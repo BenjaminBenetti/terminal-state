@@ -95,6 +95,7 @@ all". Shelves, kiosk counters/back shelves and tables hold visible items too; ve
 "E — Pry open" (~1 s) and their stock spills out in front. Contents are rolled once per station
 (seeded, finite, never rerolled); anything that does not fit stays where it is. Empty containers
 say so ("searched — empty").
+Loot tables per logical level (profiles, slot categories, overrides; `src/items/lootTables.ts`): tuning guide `../docs/loot-tables.md`.
 
 Room and store purposes (iteration 05, `src/gen/purposes.ts`): every back-of-house room and every
 storefront is generated from a data-driven PURPOSE — name pool / sign / menu, fixtures and where

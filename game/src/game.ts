@@ -61,6 +61,7 @@ import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
+import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
@@ -538,7 +539,8 @@ export class Game {
       this.scene.add(this.containers.group);
     }
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
-    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>); // iteration 08 (Lane I): openables split the lazy p7 models too
+    // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
+    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels

@@ -14,6 +14,7 @@
 // reference/tasks/vertical-slice-iteration08-20261027/lanes/lane-I-audit.md; tests/openables.test.ts keeps both in step.
 
 import {COMPANY_KIND_AUDIT} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS): audit rows
+import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 
 /** Axis-aligned box [x0, y0, z0, x1, y1, z1] (holder-local, closed pose). */
 export type Box6 = readonly [number, number, number, number, number, number];
@@ -96,9 +97,9 @@ export interface PartSpec {
   holdsExposed?: boolean;
 }
 
-/** Item weights. */
-export type Rows = readonly (readonly [string, number])[];
-export interface OpenableLoot { lots: readonly [number, number]; empty: number; items: Rows }
+/** Item weights. Task loot-tables-20261030 (lane LOOT): the loot types / tables live in items/lootTables.ts. */
+export type Rows = ItemRows;
+export type OpenableLoot = OwnTable;
 
 export interface OpenableSpec {
   /** HUD label (lower case). */
@@ -168,17 +169,8 @@ function trashFill(x0: number, z0: number, x1: number, z1: number, y: number, ro
   ];
 }
 
-// Item rows (items/items.ts ids).
-const JUNK: Rows = [['chips', 1], ['chocolate', 1], ['cola', 1.2], ['water', 0.5], ['juice', 0.5], ['noodles', 0.3], ['bandage', 0.12]];
-const SNACK: Rows = [['chocolate', 1], ['chips', 0.6], ['water', 0.4], ['cola', 0.4]];
-const PERSONAL: Rows = [['water', 1], ['cola', 0.8], ['chocolate', 1], ['chips', 0.6], ['bandage', 0.8], ['juice', 0.5], ['noodles', 0.4], ['ammo_rifle', 0.3], ['ammo_shells', 0.2]];
-const OFFICE: Rows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ['ammo_rifle', 0.15]];
-const MED: Rows = [['bandage', 3], ['medkit', 0.35], ['water', 0.3]];
-const SAFE: Rows = [['ammo_rifle', 1.2], ['ammo_shells', 0.8], ['bandage', 0.6], ['medkit', 0.25], ['chocolate', 0.3]];
-const FROZEN: Rows = [['water', 1], ['juice', 1], ['cola', 0.8], ['beans', 0.4], ['noodles', 0.3]];
-const PANTRY: Rows = [['noodles', 1], ['beans', 1], ['water', 0.8], ['chocolate', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.2]];
-/** Task office-overhaul-20261030 (lane INTERACT): stashed in a toilet (bowl / tank lid) — a bottle, a dressing, a box of 9 mm, rarely better. */
-const TOILET: Rows = [['water', 1], ['bandage', 0.8], ['ammo_pistol', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
+// Item rows / own tables: items/lootTables.ts OPENABLE_TABLES (task loot-tables-20261030, lane LOOT — the same rows as before).
+const LOOT = OPENABLE_TABLES;
 
 // ---------------------------------------------------------------------------------------
 // Per-kind specs
@@ -287,7 +279,7 @@ export const OPENABLE_SPECS = {
       inner: trashFill(-0.2, -0.2, 0.2, 0.2, 0.42, true),
       surfaces: [{y: 0.452, x0: -0.15, x1: 0.15, z0: -0.15, z1: 0.15, clear: 0.27}],
     }],
-    loot: {lots: [1, 2], empty: 0.6, items: JUNK},
+    loot: LOOT.bin,
     sound: {open: 'cabinetTall', close: 'cabinetTall'},
   },
   /**
@@ -309,7 +301,7 @@ export const OPENABLE_SPECS = {
       inner: trashFill(-0.175, -0.215, 0.175, 0.215, 0.56, false, 0.3),
       surfaces: [{y: 0.592, x0: -0.15, x1: 0.15, z0: -0.18, z1: 0.18, clear: 0.3}],
     }],
-    loot: {lots: [1, 3], empty: 0.5, items: JUNK},
+    loot: LOOT.wheelieBin,
     sound: {open: 'crate', close: 'crate'},
   },
   // --- street / station furniture ---------------------------------------------------------------------------------------------
@@ -328,7 +320,7 @@ export const OPENABLE_SPECS = {
       inner: [B('paper', -0.17, 0.125, -0.17, 0.17, 0.205, 0.085), B('paper', -0.16, 0.205, -0.17, 0.15, 0.245, -0.06)],
       surfaces: [{y: 0.207, x0: -0.15, x1: 0.15, z0: -0.055, z1: 0.08, clear: 0.26}],
     }],
-    loot: {lots: [1, 1], empty: 0.72, items: SNACK},
+    loot: LOOT.newspaperVendingBox,
     contents: 'yesterday\'s papers',
     sound: {open: 'cabinetTall', close: 'vending'},
   },
@@ -342,14 +334,14 @@ export const OPENABLE_SPECS = {
       B('black', -0.585, 0, -0.23, 0.585, 0.08, 0.2),
     ],
     parts: [locker('left locker', -0.4), locker('middle locker', 0), locker('right locker', 0.4)],
-    loot: {lots: [1, 4], empty: 0.2, items: PERSONAL},
+    loot: LOOT.staffLockers,
     sound: {open: 'staffLockers', close: 'staffLockers'},
   },
   /** Four-drawer filing cabinet (p7-filing-cabinet-t25.glb): drawer fronts slide out along +Z with their trays. */
   filingCabinet: {
     label: 'filing cabinet', model: 'p7_filingCabinet', body: 'model', group: 'container',
     parts: FILING_Y.map(([y0, y1], i) => drawer(FILING_NAMES[i], FILING_X[0], FILING_X[1], y0, y1, FILING_Z_CUT, FILING_Z_FRONT, 0.5, 0.42)),
-    loot: {lots: [1, 3], empty: 0.35, items: OFFICE},
+    loot: LOOT.filingCabinet,
     sound: {open: 'desk', close: 'desk'},
   },
   /** Old safe (authored; the lock was forced, door ajar): heavy door on its left hinge, two compartments. */
@@ -369,7 +361,7 @@ export const OPENABLE_SPECS = {
       ajar: 0.2,
       surfaces: [{y: 0.132, x0: -0.26, x1: 0.26, z0: -0.27, z1: 0.06, clear: 0.43}, {y: 0.602, x0: -0.26, x1: 0.26, z0: -0.27, z1: 0.06, clear: 0.33}],
     }],
-    loot: {lots: [1, 3], empty: 0.4, items: SAFE},
+    loot: LOOT.safe,
     sound: {open: 'gunLocker', close: 'gunLocker'},
   },
   // --- retail -------------------------------------------------------------------------------------------------------------------
@@ -390,7 +382,7 @@ export const OPENABLE_SPECS = {
         : [B('frost', 0.01, 0.14, -0.26, 0.68, 0.3, 0.29), B('stock', 0.12, 0.3, -0.2, 0.34, 0.35, 0.02), B('stock', 0.42, 0.3, 0.04, 0.64, 0.37, 0.24)],
       surfaces: [{y: 0.302, x0: s < 0 ? -0.6 : 0.08, x1: s < 0 ? -0.08 : 0.6, z0: -0.2, z1: 0.22, clear: 0.28}],
     })),
-    loot: {lots: [1, 3], empty: 0.35, items: FROZEN},
+    loot: LOOT.chestFreezer,
     sound: {open: 'desk', close: 'shopCooler'},
   },
   /**
@@ -428,7 +420,7 @@ export const OPENABLE_SPECS = {
         {y: 0.284, x0: -0.15, x1: 0.15, z0: -0.1, z1: 0.06, clear: 0.125},
       ],
     }],
-    loot: {lots: [1, 3], empty: 0.3, items: MED},
+    loot: LOOT.firstAidWallKit,
     sound: {open: 'medCabinet', close: 'medCabinet'},
   },
   /**
@@ -494,7 +486,7 @@ export const OPENABLE_SPECS = {
       ...[-0.45, 0, 0.45].map(x => B('wood', x - 0.0075, 0.12, -0.28, x + 0.0075, 0.84, 0.29)),
     ],
     parts: [cupboard(-0.675, -1), cupboard(-0.225, 1), cupboard(0.225, -1), cupboard(0.675, 1)],
-    loot: {lots: [1, 2], empty: 0.45, items: PANTRY},
+    loot: LOOT.kitchenette,
     sound: {open: 'kitchenette', close: 'kitchenette'},
   },
   // --- desks (procedural / authored pedestals: drawer fronts are authored) --------------------------------------------------------
@@ -502,14 +494,14 @@ export const OPENABLE_SPECS = {
   desk: {
     label: 'desk', model: null, body: 'overlay', group: 'surface',
     parts: [[0.03, 0.255], [0.265, 0.485], [0.495, 0.715]].map(([y0, y1], i) => deskDrawer(i === 2 ? 'top drawer' : i === 0 ? 'bottom drawer' : 'drawer', 0.285, 0.715, y0, y1, 0.35, 0.6)),
-    loot: {lots: [1, 1], empty: 0.6, items: OFFICE},
+    loot: LOOT.desk,
     sound: {open: 'desk', close: 'desk'},
   },
   /** Security desk (gen/purposeShapes.ts): three authored drawers on its pedestal (x 0.35..0.79, seams 0.24 / 0.48). */
   monitorDesk: {
     label: 'security desk', model: null, body: 'overlay', group: 'surface',
     parts: [[0.015, 0.236], [0.254, 0.476], [0.494, 0.712]].map(([y0, y1], i) => deskDrawer(i === 2 ? 'top drawer' : i === 0 ? 'bottom drawer' : 'drawer', 0.37, 0.77, y0, y1, 0.355, 0.6)),
-    loot: {lots: [1, 1], empty: 0.5, items: [['ammo_rifle', 0.7], ['ammo_shells', 0.5], ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]]},
+    loot: LOOT.monitorDesk,
     sound: {open: 'desk', close: 'desk'},
   },
   // --- washroom cubicles (task office-overhaul-20261030, lane INTERACT) -------------------------------------------------------------
@@ -542,7 +534,7 @@ export const OPENABLE_SPECS = {
         {y: 0.812, x0: -0.17, x1: 0.17, z0: -0.77, z1: -0.64, clear: 0.4},
       ],
     }],
-    loot: {lots: [1, 2], empty: 0.2, items: TOILET},
+    loot: LOOT.toiletStall,
     sound: {open: 'kitchenette', close: 'kitchenette'},
   },
 } as const satisfies Record<string, OpenableSpec>;
