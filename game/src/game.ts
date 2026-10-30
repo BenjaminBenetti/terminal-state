@@ -1569,7 +1569,7 @@ export class Game {
     const def = st ? itemDef(st.itemId) : null;
     let hint = '';
     if (wdef && st) {
-      if (wdef.melee) hint = 'Click to slash · hold to keep slashing · no ammo'; // lane KNIFE
+      if (wdef.melee) hint = 'Click to slash · no ammo'; // lane KNIFE (short: the long form overlapped the hotbar at 960 px)
       else if (this.weapon.reloading) hint = 'Reloading…';
       else if ((st.mag ?? 0) === 0) hint = reserveFor(wdef, this.inv) ? 'Empty — press R' : `No ${caliberLabel(wdef)} ammo`;
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && reserveFor(wdef, this.inv)) hint = 'Low — R to reload';
