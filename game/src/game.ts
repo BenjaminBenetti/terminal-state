@@ -24,7 +24,7 @@ import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/p
 import {Inventory, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, caliberLabel, reserveFor, type WeaponDef} from './weapons/weapons';
-import {CALIBERS} from './items/calibers'; // lane AMMO: caliber-based ammo
+import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based ammo
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
 import {ConsumeView} from './weapons/consumeView';
@@ -1581,7 +1581,7 @@ export class Game {
     if (lanePrompt) { /* the lane's interactHandler takes E */ } else if (this.currentTarget) {
       const d = itemDef(this.currentTarget.stack.itemId);
       const n = this.currentTarget.stack.count;
-      prompt = `<b>[E]</b> Take ${d.kind === 'weapon' ? d.name : `${n > 1 ? n + ' × ' : ''}${d.name}`}`;
+      prompt = `<b>[E]</b> Take ${d.kind === 'weapon' ? d.name : ammoText(d.id, n) ?? `${n > 1 ? n + ' × ' : ''}${d.name}`}`; // lane AMMO: "15 9mm rounds" like holder lots
     } else if (this.containerTarget && this.containers) prompt = this.containers.prompt(this.containerTarget);
     else if (this.ladderAim) prompt = this.ladderAim.up ? '<b>[E]</b> Climb ladder' : '<b>[E]</b> Climb down ladder';
     else if (p.climbing) prompt = '<b>[Space]</b> Let go';

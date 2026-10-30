@@ -389,7 +389,7 @@ await withBrowserLock(async () => {
         const at = {bar: 'hotbar', index: 2};
         if (inv.get(at)) { const j = inv.pack.findIndex(s => !s); if (j >= 0) inv.move(at, {bar: 'pack', index: j}); else inv.set(at, null); }
         inv.set(at, inv.makeStack('shotgun', 1, 6));
-        inv.add(inv.makeStack('ammo_shells', 18));
+        inv.add(inv.makeStack('ammo_12ga', 18));
       });
       const slot = await ev(() => window.__game.inv.hotbar.findIndex(s => s?.itemId === 'shotgun'));
       const st0 = await ev(() => window.__LL.stock());

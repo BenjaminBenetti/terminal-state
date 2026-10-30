@@ -587,4 +587,6 @@ async function main() {
   log(`\nprovenance: ${rel(PROV)} (${records.length} records)`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+// Helpers for review scripts (CPU renders of the runtime GLBs); the build runs only when this file is executed.
+export {readMesh, decodeRGB, rasterize, viewYawPitch, VIEWS, BOXES};
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(e => { console.error(e); process.exit(1); });

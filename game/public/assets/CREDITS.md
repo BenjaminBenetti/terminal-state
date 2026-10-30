@@ -109,3 +109,14 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   - The superseded files are removed from the current game and remain in Git history.
 - Native downloads, generation ledgers and the reference mapping are kept outside the repository (studio reference
   task folder). Unapproved prototypes; no commercial clearance implied.
+
+## Caliber ammo boxes (2026-10-30)
+- Three ammo-box models, one per caliber (9mm carton, 5.56×45mm steel ammo can, 12-gauge shell carton), were generated
+  with the user's Meshy account (Meshy T2.5, Smart Topology, text-to-3D preview + 2K PBR texture refine; 45 credits)
+  under the user's task authorization and API-key limit. They replace the procedural ammo supply boxes.
+- Runtime derivatives (`assets/models/ammo-*-t25.glb`) were oriented, scaled to pickup size, grounded and
+  texture-downsized by `tools/asset-pipeline/props/build-ammo-boxes.mjs`. The ammo can's generated stencil read "516";
+  it was corrected LOCALLY to "5.56" from the model's own stencil glyphs (not generator output). Per-asset provenance:
+  `assets/derivatives/meshy-t25-ammo-20261030.json`.
+- Native downloads and the generation ledger are kept outside the repository (studio reference task folder).
+  Printed graphics are fictional AI designs. Unapproved prototypes; no commercial clearance implied.

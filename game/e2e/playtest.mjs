@@ -112,7 +112,7 @@ await withBrowserLock(async () => {
     const sg = await takePickup('shotgun');
     s = await snap();
     step('walks to and picks up the shotgun with E (prompt shown)', sg.ok && s.hotbar.some(h => h?.itemId === 'shotgun'), {...sg, hotbar: s.hotbar.map(h => h?.itemId ?? null)});
-    const sh = await takePickup('ammo_shells');
+    const sh = await takePickup('ammo_12ga');
     s = await snap();
     step('picks up shotgun shells into the backpack', sh.ok && s.ammo.shells >= 8, {...sh, shells: s.ammo.shells});
     await shot('03-after-pickups');
@@ -178,13 +178,13 @@ await withBrowserLock(async () => {
     step('inventory: click-move to backpack and 1-5 assignment to a quick slot', movedToPack && assigned && s.invariants.length === 0, {movedToPack, assigned, invariants: s.invariants});
     // Drop the shells stack from the backpack, then pick it back up from the floor.
     s = await snap();
-    const shellIdx = s.pack.findIndex(x => x?.itemId === 'ammo_shells');
+    const shellIdx = s.pack.findIndex(x => x?.itemId === 'ammo_12ga');
     const shellsBefore = s.ammo.shells;
     await page.click(`#inv-pack .slot[data-index="${shellIdx}"]`);
     await page.click('#btn-inv-drop');
     await sleep(300);
     s = await snap();
-    const dropped = s.pickups.find(p => p.itemId === 'ammo_shells' && Math.hypot(p.x - s.player.x, p.z - s.player.z) < 1.5);
+    const dropped = s.pickups.find(p => p.itemId === 'ammo_12ga' && Math.hypot(p.x - s.player.x, p.z - s.player.z) < 1.5);
     await page.keyboard.press('Tab');
     await waitFor(async () => (await snap()).state === 'playing', 5000);
     step('Tab closes inventory and resumes play', (await snap()).state === 'playing');
