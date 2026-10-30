@@ -5,6 +5,9 @@
 // delivered or failed to load (world/officeProps.ts). None of these kinds is a loot holder: office loot sits in the existing
 // holders (the `desk` itself — rendered as the Meshy office desk inside office sections —, cabinets, crates, shelves,
 // kitchenette / fridge, vending, filing cabinets with drawers …), so the loot / openable / damage plumbing is unchanged.
+// Task office-interactions-layout-20261030 (lane OPEN): except `officeFiling` (lateral filing cabinet) and `serverRack`, which are
+// openable holders now (world/openablesSpec.ts; drawn by world/openables.ts, not world/officeProps.ts); every office kind's openables
+// classification: world/openablesSpec.ts OFFICE_OPEN_AUDIT.
 // `cubiclePartition` is always geometry: a fabric panel whose length comes from each placement's hx / hz (cell-aligned runs).
 
 import type {PropDef} from '../props';

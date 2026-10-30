@@ -20,7 +20,7 @@ import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpac
 import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
 import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
-import {roofLadderPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT): roof ladder / transit hall poses
+import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input walker, per-frame traversal trace, lifecycle counts
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
@@ -333,6 +333,20 @@ export function installQaHooks(game: Game): void {
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);
+      if (!q) return null;
+      game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
+      return q;
+    },
+    // Task office-interactions-layout-20261030: in front of the roof cache (lane ROOF) / at the top of a floor's side corridor
+    // looking into its arrangement (lane LAYOUT; kind = 'ring' | 'loop' | 'commons')
+    goRoofCache: () => {
+      const q = roofRewardPose(game.layout);
+      if (!q) return null;
+      game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
+      return q;
+    },
+    goFloorPlan: (floor: number) => {
+      const q = floorPlanPose(game.layout, floor);
       if (!q) return null;
       game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
       return q;

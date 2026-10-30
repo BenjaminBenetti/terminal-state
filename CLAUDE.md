@@ -17,6 +17,40 @@ local assistant settings. Main backs up old .git/root docs and verifies GitHub
 source/asset hashes before adoption. Never git clean/reset away existing work or
 stage external archives. Never reuse old generation budgets.
 
+## Props — core design rules (standing user rule, 2026-10-30)
+
+Every new or changed prop must meet both affordance rules below. They are acceptance requirements for prop work, not
+polish: a prop that looks usable must not silently ship as decoration-only. Checklist and file pointers:
+`docs/prop-affordances.md`.
+
+1. **Storage opens.** Anything that reads as reasonably openable storage must open, with physical doors, lids or drawers in
+   the existing openables style. That covers cabinets, cupboards, desk and filing drawers, lockers, fridges, safes, chests,
+   crates and lidded boxes.
+   - Contents are finite, seeded once, remembered and never refilled.
+   - Contents are themed to the container where relevant: food and drink in a fridge, dressings in first-aid storage,
+     supplies in supply or utility storage, and ammo only by deliberate rule.
+   - Contents come from the loot-table foundation (`game/src/items/lootTables.ts` slot categories and named tables;
+     `docs/loot-tables.md`), not new literal item lists.
+   - Respect fit and occupancy, door clearance and persistence.
+2. **Movable things move.** Reasonably loose or movable props react to bullets and to the player walking into them, using
+   the existing bounded, lazily created, sleeping physics. Examples: chairs, boxes, bins, small furniture, plants and
+   desk-top objects.
+   - Mass, friction and impulses must be plausible.
+   - Loot on or in a moved prop never floats, duplicates or disappears.
+   - Doors never detach.
+   - Never wake the whole level, and never add unbounded bodies.
+3. **Exceptions are explicit and classified.** These may stay static or closed, but only with a recorded, honest reason:
+   - anchored structures and fixtures, such as built-in counters, wall units, heavy machinery and sealed equipment;
+   - equipment that is not storage.
+
+   An anchored cabinet can still have openable doors. Every prop kind is classified in the openables audit
+   (`OPENABLE_AUDIT`, `game/src/world/openablesSpec.ts`) and in the physics-affordance classification (see
+   `docs/prop-affordances.md`), and the audit tests fail for an unclassified kind. No blanket destructibility,
+   durability, fire or explosion system is implied.
+4. **Check it.** New props need:
+   - focused unit tests for openability, contents theme, fit and the physics class;
+   - a short serial browser spot check of one representative prop when visuals change (browser rules below).
+
 ## Meshy MCP — key from the environment only
 
 The project MCP entry for Meshy (`docs/meshy.mcp.json`, activated as root `.mcp.json`; see `docs/meshy-mcp.md`) reads

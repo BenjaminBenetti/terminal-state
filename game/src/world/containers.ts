@@ -53,7 +53,7 @@ import {itemModelSources} from './pickups';
 import {holderBoxes} from '../physics/holderShapes';
 import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, type Plane, type Soup} from './meshSplit';
 import {FitIndex, OpenableSet, interiorShadowSide, type OpenRT} from './openables';
-import {openableActive} from './openablesSpec';
+import {openableActive, openableSpec} from './openablesSpec';
 
 /**
  * Lid split for the generated crate model (`models.crate`, assets/models/crate-t25.glb): triangles
@@ -497,7 +497,7 @@ export class ContainerManager {
         lotMats: new Map(), lotBoxes: new Map(), shown: false,
       };
       if (kind === 'vending') this.settleSpill(h, layout.levels?.[p.level ?? 0]?.grid ?? layout.grid); // iteration 08: the holder's own storey
-      if (openable) { this.openables.attach(h, fit.context(p)); this.openList.push(h); }
+      if (openable) { this.openables.attach(h, fit.context(p, !!openableSpec(kind)?.seatAside)); this.openList.push(h); } // seatAside: lane OPEN (office-interactions-layout)
       this.placeLots(h);
       for (const l of h.state.lots) counts.set(l.itemId, (counts.get(l.itemId) ?? 0) + 1);
       this.all.push(h);
@@ -642,7 +642,10 @@ export class ContainerManager {
   /** HUD / toast facts of one compartment. */
   private partInfo(h: Holder, part: number): PartInfo {
     const spec = h.open!.spec, ps = spec.parts[part];
-    return {name: ps.name, label: HOLDER_LABEL[h.kind], loot: spec.loot !== null || !!spec.shared, contents: spec.contents, glass: ps.glass && !h.open!.glassBroken};
+    // Task office-interactions-layout-20261030 (lane OPEN): a part with no compartment of its own (the server cabinet's glass doors over
+    // its racked servers) is not a loot compartment: it shows its own fixture `contents` ("Close glass door", not "— empty").
+    const loot = (spec.loot !== null || !!spec.shared) && (ps.surfaces.length > 0 || !!ps.holdsExposed);
+    return {name: ps.name, label: HOLDER_LABEL[h.kind], loot, contents: ps.contents ?? spec.contents, glass: ps.glass && !h.open!.glassBroken};
   }
 
   /** Compartment under a body hit point: the part whose closed box holds it; containers fall back to the nearest part. */
@@ -684,7 +687,7 @@ export class ContainerManager {
         st.searched = true;
         st.open = true;
         const m = first ? partOpenMessage(st, part, this.partInfo(h, part)) : null;
-        this.emit({type: 'open', container: h, part, sound: spec.sound.open, rummage: spec.loot !== null || !!spec.shared, ...(m ? {message: m.text, warn: m.warn} : {})});
+        this.emit({type: 'open', container: h, part, sound: spec.sound.open, rummage: this.partInfo(h, part).loot, ...(m ? {message: m.text, warn: m.warn} : {})}); // lane OPEN: per part
         break;
       }
       case 'take':

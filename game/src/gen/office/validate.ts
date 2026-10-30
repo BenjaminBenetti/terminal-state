@@ -15,15 +15,16 @@
 //   start weapon is never a pickup. Shared traversal / doorway / storey rules (gen/traversal.ts, gen/doorways.ts, gen/levelGen.ts).
 
 import {CELL, FLOOR, SOLID} from '../grid';
-import {doorwayIssues} from '../doorways';
+import {doorwayIssues, signDims} from '../doorways';
 import {levelArrays, levelDistance, levelIssues, SLAB} from '../levelGen';
 import {levelsOf} from '../levels';
 import {traversalIssues} from '../traversal';
-import type {StationLayout} from '../stationTypes';
-import {FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_ROOF_LEVEL, SCISSOR_STAIR, landingRect, type TowerFrame} from './frame';
+import type {Area, StationLayout} from '../stationTypes';
+import {FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR, SCISSOR_STAIR, landingRect, type TowerFrame} from './frame';
+import {ROOM_MIN_CELLS} from './floorplan'; // Task office-interactions-layout-20261030 (lane LAYOUT)
 import {roofIssues} from './roof'; // Task office-overhaul-20261030 (lane STRUCT): the roof storey
 import {transitIssues} from './transit'; // Task office-overhaul-20261030 (lane STRUCT): the transit hall
-import {landingStrip} from './dress';
+import {landingStrip, signOverlaps} from './dress';
 import {ENEMY_MIN_CELLS, OFFICE_ENEMIES} from './spawns';
 import {CORRIDOR_CLEAR_M, isNarrowPassage, isPlantKind, passageClear} from './companyDress';
 import {COMPANIES} from './companies';
@@ -219,6 +220,8 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
 
   // --- Task office-overhaul-20261030 (lane TENANTS): tenants, server rooms, corridor clearance ---------------------------------
   issues.push(...tenantIssues(layout));
+  // --- Task office-interactions-layout-20261030 (lane LAYOUT): room sizes, washrooms, plates, the roof access room's one plate -------
+  issues.push(...layoutIssues(layout));
   // --- Task office-overhaul-20261030 (lane STRUCT): the roof (reachable by the ladder, parapet closed, hatch zone clear) and the
   // transit hall (widths, walkable stair + escalators, carved hand-over, clear mouths, gate gaps) -------------------------------
   issues.push(...roofIssues(layout, f, dist), ...transitIssues(layout, f));
@@ -232,6 +235,41 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
     const m = /^flight (\d+) off spec$/.exec(s);
     return !(m && scissorFlights.has(Number(m[1])));
   }));
+  return issues;
+}
+
+/** Areas of the tower storeys that are ROOMS (not corridors, halls, stair landings / runs). */
+const isTowerRoom = (a: Area): boolean => {
+  const lv = a.level ?? 0;
+  return lv >= 1 && lv <= OFFICE_TOP_FLOOR && a.kind !== 'passage' && a.type !== 'office-corridor' && a.type !== 'office-stair' && a.type !== 'office-lobby' && a.role !== 'stair';
+};
+
+/**
+ * Task office-interactions-layout-20261030 (lane LAYOUT): floor-plan invariants — every room of the tower storeys is at least
+ * ROOM_MIN_CELLS (2.5 m) on its short side; a men's and a women's washroom on every storey; no two plates overlap on one wall face
+ * of an office storey; floor 8 has exactly one roof access room, exactly one ROOF ACCESS plate, and no ELECTRICAL plate at the roof
+ * access room's door (item 4).
+ */
+export function layoutIssues(layout: StationLayout): string[] {
+  const issues: string[] = [];
+  for (const a of layout.areas) if (isTowerRoom(a) && Math.min(a.w, a.h) < ROOM_MIN_CELLS) issues.push(`room ${a.id} (${a.label}, level ${a.level}) ${a.w * CELL} x ${a.h * CELL} m: narrower than 2.5 m`);
+  for (const n of OFFICE_FLOORS) {
+    const wc = layout.areas.filter(a => a.level === n && a.type === 'washroom');
+    if (!wc.some(a => a.label.includes("Men's")) || !wc.some(a => a.label.includes("Women's"))) issues.push(`storey ${n}: no men's + women's washroom`);
+  }
+  for (const s of layout.signs) {
+    const lv = s.level ?? 0;
+    if (lv >= 1 && signOverlaps(layout, lv, s, s.y, signDims(s), s, {w: -0.01, h: -0.01})) issues.push(`sign '${s.text}' (level ${lv}) overlaps another plate`);
+  }
+  const roof = layout.areas.filter(a => a.level === OFFICE_TOP_FLOOR && a.purpose === 'office-roof-access');
+  if (roof.length !== 1) return [...issues, `${roof.length} roof access rooms on floor ${OFFICE_TOP_FLOOR}`];
+  const plates = layout.signs.filter(s => s.level === OFFICE_TOP_FLOOR && s.text === 'ROOF ACCESS');
+  if (plates.length !== 1) issues.push(`${plates.length} ROOF ACCESS plates`);
+  for (const d of layout.doors.filter(q => (q.a === roof[0].id || q.b === roof[0].id) && q.level === OFFICE_TOP_FLOOR)) {
+    const cx = (d.x + d.w / 2) * CELL, cz = (d.y + d.h / 2) * CELL;
+    if (layout.signs.some(s => s.level === OFFICE_TOP_FLOOR && /ELECTRICAL/.test(s.text) && Math.hypot(s.x - cx, s.z - cz) < 2.5)) issues.push('ELECTRICAL plate at the roof access door');
+    if (!plates.some(s => Math.hypot(s.x - cx, s.z - cz) < 3.5)) issues.push('ROOF ACCESS plate not at the roof access door');
+  }
   return issues;
 }
 

@@ -78,6 +78,11 @@ export const ROOMS = {
   storage: {label: 'Supply storage', purpose: 'office-storage', role: 'storage', w: [6, 8], steps: []},
   server: {label: 'Server room', purpose: 'office-server', role: 'server', w: [10, 13], plate: 'SERVER ROOM · AUTHORIZED ONLY', steps: []},
   exec: {label: 'Executive suite', purpose: 'office-exec', role: 'exec', w: [13, 17], steps: []},
+  /**
+   * Task office-interactions-layout-20261030 (lane LAYOUT): a small glass-walled meeting room carved out of a very long open-plan
+   * area (gen/office/tower.ts huddles) or into a split end zone — a conference table and chairs (the meeting dressing).
+   */
+  huddle: {label: 'Huddle room', purpose: 'office-meeting', role: 'meeting', w: [10, 12], plate: 'HUDDLE ROOM', steps: []},
   // --- company rooms -----------------------------------------------------------------------------------------------------------
   /** The company's reception off the elevator lobby (first floor of every tenant): dressed by companyDress.reception. */
   reception: {label: 'Reception', purpose: 'office-tenant-reception', role: 'reception', w: [14, 18], open: true, steps: []},
@@ -120,7 +125,7 @@ export const ROOMS = {
 } as const satisfies Record<string, RoomInfo>;
 export type RoomKey = keyof typeof ROOMS;
 /** Rooms the iteration-16 office dressing already handles (meeting tables, break kitchenettes, copy, storage). */
-export const BASE_ROOMS: ReadonlySet<RoomKey> = new Set(['meeting', 'break', 'copy', 'storage', 'server', 'exec']);
+export const BASE_ROOMS: ReadonlySet<RoomKey> = new Set(['meeting', 'break', 'copy', 'storage', 'server', 'exec', 'huddle']);
 
 /** Open-plan styles (what an open area of a company floor becomes). */
 export const OPEN_STYLES = {

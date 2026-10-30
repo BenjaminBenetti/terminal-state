@@ -30,6 +30,8 @@ import {
   BASELINE_PROFILE, LEGACY_CATS, catWeight, resolveRows, slotEmpty, slotLots, slotOf,
   type ItemRows, type LegacyCat, type LootProfile, type LotRange, type OwnTable, type SlotCategory,
 } from './lootTables';
+import {rewardTable, type RewardTable} from './lootTables'; // Task office-interactions-layout-20261030 (lane ROOF): curated rewards
+import {CONTAINER_THEMED} from './lootTables'; // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage
 import {
   OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind,
 } from '../world/openablesSpec';
@@ -116,7 +118,8 @@ type Row = readonly [itemId: string, weight: number];
  */
 export interface HolderTable {
   slot: SlotCategory | undefined;
-  source: 'own' | 'purpose' | 'legacy' | 'fixture';
+  /** ... | 'reward' = a curated reward (lane ROOF, office-interactions-layout-20261030: lootTables REWARD_TABLES; exact, no scarcity cut). */
+  source: 'own' | 'purpose' | 'legacy' | 'fixture' | 'reward';
   empty: number;
   lots: LotRange;
   rows: ItemRows;
@@ -124,6 +127,9 @@ export interface HolderTable {
 
 export function holderTable(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE): HolderTable {
   const T = profile.tables, slot = slotOf(kind);
+  // Lane ROOF (office-interactions-layout-20261030): a holder whose loot key names a curated reward (the Office roof cache) rolls it.
+  const reward = rewardOf(kind, areaType, profile);
+  if (reward) return rewardHolderTable(slot, reward);
   // Iteration 08 (Lane I): new openable containers use their own tables whatever the room (a pharmacy bin is still a bin);
   // fixtures (fire / defibrillator cabinets) hold only what is baked into their model.
   const own = containerLoot(kind);
@@ -147,6 +153,46 @@ export function compartmentTable(kind: HolderKind, areaType: string, profile: Lo
 
 function resolved(profile: LootProfile, slot: SlotCategory | undefined, source: HolderTable['source'], t: OwnTable): HolderTable {
   return {slot, source, empty: slotEmpty(profile, slot, t.empty), lots: slotLots(profile, slot, t.lots), rows: resolveRows(profile, t.items)};
+}
+
+// ---------------------------------------------------------------------------------------
+// Task office-interactions-layout-20261030 (lane ROOF): CURATED REWARDS (lootTables REWARD_TABLES, docs/loot-tables.md "Roof
+// reward"). A holder whose loot key (`areaType` = PropPlacement.purpose) names a reward for its kind — the Office roof cache —
+// rolls that reward ONCE on its own seeded holder stream like any holder (finite; remembered by lot id), but EXACTLY: its picks in
+// order, no scarcity cut / re-theme / limb conversion (all entries are `roll`s), and every rolled lot is placed (bounded re-packs).
+
+/** Extra deterministic packing attempts for a reward whose lots did not all fit on the first pack (own `:repack<k>` streams). */
+export const REWARD_REPACKS = 16;
+
+function rewardOf(kind: HolderKind, areaType: string, profile: LootProfile): RewardTable | undefined {
+  const t = rewardTable(profile, areaType);
+  return t && t.holder === kind ? t : undefined;
+}
+
+/** A reward as a HolderTable (QA / tests): all picks' rows, lots = the summed pick ranges, empty = every pick empty. */
+function rewardHolderTable(slot: SlotCategory | undefined, t: RewardTable): HolderTable {
+  const lo = t.picks.reduce((s, p) => s + p.lots[0], 0), hi = t.picks.reduce((s, p) => s + p.lots[1], 0);
+  return {slot, source: 'reward', empty: t.picks.reduce((e, p) => e * (p.lots[1] > 0 && p.items.length ? p.empty : 1), 1), lots: [lo, hi], rows: t.picks.flatMap(p => p.items)};
+}
+
+/** The reward's picks rolled in order on the holder stream (each an own-table roll: empty?, lots, items + stack sizes). */
+function rollReward(r: () => number, kind: HolderKind, t: RewardTable, profile: LootProfile): LootEntry[] {
+  return t.picks.flatMap(p => rollRows(r, kind, {slot: slotOf(kind), source: 'reward', empty: p.empty, lots: p.lots, rows: p.items}, profile));
+}
+
+/**
+ * Packs a reward so that every lot is placed: the standard packer on the holder stream, then (only when something did not fit)
+ * up to REWARD_REPACKS fresh packs on the holder's own repack streams; the first full pack wins, else the one placing the most
+ * (the guaranteed picks come first, so they always find room in an empty holder).
+ */
+function packReward(seed: number, index: number, kind: HolderKind, ids: readonly string[], surfaces: readonly Surface[], r: () => number): (Placement | null)[] {
+  let best = packItems(ids, surfaces, r, false);
+  const n = (p: readonly (Placement | null)[]) => p.filter(Boolean).length;
+  for (let k = 0; k < REWARD_REPACKS && n(best) < ids.length; k++) {
+    const p = packItems(ids, surfaces, mulberry32(hashString(`loot:${kind}:${index}:repack${k}`, seed >>> 0)), false);
+    if (n(p) > n(best)) best = p;
+  }
+  return best;
 }
 
 /** Legacy category weights of a holder in a plain room (room type x holder modifier; categories with weight > 0). */
@@ -217,6 +263,8 @@ export function rollTableItems(seed: number, index: number, kind: HolderKind, ar
  */
 export function holderFinds(seed: number, index: number, kind: HolderKind, areaType: string, withCompartments = false, profile: LootProfile = BASELINE_PROFILE): Find[] {
   const t = holderTable(kind, areaType, profile);
+  // lane ROOF: a curated reward is exact (every entry its own roll, nothing cut)
+  if (t.source === 'reward') return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile).map(e => ({...e, source: 'roll' as const}));
   const out = scarceFinds(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), findContext(kind, areaType, t.rows, profile), scarceRng(seed, index, kind));
   const inside = withCompartments ? compartmentTable(kind, areaType, profile) : null;
   if (inside) {
@@ -230,6 +278,8 @@ export function holderFinds(seed: number, index: number, kind: HolderKind, areaT
  * pharmacy things, a newsstand's its snacks) — or the purpose's own rows when nothing overlaps. Plain halls keep the table.
  */
 function purposeRows(own: OwnTable, areaType: string, kind: HolderKind): OwnTable {
+  // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage keeps its own rows in any room (lootTables CONTAINER_THEMED)
+  if (CONTAINER_THEMED.has(kind)) return own;
   const spec = purposeLoot(areaType, kind);
   if (!spec || !spec.items.length) return own;
   const allowed = new Set(spec.items.map(r => r[0]));
@@ -256,6 +306,7 @@ function rollRows(r: () => number, kind: HolderKind, t: HolderTable, profile: Lo
 
 function rollItems(r: () => number, kind: HolderKind, t: HolderTable, areaType: string, profile: LootProfile): LootEntry[] {
   if (t.source === 'fixture') return [];
+  if (t.source === 'reward') { const rw = rewardOf(kind, areaType, profile); return rw ? rollReward(r, kind, rw, profile) : []; } // lane ROOF
   if (t.source !== 'legacy') return rollRows(r, kind, t, profile);
   // Legacy room-type tables: a category per lot (room x holder weights), then an item of it.
   if (r() < t.empty) return [];
@@ -280,12 +331,22 @@ function rollItems(r: () => number, kind: HolderKind, t: HolderTable, areaType: 
  */
 export function rollLootItems(seed: number, index: number, kind: HolderKind, areaType = 'default', profile: LootProfile = BASELINE_PROFILE): LootEntry[] {
   const t = holderTable(kind, areaType, profile);
+  if (t.source === 'reward') return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile); // lane ROOF: exact, no scarcity cut
   return scarce(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
 }
 
 /** Deterministic contents placed on the holder's surfaces (items that fit nowhere are dropped). */
 export function rollHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], profile: LootProfile = BASELINE_PROFILE): Lot[] {
   const t = holderTable(kind, areaType, profile);
+  // Lane ROOF (office-interactions-layout-20261030): a curated reward — rolled exactly, every lot placed (packReward).
+  if (t.source === 'reward') {
+    const r = holderRng(seed, index, kind);
+    const items = rollItems(r, kind, t, areaType, profile);
+    const placed = packReward(seed, index, kind, items.map(e => e.itemId), surfaces, r);
+    const lots: Lot[] = [];
+    placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
+    return lots;
+  }
   // Iteration 08 (Lane I): a surface holder that gained compartments (desk drawers) keeps its exposed surfaces' roll exactly and
   // rolls the compartments separately (own stream + table) — closed drawers are not where the old loot went.
   const inside = compartmentTable(kind, areaType, profile);

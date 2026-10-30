@@ -27,6 +27,7 @@ import type {AreaKind, RoomType, ShopUse} from './stationTypes';
 import {
   CACHE_CRATE, OFFICE_DESK, OFFICE_DRAWERS, STORE_DRINKS, STORE_SNACKS, TENANT_ARMS, TENANT_FRIDGE, TENANT_KITCHEN, TENANT_MEDS, TENANT_SNACKS,
   TENANT_SUPPLY, TENANT_TABLE, storeKitchen, storeTill, type ItemRow, type LootSpec,
+  JUNK_ROWS, PERSONAL_ROWS, // Task office-interactions-layout-20261030 (lane LAYOUT): office support rooms / large-room fill
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
@@ -839,7 +840,10 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
       id: 'office-storage', category: 'back', theme: 'service', label: 'Supply storage', slots: ROOM, kinds: ['room'], weight: 1.4, max: 2,
       light: [0.1, 0.45, 0.45], stock: 'cartons',
       props: [
-        {kind: 'shelf', at: 'row', wall: 'far', n: [2, 3], front: 0.8},
+        // Task office-interactions-layout-20261030 (lane LAYOUT): 1 stocked shelf (was 2-3): the far wall used to be the held facade
+        // of most of these rooms, so the row mostly failed (~0.75 shelves / room); with the per-floor plans it stands — kept at the old
+        // effective stock (the ammo census), the large-room fill adds the rest of the room's (picked-over) shelving.
+        {kind: 'shelf', at: 'row', wall: 'far', n: [1, 1], front: 0.8},
         {kind: 'cabinetTall', at: 'wall', wall: 'side', n: [1, 1], front: 0.8},
         {kind: 'crate', at: 'wall', wall: 'any', n: [1, 2]},
         {kind: 'cartonStack', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6},
@@ -867,6 +871,7 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
       },
       floor: {ammo: 0.6, med: 0.3},
     },
+    ...SUPPORT_PURPOSES(),
     ...TENANT_PURPOSES(OPEN, ROOM, DESK, DRAWERS),
     'office-elevator': {
       id: 'office-elevator', category: 'back', theme: 'public', label: 'Elevator', slots: ['office-elevator'], kinds: ['room'], weight: 1, max: 99,
@@ -876,6 +881,53 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
       id: 'office-stair', category: 'back', theme: 'public', label: 'Stairwell', slots: ['office-stair'], kinds: ['room'], weight: 1, max: 99,
       light: [0.5, 0.4, 0.1], props: [], loot: {}, floor: {med: 0.2, ammo: 0.2},
     },
+  };
+}
+
+/**
+ * Task office-interactions-layout-20261030 (lane LAYOUT): the core SUPPORT ROOMS of the per-floor plans (gen/office/floorplan.ts) that
+ * have no earlier purpose — a proper utility room (janitor + electrical + supplies merged), a kitchenette / coffee point, an IT closet,
+ * staff lockers / showers, and floor 8's ROOF ACCESS room (assigned when the floor is carved, so its door gets the one correct plate;
+ * the ladder room is held empty while the dressers run). Preset by the generator (never drawn by assignPurposes: the slots are
+ * placeholders); loot through the shared tables (items/lootTables.ts), no new item lists; no stationDress PLATES entry (the office
+ * dresser plates them from their area meta).
+ */
+function SUPPORT_PURPOSES(): Record<string, RoomPurpose> {
+  const S = (id: string, label: string, theme: LootTheme, light: LightOdds, props: PropRule[], loot: LootTable, floor: FloorLoot, o: {stock?: StockTheme; warm?: boolean} = {}): RoomPurpose => ({
+    id, category: 'back', theme, label, slots: ['office-room'], kinds: ['room', 'closet'], min: [2.5, 3], weight: 0, max: 99, light, props, loot, floor, ...o,
+  });
+  return {
+    'office-utility': S('office-utility', 'Utility room', 'service', [0.15, 0.45, 0.4], [
+      {kind: 'mopSink', at: 'wall', wall: 'far', n: [1, 1], front: 0.6},
+      {kind: 'electricalPanel', at: 'row', wall: 'far', n: [1, 2], front: 0.8},
+      {kind: 'stockShelf', at: 'row', wall: 'side', n: [1, 2], variant: 'stock', front: 0.6},
+      {kind: 'janitorCart', at: 'wall', wall: 'any', n: [0, 1], chance: 0.7},
+      {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.7},
+      // (the electrical riser it merges keeps the riser closet's occasional cache crate: electrical-closet's own rule)
+      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
+    ], {stockShelf: TENANT_SUPPLY, cabinetTall: TENANT_SUPPLY, crate: CACHE_CRATE}, {med: 0.4, ammo: 0.3}, {stock: 'cleaning'}),
+    'office-kitchenette': S('office-kitchenette', 'Kitchenette', 'food', [0.35, 0.45, 0.2], [
+      {kind: 'kitchenette', at: 'wall', wall: 'far', n: [1, 1], front: 0.9},
+      {kind: 'fridge', at: 'wall', wall: 'any', n: [1, 1], front: 0.6},
+      {kind: 'officeWaterCooler', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.6},
+      {kind: 'vending', at: 'wall', wall: 'side', n: [0, 1], chance: 0.4, front: 1.0},
+    ], {fridge: TENANT_FRIDGE, kitchenette: TENANT_KITCHEN, vending: TENANT_SNACKS}, {med: 0.2}, {warm: true}),
+    'office-it': S('office-it', 'IT closet', 'tech', [0.1, 0.4, 0.5], [
+      {kind: 'electricalPanel', at: 'wall', wall: 'far', n: [1, 1], front: 0.8},
+      {kind: 'cabinetTall', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 0.7},
+      // (the comms riser closet: the electrical riser's occasional cache crate)
+      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
+    ], {cabinetTall: TENANT_SUPPLY, crate: CACHE_CRATE}, {ammo: 0.3}),
+    'office-lockers': S('office-lockers', 'Locker room', 'personal', [0.2, 0.45, 0.35], [
+      {kind: 'staffLockers', at: 'row', wall: 'far', n: [2, 4], front: 0.8},
+      {kind: 'staffLockers', at: 'row', wall: 'side', n: [0, 2], chance: 0.6, front: 0.8},
+      {kind: 'bench', at: 'center', n: [0, 1], chance: 0.7, ring: 0.6},
+    ], {staffLockers: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.4}}, {med: 0.4}),
+    'office-roof-access': S('office-roof-access', 'Roof access', 'service', [0.4, 0.45, 0.15], [], {}, {}),
+    // A PROP-level purpose override (PropPlacement.purpose), never an area's: the extra furniture the large-room fill adds
+    // (gen/office/dress.ts fillLargeRooms) is real, openable storage, but picked over — mostly bare, now and then one leftover snack / drink / dressing (no ammo) —
+    // so furnishing the empty rooms does not inflate the tower's loot totals (the established scarcity).
+    'office-fill': S('office-fill', 'Picked-over stock', 'personal', [0.2, 0.45, 0.35], [], {default: {items: JUNK_ROWS, lots: [1, 1], empty: 0.93}}, {}),
   };
 }
 

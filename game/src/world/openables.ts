@@ -39,7 +39,7 @@ import {purposeMaterial} from './purposeTextures';
 import {surface, type SurfaceName} from './canvasTextures';
 import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, toSoup, type Plane} from './meshSplit';
 import {propShape} from '../gen/propShapes'; // Task office-overhaul-20261030 (lane INTERACT): toilet-stall body (bodyShape)
-import {openableSpec, type AuthoredBox, type Box6, type MatRole, type OpenableKind, type OpenableSpec, type PartSpec} from './openablesSpec';
+import {openableSpec, partFace, type AuthoredBox, type Box6, type MatRole, type OpenableKind, type OpenableSpec, type PartSpec} from './openablesSpec';
 
 const OPEN_TIME = 0.5;
 const CLOSE_TIME = 0.38;
@@ -288,7 +288,7 @@ export class OpenableSet {
         for (const axis of [0, 1, 2] as const) for (const v of [r.min.getComponent(axis), r.max.getComponent(axis)]) if (!planes.some(q => q.axis === axis && Math.abs(q.value - v) < 1e-6)) planes.push({axis, value: v});
       }
       let remnants = 0;
-      for (const {soup, mat} of fittedMeshes(gltf, def.w, def.h, def.d)) {
+      for (const {soup, mat} of fittedMeshes(gltf, def.w, def.h, def.d, !!spec.turn)) { // task office-interactions-layout (OPEN): office files face -Z
         const buckets = partition(soup, planes, all, 1 + spec.parts.length, (c, _nz, n) => {
           for (let i = 0; i < regions.length; i++) for (const r of regions[i]) if (r.containsPoint(c)) return i + 1;
           // Iteration 12 (ATMOS, #4): what the split leaves in a lined compartment's opening (see openingSlabs) is dropped.
@@ -674,12 +674,15 @@ export class OpenableSet {
   aimPoint(rt: OpenRT, i: number): {aim: THREE.Vector3; stand: THREE.Vector3} {
     const pm = rt.model.parts[i];
     const b = pm.bounds;
-    const local = new THREE.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.max.z - 0.005);
+    // task office-interactions-layout-20261030 (lane OPEN): parts on the prop's back (the executive desk's sitter-side drawers) are
+    // aimed at / stood in front of from behind (face -1); every other part keeps the front (+Z) as before.
+    const face = partFace(rt.spec.parts[i]);
+    const local = new THREE.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, face > 0 ? b.max.z - 0.005 : b.min.z + 0.005);
     if (rt.spec.parts[i].move.type === 'hinge' && rt.spec.parts[i].move.axis === 'x' && b.max.y - b.min.y < 0.35) local.set((b.min.x + b.max.x) / 2, b.max.y - 0.01, (b.min.z + b.max.z) / 2 + (b.max.z - b.min.z) * 0.3);
     partLocalMatrix(rt.spec.parts[i], pm.pivot, partAmount(rt, i), tmpM);
     const aim = local.applyMatrix4(tmpM).applyMatrix4(rt.matrix);
     const def = (PROP_DEFS as unknown as Record<string, {d: number}>)[rt.kind];
-    const fwd = new THREE.Vector3(0, 0, 1).transformDirection(rt.matrix);
+    const fwd = new THREE.Vector3(0, 0, face).transformDirection(rt.matrix);
     const centre = new THREE.Vector3().setFromMatrixPosition(rt.matrix);
     const stand = centre.addScaledVector(fwd, def.d / 2 + (rt.spec.parts[i].move.type === 'slide' ? 0.95 : 0.7));
     return {aim, stand};
@@ -715,6 +718,9 @@ export interface FitContext {
   props: readonly PropPlacement[];
 }
 
+/** Seats on castors that roll aside from their own work surface (FitIndex.context `seatAside`): the office kinds only. */
+const ROLLING_SEATS: ReadonlySet<string> = new Set(['officeChair', 'executiveChair']);
+
 /** Station-wide helper: the fit context of a placement (its storey's grid / doors, props within reach). */
 export class FitIndex {
   private readonly buckets = new Map<string, PropPlacement[]>();
@@ -726,13 +732,22 @@ export class FitIndex {
       l.push(p);
     }
   }
-  context(p: PropPlacement): FitContext {
+  /**
+   * `seatAside` (task office-interactions-layout-20261030, lane OPEN: OpenableSpec.seatAside): the office / executive chair pulled up to
+   * this very holder (its `host`) rolls aside on its castors — it does not limit the holder's drawers.
+   */
+  context(p: PropPlacement, seatAside = false): FitContext {
     const level = p.level ?? 0;
     const grid = this.layout.levels?.[level]?.grid ?? this.layout.grid;
     const doors = this.layout.doors.filter(d => (d.level ?? 0) === level);
     const props: PropPlacement[] = [];
+    const self = seatAside ? this.layout.props.indexOf(p) : -1;
     const bx = Math.floor(p.x / 4), bz = Math.floor(p.z / 4);
-    for (let z = bz - 1; z <= bz + 1; z++) for (let x = bx - 1; x <= bx + 1; x++) for (const q of this.buckets.get(`${x},${z}`) ?? []) if (q !== p && (q.level ?? 0) === level && q.h > 0.02) props.push(q);
+    for (let z = bz - 1; z <= bz + 1; z++) for (let x = bx - 1; x <= bx + 1; x++) for (const q of this.buckets.get(`${x},${z}`) ?? []) {
+      if (q === p || (q.level ?? 0) !== level || q.h <= 0.02) continue;
+      if (self >= 0 && q.host === self && ROLLING_SEATS.has(q.kind)) continue;
+      props.push(q);
+    }
     return {grid, doors, props};
   }
 }
@@ -845,7 +860,8 @@ export function openingSlabs(spec: Pick<OpenableSpec, 'parts'>, regions: readonl
     for (const r of regions[i]) reg.union(r);
     const d = reg.getCenter(new THREE.Vector3()).sub(cav.getCenter(new THREE.Vector3()));
     const ad = [Math.abs(d.x), Math.abs(d.y), Math.abs(d.z)];
-    const axis = (ad[0] > ad[1] && ad[0] > ad[2] ? 0 : ad[1] > ad[2] ? 1 : 2) as 0 | 1 | 2;
+    // task office-interactions-layout-20261030 (lane OPEN): a spec may name the axis (a tall door frame over a low compartment)
+    const axis = (p.openAxis ?? (ad[0] > ad[1] && ad[0] > ad[2] ? 0 : ad[1] > ad[2] ? 1 : 2)) as 0 | 1 | 2;
     const s = Math.sign(d.getComponent(axis)) || 1;
     const open = s > 0 ? cav.max.getComponent(axis) : cav.min.getComponent(axis);
     const near = s > 0 ? reg.min.getComponent(axis) : reg.max.getComponent(axis);

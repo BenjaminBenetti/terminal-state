@@ -10,6 +10,9 @@ import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../../src
 import {MODEL_FILES, TEXTURE_FILES, type TextureKey} from '../../src/assets/manifest';
 import {P7_FILES} from '../../src/gen/props07';
 import {OPENABLE_SPECS} from '../../src/world/openablesSpec';
+// Task office-interactions-layout-20261030 (lane OPEN): the office-overhaul storage splits office / company GLBs (`office-<id>` keys)
+import {OFFICE_MODEL_FILES} from '../../src/assets/officeAssets';
+import {COMPANY_MODEL_FILES} from '../../src/assets/companyAssets';
 import type {StationLayout} from '../../src/gen/station';
 
 const pub = (rel: string) => fileURLToPath(new URL('../../public/' + rel, import.meta.url));
@@ -28,7 +31,7 @@ export async function openableModels(): Promise<Record<string, GLTF>> {
   for (const spec of Object.values(OPENABLE_SPECS)) {
     const key = spec.model;
     if (!key || out[key]) continue;
-    const file = (MODEL_FILES as Record<string, {url: string}>)[key] ?? P7_FILES[key];
+    const file = (MODEL_FILES as Record<string, {url: string}>)[key] ?? P7_FILES[key] ?? OFFICE_MODEL_FILES[key] ?? COMPANY_MODEL_FILES[key];
     if (!file) throw new Error(`no model file for ${key}`);
     out[key] = await loadStripped(file.url);
   }

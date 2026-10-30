@@ -12,10 +12,17 @@
 //
 // The audit of the whole prop catalogue (covered kinds + genuine exceptions) is OPENABLE_AUDIT below and
 // reference/tasks/vertical-slice-iteration08-20261027/lanes/lane-I-audit.md; tests/openables.test.ts keeps both in step.
+//
+// Task office-interactions-layout-20261030 (lane OPEN): the office-overhaul storage opens too (user: "I encountered a large cabinet
+// I could not open. The items inside should be related to the type of container it is") — the lateral filing cabinet, server
+// cabinet / rack, vault safe, executive desk, lab bench, exam table, specimen fridge and archive box, split from their office GLBs
+// (`turn`: the files face -Z), contents from their own themed tables (items/lootTables.ts, CONTAINER_THEMED); every office kind is
+// classified in OFFICE_OPEN_AUDIT (role + class + reason). Checklist: docs/prop-affordances.md; tests/office-openables.test.ts.
 
 // Lane AMMO (knife-melee-20261030): ammo rows are GENERIC — the table's ammo weight split ~1/3 each over the calibers (the rows
 // live in items/lootTables.ts, built with items/calibers.ts genericAmmo).
-import {COMPANY_KIND_AUDIT} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS): audit rows
+// Task office-interactions-layout-20261030 (lane OPEN): the office kinds' audit rows live here now (OFFICE_OPEN_AUDIT, typed over OfficeKind).
+import type {OfficeKind} from '../gen/office/kinds';
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 
 /** Axis-aligned box [x0, y0, z0, x1, y1, z1] (holder-local, closed pose). */
@@ -97,6 +104,16 @@ export interface PartSpec {
   doubleSide?: boolean;
   /** This compartment holds the holder's own (pre-existing) surfaces too: the cooler's wire shelves behind its glass door. */
   holdsExposed?: boolean;
+  /**
+   * Task office-interactions-layout-20261030 (lane OPEN): what this compartment shows when opened without loot surfaces of its own
+   * (the server cabinet's racked servers behind its glass doors), instead of the holder's `contents` / "empty".
+   */
+  contents?: string;
+  /**
+   * Task office-interactions-layout-20261030 (lane OPEN): the axis the lined compartment opens along (world/openables.ts
+   * openingSlabs), when the region / cavity centres do not tell it (a door frame much taller than its lined bottom compartment).
+   */
+  openAxis?: 0 | 1 | 2;
 }
 
 /** Item weights. Task loot-tables-20261030 (lane LOOT): the loot types / tables live in items/lootTables.ts. */
@@ -147,6 +164,17 @@ export interface OpenableSpec {
   sound: {open: string; close: string};
   /** Light dynamic prop (physics/dynamicItems.ts): when shot loose it spills its finite lots as real pickups. */
   spill?: boolean;
+  /**
+   * Task office-interactions-layout-20261030 (lane OPEN): the model file faces -Z (the office / company GLBs): it is half-turned
+   * before the split (world/meshSplit.ts fittedMeshes `turn`), like world/officeProps.ts turns the instanced office models.
+   */
+  turn?: boolean;
+  /**
+   * Task office-interactions-layout-20261030 (lane OPEN): the seat pulled up to this work surface (an office / executive chair on
+   * castors, gen/office/companyDress.ts SEAT_AT `host`) rolls aside: it never limits this holder's drawers (world/openables.ts
+   * FitIndex.context).
+   */
+  seatAside?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -215,6 +243,46 @@ function drawer(name: string, x0: number, x1: number, y0: number, y1: number, zC
   };
 }
 
+/**
+ * Task office-interactions-layout-20261030 (lane OPEN): a drawer DERIVED from an office model — the front [x0, x1] x [y0, y1] in
+ * front of `zCut` slides out with an authored tray, a lined cavity behind it and items on the tray floor (like `drawer`). `face` -1:
+ * the drawer is on the prop's BACK (the executive desk's sitter side) — the same part mirrored in z, sliding along -Z. `tight`: a
+ * shallow drawer (12-15 cm fronts: lab bench / exam table / desk top rows) keeps 1 cm under its tray and 6 mm over the items, so a
+ * dressing (9.2 cm) still fits standing up.
+ */
+interface ModelDrawer { zCut: number; zFront: number; depth: number; dist: number; face?: 1 | -1; tight?: boolean; trayRole?: MatRole }
+function modelDrawer(name: string, x0: number, x1: number, y0: number, y1: number, o: ModelDrawer): PartSpec {
+  const h = y1 - y0, inX0 = x0 + 0.02, inX1 = x1 - 0.02, tz1 = o.zCut - 0.004, tz0 = tz1 - o.depth;
+  const under = o.tight ? 0.006 : 0.012, floor = y0 + under + 0.01, over = o.tight ? 0.006 : 0.02;
+  const p: PartSpec = {
+    name,
+    move: {type: 'slide', dir: [0, 0, 1], dist: o.dist, min: Math.min(o.dist, 0.16)},
+    region: [box(x0, y0, o.zCut, x1, y1, o.zFront + 0.15)],
+    cavity: box(x0 + 0.004, y0 + 0.004, tz0 - 0.01, x1 - 0.004, y1 - 0.004, o.zCut - 0.001),
+    tray: tray(o.trayRole ?? 'inner', inX0, y0 + under, tz0, inX1, y1 - Math.min(0.03, h * 0.25), tz1),
+    surfaces: [{y: floor, x0: inX0 + 0.02, x1: inX1 - 0.02, z0: tz0 + 0.03, z1: tz1 - 0.03, clear: Math.max(0.02, y1 - floor - over)}],
+  };
+  return o.face === -1 ? mirrorSlideZ(p) : p;
+}
+/** A +Z slide part mirrored onto the prop's back (z -> -z): regions, cavity, tray, surfaces and the travel direction. */
+function mirrorSlideZ(p: PartSpec): PartSpec {
+  const mb = (b: Box6): Box6 => [b[0], b[1], -b[5], b[3], b[4], -b[2]];
+  const mv = p.move as SlideMove;
+  return {
+    ...p,
+    move: {...mv, dir: [mv.dir[0], mv.dir[1], -mv.dir[2]]},
+    ...(p.region ? {region: p.region.map(mb)} : {}),
+    ...(p.cavity ? {cavity: mb(p.cavity)} : {}),
+    ...(p.tray ? {tray: p.tray.map(t => ({m: t.m, b: mb(t.b)}))} : {}),
+    surfaces: p.surfaces.map(s => ({...s, z0: -s.z1, z1: -s.z0})),
+  };
+}
+/** Which way a part opens toward (+1 the prop's front +Z, -1 its back): slides by their travel, side hinges by their pivot. */
+export function partFace(p: PartSpec): 1 | -1 {
+  if (p.move.type === 'slide') return p.move.dir[2] < 0 ? -1 : 1;
+  return p.move.axis === 'y' && p.move.pivot[2] < 0 ? -1 : 1;
+}
+
 /** Authored drawer front (steel panel + black pull) for the procedural desk pedestals. */
 function deskDrawer(name: string, x0: number, x1: number, y0: number, y1: number, zFace: number, depth: number): PartSpec {
   const cx = (x0 + x1) / 2;
@@ -257,6 +325,55 @@ function locker(name: string, cx: number): PartSpec {
       {y: 0.082, x0: cx - 0.16, x1: cx + 0.16, z0: -0.2, z1: 0.15, clear: 0.42},
       {y: 1.504, x0: cx - 0.16, x1: cx + 0.16, z0: -0.2, z1: 0.14, clear: 0.33},
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------
+// Task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage measured on the runtime GLBs in the PROP frame (the
+// file half-turned from its -Z front like world/officeProps.ts, fitted to the footprint): CPU ortho views + ray-cast depth / hit
+// profiles (reference/tasks/office-interactions-layout-20261030/tools/open-measure.mjs, 2026-10-30). Every one is a hollow shell
+// behind its fronts, so the derived fronts move and authored trays / liners / shelves make the compartments.
+
+/**
+ * B3 lateral filing cabinet (office-filing-cabinet.glb, 1.32 x 1.32 x 0.80): a 2 x 2 bank of drawer fronts (2 cm panels, faces z
+ * 0.253..0.277, pulls to z 0.397) in a 3.5 cm frame; see-through seams at x +-0.62 / +-0.017 and y 1.26, a centre rail y 0.69..0.72;
+ * the carcass is hollow (inner back z -0.358, floor 0.039, top 1.267, sides +-0.62), no dividers.
+ */
+const LATERAL_X: readonly (readonly [number, number])[] = [[-0.617, -0.017], [0.017, 0.622]];
+const LATERAL_Y: readonly (readonly [number, number])[] = [[0.04, 0.692], [0.722, 1.259]];
+const LATERAL = {zCut: 0.24, zFront: 0.277, depth: 0.55, dist: 0.45} as const;
+/**
+ * E01 executive desk (office-executive-desk.glb, 2.0 x 0.97 x 1.08): the drawers are on the SITTER side (prop -Z): single-faced
+ * fronts flush on hollow pedestals (faces z -0.49..-0.50, brass pulls proud): pedestals x +-(0.535..0.89) with a bottom drawer
+ * y 0.175..0.38 and an upper one 0.415..0.605, a top row y 0.655..0.77 (side drawers x +-(0.535..0.905), the centre drawer
+ * x -0.455..0.45). The two little organiser drawers on the desktop are left fused (8 cm fronts: nothing fits).
+ */
+const EXEC = {zCut: 0.48, zFront: 0.5, depth: 0.6, dist: 0.4, face: -1} as const;
+/**
+ * D09 lab bench (office-lab-bench.glb, 1.8 x 0.93 x 0.51): 5 x 3 drawers under the bench top (fronts z 0.212..0.226, pulls to
+ * 0.248; seams x -0.52/-0.51, -0.175/-0.165, 0.165/0.175, 0.505/0.52 and y 0.26, 0.385; plinth below 0.115, top slab 0.515);
+ * hollow columns between 2 cm dividers, inner back z -0.199.
+ */
+const LAB_X: readonly (readonly [number, number])[] = [[-0.856, -0.516], [-0.513, -0.17], [-0.168, 0.168], [0.17, 0.51], [0.514, 0.852]];
+const LAB_Y: readonly (readonly [number, number])[] = [[0.128, 0.262], [0.264, 0.387], [0.389, 0.512]];
+const LAB = {zCut: 0.2, zFront: 0.226, depth: 0.36, dist: 0.3, tight: true} as const;
+/**
+ * D23 exam table (office-exam-table.glb, 1.9 x 0.99 x 0.75): the cabinet under the head end (x 0.40..0.90, flat front z 0.204,
+ * pulls 0.228) is three drawers by their texture seams (inset frame x 0.412 / 0.878, grooves y 0.275 / 0.408, top band 0.54); hollow
+ * behind to z -0.367.
+ */
+const EXAM_Y: readonly (readonly [number, number])[] = [[0.125, 0.274], [0.277, 0.406], [0.41, 0.54]];
+const EXAM = {zCut: 0.185, zFront: 0.204, depth: 0.45, dist: 0.35, tight: true} as const;
+/** A tall cupboard bay of the E05 server cabinet run: two shelves inside its lined, hollow bay (x0..x1, floor 0.105, back -0.672). */
+function serverBay(name: string, x0: number, x1: number, hinge: -1 | 1): PartSpec {
+  const ix0 = x0 + 0.012, ix1 = x1 - 0.012;
+  return {
+    name,
+    move: {type: 'hinge', axis: 'y', pivot: [hinge < 0 ? -1.44 : 1.44, 0, 0.68], angle: (hinge < 0 ? -1 : 1) * 100 * P, min: 55 * P},
+    region: [hinge < 0 ? box(-1.462, 0.07, 0.6, -0.627, 1.957, 0.75) : box(0.637, 0.07, 0.6, 1.462, 1.957, 0.75)],
+    cavity: box(ix0, 0.108, -0.665, ix1, 1.955, 0.598), cavityRole: 'steelDark',
+    inner: [B('steelDark', ix0, 0.7, -0.665, ix1, 0.715, 0.56), B('steelDark', ix0, 1.3, -0.665, ix1, 1.315, 0.56)],
+    surfaces: [0.11, 0.717, 1.317].map((y, i) => ({y, x0: ix0 + 0.04, x1: ix1 - 0.04, z0: -0.6, z1: 0.5, clear: i === 2 ? 0.6 : 0.56})),
   };
 }
 
@@ -539,6 +656,146 @@ export const OPENABLE_SPECS = {
     loot: LOOT.toiletStall,
     sound: {open: 'kitchenette', close: 'kitchenette'},
   },
+  // --- office-overhaul storage (task office-interactions-layout-20261030, lane OPEN: "I encountered a large cabinet I could not
+  // open. The items inside should be related to the type of container it is") -------------------------------------------------------
+  /** B3 lateral filing cabinet: its four big drawer fronts slide out with their trays (the "large cabinet" the user could not open). */
+  officeFiling: {
+    label: 'filing cabinet', model: 'office-filing-cabinet', turn: true, body: 'model', group: 'container',
+    parts: LATERAL_Y.flatMap(([y0, y1], r) => LATERAL_X.map(([x0, x1], c) => modelDrawer(`${r ? 'top' : 'bottom'} ${c ? 'right' : 'left'} drawer`, x0, x1, y0, y1, LATERAL))),
+    loot: LOOT.officeFiling,
+    sound: {open: 'desk', close: 'desk'},
+  },
+  /** E01 executive desk: seven drawers on the sitter side (a centre drawer, two top drawers, two per pedestal). */
+  executiveDesk: {
+    label: 'executive desk', model: 'office-executive-desk', turn: true, body: 'model', group: 'container', seatAside: true,
+    parts: [
+      modelDrawer('centre drawer', -0.455, 0.45, 0.655, 0.77, {...EXEC, tight: true}),
+      ...([-1, 1] as const).flatMap(s => {
+        const [x0, x1] = s < 0 ? [-0.89, -0.535] : [0.535, 0.89];
+        return [
+          modelDrawer('top drawer', s < 0 ? -0.905 : 0.535, s < 0 ? -0.535 : 0.905, 0.655, 0.77, {...EXEC, tight: true}),
+          modelDrawer('drawer', x0, x1, 0.415, 0.605, EXEC),
+          modelDrawer('bottom drawer', x0, x1, 0.175, 0.38, EXEC),
+        ];
+      }),
+    ],
+    loot: LOOT.executiveDesk,
+    sound: {open: 'desk', close: 'desk'},
+  },
+  /** D09 lab bench: fifteen shallow drawers (lab consumables). */
+  labBench: {
+    label: 'lab bench', model: 'office-lab-bench', turn: true, body: 'model', group: 'container', seatAside: true,
+    parts: LAB_Y.flatMap(([y0, y1], r) => LAB_X.map(([x0, x1]) => modelDrawer(r === 0 ? 'bottom drawer' : r === 2 ? 'top drawer' : 'drawer', x0, x1, y0, y1, LAB))),
+    loot: LOOT.labBench,
+    sound: {open: 'desk', close: 'desk'},
+  },
+  /** D23 exam table: the three drawers of its head-end cabinet (clinic dressings). */
+  examTable: {
+    label: 'exam table', model: 'office-exam-table', turn: true, body: 'model', group: 'container',
+    parts: EXAM_Y.map(([y0, y1], i) => modelDrawer(i === 0 ? 'bottom drawer' : i === 2 ? 'top drawer' : 'drawer', 0.412, 0.878, y0, y1, EXAM)),
+    loot: LOOT.examTable,
+    sound: {open: 'desk', close: 'desk'},
+  },
+  /**
+   * D33 antique vault safe (office-vault-safe.glb, 1.31 x 1.5 x 1.35): the panelled door (x -0.506..0.499, y 0.29..1.335, front z
+   * 0.585..0.617, back 0.56; dial / handle proud) swings on its right-hand hinge knuckles (x ~0.5, z ~0.63); the body is a hollow
+   * single-faced shell (inner floor 0.134, back -0.677): a lined steel cavity with one shelf. The dial was left off the lock.
+   */
+  vaultSafe: {
+    label: 'vault safe', model: 'office-vault-safe', turn: true, body: 'model', group: 'container',
+    parts: [{
+      name: 'safe door',
+      move: {type: 'hinge', axis: 'y', pivot: [0.505, 0, 0.62], angle: 100 * P, min: 55 * P},
+      region: [box(-0.509, 0.287, 0.5, 0.503, 1.339, 0.75)],
+      cavity: box(-0.5, 0.29, -0.62, 0.5, 1.335, 0.555), cavityRole: 'steelDark',
+      inner: [B('steelDark', -0.5, 0.79, -0.62, 0.5, 0.808, 0.54)],
+      surfaces: [{y: 0.292, x0: -0.44, x1: 0.44, z0: -0.56, z1: 0.48, clear: 0.48}, {y: 0.81, x0: -0.44, x1: 0.44, z0: -0.56, z1: 0.48, clear: 0.5}],
+    }],
+    loot: LOOT.vaultSafe,
+    sound: {open: 'gunLocker', close: 'gunLocker'},
+  },
+  /**
+   * E05 server cabinet run (office-server-cabinet.glb, 2.92 x 2.0 x 1.38): two tall cupboard bays behind 7 cm solid doors (x
+   * -1.454..-0.624 / 0.651..1.454, hinge knuckles on the outer edges at y 0.3 / 1.75, front z 0.677) — EMPTY hollow bays (supply
+   * cupboards: two shelves each) — and a centre bay of two glass doors (frames only, x -0.62..0.005..0.634, y 0.105..1.96, meeting
+   * stiles with pulls at x -0.05..0.06) over two racks of servers (fronts z 0.58..0.6: equipment, nothing to take).
+   */
+  serverCabinet: {
+    label: 'server cabinet', model: 'office-server-cabinet', turn: true, body: 'model', group: 'container',
+    parts: [
+      serverBay('left cupboard', -1.425, -0.636, -1),
+      {
+        name: 'glass door', contents: 'racked servers, cold and dark — nothing to take',
+        move: {type: 'hinge', axis: 'y', pivot: [-0.62, 0, 0.675], angle: -100 * P, min: 55 * P},
+        region: [box(-0.622, 0.105, 0.62, 0.005, 1.957, 0.75)], surfaces: [],
+      },
+      {
+        name: 'glass door', contents: 'racked servers, cold and dark — nothing to take',
+        move: {type: 'hinge', axis: 'y', pivot: [0.634, 0, 0.675], angle: 100 * P, min: 55 * P},
+        region: [box(0.005, 0.105, 0.62, 0.636, 1.957, 0.75)], surfaces: [],
+      },
+      serverBay('right cupboard', 0.648, 1.425, 1),
+    ],
+    loot: LOOT.serverCabinet,
+    sound: {open: 'cabinetTall', close: 'cabinetTall'},
+  },
+  /**
+   * B10 server rack (office-server-rack.glb, 1.23 x 2.0 x 1.48): the shattered-glass front door (x -0.555..0.551, y 0.13..1.952,
+   * glass z 0.59..0.64, pull at the left x -0.49 proud to 0.724) swings on its right edge; the rack is an EMPTY hollow cabinet (inner
+   * x +-0.56, back -0.688, floor 0.109, top 1.957): three rack shelves are authored inside. Lots show through the broken pane.
+   */
+  serverRack: {
+    label: 'server rack', model: 'office-server-rack', turn: true, body: 'model', group: 'container',
+    parts: [{
+      name: 'rack door', glass: true,
+      move: {type: 'hinge', axis: 'y', pivot: [0.553, 0, 0.655], angle: 100 * P, min: 55 * P},
+      region: [box(-0.556, 0.131, 0.58, 0.552, 1.953, 0.8)],
+      cavity: box(-0.55, 0.112, -0.68, 0.55, 1.95, 0.575), cavityRole: 'steelDark',
+      inner: [0.55, 1.0, 1.45].map(y => B('steelDark', -0.55, y, -0.68, 0.55, y + 0.015, 0.55)),
+      surfaces: [0.114, 0.567, 1.017, 1.467].map((y, i) => ({y, x0: -0.5, x1: 0.5, z0: -0.62, z1: 0.48, clear: i === 3 ? 0.46 : 0.42})),
+    }],
+    loot: LOOT.serverRack,
+    sound: {open: 'cabinetTall', close: 'cabinetTall'},
+  },
+  /**
+   * D10 biohazard fridge (office-biohazard-fridge.glb, 0.9 x 2.0 x 0.77): the door is a frame (stiles x -0.421..-0.386 / 0.379..0.41,
+   * rails y 0.07..0.085 / 1.62..1.635, z 0.33..0.376; no pane) hinged on its right; shelves at y 0.25 / 0.43 / 0.71 / 0.99 / 1.34
+   * crammed with fused specimen vials. The bottom shelf and its vials are replaced by a clear compartment over the crisper lid
+   * (y 0.2..0.425) for the cold-chain dressings; the racks of vials above stay (decor).
+   */
+  biohazardFridge: {
+    label: 'specimen fridge', model: 'office-biohazard-fridge', turn: true, body: 'model', group: 'container',
+    parts: [{
+      name: 'fridge door', glass: true,
+      move: {type: 'hinge', axis: 'y', pivot: [0.412, 0, 0.37], angle: 100 * P, min: 55 * P},
+      region: [box(-0.425, 0.066, 0.32, -0.384, 1.64, 0.45), box(0.376, 0.066, 0.32, 0.415, 1.64, 0.45), box(-0.384, 1.605, 0.32, 0.376, 1.64, 0.45), box(-0.384, 0.066, 0.35, 0.376, 0.088, 0.45)],
+      cavity: box(-0.365, 0.2, -0.34, 0.365, 0.425, 0.315), cavityHidden: true, replaceInterior: true, openAxis: 2,
+      surfaces: [{y: 0.202, x0: -0.33, x1: 0.33, z0: -0.3, z1: 0.27, clear: 0.2}],
+    }],
+    loot: LOOT.biohazardFridge,
+    sound: {open: 'fridge', close: 'fridge'},
+  },
+  /**
+   * D34 archive box stack (office-archive-boxes.glb, 0.58 x 1.3 x 0.73): the front top box (x -0.2..0.066, z -0.035..0.304, y
+   * 1.09..1.3, hollow single-faced card) lifts its lid on the back edge; the crushed boxes under it stay shut (fused). Spills like a
+   * bin if physics knocks the stack loose.
+   */
+  archiveBoxes: {
+    label: 'archive box', model: 'office-archive-boxes', turn: true, body: 'model', group: 'container', spill: true,
+    parts: [{
+      name: 'archive box lid',
+      move: {type: 'hinge', axis: 'x', pivot: [0, 1.262, -0.04], angle: -100 * P, min: 45 * P},
+      region: [box(-0.215, 1.262, -0.045, 0.075, 1.32, 0.32)],
+      // inside its card walls (x -0.206..0.057, z -0.031..0.295 at the narrowest)
+      plate: box(-0.192, 1.263, -0.022, 0.048, 1.266, 0.286),
+      cavity: box(-0.198, 1.096, -0.027, 0.053, 1.258, 0.291),
+      inner: [B('paper', -0.19, 1.096, -0.022, 0.048, 1.17, 0.075)],
+      surfaces: [{y: 1.098, x0: -0.165, x1: 0.028, z0: 0.095, z1: 0.265, clear: 0.15}],
+    }],
+    loot: LOOT.archiveBoxes,
+    contents: 'old case files',
+    sound: {open: 'crate', close: 'crate'},
+  },
 } as const satisfies Record<string, OpenableSpec>;
 
 export type OpenableKind = keyof typeof OPENABLE_SPECS;
@@ -549,7 +806,9 @@ export function openableSpec(kind: string): OpenableSpec | null { return SPECS[k
 
 /** New container kinds (not loot holders before iteration 08): items/loot.ts ContainerKind additions. */
 export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingBox', 'staffLockers', 'filingCabinet', 'safe', 'chestFreezer', 'firstAidWallKit', 'fireExtinguisherCabinet', 'aedWallCabinet',
-  'toiletStall'] as const; // task office-overhaul-20261030 (lane INTERACT): washroom cubicles
+  'toiletStall', // task office-overhaul-20261030 (lane INTERACT): washroom cubicles
+  // task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage
+  'officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes'] as const;
 export type OpenableContainerKind = (typeof OPENABLE_CONTAINER_KINDS)[number];
 
 /**
@@ -609,7 +868,97 @@ export const OPENABLE_META = {
 // Audit: every prop kind of the catalogue (generated + authored + iteration-07) — what can be opened and why not.
 
 export type AuditClass = 'openable' | 'existing' | 'open' | 'exception' | 'none';
-export interface AuditEntry { kind: string; cls: AuditClass; how: string }
+/**
+ * Task office-interactions-layout-20261030 (lane OPEN): what a prop IS, for the "storage opens" rule (root CLAUDE.md "Props — core
+ * design rules"): 'storage' (reads as something you could open: cabinets, drawers, safes, fridges, lidded boxes), 'surface' (an open
+ * top / shelf / counter), 'equipment' (machines, appliances, screens) or 'decor' (furniture and dressing with nothing to open).
+ */
+export type PropRole = 'storage' | 'surface' | 'equipment' | 'decor';
+export interface AuditEntry { kind: string; cls: AuditClass; how: string; role?: PropRole }
+
+/**
+ * Task office-interactions-layout-20261030 (lane OPEN): EVERY office kind (gen/office/kinds.ts OFFICE_KINDS: the iteration-16 office
+ * kinds + the office-overhaul company / supporting kinds) classified by role and openables class with the honest reason, from the
+ * runtime models (CPU ortho views + ray-cast hit profiles, reference/tasks/office-interactions-layout-20261030/tools/open-measure.mjs).
+ * A Record over OfficeKind: a new office kind does not compile until it is classified here. 'openable' rows must be OPENABLE_SPECS
+ * kinds (tests/office-openables.test.ts).
+ */
+const OFFICE_OPEN_AUDIT: Readonly<Record<OfficeKind, {role: PropRole; cls: AuditClass; how: string}>> = {
+  // --- storage that opens now (OPENABLE_SPECS above) ---
+  officeFiling: {role: 'storage', cls: 'openable', how: 'lateral filing cabinet: 4 derived drawers'},
+  serverRack: {role: 'storage', cls: 'openable', how: 'empty rack cabinet: derived shattered-glass door, 3 authored rack shelves'},
+  serverCabinet: {role: 'storage', cls: 'openable', how: 'three-bay run: 2 derived cupboard doors (2 shelves each) + 2 derived glass doors over racked servers (fixture contents)'},
+  vaultSafe: {role: 'storage', cls: 'openable', how: 'antique vault safe: derived door (the dial was left off the lock), lined steel cavity + shelf'},
+  executiveDesk: {role: 'storage', cls: 'openable', how: '7 derived drawers on the sitter side (the 2 desktop organiser drawers stay fused: 8 cm fronts, nothing fits)'},
+  labBench: {role: 'storage', cls: 'openable', how: '15 derived shallow drawers'},
+  examTable: {role: 'storage', cls: 'openable', how: '3 derived drawers in the head-end cabinet'},
+  biohazardFridge: {role: 'storage', cls: 'openable', how: 'derived door frame; a cleared bottom compartment (its shelf of fused vials replaced) holds the loot'},
+  archiveBoxes: {role: 'storage', cls: 'openable', how: 'the top box lifts its derived lid (the crushed boxes under it stay shut)'},
+  // --- storage-looking, deliberately closed (honest reasons) ---
+  kegerator: {role: 'storage', cls: 'exception', how: 'its front is a tap panel with no door; the model\'s keg door is on its back, which always stands against a wall (corner placement); kegs / beer are not items'},
+  bakeryCase: {role: 'storage', cls: 'exception', how: 'glazed display case: its staff-side glass panes face the wall it always stands against (companies.ts bakery: ROW / W against a wall), the curved customer glass is fixed, and every tray is packed with modelled stale bread (decor, not food items) — no reachable free compartment'},
+  globeBar: {role: 'storage', cls: 'exception', how: 'globe lid modelled permanently open (hinge fused); its decanters and glasses are decor (spirits are not items)'},
+  parcelPallet: {role: 'storage', cls: 'exception', how: 'sealed, taped shipping cartons stacked on a pallet (like cartonStack): not searchable'},
+  gumballJar: {role: 'storage', cls: 'exception', how: 'lidded glass jar of gumballs: the lid is fused and gum is not an item'},
+  gumballMachine: {role: 'equipment', cls: 'exception', how: 'coin flap dispenses gum only (not an item); one fused mesh'},
+  arcadeCabinet: {role: 'equipment', cls: 'exception', how: 'coin door: a locked service panel of a machine; one fused mesh'},
+  jukebox: {role: 'equipment', cls: 'exception', how: 'service panel locked, records only; one fused mesh'},
+  officePhotocopier: {role: 'equipment', cls: 'exception', how: 'copier paper trays: appliance holding paper only (not an item)'},
+  coffeeRoaster: {role: 'equipment', cls: 'exception', how: 'drum roaster hatch: machinery holding old beans only'},
+  cracUnit: {role: 'equipment', cls: 'exception', how: 'CRAC unit service panels: machinery, locked'},
+  roofHvac: {role: 'equipment', cls: 'exception', how: 'rooftop HVAC service panels: machinery, screwed shut'},
+  // --- nothing to open ---
+  receptionDesk: {role: 'surface', cls: 'none', how: 'solid counter block: closed panels front AND back (both sides measured), no drawers or doors modelled'},
+  cctvConsole: {role: 'equipment', cls: 'none', how: 'monitor wall on a flat board: no drawers modelled'},
+  tradingDesk: {role: 'surface', cls: 'none', how: 'open desk on legs with a PC tower: no drawers'},
+  newsDesk: {role: 'surface', cls: 'none', how: 'anchor desk with a closed front: no drawers modelled'},
+  consoleStation: {role: 'surface', cls: 'none', how: 'open media stand (console / pads on open shelves): no doors or drawers'},
+  conferenceTable: {role: 'surface', cls: 'none', how: 'table top on legs: no drawers'},
+  draftingTable: {role: 'surface', cls: 'none', how: 'tilting drafting board: no drawers modelled'},
+  officeShelf: {role: 'surface', cls: 'none', how: 'open steel shelving: no doors; its books are decor'},
+  lawBookcase: {role: 'surface', cls: 'none', how: 'open bookcase without doors: its books are decor'},
+  sneakerWall: {role: 'surface', cls: 'none', how: 'open display wall: the shoes are decor'},
+  clothingRack: {role: 'surface', cls: 'none', how: 'open garment rail: the clothes are decor'},
+  officeWaterCooler: {role: 'equipment', cls: 'none', how: 'bottle cooler in an open frame: the jug is part of the appliance, no cupboard door'},
+  officeMonitor: {role: 'equipment', cls: 'none', how: 'monitor: no door, lid or drawer'},
+  espressoMachine: {role: 'equipment', cls: 'none', how: 'espresso machine: group heads / wands, no door or drawer'},
+  doughMixer: {role: 'equipment', cls: 'none', how: 'open-bowl mixer: no door, lid or drawer'},
+  mixingConsole: {role: 'equipment', cls: 'none', how: 'mixing desk and monitors: no drawers'},
+  tvCamera: {role: 'equipment', cls: 'none', how: 'studio camera on a pedestal'},
+  treadmill: {role: 'equipment', cls: 'none', how: 'treadmill: nothing to open'},
+  vitalsMonitor: {role: 'equipment', cls: 'none', how: 'vitals monitor on a stand'},
+  metalDetector: {role: 'equipment', cls: 'none', how: 'walk-through detector arch'},
+  securityTurnstile: {role: 'equipment', cls: 'none', how: 'turnstile gate: nothing to open'},
+  satelliteDish: {role: 'equipment', cls: 'none', how: 'roof satellite dish: nothing to open'},
+  waterTower: {role: 'equipment', cls: 'none', how: 'roof water tank on its stand: no hatch within reach'},
+  telescope: {role: 'equipment', cls: 'none', how: 'telescope on a tripod'},
+  foosballTable: {role: 'equipment', cls: 'none', how: 'game table: no drawers'},
+  pingPongTable: {role: 'equipment', cls: 'none', how: 'game table: no drawers'},
+  shipModel: {role: 'decor', cls: 'none', how: 'display model delivered without a cabinet: it stands on an openable cabinetLow sideboard'},
+  aquarium: {role: 'decor', cls: 'none', how: 'fish tank delivered without a cabinet: it stands on an openable cabinetLow sideboard'},
+  officeChair: {role: 'decor', cls: 'none', how: 'swivel chair: nothing to open'},
+  executiveChair: {role: 'decor', cls: 'none', how: 'swivel chair: nothing to open'},
+  chesterfieldSofa: {role: 'decor', cls: 'none', how: 'sofa: nothing to open'},
+  lobbySofa: {role: 'decor', cls: 'none', how: 'sofa: nothing to open'},
+  loungeArmchair: {role: 'decor', cls: 'none', how: 'armchair: nothing to open'},
+  beanBag: {role: 'decor', cls: 'none', how: 'bean bag: nothing to open'},
+  napPod: {role: 'decor', cls: 'none', how: 'sleep pod: an open shell with a mattress'},
+  deadPlant: {role: 'decor', cls: 'none', how: 'potted plant: nothing to open'},
+  pottedPlantSmall: {role: 'decor', cls: 'none', how: 'potted plant: nothing to open'},
+  planterTree: {role: 'decor', cls: 'none', how: 'planter: nothing to open'},
+  officeWhiteboard: {role: 'decor', cls: 'none', how: 'whiteboard on a stand'},
+  cubiclePartition: {role: 'decor', cls: 'none', how: 'fabric partition panel'},
+  logoWall: {role: 'decor', cls: 'none', how: 'reception logo wall (geometry)'},
+  justiceStatue: {role: 'decor', cls: 'none', how: 'statue: nothing to open'},
+  bullStatue: {role: 'decor', cls: 'none', how: 'statue: nothing to open'},
+  architectModel: {role: 'decor', cls: 'none', how: 'architecture model on a plinth'},
+  satelliteModel: {role: 'decor', cls: 'none', how: 'satellite model on a plinth'},
+  giantTeddy: {role: 'decor', cls: 'none', how: 'plush toy: nothing to open'},
+  rockingHorse: {role: 'decor', cls: 'none', how: 'rocking horse: nothing to open'},
+  dressForm: {role: 'decor', cls: 'none', how: 'dress form: nothing to open'},
+  catTree: {role: 'decor', cls: 'none', how: 'carpeted cat tree: nothing to open'},
+};
+const OFFICE_AUDIT_KINDS: ReadonlySet<string> = new Set(Object.keys(OFFICE_OPEN_AUDIT));
 
 /**
  * Covered: 'openable' (this lane), 'existing' (earlier holder with doors / lid / pry: cabinets, crates, vending), 'open' (open
@@ -617,8 +966,8 @@ export interface AuditEntry { kind: string; cls: AuditClass; how: string }
  * lid or drawer that is deliberately NOT openable, with the honest reason) and 'none' (no door, lid or drawer at all).
  */
 export const OPENABLE_AUDIT: readonly AuditEntry[] = [
-  // openable (iteration 08, this lane)
-  ...OPENABLE_KINDS.map(k => ({kind: k, cls: 'openable' as const, how: describe(k)})),
+  // openable (iteration 08, this lane; office kinds: OFFICE_OPEN_AUDIT below)
+  ...OPENABLE_KINDS.filter(k => !OFFICE_AUDIT_KINDS.has(k)).map(k => ({kind: k, cls: 'openable' as const, how: describe(k)})),
   // existing holders with moving parts / always-open fronts
   {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25r1.glb (Meshy T2.5 + local flat side / top repair, task model-touchups-20261030; door region untouched, split unchanged), shelving insert'},
   {kind: 'cabinetLow', cls: 'existing', how: 'two doors derived from cabinet-low-t25.glb (Meshy T2.5; door split re-measured)'},
@@ -668,15 +1017,9 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
     'disconnectSwitch', 'dryTransformer', 'benchGrinderStand', 'toolPegboard', 'partsBinRack', 'airCompressor', 'gasCylinderCart', 'tripodWorkLight',
     'portableGenerator', 'drumFan', 'waterPumpSkid', 'waterHeaterTank', 'pipeValveManifold', 'fireExtinguisher']
     .map(k => ({kind: k, cls: 'none' as const, how: 'no door, lid or drawer (fixture / equipment / furniture / open frame)'})),
-  // Iteration 16 (WORLD-GEN office kinds, gen/office/kinds.ts): one fused Meshy mesh each, not loot holders
-  {kind: 'officeFiling', cls: 'exception', how: 'lateral filing cabinet: one fused mesh, no separable drawers (the openable filingCabinet is the searchable one)'},
-  {kind: 'receptionDesk', cls: 'exception', how: 'reception counter: one fused mesh with no separable drawers; decor only'},
-  {kind: 'serverRack', cls: 'exception', how: 'server rack front door: one fused mesh; equipment, nothing to search'},
-  {kind: 'officePhotocopier', cls: 'exception', how: 'copier paper trays: appliance, one fused mesh'},
-  ...['officeChair', 'officeMonitor', 'officeWaterCooler', 'conferenceTable', 'deadPlant', 'officeWhiteboard', 'officeShelf', 'cubiclePartition']
-    .map(k => ({kind: k, cls: 'none' as const, how: 'no door, lid or drawer (office furniture / equipment / open shelving)'})),
-  // Task office-overhaul-20261030 (lane TENANTS): company / supporting office kinds (gen/office/companyKinds.ts), none a holder.
-  ...COMPANY_KIND_AUDIT,
+  // Iteration 16 office kinds + task office-overhaul-20261030 company / supporting kinds (gen/office/kinds.ts OFFICE_KINDS): task
+  // office-interactions-layout-20261030 (lane OPEN) classified each one (role, class, reason); the openable ones add their mechanism.
+  ...Object.entries(OFFICE_OPEN_AUDIT).map(([kind, e]) => ({kind, cls: e.cls, role: e.role, how: e.cls === 'openable' && isOpenableKind(kind) ? `${e.how}: ${describe(kind)}` : e.how})),
 ];
 
 function describe(k: OpenableKind): string {

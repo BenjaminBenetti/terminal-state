@@ -10,9 +10,14 @@
 //   y 0 ┌────────────────────── N band (rooms / open plan, nB rows) ───────────────────────┐ windows
 //       ├────────────────────── N corridor (K rows, full width: elevator lobby) ──────────────┤
 //       │ W end │ W  │ CORE  N strip: [scissor stairwell 26 x 9] [shaft 7 x 6]   (or mirrored) │ E  │ E end │
-//       │ zone  │corr│       S strip: washrooms · janitor · supply · electrical riser        │corr│ zone  │
+//       │ zone  │corr│       S strip: washrooms + support rooms (per-floor program)          │corr│ zone  │
 //       ├────────────────────── S corridor (K rows, full width) ──────────────────────────────┤
 //  y TD └────────────────────── S band (rooms / open plan, sB rows) ───────────────────────┘
+//
+// Task office-interactions-layout-20261030 (lane LAYOUT): that diagram is the RING plan. Office floors 2..8 each carve their own
+// seeded plan (TowerFrame.plans, gen/office/floorplan.ts): the side corridors / S corridor / end zones / S band depth / support
+// rooms change per floor (ring, one-sided loop, open work commons); the N corridor, the core box, the stairwell, the shaft and
+// the landing strip above are identical on every storey.
 //
 // SCISSOR STAIRWELL (design.md "Stairs"): one well with two parallel lanes (4 cells = 2 m each) and a solid 1-cell divider;
 // the runs alternate lanes (lobby→2 lane A, 2→3 lane B, 3→4 lane A …) so a storey grid never carries two runs in the same
@@ -26,6 +31,7 @@
 import {Rng, hashString} from '../../core/rng';
 import {CELL} from '../grid';
 import {STAIR, stairRunCells, type StairSpec} from '../traversal';
+import {floorPlans, type FloorPlan} from './floorplan'; // Task office-interactions-layout-20261030 (lane LAYOUT)
 
 export const OFFICE_TOP_FLOOR = 8;
 export const OFFICE_FLOORS: readonly number[] = Array.from({length: OFFICE_TOP_FLOOR}, (_, i) => i + 1);
@@ -52,7 +58,11 @@ export const SCISSOR_STAIR: StairSpec = {...STAIR, riser: FLOOR_HEIGHT / 24};
 /** Stairwell geometry (cells): lane width, divider, landing depth along the run axis; run length per storey. */
 export const WELL = {lane: 4, divider: 1, landing: 4, run: stairRunCells(FLOOR_HEIGHT, SCISSOR_STAIR)};
 
-export type CoreUnitKind = 'wc-m' | 'wc-w' | 'janitor' | 'supply' | 'riser';
+/**
+ * Core south-strip rooms. Task office-interactions-layout-20261030 (lane LAYOUT): + the support rooms of the per-floor plans
+ * (gen/office/floorplan.ts): utility room, print room, store room, kitchenette, IT closet, lockers / showers, roof access (floor 8).
+ */
+export type CoreUnitKind = 'wc-m' | 'wc-w' | 'janitor' | 'supply' | 'riser' | 'utility' | 'print' | 'storage' | 'kitchenette' | 'it' | 'lockers' | 'roof';
 export interface CoreUnit { kind: CoreUnitKind; x0: number; x1: number }
 export interface CellRect { x: number; y: number; w: number; h: number }
 
@@ -82,22 +92,32 @@ export interface TowerFrame {
   door: {x: number; w: number};
   /** South strip of the core (rows [sy0, cy1)): washrooms and closets, doors onto the S corridor. */
   sy0: number;
+  /** The LOBBY's south-strip units (office floors 2..8 use their plan's units). */
   units: CoreUnit[];
   floorHeight: number;
+  /**
+   * Task office-interactions-layout-20261030 (lane LAYOUT): the seeded floor plan of every office floor 2..8 (index = floor):
+   * corridor topology, core support rooms, end-zone splits (gen/office/floorplan.ts). The core / well / shaft never move.
+   */
+  plans: FloorPlan[];
 }
 
 const TOWER_NAMES = ['Harlan Mutual Tower', 'Calder Trust Building', 'Meridian Plaza', 'Ostend Life Tower', 'Kessler & Pruitt Building',
   'Northgate Commerce Centre', 'Bramley House', 'Union Assurance Tower', 'Halsey Financial Centre', 'Garnet One'];
 
-/** Core depth (rows): N strip (well 9 rows) + wall + S strip (6 rows). */
-const CORE_ROWS = 16;
+/**
+ * Core depth (rows): N strip (well 9 rows) + wall + S strip. Task office-interactions-layout-20261030 (lane LAYOUT): the S strip is 7
+ * rows (3.5 m, was 6 = 3 m) so every washroom / support room keeps a 1.5 m turning space in front of its 1.6 m toilet stalls /
+ * shelving (item 5: "the small rooms feel just too small"); the S band range is one row shallower (14-15) to keep the footprint.
+ */
+const CORE_ROWS = 17;
 
 /** The tower frame of a level seed. */
 export function towerFrame(levelSeed: number): TowerFrame {
   const rng = new Rng(hashString('office-tower-frame-v2', levelSeed >>> 0));
   const name = rng.pick(TOWER_NAMES);
   const K = 4;
-  const nB = rng.int(14, 16), sB = rng.int(14, 16);
+  const nB = rng.int(14, 16), sB = rng.int(14, 15); // (lane LAYOUT: sB 14-15 with the deeper core strip: TD stays <= 60 cells)
   const eW = rng.int(15, 19), eE = rng.int(15, 19);
   const wellH = 2 * WELL.lane + WELL.divider, wellW = 2 * WELL.landing + WELL.run;
   const cab = {w: 5, h: 4};
@@ -115,12 +135,13 @@ export function towerFrame(levelSeed: number): TowerFrame {
   const laneA = {y: aNorth ? cy0 : cy0 + WELL.lane + WELL.divider, h: WELL.lane};
   const laneB = {y: aNorth ? cy0 + WELL.lane + WELL.divider : cy0, h: WELL.lane};
   const oddEnd: 'W' | 'E' = rng.chance(0.5) ? 'W' : 'E';
-  // S strip: washrooms, janitor / supply closets, electrical riser (seeded order), 1-cell walls between.
-  const W: Record<CoreUnitKind, number> = {'wc-m': 8, 'wc-w': 8, janitor: 4, supply: 4, riser: 4};
+  // S strip (the lobby's): washrooms, a janitor closet, the electrical riser (seeded order), 1-cell walls between. Lane LAYOUT: two
+  // closets of 3 / 3.5 m instead of three of 2 m (every room >= 2.5 m clear: ROOM_MIN_CELLS); office floors: their plan's units.
+  const W: Partial<Record<CoreUnitKind, number>> = {'wc-m': 8, 'wc-w': 8, janitor: 6, riser: 7};
   const order = rng.shuffle(Object.keys(W) as CoreUnitKind[]);
   const units: CoreUnit[] = [];
   let x = cx0;
-  for (const kind of order) { units.push({kind, x0: x, x1: x + W[kind]}); x += W[kind] + 1; }
+  for (const kind of order) { units.push({kind, x0: x, x1: x + W[kind]!}); x += W[kind]! + 1; }
   // Any slack (none with these widths) goes to the last unit.
   units[units.length - 1].x1 = cx1;
   return {
@@ -129,6 +150,8 @@ export function towerFrame(levelSeed: number): TowerFrame {
     cab: cabR, shaft, door: {x: cabR.x + 1, w: 3},
     sy0: cy0 + wellH + 1, units,
     floorHeight: FLOOR_HEIGHT,
+    // (own seeded stream: the frame's dimensions above are unchanged by the plans)
+    plans: floorPlans(levelSeed, {K, sB, cx0, cx1, top: OFFICE_TOP_FLOOR, eW, eE, rows: CORE_ROWS}),
   };
 }
 

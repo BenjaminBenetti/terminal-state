@@ -27,7 +27,8 @@ import type {Area, Door, LightPlacement, Side, SignPlacement, StationLayout} fro
 import {CEIL, MARGIN, type TowerFrame} from './frame';
 import type {CarvedTower, OfficeAreaMeta} from './tower';
 import {companyExtras, companyPost, companyPre, companySignStyle, companyOf, roomPlate} from './companyDress';
-import type {Step} from './companies';
+import {freeRows, island, refurnish, scatter} from './companyDress'; // Task office-interactions-layout-20261030 (lane LAYOUT): large-room fill
+import {BASE_ROOMS, type RoomKey, type Step} from './companies';
 
 export interface OfficeDress {
   layout: StationLayout;
@@ -313,6 +314,8 @@ export function postDress(d: OfficeDress): void {
   d.held = [];
   const ctx = makePlaceCtx(layout, d.rng.fork('office-post'), d.level);
   const lv = d.level ? {level: d.level} : {};
+  // Lane LAYOUT (item 5): large rooms the room rules left nearly empty get purposeful furniture (before chairs / monitors below).
+  fillLargeRooms(d, makePlaceCtx(layout, d.rng.fork('office-fill'), d.level));
   // --- Desk decor: chair pulled up, a monitor on top (host decor, absolute heights: dress() already lifted the storey). ---
   const n0 = layout.props.length;
   for (let pi = 0; pi < n0; pi++) {
@@ -361,6 +364,175 @@ export function postDress(d: OfficeDress): void {
   signage(d, ctx);
   companyPost(d, ctx);
   restoreRamps(g);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Task office-interactions-layout-20261030 (lane LAYOUT, item 5): "the big rooms feel too empty"
+
+/** Rooms at least this big (m2) are checked; below FILL_BELOW furnished share they are filled toward FILL_TARGET. */
+export const FILL_MIN_M2 = 40;
+export const FILL_BELOW = 0.11;
+export const FILL_TARGET = 0.14;
+/** Roles whose large rooms get the fill (receptions, executive suites, server rooms, the collapsed office are dressed on purpose). */
+const FILL_ROLES = new Set<OfficeAreaMeta['role']>(['open', 'bay', 'storage', 'copy', 'break', 'meeting', 'amenity', 'collapsed']);
+
+/**
+ * Furnished floor share of an area: the footprint of its free-standing props (not host decor such as chairs / monitors, not wall
+ * mounts), clipped to the area, over its floor area. QA / tests measure "emptiness" with it.
+ */
+export function furnishedShare(layout: StationLayout, a: Area): number {
+  let s = 0;
+  const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
+  for (const p of layout.props) {
+    if (p.area !== a.id || p.host !== undefined || p.mounted) continue;
+    const x0 = Math.max(p.x - p.hx, ax0), x1 = Math.min(p.x + p.hx, ax1), z0 = Math.max(p.z - p.hz, az0), z1 = Math.min(p.z + p.hz, az1);
+    if (x1 > x0 && z1 > z0) s += (x1 - x0) * (z1 - z0);
+  }
+  return s / ((ax1 - ax0) * (az1 - az0));
+}
+
+/**
+ * Large rooms the purpose / company rules left nearly empty get PURPOSEFUL furniture through the placement primitive (door zones,
+ * access strips, connectivity): store rooms aisles of shelving, print rooms a collating table / copier / carton stock / board,
+ * break rooms a second table and seating, meeting rooms a credenza / whiteboard, open-plan areas work clusters (back-to-back desk
+ * pairs, a print point, a whiteboard, a work table), company rooms a second pass of their own recipe's rows. Mostly NON-holder
+ * pieces; the holders among them roll the lean 'office-fill' table — the furnishing never inflates the level's loot. Never in front
+ * of the windows (the facade strip is held again) or in front of an existing piece's access strip. Runs at the start of postDress:
+ * placements are lifted to the storey.
+ */
+function fillLargeRooms(d: OfficeDress, ctx: PlaceCtx): void {
+  const {layout} = d;
+  const g = officeGrid(d);
+  const hold = perimeterStrip(d);
+  for (const i of hold) g.blocked[i] = 1;
+  // Access strips (0.7 m) in front of what already stands on this storey: the fill never blocks a drawer / door / counter front.
+  for (const p of layout.props) {
+    if ((p.level ?? 0) !== d.level || p.host !== undefined || p.mounted) continue;
+    const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot)), hd = fx ? p.hx : p.hz, hw = fx ? p.hz : p.hx;
+    const [x0, y0, x1, y1] = cellsOfBox(p.x + fx * (hd + 0.35), p.z + fz * (hd + 0.35), fx ? 0.35 : hw * 0.8, fz ? 0.35 : hw * 0.8);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (g.inBounds(cx, cy)) ctx.keep[g.idx(cx, cy)] = 1;
+  }
+  const n0 = layout.props.length;
+  try {
+    for (const [id, m] of d.tower.meta) {
+      const a = layout.areas[id];
+      if (!a || !FILL_ROLES.has(m.role) || a.w * a.h * CELL * CELL < FILL_MIN_M2 || furnishedShare(layout, a) >= FILL_BELOW) continue;
+      const steps = fillSteps(d, ctx, a, m, hold);
+      for (let round = 0; round < 3 && furnishedShare(layout, a) < FILL_TARGET; round++) {
+        let any = false;
+        for (const step of steps) {
+          if (furnishedShare(layout, a) >= FILL_TARGET) break;
+          if (step()) any = true;
+        }
+        if (!any) break;
+      }
+    }
+  } finally {
+    // (cells a fill piece now stands on stay blocked: the window desks may stand in the strip)
+    const under = new Set<number>();
+    for (let k = n0; k < layout.props.length; k++) {
+      const p = layout.props[k];
+      if (p.host !== undefined || p.mounted) continue;
+      const [x0, y0, x1, y1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) under.add(g.idx(cx, cy));
+    }
+    for (const i of hold) if (!under.has(i)) g.blocked[i] = 0;
+  }
+  // Lifted to the storey; holders among them roll the lean 'office-fill' table (gen/purposes.ts): furnishing never inflates the loot.
+  for (let i = n0; i < layout.props.length; i++) {
+    const p = layout.props[i];
+    if (p.host !== undefined) continue;
+    p.y += d.base;
+    p.purpose = 'office-fill';
+  }
+}
+
+/** The fill recipe of a room (each step places one group; true when something was placed). `hold` = the held facade strip. */
+function fillSteps(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeAreaMeta, hold: readonly number[]): (() => boolean)[] {
+  const facade = new Set(m.facade);
+  const inner = (['N', 'S', 'E', 'W'] as Side[]).filter(s => !facade.has(s));
+  // (wall pieces once per room — one print point / filing bank / credenza — the repeating steps are the work clusters / islands)
+  const wall = (kind: PropKind, front = 0.6) => {
+    let done = false;
+    return () => !done && (done = !!placeAgainstWall(ctx, a, kind, {sides: inner.length ? inner : undefined, front, tries: 10}));
+  };
+  const isle = (kind: PropKind, ring = 0.8) => () => !!island(ctx, a, kind, ring);
+  const company = d.tower.tenant && m.program && !BASE_ROOMS.has(m.program as RoomKey) && m.program !== 'cubicles' && m.program !== 'pods' && m.program !== 'newsroom';
+  const own: (() => boolean)[] = company ? [() => refurnish(d, ctx, a, m) > 0] : [];
+  const m2 = a.w * a.h * CELL * CELL;
+  // A shallow open bay along the glass (<= 5 m deep): a bench of desks facing the windows (desks stay below the sill).
+  const shallow = Math.min(a.w, a.h) <= 10 && !m.commons;
+  const windowDesks = () => besideWindows(d, a, hold, () => {
+    let n = 0;
+    for (const side of m.facade) {
+      const [lo, hi] = wallRange(a, side);
+      if (hi - lo < 4) continue;
+      n += rowAlongWall(ctx, a, side, 'desk', {from: lo + 0.6, to: hi - 0.6, cluster: 2, gap: 1.2, front: 1.0, variant: () => ctx.rng.int(0, 2)}).length;
+    }
+    return n > 0;
+  });
+  switch (m.role) {
+    case 'storage': return [...own, () => freeRows(ctx, a, 'shelf', ctx.rng.int(3, 6), true, 1.3).length > 0, wall('cartonStack', 0.5), wall('cabinetTall', 0.7)];
+    case 'copy': return [...own, isle('table', 0.9), wall('officePhotocopier', 0.9), wall('cartonStack', 0.5), wall('officeWhiteboard', 0.6)];
+    case 'break': return [...own, isle('table', 0.9), wall('couch', 0.7), wall('vending', 1.0), wall('officeWaterCooler', 0.6), isle('table', 0.9)];
+    // (a second table keeps 2 m clear round it: both tables' chairs pull out into the gap)
+    case 'meeting': return [...own, ...(m2 >= 50 || !ctx.layout.props.some(p => p.area === a.id && p.kind === 'conferenceTable') ? [isle('conferenceTable', 2.0)] : []),
+      wall('cabinetLow', 0.7), wall('officeWhiteboard', 0.6), wall('officeShelf', 0.6)];
+    case 'open': case 'bay': return [...own, ...(shallow ? [windowDesks] : []), () => deskPair(ctx, a), wall('officePhotocopier', 0.9), wall('officeWhiteboard', 0.6),
+      () => deskPair(ctx, a), isle('table', 0.9)];
+    // The collapsed office: more of its fallen furniture (crates hold finite loot), heaped, never in the door zones.
+    case 'collapsed': return [...(shallow ? [windowDesks] : []), ...(['crate', 'cartonStack', 'officeFiling', 'desk', 'crate', 'cartonStack', 'desk', 'officeFiling'] as PropKind[]).map(kind => () => !!scatter(ctx, a, kind, 0.5))];
+    default: return [...own, wall('cabinetLow', 0.7), wall('shelf', 0.8), isle('table', 0.9)];
+  }
+}
+
+/** Runs a fill placement with this room's facade strip released (low pieces by the glass); the cells left free are held again. */
+function besideWindows(d: OfficeDress, a: Area, hold: readonly number[], fn: () => boolean): boolean {
+  const g = officeGrid(d);
+  const mine = hold.filter(i => g.area[i] === a.id);
+  for (const i of mine) g.blocked[i] = 0;
+  const n0 = d.layout.props.length;
+  const ok = fn();
+  const under = new Set<number>();
+  for (let k = n0; k < d.layout.props.length; k++) {
+    const p = d.layout.props[k];
+    const [x0, y0, x1, y1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) under.add(g.idx(cx, cy));
+  }
+  for (const i of mine) if (!under.has(i)) g.blocked[i] = 1;
+  return ok;
+}
+
+/** A work cluster: two desks back to back (a 1.5 m pod), with a walkway ring; chairs / monitors come with the desk decor. */
+function deskPair(ctx: PlaceCtx, a: Area): boolean {
+  const alongX = a.w >= a.h, def = PROP_DEFS.desk;
+  for (let t = 0; t < 24; t++) {
+    // (cell-aligned: the two desks one cell either side of a cell line, 0.25 m apart, never sharing a grid cell)
+    const cx = Math.round(ctx.rng.range(a.x + 4, a.x + a.w - 4)), cy = Math.round(ctx.rng.range(a.y + 4, a.y + a.h - 4));
+    const x = alongX ? cx * CELL + def.w / 2 : cx * CELL, z = alongX ? cy * CELL : cy * CELL + def.w / 2;
+    const off = CELL;
+    const [ax, az, bx, bz] = alongX ? [x, z - off, x, z + off] : [x - off, z, x + off, z];
+    const ra = alongX ? Math.PI : -Math.PI / 2, rb = alongX ? 0 : Math.PI / 2;
+    // Open floor round the whole pod: 0.9 m at its ends, 1.6 m on both long (sitter) sides where the chairs pull out.
+    const hx = alongX ? def.w / 2 + 0.9 : off + def.d / 2 + 1.6, hz = alongX ? off + def.d / 2 + 1.6 : def.w / 2 + 0.9;
+    const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
+    let open = true;
+    for (let cy = y0; cy <= y1 && open; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const i = ctx.g.idx(cx, cy);
+      if (!ctx.g.walkable(cx, cy) || ctx.g.area[i] !== a.id || ctx.keep[i] || ctx.doorCell[i] || ctx.zone[i]) { open = false; break; }
+    }
+    if (!open) continue;
+    begin(ctx);
+    const p = tryPlaceProp(ctx, a, 'desk', ax, az, ra, {variant: ctx.rng.int(0, 2)});
+    const q = p && tryPlaceProp(ctx, a, 'desk', bx, bz, rb, {variant: ctx.rng.int(0, 2)});
+    if (p && q) {
+      commit(ctx);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = ctx.g.idx(cx, cy); if (!ctx.g.blocked[i]) ctx.keep[i] = 1; }
+      return true;
+    }
+    rollback(ctx);
+  }
+  return false;
 }
 
 /** Host decor (chair / monitor / ...) beside or on a host prop: collides, never blocks the walk grid; absolute y. */
@@ -450,7 +622,8 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
   for (const a of layout.areas) {
     const role = roleOf(d, a);
     if (!role) continue;
-    let text = plates.get(role);
+    // (lane LAYOUT: support rooms carry their own plate — UTILITY ROOM, PRINT ROOM, KITCHENETTE, IT · COMMS, ROOF ACCESS …)
+    let text = d.tower.meta.get(a.id)?.plate ?? plates.get(role);
     if (a.type === 'washroom') text = a.label.startsWith('Men') ? 'MEN' : 'WOMEN';
     if (role === 'private') text = `SUITE ${floor}${String(++suite).padStart(2, '0')}`;
     if (role === 'bay') text = SUITES[(floor * 3 + suite++) % SUITES.length];
@@ -480,13 +653,41 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
 /** Wall plate on `area`'s wall `side` at absolute height y, slid to a wall-backed spot (stationDress.wallSign rules). */
 export function wallSign(ctx: PlaceCtx, layout: StationLayout, area: Area, side: Side, t: number, y: number, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>): boolean {
   const dims = signDims(s);
-  const spot = wallSignSpot(ctx.g, area, side, t, y, dims);
-  if (spot === null) return false;
-  if (!backed(ctx, area, side, spot - dims.w / 2, spot + dims.w / 2, y - dims.h / 2)) return false;
   if (y + dims.h / 2 > area.ceil - 0.04) return false;
   const ax0 = area.x * CELL, az0 = area.y * CELL, ax1 = (area.x + area.w) * CELL, az1 = (area.y + area.h) * CELL;
-  const pos = side === 'N' ? {x: spot, z: az0 + 0.02, rot: 0} : side === 'S' ? {x: spot, z: az1 - 0.02, rot: Math.PI}
-    : side === 'W' ? {x: ax0 + 0.02, z: spot, rot: Math.PI / 2} : {x: ax1 - 0.02, z: spot, rot: -Math.PI / 2};
-  layout.signs.push({...s, ...pos, y, area: area.id});
-  return true;
+  const posOf = (spot: number) => (side === 'N' ? {x: spot, z: az0 + 0.02, rot: 0} : side === 'S' ? {x: spot, z: az1 - 0.02, rot: Math.PI}
+    : side === 'W' ? {x: ax0 + 0.02, z: spot, rot: Math.PI / 2} : {x: ax1 - 0.02, z: spot, rot: -Math.PI / 2});
+  // Task office-interactions-layout-20261030 (lane LAYOUT, item 4): never on top of another plate of the same wall — the wanted spot
+  // first (unchanged where it is free), else the nearest free wall-backed spot within 3 m along the wall, else no plate.
+  const level = s.level ?? 0;
+  for (let k = 0; k <= 24; k++) {
+    const tc = t + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25;
+    const spot = wallSignSpot(ctx.g, area, side, tc, y, dims);
+    if (spot === null) return false;
+    if (k > 0 && Math.abs(spot - tc) > 1e-6) continue;
+    if (!backed(ctx, area, side, spot - dims.w / 2, spot + dims.w / 2, y - dims.h / 2)) continue;
+    const pos = posOf(spot);
+    if (signOverlaps(layout, level, pos, y, dims)) continue;
+    layout.signs.push({...s, ...pos, y, area: area.id});
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Lane LAYOUT: whether a plate at `pos` / `y` (`dims`) would overlap a sign already on the same wall face of `level` (same facing,
+ * within 0.1 m of the plane; their rects overlap with < 0.05 m between them). QA / tests use it over a whole layout too.
+ */
+export function signOverlaps(layout: StationLayout, level: number, pos: {x: number; z: number; rot: number}, y: number, dims: {w: number; h: number}, skip?: SignPlacement,
+  gap = {w: 0.05, h: 0.02}): boolean {
+  const alongX = Math.abs(Math.cos(pos.rot)) > 0.5;
+  for (const q of layout.signs) {
+    if (q === skip || (q.level ?? 0) !== level) continue;
+    if (Math.abs(Math.cos(q.rot) - Math.cos(pos.rot)) > 1e-3 || Math.abs(Math.sin(q.rot) - Math.sin(pos.rot)) > 1e-3) continue;
+    if ((alongX ? Math.abs(q.z - pos.z) : Math.abs(q.x - pos.x)) > 0.1) continue;
+    const qd = signDims(q);
+    const da = alongX ? Math.abs(q.x - pos.x) : Math.abs(q.z - pos.z);
+    if (da < (qd.w + dims.w) / 2 + gap.w && Math.abs(q.y - y) < (qd.h + dims.h) / 2 + gap.h) return true;
+  }
+  return false;
 }

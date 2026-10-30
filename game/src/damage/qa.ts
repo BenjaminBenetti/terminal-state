@@ -7,7 +7,8 @@ import * as THREE from 'three';
 import type {Game} from '../game';
 import {raycastWorld, rayCapsule, raySphere, type Vec3} from '../combat/hitscan';
 import {DAMAGE_MATERIALS, STRUCTURAL_CLASS, propDamageSpec, structuralKeyAt} from './materials';
-import type {PropPlacement} from '../gen/props';
+import {PROP_DEFS, type PropPlacement} from '../gen/props';
+import {PROP_PHYSICS_AUDIT} from './physicsAudit'; // task office-interactions-layout-20261030 (lane PHYS)
 
 type LookAt = (x: number, y: number, z: number) => void;
 type Teleport = (x: number, z: number, yaw?: number) => boolean;
@@ -170,19 +171,41 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       const wh = raycastWorld(game.levels ?? L.grid, L.props, {x: e.x, y: e.y, z: e.z}, (() => { const v = new THREE.Vector3(t.at.x - e.x, t.at.y - e.y, t.at.z - e.z).normalize(); return {x: v.x, y: v.y, z: v.z}; })(), 30, L.trench.floorY);
       return {...t, dist: Math.hypot(t.at.x - game.player.x, t.at.z - game.player.z), firstHit: wh.kind, firstHitT: wh.t};
     },
-    /** Iteration 07 (Lane K): aim at the nearest light dynamic prop (e.g. a trash can), optionally standing in front of it. */
-    aimLooseProp: (o: {teleport?: boolean} = {}) => {
+    /**
+     * Iteration 07 (Lane K): aim at the nearest light dynamic prop (e.g. a trash can), optionally standing in front of it.
+     * Task office-interactions-layout-20261030 (lane PHYS): `kind` filter (e.g. 'officeChair'), the player's own storey first
+     * (vertical distance weighs 10x), and the kind's audit row + office contact rule in the result: for the spot check, aim /
+     * teleport, then shoot it or walk forward into it (contact wake) and read `dynamics()`.
+     */
+    aimLooseProp: (o: {teleport?: boolean; kind?: string} = {}) => {
       const p = game.player;
-      const props = game.layout.props.map((q, i) => ({q, i})).filter(({q}) => game.physics.dynamicItems.isDynamicProp(q));
-      props.sort((a, b) => Math.hypot(a.q.x - p.x, a.q.z - p.z) - Math.hypot(b.q.x - p.x, b.q.z - p.z));
+      const di = game.physics.dynamicItems;
+      const props = game.layout.props.map((q, i) => ({q, i})).filter(({q}) => (!o.kind || q.kind === o.kind) && di.isDynamicProp(q));
+      const d = (q: PropPlacement) => Math.hypot(q.x - p.x, q.z - p.z) + Math.abs(q.y - p.y) * 10;
+      props.sort((a, b) => d(a.q) - d(b.q));
       const t = props[0];
       if (!t) return null;
       const f = {x: Math.sin(t.q.rot), z: Math.cos(t.q.rot)};
-      if (o.teleport) teleport(t.q.x + f.x * 1.8, t.q.z + f.z * 1.8);
-      const y = t.q.y + Math.max(0.4, t.q.h * 0.7);
+      if (o.teleport && !(t.q.level ?? 0)) teleport(t.q.x + f.x * 1.8, t.q.z + f.z * 1.8);
+      else if (o.teleport) {
+        // lane PHYS: an upper storey (the office tower): stand on THAT storey, 1.8 m off the first side with open floor that is
+        // not inside another prop (a chair's front faces its desk)
+        const lv = t.q.level!, g = game.levels.grid(lv);
+        const free = (x: number, z: number) => !game.layout.props.some(q => q !== t.q && q.h > 0.3 && (q.level ?? 0) === lv && Math.abs(q.x - x) < q.hx + 0.35 && Math.abs(q.z - z) < q.hz + 0.35);
+        for (const [dx, dz] of [[f.x, f.z], [-f.x, -f.z], [f.z, -f.x], [-f.z, f.x]]) {
+          const s = game.snap(t.q.x + dx * 1.8, t.q.z + dz * 1.8, lv);
+          if (!s || !free(s[0], s[1])) continue;
+          game.player.x = s[0]; game.player.z = s[1]; game.player.y = g.floorAt(s[0], s[1]);
+          game.player.vy = 0; game.player.grounded = true; game.player.climb = null;
+          break;
+        }
+      }
+      const y = t.q.y + Math.max(0.4, (t.q.h || PROP_DEFS[t.q.kind].h) * 0.7);
       lookAt(t.q.x, y, t.q.z);
-      return {kind: t.q.kind, index: t.i, loose: t.q.h === 0, at: {x: t.q.x, y, z: t.q.z}};
+      return {kind: t.q.kind, index: t.i, loose: t.q.h === 0, at: {x: t.q.x, y, z: t.q.z}, contactWake: di.contactOn, audit: PROP_PHYSICS_AUDIT[t.q.kind] ?? null};
     },
+    /** Lane PHYS: the physics-affordance audit row of a prop kind (damage/physicsAudit.ts), or every row when no kind is given. */
+    physAudit: (kind?: string) => (kind ? PROP_PHYSICS_AUDIT[kind] ?? null : PROP_PHYSICS_AUDIT),
   };
   return api;
 }
