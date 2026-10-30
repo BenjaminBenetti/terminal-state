@@ -84,7 +84,7 @@ describe('inventory drag and drop (iteration 04)', () => {
 
   it('detach (drop out of the inventory) keeps the uid for a whole stack and splits otherwise', () => {
     const inv = new Inventory();
-    const ammo = inv.makeStack('ammo_rifle', 60);
+    const ammo = inv.makeStack('ammo_556', 60);
     inv.set(P(0), ammo);
     const part = inv.detach(P(0), 25)!;
     expect(part.count).toBe(25);

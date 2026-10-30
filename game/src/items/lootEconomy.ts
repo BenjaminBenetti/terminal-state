@@ -14,7 +14,7 @@
 //     are always 'public' = random):
 //       - with probability `on` (0.75-0.8) an ON-THEME find: the rolled item itself when it already fits the theme (a pharmacy
 //         shelf's bandage stays a bandage), else a category drawn from the theme's `weights` (a security cabinet's old cola
-//         becomes a box of 9 mm / a flare / a torch battery; a maintenance shelf's old water becomes a battery or a flare);
+//         becomes a box of ammo (any caliber) / a flare / a torch battery; a maintenance shelf's old water becomes a battery or a flare);
 //       - otherwise an OFF-THEME random find: a category from OFF_THEME_WEIGHTS that is NOT on-theme (food in a security office,
 //         a bandage or a handful of rounds in a café, ...) — the "not 100 % a hard rule" part. Ammo is never excluded anywhere.
 //     The item of a category comes from the holder's OWN rows when it has any (a store's stock still matches its sign), else
@@ -29,6 +29,7 @@
 
 import {purposeById, type LootTheme} from '../gen/purposes';
 import {ITEMS} from './items';
+import {genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030)
 import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical'; // Iteration 16 (lane INJURY)
 
 export type {LootTheme};
@@ -109,18 +110,21 @@ export const THEME_ECONOMY: Readonly<Record<LootTheme, ThemeEconomy>> = {
 /** Off-theme random finds (and every find in public halls): category weights; the theme's own categories are excluded. */
 export const OFF_THEME_WEIGHTS: Readonly<Record<EconCat, number>> = {food: 0.32, drink: 0.37, med: 0.09, ammo: 0.035, battery: 0.006, flare: 0.004};
 
-/** Items of a category when the holder's own table has none (ammo: 9 mm first — the pistol is the starting gun). */
+/**
+ * Items of a category when the holder's own table has none. Lane AMMO (knife-melee-20261030): ammo is generic — ~1/3 each 9mm /
+ * 5.56×45mm / 12-gauge (was 9 mm 1.3 : rifle 1 : shells 0.8).
+ */
 export const GLOBAL_POOL: Readonly<Record<EconCat, readonly (readonly [string, number])[]>> = {
   food: [['chocolate', 1.2], ['chips', 1.1], ['beans', 0.9], ['noodles', 1]],
   drink: [['water', 1.3], ['cola', 1.2], ['juice', 0.9]],
   med: [['bandage', 1], ['medkit', 0.35]],
-  ammo: [['ammo_pistol', 1.3], ['ammo_rifle', 1], ['ammo_shells', 0.8]],
+  ammo: genericAmmo(3.1),
   battery: [[BATTERY_ID, 1]],
   flare: [[FLARE_ID, 1]],
 };
 
 /** Off-theme ammo is a handful of loose rounds, not a full box (keeps total ammo where it was). */
-export const HANDFUL: Readonly<Record<string, readonly [number, number]>> = {ammo_pistol: [4, 7], ammo_rifle: [3, 5], ammo_shells: [2, 3]};
+export const HANDFUL: Readonly<Record<string, readonly [number, number]>> = {ammo_9mm: [4, 7], ammo_556: [3, 5], ammo_12ga: [2, 3]};
 
 const FD: readonly EconCat[] = ['food', 'drink'];
 /** Fixtures that only take certain categories (everything else — cabinets, crates, shelves, desks, lockers, bins — takes any). */
@@ -177,7 +181,7 @@ export interface FindContext {
 /** Item of category `c`: from the holder's own rows of that category when it has any, else the global pool. */
 function itemOf(c: EconCat, ctx: FindContext, r: Rnd, security: boolean): string {
   const own = ctx.rows.filter(([id, w]) => w > 0 && econCat(id) === c);
-  // security / police: the service sidearm's 9 mm leads (the pistol is the starting gun)
+  // security / police re-themed ammo: always the generic pool (lane AMMO: ~1/3 each caliber; it used to let the 9 mm lead)
   return pickRow(own.length && !(security && c === 'ammo') ? own : GLOBAL_POOL[c], r);
 }
 

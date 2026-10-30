@@ -23,7 +23,8 @@ import {Input} from './player/input';
 import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/player';
 import {Inventory, THROW_REF, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
-import {WEAPONS, WeaponController, type WeaponDef} from './weapons/weapons';
+import {WEAPONS, WeaponController, caliberLabel, reserveFor, type WeaponDef} from './weapons/weapons';
+import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based ammo
 import {Viewmodel} from './weapons/viewmodel';
 import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWeaponFor, type StartWeapon} from './weapons/pistol';
 import {ConsumeView} from './weapons/consumeView';
@@ -38,6 +39,8 @@ import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts e
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
 import {raycastWorld, rayCapsule, raySphere, type Vec3} from './combat/hitscan';
+import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
+import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
 import {Sfx, humEmitters, roomKindFor} from './audio/sfx';
@@ -408,7 +411,8 @@ export class Game {
     // The dev placeholder is only reachable if the gate were off (pre-art staging with ?devpistol=1); never with the real model.
     const pistolGltf = PISTOL_ART_READY ? m.pistol
       : this.devPistol ? ({scene: makePistolDevPlaceholder()} as unknown as import('three/addons/loaders/GLTFLoader.js').GLTF) : undefined;
-    const guns = {rifle: m.rifle, shotgun: m.shotgun, ...(pistolGltf ? {pistol: pistolGltf} : {})};
+    // Lane KNIFE (knife-melee-20261030): the user's knife joins the held models (viewmodel, item icon, dropped pickup).
+    const guns = {rifle: m.rifle, shotgun: m.shotgun, ...(pistolGltf ? {pistol: pistolGltf} : {}), ...(m.knife ? {knife: m.knife} : {})};
     this.viewmodel = new Viewmodel(guns, consumables);
     // Lane D (iteration 04): eat/drink/apply with the real item model in hand, and inventory icons
     // rendered once from the runtime models through this renderer (ui/itemIcons.ts).
@@ -1002,7 +1006,7 @@ export class Game {
     const prev = this.state;
     this.state = s;
     this.input.active = s === 'playing';
-    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); }
+    if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE: no stale contact after a menu / death / loading
     this.invUI.cancelDrag();
     for (const id of ['title', 'pause', 'inventory', 'death', 'win', 'error']) $('#' + id).classList.add('hidden');
     const screen: Partial<Record<GameState, string>> = {title: 'title', paused: 'pause', inventory: 'inventory', dead: 'death', won: 'win', error: 'error', loading: 'title'};
@@ -1167,7 +1171,11 @@ export class Game {
     const st = this.inv.selectedStack();
     const def = st ? itemDef(st.itemId) : null;
     if (def?.kind === 'weapon') {
-      if (this.weapon.stack !== st) { this.weapon.equip(st); this.sfx.equip(); }
+      if (this.weapon.stack !== st) {
+        // Lane KNIFE: a button held through a switch to / from the knife never fires or slashes the new weapon (release first)
+        if (this.input.mouse[0] && (this.weapon.def?.melee || WEAPONS[def.weaponId!]?.melee)) this.lmbLatch = true;
+        this.weapon.equip(st); this.sfx.equip();
+      }
       this.viewmodel.setItem(st!.itemId);
     } else {
       this.weapon.equip(null);
@@ -1424,7 +1432,7 @@ export class Game {
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
-    this.aiming = !!wdef && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
+    this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]});
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
@@ -1433,10 +1441,13 @@ export class Game {
     if (p.stanceChanged) this.sfx.crouch(p.crouched);
 
     if (wdef && !this.flareHold.active) {
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns, pressed: inp.mousePressed[0] && !flareOwns, reload: inp.hit('KeyR') && !vmBusy, lowered: p.sprinting || vmBusy || p.climbing}, this.inv);
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns, pressed: inp.mousePressed[0] && !flareOwns, reload: inp.hit('KeyR') && !vmBusy,
+        lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && laneOwns)}, this.inv); // lane KNIFE: a lane UI taking the buttons cancels a slash
       for (const e of ev) {
         if (e.type === 'fire') this.fire(e.def);
-        else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (this.inv.count(e.def.ammoItem) === 0) this.hud.toast(`Out of ${itemDef(e.def.ammoItem).name.toLowerCase()}`, true); }
+        else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE: the slash (no gunfire, no bullets, no flash / recoil)
+        else if (e.type === 'contact') this.meleeContact(e.def);
+        else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (e.def.caliber && reserveFor(e.def, this.inv) === 0) this.hud.toast(`Out of ${caliberLabel(e.def)} ${CALIBERS[e.def.caliber].unit[1]}`, true); }
         else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.sound, e.empty);
         else if (e.type === 'shellIn') { this.sfx.shellIn(); this.viewmodel.shellBump(); }
         else if (e.type === 'reloadEnd') this.sfx.reloadEnd(e.def.sound);
@@ -1537,6 +1548,7 @@ export class Game {
       reloading: this.weapon.reloading, reloadProgress: this.weapon.progress, using: !!this.use, useProgress: this.use ? this.use.t / this.use.total : 0, bobT: p.bobT,
       crouch: p.crouchBlend, vy: p.grounded ? 0 : p.vy, landDip: p.landDip,
       throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back
+      swing: this.weapon.swingTime, // lane KNIFE: slash animation (weapons/meleeView.ts)
     });
     this.hud.setStance(p.crouched, p.standBlocked);
     this.updateHud(wdef);
@@ -1584,9 +1596,10 @@ export class Game {
     const def = st ? itemDef(st.itemId) : null;
     let hint = '';
     if (wdef && st) {
-      if (this.weapon.reloading) hint = 'Reloading…';
-      else if ((st.mag ?? 0) === 0) hint = this.inv.count(wdef.ammoItem) ? 'Empty — press R' : 'No ammo';
-      else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && this.inv.count(wdef.ammoItem)) hint = 'Low — R to reload';
+      if (wdef.melee) hint = 'Click to slash · no ammo'; // lane KNIFE (short: the long form overlapped the hotbar at 960 px)
+      else if (this.weapon.reloading) hint = 'Reloading…';
+      else if ((st.mag ?? 0) === 0) hint = reserveFor(wdef, this.inv) ? 'Empty — press R' : `No ${caliberLabel(wdef)} ammo`;
+      else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && reserveFor(wdef, this.inv)) hint = 'Low — R to reload';
     } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
     if (this.gear?.readied) hint = '6 slings it back on · 1-5 switch'; // Task office-overhaul-20261030 (INTERACT, #1)
@@ -1596,7 +1609,7 @@ export class Game {
     if (lanePrompt) { /* the lane's interactHandler takes E */ } else if (this.currentTarget) {
       const d = itemDef(this.currentTarget.stack.itemId);
       const n = this.currentTarget.stack.count;
-      prompt = `<b>[E]</b> Take ${d.kind === 'weapon' ? d.name : `${n > 1 ? n + ' × ' : ''}${d.name}`}`;
+      prompt = `<b>[E]</b> Take ${d.kind === 'weapon' ? d.name : ammoText(d.id, n) ?? `${n > 1 ? n + ' × ' : ''}${d.name}`}`; // lane AMMO: "15 9mm rounds" like holder lots
     } else if (this.containerTarget && this.containers) prompt = this.containers.prompt(this.containerTarget);
     else if (this.ladderAim) prompt = this.ladderAim.up ? '<b>[E]</b> Climb ladder' : '<b>[E]</b> Climb down ladder';
     else if (p.climbing) prompt = '<b>[Space]</b> Let go';
@@ -1610,8 +1623,11 @@ export class Game {
     const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
-      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? def.short : 'Empty hands', // INTERACT (#1): slot 6 in the hands
-      mag: wdef && st && !this.gear?.readied ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
+      // lane AMMO: a gun shows the caliber it loads ("Pistol · 9mm"); the reserve counts that caliber's pool.
+      // INTERACT (#1): slot 6 (the readied backpack) in the hands overrides the weapon panel.
+      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? (wdef?.caliber ? `${def.short} · ${caliberLabel(wdef)}` : def.short) : 'Empty hands',
+      mag: wdef && st && !wdef.melee && !this.gear?.readied ? st.mag ?? 0 : null, reserve: wdef ? reserveFor(wdef, this.inv) : 0,
+      melee: !!wdef?.melee && !this.gear?.readied, // lane KNIFE: MELEE tag, no rounds
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
@@ -1731,14 +1747,81 @@ export class Game {
     // gunfire alerts zombies; walls muffle it (Lane B, iteration 08: a slab between storeys muffles it more). Task
     // office-seamless-20261029 (ENGINE): 3D distance, x0.35 per slab between the storeys (ai/brain.ts hearingMuffle); no
     // sight test for a zombie already beyond earshot (9 storeys of zombies per shot).
+    this.alertZombies(def.noise);
+  }
+
+  /** A noise of loudness radius `radius` (m) at the player: zombies in earshot hear it (walls / slabs muffle; see fire()). */
+  private alertZombies(radius: number): void {
     const multi = this.levels.count > 1, P = this.player, bases = multi ? this.levels.list.map(l => l.baseY) : null;
     for (const z of this.zombies) {
       const b = z.brain;
-      if (!b.alive || Math.hypot(b.x - P.x, b.z - P.z, b.y - P.y) > def.noise) continue;
+      if (!b.alive || Math.hypot(b.x - P.x, b.z - P.z, b.y - P.y) > radius) continue;
       const los = multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z);
       const muffle = hearingMuffle(los, bases ? slabsBetween(bases, P.y, b.y) : 0);
-      b.hear(P.x, P.z, def.noise * muffle, P.y);
+      b.hear(P.x, P.z, radius * muffle, P.y);
     }
+  }
+
+  /**
+   * Lane KNIFE (knife-melee-20261030): the blade's contact moment of ONE swing (WeaponController 'contact', `melee.windup` s
+   * after the click; a swing cancelled before it never gets here). The sweep (combat/melee.ts) uses the bullet pipeline's
+   * pieces: Levels.raycast occlusion (walls / props / slabs of any storey), the enemies' head / torso / limb volumes, corpses
+   * as blockers — so a miss stays a miss and at most one enemy takes ONE hit. No bullet, ammo, muzzle flash, recoil, tracer
+   * or knockback; the hit never staggers (contact stays a trade). Feedback as a shot hit: wound / blood / flesh pieces
+   * (damage/system.ts), the foreground flesh confirm, hit marker + tick, the enemy's hurt / death cue, ragdoll on a kill. A
+   * blade hit (flesh or surface) is a quiet noise (`def.noise`, 5 m vs 24-38 m for gunshots); a clean miss is silent.
+   */
+  private meleeContact(def: WeaponDef): void {
+    if (!def.melee || !this.player.alive || this.state !== 'playing') return;
+    this.camera.updateMatrixWorld(true);
+    const origin = this.camera.getWorldPosition(new THREE.Vector3());
+    const fwd = this.forward();
+    const right = new THREE.Vector3().crossVectors(fwd, this.camera.up).normalize();
+    const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+    const o: Vec3 = {x: origin.x, y: origin.y, z: origin.z};
+    const L = this.levels, props = this.layout.props, trench = this.layout.trench.floorY;
+    const res = resolveMelee(o, meleeRayDirs(fwd, right, up, def.melee.rays), def.range,
+      this.zombies.map(z => ({id: z, alive: z.brain.alive, x: z.brain.x, y: z.brain.y, z: z.brain.z, volumes: z.hitVolumes})),
+      (ro, rd, max) => raycastWorld(L, props, ro, rd, max, trench),
+      (ro, rd, maxT) => this.damage.corpseHit(this.zombies, ro, rd, maxT));
+    if (!res) { this.logMelee({kind: 'miss'}); return; } // a clean miss: only the swing's rustle
+    this.damage.beginShot(); // one wound / tear group per swing
+    const point = new THREE.Vector3(res.point.x, res.point.y, res.point.z), dir = new THREE.Vector3(res.dir.x, res.dir.y, res.dir.z);
+    const wound = {damage: 24, pellet: false, weapon: def.id}; // wound / gore sizing of one rifle round
+    if (res.kind === 'enemy') {
+      const z = res.target;
+      this.damage.hitZombie(z, point, dir, res.part, wound);
+      const killed = z.brain.damage(meleeDamage(def, res.part), this.player.x, this.player.z, this.player.y, {stagger: false});
+      z.hitFlash = 1;
+      this.sfx.hitConfirm(point.x, point.y, point.z, z);
+      if (killed) {
+        this.stats.kills++;
+        enemyCues(z).death(this.sfx, z);
+        this.physics.ragdoll(z, {dir: fwd, point, strength: killImpulseStrength(def.id, 1, 1), bone: res.part === 'head' ? 'head' : undefined});
+      } else enemyCues(z).hurt(this.sfx, z);
+      this.hud.hitmarker(killed);
+      this.sfx.hitTick(killed);
+      this.logMelee({kind: 'enemy', part: res.part, t: +res.t.toFixed(3), damage: meleeDamage(def, res.part), killed, hp: z.brain.hp, archetype: z.archetype ?? 'zombie', type: z.brain.type});
+    } else if (res.kind === 'corpse') {
+      this.logMelee({kind: 'corpse', t: +res.t.toFixed(3)});
+      this.damage.hitZombie(res.corpse.z, point, dir, res.corpse.part, wound, true);
+      this.sfx.impact(point.x, point.y, point.z, 'flesh');
+    } else {
+      // blade on a surface: its material's impact cue and a few chips, no crater / prop damage (a knife does not break things)
+      const wh = res.hit, n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
+      const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls] : DAMAGE_MATERIALS.concrete;
+      this.sfx.impact(point.x, point.y, point.z, spec.sound);
+      this.fx.impact(point, n, spec.fx, {decal: false, chips: 2, dust: 0.35});
+      this.logMelee({kind: 'world', surface: wh.kind, t: +res.t.toFixed(3)});
+    }
+    this.alertZombies(def.noise);
+  }
+
+  /** Lane KNIFE (QA, `__LL.snapshot().melee`): the last few swing contacts and what they struck (read-only record). */
+  readonly meleeLog: {swing: number; time: number; kind: string; [k: string]: unknown}[] = [];
+  private logMelee(e: {kind: string; [k: string]: unknown}): void {
+    this.meleeLog.push({swing: this.weapon.swingId, time: +this.time.toFixed(3), ...e});
+    if (this.meleeLog.length > 8) this.meleeLog.shift();
   }
 
   private panOf(x: number, z: number): [number, number] {

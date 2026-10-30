@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {Inventory, HOTBAR_SIZE, PACK_SIZE} from '../src/items/inventory';
-import {WEAPONS, WeaponController, type TriggerInput} from '../src/weapons/weapons';
+import {WEAPONS, WeaponController, weaponAmmoItem, type TriggerInput} from '../src/weapons/weapons';
 import {ZombieBrain, type BrainWorld} from '../src/ai/brain';
 import {Grid, FLOOR, CELL} from '../src/gen/grid';
 import {moveCircle, PropIndex} from '../src/core/physics';
@@ -16,9 +16,9 @@ describe('inventory', () => {
     expect(inv.add(inv.makeStack('shotgun', 1))).toBe(0);
     expect(inv.hotbar[0]?.itemId).toBe('rifle');
     expect(inv.hotbar[1]?.itemId).toBe('shotgun');
-    inv.add(inv.makeStack('ammo_rifle', 100));
-    inv.add(inv.makeStack('ammo_rifle', 50));
-    expect(inv.count('ammo_rifle')).toBe(150);
+    inv.add(inv.makeStack('ammo_556', 100));
+    inv.add(inv.makeStack('ammo_556', 50));
+    expect(inv.count('ammo_556')).toBe(150);
     expect(inv.pack.filter(Boolean).length).toBe(2); // 120 + 30
     expect(inv.invariants()).toEqual([]);
   });
@@ -53,7 +53,7 @@ describe('weapons', () => {
   const setup = (id: string, ammo: number) => {
     const inv = new Inventory();
     inv.add(inv.makeStack(id, 1));
-    inv.add(inv.makeStack(WEAPONS[id].ammoItem, ammo));
+    inv.add(inv.makeStack(weaponAmmoItem(WEAPONS[id])!, ammo));
     const wc = new WeaponController();
     wc.equip(inv.hotbar[0]);
     wc.update(1, idle, inv); // finish equip
@@ -79,7 +79,7 @@ describe('weapons', () => {
     wc.update(1.2, idle, inv);
     expect(wc.reloading).toBe(false);
     expect(wc.stack!.mag).toBe(25);
-    expect(inv.count('ammo_rifle')).toBe(0);
+    expect(inv.count('ammo_556')).toBe(0);
   });
 
   it('shotgun is semi-auto, fires 9 pellets worth, reloads shell by shell and can be interrupted', () => {
@@ -102,7 +102,7 @@ describe('weapons', () => {
     wc.stack!.mag = 0;
     const ev = wc.update(0.01, {...idle, held: true, pressed: true}, inv);
     expect(ev.map(e => e.type)).toEqual(['dry']);
-    inv.add(inv.makeStack('ammo_rifle', 10));
+    inv.add(inv.makeStack('ammo_556', 10));
     const ev2 = wc.update(0.5, {...idle, held: true, pressed: true}, inv);
     expect(ev2.map(e => e.type)).toEqual(['dry', 'reloadStart']);
   });

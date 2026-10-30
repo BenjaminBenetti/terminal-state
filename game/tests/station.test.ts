@@ -264,7 +264,7 @@ describe('station generator', () => {
       expect(sgs.length).toBeLessThanOrEqual(2);
       for (const sg of sgs) {
         expect(Math.hypot(sg.x - sp.x, sg.z - sp.z)).toBeGreaterThanOrEqual(25);
-        const shells = l.pickups.filter(p => p.itemId === 'ammo_shells' && (p.level ?? 0) === (sg.level ?? 0)).map(p => Math.hypot(p.x - sg.x, p.z - sg.z));
+        const shells = l.pickups.filter(p => p.itemId === 'ammo_12ga' && (p.level ?? 0) === (sg.level ?? 0)).map(p => Math.hypot(p.x - sg.x, p.z - sg.z));
         expect(Math.min(...shells)).toBeLessThan(4.5);
       }
     }

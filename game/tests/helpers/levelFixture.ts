@@ -151,9 +151,9 @@ export function levelFixture(o: {rails?: 'derived' | 'none'} = {}): FixtureLayou
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { g.blocked[g.idx(x, y)] = 1; if (p.blocksSight) g.sightBlocked[g.idx(x, y)] = 1; }
   }
   const pickups: PickupPlacement[] = [
-    {itemId: 'ammo_rifle', count: 12, x: 23.0, y: FIX.upperY, z: 8.0, area: 2, level: 1},
+    {itemId: 'ammo_556', count: 12, x: 23.0, y: FIX.upperY, z: 8.0, area: 2, level: 1},
     {itemId: 'bandage', count: 1, x: 6.5, y: FIX.lowerY, z: 9.0, area: 3, level: 2},
-    {itemId: 'ammo_rifle', count: 8, x: 23.0, y: 0, z: 8.0, area: 0},
+    {itemId: 'ammo_556', count: 8, x: 23.0, y: 0, z: 8.0, area: 0},
   ];
   const zombies: ZombieSpawn[] = [
     {x: 24.0, z: 18.0, yaw: 0, type: 'shambler', area: 2, level: 1, y: FIX.upperY},

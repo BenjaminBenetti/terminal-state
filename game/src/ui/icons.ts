@@ -12,9 +12,10 @@ export const ICONS: Record<IconKey, string> = {
   shotgun: S('<path d="M1 14h40l2-2h19v4H44l-2 1h-6l-1 2h-6l-1-2H14l-9 7H1l7-7H1z"/><rect x="30" y="17" width="12" height="3"/>'),
   // Pistol (pistol lane): HUD silhouette; the inventory icon falls back to it while the pistol has no model.
   pistol: S('<path d="M14 9h34v7H33l-2 2h-4l-2 9h-8l3-11h-6z"/><rect x="44" y="7" width="3" height="2"/><path d="M27 18h4l-1 4h-4z" opacity="0.6"/>'),
-  rounds9: S('<g><rect x="17" y="13" width="7" height="12" rx="1"/><path d="M17 13l3.5-5 3.5 5z"/><rect x="29" y="13" width="7" height="12" rx="1"/><path d="M29 13l3.5-5 3.5 5z"/><rect x="41" y="13" width="7" height="12" rx="1"/><path d="M41 13l3.5-5 3.5 5z"/></g>'),
-  rounds: S('<g><rect x="14" y="10" width="7" height="16" rx="1"/><path d="M14 10l3.5-7 3.5 7z"/><rect x="28" y="10" width="7" height="16" rx="1"/><path d="M28 10l3.5-7 3.5 7z"/><rect x="42" y="10" width="7" height="16" rx="1"/><path d="M42 10l3.5-7 3.5 7z"/></g>'),
-  shells: S('<g><rect x="18" y="6" width="10" height="20" rx="2"/><rect x="18" y="22" width="10" height="5"/><rect x="34" y="6" width="10" height="20" rx="2"/><rect x="34" y="22" width="10" height="5"/></g>'),
+  // Lane AMMO (knife-melee-20261030): one icon per CALIBER with its label (fallback when the 3D icon render is unavailable).
+  ammo9mm: S('<g><rect x="3" y="13" width="7" height="12" rx="1"/><path d="M3 13l3.5-5 3.5 5z"/><rect x="13" y="13" width="7" height="12" rx="1"/><path d="M13 13l3.5-5 3.5 5z"/><rect x="23" y="13" width="7" height="12" rx="1"/><path d="M23 13l3.5-5 3.5 5z"/></g><text x="62" y="21" font-size="10" font-weight="700" font-family="Arial, sans-serif" text-anchor="end">9mm</text>'),
+  ammo556: S('<g><rect x="2" y="10" width="7" height="16" rx="1"/><path d="M2 10l3.5-7 3.5 7z"/><rect x="12" y="10" width="7" height="16" rx="1"/><path d="M12 10l3.5-7 3.5 7z"/><rect x="22" y="10" width="7" height="16" rx="1"/><path d="M22 10l3.5-7 3.5 7z"/></g><text x="62" y="21" font-size="10" font-weight="700" font-family="Arial, sans-serif" text-anchor="end">5.56</text>'),
+  ammo12ga: S('<g><rect x="2" y="6" width="10" height="20" rx="2"/><rect x="2" y="22" width="10" height="5"/><rect x="15" y="6" width="10" height="20" rx="2"/><rect x="15" y="22" width="10" height="5"/></g><text x="62" y="21" font-size="10" font-weight="700" font-family="Arial, sans-serif" text-anchor="end">12ga</text>'),
   medkit: S('<path d="M12 8h40v20H12z" opacity="0.9"/><path d="M28 11h8v5h5v6h-5v5h-8v-5h-5v-6h5z" fill="#15171a"/><rect x="26" y="4" width="12" height="4"/>'),
   bandage: S('<ellipse cx="24" cy="16" rx="8" ry="11"/><path d="M24 5h22v22H24z"/><ellipse cx="46" cy="16" rx="8" ry="11" opacity="0.6"/>'),
   // Food and drink (iteration 03).
@@ -28,6 +29,8 @@ export const ICONS: Record<IconKey, string> = {
   // Iteration 12 (LIGHT): D cell (upright, + nub) and road flare (tube, striker cap at the right).
   battery: S(`<rect x="25" y="7" width="14" height="22" rx="2"/><rect x="29" y="3" width="6" height="4" rx="1"/><rect x="25" y="12" width="14" height="6" fill="${DARK}" opacity="0.45"/>`),
   flare: S(`<rect x="6" y="12" width="40" height="9" rx="2"/><rect x="45" y="11" width="11" height="11" rx="2" opacity="0.75"/><rect x="14" y="13" width="18" height="7" fill="${DARK}" opacity="0.4"/>`),
+  // Lane KNIFE: survival knife silhouette (pommel + ridged grip at the left, cross guard, clip-point blade to the right, serrated spine).
+  knife: S(`<rect x="4" y="13" width="4" height="7" rx="1.5"/><rect x="8" y="13.5" width="14" height="6" rx="2"/><path d="M11 13.5v6M15 13.5v6M19 13.5v6" stroke="${DARK}" stroke-width="1" opacity="0.5"/><rect x="22" y="9" width="3" height="15" rx="1"/><path d="M25 12.5h26l9 4.5-6 2.5H25z"/><path d="M28 12.5l1-1.5 1 1.5 1-1.5 1 1.5 1-1.5 1 1.5 1-1.5 1 1.5 1-1.5 1 1.5" fill="none" stroke="currentColor" stroke-width="0.8"/>`),
   ...GEAR_ICONS,
   ...MEDICAL_ICONS,
 };

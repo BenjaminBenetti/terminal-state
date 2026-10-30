@@ -30,7 +30,7 @@ import {towerQaApi} from '../src/world/towerQa';
 import {Player} from '../src/player/player';
 import {PickupManager} from '../src/world/pickups';
 import {Inventory} from '../src/items/inventory';
-import {WEAPONS, WeaponController} from '../src/weapons/weapons';
+import {WEAPONS, WeaponController, weaponAmmoItem} from '../src/weapons/weapons';
 
 installCanvasShim(false);
 let mats: WorldMaterials;
@@ -352,7 +352,7 @@ describe('input ownership: a click on a targeted button never fires the weapon',
     const {host, e} = makeHost(towerLayout(), P);
     const inv = new Inventory();
     inv.add(inv.makeStack('rifle', 1));
-    inv.add(inv.makeStack(WEAPONS.rifle.ammoItem, 60));
+    inv.add(inv.makeStack(weaponAmmoItem(WEAPONS.rifle)!, 60)); // lane AMMO: the rifle's caliber item (5.56×45mm)
     const wc = new WeaponController();
     wc.equip(inv.hotbar[0]);
     const idle = {held: false, pressed: false, reload: false, lowered: false};

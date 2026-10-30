@@ -15,6 +15,7 @@ import {
 } from '../src/items/lootEconomy';
 import {ALL_PURPOSES} from '../src/gen/purposes';
 import {ITEMS} from '../src/items/items';
+import {canonicalItemId} from '../src/items/calibers';
 import {openableActive} from '../src/world/openablesSpec';
 import {ECONOMY_CORPUS, corpusTotals, generateCorpus, nonAmmo, stationEconomy, type EconTotals} from './helpers/lootEconomy';
 
@@ -77,9 +78,12 @@ describe('scarce resources over the fixed corpus (vs d632ce8)', () => {
     }
     expect(ratio(u.ammo, BASELINE.units.ammo)).toBeGreaterThan(0.9);
     expect(ratio(u.ammo, BASELINE.units.ammo)).toBeLessThan(1.1);
-    // every ammo type keeps its share (no type starves as a side effect)
+    // no caliber starves as a side effect. Lane AMMO (knife-melee-20261030): the generic holder ammo is now ~1/3 each caliber (it
+    // was rifle 1.4 : shells 1, no 9mm), so the 5.56 rounds move to the 9mm by design — every caliber keeps >= 0.75 of its
+    // d632ce8 amount (old gun-specific ids map 1:1: items/calibers.ts LEGACY_AMMO_IDS) and the 9mm is no longer floor-only.
     const items = TOTALS().items;
-    for (const id of ['ammo_rifle', 'ammo_shells', 'ammo_pistol'] as const) expect(ratio(items[id] ?? 0, BASELINE.items[id]), id).toBeGreaterThan(0.9);
+    for (const id of ['ammo_rifle', 'ammo_shells', 'ammo_pistol'] as const) expect(ratio(items[canonicalItemId(id)] ?? 0, BASELINE.items[id]), id).toBeGreaterThan(0.75);
+    expect(ratio(items.ammo_9mm ?? 0, BASELINE.items.ammo_pistol), 'more 9mm (holders too)').toBeGreaterThan(1.5);
     expect(u.weapon).toBe(BASELINE.units.weapon);
     expect(u.other).toBe(0);
     // loose floor ammo boxes are untouched; loose meds thin like the rest
