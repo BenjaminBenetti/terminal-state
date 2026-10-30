@@ -14,9 +14,10 @@
 // `outfit_gasmask` = assets/models/outfit-gasmask-t25.glb, part of the main asset load): its mesh `Outfit_gasmask__lastshift`
 // (fitted to the lastshift body) is made STATIC (skin attributes dropped, bind pose baked), re-centred to the item frame (origin
 // bottom-centre, +Z front — the outfit already faces +Z — metres) and kept at its real size (fitted only if grossly mis-scaled).
-// It inherits that model's recorded provenance (Meshy T2.5 replacement garment, approved: false, gameReady: false; no licence
-// clearance). world/pickups.ts registerItemModels hands it over; without it (Node tests, a failed file) a procedural stand-in
-// is used. Nothing new was generated.
+// Provenance, unchanged: the model was delivered by the authorized Meshy T2.5 replacement (garment:gasmask, review accepted in
+// that migration's DELIVERED.json); its derivative record (assets/derivatives/outfit-gasmask.json) still says approved: false,
+// gameReady: false and no licence clearance — delivery acceptance is not legal clearance. world/pickups.ts registerItemModels hands
+// it over; without it (Node tests, a failed file) a procedural stand-in is used. Nothing new was generated.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -59,7 +60,7 @@ export function registerGearModel(itemId: string, gltf: GLTF | null): void {
 
 /** 'office-gear-… (Meshy T2.5 derivative)' or 'procedural stand-in' (QA / item model report). */
 export function gearModelSource(itemId: string): string {
-  if (itemId === 'gas_mask' && maskOutfit) return `assets/models/outfit-gasmask-t25.glb ${GAS_MASK_OUTFIT_MESH} (shipped zombie outfit made static; Meshy T2.5, unapproved provenance)`;
+  if (itemId === 'gas_mask' && maskOutfit) return `assets/models/outfit-gasmask-t25.glb ${GAS_MASK_OUTFIT_MESH} (shipped zombie outfit made static; Meshy T2.5 delivery review accepted; derivative record approved: false, no licence clearance)`;
   return loaded.has(itemId) ? `assets/officeAssets.ts ${GEAR_ASSET[itemId]} (Meshy T2.5 derivative)` : 'procedural gear stand-in (gear/models.ts)';
 }
 

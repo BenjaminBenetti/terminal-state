@@ -112,14 +112,21 @@ button:disabled { opacity: 0.45; cursor: default; }
 #reserve { font-size: 24px; color: var(--cream-dim); }
 #ammo.empty #mag { color: var(--red); }
 #weapon-hint { font-size: 13px; color: var(--mustard); min-height: 1em; max-width: 250px; margin-left: auto; }
-#hotbar { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 6px; }
-#hotbar .slot { width: 84px; height: 62px; background: rgba(20, 22, 24, 0.62); cursor: default; }
-#hotbar .slot svg { width: 52px; height: 28px; }
+/* Task gasmask-hud-fix-20261030: the hotbar lives in the free band between the vitals (left) and the weapon panel (right) and
+   its cells shrink in proportion when the band is narrower than their natural widths, for however many cells the bar has
+   (Q, 1-5, 6, G, a later melee cell), instead of running under either panel. Above 1100 px the band is symmetric (the bar stays
+   centred under the crosshair): 296 px = the vitals' 22 px + 260 px + a 14 px gap, which also clears the weapon panel (26 px +
+   its <= 250 px hint + 14 px). At 1100 px and below see the media rule. */
+#hotbar { --hb-left: 296px; --hb-right: 296px; position: absolute; left: var(--hb-left); right: var(--hb-right); bottom: 20px; display: flex; justify-content: center; gap: 6px; }
+#hotbar .slot { width: 84px; flex: 0 1 auto; min-width: 30px; height: 62px; background: rgba(20, 22, 24, 0.62); cursor: default; }
+#hotbar .slot svg { width: 52px; height: 28px; max-width: 100%; }
+body #hotbar .slot img.ico3d { max-width: 100%; }
+#hotbar .slot .nm { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #hotbar .slot.selected { background: rgba(48, 44, 30, 0.75); }
 /* Task gasmask-breach-20261030 (mask lane): the compact gas-mask cell "Q" LEFT of quick slot 1 (ui/hud.ts maskSlot): the mask
    icon (or a dim "no mask" ghost), ON / OFF, the fitted filter's bar along the bottom and the spare filters (+N, top right);
    amber when the filter is low, red when it is empty. It is narrower than a quick slot and keeps a small gap before slot 1. */
-#hotbar .slot.maskslot { width: 64px; margin-right: 6px; }
+#hotbar .slot.maskslot { width: 64px; flex-shrink: 0; margin-right: 6px; } /* already compact: the numbered cells share any squeeze */
 #hotbar .slot.maskslot .key { color: var(--teal); }
 #hotbar .slot.maskslot .count { top: 3px; bottom: auto; right: 5px; font-size: 11px; color: var(--teal); }
 #hotbar .slot.maskslot svg, #hotbar .slot.maskslot .ghost svg { width: 42px; height: 22px; }
@@ -132,16 +139,14 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 #hotbar .slot.maskslot.low .nm { color: var(--mustard); }
 #hotbar .slot.maskslot.empty .fb { border-color: var(--red); }
 #hotbar .slot.maskslot.empty .nm { color: var(--red); }
-/* Task office-overhaul-20261030: the hotbar grew to 7 cells (1-5, 6 backpack, G grenade slot) — narrower cells on smaller
-   viewports so it never runs under the weapon panel's (wrapped, <= 250 px) hint at the bottom right. Mask lane: + the Q cell
-   (no wider than the bar's spare room at 1100 px: the bar still ends at the vitals' right edge, as before the Q cell). */
-@media (max-width: 1400px) { #hotbar .slot { width: 72px; } #hotbar .slot svg { width: 46px; } body #hotbar .slot img.ico3d { width: 66px; } #hotbar .slot .nm { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Natural cell widths per viewport (the band above shrinks them further only when they do not fit): 84 / 72 / 62 px quick
+   slots, a narrower Q cell (compact from 1250 px down). */
+@media (max-width: 1400px) { #hotbar .slot { width: 72px; } #hotbar .slot svg { width: 46px; } body #hotbar .slot img.ico3d { width: 66px; }
   #hotbar .slot.maskslot { width: 56px; } #hotbar .slot.maskslot svg, #hotbar .slot.maskslot .ghost svg { width: 38px; } body #hotbar .slot.maskslot img.ico3d { width: 48px; } }
-/* mask lane: the compact Q cell from 1250 px down, and 64 px quick slots between 1101 and 1180 px, so the bar's left end stays at
-   (or right of) where it was before the Q cell over that range too. */
 @media (max-width: 1250px) { #hotbar .slot.maskslot { width: 44px; margin-right: 2px; padding: 3px 2px; } #hotbar .slot.maskslot svg, #hotbar .slot.maskslot .ghost svg { width: 32px; height: 18px; } body #hotbar .slot.maskslot img.ico3d { width: 38px; height: 26px; } #hotbar .slot.maskslot .nm { font-size: 9.5px; letter-spacing: 0.04em; } }
-@media (max-width: 1180px) { #hotbar .slot { width: 64px; } body #hotbar .slot img.ico3d { width: 58px; } }
-@media (max-width: 1100px) { #hotbar .slot { width: 62px; } #hotbar .slot svg { width: 40px; } body #hotbar .slot img.ico3d { width: 56px; } #weapon-hint { max-width: 190px; } }
+/* At 1100 px and below the band is the actual gap: slimmer vitals bars (220 px; labels and values unchanged) and the weapon
+   panel's narrower hint (190 px) -> left 22 + 220 + 12 = 254 px, right 26 + 190 + 14 = 230 px. */
+@media (max-width: 1100px) { #hotbar { --hb-left: 254px; --hb-right: 230px; } #hotbar .slot { width: 62px; } #hotbar .slot svg { width: 40px; } body #hotbar .slot img.ico3d { width: 56px; } #weapon-hint { max-width: 190px; } #vitals { width: 220px; } }
 #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 20, 15, 0.75) 100%); }
 #vignette.low { animation: pulse 1.1s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }

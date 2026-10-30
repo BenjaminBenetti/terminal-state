@@ -146,7 +146,8 @@ describe('items: the gas mask (gear, face slot) and the gas filter (passive supp
       expect((out as unknown as {isSkinnedMesh?: boolean}).isSkinnedMesh).toBeFalsy();
       expect(out.geometry.getAttribute('skinIndex')).toBeUndefined();
       expect(out.material).not.toBe(mat); // its own material copy (the wardrobe's stays untouched)
-      expect(gearModelSource('gas_mask')).toMatch(/outfit-gasmask-t25\.glb.*unapproved/);
+      // provenance stays as recorded: delivery review accepted (Meshy T2.5 migration), derivative record approved: false, no clearance
+      expect(gearModelSource('gas_mask')).toMatch(/outfit-gasmask-t25\.glb.*review accepted.*approved: false, no licence clearance/);
     } finally {
       registerGasMaskOutfit(null);
     }

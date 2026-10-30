@@ -258,8 +258,10 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
 - **Charge belongs to the mask:** taking it off, re-wearing it, swapping masks, dropping it, travel and Retry never refill it.
 - **Loot:** masks and filters are level-wide floor finds with their own rolls. The Office has 1–2 masks and 2–5 filters; the
   Subway has 0–1 masks and 0–2 filters. A found mask carries 35–75 % of a filter. There is no starter mask.
-- **Art:** the pickup and icon use the shipped zombie-outfit gas mask model (provenance as recorded for that model); the
-  filter is a small procedural canister.
+- **Art:** the pickup and icon reuse the shipped zombie-outfit gas mask (`outfit-gasmask-t25.glb`). It was delivered and
+  review-accepted in the authorized Meshy T2.5 model replacement. Its derivative record still says approved: false, not game-ready
+  and no licence clearance; those flags are unchanged, and delivery acceptance is not legal clearance. The filter is a small
+  procedural canister.
 - **Camera mask:** a DOM layer under the HUD, slid onto the view. It has a rubber bezel and tinted glass, and its edge warns
   amber or red when the filter is low or empty.
 
