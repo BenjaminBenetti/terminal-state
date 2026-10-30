@@ -473,6 +473,17 @@ describe('Ctrl+Shift+P', () => {
     expect(o.visible).toBe(true);
     expect(doc.getElementById('perf-overlay')).not.toBeNull();
   });
+
+  it('sits on the right-hand side (user request): right-anchored with the same inset, same top, kept inside the viewport', () => {
+    const doc = new FakeDoc(), {host} = fakeHost();
+    installPerfOverlay(host, {doc: doc as unknown as Document, win: null, visible: true});
+    const css = doc.getElementById('perf-overlay-css')!.textContent ?? '';
+    const panel = /#perf-overlay \{([^}]*)\}/.exec(css)![1];
+    expect(panel).toMatch(/(^|[;\s])right:\s*12px/);
+    expect(panel).not.toMatch(/(^|[;\s])left:/);
+    expect(panel).toMatch(/(^|[;\s])top:\s*100px/);
+    expect(panel).toMatch(/max-width:\s*calc\(100vw - 24px\)/);
+  });
 });
 
 describe('overlay cost and content', () => {
