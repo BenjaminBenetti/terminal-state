@@ -247,13 +247,17 @@ function roomsSection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
     })
     : `<p>The profile sets <strong>no explicit room modifier entries</strong>: every room key below resolves to the neutral ${mult(mod.neutral)}.</p>`;
   const cell = (v: number, from: 'default' | 'profile') => `${mult(v)}${from === 'profile' ? ` ${badge('set', 'special')}` : ''}`;
-  const head = ['Room key', 'Key kind', 'Room intensity D(room)', ...fams.flatMap(f => [`${esc(f.label)}: density`, `${esc(f.label)}: weight`])];
+  const head = ['Room key', 'Key kind', 'Sampled room types', 'Room intensity D(room)', ...fams.flatMap(f => [`${esc(f.label)}: density`, `${esc(f.label)}: weight`])];
+  // Task enemy-spawn-tables-20261030 (primary): a purpose can sit on several room types (the Office roof deck carries the preset
+  // purpose 'office-stair' "Stairwell"), so show the sampled types the key actually covers.
+  const typesCell = (r: (typeof level.rooms.rows)[number]) => r.types === null ? '<span class="muted">not sampled</span>'
+    : r.types.map(t => `${esc(t.label)} <code>${esc(t.type)}</code>`).join(', ');
   const rows = level.rooms.rows.map(r => {
     const byFamily = fams.flatMap(f => {
       const v = r.families.find(x => x.family === f.id);
       return v ? [cell(v.density, v.from), cell(v.weight, v.from)] : [`${mult(mod.neutral)} <span class="muted">(missing)</span>`, `${mult(mod.neutral)} <span class="muted">(missing)</span>`];
     });
-    return [labelWithId(r.label, r.room), esc(keyKindLabel(r.keyKind)), mult(r.intensity), ...byFamily];
+    return [labelWithId(r.label, r.room), esc(keyKindLabel(r.keyKind)), typesCell(r), mult(r.intensity), ...byFamily];
   });
   const filterId = `rooms-table-${level.id}`;
   return `<h2 id="rooms">Room modifiers</h2>
@@ -269,10 +273,10 @@ ${filterBox(filterId, 'Filter room keys', 'room keys', 'e.g. washroom, office-op
 ${table({
     caption: `${level.name}: resolved room modifiers for every room key the level can produce (1× = neutral)`,
     head,
-    numeric: [2, ...fams.flatMap((_, i) => [3 + 2 * i, 4 + 2 * i])],
+    numeric: [3, ...fams.flatMap((_, i) => [4 + 2 * i, 5 + 2 * i])],
     rowHeader: 0,
     rows,
-    rowAttrs: level.rooms.rows.map(r => `id="${esc(roomAnchor(r.room))}" ${searchAttr(r.room, r.label, r.keyKind)}`),
+    rowAttrs: level.rooms.rows.map(r => `id="${esc(roomAnchor(r.room))}" ${searchAttr(r.room, r.label, r.keyKind, ...(r.types ?? []).flatMap(t => [t.type, t.label]))}`),
   })}
 </div>
 <p class="note">Room intensity D(room) multiplies the room's baseline area weight (see <a href="#placement">placement rules</a>). Defined

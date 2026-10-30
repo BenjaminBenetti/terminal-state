@@ -26,7 +26,7 @@ import {deriveRails, levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
-import {spawnContext, spawnProfile, type SpawnProfile} from '../../ai/spawnTables'; // Task enemy-spawn-tables-20261030 (lane SPAWN)
+import {spawnProfile, type SpawnProfile} from '../../ai/spawnTables'; // Task enemy-spawn-tables-20261030 (lane SPAWN)
 import type {SectionGenContext} from '../../levels/types';
 import type {Door, OfficePose, OfficeTowerInfo, StationLayout} from '../stationTypes';
 import {CEIL, FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR, landingRect, officeSeed, towerFrame, type TowerFrame} from './frame';
@@ -188,13 +188,13 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   const plan = officeWeaponPlan(ctx.levelSeed, layout.startWeapon);
   // Lane SPAWN: each storey run reads its context of the level's ONE spawn profile (street = station + lobby, floor = each office floor).
   for (const t of towers) {
-    const n = t.floor, id = n === 1 ? 'street' : 'floor';
-    placeOfficeEnemies(layout, rng.fork(`office-enemies-${n}`), field, storeyLevels(n), spawnContext(spawns, id), spawns, id);
+    const n = t.floor;
+    placeOfficeEnemies(layout, rng.fork(`office-enemies-${n}`), field, storeyLevels(n), spawns, n === 1 ? 'street' : 'floor');
   }
   // Lane STRUCT: 0-2 enemies already on the roof (they never climb the ladder: no AI link). Lane SPAWN: the profile's 'roof' context.
   {
     const free = holdCells(layout, roofCoreCells(layout, f));
-    placeOfficeEnemies(layout, rng.fork('office-enemies-roof'), field, [OFFICE_ROOF_LEVEL], spawnContext(spawns, 'roof'), spawns, 'roof');
+    placeOfficeEnemies(layout, rng.fork('office-enemies-roof'), field, [OFFICE_ROOF_LEVEL], spawns, 'roof');
     free();
   }
   for (const t of towers) placeOfficeSupplies(layout, rng.fork(`office-supplies-${t.floor}`), field, storeyLevels(t.floor), t.floor === 1, loot);

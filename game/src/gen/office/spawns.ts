@@ -23,7 +23,7 @@ import type {Area, PickupPlacement, StationLayout} from '../stationTypes';
 // Task enemy-spawn-tables-20261030 (lane SPAWN): the enemy controls are the Office's spawn profile (contexts street / floor / roof).
 import {
   areaCap, areaSpawnWeight, reportSpawnCandidates, rollZombieTypes, spawnContext, spawnProfile,
-  type SpawnContextId, type SpawnContextRule, type SpawnProfile,
+  type SpawnContextId, type SpawnProfile,
 } from '../../ai/spawnTables';
 import {OFFICE_FLOORS} from './frame';
 import {COMPANIES, type LootTilt} from './companies';
@@ -48,16 +48,15 @@ function floorTilt(layout: StationLayout, levels: readonly number[]): LootTilt {
 
 /**
  * Lane SPAWN: the count ranges of the Office's spawn profile (ai/spawnTables.ts SPAWN_PROFILES.office contexts street / floor /
- * roof: [5, 8] / [3, 6] / [0, 2]) — read from the profile, kept as the established export.
+ * roof) — read from the profile, kept as the established export. The enemies' walking distance from the start (was
+ * ENEMY_MIN_CELLS) and landing keep-off (was LANDING_KEEP_M.enemy) are the profile's placement rules (OFFICE_PLACEMENT).
  */
 export const OFFICE_ENEMIES = {
   street: spawnContext(spawnProfile('office'), 'street').count, floor: spawnContext(spawnProfile('office'), 'floor').count,
   roof: spawnContext(spawnProfile('office'), 'roof').count,
 };
-/** Walking distance (cells) every enemy keeps from the platform start (18 m, the station rule) — the profile's placement rule. */
-export const ENEMY_MIN_CELLS = {start: spawnContext(spawnProfile('office'), 'street').placement.startCells};
-/** Straight-line keep-out (m) from a storey's stair landing / elevator landing: enemies (the profile's rule), loose loot. */
-export const LANDING_KEEP_M = {enemy: spawnContext(spawnProfile('office'), 'street').placement.landingKeepM ?? 0, loot: 2.0};
+/** Straight-line keep-out (m) of loose loot from a storey's stair landing / elevator landing (enemies: the spawn profile's rule). */
+export const LANDING_KEEP_M = {loot: 2.0};
 
 export interface SpawnField {
   /** Walking distance (cells) from the platform start on every level (-1 = unreachable). */
@@ -70,12 +69,12 @@ const nearKeep = (f: SpawnField, lv: number, x: number, z: number, r: number): b
 const NO_SPAWN_TYPES = new Set(['office-stair', 'stair-core', 'office-elevator']);
 
 /**
- * Enemies of the storeys `levels` (station + lobby: [0, 1]; office floor n: [n]; the roof: [9]) for the generation context `ctx` of
- * the level's spawn `profile` (lane SPAWN: count, type roll, keep-away, area weights x room intensity, caps, tries, spacing — the
+ * Enemies of the storeys `levels` (station + lobby: [0, 1]; office floor n: [n]; the roof: [9]) for the generation context `context`
+ * of the level's spawn `profile` (lane SPAWN: count, type roll, keep-away, area weights x room intensity, caps, tries, spacing — the
  * established values, same draws). Returns the placed count.
  */
-export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], ctx: SpawnContextRule, profile: SpawnProfile, context: SpawnContextId = 'floor'): number {
-  const pl = ctx.placement;
+export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], profile: SpawnProfile, context: SpawnContextId): number {
+  const ctx = spawnContext(profile, context), pl = ctx.placement;
   const count = rng.int(ctx.count[0], ctx.count[1]);
   const types = rollZombieTypes(rng, count, profile.zombieTypes);
   const areaW = new Map<number, number>();
