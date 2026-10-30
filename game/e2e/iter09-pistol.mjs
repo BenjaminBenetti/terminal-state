@@ -55,14 +55,14 @@ await withBrowserLock(async () => {
     let h = await held();
     await shot('b1-devpistol-start');
     step('devpistol: starts holding the pistol (real pistol.glb; the flag is redundant now)', h?.itemId === 'pistol', {held: h, snapshotHeld: (await snap()).held});
-    const r0 = await ammo('ammo_pistol');
+    const r0 = await ammo('ammo_9mm');
     const m0 = h?.mag;
     for (let k = 0; k < 3; k++) { await page.mouse.down(); await frames(2); await page.mouse.up(); await frames(14); }
     h = await held();
     await shot('b2-pistol-fired');
     step('ordinary mouse clicks fire the pistol (magazine decreases, finite)', m0 !== null && h?.mag < m0, {mag: [m0, h?.mag]});
     await page.keyboard.press('KeyR'); await frames(120);
-    const h2 = await held(); const r1 = await ammo('ammo_pistol');
+    const h2 = await held(); const r1 = await ammo('ammo_9mm');
     step('R reloads from finite reserve ammo', h2?.mag > h?.mag && r1 < r0, {mag: [h?.mag, h2?.mag], reserve: [r0, r1]});
     await page.keyboard.press('KeyG'); await frames(40);
     const after = await held();

@@ -1,0 +1,796 @@
+{
+  "schema": "terminal-state-meshy-t25-derivatives-v1",
+  "task": "studio-knife-melee-20261030-01",
+  "lane": "AMMO",
+  "status": "Runtime derivatives of three Meshy T2.5 text-to-3D ammo boxes (one per caliber; primary review: accepted, M2 with a LOCAL stencil repair). Prototype art; no commercial / model licence clearance asserted.",
+  "generation": {
+    "provider": "Meshy",
+    "model": "meshy-t2.5",
+    "route": "text-to-3D preview (smart-topology) + 2K PBR refine",
+    "credits": {
+      "previews": 15,
+      "refines": 30,
+      "total": 45,
+      "allowance": 45
+    },
+    "authorization": "task coordination.md \"Task-scoped generation authority\": exactly three ammo boxes, 45 credits, no rerolls"
+  },
+  "rebuild": "node tools/asset-pipeline/props/build-ammo-boxes.mjs [--only <id>,<id>]",
+  "rawStorage": "Native Meshy GLBs, texture PNGs, task records and the submission ledger stay OUTSIDE Git in reference/tasks/knife-melee-20261030/assets/ (raw/M*/refine/model.glb, ledger.jsonl, DELIVERED.json, manifest.json).",
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "front": "+Z",
+    "origin": "bottom-centre",
+    "files": "plain glTF 2.0 binary (no Draco / meshopt / KTX2); flat paths assets/models/ammo-<caliber>-t25.glb"
+  },
+  "runtime": "game/src/assets/manifest.ts MODEL_FILES item_ammo_9mm / item_ammo_556 / item_ammo_12ga -> world/pickups.ts ITEM_MODEL_KEYS (pickups, holder lots, item icons, warm-up like the other item models)",
+  "counts": {
+    "records": 3,
+    "bytes": 683268,
+    "triangles": 8471
+  },
+  "records": [
+    {
+      "id": "ammo-9mm",
+      "code": "M1",
+      "itemId": "ammo_9mm",
+      "caliber": "9x19mm",
+      "modelKey": "item_ammo_9mm",
+      "output": {
+        "path": "game/public/assets/models/ammo-9mm-t25.glb",
+        "url": "assets/models/ammo-9mm-t25.glb",
+        "sha256": "fd4d594e9240188ce09eb5da5b2a5f0ce565aca5fc47e83aafd23a06acf604bd",
+        "bytes": 178096,
+        "triangles": 2259,
+        "vertices": 2941,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 43897
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 19712
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 4544
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "edgePadding": {
+          "atlasCoveragePct": 86.94,
+          "method": "16 dilation passes from the covered texels (4-neighbour average) + push-pull for the rest, at the native size, before the Lanczos downsize"
+        },
+        "doubleSided": true,
+        "dims": [
+          0.1126,
+          0.1326,
+          0.13
+        ],
+        "bbox": {
+          "min": [
+            -0.0563,
+            0,
+            -0.065
+          ],
+          "max": [
+            0.0563,
+            0.1326,
+            0.065
+          ]
+        },
+        "budget": {
+          "tris": 3200,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item class (build-meshy-t25.mjs): ~3k tris (native smart topology kept, no simplification), 512 px colour, 256 px MR / normal, JPEG",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "route": "text-to-3D: preview (ai_model meshy-t2.5 explicit, model_type smart-topology, topology triangle, target_polycount 3000, glb) -> refine (texture_resolution 2k, enable_pbr; inherits the preview model)",
+        "previewTaskId": "01a18b49-b8ec-727c-9147-0092471ac67e",
+        "refineTaskId": "01a18b4a-3d97-7799-86a9-fcc009b62761",
+        "credits": {
+          "preview": 5,
+          "refine": 10
+        },
+        "prompt": "small worn cardboard box of 9mm pistol cartridges, faded red and white printed carton, the lid flap torn open showing rows of brass 9mm rounds, crushed corners, water stains, upright, realistic game asset, abandoned subway station, dusty and worn, muted colours, single object, no ground plane",
+        "texturePrompt": "small worn cardboard box of 9mm pistol cartridges, faded red and white printed carton, the lid flap torn open showing rows of brass 9mm rounds, crushed corners, water stains, upright, realistic game asset, abandoned subway station, dusty and worn, muted colours, single object, no ground plane",
+        "submittedBy": "task primary (sole submitter; assets/manifest.json, ledger.jsonl)",
+        "review": {
+          "status": "accepted",
+          "note": "worn red/white 9MM carton, torn-open lid flap, brass rounds visible; the clean printed 9MM face is +X (right view) — orient it to the pickup front"
+        },
+        "nativeGlb": "reference/tasks/knife-melee-20261030/assets/raw/M1/refine/model.glb",
+        "nativeSha256": "1e75cd23a34505f78df6b0fe8079bcc41aa2c5eb46785d3e9c78dc7abb95173a",
+        "nativeBytes": 6372828,
+        "native": {
+          "triangles": 2259,
+          "vertices": 2941,
+          "bbox": [
+            0.9263,
+            0.9448,
+            0.8022
+          ],
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2595544,
+              "sha256": "9e28cdcffb930cf53b0daf9e84db5f0f597258e7d0107a3067285dbaaaf1ab94"
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1753576,
+              "sha256": "5d583cf6c0cbd12a70fa435f4ed2ba598cd0ec0ab58fe4a910e585ef67d620ae"
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1900224,
+              "sha256": "7429f21482413739039d10c48ac8a072ad31ab0d4c82c370b7ecd3462e06eda9"
+            }
+          ],
+          "boundaryEdges": 721,
+          "nonManifoldEdges": 0,
+          "edges": 3749
+        }
+      },
+      "transform": {
+        "description": "p_out = s * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 1,
+        "R": [
+          [
+            0,
+            0,
+            -1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            0
+          ]
+        ],
+        "s": 0.140348,
+        "t": [
+          0.000274,
+          0.066371,
+          0.000069
+        ],
+        "orient": "the clean printed \"9MM\" carton end is native +X (primary review): one quarter turn (+X -> +Z) makes it the pickup / shelf front; the carton then runs front-to-back like boxes stocked on a shelf",
+        "fit": "uniform: runtime Z (d) = 0.13 m -> 0.1126 x 0.1326 x 0.13 m (w x h x d)",
+        "size": "carton length 0.13 m (a 50-round 9mm box is ~0.12 m; slightly larger for readability); the open lid flap makes it ~0.13 m tall",
+        "itemDims": "items/items.ts ITEM_DIMS.ammo_9mm = these dims (shape 'flat': rests upright); world/pickups.ts fitItemModel then keeps scale 1"
+      },
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "what": "the procedural ammo_9mm supply box (world/pickups.ts legacySupplyMesh; kept as the fallback if the model fails to load)"
+      },
+      "review": "reference/tasks/knife-melee-20261030/review/ammo/ammo-9mm-review.png",
+      "limitations": [
+        "Text-to-3D AI reconstruction (Meshy T2.5): printed graphics and small print are fictional AI designs (some fine print is gibberish).",
+        "Prototype derivative: no commercial / model licence clearance asserted."
+      ],
+      "tool": "ammo-boxes-1"
+    },
+    {
+      "id": "ammo-556",
+      "code": "M2",
+      "itemId": "ammo_556",
+      "caliber": "5.56x45mm",
+      "modelKey": "item_ammo_556",
+      "output": {
+        "path": "game/public/assets/models/ammo-556-t25.glb",
+        "url": "assets/models/ammo-556-t25.glb",
+        "sha256": "062a05296e4c5e5dfff28b98c29e7f9e5c9af5ccabd03f927f4f37986aeb3e52",
+        "bytes": 186152,
+        "triangles": 3126,
+        "vertices": 3760,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 27147
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 15962
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 1615
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "edgePadding": {
+          "atlasCoveragePct": 54.986,
+          "method": "16 dilation passes from the covered texels (4-neighbour average) + push-pull for the rest, at the native size, before the Lanczos downsize"
+        },
+        "doubleSided": false,
+        "dims": [
+          0.1645,
+          0.175,
+          0.0762
+        ],
+        "bbox": {
+          "min": [
+            -0.0823,
+            0,
+            -0.0381
+          ],
+          "max": [
+            0.0823,
+            0.175,
+            0.0381
+          ]
+        },
+        "budget": {
+          "tris": 3200,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item class (build-meshy-t25.mjs): ~3k tris (native smart topology kept, no simplification), 512 px colour, 256 px MR / normal, JPEG",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "route": "text-to-3D: preview (ai_model meshy-t2.5 explicit, model_type smart-topology, topology triangle, target_polycount 3000, glb) -> refine (texture_resolution 2k, enable_pbr; inherits the preview model)",
+        "previewTaskId": "01a18b49-c099-76b0-ab1c-fa5e88c22122",
+        "refineTaskId": "01a18b4a-453c-77c3-a1c7-9ddf0bb0499a",
+        "credits": {
+          "preview": 5,
+          "refine": 10
+        },
+        "prompt": "worn olive-drab steel military ammunition can with a latching lid and folding carry handle, faded yellow stenciled 5.56 markings, chipped paint and rust spots, closed, upright, realistic game asset, abandoned subway station, dusty and worn, muted colours, single object, no ground plane",
+        "texturePrompt": "worn olive-drab steel military ammunition can with a latching lid and folding carry handle, faded yellow stenciled 5.56 markings, chipped paint and rust spots, closed, upright, realistic game asset, abandoned subway station, dusty and worn, muted colours, single object, no ground plane",
+        "submittedBy": "task primary (sole submitter; assets/manifest.json, ledger.jsonl)",
+        "review": {
+          "status": "accepted-with-local-fix",
+          "note": "olive-drab steel ammo can, handle, latches, chipped/rusted; the generated stencil reads \"516\" (front + back panels) instead of 5.56 — needs a local texture decal correction to \"5.56\" in the derivative (authorized: locally corrected typography/decals)"
+        },
+        "nativeGlb": "reference/tasks/knife-melee-20261030/assets/raw/M2/refine/model.glb",
+        "nativeSha256": "76b89de71cc9494be6d5788ad4a399e410ec226c51d765fadf41c290ac2bbbb1",
+        "nativeBytes": 5238084,
+        "native": {
+          "triangles": 3126,
+          "vertices": 3760,
+          "bbox": [
+            0.895,
+            0.9521,
+            0.4146
+          ],
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1983054,
+              "sha256": "7ba16e6413f880ddf88cfbb86a5effd832028c791999d3b84f869629f36aa967"
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1575680,
+              "sha256": "4be212192c5f200d663327f909bed713f3ebada853730069ef8f264a2df76c24"
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1519243,
+              "sha256": "93fa72e7aac83fc17bfe6e31acb0c7f4ee657edf52400cf72159b34f31d2ec49"
+            }
+          ],
+          "boundaryEdges": 20,
+          "nonManifoldEdges": 0,
+          "edges": 4699
+        }
+      },
+      "transform": {
+        "description": "p_out = s * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "s": 0.183795,
+        "t": [
+          0,
+          0.087545,
+          0
+        ],
+        "orient": "native front (+Z) already shows the stencilled panel",
+        "fit": "uniform: runtime Y (h) = 0.175 m -> 0.1645 x 0.175 x 0.0762 m (w x h x d)",
+        "size": "a compact steel ammo can 0.175 m tall incl. the folded handle (fits the 0.18 m drawer / low-tier clearance), ~0.165 m wide, ~0.076 m deep",
+        "itemDims": "items/items.ts ITEM_DIMS.ammo_556 = these dims (shape 'flat': rests upright); world/pickups.ts fitItemModel then keeps scale 1"
+      },
+      "localRepair": {
+        "kind": "LOCAL texture repair (not Meshy output)",
+        "reason": "Meshy painted the can's stencil as \"516\" (front and back panels; primary review) instead of the 5.56 caliber. Authorized by the task: \"locally corrected typography / decals are fine if generated text is poor\".",
+        "method": "object-space panel projection: yellow stencil masked (colour rule) + dilated 7 px (its dark halo too), filled from the surrounding paint (push-pull inpainting + seeded grain at the panel's own luminance spread), \"5.56\" composed from the generated stencil's own glyphs, written back to every atlas texel of the panel (face normal toward the view, on the panel plane; bilinear from the decal) + a 3 px gutter bleed; the embossed \"516\" relief in the normal map flattened (128,128,255) inside the old mask. Metallic-roughness unchanged. Base colour / normal edited at 2048 px before downsizing.",
+        "colorRule": "(r, g, b) => r > 105 && g > 70 && b < 0.5 * r && r - b > 70 && g < 0.98 * r && g > 0.45 * r",
+        "panels": [
+          {
+            "side": "front",
+            "view": "+Z panel (front view)",
+            "oldStencil": {
+              "yellowAtlasTexels": 14489,
+              "extentNative": {
+                "x": [
+                  -0.2133,
+                  0.2247
+                ],
+                "y": [
+                  -0.2153,
+                  0.0801
+                ]
+              },
+              "glyphs": [
+                {
+                  "char": "5",
+                  "wNative": 0.1686,
+                  "hNative": 0.2921
+                },
+                {
+                  "char": "1",
+                  "wNative": 0.0993,
+                  "hNative": 0.285
+                },
+                {
+                  "char": "6",
+                  "wNative": 0.16,
+                  "hNative": 0.2929
+                }
+              ]
+            },
+            "newStencil": {
+              "text": "5.56",
+              "from": "the generated stencil's own glyphs: \"5\" (x2), \"6\", dot = a square cut from the foot of the \"1\"",
+              "horizontalScale": 0.8667,
+              "widthVsOld": 1.1797,
+              "glyphBoxesDecalPx": [
+                {
+                  "x0": 97,
+                  "x1": 301,
+                  "y0": 156,
+                  "y1": 564
+                },
+                {
+                  "x0": 316,
+                  "x1": 377,
+                  "y0": 494,
+                  "y1": 564
+                },
+                {
+                  "x0": 392,
+                  "x1": 596,
+                  "y0": 156,
+                  "y1": 564
+                },
+                {
+                  "x0": 611,
+                  "x1": 804,
+                  "y0": 155,
+                  "y1": 564
+                }
+              ]
+            },
+            "decal": {
+              "pxPerUnit": 1400,
+              "size": [
+                920,
+                721
+              ],
+              "rectNative": {
+                "x0": -0.3227,
+                "x1": 0.3342,
+                "y0": -0.3248,
+                "y1": 0.1896
+              },
+              "grainStd": 2.943,
+              "seed": 21926
+            },
+            "atlas": {
+              "texelsRewritten": 61671,
+              "normalTexelsFlattened": 18464,
+              "gutterTexelsBled": 21714
+            }
+          },
+          {
+            "side": "back",
+            "view": "-Z panel (back view, mirrored X so it reads from behind)",
+            "oldStencil": {
+              "yellowAtlasTexels": 6848,
+              "extentNative": {
+                "x": [
+                  -0.2212,
+                  0.1962
+                ],
+                "y": [
+                  -0.2183,
+                  0.0805
+                ]
+              },
+              "glyphs": [
+                {
+                  "char": "5",
+                  "wNative": 0.17,
+                  "hNative": 0.3007
+                },
+                {
+                  "char": "1",
+                  "wNative": 0.1014,
+                  "hNative": 0.2964
+                },
+                {
+                  "char": "6",
+                  "wNative": 0.1486,
+                  "hNative": 0.3036
+                }
+              ]
+            },
+            "newStencil": {
+              "text": "5.56",
+              "from": "the generated stencil's own glyphs: \"5\" (x2), \"6\", dot = a square cut from the foot of the \"1\"",
+              "horizontalScale": 0.8635,
+              "widthVsOld": 1.1797,
+              "glyphBoxesDecalPx": [
+                {
+                  "x0": 90,
+                  "x1": 295,
+                  "y0": 147,
+                  "y1": 567
+                },
+                {
+                  "x0": 310,
+                  "x1": 370,
+                  "y0": 497,
+                  "y1": 567
+                },
+                {
+                  "x0": 386,
+                  "x1": 591,
+                  "y0": 147,
+                  "y1": 567
+                },
+                {
+                  "x0": 606,
+                  "x1": 785,
+                  "y0": 143,
+                  "y1": 567
+                }
+              ]
+            },
+            "decal": {
+              "pxPerUnit": 1400,
+              "size": [
+                877,
+                711
+              ],
+              "rectNative": {
+                "x0": -0.3255,
+                "x1": 0.3005,
+                "y0": -0.3227,
+                "y1": 0.1848
+              },
+              "grainStd": 4.103,
+              "seed": 21942
+            },
+            "atlas": {
+              "texelsRewritten": 26733,
+              "normalTexelsFlattened": 8948,
+              "gutterTexelsBled": 5211
+            }
+          }
+        ],
+        "inputs": {
+          "baseColorSha256": "7ba16e6413f880ddf88cfbb86a5effd832028c791999d3b84f869629f36aa967",
+          "normalSha256": "93fa72e7aac83fc17bfe6e31acb0c7f4ee657edf52400cf72159b34f31d2ec49"
+        },
+        "outputs2048": {
+          "baseColorPngSha256": "06720b58bc0ecd9c0cee473663f558eb56affa38a5381fd01fc11b26c6f6e1a7",
+          "normalPngSha256": "18193c0c7248625bf88a2090b87945384a765646b33a41dcd812f62917ca4d5a"
+        }
+      },
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "what": "the procedural ammo_556 supply box (world/pickups.ts legacySupplyMesh; kept as the fallback if the model fails to load)"
+      },
+      "review": "reference/tasks/knife-melee-20261030/review/ammo/ammo-556-review.png",
+      "limitations": [
+        "Text-to-3D AI reconstruction (Meshy T2.5): printed graphics and small print are fictional AI designs (some fine print is gibberish).",
+        "The 5.56 stencil is a LOCAL repair of the generated texture (not Meshy output); the old \"516\" relief is flattened in the normal map (the new digits are paint only).",
+        "Prototype derivative: no commercial / model licence clearance asserted."
+      ],
+      "tool": "ammo-boxes-1"
+    },
+    {
+      "id": "ammo-12ga",
+      "code": "M3",
+      "itemId": "ammo_12ga",
+      "caliber": "12ga",
+      "modelKey": "item_ammo_12ga",
+      "output": {
+        "path": "game/public/assets/models/ammo-12ga-t25.glb",
+        "url": "assets/models/ammo-12ga-t25.glb",
+        "sha256": "1536c0a57dc78b8ba6a6140c9404dedfc3cc5596d7a2a293c4e695cdf8a36e2b",
+        "bytes": 319020,
+        "triangles": 3086,
+        "vertices": 3786,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              1024,
+              1024
+            ],
+            "mime": "image/jpeg",
+            "bytes": 159418
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 14036
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 3625
+          }
+        ],
+        "gpuTextureBytesEstimate": 6291456,
+        "edgePadding": {
+          "atlasCoveragePct": 57.069,
+          "method": "16 dilation passes from the covered texels (4-neighbour average) + push-pull for the rest, at the native size, before the Lanczos downsize"
+        },
+        "doubleSided": false,
+        "dims": [
+          0.13,
+          0.1566,
+          0.123
+        ],
+        "bbox": {
+          "min": [
+            -0.065,
+            0,
+            -0.0615
+          ],
+          "max": [
+            0.065,
+            0.1566,
+            0.0615
+          ]
+        },
+        "budget": {
+          "tris": 3200,
+          "color": 1024,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 420000,
+          "rule": "consumable item class (build-meshy-t25.mjs): ~3k tris (native smart topology kept, no simplification), 512 px colour, 256 px MR / normal, JPEG; M3 colour 1024 px: its UV islands are packed tightly, so at 512 px the red shells bleed into the carton as pink seams (review sheet)",
+          "reason": "M3 colour 1024 px: its UV islands are packed tightly, so at 512 px the red shells bleed into the carton as pink seams (review sheet)",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "route": "text-to-3D: preview (ai_model meshy-t2.5 explicit, model_type smart-topology, topology triangle, target_polycount 3000, glb) -> refine (texture_resolution 2k, enable_pbr; inherits the preview model)",
+        "previewTaskId": "01a18b49-c849-7620-b8bc-86cc44340f64",
+        "refineTaskId": "01a18b4a-4c79-711d-8f98-5cc3719475a6",
+        "credits": {
+          "preview": 5,
+          "refine": 10
+        },
+        "prompt": "worn cardboard box of 12 gauge shotgun shells, faded green and yellow printed carton, open top showing red plastic shotgun shells with brass bases standing in rows, scuffed and water-stained, upright, realistic game asset, abandoned subway station, dusty and worn, muted colours, single object, no ground plane",
+        "texturePrompt": "worn cardboard box of 12 gauge shotgun shells, faded green and yellow printed carton, open top showing red plastic shotgun shells with brass bases standing in rows, scuffed and water-stained, upright, realistic game asset, abandoned subway station, dusty and worn, muted colours, single object, no ground plane",
+        "submittedBy": "task primary (sole submitter; assets/manifest.json, ledger.jsonl)",
+        "review": {
+          "status": "accepted",
+          "note": "tan carton printed \"12 Gauge / SHOTGUN SHELLS\", open top with red shells; small gibberish fine print acceptable"
+        },
+        "nativeGlb": "reference/tasks/knife-melee-20261030/assets/raw/M3/refine/model.glb",
+        "nativeSha256": "03155f6362e5a80774225278cb3a954615efad69f100af1d95f5fb762c97ac80",
+        "nativeBytes": 6442692,
+        "native": {
+          "triangles": 3086,
+          "vertices": 3786,
+          "bbox": [
+            0.7891,
+            0.9507,
+            0.7466
+          ],
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2912587,
+              "sha256": "f86c351adb6b98fc259ef64a6526415204bf3545f37a78d196b9b361f612a9a2"
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1360550,
+              "sha256": "a7f51614e5490e895081515ac545044db05cde26a37507a977b15bf63176f68a"
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2009065,
+              "sha256": "5dd178b71e58b8e4829790e533c4a85b43a1c339086b5a7f45df7fa7ac2a2c34"
+            }
+          ],
+          "boundaryEdges": 0,
+          "nonManifoldEdges": 0,
+          "edges": 4629
+        }
+      },
+      "transform": {
+        "description": "p_out = s * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "s": 0.164752,
+        "t": [
+          -0.000121,
+          0.078394,
+          0
+        ],
+        "orient": "native front (+Z) shows the \"12 Gauge\" print and the open top with the red shells",
+        "fit": "uniform: runtime X (w) = 0.13 m -> 0.13 x 0.1566 x 0.123 m (w x h x d)",
+        "size": "carton 0.13 m wide (a 25-shell 12-gauge box is ~0.11 m); the lid flap standing open at the back makes it ~0.16 m tall",
+        "itemDims": "items/items.ts ITEM_DIMS.ammo_12ga = these dims (shape 'flat': rests upright); world/pickups.ts fitItemModel then keeps scale 1"
+      },
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "what": "the procedural ammo_12ga supply box (world/pickups.ts legacySupplyMesh; kept as the fallback if the model fails to load)"
+      },
+      "review": "reference/tasks/knife-melee-20261030/review/ammo/ammo-12ga-review.png",
+      "limitations": [
+        "Text-to-3D AI reconstruction (Meshy T2.5): printed graphics and small print are fictional AI designs (some fine print is gibberish).",
+        "Prototype derivative: no commercial / model licence clearance asserted."
+      ],
+      "tool": "ammo-boxes-1"
+    }
+  ],
+  "tool": "ammo-boxes-1"
+}

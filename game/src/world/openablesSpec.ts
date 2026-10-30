@@ -13,6 +13,8 @@
 // The audit of the whole prop catalogue (covered kinds + genuine exceptions) is OPENABLE_AUDIT below and
 // reference/tasks/vertical-slice-iteration08-20261027/lanes/lane-I-audit.md; tests/openables.test.ts keeps both in step.
 
+// Lane AMMO (knife-melee-20261030): ammo rows are GENERIC — the table's ammo weight split ~1/3 each over the calibers.
+import {genericAmmo} from '../items/calibers';
 import {COMPANY_KIND_AUDIT} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS): audit rows
 
 /** Axis-aligned box [x0, y0, z0, x1, y1, z1] (holder-local, closed pose). */
@@ -171,14 +173,14 @@ function trashFill(x0: number, z0: number, x1: number, z1: number, y: number, ro
 // Item rows (items/items.ts ids).
 const JUNK: Rows = [['chips', 1], ['chocolate', 1], ['cola', 1.2], ['water', 0.5], ['juice', 0.5], ['noodles', 0.3], ['bandage', 0.12]];
 const SNACK: Rows = [['chocolate', 1], ['chips', 0.6], ['water', 0.4], ['cola', 0.4]];
-const PERSONAL: Rows = [['water', 1], ['cola', 0.8], ['chocolate', 1], ['chips', 0.6], ['bandage', 0.8], ['juice', 0.5], ['noodles', 0.4], ['ammo_rifle', 0.3], ['ammo_shells', 0.2]];
-const OFFICE: Rows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ['ammo_rifle', 0.15]];
+const PERSONAL: Rows = [['water', 1], ['cola', 0.8], ['chocolate', 1], ['chips', 0.6], ['bandage', 0.8], ['juice', 0.5], ['noodles', 0.4], ...genericAmmo(0.5)];
+const OFFICE: Rows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ...genericAmmo(0.15)];
 const MED: Rows = [['bandage', 3], ['medkit', 0.35], ['water', 0.3]];
-const SAFE: Rows = [['ammo_rifle', 1.2], ['ammo_shells', 0.8], ['bandage', 0.6], ['medkit', 0.25], ['chocolate', 0.3]];
+const SAFE: Rows = [...genericAmmo(2), ['bandage', 0.6], ['medkit', 0.25], ['chocolate', 0.3]];
 const FROZEN: Rows = [['water', 1], ['juice', 1], ['cola', 0.8], ['beans', 0.4], ['noodles', 0.3]];
 const PANTRY: Rows = [['noodles', 1], ['beans', 1], ['water', 0.8], ['chocolate', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.2]];
 /** Task office-overhaul-20261030 (lane INTERACT): stashed in a toilet (bowl / tank lid) — a bottle, a dressing, a box of 9 mm, rarely better. */
-const TOILET: Rows = [['water', 1], ['bandage', 0.8], ['ammo_pistol', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
+const TOILET: Rows = [['water', 1], ['bandage', 0.8], ['ammo_9mm', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
 
 // ---------------------------------------------------------------------------------------
 // Per-kind specs
@@ -509,7 +511,7 @@ export const OPENABLE_SPECS = {
   monitorDesk: {
     label: 'security desk', model: null, body: 'overlay', group: 'surface',
     parts: [[0.015, 0.236], [0.254, 0.476], [0.494, 0.712]].map(([y0, y1], i) => deskDrawer(i === 2 ? 'top drawer' : i === 0 ? 'bottom drawer' : 'drawer', 0.37, 0.77, y0, y1, 0.355, 0.6)),
-    loot: {lots: [1, 1], empty: 0.5, items: [['ammo_rifle', 0.7], ['ammo_shells', 0.5], ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]]},
+    loot: {lots: [1, 1], empty: 0.5, items: [...genericAmmo(1.2), ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]]},
     sound: {open: 'desk', close: 'desk'},
   },
   // --- washroom cubicles (task office-overhaul-20261030, lane INTERACT) -------------------------------------------------------------

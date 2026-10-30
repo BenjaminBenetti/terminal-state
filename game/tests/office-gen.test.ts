@@ -26,6 +26,7 @@ import {Rng} from '../src/core/rng';
 import {cutOfficeWindows} from '../src/world/officeProps';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {corpusTotals} from './helpers/lootEconomy';
+import {LEGACY_AMMO_IDS} from '../src/items/calibers';
 
 /** Canonical dump hash of everything a generator produces (grids, areas, doors, props, lights, signs, loot, spawns). */
 function fingerprint(l: StationLayout): string {
@@ -445,6 +446,7 @@ describe('the Subway is unchanged', () => {
   // slush machines …) sit on the new geometry: verified against a7a646a for these 8 seeds — areas, doors, grid, lights,
   // zombies and pickups byte-identical; 13–29 hosted props per seed moved by |dy| <= 0.049 m, |dz| <= 0.028 m, dx = 0,
   // same kinds / rotations / counts.
+  const LEGACY_NAME = Object.fromEntries(Object.entries(LEGACY_AMMO_IDS).map(([o, n]) => [n, o])) as Record<string, string>;
   const HEAD: Record<string, string> = {
     '1:rifle': 'f50fc2e7', '1:pistol': '94a7f554', '7:rifle': 'bdd4de2a', '7:pistol': '5f455d00',
     '42:rifle': '57dcd13b', '42:pistol': 'fd258bb9', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
@@ -453,7 +455,9 @@ describe('the Subway is unchanged', () => {
     for (const [key, fp] of Object.entries(HEAD)) {
       const [seed, sw] = key.split(':');
       const l = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol'});
-      expect(fingerprint(l), key).toBe(fp);
+      // lane AMMO (knife-melee-20261030): the ammo item ids became caliber ids (ammo_rifle -> ammo_556, ...); with the old names
+      // mapped back, the generated station must still be byte-identical (floor boxes / weapon-find companions are unchanged)
+      expect(fingerprint({...l, pickups: l.pickups.map(q => ({...q, itemId: LEGACY_NAME[q.itemId] ?? q.itemId}))}), key).toBe(fp);
       expect(l.office).toBeUndefined();
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
       expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);

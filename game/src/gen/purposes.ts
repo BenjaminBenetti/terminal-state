@@ -23,6 +23,10 @@ import {isP7Kind} from './props07';
 import type {StockTheme} from './purposeShapes';
 import type {Wing} from './stationKit';
 import type {AreaKind, RoomType, ShopUse} from './stationTypes';
+// Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
+// 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
+// deliberate sidearm stock, not a rifle / shotgun place.
+import {genericAmmo} from '../items/calibers';
 
 // ---------------------------------------------------------------------------------------
 // Types
@@ -317,7 +321,7 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
 // ---------------------------------------------------------------------------------------
 // Back-of-house rooms (and closets). `slots` = structural room types from the level generator.
 
-const CACHE_CRATE: LootSpec = {items: [['ammo_rifle', 2], ['ammo_shells', 1.4], ['beans', 1], ['water', 1], ['bandage', 0.8]], lots: [1, 3], empty: 0.12};
+const CACHE_CRATE: LootSpec = {items: [...genericAmmo(3.4), ['beans', 1], ['water', 1], ['bandage', 0.8]], lots: [1, 3], empty: 0.12};
 
 export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   'staff-room': {
@@ -350,7 +354,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [1, 1], chance: 0.7, front: 0.8},
       {kind: 'noticeBoard', at: 'wall', wall: 'near', n: [1, 1], chance: 0.5, y: 1.1},
     ],
-    loot: {cabinetTall: {items: [['bandage', 2], ['water', 1], ['chocolate', 1], ['ammo_shells', 0.5]], lots: [2, 4], empty: 0.1}},
+    loot: {cabinetTall: {items: [['bandage', 2], ['water', 1], ['chocolate', 1], ...genericAmmo(0.5)], lots: [2, 4], empty: 0.1}},
     floor: {med: 0.5, ammo: 0.4},
   },
   'first-aid-room': {
@@ -384,9 +388,9 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1], chance: 0.4},
     ],
     loot: {
-      gunLocker: {items: [['ammo_rifle', 3], ['ammo_shells', 2.2], ['medkit', 0.3]], lots: [2, 4], empty: 0.08},
-      monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_shells', 0.5]], lots: [1, 2], empty: 0.4},
-      cabinetTall: {items: [['ammo_rifle', 1.4], ['bandage', 1], ['medkit', 0.4], ['water', 0.6]], lots: [2, 4], empty: 0.1},
+      gunLocker: {items: [...genericAmmo(5.2), ['medkit', 0.3]], lots: [2, 4], empty: 0.08},
+      monitorDesk: {items: [['cola', 1], ['chocolate', 1], ...genericAmmo(0.5)], lots: [1, 2], empty: 0.4},
+      cabinetTall: {items: [...genericAmmo(1.4), ['bandage', 1], ['medkit', 0.4], ['water', 0.6]], lots: [2, 4], empty: 0.1},
       crate: CACHE_CRATE,
     },
     floor: {ammo: 2.6, med: 0.6},
@@ -402,8 +406,8 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'crate', at: 'wall', wall: 'any', n: [0, 2]},
     ],
     loot: {
-      stockShelf: {items: [['water', 1], ['bandage', 1], ['ammo_rifle', 0.6]], lots: [1, 3], empty: 0.35},
-      cabinetTall: {items: [['ammo_rifle', 1.2], ['ammo_shells', 0.8], ['bandage', 1], ['water', 0.6]], lots: [2, 4], empty: 0.1},
+      stockShelf: {items: [['water', 1], ['bandage', 1], ...genericAmmo(0.6)], lots: [1, 3], empty: 0.35},
+      cabinetTall: {items: [...genericAmmo(2), ['bandage', 1], ['water', 0.6]], lots: [2, 4], empty: 0.1},
       crate: CACHE_CRATE,
     },
     floor: {ammo: 1.2, med: 0.4},
@@ -420,7 +424,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     ],
     loot: {
       desk: {items: [['cola', 1], ['chocolate', 1], ['water', 1]], lots: [1, 2], empty: 0.4},
-      cabinetLow: {items: [['bandage', 1], ['ammo_rifle', 0.8], ['water', 1]], lots: [1, 3], empty: 0.15},
+      cabinetLow: {items: [['bandage', 1], ...genericAmmo(0.8), ['water', 1]], lots: [1, 3], empty: 0.15},
     },
     floor: {ammo: 0.8},
   },
@@ -437,8 +441,8 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     ],
     loot: {
       stockShelf: {items: [['water', 1], ['bandage', 1], ['beans', 0.6]], lots: [1, 3], empty: 0.3},
-      shelf: {items: [['water', 1.4], ['beans', 1.2], ['bandage', 1], ['ammo_rifle', 0.8], ['ammo_shells', 0.6]], lots: [2, 5], empty: 0.1},
-      cabinetTall: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 1], ['medkit', 0.3], ['water', 1]], lots: [2, 5], empty: 0.08},
+      shelf: {items: [['water', 1.4], ['beans', 1.2], ['bandage', 1], ...genericAmmo(1.4)], lots: [2, 5], empty: 0.1},
+      cabinetTall: {items: [...genericAmmo(2.2), ['bandage', 1], ['medkit', 0.3], ['water', 1]], lots: [2, 5], empty: 0.08},
       cabinetLow: {items: [['bandage', 1], ['water', 1], ['beans', 1]], lots: [2, 4], empty: 0.1},
       crate: CACHE_CRATE,
     },
@@ -477,7 +481,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     ],
     loot: {
       desk: {items: [['cola', 1], ['chocolate', 1], ['water', 1]], lots: [1, 2], empty: 0.3},
-      cabinetTall: {items: [['bandage', 1.4], ['medkit', 0.4], ['water', 1], ['ammo_shells', 0.5]], lots: [2, 4], empty: 0.1},
+      cabinetTall: {items: [['bandage', 1.4], ['medkit', 0.4], ['water', 1], ...genericAmmo(0.5)], lots: [2, 4], empty: 0.1},
       cabinetLow: {items: [['chocolate', 1], ['water', 1], ['bandage', 1]], lots: [1, 3], empty: 0.15},
       shelf: {items: [['water', 1], ['bandage', 1]], lots: [1, 2], empty: 0.4},
     },
@@ -510,7 +514,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     loot: {
       stockShelf: {items: [['bandage', 1.5], ['water', 1.2], ['beans', 0.6], ['medkit', 0.2]], lots: [1, 3], empty: 0.2},
       medCabinet: {items: [['bandage', 3], ['medkit', 0.8]], lots: [1, 3], empty: 0.2},
-      cabinetTall: {items: [['bandage', 1], ['water', 1], ['ammo_rifle', 0.6]], lots: [1, 3], empty: 0.15},
+      cabinetTall: {items: [['bandage', 1], ['water', 1], ...genericAmmo(0.6)], lots: [1, 3], empty: 0.15},
     },
     floor: {med: 1},
   },
@@ -536,10 +540,10 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'crate', at: 'wall', wall: 'any', n: [0, 2]},
     ],
     loot: {
-      shelf: {items: [['ammo_rifle', 1], ['ammo_shells', 0.8], ['bandage', 1], ['water', 1]], lots: [1, 3], empty: 0.25},
-      cabinetTall: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 1], ['water', 0.6]], lots: [2, 4], empty: 0.1},
+      shelf: {items: [...genericAmmo(1.8), ['bandage', 1], ['water', 1]], lots: [1, 3], empty: 0.25},
+      cabinetTall: {items: [...genericAmmo(2.2), ['bandage', 1], ['water', 0.6]], lots: [2, 4], empty: 0.1},
       crate: CACHE_CRATE,
-      default: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 0.8], ['water', 0.6]], lots: [1, 3], empty: 0.25},
+      default: {items: [...genericAmmo(2.2), ['bandage', 0.8], ['water', 0.6]], lots: [1, 3], empty: 0.25},
     },
     floor: {ammo: 1.2, med: 0.4},
   },
@@ -551,7 +555,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
     ],
     loot: {
-      cabinetLow: {items: [['bandage', 1], ['water', 1], ['ammo_rifle', 0.6]], lots: [1, 2], empty: 0.3},
+      cabinetLow: {items: [['bandage', 1], ['water', 1], ...genericAmmo(0.6)], lots: [1, 2], empty: 0.3},
       crate: CACHE_CRATE,
     },
     floor: {ammo: 0.6, med: 0.3},
@@ -567,7 +571,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
     loot: {
       shelf: {items: [['water', 1], ['chocolate', 1], ['chips', 0.8], ['juice', 0.6], ['bandage', 0.8], ['cola', 0.6]], lots: [2, 4], empty: 0.15},
       desk: {items: [['chocolate', 1], ['water', 1]], lots: [1, 1], empty: 0.5},
-      cabinetTall: {items: [['bandage', 1], ['medkit', 0.3], ['water', 1], ['ammo_shells', 0.4]], lots: [1, 3], empty: 0.15},
+      cabinetTall: {items: [['bandage', 1], ['medkit', 0.3], ['water', 1], ...genericAmmo(0.4)], lots: [1, 3], empty: 0.15},
     },
     floor: {med: 0.5},
   },
@@ -580,8 +584,8 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [1, 1], chance: 0.5, front: 0.8},
     ],
     loot: {
-      desk: {items: [['cola', 1], ['chocolate', 1], ['ammo_shells', 0.4]], lots: [1, 2], empty: 0.4},
-      cabinetTall: {items: [['ammo_rifle', 1.2], ['ammo_shells', 1], ['bandage', 0.8], ['medkit', 0.3]], lots: [2, 4], empty: 0.1},
+      desk: {items: [['cola', 1], ['chocolate', 1], ...genericAmmo(0.4)], lots: [1, 2], empty: 0.4},
+      cabinetTall: {items: [...genericAmmo(2.2), ['bandage', 0.8], ['medkit', 0.3]], lots: [2, 4], empty: 0.1},
     },
     floor: {ammo: 1.4, med: 0.4},
   },
@@ -609,7 +613,7 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
       {kind: 'crate', at: 'wall', wall: 'any', n: [0, 2]},
     ],
     loot: {
-      cabinetLow: {items: [['water', 1], ['bandage', 1], ['ammo_rifle', 0.8], ['chips', 0.6]], lots: [1, 3], empty: 0.15},
+      cabinetLow: {items: [['water', 1], ['bandage', 1], ...genericAmmo(0.8), ['chips', 0.6]], lots: [1, 3], empty: 0.15},
       stockShelf: {items: [['water', 1], ['beans', 1], ['chips', 1]], lots: [1, 3], empty: 0.3},
       crate: CACHE_CRATE,
     },
@@ -716,12 +720,12 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
   const OPEN: readonly RoomType[] = ['office-open'];
   const ROOM: readonly RoomType[] = ['office-room'];
   const DESK: LootSpec = {items: [['chocolate', 1], ['water', 1], ['cola', 0.8], ['chips', 0.6], ['bandage', 0.4], ['juice', 0.3]], lots: [1, 1], empty: 0.62};
-  const DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['ammo_pistol', 0.25]], lots: [1, 2], empty: 0.35};
+  const DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['ammo_9mm', 0.25]], lots: [1, 2], empty: 0.35};
   return {
     'office-reception': {
       id: 'office-reception', category: 'back', theme: 'personal', label: 'Lobby', slots: ['office-lobby'], kinds: ['room'], weight: 1, max: 1,
       light: [0.4, 0.45, 0.15], props: [],
-      loot: {desk: DESK, cabinetLow: DRAWERS, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_pistol', 0.4]], lots: [1, 2], empty: 0.4}},
+      loot: {desk: DESK, cabinetLow: DRAWERS, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_9mm', 0.4]], lots: [1, 2], empty: 0.4}},
       floor: {med: 0.3, ammo: 0.2},
     },
     'office-lobby': {
@@ -740,9 +744,9 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
         {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
       ],
       loot: {
-        gunLocker: {items: [['ammo_pistol', 2.4], ['ammo_shells', 1.6], ['ammo_rifle', 1.2], ['medkit', 0.3]], lots: [2, 4], empty: 0.1},
-        monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_pistol', 0.6]], lots: [1, 2], empty: 0.4},
-        cabinetTall: {items: [['ammo_pistol', 1.4], ['bandage', 1], ['medkit', 0.3], ['water', 0.6]], lots: [2, 4], empty: 0.12},
+        gunLocker: {items: [...genericAmmo(5.2), ['medkit', 0.3]], lots: [2, 4], empty: 0.1},
+        monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_9mm', 0.6]], lots: [1, 2], empty: 0.4},
+        cabinetTall: {items: [['ammo_9mm', 1.4], ['bandage', 1], ['medkit', 0.3], ['water', 0.6]], lots: [2, 4], empty: 0.12},
         crate: CACHE_CRATE,
       },
       floor: {ammo: 2.2, med: 0.5},
@@ -759,7 +763,7 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
     'office-open': {
       id: 'office-open', category: 'back', theme: 'personal', label: 'Open-plan office', slots: OPEN, kinds: ['concourse', 'room'], weight: 1, max: 99,
       light: [0.3, 0.45, 0.25], props: [],
-      loot: {desk: DESK, cabinetLow: DRAWERS, cabinetTall: {items: [['water', 1], ['bandage', 0.8], ['chocolate', 0.8], ['ammo_pistol', 0.3]], lots: [1, 3], empty: 0.2}},
+      loot: {desk: DESK, cabinetLow: DRAWERS, cabinetTall: {items: [['water', 1], ['bandage', 0.8], ['chocolate', 0.8], ['ammo_9mm', 0.3]], lots: [1, 3], empty: 0.2}},
       floor: {med: 0.4, ammo: 0.3},
     },
     'office-private': {
@@ -772,7 +776,7 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
         {kind: 'cabinetTall', at: 'wall', wall: 'near', n: [0, 1], chance: 0.3, front: 0.8},
         {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.4},
       ],
-      loot: {desk: {...DESK, empty: 0.5}, cabinetLow: DRAWERS, cabinetTall: {items: [['water', 1], ['bandage', 1], ['chocolate', 1], ['ammo_pistol', 0.4]], lots: [1, 3], empty: 0.18}},
+      loot: {desk: {...DESK, empty: 0.5}, cabinetLow: DRAWERS, cabinetTall: {items: [['water', 1], ['bandage', 1], ['chocolate', 1], ['ammo_9mm', 0.4]], lots: [1, 3], empty: 0.18}},
       floor: {med: 0.5, ammo: 0.3},
     },
     'office-exec': {
@@ -787,8 +791,8 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
         {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 1], front: 0.4},
       ],
       loot: {
-        desk: {items: [['chocolate', 1], ['water', 1], ['juice', 0.8], ['medkit', 0.3], ['ammo_pistol', 0.5]], lots: [1, 2], empty: 0.35},
-        cabinetLow: {items: [['juice', 1], ['water', 1], ['bandage', 1], ['ammo_pistol', 0.5]], lots: [1, 2], empty: 0.25},
+        desk: {items: [['chocolate', 1], ['water', 1], ['juice', 0.8], ['medkit', 0.3], ['ammo_9mm', 0.5]], lots: [1, 2], empty: 0.35},
+        cabinetLow: {items: [['juice', 1], ['water', 1], ['bandage', 1], ['ammo_9mm', 0.5]], lots: [1, 2], empty: 0.25},
       },
       floor: {med: 0.6, ammo: 0.6},
     },
@@ -847,8 +851,8 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
         {kind: 'cartonStack', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6},
       ],
       loot: {
-        shelf: {items: [['water', 1.4], ['beans', 1], ['bandage', 1], ['ammo_pistol', 0.6], ['ammo_shells', 0.4]], lots: [2, 4], empty: 0.12},
-        cabinetTall: {items: [['ammo_pistol', 1], ['bandage', 1], ['medkit', 0.3], ['water', 1]], lots: [2, 4], empty: 0.1},
+        shelf: {items: [['water', 1.4], ['beans', 1], ['bandage', 1], ...genericAmmo(1)], lots: [2, 4], empty: 0.12},
+        cabinetTall: {items: [['ammo_9mm', 1], ['bandage', 1], ['medkit', 0.3], ['water', 1]], lots: [2, 4], empty: 0.1},
         crate: CACHE_CRATE,
       },
       floor: {ammo: 1.2, med: 0.8},
@@ -864,7 +868,7 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
         {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5},
       ],
       loot: {
-        cabinetTall: {items: [['water', 1], ['bandage', 0.6], ['ammo_pistol', 0.4]], lots: [1, 3], empty: 0.2},
+        cabinetTall: {items: [['water', 1], ['bandage', 0.6], ['ammo_9mm', 0.4]], lots: [1, 3], empty: 0.2},
         crate: CACHE_CRATE,
       },
       floor: {ammo: 0.6, med: 0.3},
@@ -898,7 +902,8 @@ function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], D
   const KITCHEN: LootSpec = {items: [['noodles', 2], ['chocolate', 1], ['beans', 1.4], ['chips', 0.6]], lots: [1, 3], empty: 0.25};
   const TABLE: LootSpec = {items: [['cola', 1], ['chocolate', 1], ['water', 0.8], ['chips', 0.6]], lots: [1, 2], empty: 0.5};
   const MEDS: LootSpec = {items: [['bandage', 2], ['medkit', 0.5], ['water', 0.6]], lots: [1, 3], empty: 0.2};
-  const ARMS: LootSpec = {items: [['ammo_pistol', 2.4], ['ammo_shells', 1.6], ['ammo_rifle', 1.2], ['flare', 0.3], ['medkit', 0.2]], lots: [2, 4], empty: 0.1};
+  // lane AMMO (knife-melee-20261030): the armory's ammo weight (5.2) split ~1/3 each over 9mm / 5.56×45mm / 12-gauge
+  const ARMS: LootSpec = {items: [...genericAmmo(5.2), ['flare', 0.3], ['medkit', 0.2]], lots: [2, 4], empty: 0.1};
   const SUPPLY: LootSpec = {items: [['water', 1.2], ['battery', 0.8], ['flare', 0.4], ['bandage', 0.6], ['beans', 0.6]], lots: [1, 3], empty: 0.25};
   const DIM: LightOdds = [0.15, 0.45, 0.4], DIMMER: LightOdds = [0.08, 0.42, 0.5], LIT: LightOdds = [0.3, 0.45, 0.25];
   const credenza = (chance = 0.6): PropRule => ({kind: 'cabinetLow', at: 'wall', wall: 'side', n: [1, 1], chance, front: 0.7});
@@ -916,18 +921,18 @@ function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], D
       {med: 1.2, ammo: 0.2}),
     'office-labfloor': T('office-labfloor', 'Lab floor', 'medical', DIM, {medCabinet: MEDS, desk: DESK, default: MEDS},
       {med: 1.0, ammo: 0.2}, [{kind: 'medCabinet', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.7}], {open: true}),
-    'office-coldroom': T('office-coldroom', 'Biohazard cold storage', 'medical', DIMMER, {crate: {items: [['bandage', 1.4], ['medkit', 0.6], ['water', 0.8], ['ammo_rifle', 0.6]], lots: [1, 2], empty: 0.2}, default: MEDS},
+    'office-coldroom': T('office-coldroom', 'Biohazard cold storage', 'medical', DIMMER, {crate: {items: [['bandage', 1.4], ['medkit', 0.6], ['water', 0.8], ...genericAmmo(0.6)], lots: [1, 2], empty: 0.2}, default: MEDS},
       {med: 1.0, ammo: 0.3}),
     'office-library': T('office-library', 'Law library', 'personal', DIM, {cabinetLow: DRAWERS, default: DRAWERS}, {med: 0.3, ammo: 0.3}, [credenza(0.5)], {warm: true}),
     'office-boardroom': T('office-boardroom', 'Boardroom', 'personal', DIM, {cabinetLow: {items: [['juice', 1], ['water', 1], ['chocolate', 0.6]], lots: [1, 2], empty: 0.35}},
       {med: 0.2}, [credenza(0.6)], {warm: true}),
     'office-archive': T('office-archive', 'Records archive', 'service', DIMMER, {shelf: {items: [['water', 1], ['bandage', 0.6], ['battery', 0.5], ['chocolate', 0.4]], lots: [1, 2], empty: 0.45}, default: SUPPLY},
       {ammo: 0.5, med: 0.4}),
-    'office-vault': T('office-vault', 'Vault room', 'security', DIMMER, {safe: {items: [['ammo_pistol', 1.4], ['medkit', 0.5], ['bandage', 0.8]], lots: [1, 2], empty: 0.2}, cabinetTall: ARMS},
+    'office-vault': T('office-vault', 'Vault room', 'security', DIMMER, {safe: {items: [['ammo_9mm', 1.4], ['medkit', 0.5], ['bandage', 0.8]], lots: [1, 2], empty: 0.2}, cabinetTall: ARMS},
       {ammo: 1.2, med: 0.4}),
     'office-kitchen': T('office-kitchen', 'Test kitchen', 'food', LIT, {fridge: FRIDGE, kitchenette: KITCHEN, table: TABLE, shelf: KITCHEN}, {med: 0.2}, [], {warm: true}),
     'office-cafe': T('office-cafe', 'Coffee bar', 'food', LIT, {fridge: FRIDGE, table: TABLE, kitchenette: KITCHEN}, {med: 0.2}, [], {warm: true}),
-    'office-roastery': T('office-roastery', 'Roastery', 'food', DIM, {shelf: KITCHEN, crate: {items: [['beans', 1.4], ['water', 1], ['ammo_rifle', 0.5]], lots: [1, 2], empty: 0.3}},
+    'office-roastery': T('office-roastery', 'Roastery', 'food', DIM, {shelf: KITCHEN, crate: {items: [['beans', 1.4], ['water', 1], ...genericAmmo(0.5)], lots: [1, 2], empty: 0.3}},
       {ammo: 0.3}, [], {warm: true}),
     'office-dispensary': T('office-dispensary', 'Dispensary', 'medical', DIM, {medCabinet: MEDS, shelf: MEDS, fridge: {items: [['water', 2], ['juice', 1]], lots: [1, 3], empty: 0.3}, cabinetTall: MEDS},
       {med: 1.6}, [{kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.8}]),
@@ -939,10 +944,10 @@ function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], D
     'office-studio': T('office-studio', 'Broadcast studio', 'tech', DIMMER, {cabinetLow: SUPPLY}, {ammo: 0.3}, [credenza(0.4)]),
     'office-gallery': T('office-gallery', 'Production gallery', 'tech', DIM, {monitorDesk: {items: [['cola', 1], ['battery', 0.8], ['chocolate', 0.8]], lots: [1, 2], empty: 0.4}}, {ammo: 0.3}),
     'office-control': T('office-control', 'Control room', 'security', DIM, {
-      gunLocker: ARMS, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_pistol', 0.8]], lots: [1, 2], empty: 0.35},
-      cabinetTall: {items: [['ammo_pistol', 1.4], ['bandage', 1], ['flare', 0.4], ['water', 0.6]], lots: [2, 4], empty: 0.12},
+      gunLocker: ARMS, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_9mm', 0.8]], lots: [1, 2], empty: 0.35},
+      cabinetTall: {items: [['ammo_9mm', 1.4], ['bandage', 1], ['flare', 0.4], ['water', 0.6]], lots: [2, 4], empty: 0.12},
     }, {ammo: 2.0, med: 0.4}),
-    'office-armory': T('office-armory', 'Equipment room', 'security', DIMMER, {gunLocker: ARMS, staffLockers: {items: [['ammo_pistol', 1], ['bandage', 0.8], ['flare', 0.4]], lots: [1, 2], empty: 0.3},
+    'office-armory': T('office-armory', 'Equipment room', 'security', DIMMER, {gunLocker: ARMS, staffLockers: {items: [['ammo_9mm', 1], ['bandage', 0.8], ['flare', 0.4]], lots: [1, 2], empty: 0.3},
       cabinetTall: ARMS, crate: CACHE_CRATE}, {ammo: 2.2, med: 0.3}),
     'office-mailroom': T('office-mailroom', 'Parcel room', 'service', DIM, {shelf: SUPPLY, crate: CACHE_CRATE}, {ammo: 0.8, med: 0.4}),
     'office-naproom': T('office-naproom', 'Nap room', 'personal', DIMMER, {cabinetLow: DRAWERS}, {med: 0.4}, [credenza(0.3)]),

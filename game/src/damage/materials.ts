@@ -151,9 +151,10 @@ export function partKeyClass(key: string, fallback: DamageClass): DamageClass {
 // Generated GLB models (assets/manifest.ts ModelKey)
 
 export const MODEL_KEY_CLASS: Record<string, DamageClass> = {
-  rifle: 'steel', shotgun: 'steel', pistol: 'steel', bench: 'sheetMetal', light: 'sheetMetal', cabinetTall: 'sheetMetal', cabinetLow: 'sheetMetal', sign: 'sheetMetal',
+  rifle: 'steel', shotgun: 'steel', pistol: 'steel', knife: 'steel', bench: 'sheetMetal', light: 'sheetMetal', cabinetTall: 'sheetMetal', cabinetLow: 'sheetMetal', sign: 'sheetMetal',
   crate: 'wood', turnstile: 'steel', shelf: 'steel', vending: 'sheetMetal', stall: 'sheetMetal',
   item_water: 'plastic', item_cola: 'sheetMetal', item_juice: 'cardboard', item_chocolate: 'food', item_chips: 'food', item_beans: 'sheetMetal', item_noodles: 'food',
+  item_ammo_9mm: 'cardboard', item_ammo_556: 'sheetMetal', item_ammo_12ga: 'cardboard', // lane AMMO (knife-melee-20261030): Meshy T2.5 ammo boxes
   trashCan: 'sheetMetal', shopCounter: 'laminate', shopBackbar: 'steel', shopCooler: 'sheetMetal', shopDisplay: 'steel',
   janitorCart: 'plastic', magazineRack: 'steel', techDisplay: 'laminate', hotdogCart: 'steel', gunLocker: 'sheetMetal',
   // Iteration 07 (Lane P2): generated props p7_<kind> (class per type in gen/props07.ts).
@@ -235,7 +236,7 @@ export const ALL_PROP_KINDS = Object.keys(PROP_DEFS) as PropKind[];
 // Loose items / loot lots (never destroyed: knocked about only)
 
 export const ITEM_CLASS: Record<string, DamageClass> = {
-  rifle: 'steel', shotgun: 'steel', pistol: 'steel', ammo_rifle: 'cardboard', ammo_shells: 'cardboard', ammo_pistol: 'cardboard', medkit: 'plastic', bandage: 'fabric',
+  rifle: 'steel', shotgun: 'steel', pistol: 'steel', knife: 'steel', ammo_556: 'sheetMetal', ammo_12ga: 'cardboard', ammo_9mm: 'cardboard', medkit: 'plastic', bandage: 'fabric', // lane AMMO: 5.56 steel can
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
   battery: 'sheetMetal', flare: 'cardboard', // Iteration 12 (LIGHT): steel-jacketed D cell; waxed-paper road flare
   leg_splint: 'plastic', arm_sling: 'fabric', trauma_kit: 'fabric', // Iteration 16 (lane INJURY): foam splint roll; sling packet; nylon pouch
@@ -272,9 +273,10 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   cola: {mass: 0.37, shape: 'cylinder', mat: 'metal'}, beans: {mass: 0.45, shape: 'cylinder', mat: 'metal'},
   water: {mass: 0.55, shape: 'cylinder', mat: 'plastic'}, noodles: {mass: 0.09, shape: 'cylinder', mat: 'soft'},
   juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
-  ammo_rifle: {mass: 0.62, shape: 'box', mat: 'soft'}, ammo_shells: {mass: 0.7, shape: 'box', mat: 'soft'}, ammo_pistol: {mass: 0.5, shape: 'box', mat: 'soft'},
+  ammo_556: {mass: 0.9, shape: 'box', mat: 'metal'}, ammo_12ga: {mass: 0.7, shape: 'box', mat: 'soft'}, ammo_9mm: {mass: 0.5, shape: 'box', mat: 'soft'}, // lane AMMO: small steel 5.56 can
   medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
   rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},
+  knife: {mass: 0.32, shape: 'box', mat: 'metal'}, // lane KNIFE: ~0.32 m survival knife, steel blade + rubber grip
   // Iteration 12 (LIGHT): D cell ~140 g (upright cylinder); road flare ~220 g lying along X (box collider when shot as a pickup)
   battery: {mass: 0.14, shape: 'cylinder', mat: 'metal'}, flare: {mass: 0.22, shape: 'box', mat: 'soft'},
   // Iteration 16 (lane INJURY): rolled SAM splint ~120 g, sling + wrap packet ~150 g, trauma pouch ~0.7 kg

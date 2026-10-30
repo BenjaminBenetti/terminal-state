@@ -95,7 +95,7 @@ function faceOpenFloor(s: Shell): void {
 function wearLoadedBag(s: Shell): ItemStack {
   const inv = s.g.inv;
   inv.set({bar: 'hotbar', index: 0}, inv.makeStack('pistol', 1, 15));
-  inv.add(inv.makeStack('ammo_pistol', 45));
+  inv.add(inv.makeStack('ammo_9mm', 45));
   inv.add(inv.makeStack('bandage', 3));
   const bag = inv.makeStack('backpack', 1);
   expect(inv.add(bag)).toBe(0); // worn straight away
@@ -207,12 +207,12 @@ describe('deployable backpack: 6, click, E', () => {
     expect(s.g.state).toBe('playing'); // NOT paused
     expect(s.g.inputOwners[0]()).toBe(true);
     const v = s.sys.bagView;
-    const ammo = s.g.inv.find(s.g.inv.allStacks().find(x => x.itemId === 'ammo_pistol')!.uid)!;
+    const ammo = s.g.inv.find(s.g.inv.allStacks().find(x => x.itemId === 'ammo_9mm')!.uid)!;
     expect(v.quick(ammo)).toBe(45);
-    expect(s.g.inv.count('ammo_pistol')).toBe(0);
+    expect(s.g.inv.count('ammo_9mm')).toBe(0);
     expect(bag.bag!.filter(Boolean)).toHaveLength(1);
     expect(v.move({bar: 'bag', index: 0}, {bar: 'pack', index: 5}, 15)).toBe('split');
-    expect(s.g.inv.count('ammo_pistol')).toBe(15);
+    expect(s.g.inv.count('ammo_9mm')).toBe(15);
     expect(total(s.g.inv, [bag])).toEqual(want);
     s.g.hitListeners[0]({amount: 8});
     expect(s.sys.viewOpen).toBe(false);

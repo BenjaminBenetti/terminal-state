@@ -37,10 +37,10 @@ function uidsUnique(inv: Inventory, extra: (ItemStack | null)[] = []): boolean {
 function wornBagWithLoot() {
   const inv = new Inventory();
   inv.set(H(0), inv.makeStack('pistol', 1, 15));
-  inv.add(inv.makeStack('ammo_pistol', 20));
+  inv.add(inv.makeStack('ammo_9mm', 20));
   const bag = inv.makeStack('backpack', 1);
   expect(bag.bag!.length).toBe(BACKPACK_SLOTS);
-  bag.bag![0] = inv.makeStack('ammo_pistol', 60);
+  bag.bag![0] = inv.makeStack('ammo_9mm', 60);
   bag.bag![1] = inv.makeStack('medkit', 2);
   bag.bag![5] = inv.makeStack('rifle', 1, 30);
   inv.set(BACK, bag);
@@ -51,10 +51,10 @@ describe('worn backpack: contents out of reach', () => {
   it('no Inventory method reads or writes the worn bag contents', () => {
     const {inv, bag} = wornBagWithLoot();
     const snapshot = JSON.stringify(stackToJSON(bag));
-    expect(inv.count('ammo_pistol')).toBe(20); // the 60 in the bag do not count (no reloading from the bag)
+    expect(inv.count('ammo_9mm')).toBe(20); // the 60 in the bag do not count (no reloading from the bag)
     expect(inv.count('medkit')).toBe(0);
     expect(inv.take('medkit', 1)).toBe(0);
-    expect(inv.take('ammo_pistol', 100)).toBe(20);
+    expect(inv.take('ammo_9mm', 100)).toBe(20);
     expect(inv.find(bag.bag![1]!.uid)).toBeNull();
     expect(inv.find(bag.bag![5]!.uid)).toBeNull();
     // the 'bag' bar is not an Inventory slot: every slot API refuses it
@@ -117,9 +117,9 @@ describe('grounded bag: open session transfers', () => {
     expect(s.active).toBe(true);
     const ammo = bag.bag![0]!;
     expect(s.quick(B(0))).toBe(60); // bag -> pockets (merges onto the 20)
-    expect(inv.count('ammo_pistol')).toBe(80);
+    expect(inv.count('ammo_9mm')).toBe(80);
     expect(bag.bag![0]).toBeNull();
-    expect(inv.allStacks().some(x => x === ammo) || inv.count('ammo_pistol') === 80).toBe(true);
+    expect(inv.allStacks().some(x => x === ammo) || inv.count('ammo_9mm') === 80).toBe(true);
     const med = bag.bag![1]!;
     expect(s.quick(B(1))).toBe(2);
     expect(inv.find(med.uid)).not.toBeNull(); // whole stack moved as the same object (uid kept)

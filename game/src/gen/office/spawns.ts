@@ -161,12 +161,13 @@ export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: Spaw
   // Ammo: one box per storey (station + lobby: one rifle box and maybe shells — it is a small station), 9 mm leads in the tower.
   const tilt = street ? 'none' : floorTilt(layout, levels);
   if (street) {
-    place('ammo_rifle', 30, ammo);
-    if (rng.chance(0.6)) place('ammo_shells', 8, ammo);
+    place('ammo_556', 30, ammo);
+    if (rng.chance(0.6)) place('ammo_12ga', 8, ammo);
   } else {
     // TENANTS: a security company's floor rarely lacks its box and leans to rifle / shells (same draw, shifted thresholds).
+    // lane AMMO (knife-melee-20261030): caliber items (9mm / 5.56×45mm / 12-gauge).
     const r = rng.next(), [p9, pr, ps] = tilt === 'ammo' ? [0.42, 0.72, 0.97] : [0.55, 0.8, 0.93];
-    if (r < p9) place('ammo_pistol', 15, ammo); else if (r < pr) place('ammo_rifle', 30, ammo); else if (r < ps) place('ammo_shells', 8, ammo);
+    if (r < p9) place('ammo_9mm', 15, ammo); else if (r < pr) place('ammo_556', 30, ammo); else if (r < ps) place('ammo_12ga', 8, ammo);
   }
   const scarce = rng.fork('scarce-floor');
   const [pMed, pBat, pFlare, pFood] = scarceOdds(tilt);
@@ -236,7 +237,7 @@ export function placeOfficeWeapons(layout: StationLayout, rng: Rng, weapons: rea
       const p: PickupPlacement = {itemId: wid, count: 1, x, y: lv ? g.floorOf(i) : 0, z, area: a.id, ...(lv ? {level: lv} : {})};
       layout.pickups.push(p);
       placed.push(p);
-      const [ammo, cnt] = WEAPON_FIND_AMMO[wid] ?? ['ammo_pistol', 15];
+      const [ammo, cnt] = WEAPON_FIND_AMMO[wid] ?? ['ammo_9mm', 15];
       const near = cells.filter(c => { const [cx, cz] = g.center(c % g.w, (c / g.w) | 0), dd = Math.hypot(cx - x, cz - z); return dd >= 0.9 && dd <= 2.4; });
       const q = near.length ? near[rng.int(0, near.length - 1)] : i;
       const [ax, az] = g.center(q % g.w, (q / g.w) | 0);

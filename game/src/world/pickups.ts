@@ -1,5 +1,5 @@
-// World pickups and item models. Gun pickups reuse the gun derivatives; ammo/medical supplies are
-// simple procedural boxes (per the asset-method rule for primitive shapes). Food and drink use the
+// World pickups and item models. Gun pickups reuse the gun derivatives; med kit / bandage are simple procedural boxes (per the
+// asset-method rule for primitive shapes); the ammo boxes are Meshy T2.5 models per caliber (lane AMMO; procedural box fallback). Food and drink use the
 // generated item models (`models.item_water` … `models.item_noodles`, lane A) when the manifest
 // has them, else labelled procedural stand-ins sized to ITEM_DIMS (bottle, can, carton, bar, bag,
 // tin, cup). Every item model: origin bottom-centre, front +Z, real-world size in meters.
@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {DRINK_IDS, FOOD_IDS, itemDef, itemDims} from '../items/items';
+import {AMMO_ITEM_IDS} from '../items/calibers'; // lane AMMO
 import type {ItemStack} from '../items/inventory';
 import {canvasTexture, pickupLabel, surface} from './canvasTextures';
 import {authoredItemModel, isAuthoredItem} from './authoredItems'; // Iteration 12 (LIGHT)
@@ -33,8 +34,12 @@ export interface Pickup {
 // ---------------------------------------------------------------------------------------
 // Item models (shared, cached templates)
 
-/** Manifest keys of the generated food/drink models (optional until lane A lands them). */
-export const ITEM_MODEL_KEYS: Record<string, string> = Object.fromEntries([...DRINK_IDS, ...FOOD_IDS].map(id => [id, `item_${id}`]));
+/**
+ * Manifest keys of the generated item models: food / drink (lane A) and, lane AMMO (knife-melee-20261030), the Meshy T2.5 ammo box
+ * of each caliber (item_ammo_9mm / item_ammo_556 / item_ammo_12ga; fitted to ITEM_DIMS like the food models). Holder lots, pickups,
+ * icons and the warm-up all use the same template; the procedural supply box below stays the fallback if a model is missing.
+ */
+export const ITEM_MODEL_KEYS: Record<string, string> = Object.fromEntries([...DRINK_IDS, ...FOOD_IDS, ...AMMO_ITEM_IDS].map(id => [id, `item_${id}`]));
 
 let itemModels: Record<string, GLTF | undefined> = {};
 const templates = new Map<string, THREE.Object3D>();
@@ -294,20 +299,20 @@ function legacySupplyMesh(itemId: string): THREE.Object3D {
   // Iteration 04 (Lane C): untinted label faces keep their label; every other face gets the shared worn
   // plastic/card grain (mesh UVs, since pickups move), tinted by its colour.
   const std = (o: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial({roughness: 0.7, map: surface('plastic').map, ...o});
-  if (itemId === 'ammo_rifle') {
-    const label = pickupLabel('RIFLE', '#59603f', '#e9e1c8', 11);
+  if (itemId === 'ammo_556') {
+    const label = pickupLabel('5.56', '#59603f', '#e9e1c8', 11);
     const side = std({color: 0x4c5236});
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 0.16), [side, side, std({color: 0x5d6442}), side, std({map: label}), side]);
     m.position.y = 0.06;
     g.add(m);
-  } else if (itemId === 'ammo_pistol') {
+  } else if (itemId === 'ammo_9mm') {
     // Pistol lane: small 9 mm carton (procedural supply box like the rifle/shell ones).
     const label = pickupLabel('9MM', '#5a5146', '#efe6cf', 12);
     const side = std({color: 0x4f473d});
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.11), [side, side, std({color: 0x5f564a}), side, std({map: label}), side]);
     m.position.y = 0.04;
     g.add(m);
-  } else if (itemId === 'ammo_shells') {
+  } else if (itemId === 'ammo_12ga') {
     const label = pickupLabel('12 GA', '#7d2c22', '#efe2c4', 12);
     const side = std({color: 0x6b261d});
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.13), [side, side, std({color: 0x7d2c22}), side, std({map: label}), side]);

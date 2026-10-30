@@ -17,6 +17,7 @@ import {PURPOSE_HOLDER_KINDS, type PurposeHolderKind} from '../gen/props';
 import {purposeLoot} from '../gen/purposes';
 import {P7_HOLDER_KINDS, P7_HOLDER_META, type P7HolderKind} from '../gen/props07';
 import {effectText, itemDef} from './items';
+import {ammoText, genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030)
 import type {Inventory} from './inventory';
 import {packItems, type Placement, type Surface} from './lootLayout';
 import {scarceFinds, type Find} from './lootEconomy';
@@ -159,7 +160,9 @@ const POOL: Record<Cat, readonly Row[]> = {
   food: [['chocolate', 1.2], ['chips', 1.1], ['beans', 0.9], ['noodles', 1]],
   drink: [['water', 1.3], ['cola', 1.2], ['juice', 0.9]],
   med: [['bandage', 1], ['medkit', 0.35]],
-  ammo: [['ammo_rifle', 1.4], ['ammo_shells', 1]],
+  // Lane AMMO (knife-melee-20261030): generic ammo = ~1/3 each 9mm / 5.56×45mm / 12-gauge (was rifle 1.4 : shells 1, no 9mm —
+  // "the pistol ammo ... only spawns on the floor"). The category weight is unchanged, so the number of ammo lots is too.
+  ammo: genericAmmo(2.4),
 };
 /** Vending machines sell snacks, not tins of beans. */
 const VENDING_FOOD: readonly Row[] = [['chocolate', 1.5], ['chips', 1.5], ['noodles', 0.3]];
@@ -173,10 +176,12 @@ function pick<T>(rows: readonly (readonly [T, number])[], r: () => number): T {
 
 function lotCount(itemId: string, kind: HolderKind, r: () => number): number {
   const range = (a: number, b: number) => a + Math.floor(r() * (b - a + 1));
-  if (itemId === 'ammo_rifle') return kind === 'crate' || kind === 'gunLocker' ? range(8, 12) : range(5, 10);
-  if (itemId === 'ammo_shells') return kind === 'crate' || kind === 'gunLocker' ? range(3, 6) : range(2, 4);
-  // Iteration 12 (LOOT lane): 9 mm boxes (security finds; the pistol is the starting gun).
-  if (itemId === 'ammo_pistol') return kind === 'crate' || kind === 'gunLocker' ? range(10, 15) : range(6, 12);
+  // Lane AMMO: per caliber (5.56×45mm = the old rifle rounds, 12-gauge = the old shells, 9mm = the old 9 mm boxes).
+  if (itemId === 'ammo_556') return kind === 'crate' || kind === 'gunLocker' ? range(8, 12) : range(5, 10);
+  if (itemId === 'ammo_12ga') return kind === 'crate' || kind === 'gunLocker' ? range(3, 6) : range(2, 4);
+  // 9mm: lane AMMO (knife-melee-20261030) — now ~1/3 of every generic ammo pick (it used to be a rare security find at 10-15 / 6-12),
+  // so a holder's 9mm lot is ~half a magazine like the other calibers (4-8 / 6-10): total holder ammo stays in its band (tests).
+  if (itemId === 'ammo_9mm') return kind === 'crate' || kind === 'gunLocker' ? range(6, 10) : range(4, 8);
   return 1;
 }
 
@@ -487,12 +492,12 @@ export function partOpenMessage(s: HolderState, part: number, info: PartInfo): {
 // ---------------------------------------------------------------------------------------
 // Text
 
-/** "12 rifle rounds, bandage, 2 × Water" */
+/** "12 5.56mm rounds, 3 12-gauge shells, 9 9mm rounds, bandage, 2 × Water" (lane AMMO: ammo by caliber) */
 export function describeLoot(entries: readonly LootEntry[]): string {
   return entries.map(({itemId, count: n}) => {
+    const ammo = ammoText(itemId, n);
+    if (ammo) return ammo;
     switch (itemId) {
-      case 'ammo_rifle': return `${n} rifle round${n === 1 ? '' : 's'}`;
-      case 'ammo_shells': return `${n} shotgun shell${n === 1 ? '' : 's'}`;
       case 'bandage': return n === 1 ? 'bandage' : `${n} bandages`;
       case 'medkit': return n === 1 ? 'first-aid kit' : `${n} first-aid kits`;
       default: { const d = itemDef(itemId); return n === 1 ? d.short : `${n} × ${d.short}`; }

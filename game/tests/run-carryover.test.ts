@@ -194,14 +194,16 @@ describe('carry state: starter kit, Retry snapshot, participants', () => {
     const inv = starterInventory('pistol');
     expect(inv.hotbar[0]).toMatchObject({itemId: 'pistol', count: 1, mag: WEAPONS.pistol.magazine});
     expect(inv.hotbar[4]).toMatchObject({itemId: 'bandage', count: 1});
-    expect(countOf(inv, 'ammo_pistol')).toBe(45);
+    expect(countOf(inv, 'ammo_9mm')).toBe(45);
     expect(countOf(inv, 'flare')).toBe(1);
     expect(inv.selected).toBe(0);
-    expect(invItems(inv)).toEqual(['ammo_pistolx45', 'bandagex1', 'flarex1', `pistolx1@${WEAPONS.pistol.magazine}`]);
+    // lane KNIFE (knife-melee-20261030): + the knife in quick slot 3, in addition to the unchanged kit (no ammo: mag 0)
+    expect(inv.hotbar[2]).toMatchObject({itemId: 'knife', count: 1});
+    expect(invItems(inv)).toEqual(['ammo_9mmx45', 'bandagex1', 'flarex1', 'knifex1@0', `pistolx1@${WEAPONS.pistol.magazine}`]);
     expect(inv.invariants()).toEqual([]);
     const rifle = starterInventory('rifle');
     expect(rifle.hotbar[0]).toMatchObject({itemId: 'rifle', mag: 30});
-    expect(countOf(rifle, 'ammo_rifle')).toBe(60);
+    expect(countOf(rifle, 'ammo_556')).toBe(60);
   });
 
   it('a level-entry snapshot restores the carry state exactly, any number of times (no free heal / refill)', () => {
@@ -221,7 +223,7 @@ describe('carry state: starter kit, Retry snapshot, participants', () => {
     const at = invItems(inv);
 
     // play on: use things, get hurt, drain, injure the other arm
-    inv.take('ammo_pistol', 30); inv.take('water', 1); inv.hotbar[0]!.mag = 0;
+    inv.take('ammo_9mm', 30); inv.take('water', 1); inv.hotbar[0]!.mag = 0;
     player.hp = 5; player.stamina = 0; player.damageTaken = 95;
     survival.hunger = 3; survival.thirst = 0; battery.charge = 0.02; battery.on = true;
     limb = {arm: 'right'};
@@ -239,7 +241,7 @@ describe('carry state: starter kit, Retry snapshot, participants', () => {
       expect(limb).toEqual({arm: 'left'});
       expect(stats.kills).toBe(2);
       // mutate the restored copies: the snapshot stays intact for the next retry
-      restored.take('ammo_pistol', 45);
+      restored.take('ammo_9mm', 45);
       restored.hotbar[0]!.mag = 1;
       limb.arm = 'both';
     }
@@ -254,8 +256,8 @@ describe('carry state: starter kit, Retry snapshot, participants', () => {
     const copy = cloneInventory(inv);
     expect(invItems(copy)).toEqual(invItems(inv));
     expect(copy).not.toBe(inv);
-    copy.take('ammo_pistol', 45);
-    expect(countOf(inv, 'ammo_pistol')).toBe(45);
+    copy.take('ammo_9mm', 45);
+    expect(countOf(inv, 'ammo_9mm')).toBe(45);
     const fresh = copy.makeStack('bandage', 1);
     const uids = copy.hotbar.concat(copy.pack).filter(Boolean).map(s => s!.uid);
     expect(uids).not.toContain(fresh.uid);
@@ -311,12 +313,12 @@ describe('section memory: taken loot stays taken, dropped items come back exactl
     v1.pm.remove(p0);
     const p2 = v1.pm.list.find(p => v1.layoutIdx.get(p) === 2)!;
     p2.stack.count = 3;
-    inv.add(inv.makeStack('ammo_rifle', 5));
+    inv.add(inv.makeStack('ammo_556', 5));
     inv.hotbar[0]!.mag = 6;
     const gun = inv.detach({bar: 'hotbar', index: 0})!;
     const dropped = v1.pm.add(gun, 4.2, 0, 6.4, 1.1);
     dropped.obj.quaternion.setFromEuler(new THREE.Euler(0.2, 1.1, 0.05));
-    const ammoRef = inv.find(inv.pack.find(s => s?.itemId === 'ammo_pistol')!.uid)!;
+    const ammoRef = inv.find(inv.pack.find(s => s?.itemId === 'ammo_9mm')!.uid)!;
     v1.pm.add(inv.detach(ammoRef, 20)!, 4.6, 0, 6.1, 0.4);
     // open a door / lid holder that has loot and take what fits (at least one interaction: it is opened / searched)
     const cab = v1.cm.all.find(h => h.group === 'container' && h.state.lots.length > 0) ?? v1.cm.all.find(h => h.group === 'container')!;
@@ -333,7 +335,7 @@ describe('section memory: taken loot stays taken, dropped items come back exactl
     // come back (fresh managers, fresh roll): exactly what was left
     const v2 = visit(layout, mem, inv);
     const items = (pm: PickupManager) => pm.list.map(p => `${p.stack.itemId}x${p.stack.count}${p.stack.mag !== undefined ? `@${p.stack.mag}` : ''}`).sort();
-    expect(items(v2.pm)).toEqual(['ammo_pistolx20', 'ammo_riflex3', 'bandagex1', 'pistolx1@6']); // not the taken 12 rifle rounds
+    expect(items(v2.pm)).toEqual(['ammo_556x3', 'ammo_9mmx20', 'bandagex1', 'pistolx1@6']); // not the taken 12 rifle rounds
     const gun2 = v2.pm.list.find(p => p.stack.itemId === 'pistol')!;
     expect(gun2.obj.position.toArray()).toEqual([4.2, 0, 6.4]);
     expect(gun2.obj.quaternion.angleTo(dropped.obj.quaternion)).toBeLessThan(1e-6);

@@ -124,13 +124,21 @@ export function encodeIconPixels(src: Uint8Array, w: number, h: number, srcSrgb:
 
 const DEG = Math.PI / 180;
 
+/**
+ * Lane AMMO (knife-melee-20261030): icon camera (degrees) per caliber box — the Meshy T2.5 models (world/ammoModels.ts) show their
+ * caliber print on the front (+Z) face: 9mm carton end, 5.56 ammo-can stencil, 12-gauge carton front with the open top.
+ */
+const AMMO_ICON_VIEW: Record<string, {az: number; el: number}> = {ammo_9mm: {az: 28, el: 26}, ammo_556: {az: 26, el: 14}, ammo_12ga: {az: 24, el: 30}};
+
 /** Camera direction for an item: azimuth from +Z (front) toward +X, elevation above the horizon. */
 function viewFor(itemId: string): {az: number; el: number} {
   const def = ITEMS[itemId];
   // Guns: camera on the detailed +X side (muzzle at -Z appears on the right), a touch from above/behind.
   if (def?.kind === 'weapon') return {az: 78 * DEG, el: 14 * DEG};
   // Flat goods (chocolate bar, ammo boxes, med kit, bandage) read better from higher up.
-  if (['chocolate', 'ammo_rifle', 'ammo_shells', 'ammo_pistol', 'medkit', 'bandage', 'arm_sling', 'trauma_kit', 'leg_splint'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG}; // + Iteration 16 treatments
+  if (['chocolate', 'medkit', 'bandage', 'arm_sling', 'trauma_kit', 'leg_splint'].includes(itemId)) return {az: 32 * DEG, el: 38 * DEG}; // + Iteration 16 treatments
+  const ammo = AMMO_ICON_VIEW[itemId];
+  if (ammo) return {az: ammo.az * DEG, el: ammo.el * DEG}; // lane AMMO: the caliber's printed face / stencil toward the camera
   if (itemId === 'flare') return {az: 12 * DEG, el: 30 * DEG}; // Iteration 12 (LIGHT): the tube lies along X, printed band to the front
   if (def?.kind === 'gear') return gearIconView(itemId); // Iteration 16 (lane GEAR): per-piece angles (front three-quarter; the flat gloves from above)
   return {az: 30 * DEG, el: 18 * DEG};

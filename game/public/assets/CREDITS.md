@@ -15,6 +15,10 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   file names mention Meshy, but the generator, account, settings and licence are NOT verified and no clearance is implied).
   The game ships re-oriented, re-scaled, simplified derivatives with the embedded textures unchanged
   (derivatives/user-weapons-20261028.json). The earlier rifle/shotgun derivatives below stay in the repository unused.
+- Knife (2026-10-30, the first melee weapon): a user-uploaded model (the user identifies it as a knife and authorized it
+  for the game; the upload file name mentions Meshy, but the generator, account, settings and licence are NOT verified and
+  no clearance is implied). The game ships a re-oriented, re-scaled (0.32 m), simplified derivative with its PBR textures
+  resized to 1024 px (derivatives/user-knife-20261030.json; tools/asset-pipeline/weapons/build-knife.mjs). No generation.
 - Zombie body + coat ("Last-shift body" / "Last-shift coat"), rifle ("Kept running"), shotgun
   ("Old reliable"), bench, ceiling light, tall and low cabinets: concept images made with native
   Codex/ChatGPT image generation (model not reported), reconstructed to 3D locally with Pixal3D
@@ -117,3 +121,14 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   `assets/derivatives/office-overhaul-20261030.json`.
 - Company names, logos and products are fictional. Native downloads and the generation ledger are kept outside the
   repository (studio reference task folder). Unapproved prototypes; no commercial clearance implied.
+
+## Caliber ammo boxes (2026-10-30)
+- Three ammo-box models, one per caliber (9mm carton, 5.56×45mm steel ammo can, 12-gauge shell carton), were generated
+  with the user's Meshy account (Meshy T2.5, Smart Topology, text-to-3D preview + 2K PBR texture refine; 45 credits)
+  under the user's task authorization and API-key limit. They replace the procedural ammo supply boxes.
+- Runtime derivatives (`assets/models/ammo-*-t25.glb`) were oriented, scaled to pickup size, grounded and
+  texture-downsized by `tools/asset-pipeline/props/build-ammo-boxes.mjs`. The ammo can's generated stencil read "516";
+  it was corrected LOCALLY to "5.56" from the model's own stencil glyphs (not generator output). Per-asset provenance:
+  `assets/derivatives/meshy-t25-ammo-20261030.json`.
+- Native downloads and the generation ledger are kept outside the repository (studio reference task folder).
+  Printed graphics are fictional AI designs. Unapproved prototypes; no commercial clearance implied.

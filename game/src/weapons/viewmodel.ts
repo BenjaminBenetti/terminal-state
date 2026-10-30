@@ -7,6 +7,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {WEAPONS, type WeaponDef} from './weapons';
 import {canvasTexture} from '../world/canvasTextures';
 import {OPTIC_ADS_KICK, RifleOptic, opticAimPosition} from './optic';
+import {knifeSwingOffset, type PoseOffset} from './meleeView'; // lane KNIFE
 
 interface HeldModel {
   root: THREE.Object3D;
@@ -57,6 +58,8 @@ export interface ViewState {
   landDip?: number;
   /** Iteration 15: grenade-style flare pull-back while T / left click is held (0 .. 1, weapons/flareHold.ts). */
   throwReady?: number;
+  /** Lane KNIFE: seconds into the held melee weapon's swing (weapons.ts WeaponController.swingTime), < 0 / absent = none. */
+  swing?: number;
 }
 
 export class Viewmodel {
@@ -84,7 +87,8 @@ export class Viewmodel {
   private readonly tmpV = new THREE.Vector3();
 
   /** Pistol lane: `pistol` is optional (game.ts passes the real pistol.glb once PISTOL_ART_READY). A gun without a model is simply not shown. */
-  constructor(models: {rifle: GLTF; shotgun: GLTF; pistol?: Pick<GLTF, 'scene'>}, consumables: Record<string, THREE.Object3D>) {
+  /** Lane KNIFE: `knife` (knife-user.glb, Grip at the origin, Tip marker) joins the held models like the guns; absent = not shown. */
+  constructor(models: {rifle: GLTF; shotgun: GLTF; pistol?: Pick<GLTF, 'scene'>; knife?: Pick<GLTF, 'scene'>}, consumables: Record<string, THREE.Object3D>) {
     this.scene.add(this.hemi, this.key, this.camera, this.flashLight);
     this.key.position.set(-1, 2, 1);
     this.camera.add(this.pivot);
@@ -354,6 +358,12 @@ export class Viewmodel {
       rot.z -= tk * 0.35;
     }
     this.bobClock += dt;
+    // Lane KNIFE: the slash (weapons/meleeView.ts) — cock back right, sweep through the crosshair at contact, recover
+    if (it.def?.melee && (s.swing ?? -1) >= 0) {
+      const k = knifeSwingOffset(s.swing!, it.def.melee.windup, it.def.interval, this.swingPose);
+      pos.x += k.x; pos.y += k.y; pos.z += k.z;
+      rot.x += k.rx; rot.y += k.ry; rot.z += k.rz;
+    }
     // optic ADS: rotate (kick/sway) about the eyepiece instead of the grip, so the lens stays on the eye
     if (it.optic && optK > 0) {
       const o = it.opticPoint!;
@@ -376,4 +386,6 @@ export class Viewmodel {
   /** Iteration 15: eased flare pull-back and a clock for its full-draw tremble. */
   private throwK = 0;
   private bobClock = 0;
+  /** Lane KNIFE: scratch pose of the melee swing. */
+  private readonly swingPose: PoseOffset = {x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0};
 }

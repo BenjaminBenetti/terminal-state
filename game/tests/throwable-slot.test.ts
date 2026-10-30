@@ -61,7 +61,7 @@ describe('flares stack to 10; the grenade slot fills first', () => {
   it('a different / full grenade slot leaves the normal order unchanged; non-throwables never go there', () => {
     const inv = new Inventory();
     inv.add(inv.makeStack('water', 2));
-    inv.add(inv.makeStack('ammo_pistol', 30));
+    inv.add(inv.makeStack('ammo_9mm', 30)); // lane AMMO: caliber id (the old ammo_pistol id still migrates)
     expect(inv.thrown).toBeNull();
     expect(inv.hasRoomFor('flare')).toBe(true);
     for (let i = 0; i < 5; i++) inv.set(H(i), inv.makeStack('bandage', 5));
