@@ -13,6 +13,11 @@
 //  composite (full res, the RenderPipeline output): depth-aware (bilateral) upsample, then scene x transmittance +
 //            in-scatter in LINEAR HDR; the pipeline's output transform tone-maps (ACES, renderer exposure) + sRGB once.
 //
+// Task gasmask-breach-20261030 (lane GAS): the breached-window gas (world/gas/field.ts) is a separate march term like the
+// smoke: its R8 concentration layers (one per level slot, the density map's grid) give extinction GAS.EXT·c, a green tinted
+// in-scatter of the same lights and a small ambient emission, shaped by the shared height profile and wisped by the moving
+// detail noise. Gated per step by the `gasOn` uniform (TSL If): no gas anywhere = one uniform branch per step.
+//
 // WGSL uniformity: textureSampleCompare (the flashlight shadow) needs uniform control flow, so the march loop has a
 // compile-time trip count, no per-pixel break, and the shadow compare runs unconditionally at the top of each step; every
 // other lookup is textureSampleLevel / textureLoad (fine in per-pixel branches).
@@ -22,6 +27,7 @@ import {NodeMaterial, type Node} from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import {lfSlotAt, lightFieldSample} from '../world/lightFieldNode';
 import {MAX_SLOTS} from '../world/lightField';
+import {GAS} from '../world/gas/field';
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
 import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 
@@ -70,6 +76,8 @@ export function createFogUniforms() {
     scatCount: uniform(0, 'int'), scatPos: uniformArray(arr4(VF_LIMITS.scatter), 'vec4'), scatCol: uniformArray(arr4(VF_LIMITS.scatter), 'vec4'),
     smokeCount: uniform(0, 'int'), smokeBound: uniformArray(arr4(VF_LIMITS.smoke), 'vec4'), smokeTint: uniformArray(arr4(VF_LIMITS.smoke), 'vec4'),
     puff: uniformArray(arr4(VF_LIMITS.puffs), 'vec4'), puffD: uniformArray(new Array<number>(VF_LIMITS.puffs).fill(0), 'float'),
+    // task gasmask-breach-20261030: breach gas — on (0 / 1), [extinction / m, scatter albedo, emission, noise], tint (linear)
+    gasOn: uniform(0), gasK: uniform(new THREE.Vector4(GAS.EXT, GAS.SCATTER, GAS.EMISSION, GAS.NOISE)), gasTint: uniform(new THREE.Vector3(...GAS.TINT)),
     // temporal
     prevView: uniform(M4()), prevProj: uniform(M4()), historyValid: uniform(0), blend: uniform(0.85),
     // composite
@@ -88,6 +96,27 @@ export interface FogTextures {
   vis: THREE.DataArrayTexture;
   /** The flashlight's shadow depth texture (compare sampler), or null: no shadow term compiled. */
   shadow: THREE.Texture | null;
+  /**
+   * Task gasmask-breach-20261030: breach gas concentration, R8, the density map's w / h / slots (render/volumetric.ts
+   * allocates it per station). Absent: an all-zero 1x1 stand-in (the same graph; the term stays off).
+   */
+  gas?: THREE.DataArrayTexture;
+}
+
+let gasStandIn: THREE.DataArrayTexture | null = null;
+/** 1x1x1 zero R8 layer (FogTextures.gas absent). */
+function gasPlaceholder(): THREE.DataArrayTexture {
+  if (gasStandIn) return gasStandIn;
+  const t = new THREE.DataArrayTexture(new Uint8Array(1), 1, 1, 1);
+  t.format = THREE.RedFormat;
+  t.type = THREE.UnsignedByteType;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
+  t.unpackAlignment = 1;
+  t.colorSpace = THREE.NoColorSpace;
+  t.name = 'fog-gas-placeholder';
+  t.needsUpdate = true;
+  return (gasStandIn = t);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -125,6 +154,7 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
   const densT = texture(tex.density);
   const airT = texture(tex.air);
   const visT = texture(tex.vis);
+  const gasT = texture(tex.gas ?? gasPlaceholder());
   const shadowT = tex.shadow ? texture(tex.shadow) : null;
   const out0 = property('vec4'), out1 = property('vec4');
 
@@ -253,8 +283,23 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
           });
         });
       });
+      // --- task gasmask-breach-20261030: breach gas (world/gas/field.ts), its storey's layer = this step's slot ---
+      const gasSig = n(float(0)).toVar('vfGasSig');
+      If(n(u.gasOn).greaterThan(0.5), () => {
+        // wobble the lookup by the moving detail noise (< half a cell: never reaches a neighbour room through a wall)
+        const wob = vec2(D.b.sub(0.5), D.a.sub(0.5)).mul(GAS.WOBBLE * 2);
+        const gc = n(gasT.sample(n(p).xz.add(wob).sub(n(u.mapXform).xy).mul(n(u.mapXform).zw)).depth(layer).level(0)).r.toVar();
+        If(gc.greaterThan(0.002), () => {
+          // the shared height profile (world/gas/field.ts gasProfile) on the density map's local floor / ceiling
+          const span = max(m.b.sub(m.g).mul(n(mf).y), 0.5).toVar();
+          const prof = float(1).sub(clamp(h.div(span), 0, 1).mul(GAS.HEIGHT_FALLOFF));
+          const band = smoothstep(-0.15, 0, h).mul(float(1).sub(smoothstep(span, span.add(0.15), h)));
+          const wisp = clamp(float(1).add(n(u.gasK).w.mul(D.g.sub(0.5)).mul(2)), 0, 2);
+          gasSig.assign(gc.mul(prof).mul(band).mul(wisp).mul(n(u.gasK).x));
+        });
+      });
       // --- in-scattering ---
-      If(sigma.add(smokeSig).greaterThan(0), () => {
+      If(sigma.add(smokeSig).add(gasSig).greaterThan(0), () => {
         const L = n(vec3(0, 0, 0)).toVar();
         If(flashOn, () => {
           const lv = n(p).sub(u.flashPos).toVar();
@@ -287,9 +332,11 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
           });
         });
         const tr = n(u.fogDensity).mul(t);
-        const scat = vec3(sigma, sigma, sigma).add(smokeTint.mul(n(u.ext).z));
-        acc.addAssign(L.mul(scat).mul(w.mul(exp(tr.mul(tr).negate())).mul(tv)));
-        tv.mulAssign(exp(excess.mul(n(u.ext).x).add(smokeSig.mul(n(u.ext).y)).mul(w).negate()));
+        // gas: tinted single scatter of the same lights + its faint ambient emission (u.gasK.y albedo, .z emission)
+        const gasTint = n(u.gasTint).mul(gasSig);
+        const scat = vec3(sigma, sigma, sigma).add(smokeTint.mul(n(u.ext).z)).add(gasTint.mul(n(u.gasK).y));
+        acc.addAssign(L.mul(scat).add(gasTint.mul(n(u.gasK).z)).mul(w.mul(exp(tr.mul(tr).negate())).mul(tv)));
+        tv.mulAssign(exp(excess.mul(n(u.ext).x).add(smokeSig.mul(n(u.ext).y)).add(gasSig).mul(w).negate()));
       });
     });
     out0.assign(vec4(acc, viewDepth));

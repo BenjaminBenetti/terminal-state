@@ -38,7 +38,7 @@ import {hearingMuffle, slabsBetween, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
-import {raycastWorld, rayCapsule, raySphere, type Vec3} from './combat/hitscan';
+import {raycastWorld, rayCapsule, raySphere, type Vec3, type WorldHit} from './combat/hitscan';
 import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
@@ -58,6 +58,7 @@ import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lan
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
+import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -216,6 +217,13 @@ export class Game {
   readonly injuries: InjurySystem;
   /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
   readonly tower: TowerRuntime;
+  /**
+   * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
+   * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it).
+   */
+  readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number) => boolean)[] = [];
+  /** Task gasmask-breach-20261030 (lane GAS): breakable office windows, the breach gas field and its exposure (`gas.protection`). */
+  readonly gas: GasSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
   run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
@@ -358,6 +366,7 @@ export class Game {
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
+    this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -1716,7 +1725,7 @@ export class Game {
       if (!fh) this.damage.knockPickups(o, d, bestT, wh, shot);
       else {
         if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
-        if (fh.glass) this.damage.hitWorld(wh, origin.clone().addScaledVector(dir, wh.t), dir, shot); // through a cooler's glass
+        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
       }
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
@@ -1733,7 +1742,8 @@ export class Game {
         this.sfx.impact(end.x, end.y, end.z, 'flesh');
       } else if (!fh && wh.kind !== 'none') {
         // Lane D: material-matched persistent damage (craters / per-instance prop damage / breaking) + fx + sound
-        this.damage.hitWorld(wh, end, dir, shot);
+        // (task gasmask-breach-20261030: unless a lane handler takes the hit — an office window pane)
+        if (!this.bulletHit(wh, end, dir)) this.damage.hitWorld(wh, end, dir, shot);
       }
       if (def.pellets === 1 ? this.shotCounter % 3 === 0 : i < 3) this.fx.tracer(muzzle, end);
     }
@@ -1764,6 +1774,12 @@ export class Game {
     // office-seamless-20261029 (ENGINE): 3D distance, x0.35 per slab between the storeys (ai/brain.ts hearingMuffle); no
     // sight test for a zombie already beyond earshot (9 storeys of zombies per shot).
     this.alertZombies(def.noise);
+  }
+
+  /** Task gasmask-breach-20261030: offer a bullet's world hit to the lane handlers (this trigger pull's id); true = handled. */
+  private bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3): boolean {
+    for (const h of this.bulletHitHandlers) if (h(wh, point, dir, this.shotCounter)) return true;
+    return false;
   }
 
   /** A noise of loudness radius `radius` (m) at the player: zombies in earshot hear it (walls / slabs muffle; see fire()). */
