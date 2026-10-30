@@ -443,6 +443,12 @@ interface PathLink { a: number; b: number; cost: number; id: number; pa: StandPo
  */
 export const LEVEL_HEURISTIC_MIN_LEVELS = 4;
 
+/**
+ * Task frame-budget-deferral-20261030 (lane SCHED): work units of a resumable search (PathFinder.search): one per A* heap pop,
+ * PULL_PROBE_UNITS per string-pulling line probe (a height-aware walk-line test costs as much as a few dozen pops).
+ */
+export const PULL_PROBE_UNITS = 48;
+
 export interface PathFinderOptions {
   /** Level distance fields for the A* heuristic (default: when the stack has >= LEVEL_HEURISTIC_MIN_LEVELS levels). */
   levelHeuristic?: boolean;
@@ -696,8 +702,40 @@ export class PathFinder {
   /**
    * Returns world-space waypoints (cell centres string-pulled; ladder ends marked; on stacked
    * stations each with its floor height) or null.
+   * Task frame-budget-deferral-20261030 (lane SCHED): runs search() to the end in one call (the one implementation).
    */
   find(ax: number, az: number, bx: number, bz: number, radius = 0.3, maxExpand = 12000, opts: PathOpts = {}): Waypoint[] | null {
+    const it = this.search(ax, az, bx, bz, radius, maxExpand, opts, Infinity);
+    let r = it.next();
+    while (!r.done) r = it.next();
+    return r.value;
+  }
+
+  /**
+   * Task frame-budget-deferral-20261030 (lane SCHED): a finder that shares this one's static navigation data (walkability,
+   * floors, wall costs, stair twins, links, rails, level heuristic) and owns its search buffers, so a resumable search on it
+   * can stay suspended across frames while this finder keeps answering. ~20 bytes per node; no search, no copy of the data.
+   */
+  fork(): PathFinder {
+    const f = Object.create(PathFinder.prototype) as PathFinder;
+    Object.assign(f, this);
+    const n = this.g.length, b = f as unknown as {g: Float32Array; came: Int32Array; cameLink: Int32Array; stamp: Uint32Array; closed: Uint32Array;
+      heap: Int32Array; heapF: Float32Array; heapSize: number; cur: number; lastExpanded: number};
+    b.g = new Float32Array(n); b.came = new Int32Array(n); b.cameLink = new Int32Array(n); b.stamp = new Uint32Array(n); b.closed = new Uint32Array(n);
+    b.heap = new Int32Array(this.heap.length); b.heapF = new Float32Array(this.heapF.length); b.heapSize = 0; b.cur = 1; b.lastExpanded = 0;
+    return f;
+  }
+
+  /**
+   * Task frame-budget-deferral-20261030 (lane SCHED): find() as a RESUMABLE search — the very same search (same expansions,
+   * same probes, same result), suspended (`yield`) whenever `chunk` work units were spent since the last resume (a unit per
+   * A* heap pop, PULL_PROBE_UNITS per string-pulling probe); the generator's return value is find()'s result. Its state lives
+   * in this finder's search buffers: at most ONE search in progress per finder — a background search runs on a fork(). While
+   * suspended, the static grid data cannot change (props never move); a string-pulling probe resumed in a later frame sees
+   * that frame's dynamic volumes (the elevator cab), like a search started then.
+   */
+  *search(ax: number, az: number, bx: number, bz: number, radius = 0.3, maxExpand = 12000, opts: PathOpts = {}, chunk = Infinity): Generator<void, Waypoint[] | null, void> {
+    let work = 0;
     const multi = this.src !== null;
     const la = this.levelOf(ax, az, opts.ay), lb = this.levelOf(bx, bz, opts.by);
     const ga = this.grids[la], gb = this.grids[lb];
@@ -751,6 +789,7 @@ export class PathFinder {
     let expanded = 0;
     let found = false;
     while (this.heapSize > 0) {
+      if (++work > chunk) { work = 1; yield; } // lane SCHED: a resumable search's chunk boundary (never with chunk = Infinity)
       const c = this.pop();
       if (closed[c] === cur) continue;
       closed[c] = cur;
@@ -842,14 +881,19 @@ export class PathFinder {
     const clear = (a: [number, number, number], b: [number, number, number]) =>
       src ? src.walkLineClear(a[0], a[2], a[1], b[0], b[1], radius, b[2]) : ga.walkLineClearH(a[0], a[1], b[0], b[1], radius);
     const emit = (p: [number, number, number], link?: number) => { out.push(multi ? [p[0], p[1], link, p[2]] : link === undefined ? [p[0], p[1]] : [p[0], p[1], link]); };
-    const segment = (from: number, to: number, end: [number, number, number]) => {
+    const segment = function* (from: number, to: number, end: [number, number, number]): Generator<void, void, void> {
       const pts: [number, number, number][] = [];
       for (let k = from; k <= to; k++) { const ci = cells[k] % NC; const [x, z] = ga.center(ci % W, Math.floor(ci / W)); pts.push([x, z, fl[cells[k]]]); }
       pts[pts.length - 1] = end;
       let i = 0;
       while (i < pts.length) {
         let j = Math.min(pts.length - 1, i + 48);
-        while (j > i && !clear(anchor, pts[j])) j--;
+        // (j > i && !clear(anchor, pts[j])) j-- — the same probes in the same order; lane SCHED: a chunk boundary between probes
+        while (j > i) {
+          if ((work += PULL_PROBE_UNITS) > chunk) { work = PULL_PROBE_UNITS; yield; }
+          if (clear(anchor, pts[j])) break;
+          j--;
+        }
         emit(pts[j]);
         anchor = pts[j];
         i = j + 1;
@@ -861,12 +905,12 @@ export class PathFinder {
       const l = links[via[k]];
       const fromA = l.a === cells[k - 1];
       const ps = fromA ? l.pa : l.pb, pe = fromA ? l.pb : l.pa;
-      segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
+      yield* segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
       emit([pe.x, pe.z, pe.y], l.id);
       anchor = [pe.x, pe.z, pe.y];
       segStart = k;
     }
-    segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
+    yield* segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
     return out;
   }
 }

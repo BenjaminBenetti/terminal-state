@@ -26,9 +26,16 @@
 //    through the open gate only.
 //  * Works for any storey count and any stair / escalator / ladder links (no office-specific data): the Subway's stacked
 //    stations use the same field (only the vocal gate changes there).
+//  * Task frame-budget-deferral-20261030 (lane SCHED): with a frame-budget scheduler attached (attachScheduler; the game
+//    does), the build's slices are NOT run by update() any more but as scheduler chunks (core/frameBudget.ts) in the spare
+//    time left after the frame's update + render submission: several slices in a light frame, none in a frame already over
+//    budget — at most VOCAL_REACH_SCHED.maxStaleMs, after which one slice per frame runs anyway (exactly the old per-frame
+//    rate under sustained overload). Same slices, same order, same field (tests/frame-budget-jobs.test.ts); update() keeps
+//    the cheap per-frame part (player position, cab, teleport drop, build start). Without a scheduler: unchanged.
 
 import {CELL, FLOOR, VOID, MAX_DROP, Grid, type NavLevels} from '../gen/grid';
 import type {DynamicVolume, VolumeGate} from '../gen/levels';
+import type {FrameScheduler} from '../core/frameBudget'; // task frame-budget-deferral-20261030 (lane SCHED)
 
 /** Field parameters (game defaults; tests may override per instance). */
 export const VOCAL_REACH = {
@@ -57,6 +64,13 @@ export const VOCAL_REACH = {
 } as const;
 
 export type VocalReachOptions = Partial<Record<'radius' | 'maxNodes' | 'budget' | 'minInterval' | 'minMove' | 'teleport', number>>;
+
+/**
+ * Task frame-budget-deferral-20261030 (lane SCHED): the build as a background job (attachScheduler). A chunk = one slice of
+ * `budget` node settles (the same bounded slice update() ran per frame). Max staleness 50 ms of play (~3 frames at 60 Hz):
+ * a heavy frame sheds its slice to a lighter one that follows, and sustained overload still advances one slice per frame.
+ */
+export const VOCAL_REACH_SCHED = {key: 'vocalReach.build', kind: 'vocalReach.slice', priority: 2, maxStaleMs: 50, initialEstimateMs: 1} as const;
 
 /**
  * Policy of the enemy vocal gate (audio/sfx.ts). Categories (documented in lanes/AUDIO.done):
@@ -186,6 +200,16 @@ export class VocalReach {
   private playerVol: DynamicVolume | null = null;
   private readonly seedBuf: number[] = [];
   readonly stats: VocalReachStats = {builds: 0, completed: 0, nodes: 0, maxStep: 0, invalidated: 0, maxStepMs: 0};
+  /** Lane SCHED: the scheduler running the build's slices (null: update() runs one slice per frame, as before). */
+  private sched: FrameScheduler | null = null;
+  private schedGen = 0;
+  private readonly schedStep = (): boolean => {
+    if (!this.buildingNow) return true; // aborted (teleport) since the request
+    this.slice();
+    return !this.buildingNow;
+  };
+  /** Lane SCHED: slices run by the scheduler / requests it refused (drops fall back to the old per-frame slice). */
+  readonly schedStats = {chunks: 0, requests: 0, refused: 0};
 
   constructor(source: Grid | ReachSource, opts: VocalReachOptions = {}) {
     const grids = source instanceof Grid ? [source] : source.list.map(l => l.grid);
@@ -263,7 +287,19 @@ export class VocalReach {
   // -------------------------------------------------------------------------------------------
   // Per frame
 
-  /** Once per frame with the player's feet position: continues a build within `budget`, or starts one when due. */
+  /**
+   * Lane SCHED: run the build's slices as background chunks of `s` (see VOCAL_REACH_SCHED). `s.generation` is captured: after
+   * a world change this instance's requests are refused and it falls back to stepping in update().
+   */
+  attachScheduler(s: FrameScheduler | null): void {
+    this.sched = s;
+    this.schedGen = s ? s.generation : 0;
+  }
+
+  /**
+   * Once per frame with the player's feet position: continues a build within `budget`, or starts one when due. Lane SCHED:
+   * with a scheduler the slices run as its chunks (update() only starts a build and keeps its job queued).
+   */
   update(dt: number, x: number, y: number, z: number): void {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     this.sinceStart += dt;
@@ -277,12 +313,37 @@ export class VocalReach {
     }
     const B = this.buildOrigin;
     if (this.buildingNow && Math.hypot(x - B.x, y - B.y, z - B.z) > this.teleport) this.abort(); // and so would the build in progress
-    if (this.buildingNow) this.step();
+    if (this.sched) {
+      // lane SCHED: start a build when due (no slice here) and keep its job queued; the scheduler runs the slices
+      if (!this.buildingNow && (this.sinceStart >= this.minInterval || !this.frontOk)) this.maybeBegin(x, y, z, false);
+      if (this.buildingNow && !this.queueBuild()) this.step(); // refused (queue full / old world): the old per-frame slice
+    } else if (this.buildingNow) this.step();
     else if (this.sinceStart >= this.minInterval || !this.frontOk) this.maybeBegin(x, y, z);
     if (t0) { const ms = performance.now() - t0; if (ms > this.stats.maxStepMs) this.stats.maxStepMs = ms; }
   }
 
-  private maybeBegin(x: number, y: number, z: number): void {
+  /** Lane SCHED: the build's job is queued (true), or the scheduler refused it (false). */
+  private queueBuild(): boolean {
+    const s = this.sched!, J = VOCAL_REACH_SCHED;
+    if (s.has(J.key)) return true;
+    this.schedStats.requests++;
+    const r = s.request({key: J.key, kind: J.kind, priority: J.priority, maxStaleMs: J.maxStaleMs, initialEstimateMs: J.initialEstimateMs,
+      generation: this.schedGen, step: this.schedStep});
+    if (r === 'queued' || r === 'coalesced') return true;
+    this.schedStats.refused++;
+    if (r === 'stale') this.sched = null; // this field belongs to a replaced world: never queue again
+    return false;
+  }
+
+  /** Lane SCHED: one scheduler chunk = one slice (timed into the same per-slice maximum update() reports). */
+  private slice(): void {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    this.step();
+    this.schedStats.chunks++;
+    if (t0) { const ms = performance.now() - t0; if (ms > this.stats.maxStepMs) this.stats.maxStepMs = ms; }
+  }
+
+  private maybeBegin(x: number, y: number, z: number, stepNow = true): void {
     const seeds = this.seedBuf;
     const level = this.seeds(x, y, z, seeds);
     const key = seeds.length ? seeds[0] : SEALED;
@@ -293,7 +354,7 @@ export class VocalReach {
       if (sameKind && key !== SEALED && level === O.level && Math.hypot(x - O.x, z - O.z) < this.minMove) return;
     }
     this.begin(seeds, key, x, y, z, level);
-    this.step();
+    if (stepNow) this.step();
   }
 
   private begin(seeds: readonly number[], key: number, x: number, y: number, z: number, level: number): void {

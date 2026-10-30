@@ -92,8 +92,13 @@ export interface BrainWorld {
   los(ax: number, az: number, bx: number, bz: number, ay?: number, by?: number): boolean;
   /** Iteration 08: `ay` = feet height at a, `by` = the walk must end at that height (same storey). */
   walkClear(ax: number, az: number, bx: number, bz: number, r: number, ay?: number, by?: number): boolean;
-  /** `drops`: chase paths may jump down ledges (platform edge into the track bed). Iteration 08: `ay` / `by` = start / goal feet heights (storeys). */
-  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean; ay?: number; by?: number}): Waypoint[] | null;
+  /**
+   * `drops`: chase paths may jump down ledges (platform edge into the track bed). Iteration 08: `ay` / `by` = start / goal feet
+   * heights (storeys). Task frame-budget-deferral-20261030 (lane SCHED): `defer` = the requesting brain, offered only by a chase
+   * re-plan of an enemy that does not see the player; the world MAY then answer `undefined` = "queued in the background, ask
+   * again next frame" (the game does for far enemies: ai/pathService.ts). Without `defer` the answer is always immediate.
+   */
+  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean; ay?: number; by?: number; defer?: object}): Waypoint[] | null | undefined;
   /** Iteration 08: `y` = feet height (stay on that storey); the optional 3rd element is the point's floor height. */
   randomNear(x: number, z: number, r: number, y?: number): [number, number] | [number, number, number] | null;
   rand(): number;
@@ -156,6 +161,8 @@ export class ZombieBrain {
   private climb: {path: ClimbPath; t: number; ladder: number; yaw: number; resume: BrainState; resumeT: number} | null = null;
   private readonly tmp: Vec3 = {x: 0, y: 0, z: 0};
   private repathT = 0;
+  /** Task frame-budget-deferral-20261030 (lane SCHED): the chase re-plan timer drawn at the first ask of a re-plan still queued (null: none). */
+  private nextRepathT: number | null = null;
   /** Last known player position; iteration 08: with its feet height when known (its storey). */
   private lastKnown: [number, number, number?] | null = null;
   private unseenT = 0;
@@ -204,6 +211,7 @@ export class ZombieBrain {
   private setState(s: BrainState, t = 0) {
     if (s === 'attack') this.attackSeq++;
     if (s !== 'investigate' && s !== 'climb') this.lure = null; // Iteration 12 (AI): any other state ends a light investigation
+    this.nextRepathT = null; // lane SCHED: a queued re-plan's timer belongs to the state that asked
     this.state = s;
     this.stateT = t;
     this.attackDone = false;
@@ -222,6 +230,7 @@ export class ZombieBrain {
     if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
       this.setState('chase');
       this.repathT = 0;
+      this.path = []; // lane SCHED: the old wander / search path is no chase route (an immediate re-plan replaced it this frame anyway)
     } else if (this.climb) this.climb.resume = 'chase';
   }
 
@@ -246,6 +255,7 @@ export class ZombieBrain {
       this.staggerCd = 0.9;
     } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
       this.setState('chase');
+      this.path = []; // lane SCHED: as in hear()
     }
     this.repathT = 0;
     return false;
@@ -396,15 +406,26 @@ export class ZombieBrain {
           this.path = [];
         } else {
           this.repathT -= dt;
+          let pending = false;
           if (this.repathT <= 0 || (!this.path.length && this.pathFailT <= 0)) {
-            // Far goals re-plan less often (long detours on the large station are costly).
-            this.repathT = 0.45 + w.rand() * 0.2 + Math.min(0.9, Math.hypot(goal[0] - this.x, goal[1] - this.z) / 45);
-            const path = w.findPath(this.x, this.z, goal[0], goal[1], {drops: true, ...this.pathOpts(goal[2])});
-            this.path = path ?? [];
-            if (!path) { this.pathFailT = 1.2 + w.rand() * 0.6; this.repathT = this.pathFailT; }
+            // Far goals re-plan less often (long detours on the large station are costly). Task frame-budget-deferral-20261030
+            // (lane SCHED): the timer is drawn at the FIRST ask, before the search, exactly as before. Not seeing the player,
+            // the re-plan may be queued (undefined): keep following the current path, ask again next frame; the timer starts
+            // once the path is there (and a failed search draws its back-off then, as it always did after the search).
+            this.nextRepathT ??= 0.45 + w.rand() * 0.2 + Math.min(0.9, Math.hypot(goal[0] - this.x, goal[1] - this.z) / 45);
+            const path = w.findPath(this.x, this.z, goal[0], goal[1], sees ? {drops: true, ...this.pathOpts(goal[2])} : {drops: true, ...this.pathOpts(goal[2]), defer: this});
+            if (path === undefined) pending = true;
+            else {
+              this.repathT = this.nextRepathT;
+              this.nextRepathT = null;
+              this.path = path ?? [];
+              if (!path) { this.pathFailT = 1.2 + w.rand() * 0.6; this.repathT = this.pathFailT; }
+            }
           }
           const done = this.followPath(w, out, this.stats.chaseSpeed);
-          if (done && !sees) {
+          // lane SCHED: a queued re-plan with nothing to follow yet: stand facing the goal (no running on the spot)
+          if (done && pending) { out.anim = 'Idle'; out.face = Math.atan2(goal[0] - this.x, goal[1] - this.z); }
+          if (done && !sees && !pending) {
             // Reached the last known position without seeing the player: search around.
             if (this.unseenT > 1.5) {
               const p = w.randomNear(this.x, this.z, 5, this.y);

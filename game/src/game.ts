@@ -32,6 +32,9 @@ import {buildItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
+import {FrameBudget} from './core/frameBudget'; // Task frame-budget-deferral-20261030 (lane SCHED): deferred background work
+import {PathService, nearPlayerRule} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
+import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
 import {hearingMuffle, slabsBetween, type BrainWorld} from './ai/brain';
@@ -149,6 +152,8 @@ export class Game {
   pathfinder!: PathFinder;
   /** Task office-overhaul-20261030 (lane AUDIO): the shared navigable-distance field from the player (enemy vocal gate; ai/vocalReach.ts). */
   vocalReach: VocalReach | null = null;
+  /** Task frame-budget-deferral-20261030 (lane SCHED): the brains' path requests — far, not-in-sight chase re-plans as frameBudget jobs (ai/pathService.ts). */
+  pathService: PathService | null = null;
   /**
    * Iteration 08 (Lane B): the station's stacked levels — every y-aware world query (support,
    * collision, ceilings, 3D raycasts / sight, nav). One level on single-storey layouts.
@@ -276,8 +281,22 @@ export class Game {
   private currentSeed = 0;
   /** Frames rendered while playing (used by QA to confirm the loop runs). */
   frames = 0;
-  /** Debug overlay (debug/overlay.ts): main-thread ms of the last frame()'s world update and render submission. */
-  readonly frameCpu = {updateMs: 0, renderMs: 0, rendered: false};
+  /**
+   * Debug overlay (debug/overlay.ts): main-thread ms of the last frame()'s world update and render submission; deferredMs
+   * (task frame-budget-deferral-20261030, lane SCHED) = its background chunks (frameBudget.run, same callback).
+   */
+  readonly frameCpu = {updateMs: 0, renderMs: 0, deferredMs: 0, rendered: false};
+  /**
+   * Task frame-budget-deferral-20261030 (lane SCHED): cooperative frame-budget scheduler for deferrable, chunked background
+   * work (core/frameBudget.ts) — run after the update and the render submission in what is left of the frame's budget;
+   * held outside play; its generation is bumped by every world teardown (leaveSection). `__LL.frameBudget()` reads it.
+   */
+  readonly frameBudget = new FrameBudget();
+  /**
+   * Task frame-budget-deferral-20261030 (lane MEASURE): opt-in profiler of frame() in named spans (debug/updateProfile.ts) —
+   * off by default (each span boundary is one boolean check); `__LL.updateProfileStart()` / `updateProfile()` / `Stop()`.
+   */
+  readonly prof = new UpdateProfiler();
   /** Gameplay clock (s; advances only while the world updates). Iteration 17: QA / tests prove traversal never stops it. */
   get clock(): number { return this.time; }
   /**
@@ -364,14 +383,23 @@ export class Game {
       vitals: () => ({hp: this.player.hp, maxHp: this.player.maxHp, food: this.survival.hunger, water: this.survival.thirst, limbs: injuryStatusHtml(this.injuries)}),
     });
     // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
+    // Task frame-budget-deferral-20261030 (lane MEASURE): names the frame hooks each install below registered (profiler spans)
+    const hookName = (name: string) => { const n = this.prof.hookNames; while (n.length < this.frameHooks.length) n.push(name); };
     this.injuries = installInjuries(this, {aiming: () => this.aiming});
+    hookName('injuries');
     this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
+    hookName('gear');
     // Task gasmask-breach-20261030 (mask lane): after GEAR (wraps its inventory-screen hook); frame hook, input owner, lifecycle, run participant 'gas.mask'
     this.gasMask = installGasMask(this, {cancelUse: reason => this.cancelUse(reason), cancelFlareHold: () => this.cancelFlareHold()});
+    hookName('gasMask');
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
+    hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
+    hookName('tower');
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
+    hookName('officeAtmosphere');
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
+    hookName('gas');
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();
@@ -496,6 +524,7 @@ export class Game {
   private leaveSection(save: boolean): void {
     this.lifecycleCounts.leave++;
     this.stationGen++; // Iteration 14: invalidates a warm-up of the previous station
+    this.frameBudget.bumpGeneration(); // lane SCHED: the old world's queued background jobs are cancelled (never run against the next one)
     // Iteration 14 (user: "when I load a new station the stutters come back"): three r186 frees a node build / pipeline /
     // program when its LAST user is disposed, and the next station needs the same ones (zombie + wound materials, glow,
     // instanced variants). The old station leaves the scene now; its GPU releases are queued and run only after the new
@@ -573,6 +602,12 @@ export class Game {
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
     this.vocalReach = new VocalReach(this.levels); // lane AUDIO: one bounded, time-sliced route field from the player (no search here)
+    this.vocalReach.attachScheduler(this.frameBudget); // lane SCHED: its build slices run in spare frame time (this world's generation)
+    // lane SCHED: the same search as below (brainWorld findPath); only far, not-in-sight chase re-plans are queued — and run
+    // resumably on a fork of the finder (its own search buffers, allocated here on the loading screen; ~20 B per node)
+    const farFinder = this.pathfinder.fork(), near = (x: number, z: number, y: number | undefined) => this.nearPlayer(x, z, y);
+    this.pathService = new PathService((ax, az, bx, bz, o) => this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, o),
+      (ax, az, bx, bz, o, chunk) => farFinder.search(ax, az, bx, bz, 0.34, 26000, o, chunk), this.frameBudget, near);
     this.sfx.setVocalReach(this.vocalReach);
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
@@ -1120,13 +1155,20 @@ export class Game {
     this.resize();
   }
 
-  frame(): void {
+  /** One animation frame. `time` = its rAF timestamp (lane SCHED: display-rate detection; default: the callback's start). */
+  frame(time?: number): void {
+    this.prof.frameBegin(); // lane MEASURE (off: one boolean check)
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
     const cpu = this.frameCpu;
-    cpu.updateMs = cpu.renderMs = 0;
+    cpu.updateMs = cpu.renderMs = cpu.deferredMs = 0;
     cpu.rendered = false;
+    // Task frame-budget-deferral-20261030 (lane SCHED): background chunks run only in play. Held during the warm-up / loading
+    // (their rAF intervals are not display samples either) and in every menu (the queue keeps its jobs; they do not age).
+    const fb = this.frameBudget;
+    fb.hold(this.warming ? 'warmup' : this.state === 'loading' ? 'loading' : this.state === 'playing' ? null : 'paused');
+    fb.beginFrame(time ?? now, now);
     // Iteration 14: the warm-up owns the renderer (render target / layers / hidden frames) until it resolves
     if (this.warming) { this.input.endFrame(); return; }
     if (this.state === 'playing' || (this.state === 'won' && this.wonAt >= 0)) {
@@ -1136,6 +1178,12 @@ export class Game {
       if (playing) cpu.updateMs = r0 - now;
       cpu.rendered = this.render();
       cpu.renderMs = performance.now() - r0;
+      // lane SCHED: deferred chunks AFTER the critical update and the render submission, so the main-thread time this frame
+      // already spent is measured, not predicted; still inside this callback, so the overlay's game CPU includes them
+      // (deferredMs = their share). Nothing frame-critical is ever queued (see core/frameBudget.ts).
+      this.prof.lap(SPAN.deferred); // lane MEASURE
+      if (this.state === 'playing') cpu.deferredMs = fb.run();
+      this.prof.lap(SPAN.other); // lane MEASURE
       this.frames++;
     } else if (this.world) {
       // menus: keep the frozen frame fresh at a low rate
@@ -1148,12 +1196,15 @@ export class Game {
       }
     }
     this.input.endFrame();
+    this.prof.frameEnd(); // lane MEASURE: stores the frame when the world updated in it
   }
 
   /** Draws the frame; false when there is nothing to draw with (lost device / renderer not initialized). */
   render(): boolean {
     if (this.gpu?.deviceLost || !this.renderer.initialized) return false; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
+    this.prof.lap(SPAN.cull); // lane MEASURE
     this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still)
+    this.prof.lap(SPAN.draw); // lane MEASURE
     this.drawFrame();
     return true;
   }
@@ -1466,6 +1517,8 @@ export class Game {
 
   // ---------------------------------------------------------------------------------------
   update(dt: number): void {
+    const prof = this.prof; // lane MEASURE: profiler laps tile the update (off: one boolean check each)
+    prof.lap(SPAN.input);
     this.time += dt;
     this.stats.time += dt;
     this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
@@ -1488,6 +1541,7 @@ export class Game {
     // button: the press is consumed and latched until release — no shot, flare, item use or backpack placement below / in the hooks.
     if (inp.mousePressed[0] && this.pointerHandlers.some(h => h())) { inp.mousePressed[0] = false; this.lmbLatch = true; }
 
+    prof.lap(SPAN.player);
     const held = this.inv.selectedStack();
     const heldDef = held ? itemDef(held.itemId) : null;
     const wdef = heldDef?.kind === 'weapon' ? WEAPONS[heldDef.weaponId!] : null;
@@ -1519,6 +1573,7 @@ export class Game {
     if (p.justRung) this.sfx.ladder(); // Lane T: hand/foot on a ladder rung (Lane S: Sound Lab rung clip)
     if (p.stanceChanged) this.sfx.crouch(p.crouched);
 
+    prof.lap(SPAN.weapon);
     if (wdef && !this.flareHold.active) {
       // Lane KNIFE / FEEL (knife-windup-20261030): a melee weapon winds up while held and swings on release. A lane UI taking the
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
@@ -1578,15 +1633,23 @@ export class Game {
     }
 
     // Hunger/thirst: slow long-term drain in play time only (menus freeze it); at 0, slow health loss.
+    prof.lap(SPAN.survival);
     const surv = this.survival.update(survivalTicks(this.state) ? dt : 0);
     if (surv.hpLoss > 0) p.takeDamage(surv.hpLoss);
     for (const w of surv.warnings) this.hud.toast(w.text, w.warn);
 
+    prof.lap(SPAN.ai);
     this.updateZombies(dt);
-    for (const fn of this.frameHooks) fn(dt); // Iteration 16: lane per-frame systems (gear / backpack, injuries, elevator)
+    prof.lap(SPAN.hooks);
+    // Iteration 16: lane per-frame systems (gear / backpack, injuries, elevator); lane MEASURE: each timed in its own hook span
+    let hookIx = 0;
+    for (const fn of this.frameHooks) { const h = SPAN.hook0 + Math.min(hookIx++, HOOK_SLOTS - 1); prof.begin(h); fn(dt); prof.end(h); }
+    prof.lap(SPAN.physics);
     this.physics.update(dt); // ragdolls (fixed 1/60 steps) + casings; update() only runs while playing
+    prof.lap(SPAN.flares);
     this.flares.tick(dt); // Iteration 12 (LIGHT): flare bodies -> mesh / light / smoke / sound / light-source positions, burn-out
 
+    prof.lap(SPAN.camera);
     // recoil recovery and bloom decay
     const rec = wdef ? wdef.recoil.recover : 8;
     this.recoilPitch -= this.recoilPitch * Math.min(1, rec * dt);
@@ -1595,6 +1658,7 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 2.5);
     this.updateCamera(dt);
 
+    prof.lap(SPAN.targets);
     const eye = this.camera.getWorldPosition(new THREE.Vector3());
     const look = this.forward();
     const reachWorld = this.levels.count > 1 ? this.levels : this.layout.grid; // Lane B: 3D occlusion on stacked levels
@@ -1609,15 +1673,19 @@ export class Game {
     if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, reachWorld);
     // Lane T: a rescue ladder under the crosshair (only when nothing else is targeted).
     this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null;
+    prof.lap(SPAN.items);
     this.pickups.update(this.time);
     this.containers?.update(dt, this.time);
 
+    prof.lap(SPAN.lights);
     this.muzzleT -= dt;
     this.muzzleLight.intensity = this.muzzleT > 0 ? 18 * (0.65 + Math.random() * 0.7) : 0; // flicker
     this.updatePlayerLight(dt, eye); // Iteration 12 (LIGHT): battery drain / flicker -> SpotLight, body glow, light sources
     this.lightPool.update(dt, eye);
+    prof.lap(SPAN.fx);
     this.fx.update(dt);
     this.damage.update(dt); // Lane D: debris physics, knocked pickups
+    prof.lap(SPAN.audio);
     // Audio: listener follows the camera; reverb room + ambience beds follow the current area.
     this.sfx.setListener(eye.x, eye.y, eye.z, p.yaw);
     const audioArea = this.layout.areas[this.levels.count > 1 ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z)];
@@ -1626,6 +1694,7 @@ export class Game {
     this.sfx.ambience(dt);
     // viewmodel brightness follows nearby light
     this.viewmodel.setLightLevel(this.lightPool.viewLevel(eye, this.torch.battery.emitting)); // Iteration 12 (LIGHT): actual output
+    prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     this.viewmodel.update(dt, {
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx, lookDY: inp.dy,
@@ -1634,6 +1703,7 @@ export class Game {
       throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back
       melee: this.weapon.meleePose, // lane KNIFE / FEEL: windup / ready / slash / recovery pose (weapons/meleeView.ts)
     });
+    prof.lap(SPAN.hud);
     this.hud.setStance(p.crouched, p.standBlocked);
     this.updateHud(wdef);
     // Iteration 04 (Lane E): while sighted through the rifle optic its lens draws the reticle, so the HUD crosshair hides.
@@ -1641,6 +1711,7 @@ export class Game {
     const opticHide = this.viewmodel.opticAim > 0.6;
     if (crosshair && (crosshair.style.visibility === 'hidden') !== opticHide) crosshair.style.visibility = opticHide ? 'hidden' : '';
 
+    prof.lap(SPAN.rules);
     if (!p.alive) this.die();
     // Iteration 16 (RUN): a SECTION is cleared once per run (remembered); the clear screen shows when its whole LEVEL is clear
     // (the subway: its one station; the office: the street station and every floor), else a toast points onward.
@@ -1932,7 +2003,13 @@ export class Game {
       // Lane T (iteration 05): height-aware lines/paths (stairs, platform-edge drops, rescue-ladder links); Lane B: on the right storey.
       walkClear: (ax, az, bx, bz, r, ay, by) => multi && ay !== undefined ? L.walkLineClear(ax, ay, az, bx, bz, r, by) : g.walkLineClearH(ax, az, bx, bz, r),
       // Large station: cross-track detours via the underpasses need ~20k expansions (brain backs off on failure).
-      findPath: (ax, az, bx, bz, opts) => this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, opts),
+      findPath: (ax, az, bx, bz, opts) => {
+        this.prof.begin(SPAN.path); // lane MEASURE: every path search (A* + string pulling) of this frame
+        // lane SCHED: through the path service (immediate unless a far, not-in-sight chase re-plan: then possibly queued = undefined)
+        const path = this.pathService ? this.pathService.request(ax, az, bx, bz, opts) : this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, opts);
+        this.prof.end(SPAN.path);
+        return path;
+      },
       py: this.player.y,
       ladder: id => this.layout.traversal.ladders[id],
       randomNear: (x, z, r, y) => {
@@ -1962,14 +2039,29 @@ export class Game {
     return !this.layout.grid.lineOfSight(p.x, p.z, x, z);
   }
 
+  /**
+   * Lane SCHED (ai/pathService.ts nearPlayerRule): a path requester at (x, z, feet y) is NEAR the player — its re-plan is never
+   * deferred: a few metres away, or a short navigable route by the vocal-reach field (straight line without a field).
+   */
+  private nearPlayer(x: number, z: number, y: number | undefined): boolean {
+    const p = this.player, fy = y ?? p.y, r = this.vocalReach;
+    return nearPlayerRule(Math.hypot(x - p.x, z - p.z, fy - p.y), () => r?.ready ? r.pathTo(x, fy + 1.2, z) : null);
+  }
+
   private updateZombies(dt: number): void {
+    this.pathService?.tick(); // lane SCHED: frames since each queued far re-plan was last asked for
     const w = this.brainWorld();
-    const p = this.player;
-    this.vocalReach?.update(dt, p.x, p.y, p.z); // lane AUDIO: refresh the route field (<= 2.5 Hz, budgeted per frame) before vocals
+    const p = this.player, prof = this.prof; // lane MEASURE: nested spans (off: one boolean check each)
+    prof.begin(SPAN.vocal);
+    this.vocalReach?.update(dt, p.x, p.y, p.z); // lane AUDIO: refresh the route field (<= 2.5 Hz) before vocals; lane SCHED: its slices run as frameBudget chunks
+    prof.end(SPAN.vocal);
     for (const z of this.zombies) {
       const b = z.brain;
       const seqBefore = b.attackSeq;
+      prof.begin(SPAN.brain);
       const out = b.update(dt, w);
+      prof.end(SPAN.brain);
+      prof.begin(SPAN.motor);
       if (out.face !== null) {
         let d = out.face - b.yaw;
         d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -1991,6 +2083,8 @@ export class Game {
       }
       // positional (panner) enemy audio: vocals, swings, footfalls — per archetype (Lane Q cue adapter;
       // the zombie adapter makes exactly the previous groan / swing / gait / ladder calls)
+      prof.end(SPAN.motor);
+      prof.begin(SPAN.anim);
       const [, dist] = this.panOf(b.x, b.z);
       const cues = enemyCues(z);
       if (out.alerted) cues.alert(this.sfx, z);
@@ -2001,6 +2095,7 @@ export class Game {
       z.syncTransform();
       if (!z.ragdolled) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder
       z.updateVolumes();
+      prof.end(SPAN.anim);
     }
   }
 

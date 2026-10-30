@@ -136,7 +136,7 @@ async function boot(): Promise<void> {
   const loop = (time: number) => {
     const t0 = performance.now();
     try {
-      game.frame();
+      game.frame(time); // task frame-budget-deferral-20261030 (lane SCHED): the rAF timestamp feeds display-rate detection
     } catch (err) {
       game.lastError = String((err as Error)?.stack ?? err);
       console.error(err);
