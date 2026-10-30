@@ -19,6 +19,8 @@ import {readTowerInfo} from '../src/world/towerShared';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {WorldHit} from '../src/combat/hitscan';
+import {createRun} from '../src/run/runState';
+import {LEVELS} from '../src/levels/registry';
 
 // ---------------------------------------------------------------------------------------------
 // Synthetic storey (cells; CELL = 0.5 m):
@@ -429,6 +431,49 @@ describe('exposure: one damage calculation per frame from the eye concentration;
     expect((store.get(WINDOWS_LANE) as typeof rec).broken[p.ref.id]).toBeLessThanOrEqual(90);
     // NewGame = a fresh run (empty lane store): nothing broken, no gas
     store.clear();
+    h.sectionHooks[0].build!(L);
+    expect(sys.windows!.state.size).toBe(0);
+    expect(sys.field!.storeys).toEqual([]);
+  });
+
+  it('RUN lifecycle (real RunState): off-camera storeys keep simulating; travel out / back keeps the breach; Retry restores the level-entry memories; NewGame starts clean', () => {
+    const L = officeLevel(12345);
+    const {h, step} = host(L);
+    const key = {level: 'office' as const, section: 'main'};
+    let run = createRun({seeds: {subway: 1, office: 12345}, start: key, levels: LEVELS});
+    (h as {run: unknown}).run = undefined;
+    Object.defineProperty(h, 'run', {get: () => run});
+    const sys = installGas(h as unknown as GasHost);
+    h.sectionHooks[0].build!(L);
+    const entry = run.levelMemories('office'); // the Retry snapshot taken when the level was entered
+    const p = roomPane(L, sys, 3);
+    sys.breakPane(p.ref.id);
+    // the player is up on floor 8: floor 3's gas keeps evolving off-camera
+    Object.assign(h.player, {x: 5, z: 5, y: L.levels[8].baseY, eye: L.levels[8].baseY + 1.6});
+    step(5, 0.1);
+    const early = sys.field!.storey(3)!.stats().poolMean;
+    step(15, 0.1);
+    expect(sys.field!.storey(3)!.stats().poolMean).toBeGreaterThan(early + 0.2);
+    expect(sys.exposure.c).toBe(0);
+    // travel to the Subway and back (the office world is rebuilt): the breach and its gas come back
+    h.sectionHooks[0].teardown!();
+    expect(run.laneStore(WINDOWS_LANE, key)).toBeDefined();
+    const t0 = performance.now();
+    h.sectionHooks[0].build!(L);
+    const ffMs = performance.now() - t0;
+    expect(sys.windows!.broken(p.ref.id)).toBe(true);
+    expect(sys.field!.storey(3)!.stats().poolMean).toBeGreaterThan(0.5);
+    console.info(`gas rebuild (restore + fast-forward 20 s on one storey): ${ffMs.toFixed(1)} ms`);
+    // Retry level: lanes teardown, then the level's memories are replaced by the entry snapshot -> nothing broken
+    h.sectionHooks[0].teardown!();
+    run.restoreLevelMemories('office', entry);
+    h.sectionHooks[0].build!(L);
+    expect(sys.windows!.state.size).toBe(0);
+    expect(sys.field!.storeys).toEqual([]);
+    // break again, then NewGame (a new run): clean
+    sys.breakPane(p.ref.id);
+    h.sectionHooks[0].teardown!();
+    run = createRun({seeds: {subway: 1, office: 12345}, start: key, levels: LEVELS});
     h.sectionHooks[0].build!(L);
     expect(sys.windows!.state.size).toBe(0);
     expect(sys.field!.storeys).toEqual([]);
