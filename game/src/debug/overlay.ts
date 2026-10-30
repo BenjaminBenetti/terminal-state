@@ -272,7 +272,7 @@ export class PerfOverlay {
     const scaleText = `graph 0–${fmt(this.scale, this.scale < 50 ? 1 : 0)} ms`;
     if (this.scaleEl && this.scaleEl.textContent !== scaleText) this.scaleEl.textContent = scaleText;
     const h = this.host, r = h.renderer;
-    this.set('fps', s.fps === null ? 'waiting for frames (the game loop starts after loading)' :`${fmt(s.fps)} · game drew ${fmt(s.renderedPerSec, 0)}/s (last 1 s)`);
+    this.set('fps', s.fps === null ? 'waiting for frames (the game loop starts after loading)' :`${fmt(s.fps)} · game drew ${fmt(s.renderedPerSec, 0)} frames/s (last 1 s)`);
     this.set('frame', s.frames === 0 ? '—' : `${fmt(s.lastMs)} now · ${fmt(s.avgMs)} avg · ${fmt(s.p99Ms)} p99 · ${fmt(s.maxMs)} max`);
     this.set('spikes', `${s.over33} >33 ms · ${s.over50} >50 ms in ${fmt(s.spanMs / 1000)} s`
       + (s.gaps > 0 ? ` · ${s.gaps} gap${s.gaps > 1 ? 's' : ''} (${fmt((s.lastGapMs ?? 0) / 1000)} s, not counted)` : ''));
