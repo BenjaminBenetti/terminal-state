@@ -415,6 +415,7 @@ export class Game {
       return m.on ? 'No filter — the mask is not protecting you' : 'Put on your gas mask (Q)';
     };
     this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
+    hookName('cough');
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
