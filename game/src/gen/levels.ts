@@ -36,8 +36,28 @@
 
 import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, type Grid, type NavLevels, type CrossLink, type StandPoint} from './grid';
 
-/** 'office' (task office-seamless-20261029): a tower storey above the lobby (dry indoor air, office walls). */
-export type LevelRole = 'main' | 'upper' | 'lower' | 'office';
+/** 'office' (task office-seamless-20261029): a tower storey above the lobby (dry indoor air, office walls). 'roof' (task
+ *  office-overhaul-20261030, lane STRUCT): the open-sky roof deck on top of the tower (outdoor air; see Level.sky). */
+export type LevelRole = 'main' | 'upper' | 'lower' | 'office' | 'roof';
+
+/**
+ * Task office-overhaul-20261030 (lane STRUCT): an OPEN-SKY storey (the tower roof). Its grid bands end at `ceil` (a high
+ * nominal band top that only bounds headroom / the light field); nothing is built there and rays leaving any band through a
+ * ceiling at or above `ceil` fly into the open sky (Levels.raycast / lineOfSight: no hit). Closed columns (the parapet wall
+ * ring and everything beyond it, the elevator overrun) are solid only up to their top: `top` (the parapet coping, absolute y)
+ * unless `tops[cell]` (absolute, > 0) says otherwise; a ray entering a closed column above that height is in open air.
+ * Collision is unchanged (closed columns block walking bodies at any height: nobody walks or jumps off the roof).
+ */
+export interface LevelSky {
+  /** Deck height (absolute): the open-air rule only applies above it. */
+  y: number;
+  /** Nominal band top of the open-sky storey (absolute). */
+  ceil: number;
+  /** Default top of closed columns (absolute: the parapet coping). */
+  top: number;
+  /** Per grid cell: absolute top of a taller closed structure (elevator overrun); 0 = `top`. */
+  tops?: Float32Array;
+}
 
 export interface Level {
   /** Index into layout.levels (0 = main; ascending ids are NOT height-ordered). */
@@ -52,9 +72,15 @@ export interface Level {
    * (even empty): used as-is for this level.
    */
   rails?: RailRun[];
+  /** Task office-overhaul-20261030 (lane STRUCT): open-sky storey (the roof); see LevelSky. */
+  sky?: LevelSky;
 }
 
-/** A vertical connection between two levels (stairs carved into both grids, or a ladder link). */
+/**
+ * A vertical connection between two levels (stairs carved into both grids, or a ladder link). Task office-overhaul-20261030
+ * (lane STRUCT): a 'ladder' link WITHOUT traversalId (the roof access ladder) is a PLAYER-ONLY climb: player reachability
+ * (levelGen.levelDistance, levelIssues) follows it, the AI path graph (crossLinks / PathFinder) never does.
+ */
 export interface LevelLink {
   id: number;
   kind: 'stairs' | 'ladder';
@@ -190,6 +216,9 @@ export interface RailRun {
   nx: number; nz: number;
   kind?: 'railing' | 'parapet';
   h?: number;
+  /** Task office-overhaul-20261030 (lane STRUCT): collision-only (the builder draws no railing: escalator glass balustrades,
+   *  stair handrails and roof fixtures render their own geometry). */
+  hidden?: boolean;
 }
 
 /** Result of `Levels.raycast`: kind + ray parameter + surface normal + the level whose band the ray was in. */
@@ -292,6 +321,16 @@ export class Levels implements NavLevels {
     this.list = levels;
     this.links = links;
     this.explicitRails = rails;
+    this.sky = levels.find(l => l.sky)?.sky ?? null;
+  }
+  /** Task office-overhaul-20261030 (lane STRUCT): the open-sky storey's rule (the roof), or null (every other station). */
+  readonly sky: LevelSky | null;
+  /** Open sky at height y entering closed column i (out of the grid: i < 0): above the column's solid top. */
+  private openAir(i: number, y: number): boolean {
+    const s = this.sky;
+    if (!s || y <= s.y) return false;
+    const t = i >= 0 && s.tops ? s.tops[i] : 0;
+    return y > (t > 0 ? t : s.top);
   }
   get main(): Grid {
     return this.list[0].grid;
@@ -837,7 +876,8 @@ export class Levels implements NavLevels {
         }
       }
       if (d.y < 0) { const t = (f - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'floor', level: lid[k], nx: 0, ny: 1, nz: 0, cell: i} : none(); }
-      if (d.y > 0) { const t = (c - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'ceiling', level: lid[k], nx: 0, ny: -1, nz: 0, cell: i} : none(); }
+      // Task office-overhaul-20261030 (lane STRUCT): an open-sky band top is no surface (the ray flies into the sky).
+      if (d.y > 0) { const t = (c - o.y) / d.y; return t >= 0 && t < tMax && !(this.sky && c >= this.sky.ceil - 1e-3) ? {t, kind: 'ceiling', level: lid[k], nx: 0, ny: -1, nz: 0, cell: i} : none(); }
       return none();
     }
     const ux = d.x / hl, uz = d.z / hl;
@@ -848,7 +888,8 @@ export class Levels implements NavLevels {
     let tA = 0, lastX = false, cur = -1;
     const sight = !!opts.sightProps;
     for (let guard = 0; guard < 8192 && tA < tMax; guard++) {
-      if (!g0.inBounds(cx, cy)) return {t: tA, kind: 'wall', level: cur >= 0 ? lid[cur] : -1, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: -1};
+      // (lane STRUCT: leaving the grid above the roof parapet = open sky, no hit)
+      if (!g0.inBounds(cx, cy)) return this.sky && this.openAir(-1, o.y + d.y * tA) ? none() : {t: tA, kind: 'wall', level: cur >= 0 ? lid[cur] : -1, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: -1};
       i = cy * W + cx;
       const tB = Math.min(tMax, Math.min(mX, mY) / hl);
       const ax = o.x + d.x * tA, ay = o.y + d.y * tA, az = o.z + d.z * tA;
@@ -856,11 +897,11 @@ export class Levels implements NavLevels {
       // (cur's level id is read before evalCol may reuse a volume slot)
       const curLevel = cur >= 0 ? lid[cur] : -1;
       const any = evalCol(i, cx, cy, ax, az, bx, bz);
-      if (!any) return {t: tA, kind: 'wall', level: curLevel, nx: lastX ? -stepX : (tA > 0 ? 0 : -ux), ny: 0, nz: lastX ? 0 : (tA > 0 ? -stepY : -uz), cell: i};
+      if (!any) return this.sky && tA > 1e-6 && this.openAir(i, ay) ? none() : {t: tA, kind: 'wall', level: curLevel, nx: lastX ? -stepX : (tA > 0 ? 0 : -ux), ny: 0, nz: lastX ? 0 : (tA > 0 ? -stepY : -uz), cell: i};
       if (tA > 1e-6) {
         // entering this column below every floor / above every ceiling at this height: a face
         const k = pick(ay, cur, 1e-3);
-        if (k < 0) return {t: tA, kind: 'wall', level: curLevel, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: i};
+        if (k < 0) return this.sky && this.openAir(i, ay) ? none() : {t: tA, kind: 'wall', level: curLevel, nx: lastX ? -stepX : 0, ny: 0, nz: lastX ? 0 : -stepY, cell: i};
         cur = k;
       } else {
         cur = pick(ay, -1, 1e-3);
@@ -888,7 +929,8 @@ export class Levels implements NavLevels {
           const fm = fA[m] + (fB[m] - fA[m]) * uh, cm = cA[m] + (cB[m] - cA[m]) * uh;
           if (down ? fm < yh - 1e-4 && cm >= yh - 1e-4 : cm > yh + 1e-4 && fm <= yh + 1e-4) { next = m; break; }
         }
-        if (next < 0) return down ? {t: th, kind: 'floor', level: lid[cur], nx: 0, ny: 1, nz: 0, cell: i} : {t: th, kind: 'ceiling', level: lid[cur], nx: 0, ny: -1, nz: 0, cell: i};
+        if (next < 0) return down ? {t: th, kind: 'floor', level: lid[cur], nx: 0, ny: 1, nz: 0, cell: i}
+          : this.sky && yh >= this.sky.ceil - 1e-3 ? none() : {t: th, kind: 'ceiling', level: lid[cur], nx: 0, ny: -1, nz: 0, cell: i};
         cur = next; t0 = th;
       }
       if (tB >= tMax) return none();

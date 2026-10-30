@@ -19,6 +19,28 @@ import {ITEMS} from '../../items/items';
 import {WEAPON_FIND_AMMO, findWeaponsFor, type StartWeaponId} from '../weaponFinds';
 import type {Area, PickupPlacement, StationLayout, ZombieType} from '../stationTypes';
 import {OFFICE_FLOORS} from './frame';
+import {COMPANIES, type LootTilt} from './companies';
+
+/**
+ * Task office-overhaul-20261030 (lane TENANTS): a company floor's loot tilt shifts the MIX of its scarce loose finds (same expected
+ * count): the clinic's floor leans to dressings, the logistics / aerospace floors to torch batteries and flares, the security
+ * firm's to flares and a surer ammo box, the food companies trade some battery chance for a snack. Multipliers per category
+ * [med, battery, flare, food]; renormalised to the untilted total.
+ */
+const TILT: Readonly<Record<LootTilt, readonly [number, number, number, number]>> = {
+  none: [1, 1, 1, 0], medical: [1.9, 0.6, 0.6, 0], light: [0.6, 1.5, 1.6, 0], ammo: [0.8, 0.7, 1.6, 0], food: [1, 0.6, 1, 0.5],
+};
+/** Scarce loose-find odds of a floor [med, battery, flare, food] under a company's tilt (sum = the untilted sum: same count). */
+export function scarceOdds(tilt: LootTilt): [number, number, number, number] {
+  const base = [FLOOR_ECONOMY.medKeep * 1.5, 0.35, 0.14] as const, w = TILT[tilt];
+  const sum = base[0] + base[1] + base[2];
+  const k = sum / (base[0] * w[0] + base[1] * w[1] + base[2] * w[2] + base[1] * w[3]);
+  return [Math.min(0.95, base[0] * w[0] * k), Math.min(0.95, base[1] * w[1] * k), Math.min(0.95, base[2] * w[2] * k), Math.min(0.95, base[1] * w[3] * k)];
+}
+function floorTilt(layout: StationLayout, levels: readonly number[]): LootTilt {
+  const a = layout.areas.find(q => q.tenant && levels.includes(q.level ?? 0));
+  return a?.tenant ? COMPANIES[a.tenant].loot : 'none';
+}
 
 export const OFFICE_ENEMIES = {street: [5, 8] as const, floor: [3, 6] as const};
 /** Walking distance (cells) every enemy keeps from the platform start (18 m, the station rule). */
@@ -137,17 +159,22 @@ export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: Spaw
   const ammo = pools('ammo'), med = pools('med');
   const light = mine.map(a => [a, FLOOR_ECONOMY.themeWeight[(purposeById(a.purpose)?.theme ?? 'public')]] as [Area, number]).filter(e => e[1] > 0);
   // Ammo: one box per storey (station + lobby: one rifle box and maybe shells — it is a small station), 9 mm leads in the tower.
+  const tilt = street ? 'none' : floorTilt(layout, levels);
   if (street) {
     place('ammo_556', 30, ammo);
     if (rng.chance(0.6)) place('ammo_12ga', 8, ammo);
   } else {
-    const r = rng.next();
-    if (r < 0.55) place('ammo_9mm', 15, ammo); else if (r < 0.8) place('ammo_556', 30, ammo); else if (r < 0.93) place('ammo_12ga', 8, ammo);
+    // TENANTS: a security company's floor rarely lacks its box and leans to rifle / shells (same draw, shifted thresholds).
+    // lane AMMO (knife-melee-20261030): caliber items (9mm / 5.56×45mm / 12-gauge).
+    const r = rng.next(), [p9, pr, ps] = tilt === 'ammo' ? [0.42, 0.72, 0.97] : [0.55, 0.8, 0.93];
+    if (r < p9) place('ammo_9mm', 15, ammo); else if (r < pr) place('ammo_556', 30, ammo); else if (r < ps) place('ammo_12ga', 8, ammo);
   }
   const scarce = rng.fork('scarce-floor');
-  if (scarce.chance(FLOOR_ECONOMY.medKeep * 1.5)) place(scarce.chance(0.3) ? 'medkit' : 'bandage', 1, med);
-  if (scarce.chance(0.35)) place(BATTERY_ID, 1, light);
-  if (scarce.chance(0.14)) place(FLARE_ID, 1, light);
+  const [pMed, pBat, pFlare, pFood] = scarceOdds(tilt);
+  if (scarce.chance(pMed)) place(scarce.chance(0.3) ? 'medkit' : 'bandage', 1, med);
+  if (scarce.chance(pBat)) place(BATTERY_ID, 1, light);
+  if (scarce.chance(pFlare)) place(FLARE_ID, 1, light);
+  if (pFood > 0 && scarce.chance(pFood)) place(scarce.pick(['chocolate', 'cola', 'water', 'chips']), 1, light);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -175,6 +202,8 @@ export function officeWeaponPlan(levelSeed: number, start: StartWeaponId): Recor
 
 const FIND_W: Partial<Record<string, number>> = {
   'office-security': 4, 'office-storage': 2, 'office-exec': 2, 'office-server': 1.2, 'office-copy': 1, 'office-private': 0.8,
+  // TENANTS: company rooms where a weapon plausibly turns up.
+  'office-control': 4, 'office-armory': 4, 'office-vault': 2, 'office-archive': 1, 'office-mailroom': 1, 'office-workshop': 0.8, 'office-coldroom': 0.6,
   'agent-office': 2, 'storage': 2, 'utility': 1, 'office-break': 0.6, 'janitor-closet': 0.4, 'supply-closet': 0.6, 'electrical-closet': 0.4,
 };
 

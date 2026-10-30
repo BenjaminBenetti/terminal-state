@@ -45,6 +45,9 @@ const officeCache = new Map<number, StationLayout>();
 const OFFICE = (levelSeed: number) => { let l = officeCache.get(levelSeed); if (!l) officeCache.set(levelSeed, (l = generateOfficeLevel({levelSeed, startWeapon: 'pistol'}))); return l; };
 const run = (wc: WeaponController, inv: Inventory, secs: number, inp: Partial<TriggerInput> = {}) => { const ev = []; for (let t = 0; t < secs; t += 0.05) ev.push(...wc.update(0.05, idle(inp), inv)); return ev; };
 
+/** 9mm-only loot rows outside office purposes that are deliberate sidearm caches (documented exceptions to the 1/3 rule). */
+const NINE_ONLY_EXCEPTIONS: readonly string[] = ['openable.toiletStall'];
+
 describe('calibers: an ammo item IS a caliber, weapons declare the caliber they chamber', () => {
   it('9mm (9×19mm) pistol, 5.56×45mm rifle, 12-gauge shotgun; one item per caliber; no gun-specific ammo item left', () => {
     expect(CALIBER_IDS).toEqual(['9x19mm', '5.56x45mm', '12ga']);
@@ -208,7 +211,9 @@ describe('distribution: generic ammo is ~1/3 each caliber wherever rifle / shotg
         expect(Math.max(...w) - Math.min(...w), `${t.name} weights ${w}`).toBeLessThan(1e-9);
       } else {
         nineOnly++;
-        expect(t.purpose ?? '', `${t.name}: 9mm-only stock outside the office`).toMatch(/^office-/);
+        // 9mm-only (no rifle / shotgun rows, so the 1/3 rule does not apply): the office sidearm stock, and the office overhaul's
+        // toilet-tank stash (a hidden sidearm cache in washroom stalls; task office-overhaul-20261030)
+        if (!NINE_ONLY_EXCEPTIONS.includes(t.name)) expect(t.purpose ?? '', `${t.name}: 9mm-only stock outside the office`).toMatch(/^office-/);
       }
     }
     expect(generic).toBeGreaterThan(20);
@@ -258,13 +263,15 @@ describe('distribution: generic ammo is ~1/3 each caliber wherever rifle / shotg
 });
 
 /**
- * Pre-change census (main 7aeca7b, before lane AMMO; reference/tasks/knife-melee-20261030/lanes/ammo-census, same counting code as
- * tests/helpers/lootEconomy.ts stationEconomy: holder lots as world/containers.ts rolls + places them, plus every layout pickup).
- * Per level: rounds, stacks (boxes / lots), magazine-equivalents (rounds / the caliber's magazine: 9mm 15, 5.56 30, 12-gauge 6).
+ * Pre-change census, re-measured on main dfb3a06 (after the office overhaul merged, before lane AMMO; the original baseline was
+ * main 7aeca7b — the overhaul's tenant loot tables changed the office's ammo) with reference/tasks/knife-melee-20261030/lanes/
+ * ammo-census, same counting code as tests/helpers/lootEconomy.ts stationEconomy: holder lots as world/containers.ts rolls +
+ * places them, plus every layout pickup. Per level: rounds, stacks (boxes / lots), magazine-equivalents (rounds / the caliber's
+ * magazine: 9mm 15, 5.56 30, 12-gauge 6).
  */
 const BEFORE = {
-  subway: {rounds: 437.44, stacks: 47.11, magEq: 26.99, holderShare9mm: 0.035},
-  office: {rounds: 356.67, stacks: 34.83, magEq: 22.31},
+  subway: {rounds: 440.28, stacks: 47.5, magEq: 27.18, holderShare9mm: 0.045},
+  office: {rounds: 451.33, stacks: 44.67, magEq: 28.06},
 };
 const OFFICE_SEEDS = [11, 222, 3333, 7, 4242, 99];
 const MAG: Record<string, number> = {ammo_9mm: 15, ammo_556: 30, ammo_12ga: 6};

@@ -111,7 +111,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     'setListener', 'setWorld', 'prune', 'release', 'take', 'dist', 'setPannerPos', 'makePanner', 'voice', 'playClip', 'play', 'buildReverb', 'ir', 'loadSlot', 'setRoom',
     'startAmbient', 'onCueReady', 'loopSource', 'attachBed', 'applyBeds', 'updateEmitter', 'duck', 'around', 'stopReload',
     // iteration 12 (AUDIO): hit-confirm dip + flare-loop plumbing / lifecycle
-    'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares']);
+    'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares',
+    // task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + cross-storey step gate
+    'setVocalReach', 'vocal', 'stepHeard']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];

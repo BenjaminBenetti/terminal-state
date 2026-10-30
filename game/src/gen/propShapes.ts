@@ -177,19 +177,37 @@ function exitStair(): ShapePart[] {
   return parts;
 }
 
+/**
+ * Task office-overhaul-20261030 (lane INTERACT): the cubicle WITHOUT its door — the door is now the openable part of the toilet-stall
+ * holder (world/openablesSpec.ts toiletStall, which draws this shape as its body). The toilet reads as one: a hollow bowl (pedestal,
+ * four thin walls, dark water at the bottom, seat ring) in front of the cistern and its lid. The loot surfaces of the spec match it:
+ * the bowl bottom (y 0.245, x +-0.12, z -0.56..-0.22) and the tank lid top (y 0.812).
+ */
 function toiletStall(): ShapePart[] {
   const {w, d} = PROP_DEFS.toiletStall;
   const hw = w / 2, hd = d / 2;
   return [
     box('partition', [0.03, 1.8, d], [-hw + 0.015, 1.05, 0]),
     box('partition', [0.03, 1.8, d], [hw - 0.015, 1.05, 0]),
-    box('partition', [w - 0.1, 1.72, 0.03], [0, 1.03, hd - 0.02]),
     box('steelBright', [w, 0.04, 0.04], [0, 2.0, hd - 0.02]),
     box('steelBright', [0.025, 0.15, 0.025], [-hw + 0.015, 0.075, hd - 0.03]),
     box('steelBright', [0.025, 0.15, 0.025], [hw - 0.015, 0.075, hd - 0.03]),
-    box('porcelain', [0.38, 0.4, 0.5], [0, 0.2, -hd + 0.35]),
-    box('porcelain', [0.42, 0.36, 0.16], [0, 0.6, -hd + 0.1]),
-    box('black', [0.1, 0.03, 0.01], [0.3, 1.0, hd - 0.003]),
+    // cistern + lid + flush lever (against the back wall)
+    box('porcelain', [0.4, 0.36, 0.17], [0, 0.6, -0.705]),
+    box('porcelain', [0.43, 0.03, 0.18], [0, 0.797, -0.705]),
+    box('steelBright', [0.06, 0.015, 0.02], [-0.14, 0.72, -0.61]),
+    // bowl: pedestal, bottom, water, four walls, seat ring
+    box('porcelain', [0.24, 0.2, 0.3], [0, 0.1, -0.45]),
+    box('porcelain', [0.3, 0.04, 0.38], [0, 0.22, -0.39]),
+    box('black', [0.22, 0.004, 0.24], [0, 0.243, -0.4]),
+    box('porcelain', [0.38, 0.19, 0.04], [0, 0.295, -0.6]),
+    box('porcelain', [0.3, 0.19, 0.04], [0, 0.295, -0.18]),
+    box('porcelain', [0.04, 0.19, 0.42], [-0.17, 0.295, -0.39]),
+    box('porcelain', [0.04, 0.19, 0.42], [0.17, 0.295, -0.39]),
+    box('black', [0.36, 0.02, 0.06], [0, 0.4, -0.2]),
+    box('black', [0.36, 0.02, 0.06], [0, 0.4, -0.58]),
+    box('black', [0.06, 0.02, 0.32], [-0.16, 0.4, -0.39]),
+    box('black', [0.06, 0.02, 0.32], [0.16, 0.4, -0.39]),
   ];
 }
 

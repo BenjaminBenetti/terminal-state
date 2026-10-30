@@ -47,5 +47,6 @@ export function dummyTrench(): Trench {
 
 /** Canvas cell of the tower interior's NW corner (tower-local 0, 0) during generation. */
 export const TOWER_CANVAS = {x: 40, y: 40};
-/** Office canvas (cells) and level grids: the station (main), the lobby, office floors 2..8 (9 grids of this size). */
-export const OFFICE_CANVAS = {w: 320, h: 240, levels: 9};
+/** Office canvas (cells) and level grids: the station (main), the lobby, office floors 2..8 and (task office-overhaul-20261030,
+ *  lane STRUCT) the roof: 10 grids of this size. */
+export const OFFICE_CANVAS = {w: 320, h: 240, levels: 10};

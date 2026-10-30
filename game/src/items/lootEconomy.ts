@@ -137,6 +137,8 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
   gunLocker: ['ammo', 'med', 'flare', 'battery'],
   // trash: discarded snacks, a dressing, a few rounds, a battery — never a flare
   bin: ['food', 'drink', 'med', 'ammo', 'battery'], wheelieBin: ['food', 'drink', 'med', 'ammo', 'battery'],
+  // Task office-overhaul-20261030: something stashed in a toilet / on its tank lid — sealed water, a dressing, rounds, a battery, a flare; never snacks
+  toiletStall: ['drink', 'med', 'ammo', 'battery', 'flare'],
 };
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);

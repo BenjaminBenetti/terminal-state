@@ -7,6 +7,8 @@
 // - "Close (E)" / E / 6 / Tab / Esc close it (Tab and Esc also open the inventory / pause as usual).
 // Every action goes through the open BagSession (gear/bagSession.ts), which refuses once the bag is no longer on the
 // ground or the view was closed. Refusals are shown in red under the slots.
+// Task office-overhaul-20261030 (lane INTERACT): the grenade slot (G) sits after the quick slots (throwables only; the
+// inventory validates every move). The view opens on a TAP of E (a held E picks the bag up instead: gear/system.ts).
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef} from '../items/items';
@@ -27,7 +29,7 @@ export interface BagViewHost {
   changed(): void;
 }
 
-type Side = 'hotbar' | 'pack' | 'bag';
+type Side = 'hotbar' | 'pack' | 'bag' | 'throw';
 const refOf = (el: HTMLElement | null): AnyRef | null => el && el.dataset.bar ? {bar: el.dataset.bar as Side, index: Number(el.dataset.index)} as AnyRef : null;
 
 export class BagView {
@@ -69,7 +71,7 @@ export class BagView {
     el.innerHTML = `<div class="bv-panel">
       <div class="bv-head"><b>Backpack on the ground</b><span class="bv-live">● Not paused — keep an eye out</span></div>
       <div class="bv-cols">
-        <div class="bv-side"><h4>Quick slots</h4><div class="slots bv-g5" data-side="hotbar"></div><h4 class="bv-pockets">Pockets</h4><div class="slots bv-g6" data-side="pack"></div></div>
+        <div class="bv-side"><h4>Quick slots · grenade slot</h4><div class="slots bv-g6" data-side="hotbar"></div><h4 class="bv-pockets">Pockets</h4><div class="slots bv-g6" data-side="pack"></div></div>
         <div class="bv-arrow">⇄</div>
         <div class="bv-side"><h4 class="bv-bagtitle">Backpack</h4><div class="slots bv-g6" data-side="bag"></div></div>
       </div>
@@ -195,13 +197,14 @@ export class BagView {
       const title = def ? ` title="${def.name}${fx ? ` — ${fx}` : ''}. Click to move it ${ref.bar === 'bag' ? 'to you' : 'into the backpack'} · drag to a slot"` : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';
       const held = ref.bar === 'hotbar' && ref.index === inv.selected ? ' held' : '';
-      return `<div class="slot${def ? ' filled' : ''}${extra}${held}" data-bar="${ref.bar}" data-index="${ref.index}"${title}>${ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : ''}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
+      const key = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : (ref.bar as Side) === 'throw' ? '<span class="key">G</span>' : '';
+      return `<div class="slot${def ? ' filled' : ''}${extra}${held}" data-bar="${ref.bar}" data-index="${ref.index}"${title}>${key}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
-    const side = (name: Side, list: readonly (ItemStack | null)[]) => {
+    const side = (name: Side, list: readonly (ItemStack | null)[], extra = '') => {
       const box = root.querySelector(`[data-side="${name}"]`);
-      if (box) box.innerHTML = list.map((st, i) => cell({bar: name, index: i} as AnyRef, st)).join('');
+      if (box) box.innerHTML = list.map((st, i) => cell({bar: name, index: i} as AnyRef, st)).join('') + extra;
     };
-    side('hotbar', inv.hotbar);
+    side('hotbar', inv.hotbar, inv.throwSlot.map((st, i) => cell({bar: 'throw', index: i} as AnyRef, st)).join('')); // + grenade slot (INTERACT)
     side('pack', inv.pack);
     side('bag', s.slots());
     const ex = inv.extraPockets;

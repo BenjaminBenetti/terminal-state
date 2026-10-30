@@ -1,6 +1,7 @@
 // Iteration 12 (LIGHT): thrown road FLARES — the first grenade-slot item (mandate D).
 //
-// T (or left click with a flare in the held quick slot) strikes a flare and tosses it: ONE item is consumed only when the
+// G — the grenade slot (task office-overhaul-20261030, lane INTERACT; was T) — or left click with a flare in the held quick slot
+// strikes a flare and tosses it: ONE item is consumed only when the
 // throw actually happens (refused at the cap / without physics, with a HUD message and nothing removed).
 //  - Physics: a cannon-es rigid body (the 0.255 m tube as 5 spheres of r 16.5 mm along its axis, 0.22 kg, 'plastic' contact:
 //    friction 0.42 / restitution 0.30) in the station's bounded world (physics/world.ts BodySource: the world steps while a

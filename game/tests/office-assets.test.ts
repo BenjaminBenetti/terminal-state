@@ -10,6 +10,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {getBounds} from '@gltf-transform/functions';
 import {OFFICE_ASSETS, OFFICE_ASSET_IDS, OFFICE_TEXTURES, OFFICE_TEXTURE_IDS, OFFICE_MODEL_FILES, loadOfficeAsset, loadOfficeTexture, officeAssetsReady, type OfficeAssetId} from '../src/assets/officeAssets';
+import {COMPANY_ASSETS} from '../src/assets/companyAssets';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(GAME, '..');
@@ -120,8 +121,11 @@ describe('iteration16 office assets', () => {
     expect(provText).not.toMatch(/Signature|X-Amz|Key-Pair-Id|token=|api[_-]?key/i);
     const buf = fs.readFileSync(path.join(PUB, PROV_REL));
     expect(ALLOW.get(PROV_REL)).toEqual({path: PROV_REL, bytes: buf.length, sha256: sha(buf)});
-    // only delivered office files exist on disk (no stray, unallowlisted office outputs)
-    const onDisk = fs.readdirSync(path.join(PUB, 'assets/models')).filter(f => f.startsWith('office-')).map(f => `assets/models/${f}`);
+    // only delivered office files exist on disk (no stray, unallowlisted office outputs). The office-overhaul company / supporting
+    // models share the flat office-<id>.glb naming and are covered by company-assets.test.ts, so they are excluded here.
+    const companyUrls = new Set(Object.values(COMPANY_ASSETS).map(a => a.url).filter(Boolean));
+    const onDisk = fs.readdirSync(path.join(PUB, 'assets/models')).filter(f => f.startsWith('office-')).map(f => `assets/models/${f}`)
+      .filter(p => !companyUrls.has(p));
     expect(onDisk.sort()).toEqual(ready.map(id => OFFICE_ASSETS[id].url!).sort());
     for (const p of onDisk) expect(ALLOW.has(p)).toBe(true);
   });

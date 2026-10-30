@@ -797,6 +797,8 @@ export const LIGHT_ODDS: Record<RoomType, readonly [number, number, number]> = {
   // Iteration 16 (WORLD-GEN): office tower — decades without upkeep: most of the floor runs dim or dead (purposes refine it).
   'office-lobby': [0.35, 0.5, 0.15], 'office-corridor': [0.3, 0.45, 0.25], 'office-open': [0.3, 0.45, 0.25], 'office-room': [0.2, 0.45, 0.35],
   'office-elevator': [1, 0, 0], 'office-stair': [0.5, 0.4, 0.1],
+  // Task office-overhaul-20261030 (lane STRUCT): the open-sky roof has no fixtures (fixture-less daylight, gen/office/roof.ts).
+  'office-roof': [0, 0, 1],
 };
 
 /**

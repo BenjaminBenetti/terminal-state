@@ -36,7 +36,8 @@ function fakeEnvTextures(): Record<TextureKey, THREE.Texture> {
   return out;
 }
 
-const invItems = (inv: Inventory) => inv.hotbar.concat(inv.pack).filter(Boolean).map(s => `${s!.itemId}x${s!.count}${s!.mag !== undefined ? `@${s!.mag}` : ''}`).sort();
+// task office-overhaul-20261030 (INTERACT #6): + the grenade slot (the starter flare goes there now)
+const invItems = (inv: Inventory) => inv.hotbar.concat(inv.pack, inv.throwSlot ?? []).filter(Boolean).map(s => `${s!.itemId}x${s!.count}${s!.mag !== undefined ? `@${s!.mag}` : ''}`).sort();
 const countOf = (inv: Inventory, id: string) => inv.count(id);
 
 describe('levels registry', () => {
@@ -81,7 +82,7 @@ describe('levels registry', () => {
     const levelSeed = 0x0ff1ce;
     const office = LEVELS.office.generate('main', {levelSeed, startWeapon: 'pistol'});
     expect(office.office?.storeys.map(s => s.floor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(office.levels.length).toBe(9);
+    expect(office.levels.length).toBe(10); // task office-overhaul-20261030 (lane STRUCT): + the roof (level 9)
     expect(storeyLabel(office, 1)).toBe('L');
     expect(storeyLabel(office, 5)).toBe('5');
     expect(storeyLabel(office, 0)).toBe('');

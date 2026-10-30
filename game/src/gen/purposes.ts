@@ -753,10 +753,10 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
     },
     'office-corridor': {
       id: 'office-corridor', category: 'back', theme: 'public', label: 'Corridor', slots: ['office-corridor'], kinds: ['passage'], weight: 1, max: 99,
+      // Task office-overhaul-20261030 (lane TENANTS, item 8): the 2 m corridors keep >= 1.5 m clear — only the small pot plant
+      // (0.42 m) stands against their walls; water coolers / bins / dead plants moved to the lounges, break rooms and halls.
       props: [
-        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 2], chance: 0.6, front: 0.5},
-        {kind: 'officeWaterCooler', at: 'wall', wall: 'any', n: [0, 1], chance: 0.35, front: 0.6},
-        {kind: 'bin', at: 'wall', wall: 'any', n: [0, 1], chance: 0.4},
+        {kind: 'pottedPlantSmall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.4},
       ],
       loot: {bin: {items: [['chips', 1], ['cola', 1], ['water', 0.6], ['bandage', 0.3]], lots: [0, 2], empty: 0.6}}, floor: {med: 0.2, ammo: 0.15},
     },
@@ -782,13 +782,13 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
     'office-exec': {
       id: 'office-exec', category: 'back', theme: 'personal', label: 'Executive office', slots: ROOM, kinds: ['room'], min: [4, 5], weight: 1, max: 3,
       light: [0.15, 0.45, 0.4], warm: true,
+      // Task office-overhaul-20261030 (lane TENANTS, item 7): the executive desk / chair, chesterfield, globe bar, bookcases and
+      // planter come from gen/office/companyDress.ts execSuite; these rules add the credenza, more shelving, the safe.
       props: [
-        {kind: 'desk', at: 'center', n: [1, 1], ring: 0.8},
-        {kind: 'couch', at: 'wall', wall: 'side', n: [1, 1], chance: 0.8, front: 0.7},
         {kind: 'cabinetLow', at: 'wall', wall: 'side', n: [1, 1], front: 0.7},
-        {kind: 'officeShelf', at: 'row', wall: 'near', n: [1, 3], front: 0.6},
+        {kind: 'officeShelf', at: 'row', wall: 'near', n: [0, 2], front: 0.6},
         {kind: 'safe', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.6},
-        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [1, 2], front: 0.4},
+        {kind: 'deadPlant', at: 'wall', wall: 'any', n: [0, 1], front: 0.4},
       ],
       loot: {
         desk: {items: [['chocolate', 1], ['water', 1], ['juice', 0.8], ['medkit', 0.3], ['ammo_9mm', 0.5]], lots: [1, 2], empty: 0.35},
@@ -860,9 +860,10 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
     'office-server': {
       id: 'office-server', category: 'back', theme: 'tech', label: 'Server room', slots: ROOM, kinds: ['room'], min: [2.5, 3], weight: 1.2, max: 1,
       light: [0.05, 0.35, 0.6],
+      // Task office-overhaul-20261030 (lane TENANTS, item 9): the racks used to be a `row` on the FAR wall — the facade of these
+      // end-zone rooms (door on the side corridor), whose window strip is held during dress(), so most rooms got none. The rack
+      // rows, server cabinets and CRAC unit now come from gen/office/companyDress.ts serverRoom (before these rules run).
       props: [
-        {kind: 'serverRack', at: 'row', wall: 'far', n: [2, 5], front: 1.0},
-        {kind: 'serverRack', at: 'row', wall: 'side', n: [0, 3], chance: 0.6, front: 1.0},
         {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.8},
         {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5},
       ],
@@ -872,6 +873,7 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
       },
       floor: {ammo: 0.6, med: 0.3},
     },
+    ...TENANT_PURPOSES(OPEN, ROOM, DESK, DRAWERS),
     'office-elevator': {
       id: 'office-elevator', category: 'back', theme: 'public', label: 'Elevator', slots: ['office-elevator'], kinds: ['room'], weight: 1, max: 99,
       light: [1, 0, 0], props: [], loot: {},
@@ -882,3 +884,92 @@ function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
     },
   };
 }
+
+/**
+ * Task office-overhaul-20261030 (lane TENANTS): purposes of the company rooms (gen/office/companies.ts ROOMS / OPEN_STYLES / RUNS).
+ * The furniture comes from the company dresser (gen/office/companyDress.ts); `props` here add the EXISTING loot holders a room of
+ * that kind would have (fridges, medicine cabinets, gun lockers, credenzas …), and each purpose's theme / table steers what is in
+ * them (clinic -> dressings, café / bakery -> food and drink, security -> ammo, logistics / tech -> batteries and flares) — the
+ * economy's scarcity (items/lootEconomy.ts) is applied on top exactly as everywhere else: the mix moves, never the totals.
+ */
+function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], DESK: LootSpec, DRAWERS: LootSpec): Record<string, RoomPurpose> {
+  const T = (id: string, label: string, theme: LootTheme, light: LightOdds, loot: LootTable, floor: FloorLoot, props: PropRule[] = [], o: {open?: boolean; warm?: boolean} = {}): RoomPurpose => ({
+    id, category: 'back', theme, label, slots: o.open ? OPEN : ROOM, kinds: o.open ? ['concourse', 'room'] : ['room'], weight: 1, max: 99,
+    light, ...(o.warm ? {warm: true} : {}), props, loot, floor,
+  });
+  const SNACKS: LootSpec = {items: [['chocolate', 2], ['chips', 2], ['cola', 2], ['water', 1]], lots: [3, 6], empty: 0.15};
+  const FRIDGE: LootSpec = {items: [['juice', 2], ['water', 2], ['cola', 2], ['beans', 0.6]], lots: [2, 5], empty: 0.15};
+  const KITCHEN: LootSpec = {items: [['noodles', 2], ['chocolate', 1], ['beans', 1.4], ['chips', 0.6]], lots: [1, 3], empty: 0.25};
+  const TABLE: LootSpec = {items: [['cola', 1], ['chocolate', 1], ['water', 0.8], ['chips', 0.6]], lots: [1, 2], empty: 0.5};
+  const MEDS: LootSpec = {items: [['bandage', 2], ['medkit', 0.5], ['water', 0.6]], lots: [1, 3], empty: 0.2};
+  // lane AMMO (knife-melee-20261030): the armory's ammo weight (5.2) split ~1/3 each over 9mm / 5.56×45mm / 12-gauge
+  const ARMS: LootSpec = {items: [...genericAmmo(5.2), ['flare', 0.3], ['medkit', 0.2]], lots: [2, 4], empty: 0.1};
+  const SUPPLY: LootSpec = {items: [['water', 1.2], ['battery', 0.8], ['flare', 0.4], ['bandage', 0.6], ['beans', 0.6]], lots: [1, 3], empty: 0.25};
+  const DIM: LightOdds = [0.15, 0.45, 0.4], DIMMER: LightOdds = [0.08, 0.42, 0.5], LIT: LightOdds = [0.3, 0.45, 0.25];
+  const credenza = (chance = 0.6): PropRule => ({kind: 'cabinetLow', at: 'wall', wall: 'side', n: [1, 1], chance, front: 0.7});
+  return {
+    'office-tenant-reception': T('office-tenant-reception', 'Reception', 'personal', [0.35, 0.45, 0.2],
+      {cabinetLow: DRAWERS, table: TABLE, vending: SNACKS}, {med: 0.3, ammo: 0.2}, [credenza(0.5)], {warm: true}),
+    'office-lounge': T('office-lounge', 'Staff lounge', 'food', LIT, {vending: SNACKS, fridge: FRIDGE, table: TABLE},
+      {med: 0.2}, [{kind: 'vending', at: 'wall', wall: 'side', n: [0, 1], chance: 0.5, front: 1.0}], {warm: true}),
+    'office-gameroom': T('office-gameroom', 'Game lounge', 'food', LIT, {vending: SNACKS, fridge: FRIDGE, table: TABLE},
+      {med: 0.2}, [{kind: 'vending', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 1.0}]),
+    'office-gym': T('office-gym', 'Staff gym', 'medical', DIM, {staffLockers: {items: [['bandage', 1.4], ['water', 1.2], ['juice', 0.6]], lots: [1, 2], empty: 0.4}, default: MEDS},
+      {med: 0.8}, [{kind: 'medCabinet', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.7}]),
+    'office-showroom': T('office-showroom', 'Showroom', 'personal', LIT, {cabinetLow: DRAWERS, default: DRAWERS}, {med: 0.3, ammo: 0.2}, [credenza(0.4)], {open: false}),
+    'office-lab': T('office-lab', 'Laboratory', 'medical', DIM, {medCabinet: MEDS, cabinetTall: {items: [['bandage', 1.4], ['medkit', 0.4], ['water', 1]], lots: [1, 3], empty: 0.2}},
+      {med: 1.2, ammo: 0.2}),
+    'office-labfloor': T('office-labfloor', 'Lab floor', 'medical', DIM, {medCabinet: MEDS, desk: DESK, default: MEDS},
+      {med: 1.0, ammo: 0.2}, [{kind: 'medCabinet', at: 'wall', wall: 'any', n: [0, 1], chance: 0.6, front: 0.7}], {open: true}),
+    'office-coldroom': T('office-coldroom', 'Biohazard cold storage', 'medical', DIMMER, {crate: {items: [['bandage', 1.4], ['medkit', 0.6], ['water', 0.8], ...genericAmmo(0.6)], lots: [1, 2], empty: 0.2}, default: MEDS},
+      {med: 1.0, ammo: 0.3}),
+    'office-library': T('office-library', 'Law library', 'personal', DIM, {cabinetLow: DRAWERS, default: DRAWERS}, {med: 0.3, ammo: 0.3}, [credenza(0.5)], {warm: true}),
+    'office-boardroom': T('office-boardroom', 'Boardroom', 'personal', DIM, {cabinetLow: {items: [['juice', 1], ['water', 1], ['chocolate', 0.6]], lots: [1, 2], empty: 0.35}},
+      {med: 0.2}, [credenza(0.6)], {warm: true}),
+    'office-archive': T('office-archive', 'Records archive', 'service', DIMMER, {shelf: {items: [['water', 1], ['bandage', 0.6], ['battery', 0.5], ['chocolate', 0.4]], lots: [1, 2], empty: 0.45}, default: SUPPLY},
+      {ammo: 0.5, med: 0.4}),
+    'office-vault': T('office-vault', 'Vault room', 'security', DIMMER, {safe: {items: [['ammo_9mm', 1.4], ['medkit', 0.5], ['bandage', 0.8]], lots: [1, 2], empty: 0.2}, cabinetTall: ARMS},
+      {ammo: 1.2, med: 0.4}),
+    'office-kitchen': T('office-kitchen', 'Test kitchen', 'food', LIT, {fridge: FRIDGE, kitchenette: KITCHEN, table: TABLE, shelf: KITCHEN}, {med: 0.2}, [], {warm: true}),
+    'office-cafe': T('office-cafe', 'Coffee bar', 'food', LIT, {fridge: FRIDGE, table: TABLE, kitchenette: KITCHEN}, {med: 0.2}, [], {warm: true}),
+    'office-roastery': T('office-roastery', 'Roastery', 'food', DIM, {shelf: KITCHEN, crate: {items: [['beans', 1.4], ['water', 1], ...genericAmmo(0.5)], lots: [1, 2], empty: 0.3}},
+      {ammo: 0.3}, [], {warm: true}),
+    'office-dispensary': T('office-dispensary', 'Dispensary', 'medical', DIM, {medCabinet: MEDS, shelf: MEDS, fridge: {items: [['water', 2], ['juice', 1]], lots: [1, 3], empty: 0.3}, cabinetTall: MEDS},
+      {med: 1.6}, [{kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.8}]),
+    'office-waiting': T('office-waiting', 'Waiting room', 'medical', LIT, {vending: SNACKS, default: MEDS}, {med: 0.8},
+      [{kind: 'vending', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 1.0}]),
+    'office-recording': T('office-recording', 'Recording studio', 'personal', DIMMER, {cabinetLow: DRAWERS}, {med: 0.2, ammo: 0.2}, [credenza(0.5)]),
+    'office-listening': T('office-listening', 'Listening lounge', 'food', DIM, {fridge: FRIDGE, table: TABLE}, {med: 0.2},
+      [{kind: 'fridge', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.6}], {warm: true}),
+    'office-studio': T('office-studio', 'Broadcast studio', 'tech', DIMMER, {cabinetLow: SUPPLY}, {ammo: 0.3}, [credenza(0.4)]),
+    'office-gallery': T('office-gallery', 'Production gallery', 'tech', DIM, {monitorDesk: {items: [['cola', 1], ['battery', 0.8], ['chocolate', 0.8]], lots: [1, 2], empty: 0.4}}, {ammo: 0.3}),
+    'office-control': T('office-control', 'Control room', 'security', DIM, {
+      gunLocker: ARMS, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ['ammo_9mm', 0.8]], lots: [1, 2], empty: 0.35},
+      cabinetTall: {items: [['ammo_9mm', 1.4], ['bandage', 1], ['flare', 0.4], ['water', 0.6]], lots: [2, 4], empty: 0.12},
+    }, {ammo: 2.0, med: 0.4}),
+    'office-armory': T('office-armory', 'Equipment room', 'security', DIMMER, {gunLocker: ARMS, staffLockers: {items: [['ammo_9mm', 1], ['bandage', 0.8], ['flare', 0.4]], lots: [1, 2], empty: 0.3},
+      cabinetTall: ARMS, crate: CACHE_CRATE}, {ammo: 2.2, med: 0.3}),
+    'office-mailroom': T('office-mailroom', 'Parcel room', 'service', DIM, {shelf: SUPPLY, crate: CACHE_CRATE}, {ammo: 0.8, med: 0.4}),
+    'office-naproom': T('office-naproom', 'Nap room', 'personal', DIMMER, {cabinetLow: DRAWERS}, {med: 0.4}, [credenza(0.3)]),
+    'office-playtest': T('office-playtest', 'Play-test room', 'food', LIT, {table: TABLE}, {med: 0.2}),
+    'office-workshop': T('office-workshop', 'Prototype workshop', 'service', DIM, {table: SUPPLY, shelf: SUPPLY, crate: CACHE_CRATE}, {ammo: 0.6, med: 0.3}),
+    'office-modelroom': T('office-modelroom', 'Model room', 'service', DIM, {crate: SUPPLY, default: SUPPLY}, {ammo: 0.4, med: 0.3}),
+    'office-mission': T('office-mission', 'Mission room', 'tech', DIM, {monitorDesk: {items: [['battery', 1], ['cola', 0.8], ['flare', 0.3]], lots: [1, 2], empty: 0.4}}, {ammo: 0.4}),
+    'office-observatory': T('office-observatory', 'Observation room', 'personal', DIM, {table: TABLE}, {med: 0.3}),
+    'office-tasting': T('office-tasting', 'Tasting lounge', 'food', LIT, {table: TABLE, vending: SNACKS}, {med: 0.2}, [], {warm: true}),
+    'office-petlounge': T('office-petlounge', 'Pet lounge', 'food', LIT, {cabinetLow: {items: [['chocolate', 1], ['water', 1], ['beans', 0.6]], lots: [1, 2], empty: 0.4}},
+      {med: 0.2}, [credenza(0.4)]),
+    'office-bakery': T('office-bakery', 'Bakery counter', 'food', LIT, {table: TABLE, fridge: FRIDGE}, {med: 0.2},
+      [{kind: 'fridge', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.6}], {warm: true}),
+    'office-qa': T('office-qa', 'QA lab', 'tech', DIM, {desk: DESK, default: DESK}, {med: 0.3, ammo: 0.2}),
+    'office-trading': T('office-trading', 'Trading floor', 'personal', LIT, {cabinetLow: DRAWERS, desk: DESK}, {med: 0.4, ammo: 0.3},
+      [{kind: 'cabinetLow', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.7}], {open: true}),
+    'office-drafting': T('office-drafting', 'Drafting studio', 'service', LIT, {cabinetLow: SUPPLY, default: SUPPLY}, {ammo: 0.3, med: 0.3},
+      [{kind: 'cabinetLow', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.7}], {open: true}),
+    'office-dispatch': T('office-dispatch', 'Dispatch floor', 'service', LIT, {desk: DESK, shelf: SUPPLY}, {ammo: 0.5, med: 0.3}, [], {open: true}),
+    'office-atelier': T('office-atelier', 'Atelier', 'personal', LIT, {table: {items: [['bandage', 1], ['water', 0.8], ['chocolate', 0.6]], lots: [1, 2], empty: 0.5}}, {med: 0.4}, [], {open: true}),
+    'office-exam': T('office-exam', 'Exam room', 'medical', DIM, {medCabinet: MEDS, default: MEDS}, {med: 1.0}),
+    'office-booth': T('office-booth', 'Production suite', 'personal', DIMMER, {cabinetLow: DRAWERS}, {med: 0.2}, [credenza(0.4)]),
+  };
+}
+

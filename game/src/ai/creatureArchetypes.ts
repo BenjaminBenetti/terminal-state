@@ -63,9 +63,14 @@ export interface EnemyCues {
 
 const coatedOf = (z: EnemyActor) => z.brain.type === 'coated';
 
-/** The zombie's cues — exactly the calls game.ts made before iteration 07. */
+/**
+ * The zombie's cues — exactly the calls game.ts made before iteration 07. Task office-overhaul-20261030 (lane AUDIO): the
+ * groans (alert + the idle / chase timer) are enemy VOCALS — audio/sfx.ts gates them by the navigable route from the player
+ * (ai/vocalReach.ts) and caps simultaneous vocals; the alert flag marks the one that just saw the player. Swings, footfalls
+ * (same storey) and death are unchanged.
+ */
 export const ZOMBIE_CUES: EnemyCues = {
-  alert: (sfx, z) => sfx.groan(z.brain.x, z.brain.y + 1.6, z.brain.z, coatedOf(z)),
+  alert: (sfx, z) => sfx.groan(z.brain.x, z.brain.y + 1.6, z.brain.z, coatedOf(z), true),
   attack: (sfx, z) => sfx.zombieAttack(z.brain.x, z.brain.y + 1.5, z.brain.z),
   tick(sfx, z, dt, moved, dist, rand) {
     const b = z.brain;
@@ -79,9 +84,9 @@ export const ZOMBIE_CUES: EnemyCues = {
   death: (sfx, z) => sfx.zombieDeath(z.brain.x, z.brain.y + 1.4, z.brain.z),
 };
 
-/** The rat/dog's cues (Sound Lab creature bank, iteration 07 Lane Q). Mouth height ~0.35 m. */
+/** The rat/dog's cues (Sound Lab creature bank, iteration 07 Lane Q). Mouth height ~0.35 m. Lane AUDIO: growl / snarl are gated vocals. */
 export const RATDOG_CUES: EnemyCues = {
-  alert: (sfx, z) => sfx.creature('snarl', z.brain.x, z.brain.y + 0.35, z.brain.z),
+  alert: (sfx, z) => sfx.creature('snarl', z.brain.x, z.brain.y + 0.35, z.brain.z, true),
   attack: (sfx, z) => sfx.creature('bite', z.brain.x, z.brain.y + 0.32, z.brain.z),
   tick(sfx, z, dt, moved, dist, rand) {
     const b = z.brain;

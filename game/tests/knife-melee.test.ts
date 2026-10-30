@@ -121,7 +121,8 @@ describe('knife derivative (user upload -> knife-user.glb): file, hash, triangle
 
 // ---------------------------------------------------------------------------------------------------------------------
 describe('NewGame kit: the knife IN ADDITION to the unchanged pistol kit; carryover / Retry / NewGame / dropped', () => {
-  const kitWithoutKnife = (inv: InstanceType<typeof Inventory>) => inv.hotbar.concat(inv.pack).filter(s => s && s.itemId !== 'knife')
+  // (the grenade slot counts: since the office overhaul the starting flare lives there, thrown with G)
+  const kitWithoutKnife = (inv: InstanceType<typeof Inventory>) => inv.hotbar.concat(inv.pack, inv.throwSlot).filter(s => s && s.itemId !== 'knife')
     .map(s => `${s!.itemId}x${s!.count}${s!.mag !== undefined ? `@${s!.mag}` : ''}`).sort();
   const knives = (inv: InstanceType<typeof Inventory>) => inv.allStacks(true).filter(s => s.itemId === 'knife');
 
