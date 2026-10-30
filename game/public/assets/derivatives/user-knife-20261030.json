@@ -1,0 +1,141 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "user-knife-20261030",
+ "task": "studio-knife-melee-20261030-01",
+ "generation": 0,
+ "status": "runtime derivative of a USER-UPLOADED model (the user identifies it as a knife and authorized it as the first melee weapon); source provider / settings / licence NOT verified — the upload filename and embedded generator field are not provider or licence proof; no licence clearance implied",
+ "rebuild": "node tools/asset-pipeline/weapons/build-knife.mjs",
+ "convention": "tip -Z, +Y up (serrated spine up, edge down), blade flats facing ±X, metres; PIVOT = grip centre at the origin; game = rotateY(-90deg) * uniform scale - grip: (x,y,z) -> (-z*s, y*s, x*s) - Grip; markers Grip (0,0,0) and Tip",
+ "subject": "combat / survival knife: dark blackened clip-point blade with serrated spine, cross guard, olive-green ridged grip, steel pommel with lanyard hole",
+ "source": {
+  "file": ".cache/user-knife-20261030/4fde1d8eef60486296922bef05dd2a98.glb (ignored worker copy; the canonical upload, same SHA-256, is kept by Main in the user-upload store, untouched)",
+  "uploadName": "Meshy_AI_Survival_Knife_1030034338_texture.glb",
+  "sha256": "f82d48727f3720f387490900fa36a690fd519d0a3b4ebbfcfbd4635b53e03d4b",
+  "bytes": 10951220,
+  "triangles": 72790,
+  "vertices": 39206,
+  "extent": [
+   1.8991,
+   0.3644,
+   0.3822
+  ],
+  "axes": "tip -X, pommel +X, spine +Y, edge -Y"
+ },
+ "output": {
+  "file": "game/public/assets/models/knife-user.glb",
+  "sha256": "47177ea38bc2e16b215a23011d30f9dfb14f9927f610fcbbf844ffae29b8e858",
+  "bytes": 752792,
+  "triangles": 6186,
+  "vertices": 4646,
+  "boundsM": {
+   "min": [
+    -0.032,
+    -0.0306,
+    -0.2566
+   ],
+   "max": [
+    0.0324,
+    0.0307,
+    0.0633
+   ]
+  },
+  "lengthM": 0.3199
+ },
+ "lengthM": 0.32,
+ "scale": 0.168499,
+ "simplify": {
+  "ratio": 0.085,
+  "error": 0.0012,
+  "lockBorder": true,
+  "weldTolerance": 0.0001,
+  "simplifier": "meshoptimizer (MeshoptSimplifier) via glTF-Transform simplify"
+ },
+ "material": {
+  "name": "knife-user",
+  "note": "source PBR material kept (base colour, metallic-roughness, normal; opaque, double-sided)",
+  "emissive": "dropped: the source emissive map is black (peak 3/255, emissiveFactor 1) -> emissiveFactor 0, no visible change"
+ },
+ "textures": [
+  {
+   "slot": "baseColor",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "bytes": 3495205,
+    "sha256": "407d49f9d1d603b5759171f8cce6d7ccd9e918a65ea948a1c5ecf02e7e9ce0b4"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 229885,
+   "sha256": "a8c3661fffa18a9f28ea2046f215708d931aa4ab5427eb62116f0393f3ed3d8e",
+   "note": "resized 2048 -> 1024 (sharp lanczos3, JPEG q88 4:4:4)"
+  },
+  {
+   "slot": "metallicRoughness",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "bytes": 1129582,
+    "sha256": "ed3ad1434be10a1f759031f2caf952ce39a8851da2dacffbe5d8424115f7999e"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 119563,
+   "sha256": "72fc14adcca993b8cf55042e41715493e402c5c786e5f2193a60e6a7b6de2fb4",
+   "note": "resized 2048 -> 1024 (sharp lanczos3, JPEG q88 4:4:4)"
+  },
+  {
+   "slot": "normal",
+   "source": {
+    "size": [
+     2048,
+     2048
+    ],
+    "bytes": 3502399,
+    "sha256": "11c9a6753b0012dd59107c33266a54a71aacba9899e9b6479786945f57e665ad"
+   },
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 141168,
+   "sha256": "254726c1048b0c120c36d0e56a0566733820bda1a455efd1bc5b6686bd1001e5",
+   "note": "resized 2048 -> 1024 (sharp lanczos3, JPEG q88 4:4:4)"
+  }
+ ],
+ "markersSource": {
+  "Grip": [
+   0.573,
+   -0.001,
+   0
+  ],
+  "Tip": [
+   -0.9504,
+   0.0456,
+   -0.0105
+  ]
+ },
+ "markersGame": {
+  "Grip": [
+   0,
+   0,
+   0
+  ],
+  "Tip": [
+   0.00177,
+   0.00785,
+   -0.25669
+  ]
+ }
+}

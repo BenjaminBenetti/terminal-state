@@ -1003,6 +1003,12 @@ export class Sfx {
   }
   /** Clothing rustle when crouching (down) or standing (up). */
   crouch(down: boolean): void { this.play(this.voice(), 'crouch', {rate: down ? 0.95 : 1.07, gain: down ? 1 : 0.8}); }
+  /**
+   * Lane KNIFE (knife-melee-20261030): the player's knife swing. No blade-whoosh clip exists in the Sound Lab bank and no
+   * generation is authorized, so the existing 'crouch' clip (a short heavy-jacket rustle) is reused, quicker and brighter,
+   * as the arm's slash; the contact itself is the existing flesh confirm / impact cues. Never a gunshot.
+   */
+  meleeSwing(): void { this.play(this.voice(), 'crouch', {rate: 1.38, gain: 0.95, jitter: 0.05}); }
   /** Container/holder opened; kind is the holder kind (cabinet*, crate, vending, fridge, desk, shelf...). */
   containerOpen(kind: string, at?: Pos): void {
     const cue = OPEN_CUE[kind];

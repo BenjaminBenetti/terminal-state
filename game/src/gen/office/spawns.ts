@@ -138,11 +138,11 @@ export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: Spaw
   const light = mine.map(a => [a, FLOOR_ECONOMY.themeWeight[(purposeById(a.purpose)?.theme ?? 'public')]] as [Area, number]).filter(e => e[1] > 0);
   // Ammo: one box per storey (station + lobby: one rifle box and maybe shells — it is a small station), 9 mm leads in the tower.
   if (street) {
-    place('ammo_rifle', 30, ammo);
-    if (rng.chance(0.6)) place('ammo_shells', 8, ammo);
+    place('ammo_556', 30, ammo);
+    if (rng.chance(0.6)) place('ammo_12ga', 8, ammo);
   } else {
     const r = rng.next();
-    if (r < 0.55) place('ammo_pistol', 15, ammo); else if (r < 0.8) place('ammo_rifle', 30, ammo); else if (r < 0.93) place('ammo_shells', 8, ammo);
+    if (r < 0.55) place('ammo_9mm', 15, ammo); else if (r < 0.8) place('ammo_556', 30, ammo); else if (r < 0.93) place('ammo_12ga', 8, ammo);
   }
   const scarce = rng.fork('scarce-floor');
   if (scarce.chance(FLOOR_ECONOMY.medKeep * 1.5)) place(scarce.chance(0.3) ? 'medkit' : 'bandage', 1, med);
@@ -208,7 +208,7 @@ export function placeOfficeWeapons(layout: StationLayout, rng: Rng, weapons: rea
       const p: PickupPlacement = {itemId: wid, count: 1, x, y: lv ? g.floorOf(i) : 0, z, area: a.id, ...(lv ? {level: lv} : {})};
       layout.pickups.push(p);
       placed.push(p);
-      const [ammo, cnt] = WEAPON_FIND_AMMO[wid] ?? ['ammo_pistol', 15];
+      const [ammo, cnt] = WEAPON_FIND_AMMO[wid] ?? ['ammo_9mm', 15];
       const near = cells.filter(c => { const [cx, cz] = g.center(c % g.w, (c / g.w) | 0), dd = Math.hypot(cx - x, cz - z); return dd >= 0.9 && dd <= 2.4; });
       const q = near.length ? near[rng.int(0, near.length - 1)] : i;
       const [ax, az] = g.center(q % g.w, (q / g.w) | 0);

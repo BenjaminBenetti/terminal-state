@@ -347,14 +347,14 @@ describe('shots and interaction respect slabs', () => {
     const M = new Levels([{id: 0, role: 'main', grid: g0, baseY: 0}, {id: 1, role: 'upper', grid: g1, baseY: 0.7}]);
     const pm = new PickupManager({});
     const inv = new Inventory();
-    const below = pm.add(inv.makeStack('ammo_rifle', 5), 3.0, 0, 3.0, 0);
+    const below = pm.add(inv.makeStack('ammo_556', 5), 3.0, 0, 3.0, 0);
     const eye = new THREE.Vector3(2.7, 0.7 + STAND_EYE, 3.0);
     const look = new THREE.Vector3(below.x - eye.x, below.y + 0.08 - eye.y, below.z - eye.z).normalize();
     expect(eye.distanceTo(new THREE.Vector3(below.x, below.y + 0.08, below.z))).toBeLessThan(2.6);
     expect(pm.target(eye, look, g0), 'legacy 2D test would take it through the floor').toBe(below);
     expect(pm.target(eye, look, M), 'stacked levels: hidden under the floor').toBeNull();
     // on the same storey it is targetable
-    const onTop = pm.add(inv.makeStack('ammo_rifle', 5), 3.2, 0.7, 3.0, 0);
+    const onTop = pm.add(inv.makeStack('ammo_556', 5), 3.2, 0.7, 3.0, 0);
     const look2 = new THREE.Vector3(onTop.x - eye.x, onTop.y + 0.08 - eye.y, onTop.z - eye.z).normalize();
     expect(pm.target(eye, look2, M)).toBe(onTop);
     void singleLevel;

@@ -1,7 +1,7 @@
 // Runtime asset manifest. Every file here is a derivative under public/assets/ documented in
 // public/assets/derivatives/*.json (sources, hashes, pipeline, limitations).
 
-export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'bench' | 'light' | 'cabinetTall' | 'cabinetLow' | 'sign' | 'crate' | 'turnstile'
+export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'knife' | 'bench' | 'light' | 'cabinetTall' | 'cabinetLow' | 'sign' | 'crate' | 'turnstile'
   // Iteration 06 zombie wardrobe (ai/outfits.ts + ai/wardrobe.ts): bodies (derivatives/zombie-body-*.json) + slot wearables fitted per body (derivatives/outfit-*.json; summary zombie-wardrobe.json).
   // Iteration 07: refitted outside the posed body + cranium-fitted hats; the puffer fails the fit gate on every body (no model key).
   | 'zombieBody_lastshift' | 'zombieBody_courier' | 'zombieBody_agent' | 'zombieBody_scavenger' | 'zombieBody_heavyset' | 'zombieBody_tall'
@@ -11,6 +11,8 @@ export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'bench' | 'light' | 'cab
   | 'creature_ratdog'
   // Iteration 03 generated props/items (derivatives/props-iteration03.json); each key is added only once its GLB exists.
   | 'shelf' | 'vending' | 'stall' | 'item_water' | 'item_cola' | 'item_juice' | 'item_chocolate' | 'item_chips' | 'item_beans' | 'item_noodles'
+  // Lane AMMO (knife-melee-20261030): one Meshy T2.5 ammo box per caliber (derivatives/meshy-t25-ammo-20261030.json).
+  | 'item_ammo_9mm' | 'item_ammo_556' | 'item_ammo_12ga'
   // Iteration 04 generated trash can + modular shop building blocks (derivatives/props-iteration04.json); added once each GLB exists.
   | 'trashCan' | 'shopCounter' | 'shopBackbar' | 'shopCooler' | 'shopDisplay'
   // Iteration 05 purpose-specific props (Lane A; derivatives/props-iteration05.json); each key is added only once its GLB exists.
@@ -49,6 +51,9 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   rifle: {url: 'assets/models/rifle-user.glb', bytes: 13_646_000},
   shotgun: {url: 'assets/models/shotgun-user.glb', bytes: 11_392_000},
   pistol: {url: 'assets/models/pistol.glb', bytes: 11_271_000},
+  // Lane KNIFE (knife-melee-20261030): runtime derivative of the user's uploaded survival knife (derivatives/user-knife-20261030.json;
+  // tools/asset-pipeline/weapons/build-knife.mjs): tip -Z, spine +Y, metres (0.32 m), grip pivot at the origin, Grip / Tip markers.
+  knife: {url: 'assets/models/knife-user.glb', bytes: 753_000},
   bench: {url: 'assets/models/bench-t25r1.glb', bytes: 520_000},
   // Meshy T2.5 replacement (2026-10-29; derivatives/meshy-t25-light-20261029.json): the fixture rebuilt from Meshy T2.5 conditioned
   // on the original env-light-03 front view; 1.2 m long, top-centre origin (its bbox sizes the fixture material / tubes). The
@@ -71,6 +76,13 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   item_chips: {url: 'assets/models/item-chips-t25.glb', bytes: 171_000},
   item_beans: {url: 'assets/models/item-beans-t25.glb', bytes: 186_000},
   item_noodles: {url: 'assets/models/item-noodles-t25.glb', bytes: 184_000},
+  // Lane AMMO (knife-melee-20261030): Meshy T2.5 text-to-3D ammo boxes, one per caliber (tools/asset-pipeline/props/build-ammo-boxes.mjs;
+  // derivatives/meshy-t25-ammo-20261030.json). Front +Z, origin bottom-centre, metres, at ITEM_DIMS size: 9mm carton (printed end to
+  // the front, lid flap open) 0.113 x 0.133 x 0.13; 5.56 steel can (stencil locally corrected 516 -> 5.56) 0.165 x 0.175 x 0.076;
+  // 12-gauge carton (open top, red shells) 0.13 x 0.157 x 0.123. They replace the procedural supply boxes (kept as the fallback).
+  item_ammo_9mm: {url: 'assets/models/ammo-9mm-t25.glb', bytes: 178_000},
+  item_ammo_556: {url: 'assets/models/ammo-556-t25.glb', bytes: 186_000},
+  item_ammo_12ga: {url: 'assets/models/ammo-12ga-t25.glb', bytes: 319_000},
   // Iteration 04 generated (derivatives/props-iteration04.json; straight-on conditioning images). Front +Z, origin bottom-centre, metres.
   // trashCan 0.55 x 0.95 x 0.55; shopCounter 1.5 x 1.05 x 0.75 (top 1.04); shopBackbar 1.77 x 1.83 x 0.70 (worktop 0.86);
   // shopCooler 0.75 x 2.0 x 0.75; shopDisplay 1.1 x 0.70 x 0.62 countertop unit (sits on shopCounter).

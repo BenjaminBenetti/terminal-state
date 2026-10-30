@@ -8,9 +8,10 @@ export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
-  | 'rifle' | 'shotgun' | 'pistol' | 'rounds' | 'rounds9' | 'shells' | 'medkit' | 'bandage'
+  | 'rifle' | 'shotgun' | 'pistol' | 'ammo556' | 'ammo9mm' | 'ammo12ga' | 'medkit' | 'bandage' // lane AMMO: one icon per caliber
   | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles'
   | 'battery' | 'flare'
+  | 'knife' // lane KNIFE: the first melee weapon
   | GearIconKey | MedicalIconKey; // Iteration 16 (lanes GEAR / INJURY)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
@@ -38,9 +39,12 @@ export interface ItemDef {
   gear?: GearSpec;
   /** Iteration 16 (lane INJURY): limb injuries this item treats (items/medical.ts); HP-only items never treat limbs. */
   treats?: readonly Limb[];
+  /** Lane AMMO (knife-melee-20261030): the caliber an ammo item IS (items/calibers.ts); weapons load by caliber. */
+  caliber?: Caliber;
 }
 
 import {GEAR_DIMS, GEAR_ITEMS, type GearIconKey, type GearSpec} from './gear';
+import type {Caliber} from './calibers';
 import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey} from './medical';
 
 export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles'] as const;
@@ -48,17 +52,22 @@ export const DRINK_IDS = ['water', 'cola', 'juice'] as const;
 
 export const ITEMS: Record<string, ItemDef> = {
   rifle: {id: 'rifle', name: 'Rifle — "Kept running"', short: 'Rifle', kind: 'weapon', stackMax: 1, weaponId: 'rifle', icon: 'rifle',
-    description: 'Adapted automatic rifle with a battered optic. 30-round magazine.'},
+    description: 'Adapted automatic rifle with a battered optic. Chambered in 5.56×45mm; 30-round magazine.'},
   shotgun: {id: 'shotgun', name: 'Shotgun — "Old reliable"', short: 'Shotgun', kind: 'weapon', stackMax: 1, weaponId: 'shotgun', icon: 'shotgun',
-    description: 'Pump shotgun with a repaired stock. Loads shell by shell; devastating up close.'},
+    description: '12-gauge pump shotgun with a repaired stock. Loads shell by shell; devastating up close.'},
   pistol: {id: 'pistol', name: 'Pistol — "Service sidearm"', short: 'Pistol', kind: 'weapon', stackMax: 1, weaponId: 'pistol', icon: 'pistol',
-    description: 'Semi-automatic 9 mm service pistol. 15-round magazine; quick to raise and reload.'},
-  ammo_rifle: {id: 'ammo_rifle', name: 'Rifle rounds', short: 'Rounds', kind: 'ammo', stackMax: 120, icon: 'rounds',
-    description: 'Loose rifle cartridges. Used when reloading the rifle.'},
-  ammo_pistol: {id: 'ammo_pistol', name: '9 mm rounds', short: '9 mm', kind: 'ammo', stackMax: 120, icon: 'rounds9',
-    description: 'Loose 9 mm pistol cartridges. Used when reloading the pistol.'},
-  ammo_shells: {id: 'ammo_shells', name: '12-gauge shells', short: 'Shells', kind: 'ammo', stackMax: 32, icon: 'shells',
-    description: 'Buckshot shells for the shotgun.'},
+    description: 'Semi-automatic 9mm (9×19mm) service pistol. 15-round magazine; quick to raise and reload.'},
+  // Lane KNIFE (knife-melee-20261030): the user's survival knife — the first melee weapon; no ammo, never used up (weapons.ts knife).
+  knife: {id: 'knife', name: 'Knife — "Last resort"', short: 'Knife', kind: 'weapon', stackMax: 1, weaponId: 'knife', icon: 'knife',
+    description: 'Survival knife with a serrated spine. Melee: click to slash (hold to keep slashing) — no ammo, never runs out. One slash to the head or two to the body drops an ordinary zombie — but you have to get close enough to be hit back.'},
+  // Lane AMMO (knife-melee-20261030): ammo items ARE calibers (items/calibers.ts); any weapon chambering that caliber loads from
+  // them. Old ids ammo_pistol / ammo_rifle / ammo_shells migrate 1:1 (LEGACY_AMMO_IDS); stack limits unchanged (120 / 120 / 32).
+  ammo_9mm: {id: 'ammo_9mm', name: '9mm rounds (9×19mm)', short: '9mm', kind: 'ammo', stackMax: 120, icon: 'ammo9mm', caliber: '9x19mm',
+    description: 'Loose 9×19mm pistol cartridges. Loads any 9mm weapon — today the service pistol.'},
+  ammo_556: {id: 'ammo_556', name: '5.56×45mm rounds', short: '5.56mm', kind: 'ammo', stackMax: 120, icon: 'ammo556', caliber: '5.56x45mm',
+    description: 'Loose 5.56×45mm rifle cartridges. Loads any 5.56mm weapon — today the automatic rifle.'},
+  ammo_12ga: {id: 'ammo_12ga', name: '12-gauge shells', short: '12-gauge', kind: 'ammo', stackMax: 32, icon: 'ammo12ga', caliber: '12ga',
+    description: 'Buckshot shells. Loads any 12-gauge weapon — today the pump shotgun.'},
   medkit: {id: 'medkit', name: 'First-aid kit', short: 'Med kit', kind: 'consumable', stackMax: 3, heal: 50, useTime: 2.2, verb: 'apply', icon: 'medkit',
     description: 'Restores 50 health. Takes a couple of seconds to apply.'},
   bandage: {id: 'bandage', name: 'Bandage roll', short: 'Bandage', kind: 'consumable', stackMax: 5, heal: 20, useTime: 1.1, verb: 'apply', icon: 'bandage',
@@ -155,10 +164,13 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   chips: {w: 0.2, d: 0.08, h: 0.27, shape: 'box'},
   beans: {w: 0.075, d: 0.075, h: 0.11, shape: 'cylinder'},
   noodles: {w: 0.095, d: 0.095, h: 0.105, shape: 'cylinder'},
+  // Lane AMMO (knife-melee-20261030): the measured runtime bounds of the Meshy T2.5 ammo boxes (assets/manifest.ts item_ammo_*;
+  // derivatives/meshy-t25-ammo-20261030.json), so fitItemModel keeps them at scale 1. They stand upright ('flat': never laid down)
+  // and are all < 0.176 m tall: they fit the 0.18 m desk-drawer / low-cupboard clearance (items/lootLayout.ts).
+  ammo_9mm: {w: 0.1126, d: 0.13, h: 0.1326, shape: 'flat'},   // 9mm carton, printed end to the front, lid flap open
+  ammo_556: {w: 0.1645, d: 0.0762, h: 0.175, shape: 'flat'},  // 5.56 steel can incl. its folded handle
+  ammo_12ga: {w: 0.13, d: 0.123, h: 0.1566, shape: 'flat'},   // 12-gauge carton, open top, flap up at the back
   // Legacy procedural supplies (world/pickups.ts makeSupplyMesh).
-  ammo_rifle: {w: 0.28, d: 0.16, h: 0.12, shape: 'flat'},
-  ammo_shells: {w: 0.2, d: 0.2, h: 0.1, shape: 'flat'},
-  ammo_pistol: {w: 0.16, d: 0.11, h: 0.08, shape: 'flat'},
   medkit: {w: 0.32, d: 0.22, h: 0.14, shape: 'flat'},
   bandage: {w: 0.1, d: 0.094, h: 0.092, shape: 'flat'},
   // Iteration 12 (LIGHT): authored models (world/authoredItems.ts): a D cell standing upright, a capped road flare lying along X.

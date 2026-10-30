@@ -6,6 +6,7 @@ import {isP7Kind, p7ModelKeysFor} from './gen/props07';
 import * as THREE from 'three';
 import type {Game} from './game';
 import {itemDef} from './items/items';
+import {CALIBER_IDS, ammoItemFor} from './items/calibers'; // lane AMMO
 import {killImpulseStrength} from './physics/world';
 import {itemIconStats, itemIconUrl} from './ui/itemIcons';
 import {traversalSummary} from './gen/traversal';
@@ -42,9 +43,13 @@ export function installQaHooks(game: Game): void {
         selected: game.inv.selected,
         held: st ? {itemId: st.itemId, mag: st.mag ?? null, count: st.count} : null,
         weapon: {id: game.weapon.def?.id ?? null, phase: game.weapon.phase},
+        // lane KNIFE: melee swing state + the last contacts (kind enemy / corpse / world / miss, part, damage, killed)
+        melee: {swinging: game.weapon.swinging, swingTime: game.weapon.swingTime, swings: game.weapon.swingId, last: game.meleeLog.slice(-4)},
         hotbar: game.inv.hotbar.map(s => s && {itemId: s.itemId, count: s.count, mag: s.mag ?? null}),
         pack: game.inv.pack.map(s => s && {itemId: s.itemId, count: s.count}),
-        ammo: {rifle: game.inv.count('ammo_rifle'), shells: game.inv.count('ammo_shells')},
+        // lane AMMO: per caliber (rifle / shells keys kept for the older e2e scripts: the 5.56×45mm / 12-gauge pools)
+        ammo: {rifle: game.inv.count('ammo_556'), shells: game.inv.count('ammo_12ga'), pistol: game.inv.count('ammo_9mm'),
+          byCaliber: Object.fromEntries(CALIBER_IDS.map(c => [c, game.inv.count(ammoItemFor(c))]))},
         invariants: game.inv.invariants(),
         zombies: game.zombies.map(z => ({x: z.brain.x, z: z.brain.z, hp: z.brain.hp, state: z.brain.state, type: z.brain.type, alive: z.brain.alive, rigged: z.hasRig, look: z.look, archetype: z.archetype ?? 'zombie'})),
         pickups: game.pickups.list.map(pk => ({itemId: pk.stack.itemId, count: pk.stack.count, x: pk.x, y: pk.y, z: pk.z, name: itemDef(pk.stack.itemId).name})),

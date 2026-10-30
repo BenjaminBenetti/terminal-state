@@ -3,6 +3,7 @@
 import {LIGHT_ICONS, STAT_ICONS} from './icons';
 import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
+import {meleeDefOf} from '../weapons/weapons'; // lane KNIFE
 import type {Inventory} from '../items/inventory';
 import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
@@ -27,6 +28,11 @@ const LIMB_SVG = `<svg viewBox="0 0 20 38" aria-hidden="true"><circle class="p" 
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
+/** Lane KNIFE: melee weapon held — #ammo shows a compact MELEE tag (no magazine / separator / reserve). */
+const MELEE_CSS = `
+#ammo.melee { font-size: 22px; letter-spacing: 0.22em; line-height: 1.6; }
+#ammo.melee .sep, #ammo.melee #reserve { display: none; }`;
+
 export interface HudState {
   hp: number;
   maxHp: number;
@@ -34,6 +40,8 @@ export interface HudState {
   weaponName: string;
   mag: number | null;
   reserve: number;
+  /** Lane KNIFE: a melee weapon is held — the ammo counter shows MELEE instead of rounds (no magazine / reserve). */
+  melee?: boolean;
   hint: string;
   prompt: string;
   /** Item id shown as a 3D icon in front of the prompt (aimed floor pickup). */
@@ -71,6 +79,12 @@ export class Hud {
       if (ico) ico.innerHTML = svg;
     }
     this.buildLimbs(); // Iteration 16 (lane INJURY)
+    if (!document.querySelector('#melee-css')) { // lane KNIFE: the MELEE tag in the ammo counter's place
+      const st = document.createElement('style');
+      st.id = 'melee-css';
+      st.textContent = MELEE_CSS;
+      document.head.appendChild(st);
+    }
   }
 
   /** Iteration 16 (lane INJURY): the limb indicator row (last row of #vitals) and its styles. */
@@ -135,10 +149,12 @@ export class Hud {
     this.set('hp', String(Math.ceil(s.hp)), v => { $('#hp-num').textContent = v; $<HTMLElement>('#vitals .health .fill').style.width = `${hpFrac * 100}%`; $('#vitals .health').classList.toggle('low', hpFrac < 0.3); $('#vignette').classList.toggle('low', hpFrac < 0.3); });
     this.set('st', s.stamina.toFixed(0), v => { $<HTMLElement>('#vitals .stam .fill').style.width = `${v}%`; });
     this.set('wn', s.weaponName, v => { $('#weapon-name').textContent = v; });
-    this.set('mag', s.mag === null ? '' : `${s.mag}|${s.reserve}`, v => {
+    this.set('mag', s.melee ? 'melee' : s.mag === null ? '' : `${s.mag}|${s.reserve}`, v => {
       const ammo = $('#ammo');
       ammo.style.visibility = v ? 'visible' : 'hidden';
-      if (v) { const [m, r] = v.split('|'); $('#mag').textContent = m; $('#reserve').textContent = r; ammo.classList.toggle('empty', m === '0'); }
+      ammo.classList.toggle('melee', v === 'melee'); // lane KNIFE: "MELEE" in place of the rounds counter
+      if (v === 'melee') { $('#mag').textContent = 'MELEE'; $('#reserve').textContent = ''; ammo.classList.remove('empty'); }
+      else if (v) { const [m, r] = v.split('|'); $('#mag').textContent = m; $('#reserve').textContent = r; ammo.classList.toggle('empty', m === '0'); }
     });
     this.set('hint', s.hint, v => { $('#weapon-hint').textContent = v; });
     this.set('prompt', `${s.prompt}|${s.prompt && s.promptItem ? s.promptItem : ''}|${itemIconsVersion()}`, () => {
@@ -188,7 +204,7 @@ export class Hud {
         el.classList.toggle('selected', i === inv.selected);
         if (el.dataset.k === key) return;
         el.dataset.k = key;
-        const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' ? `<span class="count">${st!.mag}</span>` : '';
+        const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' && !meleeDefOf(def.id) ? `<span class="count">${st!.mag}</span>` : ''; // lane KNIFE: no rounds on a melee slot
         el.innerHTML = `<span class="key">${i + 1}</span>${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}`;
       });
     }
@@ -280,8 +296,8 @@ export class Hud {
 
 export const CONTROLS: [string, string][] = [
   ['Move', 'W A S D'], ['Look', 'Mouse'], ['Sprint', 'Shift'], ['Jump', 'Space'],
-  ['Crouch (tap toggle · hold)', 'C'], ['Fire / eat · drink · use held item', 'Left click'],
-  ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
+  ['Crouch (tap toggle · hold)', 'C'], ['Fire · knife slash (hold to keep slashing) / eat · drink · use held item', 'Left click'],
+  ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots (knife: 3 at the start)', '1 – 5 · wheel'],
   ['Last item', 'Q'], ['Inventory', 'Tab or I'], ['Quick heal', 'H'], ['Drop held item', 'G'],
   // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items; T throws a flare
   ['Flashlight (battery meter, bottom right)', 'F'], ['Throw flare: hold to ready, release to throw', 'Hold T · or hold click while held'],

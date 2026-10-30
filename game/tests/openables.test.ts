@@ -298,7 +298,7 @@ describe('finite, unique contents across generated stations (all storeys)', () =
       for (const h of cm.openList) { levels.add(h.prop.level ?? 0); kindsSeen.add(h.kind); }
       // every bin / newspaper box holds junk-tier things only (no ammo / first-aid kits)
       for (const h of cm.openList.filter(x => x.kind === 'bin' || x.kind === 'wheelieBin' || x.kind === 'newspaperVendingBox')) {
-        for (const l of h.state.lots) expect(['ammo_rifle', 'ammo_shells', 'medkit', 'rifle', 'shotgun'], `${h.kind} ${l.itemId}`).not.toContain(l.itemId);
+        for (const l of h.state.lots) expect(['ammo_556', 'ammo_12ga', 'medkit', 'rifle', 'shotgun'], `${h.kind} ${l.itemId}`).not.toContain(l.itemId);
       }
       const total = cm.openList.reduce((n, h) => n + h.state.lots.reduce((m, l) => m + l.count, 0), 0);
       const holders = cm.openList.slice(0, 40);

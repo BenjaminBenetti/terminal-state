@@ -15,6 +15,10 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   file names mention Meshy, but the generator, account, settings and licence are NOT verified and no clearance is implied).
   The game ships re-oriented, re-scaled, simplified derivatives with the embedded textures unchanged
   (derivatives/user-weapons-20261028.json). The earlier rifle/shotgun derivatives below stay in the repository unused.
+- Knife (2026-10-30, the first melee weapon): a user-uploaded model (the user identifies it as a knife and authorized it
+  for the game; the upload file name mentions Meshy, but the generator, account, settings and licence are NOT verified and
+  no clearance is implied). The game ships a re-oriented, re-scaled (0.32 m), simplified derivative with its PBR textures
+  resized to 1024 px (derivatives/user-knife-20261030.json; tools/asset-pipeline/weapons/build-knife.mjs). No generation.
 - Zombie body + coat ("Last-shift body" / "Last-shift coat"), rifle ("Kept running"), shotgun
   ("Old reliable"), bench, ceiling light, tall and low cabinets: concept images made with native
   Codex/ChatGPT image generation (model not reported), reconstructed to 3D locally with Pixal3D

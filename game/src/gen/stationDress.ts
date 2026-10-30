@@ -960,8 +960,8 @@ export function placeSpawns(layout: StationLayout, rng: Rng): void {
   };
   const lootAreas = (cat: 'ammo' | 'med'): [Area, number][] => layout.areas.map(a => [a, floorWeight(a, cat)] as [Area, number]).filter(e => e[1] > 0);
   const loot: [string, number][] = [];
-  for (let i = 0, n = rng.int(3, 4); i < n; i++) loot.push(['ammo_rifle', 30]);
-  for (let i = 0, n = rng.int(2, 3); i < n; i++) loot.push(['ammo_shells', 8]);
+  for (let i = 0, n = rng.int(3, 4); i < n; i++) loot.push(['ammo_556', 30]);
+  for (let i = 0, n = rng.int(2, 3); i < n; i++) loot.push(['ammo_12ga', 8]);
   // Iteration 12 (LOOT lane): scarce resources (items/lootEconomy.ts FLOOR_ECONOMY) — the ammo boxes above are unchanged; each old
   // loose dressing / first-aid kit survives ~1 in 5 (own fork: the draws above stay as they were), plus sometimes a torch battery
   // and a flare, dropped in service / security rooms first.

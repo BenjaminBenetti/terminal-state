@@ -26,7 +26,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 describe('pistol weapon', () => {
   it('is a semi-auto 15-round sidearm below the rifle per shot, with its own 9 mm ammo', () => {
     const p = WEAPONS.pistol, r = WEAPONS.rifle, s = WEAPONS.shotgun;
-    expect(p).toMatchObject({itemId: 'pistol', ammoItem: 'ammo_pistol', magazine: 15, auto: false, pellets: 1, equipTime: 0.35, aimFov: 58, moveMult: 1, sound: 'pistol'});
+    expect(p).toMatchObject({itemId: 'pistol', caliber: '9x19mm', magazine: 15, auto: false, pellets: 1, equipTime: 0.35, aimFov: 58, moveMult: 1, sound: 'pistol'});
     expect(p.interval).toBeCloseTo(0.16);
     expect(p.reload).toMatchObject({kind: 'magazine', time: 1.4});
     expect(p.damage).toBeLessThan(r.damage);
@@ -34,18 +34,18 @@ describe('pistol weapon', () => {
     expect(p.spreadHip).toBeLessThan(s.spreadHip);
     expect(p.noise).toBeLessThan(r.noise);
     expect(itemDef('pistol')).toMatchObject({kind: 'weapon', short: 'Pistol', weaponId: 'pistol', stackMax: 1});
-    expect(itemDef('ammo_pistol')).toMatchObject({kind: 'ammo', stackMax: ITEMS.ammo_rifle.stackMax});
+    expect(itemDef('ammo_9mm')).toMatchObject({kind: 'ammo', stackMax: ITEMS.ammo_556.stackMax});
     expect(ICONS[itemDef('pistol').icon]).toContain('<svg'); // HUD silhouette (and inventory fallback if the model fails)
     expect(EJECTION_PORTS.pistol.kind).toBe('rifle'); // reuses the brass casing kind
     // rifle and shotgun unchanged
-    expect(WEAPONS.rifle).toMatchObject({magazine: 30, auto: true, damage: 24, ammoItem: 'ammo_rifle'});
-    expect(WEAPONS.shotgun).toMatchObject({magazine: 6, pellets: 9, damage: 15, ammoItem: 'ammo_shells'});
+    expect(WEAPONS.rifle).toMatchObject({magazine: 30, auto: true, damage: 24, caliber: '5.56x45mm'});
+    expect(WEAPONS.shotgun).toMatchObject({magazine: 6, pellets: 9, damage: 15, caliber: '12ga'});
   });
 
   it('fires semi-auto, runs dry, dry-fires, reloads from finite ammo and stops when ammo is gone', () => {
     const inv = new Inventory();
     inv.add(inv.makeStack('pistol', 1, 15));
-    inv.add(inv.makeStack('ammo_pistol', 20));
+    inv.add(inv.makeStack('ammo_9mm', 20));
     const wc = new WeaponController();
     wc.equip(inv.hotbar[0]);
     step(wc, inv, 0.4);
@@ -61,12 +61,12 @@ describe('pistol weapon', () => {
     expect(dry.map(e => e.type)).toEqual(['dry', 'reloadStart']);
     for (let t = 0; t < 1.7; t += 0.05) step(wc, inv, 0.05);
     expect(inv.hotbar[0]!.mag).toBe(15);
-    expect(inv.count('ammo_pistol')).toBe(5);
+    expect(inv.count('ammo_9mm')).toBe(5);
     for (let i = 0; i < 40 && (inv.hotbar[0]!.mag ?? 0) > 0; i++) { step(wc, inv, 0.2, {pressed: true}); step(wc, inv, 0.01); }
     step(wc, inv, 0.01, {reload: true});
     for (let t = 0; t < 1.7; t += 0.05) step(wc, inv, 0.05);
     expect(inv.hotbar[0]!.mag).toBe(5);
-    expect(inv.count('ammo_pistol')).toBe(0);
+    expect(inv.count('ammo_9mm')).toBe(0);
     for (let i = 0; i < 10; i++) { step(wc, inv, 0.2, {pressed: true}); step(wc, inv, 0.01); }
     expect(inv.hotbar[0]!.mag).toBe(0);
     expect(wc.canReload(inv)).toBe(false);
@@ -121,7 +121,7 @@ describe('pistol staging gate', () => {
     const seed = 424242;
     const rifleL = generateStation(seed, {startWeapon: startWeaponFor(false, false)});
     expect(rifleL.startWeapon).toBe('rifle');
-    expect(rifleL.pickups.some(p => p.itemId === 'pistol' || p.itemId === 'ammo_pistol')).toBe(false);
+    expect(rifleL.pickups.some(p => p.itemId === 'pistol' || p.itemId === 'ammo_9mm')).toBe(false);
     expect(rifleL.pickups.some(p => p.itemId === 'rifle')).toBe(false);
     expect(validateLayout(rifleL)).toEqual([]);
     const pistolL = generateStation(seed, {startWeapon: startWeaponFor(false)}); // what game.ts passes in normal play
@@ -129,7 +129,7 @@ describe('pistol staging gate', () => {
     expect(pistolL.pickups.some(p => p.itemId === 'rifle') || pistolL.pickups.some(p => p.itemId === 'shotgun')).toBe(true);
     expect(validateLayout(pistolL)).toEqual([]);
     expect(pistolL.pickups.some(p => p.itemId === 'pistol')).toBe(false);
-    expect(pistolL.pickups.some(p => p.itemId === 'ammo_pistol')).toBe(true);
+    expect(pistolL.pickups.some(p => p.itemId === 'ammo_9mm')).toBe(true);
     expect(findWeaponsFor('pistol')).toEqual(['shotgun', 'rifle']);
     expect(findWeaponsFor('rifle')).toEqual(['shotgun']);
     // deterministic per seed for a given option (no reroll on reload)

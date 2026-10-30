@@ -115,7 +115,7 @@ describe('visible loot holders', () => {
     const inv = new Inventory();
     const s = createHolderState(1, 0, 'cabinetLow', 'storage', surfaces('cabinetLow'), [
       {id: 0, itemId: 'water', count: 1, surface: 0, x: -0.2, y: 0.2, z: 0, yaw: 0, orient: 'up'},
-      {id: 1, itemId: 'ammo_rifle', count: 9, surface: 0, x: 0.2, y: 0.2, z: 0, yaw: 0, orient: 'up'},
+      {id: 1, itemId: 'ammo_556', count: 9, surface: 0, x: 0.2, y: 0.2, z: 0, yaw: 0, orient: 'up'},
     ]);
     expect(nextHolderAction(s)).toBe('open');
     s.open = true; s.searched = true; // [E] opens: contents become visible, nothing is auto-taken
@@ -127,13 +127,13 @@ describe('visible loot holders', () => {
     expect(r.taken).toEqual([{itemId: 'water', count: 1}]);
     expect(s.lots.map(l => l.id)).toEqual([1]);
     takeAll(s, inv);
-    expect(inv.count('ammo_rifle')).toBe(9);
+    expect(inv.count('ammo_556')).toBe(9);
     expect(nextHolderAction(s)).toBe('close');
     s.open = false; // close + reopen: still empty, clearly labelled
     expect(holderPrompt(s, {roomForAny: true}).text).toMatch(/searched — empty/);
     s.open = true;
     expect(takeAll(s, inv).taken).toEqual([]);
-    expect(inv.count('ammo_rifle') + inv.count('water')).toBe(10);
+    expect(inv.count('ammo_556') + inv.count('water')).toBe(10);
     expect(inv.invariants()).toEqual([]);
   });
 
@@ -142,12 +142,12 @@ describe('visible loot holders', () => {
     for (let i = 0; i < HOTBAR_SIZE + PACK_SIZE; i++) inv.add(inv.makeStack(i % 2 ? 'rifle' : 'shotgun', 1));
     const s = createHolderState(1, 3, 'shelf', 'stock-room', surfaces('shelf'), [
       {id: 7, itemId: 'beans', count: 1, surface: 1, x: 0, y: 0.55, z: 0, yaw: 0, orient: 'up'},
-      {id: 8, itemId: 'ammo_shells', count: 6, surface: 2, x: 0.1, y: 1.0, z: 0, yaw: 0, orient: 'up'},
+      {id: 8, itemId: 'ammo_12ga', count: 6, surface: 2, x: 0.1, y: 1.0, z: 0, yaw: 0, orient: 'up'},
     ]);
     expect(s.open).toBe(true); // shelves are open surfaces
     const r = takeAll(s, inv);
     expect(r.taken).toEqual([]);
-    expect(r.blocked).toEqual([{itemId: 'beans', count: 1}, {itemId: 'ammo_shells', count: 6}]);
+    expect(r.blocked).toEqual([{itemId: 'beans', count: 1}, {itemId: 'ammo_12ga', count: 6}]);
     expect(transferMessage(s, r).warn).toBe(true);
     expect(s.lots.map(l => [l.id, l.x, l.y])).toEqual([[7, 0, 0.55], [8, 0.1, 1.0]]); // same spots, still visible
     const one = takeLot(s, 7, inv);
@@ -156,7 +156,7 @@ describe('visible loot holders', () => {
     inv.remove({bar: 'pack', index: 0});
     inv.remove({bar: 'pack', index: 1});
     expect(takeLot(s, 7, inv).taken).toEqual([{itemId: 'beans', count: 1}]);
-    expect(takeAll(s, inv).taken).toEqual([{itemId: 'ammo_shells', count: 6}]);
+    expect(takeAll(s, inv).taken).toEqual([{itemId: 'ammo_12ga', count: 6}]);
     expect(s.lots).toEqual([]);
     expect(inv.invariants()).toEqual([]);
   });
