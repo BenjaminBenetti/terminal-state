@@ -5,9 +5,12 @@ import {FILTER_LIFE_S} from '../items/gear';
 import {GAS_MASK} from './gasMask';
 
 export function gasMaskQaApi(game: Game) {
-  const report = () => ({...game.gasMask.qa(), hudQ: typeof document !== 'undefined' ? document.querySelector('#hotbar .slot.maskslot')?.className ?? null : null});
+  const report = () => ({
+    ...game.gasMask.qa(), hudQ: typeof document !== 'undefined' ? document.querySelector('#hotbar .slot.maskslot')?.className ?? null : null,
+    view: game.gasMask.maskView?.qa() ?? null, // task gas-mask-roof-feedback-20261030 (item 4): the first-person mask view (gear/maskView.ts)
+  });
   return {
-    /** Mask state: off / donning / on / doffing, on, protects, fitted filter seconds + fraction, spares, tone, overlay cover. */
+    /** Mask state: off / donning / on / doffing, on, protects, fitted filter seconds + fraction, spares, tone, view cover + the mask view's report. */
     mask: () => report(),
     /**
      * Give a gas mask with `filterFrac` (0..1, default 0.5) of one filter fitted: worn at once (equipped, OFF the face) when the

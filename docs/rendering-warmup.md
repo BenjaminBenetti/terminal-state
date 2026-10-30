@@ -28,6 +28,7 @@ finishes building. `game/tests/warmup.test.ts` covers this by injecting an unfam
 | You add… | Do this | Example in the code |
 |---|---|---|
 | Parts **added to a held item** at runtime (e.g. the rifle's optic lens + depth mask, iteration 15) | nothing — they live under the viewmodel's held-item roots, which the viewmodel pass compiles (hidden roots made visible for the call) | `RifleOptic` runtime aperture |
+| A viewmodel object **fixed to the face** rather than held (hidden until used) | `viewmodel.addFaceRoot(root)` before the warm-up: the root hangs off the viewmodel camera and is one of `warmRoots()`; materials are made once, use only changes visibility / uniforms | the first-person gas-mask view (`gear/maskView.ts`, task gas-mask-roof-feedback-20261030) |
 | A **new light type** with its own lighting node | register the node in `Game.initRenderer` before the first compile, keep the light in the scene from the start (change intensity, never the light set) | `FlareLight` / `FlareLightNode` (iteration 15) |
 | A **new render pass** that draws objects with its own scene / camera / render target | `warmRegistry.addPass({name, scene, camera, target: () => rt, hidden?: () => roots})` | the viewmodel overlay (`'weapons and held items'`) |
 | **Effects hidden until first use** (pools with `visible = false`) | keep them under a registered pool root: `warmRegistry.addPool(name, () => [root])`. The default `'effects'` pool is `fx.group`, so new effects added there are covered | sparks, smoke, blood, tracers, decals |

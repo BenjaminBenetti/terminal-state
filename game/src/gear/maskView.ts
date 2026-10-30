@@ -12,18 +12,21 @@
 //  2. splits it into geometric islands (vertices welded by position). The visor glass is two separate sheet islands (outer and
 //     inner face of the lens) in front of the eyes: they are found as the non-body islands crossed by rays in a cone forward
 //     from an eye guess, and REMOVED from the shell, so the visor is an opening framed by the mask's own rubber rim, nose-
-//     bridge dip, inner walls and valve;
-//  3. puts the eye behind the visor (MASK_VIEW.eye: across the glass box, `eyeToGlass` behind the glass at its centre) and
-//     re-expresses everything in the viewmodel camera's frame (eye at the origin, visor toward -Z), scaled about the eye
+//     bridge dip, inner walls and valve. The small head-strap islands (buckles, crown strap: they reach back past the face
+//     seal, never seen from inside a worn mask) are dropped too;
+//  3. puts the eye behind the visor (MASK_VIEW.eyeFx / eyeFy across the glass box, `eyeToGlass` behind the glass at its centre)
+//     and re-expresses everything in the viewmodel camera's frame (eye at the origin, visor toward -Z), scaled about the eye
 //     (MASK_VIEW.scale) so the whole mask sits closer than any held item (the rifle optic's eyepiece is 10.5 cm away) —
-//     scaling about the eye does not change the image;
+//     scaling about the eye does not change the image. With the eye that far back, steep rays at the top corners of a wide
+//     view would pass over the mask's low upper edge: a small dark COWL (a brow plane and two side walls just outside the
+//     mask's outline, 6 triangles) stands for the wearer's own brow / hood in shadow there, only while the mask is fully on;
 //  4. the inner glass sheet becomes the LENS: its triangles turned to face the eye, planar UVs over the glass, and a lens
 //     texture computed from the sheet's own outline (distance to its boundary): a faint tint that is clear in the middle,
 //     a darker band along the rim (edge darkening / rubber shadow), breath condensation low in the corners, a few soft
 //     smudges and faint scratches — all kept out of the central aim area;
 //  5. the shell gets vertex colours (dark near the face seal, lighter toward the visor where light comes in) and a matte
 //     rubber material (the outfit's colour texture, metalness 0), double-sided so its inner faces render.
-// Triangles: ~2.6k shell + ~0.2k lens (the source mesh is 3k). If the outfit mesh is missing or the cut fails, a small
+// Triangles: ~2.3k shell + 6 cowl + ~0.19k lens (the source mesh is 3k). If the outfit mesh is missing or the cut fails, a small
 // procedural frame + lens stands in (never on the normal load path: the outfit file is a required main asset).
 //
 // MaskView (runtime): one root under the viewmodel camera (Viewmodel.addFaceRoot), so it renders in the existing viewmodel
@@ -48,9 +51,9 @@ import type {MaskTone} from './gasMask';
 export const MASK_VIEW = {
   /** The eye across the visor-glass box (fractions of its width / height from the wearer's right / bottom). */
   eyeFx: 0.48,
-  eyeFy: 0.58,
+  eyeFy: 0.64,
   /** Eye distance behind the inner glass at its centre (mask metres; real goggles are closer, but then the rim leaves the 54 deg view). */
-  eyeToGlass: 0.1,
+  eyeToGlass: 0.095,
   /** Uniform scale about the eye: the mask's nearest visible parts stay beyond the 1 cm near plane, its farthest in front of held items. */
   scale: 0.6,
   /** The cone (deg, about the eye's forward axis) that stays clear of rubber after the cut (the nose bridge peaks ~11 deg below). */
@@ -249,11 +252,11 @@ export function cutMaskView(geo: THREE.BufferGeometry): MaskViewCut {
   if (!glass.size) throw new Error('no visor glass in front of the eye');
   // the glass box -> the eye; the inner (nearest) sheet -> the lens
   const glassBox = new THREE.Box3(), mean = new Map<number, {d: number; n: number}>();
-  const shellTris: Tri[] = [], glassTris = new Map<number, Tri[]>(), islandOfTri = new Map<Tri, number>();
+  const triOf = (t: number): Tri => [I.getX(t * 3), I.getX(t * 3 + 1), I.getX(t * 3 + 2)];
+  const shellIds: number[] = [], glassTris = new Map<number, Tri[]>();
   for (let t = 0; t < tris; t++) {
-    const tri: Tri = [I.getX(t * 3), I.getX(t * 3 + 1), I.getX(t * 3 + 2)];
-    islandOfTri.set(tri, t);
-    if (!glass.has(isl.of[t])) { shellTris.push(tri); continue; }
+    if (!glass.has(isl.of[t])) { shellIds.push(t); continue; }
+    const tri = triOf(t);
     const list = glassTris.get(isl.of[t]) ?? [];
     list.push(tri);
     glassTris.set(isl.of[t], list);
@@ -290,9 +293,9 @@ export function cutMaskView(geo: THREE.BufferGeometry): MaskViewCut {
   // in the way while it comes up.
   const islandMinZ = new Float64Array(isl.count).fill(Infinity);
   for (let t = 0; t < tris; t++) for (let k = 0; k < 3; k++) islandMinZ[isl.of[t]] = Math.min(islandMinZ[isl.of[t]], P.getZ(I.getX(t * 3 + k)));
-  const strap = (t: Tri) => { const id = isl.of[islandOfTri.get(t)!]; return id !== body && islandMinZ[id] < eye.z + MASK_VIEW.strapReach; };
-  const kept = shellTris.filter(t => !strap(t));
-  const strapTriangles = shellTris.length - kept.length;
+  const strap = (id: number) => id !== body && islandMinZ[id] < eye.z + MASK_VIEW.strapReach;
+  const kept = shellIds.filter(t => !strap(isl.of[t])).map(triOf);
+  const strapTriangles = shellIds.length - kept.length;
   const shell = subset(geo, kept, ['position', 'normal', 'uv']);
   {
     const SP = shell.attributes.position, col = new Float32Array(SP.count * 3);
@@ -306,15 +309,15 @@ export function cutMaskView(geo: THREE.BufferGeometry): MaskViewCut {
   // + the COWL: dark inward faces just outside the mask's outline (over the brow, beside the upper cheeks). With the eye behind the
   // face seal, steep rays at the top corners of a wide view pass over the mask's low upper edge; the cowl stands for the wearer's
   // own brow / hood in shadow there. It never reaches into the visor's view (it ends before the visor rays climb that high).
-  const shellOnly = shell.index!.count;
-  const withCowl = mergeGeometries([shell, cowlGeometry(shell, bodyBox, eye, glassZ)], false);
+  const cowlStart = shell.index!.count;
+  const cowl = cowlGeometry(shell, bodyBox, eye, glassZ);
+  const shellGeo = mergeGeometries([shell, cowl], false);
   shell.dispose();
-  if (!withCowl) throw new Error('cowl merge failed');
-  const full = withCowl;
-  full.applyMatrix4(toEye);
-  full.computeBoundingBox();
-  full.computeBoundingSphere();
-  const shellGeo = full;
+  cowl.dispose();
+  if (!shellGeo) throw new Error('cowl merge failed');
+  shellGeo.applyMatrix4(toEye);
+  shellGeo.computeBoundingBox();
+  shellGeo.computeBoundingSphere();
 
   // --- lens: the inner glass sheet facing the eye, planar UVs over the glass box (u: screen left -> right, v: bottom -> top)
   const lens = subset(geo, lensTris, ['position', 'normal']);
@@ -345,12 +348,12 @@ export function cutMaskView(geo: THREE.BufferGeometry): MaskViewCut {
   let glassTriangles = 0;
   for (const list of glassTris.values()) glassTriangles += list.length;
   return {
-    shell: shellGeo, cowlStart: shellOnly, lens, lensMap: maps.map, glowMap: maps.glow, eye, glassZ, glassIslands: glass.size, glassTriangles,
+    shell: shellGeo, cowlStart, lens, lensMap: maps.map, glowMap: maps.glow, eye, glassZ, glassIslands: glass.size, glassTriangles,
     shellTriangles: kept.length, strapTriangles, lensTriangles: lensTris.length, toEye,
   };
 }
 
-/** The cowl (mask space, same attributes as the shell): a brow plane over the mask and two upper side walls, facing the eye. */
+/** The cowl (mask space, same attributes as the shell): a brow plane over the mask and two side walls beside it, facing the eye. */
 function cowlGeometry(shell: THREE.BufferGeometry, body: THREE.Box3, eye: THREE.Vector3, glassZ: number): THREE.BufferGeometry {
   // one rubber texel for all of it: the UV of the shell vertex nearest the eye (inside, by the seal)
   const SP = shell.attributes.position, SU = shell.attributes.uv;
@@ -523,7 +526,7 @@ function proceduralCut(): MaskViewCut {
   const box = new THREE.Box3(new THREE.Vector3(-hw, -hh, z), new THREE.Vector3(hw, hh, z));
   // lensMaps works in a +Z-facing mask space; this flat stand-in is already in the eye frame (mirror x for its u)
   const mirrored = lens.clone().scale(-1, 1, 1);
-  const maps = lensMaps(mirrored, new THREE.Box3(new THREE.Vector3(-hw, -hh, z), new THREE.Vector3(hw, hh, z)), new THREE.Vector3(0, 0, 0));
+  const maps = lensMaps(mirrored, box, new THREE.Vector3(0, 0, 0));
   mirrored.dispose();
   for (const g of [shell, lens]) { g.computeBoundingBox(); g.computeBoundingSphere(); }
   return {

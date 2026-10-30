@@ -55,7 +55,7 @@ import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifi
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
-import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters, camera mask
+import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
@@ -214,7 +214,7 @@ export class Game {
   readonly inputOwners: (() => boolean)[] = [];
   /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
   readonly gear: GearSystem;
-  /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, camera mask; protects() (gear/gasMask.ts). */
+  /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, the first-person mask view; protects() (gear/gasMask.ts). */
   readonly gasMask: GasMaskSystem;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
