@@ -3,6 +3,10 @@ name: Build static game
 on:
   push:
     branches: [main]
+  # Pull requests into main run the same validation BEFORE merge (required check `build`). Plain pull_request:
+  # read-only token, no secrets; never the privileged target-branch variant.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,8 +14,9 @@ permissions:
 
 jobs:
   build:
-    # Manual runs from another branch must not become release artifacts.
-    if: github.ref == 'refs/heads/main'
+    # Stable check name (required status check on main). Validation runs for every trigger; only runs on main itself
+    # (the exact merged commit, or a manual run on main) upload release artifacts — see the upload steps.
+    name: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -35,6 +40,9 @@ jobs:
       - run: npm run ci:test
       - run: npm run ci:package
       - name: Upload static site and integrity manifest
+        # Release artifacts come only from main: pull-request runs (ref refs/pull/N/merge) and manual runs from another
+        # branch validate but must not become release artifacts.
+        if: github.ref == 'refs/heads/main'
         # Official actions/upload-artifact v7.0.2 (node24), SHA verified with git ls-remote.
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -45,6 +53,7 @@ jobs:
           compression-level: 0
           retention-days: 30
       - name: Upload separate integrity manifest
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: terminal-state-manifest-${{ github.sha }}

@@ -17,6 +17,14 @@ for (const required of ['branches: [main]','workflow_dispatch:',"github.ref == '
   'name: terminal-state-web-${{ github.sha }}','path: artifacts/terminal-state-web/',
   'name: terminal-state-manifest-${{ github.sha }}','path: artifacts/terminal-state-web/manifest.json']) assert(workflow.includes(required),`Missing ${required}`);
 assert(!/\b(?:pull_request_target|write-all|secrets\.)\b/.test(workflow),'Unexpected privileged workflow');
+// Pull requests into main run the full validation before merge (required check 'build'); only main uploads release artifacts.
+assert(/^on:\n  push:\n    branches: \[main\]\n(?:  #.*\n)*  pull_request:\n    branches: \[main\]\n  workflow_dispatch:\n/m.test(workflow),'Expected push(main) + pull_request(main) + workflow_dispatch triggers');
+assert(/^  build:\n(?:    #.*\n)*    name: build\n    runs-on:/m.test(workflow),'The validation job must be named build with no job-level condition');
+const steps = workflow.split(/\n      - /).slice(1);
+const uploads = steps.filter(st => /uses:\s*actions\/upload-artifact@/.test(st));
+assert.equal(uploads.length,2);
+for (const st of uploads) assert(/\n        if: github\.ref == 'refs\/heads\/main'\n/.test(st),'Release artifact uploads must be limited to main');
+assert.equal((workflow.match(/^\s*if:/gm) ?? []).length,2,'Only the two upload steps may be conditional (validation always runs)');
 const pkg=JSON.parse(fs.readFileSync(new URL('package.json',root),'utf8'));
 assert.equal(pkg.name,'terminal-state');
 for(const alias of ['dev','build','preview']) assert.equal(pkg.scripts[alias],`npm run game:${alias}`);
