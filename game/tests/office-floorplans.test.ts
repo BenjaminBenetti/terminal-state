@@ -6,7 +6,7 @@
 // Node only, a bounded seed set (no browser).
 import {describe, expect, it} from 'vitest';
 import {generateOfficeLevel, officeIssues, towerFrame, OFFICE_GEN_STATS} from '../src/gen/office/index';
-import {ROOM_MIN_CELLS, STRIPS, floorPlans, planKey, type FloorPlan} from '../src/gen/office/floorplan';
+import {ROOM_MAX_CELLS, ROOM_MIN_CELLS, STRIPS, floorPlans, planKey, type FloorPlan} from '../src/gen/office/floorplan';
 import {MARGIN, OFFICE_TOP_FLOOR, landingRect} from '../src/gen/office/frame';
 import {elevatorLandingStrip, floorPlanPose} from '../src/gen/office/index';
 import {FILL_MIN_M2, furnishedShare, signOverlaps} from '../src/gen/office/dress';
@@ -61,7 +61,7 @@ describe('floor plans (pure data, 200 level seeds)', () => {
     const keys = new Set<string>();
     for (let s = 0; s < 200; s++) {
       const seed = s * 7919 + 13, f = towerFrame(seed);
-      expect(floorPlans(seed, {K: f.K, sB: f.sB, cx0: f.cx0, cx1: f.cx1, top: OFFICE_TOP_FLOOR})).toEqual(f.plans);
+      expect(floorPlans(seed, {K: f.K, sB: f.sB, cx0: f.cx0, cx1: f.cx1, top: OFFICE_TOP_FLOOR, eW: f.eW, eE: f.eE, rows: f.cy1 - f.cy0})).toEqual(f.plans);
       const plans = FLOORS.map(n => f.plans[n]);
       expect(new Set(plans.map(topo)).size, `${seed} topologies`).toBeGreaterThanOrEqual(3);
       for (let i = 1; i < plans.length; i++) {
@@ -78,8 +78,11 @@ describe('floor plans (pure data, 200 level seeds)', () => {
         expect(p.units.filter(u => u.kind === 'wc-w').length).toBe(1);
         expect(p.units.filter(u => u.kind === 'roof').length).toBe(p.floor === OFFICE_TOP_FLOOR ? 1 : 0);
         if (p.topology === 'commons') { expect(p.commons).toBeGreaterThanOrEqual(10); expect(f.sB + f.K - p.commons).toBeGreaterThanOrEqual(8); } else expect(p.commons).toBe(0);
-        if (p.topology === 'loopW') expect(p.ends.E).not.toBe('single');
-        if (p.topology === 'loopE') expect(p.ends.W).not.toBe('single');
+        // a widened loop zone is always paired (two compact rooms); a zone too big for one room (> ROOM_MAX_CELLS) is never single
+        if (p.topology === 'loopW') expect(p.ends.E).toBe('pair');
+        if (p.topology === 'loopE') expect(p.ends.W).toBe('pair');
+        if (f.eW * (f.cy1 - f.cy0) > ROOM_MAX_CELLS && p.topology !== 'loopE') expect(p.ends.W).not.toBe('single');
+        if (f.eE * (f.cy1 - f.cy0) > ROOM_MAX_CELLS && p.topology !== 'loopW') expect(p.ends.E).not.toBe('single');
       }
       // every strip program fits the 32-cell core exactly
       for (const prog of Object.values(STRIPS)) expect(prog.reduce((a, [, w]) => a + w, 0) + prog.length - 1).toBe(f.cx1 - f.cx0);

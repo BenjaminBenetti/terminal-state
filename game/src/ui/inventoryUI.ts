@@ -19,11 +19,14 @@
 // (data-bar="throw"): only throwables (flares) go in — drag them in / out, right-click / double-click / Equip a flare to put it
 // there. G no longer drops: dropping is dragging an item out of this panel (or Drop / Delete), which works for every slot.
 // (#1) the worn backpack's "contents hidden" label is gone; its contents still need the bag on the ground (tap E opens it).
+//
+// Task gasmask-breach-20261030 (mask lane): the gear panel's 6th slot FACE (the gas mask; Q puts it on). A mask shows its fitted
+// filter (%) in its cell and detail line. Spare filters (kind 'supply') are passive: no Use / Equip — a mask on the face fits them.
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
 import {PACK_SIZE, THROW_REF, type Bar, type Inventory, type SlotRef} from '../items/inventory';
-import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem} from '../items/gear';
+import {FILTER_LIFE_S, GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem, isFilterMask} from '../items/gear';
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
 import {CRITICAL, LOW} from '../player/survival';
@@ -72,7 +75,11 @@ interface DragState {
 const same = (a: SlotRef | null | undefined, b: SlotRef | null | undefined) => !!a && !!b && a.bar === b.bar && a.index === b.index;
 // Task office-overhaul-20261030 (INTERACT): by data-bar (the grenade slot lives in the quick-slot row)
 const slotSel = (r: SlotRef) => `#inventory .slot[data-bar="${r.bar}"][data-index="${r.index}"]`;
-const GEAR_GHOST: Record<string, string> = {helmet: GEAR_ICONS.helmet, chest: GEAR_ICONS.vest, gloves: GEAR_ICONS.gloves, boots: GEAR_ICONS.boots, backpack: GEAR_ICONS.backpack};
+const GEAR_GHOST: Record<string, string> = {helmet: GEAR_ICONS.helmet, chest: GEAR_ICONS.vest, gloves: GEAR_ICONS.gloves, boots: GEAR_ICONS.boots, backpack: GEAR_ICONS.backpack, mask: GEAR_ICONS.gasmask};
+/** Mask lane: a gas mask's fitted filter in whole percent (rounded up: 0 only when empty). */
+const filterPct = (filter: number | undefined) => Math.ceil(Math.max(0, Math.min(1, (filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9);
+/** Mask lane: what goes in each gear slot (empty-slot hint). */
+const SLOT_WHAT: Record<string, string> = {helmet: 'a helmet', chest: 'an armor vest or a chest rig', gloves: 'gloves', boots: 'boots', backpack: 'a backpack', mask: 'a gas mask'};
 
 export class InventoryUI {
   selected: SlotRef | null = null;
@@ -335,7 +342,7 @@ export class InventoryUI {
 
   /**
    * QA / browser check: viewport centre of a slot spec — 'hotbar:N' / 'pack:N' / 'gear:N' / 'throw:0' (inventory panel),
-   * 'hud:N' (HUD quick slot), 'panel' (inside the panel, not a slot), 'out' (outside the panel).
+   * 'hud:N' (HUD quick slot), 'hudq' (the HUD gas-mask cell, mask lane), 'panel' (inside the panel, not a slot), 'out' (outside the panel).
    */
   pointFor(spec: string): {x: number; y: number} | null {
     const centre = (el: Element | null) => {
@@ -345,7 +352,8 @@ export class InventoryUI {
     };
     const [kind, n] = spec.split(':');
     if (kind === 'hotbar' || kind === 'pack' || kind === 'gear' || kind === 'throw') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
-    if (kind === 'hud') return centre(document.querySelector(`#hotbar .slot[data-index="${Number(n)}"]`));
+    if (kind === 'hud') return centre(document.querySelector(`#hotbar .slot[data-bar="hotbar"][data-index="${Number(n)}"]`)); // quick slots only (the Q / 6 cells are gear)
+    if (kind === 'hudq') return centre(document.querySelector('#hotbar .slot.maskslot')); // mask lane: the HUD gas-mask cell
     if (kind === 'panel') return centre(document.querySelector('#inv-detail'));
     const p = document.querySelector('#inventory .inv-panel')?.getBoundingClientRect();
     if (!p) return null;
@@ -430,7 +438,9 @@ export class InventoryUI {
       const sel = same(this.selected, ref);
       const held = ref.bar === 'hotbar' && ref.index === inv.selected;
       const usable = def?.kind === 'consumable';
-      const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
+      const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`)
+        : isFilterMask(def.id) ? `<span class="count">${filterPct(st!.filter)}%</span>` // mask lane: the fitted filter
+        : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       let title = def ? ` title="${def.name}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
@@ -444,7 +454,7 @@ export class InventoryUI {
         const slot = GEAR_SLOTS[ref.index];
         lead = `<span class="gslot">${GEAR_SLOT_NAMES[slot]}</span>${def ? '' : `<span class="ghost">${GEAR_GHOST[slot] ?? ''}</span>`}`;
         if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${def.name} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then tap E to open it (hold E picks it back up), or drag it out of this panel."`; }
-        else if (!def) title = ` title="${GEAR_SLOT_NAMES[slot]}: drag ${slot === 'chest' ? 'an armor vest or a chest rig' : slot === 'backpack' ? 'a backpack' : `${slot === 'helmet' ? 'a helmet' : slot}`} here to wear it"`;
+        else if (!def) title = ` title="${GEAR_SLOT_NAMES[slot]}: drag ${SLOT_WHAT[slot] ?? slot} here to wear it${slot === 'mask' ? ' (Q puts it on your face)' : ''}"`;
       } else if (ref.bar === 'pack' && ref.index >= PACK_SIZE) cls = ' gear-extra';
       return `<div class="slot${sel ? ' selected' : ''}${held ? ' held' : ''}${usable ? ' usable' : ''}${def ? ' filled' : ''}${cls}" data-bar="${ref.bar}" data-index="${ref.index}" role="button" tabindex="0"${title}>${lead}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
@@ -466,8 +476,9 @@ export class InventoryUI {
         : wdef?.caliber ? `Takes ${CALIBERS[wdef.caliber].label} (${CALIBERS[wdef.caliber].designation}) · ${reserveFor(wdef, inv)} in reserve`
         : wdef?.melee ? `Melee · click to slash, hold to keep slashing · reach ${wdef.range} m · never needs ammo` // lane KNIFE
         : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
-        : def?.kind === 'gear' ? `${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
-        : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') : ''); // INTERACT (#6)
+        : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
+        : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
+        : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` : ''); // mask lane
       fx.classList.toggle('refused', !!this.note && this.noteBad);
     }
     const useBtn = $('#btn-inv-use') as HTMLButtonElement;
@@ -475,7 +486,7 @@ export class InventoryUI {
     useBtn.disabled = !def || def.kind !== 'consumable';
     const eq = $('#btn-inv-equip') as HTMLButtonElement;
     eq.textContent = def?.kind === 'gear' ? (worn ? 'Take off' : 'Wear') : 'Equip'; // Iteration 16
-    eq.disabled = !def || def.kind === 'ammo' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT
+    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
     ($('#btn-inv-drop') as HTMLButtonElement).disabled = !def;
     const v = this.actions.vitals?.();
     const vit = document.querySelector('#inv-vitals');
@@ -495,7 +506,7 @@ export class InventoryUI {
     const mods: string[] = [];
     for (const st of inv.gearSlots) if (st) { const t = gearStatText(itemDef(st.itemId).gear!); if (t) mods.push(t); }
     const sum = document.querySelector('#inv-gear-wrap .gear-sum');
-    if (sum) sum.textContent = mods.length ? mods.join(' · ') : 'nothing worn — gear is rare: armor vest, chest rig, backpack, hard hat, boots, gloves';
+    if (sum) sum.textContent = mods.length ? mods.join(' · ') : 'nothing worn — gear is rare: armor vest, chest rig, backpack, hard hat, boots, gloves, gas mask';
     const note = document.querySelector('#inv-gear-note');
     if (note) {
       const bag = inv.worn('backpack');

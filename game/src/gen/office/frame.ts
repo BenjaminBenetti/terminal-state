@@ -151,7 +151,7 @@ export function towerFrame(levelSeed: number): TowerFrame {
     sy0: cy0 + wellH + 1, units,
     floorHeight: FLOOR_HEIGHT,
     // (own seeded stream: the frame's dimensions above are unchanged by the plans)
-    plans: floorPlans(levelSeed, {K, sB, cx0, cx1, top: OFFICE_TOP_FLOOR}),
+    plans: floorPlans(levelSeed, {K, sB, cx0, cx1, top: OFFICE_TOP_FLOOR, eW, eE, rows: CORE_ROWS}),
   };
 }
 

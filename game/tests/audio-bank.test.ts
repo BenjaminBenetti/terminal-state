@@ -132,6 +132,7 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       hitTick: () => { sfx.hitTick(false); sfx.hitTick(true); }, hurt: () => sfx.hurt(), jump: () => sfx.jump(), land: () => { sfx.land(0.1); sfx.land(1); },
       crouch: () => { sfx.crouch(true); sfx.crouch(false); },
       meleeSwing: () => sfx.meleeSwing(), // lane KNIFE: the knife slash reuses the Sound Lab 'crouch' rustle clip
+      maskRustle: () => { sfx.maskRustle(true); sfx.maskRustle(false); }, // task gasmask-breach-20261030 (mask lane): Q don / doff reuses 'crouch' too
       containerOpen: () => { for (const k of ['cabinetTall', 'cabinetLow', 'crate', 'vending', 'fridge', 'shopCooler', 'desk', 'gunLocker', 'shelf']) sfx.containerOpen(k, at); },
       containerClose: () => { for (const k of ['cabinetTall', 'crate', 'vending', 'fridge', 'desk']) sfx.containerClose(k, at); }, pry: () => sfx.pry('vending', at),
       search: () => sfx.search(), eat: () => { for (const k of ['chips', 'chocolate', 'beans', 'noodles', 'other']) sfx.eat(k); },

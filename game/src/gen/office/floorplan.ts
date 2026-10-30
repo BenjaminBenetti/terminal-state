@@ -15,7 +15,7 @@
 //            into two rooms; the S corridor is reached round one side only (a C-shaped racetrack)
 //   commons  no S corridor: an open WORK COMMONS (10-12 rows deep, full width) south of the core — the side corridors run
 //            into it, the core's support rooms open onto it, and a shallower FACADE BAND of rooms / offices lines the south
-//            windows behind it (rooms open off the commons)
+//            windows behind it (rooms open off the commons, each on one normal door; leftover length = a row of window offices)
 // Core support programs (the S strip, cx0..cx1 = 32 cells, 7 rows = 3.5 m deep; every room >= 2.5 m wide): see STRIPS.
 // End-zone splits: single room / stacked (two rooms N + S, each on its own corridor) / paired (facade room + inner room).
 
@@ -98,7 +98,10 @@ function spread<T>(rng: Rng, deck: readonly T[]): T[] {
  * depth and core columns. At least three different topologies per level (ring, a loop, the commons), every strip program at most
  * twice, consecutive floors differ in topology and strip; floor 8 carries the roof access room.
  */
-export function floorPlans(levelSeed: number, dims: {K: number; sB: number; cx0: number; cx1: number; top: number}): FloorPlan[] {
+/** Largest enclosed room (cells, 76 m2 — the old end-zone maximum): a bigger single end-zone room is split instead. */
+export const ROOM_MAX_CELLS = 304;
+
+export function floorPlans(levelSeed: number, dims: {K: number; sB: number; cx0: number; cx1: number; top: number; eW?: number; eE?: number; rows?: number}): FloorPlan[] {
   const rng = new Rng(hashString('office-floor-plans-v1', levelSeed >>> 0));
   const floors: number[] = [];
   for (let n = 2; n <= dims.top; n++) floors.push(n);
@@ -115,8 +118,12 @@ export function floorPlans(levelSeed: number, dims: {K: number; sB: number; cx0:
     const prog = floor === dims.top ? ROOF_SWAP[strip] : STRIPS[strip];
     const units = layStrip(rng.fork(`strip-${floor}`), prog, strip, dims.cx0, dims.cx1 - dims.cx0);
     // End zones: the widened side of a loop is always split; a ring floor never keeps both zones whole.
-    const pickSplit = (wide: boolean): EndSplit => (wide ? (rng.chance(0.5) ? 'stack' : 'pair') : rng.weighted<EndSplit>([['single', 0.34], ['stack', 0.36], ['pair', 0.3]]));
-    const ends = {W: pickSplit(topology === 'loopE'), E: pickSplit(topology === 'loopW')};
+    // (a widened loop zone is always PAIRED — two compact 5-6 m rooms; stacked it gave 11-12 m x 4 m tubes the window-breach gas
+    // never filled, nor furniture)
+    // (and a zone too big for one room — over ROOM_MAX_CELLS — is never kept single)
+    const pickSplit = (wide: boolean, w = 0): EndSplit => (wide ? 'pair' : w * (dims.rows ?? 0) > ROOM_MAX_CELLS ? (rng.chance(0.55) ? 'stack' : 'pair')
+      : rng.weighted<EndSplit>([['single', 0.34], ['stack', 0.36], ['pair', 0.3]]));
+    const ends = {W: pickSplit(topology === 'loopE', dims.eW), E: pickSplit(topology === 'loopW', dims.eE)};
     if (topology === 'ring' && ends.W === 'single' && ends.E === 'single') ends[rng.chance(0.5) ? 'W' : 'E'] = rng.chance(0.5) ? 'stack' : 'pair';
     // Commons depth: 10-12 rows, leaving a facade band of >= 8 rows (4 m) behind it.
     const room = dims.sB + dims.K - 8;

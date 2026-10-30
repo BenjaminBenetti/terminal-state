@@ -82,7 +82,7 @@ export const ROOMS = {
    * Task office-interactions-layout-20261030 (lane LAYOUT): a small glass-walled meeting room carved out of a very long open-plan
    * area (gen/office/tower.ts huddles) or into a split end zone — a conference table and chairs (the meeting dressing).
    */
-  huddle: {label: 'Huddle room', purpose: 'office-meeting', role: 'meeting', w: [8, 10], plate: 'HUDDLE ROOM', steps: []},
+  huddle: {label: 'Huddle room', purpose: 'office-meeting', role: 'meeting', w: [10, 12], plate: 'HUDDLE ROOM', steps: []},
   // --- company rooms -----------------------------------------------------------------------------------------------------------
   /** The company's reception off the elevator lobby (first floor of every tenant): dressed by companyDress.reception. */
   reception: {label: 'Reception', purpose: 'office-tenant-reception', role: 'reception', w: [14, 18], open: true, steps: []},

@@ -18,9 +18,11 @@
 //     reproduced byte for byte by the merged tree (the calibre data ported into items/lootTables.ts). The change from stage 1 is
 //     attributable to the authorized calibre-ammo merge #5, not to the loot-table refactor; gear is unchanged.
 //  3. Task office-interactions-layout-20261030 (deliberate Office content / geometry changes; Subway and the gear ROLL unchanged):
-//     officeHolders 0dedc0d9 -> 905669dc: nine office storage kinds became openable holders with container-themed tables (lane
+//     officeHolders 0dedc0d9 -> bebd9642: nine office storage kinds became openable holders with container-themed tables (lane
 //     OPEN), the roof cache reward crate (lane ROOF), and the new seeded floor plans / furnishing (lane LAYOUT: different rooms,
-//     holders and index order); officePickups 7b266d40 -> 2fc2f696 and gearPlaced 1a7b07f0 -> 7b03da24: the same floor-plan
+//     holders and index order; incl. the compact-room adjustment made for main's gas field, PR #8: paired end-zone rooms,
+//     <= 76 m² rooms, >= 86 m² open plans, one normal door in shallow-band rooms); officePickups 7b266d40 -> f0e0d3d4 and
+//     gearPlaced 1a7b07f0 -> da46e2b8: the same floor-plan
 //     change moves the loose floor supplies and gear spots (the per-storey supply programs and the one gear roll per logical
 //     level are unchanged). Subway hashes f94f99ea / 574dd442 and gearRolls 77148ba3 are byte-identical.
 
@@ -36,10 +38,10 @@ import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
 const GOLDEN = {
   subwayHolders: 'f94f99ea',
   subwayPickups: '574dd442',
-  officeHolders: '905669dc',
-  officePickups: '2fc2f696',
+  officeHolders: 'bebd9642',
+  officePickups: 'f0e0d3d4',
   gearRolls: '77148ba3',
-  gearPlaced: '7b03da24',
+  gearPlaced: 'da46e2b8',
 };
 
 function fnv() {

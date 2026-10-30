@@ -903,8 +903,8 @@ function SUPPORT_PURPOSES(): Record<string, RoomPurpose> {
       {kind: 'stockShelf', at: 'row', wall: 'side', n: [1, 2], variant: 'stock', front: 0.6},
       {kind: 'janitorCart', at: 'wall', wall: 'any', n: [0, 1], chance: 0.7},
       {kind: 'cabinetTall', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5, front: 0.7},
-      // (the electrical riser it merges keeps an occasional cache crate, as the riser closets had)
-      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1], chance: 0.5},
+      // (the electrical riser it merges keeps the riser closet's occasional cache crate: electrical-closet's own rule)
+      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
     ], {stockShelf: TENANT_SUPPLY, cabinetTall: TENANT_SUPPLY, crate: CACHE_CRATE}, {med: 0.4, ammo: 0.3}, {stock: 'cleaning'}),
     'office-kitchenette': S('office-kitchenette', 'Kitchenette', 'food', [0.35, 0.45, 0.2], [
       {kind: 'kitchenette', at: 'wall', wall: 'far', n: [1, 1], front: 0.9},
@@ -915,7 +915,8 @@ function SUPPORT_PURPOSES(): Record<string, RoomPurpose> {
     'office-it': S('office-it', 'IT closet', 'tech', [0.1, 0.4, 0.5], [
       {kind: 'electricalPanel', at: 'wall', wall: 'far', n: [1, 1], front: 0.8},
       {kind: 'cabinetTall', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 0.7},
-      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1], chance: 0.4},
+      // (the comms riser closet: the electrical riser's occasional cache crate)
+      {kind: 'crate', at: 'wall', wall: 'any', n: [0, 1]},
     ], {cabinetTall: TENANT_SUPPLY, crate: CACHE_CRATE}, {ammo: 0.3}),
     'office-lockers': S('office-lockers', 'Locker room', 'personal', [0.2, 0.45, 0.35], [
       {kind: 'staffLockers', at: 'row', wall: 'far', n: [2, 4], front: 0.8},
@@ -926,7 +927,7 @@ function SUPPORT_PURPOSES(): Record<string, RoomPurpose> {
     // A PROP-level purpose override (PropPlacement.purpose), never an area's: the extra furniture the large-room fill adds
     // (gen/office/dress.ts fillLargeRooms) is real, openable storage, but picked over — mostly bare, now and then one leftover snack / drink / dressing (no ammo) —
     // so furnishing the empty rooms does not inflate the tower's loot totals (the established scarcity).
-    'office-fill': S('office-fill', 'Picked-over stock', 'personal', [0.2, 0.45, 0.35], [], {default: {items: JUNK_ROWS, lots: [1, 1], empty: 0.85}}, {}),
+    'office-fill': S('office-fill', 'Picked-over stock', 'personal', [0.2, 0.45, 0.35], [], {default: {items: JUNK_ROWS, lots: [1, 1], empty: 0.93}}, {}),
   };
 }
 

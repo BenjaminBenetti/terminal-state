@@ -243,6 +243,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   leg_splint: 'plastic', arm_sling: 'fabric', trauma_kit: 'fabric', // Iteration 16 (lane INJURY): foam splint roll; sling packet; nylon pouch
   // Iteration 16 (primary, for lane GEAR's items): soft armor / nylon / boots / gloves = fabric; the hard hat = plastic
   armor_vest: 'fabric', chest_rig: 'fabric', backpack: 'fabric', helmet: 'plastic', boots: 'fabric', gloves: 'fabric',
+  gas_mask: 'rubber', gas_filter: 'sheetMetal', // task gasmask-breach-20261030 (mask lane): rubber full-face mask; painted steel filter canister
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -305,6 +306,8 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   // Iteration 16 (primary, lane GEAR's items): soft vest ~2 kg, rig ~1 kg, empty daypack ~0.8 kg, hard hat ~0.4 kg, boots ~1.6 kg, gloves ~0.2 kg
   armor_vest: {mass: 2.0, shape: 'box', mat: 'cloth'}, chest_rig: {mass: 1.0, shape: 'box', mat: 'cloth'}, backpack: {mass: 0.8, shape: 'box', mat: 'cloth'},
   helmet: {mass: 0.4, shape: 'box', mat: 'soft'}, boots: {mass: 1.6, shape: 'box', mat: 'soft'}, gloves: {mass: 0.2, shape: 'box', mat: 'cloth'},
+  // task gasmask-breach-20261030 (mask lane): full-face mask ~0.6 kg (rubber), 40 mm filter canister ~0.25 kg (steel)
+  gas_mask: {mass: 0.6, shape: 'box', mat: 'soft'}, gas_filter: {mass: 0.25, shape: 'cylinder', mat: 'metal'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

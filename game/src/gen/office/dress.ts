@@ -481,7 +481,7 @@ function fillSteps(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeAreaMeta, ho
     case 'open': case 'bay': return [...own, ...(shallow ? [windowDesks] : []), () => deskPair(ctx, a), wall('officePhotocopier', 0.9), wall('officeWhiteboard', 0.6),
       () => deskPair(ctx, a), isle('table', 0.9)];
     // The collapsed office: more of its fallen furniture (crates hold finite loot), heaped, never in the door zones.
-    case 'collapsed': return [...(shallow ? [windowDesks] : []), ...(['crate', 'cartonStack', 'officeFiling', 'desk', 'crate'] as PropKind[]).map(kind => () => !!scatter(ctx, a, kind, 0.6))];
+    case 'collapsed': return [...(shallow ? [windowDesks] : []), ...(['crate', 'cartonStack', 'officeFiling', 'desk', 'crate', 'cartonStack', 'desk', 'officeFiling'] as PropKind[]).map(kind => () => !!scatter(ctx, a, kind, 0.5))];
     default: return [...own, wall('cabinetLow', 0.7), wall('shelf', 0.8), isle('table', 0.9)];
   }
 }

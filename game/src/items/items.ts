@@ -6,7 +6,9 @@
 // Task office-overhaul-20261030 (lane INTERACT, user feedback #6): flares stack to 10; the dedicated grenade slot (HUD key G,
 // items/inventory.ts throwSlot) takes throwables only and G strikes / throws from it (T retired; G no longer drops).
 // Iteration 16: 'gear' = character gear worn in a gear slot (items/gear.ts; lane GEAR).
-export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear';
+// Task gasmask-breach-20261030 (mask lane): 'supply' = a PASSIVE supply that worn gear draws by itself (the gas-mask filter):
+// never used, equipped, held as a weapon or thrown; it stacks in the pockets first (like ammo).
+export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
@@ -14,6 +16,7 @@ export type IconKey =
   | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles'
   | 'battery' | 'flare'
   | 'knife' // lane KNIFE: the first melee weapon
+  | 'filter' // mask lane: gas-mask filter canister
   | GearIconKey | MedicalIconKey; // Iteration 16 (lanes GEAR / INJURY)
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
@@ -95,6 +98,9 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
   flare: {id: 'flare', name: 'Road flare', short: 'Flare', kind: 'throwable', stackMax: 10, icon: 'flare', // INTERACT (#6): was 3
     description: 'Red highway flare. Goes in the grenade slot: hold G to strike and ready one, release to throw (or hold click while it is in your hand): about 50 s of red light and smoke. Light draws the infected.'},
+  // --- Task gasmask-breach-20261030 (mask lane): a passive supply (authored model: world/authoredItems.ts) ---
+  gas_filter: {id: 'gas_filter', name: 'Gas mask filter canister', short: 'Filter', kind: 'supply', stackMax: 6, icon: 'filter',
+    description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 2.5 minutes on the face.'},
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
   ...GEAR_ITEMS,
   ...MEDICAL_ITEMS,
@@ -178,6 +184,8 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // Iteration 12 (LIGHT): authored models (world/authoredItems.ts): a D cell standing upright, a capped road flare lying along X.
   battery: {w: 0.0346, d: 0.0346, h: 0.0615, shape: 'cylinder'},
   flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
+  // mask lane: the authored filter canister (world/authoredItems.ts FILTER_DIMS) standing on its base, thread up
+  gas_filter: {w: 0.096, d: 0.096, h: 0.072, shape: 'cylinder'},
   // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,
