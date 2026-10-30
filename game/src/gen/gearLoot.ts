@@ -22,7 +22,8 @@ import type {Area, PickupPlacement, StationLayout} from './stationTypes';
 import {GEAR_ITEMS} from '../items/gear';
 import type {LevelId} from '../levels/types';
 
-export interface GearAssignment { itemId: string }
+/** Task gasmask-breach-20261030 (mask lane): `filter` = a found gas mask's seeded filter charge (s), copied onto its placement. */
+export interface GearAssignment { itemId: string; filter?: number }
 
 /** Mean of the per-level gear count before the cap (Poisson). */
 export const GEAR_MEAN_PER_LEVEL = 1;
@@ -212,10 +213,10 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
     }
     return rng.pick(cells);
   };
-  const put = (lv: number, a: Area | null, i: number, itemId: string): void => {
+  const put = (lv: number, a: Area | null, i: number, it: GearAssignment): void => {
     const g = gridOf(lv);
     const [x, z] = g.center(i % W, (i / W) | 0);
-    const p: PickupPlacement = {itemId, count: 1, x, y: g.floorOf(i), z, area: a?.id ?? g.area[i], ...(lv ? {level: lv} : {})};
+    const p: PickupPlacement = {itemId: it.itemId, count: 1, x, y: g.floorOf(i), z, area: a?.id ?? g.area[i], ...(lv ? {level: lv} : {}), ...(it.filter !== undefined ? {filter: it.filter} : {})};
     layout.pickups.push(p);
     placed.push(p);
   };
@@ -228,7 +229,7 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
       const a = rng.weighted(fresh.length ? fresh : pool);
       const cells = cellsOf(a, true);
       if (!cells.length) continue;
-      put(a.level ?? 0, a, pickCell(a, cells), it.itemId);
+      put(a.level ?? 0, a, pickCell(a, cells), it);
       used.add(a.id);
       done = true;
     }
@@ -236,7 +237,7 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
     // fallback 1: any non-excluded area, relaxed spacing; fallback 2: any reachable floor cell of the layout
     for (const [a] of pool) {
       const cells = cellsOf(a, false);
-      if (cells.length) { put(a.level ?? 0, a, rng.pick(cells), it.itemId); done = true; break; }
+      if (cells.length) { put(a.level ?? 0, a, rng.pick(cells), it); done = true; break; }
     }
     if (done) continue;
     for (const L of levels) {
@@ -245,7 +246,7 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
         const a = layout.areas[g.area[i]];
         if (cellOk(null, L.id, i, false) && (!a || gearAreaWeight(a) > 0)) cells.push(i);
       }
-      if (cells.length) { const i = rng.pick(cells); put(L.id, layout.areas[g.area[i]] ?? null, i, it.itemId); break; }
+      if (cells.length) { const i = rng.pick(cells); put(L.id, layout.areas[g.area[i]] ?? null, i, it); break; }
     }
   }
   return placed;

@@ -300,8 +300,10 @@ describe('HUD slot 6 and the inventory label (ui/hud.ts, ui/gearStyles.ts)', () 
     const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    expect(bar.children).toHaveLength(7);
-    const six = bar.children[5];
+    // task gasmask-breach-20261030 (mask lane): [Q, 1..5, 6, G] — the gas-mask cell comes first, slot 6 is the 7th child
+    expect(bar.children).toHaveLength(8);
+    expect(bar.children[0].dataset).toMatchObject({bar: 'gear', index: String(GEAR_SLOTS.indexOf('mask'))});
+    const six = bar.children[6];
     expect(six.dataset).toMatchObject({bar: 'gear', index: String(GEAR_SLOTS.indexOf('backpack'))});
     expect(six.innerHTML).toMatch(/<span class="key">6<\/span>/);
     expect(six.innerHTML).toMatch(/no bag/);
@@ -310,15 +312,15 @@ describe('HUD slot 6 and the inventory label (ui/hud.ts, ui/gearStyles.ts)', () 
     hud.update(state, inv);
     expect(six.classList.contains('vacant')).toBe(false);
     expect(six.innerHTML).toMatch(/Backpack/);
-    expect(bar.children[0].classList.contains('selected')).toBe(true);
+    expect(bar.children[1].classList.contains('selected')).toBe(true); // quick slot 1
     hud.setBagSelected(true);
     hud.update(state, inv);
     expect(six.classList.contains('selected')).toBe(true);
-    expect(bar.children[0].classList.contains('selected')).toBe(false);
+    expect(bar.children[1].classList.contains('selected')).toBe(false);
     hud.setBagSelected(false);
     hud.update(state, inv);
     expect(six.classList.contains('selected')).toBe(false);
-    expect(bar.children[0].classList.contains('selected')).toBe(true);
+    expect(bar.children[1].classList.contains('selected')).toBe(true);
     // the hold ring
     hud.setHoldRing(0.4);
     expect(hud.holdRing).toBe(40);
