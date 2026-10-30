@@ -29,10 +29,10 @@ export const ZOMBIE_BODIES: readonly ZombieBodyDef[] = [
   {id: 'lastshift', label: 'Last-shift worker', model: 'zombieBody_lastshift', weight: 1, origin: 'generated', tags: ['hair']},
   {id: 'courier', label: 'Bike courier', model: 'zombieBody_courier', weight: 1, origin: 'generated', tags: ['hair']},
   {id: 'agent', label: 'Station agent', model: 'zombieBody_agent', weight: 1, origin: 'generated', tags: ['hair', 'curly-hair']},
-  // REUSED original user upload (zombie-pixal3d), re-posed T -> A; its hood and built-in gas mask
-  // already fill the head/face slots. Iteration 06 repaired the derivative (arm/torso webbing)
-  // instead of hiding it by rarity.
-  {id: 'scavenger', label: 'Masked scavenger (reused original upload)', model: 'zombieBody_scavenger', weight: 1, origin: 'reused', covers: ['head', 'face'], tags: ['hood', 'gasmask']},
+  // Meshy T2.5 migration (2026-10-29): rebuilt from a T2.5 model of a RECREATED reference image of the old user upload
+  // (zombie-pixal3d; user update 01, labelled not-original). Its built-in gas mask and straps still fill the head/face
+  // slots (registry unchanged); it now wears fitted pants / jackets (the old fused upload could not).
+  {id: 'scavenger', label: 'Masked scavenger', model: 'zombieBody_scavenger', weight: 1, origin: 'generated', covers: ['head', 'face'], tags: ['gasmask']},
   // Iteration 06 base-layer bodies (generated wearing an opaque tank top/t-shirt + shorts/briefs + socks):
   // they always get pants at runtime.
   {id: 'heavyset', label: 'Heavyset man (base layer)', model: 'zombieBody_heavyset', weight: 1, origin: 'generated', requires: ['lower'], tags: ['shaved-head', 'base-layer']},

@@ -165,14 +165,28 @@ const PANTRY: Rows = [['noodles', 1], ['beans', 1], ['water', 0.8], ['chocolate'
 // ---------------------------------------------------------------------------------------
 // Per-kind specs
 
-/** Filing cabinet drawers (bottom -> top), seams measured on the front grooves of p7-filing-cabinet.glb. */
-const FILING_Y: readonly (readonly [number, number])[] = [[0.075, 0.377], [0.377, 0.681], [0.681, 0.983], [0.983, 1.29]];
+/**
+ * Filing cabinet drawers (bottom -> top), split at the centres of the front seam grooves of the Meshy T2.5 derivative
+ * p7-filing-cabinet-t25.glb (ray-cast front profile, 2026-10-29: grooves at y 0.066-0.074 / 0.355-0.370 / 0.670-0.685 /
+ * 0.980-0.995, top slit 1.285; drawer fronts x -0.209..0.209 at z 0.292, handles to z 0.320).
+ */
+const FILING_Y: readonly (readonly [number, number])[] = [[0.072, 0.362], [0.362, 0.678], [0.678, 0.988], [0.988, 1.286]];
+/** Filing cabinet drawer front: x span, cut plane (2.2 cm behind the front face, like the iteration-08 fit) and front face z. */
+const FILING_X = [-0.209, 0.209] as const, FILING_Z_CUT = 0.27, FILING_Z_FRONT = 0.292;
 const FILING_NAMES = ['bottom drawer', 'third drawer', 'second drawer', 'top drawer'];
-/** Crash cart drawers (bottom -> top): handle bars at 0.341 / 0.457 / 0.569 / 0.678 / 0.771 m sit under each drawer's top edge. */
-const CART_Y: readonly (readonly [number, number])[] = [[0.172, 0.392], [0.392, 0.502], [0.502, 0.613], [0.613, 0.723], [0.723, 0.832]];
-/** Tool chest: bottom cabinet drawers (handles 0.358 / 0.466 / 0.551 / 0.635 / 0.732 m) and top chest drawers (0.835 / 0.905-0.941 / 1.009). */
-const CHEST_LOW_Y: readonly (readonly [number, number])[] = [[0.15, 0.392], [0.392, 0.497], [0.497, 0.582], [0.582, 0.667], [0.667, 0.775]];
-const CHEST_TOP_Y: readonly (readonly [number, number])[] = [[0.808, 0.872], [0.872, 0.968], [0.968, 1.035]];
+/**
+ * Crash cart drawers (bottom -> top), split at the seam slits of p7-crash-cart-t25.glb (Meshy T2.5, ray-cast 2026-10-29: 0.167 /
+ * 0.370 / 0.490 / 0.600 / 0.707 / 0.822; handle bars at 0.33 / 0.455 / 0.57 / 0.675 / 0.77 m under each drawer's top edge;
+ * drawer fronts x -0.275..0.245 at z 0.238).
+ */
+const CART_Y: readonly (readonly [number, number])[] = [[0.167, 0.37], [0.37, 0.49], [0.49, 0.6], [0.6, 0.707], [0.707, 0.822]];
+/**
+ * Tool chest (p7-rolling-tool-chest-t25.glb, Meshy T2.5, ray-cast 2026-10-29): bottom cabinet drawers (handle bars 0.352 / 0.456 /
+ * 0.552 / 0.636 / 0.728 m under seams 0.376 / 0.48 / 0.572 / 0.656 / 0.744; fronts z 0.21, x -0.27..0.33) and four top-chest
+ * drawers (handles 0.83 / 0.896 / 0.956 / 1.012 under seams 0.84 / 0.908 / 0.968 / 1.032; fronts z 0.206, x -0.27..0.32).
+ */
+const CHEST_LOW_Y: readonly (readonly [number, number])[] = [[0.144, 0.376], [0.376, 0.48], [0.48, 0.572], [0.572, 0.656], [0.656, 0.744]];
+const CHEST_TOP_Y: readonly (readonly [number, number])[] = [[0.792, 0.84], [0.84, 0.908], [0.908, 0.968], [0.968, 1.032]];
 const ord = (i: number, n: number) => (i === 0 ? 'bottom drawer' : i === n - 1 ? 'top drawer' : 'drawer');
 
 /** Drawer part: derived front [x0, x1] x [y0, y1] in front of zCut, tray + cavity behind it, items on the tray floor. */
@@ -236,7 +250,12 @@ function locker(name: string, cx: number): PartSpec {
 
 export const OPENABLE_SPECS = {
   // --- trash ------------------------------------------------------------------------------------------------------------
-  /** Slatted municipal trash can (trash-can.glb): the dome top lifts on its back rim (split at the band top, y 0.746). */
+  /**
+   * Slatted municipal trash can (trash-can-t25.glb): the dome top lifts on its back rim (split at the band top, y 0.746).
+   * Re-measured on the Meshy T2.5 derivative (radial profile 2026-10-29): band r 0.275 at y 0.655-0.742, hood r 0.257 from
+   * y 0.744 (thin shell, inner r ~0.249), inner drum r ~0.215 with its lip at y 0.62-0.63, inner floor y 0.105-0.17 — the
+   * iteration-08 split, pivot, liner, rim and disc below still fit inside it unchanged.
+   */
   bin: {
     label: 'trash can', model: 'trashCan', body: 'model', group: 'container', spill: true,
     parts: [{
@@ -253,34 +272,41 @@ export const OPENABLE_SPECS = {
     loot: {lots: [1, 2], empty: 0.6, items: JUNK},
     sound: {open: 'cabinetTall', close: 'cabinetTall'},
   },
-  /** Plastic wheelie bin (p7-wheelie-bin.glb): the lid (above the body rim y 0.93, plus its front grip) flips back on the handle bar. */
+  /**
+   * Plastic wheelie bin (p7-wheelie-bin-t25.glb): the lid flips back on its rear edge. Meshy T2.5 (ray-cast 2026-10-29): a closed
+   * shell; the lid (top 1.03..1.10) overhangs the body with a lip from y 0.974 all round (to z +-0.425, front / back lips down to
+   * ~0.94); body walls at the top x +-0.25 / z +-0.255, tapering to x +-0.19..0.235 at knee height; wheels at mid-depth, no handle
+   * bar — the hinge sits on the lid's rear edge.
+   */
   wheelieBin: {
     label: 'wheelie bin', model: 'p7_wheelieBin', body: 'model', group: 'container', spill: true,
     parts: [{
       name: 'wheelie bin',
-      move: {type: 'hinge', axis: 'x', pivot: [0, 1.045, -0.38], angle: -110 * P, min: 55 * P},
-      region: [box(-0.36, 0.93, -0.355, 0.36, 1.2, 0.5), box(-0.36, 0.84, 0.335, 0.36, 0.93, 0.5)],
-      plate: box(-0.25, 0.934, -0.3, 0.25, 0.937, 0.3),
-      // the body tapers (x ±0.23 / z -0.29..0.29 at knee height) and has a recessed kick plate and wheel arches below 0.3 m:
-      // liner and fill stay inside its walls, from 0.3 m up (the fill hides the rest of the can)
-      cavity: box(-0.222, 0.3, -0.27, 0.222, 0.928, 0.28),
-      rim: [0.278, -0.305, 0.318, 0.222, -0.27, 0.28, 0.929],
-      inner: trashFill(-0.212, -0.26, 0.212, 0.27, 0.56, false, 0.3),
-      surfaces: [{y: 0.592, x0: -0.18, x1: 0.18, z0: -0.21, z1: 0.21, clear: 0.3}],
+      move: {type: 'hinge', axis: 'x', pivot: [0, 0.99, -0.42], angle: -110 * P, min: 55 * P},
+      region: [box(-0.31, 0.97, -0.43, 0.31, 1.2, 0.43), box(-0.31, 0.92, 0.262, 0.31, 0.97, 0.43), box(-0.31, 0.92, -0.43, 0.31, 0.97, -0.262)],
+      plate: box(-0.24, 0.971, -0.33, 0.24, 0.974, 0.33),
+      // the body tapers toward the bottom and the wheels sit below 0.3 m: liner and fill stay inside its walls, from 0.3 m up
+      cavity: box(-0.185, 0.3, -0.225, 0.185, 0.968, 0.225),
+      rim: [0.255, -0.262, 0.262, 0.185, -0.225, 0.225, 0.969],
+      inner: trashFill(-0.175, -0.215, 0.175, 0.215, 0.56, false, 0.3),
+      surfaces: [{y: 0.592, x0: -0.15, x1: 0.15, z0: -0.18, z1: 0.18, clear: 0.3}],
     }],
     loot: {lots: [1, 3], empty: 0.5, items: JUNK},
     sound: {open: 'crate', close: 'crate'},
   },
   // --- street / station furniture ---------------------------------------------------------------------------------------------
-  /** Coin-op newspaper box (p7-newspaper-vending-box.glb): the windowed front door swings up on its top edge. */
+  /**
+   * Coin-op newspaper box (p7-newspaper-vending-box-t25.glb): the windowed front door swings up on its top edge. Meshy T2.5
+   * (ray-cast 2026-10-29): flat front z 0.179, door seams x +-0.16 and y 0.27 / 0.71, pull handle to z 0.225 at y 0.29..0.39.
+   */
   newspaperVendingBox: {
     label: 'newspaper box', model: 'p7_newspaperVendingBox', body: 'model', group: 'container',
     parts: [{
       name: 'newspaper box',
-      move: {type: 'hinge', axis: 'x', pivot: [0, 0.72, 0.185], angle: -80 * P, min: 45 * P},
-      region: [box(-0.168, 0.28, 0.12, 0.172, 0.72, 0.3)],
-      plate: box(-0.164, 0.284, 0.118, 0.168, 0.716, 0.121),
-      cavity: box(-0.2, 0.125, -0.19, 0.2, 0.8, 0.119),
+      move: {type: 'hinge', axis: 'x', pivot: [0, 0.71, 0.18], angle: -80 * P, min: 45 * P},
+      region: [box(-0.16, 0.27, 0.155, 0.16, 0.71, 0.3)],
+      plate: box(-0.156, 0.274, 0.151, 0.156, 0.706, 0.154),
+      cavity: box(-0.2, 0.125, -0.19, 0.2, 0.8, 0.15),
       inner: [B('paper', -0.17, 0.125, -0.17, 0.17, 0.205, 0.085), B('paper', -0.16, 0.205, -0.17, 0.15, 0.245, -0.06)],
       surfaces: [{y: 0.207, x0: -0.15, x1: 0.15, z0: -0.055, z1: 0.08, clear: 0.26}],
     }],
@@ -301,10 +327,10 @@ export const OPENABLE_SPECS = {
     loot: {lots: [1, 4], empty: 0.2, items: PERSONAL},
     sound: {open: 'staffLockers', close: 'staffLockers'},
   },
-  /** Four-drawer filing cabinet (p7-filing-cabinet.glb): drawer fronts slide out along +Z with their trays. */
+  /** Four-drawer filing cabinet (p7-filing-cabinet-t25.glb): drawer fronts slide out along +Z with their trays. */
   filingCabinet: {
     label: 'filing cabinet', model: 'p7_filingCabinet', body: 'model', group: 'container',
-    parts: FILING_Y.map(([y0, y1], i) => drawer(FILING_NAMES[i], -0.192, 0.188, y0, y1, 0.255, 0.276, 0.5, 0.42)),
+    parts: FILING_Y.map(([y0, y1], i) => drawer(FILING_NAMES[i], FILING_X[0], FILING_X[1], y0, y1, FILING_Z_CUT, FILING_Z_FRONT, 0.5, 0.42)),
     loot: {lots: [1, 3], empty: 0.35, items: OFFICE},
     sound: {open: 'desk', close: 'desk'},
   },
@@ -329,13 +355,17 @@ export const OPENABLE_SPECS = {
     sound: {open: 'gunLocker', close: 'gunLocker'},
   },
   // --- retail -------------------------------------------------------------------------------------------------------------------
-  /** Sliding-glass chest freezer (p7-chest-freezer.glb): two curved panes; opening one slides it over the other. */
+  /**
+   * Sliding-glass chest freezer (p7-chest-freezer-t25.glb): two curved panes; opening one slides it over the other. Meshy T2.5
+   * (ray-cast 2026-10-29): one curved top y 0.61 (z +-0.31) .. 0.835 (z 0) between end caps at |x| >= 0.69, a hollow box
+   * below (floor 0.046), so each pane is its half of the top up to the end caps.
+   */
   chestFreezer: {
     label: 'chest freezer', model: 'p7_chestFreezer', body: 'model', group: 'container',
     parts: ([[-1, 'left pane'], [1, 'right pane']] as const).map(([s, name]): PartSpec => ({
       name, group: 'panes', doubleSide: true,
       move: {type: 'slide', dir: [-s, 0.036, 0.017], dist: 0.69, min: 0.4},
-      region: [s < 0 ? box(-0.705, 0.6, -0.35, 0.0, 0.9, 0.36) : box(0.0, 0.6, -0.35, 0.705, 0.9, 0.36)],
+      region: [s < 0 ? box(-0.69, 0.6, -0.35, 0.0, 0.9, 0.36) : box(0.0, 0.6, -0.35, 0.69, 0.9, 0.36)],
       cavity: s < 0 ? box(-0.69, 0.14, -0.27, 0.0, 0.84, 0.3) : box(0.0, 0.14, -0.27, 0.69, 0.84, 0.3), cavityRole: 'frost', replaceInterior: true,
       inner: s < 0
         ? [B('frost', -0.68, 0.14, -0.26, -0.01, 0.3, 0.29), B('stock', -0.62, 0.3, -0.22, -0.4, 0.36, 0.0), B('stock', -0.3, 0.3, 0.02, -0.12, 0.34, 0.22)]
@@ -358,18 +388,21 @@ export const OPENABLE_SPECS = {
     sound: {open: 'shopCooler', close: 'shopCooler'},
   },
   // --- wall cabinets --------------------------------------------------------------------------------------------------------------
-  /** Wall first-aid box (p7-first-aid-wall-kit.glb): flat front door (handle left) on its right hinge; two shelves inside. */
+  /**
+   * Wall first-aid box (p7-first-aid-wall-kit-t25.glb): flat front door (handle left) on its right hinge; two shelves inside.
+   * Meshy T2.5 re-measure (ray-cast 2026-10-29): door front z 0.104 between the side seams x +-0.17 and the grooves y 0.028 / 0.419.
+   */
   firstAidWallKit: {
     label: 'first-aid kit', model: 'p7_firstAidWallKit', body: 'model', group: 'container',
     parts: [{
       name: 'first-aid kit',
-      move: {type: 'hinge', axis: 'y', pivot: [0.172, 0, 0.096], angle: 105 * P, min: 60 * P},
-      region: [box(-0.172, 0.016, 0.075, 0.172, 0.421, 0.2)],
-      plate: box(-0.168, 0.02, 0.071, 0.168, 0.417, 0.075),
-      cavity: box(-0.17, 0.018, -0.12, 0.17, 0.419, 0.074), cavityRole: 'white',
-      inner: [B('white', -0.168, 0.145, -0.118, 0.168, 0.152, 0.07), B('white', -0.168, 0.275, -0.118, 0.168, 0.282, 0.07)],
+      move: {type: 'hinge', axis: 'y', pivot: [0.17, 0, 0.105], angle: 105 * P, min: 60 * P},
+      region: [box(-0.17, 0.028, 0.08, 0.17, 0.419, 0.2)],
+      plate: box(-0.166, 0.032, 0.083, 0.166, 0.415, 0.087),
+      cavity: box(-0.168, 0.03, -0.115, 0.168, 0.417, 0.079), cavityRole: 'white',
+      inner: [B('white', -0.166, 0.145, -0.113, 0.166, 0.152, 0.075), B('white', -0.166, 0.275, -0.113, 0.166, 0.282, 0.075)],
       surfaces: [
-        {y: 0.022, x0: -0.15, x1: 0.15, z0: -0.1, z1: 0.06, clear: 0.115},
+        {y: 0.032, x0: -0.15, x1: 0.15, z0: -0.1, z1: 0.06, clear: 0.105},
         {y: 0.154, x0: -0.15, x1: 0.15, z0: -0.1, z1: 0.06, clear: 0.115},
         {y: 0.284, x0: -0.15, x1: 0.15, z0: -0.1, z1: 0.06, clear: 0.125},
       ],
@@ -377,24 +410,32 @@ export const OPENABLE_SPECS = {
     loot: {lots: [1, 3], empty: 0.3, items: MED},
     sound: {open: 'medCabinet', close: 'medCabinet'},
   },
-  /** Fire-extinguisher cabinet (p7-fire-extinguisher-cabinet.glb): the framed door (latch left) swings on its right hinges. */
+  /**
+   * Fire-extinguisher cabinet (p7-fire-extinguisher-cabinet-t25.glb, an open-front hybrid: T2.5 exterior with its painted pane cut,
+   * a real glass pane, an inward liner and the T2.5 extinguisher inside): the white glazed door frame (handle left) swings on its
+   * right hinges. Door frame measured on the T2.5 derivative (colour + ray-cast 2026-10-29): x -0.18..0.168, y 0.048..0.705,
+   * front z 0.155..0.163 (glass pane z 0.15; the liner ends at z 0.135).
+   */
   fireExtinguisherCabinet: {
     label: 'fire extinguisher cabinet', model: 'p7_fireExtinguisherCabinet', body: 'model', group: 'container',
     parts: [{
       name: 'fire extinguisher cabinet',
-      move: {type: 'hinge', axis: 'y', pivot: [0.226, 0, 0.15], angle: 105 * P, min: 60 * P},
-      region: [box(-0.232, 0.0, 0.12, 0.232, 0.75, 0.2)],
+      move: {type: 'hinge', axis: 'y', pivot: [0.168, 0, 0.165], angle: 105 * P, min: 60 * P},
+      region: [box(-0.18, 0.048, 0.14, 0.168, 0.705, 0.25)],
       surfaces: [],
     }],
     loot: null, contents: 'only the extinguisher, clipped in its bracket',
     sound: {open: 'cabinetTall', close: 'cabinetTall'},
   },
-  /** Defibrillator cabinet (p7-aed-wall-cabinet.glb): glazed door (handle right) on its left hinge. */
+  /**
+   * Defibrillator cabinet (p7-aed-wall-cabinet-t25.glb): door frame (handle right) on its left hinge. Meshy T2.5 (ray-cast
+   * 2026-10-29): frame front z 0.124, an open window x -0.145..0.135 / y 0.065..0.415 onto the unit (no glass pane modelled).
+   */
   aedWallCabinet: {
     label: 'defibrillator cabinet', model: 'p7_aedWallCabinet', body: 'model', group: 'container',
     parts: [{
       name: 'defibrillator cabinet',
-      move: {type: 'hinge', axis: 'y', pivot: [-0.211, 0, 0.112], angle: -105 * P, min: 60 * P},
+      move: {type: 'hinge', axis: 'y', pivot: [-0.211, 0, 0.12], angle: -105 * P, min: 60 * P},
       region: [box(-0.212, 0.0, 0.095, 0.212, 0.48, 0.2)],
       surfaces: [],
     }],
@@ -405,7 +446,7 @@ export const OPENABLE_SPECS = {
   /** Medical crash cart (p7-crash-cart.glb): five drawers under the monitor shelf. */
   crashCart: {
     label: 'crash cart', model: 'p7_crashCart', body: 'model', group: 'surface', shared: true, exposed: 'none',
-    parts: CART_Y.map(([y0, y1], i) => drawer(ord(i, CART_Y.length), -0.3, 0.27, y0, y1, 0.186, 0.206, 0.36, 0.3)),
+    parts: CART_Y.map(([y0, y1], i) => drawer(ord(i, CART_Y.length), -0.275, 0.245, y0, y1, 0.218, 0.238, 0.36, 0.3)),
     loot: null,
     sound: {open: 'desk', close: 'desk'},
   },
@@ -413,8 +454,8 @@ export const OPENABLE_SPECS = {
   rollingToolChest: {
     label: 'tool chest', model: 'p7_rollingToolChest', body: 'model', group: 'surface', shared: true, exposed: {minY: 1.0},
     parts: [
-      ...CHEST_LOW_Y.map(([y0, y1], i) => drawer(i === 0 ? 'bottom drawer' : 'drawer', -0.27, 0.322, y0, y1, 0.176, 0.194, 0.36, 0.3)),
-      ...CHEST_TOP_Y.map(([y0, y1], i) => drawer(i === CHEST_TOP_Y.length - 1 ? 'top drawer' : 'chest drawer', -0.252, 0.312, y0, y1, 0.152, 0.172, 0.33, 0.27)),
+      ...CHEST_LOW_Y.map(([y0, y1], i) => drawer(i === 0 ? 'bottom drawer' : 'drawer', -0.265, 0.325, y0, y1, 0.19, 0.21, 0.36, 0.3)),
+      ...CHEST_TOP_Y.map(([y0, y1], i) => drawer(i === CHEST_TOP_Y.length - 1 ? 'top drawer' : 'chest drawer', -0.265, 0.315, y0, y1, 0.186, 0.206, 0.33, 0.27)),
     ],
     loot: null,
     sound: {open: 'desk', close: 'desk'},
@@ -530,9 +571,9 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   // openable (iteration 08, this lane)
   ...OPENABLE_KINDS.map(k => ({kind: k, cls: 'openable' as const, how: describe(k)})),
   // existing holders with moving parts / always-open fronts
-  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall.glb (iteration 02/04), shelving insert'},
-  {kind: 'cabinetLow', cls: 'existing', how: 'two doors derived from cabinet-low.glb (iteration 02/04)'},
-  {kind: 'crate', cls: 'existing', how: 'lid derived from crate.glb, hinged at the back; splinters when shot (iteration 06)'},
+  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25.glb (Meshy T2.5; door split re-measured), shelving insert'},
+  {kind: 'cabinetLow', cls: 'existing', how: 'two doors derived from cabinet-low-t25.glb (Meshy T2.5; door split re-measured)'},
+  {kind: 'crate', cls: 'existing', how: 'lid derived from crate-t25.glb, hinged at the back; splinters when shot (iteration 06)'},
   {kind: 'vending', cls: 'existing', how: 'front pried open ([E] hold), stock spills out (iteration 03); shot front gives way (06)'},
   {kind: 'fridge', cls: 'existing', how: 'authored staff fridge modelled with its door hanging open (footprint includes the swing): open shelves'},
   {kind: 'gunLocker', cls: 'existing', how: 'authored locker modelled forced open (both doors bent back, in the footprint): open racks'},

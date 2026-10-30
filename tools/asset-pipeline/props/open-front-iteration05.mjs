@@ -189,13 +189,25 @@ export const OPEN_FRONT = {shopCoolerOpen: COOLER, shopDisplayOpen: DISPLAY};
 export async function buildOpenFront(name, {REPO, guardedWrite, log, outDir}) {
   const S = OPEN_FRONT[name];
   const src = await loadBaked(REPO, S.key, S.src);
+  const status = 'prototype hybrid derivative: iteration04 reconstructed exterior (unapproved AI master, CPU-baked) + authored interior/shelves/glass; reviewStatus unapproved; gameReady false; no license clearance';
+  const {bytes, body, g, gidx, bbOut, surfaces} = await assembleOpenFront(S, src, bb => ({sourceId: `iteration05-${S.key}-open`, derivedFrom: S.src, derivedFromSha256: src.sha, nativeJobId: src.prov.source.nativeJobId, units: 'meters', front: '+Z', origin: 'bottom-centre',
+    provisionalDimensionsMeters: bb.size, status, pipeline: 'tools/asset-pipeline/props/build-props-iteration05.mjs (open-front-iteration05.mjs)', glassNode: 'glass (alphaMode BLEND; decorative only, never blocks item picking)'}));
+  return openFrontRecord(name, S, src, {bytes, body, g, gidx, bbOut, surfaces, written: guardedWrite(path.join(outDir, S.out), bytes), log});
+}
+
+/**
+ * The hybrid itself (shared with build-meshy-t25.mjs, which passes a Meshy T2.5 exterior as `src`): cut the source mesh by S.cut,
+ * add the authored interior (S.build) and glass (S.glass); the bbox must stay the source's. `extras(bbOut)` -> root node extras
+ * (interiorSurfaces is appended). Returns the GLB bytes and the parts for the provenance record.
+ */
+export async function assembleOpenFront(S, src, extras, extraNodes = []) {
   const body = cutFaces(src, S.cut);
   const g = new Geo(); S.build(g, S.interior);
   const glass = S.glass(S.interior);
   const gpos = [], gnrm = [], gidx = [];
   for (const q of glass) { const b = gpos.length / 3; for (const c of q.c) { gpos.push(...c); gnrm.push(...q.n); } gidx.push(b, b + 1, b + 2, b, b + 2, b + 3); }
   const bbSrc = bboxOf(src.P), bbOut = bboxOf(body.pos, Float32Array.from(g.pos), Float32Array.from(gpos));
-  for (let k = 0; k < 3; k++) if (Math.abs(bbSrc.min[k] - bbOut.min[k]) > 0.002 || Math.abs(bbSrc.max[k] - bbOut.max[k]) > 0.002) throw new Error(`${name}: bbox changed ${JSON.stringify(bbSrc)} -> ${JSON.stringify(bbOut)} (the game fits the model bbox to PROP_DEFS; must stay identical)`);
+  for (let k = 0; k < 3; k++) if (Math.abs(bbSrc.min[k] - bbOut.min[k]) > 0.002 || Math.abs(bbSrc.max[k] - bbOut.max[k]) > 0.002) throw new Error(`${S.key}: bbox changed ${JSON.stringify(bbSrc)} -> ${JSON.stringify(bbOut)} (the game fits the model bbox to PROP_DEFS; must stay identical)`);
   const atlas = await authoredAtlas();
   // ---- write GLB: root node <key> with children body / interior / glass --------------------------------------------------------------
   const doc = new Document(), buf = doc.createBuffer();
@@ -212,14 +224,22 @@ export async function buildOpenFront(name, {REPO, guardedWrite, log, outDir}) {
   root.addChild(doc.createNode('body').setMesh(doc.createMesh('body').addPrimitive(prim(body.pos, body.nrm, body.uv, body.idx, mBody))));
   root.addChild(doc.createNode('interior').setMesh(doc.createMesh('interior').addPrimitive(prim(Float32Array.from(g.pos), Float32Array.from(g.nrm), Float32Array.from(g.uv), g.idx, mInt))));
   root.addChild(doc.createNode('glass').setMesh(doc.createMesh('glass').addPrimitive(prim(Float32Array.from(gpos), Float32Array.from(gnrm), null, gidx, mGlass))));
+  // optional extra textured meshes (build-meshy-t25.mjs: a fixture placed inside the case), each its own node + material
+  for (const x of extraNodes) {
+    const m = doc.createMaterial(`${S.key}-${x.name}`).setBaseColorFactor([1, 1, 1, 1]).setMetallicFactor(x.metallic).setRoughnessFactor(x.roughness)
+      .setBaseColorTexture(tex(`${x.name}-color`, x.tex.color)).setMetallicRoughnessTexture(tex(`${x.name}-orm`, x.tex.orm)).setDoubleSided(!!x.doubleSided);
+    if (x.tex.normal) m.setNormalTexture(tex(`${x.name}-normal`, x.tex.normal));
+    root.addChild(doc.createNode(x.name).setMesh(doc.createMesh(x.name).addPrimitive(prim(x.P, x.N, x.UV, x.I, m))));
+  }
   const surfaces = S.surfaces(S.interior).map(s => ({...s, y: r3(s.y), x0: r3(s.x0), x1: r3(s.x1), z0: r3(s.z0), z1: r3(s.z1), clearTo: r3(s.clearTo), clearM: r3(s.clearTo - s.y)}));
-  const status = 'prototype hybrid derivative: iteration04 reconstructed exterior (unapproved AI master, CPU-baked) + authored interior/shelves/glass; reviewStatus unapproved; gameReady false; no license clearance';
-  root.setExtras({sourceId: `iteration05-${S.key}-open`, derivedFrom: S.src, derivedFromSha256: src.sha, nativeJobId: src.prov.source.nativeJobId, units: 'meters', front: '+Z', origin: 'bottom-centre',
-    provisionalDimensionsMeters: bbOut.size, status, pipeline: 'tools/asset-pipeline/props/build-props-iteration05.mjs (open-front-iteration05.mjs)', glassNode: 'glass (alphaMode BLEND; decorative only, never blocks item picking)',
-    interiorSurfaces: surfaces});
+  root.setExtras({...extras(bbOut), interiorSurfaces: surfaces});
   doc.getRoot().setDefaultScene(doc.createScene('Scene').addChild(root));
   const bytes = Buffer.from(await new NodeIO().writeBinary(doc));
-  const written = guardedWrite(path.join(outDir, S.out), bytes);
+  return {bytes, body, g, gidx, bbOut, surfaces};
+}
+
+function openFrontRecord(name, S, src, {bytes, body, g, gidx, bbOut, surfaces, written, log}) {
+  void bytes;
   const tris = body.kept + g.tris + gidx.length / 3;
   log(`  ${name}: cut ${body.removed} faces (${body.removedAreaM2} m2) of ${src.I.length / 3}; kept ${body.kept}; authored ${g.tris} tris (${g.parts.length} parts); glass ${gidx.length / 3}; total ${tris}; ${written.bytes} bytes; bbox ${JSON.stringify(bbOut.size)}`);
   return {

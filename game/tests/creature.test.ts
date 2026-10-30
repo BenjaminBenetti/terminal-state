@@ -1,10 +1,11 @@
 // Iteration 07 (Lane Q): the field-notes rat/dog creature — derivative rig/skin/clip validity,
+// (Meshy T2.5 migration 2026-10-29: the derivative is now rebuilt from the Meshy T2.5 replacement of the same concept),
 // archetype registry, ~5 % seed-weighted spawn share, brain (no ladders, lunge), quadruped hit
 // volumes, wounds on the generic actor surface and the quadruped ragdoll building and settling.
 
 import {describe, expect, it, beforeAll} from 'vitest';
 import * as THREE from 'three';
-import {readFileSync, existsSync, statSync, writeFileSync} from 'node:fs';
+import {readFileSync, existsSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -27,7 +28,9 @@ import {CUES} from '../src/audio/bank';
 import {CLIP_MANIFEST_I07Q} from '../src/audio/manifest.iteration07q.generated';
 
 const pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
-const MASTER_SHA = '03503553ac5b7328e589785cea54e5261280148c5e2cd7a75340e728073d07ec';
+/** Meshy T2.5 native GLB (accepted delivery creature:ratdog a1) and the original concept image it was conditioned on. */
+const T25_NATIVE_SHA = '62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b';
+const CONCEPT_SHA = 'd47f4eedbd17f41062f69ef61bc2754a8f5a59741d64cc03cb54546d8706d349';
 const prov = JSON.parse(readFileSync(pub('assets/derivatives/creature-ratdog.json'), 'utf8'));
 
 async function loadStripped(url: string): Promise<GLTF> {
@@ -44,11 +47,18 @@ const rng = (seed = 1) => { let s = seed; return () => ((s = (s * 16807) % 21474
 let gltf: GLTF;
 beforeAll(async () => { gltf = await loadStripped(MODEL_FILES.creature_ratdog.url); });
 
-describe('rat/dog derivative (creature-ratdog.glb)', () => {
-  it('is a new derivative of the read-only quadruped-02 master with provenance', () => {
-    expect(prov.source.id).toBe('quadruped-02');
-    expect(prov.source.sha256).toBe(MASTER_SHA);
+describe('rat/dog derivative (creature-ratdog-t25.glb)', () => {
+  it('is a new rigged derivative of the accepted Meshy T2.5 replacement (same quadruped-02 concept image) with provenance', () => {
+    // Meshy T2.5 migration (2026-10-29): the source is the unrigged Meshy image-to-3D output conditioned on the ORIGINAL
+    // concept image (the one the old Pixal3D master came from); the old runtime file is restorable from the base commit
     expect(prov.source.unrigged).toBe(true);
+    expect(prov.source.sha256).toBe(T25_NATIVE_SHA);
+    expect(prov.source.conceptSha256).toBe(CONCEPT_SHA);
+    expect(prov.t25.source).toMatchObject({asset: 'creature:ratdog', nativeSha256: T25_NATIVE_SHA, inputImageSha256: CONCEPT_SHA, review: 'accepted'});
+    expect(prov.t25.source.provider).toMatch(/meshy-t2\.5/);
+    expect(prov.t25.supersedes).toMatchObject({path: 'game/public/assets/models/creature-ratdog.glb', baseCommit: 'a7a646a1dd62bf1c641fe3dd0d1187ab322afe87'});
+    expect(prov.t25.supersedes.blob).toMatch(/^[0-9a-f]{40}$/);
+    expect(MODEL_FILES.creature_ratdog.url).toBe('assets/models/creature-ratdog-t25.glb');
     expect(prov.approval).toMatchObject({approved: false, gameReady: false});
     const bytes = readFileSync(pub(MODEL_FILES.creature_ratdog.url));
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(prov.output.sha256);
@@ -56,9 +66,12 @@ describe('rat/dog derivative (creature-ratdog.glb)', () => {
     expect(Math.abs(MODEL_FILES.creature_ratdog.bytes - bytes.length) / bytes.length).toBeLessThan(0.1);
     expect(prov.output.triangles).toBeGreaterThanOrEqual(8000);
     expect(prov.output.triangles).toBeLessThanOrEqual(15000);
-    // the master is never written by the pipeline (present in the packaged board snapshot)
-    const master = fileURLToPath(new URL('../../public/vision-board/models/84cdf0afae9346489ac2f188c37f12de.glb', import.meta.url));
-    if (existsSync(master)) expect(statSync(master).size).toBe(96884108);
+    // low-poly source: claws are separate pieces -> they must follow their paws (island assignment), legs flooded
+    expect(prov.skin.islands.pieces).toBeGreaterThan(0);
+    for (const leg of ['L_Front', 'R_Front', 'L_Hind', 'R_Hind']) expect(prov.skin.regionCounts[leg], leg).toBeGreaterThan(300);
+    // the raw native source is never written by the pipeline (lane MESHY delivery, outside the game)
+    const native = fileURLToPath(new URL('../../' + prov.t25.source.nativeGlb, import.meta.url));
+    if (existsSync(native)) expect(createHash('sha256').update(readFileSync(native)).digest('hex')).toBe(T25_NATIVE_SHA);
   });
 
   it('has a quadruped skeleton, normalised 4-influence skin and the six clips', async () => {

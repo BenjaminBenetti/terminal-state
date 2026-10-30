@@ -1,19 +1,102 @@
 {
  "asset": "creature-ratdog",
- "task": "studio-slice-iteration07-20261026-01",
- "lane": "Q (rat/dog quadruped enemy)",
+ "task": "studio-meshy-game-replacement-20261029-01",
+ "lane": "CHARS (Meshy T2.5 replacement; pipeline of iteration-07 lane Q)",
+ "t25": {
+  "sourceReplaced": true,
+  "source": {
+   "asset": "creature:ratdog",
+   "attempt": "a1",
+   "taskId": "01a18991-2a61-76ab-b1dd-7bd10d9e4bef",
+   "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, 2K PBR textures, single original front/reference image)",
+   "args": {
+    "target_polycount": 15000,
+    "pose_mode": null
+   },
+   "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/creature:ratdog/a1/native.glb",
+   "nativeSha256": "62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b",
+   "nativeBytes": 7898584,
+   "nativeTriangles": 15774,
+   "nativeVertices": 14653,
+   "nativeBBox": {
+    "min": [
+     -0.1184,
+     -0.1858,
+     -0.4753
+    ],
+    "max": [
+     0.1174,
+     0.1848,
+     0.4739
+    ],
+    "size": [
+     0.2358,
+     0.3706,
+     0.9492
+    ],
+    "space": "scene/world (node transforms applied)"
+   },
+   "nativeTextures": [
+    {
+     "mime": "image/jpeg",
+     "size": [
+      2048,
+      2048
+     ]
+    },
+    {
+     "mime": "image/jpeg",
+     "size": [
+      2048,
+      2048
+     ]
+    },
+    {
+     "mime": "image/jpeg",
+     "size": [
+      2048,
+      2048
+     ]
+    }
+   ],
+   "inputImage": "reference/assets/generated/quadruped-02-24step-01/input.png",
+   "inputImageSha256": "d47f4eedbd17f41062f69ef61bc2754a8f5a59741d64cc03cb54546d8706d349",
+   "review": "accepted",
+   "reviewNote": "Same grizzled dark-grey rat-dog: long curled tail, pale flank streaks, clawed feet (side views confirm; provider thumbnail lighting reads paler). Posture somewhat longer/lower than the hunched reference. Static mesh - local re-rig required.",
+   "delivered": "reference/tasks/meshy-game-replacement-20261029/assets/DELIVERED.json"
+  },
+  "densify": {
+   "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+   "maxEdge": 0.0033354,
+   "passes": 4,
+   "sourceTriangles": 15774,
+   "sourceVertices": 14653,
+   "triangles": 306351,
+   "vertices": 170971,
+   "longestEdge": 0.0033349,
+   "maxEdgeFractionOfHeight": 0.009,
+   "sourceHeightUnits": 0.370605
+  },
+  "supersedes": {
+   "path": "game/public/assets/models/creature-ratdog.glb",
+   "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+   "blob": "d1cba8accf7ecead94004985a3f761ab5e593e23",
+   "restore": "git show a7a646a:game/public/assets/models/creature-ratdog.glb > game/public/assets/models/creature-ratdog.glb"
+  },
+  "supersededManifest": "the iteration-07 creature-ratdog.json (Pixal3D quadruped-02 master) is in Git history at the same path (base commit a7a646a)"
+ },
  "generatedBy": "tools/asset-pipeline/creature/build-creature.mjs",
- "builtAt": "2026-10-26T22:10:48.275Z",
+ "builtAt": "2026-10-29T22:24:16.462Z",
  "output": {
-  "file": "game/public/assets/models/creature-ratdog.glb",
-  "bytes": 1238220,
-  "sha256": "7bf1649d02762365e2849de9690f32afdf91e152517384c88c94270fd78809d9",
-  "triangles": 11796,
-  "vertices": 11278,
+  "file": "game/public/assets/models/creature-ratdog-t25.glb",
+  "bytes": 893544,
+  "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad",
+  "triangles": 11998,
+  "vertices": 7989,
   "textures": {
-   "baseColor": "1024² JPEG (187238 B)",
-   "metallicRoughness": "512² JPEG (47596 B)",
-   "normal": "512² JPEG tangent-space, three.js derivative-tangent convention (167321 B)"
+   "baseColor": "1024² JPEG (148384 B)",
+   "metallicRoughness": "512² JPEG (28461 B)",
+   "normal": "512² JPEG tangent-space, three.js derivative-tangent convention (63556 B)"
   },
   "meshNode": "RatdogBody",
   "skin": "RatdogSkin",
@@ -28,14 +111,13 @@
   ]
  },
  "source": {
-  "id": "quadruped-02",
+  "id": "creature:ratdog",
   "title": "Tunnel scavenger",
-  "uploadId": "84cdf0afae9346489ac2f188c37f12de",
-  "file": "public/vision-board/models/84cdf0afae9346489ac2f188c37f12de.glb",
-  "sha256": "03503553ac5b7328e589785cea54e5261280148c5e2cd7a75340e728073d07ec",
-  "bytes": 96884108,
-  "triangles": 998536,
-  "vertices": 899817,
+  "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/creature:ratdog/a1/native.glb",
+  "sha256": "62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b",
+  "bytes": 7898584,
+  "triangles": 15774,
+  "vertices": 14653,
   "material": {
    "metallicFactor": 1,
    "roughnessFactor": 1,
@@ -49,66 +131,141 @@
   },
   "textures": {
    "baseColor": [
-    4096,
-    4096,
-    "image/png"
+    2048,
+    2048,
+    "image/jpeg"
    ],
    "metallicRoughness": [
-    4096,
-    4096,
-    "image/png"
+    2048,
+    2048,
+    "image/jpeg"
    ]
   },
-  "nativeJob": "20261019T223637Z-b51e000a44934ba2a51f2c70779c84f0",
-  "conceptImage": "reference/vision-board/assets/core-assets/round-02/quadruped-02.png",
+  "nativeJob": "01a18991-2a61-76ab-b1dd-7bd10d9e4bef",
+  "conceptImage": "reference/assets/generated/quadruped-02-24step-01/input.png",
   "conceptSha256": "d47f4eedbd17f41062f69ef61bc2754a8f5a59741d64cc03cb54546d8706d349",
+  "t25": {
+   "asset": "creature:ratdog",
+   "attempt": "a1",
+   "taskId": "01a18991-2a61-76ab-b1dd-7bd10d9e4bef",
+   "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, 2K PBR textures, single original front/reference image)",
+   "args": {
+    "target_polycount": 15000,
+    "pose_mode": null
+   },
+   "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/creature:ratdog/a1/native.glb",
+   "nativeSha256": "62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b",
+   "nativeBytes": 7898584,
+   "nativeTriangles": 15774,
+   "nativeVertices": 14653,
+   "nativeBBox": {
+    "min": [
+     -0.1184,
+     -0.1858,
+     -0.4753
+    ],
+    "max": [
+     0.1174,
+     0.1848,
+     0.4739
+    ],
+    "size": [
+     0.2358,
+     0.3706,
+     0.9492
+    ],
+    "space": "scene/world (node transforms applied)"
+   },
+   "nativeTextures": [
+    {
+     "mime": "image/jpeg",
+     "size": [
+      2048,
+      2048
+     ]
+    },
+    {
+     "mime": "image/jpeg",
+     "size": [
+      2048,
+      2048
+     ]
+    },
+    {
+     "mime": "image/jpeg",
+     "size": [
+      2048,
+      2048
+     ]
+    }
+   ],
+   "inputImage": "reference/assets/generated/quadruped-02-24step-01/input.png",
+   "inputImageSha256": "d47f4eedbd17f41062f69ef61bc2754a8f5a59741d64cc03cb54546d8706d349",
+   "review": "accepted",
+   "reviewNote": "Same grizzled dark-grey rat-dog: long curled tail, pale flank streaks, clawed feet (side views confirm; provider thumbnail lighting reads paler). Posture somewhat longer/lower than the hunched reference. Static mesh - local re-rig required.",
+   "delivered": "reference/tasks/meshy-game-replacement-20261029/assets/DELIVERED.json"
+  },
+  "densify": {
+   "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+   "maxEdge": 0.0033354,
+   "passes": 4,
+   "sourceTriangles": 15774,
+   "sourceVertices": 14653,
+   "triangles": 306351,
+   "vertices": 170971,
+   "longestEdge": 0.0033349,
+   "maxEdgeFractionOfHeight": 0.009,
+   "sourceHeightUnits": 0.370605
+  },
   "readOnly": true,
   "unrigged": true,
-  "note": "The master is a static, unrigged AI reconstruction (Field Notes Core Assets quadruped-02). It was NOT animated; everything rig/animation related below is new derivative work."
+  "note": "The source is the static, unrigged Meshy T2.5 image-to-3D reconstruction of the ORIGINAL quadruped-02 concept image (the same image the old Pixal3D master came from). It was NOT animated; everything rig/animation related below is new derivative work."
  },
  "placement": {
   "method": "paw contact patches (lowest band of vertices raised until its XZ occupancy grid has exactly four components; a paw lifted mid-stride appears later) split front/hind along the principal axis of the four centres and left/right across it; head end = larger max cross-section (occupied cells of slices across the body axis, beyond 25% of the paw spacing past each paw pair); heading hind->front paw midpoints rotated onto +Z; paw-patch centre at the origin; lowest vertex y=0; uniform scale",
   "topHeightM": 0.64,
-  "scale": 1.224212,
-  "yawDeg": 128.228,
+  "scale": 1.726906,
+  "yawDeg": 1.85,
   "masterCentreXZ": [
-   -0.05244,
-   -0.01779
+   0.0037,
+   0.07208
   ],
-  "masterMinY": -0.24713,
-  "pawBandFractionOfHeight": 0.04,
-  "masterHeightUnits": 0.52279,
+  "masterMinY": -0.18579,
+  "pawBandFractionOfHeight": 0.02,
+  "masterHeightUnits": 0.37061,
   "maxCrossSectionCellsPerEnd": [
-   105,
-   56
+   35,
+   60
   ],
   "pawsPlaced": {
-   "frontL": [
-    0.1672,
+   "hindR": [
+    -0.1211,
     0,
-    0.288
-   ],
-   "frontR": [
-    -0.1672,
-    0,
-    0.2775
+    -0.4931
    ],
    "hindL": [
-    0.1476,
+    0.1211,
     0,
-    -0.2272
+    -0.2587
    ],
-   "hindR": [
-    -0.1476,
+   "frontR": [
+    -0.1411,
     0,
-    -0.3383
+    0.3611
+   ],
+   "frontL": [
+    0.1411,
+    0,
+    0.3908
    ]
   },
+  "lengthScale": 0.86,
+  "lengthScaleNote": "non-uniform body-axis (+Z) scale 0.86 after placement: Meshy T2.5 posture is longer / lower than the hunched quadruped-02 concept; shoulder height (0.64 m) kept as the scale contract, nose -> rump length brought back near the established creature (1.03 m)",
   "provisionalSize": "Top of the shoulder bristles at 0.64 m (about a large dog). The concept card gives proposed anatomy but no size; this is a game-scale choice, not approved lore."
  },
  "mesh": {
-  "weldedVertices": 486585,
-  "weldedTriangles": 998442,
+  "weldedVertices": 153223,
+  "weldedTriangles": 306351,
   "simplify": {
    "targetTris": 12000,
    "importance": {
@@ -116,21 +273,21 @@
     "paws": 25,
     "note": "extra simplifier attribute = position * k: face/jaw and paws keep more triangles"
    },
-   "resultTris": 11796,
-   "resultVerts": 5504,
-   "relativeError": 0.00676,
-   "absoluteErrorM": 0.00877,
+   "resultTris": 11998,
+   "resultVerts": 6033,
+   "relativeError": 0.00293,
+   "absoluteErrorM": 0.00412,
    "flags": [
     "Prune",
     "Regularize"
    ]
   },
   "unwrap": {
-   "initialCharts": 2706,
-   "charts": 1165,
-   "mergedSmallCharts": 1541,
-   "texelsPerMetreBase": 404.5,
-   "uvAreaFill": 0.438,
+   "initialCharts": 493,
+   "charts": 208,
+   "mergedSmallCharts": 285,
+   "texelsPerMetreBase": 620.3,
+   "uvAreaFill": 0.467,
    "uvMirroredFaces": 0,
    "coneDeg": 66,
    "validDot": 0.15,
@@ -140,30 +297,30 @@
    "packAtlas": 1024
   },
   "bake": {
-   "texels": 1797990,
-   "coverage": 0.429,
+   "texels": 1941885,
+   "coverage": 0.463,
    "missed": 0,
-   "farOver1cm": 26814,
-   "distMedianMm": 0.69,
-   "distP99Mm": 10.7,
+   "farOver1cm": 4150,
+   "distMedianMm": 0.21,
+   "distP99Mm": 2.71,
    "normalDeviationDeg": {
-    "median": 6.5,
-    "p90": 32.2
+    "median": 1.8,
+    "p90": 7.6
    },
-   "cageRayHits": 391909,
+   "cageRayHits": 115762,
    "cageM": 0.012,
    "rayBelowM": 0.004,
    "normalBlend": 0.8,
    "method": "closest facing-compatible master point, overridden by the first front-facing hit of a cage ray (P+N*cage -> -N); colour/MR sampled from the master textures there; normal = master vertex normals interpolated there, blended with the low normal (normalBlend), encoded in the three.js derivative-tangent (cotangent) frame",
    "gridCells": [
-    51,
+    42,
     65,
-    131
+    142
    ],
-   "ms": 14927,
-   "workers": 32
+   "ms": 61212,
+   "workers": 1
   },
-  "outVertices": 11278
+  "outVertices": 7989
  },
  "skeleton": {
   "method": "auto-placed from mesh landmarks of the placed master (lib/landmarks.mjs): paw contact patches, midline back/underside profile, slice-tracked leg centrelines, narrowest neck section, nose tip, tail centreline by geodesic distance bands; anatomical ratios for joints inside the body",
@@ -175,180 +332,180 @@
    ],
    "Hips": [
     0,
-    0.3756,
-    -0.3399
+    0.3695,
+    -0.3545
    ],
    "Spine1": [
     0,
-    0.4195,
-    -0.1794
+    0.3977,
+    -0.1856
    ],
    "Spine2": [
     0,
-    0.4057,
-    -0.0189
+    0.3937,
+    -0.0167
    ],
    "Chest": [
     0,
-    0.4533,
-    0.1416
+    0.4557,
+    0.1522
    ],
    "Neck": [
     0,
-    0.4834,
-    0.2472
+    0.4591,
+    0.2728
    ],
    "Head": [
     0,
-    0.4502,
-    0.3528
+    0.4424,
+    0.3933
    ],
    "Jaw": [
     0,
-    0.3859,
-    0.4126
+    0.3883,
+    0.448
    ],
    "Tail1": [
     0,
-    0.2942,
-    -0.4489
+    0.285,
+    -0.4751
    ],
    "Tail2": [
-    -0.0802,
-    0.3079,
-    -0.5166
+    -0.0818,
+    0.3055,
+    -0.5605
    ],
    "Tail3": [
-    -0.0954,
-    0.3566,
-    -0.5632
+    -0.0879,
+    0.3483,
+    -0.6362
    ],
    "Tail4": [
-    -0.095,
-    0.4381,
-    -0.5777
+    -0.0691,
+    0.437,
+    -0.6792
    ],
    "Tail5": [
-    -0.1041,
-    0.4849,
-    -0.6154
+    -0.0828,
+    0.4417,
+    -0.7605
    ],
    "L_FrontUpper": [
-    0.0749,
-    0.5193,
-    0.2016
+    0.0675,
+    0.5037,
+    0.2122
    ],
    "L_FrontLower": [
-    0.1369,
-    0.3041,
-    0.1898
+    0.1236,
+    0.2659,
+    0.2115
    ],
    "L_FrontFoot": [
-    0.1619,
-    0.1004,
-    0.2118
+    0.1305,
+    0.0878,
+    0.2652
    ],
    "L_HindUpper": [
-    0.0793,
-    0.3556,
-    -0.3399
+    0.0597,
+    0.3495,
+    -0.3545
    ],
    "L_HindLower": [
-    0.1438,
-    0.2185,
-    -0.2514
+    0.0829,
+    0.2253,
+    -0.2768
    ],
    "L_HindFoot": [
-    0.1569,
-    0.1093,
-    -0.3291
+    0.0994,
+    0.1126,
+    -0.3256
    ],
    "R_FrontUpper": [
-    -0.0749,
-    0.5193,
-    0.2016
+    -0.0675,
+    0.5037,
+    0.2122
    ],
    "R_FrontLower": [
-    -0.1047,
-    0.3041,
-    0.1934
+    -0.0942,
+    0.2659,
+    0.1929
    ],
    "R_FrontFoot": [
-    -0.1414,
-    0.1004,
-    0.2004
+    -0.1148,
+    0.0878,
+    0.248
    ],
    "R_HindUpper": [
-    -0.0793,
-    0.3556,
-    -0.3399
+    -0.0597,
+    0.3495,
+    -0.3545
    ],
    "R_HindLower": [
-    -0.0765,
-    0.2185,
-    -0.2884
+    -0.083,
+    0.2253,
+    -0.2921
    ],
    "R_HindFoot": [
-    -0.1125,
-    0.1093,
-    -0.3963
+    -0.1006,
+    0.1126,
+    -0.4426
    ]
   },
   "ends": {
    "Head": [
     0,
-    0.3599,
-    0.5665
+    0.3493,
+    0.5886
    ],
    "Jaw": [
     0,
-    0.3032,
-    0.5315
+    0.321,
+    0.5536
    ],
    "Tail5": [
-    -0.1189,
-    0.4128,
-    -0.6828
+    -0.1146,
+    0.3643,
+    -0.8035
    ],
    "tailTip": [
-    -0.1195,
-    0.399,
-    -0.6858
+    -0.1191,
+    0.3464,
+    -0.8029
    ],
    "headTop": [
     0,
-    0.5403,
-    0.3928
+    0.5232,
+    0.4333
    ],
    "earL": [
-    0.0546,
-    0.5712,
-    0.3578
+    0.041,
+    0.5367,
+    0.3844
    ],
    "earR": [
-    -0.0478,
-    0.5675,
-    0.343
+    -0.0663,
+    0.5194,
+    0.4139
    ],
    "L_FrontFoot": [
-    0.1857,
-    0.0245,
-    0.3478
+    0.1184,
+    0.0137,
+    0.3913
    ],
    "L_HindFoot": [
-    0.174,
-    0.0364,
-    -0.1971
+    0.1272,
+    0.0128,
+    -0.1618
    ],
    "R_FrontFoot": [
-    -0.1571,
+    -0.1297,
     0.012,
-    0.3337
+    0.3663
    ],
    "R_HindFoot": [
-    -0.1116,
-    0.0264,
-    -0.2819
+    -0.1202,
+    0.012,
+    -0.3675
    ]
   },
   "hierarchy": [
@@ -454,22 +611,22 @@
    ]
   ],
   "measures": {
-   "zFrontPaws": 0.2828,
-   "zHindPaws": -0.2828,
-   "chestBottomY": 0.3041,
-   "groinY": 0.223,
-   "rumpEndZ": -0.4599,
-   "tailGeodesicLengthM": 0.3239,
-   "noseZ": 0.5665,
-   "neckZ": 0.3428,
-   "neckHalfWidth": 0.1215,
-   "backAtChestY": 0.6067,
-   "backAtHipsY": 0.4683,
+   "zFrontPaws": 0.3233,
+   "zHindPaws": -0.3233,
+   "chestBottomY": 0.2659,
+   "groinY": 0.2299,
+   "rumpEndZ": -0.4845,
+   "tailGeodesicLengthM": 0.4206,
+   "noseZ": 0.5886,
+   "neckZ": 0.3833,
+   "neckHalfWidth": 0.0723,
+   "backAtChestY": 0.6105,
+   "backAtHipsY": 0.4533,
    "legSlices": {
-    "L_Front": 31,
-    "R_Front": 32,
-    "L_Hind": 21,
-    "R_Hind": 22
+    "L_Front": 28,
+    "R_Front": 28,
+    "L_Hind": 24,
+    "R_Hind": 24
    }
   },
   "ratios": {
@@ -491,289 +648,289 @@
    "Hips": {
     "from": [
      0,
-     0.3756,
-     -0.3399
+     0.3695,
+     -0.3545
     ],
     "to": [
      0,
-     0.4195,
-     -0.1794
+     0.3977,
+     -0.1856
     ]
    },
    "Spine1": {
     "from": [
      0,
-     0.4195,
-     -0.1794
+     0.3977,
+     -0.1856
     ],
     "to": [
      0,
-     0.4057,
-     -0.0189
+     0.3937,
+     -0.0167
     ]
    },
    "Spine2": {
     "from": [
      0,
-     0.4057,
-     -0.0189
+     0.3937,
+     -0.0167
     ],
     "to": [
      0,
-     0.4533,
-     0.1416
+     0.4557,
+     0.1522
     ]
    },
    "Chest": {
     "from": [
      0,
-     0.4533,
-     0.1416
+     0.4557,
+     0.1522
     ],
     "to": [
      0,
-     0.4834,
-     0.2472
+     0.4591,
+     0.2728
     ]
    },
    "Neck": {
     "from": [
      0,
-     0.4834,
-     0.2472
+     0.4591,
+     0.2728
     ],
     "to": [
      0,
-     0.4502,
-     0.3528
+     0.4424,
+     0.3933
     ]
    },
    "Head": {
     "from": [
      0,
-     0.4502,
-     0.3528
+     0.4424,
+     0.3933
     ],
     "to": [
      0,
-     0.3599,
-     0.5665
+     0.3493,
+     0.5886
     ]
    },
    "Jaw": {
     "from": [
      0,
-     0.3859,
-     0.4126
+     0.3883,
+     0.448
     ],
     "to": [
      0,
-     0.3032,
-     0.5315
+     0.321,
+     0.5536
     ]
    },
    "Tail1": {
     "from": [
      0,
-     0.2942,
-     -0.4489
+     0.285,
+     -0.4751
     ],
     "to": [
-     -0.0802,
-     0.3079,
-     -0.5166
+     -0.0818,
+     0.3055,
+     -0.5605
     ]
    },
    "Tail2": {
     "from": [
-     -0.0802,
-     0.3079,
-     -0.5166
+     -0.0818,
+     0.3055,
+     -0.5605
     ],
     "to": [
-     -0.0954,
-     0.3566,
-     -0.5632
+     -0.0879,
+     0.3483,
+     -0.6362
     ]
    },
    "Tail3": {
     "from": [
-     -0.0954,
-     0.3566,
-     -0.5632
+     -0.0879,
+     0.3483,
+     -0.6362
     ],
     "to": [
-     -0.095,
-     0.4381,
-     -0.5777
+     -0.0691,
+     0.437,
+     -0.6792
     ]
    },
    "Tail4": {
     "from": [
-     -0.095,
-     0.4381,
-     -0.5777
+     -0.0691,
+     0.437,
+     -0.6792
     ],
     "to": [
-     -0.1041,
-     0.4849,
-     -0.6154
+     -0.0828,
+     0.4417,
+     -0.7605
     ]
    },
    "Tail5": {
     "from": [
-     -0.1041,
-     0.4849,
-     -0.6154
+     -0.0828,
+     0.4417,
+     -0.7605
     ],
     "to": [
-     -0.1189,
-     0.4128,
-     -0.6828
+     -0.1146,
+     0.3643,
+     -0.8035
     ]
    },
    "L_FrontUpper": {
     "from": [
-     0.0749,
-     0.5193,
-     0.2016
+     0.0675,
+     0.5037,
+     0.2122
     ],
     "to": [
-     0.1369,
-     0.3041,
-     0.1898
+     0.1236,
+     0.2659,
+     0.2115
     ]
    },
    "L_FrontLower": {
     "from": [
-     0.1369,
-     0.3041,
-     0.1898
+     0.1236,
+     0.2659,
+     0.2115
     ],
     "to": [
-     0.1619,
-     0.1004,
-     0.2118
+     0.1305,
+     0.0878,
+     0.2652
     ]
    },
    "L_FrontFoot": {
     "from": [
-     0.1619,
-     0.1004,
-     0.2118
+     0.1305,
+     0.0878,
+     0.2652
     ],
     "to": [
-     0.1857,
-     0.0245,
-     0.3478
+     0.1184,
+     0.0137,
+     0.3913
     ]
    },
    "R_FrontUpper": {
     "from": [
-     -0.0749,
-     0.5193,
-     0.2016
+     -0.0675,
+     0.5037,
+     0.2122
     ],
     "to": [
-     -0.1047,
-     0.3041,
-     0.1934
+     -0.0942,
+     0.2659,
+     0.1929
     ]
    },
    "R_FrontLower": {
     "from": [
-     -0.1047,
-     0.3041,
-     0.1934
+     -0.0942,
+     0.2659,
+     0.1929
     ],
     "to": [
-     -0.1414,
-     0.1004,
-     0.2004
+     -0.1148,
+     0.0878,
+     0.248
     ]
    },
    "R_FrontFoot": {
     "from": [
-     -0.1414,
-     0.1004,
-     0.2004
+     -0.1148,
+     0.0878,
+     0.248
     ],
     "to": [
-     -0.1571,
+     -0.1297,
      0.012,
-     0.3337
+     0.3663
     ]
    },
    "L_HindUpper": {
     "from": [
-     0.0793,
-     0.3556,
-     -0.3399
+     0.0597,
+     0.3495,
+     -0.3545
     ],
     "to": [
-     0.1438,
-     0.2185,
-     -0.2514
+     0.0829,
+     0.2253,
+     -0.2768
     ]
    },
    "L_HindLower": {
     "from": [
-     0.1438,
-     0.2185,
-     -0.2514
+     0.0829,
+     0.2253,
+     -0.2768
     ],
     "to": [
-     0.1569,
-     0.1093,
-     -0.3291
+     0.0994,
+     0.1126,
+     -0.3256
     ]
    },
    "L_HindFoot": {
     "from": [
-     0.1569,
-     0.1093,
-     -0.3291
+     0.0994,
+     0.1126,
+     -0.3256
     ],
     "to": [
-     0.174,
-     0.0364,
-     -0.1971
+     0.1272,
+     0.0128,
+     -0.1618
     ]
    },
    "R_HindUpper": {
     "from": [
-     -0.0793,
-     0.3556,
-     -0.3399
+     -0.0597,
+     0.3495,
+     -0.3545
     ],
     "to": [
-     -0.0765,
-     0.2185,
-     -0.2884
+     -0.083,
+     0.2253,
+     -0.2921
     ]
    },
    "R_HindLower": {
     "from": [
-     -0.0765,
-     0.2185,
-     -0.2884
+     -0.083,
+     0.2253,
+     -0.2921
     ],
     "to": [
-     -0.1125,
-     0.1093,
-     -0.3963
+     -0.1006,
+     0.1126,
+     -0.4426
     ]
    },
    "R_HindFoot": {
     "from": [
-     -0.1125,
-     0.1093,
-     -0.3963
+     -0.1006,
+     0.1126,
+     -0.4426
     ],
     "to": [
-     -0.1116,
-     0.0264,
-     -0.2819
+     -0.1202,
+     0.012,
+     -0.3675
     ]
    }
   },
@@ -782,12 +939,12 @@
  "skin": {
   "method": "region flood (legs from the toe, tail by geodesic distance) + chain weights with smooth joint blends + masked Laplacian smoothing, top-4",
   "regionCounts": {
-   "torso": 3586,
-   "tail": 215,
-   "L_Front": 486,
-   "R_Front": 476,
-   "L_Hind": 389,
-   "R_Hind": 352
+   "torso": 2967,
+   "tail": 377,
+   "L_Front": 744,
+   "R_Front": 720,
+   "L_Hind": 612,
+   "R_Hind": 613
   },
   "legRatio": 0.55,
   "jointBlend": 0.025,
@@ -795,12 +952,24 @@
   "smoothLambda": 0.5,
   "maxInfluences": 4,
   "tailJointGeodesicM": [
-   0.027,
-   0.129,
-   0.193,
-   0.228,
-   0.302
-  ]
+   0.033,
+   0.143,
+   0.197,
+   0.282,
+   0.396
+  ],
+  "legSeedRadiusM": 0.05,
+  "islands": {
+   "pieces": 17,
+   "vertices": 157,
+   "regions": {
+    "L_Front": 4,
+    "torso": 2,
+    "R_Hind": 3,
+    "R_Front": 3,
+    "L_Hind": 5
+   }
+  }
  },
  "clips": {
   "method": "hand-authored procedural keyframes sampled at 30 fps (lib/clips.mjs); legs by paw-planting IK on per-leg stance/swing cycles; not motion capture",
@@ -915,29 +1084,29 @@
    }
   },
   "deathSolve": {
-   "hipsY": -0.0748,
+   "hipsY": -0.0938,
    "hipsX": -0.06,
    "lowestY": 0.01,
    "regionLows": {
-    "torso": 0.113,
-    "frontL": 0.23,
-    "pelvis": 0.156,
-    "hindL": 0.338,
-    "head": 0.06,
-    "hindR": 0.11,
+    "torso": 0.104,
+    "head": 0.038,
     "frontR": 0.01,
-    "tail": 0.15
+    "pelvis": 0.103,
+    "hindR": 0.111,
+    "tail": 0.144,
+    "frontL": 0.166,
+    "hindL": 0.248
    },
    "bounds": {
     "min": [
-     -0.348,
+     -0.355,
      0.01,
-     -0.755
+     -0.839
     ],
     "max": [
-     0.389,
-     0.478,
-     0.499
+     0.4,
+     0.399,
+     0.525
     ]
    }
   },
@@ -953,8 +1122,8 @@
      "maxLiftM": 0
     },
     "Death": {
-     "frames": 13,
-     "maxLiftM": 0.1384
+     "frames": 12,
+     "maxLiftM": 0.1477
     }
    }
   },
@@ -962,85 +1131,85 @@
    "Idle": {
     "frames": 121,
     "duration": 4,
-    "minYOverClip": -0.0014,
+    "minYOverClip": 0.0002,
     "minAtT": 0,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.617,
-    "firstFrameMinY": -0.0014,
-    "lastFrameMinY": -0.0014,
-    "maxLegReach": 0.994,
+    "maxTopY": 0.62,
+    "firstFrameMinY": 0.0002,
+    "lastFrameMinY": 0.0002,
+    "maxLegReach": 0.961,
     "groundSpeed": 0
    },
    "Walk": {
     "frames": 20,
     "duration": 0.62,
-    "minYOverClip": -0.0014,
-    "minAtT": 0,
+    "minYOverClip": 0.0002,
+    "minAtT": 0.16667,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.602,
-    "firstFrameMinY": -0.0014,
-    "lastFrameMinY": -0.0014,
-    "maxLegReach": 0.958,
+    "maxTopY": 0.605,
+    "firstFrameMinY": 0.0003,
+    "lastFrameMinY": 0.0003,
+    "maxLegReach": 0.944,
     "groundSpeed": 0.598
    },
    "Run": {
     "frames": 14,
     "duration": 0.42,
-    "minYOverClip": -0.0014,
-    "minAtT": 0.23333,
+    "minYOverClip": 0.0002,
+    "minAtT": 0.26667,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.623,
-    "firstFrameMinY": -0.0011,
-    "lastFrameMinY": -0.0011,
-    "maxLegReach": 1.033,
+    "maxTopY": 0.631,
+    "firstFrameMinY": 0.0003,
+    "lastFrameMinY": 0.0003,
+    "maxLegReach": 1.024,
     "groundSpeed": 2.46
    },
    "Attack": {
     "frames": 28,
     "duration": 0.9,
-    "minYOverClip": -0.0014,
+    "minYOverClip": 0.0002,
     "minAtT": 0,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.609,
-    "firstFrameMinY": -0.0014,
-    "lastFrameMinY": -0.0014,
-    "maxLegReach": 0.986,
+    "maxTopY": 0.612,
+    "firstFrameMinY": 0.0002,
+    "lastFrameMinY": 0.0002,
+    "maxLegReach": 0.966,
     "groundSpeed": 0
    },
    "Hit": {
     "frames": 15,
     "duration": 0.45,
-    "minYOverClip": -0.0014,
+    "minYOverClip": 0.0002,
     "minAtT": 0,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.62,
-    "firstFrameMinY": -0.0014,
-    "lastFrameMinY": -0.0014,
-    "maxLegReach": 1.014,
+    "maxTopY": 0.628,
+    "firstFrameMinY": 0.0002,
+    "lastFrameMinY": 0.0002,
+    "maxLegReach": 0.997,
     "groundSpeed": 0
    },
    "Death": {
     "frames": 46,
     "duration": 1.5,
-    "minYOverClip": -0.0013,
-    "minAtT": 0,
+    "minYOverClip": -0.0002,
+    "minAtT": 0.76667,
     "framesBelowMinus1cm": 0,
-    "maxTopY": 0.703,
-    "firstFrameMinY": -0.0013,
+    "maxTopY": 0.714,
+    "firstFrameMinY": 0.0002,
     "lastFrameMinY": 0.01,
-    "maxLegReach": 1.044,
+    "maxLegReach": 1.013,
     "groundSpeed": 0
    }
   }
  },
  "hitRadii": {
   "method": "75th percentile of the distance from region vertices to the region bone chain (low mesh, bind pose)",
-  "torso": 0.14,
-  "neck": 0.113,
-  "head": 0.1,
-  "frontLeg": 0.071,
-  "hindLeg": 0.055,
-  "tail": 0.043
+  "torso": 0.138,
+  "neck": 0.137,
+  "head": 0.086,
+  "frontLeg": 0.072,
+  "hindLeg": 0.059,
+  "tail": 0.042
  },
  "runtime": {
   "modelSpace": "+Z forward, +Y up, +X = creature left, paws on y=0; metres",

@@ -19,6 +19,7 @@ import {frameRot, qRot, V} from './pose.mjs';
 import {measurePants, fitPantsToBody} from './pants.mjs';
 import {fitRigid} from './rigid.mjs';
 import {fitHat, hatMask} from './headwear.mjs';
+import {densify} from './densify.mjs';
 
 const TORSO = new Set(['Root', 'Hips', 'Spine', 'Chest', 'Neck']);
 const CHILD = {L_UpperArm: 'L_Forearm', L_Forearm: 'L_Hand', R_UpperArm: 'R_Forearm', R_Forearm: 'R_Hand', L_Thigh: 'L_Shin', L_Shin: 'L_Foot', R_Thigh: 'R_Shin', R_Shin: 'R_Foot'};
@@ -310,7 +311,11 @@ function fitDirect(gC, cfg, B) {
   const W = gC.low.welded;
   let pos, fitStats, joints, weights, push = null, transfer, hatFit = null;
   if (cfg.kind === 'pants') {
-    const F = measurePants(W.pos);
+    // T2.5 migration: cfg.measureDensify (fraction of the pants height) measures the frame on an edge-split copy of the
+    // low mesh (same surface): the ~6k-triangle low mesh of a T2.5 source can leave 1 % slices too sparse for the crotch scan
+    let mp = W.pos;
+    if (cfg.measureDensify) { let y0 = Infinity, y1 = -Infinity; for (let i = 1; i < W.pos.length; i += 3) { y0 = Math.min(y0, W.pos[i]); y1 = Math.max(y1, W.pos[i]); } mp = densify({pos: W.pos, nrm: W.nrm, uv: new Float32Array(W.pos.length / 3 * 2), idx: W.idx}, (y1 - y0) * cfg.measureDensify).pos; }
+    const F = measurePants(mp);
     const r = fitPantsToBody(W.pos, W.idx, F, B, cfg);
     pos = r.pos; fitStats = r.stats;
     push = pushOut(pos, W.idx, B.low.welded, {...cfg.pushOut, radius: Math.max(cfg.pushOut.radius ?? 0.05, 0.08)});

@@ -76,9 +76,13 @@ export interface CabinetSpec {
   /** Interior back plane, fraction of depth from the back. */
   back: number;
 }
+// Meshy T2.5 cabinets (2026-10-29, ray-cast front profiles of cabinet-tall-t25.glb / cabinet-low-t25.glb): thin single-shell door
+// fronts (tall z 0.269, low z 0.349) meeting at the centre; door edges x +-0.499 / +-0.905, bottom / top grooves y 0.130 / 1.850
+// (tall) and 0.108 / 0.758 (low). The slab is 2 cm behind the door face (thin doors, so the opened leaf is not a thick block).
+// Iteration-02/04 values: tall {0.905, 0.059, 0.982, 0.24, 0.028}, low {0.946, 0.101, 0.934, 0.18, 0.015}.
 export const CABINET_SPECS: Record<'cabinetTall' | 'cabinetLow', CabinetSpec> = {
-  cabinetTall: {halfW: 0.905, y0: 0.059, y1: 0.982, slab: 0.24, seam: 0.028, doors: 2, back: 0.06},
-  cabinetLow: {halfW: 0.946, y0: 0.101, y1: 0.934, slab: 0.18, seam: 0.015, doors: 2, back: 0.06},
+  cabinetTall: {halfW: 0.921, y0: 0.068, y1: 0.974, slab: 0.072, seam: 0, doors: 2, back: 0.06},
+  cabinetLow: {halfW: 0.968, y0: 0.127, y1: 0.892, slab: 0.084, seam: 0, doors: 2, back: 0.06},
 };
 
 export interface Interior { hw: number; y0: number; y1: number; zBack: number; zCut: number }
@@ -143,7 +147,8 @@ export type SurfaceHolder = 'cabinetTall' | 'cabinetLow' | 'crate' | 'shelf' | '
  * back-counter worktop + over-shelf, cooler wire shelves.
  */
 export const SHOP_SURFACE_FRAC = {
-  counterTop: 1.045 / 1.05, backbar: [0.865 / 1.83, 1.62 / 1.83], cooler: [0.26, 0.66, 1.06, 1.46].map(y => y / 2.0),
+  // Meshy T2.5 counter / back counter (2026-10-29): counter top 1.05 / 1.05; worktop 0.914, over-shelf 1.663 of 1.83 (gen/props.ts).
+  counterTop: 1.05 / 1.05, backbar: [0.914 / 1.83, 1.663 / 1.83], cooler: [0.26, 0.66, 1.06, 1.46].map(y => y / 2.0),
 };
 
 /** Measured surface specs (gen/props.ts), scaled if a model's fitted height ever differs from `refH`. */
@@ -232,7 +237,8 @@ export function holderSurfaces(kind: SurfaceHolder, def: Dims, o: SurfaceOptions
     case 'shopBackbar': {
       const [top, shelf] = SHOP_SURFACE_FRAC.backbar.map(f => f * def.h);
       out.push({y: top + 0.002, x0: -def.w / 2 + 0.12, x1: def.w / 2 - 0.12, z0: -def.d / 2 + 0.1, z1: def.d / 2 - 0.08, clear: Math.min(0.5, shelf - top - BOARD)});
-      out.push({y: shelf + 0.002, x0: -def.w / 2 + 0.12, x1: def.w / 2 - 0.12, z0: -def.d / 2 + 0.04, z1: -def.d / 2 + 0.32, clear: Math.max(0.1, def.h - shelf - 0.02)});
+      // over-shelf: the T2.5 shelf is a 13 cm ledge against the splash back (z -0.337..-0.21 of the 0.7 m depth)
+      out.push({y: shelf + 0.002, x0: -def.w / 2 + 0.12, x1: def.w / 2 - 0.12, z0: -def.d / 2 + 0.03, z1: -def.d / 2 + 0.135, clear: Math.max(0.1, def.h - shelf - 0.02)});
       break;
     }
     case 'shopCooler':

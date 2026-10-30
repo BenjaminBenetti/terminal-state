@@ -1,0 +1,2018 @@
+{
+  "schema": "terminal-state-meshy-t25-derivatives-v1",
+  "task": "studio-meshy-game-replacement-20261029-01",
+  "lane": "PROPS",
+  "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+  "status": "Runtime derivatives of reference-conditioned Meshy T2.5 image-to-3d outputs (each conditioned on the master's ORIGINAL front / reference image; lane MESHY review: accepted). Prototype art; no commercial / model licence clearance asserted.",
+  "rebuild": "node tools/asset-pipeline/props/build-meshy-t25.mjs [--only <id>,<id>] [--force]",
+  "rawStorage": "Native Meshy GLBs, thumbnails, task records and the submission ledger stay OUTSIDE Git in reference/tasks/meshy-game-replacement-20261029/assets/ (raw/<id>/<attempt>/native.glb, ledger.jsonl, DELIVERED.json).",
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "front": "+Z",
+    "files": "plain glTF 2.0 binary (no Draco / meshopt / KTX2); new flat path <old-basename>-t25.glb (cache-busting); logical runtime keys unchanged"
+  },
+  "restoreNote": "Every replaced runtime file is tracked at the pushed base commit; restore = record.restore.command (git show <base>:<path>).",
+  "tool": "meshy-t25-props-2",
+  "class": "items",
+  "counts": {
+    "records": 7,
+    "bytes": 1213508,
+    "triangles": 14317,
+    "replacedBytes": 1119280,
+    "replacedTriangles": 5762
+  },
+  "records": [
+    {
+      "id": "base:item_beans",
+      "runtimeKeys": [
+        "item_beans"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-beans-t25.glb",
+        "url": "assets/models/item-beans-t25.glb",
+        "sha256": "b2f381479c81bdbf73b21a33757fbbd7284b36707a456da9f5a7c5f4f7ff6bf8",
+        "bytes": 185200,
+        "triangles": 2102,
+        "vertices": 2255,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 65184
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 24638
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 8382
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": false,
+        "dims": [
+          0.0801,
+          0.11,
+          0.08
+        ],
+        "bbox": {
+          "min": [
+            -0.0401,
+            0,
+            -0.04
+          ],
+          "max": [
+            0.0401,
+            0.11,
+            0.04
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a1899d-9295-7595-85eb-a717ded13d70",
+        "attempt": "a2",
+        "review": "flagged:unusable:label-bowl-extruded",
+        "reviewNote": "a2 repeats the a1 defect: the label bowl illustration is again a solid bowl protruding from the can side (side/top views). Same input image => systematic, not random. NO further Meshy attempts (limit reached). Can body itself is a clean cylinder with red/cream label (a2 back face also carries the bowl art): a local CPU trim of geometry outside the can radius is feasible at integration, or keep the existing model - PRIMARY decides.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "usedDespiteFlag": {
+          "attempt": "a2",
+          "reason": "primary 2026-10-29: no more rerolls; fix the extruded label locally (radialClamp) or keep the old model. Fixed locally: the can silhouette is a clean cylinder again and the illustration reads as printed (review sheet review/props/base_item_beans.png)"
+        },
+        "attempts": [
+          {
+            "attempt": "a1",
+            "taskId": "01a18997-0071-71e4-bcf4-a5a8337f0fd9",
+            "review": "flagged:unusable:label-bowl-extruded"
+          },
+          {
+            "attempt": "a2",
+            "taskId": "01a1899d-9295-7595-85eb-a717ded13d70",
+            "review": "flagged:unusable:label-bowl-extruded"
+          }
+        ],
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_beans/a2/native.glb",
+        "nativeSha256": "7ef151ce857c7a70545e77880be277038f068869b7995f28c272b8c96e03b182",
+        "nativeBytes": 7581356,
+        "native": {
+          "triangles": 2102,
+          "vertices": 2255,
+          "bbox": [
+            0.6934,
+            0.9517,
+            0.9165
+          ],
+          "components": 1,
+          "largestComponentFaces": 2102,
+          "boundaryEdges": 4,
+          "nonManifoldEdges": 0,
+          "edges": 3155,
+          "mr": {
+            "meanRoughness": 0.385,
+            "meanMetalness": 0.206
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 3408649
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1728143
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2344861
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/beans/image/beans-original.png",
+          "sha256": "2f6588b97ba81cf0127606a797a0d769568ccb04bff060e34690757c3faee66e",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.115588,
+          0.115588,
+          0.115588
+        ],
+        "t": [
+          -0.000028,
+          0.055,
+          0.012982
+        ],
+        "fit": "uniform: height 0.11 m (old runtime height) -> 0.0801 x 0.11 x 0.08 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.075,
+          0.11,
+          0.075
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.913,
+              "lumaCorrelation": 0.235,
+              "chromaDiff": 0.13,
+              "aspectLogDiff": 0.133,
+              "score": 0.905
+            },
+            "right": {
+              "iou": 0.811,
+              "lumaCorrelation": 0.212,
+              "chromaDiff": 0.118,
+              "aspectLogDiff": 0.412,
+              "score": 0.656
+            },
+            "back": {
+              "iou": 0.913,
+              "lumaCorrelation": 0.241,
+              "chromaDiff": 0.119,
+              "aspectLogDiff": 0.133,
+              "score": 0.921
+            },
+            "left": {
+              "iou": 0.802,
+              "lumaCorrelation": 0.236,
+              "chromaDiff": 0.117,
+              "aspectLogDiff": 0.412,
+              "score": 0.668
+            }
+          },
+          "best": "back",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": {
+        "acceptFlagged": {
+          "attempt": "a2",
+          "reason": "primary 2026-10-29: no more rerolls; fix the extruded label locally (radialClamp) or keep the old model. Fixed locally: the can silhouette is a clean cylinder again and the illustration reads as printed (review sheet review/props/base_item_beans.png)"
+        },
+        "radialClamp": {
+          "rimBand": 0.08,
+          "pad": 0.0004,
+          "reason": "both Meshy attempts (a1, a2; no further rerolls) reconstructed the bowl-of-beans illustration on the label as a solid bowl protruding ~0.3 can widths from the can side; the protruding shell is pressed back onto the can wall (texture kept), so the illustration reads as printed on the label like the original image"
+        }
+      },
+      "simplify": {
+        "applied": false,
+        "triangles": 2102
+      },
+      "meshAfter": {
+        "components": 1,
+        "largestComponentFaces": 2102,
+        "boundaryEdges": 4,
+        "nonManifoldEdges": 0,
+        "edges": 3155
+      },
+      "radialClamp": {
+        "reason": "both Meshy attempts (a1, a2; no further rerolls) reconstructed the bowl-of-beans illustration on the label as a solid bowl protruding ~0.3 can widths from the can side; the protruding shell is pressed back onto the can wall (texture kept), so the illustration reads as printed on the label like the original image",
+        "axis": [
+          0.0003,
+          -0.0152
+        ],
+        "wallRadiusM": 0.0418,
+        "verticesMoved": 982,
+        "maxProtrusionM": 0.0264,
+        "padM": 0.0004,
+        "rimBand": 0.08
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-beans.glb",
+        "sha256": "898e388bce1fbb57478d0e97a714cb1f5171a9237ebbb9f93aa8553289ae97c4",
+        "bytes": 144744,
+        "triangles": 692,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.0375,
+            0,
+            -0.0375
+          ],
+          "max": [
+            0.0375,
+            0.11,
+            0.0375
+          ],
+          "size": [
+            0.075,
+            0.11,
+            0.075
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-beans.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "edc6292a494cde0256b854da8082237246d09fbc",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-beans.glb > game/public/assets/models/item-beans.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_beans.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
+    {
+      "id": "base:item_chips",
+      "runtimeKeys": [
+        "item_chips"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-chips-t25.glb",
+        "url": "assets/models/item-chips-t25.glb",
+        "sha256": "5d99643b1f78411dfc4220684950fe176cc0e8a8de753378889df99ffa63e3a3",
+        "bytes": 170828,
+        "triangles": 1998,
+        "vertices": 2164,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 64973
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 16433
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 5934
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": true,
+        "dims": [
+          0.155,
+          0.27,
+          0.0731
+        ],
+        "bbox": {
+          "min": [
+            -0.0775,
+            0,
+            -0.0365
+          ],
+          "max": [
+            0.0775,
+            0.27,
+            0.0365
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a18997-0813-77bf-8337-59626ce99604",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same blue/orange chips bag with chip art, crimped ends.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_chips/a1/native.glb",
+        "nativeSha256": "a1cef180e9d8878a937a8f4f515d3993f8b803cefe9a4291c285088a0aa3a528",
+        "nativeBytes": 6464276,
+        "native": {
+          "triangles": 1998,
+          "vertices": 2164,
+          "bbox": [
+            0.5479,
+            0.9541,
+            0.2583
+          ],
+          "components": 14,
+          "largestComponentFaces": 786,
+          "boundaryEdges": 50,
+          "nonManifoldEdges": 0,
+          "edges": 3022,
+          "mr": {
+            "meanRoughness": 0.393,
+            "meanMetalness": 0.001
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 3174015
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1188608
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2006124
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/chips/image/chips-original.png",
+          "sha256": "23353833b629a7fca42b713bcb0bc1aacb8a00b023ed05ad6753064c86355164",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.282989,
+          0.282989,
+          0.282989
+        ],
+        "t": [
+          -0.000069,
+          0.134931,
+          0.000138
+        ],
+        "fit": "uniform: height 0.27 m (old runtime height) -> 0.155 x 0.27 x 0.0731 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.2,
+          0.27,
+          0.08
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.866,
+              "lumaCorrelation": 0.638,
+              "chromaDiff": 0.158,
+              "aspectLogDiff": 0.14,
+              "score": 1.148
+            },
+            "right": {
+              "iou": 0.523,
+              "lumaCorrelation": 0.398,
+              "chromaDiff": 0.29,
+              "aspectLogDiff": 0.853,
+              "score": 0.125
+            },
+            "back": {
+              "iou": 0.859,
+              "lumaCorrelation": 0.655,
+              "chromaDiff": 0.153,
+              "aspectLogDiff": 0.14,
+              "score": 1.16
+            },
+            "left": {
+              "iou": 0.497,
+              "lumaCorrelation": 0.189,
+              "chromaDiff": 0.251,
+              "aspectLogDiff": 0.853,
+              "score": -0.029
+            }
+          },
+          "best": "back",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": null,
+      "simplify": {
+        "applied": false,
+        "triangles": 1998
+      },
+      "meshAfter": {
+        "components": 14,
+        "largestComponentFaces": 786,
+        "boundaryEdges": 50,
+        "nonManifoldEdges": 0,
+        "edges": 3022
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-chips.glb",
+        "sha256": "819e152e0376fd901992e74aeb17813d1f276da7ec7c5b51fd181cc84cf8be7d",
+        "bytes": 212724,
+        "triangles": 1198,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.1,
+            0,
+            -0.04
+          ],
+          "max": [
+            0.1,
+            0.27,
+            0.04
+          ],
+          "size": [
+            0.2,
+            0.27,
+            0.08
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-chips.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "00b640eacbb1b4afb8d13b68f5c5d0b8528b7c6e",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-chips.glb > game/public/assets/models/item-chips.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_chips.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
+    {
+      "id": "base:item_chocolate",
+      "runtimeKeys": [
+        "item_chocolate"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-chocolate-t25.glb",
+        "url": "assets/models/item-chocolate-t25.glb",
+        "sha256": "3579b5974af6b18d967354f38d8fa8b5c2ac6ba9ad3636ea25dd013bd79985f7",
+        "bytes": 176040,
+        "triangles": 2074,
+        "vertices": 2390,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 50710
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 23180
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 10968
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": false,
+        "dims": [
+          0.129,
+          0.02,
+          0.0537
+        ],
+        "bbox": {
+          "min": [
+            -0.0645,
+            0,
+            -0.0269
+          ],
+          "max": [
+            0.0645,
+            0.02,
+            0.0269
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a18997-0fde-73a0-9084-7aa6a399d1aa",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same wrapped bar: dark brown wrapper, cream wave band + red leaf logo on top face (top view), foil ends. Slightly rounder/thinner than reference.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_chocolate/a1/native.glb",
+        "nativeSha256": "0521a71f5b75c55eb35abcc8bfcaa03d4f99a804b67b2a3d5ff4f3aa1f7b29f4",
+        "nativeBytes": 6369408,
+        "native": {
+          "triangles": 2074,
+          "vertices": 2390,
+          "bbox": [
+            0.9512,
+            0.1475,
+            0.396
+          ],
+          "components": 1,
+          "largestComponentFaces": 2074,
+          "boundaryEdges": 0,
+          "nonManifoldEdges": 2,
+          "edges": 3109,
+          "mr": {
+            "meanRoughness": 0.269,
+            "meanMetalness": 0.49
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2912116
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1208966
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2144639
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/chocolate/image/chocolate-original.png",
+          "sha256": "b7d12de91f36f80cdd085cc647cbf0dbc078e81457b38ea3d0761a77316ff9a8",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.135629,
+          0.135629,
+          0.135629
+        ],
+        "t": [
+          -0.000033,
+          0.010033,
+          0.000066
+        ],
+        "fit": "uniform: height 0.02 m (old runtime height) -> 0.129 x 0.02 x 0.0537 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.16,
+          0.02,
+          0.08
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.514,
+              "lumaCorrelation": 0.092,
+              "chromaDiff": 0.02,
+              "aspectLogDiff": 1.52,
+              "score": -0.194
+            },
+            "right": {
+              "iou": 0.534,
+              "lumaCorrelation": -0.243,
+              "chromaDiff": 0.062,
+              "aspectLogDiff": 0.638,
+              "score": -0.042
+            },
+            "back": {
+              "iou": 0.515,
+              "lumaCorrelation": 0.096,
+              "chromaDiff": 0.019,
+              "aspectLogDiff": 1.52,
+              "score": -0.188
+            },
+            "left": {
+              "iou": 0.532,
+              "lumaCorrelation": -0.254,
+              "chromaDiff": 0.063,
+              "aspectLogDiff": 0.638,
+              "score": -0.054
+            }
+          },
+          "best": "right",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": null,
+      "simplify": {
+        "applied": false,
+        "triangles": 2074
+      },
+      "meshAfter": {
+        "components": 1,
+        "largestComponentFaces": 2074,
+        "boundaryEdges": 0,
+        "nonManifoldEdges": 2,
+        "edges": 3109
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-chocolate.glb",
+        "sha256": "6b6ed2e70b3bbf81698c4dbc6cf189f8486d3b6d1a6c47626b2f414e65c8dfab",
+        "bytes": 119504,
+        "triangles": 600,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.08,
+            0,
+            -0.04
+          ],
+          "max": [
+            0.08,
+            0.02,
+            0.04
+          ],
+          "size": [
+            0.16,
+            0.02,
+            0.08
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-chocolate.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "937caa77816d6902ce1cafd934fceb8667b280f2",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-chocolate.glb > game/public/assets/models/item-chocolate.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_chocolate.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
+    {
+      "id": "base:item_cola",
+      "runtimeKeys": [
+        "item_cola"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-cola-t25.glb",
+        "url": "assets/models/item-cola-t25.glb",
+        "sha256": "2fc26018fdcf5cf00b1db10568203505284377c4f450fd33ff7a79619c09812b",
+        "bytes": 175860,
+        "triangles": 2050,
+        "vertices": 2419,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 49552
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 28153
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 6222
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": false,
+        "dims": [
+          0.0648,
+          0.122,
+          0.065
+        ],
+        "bbox": {
+          "min": [
+            -0.0324,
+            0,
+            -0.0325
+          ],
+          "max": [
+            0.0324,
+            0.122,
+            0.0325
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a18997-170f-7346-862f-8b08f8a938a2",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same red can with yellow star/swoosh, pull-tab.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_cola/a1/native.glb",
+        "nativeSha256": "a3233a109f15aae061e11fdda1650ea69aad28486aa8843e17db369bfc8bab1d",
+        "nativeBytes": 6505044,
+        "native": {
+          "triangles": 2050,
+          "vertices": 2419,
+          "bbox": [
+            0.5054,
+            0.9517,
+            0.5073
+          ],
+          "components": 2,
+          "largestComponentFaces": 1316,
+          "boundaryEdges": 0,
+          "nonManifoldEdges": 0,
+          "edges": 3075,
+          "mr": {
+            "meanRoughness": 0.372,
+            "meanMetalness": 0.727
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2673518
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1783220
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1944010
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/cola/image/cola-original.png",
+          "sha256": "329511aa922d579c847e33630c2d0afd9234131ca8c25f514e630f3d2db08f3a",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.128197,
+          0.128197,
+          0.128197
+        ],
+        "t": [
+          0,
+          0.061,
+          0
+        ],
+        "fit": "uniform: height 0.122 m (old runtime height) -> 0.0648 x 0.122 x 0.065 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.066,
+          0.122,
+          0.066
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.957,
+              "lumaCorrelation": 0.183,
+              "chromaDiff": 0.087,
+              "aspectLogDiff": 0.04,
+              "score": 0.997
+            },
+            "right": {
+              "iou": 0.957,
+              "lumaCorrelation": -0.136,
+              "chromaDiff": 0.113,
+              "aspectLogDiff": 0.04,
+              "score": 0.715
+            },
+            "back": {
+              "iou": 0.957,
+              "lumaCorrelation": 0.154,
+              "chromaDiff": 0.095,
+              "aspectLogDiff": 0.04,
+              "score": 0.965
+            },
+            "left": {
+              "iou": 0.957,
+              "lumaCorrelation": 0.215,
+              "chromaDiff": 0.099,
+              "aspectLogDiff": 0.04,
+              "score": 1.01
+            }
+          },
+          "best": "left",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": null,
+      "simplify": {
+        "applied": false,
+        "triangles": 2050
+      },
+      "meshAfter": {
+        "components": 2,
+        "largestComponentFaces": 1316,
+        "boundaryEdges": 0,
+        "nonManifoldEdges": 0,
+        "edges": 3075
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-cola.glb",
+        "sha256": "76294dfa01e6a6e88868c4639fdf9487f757524e4f736499fb1927d63a9fef86",
+        "bytes": 137772,
+        "triangles": 678,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.033,
+            0,
+            -0.033
+          ],
+          "max": [
+            0.033,
+            0.122,
+            0.033
+          ],
+          "size": [
+            0.066,
+            0.122,
+            0.066
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-cola.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "e31a4c390c0dbf358be419d88c25ed779ad7dbae",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-cola.glb > game/public/assets/models/item-cola.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_cola.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
+    {
+      "id": "base:item_juice",
+      "runtimeKeys": [
+        "item_juice"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-juice-t25.glb",
+        "url": "assets/models/item-juice-t25.glb",
+        "sha256": "27d6929170334aa3a1f2c79212d544fc3aa13febd15a482e35e014bff77a7d2b",
+        "bytes": 172544,
+        "triangles": 1984,
+        "vertices": 2503,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 54715
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 18390
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 5192
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": true,
+        "dims": [
+          0.057,
+          0.195,
+          0.0568
+        ],
+        "bbox": {
+          "min": [
+            -0.0285,
+            0,
+            -0.0284
+          ],
+          "max": [
+            0.0285,
+            0.195,
+            0.0284
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a18998-591d-76bd-9b0f-cba4fd6858fc",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same orange-juice gable carton, orange cap, orange-slice art.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_juice/a1/native.glb",
+        "nativeSha256": "0781134cc327a277a0c9c2d886fca888023c6442195a5d7e4545fe099570b48f",
+        "nativeBytes": 5473652,
+        "native": {
+          "triangles": 1984,
+          "vertices": 2503,
+          "bbox": [
+            0.2778,
+            0.9512,
+            0.2769
+          ],
+          "components": 5,
+          "largestComponentFaces": 1774,
+          "boundaryEdges": 114,
+          "nonManifoldEdges": 0,
+          "edges": 3033,
+          "mr": {
+            "meanRoughness": 0.43,
+            "meanMetalness": 0.002
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2409316
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1339805
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1618321
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/juice/image/juice-original.png",
+          "sha256": "000a6e4ce367b0e3aadb7a0e0c3691b31038947773b9de3e9b3f8864b0fb0e71",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.20501,
+          0.20501,
+          0.20501
+        ],
+        "t": [
+          0,
+          0.09745,
+          0.0002
+        ],
+        "fit": "uniform: height 0.195 m (old runtime height) -> 0.057 x 0.195 x 0.0568 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.07,
+          0.195,
+          0.07
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.878,
+              "lumaCorrelation": 0.252,
+              "chromaDiff": 0.11,
+              "aspectLogDiff": 0.388,
+              "score": 0.775
+            },
+            "right": {
+              "iou": 0.854,
+              "lumaCorrelation": 0.26,
+              "chromaDiff": 0.124,
+              "aspectLogDiff": 0.388,
+              "score": 0.744
+            },
+            "back": {
+              "iou": 0.878,
+              "lumaCorrelation": 0.336,
+              "chromaDiff": 0.118,
+              "aspectLogDiff": 0.388,
+              "score": 0.835
+            },
+            "left": {
+              "iou": 0.855,
+              "lumaCorrelation": 0.36,
+              "chromaDiff": 0.137,
+              "aspectLogDiff": 0.388,
+              "score": 0.812
+            }
+          },
+          "best": "back",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": null,
+      "simplify": {
+        "applied": false,
+        "triangles": 1984
+      },
+      "meshAfter": {
+        "components": 5,
+        "largestComponentFaces": 1774,
+        "boundaryEdges": 114,
+        "nonManifoldEdges": 0,
+        "edges": 3033
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-juice.glb",
+        "sha256": "0e1405ffc876defa53ff4a0c629a1f908bd4edf1593b32c6f6717b56fa7cfc05",
+        "bytes": 141516,
+        "triangles": 700,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.035,
+            0,
+            -0.035
+          ],
+          "max": [
+            0.035,
+            0.195,
+            0.035
+          ],
+          "size": [
+            0.07,
+            0.195,
+            0.07
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-juice.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "5a430d9ff1097a1299f008323cc505c924d87fe7",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-juice.glb > game/public/assets/models/item-juice.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_juice.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
+    {
+      "id": "base:item_noodles",
+      "runtimeKeys": [
+        "item_noodles"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-noodles-t25.glb",
+        "url": "assets/models/item-noodles-t25.glb",
+        "sha256": "5273677a6ae27abd59a31a69a3e2dedfeed6675fde4e083b91789481c14cf299",
+        "bytes": 183564,
+        "triangles": 2007,
+        "vertices": 2219,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 75144
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 12430
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 10679
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": true,
+        "dims": [
+          0.1043,
+          0.105,
+          0.1048
+        ],
+        "bbox": {
+          "min": [
+            -0.0522,
+            0,
+            -0.0524
+          ],
+          "max": [
+            0.0522,
+            0.105,
+            0.0524
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a18998-60f9-74ac-91db-631e75245c97",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same instant-noodle cup: green swirl print, noodle-bowl art, printed lid (top view), foil rim.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_noodles/a1/native.glb",
+        "nativeSha256": "1cb02021176af0fe9ddfeaef3a166d75461445abe308990e703925769139dd0d",
+        "nativeBytes": 7383072,
+        "native": {
+          "triangles": 2007,
+          "vertices": 2219,
+          "bbox": [
+            0.9375,
+            0.9434,
+            0.9419
+          ],
+          "components": 2,
+          "largestComponentFaces": 1574,
+          "boundaryEdges": 51,
+          "nonManifoldEdges": 0,
+          "edges": 3036,
+          "mr": {
+            "meanRoughness": 0.418,
+            "meanMetalness": 0.001
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 3462515
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1364596
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2458568
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/noodles/image/noodles-original.png",
+          "sha256": "d8c9780bab7f8aa740b8fcec599bf9b493373033a51ba0a2bc93f3a6e13bc1a9",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.111304,
+          0.111304,
+          0.111304
+        ],
+        "t": [
+          -0.000245,
+          0.052364,
+          -0.000272
+        ],
+        "fit": "uniform: height 0.105 m (old runtime height) -> 0.1043 x 0.105 x 0.1048 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.095,
+          0.105,
+          0.095
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.888,
+              "lumaCorrelation": 0.189,
+              "chromaDiff": 0.07,
+              "aspectLogDiff": 0.077,
+              "score": 0.93
+            },
+            "right": {
+              "iou": 0.898,
+              "lumaCorrelation": 0.169,
+              "chromaDiff": 0.077,
+              "aspectLogDiff": 0.07,
+              "score": 0.922
+            },
+            "back": {
+              "iou": 0.887,
+              "lumaCorrelation": 0.204,
+              "chromaDiff": 0.068,
+              "aspectLogDiff": 0.077,
+              "score": 0.944
+            },
+            "left": {
+              "iou": 0.895,
+              "lumaCorrelation": 0.154,
+              "chromaDiff": 0.074,
+              "aspectLogDiff": 0.07,
+              "score": 0.909
+            }
+          },
+          "best": "back",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": null,
+      "simplify": {
+        "applied": false,
+        "triangles": 2007
+      },
+      "meshAfter": {
+        "components": 2,
+        "largestComponentFaces": 1574,
+        "boundaryEdges": 51,
+        "nonManifoldEdges": 0,
+        "edges": 3036
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-noodles.glb",
+        "sha256": "c866a07382bde8ca1dde8c260d05ea587a5b885d2f1a4ea1abe452e0517b95a4",
+        "bytes": 159108,
+        "triangles": 900,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.0475,
+            0,
+            -0.0475
+          ],
+          "max": [
+            0.0475,
+            0.105,
+            0.0475
+          ],
+          "size": [
+            0.095,
+            0.105,
+            0.095
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-noodles.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "3cefd6623fcea1c9b7bbf8a14bd33a3be184da36",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-noodles.glb > game/public/assets/models/item-noodles.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_noodles.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    },
+    {
+      "id": "base:item_water",
+      "runtimeKeys": [
+        "item_water"
+      ],
+      "class": "consumable item",
+      "output": {
+        "path": "game/public/assets/models/item-water-t25.glb",
+        "url": "assets/models/item-water-t25.glb",
+        "sha256": "0ff5c8a3a557bc35d6f2c8e6f550df0f4b4f7d869e01c528937dec76f51d31b2",
+        "bytes": 149472,
+        "triangles": 2102,
+        "vertices": 2072,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 51361
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 12034
+          },
+          {
+            "slot": "normal",
+            "size": [
+              256,
+              256
+            ],
+            "mime": "image/jpeg",
+            "bytes": 4930
+          }
+        ],
+        "gpuTextureBytesEstimate": 2097152,
+        "doubleSided": false,
+        "dims": [
+          0.0733,
+          0.23,
+          0.0742
+        ],
+        "bbox": {
+          "min": [
+            -0.0366,
+            0,
+            -0.0371
+          ],
+          "max": [
+            0.0366,
+            0.23,
+            0.0371
+          ]
+        },
+        "budget": {
+          "tris": 3000,
+          "color": 512,
+          "mr": 256,
+          "normal": 256,
+          "bytes": 240000,
+          "rule": "consumable item: <= 3k tris, 512 px colour, 256 px MR / normal",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a1898f-c803-72bc-a4df-1163d0c22c2e",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same clear PET bottle, blue cap, white/blue droplet-wave label, ridges. Material is opaque (texture-painted transparency, no alpha); integration may tune material.",
+        "args": {
+          "target_polycount": 2000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:item_water/a1/native.glb",
+        "nativeSha256": "0c708585b038c19a631f2cc7b96d7b4bbf84a9bc48e74aa245cd9f9094ae9fa9",
+        "nativeBytes": 6159604,
+        "native": {
+          "triangles": 2102,
+          "vertices": 2072,
+          "bbox": [
+            0.3032,
+            0.9517,
+            0.3071
+          ],
+          "components": 1,
+          "largestComponentFaces": 2102,
+          "boundaryEdges": 0,
+          "nonManifoldEdges": 0,
+          "edges": 3153,
+          "mr": {
+            "meanRoughness": 0.205,
+            "meanMetalness": 0
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2872629
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1260516
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1932611
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/tasks/vertical-slice-iteration03-20261026/generation/water/image/water-original.png",
+          "sha256": "2fe739c187ff95d9191ee86ed1e7617a9b970f131351c3f9c3a5ac17c5c0a0ae",
+          "role": "front (SV, sole input)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          0.241683,
+          0.241683,
+          0.241683
+        ],
+        "t": [
+          0,
+          0.115,
+          0
+        ],
+        "fit": "uniform: height 0.23 m (old runtime height) -> 0.0733 x 0.23 x 0.0742 m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime",
+        "oldDims": [
+          0.07,
+          0.23,
+          0.07
+        ],
+        "stretchVsUniformHeight": [
+          1,
+          1,
+          1
+        ],
+        "anchor": "bottom",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.959,
+              "lumaCorrelation": 0.644,
+              "chromaDiff": 0.044,
+              "aspectLogDiff": 0.062,
+              "score": 1.399
+            },
+            "right": {
+              "iou": 0.972,
+              "lumaCorrelation": 0.522,
+              "chromaDiff": 0.048,
+              "aspectLogDiff": 0.021,
+              "score": 1.331
+            },
+            "back": {
+              "iou": 0.959,
+              "lumaCorrelation": 0.649,
+              "chromaDiff": 0.043,
+              "aspectLogDiff": 0.062,
+              "score": 1.404
+            },
+            "left": {
+              "iou": 0.972,
+              "lumaCorrelation": 0.472,
+              "chromaDiff": 0.053,
+              "aspectLogDiff": 0.021,
+              "score": 1.287
+            }
+          },
+          "best": "back",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": null,
+      "simplify": {
+        "applied": false,
+        "triangles": 2102
+      },
+      "meshAfter": {
+        "components": 1,
+        "largestComponentFaces": 2102,
+        "boundaryEdges": 0,
+        "nonManifoldEdges": 0,
+        "edges": 3153
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "bottom-centre (y = 0 floor contact; x/z bbox centre)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/item-water.glb",
+        "sha256": "0d8189558b9341657e313c4bc6c0d7264dac59235538319013740f3b5f0f1e56",
+        "bytes": 203912,
+        "triangles": 994,
+        "textures": [
+          "jpeg 512x512",
+          "jpeg 256x256",
+          "png 128x128"
+        ],
+        "bbox": {
+          "min": [
+            -0.035,
+            0,
+            -0.035
+          ],
+          "max": [
+            0.035,
+            0.23,
+            0.035
+          ],
+          "size": [
+            0.07,
+            0.23,
+            0.07
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/item-water.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "63850babed84a67b71c72d1502d7c7caf29d914c",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/item-water.glb > game/public/assets/models/item-water.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_item_water.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    }
+  ]
+}

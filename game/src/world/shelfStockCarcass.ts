@@ -191,11 +191,12 @@ export const TOP_DECK_CLEAR = 0.3;
 export const SHELF_MODEL_RECT = {x0: -0.462, x1: 0.462, z0: -0.152, z1: 0.14};
 
 /**
- * Stockable deck of tech-display.glb (deviceWall, fitted 1.1 x 2.0 x 0.58): flat at 0.863 m from the
- * back panel (z -0.24) to the display phones on stands (z >= 0.08); the narrow accessory shelf above
- * it hangs at 1.2 m against the back panel.
+ * Stockable deck of tech-display-t25.glb (deviceWall, fitted 1.1 x 2.0 x 0.58; Meshy T2.5, ray-cast 2026-10-29): flat cabinet
+ * top at 0.849 m; the display phones lean back on their stands to z -0.10, the pegboard face is at z -0.223 and accessory
+ * cards hang off it down to 1.085 m, so stock fills the clear strip between them (z -0.22..-0.105, up to 1.08 m) under the
+ * accessory shelf (underside 1.256 m). (Iteration 05 tech-display.glb: deck 0.863, rect z -0.2..0.05, top 1.16.)
  */
-export const DEVICE_WALL_DECK = {y: 0.863, rect: {x0: -0.455, x1: 0.455, z0: -0.2, z1: 0.05}, top: 1.16};
+export const DEVICE_WALL_DECK = {y: 0.849, rect: {x0: -0.465, x1: 0.465, z0: -0.22, z1: -0.105}, top: 1.08};
 
 /**
  * Deck heightmaps of a generated shelf model from its fitted triangles (holder-local, metres; 9
@@ -418,8 +419,8 @@ export function stockColliders(kind: string, variant: number, boards: readonly B
       const top = boards[0]?.y ?? DEVICE_WALL_DECK.y;
       box(-w / 2, 0, -d / 2 + 0.03, w / 2, top, d / 2 - 0.03); // cabinet
       box(-w / 2, 0, -d / 2, w / 2, h, -0.235); // back panel / pegboard
-      box(-w / 2 + 0.03, top, 0.07, w / 2 - 0.03, top + 0.14, d / 2 - 0.05); // the display phones on their stands
-      box(-w / 2 + 0.03, 1.18, -0.235, w / 2 - 0.03, 1.26, -0.17); // narrow accessory shelf
+      box(-w / 2 + 0.03, top, -0.075, w / 2 - 0.03, top + 0.21, 0.12); // the display phones on their stands (T2.5 model: z -0.07..0.11)
+      box(-w / 2 + 0.03, 1.25, -0.235, w / 2 - 0.03, 1.28, -0.045); // accessory shelf (T2.5 model: 1.256..1.278, z -0.17..-0.05)
       break;
     }
     default:

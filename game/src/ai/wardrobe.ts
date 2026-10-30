@@ -90,7 +90,12 @@ export const DEFAULT_ZOMBIE_POOL: ZombiePool = {};
  * for the original zombie and scales with every other body/wearable.
  */
 export const HIT_CALIBRATION = {head: 1.126, torso: 1.378, arm: 1.062, leg: 0.913} as const;
-/** Measured Last-shift radii (zombie-body-lastshift.glb extras `hit`): the calibration and ragdoll reference. */
+/**
+ * Measured Last-shift radii (zombie-body-lastshift.glb extras `hit` of iterations 01-07): the calibration and ragdoll
+ * reference. Meshy T2.5 migration (2026-10-29): KEPT. The calibration maps measured mesh radii to gameplay radii and the
+ * ragdoll spheres were tuned on that Last-shift mesh, so every rebuilt body (incl. the gaunter T2.5 Last-shift) gets
+ * volumes / ragdoll girth from its OWN measured mesh through the same mapping (derivatives/meshy-t25-chars-20261029.json).
+ */
 export const REFERENCE_HIT = {head: 0.1199, torso: 0.1451, arm: 0.0706, leg: 0.1095} as const;
 
 export type HitRadii = {head: number; torso: number; arm: number; leg: number};

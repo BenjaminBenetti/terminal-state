@@ -90,3 +90,18 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   are native Codex image generations, downsized for runtime.
 - Original native downloads and generation ledgers are kept outside the repository (studio reference task folder).
   Unapproved prototypes; no commercial clearance implied.
+
+## Meshy T2.5 replacement of the locally generated game models (iteration 18)
+- The game's locally generated (Pixal3D) props, consumable items, ceiling light, zombie bodies, garments and the
+  rat-dog creature were regenerated with the user's Meshy account (Meshy T2.5, Smart Topology, image-to-3D, 2K PBR)
+  under the user's authorization and API-key limit.
+- Each model was conditioned on ITS ORIGINAL reference image (the exact earlier conditioning image, hash-verified).
+  The one exception is the scavenger body: its original image was never retained, so its reference was recreated by
+  one user-authorized Codex image generation, guided by a render of the existing model, and is labelled as recreated.
+- Runtime derivatives (`*-t25.glb`) were fitted to the existing gameplay footprints and budgets by
+  `tools/asset-pipeline/props/build-meshy-t25.mjs` and the character / creature rig pipelines.
+  - Per-asset provenance, including the restore map to the previous files (Git commit `a7a646a`):
+    `assets/derivatives/meshy-t25-*-20261029.json`.
+  - The superseded files are removed from the current game and remain in Git history.
+- Native downloads, generation ledgers and the reference mapping are kept outside the repository (studio reference
+  task folder). Unapproved prototypes; no commercial clearance implied.

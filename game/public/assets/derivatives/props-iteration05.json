@@ -2075,5 +2075,38 @@
       ]
     }
   ],
-  "note": "Native masters stay in reference/tasks/vertical-slice-iteration05-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public. The iteration04 derivatives (shop-cooler.glb, shop-display.glb) and props-iteration04.json are left unchanged."
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration05-20261026/generation/<asset>/native/ (asset.glb.xz, lossless) and are never copied to game/public. The iteration04 derivatives (shop-cooler.glb, shop-display.glb) and props-iteration04.json are left unchanged.",
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/janitor-cart.glb": {
+        "id": "base:janitorCart",
+        "replacedBy": "game/public/assets/models/janitor-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "563dd70180c5f221a55e4990460715b8b03bf89e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/janitor-cart.glb > game/public/assets/models/janitor-cart.glb"
+      },
+      "game/public/assets/models/shop-cooler-open.glb": {
+        "id": "base:shopCooler",
+        "replacedBy": "game/public/assets/models/shop-cooler-open-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "22aac733d6087c7d5a96982a75cba1dcff02dc39",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shop-cooler-open.glb > game/public/assets/models/shop-cooler-open.glb"
+      },
+      "game/public/assets/models/shop-display-open.glb": {
+        "id": "base:shopDisplay",
+        "replacedBy": "game/public/assets/models/shop-display-open-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "c5da4423624bb1c361316c885419f896f80ffab8",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shop-display-open.glb > game/public/assets/models/shop-display-open.glb"
+      },
+      "game/public/assets/models/tech-display.glb": {
+        "id": "base:techDisplay",
+        "replacedBy": "game/public/assets/models/tech-display-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "6610bc0393818235d77f378b947eff25139b270b",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/tech-display.glb > game/public/assets/models/tech-display.glb"
+      }
+    }
+  }
 }

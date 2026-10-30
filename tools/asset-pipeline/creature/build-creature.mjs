@@ -7,12 +7,22 @@
 // The master is an unrigged static reconstruction; this script makes a NEW derivative: placement from paw landmarks,
 // simplification + new UVs + texture/normal bake, a NEW quadruped skeleton auto-placed from mesh landmarks, automatic
 // skin weights and hand-authored procedural keyframe clips (not mocap). Nothing here was animated in the master.
+//
+// Meshy T2.5 migration (task studio-meshy-game-replacement-20261029-01, lane CHARS): the DEFAULT source is now the
+// accepted Meshy T2.5 replacement (meshy_image_to_3d from the SAME original concept image, quadruped-02 input.png),
+// pinned below by sha256; it is densified (zombie/lib/densify.mjs: same surface / texture mapping) so the unchanged
+// landmark / skeleton / skin / clip stages run on it, and the result is written to creature-ratdog-t25.glb (new URL;
+// the runtime key creature_ratdog is unchanged). `--legacy-master` rebuilds the old Pixal3D derivative at the old path.
+//   LL_THREADS=N caps bake worker threads (1-CPU pod).
 import fs from 'node:fs';
+import os from 'node:os';
+import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import v8 from 'node:v8';
 import {REPO, sha256File} from '../zombie/lib/master.mjs';
 import {loadSource} from '../zombie/lib/source.mjs';
+import {t25Source, loadAnySource, t25LoaderHash, restoreRecord, T25_TASK} from '../zombie/lib/t25.mjs';
 import {weldByPosition, simplifyMesh, computeNormals, bounds} from '../zombie/lib/mesh.mjs';
 import {unwrap} from '../zombie/lib/unwrap.mjs';
 import {MASTER} from './lib/master.mjs';
@@ -27,7 +37,14 @@ import {buildDocument, writeGLB, skinPositions} from './lib/glb.mjs';
 
 const ARGS = new Set(process.argv.slice(2));
 const TMP = '/tmp/ll-creature';
-const OUT_GLB = path.join(REPO, 'game/public/assets/models/creature-ratdog.glb');
+if (+process.env.LL_THREADS > 0) { const cpus = os.cpus; os.cpus = () => cpus().slice(0, +process.env.LL_THREADS); }
+/** Accepted Meshy T2.5 delivery (reference/tasks/meshy-game-replacement-20261029/assets/DELIVERED.json), pinned. */
+export const T25 = {asset: 'creature:ratdog', attempt: 'a1', sha256: '62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b', densifyFrac: 0.009};
+const LEGACY = ARGS.has('--legacy-master');
+const SOURCE = LEGACY ? MASTER : t25Source(T25.asset, T25, T25.densifyFrac);
+if (!SOURCE) throw new Error(`T2.5 source ${T25.asset} is not an accepted delivery (use --legacy-master for the old Pixal3D derivative)`);
+const OLD_GLB_REL = 'game/public/assets/models/creature-ratdog.glb';
+const OUT_GLB = path.join(REPO, LEGACY ? OLD_GLB_REL : 'game/public/assets/models/creature-ratdog-t25.glb');
 const OUT_JSON = path.join(REPO, 'game/public/assets/derivatives/creature-ratdog.json');
 
 export const OPTIONS = {
@@ -40,6 +57,15 @@ export const OPTIONS = {
   textures: {baseColor: 1024, metallicRoughness: 512, normal: 512, jpegQuality: 90},
   skin: {smoothIters: 4, smoothLambda: 0.5, legRatio: 0.55, jointBlend: 0.025},
 };
+// T2.5 source: claws / toes are separate mesh pieces -> multi-vertex leg flood seeds (lib/skin.mjs seedRadius)
+if (!process.argv.includes('--legacy-master')) {
+  Object.assign(OPTIONS.skin, {seedRadius: 0.05, islands: true});
+  // accepted proportion fit (primary review vs the ORIGINAL concept image): the T2.5 mesh at the 0.64 m shoulder height is
+  // 1.23 m nose -> rump (1.92 x the shoulder height) where the established creature from the same concept is 1.03 m (1.61 x);
+  // compress the body axis by 0.86 (-> ~1.06 m, 1.65 x) - legs / head get 14 % shorter front-to-back, within sane limits
+  OPTIONS.lengthScale = 0.86;
+  OPTIONS.lengthScaleNote = 'non-uniform body-axis (+Z) scale 0.86 after placement: Meshy T2.5 posture is longer / lower than the hunched quadruped-02 concept; shoulder height (0.64 m) kept as the scale contract, nose -> rump length brought back near the established creature (1.03 m)';
+}
 
 function guardOutput(file) {
   const rel = path.relative(REPO, path.resolve(file));
@@ -53,17 +79,24 @@ const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1
 function codeHash() {
   const h = crypto.createHash('sha256');
   for (const f of ['lib/placement.mjs', 'lib/landmarks.mjs', 'lib/bake.mjs', 'lib/bake-worker.mjs']) h.update(fs.readFileSync(new URL(f, import.meta.url)));
-  h.update(JSON.stringify([OPTIONS.topHeight, OPTIONS.targetTris, OPTIONS.importance, OPTIONS.unwrap, OPTIONS.density, OPTIONS.bake, OPTIONS.textures]));
+  h.update(JSON.stringify([OPTIONS.topHeight, OPTIONS.targetTris, OPTIONS.importance, OPTIONS.unwrap, OPTIONS.density, OPTIONS.bake, OPTIONS.textures, OPTIONS.lengthScale ?? 1]));
+  if (!LEGACY) h.update(`${SOURCE.sha256}|${t25LoaderHash()}|${SOURCE.densifyFrac}`);
   return h.digest('hex').slice(0, 16);
 }
 
 async function meshStage() {
-  const m = await loadSource(MASTER);
-  if (m.sha256Verified !== MASTER.sha256) throw new Error('master sha mismatch');
+  const m = LEGACY ? await loadSource(MASTER) : await loadAnySource(SOURCE);
+  if (m.sha256Verified !== SOURCE.sha256) throw new Error('source sha mismatch');
   const pl = quadrupedPlacement(m.pos, {topHeight: OPTIONS.topHeight});
-  const high = {pos: pl.apply(m.pos), nrm: pl.applyNormals(m.nrm), uv: m.uv, idx: m.idx};
+  // T2.5 proportion fit (lengthScale < 1): the Meshy reconstruction is longer / lower than the original concept; the
+  // placed mesh is compressed along the body axis (+Z) only, so the shoulder height stays the scale contract and the
+  // nose -> rump length returns to the established creature (normals: inverse-transpose)
+  const ls = OPTIONS.lengthScale ?? 1;
+  const sz = P => { const o = Float32Array.from(P); if (ls !== 1) for (let i = 2; i < o.length; i += 3) o[i] *= ls; return o; };
+  const szN = N => { const o = Float32Array.from(N); if (ls !== 1) for (let i = 0; i < o.length; i += 3) { o[i + 2] /= ls; const l = Math.hypot(o[i], o[i + 1], o[i + 2]) || 1; o[i] /= l; o[i + 1] /= l; o[i + 2] /= l; } return o; };
+  const high = {pos: sz(pl.apply(m.pos)), nrm: szN(pl.applyNormals(m.nrm)), uv: m.uv, idx: m.idx};
   const welded = weldByPosition(high.pos, high.nrm, high.idx);
-  const skel = detectQuadruped(welded, pl.paws);
+  const skel = detectQuadruped(welded, Object.fromEntries(Object.entries(pl.paws).map(([k, p]) => [k, [p[0], p[1], +(p[2] * ls).toFixed(4)]])));
   if (skel._sanity.length) throw new Error('skeleton sanity: ' + skel._sanity.join('; '));
   // simplification importance: head (in front of the skull base) and paws (below the foot joints)
   const J = skel.joints;
@@ -83,13 +116,14 @@ async function meshStage() {
   const enc = await encodeAll(bk, {baseSize: OPTIONS.textures.baseColor, mrSize: OPTIONS.textures.metallicRoughness, nrmSize: OPTIONS.textures.normal, quality: OPTIONS.textures.jpegQuality});
   const {debug, _sanity, ...skelOut} = skel;
   void debug; void _sanity;
-  return {skel: skelOut, placement: pl.report(), low, enc,
+  return {skel: skelOut, placement: {...pl.report(), ...(ls !== 1 ? {lengthScale: ls, lengthScaleNote: OPTIONS.lengthScaleNote} : {})}, low, enc,
     stats: {weldedVertices: welded.pos.length / 3, weldedTriangles: welded.idx.length / 3,
       simplify: {targetTris: OPTIONS.targetTris, importance: OPTIONS.importance, resultTris: simp.triangles, resultVerts: simp.vertices, relativeError: +simp.error.toFixed(5), absoluteErrorM: +(simp.error * simp.scale).toFixed(5), flags: ['Prune', 'Regularize']},
       unwrap: uw.stats, bake: bk.stats, outVertices: nv},
     master: {id: m.id, title: MASTER.title, uploadId: m.uploadId, file: m.file, sha256: m.sha256Verified, bytes: m.bytes, triangles: m.triangles, vertices: m.vertices, material: m.material,
       textures: {baseColor: [m.baseColor.width, m.baseColor.height, m.baseColor.mimeType], metallicRoughness: [m.metallicRoughness.width, m.metallicRoughness.height, m.metallicRoughness.mimeType]},
-      nativeJob: MASTER.nativeJob, conceptImage: MASTER.conceptImage, conceptSha256: MASTER.conceptSha256}};
+      ...(LEGACY ? {nativeJob: MASTER.nativeJob, conceptImage: MASTER.conceptImage, conceptSha256: MASTER.conceptSha256}
+        : {nativeJob: SOURCE.t25.taskId, conceptImage: SOURCE.t25.inputImage, conceptSha256: SOURCE.t25.inputImageSha256, t25: SOURCE.t25, densify: m.densify})}};
 }
 
 async function cachedMeshStage() {
@@ -241,9 +275,10 @@ async function main() {
   const endRel = {};
   for (const [bone, key] of [['Head', 'Head'], ['Jaw', 'Jaw'], ['Tail5', 'Tail5'], ...['L_Front', 'R_Front', 'L_Hind', 'R_Hind'].map(l => [l + 'Foot', l + 'Foot'])])
     endRel[bone] = V.sub(skel.ends[key], skel.joints[bone]).map(v => +v.toFixed(4));
-  const extras = {creatureRatdog: {version: 1, archetype: 'ratdog', joints: JOINT_NAMES, ends: endRel, clips: clipMeta, radii,
+  const extras = {creatureRatdog: {version: LEGACY ? 1 : 2, archetype: 'ratdog', joints: JOINT_NAMES, ends: endRel, clips: clipMeta, radii,
     boundsM: {min: bb.min.map(v => +v.toFixed(3)), max: bb.max.map(v => +v.toFixed(3))}, deathBounds: death.bounds,
-    note: 'Derivative of the unrigged Field Notes quadruped-02 master; NEW skeleton/skin/procedural clips; unapproved, gameReady false.'}};
+    note: LEGACY ? 'Derivative of the unrigged Field Notes quadruped-02 master; NEW skeleton/skin/procedural clips; unapproved, gameReady false.'
+      : 'Derivative of the unrigged Meshy T2.5 replacement (same quadruped-02 concept image) of the Field Notes master; NEW skeleton/skin/procedural clips; unapproved, gameReady false.'}};
   console.log('[6/6] write GLB + provenance');
   const doc = buildDocument({skel, mesh: {...mesh, extras: {slot: 'body'}}, clips, generator: 'The Last Line creature derivative builder (tools/asset-pipeline/creature/build-creature.mjs)', extras});
   fs.mkdirSync(path.dirname(OUT_GLB), {recursive: true});
@@ -251,12 +286,15 @@ async function main() {
   const outBytes = fs.statSync(OUT_GLB).size, outSha = sha256File(OUT_GLB);
   const segs = boneSegments(skel);
   const manifest = {
-    asset: 'creature-ratdog', task: 'studio-slice-iteration07-20261026-01', lane: 'Q (rat/dog quadruped enemy)',
+    asset: 'creature-ratdog', task: LEGACY ? 'studio-slice-iteration07-20261026-01' : T25_TASK, lane: LEGACY ? 'Q (rat/dog quadruped enemy)' : 'CHARS (Meshy T2.5 replacement; pipeline of iteration-07 lane Q)',
+    ...(LEGACY ? {} : {t25: {sourceReplaced: true, source: SOURCE.t25, densify: ms.master.densify, supersedes: restoreRecord(OLD_GLB_REL, args => execFileSync('git', ['-C', REPO, ...args], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']})),
+      supersededManifest: 'the iteration-07 creature-ratdog.json (Pixal3D quadruped-02 master) is in Git history at the same path (base commit a7a646a)'}}),
     generatedBy: 'tools/asset-pipeline/creature/build-creature.mjs', builtAt: new Date().toISOString(),
     output: {file: path.relative(REPO, OUT_GLB), bytes: outBytes, sha256: outSha, triangles: mesh.idx.length / 3, vertices: mesh.pos.length / 3,
       textures: {baseColor: `${OPTIONS.textures.baseColor}² JPEG (${ms.enc.baseJpg.length} B)`, metallicRoughness: `${OPTIONS.textures.metallicRoughness}² JPEG (${ms.enc.mrJpg.length} B)`, normal: `${OPTIONS.textures.normal}² JPEG tangent-space, three.js derivative-tangent convention (${ms.enc.nrmJpg.length} B)`},
       meshNode: 'RatdogBody', skin: 'RatdogSkin', joints: JOINTS.length, clips: Object.keys(clipMeta)},
-    source: {...ms.master, readOnly: true, unrigged: true, note: 'The master is a static, unrigged AI reconstruction (Field Notes Core Assets quadruped-02). It was NOT animated; everything rig/animation related below is new derivative work.'},
+    source: {...ms.master, readOnly: true, unrigged: true, note: LEGACY ? 'The master is a static, unrigged AI reconstruction (Field Notes Core Assets quadruped-02). It was NOT animated; everything rig/animation related below is new derivative work.'
+      : 'The source is the static, unrigged Meshy T2.5 image-to-3D reconstruction of the ORIGINAL quadruped-02 concept image (the same image the old Pixal3D master came from). It was NOT animated; everything rig/animation related below is new derivative work.'},
     placement: {...ms.placement, provisionalSize: 'Top of the shoulder bristles at 0.64 m (about a large dog). The concept card gives proposed anatomy but no size; this is a game-scale choice, not approved lore.'},
     mesh: ms.stats,
     skeleton: {method: 'auto-placed from mesh landmarks of the placed master (lib/landmarks.mjs): paw contact patches, midline back/underside profile, slice-tracked leg centrelines, narrowest neck section, nose tip, tail centreline by geodesic distance bands; anatomical ratios for joints inside the body', joints: skel.joints, ends: skel.ends, hierarchy: JOINTS, measures: skel.measures, ratios: skel.ratios,
@@ -269,8 +307,8 @@ async function main() {
   };
   fs.mkdirSync(path.dirname(OUT_JSON), {recursive: true});
   fs.writeFileSync(OUT_JSON, JSON.stringify(manifest, null, 1) + '\n');
-  const s = sha256File(path.join(REPO, MASTER.file));
-  if (s !== MASTER.sha256) throw new Error('MASTER CHANGED');
+  const s = sha256File(path.isAbsolute(SOURCE.file) ? SOURCE.file : path.join(REPO, SOURCE.file));
+  if (s !== SOURCE.sha256) throw new Error('SOURCE CHANGED');
   fs.mkdirSync(TMP, {recursive: true});
   fs.writeFileSync(path.join(TMP, 'base-preview.png'), ms.enc.basePreview);
   fs.writeFileSync(path.join(TMP, 'normal-preview.png'), ms.enc.nrmPreview);

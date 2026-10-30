@@ -1,30 +1,29 @@
 {
  "schema": "the-last-line/wardrobe-fit-audit@1",
- "generatedAt": "2026-10-27T00:08:37.744Z",
+ "generatedAt": "2026-10-30T02:10:48.451Z",
  "method": "tools/asset-pipeline/zombie/qa/fit-audit.mjs on the shipped GLBs (every 2nd frame of all six clips + bind + 3 ragdoll-like extreme poses); lib/penetration.mjs: fraction of the covered OUTER-HULL body vertices (footwear excluded) that are VISIBLE (used by an unhidden triangle) and lie outside the cloth while the cloth's outward face is under the skin; layering = outer-wall pants vertices (not hidden by hideWear) poking through the upper",
  "models": {
-  "outfit-beanie.glb": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a",
-  "outfit-blazer.glb": "972a3f48a8ffae01c76f547ed8d8eb1123bb7836bb198b63150336b91afa44bd",
-  "outfit-cap.glb": "4fdb02fccf121e22fadfa81cef6754d46d6d91d16f12f59295744ed848e3ddb7",
-  "outfit-cargo.glb": "68851c3eed45291936121d6770e37538c1ff1fe9989ecd9185d7b614878d2d06",
-  "outfit-coat.glb": "e8a6462714d12a3d1c278d400b3d31760b83b3743571955ba67f6964743f88ed",
-  "outfit-flannel.glb": "0303a2698c8b530d8f6f81c407ad359f5ab29514938f012973afc26c67082b23",
-  "outfit-gasmask.glb": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4",
-  "outfit-hardhat.glb": "c94ed2035aa144330e5307b4bb00db6ef5b5d6ae16f3953c0f3040679e5ad640",
-  "outfit-hivis.glb": "4762bd2048f2bbea45932dd025f661d8984e55abc3ccb7a5b79f3d575875eaf0",
-  "outfit-hoodie.glb": "5364d68aaeabec4dfd4fa8a2dfc4636f5bb63fc574de35efad2c7c3330e55988",
-  "outfit-jeans.glb": "1563d11941520228862247e7acc2e08533d6bfea6cb77237bbb4fc0ba9292e35",
-  "outfit-puffer.glb": "3902e0e2dcc5993e6151abbfbf222e6c3bc0df99d31ead7070ad0595d3e35049",
-  "outfit-respirator.glb": "12b7b25a197f555be624c754836fa3b29c85cb8d8d3a9f96620dfc083390577e",
-  "outfit-slacks.glb": "54bc4ad60d795ba9cb473fa0dda4517e7d8b9d2eb4c5ff9169a1b7923635101e",
-  "outfit-sweater.glb": "543b57efeedc53007cc3a9b821d77630594cbc4119fbeb38d46ce53f3560fb45",
-  "outfit-trench.glb": "87904fb00ee3370d76a4fd5ee552a3f7314101d044b1e1d178c15a3c07a6d601",
-  "zombie-body-agent.glb": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45",
-  "zombie-body-courier.glb": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df",
-  "zombie-body-heavyset.glb": "a55889055287c4e852ff52de72d15af3fc3788b1b278da5e05f5760f66ffab6c",
-  "zombie-body-lastshift.glb": "b91e2c0bd56effec6d2f7a825e4c26da6e2c5d4fc1e80ef87730e6fee6246559",
-  "zombie-body-scavenger.glb": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869",
-  "zombie-body-tall.glb": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281"
+  "outfit-beanie-t25.glb": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
+  "outfit-blazer-t25.glb": "8a25514379680f4a2b8aa2940253f996c1b99f35bef253c7573a0197b0937b24",
+  "outfit-cap-t25.glb": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d",
+  "outfit-cargo-t25.glb": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788",
+  "outfit-coat-t25.glb": "0f8dd368762e5f7e8bda487e4113451731b8e06a6f1dff7da0f1c8401104c34c",
+  "outfit-flannel-t25.glb": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3",
+  "outfit-gasmask-t25.glb": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed",
+  "outfit-hardhat-t25.glb": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a",
+  "outfit-hivis-t25.glb": "1208db45cf9fc9ecaf86687799578358fefa3f0cb3341e2862eb5c7385a518d7",
+  "outfit-hoodie-t25.glb": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b",
+  "outfit-jeans-t25.glb": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401",
+  "outfit-respirator-t25.glb": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687",
+  "outfit-slacks-t25.glb": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096",
+  "outfit-sweater-t25.glb": "7c597f531fd3dbabcb2b70e9f922eb6baebbead57abfcf1398cbadb339f66760",
+  "outfit-trench-t25.glb": "2a280c631f4eabd0f6d59873013511f623577d6cb20a438037b95ff5bde42959",
+  "zombie-body-agent-t25.glb": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e",
+  "zombie-body-courier-t25.glb": "be7b01ecd1259293b4f34713a2a76821514f55fef7cbcae504b27dfbafa2fc04",
+  "zombie-body-heavyset-t25.glb": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f",
+  "zombie-body-lastshift-t25.glb": "8214232e2bcda8f40b6828b0468be9b51373f9f988cdff8ffb4573c0496cc7f7",
+  "zombie-body-scavenger-t25.glb": "b8acc6a5937a3e96d053be9845bbf0b520d1584c5f642142da7f909b579a376d",
+  "zombie-body-tall-t25.glb": "fa26aa32701d1eae50a6ee0f54299a0b9810e74d9afd0c41c136e970e5cda314"
  },
  "audit": {
   "before": "../../tmp/ll-w07/before/models",
@@ -33,161 +32,491 @@
  },
  "after": {
   "pairs": {
-   "heavyset:beanie": {
+   "lastshift:beanie": {
     "slot": "head",
-    "covered": 102,
-    "bind": 0.1078,
-    "animated": 0.098,
-    "animatedMean": 0.0438,
-    "extreme": 0.1176,
-    "maxExposedHidden": 2,
-    "everPokeVisibleVertices": 18,
+    "covered": 622,
+    "bind": 0.0257,
+    "animated": 0.0305,
+    "animatedMean": 0.0234,
+    "extreme": 0.0434,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 42,
     "regionPoke": {
-     "head": 18
+     "head": 42
     },
     "worst": {
-     "frac": 0.1176,
+     "frac": 0.0434,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "courier:beanie": {
     "slot": "head",
-    "covered": 140,
-    "bind": 0.0929,
-    "animated": 0.0714,
-    "animatedMean": 0.0277,
-    "extreme": 0.1071,
-    "maxExposedHidden": 3,
-    "everPokeVisibleVertices": 25,
+    "covered": 147,
+    "bind": 0,
+    "animated": 0.0068,
+    "animatedMean": 0.0001,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
     "regionPoke": {
-     "head": 25
+     "head": 1
     },
     "worst": {
-     "frac": 0.1071,
+     "frac": 0.0068,
+     "clip": "Death",
+     "t": 0.8
+    }
+   },
+   "agent:beanie": {
+    "slot": "head",
+    "covered": 359,
+    "bind": 0.0891,
+    "animated": 0.0891,
+    "animatedMean": 0.0891,
+    "extreme": 0.0891,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 32,
+    "regionPoke": {
+     "head": 32
+    },
+    "worst": {
+     "frac": 0.0891,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "heavyset:beanie": {
+    "slot": "head",
+    "covered": 212,
+    "bind": 0.066,
+    "animated": 0.066,
+    "animatedMean": 0.038,
+    "extreme": 0.0519,
+    "maxExposedHidden": 2,
+    "everPokeVisibleVertices": 22,
+    "regionPoke": {
+     "head": 22
+    },
+    "worst": {
+     "frac": 0.066,
+     "clip": "Death",
+     "t": 0.8
+    }
+   },
+   "tall:beanie": {
+    "slot": "head",
+    "covered": 783,
+    "bind": 0.0243,
+    "animated": 0.0217,
+    "animatedMean": 0.0095,
+    "extreme": 0.0345,
+    "maxExposedHidden": 7,
+    "everPokeVisibleVertices": 43,
+    "regionPoke": {
+     "head": 43
+    },
+    "worst": {
+     "frac": 0.0345,
      "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:blazer": {
+    "slot": "upper",
+    "covered": 2577,
+    "bind": 0.0027,
+    "animated": 0.0031,
+    "animatedMean": 0.0022,
+    "extreme": 0.0023,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 20,
+    "regionPoke": {
+     "shoulder": 3,
+     "arm": 14,
+     "chest": 2,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0031,
+     "clip": "Death",
+     "t": 0.8667
+    }
+   },
+   "courier:blazer": {
+    "slot": "upper",
+    "covered": 3009,
+    "bind": 0,
+    "animated": 0.0003,
+    "animatedMean": 0,
+    "extreme": 0.001,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "arm": 4
+    },
+    "worst": {
+     "frac": 0.001,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "scavenger:blazer": {
+    "slot": "upper",
+    "covered": 3018,
+    "bind": 0.0023,
+    "animated": 0.004,
+    "animatedMean": 0.0018,
+    "extreme": 0.002,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 14,
+    "regionPoke": {
+     "chest": 7,
+     "arm": 4,
+     "head": 1,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.004,
+     "clip": "Attack",
+     "t": 0.7333
+    }
+   },
+   "heavyset:blazer": {
+    "slot": "upper",
+    "covered": 3730,
+    "bind": 0.0005,
+    "animated": 0.0021,
+    "animatedMean": 0.0007,
+    "extreme": 0.0008,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 29,
+    "regionPoke": {
+     "chest": 15,
+     "underarm": 10,
+     "arm": 4
+    },
+    "worst": {
+     "frac": 0.0021,
+     "clip": "Idle",
+     "t": 2.8
+    }
+   },
+   "tall:blazer": {
+    "slot": "upper",
+    "covered": 3267,
+    "bind": 0,
+    "animated": 0.0003,
+    "animatedMean": 0.0001,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 7,
+    "regionPoke": {
+     "chest": 1,
+     "arm": 6
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:cap": {
+    "slot": "head",
+    "covered": 574,
+    "bind": 0.0105,
+    "animated": 0.0139,
+    "animatedMean": 0.0106,
+    "extreme": 0.0122,
+    "maxExposedHidden": 7,
+    "everPokeVisibleVertices": 10,
+    "regionPoke": {
+     "head": 10
+    },
+    "worst": {
+     "frac": 0.0139,
+     "clip": "Idle",
+     "t": 0.6
+    }
+   },
+   "courier:cap": {
+    "slot": "head",
+    "covered": 149,
+    "bind": 0,
+    "animated": 0.0067,
+    "animatedMean": 0.0002,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0067,
+     "clip": "Death",
+     "t": 0.8667
+    }
+   },
+   "agent:cap": {
+    "slot": "head",
+    "covered": 292,
+    "bind": 0.0205,
+    "animated": 0.0205,
+    "animatedMean": 0.0205,
+    "extreme": 0.0205,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 6,
+    "regionPoke": {
+     "head": 6
+    },
+    "worst": {
+     "frac": 0.0205,
+     "clip": "ragdoll-twist",
      "t": 0
     }
    },
    "heavyset:cap": {
     "slot": "head",
-    "covered": 116,
-    "bind": 0.0948,
-    "animated": 0.0862,
-    "animatedMean": 0.0473,
-    "extreme": 0.0603,
-    "maxExposedHidden": 4,
-    "everPokeVisibleVertices": 12,
+    "covered": 182,
+    "bind": 0.0055,
+    "animated": 0.0055,
+    "animatedMean": 0.0055,
+    "extreme": 0.011,
+    "maxExposedHidden": 2,
+    "everPokeVisibleVertices": 2,
     "regionPoke": {
-     "head": 12
+     "head": 2
     },
     "worst": {
-     "frac": 0.0948,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "courier:cap": {
-    "slot": "head",
-    "covered": 139,
-    "bind": 0.0647,
-    "animated": 0.0576,
-    "animatedMean": 0.0251,
-    "extreme": 0.0504,
-    "maxExposedHidden": 4,
-    "everPokeVisibleVertices": 15,
-    "regionPoke": {
-     "head": 15
-    },
-    "worst": {
-     "frac": 0.0647,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "tall:beanie": {
-    "slot": "head",
-    "covered": 274,
-    "bind": 0.0839,
-    "animated": 0.0803,
-    "animatedMean": 0.0611,
-    "extreme": 0.073,
-    "maxExposedHidden": 24,
-    "everPokeVisibleVertices": 26,
-    "regionPoke": {
-     "head": 26
-    },
-    "worst": {
-     "frac": 0.0839,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "lastshift:beanie": {
-    "slot": "head",
-    "covered": 239,
-    "bind": 0.1004,
-    "animated": 0.0879,
-    "animatedMean": 0.0544,
-    "extreme": 0.0837,
-    "maxExposedHidden": 4,
-    "everPokeVisibleVertices": 37,
-    "regionPoke": {
-     "head": 37
-    },
-    "worst": {
-     "frac": 0.1004,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "agent:beanie": {
-    "slot": "head",
-    "covered": 321,
-    "bind": 0.1558,
-    "animated": 0.1371,
-    "animatedMean": 0.1185,
-    "extreme": 0.1246,
-    "maxExposedHidden": 7,
-    "everPokeVisibleVertices": 57,
-    "regionPoke": {
-     "head": 57
-    },
-    "worst": {
-     "frac": 0.1558,
-     "clip": "Bind",
+     "frac": 0.011,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:cap": {
     "slot": "head",
-    "covered": 264,
-    "bind": 0.0758,
-    "animated": 0.0758,
-    "animatedMean": 0.0656,
-    "extreme": 0.072,
-    "maxExposedHidden": 13,
+    "covered": 645,
+    "bind": 0.0155,
+    "animated": 0.014,
+    "animatedMean": 0.008,
+    "extreme": 0.0186,
+    "maxExposedHidden": 11,
     "everPokeVisibleVertices": 20,
     "regionPoke": {
      "head": 20
     },
     "worst": {
-     "frac": 0.0758,
-     "clip": "Bind",
+     "frac": 0.0186,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:cargo": {
+    "slot": "lower",
+    "covered": 1635,
+    "bind": 0,
+    "animated": 0.0012,
+    "animatedMean": 0.0005,
+    "extreme": 0.0012,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "thigh": 4
+    },
+    "worst": {
+     "frac": 0.0012,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:cargo": {
+    "slot": "lower",
+    "covered": 2001,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0.001,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "shin/foot": 1,
+     "thigh": 2
+    },
+    "worst": {
+     "frac": 0.001,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "scavenger:cargo": {
+    "slot": "lower",
+    "covered": 1530,
+    "bind": 0,
+    "animated": 0.0013,
+    "animatedMean": 0.0002,
+    "extreme": 0.0007,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "shin/foot": 3
+    },
+    "worst": {
+     "frac": 0.0013,
+     "clip": "Death",
+     "t": 1.0667
+    }
+   },
+   "agent:cargo": {
+    "slot": "lower",
+    "covered": 1659,
+    "bind": 0,
+    "animated": 0.0006,
+    "animatedMean": 0,
+    "extreme": 0.0012,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "waist/hip": 2,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0012,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "heavyset:cargo": {
     "slot": "lower",
-    "covered": 652,
+    "covered": 2119,
     "bind": 0,
-    "animated": 0,
+    "animated": 0.0005,
     "animatedMean": 0,
-    "extreme": 0.0015,
+    "extreme": 0.0019,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {
+     "waist/hip": 5
+    },
+    "worst": {
+     "frac": 0.0019,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:cargo": {
+    "slot": "lower",
+    "covered": 1906,
+    "bind": 0,
+    "animated": 0.0005,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0005,
+     "clip": "Death",
+     "t": 1.0667
+    }
+   },
+   "lastshift:coat": {
+    "slot": "upper",
+    "covered": 3201,
+    "bind": 0.0034,
+    "animated": 0.0028,
+    "animatedMean": 0.0014,
+    "extreme": 0.0022,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 23,
+    "regionPoke": {
+     "arm": 19,
+     "thigh": 1,
+     "head": 3
+    },
+    "worst": {
+     "frac": 0.0034,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "courier:coat": {
+    "slot": "upper",
+    "covered": 3613,
+    "bind": 0.0006,
+    "animated": 0.0019,
+    "animatedMean": 0.0012,
+    "extreme": 0.0008,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 14,
+    "regionPoke": {
+     "underarm": 3,
+     "arm": 8,
+     "shoulder": 2,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0019,
+     "clip": "Attack",
+     "t": 0.8
+    }
+   },
+   "scavenger:coat": {
+    "slot": "upper",
+    "covered": 3540,
+    "bind": 0.0045,
+    "animated": 0.0056,
+    "animatedMean": 0.0034,
+    "extreme": 0.0054,
+    "maxExposedHidden": 3,
+    "everPokeVisibleVertices": 42,
+    "regionPoke": {
+     "arm": 25,
+     "underarm": 2,
+     "shoulder": 14,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0056,
+     "clip": "Death",
+     "t": 1.0667
+    }
+   },
+   "heavyset:coat": {
+    "slot": "upper",
+    "covered": 4429,
+    "bind": 0.0016,
+    "animated": 0.0016,
+    "animatedMean": 0.0004,
+    "extreme": 0.0007,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 24,
+    "regionPoke": {
+     "chest": 2,
+     "underarm": 13,
+     "arm": 8,
      "waist/hip": 1
+    },
+    "worst": {
+     "frac": 0.0016,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "tall:coat": {
+    "slot": "upper",
+    "covered": 3873,
+    "bind": 0,
+    "animated": 0.0003,
+    "animatedMean": 0,
+    "extreme": 0.0015,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 9,
+    "regionPoke": {
+     "underarm": 2,
+     "arm": 7
     },
     "worst": {
      "frac": 0.0015,
@@ -195,157 +524,579 @@
      "t": 0
     }
    },
-   "lastshift:cap": {
-    "slot": "head",
-    "covered": 234,
-    "bind": 0.0855,
-    "animated": 0.0769,
-    "animatedMean": 0.0457,
-    "extreme": 0.0556,
-    "maxExposedHidden": 7,
-    "everPokeVisibleVertices": 23,
-    "regionPoke": {
-     "head": 23
-    },
-    "worst": {
-     "frac": 0.0855,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "agent:cargo": {
-    "slot": "lower",
-    "covered": 721,
-    "bind": 0.0014,
-    "animated": 0.0014,
-    "animatedMean": 0.0012,
-    "extreme": 0.0014,
+   "lastshift:flannel": {
+    "slot": "upper",
+    "covered": 2617,
+    "bind": 0.0011,
+    "animated": 0.0019,
+    "animatedMean": 0.0008,
+    "extreme": 0.0011,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 2,
+    "everPokeVisibleVertices": 9,
     "regionPoke": {
-     "thigh": 2
+     "underarm": 1,
+     "shoulder": 1,
+     "arm": 7
     },
     "worst": {
-     "frac": 0.0014,
-     "clip": "Bind",
-     "t": 0
+     "frac": 0.0019,
+     "clip": "Run",
+     "t": 0.0667
     }
    },
-   "agent:cap": {
-    "slot": "head",
-    "covered": 296,
-    "bind": 0.1385,
-    "animated": 0.125,
-    "animatedMean": 0.0971,
-    "extreme": 0.1014,
-    "maxExposedHidden": 7,
-    "everPokeVisibleVertices": 43,
-    "regionPoke": {
-     "head": 43
-    },
-    "worst": {
-     "frac": 0.1385,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "courier:cargo": {
-    "slot": "lower",
-    "covered": 901,
-    "bind": 0.0022,
-    "animated": 0.0033,
-    "animatedMean": 0.0023,
-    "extreme": 0.0033,
+   "courier:flannel": {
+    "slot": "upper",
+    "covered": 3155,
+    "bind": 0.0006,
+    "animated": 0.001,
+    "animatedMean": 0.0006,
+    "extreme": 0.001,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 4,
+    "everPokeVisibleVertices": 7,
     "regionPoke": {
-     "thigh": 3,
+     "arm": 2,
+     "underarm": 2,
+     "shoulder": 2,
      "waist/hip": 1
     },
     "worst": {
-     "frac": 0.0033,
+     "frac": 0.001,
+     "clip": "Idle",
+     "t": 0.4667
+    }
+   },
+   "heavyset:flannel": {
+    "slot": "upper",
+    "covered": 3948,
+    "bind": 0.0003,
+    "animated": 0.0018,
+    "animatedMean": 0.0006,
+    "extreme": 0.0018,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 28,
+    "regionPoke": {
+     "underarm": 19,
+     "chest": 5,
+     "shoulder": 2,
+     "waist/hip": 1,
+     "arm": 1
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "Attack",
+     "t": 0.4
+    }
+   },
+   "tall:flannel": {
+    "slot": "upper",
+    "covered": 3313,
+    "bind": 0.0006,
+    "animated": 0.0018,
+    "animatedMean": 0.0005,
+    "extreme": 0.0015,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 16,
+    "regionPoke": {
+     "shoulder": 8,
+     "underarm": 2,
+     "arm": 6
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "Death",
+     "t": 0.8667
+    }
+   },
+   "lastshift:gasmask": {
+    "slot": "face",
+    "covered": 141,
+    "bind": 0.0851,
+    "animated": 0.0851,
+    "animatedMean": 0.0842,
+    "extreme": 0.0851,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "head": 12
+    },
+    "worst": {
+     "frac": 0.0851,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:gasmask": {
+    "slot": "face",
+    "covered": 113,
+    "bind": 0.0265,
+    "animated": 0.0265,
+    "animatedMean": 0.0216,
+    "extreme": 0.0088,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "head": 3
+    },
+    "worst": {
+     "frac": 0.0265,
+     "clip": "Death",
+     "t": 0
+    }
+   },
+   "agent:gasmask": {
+    "slot": "face",
+    "covered": 143,
+    "bind": 0.028,
+    "animated": 0.021,
+    "animatedMean": 0.0094,
+    "extreme": 0.014,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "head": 2,
+     "shoulder": 2
+    },
+    "worst": {
+     "frac": 0.028,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "heavyset:gasmask": {
+    "slot": "face",
+    "covered": 246,
+    "bind": 0.0041,
+    "animated": 0.0041,
+    "animatedMean": 0.0041,
+    "extreme": 0.0244,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 6,
+    "regionPoke": {
+     "shoulder": 5,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0244,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:gasmask": {
+    "slot": "face",
+    "covered": 204,
+    "bind": 0.0294,
+    "animated": 0.0294,
+    "animatedMean": 0.0294,
+    "extreme": 0.0294,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 6,
+    "regionPoke": {
+     "head": 6
+    },
+    "worst": {
+     "frac": 0.0294,
      "clip": "ragdoll-twist",
      "t": 0
     }
    },
-   "tall:cargo": {
-    "slot": "lower",
-    "covered": 776,
-    "bind": 0.0039,
-    "animated": 0.0039,
-    "animatedMean": 0.0026,
-    "extreme": 0.0039,
+   "lastshift:hardhat": {
+    "slot": "head",
+    "covered": 596,
+    "bind": 0.0117,
+    "animated": 0.0117,
+    "animatedMean": 0.0117,
+    "extreme": 0.0134,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 3,
+    "everPokeVisibleVertices": 8,
     "regionPoke": {
-     "thigh": 1,
-     "waist/hip": 2
+     "head": 8
     },
     "worst": {
-     "frac": 0.0039,
-     "clip": "Bind",
+     "frac": 0.0134,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "courier:hardhat": {
     "slot": "head",
-    "covered": 133,
-    "bind": 0.0827,
-    "animated": 0.0752,
-    "animatedMean": 0.0304,
-    "extreme": 0.0526,
-    "maxExposedHidden": 4,
-    "everPokeVisibleVertices": 14,
-    "regionPoke": {
-     "head": 14
-    },
-    "worst": {
-     "frac": 0.0827,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "heavyset:blazer": {
-    "slot": "upper",
-    "covered": 1866,
-    "bind": 0,
-    "animated": 0.0016,
-    "animatedMean": 0.0003,
-    "extreme": 0.0021,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 12,
-    "regionPoke": {
-     "underarm": 2,
-     "chest": 8,
-     "arm": 2
-    },
-    "worst": {
-     "frac": 0.0021,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "lastshift:gasmask": {
-    "slot": "face",
-    "covered": 38,
-    "bind": 0.0263,
-    "animated": 0.0263,
-    "animatedMean": 0.0263,
-    "extreme": 0.0263,
+    "covered": 159,
+    "bind": 0.0063,
+    "animated": 0.0063,
+    "animatedMean": 0.0052,
+    "extreme": 0.0063,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {
      "head": 1
     },
     "worst": {
-     "frac": 0.0263,
+     "frac": 0.0063,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "agent:hardhat": {
+    "slot": "head",
+    "covered": 342,
+    "bind": 0.0205,
+    "animated": 0.0205,
+    "animatedMean": 0.0205,
+    "extreme": 0.0205,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 7,
+    "regionPoke": {
+     "head": 7
+    },
+    "worst": {
+     "frac": 0.0205,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "heavyset:hardhat": {
+    "slot": "head",
+    "covered": 253,
+    "bind": 0.004,
+    "animated": 0.004,
+    "animatedMean": 0.004,
+    "extreme": 0.0158,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "head": 4
+    },
+    "worst": {
+     "frac": 0.0158,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:hardhat": {
+    "slot": "head",
+    "covered": 773,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0.0052,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "head": 4
+    },
+    "worst": {
+     "frac": 0.0052,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:hivis": {
+    "slot": "upper",
+    "covered": 1462,
+    "bind": 0,
+    "animated": 0.0021,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "arm": 3
+    },
+    "worst": {
+     "frac": 0.0021,
+     "clip": "Hit",
+     "t": 0.2
+    }
+   },
+   "courier:hivis": {
+    "slot": "upper",
+    "covered": 1971,
+    "bind": 0.0005,
+    "animated": 0.0005,
+    "animatedMean": 0.0003,
+    "extreme": 0.0005,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {
+     "arm": 1,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0005,
      "clip": "ragdoll-twist",
      "t": 0
     }
    },
-   "courier:gasmask": {
+   "scavenger:hivis": {
+    "slot": "upper",
+    "covered": 1654,
+    "bind": 0.0018,
+    "animated": 0.0024,
+    "animatedMean": 0.0012,
+    "extreme": 0.0012,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 10,
+    "regionPoke": {
+     "arm": 4,
+     "shoulder": 5,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0024,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "heavyset:hivis": {
+    "slot": "upper",
+    "covered": 2255,
+    "bind": 0.0053,
+    "animated": 0.0049,
+    "animatedMean": 0.0015,
+    "extreme": 0.0022,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 24,
+    "regionPoke": {
+     "chest": 4,
+     "arm": 20
+    },
+    "worst": {
+     "frac": 0.0053,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "tall:hivis": {
+    "slot": "upper",
+    "covered": 1734,
+    "bind": 0,
+    "animated": 0.0006,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {
+     "arm": 2
+    },
+    "worst": {
+     "frac": 0.0006,
+     "clip": "Idle",
+     "t": 2.5333
+    }
+   },
+   "lastshift:hoodie": {
+    "slot": "upper",
+    "covered": 2455,
+    "bind": 0.002,
+    "animated": 0.0024,
+    "animatedMean": 0.0013,
+    "extreme": 0.0024,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 20,
+    "regionPoke": {
+     "arm": 20
+    },
+    "worst": {
+     "frac": 0.0024,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "courier:hoodie": {
+    "slot": "upper",
+    "covered": 2981,
+    "bind": 0.0007,
+    "animated": 0.0023,
+    "animatedMean": 0.0012,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "arm": 7,
+     "underarm": 2,
+     "shoulder": 3
+    },
+    "worst": {
+     "frac": 0.0023,
+     "clip": "Attack",
+     "t": 0.8
+    }
+   },
+   "scavenger:hoodie": {
+    "slot": "upper",
+    "covered": 2998,
+    "bind": 0.0043,
+    "animated": 0.005,
+    "animatedMean": 0.0041,
+    "extreme": 0.0053,
+    "maxExposedHidden": 4,
+    "everPokeVisibleVertices": 30,
+    "regionPoke": {
+     "arm": 10,
+     "underarm": 1,
+     "chest": 2,
+     "shoulder": 17
+    },
+    "worst": {
+     "frac": 0.0053,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:hoodie": {
+    "slot": "upper",
+    "covered": 3632,
+    "bind": 0.0008,
+    "animated": 0.0017,
+    "animatedMean": 0.0006,
+    "extreme": 0.0014,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 20,
+    "regionPoke": {
+     "underarm": 7,
+     "arm": 9,
+     "waist/hip": 1,
+     "chest": 2,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "Attack",
+     "t": 0.4
+    }
+   },
+   "tall:hoodie": {
+    "slot": "upper",
+    "covered": 3148,
+    "bind": 0.0003,
+    "animated": 0.001,
+    "animatedMean": 0.0005,
+    "extreme": 0.0025,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 14,
+    "regionPoke": {
+     "shoulder": 3,
+     "arm": 11
+    },
+    "worst": {
+     "frac": 0.0025,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:jeans": {
+    "slot": "lower",
+    "covered": 1645,
+    "bind": 0,
+    "animated": 0.003,
+    "animatedMean": 0.0006,
+    "extreme": 0.0012,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 11,
+    "regionPoke": {
+     "thigh": 6,
+     "shin/foot": 5
+    },
+    "worst": {
+     "frac": 0.003,
+     "clip": "Death",
+     "t": 0.6667
+    }
+   },
+   "courier:jeans": {
+    "slot": "lower",
+    "covered": 2032,
+    "bind": 0,
+    "animated": 0.0005,
+    "animatedMean": 0,
+    "extreme": 0.0005,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0005,
+     "clip": "Run",
+     "t": 0.5333
+    }
+   },
+   "scavenger:jeans": {
+    "slot": "lower",
+    "covered": 1505,
+    "bind": 0,
+    "animated": 0.0013,
+    "animatedMean": 0.0001,
+    "extreme": 0.0027,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {
+     "thigh": 3,
+     "shin/foot": 2
+    },
+    "worst": {
+     "frac": 0.0027,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "agent:jeans": {
+    "slot": "lower",
+    "covered": 1627,
+    "bind": 0,
+    "animated": 0.0012,
+    "animatedMean": 0.0001,
+    "extreme": 0.0025,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 7,
+    "regionPoke": {
+     "waist/hip": 3,
+     "thigh": 3,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.0025,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:jeans": {
+    "slot": "lower",
+    "covered": 2104,
+    "bind": 0,
+    "animated": 0.001,
+    "animatedMean": 0,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "shin/foot": 1,
+     "waist/hip": 3
+    },
+    "worst": {
+     "frac": 0.001,
+     "clip": "Death",
+     "t": 0.7333
+    }
+   },
+   "tall:jeans": {
+    "slot": "lower",
+    "covered": 1926,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:respirator": {
     "slot": "face",
-    "covered": 50,
+    "covered": 48,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -359,101 +1110,42 @@
      "t": 0
     }
    },
-   "heavyset:hardhat": {
-    "slot": "head",
-    "covered": 112,
-    "bind": 0.0893,
-    "animated": 0.0625,
-    "animatedMean": 0.0284,
-    "extreme": 0.0357,
-    "maxExposedHidden": 2,
-    "everPokeVisibleVertices": 12,
-    "regionPoke": {
-     "head": 12
-    },
-    "worst": {
-     "frac": 0.0893,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "lastshift:hardhat": {
-    "slot": "head",
-    "covered": 232,
-    "bind": 0.0948,
-    "animated": 0.0733,
-    "animatedMean": 0.0438,
-    "extreme": 0.056,
-    "maxExposedHidden": 4,
-    "everPokeVisibleVertices": 26,
-    "regionPoke": {
-     "head": 26
-    },
-    "worst": {
-     "frac": 0.0948,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "tall:hardhat": {
-    "slot": "head",
-    "covered": 231,
-    "bind": 0.0952,
-    "animated": 0.0909,
-    "animatedMean": 0.0681,
-    "extreme": 0.0736,
-    "maxExposedHidden": 5,
-    "everPokeVisibleVertices": 23,
-    "regionPoke": {
-     "head": 23
-    },
-    "worst": {
-     "frac": 0.0952,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "agent:hardhat": {
-    "slot": "head",
-    "covered": 295,
-    "bind": 0.1559,
-    "animated": 0.1288,
-    "animatedMean": 0.1074,
-    "extreme": 0.0983,
-    "maxExposedHidden": 4,
-    "everPokeVisibleVertices": 48,
-    "regionPoke": {
-     "head": 48
-    },
-    "worst": {
-     "frac": 0.1559,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "lastshift:blazer": {
-    "slot": "upper",
-    "covered": 1728,
-    "bind": 0.0012,
-    "animated": 0.0035,
-    "animatedMean": 0.0015,
-    "extreme": 0.0017,
+   "courier:respirator": {
+    "slot": "face",
+    "covered": 57,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 13,
-    "regionPoke": {
-     "arm": 6,
-     "underarm": 2,
-     "chest": 2,
-     "head": 1,
-     "shoulder": 2
-    },
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
     "worst": {
-     "frac": 0.0035,
-     "clip": "Death",
-     "t": 0.8667
+     "frac": 0,
+     "clip": null,
+     "t": 0
     }
    },
-   "tall:gasmask": {
+   "agent:respirator": {
+    "slot": "face",
+    "covered": 62,
+    "bind": 0.0484,
+    "animated": 0.0323,
+    "animatedMean": 0.0191,
+    "extreme": 0.0323,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "head": 2,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0484,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "heavyset:respirator": {
     "slot": "face",
     "covered": 68,
     "bind": 0,
@@ -469,9 +1161,9 @@
      "t": 0
     }
    },
-   "heavyset:gasmask": {
+   "tall:respirator": {
     "slot": "face",
-    "covered": 74,
+    "covered": 54,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -485,392 +1177,102 @@
      "t": 0
     }
    },
-   "agent:gasmask": {
-    "slot": "face",
-    "covered": 74,
-    "bind": 0.0405,
-    "animated": 0.0541,
-    "animatedMean": 0.0151,
-    "extreme": 0.027,
+   "lastshift:slacks": {
+    "slot": "lower",
+    "covered": 1645,
+    "bind": 0.0024,
+    "animated": 0.003,
+    "animatedMean": 0.0023,
+    "extreme": 0.0036,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 6,
     "regionPoke": {
-     "shoulder": 5,
-     "head": 1
+     "thigh": 5,
+     "shin/foot": 1
     },
     "worst": {
-     "frac": 0.0541,
-     "clip": "Death",
-     "t": 0.6667
-    }
-   },
-   "courier:blazer": {
-    "slot": "upper",
-    "covered": 2104,
-    "bind": 0.0048,
-    "animated": 0.0071,
-    "animatedMean": 0.0047,
-    "extreme": 0.0052,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 21,
-    "regionPoke": {
-     "waist/hip": 4,
-     "shoulder": 14,
-     "arm": 1,
-     "underarm": 1,
-     "thigh": 1
-    },
-    "worst": {
-     "frac": 0.0071,
-     "clip": "Run",
-     "t": 0.4667
-    }
-   },
-   "tall:blazer": {
-    "slot": "upper",
-    "covered": 2036,
-    "bind": 0.0039,
-    "animated": 0.0039,
-    "animatedMean": 0.0028,
-    "extreme": 0.0039,
-    "maxExposedHidden": 1,
-    "everPokeVisibleVertices": 12,
-    "regionPoke": {
-     "waist/hip": 2,
-     "arm": 3,
-     "chest": 5,
-     "shoulder": 1,
-     "underarm": 1
-    },
-    "worst": {
-     "frac": 0.0039,
-     "clip": "ragdoll-crumple",
+     "frac": 0.0036,
+     "clip": "ragdoll-sprawl",
      "t": 0
     }
    },
-   "lastshift:flannel": {
-    "slot": "upper",
-    "covered": 1798,
-    "bind": 0.0006,
-    "animated": 0.0028,
-    "animatedMean": 0.0009,
-    "extreme": 0.0011,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 6,
-    "regionPoke": {
-     "chest": 1,
-     "underarm": 3,
-     "arm": 2
-    },
-    "worst": {
-     "frac": 0.0028,
-     "clip": "Death",
-     "t": 0.8667
-    }
-   },
-   "heavyset:coat": {
-    "slot": "upper",
-    "covered": 2244,
-    "bind": 0.0009,
-    "animated": 0.004,
-    "animatedMean": 0.0015,
-    "extreme": 0.0045,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 39,
-    "regionPoke": {
-     "underarm": 3,
-     "arm": 21,
-     "chest": 12,
-     "waist/hip": 1,
-     "shoulder": 1,
-     "head": 1
-    },
-    "worst": {
-     "frac": 0.0045,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "lastshift:hivis": {
-    "slot": "upper",
-    "covered": 1145,
-    "bind": 0.0009,
-    "animated": 0.007,
-    "animatedMean": 0.0003,
-    "extreme": 0.0009,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 12,
-    "regionPoke": {
-     "chest": 2,
-     "shoulder": 7,
-     "underarm": 3
-    },
-    "worst": {
-     "frac": 0.007,
-     "clip": "Death",
-     "t": 0.8667
-    }
-   },
-   "courier:flannel": {
-    "slot": "upper",
-    "covered": 2146,
-    "bind": 0.0042,
-    "animated": 0.0065,
-    "animatedMean": 0.0036,
-    "extreme": 0.0051,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 20,
-    "regionPoke": {
-     "waist/hip": 7,
-     "arm": 5,
-     "underarm": 3,
-     "shoulder": 5
-    },
-    "worst": {
-     "frac": 0.0065,
-     "clip": "Death",
-     "t": 0.8667
-    }
-   },
-   "courier:jeans": {
+   "courier:slacks": {
     "slot": "lower",
-    "covered": 913,
-    "bind": 0.0011,
-    "animated": 0.0044,
-    "animatedMean": 0.0013,
-    "extreme": 0.0033,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 5,
-    "regionPoke": {
-     "shin/foot": 2,
-     "waist/hip": 1,
-     "thigh": 2
-    },
-    "worst": {
-     "frac": 0.0044,
-     "clip": "Death",
-     "t": 0.6667
-    }
-   },
-   "agent:jeans": {
-    "slot": "lower",
-    "covered": 748,
-    "bind": 0.0027,
-    "animated": 0.004,
-    "animatedMean": 0.0026,
-    "extreme": 0.0053,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 5,
-    "regionPoke": {
-     "chest": 1,
-     "waist/hip": 3,
-     "thigh": 1
-    },
-    "worst": {
-     "frac": 0.0053,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "heavyset:hivis": {
-    "slot": "upper",
-    "covered": 1268,
-    "bind": 0.0008,
-    "animated": 0.0087,
-    "animatedMean": 0.002,
-    "extreme": 0.0039,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 26,
-    "regionPoke": {
-     "arm": 20,
-     "chest": 6
-    },
-    "worst": {
-     "frac": 0.0087,
-     "clip": "Attack",
-     "t": 0.7333
-    }
-   },
-   "heavyset:jeans": {
-    "slot": "lower",
-    "covered": 674,
+    "covered": 2029,
     "bind": 0,
-    "animated": 0.0015,
+    "animated": 0,
     "animatedMean": 0,
-    "extreme": 0.003,
-    "maxExposedHidden": 0,
+    "extreme": 0.0005,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0005,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "scavenger:slacks": {
+    "slot": "lower",
+    "covered": 1516,
+    "bind": 0,
+    "animated": 0.0013,
+    "animatedMean": 0.0007,
+    "extreme": 0.0013,
+    "maxExposedHidden": 1,
     "everPokeVisibleVertices": 3,
     "regionPoke": {
-     "waist/hip": 2,
-     "shin/foot": 1
+     "waist/hip": 1,
+     "shin/foot": 2
     },
     "worst": {
-     "frac": 0.003,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "courier:respirator": {
-    "slot": "face",
-    "covered": 17,
-    "bind": 0,
-    "animated": 0,
-    "animatedMean": 0,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 0,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0,
-     "clip": null,
-     "t": 0
-    }
-   },
-   "lastshift:coat": {
-    "slot": "upper",
-    "covered": 2076,
-    "bind": 0.0034,
-    "animated": 0.0058,
-    "animatedMean": 0.0038,
-    "extreme": 0.0053,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 26,
-    "regionPoke": {
-     "arm": 15,
-     "underarm": 3,
-     "thigh": 6,
-     "head": 1,
-     "shin/foot": 1
-    },
-    "worst": {
-     "frac": 0.0058,
-     "clip": "Death",
-     "t": 0.8667
-    }
-   },
-   "heavyset:respirator": {
-    "slot": "face",
-    "covered": 30,
-    "bind": 0,
-    "animated": 0,
-    "animatedMean": 0,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 0,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0,
-     "clip": null,
-     "t": 0
-    }
-   },
-   "tall:jeans": {
-    "slot": "lower",
-    "covered": 779,
-    "bind": 0,
-    "animated": 0,
-    "animatedMean": 0,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 0,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0,
-     "clip": null,
-     "t": 0
-    }
-   },
-   "lastshift:respirator": {
-    "slot": "face",
-    "covered": 23,
-    "bind": 0.0435,
-    "animated": 0.0435,
-    "animatedMean": 0.0435,
-    "extreme": 0.0435,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
-    "regionPoke": {
-     "head": 1
-    },
-    "worst": {
-     "frac": 0.0435,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "agent:respirator": {
-    "slot": "face",
-    "covered": 29,
-    "bind": 0.0345,
-    "animated": 0.0345,
-    "animatedMean": 0.0019,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
-    "regionPoke": {
-     "shoulder": 1
-    },
-    "worst": {
-     "frac": 0.0345,
-     "clip": "Bind",
+     "frac": 0.0013,
+     "clip": "ragdoll-twist",
      "t": 0
     }
    },
    "agent:slacks": {
     "slot": "lower",
-    "covered": 679,
-    "bind": 0.0015,
-    "animated": 0.0015,
-    "animatedMean": 0.0014,
-    "extreme": 0.0015,
+    "covered": 1653,
+    "bind": 0,
+    "animated": 0.0006,
+    "animatedMean": 0,
+    "extreme": 0.0012,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
+    "everPokeVisibleVertices": 3,
     "regionPoke": {
+     "waist/hip": 2,
      "thigh": 1
     },
     "worst": {
-     "frac": 0.0015,
-     "clip": "Bind",
+     "frac": 0.0012,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "heavyset:slacks": {
     "slot": "lower",
-    "covered": 593,
+    "covered": 2123,
     "bind": 0,
-    "animated": 0.0017,
+    "animated": 0.0005,
     "animatedMean": 0,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
+    "extreme": 0.0038,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 8,
     "regionPoke": {
-     "thigh": 1
+     "waist/hip": 8
     },
     "worst": {
-     "frac": 0.0017,
-     "clip": "Run",
-     "t": 0.2
-    }
-   },
-   "tall:respirator": {
-    "slot": "face",
-    "covered": 25,
-    "bind": 0,
-    "animated": 0,
-    "animatedMean": 0,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 0,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0,
-     "clip": null,
+     "frac": 0.0038,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:slacks": {
     "slot": "lower",
-    "covered": 739,
+    "covered": 1931,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -884,353 +1286,463 @@
      "t": 0
     }
    },
-   "heavyset:hoodie": {
+   "courier:sweater": {
     "slot": "upper",
-    "covered": 1783,
-    "bind": 0.0017,
-    "animated": 0.0062,
-    "animatedMean": 0.0027,
-    "extreme": 0.0045,
+    "covered": 2912,
+    "bind": 0.0024,
+    "animated": 0.0038,
+    "animatedMean": 0.003,
+    "extreme": 0.0041,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 33,
+    "everPokeVisibleVertices": 22,
     "regionPoke": {
-     "chest": 10,
-     "arm": 19,
-     "shoulder": 1,
-     "underarm": 1,
-     "head": 2
+     "arm": 8,
+     "shoulder": 8,
+     "underarm": 3,
+     "waist/hip": 3
     },
     "worst": {
-     "frac": 0.0062,
-     "clip": "Hit",
-     "t": 0.2
-    }
-   },
-   "tall:coat": {
-    "slot": "upper",
-    "covered": 2318,
-    "bind": 0.0043,
-    "animated": 0.0052,
-    "animatedMean": 0.0039,
-    "extreme": 0.0047,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 28,
-    "regionPoke": {
-     "arm": 15,
-     "shoulder": 6,
-     "chest": 5,
-     "underarm": 2
-    },
-    "worst": {
-     "frac": 0.0052,
-     "clip": "Attack",
-     "t": 0.3333
-    }
-   },
-   "lastshift:hoodie": {
-    "slot": "upper",
-    "covered": 1715,
-    "bind": 0.0023,
-    "animated": 0.0047,
-    "animatedMean": 0.002,
-    "extreme": 0.0035,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 21,
-    "regionPoke": {
-     "arm": 12,
-     "underarm": 5,
-     "head": 2,
-     "shoulder": 2
-    },
-    "worst": {
-     "frac": 0.0047,
-     "clip": "Attack",
-     "t": 0.5333
-    }
-   },
-   "lastshift:sweater": {
-    "slot": "upper",
-    "covered": 1775,
-    "bind": 0.0011,
-    "animated": 0.0039,
-    "animatedMean": 0.0021,
-    "extreme": 0.0034,
-    "maxExposedHidden": 1,
-    "everPokeVisibleVertices": 19,
-    "regionPoke": {
-     "arm": 12,
-     "shoulder": 4,
-     "underarm": 2,
-     "waist/hip": 1
-    },
-    "worst": {
-     "frac": 0.0039,
-     "clip": "Death",
-     "t": 0.8667
+     "frac": 0.0041,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
    "heavyset:sweater": {
     "slot": "upper",
-    "covered": 2089,
-    "bind": 0.0005,
-    "animated": 0.0038,
-    "animatedMean": 0.0014,
-    "extreme": 0.0024,
-    "maxExposedHidden": 1,
-    "everPokeVisibleVertices": 20,
+    "covered": 3540,
+    "bind": 0.0011,
+    "animated": 0.002,
+    "animatedMean": 0.0009,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 18,
     "regionPoke": {
-     "underarm": 3,
-     "chest": 1,
-     "arm": 16
+     "underarm": 10,
+     "shoulder": 2,
+     "arm": 5,
+     "chest": 1
     },
     "worst": {
-     "frac": 0.0038,
-     "clip": "Idle",
-     "t": 1.8
+     "frac": 0.002,
+     "clip": "Death",
+     "t": 0.0667
     }
    },
    "tall:sweater": {
     "slot": "upper",
-    "covered": 2051,
-    "bind": 0.0034,
-    "animated": 0.0044,
-    "animatedMean": 0.0033,
-    "extreme": 0.0039,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 21,
+    "covered": 3079,
+    "bind": 0.0026,
+    "animated": 0.0026,
+    "animatedMean": 0.0021,
+    "extreme": 0.0042,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 16,
     "regionPoke": {
-     "arm": 11,
-     "shoulder": 2,
-     "waist/hip": 2,
-     "underarm": 3,
-     "chest": 3
+     "arm": 14,
+     "shoulder": 2
     },
     "worst": {
-     "frac": 0.0044,
-     "clip": "Idle",
-     "t": 0.3333
+     "frac": 0.0042,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
-   "courier:hoodie": {
+   "courier:trench": {
     "slot": "upper",
-    "covered": 2001,
-    "bind": 0.004,
-    "animated": 0.008,
-    "animatedMean": 0.0046,
-    "extreme": 0.0045,
+    "covered": 3838,
+    "bind": 0.0021,
+    "animated": 0.0029,
+    "animatedMean": 0.0023,
+    "extreme": 0.0026,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 27,
+    "everPokeVisibleVertices": 25,
     "regionPoke": {
-     "waist/hip": 3,
-     "underarm": 3,
-     "chest": 3,
      "arm": 11,
+     "underarm": 3,
+     "waist/hip": 3,
      "shoulder": 6,
-     "head": 1
+     "thigh": 2
     },
     "worst": {
-     "frac": 0.008,
-     "clip": "Death",
-     "t": 0.8
+     "frac": 0.0029,
+     "clip": "Idle",
+     "t": 1.6667
     }
    },
    "heavyset:trench": {
     "slot": "upper",
-    "covered": 2323,
-    "bind": 0,
-    "animated": 0.0009,
-    "animatedMean": 0.0002,
+    "covered": 4655,
+    "bind": 0.0004,
+    "animated": 0.0013,
+    "animatedMean": 0.0006,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 19,
+    "regionPoke": {
+     "chest": 4,
+     "shoulder": 3,
+     "underarm": 8,
+     "arm": 4
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:trench": {
+    "slot": "upper",
+    "covered": 4078,
+    "bind": 0.002,
+    "animated": 0.0022,
+    "animatedMean": 0.0017,
     "extreme": 0.0022,
     "maxExposedHidden": 1,
-    "everPokeVisibleVertices": 20,
+    "everPokeVisibleVertices": 18,
     "regionPoke": {
-     "underarm": 2,
-     "arm": 11,
-     "chest": 7
+     "arm": 13,
+     "shoulder": 5
     },
     "worst": {
      "frac": 0.0022,
      "clip": "ragdoll-crumple",
      "t": 0
     }
-   },
-   "lastshift:trench": {
-    "slot": "upper",
-    "covered": 2113,
-    "bind": 0.0038,
-    "animated": 0.0052,
-    "animatedMean": 0.0031,
-    "extreme": 0.0038,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
-    "regionPoke": {
-     "arm": 5,
-     "underarm": 2,
-     "thigh": 11
-    },
-    "worst": {
-     "frac": 0.0052,
-     "clip": "Death",
-     "t": 0.9333
-    }
-   },
-   "tall:hoodie": {
-    "slot": "upper",
-    "covered": 2018,
-    "bind": 0.005,
-    "animated": 0.0084,
-    "animatedMean": 0.0058,
-    "extreme": 0.0055,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 29,
-    "regionPoke": {
-     "arm": 17,
-     "waist/hip": 1,
-     "underarm": 4,
-     "chest": 5,
-     "head": 1,
-     "shoulder": 1
-    },
-    "worst": {
-     "frac": 0.0084,
-     "clip": "Idle",
-     "t": 1.8667
-    }
-   },
-   "tall:trench": {
-    "slot": "upper",
-    "covered": 2308,
-    "bind": 0.0048,
-    "animated": 0.0065,
-    "animatedMean": 0.004,
-    "extreme": 0.0069,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 33,
-    "regionPoke": {
-     "shoulder": 14,
-     "arm": 9,
-     "waist/hip": 3,
-     "chest": 7
-    },
-    "worst": {
-     "frac": 0.0069,
-     "clip": "ragdoll-twist",
-     "t": 0
-    }
    }
   },
   "layering": {
    "courier:blazer+cargo": {
-    "covered": 146,
-    "bind": 0.0068,
-    "animated": 0.0068,
-    "animatedMean": 0.0042,
-    "extreme": 0.0068,
+    "covered": 526,
+    "bind": 0,
+    "animated": 0.0019,
+    "animatedMean": 0.0001,
+    "extreme": 0.0019,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0068,
+     "frac": 0.0019,
      "clip": "ragdoll-twist",
      "t": 0
     }
    },
    "courier:blazer+jeans": {
-    "incompatible": true,
-    "covered": 184,
-    "bind": 0.0163,
-    "animated": 0.0217,
-    "animatedMean": 0.014,
-    "extreme": 0.0272,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 5,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0272,
-     "clip": "ragdoll-sprawl",
-     "t": 0
-    }
-   },
-   "courier:flannel+cargo": {
-    "covered": 173,
-    "bind": 0.0058,
-    "animated": 0.0058,
-    "animatedMean": 0.0058,
-    "extreme": 0.0058,
+    "covered": 476,
+    "bind": 0.0021,
+    "animated": 0.0021,
+    "animatedMean": 0.0021,
+    "extreme": 0.0021,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0058,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "courier:flannel+jeans": {
-    "incompatible": true,
-    "covered": 217,
-    "bind": 0.0092,
-    "animated": 0.0184,
-    "animatedMean": 0.0102,
-    "extreme": 0.0138,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 4,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0184,
-     "clip": "Attack",
-     "t": 0.5333
-    }
-   },
-   "courier:hoodie+cargo": {
-    "incompatible": true,
-    "covered": 99,
-    "bind": 0.0202,
-    "animated": 0.0202,
-    "animatedMean": 0.0156,
-    "extreme": 0.0202,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 2,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0202,
+     "frac": 0.0021,
      "clip": "ragdoll-twist",
      "t": 0
     }
    },
-   "courier:hoodie+jeans": {
-    "incompatible": true,
-    "covered": 129,
-    "bind": 0.0388,
-    "animated": 0.0388,
-    "animatedMean": 0.0255,
-    "extreme": 0.0233,
+   "courier:blazer+slacks": {
+    "covered": 559,
+    "bind": 0.0018,
+    "animated": 0.0018,
+    "animatedMean": 0.0018,
+    "extreme": 0.0018,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 6,
+    "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0388,
+     "frac": 0.0018,
      "clip": "Bind",
      "t": 0
     }
    },
-   "heavyset:blazer+cargo": {
-    "covered": 111,
+   "courier:coat+cargo": {
+    "covered": 1322,
     "bind": 0,
-    "animated": 0.009,
-    "animatedMean": 0.0004,
+    "animated": 0,
+    "animatedMean": 0,
     "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "courier:coat+jeans": {
+    "covered": 1205,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "courier:coat+slacks": {
+    "covered": 1345,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "courier:flannel+cargo": {
+    "covered": 520,
+    "bind": 0.0019,
+    "animated": 0.0038,
+    "animatedMean": 0.002,
+    "extreme": 0.0058,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0058,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:flannel+jeans": {
+    "covered": 474,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "courier:flannel+slacks": {
+    "covered": 560,
+    "bind": 0,
+    "animated": 0.0018,
+    "animatedMean": 0.0002,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0018,
+     "clip": "Attack",
+     "t": 0.2667
+    }
+   },
+   "courier:hivis+cargo": {
+    "covered": 128,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "courier:hivis+jeans": {
+    "covered": 111,
+    "bind": 0.009,
+    "animated": 0.009,
+    "animatedMean": 0.009,
+    "extreme": 0.009,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
      "frac": 0.009,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "courier:hivis+slacks": {
+    "covered": 142,
+    "bind": 0.007,
+    "animated": 0.007,
+    "animatedMean": 0.0029,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.007,
+     "clip": "Death",
+     "t": 0.1333
+    }
+   },
+   "courier:hoodie+cargo": {
+    "covered": 432,
+    "bind": 0.0093,
+    "animated": 0.0093,
+    "animatedMean": 0.0083,
+    "extreme": 0.0069,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0093,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "courier:hoodie+jeans": {
+    "covered": 397,
+    "bind": 0.0076,
+    "animated": 0.0101,
+    "animatedMean": 0.01,
+    "extreme": 0.0101,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0101,
      "clip": "Idle",
-     "t": 1.0667
+     "t": 0
+    }
+   },
+   "courier:hoodie+slacks": {
+    "covered": 460,
+    "bind": 0.0087,
+    "animated": 0.0065,
+    "animatedMean": 0.0051,
+    "extreme": 0.0022,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0087,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "courier:sweater+cargo": {
+    "covered": 310,
+    "bind": 0.0032,
+    "animated": 0.0065,
+    "animatedMean": 0.0034,
+    "extreme": 0.0065,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0065,
+     "clip": "Run",
+     "t": 0.5333
+    }
+   },
+   "courier:sweater+jeans": {
+    "covered": 298,
+    "bind": 0.0067,
+    "animated": 0.0067,
+    "animatedMean": 0.0067,
+    "extreme": 0.0067,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0067,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "courier:sweater+slacks": {
+    "covered": 339,
+    "bind": 0.0029,
+    "animated": 0.0029,
+    "animatedMean": 0.0029,
+    "extreme": 0.0029,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0029,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "courier:trench+cargo": {
+    "covered": 1521,
+    "bind": 0.0013,
+    "animated": 0.002,
+    "animatedMean": 0.0018,
+    "extreme": 0.0013,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.002,
+     "clip": "Idle",
+     "t": 0
+    }
+   },
+   "courier:trench+jeans": {
+    "covered": 1442,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "courier:trench+slacks": {
+    "covered": 1554,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0.0013,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0013,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "heavyset:blazer+cargo": {
+    "covered": 404,
+    "bind": 0,
+    "animated": 0.0074,
+    "animatedMean": 0.001,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0074,
+     "clip": "Death",
+     "t": 0.5333
     }
    },
    "heavyset:blazer+jeans": {
-    "covered": 141,
+    "covered": 348,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1245,7 +1757,52 @@
     }
    },
    "heavyset:blazer+slacks": {
-    "covered": 81,
+    "covered": 420,
+    "bind": 0,
+    "animated": 0.0024,
+    "animatedMean": 0.0003,
+    "extreme": 0.0048,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0048,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "heavyset:coat+cargo": {
+    "covered": 1077,
+    "bind": 0,
+    "animated": 0.0009,
+    "animatedMean": 0.0001,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0009,
+     "clip": "Death",
+     "t": 0.5333
+    }
+   },
+   "heavyset:coat+jeans": {
+    "covered": 953,
+    "bind": 0,
+    "animated": 0.001,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.001,
+     "clip": "Run",
+     "t": 0.2667
+    }
+   },
+   "heavyset:coat+slacks": {
+    "covered": 1094,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1259,23 +1816,53 @@
      "t": 0
     }
    },
-   "heavyset:coat+cargo": {
-    "covered": 542,
-    "bind": 0.0018,
-    "animated": 0.0037,
-    "animatedMean": 0.002,
-    "extreme": 0.0037,
+   "heavyset:flannel+cargo": {
+    "covered": 390,
+    "bind": 0,
+    "animated": 0.0051,
+    "animatedMean": 0.0031,
+    "extreme": 0.0026,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 2,
+    "everPokeVisibleVertices": 5,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0037,
-     "clip": "Run",
+     "frac": 0.0051,
+     "clip": "Death",
+     "t": 1.0667
+    }
+   },
+   "heavyset:flannel+jeans": {
+    "covered": 367,
+    "bind": 0,
+    "animated": 0.0054,
+    "animatedMean": 0.0002,
+    "extreme": 0.0027,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0054,
+     "clip": "Attack",
      "t": 0.4
     }
    },
+   "heavyset:flannel+slacks": {
+    "covered": 417,
+    "bind": 0,
+    "animated": 0.0024,
+    "animatedMean": 0.0003,
+    "extreme": 0.0048,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0048,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
    "heavyset:hivis+cargo": {
-    "covered": 49,
+    "covered": 83,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1290,7 +1877,7 @@
     }
    },
    "heavyset:hivis+jeans": {
-    "covered": 71,
+    "covered": 79,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1305,7 +1892,7 @@
     }
    },
    "heavyset:hivis+slacks": {
-    "covered": 34,
+    "covered": 92,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1316,60 +1903,404 @@
     "worst": {
      "frac": 0,
      "clip": null,
-     "t": 0
-    }
-   },
-   "heavyset:coat+jeans": {
-    "covered": 538,
-    "bind": 0,
-    "animated": 0.0019,
-    "animatedMean": 0.0004,
-    "extreme": 0.0037,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 2,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0037,
-     "clip": "ragdoll-sprawl",
      "t": 0
     }
    },
    "heavyset:hoodie+cargo": {
-    "covered": 74,
+    "covered": 321,
     "bind": 0,
-    "animated": 0,
-    "animatedMean": 0,
-    "extreme": 0,
+    "animated": 0.0031,
+    "animatedMean": 0.0001,
+    "extreme": 0.0031,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 0,
+    "everPokeVisibleVertices": 2,
     "regionPoke": {},
     "worst": {
-     "frac": 0,
-     "clip": null,
+     "frac": 0.0031,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
-   "heavyset:hoodie+slacks": {
-    "incompatible": true,
-    "covered": 49,
+   "heavyset:hoodie+jeans": {
+    "covered": 298,
     "bind": 0,
-    "animated": 0.0204,
-    "animatedMean": 0.0003,
+    "animated": 0.0034,
+    "animatedMean": 0.0002,
     "extreme": 0,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0204,
-     "clip": "Attack",
-     "t": 0.8
+     "frac": 0.0034,
+     "clip": "Run",
+     "t": 0.6667
     }
    },
-   "heavyset:coat+slacks": {
-    "covered": 489,
+   "heavyset:hoodie+slacks": {
+    "covered": 343,
     "bind": 0,
-    "animated": 0.002,
+    "animated": 0.0058,
+    "animatedMean": 0.0005,
+    "extreme": 0.0087,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0087,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:sweater+cargo": {
+    "covered": 232,
+    "bind": 0,
+    "animated": 0.0086,
+    "animatedMean": 0.0012,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0086,
+     "clip": "Death",
+     "t": 0.5333
+    }
+   },
+   "heavyset:sweater+jeans": {
+    "covered": 221,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "heavyset:sweater+slacks": {
+    "covered": 249,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "heavyset:trench+cargo": {
+    "covered": 1253,
+    "bind": 0.0008,
+    "animated": 0.0024,
+    "animatedMean": 0.001,
+    "extreme": 0.0024,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0024,
+     "clip": "Walk",
+     "t": 0
+    }
+   },
+   "heavyset:trench+jeans": {
+    "covered": 1155,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "heavyset:trench+slacks": {
+    "covered": 1273,
+    "bind": 0,
+    "animated": 0.0008,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0008,
+     "clip": "Run",
+     "t": 0.1333
+    }
+   },
+   "lastshift:blazer+cargo": {
+    "covered": 475,
+    "bind": 0,
+    "animated": 0.0021,
+    "animatedMean": 0.0002,
+    "extreme": 0.0021,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0021,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:blazer+jeans": {
+    "covered": 426,
+    "bind": 0,
+    "animated": 0.0023,
+    "animatedMean": 0.0002,
+    "extreme": 0.0023,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0023,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "lastshift:blazer+slacks": {
+    "covered": 503,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:coat+cargo": {
+    "covered": 1183,
+    "bind": 0.0008,
+    "animated": 0.0025,
+    "animatedMean": 0.0022,
+    "extreme": 0.0034,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0034,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "lastshift:coat+jeans": {
+    "covered": 1057,
+    "bind": 0.0009,
+    "animated": 0.0009,
+    "animatedMean": 0.0009,
+    "extreme": 0.0038,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0038,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:coat+slacks": {
+    "covered": 1187,
+    "bind": 0.0008,
+    "animated": 0.0017,
+    "animatedMean": 0.0011,
+    "extreme": 0.0034,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0034,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "lastshift:flannel+cargo": {
+    "covered": 449,
+    "bind": 0,
+    "animated": 0.0045,
     "animatedMean": 0.0001,
+    "extreme": 0.0045,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0045,
+     "clip": "Run",
+     "t": 0.5333
+    }
+   },
+   "lastshift:flannel+jeans": {
+    "covered": 432,
+    "bind": 0.0023,
+    "animated": 0.0023,
+    "animatedMean": 0.0023,
+    "extreme": 0.0023,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0023,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "lastshift:flannel+slacks": {
+    "covered": 488,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:hivis+cargo": {
+    "covered": 116,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:hivis+jeans": {
+    "covered": 113,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:hivis+slacks": {
+    "covered": 121,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:hoodie+cargo": {
+    "covered": 386,
+    "bind": 0,
+    "animated": 0.0052,
+    "animatedMean": 0.0005,
+    "extreme": 0.0052,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0052,
+     "clip": "Run",
+     "t": 0.6667
+    }
+   },
+   "lastshift:hoodie+jeans": {
+    "covered": 370,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "lastshift:hoodie+slacks": {
+    "covered": 406,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "scavenger:blazer+cargo": {
+    "covered": 468,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "scavenger:blazer+jeans": {
+    "covered": 422,
+    "bind": 0,
+    "animated": 0.0024,
+    "animatedMean": 0.0002,
+    "extreme": 0.0024,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0024,
+     "clip": "Run",
+     "t": 0.5333
+    }
+   },
+   "scavenger:blazer+slacks": {
+    "covered": 499,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
     "extreme": 0.002,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
@@ -1380,54 +2311,23 @@
      "t": 0
     }
    },
-   "heavyset:hoodie+jeans": {
-    "covered": 100,
-    "bind": 0,
-    "animated": 0.01,
-    "animatedMean": 0.003,
-    "extreme": 0,
+   "scavenger:coat+cargo": {
+    "covered": 1199,
+    "bind": 0.0008,
+    "animated": 0.0008,
+    "animatedMean": 0.0008,
+    "extreme": 0.0008,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.01,
-     "clip": "Idle",
-     "t": 0
-    }
-   },
-   "heavyset:sweater+cargo": {
-    "covered": 101,
-    "bind": 0,
-    "animated": 0,
-    "animatedMean": 0,
-    "extreme": 0.0099,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0099,
+     "frac": 0.0008,
      "clip": "ragdoll-twist",
      "t": 0
     }
    },
-   "heavyset:sweater+slacks": {
-    "incompatible": true,
-    "covered": 65,
-    "bind": 0,
-    "animated": 0.0154,
-    "animatedMean": 0.0002,
-    "extreme": 0,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0154,
-     "clip": "Attack",
-     "t": 0.8
-    }
-   },
-   "heavyset:sweater+jeans": {
-    "covered": 124,
+   "scavenger:coat+jeans": {
+    "covered": 1115,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1441,83 +2341,158 @@
      "t": 0
     }
    },
-   "heavyset:trench+cargo": {
-    "covered": 514,
-    "bind": 0.0019,
-    "animated": 0.0019,
-    "animatedMean": 0.0019,
-    "extreme": 0.0019,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0019,
-     "clip": "ragdoll-twist",
-     "t": 0
-    }
-   },
-   "heavyset:trench+jeans": {
-    "covered": 488,
-    "bind": 0.002,
-    "animated": 0.0041,
-    "animatedMean": 0.0037,
-    "extreme": 0.002,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 2,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0041,
-     "clip": "Idle",
-     "t": 0
-    }
-   },
-   "heavyset:trench+slacks": {
-    "covered": 430,
+   "scavenger:coat+slacks": {
+    "covered": 1238,
     "bind": 0,
-    "animated": 0.0023,
+    "animated": 0,
     "animatedMean": 0,
     "extreme": 0,
     "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "scavenger:hivis+cargo": {
+    "covered": 115,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "scavenger:hivis+jeans": {
+    "covered": 112,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "scavenger:hivis+slacks": {
+    "covered": 140,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "scavenger:hoodie+cargo": {
+    "covered": 379,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0.0026,
+    "maxExposedHidden": 0,
     "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0023,
-     "clip": "Run",
-     "t": 0.1333
+     "frac": 0.0026,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
-   "tall:blazer+cargo": {
-    "covered": 209,
-    "bind": 0.0048,
-    "animated": 0.0048,
-    "animatedMean": 0.0046,
-    "extreme": 0.0096,
+   "scavenger:hoodie+jeans": {
+    "covered": 353,
+    "bind": 0,
+    "animated": 0.0028,
+    "animatedMean": 0.0003,
+    "extreme": 0.0057,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 2,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0096,
-     "clip": "ragdoll-twist",
+     "frac": 0.0057,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "scavenger:hoodie+slacks": {
+    "covered": 408,
+    "bind": 0,
+    "animated": 0.0025,
+    "animatedMean": 0.0001,
+    "extreme": 0.0049,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0049,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:blazer+cargo": {
+    "covered": 584,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
      "t": 0
     }
    },
    "tall:blazer+jeans": {
-    "covered": 244,
-    "bind": 0.0123,
-    "animated": 0.0123,
-    "animatedMean": 0.0112,
-    "extreme": 0.0164,
+    "covered": 542,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 5,
+    "everPokeVisibleVertices": 0,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0164,
-     "clip": "ragdoll-twist",
+     "frac": 0,
+     "clip": null,
      "t": 0
     }
    },
    "tall:blazer+slacks": {
-    "covered": 160,
+    "covered": 632,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "tall:coat+cargo": {
+    "covered": 1303,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1532,22 +2507,112 @@
     }
    },
    "tall:coat+jeans": {
-    "covered": 658,
-    "bind": 0.003,
-    "animated": 0.003,
-    "animatedMean": 0.0005,
-    "extreme": 0.0015,
+    "covered": 1224,
+    "bind": 0,
+    "animated": 0.0008,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0008,
+     "clip": "Idle",
+     "t": 1.8667
+    }
+   },
+   "tall:coat+slacks": {
+    "covered": 1352,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "tall:flannel+cargo": {
+    "covered": 559,
+    "bind": 0,
+    "animated": 0.0018,
+    "animatedMean": 0.0001,
+    "extreme": 0.0018,
     "maxExposedHidden": 0,
     "everPokeVisibleVertices": 3,
     "regionPoke": {},
     "worst": {
-     "frac": 0.003,
-     "clip": "Death",
-     "t": 0.5333
+     "frac": 0.0018,
+     "clip": "Run",
+     "t": 0.1333
     }
    },
-   "tall:coat+cargo": {
-    "covered": 641,
+   "tall:flannel+jeans": {
+    "covered": 540,
+    "bind": 0,
+    "animated": 0.0019,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0019,
+     "clip": "Run",
+     "t": 0.2667
+    }
+   },
+   "tall:flannel+slacks": {
+    "covered": 626,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "tall:hivis+cargo": {
+    "covered": 187,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "tall:hivis+jeans": {
+    "covered": 183,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "tall:hivis+slacks": {
+    "covered": 208,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1562,38 +2627,22 @@
     }
    },
    "tall:hoodie+cargo": {
-    "incompatible": true,
-    "covered": 137,
-    "bind": 0.0146,
-    "animated": 0.0146,
-    "animatedMean": 0.0146,
-    "extreme": 0.0146,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 2,
-    "regionPoke": {},
-    "worst": {
-     "frac": 0.0146,
-     "clip": "Bind",
-     "t": 0
-    }
-   },
-   "tall:coat+slacks": {
-    "covered": 605,
+    "covered": 491,
     "bind": 0,
-    "animated": 0.0017,
+    "animated": 0,
     "animatedMean": 0,
     "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
+    "everPokeVisibleVertices": 0,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0017,
-     "clip": "Run",
-     "t": 0.2667
+     "frac": 0,
+     "clip": null,
+     "t": 0
     }
    },
    "tall:hoodie+jeans": {
-    "covered": 182,
+    "covered": 470,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1608,7 +2657,7 @@
     }
    },
    "tall:hoodie+slacks": {
-    "covered": 95,
+    "covered": 537,
     "bind": 0,
     "animated": 0,
     "animatedMean": 0,
@@ -1623,219 +2672,433 @@
     }
    },
    "tall:sweater+cargo": {
-    "incompatible": true,
-    "covered": 175,
-    "bind": 0.0171,
-    "animated": 0.0171,
-    "animatedMean": 0.0167,
-    "extreme": 0.0171,
+    "covered": 375,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 3,
+    "everPokeVisibleVertices": 0,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0171,
-     "clip": "ragdoll-twist",
+     "frac": 0,
+     "clip": null,
      "t": 0
     }
    },
    "tall:sweater+jeans": {
-    "covered": 223,
+    "covered": 369,
     "bind": 0,
-    "animated": 0.0045,
-    "animatedMean": 0.0008,
-    "extreme": 0.0045,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
+    "everPokeVisibleVertices": 0,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0045,
-     "clip": "Run",
-     "t": 0.1333
+     "frac": 0,
+     "clip": null,
+     "t": 0
     }
    },
    "tall:sweater+slacks": {
-    "covered": 130,
+    "covered": 414,
     "bind": 0,
-    "animated": 0.0077,
-    "animatedMean": 0.0051,
+    "animated": 0,
+    "animatedMean": 0,
     "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 1,
+    "everPokeVisibleVertices": 0,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0077,
-     "clip": "Idle",
+     "frac": 0,
+     "clip": null,
      "t": 0
     }
    },
    "tall:trench+cargo": {
-    "covered": 650,
-    "bind": 0.0077,
-    "animated": 0.0092,
-    "animatedMean": 0.007,
-    "extreme": 0.0077,
+    "covered": 1515,
+    "bind": 0.0007,
+    "animated": 0.0007,
+    "animatedMean": 0.0007,
+    "extreme": 0.0007,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 6,
+    "everPokeVisibleVertices": 1,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0092,
-     "clip": "Death",
-     "t": 0.4
+     "frac": 0.0007,
+     "clip": "Bind",
+     "t": 0
     }
    },
    "tall:trench+jeans": {
-    "covered": 648,
-    "bind": 0.0108,
-    "animated": 0.0093,
-    "animatedMean": 0.0079,
-    "extreme": 0.0123,
+    "covered": 1464,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 9,
+    "everPokeVisibleVertices": 0,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0123,
-     "clip": "ragdoll-twist",
+     "frac": 0,
+     "clip": null,
      "t": 0
     }
    },
    "tall:trench+slacks": {
-    "covered": 572,
-    "bind": 0.007,
-    "animated": 0.0087,
-    "animatedMean": 0.0056,
-    "extreme": 0.007,
+    "covered": 1570,
+    "bind": 0,
+    "animated": 0.0013,
+    "animatedMean": 0,
+    "extreme": 0,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 10,
+    "everPokeVisibleVertices": 2,
     "regionPoke": {},
     "worst": {
-     "frac": 0.0087,
-     "clip": "Death",
-     "t": 0.4
+     "frac": 0.0013,
+     "clip": "Idle",
+     "t": 1.8667
     }
    }
   },
   "bodyUnderLayers": {
    "courier:blazer+cargo": {
-    "covered": 2881,
-    "bind": 0.0035,
-    "animated": 0.0049,
-    "animatedMean": 0.0033,
-    "extreme": 0.0031,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
-    "regionPoke": {
-     "waist/hip": 3,
-     "shoulder": 11,
-     "thigh": 2,
-     "arm": 1,
-     "underarm": 1
-    },
-    "worst": {
-     "frac": 0.0049,
-     "clip": "Run",
-     "t": 0.5333
-    }
-   },
-   "courier:flannel+jeans": {
-    "incompatible": true,
-    "covered": 2895,
-    "bind": 0.0017,
-    "animated": 0.0035,
-    "animatedMean": 0.0014,
-    "extreme": 0.0031,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
-    "regionPoke": {
-     "shin/foot": 2,
-     "arm": 5,
-     "underarm": 3,
-     "shoulder": 4,
-     "waist/hip": 2,
-     "thigh": 2
-    },
-    "worst": {
-     "frac": 0.0035,
-     "clip": "Death",
-     "t": 0.8
-    }
-   },
-   "courier:flannel+cargo": {
-    "covered": 2896,
-    "bind": 0.0024,
-    "animated": 0.0038,
-    "animatedMean": 0.0022,
-    "extreme": 0.0024,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 17,
-    "regionPoke": {
-     "waist/hip": 3,
-     "arm": 5,
-     "underarm": 3,
-     "shoulder": 4,
-     "thigh": 2
-    },
-    "worst": {
-     "frac": 0.0038,
-     "clip": "Death",
-     "t": 0.8
-    }
-   },
-   "courier:blazer+jeans": {
-    "incompatible": true,
-    "covered": 2881,
-    "bind": 0.0028,
-    "animated": 0.0042,
-    "animatedMean": 0.0029,
-    "extreme": 0.0031,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
-    "regionPoke": {
-     "shin/foot": 2,
-     "shoulder": 11,
-     "waist/hip": 1,
-     "thigh": 2,
-     "arm": 1,
-     "underarm": 1
-    },
-    "worst": {
-     "frac": 0.0042,
-     "clip": "Run",
-     "t": 0.4
-    }
-   },
-   "heavyset:blazer+cargo": {
-    "covered": 2408,
+    "covered": 4649,
     "bind": 0,
-    "animated": 0.0008,
-    "animatedMean": 0.0002,
-    "extreme": 0.0017,
+    "animated": 0.0002,
+    "animatedMean": 0,
+    "extreme": 0.0011,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 11,
+    "everPokeVisibleVertices": 7,
     "regionPoke": {
-     "underarm": 2,
-     "chest": 7,
-     "arm": 2
+     "shin/foot": 1,
+     "thigh": 2,
+     "arm": 4
     },
     "worst": {
-     "frac": 0.0017,
+     "frac": 0.0011,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
-   "heavyset:blazer+jeans": {
-    "covered": 2409,
+   "courier:blazer+jeans": {
+    "covered": 4689,
     "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0,
+    "extreme": 0.0006,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {
+     "arm": 4,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0006,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "courier:blazer+slacks": {
+    "covered": 4689,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0,
+    "extreme": 0.0006,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {
+     "arm": 4,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0006,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "courier:coat+cargo": {
+    "covered": 4797,
+    "bind": 0.0002,
+    "animated": 0.0013,
+    "animatedMean": 0.0007,
+    "extreme": 0.0006,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "shin/foot": 1,
+     "arm": 7,
+     "underarm": 2,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0013,
+     "clip": "Idle",
+     "t": 0.6667
+    }
+   },
+   "courier:coat+jeans": {
+    "covered": 4833,
+    "bind": 0.0002,
+    "animated": 0.0012,
+    "animatedMean": 0.0007,
+    "extreme": 0.0006,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 11,
+    "regionPoke": {
+     "arm": 7,
+     "underarm": 2,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0012,
+     "clip": "Attack",
+     "t": 0.8
+    }
+   },
+   "courier:coat+slacks": {
+    "covered": 4840,
+    "bind": 0.0002,
+    "animated": 0.0012,
+    "animatedMean": 0.0006,
+    "extreme": 0.0006,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "arm": 7,
+     "underarm": 2,
+     "shoulder": 1,
+     "waist/hip": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0012,
+     "clip": "Attack",
+     "t": 0.8
+    }
+   },
+   "courier:flannel+cargo": {
+    "covered": 4802,
+    "bind": 0.0004,
+    "animated": 0.0006,
+    "animatedMean": 0.0004,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 10,
+    "regionPoke": {
+     "shin/foot": 1,
+     "thigh": 2,
+     "arm": 2,
+     "underarm": 2,
+     "shoulder": 2,
+     "waist/hip": 1
+    },
+    "worst": {
+     "frac": 0.001,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "courier:flannel+jeans": {
+    "covered": 4848,
+    "bind": 0.0004,
     "animated": 0.0008,
-    "animatedMean": 0.0002,
+    "animatedMean": 0.0004,
+    "extreme": 0.0008,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 8,
+    "regionPoke": {
+     "arm": 2,
+     "underarm": 2,
+     "shoulder": 2,
+     "waist/hip": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0008,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:flannel+slacks": {
+    "covered": 4844,
+    "bind": 0.0004,
+    "animated": 0.0006,
+    "animatedMean": 0.0004,
+    "extreme": 0.0008,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 8,
+    "regionPoke": {
+     "arm": 2,
+     "underarm": 2,
+     "shoulder": 2,
+     "waist/hip": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0008,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:hivis+cargo": {
+    "covered": 3854,
+    "bind": 0.0003,
+    "animated": 0.0003,
+    "animatedMean": 0.0001,
+    "extreme": 0.0008,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {
+     "shin/foot": 1,
+     "thigh": 2,
+     "arm": 1,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0008,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "courier:hivis+jeans": {
+    "covered": 3900,
+    "bind": 0.0003,
+    "animated": 0.0005,
+    "animatedMean": 0.0001,
+    "extreme": 0.0005,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "arm": 1,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0005,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:hivis+slacks": {
+    "covered": 3897,
+    "bind": 0.0003,
+    "animated": 0.0003,
+    "animatedMean": 0.0001,
+    "extreme": 0.0005,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "arm": 1,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0005,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "courier:hoodie+cargo": {
+    "covered": 4682,
+    "bind": 0.0004,
+    "animated": 0.0015,
+    "animatedMean": 0.0008,
+    "extreme": 0.0009,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 13,
+    "regionPoke": {
+     "shin/foot": 1,
+     "arm": 7,
+     "underarm": 1,
+     "shoulder": 3,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Idle",
+     "t": 0.9333
+    }
+   },
+   "courier:hoodie+jeans": {
+    "covered": 4729,
+    "bind": 0.0004,
+    "animated": 0.0015,
+    "animatedMean": 0.0008,
+    "extreme": 0.0006,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "arm": 7,
+     "underarm": 1,
+     "shoulder": 3,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Idle",
+     "t": 0.9333
+    }
+   },
+   "courier:hoodie+slacks": {
+    "covered": 4726,
+    "bind": 0.0004,
+    "animated": 0.0015,
+    "animatedMean": 0.0008,
+    "extreme": 0.0006,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "arm": 7,
+     "underarm": 1,
+     "shoulder": 3,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Idle",
+     "t": 0.9333
+    }
+   },
+   "courier:sweater+cargo": {
+    "covered": 4685,
+    "bind": 0.0015,
+    "animated": 0.0023,
+    "animatedMean": 0.0019,
+    "extreme": 0.0028,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 24,
+    "regionPoke": {
+     "shin/foot": 1,
+     "arm": 8,
+     "shoulder": 8,
+     "underarm": 3,
+     "waist/hip": 3,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0028,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "courier:sweater+jeans": {
+    "covered": 4732,
+    "bind": 0.0015,
+    "animated": 0.0023,
+    "animatedMean": 0.0019,
     "extreme": 0.0025,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 14,
+    "everPokeVisibleVertices": 23,
     "regionPoke": {
-     "underarm": 2,
-     "waist/hip": 2,
-     "chest": 7,
-     "shin/foot": 1,
-     "arm": 2
+     "arm": 8,
+     "shoulder": 8,
+     "underarm": 3,
+     "waist/hip": 3,
+     "thigh": 1
     },
     "worst": {
      "frac": 0.0025,
@@ -1843,19 +3106,145 @@
      "t": 0
     }
    },
+   "courier:sweater+slacks": {
+    "covered": 4728,
+    "bind": 0.0015,
+    "animated": 0.0023,
+    "animatedMean": 0.0019,
+    "extreme": 0.0025,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 23,
+    "regionPoke": {
+     "arm": 8,
+     "shoulder": 8,
+     "underarm": 3,
+     "waist/hip": 3,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0025,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "courier:trench+cargo": {
+    "covered": 4874,
+    "bind": 0.0014,
+    "animated": 0.0023,
+    "animatedMean": 0.0018,
+    "extreme": 0.0023,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 26,
+    "regionPoke": {
+     "shin/foot": 1,
+     "arm": 11,
+     "underarm": 3,
+     "waist/hip": 3,
+     "shoulder": 6,
+     "thigh": 2
+    },
+    "worst": {
+     "frac": 0.0023,
+     "clip": "Walk",
+     "t": 0.2667
+    }
+   },
+   "courier:trench+jeans": {
+    "covered": 4917,
+    "bind": 0.0014,
+    "animated": 0.0022,
+    "animatedMean": 0.0018,
+    "extreme": 0.002,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 25,
+    "regionPoke": {
+     "arm": 11,
+     "underarm": 3,
+     "waist/hip": 3,
+     "shoulder": 6,
+     "thigh": 2
+    },
+    "worst": {
+     "frac": 0.0022,
+     "clip": "Walk",
+     "t": 0.2667
+    }
+   },
+   "courier:trench+slacks": {
+    "covered": 4923,
+    "bind": 0.0014,
+    "animated": 0.0022,
+    "animatedMean": 0.0018,
+    "extreme": 0.002,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 25,
+    "regionPoke": {
+     "arm": 11,
+     "underarm": 3,
+     "waist/hip": 3,
+     "shoulder": 6,
+     "thigh": 2
+    },
+    "worst": {
+     "frac": 0.0022,
+     "clip": "Walk",
+     "t": 0.2667
+    }
+   },
+   "heavyset:blazer+cargo": {
+    "covered": 5351,
+    "bind": 0.0004,
+    "animated": 0.0015,
+    "animatedMean": 0.0005,
+    "extreme": 0.0013,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 29,
+    "regionPoke": {
+     "chest": 13,
+     "underarm": 9,
+     "arm": 3,
+     "waist/hip": 4
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Idle",
+     "t": 2.8
+    }
+   },
+   "heavyset:blazer+jeans": {
+    "covered": 5348,
+    "bind": 0.0004,
+    "animated": 0.0015,
+    "animatedMean": 0.0005,
+    "extreme": 0.0009,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 28,
+    "regionPoke": {
+     "chest": 13,
+     "underarm": 9,
+     "arm": 3,
+     "shin/foot": 1,
+     "waist/hip": 2
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Idle",
+     "t": 2.8
+    }
+   },
    "heavyset:blazer+slacks": {
-    "covered": 2376,
-    "bind": 0,
-    "animated": 0.0008,
-    "animatedMean": 0.0002,
+    "covered": 5358,
+    "bind": 0.0004,
+    "animated": 0.0015,
+    "animatedMean": 0.0005,
     "extreme": 0.0021,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 12,
+    "everPokeVisibleVertices": 33,
     "regionPoke": {
-     "underarm": 2,
-     "waist/hip": 1,
-     "chest": 7,
-     "arm": 2
+     "chest": 13,
+     "underarm": 9,
+     "waist/hip": 8,
+     "arm": 3
     },
     "worst": {
      "frac": 0.0021,
@@ -1863,293 +3252,124 @@
      "t": 0
     }
    },
-   "courier:hoodie+cargo": {
-    "incompatible": true,
-    "covered": 2810,
-    "bind": 0.0032,
-    "animated": 0.0057,
-    "animatedMean": 0.0036,
-    "extreme": 0.0028,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 27,
-    "regionPoke": {
-     "waist/hip": 2,
-     "underarm": 3,
-     "chest": 3,
-     "arm": 11,
-     "shoulder": 5,
-     "head": 1,
-     "thigh": 2
-    },
-    "worst": {
-     "frac": 0.0057,
-     "clip": "Death",
-     "t": 0.8
-    }
-   },
-   "courier:hoodie+jeans": {
-    "incompatible": true,
-    "covered": 2808,
-    "bind": 0.0025,
-    "animated": 0.0053,
-    "animatedMean": 0.0028,
-    "extreme": 0.0036,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 28,
-    "regionPoke": {
-     "underarm": 3,
-     "shin/foot": 2,
-     "chest": 3,
-     "arm": 11,
-     "shoulder": 5,
-     "head": 1,
-     "thigh": 2,
-     "waist/hip": 1
-    },
-    "worst": {
-     "frac": 0.0053,
-     "clip": "Death",
-     "t": 0.8
-    }
-   },
-   "heavyset:hivis+cargo": {
-    "covered": 1865,
-    "bind": 0.0005,
-    "animated": 0.0032,
-    "animatedMean": 0.0013,
-    "extreme": 0.0027,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 20,
-    "regionPoke": {
-     "arm": 15,
-     "chest": 5
-    },
-    "worst": {
-     "frac": 0.0032,
-     "clip": "Attack",
-     "t": 0.8
-    }
-   },
-   "heavyset:hivis+jeans": {
-    "covered": 1866,
-    "bind": 0.0005,
-    "animated": 0.0032,
-    "animatedMean": 0.0013,
-    "extreme": 0.0038,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 23,
-    "regionPoke": {
-     "arm": 15,
-     "waist/hip": 2,
-     "chest": 5,
-     "shin/foot": 1
-    },
-    "worst": {
-     "frac": 0.0038,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "heavyset:hivis+slacks": {
-    "covered": 1825,
-    "bind": 0.0005,
-    "animated": 0.0033,
-    "animatedMean": 0.0013,
-    "extreme": 0.0027,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 20,
-    "regionPoke": {
-     "arm": 15,
-     "chest": 5
-    },
-    "worst": {
-     "frac": 0.0033,
-     "clip": "Idle",
-     "t": 0.1333
-    }
-   },
    "heavyset:coat+cargo": {
-    "covered": 2554,
-    "bind": 0.0008,
-    "animated": 0.0023,
-    "animatedMean": 0.0013,
-    "extreme": 0.0035,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 34,
+    "covered": 5566,
+    "bind": 0.0013,
+    "animated": 0.0007,
+    "animatedMean": 0.0003,
+    "extreme": 0.0011,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 25,
     "regionPoke": {
-     "underarm": 2,
-     "arm": 19,
-     "shoulder": 1,
-     "chest": 11,
-     "head": 1
+     "chest": 2,
+     "underarm": 13,
+     "arm": 7,
+     "waist/hip": 3
     },
     "worst": {
-     "frac": 0.0035,
-     "clip": "ragdoll-crumple",
+     "frac": 0.0013,
+     "clip": "Bind",
      "t": 0
-    }
-   },
-   "heavyset:sweater+cargo": {
-    "covered": 2637,
-    "bind": 0.0004,
-    "animated": 0.003,
-    "animatedMean": 0.0012,
-    "extreme": 0.0019,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 20,
-    "regionPoke": {
-     "underarm": 3,
-     "chest": 1,
-     "arm": 16
-    },
-    "worst": {
-     "frac": 0.003,
-     "clip": "Idle",
-     "t": 1.7333
     }
    },
    "heavyset:coat+jeans": {
-    "covered": 2555,
-    "bind": 0.0008,
-    "animated": 0.0023,
-    "animatedMean": 0.0013,
-    "extreme": 0.0039,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 36,
+    "covered": 5560,
+    "bind": 0.0013,
+    "animated": 0.0007,
+    "animatedMean": 0.0003,
+    "extreme": 0.0005,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 24,
     "regionPoke": {
-     "underarm": 2,
-     "arm": 19,
-     "shoulder": 1,
+     "chest": 2,
+     "underarm": 13,
+     "arm": 7,
      "waist/hip": 1,
-     "chest": 11,
-     "shin/foot": 1,
-     "head": 1
-    },
-    "worst": {
-     "frac": 0.0039,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "heavyset:sweater+jeans": {
-    "covered": 2638,
-    "bind": 0.0004,
-    "animated": 0.003,
-    "animatedMean": 0.0012,
-    "extreme": 0.0027,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 23,
-    "regionPoke": {
-     "underarm": 3,
-     "chest": 1,
-     "arm": 16,
-     "waist/hip": 2,
      "shin/foot": 1
     },
     "worst": {
-     "frac": 0.003,
-     "clip": "Idle",
-     "t": 1.7333
-    }
-   },
-   "heavyset:sweater+slacks": {
-    "incompatible": true,
-    "covered": 2614,
-    "bind": 0.0004,
-    "animated": 0.0027,
-    "animatedMean": 0.0012,
-    "extreme": 0.0019,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 20,
-    "regionPoke": {
-     "underarm": 3,
-     "chest": 1,
-     "arm": 16
-    },
-    "worst": {
-     "frac": 0.0027,
-     "clip": "Idle",
-     "t": 1.7333
-    }
-   },
-   "heavyset:hoodie+cargo": {
-    "covered": 2351,
-    "bind": 0.0013,
-    "animated": 0.0038,
-    "animatedMean": 0.0021,
-    "extreme": 0.0034,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 28,
-    "regionPoke": {
-     "arm": 16,
-     "chest": 9,
-     "underarm": 1,
-     "head": 2
-    },
-    "worst": {
-     "frac": 0.0038,
-     "clip": "Hit",
-     "t": 0.2667
+     "frac": 0.0013,
+     "clip": "Bind",
+     "t": 0
     }
    },
    "heavyset:coat+slacks": {
-    "covered": 2525,
-    "bind": 0.0008,
-    "animated": 0.0024,
-    "animatedMean": 0.0013,
-    "extreme": 0.004,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 35,
+    "covered": 5570,
+    "bind": 0.0013,
+    "animated": 0.0007,
+    "animatedMean": 0.0004,
+    "extreme": 0.0014,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 27,
     "regionPoke": {
-     "underarm": 2,
-     "arm": 19,
-     "waist/hip": 1,
-     "shoulder": 1,
-     "chest": 11,
-     "head": 1
+     "chest": 2,
+     "underarm": 13,
+     "arm": 7,
+     "waist/hip": 5
     },
     "worst": {
-     "frac": 0.004,
+     "frac": 0.0014,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
-   "heavyset:hoodie+jeans": {
-    "covered": 2352,
-    "bind": 0.0013,
-    "animated": 0.0038,
-    "animatedMean": 0.0021,
-    "extreme": 0.0043,
-    "maxExposedHidden": 0,
+   "heavyset:flannel+cargo": {
+    "covered": 5544,
+    "bind": 0.0002,
+    "animated": 0.0013,
+    "animatedMean": 0.0004,
+    "extreme": 0.0018,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 28,
+    "regionPoke": {
+     "underarm": 18,
+     "chest": 3,
+     "shoulder": 2,
+     "waist/hip": 4,
+     "arm": 1
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:flannel+jeans": {
+    "covered": 5552,
+    "bind": 0.0002,
+    "animated": 0.0013,
+    "animatedMean": 0.0004,
+    "extreme": 0.0014,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 27,
+    "regionPoke": {
+     "underarm": 18,
+     "chest": 3,
+     "shoulder": 2,
+     "shin/foot": 1,
+     "waist/hip": 2,
+     "arm": 1
+    },
+    "worst": {
+     "frac": 0.0014,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:flannel+slacks": {
+    "covered": 5558,
+    "bind": 0.0002,
+    "animated": 0.0013,
+    "animatedMean": 0.0004,
+    "extreme": 0.0023,
+    "maxExposedHidden": 1,
     "everPokeVisibleVertices": 31,
     "regionPoke": {
-     "arm": 16,
-     "chest": 9,
-     "waist/hip": 2,
-     "underarm": 1,
-     "shin/foot": 1,
-     "head": 2
-    },
-    "worst": {
-     "frac": 0.0043,
-     "clip": "ragdoll-crumple",
-     "t": 0
-    }
-   },
-   "heavyset:trench+jeans": {
-    "covered": 2645,
-    "bind": 0,
-    "animated": 0.0011,
-    "animatedMean": 0.0002,
-    "extreme": 0.0023,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 20,
-    "regionPoke": {
-     "underarm": 2,
-     "arm": 10,
-     "chest": 6,
-     "shin/foot": 1,
-     "waist/hip": 1
+     "underarm": 18,
+     "chest": 3,
+     "waist/hip": 7,
+     "shoulder": 2,
+     "arm": 1
     },
     "worst": {
      "frac": 0.0023,
@@ -2157,59 +3377,142 @@
      "t": 0
     }
    },
-   "heavyset:trench+cargo": {
-    "covered": 2644,
-    "bind": 0,
-    "animated": 0.0008,
-    "animatedMean": 0.0002,
-    "extreme": 0.0019,
+   "heavyset:hivis+cargo": {
+    "covered": 4251,
+    "bind": 0.0028,
+    "animated": 0.0019,
+    "animatedMean": 0.0008,
+    "extreme": 0.0021,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
+    "everPokeVisibleVertices": 27,
     "regionPoke": {
-     "underarm": 2,
-     "arm": 10,
-     "chest": 6
+     "chest": 4,
+     "arm": 18,
+     "waist/hip": 5
     },
     "worst": {
-     "frac": 0.0019,
+     "frac": 0.0028,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "heavyset:hivis+jeans": {
+    "covered": 4246,
+    "bind": 0.0028,
+    "animated": 0.0019,
+    "animatedMean": 0.0008,
+    "extreme": 0.0016,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 25,
+    "regionPoke": {
+     "chest": 4,
+     "arm": 18,
+     "shin/foot": 1,
+     "waist/hip": 2
+    },
+    "worst": {
+     "frac": 0.0028,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "heavyset:hivis+slacks": {
+    "covered": 4257,
+    "bind": 0.0028,
+    "animated": 0.0019,
+    "animatedMean": 0.0008,
+    "extreme": 0.0031,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 30,
+    "regionPoke": {
+     "chest": 4,
+     "arm": 18,
+     "waist/hip": 8
+    },
+    "worst": {
+     "frac": 0.0031,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:hoodie+cargo": {
+    "covered": 5314,
+    "bind": 0.0006,
+    "animated": 0.0011,
+    "animatedMean": 0.0004,
+    "extreme": 0.0015,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 21,
+    "regionPoke": {
+     "underarm": 7,
+     "arm": 8,
+     "waist/hip": 4,
+     "chest": 1,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:hoodie+jeans": {
+    "covered": 5320,
+    "bind": 0.0006,
+    "animated": 0.0011,
+    "animatedMean": 0.0004,
+    "extreme": 0.0011,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 20,
+    "regionPoke": {
+     "underarm": 7,
+     "arm": 8,
+     "shin/foot": 1,
+     "chest": 1,
+     "waist/hip": 2,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0011,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "heavyset:hoodie+slacks": {
-    "incompatible": true,
-    "covered": 2326,
-    "bind": 0.0013,
-    "animated": 0.0039,
-    "animatedMean": 0.0021,
-    "extreme": 0.0039,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 29,
+    "covered": 5326,
+    "bind": 0.0006,
+    "animated": 0.0011,
+    "animatedMean": 0.0004,
+    "extreme": 0.0023,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 25,
     "regionPoke": {
-     "arm": 16,
-     "chest": 9,
-     "waist/hip": 1,
-     "underarm": 1,
-     "head": 2
+     "underarm": 7,
+     "arm": 8,
+     "waist/hip": 8,
+     "chest": 1,
+     "shoulder": 1
     },
     "worst": {
-     "frac": 0.0039,
-     "clip": "Hit",
-     "t": 0.2667
+     "frac": 0.0023,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
-   "heavyset:trench+slacks": {
-    "covered": 2623,
-    "bind": 0,
-    "animated": 0.0008,
-    "animatedMean": 0.0002,
+   "heavyset:sweater+cargo": {
+    "covered": 5334,
+    "bind": 0.0007,
+    "animated": 0.0011,
+    "animatedMean": 0.0006,
     "extreme": 0.0019,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
+    "everPokeVisibleVertices": 21,
     "regionPoke": {
-     "underarm": 2,
-     "arm": 10,
-     "chest": 6
+     "underarm": 10,
+     "shoulder": 2,
+     "arm": 4,
+     "waist/hip": 4,
+     "chest": 1
     },
     "worst": {
      "frac": 0.0019,
@@ -2217,346 +3520,1071 @@
      "t": 0
     }
    },
-   "tall:blazer+jeans": {
-    "covered": 2675,
-    "bind": 0.0026,
-    "animated": 0.0026,
-    "animatedMean": 0.0021,
-    "extreme": 0.003,
+   "heavyset:sweater+jeans": {
+    "covered": 5340,
+    "bind": 0.0007,
+    "animated": 0.0011,
+    "animatedMean": 0.0006,
+    "extreme": 0.0015,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 11,
+    "everPokeVisibleVertices": 20,
     "regionPoke": {
-     "waist/hip": 1,
-     "arm": 3,
-     "chest": 5,
-     "shoulder": 1,
-     "underarm": 1
+     "underarm": 10,
+     "shoulder": 2,
+     "arm": 4,
+     "shin/foot": 1,
+     "chest": 1,
+     "waist/hip": 2
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:sweater+slacks": {
+    "covered": 5347,
+    "bind": 0.0007,
+    "animated": 0.0011,
+    "animatedMean": 0.0006,
+    "extreme": 0.0026,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 25,
+    "regionPoke": {
+     "underarm": 10,
+     "shoulder": 2,
+     "waist/hip": 8,
+     "arm": 4,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0026,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:trench+cargo": {
+    "covered": 5617,
+    "bind": 0.0004,
+    "animated": 0.0011,
+    "animatedMean": 0.0005,
+    "extreme": 0.002,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 22,
+    "regionPoke": {
+     "chest": 4,
+     "shoulder": 3,
+     "underarm": 8,
+     "arm": 4,
+     "waist/hip": 3
+    },
+    "worst": {
+     "frac": 0.002,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:trench+jeans": {
+    "covered": 5622,
+    "bind": 0.0004,
+    "animated": 0.0011,
+    "animatedMean": 0.0005,
+    "extreme": 0.0014,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 20,
+    "regionPoke": {
+     "chest": 4,
+     "shoulder": 3,
+     "underarm": 8,
+     "arm": 4,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.0014,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "heavyset:trench+slacks": {
+    "covered": 5629,
+    "bind": 0.0004,
+    "animated": 0.0011,
+    "animatedMean": 0.0006,
+    "extreme": 0.0025,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 25,
+    "regionPoke": {
+     "chest": 4,
+     "shoulder": 3,
+     "underarm": 8,
+     "waist/hip": 6,
+     "arm": 4
+    },
+    "worst": {
+     "frac": 0.0025,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:blazer+cargo": {
+    "covered": 3866,
+    "bind": 0.0018,
+    "animated": 0.0023,
+    "animatedMean": 0.0016,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 21,
+    "regionPoke": {
+     "shoulder": 3,
+     "arm": 12,
+     "chest": 2,
+     "thigh": 3,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0023,
+     "clip": "Hit",
+     "t": 0.2667
+    }
+   },
+   "lastshift:blazer+jeans": {
+    "covered": 3874,
+    "bind": 0.0018,
+    "animated": 0.0026,
+    "animatedMean": 0.0017,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 26,
+    "regionPoke": {
+     "shoulder": 3,
+     "arm": 12,
+     "chest": 2,
+     "thigh": 3,
+     "shin/foot": 5,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0026,
+     "clip": "Death",
+     "t": 0.6667
+    }
+   },
+   "lastshift:blazer+slacks": {
+    "covered": 3878,
+    "bind": 0.0028,
+    "animated": 0.0031,
+    "animatedMean": 0.0024,
+    "extreme": 0.0028,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 23,
+    "regionPoke": {
+     "shoulder": 3,
+     "arm": 12,
+     "thigh": 4,
+     "chest": 2,
+     "head": 1,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.0031,
+     "clip": "Hit",
+     "t": 0.2667
+    }
+   },
+   "lastshift:coat+cargo": {
+    "covered": 4055,
+    "bind": 0.0025,
+    "animated": 0.0022,
+    "animatedMean": 0.0013,
+    "extreme": 0.002,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 23,
+    "regionPoke": {
+     "arm": 17,
+     "thigh": 3,
+     "head": 3
+    },
+    "worst": {
+     "frac": 0.0025,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "lastshift:coat+jeans": {
+    "covered": 4062,
+    "bind": 0.0025,
+    "animated": 0.003,
+    "animatedMean": 0.0013,
+    "extreme": 0.002,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 28,
+    "regionPoke": {
+     "arm": 17,
+     "thigh": 3,
+     "shin/foot": 5,
+     "head": 3
     },
     "worst": {
      "frac": 0.003,
+     "clip": "Death",
+     "t": 0.6667
+    }
+   },
+   "lastshift:coat+slacks": {
+    "covered": 4071,
+    "bind": 0.0027,
+    "animated": 0.0025,
+    "animatedMean": 0.0013,
+    "extreme": 0.0022,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 22,
+    "regionPoke": {
+     "arm": 17,
+     "thigh": 1,
+     "head": 3,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.0027,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "lastshift:flannel+cargo": {
+    "covered": 3928,
+    "bind": 0.0008,
+    "animated": 0.0013,
+    "animatedMean": 0.0007,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "underarm": 1,
+     "shoulder": 1,
+     "arm": 7,
+     "thigh": 3
+    },
+    "worst": {
+     "frac": 0.0013,
+     "clip": "Run",
+     "t": 0
+    }
+   },
+   "lastshift:flannel+jeans": {
+    "covered": 3939,
+    "bind": 0.0008,
+    "animated": 0.0018,
+    "animatedMean": 0.0008,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 17,
+    "regionPoke": {
+     "underarm": 1,
+     "shoulder": 1,
+     "thigh": 3,
+     "arm": 7,
+     "shin/foot": 5
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "Death",
+     "t": 0.6667
+    }
+   },
+   "lastshift:flannel+slacks": {
+    "covered": 3942,
+    "bind": 0.0018,
+    "animated": 0.002,
+    "animatedMean": 0.0014,
+    "extreme": 0.002,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 14,
+    "regionPoke": {
+     "underarm": 1,
+     "shoulder": 1,
+     "thigh": 4,
+     "arm": 7,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.002,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "lastshift:hivis+cargo": {
+    "covered": 3003,
+    "bind": 0,
+    "animated": 0.0007,
+    "animatedMean": 0.0003,
+    "extreme": 0.0007,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 4,
+    "regionPoke": {
+     "thigh": 4
+    },
+    "worst": {
+     "frac": 0.0007,
+     "clip": "Walk",
+     "t": 0.2667
+    }
+   },
+   "lastshift:hivis+jeans": {
+    "covered": 3013,
+    "bind": 0,
+    "animated": 0.0017,
+    "animatedMean": 0.0003,
+    "extreme": 0.0007,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 10,
+    "regionPoke": {
+     "thigh": 5,
+     "shin/foot": 5
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "Death",
+     "t": 0.6667
+    }
+   },
+   "lastshift:hivis+slacks": {
+    "covered": 3017,
+    "bind": 0.0013,
+    "animated": 0.0013,
+    "animatedMean": 0.0012,
+    "extreme": 0.002,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 6,
+    "regionPoke": {
+     "thigh": 5,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.002,
+     "clip": "ragdoll-sprawl",
+     "t": 0
+    }
+   },
+   "lastshift:hoodie+cargo": {
+    "covered": 3816,
+    "bind": 0.0013,
+    "animated": 0.0013,
+    "animatedMean": 0.001,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 21,
+    "regionPoke": {
+     "arm": 18,
+     "thigh": 3
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "lastshift:hoodie+jeans": {
+    "covered": 3827,
+    "bind": 0.0013,
+    "animated": 0.0018,
+    "animatedMean": 0.001,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 26,
+    "regionPoke": {
+     "arm": 18,
+     "thigh": 3,
+     "shin/foot": 5
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "lastshift:hoodie+slacks": {
+    "covered": 3830,
+    "bind": 0.0023,
+    "animated": 0.0023,
+    "animatedMean": 0.0018,
+    "extreme": 0.0026,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 23,
+    "regionPoke": {
+     "arm": 18,
+     "thigh": 4,
+     "shin/foot": 1
+    },
+    "worst": {
+     "frac": 0.0026,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "scavenger:blazer+cargo": {
+    "covered": 4228,
+    "bind": 0.0017,
+    "animated": 0.0019,
+    "animatedMean": 0.0013,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 13,
+    "regionPoke": {
+     "shin/foot": 3,
+     "chest": 3,
+     "arm": 4,
+     "head": 1,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0019,
+     "clip": "Death",
+     "t": 0.6667
+    }
+   },
+   "scavenger:blazer+jeans": {
+    "covered": 4223,
+    "bind": 0.0017,
+    "animated": 0.0019,
+    "animatedMean": 0.0013,
+    "extreme": 0.0024,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 15,
+    "regionPoke": {
+     "thigh": 4,
+     "shin/foot": 2,
+     "chest": 3,
+     "arm": 4,
+     "head": 1,
+     "shoulder": 1
+    },
+    "worst": {
+     "frac": 0.0024,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "scavenger:blazer+slacks": {
+    "covered": 4229,
+    "bind": 0.0017,
+    "animated": 0.0017,
+    "animatedMean": 0.0015,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "chest": 3,
+     "shin/foot": 2,
+     "arm": 4,
+     "head": 1,
+     "shoulder": 1,
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "scavenger:coat+cargo": {
+    "covered": 4403,
+    "bind": 0.0036,
+    "animated": 0.005,
+    "animatedMean": 0.0028,
+    "extreme": 0.0045,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 44,
+    "regionPoke": {
+     "arm": 24,
+     "underarm": 2,
+     "shin/foot": 3,
+     "shoulder": 14,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.005,
+     "clip": "Death",
+     "t": 1.0667
+    }
+   },
+   "scavenger:coat+jeans": {
+    "covered": 4402,
+    "bind": 0.0036,
+    "animated": 0.0045,
+    "animatedMean": 0.0027,
+    "extreme": 0.0048,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 44,
+    "regionPoke": {
+     "arm": 24,
+     "underarm": 2,
+     "shin/foot": 2,
+     "thigh": 1,
+     "shoulder": 14,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0048,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "scavenger:coat+slacks": {
+    "covered": 4407,
+    "bind": 0.0036,
+    "animated": 0.0045,
+    "animatedMean": 0.0029,
+    "extreme": 0.0043,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 43,
+    "regionPoke": {
+     "arm": 24,
+     "underarm": 2,
+     "shoulder": 14,
+     "shin/foot": 2,
+     "head": 1
+    },
+    "worst": {
+     "frac": 0.0045,
+     "clip": "Death",
+     "t": 1.6
+    }
+   },
+   "scavenger:hivis+cargo": {
+    "covered": 3089,
+    "bind": 0.001,
+    "animated": 0.0019,
+    "animatedMean": 0.0008,
+    "extreme": 0.0006,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "shin/foot": 3,
+     "arm": 4,
+     "shoulder": 4,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0019,
+     "clip": "Death",
+     "t": 0.8
+    }
+   },
+   "scavenger:hivis+jeans": {
+    "covered": 3084,
+    "bind": 0.001,
+    "animated": 0.0019,
+    "animatedMean": 0.0007,
+    "extreme": 0.0016,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 14,
+    "regionPoke": {
+     "thigh": 3,
+     "shin/foot": 2,
+     "arm": 4,
+     "shoulder": 4,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0019,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "scavenger:hivis+slacks": {
+    "covered": 3088,
+    "bind": 0.001,
+    "animated": 0.0016,
+    "animatedMean": 0.001,
+    "extreme": 0.001,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "waist/hip": 1,
+     "shin/foot": 2,
+     "arm": 4,
+     "shoulder": 4,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0016,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "scavenger:hoodie+cargo": {
+    "covered": 4238,
+    "bind": 0.0031,
+    "animated": 0.0035,
+    "animatedMean": 0.0029,
+    "extreme": 0.004,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 31,
+    "regionPoke": {
+     "arm": 8,
+     "underarm": 1,
+     "shin/foot": 3,
+     "chest": 2,
+     "shoulder": 17
+    },
+    "worst": {
+     "frac": 0.004,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "scavenger:hoodie+jeans": {
+    "covered": 4238,
+    "bind": 0.0031,
+    "animated": 0.0033,
+    "animatedMean": 0.0029,
+    "extreme": 0.0047,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 33,
+    "regionPoke": {
+     "arm": 8,
+     "underarm": 1,
+     "thigh": 3,
+     "shin/foot": 2,
+     "chest": 2,
+     "shoulder": 17
+    },
+    "worst": {
+     "frac": 0.0047,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "scavenger:hoodie+slacks": {
+    "covered": 4243,
+    "bind": 0.0031,
+    "animated": 0.0035,
+    "animatedMean": 0.0031,
+    "extreme": 0.0038,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 30,
+    "regionPoke": {
+     "arm": 8,
+     "underarm": 1,
+     "chest": 2,
+     "shin/foot": 2,
+     "shoulder": 17
+    },
+    "worst": {
+     "frac": 0.0038,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:blazer+cargo": {
-    "covered": 2675,
-    "bind": 0.0037,
-    "animated": 0.0037,
-    "animatedMean": 0.0028,
-    "extreme": 0.0037,
+    "covered": 4704,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0.0001,
+    "extreme": 0.0013,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 14,
+    "everPokeVisibleVertices": 8,
     "regionPoke": {
-     "waist/hip": 3,
-     "arm": 3,
      "thigh": 1,
-     "chest": 5,
-     "shoulder": 1,
-     "underarm": 1
+     "chest": 1,
+     "arm": 6
     },
     "worst": {
-     "frac": 0.0037,
+     "frac": 0.0013,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:blazer+jeans": {
+    "covered": 4725,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0.0001,
+    "extreme": 0.0013,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 7,
+    "regionPoke": {
+     "chest": 1,
+     "arm": 6
+    },
+    "worst": {
+     "frac": 0.0013,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:blazer+slacks": {
-    "covered": 2654,
-    "bind": 0.003,
-    "animated": 0.003,
-    "animatedMean": 0.0021,
-    "extreme": 0.003,
+    "covered": 4730,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0.0001,
+    "extreme": 0.0013,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 12,
+    "everPokeVisibleVertices": 7,
     "regionPoke": {
-     "waist/hip": 2,
-     "arm": 3,
-     "chest": 5,
-     "shoulder": 1,
-     "underarm": 1
+     "chest": 1,
+     "arm": 6
     },
     "worst": {
-     "frac": 0.003,
+     "frac": 0.0013,
      "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:coat+cargo": {
-    "covered": 2713,
-    "bind": 0.0048,
-    "animated": 0.0048,
-    "animatedMean": 0.004,
-    "extreme": 0.0048,
+    "covered": 4874,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0,
+    "extreme": 0.0012,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 29,
+    "everPokeVisibleVertices": 8,
     "regionPoke": {
-     "arm": 13,
-     "thigh": 1,
-     "shoulder": 6,
-     "chest": 5,
-     "underarm": 2,
-     "waist/hip": 2
+     "underarm": 1,
+     "arm": 7
     },
     "worst": {
-     "frac": 0.0048,
-     "clip": "Bind",
+     "frac": 0.0012,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
-   "tall:sweater+slacks": {
-    "covered": 2680,
-    "bind": 0.0026,
-    "animated": 0.003,
-    "animatedMean": 0.0022,
-    "extreme": 0.0026,
+   "tall:coat+jeans": {
+    "covered": 4893,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0,
+    "extreme": 0.0012,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 18,
+    "everPokeVisibleVertices": 8,
     "regionPoke": {
-     "arm": 11,
-     "waist/hip": 1,
-     "underarm": 3,
-     "chest": 3
+     "underarm": 1,
+     "arm": 7
     },
     "worst": {
-     "frac": 0.003,
-     "clip": "Idle",
-     "t": 1.2
+     "frac": 0.0012,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
-   "tall:coat+jeans": {
-    "covered": 2712,
-    "bind": 0.0037,
-    "animated": 0.0041,
-    "animatedMean": 0.0033,
-    "extreme": 0.0041,
+   "tall:coat+slacks": {
+    "covered": 4899,
+    "bind": 0,
+    "animated": 0.0002,
+    "animatedMean": 0,
+    "extreme": 0.0012,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 26,
+    "everPokeVisibleVertices": 8,
     "regionPoke": {
-     "arm": 13,
-     "shoulder": 6,
-     "chest": 5,
-     "underarm": 2
+     "underarm": 1,
+     "arm": 7
     },
     "worst": {
-     "frac": 0.0041,
-     "clip": "Death",
-     "t": 0.5333
+     "frac": 0.0012,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:flannel+cargo": {
+    "covered": 4738,
+    "bind": 0.0004,
+    "animated": 0.0008,
+    "animatedMean": 0.0003,
+    "extreme": 0.0011,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 11,
+    "regionPoke": {
+     "underarm": 2,
+     "shoulder": 2,
+     "thigh": 1,
+     "arm": 6
+    },
+    "worst": {
+     "frac": 0.0011,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:flannel+jeans": {
+    "covered": 4762,
+    "bind": 0.0004,
+    "animated": 0.0008,
+    "animatedMean": 0.0003,
+    "extreme": 0.001,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 10,
+    "regionPoke": {
+     "underarm": 2,
+     "shoulder": 2,
+     "arm": 6
+    },
+    "worst": {
+     "frac": 0.001,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:flannel+slacks": {
+    "covered": 4766,
+    "bind": 0.0004,
+    "animated": 0.0008,
+    "animatedMean": 0.0003,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 10,
+    "regionPoke": {
+     "underarm": 2,
+     "shoulder": 2,
+     "arm": 6
+    },
+    "worst": {
+     "frac": 0.001,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:hivis+cargo": {
+    "covered": 3463,
+    "bind": 0,
+    "animated": 0.0003,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "thigh": 1,
+     "arm": 2
+    },
+    "worst": {
+     "frac": 0.0003,
+     "clip": "Idle",
+     "t": 2.5333
+    }
+   },
+   "tall:hivis+jeans": {
+    "covered": 3487,
+    "bind": 0,
+    "animated": 0.0003,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {
+     "arm": 2
+    },
+    "worst": {
+     "frac": 0.0003,
+     "clip": "Idle",
+     "t": 2.5333
+    }
+   },
+   "tall:hivis+slacks": {
+    "covered": 3491,
+    "bind": 0,
+    "animated": 0.0003,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 2,
+    "regionPoke": {
+     "arm": 2
+    },
+    "worst": {
+     "frac": 0.0003,
+     "clip": "Idle",
+     "t": 2.5333
+    }
+   },
+   "tall:hoodie+cargo": {
+    "covered": 4645,
+    "bind": 0.0002,
+    "animated": 0.0006,
+    "animatedMean": 0.0003,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 14,
+    "regionPoke": {
+     "shoulder": 2,
+     "thigh": 1,
+     "arm": 11
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:hoodie+jeans": {
+    "covered": 4669,
+    "bind": 0.0002,
+    "animated": 0.0006,
+    "animatedMean": 0.0003,
+    "extreme": 0.0017,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "shoulder": 2,
+     "arm": 10
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:hoodie+slacks": {
+    "covered": 4673,
+    "bind": 0.0002,
+    "animated": 0.0006,
+    "animatedMean": 0.0003,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 12,
+    "regionPoke": {
+     "shoulder": 2,
+     "arm": 10
+    },
+    "worst": {
+     "frac": 0.0017,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
    "tall:sweater+cargo": {
-    "incompatible": true,
-    "covered": 2698,
-    "bind": 0.003,
-    "animated": 0.003,
-    "animatedMean": 0.0022,
-    "extreme": 0.0026,
+    "covered": 4664,
+    "bind": 0.0017,
+    "animated": 0.0019,
+    "animatedMean": 0.0013,
+    "extreme": 0.0028,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 19,
+    "everPokeVisibleVertices": 16,
     "regionPoke": {
-     "arm": 11,
-     "waist/hip": 1,
+     "arm": 14,
      "thigh": 1,
-     "underarm": 3,
-     "chest": 3
+     "shoulder": 1
     },
     "worst": {
-     "frac": 0.003,
-     "clip": "Bind",
+     "frac": 0.0028,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:sweater+jeans": {
-    "covered": 2697,
-    "bind": 0.0022,
-    "animated": 0.003,
-    "animatedMean": 0.0022,
-    "extreme": 0.0026,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 17,
+    "covered": 4688,
+    "bind": 0.0017,
+    "animated": 0.0017,
+    "animatedMean": 0.0013,
+    "extreme": 0.0028,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 15,
     "regionPoke": {
-     "arm": 11,
-     "underarm": 3,
-     "chest": 3
-    },
-    "worst": {
-     "frac": 0.003,
-     "clip": "Attack",
-     "t": 0.8
-    }
-   },
-   "tall:coat+slacks": {
-    "covered": 2694,
-    "bind": 0.0037,
-    "animated": 0.0041,
-    "animatedMean": 0.0033,
-    "extreme": 0.0041,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 26,
-    "regionPoke": {
-     "arm": 13,
-     "shoulder": 6,
-     "chest": 5,
-     "underarm": 2
-    },
-    "worst": {
-     "frac": 0.0041,
-     "clip": "Death",
-     "t": 0.5333
-    }
-   },
-   "tall:hoodie+jeans": {
-    "covered": 2690,
-    "bind": 0.0033,
-    "animated": 0.0059,
-    "animatedMean": 0.0041,
-    "extreme": 0.0041,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 27,
-    "regionPoke": {
-     "arm": 17,
-     "underarm": 3,
-     "chest": 5,
-     "head": 1,
+     "arm": 14,
      "shoulder": 1
     },
     "worst": {
-     "frac": 0.0059,
-     "clip": "Idle",
-     "t": 1.8667
-    }
-   },
-   "tall:trench+cargo": {
-    "covered": 2710,
-    "bind": 0.0037,
-    "animated": 0.0048,
-    "animatedMean": 0.0029,
-    "extreme": 0.0055,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 29,
-    "regionPoke": {
-     "shoulder": 11,
-     "arm": 9,
-     "waist/hip": 1,
-     "chest": 7,
-     "thigh": 1
-    },
-    "worst": {
-     "frac": 0.0055,
-     "clip": "ragdoll-twist",
+     "frac": 0.0028,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
-   "tall:hoodie+cargo": {
-    "incompatible": true,
-    "covered": 2691,
-    "bind": 0.0041,
-    "animated": 0.0059,
-    "animatedMean": 0.0041,
-    "extreme": 0.0041,
+   "tall:sweater+slacks": {
+    "covered": 4692,
+    "bind": 0.0017,
+    "animated": 0.0017,
+    "animatedMean": 0.0013,
+    "extreme": 0.0028,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 29,
+    "everPokeVisibleVertices": 15,
     "regionPoke": {
-     "arm": 17,
-     "waist/hip": 1,
-     "underarm": 3,
-     "thigh": 1,
-     "chest": 5,
-     "head": 1,
+     "arm": 14,
      "shoulder": 1
     },
     "worst": {
-     "frac": 0.0059,
-     "clip": "Idle",
-     "t": 1.8667
+     "frac": 0.0028,
+     "clip": "ragdoll-crumple",
+     "t": 0
     }
    },
-   "tall:hoodie+slacks": {
-    "covered": 2673,
-    "bind": 0.0037,
-    "animated": 0.006,
-    "animatedMean": 0.0041,
-    "extreme": 0.0041,
+   "tall:trench+cargo": {
+    "covered": 4919,
+    "bind": 0.0016,
+    "animated": 0.0018,
+    "animatedMean": 0.0014,
+    "extreme": 0.0018,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 28,
+    "everPokeVisibleVertices": 18,
     "regionPoke": {
-     "arm": 17,
-     "waist/hip": 1,
-     "underarm": 3,
-     "chest": 5,
-     "head": 1,
-     "shoulder": 1
+     "arm": 13,
+     "shoulder": 5
     },
     "worst": {
-     "frac": 0.006,
-     "clip": "Idle",
-     "t": 1.4667
-    }
-   },
-   "tall:trench+slacks": {
-    "covered": 2694,
-    "bind": 0.0041,
-    "animated": 0.0056,
-    "animatedMean": 0.0034,
-    "extreme": 0.0059,
-    "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 30,
-    "regionPoke": {
-     "shoulder": 11,
-     "arm": 9,
-     "waist/hip": 3,
-     "chest": 7
-    },
-    "worst": {
-     "frac": 0.0059,
-     "clip": "ragdoll-twist",
+     "frac": 0.0018,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    },
    "tall:trench+jeans": {
-    "covered": 2709,
-    "bind": 0.0033,
-    "animated": 0.0048,
-    "animatedMean": 0.0029,
-    "extreme": 0.0052,
+    "covered": 4940,
+    "bind": 0.0016,
+    "animated": 0.0018,
+    "animatedMean": 0.0014,
+    "extreme": 0.0018,
     "maxExposedHidden": 0,
-    "everPokeVisibleVertices": 28,
+    "everPokeVisibleVertices": 18,
     "regionPoke": {
-     "shoulder": 11,
-     "arm": 9,
-     "waist/hip": 1,
-     "chest": 7
+     "arm": 13,
+     "shoulder": 5
     },
     "worst": {
-     "frac": 0.0052,
-     "clip": "ragdoll-twist",
+     "frac": 0.0018,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "tall:trench+slacks": {
+    "covered": 4947,
+    "bind": 0.0016,
+    "animated": 0.0018,
+    "animatedMean": 0.0014,
+    "extreme": 0.0018,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 18,
+    "regionPoke": {
+     "arm": 13,
+     "shoulder": 5
+    },
+    "worst": {
+     "frac": 0.0018,
+     "clip": "ragdoll-crumple",
      "t": 0
     }
    }
   },
   "aggregate": {
    "garments": {
-    "n": 32,
-    "maxBind": 0.005,
-    "maxAnimated": 0.0087,
-    "maxExtreme": 0.0069,
-    "meanAnimated": 0.0041,
-    "totalEverPokeVisibleVertices": 481
+    "n": 48,
+    "maxBind": 0.0053,
+    "maxAnimated": 0.0056,
+    "maxExtreme": 0.0054,
+    "meanAnimated": 0.0017,
+    "totalEverPokeVisibleVertices": 569
    },
    "headwear": {
     "n": 15,
-    "maxBind": 0.1559,
-    "maxAnimated": 0.1371,
-    "maxExtreme": 0.1246,
-    "meanAnimated": 0.0885,
-    "totalEverPokeVisibleVertices": 399
+    "maxBind": 0.0891,
+    "maxAnimated": 0.0891,
+    "maxExtreme": 0.0891,
+    "meanAnimated": 0.0211,
+    "totalEverPokeVisibleVertices": 203
    },
    "face": {
     "n": 10,
-    "maxBind": 0.0435,
-    "maxAnimated": 0.0541,
-    "maxExtreme": 0.0435,
-    "meanAnimated": 0.0158,
-    "totalEverPokeVisibleVertices": 9
+    "maxBind": 0.0851,
+    "maxAnimated": 0.0851,
+    "maxExtreme": 0.0851,
+    "meanAnimated": 0.0198,
+    "totalEverPokeVisibleVertices": 34
    }
   }
  },

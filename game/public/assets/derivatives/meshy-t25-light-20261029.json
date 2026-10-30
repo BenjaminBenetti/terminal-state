@@ -1,0 +1,344 @@
+{
+  "schema": "terminal-state-meshy-t25-derivatives-v1",
+  "task": "studio-meshy-game-replacement-20261029-01",
+  "lane": "PROPS",
+  "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+  "status": "Runtime derivatives of reference-conditioned Meshy T2.5 image-to-3d outputs (each conditioned on the master's ORIGINAL front / reference image; lane MESHY review: accepted). Prototype art; no commercial / model licence clearance asserted.",
+  "rebuild": "node tools/asset-pipeline/props/build-meshy-t25.mjs [--only <id>,<id>] [--force]",
+  "rawStorage": "Native Meshy GLBs, thumbnails, task records and the submission ledger stay OUTSIDE Git in reference/tasks/meshy-game-replacement-20261029/assets/ (raw/<id>/<attempt>/native.glb, ledger.jsonl, DELIVERED.json).",
+  "conventions": {
+    "units": "meters",
+    "up": "+Y",
+    "front": "+Z",
+    "files": "plain glTF 2.0 binary (no Draco / meshopt / KTX2); new flat path <old-basename>-t25.glb (cache-busting); logical runtime keys unchanged"
+  },
+  "restoreNote": "Every replaced runtime file is tracked at the pushed base commit; restore = record.restore.command (git show <base>:<path>).",
+  "tool": "meshy-t25-props-2",
+  "class": "light",
+  "counts": {
+    "records": 1,
+    "bytes": 348808,
+    "triangles": 1199,
+    "replacedBytes": 538696,
+    "replacedTriangles": 894
+  },
+  "records": [
+    {
+      "id": "base:light",
+      "runtimeKeys": [
+        "light"
+      ],
+      "class": "light fixture",
+      "output": {
+        "path": "game/public/assets/models/light-lod2-t25.glb",
+        "url": "assets/models/light-lod2-t25.glb",
+        "sha256": "a3bafa8094cee5a07da0a90a3a3ee1245e29ad4569797f065ea1c567ce441fdf",
+        "bytes": 348808,
+        "triangles": 1199,
+        "vertices": 1871,
+        "textures": [
+          {
+            "slot": "baseColor",
+            "size": [
+              1024,
+              1024
+            ],
+            "mime": "image/jpeg",
+            "bytes": 167090
+          },
+          {
+            "slot": "metallicRoughness",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 70704
+          },
+          {
+            "slot": "normal",
+            "size": [
+              512,
+              512
+            ],
+            "mime": "image/jpeg",
+            "bytes": 41717
+          }
+        ],
+        "gpuTextureBytesEstimate": 8388608,
+        "doubleSided": true,
+        "dims": [
+          1.2,
+          0.1905,
+          0.1315
+        ],
+        "bbox": {
+          "min": [
+            -0.6,
+            -0.1905,
+            -0.0657
+          ],
+          "max": [
+            0.6,
+            0,
+            0.0657
+          ]
+        },
+        "budget": {
+          "tris": 1200,
+          "color": 1024,
+          "mr": 512,
+          "normal": 512,
+          "bytes": 560000,
+          "rule": "light fixture (instanced at every fixture): <= 1.2k tris; old 1024 / 512 / 512 maps",
+          "overBudget": false,
+          "jpegQuality": [
+            86,
+            88,
+            90
+          ]
+        }
+      },
+      "meshy": {
+        "taskId": "01a1898f-e257-7125-95e7-30760a012140",
+        "attempt": "a1",
+        "review": "accepted",
+        "reviewNote": "Same long tube fixture: cream diffuser, dark end caps and 2 clamp brackets, light grime. Diffuser visible from both front and back; no separate emissive part.",
+        "args": {
+          "target_polycount": 3000,
+          "pose_mode": null
+        },
+        "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/base:light/a1/native.glb",
+        "nativeSha256": "a780aefa363b4e966c7ab088a31d93ba1adac493d927c4895ac073e8c37a0b7b",
+        "nativeBytes": 6236440,
+        "native": {
+          "triangles": 2662,
+          "vertices": 2874,
+          "bbox": [
+            0.9536,
+            0.1514,
+            0.1045
+          ],
+          "components": 15,
+          "largestComponentFaces": 778,
+          "boundaryEdges": 474,
+          "nonManifoldEdges": 0,
+          "edges": 4230,
+          "mr": {
+            "meanRoughness": 0.441,
+            "meanMetalness": 0.105
+          },
+          "textures": [
+            {
+              "slot": "color",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2473465
+            },
+            {
+              "slot": "mr",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 1623362
+            },
+            {
+              "slot": "normal",
+              "mime": "image/jpeg",
+              "size": [
+                2048,
+                2048
+              ],
+              "bytes": 2013439
+            }
+          ]
+        },
+        "inputImage": {
+          "path": "reference/assets/generated/final-environment-mv-f16-01/env-light-03/view00.png",
+          "sha256": "1b1d22fb97236b496d9ef98c9a3838c54b7fa94e620ce4fa2e21237d7bca0911",
+          "role": "front (MV view 0)"
+        }
+      },
+      "transform": {
+        "description": "p_out = diag(S) * Ryaw * p_native + t (baked into the vertices; node transform identity). Meshy native: +Y up, front +Z.",
+        "yawQuarter": 0,
+        "yawRefineDeg": 0,
+        "R": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "S": [
+          1.258371,
+          1.258371,
+          1.258371
+        ],
+        "t": [
+          0.002458,
+          -0.09493,
+          -0.000922
+        ],
+        "fit": "uniform: width 1.2 m (old runtime width) -> 1.2 x 0.1905 x 0.1315 m. the fixture size is read from the model bbox at load (game.ts WorldMaterials fixture dims -> emissive tube box, instancing fit): keep the 1.2 m length and the round diffuser tube round (a per-axis fit to the old 0.172 m depth would stretch it 30% into an oval); height comes out 0.19 m like the old fixture, depth 0.13 m",
+        "oldDims": [
+          1.2,
+          0.1925,
+          0.1722
+        ],
+        "stretchVsUniformHeight": [
+          0.9921,
+          0.9921,
+          0.9921
+        ],
+        "anchor": "top",
+        "frontCheck": {
+          "scores": {
+            "front": {
+              "iou": 0.993,
+              "lumaCorrelation": 0.818,
+              "chromaDiff": 0.019,
+              "aspectLogDiff": 0.057,
+              "score": 1.6
+            },
+            "right": {
+              "iou": 0.825,
+              "lumaCorrelation": 0.263,
+              "chromaDiff": 0.051,
+              "aspectLogDiff": 2.175,
+              "score": -0.103
+            },
+            "back": {
+              "iou": 0.991,
+              "lumaCorrelation": 0.757,
+              "chromaDiff": 0.022,
+              "aspectLogDiff": 0.057,
+              "score": 1.546
+            },
+            "left": {
+              "iou": 0.825,
+              "lumaCorrelation": 0.253,
+              "chromaDiff": 0.051,
+              "aspectLogDiff": 2.175,
+              "score": -0.111
+            }
+          },
+          "best": "front",
+          "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "tune": {
+        "colorGrade": {
+          "mode": "tint",
+          "reason": "primary review: the T2.5 diffuser bakes cleaner / whiter than the original aged-ivory fixture (mean tint original 164/152/134 vs 160/154/141): hue moved toward the original ivory, luminance kept"
+        },
+        "fit": "uniform-width",
+        "reason": "the fixture size is read from the model bbox at load (game.ts WorldMaterials fixture dims -> emissive tube box, instancing fit): keep the 1.2 m length and the round diffuser tube round (a per-axis fit to the old 0.172 m depth would stretch it 30% into an oval); height comes out 0.19 m like the old fixture, depth 0.13 m"
+      },
+      "simplify": {
+        "applied": true,
+        "tool": "meshoptimizer simplifyWithAttributes (normals x0.5 + UV weights; attribute seams preserved, Meshy UVs kept)",
+        "fromTriangles": 2662,
+        "triangles": 1199,
+        "targetTriangles": 1200,
+        "errorRelative": 0.006743,
+        "errorMeters": 0.008157
+      },
+      "meshAfter": {
+        "components": 15,
+        "largestComponentFaces": 652,
+        "boundaryEdges": 147,
+        "nonManifoldEdges": 0,
+        "edges": 1872
+      },
+      "colorGrade": {
+        "mode": "tint",
+        "reason": "primary review: the T2.5 diffuser bakes cleaner / whiter than the original aged-ivory fixture (mean tint original 164/152/134 vs 160/154/141): hue moved toward the original ivory, luminance kept",
+        "factors": [
+          1.0239,
+          0.9952,
+          0.9712
+        ],
+        "clamp": [
+          0.85,
+          1.05
+        ],
+        "neutralMask": null,
+        "referenceMeanSRGB": [
+          163.594,
+          152.046,
+          134.17
+        ],
+        "renderMeanSRGBBefore": [
+          159.638,
+          152.647,
+          138.024
+        ],
+        "method": "per-channel multiply of the base-colour map (sRGB) before downsizing; means over the alpha-masked original image and an unshaded 200 px orthographic front render"
+      },
+      "surfaces": [],
+      "conventions": {
+        "units": "meters",
+        "up": "+Y",
+        "front": "+Z",
+        "origin": "top-centre (y = 0 mounting face; hangs below)"
+      },
+      "replaces": {
+        "path": "game/public/assets/models/light-lod2.glb",
+        "sha256": "fe57c42989f9b533d52ec49f7261e964c5fc8eaf69d35e1630701442e94cc4f7",
+        "bytes": 538696,
+        "triangles": 894,
+        "textures": [
+          "jpeg 1024x1024",
+          "jpeg 512x512",
+          "png 512x512"
+        ],
+        "bbox": {
+          "min": [
+            -0.6,
+            -0.1925,
+            -0.0861
+          ],
+          "max": [
+            0.6,
+            0,
+            0.0861
+          ],
+          "size": [
+            1.2,
+            0.1925,
+            0.1722
+          ]
+        }
+      },
+      "restore": {
+        "path": "game/public/assets/models/light-lod2.glb",
+        "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+        "blobSha1": "dc4af79c296905beee612e823d73eb222c4b4807",
+        "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/light-lod2.glb > game/public/assets/models/light-lod2.glb"
+      },
+      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_light.png",
+      "limitations": [
+        "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
+        "Simplified from 2662 to 1199 triangles (Meshy UVs / seams kept).",
+        "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
+      ],
+      "tool": "meshy-t25-props-2"
+    }
+  ]
+}

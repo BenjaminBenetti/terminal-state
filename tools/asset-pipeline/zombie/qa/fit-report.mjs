@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {liveModelFiles} from '../lib/live-files.mjs';
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..');
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, ...v]) => [k, v.length ? v.join('=') : true]));
@@ -29,7 +30,8 @@ const split = res => {
 };
 const A = split(after.results), Bf = split(before.results);
 const files = {};
-for (const f of fs.readdirSync(MODELS).filter(f => /^(zombie-body|outfit)-.+\.glb$/.test(f)).sort()) files[f] = crypto.createHash('sha256').update(fs.readFileSync(path.join(MODELS, f))).digest('hex');
+// T2.5 migration: hash the LIVE files (manifest / -t25), not every file matching the pattern
+{ const live = liveModelFiles(MODELS); for (const abs of [...Object.values(live.bodies), ...Object.values(live.wearables)].sort()) files[path.basename(abs)] = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex'); }
 const agg = (o, slots) => { const l = Object.values(o).filter(x => !slots || slots.includes(x.slot)); const mx = f => +Math.max(0, ...l.map(x => x[f])).toFixed(4); const mean = f => l.length ? +(l.reduce((a, x) => a + x[f], 0) / l.length).toFixed(4) : 0; return {n: l.length, maxBind: mx('bind'), maxAnimated: mx('animated'), maxExtreme: mx('extreme'), meanAnimated: mean('animated'), totalEverPokeVisibleVertices: l.reduce((a, x) => a + x.everPokeVisibleVertices, 0)}; };
 const summary = {
   schema: 'the-last-line/wardrobe-fit-audit@1', generatedAt: new Date().toISOString(),

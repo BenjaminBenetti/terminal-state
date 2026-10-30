@@ -145,15 +145,18 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
 
 /**
  * Loot surfaces (heights above the prop's base, metres; local frame front = +Z), measured on the
- * generated derivatives (derivatives/props-iteration03.json `measurements`): shelf deck tops,
- * stall counter (0.86–0.955 m, uneven; items sit at 0.93) and the three back shelves.
+ * generated derivatives: shelf deck tops, stall counter and the three back shelves. Meshy T2.5
+ * replacement (2026-10-29, derivatives/meshy-t25-props-20261029.json): re-measured by vertical ray
+ * casts on shelf-t25.glb (thin 4 mm decks: tops 0.078 / 0.615 / 1.186 / 1.764) and stall-t25.glb
+ * (counter 0.923 over z 0.153..0.562; back shelves 0.994 / 1.304 / 1.585 over z -0.56..-0.40).
+ * Iteration-03 values were [0.128, 0.625, 1.182, 1.739], 0.93, [1.026, 1.288, 1.539], [0.1, 0.56], [-0.55, -0.27].
  */
-export const SHELF_TIER_Y: number[] = [0.128, 0.625, 1.182, 1.739];
-export const STALL_COUNTER_Y = 0.93;
-export const STALL_BACK_SHELF_Y: number[] = [1.026, 1.288, 1.539];
+export const SHELF_TIER_Y: number[] = [0.078, 0.615, 1.186, 1.764];
+export const STALL_COUNTER_Y = 0.923;
+export const STALL_BACK_SHELF_Y: number[] = [0.994, 1.304, 1.585];
 /** Local Z span [z0, z1] (from the unit's centre, front = +Z) of the stall counter top and of the back shelves. */
-export const STALL_COUNTER_Z: [number, number] = [0.1, 0.56];
-export const STALL_BACK_SHELF_Z: [number, number] = [-0.55, -0.27];
+export const STALL_COUNTER_Z: [number, number] = [0.155, 0.56];
+export const STALL_BACK_SHELF_Z: [number, number] = [-0.56, -0.4];
 
 /** Base height of a wall-mounted notice board. */
 export const NOTICE_BOARD_Y = 1.1;
@@ -211,7 +214,7 @@ export const PURPOSE_MODEL_KEYS: Partial<Record<PurposePropKind, string>> = {
  * Counter: laminate top at full height. Display: deck inside the glass case. Back counter: worktop
  * and over-shelf. Cooler: four wire shelves behind the glass door.
  */
-export const SHOP_COUNTER_TOP_Y = 1.045;
+export const SHOP_COUNTER_TOP_Y = 1.05; // Meshy T2.5 shop-counter-t25.glb: flat top at the full 1.05 m (iteration 04: 1.045)
 /** Countertop display footprint (shop-display.glb) and the counter top it stands on. */
 export const SHOP_DISPLAY_CASE = {w: 1.1, h: 0.7, d: 0.62, baseY: 1.041};
 /**
@@ -223,8 +226,8 @@ export const SHOP_DISPLAY_CASE = {w: 1.1, h: 0.7, d: 0.62, baseY: 1.041};
 export const SHOP_DISPLAY_TRAY_Y: [number, number] = [SHOP_DISPLAY_CASE.baseY + 0.22, SHOP_DISPLAY_CASE.baseY + 0.432];
 /** Lowest display loot surface (the lower tray, unit-relative). */
 export const SHOP_DISPLAY_DECK_Y = SHOP_DISPLAY_TRAY_Y[0];
-/** Worktop and over-shelf (Lane A measured 0.865 / 1.62 m on shop-backbar.glb). */
-export const SHOP_BACKBAR_Y: [number, number] = [0.865, 1.62];
+/** Worktop and over-shelf (Meshy T2.5 shop-backbar-t25.glb, ray-cast 2026-10-29: 0.914 / 1.663 m; iteration 04: 0.865 / 1.62). */
+export const SHOP_BACKBAR_Y: [number, number] = [0.914, 1.663];
 /**
  * Cooler deck + wire shelves (Lane A shop-cooler-open.glb, no picture pane: real shelves behind a
  * transparent glass door at z 0.312; the shelf lip is at z 0.263..0.275, ceiling 1.70).

@@ -15,43 +15,121 @@
     "generation": "no AI generation, inference, model download or network service was used by this builder",
     "garment": "item source is a separate empty (ghost) reconstruction; scaled and placed per body (rigid, no deformation)"
   },
-  "origin": "iteration-06 generated (Lane G headBeanie)",
-  "provenance": "generated",
+  "origin": "iteration-06 generated (Lane G headBeanie) + Meshy T2.5 replacement garment:beanie a1 (task 01a189db-ae28-7655-a368-34a5c726f038; studio-meshy-game-replacement-20261029-01)",
+  "provenance": "generated (Meshy T2.5 replacement of the local Pixal3D master)",
   "slot": "head",
   "kind": "rigid",
+  "t25": {
+    "migration": "studio-meshy-game-replacement-20261029-01",
+    "sourceReplaced": true,
+    "source": {
+      "asset": "garment:beanie",
+      "attempt": "a1",
+      "taskId": "01a189db-ae28-7655-a368-34a5c726f038",
+      "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, 2K PBR textures, single original front/reference image)",
+      "args": {
+        "target_polycount": 6000,
+        "pose_mode": null
+      },
+      "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:beanie/a1/native.glb",
+      "nativeSha256": "266a4e571fccfa1476f28d95df3a3130fd957153f799e8163106bcccc6733b20",
+      "nativeBytes": 9191608,
+      "nativeTriangles": 6317,
+      "nativeVertices": 5044,
+      "nativeBBox": {
+        "min": [
+          -0.4563,
+          -0.4119,
+          -0.4758
+        ],
+        "max": [
+          0.4539,
+          0.4114,
+          0.4739
+        ],
+        "size": [
+          0.9102,
+          0.8232,
+          0.9497
+        ],
+        "space": "scene/world (node transforms applied)"
+      },
+      "nativeTextures": [
+        {
+          "mime": "image/jpeg",
+          "size": [
+            2048,
+            2048
+          ]
+        },
+        {
+          "mime": "image/jpeg",
+          "size": [
+            2048,
+            2048
+          ]
+        },
+        {
+          "mime": "image/jpeg",
+          "size": [
+            2048,
+            2048
+          ]
+        }
+      ],
+      "inputImage": "reference/tasks/vertical-slice-iteration06-20261026/generation/headBeanie/image/headBeanie-original.png",
+      "inputImageSha256": "d6ba76b8a011b8669cdbf78c9158a0df9423bfe47c345fd1502ca99288709e74",
+      "review": "accepted",
+      "reviewNote": "Same dark-green ribbed cuffed beanie; base colour mean 53/59/51 vs ref 56/60/51 (thumbnail lighting washes it); the small hole/loose thread of the reference is not reproduced.",
+      "delivered": "reference/tasks/meshy-game-replacement-20261029/assets/DELIVERED.json",
+      "densify": {
+        "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+        "maxEdge": 0.0057627,
+        "passes": 6,
+        "sourceTriangles": 6317,
+        "sourceVertices": 5044,
+        "triangles": 806604,
+        "vertices": 419560,
+        "longestEdge": 0.0057627,
+        "maxEdgeFractionOfHeight": 0.007,
+        "sourceHeightUnits": 0.823242
+      }
+    },
+    "supersedes": {
+      "path": "game/public/assets/models/outfit-beanie.glb",
+      "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
+      "blob": "eb8e43bcc755738fcd31345858edad510b06a53f",
+      "restore": "git show a7a646a:game/public/assets/models/outfit-beanie.glb > game/public/assets/models/outfit-beanie.glb"
+    }
+  },
   "outputs": {
     "glb": {
-      "path": "game/public/assets/models/outfit-beanie.glb",
-      "bytes": 296552,
-      "sha256": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a",
+      "path": "game/public/assets/models/outfit-beanie-t25.glb",
+      "bytes": 262260,
+      "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
   "source": {
-    "id": "headBeanie",
-    "file": ".cache/iteration06-native-masters/headBeanie/asset.glb",
-    "sha256Verified": "3ec2b54ee0d542c9b76fb11f610cb9760443d74ba6e61c74ed53fbb3952739b6",
-    "displayName": "Head: dark green knit beanie",
-    "ledger": "reference/tasks/vertical-slice-iteration06-20261026/generation/ledger.json",
-    "ledgerKey": "headBeanie",
+    "id": "garment:beanie",
+    "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:beanie/a1/native.glb",
+    "sha256Verified": "266a4e571fccfa1476f28d95df3a3130fd957153f799e8163106bcccc6733b20",
+    "displayName": "garment:beanie",
     "inputPng": "reference/tasks/vertical-slice-iteration06-20261026/generation/headBeanie/image/headBeanie-original.png",
     "inputPngSha256": "d6ba76b8a011b8669cdbf78c9158a0df9423bfe47c345fd1502ca99288709e74",
-    "nativeJob": "20261026T194328Z-83261ae6a1dc48ae80c817f8d62ca6ff",
-    "nativeMetadata": "reference/tasks/vertical-slice-iteration06-20261026/generation/headBeanie/native/metadata.json",
-    "nativeReceipt": "reference/tasks/vertical-slice-iteration06-20261026/generation/headBeanie/native/receipt.json",
-    "preservedXz": "reference/tasks/vertical-slice-iteration06-20261026/generation/headBeanie/native/asset.glb.xz",
-    "triangles": 978020,
-    "vertices": 676240,
+    "nativeJob": "01a189db-ae28-7655-a368-34a5c726f038",
+    "triangles": 6317,
+    "vertices": 5044,
     "textures": {
       "baseColor": [
-        4096,
-        4096,
-        "image/png"
+        2048,
+        2048,
+        "image/jpeg"
       ],
       "metallicRoughness": [
-        4096,
-        4096,
-        "image/png"
+        2048,
+        2048,
+        "image/jpeg"
       ]
     },
     "material": {
@@ -68,20 +146,20 @@
   },
   "stage": {
     "nominal": {
-      "scale": 0.290103,
+      "scale": 0.303677,
       "pivot": [
-        -0.00012,
-        -0.4498,
-        -0.04305
+        -0.00122,
+        -0.41186,
+        -0.00098
       ],
-      "flipFacing": true
+      "flipFacing": false
     },
     "frame": null,
     "sourceTrim": null
   },
   "mesh": {
-    "vertices": 1540,
-    "triangles": 2194,
+    "vertices": 1363,
+    "triangles": 2199,
     "simplify": {
       "targetTris": 2200,
       "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
@@ -90,17 +168,17 @@
         "Prune",
         "Regularize"
       ],
-      "resultTris": 2194,
-      "resultVerts": 1071,
-      "relativeError": 0.02343,
-      "absoluteErrorM": 0.00612
+      "resultTris": 2199,
+      "resultVerts": 1102,
+      "relativeError": 0.01434,
+      "absoluteErrorM": 0.00414
     },
     "unwrap": {
-      "initialCharts": 144,
-      "charts": 57,
-      "mergedSmallCharts": 87,
-      "texelsPerMetreBase": 798.7,
-      "uvAreaFill": 0.589,
+      "initialCharts": 20,
+      "charts": 17,
+      "mergedSmallCharts": 3,
+      "texelsPerMetreBase": 890.3,
+      "uvAreaFill": 0.63,
       "uvMirroredFaces": 0,
       "coneDeg": 66,
       "validDot": 0.15,
@@ -110,27 +188,68 @@
       "packAtlas": 512
     },
     "bake": {
-      "texels": 616471,
-      "coverage": 0.588,
+      "texels": 659064,
+      "coverage": 0.629,
       "missed": 0,
       "farOver1cm": 0,
-      "distMedianMm": 0.82,
-      "distP99Mm": 4.17,
-      "cageRayHits": 305028,
+      "distMedianMm": 0.19,
+      "distP99Mm": 1.73,
+      "cageRayHits": 73059,
       "cageM": 0.006,
       "rayBelowM": 0.002,
       "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
       "gridCells": [
-        27,
+        29,
         26,
-        28
+        30
       ],
-      "workers": 32
+      "workers": 1
     },
     "textures": {
       "baseColor": 512,
       "metallicRoughness": 128,
       "jpegQuality": 88
+    },
+    "colourGrade": {
+      "mode": "reference-chroma",
+      "applied": true,
+      "gainLinear": [
+        1.0378,
+        0.9959,
+        0.9303
+      ],
+      "luminance": 1,
+      "from": "stage JPEG",
+      "albedoMeanLinearBefore": [
+        0.0375,
+        0.0437,
+        0.0344
+      ],
+      "albedoMeanLinearAfter": [
+        0.0388,
+        0.0437,
+        0.0321
+      ],
+      "coveredTexels": 164766,
+      "albedoRatiosBefore": {
+        "GR": 1.167,
+        "BR": 0.9191
+      },
+      "albedoRatiosAfter": {
+        "GR": 1.1275,
+        "BR": 0.827
+      },
+      "referenceMeanLinear": [
+        0.0605,
+        0.0677,
+        0.0498
+      ],
+      "referenceRatios": {
+        "GR": 1.1198,
+        "BR": 0.8239
+      },
+      "referencePixels": 909097,
+      "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
     }
   },
   "perBody": {
@@ -141,76 +260,111 @@
         "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
         "cranium": {
           "breadthM": 0.17,
-          "lengthM": 0.1996,
-          "envelopeBreadthM": 0.2085,
-          "envelopeLengthM": 0.1996,
-          "topM": 1.7747,
-          "meshTopM": 1.7793,
-          "browY": 1.6697,
-          "noseY": 1.6247,
+          "lengthM": 0.1914,
+          "envelopeBreadthM": 0.187,
+          "envelopeLengthM": 0.1914,
+          "topM": 1.7666,
+          "meshTopM": 1.78,
+          "browY": 1.6616,
+          "noseY": 1.6166,
           "hairAllowanceM": {
-            "sides": 0.0192,
-            "top": 0.0047
+            "sides": 0.0085,
+            "top": 0.0134
           }
         },
         "item": {
-          "widthM": 0.1894,
-          "lengthM": 0.253,
-          "heightM": 0.1547,
-          "bandWidthM": 0.1867,
-          "bandLengthM": 0.2487,
-          "bandY": 1.7117,
-          "bandAboveBrowM": 0.042,
-          "topAboveCraniumM": 0.0556,
-          "crownClearanceM": 0.0449,
+          "widthM": 0.1912,
+          "lengthM": 0.2115,
+          "heightM": 0.1392,
+          "bandWidthM": 0.1897,
+          "bandLengthM": 0.2117,
+          "bandY": 1.6956,
+          "bandAboveBrowM": 0.034,
+          "topAboveCraniumM": 0.0217,
+          "crownClearanceM": 0.0171,
           "eyeLiftM": 0
         },
         "seat": {
-          "pitchDeg": 8,
-          "liftM": 0.012,
-          "rimContactVerticesBefore": 226,
-          "rimContactVerticesAfter": 154,
+          "pitchDeg": 4,
+          "liftM": 0.004,
+          "rimContactVerticesBefore": 72,
+          "rimContactVerticesAfter": 65,
           "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
         },
         "containment": {
-          "bandClearSideM": 0.0044,
-          "bandClearFrontBackM": 0.0287,
+          "bandClearSideM": 0.0059,
+          "bandClearFrontBackM": 0.0072,
           "rings": [
             {
-              "y": 1.6801,
+              "y": 1.6569,
+              "clearSideM": 0.0045,
+              "clearFrontBackM": 0.0136
+            },
+            {
+              "y": 1.6595,
+              "clearSideM": 0.0053,
+              "clearFrontBackM": 0.0111
+            },
+            {
+              "y": 1.6622,
+              "clearSideM": 0.0057,
+              "clearFrontBackM": 0.0113
+            },
+            {
+              "y": 1.6649,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0134
+            },
+            {
+              "y": 1.6676,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0134
+            },
+            {
+              "y": 1.6702,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.0137
+            },
+            {
+              "y": 1.6729,
               "clearSideM": 0.0043,
+              "clearFrontBackM": 0.0129
+            },
+            {
+              "y": 1.6756,
+              "clearSideM": 0.0046,
               "clearFrontBackM": 0.004
             },
             {
-              "y": 1.6833,
+              "y": 1.6782,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0043
+            },
+            {
+              "y": 1.6809,
               "clearSideM": 0.0042,
-              "clearFrontBackM": 0.012
+              "clearFrontBackM": 0.0047
             },
             {
-              "y": 1.6866,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0192
-            },
-            {
-              "y": 1.6899,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0236
-            },
-            {
-              "y": 1.6931,
+              "y": 1.6836,
               "clearSideM": 0.0047,
-              "clearFrontBackM": 0.0243
+              "clearFrontBackM": 0.0049
             },
             {
-              "y": 1.6964,
-              "clearSideM": 0.0044,
-              "clearFrontBackM": 0.0266
+              "y": 1.6862,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0061
+            },
+            {
+              "y": 1.6889,
+              "clearSideM": 0.0059,
+              "clearFrontBackM": 0.0067
             }
           ]
         },
         "ratios": {
-          "widthToCraniumBreadth": 1.1139,
-          "bandToCraniumBreadth": 1.0985
+          "widthToCraniumBreadth": 1.1244,
+          "bandToCraniumBreadth": 1.116
         },
         "params": {
           "bandLevel": 0.3,
@@ -223,17 +377,17 @@
         },
         "transform": {
           "scale": [
-            0.7476,
-            0.656,
-            1.0017
+            0.6928,
+            0.5347,
+            0.733
           ],
           "translate": [
-            -0.0106,
-            1.6506,
-            -0.0745
+            -0.0039,
+            1.6516,
+            -0.0303
           ]
         },
-        "bulkHeadM": 0.0058
+        "bulkHeadM": 0.0064
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -243,17 +397,17 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0058
+        "head": 0.0064
       },
-      "hiddenBodyTriangles": 577,
-      "hiddenFraction": 0.0387,
+      "hiddenBodyTriangles": 1027,
+      "hiddenFraction": 0.0686,
       "mask": {
-        "hidden": 577,
-        "total": 14912,
+        "hidden": 1027,
+        "total": 14976,
         "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
-        "triangles": 2194,
+        "triangles": 2199,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -261,10 +415,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 10,
-          "Attack": 2,
-          "Run": 3,
-          "Idle": 8
+          "Idle": 10,
+          "Attack": 8,
+          "Walk": 2,
+          "Run": 2,
+          "Hit": 2
         },
         "poses": 85
       }
@@ -275,77 +430,117 @@
       "fit": {
         "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
         "cranium": {
-          "breadthM": 0.165,
-          "lengthM": 0.206,
-          "envelopeBreadthM": 0.165,
-          "envelopeLengthM": 0.2072,
-          "topM": 1.7733,
-          "meshTopM": 1.8,
-          "browY": 1.6683,
-          "noseY": 1.6233,
+          "breadthM": 0.1423,
+          "lengthM": 0.1691,
+          "envelopeBreadthM": 0.1423,
+          "envelopeLengthM": 0.1691,
+          "topM": 1.7996,
+          "meshTopM": 1.7996,
+          "browY": 1.71,
+          "noseY": 1.665,
           "hairAllowanceM": {
             "sides": 0,
-            "top": 0.0267
+            "top": 0
           }
         },
         "item": {
-          "widthM": 0.1887,
-          "lengthM": 0.2462,
-          "heightM": 0.1582,
-          "bandWidthM": 0.1861,
-          "bandLengthM": 0.2354,
-          "bandY": 1.7063,
+          "widthM": 0.1647,
+          "lengthM": 0.1965,
+          "heightM": 0.1195,
+          "bandWidthM": 0.1635,
+          "bandLengthM": 0.1965,
+          "bandY": 1.748,
           "bandAboveBrowM": 0.038,
-          "topAboveCraniumM": 0.0438,
-          "crownClearanceM": 0.0312,
+          "topAboveCraniumM": 0.032,
+          "crownClearanceM": 0.0266,
           "eyeLiftM": 0
         },
         "seat": {
           "pitchDeg": 0,
           "liftM": 0.008,
-          "rimContactVerticesBefore": 92,
-          "rimContactVerticesAfter": 77,
+          "rimContactVerticesBefore": 6,
+          "rimContactVerticesAfter": 0,
           "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
         },
         "containment": {
-          "bandClearSideM": 0.0095,
-          "bandClearFrontBackM": 0.0182,
+          "bandClearSideM": 0.0072,
+          "bandClearFrontBackM": 0.0144,
           "rings": [
             {
-              "y": 1.6793,
-              "clearSideM": 0.004,
+              "y": 1.7065,
+              "clearSideM": 0.0045,
+              "clearFrontBackM": 0.0045
+            },
+            {
+              "y": 1.7089,
+              "clearSideM": 0.0064,
+              "clearFrontBackM": 0.0055
+            },
+            {
+              "y": 1.7113,
+              "clearSideM": 0.0071,
+              "clearFrontBackM": 0.0061
+            },
+            {
+              "y": 1.7137,
+              "clearSideM": 0.0071,
+              "clearFrontBackM": 0.0064
+            },
+            {
+              "y": 1.716,
+              "clearSideM": 0.0069,
+              "clearFrontBackM": 0.0067
+            },
+            {
+              "y": 1.7184,
+              "clearSideM": 0.0067,
               "clearFrontBackM": 0.0071
             },
             {
-              "y": 1.6824,
-              "clearSideM": 0.0081,
-              "clearFrontBackM": 0.0113
+              "y": 1.7208,
+              "clearSideM": 0.0059,
+              "clearFrontBackM": 0.007
             },
             {
-              "y": 1.6856,
-              "clearSideM": 0.0079,
-              "clearFrontBackM": 0.0181
+              "y": 1.7232,
+              "clearSideM": 0.0054,
+              "clearFrontBackM": 0.0067
             },
             {
-              "y": 1.6888,
-              "clearSideM": 0.011,
+              "y": 1.7256,
+              "clearSideM": 0.0056,
+              "clearFrontBackM": 0.0069
+            },
+            {
+              "y": 1.728,
+              "clearSideM": 0.005,
+              "clearFrontBackM": 0.0079
+            },
+            {
+              "y": 1.7304,
+              "clearSideM": 0.0052,
+              "clearFrontBackM": 0.0083
+            },
+            {
+              "y": 1.7328,
+              "clearSideM": 0.0058,
+              "clearFrontBackM": 0.0101
+            },
+            {
+              "y": 1.7352,
+              "clearSideM": 0.0058,
               "clearFrontBackM": 0.0107
             },
             {
-              "y": 1.6919,
-              "clearSideM": 0.0107,
-              "clearFrontBackM": 0.0154
-            },
-            {
-              "y": 1.6951,
-              "clearSideM": 0.0105,
-              "clearFrontBackM": 0.0176
+              "y": 1.7376,
+              "clearSideM": 0.0072,
+              "clearFrontBackM": 0.0144
             }
           ]
         },
         "ratios": {
-          "widthToCraniumBreadth": 1.144,
-          "bandToCraniumBreadth": 1.1282
+          "widthToCraniumBreadth": 1.158,
+          "bandToCraniumBreadth": 1.1492
         },
         "params": {
           "bandLevel": 0.3,
@@ -358,17 +553,17 @@
         },
         "transform": {
           "scale": [
-            0.7451,
-            0.635,
-            0.9483
+            0.5971,
+            0.4791,
+            0.6806
           ],
           "translate": [
-            -0.0028,
-            1.6508,
-            0.0275
+            -0.0013,
+            1.7041,
+            -0.0462
           ]
         },
-        "bulkHeadM": 0.0071
+        "bulkHeadM": 0.0067
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -378,17 +573,17 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0071
+        "head": 0.0067
       },
-      "hiddenBodyTriangles": 437,
-      "hiddenFraction": 0.0292,
+      "hiddenBodyTriangles": 162,
+      "hiddenFraction": 0.0108,
       "mask": {
-        "hidden": 437,
-        "total": 14956,
+        "hidden": 162,
+        "total": 14987,
         "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
-        "triangles": 2194,
+        "triangles": 2199,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -396,10 +591,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 9,
+          "Idle": 10,
+          "Attack": 6,
+          "Hit": 4,
           "Walk": 2,
-          "Run": 10,
-          "Attack": 4
+          "Death": 2,
+          "Run": 2
         },
         "poses": 85
       }
@@ -411,76 +608,111 @@
         "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
         "cranium": {
           "breadthM": 0.17,
-          "lengthM": 0.2013,
-          "envelopeBreadthM": 0.2226,
-          "envelopeLengthM": 0.2056,
-          "topM": 1.6307,
-          "meshTopM": 1.6506,
-          "browY": 1.5257,
-          "noseY": 1.4807,
+          "lengthM": 0.1871,
+          "envelopeBreadthM": 0.1998,
+          "envelopeLengthM": 0.1871,
+          "topM": 1.6498,
+          "meshTopM": 1.6498,
+          "browY": 1.554,
+          "noseY": 1.4433,
           "hairAllowanceM": {
-            "sides": 0.0263,
-            "top": 0.0199
+            "sides": 0.0149,
+            "top": 0
           }
         },
         "item": {
-          "widthM": 0.1894,
-          "lengthM": 0.2544,
-          "heightM": 0.1552,
-          "bandWidthM": 0.1867,
-          "bandLengthM": 0.2501,
-          "bandY": 1.5557,
-          "bandAboveBrowM": 0.03,
-          "topAboveCraniumM": 0.044,
-          "crownClearanceM": 0.0333,
+          "widthM": 0.1912,
+          "lengthM": 0.2065,
+          "heightM": 0.1438,
+          "bandWidthM": 0.1897,
+          "bandLengthM": 0.206,
+          "bandY": 1.596,
+          "bandAboveBrowM": 0.042,
+          "topAboveCraniumM": 0.0382,
+          "crownClearanceM": 0.0335,
           "eyeLiftM": 0
         },
         "seat": {
           "pitchDeg": 8,
-          "liftM": 0,
-          "rimContactVerticesBefore": 275,
-          "rimContactVerticesAfter": 247,
+          "liftM": 0.012,
+          "rimContactVerticesBefore": 220,
+          "rimContactVerticesAfter": 151,
           "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
         },
         "containment": {
-          "bandClearSideM": 0.0044,
-          "bandClearFrontBackM": 0.0287,
+          "bandClearSideM": 0.0059,
+          "bandClearFrontBackM": 0.0058,
           "rings": [
             {
-              "y": 1.536,
-              "clearSideM": 0.0043,
-              "clearFrontBackM": 0.004
-            },
-            {
-              "y": 1.5393,
-              "clearSideM": 0.0042,
-              "clearFrontBackM": 0.0106
-            },
-            {
-              "y": 1.5426,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0178
-            },
-            {
-              "y": 1.5458,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.026
-            },
-            {
-              "y": 1.5491,
-              "clearSideM": 0.0047,
-              "clearFrontBackM": 0.0288
+              "y": 1.5498,
+              "clearSideM": 0.0045,
+              "clearFrontBackM": 0.0042
             },
             {
               "y": 1.5524,
-              "clearSideM": 0.0044,
-              "clearFrontBackM": 0.0311
+              "clearSideM": 0.0053,
+              "clearFrontBackM": 0.0055
+            },
+            {
+              "y": 1.555,
+              "clearSideM": 0.0057,
+              "clearFrontBackM": 0.0056
+            },
+            {
+              "y": 1.5577,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0067
+            },
+            {
+              "y": 1.5603,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0067
+            },
+            {
+              "y": 1.5629,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.0056
+            },
+            {
+              "y": 1.5656,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.0048
+            },
+            {
+              "y": 1.5682,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.5708,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0043
+            },
+            {
+              "y": 1.5735,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.5761,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0042
+            },
+            {
+              "y": 1.5787,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.005
+            },
+            {
+              "y": 1.5813,
+              "clearSideM": 0.0059,
+              "clearFrontBackM": 0.0056
             }
           ]
         },
         "ratios": {
-          "widthToCraniumBreadth": 1.1139,
-          "bandToCraniumBreadth": 1.0985
+          "widthToCraniumBreadth": 1.1244,
+          "bandToCraniumBreadth": 1.116
         },
         "params": {
           "bandLevel": 0.3,
@@ -493,17 +725,17 @@
         },
         "transform": {
           "scale": [
-            0.7476,
-            0.6581,
-            1.0074
+            0.6928,
+            0.5273,
+            0.7132
           ],
           "translate": [
-            -0.0059,
-            1.5064,
-            0.0846
+            -0.0115,
+            1.5445,
+            -0.0437
           ]
         },
-        "bulkHeadM": 0.0058
+        "bulkHeadM": 0.0064
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -513,17 +745,17 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0058
+        "head": 0.0064
       },
-      "hiddenBodyTriangles": 1005,
-      "hiddenFraction": 0.0671,
+      "hiddenBodyTriangles": 564,
+      "hiddenFraction": 0.0376,
       "mask": {
-        "hidden": 1005,
-        "total": 14972,
+        "hidden": 564,
+        "total": 14991,
         "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
-        "triangles": 2194,
+        "triangles": 2199,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -531,12 +763,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 8,
-          "Hit": 2,
-          "Run": 7,
-          "Idle": 2,
-          "Attack": 2,
-          "Walk": 4
+          "Death": 2,
+          "Idle": 8,
+          "Run": 4,
+          "Walk": 4,
+          "Hit": 4,
+          "Attack": 2
         },
         "poses": 85
       }
@@ -547,77 +779,112 @@
       "fit": {
         "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
         "cranium": {
-          "breadthM": 0.17,
-          "lengthM": 0.1951,
-          "envelopeBreadthM": 0.1763,
-          "envelopeLengthM": 0.1991,
-          "topM": 1.7635,
-          "meshTopM": 1.7803,
-          "browY": 1.6585,
-          "noseY": 1.6135,
+          "breadthM": 0.1646,
+          "lengthM": 0.1944,
+          "envelopeBreadthM": 0.1646,
+          "envelopeLengthM": 0.2009,
+          "topM": 1.767,
+          "meshTopM": 1.7801,
+          "browY": 1.662,
+          "noseY": 1.617,
           "hairAllowanceM": {
-            "sides": 0.0032,
-            "top": 0.0168
+            "sides": 0,
+            "top": 0.0132
           }
         },
         "item": {
-          "widthM": 0.1894,
-          "lengthM": 0.2352,
-          "heightM": 0.1545,
-          "bandWidthM": 0.1867,
-          "bandLengthM": 0.2249,
-          "bandY": 1.7005,
+          "widthM": 0.1905,
+          "lengthM": 0.2115,
+          "heightM": 0.1359,
+          "bandWidthM": 0.1891,
+          "bandLengthM": 0.2115,
+          "bandY": 1.704,
           "bandAboveBrowM": 0.042,
-          "topAboveCraniumM": 0.0451,
-          "crownClearanceM": 0.0328,
+          "topAboveCraniumM": 0.0298,
+          "crownClearanceM": 0.0247,
           "eyeLiftM": 0
         },
         "seat": {
-          "pitchDeg": 0,
+          "pitchDeg": 2,
           "liftM": 0.012,
-          "rimContactVerticesBefore": 78,
-          "rimContactVerticesAfter": 55,
+          "rimContactVerticesBefore": 98,
+          "rimContactVerticesAfter": 52,
           "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
         },
         "containment": {
-          "bandClearSideM": 0.0044,
-          "bandClearFrontBackM": 0.0216,
+          "bandClearSideM": 0.0088,
+          "bandClearFrontBackM": 0.0052,
           "rings": [
             {
-              "y": 1.6699,
+              "y": 1.6574,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.0243
+            },
+            {
+              "y": 1.66,
+              "clearSideM": 0.005,
+              "clearFrontBackM": 0.0269
+            },
+            {
+              "y": 1.6627,
+              "clearSideM": 0.0054,
+              "clearFrontBackM": 0.0271
+            },
+            {
+              "y": 1.6653,
+              "clearSideM": 0.0052,
+              "clearFrontBackM": 0.024
+            },
+            {
+              "y": 1.668,
+              "clearSideM": 0.0052,
+              "clearFrontBackM": 0.024
+            },
+            {
+              "y": 1.6707,
               "clearSideM": 0.0043,
+              "clearFrontBackM": 0.0229
+            },
+            {
+              "y": 1.6733,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0221
+            },
+            {
+              "y": 1.676,
+              "clearSideM": 0.0051,
+              "clearFrontBackM": 0.0118
+            },
+            {
+              "y": 1.6787,
+              "clearSideM": 0.0045,
+              "clearFrontBackM": 0.0121
+            },
+            {
+              "y": 1.6813,
+              "clearSideM": 0.0069,
+              "clearFrontBackM": 0.0117
+            },
+            {
+              "y": 1.684,
+              "clearSideM": 0.0074,
+              "clearFrontBackM": 0.0119
+            },
+            {
+              "y": 1.6866,
+              "clearSideM": 0.0076,
               "clearFrontBackM": 0.004
             },
             {
-              "y": 1.673,
-              "clearSideM": 0.0042,
-              "clearFrontBackM": 0.011
-            },
-            {
-              "y": 1.6761,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0174
-            },
-            {
-              "y": 1.6792,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0238
-            },
-            {
-              "y": 1.6823,
-              "clearSideM": 0.0047,
-              "clearFrontBackM": 0.0192
-            },
-            {
-              "y": 1.6854,
-              "clearSideM": 0.0044,
-              "clearFrontBackM": 0.0213
+              "y": 1.6893,
+              "clearSideM": 0.0087,
+              "clearFrontBackM": 0.0046
             }
           ]
         },
         "ratios": {
-          "widthToCraniumBreadth": 1.1139,
-          "bandToCraniumBreadth": 1.0985
+          "widthToCraniumBreadth": 1.1575,
+          "bandToCraniumBreadth": 1.1488
         },
         "params": {
           "bandLevel": 0.3,
@@ -630,17 +897,17 @@
         },
         "transform": {
           "scale": [
-            0.7476,
-            0.6201,
-            0.906
+            0.6904,
+            0.5336,
+            0.7324
           ],
           "translate": [
-            -0.0046,
-            1.6421,
-            0.0011
+            -0.001,
+            1.652,
+            -0.0175
           ]
         },
-        "bulkHeadM": 0.0058
+        "bulkHeadM": 0.0078
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -650,17 +917,17 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0058
+        "head": 0.0078
       },
-      "hiddenBodyTriangles": 318,
-      "hiddenFraction": 0.0213,
+      "hiddenBodyTriangles": 266,
+      "hiddenFraction": 0.0177,
       "mask": {
-        "hidden": 318,
-        "total": 14962,
+        "hidden": 266,
+        "total": 15000,
         "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
-        "triangles": 2194,
+        "triangles": 2199,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -668,11 +935,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 5,
-          "Death": 12,
-          "Run": 4,
-          "Walk": 2,
-          "Hit": 2
+          "Idle": 6,
+          "Death": 4,
+          "Attack": 6,
+          "Hit": 6,
+          "Walk": 2
         },
         "poses": 85
       }
@@ -683,77 +950,107 @@
       "fit": {
         "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
         "cranium": {
-          "breadthM": 0.17,
-          "lengthM": 0.2085,
-          "envelopeBreadthM": 0.1976,
-          "envelopeLengthM": 0.2184,
-          "topM": 1.7177,
-          "meshTopM": 1.7503,
-          "browY": 1.6127,
-          "noseY": 1.5677,
+          "breadthM": 0.168,
+          "lengthM": 0.205,
+          "envelopeBreadthM": 0.168,
+          "envelopeLengthM": 0.205,
+          "topM": 1.7365,
+          "meshTopM": 1.75,
+          "browY": 1.6315,
+          "noseY": 1.5865,
           "hairAllowanceM": {
-            "sides": 0.0138,
-            "top": 0.0326
+            "sides": 0,
+            "top": 0.0135
           }
         },
         "item": {
-          "widthM": 0.1894,
-          "lengthM": 0.248,
-          "heightM": 0.1591,
-          "bandWidthM": 0.1867,
-          "bandLengthM": 0.2372,
-          "bandY": 1.6507,
+          "widthM": 0.1887,
+          "lengthM": 0.2202,
+          "heightM": 0.145,
+          "bandWidthM": 0.1872,
+          "bandLengthM": 0.2201,
+          "bandY": 1.6695,
           "bandAboveBrowM": 0.038,
-          "topAboveCraniumM": 0.0444,
-          "crownClearanceM": 0.0318,
+          "topAboveCraniumM": 0.0274,
+          "crownClearanceM": 0.0227,
           "eyeLiftM": 0
         },
         "seat": {
-          "pitchDeg": 0,
+          "pitchDeg": 6,
           "liftM": 0.008,
-          "rimContactVerticesBefore": 250,
-          "rimContactVerticesAfter": 237,
+          "rimContactVerticesBefore": 85,
+          "rimContactVerticesAfter": 53,
           "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
         },
         "containment": {
-          "bandClearSideM": 0.0044,
-          "bandClearFrontBackM": 0.0171,
+          "bandClearSideM": 0.0057,
+          "bandClearFrontBackM": 0.0041,
           "rings": [
             {
-              "y": 1.6236,
-              "clearSideM": 0.0043,
+              "y": 1.6291,
+              "clearSideM": 0.0073,
+              "clearFrontBackM": 0.014
+            },
+            {
+              "y": 1.6318,
+              "clearSideM": 0.0076,
+              "clearFrontBackM": 0.0142
+            },
+            {
+              "y": 1.6345,
+              "clearSideM": 0.0069,
+              "clearFrontBackM": 0.0136
+            },
+            {
+              "y": 1.6372,
+              "clearSideM": 0.0069,
+              "clearFrontBackM": 0.0136
+            },
+            {
+              "y": 1.6399,
+              "clearSideM": 0.0051,
+              "clearFrontBackM": 0.0107
+            },
+            {
+              "y": 1.6426,
+              "clearSideM": 0.0048,
+              "clearFrontBackM": 0.0098
+            },
+            {
+              "y": 1.6453,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.0074
+            },
+            {
+              "y": 1.648,
+              "clearSideM": 0.0041,
+              "clearFrontBackM": 0.0077
+            },
+            {
+              "y": 1.6507,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0048
+            },
+            {
+              "y": 1.6534,
+              "clearSideM": 0.0044,
+              "clearFrontBackM": 0.005
+            },
+            {
+              "y": 1.6561,
+              "clearSideM": 0.0046,
               "clearFrontBackM": 0.004
             },
             {
-              "y": 1.6268,
-              "clearSideM": 0.0042,
-              "clearFrontBackM": 0.0079
-            },
-            {
-              "y": 1.63,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0147
-            },
-            {
-              "y": 1.6332,
-              "clearSideM": 0.004,
-              "clearFrontBackM": 0.0164
-            },
-            {
-              "y": 1.6363,
-              "clearSideM": 0.0047,
-              "clearFrontBackM": 0.0177
-            },
-            {
-              "y": 1.6395,
-              "clearSideM": 0.0044,
-              "clearFrontBackM": 0.0199
+              "y": 1.6588,
+              "clearSideM": 0.0057,
+              "clearFrontBackM": 0.0046
             }
           ]
         },
         "ratios": {
-          "widthToCraniumBreadth": 1.1139,
-          "bandToCraniumBreadth": 1.0985
+          "widthToCraniumBreadth": 1.1227,
+          "bandToCraniumBreadth": 1.1142
         },
         "params": {
           "bandLevel": 0.3,
@@ -766,17 +1063,17 @@
         },
         "transform": {
           "scale": [
-            0.7476,
-            0.6386,
-            0.9553
+            0.6837,
+            0.5422,
+            0.7621
           ],
           "translate": [
-            -0.0006,
-            1.5949,
-            -0.0115
+            0.0004,
+            1.621,
+            -0.0321
           ]
         },
-        "bulkHeadM": 0.0058
+        "bulkHeadM": 0.0062
       },
       "collisionTarget": "none (rigid contact solve)",
       "pushOut": null,
@@ -786,17 +1083,17 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0.0058
+        "head": 0.0062
       },
-      "hiddenBodyTriangles": 1041,
-      "hiddenFraction": 0.0696,
+      "hiddenBodyTriangles": 1221,
+      "hiddenFraction": 0.0814,
       "mask": {
-        "hidden": 1041,
-        "total": 14960,
+        "hidden": 1221,
+        "total": 14993,
         "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
       },
       "motionStretch": {
-        "triangles": 2194,
+        "triangles": 2199,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -804,11 +1101,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 8,
-          "Idle": 10,
-          "Run": 2,
-          "Walk": 2,
-          "Hit": 2
+          "Attack": 6,
+          "Walk": 1,
+          "Run": 4,
+          "Death": 2,
+          "Idle": 6,
+          "Hit": 4
         },
         "poses": 85
       }

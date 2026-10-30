@@ -41777,5 +41777,710 @@
       ]
     }
   ],
-  "note": "Native masters stay lossless in .cache/iteration07-native-masters/ (P1) and are never copied to game/public. Previews (CPU rasteriser) in .cache/iteration07-p2-previews/."
+  "note": "Native masters stay lossless in .cache/iteration07-native-masters/ (P1) and are never copied to game/public. Previews (CPU rasteriser) in .cache/iteration07-p2-previews/.",
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/p7-aed-wall-cabinet.glb": {
+        "id": "p7:aedWallCabinet",
+        "replacedBy": "game/public/assets/models/p7-aed-wall-cabinet-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "28a5d7ada92cf89a927190aff57392a74a2c205c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-aed-wall-cabinet.glb > game/public/assets/models/p7-aed-wall-cabinet.glb"
+      },
+      "game/public/assets/models/p7-air-compressor.glb": {
+        "id": "p7:airCompressor",
+        "replacedBy": "game/public/assets/models/p7-air-compressor-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "0a00f035b026f8ad09c62222b86873720904a03c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-air-compressor.glb > game/public/assets/models/p7-air-compressor.glb"
+      },
+      "game/public/assets/models/p7-atm-kiosk.glb": {
+        "id": "p7:atmKiosk",
+        "replacedBy": "game/public/assets/models/p7-atm-kiosk-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "bad01a881e6710042f5e348a8d89bfbb784c0e97",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-atm-kiosk.glb > game/public/assets/models/p7-atm-kiosk.glb"
+      },
+      "game/public/assets/models/p7-baby-stroller.glb": {
+        "id": "p7:babyStroller",
+        "replacedBy": "game/public/assets/models/p7-baby-stroller-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "8b0a7dfaae555f2c827cd4ef865eb43f29929dcd",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-baby-stroller.glb > game/public/assets/models/p7-baby-stroller.glb"
+      },
+      "game/public/assets/models/p7-basket-stack.glb": {
+        "id": "p7:basketStack",
+        "replacedBy": "game/public/assets/models/p7-basket-stack-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "5e09ec18c591cedfaf1a7d729750c762c9a5a078",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-basket-stack.glb > game/public/assets/models/p7-basket-stack.glb"
+      },
+      "game/public/assets/models/p7-bench-grinder-stand.glb": {
+        "id": "p7:benchGrinderStand",
+        "replacedBy": "game/public/assets/models/p7-bench-grinder-stand-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "11d98fe066b1cd5bc4378c2aafc87ea6d1f7c794",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-bench-grinder-stand.glb > game/public/assets/models/p7-bench-grinder-stand.glb"
+      },
+      "game/public/assets/models/p7-bicycle.glb": {
+        "id": "p7:bicycle",
+        "replacedBy": "game/public/assets/models/p7-bicycle-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "b015cbe8b2968b9850d7bef2bc6a8c1ba5b81d4f",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-bicycle.glb > game/public/assets/models/p7-bicycle.glb"
+      },
+      "game/public/assets/models/p7-blood-pressure-kiosk.glb": {
+        "id": "p7:bloodPressureKiosk",
+        "replacedBy": "game/public/assets/models/p7-blood-pressure-kiosk-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "aa305d3e1fe947712cdd36b2f8fa3bdb089f576e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-blood-pressure-kiosk.glb > game/public/assets/models/p7-blood-pressure-kiosk.glb"
+      },
+      "game/public/assets/models/p7-bus-cart.glb": {
+        "id": "p7:busCart",
+        "replacedBy": "game/public/assets/models/p7-bus-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ce181b33811fd01dbc6b8ae7badd3c0fe1ff0653",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-bus-cart.glb > game/public/assets/models/p7-bus-cart.glb"
+      },
+      "game/public/assets/models/p7-capsule-toy-machine.glb": {
+        "id": "p7:capsuleToyMachine",
+        "replacedBy": "game/public/assets/models/p7-capsule-toy-machine-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "e562c08333972047d17121b5220fa754928d6461",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-capsule-toy-machine.glb > game/public/assets/models/p7-capsule-toy-machine.glb"
+      },
+      "game/public/assets/models/p7-cash-register.glb": {
+        "id": "p7:cashRegister",
+        "replacedBy": "game/public/assets/models/p7-cash-register-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "c3e0d1733f5cc4e20eb2cc20aa0e16d26849ed30",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-cash-register.glb > game/public/assets/models/p7-cash-register.glb"
+      },
+      "game/public/assets/models/p7-cctv-camera.glb": {
+        "id": "p7:cctvCamera",
+        "replacedBy": "game/public/assets/models/p7-cctv-camera-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ea335bdeb1e05f7db67f96e9b8d44ed4f6ddf4cc",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-cctv-camera.glb > game/public/assets/models/p7-cctv-camera.glb"
+      },
+      "game/public/assets/models/p7-chest-freezer.glb": {
+        "id": "p7:chestFreezer",
+        "replacedBy": "game/public/assets/models/p7-chest-freezer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "5269a991ce407169ff5ec1ecbc0108a9d52f2917",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-chest-freezer.glb > game/public/assets/models/p7-chest-freezer.glb"
+      },
+      "game/public/assets/models/p7-coat-rack.glb": {
+        "id": "p7:coatRack",
+        "replacedBy": "game/public/assets/models/p7-coat-rack-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "5fde45487ba727f8979d83ad7c7784f6a1661a13",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-coat-rack.glb > game/public/assets/models/p7-coat-rack.glb"
+      },
+      "game/public/assets/models/p7-coin-counter.glb": {
+        "id": "p7:coinCounter",
+        "replacedBy": "game/public/assets/models/p7-coin-counter-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "582abe4db0fb4590cb9654e3b704a4ff03f083e2",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-coin-counter.glb > game/public/assets/models/p7-coin-counter.glb"
+      },
+      "game/public/assets/models/p7-condiment-station.glb": {
+        "id": "p7:condimentStation",
+        "replacedBy": "game/public/assets/models/p7-condiment-station-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "6b199bb8b71894abbfdcc716341bad41cee4d7bc",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-condiment-station.glb > game/public/assets/models/p7-condiment-station.glb"
+      },
+      "game/public/assets/models/p7-conveyor-toaster.glb": {
+        "id": "p7:conveyorToaster",
+        "replacedBy": "game/public/assets/models/p7-conveyor-toaster-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "235022f43daad36f7e331e5535988c34e8ad5341",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-conveyor-toaster.glb > game/public/assets/models/p7-conveyor-toaster.glb"
+      },
+      "game/public/assets/models/p7-crash-cart.glb": {
+        "id": "p7:crashCart",
+        "replacedBy": "game/public/assets/models/p7-crash-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9c92f584aed8d9b7b064a0c2c917c983b924e6b6",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-crash-cart.glb > game/public/assets/models/p7-crash-cart.glb"
+      },
+      "game/public/assets/models/p7-crowd-barrier.glb": {
+        "id": "p7:crowdBarrier",
+        "replacedBy": "game/public/assets/models/p7-crowd-barrier-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "fe909e9490718ebd2db1a33c8c06958b8287a550",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-crowd-barrier.glb > game/public/assets/models/p7-crowd-barrier.glb"
+      },
+      "game/public/assets/models/p7-crt-terminal.glb": {
+        "id": "p7:crtTerminal",
+        "replacedBy": "game/public/assets/models/p7-crt-terminal-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "577f06201cef403dacf205e4b6db532d19805fed",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-crt-terminal.glb > game/public/assets/models/p7-crt-terminal.glb"
+      },
+      "game/public/assets/models/p7-crt-tv-cart.glb": {
+        "id": "p7:crtTvCart",
+        "replacedBy": "game/public/assets/models/p7-crt-tv-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "7cb33d84f221d109e03d4355e2ecd393aed62bc5",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-crt-tv-cart.glb > game/public/assets/models/p7-crt-tv-cart.glb"
+      },
+      "game/public/assets/models/p7-deep-fryer.glb": {
+        "id": "p7:deepFryer",
+        "replacedBy": "game/public/assets/models/p7-deep-fryer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "61a8086f6f4e891af2bf0f230d133f1035c8152c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-deep-fryer.glb > game/public/assets/models/p7-deep-fryer.glb"
+      },
+      "game/public/assets/models/p7-disconnect-switch.glb": {
+        "id": "p7:disconnectSwitch",
+        "replacedBy": "game/public/assets/models/p7-disconnect-switch-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "7e2843bc4fb120b34183935db88fc355722e3586",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-disconnect-switch.glb > game/public/assets/models/p7-disconnect-switch.glb"
+      },
+      "game/public/assets/models/p7-drip-coffee-maker.glb": {
+        "id": "p7:dripCoffeeMaker",
+        "replacedBy": "game/public/assets/models/p7-drip-coffee-maker-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9b0df580f1f85d01ceca2538fd8d29fd6b9e371a",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-drip-coffee-maker.glb > game/public/assets/models/p7-drip-coffee-maker.glb"
+      },
+      "game/public/assets/models/p7-drum-fan.glb": {
+        "id": "p7:drumFan",
+        "replacedBy": "game/public/assets/models/p7-drum-fan-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "f0533681cbf1c435be5663021edd751e0b5a8644",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-drum-fan.glb > game/public/assets/models/p7-drum-fan.glb"
+      },
+      "game/public/assets/models/p7-dry-transformer.glb": {
+        "id": "p7:dryTransformer",
+        "replacedBy": "game/public/assets/models/p7-dry-transformer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "1d98ad975bf135ae0c06bc9d329b50acfd046219",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-dry-transformer.glb > game/public/assets/models/p7-dry-transformer.glb"
+      },
+      "game/public/assets/models/p7-emergency-call-point.glb": {
+        "id": "p7:emergencyCallPoint",
+        "replacedBy": "game/public/assets/models/p7-emergency-call-point-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "c5a06d73d286a9b6f5cb23b5baad3fcd18f16471",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-emergency-call-point.glb > game/public/assets/models/p7-emergency-call-point.glb"
+      },
+      "game/public/assets/models/p7-espresso-grinder.glb": {
+        "id": "p7:espressoGrinder",
+        "replacedBy": "game/public/assets/models/p7-espresso-grinder-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "46e99dd97d9d68b000a25d777b353ed6833b609d",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-espresso-grinder.glb > game/public/assets/models/p7-espresso-grinder.glb"
+      },
+      "game/public/assets/models/p7-eyewash-station.glb": {
+        "id": "p7:eyewashStation",
+        "replacedBy": "game/public/assets/models/p7-eyewash-station-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "92cc438f961ba90ddb8e2c1d91b48fad07c4bb4c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-eyewash-station.glb > game/public/assets/models/p7-eyewash-station.glb"
+      },
+      "game/public/assets/models/p7-fare-validator-stand.glb": {
+        "id": "p7:fareValidatorStand",
+        "replacedBy": "game/public/assets/models/p7-fare-validator-stand-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "d78933b269efe4f474699fc6e66da424cbc0f91e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-fare-validator-stand.glb > game/public/assets/models/p7-fare-validator-stand.glb"
+      },
+      "game/public/assets/models/p7-fare-vault-cart.glb": {
+        "id": "p7:fareVaultCart",
+        "replacedBy": "game/public/assets/models/p7-fare-vault-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "10f79544526f33a72159fbd786e1f996aabbb7ea",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-fare-vault-cart.glb > game/public/assets/models/p7-fare-vault-cart.glb"
+      },
+      "game/public/assets/models/p7-field-phone-box.glb": {
+        "id": "p7:fieldPhoneBox",
+        "replacedBy": "game/public/assets/models/p7-field-phone-box-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "6230881b1abd5f817eabf1449a89d5df50159e8a",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-field-phone-box.glb > game/public/assets/models/p7-field-phone-box.glb"
+      },
+      "game/public/assets/models/p7-filing-cabinet.glb": {
+        "id": "p7:filingCabinet",
+        "replacedBy": "game/public/assets/models/p7-filing-cabinet-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "d7a8c3de4112e0411f8a8d5e042c887543d45a00",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-filing-cabinet.glb > game/public/assets/models/p7-filing-cabinet.glb"
+      },
+      "game/public/assets/models/p7-fire-extinguisher-cabinet.glb": {
+        "id": "p7:fireExtinguisherCabinet",
+        "replacedBy": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "4b9b48806f419fc5968cf48020ca2a2db2a03063",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-fire-extinguisher-cabinet.glb > game/public/assets/models/p7-fire-extinguisher-cabinet.glb"
+      },
+      "game/public/assets/models/p7-fire-extinguisher.glb": {
+        "id": "p7:fireExtinguisher",
+        "replacedBy": "game/public/assets/models/p7-fire-extinguisher-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "1645d54f780ccec0da30c297a411fc6985e2d759",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-fire-extinguisher.glb > game/public/assets/models/p7-fire-extinguisher.glb"
+      },
+      "game/public/assets/models/p7-fire-hose-reel-cabinet.glb": {
+        "id": "p7:fireHoseReelCabinet",
+        "replacedBy": "game/public/assets/models/p7-fire-hose-reel-cabinet-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "a2c7301f74a088eca11296ab5f282b7e11899563",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-fire-hose-reel-cabinet.glb > game/public/assets/models/p7-fire-hose-reel-cabinet.glb"
+      },
+      "game/public/assets/models/p7-first-aid-wall-kit.glb": {
+        "id": "p7:firstAidWallKit",
+        "replacedBy": "game/public/assets/models/p7-first-aid-wall-kit-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "2b09adfbbf223055267e9e66c455214f7a87e0a1",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-first-aid-wall-kit.glb > game/public/assets/models/p7-first-aid-wall-kit.glb"
+      },
+      "game/public/assets/models/p7-floor-buffer.glb": {
+        "id": "p7:floorBuffer",
+        "replacedBy": "game/public/assets/models/p7-floor-buffer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "097fc6e35280d86cb6b98be64bd5cec2df445e72",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-floor-buffer.glb > game/public/assets/models/p7-floor-buffer.glb"
+      },
+      "game/public/assets/models/p7-floor-scrubber.glb": {
+        "id": "p7:floorScrubber",
+        "replacedBy": "game/public/assets/models/p7-floor-scrubber-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ddc322a60edb0269306e200d6fbfd8c9d4fec48d",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-floor-scrubber.glb > game/public/assets/models/p7-floor-scrubber.glb"
+      },
+      "game/public/assets/models/p7-folding-barricade.glb": {
+        "id": "p7:foldingBarricade",
+        "replacedBy": "game/public/assets/models/p7-folding-barricade-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "7fd3fd24155acf5837952f785b0521f8ed761e9b",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-folding-barricade.glb > game/public/assets/models/p7-folding-barricade.glb"
+      },
+      "game/public/assets/models/p7-folding-chair.glb": {
+        "id": "p7:foldingChair",
+        "replacedBy": "game/public/assets/models/p7-folding-chair-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "4e12f7e91f9d7347f3d14ec2991713a948e985a5",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-folding-chair.glb > game/public/assets/models/p7-folding-chair.glb"
+      },
+      "game/public/assets/models/p7-gas-cylinder-cart.glb": {
+        "id": "p7:gasCylinderCart",
+        "replacedBy": "game/public/assets/models/p7-gas-cylinder-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "1dbe9b371c857f56619576f66c8d19570dd326fe",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-gas-cylinder-cart.glb > game/public/assets/models/p7-gas-cylinder-cart.glb"
+      },
+      "game/public/assets/models/p7-hand-dryer.glb": {
+        "id": "p7:handDryer",
+        "replacedBy": "game/public/assets/models/p7-hand-dryer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "c28d8e6e9099b128f076c9c2d22463c4afd10e52",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-hand-dryer.glb > game/public/assets/models/p7-hand-dryer.glb"
+      },
+      "game/public/assets/models/p7-hand-toolbox.glb": {
+        "id": "p7:handToolbox",
+        "replacedBy": "game/public/assets/models/p7-hand-toolbox-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "3995bb21f886c60f1ab07426a0e21efc58206d65",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-hand-toolbox.glb > game/public/assets/models/p7-hand-toolbox.glb"
+      },
+      "game/public/assets/models/p7-hand-truck.glb": {
+        "id": "p7:handTruck",
+        "replacedBy": "game/public/assets/models/p7-hand-truck-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "aefa21b4d07ef1a26708a20c1f22dc7ba7a47124",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-hand-truck.glb > game/public/assets/models/p7-hand-truck.glb"
+      },
+      "game/public/assets/models/p7-hot-dog-roller.glb": {
+        "id": "p7:hotDogRoller",
+        "replacedBy": "game/public/assets/models/p7-hot-dog-roller-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "429277b0793403ea4b85d4656d1038c01b391f64",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-hot-dog-roller.glb > game/public/assets/models/p7-hot-dog-roller.glb"
+      },
+      "game/public/assets/models/p7-ice-machine.glb": {
+        "id": "p7:iceMachine",
+        "replacedBy": "game/public/assets/models/p7-ice-machine-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "1a52cca48a1c263ce9c3a33e73c8820fd490d62e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-ice-machine.glb > game/public/assets/models/p7-ice-machine.glb"
+      },
+      "game/public/assets/models/p7-info-touch-kiosk.glb": {
+        "id": "p7:infoTouchKiosk",
+        "replacedBy": "game/public/assets/models/p7-info-touch-kiosk-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9842a17ad39838e9f9e1fd6a9b88acb06a3f55ca",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-info-touch-kiosk.glb > game/public/assets/models/p7-info-touch-kiosk.glb"
+      },
+      "game/public/assets/models/p7-ingredient-bin.glb": {
+        "id": "p7:ingredientBin",
+        "replacedBy": "game/public/assets/models/p7-ingredient-bin-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "cf560b17079b4a19c21f2935e7a40ee119864018",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-ingredient-bin.glb > game/public/assets/models/p7-ingredient-bin.glb"
+      },
+      "game/public/assets/models/p7-iv-pole.glb": {
+        "id": "p7:ivPole",
+        "replacedBy": "game/public/assets/models/p7-iv-pole-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "3b288ee217cb6257a7046000947a3f55348280fd",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-iv-pole.glb > game/public/assets/models/p7-iv-pole.glb"
+      },
+      "game/public/assets/models/p7-key-cabinet.glb": {
+        "id": "p7:keyCabinet",
+        "replacedBy": "game/public/assets/models/p7-key-cabinet-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "6bb8282def2cb74c04b46dc7cd08c4be70841776",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-key-cabinet.glb > game/public/assets/models/p7-key-cabinet.glb"
+      },
+      "game/public/assets/models/p7-key-cutting-machine.glb": {
+        "id": "p7:keyCuttingMachine",
+        "replacedBy": "game/public/assets/models/p7-key-cutting-machine-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "946687d16bb375a5e4a7e0b3365229990a5fa2ae",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-key-cutting-machine.glb > game/public/assets/models/p7-key-cutting-machine.glb"
+      },
+      "game/public/assets/models/p7-meat-slicer.glb": {
+        "id": "p7:meatSlicer",
+        "replacedBy": "game/public/assets/models/p7-meat-slicer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ed494c6b724457006974d0c49dc442637e0da246",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-meat-slicer.glb > game/public/assets/models/p7-meat-slicer.glb"
+      },
+      "game/public/assets/models/p7-microwave-oven.glb": {
+        "id": "p7:microwaveOven",
+        "replacedBy": "game/public/assets/models/p7-microwave-oven-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "5da112e27daa88a0545cc80b418d652862d24e6c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-microwave-oven.glb > game/public/assets/models/p7-microwave-oven.glb"
+      },
+      "game/public/assets/models/p7-mobile-whiteboard.glb": {
+        "id": "p7:mobileWhiteboard",
+        "replacedBy": "game/public/assets/models/p7-mobile-whiteboard-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "4ea614ee517a062ad29e78145c66aaba4b3d1333",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-mobile-whiteboard.glb > game/public/assets/models/p7-mobile-whiteboard.glb"
+      },
+      "game/public/assets/models/p7-mop-bucket-wringer.glb": {
+        "id": "p7:mopBucketWringer",
+        "replacedBy": "game/public/assets/models/p7-mop-bucket-wringer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "58199b79c140f43dd386a5426d73a2b3cbcf381c",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-mop-bucket-wringer.glb > game/public/assets/models/p7-mop-bucket-wringer.glb"
+      },
+      "game/public/assets/models/p7-newspaper-bundles.glb": {
+        "id": "p7:newspaperBundles",
+        "replacedBy": "game/public/assets/models/p7-newspaper-bundles-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "f97e459958c2077d30a79b72ed9e3c60fc760995",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-newspaper-bundles.glb > game/public/assets/models/p7-newspaper-bundles.glb"
+      },
+      "game/public/assets/models/p7-newspaper-vending-box.glb": {
+        "id": "p7:newspaperVendingBox",
+        "replacedBy": "game/public/assets/models/p7-newspaper-vending-box-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "d0689a19f4bd6782e73a6ccc520f069fe008dec8",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-newspaper-vending-box.glb > game/public/assets/models/p7-newspaper-vending-box.glb"
+      },
+      "game/public/assets/models/p7-office-copier.glb": {
+        "id": "p7:officeCopier",
+        "replacedBy": "game/public/assets/models/p7-office-copier-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "216fe4ff80c265125406a67a92749c2285f75494",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-office-copier.glb > game/public/assets/models/p7-office-copier.glb"
+      },
+      "game/public/assets/models/p7-office-swivel-chair.glb": {
+        "id": "p7:officeSwivelChair",
+        "replacedBy": "game/public/assets/models/p7-office-swivel-chair-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "f30c62ee24eeed2c8fb623e9633c9e3e320c2a02",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-office-swivel-chair.glb > game/public/assets/models/p7-office-swivel-chair.glb"
+      },
+      "game/public/assets/models/p7-oxygen-cart.glb": {
+        "id": "p7:oxygenCart",
+        "replacedBy": "game/public/assets/models/p7-oxygen-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "cbbe1e42a2ed30bff82ff253cb005f0231b50ec5",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-oxygen-cart.glb > game/public/assets/models/p7-oxygen-cart.glb"
+      },
+      "game/public/assets/models/p7-pallet-jack.glb": {
+        "id": "p7:palletJack",
+        "replacedBy": "game/public/assets/models/p7-pallet-jack-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "f393d8c947bfb847303ec43e4f21f2488159ea58",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-pallet-jack.glb > game/public/assets/models/p7-pallet-jack.glb"
+      },
+      "game/public/assets/models/p7-paper-shredder.glb": {
+        "id": "p7:paperShredder",
+        "replacedBy": "game/public/assets/models/p7-paper-shredder-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "318121781934a057d9f148c333f3bd810f91a0c9",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-paper-shredder.glb > game/public/assets/models/p7-paper-shredder.glb"
+      },
+      "game/public/assets/models/p7-paper-towel-dispenser.glb": {
+        "id": "p7:paperTowelDispenser",
+        "replacedBy": "game/public/assets/models/p7-paper-towel-dispenser-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "a1f79a2358d87287de02c5bc2611d9ff8c7fde52",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-paper-towel-dispenser.glb > game/public/assets/models/p7-paper-towel-dispenser.glb"
+      },
+      "game/public/assets/models/p7-parts-bin-rack.glb": {
+        "id": "p7:partsBinRack",
+        "replacedBy": "game/public/assets/models/p7-parts-bin-rack-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "3b1d64c38fbc323f7e6c15ab8f35428c09aae186",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-parts-bin-rack.glb > game/public/assets/models/p7-parts-bin-rack.glb"
+      },
+      "game/public/assets/models/p7-payphone.glb": {
+        "id": "p7:payphone",
+        "replacedBy": "game/public/assets/models/p7-payphone-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "2085142fb25c4822441f891033a6077ad38cb050",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-payphone.glb > game/public/assets/models/p7-payphone.glb"
+      },
+      "game/public/assets/models/p7-pedestal-fan.glb": {
+        "id": "p7:pedestalFan",
+        "replacedBy": "game/public/assets/models/p7-pedestal-fan-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "e9d40d49f2590dcc56723bf7d381dcac8a49ac63",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-pedestal-fan.glb > game/public/assets/models/p7-pedestal-fan.glb"
+      },
+      "game/public/assets/models/p7-physician-scale.glb": {
+        "id": "p7:physicianScale",
+        "replacedBy": "game/public/assets/models/p7-physician-scale-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "8c2b6e82d7a21708d3d15aad0434683186a5b385",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-physician-scale.glb > game/public/assets/models/p7-physician-scale.glb"
+      },
+      "game/public/assets/models/p7-pipe-valve-manifold.glb": {
+        "id": "p7:pipeValveManifold",
+        "replacedBy": "game/public/assets/models/p7-pipe-valve-manifold-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "1662a4d253c6d6ef3ad0b696903b557eb7e04a43",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-pipe-valve-manifold.glb > game/public/assets/models/p7-pipe-valve-manifold.glb"
+      },
+      "game/public/assets/models/p7-plastic-stack-chair.glb": {
+        "id": "p7:plasticStackChair",
+        "replacedBy": "game/public/assets/models/p7-plastic-stack-chair-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "dd0db8f1bab88fa827deeac330bd1456b28b6ee6",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-plastic-stack-chair.glb > game/public/assets/models/p7-plastic-stack-chair.glb"
+      },
+      "game/public/assets/models/p7-platform-clock.glb": {
+        "id": "p7:platformClock",
+        "replacedBy": "game/public/assets/models/p7-platform-clock-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "2cf877ea0bc54364016b71fbe213c3ca42c362b2",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-platform-clock.glb > game/public/assets/models/p7-platform-clock.glb"
+      },
+      "game/public/assets/models/p7-popcorn-machine.glb": {
+        "id": "p7:popcornMachine",
+        "replacedBy": "game/public/assets/models/p7-popcorn-machine-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "5ca5263623fea6e23fee8d69e3d6c7ce865477f2",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-popcorn-machine.glb > game/public/assets/models/p7-popcorn-machine.glb"
+      },
+      "game/public/assets/models/p7-portable-generator.glb": {
+        "id": "p7:portableGenerator",
+        "replacedBy": "game/public/assets/models/p7-portable-generator-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ddb54db5351be0132452449676e4b506f8a1cd98",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-portable-generator.glb > game/public/assets/models/p7-portable-generator.glb"
+      },
+      "game/public/assets/models/p7-punch-clock.glb": {
+        "id": "p7:punchClock",
+        "replacedBy": "game/public/assets/models/p7-punch-clock-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9afb6f60ef2ceb5bd298f9cfeaa489644ffbaa4f",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-punch-clock.glb > game/public/assets/models/p7-punch-clock.glb"
+      },
+      "game/public/assets/models/p7-rice-cooker.glb": {
+        "id": "p7:riceCooker",
+        "replacedBy": "game/public/assets/models/p7-rice-cooker-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ffef3e19a04203c028e7742ed3ab88ec5258d245",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-rice-cooker.glb > game/public/assets/models/p7-rice-cooker.glb"
+      },
+      "game/public/assets/models/p7-rolling-suitcase.glb": {
+        "id": "p7:rollingSuitcase",
+        "replacedBy": "game/public/assets/models/p7-rolling-suitcase-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "855733cb3b75d0cd79a74f58ee8fa5ee0cb2c2d3",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-rolling-suitcase.glb > game/public/assets/models/p7-rolling-suitcase.glb"
+      },
+      "game/public/assets/models/p7-rolling-tool-chest.glb": {
+        "id": "p7:rollingToolChest",
+        "replacedBy": "game/public/assets/models/p7-rolling-tool-chest-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "b57d84f0d3db13b1138cd1a761dc86e02dda2010",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-rolling-tool-chest.glb > game/public/assets/models/p7-rolling-tool-chest.glb"
+      },
+      "game/public/assets/models/p7-security-podium.glb": {
+        "id": "p7:securityPodium",
+        "replacedBy": "game/public/assets/models/p7-security-podium-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "dba5bd48f19d789c1608de080c1cc612d88798a7",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-security-podium.glb > game/public/assets/models/p7-security-podium.glb"
+      },
+      "game/public/assets/models/p7-shoe-shine-chair.glb": {
+        "id": "p7:shoeShineChair",
+        "replacedBy": "game/public/assets/models/p7-shoe-shine-chair-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "0dd16903b45939c7740e63937844c5ece7cd1380",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-shoe-shine-chair.glb > game/public/assets/models/p7-shoe-shine-chair.glb"
+      },
+      "game/public/assets/models/p7-shopping-cart.glb": {
+        "id": "p7:shoppingCart",
+        "replacedBy": "game/public/assets/models/p7-shopping-cart-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "c8540cc7dec4113fec2c1bfe13e7d406a8749bce",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-shopping-cart.glb > game/public/assets/models/p7-shopping-cart.glb"
+      },
+      "game/public/assets/models/p7-signal-head-spare.glb": {
+        "id": "p7:signalHeadSpare",
+        "replacedBy": "game/public/assets/models/p7-signal-head-spare-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "0ace41aafd6651641eb98ef3e55c058b526f0a1f",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-signal-head-spare.glb > game/public/assets/models/p7-signal-head-spare.glb"
+      },
+      "game/public/assets/models/p7-slush-machine.glb": {
+        "id": "p7:slushMachine",
+        "replacedBy": "game/public/assets/models/p7-slush-machine-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "fd7927c42851d689b4308d22cbb84447c98bbb23",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-slush-machine.glb > game/public/assets/models/p7-slush-machine.glb"
+      },
+      "game/public/assets/models/p7-soda-fountain.glb": {
+        "id": "p7:sodaFountain",
+        "replacedBy": "game/public/assets/models/p7-soda-fountain-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "ca7d491056cdf4701502a5e52d010e15949adb19",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-soda-fountain.glb > game/public/assets/models/p7-soda-fountain.glb"
+      },
+      "game/public/assets/models/p7-soldering-station.glb": {
+        "id": "p7:solderingStation",
+        "replacedBy": "game/public/assets/models/p7-soldering-station-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "86d7caac45a59afda07d2c95f7e274e381af1aaf",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-soldering-station.glb > game/public/assets/models/p7-soldering-station.glb"
+      },
+      "game/public/assets/models/p7-spinner-rack.glb": {
+        "id": "p7:spinnerRack",
+        "replacedBy": "game/public/assets/models/p7-spinner-rack-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "0216c2a1ae1512f0c8b7ef61948f323662d276b6",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-spinner-rack.glb > game/public/assets/models/p7-spinner-rack.glb"
+      },
+      "game/public/assets/models/p7-stand-mixer.glb": {
+        "id": "p7:standMixer",
+        "replacedBy": "game/public/assets/models/p7-stand-mixer-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "18e9b7f448a930e5b71f7af89bd8bde805949e55",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-stand-mixer.glb > game/public/assets/models/p7-stand-mixer.glb"
+      },
+      "game/public/assets/models/p7-step-ladder.glb": {
+        "id": "p7:stepLadder",
+        "replacedBy": "game/public/assets/models/p7-step-ladder-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9e1e9fae2aef543d50456f910fe75a967e145da2",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-step-ladder.glb > game/public/assets/models/p7-step-ladder.glb"
+      },
+      "game/public/assets/models/p7-tool-pegboard.glb": {
+        "id": "p7:toolPegboard",
+        "replacedBy": "game/public/assets/models/p7-tool-pegboard-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "7d32c88aba7f7fb9f24a7c94b0cec917f9482613",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-tool-pegboard.glb > game/public/assets/models/p7-tool-pegboard.glb"
+      },
+      "game/public/assets/models/p7-trash-bag-pile.glb": {
+        "id": "p7:trashBagPile",
+        "replacedBy": "game/public/assets/models/p7-trash-bag-pile-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "829dd1fe76d16bba77d6fffab48a5db87f7ad9c9",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-trash-bag-pile.glb > game/public/assets/models/p7-trash-bag-pile.glb"
+      },
+      "game/public/assets/models/p7-tripod-work-light.glb": {
+        "id": "p7:tripodWorkLight",
+        "replacedBy": "game/public/assets/models/p7-tripod-work-light-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9d99986c9f35386a3eea585cb1186225515eab1e",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-tripod-work-light.glb > game/public/assets/models/p7-tripod-work-light.glb"
+      },
+      "game/public/assets/models/p7-urinal.glb": {
+        "id": "p7:urinal",
+        "replacedBy": "game/public/assets/models/p7-urinal-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "9be0b88996d4d96a41ea72be7405e14e0f5cbbcb",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-urinal.glb > game/public/assets/models/p7-urinal.glb"
+      },
+      "game/public/assets/models/p7-wall-data-cabinet.glb": {
+        "id": "p7:wallDataCabinet",
+        "replacedBy": "game/public/assets/models/p7-wall-data-cabinet-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "20179894cab8e38eac79506d0691e5ab477a26a9",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-wall-data-cabinet.glb > game/public/assets/models/p7-wall-data-cabinet.glb"
+      },
+      "game/public/assets/models/p7-water-cooler.glb": {
+        "id": "p7:waterCooler",
+        "replacedBy": "game/public/assets/models/p7-water-cooler-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "785c1ce661abcc4dc321507393cad1068aa06f44",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-water-cooler.glb > game/public/assets/models/p7-water-cooler.glb"
+      },
+      "game/public/assets/models/p7-water-heater-tank.glb": {
+        "id": "p7:waterHeaterTank",
+        "replacedBy": "game/public/assets/models/p7-water-heater-tank-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "788f91853c8b9488f8a575a341120f325b691516",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-water-heater-tank.glb > game/public/assets/models/p7-water-heater-tank.glb"
+      },
+      "game/public/assets/models/p7-water-pump-skid.glb": {
+        "id": "p7:waterPumpSkid",
+        "replacedBy": "game/public/assets/models/p7-water-pump-skid-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "e380b1f6783999b02b0a6c1b4966668ca62e8461",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-water-pump-skid.glb > game/public/assets/models/p7-water-pump-skid.glb"
+      },
+      "game/public/assets/models/p7-wet-dry-vac.glb": {
+        "id": "p7:wetDryVac",
+        "replacedBy": "game/public/assets/models/p7-wet-dry-vac-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "cca06c0ec67444b986ae1d316d79ef48e19630ae",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-wet-dry-vac.glb > game/public/assets/models/p7-wet-dry-vac.glb"
+      },
+      "game/public/assets/models/p7-wet-floor-sign.glb": {
+        "id": "p7:wetFloorSign",
+        "replacedBy": "game/public/assets/models/p7-wet-floor-sign-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "7517eb33090370b37bc57dfeb9fcfdbd56e3d36b",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-wet-floor-sign.glb > game/public/assets/models/p7-wet-floor-sign.glb"
+      },
+      "game/public/assets/models/p7-wheelchair.glb": {
+        "id": "p7:wheelchair",
+        "replacedBy": "game/public/assets/models/p7-wheelchair-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "e6f3f2ef7ca0360e9ab349d61901234f552b9f61",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-wheelchair.glb > game/public/assets/models/p7-wheelchair.glb"
+      },
+      "game/public/assets/models/p7-wheeled-stretcher.glb": {
+        "id": "p7:wheeledStretcher",
+        "replacedBy": "game/public/assets/models/p7-wheeled-stretcher-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "6a9321c3ac1c5bf4f61ad1aefc59dc8f7196c7af",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-wheeled-stretcher.glb > game/public/assets/models/p7-wheeled-stretcher.glb"
+      },
+      "game/public/assets/models/p7-wheelie-bin.glb": {
+        "id": "p7:wheelieBin",
+        "replacedBy": "game/public/assets/models/p7-wheelie-bin-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "4ef636c749a55782ed28d7c03465768e172d28a8",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-wheelie-bin.glb > game/public/assets/models/p7-wheelie-bin.glb"
+      }
+    }
+  }
 }

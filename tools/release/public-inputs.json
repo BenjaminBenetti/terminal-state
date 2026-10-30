@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 7996,
-      "sha256": "64b7da629dbf2f7b3db3aa91e019613670699567d26614250bf486ca42e94181"
+      "bytes": 9323,
+      "sha256": "a90fa31485a5d09767ee7811f790fddfe954e41a3ca1be52057537ba8b524a52"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1345,8 +1345,8 @@
     },
     {
       "path": "assets/derivatives/creature-ratdog.json",
-      "bytes": 17740,
-      "sha256": "5c014d54cbbd8d8bd13695b81a5e22c204b6d59d69645237ccc29c997b589ddb"
+      "bytes": 23070,
+      "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -1355,8 +1355,28 @@
     },
     {
       "path": "assets/derivatives/light-lod-iteration04.json",
-      "bytes": 5092,
-      "sha256": "b0bca74834e3246feeac4bf040db884c2f518b343d7ffbe1375f7928d27c68c1"
+      "bytes": 5983,
+      "sha256": "685156860b4caa08f0f3b2e2463313e4697262b69987e71e32a13c599fbab854"
+    },
+    {
+      "path": "assets/derivatives/meshy-t25-chars-20261029.json",
+      "bytes": 76584,
+      "sha256": "918a6a2e71ce0458585fec9fc34c1d05bc82d4a4e4730209af851d4f4651c4a5"
+    },
+    {
+      "path": "assets/derivatives/meshy-t25-items-20261029.json",
+      "bytes": 58766,
+      "sha256": "f1d9b0e913dee8dca28a0de31de80257279b235200c75e988e0bd151f6bc1c25"
+    },
+    {
+      "path": "assets/derivatives/meshy-t25-light-20261029.json",
+      "bytes": 11348,
+      "sha256": "f3bf8f519af676fa84bb886870e4a3502e5dfdcf9fabbfb63eeb2dee4ac53542"
+    },
+    {
+      "path": "assets/derivatives/meshy-t25-props-20261029.json",
+      "bytes": 1205635,
+      "sha256": "b806743e03407573c1276a2ad58848732eb9e8002e2bedae836f037dea124bbb"
     },
     {
       "path": "assets/derivatives/office-space-20261029.json",
@@ -1365,58 +1385,58 @@
     },
     {
       "path": "assets/derivatives/outfit-beanie.json",
-      "bytes": 23833,
-      "sha256": "dd9d4b883ef2f6310e7a30790e3f4945baa0164e2be5da4a4057d265865e0437"
+      "bytes": 32020,
+      "sha256": "5347f0ae333402c3e398285a7f806ce78ba5973ed5aad116183d0b3f2e7a696f"
     },
     {
       "path": "assets/derivatives/outfit-blazer.json",
-      "bytes": 113124,
-      "sha256": "be51fccef0f4138ff0cf898ab466d870a60e88c59322010b401cd791ccc79090"
+      "bytes": 138071,
+      "sha256": "0629b347cfa7c5b2064c9b62b9d87ca931c063f8994dbc1a0c6c981ebc941993"
     },
     {
       "path": "assets/derivatives/outfit-cap.json",
-      "bytes": 25087,
-      "sha256": "07dc9855e0a23d0f787538c57866491640c898cfcc900f216a172719bbe76229"
+      "bytes": 26555,
+      "sha256": "9cf5deacb446bbb7d852f0d32acdb991cf4cfdac91427b1c2e1e5bdd4dcefbce"
     },
     {
       "path": "assets/derivatives/outfit-cargo.json",
-      "bytes": 49288,
-      "sha256": "661631effa9130e6191857a03fddfd3a72b426698f3ce3431ade2e618e85e364"
+      "bytes": 71462,
+      "sha256": "52c18334214b32a7294e2b4372426d6743f3ba70b6b817126bfa333a49b7bd88"
     },
     {
       "path": "assets/derivatives/outfit-coat.json",
-      "bytes": 87059,
-      "sha256": "2b82172944adaf2f3153e414b60270d2fa179d5ac22b1d90d6e3f135981669af"
+      "bytes": 139824,
+      "sha256": "c17e513cbc56d6381ce96f352b089c830572e74a1953bf7971b5c3420fb6ccf1"
     },
     {
       "path": "assets/derivatives/outfit-flannel.json",
-      "bytes": 61817,
-      "sha256": "c2952cfe6575f5b116c95d2af79ff480ce841b2288b4fee7373353e9bc2ce9fd"
+      "bytes": 116580,
+      "sha256": "e2df729f1839fcf2a1c0d08a44fd5b69041c82bf368a7054757facfb868f520d"
     },
     {
       "path": "assets/derivatives/outfit-gasmask.json",
-      "bytes": 16202,
-      "sha256": "64c429d70b410e9ddb8b8bad9e79204a052bed87ba5e3dabce620b58ab515fb5"
+      "bytes": 19301,
+      "sha256": "117627deeebf627d2bd06fa37dcfc89969b478ddf02e32e587e85b4670db1448"
     },
     {
       "path": "assets/derivatives/outfit-hardhat.json",
-      "bytes": 27799,
-      "sha256": "c9cbc72d839e73b871e7880deef87201d5dd005d79b4b073c233085e36b226a7"
+      "bytes": 31216,
+      "sha256": "eb5155692776ba7059cb83b23237faa3dc8e4b4cc00cbd89595eb59ff957b29f"
     },
     {
       "path": "assets/derivatives/outfit-hivis.json",
-      "bytes": 57501,
-      "sha256": "edf278273218a877aea288311d2326ed9bd66996cd8edb5baefce2403232365e"
+      "bytes": 113689,
+      "sha256": "2a744d0e52e153cfb35235e03d97648e36e22294166a37d43d3cca3e27061423"
     },
     {
       "path": "assets/derivatives/outfit-hoodie.json",
-      "bytes": 113066,
-      "sha256": "039dade6c7082ae193f3706fbb911fb735071599983c7c193be33fc05d16ea24"
+      "bytes": 134101,
+      "sha256": "0422637997667c13fabe13130892d756ad406c72b5cb29053d2ce9bbe9d931c9"
     },
     {
       "path": "assets/derivatives/outfit-jeans.json",
-      "bytes": 50533,
-      "sha256": "890c437c1364c11170c0db73a4334da0a2bbbb67faccfdb07e056559beedb800"
+      "bytes": 72213,
+      "sha256": "87edf82c382199cd83183416ac4910274b897db0dc158f8f2569f430d8649526"
     },
     {
       "path": "assets/derivatives/outfit-puffer.json",
@@ -1425,53 +1445,53 @@
     },
     {
       "path": "assets/derivatives/outfit-respirator.json",
-      "bytes": 16223,
-      "sha256": "a13b6323a68dc8381e012ae9e2e7f6d7125ed6f81ae9eed0dec1986bedda8f19"
+      "bytes": 19710,
+      "sha256": "3051753fc79ad42b0af5ad131a27acf63c525afab539d80facf514a287a239a1"
     },
     {
       "path": "assets/derivatives/outfit-slacks.json",
-      "bytes": 38848,
-      "sha256": "4393910a9cd52d387c08d922a1bbf640c656abe20ce6d0e4d3e378cdc827a766"
+      "bytes": 71473,
+      "sha256": "bc9e4e9e538d0643edcce25ea6dc14854f0b048f3cbe6ef7176de50ba65ffb65"
     },
     {
       "path": "assets/derivatives/outfit-sweater.json",
-      "bytes": 87437,
-      "sha256": "cd19e8d4c65a9fea22c3200b7aebd9e73d9b8ee252397c10f103d232029e2a76"
+      "bytes": 91200,
+      "sha256": "e88324058647c8980e1a5a2634dd60656298f8963c068ea84405e421b3baeafb"
     },
     {
       "path": "assets/derivatives/outfit-trench.json",
-      "bytes": 87940,
-      "sha256": "8f0f6190551305525a0d22a5fa797c8ffed6a54d8dc2023f1bbdf2f1af89859f"
+      "bytes": 89505,
+      "sha256": "a235f2c1db27345365ebd751f6dd87f1c852c3ea5eabfdc42ed52c293045fd43"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
-      "bytes": 15138,
-      "sha256": "0dbf6da6375da623d315cb3627e3f0b464f5bbdafeeaf899ac97c64e20c9bc3a"
+      "bytes": 16480,
+      "sha256": "1005662e1bd9091694ecaf046bc082143917328f5597fefcfe503c8944ee0f35"
     },
     {
       "path": "assets/derivatives/props-iteration03.json",
-      "bytes": 85753,
-      "sha256": "dd369f4f702be1688ed03074941105f9bb85e52c99fe5b889eba0b00f73140ea"
+      "bytes": 90893,
+      "sha256": "984dd1bcc91e9c17af525e3799766404be80621febbf8529259785cc2e8d7bb7"
     },
     {
       "path": "assets/derivatives/props-iteration04.json",
-      "bytes": 61832,
-      "sha256": "13242ebe8c674e25d0571eb859d3c4b673d9f61f2f1fe71173f353e41a0bff65"
+      "bytes": 63692,
+      "sha256": "25c8ab4601bbccc79068c284366b8ec6fcb91a9542836cdf2b0aaf8be12db8a0"
     },
     {
       "path": "assets/derivatives/props-iteration05.json",
-      "bytes": 71709,
-      "sha256": "2c5d0d9865f289b20ee0604caf69a1cea577ed5b498a9f25881b0957e76c5200"
+      "bytes": 74104,
+      "sha256": "70a84cba0c0ab3af54f80455d4d73fa8e3de86e2a9fb7c029b3b5d69d0403c79"
     },
     {
       "path": "assets/derivatives/props-iteration07.json",
-      "bytes": 1301388,
-      "sha256": "45c45577dfc5f3dff2d39d400d54fa69511c73a0277a4c0ac55c81a922dd6582"
+      "bytes": 1352396,
+      "sha256": "e5c528496d0aa1c51db2329911e3640288b01421fd43bc043fc906cc9d38cb6f"
     },
     {
       "path": "assets/derivatives/props.json",
-      "bytes": 95557,
-      "sha256": "6ee44331b22b28216dbf4ba77f9234951b6057fde548962b50b235d0bbf41ac2"
+      "bytes": 97393,
+      "sha256": "883f53f8858073f6d61ba8c7a0f4d382ffee5e7aa4c8e9b755487e13786602ca"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -1485,33 +1505,33 @@
     },
     {
       "path": "assets/derivatives/zombie-body-agent.json",
-      "bytes": 35774,
-      "sha256": "d7d6a936aeedb656176f38f1e0e6112c373a29287f65ad9124dafc56b72c2846"
+      "bytes": 39731,
+      "sha256": "d679ffc281d60a2fae73bacfc43497976f2b59b3555719f8a3bc7d05285b2bd7"
     },
     {
       "path": "assets/derivatives/zombie-body-courier.json",
-      "bytes": 37865,
-      "sha256": "4f74e5193da56387ce1d846c96b9d177339d2f3578d1ab999ea342734cffe4ae"
+      "bytes": 45394,
+      "sha256": "15f5f0571a70f51f9eab5c82dfb0310e95dc14910592e5ddadd840e1735435df"
     },
     {
       "path": "assets/derivatives/zombie-body-heavyset.json",
-      "bytes": 41653,
-      "sha256": "0f0277901e05099c608259872abbc3dc4e37a403a8f41a4cdc418b88dcd3b71a"
+      "bytes": 45445,
+      "sha256": "2dcbeb02e5b22eace9edd1bcfd3d5e856a824e2be8c6db7624507b40960e3e3b"
     },
     {
       "path": "assets/derivatives/zombie-body-lastshift.json",
-      "bytes": 37866,
-      "sha256": "8bd4956eb7542842093c54660607bea2163f077485bceeb95f7fa4ac8a8593d4"
+      "bytes": 43298,
+      "sha256": "7909f53bddf2c39585d9cfe6d797afc8e380ad766d20811949497d91a19620c7"
     },
     {
       "path": "assets/derivatives/zombie-body-scavenger.json",
-      "bytes": 28273,
-      "sha256": "45778f0bf0eb2333d9d34c61866cd800f86ddfe3b5cb96427233d2e9d5573cbd"
+      "bytes": 39933,
+      "sha256": "e96095716a623afb678b045696e9e61d2585bef776660965416a74d2fcb314d6"
     },
     {
       "path": "assets/derivatives/zombie-body-tall.json",
-      "bytes": 39641,
-      "sha256": "a335a71bed9cd7c723b3a3974be7f0401a6f9dac4be6f54e1b4a4d4aa214a3c5"
+      "bytes": 44404,
+      "sha256": "a49628ea440b68f6325a70058eded2ba6a3073bee8d04449b680a6b58e6b424d"
     },
     {
       "path": "assets/derivatives/zombie-rigged.json",
@@ -1525,38 +1545,38 @@
     },
     {
       "path": "assets/derivatives/zombie-wardrobe-fit-audit.json",
-      "bytes": 89031,
-      "sha256": "bb5cd5dab4515f1b7af47310cf3f5df04e2470e4d9b2d8dfe19839549cd12d68"
+      "bytes": 128746,
+      "sha256": "387b09852aa0d468a7069779ca7ddbf03c5c46d0b57eac5ec414ba7f474f4335"
     },
     {
       "path": "assets/derivatives/zombie-wardrobe.json",
-      "bytes": 114800,
-      "sha256": "aff8e1efd21acda4c281bdf6b11ae316d9cd55ce491249f7e7e5a74f4385fd06"
+      "bytes": 106589,
+      "sha256": "e9ca0d440576c98bd9d63cd6a2889c752dd018ad6ab3d98f405afb0d5277d7b6"
     },
     {
-      "path": "assets/models/bench.glb",
-      "bytes": 950388,
-      "sha256": "73ab8140411735e6f1d0997f9871970585f246306a65911b32dd28c065feacce"
+      "path": "assets/models/bench-t25.glb",
+      "bytes": 623608,
+      "sha256": "caad790696f9342d806753f0b8fb578ed50c032a481ee90f1d309b1c82054890"
     },
     {
-      "path": "assets/models/cabinet-low.glb",
-      "bytes": 906984,
-      "sha256": "d84562f0394d8825d3361439a82e1ec9c0d8d8cafde2b8d64031ba27a5e8389f"
+      "path": "assets/models/cabinet-low-t25.glb",
+      "bytes": 649644,
+      "sha256": "eb44d31c62ccdf4b15417efa9b174a2f3805101f45a2056e8e589f5a2c2566fc"
     },
     {
-      "path": "assets/models/cabinet-tall.glb",
-      "bytes": 890300,
-      "sha256": "5696abfd7f21ba775dc6b3309751eaaa0be1647f7112f093946c06be08461c13"
+      "path": "assets/models/cabinet-tall-t25.glb",
+      "bytes": 445096,
+      "sha256": "a56799dca9c02d32ac07b08a2b9f0ae35aeb25f3b7fde1a034637ee727bd83f8"
     },
     {
-      "path": "assets/models/crate.glb",
-      "bytes": 798944,
-      "sha256": "cf560533199edf4af2cb7321ab081d7c4d08d39fe532d5162d15df7186725f08"
+      "path": "assets/models/crate-t25.glb",
+      "bytes": 516288,
+      "sha256": "007bba3ddf3df5ef95fba6d91acf95d92cb07a250f2780bc185edaac0cdaf853"
     },
     {
-      "path": "assets/models/creature-ratdog.glb",
-      "bytes": 1238220,
-      "sha256": "7bf1649d02762365e2849de9690f32afdf91e152517384c88c94270fd78809d9"
+      "path": "assets/models/creature-ratdog-t25.glb",
+      "bytes": 893544,
+      "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad"
     },
     {
       "path": "assets/models/gun-locker.glb",
@@ -1569,44 +1589,44 @@
       "sha256": "e50ba14b293e4f6b64399d807276422e4c19f72b0112e903ecd7d0a652d9e8b9"
     },
     {
-      "path": "assets/models/item-beans.glb",
-      "bytes": 144744,
-      "sha256": "898e388bce1fbb57478d0e97a714cb1f5171a9237ebbb9f93aa8553289ae97c4"
+      "path": "assets/models/item-beans-t25.glb",
+      "bytes": 185200,
+      "sha256": "b2f381479c81bdbf73b21a33757fbbd7284b36707a456da9f5a7c5f4f7ff6bf8"
     },
     {
-      "path": "assets/models/item-chips.glb",
-      "bytes": 212724,
-      "sha256": "819e152e0376fd901992e74aeb17813d1f276da7ec7c5b51fd181cc84cf8be7d"
+      "path": "assets/models/item-chips-t25.glb",
+      "bytes": 170828,
+      "sha256": "5d99643b1f78411dfc4220684950fe176cc0e8a8de753378889df99ffa63e3a3"
     },
     {
-      "path": "assets/models/item-chocolate.glb",
-      "bytes": 119504,
-      "sha256": "6b6ed2e70b3bbf81698c4dbc6cf189f8486d3b6d1a6c47626b2f414e65c8dfab"
+      "path": "assets/models/item-chocolate-t25.glb",
+      "bytes": 176040,
+      "sha256": "3579b5974af6b18d967354f38d8fa8b5c2ac6ba9ad3636ea25dd013bd79985f7"
     },
     {
-      "path": "assets/models/item-cola.glb",
-      "bytes": 137772,
-      "sha256": "76294dfa01e6a6e88868c4639fdf9487f757524e4f736499fb1927d63a9fef86"
+      "path": "assets/models/item-cola-t25.glb",
+      "bytes": 175860,
+      "sha256": "2fc26018fdcf5cf00b1db10568203505284377c4f450fd33ff7a79619c09812b"
     },
     {
-      "path": "assets/models/item-juice.glb",
-      "bytes": 141516,
-      "sha256": "0e1405ffc876defa53ff4a0c629a1f908bd4edf1593b32c6f6717b56fa7cfc05"
+      "path": "assets/models/item-juice-t25.glb",
+      "bytes": 172544,
+      "sha256": "27d6929170334aa3a1f2c79212d544fc3aa13febd15a482e35e014bff77a7d2b"
     },
     {
-      "path": "assets/models/item-noodles.glb",
-      "bytes": 159108,
-      "sha256": "c866a07382bde8ca1dde8c260d05ea587a5b885d2f1a4ea1abe452e0517b95a4"
+      "path": "assets/models/item-noodles-t25.glb",
+      "bytes": 183564,
+      "sha256": "5273677a6ae27abd59a31a69a3e2dedfeed6675fde4e083b91789481c14cf299"
     },
     {
-      "path": "assets/models/item-water.glb",
-      "bytes": 203912,
-      "sha256": "0d8189558b9341657e313c4bc6c0d7264dac59235538319013740f3b5f0f1e56"
+      "path": "assets/models/item-water-t25.glb",
+      "bytes": 149472,
+      "sha256": "0ff5c8a3a557bc35d6f2c8e6f550df0f4b4f7d869e01c528937dec76f51d31b2"
     },
     {
-      "path": "assets/models/janitor-cart.glb",
-      "bytes": 878568,
-      "sha256": "8757d1557df62f6e1a1c48fbc25791bba5f70b49035c1e2eec8de866b08230a2"
+      "path": "assets/models/janitor-cart-t25.glb",
+      "bytes": 648192,
+      "sha256": "4d0cb91a273dc453260c33eda63c0c9fc13e2bae3635207d293ad0c2b8ea38c5"
     },
     {
       "path": "assets/models/light-lod.glb",
@@ -1614,9 +1634,9 @@
       "sha256": "1bf7cd4e5c359d9494a853548c8df53fb3375b78be3fc64446f40e15e064336f"
     },
     {
-      "path": "assets/models/light-lod2.glb",
-      "bytes": 538696,
-      "sha256": "fe57c42989f9b533d52ec49f7261e964c5fc8eaf69d35e1630701442e94cc4f7"
+      "path": "assets/models/light-lod2-t25.glb",
+      "bytes": 348808,
+      "sha256": "a3bafa8094cee5a07da0a90a3a3ee1245e29ad4569797f065ea1c567ce441fdf"
     },
     {
       "path": "assets/models/light.glb",
@@ -1754,59 +1774,59 @@
       "sha256": "e6fc2f6bac5e59a78aff09992490453ffbf09276b5cf6f662301b18579864c36"
     },
     {
-      "path": "assets/models/outfit-beanie.glb",
-      "bytes": 296552,
-      "sha256": "3b6fcd71b09edaa0c23c74e9498bfbdec13c37acde2c94014a56fdc64e94e21a"
+      "path": "assets/models/outfit-beanie-t25.glb",
+      "bytes": 262260,
+      "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6"
     },
     {
-      "path": "assets/models/outfit-blazer.glb",
-      "bytes": 730644,
-      "sha256": "972a3f48a8ffae01c76f547ed8d8eb1123bb7836bb198b63150336b91afa44bd"
+      "path": "assets/models/outfit-blazer-t25.glb",
+      "bytes": 776288,
+      "sha256": "8a25514379680f4a2b8aa2940253f996c1b99f35bef253c7573a0197b0937b24"
     },
     {
-      "path": "assets/models/outfit-cap.glb",
-      "bytes": 341468,
-      "sha256": "4fdb02fccf121e22fadfa81cef6754d46d6d91d16f12f59295744ed848e3ddb7"
+      "path": "assets/models/outfit-cap-t25.glb",
+      "bytes": 250812,
+      "sha256": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d"
     },
     {
-      "path": "assets/models/outfit-cargo.glb",
-      "bytes": 612752,
-      "sha256": "68851c3eed45291936121d6770e37538c1ff1fe9989ecd9185d7b614878d2d06"
+      "path": "assets/models/outfit-cargo-t25.glb",
+      "bytes": 760232,
+      "sha256": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788"
     },
     {
-      "path": "assets/models/outfit-coat.glb",
-      "bytes": 821396,
-      "sha256": "e8a6462714d12a3d1c278d400b3d31760b83b3743571955ba67f6964743f88ed"
+      "path": "assets/models/outfit-coat-t25.glb",
+      "bytes": 1044436,
+      "sha256": "0f8dd368762e5f7e8bda487e4113451731b8e06a6f1dff7da0f1c8401104c34c"
     },
     {
-      "path": "assets/models/outfit-flannel.glb",
-      "bytes": 428204,
-      "sha256": "0303a2698c8b530d8f6f81c407ad359f5ab29514938f012973afc26c67082b23"
+      "path": "assets/models/outfit-flannel-t25.glb",
+      "bytes": 622104,
+      "sha256": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3"
     },
     {
-      "path": "assets/models/outfit-gasmask.glb",
-      "bytes": 490108,
-      "sha256": "48039927321ed55df776fa04ee456f138cfe697ba77b170cd3957f1c8a6bc2b4"
+      "path": "assets/models/outfit-gasmask-t25.glb",
+      "bytes": 423752,
+      "sha256": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed"
     },
     {
-      "path": "assets/models/outfit-hardhat.glb",
-      "bytes": 349096,
-      "sha256": "c94ed2035aa144330e5307b4bb00db6ef5b5d6ae16f3953c0f3040679e5ad640"
+      "path": "assets/models/outfit-hardhat-t25.glb",
+      "bytes": 273028,
+      "sha256": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a"
     },
     {
-      "path": "assets/models/outfit-hivis.glb",
-      "bytes": 418748,
-      "sha256": "4762bd2048f2bbea45932dd025f661d8984e55abc3ccb7a5b79f3d575875eaf0"
+      "path": "assets/models/outfit-hivis-t25.glb",
+      "bytes": 788048,
+      "sha256": "1208db45cf9fc9ecaf86687799578358fefa3f0cb3341e2862eb5c7385a518d7"
     },
     {
-      "path": "assets/models/outfit-hoodie.glb",
-      "bytes": 823720,
-      "sha256": "5364d68aaeabec4dfd4fa8a2dfc4636f5bb63fc574de35efad2c7c3330e55988"
+      "path": "assets/models/outfit-hoodie-t25.glb",
+      "bytes": 822928,
+      "sha256": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b"
     },
     {
-      "path": "assets/models/outfit-jeans.glb",
-      "bytes": 583696,
-      "sha256": "1563d11941520228862247e7acc2e08533d6bfea6cb77237bbb4fc0ba9292e35"
+      "path": "assets/models/outfit-jeans-t25.glb",
+      "bytes": 766276,
+      "sha256": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401"
     },
     {
       "path": "assets/models/outfit-puffer.glb",
@@ -1814,524 +1834,524 @@
       "sha256": "3902e0e2dcc5993e6151abbfbf222e6c3bc0df99d31ead7070ad0595d3e35049"
     },
     {
-      "path": "assets/models/outfit-respirator.glb",
-      "bytes": 392876,
-      "sha256": "12b7b25a197f555be624c754836fa3b29c85cb8d8d3a9f96620dfc083390577e"
+      "path": "assets/models/outfit-respirator-t25.glb",
+      "bytes": 351120,
+      "sha256": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687"
     },
     {
-      "path": "assets/models/outfit-slacks.glb",
-      "bytes": 490088,
-      "sha256": "54bc4ad60d795ba9cb473fa0dda4517e7d8b9d2eb4c5ff9169a1b7923635101e"
+      "path": "assets/models/outfit-slacks-t25.glb",
+      "bytes": 687316,
+      "sha256": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096"
     },
     {
-      "path": "assets/models/outfit-sweater.glb",
-      "bytes": 594220,
-      "sha256": "543b57efeedc53007cc3a9b821d77630594cbc4119fbeb38d46ce53f3560fb45"
+      "path": "assets/models/outfit-sweater-t25.glb",
+      "bytes": 518580,
+      "sha256": "7c597f531fd3dbabcb2b70e9f922eb6baebbead57abfcf1398cbadb339f66760"
     },
     {
-      "path": "assets/models/outfit-trench.glb",
-      "bytes": 761772,
-      "sha256": "87904fb00ee3370d76a4fd5ee552a3f7314101d044b1e1d178c15a3c07a6d601"
+      "path": "assets/models/outfit-trench-t25.glb",
+      "bytes": 698072,
+      "sha256": "2a280c631f4eabd0f6d59873013511f623577d6cb20a438037b95ff5bde42959"
     },
     {
-      "path": "assets/models/p7-aed-wall-cabinet.glb",
-      "bytes": 313580,
-      "sha256": "5422153c643b7fc2a0750a27338db1c8c508679b3a60654b03fa1de26748609b"
+      "path": "assets/models/p7-aed-wall-cabinet-t25.glb",
+      "bytes": 149820,
+      "sha256": "d6ec82d36246c2ae039db0aa429284f33e1dcc79ed597df834ced1e78eee2b94"
     },
     {
-      "path": "assets/models/p7-air-compressor.glb",
-      "bytes": 508356,
-      "sha256": "9519b1683c86194e440ef988744dedb7c65c9a0b60dc4780ef5cb4aab8f7e054"
+      "path": "assets/models/p7-air-compressor-t25.glb",
+      "bytes": 350784,
+      "sha256": "5262f803b619a9b57aa5cda5b2c284c9759531b6d0420c70e7a1a2f03ff2f942"
     },
     {
-      "path": "assets/models/p7-atm-kiosk.glb",
-      "bytes": 507180,
-      "sha256": "b403613703a327caff55ebaccc907d3e00775331998ba08062bc2443c7617883"
+      "path": "assets/models/p7-atm-kiosk-t25.glb",
+      "bytes": 404956,
+      "sha256": "58ae413c6db9ef86dd89a439867f4fb4c7a4cdd150e6aa65f47455a5cfdc6ba8"
     },
     {
-      "path": "assets/models/p7-baby-stroller.glb",
-      "bytes": 549120,
-      "sha256": "f0c3775deb7b6e1dad00bc2915b7cc696bd664cd6fdd5c6ee9f9187239e1f1ba"
+      "path": "assets/models/p7-baby-stroller-t25.glb",
+      "bytes": 335904,
+      "sha256": "4eafe7d9c2ed92918464a5c2349404ad08c9c428b812389ef9f82c3b58963f70"
     },
     {
-      "path": "assets/models/p7-basket-stack.glb",
-      "bytes": 549628,
-      "sha256": "3475c1199d71bf025d5a154654115fbd77e3783f819292b6d3e2e4f402cf2a95"
+      "path": "assets/models/p7-basket-stack-t25.glb",
+      "bytes": 304516,
+      "sha256": "f2862a883f0341aa9b05aa9014a6814e7836a807afd1df471f11bfc151b51ee2"
     },
     {
-      "path": "assets/models/p7-bench-grinder-stand.glb",
-      "bytes": 522572,
-      "sha256": "2538f3d2df76ad6323e88ad0fbc8c67333beae39284efc659e5f1bfea577c7d6"
+      "path": "assets/models/p7-bench-grinder-stand-t25.glb",
+      "bytes": 316364,
+      "sha256": "82e1cb38bdd15ac3332f1ffe9e469f057f5fb9d069ca80a781c672a584d5ce8c"
     },
     {
-      "path": "assets/models/p7-bicycle.glb",
-      "bytes": 786224,
-      "sha256": "995684d565e52c8be99e4e759b7bb1da977141dd8bdceaf162d6f441c045bff2"
+      "path": "assets/models/p7-bicycle-t25.glb",
+      "bytes": 526364,
+      "sha256": "039fa079600ce94acdad4d99987be95cdc298874c847fd08af7aba0ebef9c883"
     },
     {
-      "path": "assets/models/p7-blood-pressure-kiosk.glb",
-      "bytes": 569724,
-      "sha256": "a9e3aca57a6765c01c79c4d01481f99edf1b69b7d953056a12012462eb99f997"
+      "path": "assets/models/p7-blood-pressure-kiosk-t25.glb",
+      "bytes": 408964,
+      "sha256": "32da08465a44baf9b93646ebe77823548cd6a7c212b0b5eb7ef8a74ca915f042"
     },
     {
-      "path": "assets/models/p7-bus-cart.glb",
-      "bytes": 521576,
-      "sha256": "a3c9e0f8341e07b4d77e068485284381866f018d4af0ff79b552c3404f6685c9"
+      "path": "assets/models/p7-bus-cart-t25.glb",
+      "bytes": 302784,
+      "sha256": "53ebfc66d5abdbd9ac3d5de56a014020b68bc42df2976f6a2004645ddfbbb122"
     },
     {
-      "path": "assets/models/p7-capsule-toy-machine.glb",
-      "bytes": 538456,
-      "sha256": "de882487451609e053423d53fd725afb8cab30dddf267cec181cce29c9cc3b7c"
+      "path": "assets/models/p7-capsule-toy-machine-t25.glb",
+      "bytes": 338308,
+      "sha256": "a5ebaf9b16fb17a4354913afbf498fa3a36a4eec22bacd22759513be923172ec"
     },
     {
-      "path": "assets/models/p7-cash-register.glb",
-      "bytes": 303776,
-      "sha256": "229fc201284b3ceeb6753f297bf8ac37d66a0c2c5c422c514565af3f4b062a58"
+      "path": "assets/models/p7-cash-register-t25.glb",
+      "bytes": 186268,
+      "sha256": "32f27d67e643925188534269b49dfe0bb477ab1f9ee513f3a7383b1fb09fd5aa"
     },
     {
-      "path": "assets/models/p7-cctv-camera.glb",
-      "bytes": 310028,
-      "sha256": "9b7462593773b91382170dd1b4f7730255ce88d360b201bef62e35e89494ce16"
+      "path": "assets/models/p7-cctv-camera-t25.glb",
+      "bytes": 150908,
+      "sha256": "34c6699fed76b371548c237cc890101a1f09ff6db5b75f5d93056b91a833614c"
     },
     {
-      "path": "assets/models/p7-chest-freezer.glb",
-      "bytes": 554648,
-      "sha256": "95c942871274bcfaf1d28f2e1a45b230659bd93b6f88b64ffa4807b79506fbb7"
+      "path": "assets/models/p7-chest-freezer-t25.glb",
+      "bytes": 328992,
+      "sha256": "3a09a61a2bac7be5fa347c7049c2965d714d8f310765145a847b7381dc3de4dc"
     },
     {
-      "path": "assets/models/p7-coat-rack.glb",
-      "bytes": 631312,
-      "sha256": "3527e1481996ef784f4c42afb67554f791e42d4238226457c9960658c03da0b6"
+      "path": "assets/models/p7-coat-rack-t25.glb",
+      "bytes": 471284,
+      "sha256": "4d08e3f0e3a141050ffa742d8c18a4b5d1f5b2c7c752682ab8235ca2261d4da8"
     },
     {
-      "path": "assets/models/p7-coin-counter.glb",
-      "bytes": 312700,
-      "sha256": "39635cc3bfadaf9e0d3d7962f53c1c38bc9ee98b42deed51aaadd26e3639d3f5"
+      "path": "assets/models/p7-coin-counter-t25.glb",
+      "bytes": 111580,
+      "sha256": "5616ae8b97f5f1b971e94057473296856d2acf298fde3f8baf32034b41d67554"
     },
     {
-      "path": "assets/models/p7-condiment-station.glb",
-      "bytes": 275080,
-      "sha256": "e6838ba374947ee863e563f273bb3f3367f16158ae544126ee6a1051a4381408"
+      "path": "assets/models/p7-condiment-station-t25.glb",
+      "bytes": 225988,
+      "sha256": "1c689cf780dfe6129fb256f9299b341b7f573d504c8a1abec3a63445983bb728"
     },
     {
-      "path": "assets/models/p7-conveyor-toaster.glb",
-      "bytes": 528528,
-      "sha256": "e8dc39db5b5cb7f21807a40b342e74b79e115c47fccf9641056a495d09ba80d4"
+      "path": "assets/models/p7-conveyor-toaster-t25.glb",
+      "bytes": 281156,
+      "sha256": "ef8cc2d39c3d2c2c8121ea73ebc1baa2a927c588237c07d647eebe3650d5ce6d"
     },
     {
-      "path": "assets/models/p7-crash-cart.glb",
-      "bytes": 514308,
-      "sha256": "1e8aa28e02b21d01c7dfef1254911af14cc78ee0c5f79729ba711a854fbb509e"
+      "path": "assets/models/p7-crash-cart-t25.glb",
+      "bytes": 358080,
+      "sha256": "cc364efe0ac605abfff138a2031de7b2b5d2aa9d771be876dc8fea93b10923d9"
     },
     {
-      "path": "assets/models/p7-crowd-barrier.glb",
-      "bytes": 607324,
-      "sha256": "5848f78d381389bf96082b9052e49668c8bdabd4d759878193e5ac24992e6a2e"
+      "path": "assets/models/p7-crowd-barrier-t25.glb",
+      "bytes": 459152,
+      "sha256": "e78837694d74fc33971d8b31ddd847ba33d0eff9820cbb0356f5bd02bcd7619e"
     },
     {
-      "path": "assets/models/p7-crt-terminal.glb",
-      "bytes": 503664,
-      "sha256": "b4f868bd2bbf3eb50fe243d39700c65d70ddae5b79d88a694f210c2570c456a3"
+      "path": "assets/models/p7-crt-terminal-t25.glb",
+      "bytes": 323240,
+      "sha256": "06a923e922deac666443008c1f19273277a9dc097ca0c26a810727fbf31c63cb"
     },
     {
-      "path": "assets/models/p7-crt-tv-cart.glb",
-      "bytes": 468060,
-      "sha256": "a270a89adf21d579b1c06790f7f40ba09c6eb322e1e85bc7aa178eb637e7dda5"
+      "path": "assets/models/p7-crt-tv-cart-t25.glb",
+      "bytes": 305668,
+      "sha256": "bd92423a71f54ac6f6559d37926096cc2077970da3152b19b7c56de8e12590a2"
     },
     {
-      "path": "assets/models/p7-deep-fryer.glb",
-      "bytes": 490392,
-      "sha256": "4a9ada7b0b65349cc6909089237e2a5d99f79329ccca3c8c7cf22518482bb291"
+      "path": "assets/models/p7-deep-fryer-t25.glb",
+      "bytes": 330620,
+      "sha256": "87ac5100d45bd6b02388e0d8c451f2f80bbf4f3ed5281c0b0fb640c3b30fec97"
     },
     {
-      "path": "assets/models/p7-disconnect-switch.glb",
-      "bytes": 307740,
-      "sha256": "c2daa8cc00640043bd4ea3e5c55af1e3844ada2fa8378dce899f8bab4f1cee6e"
+      "path": "assets/models/p7-disconnect-switch-t25.glb",
+      "bytes": 160456,
+      "sha256": "0a3654a255d9b48a205e958b96abf4c25443649538531450fb96550e11755beb"
     },
     {
-      "path": "assets/models/p7-drip-coffee-maker.glb",
-      "bytes": 328496,
-      "sha256": "4dd9c9e28978d21ac071e5a2e9d0634ad3050fee1c5a55837118749005fafebd"
+      "path": "assets/models/p7-drip-coffee-maker-t25.glb",
+      "bytes": 144348,
+      "sha256": "ba1c5f5875be23cff8895dac4ae3de78f81107be42d33223afb30ad23f9bbb3c"
     },
     {
-      "path": "assets/models/p7-drum-fan.glb",
-      "bytes": 483264,
-      "sha256": "6293dc18f8a06dd37e6e7cdcb5595a10fc9361927f8c870e38689e81bc3e6fa3"
+      "path": "assets/models/p7-drum-fan-t25.glb",
+      "bytes": 320620,
+      "sha256": "ea31f5599f7c1b49d1bf790224b8ad5ca18f29f06f939049abc2b42e9ea8c3f0"
     },
     {
-      "path": "assets/models/p7-dry-transformer.glb",
-      "bytes": 704052,
-      "sha256": "78cec058fb5e18eddb2ecf589a56ff0047192bf19fec23421e81dae1088cfd0a"
+      "path": "assets/models/p7-dry-transformer-t25.glb",
+      "bytes": 427448,
+      "sha256": "1d8868e6d4e5166afcb57a2f428edf9e866c63d92c253d92e30007dcf1ac325a"
     },
     {
-      "path": "assets/models/p7-emergency-call-point.glb",
-      "bytes": 384936,
-      "sha256": "3fe253a9f4b796ff7f9ded8a88c7be4ee239ed550eb0b4362e1d4fd9e1bfae80"
+      "path": "assets/models/p7-emergency-call-point-t25.glb",
+      "bytes": 277500,
+      "sha256": "ddea31670726b20efe9fd347fab7efe6d92f8ce1b14c9c0141740bd2e83b3ed6"
     },
     {
-      "path": "assets/models/p7-espresso-grinder.glb",
-      "bytes": 323456,
-      "sha256": "64e9597e99b5176e107f90448bc9816c8403e913127e172b54e99fe8e00096ad"
+      "path": "assets/models/p7-espresso-grinder-t25.glb",
+      "bytes": 169900,
+      "sha256": "070d337c18cd775e17ccafea9b2839c9094518e3018a9f1218d0a69188fabf0a"
     },
     {
-      "path": "assets/models/p7-eyewash-station.glb",
-      "bytes": 489732,
-      "sha256": "46cb215aeb9705d10c9341abefed44f8d5ce2a1b4ff91f91cc5402aad22fd3cf"
+      "path": "assets/models/p7-eyewash-station-t25.glb",
+      "bytes": 303308,
+      "sha256": "0952cc4ad8853dc69bef7dd59b44161b75c4889e26057141e0d1e13e45371b1a"
     },
     {
-      "path": "assets/models/p7-fare-validator-stand.glb",
-      "bytes": 286524,
-      "sha256": "6cbfdd53bbb8f45caef34d9948d732920dc2c5661c3397eaa96f9baed7c451ee"
+      "path": "assets/models/p7-fare-validator-stand-t25.glb",
+      "bytes": 291684,
+      "sha256": "4e54182238eb37303d9667542fcab410eccf2faa5f99e000f8f5a0ac2a993b78"
     },
     {
-      "path": "assets/models/p7-fare-vault-cart.glb",
-      "bytes": 529236,
-      "sha256": "6a177dbc06a12c8a605390b23f2b22689d41e61c85787a25fc7cbdd1b762becf"
+      "path": "assets/models/p7-fare-vault-cart-t25.glb",
+      "bytes": 305516,
+      "sha256": "710ce33d28c9023fa4da622810c372811556454399c96f7fa40f3ea33cd4d63e"
     },
     {
-      "path": "assets/models/p7-field-phone-box.glb",
-      "bytes": 293584,
-      "sha256": "d9a0658a53f711f8831873aeba1ec15d6e879907bace2f8708119844df6df14e"
+      "path": "assets/models/p7-field-phone-box-t25.glb",
+      "bytes": 160944,
+      "sha256": "6e359f34acbd2bebc0dfd73a24ba9ad4131528f392c7324f24aa75078371e46f"
     },
     {
-      "path": "assets/models/p7-filing-cabinet.glb",
-      "bytes": 393000,
-      "sha256": "49b34abd726bbcc9d9de6a03bb75e5b4e04510a1893d0841a6d7c9f58775a91d"
+      "path": "assets/models/p7-filing-cabinet-t25.glb",
+      "bytes": 341728,
+      "sha256": "4819eaf9e2b9c7d8eef6ce22be62476138e528c6fe035b28037ef7c551359d66"
     },
     {
-      "path": "assets/models/p7-fire-extinguisher-cabinet.glb",
-      "bytes": 515040,
-      "sha256": "e819c60d8a3e02f3277cc329df42e171fc4ed02e26e4c663b32480d1e1a9dbbc"
+      "path": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
+      "bytes": 402332,
+      "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa"
     },
     {
-      "path": "assets/models/p7-fire-extinguisher.glb",
-      "bytes": 262880,
-      "sha256": "dffba64c361ee0c71c2119cbb64785a9d74705eaaaa9ccc58a9ca8f8b2655716"
+      "path": "assets/models/p7-fire-extinguisher-t25.glb",
+      "bytes": 164736,
+      "sha256": "1a342b200fde996502ddff20490ed81470f13a6490b2f81c6341e6e5e34a3208"
     },
     {
-      "path": "assets/models/p7-fire-hose-reel-cabinet.glb",
-      "bytes": 470312,
-      "sha256": "63f45aa93187cd7b76c0aa12ef2eefd870d0249aab1e27192392987b6637f31d"
+      "path": "assets/models/p7-fire-hose-reel-cabinet-t25.glb",
+      "bytes": 312280,
+      "sha256": "8dcaaffe6bce28d364884aeb85e9821a243b730d84867f2510b18feaf3a4fbbe"
     },
     {
-      "path": "assets/models/p7-first-aid-wall-kit.glb",
-      "bytes": 263384,
-      "sha256": "5c657ce15662860ef1b6c8cd29cb3fe73aacf7cde26df845a22aba3a3c6b2df2"
+      "path": "assets/models/p7-first-aid-wall-kit-t25.glb",
+      "bytes": 175868,
+      "sha256": "f8f17d43ea4c28fd8ee0afb571084e7efe5fe54ac70c8dda772e1c81bf20a2dd"
     },
     {
-      "path": "assets/models/p7-floor-buffer.glb",
-      "bytes": 453484,
-      "sha256": "24a582477aaba048c2d4a915e45f12813b0bf7f6717a46a1cc3cd995a6b98afa"
+      "path": "assets/models/p7-floor-buffer-t25.glb",
+      "bytes": 374900,
+      "sha256": "344c09c82328b9389072b5ab4d4ff9292e6419794745ea87b3ed6543b9c57bd7"
     },
     {
-      "path": "assets/models/p7-floor-scrubber.glb",
-      "bytes": 687760,
-      "sha256": "c37354fb1e1d0a81fa5f06291f5a5bb5f49121c26fe54887e4b41d56d71ef5bc"
+      "path": "assets/models/p7-floor-scrubber-t25.glb",
+      "bytes": 422024,
+      "sha256": "f4086ef009321810bf64a4def737e07bcb461fe6aa426b7ef07949fc0f9f5082"
     },
     {
-      "path": "assets/models/p7-folding-barricade.glb",
-      "bytes": 661332,
-      "sha256": "d94fce0eaec991cd49a708492219295aec3e8c0e1eb631925dfa255631c6e787"
+      "path": "assets/models/p7-folding-barricade-t25.glb",
+      "bytes": 546664,
+      "sha256": "4878b9e6bff0a6a9e059887d0b2f93bb789ea5c05a6178ed9e44a8bfec43eea4"
     },
     {
-      "path": "assets/models/p7-folding-chair.glb",
-      "bytes": 364204,
-      "sha256": "e6099013eaa6f596c3a69a4ce18fb2f65ca96316955ee750f67a6b63d6ae56e3"
+      "path": "assets/models/p7-folding-chair-t25.glb",
+      "bytes": 303992,
+      "sha256": "58e4d38a3f5900e937a07d495a2285acdd95defeac37a13a7a54248bfc74780a"
     },
     {
-      "path": "assets/models/p7-gas-cylinder-cart.glb",
-      "bytes": 459624,
-      "sha256": "11178258acb6b86f6d3be3c3af11849e741c7bb65f308fe5ecf0afd2eb6fc943"
+      "path": "assets/models/p7-gas-cylinder-cart-t25.glb",
+      "bytes": 370356,
+      "sha256": "3b9cab162bedf823c4a62182a2679064d2bd1f9d28b8e5deb2ca7e20f5bc8f30"
     },
     {
-      "path": "assets/models/p7-hand-dryer.glb",
-      "bytes": 227356,
-      "sha256": "c0a9f2f5487fe849038d0c4e81c9acdec17af94474e5493a7d884ddc69ba7e9e"
+      "path": "assets/models/p7-hand-dryer-t25.glb",
+      "bytes": 192272,
+      "sha256": "a38fde694aa6a2dcb2c317ba3d4865cdd0b09b4f70d6a7a6e4476189728bf93d"
     },
     {
-      "path": "assets/models/p7-hand-toolbox.glb",
-      "bytes": 320716,
-      "sha256": "c3360fc52441af7db0fa415deca04917ea942e926e9bf2df5d672013566d95f5"
+      "path": "assets/models/p7-hand-toolbox-t25.glb",
+      "bytes": 216824,
+      "sha256": "aa0bb0f6114b75a273ea416c442244dcee6ae439f0928ecd180669f1625b2daf"
     },
     {
-      "path": "assets/models/p7-hand-truck.glb",
-      "bytes": 398108,
-      "sha256": "f489ec102432cf6a69d34eeb9d3e00161b0152066308ad2450aabdd79f58284a"
+      "path": "assets/models/p7-hand-truck-t25.glb",
+      "bytes": 296240,
+      "sha256": "0af42f234fb10701aed95c0326453631f1ccfbc9e3b77ea9e02b8cd3022b7abd"
     },
     {
-      "path": "assets/models/p7-hot-dog-roller.glb",
-      "bytes": 491608,
-      "sha256": "0469087cf141e2416a9efe4d17be8132dde0cbf90102eaefa1d49495cf98e8fa"
+      "path": "assets/models/p7-hot-dog-roller-t25.glb",
+      "bytes": 310448,
+      "sha256": "20d7600ff8a57c1e1b3e5a01571df5575b7e55fb198235884ac741a0892fad1b"
     },
     {
-      "path": "assets/models/p7-ice-machine.glb",
-      "bytes": 704416,
-      "sha256": "2b2d25d6a861e7b39414a6ab76250952aa8ad646b2f51c9eacb6244289bcd553"
+      "path": "assets/models/p7-ice-machine-t25.glb",
+      "bytes": 509180,
+      "sha256": "e8b5b0e4175cdf61847b72952d753dea43a48e890b122542f9b7ffeba2aff38f"
     },
     {
-      "path": "assets/models/p7-info-touch-kiosk.glb",
-      "bytes": 464280,
-      "sha256": "6ef9359feae7bc2dda8cc5339b3a2e7b2f6a43db5de20db44c5638c661ba0a36"
+      "path": "assets/models/p7-info-touch-kiosk-t25.glb",
+      "bytes": 494744,
+      "sha256": "2d4cd18c6eb13d7bdf1a64c6ef659a9134a11a6a6ff2f887cb88db6168894fc4"
     },
     {
-      "path": "assets/models/p7-ingredient-bin.glb",
-      "bytes": 494020,
-      "sha256": "6e2020f0f9a27c3eda45833d96d6a398b0887d36b6e229ab1341a590b802f1a3"
+      "path": "assets/models/p7-ingredient-bin-t25.glb",
+      "bytes": 347864,
+      "sha256": "31db031bed0d647ad85950661f5a8a64005a04f2a5f7e2933af8b13310d4d04d"
     },
     {
-      "path": "assets/models/p7-iv-pole.glb",
-      "bytes": 569044,
-      "sha256": "2fb9de417f389c608c282077559cb50726ec78faf4521a31547ca1be114b857c"
+      "path": "assets/models/p7-iv-pole-t25.glb",
+      "bytes": 481800,
+      "sha256": "d9e4826ffa98bfd901e85367ab54f61d95a49da2a76a5f66bbb7250905a90f8e"
     },
     {
-      "path": "assets/models/p7-key-cabinet.glb",
-      "bytes": 290800,
-      "sha256": "8e307a70b9e2698b16f1df09f2c4f012870667b88eacd0230c774f6f3748ee6e"
+      "path": "assets/models/p7-key-cabinet-t25.glb",
+      "bytes": 161984,
+      "sha256": "ab6681c26611fccf81560e33c167fe202f5cd059041695abac13d920c0f50e60"
     },
     {
-      "path": "assets/models/p7-key-cutting-machine.glb",
-      "bytes": 274320,
-      "sha256": "12d52ed9716e91b42bb5b23a621047c4de003febfcc495a1e8e19882f4f29ff6"
+      "path": "assets/models/p7-key-cutting-machine-t25.glb",
+      "bytes": 161424,
+      "sha256": "f521c37d8a288a8cded446e60c54a71dabcc7d67834a6228b67c6f930013b3fe"
     },
     {
-      "path": "assets/models/p7-meat-slicer.glb",
-      "bytes": 539860,
-      "sha256": "0bffc36c004fbdc82d5beeeaf829a6503133f2646595c8d92c3715c0c3eebb0e"
+      "path": "assets/models/p7-meat-slicer-t25.glb",
+      "bytes": 338992,
+      "sha256": "04ad5002513fbb7f8543d87adab859a8f25f9a31162cec370e2e0d19cb305e3c"
     },
     {
-      "path": "assets/models/p7-microwave-oven.glb",
-      "bytes": 261780,
-      "sha256": "9dd1fc299f2aa897eeeba34d11b196f78d53ad80c5ef3bfbc5ab725ce92ad8a4"
+      "path": "assets/models/p7-microwave-oven-t25.glb",
+      "bytes": 168212,
+      "sha256": "c663b804595497e89124c3d45114cdecba7cc253a03b0e8f7f3db7cc08a58f27"
     },
     {
-      "path": "assets/models/p7-mobile-whiteboard.glb",
-      "bytes": 477628,
-      "sha256": "6213c12764121c6ea3a4180d7303229af847f114a6e760a7ec7dd21ea0b9d879"
+      "path": "assets/models/p7-mobile-whiteboard-t25.glb",
+      "bytes": 460596,
+      "sha256": "3cb48e2d63e614b9380fea5c8fef620a577da0f8263a36510b0c7460a2f659d3"
     },
     {
-      "path": "assets/models/p7-mop-bucket-wringer.glb",
-      "bytes": 483124,
-      "sha256": "6f27f42e06abb73b0007f9963799057faaa5b5885153233d155cf4dfdbb42163"
+      "path": "assets/models/p7-mop-bucket-wringer-t25.glb",
+      "bytes": 346764,
+      "sha256": "90878e42ec86cb50e76ba34e59f390ca3f9ec39898715dd2a4cce5d73855bacc"
     },
     {
-      "path": "assets/models/p7-newspaper-bundles.glb",
-      "bytes": 454108,
-      "sha256": "acc4aed6947d0ee58f31e9730727d0588486f8da5ae2175f5ecd2cb6b0390912"
+      "path": "assets/models/p7-newspaper-bundles-t25.glb",
+      "bytes": 298832,
+      "sha256": "39b88dfa16284a037d7dd91ee3116d4c78725c049fae52c84ce2467ac4a4a0e1"
     },
     {
-      "path": "assets/models/p7-newspaper-vending-box.glb",
-      "bytes": 537168,
-      "sha256": "15dc8bc379cb660cde406215cd2d65317e310572965f4c74d648b58df368af79"
+      "path": "assets/models/p7-newspaper-vending-box-t25.glb",
+      "bytes": 282756,
+      "sha256": "7e512847d6ac444a06bb37b46d18ba14d9a9a363bbea817e8de1d3281c8ace40"
     },
     {
-      "path": "assets/models/p7-office-copier.glb",
-      "bytes": 468916,
-      "sha256": "54caa4a11b863335debb571143acc6a55fe16420878646bbe43a50b161b13c5d"
+      "path": "assets/models/p7-office-copier-t25.glb",
+      "bytes": 323528,
+      "sha256": "a7cdbfe2385aa4186e199d5bdb0a878867f4071cc2ec81ebc61a28057277aecb"
     },
     {
-      "path": "assets/models/p7-office-swivel-chair.glb",
-      "bytes": 473728,
-      "sha256": "9799826fd244ffa958a1444186f666d148896377f89b5e6f1f10f04969f8a597"
+      "path": "assets/models/p7-office-swivel-chair-t25.glb",
+      "bytes": 253308,
+      "sha256": "d9b4ca8e1ae16b8b1b77455f977f67727fb9580c33b2b5f1cf6c513d5deb6b87"
     },
     {
-      "path": "assets/models/p7-oxygen-cart.glb",
-      "bytes": 475580,
-      "sha256": "d5f668d546eb6dd02ee17a949adbf1a7be04a3a3a19581cdaef10f6ef959e636"
+      "path": "assets/models/p7-oxygen-cart-t25.glb",
+      "bytes": 348580,
+      "sha256": "74b5c7f2c4fe068458bdf3b1a9e851ecd2b2ceabda386b9c8f114285bb6e8d6b"
     },
     {
-      "path": "assets/models/p7-pallet-jack.glb",
-      "bytes": 690100,
-      "sha256": "0e8318905e9d4b0451d866420049c384fc3e9cdb50af7b14d1bd2f9559a0f258"
+      "path": "assets/models/p7-pallet-jack-t25.glb",
+      "bytes": 469584,
+      "sha256": "2ef7398339fc67e5c998031de28e2c46838ba85226b157e60f1d9a45145eb548"
     },
     {
-      "path": "assets/models/p7-paper-shredder.glb",
-      "bytes": 221128,
-      "sha256": "0c51bbbac3a0c9839e2dadb937639350921d1bab7223382c78acd8213caaa391"
+      "path": "assets/models/p7-paper-shredder-t25.glb",
+      "bytes": 157604,
+      "sha256": "cf25725370d059be6824f1a6c3ede94a5efb97d980294d2684f1d1ef6c4f1e71"
     },
     {
-      "path": "assets/models/p7-paper-towel-dispenser.glb",
-      "bytes": 271704,
-      "sha256": "eaa6f193cbc9b4d388972fe900b63f0ed39a6db1a0999f0769965cf1d6fb1e51"
+      "path": "assets/models/p7-paper-towel-dispenser-t25.glb",
+      "bytes": 154532,
+      "sha256": "6fc29cbc1571bc7561fa901956d6cdc9b0e955500c65f3c26339f316e2e34fc8"
     },
     {
-      "path": "assets/models/p7-parts-bin-rack.glb",
-      "bytes": 552932,
-      "sha256": "85af82ac20dabdec02dcca2e0d8f4ebf47e3a854d14e48476969066c76afaeb3"
+      "path": "assets/models/p7-parts-bin-rack-t25.glb",
+      "bytes": 419712,
+      "sha256": "a9cfdde736f4595f137290d92325ce6050588f2ba16e7f1d0a450c1115a7e6f9"
     },
     {
-      "path": "assets/models/p7-payphone.glb",
-      "bytes": 435884,
-      "sha256": "45a945bc2557856ceec23472503b12e43c568704270c5af919fd2553b28e9c5a"
+      "path": "assets/models/p7-payphone-t25.glb",
+      "bytes": 319016,
+      "sha256": "511132877e783f77c9b869d5d04c5b30d85b0bfa217119f112d38f969be6dcf5"
     },
     {
-      "path": "assets/models/p7-pedestal-fan.glb",
-      "bytes": 469248,
-      "sha256": "2bb334906cf62b2a6ad9decb59f8f2928cb456b05b4edc68a558318bfb82d0cf"
+      "path": "assets/models/p7-pedestal-fan-t25.glb",
+      "bytes": 374312,
+      "sha256": "d91271b48f74adc877e43bc46adb65e5b05b034e8c5423e23e7f0c546896f9e0"
     },
     {
-      "path": "assets/models/p7-physician-scale.glb",
-      "bytes": 390008,
-      "sha256": "e653efd441fe34d5fc695695c1970854fbb429c8514c97bafb11bc3d95ae50a7"
+      "path": "assets/models/p7-physician-scale-t25.glb",
+      "bytes": 333408,
+      "sha256": "d289378a8aed103d8c88c8d8c55a9662bc8ee6955a27cae01b353d4e86adf529"
     },
     {
-      "path": "assets/models/p7-pipe-valve-manifold.glb",
-      "bytes": 467860,
-      "sha256": "b68611f6c6910758636ee88acaaf39d690ffba25dd6eb8d86fc27c46e64a906f"
+      "path": "assets/models/p7-pipe-valve-manifold-t25.glb",
+      "bytes": 345528,
+      "sha256": "85c046bbe1bf07f4c5ec79044848dfba3fc75dc92c79b27db46dba30bb6bc675"
     },
     {
-      "path": "assets/models/p7-plastic-stack-chair.glb",
-      "bytes": 464520,
-      "sha256": "e4d0f8021b17a1e5a4607eac5e9b72e58ac9822a8427b23920ba6b9eb77e215d"
+      "path": "assets/models/p7-plastic-stack-chair-t25.glb",
+      "bytes": 301684,
+      "sha256": "2e6f39e93cea9cd9b731e1a21ac3efa0a3093333573d6fec9465dc3b6d4366b2"
     },
     {
-      "path": "assets/models/p7-platform-clock.glb",
-      "bytes": 434576,
-      "sha256": "f823ffb1c74686960888366f797a5c58d62fc874d0463d409322607688b9d07b"
+      "path": "assets/models/p7-platform-clock-t25.glb",
+      "bytes": 313380,
+      "sha256": "fd43c19aa0b9776597932a1aff347e407d0fb12a13eddd4702277390f2a6402a"
     },
     {
-      "path": "assets/models/p7-popcorn-machine.glb",
-      "bytes": 522892,
-      "sha256": "48a7f26fda0c0a11dc39db78733efa74e4df78ee0736b8d2e4fcdee581d5b784"
+      "path": "assets/models/p7-popcorn-machine-t25.glb",
+      "bytes": 335952,
+      "sha256": "3455591dc5b33eed7ac70278a5e6f5f88b16e6aaab1409df3f62556a86547039"
     },
     {
-      "path": "assets/models/p7-portable-generator.glb",
-      "bytes": 519108,
-      "sha256": "5ca6eecbc30950e6ac4a7e6b8c1a47789627f32a5cc7743556143e5101768a56"
+      "path": "assets/models/p7-portable-generator-t25.glb",
+      "bytes": 336652,
+      "sha256": "fd6ca288151927aba22bd61fe24e26179503bddd3727bd9d07a5b026bc99cc5c"
     },
     {
-      "path": "assets/models/p7-punch-clock.glb",
-      "bytes": 297604,
-      "sha256": "5cbccc2fc29e77f1adb763c60c7e4d5ec819fa97f05e615d41a810672b8616a2"
+      "path": "assets/models/p7-punch-clock-t25.glb",
+      "bytes": 165000,
+      "sha256": "56f28bdb1363500392b1d5f1d6c19407983f22db0290257c7e754431e1f5a870"
     },
     {
-      "path": "assets/models/p7-rice-cooker.glb",
-      "bytes": 264148,
-      "sha256": "fee1ad182447c91e05f9d20c7d974c3491e5a0d7c52f239dc646fe544947a5a3"
+      "path": "assets/models/p7-rice-cooker-t25.glb",
+      "bytes": 163216,
+      "sha256": "4b534f6b37aa5b8a65ea72a80eeab0817ce20be2c5d78f98012d1031c6b85696"
     },
     {
-      "path": "assets/models/p7-rolling-suitcase.glb",
-      "bytes": 395984,
-      "sha256": "fbded176f8d76bc09a1d523c2590acabf35023c80261041a403cd0fe303d442f"
+      "path": "assets/models/p7-rolling-suitcase-t25.glb",
+      "bytes": 260504,
+      "sha256": "ed8f993ae58c9f4532bac7549f53681ba0037695fd01700a3ebe5c76679127f4"
     },
     {
-      "path": "assets/models/p7-rolling-tool-chest.glb",
-      "bytes": 473048,
-      "sha256": "a3b17d7e86404d68796ca16fcfdb81b0eb25953120df45612fe40e6f0957b31a"
+      "path": "assets/models/p7-rolling-tool-chest-t25.glb",
+      "bytes": 282608,
+      "sha256": "71a573f5860741a2dcbb3c8099ba8b7e1bf54f8378a8db054512babc425c76e1"
     },
     {
-      "path": "assets/models/p7-security-podium.glb",
-      "bytes": 389816,
-      "sha256": "36d9cb6bfb2637ca6c9e7ceea4d7f4a94de6134e85f08bc355ec5d14d9a881bf"
+      "path": "assets/models/p7-security-podium-t25.glb",
+      "bytes": 287832,
+      "sha256": "6ebc61461afe0e77cd2489e4a1e90b681a0f446dc6d4ef57726dd3bd76160b0e"
     },
     {
-      "path": "assets/models/p7-shoe-shine-chair.glb",
-      "bytes": 562872,
-      "sha256": "58c3e01d099f2c652ffb69ccb38ce6ab51f817e379a1f16969634511401a406b"
+      "path": "assets/models/p7-shoe-shine-chair-t25.glb",
+      "bytes": 432832,
+      "sha256": "c79902106f5d221ad0f4d77ba3da23981552594f8b151edd624c1026864cdeab"
     },
     {
-      "path": "assets/models/p7-shopping-cart.glb",
-      "bytes": 537796,
-      "sha256": "33c9477fde89819419a4f8752eac4679dbf849f56532f578d2da0c7697c5c869"
+      "path": "assets/models/p7-shopping-cart-t25.glb",
+      "bytes": 341716,
+      "sha256": "924b0abbb9b27bf4ca3276470bf4767224733a935f8981ad8bb84a8fa20a67c7"
     },
     {
-      "path": "assets/models/p7-signal-head-spare.glb",
-      "bytes": 436424,
-      "sha256": "a14eb63dbdbcd1b1c7dc821389430a5e9a370a1af9a8b39e55391c1f84aa596a"
+      "path": "assets/models/p7-signal-head-spare-t25.glb",
+      "bytes": 285060,
+      "sha256": "0d5078d1c7713031185f0ffb64adebaaff2a4de06d9df6a0d2e9307a724ada48"
     },
     {
-      "path": "assets/models/p7-slush-machine.glb",
-      "bytes": 540192,
-      "sha256": "0a9a5f09f6fd09fccf1921880f6963312dc4e99be2b0f0ee887ba30c0bb9d5d9"
+      "path": "assets/models/p7-slush-machine-t25.glb",
+      "bytes": 384184,
+      "sha256": "21f85890a47e0f2001849bb69a7692e35b9cde9cf0080faaa2691d5a0fd12795"
     },
     {
-      "path": "assets/models/p7-soda-fountain.glb",
-      "bytes": 526448,
-      "sha256": "aa1c2012b8df84e415a0dc52fc85b75c8837cfc5d6e986314b96ecf05cb6a354"
+      "path": "assets/models/p7-soda-fountain-t25.glb",
+      "bytes": 277920,
+      "sha256": "c809c189ad612f863101e0df13a81260bdd2dda19528414b51aa5601e53307a3"
     },
     {
-      "path": "assets/models/p7-soldering-station.glb",
-      "bytes": 328076,
-      "sha256": "1a691db3b4f3eaf081bc86e6f4bd42aed31dfb9c2fa8217ea2668445c188bb1c"
+      "path": "assets/models/p7-soldering-station-t25.glb",
+      "bytes": 191184,
+      "sha256": "0fea1667f368c535d4a6ea6b12e5caa45add19bc7880074bc9c25f7ea5ae5db0"
     },
     {
-      "path": "assets/models/p7-spinner-rack.glb",
-      "bytes": 552120,
-      "sha256": "a504532d372039bf37e866d7381edf31f319db6ddd1b07bfd310c19fd00dcc32"
+      "path": "assets/models/p7-spinner-rack-t25.glb",
+      "bytes": 394992,
+      "sha256": "6da205ae695f35f372629fbf1ec19682b7cc2cd66eb31fd596377bfed6e0ad0d"
     },
     {
-      "path": "assets/models/p7-stand-mixer.glb",
-      "bytes": 517452,
-      "sha256": "afbb0555b617269dddfe2f296ce74c0755fb0b58fdbf166f870b01c757c25348"
+      "path": "assets/models/p7-stand-mixer-t25.glb",
+      "bytes": 287608,
+      "sha256": "691ef90a317142bf90c6ddac24c631cc032fd90b4a17ba0d815ae31f1b9b6918"
     },
     {
-      "path": "assets/models/p7-step-ladder.glb",
-      "bytes": 586900,
-      "sha256": "a159cf7f9d15a93b457ca57e08015e69409c442ecfda1df510af0a2d0ddba8de"
+      "path": "assets/models/p7-step-ladder-t25.glb",
+      "bytes": 507724,
+      "sha256": "0a23e176ac3a4a570c540ec1979ccdc7c4961bf88be9fe2a7d0fc50d844e159b"
     },
     {
-      "path": "assets/models/p7-tool-pegboard.glb",
-      "bytes": 555372,
-      "sha256": "ef9c026da445182e3b95555de570bf8de030407343ead2ce5de1a24e7193cac8"
+      "path": "assets/models/p7-tool-pegboard-t25.glb",
+      "bytes": 315980,
+      "sha256": "c1ee4e9ed35b2294806fcbba78f7a44dfd1f35a1347ea866aee5f9523b3fbf66"
     },
     {
-      "path": "assets/models/p7-trash-bag-pile.glb",
-      "bytes": 470592,
-      "sha256": "ca1420bce3c481d958bbd9d2a70fc37805f1a1d1458295dbd89adf4fb2bb8a12"
+      "path": "assets/models/p7-trash-bag-pile-t25.glb",
+      "bytes": 304396,
+      "sha256": "fc43783cf54b60758bb224fb495611549b97274e9c614597be6ee00ff47bbafd"
     },
     {
-      "path": "assets/models/p7-tripod-work-light.glb",
-      "bytes": 729324,
-      "sha256": "421ec778e45bc322bdea46657c0083cfb33e30ba8de806765a95e6921f7a6544"
+      "path": "assets/models/p7-tripod-work-light-t25.glb",
+      "bytes": 607620,
+      "sha256": "aa73cdb35defbd16531e82f9179c44a67e6ea81dbf42fd90925a70ad65e3f3c5"
     },
     {
-      "path": "assets/models/p7-urinal.glb",
-      "bytes": 411648,
-      "sha256": "6249357dad997035da9d8360ba3ca81edc719033e2cebe6c6f36c60dff695f2d"
+      "path": "assets/models/p7-urinal-t25.glb",
+      "bytes": 314216,
+      "sha256": "bd9bc0af9dea273f6b1bc47d98a139f4ae0ed237f0b0e08551346a957ae8d4bf"
     },
     {
-      "path": "assets/models/p7-wall-data-cabinet.glb",
-      "bytes": 510784,
-      "sha256": "c2852deb74bdb50b0faaf53519b0b82d60ccfb56644c824bdc4121db33d7d06a"
+      "path": "assets/models/p7-wall-data-cabinet-t25.glb",
+      "bytes": 332724,
+      "sha256": "d379a5fe8585253c6b109c715df499cf0fbefa2ef56948f41608087f0cb7e5af"
     },
     {
-      "path": "assets/models/p7-water-cooler.glb",
-      "bytes": 331420,
-      "sha256": "dd56e97f9b145ec86183397095327c5e955089bb0a7347cd892ea15883c819b8"
+      "path": "assets/models/p7-water-cooler-t25.glb",
+      "bytes": 293860,
+      "sha256": "444db13824de471e8f693d64eb61472721b353f425540e24e6315f4e1b3e813a"
     },
     {
-      "path": "assets/models/p7-water-heater-tank.glb",
-      "bytes": 363608,
-      "sha256": "de707fc9d32f38591aba9d313195c57ba3a8b8636ce94ab5164eaec82b2636cc"
+      "path": "assets/models/p7-water-heater-tank-t25.glb",
+      "bytes": 314420,
+      "sha256": "6924b0337d00409c5dddbeccac2435a36bc25d16bf0e405f3c571503122d8dfd"
     },
     {
-      "path": "assets/models/p7-water-pump-skid.glb",
-      "bytes": 523340,
-      "sha256": "d4677df4476be702daa81d648d3842ae19c0c40acfbcb2ebc9162d4b9977d6fa"
+      "path": "assets/models/p7-water-pump-skid-t25.glb",
+      "bytes": 331476,
+      "sha256": "68bc5956e96d05ade438826b22b741cc1e1a333ab5b859eb53c5e54d18032dcd"
     },
     {
-      "path": "assets/models/p7-wet-dry-vac.glb",
-      "bytes": 528812,
-      "sha256": "ff9ce751f86e1f8fe6cec257db4ec3d3f7caff4cb7f88ed02d35daea66a28a52"
+      "path": "assets/models/p7-wet-dry-vac-t25.glb",
+      "bytes": 336296,
+      "sha256": "1d11285f16332f256931ebf242da8df6ce264809f4c8cadda2d908be8303f5d6"
     },
     {
-      "path": "assets/models/p7-wet-floor-sign.glb",
-      "bytes": 311492,
-      "sha256": "c3ccf50468d471856fa62f281723e2d7f2a802012b5c01cbe5c70f359aa7d347"
+      "path": "assets/models/p7-wet-floor-sign-t25.glb",
+      "bytes": 194824,
+      "sha256": "42d07ae0b1b952d5ea8438ca4c60b7830aaa73281c0820101d3dc0dc126e014d"
     },
     {
-      "path": "assets/models/p7-wheelchair.glb",
-      "bytes": 518452,
-      "sha256": "a4bcbaf1862514c14675be8386de35c5cdc5f19bfb706f470b2ca53f3ecc5080"
+      "path": "assets/models/p7-wheelchair-t25.glb",
+      "bytes": 332120,
+      "sha256": "fa18e731ee0def5b6a102f7c29fe1283900450ddc5145a4a05b16d6c7ecfc81b"
     },
     {
-      "path": "assets/models/p7-wheeled-stretcher.glb",
-      "bytes": 738640,
-      "sha256": "97f2a86c8b3e781a98b5c07858cd6c28e4da27477c50a796011171b7860ce818"
+      "path": "assets/models/p7-wheeled-stretcher-t25.glb",
+      "bytes": 576484,
+      "sha256": "ed07d099428882a147010cd1bdb079b971a153d70d31cb6898dc5dfc95ef7b19"
     },
     {
-      "path": "assets/models/p7-wheelie-bin.glb",
-      "bytes": 473304,
-      "sha256": "5cbf59bd701d1bedc5af454d2eeb2b3814e2ccdb44fcdc49bb756b30114cae02"
+      "path": "assets/models/p7-wheelie-bin-t25.glb",
+      "bytes": 278324,
+      "sha256": "3f6107634e027e86e7ed083d67ee62c6b6022138b8451a49a04d3d7121658da4"
     },
     {
       "path": "assets/models/pistol.glb",
@@ -2354,19 +2374,19 @@
       "sha256": "eb8b2f43f56629db2f95a1d2738be15a6922f7a4c368b9f04aa8fea402692623"
     },
     {
-      "path": "assets/models/shelf.glb",
-      "bytes": 853072,
-      "sha256": "a236afe23cc7b77afc92dac32b13c5118c1c2e300aa7d9ea1653491407ead715"
+      "path": "assets/models/shelf-t25.glb",
+      "bytes": 373392,
+      "sha256": "80c89f79fd509d4db742955e0058bc96e1c119384676179f398e157a81744be4"
     },
     {
-      "path": "assets/models/shop-backbar.glb",
-      "bytes": 932160,
-      "sha256": "845b0f2a819166d9fc40f659a1867028981e3d1f058d9973d6bb0dc5429c26f6"
+      "path": "assets/models/shop-backbar-t25.glb",
+      "bytes": 499544,
+      "sha256": "26578a0e086561ba1f5b407cdb376a5fd5def466c3b6523a08900996194d9ca4"
     },
     {
-      "path": "assets/models/shop-cooler-open.glb",
-      "bytes": 648412,
-      "sha256": "6f2dab9ac163dd91c6705a6f68ce37f62b14a11e2b4a8f858acd53abed543f84"
+      "path": "assets/models/shop-cooler-open-t25.glb",
+      "bytes": 278708,
+      "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f"
     },
     {
       "path": "assets/models/shop-cooler.glb",
@@ -2374,14 +2394,14 @@
       "sha256": "b2afaf28962d8a4d0aa424455e4dd7839561010f449c70d691ad8e976737fb36"
     },
     {
-      "path": "assets/models/shop-counter.glb",
-      "bytes": 742204,
-      "sha256": "fb966601637395e82c0f59056791833617f44e764cae9e792b26379d7387ef78"
+      "path": "assets/models/shop-counter-t25.glb",
+      "bytes": 458100,
+      "sha256": "bc8a698a0c3161ac47f10705485fbdf990a8807ed1ef03d7906fc60fd71f842a"
     },
     {
-      "path": "assets/models/shop-display-open.glb",
-      "bytes": 653604,
-      "sha256": "9ceeab8bb9ecb4f6bb16534942badcb97505bb81df95cc1b7a6e99af361c1fc1"
+      "path": "assets/models/shop-display-open-t25.glb",
+      "bytes": 140588,
+      "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005"
     },
     {
       "path": "assets/models/shop-display.glb",
@@ -2404,59 +2424,59 @@
       "sha256": "51aee024f5ff0cfec1cbdb93912bd79672612023a4f5add2b1b1eb13a8043de3"
     },
     {
-      "path": "assets/models/stall.glb",
-      "bytes": 838396,
-      "sha256": "b8400b8a190a471d47e120df783ee9b28327f4c234c3bf0ebd39d25d20fecfb5"
+      "path": "assets/models/stall-t25.glb",
+      "bytes": 646764,
+      "sha256": "f3d8902c1c6c5dafd795ad18178012bfa4bcce90c606c009ddd1b6421cfa147c"
     },
     {
-      "path": "assets/models/tech-display.glb",
-      "bytes": 792920,
-      "sha256": "a7a98a232f407569a6497997a8eb688562fbf65b3dd2ec9829e06316c5662de5"
+      "path": "assets/models/tech-display-t25.glb",
+      "bytes": 500576,
+      "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
     },
     {
-      "path": "assets/models/trash-can.glb",
-      "bytes": 665600,
-      "sha256": "3cd3aacb4a0f3cfe5c215b6d7170f548614d338624aa73404d2b508d1582bd76"
+      "path": "assets/models/trash-can-t25.glb",
+      "bytes": 395520,
+      "sha256": "4b2b7fab218230c2b79a882d4b89db63e5e8a5cc67863d06e26784ff4a9521a2"
     },
     {
-      "path": "assets/models/turnstile.glb",
-      "bytes": 819264,
-      "sha256": "ad681e7d825177007122170c0ac4e38b930415e580a13edc0c620c6141d8cadf"
+      "path": "assets/models/turnstile-t25.glb",
+      "bytes": 530900,
+      "sha256": "becd5c4ed2523f35c72c3242e14569de59480b71f036224d0d4018316111a3cc"
     },
     {
-      "path": "assets/models/vending.glb",
-      "bytes": 1032668,
-      "sha256": "a9360c17c9c87860368f299d8c7ce708a74481f6957a995558e3bbbccb1b5821"
+      "path": "assets/models/vending-t25.glb",
+      "bytes": 316428,
+      "sha256": "2bfc85c2d8d99a8a785b4406809d8b237db1661f96895f7c145e5680ee4758e3"
     },
     {
-      "path": "assets/models/zombie-body-agent.glb",
-      "bytes": 662524,
-      "sha256": "afc99b9bce6b3ed056248faa0b2c90e9c44ec207d3a843b716181fbada861a45"
+      "path": "assets/models/zombie-body-agent-t25.glb",
+      "bytes": 657976,
+      "sha256": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e"
     },
     {
-      "path": "assets/models/zombie-body-courier.glb",
-      "bytes": 695128,
-      "sha256": "040959a2efad707ec7239c1abe918675ad49dabb40b23502f1b0e077751d05df"
+      "path": "assets/models/zombie-body-courier-t25.glb",
+      "bytes": 679644,
+      "sha256": "be7b01ecd1259293b4f34713a2a76821514f55fef7cbcae504b27dfbafa2fc04"
     },
     {
-      "path": "assets/models/zombie-body-heavyset.glb",
-      "bytes": 627580,
-      "sha256": "a55889055287c4e852ff52de72d15af3fc3788b1b278da5e05f5760f66ffab6c"
+      "path": "assets/models/zombie-body-heavyset-t25.glb",
+      "bytes": 588444,
+      "sha256": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f"
     },
     {
-      "path": "assets/models/zombie-body-lastshift.glb",
-      "bytes": 732068,
-      "sha256": "b91e2c0bd56effec6d2f7a825e4c26da6e2c5d4fc1e80ef87730e6fee6246559"
+      "path": "assets/models/zombie-body-lastshift-t25.glb",
+      "bytes": 719216,
+      "sha256": "8214232e2bcda8f40b6828b0468be9b51373f9f988cdff8ffb4573c0496cc7f7"
     },
     {
-      "path": "assets/models/zombie-body-scavenger.glb",
-      "bytes": 832684,
-      "sha256": "97fd1bdafea7aefc3d1a5041bb74085b5cc1db1b2eed088c5e485f660558c869"
+      "path": "assets/models/zombie-body-scavenger-t25.glb",
+      "bytes": 700768,
+      "sha256": "b8acc6a5937a3e96d053be9845bbf0b520d1584c5f642142da7f909b579a376d"
     },
     {
-      "path": "assets/models/zombie-body-tall.glb",
-      "bytes": 628536,
-      "sha256": "8eaa379b1a7bb53a9c338d66ad303ea8ba373ec4ee5a591d8b3fcde0a7d62281"
+      "path": "assets/models/zombie-body-tall-t25.glb",
+      "bytes": 632528,
+      "sha256": "fa26aa32701d1eae50a6ee0f54299a0b9810e74d9afd0c41c136e970e5cda314"
     },
     {
       "path": "assets/models/zombie-rigged.glb",

@@ -55,12 +55,14 @@ import {FitIndex, OpenableSet, interiorShadowSide, type OpenRT} from './openable
 import {openableActive} from './openablesSpec';
 
 /**
- * Lid split for the generated crate model (`models.crate`, assets/models/crate.glb): triangles
- * whose centroid is above this fraction of the fitted crate height become the lid. 0.817 is the
- * seam groove measured on the derivative (lidSplitY 0.353 m of 0.432 m, props-iteration02.json).
- * The placeholder crate ignores it and uses a 7 cm lid.
+ * Lid split for the generated crate model (`models.crate`, assets/models/crate-t25.glb): triangles
+ * whose centroid is above this fraction of the fitted crate height become the lid. Meshy T2.5
+ * (2026-10-29): the body's closed top cap sits at 0.356 m and the lid skirt starts at 0.362 m, so
+ * the split at 0.350 m of 0.432 m lifts the cap with the lid (its underside) and leaves an open
+ * box for the interior liner. (Iteration 02: 0.817, the seam groove at 0.353 m.) The placeholder
+ * crate ignores it and uses a 7 cm lid.
  */
-export const CRATE_LID_SPLIT_Y = 0.817;
+export const CRATE_LID_SPLIT_Y = 0.81;
 
 /** Reach for [E] on holders (eye to hit point, meters). */
 export const CONTAINER_REACH = 2.1;

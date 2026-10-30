@@ -433,11 +433,16 @@ describe('office level build (world/builder.ts + world/officeProps.ts, Node, no 
 });
 
 describe('the Subway is unchanged', () => {
-  // Fingerprints of generateStation captured from git HEAD (1c71045) before any iteration-16 WORLD-GEN edit; still identical after
-  // the seamless N-grid Kit option (default = 3 grids of GEN_W x GEN_H).
+  // Fingerprints of generateStation. Captured from git HEAD (1c71045) before any iteration-16 WORLD-GEN edit and still
+  // identical after the seamless N-grid Kit option; re-pinned for the Meshy T2.5 model replacement (2026-10-30): the host
+  // surfaces were re-measured on the new meshes (shop counter top 1.045 -> 1.05 m, stall counter 0.93 -> 0.923 m and its
+  // z span, back counter, stretcher, iteration-07 support surfaces), so countertop items (cash registers, grinders, toasters,
+  // slush machines …) sit on the new geometry: verified against a7a646a for these 8 seeds — areas, doors, grid, lights,
+  // zombies and pickups byte-identical; 13–29 hosted props per seed moved by |dy| <= 0.049 m, |dz| <= 0.028 m, dx = 0,
+  // same kinds / rotations / counts.
   const HEAD: Record<string, string> = {
-    '1:rifle': '19be9008', '1:pistol': 'd5505377', '7:rifle': 'fb9cd7e2', '7:pistol': 'dfed84f8',
-    '42:rifle': 'fe4cbb13', '42:pistol': '28419591', '1234:rifle': '8828e751', '1234:pistol': '6ef9c6fa',
+    '1:rifle': 'f50fc2e7', '1:pistol': '94a7f554', '7:rifle': 'bdd4de2a', '7:pistol': '5f455d00',
+    '42:rifle': '57dcd13b', '42:pistol': 'fd258bb9', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD', () => {
     for (const [key, fp] of Object.entries(HEAD)) {

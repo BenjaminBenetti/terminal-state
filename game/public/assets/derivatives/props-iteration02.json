@@ -433,5 +433,24 @@
       ]
     }
   ],
-  "note": "Native masters stay in reference/tasks/vertical-slice-iteration02-20261025/generation/<asset>/native/ and are never copied to game/public. props.json (older derivatives) is not modified by this script."
+  "note": "Native masters stay in reference/tasks/vertical-slice-iteration02-20261025/generation/<asset>/native/ and are never copied to game/public. props.json (older derivatives) is not modified by this script.",
+  "supersededByMeshyT25": {
+    "note": "Runtime files listed here were REPLACED by reference-conditioned Meshy T2.5 derivatives (task studio-meshy-game-replacement-20261029-01) and are removed from the current game tree once their replacement is integrated; their records below stay as history. Restore any of them from Git at the pushed base commit a7a646a1dd62bf1c641fe3dd0d1187ab322afe87.",
+    "files": {
+      "game/public/assets/models/crate.glb": {
+        "id": "base:crate",
+        "replacedBy": "game/public/assets/models/crate-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "d0f179df74c1ef6eaeb576cc7736e5514494876b",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/crate.glb > game/public/assets/models/crate.glb"
+      },
+      "game/public/assets/models/turnstile.glb": {
+        "id": "base:turnstile",
+        "replacedBy": "game/public/assets/models/turnstile-t25.glb",
+        "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
+        "restoreBlobSha1": "b9bf82cc7995fa3868142a20bd274bf3bbb77298",
+        "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/turnstile.glb > game/public/assets/models/turnstile.glb"
+      }
+    }
+  }
 }
