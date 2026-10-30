@@ -17,6 +17,8 @@ import {creatureQaApi} from './ai/creatureQa';
 import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
 import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
 import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
+import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
+import {roofLadderPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT): roof ladder / transit hall poses
 import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input walker, per-frame traversal trace, lifecycle counts
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
@@ -315,7 +317,21 @@ export function installQaHooks(game: Game): void {
     // Iteration 12 (AI): light lure — lightLure(), lureProbe(i?), goLureVantage({index, dist, ahead}), DEBUG qaLureLight / qaLureLightSet.
     ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
-    ...towerQaApi(game), // Iteration 17 (lane LIFT): tower(), towerCall(floor), towerPick(floor | 'open'), towerInteract(), towerGoLanding(floor), towerGoCab(), towerExteriorTune({...})
+    ...towerQaApi(game), // Iteration 17 / office-overhaul (lane LIFT): tower(), towerGoLanding(floor), towerGoCab(), liftButtons(), liftAim(id), liftPress(id, 'mouse' | 'key'), liftState(), towerExteriorTune({...})
+    ...officeArchQaApi(game), // Task office-overhaul-20261030 (lane ARCH): exteriorFogTune({...}), officeArch(), officeArchTune({...}), roofFog()
+    // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
+    goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
+      const q = roofLadderPose(game.layout, end);
+      if (!q) return null;
+      game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
+      return q;
+    },
+    goTransit: (end: 'bottom' | 'top' = 'bottom', lane = 1) => {
+      const q = transitPose(game.layout, end, lane);
+      if (!q) return null;
+      game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
+      return q;
+    },
     ...walkerQaApi(game), // Iteration 17: walkTo(x, z, y?), walkStatus(), traceStart/Stop/Summary/Samples, lifecycle()
     // Iteration 12 (LIGHT): light() — battery / glow / flares / light sources; DEBUG qaSetBattery(charge), qaGiveItem(id, n).
     ...lightQaApi(game),

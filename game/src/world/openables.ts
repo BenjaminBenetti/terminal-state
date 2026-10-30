@@ -18,6 +18,9 @@
 // (incl. on-top decor and mounted fixtures) and doorway cells, sweeping sample points of the real moving geometry; a door
 // against a wall / neighbour opens only as far as there is room (never through it). Parts have no collision of their own (the
 // prop keeps its AABB): an open door never becomes an invisible blocker and never strands the player or AI.
+// Task office-overhaul-20261030 (lane INTERACT): the toilet stall (a walk-in cubicle) is the one exception — world/stalls.ts gives
+// its door leaf / partitions / toilet their own movement collision; a spec `bodyShape` draws a procedural prop shape as the body
+// (optionally with a delivered model swapped in, setOpenableBodyModel) and `cavityHidden` keeps a cavity for item walls only.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -34,7 +37,8 @@ import type {WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {purposeMaterial} from './purposeTextures';
 import {surface, type SurfaceName} from './canvasTextures';
-import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, type Plane} from './meshSplit';
+import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, toSoup, type Plane} from './meshSplit';
+import {propShape} from '../gen/propShapes'; // Task office-overhaul-20261030 (lane INTERACT): toilet-stall body (bodyShape)
 import {openableSpec, type AuthoredBox, type Box6, type MatRole, type OpenableKind, type OpenableSpec, type PartSpec} from './openablesSpec';
 
 const OPEN_TIME = 0.5;
@@ -73,6 +77,8 @@ interface OpenModel {
   owned: THREE.Material[];
   paint: THREE.Color;
   source: string;
+  /** Task office-overhaul-20261030 (lane INTERACT): the delivered model a `bodyShape.swap` used (null: the shape's own parts). */
+  swap: GLTF | null;
 }
 
 export interface OpenPartState {
@@ -135,7 +141,19 @@ const ROLE: Record<Exclude<MatRole, 'body' | 'inner' | 'accent'>, {color: number
   white: {color: 0xe6e2d8, map: 'paintedPanel', rough: 0.85, metal: 0.05},
   shadow: {color: 0x040404, map: 'black', rough: 1, metal: 0},
   wood: {color: 0x7b5d43, map: 'woodVeneer', rough: 0.75, metal: 0},
+  // Task office-overhaul-20261030 (lane INTERACT): toilet-stall door leaf — world/shapeMaterials.ts 'partition' tint, mesh UVs (it moves)
+  partition: {color: 0xa3b3ae, map: 'paintedPanel', rough: 0.8, metal: 0.15},
 };
+
+/**
+ * Task office-overhaul-20261030 (lane INTERACT): models a spec's `bodyShape.swap` may use (asset id -> GLTF, null = not delivered).
+ * world/stalls.ts sets the company `toilet` model (assets/companyAssets.ts) before the section is built; a changed model rebuilds
+ * the kind's cached geometry at the next ContainerManager.build.
+ */
+const bodySwaps = new Map<string, GLTF>();
+export function setOpenableBodyModel(asset: string, gltf: GLTF | null): void {
+  if (gltf) bodySwaps.set(asset, gltf); else bodySwaps.delete(asset);
+}
 
 /**
  * Iteration 12 (ATMOS, user feedback #4 "my flashlight does not light the inside" of an opened cupboard / fridge / locker):
@@ -234,15 +252,16 @@ export class OpenableSet {
   model(kind: OpenableKind): OpenModel {
     const spec = openableSpec(kind)!;
     const gltf = (spec.model && this.models[spec.model]) || null;
+    const swap = (spec.bodyShape?.swap && bodySwaps.get(spec.bodyShape.swap.asset)) || null; // task office-overhaul-20261030 (INTERACT)
     let m = this.cache.get(kind);
-    if (m && m.gltf === gltf) return m;
+    if (m && m.gltf === gltf && m.swap === swap) return m;
     if (m) this.disposeModel(m);
-    m = this.buildModel(kind, spec, gltf);
+    m = this.buildModel(kind, spec, gltf, swap);
     this.cache.set(kind, m);
     return m;
   }
 
-  private buildModel(kind: OpenableKind, spec: OpenableSpec, gltf: GLTF | null): OpenModel {
+  private buildModel(kind: OpenableKind, spec: OpenableSpec, gltf: GLTF | null, swap: GLTF | null = null): OpenModel {
     const def = (PROP_DEFS as unknown as Record<string, {w: number; d: number; h: number}>)[kind];
     const geos: THREE.BufferGeometry[] = [];
     const owned: THREE.Material[] = [];
@@ -321,6 +340,33 @@ export class OpenableSet {
         body.push({geo, mat});
       }
     }
+    // Task office-overhaul-20261030 (lane INTERACT): authored body from the PROCEDURAL prop shape (toilet stall), optionally with a
+    // delivered model in place of some of its parts (the company toilet).
+    if (spec.bodyShape) {
+      const inBox = (q: {p: readonly number[]}, b: Box6) => q.p[0] > b[0] && q.p[0] < b[3] && q.p[1] > b[1] && q.p[1] < b[4] && q.p[2] > b[2] && q.p[2] < b[5];
+      const sw = swap ? spec.bodyShape.swap : undefined;
+      const parts = (propShape(kind as never) ?? []).filter(q => !spec.bodyShape!.drop.some(b => inBox(q, b)) && !(sw && sw.drop.some(b => inBox(q, b))));
+      const byKey = new Map<string, THREE.BufferGeometry[]>();
+      for (const q of parts) {
+        const g = new THREE.BoxGeometry(q.s[0], q.s[1], q.s[2]);
+        if (q.rx) g.rotateX(q.rx);
+        g.translate(q.p[0], q.p[1], q.p[2]);
+        let l = byKey.get(q.m);
+        if (!l) byKey.set(q.m, (l = []));
+        l.push(g.toNonIndexed());
+        g.dispose();
+      }
+      for (const [key, list] of byKey) {
+        const geo = list.length > 1 ? mergeGeometries(list, false) ?? list[0] : list[0];
+        if (list.length > 1) for (const g of list) if (g !== geo) g.dispose();
+        geo.computeBoundingSphere();
+        body.push({geo, mat: this.mats ? shapeMaterial(this.mats, key as never) : this.roleMat('steelDark', paint)});
+      }
+      if (sw && swap) {
+        for (const q of swapParts(swap, sw)) body.push(q);
+        source = `authored body (gen/propShapes.ts shape) + ${sw.asset} model + parts`;
+      } else source = 'authored body (gen/propShapes.ts shape) + parts';
+    }
     if (spec.bodyBoxes?.length) for (const g of mergeByRole(spec.bodyBoxes)) body.push({geo: g.geo, mat: this.roleMat(g.role, paint), role: g.role});
     const parts: PartModel[] = spec.parts.map((p, i) => {
       const pivot = pivots[i];
@@ -334,7 +380,7 @@ export class OpenableSet {
       }
       const tray = mergeByRole(p.tray ?? [], pivot).map(g => ({geo: g.geo, mat: this.roleMat(g.role, paint), role: g.role}));
       const inner: Part[] = [];
-      if (p.cavity) inner.push({geo: boxGeo(...p.cavity), mat: this.cavityMat(p, paint)});
+      if (p.cavity && !p.cavityHidden) inner.push({geo: boxGeo(...p.cavity), mat: this.cavityMat(p, paint)}); // task office-overhaul (INTERACT): cavityHidden
       if (p.cylinder) {
         const [r, y0, y1] = p.cylinder;
         const g = new THREE.CylinderGeometry(r, r * 0.94, y1 - y0, 20, 1, true);
@@ -379,7 +425,7 @@ export class OpenableSet {
       closed.push({geo: merged, mat});
     }
     for (const q of [...body, ...closed, ...parts.flatMap(p => [...p.moving, ...p.plate, ...p.tray, ...p.inner])]) geos.push(q.geo);
-    return {kind, gltf, body, parts, closed, geos, owned, paint, source};
+    return {kind, gltf, body, parts, closed, geos, owned, paint, source, swap};
   }
 
   private disposeModel(m: OpenModel): void {
@@ -503,9 +549,25 @@ export class OpenableSet {
       root.add(pivot);
       ps.pivot = pivot;
     });
-    // flashlight shadows: own meshes cast / receive like the instanced closed parts they replace (marked once per station)
+    // flashlight shadows: own meshes cast / receive like the instanced closed parts they replace (marked once per station).
+    // Task model-touchups-20261030 (lane GLASS): PER MATERIAL — a moving mesh takes the flags of the closed-part instance drawing
+    // its own material. Copying the first slot's (the opaque door frame's) flags onto every own mesh made the cooler's /
+    // extinguisher cabinet's transparent glass a spot-shadow caster whenever the player aimed at it (aiming takes the holder
+    // over): everything behind the closed glass fell into the torch's shadow while the pane itself stayed lit ("almost opaque"
+    // up close). render/volumetric.ts markShadows never marks a transparent material. Interior meshes (plate / tray / liner: no
+    // closed instance of their own) keep the first slot's flags, and a transparent / non-depth-writing material never casts.
     const ref = rt.slots[0]?.mesh;
-    if (ref) root.traverse(o => { const mm = o as THREE.Mesh; if (mm.isMesh) { mm.castShadow = ref.castShadow; mm.receiveShadow = ref.receiveShadow; } });
+    if (ref) {
+      const bySlot = new Map<THREE.Material, THREE.InstancedMesh>();
+      for (const s of rt.slots) if (!bySlot.has(s.mesh.material as THREE.Material)) bySlot.set(s.mesh.material as THREE.Material, s.mesh);
+      root.traverse(o => {
+        const mm = o as THREE.Mesh;
+        if (!mm.isMesh) return;
+        const mat = mm.material as THREE.Material, src = bySlot.get(mat) ?? ref;
+        mm.castShadow = src.castShadow && !mat.transparent && mat.depthWrite !== false;
+        mm.receiveShadow = src.receiveShadow;
+      });
+    }
     this.group.add(root);
     rt.root = root;
     for (const s of rt.slots) { s.mesh.setMatrixAt(s.index, ZERO); s.mesh.instanceMatrix.needsUpdate = true; }
@@ -806,6 +868,34 @@ export function inOpeningSlab(c: THREE.Vector3, n: THREE.Vector3, slabs: readonl
 
 function clampBox(b: Box6, def: {w: number; d: number; h: number}): Box6 {
   return [Math.max(b[0], -def.w / 2), Math.max(b[1], 0), Math.max(b[2], -def.d / 2), Math.min(b[3], def.w / 2), Math.min(b[4], def.h), Math.min(b[5], def.d / 2)];
+}
+
+/**
+ * Task office-overhaul-20261030 (lane INTERACT): a delivered model as holder-local body parts — grounded and centred, turned by `yaw`
+ * and placed at `at`; uniformly rescaled to `size` only when it is grossly mis-scaled (the company models are at real size).
+ */
+export function swapParts(gltf: GLTF, sw: {at: readonly [number, number, number]; size: readonly [number, number, number]; yaw: number}): {geo: THREE.BufferGeometry; mat: THREE.Material}[] {
+  const root = gltf.scene;
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return [];
+  const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const k = Math.min(sw.size[0] / (size.x || 1), sw.size[1] / (size.y || 1), sw.size[2] / (size.z || 1));
+  const s = k < 0.5 || k > 2 ? k : 1;
+  // back edge (after the turn) on `at`: the model's +Z extent ends up at at.z after a half turn
+  const turned = Math.abs(Math.cos(sw.yaw)) > 0.5 ? size.z : size.x;
+  const fit = new THREE.Matrix4().makeTranslation(sw.at[0], sw.at[1], sw.at[2] + turned * s / 2)
+    .multiply(new THREE.Matrix4().makeRotationY(sw.yaw)).multiply(new THREE.Matrix4().makeScale(s, s, s))
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z));
+  const out: Part[] = [];
+  root.traverse(o => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const soup = toSoup(mesh.geometry, new THREE.Matrix4().multiplyMatrices(fit, mesh.matrixWorld));
+    const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material;
+    out.push({geo: soupGeometry(soup, Array.from(soup.data)), mat});
+  });
+  return out;
 }
 
 /** Authored boxes merged per material role (geometry translated by -origin). */

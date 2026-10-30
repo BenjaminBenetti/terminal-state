@@ -219,7 +219,10 @@ export async function assembleOpenFront(S, src, extras, extraNodes = []) {
   if (src.tex.normal) mBody.setNormalTexture(tex(`${S.key}-normal`, src.tex.normal));
   const mInt = doc.createMaterial(`${S.key}-open-authored`).setBaseColorFactor([1, 1, 1, 1]).setMetallicFactor(1).setRoughnessFactor(1)
     .setBaseColorTexture(tex('authored-color', atlas.color)).setMetallicRoughnessTexture(tex('authored-orm', atlas.orm)).setEmissiveTexture(tex('authored-emissive', atlas.emissive)).setEmissiveFactor([1, 1, 1]);
-  const mGlass = doc.createMaterial(`${S.key}-open-glass`).setBaseColorFactor([0.8, 0.88, 0.9, 0.14]).setMetallicFactor(0).setRoughnessFactor(0.06).setAlphaMode('BLEND').setDoubleSided(true);
+  // glass factors: S.glassMaterial (build-meshy-t25.mjs LOCAL_REPAIR, task model-touchups-20261030) overrides; the iteration-05
+  // default (a near-white film, base (0.8, 0.88, 0.9) alpha 0.14) is unchanged so build-props-iteration05.mjs stays byte-identical
+  const G = {baseColor: [0.8, 0.88, 0.9, 0.14], roughness: 0.06, metallic: 0, ...(S.glassMaterial ?? {})};
+  const mGlass = doc.createMaterial(`${S.key}-open-glass`).setBaseColorFactor(G.baseColor).setMetallicFactor(G.metallic).setRoughnessFactor(G.roughness).setAlphaMode('BLEND').setDoubleSided(true);
   const root = doc.createNode(`${S.key}Open`);
   root.addChild(doc.createNode('body').setMesh(doc.createMesh('body').addPrimitive(prim(body.pos, body.nrm, body.uv, body.idx, mBody))));
   root.addChild(doc.createNode('interior').setMesh(doc.createMesh('interior').addPrimitive(prim(Float32Array.from(g.pos), Float32Array.from(g.nrm), Float32Array.from(g.uv), g.idx, mInt))));

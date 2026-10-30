@@ -3,6 +3,8 @@
 // short slice never forces eating, but each item visibly moves its bar.
 
 // Iteration 12 (LIGHT): 'throwable' = the grenade slot (the road flare: T throws it, or left click while it is held).
+// Task office-overhaul-20261030 (lane INTERACT, user feedback #6): flares stack to 10; the dedicated grenade slot (HUD key G,
+// items/inventory.ts throwSlot) takes throwables only and G strikes / throws from it (T retired; G no longer drops).
 // Iteration 16: 'gear' = character gear worn in a gear slot (items/gear.ts; lane GEAR).
 export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear';
 
@@ -82,8 +84,8 @@ export const ITEMS: Record<string, ItemDef> = {
   // --- Iteration 12 (LIGHT): light survival (authored models: world/authoredItems.ts) ---
   battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
-  flare: {id: 'flare', name: 'Road flare', short: 'Flare', kind: 'throwable', stackMax: 3, icon: 'flare',
-    description: 'Red highway flare. T strikes and throws one (or left click while it is held): about 50 s of red light and smoke. Light draws the infected.'},
+  flare: {id: 'flare', name: 'Road flare', short: 'Flare', kind: 'throwable', stackMax: 10, icon: 'flare', // INTERACT (#6): was 3
+    description: 'Red highway flare. Goes in the grenade slot: hold G to strike and ready one, release to throw (or hold click while it is in your hand): about 50 s of red light and smoke. Light draws the infected.'},
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
   ...GEAR_ITEMS,
   ...MEDICAL_ITEMS,
@@ -114,7 +116,7 @@ export function effectText(def: ItemDef): string {
 
 /** Iteration 12 (LIGHT): weapon-panel hint while a throwable (flare) is held. */
 export function throwHint(def: ItemDef): string {
-  return `Hold click or T to ready ${def.short.toLowerCase()} · release to throw`; // Iteration 15: grenade-style
+  return `Hold click or G to ready ${def.short.toLowerCase()} · release to throw`; // Iteration 15: grenade-style; INTERACT (#6): G (was T)
 }
 
 /** Weapon-panel hint while a consumable is held. */

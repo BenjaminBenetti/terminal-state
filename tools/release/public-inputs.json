@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 9323,
-      "sha256": "a90fa31485a5d09767ee7811f790fddfe954e41a3ca1be52057537ba8b524a52"
+      "bytes": 10340,
+      "sha256": "75c9b799dc7d78c5fbbbbad3f9ca659b013503ab1def1001168adcdc09a83e89"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1375,8 +1375,13 @@
     },
     {
       "path": "assets/derivatives/meshy-t25-props-20261029.json",
-      "bytes": 1205635,
-      "sha256": "b806743e03407573c1276a2ad58848732eb9e8002e2bedae836f037dea124bbb"
+      "bytes": 1240719,
+      "sha256": "f4f662eeb0cb36b0eb6bf4240d2729ce1e568e0e617310f83a330149d5c02f2e"
+    },
+    {
+      "path": "assets/derivatives/office-overhaul-20261030.json",
+      "bytes": 258052,
+      "sha256": "e3c3dbcba1d32bcb74bd4a8282a8e9d8aef97d29b8e3d6397fc2f8113c77243c"
     },
     {
       "path": "assets/derivatives/office-space-20261029.json",
@@ -1480,18 +1485,18 @@
     },
     {
       "path": "assets/derivatives/props-iteration05.json",
-      "bytes": 74104,
-      "sha256": "70a84cba0c0ab3af54f80455d4d73fa8e3de86e2a9fb7c029b3b5d69d0403c79"
+      "bytes": 74108,
+      "sha256": "a773d5f828f05b07976d0bbac9f294e0739d6d999a7b60f7493e691c1de504e8"
     },
     {
       "path": "assets/derivatives/props-iteration07.json",
-      "bytes": 1352396,
-      "sha256": "e5c528496d0aa1c51db2329911e3640288b01421fd43bc043fc906cc9d38cb6f"
+      "bytes": 1352398,
+      "sha256": "e9be8baa69d28d914124156e525acc71c9e3f77e17362d4156879294551b2508"
     },
     {
       "path": "assets/derivatives/props.json",
-      "bytes": 97393,
-      "sha256": "883f53f8858073f6d61ba8c7a0f4d382ffee5e7aa4c8e9b755487e13786602ca"
+      "bytes": 97397,
+      "sha256": "676efa0cd0efcb53b91e6c1ad249284a109583764b105d0222fca4a2e4d02149"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -1554,9 +1559,9 @@
       "sha256": "e9ca0d440576c98bd9d63cd6a2889c752dd018ad6ab3d98f405afb0d5277d7b6"
     },
     {
-      "path": "assets/models/bench-t25.glb",
-      "bytes": 623608,
-      "sha256": "caad790696f9342d806753f0b8fb578ed50c032a481ee90f1d309b1c82054890"
+      "path": "assets/models/bench-t25r1.glb",
+      "bytes": 519540,
+      "sha256": "490a8be5ae66ca412c02e29514d280c640a2d830cc66904cc6be252c56d6ca87"
     },
     {
       "path": "assets/models/cabinet-low-t25.glb",
@@ -1564,9 +1569,9 @@
       "sha256": "eb44d31c62ccdf4b15417efa9b174a2f3805101f45a2056e8e589f5a2c2566fc"
     },
     {
-      "path": "assets/models/cabinet-tall-t25.glb",
-      "bytes": 445096,
-      "sha256": "a56799dca9c02d32ac07b08a2b9f0ae35aeb25f3b7fde1a034637ee727bd83f8"
+      "path": "assets/models/cabinet-tall-t25r1.glb",
+      "bytes": 303764,
+      "sha256": "83f55c3ca01adaea592ce127c76284644628871fe9e349c739f2a30eb1ae9804"
     },
     {
       "path": "assets/models/crate-t25.glb",
@@ -1649,6 +1654,46 @@
       "sha256": "ef5f410fe9d2d36e117526d4be958b089d35004307774ad241436bc14f726a0d"
     },
     {
+      "path": "assets/models/office-aquarium.glb",
+      "bytes": 346456,
+      "sha256": "0043542dbbe27245d0e2612ccfd7ce71257b169ee28e36e1b1a052c01714fc9e"
+    },
+    {
+      "path": "assets/models/office-arcade-cabinet.glb",
+      "bytes": 420056,
+      "sha256": "04d6d49365c4b7092f86736a7166973ff99b3dd67ccdd3ea5469526d4c5cf246"
+    },
+    {
+      "path": "assets/models/office-architect-model.glb",
+      "bytes": 452296,
+      "sha256": "a4f7b97c247b3e5e41d4018f920794a0635ee5419e3b111b7f347304ced52d98"
+    },
+    {
+      "path": "assets/models/office-archive-boxes.glb",
+      "bytes": 189748,
+      "sha256": "f3bbde81b21777ba29ce33b1663e8a5d91ed488ad2c7737060ed5f43d7c1db94"
+    },
+    {
+      "path": "assets/models/office-bakery-case.glb",
+      "bytes": 454580,
+      "sha256": "6f1611c80524610abb64858baf51e50b64fc517d96b31b5cd4495437abefe6a5"
+    },
+    {
+      "path": "assets/models/office-bean-bag.glb",
+      "bytes": 134200,
+      "sha256": "e7a6a385a3fa9ab8c265bc103d0ae4feffa84e5f37db28fbf0d627260cf2d377"
+    },
+    {
+      "path": "assets/models/office-biohazard-fridge.glb",
+      "bytes": 370796,
+      "sha256": "883d98a1bb0cbb886227011dd285b789fb6a6dcc24693d435a2fef313582be11"
+    },
+    {
+      "path": "assets/models/office-bull-statue.glb",
+      "bytes": 240676,
+      "sha256": "5fef8d640c88145b87139279febe2939d729e1ebc07d71db1dac8d3f97b263c6"
+    },
+    {
       "path": "assets/models/office-bus-wreck.glb",
       "bytes": 757148,
       "sha256": "90332d9e31edadc3e7891c28e018b3afaa2e300cbf1ac6412e0c1a779d0d21e7"
@@ -1659,9 +1704,44 @@
       "sha256": "ae2135b7957103c58a9bc1188afb47b27a6837633b0e5876d8098ad0a40ac848"
     },
     {
+      "path": "assets/models/office-cat-tree.glb",
+      "bytes": 364240,
+      "sha256": "2af93be4a9b92163acac9b680454c0004cfe45e483ad2aa388c27088a61677ee"
+    },
+    {
+      "path": "assets/models/office-cctv-console.glb",
+      "bytes": 438720,
+      "sha256": "b633cb08bd9531704ca5469d0364d62ac429bfb0743b7588bebe080c42ab4b98"
+    },
+    {
+      "path": "assets/models/office-chesterfield-sofa.glb",
+      "bytes": 279844,
+      "sha256": "a4ac082aa2450a0a0d99241184c05b6e44c64b00ec5e6a6f4ba25c37898afcfb"
+    },
+    {
+      "path": "assets/models/office-clothing-rack.glb",
+      "bytes": 533344,
+      "sha256": "3b695fb028b5be3069bfd61b011fd13fdd71c628c8dd5357b83a6cf39daa4134"
+    },
+    {
+      "path": "assets/models/office-coffee-roaster.glb",
+      "bytes": 417544,
+      "sha256": "391f4825bfe612f8b7b57fe72cf787c9db167f8801cb5c920ffc4f7aeea43f24"
+    },
+    {
       "path": "assets/models/office-conference-table.glb",
       "bytes": 334936,
       "sha256": "44088452635a260f6355a1ee6b1fc6a77c079f9c64354955990af24b90cba02d"
+    },
+    {
+      "path": "assets/models/office-console-station.glb",
+      "bytes": 251664,
+      "sha256": "0a79675378b252f856310dac1215377776487acbd2cfaff646c820885dbf8fb0"
+    },
+    {
+      "path": "assets/models/office-crac-unit.glb",
+      "bytes": 356392,
+      "sha256": "7c95c60a35862ba9a8d7f1f1b5b7c3f55dec7323d75d422fad614d784a6ab91e"
     },
     {
       "path": "assets/models/office-dead-plant.glb",
@@ -1669,9 +1749,49 @@
       "sha256": "eced2a56c0e93b2409ebb580095ec681219786e2ce245f58cc8812412e25de0b"
     },
     {
+      "path": "assets/models/office-dough-mixer.glb",
+      "bytes": 330888,
+      "sha256": "e8ba11c7cab5d5544cba7a846064ecad162f42e3a3bc6253286756f906c643a5"
+    },
+    {
+      "path": "assets/models/office-drafting-table.glb",
+      "bytes": 259812,
+      "sha256": "c04ba44dfafb6443e04af70b3ef84f8efed6a56a2ec0f6c94b8d898fbe572595"
+    },
+    {
+      "path": "assets/models/office-dress-form.glb",
+      "bytes": 278060,
+      "sha256": "8557aafc1e9760fb1acc9e19354bae7abd139a16d62a3ae1430ff5ef2e48b438"
+    },
+    {
+      "path": "assets/models/office-espresso-machine.glb",
+      "bytes": 325804,
+      "sha256": "d77effbd4dd7fefb2c641c1ebb411f0f3e54c3eccf8e144d0ec5d656cf209fbc"
+    },
+    {
+      "path": "assets/models/office-exam-table.glb",
+      "bytes": 440364,
+      "sha256": "f0208510ea5beb3b86f5f84b57513124c15fc5fc4755a8cee855534422db6d4c"
+    },
+    {
+      "path": "assets/models/office-executive-chair.glb",
+      "bytes": 269436,
+      "sha256": "804fb8dff7d914fe829ae39af2a3c5f8aa3e4e8b8c87691b33ba4d51d9fbb09f"
+    },
+    {
+      "path": "assets/models/office-executive-desk.glb",
+      "bytes": 506668,
+      "sha256": "bef5423eef493ae01750fb979f41a6a0d21fed5e7f699c364fe3998bcb27ea67"
+    },
+    {
       "path": "assets/models/office-filing-cabinet.glb",
       "bytes": 505980,
       "sha256": "87e21227dc16bcb4e40526ef84b106bccfd6254e73c86f28fafa3d87c122df27"
+    },
+    {
+      "path": "assets/models/office-foosball-table.glb",
+      "bytes": 310132,
+      "sha256": "104151d80c13e9f6120c98820c36f0f327f2aa94d871953a411b39a548a051e0"
     },
     {
       "path": "assets/models/office-gear-armor-vest.glb",
@@ -1704,6 +1824,61 @@
       "sha256": "29078199ba70e0f6940748b6f5be1c9c0cfbddd7f758243e0244cb1df285d6aa"
     },
     {
+      "path": "assets/models/office-giant-teddy.glb",
+      "bytes": 244396,
+      "sha256": "61a10e1e212c2375b84570318b1997e150fb1e4674548e61c6c9726c2c4619b8"
+    },
+    {
+      "path": "assets/models/office-globe-bar.glb",
+      "bytes": 304048,
+      "sha256": "b20ca7abe2fdf416b155154ef6054182afd08429c12ef25071e554fdab954294"
+    },
+    {
+      "path": "assets/models/office-gumball-jar.glb",
+      "bytes": 218628,
+      "sha256": "8f362e2510890246c5676022c5b174feb25f875c8b5d7b0148b5c223356970c9"
+    },
+    {
+      "path": "assets/models/office-gumball-machine.glb",
+      "bytes": 270516,
+      "sha256": "c953f17ae890958ff44b21d7db5ed4a88d7ce5ac6093677f5bf8676077266fae"
+    },
+    {
+      "path": "assets/models/office-jukebox.glb",
+      "bytes": 509156,
+      "sha256": "25fe301c5ab6a2b11ebf80b5c883212b5d8c1d14ddd16db31db0d58002716729"
+    },
+    {
+      "path": "assets/models/office-justice-statue.glb",
+      "bytes": 464520,
+      "sha256": "d74218929cc993efdaa5c92952ab5c8d140731d07cef06ab6960786ea64aa273"
+    },
+    {
+      "path": "assets/models/office-kegerator.glb",
+      "bytes": 214100,
+      "sha256": "9ca1131559a32e75873aab1cf635405edba6d81f6740488799c1f7af2d0d8dd0"
+    },
+    {
+      "path": "assets/models/office-lab-bench.glb",
+      "bytes": 452504,
+      "sha256": "ce7b452cc31830db5beecfd58497b8687e53bd458cd4e01d6b2fa15599982c4b"
+    },
+    {
+      "path": "assets/models/office-law-bookcase.glb",
+      "bytes": 376656,
+      "sha256": "374d34007a47d09a2473d7f6fede1259dc708d94a375bb9e90cc8994bb9bedba"
+    },
+    {
+      "path": "assets/models/office-lobby-sofa.glb",
+      "bytes": 355544,
+      "sha256": "b034348e38f94c773e0ee794523fc56c39658f3116d0a1722f30f318dbfde663"
+    },
+    {
+      "path": "assets/models/office-lounge-armchair.glb",
+      "bytes": 223620,
+      "sha256": "0578bdf8fa1ba0421b11ea636c5430323254200f6cbd02b33c92632c058b3a58"
+    },
+    {
       "path": "assets/models/office-med-arm-sling.glb",
       "bytes": 159544,
       "sha256": "fb93726f0f47bce3d67de71eda41dc224e015a8ce7b97e0e0694fe36fa2e114a"
@@ -1712,6 +1887,26 @@
       "path": "assets/models/office-med-leg-splint.glb",
       "bytes": 232476,
       "sha256": "f983f679db3dd976bd8e256241cd8e21f8ea68bd97ef9f2892afa0243756e045"
+    },
+    {
+      "path": "assets/models/office-metal-detector.glb",
+      "bytes": 352596,
+      "sha256": "844a2df979daa0a76cfa7d50a281542fb203c3335f9ec27abcdb65b1435b3471"
+    },
+    {
+      "path": "assets/models/office-mixing-console.glb",
+      "bytes": 438332,
+      "sha256": "a5d010457044cd528871e90967e4200a3131ec595a69b5efdb7765e68bf45ad9"
+    },
+    {
+      "path": "assets/models/office-nap-pod.glb",
+      "bytes": 290416,
+      "sha256": "1c0e3d0dfe69761a1cf2b8eea0d0de7b40aaf72468649467be942c7f75bddb75"
+    },
+    {
+      "path": "assets/models/office-news-desk.glb",
+      "bytes": 539256,
+      "sha256": "e17eee5e96591082476b0cf42614f16d75f721fe5f68e1dfd801176b080a5295"
     },
     {
       "path": "assets/models/office-office-chair.glb",
@@ -1734,14 +1929,44 @@
       "sha256": "69e63b9079762b82be688a844ab598287996a2b41108ae3a2757ccda644bdb34"
     },
     {
+      "path": "assets/models/office-parcel-pallet.glb",
+      "bytes": 238040,
+      "sha256": "f019cf64e140c306dd3cbfec49f3125ca9686675bb3b293ecb476b87e9a724f8"
+    },
+    {
       "path": "assets/models/office-photocopier.glb",
       "bytes": 697956,
       "sha256": "3879debc91188bc5dd991654450a35d973d41dd3e4901e816be7ef14da6a3277"
     },
     {
+      "path": "assets/models/office-ping-pong-table.glb",
+      "bytes": 327328,
+      "sha256": "b7cb6cb2dbeadf1e75b055aa9d4006dfd2067049a2e79c75dab4f5428ef87ffd"
+    },
+    {
+      "path": "assets/models/office-planter-tree.glb",
+      "bytes": 411936,
+      "sha256": "ec06eca8db3579594607fb289c0378fb02ea21fe171352f3adc831d210a2aa7b"
+    },
+    {
+      "path": "assets/models/office-potted-plant-small.glb",
+      "bytes": 176956,
+      "sha256": "415fcd6371fd06ee2526e67c61f22e0179b1359deb8001f88a19c9ba6041c57e"
+    },
+    {
       "path": "assets/models/office-reception-desk.glb",
       "bytes": 498784,
       "sha256": "8560d15a1017b4b95295b8a07e87906fdc6f223cb063aecc8ed8a55c67a08158"
+    },
+    {
+      "path": "assets/models/office-rocking-horse.glb",
+      "bytes": 288588,
+      "sha256": "5ebe69fc7de46d0a27f9aec8e7f695e2ef49e55052475a87ee72de35226f9006"
+    },
+    {
+      "path": "assets/models/office-rooftop-hvac.glb",
+      "bytes": 307164,
+      "sha256": "031d7a2f14104f4723a69619cf18ca32570b86d82a361de8374673e142f7b333"
     },
     {
       "path": "assets/models/office-rubble-pile.glb",
@@ -1759,14 +1984,84 @@
       "sha256": "8eca841138d89e49b243137421e283c25e94f8d57f4f907ed5d99634f9a924f7"
     },
     {
+      "path": "assets/models/office-satellite-dish.glb",
+      "bytes": 418772,
+      "sha256": "9dad55294b8b62c602ab321966a8793ebd47bd29b7e9eefb5632491ab8db4383"
+    },
+    {
+      "path": "assets/models/office-satellite-model.glb",
+      "bytes": 528188,
+      "sha256": "9098295f6b60cb7ed0fb936e6edc80066a3c72428604fee6fedffa5187ec9c75"
+    },
+    {
+      "path": "assets/models/office-security-turnstile.glb",
+      "bytes": 185696,
+      "sha256": "5036fca00b408301c3ea5e51de0b546dddcacd917a6835df700a9fa61bb41924"
+    },
+    {
+      "path": "assets/models/office-server-cabinet.glb",
+      "bytes": 284588,
+      "sha256": "ad281f20c57129f633fd811fdd6ac0c39996c89ef18706c59ee2a8e61467702c"
+    },
+    {
       "path": "assets/models/office-server-rack.glb",
       "bytes": 354588,
       "sha256": "f8b6c779da94accadd71fd3bf164e0a40ad5163f6a7ca202b5a6d8f2feed14cf"
     },
     {
+      "path": "assets/models/office-ship-model.glb",
+      "bytes": 480996,
+      "sha256": "dc10ffce17cb7187aaef2f0dda67d9bd2331bd3c2cf32f7c83344d972ccf3c9a"
+    },
+    {
+      "path": "assets/models/office-sneaker-wall.glb",
+      "bytes": 449384,
+      "sha256": "b1284e57a59b35be4d2401d9548ed9f9601b145118baf51feeb32adca4c2f9a2"
+    },
+    {
+      "path": "assets/models/office-telescope.glb",
+      "bytes": 466532,
+      "sha256": "3174f986942e1e243f09dd0028d737eac6dd1008db3f57746be729e878220c68"
+    },
+    {
+      "path": "assets/models/office-toilet.glb",
+      "bytes": 169120,
+      "sha256": "4dc5435cd3036a06b1ae5b55ae12effed343675f0e8d2ddf3be974012f742f78"
+    },
+    {
+      "path": "assets/models/office-trading-desk.glb",
+      "bytes": 406132,
+      "sha256": "327b77080919a7f6405eabc479017214f2a0445a12cf61b0bc7d3fc37f4d346b"
+    },
+    {
+      "path": "assets/models/office-treadmill.glb",
+      "bytes": 326436,
+      "sha256": "1cd920a7021f2f2371dce0ef938e3c17a198c5b6fcd5645dea7ff12032fa2589"
+    },
+    {
+      "path": "assets/models/office-tv-camera.glb",
+      "bytes": 284120,
+      "sha256": "07b46929e0c870be941b58cce70d6f64561575acb93a85fcf4490d8a93073939"
+    },
+    {
+      "path": "assets/models/office-vault-safe.glb",
+      "bytes": 380020,
+      "sha256": "3eb0d1a30ef602f0c59d091bd88945b7e853199cd273a9fbc92dfd2c881e6573"
+    },
+    {
+      "path": "assets/models/office-vitals-monitor.glb",
+      "bytes": 396496,
+      "sha256": "5f3eb63504bbea8abf377c074e3086083e8d73afcb4eefcafa300aca1674cf88"
+    },
+    {
       "path": "assets/models/office-water-cooler.glb",
       "bytes": 233012,
       "sha256": "0ea1120c61adffe7754a05bdca9fc7450bf4e20fd4e4a07d587a1c2a0efe9fb2"
+    },
+    {
+      "path": "assets/models/office-water-tower.glb",
+      "bytes": 472444,
+      "sha256": "817da4fde685ce996ec7bc59f88ac1ecdc3cd2c8719d509a37734a48a8e3d95b"
     },
     {
       "path": "assets/models/office-whiteboard.glb",
@@ -2019,9 +2314,9 @@
       "sha256": "4819eaf9e2b9c7d8eef6ce22be62476138e528c6fe035b28037ef7c551359d66"
     },
     {
-      "path": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-      "bytes": 402332,
-      "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa"
+      "path": "assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+      "bytes": 402336,
+      "sha256": "b02f7029b30ddce26a0ef8288a4ff964cc1b76be82c1a07aa26a7c2514f95131"
     },
     {
       "path": "assets/models/p7-fire-extinguisher-t25.glb",
@@ -2384,9 +2679,9 @@
       "sha256": "26578a0e086561ba1f5b407cdb376a5fd5def466c3b6523a08900996194d9ca4"
     },
     {
-      "path": "assets/models/shop-cooler-open-t25.glb",
-      "bytes": 278708,
-      "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f"
+      "path": "assets/models/shop-cooler-open-t25r1.glb",
+      "bytes": 278712,
+      "sha256": "4e68c571d946cf890c4c4fd320b24bf24ec678d7d67b05d6f6f2d8902226e3f7"
     },
     {
       "path": "assets/models/shop-cooler.glb",
@@ -2399,9 +2694,9 @@
       "sha256": "bc8a698a0c3161ac47f10705485fbdf990a8807ed1ef03d7906fc60fd71f842a"
     },
     {
-      "path": "assets/models/shop-display-open-t25.glb",
-      "bytes": 140588,
-      "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005"
+      "path": "assets/models/shop-display-open-t25r1.glb",
+      "bytes": 140592,
+      "sha256": "2c330771f1cabb85b9d7ffcaf956d8d050b3a1cf37a6a56ec357acb86ecc6664"
     },
     {
       "path": "assets/models/shop-display.glb",

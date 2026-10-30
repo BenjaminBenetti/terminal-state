@@ -90,8 +90,9 @@ describe('office level (one continuous layout)', () => {
   it('storeys: station 0, lobby 1, floors 2..8 at hu + 4.4 (n - 1); levelId === floor; one grid size; tower at the same X/Z', () => {
     for (const levelSeed of LEVEL_SEEDS) {
       const l = gen(levelSeed), o = l.office!, f = towerFrame(levelSeed);
-      expect(l.levels.map(L => L.role)).toEqual(['main', 'upper', 'office', 'office', 'office', 'office', 'office', 'office', 'office']);
-      expect(l.levels.map(L => L.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+      // Task office-overhaul-20261030 (lane STRUCT's roof, expectation updated by lane TENANTS): + levels[9] = the roof.
+      expect(l.levels.map(L => L.role)).toEqual(['main', 'upper', 'office', 'office', 'office', 'office', 'office', 'office', 'office', 'roof']);
+      expect(l.levels.map(L => L.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
       const hu = l.levels[1].baseY;
       expect(hu).toBeGreaterThanOrEqual(5.4);
       expect(hu).toBeLessThanOrEqual(5.9);
@@ -280,7 +281,7 @@ describe('office level (one continuous layout)', () => {
         floorEnemies += per([n]);
         floors++;
       }
-      expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6);
+      expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
       expect(l.zombies.every(z => z.archetype === 'zombie' || z.archetype === 'ratdog')).toBe(true);
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
       pickups += l.pickups.length;
@@ -291,8 +292,12 @@ describe('office level (one continuous layout)', () => {
       for (const p of l.props) expect(PROP_DEFS[p.kind], p.kind).toBeDefined();
       // Office furniture per storey: cubicle farms / desks on the office floors, the reception desk in the lobby.
       const on = (n: number, kind: string) => l.props.filter(p => (p.level ?? 0) === n && p.kind === kind).length;
-      for (let n = 2; n <= 8; n++) expect(on(n, 'desk'), `${levelSeed} floor ${n} desks`).toBeGreaterThan(3);
-      expect([2, 3, 4, 5, 6, 7].reduce((s, n) => s + on(n, 'cubiclePartition'), 0)).toBeGreaterThan(40);
+      // Task office-overhaul-20261030 (lane TENANTS): company floors trade some cubicle desks for their own work surfaces (trading
+      // desks, lab benches, drafting tables, consoles, exam tables …): count every work surface, not only the `desk` kind.
+      const WORK = ['desk', 'receptionDesk', 'executiveDesk', 'tradingDesk', 'labBench', 'draftingTable', 'mixingConsole', 'cctvConsole', 'newsDesk', 'monitorDesk', 'examTable', 'consoleStation', 'table'];
+      for (let n = 2; n <= 8; n++) expect(WORK.reduce((s, k) => s + on(n, k), 0), `${levelSeed} floor ${n} work surfaces`).toBeGreaterThan(3);
+      // (TENANTS: open studios / trading floors / labs are partition-free; cubicle farms remain where the company keeps them.)
+      expect([2, 3, 4, 5, 6, 7].reduce((s, n) => s + on(n, 'cubiclePartition') + on(n, 'desk'), 0)).toBeGreaterThan(40);
       expect(on(1, 'receptionDesk')).toBe(1);
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(true);
       // Unique ids across storeys: one list per kind in one layout (indices are the ids).

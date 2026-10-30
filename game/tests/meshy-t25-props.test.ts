@@ -60,7 +60,8 @@ describe('Meshy T2.5 prop / item / light derivatives: files, budgets, provenance
       expect(sha(file), r.id).toBe(r.output.sha256);
       expect(fs.statSync(file).size, r.id).toBe(r.output.bytes);
       expect(r.output.path, r.id).toBe(`game/public/${r.output.url}`);
-      expect(path.basename(r.output.path), r.id).toBe(path.basename(r.restore.path, '.glb') + '-t25.glb');
+      // a local repair (task model-touchups-20261030: record.localRepair, not new Meshy output) ships under -t25<suffix>.glb
+      expect(path.basename(r.output.path), r.id).toBe(path.basename(r.restore.path, '.glb') + `-t25${(r as {localRepair?: {suffix: string}}).localRepair?.suffix ?? ''}.glb`);
       const json = JSON.parse(Buffer.from(fs.readFileSync(file)).subarray(20, 20 + fs.readFileSync(file).readUInt32LE(12)).toString('utf8'));
       expect(json.extensionsUsed ?? [], `${r.id} plain glTF (loader has no Draco / meshopt / KTX2)`).toEqual([]);
       const doc = await io.read(file);

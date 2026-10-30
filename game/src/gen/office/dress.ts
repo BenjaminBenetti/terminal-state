@@ -10,17 +10,24 @@
 //            chairs round the conference tables, the lobby entrance barricade, ceiling fixture grids (troffers) replacing the
 //            dresser's sparse room lights in offices / halls / corridors, and signage (floor plates, stair / elevator / room plates).
 // Everything goes through the dresser's placement primitive (gen/placeKit.ts: door zones, access strips, rings, connectivity).
+//
+// Task office-overhaul-20261030 (lane TENANTS): company floors are dressed by gen/office/companyDress.ts (companyPre / companyExtras
+// in preDress, companyPost at the end of postDress): receptions, themed rooms, executive suites (item 7), server-room rack rows
+// (item 9), corridor clearance + small plants (item 8), company plates / labels, the lobby's tenant directory. The lobby keeps a
+// neutral corporate dressing (modern lobby sofas / armchairs, planter trees).
 
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR, type Grid} from '../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {signDims, wallSignSpot} from '../doorways';
 import {
-  backed, cellsOfBox, doorSide, forceProp, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
+  backed, begin, cellsOfBox, commit, propBlocksDoorway, rollback, doorSide, forceProp, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
 } from '../placeKit';
 import type {Area, Door, LightPlacement, Side, SignPlacement, StationLayout} from '../stationTypes';
 import {CEIL, MARGIN, type TowerFrame} from './frame';
 import type {CarvedTower, OfficeAreaMeta} from './tower';
+import {companyExtras, companyPost, companyPre, companySignStyle, companyOf, roomPlate} from './companyDress';
+import type {Step} from './companies';
 
 export interface OfficeDress {
   layout: StationLayout;
@@ -36,6 +43,8 @@ export interface OfficeDress {
   entrance?: {x0: number; x1: number};
   /** Perimeter strip (+ elevator landing strip) cells held blocked during dress(). */
   held: number[];
+  /** TENANTS: company steps deferred to postDress (pieces by the windows, once the strip is released). */
+  deferred?: {area: number; step: Step}[];
 }
 
 /** Elevator landing strip in front of the shaft door (tower-local cells): 5 cols x 3 rows, kept walkable and prop-free. */
@@ -62,8 +71,29 @@ function perimeterStrip(d: OfficeDress): number[] {
 // ---------------------------------------------------------------------------------------------
 // Before dress()
 
+/**
+ * TENANTS: the storeys share ONE ramps list (gen/office/common.ts cropKit), and placeKit.makePlaceCtx keeps a 1.5 m "stair
+ * approach" clear beyond the ends of EVERY ramp in it — so the station stair run and the other storeys' scissor runs stamped
+ * phantom keep-out patches into the S band of every office floor (cubicle pods / company furniture there failed). While a storey
+ * is dressed (preDress .. end of postDress) its grid sees the ramps of other storeys parked far outside the grid (same indices,
+ * so its own rampIdx lookups are untouched); postDress restores the shared list.
+ */
+const SHARED_RAMPS = new WeakMap<Grid, Grid['ramps']>();
+function ownRampsOnly(g: Grid): void {
+  if (SHARED_RAMPS.has(g)) return;
+  const own = new Set<number>();
+  for (let i = 0; i < g.rampIdx.length; i++) if (g.rampIdx[i] >= 0) own.add(g.rampIdx[i]);
+  SHARED_RAMPS.set(g, g.ramps);
+  g.ramps = g.ramps.map((r, k) => (own.has(k) ? r : {...r, x: -10000, y: -10000}));
+}
+function restoreRamps(g: Grid): void {
+  const all = SHARED_RAMPS.get(g);
+  if (all) { g.ramps = all; SHARED_RAMPS.delete(g); }
+}
+
 export function preDress(d: OfficeDress): void {
   const g = officeGrid(d);
+  ownRampsOnly(g);
   d.held = perimeterStrip(d);
   // The row of the elevator landing strip farthest from the shaft (the rows nearer to it are the shaft opening's door zone,
   // gen/office/index.ts withShaftOpenings).
@@ -72,11 +102,16 @@ export function preDress(d: OfficeDress): void {
   for (const i of d.held) g.blocked[i] = 1;
   const ctx = makePlaceCtx(d.layout, d.rng.fork('office-pre'), d.level);
   for (const a of d.layout.areas) {
-    const role = roleOf(d, a);
+    const m = d.tower.meta.get(a.id);
+    if (!m) continue;
+    // TENANTS: company rooms / receptions / executive suites / server rooms first; base rooms fall through, then get extras.
+    if (companyPre(d, ctx, a, m)) continue;
+    const role = m.role;
     if (role === 'open' || role === 'bay' || role === 'collapsed') cubicleFarm(d, ctx, a, role);
     else if (role === 'meeting') conferenceTable(d, ctx, a);
     else if (role === 'reception') reception(d, ctx, a);
     else if (role === 'transit' || role === 'lobby') lobbyWing(d, ctx, a, role);
+    companyExtras(d, ctx, a, m);
   }
 }
 
@@ -93,7 +128,7 @@ function margins(d: OfficeDress, a: Area): Record<Side, number> {
  * cubicle is 2.5 m wide (side partitions on the module lines) with its desk against the spine. Admin bays get a row of desks.
  * Collapsed (top floor): pods partly missing, partitions knocked down, debris.
  */
-function cubicleFarm(d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'open' | 'bay' | 'collapsed'): void {
+export function cubicleFarm(d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'open' | 'bay' | 'collapsed', pods = false): void {
   const rng = ctx.rng, g = ctx.g;
   const m = margins(d, a);
   const ix0 = a.x + m.W, iy0 = a.y + m.N, iw = a.w - m.W - m.E, ih = a.h - m.N - m.S;
@@ -140,6 +175,8 @@ function cubicleFarm(d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'open' | 'bay
   };
   /** Partition over the cell run (ua, va) .. (ub, vb) inclusive (one of the two spans is a single cell). */
   const partition = (ua: number, va: number, ub: number, vb: number): void => {
+    // TENANTS: open studios / newsrooms are bench desking (desk pods without fabric partitions).
+    if (pods) return;
     const [x0, y0] = xy(Math.min(ua, ub), Math.min(va, vb)), [x1, y1] = xy(Math.max(ua, ub), Math.max(va, vb));
     const cx = (Math.min(x0, x1) + Math.max(x0, x1) + 1) / 2 * CELL, cz = (Math.min(y0, y1) + Math.max(y0, y1) + 1) / 2 * CELL;
     const lx = (Math.abs(x1 - x0) + 1) * CELL, lz = (Math.abs(y1 - y0) + 1) * CELL;
@@ -157,10 +194,16 @@ function cubicleFarm(d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'open' | 'bay
   };
   const collapsed = role === 'collapsed';
   for (const r of rows) {
-    for (const s of segs) {
-      const U0 = du + s.u0, U1 = U0 + 5 * s.n, V0 = dv + r.v0;
+    for (const s0 of segs) {
+      const V0 = dv + r.v0;
       const V1 = V0 + (r.kind === 'double' ? 8 : 4);
-      if (!box(U0, V0, U1, V1)) continue;
+      // TENANTS: a pod that does not fit (a stair approach, company furniture) shrinks / slides to the cubicles that do.
+      let fit: {U0: number; n: number} | null = null;
+      for (let off = 0; off <= 5 * (s0.n - 2) && !fit; off += 5) {
+        for (let n = s0.n - off / 5; n >= 2 && !fit; n--) if (box(du + s0.u0 + off, V0, du + s0.u0 + off + 5 * n, V1)) fit = {U0: du + s0.u0 + off, n};
+      }
+      if (!fit) continue;
+      const s = {u0: fit.U0 - du, n: fit.n}, U0 = fit.U0, U1 = U0 + 5 * s.n;
       if (collapsed && rng.chance(0.45)) continue;
       const spineV = r.kind === 'double' ? V0 + 4 : V0 + 4;
       const knock = collapsed ? 0.4 : 0.08;
@@ -214,13 +257,24 @@ function reception(d: OfficeDress, ctx: PlaceCtx, a: Area): void {
     // Back counter behind the desk (drawers: a holder), the receptionist's side.
     tryPlaceProp(ctx, a, 'cabinetLow', desk.x, q4(desk.z + 1.9), 0, {front: 0.6});
   }
-  // Waiting area: two couches facing each other across a gap, plants at the ends.
+  // Waiting area (TENANTS: the neutral corporate lobby): two modern lobby sofas facing each other across a gap, lounge armchairs
+  // closing the ends, planter trees against the walls (a dead pot plant here and there).
   const side = rng.chance(0.5) ? -1 : 1;
-  const wx = (a.x + (side < 0 ? a.w * 0.2 : a.w * 0.8)) * CELL, wz = (a.y + a.h * 0.5) * CELL;
-  for (const [dz, rot] of [[-1.25, 0], [1.25, Math.PI]] as const) {
-    for (const dx of [0, 1, -1, 2, -2]) if (tryPlaceProp(ctx, a, 'couch', q4(wx + dx), q4(wz + dz), rot, {ring: 0.5})) break;
+  // The pair of sofas is placed together (all-or-nothing) at the first spot that takes both: the preferred end of the hall first.
+  let sx: number | null = null, wz = (a.y + a.h * 0.5) * CELL;
+  search: for (const fx of side < 0 ? [0.2, 0.8, 0.3, 0.7, 0.12, 0.88] : [0.8, 0.2, 0.7, 0.3, 0.88, 0.12]) {
+    for (const fz of [0.5, 0.42, 0.58, 0.35, 0.65]) for (const dx of [0, 1, -1, 2, -2]) {
+      const wx = (a.x + a.w * fx) * CELL, z = (a.y + a.h * fz) * CELL;
+      begin(ctx);
+      const p0 = tryPlaceProp(ctx, a, 'lobbySofa', q4(wx + dx), q4(z - 1.3), 0, {ring: 0.5});
+      const p1 = p0 && tryPlaceProp(ctx, a, 'lobbySofa', q4(wx + dx), q4(z + 1.3), Math.PI, {ring: 0.5});
+      if (p0 && p1) { commit(ctx); sx = p0.x; wz = z; break search; }
+      rollback(ctx);
+    }
   }
-  for (let i = 0, n = rng.int(3, 5); i < n; i++) placeAgainstWall(ctx, a, 'deadPlant', {sides: ['S', 'E', 'W'], front: 0.4});
+  if (sx !== null) for (const s of [-1, 1]) tryPlaceProp(ctx, a, 'loungeArmchair', q4(sx + s * (PROP_DEFS.lobbySofa.w / 2 + 1.1)), q4(wz), s < 0 ? Math.PI / 2 : -Math.PI / 2, {ring: 0.4});
+  for (let i = 0, n = rng.int(2, 4); i < n; i++) placeAgainstWall(ctx, a, 'planterTree', {sides: ['S', 'E', 'W'], front: 0.5});
+  for (let i = 0, n = rng.int(0, 2); i < n; i++) placeAgainstWall(ctx, a, 'deadPlant', {sides: ['S', 'E', 'W'], front: 0.4});
 }
 
 /** Lobby wings / transit concourse: benches, vending, bins, a newsstand kiosk, plants. */
@@ -236,15 +290,21 @@ function lobbyWing(_d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'transit' | 'l
     }
   }
   placeAgainstWall(ctx, a, 'bin', {front: 0.4});
-  for (let i = 0, n = rng.int(1, 3); i < n; i++) placeAgainstWall(ctx, a, 'deadPlant', {front: 0.4});
+  // TENANTS: planter trees in the wide halls, the small pot plant where the hall is narrow.
+  const wide = Math.min(a.w, a.h) * CELL >= 6;
+  for (let i = 0, n = rng.int(1, 3); i < n; i++) placeAgainstWall(ctx, a, wide ? 'planterTree' : 'pottedPlantSmall', {front: 0.4});
+  if (wide && rng.chance(0.5)) {
+    const p = tryPlaceProp(ctx, a, 'lobbySofa', q4((a.x + a.w * rng.range(0.3, 0.7)) * CELL), q4((a.y + a.h / 2) * CELL), rng.pick([0, Math.PI]), {ring: 0.8});
+    void p;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
 // After dress()
 
-const OFFICE_DECOR_ROLES = new Set<OfficeAreaMeta['role']>(['open', 'bay', 'private', 'exec', 'collapsed', 'reception', 'security', 'meeting', 'copy', 'break']);
+const OFFICE_DECOR_ROLES = new Set<OfficeAreaMeta['role']>(['open', 'bay', 'private', 'exec', 'collapsed', 'reception', 'security', 'meeting', 'copy', 'break', 'amenity']);
 /** Areas whose fixtures this module lays out (the dresser's sparse room lights there are replaced). */
-const GRID_LIT = new Set<OfficeAreaMeta['role']>(['open', 'bay', 'collapsed', 'private', 'exec', 'meeting', 'break', 'corridor', 'reception', 'lobby', 'transit', 'security', 'copy', 'storage']);
+const GRID_LIT = new Set<OfficeAreaMeta['role']>(['open', 'bay', 'collapsed', 'private', 'exec', 'meeting', 'break', 'corridor', 'reception', 'lobby', 'transit', 'security', 'copy', 'storage', 'amenity']);
 
 export function postDress(d: OfficeDress): void {
   const {layout} = d;
@@ -299,10 +359,12 @@ export function postDress(d: OfficeDress): void {
   }
   officeLights(d);
   signage(d, ctx);
+  companyPost(d, ctx);
+  restoreRamps(g);
 }
 
 /** Host decor (chair / monitor / ...) beside or on a host prop: collides, never blocks the walk grid; absolute y. */
-function hostDecor(d: OfficeDress, host: PropPlacement, hostIndex: number, kind: PropKind, x: number, z: number, rot: number, y: number, lv: {level?: number}): PropPlacement | null {
+export function hostDecor(d: OfficeDress, host: PropPlacement, hostIndex: number, kind: PropKind, x: number, z: number, rot: number, y: number, lv: {level?: number}): PropPlacement | null {
   const q = Math.round(rot / (Math.PI / 2)) * (Math.PI / 2);
   const {hx, hz} = footprint(kind, q);
   const g = officeGrid(d);
@@ -314,6 +376,8 @@ function hostDecor(d: OfficeDress, host: PropPlacement, hostIndex: number, kind:
       const i = g.idx(cx, cy);
       if (g.cells[i] !== FLOOR || (g.blocked[i] && !inBox(host, cx, cy))) return null;
     }
+    // TENANTS: a chair never reaches into a doorway's clear volume (company desks / consoles stand closer to doors).
+    if (propBlocksDoorway(d.layout, x, z, hx, hz, y, PROP_DEFS[kind].h)) return null;
   }
   const p: PropPlacement = {kind, x: Math.round(x * 1000) / 1000, z: Math.round(z * 1000) / 1000, y, rot: q, area: host.area, hx, hz, h: PROP_DEFS[kind].h, blocksSight: false, variant: 0, host: hostIndex, ...lv};
   d.layout.props.push(p);
@@ -364,6 +428,9 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
   const N = d.tower.north;
   const label = floor === 1 ? 'LOBBY' : `FLOOR ${floor}`;
   const put = (a: Area, side: Side, t: number, yRel: number, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>) => wallSign(ctx, layout, a, side, t, base + yRel, {...s, ...lv});
+  // TENANTS: door plates and wayfinding of a company floor in its signage style, room names from its program.
+  const company = companyOf(d);
+  const style = company ? companySignStyle(company) : undefined;
   // Elevator: a floor plate on the shaft pier on the side away from the call panel (lane LIFT owns the door face: indicator +
   // call panel on the other pier); the stairwell doorway gets its exit sign over the lintel.
   const f = frame, stairWest = f.well.x < f.cab.x;
@@ -387,6 +454,11 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
     if (a.type === 'washroom') text = a.label.startsWith('Men') ? 'MEN' : 'WOMEN';
     if (role === 'private') text = `SUITE ${floor}${String(++suite).padStart(2, '0')}`;
     if (role === 'bay') text = SUITES[(floor * 3 + suite++) % SUITES.length];
+    const prog = d.tower.meta.get(a.id)?.program;
+    if (company && prog) {
+      if (role === 'private') text = prog === 'exam' ? `EXAM ${suite}` : prog === 'partner' ? `${floor}${String(suite).padStart(2, '0')} · COUNSEL` : text;
+      else if (role !== 'open' || (prog !== 'cubicles' && prog !== 'pods')) text = roomPlate(company, prog, text ?? a.label.toUpperCase());
+    }
     if (!text) continue;
     for (const q of doorsOf(layout, a)) {
       const o = layout.areas[q.a === a.id ? q.b : q.a];
@@ -394,7 +466,7 @@ function signage(d: OfficeDress, ctx: PlaceCtx): void {
       const side = doorSide(q, o);
       const mid = q.h === 1 ? (q.x + q.w / 2) * CELL : (q.y + q.h / 2) * CELL;
       const w = text.length > 14 ? 2.0 : 1.3;
-      put(o, side, mid + (q.h === 1 ? q.w : q.h) * CELL / 2 + 0.25 + w / 2, 1.75, {kind: 'service', text, w});
+      put(o, side, mid + (q.h === 1 ? q.w : q.h) * CELL / 2 + 0.25 + w / 2, 1.75, {kind: 'service', text, w, ...(style && a.type !== 'washroom' ? {style} : {})});
       break;
     }
   }

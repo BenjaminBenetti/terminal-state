@@ -268,17 +268,50 @@ export const insideRect = (b: Rect2, x: number, z: number, inset = 0): boolean =
 
 export interface Box3Like { min: P3; max: P3 }
 
-/** Ray (o, unit d) vs axis-aligned box: entry distance (0 when inside) or null. */
-export function rayBox(o: P3, d: P3, b: Box3Like, maxT = Infinity): number | null {
-  let t0 = 0, t1 = maxT;
-  for (const k of ['x', 'y', 'z'] as const) {
-    const inv = 1 / (Math.abs(d[k]) < 1e-9 ? (d[k] < 0 ? -1e-9 : 1e-9) : d[k]);
-    let a = (b.min[k] - o[k]) * inv, c = (b.max[k] - o[k]) * inv;
-    if (a > c) [a, c] = [c, a];
-    t0 = Math.max(t0, a); t1 = Math.min(t1, c);
-    if (t0 > t1) return null;
+/** One slab of rayBox: [t0, t1] narrowed by the slab [mn, mx] along one axis (o, d components); null when it misses. */
+function slab(o: number, d: number, mn: number, mx: number, t0: number, t1: number, out: [number, number]): boolean {
+  const inv = 1 / (Math.abs(d) < 1e-9 ? (d < 0 ? -1e-9 : 1e-9) : d);
+  let a = (mn - o) * inv, c = (mx - o) * inv;
+  if (a > c) { const s = a; a = c; c = s; }
+  out[0] = Math.max(t0, a); out[1] = Math.min(t1, c);
+  return out[0] <= out[1];
+}
+const slabT: [number, number] = [0, 0];
+
+/**
+ * Ray (o, unit d) vs axis-aligned box: entry distance (0 when inside) or null. `dy` lifts the box (task office-overhaul-20261030,
+ * lane LIFT: the cab's buttons are planned relative to its floor). Allocation-free (per-frame button picking).
+ */
+export function rayBox(o: P3, d: P3, b: Box3Like, maxT = Infinity, dy = 0): number | null {
+  if (!slab(o.x, d.x, b.min.x, b.max.x, 0, maxT, slabT)) return null;
+  if (!slab(o.y, d.y, b.min.y + dy, b.max.y + dy, slabT[0], slabT[1], slabT)) return null;
+  if (!slab(o.z, d.z, b.min.z, b.max.z, slabT[0], slabT[1], slabT)) return null;
+  return slabT[0];
+}
+
+/**
+ * Ray (o, unit d) vs a vertical cylinder (centre x / z, radius r, from y0 to y1): the first t in [0, maxT] inside it, or null.
+ * Task office-overhaul-20261030 (lane LIFT): a living body in front of an elevator button takes the click (allocation-free).
+ */
+export function rayCylinder(o: P3, d: P3, cx: number, cz: number, r: number, y0: number, y1: number, maxT: number): number | null {
+  const ox = o.x - cx, oz = o.z - cz;
+  const a = d.x * d.x + d.z * d.z, b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - r * r;
+  let t0: number, t1: number;
+  if (a < 1e-12) { if (c > 0) return null; t0 = 0; t1 = maxT; }
+  else {
+    const disc = b * b - a * c;
+    if (disc < 0) return null;
+    const s = Math.sqrt(disc);
+    t0 = (-b - s) / a; t1 = (-b + s) / a;
   }
-  return t0;
+  if (Math.abs(d.y) < 1e-9) { if (o.y < y0 || o.y > y1) return null; }
+  else {
+    let ya = (y0 - o.y) / d.y, yb = (y1 - o.y) / d.y;
+    if (ya > yb) { const k = ya; ya = yb; yb = k; }
+    t0 = Math.max(t0, ya); t1 = Math.min(t1, yb);
+  }
+  t0 = Math.max(t0, 0); t1 = Math.min(t1, maxT);
+  return t0 <= t1 ? t0 : null;
 }
 
 /** A box around a wall-mounted point (centre p, room-facing normal (nx, nz)): w wide, h tall, d deep. */

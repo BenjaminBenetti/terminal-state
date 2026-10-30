@@ -2,6 +2,8 @@
 // movement is accepted without pointer lock, because headless browsers cannot grant it.
 //
 // Crouch is C (iteration 05, user request: Ctrl was dropped because Ctrl+W closes the tab).
+// Task office-overhaul-20261030 (lane INTERACT): G is the grenade slot (hold to ready, release to throw; it no longer drops) and
+// 6 the backpack slot; E is tap / hold on a grounded bag (gear/system.ts reads Input.down('KeyE')).
 
 /** Crouch key (tap toggles, hold > 0.3 s crouches while held). */
 export const CROUCH_KEYS = ['KeyC'] as const;
@@ -16,7 +18,7 @@ export const GAME_KEYS = new Set(['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'Arrow
 /** Whether a keydown's browser default should be cancelled. `active` = playing. */
 export function shouldPreventKey(e: {code: string}, active: boolean): boolean {
   if (GAME_KEYS.has(e.code)) return true;
-  return active && (/^Digit[1-5]$/.test(e.code) || isCrouchKey(e.code));
+  return active && (/^Digit[1-6]$/.test(e.code) || isCrouchKey(e.code)); // Task office-overhaul-20261030 (INTERACT): 6 = the backpack slot
 }
 
 export class Input {

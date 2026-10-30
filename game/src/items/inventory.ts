@@ -12,6 +12,13 @@
 //   a bag lying on the ground whose transfer view is open.
 // - SNAPSHOTS for run carryover / Retry level (lane RUN): toJSON / fromJSON / loadJSON / clone — deep, same uids, and
 //   nextUid restored above every uid. Every change bumps `version`.
+//
+// Task office-overhaul-20261030 (lane INTERACT, user feedback #6 "introduce grenade slot, flare can go in it. Throw grenade with G"):
+// - GRENADE SLOT: one dedicated slot (`throwSlot`, SlotRef {bar: 'throw', index: 0}; HUD: end of the quick-slot bar, key G) that
+//   takes ONLY kind 'throwable' items. Picking a throwable up fills it first (same item merge, else the empty slot), then the
+//   normal order. count / take / find / holds / hasRoomFor / allStacks / snapshots include it; moves validate it.
+// - SNAPSHOT v2 (`throw` field). loadJSON migrates v1 snapshots (older saves / carryover): the grenade slot starts empty and every
+//   flare stays where it was. A non-throwable found in it (malformed) goes back in through add(), never lost.
 
 import {itemDef} from './items';
 import {WEAPONS} from '../weapons/weapons';
@@ -27,7 +34,7 @@ export interface ItemStack {
   bag?: (ItemStack | null)[];
 }
 
-export type Bar = 'hotbar' | 'pack' | 'gear';
+export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw';
 export interface SlotRef { bar: Bar; index: number }
 /** Iteration 16 (GEAR): a slot of a (grounded, open) backpack's own contents. */
 export interface BagRef { bar: 'bag'; index: number }
@@ -35,6 +42,12 @@ export type AnyRef = SlotRef | BagRef;
 
 export const HOTBAR_SIZE = 5;
 export const PACK_SIZE = 12;
+/** Task office-overhaul-20261030 (INTERACT): grenade slots (one; HUD key G). */
+export const THROW_SLOTS = 1;
+/** Task office-overhaul-20261030 (INTERACT): the grenade slot ref. */
+export const THROW_REF: SlotRef = Object.freeze({bar: 'throw', index: 0}) as SlotRef;
+/** Snapshot format: 1 = iteration 16 (no grenade slot), 2 = + `throw` (task office-overhaul-20261030). */
+export const INVENTORY_JSON_VERSION = 2;
 
 export type MoveResult = 'none' | 'moved' | 'split' | 'merged' | 'swapped' | 'refused';
 
@@ -46,10 +59,13 @@ export interface Refusal { code: RefusalCode; text: string }
 /** Plain-data stack (snapshots). */
 export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[] }
 export interface InventoryJSON {
-  v: 1;
+  /** 1: iteration-16 snapshots (no grenade slot; still loaded), 2: current. */
+  v: 1 | 2;
   hotbar: (StackJSON | null)[];
   pack: (StackJSON | null)[];
   gear: Record<GearSlot, StackJSON | null>;
+  /** v2: the grenade slot (THROW_SLOTS entries). Absent in v1. */
+  throw?: (StackJSON | null)[];
   selected: number;
   nextUid: number;
 }
@@ -86,7 +102,7 @@ export function stacksIn(s: ItemStack | null | undefined): ItemStack[] {
 /** Iteration 16: each inventory instance starts on its own version range, so a swapped-in restored one always redraws. */
 let versionEpoch = 0;
 
-interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag'; list: (ItemStack | null)[]; index: number }
+interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag' | 'throw'; list: (ItemStack | null)[]; index: number }
 
 export class Inventory {
   readonly hotbar: (ItemStack | null)[] = new Array(HOTBAR_SIZE).fill(null);
@@ -94,6 +110,8 @@ export class Inventory {
   readonly pack: (ItemStack | null)[] = new Array(PACK_SIZE).fill(null);
   /** Iteration 16 (GEAR): worn gear, GEAR_SLOTS order (helmet, chest, gloves, boots, backpack). */
   readonly gearSlots: (ItemStack | null)[] = new Array(GEAR_SLOTS.length).fill(null);
+  /** Task office-overhaul-20261030 (INTERACT): the grenade slot (throwables only; G strikes / throws from it). */
+  readonly throwSlot: (ItemStack | null)[] = new Array(THROW_SLOTS).fill(null);
   selected = 0;
   private nextUid = 1;
   /** Bumped on every change so the UI knows when to redraw. */
@@ -122,7 +140,7 @@ export class Inventory {
 
   private list(bar: Bar): (ItemStack | null)[] {
     // strict: any other bar (e.g. a stray 'bag' ref) is no slot at all — it never aliases the pockets
-    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : bar === 'pack' ? this.pack : NO_SLOTS;
+    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : bar === 'pack' ? this.pack : bar === 'throw' ? this.throwSlot : NO_SLOTS;
   }
   get(ref: SlotRef): ItemStack | null {
     return this.list(ref.bar)[ref.index] ?? null;
@@ -229,9 +247,32 @@ export class Inventory {
     return st;
   }
 
-  /** Whether a stack object is anywhere in the quick slots / pockets / gear slots. */
+  /** Whether a stack object is anywhere in the quick slots / pockets / gear slots / grenade slot. */
   holds(stack: ItemStack): boolean {
-    return this.hotbar.includes(stack) || this.pack.includes(stack) || this.gearSlots.includes(stack);
+    return this.hotbar.includes(stack) || this.pack.includes(stack) || this.gearSlots.includes(stack) || this.throwSlot.includes(stack);
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): the throwable in the grenade slot (null when empty). */
+  get thrown(): ItemStack | null {
+    return this.throwSlot[0] ?? null;
+  }
+
+  /**
+   * Task office-overhaul-20261030 (INTERACT): an EMPTY grenade slot takes the first throwable stack carried elsewhere (pockets
+   * first, then quick slots, the held one last) — G then always throws "the equipped throwable". Returns whether it holds one.
+   */
+  refillThrowSlot(): boolean {
+    if (this.throwSlot[0]) return true;
+    const order: SlotRef[] = [
+      ...this.pack.map((_, i) => ({bar: 'pack' as const, index: i})),
+      ...this.hotbar.map((_, i) => ({bar: 'hotbar' as const, index: i})).filter(r => r.index !== this.selected),
+      {bar: 'hotbar', index: this.selected},
+    ];
+    for (const r of order) {
+      const st = this.get(r);
+      if (st && itemDef(st.itemId).kind === 'throwable') return this.moveCount(r, THROW_REF) === 'moved';
+    }
+    return false;
   }
 
   /**
@@ -255,6 +296,20 @@ export class Inventory {
       if (isBagItem(stack.itemId)) { this.refuse('bag-not-pocketable', 'You are already wearing a backpack.'); return stack.count; }
     }
     let left = stack.count;
+    // Task office-overhaul-20261030 (INTERACT): a throwable fills the grenade slot first (same item merge, else the empty slot)
+    if (def.kind === 'throwable') {
+      const t = this.throwSlot[0];
+      if (t && t.itemId === stack.itemId && t.count < def.stackMax) {
+        const n = Math.min(left, def.stackMax - t.count);
+        t.count += n;
+        left -= n;
+      } else if (!t) {
+        const n = Math.min(left, def.stackMax);
+        this.throwSlot[0] = n === stack.count ? stack : {...stack, uid: this.nextUid++, count: n};
+        left -= n;
+      }
+      if (!left) { this.refusal = null; this.version++; return 0; }
+    }
     if (def.stackMax > 1) {
       for (const s of [...this.pack, ...this.hotbar]) {
         if (!s || s.itemId !== stack.itemId || s.count >= def.stackMax) continue;
@@ -270,7 +325,7 @@ export class Inventory {
       for (let i = 0; i < list.length && left > 0; i++) {
         if (list[i]) continue;
         const n = Math.min(left, def.stackMax);
-        list[i] = n === stack.count && left === stack.count ? stack : {...stack, uid: this.nextUid++, count: n};
+        list[i] = n === stack.count && left === stack.count && !this.throwSlot.includes(stack) ? stack : {...stack, uid: this.nextUid++, count: n};
         left -= n;
       }
       if (!left) break;
@@ -281,14 +336,14 @@ export class Inventory {
 
   count(itemId: string): number {
     let n = 0;
-    for (const s of [...this.hotbar, ...this.pack]) if (s && s.itemId === itemId) n += s.count;
+    for (const s of [...this.hotbar, ...this.pack, ...this.throwSlot]) if (s && s.itemId === itemId) n += s.count; // + grenade slot (INTERACT)
     return n;
   }
 
-  /** Removes up to n of an item (backpack first). Returns how many were removed. */
+  /** Removes up to n of an item (backpack first; the grenade slot last). Returns how many were removed. */
   take(itemId: string, n: number): number {
     let got = 0;
-    for (const bar of ['pack', 'hotbar'] as Bar[]) {
+    for (const bar of ['pack', 'hotbar', 'throw'] as Bar[]) {
       const list = this.list(bar);
       for (let i = list.length - 1; i >= 0 && got < n; i--) {
         const s = list[i];
@@ -443,6 +498,8 @@ export class Inventory {
 
   private acceptsText(e: End, itemId: string): Refusal | null {
     const def = itemDef(itemId);
+    // Task office-overhaul-20261030 (INTERACT): the grenade slot takes throwables only
+    if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};
     if (e.kind === 'gear') {
       const slot = GEAR_SLOTS[e.index];
       const spec = def.gear;
@@ -545,7 +602,7 @@ export class Inventory {
     const def = itemDef(itemId);
     if (def.gear && !this.gearSlots[GEAR_SLOTS.indexOf(def.gear.slot)]) return true; // worn straight away
     if (isBagItem(itemId)) return false;
-    for (const s of [...this.hotbar, ...this.pack]) {
+    for (const s of [...this.hotbar, ...this.pack, ...(def.kind === 'throwable' ? this.throwSlot : [])]) { // + grenade slot (INTERACT)
       if (!s) return true;
       if (s.itemId === itemId && s.count < def.stackMax) return true;
     }
@@ -553,7 +610,7 @@ export class Inventory {
   }
 
   find(uid: number): SlotRef | null {
-    for (const bar of ['hotbar', 'pack', 'gear'] as Bar[]) {
+    for (const bar of ['hotbar', 'pack', 'gear', 'throw'] as Bar[]) {
       const i = this.list(bar).findIndex(s => s?.uid === uid);
       if (i >= 0) return {bar, index: i};
     }
@@ -565,7 +622,7 @@ export class Inventory {
   toJSON(): InventoryJSON {
     const gear = {} as Record<GearSlot, StackJSON | null>;
     GEAR_SLOTS.forEach((slot, i) => { gear[slot] = stackToJSON(this.gearSlots[i]); });
-    return {v: 1, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), gear, selected: this.selected, nextUid: this.nextUid};
+    return {v: INVENTORY_JSON_VERSION, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), gear, throw: this.throwSlot.map(stackToJSON), selected: this.selected, nextUid: this.nextUid};
   }
 
   /** A new inventory from a snapshot (deep; same uids; nextUid above every uid). */
@@ -575,11 +632,17 @@ export class Inventory {
     return inv;
   }
 
-  /** Restore a snapshot IN PLACE (keeps this object, which the UI / container closures hold). */
+  /**
+   * Restore a snapshot IN PLACE (keeps this object, which the UI / container closures hold).
+   * Task office-overhaul-20261030 (INTERACT): v1 snapshots (no `throw`) load with an empty grenade slot (flares stay put).
+   */
   loadJSON(j: InventoryJSON): void {
     const hot = (j.hotbar ?? []).map(stackFromJSON);
     const gear = GEAR_SLOTS.map(slot => stackFromJSON(j.gear?.[slot] ?? null));
     const pack = (j.pack ?? []).map(stackFromJSON);
+    const thr = ((j.v ?? 1) >= 2 && Array.isArray(j.throw) ? j.throw : []).map(stackFromJSON);
+    this.throwSlot.fill(null);
+    for (let i = 0; i < THROW_SLOTS; i++) { const s = thr[i]; if (s && itemDef(s.itemId).kind === 'throwable') this.throwSlot[i] = s; }
     this.hotbar.fill(null);
     for (let i = 0; i < HOTBAR_SIZE; i++) this.hotbar[i] = hot[i] ?? null;
     this.gearSlots.fill(null);
@@ -588,9 +651,9 @@ export class Inventory {
     this.pack.length = 0;
     for (let i = 0; i < cap; i++) this.pack.push(pack[i] ?? null);
     let maxUid = 0;
-    const all = [...this.hotbar, ...this.pack, ...this.gearSlots].flatMap(stacksIn);
+    const all = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot].flatMap(stacksIn);
     for (const s of all) maxUid = Math.max(maxUid, s.uid);
-    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...gear.filter((s, i) => s && this.gearSlots[i] !== s)].filter((s): s is ItemStack => !!s);
+    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...gear.filter((s, i) => s && this.gearSlots[i] !== s), ...thr.filter((s, i) => s && this.throwSlot[i] !== s)].filter((s): s is ItemStack => !!s);
     for (const s of stray) for (const x of stacksIn(s)) maxUid = Math.max(maxUid, x.uid);
     this.nextUid = Math.max(j.nextUid ?? 1, maxUid + 1);
     this.selected = Math.max(0, Math.min(HOTBAR_SIZE - 1, Math.floor(j.selected ?? 0)));
@@ -605,9 +668,9 @@ export class Inventory {
     return Inventory.fromJSON(this.toJSON());
   }
 
-  /** Every stack held (quick slots, pockets, worn gear; `withBag`: the worn backpack's contents too — audits / tests only). */
+  /** Every stack held (quick slots, pockets, worn gear, grenade slot; `withBag`: the worn backpack's contents too — audits / tests only). */
   allStacks(withBag = false): ItemStack[] {
-    const top = [...this.hotbar, ...this.pack, ...this.gearSlots].filter((s): s is ItemStack => !!s);
+    const top = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot].filter((s): s is ItemStack => !!s);
     return withBag ? top.flatMap(stacksIn) : top;
   }
 
@@ -645,6 +708,13 @@ export class Inventory {
       if (gearSpec(s.itemId)?.slot !== slot) out.push(`${s.itemId} in gear slot ${slot}`);
       check(s, `gear:${slot}`);
     });
+    // Task office-overhaul-20261030 (INTERACT): the grenade slot holds throwables only
+    this.throwSlot.forEach(s => {
+      if (!s) return;
+      if (itemDef(s.itemId).kind !== 'throwable') out.push(`${s.itemId} in the grenade slot`);
+      check(s, 'throw');
+    });
+    if (this.throwSlot.length !== THROW_SLOTS) out.push('grenade slot resized');
     if (this.hotbar.length !== HOTBAR_SIZE) out.push('slot arrays resized');
     if (this.pack.length !== this.capacity) out.push(`pockets ${this.pack.length} != capacity ${this.capacity}`);
     if (this.gearSlots.length !== GEAR_SLOTS.length) out.push('gear slots resized');

@@ -12,6 +12,11 @@
 // stationDress.dress() → office post-dressing (every storey) → start → whole-level enemies / loose supplies / weapon finds (storey
 // by storey) → applyLighting → landing lights → finishTraversal → enemy archetypes → window spans + daylight per storey →
 // layout.office (OfficeTowerInfo v2) → validation (retry on issues).
+//
+// Task office-overhaul-20261030 (lane STRUCT): + levels[9] = the ROOF (role 'roof', open sky, deck at floor 8 + 4.4; gen/office/roof.ts)
+// reached by the caged access ladder from floor 8's roof access closet through a ceiling hatch (a player-only climb: the AI graph
+// never uses it); the station <-> lobby connection is the broad TRANSIT HALL (fixed stair + two stopped escalators on one pitch,
+// gen/office/street.ts + transit.ts) instead of the single narrow stair core. Kit: 10 level grids.
 
 import {Rng, hashString} from '../../core/rng';
 import {CELL, FLOOR, SOLID, type Grid} from '../grid';
@@ -23,17 +28,22 @@ import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
 import type {SectionGenContext} from '../../levels/types';
 import type {Door, OfficePose, OfficeTowerInfo, StationLayout} from '../stationTypes';
-import {CEIL, FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_TOP_FLOOR, landingRect, officeSeed, towerFrame, type TowerFrame} from './frame';
+import {CEIL, FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR, landingRect, officeSeed, towerFrame, type TowerFrame} from './frame';
 import {OFFICE_CANVAS, TOWER_CANVAS, cropKit} from './common';
 import {carveOfficeFloor, carveScissor, storeyLabel, type CarvedTower, type ScissorRun} from './tower';
 import {carveStreet, type StreetCarve} from './street';
-import {landingStrip, postDress, preDress, wallSign, type OfficeDress} from './dress';
-import {makePlaceCtx} from '../placeKit';
+import {landingStrip, postDress, preDress, type OfficeDress} from './dress';
 import {OFFICE_ENEMIES, officeWeaponPlan, placeOfficeEnemies, placeOfficeSupplies, placeOfficeWeapons, type SpawnField} from './spawns';
 import {addDaylight, windowSpans, type StoreyWindow} from './windows';
 import {officeIssues} from './validate';
+import {officeTenants} from './tenants'; // Task office-overhaul-20261030 (lane TENANTS)
+// Task office-overhaul-20261030 (lane STRUCT): the roof storey and the transit hall.
+import {carveRoof, dressRoof, roofCoreCells, roofDaylight, roofHold, roofInfo, roofLadder, roofSky, roofStrip, type RoofCarve} from './roof';
+import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, transitRails, transitSigns} from './transit';
 
-export {OFFICE_FLOORS, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
+export {OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
+export {roofLadderPose} from './roof';
+export {transitPose} from './transit';
 export {officeIssues} from './validate';
 export {officeModelKeysFor} from './kinds';
 
@@ -46,7 +56,7 @@ export const OFFICE_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0};
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
-/** The ONE continuous Office Space layout (station, lobby, office floors 2..8). */
+/** The ONE continuous Office Space layout (station, lobby, office floors 2..8, the roof). */
 export function generateOfficeLevel(ctx: SectionGenContext): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const f = towerFrame(ctx.levelSeed);
@@ -89,12 +99,15 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   if (!s) return null;
   const hu = s.hu;
   const TX = TOWER_CANVAS.x, TY = TOWER_CANVAS.y;
-  /** Absolute floor of storey n (0 = the station's main level). */
+  /** Absolute floor of storey n (0 = the station's main level); [OFFICE_ROOF_LEVEL] = the roof deck. */
   const bases = [0, ...OFFICE_FLOORS.map(n => r3(hu + FLOOR_HEIGHT * (n - 1)))];
   const towers: CarvedTower[] = [s.tower];
   for (let n = 2; n <= OFFICE_TOP_FLOOR; n++) towers.push(carveOfficeFloor(k, f, {ox: TX, oy: TY, level: n, base: bases[n]}, n, n === OFFICE_TOP_FLOOR, rng.fork(`program-${n}`)));
   const landings = [towers[0].core.landing, ...towers.map(t => t.core.landing)];
   const runs = carveScissor(k, f, TX, TY, bases, landings);
+  // Task office-overhaul-20261030 (lane STRUCT): the roof deck over the whole tower, the hatch, the roof access closet on floor 8.
+  bases[OFFICE_ROOF_LEVEL] = r3(bases[OFFICE_TOP_FLOOR] + FLOOR_HEIGHT);
+  const rc: RoofCarve = carveRoof(k, f, TX, TY, bases[OFFICE_TOP_FLOOR], bases[OFFICE_ROOF_LEVEL]);
 
   // --- Crop: tower interior NW corner at grid cell (MARGIN, MARGIN) on every storey ----------------------------------------
   let x1 = TX + f.TW, y1 = TY + f.TD;
@@ -103,13 +116,14 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
     x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1);
   }
   const ox = TX - MARGIN, oy = TY - MARGIN;
-  const c = cropKit(k, [0, ...OFFICE_FLOORS], ox, oy, x1 - ox + 3, y1 - oy + 3, s.storefronts);
+  const c = cropKit(k, [0, ...OFFICE_FLOORS, OFFICE_ROOF_LEVEL], ox, oy, x1 - ox + 3, y1 - oy + 3, s.storefronts);
   for (const t of towers) t.at = {ox: MARGIN, oy: MARGIN, level: t.at.level, base: t.at.base};
 
-  // --- Storeys, stair links (station → lobby run first, then the scissor runs 1→2 … 7→8) -----------------------------------
-  const levels: Level[] = c.grids.map((grid, id) => ({id, role: id === 0 ? 'main' : id === 1 ? 'upper' : 'office', grid, baseY: bases[id]}));
-  const stationFlights = c.flights.filter(q => q.area === s.run.id);
-  const links: LevelLink[] = [linkOf(0, 0, 1, stationFlights)];
+  // --- Storeys, stair links (the transit hall's lanes first — its fixed stair is link 0 —, then the scissor runs 1→2 … 7→8, then
+  // the roof ladder: a player-only 'ladder' link) -------------------------------------------------------------------------------
+  const levels: Level[] = c.grids.map((grid, id) => ({id, role: id === 0 ? 'main' : id === 1 ? 'upper' : id === OFFICE_ROOF_LEVEL ? 'roof' : 'office', grid, baseY: bases[id]}));
+  const links: LevelLink[] = [];
+  const transitLinkIds = transitLinks(s.hallRun, c.flights, links);
   const runLinks = runs.map(r => {
     const l = linkOf(links.length, r.lower, r.upper, r.flights.map(i => c.flights[i]));
     links.push(l);
@@ -121,9 +135,13 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
     playerSpawn: {x: 0, z: 0, yaw: 0}, trench: c.trenches[0], trenches: c.trenches, platform: s.platform.id, platforms: [s.platform.id],
     traversal: {stairs: c.flights, ladders: [], underpasses: []}, levels, levelLinks: links, rails: [],
   };
+  levels[OFFICE_ROOF_LEVEL].sky = roofSky(layout, f, rc);
   registerApertures(layout.levels);
-  layout.rails = deriveRails(layout.levels);
+  layout.rails = [...deriveRails(layout.levels), ...transitRails(s.hallRun, hu)];
   layout.traversal.ladders = placeLadders(layout);
+  const roof = roofLadder(layout, rc);
+  layout.traversal.ladders.push(roof.ladder);
+  links.push(roof.link);
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
   // --- Dressing: office pre-dressing per storey → ONE dresser pass → office post-dressing per storey ------------------------
@@ -131,29 +149,47 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
     layout, frame: f, tower: t, floor: t.floor, top: t.floor === OFFICE_TOP_FLOOR, level: t.floor, base: bases[t.floor],
     rng: rng.fork(`office-dress-${t.floor}`), entrance: t.floor === 1 ? s.entrance : undefined, held: [],
   }));
+  // Lane STRUCT: the lobby gate line and the escalator barricade first (lifted with the dressing); then the transit mouths, the
+  // run, the roof deck and the roof access closet are held empty while the dressers run.
+  transitPreDress(layout, s, rng.fork('transit'));
+  const release = holdCells(layout, [...mouthZones(layout, s.hallRun), ...roofHold(layout, rc)]);
   withShaftOpenings(layout, f, towers, () => {
     for (const d of dresses) preDress(d);
     dress(layout, rng.fork('dress'));
     for (const d of dresses) postDress(d);
   });
+  release();
+  roofStrip(layout, rc);
+  const roofDress = dressRoof(layout, f, rc, rng.fork('roof'));
+  layout.rails = [...layout.rails, ...roofDress.rails];
 
   // --- Player start (after dressing, like placeSpawns): the platform's east end, far from the exit passage, looking west -----
   const start = startOf(layout, s);
 
   // --- Whole-level populations, storey by storey ---------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
-  const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0), keep: keepPoints(f, towers)};
+  const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0, layout.levelLinks), keep: keepPoints(f, towers)};
+  // Lane STRUCT: nobody waits at the roof hatch or at the foot of the ladder.
+  field.keep.push({level: OFFICE_ROOF_LEVEL, x: roof.ladder.top.x, z: roof.ladder.top.z}, {level: OFFICE_TOP_FLOOR, x: roof.ladder.bottom.x, z: roof.ladder.bottom.z});
   const storeyLevels = (floor: number): number[] => (floor === 1 ? [0, 1] : [floor]);
   const plan = officeWeaponPlan(ctx.levelSeed, layout.startWeapon);
   for (const t of towers) {
     const n = t.floor;
     placeOfficeEnemies(layout, rng.fork(`office-enemies-${n}`), field, storeyLevels(n), n === 1 ? OFFICE_ENEMIES.street : OFFICE_ENEMIES.floor);
   }
+  // Lane STRUCT: 0-2 enemies already on the roof (they never climb the ladder: no AI link).
+  {
+    const free = holdCells(layout, roofCoreCells(layout, f));
+    placeOfficeEnemies(layout, rng.fork('office-enemies-roof'), field, [OFFICE_ROOF_LEVEL], [0, 2]);
+    free();
+  }
   for (const t of towers) placeOfficeSupplies(layout, rng.fork(`office-supplies-${t.floor}`), field, storeyLevels(t.floor), t.floor === 1);
   for (const t of towers) placeOfficeWeapons(layout, rng.fork(`office-weapons-${t.floor}`), plan[t.floor] ?? [], field, storeyLevels(t.floor), 30);
 
   // --- Lighting, traversal finishing, archetypes, windows + daylight, the tower record -------------------------------------
   applyLighting(layout, rng.fork('lighting'));
+  // Lane STRUCT: the open-sky roof has no fixtures (its daylight is fixture-less, added below).
+  layout.lights = layout.lights.filter(l => (l.level ?? layout.areas[l.area]?.level ?? 0) !== OFFICE_ROOF_LEVEL);
   landingLights(layout, f, towers, bases);
   finishTraversal(layout);
   assignEnemyArchetypes(layout);
@@ -163,8 +199,11 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
     addDaylight(layout, spans, t.floor, t.floor);
     windows.push(...spans);
   }
+  roofDaylight(layout, f, rc);
   layout.office = officeInfo(layout, f, towers, bases, runs, runLinks, windows, start);
-  streetSigns(layout, s, hu);
+  layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures);
+  layout.office.transit = transitInfo(layout, s, transitLinkIds);
+  streetSigns(layout, s, f, rc);
   return layout;
 }
 
@@ -289,6 +328,8 @@ function officeInfo(layout: StationLayout, f: TowerFrame, towers: readonly Carve
     start,
     name: f.name,
     gearSpots: towers.flatMap(t => gearSpots(layout, t)),
+    // Task office-overhaul-20261030 (lane TENANTS): the company of each office floor 2..8 (palette / finish for lane ARCH).
+    tenants: officeTenants(f.levelSeed).map(t => ({...t, palette: {...t.palette}})),
   };
 }
 
@@ -309,16 +350,18 @@ function gearSpots(layout: StationLayout, tower: CarvedTower): NonNullable<Offic
   return out;
 }
 
-function streetSigns(layout: StationLayout, s: StreetCarve, hu: number): void {
-  const lobby = layout.areas[s.coreLobby.id], landing = layout.areas[s.landing.id], T = layout.areas[s.ticketHall.id], transit = layout.areas[s.transit.id];
-  const name = layout.office!.name.toUpperCase();
-  // Over the core door in the ticket hall (its north wall), hanging in the core lobby, over the landing door in the lobby.
-  const c0 = makePlaceCtx(layout, new Rng(1), 0), c1 = makePlaceCtx(layout, new Rng(2), 1);
-  const doorT = layout.doors.find(q => (q.a === T.id && q.b === lobby.id) || (q.b === T.id && q.a === lobby.id));
-  if (doorT) wallSign(c0, layout, T, 'N', (doorT.x + doorT.w / 2) * CELL, 3.0, {kind: 'info', text: `${name} · LOBBY`, arrow: 'up', w: 2.6});
-  layout.signs.push({x: lobby.x * CELL + 0.7, y: 2.55, z: (lobby.y + lobby.h / 2) * CELL, rot: Math.PI / 2, kind: 'info', text: 'OFFICE TOWER', arrow: 'up', area: lobby.id, hang: true, w: 1.6});
-  const doorL = layout.doors.find(q => q.b === landing.id || q.a === landing.id);
-  if (doorL) wallSign(c1, layout, transit, 'S', (doorL.x + doorL.w / 2) * CELL, hu + 2.75, {kind: 'info', text: 'TO TRAINS', arrow: 'down', w: 1.6, level: 1});
+/**
+ * Station / lobby wayfinding (task office-overhaul-20261030, lane STRUCT: the transit hall's signs, gen/office/transit.ts) and the
+ * ROOF ACCESS plates of the roof access closet on floor 8 (over its door on the corridor side; beside the ladder inside).
+ */
+function streetSigns(layout: StationLayout, s: StreetCarve, f: TowerFrame, rc: RoofCarve): void {
+  transitSigns(layout, s, layout.office!.name);
+  const lad = layout.traversal.ladders.find(l => l.kind === 'roof');
+  if (!lad) return;
+  const b8 = rc.base8, c = layout.areas[rc.closet.id];
+  const door = layout.doors.find(d => (d.a === c.id || d.b === c.id) && d.level === OFFICE_TOP_FLOOR);
+  if (door) layout.signs.push({x: r3((door.x + door.w / 2) * CELL), y: r3(b8 + 2.4), z: r3(W(f.cy1 + 1) + 0.02), rot: 0, kind: 'service', text: 'ROOF ACCESS', area: door.a === c.id ? door.b : door.a, w: 1.2, level: OFFICE_TOP_FLOOR});
+  layout.signs.push({x: r3(lad.x + 0.64), y: r3(b8 + 1.55), z: r3(lad.faceZ + 0.02), rot: 0, kind: 'service', text: 'ROOF', area: c.id, w: 0.56, level: OFFICE_TOP_FLOOR});
 }
 
 /** The elevator landing strip in front of the shaft door (world m), kept walkable and prop-free on every storey — QA / tests. */

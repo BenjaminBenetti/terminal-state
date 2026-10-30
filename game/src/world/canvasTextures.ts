@@ -953,3 +953,64 @@ export function vendFrontTexture(): THREE.CanvasTexture {
     panelWear(p, false);
   });
 }
+
+// ---- office surfaces (task office-overhaul-20261030, lane ARCH) ------------------------------------
+// Neutral, tileable canvas maps of the office architecture (world/officeArch.ts tints them per tenant / finish):
+//  - drywall / carpet / ceilingTile: procedural stand-ins for the Codex T4 office-wall / T1 office-carpet / T2 ceiling-tile
+//    textures while those load (or when absent); authored to the same mean linear luminance (0.40 / 0.105 / 0.40) so the
+//    office shaders' normalisation reads them alike;
+//  - grain: the shared fine mottle / speckle of every office hard floor (vinyl, tile, stone, concrete, raised floor, roof
+//    membrane), mean linear ~0.5 (the floor shader divides by it).
+
+export type OfficeSurfaceName = 'drywall' | 'carpet' | 'ceilingTile' | 'grain';
+
+/** Mean linear luminance each office surface map is authored to (the office shaders normalise by it). */
+export const OFFICE_SURFACE_MEAN: Record<OfficeSurfaceName, number> = {drywall: 0.4, carpet: 0.105, ceilingTile: 0.4, grain: 0.5};
+
+const officeSurfaceCache = new Map<OfficeSurfaceName, THREE.CanvasTexture>();
+
+/** Shared office surface map (generated once; do not mutate repeat / offset). */
+export function officeSurface(name: OfficeSurfaceName): THREE.CanvasTexture {
+  let t = officeSurfaceCache.get(name);
+  if (t) return t;
+  t = name === 'drywall' ? canvasTexture(512, 512, 9301, (ctx, w, h, rnd) => {
+    // Matt emulsion over plasterboard: broad mottle, a few flaked patches down to the grey board, faint runs.
+    ctx.fillStyle = '#b2aca0'; ctx.fillRect(0, 0, w, h);
+    stains(ctx, w, h, rnd, 30, 'rgba(150,144,132,A)', 120, 0.35);
+    stains(ctx, w, h, rnd, 20, 'rgba(198,192,180,A)', 90, 0.3);
+    speckle(ctx, w, h, rnd, 2600, ['#aaa498', '#bab4a8', '#a49e92'], 0.5, 1.4);
+    for (let i = 0; i < 9; i++) {
+      const x = rnd() * w, y = rnd() * h, r = 8 + rnd() * 26;
+      for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) {
+        ctx.fillStyle = '#8c8c89';
+        ctx.beginPath();
+        for (let k = 0; k < 11; k++) { const a = k / 11 * Math.PI * 2, rr = r * (0.6 + rnd() * 0.5); ctx.lineTo(x + ox + Math.cos(a) * rr, y + oy + Math.sin(a) * rr * 0.8); }
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    for (let i = 0; i < 12; i++) {
+      const x = rnd() * w, len = (0.2 + rnd() * 0.6) * h, y = rnd() * h;
+      const g = ctx.createLinearGradient(0, y, 0, y + len);
+      g.addColorStop(0, 'rgba(110,100,84,0.18)'); g.addColorStop(1, 'rgba(110,100,84,0)');
+      ctx.fillStyle = g; ctx.fillRect(x, y, 2 + rnd() * 3, len);
+    }
+  }) : name === 'carpet' ? canvasTexture(256, 256, 9302, (ctx, w, h, rnd) => {
+    // Loop-pile commercial carpet: dense two-tone fibre speckle, faint traffic soiling.
+    ctx.fillStyle = '#5a5c60'; ctx.fillRect(0, 0, w, h);
+    speckle(ctx, w, h, rnd, 9000, ['#4a4c50', '#6c6e72', '#55575c', '#7a7a7a', '#45474b'], 0.4, 1.1);
+    stains(ctx, w, h, rnd, 10, 'rgba(40,36,30,A)', 50, 0.25);
+  }) : name === 'ceilingTile' ? canvasTexture(256, 256, 9303, (ctx, w, h, rnd) => {
+    // Fissured mineral-fibre acoustic tile: pinholes and short fissures, a little water staining.
+    ctx.fillStyle = '#b4aa96'; ctx.fillRect(0, 0, w, h);
+    speckle(ctx, w, h, rnd, 1400, ['#8a8170', '#7a7262', '#9a917f'], 0.5, 1.3);
+    stains(ctx, w, h, rnd, 6, 'rgba(150,118,70,A)', 60, 0.22);
+  }) : canvasTexture(512, 512, 9304, (ctx, w, h, rnd) => {
+    // Neutral mid-grey grain (hard floors tint it): soft mottle + fine speckle, no pattern.
+    ctx.fillStyle = '#bcbcbc'; ctx.fillRect(0, 0, w, h);
+    stains(ctx, w, h, rnd, 40, 'rgba(160,160,160,A)', 110, 0.35);
+    stains(ctx, w, h, rnd, 30, 'rgba(214,214,214,A)', 90, 0.3);
+    speckle(ctx, w, h, rnd, 7000, ['#a8a8a8', '#cfcfcf', '#b2b2b2', '#c6c6c6'], 0.4, 1.3);
+  });
+  officeSurfaceCache.set(name, t);
+  return t;
+}

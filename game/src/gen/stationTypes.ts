@@ -7,6 +7,7 @@ import type {PropPlacement} from './props';
 import type {ShopBox} from './storefronts';
 import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
+import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -22,7 +23,9 @@ export type RoomType =
   // Iteration 16 (WORLD-GEN): office tower (gen/office/*) — lobby halls, corridors / elevator lobbies, open-plan cubicle
   // farms, enclosed office rooms (private / meeting / break / copy / storage / server / executive: by purpose), the elevator
   // cab and the stairwell vestibule. Never produced by generateStation.
-  | 'office-lobby' | 'office-corridor' | 'office-open' | 'office-room' | 'office-elevator' | 'office-stair';
+  | 'office-lobby' | 'office-corridor' | 'office-open' | 'office-room' | 'office-elevator' | 'office-stair'
+  // Task office-overhaul-20261030 (lane STRUCT): the tower's open-sky roof deck (layout level 9).
+  | 'office-roof';
 
 /**
  * Macro station archetype (iteration 04): recognisably different structures, not one template.
@@ -85,6 +88,8 @@ export interface Area extends Rect {
    * identically into both connected grids); `ceil` is absolute on every level.
    */
   level?: number;
+  /** Task office-overhaul-20261030 (lane TENANTS): the company occupying this office area (office floors 2..8 only). */
+  tenant?: CompanyId;
 }
 
 export interface Door extends Rect {
@@ -129,7 +134,11 @@ export interface SignPlacement {
   w?: number;
   /** Iteration 08: level the sign is mounted on (default 0; hang rods reach that level's ceiling); y is absolute. */
   level?: number;
+  /** Task office-overhaul-20261030 (lane TENANTS): company-styled plate (world/builder.ts signTexture); absent = the default plate. */
+  style?: SignStyle;
 }
+/** Task office-overhaul-20261030 (lane TENANTS): plate colours (0xRRGGBB) and typeface of a company / directory sign. */
+export interface SignStyle { bg: number; fg: number; accent?: number; font?: 'sans' | 'serif' | 'mono' | 'rounded' | 'condensed' }
 export interface PickupPlacement {
   itemId: string; count: number; x: number; y: number; z: number; area: number;
   /** Iteration 08: level the pickup rests on (default 0); y is absolute. */
@@ -364,6 +373,12 @@ export interface OfficeTowerInfo {
   name: string;
   /** Candidate gear spots (flat reachable floor in back-of-house office rooms), every storey. */
   gearSpots?: {x: number; y: number; z: number; level: number; area: number}[];
+  /** Task office-overhaul-20261030: the company tenant of each office floor 2..8 (lane TENANTS). */
+  tenants?: TenantFloor[];
+  /** Task office-overhaul-20261030: the roof storey (lane STRUCT). */
+  roof?: RoofInfo;
+  /** Task office-overhaul-20261030: the high-capacity station <-> lobby connection (lane STRUCT). */
+  transit?: TransitInfo;
 }
 
 /** Working canvas for generation (cells); the finished layout is cropped to its bounds. */

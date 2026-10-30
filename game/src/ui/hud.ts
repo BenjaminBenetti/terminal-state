@@ -1,9 +1,12 @@
 // DOM heads-up display. Writes only when values change.
 
-import {LIGHT_ICONS, STAT_ICONS} from './icons';
+import {ICONS, LIGHT_ICONS, STAT_ICONS} from './icons';
 import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
 import type {Inventory} from '../items/inventory';
+import {GEAR_SLOTS} from '../items/gear';
+import {GEAR_ICONS} from './gearIcons';
+import {ensureGearStyles} from './gearStyles';
 import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
 
@@ -26,6 +29,11 @@ const LIMB_SVG = `<svg viewBox="0 0 20 38" aria-hidden="true"><circle class="p" 
   + `<rect class="p leg-left" x="6.4" y="21.4" width="3.4" height="16" rx="1.6"/><rect class="p leg-right" x="10.2" y="21.4" width="3.4" height="16" rx="1.6"/></svg>`;
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
+
+/** Task office-overhaul-20261030 (lane INTERACT): the worn backpack's gear slot index (HUD slot "6"). */
+const BACK = GEAR_SLOTS.indexOf('backpack');
+/** Crosshair hold ring (E held on a grounded bag): circumference of the r=13 progress circle. */
+const RING_C = 2 * Math.PI * 13;
 
 export interface HudState {
   hp: number;
@@ -50,7 +58,7 @@ export interface HudState {
   water?: number;
   /** Iteration 12 (LIGHT): flashlight battery (charge 0..1, light switched on, flicker amount 0..1, spare batteries carried). */
   battery?: {charge: number; on: boolean; flicker: number; spares: number};
-  /** Iteration 12 (LIGHT): flares carried (grenade slot, T) and burning in the world. */
+  /** Iteration 12 (LIGHT): flares carried (grenade slot; G since task office-overhaul-20261030) and burning in the world. */
   flares?: {count: number; burning: number};
 }
 
@@ -59,6 +67,11 @@ export class Hud {
   private hotbarVersion = -1;
   private readonly root = $('#hud');
   private readonly survShown: Record<'food' | 'water', number> = {food: -1, water: -1};
+  /** Task office-overhaul-20261030 (INTERACT, #1): the worn backpack is in the hands (6): HUD slot 6 is the selected one. */
+  private bagSelected = false;
+  private ring: SVGCircleElement | null = null;
+  private ringWrap: HTMLElement | null = null;
+  private ringShown = -1;
 
   constructor() {
     for (const k of ['food', 'water'] as const) {
@@ -179,19 +192,88 @@ export class Hud {
       this.hotbarVersion = hv;
       // Per-slot redraw (the version bumps on every shot): only slots whose content changed are rebuilt.
       // data-bar/data-index make these slots drop targets while the inventory is open (inventoryUI.ts).
+      // Task office-overhaul-20261030 (lane INTERACT): after quick slots 1-5 come slot "6" (the worn backpack: 6 takes it into the
+      // hands, click sets it down) and slot "G" (the grenade slot: hold G to ready its throwable, release to throw).
       const bar = $('#hotbar');
-      if (bar.children.length !== inv.hotbar.length) bar.innerHTML = inv.hotbar.map((_, i) => `<div class="slot" data-bar="hotbar" data-index="${i}"></div>`).join('');
+      const n = inv.hotbar.length;
+      if (bar.children.length !== n + 2) {
+        ensureGearStyles();
+        bar.innerHTML = inv.hotbar.map((_, i) => `<div class="slot" data-bar="hotbar" data-index="${i}"></div>`).join('')
+          + `<div class="slot bagslot" data-bar="gear" data-index="${BACK}" title="6: take your backpack off into your hands · click sets it down"></div>`
+          + `<div class="slot throwslot" data-bar="throw" data-index="0" title="G: hold to ready the grenade slot's throwable (flare), release to throw"></div>`;
+      }
       inv.hotbar.forEach((st, i) => {
         const el = bar.children[i] as HTMLElement;
         const def = st ? itemDef(st.itemId) : null;
         const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${st?.count ?? 0}|${st?.mag ?? ''}|${itemIconsVersion()}`;
-        el.classList.toggle('selected', i === inv.selected);
+        el.classList.toggle('selected', i === inv.selected && !this.bagSelected);
         if (el.dataset.k === key) return;
         el.dataset.k = key;
         const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' ? `<span class="count">${st!.mag}</span>` : '';
         el.innerHTML = `<span class="key">${i + 1}</span>${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}`;
       });
+      this.extraSlots(inv, bar.children[n] as HTMLElement, bar.children[n + 1] as HTMLElement);
     }
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): HUD slot 6 (worn backpack, dim "no bag" without one) and slot G (grenade slot). */
+  private extraSlots(inv: Inventory, bagEl: HTMLElement, throwEl: HTMLElement): void {
+    const bag = inv.gearSlots[BACK];
+    const bagDef = bag ? itemDef(bag.itemId) : null;
+    bagEl.classList.toggle('vacant', !bagDef);
+    bagEl.classList.toggle('selected', this.bagSelected && !!bagDef);
+    const bk = `${bag?.uid ?? 0}|${bag?.itemId ?? ''}|${itemIconsVersion()}`;
+    if (bagEl.dataset.k !== bk) {
+      bagEl.dataset.k = bk;
+      bagEl.innerHTML = `<span class="key">6</span>${bagDef ? itemIconHtml(bagDef.id) : `<span class="ghost">${GEAR_ICONS.backpack}</span>`}<span class="nm">${bagDef ? bagDef.short : 'no bag'}</span>`;
+    }
+    const t = inv.throwSlot[0];
+    const tDef = t ? itemDef(t.itemId) : null;
+    throwEl.classList.toggle('vacant', !tDef);
+    const tk = `${t?.uid ?? 0}|${t?.itemId ?? ''}|${t?.count ?? 0}|${itemIconsVersion()}`;
+    if (throwEl.dataset.k !== tk) {
+      throwEl.dataset.k = tk;
+      throwEl.innerHTML = `<span class="key">G</span>${tDef ? itemIconHtml(tDef.id) : `<span class="ghost">${ICONS.flare}</span>`}<span class="nm">${tDef ? tDef.short : 'grenade'}</span>${t && t.count > 1 ? `<span class="count">${t.count}</span>` : ''}`;
+    }
+  }
+
+  /**
+   * Task office-overhaul-20261030 (INTERACT, #1): the worn backpack is (not) in the hands — slot 6 shows as the selected slot
+   * instead of the quick slot (gear/system.ts calls it every frame; writes only on change).
+   */
+  setBagSelected(on: boolean): void {
+    if (on === this.bagSelected) return;
+    this.bagSelected = on;
+    this.hotbarVersion = -1; // redraw the selection marks
+  }
+
+  /**
+   * Task office-overhaul-20261030 (INTERACT, #1): a progress ring round the crosshair while E is held on a grounded bag (0..1),
+   * hidden with null. Writes only on change.
+   */
+  setHoldRing(progress: number | null): void {
+    const k = progress === null ? -1 : Math.round(Math.max(0, Math.min(1, progress)) * 100);
+    if (k === this.ringShown) return;
+    this.ringShown = k;
+    if (typeof document === 'undefined') return;
+    if (!this.ringWrap) {
+      const host = document.querySelector('#hud');
+      if (!host) return;
+      ensureGearStyles();
+      const wrap = document.createElement('div');
+      wrap.id = 'hold-ring';
+      wrap.innerHTML = `<svg viewBox="0 0 32 32" aria-hidden="true"><circle class="track" cx="16" cy="16" r="13"/><circle class="arc" cx="16" cy="16" r="13" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${RING_C.toFixed(2)}"/></svg>`;
+      host.appendChild(wrap);
+      this.ringWrap = wrap;
+      this.ring = wrap.querySelector('circle.arc');
+    }
+    this.ringWrap?.classList.toggle('show', k >= 0);
+    if (k >= 0) this.ring?.setAttribute('stroke-dashoffset', (RING_C * (1 - k / 100)).toFixed(2));
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): the hold ring's progress in percent (-1 hidden) — QA / tests. */
+  get holdRing(): number {
+    return this.ringShown;
   }
 
   /** FOOD / WATER bar: width eases (CSS), low/critical tint, and a "+N" pop when it goes up. */
@@ -272,6 +354,7 @@ export class Hud {
   reset(): void {
     this.cache.clear();
     this.hotbarVersion = -1;
+    this.setHoldRing(null); // Task office-overhaul-20261030 (INTERACT)
     this.survShown.food = this.survShown.water = -1;
     $('#toasts').innerHTML = '';
     $('#damage-dir').innerHTML = '';
@@ -282,14 +365,16 @@ export const CONTROLS: [string, string][] = [
   ['Move', 'W A S D'], ['Look', 'Mouse'], ['Sprint', 'Shift'], ['Jump', 'Space'],
   ['Crouch (tap toggle · hold)', 'C'], ['Fire / eat · drink · use held item', 'Left click'],
   ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
-  ['Last item', 'Q'], ['Inventory', 'Tab or I'], ['Quick heal', 'H'], ['Drop held item', 'G'],
-  // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items; T throws a flare
-  ['Flashlight (battery meter, bottom right)', 'F'], ['Throw flare: hold to ready, release to throw', 'Hold T · or hold click while held'],
+  ['Last item', 'Q'], ['Inventory (drag an item out of it to drop it)', 'Tab or I'], ['Quick heal', 'H'],
+  // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items.
+  // Task office-overhaul-20261030 (INTERACT, #6): G throws the grenade slot's flare (T retired; G no longer drops)
+  ['Flashlight (battery meter, bottom right)', 'F'], ['Throw the grenade slot\'s flare: hold to ready, release to throw', 'Hold G · or hold click while held'],
   ['Swap in a battery (refills the light)', 'Click while held · inventory Use'],
   // Iteration 16 (lane INJURY): bandages / med kits heal HP only; an injured arm / leg needs its own treatment
   ['Injured arm / leg (red on the HUD): apply an arm sling / leg splint', 'Click while held · inventory Use'],
   // Iteration 16 (lane GEAR): gear is worn from the inventory's gear panel; a backpack is only opened on the ground
-  ['Backpack: take it off · set it down · open it (world keeps running)', '6 · click · E'],
+  // Task office-overhaul-20261030 (INTERACT, #1): hold E on a grounded bag to pick it up and wear it
+  ['Backpack: hold it (slot 6) · set it down · open it (world keeps running) · pick it up', '6 · click · tap E · hold E'],
   ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
 ];
 

@@ -38,6 +38,7 @@ import {writeMeshGlb} from './lib/glb.mjs';
 import {bbox, minAreaYaw} from './lib/orient.mjs';
 import {p7CatalogSource, t25CatalogOverrides, T25_PROPS_PROVENANCE} from './lib/p7-catalog.mjs';
 import {OPEN_FRONT, assembleOpenFront} from './open-front-iteration05.mjs';
+import {repairCabinetTall, repairBenchBackrest, cabinetMetrics, benchMetrics} from './lib/local-repair-geom.mjs';
 
 const TOOL_VERSION = 'meshy-t25-props-2';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -48,6 +49,7 @@ const ASSETS = path.join(TASK, 'assets');
 const DELIVERED = path.join(ASSETS, 'DELIVERED.json');
 const INVENTORY = path.join(TASK, 'inventory.json');
 const REVIEW = path.join(TASK, 'review/props');
+const REPAIR_REVIEW = path.join(REPO, 'reference/tasks/model-touchups-20261030/review/props');   // LOCAL_REPAIR review sheets
 const MODELS_DIR = path.join(REPO, 'game/public/assets/models');
 const PROV = {
   props: path.join(REPO, T25_PROPS_PROVENANCE),
@@ -111,6 +113,53 @@ const HYBRID = {
     cut: ([, y]) => y > 0.172 && y < 0.624,
     build(g, I) { OPEN_FRONT.shopDisplayOpen.build.call(this, g, I); g.box('base-band', [-0.548, 0.172, -0.305], [0.548, I.yLow - 0.012, 0.305], 'steel', '+x-x+z-z'); }}},
 };
+
+/**
+ * LOCAL REPAIRS after the T2.5 integration (task studio-model-touchups-20261030-01, user feedback 2026-10-30). NOT new Meshy
+ * output: the same accepted native and chain plus the documented local change, written to a NEW cache-busting file
+ * <old-basename>-t25<suffix>.glb (logical runtime keys unchanged). The record keeps its meshy block and gains `localRepair`
+ * (what / why / before -> after, and the previous -t25 output with its restore command at REPAIR_BASE). Add other ids here
+ * (with their own spec) rather than a second rename mechanism.
+ */
+const REPAIR_TASK = 'studio-model-touchups-20261030-01';
+const REPAIR_BASE = '69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b';
+// Lane GLASS: the glazed hybrids' glass film (open-front-iteration05.mjs S.glassMaterial). It was base (0.8, 0.88, 0.9) at alpha
+// 0.14: a near-white Lambert diffuser (12 % diffuse reflectance) that the torch, 0.5 m away, lit into a veil brighter than the
+// stock behind it. Now the same hue x 0.115 (a dark grime tint) at alpha 0.2: ~2 % haze, 80 % transmission (a slightly tinted
+// double-glazed door), same GGX gloss (roughness 0.06, metallic 0 -> F0 0.04; reflections x1.4 with the higher alpha).
+const GLASS_FILM = {baseColor: [0.092, 0.101, 0.1035, 0.2], roughness: 0.06, metallic: 0};
+const GLASS_REPAIR = {suffix: 'r1', lane: 'GLASS', date: '2026-10-30', kind: 'glass-material', glassMaterial: GLASS_FILM,
+  change: {glassMaterial: {before: {baseColor: [0.8, 0.88, 0.9, 0.14], roughness: 0.06, metallic: 0}, after: GLASS_FILM}},
+  userFeedback: 'The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque',
+  what: 'material factors of the transparent "glass" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged',
+  why: 'root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame\'s shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)'};
+const LOCAL_REPAIR = {'base:shopCooler': GLASS_REPAIR, 'base:shopDisplay': GLASS_REPAIR, 'p7:fireExtinguisherCabinet': GLASS_REPAIR};
+// Lane GEOM: geometry repairs of the FITTED mesh (lib/local-repair-geom.mjs: deterministic, measured on the mesh, no texture edit,
+// no generator) applied in buildOne right after the footprint fit; `metrics` = before / after probes for the record.
+const GEOM_REPAIR = {suffix: 'r1', lane: 'GEOM', date: '2026-10-30', kind: 'geometry', record: (cfg, info) => ({geometry: info})};
+LOCAL_REPAIR['base:cabinetTall'] = {...GEOM_REPAIR, geometry: repairCabinetTall, metrics: cabinetMetrics,
+  userFeedback: 'supply cabinet side face looks bad, sorta like accordion lines or something. Might be able to manually fix the model, by putting a proper flat face on the sides / top.',
+  what: 'geometry only: the 32 side fins and 13 top slats (and the hidden inner faces they covered) removed; one flat side panel per side between the corner posts (1.5 mm inside the post faces) and a flat cap box (top + header skirts) at the exact old outer bounds, UV-mapped onto the cabinet\'s own clean back-panel paint / front header rail (colour, metallic-roughness and normal maps share the UVs). Textures, front, doors, handles, hinges, posts, plinth, back, interior shell and bbox unchanged',
+  why: 'Meshy T2.5 reconstructed the plain painted side panels as rows of separate vertical fins standing 3 cm proud of a thin inner wall with ~1 cm gaps, and the top as transverse slats, all painted with dark streaks: the shading across fins and gaps reads as accordion lines (not normals, not the normal map, not simplification: the cabinet was never simplified)'};
+LOCAL_REPAIR['base:bench'] = {...GEOM_REPAIR, geometry: repairBenchBackrest, metrics: benchMetrics,
+  userFeedback: 'Bench found in the subway track area has messed up back reset, lots of mangled triangles',   // 'back reset' = backrest
+  what: 'geometry only: per seat bay the old backrest triangles are clipped on planes where the mesh is clean (seat fillet y 0.386, back corner y 0.325, rolled top rail y 0.73, inside the teal side plates) and the panel is rebuilt as a clean front surface (with the seat fillet) and back surface welded vertex-to-vertex to the cut edges; UVs on the bench\'s own seat-top (mirrored at the fillet) / seat-bottom paint. Textures, seat, top rail, side plates, legs, bolts and bbox unchanged; fewer triangles',
+  why: 'Meshy T2.5 reconstructed the three perforated backrest panels as torn shells (holes, fans of sliver triangles, shard walls inside the slab); present in the native output, not caused by the simplification'};
+/** Runtime file name of a master: <old-basename>-t25.glb, or <old-basename>-t25<suffix>.glb after a local repair. */
+const runtimeName = (id, oldPath) => `${path.basename(oldPath, '.glb')}-t25${LOCAL_REPAIR[id]?.suffix ?? ''}.glb`;
+/** The record's `localRepair` block: the entry's descriptive fields (+ its optional record(cfg, info) extras) and the previous output. */
+function localRepairRecord(cfg, info = {}) {
+  const R = LOCAL_REPAIR[cfg.id];
+  if (!R) return null;
+  const prev = `game/public/assets/models/${path.basename(cfg.oldPath, '.glb')}-t25.glb`;
+  let previousOutput;
+  try {
+    const b = execFileSync('git', ['-C', REPO, 'show', `${REPAIR_BASE}:${prev}`], {maxBuffer: 1 << 28});
+    previousOutput = {path: prev, sha256: sha256(b), bytes: b.length, baseCommit: REPAIR_BASE, blobSha1: execFileSync('git', ['-C', REPO, 'rev-parse', `${REPAIR_BASE}:${prev}`]).toString().trim(), restore: `git show ${REPAIR_BASE}:${prev} > ${prev}`};
+  } catch { previousOutput = {path: prev, note: `not tracked at ${REPAIR_BASE}`}; }
+  const {suffix, lane, date, kind, userFeedback, what, why, change = null} = R;
+  return {task: REPAIR_TASK, lane, date, notNewMeshyOutput: true, kind, suffix, userFeedback, what, why, change, ...(R.record?.(cfg, info) ?? {}), previousOutput};
+}
 
 /** Per-asset tuning found by inspection (front/yaw overrides, fit, budget changes, notes). */
 const TUNE = {
@@ -450,7 +499,7 @@ async function configFor(master, p7) {
     budget = {tris: Math.round(Math.min(8000, Math.max(1500, oldTris * 1.25))), color: Math.min(1024, oc), mr: Math.min(512, oc / 2), normal: Math.min(512, oc / 2), bytes: Math.round(Math.max(600_000, (master.current?.bytes ?? 0) * 1.1)), rule: 'earlier prop: ~old triangles x1.25 (1.5k..8k), old colour size, MR / normal at half'};
   }
   if (tune.budget) budget = {...budget, ...tune.budget, rule: `${budget.rule}; TUNE: ${tune.budget.reason}`};
-  return {id: master.id, cls, p7Key, p7SizeClass: p7Out?.sizeClass ?? null, runtimeKeys: master.runtimeKeys, oldPath, outRel: `game/public/assets/models/${oldBase}-t25.glb`, url: `assets/models/${oldBase}-t25.glb`,
+  return {id: master.id, cls, p7Key, p7SizeClass: p7Out?.sizeClass ?? null, runtimeKeys: master.runtimeKeys, oldPath, outRel: `game/public/assets/models/${runtimeName(master.id, oldPath)}`, url: `assets/models/${runtimeName(master.id, oldPath)}`,
     fit: tune.fit ?? (cls === 'items' ? 'uniform-height' : 'footprint'), fitReason: tune.reason ?? null, dims, anchor, budget, old: {tris: oldTris, bbox: {min: ob.min.map(r4), max: ob.max.map(r4), size: ob.size.map(r4)}, bytes: master.current?.bytes ?? null, textures: master.current?.textures ?? null, sha256: master.current?.sha256 ?? null},
     yawQuarter: tune.yawQuarter ?? null, yawDeg: tune.yawDeg ?? null, patch: tune.patch ?? null, radialClamp: tune.radialClamp ?? null, colorGrade: tune.colorGrade ?? null, simplifyFlags: tune.simplifyFlags ?? null, doubleSided: tune.doubleSided ?? null, limitations: tune.limitations ?? [], tool: TOOL_VERSION};
 }
@@ -533,6 +582,17 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   const t = [-S[0] * bR.center[0], cfg.anchor === 'top' ? -S[1] * bR.max[1] : -S[1] * bR.min[1], -S[2] * bR.center[2]];
   const I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   let low = {...low0, P: apply(low0.P, I3, S, t), N: applyN(low0.N, I3, S)};
+  // LOCAL_REPAIR geometry (lane GEOM, task model-touchups-20261030): repair the fitted mesh. The unrepaired mesh is kept: its
+  // shell decides the material's double-sidedness (unchanged by the repair) and it is re-written below to prove the repair starts
+  // from the shipped -t25 derivative (same bytes).
+  let preRepair = null, repairInfo = null;
+  if (LOCAL_REPAIR[cfg.id]?.geometry) {
+    const L = LOCAL_REPAIR[cfg.id], r = L.geometry(low);
+    preRepair = low; repairInfo = r.info;
+    low = {...low, P: r.P, N: r.N, UV: r.UV, I: r.I};
+    if (L.metrics) repairInfo.metrics = {before: L.metrics(preRepair), after: L.metrics(low)};
+    log(`  local repair (${L.lane}): ${repairInfo.triangles.before} -> ${repairInfo.triangles.after} tris`);
+  }
   // TUNE patch: close a reconstruction hole with quads (output frame) textured from the model's own atlas at a nearby surface.
   let patchInfo = null;
   if (cfg.patch) {
@@ -558,7 +618,8 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   const lowStats = meshStats(low.P, low.I);
   // Closed shells stay single-sided (the game convention); open shells (> 1% boundary edges: thin brackets, handles, tube ends)
   // render double-sided so no see-through holes appear.
-  const doubleSided = cfg.doubleSided ?? (lowStats.boundaryEdges > 0.01 * lowStats.edges);
+  const dsStats = preRepair ? meshStats(preRepair.P, preRepair.I) : lowStats;   // a local geometry repair keeps the material flags
+  const doubleSided = cfg.doubleSided ?? (dsStats.boundaryEdges > 0.01 * dsStats.edges);
   // TUNE colorGrade (primary 2026-10-29: assess against the ORIGINAL image; a modest documented grade where the T2.5 bake came out
   // cleaner / whiter than the reference): per-channel multiply of the base colour from the mean tints (original image vs the
   // unshaded front render, both alpha-masked). 'tint' keeps the luminance and moves only the hue; 'tint+lum' also darkens toward
@@ -607,11 +668,14 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
         extraNodes.push({name: x.name, P: P2, N: xm.N, UV: xm.UV, I: xm.I, tex: {color: xm.material.color, orm: xm.material.mr, normal: xm.material.normal}, metallic: xm.material.metallicFactor, roughness: xm.material.roughnessFactor, doubleSided: xm.material.doubleSided,
           from: {id: x.from, path: rec.output.path, sha256: rec.output.sha256, scale: r6(k), triangles: xm.I.length / 3, gpuTextureBytesEstimate: rec.output.gpuTextureBytesEstimate}});
       }
-      hybrid = await assembleOpenFront(H.spec, {P: low.P, N: low.N, UV: low.UV, I: low.I, tex: textures, metallic: nat.material.metallicFactor, roughness: nat.material.roughnessFactor},
+      const spec = LOCAL_REPAIR[cfg.id]?.glassMaterial ? {...H.spec, glassMaterial: LOCAL_REPAIR[cfg.id].glassMaterial} : H.spec;   // local repair: glass factors
+      hybrid = await assembleOpenFront(spec, {P: low.P, N: low.N, UV: low.UV, I: low.I, tex: textures, metallic: nat.material.metallicFactor, roughness: nat.material.roughnessFactor},
         bb => ({...extras, provisionalDimensionsMeters: bb.size, hybrid: `${H.name}: T2.5 exterior cut + authored interior / glass${extraNodes.length ? ' + ' + extraNodes.map(x => x.name).join(', ') : ''} (open-front-iteration05.mjs)`, glassNode: 'glass (alphaMode BLEND; decorative only, never blocks item picking)'}), extraNodes);
       hybrid.extraNodes = extraNodes;
       glb = hybrid.bytes;
     } else glb = await writeMeshGlb({name: path.basename(cfg.outRel, '.glb'), mesh: {pos: low.P, nrm: low.N, uv: low.UV, idx: low.I}, textures, material: {metallicFactor: nat.material.metallicFactor, roughnessFactor: nat.material.roughnessFactor}, doubleSided, extras});
+    // the unrepaired mesh written exactly like the shipped -t25 file (its name, same maps / tier): must reproduce its bytes
+    if (preRepair && !hybrid) repairInfo.unrepairedRebuild = (b => ({sha256: sha256(b), bytes: b.length, triangles: preRepair.I.length / 3}))(await writeMeshGlb({name: `${path.basename(cfg.oldPath, '.glb')}-t25`, mesh: {pos: preRepair.P, nrm: preRepair.N, uv: preRepair.UV, idx: preRepair.I}, textures, material: {metallicFactor: nat.material.metallicFactor, roughnessFactor: nat.material.roughnessFactor}, doubleSided, extras}));
     tierUsed = [qc, qm, qn];
     if (glb.length <= cfg.budget.bytes) break;
   }
@@ -619,7 +683,7 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
   // write
   const abs = path.resolve(glbOut);
   if (dev) { if (!outDir || !abs.startsWith(path.resolve(outDir) + path.sep)) throw new Error('dev mode writes only into --out-dir'); }
-  else if (!(path.dirname(abs) === MODELS_DIR && /^[a-z0-9-]+-t25\.glb$/.test(path.basename(abs)))) throw new Error(`refusing to write ${abs}`);
+  else if (!(path.dirname(abs) === MODELS_DIR && /^[a-z0-9-]+-t25(r\d+)?\.glb$/.test(path.basename(abs)))) throw new Error(`refusing to write ${abs}`);
   fs.mkdirSync(path.dirname(abs), {recursive: true});
   fs.writeFileSync(abs + '.tmp', glb); fs.renameSync(abs + '.tmp', abs);
   const gpu = Math.round(4 * 4 / 3 * (cfg.budget.color ** 2 + cfg.budget.mr ** 2 + cfg.budget.normal ** 2)) + (hybrid?.extraNodes ?? []).reduce((t, x) => t + (x.from.gpuTextureBytesEstimate ?? 0), 0);
@@ -644,6 +708,7 @@ async function buildOne(master, del, p7, {glbOut, reviewOut, dev = false}) {
           : `uniform: height ${cfg.dims[1]} m (old runtime height) -> ${cfg.dims.join(' x ')} m; world/pickups.ts fitItemModel fits ITEM_DIMS at runtime`,
       oldDims: cfg.old.bbox.size,
       stretchVsUniformHeight: rel3, anchor: cfg.anchor, frontCheck: fc},
+    ...(LOCAL_REPAIR[cfg.id] ? {localRepair: (lr => { if (lr.geometry?.unrepairedRebuild) lr.geometry.unrepairedRebuild.matchesPreviousOutput = lr.geometry.unrepairedRebuild.sha256 === lr.previousOutput?.sha256; return lr; })(localRepairRecord(cfg, repairInfo ?? {}))} : {}),
     tune: TUNE[cfg.id] ?? null, simplify: low.simplify, meshAfter: lowStats, ...(patchInfo ? {patch: {reason: cfg.patch.reason, quads: patchInfo}} : {}), ...(clampInfo ? {radialClamp: clampInfo} : {}), ...(gradeInfo ? {colorGrade: gradeInfo} : {}),
     ...(hybrid ? {hybrid: {spec: HYBRID[cfg.id].name, note: HYBRID[cfg.id].note ?? null, nodes: ['body', 'interior', 'glass', ...hybrid.extraNodes.map(x => x.name)], trianglesByNode: {body: hybrid.body.kept, interior: hybrid.g.tris, glass: hybrid.gidx.length / 3, ...Object.fromEntries(hybrid.extraNodes.map(x => [x.name, x.I.length / 3]))},
       extraNodes: hybrid.extraNodes.map(x => ({name: x.name, ...x.from})), cut: {removedFaces: hybrid.body.removed, removedAreaM2: hybrid.body.removedAreaM2, rule: HYBRID[cfg.id].spec.cut.toString()},
@@ -847,11 +912,12 @@ async function main() {
     const usable = d && d.status === 'SUCCEEDED' && (d.review === 'accepted' || (af && d.attempt === af.attempt && String(d.review).startsWith('flagged')));
     if (!usable) { if (only) skipped.push({id: m.id, reason: d ? `${d.status}/${d.review}` : 'not delivered'}); continue; }
     const cls = CLASS_OF[m.class], prev = records[cls].find(r => r.id === m.id);
-    if (!force && prev && prev.meshy.nativeSha256 === d.sha256 && prev.tool === TOOL_VERSION && fs.existsSync(path.join(REPO, prev.output.path)) && sha256(fs.readFileSync(path.join(REPO, prev.output.path))) === prev.output.sha256) continue;
+    if (!force && prev && prev.meshy.nativeSha256 === d.sha256 && prev.tool === TOOL_VERSION && path.basename(prev.output.path) === runtimeName(m.id, m.runtimePaths[0]) && fs.existsSync(path.join(REPO, prev.output.path)) && sha256(fs.readFileSync(path.join(REPO, prev.output.path))) === prev.output.sha256) continue;   // (a new LOCAL_REPAIR name rebuilds)
     try {
       const base = m.id.replace(/[^A-Za-z0-9]+/g, '_');
-      const cfgPath = path.join(REPO, 'game/public/assets/models', `${path.basename(m.runtimePaths[0], '.glb')}-t25.glb`);
-      const rec = await buildOne(m, d, p7, {glbOut: cfgPath, reviewOut: path.join(REVIEW, `${base}.png`)});
+      const cfgPath = path.join(REPO, 'game/public/assets/models', runtimeName(m.id, m.runtimePaths[0]));
+      // a local repair's review sheet goes to its own task (the replacement task's sheets stay as they were)
+      const rec = await buildOne(m, d, p7, {glbOut: cfgPath, reviewOut: path.join(LOCAL_REPAIR[m.id] ? REPAIR_REVIEW : REVIEW, `${base}.png`)});
       records[cls] = records[cls].filter(r => r.id !== m.id).concat([rec]);
       writeProvenance(cls, records[cls]);
       if (rec.p7Key) writeCatalog();

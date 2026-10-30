@@ -18,6 +18,17 @@
 //   keep coming), the mouse belongs to the view (no look / fire / aim), WASD still moves you; walking more than 2.5 m away,
 //   taking a hit, death, travel, pause or Tab closes it. "Wear it" picks the bag up (same bag, exact contents) if your
 //   back slot is free. A backpack found in the level lies there as such a bag (empty), so it works the same way.
+//
+// Task office-overhaul-20261030 (lane INTERACT, user feedback #1): the HUD quick-slot bar shows slot "6" holding the worn backpack
+// (dim "no bag" without one; selected while it is in the hands). 6 readies it and the bag model is HELD IN FRONT of you in the
+// viewmodel (the same template as the world / icons: assets/officeAssets.ts gear-backpack, procedural stand-in until loaded);
+// left click sets it down (same placement rules; the placing click never fires). On a grounded bag E is TAP / HOLD:
+//   tap E (released before BAG_HOLD_S) = open the transfer view (world keeps running) — it opens on the RELEASE, so the first
+//   press can never pick the bag up; hold E for BAG_HOLD_S = pick it up and wear it directly (the same stack: identity, uid,
+//   contents), with a crosshair hold ring and the prompt "[E] Open bag · hold [E] wear". The press is consumed by the bag (no
+//   door / elevator / container also gets it); looking away, a slot key, 6, input clears (menus), climbing or death cancel the
+//   hold with nothing done; while held the mouse belongs to the bag (no shot / flare). The worn bag's contents still need it on
+//   the ground (the inventory's "contents hidden" label is gone, not the rule).
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -46,6 +57,12 @@ interface OfficeInfoLike {
 }
 
 const KEYS_SHOULDER = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'KeyQ'];
+/** Task office-overhaul-20261030 (INTERACT, #1): seconds E must be held on a grounded bag to pick it up and wear it. */
+export const BAG_HOLD_S = 0.5;
+/** The hold ring appears after this much of the hold (a quick tap never flashes it). */
+const RING_DELAY_S = 0.1;
+/** Hand pose of the readied backpack (viewmodel camera space; the model is centred on the holder). */
+export const HELD_BAG_POSE = {hip: [0.07, -0.33, -0.74] as const, yaw: -0.32, pitch: 0.12, roll: 0.06};
 
 export class GearSystem {
   /** Grounded bags + warm-up prototypes (in the scene for the whole session). */
@@ -74,6 +91,8 @@ export class GearSystem {
   private seenClears = -1;
   private lastVersion = -1;
   private time = 0;
+  /** Task office-overhaul-20261030 (INTERACT, #1): E pressed on a grounded bag — tap opens (on release), hold wears. */
+  private eHold: {bag: GroundBag; t: number; clears: number} | null = null;
 
   constructor(private readonly game: Game) {
     this.group.name = 'gear';
@@ -125,6 +144,7 @@ export class GearSystem {
   reset(): void {
     this.close('reset');
     this.cancelReady(false);
+    this.eHold = null;
     this.disposeBags();
     this.live = false;
     this.section = null;
@@ -132,13 +152,18 @@ export class GearSystem {
     this.wornKey = this.keyOfWorn();
   }
 
-  /** Mouse buttons belong to the gear UI (readied bag, open view, resume prompt): no fire / ADS / use / flare. */
+  /** Mouse buttons belong to the gear UI (readied bag, open view, resume prompt, an E hold on a bag): no fire / ADS / use / flare. */
   get ownsInput(): boolean {
     if (this.mouseLatch) {
       if (!this.game.input.mouse[0]) this.mouseLatch = false; // the click that set the bag down never bleeds into the gun
       else return true;
     }
-    return this.readied || !!this.session || this.resumeShown;
+    return this.readied || !!this.session || this.resumeShown || !!this.eHold;
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): E is being held on a grounded bag (0..1 of BAG_HOLD_S), or null — QA / tests. */
+  get holdProgress(): number | null {
+    return this.eHold ? Math.min(1, this.eHold.t / BAG_HOLD_S) : null;
   }
   private mouseLatch = false;
 
@@ -171,7 +196,7 @@ export class GearSystem {
       else if (KEYS_SHOULDER.some(k => inp.hit(k)) || inp.wheel) this.cancelReady(true);
       else {
         if (g.weapon.stack) g.weapon.equip(null);
-        g.viewmodel.setItem(null);
+        this.holdBagModel(); // Task office-overhaul-20261030 (INTERACT, #1): the bag is held in front of you
         if (inp.mousePressed[0]) this.placeReadied();
       }
     }
@@ -192,7 +217,63 @@ export class GearSystem {
       else { const w = Math.sin(this.time * 2.2 + b.serial * 2.39); const k = 0.035 + (w > 0.9 ? (w - 0.9) * 1.3 : 0); b.glow(k); }
     }
     if (prevTarget !== this.target && !this.target && prevTarget) prevTarget.glow(0.035);
+    this.updateEHold(dt);
+    g.hud.setBagSelected?.(this.readied); // Task office-overhaul-20261030 (INTERACT, #1): HUD slot 6 selected while held
     this.announceWorn();
+  }
+
+  /**
+   * Task office-overhaul-20261030 (INTERACT, #1): the E tap / hold on a grounded bag. Released before BAG_HOLD_S -> open the
+   * transfer view; held BAG_HOLD_S -> pick it up and wear it. Cancelled (nothing happens) when the aim leaves the bag, a slot
+   * key / wheel / 6 is used, the input is cleared (menus, blur), the player climbs or dies, or the bag stops lying there.
+   */
+  private updateEHold(dt: number): void {
+    const h = this.eHold, g = this.game, inp = g.input;
+    if (h) {
+      const down = typeof (inp as {down?: (c: string) => boolean}).down === 'function' ? inp.down('KeyE') : false;
+      const cancel = inp.clears !== h.clears || !h.bag.grounded || !this.bags.includes(h.bag) || !!this.session || this.readied
+        || this.target !== h.bag || !g.player.alive || g.player.climbing || KEYS_SHOULDER.some(k => inp.hit(k)) || inp.hit('Digit6') || !!inp.wheel;
+      if (cancel) this.eHold = null;
+      else {
+        h.t += dt;
+        if (h.t >= BAG_HOLD_S) { this.eHold = null; this.wearGrounded(h.bag); }
+        else if (!down) { this.eHold = null; this.open(h.bag); }
+      }
+    }
+    const e = this.eHold;
+    g.hud.setHoldRing?.(e && e.t >= RING_DELAY_S ? Math.min(1, e.t / BAG_HOLD_S) : null);
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT, #1): pick a grounded bag up and wear it (the same stack). Needs the back slot free. */
+  wearGrounded(b: GroundBag): boolean {
+    const g = this.game;
+    if (!b.grounded || this.session || !this.bags.includes(b)) return false;
+    if (!g.inv.wearBag(b.stack)) { g.hud.toast(g.inv.refusal?.text ?? 'You cannot wear it now.', true); g.sfx.denied(); return false; }
+    this.removeBag(b);
+    this.wornKey = this.keyOfWorn();
+    g.sfx.pickup();
+    g.hud.toast(`Picked up the ${itemDef(b.stack.itemId).short.toLowerCase()} — wearing it (6 takes it off)`);
+    g.syncHeld();
+    return true;
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT, #1): the readied bag in the hands (the held model is added on first use). */
+  private holdBagModel(): void {
+    const vm = this.game.viewmodel;
+    if (!vm) return;
+    this.ensureHeldModel();
+    vm.setItem(vm.hasItem?.('backpack') ? 'backpack' : null);
+  }
+
+  /** The viewmodel's held backpack (the shared item template, centred on its holder), added once. */
+  private ensureHeldModel(): void {
+    const vm = this.game.viewmodel as (Game['viewmodel'] & {addHeldItem?: unknown}) | undefined;
+    if (!vm || typeof vm.addHeldItem !== 'function' || vm.hasItem('backpack')) return;
+    const obj = makeSupplyMesh('backpack');
+    obj.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(obj);
+    if (!box.isEmpty()) obj.position.y -= (box.min.y + box.max.y) / 2; // centre on the holder (template origin is bottom-centre)
+    vm.addHeldItem('backpack', obj, HELD_BAG_POSE);
   }
 
   private aimedBag(): GroundBag | null {
@@ -211,7 +292,7 @@ export class GearSystem {
     for (const st of this.game.inv.gearSlots) {
       if (!st || before.has(String(st.uid))) continue;
       const def = itemDef(st.itemId);
-      this.game.hud.toast(isBagItem(st.itemId) ? `Wearing the ${def.short.toLowerCase()} — 6 takes it off, click sets it down, E opens it` : `Wearing the ${def.short.toLowerCase()} (Tab: gear)`);
+      this.game.hud.toast(isBagItem(st.itemId) ? `Wearing the ${def.short.toLowerCase()} — 6 takes it off, click sets it down, tap E opens it` : `Wearing the ${def.short.toLowerCase()} (Tab: gear)`);
     }
   }
 
@@ -225,12 +306,13 @@ export class GearSystem {
   ready(): boolean {
     const g = this.game;
     const bag = g.inv.worn('backpack');
-    if (!bag) { g.hud.toast(this.bags.length ? 'No backpack on your back — yours is on the ground (E to open it)' : 'No backpack — gear is rare, keep looking', true); g.sfx.denied(); return false; }
+    if (!bag) { g.hud.toast(this.bags.length ? 'No backpack on your back — yours is on the ground (tap E to open it, hold E to pick it up)' : 'No backpack — gear is rare, keep looking', true); g.sfx.denied(); return false; }
     if (g.player.climbing || g.consumeView.busy) { g.hud.toast('Hands busy', true); g.sfx.denied(); return false; }
     if (g.flareHold.active) { g.flareHold.cancel(); g.syncHeld(); }
     this.readied = true;
+    this.eHold = null;
     g.weapon.equip(null);
-    g.viewmodel.setItem(null);
+    this.holdBagModel(); // Task office-overhaul-20261030 (INTERACT, #1)
     g.sfx.equip();
     return true;
   }
@@ -269,7 +351,7 @@ export class GearSystem {
     this.addBag(new GroundBag(`bag:${stack.uid}`, stack, pose));
     this.wornKey = this.keyOfWorn();
     g.sfx.pickup();
-    g.hud.toast('Backpack set down — E to open it (the world does not stop)');
+    g.hud.toast('Backpack set down — tap E to open it (the world does not stop), hold E to pick it up');
     return true;
   }
 
@@ -343,13 +425,19 @@ export class GearSystem {
     this.target = null;
   }
 
-  /** E: open the aimed bag (true = handled; the default pickup / container interaction is skipped). */
+  /**
+   * E on the aimed bag (true = handled; the default pickup / door / elevator / container interaction is skipped).
+   * Task office-overhaul-20261030 (INTERACT, #1): the press only STARTS the tap / hold — the view opens on the release (tap), a
+   * BAG_HOLD_S hold picks the bag up and wears it (updateEHold).
+   */
   onInteract(): boolean {
     if (this.session) { this.close('user'); return true; }
     if (this.readied) return false;
+    if (this.eHold) return true;
     const b = this.target ?? (this.bags.length ? this.aimedBag() : null);
     if (!b) return false;
-    this.open(b);
+    this.target = b;
+    this.eHold = {bag: b, t: 0, clears: this.game.input.clears};
     return true;
   }
 
@@ -357,8 +445,11 @@ export class GearSystem {
     if (this.readied) return '<b>[Click]</b> Set the backpack down · <b>[6]</b> Sling it back on';
     const b = this.target;
     if (!b || this.session) return null;
+    if (this.eHold) return '<b>Hold [E]</b> Picking the bag up… · release to open it instead';
     const used = (b.stack.bag ?? []).filter(Boolean).length;
-    return `<b>[E]</b> Open ${itemDef(b.stack.itemId).short.toLowerCase()} · ${used ? `${used} item${used > 1 ? 's' : ''} inside` : 'empty'}`;
+    const what = itemDef(b.stack.itemId).short.toLowerCase();
+    const wear = this.game.inv.worn('backpack') ? ' (you already wear one)' : ' · <b>hold [E]</b> wear';
+    return `<b>[E]</b> Open ${what}${wear} · ${used ? `${used} item${used > 1 ? 's' : ''} inside` : 'empty'}`;
   }
 
   /** Open the transfer view on a grounded bag (world keeps running). */
@@ -442,6 +533,8 @@ export class GearSystem {
     const g = this.game;
     this.close('travel');
     this.cancelReady(false);
+    this.eHold = null;
+    this.ensureHeldModel(); // Task office-overhaul-20261030 (INTERACT, #1): in the viewmodel before the warm-up runs
     this.disposeBags();
     this.section = this.sectionIdFor(layout);
     this.sectionSeed = layout.seed >>> 0;
@@ -470,6 +563,7 @@ export class GearSystem {
   onTeardown(): void {
     this.close('travel');
     this.cancelReady(false);
+    this.eHold = null;
     this.hideResume();
     if (this.live && this.section) this.store.save(this.section, this.record());
     this.disposeBags();
@@ -536,10 +630,10 @@ export class GearSystem {
   }
 
   /** QA: a compact state report. */
-  qa(): {readied: boolean; viewOpen: boolean; bags: {id: string; x: number; z: number; level: number; used: number}[]; target: string | null; section: string | null; worn: Record<string, string | null>} {
+  qa(): {readied: boolean; viewOpen: boolean; bags: {id: string; x: number; z: number; level: number; used: number}[]; target: string | null; section: string | null; worn: Record<string, string | null>; hold: number | null; held: string | null} {
     const worn: Record<string, string | null> = {};
     for (const [k, v] of Object.entries(this.game.inv.gear)) worn[k] = v?.itemId ?? null;
-    return {readied: this.readied, viewOpen: this.viewOpen, target: this.target?.id ?? null, section: this.section, worn,
+    return {readied: this.readied, viewOpen: this.viewOpen, target: this.target?.id ?? null, section: this.section, worn, hold: this.holdProgress, held: this.game.viewmodel?.heldItem ?? null,
       bags: this.bags.map(b => ({id: b.id, x: +b.pose.x.toFixed(2), z: +b.pose.z.toFixed(2), level: b.pose.level, used: (b.stack.bag ?? []).filter(Boolean).length}))};
   }
 

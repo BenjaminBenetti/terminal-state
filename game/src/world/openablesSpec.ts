@@ -13,11 +13,15 @@
 // The audit of the whole prop catalogue (covered kinds + genuine exceptions) is OPENABLE_AUDIT below and
 // reference/tasks/vertical-slice-iteration08-20261027/lanes/lane-I-audit.md; tests/openables.test.ts keeps both in step.
 
+import {COMPANY_KIND_AUDIT} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS): audit rows
+
 /** Axis-aligned box [x0, y0, z0, x1, y1, z1] (holder-local, closed pose). */
 export type Box6 = readonly [number, number, number, number, number, number];
 
 /** Authored material roles (world/openables.ts maps them to mesh-UV materials; `body` / `inner` follow the model's paint). */
-export type MatRole = 'body' | 'inner' | 'liner' | 'fill' | 'paper' | 'frost' | 'steelDark' | 'steelBright' | 'black' | 'white' | 'accent' | 'shadow' | 'stock' | 'wood';
+export type MatRole = 'body' | 'inner' | 'liner' | 'fill' | 'paper' | 'frost' | 'steelDark' | 'steelBright' | 'black' | 'white' | 'accent' | 'shadow' | 'stock' | 'wood'
+  // Task office-overhaul-20261030 (lane INTERACT): toilet-stall door leaf (the partition shape material's tint, mesh UVs)
+  | 'partition';
 export interface AuthoredBox { b: Box6; m: MatRole }
 
 export interface HingeMove {
@@ -65,6 +69,11 @@ export interface PartSpec {
    * clear inside the model's outer walls.
    */
   replaceInterior?: boolean;
+  /**
+   * Task office-overhaul-20261030 (lane INTERACT): the `cavity` only bounds the compartment for item / chunk collision
+   * (world/containers.ts openPhysicsBoxes walls); no liner mesh is drawn (a walk-in toilet stall: the real interior shows).
+   */
+  cavityHidden?: boolean;
   /** Round liner (trash can): open cylinder r, y0..y1, back-side. */
   cylinder?: readonly [r: number, y0: number, y1: number];
   /** Static extras revealed while open (trash fill, newspaper stack, shelves, frozen stock). */
@@ -108,6 +117,13 @@ export interface OpenableSpec {
    * lies in a `drop` box (the baked doors / solid carcass the openable replaces); `bodyBoxes` add the hollow carcass.
    */
   bodyPurpose?: {drop: readonly Box6[]};
+  /**
+   * Task office-overhaul-20261030 (lane INTERACT): authored body taken from the PROCEDURAL prop shape (gen/propShapes.ts propShape,
+   * the same world-mapped shape materials world/builder.ts used before the kind became a container) minus `drop` boxes. `swap`: a
+   * delivered model (world/openables.ts setOpenableBodyModel(asset, gltf)) replaces the shape parts whose centre lies in its
+   * `drop` boxes, fitted uniformly into `size` (only grossly mis-scaled files are rescaled) at `at` (base centre), turned by `yaw`.
+   */
+  bodyShape?: {drop: readonly Box6[]; swap?: {asset: string; drop: readonly Box6[]; at: readonly [number, number, number]; size: readonly [number, number, number]; yaw: number}};
   parts: readonly PartSpec[];
   /**
    * Loot: pure new containers roll `loot` over every compartment; surface holders keep their exposed surfaces' roll and get a
@@ -161,6 +177,8 @@ const MED: Rows = [['bandage', 3], ['medkit', 0.35], ['water', 0.3]];
 const SAFE: Rows = [['ammo_rifle', 1.2], ['ammo_shells', 0.8], ['bandage', 0.6], ['medkit', 0.25], ['chocolate', 0.3]];
 const FROZEN: Rows = [['water', 1], ['juice', 1], ['cola', 0.8], ['beans', 0.4], ['noodles', 0.3]];
 const PANTRY: Rows = [['noodles', 1], ['beans', 1], ['water', 0.8], ['chocolate', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.2]];
+/** Task office-overhaul-20261030 (lane INTERACT): stashed in a toilet (bowl / tank lid) — a bottle, a dressing, a box of 9 mm, rarely better. */
+const TOILET: Rows = [['water', 1], ['bandage', 0.8], ['ammo_pistol', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
 
 // ---------------------------------------------------------------------------------------
 // Per-kind specs
@@ -375,7 +393,10 @@ export const OPENABLE_SPECS = {
     loot: {lots: [1, 3], empty: 0.35, items: FROZEN},
     sound: {open: 'desk', close: 'shopCooler'},
   },
-  /** Glass-door drinks cooler (shop-cooler-open.glb): the framed glass door (handle right) swings on its left hinge. */
+  /**
+   * Glass-door drinks cooler (shop-cooler-open-t25r1.glb; 2026-10-30 glass-film repair): the framed glass door (handle right) swings
+   * on its left hinge. Aimed at, it is taken over; its glass own mesh never casts the flashlight shadow (openables.ts takeover).
+   */
   shopCooler: {
     label: 'drinks cooler', model: 'shopCooler', body: 'model', group: 'surface', shared: true,
     parts: [{
@@ -411,7 +432,7 @@ export const OPENABLE_SPECS = {
     sound: {open: 'medCabinet', close: 'medCabinet'},
   },
   /**
-   * Fire-extinguisher cabinet (p7-fire-extinguisher-cabinet-t25.glb, an open-front hybrid: T2.5 exterior with its painted pane cut,
+   * Fire-extinguisher cabinet (p7-fire-extinguisher-cabinet-t25r1.glb, an open-front hybrid: T2.5 exterior with its painted pane cut,
    * a real glass pane, an inward liner and the T2.5 extinguisher inside): the white glazed door frame (handle left) swings on its
    * right hinges. Door frame measured on the T2.5 derivative (colour + ray-cast 2026-10-29): x -0.18..0.168, y 0.048..0.705,
    * front z 0.155..0.163 (glass pane z 0.15; the liner ends at z 0.135).
@@ -491,6 +512,39 @@ export const OPENABLE_SPECS = {
     loot: {lots: [1, 1], empty: 0.5, items: [['ammo_rifle', 0.7], ['ammo_shells', 0.5], ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]]},
     sound: {open: 'desk', close: 'desk'},
   },
+  // --- washroom cubicles (task office-overhaul-20261030, lane INTERACT) -------------------------------------------------------------
+  /**
+   * Toilet stall (user feedback #13: "Bathroom stall doors cannot be opened … sometimes find items in the toilet!"): the procedural
+   * cubicle (gen/propShapes.ts toiletStall: partitions, header rail, legs, toilet) is the holder body; the laminate door is an
+   * authored leaf hinged on the left front post that swings INTO the cubicle (88°: it rests along the left partition, clear of the
+   * toilet; +angle turns the free end toward -Z). Loot lies in the toilet bowl or on the tank lid — rolled once with the level
+   * (finite, remembered like every holder), and the iteration-12 scarcity thins it so only about a third of stalls hold anything.
+   * The walk-in collision, sight and hitscan of the cubicle are world/stalls.ts (the prop keeps its generated AABB / masks).
+   */
+  toiletStall: {
+    label: 'toilet stall', model: null, body: 'authored', group: 'container',
+    bodyShape: {drop: [], swap: {asset: 'toilet', drop: [box(-0.25, 0, -0.8, 0.25, 0.9, -0.12)], at: [0, 0, -0.79], size: [0.44, 0.82, 0.68], yaw: Math.PI}},
+    parts: [{
+      name: 'stall door',
+      move: {type: 'hinge', axis: 'y', pivot: [-0.455, 0, 0.78], angle: 88 * P, min: 70 * P},
+      boxes: [
+        B('partition', -0.445, 0.16, 0.765, 0.445, 1.9, 0.795),
+        // outside: occupancy indicator + knob near the free edge; inside: the slide latch
+        B('black', 0.33, 0.985, 0.795, 0.41, 1.025, 0.803), B('steelBright', 0.355, 0.9, 0.795, 0.385, 0.95, 0.815),
+        B('steelBright', 0.36, 0.975, 0.75, 0.42, 1.035, 0.765),
+      ],
+      cavity: box(-0.47, 0, -0.77, 0.47, 1.95, 0.75), cavityHidden: true,
+      // revealed with the door: a toilet-roll holder on the right partition
+      inner: [B('steelBright', 0.445, 0.68, -0.3, 0.47, 0.76, -0.12), B('white', 0.39, 0.69, -0.27, 0.445, 0.75, -0.15)],
+      surfaces: [
+        // in the bowl (items lie down) and on the tank lid
+        {y: 0.245, x0: -0.12, x1: 0.12, z0: -0.56, z1: -0.22, clear: 0.14},
+        {y: 0.812, x0: -0.17, x1: 0.17, z0: -0.77, z1: -0.64, clear: 0.4},
+      ],
+    }],
+    loot: {lots: [1, 2], empty: 0.2, items: TOILET},
+    sound: {open: 'kitchenette', close: 'kitchenette'},
+  },
 } as const satisfies Record<string, OpenableSpec>;
 
 export type OpenableKind = keyof typeof OPENABLE_SPECS;
@@ -500,7 +554,8 @@ export function isOpenableKind(kind: string): kind is OpenableKind { return kind
 export function openableSpec(kind: string): OpenableSpec | null { return SPECS[kind] ?? null; }
 
 /** New container kinds (not loot holders before iteration 08): items/loot.ts ContainerKind additions. */
-export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingBox', 'staffLockers', 'filingCabinet', 'safe', 'chestFreezer', 'firstAidWallKit', 'fireExtinguisherCabinet', 'aedWallCabinet'] as const;
+export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingBox', 'staffLockers', 'filingCabinet', 'safe', 'chestFreezer', 'firstAidWallKit', 'fireExtinguisherCabinet', 'aedWallCabinet',
+  'toiletStall'] as const; // task office-overhaul-20261030 (lane INTERACT): washroom cubicles
 export type OpenableContainerKind = (typeof OPENABLE_CONTAINER_KINDS)[number];
 
 /**
@@ -571,7 +626,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   // openable (iteration 08, this lane)
   ...OPENABLE_KINDS.map(k => ({kind: k, cls: 'openable' as const, how: describe(k)})),
   // existing holders with moving parts / always-open fronts
-  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25.glb (Meshy T2.5; door split re-measured), shelving insert'},
+  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25r1.glb (Meshy T2.5 + local flat side / top repair, task model-touchups-20261030; door region untouched, split unchanged), shelving insert'},
   {kind: 'cabinetLow', cls: 'existing', how: 'two doors derived from cabinet-low-t25.glb (Meshy T2.5; door split re-measured)'},
   {kind: 'crate', cls: 'existing', how: 'lid derived from crate-t25.glb, hinged at the back; splinters when shot (iteration 06)'},
   {kind: 'vending', cls: 'existing', how: 'front pried open ([E] hold), stock spills out (iteration 03); shot front gives way (06)'},
@@ -603,7 +658,6 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   {kind: 'wetDryVac', cls: 'exception', how: 'appliance drum lid'},
   {kind: 'waterCooler', cls: 'exception', how: 'appliance (dispenser taps, no cupboard)'},
   {kind: 'cartonStack', cls: 'exception', how: 'sealed, strapped cartons on a pallet (collapse when shot); not searchable'},
-  {kind: 'toiletStall', cls: 'exception', how: 'cubicle partition door: walking in would need new collision / navigation (not a container)'},
   {kind: 'booth', cls: 'exception', how: 'station-agent booth door: structural (part of the booth enclosure)'},
   {kind: 'exitStair', cls: 'exception', how: 'locked street-exit grille: structural'},
   {kind: 'shopShutter', cls: 'exception', how: 'rolled-down shopfront shutter: structural (closed store)'},
@@ -627,6 +681,8 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   {kind: 'officePhotocopier', cls: 'exception', how: 'copier paper trays: appliance, one fused mesh'},
   ...['officeChair', 'officeMonitor', 'officeWaterCooler', 'conferenceTable', 'deadPlant', 'officeWhiteboard', 'officeShelf', 'cubiclePartition']
     .map(k => ({kind: k, cls: 'none' as const, how: 'no door, lid or drawer (office furniture / equipment / open shelving)'})),
+  // Task office-overhaul-20261030 (lane TENANTS): company / supporting office kinds (gen/office/companyKinds.ts), none a holder.
+  ...COMPANY_KIND_AUDIT,
 ];
 
 function describe(k: OpenableKind): string {

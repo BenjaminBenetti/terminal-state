@@ -197,8 +197,12 @@ describe('deployable backpack: 6, click, E', () => {
     s.lookAt(s.sys.bags[0].centre);
     s.step();
     expect(s.sys.target).toBe(s.sys.bags[0]);
-    expect(s.g.promptProviders[0]()).toMatch(/\[E\]<\/b> Open backpack · empty/);
+    // Task office-overhaul-20261030 (INTERACT, #1): "E open bag · hold E wear"; the press only starts the tap / hold — the view
+    // opens on the RELEASE (this shell's input has no held keys, so E reads released on the next frame)
+    expect(s.g.promptProviders[0]()).toMatch(/\[E\]<\/b> Open backpack · <b>hold \[E\]<\/b> wear · empty/);
     expect(s.g.interactHandlers[0]()).toBe(true);
+    expect(s.sys.viewOpen).toBe(false);
+    s.step();
     expect(s.sys.viewOpen).toBe(true);
     expect(s.g.state).toBe('playing'); // NOT paused
     expect(s.g.inputOwners[0]()).toBe(true);

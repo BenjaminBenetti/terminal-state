@@ -18,7 +18,8 @@ describe('iteration05 open-front cooler/display', () => {
     it(`${modelKey} uses ${file} (Meshy T2.5 rebuild: -t25) with a transparent glass node, real interior surfaces and the old bbox`, async () => {
       // Meshy T2.5 replacement (2026-10-29): the same open-front hybrid rebuilt on the T2.5 exterior (meshy-t25-props-20261029.json
       // record.hybrid); the iteration-05 file is restorable from Git (record.restore).
-      expect(MODEL_FILES[modelKey].url).toBe(`assets/models/${file.replace(/\.glb$/, '-t25.glb')}`);
+      // task model-touchups-20261030 (lane GLASS): the glass film repair ships as -t25r1 (record.localRepair; not new Meshy output)
+      expect(MODEL_FILES[modelKey].url).toBe(`assets/models/${file.replace(/\.glb$/, '-t25r1.glb')}`);
       const abs = path.join(GAME, 'public', MODEL_FILES[modelKey].url);
       const t25 = T25.records.find(r => r.runtimeKeys.includes(modelKey))!;
       expect(t25.restore.path).toBe(PROV.outputs.find(o => o.key === key)!.output);

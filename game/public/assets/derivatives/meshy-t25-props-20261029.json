@@ -17,8 +17,8 @@
   "class": "props",
   "counts": {
     "records": 115,
-    "bytes": 38622484,
-    "triangles": 454988,
+    "bytes": 38377096,
+    "triangles": 450948,
     "replacedBytes": 58653948,
     "replacedTriangles": 448981
   },
@@ -30,12 +30,12 @@
       ],
       "class": "prop",
       "output": {
-        "path": "game/public/assets/models/bench-t25.glb",
-        "url": "assets/models/bench-t25.glb",
-        "sha256": "caad790696f9342d806753f0b8fb578ed50c032a481ee90f1d309b1c82054890",
-        "bytes": 623608,
-        "triangles": 7999,
-        "vertices": 9345,
+        "path": "game/public/assets/models/bench-t25r1.glb",
+        "url": "assets/models/bench-t25r1.glb",
+        "sha256": "490a8be5ae66ca412c02e29514d280c640a2d830cc66904cc6be252c56d6ca87",
+        "bytes": 519540,
+        "triangles": 6653,
+        "vertices": 6345,
         "textures": [
           {
             "slot": "baseColor",
@@ -242,6 +242,401 @@
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
         }
       },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GEOM",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "geometry",
+        "suffix": "r1",
+        "userFeedback": "Bench found in the subway track area has messed up back reset, lots of mangled triangles",
+        "what": "geometry only: per seat bay the old backrest triangles are clipped on planes where the mesh is clean (seat fillet y 0.386, back corner y 0.325, rolled top rail y 0.73, inside the teal side plates) and the panel is rebuilt as a clean front surface (with the seat fillet) and back surface welded vertex-to-vertex to the cut edges; UVs on the bench's own seat-top (mirrored at the fillet) / seat-bottom paint. Textures, seat, top rail, side plates, legs, bolts and bbox unchanged; fewer triangles",
+        "why": "Meshy T2.5 reconstructed the three perforated backrest panels as torn shells (holes, fans of sliver triangles, shard walls inside the slab); present in the native output, not caused by the simplification",
+        "change": null,
+        "geometry": {
+          "version": "geom-r1",
+          "method": "repairBenchBackrest (tools/asset-pipeline/props/lib/local-repair-geom.mjs)",
+          "bays": [
+            {
+              "bay": 0,
+              "x": [
+                -0.8343,
+                -0.2765
+              ],
+              "plateFaces": {
+                "left": [
+                  -0.8303,
+                  -0.8235
+                ],
+                "right": [
+                  -0.2854,
+                  -0.2805
+                ]
+              },
+              "chains": {
+                "frontBottom": 3,
+                "frontTop": 3,
+                "backTop": 3,
+                "backBottom": 3
+              },
+              "railZ": {
+                "front": -0.1173,
+                "back": -0.2335
+              },
+              "columns": 4,
+              "newTriangles": 120,
+              "uv": {
+                "front": {
+                  "source": "seat top of this bay, mirrored at the fillet cut (continuous with the kept seat)",
+                  "fit": {
+                    "axes": [
+                      "x",
+                      "z"
+                    ],
+                    "u": [
+                      -0.003592,
+                      -0.201367,
+                      0.572527
+                    ],
+                    "v": [
+                      0.294884,
+                      -0.002436,
+                      0.955289
+                    ],
+                    "faces": 8,
+                    "vertices": 9,
+                    "maxResidualUV": 0.0000122
+                  },
+                  "seatZAtCut": -0.0896,
+                  "compress": 0.8516
+                },
+                "back": {
+                  "source": "seat bottom of this bay, rotated (under-seat bracket / leg footprints avoided)",
+                  "fit": {
+                    "axes": [
+                      "x",
+                      "z"
+                    ],
+                    "u": [
+                      0,
+                      -0.201371,
+                      0.281037
+                    ],
+                    "v": [
+                      -0.294917,
+                      0,
+                      0.599219
+                    ],
+                    "faces": 4,
+                    "vertices": 6,
+                    "maxResidualUV": 0.00000538
+                  },
+                  "cleanX": [
+                    -0.6816,
+                    -0.2994
+                  ],
+                  "compress": 0.9428
+                }
+              }
+            },
+            {
+              "bay": 1,
+              "x": [
+                -0.2492,
+                0.2554
+              ],
+              "plateFaces": {
+                "left": [
+                  -0.2452,
+                  -0.2368
+                ],
+                "right": [
+                  0.2505,
+                  0.2514
+                ]
+              },
+              "chains": {
+                "frontBottom": 3,
+                "frontTop": 3,
+                "backTop": 3,
+                "backBottom": 3
+              },
+              "railZ": {
+                "front": -0.1153,
+                "back": -0.235
+              },
+              "columns": 4,
+              "newTriangles": 120,
+              "uv": {
+                "front": {
+                  "source": "seat top of this bay, mirrored at the fillet cut (continuous with the kept seat)",
+                  "fit": {
+                    "axes": [
+                      "x",
+                      "z"
+                    ],
+                    "u": [
+                      0.000109,
+                      -0.201371,
+                      0.469157
+                    ],
+                    "v": [
+                      0.294909,
+                      0.00009,
+                      0.467224
+                    ],
+                    "faces": 6,
+                    "vertices": 8,
+                    "maxResidualUV": 0.0000161
+                  },
+                  "seatZAtCut": -0.0862,
+                  "compress": 0.8363
+                },
+                "back": {
+                  "source": "seat bottom of this bay, rotated (under-seat bracket / leg footprints avoided)",
+                  "fit": {
+                    "axes": [
+                      "x",
+                      "z"
+                    ],
+                    "u": [
+                      -0.000005,
+                      -0.201358,
+                      0.479742
+                    ],
+                    "v": [
+                      -0.294908,
+                      -0.000013,
+                      0.927942
+                    ],
+                    "faces": 3,
+                    "vertices": 5,
+                    "maxResidualUV": 0.00000584
+                  },
+                  "cleanX": [
+                    -0.2228,
+                    0.2365
+                  ],
+                  "compress": 1
+                }
+              }
+            },
+            {
+              "bay": 2,
+              "x": [
+                0.2898,
+                0.8415
+              ],
+              "plateFaces": {
+                "left": [
+                  0.2938,
+                  0.2944
+                ],
+                "right": [
+                  0.8313,
+                  0.8375
+                ]
+              },
+              "chains": {
+                "frontBottom": 3,
+                "frontTop": 3,
+                "backTop": 4,
+                "backBottom": 3
+              },
+              "railZ": {
+                "front": -0.1161,
+                "back": -0.2327
+              },
+              "columns": 4,
+              "newTriangles": 123,
+              "uv": {
+                "front": {
+                  "source": "seat top of this bay, mirrored at the fillet cut (continuous with the kept seat)",
+                  "fit": {
+                    "axes": [
+                      "x",
+                      "z"
+                    ],
+                    "u": [
+                      0.000008,
+                      -0.201387,
+                      0.271218
+                    ],
+                    "v": [
+                      0.29491,
+                      0.000013,
+                      0.296358
+                    ],
+                    "faces": 6,
+                    "vertices": 8,
+                    "maxResidualUV": 0.0000129
+                  },
+                  "seatZAtCut": -0.0895,
+                  "compress": 0.8511
+                },
+                "back": {
+                  "source": "seat bottom of this bay, rotated (under-seat bracket / leg footprints avoided)",
+                  "fit": {
+                    "axes": [
+                      "x",
+                      "z"
+                    ],
+                    "u": [
+                      0.000004,
+                      -0.201369,
+                      0.472476
+                    ],
+                    "v": [
+                      -0.294914,
+                      -0.00001,
+                      0.785808
+                    ],
+                    "faces": 4,
+                    "vertices": 6,
+                    "maxResidualUV": 0.00000758
+                  },
+                  "cleanX": [
+                    0.3084,
+                    0.69
+                  ],
+                  "compress": 0.9412
+                }
+              }
+            }
+          ],
+          "weld": {
+            "vertices": 16,
+            "maxMoveM": 0.003199,
+            "collapsedOldFaces": 12
+          },
+          "rootCause": "Meshy T2.5 reconstructed the three perforated backrest panels as torn shells: front / back faces with holes, fans of sliver triangles converging on single points and shard walls inside the 12 cm slab (y 0.33..0.725 in every bay); present in the native output (the 8173 -> 7999 seam-preserving simplification is not the cause). The seat, the seat fillet below y 0.386, the rolled top rail above y 0.725 and the teal L side plates are clean.",
+          "cut": {
+            "planes": {
+              "yFront": 0.386,
+              "yBack": 0.325,
+              "yTop": 0.73,
+              "bayX": [
+                [
+                  -0.8343,
+                  -0.2765
+                ],
+                [
+                  -0.2492,
+                  0.2554
+                ],
+                [
+                  0.2898,
+                  0.8415
+                ]
+              ]
+            },
+            "envelopeM": {
+              "front": 0.01,
+              "back": 0.008
+            },
+            "removedTrianglePieces": 2092,
+            "note": "old triangles clipped exactly on the planes (attributes interpolated); pieces inside a bay's slab envelope removed (the plates' side faces kept); the new surfaces reuse the cut-edge vertex positions (watertight, no T-junctions)"
+          },
+          "added": {
+            "triangles": 363
+          },
+          "triangles": {
+            "before": 7999,
+            "afterClip": 8394,
+            "kept": 6302,
+            "after": 6653
+          },
+          "keeps": "seat (top, nose, bottom), the seat fillet below the cut, the rolled top rail, the teal L side plates, legs, foot plates, bolts, brackets and the exact bbox (collider / placement unchanged)",
+          "metrics": {
+            "before": {
+              "backrestTriangles": {
+                "triangles": 1672,
+                "degenerate": 2,
+                "sliver": 47,
+                "thin": 195,
+                "flipped": 117,
+                "minAngleDeg": 0.0505,
+                "areaM2": 3.330995
+              },
+              "frontRays": {
+                "rays": 720,
+                "hitsPerRay": {
+                  "0": 51,
+                  "1": 145,
+                  "2": 226,
+                  "3": 164,
+                  "4": 89,
+                  "5": 28,
+                  "6": 13,
+                  "7": 3,
+                  "8": 1
+                },
+                "holes": 51,
+                "firstHitDepthSpreadM": 0.1292,
+                "windingNormalRmsDeg": 33.6458,
+                "shadingNormalRmsDeg": 43.004
+              },
+              "backrestOpenEdges": 1216,
+              "allTriangles": {
+                "triangles": 7999,
+                "degenerate": 7,
+                "sliver": 340,
+                "thin": 1129,
+                "flipped": 199,
+                "minAngleDeg": 0.001,
+                "areaM2": 6.137683
+              },
+              "triangles": 7999
+            },
+            "after": {
+              "backrestTriangles": {
+                "triangles": 289,
+                "degenerate": 0,
+                "sliver": 0,
+                "thin": 0,
+                "flipped": 0,
+                "minAngleDeg": 6.5509,
+                "areaM2": 1.202707
+              },
+              "frontRays": {
+                "rays": 720,
+                "hitsPerRay": {
+                  "2": 720
+                },
+                "holes": 0,
+                "firstHitDepthSpreadM": 0.006,
+                "windingNormalRmsDeg": 1.4584,
+                "shadingNormalRmsDeg": 4.2559
+              },
+              "backrestOpenEdges": 0,
+              "allTriangles": {
+                "triangles": 6653,
+                "degenerate": 0,
+                "sliver": 303,
+                "thin": 936,
+                "flipped": 81,
+                "minAngleDeg": 0.001,
+                "areaM2": 3.965166
+              },
+              "triangles": 6653
+            }
+          },
+          "unrepairedRebuild": {
+            "sha256": "caad790696f9342d806753f0b8fb578ed50c032a481ee90f1d309b1c82054890",
+            "bytes": 623608,
+            "triangles": 7999,
+            "matchesPreviousOutput": true
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/bench-t25.glb",
+          "sha256": "caad790696f9342d806753f0b8fb578ed50c032a481ee90f1d309b1c82054890",
+          "bytes": 623608,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "50ea8d9607c23c37ba14c038794274e544963aa9",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/bench-t25.glb > game/public/assets/models/bench-t25.glb"
+        }
+      },
       "tune": null,
       "simplify": {
         "applied": true,
@@ -254,10 +649,10 @@
       },
       "meshAfter": {
         "components": 19,
-        "largestComponentFaces": 4262,
-        "boundaryEdges": 1547,
-        "nonManifoldEdges": 0,
-        "edges": 12772
+        "largestComponentFaces": 2921,
+        "boundaryEdges": 572,
+        "nonManifoldEdges": 1,
+        "edges": 10265
       },
       "surfaces": [
         {
@@ -349,11 +744,11 @@
         "blobSha1": "0b1009b4de7282c96378fad0a8f33a1b9f2f96f9",
         "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/bench.glb > game/public/assets/models/bench.glb"
       },
-      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_bench.png",
+      "review": "reference/tasks/model-touchups-20261030/review/props/base_bench.png",
       "limitations": [
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Fitted per axis to the existing gameplay footprint; relative stretch vs a uniform height fit 0.9795 / 1 / 1.4345 (x / y / z).",
-        "Simplified from 8173 to 7999 triangles (Meshy UVs / seams kept).",
+        "Simplified from 8173 to 6653 triangles (Meshy UVs / seams kept).",
         "Prototype derivative: no commercial / model licence clearance asserted. Labels / graphics are fictional AI designs."
       ],
       "tool": "meshy-t25-props-2"
@@ -694,12 +1089,12 @@
       ],
       "class": "openable prop",
       "output": {
-        "path": "game/public/assets/models/cabinet-tall-t25.glb",
-        "url": "assets/models/cabinet-tall-t25.glb",
-        "sha256": "a56799dca9c02d32ac07b08a2b9f0ae35aeb25f3b7fde1a034637ee727bd83f8",
-        "bytes": 445096,
-        "triangles": 7324,
-        "vertices": 9490,
+        "path": "game/public/assets/models/cabinet-tall-t25r1.glb",
+        "url": "assets/models/cabinet-tall-t25r1.glb",
+        "sha256": "83f55c3ca01adaea592ce127c76284644628871fe9e349c739f2a30eb1ae9804",
+        "bytes": 303764,
+        "triangles": 4630,
+        "vertices": 5578,
         "textures": [
           {
             "slot": "baseColor",
@@ -906,17 +1301,502 @@
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
         }
       },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GEOM",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "geometry",
+        "suffix": "r1",
+        "userFeedback": "supply cabinet side face looks bad, sorta like accordion lines or something. Might be able to manually fix the model, by putting a proper flat face on the sides / top.",
+        "what": "geometry only: the 32 side fins and 13 top slats (and the hidden inner faces they covered) removed; one flat side panel per side between the corner posts (1.5 mm inside the post faces) and a flat cap box (top + header skirts) at the exact old outer bounds, UV-mapped onto the cabinet's own clean back-panel paint / front header rail (colour, metallic-roughness and normal maps share the UVs). Textures, front, doors, handles, hinges, posts, plinth, back, interior shell and bbox unchanged",
+        "why": "Meshy T2.5 reconstructed the plain painted side panels as rows of separate vertical fins standing 3 cm proud of a thin inner wall with ~1 cm gaps, and the top as transverse slats, all painted with dark streaks: the shading across fins and gaps reads as accordion lines (not normals, not the normal map, not simplification: the cabinet was never simplified)",
+        "change": null,
+        "geometry": {
+          "version": "geom-r1",
+          "method": "repairCabinetTall (tools/asset-pipeline/props/lib/local-repair-geom.mjs)",
+          "rootCause": "Meshy T2.5 reconstructed the plain painted side panels as 32 separate vertical fins (16 per side, each a closed blob ~2-3 cm wide standing 3 cm proud of a thin inner wall at |x| 0.51 with ~1 cm gaps) and the top as 13 transverse slats; the fins / slats are also painted with dark-grey streaks. Shading across fins and gaps reads as accordion lines. Not a normal / normal-map / simplification issue (the cabinet was never simplified; its normal map is calm).",
+          "removed": {
+            "fins": 601,
+            "slats": 2083,
+            "innerWallOutward": 20,
+            "topPlateUpward": 4,
+            "finComponents": 32,
+            "slatComponents": 13
+          },
+          "added": {
+            "faces": 7,
+            "triangles": 14,
+            "quads": [
+              {
+                "name": "side-panel-right",
+                "normal": [
+                  1,
+                  0,
+                  0
+                ],
+                "corners": [
+                  [
+                    0.54,
+                    0.0822,
+                    0.2416
+                  ],
+                  [
+                    0.54,
+                    0.0822,
+                    -0.2624
+                  ],
+                  [
+                    0.54,
+                    1.8549,
+                    -0.2624
+                  ],
+                  [
+                    0.54,
+                    1.8549,
+                    0.2416
+                  ]
+                ],
+                "uvSource": "back panel x -0.47..0.034"
+              },
+              {
+                "name": "side-panel-left",
+                "normal": [
+                  -1,
+                  0,
+                  0
+                ],
+                "corners": [
+                  [
+                    -0.54,
+                    0.0822,
+                    -0.2624
+                  ],
+                  [
+                    -0.54,
+                    0.0822,
+                    0.2416
+                  ],
+                  [
+                    -0.54,
+                    1.8549,
+                    0.2416
+                  ],
+                  [
+                    -0.54,
+                    1.8549,
+                    -0.2624
+                  ]
+                ],
+                "uvSource": "back panel x -0.4..0.104 (mirrored)"
+              },
+              {
+                "name": "cap-top",
+                "normal": [
+                  0,
+                  1,
+                  0
+                ],
+                "corners": [
+                  [
+                    -0.5415,
+                    1.9,
+                    -0.2915
+                  ],
+                  [
+                    -0.5415,
+                    1.9,
+                    0.27
+                  ],
+                  [
+                    0.5415,
+                    1.9,
+                    0.27
+                  ],
+                  [
+                    0.5415,
+                    1.9,
+                    -0.2915
+                  ]
+                ],
+                "uvSource": "back panel x -0.47..0.0915, y 0.3..1.383 (rotated)"
+              },
+              {
+                "name": "cap-front",
+                "normal": [
+                  0,
+                  0,
+                  1
+                ],
+                "corners": [
+                  [
+                    -0.5415,
+                    1.8524,
+                    0.27
+                  ],
+                  [
+                    0.5415,
+                    1.8524,
+                    0.27
+                  ],
+                  [
+                    0.5415,
+                    1.9,
+                    0.27
+                  ],
+                  [
+                    -0.5415,
+                    1.9,
+                    0.27
+                  ]
+                ],
+                "uvSource": "front header rail (same texels as the removed header strip)"
+              },
+              {
+                "name": "cap-back",
+                "normal": [
+                  0,
+                  0,
+                  -1
+                ],
+                "corners": [
+                  [
+                    0.5415,
+                    1.8524,
+                    -0.2915
+                  ],
+                  [
+                    -0.5415,
+                    1.8524,
+                    -0.2915
+                  ],
+                  [
+                    -0.5415,
+                    1.9,
+                    -0.2915
+                  ],
+                  [
+                    0.5415,
+                    1.9,
+                    -0.2915
+                  ]
+                ],
+                "uvSource": "front header rail (mirrored)"
+              },
+              {
+                "name": "cap-right",
+                "normal": [
+                  1,
+                  0,
+                  0
+                ],
+                "corners": [
+                  [
+                    0.5415,
+                    1.8524,
+                    0.27
+                  ],
+                  [
+                    0.5415,
+                    1.8524,
+                    -0.2915
+                  ],
+                  [
+                    0.5415,
+                    1.9,
+                    -0.2915
+                  ],
+                  [
+                    0.5415,
+                    1.9,
+                    0.27
+                  ]
+                ],
+                "uvSource": "front header rail (centre part)"
+              },
+              {
+                "name": "cap-left",
+                "normal": [
+                  -1,
+                  0,
+                  0
+                ],
+                "corners": [
+                  [
+                    -0.5415,
+                    1.8524,
+                    -0.2915
+                  ],
+                  [
+                    -0.5415,
+                    1.8524,
+                    0.27
+                  ],
+                  [
+                    -0.5415,
+                    1.9,
+                    0.27
+                  ],
+                  [
+                    -0.5415,
+                    1.9,
+                    -0.2915
+                  ]
+                ],
+                "uvSource": "front header rail (centre part)"
+              }
+            ]
+          },
+          "measured": {
+            "backPostFrontZ": -0.2604,
+            "frontPostBackZ": 0.2396,
+            "plinthTopY": 0.0842,
+            "postOuterX": 0.5415,
+            "postTopY": 1.8519,
+            "frontZ": 0.27
+          },
+          "planes": {
+            "sidePanelX": 0.54,
+            "sidePanelZ": [
+              -0.2624,
+              0.2416
+            ],
+            "sidePanelY": [
+              0.0822,
+              1.8549
+            ],
+            "capY": [
+              1.8524,
+              1.9
+            ],
+            "capZ": [
+              -0.2915,
+              0.27
+            ],
+            "capX": [
+              -0.5415,
+              0.5415
+            ]
+          },
+          "uvSources": {
+            "backPanel": {
+              "axes": [
+                "x",
+                "y"
+              ],
+              "u": [
+                0.10754,
+                0.000069,
+                0.164935
+              ],
+              "v": [
+                -0.000043,
+                0.128889,
+                0.758337
+              ],
+              "faces": 3,
+              "vertices": 5,
+              "maxResidualUV": 0.00000415,
+              "range": {
+                "x": [
+                  -0.5111,
+                  0.5111
+                ],
+                "y": [
+                  0.078,
+                  1.8513
+                ]
+              }
+            },
+            "frontHeader": {
+              "axes": [
+                "x",
+                "y"
+              ],
+              "u": [
+                0,
+                -0.128894,
+                0.333484
+              ],
+              "v": [
+                -0.107552,
+                -0.000002,
+                0.474399
+              ],
+              "faces": 13,
+              "vertices": 13,
+              "maxResidualUV": 0.00000133
+            }
+          },
+          "triangles": {
+            "before": 7324,
+            "after": 4630
+          },
+          "keeps": "front, doors (runtime split region |x| < 0.499, y 0.129..1.8506, z > 0.2495 untouched), handles, hinges, corner posts, plinth, feet, back panel, interior shell and the exact bbox",
+          "metrics": {
+            "before": {
+              "sideRight": {
+                "rays": 432,
+                "holes": 0,
+                "hitsPerRay": {
+                  "4": 28,
+                  "5": 30,
+                  "6": 65,
+                  "7": 67,
+                  "8": 86,
+                  "9": 58,
+                  "10": 52,
+                  "11": 30,
+                  "12": 16
+                },
+                "firstHitDepthSpreadM": 0.0299,
+                "windingNormalRmsDeg": 38.2869,
+                "shadingNormalRmsDeg": 57.6935,
+                "distinctFirstHitFaces": 21
+              },
+              "sideLeft": {
+                "rays": 432,
+                "holes": 0,
+                "hitsPerRay": {
+                  "4": 28,
+                  "5": 30,
+                  "6": 65,
+                  "7": 67,
+                  "8": 86,
+                  "9": 58,
+                  "10": 52,
+                  "11": 30,
+                  "12": 16
+                },
+                "firstHitDepthSpreadM": 0.0303,
+                "windingNormalRmsDeg": 36.3934,
+                "shadingNormalRmsDeg": 47.5936,
+                "distinctFirstHitFaces": 24
+              },
+              "top": {
+                "rays": 288,
+                "holes": 0,
+                "hitsPerRay": {
+                  "4": 66,
+                  "5": 25,
+                  "6": 171,
+                  "7": 4,
+                  "8": 21,
+                  "9": 1
+                },
+                "firstHitDepthSpreadM": 0.0214,
+                "windingNormalRmsDeg": 6.2646,
+                "shadingNormalRmsDeg": 34.8454,
+                "distinctFirstHitFaces": 19
+              },
+              "sideAndTopTriangles": {
+                "triangles": 3668,
+                "degenerate": 0,
+                "sliver": 1081,
+                "thin": 1682,
+                "flipped": 98,
+                "minAngleDeg": 0.0009,
+                "areaM2": 11.64418
+              },
+              "allTriangles": {
+                "triangles": 7324,
+                "degenerate": 0,
+                "sliver": 1295,
+                "thin": 2229,
+                "flipped": 154,
+                "minAngleDeg": 0,
+                "areaM2": 25.187897
+              },
+              "triangles": 7324
+            },
+            "after": {
+              "sideRight": {
+                "rays": 432,
+                "holes": 0,
+                "hitsPerRay": {
+                  "4": 100,
+                  "5": 218,
+                  "6": 114
+                },
+                "firstHitDepthSpreadM": 0,
+                "windingNormalRmsDeg": 0,
+                "shadingNormalRmsDeg": 0,
+                "distinctFirstHitFaces": 2
+              },
+              "sideLeft": {
+                "rays": 432,
+                "holes": 0,
+                "hitsPerRay": {
+                  "4": 100,
+                  "5": 218,
+                  "6": 114
+                },
+                "firstHitDepthSpreadM": 0,
+                "windingNormalRmsDeg": 0,
+                "shadingNormalRmsDeg": 0,
+                "distinctFirstHitFaces": 2
+              },
+              "top": {
+                "rays": 288,
+                "holes": 0,
+                "hitsPerRay": {
+                  "4": 264,
+                  "6": 22,
+                  "7": 2
+                },
+                "firstHitDepthSpreadM": 0,
+                "windingNormalRmsDeg": 0,
+                "shadingNormalRmsDeg": 0,
+                "distinctFirstHitFaces": 2
+              },
+              "sideAndTopTriangles": {
+                "triangles": 979,
+                "degenerate": 0,
+                "sliver": 164,
+                "thin": 341,
+                "flipped": 19,
+                "minAngleDeg": 0.0063,
+                "areaM2": 6.523349
+              },
+              "allTriangles": {
+                "triangles": 4630,
+                "degenerate": 0,
+                "sliver": 375,
+                "thin": 884,
+                "flipped": 74,
+                "minAngleDeg": 0,
+                "areaM2": 19.59254
+              },
+              "triangles": 4630
+            }
+          },
+          "unrepairedRebuild": {
+            "sha256": "a56799dca9c02d32ac07b08a2b9f0ae35aeb25f3b7fde1a034637ee727bd83f8",
+            "bytes": 445096,
+            "triangles": 7324,
+            "matchesPreviousOutput": true
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/cabinet-tall-t25.glb",
+          "sha256": "a56799dca9c02d32ac07b08a2b9f0ae35aeb25f3b7fde1a034637ee727bd83f8",
+          "bytes": 445096,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "7bf23096516a2fe6004da2498b575556bbdf2b43",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/cabinet-tall-t25.glb > game/public/assets/models/cabinet-tall-t25.glb"
+        }
+      },
       "tune": null,
       "simplify": {
         "applied": false,
         "triangles": 7324
       },
       "meshAfter": {
-        "components": 91,
+        "components": 50,
         "largestComponentFaces": 501,
-        "boundaryEdges": 930,
+        "boundaryEdges": 350,
         "nonManifoldEdges": 0,
-        "edges": 11451
+        "edges": 7120
       },
       "surfaces": [
         {
@@ -984,7 +1864,7 @@
         "blobSha1": "0f2b4946f31e6b900389d5ea7e0ad16030706d8e",
         "command": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/cabinet-tall.glb > game/public/assets/models/cabinet-tall.glb"
       },
-      "review": "reference/tasks/meshy-game-replacement-20261029/review/props/base_cabinetTall.png",
+      "review": "reference/tasks/model-touchups-20261030/review/props/base_cabinetTall.png",
       "limitations": [
         "Single-image AI reconstruction (Meshy T2.5 image-to-3d) conditioned on the original front / reference image: back, sides and underside are inferred.",
         "Fitted per axis to the existing gameplay footprint; relative stretch vs a uniform height fit 1.1984 / 1 / 0.7599 (x / y / z).",
@@ -2566,10 +3446,10 @@
       ],
       "class": "openable prop",
       "output": {
-        "path": "game/public/assets/models/shop-cooler-open-t25.glb",
-        "url": "assets/models/shop-cooler-open-t25.glb",
-        "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f",
-        "bytes": 278708,
+        "path": "game/public/assets/models/shop-cooler-open-t25r1.glb",
+        "url": "assets/models/shop-cooler-open-t25r1.glb",
+        "sha256": "4e68c571d946cf890c4c4fd320b24bf24ec678d7d67b05d6f6f2d8902226e3f7",
+        "bytes": 278712,
         "triangles": 1043,
         "vertices": 6508,
         "textures": [
@@ -2776,6 +3656,49 @@
           },
           "best": "front",
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GLASS",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "glass-material",
+        "suffix": "r1",
+        "userFeedback": "The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque",
+        "what": "material factors of the transparent \"glass\" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged",
+        "why": "root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame's shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)",
+        "change": {
+          "glassMaterial": {
+            "before": {
+              "baseColor": [
+                0.8,
+                0.88,
+                0.9,
+                0.14
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            },
+            "after": {
+              "baseColor": [
+                0.092,
+                0.101,
+                0.1035,
+                0.2
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            }
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/shop-cooler-open-t25.glb",
+          "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f",
+          "bytes": 278708,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "4c6c95b1ce5b76b11b1735c1335b17ec4161197e",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/shop-cooler-open-t25.glb > game/public/assets/models/shop-cooler-open-t25.glb"
         }
       },
       "tune": null,
@@ -3321,10 +4244,10 @@
       ],
       "class": "shelf/holder",
       "output": {
-        "path": "game/public/assets/models/shop-display-open-t25.glb",
-        "url": "assets/models/shop-display-open-t25.glb",
-        "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005",
-        "bytes": 140588,
+        "path": "game/public/assets/models/shop-display-open-t25r1.glb",
+        "url": "assets/models/shop-display-open-t25r1.glb",
+        "sha256": "2c330771f1cabb85b9d7ffcaf956d8d050b3a1cf37a6a56ec357acb86ecc6664",
+        "bytes": 140592,
         "triangles": 901,
         "vertices": 4901,
         "textures": [
@@ -3532,6 +4455,49 @@
           },
           "best": "front",
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GLASS",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "glass-material",
+        "suffix": "r1",
+        "userFeedback": "The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque",
+        "what": "material factors of the transparent \"glass\" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged",
+        "why": "root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame's shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)",
+        "change": {
+          "glassMaterial": {
+            "before": {
+              "baseColor": [
+                0.8,
+                0.88,
+                0.9,
+                0.14
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            },
+            "after": {
+              "baseColor": [
+                0.092,
+                0.101,
+                0.1035,
+                0.2
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            }
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/shop-display-open-t25.glb",
+          "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005",
+          "bytes": 140588,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "0e053d04064b5cb3e48ceb15bb7c27c5682fbb63",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/shop-display-open-t25.glb > game/public/assets/models/shop-display-open-t25.glb"
         }
       },
       "tune": {
@@ -18058,10 +19024,10 @@
       "p7SizeClass": "medium",
       "class": "openable prop",
       "output": {
-        "path": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-        "url": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-        "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa",
-        "bytes": 402332,
+        "path": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+        "url": "assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+        "sha256": "b02f7029b30ddce26a0ef8288a4ff964cc1b76be82c1a07aa26a7c2514f95131",
+        "bytes": 402336,
         "triangles": 3736,
         "vertices": 2992,
         "textures": [
@@ -18277,6 +19243,49 @@
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
         }
       },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GLASS",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "glass-material",
+        "suffix": "r1",
+        "userFeedback": "The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque",
+        "what": "material factors of the transparent \"glass\" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged",
+        "why": "root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame's shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)",
+        "change": {
+          "glassMaterial": {
+            "before": {
+              "baseColor": [
+                0.8,
+                0.88,
+                0.9,
+                0.14
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            },
+            "after": {
+              "baseColor": [
+                0.092,
+                0.101,
+                0.1035,
+                0.2
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            }
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb",
+          "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa",
+          "bytes": 402332,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "f399798a47ed0d68a72cd89b2b38985749e22b41",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb > game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb"
+        }
+      },
       "tune": {
         "acceptFlagged": {
           "attempt": "a1",
@@ -18379,8 +19388,8 @@
         }
       ],
       "catalog": {
-        "url": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-        "bytes": 402332,
+        "url": "assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+        "bytes": 402336,
         "w": 0.45,
         "h": 0.75,
         "d": 0.346,
