@@ -35,7 +35,11 @@ export const T25 = {
   flannel: {asset: 'garment:flannel', attempt: 'a1', sha256: 'ccf22d234ff534c7448c1edc6730706d4fa2166df63bae0bd230db53c1cc6638', facing: 1},
   sweater: {asset: 'garment:sweater', attempt: 'a1', sha256: '1a11c7865ed0eea91e5f07efae1e5d61d9a39660d15a84713e69a4c8a59934e0', facing: 1},
   cargo: {asset: 'garment:cargo', attempt: 'a1', sha256: '11933bb04879b4dba67c5c2ed44a08efd1a78340d46730500ebb7eb6f7cc845f', facing: 1},
-  jeans: {asset: 'garment:jeans', attempt: 'a1', sha256: '23aa400234c5a08dda51919151b297052459f124ea5f3a4e840c04c05ad39adc', facing: 1},
+  jeans: {asset: 'garment:jeans', attempt: 'a1', sha256: '23aa400234c5a08dda51919151b297052459f124ea5f3a4e840c04c05ad39adc', facing: 1,
+    // the T2.5 jeans close the waist opening with an upward-facing lid (~0.06 m2-equivalent in the top 4 %); fitted, it was
+    // pushed out into a dark frill round the waist and the fit07 gate failed on 4 bodies -> lid trimmed at load
+    // (lib/t25.mjs trimTopCap; cargo / slacks have open waists)
+    trimTopCap: 0.94},
   slacks: {asset: 'garment:slacks', attempt: 'a1', sha256: 'e0a8ac124a8da2368385097ada48df5e7b92a3b85e9ba0a8fb0d283c651c44be', facing: 1},
   hardhat: {asset: 'garment:hardhat', attempt: 'a1', sha256: '0dcde4fed2151fe1697ff91b202f144520a753e2890fad3d0ed179185e6751f6', facing: 1},
   cap: {asset: 'garment:cap', attempt: 'a1', sha256: '4f6009e9dda1e4cd67935aaa2d4335cafd29107fd09b4b1f358a9c8acd7724e8', facing: 1},
@@ -74,7 +78,7 @@ const t25Facing = id => (T25[id]?.facing ? {facing: T25[id].facing} : {});
 const withT25 = (id, kind, fallback) => () => {
   const p = T25[id];
   if (!p) return fallback();
-  const s = t25Source(p.asset, p, T25_DENSIFY[kind]);
+  const s = t25Source(p.asset, p, T25_DENSIFY[kind], p.trimTopCap ? {trimTopCap: p.trimTopCap} : {});
   if (!s) throw new Error(`T2.5 source ${p.asset} (${id}) pinned in wardrobe.config.mjs is not an accepted delivery`);
   return s;
 };
@@ -170,6 +174,8 @@ export const WEARABLES = [
   {id: 'respirator', slot: 'face', kind: 'rigid', label: 'Half-face respirator', origin: 'iteration-06 generated (Lane G faceRespirator)', provenance: 'generated', source: withT25('respirator', 'wearable', src06('faceRespirator')), ...t25Facing('respirator'), weight: 1, ...SMALL_BASE, targetTris: 2200, trimBehind: 0.81, fit: {mode: 'face', widthLevel: 0.6, above: 0.022, below: 0.008, minWidthEase: 0.8, zone: [0.03, -0.045, 0.0], gap: 0.006}},
 ];
 function pick(o, keys) { return Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]])); }
+// T2.5 per-asset fit parameter overrides (documented in the T25 entry; only while that asset is T2.5-sourced)
+for (const w of WEARABLES) if (T25[w.id]?.fitOverride) w.fit = {...w.fit, ...T25[w.id].fitOverride};
 
 /**
  * Pairs the build refuses to fit (reason recorded in zombie-variants.json). Use only for real,

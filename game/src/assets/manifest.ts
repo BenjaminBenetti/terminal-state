@@ -19,28 +19,28 @@ export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'bench' | 'light' | 'cab
 export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   // Iteration 06: slot wardrobe rebuilt by tools/asset-pipeline/zombie/build-wardrobe.mjs (derivatives/zombie-wardrobe.json; the
   // single-template zombie-rigged.glb stays on disk, unused). Wearable GLBs hold one fitted SkinnedMesh per supported body.
-  zombieBody_lastshift: {url: 'assets/models/zombie-body-lastshift-t25.glb', bytes: 732_000},
-  zombieBody_courier: {url: 'assets/models/zombie-body-courier-t25.glb', bytes: 695_000},
-  zombieBody_agent: {url: 'assets/models/zombie-body-agent.glb', bytes: 663_000},
-  zombieBody_scavenger: {url: 'assets/models/zombie-body-scavenger.glb', bytes: 833_000}, // REUSED original upload (zombie-pixal3d); iteration-06 repose v2 + webbing fix
+  zombieBody_lastshift: {url: 'assets/models/zombie-body-lastshift-t25.glb', bytes: 719_000},
+  zombieBody_courier: {url: 'assets/models/zombie-body-courier-t25.glb', bytes: 680_000},
+  zombieBody_agent: {url: 'assets/models/zombie-body-agent-t25.glb', bytes: 676_000},
+  zombieBody_scavenger: {url: 'assets/models/zombie-body-scavenger-t25.glb', bytes: 701_000}, // Meshy T2.5 from a RECREATED reference (user update 01; not an original) of the old upload
   zombieBody_heavyset: {url: 'assets/models/zombie-body-heavyset-t25.glb', bytes: 588_000}, // Meshy T2.5 replacement (lane CHARS) of the iteration-06 base-layer body (always wears pants)
-  zombieBody_tall: {url: 'assets/models/zombie-body-tall.glb', bytes: 629_000}, // iteration 06 generated base-layer body (always wears pants)
+  zombieBody_tall: {url: 'assets/models/zombie-body-tall-t25.glb', bytes: 633_000}, // iteration 06 generated base-layer body (always wears pants)
   // iteration 07 refit (fewer per-body variants: pairs that still clipped are not shipped)
-  outfit_coat: {url: 'assets/models/outfit-coat-t25.glb', bytes: 821_000},
-  outfit_hivis: {url: 'assets/models/outfit-hivis-t25.glb', bytes: 322_000},
-  outfit_hoodie: {url: 'assets/models/outfit-hoodie-t25.glb', bytes: 697_000},
-  outfit_blazer: {url: 'assets/models/outfit-blazer-t25.glb', bytes: 731_000},
-  outfit_trench: {url: 'assets/models/outfit-trench-t25.glb', bytes: 762_000},
-  outfit_flannel: {url: 'assets/models/outfit-flannel-t25.glb', bytes: 551_000},
-  outfit_sweater: {url: 'assets/models/outfit-sweater-t25.glb', bytes: 594_000},
-  outfit_cargo: {url: 'assets/models/outfit-cargo-t25.glb', bytes: 613_000},
-  outfit_jeans: {url: 'assets/models/outfit-jeans-t25.glb', bytes: 584_000},
-  outfit_slacks: {url: 'assets/models/outfit-slacks-t25.glb', bytes: 490_000},
-  outfit_hardhat: {url: 'assets/models/outfit-hardhat-t25.glb', bytes: 349_000},
-  outfit_cap: {url: 'assets/models/outfit-cap-t25.glb', bytes: 341_000},
-  outfit_beanie: {url: 'assets/models/outfit-beanie-t25.glb', bytes: 297_000},
-  outfit_gasmask: {url: 'assets/models/outfit-gasmask-t25.glb', bytes: 490_000},
-  outfit_respirator: {url: 'assets/models/outfit-respirator-t25.glb', bytes: 393_000},
+  outfit_coat: {url: 'assets/models/outfit-coat-t25.glb', bytes: 1_198_000},
+  outfit_hivis: {url: 'assets/models/outfit-hivis-t25.glb', bytes: 788_000},
+  outfit_hoodie: {url: 'assets/models/outfit-hoodie-t25.glb', bytes: 952_000},
+  outfit_blazer: {url: 'assets/models/outfit-blazer-t25.glb', bytes: 902_000},
+  outfit_trench: {url: 'assets/models/outfit-trench-t25.glb', bytes: 698_000},
+  outfit_flannel: {url: 'assets/models/outfit-flannel-t25.glb', bytes: 734_000},
+  outfit_sweater: {url: 'assets/models/outfit-sweater-t25.glb', bytes: 519_000},
+  outfit_cargo: {url: 'assets/models/outfit-cargo-t25.glb', bytes: 760_000},
+  outfit_jeans: {url: 'assets/models/outfit-jeans-t25.glb', bytes: 766_000},
+  outfit_slacks: {url: 'assets/models/outfit-slacks-t25.glb', bytes: 687_000},
+  outfit_hardhat: {url: 'assets/models/outfit-hardhat-t25.glb', bytes: 273_000},
+  outfit_cap: {url: 'assets/models/outfit-cap-t25.glb', bytes: 251_000},
+  outfit_beanie: {url: 'assets/models/outfit-beanie-t25.glb', bytes: 262_000},
+  outfit_gasmask: {url: 'assets/models/outfit-gasmask-t25.glb', bytes: 424_000},
+  outfit_respirator: {url: 'assets/models/outfit-respirator-t25.glb', bytes: 351_000},
   // Meshy T2.5 migration (lane CHARS): rebuilt from the accepted Meshy T2.5 replacement of the same concept image (derivatives/creature-ratdog.json,
   // meshy-t25-chars-20261029.json); same 25-joint rig contract + procedural clips; creature-ratdog.glb restorable from a7a646a.
   creature_ratdog: {url: 'assets/models/creature-ratdog-t25.glb', bytes: 894_000},

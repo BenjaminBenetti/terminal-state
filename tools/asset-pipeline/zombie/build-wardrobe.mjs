@@ -60,7 +60,7 @@ import {NodeIO} from '@gltf-transform/core';
 // touching the stage code (its hash keys the stage cache)
 if (+process.env.LL_THREADS > 0) { const cpus = os.cpus; os.cpus = () => cpus().slice(0, +process.env.LL_THREADS); }
 /** Stage-cache identity of a source: T2.5 sources add the loader (densify) hash and density. */
-const srcKey = src => (src.t25 ? `${src.sha256}|t25:${t25LoaderHash()}|${src.densifyFrac}` : src.sha256);
+const srcKey = src => (src.t25 ? `${src.sha256}|t25:${t25LoaderHash()}|${src.densifyFrac}${src.trimTopCap ? '|trim' + src.trimTopCap : ''}` : src.sha256);
 const git = args => execFileSync('git', ['-C', REPO, ...args], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']});
 const T25_TAG = src => src.t25 ? ` + Meshy T2.5 replacement ${src.t25.asset} ${src.t25.attempt} (task ${src.t25.taskId}; ${T25_TASK})` : '';
 

@@ -109,7 +109,7 @@
     "glb": {
       "path": "game/public/assets/models/zombie-body-heavyset-t25.glb",
       "bytes": 588444,
-      "sha256": "cd3b21eaff60c28fcf2a6931e5d2b4c688c5b3302c3edd785db5dd43d237fb3a",
+      "sha256": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -235,6 +235,30 @@
       "baseColor": 1024,
       "metallicRoughness": 256,
       "jpegQuality": 88
+    },
+    "colourGrade": {
+      "mode": "reference-chroma",
+      "applied": false,
+      "skipped": "chroma deviation 0.016 <= 0.08",
+      "albedoMeanLinear": [
+        0.1766,
+        0.1445,
+        0.1227
+      ],
+      "albedoRatios": {
+        "GR": 0.8183,
+        "BR": 0.6948
+      },
+      "referenceMeanLinear": [
+        0.1748,
+        0.1409,
+        0.1232
+      ],
+      "referenceRatios": {
+        "GR": 0.8058,
+        "BR": 0.7046
+      },
+      "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
     }
   },
   "skeleton": {
@@ -1556,37 +1580,37 @@
       "durationS": 1.6,
       "loop": false,
       "keyframes": 49,
-      "maxLegReach": 1.0347
+      "maxLegReach": 1.0097
     }
   ],
   "death": {
-    "hipsY": -0.511,
+    "hipsY": -0.59,
     "tune": {
-      "hipsPitch": -95,
-      "hipsRoll": 8.625,
-      "neck": -26.148,
+      "hipsPitch": -90.578,
+      "hipsRoll": 10.5,
+      "neck": -25.797,
       "head": -24.75,
       "headYaw": -20,
       "armLz": -0.694,
-      "armRz": -0.512,
+      "armRz": -0.306,
       "footLz": 0.5,
-      "footRz": -0.018
+      "footRz": 0.12
     },
     "lowestPointPerRegionM": {
-      "torso": 0.133,
-      "armR": 0.04,
-      "pelvis": 0.168,
-      "armL": 0.098,
+      "torso": 0.09,
+      "armR": 0.034,
+      "pelvis": 0.095,
+      "armL": 0.075,
       "legR": 0.009,
-      "legL": 0.004,
-      "head": 0.14,
-      "outfit.torso": 0.026,
-      "outfit.head": 0.103,
-      "outfit.armL": 0.068,
+      "legL": -0.002,
+      "head": 0.122,
+      "outfit.legR": 0.037,
+      "outfit.pelvis": 0.035,
+      "outfit.torso": 0.01,
       "outfit.armR": 0.01,
-      "outfit.pelvis": 0.01,
-      "outfit.legR": 0.046,
-      "outfit.legL": -0.013
+      "outfit.armL": 0.049,
+      "outfit.legL": -0.016,
+      "outfit.head": 0.114
     },
     "solvedAgainst": "body + every fitted wearable"
   },
@@ -1605,6 +1629,11 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_trench": {
+          "minY": 0,
+          "atT": 0.5,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
           "minY": 0,
           "atT": 0.5,
           "framesBelowMinus1cm": 0
@@ -1687,6 +1716,11 @@
           "atT": 0.5,
           "framesBelowMinus1cm": 0
         },
+        "Outfit_hivis": {
+          "minY": 0,
+          "atT": 0.5,
+          "framesBelowMinus1cm": 0
+        },
         "Outfit_hoodie": {
           "minY": 0,
           "atT": 0.5,
@@ -1761,6 +1795,11 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_trench": {
+          "minY": 0,
+          "atT": 0.06667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
           "minY": 0,
           "atT": 0.06667,
           "framesBelowMinus1cm": 0
@@ -1843,6 +1882,11 @@
           "atT": 0,
           "framesBelowMinus1cm": 0
         },
+        "Outfit_hivis": {
+          "minY": 0,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
         "Outfit_hoodie": {
           "minY": 0,
           "atT": 0,
@@ -1921,6 +1965,11 @@
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
         },
+        "Outfit_hivis": {
+          "minY": 0,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
         "Outfit_hoodie": {
           "minY": 0,
           "atT": 0.26667,
@@ -1983,79 +2032,84 @@
         }
       },
       "Death": {
-        "maxLegReach": 1.0347,
+        "maxLegReach": 1.0097,
         "body": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_coat": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_trench": {
-          "minY": -0.0186,
+          "minY": -0.004,
           "atT": 1.1,
-          "framesBelowMinus1cm": 8
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hivis": {
+          "minY": -0.004,
+          "atT": 1.1,
+          "framesBelowMinus1cm": 0
         },
         "Outfit_hoodie": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_blazer": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_flannel": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_sweater": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_cargo": {
-          "minY": -0.0114,
-          "atT": 1.1,
-          "framesBelowMinus1cm": 1
+          "minY": -0.0053,
+          "atT": 1.16667,
+          "framesBelowMinus1cm": 0
         },
         "Outfit_jeans": {
-          "minY": -0.006,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_slacks": {
-          "minY": -0.0086,
-          "atT": 1.1,
-          "framesBelowMinus1cm": 0
+          "minY": -0.0155,
+          "atT": 1.6,
+          "framesBelowMinus1cm": 16
         },
         "Outfit_hardhat": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_cap": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_beanie": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_gasmask": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_respirator": {
-          "minY": -0.0025,
+          "minY": -0.004,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         }
@@ -2063,10 +2117,10 @@
     },
     "motionStretch": {
       "triangles": 15000,
-      "p50": 1.044,
+      "p50": 1.043,
       "p99": 3.082,
       "max": 14.67,
-      "over2x": 601,
+      "over2x": 604,
       "over3x": 161,
       "fractionOver": 0.0107,
       "worstClips": {

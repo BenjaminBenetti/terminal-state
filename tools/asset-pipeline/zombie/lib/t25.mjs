@@ -25,12 +25,18 @@ export const T25_BASE_COMMIT = 'a7a646a1dd62bf1c641fe3dd0d1187ab322afe87';
 /** Runtime file suffix of every derivative rebuilt in the migration (new URL = cache-busting; logical keys unchanged). */
 export const T25_SUFFIX = '-t25';
 
-/** Hash of the T2.5 loader code (part of the stage cache key of T2.5 sources). */
+/**
+ * Stage-cache identity of the T2.5 loader (part of the stage cache key of T2.5 sources): an explicit version, bumped
+ * whenever the loader's output for an EXISTING source key changes. v1 '7a14668bb4ac' = the content hash of the first
+ * loader (densify only); later opt-in features (trimTopCap) enter the key through their own parameter (build srcKey),
+ * so v1 stays valid for every source without them. Plus the densify code itself.
+ */
+export const T25_LOADER_VERSION = '7a14668bb4ac';
 export function t25LoaderHash() {
-  const h = crypto.createHash('sha256');
-  for (const f of ['t25.mjs', 'densify.mjs']) h.update(fs.readFileSync(new URL(f, import.meta.url)));
-  return h.digest('hex').slice(0, 12);
+  const d = crypto.createHash('sha256').update(fs.readFileSync(new URL('densify.mjs', import.meta.url))).digest('hex').slice(0, 8);
+  return d === DENSIFY_V1 ? T25_LOADER_VERSION : `${T25_LOADER_VERSION}+d${d}`;
 }
+const DENSIFY_V1 = 'a85763f4'; // sha256 prefix of lib/densify.mjs when v1 was keyed
 
 let delivered = null;
 export function deliveredIndex() {
@@ -66,12 +72,29 @@ export function t25Source(asset, pin, densifyFrac, extra = {}) {
 
 /** loadSource + densification for T2.5 sources (other sources load unchanged). */
 export async function loadAnySource(src) {
-  const m = await loadSource(src);
+  let m = await loadSource(src);
   if (!src.t25) return m;
   const b = bounds(m.pos), H = b.max[1] - b.min[1];
+  let trim = null;
+  if (src.trimTopCap) {
+    // a closed lid over a garment opening (e.g. the T2.5 jeans' waist): upward-facing triangles above trimTopCap x height
+    const keep = [], y0 = b.min[1] + H * src.trimTopCap;
+    let removed = 0;
+    for (let t = 0; t < m.idx.length; t += 3) {
+      const a = m.idx[t] * 3, c1 = m.idx[t + 1] * 3, c2 = m.idx[t + 2] * 3;
+      const cy = (m.pos[a + 1] + m.pos[c1 + 1] + m.pos[c2 + 1]) / 3;
+      const ux = m.pos[c1] - m.pos[a], uy = m.pos[c1 + 1] - m.pos[a + 1], uz = m.pos[c1 + 2] - m.pos[a + 2];
+      const vx = m.pos[c2] - m.pos[a], vy = m.pos[c2 + 1] - m.pos[a + 1], vz = m.pos[c2 + 2] - m.pos[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1;
+      if (cy > y0 && ny / l > 0.7) { removed++; continue; }
+      keep.push(m.idx[t], m.idx[t + 1], m.idx[t + 2]);
+    }
+    m = {...m, idx: Uint32Array.from(keep)};
+    trim = {method: `removed the upward-facing (n.y > 0.7) triangles above ${src.trimTopCap} x height: a closed lid over the garment opening`, removedTriangles: removed};
+  }
   const d = densify(m, H * src.densifyFrac);
   return {...m, pos: d.pos, nrm: d.nrm, uv: d.uv, idx: d.idx, triangles: m.triangles, vertices: m.vertices,
-    densify: {...d.stats, maxEdgeFractionOfHeight: src.densifyFrac, sourceHeightUnits: +H.toPrecision(6)}};
+    densify: {...d.stats, maxEdgeFractionOfHeight: src.densifyFrac, sourceHeightUnits: +H.toPrecision(6)}, ...(trim ? {sourceTrim: trim} : {})};
 }
 
 /** Pushed-history restore record for an old runtime path (read-only git; null when not tracked in the base commit). */

@@ -15,14 +15,86 @@
     "generation": "no AI generation, inference, model download or network service was used by this builder",
     "garment": "item source is a separate empty (ghost) reconstruction; scaled and placed per body (rigid, no deformation)"
   },
-  "origin": "iteration-06 generated (Lane G faceRespirator)",
-  "provenance": "generated",
+  "origin": "iteration-06 generated (Lane G faceRespirator) + Meshy T2.5 replacement garment:respirator a1 (task 01a189db-bd59-7583-96a8-0c22b3dc428c; studio-meshy-game-replacement-20261029-01)",
+  "provenance": "generated (Meshy T2.5 replacement of the local Pixal3D master)",
   "slot": "face",
   "kind": "rigid",
   "t25": {
     "migration": "studio-meshy-game-replacement-20261029-01",
-    "sourceReplaced": false,
-    "note": "source master unchanged (legacy local Pixal3D); file rebuilt because its per-body fits / masks follow bodies replaced in this migration",
+    "sourceReplaced": true,
+    "source": {
+      "asset": "garment:respirator",
+      "attempt": "a1",
+      "taskId": "01a189db-bd59-7583-96a8-0c22b3dc428c",
+      "provider": "Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, 2K PBR textures, single original front/reference image)",
+      "args": {
+        "target_polycount": 6000,
+        "pose_mode": null
+      },
+      "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:respirator/a1/native.glb",
+      "nativeSha256": "6d53a2c3db3ae118e9f845917b92cdbddfd8fa489a5c9ee2c559acc362f2dbbe",
+      "nativeBytes": 8055988,
+      "nativeTriangles": 6341,
+      "nativeVertices": 6978,
+      "nativeBBox": {
+        "min": [
+          -0.4714,
+          -0.3455,
+          -0.4768
+        ],
+        "max": [
+          0.4714,
+          0.3455,
+          0.4773
+        ],
+        "size": [
+          0.9429,
+          0.6909,
+          0.9541
+        ],
+        "space": "scene/world (node transforms applied)"
+      },
+      "nativeTextures": [
+        {
+          "mime": "image/jpeg",
+          "size": [
+            2048,
+            2048
+          ]
+        },
+        {
+          "mime": "image/jpeg",
+          "size": [
+            2048,
+            2048
+          ]
+        },
+        {
+          "mime": "image/jpeg",
+          "size": [
+            2048,
+            2048
+          ]
+        }
+      ],
+      "inputImage": "reference/tasks/vertical-slice-iteration06-20261026/generation/faceRespirator/image/faceRespirator-original.png",
+      "inputImageSha256": "2563322dab411a2365d0c711bd7caeccc0e0f63e473248d38dd107ef80326be2",
+      "review": "accepted",
+      "reviewNote": "Same grey half-face respirator with olive twin cartridges and exhalation valve, grime.",
+      "delivered": "reference/tasks/meshy-game-replacement-20261029/assets/DELIVERED.json",
+      "densify": {
+        "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+        "maxEdge": 0.0048364,
+        "passes": 6,
+        "sourceTriangles": 6341,
+        "sourceVertices": 6978,
+        "triangles": 1026110,
+        "vertices": 543528,
+        "longestEdge": 0.0048361,
+        "maxEdgeFractionOfHeight": 0.007,
+        "sourceHeightUnits": 0.690918
+      }
+    },
     "supersedes": {
       "path": "game/public/assets/models/outfit-respirator.glb",
       "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
@@ -33,36 +105,31 @@
   "outputs": {
     "glb": {
       "path": "game/public/assets/models/outfit-respirator-t25.glb",
-      "bytes": 392880,
-      "sha256": "11175f96a9fee11cae662d92d386d2606f3e0bae447e700707dabda37e448f10",
+      "bytes": 351128,
+      "sha256": "362a98a57409dd7544d1368c31b59364160b0d914af3de4511e76ac7adaa0c73",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
   "source": {
-    "id": "faceRespirator",
-    "file": ".cache/iteration06-native-masters/faceRespirator/asset.glb",
-    "sha256Verified": "3c6c274c7900a6472b5866f45ef05e5f8a6518035f432603c3c0e31ce18b9a67",
-    "displayName": "Face: half-face dust respirator",
-    "ledger": "reference/tasks/vertical-slice-iteration06-20261026/generation/ledger.json",
-    "ledgerKey": "faceRespirator",
+    "id": "garment:respirator",
+    "file": "reference/tasks/meshy-game-replacement-20261029/assets/raw/garment:respirator/a1/native.glb",
+    "sha256Verified": "6d53a2c3db3ae118e9f845917b92cdbddfd8fa489a5c9ee2c559acc362f2dbbe",
+    "displayName": "garment:respirator",
     "inputPng": "reference/tasks/vertical-slice-iteration06-20261026/generation/faceRespirator/image/faceRespirator-original.png",
     "inputPngSha256": "2563322dab411a2365d0c711bd7caeccc0e0f63e473248d38dd107ef80326be2",
-    "nativeJob": "20261026T195227Z-53c1569593dd45678fc277868e1b463e",
-    "nativeMetadata": "reference/tasks/vertical-slice-iteration06-20261026/generation/faceRespirator/native/metadata.json",
-    "nativeReceipt": "reference/tasks/vertical-slice-iteration06-20261026/generation/faceRespirator/native/receipt.json",
-    "preservedXz": "reference/tasks/vertical-slice-iteration06-20261026/generation/faceRespirator/native/asset.glb.xz",
-    "triangles": 979184,
-    "vertices": 764601,
+    "nativeJob": "01a189db-bd59-7583-96a8-0c22b3dc428c",
+    "triangles": 6341,
+    "vertices": 6978,
     "textures": {
       "baseColor": [
-        4096,
-        4096,
-        "image/png"
+        2048,
+        2048,
+        "image/jpeg"
       ],
       "metallicRoughness": [
-        4096,
-        4096,
-        "image/png"
+        2048,
+        2048,
+        "image/jpeg"
       ]
     },
     "material": {
@@ -79,24 +146,24 @@
   },
   "stage": {
     "nominal": {
-      "scale": 0.390279,
+      "scale": 0.361837,
       "pivot": [
-        -0.00011,
-        -0.3118,
-        -0.22073
+        0,
+        -0.34546,
+        0.19516
       ],
-      "flipFacing": true
+      "flipFacing": false
     },
     "frame": null,
     "sourceTrim": {
       "trimBehindFractionOfHeight": 0.81,
-      "trianglesRemoved": 126194,
+      "trianglesRemoved": 115908,
       "reason": "loose strap loops trailing behind the item (a rigid item cannot wrap them around a head)"
     }
   },
   "mesh": {
-    "vertices": 2257,
-    "triangles": 2193,
+    "vertices": 2018,
+    "triangles": 2194,
     "simplify": {
       "targetTris": 2200,
       "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
@@ -105,17 +172,17 @@
         "Prune",
         "Regularize"
       ],
-      "resultTris": 2193,
-      "resultVerts": 974,
-      "relativeError": 0.01702,
-      "absoluteErrorM": 0.0065
+      "resultTris": 2194,
+      "resultVerts": 1101,
+      "relativeError": 0.01537,
+      "absoluteErrorM": 0.00531
     },
     "unwrap": {
-      "initialCharts": 677,
-      "charts": 252,
-      "mergedSmallCharts": 425,
-      "texelsPerMetreBase": 674.2,
-      "uvAreaFill": 0.477,
+      "initialCharts": 342,
+      "charts": 186,
+      "mergedSmallCharts": 156,
+      "texelsPerMetreBase": 794.6,
+      "uvAreaFill": 0.52,
       "uvMirroredFaces": 0,
       "coneDeg": 66,
       "validDot": 0.15,
@@ -125,27 +192,68 @@
       "packAtlas": 512
     },
     "bake": {
-      "texels": 485386,
-      "coverage": 0.463,
+      "texels": 543540,
+      "coverage": 0.518,
       "missed": 0,
       "farOver1cm": 0,
-      "distMedianMm": 1.13,
-      "distP99Mm": 5.41,
-      "cageRayHits": 251549,
+      "distMedianMm": 0.5,
+      "distP99Mm": 5.19,
+      "cageRayHits": 200629,
       "cageM": 0.006,
       "rayBelowM": 0.002,
       "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
       "gridCells": [
-        34,
+        36,
         26,
-        40
+        36
       ],
-      "workers": 32
+      "workers": 1
     },
     "textures": {
       "baseColor": 512,
       "metallicRoughness": 128,
       "jpegQuality": 88
+    },
+    "colourGrade": {
+      "mode": "reference-chroma",
+      "applied": true,
+      "gainLinear": [
+        1.0529,
+        0.986,
+        0.9733
+      ],
+      "luminance": 1,
+      "from": "stage JPEG",
+      "albedoMeanLinearBefore": [
+        0.1094,
+        0.1063,
+        0.0872
+      ],
+      "albedoMeanLinearAfter": [
+        0.1151,
+        0.1043,
+        0.0851
+      ],
+      "coveredTexels": 135860,
+      "albedoRatiosBefore": {
+        "GR": 0.9715,
+        "BR": 0.7975
+      },
+      "albedoRatiosAfter": {
+        "GR": 0.9061,
+        "BR": 0.7392
+      },
+      "referenceMeanLinear": [
+        0.1511,
+        0.1375,
+        0.1114
+      ],
+      "referenceRatios": {
+        "GR": 0.9098,
+        "BR": 0.7372
+      },
+      "referencePixels": 790980,
+      "note": "T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]"
     }
   },
   "perBody": {
@@ -154,38 +262,38 @@
       "kind": "rigid",
       "fit": {
         "head": {
-          "topM": 1.7793,
-          "craniumWidthM": 0.2116,
+          "topM": 1.78,
+          "craniumWidthM": 0.1867,
           "centre": [
-            -0.0121,
-            -0.0691
+            -0.0039,
+            -0.0262
           ],
-          "noseY": 1.6247,
-          "chinY": 1.5463,
-          "cheekWidthM": 0.1261
+          "noseY": 1.6166,
+          "chinY": 1.5391,
+          "cheekWidthM": 0.0841
         },
-        "itemWidthM": 0.129,
+        "itemWidthM": 0.1371,
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 678,
+          "contactCells": 644,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.025,
-            -0.157
+            0.021,
+            -0.165
           ],
-          "itemTopY": 1.6467,
-          "itemBottomY": 1.5383,
-          "headHeightM": 0.233
+          "itemTopY": 1.6386,
+          "itemBottomY": 1.5311,
+          "headHeightM": 0.2409
         },
         "bulkHeadM": 0,
         "method": "uniform scale from nose + 0.022 m to chin - 0.008 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
-          "scale": 0.44407,
+          "scale": 0.43308,
           "translate": [
-            -0.01208,
-            1.5377,
-            0.05263
+            -0.00366,
+            1.53094,
+            0.08466
           ]
         }
       },
@@ -199,15 +307,15 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 5,
-      "hiddenFraction": 0.0003,
+      "hiddenBodyTriangles": 34,
+      "hiddenFraction": 0.0023,
       "mask": {
-        "hidden": 5,
-        "total": 14912,
+        "hidden": 34,
+        "total": 14976,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
       "motionStretch": {
-        "triangles": 2193,
+        "triangles": 2194,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -215,10 +323,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Idle": 18,
-          "Death": 6,
-          "Attack": 2,
-          "Walk": 2
+          "Hit": 6,
+          "Idle": 6,
+          "Walk": 2,
+          "Run": 4,
+          "Attack": 5
         },
         "poses": 85
       }
@@ -228,38 +337,38 @@
       "kind": "rigid",
       "fit": {
         "head": {
-          "topM": 1.8,
-          "craniumWidthM": 0.1651,
+          "topM": 1.7996,
+          "craniumWidthM": 0.1423,
           "centre": [
-            -0.0044,
-            0.0321
+            -0.0021,
+            -0.0458
           ],
-          "noseY": 1.6233,
-          "chinY": 1.5509,
-          "cheekWidthM": 0.0926
+          "noseY": 1.665,
+          "chinY": 1.5788,
+          "cheekWidthM": 0.074
         },
-        "itemWidthM": 0.122,
+        "itemWidthM": 0.1482,
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 678,
+          "contactCells": 671,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.023,
-            -0.177
+            -0.011,
+            -0.145
           ],
-          "itemTopY": 1.6453,
-          "itemBottomY": 1.5429,
-          "headHeightM": 0.2491
+          "itemTopY": 1.687,
+          "itemBottomY": 1.5708,
+          "headHeightM": 0.2209
         },
-        "bulkHeadM": 0,
+        "bulkHeadM": 0.0017,
         "method": "uniform scale from nose + 0.022 m to chin - 0.008 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
-          "scale": 0.41986,
+          "scale": 0.46816,
           "translate": [
-            -0.00437,
-            1.54225,
-            0.16046
+            -0.00189,
+            1.57061,
+            0.05079
           ]
         }
       },
@@ -271,17 +380,17 @@
       "bulkM": {
         "torso": 0,
         "arm": 0,
-        "head": 0
+        "head": 0.0017
       },
-      "hiddenBodyTriangles": 10,
-      "hiddenFraction": 0.0007,
+      "hiddenBodyTriangles": 42,
+      "hiddenFraction": 0.0028,
       "mask": {
-        "hidden": 10,
-        "total": 14956,
+        "hidden": 42,
+        "total": 14987,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
       "motionStretch": {
-        "triangles": 2193,
+        "triangles": 2194,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -289,11 +398,10 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Hit": 8,
-          "Idle": 6,
-          "Attack": 4,
-          "Walk": 2,
-          "Run": 4
+          "Idle": 9,
+          "Attack": 2,
+          "Run": 8,
+          "Death": 5
         },
         "poses": 85
       }
@@ -303,38 +411,38 @@
       "kind": "rigid",
       "fit": {
         "head": {
-          "topM": 1.6506,
-          "craniumWidthM": 0.2232,
+          "topM": 1.649,
+          "craniumWidthM": 0.2085,
           "centre": [
-            -0.0069,
-            0.0929
+            -0.0097,
+            -0.0435
           ],
-          "noseY": 1.4807,
-          "chinY": 1.4084,
-          "cheekWidthM": 0.0871
+          "noseY": 1.4504,
+          "chinY": 1.3954,
+          "cheekWidthM": 0.0353
         },
-        "itemWidthM": 0.1218,
+        "itemWidthM": 0.1084,
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 648,
+          "contactCells": 675,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.023,
-            -0.171
+            0.021,
+            -0.199
           ],
-          "itemTopY": 1.5027,
-          "itemBottomY": 1.4004,
-          "headHeightM": 0.2422
+          "itemTopY": 1.4724,
+          "itemBottomY": 1.3874,
+          "headHeightM": 0.2536
         },
         "bulkHeadM": 0,
         "method": "uniform scale from nose + 0.022 m to chin - 0.008 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
-          "scale": 0.41929,
+          "scale": 0.3425,
           "translate": [
-            -0.00688,
-            1.3998,
-            0.20849
+            -0.00954,
+            1.38729,
+            0.07941
           ]
         }
       },
@@ -348,15 +456,15 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 10,
-      "hiddenFraction": 0.0007,
+      "hiddenBodyTriangles": 1,
+      "hiddenFraction": 0.0001,
       "mask": {
-        "hidden": 10,
-        "total": 14972,
+        "hidden": 1,
+        "total": 14994,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
       "motionStretch": {
-        "triangles": 2193,
+        "triangles": 2194,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -364,10 +472,10 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Hit": 2,
+          "Hit": 4,
           "Attack": 8,
-          "Run": 10,
-          "Death": 2,
+          "Walk": 6,
+          "Death": 4,
           "Idle": 2
         },
         "poses": 85
@@ -388,14 +496,14 @@
           "chinY": 1.527,
           "cheekWidthM": 0.1197
         },
-        "itemWidthM": 0.1429,
+        "itemWidthM": 0.153,
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 651,
+          "contactCells": 646,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            0.025,
+            0.023,
             -0.165
           ],
           "itemTopY": 1.639,
@@ -405,11 +513,11 @@
         "bulkHeadM": 0,
         "method": "uniform scale from nose + 0.022 m to chin - 0.008 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
-          "scale": 0.49196,
+          "scale": 0.48353,
           "translate": [
-            -0.00217,
-            1.51825,
-            0.12388
+            -0.00196,
+            1.5188,
+            0.11027
           ]
         }
       },
@@ -423,15 +531,15 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 1,
-      "hiddenFraction": 0.0001,
+      "hiddenBodyTriangles": 17,
+      "hiddenFraction": 0.0011,
       "mask": {
-        "hidden": 1,
+        "hidden": 17,
         "total": 15000,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
       "motionStretch": {
-        "triangles": 2193,
+        "triangles": 2194,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -439,11 +547,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Walk": 2,
+          "Run": 2,
+          "Idle": 8,
           "Death": 10,
           "Attack": 2,
-          "Idle": 6,
-          "Run": 4
+          "Walk": 1
         },
         "poses": 85
       }
@@ -453,38 +561,38 @@
       "kind": "rigid",
       "fit": {
         "head": {
-          "topM": 1.7503,
-          "craniumWidthM": 0.1974,
+          "topM": 1.75,
+          "craniumWidthM": 0.1689,
           "centre": [
-            -0.0009,
-            -0.0167
+            0.0002,
+            -0.0312
           ],
-          "noseY": 1.5677,
-          "chinY": 1.4942,
-          "cheekWidthM": 0.1119
+          "noseY": 1.5865,
+          "chinY": 1.5141,
+          "cheekWidthM": 0.1005
         },
-        "itemWidthM": 0.1232,
+        "itemWidthM": 0.1306,
         "solve": {
           "mode": "forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face",
           "thicknessM": 0.006,
-          "contactCells": 678,
+          "contactCells": 645,
           "gapM": 0.006,
           "bindingCellXYRelHeadTopM": [
-            -0.023,
-            -0.183
+            0.025,
+            -0.167
           ],
-          "itemTopY": 1.5897,
-          "itemBottomY": 1.4862,
-          "headHeightM": 0.256
+          "itemTopY": 1.6085,
+          "itemBottomY": 1.5061,
+          "headHeightM": 0.2359
         },
         "bulkHeadM": 0,
         "method": "uniform scale from nose + 0.022 m to chin - 0.008 m (>= cheeks x 0.8); forward onto face/neck depth field (2 mm cells): item front surface - shell thickness clears the face; 100% Head weights (rigid)",
         "transform": {
-          "scale": 0.42413,
+          "scale": 0.41271,
           "translate": [
-            -0.00083,
-            1.48563,
-            0.09971
+            0.00044,
+            1.50598,
+            0.07652
           ]
         }
       },
@@ -498,15 +606,15 @@
         "arm": 0,
         "head": 0
       },
-      "hiddenBodyTriangles": 9,
-      "hiddenFraction": 0.0006,
+      "hiddenBodyTriangles": 32,
+      "hiddenFraction": 0.0021,
       "mask": {
-        "hidden": 9,
-        "total": 14960,
+        "hidden": 32,
+        "total": 14993,
         "method": "normal + 4 rays tilted 22 deg from 0.02 m below each body triangle centroid; hidden when all hit the fitted garment within 0.05 m of the surface; head/hands/feet/legs (and arms under sleeveless garments) never hidden"
       },
       "motionStretch": {
-        "triangles": 2193,
+        "triangles": 2194,
         "p50": 1,
         "p99": 1,
         "max": 1,
@@ -514,11 +622,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Walk": 10,
-          "Death": 6,
-          "Run": 2,
-          "Idle": 4,
-          "Hit": 6
+          "Walk": 2,
+          "Attack": 6,
+          "Idle": 10,
+          "Death": 2,
+          "Hit": 2,
+          "Run": 1
         },
         "poses": 85
       }
