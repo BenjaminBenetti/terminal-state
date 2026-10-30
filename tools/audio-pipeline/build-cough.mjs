@@ -16,8 +16,14 @@ import {readWav, toInt16} from './lib/wav.mjs';
 import * as D from './lib/dsp.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
-const TASK = 'reference/tasks/gas-mask-roof-feedback-20261030/audio';
-const AUDIO = path.join(ROOT, TASK);
+/**
+ * Raw sources, in order: the original 10 authorized jobs (closed ledger; five takes were continuous noise and stay excluded)
+ * and the cough-completion batches (task cough-completion-20261030, user-authorized regenerations at whole-second durations).
+ */
+const SOURCES = [
+  {dir: 'reference/tasks/gas-mask-roof-feedback-20261030/audio', task: 'studio-alpha-gas-mask-roof-feedback-20261030-01', label: 'original 10-job allowance (closed)'},
+  {dir: 'reference/tasks/cough-completion-20261030/audio/batch1', task: 'studio-alpha-cough-completion-20261030-01', label: 'completion batch 1 (5 jobs)'},
+];
 const OUT_DIR = path.join(ROOT, 'game/public/assets/audio');
 const MANIFEST_TS = path.join(ROOT, 'game/src/audio/manifest.cough.generated.ts');
 const PROV = path.join(ROOT, 'game/public/assets/derivatives/audio-cough.json');
@@ -96,9 +102,9 @@ function encode(ch, sr, kbps) {
   return Buffer.concat(parts);
 }
 
-const queue = JSON.parse(fs.readFileSync(path.join(AUDIO, 'queue.json'), 'utf8')).clips;
 const manifest = [], derivs = [], gaps = [], sigs = [], excluded = [];
-for (const clip of queue) {
+for (const src of SOURCES) for (const clip of JSON.parse(fs.readFileSync(path.join(ROOT, src.dir, 'queue.json'), 'utf8')).clips) {
+  const TASK = src.dir, AUDIO = path.join(ROOT, TASK);
   const id = clip.id;
   const termPath = path.join(AUDIO, 'ledger', id, 'terminal.json');
   if (!fs.existsSync(termPath)) { gaps.push(`${id}: no terminal record`); continue; }
@@ -112,7 +118,7 @@ for (const clip of queue) {
   const x = D.downmix(w.channels);
   const qf = quietFrac(x, sr);
   if (qf < QUIET_MIN) {
-    excluded.push({id, jobId: term.jobId, rawSha256: rawSha, seconds: clip.seconds, reason: `structural QC: continuous signal — only ${(qf * 100).toFixed(1)} % of 5 ms frames are ${-QUIET_DB} dB below the peak (cough takes need >= ${QUIET_MIN * 100} %); no discrete cough bursts`, rawQc});
+    excluded.push({id, batch: src.label, jobId: term.jobId, rawSha256: rawSha, seconds: clip.seconds, reason: `structural QC: continuous signal — only ${(qf * 100).toFixed(1)} % of 5 ms frames are ${-QUIET_DB} dB below the peak (cough takes need >= ${QUIET_MIN * 100} %); no discrete cough bursts`, rawQc});
     continue;
   }
   const on = D.onsets(x, sr, RECIPE.onset);
@@ -130,7 +136,7 @@ for (const clip of queue) {
   manifest.push({url: `assets/audio/${name}.mp3`, dur: durS, src: id});
   sigs.push({id, sig: signature(y, sr)});
   derivs.push({file: `game/public/assets/audio/${name}.mp3`, url: `assets/audio/${name}.mp3`, bytes: mp3.length, sha256: sha256(mp3), cue: 'cough', durationS: durS,
-    source: {clip: id, rawFile: `${TASK}/raw/${id}.wav`, rawSha256: rawSha, jobId: term.jobId, labFile: term.labFile, prompt: clip.prompt, seed: clip.seed, seconds: clip.seconds,
+    source: {clip: id, batch: src.label, task: src.task, rawFile: `${TASK}/raw/${id}.wav`, rawSha256: rawSha, jobId: term.jobId, labFile: term.labFile, prompt: clip.prompt, seed: clip.seed, seconds: clip.seconds,
       steps: clip.steps, cfg: clip.cfg, rawQc},
     structural: {quietFrac: +qf.toFixed(3), coughEvents: events, activeS: D.analyse([y], sr).activeS, peakDb: +D.linToDb(D.peak([y])).toFixed(1), rmsDb: +D.linToDb(D.rms([y])).toFixed(1),
       centroidHz: centroid(y, sr), zcrPerS: D.analyse([y], sr).zcrPerS},
@@ -165,12 +171,13 @@ export const CLIP_GAPS_COUGH: readonly string[] = ${JSON.stringify(manifest.leng
 export const CLIP_BYTES_COUGH = ${derivs.reduce((s, d) => s + d.bytes, 0)};
 `);
 const bytes = derivs.reduce((s, d) => s + d.bytes, 0);
-const prov = {task: 'studio-alpha-gas-mask-roof-feedback-20261030-01', generatedBy: 'tools/audio-pipeline/build-cough.mjs',
-  policy: 'Sound Lab only: derivatives of the freshly authorized Sound Lab cough jobs (one per take, distinct prompts and seeds; no retries/rerolls). Allowance 10 jobs, all used; takes failing the structural cough gate are excluded, not replaced',
+const prov = {task: 'studio-alpha-gas-mask-roof-feedback-20261030-01 + studio-alpha-cough-completion-20261030-01', generatedBy: 'tools/audio-pipeline/build-cough.mjs',
+  policy: 'Sound Lab only: one derivative per freshly authorized Sound Lab cough job (distinct prompts / seeds; no pitch / rate variants, no stacking). Original 10-job allowance (closed): five takes failed the structural cough gate and are excluded; the user then authorized regenerations, and completion batch 1 (5 jobs, whole-second durations) replaced them. Takes failing the gate are never shipped',
   license: {status: 'Conditional prototype: Stability AI Community License + Gemma terms; not production/commercial clearance. Not listened to on the worker: structural analysis only (see structural / similarity).', gameReady: false, notice: 'game/public/assets/audio/NOTICE.md'},
   lab: 'http://10.0.0.59:7871 (Last Line Sound Lab CPU 0.1.0; stabilityai/stable-audio-3-small-sfx @ 05ca3857, weights stable-audio-3-optimized @ 08b17423, profile w8a8)',
-  rawArchive: `${TASK}/ (raw WAVs + lab sidecars in raw/, intents/ACKs/terminals in ledger/, runner.log, queue.json, PLAN.json)`,
-  gaps, excluded, qcGate: {quietDb: QUIET_DB, quietMinFrac: QUIET_MIN, note: 'continuous takes are not shipped; see the task ALLOWANCE-REQUEST for replacements'}, totalBytes: bytes, similarity: {method: '48-point mean-removed, unit-norm 5 ms envelope signatures; Pearson r', highest: pairs.slice(0, 5)}, derivatives: derivs};
+  rawArchive: SOURCES.map(x => `${x.dir}/ (raw WAVs + lab sidecars in raw/, intents/ACKs/terminals in ledger/, runner.log, queue.json, PLAN.json)`),
+  auditioned: false,
+  gaps, excluded, qcGate: {quietDb: QUIET_DB, quietMinFrac: QUIET_MIN, note: 'continuous takes are not shipped; their replacements came from completion batch 1'}, totalBytes: bytes, similarity: {method: '48-point mean-removed, unit-norm 5 ms envelope signatures; Pearson r', highest: pairs.slice(0, 5)}, derivatives: derivs};
 fs.writeFileSync(PROV, JSON.stringify(prov, null, 1) + '\n');
 console.log(`total ${derivs.length} derivatives, ${bytes} B; gaps: ${gaps.length ? gaps.join(', ') : 'none'}; excluded: ${excluded.map(e => e.id).join(', ') || 'none'}`);
 for (const d of derivs) console.log(d.source.clip, d.durationS + 's', 'events', d.structural.coughEvents, 'active', d.structural.activeS, 'centroid', d.structural.centroidHz, 'Hz', 'rms', d.structural.rmsDb);

@@ -97,7 +97,7 @@ describe('shipped cough takes', () => {
     expect(CUE_GAIN.cough).toBeLessThan(CUE_GAIN.hurt);
     const clips = CLIP_MANIFEST.cough;
     expect(clips.map(c => c.url).sort()).toEqual(prov.derivatives.map(d => d.url).sort());
-    expect(clips.length).toBeGreaterThanOrEqual(5);
+    expect(clips.length).toBe(10); // the user's ten distinct takes (task cough-completion-20261030)
   });
 
   it('files match their provenance; takes are distinct jobs / seeds; excluded takes are not shipped', () => {
@@ -113,6 +113,9 @@ describe('shipped cough takes', () => {
     }
     expect(seeds.size).toBe(prov.derivatives.length);
     expect(jobs.size).toBe(prov.derivatives.length);
+    // genuinely distinct takes: separate jobs / seeds, distinct bytes, no near-duplicate envelopes (not pitch / rate copies)
+    expect(new Set(prov.derivatives.map(d => d.sha256)).size).toBe(prov.derivatives.length);
+    for (const pair of (prov as unknown as {similarity: {highest: {envelopeCorr: number}[]}}).similarity.highest) expect(pair.envelopeCorr).toBeLessThan(0.9);
     for (const e of prov.excluded) expect(CLIP_MANIFEST.cough.some(c => c.src === e.id)).toBe(false);
   });
 });

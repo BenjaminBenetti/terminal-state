@@ -10,6 +10,11 @@ export const CLIP_MANIFEST_COUGH: Readonly<Record<string, readonly ClipRef[]>> =
   {"url":"assets/audio/cough-06-sputter.mp3","dur":1.353,"src":"cough-06-sputter"},
   {"url":"assets/audio/cough-08-fit-gag.mp3","dur":2.265,"src":"cough-08-fit-gag"},
   {"url":"assets/audio/cough-09-weak-hoarse.mp3","dur":1.413,"src":"cough-09-weak-hoarse"},
+  {"url":"assets/audio/cc1-cough-01-dry-single.mp3","dur":1.218,"src":"cc1-cough-01-dry-single"},
+  {"url":"assets/audio/cc1-cough-02-chesty-triple.mp3","dur":2.054,"src":"cc1-cough-02-chesty-triple"},
+  {"url":"assets/audio/cc1-cough-04-throat-rasp.mp3","dur":1.443,"src":"cc1-cough-04-throat-rasp"},
+  {"url":"assets/audio/cc1-cough-07-muffled.mp3","dur":1.117,"src":"cc1-cough-07-muffled"},
+  {"url":"assets/audio/cc1-cough-10-bark.mp3","dur":1.804,"src":"cc1-cough-10-bark"},
  ],
 };
 
@@ -17,4 +22,4 @@ export const CLIP_MANIFEST_COUGH: Readonly<Record<string, readonly ClipRef[]>> =
 export const CLIP_GAPS_COUGH: readonly string[] = [];
 
 /** Total bytes of this build's derivatives. */
-export const CLIP_BYTES_COUGH = 101564;
+export const CLIP_BYTES_COUGH = 195606;

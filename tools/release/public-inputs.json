@@ -144,6 +144,31 @@
       "sha256": "918c51010c6abde5df985e26b961d220bec574a1eb2af7baaf6b51ffb471f8f5"
     },
     {
+      "path": "assets/audio/cc1-cough-01-dry-single.mp3",
+      "bytes": 15047,
+      "sha256": "ff17f8c430576352383e3d17ea5f799ebf5c5213f25eb5527825bafae6643c59"
+    },
+    {
+      "path": "assets/audio/cc1-cough-02-chesty-triple.mp3",
+      "bytes": 25078,
+      "sha256": "223f61798fa2ed63d0bc79325eb6f631a0f89cec9f9ce7705dea207c7efbc5d5"
+    },
+    {
+      "path": "assets/audio/cc1-cough-04-throat-rasp.mp3",
+      "bytes": 17868,
+      "sha256": "eabc55a1d832d87a9c4f531db7fbcfa0cae9510427d07b040b220f7da20e0f80"
+    },
+    {
+      "path": "assets/audio/cc1-cough-07-muffled.mp3",
+      "bytes": 13793,
+      "sha256": "d122188cbe453985ac406a4ed9ad34018c40a24a65651c1fd623b37a4b66849b"
+    },
+    {
+      "path": "assets/audio/cc1-cough-10-bark.mp3",
+      "bytes": 22256,
+      "sha256": "b51fc1195c01c47f4346565dec9ca2b043b9580bdda6e23afdac718023b63627"
+    },
+    {
       "path": "assets/audio/clank-01.mp3",
       "bytes": 6269,
       "sha256": "fd5ec36475426507a2ca4d7575c3485cc3f82932e78ef297bbf752b50089cfad"
@@ -1340,8 +1365,8 @@
     },
     {
       "path": "assets/derivatives/audio-cough.json",
-      "bytes": 13340,
-      "sha256": "3a72e3c59dce01be1b5e482e74d5d6639373bea3e28fb0d1a7a9ca3bd5dd15bc"
+      "bytes": 24088,
+      "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
     },
     {
       "path": "assets/derivatives/audio-iteration05.json",
