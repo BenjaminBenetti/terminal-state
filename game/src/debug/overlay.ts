@@ -77,7 +77,7 @@ const COLORS = {
 const OK_MS = 1000 / 60 * 1.05;
 
 const CSS = `
-#perf-overlay { position: fixed; left: 12px; top: 100px; z-index: 80; width: ${GRAPH_W + 24}px; max-height: calc(100vh - 112px); overflow: hidden;
+#perf-overlay { position: fixed; right: 12px; top: 100px; z-index: 80; width: ${GRAPH_W + 24}px; max-width: calc(100vw - 24px); max-height: calc(100vh - 112px); overflow: hidden;
   box-sizing: border-box; padding: 8px 12px 9px; background: rgba(8, 9, 10, 0.8); border-left: 3px solid #4f8a87; color: #ece4cf;
   pointer-events: none; user-select: none; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
   font-weight: 400; letter-spacing: 0; text-shadow: none; }
