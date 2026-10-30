@@ -266,6 +266,8 @@ export class Game {
   private currentSeed = 0;
   /** Frames rendered while playing (used by QA to confirm the loop runs). */
   frames = 0;
+  /** Debug overlay (debug/overlay.ts): main-thread ms of the last frame()'s world update and render submission. */
+  readonly frameCpu = {updateMs: 0, renderMs: 0, rendered: false};
   /** Gameplay clock (s; advances only while the world updates). Iteration 17: QA / tests prove traversal never stops it. */
   get clock(): number { return this.time; }
   /**
@@ -1098,24 +1100,38 @@ export class Game {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
+    const cpu = this.frameCpu;
+    cpu.updateMs = cpu.renderMs = 0;
+    cpu.rendered = false;
     // Iteration 14: the warm-up owns the renderer (render target / layers / hidden frames) until it resolves
     if (this.warming) { this.input.endFrame(); return; }
     if (this.state === 'playing' || (this.state === 'won' && this.wonAt >= 0)) {
-      if (this.state === 'playing') this.update(dt);
-      this.render();
+      const playing = this.state === 'playing';
+      if (playing) this.update(dt);
+      const r0 = performance.now();
+      if (playing) cpu.updateMs = r0 - now;
+      cpu.rendered = this.render();
+      cpu.renderMs = performance.now() - r0;
       this.frames++;
     } else if (this.world) {
       // menus: keep the frozen frame fresh at a low rate
       this.renderT -= dt;
-      if (this.renderT <= 0) { this.renderT = 0.25; this.render(); }
+      if (this.renderT <= 0) {
+        this.renderT = 0.25;
+        const r0 = performance.now();
+        cpu.rendered = this.render();
+        cpu.renderMs = performance.now() - r0;
+      }
     }
     this.input.endFrame();
   }
 
-  render(): void {
-    if (this.gpu?.deviceLost || !this.renderer.initialized) return; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
+  /** Draws the frame; false when there is nothing to draw with (lost device / renderer not initialized). */
+  render(): boolean {
+    if (this.gpu?.deviceLost || !this.renderer.initialized) return false; // Iteration 13 (CORE): lost device / not initialized: nothing to draw with
     this.world?.culler.update(this.camera); // Iteration 08 (Lane G): level / fog culling (cheap; skipped while still)
     this.drawFrame();
+    return true;
   }
 
   /** Iteration 14: the frame itself (station + atmosphere, then the viewmodel overlay); the warm-up's hidden frames call it without the culler. */
