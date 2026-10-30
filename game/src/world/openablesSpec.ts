@@ -896,7 +896,7 @@ const OFFICE_OPEN_AUDIT: Readonly<Record<OfficeKind, {role: PropRole; cls: Audit
   archiveBoxes: {role: 'storage', cls: 'openable', how: 'the top box lifts its derived lid (the crushed boxes under it stay shut)'},
   // --- storage-looking, deliberately closed (honest reasons) ---
   kegerator: {role: 'storage', cls: 'exception', how: 'its front is a tap panel with no door; the model\'s keg door is on its back, which always stands against a wall (corner placement); kegs / beer are not items'},
-  bakeryCase: {role: 'storage', cls: 'exception', how: 'glazed display case: curved front glass and staff-side panes fused into one mesh, every tray packed with modelled stale bread (decor, not food items) — no free compartment to hold loot'},
+  bakeryCase: {role: 'storage', cls: 'exception', how: 'glazed display case: its staff-side glass panes face the wall it always stands against (companies.ts bakery: ROW / W against a wall), the curved customer glass is fixed, and every tray is packed with modelled stale bread (decor, not food items) — no reachable free compartment'},
   globeBar: {role: 'storage', cls: 'exception', how: 'globe lid modelled permanently open (hinge fused); its decanters and glasses are decor (spirits are not items)'},
   parcelPallet: {role: 'storage', cls: 'exception', how: 'sealed, taped shipping cartons stacked on a pallet (like cartonStack): not searchable'},
   gumballJar: {role: 'storage', cls: 'exception', how: 'lidded glass jar of gumballs: the lid is fused and gum is not an item'},

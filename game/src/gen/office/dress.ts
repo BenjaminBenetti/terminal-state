@@ -393,10 +393,12 @@ export function furnishedShare(layout: StationLayout, a: Area): number {
 
 /**
  * Large rooms the purpose / company rules left nearly empty get PURPOSEFUL furniture through the placement primitive (door zones,
- * access strips, connectivity): store rooms aisles of shelving, print rooms a collating table / copiers / filing, break rooms a
- * second table and seating, meeting rooms a credenza / whiteboard, open-plan areas work clusters (back-to-back desk pairs, filing,
- * a print point), company rooms a second pass of their own recipe's rows. Never in front of the windows (the facade strip is held
- * again) or in front of an existing piece's access strip. Runs at the start of postDress: placements are lifted to the storey.
+ * access strips, connectivity): store rooms aisles of shelving, print rooms a collating table / copier / carton stock / board,
+ * break rooms a second table and seating, meeting rooms a credenza / whiteboard, open-plan areas work clusters (back-to-back desk
+ * pairs, a print point, a whiteboard, a work table), company rooms a second pass of their own recipe's rows. Mostly NON-holder
+ * pieces; the holders among them roll the lean 'office-fill' table — the furnishing never inflates the level's loot. Never in front
+ * of the windows (the facade strip is held again) or in front of an existing piece's access strip. Runs at the start of postDress:
+ * placements are lifted to the storey.
  */
 function fillLargeRooms(d: OfficeDress, ctx: PlaceCtx): void {
   const {layout} = d;
@@ -471,11 +473,12 @@ function fillSteps(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeAreaMeta, ho
   });
   switch (m.role) {
     case 'storage': return [...own, () => freeRows(ctx, a, 'shelf', ctx.rng.int(3, 6), true, 1.3).length > 0, wall('cartonStack', 0.5), wall('cabinetTall', 0.7)];
-    case 'copy': return [...own, isle('table', 0.9), wall('officePhotocopier', 0.9), wall('officeFiling', 0.7), wall('shelf', 0.8)];
+    case 'copy': return [...own, isle('table', 0.9), wall('officePhotocopier', 0.9), wall('cartonStack', 0.5), wall('officeWhiteboard', 0.6)];
     case 'break': return [...own, isle('table', 0.9), wall('couch', 0.7), wall('vending', 1.0), wall('officeWaterCooler', 0.6), isle('table', 0.9)];
-    case 'meeting': return [...own, ...(m2 >= 50 || !ctx.layout.props.some(p => p.area === a.id && p.kind === 'conferenceTable') ? [isle('conferenceTable', 0.9)] : []),
+    // (a second table keeps 2 m clear round it: both tables' chairs pull out into the gap)
+    case 'meeting': return [...own, ...(m2 >= 50 || !ctx.layout.props.some(p => p.area === a.id && p.kind === 'conferenceTable') ? [isle('conferenceTable', 2.0)] : []),
       wall('cabinetLow', 0.7), wall('officeWhiteboard', 0.6), wall('officeShelf', 0.6)];
-    case 'open': case 'bay': return [...own, ...(shallow ? [windowDesks] : []), () => deskPair(ctx, a), wall('officeFiling', 0.7), wall('officePhotocopier', 0.9),
+    case 'open': case 'bay': return [...own, ...(shallow ? [windowDesks] : []), () => deskPair(ctx, a), wall('officePhotocopier', 0.9), wall('officeWhiteboard', 0.6),
       () => deskPair(ctx, a), isle('table', 0.9)];
     // The collapsed office: more of its fallen furniture (crates hold finite loot), heaped, never in the door zones.
     case 'collapsed': return [...(shallow ? [windowDesks] : []), ...(['crate', 'cartonStack', 'officeFiling', 'desk', 'crate'] as PropKind[]).map(kind => () => !!scatter(ctx, a, kind, 0.6))];
@@ -510,9 +513,9 @@ function deskPair(ctx: PlaceCtx, a: Area): boolean {
     const off = CELL;
     const [ax, az, bx, bz] = alongX ? [x, z - off, x, z + off] : [x - off, z, x + off, z];
     const ra = alongX ? Math.PI : -Math.PI / 2, rb = alongX ? 0 : Math.PI / 2;
-    // Walkway ring (0.9 m) of open floor round the whole pod (chairs pull out on both long sides).
-    const hx = alongX ? def.w / 2 : off + def.d / 2, hz = alongX ? off + def.d / 2 : def.w / 2;
-    const [x0, y0, x1, y1] = cellsOfBox(x, z, hx + 0.9, hz + 0.9);
+    // Open floor round the whole pod: 0.9 m at its ends, 1.6 m on both long (sitter) sides where the chairs pull out.
+    const hx = alongX ? def.w / 2 + 0.9 : off + def.d / 2 + 1.6, hz = alongX ? off + def.d / 2 + 1.6 : def.w / 2 + 0.9;
+    const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
     let open = true;
     for (let cy = y0; cy <= y1 && open; cy++) for (let cx = x0; cx <= x1; cx++) {
       const i = ctx.g.idx(cx, cy);

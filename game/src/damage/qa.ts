@@ -186,7 +186,20 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       const t = props[0];
       if (!t) return null;
       const f = {x: Math.sin(t.q.rot), z: Math.cos(t.q.rot)};
-      if (o.teleport) teleport(t.q.x + f.x * 1.8, t.q.z + f.z * 1.8);
+      if (o.teleport && !(t.q.level ?? 0)) teleport(t.q.x + f.x * 1.8, t.q.z + f.z * 1.8);
+      else if (o.teleport) {
+        // lane PHYS: an upper storey (the office tower): stand on THAT storey, 1.8 m off the first side with open floor that is
+        // not inside another prop (a chair's front faces its desk)
+        const lv = t.q.level!, g = game.levels.grid(lv);
+        const free = (x: number, z: number) => !game.layout.props.some(q => q !== t.q && q.h > 0.3 && (q.level ?? 0) === lv && Math.abs(q.x - x) < q.hx + 0.35 && Math.abs(q.z - z) < q.hz + 0.35);
+        for (const [dx, dz] of [[f.x, f.z], [-f.x, -f.z], [f.z, -f.x], [-f.z, f.x]]) {
+          const s = game.snap(t.q.x + dx * 1.8, t.q.z + dz * 1.8, lv);
+          if (!s || !free(s[0], s[1])) continue;
+          game.player.x = s[0]; game.player.z = s[1]; game.player.y = g.floorAt(s[0], s[1]);
+          game.player.vy = 0; game.player.grounded = true; game.player.climb = null;
+          break;
+        }
+      }
       const y = t.q.y + Math.max(0.4, (t.q.h || PROP_DEFS[t.q.kind].h) * 0.7);
       lookAt(t.q.x, y, t.q.z);
       return {kind: t.q.kind, index: t.i, loose: t.q.h === 0, at: {x: t.q.x, y, z: t.q.z}, contactWake: di.contactOn, audit: PROP_PHYSICS_AUDIT[t.q.kind] ?? null};

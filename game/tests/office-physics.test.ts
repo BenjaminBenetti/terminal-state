@@ -206,11 +206,18 @@ describe('dynamic office kinds: a body on demand, shots and walkers move them, t
       const {ph, det} = officeWorld([p]);
       const w: Walker = {id: {}, x: p.x - p.hx - 0.3 - 0.8, z: p.z, y: 0, r: 0.3, wake: true};
       ph.dynamicItems.walkers = () => [w];
-      for (let i = 0; i < 150; i++) { w.x += 1.4 * DT; ph.update(DT); }
+      const half = p.hx * (propPhysics(k).fit ?? 1);
+      let into = 0; // how far the walker's circle reaches into the shoved prop's collider (the camera would clip into it)
+      for (let i = 0; i < 150; i++) {
+        w.x += 1.4 * DT; ph.update(DT);
+        const m = det.meshes.get(p);
+        if (m && pose(m).tilt < 0.2) into = Math.max(into, w.x + w.r - (pose(m).p.x - half));
+      }
       expect(ph.dynamicItems.stats().counts.contacts, k).toBe(1);
       expect(p.h, k).toBe(0);
       const {p: at, tilt} = pose(det.meshes.get(p)!);
-      rows.push(`${k} dx ${(at.x - 10).toFixed(2)} tilt ${(tilt * 57.3).toFixed(0)}`);
+      rows.push(`${k} dx ${(at.x - 10).toFixed(2)} tilt ${(tilt * 57.3).toFixed(0)} into ${into.toFixed(2)}`);
+      expect(into, k).toBeLessThan(0.15);
       expect((at.x - 10) + tilt, k).toBeGreaterThan(0.15); // shoved ahead (or tipped over)
       ph.dynamicItems.walkers = () => [];
       run(ph, 20);

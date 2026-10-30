@@ -29,7 +29,9 @@
 //  - ON-HOST decor (`onHost`, the office monitor) goes loose on its static host's top: a host-top support slab is added for it
 //    (the desk's loot surface is split around the monitor, so its shelf boxes leave a gap exactly there).
 //  - a moving prop knocks resting lots / pickups it touches like a flying item does (lots lifted as the same pickups); walkers
-//    do not shove a raised prop (a monitor on a desk) with their legs; a prop something rests on never goes loose.
+//    do not shove a raised prop (a monitor on a desk) with their legs; a prop something rests on never goes loose; a walker
+//    shove closes OFFICE_SHOVE_GAIN of the speed gap per frame (calibrated carpet friction: the walker stays out of a 20 kg
+//    armchair) and pushes within the body's own height (a low bean bag is not flipped).
 //  - riders: resting (static-body) loose props inside the moving elevator cab ride its dy, and are swept out of a doorway the
 //    landing doors shut on (PhysicsSystem.carryRiders / clearDoorway call carry() / relocate()).
 
@@ -58,6 +60,8 @@ const RAISED_SHOVE = 0.5;
 const PROP_KNOCK_SPEED = 0.5;
 /** Lane PHYS: contact-wake candidate buckets (m). */
 const CB = 1;
+/** Lane PHYS (office worlds): share of the walker-speed gap a shove closes per frame (the Subway keeps 0.35). */
+const OFFICE_SHOVE_GAIN = 0.6;
 
 /**
  * Whether props of this kind can become rigid bodies at all: flagged dynamic (PROP_PHYSICS / PROP_DEFS.physics) with a finite
@@ -647,9 +651,11 @@ export class DynamicItems {
         const along = body.velocity.x * ux + body.velocity.z * uz;
         const need = sp * 1.1 - along;
         if (need <= 0) continue;
-        const j = Math.min(need, 2.5) * e.mass * 0.35;
+        // lane PHYS: office worlds close the speed gap faster (calibrated carpet friction: the walker would reach into a 20 kg piece)
+        const j = Math.min(need, 2.5) * e.mass * (contact ? OFFICE_SHOVE_GAIN : 0.35);
         cv.set(ux * j, 0, uz * j);
-        cv2.set(nx - body.position.x, Math.min(0.25, a.y + 0.6 - body.position.y), nz - body.position.z);
+        // lane PHYS: office worlds push within the body's own height (a 39 cm bean bag is not flipped by a push above its top)
+        cv2.set(nx - body.position.x, Math.min(0.25, a.y + 0.6 - body.position.y, contact ? e.half.y * 0.5 : Infinity), nz - body.position.z);
         body.applyImpulse(cv, cv2);
         this.counts.pushes++;
       }

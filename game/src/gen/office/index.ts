@@ -45,6 +45,7 @@ import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, trans
 
 export {OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
 export {roofLadderPose} from './roof';
+export {floorPlanPose} from './floorplan'; // Task office-interactions-layout-20261030 (lane LAYOUT): QA pose into a floor's arrangement
 export {roofRewardPose} from './roof'; // Task office-interactions-layout-20261030 (lane ROOF): QA pose in front of the roof cache
 export {transitPose} from './transit';
 export {officeIssues} from './validate';

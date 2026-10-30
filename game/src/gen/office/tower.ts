@@ -64,7 +64,8 @@ const UNIT_SPEC: Record<Exclude<CoreUnitKind, 'wc-m' | 'wc-w'>, {kind: 'room' | 
   riser: {kind: 'closet', type: 'supply-closet', label: 'Electrical riser', purpose: 'electrical-closet', role: 'closet'},
   utility: {kind: 'room', type: 'office-room', label: 'Utility room', purpose: 'office-utility', role: 'storage', plate: 'UTILITY ROOM'},
   print: {kind: 'room', type: 'office-room', label: 'Print room', purpose: 'office-copy', role: 'copy', plate: 'PRINT ROOM'},
-  storage: {kind: 'room', type: 'office-room', label: 'Store room', purpose: 'office-storage', role: 'storage', plate: 'STORE ROOM'},
+  // (a supply room, not another ammo-stocked 'office-storage': the station dresser plates it SUPPLIES)
+  storage: {kind: 'closet', type: 'supply-closet', label: 'Supply room', purpose: 'supply-closet', role: 'closet'},
   kitchenette: {kind: 'room', type: 'office-room', label: 'Kitchenette', purpose: 'office-kitchenette', role: 'break', plate: 'KITCHENETTE'},
   it: {kind: 'room', type: 'office-room', label: 'IT closet', purpose: 'office-it', role: 'closet', plate: 'IT · COMMS'},
   lockers: {kind: 'room', type: 'office-room', label: 'Locker room', purpose: 'office-lockers', role: 'amenity', plate: 'LOCKERS · SHOWERS'},
@@ -452,10 +453,10 @@ function carveSkeleton(k: Kit, f: TowerFrame, at: TowerAt, plan: FloorPlan, meta
 }
 
 /**
- * Support rooms a split end zone adds (one per split zone, not repeating the strip's or the other zone's). (No extra store room: the
- * supply-storage shelving is ammo-heavy — more of those rooms would inflate the tower's loot.)
+ * Support rooms a split end zone adds (one per split zone, not repeating the strip's or the other zone's): a huddle room or a print
+ * room. (No extra store room / break room: their stocked shelving / fridges / vending would inflate the tower's loot economy.)
  */
-const ZONE_EXTRAS: readonly RoomKey[] = ['huddle', 'copy', 'break'];
+const ZONE_EXTRAS: readonly RoomKey[] = ['huddle', 'copy'];
 const STRIP_COVERS: Partial<Record<CoreUnitKind, RoomKey>> = {print: 'copy', storage: 'storage', utility: 'storage', kitchenette: 'break'};
 
 function zoneExtra(rng: Rng, plan: FloorPlan, used: Set<RoomKey>, items: Item[]): RoomKey {
@@ -636,9 +637,11 @@ function carveTenantBand(k: Kit, f: TowerFrame, at: TowerAt, rng: Rng, meta: Map
     }
     if (s.type === 'run') {
       const run = RUNS[c.program.run];
-      const n = s.n ?? 2;
+      // (lane LAYOUT: a shallow band's offices are at least 4.5 m wide — 4 m deep only, they need the width to stay usable)
+      const shallow = band.h < 2 * ROOM_MIN_CELLS + 4;
+      const n = shallow ? Math.max(1, Math.min(s.n ?? 2, Math.floor((s.w + 1) / 10))) : s.n ?? 2;
       const ow = Math.floor((s.w - (n - 1)) / n);
-      if (band.h < 2 * ROOM_MIN_CELLS + 4) {
+      if (shallow) {
         // Lane LAYOUT: a shallow facade band (behind the work commons): the offices open straight onto the commons (no admin bay).
         let ox = x0;
         for (let i = 0; i < n; i++) {

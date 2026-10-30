@@ -20,6 +20,8 @@
 // End-zone splits: single room / stacked (two rooms N + S, each on its own corridor) / paired (facade room + inner room).
 
 import {Rng, hashString} from '../../core/rng';
+import {CELL} from '../grid';
+import type {StationLayout} from '../stationTypes';
 import type {CoreUnit, CoreUnitKind} from './frame';
 
 export type Topology = 'ring' | 'loopW' | 'loopE' | 'commons';
@@ -43,14 +45,14 @@ export const ROOM_MIN_CELLS = 5;
 
 /** Core south-strip programs: [unit kind, width cells] (sum + walls = the core width, 32 cells). */
 export const STRIPS: Readonly<Record<StripId, readonly (readonly [CoreUnitKind, number])[]>> = {
-  /** The classic trio reduced to two proper closets (3 m and 3.5 m wide instead of three 2 m ones). */
+  /** The classic trio reduced to two proper closets (3 m and 3.5 m wide, 3.5 m deep, instead of three 2 x 3 m ones). */
   closets: [['wc-m', 8], ['wc-w', 8], ['janitor', 6], ['riser', 7]],
-  /** One utility room (janitor + electrical + supplies merged, 7 m x 3 m). */
+  /** One utility room (janitor + electrical + supplies merged, 7 m x 3.5 m). */
   utility: [['wc-m', 8], ['wc-w', 8], ['utility', 14]],
   /** A kitchenette / coffee point and an IT closet. */
-  pantry: [['wc-m', 7], ['wc-w', 7], ['kitchenette', 10], ['it', 5]],
-  /** A print room and a store room. */
-  print: [['wc-m', 8], ['wc-w', 8], ['print', 8], ['storage', 5]],
+  pantry: [['wc-m', 7], ['wc-w', 7], ['kitchenette', 9], ['it', 6]],
+  /** A print room and a supply room. */
+  print: [['wc-m', 7], ['wc-w', 7], ['print', 8], ['storage', 7]],
   /** Staff lockers / showers and a janitor's room. */
   lockers: [['wc-m', 7], ['wc-w', 7], ['lockers', 7], ['janitor', 8]],
   /** Washrooms at both ends of the strip, a utility room between them. */
@@ -60,9 +62,9 @@ export const STRIPS: Readonly<Record<StripId, readonly (readonly [CoreUnitKind, 
 /** Floor 8: the roof access room replaces one support room of its program (the ladder + hatch, gen/office/roof.ts). */
 const ROOF_SWAP: Readonly<Record<StripId, readonly (readonly [CoreUnitKind, number])[]>> = {
   closets: [['wc-m', 8], ['wc-w', 8], ['janitor', 6], ['roof', 7]],
-  utility: [['wc-m', 8], ['wc-w', 8], ['utility', 8], ['roof', 5]],
-  pantry: [['wc-m', 7], ['wc-w', 7], ['kitchenette', 10], ['roof', 5]],
-  print: [['wc-m', 8], ['wc-w', 8], ['print', 8], ['roof', 5]],
+  utility: [['wc-m', 7], ['wc-w', 7], ['utility', 9], ['roof', 6]],
+  pantry: [['wc-m', 7], ['wc-w', 7], ['kitchenette', 9], ['roof', 6]],
+  print: [['wc-m', 7], ['wc-w', 7], ['print', 9], ['roof', 6]],
   lockers: [['wc-m', 7], ['wc-w', 7], ['lockers', 7], ['roof', 8]],
   split: [['wc-m', 7], ['utility', 8], ['roof', 7], ['wc-w', 7]],
 };
@@ -126,3 +128,22 @@ export function floorPlans(levelSeed: number, dims: {K: number; sB: number; cx0:
 
 /** Short structural key of a plan (QA / tests: what the floor's skeleton is). */
 export const planKey = (p: FloorPlan): string => `${p.topology}/${p.strip}/${p.ends.W}-${p.ends.E}${p.commons ? `/c${p.commons}` : ''}`;
+
+/**
+ * QA (the primary's browser spot check): a pose on office floor `floor` at the head of a side corridor (the elevator-lobby end),
+ * looking south down it — the end-zone rooms beside it and, ahead, the S corridor (ring / loop) or the open work commons. `kind`
+ * reads the arrangement from the geometry: 'ring' (2 side corridors + S corridor), 'loop' (1 side corridor), 'commons'.
+ */
+export function floorPlanPose(layout: StationLayout, floor: number): {x: number; y: number; z: number; yaw: number; pitch: number; level: number; kind: string} | null {
+  const L = layout.levels[floor];
+  if (!L) return null;
+  const corr = layout.areas.filter(a => a.level === floor && a.type === 'office-corridor');
+  const sides = corr.filter(a => a.h > a.w * 2).sort((a, b) => a.x - b.x);
+  const wide = corr.filter(a => a.w > a.h * 4).sort((a, b) => a.y - b.y);
+  const commons = layout.areas.some(a => a.level === floor && a.type === 'office-open' && sides.length && a.y === sides[0].y + sides[0].h);
+  const s = sides[0];
+  if (!s) return null;
+  const kind = commons ? 'commons' : sides.length === 1 ? 'loop' : wide.length >= 2 ? 'ring' : 'other';
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+  return {x: r3((s.x + s.w / 2) * CELL), y: L.baseY, z: r3(s.y * CELL + 0.8), yaw: Math.PI, pitch: -0.05, level: floor, kind};
+}

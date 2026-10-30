@@ -65,8 +65,11 @@ export function freeRows(ctx: PlaceCtx, a: Area, kind: PropKind, n: number, pair
   const alongX = a.w >= a.h;
   const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
   const M = 0.9;
+  // (lane LAYOUT: a back-to-back pair's two faces are FRONTS — doors / drawers / screens — so the outer lines keep a full service
+  // aisle to the walls, not just the 0.9 m margin)
+  const MV = pair ? Math.max(M, aisle) : M;
   const u0 = (alongX ? ax0 : az0) + M, u1 = (alongX ? ax1 : az1) - M;
-  const v0 = (alongX ? az0 : ax0) + M, v1 = (alongX ? az1 : ax1) - M;
+  const v0 = (alongX ? az0 : ax0) + MV, v1 = (alongX ? az1 : ax1) - MV;
   // Task office-interactions-layout-20261030 (lane LAYOUT): CELL-ALIGNED pitches. Units used to stand 0.04 m apart side by side and
   // 0.02 m back to back, so two neighbours shared a grid cell and every other placement silently failed (rows of racks / desks /
   // benches came out half empty, depending on the room's alignment) — now neighbours never share a cell.
@@ -74,7 +77,8 @@ export function freeRows(ctx: PlaceCtx, a: Area, kind: PropKind, n: number, pair
   const gap = def.w >= 1.0 ? 0.04 : 0.35;
   const pu = snap(def.w + gap), cx = snap(Math.max(0, 1.2 - (pu - def.w)));
   const half = def.d / 2 + 0.01;
-  const block = pair ? 2 * half : def.d;
+  // a pair spans both lines (2 depths + the 0.02 m between the backs); rows of pairs keep `aisle` between one pair's fronts and the next's
+  const block = pair ? 4 * half - 0.02 : def.d;
   const pitch = snap(block + aisle);
   if (v1 - v0 < block) return [];
   const rows = Math.max(1, Math.floor((v1 - v0 - block) / pitch) + 1);
@@ -86,9 +90,12 @@ export function freeRows(ctx: PlaceCtx, a: Area, kind: PropKind, n: number, pair
   const us = Math.round((u0 + (u1 - u0 - len(per)) / 2) / CELL) * CELL;
   const out: PropPlacement[] = [];
   const flip = ctx.rng.chance(0.5);
+  // (a pair's backs meet on a cell line: each line keeps its own cells; the snap never eats into the aisles to the walls)
+  let vb0 = pair ? Math.round((vs + block / 2) / CELL) * CELL : vs;
+  if (pair && vb0 - block / 2 < v0 - 1e-6) vb0 += CELL;
   for (let r = 0; r < rows && out.length < n; r++) {
-    // (a pair's backs meet on a cell line: each line keeps its own cells)
-    const vb = pair ? Math.round((vs + half) / CELL) * CELL + r * pitch : vs + r * pitch;
+    const vb = vb0 + r * pitch;
+    if (pair && vb + block / 2 > v1 + 1e-6) break;
     const lines = pair ? [{v: vb - half, f: -1}, {v: vb + half, f: 1}] : [{v: vb + def.d / 2, f: flip ? -1 : 1}];
     for (const ln of lines) {
       for (let i = 0; i < per && out.length < n; i++) {
@@ -468,7 +475,8 @@ function serverRoom(ctx: PlaceCtx, a: Area): void {
   if (racks.length < 2) {
     for (const side of ctx.rng.shuffle(SIDES.slice())) {
       const [lo, hi] = wallRange(a, side);
-      racks.push(...rowAlongWall(ctx, a, side, 'serverRack', {from: lo + 0.45, to: hi - 0.45, max: 4 - racks.length, front: 1.0}));
+      // (lane LAYOUT: the rack's glass door is 1.1 m wide — a 1.2 m service aisle in front, as between the free-standing rows)
+      racks.push(...rowAlongWall(ctx, a, side, 'serverRack', {from: lo + 0.45, to: hi - 0.45, max: 4 - racks.length, front: 1.2}));
       if (racks.length >= 2) break;
     }
   }
@@ -488,7 +496,8 @@ function serverRoom(ctx: PlaceCtx, a: Area): void {
 /** Chairs / stools pulled up to company work surfaces (sitter side +Z unless noted): host decor, collides, never blocks. */
 const SEAT_AT: Partial<Record<PropKind, {kind: PropKind; behind?: boolean; n?: number}>> = {
   tradingDesk: {kind: 'officeChair'}, mixingConsole: {kind: 'officeChair'}, cctvConsole: {kind: 'officeChair'}, monitorDesk: {kind: 'officeChair'},
-  labBench: {kind: 'officeChair'}, newsDesk: {kind: 'officeChair', behind: true, n: 2}, executiveDesk: {kind: 'executiveChair', behind: true},
+  // (lane LAYOUT, per OPEN: no chair at the lab benches — their 15 drawers open on the sitter side and would pass through it)
+  newsDesk: {kind: 'officeChair', behind: true, n: 2}, executiveDesk: {kind: 'executiveChair', behind: true},
 };
 
 export function companyPost(d: OfficeDress, ctx: PlaceCtx): void {
@@ -516,7 +525,6 @@ export function companyPost(d: OfficeDress, ctx: PlaceCtx): void {
     const p = layout.props[pi];
     const seat = SEAT_AT[p.kind];
     if (!seat || (p.level ?? 0) !== d.level || !mine(layout.areas[p.area]) || layout.props.some(q => q.host === pi)) continue;
-    if (p.kind === 'labBench' && !ctx.rng.chance(0.5)) continue;
     const def = PROP_DEFS[p.kind];
     const fx = Math.sin(p.rot), fz = Math.cos(p.rot), lx = Math.cos(p.rot), lz = -Math.sin(p.rot);
     const back = seat.behind ? -1 : 1;

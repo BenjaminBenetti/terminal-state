@@ -235,6 +235,7 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
     const counts = new Map<string, number>();
     let parts = 0, full = 0, reach = 0, holders = 0;
     const lots = {old: 0, new: 0, oldAmmo: 0, newAmmo: 0};
+    const missed = new Map<string, number>();
     const m = new THREE.Matrix4(), w = new THREE.Matrix4(), v = new THREE.Vector3();
     for (const seed of OFFICE_SEEDS) {
       const l = office(seed), lv = levelsOf(l);
@@ -275,9 +276,10 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
         const eye = new THREE.Vector3(a.stand.x, lv.grid(h.prop.level ?? 0).floorAt(a.stand.x, a.stand.z) + 1.6, a.stand.z);
         const t = cm.target(eye, a.aim.clone().sub(eye).normalize(), lv);
         if (t?.container === h) reach++;
+        else missed.set(h.kind, (missed.get(h.kind) ?? 0) + 1);
       }
     }
-    console.info(`[office-openables] office seeds ${OFFICE_SEEDS.join(',')}: ${[...counts].map(([k, n]) => `${k} ${n}`).join(', ')}; ${full}/${parts} parts open >= 80 %; ${reach}/${holders} reached from their stand point`);
+    console.info(`[office-openables] office seeds ${OFFICE_SEEDS.join(',')}: ${[...counts].map(([k, n]) => `${k} ${n}`).join(', ')}; ${full}/${parts} parts open >= 80 %; ${reach}/${holders} reached from their stand point (not reached: ${[...missed].map(([k, n]) => `${k} ${n}`).join(', ') || 'none'})`);
     expect(counts.size, 'the new storage kinds are placed on generated Office levels').toBeGreaterThanOrEqual(6);
     for (const k of ['officeFiling', 'serverRack', 'serverCabinet', 'executiveDesk']) expect(counts.get(k) ?? 0, k).toBeGreaterThan(0);
     expect(full / parts).toBeGreaterThan(0.8);
@@ -285,6 +287,7 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
     console.info(`[office-openables] holder lots: existing ${lots.old} (ammo ${lots.oldAmmo} rounds), new storage ${lots.new} (ammo ${lots.newAmmo} rounds)`);
     expect(lots.new / lots.old).toBeLessThan(0.2); // measured ~10-13 % (seeds 1-3; the denominator moves with the floor plans)
     expect(lots.newAmmo / lots.oldAmmo).toBeLessThan(0.05);
+    // main's floor plans: 100 %; a front blocked by the next rack / a wall is a placement bug (gen/office: keep the door side clear)
     expect(reach / holders).toBeGreaterThan(0.8);
   });
 
