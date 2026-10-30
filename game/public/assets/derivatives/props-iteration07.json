@@ -42014,7 +42014,7 @@
       },
       "game/public/assets/models/p7-fire-extinguisher-cabinet.glb": {
         "id": "p7:fireExtinguisherCabinet",
-        "replacedBy": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb",
+        "replacedBy": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
         "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
         "restoreBlobSha1": "4b9b48806f419fc5968cf48020ca2a2db2a03063",
         "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/p7-fire-extinguisher-cabinet.glb > game/public/assets/models/p7-fire-extinguisher-cabinet.glb"

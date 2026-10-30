@@ -17,7 +17,7 @@
   "class": "props",
   "counts": {
     "records": 115,
-    "bytes": 38622484,
+    "bytes": 38622496,
     "triangles": 454988,
     "replacedBytes": 58653948,
     "replacedTriangles": 448981
@@ -2566,10 +2566,10 @@
       ],
       "class": "openable prop",
       "output": {
-        "path": "game/public/assets/models/shop-cooler-open-t25.glb",
-        "url": "assets/models/shop-cooler-open-t25.glb",
-        "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f",
-        "bytes": 278708,
+        "path": "game/public/assets/models/shop-cooler-open-t25r1.glb",
+        "url": "assets/models/shop-cooler-open-t25r1.glb",
+        "sha256": "4e68c571d946cf890c4c4fd320b24bf24ec678d7d67b05d6f6f2d8902226e3f7",
+        "bytes": 278712,
         "triangles": 1043,
         "vertices": 6508,
         "textures": [
@@ -2776,6 +2776,49 @@
           },
           "best": "front",
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GLASS",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "glass-material",
+        "suffix": "r1",
+        "userFeedback": "The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque",
+        "what": "material factors of the transparent \"glass\" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged",
+        "why": "root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame's shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)",
+        "change": {
+          "glassMaterial": {
+            "before": {
+              "baseColor": [
+                0.8,
+                0.88,
+                0.9,
+                0.14
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            },
+            "after": {
+              "baseColor": [
+                0.092,
+                0.101,
+                0.1035,
+                0.2
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            }
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/shop-cooler-open-t25.glb",
+          "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f",
+          "bytes": 278708,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "4c6c95b1ce5b76b11b1735c1335b17ec4161197e",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/shop-cooler-open-t25.glb > game/public/assets/models/shop-cooler-open-t25.glb"
         }
       },
       "tune": null,
@@ -3321,10 +3364,10 @@
       ],
       "class": "shelf/holder",
       "output": {
-        "path": "game/public/assets/models/shop-display-open-t25.glb",
-        "url": "assets/models/shop-display-open-t25.glb",
-        "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005",
-        "bytes": 140588,
+        "path": "game/public/assets/models/shop-display-open-t25r1.glb",
+        "url": "assets/models/shop-display-open-t25r1.glb",
+        "sha256": "2c330771f1cabb85b9d7ffcaf956d8d050b3a1cf37a6a56ec357acb86ecc6664",
+        "bytes": 140592,
         "triangles": 901,
         "vertices": 4901,
         "textures": [
@@ -3532,6 +3575,49 @@
           },
           "best": "front",
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
+        }
+      },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GLASS",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "glass-material",
+        "suffix": "r1",
+        "userFeedback": "The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque",
+        "what": "material factors of the transparent \"glass\" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged",
+        "why": "root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame's shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)",
+        "change": {
+          "glassMaterial": {
+            "before": {
+              "baseColor": [
+                0.8,
+                0.88,
+                0.9,
+                0.14
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            },
+            "after": {
+              "baseColor": [
+                0.092,
+                0.101,
+                0.1035,
+                0.2
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            }
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/shop-display-open-t25.glb",
+          "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005",
+          "bytes": 140588,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "0e053d04064b5cb3e48ceb15bb7c27c5682fbb63",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/shop-display-open-t25.glb > game/public/assets/models/shop-display-open-t25.glb"
         }
       },
       "tune": {
@@ -18058,10 +18144,10 @@
       "p7SizeClass": "medium",
       "class": "openable prop",
       "output": {
-        "path": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-        "url": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-        "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa",
-        "bytes": 402332,
+        "path": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+        "url": "assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+        "sha256": "b02f7029b30ddce26a0ef8288a4ff964cc1b76be82c1a07aa26a7c2514f95131",
+        "bytes": 402336,
         "triangles": 3736,
         "vertices": 2992,
         "textures": [
@@ -18277,6 +18363,49 @@
           "method": "native rendered orthographically (textured, unshaded, 160 px) from +Z/+X/-Z/-X; alpha-bbox crops of render and the original image resized to 48 x 48; score = IoU + 0.8 luma correlation - chroma difference - 0.5 |ln aspect|; Meshy front +Z kept unless another side wins by > 0.15"
         }
       },
+      "localRepair": {
+        "task": "studio-model-touchups-20261030-01",
+        "lane": "GLASS",
+        "date": "2026-10-30",
+        "notNewMeshyOutput": true,
+        "kind": "glass-material",
+        "suffix": "r1",
+        "userFeedback": "The fridge cabinent things with glass doors found in shops, become hard to see in to when your flash light is on and your standing close, they sorta become almost opaque",
+        "what": "material factors of the transparent \"glass\" node only (base colour + alpha); geometry, textures, interior, extra nodes, bbox, node layout and loot surfaces unchanged",
+        "why": "root cause 1 (game/src/world/openables.ts takeover, fixed in code): aiming at a glazed openable took it over and its own meshes copied the opaque door frame's shadow flags, so the glass became a flashlight shadow caster and everything behind it went dark while the pane stayed lit. Root cause 2 (this file): the film was a near-white diffuser (a * rho = 0.12) whose torch-lit veil outshone dark labels 2-3x even with the stock lit; now a * rho = 0.02 (CPU model, reference/tasks/model-touchups-20261030/review/glass-numbers.json)",
+        "change": {
+          "glassMaterial": {
+            "before": {
+              "baseColor": [
+                0.8,
+                0.88,
+                0.9,
+                0.14
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            },
+            "after": {
+              "baseColor": [
+                0.092,
+                0.101,
+                0.1035,
+                0.2
+              ],
+              "roughness": 0.06,
+              "metallic": 0
+            }
+          }
+        },
+        "previousOutput": {
+          "path": "game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb",
+          "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa",
+          "bytes": 402332,
+          "baseCommit": "69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b",
+          "blobSha1": "f399798a47ed0d68a72cd89b2b38985749e22b41",
+          "restore": "git show 69a6b22ec6e73fbd4e01b9bd73c5e648e05c451b:game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb > game/public/assets/models/p7-fire-extinguisher-cabinet-t25.glb"
+        }
+      },
       "tune": {
         "acceptFlagged": {
           "attempt": "a1",
@@ -18379,8 +18508,8 @@
         }
       ],
       "catalog": {
-        "url": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-        "bytes": 402332,
+        "url": "assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+        "bytes": 402336,
         "w": 0.45,
         "h": 0.75,
         "d": 0.346,

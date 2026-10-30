@@ -503,9 +503,25 @@ export class OpenableSet {
       root.add(pivot);
       ps.pivot = pivot;
     });
-    // flashlight shadows: own meshes cast / receive like the instanced closed parts they replace (marked once per station)
+    // flashlight shadows: own meshes cast / receive like the instanced closed parts they replace (marked once per station).
+    // Task model-touchups-20261030 (lane GLASS): PER MATERIAL — a moving mesh takes the flags of the closed-part instance drawing
+    // its own material. Copying the first slot's (the opaque door frame's) flags onto every own mesh made the cooler's /
+    // extinguisher cabinet's transparent glass a spot-shadow caster whenever the player aimed at it (aiming takes the holder
+    // over): everything behind the closed glass fell into the torch's shadow while the pane itself stayed lit ("almost opaque"
+    // up close). render/volumetric.ts markShadows never marks a transparent material. Interior meshes (plate / tray / liner: no
+    // closed instance of their own) keep the first slot's flags, and a transparent / non-depth-writing material never casts.
     const ref = rt.slots[0]?.mesh;
-    if (ref) root.traverse(o => { const mm = o as THREE.Mesh; if (mm.isMesh) { mm.castShadow = ref.castShadow; mm.receiveShadow = ref.receiveShadow; } });
+    if (ref) {
+      const bySlot = new Map<THREE.Material, THREE.InstancedMesh>();
+      for (const s of rt.slots) if (!bySlot.has(s.mesh.material as THREE.Material)) bySlot.set(s.mesh.material as THREE.Material, s.mesh);
+      root.traverse(o => {
+        const mm = o as THREE.Mesh;
+        if (!mm.isMesh) return;
+        const mat = mm.material as THREE.Material, src = bySlot.get(mat) ?? ref;
+        mm.castShadow = src.castShadow && !mat.transparent && mat.depthWrite !== false;
+        mm.receiveShadow = src.receiveShadow;
+      });
+    }
     this.group.add(root);
     rt.root = root;
     for (const s of rt.slots) { s.mesh.setMatrixAt(s.index, ZERO); s.mesh.instanceMatrix.needsUpdate = true; }

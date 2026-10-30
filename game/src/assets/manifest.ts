@@ -79,8 +79,8 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   shopBackbar: {url: 'assets/models/shop-backbar-t25.glb', bytes: 500_000},
   // Iteration 05 (Lane A; derivatives/props-iteration05.json): open-front hybrids — no stock picture / opaque pane; transparent glass node
   // 'glass', authored interior + real wire shelves/trays (same bbox). shop-cooler.glb / shop-display.glb stay unchanged on disk.
-  shopCooler: {url: 'assets/models/shop-cooler-open-t25.glb', bytes: 279_000},
-  shopDisplay: {url: 'assets/models/shop-display-open-t25.glb', bytes: 141_000},
+  shopCooler: {url: 'assets/models/shop-cooler-open-t25r1.glb', bytes: 279_000},
+  shopDisplay: {url: 'assets/models/shop-display-open-t25r1.glb', bytes: 141_000},
   // Iteration 05 purpose-specific props (Lane A; derivatives/props-iteration05.json; straight-on inputs). Front +Z, origin bottom-centre, metres.
   // (generated, not loaded in r5: authored loot-verified version used; see iteration05 REPORT) hotdogCart 1.72 x 1.19 x 0.80 (work top 0.93; steam-well lids to 1.19; wheel -X, handle +X).
   // hotdogCart: {url: 'assets/models/hotdog-cart.glb', bytes: 800_000},

@@ -37,12 +37,14 @@ const code = srcFiles(SRC).map(p => readFileSync(p, 'utf8').replace(/\/\*[\s\S]*
   + readFileSync(join(ROOT, 'game', 'index.html'), 'utf8');
 
 const provFiles = readdirSync(DER).filter(f => /^meshy-t25-.*-20261029\.json$/.test(f));
-const oldPaths = new Set<string>(), newPaths = new Set<string>();
+const oldPaths = new Set<string>(), newPaths = new Set<string>(), repairedFrom = new Set<string>();
 for (const f of provFiles) {
   walk(JSON.parse(readFileSync(join(DER, f), 'utf8')), (_k, v, _p, trail) => {
     if (typeof v !== 'string' || !/^(game\/public\/)?assets\/models\/[\w.-]+\.glb$/.test(v)) return;
+    // task model-touchups-20261030: a local repair's superseded -t25 output (record.localRepair.previousOutput)
+    if (/localRepair\.previousOutput/.test(trail)) repairedFrom.add(v);
     if (/old|restore|replaces|previous|superseded/i.test(trail)) oldPaths.add(v);
-    else if (/-t25\.glb$/.test(v)) newPaths.add(v);
+    else if (/-t25(r\d+)?\.glb$/.test(v)) newPaths.add(v); // -t25rN: a local repair's cache-busting file
   });
 }
 
@@ -56,7 +58,7 @@ describe('Meshy T2.5 migration guards', () => {
   it('every superseded runtime file is removed from the game and named by no live source string', () => {
     const still: string[] = [], named: string[] = [];
     for (const p of oldPaths) {
-      if (/-t25\.glb$/.test(p)) continue;
+      if (/-t25\.glb$/.test(p) && !repairedFrom.has(p)) continue;
       if (existsSync(abs(p))) still.push(p);
       const b = basename(p);
       if (new RegExp(`['"\`/]${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(code)) named.push(b);
