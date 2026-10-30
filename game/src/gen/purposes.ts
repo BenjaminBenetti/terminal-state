@@ -23,6 +23,11 @@ import {isP7Kind} from './props07';
 import type {StockTheme} from './purposeShapes';
 import type {Wing} from './stationKit';
 import type {AreaKind, RoomType, ShopUse} from './stationTypes';
+// Task loot-tables-20261030 (lane LOOT): the shared (named) loot tables live in items/lootTables.ts — the SAME objects.
+import {
+  CACHE_CRATE, OFFICE_DESK, OFFICE_DRAWERS, STORE_DRINKS, STORE_SNACKS, TENANT_ARMS, TENANT_FRIDGE, TENANT_KITCHEN, TENANT_MEDS, TENANT_SNACKS,
+  TENANT_SUPPLY, TENANT_TABLE, storeKitchen, storeTill, type ItemRow, type LootSpec,
+} from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
 // deliberate sidearm stock, not a rifle / shotgun place.
@@ -31,15 +36,10 @@ import {genericAmmo} from '../items/calibers';
 // ---------------------------------------------------------------------------------------
 // Types
 
-/** [itemId, weight] — itemId must exist in items/items.ts (tests check). */
-export type LootRow = readonly [itemId: string, weight: number];
-export interface LootSpec {
-  items: readonly LootRow[];
-  /** Lot count range (default: per holder kind, items/loot.ts LOT_COUNT). */
-  lots?: readonly [number, number];
-  /** Chance the holder is empty (default: per holder kind). */
-  empty?: number;
-}
+/** [itemId, weight] — itemId must exist in items/items.ts (tests check). LootSpec: items + optional lots / empty (default: per holder
+ * kind, items/lootTables.ts HOLDER_LOTS / HOLDER_EMPTY). Task loot-tables-20261030 (lane LOOT): both types live in lootTables. */
+export type LootRow = ItemRow;
+export type {LootSpec};
 /** Loot per holder kind (`default` for any other holder kind in the room). */
 export type LootTable = Readonly<Partial<Record<PropKind | 'default', LootSpec>>>;
 export type LightOdds = readonly [lit: number, dim: number, dark: number];
@@ -155,12 +155,9 @@ export interface StorePurpose extends PurposeBase {
 export type Purpose = RoomPurpose | StorePurpose;
 
 // ---------------------------------------------------------------------------------------
-// Shared loot rows
-
-const DRINKS: LootSpec = {items: [['water', 3], ['cola', 3], ['juice', 2]], lots: [3, 7], empty: 0.12};
-const SNACKS: LootSpec = {items: [['chocolate', 3], ['chips', 3]], lots: [2, 4], empty: 0.15};
-const TILL = (items: readonly LootRow[], empty = 0.45): LootSpec => ({items, lots: [1, 2], empty});
-const KITCHEN = (items: readonly LootRow[]): LootSpec => ({items, lots: [1, 3], empty: 0.35});
+// Shared loot rows: items/lootTables.ts (STORE_DRINKS, STORE_SNACKS, storeTill, storeKitchen, CACHE_CRATE, OFFICE_DESK / _DRAWERS,
+// TENANT_*). Per-purpose stock below stays with its purpose (that is where "the room makes sense" lives).
+const DRINKS = STORE_DRINKS, SNACKS = STORE_SNACKS, TILL = storeTill, KITCHEN = storeKitchen;
 
 const menu = (name: string, tag: string, colors: [string, string, string, string], sections: MenuSpec['sections'], food: string[]): MenuSpec =>
   ({name, tag, bg: colors[0], fg: colors[1], accent: colors[2], band: colors[3], sections, food});
@@ -320,8 +317,6 @@ export const STORE_PURPOSES: Readonly<Record<ShopUse, StorePurpose>> = {
 
 // ---------------------------------------------------------------------------------------
 // Back-of-house rooms (and closets). `slots` = structural room types from the level generator.
-
-const CACHE_CRATE: LootSpec = {items: [...genericAmmo(3.4), ['beans', 1], ['water', 1], ['bandage', 0.8]], lots: [1, 3], empty: 0.12};
 
 export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   'staff-room': {
@@ -719,8 +714,7 @@ export function assignRoomPurposes(slots: readonly RoomSlot[], rnd: () => number
 function OFFICE_PURPOSES(): Record<string, RoomPurpose> {
   const OPEN: readonly RoomType[] = ['office-open'];
   const ROOM: readonly RoomType[] = ['office-room'];
-  const DESK: LootSpec = {items: [['chocolate', 1], ['water', 1], ['cola', 0.8], ['chips', 0.6], ['bandage', 0.4], ['juice', 0.3]], lots: [1, 1], empty: 0.62};
-  const DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['ammo_9mm', 0.25]], lots: [1, 2], empty: 0.35};
+  const DESK = OFFICE_DESK, DRAWERS = OFFICE_DRAWERS;
   return {
     'office-reception': {
       id: 'office-reception', category: 'back', theme: 'personal', label: 'Lobby', slots: ['office-lobby'], kinds: ['room'], weight: 1, max: 1,
@@ -897,14 +891,8 @@ function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], D
     id, category: 'back', theme, label, slots: o.open ? OPEN : ROOM, kinds: o.open ? ['concourse', 'room'] : ['room'], weight: 1, max: 99,
     light, ...(o.warm ? {warm: true} : {}), props, loot, floor,
   });
-  const SNACKS: LootSpec = {items: [['chocolate', 2], ['chips', 2], ['cola', 2], ['water', 1]], lots: [3, 6], empty: 0.15};
-  const FRIDGE: LootSpec = {items: [['juice', 2], ['water', 2], ['cola', 2], ['beans', 0.6]], lots: [2, 5], empty: 0.15};
-  const KITCHEN: LootSpec = {items: [['noodles', 2], ['chocolate', 1], ['beans', 1.4], ['chips', 0.6]], lots: [1, 3], empty: 0.25};
-  const TABLE: LootSpec = {items: [['cola', 1], ['chocolate', 1], ['water', 0.8], ['chips', 0.6]], lots: [1, 2], empty: 0.5};
-  const MEDS: LootSpec = {items: [['bandage', 2], ['medkit', 0.5], ['water', 0.6]], lots: [1, 3], empty: 0.2};
-  // lane AMMO (knife-melee-20261030): the armory's ammo weight (5.2) split ~1/3 each over 9mm / 5.56×45mm / 12-gauge
-  const ARMS: LootSpec = {items: [...genericAmmo(5.2), ['flare', 0.3], ['medkit', 0.2]], lots: [2, 4], empty: 0.1};
-  const SUPPLY: LootSpec = {items: [['water', 1.2], ['battery', 0.8], ['flare', 0.4], ['bandage', 0.6], ['beans', 0.6]], lots: [1, 3], empty: 0.25};
+  // Shared tenant tables (items/lootTables.ts TENANT_*; local short names shadow the store section's SNACKS / KITCHEN on purpose).
+  const SNACKS = TENANT_SNACKS, FRIDGE = TENANT_FRIDGE, KITCHEN = TENANT_KITCHEN, TABLE = TENANT_TABLE, MEDS = TENANT_MEDS, ARMS = TENANT_ARMS, SUPPLY = TENANT_SUPPLY;
   const DIM: LightOdds = [0.15, 0.45, 0.4], DIMMER: LightOdds = [0.08, 0.42, 0.5], LIT: LightOdds = [0.3, 0.45, 0.25];
   const credenza = (chance = 0.6): PropRule => ({kind: 'cabinetLow', at: 'wall', wall: 'side', n: [1, 1], chance, front: 0.7});
   return {

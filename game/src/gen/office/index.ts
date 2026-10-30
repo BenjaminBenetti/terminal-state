@@ -34,6 +34,7 @@ import {carveOfficeFloor, carveScissor, storeyLabel, type CarvedTower, type Scis
 import {carveStreet, type StreetCarve} from './street';
 import {landingStrip, postDress, preDress, type OfficeDress} from './dress';
 import {OFFICE_ENEMIES, officeWeaponPlan, placeOfficeEnemies, placeOfficeSupplies, placeOfficeWeapons, type SpawnField} from './spawns';
+import {lootProfile, type LootProfile} from '../../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {addDaylight, windowSpans, type StoreyWindow} from './windows';
 import {officeIssues} from './validate';
 import {officeTenants} from './tenants'; // Task office-overhaul-20261030 (lane TENANTS)
@@ -56,8 +57,11 @@ export const OFFICE_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0};
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
-/** The ONE continuous Office Space layout (station, lobby, office floors 2..8, the roof). */
-export function generateOfficeLevel(ctx: SectionGenContext): StationLayout {
+/**
+ * The ONE continuous Office Space layout (station, lobby, office floors 2..8, the roof). Task loot-tables-20261030 (lane LOOT):
+ * `loot` = the logical level's loot profile (default: the Office's) — one profile for every storey.
+ */
+export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = lootProfile('office')): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const f = towerFrame(ctx.levelSeed);
   const seed = officeSeed(ctx.levelSeed);
@@ -65,7 +69,7 @@ export function generateOfficeLevel(ctx: SectionGenContext): StationLayout {
   OFFICE_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot);
     OFFICE_GEN_STATS.attempts = attempt + 1;
     if (!layout) { OFFICE_GEN_STATS.carveFails++; continue; }
     const issues = officeIssues(layout, f);
@@ -79,9 +83,9 @@ export function generateOfficeLevel(ctx: SectionGenContext): StationLayout {
 }
 
 /** One generation attempt (QA / tests: what the retry loop sees); null when the station program does not fit. */
-export function officeAttempt(ctx: SectionGenContext, attempt: number): StationLayout | null {
+export function officeAttempt(ctx: SectionGenContext, attempt: number, loot: LootProfile = lootProfile('office')): StationLayout | null {
   const seed = officeSeed(ctx.levelSeed);
-  return tryLevel(towerFrame(ctx.levelSeed), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx);
+  return tryLevel(towerFrame(ctx.levelSeed), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, loot);
 }
 
 /** @deprecated The office is ONE section ('main'): use generateOfficeLevel. Kept while callers migrate. */
@@ -92,7 +96,7 @@ export function generateOfficeSection(_section: string, ctx: SectionGenContext):
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext): StationLayout | null {
+function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: OFFICE_CANVAS.levels, w: OFFICE_CANVAS.w, h: OFFICE_CANVAS.h});
   const s = carveStreet(k, rng, f);
@@ -183,7 +187,7 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
     placeOfficeEnemies(layout, rng.fork('office-enemies-roof'), field, [OFFICE_ROOF_LEVEL], [0, 2]);
     free();
   }
-  for (const t of towers) placeOfficeSupplies(layout, rng.fork(`office-supplies-${t.floor}`), field, storeyLevels(t.floor), t.floor === 1);
+  for (const t of towers) placeOfficeSupplies(layout, rng.fork(`office-supplies-${t.floor}`), field, storeyLevels(t.floor), t.floor === 1, loot);
   for (const t of towers) placeOfficeWeapons(layout, rng.fork(`office-weapons-${t.floor}`), plan[t.floor] ?? [], field, storeyLevels(t.floor), 30);
 
   // --- Lighting, traversal finishing, archetypes, windows + daylight, the tower record -------------------------------------

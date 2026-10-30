@@ -27,35 +27,23 @@
 // Weapon finds (gen/weaponFinds.ts) are untouched. Contents are rolled once and never rerolled or replenished.
 // The corpus numbers (baseline d632ce8 vs now) are in reference/tasks/atmosphere-light-survival-20261028/loot/economy.json.
 
+// Task loot-tables-20261030 (lane LOOT): the DATA (themes, pools, eligibility, limb shares, floor economy) moved to
+// items/lootTables.ts and is re-exported here as the SAME objects; this module keeps the logic. Every function takes the logical
+// level's loot profile (FindContext.profile; default: the level-agnostic baseline = today's tables, no overrides).
+
 import {purposeById, type LootTheme} from '../gen/purposes';
 import {ITEMS} from './items';
-import {genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030)
-import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical'; // Iteration 16 (lane INJURY)
+import {
+  BASELINE_PROFILE, BATTERY_ID, ECON_CATS, FLARE_ID, HOLDER_ALLOW, HP_MED, RANDOM_HOLDERS, THEME_OF_TYPE, catWeight, econCat, keepChance, resolveRows,
+  type EconCat, type ItemRows, type LootProfile,
+} from './lootTables';
 
 export type {LootTheme};
-
-/** Economy category of an item (null: weapons / anything that is not a consumable resource). */
-export type EconCat = 'food' | 'drink' | 'med' | 'ammo' | 'battery' | 'flare';
-export const ECON_CATS: readonly EconCat[] = ['food', 'drink', 'med', 'ammo', 'battery', 'flare'];
-/** The light lane's item ids (items/items.ts): a consumable torch battery and the throwable flare. */
-export const BATTERY_ID = 'battery';
-export const FLARE_ID = 'flare';
-
-const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles']);
-const DRINK = new Set(['water', 'cola', 'juice']);
-/** HP medicine (bandage / med kit). Iteration 16 (lane INJURY): the limb treatments (items/medical.ts) are 'med' too. */
-export const HP_MED: ReadonlySet<string> = new Set(['bandage', 'medkit']);
-const MED = new Set([...HP_MED, ...LIMB_TREATMENT_IDS]);
-
-export function econCat(itemId: string): EconCat | null {
-  if (itemId.startsWith('ammo_')) return 'ammo';
-  if (FOOD.has(itemId)) return 'food';
-  if (DRINK.has(itemId)) return 'drink';
-  if (MED.has(itemId)) return 'med';
-  if (itemId === BATTERY_ID) return 'battery';
-  if (itemId === FLARE_ID) return 'flare';
-  return null;
-}
+export type {EconCat, ThemeEconomy} from './lootTables';
+export {
+  BATTERY_ID, ECON_CATS, FLARE_ID, FLOOR_ECONOMY, GLOBAL_POOL, HANDFUL, HOLDER_ALLOW, HP_MED, LIMB_ECONOMY, OFF_THEME_WEIGHTS, RANDOM_HOLDERS,
+  THEME_ECONOMY, THEME_OF_TYPE, econCat,
+} from './lootTables';
 
 /** Category offered at all (battery / flare only once the light lane's items exist in items/items.ts). */
 export function catAvailable(c: EconCat): boolean {
@@ -65,83 +53,10 @@ export function catAvailable(c: EconCat): boolean {
 // ---------------------------------------------------------------------------------------
 // Themes
 
-/** Theme of room types that have no purpose (public halls, generic store units). */
-export const THEME_OF_TYPE: Readonly<Record<string, LootTheme>> = {
-  'food-court': 'food', 'eatery': 'food', 'shop': 'food', 'stock-room': 'food', 'crew-room': 'food',
-  'agent-office': 'security',
-  'storage': 'service', 'utility': 'service', 'service-corridor': 'service', 'janitor-closet': 'service',
-  'supply-closet': 'medical',
-  'platform': 'public', 'passage': 'public', 'concourse': 'public', 'fare-hall': 'public', 'retail-arcade': 'public',
-  'exit-stair': 'public', 'underpass': 'public', 'stair-core': 'public', 'washroom': 'public',
-};
-
 /** Loot theme of a holder's area key (purpose id when the area / prop has one, else its room type). */
 export function lootTheme(areaKey: string): LootTheme {
   return purposeById(areaKey)?.theme ?? THEME_OF_TYPE[areaKey] ?? 'public';
 }
-
-export interface ThemeEconomy {
-  /** Chance an original non-ammo entry survives as a find (the 80 % cut). */
-  keep: number;
-  /** Chance a find is on-theme (the rest are off-theme random finds). */
-  on: number;
-  /** Categories that fit the theme. */
-  cats: readonly EconCat[];
-  /** On-theme category weights when the rolled item does not already fit. */
-  weights: Readonly<Partial<Record<EconCat, number>>>;
-}
-
-/**
- * THE WEIGHTS TABLE (documented in economy.json and the lane report). keep: survival of an original non-ammo entry; on: share of
- * finds that are on-theme; cats: what fits the theme; weights: what an on-theme re-pick becomes. Service rooms thin harder (their
- * old water / beans rows become batteries and flares, and there are many of them: maintenance stores, caches, corridors).
- */
-export const THEME_ECONOMY: Readonly<Record<LootTheme, ThemeEconomy>> = {
-  security: {keep: 0.24, on: 0.75, cats: ['ammo', 'flare', 'battery'], weights: {ammo: 0.55, flare: 0.25, battery: 0.2}},
-  medical: {keep: 0.21, on: 0.8, cats: ['med'], weights: {med: 1}},
-  food: {keep: 0.27, on: 0.76, cats: ['food', 'drink'], weights: {food: 0.5, drink: 0.5}},
-  service: {keep: 0.06, on: 0.75, cats: ['battery', 'flare'], weights: {battery: 0.45, flare: 0.55}},
-  tech: {keep: 0.15, on: 0.8, cats: ['battery'], weights: {battery: 1}},
-  personal: {keep: 0.21, on: 0.75, cats: ['food', 'drink', 'med'], weights: {food: 0.35, drink: 0.4, med: 0.25}},
-  // Platforms / halls: no theme — every find is a sparse random one (OFF_THEME_WEIGHTS over every category).
-  public: {keep: 0.2, on: 0, cats: [], weights: {}},
-};
-
-/** Off-theme random finds (and every find in public halls): category weights; the theme's own categories are excluded. */
-export const OFF_THEME_WEIGHTS: Readonly<Record<EconCat, number>> = {food: 0.32, drink: 0.37, med: 0.09, ammo: 0.035, battery: 0.006, flare: 0.004};
-
-/**
- * Items of a category when the holder's own table has none. Lane AMMO (knife-melee-20261030): ammo is generic — ~1/3 each 9mm /
- * 5.56×45mm / 12-gauge (was 9 mm 1.3 : rifle 1 : shells 0.8).
- */
-export const GLOBAL_POOL: Readonly<Record<EconCat, readonly (readonly [string, number])[]>> = {
-  food: [['chocolate', 1.2], ['chips', 1.1], ['beans', 0.9], ['noodles', 1]],
-  drink: [['water', 1.3], ['cola', 1.2], ['juice', 0.9]],
-  med: [['bandage', 1], ['medkit', 0.35]],
-  ammo: genericAmmo(3.1),
-  battery: [[BATTERY_ID, 1]],
-  flare: [[FLARE_ID, 1]],
-};
-
-/** Off-theme ammo is a handful of loose rounds, not a full box (keeps total ammo where it was). */
-export const HANDFUL: Readonly<Record<string, readonly [number, number]>> = {ammo_9mm: [4, 7], ammo_556: [3, 5], ammo_12ga: [2, 3]};
-
-const FD: readonly EconCat[] = ['food', 'drink'];
-/** Fixtures that only take certain categories (everything else — cabinets, crates, shelves, desks, lockers, bins — takes any). */
-export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>> = {
-  shopCooler: ['drink'], fridge: FD, chestFreezer: FD,
-  vending: ['food', 'drink', 'battery'], snackRack: ['food', 'battery'], newspaperVendingBox: ['food', 'drink', 'battery'],
-  shopDisplay: ['food'], hotdogCart: FD, grillLine: FD, espressoBar: FD, wokLine: FD, deliLine: FD, blenderBar: FD, busCart: FD,
-  kitchenette: ['food', 'drink', 'med', 'battery'],
-  medCabinet: ['med'], firstAidWallKit: ['med'], crashCart: ['med', 'battery'], wheeledStretcher: ['med'],
-  gunLocker: ['ammo', 'med', 'flare', 'battery'],
-  // trash: discarded snacks, a dressing, a few rounds, a battery — never a flare
-  bin: ['food', 'drink', 'med', 'ammo', 'battery'], wheelieBin: ['food', 'drink', 'med', 'ammo', 'battery'],
-  // Task office-overhaul-20261030: something stashed in a toilet / on its tank lid — sealed water, a dressing, rounds, a battery, a flare; never snacks
-  toiletStall: ['drink', 'med', 'ammo', 'battery', 'flare'],
-};
-/** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
-export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
 /** Theme a holder's finds follow: its area's, except junk holders (random, like a public hall). */
 export function holderTheme(kind: string, areaKey: string): LootTheme {
@@ -172,17 +87,20 @@ export interface FindContext {
   kind: string;
   /** Purpose id / room type (the holder's loot key). */
   areaKey: string;
-  /** The holder's own weighted item rows (its table). */
+  /** The holder's own weighted item rows (its table, already resolved under the profile). */
   rows: readonly Row[];
-  /** Full-box count of an ammo item for this holder (items/loot.ts lotCount). */
+  /** Full-box count of an ammo item for this holder (items/loot.ts lotCount: lootTables BOX_COUNT). */
   boxCount: (itemId: string, r: Rnd) => number;
+  /** Task loot-tables-20261030 (lane LOOT): the logical level's loot profile (default: baseline). */
+  profile?: LootProfile;
 }
 
-/** Item of category `c`: from the holder's own rows of that category when it has any, else the global pool. */
-function itemOf(c: EconCat, ctx: FindContext, r: Rnd, security: boolean): string {
+/** Item of category `c`: from the holder's own rows of that category when it has any, else the global pool (null: none left). */
+function itemOf(c: EconCat, ctx: FindContext, r: Rnd, security: boolean, P: LootProfile): string | null {
   const own = ctx.rows.filter(([id, w]) => w > 0 && econCat(id) === c);
   // security / police re-themed ammo: always the generic pool (lane AMMO: ~1/3 each caliber; it used to let the 9 mm lead)
-  return pickRow(own.length && !(security && c === 'ammo') ? own : GLOBAL_POOL[c], r);
+  const rows: ItemRows = own.length && !(security && c === 'ammo') ? own : resolveRows(P, P.tables.globalPool[c]);
+  return rows.length ? pickRow(rows, r) : null;
 }
 
 /**
@@ -190,34 +108,36 @@ function itemOf(c: EconCat, ctx: FindContext, r: Rnd, security: boolean): string
  * Returns the entries in roll order (ammo exactly as rolled; surviving / re-themed finds in place of their original entry).
  */
 export function scarceFinds(raw: readonly Entry[], ctx: FindContext, s: Rnd): Find[] {
+  const P = ctx.profile ?? BASELINE_PROFILE, X = P.tables;
   const theme = holderTheme(ctx.kind, ctx.areaKey);
-  const T = THEME_ECONOMY[theme];
+  const T = X.themes[theme];
   const allow = allowedCats(ctx.kind);
   const out: Find[] = [];
   for (const e of raw) {
     const c = econCat(e.itemId);
     if (c === 'ammo' || c === null) { out.push({itemId: e.itemId, count: e.count, source: 'roll'}); continue; }
-    if (s() >= T.keep) continue;
+    if (s() >= keepChance(P, T.keep, c)) continue;
     const keep: Find = {itemId: e.itemId, count: e.count, source: 'find'};
     const on = s() < T.on;
     let cat: EconCat | null = null;
     if (on) {
       if (T.cats.includes(c)) { out.push(keep); continue; }
-      const opts = T.cats.filter(k => allow.includes(k)).map(k => [k, T.weights[k] ?? 0] as const).filter(o => o[1] > 0);
+      const opts = T.cats.filter(k => allow.includes(k)).map(k => [k, catWeight(P, k, T.weights[k] ?? 0)] as const).filter(o => o[1] > 0);
       if (opts.length) cat = pickRow(opts, s);
     } else {
       // Drawn over EVERY off-theme category, then dropped back to the rolled item when the fixture cannot hold it: a café vending
       // machine's rare off-theme find is not always a battery just because that is all a vending machine may take besides snacks.
-      const opts = ECON_CATS.filter(k => !T.cats.includes(k) && catAvailable(k)).map(k => [k, OFF_THEME_WEIGHTS[k]] as const);
+      const opts = ECON_CATS.filter(k => !T.cats.includes(k) && catAvailable(k)).map(k => [k, catWeight(P, k, X.offTheme[k])] as const).filter(o => o[1] > 0);
       if (opts.length) cat = pickRow(opts, s);
       if (cat && !allow.includes(cat)) cat = null;
     }
     if (!cat || cat === c) { out.push(keep); continue; }
-    const itemId = itemOf(cat, ctx, s, theme === 'security');
-    const count = cat !== 'ammo' ? 1 : on ? ctx.boxCount(itemId, s) : range(s, HANDFUL[itemId] ?? [3, 6]);
+    const itemId = itemOf(cat, ctx, s, theme === 'security', P);
+    if (itemId === null) { out.push(keep); continue; }
+    const count = cat !== 'ammo' ? 1 : on ? ctx.boxCount(itemId, s) : range(s, X.handful[itemId] ?? X.handfulFallback);
     out.push({itemId, count, source: 'find'});
   }
-  limbTreatments(out, theme, ctx.kind, s); // Iteration 16 (lane INJURY)
+  limbTreatments(out, theme, ctx.kind, s, P); // Iteration 16 (lane INJURY)
   return out;
 }
 
@@ -227,33 +147,18 @@ export function scarceFinds(raw: readonly Entry[], ctx: FindContext, s: Rnd): Fi
  * are APPENDED to the holder's scarcity stream (after the loop), so every other find of every holder is exactly as before; the
  * med total is unchanged (some dressings become treatments). Medical rooms (first-aid rooms, pharmacies, supply closets, wall
  * first-aid kits there) lead. Tuned so treatments are about as common as med kits and rarer than bandages (lanes/injury.done:
- * measured per Subway station and per Office level).
+ * measured per Subway station and per Office level). The shares live in lootTables LIMB_ECONOMY (read live: tests zero it).
  */
-export const LIMB_ECONOMY = {
-  share: {medical: 0.27, personal: 0.2, security: 0.2, service: 0.2, tech: 0.2, public: 0.19, food: 0.14} as Readonly<Record<LootTheme, number>>,
-  /** First-aid fixtures hold treatments whatever room they hang in (a wall first-aid kit in an office break room / corridor). */
-  holder: {firstAidWallKit: 0.36, medCabinet: 0.3, crashCart: 0.36, wheeledStretcher: 0.36} as Readonly<Partial<Record<string, number>>>,
-  /** Splints a little ahead of slings: legs are hurt more often (hard landings, rat / dog bites go low). */
-  pool: [[LEG_SPLINT, 1.1], [ARM_SLING, 0.9], [TRAUMA_KIT, 0.3]] as readonly (readonly [string, number])[],
-};
-
-function limbTreatments(out: Find[], theme: LootTheme, kind: string, s: Rnd): void {
-  const share = Math.max(LIMB_ECONOMY.share[theme] ?? 0, LIMB_ECONOMY.holder[kind] ?? 0);
+function limbTreatments(out: Find[], theme: LootTheme, kind: string, s: Rnd, P: LootProfile): void {
+  const L = P.tables.limb;
+  const share = Math.max(L.share[theme] ?? 0, L.holder[kind] ?? 0);
   for (const f of out) {
     if (f.source !== 'find' || !HP_MED.has(f.itemId)) continue;
-    if (s() < share) { f.itemId = pickRow(LIMB_ECONOMY.pool, s); f.count = 1; }
+    if (s() < share) {
+      const pool = resolveRows(P, L.pool);
+      if (pool.length) { f.itemId = pickRow(pool, s); f.count = 1; }
+    }
   }
 }
 
-// ---------------------------------------------------------------------------------------
-// Loose floor supplies (gen/stationDress.ts placeSpawns)
-
-export const FLOOR_ECONOMY = {
-  /** Survival of each old loose dressing / first-aid kit (ammo boxes on the floor are unchanged). */
-  medKeep: 0.2,
-  /** Chance of one loose torch battery (always: every station has at least one) and of one loose flare per station. */
-  batteryChance: 1,
-  flareChance: 0.35,
-  /** Area weight per theme for the loose battery / flare (service and security rooms first; never a food counter). */
-  themeWeight: {service: 3, security: 2.2, tech: 1, personal: 1, medical: 0.4, food: 0, public: 0.35} as Readonly<Record<LootTheme, number>>,
-};
+// Loose floor supplies: lootTables FLOOR_ECONOMY / SUBWAY_FLOOR / OFFICE_FLOOR (gen/stationDress.ts, gen/office/spawns.ts interpret them).
