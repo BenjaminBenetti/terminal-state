@@ -21,7 +21,11 @@
     "test": "npm run game:test",
     "ci:package": "node tools/release/package-ci.mjs",
     "ci:check": "node tools/release/check-workflow.mjs",
-    "ci:test": "node --test tools/release/package-ci.test.mjs"
+    "ci:test": "node --test tools/release/package-ci.test.mjs",
+    "pages:build": "node tools/pages/run.mjs build",
+    "pages:check": "node tools/pages/run.mjs check",
+    "pages:preview": "vite preview --outDir dist/pages --base /terminal-state/ --host 127.0.0.1 --port 4190 --strictPort",
+    "pages:test": "vitest run --config game/vitest.config.ts --maxWorkers=1 --no-file-parallelism tests/pages-output.test.ts tests/loot-reference.test.ts"
   },
   "engines": {
     "node": ">=22"

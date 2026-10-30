@@ -36,6 +36,48 @@
         "using: 'node24'"
       ],
       "gitLsRemote": "cf430e030ddbb5b0abf93d22962f4752f3646cd9\trefs/tags/v7.0.2\n"
+    },
+    {
+      "action": "actions/configure-pages",
+      "tag": "v6.0.0",
+      "commit": "45bfe0192ca1faeb007ade9deae92b16b8254a0d",
+      "metadataUrl": "https://raw.githubusercontent.com/actions/configure-pages/45bfe0192ca1faeb007ade9deae92b16b8254a0d/action.yml",
+      "metadataSHA256": "55f1486ae3901c69be182cea1c1e3313954c78be626751a85b19ddaf14ae8da6",
+      "runtimeLines": [
+        "using: 'node24'"
+      ],
+      "gitLsRemote": "45bfe0192ca1faeb007ade9deae92b16b8254a0d\trefs/tags/v6.0.0\n",
+      "verifiedUtc": "2026-10-30T18:12:29Z",
+      "workflow": ".github/workflows/pages.yml (job pages-deploy)"
+    },
+    {
+      "action": "actions/upload-pages-artifact",
+      "tag": "v5.0.0",
+      "commit": "fc324d3547104276b827a68afc52ff2a11cc49c9",
+      "metadataUrl": "https://raw.githubusercontent.com/actions/upload-pages-artifact/fc324d3547104276b827a68afc52ff2a11cc49c9/action.yml",
+      "metadataSHA256": "f84e759011e0c497e696f5bce4ebb5fbe9bbdc5aea309b73795283fa139c1558",
+      "runtimeLines": [
+        "using: composite"
+      ],
+      "nestedActions": [
+        "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0 (pinned by the composite action itself)"
+      ],
+      "gitLsRemote": "fc324d3547104276b827a68afc52ff2a11cc49c9\trefs/tags/v5.0.0\n",
+      "verifiedUtc": "2026-10-30T18:12:29Z",
+      "workflow": ".github/workflows/pages.yml (job pages-build, main only)"
+    },
+    {
+      "action": "actions/deploy-pages",
+      "tag": "v5.0.1",
+      "commit": "368f82528645a54fb793d4d04e342629a3f51346",
+      "metadataUrl": "https://raw.githubusercontent.com/actions/deploy-pages/368f82528645a54fb793d4d04e342629a3f51346/action.yml",
+      "metadataSHA256": "64c44539fba53559a157b5de16c01d3ab91dbc999c1b98b5c0b2fc3528d5d059",
+      "runtimeLines": [
+        "using: 'node24'"
+      ],
+      "gitLsRemote": "368f82528645a54fb793d4d04e342629a3f51346\trefs/tags/v5.0.1\n",
+      "verifiedUtc": "2026-10-30T18:12:29Z",
+      "workflow": ".github/workflows/pages.yml (job pages-deploy)"
     }
   ]
 }
