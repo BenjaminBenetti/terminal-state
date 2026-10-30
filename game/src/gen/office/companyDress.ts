@@ -67,25 +67,32 @@ export function freeRows(ctx: PlaceCtx, a: Area, kind: PropKind, n: number, pair
   const M = 0.9;
   const u0 = (alongX ? ax0 : az0) + M, u1 = (alongX ? ax1 : az1) - M;
   const v0 = (alongX ? az0 : ax0) + M, v1 = (alongX ? az1 : ax1) - M;
-  const gap = def.w >= 1.0 ? 0.04 : 0.35, cross = 1.2;
-  const block = pair ? 2 * def.d + 0.02 : def.d;
-  const pitch = block + aisle;
-  const rows = Math.max(1, Math.floor((v1 - v0 + aisle) / pitch));
+  // Task office-interactions-layout-20261030 (lane LAYOUT): CELL-ALIGNED pitches. Units used to stand 0.04 m apart side by side and
+  // 0.02 m back to back, so two neighbours shared a grid cell and every other placement silently failed (rows of racks / desks /
+  // benches came out half empty, depending on the room's alignment) — now neighbours never share a cell.
+  const snap = (q: number) => Math.ceil(q / CELL - 1e-6) * CELL;
+  const gap = def.w >= 1.0 ? 0.04 : 0.35;
+  const pu = snap(def.w + gap), cx = snap(Math.max(0, 1.2 - (pu - def.w)));
+  const half = def.d / 2 + 0.01;
+  const block = pair ? 2 * half : def.d;
+  const pitch = snap(block + aisle);
   if (v1 - v0 < block) return [];
-  const vs = v0 + (v1 - v0 - (rows * pitch - aisle)) / 2;
-  const len = (k: number) => k * def.w + (k - 1) * gap + Math.floor((k - 1) / 4) * (cross - gap);
+  const rows = Math.max(1, Math.floor((v1 - v0 - block) / pitch) + 1);
+  const vs = v0 + (v1 - v0 - ((rows - 1) * pitch + block)) / 2;
+  const len = (k: number) => (k - 1) * pu + def.w + Math.floor((k - 1) / 4) * cx;
   let per = 0;
   while (len(per + 1) <= u1 - u0) per++;
   if (!per) return [];
-  const us = u0 + (u1 - u0 - len(per)) / 2;
+  const us = Math.round((u0 + (u1 - u0 - len(per)) / 2) / CELL) * CELL;
   const out: PropPlacement[] = [];
   const flip = ctx.rng.chance(0.5);
   for (let r = 0; r < rows && out.length < n; r++) {
-    const vb = vs + r * pitch;
-    const lines = pair ? [{v: vb + def.d / 2, f: -1}, {v: vb + def.d + 0.02 + def.d / 2, f: 1}] : [{v: vb + def.d / 2, f: flip ? -1 : 1}];
+    // (a pair's backs meet on a cell line: each line keeps its own cells)
+    const vb = pair ? Math.round((vs + half) / CELL) * CELL + r * pitch : vs + r * pitch;
+    const lines = pair ? [{v: vb - half, f: -1}, {v: vb + half, f: 1}] : [{v: vb + def.d / 2, f: flip ? -1 : 1}];
     for (const ln of lines) {
       for (let i = 0; i < per && out.length < n; i++) {
-        const u = us + i * (def.w + gap) + Math.floor(i / 4) * (cross - gap) + def.w / 2;
+        const u = us + i * pu + Math.floor(i / 4) * cx + def.w / 2;
         const x = alongX ? u : ln.v, z = alongX ? ln.v : u;
         const rot = alongX ? (ln.f > 0 ? 0 : Math.PI) : (ln.f > 0 ? Math.PI / 2 : -Math.PI / 2);
         const p = tryPlaceProp(ctx, a, kind, r3(x), r3(z), rot);
@@ -94,6 +101,32 @@ export function freeRows(ctx: PlaceCtx, a: Area, kind: PropKind, n: number, pair
     }
   }
   return out;
+}
+
+/**
+ * Task office-interactions-layout-20261030 (lane LAYOUT): bench-desk clusters down the middle of a long, shallow open area (the work
+ * commons): each cluster two desks wide and two deep (back to back, 3 m x 1.5 m), 1.6 m cross aisles between clusters, walkways
+ * along both long walls (door zones / openings stay clear: the placement primitive skips them). Returns the desks placed.
+ */
+export function benchRows(ctx: PlaceCtx, a: Area): number {
+  const def = PROP_DEFS.desk;
+  const alongX = a.w >= a.h;
+  const u0 = (alongX ? a.x : a.y) * CELL + 1.2, u1 = (alongX ? a.x + a.w : a.y + a.h) * CELL - 1.2;
+  // (cell-aligned: back-to-back desks one cell either side of a cell line, 0.25 m apart, never sharing a grid cell)
+  const vc = Math.round((alongX ? a.y + a.h / 2 : a.x + a.w / 2)) * CELL;
+  const block = 2 * def.w + 0.02, pitch = block + 1.6;
+  const n = Math.floor((u1 - u0 + 1.6) / pitch);
+  const us = u0 + (u1 - u0 - (n * pitch - 1.6)) / 2;
+  let placed = 0;
+  for (let i = 0; i < n; i++) {
+    const ub = Math.round((us + i * pitch) / CELL) * CELL;
+    for (const du of [def.w / 2, def.w * 1.5 + 0.02]) for (const sv of [-1, 1]) {
+      const u = r3(ub + du), v = r3(vc + sv * CELL);
+      const rot = alongX ? (sv < 0 ? Math.PI : 0) : (sv < 0 ? -Math.PI / 2 : Math.PI / 2);
+      if (tryPlaceProp(ctx, a, 'desk', alongX ? u : v, alongX ? v : u, rot, {variant: ctx.rng.int(0, 2)})) placed++;
+    }
+  }
+  return placed;
 }
 
 /** Island near the room centre (walkway ring), long side along the room's long axis. */
@@ -251,6 +284,25 @@ function runStep(d: OfficeDress, ctx: PlaceCtx, a: Area, s: Step, ds: Side): voi
 }
 const runSteps = (d: OfficeDress, ctx: PlaceCtx, a: Area, steps: readonly Step[]) => { const ds = doorSideOf(ctx, a); for (const s of steps) runStep(d, ctx, a, s, ds); };
 
+/** Work surfaces / tables a refurnish pass may repeat as islands. */
+const REPEAT_ISLANDS: ReadonlySet<PropKind> = new Set(['table', 'conferenceTable', 'labBench', 'coffeeRoaster', 'mixingConsole', 'foosballTable', 'pingPongTable']);
+/**
+ * Task office-interactions-layout-20261030 (lane LAYOUT, item 5): a SECOND pass of a company room's own recipe to furnish a large room
+ * the first pass left nearly empty — only its multi-unit furniture (rows of desks / benches / racks / shelving / machines, its table
+ * islands, wall pieces it places several of), never another statue / hero or sideboard piece. Pre-dress frame (local y); the caller
+ * lifts. Returns the number of props placed.
+ */
+export function refurnish(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeAreaMeta): number {
+  const c = companyOf(d);
+  if (!c || !m.program) return 0;
+  const n0 = ctx.layout.props.length;
+  const steps = roomSteps(c, m.program).filter(s => s.at !== 'window' && s.at !== 'facing' && s.at !== 'seating' && s.at !== 'corners' && s.at !== 'scatter'
+    && !ON_SIDEBOARD.has(s.kind) && !SIDE_TO_WALL.has(s.kind)
+    && (s.at === 'rows' || s.at === 'row' || (s.at === 'island' && REPEAT_ISLANDS.has(s.kind)) || (s.at === 'wall' && s.n[1] >= 2)));
+  runSteps(d, ctx, a, steps.map(s => ({...s, chance: undefined})));
+  return ctx.layout.props.length - n0;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Pre-dress
 
@@ -267,6 +319,8 @@ export function companyPre(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeArea
   const key = m.program;
   if (key === 'reception') { reception(d, ctx, a, c); return true; }
   if (m.role === 'open') {
+    // Lane LAYOUT: the work commons (too shallow for cubicle pods) gets bench-desk clusters down its middle, then its own pieces.
+    if (m.commons && (key === 'cubicles' || key === 'pods' || key === 'newsroom')) { benchRows(ctx, a); runSteps(d, ctx, a, roomSteps(c, key)); return true; }
     if (key === 'cubicles') return false;
     if (key === 'pods' || key === 'newsroom') cubicleFarm(d, ctx, a, 'open', true);
     runSteps(d, ctx, a, roomSteps(c, key));

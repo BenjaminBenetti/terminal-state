@@ -58,6 +58,12 @@ export interface RoofInfo {
   };
   /** Rooftop structures the render dresses (HVAC, water tower, dish, stair/hatch housing): world footprint + yaw. */
   structures: {kind: string; x: number; z: number; yaw: number}[];
+  /**
+   * Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache (gen/office/roof.ts placeRoofReward) — the holder's
+   * kind, loot key, pose and the anchor it is tucked against. Absent: the level's loot profile has no roof reward; null: no spot
+   * was found (roofIssues rejects the attempt).
+   */
+  reward?: {kind: string; key: string; x: number; y: number; z: number; rot: number; anchor: string} | null;
 }
 
 /** One escalator of the station <-> lobby transit hall (lane STRUCT carves it as a stair run; the render adds the escalator). */

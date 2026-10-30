@@ -46,6 +46,8 @@ export interface BodyHost {
   /** A prop's box changed (a light prop went loose): rebuild the static chunk there. */
   propsChanged?(x: number, z: number): void;
   readonly audio: PhysAudio | null;
+  /** Task office-interactions-layout-20261030 (lane PHYS): the station statics' contact material (extra static bodies). */
+  readonly staticMaterial?: CANNON.Material;
 }
 
 export const CHUNK_MASK = GROUP_STATIC | GROUP_ITEM | GROUP_CHUNK;

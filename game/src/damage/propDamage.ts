@@ -628,6 +628,14 @@ export class PropDamage {
     return s.parts.filter(q => q.created).map(q => q.mesh);
   }
 
+  /**
+   * Task office-interactions-layout-20261030 (lane PHYS): soft-cap detach slots left. Office furniture woken by walking into it
+   * (physics/dynamicItems.ts contact wake) stops while fewer than CONTACT_RESERVE remain, so bullet marks keep their headroom.
+   */
+  detachRoom(): number {
+    return MAX_DETACHED - this.detachedCount;
+  }
+
   /** Whether another prop rests on top of this one (it then never fully breaks: no floating stacks). */
   private supports(p: PropPlacement): boolean {
     const top = p.y + p.h;

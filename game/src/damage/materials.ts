@@ -11,6 +11,7 @@
 import {PROP_DEFS, type PropKind} from '../gen/props';
 import {P7_MODEL_CLASS, P7_PROP_DAMAGE} from '../gen/props07';
 import {OFFICE_PROP_DAMAGE} from '../gen/office/kinds'; // Iteration 16 (WORLD-GEN)
+import {officePropPhysics} from '../gen/office/physics'; // Task office-interactions-layout-20261030 (lane PHYS)
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -251,14 +252,34 @@ export function itemClass(itemId: string): DamageClass {
 // Iteration 07 (Lane K): rigid-body physics of loose items, light props and chunks
 // (physics/dynamicItems.ts, physics/chunks.ts). Pure data.
 
-/** Contact / sound family of a rigid body (cannon contact material vs the static station). */
-export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' | 'glass' | 'flesh' | 'cloth';
-/** Friction / restitution against the station (floors, walls, prop boxes, holder shelves). */
+/**
+ * Contact / sound family of a rigid body (cannon contact material vs the static station). Task office-interactions-layout-20261030
+ * (lane PHYS): + `castor` (wheeled furniture: office / executive chairs, mobile whiteboard, clothing rail, camera pedestal, vitals
+ * stand) and `pad` (other loose office furniture: feet / fabric / pot bases on carpet). No Subway kind uses them.
+ */
+export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' | 'glass' | 'flesh' | 'cloth' | 'castor' | 'pad';
+/**
+ * Friction / restitution against the station (floors, walls, prop boxes, holder shelves).
+ * Lane PHYS — CALIBRATED office materials: cannon-es (GSSolver) clamps each friction equation's IMPULSE by μ·m·g (a force), so per
+ * 1/60 s step a contact resists ~60x the Coulomb impulse (x ~4 corner contacts of a box on the floor): with the iteration-07 values
+ * a shot or shoved box never slides, it only rocks / tips (fine for cans and bins, wrong for a castor chair). `castor` / `pad` are
+ * Coulomb μ / ~240 so a body decelerates at ~μ·g: castors ≈ μ 0.15 (a chair coasts ~15 cm under buckshot and rolls ahead of the
+ * walker), pads ≈ μ 0.3. The iteration-07 values stay as they are (Subway behaviour unchanged).
+ */
 export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution: number}>> = {
   metal: {friction: 0.32, restitution: 0.34}, plastic: {friction: 0.42, restitution: 0.3}, soft: {friction: 0.7, restitution: 0.08},
   heavy: {friction: 0.55, restitution: 0.1}, stone: {friction: 0.7, restitution: 0.2}, wood: {friction: 0.6, restitution: 0.24},
   glass: {friction: 0.45, restitution: 0.14}, flesh: {friction: 0.95, restitution: 0.02}, cloth: {friction: 0.98, restitution: 0},
+  castor: {friction: 0.0005, restitution: 0.1}, pad: {friction: 0.0012, restitution: 0.1}, // lane PHYS (calibrated, see above)
 };
+/**
+ * Task office-interactions-layout-20261030 (lane PHYS): why a prop kind stays static (damage/physicsAudit.ts PROP_PHYSICS_AUDIT;
+ * docs/prop-affordances.md): a loot holder that does not spill, bolted / anchored, built into the fit-out, too heavy to shove
+ * with a body bump, a wall / ceiling fixture, a partition system, mounted, standing on a host, building structure, machinery —
+ * or `kept`: a Subway kind whose iteration-07 class this pass deliberately leaves unchanged (Subway behaviour / goldens frozen)
+ * although it could move; listed so a later Subway pass sees it.
+ */
+export type StaticWhy = 'holder' | 'anchored' | 'built-in' | 'too heavy' | 'fixture' | 'partition' | 'mounted' | 'host decor' | 'structure' | 'machinery' | 'kept';
 
 export interface ItemPhysics {
   /** Mass (kg) of one loose item (a full can, a box of rounds). */
@@ -295,8 +316,25 @@ export function itemPhysics(itemId: string): ItemPhysics {
  * kinds (iteration 07 Lane P2) either add a line here or give their PROP_DEFS entry an optional
  * `physics: {mass, dynamic, shape?}` field (read first).
  */
-export interface PropPhysics { mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: PhysMat }
+export interface PropPhysics {
+  mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: PhysMat;
+  /** Lane PHYS: may also go loose while resting on its (static) host's top face (an office monitor on a desk). */
+  onHost?: boolean;
+  /**
+   * Lane PHYS: collider footprint scale (w / d) vs the prop box — chairs: the box includes the armrests / star base and the
+   * dressing tucks the seat under its desk, so the full box would start inside the desk (absent = 1).
+   */
+  fit?: number;
+  /**
+   * Lane PHYS: in office worlds walking into it wakes it (physics/dynamicItems.ts contact wake). Only kinds with calibrated contact
+   * materials (castor / pad) set it: the iteration-07 kinds' sticky contacts make a shoved body tip and the walker pass into it.
+   */
+  contact?: boolean;
+}
 export const PROP_PHYSICS: Record<string, PropPhysics> = {
+  // Task office-interactions-layout-20261030 (lane PHYS): the dynamic office / company kinds (gen/office/physics.ts OFFICE_PHYS:
+  // mass, castor / soft / … contact, collider; the static ones carry their reason there). Office-only ids: no Subway row changes.
+  ...officePropPhysics(),
   // Lane A trash can: 0.55 x 0.95 m sheet-steel can with a liner (~7 kg): a rifle round rocks it, buckshot tips it.
   bin: {mass: 7, dynamic: true, shape: 'cylinder', mat: 'metal'},
   // Light, floor-standing iteration-07 generated types (ids of the Lane P1 manifest; used only if Lane P2 integrates a kind

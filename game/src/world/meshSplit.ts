@@ -113,14 +113,20 @@ export function soupGeometry(s: Soup, data: number[], origin?: THREE.Vector3): T
   return g;
 }
 
-/** Fitted meshes of a GLB: same fit as builder.addInstancedModel (footprint w/h/d, base at y=0). */
-export function fittedMeshes(gltf: GLTF, w: number, h: number, d: number): {soup: Soup; mat: THREE.Material; name: string}[] {
+/**
+ * Fitted meshes of a GLB: same fit as builder.addInstancedModel (footprint w/h/d, base at y=0). Task office-interactions-layout-20261030
+ * (lane OPEN): `turn` half-turns the centred file about +Y first (the office / company files face -Z; world/officeProps.ts FLIP turns
+ * them to the prop frame's +Z the same way), so a split office model lines up with the instanced one.
+ */
+export function fittedMeshes(gltf: GLTF, w: number, h: number, d: number, turn = false): {soup: Soup; mat: THREE.Material; name: string}[] {
   const root = gltf.scene;
   root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(root);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const fitM = new THREE.Matrix4().makeScale(w / size.x, h / size.y, d / size.z).multiply(new THREE.Matrix4().makeTranslation(-center.x, -box.min.y, -center.z));
+  const fitM = new THREE.Matrix4().makeScale(w / size.x, h / size.y, d / size.z);
+  if (turn) fitM.multiply(new THREE.Matrix4().makeRotationY(Math.PI)); // a half turn keeps the centred extents on their axes
+  fitM.multiply(new THREE.Matrix4().makeTranslation(-center.x, -box.min.y, -center.z));
   const out: {soup: Soup; mat: THREE.Material; name: string}[] = [];
   root.traverse(o => {
     const mesh = o as THREE.Mesh;

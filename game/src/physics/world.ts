@@ -255,6 +255,11 @@ export class PhysicsSystem implements BodyHost {
     return this.query;
   }
 
+  /** BodyHost (task office-interactions-layout-20261030, lane PHYS): contact material of the station statics. */
+  get staticMaterial(): CANNON.Material {
+    return this.staticMat;
+  }
+
   /** BodyHost: cannon material of a rigid-body family (contacts vs the station defined in build()). */
   material(m: PhysMat): CANNON.Material {
     let mat = this.physMats.get(m);
@@ -510,6 +515,7 @@ export class PhysicsSystem implements BodyHost {
       p.x += dx; p.z += dz; b.previousPosition.x += dx; b.previousPosition.z += dz; b.interpolatedPosition.x += dx; b.interpolatedPosition.z += dz;
       b.aabbNeedsUpdate = true;
     }
+    this.dynamicItems.relocate(move); // task office-interactions-layout-20261030 (lane PHYS): resting loose props (static bodies)
     this.casings.relocate(move);
     this.chunks.relocate(move);
     for (const s of this.sources) s.relocate?.(move);
@@ -518,6 +524,9 @@ export class PhysicsSystem implements BodyHost {
   /** Everything resting / moving inside the cab rides its dy (the cab frame stays exact). */
   private carryRiders(v: DynamicVolume, floor: number, ceil: number, dy: number): void {
     const w = this.world!;
+    // task office-interactions-layout-20261030 (lane PHYS): resting loose props (static bodies) ride too — first, while the
+    // simulating bodies below are still at their pre-move positions (their placement height follows either way)
+    this.dynamicItems.carry((x, y, z) => inCab(v, floor, ceil, x, y, z), dy);
     const shift = (b: CANNON.Body) => {
       b.position.y += dy; b.previousPosition.y += dy; b.interpolatedPosition.y += dy;
       b.aabbNeedsUpdate = true;

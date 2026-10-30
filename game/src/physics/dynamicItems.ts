@@ -16,6 +16,22 @@
 // Budget: at most MAX_DYNAMIC_ITEMS item bodies and MAX_DYNAMIC_PROPS prop bodies simulate at once.
 // Over budget the oldest is retired if nearly at rest, otherwise FROZEN in place (never deleted —
 // gameplay loot) and re-activated with its saved velocity as soon as a slot frees.
+//
+// Task office-interactions-layout-20261030 (lane PHYS): the office's movable furniture (gen/office/physics.ts OFFICE_PHYS ->
+// PROP_PHYSICS; every kind classified in damage/physicsAudit.ts PROP_PHYSICS_AUDIT). In office (tower) worlds only
+// (`contactOn`: StaticQuery.capAbove, or the `contactWake` override) — the Subway keeps exactly its iteration-07 / 08 rules:
+//  - CONTACT WAKE: a walker moving into a light dynamic floor prop of a `contact` kind (the office kinds, calibrated castor / pad
+//    contacts) wakes it (not only a shot): within CONTACT_MARGIN of its box and heading for it, the prop goes loose (static body,
+//    no AABB) and the walker shove moves it from then on (iteration-07 kinds placed in the office keep the shot-first rule: their
+//    sticky Subway contacts make a shoved body tip and the walker pass into it). Wakers: walkers
+//    flagged `wake` (the player) and walkers within CONTACT_RANGE of one (zombies near the player) — never far-away AI, never a
+//    loot holder, and only while the damage system has CONTACT_RESERVE detach slots left (shot marks keep their headroom).
+//  - ON-HOST decor (`onHost`, the office monitor) goes loose on its static host's top: a host-top support slab is added for it
+//    (the desk's loot surface is split around the monitor, so its shelf boxes leave a gap exactly there).
+//  - a moving prop knocks resting lots / pickups it touches like a flying item does (lots lifted as the same pickups); walkers
+//    do not shove a raised prop (a monitor on a desk) with their legs; a prop something rests on never goes loose.
+//  - riders: resting (static-body) loose props inside the moving elevator cab ride its dy, and are swept out of a doorway the
+//    landing doors shut on (PhysicsSystem.carryRiders / clearDoorway call carry() / relocate()).
 
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
@@ -26,9 +42,32 @@ import {isLootHolderKind} from '../items/loot';
 import {isSpillHolderKind} from '../world/openablesSpec';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC} from './ragdoll';
 import {groundClamp, restTime, type BodyHost, type ImpactFamily} from './chunks';
+import type {StaticQuery} from './staticQuery';
 
 export const MAX_DYNAMIC_ITEMS = 16;
 export const MAX_DYNAMIC_PROPS = 4;
+/** Lane PHYS (office worlds): a walker this close to a prop box (beyond its radius, m) and heading for it wakes it. */
+export const CONTACT_MARGIN = 0.12;
+/** Lane PHYS: contact wakes stop while fewer soft detach slots than this remain (bullet damage marks keep their headroom). */
+export const CONTACT_RESERVE = 16;
+/** Lane PHYS: AI walkers wake props by contact only within this distance of a `wake` walker (the player), m. */
+export const CONTACT_RANGE = 10;
+/** Lane PHYS (office worlds): a loose prop whose bottom is this far above a walker's feet is out of reach of its legs (m). */
+const RAISED_SHOVE = 0.5;
+/** Lane PHYS (office worlds): a moving prop faster than this knocks resting lots / pickups it touches (m/s). */
+const PROP_KNOCK_SPEED = 0.5;
+/** Lane PHYS: contact-wake candidate buckets (m). */
+const CB = 1;
+
+/**
+ * Whether props of this kind can become rigid bodies at all: flagged dynamic (PROP_PHYSICS / PROP_DEFS.physics) with a finite
+ * mass, and not a loot holder (its lots would float) unless it is a spill holder (trash can / wheelie bin: goLoose spills them).
+ * Placement rules come on top (DynamicItems.isDynamicProp: on the floor, or on a static host for `onHost` kinds).
+ */
+export function dynamicKind(kind: string): boolean {
+  const ph = propPhysics(kind);
+  return ph.dynamic && Number.isFinite(ph.mass) && !(isLootHolderKind(kind) && !isSpillHolderKind(kind));
+}
 /** Largest velocity change one bullet gives a light item (m/s) and spin cap (rad/s). */
 export const MAX_SHOT_DV = 5.5;
 const MAX_SPIN = 40;
@@ -42,13 +81,18 @@ export interface PickupLike {
   obj: THREE.Object3D;
 }
 
-/** A walker that shoves loose props (player, zombies); id = any stable object. */
-export interface Walker { id: object; x: number; z: number; y: number; r: number }
+/**
+ * A walker that shoves loose props (player, zombies); id = any stable object. Lane PHYS: `wake` = it wakes light props by
+ * walking into them in office worlds (the player); other walkers do so only near a waking one.
+ */
+export interface Walker { id: object; x: number; z: number; y: number; r: number; wake?: boolean }
 
 /** What dynamic props need from the prop damage system (damage/propDamage.ts). */
 export interface PropDetacher {
   /** Detach the prop's render instances into its own meshes (marks them moving); null if impossible. */
   detachForPhysics(prop: PropPlacement, index: number): THREE.Mesh[] | null;
+  /** Lane PHYS: soft detach slots left (contact wakes keep CONTACT_RESERVE of them for bullet marks); absent = unlimited. */
+  detachRoom?(): number;
 }
 
 interface Ent {
@@ -108,7 +152,7 @@ function obbBox(m: THREE.Matrix4, c: THREE.Vector3, h: THREE.Vector3, out: THREE
   return out;
 }
 
-const FAM: Record<PhysMat, ImpactFamily> = {metal: 'can', plastic: 'light', soft: 'light', heavy: 'heavy', stone: 'stone', wood: 'wood', glass: 'glass', flesh: 'flesh', cloth: 'flesh'};
+const FAM: Record<PhysMat, ImpactFamily> = {metal: 'can', plastic: 'light', soft: 'light', heavy: 'heavy', stone: 'stone', wood: 'wood', glass: 'glass', flesh: 'flesh', cloth: 'flesh', castor: 'heavy', pad: 'light'};
 
 export class DynamicItems {
   private readonly ents = new Map<object, Ent>();
@@ -127,8 +171,26 @@ export class DynamicItems {
    */
   holderLoose: ((prop: PropPlacement) => THREE.Object3D[]) | null = null;
   private readonly lastPos = new WeakMap<object, {x: number; z: number}>();
-  /** Counters (QA/tests). */
-  readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0};
+  /**
+   * Lane PHYS: office-world interaction rules (contact wake, on-host decor, prop knock-on, no leg shove of raised props, no
+   * loose prop under another). null = automatic: on in tower worlds (StaticQuery.capAbove: a level with role 'office'), off in
+   * the Subway. Tests / QA may force it.
+   */
+  contactWake: boolean | null = null;
+  /** Lane PHYS: contact-wake candidates (prop indices per CB-metre bucket) of the current statics. */
+  private contactIndex: {statics: StaticQuery; cells: Map<number, number[]>} | null = null;
+  private readonly scanSeen = new Set<number>();
+  /** Lane PHYS: support slabs added under on-host props' hosts (host prop -> static body). */
+  private readonly hostSlabs = new Map<PropPlacement, CANNON.Body>();
+  /** Lane PHYS: props that something rests on (never go loose: no floating stacks). */
+  private readonly supportsMemo = new WeakMap<PropPlacement, boolean>();
+  /** Counters (QA/tests). Lane PHYS: + contacts (props woken by a walker), carried (cab riders), hostSlabs. */
+  readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0, contacts: 0, carried: 0, hostSlabs: 0};
+
+  /** Lane PHYS: whether the office-world interaction rules apply (see contactWake). */
+  get contactOn(): boolean {
+    return this.contactWake ?? !!this.host.statics?.capAbove;
+  }
 
   constructor(private readonly host: BodyHost) {}
 
@@ -295,12 +357,34 @@ export class DynamicItems {
    * not a loot holder (its lots would float) and it stands on the floor (not stacked / on a counter / wall-mounted).
    */
   isDynamicProp(prop: PropPlacement): boolean {
-    const ph = propPhysics(prop.kind);
     // iteration 08 (Lane I): openable trash cans / wheelie bins are loot holders that still go loose (they spill their lots)
-    if (!ph.dynamic || !Number.isFinite(ph.mass) || (isLootHolderKind(prop.kind) && !isSpillHolderKind(prop.kind))) return false;
+    if (!dynamicKind(prop.kind)) return false;
     if (this.ents.has(prop)) return true;
     const g = this.host.statics?.cellGround(prop.x, prop.z, prop.y + 0.05); // iteration 08: its own storey's floor
-    return g === undefined || (Number.isFinite(g) && Math.abs(prop.y - g) < 0.06);
+    const onFloor = g === undefined || (Number.isFinite(g) && Math.abs(prop.y - g) < 0.06);
+    if (!this.contactOn) return onFloor; // the Subway: exactly the iteration-07 / 08 rule
+    // Lane PHYS (office worlds): on-host decor may go loose on its static host's top; nothing that carries another prop does
+    if (!onFloor && !(propPhysics(prop.kind).onHost && this.restsOnStaticHost(prop))) return false;
+    return !this.supportsOther(prop);
+  }
+
+  /** Lane PHYS: the prop stands on its host's top face (prop.host), the host is a prop that never moves. */
+  private restsOnStaticHost(prop: PropPlacement): boolean {
+    const q = prop.host !== undefined ? this.host.statics?.props[prop.host] : undefined;
+    if (!q || q === prop || q.h <= 0.02 || dynamicKind(q.kind)) return false;
+    return Math.abs(prop.y - (q.y + q.h)) < 0.03 && Math.abs(prop.x - q.x) <= q.hx && Math.abs(prop.z - q.z) <= q.hz;
+  }
+
+  /** Lane PHYS: another prop rests on this one's top (it would float if this one moved). */
+  private supportsOther(p: PropPlacement): boolean {
+    let v = this.supportsMemo.get(p);
+    if (v === undefined) {
+      const top = p.y + p.h;
+      v = (this.host.statics?.props ?? []).some(q => q !== p && q.h > 0.02 && !q.mounted && Math.abs(q.y - top) < 0.06
+        && Math.abs(q.x - p.x) < q.hx + p.hx - 0.05 && Math.abs(q.z - p.z) < q.hz + p.hz - 0.05);
+      this.supportsMemo.set(p, v);
+    }
+    return v;
   }
 
   /** Loose (already physical) props, e.g. for QA. */
@@ -317,7 +401,8 @@ export class DynamicItems {
     if (!meshes || !meshes.length) return null;
     const def = (PROP_DEFS as unknown as Record<string, {w: number; d: number; h: number} | undefined>)[prop.kind];
     const quarter = Math.round(prop.rot / (Math.PI / 2)) & 1;
-    const w = def?.w ?? (quarter ? prop.hz * 2 : prop.hx * 2), d = def?.d ?? (quarter ? prop.hx * 2 : prop.hz * 2), h = prop.h;
+    const fit = ph.fit ?? 1; // lane PHYS: chairs' collider inside their box (absent: the box, as before)
+    const w = (def?.w ?? (quarter ? prop.hz * 2 : prop.hx * 2)) * fit, d = (def?.d ?? (quarter ? prop.hx * 2 : prop.hz * 2)) * fit, h = prop.h;
     const shape = ph.shape ?? 'box';
     const half = shape === 'cylinder' ? new THREE.Vector3(Math.min(w, d) / 2, h / 2, Math.min(w, d) / 2) : new THREE.Vector3(w / 2, h / 2, d / 2);
     e = {kind: 'prop', serial: 0, body: null, pending: null, center: new THREE.Vector3(0, h / 2, 0), half, shape, mass: ph.mass, mat: ph.mat ?? 'metal', fam: 'prop',
@@ -338,8 +423,29 @@ export class DynamicItems {
     e.body = body;
     this.ents.set(prop, e);
     this.counts.props++;
+    if (ph.onHost) this.hostSupport(prop); // lane PHYS: a monitor on a desk rests on the desk's top
     this.host.propsChanged?.(prop.x, prop.z);
     return e;
+  }
+
+  /**
+   * Lane PHYS: a static slab over the whole top face of an on-host prop's host (items / props / chunks collide with it). The
+   * host's holder boxes leave a gap exactly under on-top decor (its loot surface is split round the decor's `cut`), so without
+   * it a monitor going loose would drop into its desk. One per host, kept for the world's life (the host never moves).
+   */
+  private hostSupport(prop: PropPlacement): void {
+    const q = prop.host !== undefined ? this.host.statics?.props[prop.host] : undefined;
+    const w = this.host.world;
+    if (!q || !w || prop.y < q.y + q.h - 0.03 || this.hostSlabs.has(q)) return;
+    const T = 0.05;
+    const b = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, material: this.host.staticMaterial ?? this.host.material('heavy'),
+      collisionFilterGroup: GROUP_STATIC, collisionFilterMask: GROUP_ITEM | GROUP_CHUNK});
+    b.addShape(new CANNON.Box(new CANNON.Vec3(Math.max(0.02, q.hx - 0.01), T / 2, Math.max(0.02, q.hz - 0.01))));
+    b.position.set(q.x, q.y + q.h - T / 2, q.z);
+    b.aabbNeedsUpdate = true;
+    w.addBody(b);
+    this.hostSlabs.set(q, b);
+    this.counts.hostSlabs++;
   }
 
   private shove(e: Ent, point: THREE.Vector3, dir: THREE.Vector3, impulse: number, lift: number): boolean {
@@ -469,15 +575,21 @@ export class DynamicItems {
     this.shoveByWalkers(dt);
   }
 
-  /** Moving items set resting loot lots / pickups they touch moving too (bounded per frame). */
+  /**
+   * Moving items set resting loot lots / pickups they touch moving too (bounded per frame). Lane PHYS: in office worlds a moving
+   * loose prop (a shoved chair, a toppling monitor) does too, above PROP_KNOCK_SPEED.
+   */
   private wakeNeighbours(): void {
     if (!this.pickups && !this.liftLots) return;
     let budget = 4;
     const box = new THREE.Box3(), other = new THREE.Box3(), m = new THREE.Matrix4();
+    const props = this.contactOn;
     for (const e of [...this.ents.values()]) {
       const b = e.body;
       if (budget <= 0) break;
-      if (!b || b.type !== CANNON.Body.DYNAMIC || e.kind !== 'item' || b.velocity.length() < 0.25) continue;
+      if (!b || b.type !== CANNON.Body.DYNAMIC || b.velocity.length() < 0.25) continue;
+      if (e.kind !== 'item' && !(props && e.kind === 'prop' && b.velocity.length() >= PROP_KNOCK_SPEED)) continue;
+      const win = 0.6 + (e.kind === 'prop' ? Math.max(e.half.x, e.half.z) : 0);
       if (b.aabbNeedsUpdate) b.updateAABB();
       // predictive: the box swept ~2 fixed steps ahead, so a neighbour gets its body BEFORE the contact
       const vx = b.velocity.x * 0.034, vy = b.velocity.y * 0.034, vz = b.velocity.z * 0.034;
@@ -489,7 +601,7 @@ export class DynamicItems {
       }
       for (const pk of this.pickups?.() ?? []) {
         if (budget <= 0) break;
-        if (pk === e.pickup || Math.abs(pk.obj.position.x - b.position.x) > 0.6 || Math.abs(pk.obj.position.z - b.position.z) > 0.6) continue;
+        if (pk === e.pickup || Math.abs(pk.obj.position.x - b.position.x) > win || Math.abs(pk.obj.position.z - b.position.z) > win) continue;
         const n = this.entForPickup(pk);
         if (n.body && n.body.type === CANNON.Body.DYNAMIC) continue;
         obbBox(this.objMatrix(n, m), n.center, n.half, other);
@@ -499,17 +611,21 @@ export class DynamicItems {
     }
   }
 
-  /** Walkers push loose props (and sprinters kick loose items lying at their feet). */
+  /** Walkers push loose props (and sprinters kick loose items lying at their feet). Lane PHYS: office worlds also contact-wake. */
   private shoveByWalkers(dt: number): void {
-    if (!this.counts.props) return; // no loose prop yet (cheap idle path)
+    const contact = this.contactOn;
+    if (!this.counts.props && !contact) return; // no loose prop yet (cheap idle path; office worlds scan for contact wakes)
     const list = this.walkers?.();
     if (!list || !list.length || dt <= 0) return;
+    const wakers = contact ? list.filter(w => w.wake) : [];
     for (const a of list) {
       const last = this.lastPos.get(a.id);
       this.lastPos.set(a.id, {x: a.x, z: a.z});
       if (!last) continue;
       const vx = (a.x - last.x) / dt, vz = (a.z - last.z) / dt, sp = Math.hypot(vx, vz);
       if (sp < 0.3 || sp > 12) continue;
+      // lane PHYS: walking into a light prop wakes it (the player; AI only near the player)
+      if (contact && (a.wake || wakers.some(w => Math.abs(w.y - a.y) < 3 && Math.hypot(w.x - a.x, w.z - a.z) < CONTACT_RANGE))) this.contactScan(a, vx / sp, vz / sp);
       for (const e of this.ents.values()) {
         if (!e.prop || !e.body) continue;
         const b = e.body;
@@ -518,6 +634,7 @@ export class DynamicItems {
         if (b.aabbNeedsUpdate) b.updateAABB();
         const lb = b.aabb.lowerBound, ub = b.aabb.upperBound;
         if (lb.y > a.y + 1.6 || ub.y < a.y + 0.05) continue;
+        if (contact && lb.y > a.y + RAISED_SHOVE) continue; // lane PHYS: a monitor on a desk is out of reach of the legs
         const nx = Math.max(lb.x, Math.min(a.x, ub.x)), nz = Math.max(lb.z, Math.min(a.z, ub.z));
         const dx = nx - a.x, dz = nz - a.z, dist = Math.hypot(dx, dz);
         if (dist > a.r + 0.03) continue;
@@ -539,10 +656,87 @@ export class DynamicItems {
     }
   }
 
+  /**
+   * Lane PHYS: wake the light floor props `a` is walking into (office worlds). Candidates come from a per-world bucket index of
+   * the dynamic, non-holder kinds; a prop wakes when the walker is within CONTACT_MARGIN of its box, heading for it, at its
+   * height, and the damage system still has CONTACT_RESERVE detach slots. The woken prop loses its AABB (the walker no longer
+   * stops at it) and the loose-prop shove above moves it from the next frame on.
+   */
+  private contactScan(a: Walker, ux: number, uz: number): void {
+    const s = this.host.statics;
+    if (!s) return;
+    if (this.contactIndex?.statics !== s) this.contactIndex = {statics: s, cells: contactCells(s.props)};
+    const cells = this.contactIndex.cells, props = s.props, reach = a.r + CONTACT_MARGIN, seen = this.scanSeen;
+    seen.clear();
+    for (let cz = Math.floor((a.z - reach) / CB); cz <= Math.floor((a.z + reach) / CB); cz++) {
+      for (let cx = Math.floor((a.x - reach) / CB); cx <= Math.floor((a.x + reach) / CB); cx++) {
+        for (const i of cells.get(cellKey(cx, cz)) ?? []) {
+          if (seen.has(i)) continue;
+          seen.add(i);
+          const p = props[i];
+          if (p.h <= 0.02 || this.ents.has(p)) continue;
+          // a floor prop at the walker's feet (never one on a desk / counter: its host is in the way)
+          if (p.y > a.y + 0.45 || p.y < a.y - 0.6 || p.y + p.h < a.y + 0.05) continue;
+          const nx = Math.max(p.x - p.hx, Math.min(a.x, p.x + p.hx)), nz = Math.max(p.z - p.hz, Math.min(a.z, p.z + p.hz));
+          const dx = nx - a.x, dz = nz - a.z, dist = Math.hypot(dx, dz);
+          if (dist > reach) continue;
+          if ((dist > 1e-4 ? (dx * ux + dz * uz) / dist : 1) < 0.2) continue; // only when moving into it
+          if ((this.detacher?.detachRoom?.() ?? Infinity) <= CONTACT_RESERVE) return;
+          if (!this.isDynamicProp(p)) continue;
+          if (this.entForProp(p, i)) this.counts.contacts++;
+        }
+      }
+    }
+  }
+
+  /**
+   * Lane LIFT riders (lane PHYS): resting loose props (STATIC bodies, also budget-frozen ones) inside the moving cab ride its dy
+   * (simulating bodies are carried by PhysicsSystem.carryRiders); every loose prop inside keeps its placement height in step.
+   * Call BEFORE the simulating bodies are shifted (the test uses the pre-move positions). Returns the props carried.
+   */
+  carry(inside: (x: number, y: number, z: number) => boolean, dy: number): number {
+    let n = 0;
+    for (const e of this.ents.values()) {
+      const b = e.body;
+      if (!e.prop || !b) continue;
+      const p = b.position;
+      if (!inside(p.x, p.y, p.z)) continue;
+      e.prop.y += dy;
+      if (b.type !== CANNON.Body.DYNAMIC) {
+        p.y += dy; b.previousPosition.y += dy; b.interpolatedPosition.y += dy;
+        b.aabbNeedsUpdate = true;
+        this.syncEnt(e, false);
+      }
+      n++;
+    }
+    this.counts.carried += n;
+    return n;
+  }
+
+  /** Lane LIFT (lane PHYS): resting loose props in a doorway the landing doors shut on go to the nearer side. */
+  relocate(move: (x: number, y: number, z: number) => [number, number] | null): number {
+    let n = 0;
+    for (const e of this.ents.values()) {
+      const b = e.body;
+      if (!e.prop || !b || b.type === CANNON.Body.DYNAMIC) continue;
+      const p = b.position, to = move(p.x, p.y, p.z);
+      if (!to) continue;
+      const dx = to[0] - p.x, dz = to[1] - p.z;
+      p.x += dx; p.z += dz; b.previousPosition.x += dx; b.previousPosition.z += dz; b.interpolatedPosition.x += dx; b.interpolatedPosition.z += dz;
+      b.aabbNeedsUpdate = true;
+      this.syncEnt(e, false);
+      n++;
+    }
+    return n;
+  }
+
   /** Remove every body (New Station). Pickup objects / prop placements belong to their owners. */
   clear(): void {
     for (const e of this.ents.values()) if (e.body) this.host.world?.removeBody(e.body);
     this.ents.clear();
+    for (const b of this.hostSlabs.values()) this.host.world?.removeBody(b); // lane PHYS
+    this.hostSlabs.clear();
+    this.contactIndex = null;
   }
 
   stats(): {items: number; itemsAwake: number; props: number; propsAwake: number; pending: number; counts: Record<string, number>} {
@@ -565,3 +759,26 @@ export class DynamicItems {
 }
 
 const tv2 = new THREE.Vector3();
+
+/** Lane PHYS: bucket key of a CB-metre cell. */
+const cellKey = (cx: number, cz: number) => (cz + 4096) * 8192 + (cx + 4096);
+
+/** Lane PHYS: contact-wake candidates — indices of the dynamic, non-holder `contact` props with a box, per CB-metre bucket they overlap. */
+function contactCells(props: readonly PropPlacement[]): Map<number, number[]> {
+  const cells = new Map<number, number[]>();
+  const kinds = new Map<string, boolean>();
+  props.forEach((p, i) => {
+    let ok = kinds.get(p.kind);
+    if (ok === undefined) kinds.set(p.kind, (ok = !!propPhysics(p.kind).contact && dynamicKind(p.kind) && !isLootHolderKind(p.kind)));
+    if (!ok || p.h <= 0.02 || p.mounted) return;
+    for (let cz = Math.floor((p.z - p.hz) / CB); cz <= Math.floor((p.z + p.hz) / CB); cz++) {
+      for (let cx = Math.floor((p.x - p.hx) / CB); cx <= Math.floor((p.x + p.hx) / CB); cx++) {
+        const k = cellKey(cx, cz);
+        let l = cells.get(k);
+        if (!l) cells.set(k, (l = []));
+        l.push(i);
+      }
+    }
+  });
+  return cells;
+}

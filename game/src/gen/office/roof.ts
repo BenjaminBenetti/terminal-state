@@ -24,10 +24,14 @@ import type {Kit} from '../stationKit';
 import {LADDER, type Ladder} from '../traversal';
 import type {LevelLink, LevelSky, RailRun} from '../levels';
 import {makePlaceCtx, tryPlaceProp} from '../placeKit';
+import {cellsOfBox} from '../placeKit'; // lane ROOF (office-interactions-layout-20261030)
 import {PROP_DEFS, type PropKind} from '../props';
 import type {Area, LightPlacement, StationLayout} from '../stationTypes';
 import type {RoofInfo} from './overhaulTypes';
 import {FLOOR_HEIGHT, MARGIN, OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR, ROOF, type CoreUnit, type TowerFrame} from './frame';
+// Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache (placeRoofReward / roofRewardIssues / roofRewardPose).
+import {footprint, type PropPlacement} from '../props';
+import {ROOF_CACHE_KEY, type LootProfile} from '../../items/lootTables';
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -55,6 +59,10 @@ export interface RoofCarve {
 
 /** The core unit repurposed as the roof access closet (the electrical riser, else the janitor / supply closet). */
 export function roofUnit(f: TowerFrame): CoreUnit {
+  // Task office-interactions-layout-20261030 (lane LAYOUT): floor 8's plan carves its own ROOF ACCESS room in the core strip (purpose,
+  // label and door plate assigned at carve time, gen/office/tower.ts UNIT_SPEC.roof); the old closet pick stays as a fallback only.
+  const own = f.plans?.[OFFICE_TOP_FLOOR]?.units.find(u => u.kind === 'roof');
+  if (own) return own;
   return f.units.find(u => u.kind === 'riser') ?? f.units.find(u => u.kind === 'janitor') ?? f.units.find(u => u.kind === 'supply') ?? f.units[f.units.length - 1];
 }
 
@@ -67,6 +75,9 @@ export function carveRoof(k: Kit, f: TowerFrame, ox: number, oy: number, base8: 
   const unit = roofUnit(f);
   const closet = k.areas[g8.area[g8.idx(ox + unit.x0 + 1, oy + f.sy0 + 3)]];
   closet.label = 'Roof access';
+  // Lane LAYOUT (item 4): the room's PURPOSE follows its new use too (normally already set at carve time) — a relabelled riser
+  // kept 'electrical-closet', so the dresser plated its door ELECTRICAL under the ROOF ACCESS plate.
+  closet.purpose = 'office-roof-access';
   // (parent: the closet — the roof is reached through it; its depth keeps the station's lighting pass from picking the deck)
   const area = k.addArea({x: ox, y: oy, w: f.TW, h: f.TD}, 'room', 'office-roof', r2(base9 + ROOF.sky), closet.id,
     {level: L, floorY: base9, label: 'Roof', publicSpace: false});
@@ -283,10 +294,13 @@ export function roofDaylight(layout: StationLayout, f: TowerFrame, rc: RoofCarve
   return n;
 }
 
-/** The layout.office.roof record. */
-export function roofInfo(layout: StationLayout, rc: RoofCarve, ladder: Ladder, structures: readonly RoofStructure[]): RoofInfo {
+/**
+ * The layout.office.roof record. Lane ROOF (office-interactions-layout-20261030): `reward` = placeRoofReward's result (undefined:
+ * no roof reward for this profile -> no field; null: no spot -> `reward: null`, rejected by roofIssues).
+ */
+export function roofInfo(layout: StationLayout, rc: RoofCarve, ladder: Ladder, structures: readonly RoofStructure[], reward?: RoofReward | null): RoofInfo {
   const props = layout.props.filter(p => p.level === OFFICE_ROOF_LEVEL);
-  return {
+  const info: RoofInfo = {
     level: OFFICE_ROOF_LEVEL, baseY: rc.base9, parapet: ROOF.parapet,
     ladder: {bottom: {...ladder.bottom}, top: {...ladder.top}, yaw: ladder.dir > 0 ? Math.PI : 0, hatch: hatchRect(rc), link: ladder.id},
     structures: [
@@ -294,6 +308,116 @@ export function roofInfo(layout: StationLayout, rc: RoofCarve, ladder: Ladder, s
       ...props.filter(p => p.kind === 'roofHvac' || p.kind === 'waterTower' || p.kind === 'satelliteDish').map(p => ({kind: p.kind, x: p.x, z: p.z, yaw: p.rot})),
     ],
   };
+  if (reward !== undefined) info.reward = reward && {kind: reward.prop.kind, key: ROOF_CACHE_KEY, x: reward.prop.x, y: reward.prop.y, z: reward.prop.z, rot: reward.prop.rot, anchor: reward.anchor};
+  return info;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Task office-interactions-layout-20261030 (lane ROOF): THE ROOF REWARD (user 2026-10-30: "There is no loot on the roof. The roof
+// is sorta the 'end' of the level so I think there should at least be good item up there.")
+
+/** Roof plant the cache is tucked against, by preference tier: the landmark water tower, the HVAC units / pump skid, the rest. */
+export const ROOF_CACHE_ANCHORS: readonly (readonly PropKind[])[] = [
+  ['waterTower'], ['roofHvac', 'waterPumpSkid'], ['dryTransformer', 'pipeValveManifold', 'portableGenerator', 'airCompressor', 'gasCylinderCart'],
+];
+/** Least clear gap (m) between the cache and its anchor's plinth (roof plant stands on plinths 0.1 m wider than its footprint). */
+const CACHE_GAP = 0.08;
+/** Open access strip (m) kept in front of the cache's lid side: the player stands there to open it. */
+export const CACHE_FRONT = 0.8;
+
+/** A placed roof reward: the holder prop (loot key ROOF_CACHE_KEY) and the kind of the plant it is tucked against ('' = open deck). */
+export interface RoofReward { prop: PropPlacement; anchor: string }
+
+/**
+ * Places the roof reward holder (after dressRoof; its own rng fork; depends only on the roof deck, its plant and structures): the
+ * profile's ROOF_CACHE_KEY reward table names the holder kind (a crate). It is tucked against the roof plant — the water tower
+ * first, else an HVAC unit / the pump skid, else other plant —, its back to the plant, lid side out with a CACHE_FRONT access strip,
+ * clear of the core box, the hatch / ladder head (the same keep-clear rules as dressRoof), the parapet walkway, every plinth / vent /
+ * structure, the deck staying connected (tryPlaceProp). Fallback: any free deck spot. The holder gets `purpose = ROOF_CACHE_KEY`, so
+ * ContainerManager rolls the curated reward (items/lootTables.ts ROOF_CACHE) ONCE; run memory keeps what was taken (holderKey).
+ * Returns undefined when the profile has no roof reward, null when no spot was found (roofIssues rejects the attempt).
+ */
+export function placeRoofReward(layout: StationLayout, f: TowerFrame, rc: RoofCarve, structures: readonly RoofStructure[], rng: Rng, loot: LootProfile): RoofReward | null | undefined {
+  const reward = loot.tables.rewards?.[ROOF_CACHE_KEY];
+  if (!reward || !(reward.holder in PROP_DEFS)) return undefined;
+  const kind = reward.holder as PropKind;
+  const L = OFFICE_ROOF_LEVEL, g = layout.levels[L].grid, A = rc.area;
+  const ctx = makePlaceCtx(layout, rng.fork('place'), L);
+  const core: Box = {x0: f.cx0 - 1, y0: f.cy0 - 5, x1: f.cx1 + 1, y1: f.cy1 + 1};
+  const hatch = hatchRect(rc), hcx = (hatch.x0 + hatch.x1) / 2, hcz = (hatch.z0 + hatch.z1) / 2;
+  for (let y = 0; y < f.TD; y++) for (let x = 0; x < f.TW; x++) {
+    const [cx, cz] = g.center(x + MARGIN, y + MARGIN);
+    if (inside(core, x, y) || Math.hypot(cx - hcx, cz - hcz) < HATCH_CLEAR + 0.8 || x < 2 || y < 2 || x >= f.TW - 2 || y >= f.TD - 2) ctx.keep[g.idx(x + MARGIN, y + MARGIN)] = 1;
+  }
+  // Structure footprints (plinths, vents, hatch, overrun; drains are flush and cable trays hug the parapet): never overlapped.
+  const solids = structures.filter(s => s.kind !== 'drain' && s.kind !== 'cableTray')
+    .map(s => ({x: s.x, z: s.z, hx: s.w !== undefined ? s.w / 2 : 0.35, hz: s.d !== undefined ? s.d / 2 : 0.35}));
+  const clear = (x: number, z: number, hx: number, hz: number) => solids.every(s => Math.abs(s.x - x) >= s.hx + hx + 0.05 || Math.abs(s.z - z) >= s.hz + hz + 0.05);
+  const put = (x: number, z: number, rot: number): PropPlacement | null => {
+    const {hx, hz} = footprint(kind, rot);
+    if (!clear(x, z, hx, hz)) return null;
+    const p = tryPlaceProp(ctx, A, kind, r3(x), r3(z), rot, {checkZone: false, front: CACHE_FRONT});
+    if (!p) return null;
+    p.y = r3(rc.base9);
+    p.purpose = ROOF_CACHE_KEY;
+    return p;
+  };
+  // Sides of an anchor: [rot (the cache's front faces away from the plant), outward x, outward z]
+  const SIDES: readonly [number, number, number][] = [[0, 0, 1], [Math.PI, 0, -1], [Math.PI / 2, 1, 0], [-Math.PI / 2, -1, 0]];
+  const plant = layout.props.filter(p => (p.level ?? 0) === L);
+  for (const tier of ROOF_CACHE_ANCHORS) {
+    for (const a of rng.shuffle(plant.filter(p => tier.includes(p.kind)))) {
+      // The plant's outer edge per side: beyond its plinth + CACHE_GAP and beyond its blocked cells (whole cells, up to 0.5 m past
+      // its box), so the cache's own cells are free floor right beside it.
+      const pad = 0.1 + CACHE_GAP, [bx0, by0, bx1, by1] = cellsOfBox(a.x, a.z, a.hx, a.hz);
+      const out = {e: Math.max((bx1 + 1) * CELL + 0.02, a.x + a.hx + pad), w: Math.min(bx0 * CELL - 0.02, a.x - a.hx - pad),
+        s: Math.max((by1 + 1) * CELL + 0.02, a.z + a.hz + pad), n: Math.min(by0 * CELL - 0.02, a.z - a.hz - pad)};
+      for (const s of rng.shuffle([0, 1, 2, 3])) {
+        const [rot, ox, oz] = SIDES[s];
+        const {hx, hz} = footprint(kind, rot);
+        // slide along the side: its centre, its ends (tucked in by a corner of the plant) or the quarter points, in seeded order
+        const reach = Math.max(0, ox ? a.hz - hz : a.hx - hx);
+        for (const t of rng.shuffle([0, 1, -1, 0.5, -0.5])) {
+          const x = ox ? (ox > 0 ? out.e + hx : out.w - hx) : a.x + t * reach;
+          const z = oz ? (oz > 0 ? out.s + hz : out.n - hz) : a.z + t * reach;
+          const p = put(x, z, rot);
+          if (p) return {prop: p, anchor: a.kind};
+        }
+      }
+    }
+  }
+  // Fallback: any free deck spot (cell centres every 2 cells), facing a random way.
+  for (const [tx, ty] of rng.shuffle(Array.from({length: Math.ceil(f.TW / 2) * Math.ceil(f.TD / 2)}, (_, i) => [2 * (i % Math.ceil(f.TW / 2)), 2 * Math.floor(i / Math.ceil(f.TW / 2))] as [number, number]))) {
+    const p = put(W(tx) + CELL / 2, W(ty) + CELL / 2, SIDES[rng.int(0, 3)][0]);
+    if (p) return {prop: p, anchor: ''};
+  }
+  return null;
+}
+
+/** Roof reward invariants (roofIssues): exactly the one recorded holder, on the deck, its access strip reachable (`dist`). */
+export function roofRewardIssues(layout: StationLayout, dist?: Int32Array[]): string[] {
+  const info = layout.office?.roof;
+  if (!info) return [];
+  const caches = layout.props.filter(p => p.purpose === ROOF_CACHE_KEY);
+  if (info.reward === undefined) return caches.length ? [`${caches.length} roof reward holders without a roof reward`] : [];
+  if (info.reward === null) return ['roof reward: no spot on the deck'];
+  if (caches.length !== 1) return [`${caches.length} roof reward holders`];
+  const c = caches[0], R = layout.levels[OFFICE_ROOF_LEVEL], g = R.grid, issues: string[] = [];
+  if ((c.level ?? 0) !== OFFICE_ROOF_LEVEL || c.kind !== info.reward.kind || Math.abs(c.x - info.reward.x) > 1e-6 || Math.abs(c.z - info.reward.z) > 1e-6) issues.push('roof reward record');
+  if (Math.abs(c.y - R.baseY) > 1e-3) issues.push(`roof reward at y ${c.y}`);
+  // the middle of the access strip in front of the lid side (world: front = (sin rot, cos rot); hx / hz are the rotated half extents)
+  const fx = Math.round(Math.sin(c.rot)), fz = Math.round(Math.cos(c.rot));
+  const [sx, sy] = g.cellOf(c.x + fx * (c.hx + CACHE_FRONT / 2), c.z + fz * (c.hz + CACHE_FRONT / 2));
+  if (!g.walkable(sx, sy) || (dist && dist[OFFICE_ROOF_LEVEL][g.idx(sx, sy)] < 0)) issues.push('roof reward access strip blocked / unreachable');
+  return issues;
+}
+
+/** QA (the browser spot check; the primary wires it into qa.ts): a pose in front of the roof cache, facing it, looking at its lid. */
+export function roofRewardPose(layout: StationLayout): {x: number; y: number; z: number; yaw: number; pitch: number; level: number} | null {
+  const r = layout.office?.roof?.reward;
+  if (!r) return null;
+  const d = (PROP_DEFS[r.kind as PropKind]?.d ?? 0.5) / 2, away = d + 0.8;
+  return {x: r3(r.x + Math.sin(r.rot) * away), y: r.y, z: r3(r.z + Math.cos(r.rot) * away), yaw: r.rot, pitch: -0.8, level: OFFICE_ROOF_LEVEL};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -370,5 +494,6 @@ export function roofIssues(layout: StationLayout, f: TowerFrame, dist: Int32Arra
   for (const z of roofZ) if (inHatch(z.x, z.z, 2.5)) issues.push('enemy at the roof hatch');
   if (layout.pickups.some(p => p.level === OFFICE_ROOF_LEVEL && inHatch(p.x, p.z, 1))) issues.push('pickup in the roof hatch zone');
   if (!layout.lights.some(l => l.level === OFFICE_ROOF_LEVEL && l.virtual)) issues.push('roof has no daylight');
+  issues.push(...roofRewardIssues(layout, dist)); // Task office-interactions-layout-20261030 (lane ROOF)
   return issues;
 }

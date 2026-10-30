@@ -19,10 +19,11 @@ unchanged; a tuning change will move it.
 | Named shared tables | `STORE_DRINKS`, `STORE_SNACKS`, `storeTill()`, `storeKitchen()`, `CACHE_CRATE`, `OFFICE_DESK`, `OFFICE_DRAWERS`, `TENANT_*` |
 | Openable holders' own tables | `*_ROWS`, `OPENABLE_TABLES` |
 | Scarcity economy | `THEME_ECONOMY`, `OFF_THEME_WEIGHTS`, `GLOBAL_POOL`, `THEME_OF_TYPE`, `LIMB_ECONOMY` |
-| Eligibility | `HOLDER_ALLOW` (e.g. no snacks in toilets), `RANDOM_HOLDERS` (bins) |
+| Eligibility | `HOLDER_ALLOW` (e.g. no snacks in toilets), `RANDOM_HOLDERS` (bins), `CONTAINER_THEMED` (the container, not the room, decides its rows) |
 | Stack sizes | `BOX_COUNT`, `BIG_BOX_HOLDERS`, `HANDFUL`, `HANDFUL_FALLBACK` |
 | Loose floor finds | `FLOOR_ECONOMY`, `SUBWAY_FLOOR`, `OFFICE_FLOOR` (with `OFFICE_FLOOR_TILT`), `PUBLIC_FLOOR_WEIGHTS` (where finds land) |
 | Rare gear | `GEAR_LOOT` (mean / cap / weights) |
+| Curated rewards (the Office roof cache) | `REWARD_TABLES`, `ROOF_CACHE`, `ROOF_CACHE_KEY`, `rewardTable()`; `LootTables.rewards` |
 
 Per-room stock stays with its room in `gen/purposes.ts` (each purpose's `loot` per holder kind). That is where "this room
 makes sense" lives. Purposes reference the named shared tables above.
@@ -65,12 +66,12 @@ Loose floor finds and rare gear are decided when the layout is generated:
 | `surface` | table, desk top, security-desk top |
 | `countertop` | shop counter, back counter, kiosk stall, kitchenette top |
 | `shelf` | shelf, stock shelf, shopping cart |
-| `container` | tall / low cabinet, crate, staff lockers, filing cabinet, safe, tool chest, **every drawer / cupboard compartment** |
+| `container` | tall / low cabinet, crate, staff lockers, filing cabinet, safe, tool chest, office lateral filing cabinet, executive desk, server cabinet / rack, archive box, **every drawer / cupboard compartment** |
 | `foodPrep` | grill, espresso, wok, deli, blender lines, hot-dog cart, bus cart |
 | `vend` | vending machine, snack rack, display case, newspaper box |
 | `cold` | drinks cooler, fridge, chest freezer |
-| `medical` | first-aid cabinet, wall first-aid kit, crash cart, stretcher |
-| `arms` | gun locker |
+| `medical` | first-aid cabinet, wall first-aid kit, crash cart, stretcher, lab bench, exam table, specimen fridge |
+| `arms` | gun locker, vault safe |
 | `junk` | trash can, wheelie bin |
 | `stash` | toilet stall |
 | `fixture` | fire-extinguisher cabinet, AED cabinet (baked contents, no loot) |
@@ -83,9 +84,16 @@ A slot is a classification and an override target. Each kind keeps its own numbe
 2. Add it to `HOLDER_SLOTS`.
 3. Give it per-kind defaults: `HOLDER_EMPTY` / `HOLDER_LOTS` / `HOLDER_MOD`, or an `OPENABLE_TABLES` entry if it is an
    openable container, or `P7_HOLDER_LOOT` if it is a generated holder.
-4. Give it eligibility in `HOLDER_ALLOW` if it should only take certain categories.
+4. Give it eligibility in `HOLDER_ALLOW` if it should only take certain categories. The list must cover every category of the
+   kind's own rows: a kept original roll keeps its item.
+5. Openable storage whose contents follow the CONTAINER, whatever room it stands in (a specimen fridge holds medicine in any
+   room): add it to `CONTAINER_THEMED`. Its own rows are then not narrowed to the room purpose's rows. The room's theme still
+   steers the scarce re-themes within `HOLDER_ALLOW`. Without it, an openable's own rows are narrowed to what the purpose stocks
+   (a pharmacy bin holds pharmacy things).
 
-`tests/loot-tables.test.ts` fails if a holder kind has no slot or no defaults.
+`tests/loot-tables.test.ts` fails if a holder kind has no slot or no defaults. The office-overhaul storage (lateral filing
+cabinet, executive desk, lab bench, exam table, specimen fridge, vault safe, server cabinet / rack, archive box) is the worked
+example: `docs/prop-affordances.md` and `tests/office-openables.test.ts`.
 
 **New slot:**
 1. Add the name to `SLOT_CATEGORIES`.
@@ -174,9 +182,40 @@ The Subway's loose pickups were byte-identical (its floor program has no food).
 - **Fixtures with baked contents.** Fire and AED cabinets: `loot: null`.
 - **Vending pry / spill and bin spill mechanics.** These move existing lots; they do not roll new ones.
 - **Shelf filler stock.** It is decoration, not loot.
+- **The roof reward** is table-driven but exempt from the scarcity cut. See the next section.
 - **Where things land.** Floor-find area weights (`PUBLIC_FLOOR_WEIGHTS`, purpose `floor`, `FLOOR_ECONOMY.themeWeight`) and
   the multi-level share in `gen/levelGenDress.ts`, which moves existing loose ammo and dressings. These are data, but
   overrides do not reach them.
+
+## Roof reward
+
+The Office roof is the end of the level, so it holds one guaranteed reward.
+
+- **Where it is.** One supply crate stands on the roof deck, its back to the water tower (other roof plant if the tower has no
+  free side). The lid faces out, with 0.8 m of open deck in front of it. The crate keeps clear of the hatch, the ladder head, the
+  core and the parapet walkway. `placeRoofReward` in `gen/office/roof.ts` places it after the roof dressing, on its own RNG fork,
+  so the rest of the roof dressing is unchanged. `layout.office.roof.reward` records it.
+- **How it is keyed.** The crate's loot key (`PropPlacement.purpose`) is `ROOF_CACHE_KEY` (`'roof-cache'`). Its table is
+  `ROOF_CACHE` in `REWARD_TABLES`, which `BASE_TABLES.rewards` points to.
+- **Value.**
+  - One top-tier medicine, always: a first-aid kit (2 in 3) or a trauma kit (1 in 3).
+  - One full crate box of generic ammo, always: about a third each 9mm (6–10), 5.56 (8–12) and 12-gauge (3–6).
+
+  That is one medicine and one box per Office run, not more loot per floor.
+- **The exception.** The reward is rolled exactly as the table says:
+  - no scarcity keep cut, no re-theming and no limb-treatment conversion;
+  - every rolled lot is placed. If the first pack does not fit, `packReward` re-packs on up to 16 seeded streams.
+
+  The crate floor is 0.55 m wide. A first-aid kit and one box fit together in at least 93 % of packs. A third item fits beside a
+  first-aid kit in under 15 %, so the cache has no third item.
+- **No gear.** The reward adds no rare-gear roll. Gear stays one roll per logical level.
+- **Finite and remembered.** The crate rolls once on its holder stream (`loot:crate:<index>`), like every holder. Run memory
+  remembers taken lots by holder key and lot id, so they stay taken after climbing the ladder, changing floors, or leaving the
+  level and coming back. Retry and New Game behave as for all loot.
+- **Tuning per level.** Item and category weight overrides reach the reward's rows. Keep and slot overrides do not. To change
+  or drop the reward, replace `tables.rewards`: `{}` means no roof reward.
+- **Tests.** `tests/office-roof-reward.test.ts` covers placement, reachability, contents, the scarcity exemption, fit, memory,
+  that no other storey changes, and that the Subway is unchanged.
 
 ## Ammo
 

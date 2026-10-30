@@ -567,7 +567,8 @@ export class Game {
     applyHolders(cm, mem.holders);
     // Iteration 08 (Lane I): a shot trash can / wheelie bin still goes loose — its lid pops, its finite lots spill as pickups.
     this.physics.dynamicItems.holderLoose = p => { const carried = cm.goLoose(p); this.world.culler.release(carried); return carried; }; // Lane G: moving now
-    this.physics.dynamicItems.walkers = () => [{id: this.player, x: this.player.x, z: this.player.z, y: this.player.y, r: this.player.radius},
+    // task office-interactions-layout-20261030 (lane PHYS): `wake` — in the office the player wakes light props by walking into them
+    this.physics.dynamicItems.walkers = () => [{id: this.player, x: this.player.x, z: this.player.z, y: this.player.y, r: this.player.radius, wake: true},
       ...this.zombies.filter(z => z.brain.alive && !z.ragdolled).map(z => ({id: z, x: z.brain.x, z: z.brain.z, y: z.brain.y, r: z.brain.stats.radius}))];
     this.damage.build(this.layout, this.mats, [this.world.group, cm.group], {
       ownMeshes: p => cm.ownMeshes(p),

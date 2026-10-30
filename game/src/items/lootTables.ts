@@ -20,6 +20,8 @@
 //    room-type tables (AREA_WEIGHTS x HOLDER_MOD -> LEGACY_POOL). The scarcity economy (THEME_ECONOMY ...) then thins / re-themes
 //    the roll (items/lootEconomy.ts). Loose floor finds follow the per-level FLOOR PROGRAMS; rare gear GEAR_LOOT.
 //  - Fit / occupancy stays in items/lootLayout.ts (an item that fits no surface is dropped); eligibility in HOLDER_ALLOW.
+//  - CURATED REWARDS (task office-interactions-layout-20261030, lane ROOF): REWARD_TABLES / LootTables.rewards — the Office roof cache
+//    (ROOF_CACHE), keyed by its holder's loot key, rolled exactly (the documented exception to the scarcity cut).
 // Explicit exceptions (not table-driven): weapon finds + their paired ammo (gen/weaponFinds.ts, gen/office/spawns.ts) incl. the
 // Subway pistol-start 9 mm boxes, the starter kit (run/starter.ts), fixtures with baked contents, vending pry / bin spill
 // mechanics, shelf filler stock (decoration).
@@ -108,6 +110,9 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   toiletStall: 'stash',
   // baked contents only (the extinguisher, the defibrillator): no loot table
   fireExtinguisherCabinet: 'fixture', aedWallCabinet: 'fixture',
+  // Task office-interactions-layout-20261030 (lane OPEN): the office-overhaul storage that opens now (world/openablesSpec.ts)
+  officeFiling: 'container', executiveDesk: 'container', serverCabinet: 'container', serverRack: 'container', archiveBoxes: 'container',
+  vaultSafe: 'arms', labBench: 'medical', examTable: 'medical', biohazardFridge: 'medical',
 };
 /** Separate compartment rolls (desk / security-desk drawers, kitchenette cupboards) are closed storage. */
 export const COMPARTMENT_SLOT: SlotCategory = 'container';
@@ -289,7 +294,23 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
   bin: ['food', 'drink', 'med', 'ammo', 'battery'], wheelieBin: ['food', 'drink', 'med', 'ammo', 'battery'],
   // Task office-overhaul-20261030: something stashed in a toilet / on its tank lid — sealed water, a dressing, rounds, a battery, a flare; never snacks
   toiletStall: ['drink', 'med', 'ammo', 'battery', 'flare'],
+  // Task office-interactions-layout-20261030 (lane OPEN): office storage keeps to what its container holds — a vault safe ammo (the
+  // deliberate rule) / dressings / flares / batteries; clinic and lab storage medicine and bottled water (lab drawers also spare
+  // cells); server cupboards and racks spares (cells, flares, a dressing, bottled water); an archive box a forgotten snack / cell /
+  // dressing / flare. Each list covers its own rows' categories (a kept original roll is never re-themed away).
+  vaultSafe: ['ammo', 'med', 'flare', 'battery'], examTable: ['med', 'drink'], biohazardFridge: ['med', 'drink'], labBench: ['med', 'battery', 'drink'],
+  // office drawers hold personal stock (snacks, a drink, a dressing, a cell) — never a flare; only the executive desk keeps the
+  // generic sidearm rows (the deliberate desk stock)
+  officeFiling: ['food', 'drink', 'med', 'battery'], executiveDesk: ['food', 'drink', 'med', 'ammo', 'battery'],
+  serverCabinet: ['battery', 'flare', 'med', 'drink'], serverRack: ['battery', 'flare', 'med', 'drink'], archiveBoxes: ['food', 'med', 'battery', 'flare'],
 };
+/**
+ * Task office-interactions-layout-20261030 (lane OPEN): openable containers whose OWN table is never narrowed to the room purpose's
+ * rows (items/loot.ts purposeRows): the CONTAINER decides what it holds ("the items inside should be related to the type of container
+ * it is"); the room's theme still steers the scarce re-themes within HOLDER_ALLOW. (A bin keeps the narrowing: a pharmacy bin holds
+ * pharmacy things.)
+ */
+export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes']);
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
@@ -300,7 +321,8 @@ export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']
 export const LIMB_ECONOMY = {
   share: {medical: 0.27, personal: 0.2, security: 0.2, service: 0.2, tech: 0.2, public: 0.19, food: 0.14} as Readonly<Record<LootTheme, number>>,
   /** First-aid fixtures hold treatments whatever room they hang in (a wall first-aid kit in an office break room / corridor). */
-  holder: {firstAidWallKit: 0.36, medCabinet: 0.3, crashCart: 0.36, wheeledStretcher: 0.36} as Readonly<Partial<Record<string, number>>>,
+  holder: {firstAidWallKit: 0.36, medCabinet: 0.3, crashCart: 0.36, wheeledStretcher: 0.36,
+    examTable: 0.36, biohazardFridge: 0.3} as Readonly<Partial<Record<string, number>>>, // + office clinic storage (lane OPEN)
   /** Splints a little ahead of slings: legs are hurt more often (hard landings, rat / dog bites go low). */
   pool: [[LEG_SPLINT, 1.1], [ARM_SLING, 0.9], [TRAUMA_KIT, 0.3]] as ItemRows,
 };
@@ -352,6 +374,23 @@ export const PANTRY_ROWS: ItemRows = [['noodles', 1], ['beans', 1], ['water', 0.
 export const TOILET_ROWS: ItemRows = [['water', 1], ['bandage', 0.8], ['ammo_9mm', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
 /** Security desk drawers. */
 export const SECURITY_DRAWER_ROWS: ItemRows = [...genericAmmo(1.2), ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]];
+// Task office-interactions-layout-20261030 (lane OPEN): the office-overhaul storage's own rows (container-themed: CONTAINER_THEMED).
+/** Lateral filing cabinet drawers: office stock without the sidearm rows (ammo only by deliberate rule: the vault safe, the desk). */
+export const LATERAL_FILE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ['battery', 0.2]];
+/** Executive desk drawers: personal stock — snacks, a drink, a dressing, a spare cell, a few rounds of the deliberate desk sidearm stock. */
+export const EXEC_DESK_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['juice', 0.6], ['bandage', 0.7], ['battery', 0.3], ...genericAmmo(0.45)];
+/** Lab bench drawers: dressings and spare cells (shallow drawers: a first-aid kit does not fit). */
+export const LAB_DRAWER_ROWS: ItemRows = [['bandage', 2], ['battery', 0.45], ['water', 0.3]];
+/** Exam table drawers: clinic dressings (limb treatments come through LIMB_ECONOMY.holder). */
+export const CLINIC_DRAWER_ROWS: ItemRows = [['bandage', 3], ['water', 0.3]];
+/** Specimen fridge: cold-chain medicine. */
+export const COLD_MED_ROWS: ItemRows = [['bandage', 1.6], ['medkit', 0.6], ['water', 0.4]];
+/** Server room cupboards / racks: spares — torch cells, a flare, a dressing, bottled water. */
+export const SERVER_SPARES_ROWS: ItemRows = [['battery', 1.4], ['flare', 0.6], ['bandage', 0.5], ['water', 0.6]];
+/** Vault safe: the deliberate ammo rule (generic calibre rows) plus dressings / a first-aid kit / a flare — no snacks in a vault. */
+export const VAULT_ROWS: ItemRows = [...genericAmmo(2), ['bandage', 0.6], ['medkit', 0.3], ['flare', 0.2]];
+/** Archive box: mostly paper; rarely something forgotten. */
+export const ARCHIVE_ROWS: ItemRows = [['chocolate', 1], ['battery', 0.6], ['bandage', 0.5], ['flare', 0.3]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
@@ -373,6 +412,19 @@ export const OPENABLE_TABLES = {
   kitchenette: {lots: [1, 2], empty: 0.45, items: PANTRY_ROWS},
   desk: {lots: [1, 1], empty: 0.6, items: OFFICE_ROWS},
   monitorDesk: {lots: [1, 1], empty: 0.5, items: SECURITY_DRAWER_ROWS},
+  // Task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage (themed by container: CONTAINER_THEMED; finite,
+  // thinned again by the scarcity economy like every holder). The kinds placed in numbers (filing cabinets ~30, lab benches ~20,
+  // server racks ~34 per Office level) are emptier, so the new storage adds ~10 % to the Office's holder lots, not a new economy
+  // (tests/office-openables.test.ts measures it).
+  officeFiling: {lots: [1, 2], empty: 0.55, items: LATERAL_FILE_ROWS},
+  executiveDesk: {lots: [1, 3], empty: 0.3, items: EXEC_DESK_ROWS},
+  labBench: {lots: [1, 2], empty: 0.7, items: LAB_DRAWER_ROWS},
+  examTable: {lots: [1, 2], empty: 0.3, items: CLINIC_DRAWER_ROWS},
+  vaultSafe: {lots: [1, 3], empty: 0.3, items: VAULT_ROWS},
+  serverCabinet: {lots: [1, 3], empty: 0.35, items: SERVER_SPARES_ROWS},
+  serverRack: {lots: [1, 1], empty: 0.86, items: SERVER_SPARES_ROWS},
+  biohazardFridge: {lots: [1, 1], empty: 0.6, items: COLD_MED_ROWS},
+  archiveBoxes: {lots: [1, 1], empty: 0.7, items: ARCHIVE_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------
@@ -461,6 +513,43 @@ export interface GearLoot { mean: number; cap: number; weights: Readonly<Record<
 export const GEAR_LOOT: GearLoot = {mean: GEAR_MEAN_PER_LEVEL, cap: GEAR_CAP_PER_LEVEL, weights: GEAR_WEIGHTS};
 
 // ---------------------------------------------------------------------------------------
+// Task office-interactions-layout-20261030 (lane ROOF): CURATED REWARDS — a fixed-place payoff with its own curated table.
+// User (2026-10-30): "There is no loot on the roof. The roof is sorta the 'end' of the level so I think there should at least be
+// good item up there." docs/loot-tables.md "Roof reward".
+//
+// A reward is keyed by its holder's LOOT KEY (PropPlacement.purpose; the generator sets it on the one holder it places) and lives in
+// the profile's rate tables (LootTables.rewards), so a level tunes or drops it like any table (`tables: {...BASE_TABLES, rewards:
+// {...}}`; `{}` = no reward). It is the EXPLICIT EXCEPTION to the scarcity economy: rolled ONCE on its holder's own seeded stream
+// like every holder (finite, remembered by run memory, never re-rolled), but EXACTLY — no ~1-in-5 keep cut, no re-theme, no limb
+// conversion — and every rolled lot is placed (items/loot.ts packs it with bounded re-packs). Item / category weight overrides
+// still apply to its rows; keep / slot overrides do not reach it. No rare-gear roll: gear stays ONE roll per logical level.
+
+/**
+ * A curated reward: `holder` = the existing searchable holder kind that carries it (HOLDER_SLOTS); `picks` roll in order, each an
+ * own-table roll ({lots, empty, items}: `empty` 0 + `lots` lo >= 1 = guaranteed). Stack sizes follow BOX_COUNT for the holder.
+ */
+export interface RewardTable { holder: string; label: string; picks: readonly OwnTable[] }
+
+/** Loot key (PropPlacement.purpose) of the Office roof cache (gen/office/roof.ts placeRoofReward). */
+export const ROOF_CACHE_KEY = 'roof-cache';
+/**
+ * THE ROOF CACHE (Office Space, the roof deck — the level's "end"): a supply crate tucked against the roof plant. Value: ONE
+ * top-tier medicine, always (a first-aid kit 2 : 1 a trauma kit — the "good item"), and ONE full crate box of ammunition, always
+ * (generic: ~1/3 each 9mm 6-10 / 5.56 8-12 / 12-gauge 3-6 rounds, BOX_COUNT big). Finite: one medicine + one box per logical Office
+ * run, not a per-floor increase. (Measured: a first-aid kit + a box share the 0.55 m crate floor in >= 93 % of packs — the bounded
+ * re-packs place both every time —, a third item beside a first-aid kit in under 15 %, so no light extra: nothing rolled is lost.)
+ */
+export const ROOF_CACHE: RewardTable = {
+  holder: 'crate', label: 'roof supply cache',
+  picks: [
+    {lots: [1, 1], empty: 0, items: [['medkit', 2], [TRAUMA_KIT, 1]]},
+    {lots: [1, 1], empty: 0, items: genericAmmo(1)},
+  ],
+};
+/** Every curated reward by loot key (BASE_TABLES.rewards). */
+export const REWARD_TABLES: Readonly<Record<string, RewardTable>> = {[ROOF_CACHE_KEY]: ROOF_CACHE};
+
+// ---------------------------------------------------------------------------------------
 // Profiles
 
 /** The rate tables a profile rolls with. BASE_TABLES = today's numbers; a future level may swap one wholesale (`{...BASE_TABLES, ...}`). */
@@ -488,6 +577,8 @@ export interface LootTables {
   floor: {subway: SubwayFloorProgram; office: OfficeFloorProgram};
   /** Rare gear. */
   gear: GearLoot;
+  /** Task office-interactions-layout-20261030 (lane ROOF): curated rewards by loot key (REWARD_TABLES; absent / {} = none). */
+  rewards?: Readonly<Record<string, RewardTable>>;
 }
 export const BASE_TABLES: LootTables = {
   areaWeights: AREA_WEIGHTS, holderMod: HOLDER_MOD, holderEmpty: HOLDER_EMPTY, holderLots: HOLDER_LOTS, fullRooms: FULL_ROOMS,
@@ -496,6 +587,7 @@ export const BASE_TABLES: LootTables = {
   themes: THEME_ECONOMY, offTheme: OFF_THEME_WEIGHTS, globalPool: GLOBAL_POOL, limb: LIMB_ECONOMY,
   floor: {subway: SUBWAY_FLOOR, office: OFFICE_FLOOR},
   gear: GEAR_LOOT,
+  rewards: REWARD_TABLES, // lane ROOF (office-interactions-layout-20261030)
 };
 
 /** Multiplier tables (all optional; 1 = unchanged, 0 = never). */
@@ -619,6 +711,18 @@ export function gearParams(profile: LootProfile): GearLoot {
   if (!o) return g;
   const weights = o.weight ? Object.fromEntries(Object.entries(g.weights).map(([id, w]) => [id, w * (o.weight![id] ?? 1)])) : g.weights;
   return {mean: o.mean === undefined ? g.mean : g.mean * o.mean, cap: o.cap ?? g.cap, weights};
+}
+
+/**
+ * Task office-interactions-layout-20261030 (lane ROOF): the curated reward a holder with loot key `key` rolls under `profile`
+ * (undefined: none). The tables' own object when no item / category weight override touches its rows; otherwise a copy with the
+ * rows resolved (resolveRows). Keep / slot overrides never reach a reward (the documented exception).
+ */
+export function rewardTable(profile: LootProfile, key: string): RewardTable | undefined {
+  const t = profile.tables.rewards?.[key];
+  if (!t) return undefined;
+  const picks = t.picks.map(p => { const items = resolveRows(profile, p.items); return items === p.items ? p : {...p, items}; });
+  return picks.every((p, i) => p === t.picks[i]) ? t : {...t, picks};
 }
 
 // ---------------------------------------------------------------------------------------
@@ -748,5 +852,15 @@ export function validateLootProfile(p: LootProfile): string[] {
   }
   for (const [k, cats] of Object.entries(HOLDER_ALLOW)) for (const c of cats ?? []) if (!isCat(c)) bad(`shared.HOLDER_ALLOW.${k}`, `unknown economy category ${c}`);
   for (const [k, s] of Object.entries(HOLDER_SLOTS)) if (!isSlot(s)) bad(`shared.HOLDER_SLOTS.${k}`, `unknown slot category ${s}`);
+  // --- lane ROOF (office-interactions-layout-20261030): curated rewards — a real loot holder, valid picks, at least one guaranteed
+  for (const [k, rw] of Object.entries(t.rewards ?? {})) {
+    const path = `tables.rewards.${k}`;
+    if (!rw || typeof rw !== 'object' || !Array.isArray(rw.picks)) { bad(path, 'not a reward table'); continue; }
+    if (!(rw.holder in HOLDER_SLOTS) || HOLDER_SLOTS[rw.holder] === 'fixture') bad(`${path}.holder`, `${String(rw.holder)} is not a loot holder kind`);
+    rw.picks.forEach((q, i) => { rows(`${path}.picks[${i}].items`, q.items); range(`${path}.picks[${i}].lots`, q.lots); chance(`${path}.picks[${i}].empty`, q.empty); });
+    if (!rw.picks.some(q => q.empty === 0 && isRange(q.lots) && q.lots[0] >= 1 && Array.isArray(q.items) && q.items.some((r: ItemRow) => finiteNonNeg(r[1]) && r[1] > 0))) {
+      bad(path, 'no guaranteed pick (empty 0, lots lo >= 1, a row with weight > 0)');
+    }
+  }
   return issues;
 }

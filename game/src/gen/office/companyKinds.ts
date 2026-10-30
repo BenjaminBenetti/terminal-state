@@ -14,13 +14,16 @@
 // them with EXISTING holders instead (the vault room's openable `safe`, the clinic's `medCabinet`, the café / test kitchen's
 // `fridge` + `kitchenette`, the control room's `gunLocker`, reception back counters `cabinetLow` …) whose purposes carry the
 // company's loot theme (gen/purposes.ts office-* entries), so scarcity is unchanged.
+// Task office-interactions-layout-20261030 (lane OPEN): superseded for the plausible storage — the vault safe, specimen fridge, lab
+// bench, exam table, executive desk, server cabinet and archive boxes are openable holders now (world/openablesSpec.ts: their model
+// split into doors / drawers / a lid, themed loot); world/openables.ts draws them instead of the office builder. Every company kind's
+// openables classification is world/openablesSpec.ts OFFICE_OPEN_AUDIT.
 
 import type {PropDef} from '../props';
 import type {ShapeMat, ShapePart} from '../propShapes';
 import type {DamageClass} from '../../damage/materials';
 import {COMPANY_DIMS} from '../../assets/companyDims.generated';
 
-type AuditCls = 'none' | 'exception';
 interface KindSpec {
   /** Manifest asset id (assets/companyAssets.ts CompanyAssetId), null = geometry only. */
   asset: string | null;
@@ -28,59 +31,57 @@ interface KindSpec {
   box: readonly [number, number, number];
   blocksSight?: boolean;
   cls: DamageClass;
-  /** Openables audit (world/openablesSpec.ts): 'exception' = a door / lid / drawer that deliberately does not open. */
-  audit?: {cls: AuditCls; how: string};
 }
 
 const SPECS = {
   // --- D01-D40: company signature props (two per company) ---------------------------------------------------------------------
-  gumballMachine: {asset: 'gumball-machine', box: [0.5, 0.5, 1.35], cls: 'glass', audit: {cls: 'exception', how: 'gumball machine coin flap: dispenses gum only (no item), one fused mesh'}},
+  gumballMachine: {asset: 'gumball-machine', box: [0.5, 0.5, 1.35], cls: 'glass'},
   gumballJar: {asset: 'gumball-jar', box: [0.46, 0.46, 0.75], cls: 'glass'},
-  arcadeCabinet: {asset: 'arcade-cabinet', box: [0.7, 0.85, 1.8], cls: 'laminate', audit: {cls: 'exception', how: 'arcade cabinet coin door: locked service panel, one fused mesh'}},
+  arcadeCabinet: {asset: 'arcade-cabinet', box: [0.7, 0.85, 1.8], cls: 'laminate'},
   consoleStation: {asset: 'console-station', box: [1.4, 0.5, 1.15], cls: 'plastic'},
   lawBookcase: {asset: 'law-bookcase', box: [1.0, 0.4, 2.2], blocksSight: true, cls: 'wood'},
   justiceStatue: {asset: 'justice-statue', box: [0.6, 0.6, 1.7], cls: 'steel'},
   tradingDesk: {asset: 'trading-desk', box: [1.8, 0.9, 1.25], cls: 'laminate'},
   bullStatue: {asset: 'bull-statue', box: [1.4, 0.6, 0.85], cls: 'steel'},
-  labBench: {asset: 'lab-bench', box: [1.8, 0.75, 1.3], cls: 'laminate', audit: {cls: 'exception', how: 'lab bench drawers: fused into the bench mesh (the lab medCabinet is the searchable one)'}},
-  biohazardFridge: {asset: 'biohazard-fridge', box: [0.8, 0.75, 2.0], cls: 'sheetMetal', audit: {cls: 'exception', how: 'specimen fridge: sealed biohazard door with sample vials only (no items), one fused mesh'}},
+  labBench: {asset: 'lab-bench', box: [1.8, 0.75, 1.3], cls: 'laminate'},
+  biohazardFridge: {asset: 'biohazard-fridge', box: [0.8, 0.75, 2.0], cls: 'sheetMetal'},
   architectModel: {asset: 'architect-model', box: [1.6, 1.0, 1.1], cls: 'wood'},
   draftingTable: {asset: 'drafting-table', box: [1.3, 0.9, 1.3], cls: 'wood'},
   tvCamera: {asset: 'tv-camera', box: [0.8, 1.0, 1.7], cls: 'steel'},
   newsDesk: {asset: 'news-desk', box: [2.6, 1.1, 1.05], cls: 'laminate'},
   espressoMachine: {asset: 'espresso-machine', box: [1.4, 0.7, 1.4], cls: 'steel'},
-  coffeeRoaster: {asset: 'coffee-roaster', box: [1.4, 1.2, 1.8], blocksSight: true, cls: 'steel', audit: {cls: 'exception', how: 'drum roaster hatch: machinery holding old beans only, one fused mesh'}},
+  coffeeRoaster: {asset: 'coffee-roaster', box: [1.4, 1.2, 1.8], blocksSight: true, cls: 'steel'},
   treadmill: {asset: 'treadmill', box: [0.85, 2.0, 1.45], cls: 'plastic'},
   sneakerWall: {asset: 'sneaker-wall', box: [1.6, 0.5, 2.0], blocksSight: true, cls: 'laminate'},
   giantTeddy: {asset: 'giant-teddy', box: [0.9, 0.8, 1.2], cls: 'fabric'},
   rockingHorse: {asset: 'rocking-horse', box: [0.45, 1.2, 0.95], cls: 'wood'},
-  jukebox: {asset: 'jukebox', box: [0.95, 0.7, 1.6], cls: 'plastic', audit: {cls: 'exception', how: 'jukebox service panel: locked, records only, one fused mesh'}},
+  jukebox: {asset: 'jukebox', box: [0.95, 0.7, 1.6], cls: 'plastic'},
   mixingConsole: {asset: 'mixing-console', box: [2.0, 1.1, 1.35], cls: 'laminate'},
-  examTable: {asset: 'exam-table', box: [1.9, 0.75, 0.9], cls: 'fabric', audit: {cls: 'exception', how: 'exam table drawers: fused into the table mesh (the clinic medCabinet is the searchable one)'}},
+  examTable: {asset: 'exam-table', box: [1.9, 0.75, 0.9], cls: 'fabric'},
   vitalsMonitor: {asset: 'vitals-monitor', box: [0.55, 0.55, 1.6], cls: 'plastic'},
   dressForm: {asset: 'dress-form', box: [0.6, 0.6, 1.7], cls: 'fabric'},
   clothingRack: {asset: 'clothing-rack', box: [1.5, 0.6, 1.7], cls: 'fabric'},
-  shipModel: {asset: 'ship-model', box: [1.6, 0.6, 1.5], cls: 'glass', audit: {cls: 'exception', how: 'ship model display case: glazed and sealed, cabinet doors fused into the mesh'}},
+  shipModel: {asset: 'ship-model', box: [1.6, 0.6, 1.5], cls: 'glass'},
   parcelPallet: {asset: 'parcel-pallet', box: [1.2, 1.0, 1.4], cls: 'cardboard'},
   napPod: {asset: 'nap-pod', box: [1.0, 1.8, 1.4], cls: 'plastic'},
-  kegerator: {asset: 'kegerator', box: [0.65, 0.7, 1.4], cls: 'steel', audit: {cls: 'exception', how: 'kegerator door: kegs and taps only (no item), one fused mesh'}},
-  cctvConsole: {asset: 'cctv-console', box: [2.0, 0.9, 2.0], blocksSight: true, cls: 'laminate', audit: {cls: 'exception', how: 'control desk drawers: fused into the console mesh (the control room gunLocker / cabinets are searchable)'}},
+  kegerator: {asset: 'kegerator', box: [0.65, 0.7, 1.4], cls: 'steel'},
+  cctvConsole: {asset: 'cctv-console', box: [2.0, 0.9, 2.0], blocksSight: true, cls: 'laminate'},
   metalDetector: {asset: 'metal-detector', box: [1.0, 0.7, 2.2], cls: 'plastic'},
-  vaultSafe: {asset: 'vault-safe', box: [1.0, 0.85, 1.5], cls: 'steel', audit: {cls: 'exception', how: 'antique vault safe: combination dial, locked shut (the vault room openable safe is the searchable one)'}},
-  archiveBoxes: {asset: 'archive-boxes', box: [0.9, 0.6, 1.3], cls: 'cardboard', audit: {cls: 'exception', how: 'archive box stack: lids hide paper records only (no item), one fused mesh'}},
-  aquarium: {asset: 'aquarium', box: [1.5, 0.55, 1.5], cls: 'glass', audit: {cls: 'exception', how: 'aquarium cabinet doors: fused into the cabinet mesh; murky water, no items'}},
+  vaultSafe: {asset: 'vault-safe', box: [1.0, 0.85, 1.5], cls: 'steel'},
+  archiveBoxes: {asset: 'archive-boxes', box: [0.9, 0.6, 1.3], cls: 'cardboard'},
+  aquarium: {asset: 'aquarium', box: [1.5, 0.55, 1.5], cls: 'glass'},
   catTree: {asset: 'cat-tree', box: [0.7, 0.7, 1.8], cls: 'fabric'},
   doughMixer: {asset: 'dough-mixer', box: [0.8, 0.9, 1.5], cls: 'steel'},
-  bakeryCase: {asset: 'bakery-case', box: [1.6, 0.8, 1.25], cls: 'glass', audit: {cls: 'exception', how: 'bakery case sliding back: stale pastries only (not food items), one fused mesh'}},
+  bakeryCase: {asset: 'bakery-case', box: [1.6, 0.8, 1.25], cls: 'glass'},
   satelliteModel: {asset: 'satellite-model', box: [1.8, 0.9, 1.4], cls: 'steel'},
   telescope: {asset: 'telescope', box: [0.9, 1.2, 1.8], cls: 'steel'},
   // --- E01-E17: supporting models (executive, server, lobby, leisure, small plant, roof) -----------------------------------------
-  executiveDesk: {asset: 'executive-desk', box: [2.0, 1.0, 0.78], cls: 'wood', audit: {cls: 'exception', how: 'executive desk drawers: fused into the desk mesh (the suite credenza cabinetLow / safe are searchable)'}},
+  executiveDesk: {asset: 'executive-desk', box: [2.0, 1.0, 0.78], cls: 'wood'},
   executiveChair: {asset: 'executive-chair', box: [0.7, 0.75, 1.25], cls: 'fabric'},
   chesterfieldSofa: {asset: 'chesterfield-sofa', box: [2.1, 0.9, 0.8], cls: 'fabric'},
-  globeBar: {asset: 'globe-bar', box: [0.65, 0.65, 1.0], cls: 'wood', audit: {cls: 'exception', how: 'globe bar lid: modelled open, decanters fused into the mesh (no items)'}},
-  serverCabinet: {asset: 'server-cabinet', box: [0.6, 1.05, 2.0], cls: 'sheetMetal', audit: {cls: 'exception', how: 'server cabinet glass door: keyed, equipment only, one fused mesh'}},
-  cracUnit: {asset: 'crac-unit', box: [1.7, 0.85, 1.9], blocksSight: true, cls: 'sheetMetal', audit: {cls: 'exception', how: 'CRAC unit service panels: machinery, locked, one fused mesh'}},
+  globeBar: {asset: 'globe-bar', box: [0.65, 0.65, 1.0], cls: 'wood'},
+  serverCabinet: {asset: 'server-cabinet', box: [0.6, 1.05, 2.0], cls: 'sheetMetal'},
+  cracUnit: {asset: 'crac-unit', box: [1.7, 0.85, 1.9], blocksSight: true, cls: 'sheetMetal'},
   lobbySofa: {asset: 'lobby-sofa', box: [2.2, 0.9, 0.8], cls: 'fabric'},
   planterTree: {asset: 'planter-tree', box: [0.9, 0.9, 2.2], cls: 'concrete'},
   securityTurnstile: {asset: 'security-turnstile', box: [0.32, 1.4, 1.0], cls: 'steel'},
@@ -89,7 +90,7 @@ const SPECS = {
   beanBag: {asset: 'bean-bag', box: [0.9, 0.9, 0.7], cls: 'fabric'},
   loungeArmchair: {asset: 'lounge-armchair', box: [0.75, 0.8, 0.85], cls: 'fabric'},
   pottedPlantSmall: {asset: 'potted-plant-small', box: [0.42, 0.42, 0.6], cls: 'porcelain'},
-  roofHvac: {asset: 'rooftop-hvac', box: [2.4, 1.4, 1.4], blocksSight: true, cls: 'sheetMetal', audit: {cls: 'exception', how: 'rooftop HVAC service panels: machinery, screwed shut, one fused mesh'}},
+  roofHvac: {asset: 'rooftop-hvac', box: [2.4, 1.4, 1.4], blocksSight: true, cls: 'sheetMetal'},
   waterTower: {asset: 'water-tower', box: [3.2, 3.2, 4.5], blocksSight: true, cls: 'wood'},
   satelliteDish: {asset: 'satellite-dish', box: [1.8, 1.2, 1.8], cls: 'steel'},
   // --- geometry only ------------------------------------------------------------------------------------------------------------
@@ -132,11 +133,11 @@ export const COMPANY_KIND_ASSET: Readonly<Partial<Record<CompanyKind, string>>> 
 export const COMPANY_PROP_DAMAGE = Object.fromEntries(COMPANY_KINDS.map(k => [k, {cls: SPECS[k].cls as DamageClass, integrity: Infinity, breaks: 'never' as const}])) as
   Record<CompanyKind, {cls: DamageClass; integrity: number; breaks: 'never'}>;
 
-/** Openables audit rows (world/openablesSpec.ts OPENABLE_AUDIT spreads these). */
-export const COMPANY_KIND_AUDIT: readonly {kind: string; cls: AuditCls; how: string}[] = COMPANY_KINDS.map(k => {
-  const a: KindSpec['audit'] = (SPECS[k] as KindSpec).audit;
-  return a ? {kind: k, ...a} : {kind: k, cls: 'none' as const, how: 'no door, lid or drawer (company / office furniture, decor or equipment)'};
-});
+/**
+ * Task office-interactions-layout-20261030 (lane OPEN): the company kinds by name. Their openables classification (role, class, honest
+ * reason — several of them open now) moved to world/openablesSpec.ts OFFICE_OPEN_AUDIT, typed over every office kind.
+ */
+export const COMPANY_KIND_AUDIT: readonly {kind: string}[] = COMPANY_KINDS.map(k => ({kind: k}));
 
 // ---------------------------------------------------------------------------------------------
 // Procedural stand-ins (box parts; used until / unless the model is loaded)

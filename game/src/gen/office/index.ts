@@ -40,10 +40,12 @@ import {officeIssues} from './validate';
 import {officeTenants} from './tenants'; // Task office-overhaul-20261030 (lane TENANTS)
 // Task office-overhaul-20261030 (lane STRUCT): the roof storey and the transit hall.
 import {carveRoof, dressRoof, roofCoreCells, roofDaylight, roofHold, roofInfo, roofLadder, roofSky, roofStrip, type RoofCarve} from './roof';
+import {placeRoofReward} from './roof'; // Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache
 import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, transitRails, transitSigns} from './transit';
 
 export {OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
 export {roofLadderPose} from './roof';
+export {roofRewardPose} from './roof'; // Task office-interactions-layout-20261030 (lane ROOF): QA pose in front of the roof cache
 export {transitPose} from './transit';
 export {officeIssues} from './validate';
 export {officeModelKeysFor} from './kinds';
@@ -166,6 +168,9 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   roofStrip(layout, rc);
   const roofDress = dressRoof(layout, f, rc, rng.fork('roof'));
   layout.rails = [...layout.rails, ...roofDress.rails];
+  // Task office-interactions-layout-20261030 (lane ROOF): the roof payoff — ONE curated reward cache tucked against the roof plant
+  // (its own fork: the dressing above is untouched; holders before it keep their indices — it is the last loot holder placed).
+  const roofReward = placeRoofReward(layout, f, rc, roofDress.structures, rng.fork('roof-reward'), loot);
 
   // --- Player start (after dressing, like placeSpawns): the platform's east end, far from the exit passage, looking west -----
   const start = startOf(layout, s);
@@ -205,7 +210,7 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   }
   roofDaylight(layout, f, rc);
   layout.office = officeInfo(layout, f, towers, bases, runs, runLinks, windows, start);
-  layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures);
+  layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures, roofReward); // (lane ROOF: + the reward record)
   layout.office.transit = transitInfo(layout, s, transitLinkIds);
   streetSigns(layout, s, f, rc);
   return layout;
@@ -364,7 +369,11 @@ function streetSigns(layout: StationLayout, s: StreetCarve, f: TowerFrame, rc: R
   if (!lad) return;
   const b8 = rc.base8, c = layout.areas[rc.closet.id];
   const door = layout.doors.find(d => (d.a === c.id || d.b === c.id) && d.level === OFFICE_TOP_FLOOR);
-  if (door) layout.signs.push({x: r3((door.x + door.w / 2) * CELL), y: r3(b8 + 2.4), z: r3(W(f.cy1 + 1) + 0.02), rot: 0, kind: 'service', text: 'ROOF ACCESS', area: door.a === c.id ? door.b : door.a, w: 1.2, level: OFFICE_TOP_FLOOR});
+  // Task office-interactions-layout-20261030 (lane LAYOUT, item 4): the roof access room is assigned when floor 8 is carved, so the
+  // office dresser's signage already plated its door (ROOF ACCESS, overlap-free, never ELECTRICAL); this over-door plate is only the
+  // fallback for a room without one — exactly one ROOF ACCESS plate either way.
+  const plated = layout.signs.some(s => s.level === OFFICE_TOP_FLOOR && s.text === 'ROOF ACCESS');
+  if (door && !plated) layout.signs.push({x: r3((door.x + door.w / 2) * CELL), y: r3(b8 + 2.4), z: r3(W(f.cy1 + 1) + 0.02), rot: 0, kind: 'service', text: 'ROOF ACCESS', area: door.a === c.id ? door.b : door.a, w: 1.2, level: OFFICE_TOP_FLOOR});
   layout.signs.push({x: r3(lad.x + 0.64), y: r3(b8 + 1.55), z: r3(lad.faceZ + 0.02), rot: 0, kind: 'service', text: 'ROOF', area: c.id, w: 0.56, level: OFFICE_TOP_FLOOR});
 }
 
