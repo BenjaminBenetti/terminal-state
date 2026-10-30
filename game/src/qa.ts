@@ -43,6 +43,8 @@ export function installQaHooks(game: Game): void {
         // Iteration 08 (Lane B): storey of the player / zombies (support band at the feet).
         level: levelQa(),
         selected: game.inv.selected,
+        // task knife-windup-20261030 (lane SLOT): the melee slot (~) and whether its weapon is the one in the hands
+        meleeSlot: game.inv.melee && {itemId: game.inv.melee.itemId, uid: game.inv.melee.uid}, meleeSelected: game.inv.meleeSelected,
         held: st ? {itemId: st.itemId, mag: st.mag ?? null, count: st.count} : null,
         weapon: {id: game.weapon.def?.id ?? null, phase: game.weapon.phase},
         // lane KNIFE: melee swing state + the last contacts (kind enemy / corpse / world / miss, part, damage, killed)

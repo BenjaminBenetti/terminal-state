@@ -19,10 +19,15 @@
 // (data-bar="throw"): only throwables (flares) go in — drag them in / out, right-click / double-click / Equip a flare to put it
 // there. G no longer drops: dropping is dragging an item out of this panel (or Drop / Delete), which works for every slot.
 // (#1) the worn backpack's "contents hidden" label is gone; its contents still need the bag on the ground (tap E opens it).
+//
+// Task knife-windup-20261030 (lane SLOT): the MELEE SLOT (key ~) is the last cell of the quick-slot row (data-bar="melee"), shown
+// first (left of 1) by CSS. Only melee weapons go in (drag refused / red outline otherwise). Right-click / double-click / Equip on a
+// melee weapon anywhere puts it into the melee slot (a swap sends the old one back) and draws it; ~ while the inventory is open
+// puts the selected melee weapon there (like 1-5 for quick slots). Dragging it out of the panel drops it, as for every slot.
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
-import {PACK_SIZE, THROW_REF, type Bar, type Inventory, type SlotRef} from '../items/inventory';
+import {MELEE_REF, PACK_SIZE, THROW_REF, isMeleeItem, type Bar, type Inventory, type SlotRef} from '../items/inventory';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem} from '../items/gear';
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
@@ -70,6 +75,8 @@ interface DragState {
 }
 
 const same = (a: SlotRef | null | undefined, b: SlotRef | null | undefined) => !!a && !!b && a.bar === b.bar && a.index === b.index;
+/** Task knife-windup-20261030 (SLOT): text inside a title="…" attribute (weapon names quote their nickname: Knife — "Last resort"). */
+const attr = (t: string) => t.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 // Task office-overhaul-20261030 (INTERACT): by data-bar (the grenade slot lives in the quick-slot row)
 const slotSel = (r: SlotRef) => `#inventory .slot[data-bar="${r.bar}"][data-index="${r.index}"]`;
 const GEAR_GHOST: Record<string, string> = {helmet: GEAR_ICONS.helmet, chest: GEAR_ICONS.vest, gloves: GEAR_ICONS.gloves, boots: GEAR_ICONS.boots, backpack: GEAR_ICONS.backpack};
@@ -112,6 +119,7 @@ export class InventoryUI {
         }
         if (this.isGear(ref)) { this.lastClick = null; this.toggleWear(ref); return; } // Iteration 16: wear / take off
         if (this.isThrowable(ref) && ref.bar !== 'throw') { this.lastClick = null; this.dropAt(ref, THROW_REF); return; } // INTERACT (#6)
+        if (this.isMelee(ref) && ref.bar !== 'melee') { this.lastClick = null; this.selected = null; this.actions.equip(ref); this.render(); return; } // SLOT
       }
       this.click(ref);
     };
@@ -221,6 +229,11 @@ export class InventoryUI {
     return !!st && itemDef(st.itemId).kind === 'throwable';
   }
 
+  /** Task knife-windup-20261030 (SLOT): a melee weapon (knife) — it belongs in the melee slot. */
+  private isMelee(ref: SlotRef): boolean {
+    return isMeleeItem(this.inv().get(ref)?.itemId);
+  }
+
   /** Iteration 16: wear a gear item from a slot, or take worn gear off (refusals explained). */
   toggleWear(ref: SlotRef): string {
     const inv = this.inv();
@@ -272,6 +285,12 @@ export class InventoryUI {
     if (!this.selected) return;
     const to: SlotRef = {bar: 'hotbar', index: slot};
     this.dropAt(this.selected, to);
+  }
+
+  /** Task knife-windup-20261030 (SLOT): ~ while the inventory is open — the selected stack into the melee slot (refused unless melee). */
+  assignMelee(): string {
+    if (!this.selected) return 'none';
+    return this.dropAt(this.selected, MELEE_REF);
   }
 
   /**
@@ -344,8 +363,9 @@ export class InventoryUI {
       return r.width > 0 ? {x: r.left + r.width / 2, y: r.top + r.height / 2} : null;
     };
     const [kind, n] = spec.split(':');
-    if (kind === 'hotbar' || kind === 'pack' || kind === 'gear' || kind === 'throw') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
-    if (kind === 'hud') return centre(document.querySelector(`#hotbar .slot[data-index="${Number(n)}"]`));
+    if (kind === 'hotbar' || kind === 'pack' || kind === 'gear' || kind === 'throw' || kind === 'melee') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
+    // 'hud:N' = HUD quick slot N (by data-bar: the G / ~ cells also have data-index 0); 'hud:melee' / 'hud:throw' = those HUD cells
+    if (kind === 'hud') return centre(document.querySelector(n === 'melee' || n === 'throw' ? `#hotbar .slot[data-bar="${n}"]` : `#hotbar .slot[data-bar="hotbar"][data-index="${Number(n)}"]`));
     if (kind === 'panel') return centre(document.querySelector('#inv-detail'));
     const p = document.querySelector('#inventory .inv-panel')?.getBoundingClientRect();
     if (!p) return null;
@@ -415,6 +435,8 @@ export class InventoryUI {
     if (a && t.bar !== 'gear' && isBagItem(a.itemId)) bad = true;
     if (a && t.bar === 'throw' && itemDef(a.itemId).kind !== 'throwable') bad = true; // INTERACT (#6): throwables only
     if (a && b && d.from.bar === 'throw' && itemDef(b.itemId).kind !== 'throwable') bad = true;
+    if (a && t.bar === 'melee' && !isMeleeItem(a.itemId)) bad = true; // SLOT: melee weapons only
+    if (a && b && d.from.bar === 'melee' && !isMeleeItem(b.itemId)) bad = true;
     if (a && b && d.from.bar === 'gear' && itemDef(b.itemId).gear?.slot !== GEAR_SLOTS[d.from.index]) bad = true;
     el.classList.add(bad ? 'drop-bad' : 'drop-target');
     this.hoverEl = el;
@@ -428,27 +450,36 @@ export class InventoryUI {
       const st = inv.get(ref);
       const def = st ? itemDef(st.itemId) : null;
       const sel = same(this.selected, ref);
-      const held = ref.bar === 'hotbar' && ref.index === inv.selected;
+      const held = same(ref, inv.selectedRef()); // SLOT: the melee slot while its weapon is drawn
       const usable = def?.kind === 'consumable';
       const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      let title = def ? ` title="${def.name}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
+      let title = def ? ` title="${attr(def.name)}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
       let cls = '';
       // Task office-overhaul-20261030 (INTERACT, #6): the grenade slot
       if (ref.bar === 'throw') {
         lead = `<span class="key">G</span>${def ? '' : `<span class="ghost">${ICONS.flare}</span>`}`;
-        title = def ? ` title="${def.name} — grenade slot: hold G to ready it, release to throw. Drag to move · drag out of the panel to drop"` : ' title="Grenade slot (G): drag a flare here (or right-click one) — hold G to ready it, release to throw"';
+        title = def ? ` title="${attr(def.name)} — grenade slot: hold G to ready it, release to throw. Drag to move · drag out of the panel to drop"` : ' title="Grenade slot (G): drag a flare here (or right-click one) — hold G to ready it, release to throw"';
+      }
+      // Task knife-windup-20261030 (SLOT): the melee slot
+      if (ref.bar === 'melee') {
+        lead = `<span class="key">~</span>${def ? '' : `<span class="ghost">${ICONS.knife}</span>`}`;
+        title = def ? ` title="${attr(def.name)} — melee slot: ~ draws it (it takes no quick slot). Drag to move · drag out of the panel to drop"` : ' title="Melee slot (~): drag a knife here (or right-click one) — ~ draws it; it takes no quick slot"';
       }
       if (ref.bar === 'gear') {
         const slot = GEAR_SLOTS[ref.index];
         lead = `<span class="gslot">${GEAR_SLOT_NAMES[slot]}</span>${def ? '' : `<span class="ghost">${GEAR_GHOST[slot] ?? ''}</span>`}`;
-        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${def.name} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then tap E to open it (hold E picks it back up), or drag it out of this panel."`; }
+        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${attr(def.name)} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then tap E to open it (hold E picks it back up), or drag it out of this panel."`; }
         else if (!def) title = ` title="${GEAR_SLOT_NAMES[slot]}: drag ${slot === 'chest' ? 'an armor vest or a chest rig' : slot === 'backpack' ? 'a backpack' : `${slot === 'helmet' ? 'a helmet' : slot}`} here to wear it"`;
       } else if (ref.bar === 'pack' && ref.index >= PACK_SIZE) cls = ' gear-extra';
       return `<div class="slot${sel ? ' selected' : ''}${held ? ' held' : ''}${usable ? ' usable' : ''}${def ? ' filled' : ''}${cls}" data-bar="${ref.bar}" data-index="${ref.index}" role="button" tabindex="0"${title}>${lead}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
-    $('#inv-hotbar').innerHTML = inv.hotbar.map((_, i) => cell({bar: 'hotbar', index: i})).join('') + inv.throwSlot.map((_, i) => cell({bar: 'throw', index: i})).join(''); // + grenade slot (INTERACT)
+    // + grenade slot (INTERACT) + melee slot (SLOT: last in the markup, shown first by CSS)
+    $('#inv-hotbar').innerHTML = inv.hotbar.map((_, i) => cell({bar: 'hotbar', index: i})).join('') + inv.throwSlot.map((_, i) => cell({bar: 'throw', index: i})).join('')
+      + inv.meleeSlot.map((_, i) => cell({bar: 'melee', index: i})).join('');
+    const qh = document.querySelector('#inv-hotbar')?.previousElementSibling; // SLOT: the row's heading names its three kinds of slot
+    if (qh && qh.tagName === 'H3') qh.textContent = 'Melee slot (~) · quick slots (1–5) · grenade slot (G)';
     $('#inv-pack').innerHTML = inv.pack.map((_, i) => cell({bar: 'pack', index: i})).join('');
     this.renderGear(inv, cell);
     if (refocus) (document.querySelector(`#inventory .slot[data-bar="${refocus.bar}"][data-index="${refocus.index}"]`) as HTMLElement | null)?.focus();
@@ -464,7 +495,7 @@ export class InventoryUI {
     if (fx) {
       fx.textContent = this.note || (def?.kind === 'ammo' && def.caliber ? `${CALIBERS[def.caliber].designation} · loads: ${weaponsForCaliber(def.caliber).map(w => itemDef(w.itemId).short).join(', ') || 'no weapon yet'}`
         : wdef?.caliber ? `Takes ${CALIBERS[wdef.caliber].label} (${CALIBERS[wdef.caliber].designation}) · ${reserveFor(wdef, inv)} in reserve`
-        : wdef?.melee ? `Melee · click to slash, hold to keep slashing · reach ${wdef.range} m · never needs ammo` // lane KNIFE
+        : wdef?.melee ? `Melee · hold click to wind up, release to slash · reach ${wdef.range} m · never needs ammo · ${this.selected?.bar === 'melee' ? 'in the melee slot: ~ draws it' : 'right-click / double-click / Equip puts it in the melee slot (~)'}` // lane KNIFE / SLOT
         : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
         : def?.kind === 'gear' ? `${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') : ''); // INTERACT (#6)

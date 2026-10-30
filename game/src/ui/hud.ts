@@ -209,26 +209,46 @@ export class Hud {
       // data-bar/data-index make these slots drop targets while the inventory is open (inventoryUI.ts).
       // Task office-overhaul-20261030 (lane INTERACT): after quick slots 1-5 come slot "6" (the worn backpack: 6 takes it into the
       // hands, click sets it down) and slot "G" (the grenade slot: hold G to ready its throwable, release to throw).
+      // Task knife-windup-20261030 (lane SLOT): + slot "~" (the melee slot: ~ draws its weapon). It is the LAST child (indices of
+      // 1-5 / 6 / G unchanged) but shown FIRST, left of quick slot 1 like the ~ key (CSS order, ui/gearStyles.ts).
       const bar = $('#hotbar');
       const n = inv.hotbar.length;
-      if (bar.children.length !== n + 2) {
+      if (bar.children.length !== n + 3) {
         ensureGearStyles();
         bar.innerHTML = inv.hotbar.map((_, i) => `<div class="slot" data-bar="hotbar" data-index="${i}"></div>`).join('')
           + `<div class="slot bagslot" data-bar="gear" data-index="${BACK}" title="6: take your backpack off into your hands · click sets it down"></div>`
-          + `<div class="slot throwslot" data-bar="throw" data-index="0" title="G: hold to ready the grenade slot's throwable (flare), release to throw"></div>`;
+          + `<div class="slot throwslot" data-bar="throw" data-index="0" title="G: hold to ready the grenade slot's throwable (flare), release to throw"></div>`
+          + `<div class="slot meleeslot" data-bar="melee" data-index="0" title="~: draw the melee slot's weapon (knife) · 1-5 / wheel / Q go back to the quick slots"></div>`;
       }
+      const meleeHeld = inv.meleeSelected && !this.bagSelected;
       inv.hotbar.forEach((st, i) => {
         const el = bar.children[i] as HTMLElement;
         const def = st ? itemDef(st.itemId) : null;
         const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${st?.count ?? 0}|${st?.mag ?? ''}|${itemIconsVersion()}`;
-        el.classList.toggle('selected', i === inv.selected && !this.bagSelected);
+        el.classList.toggle('selected', i === inv.selected && !inv.meleeSelected && !this.bagSelected);
         if (el.dataset.k === key) return;
         el.dataset.k = key;
         const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' && !meleeDefOf(def.id) ? `<span class="count">${st!.mag}</span>` : ''; // lane KNIFE: no rounds on a melee slot
         el.innerHTML = `<span class="key">${i + 1}</span>${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}`;
       });
       this.extraSlots(inv, bar.children[n] as HTMLElement, bar.children[n + 1] as HTMLElement);
+      this.meleeCell(inv, bar.children[n + 2] as HTMLElement, meleeHeld);
     }
+  }
+
+  /**
+   * Task knife-windup-20261030 (lane SLOT): HUD slot "~" — the melee slot in the grenade slot's style (teal key, dim "melee" ghost
+   * when empty), mustard-selected while its weapon is in the hands. Melee weapons show no rounds.
+   */
+  private meleeCell(inv: Inventory, el: HTMLElement, held: boolean): void {
+    const m = inv.melee;
+    const def = m ? itemDef(m.itemId) : null;
+    el.classList.toggle('vacant', !def);
+    el.classList.toggle('selected', held && !!def);
+    const k = `${m?.uid ?? 0}|${m?.itemId ?? ''}|${itemIconsVersion()}`;
+    if (el.dataset.k === k) return;
+    el.dataset.k = k;
+    el.innerHTML = `<span class="key">~</span>${def ? itemIconHtml(def.id) : `<span class="ghost">${ICONS.knife}</span>`}<span class="nm">${def ? def.short : 'melee'}</span>`;
   }
 
   /** Task office-overhaul-20261030 (INTERACT): HUD slot 6 (worn backpack, dim "no bag" without one) and slot G (grenade slot). */
@@ -378,8 +398,10 @@ export class Hud {
 
 export const CONTROLS: [string, string][] = [
   ['Move', 'W A S D'], ['Look', 'Mouse'], ['Sprint', 'Shift'], ['Jump', 'Space'],
-  ['Crouch (tap toggle · hold)', 'C'], ['Fire · knife slash (hold to keep slashing) / eat · drink · use held item', 'Left click'],
-  ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots (knife: 3 at the start)', '1 – 5 · wheel'],
+  ['Crouch (tap toggle · hold)', 'C'], ['Fire · knife: hold to wind up, release to slash (a tap slashes too) / eat · drink · use held item', 'Left click'],
+  ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
+  // Task knife-windup-20261030 (lane SLOT): the dedicated melee slot (the knife lives there, not in a quick slot)
+  ['Melee slot: draw your knife (1 – 5 · wheel · Q switch back)', '~'],
   ['Last item', 'Q'], ['Inventory (drag an item out of it to drop it)', 'Tab or I'], ['Quick heal', 'H'],
   // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items.
   // Task office-overhaul-20261030 (INTERACT, #6): G throws the grenade slot's flare (T retired; G no longer drops)

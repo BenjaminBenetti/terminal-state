@@ -49,16 +49,25 @@ const CSS = `
 #gear-resume span { padding: 8px 16px; background: rgba(20, 22, 24, 0.82); border: 1px solid var(--teal); color: var(--cream); font-size: 14px; }
 /* Task office-overhaul-20261030 (lane INTERACT): HUD slot 6 (worn backpack) + G (grenade slot) after quick slots 1-5; the
    inventory's quick-slot row gains the grenade slot; the crosshair hold ring (hold E on a grounded bag to wear it). */
-#hotbar .slot.bagslot { margin-left: 10px; }
-#hotbar .slot.throwslot { margin-left: 4px; }
+#hotbar .slot.bagslot { margin-left: var(--hb-sep, 10px); }
+#hotbar .slot.throwslot { margin-left: var(--hb-sep2, 4px); }
 #hotbar .slot.throwslot .key, #inv-hotbar .slot[data-bar="throw"] .key { color: var(--teal); }
 #hotbar .slot.vacant { opacity: 0.55; }
 #hotbar .slot.vacant .nm { color: var(--cream-dim); }
-#hotbar .slot .ghost, #inv-hotbar .slot .ghost { color: #4a5157; display: flex; }
-#hotbar .slot .ghost svg { width: 46px; height: 24px; }
-#inv-hotbar { grid-template-columns: repeat(6, 1fr); }
+#hotbar .slot .ghost, #inv-hotbar .slot .ghost, #bagview .slot .ghost { color: #4a5157; display: flex; }
+#hotbar .slot .ghost svg { width: min(46px, calc(var(--hb-w, 84px) - 14px)); height: 24px; }
+#inv-hotbar { grid-template-columns: repeat(7, 1fr); }
 #inv-hotbar .slot[data-bar="throw"] { border-style: dashed; }
 #inv-hotbar .slot[data-bar="throw"].filled { border-style: solid; }
+/* Task knife-windup-20261030 (lane SLOT): the melee slot "~" in the grenade slot's look (teal key; dashed while empty in the
+   inventory / bag view). It is the LAST element of each slot row (stable indices for 1-5 / 6 / G) but shown FIRST — left of
+   quick slot 1, where the ~ key sits — with the same separation the backpack cell has on the other side. */
+#hotbar .slot.meleeslot { order: -1; margin-right: var(--hb-sep, 10px); }
+#hotbar .slot.meleeslot .key, #inv-hotbar .slot[data-bar="melee"] .key, #bagview .slot[data-bar="melee"] .key { color: var(--teal); }
+#inv-hotbar .slot[data-bar="melee"], #bagview .slot[data-bar="melee"] { order: -1; border-style: dashed; }
+#inv-hotbar .slot[data-bar="melee"].filled, #bagview .slot[data-bar="melee"].filled { border-style: solid; }
+#bagview .bv-g7 { grid-template-columns: repeat(7, 1fr); }
+#bagview .slot .ghost svg { width: 40px; height: 22px; }
 #hold-ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; pointer-events: none; opacity: 0; transition: opacity 0.08s linear; }
 #hold-ring.show { opacity: 1; }
 #hold-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }

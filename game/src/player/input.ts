@@ -4,6 +4,7 @@
 // Crouch is C (iteration 05, user request: Ctrl was dropped because Ctrl+W closes the tab).
 // Task office-overhaul-20261030 (lane INTERACT): G is the grenade slot (hold to ready, release to throw; it no longer drops) and
 // 6 the backpack slot; E is tap / hold on a grounded bag (gear/system.ts reads Input.down('KeyE')).
+// Task knife-windup-20261030 (lane SLOT): ~ / ` (code 'Backquote') draws the melee slot's weapon — see isMeleeKey.
 
 /** Crouch key (tap toggles, hold > 0.3 s crouches while held). */
 export const CROUCH_KEYS = ['KeyC'] as const;
@@ -15,9 +16,31 @@ export function isCrouchKey(code: string): boolean {
 /** Keys whose browser default is always suppressed (focus moves, scrolling, quick find). */
 export const GAME_KEYS = new Set(['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyF', 'KeyH', 'KeyG', 'KeyE', 'KeyR', 'KeyI', 'KeyM', 'Slash']);
 
+/**
+ * Task knife-windup-20261030 (lane SLOT): the melee slot key — the PHYSICAL key left of 1 (KeyboardEvent.code 'Backquote': ` and,
+ * shifted, ~ on US / UK layouts; whatever that key prints on other layouts).
+ */
+export const MELEE_KEY = 'Backquote';
+
+/** Typing / form-control focus: a gameplay shortcut never fires there. */
+export function isTypingTarget(t: unknown): boolean {
+  const el = t as {tagName?: string; isContentEditable?: boolean} | null;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable === true);
+}
+
+/**
+ * Task knife-windup-20261030 (SLOT): whether a keydown is the melee-slot shortcut — ` or ~ (Shift is fine), never with Ctrl / Alt /
+ * Meta (browser / OS shortcuts such as Cmd+` window switching stay theirs: the event is not consumed or prevented) and never while
+ * typing in a form control.
+ */
+export function isMeleeKey(e: {code: string; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean; target?: unknown}): boolean {
+  return e.code === MELEE_KEY && !e.ctrlKey && !e.altKey && !e.metaKey && !isTypingTarget(e.target);
+}
+
 /** Whether a keydown's browser default should be cancelled. `active` = playing. */
-export function shouldPreventKey(e: {code: string}, active: boolean): boolean {
+export function shouldPreventKey(e: {code: string; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean}, active: boolean): boolean {
   if (GAME_KEYS.has(e.code)) return true;
+  if (e.code === MELEE_KEY) return active && isMeleeKey(e); // SLOT: only the plain / Shift key while playing
   return active && (/^Digit[1-6]$/.test(e.code) || isCrouchKey(e.code)); // Task office-overhaul-20261030 (INTERACT): 6 = the backpack slot
 }
 
@@ -39,6 +62,7 @@ export class Input {
   constructor(private readonly canvas: HTMLCanvasElement, readonly qa: boolean) {
     window.addEventListener('keydown', e => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT' && e.code !== 'Tab' && e.code !== 'Escape') return;
+      if (e.code === MELEE_KEY && !isMeleeKey(e)) return; // SLOT: Ctrl / Alt / Meta + ` or typing: not the game's (not consumed)
       if (shouldPreventKey(e, this.active)) e.preventDefault();
       if (!e.repeat) {
         this.pressed.add(e.code);

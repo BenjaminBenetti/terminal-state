@@ -236,8 +236,11 @@ describe('inventory snapshots (lane RUN: carryover / Retry level)', () => {
   it('toJSON / fromJSON / clone are deep, keep uids, mags, gear, pockets and bag contents; nextUid stays above every uid', () => {
     const inv = sample();
     const j = inv.toJSON();
-    expect(j.v).toBe(2); // task office-overhaul-20261030 (INTERACT): v2 adds the grenade slot (v1 still loads: throwable-slot.test.ts)
+    // task office-overhaul-20261030 (INTERACT): v2 added the grenade slot (v1 still loads: throwable-slot.test.ts); task
+    // knife-windup-20261030 (SLOT): v3 adds the melee slot (v1 / v2 still load and migrate: melee-slot.test.ts)
+    expect(j.v).toBe(3);
     expect(j.throw).toEqual([null]);
+    expect(j.melee).toEqual([null]);
     expect(j.pack.length).toBe(16);
     expect(j.gear.backpack?.bag?.[7]?.mag).toBe(3);
     const c = inv.clone(), f = Inventory.fromJSON(JSON.parse(JSON.stringify(j)));

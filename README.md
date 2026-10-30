@@ -89,7 +89,7 @@ not a general JavaScript sandbox or a licensing audit.
 
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use
 · right click aim · R reload · E interact (hold E on a grounded backpack to wear it) · 1–5 / wheel quick slots
-· 6 backpack · G throw (grenade slot) · Q last item · Tab/I inventory · H heal · F flashlight · M mute · Esc pause.
+· ~ melee slot (knife) · 6 backpack · G throw (grenade slot) · Q last item · Tab/I inventory · H heal · F flashlight · M mute · Esc pause.
 Drop an item by dragging it out of the inventory panel.
 
 **Office Space overhaul** (task office-overhaul-20261030): every office floor 2–8 is leased to one of **20 fictional

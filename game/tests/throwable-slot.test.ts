@@ -159,7 +159,7 @@ describe('snapshots: v2 carries the grenade slot; v1 (older saves / carryover) m
     inv.set(P(3), inv.makeStack('flare', 2));
     const j = inv.toJSON();
     expect(j.v).toBe(INVENTORY_JSON_VERSION);
-    expect(INVENTORY_JSON_VERSION).toBe(2);
+    expect(INVENTORY_JSON_VERSION).toBe(3); // task knife-windup-20261030 (SLOT): v3 = v2 + the melee slot (melee-slot.test.ts)
     expect(j.throw).toEqual([{uid: inv.thrown!.uid, itemId: 'flare', count: 7}]);
     for (const x of [inv.clone(), Inventory.fromJSON(JSON.parse(JSON.stringify(j)))]) {
       expect(x.toJSON()).toEqual(j);
@@ -184,7 +184,7 @@ describe('snapshots: v2 carries the grenade slot; v1 (older saves / carryover) m
     expect(flares(inv)).toBe(5);
     expect(inv.selected).toBe(1);
     expect(inv.invariants()).toEqual([]);
-    expect(inv.toJSON().v).toBe(2);
+    expect(inv.toJSON().v).toBe(3); // saved again in the current format (v3 since task knife-windup-20261030)
     // the next G press equips one from the pockets
     expect(inv.refillThrowSlot()).toBe(true);
     expect(inv.thrown?.uid).toBe(4);
@@ -305,7 +305,8 @@ describe('inventory screen + HUD (ui/inventoryUI.ts drop step, ui/hud.ts G slot)
     // the quick-slot row renders the grenade slot as its 6th cell
     ui.render();
     const row = dom.el('#inv-hotbar');
-    expect(row.children.map(c => c.dataset.bar)).toEqual(['hotbar', 'hotbar', 'hotbar', 'hotbar', 'hotbar', 'throw']);
+    // (task knife-windup-20261030, SLOT: + the melee slot as the last cell — shown first by CSS)
+    expect(row.children.map(c => c.dataset.bar)).toEqual(['hotbar', 'hotbar', 'hotbar', 'hotbar', 'hotbar', 'throw', 'melee']);
     expect(row.children[5].innerHTML).toMatch(/<span class="key">G<\/span>/);
   });
 
@@ -316,7 +317,7 @@ describe('inventory screen + HUD (ui/inventoryUI.ts drop step, ui/hud.ts G slot)
     const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    expect(bar.children).toHaveLength(7);
+    expect(bar.children).toHaveLength(8); // 1-5, 6, G + the melee slot ~ (task knife-windup-20261030, SLOT; last child, shown first)
     const g = bar.children[6];
     expect(g.dataset.bar).toBe('throw');
     expect(g.classList.contains('vacant')).toBe(true);

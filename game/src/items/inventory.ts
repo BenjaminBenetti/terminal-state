@@ -19,10 +19,25 @@
 //   normal order. count / take / find / holds / hasRoomFor / allStacks / snapshots include it; moves validate it.
 // - SNAPSHOT v2 (`throw` field). loadJSON migrates v1 snapshots (older saves / carryover): the grenade slot starts empty and every
 //   flare stays where it was. A non-throwable found in it (malformed) goes back in through add(), never lost.
+//
+// Task knife-windup-20261030 (lane SLOT, user: "I want a custom melee weapon slot ... you hit the tilde key to switch to your knife
+// ... so that way it doesn't take up a hot[bar] slot"):
+// - MELEE SLOT: one dedicated equipment slot (`meleeSlot`, SlotRef MELEE_REF = {bar: 'melee', index: 0}; HUD: the "~" cell before
+//   quick slot 1; key ~ / ` = KeyboardEvent.code 'Backquote') that takes ONLY melee weapons (a WeaponDef with `melee`: the knife
+//   today, clubs / crowbars later) — set / move / swap / bag moves of anything else are refused ('wrong-slot'). A picked-up melee
+//   weapon fills an EMPTY melee slot first (the same object), else the normal order; a second knife stays an ordinary item.
+// - SELECTION: `selected` stays the quick-slot index (0-4, always valid: the "remembered" quick slot). `meleeSelected` says the
+//   melee slot's weapon is in the hands instead: selectedStack() / selectedRef() then return the melee slot. selectMelee() needs
+//   a weapon in it (false, nothing changes, when empty); select(i) (keys 1-5 / wheel) leaves the melee slot. Whenever the melee
+//   slot is emptied (dropped, moved, bagged) while selected, the selection falls back to the remembered quick slot — the hands
+//   never keep a stale knife, and a knife picked up later never draws itself.
+// - count / take / find / holds / hasRoomFor / allStacks / snapshots include it; consumeAt never touches it.
+// - SNAPSHOT v3 (`melee` + `meleeSelected`). loadJSON migrates v1 / v2 snapshots: see migrateLegacyMelee() (exactly one carried melee
+//   weapon — quick slots first, then pockets — moves into the empty melee slot; never the worn backpack's contents).
 
 import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
-import {WEAPONS} from '../weapons/weapons';
+import {WEAPONS, meleeDefOf} from '../weapons/weapons';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isBagItem, type GearSlot} from './gear';
 
 export interface ItemStack {
@@ -35,7 +50,7 @@ export interface ItemStack {
   bag?: (ItemStack | null)[];
 }
 
-export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw';
+export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw' | 'melee';
 export interface SlotRef { bar: Bar; index: number }
 /** Iteration 16 (GEAR): a slot of a (grounded, open) backpack's own contents. */
 export interface BagRef { bar: 'bag'; index: number }
@@ -47,8 +62,20 @@ export const PACK_SIZE = 12;
 export const THROW_SLOTS = 1;
 /** Task office-overhaul-20261030 (INTERACT): the grenade slot ref. */
 export const THROW_REF: SlotRef = Object.freeze({bar: 'throw', index: 0}) as SlotRef;
-/** Snapshot format: 1 = iteration 16 (no grenade slot), 2 = + `throw` (task office-overhaul-20261030). */
-export const INVENTORY_JSON_VERSION = 2;
+/** Task knife-windup-20261030 (SLOT): melee slots (one; HUD key ~). */
+export const MELEE_SLOTS = 1;
+/** Task knife-windup-20261030 (SLOT): the melee slot ref. */
+export const MELEE_REF: SlotRef = Object.freeze({bar: 'melee', index: 0}) as SlotRef;
+/**
+ * Snapshot format: 1 = iteration 16 (no grenade slot), 2 = + `throw` (task office-overhaul-20261030), 3 = + `melee` /
+ * `meleeSelected` (task knife-windup-20261030).
+ */
+export const INVENTORY_JSON_VERSION = 3;
+
+/** Task knife-windup-20261030 (SLOT): whether an item is a melee weapon (the only kind the melee slot takes). */
+export function isMeleeItem(itemId: string | null | undefined): boolean {
+  return !!meleeDefOf(itemId);
+}
 
 export type MoveResult = 'none' | 'moved' | 'split' | 'merged' | 'swapped' | 'refused';
 
@@ -60,14 +87,19 @@ export interface Refusal { code: RefusalCode; text: string }
 /** Plain-data stack (snapshots). */
 export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[] }
 export interface InventoryJSON {
-  /** 1: iteration-16 snapshots (no grenade slot; still loaded), 2: current. */
-  v: 1 | 2;
+  /** 1: iteration-16 snapshots (no grenade slot), 2: + grenade slot (no melee slot) — both still loaded; 3: current. */
+  v: 1 | 2 | 3;
   hotbar: (StackJSON | null)[];
   pack: (StackJSON | null)[];
   gear: Record<GearSlot, StackJSON | null>;
   /** v2: the grenade slot (THROW_SLOTS entries). Absent in v1. */
   throw?: (StackJSON | null)[];
+  /** v3: the melee slot (MELEE_SLOTS entries). Absent in v1 / v2 (migrated: Inventory.loadJSON). */
+  melee?: (StackJSON | null)[];
+  /** Quick-slot index 0-4 (v3: the remembered quick slot while the melee slot's weapon is held). */
   selected: number;
+  /** v3: the melee slot's weapon is in the hands (key ~). */
+  meleeSelected?: boolean;
   nextUid: number;
 }
 
@@ -106,7 +138,7 @@ export function stacksIn(s: ItemStack | null | undefined): ItemStack[] {
 /** Iteration 16: each inventory instance starts on its own version range, so a swapped-in restored one always redraws. */
 let versionEpoch = 0;
 
-interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag' | 'throw'; list: (ItemStack | null)[]; index: number }
+interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag' | 'throw' | 'melee'; list: (ItemStack | null)[]; index: number }
 
 export class Inventory {
   readonly hotbar: (ItemStack | null)[] = new Array(HOTBAR_SIZE).fill(null);
@@ -116,7 +148,12 @@ export class Inventory {
   readonly gearSlots: (ItemStack | null)[] = new Array(GEAR_SLOTS.length).fill(null);
   /** Task office-overhaul-20261030 (INTERACT): the grenade slot (throwables only; G strikes / throws from it). */
   readonly throwSlot: (ItemStack | null)[] = new Array(THROW_SLOTS).fill(null);
+  /** Task knife-windup-20261030 (SLOT): the melee slot (melee weapons only; ~ draws its weapon). */
+  readonly meleeSlot: (ItemStack | null)[] = new Array(MELEE_SLOTS).fill(null);
+  /** Quick slot 0-4 in the hands — or, while `meleeSelected`, the remembered quick slot (1-5 / wheel / Q come back to it). */
   selected = 0;
+  /** Task knife-windup-20261030 (SLOT): the melee slot is selected (read `meleeSelected`; cleared whenever the slot empties). */
+  private meleeHeld = false;
   private nextUid = 1;
   /** Bumped on every change so the UI knows when to redraw. */
   version = ++versionEpoch * 1_000_000;
@@ -145,7 +182,8 @@ export class Inventory {
 
   private list(bar: Bar): (ItemStack | null)[] {
     // strict: any other bar (e.g. a stray 'bag' ref) is no slot at all — it never aliases the pockets
-    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : bar === 'pack' ? this.pack : bar === 'throw' ? this.throwSlot : NO_SLOTS;
+    return bar === 'hotbar' ? this.hotbar : bar === 'gear' ? this.gearSlots : bar === 'pack' ? this.pack : bar === 'throw' ? this.throwSlot
+      : bar === 'melee' ? this.meleeSlot : NO_SLOTS;
   }
   get(ref: SlotRef): ItemStack | null {
     return this.list(ref.bar)[ref.index] ?? null;
@@ -168,19 +206,78 @@ export class Inventory {
       list[ref.index] = s;
       this.resizePack(cap);
     } else list[ref.index] = s;
+    this.settleMelee();
     this.refusal = null;
     this.version++;
   }
+  /** What is in the hands: the selected quick slot, or the melee slot's weapon while it is selected (task knife-windup-20261030). */
   selectedStack(): ItemStack | null {
-    return this.hotbar[this.selected];
+    return this.meleeSelected ? this.meleeSlot[0] : this.hotbar[this.selected] ?? null;
   }
+  /** Task knife-windup-20261030 (SLOT): the slot whose item is in the hands (MELEE_REF or the selected quick slot). */
+  selectedRef(): SlotRef {
+    return this.meleeSelected ? MELEE_REF : {bar: 'hotbar', index: this.selected};
+  }
+  /** Quick slot i (keys 1-5 / wheel / Q); leaves the melee slot. */
   select(i: number): void {
     if (i < 0 || i >= HOTBAR_SIZE) return;
     this.selected = i;
+    this.meleeHeld = false;
     this.version++;
   }
+  /** Next / previous quick slot; from the melee slot, back to the remembered quick slot first. */
   cycle(dir: number): void {
-    this.select((this.selected + dir + HOTBAR_SIZE) % HOTBAR_SIZE);
+    this.select(this.meleeSelected ? this.selected : (this.selected + dir + HOTBAR_SIZE) % HOTBAR_SIZE);
+  }
+
+  // --- Task knife-windup-20261030 (lane SLOT): the melee slot -------------------------------------------------------------
+
+  /** The melee weapon in the melee slot (null when empty). */
+  get melee(): ItemStack | null {
+    return this.meleeSlot[0] ?? null;
+  }
+  /** The melee slot's weapon is in the hands (key ~). Never true while the slot is empty. */
+  get meleeSelected(): boolean {
+    return this.meleeHeld && !!this.meleeSlot[0];
+  }
+  /** Draw the melee slot's weapon (key ~). False (nothing changes) when the slot is empty; the remembered quick slot is kept. */
+  selectMelee(): boolean {
+    if (!this.meleeSlot[0]) return false;
+    if (!this.meleeHeld) { this.meleeHeld = true; this.version++; }
+    return true;
+  }
+  /**
+   * An EMPTY melee slot takes the first melee weapon carried elsewhere (pockets first, then quick slots, the held one last) —
+   * ~ then always draws "the equipped melee weapon", like G and the grenade slot. Returns whether the slot holds one.
+   */
+  refillMeleeSlot(): boolean {
+    if (this.meleeSlot[0]) return true;
+    const order: SlotRef[] = [
+      ...this.pack.map((_, i) => ({bar: 'pack' as const, index: i})),
+      ...this.hotbar.map((_, i) => ({bar: 'hotbar' as const, index: i})).filter(r => r.index !== this.selected),
+      {bar: 'hotbar', index: this.selected},
+    ];
+    for (const r of order) {
+      const st = this.get(r);
+      if (st && isMeleeItem(st.itemId)) return this.moveCount(r, MELEE_REF) === 'moved';
+    }
+    return false;
+  }
+  /**
+   * Put the melee weapon in `ref` into the melee slot (inventory Equip / right-click / double-click / ~ while the inventory is
+   * open): a move, or a swap with the one already there (which goes to `ref`). 'none' for the melee slot itself; refused
+   * ('wrong-slot') for anything that is not a melee weapon. Selection is unchanged (the caller draws it).
+   */
+  equipMeleeFrom(ref: SlotRef): MoveResult {
+    if (ref.bar === 'melee') return this.meleeSlot[ref.index] ? 'none' : this.refuse('bad-ref', 'The melee slot is empty.');
+    const st = this.get(ref);
+    if (!st) return 'none';
+    if (!isMeleeItem(st.itemId)) return this.refuse('wrong-slot', `Only melee weapons (the knife) go in the melee slot (~) — not the ${itemDef(st.itemId).short.toLowerCase()}.`);
+    return this.moveCount(ref, MELEE_REF);
+  }
+  /** The melee slot was emptied: a melee selection falls back to the remembered quick slot (no stale weapon, no auto-draw later). */
+  private settleMelee(): void {
+    if (this.meleeHeld && !this.meleeSlot[0]) this.meleeHeld = false;
   }
 
   // --- Iteration 16 (GEAR): gear slots ----------------------------------------------------------------------------------
@@ -252,9 +349,10 @@ export class Inventory {
     return st;
   }
 
-  /** Whether a stack object is anywhere in the quick slots / pockets / gear slots / grenade slot. */
+  /** Whether a stack object is anywhere in the quick slots / pockets / gear slots / grenade slot / melee slot. */
   holds(stack: ItemStack): boolean {
-    return this.hotbar.includes(stack) || this.pack.includes(stack) || this.gearSlots.includes(stack) || this.throwSlot.includes(stack);
+    return this.hotbar.includes(stack) || this.pack.includes(stack) || this.gearSlots.includes(stack) || this.throwSlot.includes(stack)
+      || this.meleeSlot.includes(stack);
   }
 
   /** Task office-overhaul-20261030 (INTERACT): the throwable in the grenade slot (null when empty). */
@@ -315,6 +413,13 @@ export class Inventory {
       }
       if (!left) { this.refusal = null; this.version++; return 0; }
     }
+    // Task knife-windup-20261030 (SLOT): a melee weapon fills an EMPTY melee slot first (the same object); a second one is an ordinary item
+    if (isMeleeItem(stack.itemId) && !this.meleeSlot[0] && !this.holds(stack)) {
+      const n = Math.min(left, def.stackMax);
+      this.meleeSlot[0] = n === stack.count ? stack : {...stack, uid: this.nextUid++, count: n};
+      left -= n;
+      if (!left) { this.refusal = null; this.version++; return 0; }
+    }
     if (def.stackMax > 1) {
       for (const s of [...this.pack, ...this.hotbar]) {
         if (!s || s.itemId !== stack.itemId || s.count >= def.stackMax) continue;
@@ -330,7 +435,7 @@ export class Inventory {
       for (let i = 0; i < list.length && left > 0; i++) {
         if (list[i]) continue;
         const n = Math.min(left, def.stackMax);
-        list[i] = n === stack.count && left === stack.count && !this.throwSlot.includes(stack) ? stack : {...stack, uid: this.nextUid++, count: n};
+        list[i] = n === stack.count && left === stack.count && !this.throwSlot.includes(stack) && !this.meleeSlot.includes(stack) ? stack : {...stack, uid: this.nextUid++, count: n};
         left -= n;
       }
       if (!left) break;
@@ -341,14 +446,14 @@ export class Inventory {
 
   count(itemId: string): number {
     let n = 0;
-    for (const s of [...this.hotbar, ...this.pack, ...this.throwSlot]) if (s && s.itemId === itemId) n += s.count; // + grenade slot (INTERACT)
+    for (const s of [...this.hotbar, ...this.pack, ...this.throwSlot, ...this.meleeSlot]) if (s && s.itemId === itemId) n += s.count; // + grenade (INTERACT) / melee (SLOT) slot
     return n;
   }
 
-  /** Removes up to n of an item (backpack first; the grenade slot last). Returns how many were removed. */
+  /** Removes up to n of an item (backpack first; the grenade slot, then the melee slot last). Returns how many were removed. */
   take(itemId: string, n: number): number {
     let got = 0;
-    for (const bar of ['pack', 'hotbar', 'throw'] as Bar[]) {
+    for (const bar of ['pack', 'hotbar', 'throw', 'melee'] as Bar[]) {
       const list = this.list(bar);
       for (let i = list.length - 1; i >= 0 && got < n; i--) {
         const s = list[i];
@@ -359,13 +464,14 @@ export class Inventory {
         if (s.count <= 0) list[i] = null;
       }
     }
+    this.settleMelee();
     if (got) this.version++;
     return got;
   }
 
   /** Consume one from a specific slot (used for consumables in hand). */
   consumeAt(ref: SlotRef): boolean {
-    if (ref.bar === 'gear') return false; // Iteration 16: worn gear is never consumed
+    if (ref.bar === 'gear' || ref.bar === 'melee') return false; // Iteration 16: worn gear is never consumed; SLOT: nor a melee weapon
     const s = this.get(ref);
     if (!s) return false;
     s.count--;
@@ -479,6 +585,7 @@ export class Inventory {
     } else src.list[src.index] = null;
     const moved = before - left;
     if (moved <= 0) { this.refuse('no-room', 'The backpack is full.'); return 0; }
+    this.settleMelee(); // SLOT: the knife went into the bag
     this.refusal = null;
     this.version++;
     return moved;
@@ -505,6 +612,8 @@ export class Inventory {
     const def = itemDef(itemId);
     // Task office-overhaul-20261030 (INTERACT): the grenade slot takes throwables only
     if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};
+    // Task knife-windup-20261030 (SLOT): the melee slot takes melee weapons only
+    if (e.kind === 'melee' && !isMeleeItem(itemId)) return {code: 'wrong-slot', text: `Only melee weapons (the knife) go in the melee slot (~) — not the ${def.short.toLowerCase()}.`};
     if (e.kind === 'gear') {
       const slot = GEAR_SLOTS[e.index];
       const spec = def.gear;
@@ -598,6 +707,7 @@ export class Inventory {
       result = 'swapped';
     }
     this.resizePack(cap);
+    this.settleMelee(); // SLOT: the melee weapon moved out of its slot
     this.refusal = null;
     this.version++;
     return result;
@@ -607,7 +717,8 @@ export class Inventory {
     const def = itemDef(itemId);
     if (def.gear && !this.gearSlots[GEAR_SLOTS.indexOf(def.gear.slot)]) return true; // worn straight away
     if (isBagItem(itemId)) return false;
-    for (const s of [...this.hotbar, ...this.pack, ...(def.kind === 'throwable' ? this.throwSlot : [])]) { // + grenade slot (INTERACT)
+    // + grenade slot (INTERACT) / melee slot (SLOT) for their own kinds
+    for (const s of [...this.hotbar, ...this.pack, ...(def.kind === 'throwable' ? this.throwSlot : []), ...(isMeleeItem(itemId) ? this.meleeSlot : [])]) {
       if (!s) return true;
       if (s.itemId === itemId && s.count < def.stackMax) return true;
     }
@@ -615,7 +726,7 @@ export class Inventory {
   }
 
   find(uid: number): SlotRef | null {
-    for (const bar of ['hotbar', 'pack', 'gear', 'throw'] as Bar[]) {
+    for (const bar of ['hotbar', 'pack', 'gear', 'throw', 'melee'] as Bar[]) {
       const i = this.list(bar).findIndex(s => s?.uid === uid);
       if (i >= 0) return {bar, index: i};
     }
@@ -627,7 +738,8 @@ export class Inventory {
   toJSON(): InventoryJSON {
     const gear = {} as Record<GearSlot, StackJSON | null>;
     GEAR_SLOTS.forEach((slot, i) => { gear[slot] = stackToJSON(this.gearSlots[i]); });
-    return {v: INVENTORY_JSON_VERSION, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), gear, throw: this.throwSlot.map(stackToJSON), selected: this.selected, nextUid: this.nextUid};
+    return {v: INVENTORY_JSON_VERSION, hotbar: this.hotbar.map(stackToJSON), pack: this.pack.map(stackToJSON), gear, throw: this.throwSlot.map(stackToJSON),
+      melee: this.meleeSlot.map(stackToJSON), selected: this.selected, meleeSelected: this.meleeSelected, nextUid: this.nextUid}; // + melee slot (v3, SLOT)
   }
 
   /** A new inventory from a snapshot (deep; same uids; nextUid above every uid). */
@@ -640,14 +752,21 @@ export class Inventory {
   /**
    * Restore a snapshot IN PLACE (keeps this object, which the UI / container closures hold).
    * Task office-overhaul-20261030 (INTERACT): v1 snapshots (no `throw`) load with an empty grenade slot (flares stay put).
+   * Task knife-windup-20261030 (SLOT): v1 / v2 snapshots (no `melee`) migrate their carried knife into the melee slot
+   * (migrateLegacyMelee); a non-melee item found in a v3 melee slot (malformed) goes back in through add(), never lost.
    */
   loadJSON(j: InventoryJSON): void {
+    const v = j.v ?? 1;
     const hot = (j.hotbar ?? []).map(stackFromJSON);
     const gear = GEAR_SLOTS.map(slot => stackFromJSON(j.gear?.[slot] ?? null));
     const pack = (j.pack ?? []).map(stackFromJSON);
-    const thr = ((j.v ?? 1) >= 2 && Array.isArray(j.throw) ? j.throw : []).map(stackFromJSON);
+    const thr = (v >= 2 && Array.isArray(j.throw) ? j.throw : []).map(stackFromJSON);
+    // (read whatever the version: a melee slot found already occupied in an older snapshot is kept, and nothing migrates into it)
+    const mel = (Array.isArray(j.melee) ? j.melee : []).map(stackFromJSON);
     this.throwSlot.fill(null);
     for (let i = 0; i < THROW_SLOTS; i++) { const s = thr[i]; if (s && itemDef(s.itemId).kind === 'throwable') this.throwSlot[i] = s; }
+    this.meleeSlot.fill(null);
+    for (let i = 0; i < MELEE_SLOTS; i++) { const s = mel[i]; if (s && isMeleeItem(s.itemId)) this.meleeSlot[i] = s; }
     this.hotbar.fill(null);
     for (let i = 0; i < HOTBAR_SIZE; i++) this.hotbar[i] = hot[i] ?? null;
     this.gearSlots.fill(null);
@@ -656,16 +775,46 @@ export class Inventory {
     this.pack.length = 0;
     for (let i = 0; i < cap; i++) this.pack.push(pack[i] ?? null);
     let maxUid = 0;
-    const all = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot].flatMap(stacksIn);
+    const all = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot, ...this.meleeSlot].flatMap(stacksIn);
     for (const s of all) maxUid = Math.max(maxUid, s.uid);
-    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...gear.filter((s, i) => s && this.gearSlots[i] !== s), ...thr.filter((s, i) => s && this.throwSlot[i] !== s)].filter((s): s is ItemStack => !!s);
+    const stray = [...hot.slice(HOTBAR_SIZE), ...pack.slice(cap), ...gear.filter((s, i) => s && this.gearSlots[i] !== s), ...thr.filter((s, i) => s && this.throwSlot[i] !== s),
+      ...mel.filter((s, i) => s && this.meleeSlot[i] !== s)].filter((s): s is ItemStack => !!s);
     for (const s of stray) for (const x of stacksIn(s)) maxUid = Math.max(maxUid, x.uid);
     this.nextUid = Math.max(j.nextUid ?? 1, maxUid + 1);
     this.selected = Math.max(0, Math.min(HOTBAR_SIZE - 1, Math.floor(j.selected ?? 0)));
+    this.meleeHeld = v >= 3 && j.meleeSelected === true && !!this.meleeSlot[0];
+    if (v < 3) this.migrateLegacyMelee(); // before the strays: only items that were really carried in quick slots / pockets move
     // a malformed snapshot never loses items silently: strays go back in through add()
     for (const s of stray) if (this.add(s) > 0) console.warn(`Inventory.loadJSON: no room for ${s.itemId} ×${s.count}`);
     this.refusal = null;
     this.version = ++versionEpoch * 1_000_000;
+  }
+
+  /**
+   * Task knife-windup-20261030 (SLOT): a v1 / v2 snapshot (knife-melee-20261030 kit: the knife in quick slot 3) moves ONE carried
+   * melee weapon into the empty melee slot — the first in quick slots 1-5, else the first in the pockets — as the same stack
+   * (uid kept, nothing duplicated, nothing refilled). Further knives stay where they are (ordinary items). The worn backpack's
+   * contents and grounded bags (separate stores) are never searched. Selection: a gun (any other quick slot) in the hands stays
+   * in the hands; if the hands held THAT knife, the melee slot becomes the selection (still the knife in the hands) and the
+   * remembered quick slot is the first quick slot holding a gun (else the one the knife left).
+   */
+  private migrateLegacyMelee(): void {
+    if (this.meleeSlot[0]) return;
+    const hi = this.hotbar.findIndex(s => !!s && isMeleeItem(s.itemId));
+    const from: SlotRef | null = hi >= 0 ? {bar: 'hotbar', index: hi} : (() => {
+      const pi = this.pack.findIndex(s => !!s && isMeleeItem(s.itemId));
+      return pi >= 0 ? {bar: 'pack', index: pi} : null;
+    })();
+    if (!from) return;
+    const held = from.bar === 'hotbar' && from.index === this.selected;
+    const list = this.list(from.bar);
+    this.meleeSlot[0] = list[from.index];
+    list[from.index] = null;
+    if (held) {
+      this.meleeHeld = true;
+      const gun = this.hotbar.findIndex(s => !!s && itemDef(s.itemId).kind === 'weapon' && !isMeleeItem(s.itemId));
+      if (gun >= 0) this.selected = gun;
+    }
   }
 
   /** Deep copy (same uids and uid counter). */
@@ -673,9 +822,9 @@ export class Inventory {
     return Inventory.fromJSON(this.toJSON());
   }
 
-  /** Every stack held (quick slots, pockets, worn gear, grenade slot; `withBag`: the worn backpack's contents too — audits / tests only). */
+  /** Every stack held (quick slots, pockets, worn gear, grenade + melee slots; `withBag`: the worn backpack's contents too — audits / tests only). */
   allStacks(withBag = false): ItemStack[] {
-    const top = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot].filter((s): s is ItemStack => !!s);
+    const top = [...this.hotbar, ...this.pack, ...this.gearSlots, ...this.throwSlot, ...this.meleeSlot].filter((s): s is ItemStack => !!s);
     return withBag ? top.flatMap(stacksIn) : top;
   }
 
@@ -720,6 +869,13 @@ export class Inventory {
       check(s, 'throw');
     });
     if (this.throwSlot.length !== THROW_SLOTS) out.push('grenade slot resized');
+    // Task knife-windup-20261030 (SLOT): the melee slot holds melee weapons only
+    this.meleeSlot.forEach(s => {
+      if (!s) return;
+      if (!isMeleeItem(s.itemId)) out.push(`${s.itemId} in the melee slot`);
+      check(s, 'melee');
+    });
+    if (this.meleeSlot.length !== MELEE_SLOTS) out.push('melee slot resized');
     if (this.hotbar.length !== HOTBAR_SIZE) out.push('slot arrays resized');
     if (this.pack.length !== this.capacity) out.push(`pockets ${this.pack.length} != capacity ${this.capacity}`);
     if (this.gearSlots.length !== GEAR_SLOTS.length) out.push('gear slots resized');

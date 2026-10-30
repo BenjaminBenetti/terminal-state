@@ -300,7 +300,7 @@ describe('HUD slot 6 and the inventory label (ui/hud.ts, ui/gearStyles.ts)', () 
     const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    expect(bar.children).toHaveLength(7);
+    expect(bar.children).toHaveLength(8); // 1-5, 6, G + the melee slot ~ (task knife-windup-20261030, SLOT; last child, shown first)
     const six = bar.children[5];
     expect(six.dataset).toMatchObject({bar: 'gear', index: String(GEAR_SLOTS.indexOf('backpack'))});
     expect(six.innerHTML).toMatch(/<span class="key">6<\/span>/);
