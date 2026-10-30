@@ -26,6 +26,7 @@ import {deriveRails, levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
+import {spawnProfile, type SpawnProfile} from '../../ai/spawnTables'; // Task enemy-spawn-tables-20261030 (lane SPAWN)
 import type {SectionGenContext} from '../../levels/types';
 import type {Door, OfficePose, OfficeTowerInfo, StationLayout} from '../stationTypes';
 import {CEIL, FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR, landingRect, officeSeed, towerFrame, type TowerFrame} from './frame';
@@ -33,7 +34,7 @@ import {OFFICE_CANVAS, TOWER_CANVAS, cropKit} from './common';
 import {carveOfficeFloor, carveScissor, storeyLabel, type CarvedTower, type ScissorRun} from './tower';
 import {carveStreet, type StreetCarve} from './street';
 import {landingStrip, postDress, preDress, type OfficeDress} from './dress';
-import {OFFICE_ENEMIES, officeWeaponPlan, placeOfficeEnemies, placeOfficeSupplies, placeOfficeWeapons, type SpawnField} from './spawns';
+import {officeWeaponPlan, placeOfficeEnemies, placeOfficeSupplies, placeOfficeWeapons, type SpawnField} from './spawns';
 import {lootProfile, type LootProfile} from '../../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {addDaylight, windowSpans, type StoreyWindow} from './windows';
 import {officeIssues} from './validate';
@@ -62,9 +63,11 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
 /**
  * The ONE continuous Office Space layout (station, lobby, office floors 2..8, the roof). Task loot-tables-20261030 (lane LOOT):
- * `loot` = the logical level's loot profile (default: the Office's) — one profile for every storey.
+ * `loot` = the logical level's loot profile (default: the Office's) — one profile for every storey. Task enemy-spawn-tables-20261030
+ * (lane SPAWN): `spawns` = the logical level's enemy spawn profile (default: the Office's; contexts street / floor / roof, ONE
+ * profile and one generation for the whole level — no per-floor reroll); validation reads the same profile.
  */
-export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = lootProfile('office')): StationLayout {
+export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = lootProfile('office'), spawns: SpawnProfile = spawnProfile('office')): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const f = towerFrame(ctx.levelSeed);
   const seed = officeSeed(ctx.levelSeed);
@@ -72,10 +75,10 @@ export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = 
   OFFICE_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns);
     OFFICE_GEN_STATS.attempts = attempt + 1;
     if (!layout) { OFFICE_GEN_STATS.carveFails++; continue; }
-    const issues = officeIssues(layout, f);
+    const issues = officeIssues(layout, f, spawns);
     if (!issues.length) { fallback = layout; break; }
     for (const i of new Set(issues.map(q => q.replace(/-?[\d.]+/g, '#')))) OFFICE_REJECTS.set(i, (OFFICE_REJECTS.get(i) ?? 0) + 1);
     fallback ??= layout;
@@ -86,9 +89,9 @@ export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = 
 }
 
 /** One generation attempt (QA / tests: what the retry loop sees); null when the station program does not fit. */
-export function officeAttempt(ctx: SectionGenContext, attempt: number, loot: LootProfile = lootProfile('office')): StationLayout | null {
+export function officeAttempt(ctx: SectionGenContext, attempt: number, loot: LootProfile = lootProfile('office'), spawns: SpawnProfile = spawnProfile('office')): StationLayout | null {
   const seed = officeSeed(ctx.levelSeed);
-  return tryLevel(towerFrame(ctx.levelSeed), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, loot);
+  return tryLevel(towerFrame(ctx.levelSeed), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, loot, spawns);
 }
 
 /** @deprecated The office is ONE section ('main'): use generateOfficeLevel. Kept while callers migrate. */
@@ -99,7 +102,7 @@ export function generateOfficeSection(_section: string, ctx: SectionGenContext):
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile): StationLayout | null {
+function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: OFFICE_CANVAS.levels, w: OFFICE_CANVAS.w, h: OFFICE_CANVAS.h});
   const s = carveStreet(k, rng, f);
@@ -183,14 +186,15 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   field.keep.push({level: OFFICE_ROOF_LEVEL, x: roof.ladder.top.x, z: roof.ladder.top.z}, {level: OFFICE_TOP_FLOOR, x: roof.ladder.bottom.x, z: roof.ladder.bottom.z});
   const storeyLevels = (floor: number): number[] => (floor === 1 ? [0, 1] : [floor]);
   const plan = officeWeaponPlan(ctx.levelSeed, layout.startWeapon);
+  // Lane SPAWN: each storey run reads its context of the level's ONE spawn profile (street = station + lobby, floor = each office floor).
   for (const t of towers) {
     const n = t.floor;
-    placeOfficeEnemies(layout, rng.fork(`office-enemies-${n}`), field, storeyLevels(n), n === 1 ? OFFICE_ENEMIES.street : OFFICE_ENEMIES.floor);
+    placeOfficeEnemies(layout, rng.fork(`office-enemies-${n}`), field, storeyLevels(n), spawns, n === 1 ? 'street' : 'floor');
   }
-  // Lane STRUCT: 0-2 enemies already on the roof (they never climb the ladder: no AI link).
+  // Lane STRUCT: 0-2 enemies already on the roof (they never climb the ladder: no AI link). Lane SPAWN: the profile's 'roof' context.
   {
     const free = holdCells(layout, roofCoreCells(layout, f));
-    placeOfficeEnemies(layout, rng.fork('office-enemies-roof'), field, [OFFICE_ROOF_LEVEL], [0, 2]);
+    placeOfficeEnemies(layout, rng.fork('office-enemies-roof'), field, [OFFICE_ROOF_LEVEL], spawns, 'roof');
     free();
   }
   for (const t of towers) placeOfficeSupplies(layout, rng.fork(`office-supplies-${t.floor}`), field, storeyLevels(t.floor), t.floor === 1, loot);
@@ -202,7 +206,7 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   layout.lights = layout.lights.filter(l => (l.level ?? layout.areas[l.area]?.level ?? 0) !== OFFICE_ROOF_LEVEL);
   landingLights(layout, f, towers, bases);
   finishTraversal(layout);
-  assignEnemyArchetypes(layout);
+  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the Office's pool, per the spawn's room
   const windows: StoreyWindow[] = [];
   for (const t of towers) {
     const spans = windowSpans(layout, f, t, t.floor, t.floor === 1 ? s.entrance : null);

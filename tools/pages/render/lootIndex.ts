@@ -95,7 +95,10 @@ export function renderHowToRead(site: Site): string {
 ${n.text.split(/\n{2,}/).map(par => `<p>${prose(par.trim())}</p>`).join('\n')}
 </section>`).join('\n');
   const toc = ref.probability.map(n => `<li><a href="#${esc(`def-${slug(n.id)}`)}">${esc(n.title)}</a></li>`).join('');
+  // Task enemy-spawn-tables-20261030 (lane SITE): pointer to the enemy section's own definitions page.
   const body = `
+<p class="note">This page covers loot. For enemy spawn counts, family shares and room modifiers, see
+<a href="${esc(href(p, 'enemies/how-to-read.html'))}">How to read enemy numbers</a>.</p>
 <nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ul>
 <li><a href="#pipeline">From table row to item</a></li>${toc}<li><a href="#labels">Source labels</a></li><li><a href="#override-knobs">Override knobs</a></li><li><a href="#not-stated">What is never stated</a></li>
 </ul></nav>

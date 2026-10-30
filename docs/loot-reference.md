@@ -6,6 +6,13 @@ The public reference site's loot explorer is **generated from the game source at
 numbers by hand: every value, every level, item, table and override shown comes from the exported game modules. The tuning
 guide for the loot itself is `docs/loot-tables.md`; this page explains the *reference*.
 
+<!-- Task enemy-spawn-tables-20261030 (lane SITE) -->
+The same site has an **Enemy spawns** section (`enemies/*.html`, data `data/enemies.json`), generated the same way from the
+per-level spawn profile API by `buildEnemyReference` (`tools/pages/enemyReference.ts`). Its generator, units and coverage
+rules are described in `docs/enemy-spawns.md`. Both references are built for the same commit and rendered together.
+`tools/pages/validate.ts` checks the section's coverage against `data/enemies.json`: every level, generation context, family
+and room key must have its rendered anchor.
+
 ## How it is generated
 
 ```

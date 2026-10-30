@@ -21,10 +21,13 @@ import {
   OPPOSITE, areaBase, areaLevel, cellsOfBox, doorSide, forceProp, levelGrid, levelsOf, mainDoor, makePlaceCtx, placeAgainstWall,
   rowAlongWall, tryPlaceProp, wallRange, wallSpot, backed, type PlaceCtx,
 } from './placeKit';
-import {ENEMY_SPAWNS} from '../ai/creatureSpawn'; // Iteration 12 (AI): doubled enemy population
+// Task enemy-spawn-tables-20261030 (lane SPAWN): the enemy spawn controls are the level's spawn profile (was ENEMY_SPAWNS + literals).
 import {
-  MIN_ZOMBIE_SPAWN_CELLS, PENDANT_Y, SPAWN_LIT_RADIUS,
-  type Area, type Door, type LightPlacement, type RoomType, type Side, type SignPlacement, type StationLayout, type ZombieType,
+  areaCap, areaSpawnWeight, reportSpawnCandidates, rollZombieTypes, spawnContext, spawnProfile, type SpawnProfile,
+} from '../ai/spawnTables';
+import {
+  PENDANT_Y, SPAWN_LIT_RADIUS,
+  type Area, type Door, type LightPlacement, type RoomType, type Side, type SignPlacement, type StationLayout,
 } from './stationTypes';
 
 /**
@@ -887,7 +890,7 @@ export function clearAround(g: Grid, x: number, y: number, r: number): boolean {
 }
 
 /** Task loot-tables-20261030 (lane LOOT): the loose floor finds follow `loot`'s Subway floor program (lootTables SUBWAY_FLOOR). */
-export function placeSpawns(layout: StationLayout, rng: Rng, loot: LootProfile = lootProfile('subway')): void {
+export function placeSpawns(layout: StationLayout, rng: Rng, loot: LootProfile = lootProfile('subway'), spawns: SpawnProfile = spawnProfile('subway')): void {
   const g = layout.grid;
   const plat = layout.areas[layout.platform];
   // Platform 1, a fifth of the way along, looking down the platform with the tracks in view.
@@ -990,35 +993,44 @@ export function placeSpawns(layout: StationLayout, rng: Rng, loot: LootProfile =
 
   // --- Zombies: spread across public halls and back-of-house, never near the spawn ---
   // Iteration 12 (AI, mandate F "double the number of enemies"): 22-32 spawn points (was 11-16; ai/creatureSpawn.ts ENEMY_SPAWNS).
-  const count = rng.int(ENEMY_SPAWNS.min, ENEMY_SPAWNS.max);
-  const types: ZombieType[] = [];
-  for (let i = 0; i < count; i++) types.push(rng.chance(0.4) ? 'coated' : 'shambler');
-  if (!types.includes('coated')) types[0] = 'coated';
-  if (!types.includes('shambler')) types[1] = 'shambler';
+  // Task enemy-spawn-tables-20261030 (lane SPAWN): every control is the level's spawn profile (ai/spawnTables.ts, context 'station':
+  // count, type roll, keep-away / clearance, area weights × room intensity, caps, tries, spacing) — same values, same draws.
+  const ctx = spawnContext(spawns, 'station'), pl = ctx.placement;
+  const count = rng.int(ctx.count[0], ctx.count[1]);
+  const types = rollZombieTypes(rng, count, spawns.zombieTypes);
+  const areaW = new Map<number, number>();
+  const weightOf = (id: number): number => {
+    let w = areaW.get(id);
+    if (w === undefined) areaW.set(id, (w = areaSpawnWeight(pl.areaWeights, spawns, layout.areas[id])));
+    return w;
+  };
   const byArea = new Map<number, [number, number][]>();
   for (let y = 1; y < g.h - 1; y++) for (let x = 1; x < g.w - 1; x++) {
     const i = g.idx(x, y);
-    if (g.cells[i] !== FLOOR || dist[i] < MIN_ZOMBIE_SPAWN_CELLS || !clearAround(g, x, y, 1)) continue;
+    if (g.cells[i] !== FLOOR || dist[i] < pl.startCells || !clearAround(g, x, y, pl.clearCells)) continue;
     const a = g.area[i];
+    // Lane SPAWN: an area whose effective weight is 0 (a room modifier density 0) is never a candidate. Every shipped baseline
+    // weight is > 0, so this never skips an area of a shipped profile.
+    if (layout.areas[a] && !(weightOf(a) > 0)) continue;
     let l = byArea.get(a);
     if (!l) byArea.set(a, (l = []));
     l.push([x, y]);
   }
-  const weightOf = (a: Area) => a.kind === 'platform' ? 2.2 : a.type === 'exit-stair' || a.type === 'washroom' ? 0.5 : a.type === 'eatery' || a.type === 'shop' ? 0.5 : a.publicSpace ? 1 : a.kind === 'closet' ? 0.6 : 1.4;
+  reportSpawnCandidates(layout, 'station', byArea);
   // Weighted shuffle of the candidate areas (Efraimidis-Spirakis keys).
-  const order = [...byArea.keys()].map(id => ({id, k: Math.pow(rng.next(), 1 / weightOf(layout.areas[id]))})).sort((p, q) => q.k - p.k).map(o => o.id);
+  const order = [...byArea.keys()].map(id => ({id, k: Math.pow(rng.next(), 1 / weightOf(id))})).sort((p, q) => q.k - p.k).map(o => o.id);
   const perArea = new Map<number, number>();
-  for (const cap of [1, 2, 3]) {
+  for (const cap of pl.caps.passes) {
     for (const id of order) {
       if (layout.zombies.length >= count) break;
       const a = layout.areas[id];
-      const limit = a.kind === 'platform' ? cap + 1 : a.kind === 'closet' || a.type === 'exit-stair' || a.storefront !== undefined ? 1 : cap;
+      const limit = areaCap(pl.caps, a, cap);
       if ((perArea.get(id) ?? 0) >= limit) continue;
       const cells = byArea.get(id)!;
-      for (let t = 0; t < 12; t++) {
+      for (let t = 0; t < pl.tries; t++) {
         const [x, y] = rng.pick(cells);
         const [zx, zz] = g.center(x, y);
-        if (layout.zombies.some(z => Math.hypot(z.x - zx, z.z - zz) < 4)) continue;
+        if (layout.zombies.some(z => Math.hypot(z.x - zx, z.z - zz) < pl.spacingM)) continue;
         perArea.set(id, (perArea.get(id) ?? 0) + 1);
         layout.zombies.push({x: zx, z: zz, yaw: rng.range(-Math.PI, Math.PI), type: types[layout.zombies.length], area: id});
         break;

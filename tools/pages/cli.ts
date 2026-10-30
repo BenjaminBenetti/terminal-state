@@ -2,7 +2,7 @@
 // invoked by tools/pages/run.mjs; see `npm run pages:build` / `npm run pages:check`).
 //
 //   build  generate the site into <root>/dist/pages/ (replacing only that generated, git-ignored directory)
-//   check  validate <root>/dist/pages/ as written (allowlist, leaks, links, manifest) and prove it is byte-identical to a fresh
+//   check  validate <root>/dist/pages/ as written (allowlist, leaks, links, nav, enemy coverage, manifest) and prove it is byte-identical to a fresh
 //          in-memory build of the same commit (determinism + no stale or foreign files)
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -99,7 +99,7 @@ export async function main(command: string, root: string, env: Readonly<Record<s
       console.error(`${OUTPUT_DIR}/ failed the check (${problems.length}):\n  ${problems.slice(0, 50).join('\n  ')}`);
       return 1;
     }
-    console.log(`${OUTPUT_DIR}/ verified: allowlist, leak, link, accessibility-structure and manifest checks passed; byte-identical to a fresh build (${summary(onDisk)}; commit ${commit}).`);
+    console.log(`${OUTPUT_DIR}/ verified: allowlist, leak, link, navigation, accessibility-structure, enemy-coverage and manifest checks passed; byte-identical to a fresh build (${summary(onDisk)}; commit ${commit}).`);
     return 0;
   }
   console.error(`Unknown command ${command}`);

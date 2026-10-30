@@ -18,6 +18,8 @@ import {PUBLIC_FLOOR_WEIGHTS} from '../items/lootTables';
 import {signDims, wallSignSpot} from './doorways';
 import {LEVEL_LOWER, LEVEL_UPPER, levelArrays, levelDistance} from './levelGen';
 import {MIN_ZOMBIE_SPAWN_CELLS, type Area, type Door, type Side, type SignPlacement, type StationLayout} from './stationTypes';
+// Task enemy-spawn-tables-20261030 (lane SPAWN): the storey moves of the enemies read the level's spawn profile (levelMoves).
+import {areaSpawnWeight, reportSpawnCandidates, spawnProfile, type SpawnProfile} from '../ai/spawnTables';
 
 const platNo = (P: Area) => (P.label.match(/\d+(?:\s*·\s*\d+)?/)?.[0] ?? String(P.platformNo ?? 1)).replace(/\s+/g, ' ');
 
@@ -131,15 +133,20 @@ export function dressLevels(layout: StationLayout, _rng: Rng): void {
 
 // Task loot-tables-20261030 (lane LOOT): where moved loose finds may land — items/lootTables.ts (its own copy, kept distinct).
 const PUBLIC_FLOOR = PUBLIC_FLOOR_WEIGHTS.stationLevels;
-const zombieWeight = (a: Area) => a.kind === 'platform' ? 2.2 : a.type === 'exit-stair' || a.type === 'washroom' ? 0.5 : a.type === 'eatery' || a.type === 'shop' ? 0.5 : a.publicSpace ? 1 : a.kind === 'closet' ? 0.6 : 1.4;
 
 /**
  * Moves a weighted share of the zombies and loose floor supplies onto the upper / lower levels
  * (totals unchanged) when spawn placement left them all on the main level.
  */
-export function placeLevelSpawns(layout: StationLayout, rng: Rng): void {
+export function placeLevelSpawns(layout: StationLayout, rng: Rng, spawns: SpawnProfile = spawnProfile('subway')): void {
   const levels = layout.levels;
   if (levels.length < 3) return;
+  // Lane SPAWN: the profile's storey-move rules (areaWeights = the station's, x room intensity; passes / tries / spacing / keep-away).
+  // Enemies keep mv.startCells walking cells from the start; the loose-supply gate below keeps the historical MIN_ZOMBIE_SPAWN_CELLS
+  // (both 36 under the shipped profile: the same single threshold as before).
+  const mv = spawns.levelMoves;
+  const zStart = mv?.startCells ?? MIN_ZOMBIE_SPAWN_CELLS, lo = Math.min(zStart, MIN_ZOMBIE_SPAWN_CELLS);
+  let lootGate = false;
   const g0 = layout.grid, W = g0.w;
   const [sx, sy] = g0.cellOf(layout.playerSpawn.x, layout.playerSpawn.z);
   const dist = levelDistance(levels, sx, sy);
@@ -167,11 +174,14 @@ export function placeLevelSpawns(layout: StationLayout, rng: Rng): void {
     const [x0, y0, x1, y1] = L.id ? [Math.max(1, bx0), Math.max(1, by0), Math.min(g.w - 1, bx1), Math.min(g.h - 1, by1)] : [1, 1, g.w - 1, g.h - 1];
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = y * W + x;
-      if (gc[i] !== FLOOR || dl[i] < MIN_ZOMBIE_SPAWN_CELLS) continue;
+      if (gc[i] !== FLOOR || dl[i] < lo) continue;
       const a = ga[i];
       if (a < 0 || (layout.areas[a].level ?? 0) !== L.id || layout.areas[a].role === 'stair') continue;
-      if (!L.id) { mainAreas.add(a); continue; }
+      const forZ = dl[i] >= zStart;
+      if (!L.id) { if (forZ) mainAreas.add(a); continue; }
       if (!clear1(g, x, y)) continue;
+      if (dl[i] >= MIN_ZOMBIE_SPAWN_CELLS) lootGate = true;
+      if (!forZ) continue;
       let l = cells.get(a);
       if (!l) cells.set(a, (l = []));
       l.push(i);
@@ -179,6 +189,16 @@ export function placeLevelSpawns(layout: StationLayout, rng: Rng): void {
   }
   const levelAreas = [...cells.keys()];
   // --- Zombies -----------------------------------------------------------------------------------
+  // Lane SPAWN: the move targets are the level areas whose effective weight is > 0 (every one under a shipped profile: the
+  // baseline weights are all > 0 and no room has a modifier); the loose-supply part below keeps using every level area.
+  const zw = new Map<number, number>();
+  const zombieWeight = (id: number): number => {
+    let w = zw.get(id);
+    if (w === undefined) zw.set(id, (w = mv ? areaSpawnWeight(mv.areaWeights, spawns, layout.areas[id]) : 0));
+    return w;
+  };
+  const zAreas = mv ? levelAreas.filter(id => zombieWeight(id) > 0) : [];
+  if (mv) reportSpawnCandidates(layout, 'levelMoves', new Map(zAreas.map(id => [id, cells.get(id)!])));
   // Never on a stair flight (main-level spawning only checks for floor): those move first.
   const onStairs = (z: StationLayout['zombies'][number]) => {
     const g = levels[z.level ?? 0]?.grid ?? g0, [cx, cy] = g.cellOf(z.x, z.z);
@@ -188,13 +208,13 @@ export function placeLevelSpawns(layout: StationLayout, rng: Rng): void {
     return g.rampIdx[i] >= 0 || layout.areas[g.area[i]]?.role === 'stair';
   };
   const stairZ = layout.zombies.filter(onStairs);
-  const share = levelAreas.length > 0 && !layout.zombies.some(z => z.level);
-  if (levelAreas.length && (share || stairZ.length)) {
-    const wMain = [...mainAreas].reduce((s, id) => s + zombieWeight(layout.areas[id]), 0);
-    const wLev = levelAreas.reduce((s, id) => s + zombieWeight(layout.areas[id]), 0);
+  const share = zAreas.length > 0 && !layout.zombies.some(z => z.level);
+  if (mv && zAreas.length && (share || stairZ.length)) {
+    const wMain = [...mainAreas].reduce((s, id) => s + zombieWeight(id), 0);
+    const wLev = zAreas.reduce((s, id) => s + zombieWeight(id), 0);
     const N = layout.zombies.length;
-    const perLevel = new Set(levelAreas.map(id => layout.areas[id].level!));
-    const want = share ? Math.min(Math.max(N - 6, 0), Math.max(perLevel.size, Math.round(N * wLev / (wLev + wMain)))) : 0;
+    const perLevel = new Set(zAreas.map(id => layout.areas[id].level!));
+    const want = share ? Math.min(Math.max(N - mv.mainKeep, 0), Math.max(perLevel.size, Math.round(N * wLev / (wLev + wMain)))) : 0;
     const nMove = Math.max(want, stairZ.length);
     // Donors: zombies on stairs, then those in the most crowded main areas (ties: latest placed).
     const crowd = new Map<number, number>();
@@ -202,19 +222,19 @@ export function placeLevelSpawns(layout: StationLayout, rng: Rng): void {
     const donors = layout.zombies.map((z, i) => ({z, i})).filter(d => share || onStairs(d.z))
       .sort((p, q) => (+onStairs(q.z) - +onStairs(p.z)) || (crowd.get(q.z.area)! - crowd.get(p.z.area)!) || q.i - p.i);
     // Area order: one area per level first (each level gets a creature), then weighted.
-    const order = levelAreas.map(id => ({id, k: Math.pow(rng.next(), 1 / zombieWeight(layout.areas[id]))})).sort((p, q) => q.k - p.k).map(o => o.id);
+    const order = zAreas.map(id => ({id, k: Math.pow(rng.next(), 1 / zombieWeight(id))})).sort((p, q) => q.k - p.k).map(o => o.id);
     const firstPer = [...perLevel].map(lv => order.find(id => layout.areas[id].level === lv)!).filter(id => id !== undefined);
     const seq = [...firstPer, ...order.filter(id => !firstPer.includes(id))];
     let moved = 0, di = 0;
-    for (let pass = 0; pass < 3 && moved < nMove; pass++) {
+    for (let pass = 0; pass < mv.passes && moved < nMove; pass++) {
       for (const id of seq) {
         if (moved >= nMove || di >= donors.length) break;
         const a = layout.areas[id], g = levels[a.level!].grid, list = cells.get(id)!;
-        for (let t = 0; t < 12; t++) {
+        for (let t = 0; t < mv.tries; t++) {
           const i = rng.pick(list);
           const [zx, zz] = g.center(i % W, (i / W) | 0);
           const zy = g.floorOf(i);
-          if (layout.zombies.some(o => Math.hypot(o.x - zx, o.z - zz) < 4 && Math.abs((o.y ?? 0) - zy) < 2)) continue;
+          if (layout.zombies.some(o => Math.hypot(o.x - zx, o.z - zz) < mv.spacingM && Math.abs((o.y ?? 0) - zy) < mv.spacingDy)) continue;
           const z = donors[di++].z;
           z.x = zx; z.z = zz; z.y = zy; z.level = a.level; z.area = id; z.yaw = rng.range(-Math.PI, Math.PI);
           moved++;
@@ -224,7 +244,7 @@ export function placeLevelSpawns(layout: StationLayout, rng: Rng): void {
     }
   }
   // --- Loose floor supplies ------------------------------------------------------------------------
-  if (levelAreas.length && !layout.pickups.some(p => p.level)) {
+  if (lootGate && !layout.pickups.some(p => p.level)) {
     const floorW = (a: Area, cat: 'ammo' | 'med') => { const p = purposeById(a.purpose); return p ? p.floor?.[cat] ?? 0 : PUBLIC_FLOOR[a.type] ?? 0; };
     const lootAreas = layout.areas.filter(a => a.level && a.type !== 'stair-core');
     const share = (cat: 'ammo' | 'med') => {
