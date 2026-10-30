@@ -76,7 +76,8 @@ export interface CabinetSpec {
   /** Interior back plane, fraction of depth from the back. */
   back: number;
 }
-// Meshy T2.5 cabinets (2026-10-29, ray-cast front profiles of cabinet-tall-t25.glb / cabinet-low-t25.glb): thin single-shell door
+// Meshy T2.5 cabinets (2026-10-29, ray-cast front profiles of cabinet-tall-t25.glb / cabinet-low-t25.glb; the 2026-10-30 local
+// repair cabinet-tall-t25r1.glb only rebuilt the sides / top — door fronts identical, these values unchanged): thin single-shell door
 // fronts (tall z 0.269, low z 0.349) meeting at the centre; door edges x +-0.499 / +-0.905, bottom / top grooves y 0.130 / 1.850
 // (tall) and 0.108 / 0.758 (low). The slab is 2 cm behind the door face (thin doors, so the opened leaf is not a thick block).
 // Iteration-02/04 values: tall {0.905, 0.059, 0.982, 0.24, 0.028}, low {0.946, 0.101, 0.934, 0.18, 0.015}.

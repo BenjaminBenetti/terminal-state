@@ -47,11 +47,14 @@ Work in this Git repository. **After checks, commit and push changes to GitHub
 `main`**, preserving existing history; no feature branch requirement or force
 push. See [AGENTS.md](AGENTS.md). The workflow
 [`.github/workflows/game-build.yml`](.github/workflows/game-build.yml) runs on pushes
-to main and manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off),
-`npm run build`, `npm test`, workflow/packager checks and the portable CI packager.
-All third-party actions are pinned to verified official-repository commit SHAs.
+to main, on **pull requests into main** (check `build`, required before merging) and
+on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off),
+`npm run build` (typecheck + build), `npm test`, workflow/packager checks and the
+portable CI packager. All third-party actions are pinned to verified
+official-repository commit SHAs. Pull-request runs validate only: release artifacts
+are uploaded only by runs on main itself.
 
-The successful run uploads **`terminal-state-web-<full commit SHA>`**, containing:
+A successful run on main uploads **`terminal-state-web-<full commit SHA>`**, containing:
 
 ```text
 site/             # self-contained static game; publish this directory only
