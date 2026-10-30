@@ -21,17 +21,17 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   // single-template zombie-rigged.glb stays on disk, unused). Wearable GLBs hold one fitted SkinnedMesh per supported body.
   zombieBody_lastshift: {url: 'assets/models/zombie-body-lastshift-t25.glb', bytes: 719_000},
   zombieBody_courier: {url: 'assets/models/zombie-body-courier-t25.glb', bytes: 680_000},
-  zombieBody_agent: {url: 'assets/models/zombie-body-agent-t25.glb', bytes: 676_000},
+  zombieBody_agent: {url: 'assets/models/zombie-body-agent-t25.glb', bytes: 658_000},
   zombieBody_scavenger: {url: 'assets/models/zombie-body-scavenger-t25.glb', bytes: 701_000}, // Meshy T2.5 from a RECREATED reference (user update 01; not an original) of the old upload
   zombieBody_heavyset: {url: 'assets/models/zombie-body-heavyset-t25.glb', bytes: 588_000}, // Meshy T2.5 replacement (lane CHARS) of the iteration-06 base-layer body (always wears pants)
   zombieBody_tall: {url: 'assets/models/zombie-body-tall-t25.glb', bytes: 633_000}, // iteration 06 generated base-layer body (always wears pants)
   // iteration 07 refit (fewer per-body variants: pairs that still clipped are not shipped)
-  outfit_coat: {url: 'assets/models/outfit-coat-t25.glb', bytes: 1_198_000},
+  outfit_coat: {url: 'assets/models/outfit-coat-t25.glb', bytes: 1_044_000},
   outfit_hivis: {url: 'assets/models/outfit-hivis-t25.glb', bytes: 788_000},
-  outfit_hoodie: {url: 'assets/models/outfit-hoodie-t25.glb', bytes: 952_000},
-  outfit_blazer: {url: 'assets/models/outfit-blazer-t25.glb', bytes: 902_000},
+  outfit_hoodie: {url: 'assets/models/outfit-hoodie-t25.glb', bytes: 823_000},
+  outfit_blazer: {url: 'assets/models/outfit-blazer-t25.glb', bytes: 776_000},
   outfit_trench: {url: 'assets/models/outfit-trench-t25.glb', bytes: 698_000},
-  outfit_flannel: {url: 'assets/models/outfit-flannel-t25.glb', bytes: 734_000},
+  outfit_flannel: {url: 'assets/models/outfit-flannel-t25.glb', bytes: 622_000},
   outfit_sweater: {url: 'assets/models/outfit-sweater-t25.glb', bytes: 519_000},
   outfit_cargo: {url: 'assets/models/outfit-cargo-t25.glb', bytes: 760_000},
   outfit_jeans: {url: 'assets/models/outfit-jeans-t25.glb', bytes: 766_000},

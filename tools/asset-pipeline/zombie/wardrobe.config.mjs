@@ -25,7 +25,9 @@ export const T25 = {
   // batch2-chars (lanes/batches/batch2-chars.json): remaining bodies (a-pose) and wearables, accepted deliveries
   lastshift: {asset: 'body:lastshift', attempt: 'a1', sha256: 'ec77a1c28537a87d68ae4ea496a6dd48427051b5e195365999fc6804730b0d1b'},
   courier: {asset: 'body:courier', attempt: 'a1', sha256: '5608e648e52874a5d28f61c0117464353f47374449ae433b995eaec8636c8cde'},
-  agent: {asset: 'body:agent', attempt: 'a1', sha256: 'be24a4f07016c05412e37bb10d5ba9ceb6a8f7b60b462d2f6c1af8700ba8a53d'},
+  // agent a1 (task 01a189d5-31ae-7673-a7d7-ba1449455a77) was flagged: head tilted back ~20-30 deg (hats over the eyes);
+  // a2 = the primary-approved replacement (lanes/batches/replace-2.json), head level like the original
+  agent: {asset: 'body:agent', attempt: 'a2', sha256: '6721c5404914a7f072338e903959d8221414c7ed3230ff52f0d9491525703c0a'},
   tall: {asset: 'body:tall', attempt: 'a1', sha256: 'dfd58b18c055c0aab164daa41ba06bf8de381f136aa49fc925efd22f06c01875'},
   scavenger: {asset: 'body:scavenger', attempt: 'a1', sha256: 'b93da7c038fded9b23edf88ce9e139adbc0af06148b5cd818b03fe0b630d5892'}, // RECREATED reference (user update 01), not an original
   coat: {asset: 'garment:coat', attempt: 'a1', sha256: '8dab13875cc683af3a3eaba4c2ace27436f09c1870458d11e4ee648b5e94a4b0', facing: 1},

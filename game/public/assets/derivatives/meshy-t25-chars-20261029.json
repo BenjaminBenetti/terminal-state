@@ -3,7 +3,7 @@
  "class": "chars",
  "task": "studio-meshy-game-replacement-20261029-01",
  "lane": "CHARS",
- "generatedAt": "2026-10-30T00:53:51.458Z",
+ "generatedAt": "2026-10-30T01:34:11.284Z",
  "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
  "method": "Accepted Meshy T2.5 native GLBs (single original front/reference image) are rebuilt by the EXISTING local CPU rig pipelines: densified (zombie/lib/densify.mjs, same surface + UV mapping) -> placement (metres, +Y up, +Z facing, feet / paws on y = 0) -> slice-landmark skeleton (18-joint humanoid / 25-joint quadruped, A-pose / bind as generated) -> simplify + new UV atlas + texture bake from the native textures -> automatic skin weights -> procedural clips (Idle/Walk/Run/Attack/Hit/Death) -> per-body garment fits (fit07 pose gate, masks, layering) recomputed for the new topology. No paid rigging / animation / remesh, no network.",
  "status": {
@@ -72,6 +72,10 @@
     "inputImageSha256": "edaba4307b761828e08869d5531315fda9db18205c4bf93b25c7a3437b066ca8",
     "review": "accepted",
     "reviewNote": "Same lastshift zombie: dirty beige pocket tee, patched camo cargo shorts, worn boots, gaunt face, A-pose; consistent back. Skin reads paler under provider lighting. Static mesh - local re-rig required (garment canonical body)."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "body:lastshift",
+    "sha256": "ec77a1c28537a87d68ae4ea496a6dd48427051b5e195365999fc6804730b0d1b"
    },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-lastshift-t25.glb",
@@ -177,6 +181,10 @@
     "review": "accepted",
     "reviewNote": "Same courier: stained white tank top, ripped light jeans, white sneakers, lean build, A-pose; consistent back. Static mesh - re-rig required."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "body:courier",
+    "sha256": "5608e648e52874a5d28f61c0117464353f47374449ae433b995eaec8636c8cde"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-courier-t25.glb",
     "sha256": "be7b01ecd1259293b4f34713a2a76821514f55fef7cbcae504b27dfbafa2fc04",
@@ -242,17 +250,17 @@
    "status": "replaced",
    "runtimeRebuilt": true,
    "meshy": {
-    "meshyTaskId": "01a189d5-31ae-7673-a7d7-ba1449455a77",
-    "attempt": "a1",
+    "meshyTaskId": "01a18a5c-5320-7678-ab83-c149b41c4c85",
+    "attempt": "a2",
     "provider": "Meshy meshy_image_to_3d, ai_model meshy-t2.5, model_type smart-topology, should_texture + enable_pbr, texture_resolution 2k, target_formats [glb]",
     "args": {
      "target_polycount": 20000,
      "pose_mode": "a-pose"
     },
-    "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/body:agent/a1/native.glb",
-    "nativeSha256": "be24a4f07016c05412e37bb10d5ba9ceb6a8f7b60b462d2f6c1af8700ba8a53d",
-    "nativeBytes": 8444556,
-    "nativeTriangles": 18148,
+    "nativeGlb": "reference/tasks/meshy-game-replacement-20261029/assets/raw/body:agent/a2/native.glb",
+    "nativeSha256": "6721c5404914a7f072338e903959d8221414c7ed3230ff52f0d9491525703c0a",
+    "nativeBytes": 8077480,
+    "nativeTriangles": 19921,
     "nativeTextures": [
      {
       "mime": "image/jpeg",
@@ -279,13 +287,17 @@
     "inputImage": "reference/tasks/vertical-slice-iteration05-20261026/generation/bodyAgent/image/bodyAgent-original.png",
     "inputImageSha256": "d28c8a995c259e1935af3ebdf145a4f63ce0ea5502cf370e44e053fef63c9e5f",
     "review": "accepted",
-    "reviewNote": "Same agent: heavyset woman, light-blue uniform shirt with epaulettes, navy work trousers, belt, black shoes, curly grey hair, A-pose; belly reads in profile. Static mesh - re-rig required."
+    "reviewNote": "Fixes the a1 defect: head is level and faces straight ahead like the original (a1 chin raised ~20-30 deg); same heavyset agent - light-blue uniform shirt with epaulettes, navy work trousers, belt, black shoes, curly grey hair, A-pose (arms slightly lower than a1: bbox width 0.56 vs 0.69). Static mesh - re-rig required; head items can be re-enabled once refit."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "body:agent",
+    "sha256": "6721c5404914a7f072338e903959d8221414c7ed3230ff52f0d9491525703c0a"
    },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-agent-t25.glb",
-    "sha256": "b610a2d514b9057fdc90b9c0cb42277d13caa36f02961a4575744758918eaa04",
-    "bytes": 676404,
-    "triangles": 14994,
+    "sha256": "99fbc4ab0f39989b480e74f1a36e7f52926b36dd221dfe583431bf06d1972b5e",
+    "bytes": 657976,
+    "triangles": 14991,
     "meshNodes": 1,
     "textures": [
      {
@@ -295,7 +307,7 @@
        1024,
        1024
       ],
-      "bytes": 116732
+      "bytes": 115423
      },
      {
       "name": "ZombieBodyMaterial_metallicRoughness",
@@ -304,7 +316,7 @@
        256,
        256
       ],
-      "bytes": 17386
+      "bytes": 13857
      }
     ],
     "skins": 1,
@@ -321,15 +333,15 @@
    },
    "densify": {
     "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
-    "maxEdge": 0.0042781,
+    "maxEdge": 0.0042561,
     "passes": 5,
-    "sourceTriangles": 18148,
-    "sourceVertices": 21915,
-    "triangles": 331186,
-    "vertices": 195699,
-    "longestEdge": 0.0042778,
+    "sourceTriangles": 19921,
+    "sourceVertices": 21660,
+    "triangles": 343161,
+    "vertices": 200061,
+    "longestEdge": 0.0042559,
     "maxEdgeFractionOfHeight": 0.0045,
-    "sourceHeightUnits": 0.950684
+    "sourceHeightUnits": 0.945801
    },
    "restore": {
     "path": "game/public/assets/models/zombie-body-agent.glb",
@@ -384,6 +396,11 @@
     "inputImageSha256": "976b10c57b6851b67217f920d86fa50f9f1eb86674d4f38f8fef7e0cca267871",
     "review": "accepted",
     "reviewNote": "Matches the RECREATED reference (user-authorized update01, NOT an original): gas-masked scavenger in tattered camo jacket/trousers with chest pouches and boots, gaunt hands, A-pose; views show brown/olive camo (thumbnail lighting reads greyer). Static mesh - re-rig required; compare against the old in-game scavenger before replacing."
+   },
+   "reference": {
+    "recreated": true,
+    "origin": "recreated-from-existing-model-guide (user authorized update01)",
+    "note": "conditioning image RECREATED from a guide render of the old model (user update 01); NOT a recovered original"
    },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-scavenger-t25.glb",
@@ -489,6 +506,10 @@
     "review": "accepted",
     "reviewNote": "Same heavyset man: grey stained tank top, dark boxer briefs, grey socks, bald, A-pose, belly reads in profile. Static mesh (no skin/skeleton) - local re-rig required per integration contract."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "body:heavyset",
+    "sha256": "a88bad7d4f74038fd4b3f383eefdda5565c2aef21c7f88093c67478c2b9f738c"
+   },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-heavyset-t25.glb",
     "sha256": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f",
@@ -592,6 +613,10 @@
     "inputImageSha256": "1115459b29c9c3fa226e5addb7aef469ceb9f38699d4b32394645cc67543f4e3",
     "review": "accepted",
     "reviewNote": "Same tall slim woman: grey tee, black bike shorts, grey socks, short black hair, A-pose; consistent back. Static mesh - re-rig required."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "body:tall",
+    "sha256": "dfd58b18c055c0aab164daa41ba06bf8de381f136aa49fc925efd22f06c01875"
    },
    "runtime": {
     "path": "game/public/assets/models/zombie-body-tall-t25.glb",
@@ -697,12 +722,16 @@
     "review": "accepted",
     "reviewNote": "Same long navy work coat with yellow shoulder yoke + reflective tape, hood, patch pockets, dirt; open front."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:coat",
+    "sha256": "8dab13875cc683af3a3eaba4c2ace27436f09c1870458d11e4ee648b5e94a4b0"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-coat-t25.glb",
-    "sha256": "b8dfc4faf509bc494dba8624cdbfcc91dc102045d7da75c1fddf31f55d55b91d",
-    "bytes": 1198268,
-    "triangles": 53928,
-    "meshNodes": 6,
+    "sha256": "0f8dd368762e5f7e8bda487e4113451731b8e06a6f1dff7da0f1c8401104c34c",
+    "bytes": 1044436,
+    "triangles": 44940,
+    "meshNodes": 5,
     "perNodeTriangles": 8988,
     "textures": [
      {
@@ -724,7 +753,7 @@
       "bytes": 13290
      }
     ],
-    "skins": 6,
+    "skins": 5,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-coat.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -732,7 +761,6 @@
      "lastshift",
      "courier",
      "scavenger",
-     "agent",
      "heavyset",
      "tall"
     ]
@@ -802,6 +830,10 @@
     "inputImageSha256": "fbf4c67d3a63651668c7df7b63030efde3f8d2c15474624fc99970e0c2f6da65",
     "review": "accepted",
     "reviewNote": "Same double-breasted belted trench with epaulettes and hem grime; colour reads lighter cream than the tan/khaki reference."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:trench",
+    "sha256": "0745c0388be7f09da591cc9ff685067defaaf9b19544e06629648d89ddc6b9b9"
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-trench-t25.glb",
@@ -905,6 +937,10 @@
     "inputImageSha256": "5fe06ed48dcc0b8a390e5a3454009da732c2c698bcbc5d9b2d4032da31fe5085",
     "review": "accepted",
     "reviewNote": "Same orange hi-vis vest with silver reflective bands, zip, chest pocket, heavy grime."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:hivis",
+    "sha256": "2b706bf354ef481332efeef9c7b6f404227e2a8b28fa559a4e78eb861b909f99"
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-hivis-t25.glb",
@@ -1011,12 +1047,16 @@
     "review": "accepted",
     "reviewNote": "Same worn brick-red zip hoodie: hood, drawstrings, kangaroo pocket, frayed cuffs/hem, dirt. Standalone garment shape; must be refit/skinned to each body (old masks/weights invalid)."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:hoodie",
+    "sha256": "fd09ada122a10c8411fbbe9700082845cbfa51a66d520252b81c7c315d0a04b3"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-hoodie-t25.glb",
-    "sha256": "f505076bbd65b02730a5c8e94c95f24c4f8627074da384cfe76b69316afb5a6d",
-    "bytes": 952256,
-    "triangles": 44946,
-    "meshNodes": 6,
+    "sha256": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b",
+    "bytes": 822928,
+    "triangles": 37455,
+    "meshNodes": 5,
     "perNodeTriangles": 7491,
     "textures": [
      {
@@ -1038,7 +1078,7 @@
       "bytes": 7458
      }
     ],
-    "skins": 6,
+    "skins": 5,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-hoodie.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1046,7 +1086,6 @@
      "lastshift",
      "courier",
      "scavenger",
-     "agent",
      "heavyset",
      "tall"
     ]
@@ -1117,12 +1156,16 @@
     "review": "accepted",
     "reviewNote": "Same torn charcoal tweed blazer with lapels, flap pockets, ripped shoulder; CPU views confirm dark charcoal (provider thumbnail lighting washes it to light grey). Base colour mean 75/75/75 vs reference 63/60/58: slightly lighter and neutral (warm tint lost)."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:blazer",
+    "sha256": "05f04056f2abc0dbae09a10a841cf8a9cfd12f7386a519022079524d650f5020"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-blazer-t25.glb",
-    "sha256": "44281099dfc2f1a0a7f855d29dc3e463668202afa07dbc3d73e9136adc5f4534",
-    "bytes": 901584,
-    "triangles": 44970,
-    "meshNodes": 6,
+    "sha256": "8a25514379680f4a2b8aa2940253f996c1b99f35bef253c7573a0197b0937b24",
+    "bytes": 776288,
+    "triangles": 37475,
+    "meshNodes": 5,
     "perNodeTriangles": 7495,
     "textures": [
      {
@@ -1144,7 +1187,7 @@
       "bytes": 7941
      }
     ],
-    "skins": 6,
+    "skins": 5,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-blazer.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1152,7 +1195,6 @@
      "lastshift",
      "courier",
      "scavenger",
-     "agent",
      "heavyset",
      "tall"
     ]
@@ -1223,12 +1265,16 @@
     "review": "accepted",
     "reviewNote": "Same red/black buffalo-check flannel shirt with chest pockets, frayed cuffs, dirt; red reads slightly pinker/lighter."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:flannel",
+    "sha256": "ccf22d234ff534c7448c1edc6730706d4fa2166df63bae0bd230db53c1cc6638"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-flannel-t25.glb",
-    "sha256": "282b110b7097fa86ce6743a5ee77ce4e8de3faf99ab318d0b32d7e2f34e21b7f",
-    "bytes": 733588,
-    "triangles": 32500,
-    "meshNodes": 5,
+    "sha256": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3",
+    "bytes": 622104,
+    "triangles": 26000,
+    "meshNodes": 4,
     "perNodeTriangles": 6500,
     "textures": [
      {
@@ -1250,14 +1296,13 @@
       "bytes": 7869
      }
     ],
-    "skins": 5,
+    "skins": 4,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-flannel.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
     "fittedBodies": [
      "lastshift",
      "courier",
-     "agent",
      "heavyset",
      "tall"
     ]
@@ -1327,6 +1372,10 @@
     "inputImageSha256": "727075cd106fc93aabcbdaad8a4b395da984ba1e9f043cb1b93b8264e8124994",
     "review": "accepted",
     "reviewNote": "Same mustard cable-knit crew sweater with holes and grime; slightly lighter yellow."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:sweater",
+    "sha256": "1a11c7865ed0eea91e5f07efae1e5d61d9a39660d15a84713e69a4c8a59934e0"
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-sweater-t25.glb",
@@ -1431,10 +1480,14 @@
     "review": "accepted",
     "reviewNote": "Same worn olive cargo trousers with side pockets, knee rips, frayed hems; texture mean 95/91/77 vs ref 88/80/65 (slightly lighter)."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:cargo",
+    "sha256": "11933bb04879b4dba67c5c2ed44a08efd1a78340d46730500ebb7eb6f7cc845f"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-cargo-t25.glb",
-    "sha256": "6b27bceaa8936d81b21d59f27f348725c159a881c04a60b98e98d3dddf841822",
-    "bytes": 760244,
+    "sha256": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788",
+    "bytes": 760232,
     "triangles": 35946,
     "meshNodes": 6,
     "perNodeTriangles": 5991,
@@ -1537,10 +1590,14 @@
     "review": "accepted",
     "reviewNote": "Same worn mid-blue straight jeans with knee rip, fading, frayed hems."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:jeans",
+    "sha256": "23aa400234c5a08dda51919151b297052459f124ea5f3a4e840c04c05ad39adc"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-jeans-t25.glb",
-    "sha256": "4401b1f8cfac0038d9d096f86cf2ee41d3a93b49bdcf02664ef3e1eb53f76eb7",
-    "bytes": 766284,
+    "sha256": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401",
+    "bytes": 766276,
     "triangles": 35994,
     "meshNodes": 6,
     "perNodeTriangles": 5999,
@@ -1643,10 +1700,14 @@
     "review": "accepted",
     "reviewNote": "Same dark grey pleated work slacks with knee tear and grime; views/base colour (94/92/89 vs ref 89/84/79) confirm dark grey (thumbnail washes it out)."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:slacks",
+    "sha256": "e0a8ac124a8da2368385097ada48df5e7b92a3b85e9ba0a8fb0d283c651c44be"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-slacks-t25.glb",
-    "sha256": "d73bcafa0bd131c352618f5f7bb70cc31578e7f799861cee962dd5f65976192f",
-    "bytes": 687328,
+    "sha256": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096",
+    "bytes": 687316,
     "triangles": 35910,
     "meshNodes": 6,
     "perNodeTriangles": 5985,
@@ -1749,10 +1810,14 @@
     "review": "accepted",
     "reviewNote": "Same scuffed yellow hard hat with ribs, brim and accessory slots (198/154/17 vs ref 209/168/51 - more saturated yellow)."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:hardhat",
+    "sha256": "0dcde4fed2151fe1697ff91b202f144520a753e2890fad3d0ed179185e6751f6"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-hardhat-t25.glb",
-    "sha256": "0cb2ebbd5db3be41bd7e13f0a21ae0a9fd7d7b0ac228af745c6271e57448a459",
-    "bytes": 273040,
+    "sha256": "bc540bfc8357c1a448baceb87bfe7d8b5aff8b61dce44e4d4b49dbd620bde82f",
+    "bytes": 273028,
     "triangles": 10990,
     "meshNodes": 5,
     "perNodeTriangles": 2198,
@@ -1854,10 +1919,14 @@
     "review": "accepted",
     "reviewNote": "Same faded navy denim baseball cap with frayed brim and eyelets; views/base colour (65/70/84 vs ref 67/69/80) match (thumbnail washes it out)."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:cap",
+    "sha256": "4f6009e9dda1e4cd67935aaa2d4335cafd29107fd09b4b1f358a9c8acd7724e8"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-cap-t25.glb",
-    "sha256": "4eaf79718116eee615ac062f53e24836bd1b4c3ce6de712e8ff2758f3d9f52c4",
-    "bytes": 250824,
+    "sha256": "85d41cf35dada0f44ca9ca529794b5d93fad26444076a72ef235e800b30aae32",
+    "bytes": 250812,
     "triangles": 11000,
     "meshNodes": 5,
     "perNodeTriangles": 2200,
@@ -1959,10 +2028,14 @@
     "review": "accepted",
     "reviewNote": "Same dark-green ribbed cuffed beanie; base colour mean 53/59/51 vs ref 56/60/51 (thumbnail lighting washes it); the small hole/loose thread of the reference is not reproduced."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:beanie",
+    "sha256": "266a4e571fccfa1476f28d95df3a3130fd957153f799e8163106bcccc6733b20"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-beanie-t25.glb",
-    "sha256": "40902fee9096cc081ea2c115b2042ee3afe6361b95541826231716a61e638a9b",
-    "bytes": 262268,
+    "sha256": "ee8a69c5148e7345c860ed61e6312f583ea43e5b804d104f129ac6860509c837",
+    "bytes": 262260,
     "triangles": 10995,
     "meshNodes": 5,
     "perNodeTriangles": 2199,
@@ -2064,10 +2137,14 @@
     "review": "accepted",
     "reviewNote": "Same black full-face gas mask: large visor, twin side filters, central valve, straps, grime."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:gasmask",
+    "sha256": "123161cea8c08200e15caf270accec2ee815da9c52cc8070ac31db50d300a8dc"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-gasmask-t25.glb",
-    "sha256": "a8836a8f3eafb13d13f7391bf27633618068639e7dd301386338b6718e184805",
-    "bytes": 423756,
+    "sha256": "3eb89dfaff77b0042475ac212483ea209cb066cf8a9eb08ad2fa84fff5c0a06b",
+    "bytes": 423748,
     "triangles": 15000,
     "meshNodes": 5,
     "perNodeTriangles": 3000,
@@ -2169,10 +2246,14 @@
     "review": "accepted",
     "reviewNote": "Same grey half-face respirator with olive twin cartridges and exhalation valve, grime."
    },
+   "pinnedNotYetBuilt": {
+    "asset": "garment:respirator",
+    "sha256": "6d53a2c3db3ae118e9f845917b92cdbddfd8fa489a5c9ee2c559acc362f2dbbe"
+   },
    "runtime": {
     "path": "game/public/assets/models/outfit-respirator-t25.glb",
-    "sha256": "362a98a57409dd7544d1368c31b59364160b0d914af3de4511e76ac7adaa0c73",
-    "bytes": 351128,
+    "sha256": "fcde48adc8c8f8ccf05cf92d60bfc6fab1aad5cb2f463dd34cf5b8891352c256",
+    "bytes": 351120,
     "triangles": 10970,
     "meshNodes": 5,
     "perNodeTriangles": 2194,
@@ -2273,6 +2354,10 @@
     "inputImageSha256": "d47f4eedbd17f41062f69ef61bc2754a8f5a59741d64cc03cb54546d8706d349",
     "review": "accepted",
     "reviewNote": "Same grizzled dark-grey rat-dog: long curled tail, pale flank streaks, clawed feet (side views confirm; provider thumbnail lighting reads paler). Posture somewhat longer/lower than the hunched reference. Static mesh - local re-rig required."
+   },
+   "pinnedNotYetBuilt": {
+    "asset": "creature:ratdog",
+    "sha256": "62cd6d25a8d4e7843269c038cbd8cf31583459044eefd50fe375cfb7121dc96b"
    },
    "runtime": {
     "path": "game/public/assets/models/creature-ratdog-t25.glb",

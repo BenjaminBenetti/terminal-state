@@ -72,6 +72,7 @@ for (const m of masters) {
   } else rec.status = replaced ? 'replaced' : 'pending (old local Pixal3D source still used)';
   rec.runtimeRebuilt = !!liveFile && !!oldPath && rel(liveFile) !== oldPath;
   if (replaced) rec.meshy = nativeRecord(m.id);
+  if (m.originalImage?.notOriginal) rec.reference = {recreated: true, origin: m.originalImage.origin, note: 'conditioning image RECREATED from a guide render of the old model (user update 01); NOT a recovered original'};
   else if (pinned) rec.pinnedNotYetBuilt = {asset: pinned.asset ?? m.id, sha256: pinned.sha256};
   if (liveFile) {
     rec.runtime = {...await glbInfo(liveFile), derivativeManifest: `game/public/assets/derivatives/${deriv}`,

@@ -2354,7 +2354,7 @@
             "coveredOuterWallVertices": 249
           }
         ],
-        "ms": 15517
+        "ms": 15405
       },
       "bulkMBeforeRefit": {
         "torso": 0.024,
@@ -3292,7 +3292,7 @@
             "coveredOuterWallVertices": 414
           }
         ],
-        "ms": 15254
+        "ms": 15518
       },
       "bulkMBeforeRefit": {
         "torso": 0.0188,
