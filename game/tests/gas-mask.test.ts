@@ -213,12 +213,16 @@ describe('Q: on / off and arbitration (GasMaskSystem.press)', () => {
     s.g.player.alive = false;
     expect(s.sys.press()).toBe('ignored');
     s.g.player.alive = true;
-    // a knife swing in progress
+    // a knife swing in progress (task knife-windup-20261030: a RELEASED swing is committed — Q waits for its recovery)
     const knife = s.g.inv.makeStack('knife', 1);
     s.g.inv.set(H(2), knife);
     s.g.weapon.equip(knife);
     for (let i = 0; i < 60 && s.g.weapon.phase === 'equipping'; i++) s.g.weapon.update(DT, {held: false, pressed: false, reload: false, lowered: false}, s.g.inv);
     s.g.weapon.update(DT, {held: true, pressed: true, reload: false, lowered: false}, s.g.inv);
+    for (let i = 0; i < 30; i++) s.g.weapon.update(DT, {held: true, pressed: false, reload: false, lowered: false}, s.g.inv); // wound up
+    expect(s.g.weapon.meleeStage).toBe('ready');
+    s.g.weapon.update(DT, {held: false, pressed: false, reload: false, lowered: false}, s.g.inv); // release: the swing
+    expect(s.g.weapon.meleeStage).toBe('swing');
     expect(s.g.weapon.swinging).toBe(true);
     expect(s.sys.press()).toBe('ignored');
     expect(s.calls.cancelUse).toEqual([]);
@@ -230,6 +234,37 @@ describe('Q: on / off and arbitration (GasMaskSystem.press)', () => {
     expect(s.g.gear.readied).toBe(false);
     expect(s.calls.cancelUse).toEqual(['mask']);
     expect(s.calls.cancelFlare).toBe(1);
+  });
+
+  it('task knife-windup-20261030: Q while the knife is held WOUND UP (not released) puts the mask on and drops the windup — no swing on the later release', () => {
+    const s = shell();
+    s.giveMask(100);
+    const knife = s.g.inv.makeStack('knife', 1);
+    s.g.inv.set(H(2), knife);
+    s.g.weapon.equip(knife);
+    const evs: WeaponEvent[] = [];
+    // as Game.update: a melee weapon is lowered while a lane owns the input (the mask transition is an input owner)
+    const frame = (held: boolean, pressed = false) => { evs.push(...s.g.weapon.update(DT, {held, pressed, reload: false, lowered: s.owns()}, s.g.inv)); s.step(DT); };
+    for (let i = 0; i < 60 && s.g.weapon.phase === 'equipping'; i++) frame(false);
+    frame(true, true);
+    for (let i = 0; i < 30; i++) frame(true);
+    expect([s.g.weapon.meleeStage, s.g.weapon.winding]).toEqual(['ready', true]);
+    expect(s.sys.press()).toBe('donning'); // not ignored: nothing is committed yet
+    frame(true); // the same frame's weapon update sees the owner -> the windup is dropped
+    expect(s.g.weapon.meleeStage).toBeNull();
+    expect(s.g.weapon.winding).toBe(false);
+    for (let i = 0; i < 50; i++) frame(true); // the button stays down through the whole transition (0.6 s) and after it
+    expect(s.sys.state).toBe('on');
+    frame(false); // the release: no swing, no contact
+    for (let i = 0; i < 40; i++) frame(false);
+    expect(evs.filter(e => e.type === 'swing' || e.type === 'contact')).toEqual([]);
+    expect(evs.filter(e => e.type === 'windup')).toHaveLength(1); // only the original press wound up
+    // a fresh press afterwards works normally
+    frame(true, true);
+    frame(false);
+    for (let i = 0; i < 40; i++) frame(false);
+    expect(evs.filter(e => e.type === 'swing')).toHaveLength(1);
+    expect(evs.filter(e => e.type === 'contact')).toHaveLength(1);
   });
 
   it('never changes the selected slot / weapon / magazine; firing, ADS and click-use are blocked during the transition; a running reload continues', () => {
@@ -279,7 +314,8 @@ describe('Q: on / off and arbitration (GasMaskSystem.press)', () => {
     expect(game).not.toMatch(/lastSlot/);
     expect(game).toMatch(/if \(inp\.hit\('KeyQ'\)\) this\.gasMask\.press\(\);/);
     expect(game).toMatch(/installGasMask\(this, \{cancelUse: reason => this\.cancelUse\(reason\), cancelFlareHold: \(\) => this\.cancelFlareHold\(\)\}\)/);
-    expect(src('../src/gear/system.ts')).toMatch(/const KEYS_SHOULDER = \['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'\];/);
+    // (task knife-windup-20261030: + 'Backquote', the melee slot ~ — still no KeyQ)
+    expect(src('../src/gear/system.ts')).toMatch(/const KEYS_SHOULDER = \['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Backquote'\];/);
     expect(GAME_KEYS.has('KeyQ')).toBe(true);
     const {CONTROLS} = await import('../src/ui/hud');
     expect(CONTROLS.some(([a, k]) => a === 'Gas mask on/off' && k === 'Q')).toBe(true);
@@ -625,13 +661,13 @@ describe('HUD Q cell (ui/hud.ts) and the camera mask (ui/maskOverlay.ts) on the 
   afterAll(() => dom.uninstall());
   const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
 
-  it('the bar is [Q, 1..5, 6, G]: Q is a gear cell for the mask slot (drop target), vacant "no mask"; then icon, ON/OFF, filter bar, spares', async () => {
+  it('the bar is [Q, 1..5, 6, G] (+ the melee slot ~ last): Q is a gear cell for the mask slot (drop target), vacant "no mask"; then icon, ON/OFF, filter bar, spares', async () => {
     const {Hud} = await import('../src/ui/hud');
     const hud = new Hud();
     const inv = new Inventory();
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    expect(bar.children.map(c => `${c.dataset.bar}:${c.dataset.index}`)).toEqual([`gear:${MASK.index}`, 'hotbar:0', 'hotbar:1', 'hotbar:2', 'hotbar:3', 'hotbar:4', `gear:${GEAR_SLOTS.indexOf('backpack')}`, 'throw:0']);
+    expect(bar.children.map(c => `${c.dataset.bar}:${c.dataset.index}`)).toEqual([`gear:${MASK.index}`, 'hotbar:0', 'hotbar:1', 'hotbar:2', 'hotbar:3', 'hotbar:4', `gear:${GEAR_SLOTS.indexOf('backpack')}`, 'throw:0', 'melee:0']); // task knife-windup-20261030: ~ is the last child
     const q = bar.children[0];
     expect(q.classList.contains('maskslot')).toBe(true);
     expect(q.classList.contains('vacant')).toBe(true);

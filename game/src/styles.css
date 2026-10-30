@@ -106,7 +106,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 #vitals .stam .fill { background: var(--teal); transition: none; }
 #hp-num { width: 34px; text-align: right; font-size: 18px; }
 #weapon-panel { position: absolute; right: 26px; bottom: 22px; text-align: right; }
-#weapon-name { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cream-dim); }
+#weapon-name { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cream-dim); max-width: 250px; margin-left: auto; }
 #ammo { font-size: 40px; font-weight: 700; line-height: 1.05; }
 #ammo .sep { color: var(--cream-dim); margin: 0 6px; font-size: 26px; }
 #reserve { font-size: 24px; color: var(--cream-dim); }
@@ -122,6 +122,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 #hotbar .slot svg { width: 52px; height: 28px; max-width: 100%; }
 body #hotbar .slot img.ico3d { max-width: 100%; }
 #hotbar .slot .nm { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#hotbar .slot .count { top: 3px; bottom: auto; } /* task knife-windup-20261030: rounds / stack size top right, clear of the centred name */
 #hotbar .slot.selected { background: rgba(48, 44, 30, 0.75); }
 /* Task gasmask-breach-20261030 (mask lane): the compact gas-mask cell "Q" LEFT of quick slot 1 (ui/hud.ts maskSlot): the mask
    icon (or a dim "no mask" ghost), ON / OFF, the fitted filter's bar along the bottom and the spare filters (+N, top right);
@@ -145,8 +146,9 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
   #hotbar .slot.maskslot { width: 56px; } #hotbar .slot.maskslot svg, #hotbar .slot.maskslot .ghost svg { width: 38px; } body #hotbar .slot.maskslot img.ico3d { width: 48px; } }
 @media (max-width: 1250px) { #hotbar .slot.maskslot { width: 44px; margin-right: 2px; padding: 3px 2px; } #hotbar .slot.maskslot svg, #hotbar .slot.maskslot .ghost svg { width: 32px; height: 18px; } body #hotbar .slot.maskslot img.ico3d { width: 38px; height: 26px; } #hotbar .slot.maskslot .nm { font-size: 9.5px; letter-spacing: 0.04em; } }
 /* At 1100 px and below the band is the actual gap: slimmer vitals bars (220 px; labels and values unchanged) and the weapon
-   panel's narrower hint (190 px) -> left 22 + 220 + 12 = 254 px, right 26 + 190 + 14 = 230 px. */
-@media (max-width: 1100px) { #hotbar { --hb-left: 254px; --hb-right: 230px; } #hotbar .slot { width: 62px; } #hotbar .slot svg { width: 40px; } body #hotbar .slot img.ico3d { width: 56px; } #weapon-hint { max-width: 190px; } #vitals { width: 220px; } }
+   panel's narrower hint and name (190 px) -> left 22 + 220 + 12 = 254 px, right 26 + 190 + 14 = 230 px. */
+@media (max-width: 1100px) { #hotbar { --hb-left: 254px; --hb-right: 230px; } #hotbar .slot { width: 62px; } #hotbar .slot svg { width: 40px; } body #hotbar .slot img.ico3d { width: 56px; } #weapon-hint { max-width: 190px; } #weapon-name { max-width: 190px; } #vitals { width: 220px; }
+  #hotbar .slot .nm { font-size: 10.5px; } #hotbar .slot .count { font-size: 11px; } } /* knife-windup: the name wraps like the hint; smaller cell text */
 #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 20, 15, 0.75) 100%); }
 #vignette.low { animation: pulse 1.1s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.6; } }

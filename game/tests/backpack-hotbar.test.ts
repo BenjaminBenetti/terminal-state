@@ -300,9 +300,11 @@ describe('HUD slot 6 and the inventory label (ui/hud.ts, ui/gearStyles.ts)', () 
     const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    // task gasmask-breach-20261030 (mask lane): [Q, 1..5, 6, G] — the gas-mask cell comes first, slot 6 is the 7th child
-    expect(bar.children).toHaveLength(8);
+    // task gasmask-breach-20261030 (mask lane): [Q, 1..5, 6, G] — the gas-mask cell comes first, slot 6 is the 7th child;
+    // + the melee slot ~ (task knife-windup-20261030, SLOT) as the LAST child (shown between Q and 1 by CSS order)
+    expect(bar.children).toHaveLength(9);
     expect(bar.children[0].dataset).toMatchObject({bar: 'gear', index: String(GEAR_SLOTS.indexOf('mask'))});
+    expect(bar.children[8].dataset).toMatchObject({bar: 'melee', index: '0'});
     const six = bar.children[6];
     expect(six.dataset).toMatchObject({bar: 'gear', index: String(GEAR_SLOTS.indexOf('backpack'))});
     expect(six.innerHTML).toMatch(/<span class="key">6<\/span>/);

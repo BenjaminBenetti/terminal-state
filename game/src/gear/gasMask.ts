@@ -15,8 +15,8 @@
 // EQUIPPED != ON THE FACE. The mask worn in the gear slot 'mask' is equipped (a picked-up mask goes there when it is empty, OFF
 // the face). Q (game.ts -> press()) toggles the face state: off -> donning (GAS_MASK.donS) -> on -> doffing (GAS_MASK.doffS)
 // -> off. The selected slot / weapon / magazine never change.
-// Q ARBITRATION: only while playing and alive; ignored mid-transition, during a knife swing, while the grounded-bag transfer
-// view (or an E hold on a bag) owns input. No mask equipped: "No gas mask" toast + sfx.denied(), nothing created. Otherwise it
+// Q ARBITRATION: only while playing and alive; ignored mid-transition, during a committed knife swing (a held, unreleased windup
+// is dropped instead: knife-windup-20261030), while the grounded-bag transfer view (or an E hold on a bag) owns input. No mask equipped: "No gas mask" toast + sfx.denied(), nothing created. Otherwise it
 // cancels a timed use (eat / drink / bandage) and a G flare hold, slings a readied backpack (6) back on through the gear
 // system's own path, then starts the transition. (The elevator panels are in-world buttons — a click, not a mode — so they own
 // no input Q could collide with.)
@@ -201,7 +201,10 @@ export class GasMaskSystem {
     const g = this.game;
     if (g.state !== 'playing' || !g.player.alive) return 'ignored';
     if (this.transitioning) return 'ignored';
-    if (g.weapon.swinging) return 'ignored'; // lane KNIFE: never mid-slash
+    // lane KNIFE: never mid-slash. Task knife-windup-20261030: a knife held wound up (not released) is no attack yet — Q goes ahead
+    // and the transition's input ownership lowers the knife, which drops the windup (no swing on a later release); a released /
+    // queued swing (committed) still ignores Q until its recovery ends.
+    if (g.weapon.swinging && !g.weapon.winding) return 'ignored';
     const gear = g.gear as unknown as GearLike | undefined;
     if (gear?.viewOpen || (gear?.holdProgress ?? null) !== null) return 'ignored'; // the bag view / an E hold owns input
     const m = this.worn;

@@ -5,6 +5,7 @@ import type {Inventory, ItemStack} from '../items/inventory';
 import {ammoItemFor, CALIBERS, type Caliber} from '../items/calibers';
 import type {OpticSpec} from './optic';
 import {KNIFE_RAYS} from '../combat/melee'; // lane KNIFE
+import {carryView, KNIFE_POSES} from './meleeView'; // lane FEEL: the knife's upright carry pose
 
 export interface MagazineReload { kind: 'magazine'; time: number; emptyTime: number }
 export interface ShellReload { kind: 'shell'; start: number; each: number; end: number }
@@ -62,18 +63,47 @@ export interface WeaponDef {
   /**
    * Lane KNIFE (knife-melee-20261030): a MELEE weapon. Its swing replaces the gun's fire / magazine / reload cycle in
    * WeaponController (no ammo is ever counted or taken, R does nothing, no ADS). The shared fields keep their meaning:
-   * `interval` = seconds per swing (cadence), `range` = reach from the eye (m), `damage` / `headMult` / `limbMult` = the hit,
-   * `noise` = loudness of a blade hit (gunshots 24-38 m), `knockback` 0, `auto` = holding the button keeps swinging.
+   * `range` = reach from the eye (m), `damage` / `headMult` / `limbMult` = the hit, `noise` = loudness of a blade hit
+   * (gunshots 24-38 m), `knockback` 0. Lane FEEL (knife-windup-20261030): `interval` = the minimum swing-to-swing cadence,
+   * which the melee phases enforce (= melee.windup + melee.sweep + melee.recovery); `auto` false (holding never repeats).
    */
   melee?: MeleeSpec;
 }
 
-/** Lane KNIFE: melee-only timing / sweep (combat/melee.ts resolves the contact). */
+/**
+ * Lane KNIFE: melee-only timing / sweep (combat/melee.ts resolves the contact).
+ * Lane FEEL (knife-windup-20261030; user: "click, and that holds it up ... and when you let go it swings, but if you just tap
+ * it quickly it still plays the whole animation ... this wind up mechanic will let us do heavier weapons like clubs and
+ * crowbars"): HOLD TO WIND UP, RELEASE TO SWING, as a small phase spec — a slower club / crowbar only sets other numbers:
+ *   press -> WINDUP (`windup` s: raised into the wound-up pose; also the MINIMUM — a release before it is queued and the
+ *   swing follows the moment the windup completes, so a quick tap still plays windup -> swing -> recovery)
+ *   -> READY (still held: the wound-up pose is kept and NOTHING attacks; after `holdMax` s, if set, the arm relaxes back to
+ *   the carry with no attack) -> release -> SWING (the ONE blade contact `strike` s after the release; the sweep /
+ *   follow-through ends at `sweep` s) -> RECOVERY (`recovery` s back to the carry).
+ * A new windup needs a NEW press (holding never repeats) and starts only after the recovery (a press during the swing /
+ * recovery is remembered and starts it then). A longer hold adds no damage or reach.
+ */
 export interface MeleeSpec {
-  /** Seconds from the click to blade contact — the ONE moment the swing is resolved (windup; the rest is recovery). */
+  /** Seconds from the press to the wound-up pose; the minimum windup before a swing can be released. */
   windup: number;
+  /** Seconds the wound-up pose may be held before the arm relaxes without attacking; absent = as long as the button is held. */
+  holdMax?: number;
+  /** Seconds from the release (swing start) to blade contact — the ONE moment the swing is resolved. */
+  strike: number;
+  /** Seconds from the release to the end of the sweep / follow-through (> strike). */
+  sweep: number;
+  /** Seconds from the end of the sweep back to the carry pose; the next windup cannot start before it ends. */
+  recovery: number;
   /** Sweep rays: [yaw, pitch] offsets (radians) from the crosshair, tried centre first (combat/melee.ts KNIFE_RAYS). */
   rays: readonly (readonly [number, number])[];
+}
+
+/** Lane FEEL: the stage of a melee weapon's cycle (null = the carry pose, nothing under way). */
+export type MeleeStage = 'windup' | 'ready' | 'swing' | 'recover';
+
+/** Lane FEEL: minimum seconds between two swing starts of a melee weapon (a tap every frame cannot beat it). */
+export function meleeCadence(m: Pick<MeleeSpec, 'windup' | 'sweep' | 'recovery'>): number {
+  return m.windup + m.sweep + m.recovery;
 }
 
 /**
@@ -126,25 +156,27 @@ export const WEAPONS: Record<string, WeaponDef> = {
     // sit 14 mm under the screen centre (~2.9 deg, the crosshair stays the aim point) and 40 mm closer (relief 0.32 -> 0.28).
     view: {model: 'pistol', hip: [0.16, -0.17, -0.36], aim: [0.0, -0.08, -0.36], hipYaw: 0.08, hipPitch: 0.03, hipRoll: -0.04, length: 0.2, sightRelief: 0.28, sightLift: 0.014},
   },
-  // Lane KNIFE (knife-melee-20261030; user: "one swipe to the head and two swipes to the body", "trading life for killing a
-  // zombie"): the user's survival knife (knife-user.glb), the first MELEE weapon — in every NewGame kit next to the pistol.
-  // No caliber (never counts / takes ammo). Tuning vs ai/brain.ts ZOMBIE_STATS: a standard zombie (shambler, 100 hp) dies to
-  // ONE head hit (60 x 2 = 120) or TWO body hits (60 + 60; torso and limbs alike, limbMult 1); the tougher coated zombie (165 hp)
-  // takes two head / three body hits; rats / dogs (44 hp) die to any hit. Reach 1.5 m from the eye (a zombie starts its swipe
-  // at 1.35-1.4 m feet to feet and lands it out to ~1.8 m), one swing per 0.65 s with contact 0.18 s after the click: closing
-  // in means trading a hit for a kill. No knockback and no hit stagger (game.ts meleeContact) — contact stays dangerous.
+  // Lane KNIFE (knife-melee-20261030): the user's survival knife (knife-user.glb), the first MELEE weapon — in every NewGame
+  // kit next to the pistol. No caliber (never counts / takes ammo). No knockback and no hit stagger (game.ts meleeContact).
+  // Lane FEEL (knife-windup-20261030; user: "very overpowered, one hit to the head ... we're gonna go two hits to the head,
+  // scale up the body hits as well ... take twenty five percent of the range away"): damage HALVED 60 -> 30 (head x2 = 60),
+  // reach 1.5 -> 1.125 m (exactly -25 %; the model is not resized). Vs ai/brain.ts ZOMBIE_STATS / creatureActor RATDOG_STATS:
+  // a standard zombie (shambler 100 hp) = 2 head / 4 body hits (torso and limbs alike, limbMult 1); the coated zombie (165 hp)
+  // = 3 head / 6 body hits; rats / dogs (44 hp) = 1 head / 2 body hits. Hold to wind up, release to swing (MeleeSpec): a tap
+  // = 0.15 s raise -> contact 0.08 s after it -> sweep 0.16 s -> 0.34 s back to the carry; swing-to-swing >= 0.65 s (the
+  // previous cadence). A zombie starts its swipe at 1.35-1.4 m feet to feet: with the shorter reach a knife kill is a trade.
   knife: {
-    id: 'knife', itemId: 'knife', magazine: 0, auto: true, interval: 0.65,
-    damage: 60, pellets: 1, spreadHip: 0, spreadAim: 0, spreadMove: 0,
-    range: 1.5, falloffStart: 1.5, falloffMin: 1, headMult: 2, limbMult: 1, knockback: 0,
+    id: 'knife', itemId: 'knife', magazine: 0, auto: false, interval: 0.65,
+    damage: 30, pellets: 1, spreadHip: 0, spreadAim: 0, spreadMove: 0,
+    range: 1.125, falloffStart: 1.125, falloffMin: 1, headMult: 2, limbMult: 1, knockback: 0,
     reload: {kind: 'magazine', time: 0, emptyTime: 0}, // never used: a melee def returns before any reload logic
     recoil: {pitch: 0, yaw: 0, kick: 0, recover: 8}, // no firing recoil (not a gun; RECOIL_SCALE does not apply)
     equipTime: 0.3, aimFov: 75, moveMult: 1.0, noise: 5,
     sound: 'pistol', // placeholder for the gun-only cue type: a knife never calls shot / dry / reload cues (swing: sfx.meleeSwing)
-    melee: {windup: 0.18, rays: KNIFE_RAYS},
-    // Carry pose: grip (the hand) low right, just under the frame; blade up-left toward the crosshair with its flat to the eye
-    // (spine / serrations upper right, edge lower left). Swing offsets: weapons/meleeView.ts (the tip crosses the crosshair at contact).
-    view: {model: 'knife', hip: [0.14, -0.15, -0.28], aim: [0.14, -0.15, -0.28], hipYaw: 0.41, hipPitch: 0.575, hipRoll: -1.02, length: 0.32},
+    melee: {windup: 0.15, strike: 0.08, sweep: 0.16, recovery: 0.34, rays: KNIFE_RAYS},
+    // Lane FEEL: upright carry — grip (the hand) low right, blade standing up (tip up, leaning a little forward and in), edge
+    // forward (was carried sideways: blade up-left, flat to the eye). Windup / ready / swing / recovery: weapons/meleeView.ts.
+    view: {model: 'knife', ...carryView(KNIFE_POSES.carry), length: 0.32},
   },
 };
 
@@ -177,7 +209,7 @@ export function weaponsForCaliber(c: Caliber, defs: Record<string, WeaponDef> = 
   return Object.values(defs).filter(d => d.caliber === c);
 }
 
-/** Lane KNIFE: 'swinging' = a melee swing in progress (windup -> contact -> recovery). */
+/** Lane KNIFE / FEEL: 'swinging' = a melee cycle under way (windup / ready hold / swing / recovery: WeaponController.meleeStage). */
 export type WeaponPhase = 'none' | 'equipping' | 'idle' | 'reloading' | 'swinging';
 
 export type WeaponEvent =
@@ -187,20 +219,31 @@ export type WeaponEvent =
   | {type: 'shellIn'; def: WeaponDef}
   | {type: 'reloadEnd'; def: WeaponDef}
   | {type: 'equipped'; def: WeaponDef}
-  // Lane KNIFE (melee only): a swing started (whoosh / animation) and — exactly once per swing, `melee.windup` s later unless
-  // cancelled first — the blade's contact moment, when the game resolves the hit (game.ts meleeContact). `swing` numbers them.
+  // Lane FEEL (melee only): a press started the windup (the raise; silent, nothing can be hit yet)
+  | {type: 'windup'; def: WeaponDef}
+  // Lane KNIFE / FEEL (melee only): the release committed ONE swing (whoosh / sweep) and — exactly once per swing,
+  // `melee.strike` s later unless cancelled first — the blade's contact moment, when the game resolves the hit
+  // (game.ts meleeContact). `swing` numbers them.
   | {type: 'swing'; def: WeaponDef; swing: number}
   | {type: 'contact'; def: WeaponDef; swing: number};
 
 export interface TriggerInput {
   /** Trigger currently held. */
   held: boolean;
-  /** Trigger went down this frame. */
+  /** Trigger went down this frame (latched by Input until the frame ends, so a down + up inside one frame still counts). */
   pressed: boolean;
   reload: boolean;
   /** Sprinting/using items keeps the gun lowered. */
   lowered: boolean;
+  /**
+   * Lane FEEL: Input.clears (bumped whenever held input is wiped: menus / blur / pointer unlock / state changes). A change
+   * while a melee windup / ready hold is under way cancels it (the wiped button must not read as a release that swings).
+   */
+  clears?: number;
 }
+
+/** Lane FEEL: frame-sum tolerance for the melee stage timers (60 fps steps hit the stage lengths exactly). */
+const MELEE_EPS = 1e-6;
 
 export class WeaponController {
   def: WeaponDef | null = null;
@@ -215,12 +258,19 @@ export class WeaponController {
   progress = 0;
   /** Iteration 16 (lane GEAR): reload time multiplier — gloves x0.92, an arm injury slower (Game.mods.handlingMult, set every frame). */
   handling = 1;
-  /** Lane KNIFE: seconds into the current melee swing (meaningful while phase === 'swinging'). */
-  swingT = 0;
-  /** Lane KNIFE: swings started by this controller (the id carried by its 'swing' / 'contact' events). */
+  /** Lane FEEL: the melee cycle's stage (null = carry pose / nothing under way) and seconds into it. */
+  meleeStage: MeleeStage | null = null;
+  stageT = 0;
+  /** Lane KNIFE: swings committed by this controller (the id carried by its 'swing' / 'contact' events). */
   swingId = 0;
   /** Lane KNIFE: this swing's contact has not happened yet (cleared at contact or by cancelSwing). */
   private contactPending = false;
+  /** Lane FEEL: the button came up during the windup (a tap): the swing follows as soon as the minimum windup is done. */
+  private releaseQueued = false;
+  /** Lane FEEL: a NEW press arrived while a swing / recovery / queued tap was under way: it starts the next windup when allowed. */
+  private pressQueued = false;
+  /** Lane FEEL: TriggerInput.clears seen last frame (a change = the held input was wiped: a windup cancels, never swings). */
+  private seenClears: number | undefined;
 
   equip(stack: ItemStack | null, defs = WEAPONS): void {
     if (stack === this.stack && stack) return;
@@ -230,37 +280,57 @@ export class WeaponController {
     this.phaseT = this.def ? this.def.equipTime : 0;
     this.cooldown = 0;
     this.progress = 0;
-    this.swingT = 0; // lane KNIFE: a swing never survives a weapon change (no stale contact)
-    this.contactPending = false;
+    this.resetMelee(); // lane KNIFE / FEEL: a windup, ready hold or swing never survives a weapon change (no stale contact)
   }
 
   get reloading(): boolean {
     return this.phase === 'reloading';
   }
 
-  /** Lane KNIFE: a melee swing is in progress. */
+  /** Lane KNIFE / FEEL: a melee cycle is under way (windup, ready hold, swing or recovery). */
   get swinging(): boolean {
     return this.phase === 'swinging';
   }
 
-  /** Lane KNIFE: seconds into the running swing, or -1 (viewmodel animation). */
+  /** Lane KNIFE / FEEL: seconds since the release of the running swing (swing + recovery), or -1 (QA / HUD). */
   get swingTime(): number {
-    return this.phase === 'swinging' ? this.swingT : -1;
+    const m = this.def?.melee;
+    if (!m || this.phase !== 'swinging') return -1;
+    return this.meleeStage === 'swing' ? this.stageT : this.meleeStage === 'recover' ? m.sweep + this.stageT : -1;
+  }
+
+  /** Lane FEEL: the button is being held in the windup / wound-up pose (no attack yet; the release swings). */
+  get winding(): boolean {
+    return this.phase === 'swinging' && (this.meleeStage === 'windup' || this.meleeStage === 'ready') && !this.releaseQueued;
+  }
+
+  /** Lane FEEL: the viewmodel's melee pose input (weapons/meleeView.ts meleePoseOffset). */
+  get meleePose(): {stage: MeleeStage | null; t: number} {
+    return {stage: this.phase === 'swinging' ? this.meleeStage : null, t: this.stageT};
   }
 
   /**
-   * Lane KNIFE: abort a running swing (menus / pause / focus loss / death / travel / sprint-use-climb before contact): its
-   * contact will never fire. The remaining swing time stays as cooldown (re-opening a menu never skips the recovery).
-   * Returns true when a contact was still pending.
+   * Lane KNIFE / FEEL: abort the melee cycle (menus / pause / focus or pointer-lock loss / death / travel / restart, and
+   * through `lowered` sprint / item use / climbing / a lane UI): a windup or ready hold drops WITHOUT attacking (a later
+   * release does nothing), a swing before its contact never makes it, a remembered press is forgotten. After a release the
+   * remaining swing + recovery time stays as cooldown (re-opening a menu never skips the recovery).
+   * Returns true when an attack was still pending (windup / ready hold / swing before contact).
    */
   cancelSwing(): boolean {
-    if (this.phase !== 'swinging') return false;
-    const pending = this.contactPending;
+    if (this.phase !== 'swinging') { this.pressQueued = false; return false; }
+    const pending = this.contactPending || this.meleeStage === 'windup' || this.meleeStage === 'ready';
     this.phase = 'idle';
-    this.contactPending = false;
-    this.swingT = 0;
     this.progress = 0;
+    this.resetMelee();
     return pending;
+  }
+
+  private resetMelee(): void {
+    this.meleeStage = null;
+    this.stageT = 0;
+    this.contactPending = false;
+    this.releaseQueued = false;
+    this.pressQueued = false;
   }
 
   canReload(inv: Inventory): boolean {
@@ -356,36 +426,99 @@ export class WeaponController {
   }
 
   /**
-   * Lane KNIFE: the melee cycle. A click (held: `auto`) starts a swing when the cadence allows; `melee.windup` s later the
-   * ONE 'contact' event of that swing fires; the swing (and its cooldown) lasts `interval` s. A lowered weapon (sprint /
-   * item use / climbing) before contact cancels it. Nothing here reads, counts or takes ammo; reload input is ignored.
+   * Lane KNIFE / FEEL: the melee cycle (MeleeSpec): press -> windup -> (held: ready, no attack) -> release -> swing (ONE
+   * 'contact' `strike` s after the release) -> recovery -> carry. A release during the windup (a quick tap, even a down + up
+   * inside one frame: `pressed` without `held`) is queued and the swing follows the moment the minimum windup is done.
+   * Holding never repeats; a new press during the swing / recovery is remembered and starts the next windup once the
+   * recovery (or a cancelled swing's cooldown) is over. Lowered (sprint / item use / climbing / a lane UI owning the
+   * buttons) or wiped input (`clears`) cancels a windup / ready hold with no attack, and a swing before its contact.
+   * Nothing here reads, counts or takes ammo; reload input is ignored. Stage times carry across frame boundaries.
    */
   private updateMelee(dt: number, input: TriggerInput, ev: WeaponEvent[]): WeaponEvent[] {
     const d = this.def!, m = d.melee!;
-    if (this.phase === 'swinging') {
-      if (input.lowered && this.contactPending) { this.cancelSwing(); return ev; }
-      this.swingT += dt;
-      if (this.contactPending && this.swingT >= m.windup) {
-        this.contactPending = false;
-        ev.push({type: 'contact', def: d, swing: this.swingId});
+    const winding = () => this.meleeStage === 'windup' || this.meleeStage === 'ready';
+    const wiped = input.clears !== undefined && this.seenClears !== undefined && input.clears !== this.seenClears;
+    this.seenClears = input.clears;
+    if (wiped) { // held input wiped (menu / blur / pointer unlock): the hold is gone, so it must not read as a release that swings
+      if (winding()) this.cancelSwing();
+      this.pressQueued = false;
+    }
+    const fresh = this.phase !== 'swinging'; // nothing under way at the start of this frame
+    if (input.lowered) {
+      if (winding() || (this.meleeStage === 'swing' && this.contactPending)) this.cancelSwing();
+      this.pressQueued = false; // a press made while lowered is forgotten (the recovery after a contact just runs out)
+    }
+    let press = input.pressed && !input.lowered;
+    if (this.phase === 'swinging' && press) {
+      // a new press during the windup implies a release in between (both inside one frame): the swing is due, the press waits
+      if (winding()) this.releaseQueued = true;
+      this.pressQueued = true;
+      press = false;
+    }
+    if (winding() && !input.held) this.releaseQueued = true;
+    let rem = dt;
+    for (let guard = 0; guard < 8 && this.phase === 'swinging'; guard++) {
+      const st = this.meleeStage;
+      if (st === 'windup') {
+        const need = m.windup - this.stageT;
+        if (rem + MELEE_EPS < need) { this.stageT += rem; rem = 0; break; }
+        rem = Math.max(0, rem - need);
+        this.meleeStage = 'ready';
+        this.stageT = 0;
+      } else if (st === 'ready') {
+        if (this.releaseQueued) { this.startSwing(ev); continue; } // the swing gets the rest of this frame
+        if (m.holdMax !== undefined && this.stageT + rem + MELEE_EPS >= m.holdMax) { this.cancelSwing(); break; } // the arm relaxes: no attack
+        this.stageT += rem; rem = 0; break;
+      } else if (st === 'swing') {
+        if (this.contactPending && this.stageT + rem + MELEE_EPS >= m.strike) {
+          this.contactPending = false;
+          ev.push({type: 'contact', def: d, swing: this.swingId});
+        }
+        const need = m.sweep - this.stageT;
+        if (rem + MELEE_EPS < need) { this.stageT += rem; rem = 0; break; }
+        rem = Math.max(0, rem - need);
+        this.meleeStage = 'recover';
+        this.stageT = 0;
+      } else {
+        const need = m.recovery - this.stageT;
+        if (rem + MELEE_EPS < need) { this.stageT += rem; rem = 0; break; }
+        rem = Math.max(0, rem - need);
+        this.phase = 'idle';
+        this.cooldown = 0;
+        this.resetMelee0();
       }
-      this.progress = Math.min(1, this.swingT / d.interval);
-      if (this.swingT < d.interval - 1e-6) return ev; // (epsilon: frame-summed time hits the cadence exactly at 60 fps)
-      this.phase = 'idle';
-      this.swingT = 0;
-      this.progress = 0;
     }
+    this.progress = this.phase === 'swinging' && this.swingTime >= 0 ? Math.min(1, this.swingTime / (m.sweep + m.recovery)) : 0;
     if (this.phase !== 'idle' || input.lowered) return ev;
-    const wants = d.auto ? input.held : input.pressed;
-    if (wants && this.cooldown <= 1e-6) {
+    if ((press || this.pressQueued) && this.cooldown <= MELEE_EPS) {
+      // the windup starts (from a press now, or one remembered during the last swing / recovery); a button already up = a tap
+      this.pressQueued = false;
       this.phase = 'swinging';
-      this.swingT = 0;
-      this.contactPending = true;
-      this.cooldown = d.interval;
-      this.swingId++;
-      ev.push({type: 'swing', def: d, swing: this.swingId});
-    }
+      this.meleeStage = 'windup';
+      this.stageT = fresh ? 0 : Math.min(rem, m.windup); // straight after a recovery that ended mid-frame: keep the leftover
+      this.releaseQueued = !input.held;
+      ev.push({type: 'windup', def: d});
+    } else if (press) this.pressQueued = true; // during a cancelled swing's leftover cooldown: starts the windup when it ends
     return ev;
+  }
+
+  /** Lane FEEL: the release commits ONE swing (whoosh / sweep now, contact `strike` s later); the cooldown covers sweep + recovery. */
+  private startSwing(ev: WeaponEvent[]): void {
+    const d = this.def!, m = d.melee!;
+    this.meleeStage = 'swing';
+    this.stageT = 0;
+    this.releaseQueued = false;
+    this.contactPending = true;
+    this.cooldown = m.sweep + m.recovery;
+    this.swingId++;
+    ev.push({type: 'swing', def: d, swing: this.swingId});
+  }
+
+  /** Lane FEEL: back to the carry at the natural end of a recovery (keeps a press remembered meanwhile). */
+  private resetMelee0(): void {
+    const queued = this.pressQueued;
+    this.resetMelee();
+    this.pressQueued = queued;
   }
 
   /** Damage multiplier by distance. */

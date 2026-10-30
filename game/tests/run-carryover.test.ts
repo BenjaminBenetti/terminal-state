@@ -197,9 +197,12 @@ describe('carry state: starter kit, Retry snapshot, participants', () => {
     expect(countOf(inv, 'ammo_9mm')).toBe(45);
     expect(countOf(inv, 'flare')).toBe(1);
     expect(inv.selected).toBe(0);
-    // lane KNIFE (knife-melee-20261030): + the knife in quick slot 3, in addition to the unchanged kit (no ammo: mag 0)
-    expect(inv.hotbar[2]).toMatchObject({itemId: 'knife', count: 1});
-    expect(invItems(inv)).toEqual(['ammo_9mmx45', 'bandagex1', 'flarex1', 'knifex1@0', `pistolx1@${WEAPONS.pistol.magazine}`]);
+    // lane KNIFE (knife-melee-20261030): + the knife, in addition to the unchanged kit (no ammo: mag 0) — since task
+    // knife-windup-20261030 (lane SLOT) in the dedicated melee slot (~), not quick slot 3 (which stays empty)
+    expect(inv.melee).toMatchObject({itemId: 'knife', count: 1});
+    expect(inv.hotbar[2]).toBeNull();
+    expect(invItems(inv)).toEqual(['ammo_9mmx45', 'bandagex1', 'flarex1', `pistolx1@${WEAPONS.pistol.magazine}`]); // quick slots / pockets / grenade slot
+    expect(inv.allStacks().map(s => s.itemId).sort()).toEqual(['ammo_9mm', 'bandage', 'flare', 'knife', 'pistol']);
     expect(inv.invariants()).toEqual([]);
     const rifle = starterInventory('rifle');
     expect(rifle.hotbar[0]).toMatchObject({itemId: 'rifle', mag: 30});

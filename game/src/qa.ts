@@ -44,10 +44,14 @@ export function installQaHooks(game: Game): void {
         // Iteration 08 (Lane B): storey of the player / zombies (support band at the feet).
         level: levelQa(),
         selected: game.inv.selected,
+        // task knife-windup-20261030 (lane SLOT): the melee slot (~) and whether its weapon is the one in the hands
+        meleeSlot: game.inv.melee && {itemId: game.inv.melee.itemId, uid: game.inv.melee.uid}, meleeSelected: game.inv.meleeSelected,
         held: st ? {itemId: st.itemId, mag: st.mag ?? null, count: st.count} : null,
         weapon: {id: game.weapon.def?.id ?? null, phase: game.weapon.phase},
         // lane KNIFE: melee swing state + the last contacts (kind enemy / corpse / world / miss, part, damage, killed)
-        melee: {swinging: game.weapon.swinging, swingTime: game.weapon.swingTime, swings: game.weapon.swingId, last: game.meleeLog.slice(-4)},
+        // lane FEEL: the cycle stage (windup / ready / swing / recover / null = carry), seconds into it, and whether it is a held windup
+        melee: {swinging: game.weapon.swinging, stage: game.weapon.meleeStage, stageT: +game.weapon.stageT.toFixed(3), winding: game.weapon.winding,
+          swingTime: game.weapon.swingTime, swings: game.weapon.swingId, last: game.meleeLog.slice(-4)},
         hotbar: game.inv.hotbar.map(s => s && {itemId: s.itemId, count: s.count, mag: s.mag ?? null}),
         pack: game.inv.pack.map(s => s && {itemId: s.itemId, count: s.count}),
         // lane AMMO: per caliber (rifle / shells keys kept for the older e2e scripts: the 5.56×45mm / 12-gauge pools)
@@ -429,6 +433,34 @@ export function installQaHooks(game: Game): void {
     },
     /** Viewport point of a slot spec, for real-mouse automation (e.g. page.mouse.move/down/up). */
     invPoint: (spec: string) => game.invUI.pointFor(spec),
+    // --- Task knife-windup-20261030 (lane SLOT): the melee slot (~) -------------------------------------------------
+    /** The melee slot, whether its weapon is drawn, the remembered quick slot, what the hands / weapon controller hold, the HUD ~ cell. */
+    meleeSlot: () => {
+      const m = game.inv.melee, held = game.inv.selectedStack();
+      return {slot: m ? {itemId: m.itemId, uid: m.uid} : null, selected: game.inv.meleeSelected, quickSlot: game.inv.selected, held: held?.itemId ?? null,
+        weapon: game.weapon.def?.id ?? null, quickSlot3: game.inv.hotbar[2]?.itemId ?? null,
+        hudCell: typeof document !== 'undefined' ? document.querySelector('#hotbar .slot.meleeslot')?.className ?? null : null};
+    },
+    /** Press ~ for the next playing frame, as an unmodified Backquote keydown does (Game.update -> slotKeys -> selectMelee). */
+    pressMelee: () => { game.input.pressed.add('Backquote'); return true; },
+    /** What ~ does, synchronously: draw the melee slot's weapon (false = empty everywhere: the "No melee weapon" toast). */
+    selectMelee: () => game.selectMelee(),
+    /**
+     * Narrow-viewport HUD check: rounded rects of the vitals, weapon panel / hint, light panel and every HUD slot cell (left to
+     * right as shown), plus every cell that intersects one of those panels (`overlaps`: expected empty at >= 960 px wide).
+     */
+    hudLayout: () => {
+      type R = {l: number; t: number; r: number; b: number};
+      const rect = (el: Element | null): R | null => { if (!el) return null; const b = el.getBoundingClientRect(); return b.width > 0 ? {l: Math.round(b.left), t: Math.round(b.top), r: Math.round(b.right), b: Math.round(b.bottom)} : null; };
+      const cells = [...document.querySelectorAll<HTMLElement>('#hotbar .slot')].map(el => ({bar: el.dataset.bar ?? '', index: Number(el.dataset.index), rect: rect(el)}))
+        .sort((a, b) => (a.rect?.l ?? 0) - (b.rect?.l ?? 0));
+      const panels: Record<string, R | null> = {vitals: rect(document.querySelector('#vitals')), weaponPanel: rect(document.querySelector('#weapon-panel')),
+        weaponHint: rect(document.querySelector('#weapon-hint')), lightPanel: rect(document.querySelector('#light-panel'))};
+      const hit = (a: R | null, b: R | null) => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      const overlaps: string[] = [];
+      for (const c of cells) for (const [k, p] of Object.entries(panels)) if (hit(c.rect, p)) overlaps.push(`${c.bar}:${c.index} x ${k}`);
+      return {viewport: {w: window.innerWidth, h: window.innerHeight}, order: cells.map(c => c.bar), cellWidth: (q => q?.rect ? q.rect.r - q.rect.l : null)(cells.find(c => c.bar === 'hotbar')), cells, panels, overlaps};
+    },
     /** Contact sheet (PNG data URL) of every model-rendered item icon, for reports. */
     iconSheet: async () => {
       const ids = itemIconStats().ids, cols = 5, w = 192, h = 136;
