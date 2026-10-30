@@ -4,7 +4,8 @@ Every sound effect in this folder is a derivative (trim, fade, mono downmix, lou
 MP3 encoding) of a raw clip generated with the user's local Last Line Sound Lab CPU 0.1.0
 (Stable Audio 3 Small-SFX, stabilityai/stable-audio-3-small-sfx via stabilityai/stable-audio-3-optimized,
 w8a8 profile). Per-file sources, prompts, seeds and hashes: ../derivatives/audio-iteration05.json
-(iteration-06 breaking cues i06-*.mp3: ../derivatives/audio-iteration06.json).
+(iteration-06 breaking cues i06-*.mp3: ../derivatives/audio-iteration06.json; player gas coughs cough-*.mp3:
+../derivatives/audio-cough.json).
 
 Powered by Stability AI.
 

@@ -11,13 +11,14 @@ import {CLIP_MANIFEST_I07K} from './manifest.iteration07k.generated';
 import {CLIP_MANIFEST_I07Q} from './manifest.iteration07q.generated';
 import {CLIP_MANIFEST_I11} from './manifest.iteration11.generated';
 import {CLIP_MANIFEST_I12} from './manifest.iteration12.generated';
+import {CLIP_MANIFEST_COUGH} from './manifest.cough.generated'; // task gas-mask-roof-feedback-20261030: the player's gas cough
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
  * (tools/audio-pipeline/build-iteration06.mjs; provenance derivatives/audio-iteration06.json), the iteration-07/11 cues and
  * the iteration-12 light-survival cues (tools/audio-pipeline/build-iteration12.mjs; provenance derivatives/audio-iteration12.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -43,6 +44,8 @@ export const CUES = [
   'denied', 'click', 'win',
   // Iteration 12 (AUDIO lane, tools/audio-pipeline/build-iteration12.mjs): flashlight battery + thrown flare.
   'batteryInsert', 'flareIgnite', 'flareBurn', 'flareOut', 'flashlightFlicker',
+  // Task gas-mask-roof-feedback-20261030 (tools/audio-pipeline/build-cough.mjs): the player coughing while toxic gas hurts them.
+  'cough',
 ] as const;
 export type CueId = (typeof CUES)[number];
 

@@ -11,14 +11,15 @@ import {CLIP_BYTES_I07K, CLIP_GAPS_I07K, CLIP_MANIFEST_I07K} from '../src/audio/
 import {CLIP_BYTES_I07Q, CLIP_GAPS_I07Q, CLIP_MANIFEST_I07Q} from '../src/audio/manifest.iteration07q.generated';
 import {CLIP_BYTES_I11, CLIP_GAPS_I11, CLIP_MANIFEST_I11} from '../src/audio/manifest.iteration11.generated';
 import {CLIP_BYTES_I12, CLIP_GAPS_I12, CLIP_MANIFEST_I12} from '../src/audio/manifest.iteration12.generated';
+import {CLIP_BYTES_COUGH, CLIP_GAPS_COUGH, CLIP_MANIFEST_COUGH} from '../src/audio/manifest.cough.generated';
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
 // Iteration 07 (Lane Q): + rat/dog creature vocals + paw scrabble (i07q).
 // Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12;
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -76,7 +77,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -113,7 +114,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // iteration 12 (AUDIO): hit-confirm dip + flare-loop plumbing / lifecycle
     'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares',
     // task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + cross-storey step gate
-    'setVocalReach', 'vocal', 'stepHeard']);
+    'setVocalReach', 'vocal', 'stepHeard',
+    // task gas-mask-roof-feedback-20261030: silencing a sounding cough (plays nothing)
+    'stopCough']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
@@ -140,6 +143,7 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       impact: () => { for (const s of ['concrete', 'tile', 'metal', 'wood', 'flesh', 'glass', 'sheet'] as const) { ctx.currentTime += 1; sfx.impact(3, 1, 3, s); } },
       hitConfirm: () => { ctx.currentTime += 1; sfx.hitConfirm(3, 1, 3); ctx.currentTime += 1; sfx.shot('pistol'); sfx.hitConfirm(70, 1, 3, z); },
       // Iteration 12 (AUDIO): flashlight battery + flare
+      cough: () => { ctx.currentTime += 1; sfx.cough(); }, // gas-mask-roof feedback: the player's cough
       batteryInsert: () => sfx.batteryInsert(), flashlightFlicker: () => { ctx.currentTime += 1; sfx.flashlightFlicker(0.5); },
       flareIgnite: () => sfx.flareIgnite(2, 1.2, 2), flareOut: () => sfx.flareOut(6, 0.1, 6),
       flareBurnStart: () => { const h = sfx.flareBurnStart(6, 0.1, 6); h.setPos(6.5, 0.1, 6); h.stop(); },

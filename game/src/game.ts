@@ -60,6 +60,7 @@ import {installStalls, type StallSystem} from './world/stalls'; // Task office-o
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
+import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -228,6 +229,8 @@ export class Game {
   readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number) => boolean)[] = [];
   /** Task gasmask-breach-20261030 (lane GAS): breakable office windows, the breach gas field and its exposure (`gas.protection`). */
   readonly gas: GasSystem;
+  /** Task gas-mask-roof-feedback-20261030 (item 1): coughing while toxic gas hurts the unprotected player (audio/cough.ts). */
+  readonly cough: CoughFeedback;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
   run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
@@ -381,6 +384,7 @@ export class Game {
       if (!m.worn) return 'No gas mask — get out of the gas';
       return m.on ? 'No filter — the mask is not protecting you' : 'Put on your gas mask (Q)';
     };
+    this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
