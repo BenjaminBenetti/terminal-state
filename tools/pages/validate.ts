@@ -11,10 +11,18 @@
 //  - basic accessibility structure (lang, title, skip link, one main + h1, captioned tables with header cells);
 //  - JSON parses with finite numbers; the client script parses and makes no network / storage / eval calls;
 //  - data/manifest.json lists exactly the other files with correct byte counts and SHA-256.
+// Task enemy-spawn-tables-20261030 (lane SITE): + the Enemy spawns section (enemies/*.html, data/enemies.json): every page's site
+// navigation reaches every section; COVERAGE: every level, generation context, family, room key and vocabulary term of
+// data/enemies.json has its rendered anchor, and no enemies/ page exists without a level; the manifest's data digests match the
+// published data files.
 import crypto from 'node:crypto';
 import path from 'node:path';
 import vm from 'node:vm';
-import {ACCESS_LABEL, SOURCE_REPO_URL} from './render/html';
+import type {EnemyReference} from './enemyReferenceTypes';
+import {
+  ctxAnchor, ENEMIES_FAMILIES, ENEMIES_HOW_TO, ENEMIES_INDEX, enemyLevelPage, familyAnchor, RESERVED_ENEMY_PAGES, roomAnchor, termAnchor,
+} from './render/enemies';
+import {ACCESS_LABEL, href, NAV, SOURCE_REPO_URL} from './render/html';
 
 export type SiteFiles = ReadonlyMap<string, string>;
 
@@ -24,8 +32,10 @@ export const SITE_LIMITS = {maxFiles: 1500, maxFileBytes: 6 * 1024 * 1024, maxTo
 export const ALLOWED_PATHS: readonly RegExp[] = [
   /^(?:index|playtest)\.html$/,
   /^loot\/(?:[a-z0-9]+(?:-[a-z0-9]+)*\/){0,2}[a-z0-9]+(?:-[a-z0-9]+)*\.html$/,
+  // Task enemy-spawn-tables-20261030 (lane SITE): the Enemy spawns section is flat: enemies/<page>.html only (no sub-directories).
+  /^enemies\/[a-z0-9]+(?:-[a-z0-9]+)*\.html$/,
   /^assets\/(?:site\.css|site\.js|favicon\.svg)$/,
-  /^data\/(?:loot|manifest)\.json$/,
+  /^data\/(?:loot|enemies|manifest)\.json$/,
 ];
 
 const SEGMENT = /^[a-z0-9]+(?:[-.][a-z0-9]+)*$/;
@@ -157,6 +167,14 @@ function checkHtml(file: string, html: string, files: SiteFiles, idCache: Map<st
   }
   if (repoLinks.size && !html.includes(`(${ACCESS_LABEL})`)) fail('private-repository links must be labelled');
   if (!ids.has('main')) fail('missing #main target');
+  // Task enemy-spawn-tables-20261030 (lane SITE): the site navigation on every page reaches every section (loot, enemy spawns …).
+  const siteNav = /<nav class="site-nav" aria-label="Site">([\s\S]*?)<\/nav>/.exec(html);
+  if (!siteNav) fail('missing site navigation');
+  else {
+    const reached = new Set([...siteNav[1]!.matchAll(/\shref="([^"#]*)(?:#[^"]*)?"/g)]
+      .map(m => path.posix.normalize(path.posix.join(dir === '.' ? '' : dir, unescapeAttr(m[1]!) || path.posix.basename(file)))));
+    for (const n of NAV) if (!reached.has(n.path)) fail(`site navigation does not link to ${n.path} (${n.label})`);
+  }
 }
 
 function checkScript(file: string, js: string, problems: string[]): void {
@@ -182,7 +200,7 @@ export function validateSite(files: SiteFiles): string[] {
   if (paths.length > SITE_LIMITS.maxFiles) problems.push(`too many files: ${paths.length}`);
   let total = 0;
   for (const required of ['index.html', 'playtest.html', 'loot/index.html', 'loot/how-to-read.html', 'assets/site.css', 'assets/site.js',
-    'assets/favicon.svg', 'data/loot.json', 'data/manifest.json']) {
+    'assets/favicon.svg', 'data/loot.json', 'data/manifest.json', ENEMIES_INDEX, ENEMIES_FAMILIES, ENEMIES_HOW_TO, 'data/enemies.json']) {
     if (!files.has(required)) problems.push(`missing required file ${required}`);
   }
   for (const file of paths) {
@@ -228,7 +246,9 @@ export function validateSite(files: SiteFiles): string[] {
   const manifestText = files.get('data/manifest.json');
   if (manifestText) {
     try {
-      const manifest = JSON.parse(manifestText) as {commit?: unknown; files?: Array<{path: string; bytes: number; sha256: string}>};
+      const manifest = JSON.parse(manifestText) as {
+        commit?: unknown; dataHash?: unknown; enemyDataHash?: unknown; files?: Array<{path: string; bytes: number; sha256: string}>;
+      };
       const listed = manifest.files ?? [];
       const expected = paths.filter(p => p !== 'data/manifest.json');
       if (JSON.stringify(listed.map(f => f.path)) !== JSON.stringify(expected)) problems.push('data/manifest.json: file list differs from the site');
@@ -238,15 +258,85 @@ export function validateSite(files: SiteFiles): string[] {
         if (f.bytes !== bytes(text) || f.sha256 !== sha256(text)) problems.push(`data/manifest.json: size / hash mismatch for ${f.path}`);
       }
       if (typeof manifest.commit !== 'string' || !/^(?:[0-9a-f]{40}|local)$/.test(manifest.commit)) problems.push('data/manifest.json: bad commit');
+      // The published data files are the ones the digests name, from the same commit.
+      for (const [file, key] of [['data/loot.json', 'dataHash'], ['data/enemies.json', 'enemyDataHash']] as const) {
+        const meta = readMeta(files.get(file));
+        if (!meta) continue;
+        if (manifest[key] !== meta.dataHash) problems.push(`data/manifest.json: ${key} does not match ${file}`);
+        if (manifest.commit !== meta.commit) problems.push(`data/manifest.json: commit differs from ${file}`);
+      }
     } catch {
       problems.push('data/manifest.json: unreadable');
     }
   }
+  checkEnemyCoverage(files, idCache, problems);
   return problems;
 }
 
+function readMeta(text: string | undefined): {dataHash?: unknown; commit?: unknown} | null {
+  if (text === undefined) return null;
+  try {
+    return (JSON.parse(text) as {meta?: {dataHash?: unknown; commit?: unknown}}).meta ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Coverage of the Enemy spawns section against the published data/enemies.json: a level, generation context, family, room key or
+ * vocabulary term without its rendered anchor is a problem, and so is an enemies/ page that no level of the data owns.
+ */
+function checkEnemyCoverage(files: SiteFiles, idCache: Map<string, Set<string>>, problems: string[]): void {
+  const text = files.get('data/enemies.json');
+  if (text === undefined) return;
+  let ref: EnemyReference;
+  try {
+    ref = JSON.parse(text) as EnemyReference;
+  } catch {
+    return; // reported as invalid JSON above
+  }
+  const ids = (page: string): Set<string> => {
+    let set = idCache.get(page);
+    if (!set) {
+      set = idsOf(files.get(page) ?? '').ids;
+      idCache.set(page, set);
+    }
+    return set;
+  };
+  const need = (page: string, anchor: string, what: string) => {
+    if (!files.has(page)) problems.push(`enemy coverage: ${what} has no page ${page}`);
+    else if (!ids(page).has(anchor)) problems.push(`${page}: no rendered place for ${what} (#${anchor})`);
+  };
+  try {
+    const levelPages = new Set<string>();
+    const index = files.get(ENEMIES_INDEX) ?? '';
+    for (const level of ref.levels) {
+      const page = enemyLevelPage(level.id);
+      levelPages.add(page);
+      if (!files.has(page)) {
+        problems.push(`enemy coverage: level ${level.id} has no page ${page}`);
+        continue;
+      }
+      if (!index.includes(`href="${href(ENEMIES_INDEX, page)}"`)) problems.push(`${ENEMIES_INDEX}: does not link to level page ${page}`);
+      for (const section of ['contexts', 'families', 'zombie-types', 'placement', 'rooms', 'census', 'knobs']) need(page, section, `section ${section} of ${level.id}`);
+      if (level.levelMoves) need(page, 'storey-moves', `storey moves of ${level.id}`);
+      for (const c of level.contexts) need(page, ctxAnchor(c.id), `context ${level.id}/${c.id}`);
+      for (const f of ref.families) need(page, familyAnchor(f.id), `family ${f.id} in ${level.id}`);
+      for (const r of level.rooms.rows) need(page, roomAnchor(r.room), `room key ${level.id}/${r.room}`);
+    }
+    for (const f of ref.families) need(ENEMIES_FAMILIES, familyAnchor(f.id), `family ${f.id}`);
+    for (const v of ref.vocabulary) need(ENEMIES_HOW_TO, termAnchor(v.term), `term ${v.term}`);
+    const reserved = new Set(RESERVED_ENEMY_PAGES.map(n => `enemies/${n}.html`));
+    for (const file of files.keys()) {
+      if (file.startsWith('enemies/') && !reserved.has(file) && !levelPages.has(file)) problems.push(`${file}: enemy page without a level in data/enemies.json`);
+    }
+  } catch (e) {
+    problems.push(`data/enemies.json: unexpected shape (${(e as Error).message})`);
+  }
+}
+
 /** Manifest of a site's files (everything except the manifest itself), sorted by path. */
-export function siteManifest(files: SiteFiles, meta: {commit: string; dataHash: string}): string {
+export function siteManifest(files: SiteFiles, meta: {commit: string; dataHash: string; enemyDataHash: string}): string {
   const list = [...files.keys()].filter(p => p !== 'data/manifest.json').sort()
     .map(p => ({path: p, bytes: bytes(files.get(p)!), sha256: sha256(files.get(p)!)}));
   return `${JSON.stringify({
@@ -254,6 +344,7 @@ export function siteManifest(files: SiteFiles, meta: {commit: string; dataHash: 
     note: 'Generated from the game source by tools/pages; byte counts and SHA-256 of every other published file.',
     commit: meta.commit,
     dataHash: meta.dataHash,
+    enemyDataHash: meta.enemyDataHash,
     files: list,
   }, null, 1)}\n`;
 }

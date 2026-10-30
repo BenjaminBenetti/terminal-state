@@ -6,34 +6,26 @@
 // it is ~5 % of the total enemies over many stations, not 5 % extra and not forced into each map
 // (many stations have none, a few have two). Pure module (no three.js) so tests and the generator
 // can use it.
+//
+// Task enemy-spawn-tables-20261030 (lane SPAWN): the pool, the population constants and every other spawn control now live in the
+// per-level spawn profiles (ai/spawnTables.ts; re-exported here unchanged). assignEnemyArchetypes reads the level's profile: the
+// pool of the spawn's ROOM (room modifiers; the profile's own pool array when the room has none — every shipped room) with the
+// SAME roll enemyRoll(seed, index), so the shipped draws are bit-identical.
 
 import {hashString, mulberry32} from '../core/rng';
+import type {Area} from '../gen/stationTypes';
+import {ENEMY_POOL, roomFamilyPool, spawnProfile, type EnemyFamilyId, type FamilyPool, type SpawnProfile} from './spawnTables';
 
-export type EnemyArchetypeId = 'zombie' | 'ratdog';
+export {ENEMY_POOL, ENEMY_POPULATION_SCALE, ENEMY_SPAWNS, ENEMY_SPAWNS_BASELINE} from './spawnTables';
 
-/**
- * Iteration 12 (AI lane, mandate F "More enemies. Double the number of enemies."): enemy spawn points per station.
- * Before iteration 12 (d632ce8) placeSpawns drew rng.int(11, 16) — measured over a 78-station corpus (60 natural seeds +
- * 3 per archetype): 1033 enemies, mean 13.24, 11..16, rat/dog 4.84 %, coated 38.8 % of zombies, levels main 74.5 / upper
- * 14.0 / lower 11.4 %. Now the same single draw over the doubled range; every spawn keeps its independent type roll
- * (40 % coated) and archetype roll (ENEMY_POOL), so the proportions are unchanged.
- */
-export const ENEMY_SPAWNS_BASELINE = {min: 11, max: 16, mean: 13.24} as const;
-export const ENEMY_POPULATION_SCALE = 2;
-export const ENEMY_SPAWNS = {min: ENEMY_SPAWNS_BASELINE.min * ENEMY_POPULATION_SCALE, max: ENEMY_SPAWNS_BASELINE.max * ENEMY_POPULATION_SCALE} as const;
-
-/**
- * Relative spawn weight of each archetype at ANY spawn point (level-generic; new levels/archetypes
- * add rows here). The user asked for the field-notes rat/dog to be about 5 % of the enemies.
- */
-export const ENEMY_POOL: readonly (readonly [EnemyArchetypeId, number])[] = [['zombie', 0.95], ['ratdog', 0.05]];
+export type EnemyArchetypeId = EnemyFamilyId;
 
 /** Deterministic uniform roll in [0, 1) for one spawn point of one station seed. */
 export function enemyRoll(seed: number, index: number): number {
   return mulberry32(hashString(`enemy-archetype:${index}`, (seed >>> 0) ^ 0x2545f491))();
 }
 
-export function pickEnemyArchetype(seed: number, index: number, pool: readonly (readonly [EnemyArchetypeId, number])[] = ENEMY_POOL): EnemyArchetypeId {
+export function pickEnemyArchetype(seed: number, index: number, pool: FamilyPool = ENEMY_POOL): EnemyArchetypeId {
   let total = 0;
   for (const [, w] of pool) total += Math.max(0, w);
   let r = enemyRoll(seed, index) * total;
@@ -47,11 +39,17 @@ export function pickEnemyArchetype(seed: number, index: number, pool: readonly (
 /**
  * Tag every spawn of a generated layout with its archetype (zombie spawns keep their shambler /
  * coated type for the outfit pick; a non-zombie archetype ignores it). Returns the non-zombie count.
+ * Lane SPAWN: `profile` = the logical level's spawn profile (default: the Subway's); a spawn's pool is its room's
+ * (spawnTables roomFamilyPool: purpose / room-type modifiers; untouched when the room has no entry).
  */
-export function assignEnemyArchetypes(layout: {seed: number; zombies: {archetype?: EnemyArchetypeId}[]}, pool = ENEMY_POOL): number {
+export function assignEnemyArchetypes(
+  layout: {seed: number; zombies: {archetype?: EnemyArchetypeId; area?: number}[]; areas?: readonly Pick<Area, 'purpose' | 'type'>[]},
+  profile: SpawnProfile = spawnProfile('subway'),
+): number {
   let n = 0;
   layout.zombies.forEach((s, i) => {
-    s.archetype = pickEnemyArchetype(layout.seed, i, pool);
+    const area = s.area !== undefined ? layout.areas?.[s.area] : undefined;
+    s.archetype = pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area));
     if (s.archetype !== 'zombie') n++;
   });
   return n;

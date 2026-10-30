@@ -2,6 +2,9 @@
 // valid nested relative links, build identity on every page, coverage of the LootReference object, determinism (two full builds
 // are byte-identical), the validator's own rejections, and that the game build / CI artifact are untouched. Bounded: two in-memory
 // builds plus string checks; no browser, no disk output.
+// Task enemy-spawn-tables-20261030 (lane SITE): + the Enemy spawns section — routes, nav from every page, data/enemies.json and its
+// manifest digest, coverage of every level / context / family / room key (new entries appear automatically; unknown kinds or
+// unregistered references fail the build; missing anchors fail the validator), units and "sampled" labelling.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,8 +13,11 @@ import {fileURLToPath} from 'node:url';
 import {beforeAll, describe, expect, it} from 'vitest';
 import {buildSite, sourceReader} from '../../tools/pages/build';
 import {OUTPUT_DIR, resolveCommit} from '../../tools/pages/cli';
+import type {EnemyLevelInfo, EnemyReference} from '../../tools/pages/enemyReferenceTypes';
 import type {LootReference} from '../../tools/pages/lootReferenceTypes';
-import {href, num, pct, slug} from '../../tools/pages/render/html';
+import {prose} from '../../tools/pages/render/common';
+import {href, NAV, num, pct, range, slug} from '../../tools/pages/render/html';
+import {renderSite} from '../../tools/pages/render/site';
 import {validateSite} from '../../tools/pages/validate';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -19,10 +25,12 @@ const COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
 let site: Map<string, string>;
 let ref: LootReference;
+let enemyRef: EnemyReference;
 
 beforeAll(() => {
   site = buildSite({commit: COMMIT, readSource: sourceReader(ROOT)});
   ref = JSON.parse(site.get('data/loot.json')!) as LootReference;
+  enemyRef = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
 });
 
 const pages = () => [...site.keys()].filter(p => p.endsWith('.html'));
@@ -33,7 +41,7 @@ describe('generated reference site', () => {
   it('passes the output allowlist, leak, link, structure and manifest checks', () => {
     expect(validateSite(site)).toEqual([]);
     expect(site.size).toBeGreaterThan(50);
-    for (const p of site.keys()) expect(p).toMatch(/^(?:index\.html|playtest\.html|loot\/.+\.html|assets\/(?:site\.css|site\.js|favicon\.svg)|data\/(?:loot|manifest)\.json)$/);
+    for (const p of site.keys()) expect(p).toMatch(/^(?:index\.html|playtest\.html|loot\/.+\.html|enemies\/[a-z0-9-]+\.html|assets\/(?:site\.css|site\.js|favicon\.svg)|data\/(?:loot|enemies|manifest)\.json)$/);
   });
 
   it('is deterministic: a second full build from the same source is byte-identical', () => {
@@ -43,14 +51,17 @@ describe('generated reference site', () => {
   });
 
   it('shows the source commit and data digest on every page and in the manifest', () => {
-    const manifest = JSON.parse(site.get('data/manifest.json')!) as {commit: string; dataHash: string; files: Array<{path: string}>};
+    const manifest = JSON.parse(site.get('data/manifest.json')!) as {commit: string; dataHash: string; enemyDataHash: string; files: Array<{path: string}>};
     expect(manifest.commit).toBe(COMMIT);
     expect(manifest.dataHash).toBe(ref.meta.dataHash);
+    expect(manifest.enemyDataHash).toBe(enemyRef.meta.dataHash);
+    expect(enemyRef.meta.commit).toBe(COMMIT);
     expect(manifest.files.map(f => f.path)).toEqual([...site.keys()].filter(p => p !== 'data/manifest.json'));
     for (const p of pages()) {
       const html = site.get(p)!;
       expect(html, p).toContain(`<code>${COMMIT.slice(0, 12)}</code>`);
       expect(html, p).toContain(`data digest <code>${ref.meta.dataHash}</code>`);
+      expect(html, p).toContain(`enemy spawn data digest <code>${enemyRef.meta.dataHash}</code>`);
       expect(html, p).toContain('(repository access required)');
     }
   });
@@ -214,6 +225,170 @@ describe('generated reference site', () => {
   });
 });
 
+describe('enemy spawns section', () => {
+  const levelPage = (id: string) => `enemies/${slug(id)}.html`;
+  const enemyPages = () => [...site.keys()].filter(p => p.startsWith('enemies/'));
+  /** Page text without the "What these pages never state" section (the only place allowed to name what is not stated). */
+  const claims = (p: string) => site.get(p)!.replace(/<section id="not-stated">[\s\S]*?<\/section>/, '');
+  const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+
+  it('is linked from the landing page and from the site navigation of every page', () => {
+    expect(NAV.map(n => n.path)).toContain('enemies/index.html');
+    const landing = site.get('index.html')!;
+    expect(landing).toContain('href="enemies/index.html"');
+    for (const level of enemyRef.levels) expect(landing).toContain(`href="${levelPage(level.id)}"`);
+    for (const p of pages()) {
+      const nav = /<nav class="site-nav" aria-label="Site">([\s\S]*?)<\/nav>/.exec(site.get(p)!)![1]!;
+      expect(nav, p).toContain(`href="${href(p, 'enemies/index.html')}"`);
+      expect(nav, p).toContain(`href="${href(p, 'loot/index.html')}"`);
+    }
+    for (const p of enemyPages()) expect(site.get(p)!, p).toMatch(/<a href="index\.html" aria-current="(?:page|true)">Enemy spawns<\/a>/);
+  });
+
+  it('has the overview, families, how-to-read and one page per registered level, and nothing else under enemies/', () => {
+    const expected = ['enemies/index.html', 'enemies/families.html', 'enemies/how-to-read.html', ...enemyRef.levels.map(l => levelPage(l.id))].sort();
+    expect(enemyPages().sort()).toEqual(expected);
+    expect(enemyRef.levels.map(l => l.id)).toEqual(expect.arrayContaining(['subway', 'office']));
+    const index = site.get('enemies/index.html')!;
+    for (const level of enemyRef.levels) expect(index).toContain(`href="${slug(level.id)}.html"`);
+    expect(site.get('data/enemies.json')!.endsWith('\n')).toBe(true);
+  });
+
+  it('renders every context with its exact count range and E[count], every family share with its denominator', () => {
+    for (const level of enemyRef.levels) {
+      const html = site.get(levelPage(level.id))!;
+      expect(html).toContain(`<h1>${level.name.replace(/&/g, '&amp;')}: enemy spawns</h1>`);
+      for (const c of level.contexts) {
+        expect(html, c.id).toContain(`id="ctx-${slug(c.id)}"`);
+        expect(html, c.id).toContain(`${range(c.count.lo, c.count.hi)}<span class="denom">U{${num(c.count.lo)}..${num(c.count.hi)}}</span>`);
+        expect(html, c.id).toContain(`<td class="num">${num(c.count.mean)}</td>`);
+        expect(c.count.mean).toBe((c.count.lo + c.count.hi) / 2);
+      }
+      expect(html).toContain(`<strong>${range(level.total.lo, level.total.hi)}</strong>`);
+      const den = level.pool.denominator;
+      expect(html).toContain(`denominator ${num(den)}`);
+      for (const r of level.pool.rows) {
+        expect(html, r.family).toContain(`<tr id="family-${slug(r.family)}">`);
+        expect(html, r.family).toContain(`<span class="denom">${num(r.weight)} / ${num(den)}</span>`);
+        expect(r.share).toBeCloseTo(r.weight / den, 12);
+      }
+      for (const f of enemyRef.families) expect(html, f.id).toContain(`id="family-${slug(f.id)}"`);
+      // Zombie types are a zombie sub-distribution, never presented as families.
+      expect(html).toContain('<h2 id="zombie-types">Zombie types <span class="summary-meta">(inside the zombie family)</span></h2>');
+      expect(html).toContain('Not separate enemy families.');
+      for (const t of level.zombieTypes.types) expect(enemyRef.families.some(f => f.id === t.type)).toBe(false);
+    }
+    const families = site.get('enemies/families.html')!;
+    for (const f of enemyRef.families) expect(families).toContain(`<section id="family-${slug(f.id)}">`);
+  });
+
+  it('shows the baseline placement rules and the room modifier table (all 1× today; missing = 1×)', () => {
+    for (const level of enemyRef.levels) {
+      const html = site.get(levelPage(level.id))!;
+      expect(html).toContain('<h2 id="placement">Baseline placement rules</h2>');
+      for (const c of level.contexts) {
+        const pl = c.placement;
+        // Each context either renders its own rules or names the earlier context with identical values.
+        const own = html.includes(`${level.name} · ${c.label}: area weights`);
+        if (own) {
+          for (const r of pl.areaWeights.rules) expect(html, `${c.id} ${r.match}`).toContain(`<td class="num">${num(r.weight)}</td>`);
+          expect(html).toContain(`at least ${num(pl.spacing.metres)} m between spawns`);
+          expect(html).toContain(`${num(pl.triesPerArea)} random eligible cell`);
+        } else {
+          const rules = (x: typeof pl) => JSON.stringify({...x, explanation: []});
+          expect(level.contexts.some(o => o !== c && rules(o.placement) === rules(pl))).toBe(true);
+        }
+        // Each context keeps its own walk-through (it names that context's count range).
+        for (const e of pl.explanation) expect(html, c.id).toContain(`<li>${prose(e)}</li>`);
+      }
+      expect(html).toContain('<h2 id="rooms">Room modifiers</h2>');
+      expect(html).toContain('A room key or family without an entry resolves to\n1×');
+      for (const r of level.rooms.rows) {
+        expect(html, r.room).toContain(`id="room-${slug(r.room)}"`);
+        // Shipped defaults are neutral: every resolved value is exactly 1.
+        expect(r.intensity, r.room).toBe(1);
+        for (const f of r.families) expect([f.density, f.weight, f.from], `${r.room} ${f.family}`).toEqual([1, 1, 'default']);
+      }
+      expect(level.rooms.entries).toEqual([]);
+      expect(html).toContain('resolve to 1× for every family (neutral)');
+      expect(html).toContain('no explicit room modifier entries');
+    }
+    const howTo = site.get('enemies/how-to-read.html')!;
+    for (const v of enemyRef.vocabulary) expect(howTo, v.term).toContain(`id="term-${slug(v.term)}"`);
+    for (const f of enemyRef.modifiers.fields) expect(howTo).toContain(`<span class="item-id">${f.field}</span>`);
+    expect(howTo).toContain('<section id="not-stated">');
+  });
+
+  it('labels every density as sampled over eligible floor of a named corpus and never states a per-area rate as a rule', () => {
+    for (const p of enemyPages()) {
+      const html = claims(p);
+      expect(html, p).not.toMatch(/square f(?:oo|ee)t|\bsq\.? ?ft\b|per (?:square )?foot/i);
+      for (const m of html.matchAll(/<th scope="col"[^>]*>([^<]*100 m²[^<]*)<\/th>/g)) expect(m[1], p).toMatch(/\(sampled\)/);
+    }
+    for (const level of enemyRef.levels) {
+      const html = site.get(levelPage(level.id))!;
+      if (!level.census) {
+        expect(html).toContain('contains no sampled census');
+        continue;
+      }
+      expect(html).toContain('<span class="badge badge-info">sampled</span> <strong>Observed, not a rule.</strong>');
+      expect(html).toContain(level.census.seeds.join(', '));
+      expect(html).toContain('not the map\'s bounding');
+    }
+  });
+
+  it('shows source locations as private-repository links and the build identity like the loot pages', () => {
+    for (const level of enemyRef.levels) {
+      const html = site.get(levelPage(level.id))!;
+      expect(html).toContain('<h2 id="knobs">Where to tune it</h2>');
+      expect(html).toContain(`github.com/BenjaminBenetti/terminal-state/blob/${COMMIT}/${level.profile.at.file}`);
+    }
+  });
+
+  it('shows a new level, context, family and room key automatically (coverage)', () => {
+    const lootRef = clone(ref);
+    const base = clone(enemyRef);
+    const lvl = base.levels[0]!;
+    const fam = {...base.families[0]!, id: 'test-family', label: 'Test family', levels: ['test-level']};
+    const ctx = {...lvl.contexts[0]!, id: 'test-context', label: 'Test context'};
+    const room = {...lvl.rooms.rows[0]!, room: 'test-room', label: 'Test room'};
+    const level: EnemyLevelInfo = {
+      ...lvl,
+      id: 'test-level',
+      name: 'Test level',
+      contexts: [...lvl.contexts, ctx],
+      rooms: {...lvl.rooms, rows: [...lvl.rooms.rows, room]},
+    };
+    const next: EnemyReference = {...base, families: [...base.families, fam], levels: [...base.levels, level]};
+    const out = renderSite(lootRef, next);
+    expect(validateSite(out)).toEqual([]);
+    const page = out.get('enemies/test-level.html')!;
+    expect(page).toBeDefined();
+    for (const id of ['ctx-test-context', 'room-test-room', 'family-test-family']) expect(page).toContain(`id="${id}"`);
+    expect(out.get('enemies/families.html')).toContain('<section id="family-test-family">');
+    expect(out.get('enemies/index.html')).toContain('href="test-level.html"');
+    expect(out.get('index.html')).toContain('href="enemies/test-level.html"');
+  });
+
+  it('fails the build for unknown kinds or references the reference does not register', () => {
+    const lootRef = clone(ref);
+    const withLevel = (patch: (l: EnemyLevelInfo) => EnemyLevelInfo): EnemyReference => {
+      const base = clone(enemyRef);
+      return {...base, levels: [patch(base.levels[0]!), ...base.levels.slice(1)]};
+    };
+    expect(() => renderSite(lootRef, withLevel(l => ({...l, rooms: {...l.rooms, rows: [{...l.rooms.rows[0]!, keyKind: 'mystery' as 'purpose'}]}}))))
+      .toThrow(/Unlabelled room key kind mystery/);
+    expect(() => renderSite(lootRef, withLevel(l => ({...l, pool: {...l.pool, rows: [...l.pool.rows, {family: 'ghoul', weight: 1, share: 0.1}]}}))))
+      .toThrow(/enemy family "ghoul"/);
+    expect(() => renderSite(lootRef, withLevel(l => ({...l, zombieTypes: {...l.zombieTypes, expectedCoated: [{context: 'nowhere', count: 2, share: 0.5}]}}))))
+      .toThrow(/context "nowhere"/);
+    expect(() => renderSite(lootRef, withLevel(l => ({...l, id: 'families'})))).toThrow(/collides with reserved page/);
+    expect(() => renderSite(lootRef, {...clone(enemyRef), meta: {...enemyRef.meta, schema: 999}})).toThrow(/schema/);
+    expect(() => renderSite(lootRef, {...clone(enemyRef), modifiers: {...enemyRef.modifiers, fields: [{...enemyRef.modifiers.fields[0]!, field: 'speed' as 'density'}]}}))
+      .toThrow(/Unlabelled room modifier field speed/);
+  });
+});
+
 describe('reference site validator rejects unsafe or broken output', () => {
   const page = 'loot/index.html';
   const withText = (extra: string) => mutated(page, site.get(page)!.replace('</main>', `${extra}</main>`));
@@ -238,6 +413,23 @@ describe('reference site validator rejects unsafe or broken output', () => {
     ['a non-finite JSON number', () => mutated('data/loot.json', '{"x": 1e999}'), /non-finite|manifest/],
     ['a stale manifest', () => mutated('assets/site.css', `${site.get('assets/site.css')}\n/* changed */\n`), /manifest/],
     ['a network call in the script', () => mutated('assets/site.js', 'fetch("x");'), /network access|manifest/],
+    ['a page whose nav misses Enemy spawns', () => mutated(page, site.get(page)!.replace('<li><a href="../enemies/index.html">Enemy spawns</a></li>', '')), /site navigation does not link to enemies\/index\.html/],
+    ['an enemy page without a level', () => mutated('enemies/ghost.html', site.get('enemies/families.html')!), /enemy page without a level/],
+    ['an enemy path outside the allowlist', () => mutated('enemies/x/y.html', site.get('enemies/families.html')!), /allowlist/],
+    ['a level page missing a context anchor', () => {
+      const level = enemyRef.levels[0]!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace(`id="ctx-${slug(level.contexts[0]!.id)}"`, 'id="ctx-gone"'));
+    }, /no rendered place for context/],
+    ['a level page missing a room key anchor', () => {
+      const level = enemyRef.levels.find(l => l.rooms.rows.length)!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace(`id="room-${slug(level.rooms.rows[0]!.room)}"`, 'id="room-gone"'));
+    }, /no rendered place for room key/],
+    ['enemy data that the manifest digest does not name', () => {
+      const data = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
+      return mutated('data/enemies.json', `${JSON.stringify({...data, meta: {...data.meta, dataHash: 'ffffffff'}})}\n`);
+    }, /enemyDataHash does not match data\/enemies\.json/],
   ];
   it.each(cases)('rejects %s', (_label, make, expected) => {
     const problems = validateSite(make());
@@ -258,11 +450,11 @@ describe('build plumbing', () => {
     expect(pagesVite).toMatch(/envDir: false/);
   });
 
-  it('renders only from the LootReference object (no renderer imports game modules)', () => {
+  it('renders only from the LootReference / EnemyReference objects (no renderer imports game modules)', () => {
     const dir = path.join(ROOT, 'tools/pages/render');
     for (const f of fs.readdirSync(dir).filter(n => n.endsWith('.ts'))) {
       const text = fs.readFileSync(path.join(dir, f), 'utf8');
-      for (const m of text.matchAll(/from\s+'([^']+)'/g)) expect(m[1], `${f} imports ${m[1]}`).toMatch(/^(?:\.\/|\.\.\/(?:lootReferenceTypes|validate|assets\/site\.(?:css|js)\?raw)$|node:)/);
+      for (const m of text.matchAll(/from\s+'([^']+)'/g)) expect(m[1], `${f} imports ${m[1]}`).toMatch(/^(?:\.\/|\.\.\/(?:lootReferenceTypes|enemyReferenceTypes|validate|assets\/site\.(?:css|js)\?raw)$|node:)/);
     }
   });
 
