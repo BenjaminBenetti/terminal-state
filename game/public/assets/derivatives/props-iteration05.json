@@ -2088,14 +2088,14 @@
       },
       "game/public/assets/models/shop-cooler-open.glb": {
         "id": "base:shopCooler",
-        "replacedBy": "game/public/assets/models/shop-cooler-open-t25.glb",
+        "replacedBy": "game/public/assets/models/shop-cooler-open-t25r1.glb",
         "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
         "restoreBlobSha1": "22aac733d6087c7d5a96982a75cba1dcff02dc39",
         "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shop-cooler-open.glb > game/public/assets/models/shop-cooler-open.glb"
       },
       "game/public/assets/models/shop-display-open.glb": {
         "id": "base:shopDisplay",
-        "replacedBy": "game/public/assets/models/shop-display-open-t25.glb",
+        "replacedBy": "game/public/assets/models/shop-display-open-t25r1.glb",
         "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
         "restoreBlobSha1": "c5da4423624bb1c361316c885419f896f80ffab8",
         "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/shop-display-open.glb > game/public/assets/models/shop-display-open.glb"

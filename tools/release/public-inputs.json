@@ -1375,8 +1375,8 @@
     },
     {
       "path": "assets/derivatives/meshy-t25-props-20261029.json",
-      "bytes": 1205635,
-      "sha256": "b806743e03407573c1276a2ad58848732eb9e8002e2bedae836f037dea124bbb"
+      "bytes": 1240719,
+      "sha256": "f4f662eeb0cb36b0eb6bf4240d2729ce1e568e0e617310f83a330149d5c02f2e"
     },
     {
       "path": "assets/derivatives/office-space-20261029.json",
@@ -1480,18 +1480,18 @@
     },
     {
       "path": "assets/derivatives/props-iteration05.json",
-      "bytes": 74104,
-      "sha256": "70a84cba0c0ab3af54f80455d4d73fa8e3de86e2a9fb7c029b3b5d69d0403c79"
+      "bytes": 74108,
+      "sha256": "a773d5f828f05b07976d0bbac9f294e0739d6d999a7b60f7493e691c1de504e8"
     },
     {
       "path": "assets/derivatives/props-iteration07.json",
-      "bytes": 1352396,
-      "sha256": "e5c528496d0aa1c51db2329911e3640288b01421fd43bc043fc906cc9d38cb6f"
+      "bytes": 1352398,
+      "sha256": "e9be8baa69d28d914124156e525acc71c9e3f77e17362d4156879294551b2508"
     },
     {
       "path": "assets/derivatives/props.json",
-      "bytes": 97393,
-      "sha256": "883f53f8858073f6d61ba8c7a0f4d382ffee5e7aa4c8e9b755487e13786602ca"
+      "bytes": 97397,
+      "sha256": "676efa0cd0efcb53b91e6c1ad249284a109583764b105d0222fca4a2e4d02149"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -1554,9 +1554,9 @@
       "sha256": "e9ca0d440576c98bd9d63cd6a2889c752dd018ad6ab3d98f405afb0d5277d7b6"
     },
     {
-      "path": "assets/models/bench-t25.glb",
-      "bytes": 623608,
-      "sha256": "caad790696f9342d806753f0b8fb578ed50c032a481ee90f1d309b1c82054890"
+      "path": "assets/models/bench-t25r1.glb",
+      "bytes": 519540,
+      "sha256": "490a8be5ae66ca412c02e29514d280c640a2d830cc66904cc6be252c56d6ca87"
     },
     {
       "path": "assets/models/cabinet-low-t25.glb",
@@ -1564,9 +1564,9 @@
       "sha256": "eb44d31c62ccdf4b15417efa9b174a2f3805101f45a2056e8e589f5a2c2566fc"
     },
     {
-      "path": "assets/models/cabinet-tall-t25.glb",
-      "bytes": 445096,
-      "sha256": "a56799dca9c02d32ac07b08a2b9f0ae35aeb25f3b7fde1a034637ee727bd83f8"
+      "path": "assets/models/cabinet-tall-t25r1.glb",
+      "bytes": 303764,
+      "sha256": "83f55c3ca01adaea592ce127c76284644628871fe9e349c739f2a30eb1ae9804"
     },
     {
       "path": "assets/models/crate-t25.glb",
@@ -2019,9 +2019,9 @@
       "sha256": "4819eaf9e2b9c7d8eef6ce22be62476138e528c6fe035b28037ef7c551359d66"
     },
     {
-      "path": "assets/models/p7-fire-extinguisher-cabinet-t25.glb",
-      "bytes": 402332,
-      "sha256": "4bfc877a261bdc21f3c53a4ecfc299c9b0a5234d1adcb0eec4bd8db059970caa"
+      "path": "assets/models/p7-fire-extinguisher-cabinet-t25r1.glb",
+      "bytes": 402336,
+      "sha256": "b02f7029b30ddce26a0ef8288a4ff964cc1b76be82c1a07aa26a7c2514f95131"
     },
     {
       "path": "assets/models/p7-fire-extinguisher-t25.glb",
@@ -2384,9 +2384,9 @@
       "sha256": "26578a0e086561ba1f5b407cdb376a5fd5def466c3b6523a08900996194d9ca4"
     },
     {
-      "path": "assets/models/shop-cooler-open-t25.glb",
-      "bytes": 278708,
-      "sha256": "8ee1db6a5855d53db9f87c825a5c824b98a65beb0030d0a5ee912670c2c2743f"
+      "path": "assets/models/shop-cooler-open-t25r1.glb",
+      "bytes": 278712,
+      "sha256": "4e68c571d946cf890c4c4fd320b24bf24ec678d7d67b05d6f6f2d8902226e3f7"
     },
     {
       "path": "assets/models/shop-cooler.glb",
@@ -2399,9 +2399,9 @@
       "sha256": "bc8a698a0c3161ac47f10705485fbdf990a8807ed1ef03d7906fc60fd71f842a"
     },
     {
-      "path": "assets/models/shop-display-open-t25.glb",
-      "bytes": 140588,
-      "sha256": "b9a871f8c2a1c136bf9ef200cc3037b826c88ddb58afd5baa24ab7a3b1ed8005"
+      "path": "assets/models/shop-display-open-t25r1.glb",
+      "bytes": 140592,
+      "sha256": "2c330771f1cabb85b9d7ffcaf956d8d050b3a1cf37a6a56ec357acb86ecc6664"
     },
     {
       "path": "assets/models/shop-display.glb",

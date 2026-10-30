@@ -49,12 +49,12 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   rifle: {url: 'assets/models/rifle-user.glb', bytes: 13_646_000},
   shotgun: {url: 'assets/models/shotgun-user.glb', bytes: 11_392_000},
   pistol: {url: 'assets/models/pistol.glb', bytes: 11_271_000},
-  bench: {url: 'assets/models/bench-t25.glb', bytes: 624_000},
+  bench: {url: 'assets/models/bench-t25r1.glb', bytes: 520_000},
   // Meshy T2.5 replacement (2026-10-29; derivatives/meshy-t25-light-20261029.json): the fixture rebuilt from Meshy T2.5 conditioned
   // on the original env-light-03 front view; 1.2 m long, top-centre origin (its bbox sizes the fixture material / tubes). The
   // iteration-04 LOD it replaces is restorable from Git (record.restore); light.glb / light-lod.glb stay unreferenced on disk.
   light: {url: 'assets/models/light-lod2-t25.glb', bytes: 349_000},
-  cabinetTall: {url: 'assets/models/cabinet-tall-t25.glb', bytes: 446_000},
+  cabinetTall: {url: 'assets/models/cabinet-tall-t25r1.glb', bytes: 304_000},
   cabinetLow: {url: 'assets/models/cabinet-low-t25.glb', bytes: 650_000},
   sign: {url: 'assets/models/sign.glb', bytes: 300_000},
   // Iteration 02 generated props (derivatives/props-iteration02.json).
@@ -79,8 +79,8 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   shopBackbar: {url: 'assets/models/shop-backbar-t25.glb', bytes: 500_000},
   // Iteration 05 (Lane A; derivatives/props-iteration05.json): open-front hybrids — no stock picture / opaque pane; transparent glass node
   // 'glass', authored interior + real wire shelves/trays (same bbox). shop-cooler.glb / shop-display.glb stay unchanged on disk.
-  shopCooler: {url: 'assets/models/shop-cooler-open-t25.glb', bytes: 279_000},
-  shopDisplay: {url: 'assets/models/shop-display-open-t25.glb', bytes: 141_000},
+  shopCooler: {url: 'assets/models/shop-cooler-open-t25r1.glb', bytes: 279_000},
+  shopDisplay: {url: 'assets/models/shop-display-open-t25r1.glb', bytes: 141_000},
   // Iteration 05 purpose-specific props (Lane A; derivatives/props-iteration05.json; straight-on inputs). Front +Z, origin bottom-centre, metres.
   // (generated, not loaded in r5: authored loot-verified version used; see iteration05 REPORT) hotdogCart 1.72 x 1.19 x 0.80 (work top 0.93; steam-well lids to 1.19; wheel -X, handle +X).
   // hotdogCart: {url: 'assets/models/hotdog-cart.glb', bytes: 800_000},

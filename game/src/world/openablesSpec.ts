@@ -375,7 +375,10 @@ export const OPENABLE_SPECS = {
     loot: {lots: [1, 3], empty: 0.35, items: FROZEN},
     sound: {open: 'desk', close: 'shopCooler'},
   },
-  /** Glass-door drinks cooler (shop-cooler-open.glb): the framed glass door (handle right) swings on its left hinge. */
+  /**
+   * Glass-door drinks cooler (shop-cooler-open-t25r1.glb; 2026-10-30 glass-film repair): the framed glass door (handle right) swings
+   * on its left hinge. Aimed at, it is taken over; its glass own mesh never casts the flashlight shadow (openables.ts takeover).
+   */
   shopCooler: {
     label: 'drinks cooler', model: 'shopCooler', body: 'model', group: 'surface', shared: true,
     parts: [{
@@ -411,7 +414,7 @@ export const OPENABLE_SPECS = {
     sound: {open: 'medCabinet', close: 'medCabinet'},
   },
   /**
-   * Fire-extinguisher cabinet (p7-fire-extinguisher-cabinet-t25.glb, an open-front hybrid: T2.5 exterior with its painted pane cut,
+   * Fire-extinguisher cabinet (p7-fire-extinguisher-cabinet-t25r1.glb, an open-front hybrid: T2.5 exterior with its painted pane cut,
    * a real glass pane, an inward liner and the T2.5 extinguisher inside): the white glazed door frame (handle left) swings on its
    * right hinges. Door frame measured on the T2.5 derivative (colour + ray-cast 2026-10-29): x -0.18..0.168, y 0.048..0.705,
    * front z 0.155..0.163 (glass pane z 0.15; the liner ends at z 0.135).
@@ -571,7 +574,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   // openable (iteration 08, this lane)
   ...OPENABLE_KINDS.map(k => ({kind: k, cls: 'openable' as const, how: describe(k)})),
   // existing holders with moving parts / always-open fronts
-  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25.glb (Meshy T2.5; door split re-measured), shelving insert'},
+  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25r1.glb (Meshy T2.5 + local flat side / top repair, task model-touchups-20261030; door region untouched, split unchanged), shelving insert'},
   {kind: 'cabinetLow', cls: 'existing', how: 'two doors derived from cabinet-low-t25.glb (Meshy T2.5; door split re-measured)'},
   {kind: 'crate', cls: 'existing', how: 'lid derived from crate-t25.glb, hinged at the back; splinters when shot (iteration 06)'},
   {kind: 'vending', cls: 'existing', how: 'front pried open ([E] hold), stock spills out (iteration 03); shot front gives way (06)'},

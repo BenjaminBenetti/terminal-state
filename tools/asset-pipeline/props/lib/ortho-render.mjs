@@ -56,8 +56,9 @@ const VIEWS = {
   TOP: ([x, y, z]) => [x, -z, y],
 };
 
+/** `viewName`: a VIEWS key, or a function world (x, y, z) -> [u right, v up, depth toward camera] (custom / 3/4 views). */
 export function renderView(tris, viewName, S, bounds) {
-  const f = VIEWS[viewName];
+  const f = typeof viewName === 'function' ? viewName : VIEWS[viewName];
   const img = Buffer.alloc(S * S * 3, 64), zb = new Float32Array(S * S).fill(-Infinity);
   const corners = [];
   for (const x of [bounds.min[0], bounds.max[0]]) for (const y of [bounds.min[1], bounds.max[1]]) for (const z of [bounds.min[2], bounds.max[2]]) corners.push(f([x, y, z]));
