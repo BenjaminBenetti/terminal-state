@@ -5,7 +5,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {FrameHistory, GAP_MS, GRAPH_SCALES_MS, HISTORY_FRAMES, graphScaleMs, quantile, type FrameSample} from '../src/debug/frameHistory';
 import {GpuTimer, frameTotals, gpuTimingSupport, type TimingBackendLike, type TimingRendererLike} from '../src/debug/gpuTimer';
 import {CpuPressureWatch, LongFrameWatch, summarizeLongFrames} from '../src/debug/browserSignals';
-import {PerfOverlay, TEXT_MS, count, installPerfOverlay, isOverlayToggle, type PerfHost} from '../src/debug/overlay';
+import {PerfOverlay, TEXT_MS, count, installPerfOverlay, isOverlayToggle} from '../src/debug/overlay';
 import {createGameRenderer, describeBackend, rendererRequest, type GpuInfo} from '../src/render/backend';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
