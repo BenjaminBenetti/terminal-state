@@ -1,0 +1,315 @@
+{
+ "schema": "terminal-state-local-derivative-v1",
+ "task": "office-props-physics-scale-20261030",
+ "lane": "RACK",
+ "status": "Local procedural rebuild of the office server rack (kind serverRack). Prototype art; no commercial / model licence clearance asserted.",
+ "generation": {
+  "provider": null,
+  "model": null,
+  "credits": 0,
+  "note": "No image / 3D / audio generation service was used: hand-dimensioned boxes / tubes and code-painted textures."
+ },
+ "rebuild": "node tools/asset-pipeline/props/build-server-rack-r2.mjs",
+ "replaces": {
+  "kind": "serverRack",
+  "asset": "B10 server-rack (assets/assets/officeAssets.ts OFFICE_ASSETS[server-rack], Meshy T2.5)",
+  "reason": "empty 1.23 x 2.0 x 1.48 m cabinet; the door was a painted shattered-glass texture on overlapping huge sliver triangles (z-fighting, opaque \"glass\"); no rack hardware (evidence: reference/tasks/office-props-physics-scale-20261030/evidence/RACK/)",
+  "oldDerivative": {
+   "path": "game/public/assets/models/office-server-rack.glb",
+   "sha256": "f8b6c779da94accadd71fd3bf164e0a40ad5163f6a7ca202b5a6d8f2feed14cf",
+   "kept": "unchanged in Git (still registered as OFFICE_ASSETS[server-rack]; no kind renders it)"
+  },
+  "rawMaster": {
+   "path": "reference/tasks/office-space-survival-20261029/assets/raw/server-rack/refine/server-rack-refine.glb",
+   "sha256": "efd0a90ab98ca9522cf02693ecd6ad921cc16a9c335a63bae90029d44edfd643",
+   "kept": "outside Git, read-only; not used as geometry"
+  }
+ },
+ "conventions": {
+  "units": "meters",
+  "up": "+Y",
+  "front": "-Z (office files; the runtime half-turns it to the prop frame +Z)",
+  "origin": "bottom-centre",
+  "files": "plain glTF 2.0 binary (no Draco / meshopt / KTX2)"
+ },
+ "runtime": "game/src/assets/officeAssets.ts OFFICE_LOCAL_MODELS[server-rack-r2] -> library key office-server-rack-r2 (gen/office/kinds.ts OFFICE_KIND_ASSET.serverRack; world/openablesSpec.ts serverRack model); world/rackLeds.ts blinks the LED emissive of material rack-faceplates",
+ "output": {
+  "url": "assets/models/office-server-rack-r2.glb",
+  "sha256": "63c0a0b418612cd49156e8d61cf20495380c5e030b04eab89d55bb565be0a2e2",
+  "bytes": 323704,
+  "triangles": 2658,
+  "dims": [
+   0.6,
+   2,
+   1
+  ],
+  "materials": [
+   {
+    "name": "rack-body",
+    "alpha": "OPAQUE",
+    "doubleSided": false,
+    "emissive": false
+   },
+   {
+    "name": "rack-faceplates",
+    "alpha": "OPAQUE",
+    "doubleSided": false,
+    "emissive": true
+   },
+   {
+    "name": "rack-door-mesh",
+    "alpha": "BLEND",
+    "doubleSided": true,
+    "emissive": false
+   },
+   {
+    "name": "rack-back-mesh",
+    "alpha": "OPAQUE",
+    "doubleSided": false,
+    "emissive": false
+   }
+  ],
+  "textures": [
+   {
+    "name": "rack-faceplates-color",
+    "mime": "image/jpeg",
+    "size": [
+     512,
+     1024
+    ],
+    "bytes": 117996,
+    "sha256": "97f12c89c43e089bf4a440f1d93954243cf86be9a3f2dfeecebe857977d71903"
+   },
+   {
+    "name": "rack-faceplates-leds",
+    "mime": "image/png",
+    "size": [
+     512,
+     1024
+    ],
+    "bytes": 6259,
+    "sha256": "58d45ecceba06b1dc985a2d00650f019e7f58014b85971ea6e61cb04e7e163fd"
+   },
+   {
+    "name": "rack-body-color",
+    "mime": "image/jpeg",
+    "size": [
+     256,
+     256
+    ],
+    "bytes": 6109,
+    "sha256": "ac47f1775e9eae638631bf052e321439a6afbfe050c099a09c405ca4ec6cb063"
+   },
+   {
+    "name": "rack-perforated",
+    "mime": "image/png",
+    "size": [
+     64,
+     64
+    ],
+    "bytes": 3058,
+    "sha256": "1660ddfbff9cf88291051a25ab573ab2055b23965958cfff7c68f40ae0e9cc1c"
+   }
+  ]
+ },
+ "layout": {
+  "frame": "prop frame (origin bottom-centre, front +Z) = the file half-turned (world/openables.ts turn)",
+  "rackUnit": 0.04445,
+  "firstUnitY": 0.09,
+  "units": 42,
+  "rails": {
+   "front": 0.4,
+   "rear": -0.36,
+   "x0": 0.2255,
+   "x1": 0.2465
+  },
+  "faceplates": {
+   "z0": 0.4,
+   "z1": 0.412,
+   "half": 0.2413
+  },
+  "door": {
+   "z0": 0.468,
+   "z1": 0.485,
+   "mesh": 0.4765,
+   "x0": -0.298,
+   "x1": 0.298,
+   "y0": 0.075,
+   "y1": 1.992,
+   "stile": 0.032,
+   "rail": 0.045
+  },
+  "pivot": [
+   0.291,
+   0,
+   0.4765
+  ],
+  "doorRegion": [
+   -0.305,
+   0.07,
+   0.466,
+   0.305,
+   1.995,
+   0.51
+  ],
+  "cavity": [
+   -0.284,
+   0.085,
+   -0.48,
+   0.284,
+   1.96,
+   0.465
+  ],
+  "equipment": [
+   {
+    "kind": "ups2u",
+    "u": 0,
+    "units": 2
+   },
+   {
+    "kind": "stor4u",
+    "u": 7,
+    "units": 4
+   },
+   {
+    "kind": "blank1u",
+    "u": 11,
+    "units": 1
+   },
+   {
+    "kind": "srv2uA",
+    "u": 12,
+    "units": 2
+   },
+   {
+    "kind": "srv1uA",
+    "u": 14,
+    "units": 1
+   },
+   {
+    "kind": "srv1uB",
+    "u": 15,
+    "units": 1
+   },
+   {
+    "kind": "patch1u",
+    "u": 20,
+    "units": 1
+   },
+   {
+    "kind": "cable1u",
+    "u": 21,
+    "units": 1
+   },
+   {
+    "kind": "switch1u",
+    "u": 22,
+    "units": 1
+   },
+   {
+    "kind": "blank1u",
+    "u": 23,
+    "units": 1
+   },
+   {
+    "kind": "srv2uB",
+    "u": 24,
+    "units": 2
+   },
+   {
+    "kind": "srv2uA",
+    "u": 26,
+    "units": 2
+   },
+   {
+    "kind": "kvm1u",
+    "u": 28,
+    "units": 1
+   },
+   {
+    "kind": "srv2uB",
+    "u": 34,
+    "units": 2
+   },
+   {
+    "kind": "srv1uA",
+    "u": 36,
+    "units": 1
+   },
+   {
+    "kind": "blank1u",
+    "u": 37,
+    "units": 1
+   },
+   {
+    "kind": "blank1u",
+    "u": 38,
+    "units": 1
+   },
+   {
+    "kind": "switch1u",
+    "u": 39,
+    "units": 1
+   },
+   {
+    "kind": "patch1u",
+    "u": 40,
+    "units": 1
+   },
+   {
+    "kind": "blank1u",
+    "u": 41,
+    "units": 1
+   }
+  ],
+  "emptyBays": [
+   {
+    "u": 2,
+    "units": 5,
+    "y": 0.1819,
+    "top": 0.4012,
+    "clear": 0.213
+   },
+   {
+    "u": 16,
+    "units": 4,
+    "y": 0.8042,
+    "top": 0.979,
+    "clear": 0.169
+   },
+   {
+    "u": 29,
+    "units": 5,
+    "y": 1.3821,
+    "top": 1.6013,
+    "clear": 0.213
+   }
+  ],
+  "surfaces": [
+   {
+    "y": 0.1819,
+    "x0": -0.195,
+    "x1": 0.195,
+    "z0": -0.135,
+    "z1": 0.37,
+    "clear": 0.213
+   },
+   {
+    "y": 0.8042,
+    "x0": -0.195,
+    "x1": 0.195,
+    "z0": -0.135,
+    "z1": 0.37,
+    "clear": 0.169
+   },
+   {
+    "y": 1.3821,
+    "x0": -0.195,
+    "x1": 0.195,
+    "z0": -0.135,
+    "z1": 0.37,
+    "clear": 0.213
+   }
+  ]
+ }
+}

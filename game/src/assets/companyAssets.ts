@@ -59,6 +59,25 @@ export interface CompanyAssetEntry {
   dims: readonly [number, number, number] | null;
 }
 
+/**
+ * Task office-props-physics-scale-20261030 (lane FURN): a loose object separated from a furniture model (user: "Never bake items on
+ * top of furnature in to the furnature model always place props on top instead"): one representative of each object type that was
+ * baked onto the lab bench / trading desk / bakery case, cut out of the same Meshy derivative (local separation, provenance in
+ * office-overhaul-20261030.json `parts`), at its OWN real size, front -Z, grounded, centred. `kind` 'prop' = an office clutter kind
+ * placed on its furniture's top (gen/office/clutterKinds.ts), 'item' = an item pickup model (the bread loaf).
+ */
+export interface CompanyPartEntry {
+  url: string;
+  bytes: number;
+  tris: number;
+  /** The furniture model it was separated from. */
+  from: CompanyAssetId;
+  kind: 'prop' | 'item';
+  sizeM: number;
+  sizeAxis: 'h' | 'w' | 'd' | 'longest';
+  dims: readonly [number, number, number];
+}
+
 // BEGIN GENERATED (build-office-overhaul.mjs) — do not hand-edit between the markers
 export const COMPANY_ASSETS: Record<CompanyAssetId, CompanyAssetEntry> = {
   'gumball-machine': {url: 'assets/models/office-gumball-machine.glb', bytes: 270516, tris: 3595, sizeM: 1.35, sizeAxis: 'h', code: 'D01', company: 'bubblr', use: 'company', placement: 'floor', targetTris: 3500, dims: [0.4866, 1.35, 0.4921]},
@@ -67,9 +86,9 @@ export const COMPANY_ASSETS: Record<CompanyAssetId, CompanyAssetEntry> = {
   'console-station': {url: 'assets/models/office-console-station.glb', bytes: 251664, tris: 4076, sizeM: 1.4, sizeAxis: 'w', code: 'D04', company: 'pixelforge', use: 'company', placement: 'wall', targetTris: 4000, dims: [1.4, 0.9305, 0.779]},
   'law-bookcase': {url: 'assets/models/office-law-bookcase.glb', bytes: 376656, tris: 3802, sizeM: 2.2, sizeAxis: 'h', code: 'D05', company: 'halden', use: 'company', placement: 'wall', targetTris: 4000, dims: [1.1317, 2.2, 0.6749]},
   'justice-statue': {url: 'assets/models/office-justice-statue.glb', bytes: 464520, tris: 4168, sizeM: 1.7, sizeAxis: 'h', code: 'D06', company: 'halden', use: 'company', placement: 'floor', targetTris: 4000, dims: [0.7233, 1.7, 0.5388]},
-  'trading-desk': {url: 'assets/models/office-trading-desk.glb', bytes: 406132, tris: 4350, sizeM: 1.8, sizeAxis: 'w', code: 'D07', company: 'crestmark', use: 'company', placement: 'floor', targetTris: 4500, dims: [1.8, 0.6844, 0.7535]},
+  'trading-desk': {url: 'assets/models/office-trading-desk.glb', bytes: 258348, tris: 1605, sizeM: 0.74, sizeAxis: 'h', code: 'D07', company: 'crestmark', use: 'company', placement: 'floor', targetTris: 4500, dims: [3.5703, 0.74, 1.4946]},
   'bull-statue': {url: 'assets/models/office-bull-statue.glb', bytes: 240676, tris: 4210, sizeM: 1.4, sizeAxis: 'longest', code: 'D08', company: 'crestmark', use: 'company', placement: 'floor', targetTris: 4000, dims: [0.4478, 0.6069, 1.4]},
-  'lab-bench': {url: 'assets/models/office-lab-bench.glb', bytes: 452504, tris: 4318, sizeM: 1.8, sizeAxis: 'w', code: 'D09', company: 'verdant', use: 'company', placement: 'wall', targetTris: 4500, dims: [1.8, 0.9262, 0.5067]},
+  'lab-bench': {url: 'assets/models/office-lab-bench.glb', bytes: 265596, tris: 890, sizeM: 0.9, sizeAxis: 'h', code: 'D09', company: 'verdant', use: 'company', placement: 'wall', targetTris: 4500, dims: [2.9513, 0.9, 0.8278]},
   'biohazard-fridge': {url: 'assets/models/office-biohazard-fridge.glb', bytes: 370796, tris: 2589, sizeM: 2, sizeAxis: 'h', code: 'D10', company: 'verdant', use: 'company', placement: 'wall', targetTris: 3500, dims: [0.902, 2, 0.7665]},
   'architect-model': {url: 'assets/models/office-architect-model.glb', bytes: 452296, tris: 3873, sizeM: 1.6, sizeAxis: 'w', code: 'D11', company: 'arcline', use: 'company', placement: 'floor', targetTris: 4500, dims: [1.6, 1.6099, 1.456]},
   'drafting-table': {url: 'assets/models/office-drafting-table.glb', bytes: 259812, tris: 3311, sizeM: 1.3, sizeAxis: 'w', code: 'D12', company: 'arcline', use: 'company', placement: 'floor', targetTris: 3500, dims: [1.3, 1.1357, 1.0022]},
@@ -98,7 +117,7 @@ export const COMPANY_ASSETS: Record<CompanyAssetId, CompanyAssetEntry> = {
   'aquarium': {url: 'assets/models/office-aquarium.glb', bytes: 346456, tris: 2859, sizeM: 1.5, sizeAxis: 'w', code: 'D35', company: 'pawprint', use: 'company', placement: 'wall', targetTris: 3500, dims: [1.5, 0.6359, 0.6952]},
   'cat-tree': {url: 'assets/models/office-cat-tree.glb', bytes: 364240, tris: 3523, sizeM: 1.8, sizeAxis: 'h', code: 'D36', company: 'pawprint', use: 'company', placement: 'floor', targetTris: 3500, dims: [0.5403, 1.8, 0.6456]},
   'dough-mixer': {url: 'assets/models/office-dough-mixer.glb', bytes: 330888, tris: 3597, sizeM: 1.5, sizeAxis: 'h', code: 'D37', company: 'goldencrust', use: 'company', placement: 'wall', targetTris: 3500, dims: [0.7123, 1.5, 0.9238]},
-  'bakery-case': {url: 'assets/models/office-bakery-case.glb', bytes: 454580, tris: 4396, sizeM: 1.6, sizeAxis: 'w', code: 'D38', company: 'goldencrust', use: 'company', placement: 'floor', targetTris: 4500, dims: [1.6, 1.1104, 1.1384]},
+  'bakery-case': {url: 'assets/models/office-bakery-case.glb', bytes: 334144, tris: 1343, sizeM: 1.35, sizeAxis: 'h', code: 'D38', company: 'goldencrust', use: 'company', placement: 'floor', targetTris: 4500, dims: [1.9453, 1.35, 1.3841]},
   'satellite-model': {url: 'assets/models/office-satellite-model.glb', bytes: 528188, tris: 3948, sizeM: 1.8, sizeAxis: 'longest', code: 'D39', company: 'orbital', use: 'company', placement: 'floor', targetTris: 4000, dims: [1.8, 0.8959, 0.7059]},
   'telescope': {url: 'assets/models/office-telescope.glb', bytes: 466532, tris: 3529, sizeM: 1.8, sizeAxis: 'h', code: 'D40', company: 'orbital', use: 'company', placement: 'floor', targetTris: 3500, dims: [0.9162, 1.8, 1.4983]},
   'executive-desk': {url: 'assets/models/office-executive-desk.glb', bytes: 506668, tris: 4158, sizeM: 2, sizeAxis: 'w', code: 'E01', company: null, use: 'support', placement: 'floor', targetTris: 4000, dims: [2, 0.9722, 1.0791]},
@@ -112,13 +131,25 @@ export const COMPANY_ASSETS: Record<CompanyAssetId, CompanyAssetEntry> = {
   'security-turnstile': {url: 'assets/models/office-security-turnstile.glb', bytes: 185696, tris: 2309, sizeM: 1, sizeAxis: 'h', code: 'E09', company: null, use: 'support', placement: 'floor', targetTris: 2500, dims: [1.5852, 1, 1.0204]},
   'foosball-table': {url: 'assets/models/office-foosball-table.glb', bytes: 310132, tris: 3938, sizeM: 1.4, sizeAxis: 'longest', code: 'E10', company: null, use: 'support', placement: 'floor', targetTris: 4000, dims: [1.4, 0.5199, 1.2576]},
   'ping-pong-table': {url: 'assets/models/office-ping-pong-table.glb', bytes: 327328, tris: 2980, sizeM: 2.74, sizeAxis: 'longest', code: 'E11', company: null, use: 'support', placement: 'floor', targetTris: 3000, dims: [2.4204, 0.8281, 2.74]},
-  'bean-bag': {url: 'assets/models/office-bean-bag.glb', bytes: 134200, tris: 2118, sizeM: 0.9, sizeAxis: 'longest', code: 'E12', company: null, use: 'support', placement: 'floor', targetTris: 2000, dims: [0.8629, 0.3889, 0.9]},
+  'bean-bag': {url: 'assets/models/office-bean-bag.glb', bytes: 134200, tris: 2118, sizeM: 1.3, sizeAxis: 'longest', code: 'E12', company: null, use: 'support', placement: 'floor', targetTris: 2000, dims: [1.2465, 0.5618, 1.3]},
   'lounge-armchair': {url: 'assets/models/office-lounge-armchair.glb', bytes: 223620, tris: 3176, sizeM: 0.85, sizeAxis: 'h', code: 'E13', company: null, use: 'support', placement: 'floor', targetTris: 3000, dims: [0.8484, 0.85, 1.0191]},
   'potted-plant-small': {url: 'assets/models/office-potted-plant-small.glb', bytes: 176956, tris: 1766, sizeM: 0.6, sizeAxis: 'h', code: 'E14', company: null, use: 'support', placement: 'wall', targetTris: 2000, dims: [0.4199, 0.6, 0.4294]},
   'rooftop-hvac': {url: 'assets/models/office-rooftop-hvac.glb', bytes: 307164, tris: 3068, sizeM: 2.4, sizeAxis: 'longest', code: 'E15', company: null, use: 'support', placement: 'floor', targetTris: 3500, dims: [2.1294, 2.3213, 2.4]},
   'water-tower': {url: 'assets/models/office-water-tower.glb', bytes: 472444, tris: 3459, sizeM: 4.5, sizeAxis: 'h', code: 'E16', company: null, use: 'support', placement: 'floor', targetTris: 4000, dims: [4.5873, 4.5, 4.5826]},
   'satellite-dish': {url: 'assets/models/office-satellite-dish.glb', bytes: 418772, tris: 2415, sizeM: 1.8, sizeAxis: 'longest', code: 'E17', company: null, use: 'support', placement: 'floor', targetTris: 2500, dims: [1.5893, 1.8, 1.326]},
   'toilet': {url: 'assets/models/office-toilet.glb', bytes: 169120, tris: 2076, sizeM: 0.8, sizeAxis: 'h', code: 'E18', company: null, use: 'support', placement: 'wall', targetTris: 2000, dims: [0.4453, 0.8, 0.6517]},
+};
+
+export const COMPANY_PART_ASSETS: Readonly<Record<string, CompanyPartEntry>> = {
+  'trading-monitor': {url: 'assets/models/office-trading-monitor.glb', bytes: 31784, tris: 160, from: 'trading-desk', kind: 'prop', sizeM: 0.62, sizeAxis: 'w', dims: [0.62, 0.4789, 0.1796]},
+  'trading-keyboard': {url: 'assets/models/office-trading-keyboard.glb', bytes: 34428, tris: 284, from: 'trading-desk', kind: 'prop', sizeM: 0.62, sizeAxis: 'w', dims: [0.62, 0.0456, 0.1797]},
+  'lab-flask': {url: 'assets/models/office-lab-flask.glb', bytes: 32392, tris: 60, from: 'lab-bench', kind: 'prop', sizeM: 0.18, sizeAxis: 'h', dims: [0.1221, 0.18, 0.1111]},
+  'lab-flask-large': {url: 'assets/models/office-lab-flask-large.glb', bytes: 25860, tris: 120, from: 'lab-bench', kind: 'prop', sizeM: 0.3, sizeAxis: 'h', dims: [0.1696, 0.3, 0.1802]},
+  'lab-microscope': {url: 'assets/models/office-lab-microscope.glb', bytes: 72240, tris: 856, from: 'lab-bench', kind: 'prop', sizeM: 0.4, sizeAxis: 'h', dims: [0.2691, 0.4, 0.3847]},
+  'lab-bottle': {url: 'assets/models/office-lab-bottle.glb', bytes: 10848, tris: 60, from: 'lab-bench', kind: 'prop', sizeM: 0.22, sizeAxis: 'h', dims: [0.0807, 0.22, 0.1106]},
+  'lab-bottle-rack': {url: 'assets/models/office-lab-bottle-rack.glb', bytes: 60216, tris: 516, from: 'lab-bench', kind: 'prop', sizeM: 0.4, sizeAxis: 'h', dims: [0.3759, 0.4, 0.1943]},
+  'lab-tube-rack': {url: 'assets/models/office-lab-tube-rack.glb', bytes: 53648, tris: 274, from: 'lab-bench', kind: 'prop', sizeM: 0.26, sizeAxis: 'w', dims: [0.26, 0.1285, 0.1602]},
+  'bread': {url: 'assets/models/item-bread-t25.glb', bytes: 41444, tris: 118, from: 'bakery-case', kind: 'item', sizeM: 0.26, sizeAxis: 'longest', dims: [0.26, 0.0919, 0.2231]},
 };
 // END GENERATED
 
@@ -137,6 +168,13 @@ export function companySignatureAssets(company: CompanyId): CompanyAssetId[] {
 /** Lazy-library file map (same shape as assets/loader.ts PropModelLibrary input) of the delivered models, keyed `office-<id>`. */
 export const COMPANY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(
   COMPANY_ASSET_IDS.flatMap(id => { const a = COMPANY_ASSETS[id]; return a.url ? [[`office-${id}`, {url: a.url, bytes: a.bytes}]] : []; }));
+
+/**
+ * Task office-props-physics-scale-20261030 (lane FURN): lazy-library file map of the separated loose PROPS (lab glassware, trading
+ * monitors / keyboards), keyed `office-<partId>` like the furniture (gen/office/clutterKinds.ts kinds render with them).
+ */
+export const COMPANY_PART_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(
+  Object.entries(COMPANY_PART_ASSETS).filter(([, p]) => p.kind === 'prop').map(([id, p]) => [`office-${id}`, {url: p.url, bytes: p.bytes}]));
 
 const modelCache = new Map<CompanyAssetId, Promise<GLTF | null>>();
 let gltfLoader: GLTFLoader | null = null;

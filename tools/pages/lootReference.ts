@@ -184,8 +184,9 @@ const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {
 
 const GROUP_LABEL: Readonly<Record<ItemGroup, string>> = {
   food: 'Food', drink: 'Drink', med: 'Medicine', ammo: 'Ammunition', battery: 'Batteries', flare: 'Flares', supply: 'Supplies', gear: 'Gear', weapon: 'Weapons',
+  material: 'Crafting materials (no crafting yet)', // lane RACK (office-props-physics-scale-20261030)
 };
-const GROUP_ORDER: readonly ItemGroup[] = ['food', 'drink', 'med', 'ammo', 'battery', 'flare', 'supply', 'gear', 'weapon'];
+const GROUP_ORDER: readonly ItemGroup[] = ['food', 'drink', 'med', 'ammo', 'battery', 'flare', 'material', 'supply', 'gear', 'weapon'];
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Source locations
@@ -509,7 +510,7 @@ function scarcityOf(P: LootProfile, kind: string, areaKey: string, exempt: boole
   const allowList = (HOLDER_ALLOW as Record<string, readonly EconCat[] | undefined>)[kind];
   const allow = (allowList ?? ECON_CATS).filter(catAvailable);
   const keep: Record<string, number> = {};
-  for (const c of ECON_CATS) keep[c] = c === 'ammo' ? 1 : keepChance(P, T.keep, c);
+  for (const c of ECON_CATS) keep[c] = c === 'ammo' || c === 'material' ? 1 : keepChance(P, T.keep, c); // lane RACK: materials kept as rolled
   const onPick = T.cats.filter(k => allow.includes(k)).map(k => [k, catWeight(P, k, T.weights[k] ?? 0)] as const).filter(o => o[1] > 0);
   const offPick = ECON_CATS.filter(k => !T.cats.includes(k) && catAvailable(k)).map(k => [k, catWeight(P, k, X.offTheme[k])] as const).filter(o => o[1] > 0);
   const L = X.limb, ts = L.share[theme] ?? 0, hs = L.holder[kind] ?? 0;
@@ -535,7 +536,7 @@ function finalLot(P: LootProfile, kind: string, areaKey: string, rows: readonly 
   };
   for (const [id, {p, units}] of raw) {
     const c = econCat(id);
-    if (c === 'ammo' || c === null) { addOut(out, id, p, units); continue; }
+    if (c === 'ammo' || c === 'material' || c === null) { addOut(out, id, p, units); continue; } // lane RACK: materials kept as rolled
     const kept = p * keepChance(P, T.keep, c), ec = units / p;
     const original = (q: number) => addOut(finds, id, q, q * ec);
     const retheme = (q: number, cat: EconCat, on: boolean) => {

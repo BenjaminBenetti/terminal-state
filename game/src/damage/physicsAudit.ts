@@ -1,14 +1,16 @@
 // Task office-interactions-layout-20261030 (lane PHYS): the physics-affordance audit of EVERY prop kind (gen/props.ts PROP_DEFS)
 // — root CLAUDE.md "Props — core design rules" 2 / 3, docs/prop-affordances.md section 3. Each kind is either
-//  - `dynamic`: a rigid body when shot (and, in office worlds, when a walker moves into it), with its mass (kg), collider and
-//    contact material — physics/dynamicItems.ts (lazy bodies, sleep -> static body, MAX_DYNAMIC_PROPS simulating at once), or
+//  - `dynamic`: a rigid body when shot and when a walker moves into it (`contact`), with its mass (kg), collider and contact
+//    material — physics/dynamicItems.ts (lazy bodies, sleep -> static body, MAX_DYNAMIC_PROPS simulating at once), or
 //  - `static`: it stays put, with the honest reason (damage/materials.ts StaticWhy) and a sentence.
-// Office / company / supporting kinds come from gen/office/physics.ts OFFICE_PHYS (this pass). Subway kinds keep their CURRENT
-// class (damage/materials.ts PROP_PHYSICS / PROP_DEFS.physics; loot holders stay put unless they spill) with the reason recorded
-// here — this pass changes none of them. tests/office-physics.test.ts fails for an unclassified kind, an empty reason, or a row
-// that disagrees with the live physics (dynamicKind).
+// Office / company / supporting kinds come from gen/office/physics.ts OFFICE_PHYS. Subway kinds keep their class and mass
+// (damage/materials.ts PROP_PHYSICS / PROP_DEFS.physics; loot holders stay put unless they spill) with the static reasons
+// recorded here. Task office-props-physics-scale-20261030 (lane PHYS): the Subway's light kinds wake by contact too, with a
+// calibrated castor / pad material (damage/materials.ts SUBWAY_CONTACT) — `contact` and `mat` are read from the live physics.
+// tests/office-physics.test.ts + tests/contact-physics.test.ts fail for an unclassified kind, an empty reason, or a row that
+// disagrees with the live physics (dynamicKind, propPhysics.contact).
 
-import {ALL_PROP_KINDS, propPhysics, type PhysMat, type StaticWhy} from './materials';
+import {ALL_PROP_KINDS, SUBWAY_CONTACT, propPhysics, type PhysMat, type StaticWhy} from './materials';
 import {OFFICE_PHYS, type OfficePhys} from '../gen/office/physics';
 import {isOfficeKind} from '../gen/office/kinds';
 import {isP7Kind, p7Spec} from '../gen/props07';
@@ -23,7 +25,7 @@ export interface PhysAuditRow {
   mass?: number;
   shape?: 'box' | 'cylinder';
   mat?: PhysMat;
-  /** dynamic: wakes when a walker moves into it (office worlds; office kinds only — holders never, shots only). */
+  /** dynamic: wakes when a walker moves into it (every world; holders never — shots only). Read from the live physics. */
   contact?: boolean;
   /** dynamic: may go loose on its static host's top (the office monitor on a desk). */
   onHost?: boolean;
@@ -31,7 +33,7 @@ export interface PhysAuditRow {
   why?: StaticWhy;
   /** One honest sentence (what it is, roughly what it weighs, why it moves / does not). */
   how: string;
-  /** office = classified by this pass (gen/office/physics.ts); subway = the kind's existing class, unchanged. */
+  /** office = classified in gen/office/physics.ts; subway = the kind's iteration-07 / 08 class (+ its contact overlay). */
   src: 'office' | 'subway';
 }
 
@@ -63,7 +65,7 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   staffLockers: ['anchored', 'locker bank fixed to the wall'],
   couch: ['too heavy', 'staff-room couch (~50 kg, no castors)'],
   noticeBoard: ['mounted', 'wall notice board'],
-  janitorCart: ['kept', 'loaded janitor cart (~40 kg): Subway kind, iteration-07 class kept'],
+  janitorCart: ['kept', 'loaded janitor cart (~40 kg): Subway kind, iteration-07 class kept (deliberate static exception, docs/prop-affordances.md section 3)'],
   mopSink: ['fixture', 'plumbed mop sink'],
   electricalPanel: ['fixture', 'electrical switchgear panel'],
   signalRack: ['anchored', 'signal equipment rack bolted down'],
@@ -83,14 +85,14 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   waterCooler: ['too heavy', 'water cooler with a full bottle (~35 kg); the office\'s officeWaterCooler (part-full, ~22 kg) is dynamic'],
   filingCabinet: ['too heavy', 'steel filing cabinet with full drawers (~60 kg)'],
   officeCopier: ['too heavy', 'office copier (~70 kg), cabled'],
-  crtTvCart: ['kept', 'TV cart with a CRT set (~45 kg, castors): Subway kind, iteration-07 class kept'],
-  mobileWhiteboard: ['kept', 'mobile whiteboard (castors): Subway kind, iteration-07 class kept (the office\'s officeWhiteboard is dynamic)'],
+  crtTvCart: ['kept', 'TV cart with a CRT set (~45 kg, castors): Subway kind, iteration-07 class kept (deliberate static exception, docs/prop-affordances.md section 3)'],
+  mobileWhiteboard: ['kept', 'mobile whiteboard (castors): Subway kind, iteration-07 class kept (deliberate static exception, docs/prop-affordances.md section 3; the office\'s officeWhiteboard is dynamic)'],
   chestFreezer: ['too heavy', 'chest freezer (~80 kg)'],
   bloodPressureKiosk: ['too heavy', 'blood-pressure kiosk (~60 kg)'],
   standMixer: ['machinery', 'floor stand mixer (~100 kg)'],
   iceMachine: ['machinery', 'plumbed ice machine'],
   oxygenCart: ['too heavy', 'oxygen cylinder cart (~60 kg)'],
-  physicianScale: ['kept', 'physician\'s beam scale (~25 kg): Subway kind, iteration-07 class kept'],
+  physicianScale: ['kept', 'physician\'s beam scale (~25 kg): Subway kind, iteration-07 class kept (deliberate static exception, docs/prop-affordances.md section 3)'],
   fareVaultCart: ['too heavy', 'steel fare-vault cart (~150 kg)'],
   signalHeadSpare: ['too heavy', 'spare signal head (~50 kg)'],
   dryTransformer: ['too heavy', 'dry-type transformer (~500 kg)'],
@@ -108,9 +110,12 @@ function subwayRow(kind: string): PhysAuditRow | null {
   if (dynamicKind(kind)) {
     const spill = isSpillHolderKind(kind);
     const onTop = isP7Kind(kind) && p7Spec(kind).uses.some(u => u.at === 'onTop');
-    const how = spill ? 'light openable holder (iteration 08): goes loose when shot, its lid pops and its finite lots spill as pickups'
+    // task office-props-physics-scale-20261030 (lane PHYS): contact from the live physics (holders: shots only)
+    const contact = !!ph.contact && !isLootHolderKind(kind);
+    const how = spill ? `light openable holder (iteration 08): goes loose when shot, its lid pops and its finite lots spill as pickups; walking into it does not (holders: shots only)${ph.mat === 'castor' ? '; rolls on its wheels once loose' : ''}`
+      : contact ? `${SUBWAY_CONTACT[kind]?.how ?? 'light loose prop'} (${ph.mat} contact; wakes when walked into or shot)${onTop ? '; on-top placements stay static (no floating stacks)' : ''}`
       : `light loose prop (iteration 07): rigid body when shot, walkers shove it once loose${onTop ? '; on-top placements stay static (no floating stacks)' : ''}`;
-    return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact: false, how, src: 'subway'};
+    return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact, how, src: 'subway'};
   }
   if (isLootHolderKind(kind)) return {kind, cls: 'static', why: 'holder', how: ph.dynamic ? `${HOLDER_HOW}; PROP_PHYSICS lists it light, holders still stay put` : HOLDER_HOW, src: 'subway'};
   const r = SUBWAY_STATIC[kind];

@@ -10,8 +10,9 @@ import {fileURLToPath} from 'node:url';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {getBounds} from '@gltf-transform/functions';
-import {COMPANY_ASSETS, COMPANY_ASSET_IDS, COMPANY_MODEL_FILES, companyAssetsReady, companySignatureAssets, loadCompanyAsset, type CompanyAssetId} from '../src/assets/companyAssets';
-import {COMPANY_DIMS, COMPANY_ASSET_SPECS} from '../src/assets/companyDims.generated';
+import {COMPANY_ASSETS, COMPANY_ASSET_IDS, COMPANY_MODEL_FILES, COMPANY_PART_ASSETS, COMPANY_PART_MODEL_FILES, companyAssetsReady, companySignatureAssets, loadCompanyAsset, type CompanyAssetId} from '../src/assets/companyAssets';
+import {COMPANY_DIMS, COMPANY_ASSET_SPECS, COMPANY_PART_DIMS} from '../src/assets/companyDims.generated';
+import {components} from '../../tools/asset-pipeline/props/lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
 import {OFFICE_ASSETS, OFFICE_MODEL_FILES} from '../src/assets/officeAssets';
 import type {CompanyId} from '../src/gen/office/overhaulTypes';
 
@@ -96,6 +97,14 @@ const TABLE: Record<CompanyAssetId, [string, CompanyId | null, number, 'h' | 'w'
   'satellite-dish': ['E17', null, 1.8, 'longest', 2500],
   'toilet': ['E18', null, 0.8, 'h', 2000],
 };
+// Task office-props-physics-scale-20261030 (lane FURN): FURNITURE-ONLY real size (tools/asset-pipeline/props/build-office-overhaul.mjs
+// FURNITURE: the miniature lab bench / trading desk were sized by a width that included their baked beakers / monitors; the bakery case
+// and the bean bag were toy-sized). The registry carries these; the manifest's sizeM / sizeAxis (TABLE) stay in the provenance.
+const FURNITURE_ONLY: Partial<Record<CompanyAssetId, [number, 'h' | 'w' | 'longest']>> = {
+  'lab-bench': [0.9, 'h'], 'trading-desk': [0.74, 'h'], 'bakery-case': [1.35, 'h'], 'bean-bag': [1.3, 'longest'],
+};
+type FurnitureProv = {manifestSizeM: number; manifestSizeAxis: string; sizeM: number; sizeAxis: string; removed: {tris: number; comps: number} | null};
+const furnitureOf = (id: string) => (PROV?.outputs.find(o => o.id === id) as {furniture?: FurnitureProv} | undefined)?.furniture;
 const COMPANIES: CompanyId[] = ['bubblr', 'pixelforge', 'halden', 'crestmark', 'verdant', 'arcline', 'metro9', 'ember', 'stride', 'wonderbox',
   'lowtide', 'calloway', 'ardent', 'tidewater', 'nimbus', 'ironclad', 'pemberton', 'pawprint', 'goldencrust', 'orbital'];
 const ready = COMPANY_ASSET_IDS.filter(id => COMPANY_ASSETS[id].url !== null);
@@ -105,7 +114,8 @@ describe('office overhaul company / supporting assets', () => {
   it('registry covers the 58-asset manifest: 40 company props (20 companies x 2) + 18 supporting models', () => {
     expect([...COMPANY_ASSET_IDS].sort()).toEqual((Object.keys(TABLE) as CompanyAssetId[]).sort());
     for (const id of COMPANY_ASSET_IDS) {
-      const a = COMPANY_ASSETS[id], [code, company, sizeM, sizeAxis, tris] = TABLE[id];
+      const a = COMPANY_ASSETS[id], [code, company, manifestSizeM, manifestAxis, tris] = TABLE[id];
+      const [sizeM, sizeAxis] = FURNITURE_ONLY[id] ?? [manifestSizeM, manifestAxis]; // lane FURN
       expect({code: a.code, company: a.company, sizeM: a.sizeM, sizeAxis: a.sizeAxis, targetTris: a.targetTris}, id).toEqual({code, company, sizeM, sizeAxis, targetTris: tris});
       expect(a.use).toBe(company ? 'company' : 'support');
       expect(code).toMatch(company ? /^D(0[1-9]|[1-3]\d|40)$/ : /^E(0[1-9]|1[0-8])$/);
@@ -169,6 +179,8 @@ describe('office overhaul company / supporting assets', () => {
       expect(o!.front).toBe('-Z');
       expect(['+Z', '-Z', '+X', '-X']).toContain(o!.nativeFront);
       expect(a.bytes, `${id} byte budget`).toBeLessThanOrEqual(isLarge(id) ? 600_000 : 400_000);
+      // lane FURN: the furniture-only size is recorded against the manifest's
+      if (FURNITURE_ONLY[id]) expect(furnitureOf(id), id).toMatchObject({manifestSizeM: TABLE[id][2], manifestSizeAxis: TABLE[id][3], sizeM: a.sizeM, sizeAxis: a.sizeAxis});
     }
     for (const o of PROV!.outputs) expect(COMPANY_ASSETS[o.id as CompanyAssetId]?.url).toBe(o.output.url);
   });
@@ -182,7 +194,7 @@ describe('office overhaul company / supporting assets', () => {
       const ext = [0, 1, 2].map(k => max[k] - min[k]);
       const measured = a.sizeAxis === 'h' ? ext[1] : a.sizeAxis === 'w' ? ext[0] : Math.max(...ext);
       expect(Math.abs(measured - a.sizeM) / a.sizeM, `${id} size`).toBeLessThan(0.01);
-      expect(Math.max(...ext), `${id} not absurdly larger than its nominal size`).toBeLessThan(a.sizeM * 3.2);
+      expect(Math.max(...ext), `${id} not absurdly larger than its nominal size`).toBeLessThan((FURNITURE_ONLY[id] ? TABLE[id][2] : a.sizeM) * 3.2);
       expect(Math.abs(min[1]), `${id} grounded`).toBeLessThan(1e-3);
       expect(Math.abs(min[0] + max[0]) / a.sizeM, `${id} centred x`).toBeLessThan(0.01);
       expect(Math.abs(min[2] + max[2]) / a.sizeM, `${id} centred z`).toBeLessThan(0.01);
@@ -190,8 +202,10 @@ describe('office overhaul company / supporting assets', () => {
       let tris = 0;
       for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices()?.getCount() ?? p.getAttribute('POSITION')!.getCount()) / 3;
       expect(tris).toBe(a.tris);
-      expect(tris, `${id} tris`).toBeLessThanOrEqual(a.targetTris * 1.2);
-      expect(tris, `${id} tris`).toBeGreaterThan(a.targetTris * 0.5);
+      // lane FURN: a separated body + the loose clutter cut out of it = the raw's triangles
+      const cut = furnitureOf(id)?.removed?.tris ?? 0;
+      expect(tris + cut, `${id} tris`).toBeLessThanOrEqual(a.targetTris * 1.2);
+      expect(tris + cut, `${id} tris`).toBeGreaterThan(a.targetTris * 0.5);
       const mats = doc.getRoot().listMaterials();
       expect(mats.some(m => m.getBaseColorTexture()), `${id} base colour map`).toBe(true);
       expect(mats.some(m => m.getNormalTexture()), `${id} normal map (PBR kept)`).toBe(true);
@@ -215,5 +229,58 @@ describe('office overhaul company / supporting assets', () => {
   it('lazy loader never throws: null outside a browser and for unknown ids', async () => {
     for (const id of COMPANY_ASSET_IDS.slice(0, 3)) await expect(loadCompanyAsset(id)).resolves.toBeNull();
     await expect(loadCompanyAsset('not-an-id' as CompanyAssetId)).resolves.toBeNull();
+  });
+});
+
+// Task office-props-physics-scale-20261030 (lane FURN): the loose clutter separated from the lab bench / trading desk / bakery case.
+describe('separated loose clutter (lane FURN)', () => {
+  const PARTS = Object.entries(COMPANY_PART_ASSETS);
+  type PartProv = {id: string; kind: string; sizeM: number; sizeAxis: string; output: {url: string; sha256: string; bytes: number; triangles: number; dims: number[]}};
+  const provParts = (PROV?.outputs ?? []).flatMap(o => ((o as {parts?: PartProv[]}).parts ?? []).map(q => ({...q, from: o.id})));
+
+  it('every part: own file at its own real size, grounded, centred, small own texture, in the provenance and the allowlist', async () => {
+    expect(PARTS.map(([id]) => id).sort()).toEqual(['bread', 'lab-bottle', 'lab-bottle-rack', 'lab-flask', 'lab-flask-large', 'lab-microscope', 'lab-tube-rack', 'trading-keyboard', 'trading-monitor']);
+    const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+    const unlisted: string[] = [];
+    for (const [id, p] of PARTS) {
+      expect(publicPath(p.url), id).toBe(true);
+      expect(p.url).toBe(p.kind === 'item' ? `assets/models/item-${id}-t25.glb` : `assets/models/office-${id}.glb`);
+      expect(COMPANY_PART_DIMS[id], id).toEqual(p.dims);
+      if (p.kind === 'prop') expect(COMPANY_PART_MODEL_FILES[`office-${id}`]).toEqual({url: p.url, bytes: p.bytes}); else expect(COMPANY_PART_MODEL_FILES[`office-${id}`]).toBeUndefined();
+      const buf = fs.readFileSync(path.join(PUB, p.url));
+      expect(buf.length, id).toBe(p.bytes);
+      expect(p.bytes, `${id} small`).toBeLessThan(120_000);
+      const q = provParts.find(x => x.id === id);
+      expect(q, `${id} provenance`).toBeDefined();
+      expect(q!.from).toBe(p.from);
+      expect(q!.output).toMatchObject({url: p.url, sha256: sha(buf), bytes: buf.length, triangles: p.tris, dims: [...p.dims]});
+      if (JSON.stringify(ALLOW.get(p.url)) !== JSON.stringify({path: p.url, bytes: buf.length, sha256: sha(buf)})) unlisted.push(id);
+      const doc = await io.read(path.join(PUB, p.url));
+      const {min, max} = getBounds(doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0]);
+      const ext = [0, 1, 2].map(k => max[k] - min[k]);
+      const measured = p.sizeAxis === 'h' ? ext[1] : p.sizeAxis === 'w' ? ext[0] : p.sizeAxis === 'd' ? ext[2] : Math.max(...ext);
+      expect(Math.abs(measured - p.sizeM), `${id} real size`).toBeLessThan(0.003);
+      expect(Math.abs(min[1]), `${id} grounded`).toBeLessThan(1e-3);
+      expect(Math.abs(min[0] + max[0]), `${id} centred x`).toBeLessThan(3e-3);
+      expect(Math.abs(min[2] + max[2]), `${id} centred z`).toBeLessThan(3e-3);
+      for (const t of doc.getRoot().listTextures()) expect(Math.max(...t.getSize()!), `${id} texture`).toBeLessThanOrEqual(256);
+    }
+    expect(unlisted, 'parts allowlisted (tools/release/public-inputs.json)').toEqual([]);
+  });
+
+  it('furniture-only bodies: no baked clutter left on the worktop / desk top / display shelves', async () => {
+    const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+    // the lab bench and the trading desk: nothing rises above the worktop / desk top (their height IS the top: 0.9 / 0.74 m)
+    for (const id of ['lab-bench', 'trading-desk'] as const) {
+      expect(COMPANY_ASSETS[id].sizeAxis).toBe('h');
+      expect(COMPANY_ASSETS[id].dims![1], id).toBeCloseTo(COMPANY_ASSETS[id].sizeM, 3);
+      expect(furnitureOf(id)!.removed!.tris, id).toBeGreaterThan(1000);
+    }
+    // the bakery case: no free-standing piece left inside the display (only the case, its glass shelves and their rails)
+    const doc = await io.read(path.join(PUB, COMPANY_ASSETS['bakery-case'].url!));
+    const k = COMPANY_ASSETS['bakery-case'].dims![1] / 1.1104;
+    const inside = components(doc).flatMap(pc => pc.comps).filter(c => c.min[1] >= 0.46 * k && c.max[1] <= 0.97 * k && Math.abs(c.centre[0]) < 0.7 * k);
+    expect(inside.every(c => c.max[0] - c.min[0] > 1.0 * k), JSON.stringify(inside.filter(c => c.max[0] - c.min[0] <= 1.0 * k).map(c => c.n))).toBe(true);
+    expect(furnitureOf('bakery-case')!.removed!.tris).toBeGreaterThan(2000);
   });
 });

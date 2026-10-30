@@ -84,7 +84,7 @@ describe('every openable kind: holder, readable prompt, moving part, interior', 
         // contents (the server cabinet's glass doors: racked servers); a cavityHidden compartment shows the model's own cleared
         // interior (the specimen fridge: replaceInterior) instead of an authored liner.
         if (!ps.surfaces.length && !ps.holdsExposed && ps.contents) expect(ps.contents.length, `${k} part ${i} fixture contents`).toBeGreaterThan(5);
-        else if (ps.cavityHidden && ps.replaceInterior) expect(ps.surfaces.length, `${k} part ${i} cleared compartment`).toBeGreaterThan(0);
+        else if (ps.cavityHidden && (ps.replaceInterior || ps.modelInterior)) expect(ps.surfaces.length, `${k} part ${i} cleared / modelled compartment`).toBeGreaterThan(0); // + lane RACK (office-props-physics-scale-20261030): the rack's modelled shelves
         else if (spec.loot || ps.surfaces.length) expect(revealed, `${k} part ${i} interior`).toBeGreaterThan(0);
         else expect(spec.contents || ps.holdsExposed, `${k} fixture contents`).toBeTruthy();
         const pr = cm.prompt(target(h, i));

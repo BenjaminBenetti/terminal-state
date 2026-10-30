@@ -23,6 +23,20 @@
 //
 // Usage: node tools/asset-pipeline/props/build-office-overhaul.mjs [--only D01,E05]   (--only rebuilds a subset; the registry,
 //        provenance, allowlist and DELIVERED.json always describe every delivered asset)
+//        [--allowlist-out <file>]  write this task's allowlist entries to <file> instead of rewriting tools/release/public-inputs.json
+//        [--no-delivered]          leave reference/.../DELIVERED.json (the original delivery note) untouched
+//
+// Task office-props-physics-scale-20261030 (lane FURN): FURNITURE-ONLY real size + LOCAL CLUTTER SEPARATION (no regeneration; the
+// pinned manifest, ledger and raw originals are unchanged). User: the lab bench "appears to small, almost like a mini version", "all the
+// beakers and lab equipment on top are part of the model, they shouldn't be ... cut out in to there own assets", the bakery case's bread
+// "should be a food item", the bean bag is "to small", the curved monitor desk "is to small, and monitors are baked in to desk model".
+// Root cause of the miniatures: the manifest sizes the lab bench / trading desk by their WIDTH, and the models came out far wider than
+// a real bench / desk for their height (worktops 0.54 / 0.37 m). FURNITURE[id] now sizes the FURNITURE ITSELF (worktop / desk top /
+// overall height, never a box that includes loose beakers or monitors): the derivative is first built exactly as before (manifest
+// frame), then lib/clutter-split.mjs separates the baked clutter (connected components standing on the worktop / desk top / display
+// shelves), the body is rescaled by k = FURNITURE.sizeM / its own extent, and one representative of each distinct loose object type is
+// written as its own small model at ITS OWN real size (office-<part>.glb; the bread loaf item-bread-t25.glb) with a crop of the atlas.
+// The registry's sizeM / sizeAxis are the furniture-only values; the manifest's stay in the provenance (manifestSizeM).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -30,6 +44,7 @@ import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
+import {cleanSupportTexture, cropPartTextures, extentOf, scaleGroundCentre, splitClutter} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -106,8 +121,63 @@ const NOTES = {
   'toilet': 'tank at +Z (against the wall), bowl and open seat toward -Z',
 };
 
+// ---------- lane FURN (office-props-physics-scale-20261030): furniture-only real size + separated loose clutter ----------
+// Measured in the MANIFEST frame (the previous runtime GLB: front -Z, grounded, centred) with CPU ortho renders, component lists and
+// side profiles (reference/tasks/office-props-physics-scale-20261030/evidence/FURN). `clutter(c)`: the component is a loose object
+// standing on the furniture (bbox c.min / c.max / c.centre, metres). `parts`: one representative per object type (selection box around
+// its components' bbox centres) and its OWN real size (sizeM along sizeAxis h / w / d / longest); `item: true` = an item pickup model.
+// Zombie-beside checks (tools/asset-pipeline/props/scale-check.mjs) of every result are in the evidence folder.
+const ext = c => [0, 1, 2].map(k => c.max[k] - c.min[k]);
+const FURNITURE = {
+  // D09: worktop top 0.538 m in the manifest frame (a miniature: the manifest sized it by its 1.8 m width) -> 0.9 m, the standard
+  // standing lab-bench height. Everything resting on the worktop is loose clutter (microscope, flasks, bottle stands, tube rack,
+  // a ring stand, petri dishes, tubing); the bench carcass, top and drawers are the body.
+  'lab-bench': {sizeM: 0.9, sizeAxis: 'h', basis: 'worktop height (standard standing lab bench 0.90 m); body only — loose glassware / equipment removed',
+    clutter: c => c.min[1] >= 0.535,
+    supports: [{y: 0.5485, tol: 0.004}], // the worktop's top face (painted ghosts of the glassware cleaned)
+    parts: {
+      'lab-flask': {box: [-0.42, 0.53, 0.1, -0.34, 0.7, 0.18], sizeM: 0.18, sizeAxis: 'h', label: '500 ml Erlenmeyer flask'},
+      'lab-flask-large': {box: [0.68, 0.53, 0.11, 0.83, 0.8, 0.26], sizeM: 0.3, sizeAxis: 'h', label: '2 l Erlenmeyer flask of green culture'},
+      'lab-microscope': {box: [0.49, 0.53, -0.05, 0.667, 0.95, 0.24], sizeM: 0.4, sizeAxis: 'h', label: 'compound microscope',
+        skip: c => ext(c)[2] > 0.25 && ext(c)[1] < 0.03}, // the loose tube curling across the bench behind it
+      'lab-bottle': {box: [0.15, 0.53, 0.08, 0.21, 0.69, 0.16], sizeM: 0.22, sizeAxis: 'h', label: '1 l reagent bottle'},
+      'lab-bottle-rack': {box: [-0.19, 0.53, -0.02, 0.12, 0.87, 0.15], sizeM: 0.4, sizeAxis: 'h', label: 'wire stand of three reagent bottles'},
+      'lab-tube-rack': {box: [-0.83, 0.53, -0.21, -0.58, 0.68, -0.05], sizeM: 0.26, sizeAxis: 'w', label: 'test-tube rack'},
+    }},
+  // D07: desk top 0.373 m (manifest frame) -> 0.74 m, a standard desk. On it: five monitors on stands, keyboard + mouse, a desk phone
+  // with its coiled cord; two monitor necks are welded to cable bundles hanging over the desk's edge (they rise above the top too).
+  // Body = curved top, legs, the PC tower on the floor under it, the under-desk cables.
+  'trading-desk': {sizeM: 0.74, sizeAxis: 'h', basis: 'desk-top height 0.74 m (standard desk); body only — monitors, keyboard / mouse and phone removed',
+    clutter: c => (c.min[1] >= 0.36 || c.max[1] > 0.385) && ext(c)[0] < 1.0,
+    supports: [{y: 0.3725, tol: 0.004}], // the desk top (painted monitor feet / keyboard / phone ghosts cleaned)
+    parts: {
+      'trading-monitor': {box: [-0.21, 0.36, 0.22, 0.21, 0.7, 0.36], sizeM: 0.62, sizeAxis: 'w', label: '27-inch monitor on its stand'},
+      'trading-keyboard': {box: [-0.27, 0.36, 0.0, 0.19, 0.42, 0.15], sizeM: 0.62, sizeAxis: 'w', label: 'keyboard and mouse'},
+    }},
+  // D38: 1.11 m overall at 1.6 m wide (a low, toy-like case: display deck 0.47 m) -> 1.35 m overall (deck ~0.57 m, shelves ~0.82 /
+  // ~1.04 m). Loose clutter = the loaves, rolls, baskets and trays on the deck and both glass shelves; the case, its glass, the shelves
+  // and their rails stay.
+  'bakery-case': {sizeM: 1.35, sizeAxis: 'h', basis: 'overall height 1.35 m (refrigerated bakery display case; display deck ~0.57 m); body only — baked bread removed',
+    clutter: c => c.min[1] >= 0.46 && c.max[1] <= 0.97 && Math.abs(c.centre[0]) < 0.7 && ext(c)[0] < 1.0,
+    // the display deck and the two glass shelves (their texture had the loaves painted on / seen through them)
+    supports: [{y: 0.477, tol: 0.007, x: [-0.76, 0.76]}, {y: 0.676, tol: 0.006}, {y: 0.852, tol: 0.007}],
+    parts: {
+      'bread': {box: [-0.63, 0.84, 0.02, -0.37, 0.96, 0.32], sizeM: 0.26, sizeAxis: 'longest', longX: true, item: true, label: 'round crusty loaf'},
+    }},
+  // E12: 0.86 x 0.39 x 0.90 (knee-high on a standing zombie) -> 1.3 m across: an adult bean bag (the model is a squashed, sat-in bag:
+  // ~0.56 m tall at that size).
+  'bean-bag': {sizeM: 1.3, sizeAxis: 'longest', basis: '1.3 m across (adult bean bag; the squashed, sat-in shape is ~0.56 m tall)'},
+};
+const partUrl = (pid, p) => (p.item ? `assets/models/item-${pid}-t25.glb` : `assets/models/office-${pid}.glb`);
+const PART_PATHS = Object.values(FURNITURE).flatMap(f => Object.entries(f.parts ?? {}).map(([pid, p]) => partUrl(pid, p)));
+const PART_TEX_PX = 256, PART_TEX_Q = 85;
+for (const p of PART_PATHS) MY_PATHS.add(p);
+const argOf = name => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : null; };
+const ALLOW_OUT = argOf('--allowlist-out');
+const NO_DELIVERED = process.argv.includes('--no-delivered');
+
 // ---------- ledger ----------
-const ledger = fs.readFileSync(LEDGER, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+const ledger =fs.readFileSync(LEDGER, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
 function jobsFor(a) {
   const ev = ledger.filter(e => e.code === a.code);
   const accepted = [...ev].reverse().find(e => e.event === 'inspect' && e.kind === 'refine' && e.verdict === 'accepted');
@@ -159,6 +229,30 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
   const b1 = getBounds(scene);
   const T = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -(b1.min[0] + b1.max[0]) / 2, -b1.min[1], -(b1.min[2] + b1.max[2]) / 2, 1];
   for (const m of r.listMeshes()) transformMesh(m, T);
+  // lane FURN (office-props-physics-scale-20261030): loose clutter separated in the manifest frame, then the FURNITURE-ONLY real size
+  const F = FURNITURE[a.id];
+  let k = 1, split = null, ghosts = null;
+  const parts = [];
+  if (F) {
+    if (F.parts) split = await splitClutter(doc, F);
+    if (F.supports) ghosts = await cleanSupportTexture(doc, sharp, F.supports, F.ghostThresh ?? 34, process.env.FURN_GHOST_DEBUG ? path.join(process.env.FURN_GHOST_DEBUG, `${a.id}-ghosts.png`) : null);
+    const bb = getBounds(scene);
+    k = F.sizeM / extentOf(bb, F.sizeAxis);
+    scaleGroundCentre(doc, k);
+    // where each extracted representative stood, in the runtime body frame (front -Z): k * p - the body's re-centring offset
+    const off = [k * (bb.min[0] + bb.max[0]) / 2, k * bb.min[1], k * (bb.min[2] + bb.max[2]) / 2];
+    for (const p of split?.parts ?? []) {
+      const P = F.parts[p.id], name = P.item ? `item-${p.id}` : `office-${p.id}`;
+      const pr = p.doc.getRoot();
+      pr.listMeshes().forEach((m, i) => m.setName(i ? `${p.id}-${i}` : p.id));
+      pr.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${p.id}-${i}` : p.id));
+      pr.listMaterials().forEach((m, i) => m.setName(i ? `${name}-${i}` : name));
+      const crop = await cropPartTextures(p.doc, sharp, PART_TEX_PX, PART_TEX_Q);
+      pr.getAsset().generator = 'Terminal State tools/asset-pipeline/props/build-office-overhaul.mjs + lib/clutter-split.mjs (glTF-Transform)';
+      const stood = {min: [0, 1, 2].map(q => +(k * p.before.min[q] - off[q]).toFixed(4)), max: [0, 1, 2].map(q => +(k * p.before.max[q] - off[q]).toFixed(4))};
+      parts.push({id: p.id, glb: Buffer.from(await io.writeBinary(p.doc)), tris: p.tris, scale: s * p.scale, manifestFrame: p.before, stood, crop});
+    }
+  }
   r.listMeshes().forEach((m, i) => m.setName(i ? `${a.id}-${i}` : a.id));
   r.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${a.id}-${i}` : a.id));
   r.listMaterials().forEach((m, i) => m.setName(i ? `office-${a.id}-${i}` : `office-${a.id}`));
@@ -166,7 +260,8 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [basePx, basePx], quality, slots: /^baseColor/}),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [otherPx, otherPx], quality, slots: /^(?!baseColor)/}));
   r.getAsset().generator = 'Terminal State tools/asset-pipeline/props/build-office-overhaul.mjs (glTF-Transform)';
-  return {glb: Buffer.from(await io.writeBinary(doc)), scale: s, rawExtent: e0};
+  return {glb: Buffer.from(await io.writeBinary(doc)), scale: s * k, rawExtent: e0, parts,
+    furniture: F ? {k, removed: split?.removed ?? null, ghosts} : null};
 }
 
 for (const a of ASSETS) {
@@ -188,20 +283,49 @@ for (const a of ASSETS) {
   const prevMine = prevProv?.outputs?.some(o => o.output.url === outRel);
   if (fs.existsSync(outAbs) && allow.files.some(f => f.path === outRel) && !prevMine) throw new Error(`${outRel} exists and is not this task's file`);
 
-  let glb, scale, rawExtent, step = 0;
+  let glb, scale, rawExtent, step = 0, parts = [], furniture = null;
   const ladder = isLarge(a) ? LADDER_LARGE : LADDER_SMALL;
-  const reuse = ONLY && !ONLY.has(a.code) && fs.existsSync(outAbs) && prevProv?.outputs?.find(o => o.id === a.id && o.source.sha256 === j.dl.sha256 && o.output.sha256 === sha(fs.readFileSync(outAbs)));
+  const F = FURNITURE[a.id];
+  const reuse = ONLY && !ONLY.has(a.code) && fs.existsSync(outAbs) && prevProv?.outputs?.find(o => o.id === a.id && o.source.sha256 === j.dl.sha256 && o.output.sha256 === sha(fs.readFileSync(outAbs))
+    && (o.parts ?? []).every(q => fs.existsSync(path.join(root, 'game/public', q.output.url)) && q.output.sha256 === sha(fs.readFileSync(path.join(root, 'game/public', q.output.url)))));
   if (reuse) {
     glb = fs.readFileSync(outAbs); scale = reuse.scale; rawExtent = reuse.source.extent; step = reuse.textureStep;
+    // lane FURN: separated parts of a reused derivative are reused with it (same raw, same files)
+    parts = (reuse.parts ?? []).map(q => ({id: q.id, glb: fs.readFileSync(path.join(root, 'game/public', q.output.url)), tris: q.output.triangles, scale: q.scale, manifestFrame: q.manifestFrame, stood: q.stood, crop: q.textureCrop}));
+    furniture = reuse.furniture ? {k: reuse.furniture.scaleFromManifest, removed: reuse.furniture.removed, ghosts: reuse.furniture.supportTextureCleanup ?? null} : null;
   } else {
     for (step = 0; step < ladder.length; step++) {
-      ({glb, scale, rawExtent} = await derive(a, rawBytes, front, ladder[step]));
+      ({glb, scale, rawExtent, parts, furniture} = await derive(a, rawBytes, front, ladder[step]));
       if (glb.length <= BUDGET(a)) break;
     }
     if (step === ladder.length) step = ladder.length - 1;
-    const jsonChunk = glb.subarray(20, 20 + glb.readUInt32LE(12)).toString();
-    if (/https?:|Signature=|X-Amz|Key-Pair-Id|token=/i.test(jsonChunk)) throw new Error(`URL/token-like string inside ${a.id} glTF JSON`);
+    for (const buf of [glb, ...parts.map(q => q.glb)]) {
+      const jsonChunk = buf.subarray(20, 20 + buf.readUInt32LE(12)).toString();
+      if (/https?:|Signature=|X-Amz|Key-Pair-Id|token=/i.test(jsonChunk)) throw new Error(`URL/token-like string inside ${a.id} glTF JSON`);
+    }
     fs.writeFileSync(outAbs, glb);
+    // lane FURN: the separated parts (collision guard: never overwrite a public model this pipeline did not create)
+    for (const q of parts) {
+      const rel = partUrl(q.id, F.parts[q.id]), abs = path.join(root, 'game/public', rel);
+      const mine = prevProv?.outputs?.some(o => (o.parts ?? []).some(x => x.output.url === rel));
+      if (fs.existsSync(abs) && allow.files.some(f => f.path === rel) && !mine) throw new Error(`${rel} exists and is not this pipeline's file`);
+      fs.writeFileSync(abs, q.glb);
+    }
+  }
+  // lane FURN: re-measure the separated parts as written
+  const partOut = [];
+  for (const q of parts) {
+    const P = F.parts[q.id], rel = partUrl(q.id, P);
+    const pd = await io.readBinary(new Uint8Array(q.glb));
+    const pb = getBounds(pd.getRoot().getDefaultScene() ?? pd.getRoot().listScenes()[0]);
+    const pdims = [0, 1, 2].map(kk => +(pb.max[kk] - pb.min[kk]).toFixed(4));
+    if (Math.abs(pb.min[1]) > 1e-4 || Math.abs(pb.min[0] + pb.max[0]) > 2e-3 || Math.abs(pb.min[2] + pb.max[2]) > 2e-3) throw new Error(`${q.id} not grounded/centred`);
+    if (Math.abs(extentOf(pb, P.sizeAxis) - P.sizeM) > 2e-3) throw new Error(`${q.id} not at its real size`);
+    const ptris = pd.getRoot().listMeshes().reduce((sum, m) => sum + m.listPrimitives().reduce((t, p) => t + p.getIndices().getCount() / 3, 0), 0);
+    partOut.push({id: q.id, label: P.label, kind: P.item ? 'item' : 'prop', sizeM: P.sizeM, sizeAxis: P.sizeAxis, scale: +q.scale.toFixed(6),
+      selection: P.box, manifestFrame: q.manifestFrame, stood: q.stood, textureCrop: q.crop,
+      output: {file: `game/public/${rel}`, url: rel, sha256: sha(q.glb), bytes: q.glb.length, triangles: ptris, dims: pdims},
+      textures: pd.getRoot().listTextures().map(t => ({size: t.getSize(), mime: t.getMimeType(), bytes: t.getImage().byteLength}))});
   }
   // re-measure the written file
   const chk = await io.readBinary(new Uint8Array(glb));
@@ -231,12 +355,18 @@ for (const a of ASSETS) {
     source: {file: `${TASK_DIR}/assets/${j.dl.file} (raw original, outside Git)`, sha256: j.dl.sha256, bytes: j.dl.bytes, triangles: rawTris, extent: rawExtent.map(v => +v.toFixed(4)), textures: rawTex,
       previewFile: j.previewDl ? `${TASK_DIR}/assets/${j.previewDl.file}` : null, previewSha256: j.previewDl?.sha256 ?? null, previewTriangles: j.previewDl?.glb?.tris ?? null},
     output: {file: `game/public/${outRel}`, url: outRel, sha256: sha(glb), bytes: glb.length, triangles: tris, dims, overBudget},
-    targetTriangles: a.tris, sizeM: a.sizeM, sizeAxis: a.sizeAxis, scale: +scale.toFixed(6), nativeFront: front, textureStep: step,
+    targetTriangles: a.tris, sizeM: F?.sizeM ?? a.sizeM, sizeAxis: F?.sizeAxis ?? a.sizeAxis, scale: +scale.toFixed(6), nativeFront: front, textureStep: step,
     textureSizes: {baseColor: ladder[step][0], other: ladder[step][1], jpegQuality: ladder[step][2]},
-    transform: `rotateY(${({'+Z': '180', '-Z': '0', '+X': '90', '-X': '-90'})[front]}deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices`, front: '-Z', up: '+Y',
+    transform: `rotateY(${({'+Z': '180', '-Z': '0', '+X': '90', '-X': '-90'})[front]}deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices${F ? `; lane FURN: ${F.parts ? 'loose clutter separated, then ' : ''}furniture-only rescale x${furniture.k.toFixed(4)} to ${F.sizeM} m (${F.sizeAxis}), grounded / centred again` : ''}`, front: '-Z', up: '+Y',
     review: {evidence: j.accepted.evidence ?? null, checks: j.accepted.checks ?? null, observation: j.accepted.observation ?? null},
-    ...(NOTES[a.id] ? {note: NOTES[a.id]} : {}), textures});
+    ...(NOTES[a.id] ? {note: NOTES[a.id]} : {}), textures,
+    // lane FURN (office-props-physics-scale-20261030): furniture-only real size + the separated loose clutter (local operation on this raw)
+    ...(F ? {furniture: {task: 'office-props-physics-scale-20261030 (lane FURN)', operation: F.parts ? 'local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale' : 'furniture-only rescale',
+      manifestSizeM: a.sizeM, manifestSizeAxis: a.sizeAxis, sizeM: F.sizeM, sizeAxis: F.sizeAxis, basis: F.basis, scaleFromManifest: +furniture.k.toFixed(6), removed: furniture.removed,
+      ...(furniture.ghosts ? {supportTextureCleanup: furniture.ghosts, supportHeights: F.supports.map(q => q.y)} : {})},
+      ...(partOut.length ? {parts: partOut} : {})} : {})});
   console.log(`${a.code} ${a.id}: ${rawTris} tris, ${(rawBytes.length / 1e6).toFixed(2)} MB -> ${(glb.length / 1e3).toFixed(0)} kB (tex step ${step}), dims ${dims.join(' x ')}${overBudget ? '  OVER BUDGET' : ''}${reuse ? ' (reused)' : ''}`);
+  for (const q of partOut) console.log(`    part ${q.id}: ${q.output.triangles} tris, ${(q.output.bytes / 1e3).toFixed(0)} kB, dims ${q.output.dims.join(' x ')}, stood at x ${q.stood.min[0]}..${q.stood.max[0]} y ${q.stood.min[1]} z ${q.stood.min[2]}..${q.stood.max[2]}`);
 }
 
 // ---------- credits summary (whole run, from the ledger) ----------
@@ -278,7 +408,7 @@ const prov = {schema: 'last-line-derivative/1', asset: 'office-overhaul-20261030
 const provBuf = Buffer.from(JSON.stringify(prov, null, 1) + '\n');
 { const hit = provBuf.toString().match(/.{0,60}(https?:|Signature=|X-Amz|Key-Pair-Id|token=).{0,20}/i);
   if (hit) throw new Error(`URL/token-like string in public provenance: ...${hit[0]}...`); }
-const newFiles = outputs.map(o => ({path: o.output.url, buf: fs.readFileSync(path.join(root, 'game/public', o.output.url))}));
+const newFiles = outputs.flatMap(o => [o.output.url, ...(o.parts ?? []).map(q => q.output.url)]).map(u => ({path: u, buf: fs.readFileSync(path.join(root, 'game/public', u))}));
 if (outputs.length) { fs.writeFileSync(PROV, provBuf); newFiles.push({path: PROV_REL, buf: provBuf}); }
 
 // ---------- allowlist (only this task's paths; CREDITS.md entry refreshed only when it carries this task's section) ----------
@@ -291,23 +421,33 @@ if (credBuf.toString().includes(CREDITS_MARK)) {
   const ce = allow.files.find(f => f.path === CREDITS_REL);
   if (ce && (ce.sha256 !== sha(credBuf) || ce.bytes !== credBuf.length)) { ce.bytes = credBuf.length; ce.sha256 = sha(credBuf); console.log('allowlist: refreshed assets/CREDITS.md (carries this task\'s credits section)'); }
 }
-fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
+// lane FURN: --allowlist-out writes this task's entries elsewhere (the integrating primary regenerates tools/release/public-inputs.json)
+if (ALLOW_OUT) fs.writeFileSync(ALLOW_OUT, JSON.stringify({note: 'entries build-office-overhaul.mjs owns (tools/release/public-inputs.json files[]); stale ones dropped', owned: [...MY_PATHS].sort(), files: allow.files.filter(f => MY_PATHS.has(f.path) || f.path === CREDITS_REL)}, null, 2) + '\n');
+else fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
 
 // ---------- registry (GENERATED blocks of companyAssets.ts / companyDims.generated.ts) ----------
 const q = v => (v === null ? 'null' : `'${v}'`);
 const arr = v => `[${v.join(', ')}]`;
 const assetLines = ASSETS.map(a => {
   const o = outputs.find(x => x.id === a.id);
-  return `  '${a.id}': {url: ${o ? q(o.output.url) : 'null'}, bytes: ${o ? o.output.bytes : 0}, tris: ${o ? o.output.triangles : 0}, sizeM: ${a.sizeM}, sizeAxis: '${a.sizeAxis}', code: '${a.code}', company: ${q(a.company)}, use: '${a.use}', placement: '${a.placement}', targetTris: ${a.tris}, dims: ${o ? arr(o.output.dims) : 'null'}},`;
+  const F = FURNITURE[a.id]; // lane FURN: the furniture-only size
+  return `  '${a.id}': {url: ${o ? q(o.output.url) : 'null'}, bytes: ${o ? o.output.bytes : 0}, tris: ${o ? o.output.triangles : 0}, sizeM: ${F?.sizeM ?? a.sizeM}, sizeAxis: '${F?.sizeAxis ?? a.sizeAxis}', code: '${a.code}', company: ${q(a.company)}, use: '${a.use}', placement: '${a.placement}', targetTris: ${a.tris}, dims: ${o ? arr(o.output.dims) : 'null'}},`;
 });
+// lane FURN: the loose clutter separated from the furniture (props) and the bread loaf (item model)
+const partList = outputs.flatMap(o => (o.parts ?? []).map(qq => ({...qq, from: o.id})));
+const partLines = partList.map(qq => `  '${qq.id}': {url: ${q(qq.output.url)}, bytes: ${qq.output.bytes}, tris: ${qq.output.triangles}, from: '${qq.from}', kind: '${qq.kind}', sizeM: ${qq.sizeM}, sizeAxis: '${qq.sizeAxis}', dims: ${arr(qq.output.dims)}},`);
 const block1 = ['// BEGIN GENERATED (build-office-overhaul.mjs) — do not hand-edit between the markers',
-  'export const COMPANY_ASSETS: Record<CompanyAssetId, CompanyAssetEntry> = {', ...assetLines, '};', '// END GENERATED'].join('\n');
+  'export const COMPANY_ASSETS: Record<CompanyAssetId, CompanyAssetEntry> = {', ...assetLines, '};', '',
+  'export const COMPANY_PART_ASSETS: Readonly<Record<string, CompanyPartEntry>> = {', ...partLines, '};', '// END GENERATED'].join('\n');
 const block2 = ['// BEGIN GENERATED (build-office-overhaul.mjs) — do not hand-edit between the markers',
   'export const COMPANY_DIMS: Record<string, readonly [number, number, number] | null> = {',
   ...ASSETS.map(a => { const o = outputs.find(x => x.id === a.id); return `  '${a.id}': ${o ? arr(o.output.dims) : 'null'},`; }), '};', '',
   'export const COMPANY_ASSET_SPECS: Record<string, CompanyAssetSpec> = {',
-  ...ASSETS.map(a => `  '${a.id}': {code: '${a.code}', company: ${q(a.company)}, use: '${a.use}', sizeM: ${a.sizeM}, sizeAxis: '${a.sizeAxis}', placement: '${a.placement}'},`),
-  '};', '// END GENERATED'].join('\n');
+  ...ASSETS.map(a => `  '${a.id}': {code: '${a.code}', company: ${q(a.company)}, use: '${a.use}', sizeM: ${FURNITURE[a.id]?.sizeM ?? a.sizeM}, sizeAxis: '${FURNITURE[a.id]?.sizeAxis ?? a.sizeAxis}', placement: '${a.placement}'},`),
+  '};', '',
+  '/** Lane FURN (office-props-physics-scale-20261030): measured runtime bounds [x, y, z] of the loose clutter separated from the furniture. */',
+  'export const COMPANY_PART_DIMS: Readonly<Record<string, readonly [number, number, number]>> = {',
+  ...partList.map(qq => `  '${qq.id}': ${arr(qq.output.dims)},`), '};', '// END GENERATED'].join('\n');
 const re = /\/\/ BEGIN GENERATED[^\n]*\n[\s\S]*?\/\/ END GENERATED/;
 for (const [f, blk] of [[REGISTRY, block1], [DIMS_TS, block2]]) {
   const src = fs.readFileSync(f, 'utf8');
@@ -332,8 +472,10 @@ for (const a of ASSETS) {
     nativeFront: o ? o.nativeFront : null,
     note: o ? `front -Z, grounded, centred${o.note ? `; ${o.note}` : ''}${o.output.overBudget ? '; OVER byte budget' : ''}` : m.reason};
 }
-const tmp = `${DELIVERED}.tmp-${process.pid}`;
-const fd = fs.openSync(tmp, 'w'); fs.writeSync(fd, JSON.stringify(delivered, null, 1) + '\n'); fs.fsyncSync(fd); fs.closeSync(fd);
-fs.renameSync(tmp, DELIVERED);
+if (!NO_DELIVERED) { // lane FURN: --no-delivered keeps the original task's delivery note untouched
+  const tmp = `${DELIVERED}.tmp-${process.pid}`;
+  const fd = fs.openSync(tmp, 'w'); fs.writeSync(fd, JSON.stringify(delivered, null, 1) + '\n'); fs.fsyncSync(fd); fs.closeSync(fd);
+  fs.renameSync(tmp, DELIVERED);
+}
 const totalBytes = outputs.reduce((s2, o) => s2 + o.output.bytes, 0);
 console.log(`models ready ${outputs.length}/${ASSETS.length} (${(totalBytes / 1e6).toFixed(2)} MB runtime); credits ${JSON.stringify(creditSummary)}; wrote ${outputs.length ? path.relative(root, PROV) + ', ' : ''}allowlist (${added.length} own entries), registry + dims, DELIVERED.json`);

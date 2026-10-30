@@ -115,7 +115,8 @@ export function scarceFinds(raw: readonly Entry[], ctx: FindContext, s: Rnd): Fi
   const out: Find[] = [];
   for (const e of raw) {
     const c = econCat(e.itemId);
-    if (c === 'ammo' || c === null) { out.push({itemId: e.itemId, count: e.count, source: 'roll'}); continue; }
+    // lane RACK (office-props-physics-scale-20261030): crafting materials are kept exactly as rolled too (their rows ARE the numbers)
+    if (c === 'ammo' || c === 'material' || c === null) { out.push({itemId: e.itemId, count: e.count, source: 'roll'}); continue; }
     if (s() >= keepChance(P, T.keep, c)) continue;
     const keep: Find = {itemId: e.itemId, count: e.count, source: 'find'};
     const on = s() < T.on;

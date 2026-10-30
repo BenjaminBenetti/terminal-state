@@ -13,6 +13,8 @@ export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'knife' | 'bench' | 'lig
   | 'shelf' | 'vending' | 'stall' | 'item_water' | 'item_cola' | 'item_juice' | 'item_chocolate' | 'item_chips' | 'item_beans' | 'item_noodles'
   // Lane AMMO (knife-melee-20261030): one Meshy T2.5 ammo box per caliber (derivatives/meshy-t25-ammo-20261030.json).
   | 'item_ammo_9mm' | 'item_ammo_556' | 'item_ammo_12ga'
+  // Task office-props-physics-scale-20261030 (lane FURN): the bakery loaf, cut out of the Meshy T2.5 bakery case (derivatives/office-overhaul-20261030.json `parts`).
+  | 'item_bread'
   // Iteration 04 generated trash can + modular shop building blocks (derivatives/props-iteration04.json); added once each GLB exists.
   | 'trashCan' | 'shopCounter' | 'shopBackbar' | 'shopCooler' | 'shopDisplay'
   // Iteration 05 purpose-specific props (Lane A; derivatives/props-iteration05.json); each key is added only once its GLB exists.
@@ -83,6 +85,10 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   item_ammo_9mm: {url: 'assets/models/ammo-9mm-t25.glb', bytes: 178_000},
   item_ammo_556: {url: 'assets/models/ammo-556-t25.glb', bytes: 186_000},
   item_ammo_12ga: {url: 'assets/models/ammo-12ga-t25.glb', bytes: 319_000},
+  // Task office-props-physics-scale-20261030 (lane FURN): the round loaf separated from the D38 bakery case (local separation of the same
+  // Meshy T2.5 refine; tools/asset-pipeline/props/build-office-overhaul.mjs FURNITURE; derivatives/office-overhaul-20261030.json `parts`).
+  // Front +Z, origin bottom-centre, metres, at ITEM_DIMS.bread size (0.26 x 0.092 x 0.223), its own 256 px crop of the case atlas.
+  item_bread: {url: 'assets/models/item-bread-t25.glb', bytes: 41_000},
   // Iteration 04 generated (derivatives/props-iteration04.json; straight-on conditioning images). Front +Z, origin bottom-centre, metres.
   // trashCan 0.55 x 0.95 x 0.55; shopCounter 1.5 x 1.05 x 0.75 (top 1.04); shopBackbar 1.77 x 1.83 x 0.70 (worktop 0.86);
   // shopCooler 0.75 x 2.0 x 0.75; shopDisplay 1.1 x 0.70 x 0.62 countertop unit (sits on shopCounter).

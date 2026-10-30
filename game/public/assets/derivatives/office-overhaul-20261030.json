@@ -1084,20 +1084,20 @@
    "output": {
     "file": "game/public/assets/models/office-trading-desk.glb",
     "url": "assets/models/office-trading-desk.glb",
-    "sha256": "327b77080919a7f6405eabc479017214f2a0445a12cf61b0bc7d3fc37f4d346b",
-    "bytes": 406132,
-    "triangles": 4350,
+    "sha256": "204665801ccd694269e9ae0008331a89d9443420f72da49b69e16c8484f8050f",
+    "bytes": 258348,
+    "triangles": 1605,
     "dims": [
-     1.8,
-     0.6844,
-     0.7535
+     3.5703,
+     0.74,
+     1.4946
     ],
     "overBudget": false
    },
    "targetTriangles": 4500,
-   "sizeM": 1.8,
-   "sizeAxis": "w",
-   "scale": 1.886593,
+   "sizeM": 0.74,
+   "sizeAxis": "h",
+   "scale": 3.742042,
    "nativeFront": "+Z",
    "textureStep": 0,
    "textureSizes": {
@@ -1105,7 +1105,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.9835 to 0.74 m (h), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -1122,8 +1122,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 120583,
-     "sha256": "397b924d566d899157327b1be557a31ccae16c5d7ed38e3535a9944e5745b05d"
+     "bytes": 119714,
+     "sha256": "a2b2507460e6c12f79a746f4d2da65adb30f759267404c113f5edf77ae0959d3"
     },
     {
      "slot": "metallicRoughness",
@@ -1132,8 +1132,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 36583,
-     "sha256": "554a67ec322c9197013c6661ecba8f46c87b721b7e371310d71d37da70d4a565"
+     "bytes": 35075,
+     "sha256": "ea86364d1c5d6a51800a218f8466d858e8276f1e0681fea67ecac526198509e1"
     },
     {
      "slot": "normal",
@@ -1142,8 +1142,215 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 9190,
-     "sha256": "33629e69453f0877c31410ffb4123de629c2e843def168549ccae69bf043ae35"
+     "bytes": 8793,
+     "sha256": "5031f6abd90dc6a732d1a3e00596a508ef128915d3d56869a07cb05e80438d06"
+    }
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 1.8,
+    "manifestSizeAxis": "w",
+    "sizeM": 0.74,
+    "sizeAxis": "h",
+    "basis": "desk-top height 0.74 m (standard desk); body only — monitors, keyboard / mouse and phone removed",
+    "scaleFromManifest": 1.983492,
+    "removed": {
+     "tris": 2745,
+     "comps": 36
+    },
+    "supportTextureCleanup": {
+     "faces": 37,
+     "masked": 449205,
+     "ghostTexels": 96658,
+     "median": [
+      82,
+      58,
+      48
+     ],
+     "sources": 341861,
+     "baseColor": "2048x2048",
+     "metallicRoughness": "2048x2048",
+     "normal": "2048x2048"
+    },
+    "supportHeights": [
+     0.3725
+    ]
+   },
+   "parts": [
+    {
+     "id": "trading-monitor",
+     "label": "27-inch monitor on its stand",
+     "kind": "prop",
+     "sizeM": 0.62,
+     "sizeAxis": "w",
+     "scale": 2.918993,
+     "selection": [
+      -0.21,
+      0.36,
+      0.22,
+      0.21,
+      0.7,
+      0.36
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.1981,
+       0.3731,
+       0.234
+      ],
+      "max": [
+       0.2027,
+       0.6826,
+       0.3501
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.3929,
+       0.74,
+       0.4641
+      ],
+      "max": [
+       0.4021,
+       1.3539,
+       0.6944
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0,
+       0.0112,
+       0.9893,
+       1
+      ],
+      "share": 0.9781
+     },
+     "output": {
+      "file": "game/public/assets/models/office-trading-monitor.glb",
+      "url": "assets/models/office-trading-monitor.glb",
+      "sha256": "1cd734b3e455e62c05447f81a1f89b888aa79ec8d69f59da221c1cb5ec8d6406",
+      "bytes": 31784,
+      "triangles": 160,
+      "dims": [
+       0.62,
+       0.4789,
+       0.1796
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 10745
+      },
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 8534
+      },
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 1278
+      }
+     ]
+    },
+    {
+     "id": "trading-keyboard",
+     "label": "keyboard and mouse",
+     "kind": "prop",
+     "sizeM": 0.62,
+     "sizeAxis": "w",
+     "scale": 2.591345,
+     "selection": [
+      -0.27,
+      0.36,
+      0,
+      0.19,
+      0.42,
+      0.15
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.2653,
+       0.3676,
+       0.0101
+      ],
+      "max": [
+       0.1861,
+       0.4007,
+       0.1409
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.5262,
+       0.7291,
+       0.02
+      ],
+      "max": [
+       0.3691,
+       0.7948,
+       0.2795
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0288,
+       0.0083,
+       0.9839,
+       1
+      ],
+      "share": 0.9472
+     },
+     "output": {
+      "file": "game/public/assets/models/office-trading-keyboard.glb",
+      "url": "assets/models/office-trading-keyboard.glb",
+      "sha256": "39b3d63afc0999361666b94127de773bc3fa23a63bdf5470128f910892e145a4",
+      "bytes": 34428,
+      "triangles": 284,
+      "dims": [
+       0.62,
+       0.0456,
+       0.1797
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        247,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 10496
+      },
+      {
+       "size": [
+        247,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 8314
+      },
+      {
+       "size": [
+        247,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 1240
+      }
+     ]
     }
    ]
   },
@@ -1401,20 +1608,20 @@
    "output": {
     "file": "game/public/assets/models/office-lab-bench.glb",
     "url": "assets/models/office-lab-bench.glb",
-    "sha256": "ce7b452cc31830db5beecfd58497b8687e53bd458cd4e01d6b2fa15599982c4b",
-    "bytes": 452504,
-    "triangles": 4318,
+    "sha256": "decadeaa307ebb2379b9cdcaa07bd5c0eb7a513d27ef30bfa2359433bbdcaa08",
+    "bytes": 265596,
+    "triangles": 890,
     "dims": [
-     1.8,
-     0.9262,
-     0.5067
+     2.9513,
+     0.9,
+     0.8278
     ],
     "overBudget": false
    },
    "targetTriangles": 4500,
-   "sizeM": 1.8,
-   "sizeAxis": "w",
-   "scale": 1.879856,
+   "sizeM": 0.9,
+   "sizeAxis": "h",
+   "scale": 3.082276,
    "nativeFront": "+Z",
    "textureStep": 0,
    "textureSizes": {
@@ -1422,7 +1629,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.6396 to 0.9 m (h), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -1439,8 +1646,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 146966,
-     "sha256": "e22a024874381dec9209f252f05e01d41e2ea93bbeae184a317086c278201876"
+     "bytes": 143093,
+     "sha256": "8a96b998bd5016446333cca00705356409d55efe0b0b05f3f6c80b1c22e25576"
     },
     {
      "slot": "metallicRoughness",
@@ -1449,8 +1656,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 41653,
-     "sha256": "ae2e823b3ca2b4fb364d2984bcd85975f2acec0e80ab795f44cfba842bd98982"
+     "bytes": 40539,
+     "sha256": "bb3a438d54c200dbbd5a459b22653ae07c6c39094c19d0e8eb8471039a6b5aa7"
     },
     {
      "slot": "normal",
@@ -1459,8 +1666,563 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 28504,
-     "sha256": "4d29e7f07b258298d4d19ed73f1a712941972212058e236891113df892ab55ef"
+     "bytes": 26287,
+     "sha256": "afaf0cdc29636f836e7dbee1e46c0c53767c5acf107759b892f64e955eb5aebf"
+    }
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 1.8,
+    "manifestSizeAxis": "w",
+    "sizeM": 0.9,
+    "sizeAxis": "h",
+    "basis": "worktop height (standard standing lab bench 0.90 m); body only — loose glassware / equipment removed",
+    "scaleFromManifest": 1.639634,
+    "removed": {
+     "tris": 3428,
+     "comps": 99
+    },
+    "supportTextureCleanup": {
+     "faces": 2,
+     "masked": 202620,
+     "ghostTexels": 45802,
+     "median": [
+      11,
+      12,
+      14
+     ],
+     "sources": 155491,
+     "baseColor": "2048x2048",
+     "metallicRoughness": "2048x2048",
+     "normal": "2048x2048"
+    },
+    "supportHeights": [
+     0.5485
+    ]
+   },
+   "parts": [
+    {
+     "id": "lab-flask",
+     "label": "500 ml Erlenmeyer flask",
+     "kind": "prop",
+     "sizeM": 0.18,
+     "sizeAxis": "h",
+     "scale": 3.205585,
+     "selection": [
+      -0.42,
+      0.53,
+      0.1,
+      -0.34,
+      0.7,
+      0.18
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.4153,
+       0.5461,
+       0.1065
+      ],
+      "max": [
+       -0.3438,
+       0.6517,
+       0.1716
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.6809,
+       0.8954,
+       0.1761
+      ],
+      "max": [
+       -0.5637,
+       1.0685,
+       0.2829
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0283,
+       0.0264,
+       0.9751,
+       0.8984
+      ],
+      "share": 0.8257
+     },
+     "output": {
+      "file": "game/public/assets/models/office-lab-flask.glb",
+      "url": "assets/models/office-lab-flask.glb",
+      "sha256": "c1a56decaf220e87a480023d793e948673ea856aa2aff9e7ef2fa8d5eb36c127",
+      "bytes": 32392,
+      "triangles": 60,
+      "dims": [
+       0.1221,
+       0.18,
+       0.1111
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        236
+       ],
+       "mime": "image/jpeg",
+       "bytes": 16208
+      },
+      {
+       "size": [
+        256,
+        236
+       ],
+       "mime": "image/jpeg",
+       "bytes": 7957
+      },
+      {
+       "size": [
+        256,
+        236
+       ],
+       "mime": "image/jpeg",
+       "bytes": 3704
+      }
+     ]
+    },
+    {
+     "id": "lab-flask-large",
+     "label": "2 l Erlenmeyer flask of green culture",
+     "kind": "prop",
+     "sizeM": 0.3,
+     "sizeAxis": "h",
+     "scale": 2.428442,
+     "selection": [
+      0.68,
+      0.53,
+      0.11,
+      0.83,
+      0.8,
+      0.26
+     ],
+     "manifestFrame": {
+      "min": [
+       0.688,
+       0.548,
+       0.1138
+      ],
+      "max": [
+       0.8192,
+       0.7802,
+       0.2533
+      ]
+     },
+     "stood": {
+      "min": [
+       1.1281,
+       0.8985,
+       0.1881
+      ],
+      "max": [
+       1.3432,
+       1.2792,
+       0.4168
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0142,
+       0.0244,
+       0.9756,
+       0.561
+      ],
+      "share": 0.5159
+     },
+     "output": {
+      "file": "game/public/assets/models/office-lab-flask-large.glb",
+      "url": "assets/models/office-lab-flask-large.glb",
+      "sha256": "638f9759797c1127419aa1608d04aafb64e162af956df9f0f2540180936e9048",
+      "bytes": 25860,
+      "triangles": 120,
+      "dims": [
+       0.1696,
+       0.3,
+       0.1802
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        143
+       ],
+       "mime": "image/jpeg",
+       "bytes": 11182
+      },
+      {
+       "size": [
+        256,
+        143
+       ],
+       "mime": "image/jpeg",
+       "bytes": 5451
+      },
+      {
+       "size": [
+        256,
+        143
+       ],
+       "mime": "image/jpeg",
+       "bytes": 2618
+      }
+     ]
+    },
+    {
+     "id": "lab-microscope",
+     "label": "compound microscope",
+     "kind": "prop",
+     "sizeM": 0.4,
+     "sizeAxis": "h",
+     "scale": 2.09514,
+     "selection": [
+      0.49,
+      0.53,
+      -0.05,
+      0.667,
+      0.95,
+      0.24
+     ],
+     "manifestFrame": {
+      "min": [
+       0.4915,
+       0.5673,
+       -0.1166
+      ],
+      "max": [
+       0.7329,
+       0.9262,
+       0.2286
+      ]
+     },
+     "stood": {
+      "min": [
+       0.8059,
+       0.9302,
+       -0.1897
+      ],
+      "max": [
+       1.2017,
+       1.5186,
+       0.3763
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0,
+       0.0107,
+       0.9761,
+       0.9233
+      ],
+      "share": 0.8908
+     },
+     "output": {
+      "file": "game/public/assets/models/office-lab-microscope.glb",
+      "url": "assets/models/office-lab-microscope.glb",
+      "sha256": "148cf165c4fece909cefe6d1a3ca0dbefdd8de78daf98fe24e8780edefb3a289",
+      "bytes": 72240,
+      "triangles": 856,
+      "dims": [
+       0.2691,
+       0.4,
+       0.3847
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        239
+       ],
+       "mime": "image/jpeg",
+       "bytes": 16579
+      },
+      {
+       "size": [
+        256,
+        239
+       ],
+       "mime": "image/jpeg",
+       "bytes": 8136
+      },
+      {
+       "size": [
+        256,
+        239
+       ],
+       "mime": "image/jpeg",
+       "bytes": 3700
+      }
+     ]
+    },
+    {
+     "id": "lab-bottle",
+     "label": "1 l reagent bottle",
+     "kind": "prop",
+     "sizeM": 0.22,
+     "sizeAxis": "h",
+     "scale": 3.061807,
+     "selection": [
+      0.15,
+      0.53,
+      0.08,
+      0.21,
+      0.69,
+      0.16
+     ],
+     "manifestFrame": {
+      "min": [
+       0.151,
+       0.5414,
+       0.0826
+      ],
+      "max": [
+       0.2006,
+       0.6765,
+       0.1505
+      ]
+     },
+     "stood": {
+      "min": [
+       0.2476,
+       0.8877,
+       0.1369
+      ],
+      "max": [
+       0.3289,
+       1.1092,
+       0.2483
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0361,
+       0.0249,
+       0.936,
+       0.1079
+      ],
+      "share": 0.0747
+     },
+     "output": {
+      "file": "game/public/assets/models/office-lab-bottle.glb",
+      "url": "assets/models/office-lab-bottle.glb",
+      "sha256": "81d832196f4acbc4480b0c0cffd8544592973eeda2d9767ffdd4b108dd47cf2f",
+      "bytes": 10848,
+      "triangles": 60,
+      "dims": [
+       0.0807,
+       0.22,
+       0.1106
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        24
+       ],
+       "mime": "image/jpeg",
+       "bytes": 3350
+      },
+      {
+       "size": [
+        256,
+        24
+       ],
+       "mime": "image/jpeg",
+       "bytes": 2084
+      },
+      {
+       "size": [
+        256,
+        24
+       ],
+       "mime": "image/jpeg",
+       "bytes": 952
+      }
+     ]
+    },
+    {
+     "id": "lab-bottle-rack",
+     "label": "wire stand of three reagent bottles",
+     "kind": "prop",
+     "sizeM": 0.4,
+     "sizeAxis": "h",
+     "scale": 2.354021,
+     "selection": [
+      -0.19,
+      0.53,
+      -0.02,
+      0.12,
+      0.87,
+      0.15
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.1868,
+       0.5406,
+       -0.0147
+      ],
+      "max": [
+       0.1134,
+       0.8601,
+       0.1404
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.3063,
+       0.8864,
+       -0.0226
+      ],
+      "max": [
+       0.1859,
+       1.4102,
+       0.2317
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0,
+       0.0068,
+       0.9761,
+       0.9814
+      ],
+      "share": 0.9513
+     },
+     "output": {
+      "file": "game/public/assets/models/office-lab-bottle-rack.glb",
+      "url": "assets/models/office-lab-bottle-rack.glb",
+      "sha256": "5db4747b59a3084601bc3ae0fdec8230366f3dfe598bf248cae067e3548149d6",
+      "bytes": 60216,
+      "triangles": 516,
+      "dims": [
+       0.3759,
+       0.4,
+       0.1943
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 17765
+      },
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 8630
+      },
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 3912
+      }
+     ]
+    },
+    {
+     "id": "lab-tube-rack",
+     "label": "test-tube rack",
+     "kind": "prop",
+     "sizeM": 0.26,
+     "sizeAxis": "w",
+     "scale": 2.024638,
+     "selection": [
+      -0.83,
+      0.53,
+      -0.21,
+      -0.58,
+      0.68,
+      -0.05
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.822,
+       0.5489,
+       -0.2074
+      ],
+      "max": [
+       -0.5806,
+       0.6682,
+       -0.0587
+      ]
+     },
+     "stood": {
+      "min": [
+       -1.3478,
+       0.9,
+       -0.3386
+      ],
+      "max": [
+       -0.952,
+       1.0956,
+       -0.0947
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0293,
+       0,
+       0.9756,
+       1
+      ],
+      "share": 0.9463
+     },
+     "output": {
+      "file": "game/public/assets/models/office-lab-tube-rack.glb",
+      "url": "assets/models/office-lab-tube-rack.glb",
+      "sha256": "24cd42155e3ae6fac93d464b896d92b916adf9ae537c4b508ef64940851e45e2",
+      "bytes": 53648,
+      "triangles": 274,
+      "dims": [
+       0.26,
+       0.1285,
+       0.1602
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        242,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 17680
+      },
+      {
+       "size": [
+        242,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 8734
+      },
+      {
+       "size": [
+        242,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 3836
+      }
+     ]
     }
    ]
   },
@@ -5913,20 +6675,20 @@
    "output": {
     "file": "game/public/assets/models/office-bakery-case.glb",
     "url": "assets/models/office-bakery-case.glb",
-    "sha256": "6f1611c80524610abb64858baf51e50b64fc517d96b31b5cd4495437abefe6a5",
-    "bytes": 454580,
-    "triangles": 4396,
+    "sha256": "decef331c2a7e1d24c4368dfaa102793da049ebeb35b0d1717e5bf495e717c83",
+    "bytes": 334144,
+    "triangles": 1343,
     "dims": [
-     1.6,
-     1.1104,
-     1.1384
+     1.9453,
+     1.35,
+     1.3841
     ],
     "overBudget": false
    },
    "targetTriangles": 4500,
-   "sizeM": 1.6,
-   "sizeAxis": "w",
-   "scale": 1.688202,
+   "sizeM": 1.35,
+   "sizeAxis": "h",
+   "scale": 2.052561,
    "nativeFront": "-Z",
    "textureStep": 0,
    "textureSizes": {
@@ -5934,7 +6696,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.2158 to 1.35 m (h), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -5951,8 +6713,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 184308,
-     "sha256": "6ad043abcea89a89b1ca9529b81ad821d06ec39688e5e3f631d5e15dfd71c98d"
+     "bytes": 183967,
+     "sha256": "4474006563752531de980e93715b2968b63389860bce32585f969696a231e2a4"
     },
     {
      "slot": "metallicRoughness",
@@ -5961,8 +6723,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 55038,
-     "sha256": "8463bdf22cf6bb7eea76200fb6f48199109035a58eefe0fbb4dabce4d076f79a"
+     "bytes": 54564,
+     "sha256": "a69f32d99fbfa58865afe16c0c7c9cad46f5df6017d3cdfc7b136a0b376230b0"
     },
     {
      "slot": "normal",
@@ -5971,8 +6733,130 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 21462,
-     "sha256": "289dca7666814d414a4b352f899ec9577aa5498aaca3a6447c37a5d60bc0cf83"
+     "bytes": 21087,
+     "sha256": "f7650a4851afc77a5fbbc089bc0a3941d85c3054c99d6fcd2f2fb7891cb81fc9"
+    }
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 1.6,
+    "manifestSizeAxis": "w",
+    "sizeM": 1.35,
+    "sizeAxis": "h",
+    "basis": "overall height 1.35 m (refrigerated bakery display case; display deck ~0.57 m); body only — baked bread removed",
+    "scaleFromManifest": 1.215827,
+    "removed": {
+     "tris": 3053,
+     "comps": 40
+    },
+    "supportTextureCleanup": {
+     "faces": 15,
+     "masked": 45426,
+     "ghostTexels": 15294,
+     "median": [
+      121,
+      136,
+      130
+     ],
+     "sources": 25918,
+     "baseColor": "2048x2048",
+     "metallicRoughness": "2048x2048",
+     "normal": "2048x2048"
+    },
+    "supportHeights": [
+     0.477,
+     0.676,
+     0.852
+    ]
+   },
+   "parts": [
+    {
+     "id": "bread",
+     "label": "round crusty loaf",
+     "kind": "item",
+     "sizeM": 0.26,
+     "sizeAxis": "longest",
+     "scale": 1.54342,
+     "selection": [
+      -0.63,
+      0.84,
+      0.02,
+      -0.37,
+      0.96,
+      0.32
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.6228,
+       0.849,
+       0.0268
+      ],
+      "max": [
+       -0.3788,
+       0.9496,
+       0.3112
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.7572,
+       1.0322,
+       0.0326
+      ],
+      "max": [
+       -0.4606,
+       1.1545,
+       0.3784
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0015,
+       0.0005,
+       1,
+       0.9595
+      ],
+      "share": 0.9576
+     },
+     "output": {
+      "file": "game/public/assets/models/item-bread-t25.glb",
+      "url": "assets/models/item-bread-t25.glb",
+      "sha256": "df74540046a7c8fda63ec54386a24c57f88d1dd8c11e4b96a9637db1d48b99b8",
+      "bytes": 41444,
+      "triangles": 118,
+      "dims": [
+       0.26,
+       0.0919,
+       0.2231
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        246
+       ],
+       "mime": "image/jpeg",
+       "bytes": 19899
+      },
+      {
+       "size": [
+        256,
+        246
+       ],
+       "mime": "image/jpeg",
+       "bytes": 12631
+      },
+      {
+       "size": [
+        256,
+        246
+       ],
+       "mime": "image/jpeg",
+       "bytes": 2802
+      }
+     ]
     }
    ]
   },
@@ -8120,20 +9004,20 @@
    "output": {
     "file": "game/public/assets/models/office-bean-bag.glb",
     "url": "assets/models/office-bean-bag.glb",
-    "sha256": "e7a6a385a3fa9ab8c265bc103d0ae4feffa84e5f37db28fbf0d627260cf2d377",
+    "sha256": "3416d2b20003a163352c53f20fe8212404e8f35430d4a7219a3ebfcb27eade69",
     "bytes": 134200,
     "triangles": 2118,
     "dims": [
-     0.8629,
-     0.3889,
-     0.9
+     1.2465,
+     0.5618,
+     1.3
     ],
     "overBudget": false
    },
    "targetTriangles": 2000,
-   "sizeM": 0.9,
+   "sizeM": 1.3,
    "sizeAxis": "longest",
-   "scale": 0.937062,
+   "scale": 1.353534,
    "nativeFront": "+Z",
    "textureStep": 0,
    "textureSizes": {
@@ -8141,7 +9025,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: furniture-only rescale x1.4444 to 1.3 m (longest), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -8180,7 +9064,18 @@
      "bytes": 4653,
      "sha256": "53839af01f523d3bec9eb99e4625a0cbed2438d74268ec4114880f45f8677fbf"
     }
-   ]
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "furniture-only rescale",
+    "manifestSizeM": 0.9,
+    "manifestSizeAxis": "longest",
+    "sizeM": 1.3,
+    "sizeAxis": "longest",
+    "basis": "1.3 m across (adult bean bag; the squashed, sat-in shape is ~0.56 m tall)",
+    "scaleFromManifest": 1.444444,
+    "removed": null
+   }
   },
   {
    "code": "E13",

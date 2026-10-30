@@ -47,7 +47,7 @@ The old modules re-export the same objects: `items/lootEconomy.ts`, `gen/gearLoo
    Fixtures (fire / AED cabinets) roll nothing.
 3. **Roll.** The holder rolls on its seeded stream (`loot:${kind}:${index}`): empty?, lot count, then an item per lot,
    plus its stack size from `BOX_COUNT`.
-4. **Scarcity.** `scarceFinds` in `items/lootEconomy.ts` keeps ammo exactly as rolled. Each other entry survives with
+4. **Scarcity.** `scarceFinds` in `items/lootEconomy.ts` keeps ammo and crafting materials exactly as rolled. Each other entry survives with
    the theme's `keep` chance and may be re-themed. `HOLDER_ALLOW` limits what a fixture may hold. Some HP-med finds become
    limb treatments.
 5. **Fit.** `packItems` in `items/lootLayout.ts` places each item on a real surface. An item that fits nowhere is
@@ -236,6 +236,35 @@ A new caliber needs:
 - `ITEM_DIMS` in `items/items.ts`. Without it the item becomes a 0.2 m box that does not fit drawers.
 
 Generic rows pick it up automatically. Weapon finds keep their matching box (`WEAPON_FIND_AMMO`, an explicit exception).
+
+## Crafting materials
+
+<!-- Task office-props-physics-scale-20261030 (lane RACK) -->
+
+Collectible salvage for a **future** crafting system (`items/craftMaterials.ts`, item kind `material`). There are no recipes,
+no crafting UI and no currency yet: the items are passive stacks (pockets first, like ammo; bags, ground bags, drop / pick up and
+level carryover work like any stack) and their descriptions say so.
+
+| Item id | Name | Stack | Count per lot (`BOX_COUNT` small / big) | Where it is found |
+|---|---|---|---|---|
+| `electrical_parts` | Electrical parts | 20 | 1–2 / 2–3 | server racks (the common find), server cupboards |
+| `scrap_metal` | Scrap metal | 20 | 1–2 / 1–3 | server racks, server cupboards |
+| `bio_mater` | Bio mater (the user's label) | 10 | 1 / 1–2 | lab storage (lane FURN's rows) |
+
+- **Economy category `material`.** `econCat` returns `'material'`. `scarceFinds` keeps a rolled material **exactly as rolled**
+  (like ammo), so a table's row weight is the real rate. `OFF_THEME_WEIGHTS.material` is 0 and no theme lists it, so no other
+  holder ever re-themes a find into a material. Only holders whose **own rows** name a material hold one, and their
+  `HOLDER_ALLOW` must list `'material'` (tests check it).
+- **Server rack** (`SERVER_RACK_ROWS`, `OPENABLE_TABLES.serverRack`: 1–2 lots, 0.7 empty): electrical parts 3, scrap metal 1.2,
+  battery 0.6, flare 0.2. The rebuilt 42U rack has three real empty bays with shelves. About one rack in four holds something;
+  most finds are electrical parts. Measured over Office seeds 1–3 (23–59 racks a level): 9–37 material units a level.
+- **Server cupboard** (`SERVER_SPARES_ROWS`, the server cabinet's two cupboards): the old spares plus electrical parts 0.8 and
+  scrap metal 0.25, about a quarter of its lots.
+- The Subway and every other table are unchanged (no material rows).
+
+To add a material: an `items/craftMaterials.ts` def, its dims, a model in `world/materialItems.ts`, an icon in
+`ui/materialIcons.ts`, `ITEM_CLASS` / `ITEM_PHYSICS` rows in `damage/materials.ts` and a `BOX_COUNT` entry. Then add rows to
+the holders it fits, and `'material'` to their `HOLDER_ALLOW`.
 
 ## Verify
 

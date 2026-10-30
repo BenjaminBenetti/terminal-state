@@ -104,7 +104,7 @@ read it. Do not hand-write its numbers.
   1. Empty chance: P(rolled) = 1 − empty.
   2. Lot count n ~ U{lo..hi}, so E[n] = (lo + hi) / 2.
   3. Per-lot pick, including the legacy category stage, plus the stack size (`BOX_COUNT` small / big).
-  4. Scarcity: ammo is kept exactly. Any other entry survives with `keep(theme, cat)`. A survivor is on-theme with `on`
+  4. Scarcity: ammo and crafting materials (category `material`) are kept exactly. Any other entry survives with `keep(theme, cat)`. A survivor is on-theme with `on`
      (re-picked by the theme weights within `HOLDER_ALLOW`) or off-theme (`OFF_THEME_WEIGHTS`). A pick outside the allow list
      keeps the rolled item. Security rooms re-theme ammo from the generic pool.
   5. Limb post-pass with `max(share[theme], holder share)`.

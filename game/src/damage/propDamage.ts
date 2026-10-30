@@ -19,11 +19,16 @@
 // (the prop box drops to rubble / plinth height) and interaction through PropDamageHooks
 // (containers keep their FINITE contents: nothing is destroyed, duplicated or re-rolled).
 // Bounded: at most MAX_DETACHED props are detached (further hits fall back to fx decals).
+// Task office-props-physics-scale-20261030 (lane PHYS): slots are given back — reattach() hands a prop's own meshes back to its
+// shared instances at their CURRENT pose (a resting loose prop where it came to rest, no pop) and drops its material clones;
+// physics/dynamicItems.ts reclaims resting loose props that way, and far marked props (reclaimMarked, marks dropped) as the last
+// resort, so the budget never runs out for good.
 
 import * as THREE from 'three';
 import type {NodeMaterial} from 'three/webgpu';
 import {Break, Discard, Fn, If, Loop, abs, atan, clamp, cross, dot, float, floor, fract, int, length, mat4, materialColor, materialEmissive, materialMetalness, materialNormal, materialOpacity, materialRoughness, max, min, mix, normalize, positionGeometry, positionView, select, smoothstep, step, varying, vec2, vec3, vec4} from 'three/tsl';
 import type {PropPlacement} from '../gen/props';
+import type {ReattachResult} from '../physics/dynamicItems';
 import {addNodeHook, nodeHookKeys} from '../render/nodeHooks';
 import {DAMAGE_MATERIALS, SHADE_MODES, damageStage, partKeyClass, propDamageSpec, propHitDamage, type DamageClass, type PropDamageSpec} from './materials';
 import {dmgHash, dmgNoise, dmgPerturb, isStandardLike, memoNode, objectData, toNodeMaterial, writeMat4, type TNode} from './tsl';
@@ -132,7 +137,8 @@ interface Part {
   lines: Line[];
 }
 
-interface Hidden { mesh: THREE.InstancedMesh; index: number; matrix: THREE.Matrix4 }
+/** `part`: the own mesh drawing this instance while detached (task office-props-physics-scale-20261030, lane PHYS: reattach). */
+interface Hidden { mesh: THREE.InstancedMesh; index: number; matrix: THREE.Matrix4; part?: THREE.Mesh }
 interface Cut { mesh: THREE.Mesh; tris: Uint32Array; saved: Uint32Array }
 
 export interface PropState {
@@ -411,6 +417,28 @@ export class RenderIndex {
   }
 }
 
+/** Task office-props-physics-scale-20261030 (lane PHYS): a mesh is drawn at `m` (world, within float noise). */
+function sameMatrix(mesh: THREE.Object3D, m: THREE.Matrix4): boolean {
+  mesh.updateWorldMatrix(true, false);
+  const a = mesh.matrixWorld.elements, b = m.elements;
+  for (let i = 0; i < 16; i++) if (Math.abs(a[i] - b[i]) > 1e-5) return false;
+  return true;
+}
+
+const tmpSphere = new THREE.Sphere(), tmpBox = new THREE.Box3();
+/** Lane PHYS: an InstancedMesh's cached bounds (frustum culling) grow to hold one instance at `local` (a re-attached moved prop). */
+function growInstanceBounds(im: THREE.InstancedMesh, local: THREE.Matrix4): void {
+  const g = im.geometry;
+  if (im.boundingSphere) {
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    im.boundingSphere.union(tmpSphere.copy(g.boundingSphere!).applyMatrix4(local));
+  }
+  if (im.boundingBox) {
+    if (!g.boundingBox) g.computeBoundingBox();
+    im.boundingBox.union(tmpBox.copy(g.boundingBox!).applyMatrix4(local));
+  }
+}
+
 /** Triangles of a merged mesh whose centroid lies inside the prop box (world). */
 function trianglesIn(mesh: THREE.Mesh, p: PropPlacement, eps = 0.012): number[] {
   const g = mesh.geometry, idx = g.index!, pos = g.attributes.position as THREE.BufferAttribute;
@@ -524,10 +552,12 @@ export class PropDamage {
   }
 
   get detachedCount(): number {
-    let n = 0;
-    for (const s of this.states.values()) if (s.parts) n++;
-    return n;
+    return this.detached; // task office-props-physics-scale-20261030 (lane PHYS): maintained (was a scan of every state per call)
   }
+  /** Lane PHYS: props detached right now. */
+  private detached = 0;
+  /** Lane PHYS: detached props that are not physics bodies, least recently hit first (reclaimMarked). */
+  private readonly order = new Set<PropState>();
 
   /** Detach the prop into its own meshes + material clones (idempotent). False when capped / nothing found. */
   detach(s: PropState, force = false): boolean {
@@ -561,7 +591,8 @@ export class PropDamage {
       e.mesh.getMatrixAt(e.index, tmpM);
       const world = tmpM.clone().premultiply(e.mesh.matrixWorld);
       const tint = e.mesh.instanceColor ? new THREE.Color().fromArray(e.mesh.instanceColor.array as Float32Array, e.index * 3) : null;
-      s.hidden.push({mesh: e.mesh, index: e.index, matrix: tmpM.clone()});
+      const hd: Hidden = {mesh: e.mesh, index: e.index, matrix: tmpM.clone()};
+      s.hidden.push(hd);
       e.mesh.setMatrixAt(e.index, ZERO);
       e.mesh.instanceMatrix.needsUpdate = true;
       const mesh = new THREE.Mesh(e.mesh.geometry, e.mesh.material as THREE.Material);
@@ -573,6 +604,7 @@ export class PropDamage {
       mesh.receiveShadow = e.mesh.receiveShadow;
       this.group.add(mesh);
       add(mesh, e.key, true, false, false, tint);
+      hd.part = mesh;
     }
     // merged chunk meshes (purpose props; shopfront blocks for glazing / shutters)
     const box = new THREE.Box3(new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz));
@@ -603,6 +635,8 @@ export class PropDamage {
     if (!parts.length) return false;
     this.group.updateMatrixWorld(true);
     s.parts = parts;
+    this.detached++; // lane PHYS
+    this.order.add(s);
     // vending-style baked glass front region (prop-local fractions)
     if (s.spec.glassFront) {
       const local = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot), new THREE.Vector3(1, 1, 1)).invert();
@@ -625,6 +659,7 @@ export class PropDamage {
     const s = this.state(prop, index);
     if (!this.detach(s, true) || !s.parts) return null;
     for (const q of s.parts) q.moving = true;
+    this.order.delete(s); // lane PHYS: a physics body now (physics/dynamicItems.ts reclaims it when it rests)
     return s.parts.filter(q => q.created).map(q => q.mesh);
   }
 
@@ -634,6 +669,69 @@ export class PropDamage {
    */
   detachRoom(): number {
     return MAX_DETACHED - this.detachedCount;
+  }
+
+  /**
+   * Task office-props-physics-scale-20261030 (lane PHYS): give a detached prop's slot back. Each shared instance it hid is shown
+   * again with the matrix its own copy is drawn with NOW (a loose prop where it came to rest: no pop; the InstancedMesh bounds
+   * grow to hold it), its own copies leave the scene with their material clones, meshes it borrowed (container doors / lid) get
+   * their shared material back; integrity / hit count stay (a later hit detaches it again). 'marked': it carries bullet marks and
+   * `dropMarks` is false (they would vanish). 'never': nothing detached, a broken body / glass (its look is its own meshes'), or
+   * merged-mesh triangles that moved (they can only go back where they were cut).
+   */
+  reattach(prop: PropPlacement, dropMarks = false): ReattachResult {
+    const s = this.states.get(prop);
+    if (!s?.parts) return 'never';
+    if (s.broken || s.glassBroken) return 'never';
+    if (s.cuts.length && s.parts.some(q => q.ownGeometry && !sameMatrix(q.mesh, q.rest))) return 'never';
+    if (!dropMarks && s.parts.some(q => q.lines.length)) return 'marked';
+    for (const hd of s.hidden) {
+      const im = hd.mesh;
+      im.updateWorldMatrix(true, false);
+      let local = hd.matrix;
+      if (hd.part) { hd.part.updateWorldMatrix(true, false); local = tmpM.copy(im.matrixWorld).invert().multiply(hd.part.matrixWorld); }
+      im.setMatrixAt(hd.index, local);
+      im.instanceMatrix.needsUpdate = true;
+      growInstanceBounds(im, local);
+    }
+    for (const c of s.cuts) {
+      const arr = c.mesh.geometry.index?.array as Uint32Array | undefined;
+      if (arr) { c.tris.forEach((t, k) => { arr[t * 3] = c.saved[k * 3]; arr[t * 3 + 1] = c.saved[k * 3 + 1]; arr[t * 3 + 2] = c.saved[k * 3 + 2]; }); c.mesh.geometry.index!.needsUpdate = true; }
+    }
+    for (const q of s.parts) {
+      if (q.created) this.group.remove(q.mesh);
+      else {
+        if (q.prevMat) { q.mesh.material = q.prevMat; if (q.mesh.userData.baseMat === q.mat) q.mesh.userData.baseMat = q.prevMat; }
+        delete q.mesh.userData[PROP_DATA_KEY];
+      }
+      if (q.ownGeometry) q.mesh.geometry.dispose();
+      q.mat.dispose();
+    }
+    this.clones -= s.parts.length;
+    s.parts = null;
+    s.hidden = [];
+    s.cuts = [];
+    this.detached--;
+    this.order.delete(s);
+    return 'ok';
+  }
+
+  /**
+   * Lane PHYS: the last resort of the reclaim — up to `n` detached props that are NOT physics bodies (bullet-marked counters,
+   * machines …), least recently hit first, for which `far(x, y, z)` holds (far from the player: their marks are dropped).
+   * Bounded: looks at most 24 of them per call. Returns the slots freed.
+   */
+  reclaimMarked(far: (x: number, y: number, z: number) => boolean, n: number): number {
+    let freed = 0, checks = 0;
+    for (const s of this.order) {
+      if (freed >= n || checks++ >= 24) break;
+      const p = s.prop;
+      if (!far(p.x, p.y + p.h * 0.5, p.z)) continue;
+      const r = this.reattach(p, true);
+      if (r === 'ok') freed++;
+      else if (r === 'never') this.order.delete(s); // keeps its own meshes for good (broken): not a candidate any more
+    }
+    return freed;
   }
 
   /** Whether another prop rests on top of this one (it then never fully breaks: no floating stacks). */
@@ -680,6 +778,7 @@ export class PropDamage {
     res.glass = glassHit || !!part?.glass;
     if (part) res.color.copy(part.color);
     s.hits++;
+    if (this.order.delete(s)) this.order.add(s); // lane PHYS: most recently hit last
     const dmg = propHitDamage(cls, h.damage);
     if (glassHit && s.spec.glass) {
       s.glassHp -= dmg;
@@ -799,6 +898,8 @@ export class PropDamage {
     }
     this.states.clear();
     this.clones = 0;
+    this.detached = 0; // lane PHYS
+    this.order.clear();
   }
 
   stats(): {damaged: number; detached: number; broken: number; glassBroken: number; lines: number; clones: number} {

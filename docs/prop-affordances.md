@@ -2,7 +2,9 @@
 
 Standing user rule (2026-10-30, root `CLAUDE.md` "Props — core design rules"):
 - **storage opens**, with thematically appropriate finite loot;
-- **movable things move**, under bullets and player contact.
+- **movable things move**, under bullets and player contact;
+- **no baked loose clutter**: loose items are separate props placed on the furniture (section 5);
+- **real-world scale**, inspected in a render beside a runtime-scaled standing zombie (section 5).
 
 Exceptions are explicit and classified. Use this checklist for every new or changed prop kind (procedural, authored or
 generated model).
@@ -44,7 +46,8 @@ Both audits are enforced by tests: an unclassified kind fails CI.
      - lids: an `axis: 'x'` hinge at the back edge with a `plate` under a single-faced top.
    - Every compartment needs real `surfaces`. Give it a lined `cavity`, `inner` shelves and a `tray`. A model interior full of
      fused clutter can be cleared with `replaceInterior` (+ `cavityHidden` to keep the model's own walls, `openAxis` when the
-     part's region and cavity centres don't show the opening axis).
+     part's region and cavity centres don't show the opening axis). A model whose compartment is real modelled geometry (shelves
+     under every surface: the rebuilt server rack) sets `modelInterior` with `cavityHidden` instead.
    - A part that only reveals equipment has no surfaces and a per-part `contents` text (the server cabinet's glass doors).
    - `seatAside: true` when the kind's own office chair is pulled up to its drawers.
    - Add the kind to `OPENABLE_CONTAINER_KINDS`.
@@ -75,8 +78,8 @@ Both audits are enforced by tests: an unclassified kind fails CI.
 | `examTable` | 3 derived drawers | `CLINIC_DRAWER_ROWS`: dressings (+ limb treatments), water |
 | `biohazardFridge` | derived door frame; cleared bottom compartment | `COLD_MED_ROWS`: dressings, first-aid kits, water |
 | `vaultSafe` | derived door; lined cavity with a shelf | `VAULT_ROWS`: generic ammo (the deliberate rule), dressings, a kit, a flare |
-| `serverCabinet` | 2 derived cupboard doors (2 shelves each) + 2 glass doors (racked servers) | `SERVER_SPARES_ROWS`: cells, flares, a dressing, water |
-| `serverRack` | derived shattered-glass door; 3 rack shelves | `SERVER_SPARES_ROWS` (mostly empty) |
+| `serverCabinet` | 2 derived cupboard doors (2 shelves each) + 2 glass doors (racked servers) | `SERVER_SPARES_ROWS`: cells, flares, a dressing, water, electrical parts, scrap metal |
+| `serverRack` | 42U rack, a local procedural rebuild (`office-server-rack-r2.glb`): derived perforated see-through door over racked equipment with blinking LEDs; 3 empty bays with modelled shelves (`modelInterior`) | `SERVER_RACK_ROWS`: electrical parts (the common find), scrap metal, rarely a cell / flare (lane RACK, office-props-physics-scale-20261030) |
 | `archiveBoxes` | the top box's derived lid (spills if knocked loose) | `ARCHIVE_ROWS`: rarely a snack / cell / dressing / flare |
 
 Explicit exceptions with reasons (kegerator, bakery case, globe bar, parcel pallet, gumball jar, machines) are in
@@ -121,4 +124,35 @@ Explicit exceptions with reasons (kegerator, bakery case, globe bar, parcel pall
   - loot fit;
   - physics class (dynamic kinds get a body, react to an impulse and settle; static kinds don't) — the pattern is in
     `tests/office-physics.test.ts`.
+- The scale-check render beside a zombie (section 5), viewed, with its W×H×D, furniture-only bounds and contact recorded.
 - One short serial browser spot check of a representative prop when visuals change (root `CLAUDE.md` browser rules).
+
+## 5. No baked clutter, real-world scale (scale check)
+Task office-props-physics-scale-20261030 (lane SCALE); root `CLAUDE.md` rules 4 and 5.
+- **Never bake loose items into furniture.** Beakers / lab glassware, monitors, keyboards, bread and other food, papers,
+  books, tools, bottles and cups are separate runtime props or loot items placed (seeded, supported, not floating or
+  overlapping) on the furniture's real support surface, so they move or can be taken. Separate them locally from an existing
+  model (no regeneration without approval); keep the source provenance. Permanent structure — handles, hinges, shelves,
+  built-in fixtures — stays in the model. A remaining baked case is listed as an exception with its reason.
+- **Inspect every new or changed prop beside a zombie** with `tools/asset-pipeline/props/scale-check.mjs` (CPU only, ~1 s;
+  no browser / GPU / Blender). It renders FRONT and SIDE orthographic views on one ground line (0.1 m grid, labelled 0.5 m
+  ticks, dashed seat 0.45 / desk 0.75 / counter 0.90 / door 2.00 m references) beside zombie `lastshift` (1.78 m bind mesh,
+  runtime scale 1.0 = the median of the game's 0.95–1.05; `--zombie-scale` refuses anything else), and writes a JSON report.
+  ```
+  node tools/asset-pipeline/props/scale-check.mjs --kind labBench --below 0.91 --out <evidence>/lab-bench.png
+  node tools/asset-pipeline/props/scale-check.mjs --kind tradingDesk --model <new.glb>   # a new GLB under the kind's runtime fit
+  node tools/asset-pipeline/props/scale-check.mjs --prop <file.glb> --turn [--scale s | --fit w,h,d | --fit-wd w,d]
+  node tools/asset-pipeline/props/scale-check.mjs --batch office --per 4 --out <dir>/catalog   # one sheet per 4 kinds
+  node tools/asset-pipeline/props/scale-check.mjs --list office   # resolved runtime model / transform per kind
+  ```
+  - `--kind` reproduces the game's own transform from its data (`PROP_DEFS`, `world/openablesSpec.ts`, office / company
+    assets): openable kinds fit non-uniformly to `PROP_DEFS` w / h / d (`meshSplit.fittedMeshes`, half turn for -Z files);
+    office / company kinds fit uniformly, k = min(w / size.x, d / size.z), then turn (`world/officeProps.ts`); iteration-07 and
+    Subway model kinds fit non-uniformly. So the render shows what the game will show after a dims / file change.
+  - Furniture-only bounds: `--below <y>` (exact clip at a height) or `--exclude <regex>` (node / mesh / material names).
+    Excluded parts are drawn magenta; the cyan box is the furniture-only bounds. Size by the furniture, not by the clutter.
+  - Record: W×H×D (full and furniture-only), grounded contact (min-y, floor gap, contact clusters drawn red on the ground;
+    a warning when the lowest point is only a speck), surface heights (yellow: plateaus of a 1 cm top-down height map; the
+    main one is usually the work top or seat).
+  - Look at the PNG yourself. Typical: desk / worktop 0.72–0.76 m, lab bench ~0.9 m, counters 0.9–1.0 m, chair seat
+    ~0.45 m, doors ~2.0 m. A resize also moves the kind's footprint, collider, loot surface / slot heights and hinges.

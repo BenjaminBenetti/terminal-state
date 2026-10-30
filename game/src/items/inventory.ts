@@ -439,7 +439,7 @@ export class Inventory {
         if (!left) break;
       }
     }
-    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' || def.kind === 'supply' ? ['pack', 'hotbar'] : ['hotbar', 'pack']; // mask lane: filters like ammo
+    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' || def.kind === 'supply' || def.kind === 'material' ? ['pack', 'hotbar'] : ['hotbar', 'pack']; // mask lane: filters like ammo; lane RACK: materials too
     for (const bar of order) {
       const list = this.list(bar);
       for (let i = 0; i < list.length && left > 0; i++) {

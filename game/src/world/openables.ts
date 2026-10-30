@@ -39,6 +39,7 @@ import {purposeMaterial} from './purposeTextures';
 import {surface, type SurfaceName} from './canvasTextures';
 import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, toSoup, type Plane} from './meshSplit';
 import {propShape} from '../gen/propShapes'; // Task office-overhaul-20261030 (lane INTERACT): toilet-stall body (bodyShape)
+import {rackLedMaterial} from './rackLeds'; // Task office-props-physics-scale-20261030 (lane RACK)
 import {openableSpec, partFace, type AuthoredBox, type Box6, type MatRole, type OpenableKind, type OpenableSpec, type PartSpec} from './openablesSpec';
 
 const OPEN_TIME = 0.5;
@@ -288,7 +289,8 @@ export class OpenableSet {
         for (const axis of [0, 1, 2] as const) for (const v of [r.min.getComponent(axis), r.max.getComponent(axis)]) if (!planes.some(q => q.axis === axis && Math.abs(q.value - v) < 1e-6)) planes.push({axis, value: v});
       }
       let remnants = 0;
-      for (const {soup, mat} of fittedMeshes(gltf, def.w, def.h, def.d, !!spec.turn)) { // task office-interactions-layout (OPEN): office files face -Z
+      for (const {soup, mat: srcMat} of fittedMeshes(gltf, def.w, def.h, def.d, !!spec.turn)) { // task office-interactions-layout (OPEN): office files face -Z
+        const mat = rackLedMaterial(srcMat); // Task office-props-physics-scale-20261030 (lane RACK): the server rack's LEDs blink (world/rackLeds.ts)
         const buckets = partition(soup, planes, all, 1 + spec.parts.length, (c, _nz, n) => {
           for (let i = 0; i < regions.length; i++) for (const r of regions[i]) if (r.containsPoint(c)) return i + 1;
           // Iteration 12 (ATMOS, #4): what the split leaves in a lined compartment's opening (see openingSlabs) is dropped.

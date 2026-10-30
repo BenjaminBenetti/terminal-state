@@ -426,18 +426,20 @@ describe('a generated office level: bounded, local, the tower never wakes', () =
     const layout = fresh();
     // stand-in "Meshy" models (two meshes, named textured materials) for the dynamic kinds the builder instances from the library
     const tex = new THREE.Texture();
-    const model = (name: string): GLTF => {
+    // (task office-props-physics-scale-20261030, lane FURN: `sy` squashes the stand-in for the squat 1.3 m bean bag, so the builder's
+    // uniform footprint fit keeps both meshes in the prop's box as the real model does)
+    const model = (name: string, sy = 1): GLTF => {
       const scene = new THREE.Group();
-      const a = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), new THREE.MeshStandardMaterial({name: `${name}-seat`, map: tex}));
-      a.position.y = 0.25;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), new THREE.MeshStandardMaterial({name: `${name}-back`, color: 0x223344}));
-      b.position.set(0, 0.75, -0.25);
+      const a = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5 * sy, 0.6), new THREE.MeshStandardMaterial({name: `${name}-seat`, map: tex}));
+      a.position.y = 0.25 * sy;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5 * sy, 0.1), new THREE.MeshStandardMaterial({name: `${name}-back`, color: 0x223344}));
+      b.position.set(0, 0.75 * sy, -0.25);
       scene.add(a, b);
       scene.updateMatrixWorld(true);
       return {scene} as unknown as GLTF;
     };
     const lib: Record<string, GLTF> = {};
-    for (const k of ['officeChair', 'executiveChair', 'officeMonitor', 'beanBag'] as const) lib[officeModelKey(officeKindAsset(k)!)] = model(k);
+    for (const k of ['officeChair', 'executiveChair', 'officeMonitor', 'beanBag'] as const) lib[officeModelKey(officeKindAsset(k)!)] = model(k, k === 'beanBag' ? PROP_DEFS.beanBag.h / PROP_DEFS.beanBag.w : 1);
     const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
     const w = buildWorld(layout, mats, lib);
     const pd = new PropDamage();
