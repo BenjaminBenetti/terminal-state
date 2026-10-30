@@ -225,8 +225,12 @@ export class ZombieBrain {
     } else if (this.climb) this.climb.resume = 'chase';
   }
 
-  /** Returns true if this hit killed the zombie (iteration 08: `fromY` = the shooter's feet height). */
-  damage(amount: number, fromX: number, fromZ: number, fromY?: number): boolean {
+  /**
+   * Returns true if this hit killed the zombie (iteration 08: `fromY` = the shooter's feet height). Lane KNIFE
+   * (knife-melee-20261030): `o.stagger === false` skips the hit stagger (melee hits: no stun-lock — a zombie hit by the knife
+   * keeps closing / swinging, so getting close stays a trade); everything else (aware, chase, death) is the same.
+   */
+  damage(amount: number, fromX: number, fromZ: number, fromY?: number, o: {stagger?: boolean} = {}): boolean {
     if (!this.alive) return false;
     this.hp -= amount;
     this.lastKnown = [fromX, fromZ, fromY];
@@ -237,7 +241,7 @@ export class ZombieBrain {
       return true;
     }
     if (this.state === 'climb') { if (this.climb) this.climb.resume = 'chase'; }
-    else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0) {
+    else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0 && o.stagger !== false) {
       this.setState('stagger', 0.35);
       this.staggerCd = 0.9;
     } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {

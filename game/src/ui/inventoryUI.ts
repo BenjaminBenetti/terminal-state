@@ -24,7 +24,8 @@ import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
 import {PACK_SIZE, THROW_REF, type Bar, type Inventory, type SlotRef} from '../items/inventory';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem} from '../items/gear';
-import {WEAPONS} from '../weapons/weapons';
+import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
+import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
 import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
 import {ICONS} from './icons';
@@ -384,7 +385,7 @@ export class InventoryUI {
     const def = itemDef(st.itemId);
     const g = document.createElement('div');
     g.id = 'drag-ghost';
-    const n = def.kind === 'weapon' ? `${st.mag}/${WEAPONS[def.weaponId!].magazine}` : d.count > 1 || d.count < st.count ? `×${d.count}` : '';
+    const n = def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `${st.mag}/${WEAPONS[def.weaponId!].magazine}`) : d.count > 1 || d.count < st.count ? `×${d.count}` : '';
     g.innerHTML = `${itemIconHtml(st.itemId)}${n ? `<span class="count">${n}</span>` : ''}<span class="hint"></span>`;
     ($('#app') ?? document.body).appendChild(g);
     d.ghost = g;
@@ -429,7 +430,7 @@ export class InventoryUI {
       const sel = same(this.selected, ref);
       const held = ref.bar === 'hotbar' && ref.index === inv.selected;
       const usable = def?.kind === 'consumable';
-      const count = def ? (def.kind === 'weapon' ? `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>` : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
+      const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       let title = def ? ` title="${def.name}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
@@ -455,11 +456,16 @@ export class InventoryUI {
     const st = this.selected ? inv.get(this.selected) : null;
     const def = st ? itemDef(st.itemId) : null;
     const worn = this.selected?.bar === 'gear';
-    $('#inv-detail .name').textContent = def ? `${def.name}${def.kind === 'weapon' ? ` — ${st!.mag} loaded` : def.kind === 'gear' ? (worn ? ' — worn' : '') : ` ×${st!.count}`}` : 'Nothing selected';
-    $('#inv-detail .desc').textContent = def ? def.description : `Rifle rounds: ${inv.count('ammo_rifle')} · Shells: ${inv.count('ammo_shells')}`;
+    $('#inv-detail .name').textContent = def ? `${def.name}${def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? ' — melee, no ammo' : ` — ${st!.mag} loaded`) : def.kind === 'gear' ? (worn ? ' — worn' : '') : ` ×${st!.count}`}` : 'Nothing selected';
+    // lane AMMO (knife-melee-20261030): ammo by caliber; an ammo item names the weapons it loads, a gun the caliber it takes
+    $('#inv-detail .desc').textContent = def ? def.description : `Ammo — ${CALIBER_IDS.map(c => `${CALIBERS[c].label}: ${inv.count(ammoItemFor(c))}`).join(' · ')}`;
     const fx = document.querySelector('#inv-detail .fx');
+    const wdef = def?.kind === 'weapon' && def.weaponId ? WEAPONS[def.weaponId] : undefined;
     if (fx) {
-      fx.textContent = this.note || (def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
+      fx.textContent = this.note || (def?.kind === 'ammo' && def.caliber ? `${CALIBERS[def.caliber].designation} · loads: ${weaponsForCaliber(def.caliber).map(w => itemDef(w.itemId).short).join(', ') || 'no weapon yet'}`
+        : wdef?.caliber ? `Takes ${CALIBERS[wdef.caliber].label} (${CALIBERS[wdef.caliber].designation}) · ${reserveFor(wdef, inv)} in reserve`
+        : wdef?.melee ? `Melee · click to slash, hold to keep slashing · reach ${wdef.range} m · never needs ammo` // lane KNIFE
+        : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
         : def?.kind === 'gear' ? `${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') : ''); // INTERACT (#6)
       fx.classList.toggle('refused', !!this.note && this.noteBad);

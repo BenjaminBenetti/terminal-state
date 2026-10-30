@@ -160,15 +160,15 @@ This is the test-only `REDUCED_FOOD` profile in `tests/loot-tables.test.ts`, whi
 | Food (holder units) | 242 | 96 (×0.40) |
 | Drink | 292 | 352 |
 | Med | 102 | 99 |
-| Ammo | 2017 | 2087 |
-| Battery + flare | 40 | 37 |
+| Ammo | 1929 | 2041 |
+| Battery + flare | 41 | 37 |
 | Office floor food | 1 | 0 |
 
 The Subway's loose pickups were byte-identical (its floor program has no food).
 
 ## Explicit exceptions (not table-driven)
 
-- **Weapon finds and their paired ammo.** In `gen/weaponFinds.ts` this includes the 9 mm floor boxes for a pistol start.
+- **Weapon finds and their paired ammo.** In `gen/weaponFinds.ts` this includes the `ammo_9mm` floor boxes for a pistol start.
   In `gen/office/spawns.ts` it is the weapon plan and placement.
 - **The starter kit** (`run/starter.ts`).
 - **Fixtures with baked contents.** Fire and AED cabinets: `loot: null`.
@@ -180,20 +180,38 @@ The Subway's loose pickups were byte-identical (its floor program has no food).
 
 ## Ammo
 
-Ammo is ordinary item rows plus per-item count data (`BOX_COUNT`, `HANDFUL`). Nothing in the profile API names a weapon or
-a calibre. A new ammo item needs:
-- its rows;
+Ammo items are calibers: `ammo_9mm`, `ammo_556` and `ammo_12ga` (`items/calibers.ts`). Weapons load by caliber.
+
+In the tables, ammo is ordinary item rows plus per-item count data (`BOX_COUNT`, `HANDFUL`). Nothing in the profile API names
+a weapon or a calibre.
+- **Generic ammo rows.** A table's rifle / shotgun ammo is generic: `genericAmmo(w)` from `items/calibers.ts` splits the row
+  weight `w` evenly (about a third each) over the caliber items. Example: `CACHE_CRATE` uses `...genericAmmo(3.4)`.
+- **9mm-only rows.** Rows that only ever held 9mm stay `ammo_9mm`: office desks and drawers (`OFFICE_DRAWERS`), police /
+  security cabinets in `gen/purposes.ts`, and toilet stashes (`TOILET_ROWS`).
+- **Floor boxes.** Each loose floor box is one caliber (`SUBWAY_FLOOR`, `OFFICE_FLOOR`).
+- **Box sizes** per caliber: `BOX_COUNT` (for example 9mm 4–8, or 6–10 in crates / gun lockers). Off-theme handfuls: `HANDFUL`.
+
+A new caliber needs:
+- a `CALIBERS` row and its item;
 - `BOX_COUNT` / `HANDFUL` entries;
 - `ITEM_DIMS` in `items/items.ts`. Without it the item becomes a 0.2 m box that does not fit drawers.
 
+Generic rows pick it up automatically. Weapon finds keep their matching box (`WEAPON_FIND_AMMO`, an explicit exception).
+
 ## Verify
 
-- `tests/loot-golden.test.ts` hashes current behaviour, pinned at main `dfb3a06` before this refactor:
+- `tests/loot-golden.test.ts` hashes current behaviour:
   - holder lots (id, item, count, compartment, surface, position) over the 18-station Subway corpus and 3 Office levels;
   - those layouts' pickups;
   - rare gear rolls and placement.
 
-  A pure refactor must not change any hash. A deliberate retune will. Explain what moved and why before re-pinning.
+  It has been pinned twice:
+  1. At main `dfb3a06`, before this refactor. The refactor left every hash unchanged.
+  2. At main `4adb91c`, after merging the caliber-ammo change (PR #5). The merged tree reproduces main's own hashes exactly.
+     The difference from stage 1 comes from that ammo change, not from the refactor.
+
+  The header of the test records both sets. A pure refactor must not change any hash. A deliberate retune will: explain what
+  moved and why before re-pinning.
 - `tests/loot-tables.test.ts` covers slots, named tables, profiles, overrides, validation, fit and determinism.
 - `validateLootProfile(profile)` returns a list of problems:
   - unknown item / category / slot / gear ids;

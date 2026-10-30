@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 10340,
-      "sha256": "75c9b799dc7d78c5fbbbbad3f9ca659b013503ab1def1001168adcdc09a83e89"
+      "bytes": 11812,
+      "sha256": "e0cbf96ba575d59369651e03bec24fd2933c4ce182a1a58612ad6473bd2e5e55"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1359,6 +1359,11 @@
       "sha256": "685156860b4caa08f0f3b2e2463313e4697262b69987e71e32a13c599fbab854"
     },
     {
+      "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
+      "bytes": 28564,
+      "sha256": "16c2f68670691e29034f64cd044f94a7bb482a19adeb075db694a40801ae3219"
+    },
+    {
       "path": "assets/derivatives/meshy-t25-chars-20261029.json",
       "bytes": 76584,
       "sha256": "918a6a2e71ce0458585fec9fc34c1d05bc82d4a4e4730209af851d4f4651c4a5"
@@ -1504,6 +1509,11 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/user-knife-20261030.json",
+      "bytes": 3815,
+      "sha256": "2eb3dd4f7479c8adac08f37b01208c952aabcc16e220533786e84e660e60561a"
+    },
+    {
       "path": "assets/derivatives/user-weapons-20261028.json",
       "bytes": 7154,
       "sha256": "b6703fcbaf5fce1ce404bdfa9ddf68f9f64937f7c0ce6d34e51b7ff76667d4db"
@@ -1557,6 +1567,21 @@
       "path": "assets/derivatives/zombie-wardrobe.json",
       "bytes": 106589,
       "sha256": "e9ca0d440576c98bd9d63cd6a2889c752dd018ad6ab3d98f405afb0d5277d7b6"
+    },
+    {
+      "path": "assets/models/ammo-12ga-t25.glb",
+      "bytes": 319020,
+      "sha256": "1536c0a57dc78b8ba6a6140c9404dedfc3cc5596d7a2a293c4e695cdf8a36e2b"
+    },
+    {
+      "path": "assets/models/ammo-556-t25.glb",
+      "bytes": 186152,
+      "sha256": "062a05296e4c5e5dfff28b98c29e7f9e5c9af5ccabd03f927f4f37986aeb3e52"
+    },
+    {
+      "path": "assets/models/ammo-9mm-t25.glb",
+      "bytes": 178096,
+      "sha256": "fd4d594e9240188ce09eb5da5b2a5f0ce565aca5fc47e83aafd23a06acf604bd"
     },
     {
       "path": "assets/models/bench-t25r1.glb",
@@ -1632,6 +1657,11 @@
       "path": "assets/models/janitor-cart-t25.glb",
       "bytes": 648192,
       "sha256": "4d0cb91a273dc453260c33eda63c0c9fc13e2bae3635207d293ad0c2b8ea38c5"
+    },
+    {
+      "path": "assets/models/knife-user.glb",
+      "bytes": 752792,
+      "sha256": "47177ea38bc2e16b215a23011d30f9dfb14f9927f610fcbbf844ffae29b8e858"
     },
     {
       "path": "assets/models/light-lod.glb",

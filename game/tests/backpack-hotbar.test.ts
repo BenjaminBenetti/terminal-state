@@ -119,7 +119,7 @@ function wearLoadedBag(s: Shell): ItemStack {
   inv.select(0);
   const bag = inv.makeStack('backpack', 1);
   bag.bag![3] = inv.makeStack('bandage', 4);
-  bag.bag![5] = inv.makeStack('ammo_pistol', 30);
+  bag.bag![5] = inv.makeStack('ammo_9mm', 30);
   expect(inv.add(bag)).toBe(0);
   return bag;
 }
@@ -239,7 +239,7 @@ describe('grounded bag: tap E opens, hold E picks it up and wears it', () => {
     for (let i = 0; i < frames && s.sys.bags.length; i++) s.step();
     expect(s.sys.bags).toHaveLength(0);
     expect(s.g.inv.worn('backpack')).toBe(bag);
-    expect(bag.bag!.filter(Boolean).map(x => `${x!.itemId}x${x!.count}`)).toEqual(['bandagex4', 'ammo_pistolx30']);
+    expect(bag.bag!.filter(Boolean).map(x => `${x!.itemId}x${x!.count}`)).toEqual(['bandagex4', 'ammo_9mmx30']);
     expect(totals(s.g.inv)).toEqual(want);
     expect(s.g.inv.invariants()).toEqual([]);
     expect(s.sys.viewOpen).toBe(false);

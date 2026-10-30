@@ -242,7 +242,7 @@ describe('per-level overrides (TEST-ONLY reduced-food example)', () => {
 
   it('floor counts: Subway floor ammo boxes x0 leave only the weapon finds\' paired ammo (explicit exception)', () => {
     const l = generateStation(ECONOMY_CORPUS[3].seed, {startWeapon: 'pistol', loot: withOverrides({floor: {count: {ammo: 0}}})});
-    const boxes = (q: StationLayout) => q.pickups.filter(p => (p.itemId === 'ammo_rifle' && p.count === 30) || (p.itemId === 'ammo_shells' && p.count === 8));
+    const boxes = (q: StationLayout) => q.pickups.filter(p => (p.itemId === 'ammo_556' && p.count === 30) || (p.itemId === 'ammo_12ga' && p.count === 8));
     expect(boxes(subway[1]).length).toBeGreaterThan(0);
     expect(boxes(l)).toEqual([]);
     expect(l.pickups.some(p => p.itemId.startsWith('ammo_'))).toBe(true); // weapon-find ammo + pistol-start 9 mm stay
@@ -319,7 +319,7 @@ describe('validation', () => {
     expect(issues(withOverrides({gear: {cap: 2.5}}))).toMatch(/not an integer >= 0/);
     const T = BASE_TABLES;
     expect(issues(withOverrides({}, {...T, holderLots: {...T.holderLots, shelf: [5, 2]}}))).toMatch(/holderLots\.shelf: range/);
-    expect(issues(withOverrides({}, {...T, floor: {...T.floor, subway: {...T.floor.subway, boxes: [{itemId: 'ammo_rifle', count: 30, n: [4, 3]}]}}}))).toMatch(/boxes\[0\]\.n: range/);
+    expect(issues(withOverrides({}, {...T, floor: {...T.floor, subway: {...T.floor.subway, boxes: [{itemId: 'ammo_556', count: 30, n: [4, 3]}]}}}))).toMatch(/boxes\[0\]\.n: range/);
     expect(issues(withOverrides({}, {...T, holderEmpty: {...T.holderEmpty, desk: 1.2}}))).toMatch(/holderEmpty\.desk: chance/);
     expect(issues(withOverrides({}, {...T, floor: {...T.floor, subway: {...T.floor.subway, light: [{itemId: 'flare', count: 1, chance: -0.1}]}}}))).toMatch(/chance -0\.1 is outside/);
     expect(issues(withOverrides({}, {...T, pool: {...T.pool, drink: [['water', NaN]]}}))).toMatch(/pool\.drink\[0\]: weight NaN/);

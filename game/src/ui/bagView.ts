@@ -192,7 +192,7 @@ export class BagView {
     const inv = this.host.inv();
     const cell = (ref: AnyRef, st: ItemStack | null) => {
       const def = st ? itemDef(st.itemId) : null;
-      const count = def ? (def.kind === 'weapon' ? `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>` : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
+      const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       const fx = def?.kind === 'consumable' ? effectText(def) : '';
       const title = def ? ` title="${def.name}${fx ? ` — ${fx}` : ''}. Click to move it ${ref.bar === 'bag' ? 'to you' : 'into the backpack'} · drag to a slot"` : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';

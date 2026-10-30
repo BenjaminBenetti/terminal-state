@@ -148,7 +148,7 @@ describe('chest rig: dynamic pockets, refused removal, nothing lost', () => {
     const rig = inv.makeStack('chest_rig', 1);
     expect(inv.add(rig)).toBe(0);
     for (let i = 0; i < PACK_SIZE; i++) inv.set(P(i), inv.makeStack('bandage', 1));
-    const extra = inv.makeStack('ammo_pistol', 30);
+    const extra = inv.makeStack('ammo_9mm', 30);
     inv.set(P(13), extra);
     return {inv, rig, extra};
   };
@@ -200,7 +200,7 @@ describe('chest rig: dynamic pockets, refused removal, nothing lost', () => {
     expect(inv.worn('chest')).toBe(vest);
     expect(inv.get(P(5))).toBe(rig);
     expect(inv.pack.length).toBe(PACK_SIZE);
-    expect(inv.count('ammo_pistol')).toBe(30);
+    expect(inv.count('ammo_9mm')).toBe(30);
     expect(inv.count('bandage')).toBe(PACK_SIZE - 2);
     expect(inv.invariants()).toEqual([]);
   });
@@ -221,7 +221,7 @@ describe('inventory snapshots (lane RUN: carryover / Retry level)', () => {
   const sample = () => {
     const inv = new Inventory();
     inv.set(H(0), inv.makeStack('pistol', 1, 7));
-    inv.add(inv.makeStack('ammo_pistol', 45));
+    inv.add(inv.makeStack('ammo_9mm', 45));
     inv.add(inv.makeStack('chest_rig', 1));
     inv.add(inv.makeStack('helmet', 1));
     inv.set(P(14), inv.makeStack('bandage', 3));
@@ -254,9 +254,9 @@ describe('inventory snapshots (lane RUN: carryover / Retry level)', () => {
     }
     // mutating the copy never touches the original
     c.worn('backpack')!.bag![2]!.count = 1;
-    c.take('ammo_pistol', 10);
+    c.take('ammo_9mm', 10);
     expect(inv.worn('backpack')!.bag![2]!.count).toBe(2);
-    expect(inv.count('ammo_pistol')).toBe(45);
+    expect(inv.count('ammo_9mm')).toBe(45);
   });
 
   it('loadJSON restores in place (same object, same arrays) and resizes the pockets to the snapshot gear', () => {

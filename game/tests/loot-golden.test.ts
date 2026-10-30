@@ -8,6 +8,15 @@
 //  - the rare-gear roll of both logical levels (key `gear-roll:${levelId}`, 400 level seeds each) and its placement on the layouts.
 // A deliberate tuning change WILL move them: then explain the cause in the change (what moved and why) before re-pinning.
 // Never re-pin to make a refactor pass. Bounded corpus: 18 stations + 3 office levels (~ the loot-economy suite's cost).
+//
+// PIN HISTORY (two stages):
+//  1. Refactor-only parity at main dfb3a06 (captured BEFORE any lane LOOT source change, unchanged after the refactor):
+//     subwayHolders 13fea6a9, subwayPickups 11e78cc6, officeHolders ca913cb0, officePickups 77bb9b0e, gearRolls 77148ba3,
+//     gearPlaced 1a7b07f0.
+//  2. Post-merge parity with main 4adb91c (PR #5 knife + caliber ammo: ammo_9mm / ammo_556 / ammo_12ga, generic ~1/3 ammo rows,
+//     new 9mm box sizes; PR #6 debug overlay): main's own hashes, computed with this unchanged test in a main worktree, are
+//     reproduced byte for byte by the merged tree (the calibre data ported into items/lootTables.ts). The change from stage 1 is
+//     attributable to the authorized calibre-ammo merge #5, not to the loot-table refactor; gear is unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -17,12 +26,12 @@ import type {PickupPlacement, StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
 import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
 
-/** Pinned at dfb3a06 (before any lane LOOT source change). */
+/** Stage 2: main 4adb91c's behaviour (stage 1 / dfb3a06 values in the header). */
 const GOLDEN = {
-  subwayHolders: '13fea6a9',
-  subwayPickups: '11e78cc6',
-  officeHolders: 'ca913cb0',
-  officePickups: '77bb9b0e',
+  subwayHolders: 'f94f99ea',
+  subwayPickups: '574dd442',
+  officeHolders: '0dedc0d9',
+  officePickups: '7b266d40',
   gearRolls: '77148ba3',
   gearPlaced: '1a7b07f0',
 };

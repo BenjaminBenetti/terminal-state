@@ -211,7 +211,15 @@ describe('foreground player hit confirm: aggregation and bounds', () => {
 
   it('game.ts calls it once per damaged enemy per shot (after pellet aggregation), passing the enemy', () => {
     const src = fs.readFileSync(path.join(GAME, 'src/game.ts'), 'utf8');
-    const calls = [...src.matchAll(/sfx\.hitConfirm\(([^)]*)\)/g)];
+    // lane KNIFE (knife-melee-20261030): + one call in meleeContact — one swing, ONE target, outside any loop
+    const all = [...src.matchAll(/sfx\.hitConfirm\(([^)]*)\)/g)];
+    expect(all.length).toBe(2);
+    const melee = all.filter(c => src.lastIndexOf('private meleeContact(', c.index) > src.lastIndexOf('private fire(', c.index));
+    expect(melee.length).toBe(1);
+    expect(melee[0][1].split(',').map(s => s.trim())).toEqual(['point.x', 'point.y', 'point.z', 'z']);
+    const inMelee = src.slice(src.lastIndexOf('private meleeContact(', melee[0].index), melee[0].index);
+    expect(inMelee).not.toContain('for (');
+    const calls = all.filter(c => !melee.includes(c));
     expect(calls.length).toBe(1);
     expect(calls[0][1].split(',').map(s => s.trim())).toEqual(['e.point.x', 'e.point.y', 'e.point.z', 'z']);
     const before = src.slice(0, calls[0].index);

@@ -14,7 +14,7 @@
 //     are always 'public' = random):
 //       - with probability `on` (0.75-0.8) an ON-THEME find: the rolled item itself when it already fits the theme (a pharmacy
 //         shelf's bandage stays a bandage), else a category drawn from the theme's `weights` (a security cabinet's old cola
-//         becomes a box of 9 mm / a flare / a torch battery; a maintenance shelf's old water becomes a battery or a flare);
+//         becomes a box of ammo (any caliber) / a flare / a torch battery; a maintenance shelf's old water becomes a battery or a flare);
 //       - otherwise an OFF-THEME random find: a category from OFF_THEME_WEIGHTS that is NOT on-theme (food in a security office,
 //         a bandage or a handful of rounds in a café, ...) — the "not 100 % a hard rule" part. Ammo is never excluded anywhere.
 //     The item of a category comes from the holder's OWN rows when it has any (a store's stock still matches its sign), else
@@ -98,7 +98,7 @@ export interface FindContext {
 /** Item of category `c`: from the holder's own rows of that category when it has any, else the global pool (null: none left). */
 function itemOf(c: EconCat, ctx: FindContext, r: Rnd, security: boolean, P: LootProfile): string | null {
   const own = ctx.rows.filter(([id, w]) => w > 0 && econCat(id) === c);
-  // security / police: the service sidearm's 9 mm leads (the pistol is the starting gun)
+  // security / police re-themed ammo: always the generic pool (lane AMMO: ~1/3 each caliber; it used to let the 9 mm lead)
   const rows: ItemRows = own.length && !(security && c === 'ammo') ? own : resolveRows(P, P.tables.globalPool[c]);
   return rows.length ? pickRow(rows, r) : null;
 }

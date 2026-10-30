@@ -11,6 +11,7 @@
 // given start weapon (its own rng fork, after the loose supplies; it never rerolls on reload).
 
 import type {Rng} from '../core/rng';
+import {ammoItemFor} from '../items/calibers';
 import {CELL, FLOOR, type Grid} from './grid';
 import {levelDistance} from './levelGen';
 import type {Area, PickupPlacement, StationLayout} from './stationTypes';
@@ -22,7 +23,11 @@ export const FIND_MIN_SPAWN_M = 25;
 /** Hard cap of copies per non-start weapon. */
 export const FIND_MAX_PER_WEAPON = 2;
 
-export const WEAPON_FIND_AMMO: Record<string, [string, number]> = {shotgun: ['ammo_shells', 6], rifle: ['ammo_rifle', 20], pistol: ['ammo_pistol', 15]};
+/**
+ * The box of MATCHING ammo beside each weapon find: the weapon's own caliber (weapons/weapons.ts WeaponDef.caliber; tests keep the
+ * two in step). Lane AMMO (knife-melee-20261030): the deliberate exception to the generic ~1/3-per-caliber ammo split.
+ */
+export const WEAPON_FIND_AMMO: Record<string, [string, number]> = {shotgun: [ammoItemFor('12ga'), 6], rifle: [ammoItemFor('5.56x45mm'), 20], pistol: [ammoItemFor('9x19mm'), 15]};
 
 /** The weapons placed as finds for a starting weapon. */
 export function findWeaponsFor(start: StartWeaponId): string[] {
@@ -133,14 +138,14 @@ export function placeWeaponFinds(layout: StationLayout, rng: Rng, start: StartWe
       }
     }
   }
-  // Pistol start: the pistol's 9 mm joins the loose-floor economy (a few boxes in back-of-house rooms).
+  // Pistol start: the pistol's 9mm (9×19mm) joins the loose-floor economy (a few boxes in back-of-house rooms).
   if (start === 'pistol') {
     for (let k = 0, n = rng.int(3, 4); k < n; k++) {
       for (let t = 0; t < 8; t++) {
         const a = rng.weighted(pool);
         const cells = cellsOf(a, 24, 8);
         if (!cells.length) continue;
-        placed.push(put(a, rng.pick(cells), 'ammo_pistol', 15));
+        placed.push(put(a, rng.pick(cells), 'ammo_9mm', 15));
         break;
       }
     }

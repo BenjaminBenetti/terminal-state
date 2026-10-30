@@ -24,10 +24,14 @@
 // Subway pistol-start 9 mm boxes, the starter kit (run/starter.ts), fixtures with baked contents, vending pry / bin spill
 // mechanics, shelf filler stock (decoration).
 //
-// Ammo: ammo is ordinary item rows + per-item count data (BOX_COUNT / HANDFUL). Nothing here names a weapon or calibre.
+// Ammo: ammo is ordinary item rows + per-item count data (BOX_COUNT / HANDFUL). Nothing in the API names a weapon or calibre. Lane
+// AMMO (knife-melee-20261030, merged from main): ammo items ARE calibers (ammo_9mm / ammo_556 / ammo_12ga, items/calibers.ts); a
+// table's rifle / shotgun ammo rows are GENERIC ammo — genericAmmo(w) splits the row weight w evenly (~1/3 each) over the caliber
+// items; rows that only ever held 9mm (office desks / drawers, police cabinets, toilet stashes) stay 9mm.
 
 import {ITEMS} from './items';
 import {GEAR_ITEMS} from './gear';
+import {genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030): pure data, no imports
 import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical';
 import type {LootTheme} from '../gen/purposes';
 import type {LootTilt} from '../gen/office/companies';
@@ -185,12 +189,14 @@ export const FULL_ROOMS = {
   kinds: ['shelf', 'stall'] as readonly string[],
   extra: 2,
 };
-/** Items of a legacy category (no 9 mm row: unlike GLOBAL_POOL — do not merge). */
+/** Items of a legacy category (its ammo weight differs from GLOBAL_POOL's — do not merge). */
 export const LEGACY_POOL: Readonly<Record<LegacyCat, ItemRows>> = {
   food: [['chocolate', 1.2], ['chips', 1.1], ['beans', 0.9], ['noodles', 1]],
   drink: [['water', 1.3], ['cola', 1.2], ['juice', 0.9]],
   med: [['bandage', 1], ['medkit', 0.35]],
-  ammo: [['ammo_rifle', 1.4], ['ammo_shells', 1]],
+  // Lane AMMO (knife-melee-20261030): generic ammo = ~1/3 each 9mm / 5.56×45mm / 12-gauge (was rifle 1.4 : shells 1, no 9mm —
+  // "the pistol ammo ... only spawns on the floor"). The category weight is unchanged, so the number of ammo lots is too.
+  ammo: genericAmmo(2.4),
 };
 /** Vending machines sell snacks, not tins of beans (legacy food rows of a vending machine). */
 export const VENDING_FOOD: ItemRows = [['chocolate', 1.5], ['chips', 1.5], ['noodles', 0.3]];
@@ -200,15 +206,17 @@ export const VENDING_FOOD: ItemRows = [['chocolate', 1.5], ['chips', 1.5], ['noo
 
 /** Box size of an item rolled in a holder: `big` in BIG_BOX_HOLDERS, else `small`. Items not listed are single (count 1, no draw). */
 export const BOX_COUNT: Readonly<Record<string, {small: LotRange; big: LotRange}>> = {
-  ammo_rifle: {small: [5, 10], big: [8, 12]},
-  ammo_shells: {small: [2, 4], big: [3, 6]},
-  // Iteration 12 (LOOT lane): 9 mm boxes (security finds; the pistol is the starting gun).
-  ammo_pistol: {small: [6, 12], big: [10, 15]},
+  // Lane AMMO: per caliber (5.56×45mm = the old rifle rounds, 12-gauge = the old shells, 9mm = the old 9 mm boxes).
+  ammo_556: {small: [5, 10], big: [8, 12]},
+  ammo_12ga: {small: [2, 4], big: [3, 6]},
+  // 9mm: lane AMMO (knife-melee-20261030) — now ~1/3 of every generic ammo pick (it used to be a rare security find at 10-15 / 6-12),
+  // so a holder's 9mm lot is ~half a magazine like the other calibers (4-8 / 6-10): total holder ammo stays in its band (tests).
+  ammo_9mm: {small: [4, 8], big: [6, 10]},
 };
 /** Holders that hold full-size boxes (crates, gun lockers). */
 export const BIG_BOX_HOLDERS: ReadonlySet<string> = new Set(['crate', 'gunLocker']);
 /** Off-theme ammo is a handful of loose rounds, not a full box (keeps total ammo where it was). */
-export const HANDFUL: Readonly<Record<string, LotRange>> = {ammo_pistol: [4, 7], ammo_rifle: [3, 5], ammo_shells: [2, 3]};
+export const HANDFUL: Readonly<Record<string, LotRange>> = {ammo_9mm: [4, 7], ammo_556: [3, 5], ammo_12ga: [2, 3]};
 /** Handful of an ammo item HANDFUL does not list. */
 export const HANDFUL_FALLBACK: LotRange = [3, 6];
 
@@ -245,12 +253,15 @@ export const THEME_ECONOMY: Readonly<Record<LootTheme, ThemeEconomy>> = {
 /** Off-theme random finds (and every find in public halls): category weights; the theme's own categories are excluded. */
 export const OFF_THEME_WEIGHTS: Readonly<Record<EconCat, number>> = {food: 0.32, drink: 0.37, med: 0.09, ammo: 0.035, battery: 0.006, flare: 0.004};
 
-/** Items of a category when the holder's own table has none (ammo: 9 mm first — the pistol is the starting gun). */
+/**
+ * Items of a category when the holder's own table has none. Lane AMMO (knife-melee-20261030): ammo is generic — ~1/3 each 9mm /
+ * 5.56×45mm / 12-gauge (was 9 mm 1.3 : rifle 1 : shells 0.8).
+ */
 export const GLOBAL_POOL: Readonly<Record<EconCat, ItemRows>> = {
   food: [['chocolate', 1.2], ['chips', 1.1], ['beans', 0.9], ['noodles', 1]],
   drink: [['water', 1.3], ['cola', 1.2], ['juice', 0.9]],
   med: [['bandage', 1], ['medkit', 0.35]],
-  ammo: [['ammo_pistol', 1.3], ['ammo_rifle', 1], ['ammo_shells', 0.8]],
+  ammo: genericAmmo(3.1),
   battery: [[BATTERY_ID, 1]],
   flare: [[FLARE_ID, 1]],
 };
@@ -307,18 +318,19 @@ export const storeTill = (items: ItemRows, empty = 0.45): LootSpec => ({items, l
 /** Store kitchen line / back counter. */
 export const storeKitchen = (items: ItemRows): LootSpec => ({items, lots: [1, 3], empty: 0.35});
 /** Back-of-house supply crate (security, electrical, storage, workshop, office storage / armory / mailroom ...). */
-export const CACHE_CRATE: LootSpec = {items: [['ammo_rifle', 2], ['ammo_shells', 1.4], ['beans', 1], ['water', 1], ['bandage', 0.8]], lots: [1, 3], empty: 0.12};
+export const CACHE_CRATE: LootSpec = {items: [...genericAmmo(3.4), ['beans', 1], ['water', 1], ['bandage', 0.8]], lots: [1, 3], empty: 0.12};
 /** Office desk top. */
 export const OFFICE_DESK: LootSpec = {items: [['chocolate', 1], ['water', 1], ['cola', 0.8], ['chips', 0.6], ['bandage', 0.4], ['juice', 0.3]], lots: [1, 1], empty: 0.62};
-/** Office credenza / low cabinet drawers. */
-export const OFFICE_DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['ammo_pistol', 0.25]], lots: [1, 2], empty: 0.35};
+/** Office credenza / low cabinet drawers (9mm only: the deliberate sidearm stock). */
+export const OFFICE_DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['ammo_9mm', 0.25]], lots: [1, 2], empty: 0.35};
 // Task office-overhaul-20261030 (lane TENANTS): the company rooms' shared tables.
 export const TENANT_SNACKS: LootSpec = {items: [['chocolate', 2], ['chips', 2], ['cola', 2], ['water', 1]], lots: [3, 6], empty: 0.15};
 export const TENANT_FRIDGE: LootSpec = {items: [['juice', 2], ['water', 2], ['cola', 2], ['beans', 0.6]], lots: [2, 5], empty: 0.15};
 export const TENANT_KITCHEN: LootSpec = {items: [['noodles', 2], ['chocolate', 1], ['beans', 1.4], ['chips', 0.6]], lots: [1, 3], empty: 0.25};
 export const TENANT_TABLE: LootSpec = {items: [['cola', 1], ['chocolate', 1], ['water', 0.8], ['chips', 0.6]], lots: [1, 2], empty: 0.5};
 export const TENANT_MEDS: LootSpec = {items: [['bandage', 2], ['medkit', 0.5], ['water', 0.6]], lots: [1, 3], empty: 0.2};
-export const TENANT_ARMS: LootSpec = {items: [['ammo_pistol', 2.4], ['ammo_shells', 1.6], ['ammo_rifle', 1.2], ['flare', 0.3], ['medkit', 0.2]], lots: [2, 4], empty: 0.1};
+// lane AMMO (knife-melee-20261030): the armory's ammo weight (5.2) split ~1/3 each over 9mm / 5.56×45mm / 12-gauge
+export const TENANT_ARMS: LootSpec = {items: [...genericAmmo(5.2), ['flare', 0.3], ['medkit', 0.2]], lots: [2, 4], empty: 0.1};
 export const TENANT_SUPPLY: LootSpec = {items: [['water', 1.2], ['battery', 0.8], ['flare', 0.4], ['bandage', 0.6], ['beans', 0.6]], lots: [1, 3], empty: 0.25};
 
 // Openable holders' item rows (iteration 08, lane I; world/openablesSpec.ts).
@@ -326,20 +338,20 @@ export const JUNK_ROWS: ItemRows = [['chips', 1], ['chocolate', 1], ['cola', 1.2
 /** Newspaper vending box (snacks). */
 export const NEWSBOX_ROWS: ItemRows = [['chocolate', 1], ['chips', 0.6], ['water', 0.4], ['cola', 0.4]];
 /** Staff lockers. */
-export const PERSONAL_ROWS: ItemRows = [['water', 1], ['cola', 0.8], ['chocolate', 1], ['chips', 0.6], ['bandage', 0.8], ['juice', 0.5], ['noodles', 0.4], ['ammo_rifle', 0.3], ['ammo_shells', 0.2]];
+export const PERSONAL_ROWS: ItemRows = [['water', 1], ['cola', 0.8], ['chocolate', 1], ['chips', 0.6], ['bandage', 0.8], ['juice', 0.5], ['noodles', 0.4], ...genericAmmo(0.5)];
 /** Filing cabinet / desk drawers. */
-export const OFFICE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ['ammo_rifle', 0.15]];
+export const OFFICE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.5], ['juice', 0.3], ...genericAmmo(0.15)];
 /** Wall first-aid kit. */
 export const WALL_KIT_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.35], ['water', 0.3]];
-export const SAFE_ROWS: ItemRows = [['ammo_rifle', 1.2], ['ammo_shells', 0.8], ['bandage', 0.6], ['medkit', 0.25], ['chocolate', 0.3]];
+export const SAFE_ROWS: ItemRows = [...genericAmmo(2), ['bandage', 0.6], ['medkit', 0.25], ['chocolate', 0.3]];
 /** Chest freezer. */
 export const FROZEN_ROWS: ItemRows = [['water', 1], ['juice', 1], ['cola', 0.8], ['beans', 0.4], ['noodles', 0.3]];
 /** Kitchenette cupboards. */
 export const PANTRY_ROWS: ItemRows = [['noodles', 1], ['beans', 1], ['water', 0.8], ['chocolate', 0.6], ['cola', 0.5], ['chips', 0.4], ['bandage', 0.2]];
 /** Task office-overhaul-20261030 (lane INTERACT): stashed in a toilet (bowl / tank lid) — a bottle, a dressing, a box of 9 mm, rarely better. */
-export const TOILET_ROWS: ItemRows = [['water', 1], ['bandage', 0.8], ['ammo_pistol', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
+export const TOILET_ROWS: ItemRows = [['water', 1], ['bandage', 0.8], ['ammo_9mm', 0.15], ['medkit', 0.12], ['battery', 0.18], ['flare', 0.1]];
 /** Security desk drawers. */
-export const SECURITY_DRAWER_ROWS: ItemRows = [['ammo_rifle', 0.7], ['ammo_shells', 0.5], ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]];
+export const SECURITY_DRAWER_ROWS: ItemRows = [...genericAmmo(1.2), ['bandage', 0.6], ['chocolate', 0.5], ['water', 0.3]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
@@ -389,7 +401,9 @@ export interface FloorChance { itemId: string; count: number; chance: number }
  */
 export interface SubwayFloorProgram { boxes: readonly FloorCopies[]; kept: readonly (FloorCopies & {keep: number})[]; light: readonly FloorChance[] }
 export const SUBWAY_FLOOR: SubwayFloorProgram = {
-  boxes: [{itemId: 'ammo_rifle', count: 30, n: [3, 4]}, {itemId: 'ammo_shells', count: 8, n: [2, 3]}],
+  // lane AMMO (knife-melee-20261030): the loose floor boxes keep a single caliber each (5.56×45mm / 12-gauge; 9mm comes with the
+  // pistol start — gen/weaponFinds.ts)
+  boxes: [{itemId: 'ammo_556', count: 30, n: [3, 4]}, {itemId: 'ammo_12ga', count: 8, n: [2, 3]}],
   kept: [{itemId: 'medkit', count: 1, n: [1, 2], keep: FLOOR_ECONOMY.medKeep}, {itemId: 'bandage', count: 1, n: [2, 3], keep: FLOOR_ECONOMY.medKeep}],
   light: [{itemId: BATTERY_ID, count: 1, chance: FLOOR_ECONOMY.batteryChance}, {itemId: FLARE_ID, count: 1, chance: FLOOR_ECONOMY.flareChance}],
 };
@@ -416,8 +430,9 @@ export interface OfficeFloorProgram {
   tilt: Readonly<Record<LootTilt, readonly [number, number, number, number]>>;
 }
 export const OFFICE_FLOOR: OfficeFloorProgram = {
-  street: {box: {itemId: 'ammo_rifle', count: 30}, extra: {itemId: 'ammo_shells', count: 8, chance: 0.6}},
-  tower: {boxes: [{itemId: 'ammo_pistol', count: 15}, {itemId: 'ammo_rifle', count: 30}, {itemId: 'ammo_shells', count: 8}], thresholds: [0.55, 0.8, 0.93], ammoThresholds: [0.42, 0.72, 0.97]},
+  // lane AMMO (knife-melee-20261030): caliber items (9mm / 5.56×45mm / 12-gauge), one caliber per loose box
+  street: {box: {itemId: 'ammo_556', count: 30}, extra: {itemId: 'ammo_12ga', count: 8, chance: 0.6}},
+  tower: {boxes: [{itemId: 'ammo_9mm', count: 15}, {itemId: 'ammo_556', count: 30}, {itemId: 'ammo_12ga', count: 8}], thresholds: [0.55, 0.8, 0.93], ammoThresholds: [0.42, 0.72, 0.97]},
   scarce: {base: [FLOOR_ECONOMY.medKeep * 1.5, 0.35, 0.14], cap: 0.95, medkit: 0.3, food: ['chocolate', 'cola', 'water', 'chips']},
   tilt: OFFICE_FLOOR_TILT,
 };

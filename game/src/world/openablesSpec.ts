@@ -13,6 +13,8 @@
 // The audit of the whole prop catalogue (covered kinds + genuine exceptions) is OPENABLE_AUDIT below and
 // reference/tasks/vertical-slice-iteration08-20261027/lanes/lane-I-audit.md; tests/openables.test.ts keeps both in step.
 
+// Lane AMMO (knife-melee-20261030): ammo rows are GENERIC — the table's ammo weight split ~1/3 each over the calibers (the rows
+// live in items/lootTables.ts, built with items/calibers.ts genericAmmo).
 import {COMPANY_KIND_AUDIT} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS): audit rows
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 

@@ -21,6 +21,7 @@
 //   flare stays where it was. A non-throwable found in it (malformed) goes back in through add(), never lost.
 
 import {itemDef} from './items';
+import {canonicalItemId} from './calibers';
 import {WEAPONS} from '../weapons/weapons';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isBagItem, type GearSlot} from './gear';
 
@@ -84,10 +85,13 @@ export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
   return j;
 }
 
-/** Deep copy back into live stacks (fresh objects, same uids). */
+/**
+ * Deep copy back into live stacks (fresh objects, same uids). Lane AMMO: a legacy gun-specific ammo id (ammo_pistol / ammo_rifle /
+ * ammo_shells) comes back as its caliber item (items/calibers.ts) with the same count — the stack limits are identical.
+ */
 export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null {
   if (!j) return null;
-  const s: ItemStack = {uid: j.uid, itemId: j.itemId, count: j.count};
+  const s: ItemStack = {uid: j.uid, itemId: canonicalItemId(j.itemId), count: j.count};
   if (j.mag !== undefined) s.mag = j.mag;
   if (j.bag) s.bag = j.bag.map(stackFromJSON);
   return s;
@@ -120,6 +124,7 @@ export class Inventory {
   refusal: Refusal | null = null;
 
   makeStack(itemId: string, count: number, mag?: number): ItemStack {
+    itemId = canonicalItemId(itemId); // lane AMMO: a legacy ammo id makes its caliber item
     const def = itemDef(itemId);
     const s: ItemStack = {uid: this.nextUid++, itemId, count: Math.min(count, def.stackMax)};
     if (def.kind === 'weapon') s.mag = mag ?? WEAPONS[def.weaponId!].magazine;
