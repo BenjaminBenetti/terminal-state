@@ -85,15 +85,26 @@ not a general JavaScript sandbox or a licensing audit.
 ## Playing and scope
 
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use
-· right click aim · R reload · E interact · 1–5 / wheel quick slots · Q last item
-· Tab/I inventory · H heal · G drop · F flashlight · M mute · Esc pause.
+· right click aim · R reload · E interact (hold E on a grounded backpack to wear it) · 1–5 / wheel quick slots
+· 6 backpack · G throw (grenade slot) · Q last item · Tab/I inventory · H heal · F flashlight · M mute · Esc pause.
+Drop an item by dragging it out of the inventory panel.
+
+**Office Space overhaul** (task office-overhaul-20261030): every office floor 2–8 is leased to one of **20 fictional
+companies** (a different seeded mix each run; sometimes one company takes two floors), each with its own floor program,
+palette, signage and two signature Meshy props — a law firm's library and Lady Justice, a game studio's arcade lounge,
+a biotech lab's biohazard fridges, a bubblegum brand's gumball machines and so on; the neutral lobby has a tenant
+directory. Offices have office finishes (not station tile), executive suites and real server rooms; the city outside
+sinks into a heavy green fog. The station connects to the lobby through a broad transit hall with two (stopped)
+escalators, the elevator is a full-size car with buttons you aim at and click (or E), a ladder on floor 8 climbs to
+the **roof**, bathroom stall doors open (sometimes there is something in the toilet), flares stack to 10 in a
+dedicated grenade slot thrown with G, and enemy moans carry only along a reasonable walking distance.
 
 Iteration 13 moves rendering to three's **WebGPURenderer** with TSL node shaders (WGSL on WebGPU; the same shaders
 as GLSL on its WebGL 2 fallback, labelled "WebGL2 fallback" on the title screen and HUD; `?renderer=webgl2` forces it).
 The volumetric fog is a GPU march that stays put when you leave and come back (it drifts slowly through the world
 instead of re-rolling), is a little thinner overall with clear and dense areas, and is lit by fixtures, the
 flashlight and flares. Iteration 12 adds a decayed, foggier station (30 years of neglect on walls/floors/ceilings, patchy drifting
-volumetric fog), a flashlight battery with a dim body glow, throwable red flares (T), enemies drawn to light, twice
+volumetric fog), a flashlight battery with a dim body glow, throwable red flares (G since the office overhaul; T originally), enemies drawn to light, twice
 the enemies and far scarcer non-ammo supplies placed by room purpose. Iteration 8 adds stacked station levels (an upper concourse over the platforms and
 tracks, a lower service level beneath them, stair cores and light wells), zone-specific
 worn and broken wall detail, composed prop clusters, openable bins/lockers/drawers and

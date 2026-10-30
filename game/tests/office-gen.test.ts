@@ -281,7 +281,7 @@ describe('office level (one continuous layout)', () => {
         floorEnemies += per([n]);
         floors++;
       }
-      expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6);
+      expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
       expect(l.zombies.every(z => z.archetype === 'zombie' || z.archetype === 'ratdog')).toBe(true);
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
       pickups += l.pickups.length;
