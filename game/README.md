@@ -37,7 +37,7 @@ saved: no localStorage/IndexedDB; settings last for the session only.
 The built folder is fully static: open `index.html` through any static HTTP server (not file://).
 
 ## Controls
-WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use · right click
+WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use (knife: hold to wind up, release to slash) · right click
 aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) / open a stall door · 1–5 / wheel quick slots · ~ (the key left of 1) melee slot: draws the knife, which lives there and
 not in a quick slot · 6 backpack (hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q last item · Tab or I inventory · H quick
 heal · F flashlight · hold G, release to throw the grenade-slot item (flares) · elevator: aim at a button and click or press E · M mute · Esc pause.
