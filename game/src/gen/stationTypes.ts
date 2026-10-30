@@ -7,6 +7,7 @@ import type {PropPlacement} from './props';
 import type {ShopBox} from './storefronts';
 import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
+import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -85,6 +86,8 @@ export interface Area extends Rect {
    * identically into both connected grids); `ceil` is absolute on every level.
    */
   level?: number;
+  /** Task office-overhaul-20261030 (lane TENANTS): the company occupying this office area (office floors 2..8 only). */
+  tenant?: CompanyId;
 }
 
 export interface Door extends Rect {
@@ -364,6 +367,12 @@ export interface OfficeTowerInfo {
   name: string;
   /** Candidate gear spots (flat reachable floor in back-of-house office rooms), every storey. */
   gearSpots?: {x: number; y: number; z: number; level: number; area: number}[];
+  /** Task office-overhaul-20261030: the company tenant of each office floor 2..8 (lane TENANTS). */
+  tenants?: TenantFloor[];
+  /** Task office-overhaul-20261030: the roof storey (lane STRUCT). */
+  roof?: RoofInfo;
+  /** Task office-overhaul-20261030: the high-capacity station <-> lobby connection (lane STRUCT). */
+  transit?: TransitInfo;
 }
 
 /** Working canvas for generation (cells); the finished layout is cropped to its bounds. */
