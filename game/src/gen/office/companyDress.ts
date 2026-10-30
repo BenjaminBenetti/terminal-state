@@ -28,7 +28,8 @@ import {COMPANY_KIND_ASSET, ON_SIDEBOARD, SIDE_TO_WALL, isCompanyKind} from './c
 import {officeTenants} from './tenants';
 import {COMPANY_ASSET_SPECS} from '../../assets/companyDims.generated';
 import {cubicleFarm, hostDecor, landingStrip, wallSign, type OfficeDress} from './dress';
-import {placeHostClutter} from './hostClutter'; // task office-props-physics-scale-20261030 (lane FURN)
+import {placeCounterCups, placeHostClutter} from './hostClutter'; // task office-props-physics-scale-20261030 (lane FURN)
+import {Rng} from '../../core/rng';
 import type {OfficeAreaMeta} from './tower';
 
 const q4 = (v: number) => Math.round(v * 4) / 4;
@@ -222,6 +223,14 @@ function onSideboard(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], pos
   const p: PropPlacement = {kind, x: r3(base.x + fx * back), z: r3(base.z + fz * back), y: r3(base.y + cab.h), rot: base.rot, area: a.id, hx, hz, h: def.h,
     blocksSight: false, variant: 0, host, ...(ctx.level ? {level: ctx.level} : {})};
   ctx.layout.props.push(p);
+  // Task office-props-physics-scale-20261030 (lane FURN, wave 2): the piece's span of the counter top is taken (the sideboard's loot
+  // surface skips it, as the desk monitor's `cut`); beside an espresso machine, its cup stacks (own seed from the spot: the room's
+  // stream is untouched)
+  (base.cut ??= []).push({y: cab.h, x0: r3(-def.w / 2 - 0.02), x1: r3(def.w / 2 + 0.02)});
+  if (kind === 'espressoMachine') {
+    const rng = new Rng(((Math.round(base.x * 100) * 73856093) ^ (Math.round(base.z * 100) * 19349663) ^ (ctx.level * 83492791)) >>> 0);
+    for (const sp of placeCounterCups(ctx.layout.props, base, host, def.w / 2, rng)) base.cut.push({y: cab.h, ...sp});
+  }
   return p;
 }
 
@@ -548,6 +557,8 @@ function serverRoom(ctx: PlaceCtx, a: Area): void {
 /** Chairs / stools pulled up to company work surfaces (sitter side +Z unless noted): host decor, collides, never blocks. */
 const SEAT_AT: Partial<Record<PropKind, {kind: PropKind; behind?: boolean; n?: number}>> = {
   tradingDesk: {kind: 'officeChair'}, mixingConsole: {kind: 'officeChair'}, cctvConsole: {kind: 'officeChair'}, monitorDesk: {kind: 'officeChair'},
+  // (lane FURN wave 2: the drafting table's baked stool was removed — an office chair is pulled up to it instead)
+  draftingTable: {kind: 'officeChair'},
   // (lane LAYOUT, per OPEN: no chair at the lab benches — their 15 drawers open on the sitter side and would pass through it)
   newsDesk: {kind: 'officeChair', behind: true, n: 2}, executiveDesk: {kind: 'executiveChair', behind: true},
 };

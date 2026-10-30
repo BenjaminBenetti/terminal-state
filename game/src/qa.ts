@@ -31,12 +31,11 @@ import {memorySummary} from './run/memory'; // Iteration 16 (lane RUN)
 import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
 import type {Arrival, LevelId} from './levels/types'; // Iteration 16 (lane RUN)
 import {propPhysics} from './damage/materials'; // Task office-props-physics-scale-20261030 (lane PHYS): goWalkInto
-import {isLootHolderKind} from './items/loot'; // lane PHYS
 import type {PropPlacement} from './gen/props'; // lane PHYS
 
 export function installQaHooks(game: Game): void {
   // task office-props-physics-scale-20261030 (lane PHYS): the goWalkInto target (walkIntoCheck)
-  let walkInto: {prop: PropPlacement; index: number; x: number; z: number; contacts: number; shots: number} | null = null;
+  let walkInto: {prop: PropPlacement; index: number; x: number; z: number; contacts: number; shots: number; lots: number} | null = null;
   const api = {
     ready: () => game.state !== 'loading' && !!game.layout,
     state: () => game.state,
@@ -513,14 +512,15 @@ export function installQaHooks(game: Game): void {
     /**
      * Task office-props-physics-scale-20261030 (lane PHYS): stand 1.2 m off a free side of the nearest untouched light physics prop
      * of `kind` (default: any contact kind — e.g. 'rollingSuitcase' in the Subway, 'officeChair' / 'plasticStackChair' in the
-     * Office) on `level` (default the player's storey), facing it. Then hold W (a real key) ~1 s and read walkIntoCheck(): the
-     * prop must be loose and moved with `shots` 0 (no shot / aim needed). Returns the target or null.
+     * Office; a spill holder: 'bin', 'wheelieBin', 'archiveBoxes') on `level` (default the player's storey), facing it. Then hold
+     * W (a real key) ~1 s and read walkIntoCheck(): the prop must be loose and moved with `shots` 0 (no shot / aim needed); a
+     * spill holder's `spilled` equals its `lotsBefore` and `lotsLeft` is 0. Returns the target or null.
      */
     goWalkInto: (kind?: string, level?: number) => {
       const p = game.player, L = game.levels, props = game.layout.props, di = game.physics.dynamicItems;
       const lv = level ?? Math.max(0, L.levelAt(p.x, p.z, p.y + 0.05));
       const cands = props.map((q, i) => ({q, i})).filter(({q}) => (q.level ?? 0) === lv && q.h > 0.02 && (!kind || q.kind === kind) && !!propPhysics(q.kind).contact
-        && !isLootHolderKind(q.kind) && di.isDynamicProp(q)).sort((a, b) => Math.hypot(a.q.x - p.x, a.q.z - p.z) - Math.hypot(b.q.x - p.x, b.q.z - p.z)).slice(0, 40);
+        && di.isDynamicProp(q)).sort((a, b) => Math.hypot(a.q.x - p.x, a.q.z - p.z) - Math.hypot(b.q.x - p.x, b.q.z - p.z)).slice(0, 40);
       const near = new Set<number>(), r = 0.36;
       const free = (t: PropPlacement, x: number, z: number) => {
         for (let cz = Math.floor((z - r) / CELL); cz <= Math.floor((z + r) / CELL); cz++) for (let cx = Math.floor((x - r) / CELL); cx <= Math.floor((x + r) / CELL); cx++) if (L.blocksAt(cx, cz, x, z, t.y)) return false;
@@ -539,8 +539,9 @@ export function installQaHooks(game: Game): void {
           if (!ok || !api.teleport(q.x + ax * (face + 1.5), q.z + az * (face + 1.5), undefined, lv)) continue;
           api.lookAt(q.x, q.y + Math.min(0.5, q.h * 0.6), q.z);
           const st = di.stats();
-          walkInto = {prop: q, index: i, x: q.x, z: q.z, contacts: st.counts.contacts, shots: st.counts.shots};
-          return {kind: q.kind, index: i, level: lv, at: {x: q.x, y: q.y, z: q.z}, mat: propPhysics(q.kind).mat, hint: 'hold W ~1 s, then __LL.walkIntoCheck()'};
+          const lots = game.containers?.holderFor(q)?.state.lots.length ?? 0;
+          walkInto = {prop: q, index: i, x: q.x, z: q.z, contacts: st.counts.contacts, shots: st.counts.shots, lots};
+          return {kind: q.kind, index: i, level: lv, at: {x: q.x, y: q.y, z: q.z}, mat: propPhysics(q.kind).mat, lots, hint: 'hold W ~1 s, then __LL.walkIntoCheck()'};
         }
       }
       return null;
@@ -550,7 +551,9 @@ export function installQaHooks(game: Game): void {
       const t = walkInto;
       if (!t) return null;
       const st = game.physics.dynamicItems.stats();
-      return {kind: t.prop.kind, index: t.index, loose: t.prop.h === 0, moved: +Math.hypot(t.prop.x - t.x, t.prop.z - t.z).toFixed(3), contacts: st.counts.contacts - t.contacts,
+      const h = game.containers?.holderFor(t.prop);
+      const holder = h ? {lotsBefore: t.lots, lotsLeft: h.state.lots.length, spilled: game.pickups.list.filter(q => q.fromLot?.holder === h.serial).length} : {};
+      return {kind: t.prop.kind, index: t.index, loose: t.prop.h === 0, moved: +Math.hypot(t.prop.x - t.x, t.prop.z - t.z).toFixed(3), ...holder, contacts: st.counts.contacts - t.contacts,
         shots: st.counts.shots - t.shots, propsAwake: st.propsAwake, resting: st.resting, restingInWorld: st.restingInWorld, reclaimed: st.counts.reclaimed, redetached: st.counts.redetached,
         detached: game.damage.props.detachedCount, stepMs: game.physics.stats().stepMs};
     },

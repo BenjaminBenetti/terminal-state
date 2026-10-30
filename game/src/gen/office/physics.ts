@@ -6,8 +6,8 @@
 //    with a plausible mass (kg), a CALIBRATED contact material (damage/materials.ts PHYS_MATS: `castor` = wheeled, rolls on
 //    carpet; `pad` = feet / fabric / pot base on carpet — calibrated against cannon-es's friction clamp so bodies really slide)
 //    and a collider (box of the kind's footprint, or an upright cylinder). damage/materials.ts spreads these rows into
-//    PROP_PHYSICS with `contact`: walking into one wakes it too (not only a shot), see DynamicItems.contactWake (holders excepted:
-//    shots only; task office-props-physics-scale-20261030: in every world, like the Subway kinds' SUBWAY_CONTACT overlay).
+//    PROP_PHYSICS with `contact`: walking into one wakes it too (not only a shot), see DynamicItems.contactWake (task
+//    office-props-physics-scale-20261030: in every world, like the Subway kinds' SUBWAY_CONTACT overlay; a spill holder spills).
 //    `onHost`: may also go loose while standing on its host's top (a monitor on a desk) — the host itself is static.
 //  - static: stays put, with the honest reason. Rule of thumb used here: furniture WITHOUT castors heavier than ~30 kg stays
 //    static — a passing bump cannot slide it (static friction of a few hundred newtons on carpet), and the walker shove of
@@ -67,7 +67,7 @@ export const OFFICE_PHYS = {
   giantTeddy: D(6, 'pad', 'giant plush teddy (~6 kg): knocked across the floor by buckshot, shoved aside when bumped'),
   rockingHorse: D(9, 'pad', 'wooden rocking horse (~9 kg): rocks / slides'),
   jukebox: S('too heavy', 'jukebox (~130 kg)'),
-  mixingConsole: S('built-in', 'studio mixing desk built into the control room'),
+  mixingConsole: S('built-in', 'studio mixing desk on its riser, built into the control room (its studio monitors are separate props: lane FURN)'),
   examTable: S('too heavy', 'steel examination table (~90 kg)'),
   vitalsMonitor: D(12, 'castor', 'vitals monitor on a wheeled pole stand (~12 kg): rolls when bumped or shot'),
   dressForm: D(6, 'pad', 'padded dress form on a stand (~6 kg, tall and narrow): buckshot knocks it over, a bump shoves it'),
@@ -79,7 +79,7 @@ export const OFFICE_PHYS = {
   cctvConsole: S('built-in', 'CCTV control console built into the control room'),
   metalDetector: S('anchored', 'walk-through metal detector arch bolted at the entry (~70 kg)'),
   vaultSafe: S('too heavy', 'antique vault safe (~500 kg)'),
-  archiveBoxes: D(28, 'pad', 'stack of archive boxes full of paper (~28 kg): an openable spill holder (lane OPEN) — a shot knocks it loose and its finite lots spill (openablesSpec `spill`); walking into it does not (holders: shots only)'),
+  archiveBoxes: D(28, 'pad', 'stack of archive boxes full of paper (~28 kg): an openable spill holder (lane OPEN) — a shot or a walk-in knocks it loose and its finite lots spill (openablesSpec `spill`), then it slides / tips'),
   aquarium: S('too heavy', 'water-filled aquarium (~200 kg) on its sideboard'),
   catTree: D(14, 'pad', 'carpeted cat tree (~14 kg): slides / rocks when shot, shoved along when bumped'),
   doughMixer: S('machinery', 'floor dough mixer (~150 kg)'),
@@ -116,6 +116,11 @@ export const OFFICE_PHYS = {
   labTubeRack: D(0.6, 'plastic', 'test-tube rack with tubes (~0.6 kg): knocked across the bench by a shot', {onHost: true}),
   tradingMonitor: D(5, 'pad', '27-inch monitor on its stand (~5 kg) on a trading desk: a shot slides / topples it off the desk top', {onHost: true}),
   tradingKeyboard: D(1.1, 'plastic', 'keyboard and mouse (~1.1 kg): knocked across the desk top by a shot', {onHost: true}),
+  // (wave 2: the drafting table's lamp, the mixing desk's studio monitors, the espresso machine's cups — on its sideboard counter)
+  draftingLamp: D(1.5, 'metal', 'arm desk lamp on a weighted base (~1.5 kg) on a drafting table: a shot knocks it over / off', {onHost: true}),
+  studioMonitor: D(9, 'pad', 'studio monitor (~9 kg) on the mixing desk\'s meter shelf: a shot slides / topples it off', {onHost: true}),
+  studioMonitorSmall: D(5, 'pad', 'small studio monitor (~5 kg) on the meter shelf: a shot slides / topples it off', {onHost: true}),
+  espressoCups: D(0.6, 'glass', 'stack of four espresso cups (~0.6 kg) on the café counter: tips and scatters when shot', {onHost: true, shape: 'cylinder'}),
 } satisfies Record<OfficeKind, OfficePhys>;
 
 /** Dynamic office kinds as PROP_PHYSICS rows (damage/materials.ts spreads them). */

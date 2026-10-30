@@ -2630,20 +2630,20 @@
    "output": {
     "file": "game/public/assets/models/office-drafting-table.glb",
     "url": "assets/models/office-drafting-table.glb",
-    "sha256": "c04ba44dfafb6443e04af70b3ef84f8efed6a56a2ec0f6c94b8d898fbe572595",
-    "bytes": 259812,
-    "triangles": 3311,
+    "sha256": "b898ca89109a345b6e34b386a216747c388bdf14c71a3f5b590855a08f6cb96d",
+    "bytes": 128412,
+    "triangles": 753,
     "dims": [
-     1.3,
-     1.1357,
-     1.0022
+     1.3838,
+     0.75,
+     0.9746
     ],
     "overBudget": false
    },
    "targetTriangles": 3500,
-   "sizeM": 1.3,
-   "sizeAxis": "w",
-   "scale": 1.367437,
+   "sizeM": 0.75,
+   "sizeAxis": "h",
+   "scale": 1.608379,
    "nativeFront": "+Z",
    "textureStep": 0,
    "textureSizes": {
@@ -2651,7 +2651,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.1762 to 0.75 m (h), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -2667,8 +2667,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 42374,
-     "sha256": "e83957354180bd75b125c398c060169dda82ecdc69148d6885ebd2cf1fcb3a8d"
+     "bytes": 40503,
+     "sha256": "79700a1e24da8519a15c9dcdee14579cc1a28a19ae2b6560114af4385aea8117"
     },
     {
      "slot": "metallicRoughness",
@@ -2677,8 +2677,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 35678,
-     "sha256": "bbaee51406cf5cefe4afa734d5f1c224152305cc38af0ed78662c99edcf4bc4e"
+     "bytes": 34332,
+     "sha256": "4517653eae203e9c88ebc25778b0b6a2846bc815144b68b11e90f6245fae2128"
     },
     {
      "slot": "normal",
@@ -2687,8 +2687,128 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 13267,
-     "sha256": "eb53222e03dcbb5b3b83768c11e70bf254088457466e76e84d79d9e9924cbd73"
+     "bytes": 12038,
+     "sha256": "336a41c719633bbf2c0b1083726f6ddd0db62dd9c80361900280b067d42b5092"
+    }
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 1.3,
+    "manifestSizeAxis": "w",
+    "sizeM": 0.75,
+    "sizeAxis": "h",
+    "basis": "board top 0.75 m (seated drafting table); stool / papers / T-square / tape removed, the lamp separated",
+    "scaleFromManifest": 1.1762,
+    "removed": {
+     "tris": 2558,
+     "comps": 61
+    },
+    "supportTextureCleanup": {
+     "faces": 2,
+     "masked": 669019,
+     "ghostTexels": 208228,
+     "median": [
+      144,
+      90,
+      54
+     ],
+     "sources": 451848,
+     "baseColor": "2048x2048",
+     "metallicRoughness": "2048x2048",
+     "normal": "2048x2048"
+    },
+    "supportHeights": [
+     0.638
+    ]
+   },
+   "parts": [
+    {
+     "id": "drafting-lamp",
+     "label": "arm desk lamp",
+     "kind": "prop",
+     "sizeM": 0.55,
+     "sizeAxis": "h",
+     "scale": 1.511944,
+     "selection": [
+      -0.67,
+      0.63,
+      0,
+      0.06,
+      1.15,
+      0.25
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.65,
+       0.6383,
+       0.0304
+      ],
+      "max": [
+       0.0331,
+       1.1357,
+       0.2314
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.8372,
+       0.7508,
+       -0.0663
+      ],
+      "max": [
+       -0.0337,
+       1.3358,
+       0.1701
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.0049,
+       0,
+       1,
+       1
+      ],
+      "share": 0.9951
+     },
+     "output": {
+      "file": "game/public/assets/models/office-drafting-lamp.glb",
+      "url": "assets/models/office-drafting-lamp.glb",
+      "sha256": "2256eb88517c1619d6b5c8d64c4a7b879190e0fde80a59055541d72ea44ac331",
+      "bytes": 95312,
+      "triangles": 1308,
+      "dims": [
+       0.7552,
+       0.55,
+       0.2222
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        255,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 13411
+      },
+      {
+       "size": [
+        255,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 7020
+      },
+      {
+       "size": [
+        255,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 1883
+      }
+     ]
     }
    ]
   },
@@ -3097,20 +3217,20 @@
    "output": {
     "file": "game/public/assets/models/office-espresso-machine.glb",
     "url": "assets/models/office-espresso-machine.glb",
-    "sha256": "d77effbd4dd7fefb2c641c1ebb411f0f3e54c3eccf8e144d0ec5d656cf209fbc",
-    "bytes": 325804,
-    "triangles": 3819,
+    "sha256": "0f5f0b73a8b68c10897a954d36d261793cc8b9e8b93e941b8859789523577127",
+    "bytes": 272160,
+    "triangles": 2643,
     "dims": [
-     1.4,
-     1.2869,
-     1.4065
+     0.78,
+     0.717,
+     0.7836
     ],
     "overBudget": false
    },
    "targetTriangles": 4000,
-   "sizeM": 1.4,
+   "sizeM": 0.78,
    "sizeAxis": "w",
-   "scale": 1.474897,
+   "scale": 0.821728,
    "nativeFront": "+Z",
    "textureStep": 0,
    "textureSizes": {
@@ -3118,7 +3238,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x0.5571 to 0.78 m (w), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -3135,8 +3255,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 67630,
-     "sha256": "6ff9664db636b84f5022744ce3781123ff1f343300f56327239d58d98345c1d1"
+     "bytes": 67521,
+     "sha256": "7f9d282f7465cfc600949383ba87b769b6294817fdc878d0d08b4a4952d29cfb"
     },
     {
      "slot": "metallicRoughness",
@@ -3145,8 +3265,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 75076,
-     "sha256": "249abd29f0806f72b7c76e5b6839f025eb97c6e1f82a4471c1772f7037f45fd4"
+     "bytes": 73496,
+     "sha256": "7d810b5ff4b5c0ef990f80d95f32bb9c155ce3523474b2fc88c44f18478a00da"
     },
     {
      "slot": "normal",
@@ -3155,8 +3275,128 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 25692,
-     "sha256": "e4eb7ebdc29d2f6e63cb4afb770ae9be6d60c51d1f10cd98c6c01edaadd239ff"
+     "bytes": 25242,
+     "sha256": "24b964b0a029f16c7c561b52856acaba55d50f26851ea82abaeb1e791c499fbd"
+    }
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 1.4,
+    "manifestSizeAxis": "w",
+    "sizeM": 0.78,
+    "sizeAxis": "w",
+    "basis": "width 0.78 m (3-group machine) on a counter; cups removed (a cup stack prop stands beside it)",
+    "scaleFromManifest": 0.557143,
+    "removed": {
+     "tris": 1176,
+     "comps": 31
+    },
+    "supportTextureCleanup": {
+     "faces": 3,
+     "masked": 23676,
+     "ghostTexels": 4110,
+     "median": [
+      135,
+      76,
+      63
+     ],
+     "sources": 17639,
+     "baseColor": "2048x2048",
+     "metallicRoughness": "2048x2048",
+     "normal": "2048x2048"
+    },
+    "supportHeights": [
+     1.029
+    ]
+   },
+   "parts": [
+    {
+     "id": "espresso-cups",
+     "label": "stack of espresso cups",
+     "kind": "prop",
+     "sizeM": 0.14,
+     "sizeAxis": "h",
+     "scale": 0.887677,
+     "selection": [
+      -0.64,
+      1,
+      0.1,
+      -0.47,
+      1.26,
+      0.27
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.6431,
+       1.0162,
+       0.1062
+      ],
+      "max": [
+       -0.4674,
+       1.2488,
+       0.2711
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.3583,
+       0.5662,
+       0.0592
+      ],
+      "max": [
+       -0.2604,
+       0.6958,
+       0.151
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0,
+       0,
+       1,
+       1
+      ],
+      "share": 1
+     },
+     "output": {
+      "file": "game/public/assets/models/office-espresso-cups.glb",
+      "url": "assets/models/office-espresso-cups.glb",
+      "sha256": "cb82bb7e5a0f1125b6033243f3543239991dfca796a4a8db665357e3fc929e2b",
+      "bytes": 54872,
+      "triangles": 226,
+      "dims": [
+       0.1058,
+       0.14,
+       0.0993
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 22755
+      },
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 15597
+      },
+      {
+       "size": [
+        256,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 3514
+      }
+     ]
     }
    ]
   },
@@ -4187,12 +4427,12 @@
    "output": {
     "file": "game/public/assets/models/office-mixing-console.glb",
     "url": "assets/models/office-mixing-console.glb",
-    "sha256": "a5d010457044cd528871e90967e4200a3131ec595a69b5efdb7765e68bf45ad9",
-    "bytes": 438332,
-    "triangles": 3806,
+    "sha256": "716c5af4a23eb4c38885d5a75d9bd6a73c86d335d9a08bff429b083cf6e4a23f",
+    "bytes": 397568,
+    "triangles": 2656,
     "dims": [
      2,
-     1.2524,
+     1.0337,
      1.9928
     ],
     "overBudget": false
@@ -4208,7 +4448,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.0000 to 2 m (w), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -4247,6 +4487,215 @@
      "mime": "image/jpeg",
      "bytes": 18230,
      "sha256": "493a35cb8be540e4890ca6084624038c90280d30fe154e2c5ab452aa90b251e4"
+    }
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 2,
+    "manifestSizeAxis": "w",
+    "sizeM": 2,
+    "sizeAxis": "w",
+    "basis": "width 2.0 m kept; on a +0.45 m riser (meter shelf ~1.03, work surface ~0.6-0.75); monitors separated",
+    "scaleFromManifest": 1,
+    "removed": {
+     "tris": 1160,
+     "comps": 6
+    },
+    "supportTextureCleanup": {
+     "faces": 0
+    },
+    "supportHeights": [
+     0.572
+    ],
+    "edits": {
+     "plinth": {
+      "x": [
+       -0.95,
+       0.95
+      ],
+      "z": [
+       -0.9464,
+       0.9464
+      ],
+      "h": 0.45
+     }
+    }
+   },
+   "parts": [
+    {
+     "id": "studio-monitor",
+     "label": "studio monitor (tall)",
+     "kind": "prop",
+     "sizeM": 0.453,
+     "sizeAxis": "h",
+     "scale": 2.094236,
+     "selection": [
+      -0.45,
+      0.79,
+      0.36,
+      -0.005,
+      1.26,
+      0.84
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.4388,
+       0.7988,
+       0.3738
+      ],
+      "max": [
+       -0.0159,
+       1.2524,
+       0.8274
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.4388,
+       0.7988,
+       0.3738
+      ],
+      "max": [
+       -0.0159,
+       1.2524,
+       0.8274
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0,
+       0.0815,
+       0.9961,
+       0.9092
+      ],
+      "share": 0.8244
+     },
+     "output": {
+      "file": "game/public/assets/models/office-studio-monitor.glb",
+      "url": "assets/models/office-studio-monitor.glb",
+      "sha256": "283c6d89675f10161eccd72cf44918dd966ce41837b1e58f81cdf8f9dd209cc7",
+      "bytes": 22960,
+      "triangles": 116,
+      "dims": [
+       0.4223,
+       0.453,
+       0.453
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        256,
+        213
+       ],
+       "mime": "image/jpeg",
+       "bytes": 9882
+      },
+      {
+       "size": [
+        256,
+        213
+       ],
+       "mime": "image/jpeg",
+       "bytes": 5137
+      },
+      {
+       "size": [
+        256,
+        213
+       ],
+       "mime": "image/jpeg",
+       "bytes": 1739
+      }
+     ]
+    },
+    {
+     "id": "studio-monitor-small",
+     "label": "studio monitor (small)",
+     "kind": "prop",
+     "sizeM": 0.417,
+     "sizeAxis": "w",
+     "scale": 2.098325,
+     "selection": [
+      -0.88,
+      0.57,
+      0.49,
+      -0.455,
+      0.8,
+      0.88
+     ],
+     "manifestFrame": {
+      "min": [
+       -0.8761,
+       0.5796,
+       0.4987
+      ],
+      "max": [
+       -0.4593,
+       0.7967,
+       0.8735
+      ]
+     },
+     "stood": {
+      "min": [
+       -0.8761,
+       0.5796,
+       0.4987
+      ],
+      "max": [
+       -0.4593,
+       0.7967,
+       0.8735
+      ]
+     },
+     "textureCrop": {
+      "uv": [
+       0.4072,
+       0.0273,
+       0.9946,
+       1
+      ],
+      "share": 0.5713
+     },
+     "output": {
+      "file": "game/public/assets/models/office-studio-monitor-small.glb",
+      "url": "assets/models/office-studio-monitor-small.glb",
+      "sha256": "dc703833c52dde31ac59b5d6234d3333c0f474e6ab3d80100f223dbf83c1dcb7",
+      "bytes": 24320,
+      "triangles": 154,
+      "dims": [
+       0.417,
+       0.2172,
+       0.375
+      ]
+     },
+     "textures": [
+      {
+       "size": [
+        155,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 10117
+      },
+      {
+       "size": [
+        155,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 5117
+      },
+      {
+       "size": [
+        155,
+        256
+       ],
+       "mime": "image/jpeg",
+       "bytes": 1937
+      }
+     ]
     }
    ]
   },
@@ -8711,12 +9160,12 @@
    "output": {
     "file": "game/public/assets/models/office-foosball-table.glb",
     "url": "assets/models/office-foosball-table.glb",
-    "sha256": "104151d80c13e9f6120c98820c36f0f327f2aa94d871953a411b39a548a051e0",
+    "sha256": "7cd6b1188ad0a3c25004cfe5698a8d6828f33fa298d7006f8aab8197a2118a09",
     "bytes": 310132,
     "triangles": 3938,
     "dims": [
      1.4,
-     0.5199,
+     0.9199,
      1.2576
     ],
     "overBudget": false
@@ -8732,7 +9181,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: furniture-only rescale x1.0000 to 1.4 m (longest), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -8772,7 +9221,26 @@
      "bytes": 22627,
      "sha256": "f628a13c13624d26121c3d77598f912514471ba52f6a402a9000f814fead7864"
     }
-   ]
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "furniture-only rescale",
+    "manifestSizeM": 1.4,
+    "manifestSizeAxis": "longest",
+    "sizeM": 1.4,
+    "sizeAxis": "longest",
+    "basis": "length 1.4 m kept; legs extended +0.40 m (rim ~0.89, playfield ~0.75)",
+    "scaleFromManifest": 1,
+    "removed": null,
+    "edits": {
+     "legs": {
+      "cut": 0.09,
+      "dy": 0.4,
+      "moved": 3931,
+      "stretched": 32
+     }
+    }
+   }
   },
   {
    "code": "E11",
@@ -8869,12 +9337,12 @@
    "output": {
     "file": "game/public/assets/models/office-ping-pong-table.glb",
     "url": "assets/models/office-ping-pong-table.glb",
-    "sha256": "b7cb6cb2dbeadf1e75b055aa9d4006dfd2067049a2e79c75dab4f5428ef87ffd",
-    "bytes": 327328,
-    "triangles": 2980,
+    "sha256": "07029a4f154ff9cf2a87cef19effa90a16db8cdb71bc5c18fba7d1dc675bd8a4",
+    "bytes": 258644,
+    "triangles": 1480,
     "dims": [
-     2.4204,
-     0.8281,
+     1.8456,
+     1.0281,
      2.74
     ],
     "overBudget": false
@@ -8890,7 +9358,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.0000 to 2.74 m (longest), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -8907,8 +9375,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 144479,
-     "sha256": "e120bfeb388f6f2c97a98e58f935fd6e3392acb4827190000214b8a757f7df48"
+     "bytes": 139806,
+     "sha256": "54d9a3fb34d0db10009082657e8509d1161bebf986ff6ad5a8fc697fb9dab7fd"
     },
     {
      "slot": "metallicRoughness",
@@ -8917,8 +9385,8 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 27712,
-     "sha256": "7b69368a6bd83fa7822541ac719b6d10c8f30f266f8ff9fddd03265984c84900"
+     "bytes": 26566,
+     "sha256": "7a8b8145f92c6d83da0bf5c5113eadd9986159f448363564d771155759814633"
     },
     {
      "slot": "normal",
@@ -8927,10 +9395,50 @@
       512
      ],
      "mime": "image/jpeg",
-     "bytes": 19611,
-     "sha256": "354192852542379bd3c3615e1a95efd971270e476cf95fb300974e9d77a38a4d"
+     "bytes": 17426,
+     "sha256": "2769da950542ba752b626b9a4d998f5f4471f425f4c12e7611b89331efc25ae8"
     }
-   ]
+   ],
+   "furniture": {
+    "task": "office-props-physics-scale-20261030 (lane FURN)",
+    "operation": "local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale",
+    "manifestSizeM": 2.74,
+    "manifestSizeAxis": "longest",
+    "sizeM": 2.74,
+    "sizeAxis": "longest",
+    "basis": "regulation 2.74 x 1.525 m at 0.76 m: legs +0.20 m, width x0.7625; paddles dropped",
+    "scaleFromManifest": 1,
+    "removed": {
+     "tris": 1500,
+     "comps": 2
+    },
+    "supportTextureCleanup": {
+     "faces": 2,
+     "masked": 754951,
+     "ghostTexels": 73155,
+     "median": [
+      31,
+      94,
+      137
+     ],
+     "sources": 681796,
+     "baseColor": "2048x2048",
+     "metallicRoughness": "2048x2048",
+     "normal": "2048x2048"
+    },
+    "supportHeights": [
+     0.559
+    ],
+    "edits": {
+     "legs": {
+      "cut": 0.2,
+      "dy": 0.2,
+      "moved": 800,
+      "stretched": 168
+     },
+     "scaleX": 0.7625
+    }
+   }
   },
   {
    "code": "E12",

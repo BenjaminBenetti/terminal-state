@@ -91,6 +91,10 @@ cut out of the lab bench / trading desk models by `tools/asset-pipeline/props/bu
 `lib/clutter-split.mjs` (connected components on the support surface; one model per object type at its own real size; the
 painted ghosts they left on the worktop / desk top / display shelves cleaned in the body's texture), placed back on their host's
 top by `gen/office/hostClutter.ts` (seeded, supported, non-overlapping) as dynamic `onHost` props (`gen/office/physics.ts`).
+Wave 2 (lane SCALE's catalog review): `draftingLamp` (drafting table), `studioMonitor` / `studioMonitorSmall` (the mixing desk's meter
+shelf), `espressoCups` (beside the espresso machine, which now stands on a `cabinetLow` counter: `ON_SIDEBOARD`); furniture-only
+proportion edits in the same script (`legs`: foosball +0.40 m, ping-pong +0.20 m and width x0.7625; `plinth`: the mixing desk on a
+0.45 m riser; drafting table / espresso machine rescaled by their own board / width).
 
 ## 3. Movable things move
 Standing user rule (2026-10-30): **every physics object reacts to the player walking into it — no shot needed first** (task
@@ -117,15 +121,21 @@ office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`)
     stick (it only rocks / tips, and the walker sinks into it). Every light floor kind — office furniture and the Subway kinds
     alike — uses the calibrated `castor` (wheels / castors: suitcases, strollers, wheelchairs, hand trucks, wheelie bins, mop
     buckets, shop vacs, IV poles, ingredient bins, swivel chairs) or `pad` (feet / bases / bags / bundles: stacking and folding
-    chairs, signs, fans, extinguishers, trash bags, newspaper bundles, ladders, barricades, racks, bicycles) material of
-    `PHYS_MATS`. Masses are unchanged. The Lane A trash can (`bin`, shots only) keeps its iteration-07 metal contact.
+    chairs, signs, fans, extinguishers, trash bags, newspaper bundles, ladders, barricades, racks, bicycles, the trash can, the
+    archive box stack) material of `PHYS_MATS`. Masses are unchanged (a ~12 kg wheelie bin rolls / rocks, a 7 kg trash can and
+    a 28 kg archive stack slide / tip; none is launched).
   - Rule of thumb: furniture without castors over ~30 kg stays static (`too heavy`); the walker shove matches the walker's
     speed, so a dynamic sofa could be bulldozed like a chair.
 - Contact, in EVERY world (Subway, Office storeys, the station hall under the tower, the roof): walking into a light prop of
   a `contact` kind wakes it; walkers then shove it. The player is the waker; AI walkers wake props only within
   `CONTACT_RANGE` of the player. `contact` kinds use the office shove rules everywhere (shove gain, push within the body's
   height, a raised prop out of the legs' reach); uncalibrated kinds keep their world's rules (`DynamicItems.officeRules`:
-  towers). Holders wake by shots only.
+  towers).
+- Spill holders (trash can, wheelie bin, archive boxes — every holder `dynamicKind` lets move) wake by contact too: a walk-in
+  knocks one loose exactly like a shot — its lid pops and `containers.goLoose` spills its finite lots once, as pickups of the
+  same lot id / item / count (never re-rolled, duplicated or lost; hover targets the pickups; the loose holder is no longer an
+  [E] target). Pickups lying under a prop when it goes loose (its spilled lots, a pickup beneath it) are not knocked by it
+  while still inside its box (they would start inside its collider and pop). Every other holder stays put.
 - A collider that would start inside a static neighbour (a stacking chair tucked under its table) is clipped on that side when
   it goes loose, so it never pops out; office kinds start within 2 cm and are unchanged.
 - The detach budget is reclaimed, never used up (`MAX_DETACHED` 64 soft / 96 hard): a resting loose prop (also a budget-frozen
@@ -153,14 +163,14 @@ office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`)
   19.9 → 2.5 ms; trajectories bit-identical). Resting loose props inside the moving elevator cab ride it.
 - Static by design, with the reason recorded (`PROP_PHYSICS_AUDIT`):
   - built-in or very heavy furniture, wall-mounted fixtures, machinery, anchored / bolted pieces, partitions, structure;
-  - loot holders that do not spill (their finite lots would float); spill holders (trash can, wheelie bin, archive boxes) go
-    loose by shots only — walking into one does not spill it;
+  - loot holders that do not spill (their finite lots would float);
   - light kinds standing on a host (a toolbox on a crate) and on-top decor of a dynamic host (no floating stacks);
   - `kept` Subway kinds — `janitorCart` (~40 kg loaded cart), `crtTvCart` (~45 kg CRT on a cart), `mobileWhiteboard`,
     `physicianScale` (~25 kg): deliberately left static by this pass (not physics objects today; a later pass may calibrate
     them), listed so it is visible.
-- Browser spot check: `__LL.goWalkInto('rollingSuitcase')` (Subway) or `__LL.goWalkInto('officeChair')` (Office), hold W ~1 s,
-  then `__LL.walkIntoCheck()` → `loose: true`, `moved` > 0.3, `shots: 0`.
+- Browser spot check: `__LL.goWalkInto('rollingSuitcase')` / `__LL.goWalkInto('bin')` (Subway) or
+  `__LL.goWalkInto('officeChair')` / `__LL.goWalkInto('archiveBoxes')` (Office), hold W ~1 s, then `__LL.walkIntoCheck()` →
+  `loose: true`, `moved` > 0.3, `shots: 0` (a spill holder: `spilled` = `lotsBefore`, `lotsLeft` 0).
 
 ## 4. Checks for a new prop
 - Unit tests:

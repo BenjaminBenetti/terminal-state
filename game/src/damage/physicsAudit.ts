@@ -6,7 +6,8 @@
 // Office / company / supporting kinds come from gen/office/physics.ts OFFICE_PHYS. Subway kinds keep their class and mass
 // (damage/materials.ts PROP_PHYSICS / PROP_DEFS.physics; loot holders stay put unless they spill) with the static reasons
 // recorded here. Task office-props-physics-scale-20261030 (lane PHYS): the Subway's light kinds wake by contact too, with a
-// calibrated castor / pad material (damage/materials.ts SUBWAY_CONTACT) — `contact` and `mat` are read from the live physics.
+// calibrated castor / pad material (damage/materials.ts SUBWAY_CONTACT) — `contact` and `mat` are read from the live physics; spill
+// holders wake by contact too (they spill their finite lots as on a shot).
 // tests/office-physics.test.ts + tests/contact-physics.test.ts fail for an unclassified kind, an empty reason, or a row that
 // disagrees with the live physics (dynamicKind, propPhysics.contact).
 
@@ -25,7 +26,7 @@ export interface PhysAuditRow {
   mass?: number;
   shape?: 'box' | 'cylinder';
   mat?: PhysMat;
-  /** dynamic: wakes when a walker moves into it (every world; holders never — shots only). Read from the live physics. */
+  /** dynamic: wakes when a walker moves into it (every world; a spill holder then spills its lots). Read from the live physics. */
   contact?: boolean;
   /** dynamic: may go loose on its static host's top (the office monitor on a desk). */
   onHost?: boolean;
@@ -110,9 +111,9 @@ function subwayRow(kind: string): PhysAuditRow | null {
   if (dynamicKind(kind)) {
     const spill = isSpillHolderKind(kind);
     const onTop = isP7Kind(kind) && p7Spec(kind).uses.some(u => u.at === 'onTop');
-    // task office-props-physics-scale-20261030 (lane PHYS): contact from the live physics (holders: shots only)
-    const contact = !!ph.contact && !isLootHolderKind(kind);
-    const how = spill ? `light openable holder (iteration 08): goes loose when shot, its lid pops and its finite lots spill as pickups; walking into it does not (holders: shots only)${ph.mat === 'castor' ? '; rolls on its wheels once loose' : ''}`
+    // task office-props-physics-scale-20261030 (lane PHYS): contact from the live physics (spill holders spill when walked into)
+    const contact = !!ph.contact;
+    const how = spill ? `light openable holder (iteration 08): ${SUBWAY_CONTACT[kind]?.how ?? 'goes loose when shot or walked into, its lid pops and its finite lots spill as pickups'} (${ph.mat} contact)`
       : contact ? `${SUBWAY_CONTACT[kind]?.how ?? 'light loose prop'} (${ph.mat} contact; wakes when walked into or shot)${onTop ? '; on-top placements stay static (no floating stacks)' : ''}`
       : `light loose prop (iteration 07): rigid body when shot, walkers shove it once loose${onTop ? '; on-top placements stay static (no floating stacks)' : ''}`;
     return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact, how, src: 'subway'};
@@ -130,7 +131,7 @@ function subwayRow(kind: string): PhysAuditRow | null {
 
 function officeRow(kind: string, r: OfficePhys): PhysAuditRow {
   if (!r.dynamic) return {kind, cls: 'static', why: r.why, how: r.how, src: 'office'};
-  return {kind, cls: 'dynamic', mass: r.mass, shape: r.shape ?? 'box', mat: r.mat, contact: !!propPhysics(kind).contact && !isLootHolderKind(kind), ...(r.onHost ? {onHost: true} : {}), how: r.how, src: 'office'};
+  return {kind, cls: 'dynamic', mass: r.mass, shape: r.shape ?? 'box', mat: r.mat, contact: !!propPhysics(kind).contact && dynamicKind(kind), ...(r.onHost ? {onHost: true} : {}), how: r.how, src: 'office'};
 }
 
 /** kind -> its physics-affordance row; a kind with no row here is UNCLASSIFIED (tests fail). */

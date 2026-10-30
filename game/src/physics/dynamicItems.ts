@@ -41,8 +41,11 @@
 //  - CONTACT WAKE IN EVERY WORLD: the Subway's light kinds carry calibrated castor / pad contacts too (damage/materials.ts
 //    SUBWAY_CONTACT), so walking into a suitcase, stroller, chair, sign … wakes it in the Subway and in the Office (imported kinds)
 //    exactly like the office furniture. A `contact` kind follows the office shove rules in every world; the iteration-07 kinds left
-//    uncalibrated (the trash can) keep their world's rules. Holders still wake by shots only; the placement rules (on the floor or
-//    an on-host decor, nothing resting on it) hold in every world.
+//    uncalibrated keep their world's rules. The placement rules (on the floor or an on-host decor, nothing resting on it) hold in
+//    every world. SPILL HOLDERS (trash can, wheelie bin, archive boxes) wake by contact too (coordinator follow-up: the rule is
+//    literal): a walk-in knocks one loose like a shot — holderLoose (ContainerManager.goLoose) spills its finite lots as the same
+//    pickups, once. Pickups lying under a prop when it goes loose (its spilled lots, a pickup on the floor beneath it) are not
+//    knocked by it while they are still inside its box (`under`: they would start inside its collider and pop out).
 //  - DETACH SLOTS ARE RECLAIMED: a resting loose prop (static body, also a budget-frozen one) can hand its own meshes back to its
 //    shared instances AT ITS CURRENT POSE (damage/propDamage.ts reattach: instance matrix = its drawn pose, no pop, its material
 //    clones dropped) and stays loose (entity, body, pose kept: walking into it / shooting it re-detaches it and moves it again).
@@ -170,6 +173,8 @@ interface Ent {
   restKey?: number | null;
   /** Lane PHYS: bounding radius of the collider (m). */
   rad?: number;
+  /** Lane PHYS: pickups lying under it when it went loose (its spilled lots): not knocked by it until it has moved off them. */
+  under?: Set<PickupLike>;
 }
 
 export interface DynHit { t: number; point: THREE.Vector3; normal: THREE.Vector3; pickup?: PickupLike; prop?: PropPlacement; propIndex?: number; ent?: Ent }
@@ -464,6 +469,22 @@ export class DynamicItems {
     if (room !== undefined && room < CONTACT_RESERVE + RECLAIM_AHEAD && this.reclaimQ.size) this.reclaim(1, undefined, false);
   }
 
+  /**
+   * Lane PHYS: pickups lying on the floor under a prop that just went loose (a spill holder's lots, spilled around its base; a
+   * pickup beneath it): its knock-on leaves them alone while they are inside its box, so they never get a body inside its collider.
+   */
+  private markUnder(e: Ent, b: CANNON.Body): void {
+    const list = this.pickups?.();
+    if (!list || !list.length) return;
+    b.updateAABB();
+    const lb = b.aabb.lowerBound, ub = b.aabb.upperBound;
+    for (const pk of list) {
+      const o = pk.obj.position;
+      if (o.x < lb.x - 0.03 || o.x > ub.x + 0.03 || o.z < lb.z - 0.03 || o.z > ub.z + 0.03 || o.y < lb.y - 0.08 || o.y >= lb.y + 0.05) continue;
+      (e.under ??= new Set()).add(pk);
+    }
+  }
+
   /** Lane PHYS: a prop starts to move — pickups lying on its top are woken with it (they fall / ride, never float). */
   private wakeRiders(e: Ent): void {
     const b = e.body, list = this.pickups?.();
@@ -646,6 +667,7 @@ export class DynamicItems {
     const inv = bm.clone().invert();
     const carried = this.holderLoose?.(prop) ?? []; // iteration 08 (Lane I): spill + carry the holder's own lid / liner
     e.parts = [...meshes, ...carried].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
+    this.markUnder(e, body); // lane PHYS: its spilled lots (and anything on the floor beneath it) lie inside its collider
     // loose from now on: no longer an AABB obstacle for walking / hitscan / statics (hit-tested here)
     prop.h = 0;
     prop.blocksSight = false;
@@ -873,7 +895,7 @@ export class DynamicItems {
   private wakeNeighbours(): void {
     if ((!this.pickups && !this.liftLots) || !this.active.size) return;
     let budget = 4;
-    const box = new THREE.Box3(), other = new THREE.Box3(), m = new THREE.Matrix4();
+    const box = new THREE.Box3(), other = new THREE.Box3(), cur = new THREE.Box3(), m = new THREE.Matrix4();
     const props = this.officeRules;
     const live = [...this.active]; // lane PHYS: the simulating entities only (activations below add to the set)
     for (const e of live) {
@@ -899,6 +921,13 @@ export class DynamicItems {
         if (n.body && n.body.type === CANNON.Body.DYNAMIC) continue;
         obbBox(this.objMatrix(n, m), n.center, n.half, other);
         if (!other.intersectsBox(box)) continue;
+        if (e.under?.has(pk)) {
+          // lane PHYS: it lay under this prop when it went loose (a spilled lot): left alone until the prop has moved off it
+          cur.min.set(b.aabb.lowerBound.x, b.aabb.lowerBound.y, b.aabb.lowerBound.z);
+          cur.max.set(b.aabb.upperBound.x, b.aabb.upperBound.y, b.aabb.upperBound.z);
+          if (other.intersectsBox(cur)) continue;
+          e.under.delete(pk);
+        }
         if (this.activate(n)) { this.counts.knockOn++; budget--; }
       }
     }
@@ -962,7 +991,7 @@ export class DynamicItems {
 
   /**
    * Lane PHYS: wake the light floor props `a` is walking into (task office-props-physics-scale-20261030: every world). Candidates
-   * come from a per-world bucket index of the dynamic, non-holder `contact` kinds; a prop wakes when the walker is within
+   * come from a per-world bucket index of the dynamic `contact` kinds (spill holders spill); a prop wakes when the walker is within
    * CONTACT_MARGIN of its box, heading for it, at its height, and the damage system still has CONTACT_RESERVE detach slots (resting
    * props' renders are reclaimed first when it has not). The woken prop loses its AABB (the walker no longer stops at it) and the
    * loose-prop shove above moves it from this frame on.
@@ -1111,13 +1140,14 @@ const tv2 = new THREE.Vector3();
 /** Lane PHYS: bucket key of a CB-metre cell. */
 const cellKey = (cx: number, cz: number) => (cz + 4096) * 8192 + (cx + 4096);
 
-/** Lane PHYS: contact-wake candidates — indices of the dynamic, non-holder `contact` props with a box, per CB-metre bucket they overlap. */
+/** Lane PHYS: contact-wake candidates — indices of the dynamic `contact` props (spill holders included) with a box, per CB-metre bucket they overlap. */
 function contactCells(props: readonly PropPlacement[]): Map<number, number[]> {
   const cells = new Map<number, number[]>();
   const kinds = new Map<string, boolean>();
   props.forEach((p, i) => {
     let ok = kinds.get(p.kind);
-    if (ok === undefined) kinds.set(p.kind, (ok = !!propPhysics(p.kind).contact && dynamicKind(p.kind) && !isLootHolderKind(p.kind)));
+    // task office-props-physics-scale-20261030 (lane PHYS): spill holders too (dynamicKind keeps every other holder out)
+    if (ok === undefined) kinds.set(p.kind, (ok = !!propPhysics(p.kind).contact && dynamicKind(p.kind)));
     if (!ok || p.h <= 0.02 || p.mounted) return;
     for (let cz = Math.floor((p.z - p.hz) / CB); cz <= Math.floor((p.z + p.hz) / CB); cz++) {
       for (let cx = Math.floor((p.x - p.hx) / CB); cx <= Math.floor((p.x + p.hx) / CB); cx++) {

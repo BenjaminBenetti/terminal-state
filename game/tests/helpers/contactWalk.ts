@@ -20,6 +20,11 @@ import {isP7Kind, p7ModelKey} from '../../src/gen/props07';
 import {officeKindAsset, officeModelKey, isOfficeKind} from '../../src/gen/office/kinds';
 import {dynamicKind} from '../../src/physics/dynamicItems';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {ContainerManager, type ContainerEvent} from '../../src/world/containers';
+import {PickupManager} from '../../src/world/pickups';
+import {Inventory} from '../../src/items/inventory';
+import {lootProfile} from '../../src/items/lootTables';
+import type {LevelId} from '../../src/levels/types';
 
 export const DT = 1 / 60;
 
@@ -40,6 +45,10 @@ export interface ContactRig {
   keys: Keys;
   /** Extra AI walkers (zombies) shoving / waking beside the player. */
   others: Walker[];
+  /** With `containers`: the loot holders + world pickups, wired exactly as game.ts buildSection does (spill -> pickups). */
+  cm?: ContainerManager;
+  pickups?: PickupManager;
+  events?: ContainerEvent[];
 }
 
 let mats: WorldMaterials | null = null;
@@ -68,19 +77,47 @@ export function standInModels(layout: {props: readonly PropPlacement[]}): Record
   return lib;
 }
 
-/** The layout's physics + render + a real Player (not yet placed). The layout's props are used in place (copy them first). */
-export function contactRig(layout: StationLayout): ContactRig {
+/**
+ * The layout's physics + render + a real Player (not yet placed). The layout's props are used in place (copy them first).
+ * `containers` (task office-props-physics-scale-20261030 follow-up): + the real ContainerManager (loot rolled under the level's
+ * profile, holders' own meshes for the damage system, holder shelves for item collision) and PickupManager, with the game's spill
+ * hook — a knocked-loose spill holder's lots become pickups of the same item / count / lot id (game.ts onContainerEvent).
+ */
+export function contactRig(layout: StationLayout, o: {containers?: LevelId} = {}): ContactRig {
   mats ??= new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
   const L = levelsOf(layout);
   const index = new PropIndex(L, layout.props);
   const world = buildWorld(layout, mats, standInModels(layout));
   const pd = new PropDamage();
-  pd.build(layout.props, [world.group]);
   const ph = new PhysicsSystem(null);
   ph.build(layout);
+  let cm: ContainerManager | undefined, pickups: PickupManager | undefined;
+  const events: ContainerEvent[] = [];
+  if (o.containers) {
+    const inv = new Inventory();
+    cm = new ContainerManager({}, mats, () => inv);
+    pickups = new PickupManager({});
+    const pk = pickups;
+    cm.onEvent = e => {
+      events.push(e);
+      if (e.type !== 'spill') return;
+      for (const sp of e.spilled ?? []) {
+        const st = inv.makeStack(sp.lot.itemId, sp.lot.count);
+        st.count = sp.lot.count;
+        pk.addAt(st, sp.matrix, {holder: e.container.serial, lot: sp.lot.id});
+      }
+    };
+    cm.build(layout, {}, lootProfile(o.containers));
+    const c = cm;
+    ph.holderBoxes = p => c.physicsBoxes(p);
+    ph.dynamicItems.holderLoose = p => c.goLoose(p);
+    ph.dynamicItems.pickups = () => pk.list;
+    pd.build(layout.props, [world.group, cm.group]);
+    pd.hooks = {ownMeshes: p => c.ownMeshes(p)};
+  } else pd.build(layout.props, [world.group]);
   ph.dynamicItems.detacher = pd;
   const player = new Player();
-  const rig: ContactRig = {layout, L, index, ph, pd, world, player, keys: new Keys(), others: []};
+  const rig: ContactRig = {layout, L, index, ph, pd, world, player, keys: new Keys(), others: [], ...(cm ? {cm, pickups, events} : {})};
   ph.dynamicItems.walkers = () => [{id: player, x: player.x, z: player.z, y: player.y, r: player.radius, wake: true}, ...rig.others];
   return rig;
 }

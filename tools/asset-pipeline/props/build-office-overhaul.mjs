@@ -45,7 +45,7 @@ import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
-import {GLASS_MATERIAL, cleanSupportTexture, cropPartTextures, extentOf, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
+import {GLASS_MATERIAL, addPlinth, cleanSupportTexture, cropPartTextures, extentOf, legExtend, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -171,6 +171,44 @@ const FURNITURE = {
   // E12: 0.86 x 0.39 x 0.90 (knee-high on a standing zombie) -> 1.3 m across: an adult bean bag (the model is a squashed, sat-in bag:
   // ~0.56 m tall at that size).
   'bean-bag': {sizeM: 1.3, sizeAxis: 'longest', basis: '1.3 m across (adult bean bag; the squashed, sat-in shape is ~0.56 m tall)'},
+  // --- Wave 2 (lane SCALE's catalog review, "clear outliers"): local proportion edits + their baked loose items ---------------------
+  // E10: the length is right (1.4 m) but the rim stood at 0.49 / playfield 0.35 (knee height): the four legs (separate components
+  // y 0..0.174, the cabinet from 0.168) stretch +0.40 m at mid-leg — rim ~0.89, playfield ~0.75. No loose items.
+  'foosball-table': {sizeM: 1.4, sizeAxis: 'longest', basis: 'length 1.4 m kept; legs extended +0.40 m (rim ~0.89, playfield ~0.75)', legs: {cut: 0.09, dy: 0.4}},
+  // E11: 2.74 m long (right) but the top at 0.56 and the table ~2.0 m wide: legs (y 0..0.409, nothing else between the floor rails
+  // and the cross rails at 0.386) +0.20 m -> top 0.76; width x0.7625 -> 1.525 m (regulation). The two paddles on the top are trivial
+  // decor (no paddle item; < 0.5 kg): dropped, not re-placed.
+  'ping-pong-table': {sizeM: 2.74, sizeAxis: 'longest', basis: 'regulation 2.74 x 1.525 m at 0.76 m: legs +0.20 m, width x0.7625; paddles dropped',
+    clutter: c => c.min[1] >= 0.56 && ext(c)[0] < 0.6, supports: [{y: 0.559, tol: 0.004}], parts: {}, legs: {cut: 0.2, dy: 0.2}, scaleX: 0.7625},
+  // D12: board at 0.64 (seated drafting ~0.75): uniform k from the board top. Loose: the stool under it (dropped: an office chair is
+  // pulled up instead, companyDress SEAT_AT), the clamp-arm desk lamp (-> its own on-top prop), papers / T-square / tape (trivial
+  // flat decor: dropped; their painted ghosts cleaned off the board).
+  'drafting-table': {sizeM: 0.75, sizeAxis: 'h', basis: 'board top 0.75 m (seated drafting table); stool / papers / T-square / tape removed, the lamp separated',
+    clutter: c => c.min[1] >= 0.63 || (c.max[1] < 0.52 && c.centre[2] < -0.13 && Math.abs(c.centre[0]) < 0.2),
+    supports: [{y: 0.638, tol: 0.006}],
+    parts: {
+      'drafting-lamp': {box: [-0.67, 0.63, 0.0, 0.06, 1.15, 0.25], sizeM: 0.55, sizeAxis: 'h', label: 'arm desk lamp'},
+    }},
+  // D15: a 3-group espresso machine at ~2x real size, standing on the floor: k from its width (0.78 m) and it stands on a sideboard
+  // counter (companyKinds ON_SIDEBOARD). Loose: the cups on the cup warmer (-> one stack model, placed on the counter beside the
+  // machine; the single cups with coffee dropped). The grinder hopper on the machine's top stays (built onto the housing).
+  'espresso-machine': {sizeM: 0.78, sizeAxis: 'w', basis: 'width 0.78 m (3-group machine) on a counter; cups removed (a cup stack prop stands beside it)',
+    clutter: c => c.min[1] >= 1.01 && ext(c)[0] < 0.4 && ext(c)[2] < 0.4 && !(c.centre[0] > 0.43 && c.centre[0] < 0.7 && c.centre[2] > -0.36 && c.centre[2] < -0.08),
+    supports: [{y: 1.029, tol: 0.005}],
+    parts: {
+      'espresso-cups': {box: [-0.64, 1.0, 0.1, -0.47, 1.26, 0.27], sizeM: 0.14, sizeAxis: 'h', label: 'stack of espresso cups'},
+    }},
+  // D22: a mixing desk modelled lying on the floor (wedge from ~0.05 at the front to the 0.58 m meter shelf): lifted +0.45 m onto a
+  // plain riser (node 'plinth', its own dark material). Loose: the studio monitors on the meter shelf (-> a tall and a small monitor
+  // model, placed back on the shelf; the two low boxes under the tall pair dropped).
+  'mixing-console': {sizeM: 2.0, sizeAxis: 'w', basis: 'width 2.0 m kept; on a +0.45 m riser (meter shelf ~1.03, work surface ~0.6-0.75); monitors separated',
+    clutter: c => c.min[1] >= 0.57 && ext(c)[0] < 0.5 && c.centre[2] > 0.3,
+    supports: [{y: 0.572, tol: 0.006}],
+    parts: {
+      'studio-monitor': {box: [-0.45, 0.79, 0.36, -0.005, 1.26, 0.84], sizeM: 0.453, sizeAxis: 'h', label: 'studio monitor (tall)'},
+      'studio-monitor-small': {box: [-0.88, 0.57, 0.49, -0.455, 0.8, 0.88], sizeM: 0.417, sizeAxis: 'w', label: 'studio monitor (small)'},
+    },
+    plinth: {dy: 0.45, inset: 0.05}},
 };
 const partUrl = (pid, p) => (p.item ? `assets/models/item-${pid}-t25.glb` : `assets/models/office-${pid}.glb`);
 const PART_PATHS = Object.values(FURNITURE).flatMap(f => Object.entries(f.parts ?? {}).map(([pid, p]) => partUrl(pid, p)));
@@ -236,11 +274,16 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
   // lane FURN (office-props-physics-scale-20261030): loose clutter separated in the manifest frame, then the FURNITURE-ONLY real size
   const F = FURNITURE[a.id];
   let k = 1, split = null, ghosts = null, glass = null;
+  const edits = {};
   const parts = [];
   if (F) {
     if (F.parts) split = await splitClutter(doc, F);
     if (F.glass) glass = await splitGlass(doc, sharp, F.glass);
     if (F.supports) ghosts = await cleanSupportTexture(doc, sharp, F.supports, F.ghostThresh ?? 34, process.env.FURN_GHOST_DEBUG ? path.join(process.env.FURN_GHOST_DEBUG, `${a.id}-ghosts.png`) : null);
+    // Wave 2: proportion edits of the body (manifest frame), before the furniture-only rescale
+    if (F.legs) edits.legs = {...F.legs, ...legExtend(doc, F.legs.cut, F.legs.dy)};
+    if (F.scaleX) { scaleAxis(doc, 0, F.scaleX); edits.scaleX = F.scaleX; }
+    if (F.plinth) edits.plinth = addPlinth(doc, F.plinth.dy, F.plinth.inset);
     const bb = getBounds(scene);
     k = F.sizeM / extentOf(bb, F.sizeAxis);
     scaleGroundCentre(doc, k);
@@ -259,9 +302,12 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
     }
   }
   // (lane FURN: a separated transparent 'glass' node keeps its names — damage/materials.ts partKeyClass reads /glass/)
-  r.listMeshes().filter(m => !/glass/.test(m.getName())).forEach((m, i) => m.setName(i ? `${a.id}-${i}` : a.id));
-  r.listNodes().filter(n => n.getMesh() && n.getName() !== 'glass').forEach((n, i) => n.setName(i ? `${a.id}-${i}` : a.id));
-  r.listMaterials().filter(m => !/-glass$/.test(m.getName())).forEach((m, i) => m.setName(i ? `office-${a.id}-${i}` : `office-${a.id}`));
+  // (lane FURN wave 2: likewise the added riser 'plinth')
+  r.listMeshes().filter(m => !/glass|plinth/.test(m.getName())).forEach((m, i) => m.setName(i ? `${a.id}-${i}` : a.id));
+  r.listNodes().filter(n => n.getMesh() && n.getName() !== 'glass' && n.getName() !== 'plinth').forEach((n, i) => n.setName(i ? `${a.id}-${i}` : a.id));
+  r.listMaterials().filter(m => !/-glass$|^plinth$/.test(m.getName())).forEach((m, i) => m.setName(i ? `office-${a.id}-${i}` : `office-${a.id}`));
+  for (const m of r.listMaterials().filter(q => q.getName() === 'plinth')) m.setName(`office-${a.id}-plinth`);
+  for (const m of r.listMeshes().filter(q => q.getName() === 'plinth')) m.setName(`${a.id}-plinth`);
   for (const m of r.listMaterials().filter(q => /-glass$/.test(q.getName()))) m.setName(`office-${a.id}-glass`);
   for (const m of r.listMeshes().filter(q => /glass/.test(q.getName()))) m.setName(`${a.id}-glass`);
   await doc.transform(dedup(), prune(),
@@ -269,7 +315,7 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [otherPx, otherPx], quality, slots: /^(?!baseColor)/}));
   r.getAsset().generator = 'Terminal State tools/asset-pipeline/props/build-office-overhaul.mjs (glTF-Transform)';
   return {glb: Buffer.from(await io.writeBinary(doc)), scale: s * k, rawExtent: e0, parts,
-    furniture: F ? {k, removed: split?.removed ?? null, ghosts, glass} : null};
+    furniture: F ? {k, removed: split?.removed ?? null, ghosts, glass, edits: Object.keys(edits).length ? edits : null} : null};
 }
 
 for (const a of ASSETS) {
@@ -300,7 +346,7 @@ for (const a of ASSETS) {
     glb = fs.readFileSync(outAbs); scale = reuse.scale; rawExtent = reuse.source.extent; step = reuse.textureStep;
     // lane FURN: separated parts of a reused derivative are reused with it (same raw, same files)
     parts = (reuse.parts ?? []).map(q => ({id: q.id, glb: fs.readFileSync(path.join(root, 'game/public', q.output.url)), tris: q.output.triangles, scale: q.scale, manifestFrame: q.manifestFrame, stood: q.stood, crop: q.textureCrop}));
-    furniture = reuse.furniture ? {k: reuse.furniture.scaleFromManifest, removed: reuse.furniture.removed, ghosts: reuse.furniture.supportTextureCleanup ?? null, glass: reuse.furniture.glass ?? null} : null;
+    furniture = reuse.furniture ? {k: reuse.furniture.scaleFromManifest, removed: reuse.furniture.removed, ghosts: reuse.furniture.supportTextureCleanup ?? null, glass: reuse.furniture.glass ?? null, edits: reuse.furniture.edits ?? null} : null;
   } else {
     for (step = 0; step < ladder.length; step++) {
       ({glb, scale, rawExtent, parts, furniture} = await derive(a, rawBytes, front, ladder[step]));
@@ -372,6 +418,7 @@ for (const a of ASSETS) {
     ...(F ? {furniture: {task: 'office-props-physics-scale-20261030 (lane FURN)', operation: F.parts ? 'local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale' : 'furniture-only rescale',
       manifestSizeM: a.sizeM, manifestSizeAxis: a.sizeAxis, sizeM: F.sizeM, sizeAxis: F.sizeAxis, basis: F.basis, scaleFromManifest: +furniture.k.toFixed(6), removed: furniture.removed,
       ...(furniture.ghosts ? {supportTextureCleanup: furniture.ghosts, supportHeights: F.supports.map(q => q.y)} : {}),
+      ...(furniture.edits ? {edits: furniture.edits} : {}),
       ...(furniture.glass ? {glass: {...furniture.glass, node: 'glass', selection: F.glass, material: {...GLASS_MATERIAL, alphaMode: 'BLEND', doubleSided: true, textured: false},
         contract: 'the shop-cooler glass fix (task model-touchups-20261030, lane GLASS): transparent, depthWrite false, never a flashlight-shadow caster'}} : {})},
       ...(partOut.length ? {parts: partOut} : {})} : {})});

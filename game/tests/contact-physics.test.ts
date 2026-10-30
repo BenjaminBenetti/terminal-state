@@ -1,8 +1,10 @@
 // Task office-props-physics-scale-20261030 (lane PHYS; user: "I love how the chairs interact when I walk in to them … things like
 // the luggage in the subway … needed to be shot first … All physics objects should always be interactable, without needing to be
 // shot first"). Node tests (cannon-es, the real PropDamage over the real built world, no WebGL):
-//  - the audit: every light dynamic kind (Subway + Office) wakes by contact with a calibrated castor / pad material; holders still
-//    shots only; Subway masses unchanged; anchored / kept / holder kinds static;
+//  - the audit: every light dynamic kind (Subway + Office) wakes by contact with a calibrated castor / pad material — the spill
+//    holders too; Subway masses unchanged; anchored / kept / non-spill holder kinds static;
+//  - a REAL Player walks into a Subway trash can, a wheelie bin and an office archive box: each goes loose and spills exactly
+//    its remembered finite lots once, as pickups of the same lot / item / count (none duplicated, lost or floating);
 //  - a REAL Player (W key, the game's own movement + prop collision) walks into a Subway rolling suitcase, an office chair and an
 //    imported Subway prop in the Office: each moves; no shot, no aim ray (the damage system is not even constructed);
 //  - the chair feel is unchanged: the walk-in / buckshot numbers recorded before this pass are reproduced exactly;
@@ -99,9 +101,9 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
       const r = PROP_PHYSICS_AUDIT[k];
       if (r.cls !== 'dynamic') continue;
       const ph = propPhysics(k);
-      expect(r.contact, k).toBe(!!ph.contact && !isLootHolderKind(k)); // the audit is the live physics
-      if (isLootHolderKind(k)) { expect(isSpillHolderKind(k), k).toBe(true); expect(r.contact, k).toBe(false); continue; }
-      expect(r.contact, k).toBe(true);
+      expect(r.contact, k).toBe(!!ph.contact); // the audit is the live physics
+      if (isLootHolderKind(k)) expect(isSpillHolderKind(k), k).toBe(true); // a moving holder always spills
+      expect(r.contact, k).toBe(true); // spill holders too (coordinator follow-up: the user's rule is literal)
       // floor kinds slide / roll on calibrated contacts (on-host decor — a monitor, lab glassware — is out of the legs' reach)
       if (!ph.onHost) expect(['castor', 'pad'], k).toContain(ph.mat);
       rows.push(`${k}:${ph.mat}`);
@@ -116,11 +118,14 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
       plasticStackChair: 3, rollingSuitcase: 9, spinnerRack: 14, stepLadder: 7, trashBagPile: 8, tripodWorkLight: 6, wetDryVac: 8, wetFloorSign: 1.2, wheelchair: 15,
       wheelieBin: 12,
     });
-    // wheeled kinds roll, the Lane A trash can keeps its iteration-07 contact (shots only: its bullet response is unchanged)
+    // wheeled kinds roll, footed / based ones slide; the trash can slides / tips on its base, the archive stack too
     for (const k of ['rollingSuitcase', 'babyStroller', 'wheelchair', 'handTruck', 'wheelieBin', 'officeSwivelChair']) expect(propPhysics(k).mat, k).toBe('castor');
     for (const k of ['plasticStackChair', 'foldingChair', 'wetFloorSign', 'trashBagPile', 'fireExtinguisher']) expect(propPhysics(k).mat, k).toBe('pad');
-    expect(propPhysics('bin')).toMatchObject({mass: 7, mat: 'metal', shape: 'cylinder'});
-    expect(propPhysics('bin').contact ?? false).toBe(false);
+    expect(propPhysics('bin')).toMatchObject({mass: 7, mat: 'pad', shape: 'cylinder', contact: true});
+    expect(propPhysics('wheelieBin')).toMatchObject({mass: 12, mat: 'castor', contact: true});
+    expect(propPhysics('archiveBoxes')).toMatchObject({mass: 28, mat: 'pad', contact: true});
+    // every other loot holder stays put (its lots would float): never dynamic, never woken
+    for (const k of ALL_PROP_KINDS) if (isLootHolderKind(k) && !isSpillHolderKind(k)) expect(dynamicKind(k), k).toBe(false);
     // deliberate static exceptions stay static, with their reason
     for (const k of ['janitorCart', 'crtTvCart', 'mobileWhiteboard', 'physicianScale']) expect(PROP_PHYSICS_AUDIT[k]).toMatchObject({cls: 'static', why: 'kept'});
     console.info(`[contact] ${rows.length} contact kinds: ${rows.join(' ')}`);
@@ -241,12 +246,12 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
     console.info(`[subway walk] ${rows.join(' | ')}`);
   });
 
-  it('anchored / kept / holder kinds never move when walked into; a light prop on a host stays put (Subway station)', () => {
+  it('anchored / kept / non-spill holder kinds never move when walked into; a light prop on a host stays put (Subway station)', () => {
     const layout = fresh(generateStation(424242));
     const ph = new PhysicsSystem(null);
     ph.build(layout);
     ph.dynamicItems.detacher = {detachForPhysics: () => [new THREE.Mesh()]};
-    const kinds = ['bench', 'ticketMachine', 'janitorCart', 'column', 'bin', 'vending'];
+    const kinds = ['bench', 'ticketMachine', 'janitorCart', 'column', 'vending', 'cabinetLow', 'cabinetTall'];
     const tried: string[] = [];
     for (const kind of kinds) {
       const p = layout.props.find(q => q.kind === kind && q.h > 0.3 && !q.mounted);
@@ -477,6 +482,106 @@ describe('bounded: a walk through the Subway wakes only what is walked into', ()
     expect(st.propsAwake).toBe(0);
     expect(st.restingInWorld).toBe(0);
     expect(st.counts.shots).toBe(0);
+  });
+});
+
+describe('spill holders wake by contact too: walked into, they go over and spill exactly their remembered lots once', () => {
+  type Lay = ReturnType<typeof generateStation>;
+  /** A real Player walks into the first `kind` holder (of the first layout that has one) holding lots, with a free side. */
+  function spillWalk(layouts: (() => Lay)[], lv: 'subway' | 'office', kind: string, role?: string) {
+    for (const make of layouts) {
+      const rig = contactRig(fresh(make()), {containers: lv});
+      const cm = rig.cm!, pk = rig.pickups!;
+      for (let i = 0; i < rig.layout.props.length; i++) {
+        const p = rig.layout.props[i];
+        if (p.kind !== kind || (role && rig.layout.levels?.[p.level ?? 0]?.role !== role)) continue;
+        const h = cm.holderFor(p);
+        if (!h?.state.lots.length || !rig.ph.dynamicItems.isDynamicProp(p) || !renderPose(rig, p)) continue;
+        const at = approach(rig, p, 1.0, 0.4);
+        if (at) return {rig, cm, pk, p, i, h, at};
+      }
+    }
+    return null;
+  }
+
+  for (const [kind, lv, role, layouts] of [
+    ['bin', 'subway', undefined, [() => generateStation(424242), () => generateStation(99)]],
+    ['wheelieBin', 'subway', undefined, [() => generateStation(1234), () => generateStation(99)]],
+    ['archiveBoxes', 'office', 'office', [36, 52, 66].map(s => () => generateOfficeLevel({levelSeed: s, startWeapon: 'pistol'}))],
+  ] as const) {
+    it(`a REAL Player walks into a ${lv === 'office' ? 'n office' : ' Subway'} ${kind}: it goes loose, spills its lots once as the same pickups; no shot`, () => {
+      const t = spillWalk(layouts as unknown as (() => Lay)[], lv, kind, role);
+      expect(t, `a ${kind} with lots and a free side`).toBeTruthy();
+      const {rig, cm, pk, p, h, at} = t!;
+      forbidShots(rig);
+      const lots = h.state.lots.map(l => [l.id, l.itemId, l.count] as const).sort((a, b) => a[0] - b[0]);
+      const before = renderPose(rig, p)!.p.clone();
+      const pickups0 = pk.list.length;
+      stand(rig, at);
+      walkForward(rig, 1.0);
+      settle(rig, 5);
+      const st = rig.ph.dynamicItems.stats();
+      const spills = rig.events!.filter(e => e.type === 'spill' && e.container === h);
+      const mine = pk.list.filter(q => q.fromLot?.holder === h.serial);
+      const moved = renderPose(rig, p)!.p.distanceTo(before);
+      console.info(`[spill] ${kind} #${t!.i} L${p.level ?? 0}: ${lots.length} lot(s) ${lots.map(l => `${l[1]}x${l[2]}`).join(',')} -> ${mine.length} pickup(s), moved ${moved.toFixed(2)} m, contacts ${st.counts.contacts}, knock-on ${st.counts.knockOn}`);
+      expect(p.h).toBe(0);
+      expect(st.counts.contacts).toBeGreaterThanOrEqual(1);
+      expect(st.counts.shots).toBe(0);
+      expect(h.open!.loose).toBe(true); // a loose holder is no longer an [E] target (containers hit-test skips it)
+      expect(moved).toBeGreaterThan(0.05);
+      // exactly its remembered lots, once: same lot ids / items / counts, none duplicated, none left on the holder
+      expect(spills.length).toBe(1);
+      expect(spills[0].spilled!.map(sp => [sp.lot.id, sp.lot.itemId, sp.lot.count] as const).sort((a, b) => a[0] - b[0])).toEqual(lots);
+      expect(h.state.lots.length).toBe(0);
+      expect(pk.list.length).toBe(pickups0 + lots.length);
+      expect(mine.map(q => [q.fromLot!.lot, q.stack.itemId, q.stack.count] as const).sort((a, b) => a[0] - b[0])).toEqual(lots);
+      // nothing floating / lost: each lies on its storey's floor (or on a prop top), finite, near where the holder stood
+      for (const q of mine) {
+        const o = q.obj.position, floor = rig.L.floorAt(o.x, o.z, p.y + 0.05);
+        expect(Number.isFinite(o.x + o.y + o.z)).toBe(true);
+        expect(o.y - floor, q.stack.itemId).toBeGreaterThan(-0.03);
+        expect(o.y - floor, q.stack.itemId).toBeLessThan(0.35);
+        expect(Math.hypot(o.x - before.x, o.z - before.z)).toBeLessThan(2);
+        // hover follows the pickup: looked down at from just above where it lies, it is the targeted pickup
+        const eye = new THREE.Vector3(q.x + 0.05, q.y + 1.4, q.z);
+        expect(pk.target(eye, new THREE.Vector3(q.x - eye.x, q.y + 0.08 - eye.y, q.z - eye.z).normalize(), rig.L)).toBe(q);
+      }
+      // walked into again: shoved further, never a second spill
+      const again = rig.player;
+      again.yaw = Math.atan2(-(p.x - again.x), -(p.z - again.z));
+      walkForward(rig, 0.8);
+      settle(rig, 3);
+      expect(rig.events!.filter(e => e.type === 'spill' && e.container === h).length).toBe(1);
+      expect(pk.list.length).toBe(pickups0 + lots.length);
+      void cm;
+    });
+  }
+
+  it('a full wheelie bin rolls / rocks, a trash can slides / tips, an archive stack slides / tips: never flies (synthetic walk-in)', () => {
+    const rows: string[] = [];
+    for (const k of ['bin', 'wheelieBin', 'archiveBoxes'] as PropKind[]) {
+      const {p, ph, pose} = lone(k, 10, 8, null);
+      const w: Walker = {id: {}, x: p.x - p.hx - 1.1, z: p.z, y: 0, r: 0.3, wake: true};
+      ph.dynamicItems.walkers = () => [w];
+      const half = p.hx * (propPhysics(k).fit ?? 1);
+      let into = 0, top = 0;
+      for (let i = 0; i < 150; i++) {
+        w.x += 1.4 * DT; ph.update(DT);
+        if (p.h === 0) { top = Math.max(top, pose().p.y); if (pose().tilt < 0.2) into = Math.max(into, w.x + w.r - (pose().p.x - half)); }
+      }
+      expect(ph.dynamicItems.stats().counts.contacts, k).toBe(1);
+      const {p: at, tilt} = pose();
+      rows.push(`${k} ${propPhysics(k).mat} dx ${(at.x - 10).toFixed(2)} tilt ${(tilt * 57.3).toFixed(0)} into ${into.toFixed(2)} max lift ${top.toFixed(2)}`);
+      expect(into, k).toBeLessThan(0.15);
+      expect(at.x - 10 + tilt, k).toBeGreaterThan(0.15);
+      expect(top, k).toBeLessThan(0.3); // its origin never leaves the floor by more than a rock / tip
+      expect(at.x - 10, k).toBeLessThan(3.2); // pushed along at walking pace, not launched
+      ph.dynamicItems.walkers = () => [];
+      for (let i = 0; i < 1200; i++) ph.update(DT);
+      expect(ph.dynamicItems.stats().propsAwake, k).toBe(0);
+    }
+    console.info(`[spill walk] ${rows.join(' | ')}`);
   });
 });
 

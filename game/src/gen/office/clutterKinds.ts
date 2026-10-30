@@ -19,14 +19,16 @@ import type {ShapeMat, ShapePart} from '../propShapes';
 import type {DamageClass} from '../../damage/materials';
 import {COMPANY_PART_DIMS} from '../../assets/companyDims.generated';
 
+/** Furniture the clutter stands on (wave 2: + the drafting table, the mixing console, the espresso machine's cabinetLow counter). */
+export type ClutterHost = 'labBench' | 'tradingDesk' | 'draftingTable' | 'mixingConsole' | 'cabinetLow';
 interface ClutterSpec {
   /** Separated part id (assets/companyAssets.ts COMPANY_PART_ASSETS). */
   asset: string;
   /** Nominal box [w (x), d (z), h (y)] m until the model's measured dims exist. */
   box: readonly [number, number, number];
   cls: DamageClass;
-  /** The furniture kind it was separated from (and stands on). */
-  host: 'labBench' | 'tradingDesk';
+  /** The furniture kind it was separated from (and stands on); the espresso cups stand on the espresso machine's sideboard. */
+  host: ClutterHost;
 }
 
 const SPECS = {
@@ -38,6 +40,11 @@ const SPECS = {
   labTubeRack: {asset: 'lab-tube-rack', box: [0.26, 0.16, 0.13], cls: 'plastic', host: 'labBench'},
   tradingMonitor: {asset: 'trading-monitor', box: [0.62, 0.18, 0.48], cls: 'plastic', host: 'tradingDesk'},
   tradingKeyboard: {asset: 'trading-keyboard', box: [0.62, 0.18, 0.05], cls: 'plastic', host: 'tradingDesk'},
+  // Wave 2 (lane SCALE's catalog review): the drafting table's arm lamp, the mixing desk's studio monitors, the espresso machine's cups
+  draftingLamp: {asset: 'drafting-lamp', box: [0.75, 0.22, 0.55], cls: 'steel', host: 'draftingTable'},
+  studioMonitor: {asset: 'studio-monitor', box: [0.42, 0.45, 0.45], cls: 'plastic', host: 'mixingConsole'},
+  studioMonitorSmall: {asset: 'studio-monitor-small', box: [0.42, 0.38, 0.22], cls: 'plastic', host: 'mixingConsole'},
+  espressoCups: {asset: 'espresso-cups', box: [0.11, 0.1, 0.14], cls: 'porcelain', host: 'cabinetLow'},
 } as const satisfies Record<string, ClutterSpec>;
 
 export type ClutterKind = keyof typeof SPECS;
@@ -46,7 +53,7 @@ export function isClutterKind(kind: string): kind is ClutterKind {
   return kind in SPECS;
 }
 /** The furniture kind a clutter kind belongs on. */
-export const clutterHost = (k: ClutterKind): 'labBench' | 'tradingDesk' => SPECS[k].host;
+export const clutterHost = (k: ClutterKind): ClutterHost => SPECS[k].host;
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 function defOf(k: ClutterKind): PropDef {
@@ -83,5 +90,11 @@ export function clutterShape(kind: ClutterKind): ShapePart[] {
       return [box('panel', [w, h * 0.68, 0.04], [0, h * 0.64, d * 0.2]), box('screen', [w * 0.94, h * 0.6, 0.005], [0, h * 0.64, d * 0.2 + 0.023]), box('steelDark', [0.06, h * 0.32, 0.05], [0, h * 0.16, -d * 0.1]), box('steelDark', [w * 0.35, 0.015, d * 0.8], [0, 0.008, 0])];
     case 'tradingKeyboard':
       return [box('black', [w * 0.72, h * 0.5, d * 0.9], [-w * 0.13, h * 0.25, 0]), box('black', [w * 0.12, h, d * 0.55], [w * 0.4, h * 0.5, 0])];
+    case 'draftingLamp':
+      return [box('black', [0.18, 0.02, d * 0.9], [-w * 0.35, 0.01, 0]), box('steelDark', [0.02, h * 0.7, 0.02], [-w * 0.35, h * 0.35, 0]), box('steelDark', [w * 0.8, 0.02, 0.02], [0, h * 0.75, 0]), box('black', [0.16, 0.12, 0.16], [w * 0.38, h * 0.85, 0])];
+    case 'studioMonitor': case 'studioMonitorSmall':
+      return [box('black', [w, h, d], [0, h / 2, 0]), box('steelDark', [w * 0.5, w * 0.5, 0.01], [0, h * 0.45, d / 2 + 0.005])];
+    case 'espressoCups':
+      return [box('porcelain', [w, h, d], [0, h / 2, 0])];
   }
 }

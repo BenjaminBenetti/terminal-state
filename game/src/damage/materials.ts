@@ -272,7 +272,7 @@ export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' 
  * a shot or shoved box never slides, it only rocks / tips (fine for cans and bins, wrong for a castor chair). `castor` / `pad` are
  * Coulomb μ / ~240 so a body decelerates at ~μ·g: castors ≈ μ 0.15 (a chair coasts ~15 cm under buckshot and rolls ahead of the
  * walker), pads ≈ μ 0.3. The iteration-07 values stay as they are (task office-props-physics-scale-20261030: the Subway's light
- * kinds now use castor / pad too, SUBWAY_CONTACT; the trash can and chunks / items keep the iteration-07 materials).
+ * kinds now use castor / pad too, SUBWAY_CONTACT, the trash can included; chunks / items keep the iteration-07 materials).
  */
 export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution: number}>> = {
   metal: {friction: 0.32, restitution: 0.34}, plastic: {friction: 0.42, restitution: 0.3}, soft: {friction: 0.7, restitution: 0.08},
@@ -343,7 +343,8 @@ export interface PropPhysics {
   /**
    * Lane PHYS: walking into it wakes it (physics/dynamicItems.ts contact wake; task office-props-physics-scale-20261030: in every
    * world, the Subway too). Only kinds with calibrated contact materials (castor / pad) set it: the iteration-07 sticky contacts
-   * make a shoved body tip and the walker pass into it. Loot holders never wake by contact (spill holders: shots only).
+   * make a shoved body tip and the walker pass into it. Loot holders that do not spill never move; a spill holder knocked loose by
+   * contact spills its finite lots like a shot one.
    */
   contact?: boolean;
 }
@@ -373,16 +374,18 @@ export const PROP_PHYSICS: Record<string, PropPhysics> = {
  * `dynamic`). Each gets a calibrated contact material — `castor` for what rolls on wheels / castors, `pad` for feet, bases, bags
  * and bundles — and `contact`: walking into one wakes it in every world (Subway and Office, where these kinds are imported too),
  * like the office furniture. `fit`: the collider inside the box of a chair pulled up to its table / desk (as the office chairs).
- * The Lane A trash can (`bin`, a spill holder: shots only) keeps its iteration-07 metal contact, so its shot response is unchanged.
+ * Spill holders (the trash can, the wheelie bin) wake by contact too (coordinator follow-up: the user's rule is literal): a walk-in
+ * knocks one loose like a shot, its lid pops and its finite lots spill through ContainerManager.goLoose as the same pickups.
  * `how` is the audit sentence (damage/physicsAudit.ts). Ids without a PROP_DEFS kind yet are listed for a later integration. The
- * shopping cart (a loot holder that does not spill) and the other holders stay put: shots only, no overlay.
+ * shopping cart and every other loot holder that does not spill stay put (no overlay: their lots would float).
  */
 export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit?: number; how: string}>> = {
   rollingSuitcase: {mat: 'castor', how: 'rolling suitcase on spinner wheels (~9 kg): rolls ahead when walked into, slides / tips when shot'},
   babyStroller: {mat: 'castor', how: 'baby stroller (~9 kg): rolls away when bumped'},
   wheelchair: {mat: 'castor', how: 'wheelchair (~15 kg): rolls away when bumped'},
   handTruck: {mat: 'castor', how: 'hand truck (~14 kg) standing on its nose plate and wheels: shoved / rolled along when bumped'},
-  wheelieBin: {mat: 'castor', how: 'wheelie bin (~12 kg): rolls on its wheels; a spill holder — shots knock it loose (its finite lots spill), walking into it does not'},
+  wheelieBin: {mat: 'castor', how: 'wheelie bin (~12 kg): a walk-in or a shot knocks it loose — its lid pops, its finite lots spill — then it rolls / rocks on its wheels'},
+  bin: {mat: 'pad', how: 'sheet-steel trash can with a liner (~7 kg): a walk-in or a shot knocks it loose — its lid pops, its finite lots spill — then it slides / tips on its base'},
   mopBucketWringer: {mat: 'castor', how: 'mop bucket with wringer on castors (~8 kg): rolls when bumped'},
   wetDryVac: {mat: 'castor', how: 'wet / dry shop vac on castors (~8 kg): rolls when bumped'},
   ivPole: {mat: 'castor', how: 'IV pole on a five-castor base (~4 kg): rolls when bumped, tips under buckshot'},

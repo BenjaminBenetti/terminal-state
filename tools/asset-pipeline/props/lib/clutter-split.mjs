@@ -412,3 +412,68 @@ export async function splitGlass(doc, sharp, {minY, maxX, sat = 0.22, minV = 110
   (doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0]).addChild(node);
   return {tris: glass.length / 3, area: +area.toFixed(4)};
 }
+
+// --- Wave 2 (task office-props-physics-scale-20261030, lane FURN): local FURNITURE-ONLY proportion edits ---------------------------
+// (catalog review, lane SCALE: furniture whose LENGTH is right but whose HEIGHT is a toy's — a uniform scale cannot fix it.)
+
+/** Unique POSITION accessors of every primitive. */
+const positionAccessors = doc => [...new Set(doc.getRoot().listMeshes().flatMap(m => m.listPrimitives()).map(p => p.getAttribute('POSITION')).filter(Boolean))];
+
+/**
+ * LEG EXTENSION: every vertex above the leg line `cut` (manifest frame) moves up by `dy`, so the triangles crossing the line — the legs
+ * only, `cut` is chosen where nothing but legs exists — stretch and everything above (top, frame, rods, net) moves rigidly. Returns
+ * {moved, stretched} vertex / triangle counts.
+ */
+export function legExtend(doc, cut, dy) {
+  let moved = 0;
+  for (const acc of positionAccessors(doc)) {
+    const a = acc.getArray().slice();
+    for (let i = 1; i < a.length; i += 3) if (a[i] > cut) { a[i] += dy; moved++; }
+    acc.setArray(a);
+  }
+  let stretched = 0;
+  for (const prim of doc.getRoot().listMeshes().flatMap(m => m.listPrimitives())) {
+    const pos = prim.getAttribute('POSITION'), I = triIndex(prim), v = [0, 0, 0];
+    for (let t = 0; t < I.length; t += 3) {
+      let lo = Infinity, hi = -Infinity;
+      for (let q = 0; q < 3; q++) { pos.getElement(I[t + q], v); lo = Math.min(lo, v[1]); hi = Math.max(hi, v[1]); }
+      if (lo <= cut && hi > cut + dy) stretched++;
+    }
+  }
+  return {moved, stretched};
+}
+
+/** Non-uniform scale along one axis (0 x, 2 z) about the origin (the manifest frame is centred): normals renormalised. */
+export function scaleAxis(doc, axis, f) {
+  for (const m of doc.getRoot().listMeshes()) {
+    const S = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    S[axis * 5] = f;
+    transformMesh(m, S);
+  }
+}
+
+/**
+ * PLINTH: the whole model is lifted by `dy` and a plain box (its own untextured dark material, node 'plinth') fills the space under
+ * the footprint, inset by `inset` (m) — a console that came modelled sitting on the floor stands on its riser. Returns the box.
+ */
+export function addPlinth(doc, dy, inset, color = [0.045, 0.045, 0.05, 1]) {
+  const scene = doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0];
+  for (const m of doc.getRoot().listMeshes()) transformMesh(m, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, dy, 0, 1]);
+  const b = getBounds(scene);
+  const x0 = b.min[0] + inset, x1 = b.max[0] - inset, z0 = b.min[2] + inset, z1 = b.max[2] - inset, y0 = 0, y1 = dy;
+  const P = [], N = [], I = [];
+  const quad = (vs, n) => { const o = P.length / 3; for (const v of vs) { P.push(...v); N.push(...n); } I.push(o, o + 1, o + 2, o, o + 2, o + 3); };
+  quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1]);
+  quad([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1]);
+  quad([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0]);
+  quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0]);
+  quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0]);
+  const buf = doc.getRoot().listBuffers()[0];
+  const prim = doc.createPrimitive()
+    .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setBuffer(buf).setArray(new Float32Array(P)))
+    .setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setBuffer(buf).setArray(new Float32Array(N)))
+    .setIndices(doc.createAccessor().setType('SCALAR').setBuffer(buf).setArray(new Uint16Array(I)))
+    .setMaterial(doc.createMaterial('plinth').setBaseColorFactor(color).setRoughnessFactor(0.75).setMetallicFactor(0.1));
+  scene.addChild(doc.createNode('plinth').setMesh(doc.createMesh('plinth').addPrimitive(prim)));
+  return {x: [+x0.toFixed(4), +x1.toFixed(4)], z: [+z0.toFixed(4), +z1.toFixed(4)], h: dy};
+}

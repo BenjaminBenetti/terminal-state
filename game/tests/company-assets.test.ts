@@ -101,6 +101,9 @@ const TABLE: Record<CompanyAssetId, [string, CompanyId | null, number, 'h' | 'w'
 // and the bean bag were toy-sized). The registry carries these; the manifest's sizeM / sizeAxis (TABLE) stay in the provenance.
 const FURNITURE_ONLY: Partial<Record<CompanyAssetId, [number, 'h' | 'w' | 'longest']>> = {
   'lab-bench': [0.9, 'h'], 'trading-desk': [0.74, 'h'], 'bakery-case': [1.35, 'h'], 'bean-bag': [1.3, 'longest'],
+  // wave 2 (lane SCALE's catalog review): the drafting table by its board, the espresso machine by its width (it stands on a counter);
+  // the foosball / ping-pong tables (legs extended, the ping-pong table narrowed) and the mixing desk (on a riser) keep their manifest size
+  'drafting-table': [0.75, 'h'], 'espresso-machine': [0.78, 'w'],
 };
 type FurnitureProv = {manifestSizeM: number; manifestSizeAxis: string; sizeM: number; sizeAxis: string; removed: {tris: number; comps: number} | null};
 const furnitureOf = (id: string) => (PROV?.outputs.find(o => o.id === id) as {furniture?: FurnitureProv} | undefined)?.furniture;
@@ -238,7 +241,8 @@ describe('separated loose clutter (lane FURN)', () => {
   const provParts = (PROV?.outputs ?? []).flatMap(o => ((o as {parts?: PartProv[]}).parts ?? []).map(q => ({...q, from: o.id})));
 
   it('every part: own file at its own real size, grounded, centred, small own texture, in the provenance and the allowlist', async () => {
-    expect(PARTS.map(([id]) => id).sort()).toEqual(['bread', 'lab-bottle', 'lab-bottle-rack', 'lab-flask', 'lab-flask-large', 'lab-microscope', 'lab-tube-rack', 'trading-keyboard', 'trading-monitor']);
+    expect(PARTS.map(([id]) => id).sort()).toEqual(['bread', 'drafting-lamp', 'espresso-cups', 'lab-bottle', 'lab-bottle-rack', 'lab-flask', 'lab-flask-large', 'lab-microscope', 'lab-tube-rack',
+      'studio-monitor', 'studio-monitor-small', 'trading-keyboard', 'trading-monitor']);
     const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
     const unlisted: string[] = [];
     for (const [id, p] of PARTS) {

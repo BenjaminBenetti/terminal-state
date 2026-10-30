@@ -37,9 +37,9 @@ function halfExtents(kind: PropKind, yaw: number): {hx: number; hz: number} {
   return {hx: r3((w * c + d * s) / 2), hz: r3((w * s + d * c) / 2)};
 }
 
-function decor(props: PropPlacement[], host: PropPlacement, hostIndex: number, kind: ClutterKind, x: number, z: number, yaw: number): PropPlacement {
+function decor(props: PropPlacement[], host: PropPlacement, hostIndex: number, kind: ClutterKind, x: number, z: number, yaw: number, top = host.h): PropPlacement {
   const {hx, hz} = halfExtents(kind, yaw);
-  const p: PropPlacement = {kind, x: r3(x), z: r3(z), y: r3(host.y + host.h), rot: Math.round(yaw * 10000) / 10000, area: host.area, hx, hz, h: PROP_DEFS[kind].h,
+  const p: PropPlacement = {kind, x: r3(x), z: r3(z), y: r3(host.y + top), rot: Math.round(yaw * 10000) / 10000, area: host.area, hx, hz, h: PROP_DEFS[kind].h,
     blocksSight: false, variant: 0, host: hostIndex, ...(host.level !== undefined ? {level: host.level} : {})};
   props.push(p);
   return p;
@@ -52,11 +52,11 @@ function toWorld(host: PropPlacement, lx: number, lz: number): [number, number] 
 }
 
 /** Lab bench: a random assortment packed on the worktop (host-local rectangles, no overlap). Returns the pieces placed. */
-function labBench(props: PropPlacement[], host: PropPlacement, hostIndex: number, rng: Rng): number {
+function labBench(props: PropPlacement[], host: PropPlacement, hostIndex: number, rng: Rng, set = LAB_SET): number {
   const def = PROP_DEFS[host.kind], M = 0.05, GAP = 0.03;
   const taken: [number, number, number, number][] = [];
   let n = 0;
-  for (const [kind, chance, lo, hi] of LAB_SET) {
+  for (const [kind, chance, lo, hi] of set) {
     if (!rng.chance(chance)) continue;
     const count = rng.int(lo, hi);
     for (let i = 0; i < count; i++) {
@@ -104,18 +104,65 @@ function tradingDesk(props: PropPlacement[], host: PropPlacement, hostIndex: num
   return n;
 }
 
+/** Wave 2: the drafting table's arm lamp (now and then), packed on the board like the lab glassware. */
+const DRAFTING_SET: readonly (readonly [ClutterKind, number, number, number])[] = [['draftingLamp', 0.75, 1, 1]];
 /**
- * Puts the loose clutter on every lab bench / trading desk of `level` that carries no host decor yet (index order; `rng` = the
- * storey's 'host-clutter' fork). Returns the number of pieces placed.
+ * Wave 2: the mixing desk's studio monitors back on its meter shelf (prop frame -Z, the top face 1 cm under the riser-lifted bbox
+ * top): the tall pair either side of the centre and the small pair at the ends (each now and then missing), turned to the engineer.
+ */
+const STUDIO_SPOTS: readonly (readonly [ClutterKind, number, number])[] = [['studioMonitor', 0.2255, -0.6], ['studioMonitor', -0.2255, -0.6],
+  ['studioMonitorSmall', 0.6675, -0.6865], ['studioMonitorSmall', -0.6675, -0.6865]];
+function mixingConsole(props: PropPlacement[], host: PropPlacement, hostIndex: number, rng: Rng): number {
+  const def = PROP_DEFS[host.kind];
+  const focus: [number, number] = [0, def.d * 0.45];
+  let n = 0;
+  for (const [kind, sx, sz] of STUDIO_SPOTS) {
+    if (!rng.chance(kind === 'studioMonitor' ? 0.9 : 0.8)) continue;
+    const lx = sx + rng.range(-0.02, 0.02), lz = sz + rng.range(-0.02, 0.02);
+    const yawL = Math.atan2(focus[0] - lx, focus[1] - lz) + rng.range(-0.05, 0.05);
+    const [x, z] = toWorld(host, lx, lz);
+    decor(props, host, hostIndex, kind, x, z, host.rot + yawL, host.h - 0.01);
+    n++;
+  }
+  return n;
+}
+
+/**
+ * Wave 2: espresso cups beside an espresso machine on its sideboard counter (gen/office/companyDress.ts onSideboard): 1-2 stacks on
+ * the counter top either side of the machine (host = the cabinetLow; `machine` its centre offset along the counter, host-local x,
+ * and half width). Returns the host-local x spans the stacks take (the counter's loot surface skips them: PropPlacement.cut).
+ */
+export function placeCounterCups(props: PropPlacement[], counter: PropPlacement, counterIndex: number, machineHalfW: number, rng: Rng): {x0: number; x1: number}[] {
+  const def = PROP_DEFS[counter.kind], cup = PROP_DEFS.espressoCups, spans: {x0: number; x1: number}[] = [];
+  const free = def.w / 2 - machineHalfW - 0.06 - cup.w; // room beside the machine for a stack's centre
+  if (free <= 0) return spans;
+  const sides = rng.shuffle([-1, 1]).slice(0, rng.int(1, 2));
+  for (const sgn of sides) {
+    const lx = sgn * (machineHalfW + 0.04 + cup.w / 2 + rng.range(0, Math.min(0.25, free)));
+    const lz = rng.range(-def.d / 2 + cup.d / 2 + 0.05, def.d / 2 - cup.d / 2 - 0.08);
+    const [x, z] = toWorld(counter, lx, lz);
+    decor(props, counter, counterIndex, 'espressoCups', x, z, counter.rot + rng.range(-Math.PI, Math.PI));
+    spans.push({x0: r3(lx - cup.w / 2 - 0.03), x1: r3(lx + cup.w / 2 + 0.03)});
+  }
+  return spans;
+}
+
+const PLACERS: Partial<Record<string, (props: PropPlacement[], host: PropPlacement, hostIndex: number, rng: Rng) => number>> = {
+  labBench: (p, h, i, r) => labBench(p, h, i, r), tradingDesk, draftingTable: (p, h, i, r) => labBench(p, h, i, r, DRAFTING_SET), mixingConsole,
+};
+
+/**
+ * Puts the loose clutter on every lab bench / trading desk / drafting table / mixing desk of `level` that carries no host decor on
+ * its top yet (index order; `rng` = the storey's 'host-clutter' fork). Returns the number of pieces placed.
  */
 export function placeHostClutter(props: PropPlacement[], level: number, rng: Rng): number {
   const n0 = props.length;
   let n = 0;
   for (let i = 0; i < n0; i++) {
-    const p = props[i];
-    if ((p.level ?? 0) !== level || (p.kind !== 'labBench' && p.kind !== 'tradingDesk') || p.h <= 0.02) continue;
+    const p = props[i], place = PLACERS[p.kind];
+    if ((p.level ?? 0) !== level || !place || p.h <= 0.02) continue;
     if (props.some(q => q.host === i && q.y > p.y + 0.01)) continue;
-    n += p.kind === 'labBench' ? labBench(props, p, i, rng) : tradingDesk(props, p, i, rng);
+    n += place(props, p, i, rng);
   }
   return n;
 }
