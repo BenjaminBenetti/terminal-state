@@ -41,7 +41,7 @@ WASD move · mouse look · Shift sprint · Space jump · C crouch · left click 
 aim · R reload · E pick up / open / take aimed item / take all / pry vending / climb ladder (Space lets go) / open a stall door · 1–5 / wheel quick slots · 6 backpack
 (hold it in front, click sets it down; on a grounded bag tap E opens it, hold E 0.5 s wears it) · Q last item · Tab or I inventory · H quick
 heal · F flashlight · hold G, release to throw the grenade-slot item (flares) · elevator: aim at a button and click or press E · M mute · Esc pause.
-Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
+Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
 is not supported.
 
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
@@ -198,6 +198,8 @@ station" (same seed, this session only).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):
   `off` renders exactly like release 5 (no haze, no flashlight shadow map).
+- `?perf=1` — start with the performance overlay shown (for browsers that keep Ctrl+Shift+P for themselves, e.g.
+  Firefox's private window).
 - `?qa=1` — **test automation only**: exposes read-only `window.__LL` state + a camera aim helper
   and lets the game run without pointer lock (automated browsers cannot grant it). It does not
   change health, ammo or AI.
@@ -234,6 +236,29 @@ station" (same seed, this session only).
   are gated by walking distance from the player (`src/ai/vocalReach.ts`; ≤ 32 m of route, ≤ 3 at once); combat sounds are not.
   QA hooks: `liftButtons()`, `liftPress(id)`, `goRoofLadder()`, `goTransit(end, lane)`, `bagHoldE(s)`, `flareGive(n)`,
   `stallOpen()`, `officeArch()`.
+
+## Performance overlay (Ctrl+Shift+P)
+Off by default; Ctrl+Shift+P toggles it in any state without pausing the game (held keys toggle once; the shortcut never
+reaches game input). Browsers or OSes that reserve the combination (e.g. Firefox: new private window) never deliver it to
+the page — use `?perf=1` there. `src/debug/` (`overlay.ts`, `frameHistory.ts`, `gpuTimer.ts`, `browserSignals.ts`):
+- **FPS / Frame ms**: animation frames per second over the last second, and rAF-to-rAF intervals (now / avg / p99 / max)
+  over the last ~6 s (360 frames). **Spikes** counts frames over 33 and 50 ms.
+- **Graph**: one bar per frame, newest right, never smoothed; colour by ≈60 / ≥30 / <30 fps, dashed 16.7 / 33.3 ms lines,
+  scale = the smallest of 33 / 50 / 100 / 250 / 500 / 1000 ms holding the 95th percentile, longer spikes drawn clipped with
+  a white cap (their value is the max). Dark base = the game's own main-thread time in that interval; a light tick = GPU
+  time where measured. Background-tab / suspended intervals (the page went hidden, or the interval is > 3 s longer than the
+  game's own work in it) are grey gaps excluded from the statistics; a freeze inside the game's frame (e.g. first-sight
+  shader compiles) counts as a stutter however long.
+- **Game CPU ms**: this game's frame callback on the main thread (update, render submit = CPU command encoding — not GPU work).
+- **GPU ms**: summed render-pass time from WebGPU `timestamp-query` or WebGL `EXT_disjoint_timer_query_webgl2`, resolved
+  asynchronously (one resolve in flight) and only while the overlay is shown; otherwise "n/a" with the reason.
+- **System CPU**: the Compute Pressure API's coarse state where available. System CPU % and GPU utilization % are not
+  exposed to web pages and are never estimated.
+- **Draw calls / Triangles**: three's per-draw counts after frustum culling, summed over every pass of the frame (flashlight
+  shadow map, scene, fog / post quads, viewmodel) — submitted, not unique visible triangles. **GPU memory**: three's
+  estimate of the resources it tracks. **Long frames** (Long Animation Frames API) and **JS heap** where the browser has them.
+- **Backend**: what actually initialized (same source as the title badge). With `?qa=1`, `window.__perf.snapshot()`
+  returns the numbers and row texts.
 
 ## Layout
 `src/gen` deterministic generator + grid/A*/LOS (pure, unit-tested) · `src/world` mesh building,
