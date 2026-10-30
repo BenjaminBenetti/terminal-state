@@ -574,7 +574,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   // openable (iteration 08, this lane)
   ...OPENABLE_KINDS.map(k => ({kind: k, cls: 'openable' as const, how: describe(k)})),
   // existing holders with moving parts / always-open fronts
-  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25.glb (Meshy T2.5; door split re-measured), shelving insert'},
+  {kind: 'cabinetTall', cls: 'existing', how: 'two doors derived from cabinet-tall-t25r1.glb (Meshy T2.5 + local flat side / top repair, task model-touchups-20261030; door region untouched, split unchanged), shelving insert'},
   {kind: 'cabinetLow', cls: 'existing', how: 'two doors derived from cabinet-low-t25.glb (Meshy T2.5; door split re-measured)'},
   {kind: 'crate', cls: 'existing', how: 'lid derived from crate-t25.glb, hinged at the back; splinters when shot (iteration 06)'},
   {kind: 'vending', cls: 'existing', how: 'front pried open ([E] hold), stock spills out (iteration 03); shot front gives way (06)'},

@@ -2936,7 +2936,7 @@
     "files": {
       "game/public/assets/models/bench.glb": {
         "id": "base:bench",
-        "replacedBy": "game/public/assets/models/bench-t25.glb",
+        "replacedBy": "game/public/assets/models/bench-t25r1.glb",
         "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
         "restoreBlobSha1": "0b1009b4de7282c96378fad0a8f33a1b9f2f96f9",
         "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/bench.glb > game/public/assets/models/bench.glb"
@@ -2950,7 +2950,7 @@
       },
       "game/public/assets/models/cabinet-tall.glb": {
         "id": "base:cabinetTall",
-        "replacedBy": "game/public/assets/models/cabinet-tall-t25.glb",
+        "replacedBy": "game/public/assets/models/cabinet-tall-t25r1.glb",
         "provenance": "game/public/assets/derivatives/meshy-t25-props-20261029.json",
         "restoreBlobSha1": "0f2b4946f31e6b900389d5ea7e0ad16030706d8e",
         "restore": "git show a7a646a1dd62bf1c641fe3dd0d1187ab322afe87:game/public/assets/models/cabinet-tall.glb > game/public/assets/models/cabinet-tall.glb"

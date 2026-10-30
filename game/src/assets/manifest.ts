@@ -49,12 +49,12 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   rifle: {url: 'assets/models/rifle-user.glb', bytes: 13_646_000},
   shotgun: {url: 'assets/models/shotgun-user.glb', bytes: 11_392_000},
   pistol: {url: 'assets/models/pistol.glb', bytes: 11_271_000},
-  bench: {url: 'assets/models/bench-t25.glb', bytes: 624_000},
+  bench: {url: 'assets/models/bench-t25r1.glb', bytes: 520_000},
   // Meshy T2.5 replacement (2026-10-29; derivatives/meshy-t25-light-20261029.json): the fixture rebuilt from Meshy T2.5 conditioned
   // on the original env-light-03 front view; 1.2 m long, top-centre origin (its bbox sizes the fixture material / tubes). The
   // iteration-04 LOD it replaces is restorable from Git (record.restore); light.glb / light-lod.glb stay unreferenced on disk.
   light: {url: 'assets/models/light-lod2-t25.glb', bytes: 349_000},
-  cabinetTall: {url: 'assets/models/cabinet-tall-t25.glb', bytes: 446_000},
+  cabinetTall: {url: 'assets/models/cabinet-tall-t25r1.glb', bytes: 304_000},
   cabinetLow: {url: 'assets/models/cabinet-low-t25.glb', bytes: 650_000},
   sign: {url: 'assets/models/sign.glb', bytes: 300_000},
   // Iteration 02 generated props (derivatives/props-iteration02.json).
