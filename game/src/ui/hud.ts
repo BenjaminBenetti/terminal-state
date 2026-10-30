@@ -5,11 +5,12 @@ import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
 import {meleeDefOf} from '../weapons/weapons'; // lane KNIFE
 import type {Inventory} from '../items/inventory';
-import {GEAR_SLOTS} from '../items/gear';
+import {FILTER_LIFE_S, GEAR_SLOTS} from '../items/gear';
 import {GEAR_ICONS} from './gearIcons';
 import {ensureGearStyles} from './gearStyles';
 import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
+import {GAS_MASK, type MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
 
 // Iteration 16 (lane INJURY): limb indicator — a row of the vitals (shown only while injured, so the healthy HUD is unchanged):
 // a small body silhouette (seen from behind: your left on the left) with the injured arm / leg in red, and short labels.
@@ -37,6 +38,8 @@ const MELEE_CSS = `
 #ammo.melee .sep, #ammo.melee #reserve { display: none; }`;
 /** Task office-overhaul-20261030 (lane INTERACT): the worn backpack's gear slot index (HUD slot "6"). */
 const BACK = GEAR_SLOTS.indexOf('backpack');
+/** Task gasmask-breach-20261030 (mask lane): the gas mask's gear slot index (HUD cell "Q", left of quick slot 1). */
+const MASK = GEAR_SLOTS.indexOf('mask');
 /** Crosshair hold ring (E held on a grounded bag): circumference of the r=13 progress circle. */
 const RING_C = 2 * Math.PI * 13;
 
@@ -79,6 +82,8 @@ export class Hud {
   private ring: SVGCircleElement | null = null;
   private ringWrap: HTMLElement | null = null;
   private ringShown = -1;
+  /** Task gasmask-breach-20261030 (mask lane): the gas mask's live face state (gear/gasMask.ts, every frame); null = off. */
+  private mask: MaskHudView | null = null;
 
   constructor() {
     for (const k of ['food', 'water'] as const) {
@@ -209,20 +214,23 @@ export class Hud {
       // data-bar/data-index make these slots drop targets while the inventory is open (inventoryUI.ts).
       // Task office-overhaul-20261030 (lane INTERACT): after quick slots 1-5 come slot "6" (the worn backpack: 6 takes it into the
       // hands, click sets it down) and slot "G" (the grenade slot: hold G to ready its throwable, release to throw).
+      // Task gasmask-breach-20261030 (mask lane): BEFORE them, a compact cell "Q" = the gas mask (gear slot 'mask'; a drop onto
+      // it wears a mask). Children: [Q, 1..5, 6, G] — it takes no numbered quick slot.
       // Task knife-windup-20261030 (lane SLOT): + slot "~" (the melee slot: ~ draws its weapon). It is the LAST child (indices of
-      // 1-5 / 6 / G unchanged) but shown FIRST, left of quick slot 1 like the ~ key (CSS order, ui/gearStyles.ts).
+      // Q / 1-5 / 6 / G unchanged) but shown between Q and quick slot 1, like the ~ key left of 1 (CSS order, ui/gearStyles.ts).
       const bar = $('#hotbar');
       const n = inv.hotbar.length;
-      if (bar.children.length !== n + 3) {
+      if (bar.children.length !== n + 4) {
         ensureGearStyles();
-        bar.innerHTML = inv.hotbar.map((_, i) => `<div class="slot" data-bar="hotbar" data-index="${i}"></div>`).join('')
+        bar.innerHTML = `<div class="slot maskslot" data-bar="gear" data-index="${MASK}" title="Q: put the gas mask on / take it off"></div>`
+          + inv.hotbar.map((_, i) => `<div class="slot" data-bar="hotbar" data-index="${i}"></div>`).join('')
           + `<div class="slot bagslot" data-bar="gear" data-index="${BACK}" title="6: take your backpack off into your hands · click sets it down"></div>`
           + `<div class="slot throwslot" data-bar="throw" data-index="0" title="G: hold to ready the grenade slot's throwable (flare), release to throw"></div>`
-          + `<div class="slot meleeslot" data-bar="melee" data-index="0" title="~: draw the melee slot's weapon (knife) · 1-5 / wheel / Q go back to the quick slots"></div>`;
+          + `<div class="slot meleeslot" data-bar="melee" data-index="0" title="~: draw the melee slot's weapon (knife) · 1-5 / wheel go back to the quick slots"></div>`;
       }
       const meleeHeld = inv.meleeSelected && !this.bagSelected;
       inv.hotbar.forEach((st, i) => {
-        const el = bar.children[i] as HTMLElement;
+        const el = bar.children[i + 1] as HTMLElement;
         const def = st ? itemDef(st.itemId) : null;
         const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${st?.count ?? 0}|${st?.mag ?? ''}|${itemIconsVersion()}`;
         el.classList.toggle('selected', i === inv.selected && !inv.meleeSelected && !this.bagSelected);
@@ -231,9 +239,42 @@ export class Hud {
         const count = def && def.kind !== 'weapon' && st!.count > 1 ? `<span class="count">${st!.count}</span>` : def?.kind === 'weapon' && !meleeDefOf(def.id) ? `<span class="count">${st!.mag}</span>` : ''; // lane KNIFE: no rounds on a melee slot
         el.innerHTML = `<span class="key">${i + 1}</span>${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}`;
       });
-      this.extraSlots(inv, bar.children[n] as HTMLElement, bar.children[n + 1] as HTMLElement);
-      this.meleeCell(inv, bar.children[n + 2] as HTMLElement, meleeHeld);
+      this.extraSlots(inv, bar.children[n + 1] as HTMLElement, bar.children[n + 2] as HTMLElement);
+      this.meleeCell(inv, bar.children[n + 3] as HTMLElement, meleeHeld);
     }
+    const q = $('#hotbar').children[0] as HTMLElement | undefined;
+    if (q) this.maskSlot(inv, q); // mask lane: live state / filter every frame (rebuilt only on change)
+  }
+
+  /**
+   * Task gasmask-breach-20261030 (mask lane): the HUD "Q" cell — the equipped gas mask's icon (dim "no mask" ghost without one),
+   * ON / OFF (ON… / OFF… while it goes on / comes off), the fitted filter's bar and the spare filters carried (+N). Amber at
+   * <= 20 % filter, red when the fitted filter is empty. Rebuilt only when what it shows changes.
+   */
+  private maskSlot(inv: Inventory, el: HTMLElement): void {
+    const st = inv.gearSlots[MASK];
+    const def = st ? itemDef(st.itemId) : null;
+    const m = this.mask, state = def ? m?.state ?? 'off' : 'off';
+    const frac = def ? Math.max(0, Math.min(1, (st!.filter ?? 0) / FILTER_LIFE_S)) : 0;
+    const pct = Math.ceil(frac * 100 - 1e-9);
+    const spares = inv.count('gas_filter');
+    const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${state}|${pct}|${spares}|${itemIconsVersion()}`;
+    if (el.dataset.k === key) return;
+    el.dataset.k = key;
+    const low = !!def && pct > 0 && frac <= GAS_MASK.lowFrac, empty = !!def && pct <= 0;
+    el.classList.toggle('vacant', !def);
+    el.classList.toggle('on', !!def && (state === 'on' || state === 'donning'));
+    el.classList.toggle('low', low);
+    el.classList.toggle('empty', empty);
+    const label = state === 'on' ? 'ON' : state === 'donning' ? 'ON…' : state === 'doffing' ? 'OFF…' : 'OFF';
+    el.title = def ? `Gas mask ${label} · filter ${pct} % · ${spares} spare — Q puts it on / takes it off; it protects only while on with filter left` : 'Q: gas mask — none worn (drag one here or wear it from Tab: gear)';
+    el.innerHTML = `<span class="key">Q</span>${spares ? `<span class="count">+${spares}</span>` : ''}${def ? itemIconHtml(def.id) : `<span class="ghost">${GEAR_ICONS.gasmask}</span>`}`
+      + `<span class="nm">${def ? label : 'no mask'}</span>${def ? `<span class="fb"><i style="width:${pct}%"></i></span>` : ''}`;
+  }
+
+  /** Task gasmask-breach-20261030 (mask lane): the gas mask's face state (gear/gasMask.ts calls it every frame; applied by update). */
+  setMask(view: MaskHudView | null): void {
+    this.mask = view;
   }
 
   /**
@@ -401,8 +442,9 @@ export const CONTROLS: [string, string][] = [
   ['Crouch (tap toggle · hold)', 'C'], ['Fire · knife: hold to wind up, release to slash (a tap slashes too) / eat · drink · use held item', 'Left click'],
   ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
   // Task knife-windup-20261030 (lane SLOT): the dedicated melee slot (the knife lives there, not in a quick slot)
-  ['Melee slot: draw your knife (1 – 5 · wheel · Q switch back)', '~'],
-  ['Last item', 'Q'], ['Inventory (drag an item out of it to drop it)', 'Tab or I'], ['Quick heal', 'H'],
+  ['Melee slot: draw your knife (1 – 5 · wheel switch back)', '~'],
+  // Task gasmask-breach-20261030 (mask lane): Q = the gas mask (last-item cycling removed); it uses filters from your pockets
+  ['Gas mask on/off', 'Q'], ['Inventory (drag an item out of it to drop it)', 'Tab or I'], ['Quick heal', 'H'],
   // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items.
   // Task office-overhaul-20261030 (INTERACT, #6): G throws the grenade slot's flare (T retired; G no longer drops)
   ['Flashlight (battery meter, bottom right)', 'F'], ['Throw the grenade slot\'s flare: hold to ready, release to throw', 'Hold G · or hold click while held'],

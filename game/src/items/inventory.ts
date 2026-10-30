@@ -20,6 +20,12 @@
 // - SNAPSHOT v2 (`throw` field). loadJSON migrates v1 snapshots (older saves / carryover): the grenade slot starts empty and every
 //   flare stays where it was. A non-throwable found in it (malformed) goes back in through add(), never lost.
 //
+// Task gasmask-breach-20261030 (mask lane): the MASK gear slot (appended to GEAR_SLOTS) and a gas mask's fitted-filter charge
+// `filter` (seconds left) ON ITS OWN STACK — kept by every move / swap / drop / snapshot (stackToJSON / stackFromJSON, clone,
+// section-memory records), so taking the mask off and on, swapping masks or travelling never refills or duplicates it. A mask
+// stack made here starts with no charge (undefined = 0); a found mask's partly used filter comes from its placement. Spare
+// filters (`gas_filter`, kind 'supply') go to the pockets first, like ammo; count / take see only quick slots + pockets.
+//
 // Task knife-windup-20261030 (lane SLOT, user: "I want a custom melee weapon slot ... you hit the tilde key to switch to your knife
 // ... so that way it doesn't take up a hot[bar] slot"):
 // - MELEE SLOT: one dedicated equipment slot (`meleeSlot`, SlotRef MELEE_REF = {bar: 'melee', index: 0}; HUD: the "~" cell before
@@ -38,7 +44,7 @@
 import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
 import {WEAPONS, meleeDefOf} from '../weapons/weapons';
-import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isBagItem, type GearSlot} from './gear';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isBagItem, isFilterMask, type GearSlot} from './gear';
 
 export interface ItemStack {
   uid: number;
@@ -48,6 +54,8 @@ export interface ItemStack {
   mag?: number;
   /** Iteration 16 (GEAR): a backpack's own contents (backpack stacks only; never holds another backpack). */
   bag?: (ItemStack | null)[];
+  /** Mask lane: a gas mask's fitted filter, seconds of on-face use left (gas masks only; undefined = no charge). */
+  filter?: number;
 }
 
 export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw' | 'melee';
@@ -84,8 +92,8 @@ export type RefusalCode = 'split' | 'wrong-slot' | 'not-gear' | 'pockets-occupie
   | 'worn-bag' | 'not-a-bag' | 'slot-taken' | 'no-room' | 'bad-ref';
 export interface Refusal { code: RefusalCode; text: string }
 
-/** Plain-data stack (snapshots). */
-export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[] }
+/** Plain-data stack (snapshots). Mask lane: + `filter` (a gas mask's fitted-filter seconds). */
+export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[]; filter?: number }
 export interface InventoryJSON {
   /** 1: iteration-16 snapshots (no grenade slot), 2: + grenade slot (no melee slot) — both still loaded; 3: current. */
   v: 1 | 2 | 3;
@@ -114,6 +122,7 @@ export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
   const j: StackJSON = {uid: s.uid, itemId: s.itemId, count: s.count};
   if (s.mag !== undefined) j.mag = s.mag;
   if (s.bag) j.bag = s.bag.map(stackToJSON);
+  if (s.filter !== undefined) j.filter = s.filter; // mask lane
   return j;
 }
 
@@ -126,6 +135,7 @@ export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null
   const s: ItemStack = {uid: j.uid, itemId: canonicalItemId(j.itemId), count: j.count};
   if (j.mag !== undefined) s.mag = j.mag;
   if (j.bag) s.bag = j.bag.map(stackFromJSON);
+  if (j.filter !== undefined) s.filter = j.filter; // mask lane
   return s;
 }
 
@@ -150,7 +160,7 @@ export class Inventory {
   readonly throwSlot: (ItemStack | null)[] = new Array(THROW_SLOTS).fill(null);
   /** Task knife-windup-20261030 (SLOT): the melee slot (melee weapons only; ~ draws its weapon). */
   readonly meleeSlot: (ItemStack | null)[] = new Array(MELEE_SLOTS).fill(null);
-  /** Quick slot 0-4 in the hands — or, while `meleeSelected`, the remembered quick slot (1-5 / wheel / Q come back to it). */
+  /** Quick slot 0-4 in the hands — or, while `meleeSelected`, the remembered quick slot (1-5 / wheel come back to it). */
   selected = 0;
   /** Task knife-windup-20261030 (SLOT): the melee slot is selected (read `meleeSelected`; cleared whenever the slot empties). */
   private meleeHeld = false;
@@ -218,7 +228,7 @@ export class Inventory {
   selectedRef(): SlotRef {
     return this.meleeSelected ? MELEE_REF : {bar: 'hotbar', index: this.selected};
   }
-  /** Quick slot i (keys 1-5 / wheel / Q); leaves the melee slot. */
+  /** Quick slot i (keys 1-5 / wheel); leaves the melee slot. */
   select(i: number): void {
     if (i < 0 || i >= HOTBAR_SIZE) return;
     this.selected = i;
@@ -429,7 +439,7 @@ export class Inventory {
         if (!left) break;
       }
     }
-    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' ? ['pack', 'hotbar'] : ['hotbar', 'pack'];
+    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' || def.kind === 'supply' ? ['pack', 'hotbar'] : ['hotbar', 'pack']; // mask lane: filters like ammo
     for (const bar of order) {
       const list = this.list(bar);
       for (let i = 0; i < list.length && left > 0; i++) {
@@ -853,6 +863,12 @@ export class Inventory {
           check(c, 'bag');
         }
       } else if (s.bag) out.push(`non-bag ${s.itemId} carries contents`);
+      // mask lane: a filter charge only on gas masks, finite, 0..one filter's life
+      if (s.filter !== undefined) {
+        const life = gearSpec(s.itemId)?.filterLife ?? 0;
+        if (!isFilterMask(s.itemId)) out.push(`non-mask ${s.itemId} carries a filter charge`);
+        else if (!Number.isFinite(s.filter) || s.filter < 0 || s.filter > life + 1e-6) out.push(`bad filter ${s.itemId}:${s.filter}`);
+      }
     };
     this.hotbar.forEach(s => s && check(s, 'hotbar'));
     this.pack.forEach(s => s && check(s, 'pack'));

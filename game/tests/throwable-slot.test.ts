@@ -317,8 +317,8 @@ describe('inventory screen + HUD (ui/inventoryUI.ts drop step, ui/hud.ts G slot)
     const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    expect(bar.children).toHaveLength(8); // 1-5, 6, G + the melee slot ~ (task knife-windup-20261030, SLOT; last child, shown first)
-    const g = bar.children[6];
+    expect(bar.children).toHaveLength(9); // task gasmask-breach-20261030 (mask lane): [Q, 1..5, 6, G] + the melee slot ~ (task knife-windup-20261030, SLOT; last child)
+    const g = bar.children[7];
     expect(g.dataset.bar).toBe('throw');
     expect(g.classList.contains('vacant')).toBe(true);
     expect(g.innerHTML).toMatch(/<span class="key">G<\/span>/);

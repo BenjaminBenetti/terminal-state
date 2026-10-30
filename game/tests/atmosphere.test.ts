@@ -86,6 +86,31 @@ describe('iteration 13: the TSL passes compile for both WebGPURenderer backends 
     }
   });
 
+  it('task gasmask-breach-20261030: the march samples the breach gas layers in BOTH backends — one gas texture, level-0 lookups, gated by the gasOn uniform', () => {
+    const u = createFogUniforms();
+    const gas = new THREE.DataArrayTexture(new Uint8Array(4 * 4 * 3), 4, 4, 3);
+    gas.format = THREE.RedFormat;
+    gas.name = 'fog-gas-map';
+    for (const backend of ['glsl', 'wgsl'] as const) {
+      const f = compileQuad(createMarchMaterial(u, {...textures(false), gas}, {steps: 14}), backend).fragment;
+      expect(f, backend).toContain('vfGasSig');
+      if (backend === 'wgsl') {
+        expect(lines(f).filter(l => /textureSample\(/.test(l))).toEqual([]); // explicit LOD only (inside per-pixel branches)
+        expect(f.match(/texture_2d_array<f32>/g)?.length, 'density, air, vis + gas').toBe(4);
+      } else {
+        expect(f.match(/uniform highp sampler2DArray|uniform sampler2DArray/g)?.length, 'density, air, vis + gas').toBe(4);
+        expect(f).toMatch(/textureLod\(/);
+      }
+    }
+    // absent gas texture: the same graph against an all-zero stand-in (no JS-side variant of the march)
+    const a = compileQuad(createMarchMaterial(u, textures(false), {steps: 14}), 'glsl').fragment;
+    const b = compileQuad(createMarchMaterial(u, {...textures(false), gas}, {steps: 14}), 'glsl').fragment;
+    expect(a).toBe(b);
+    // the gate + look are plain uniforms (set by sync from VolumetricAtmosphere.gasLook)
+    expect(u.gasOn.value).toBe(0);
+    expect(u.gasK.value.x).toBeCloseTo(1.1, 6);
+  });
+
   it('uniform arrays match the smoke / scatter limits', () => {
     const u = createFogUniforms();
     expect(u.puff.array.length).toBe(VF_LIMITS.puffs);
@@ -472,6 +497,50 @@ describe('VolumetricAtmosphere lifecycle (fake renderer, no GPU)', () => {
     a.dispose();
     expect(a.active).toBe(false);
     a.dispose(); // idempotent
+  });
+
+  it('task gasmask-breach-20261030: gas layers — allocated by setStation (density map w / h / slots, in the march key), one storey written, only that layer uploaded on the next frame, gate opened; a new station resets them', () => {
+    const {scene, camera, flashlight} = rig();
+    const a = make(fakeRenderer(), {flashlight});
+    a.setSize(640, 360);
+    const internals = a as unknown as {gasTex: THREE.DataArrayTexture; marchKey: string; u: {gasOn: {value: number}}; ensureMarch(): unknown};
+    expect(a.gasDebug().map).toBe(null);
+    a.setStation(station(1), null);
+    const m = a.densityMap!;
+    const tex = internals.gasTex;
+    expect(a.gasDebug().map).toEqual([m.w, m.h, m.slots]);
+    expect([tex.image.width, tex.image.height, tex.image.depth]).toEqual([m.w, m.h, m.slots]);
+    expect(tex.format).toBe(THREE.RedFormat);
+    a.render(scene, camera, 0);
+    internals.ensureMarch(); // (the fog pass node runs it on a real renderer)
+    expect(internals.marchKey).toContain(`|${tex.id}`);
+    expect(internals.u.gasOn.value).toBe(0); // no gas: the per-step gate stays shut
+    // a 3x2 block of storey 0's field at grid cells (10..12, 20..21)
+    const slot = Math.min(1, m.slots - 1);
+    a.setGasLayer(slot, [0, 0.5, 1, 0.25, 0.004, 2], {x0: 10, y0: 20, w: 3, h: 2});
+    const data = tex.image.data as Uint8Array, at = (x: number, y: number) => data[(slot * m.h + y) * m.w + x];
+    expect([at(10, 20), at(11, 20), at(12, 20), at(10, 21), at(11, 21), at(12, 21)]).toEqual([0, 128, 255, 64, 1, 255]);
+    expect(a.gasDebug().pending).toEqual([slot]);
+    const v0 = tex.version;
+    a.render(scene, camera, 0.1);
+    expect([...tex.layerUpdates]).toEqual([slot]); // only that layer is copied by the next upload
+    expect(tex.version).toBeGreaterThan(v0);
+    expect(internals.u.gasOn.value).toBe(1);
+    expect(a.gasDebug()).toMatchObject({on: true, pending: [], uploads: 1});
+    // a quiet frame uploads nothing
+    const v1 = tex.version;
+    a.render(scene, camera, 0.2);
+    expect(tex.version).toBe(v1);
+    // new station: fresh empty layers, gate shut, the old texture released
+    let disposed = 0;
+    tex.addEventListener('dispose', () => disposed++);
+    a.setStation(station(2), null);
+    expect(disposed).toBe(1);
+    expect(internals.gasTex).not.toBe(tex);
+    expect(a.gasDebug()).toMatchObject({on: false, pending: []});
+    a.render(scene, camera, 0.3);
+    expect(internals.u.gasOn.value).toBe(0);
+    a.dispose();
   });
 
   it('shadow casters: opaque lit meshes cast (structure double-sided), glow/tubes/decals do not', () => {

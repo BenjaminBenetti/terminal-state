@@ -19,6 +19,7 @@ import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
 import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
 import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
+import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
 import {roofLadderPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT): roof ladder / transit hall poses
 import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input walker, per-frame traversal trace, lifecycle counts
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
@@ -328,6 +329,7 @@ export function installQaHooks(game: Game): void {
     ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
     ...towerQaApi(game), // Iteration 17 / office-overhaul (lane LIFT): tower(), towerGoLanding(floor), towerGoCab(), liftButtons(), liftAim(id), liftPress(id, 'mouse' | 'key'), liftState(), towerExteriorTune({...})
     ...officeArchQaApi(game), // Task office-overhaul-20261030 (lane ARCH): exteriorFogTune({...}), officeArch(), officeArchTune({...}), roofFog()
+    ...gasQaApi(game), // Task gasmask-breach-20261030 (lane GAS): windows(level?), windowAim(id), DEBUG windowBreak(id), gas(), gasTune({...})
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);
@@ -443,7 +445,7 @@ export function installQaHooks(game: Game): void {
       const hit = (a: R | null, b: R | null) => !!a && !!b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
       const overlaps: string[] = [];
       for (const c of cells) for (const [k, p] of Object.entries(panels)) if (hit(c.rect, p)) overlaps.push(`${c.bar}:${c.index} x ${k}`);
-      return {viewport: {w: window.innerWidth, h: window.innerHeight}, order: cells.map(c => c.bar), cellWidth: cells[0]?.rect ? cells[0].rect.r - cells[0].rect.l : null, cells, panels, overlaps};
+      return {viewport: {w: window.innerWidth, h: window.innerHeight}, order: cells.map(c => c.bar), cellWidth: (q => q?.rect ? q.rect.r - q.rect.l : null)(cells.find(c => c.bar === 'hotbar')), cells, panels, overlaps};
     },
     /** Contact sheet (PNG data URL) of every model-rendered item icon, for reports. */
     iconSheet: async () => {

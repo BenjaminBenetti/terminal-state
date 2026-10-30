@@ -17,6 +17,7 @@
 import {P7_MODELS, type P7Model, type P7ModelKey, type P7Surface} from './props07.catalog';
 import type {PropDef, PropPlacement, SurfaceSpec} from './props';
 import type {DamageClass, PropDamageSpec} from '../damage/materials';
+import {P7_HOLDER_LOOT} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT): holder loot numbers
 
 // ---------------------------------------------------------------------------------------
 // Spec types
@@ -84,7 +85,8 @@ export interface P7Spec {
   core?: boolean;
   /**
    * Loot holder: measured support surfaces of the runtime model (or authored ones), lot range, empty chance, category modifiers
-   * [food, drink, med, ammo] (rooms/stores stock it from their own purpose table; halls from these modifiers).
+   * [food, drink, med, ammo] (rooms/stores stock it from their own purpose table; halls from these modifiers). Task
+   * loot-tables-20261030 (lane LOOT): the loot numbers live in items/lootTables.ts P7_HOLDER_LOOT (referenced here).
    */
   holder?: {lots: readonly [number, number]; empty: number; mod: readonly [number, number, number, number]; surfaces?: readonly SurfaceSpec[]; minClear?: number};
   uses: readonly P7Use[];
@@ -133,7 +135,7 @@ export const P7_SPECS = {
   duffelBag: {label: 'duffel bag', cls: 'fabric', uses: [FREE(LOOSE_HALLS, [1, 1], {chance: 0.35}), W(['lost-property', 'locker-room'], [1, 2], {chance: 0.6, front: 0.6})]},
   babyStroller: {label: 'stroller', cls: 'fabric', uses: [FREE(['platform', 'concourse', 'passage', 'paid-concourse'], [1, 1], {chance: 0.2}), W(['lost-property'], [1, 1], {chance: 0.6})]},
   bicycle: {label: 'bicycle', cls: 'steel', uses: [FREE(['platform', 'concourse', 'passage'], [1, 1], {chance: 0.2}), ALONG(['service-corridor', 'lost-property'], [1, 1], {chance: 0.35})]},
-  shoppingCart: {label: 'shopping cart', cls: 'steel', holder: {lots: [1, 3], empty: 0.35, mod: [1.6, 1.4, 0.2, 0]}, uses: [W(['convenience'], [1, 1], {chance: 0.5, front: 0.8}), FREE(['platform', 'concourse', 'passage', 'paid-concourse', 'underpass'], [1, 1], {chance: 0.2})]},
+  shoppingCart: {label: 'shopping cart', cls: 'steel', holder: P7_HOLDER_LOOT.shoppingCart, uses: [W(['convenience'], [1, 1], {chance: 0.5, front: 0.8}), FREE(['platform', 'concourse', 'passage', 'paid-concourse', 'underpass'], [1, 1], {chance: 0.2})]},
   wheelchair: {label: 'wheelchair', cls: 'steel', uses: [W(['first-aid-room'], [1, 1], {chance: 0.6}), W(['pharmacy'], [1, 1], {chance: 0.3}), FREE(['concourse', 'platform', 'paid-concourse'], [1, 1], {chance: 0.15})]},
   trashBagPile: {label: 'trash bags', cls: 'fabric', uses: [W(['service-corridor', 'storage'], [1, 1], {chance: 0.5}), W(['custodial-room'], [1, 2], {lead: true}), W(['platform', 'passage', 'underpass', 'food-court'], [1, 2], {per100: 0.06, chance: 0.4}), W(['burger', 'pizza'], [1, 1], {chance: 0.2, front: 0.7})]},
   foldingBarricade: {core: true, label: 'folding barricade', cls: 'plastic', uses: [W(['service-corridor', 'storage', 'custodial-room'], [1, 1], {chance: 0.4}), W(['platform', 'passage', 'concourse', 'underpass'], [1, 1], {chance: 0.3, front: 1.0})]},
@@ -198,12 +200,12 @@ export const P7_SPECS = {
   standMixer: {label: 'stand mixer', cls: 'steel', uses: [W(['bakery', 'pizza', 'donut'], [1, 1], {chance: 0.6, front: 0.7})]},
   ingredientBin: {label: 'ingredient bin', cls: 'plastic', physics: {mass: 8, dynamic: true, mat: 'plastic'}, uses: [W(['bakery', 'pizza', 'donut', 'noodles'], [1, 1], {chance: 0.6, front: 0.6})]},
   iceMachine: {label: 'ice machine', cls: 'steel', uses: [W(['burger', 'juice', 'sushi', 'deli', 'hotdog'], [1, 1], {chance: 0.5, front: 0.8})]},
-  busCart: {label: 'bus cart', cls: 'plastic', holder: {lots: [1, 3], empty: 0.4, mod: [1.5, 1.5, 0, 0]}, uses: [W(['food-court'], [1, 2], {chance: 0.6, front: 1.0}), W(['burger', 'noodles', 'sushi', 'pizza'], [1, 1], {chance: 0.35, front: 0.7}), W(['staff-room'], [1, 1], {chance: 0.2})]},
+  busCart: {label: 'bus cart', cls: 'plastic', holder: P7_HOLDER_LOOT.busCart, uses: [W(['food-court'], [1, 2], {chance: 0.6, front: 1.0}), W(['burger', 'noodles', 'sushi', 'pizza'], [1, 1], {chance: 0.35, front: 0.7}), W(['staff-room'], [1, 1], {chance: 0.2})]},
   // --- medical ----------------------------------------------------------------------------------------------------------------
-  crashCart: {label: 'crash cart', cls: 'sheetMetal', holder: {lots: [1, 3], empty: 0.2, mod: [0, 0.3, 3, 0]}, uses: [W(['first-aid-room'], [1, 1], {chance: 0.85, front: 0.8}), W(['pharmacy'], [1, 1], {chance: 0.3})]},
+  crashCart: {label: 'crash cart', cls: 'sheetMetal', holder: P7_HOLDER_LOOT.crashCart, uses: [W(['first-aid-room'], [1, 1], {chance: 0.85, front: 0.8}), W(['pharmacy'], [1, 1], {chance: 0.3})]},
   // Loot on the flat middle of the mattress (the measured extent includes the raised backrest).
   // Meshy T2.5 stretcher (ray-cast 2026-10-29): flat mattress top 0.70 m over z -0.1..0.6, raised backrest toward -z (0.75..0.89)
-  wheeledStretcher: {label: 'stretcher', cls: 'steel', holder: {lots: [1, 2], empty: 0.45, mod: [0, 0.3, 3, 0], surfaces: [{y: 0.7, x0: -0.17, x1: 0.17, z0: -0.1, z1: 0.6, clear: 0.35}]}, uses: [ALONG(['first-aid-room'], [1, 1], {chance: 0.7}), FREE(['platform'], [1, 1], {chance: 0.12, ring: 1.0})]},
+  wheeledStretcher: {label: 'stretcher', cls: 'steel', holder: {...P7_HOLDER_LOOT.wheeledStretcher, surfaces: [{y: 0.7, x0: -0.17, x1: 0.17, z0: -0.1, z1: 0.6, clear: 0.35}]}, uses: [ALONG(['first-aid-room'], [1, 1], {chance: 0.7}), FREE(['platform'], [1, 1], {chance: 0.12, ring: 1.0})]},
   ivPole: {label: 'IV pole', cls: 'steel', uses: [W(['first-aid-room'], [1, 2], {chance: 0.7, front: 0.5}), W(['pharmacy'], [1, 1], {chance: 0.2, front: 0.5})]},
   oxygenCart: {label: 'oxygen cart', cls: 'steel', uses: [W(['first-aid-room', 'pharmacy'], [1, 1], {chance: 0.6, front: 0.5})]},
   physicianScale: {label: 'scale', cls: 'steel', uses: [W(['first-aid-room'], [1, 1], {chance: 0.6}), W(['pharmacy'], [1, 1], {chance: 0.3})]},
@@ -219,7 +221,7 @@ export const P7_SPECS = {
   dryTransformer: {label: 'transformer', cls: 'sheetMetal', uses: [W(['electrical-room'], [1, 1], {chance: 0.75}), W(['electrical-closet'], [1, 1], {chance: 0.4})]},
   cableSpool: {label: 'cable spool', cls: 'wood', uses: [W(['storage', 'electrical-room', 'service-corridor', 'signal-room', 'workshop'], [1, 1], {chance: 0.5, front: 0.6})]},
   // --- maintenance workshop / plant ---------------------------------------------------------------------------------------------
-  rollingToolChest: {label: 'tool chest', cls: 'sheetMetal', holder: {lots: [1, 3], empty: 0.3, mod: [0.2, 0.6, 1, 1.6]}, uses: [W(['workshop'], [1, 1], {lead: true, front: 0.8}), W(['storage', 'electrical-room', 'signal-room'], [1, 1], {chance: 0.5, front: 0.8})]},
+  rollingToolChest: {label: 'tool chest', cls: 'sheetMetal', holder: P7_HOLDER_LOOT.rollingToolChest, uses: [W(['workshop'], [1, 1], {lead: true, front: 0.8}), W(['storage', 'electrical-room', 'signal-room'], [1, 1], {chance: 0.5, front: 0.8})]},
   benchGrinderStand: {label: 'bench grinder', cls: 'steel', uses: [W(['workshop'], [1, 1], {lead: true, front: 0.7}), W(['storage', 'electrical-room'], [1, 1], {chance: 0.3, front: 0.7})]},
   toolPegboard: {label: 'tool pegboard', cls: 'wood', uses: [MOUNT(['workshop'], [1, 1], 1.0, {lead: true}), MOUNT(['storage', 'electrical-room', 'signal-room'], [1, 1], 1.0, {chance: 0.5})]},
   partsBinRack: {label: 'parts bins', cls: 'plastic', uses: [MOUNT(['storage', 'electrical-room', 'signal-room', 'workshop', 'phone', 'keys'], [1, 1], 0.95, {chance: 0.6})]},

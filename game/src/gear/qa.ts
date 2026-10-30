@@ -8,6 +8,7 @@ import type {Game} from '../game';
 import {THROW_REF, type AnyRef} from '../items/inventory';
 import {GEAR_SLOTS} from '../items/gear';
 import {stallQaApi} from '../world/stalls'; // Task office-overhaul-20261030 (INTERACT, #13): stalls(), stallOpen(i?), stallEnter(i?), stallSpec()
+import {gasMaskQaApi} from './gasMaskQa'; // Task gasmask-breach-20261030 (mask lane): mask(), maskGive(frac?), filterGive(n), maskToggle()
 
 const ref = (spec: string): AnyRef => {
   const [bar, n] = spec.split(':');
@@ -18,6 +19,7 @@ export function gearQaApi(game: Game) {
   const sys = () => game.gear;
   return {
     ...stallQaApi(game), // Task office-overhaul-20261030 (INTERACT, #13)
+    ...gasMaskQaApi(game), // Task gasmask-breach-20261030 (mask lane)
     /** Gear / bag state: worn items, readied, view open, bags in the section, aimed bag, mods, pockets. */
     gear: () => ({...sys().qa(), mods: {...game.mods}, pockets: game.inv.pack.length, refusal: game.inv.refusal?.text ?? null}),
     /** Give one gear item (worn at once when its slot is empty, else pocketed; a second backpack is refused). */

@@ -14,6 +14,7 @@ import {INVENTORY_JSON_VERSION, Inventory, MELEE_REF, PACK_SIZE, isMeleeItem, ty
 import {ITEMS, type ItemDef} from '../src/items/items';
 import {WEAPONS, WeaponController, type WeaponDef} from '../src/weapons/weapons';
 import {starterInventory} from '../src/run/starter';
+import type {GearSlot} from '../src/items/gear';
 import {restoreCarry, takeSnapshot} from '../src/run/snapshot';
 import {Survival} from '../src/player/survival';
 import {FlashlightBattery} from '../src/player/flashlight';
@@ -27,7 +28,8 @@ const SRC = (p: string) => readFileSync(fileURLToPath(new URL(`../src/${p}`, imp
 const H = (index: number): SlotRef => ({bar: 'hotbar', index});
 const P = (index: number): SlotRef => ({bar: 'pack', index});
 const knivesIn = (inv: Inventory) => inv.allStacks(true).filter(s => s.itemId === 'knife');
-const NO_GEAR = {helmet: null, chest: null, gloves: null, boots: null, backpack: null};
+// a legacy (pre-gas-mask) snapshot's gear: no 'mask' key — the loader treats a missing slot as empty
+const NO_GEAR = {helmet: null, chest: null, gloves: null, boots: null, backpack: null} as Record<GearSlot, null>;
 const emptyPack = (n = PACK_SIZE) => new Array(n).fill(null);
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -415,11 +417,11 @@ describe('the ~ key (player/input.ts): Backquote, plain or shifted; never with C
 describe('Game selection wiring (the real Game methods on a minimal shell + the real WeaponController)', async () => {
   const {Game} = await import('../src/game');
   type Shell = {inv: Inventory; weapon: InstanceType<typeof WeaponController>; input: {mouse: boolean[]}; lmbLatch: boolean; toasts: string[]; denied: number;
-    equips: number; held: (string | null)[]; lastSlot: number | 'melee'; invUI: {selected: SlotRef | null}};
+    equips: number; held: (string | null)[]; invUI: {selected: SlotRef | null}};
   function shell(inv = starterInventory('pistol')) {
     const s = {
       inv, weapon: new WeaponController(), input: {mouse: [false, false, false]}, lmbLatch: false, toasts: [] as string[], denied: 0, equips: 0,
-      held: [] as (string | null)[], lastSlot: 0 as number | 'melee', use: null, consumeView: {cancel() {}}, flareHold: {active: false}, gear: null,
+      held: [] as (string | null)[], use: null, consumeView: {cancel() {}}, flareHold: {active: false}, gear: null,
       invUI: {selected: null as SlotRef | null},
       sfx: {equip: () => { s.equips++; }, denied: () => { s.denied++; }},
       viewmodel: {setItem: (id: string | null) => { s.held.push(id); }},
@@ -432,7 +434,7 @@ describe('Game selection wiring (the real Game methods on a minimal shell + the 
   }
   const press = (g: ReturnType<typeof shell>, codes: string[], wheel = 0) => g.slotKeys({hit: c => codes.includes(c), wheel});
 
-  it('~ draws the knife (weapon controller + viewmodel), again is a no-op; 1-5, the wheel and Q come back; slot 3 is an empty quick slot', () => {
+  it('~ draws the knife (weapon controller + viewmodel), again is a no-op; 1-5 and the wheel come back (Q is the gas mask); slot 3 is an empty quick slot', () => {
     const g = shell();
     expect(g.weapon.def?.id).toBe('pistol');
     press(g, ['Backquote']);
@@ -442,10 +444,8 @@ describe('Game selection wiring (the real Game methods on a minimal shell + the 
     expect([g.equips, g.toasts]).toEqual([eq, []]);
     press(g, ['Digit1']);
     expect([g.inv.meleeSelected, g.weapon.def?.id]).toEqual([false, 'pistol']);
-    press(g, ['KeyQ']); // Q: back to the melee slot
-    expect(g.weapon.def?.id).toBe('knife');
-    press(g, ['KeyQ']); // and back to the gun
-    expect(g.weapon.def?.id).toBe('pistol');
+    press(g, ['KeyQ']); // task gasmask-breach-20261030: Q is the gas mask (Game.update -> gasMask.press), not a selection key
+    expect([g.inv.meleeSelected, g.weapon.def?.id]).toEqual([false, 'pistol']);
     press(g, ['Backquote']);
     press(g, [], 1); // the wheel from the melee slot: the remembered quick slot (the pistol), not slot 2
     expect([g.inv.meleeSelected, g.inv.selected, g.weapon.def?.id]).toEqual([false, 0, 'pistol']);
@@ -493,7 +493,7 @@ describe('Game selection wiring (the real Game methods on a minimal shell + the 
     g.inv.select(1);
     g.inv.selectMelee();
     g.equipRef(P(3));
-    expect([g.inv.hotbar[1], g.inv.meleeSelected, g.weapon.stack, g.lastSlot]).toEqual([rifle, false, rifle, 'melee']);
+    expect([g.inv.hotbar[1], g.inv.meleeSelected, g.weapon.stack]).toEqual([rifle, false, rifle]);
     g.equipRef(MELEE_REF); // the melee slot's own weapon: drawn
     expect(g.weapon.stack).toBe(spare);
   });
@@ -506,6 +506,7 @@ describe('Game selection wiring (the real Game methods on a minimal shell + the 
     expect(src).toMatch(/this\.startUse\(this\.inv\.selectedRef\(\)\)/);
     expect(src).not.toMatch(/KNIFE_SLOT/);
     expect(SRC('gear/system.ts')).toMatch(/KEYS_SHOULDER = \[[^\]]*'Backquote'/);
+    expect(src).not.toMatch(/lastSlot/); // no last-item cycling (Q is the gas mask)
     expect(SRC('run/starter.ts')).toMatch(/inv\.set\(MELEE_REF, inv\.makeStack\('knife', 1\)\)/);
   });
 });
@@ -517,34 +518,35 @@ describe('HUD ~ cell, inventory melee cell, controls, responsive hotbar', () => 
   afterAll(() => dom.uninstall());
   const state = {hp: 100, maxHp: 100, stamina: 100, weaponName: '', mag: null, reserve: 0, hint: '', prompt: '', remaining: 0, total: 0, area: '', spreadPx: 4, aiming: false, flashlight: false, use: null};
 
-  it('HUD: 8 cells — 1-5, 6, G and the melee slot "~" (knife icon, selected while drawn, dim "melee" when empty); quick slot 3 is free', async () => {
+  it('HUD: 9 cells — Q (gas mask), 1-5, 6, G and the melee slot "~" last (knife icon, selected while drawn, dim "melee" when empty); quick slot 3 is free', async () => {
     const {Hud} = await import('../src/ui/hud');
     const hud = new Hud();
     const inv = starterInventory('pistol');
     hud.update(state, inv);
     const bar = dom.el('#hotbar');
-    expect(bar.children).toHaveLength(8);
-    expect(bar.children.map(c => c.dataset.bar)).toEqual(['hotbar', 'hotbar', 'hotbar', 'hotbar', 'hotbar', 'gear', 'throw', 'melee']);
-    const m = bar.children[7];
+    expect(bar.children).toHaveLength(9);
+    expect(bar.children.map(c => c.dataset.bar)).toEqual(['gear', 'hotbar', 'hotbar', 'hotbar', 'hotbar', 'hotbar', 'gear', 'throw', 'melee']);
+    const m = bar.children[8], q1 = bar.children[1];
+    expect(bar.children[0].classList.contains('maskslot')).toBe(true); // the gas-mask cell Q (task gasmask-breach-20261030) stays first
     expect(m.classList.contains('meleeslot')).toBe(true);
     expect(m.innerHTML).toMatch(/<span class="key">~<\/span>/);
     expect(m.innerHTML).toMatch(/Knife/);
     expect(m.innerHTML).not.toMatch(/class="count"/); // no rounds on a melee weapon
-    expect([m.classList.contains('vacant'), m.classList.contains('selected'), bar.children[0].classList.contains('selected')]).toEqual([false, false, true]);
-    expect(bar.children[2].innerHTML).not.toMatch(/Knife/);
+    expect([m.classList.contains('vacant'), m.classList.contains('selected'), q1.classList.contains('selected')]).toEqual([false, false, true]);
+    expect(bar.children[3].innerHTML).not.toMatch(/Knife/);
     inv.selectMelee();
     hud.update(state, inv);
-    expect([m.classList.contains('selected'), bar.children[0].classList.contains('selected')]).toEqual([true, false]);
+    expect([m.classList.contains('selected'), q1.classList.contains('selected')]).toEqual([true, false]);
     inv.add(inv.makeStack('backpack', 1)); // worn
     hud.setBagSelected(true); // 6: the readied backpack is what the hands hold
     hud.update(state, inv);
-    expect([m.classList.contains('selected'), bar.children[5].classList.contains('selected')]).toEqual([false, true]);
+    expect([m.classList.contains('selected'), bar.children[6].classList.contains('selected')]).toEqual([false, true]);
     hud.setBagSelected(false);
     inv.detach(MELEE_REF);
     hud.update(state, inv);
-    expect([m.classList.contains('vacant'), m.classList.contains('selected'), bar.children[0].classList.contains('selected')]).toEqual([true, false, true]);
+    expect([m.classList.contains('vacant'), m.classList.contains('selected'), q1.classList.contains('selected')]).toEqual([true, false, true]);
     expect(m.innerHTML).toMatch(/<span class="ghost"><svg[\s\S]*<span class="nm">melee<\/span>/);
-    expect(bar.children[6].innerHTML).toMatch(/<span class="key">G<\/span>/); // G cell unchanged
+    expect(bar.children[7].innerHTML).toMatch(/<span class="key">G<\/span>/); // G cell unchanged
   });
 
   it('inventory: the melee cell (key ~, "held" while drawn); drag rules; ~ assigns the selected knife; a gun is refused with a reason', async () => {
@@ -585,32 +587,37 @@ describe('HUD ~ cell, inventory melee cell, controls, responsive hotbar', () => 
     expect(SRC('game.ts')).toMatch(/'6 slings it back on · 1-5 \/ ~ switch'/);
   });
 
-  it('responsive CSS: the 8-cell bar fits between the vitals and the weapon panel at 960-1920 px (no overlap with the hint)', () => {
+  it('responsive CSS: the 9-cell bar (Q, ~, 1-5, 6, G) fits the hotbar band between the vitals and the weapon panel at 960-1920 px', () => {
+    // The band layout is main's (task gasmask-hud-fix-20261030, styles.css): #hotbar spans left: --hb-left .. right: --hb-right and
+    // its cells shrink in proportion (flex) when their natural widths do not fit; the Q cell does not shrink. This recomputes it.
     const css = SRC('styles.css'), gear = SRC('ui/gearStyles.ts');
     const num = (re: RegExp, s = css) => { const m = re.exec(s); expect(m, String(re)).toBeTruthy(); return Number(m![1]); };
-    const narrow = /@media \(max-width: (\d+)px\) \{([\s\S]*?)\n\}/.exec(css)!;
-    expect(narrow).toBeTruthy();
-    const brk = Number(narrow[1]), nb = narrow[2];
-    const wide = {
-      vitals: 22 + num(/#vitals \{[^}]*width: (\d+)px/), panelR: num(/#weapon-panel \{[^}]*right: (\d+)px/), hint: num(/#weapon-hint \{[^}]*max-width: (\d+)px/),
-      name: num(/#weapon-name \{[^}]*max-width: (\d+)px/), gap: num(/--hb-gap: (\d+)px/), sep: num(/--hb-sep: (\d+)px/), sep2: num(/--hb-sep2: (\d+)px/),
-      k: num(/--hb-w: clamp\(40px, calc\(\(100vw - (\d+)px\) \/ 8\), 84px\)/),
-    };
-    const nar = {...wide, vitals: 22 + num(/#vitals \{ width: (\d+)px/, nb), hint: num(/#weapon-hint, #weapon-name \{ max-width: (\d+)px/, nb), name: num(/#weapon-hint, #weapon-name \{ max-width: (\d+)px/, nb),
-      gap: num(/--hb-gap: (\d+)px/, nb), sep: num(/--hb-sep: (\d+)px/, nb), sep2: num(/--hb-sep2: (\d+)px/, nb), k: num(/--hb-w: clamp\(40px, calc\(\(100vw - (\d+)px\) \/ 8\), 84px\)/, nb)};
-    expect(gear).toMatch(/#hotbar \.slot\.meleeslot \{ order: -1; margin-right: var\(--hb-sep, 10px\); \}/);
-    expect(gear).toMatch(/#hotbar \.slot\.bagslot \{ margin-left: var\(--hb-sep, 10px\); \}/);
-    expect(gear).toMatch(/#hotbar \.slot\.throwslot \{ margin-left: var\(--hb-sep2, 4px\); \}/);
+    const media = (w: number) => { const m = new RegExp(`@media \\(max-width: ${w}px\\) \\{([^\\n]*(?:\\n  [^\\n]*)*)`).exec(css); expect(m, `@media ${w}`).toBeTruthy(); return m![1]; };
+    const m1400 = media(1400), m1250 = media(1250), m1100 = media(1100);
+    expect(gear).toMatch(/#hotbar \.slot\.maskslot \{ order: -2; \}/);
+    expect(gear).toMatch(/#hotbar \.slot\.meleeslot \{ order: -1; margin-right: 6px; \}/);
+    expect(gear).toMatch(/#hotbar \.slot\.bagslot \{ margin-left: 10px; \}/);
+    expect(gear).toMatch(/#hotbar \.slot\.throwslot \{ margin-left: 4px; \}/);
     expect(gear).toMatch(/#inv-hotbar \{ grid-template-columns: repeat\(7, 1fr\); \}/);
-    for (const W of [960, 1024, 1100, 1280, 1281, 1366, 1440, 1600, 1920]) {
-      const c = W <= brk ? nar : wide;
-      const w = Math.min(84, Math.max(40, (W - c.k) / 8));
-      const barW = 8 * w + 7 * c.gap + 2 * c.sep + c.sep2;
-      const left = W / 2 - barW / 2, right = W / 2 + barW / 2;
-      const panelLeft = W - c.panelR - Math.max(c.hint, c.name);
-      expect(left, `${W}px: clear of the vitals`).toBeGreaterThanOrEqual(c.vitals + 6);
-      expect(right, `${W}px: clear of the weapon panel`).toBeLessThanOrEqual(panelLeft - 6);
-      expect(w, `${W}px: cells stay readable`).toBeGreaterThanOrEqual(W <= 1000 ? 50 : 60);
+    expect(css).toMatch(/#hotbar \.slot \{ width: 84px; flex: 0 1 auto; min-width: 30px;/);
+    expect(css).toMatch(/#hotbar \.slot\.maskslot \{ width: 64px; flex-shrink: 0; margin-right: 6px; \}/);
+    expect(css).toMatch(/#hotbar \.slot \.count \{ top: 3px; bottom: auto; \}/); // counts top right, clear of the name
+    const gap = num(/#hotbar \{[^}]*gap: (\d+)px/);
+    for (const W of [960, 1024, 1100, 1180, 1280, 1366, 1440, 1600, 1920]) {
+      const narrow = W <= 1100;
+      const left = narrow ? num(/--hb-left: (\d+)px/, m1100) : num(/--hb-left: (\d+)px/), right = narrow ? num(/--hb-right: (\d+)px/, m1100) : num(/--hb-right: (\d+)px/);
+      const vitals = 22 + (narrow ? num(/#vitals \{ width: (\d+)px/, m1100) : num(/#vitals \{[^}]*width: (\d+)px/));
+      const panelR = num(/#weapon-panel \{[^}]*right: (\d+)px/);
+      const text = narrow ? Math.max(num(/#weapon-hint \{ max-width: (\d+)px/, m1100), num(/#weapon-name \{ max-width: (\d+)px/, m1100)) : Math.max(num(/#weapon-hint \{[^}]*max-width: (\d+)px/), num(/#weapon-name \{[^}]*max-width: (\d+)px/));
+      expect(left, `${W}px: band clear of the vitals`).toBeGreaterThanOrEqual(vitals + 6);
+      expect(W - right, `${W}px: band clear of the weapon panel (name / hint)`).toBeLessThanOrEqual(W - panelR - text - 6);
+      const cell = narrow ? num(/#hotbar \.slot \{ width: (\d+)px/, m1100) : W <= 1400 ? num(/#hotbar \.slot \{ width: (\d+)px/, m1400) : 84;
+      const q = W <= 1250 ? num(/#hotbar \.slot\.maskslot \{ width: (\d+)px/, m1250) : W <= 1400 ? num(/#hotbar \.slot\.maskslot \{ width: (\d+)px/, m1400) : 64;
+      const qGap = W <= 1250 ? num(/margin-right: (\d+)px/, m1250) : 6;
+      const fixed = q + qGap + 6 + 10 + 4 + 8 * gap; // Q cell + its margin, the ~ margin, 6 / G separators, 8 gaps between 9 cells
+      const w = Math.min(cell, (W - left - right - fixed) / 8); // the 8 shrinkable cells share the squeeze equally (same basis)
+      expect(w, `${W}px: cells stay readable`).toBeGreaterThanOrEqual(W <= 1100 ? 45 : 55);
+      expect(w).toBeGreaterThanOrEqual(30); // above the min-width floor: the flex shrink alone keeps the bar in the band
     }
   });
 });

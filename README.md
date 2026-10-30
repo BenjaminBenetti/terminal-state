@@ -89,7 +89,7 @@ not a general JavaScript sandbox or a licensing audit.
 
 WASD move · mouse look · Shift sprint · Space jump · C crouch · left click fire/use
 · right click aim · R reload · E interact (hold E on a grounded backpack to wear it) · 1–5 / wheel quick slots
-· ~ melee slot (knife) · 6 backpack · G throw (grenade slot) · Q last item · Tab/I inventory · H heal · F flashlight · M mute · Esc pause
+· ~ melee slot (knife) · 6 backpack · G throw (grenade slot) · Q gas mask on / off · Tab/I inventory · H heal · F flashlight · M mute · Esc pause
 · Ctrl+Shift+P performance overlay.
 Drop an item by dragging it out of the inventory panel.
 

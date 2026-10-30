@@ -6,7 +6,7 @@ const CSS = `
 #inv-gear-wrap { margin: 6px 0 2px; }
 #inv-gear-wrap h3 { display: flex; align-items: baseline; gap: 10px; }
 #inv-gear-wrap h3 .gear-sum { font-size: 12px; font-weight: 400; color: var(--cream-dim); letter-spacing: 0; text-transform: none; }
-#inv-gear { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+#inv-gear { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; } /* mask lane: + the face (gas mask) slot */
 #inv-gear .slot { height: 70px; }
 #inv-gear .slot .gslot { position: absolute; left: 5px; top: 3px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal); }
 #inv-gear .slot .ghost { color: #3a4046; display: flex; }
@@ -49,20 +49,22 @@ const CSS = `
 #gear-resume span { padding: 8px 16px; background: rgba(20, 22, 24, 0.82); border: 1px solid var(--teal); color: var(--cream); font-size: 14px; }
 /* Task office-overhaul-20261030 (lane INTERACT): HUD slot 6 (worn backpack) + G (grenade slot) after quick slots 1-5; the
    inventory's quick-slot row gains the grenade slot; the crosshair hold ring (hold E on a grounded bag to wear it). */
-#hotbar .slot.bagslot { margin-left: var(--hb-sep, 10px); }
-#hotbar .slot.throwslot { margin-left: var(--hb-sep2, 4px); }
+#hotbar .slot.bagslot { margin-left: 10px; }
+#hotbar .slot.throwslot { margin-left: 4px; }
 #hotbar .slot.throwslot .key, #inv-hotbar .slot[data-bar="throw"] .key { color: var(--teal); }
 #hotbar .slot.vacant { opacity: 0.55; }
 #hotbar .slot.vacant .nm { color: var(--cream-dim); }
 #hotbar .slot .ghost, #inv-hotbar .slot .ghost, #bagview .slot .ghost { color: #4a5157; display: flex; }
-#hotbar .slot .ghost svg { width: min(46px, calc(var(--hb-w, 84px) - 14px)); height: 24px; }
+#hotbar .slot .ghost svg { width: 46px; height: 24px; }
 #inv-hotbar { grid-template-columns: repeat(7, 1fr); }
 #inv-hotbar .slot[data-bar="throw"] { border-style: dashed; }
 #inv-hotbar .slot[data-bar="throw"].filled { border-style: solid; }
 /* Task knife-windup-20261030 (lane SLOT): the melee slot "~" in the grenade slot's look (teal key; dashed while empty in the
-   inventory / bag view). It is the LAST element of each slot row (stable indices for 1-5 / 6 / G) but shown FIRST — left of
-   quick slot 1, where the ~ key sits — with the same separation the backpack cell has on the other side. */
-#hotbar .slot.meleeslot { order: -1; margin-right: var(--hb-sep, 10px); }
+   inventory / bag view). It is the LAST element of each slot row (stable indices for Q / 1-5 / 6 / G) but shown left of quick
+   slot 1, where the ~ key sits: on the HUD after the gas-mask cell Q (order -2), with the Q cell's separation before slot 1.
+   It shrinks with the numbered cells inside the hotbar band (styles.css). */
+#hotbar .slot.maskslot { order: -2; }
+#hotbar .slot.meleeslot { order: -1; margin-right: 6px; }
 #hotbar .slot.meleeslot .key, #inv-hotbar .slot[data-bar="melee"] .key, #bagview .slot[data-bar="melee"] .key { color: var(--teal); }
 #inv-hotbar .slot[data-bar="melee"], #bagview .slot[data-bar="melee"] { order: -1; border-style: dashed; }
 #inv-hotbar .slot[data-bar="melee"].filled, #bagview .slot[data-bar="melee"].filled { border-style: solid; }

@@ -19,6 +19,12 @@
 // game time since the station started; pause freezes it), moves (constant world velocities: air drift, tunnel draft on the
 // track beds, a faster wisp / warp field), and has clear / normal / dense areas (render/atmosphere.ts). Smoke / scatter API
 // unchanged (render/smoke.ts): addSmokeEmitter / clearSmoke / addScatterLight / removeScatterLight.
+//
+// Task gasmask-breach-20261030 (lane GAS): breach gas layers. setStation allocates an R8 DataArrayTexture with the density
+// map's w / h / slots (zero; before the warm-up, its id in the march key), so the first breach never builds a program.
+// setGasLayer(slot, field, rect) quantises a storey's field (world/gas/field.ts, ticked by world/gas/system.ts from the frame
+// hooks — never from this render path) into its layer and marks it; the next rendered frame uploads only the marked layers
+// (DataArrayTexture.addLayerUpdate: both backends copy just those layers) and sets the `gasOn` gate.
 
 import * as THREE from 'three';
 import {NodeMaterial, NodeUpdateType, QuadMesh, RenderPipeline, RenderTarget, RendererUtils, TempNode, type PassNode, type WebGPURenderer} from 'three/webgpu';
@@ -39,6 +45,10 @@ import {
 } from './smoke';
 import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iteration 15
 import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, type FogUniforms} from './volumetricShaders';
+import {GAS} from '../world/gas/field'; // task gasmask-breach-20261030
+
+/** Task gasmask-breach-20261030: the gas term's look (uniform values only; QA may edit them live). */
+export interface GasLook { ext: number; scatter: number; emission: number; noise: number; tint: [number, number, number] }
 
 export interface AtmosphereLights {
   flashlight: THREE.SpotLight;
@@ -207,6 +217,15 @@ export class VolumetricAtmosphere {
   private airTex: THREE.DataArrayTexture;
   private readonly placeholderDensity: THREE.DataArrayTexture;
   private readonly placeholderAir: THREE.DataArrayTexture;
+  // task gasmask-breach-20261030: breach gas layers (R8, the density map's grid) + layers waiting for upload
+  private gasTex: THREE.DataArrayTexture;
+  private readonly placeholderGas: THREE.DataArrayTexture;
+  private gasData: Uint8Array | null = null;
+  private readonly gasDirty = new Set<number>();
+  private gasAny = false;
+  private gasUploads = 0;
+  /** Task gasmask-breach-20261030: the gas term's look (sync copies it into the uniforms). */
+  readonly gasLook: GasLook = {ext: GAS.EXT, scatter: GAS.SCATTER, emission: GAS.EMISSION, noise: GAS.NOISE, tint: [...GAS.TINT]};
   private readonly visData = new Uint8Array(VIS_RES * VIS_RES * VIS_WINDOWS);
   readonly visTex: THREE.DataArrayTexture;
   private readonly lightLayer = new Map<THREE.PointLight, number>();
@@ -276,8 +295,10 @@ export class VolumetricAtmosphere {
     bindFlareVisibility(this.visTex); // Iteration 15: flare surface light uses the same occlusion windows (world/flareLight.ts)
     this.placeholderDensity = layerTexture(new Uint8Array(4), 1, 1, 1, THREE.RGBAFormat);
     this.placeholderAir = layerTexture(new Uint8Array(1), 1, 1, 1, THREE.RedFormat);
+    this.placeholderGas = layerTexture(new Uint8Array(1), 1, 1, 1, THREE.RedFormat);
     this.densityTex = this.placeholderDensity;
     this.airTex = this.placeholderAir;
+    this.gasTex = this.placeholderGas;
     this.setQuality(quality);
   }
 
@@ -376,6 +397,14 @@ export class VolumetricAtmosphere {
     this.densityTex.name = 'fog-density-map';
     this.airTex = layerTexture(this.airMap.data, this.airMap.w, this.airMap.h, this.airMap.slots, THREE.RedFormat);
     this.airTex.name = 'fog-air-map';
+    // task gasmask-breach-20261030: the station's (empty) gas layers, allocated now so the warm-up compiles the march with them
+    if (this.gasTex !== this.placeholderGas) this.gasTex.dispose();
+    this.gasData = new Uint8Array(m.w * m.h * m.slots);
+    this.gasTex = layerTexture(this.gasData, m.w, m.h, m.slots, THREE.RedFormat);
+    this.gasTex.name = 'fog-gas-map';
+    this.gasDirty.clear();
+    this.gasAny = false;
+    this.u.gasOn.value = 0;
     this.field = field;
     this.epoch = null; // the fog clock restarts at the station's first frame
     this.statsCache = null;
@@ -455,6 +484,54 @@ export class VolumetricAtmosphere {
   removeScatterLight(light: THREE.PointLight): boolean {
     this.lightLayer.delete(light);
     return this.scatter.remove(light);
+  }
+
+  // --- task gasmask-breach-20261030: breach gas layers ---------------------------------------------------------------
+
+  /**
+   * Write a storey's gas concentration (`field`: row-major `rect.w` x `rect.h` cells starting at grid cell rect.x0 / y0,
+   * values 0..1) into density-map slot `slot` (= its layout.levels index). Uploaded with the next rendered frame (that layer
+   * only). Cells outside `rect` keep their bytes (zero). Ignored without a station or for a slot the map does not have.
+   */
+  setGasLayer(slot: number, field: ArrayLike<number>, rect: {x0: number; y0: number; w: number; h: number}): void {
+    const m = this.densityMap, data = this.gasData;
+    if (!m || !data || slot < 0 || slot >= m.slots) return;
+    const base = slot * m.w * m.h;
+    let any = false;
+    for (let y = 0; y < rect.h; y++) {
+      const gy = rect.y0 + y;
+      if (gy < 0 || gy >= m.h) continue;
+      for (let x = 0; x < rect.w; x++) {
+        const gx = rect.x0 + x;
+        if (gx < 0 || gx >= m.w) continue;
+        const v = field[y * rect.w + x];
+        const b = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
+        data[base + gy * m.w + gx] = b;
+        if (b) any = true;
+      }
+    }
+    if (any) this.gasAny = true;
+    this.gasDirty.add(slot);
+  }
+
+  /** Task gasmask-breach-20261030 (QA): the gas layers' state. */
+  gasDebug(): {on: boolean; map: [number, number, number] | null; pending: number[]; uploads: number; look: GasLook} {
+    const m = this.densityMap;
+    return {on: this.gasAny, map: m && this.gasData ? [m.w, m.h, m.slots] : null, pending: [...this.gasDirty], uploads: this.gasUploads, look: {...this.gasLook, tint: [...this.gasLook.tint]}};
+  }
+
+  /** Marked gas layers -> the texture's layer updates (next upload copies only them); the gate and the look's uniforms. */
+  private syncGas(): void {
+    const u = this.u, g = this.gasLook;
+    if (this.gasDirty.size && this.gasTex !== this.placeholderGas) {
+      for (const s of this.gasDirty) this.gasTex.addLayerUpdate(s);
+      this.gasTex.needsUpdate = true;
+      this.gasUploads += this.gasDirty.size;
+    }
+    this.gasDirty.clear();
+    u.gasOn.value = this.gasAny ? 1 : 0;
+    u.gasK.value.set(g.ext, g.scatter, g.emission, g.noise);
+    (u.gasTint.value as THREE.Vector3).set(g.tint[0], g.tint[1], g.tint[2]);
   }
 
   /** Storey band (local floor / ceiling) holding (x, y, z) from the density map, or null outside it. */
@@ -675,10 +752,10 @@ export class VolumetricAtmosphere {
     const shadowTex = fl.castShadow ? (fl.shadow.map as unknown as {depthTexture?: THREE.Texture} | null)?.depthTexture ?? null : null;
     const depthTex = (this.scenePass as unknown as {getTexture(n: string): THREE.Texture}).getTexture('depth');
     const steps = this.preset?.steps ?? 24;
-    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}`;
+    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}|${this.gasTex.id}`;
     if (this.marchMat && key === this.marchKey) return this.marchMat;
     this.marchMat?.dispose();
-    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex}, {steps});
+    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex, gas: this.gasTex}, {steps});
     this.marchKey = key;
     this.marchBuilds++;
     this.errorChecks = 3; // watch the next frames for WebGPU validation / compilation errors of the new program
@@ -844,6 +921,8 @@ export class VolumetricAtmosphere {
     u.muzzleColor.value.set(mz ? mz.color.r * mk : 0, mz ? mz.color.g * mk : 0, mz ? mz.color.b * mk : 0);
     // smoke puffs + scatter lights + their occlusion windows (fog clock: frozen in menus)
     this.syncSmoke(ft);
+    this.syncGas(); // task gasmask-breach-20261030
+
     // temporal: camera cuts (teleport / respawn) drop the history
     const camPos = u.camPos.value as THREE.Vector3;
     if (this.historyValid && camPos.distanceTo(this.prevCamPos) > 3) this.historyValid = false;
@@ -906,8 +985,11 @@ export class VolumetricAtmosphere {
     this.dropTargets();
     if (this.densityTex !== this.placeholderDensity) this.densityTex.dispose();
     if (this.airTex !== this.placeholderAir) this.airTex.dispose();
+    if (this.gasTex !== this.placeholderGas) this.gasTex.dispose();
     this.placeholderDensity.dispose();
     this.placeholderAir.dispose();
+    this.placeholderGas.dispose();
+    this.gasData = null;
     this.densityMap = null;
     this.noise.dispose();
     this.visTex.dispose();

@@ -15,6 +15,7 @@ import {FLOOR, type Grid} from '../grid';
 import {purposeById} from '../purposes';
 import {clearAround} from '../stationDress';
 import {BATTERY_ID, FLARE_ID, FLOOR_ECONOMY} from '../../items/lootEconomy';
+import {OFFICE_FLOOR, PUBLIC_FLOOR_WEIGHTS, econCat, floorChance, floorCount, lootProfile, type LootProfile, type OfficeFloorProgram} from '../../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {ITEMS} from '../../items/items';
 import {WEAPON_FIND_AMMO, findWeaponsFor, type StartWeaponId} from '../weaponFinds';
 import type {Area, PickupPlacement, StationLayout, ZombieType} from '../stationTypes';
@@ -25,17 +26,14 @@ import {COMPANIES, type LootTilt} from './companies';
  * Task office-overhaul-20261030 (lane TENANTS): a company floor's loot tilt shifts the MIX of its scarce loose finds (same expected
  * count): the clinic's floor leans to dressings, the logistics / aerospace floors to torch batteries and flares, the security
  * firm's to flares and a surer ammo box, the food companies trade some battery chance for a snack. Multipliers per category
- * [med, battery, flare, food]; renormalised to the untilted total.
+ * [med, battery, flare, food] (items/lootTables.ts OFFICE_FLOOR_TILT); renormalised to the untilted total.
+ * Scarce loose-find odds of a floor [med, battery, flare, food] under a company's tilt (sum = the untilted sum: same count).
  */
-const TILT: Readonly<Record<LootTilt, readonly [number, number, number, number]>> = {
-  none: [1, 1, 1, 0], medical: [1.9, 0.6, 0.6, 0], light: [0.6, 1.5, 1.6, 0], ammo: [0.8, 0.7, 1.6, 0], food: [1, 0.6, 1, 0.5],
-};
-/** Scarce loose-find odds of a floor [med, battery, flare, food] under a company's tilt (sum = the untilted sum: same count). */
-export function scarceOdds(tilt: LootTilt): [number, number, number, number] {
-  const base = [FLOOR_ECONOMY.medKeep * 1.5, 0.35, 0.14] as const, w = TILT[tilt];
+export function scarceOdds(tilt: LootTilt, prog: OfficeFloorProgram = OFFICE_FLOOR): [number, number, number, number] {
+  const base = prog.scarce.base, w = prog.tilt[tilt], cap = prog.scarce.cap;
   const sum = base[0] + base[1] + base[2];
   const k = sum / (base[0] * w[0] + base[1] * w[1] + base[2] * w[2] + base[1] * w[3]);
-  return [Math.min(0.95, base[0] * w[0] * k), Math.min(0.95, base[1] * w[1] * k), Math.min(0.95, base[2] * w[2] * k), Math.min(0.95, base[1] * w[3] * k)];
+  return [Math.min(cap, base[0] * w[0] * k), Math.min(cap, base[1] * w[1] * k), Math.min(cap, base[2] * w[2] * k), Math.min(cap, base[1] * w[3] * k)];
 }
 function floorTilt(layout: StationLayout, levels: readonly number[]): LootTilt {
   const a = layout.areas.find(q => q.tenant && levels.includes(q.level ?? 0));
@@ -111,10 +109,14 @@ export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: Spawn
 // ---------------------------------------------------------------------------------------------
 // Loose floor supplies
 
-const PUBLIC_FLOOR: Partial<Record<string, number>> = {'fare-hall': 0.4, 'concourse': 0.4, 'passage': 0.25, 'platform': 0.5, 'exit-stair': 0.2};
+const PUBLIC_FLOOR = PUBLIC_FLOOR_WEIGHTS.officeStorey;
 
-/** Loose supplies of the storeys `levels`; `street` = the station + lobby storeys (a rifle box, maybe shells). */
-export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], street: boolean): void {
+/**
+ * Loose supplies of the storeys `levels`; `street` = the station + lobby storeys (a rifle box, maybe shells). Task
+ * loot-tables-20261030 (lane LOOT): the per-storey program is data (lootTables OFFICE_FLOOR) under the ONE office profile `loot`
+ * (per logical level: no per-storey profile), interpreted in exactly the historical draw order.
+ */
+export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], street: boolean, loot: LootProfile = lootProfile('office')): void {
   const on = new Set(levels);
   const used = new Set<string>();
   const weight = (a: Area, cat: 'ammo' | 'med'): number => {
@@ -160,21 +162,26 @@ export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: Spaw
   const light = mine.map(a => [a, FLOOR_ECONOMY.themeWeight[(purposeById(a.purpose)?.theme ?? 'public')]] as [Area, number]).filter(e => e[1] > 0);
   // Ammo: one box per storey (station + lobby: one rifle box and maybe shells — it is a small station), 9 mm leads in the tower.
   const tilt = street ? 'none' : floorTilt(layout, levels);
+  const prog = loot.tables.floor.office;
   if (street) {
-    place('ammo_556', 30, ammo);
-    if (rng.chance(0.6)) place('ammo_12ga', 8, ammo);
+    const {box, extra} = prog.street;
+    const [lo, hi] = floorCount(loot, econCat(box.itemId), [1, 1]);
+    for (let i = 0, n = lo === hi ? lo : rng.int(lo, hi); i < n; i++) place(box.itemId, box.count, ammo);
+    if (rng.chance(floorChance(loot, econCat(extra.itemId), extra.chance))) place(extra.itemId, extra.count, ammo);
   } else {
     // TENANTS: a security company's floor rarely lacks its box and leans to rifle / shells (same draw, shifted thresholds).
-    // lane AMMO (knife-melee-20261030): caliber items (9mm / 5.56×45mm / 12-gauge).
-    const r = rng.next(), [p9, pr, ps] = tilt === 'ammo' ? [0.42, 0.72, 0.97] : [0.55, 0.8, 0.93];
-    if (r < p9) place('ammo_9mm', 15, ammo); else if (r < pr) place('ammo_556', 30, ammo); else if (r < ps) place('ammo_12ga', 8, ammo);
+    // lane AMMO (knife-melee-20261030): caliber items (9mm / 5.56×45mm / 12-gauge) — lootTables OFFICE_FLOOR.
+    const r = rng.next(), th = tilt === 'ammo' ? prog.tower.ammoThresholds : prog.tower.thresholds;
+    const i = th.findIndex((t, k) => r < floorChance(loot, econCat(prog.tower.boxes[k].itemId), t));
+    if (i >= 0) place(prog.tower.boxes[i].itemId, prog.tower.boxes[i].count, ammo);
   }
   const scarce = rng.fork('scarce-floor');
-  const [pMed, pBat, pFlare, pFood] = scarceOdds(tilt);
-  if (scarce.chance(pMed)) place(scarce.chance(0.3) ? 'medkit' : 'bandage', 1, med);
+  const odds = scarceOdds(tilt, prog);
+  const pMed = floorChance(loot, 'med', odds[0]), pBat = floorChance(loot, 'battery', odds[1]), pFlare = floorChance(loot, 'flare', odds[2]), pFood = floorChance(loot, 'food', odds[3]);
+  if (scarce.chance(pMed)) place(scarce.chance(prog.scarce.medkit) ? 'medkit' : 'bandage', 1, med);
   if (scarce.chance(pBat)) place(BATTERY_ID, 1, light);
   if (scarce.chance(pFlare)) place(FLARE_ID, 1, light);
-  if (pFood > 0 && scarce.chance(pFood)) place(scarce.pick(['chocolate', 'cola', 'water', 'chips']), 1, light);
+  if (pFood > 0 && scarce.chance(pFood)) place(scarce.pick(prog.scarce.food), 1, light);
 }
 
 // ---------------------------------------------------------------------------------------------

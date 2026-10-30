@@ -13,8 +13,9 @@
 //
 // Backpack flow (user: "cycle by hitting the six key … must be put on the ground before you can access it with E"):
 //   6 = take the worn backpack off into your hands (the gun lowers; the prompt line says what to do) · LEFT CLICK = set it down on the
-//   floor in front of you (refused on stairs, in the elevator cab, over a drop or against a wall) · 6 again (or 1-5 / Q /
-//   wheel) = sling it back on. E on a bag lying on the ground opens the TRANSFER VIEW: the world keeps running (enemies
+//   floor in front of you (refused on stairs, in the elevator cab, over a drop or against a wall) · 6 again (or 1-5 /
+//   wheel; Q slings it back on before the gas mask goes on: gear/gasMask.ts) = sling it back on.
+//   E on a bag lying on the ground opens the TRANSFER VIEW: the world keeps running (enemies
 //   keep coming), the mouse belongs to the view (no look / fire / aim), WASD still moves you; walking more than 2.5 m away,
 //   taking a hit, death, travel, pause or Tab closes it. "Wear it" picks the bag up (same bag, exact contents) if your
 //   back slot is free. A backpack found in the level lies there as such a bag (empty), so it works the same way.
@@ -32,7 +33,7 @@
 
 import * as THREE from 'three';
 import type {Game} from '../game';
-import {gearModifiersFor, GEAR_IDS, isBagItem} from '../items/gear';
+import {FILTER_LIFE_S, gearModifiersFor, GEAR_IDS, isBagItem, isFilterMask} from '../items/gear';
 import {itemDef} from '../items/items';
 import {stackFromJSON, stackToJSON, stacksIn, type ItemStack} from '../items/inventory';
 import {makeSupplyMesh} from '../world/pickups';
@@ -56,7 +57,9 @@ interface OfficeInfoLike {
   elevator?: {cab?: {x0: number; z0: number; x1: number; z1: number}; shaft?: {x0: number; z0: number; x1: number; z1: number}};
 }
 
-const KEYS_SHOULDER = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'KeyQ', 'Backquote']; // + ~ (melee slot, task knife-windup-20261030 SLOT)
+// Task gasmask-breach-20261030 (mask lane): KeyQ is the gas mask now (no last-item cycling); a Q press slings a readied bag back
+// on through cancelReady (gear/gasMask.ts press), so it is no longer a "shoulder" key here.
+const KEYS_SHOULDER = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Backquote']; // + ~ (melee slot, task knife-windup-20261030 SLOT)
 /** Task office-overhaul-20261030 (INTERACT, #1): seconds E must be held on a grounded bag to pick it up and wear it. */
 export const BAG_HOLD_S = 0.5;
 /** The hold ring appears after this much of the hold (a quick tap never flashes it). */
@@ -292,7 +295,9 @@ export class GearSystem {
     for (const st of this.game.inv.gearSlots) {
       if (!st || before.has(String(st.uid))) continue;
       const def = itemDef(st.itemId);
-      this.game.hud.toast(isBagItem(st.itemId) ? `Wearing the ${def.short.toLowerCase()} — 6 takes it off, click sets it down, tap E opens it` : `Wearing the ${def.short.toLowerCase()} (Tab: gear)`);
+      this.game.hud.toast(isBagItem(st.itemId) ? `Wearing the ${def.short.toLowerCase()} — 6 takes it off, click sets it down, tap E opens it`
+        : isFilterMask(st.itemId) ? `${def.short} equipped (face slot) — Q puts it on · filter ${Math.ceil(Math.max(0, Math.min(1, (st.filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9)} %` // mask lane
+        : `Wearing the ${def.short.toLowerCase()} (Tab: gear)`);
     }
   }
 

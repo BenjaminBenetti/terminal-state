@@ -44,8 +44,11 @@ export interface SectionGenContext {
   /** The logical level's seed for this run (fixed per run; the same section regenerates identically). */
   levelSeed: number;
   startWeapon?: 'rifle' | 'pistol';
-  /** Iteration 16 (GEAR): gear items of the level-wide gear roll (gen/gearLoot.ts), all placed in the level's one section. */
-  gear?: readonly {itemId: string}[];
+  /**
+   * Iteration 16 (GEAR): gear items of the level-wide gear roll (gen/gearLoot.ts), all placed in the level's one section.
+   * Task gasmask-breach-20261030 (mask lane): followed by the level's gas masks (with their seeded `filter` seconds) and filters.
+   */
+  gear?: readonly {itemId: string; filter?: number}[];
 }
 
 /** A logical level as the registry describes it (levels/registry.ts, lane RUN). */

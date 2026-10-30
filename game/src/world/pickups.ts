@@ -13,7 +13,7 @@ import type {ItemStack} from '../items/inventory';
 import {canvasTexture, pickupLabel, surface} from './canvasTextures';
 import {authoredItemModel, isAuthoredItem} from './authoredItems'; // Iteration 12 (LIGHT)
 import {isMedicalItem, medicalItemModel, medicalModelSource} from './medicalItems'; // Iteration 16 (lane INJURY)
-import {gearItemModel, gearModelSource} from '../gear/models'; // Iteration 16 (lane GEAR)
+import {gearItemModel, gearModelSource, registerGasMaskOutfit} from '../gear/models'; // Iteration 16 (lane GEAR); mask lane: the outfit gas mask
 import {isGearItem} from '../items/gear';
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
@@ -48,6 +48,7 @@ const templateSource = new Map<string, string>();
 /** Call once after assets load so food/drink use generated models when present. */
 export function registerItemModels(models: Record<string, GLTF | undefined>): void {
   itemModels = models;
+  registerGasMaskOutfit(models.outfit_gasmask); // task gasmask-breach-20261030 (mask lane): the gas-mask item = the shipped zombie outfit mask (gear/models.ts)
   templates.clear();
   templateSource.clear();
 }

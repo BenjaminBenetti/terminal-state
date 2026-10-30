@@ -62,7 +62,15 @@ export class FakeEl {
   addEventListener(type: string, fn: (e: unknown) => void): void { const l = this.listeners.get(type) ?? []; l.push(fn); this.listeners.set(type, l); }
   removeEventListener(): void {}
   appendChild<T extends FakeEl>(c: T): T { c.parent = this; this.children.push(c); return c; }
-  insertBefore<T extends FakeEl>(c: T): T { return this.appendChild(c); }
+  /** Task gasmask-breach-20261030 (mask lane): honours the reference child (the camera mask goes first in #hud), else appends. */
+  insertBefore<T extends FakeEl>(c: T, ref?: FakeEl | null): T {
+    const i = ref ? this.children.indexOf(ref) : -1;
+    if (i < 0) return this.appendChild(c);
+    c.parent = this;
+    this.children.splice(i, 0, c);
+    return c;
+  }
+  get firstChild(): FakeEl | null { return this.children[0] ?? null; }
   remove(): void { if (this.parent) { const i = this.parent.children.indexOf(this); if (i >= 0) this.parent.children.splice(i, 1); } }
   closest(): FakeEl | null { return null; }
   setAttribute(k: string, v: string): void { this.attrs.set(k, v); }

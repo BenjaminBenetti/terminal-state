@@ -40,6 +40,7 @@ import {
   nextHolderAction, openMessage, partAction, partOpenMessage, partPrompt, remainingCount, takeAll, takeLot, takeLots, transferMessage,
   type HolderKind, type HolderState, type Lot, type PartInfo, type SurfaceKind, type TransferResult,
 } from '../items/loot';
+import {BASELINE_PROFILE, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {
   CABINET_SPECS, DEFAULT_SHELF, cabinetInsert, cabinetInterior, holderSurfaces, placementBox,
   type Dims, type ShelfInfo, type Surface, type SurfaceOptions,
@@ -457,7 +458,11 @@ export class ContainerManager {
   }
 
   // --- station lifecycle ----------------------------------------------------------------
-  build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}): void {
+  /**
+   * Registers every loot holder of the layout and rolls its lots ONCE. Task loot-tables-20261030 (lane LOOT): `loot` = the section's
+   * logical-level loot profile (game.ts: lootProfile(key.level)); default: the level-agnostic baseline (today's tables).
+   */
+  build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}, loot: LootProfile = BASELINE_PROFILE): void {
     this.clear();
     const opts = surfaceOptions();
     const placements = new Map<LegacyKind, THREE.Matrix4[]>();
@@ -486,7 +491,7 @@ export class ContainerManager {
       const matrix = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + (openable ? p.lift ?? 0 : 0), p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
       const h: Holder = {
         group: isC ? 'container' : 'surface', index, serial: this.all.length, kind, prop: p,
-        state: createHolderState(layout.seed, index, kind, areaType, surfaces), surfaces, matrix,
+        state: createHolderState(layout.seed, index, kind, areaType, surfaces, undefined, loot), surfaces, matrix,
         root: null, hinges: [], leafMeshes: [], inner: [], t: 0, pryT: 0,
         min: new THREE.Vector3(p.x - p.hx, p.y, p.z - p.hz), max: new THREE.Vector3(p.x + p.hx, p.y + p.h, p.z + p.hz),
         lotMats: new Map(), lotBoxes: new Map(), shown: false,

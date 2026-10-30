@@ -38,7 +38,7 @@ import {hearingMuffle, slabsBetween, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
-import {raycastWorld, rayCapsule, raySphere, type Vec3} from './combat/hitscan';
+import {raycastWorld, rayCapsule, raySphere, type Vec3, type WorldHit} from './combat/hitscan';
 import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
@@ -55,15 +55,18 @@ import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifi
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
+import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters, camera mask
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
+import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
 import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
+import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
@@ -210,12 +213,21 @@ export class Game {
   readonly inputOwners: (() => boolean)[] = [];
   /** Iteration 16 (lane GEAR): worn gear, the deployable backpack (6) and grounded bags (gear/system.ts). */
   readonly gear: GearSystem;
+  /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, camera mask; protects() (gear/gasMask.ts). */
+  readonly gasMask: GasMaskSystem;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
   readonly injuries: InjurySystem;
   /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
   readonly tower: TowerRuntime;
+  /**
+   * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
+   * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it).
+   */
+  readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number) => boolean)[] = [];
+  /** Task gasmask-breach-20261030 (lane GAS): breakable office windows, the breach gas field and its exposure (`gas.protection`). */
+  readonly gas: GasSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
   run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
@@ -253,8 +265,6 @@ export class Game {
   private shake = 0;
   private muzzleT = 0;
   private use: UseAction | null = null;
-  /** Q: the previous selection — a quick-slot index, or 'melee' (task knife-windup-20261030, lane SLOT). */
-  private lastSlot: number | 'melee' = 0;
   private aiming = false;
   private wonAt = -1;
   private rand: () => number = Math.random;
@@ -356,9 +366,21 @@ export class Game {
     // Iteration 16 (lane INJURY): hit listener (arm / leg hits) + frame hook (landings, sway -> aimOffset, HUD) + ModifierSource
     this.injuries = installInjuries(this, {aiming: () => this.aiming});
     this.gear = installGear(this); // Iteration 16 (lane GEAR): modifier source, key 6 / bag view, E on grounded bags, section hooks, warm-up pool
+    // Task gasmask-breach-20261030 (mask lane): after GEAR (wraps its inventory-screen hook); frame hook, input owner, lifecycle, run participant 'gas.mask'
+    this.gasMask = installGasMask(this, {cancelUse: reason => this.cancelUse(reason), cancelFlareHold: () => this.cancelFlareHold()});
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
+    this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
+    // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
+    // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
+    this.gas.protection = () => this.gasMask.protects();
+    this.gas.hintFor = protectedNow => {
+      const m = this.gasMask;
+      if (protectedNow || m.state === 'donning') return '';
+      if (!m.worn) return 'No gas mask — get out of the gas';
+      return m.on ? 'No filter — the mask is not protecting you' : 'Put on your gas mask (Q)';
+    };
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -545,7 +567,8 @@ export class Game {
       this.scene.add(this.containers.group);
     }
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
-    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>); // iteration 08 (Lane I): openables split the lazy p7 models too
+    // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
+    this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
@@ -626,7 +649,9 @@ export class Game {
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
       const p = this.layout.pickups[i];
-      this.layoutPickup.set(this.pickups.add(this.inv.makeStack(p.itemId, p.count), p.x, p.y, p.z, this.rand() * Math.PI * 2), i);
+      const st = this.inv.makeStack(p.itemId, p.count);
+      if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
+      this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, this.rand() * Math.PI * 2), i);
     }
     for (const rec of plan.restored) {
       const pk = restorePickup(this.pickups, this.inv, rec);
@@ -671,7 +696,6 @@ export class Game {
     const next = inv as unknown as {toJSON?(): unknown};
     if (typeof live.loadJSON === 'function' && typeof next.toJSON === 'function') live.loadJSON(next.toJSON());
     else this.inv = inv;
-    this.lastSlot = this.inv.selected;
   }
 
   /** Iteration 16: NewGame state — fresh starter kit, survival 80/80, battery 80 %, lane state reset, run stats zeroed (hp: Player.spawn). */
@@ -680,7 +704,6 @@ export class Game {
     this.torch.reset(); // Iteration 12 (LIGHT): battery back to its 80 % start, light on, no dip in progress
     // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
     this.installInventory(starterInventory(this.startWeapon));
-    this.lastSlot = 0;
     this.stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
     resetParticipants(this.runParticipants);
   }
@@ -1178,7 +1201,6 @@ export class Game {
   // ---------------------------------------------------------------------------------------
   private selectSlot(i: number): void {
     if (i === this.inv.selected && !this.inv.meleeSelected) return;
-    this.lastSlot = this.inv.meleeSelected ? 'melee' : this.inv.selected; // lane SLOT: Q can return to the melee slot
     this.inv.select(i); // (leaves the melee slot)
     this.cancelUse('slot');
     this.syncHeld();
@@ -1187,13 +1209,12 @@ export class Game {
   /**
    * Selection keys, once per playing frame: 1-5 quick slots; the wheel cycles quick slots 1-5 only (task knife-windup-20261030,
    * lane SLOT: from the melee slot it first returns to the remembered quick slot); ~ (Backquote; player/input.ts isMeleeKey drops
-   * Ctrl / Alt / Meta combos and typing) draws the melee slot's weapon; Q toggles with the previous selection (melee included).
+   * Ctrl / Alt / Meta combos and typing) draws the melee slot's weapon. (Q is the gas mask, not a selection key: gear/gasMask.ts.)
    */
   private slotKeys(inp: Pick<Input, 'hit' | 'wheel'>): void {
     for (let i = 0; i < 5; i++) if (inp.hit(`Digit${i + 1}`)) this.selectSlot(i);
     if (inp.wheel) { const i = this.inv.meleeSelected ? this.inv.selected : (this.inv.selected + Math.sign(inp.wheel) + 5) % 5; this.selectSlot(i); }
     if (inp.hit('Backquote')) this.selectMelee();
-    if (inp.hit('KeyQ')) { if (this.lastSlot === 'melee') this.selectMelee(); else this.selectSlot(this.lastSlot); }
   }
 
   /**
@@ -1204,7 +1225,6 @@ export class Game {
   selectMelee(): boolean {
     if (this.inv.meleeSelected) return true;
     if (!this.inv.melee && !this.inv.refillMeleeSlot()) { this.hud.toast('No melee weapon', true); this.sfx.denied(); return false; }
-    this.lastSlot = this.inv.selected;
     this.inv.selectMelee();
     this.cancelUse('slot');
     this.syncHeld();
@@ -1299,7 +1319,7 @@ export class Game {
     if (ref.bar === 'hotbar') { this.selectSlot(ref.index); return; }
     const wasMelee = this.inv.meleeSelected;
     this.inv.move(ref, {bar: 'hotbar', index: this.inv.selected});
-    if (wasMelee) { this.lastSlot = 'melee'; this.inv.select(this.inv.selected); this.cancelUse('slot'); } // SLOT: the equipped gun is drawn
+    if (wasMelee) { this.inv.select(this.inv.selected); this.cancelUse('slot'); } // SLOT: the equipped gun is drawn
     this.invUI.selected = {bar: 'hotbar', index: this.inv.selected};
     this.syncHeld();
   }
@@ -1339,6 +1359,7 @@ export class Game {
     if (!st) return;
     const def = itemDef(st.itemId);
     if (def.kind !== 'consumable') return;
+    if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -1454,7 +1475,8 @@ export class Game {
     p.pitch -= inp.dy * sens * (this.settings.invertY ? -1 : 1);
     p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch));
 
-    this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot) / Q
+    this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot)
+    if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
     if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
     // Task office-overhaul-20261030 (lane INTERACT, #6): G = the grenade slot (hold / release below; T a silent alias). The old
     // G = drop binding is gone (drop by dragging out of the inventory screen). An empty grenade slot takes a carried throwable first.
@@ -1761,7 +1783,7 @@ export class Game {
       if (!fh) this.damage.knockPickups(o, d, bestT, wh, shot);
       else {
         if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
-        if (fh.glass) this.damage.hitWorld(wh, origin.clone().addScaledVector(dir, wh.t), dir, shot); // through a cooler's glass
+        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
       }
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
@@ -1778,7 +1800,8 @@ export class Game {
         this.sfx.impact(end.x, end.y, end.z, 'flesh');
       } else if (!fh && wh.kind !== 'none') {
         // Lane D: material-matched persistent damage (craters / per-instance prop damage / breaking) + fx + sound
-        this.damage.hitWorld(wh, end, dir, shot);
+        // (task gasmask-breach-20261030: unless a lane handler takes the hit — an office window pane)
+        if (!this.bulletHit(wh, end, dir)) this.damage.hitWorld(wh, end, dir, shot);
       }
       if (def.pellets === 1 ? this.shotCounter % 3 === 0 : i < 3) this.fx.tracer(muzzle, end);
     }
@@ -1809,6 +1832,12 @@ export class Game {
     // office-seamless-20261029 (ENGINE): 3D distance, x0.35 per slab between the storeys (ai/brain.ts hearingMuffle); no
     // sight test for a zombie already beyond earshot (9 storeys of zombies per shot).
     this.alertZombies(def.noise);
+  }
+
+  /** Task gasmask-breach-20261030: offer a bullet's world hit to the lane handlers (this trigger pull's id); true = handled. */
+  private bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3): boolean {
+    for (const h of this.bulletHitHandlers) if (h(wh, point, dir, this.shotCounter)) return true;
+    return false;
   }
 
   /** A noise of loudness radius `radius` (m) at the player: zombies in earshot hear it (walls / slabs muffle; see fire()). */
