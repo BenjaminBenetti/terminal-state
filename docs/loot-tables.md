@@ -146,8 +146,8 @@ deep: {
   overrides: {
     categoryWeight: {food: 0.4}, // food rows / re-picks are 40 % as likely (drink gains a little share where tables mix)
     keep: {food: 0.5},           // rolled food survives the scarcity cut half as often
-    floor: {chance: {food: 0}},  // no loose food (food-company floor finds)
-    // optional: slot: {foodPrep: {empty: 1.5}}, floor: {count: {med: 0.5}}, gear: {mean: 0.7}
+    floor: {chance: {food: 0}},  // no loose food (food-company floor finds); add count: {med: 0.5} here for half the loose dressings
+    // optional: slot: {foodPrep: {empty: 1.5}}, gear: {mean: 0.7}
   },
 },
 ```
