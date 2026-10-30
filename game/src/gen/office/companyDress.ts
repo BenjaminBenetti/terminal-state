@@ -239,15 +239,20 @@ export const SERVE_BEHIND: ReadonlyMap<string, number> = new Map([['bakeryCase',
  */
 function serveCounter(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], post = 0): PropPlacement | null {
   const def = PROP_DEFS[kind], aisle = SERVE_BEHIND.get(kind) ?? 1.0, g = ctx.g;
-  for (const side of sides ?? ctx.rng.shuffle(SIDES.slice())) {
+  // the preferred walls first, then any other (a held facade wall places nothing in pre-dress); never with its back to the door wall
+  // (customers would walk in behind the counter)
+  const ds = doorSideOf(ctx, a), pref = sides ?? [];
+  for (const side of [...pref, ...ctx.rng.shuffle(SIDES.filter(q => !pref.includes(q)))].filter(q => q !== ds)) {
     const [lo, hi] = wallRange(a, side);
     if (hi - lo < def.w + 0.3) continue;
     const alongX = side === 'N' || side === 'S';
-    for (let t = 0; t < 10; t++) {
-      const along = q4(ctx.rng.range(lo + def.w / 2 + 0.1, hi - def.w / 2 - 0.1));
+    // cell-aligned slots along the wall, side by side (a row step's next unit lands beside the last; neighbours never share a cell)
+    const pitch = Math.ceil((def.w + 0.04) / CELL - 1e-6) * CELL;
+    for (let along = Math.ceil((lo + 0.45 + def.w / 2) / CELL - 1e-6) * CELL; along + def.w / 2 <= hi - 0.45 + 1e-6; along += pitch) {
       const [x, z] = wallXZ(a, side, along, aisle + def.d / 2 + 0.03);
       const [sx, sz] = wallXZ(a, side, along, (aisle + 0.03) / 2);
-      const [x0, y0, x1, y1] = cellsOfBox(sx, sz, alongX ? def.w / 2 - 0.05 : aisle / 2 - 0.02, alongX ? aisle / 2 - 0.02 : def.w / 2 - 0.05);
+      // the aisle strip behind it (narrower than the case: neighbours' strips stay apart)
+      const [x0, y0, x1, y1] = cellsOfBox(sx, sz, alongX ? def.w / 2 - 0.3 : aisle / 2 - 0.02, alongX ? aisle / 2 - 0.02 : def.w / 2 - 0.3);
       let free = true;
       for (let cy = y0; cy <= y1 && free; cy++) for (let cx = x0; cx <= x1; cx++) {
         if (!g.inBounds(cx, cy) || !g.walkable(cx, cy) || g.area[g.idx(cx, cy)] !== a.id || ctx.keep[g.idx(cx, cy)]) { free = false; break; }
@@ -260,9 +265,14 @@ function serveCounter(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], po
       return p;
     }
   }
-  const p = island(ctx, a, kind, Math.max(0.9, aisle));
-  if (p) p.y += post;
-  return p;
+  // free-standing near the room centre, its customer front toward the door, a walkway ring all round (the staff side included)
+  const rot = WALL_ROT[OPPOSITE[ds]];
+  const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL, la = a.w >= a.h;
+  for (const oa of [0, 0.75, -0.75, 1.5, -1.5, 2.25, -2.25, 3, -3, 4, -4]) for (const ob of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+    const p = tryPlaceProp(ctx, a, kind, q4(cx + (la ? oa : ob)), q4(cz + (la ? ob : oa)), rot, {ring: Math.max(0.9, aisle)});
+    if (p) { p.y += post; return p; }
+  }
+  return null;
 }
 
 /** Placement of a kind with a placement rule of its own (sideboard pieces, the kegerator, serve-over displays), else null = not special. */
@@ -512,11 +522,7 @@ function execSuite(d: OfficeDress, ctx: PlaceCtx, a: Area): void {
  * Item 9: the server room — rows of racks with hot / cold aisles across the room (a server cabinet closes some rows), a CRAC unit
  * against a wall, at least two racks (a wall row is the fallback). Root cause of the empty rooms: see TENANTS.notes / the purpose.
  */
-function serverRoom(storey: PlaceCtx, a: Area): void {
-  // Task office-props-physics-scale-20261030 (lane RACK): the room dresses on its OWN stream (forked per area, the storey's stream
-  // is not drawn from), so the rack footprint / count never shifts the rooms dressed after it (the rebuilt 0.6 m rack fits more per
-  // row than B10's 1.23 m cabinet did; the CRAC unit's placement tries then drew a different number of times).
-  const ctx: PlaceCtx = {...storey, rng: storey.rng.fork(`server-room:${a.id}`)};
+function serverRoom(ctx: PlaceCtx, a: Area): void {
   const racks = freeRows(ctx, a, 'serverRack', ctx.rng.int(6, 12), true, 1.2);
   if (racks.length < 2) {
     for (const side of ctx.rng.shuffle(SIDES.slice())) {

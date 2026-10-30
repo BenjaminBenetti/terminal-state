@@ -25,8 +25,10 @@ import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {MAX_DETACHED} from '../src/damage/propDamage';
 import {SHOT_IMPULSE_PER_DAMAGE} from '../src/damage/system';
 import {PhysicsSystem} from '../src/physics/world';
-import {CONTACT_RESERVE, MAX_DYNAMIC_PROPS, dynamicKind, type Walker} from '../src/physics/dynamicItems';
+import {CONTACT_RESERVE, MAX_DYNAMIC_PROPS, dynamicKind, type PickupLike, type Walker} from '../src/physics/dynamicItems';
 import {isLootHolderKind} from '../src/items/loot';
+import * as CANNON from 'cannon-es';
+import {LiveSAPBroadphase} from '../src/physics/broadphase';
 import {isSpillHolderKind} from '../src/world/openablesSpec';
 
 installCanvasShim(false);
@@ -49,13 +51,13 @@ function forbidShots(rig: ContactRig): void {
   for (const k of ['shootProp', 'shootPickup', 'rayHits']) di[k] = () => { throw new Error(`${k} used: the player must not need to shoot / aim`); };
 }
 
-/** First prop of `kinds` (in order) that can go loose and has a free side to walk in from. */
-function target(rig: ContactRig, kinds: readonly string[], level?: number): {p: PropPlacement; i: number; at: NonNullable<ReturnType<typeof approach>>} | null {
+/** First prop of `kinds` (in order) on storey `minLevel` or above that can go loose and has a free side to walk in from. */
+function target(rig: ContactRig, kinds: readonly string[], minLevel = 0, role?: string, behind = 0.8): {p: PropPlacement; i: number; at: NonNullable<ReturnType<typeof approach>>} | null {
   for (const k of kinds) {
     for (let i = 0; i < rig.layout.props.length; i++) {
       const p = rig.layout.props[i];
-      if (p.kind !== k || (level !== undefined && (p.level ?? 0) !== level) || !rig.ph.dynamicItems.isDynamicProp(p) || !renderPose(rig, p)) continue;
-      const at = approach(rig, p);
+      if (p.kind !== k || (p.level ?? 0) < minLevel || (role && rig.layout.levels?.[p.level ?? 0]?.role !== role) || !rig.ph.dynamicItems.isDynamicProp(p) || !renderPose(rig, p)) continue;
+      const at = approach(rig, p, 1.0, behind);
       if (at) return {p, i, at};
     }
   }
@@ -100,7 +102,8 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
       expect(r.contact, k).toBe(!!ph.contact && !isLootHolderKind(k)); // the audit is the live physics
       if (isLootHolderKind(k)) { expect(isSpillHolderKind(k), k).toBe(true); expect(r.contact, k).toBe(false); continue; }
       expect(r.contact, k).toBe(true);
-      expect(['castor', 'pad'], k).toContain(ph.mat);
+      // floor kinds slide / roll on calibrated contacts (on-host decor — a monitor, lab glassware — is out of the legs' reach)
+      if (!ph.onHost) expect(['castor', 'pad'], k).toContain(ph.mat);
       rows.push(`${k}:${ph.mat}`);
     }
     // every Subway contact row is a light dynamic kind (or an id kept for a later integration), never a static one
@@ -151,7 +154,7 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
   it('a REAL Player walks into an office chair: it rolls ahead (the chair the user likes)', () => {
     const rig = contactRig(fresh(generateOfficeLevel({levelSeed: 11, startWeapon: 'pistol'})));
     forbidShots(rig);
-    const t = target(rig, ['officeChair'])!;
+    const t = target(rig, ['officeChair'], 1)!;
     expect(t).toBeTruthy();
     const before = renderPose(rig, t.p)!;
     stand(rig, t.at);
@@ -169,8 +172,10 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
     const rig = contactRig(fresh(generateOfficeLevel({levelSeed: 11, startWeapon: 'pistol'})));
     forbidShots(rig);
     const imported = ['rollingSuitcase', 'plasticStackChair', 'officeSwivelChair', 'ivPole', 'fireExtinguisher', 'ingredientBin', 'mopBucketWringer', 'foldingBarricade', 'trashBagPile', 'tripodWorkLight'];
-    const t = target(rig, imported)!;
+    // on an office storey (level 0 is the station hall under the tower); imported props stand in tight spots: 0.4 m to shove into
+    const t = target(rig, imported, 1, 'office', 0.4)!;
     expect(t, 'an imported Subway prop with a free side').toBeTruthy();
+    expect(rig.layout.levels![t.p.level!].role).toBe('office');
     expect(OFFICE_KINDS as readonly string[]).not.toContain(t.p.kind);
     expect(rig.ph.dynamicItems.officeRules).toBe(true); // a tower world
     const before = renderPose(rig, t.p)!;
@@ -296,26 +301,30 @@ describe('the detach budget never runs out: resting props hand their render back
     const w: Walker = {id: {}, x: 0, z: 0, y: 0, r: 0.3, wake: true};
     rig.others = [];
     ph.dynamicItems.walkers = () => [w];
-    let maxDetached = 0, maxAwake = 0, maxBodies = 0, missed = 0;
+    let maxDetached = 0, maxAwake = 0, maxBodies = 0, maxResting = 0, missed = 0;
     for (const [k, {p}] of targets.entries()) {
       if (p.h === 0) continue; // already shoved loose by an earlier approach
       w.x = p.x - p.hx - 1.0; w.z = p.z; w.y = p.y;
       ph.update(DT);
       for (let i = 0; i < 45; i++) {
         w.x += 1.4 * DT; ph.update(DT);
-        maxDetached = Math.max(maxDetached, pd.detachedCount); maxAwake = Math.max(maxAwake, ph.dynamicItems.stats().propsAwake); maxBodies = Math.max(maxBodies, ph.world!.bodies.length);
+        const s = ph.dynamicItems.stats();
+        maxDetached = Math.max(maxDetached, pd.detachedCount); maxAwake = Math.max(maxAwake, s.propsAwake); maxBodies = Math.max(maxBodies, ph.world!.bodies.length);
+        maxResting = Math.max(maxResting, s.restingInWorld);
       }
       if (p.h !== 0) { missed++; console.info(`[budget] target ${k} ${p.kind} not woken`); }
     }
     const st = ph.dynamicItems.stats();
-    console.info(`[budget] ${targets.length} targets, ${st.counts.contacts} contact wakes, missed ${missed}, reclaimed ${st.counts.reclaimed}, redetached ${st.counts.redetached}, max detached ${maxDetached}, max awake ${maxAwake}, max world bodies ${maxBodies}`);
+    console.info(`[budget] ${targets.length} targets, ${st.counts.contacts} contact wakes, missed ${missed}, reclaimed ${st.counts.reclaimed}, redetached ${st.counts.redetached}, max detached ${maxDetached}, max awake ${maxAwake}, max world bodies ${maxBodies} (resting loose props in it: max ${maxResting} of ${st.resting})`);
     expect(missed).toBe(0); // contact keeps working long after MAX_DETACHED_HARD wakes
     expect(st.counts.contacts).toBeGreaterThan(MAX_DETACHED_HARD);
     expect(st.counts.reclaimed).toBeGreaterThan(st.counts.contacts - MAX_DETACHED);
     expect(maxDetached).toBeLessThanOrEqual(MAX_DETACHED);
     expect(MAX_DETACHED - pd.detachedCount).toBeGreaterThanOrEqual(CONTACT_RESERVE);
     expect(maxAwake).toBeLessThanOrEqual(MAX_DYNAMIC_PROPS);
-    expect(maxBodies).toBeLessThan(400);
+    // resting loose props join the cannon world only with an active chunk (the rest are out of the broadphase entirely)
+    expect(maxResting).toBeLessThan(40);
+    expect(st.resting).toBeGreaterThan(100);
     // everything settles: the cannon world holds no resting loose prop once nothing simulates (their chunks are inactive)
     ph.dynamicItems.walkers = () => [];
     settle(rig, 25);
@@ -402,7 +411,8 @@ describe('the detach budget never runs out: resting props hand their render back
     // fill the soft cap with bullet marks: far static props first, then a few within 10 m of the player
     const dist = (p: PropPlacement) => Math.hypot(p.x - t.at.x, p.z - t.at.z);
     const marked = layout.props.map((p, i) => ({p, i})).filter(({p}) => ['table', 'bench', 'column', 'shelf', 'stockShelf', 'shopCounter', 'cabinetLow', 'cabinetTall'].includes(p.kind) && p.h > 0.3);
-    const far = marked.filter(({p}) => dist(p) > 40), near = marked.filter(({p}) => dist(p) < 10).slice(0, 4);
+    const lv = t.p.level ?? 0; // another storey counts as far
+    const far = marked.filter(({p}) => dist(p) > 40), near = marked.filter(({p}) => dist(p) < 10 && (p.level ?? 0) === lv).slice(0, 4);
     expect(far.length).toBeGreaterThan(MAX_DETACHED);
     for (const {p, i} of [...near, ...far]) {
       pd.hit({prop: p, index: i, point: new THREE.Vector3(p.x, p.y + p.h * 0.5, p.z + p.hz), dir: new THREE.Vector3(0, 0, -1), normal: new THREE.Vector3(0, 0, 1), damage: 24});
@@ -444,9 +454,13 @@ describe('bounded: a walk through the Subway wakes only what is walked into', ()
     rig.others = [ghost];
     let walkedInto = 0, maxAwake = 0;
     const touched: PropPlacement[] = [];
-    for (const kind of Object.keys(SUBWAY_CONTACT)) {
-      const t = target(rig, [kind]);
-      if (!t || Math.hypot(t.p.x - farProp.x, t.p.z - farProp.z) < 15) continue;
+    const kinds = Object.keys(SUBWAY_CONTACT);
+    for (let i = 0; i < layout.props.length && walkedInto < 12; i++) {
+      const p = layout.props[i];
+      if (!kinds.includes(p.kind) || p.h <= 0.02 || !ph.dynamicItems.isDynamicProp(p) || !renderPose(rig, p) || Math.hypot(p.x - farProp.x, p.z - farProp.z) < 15) continue;
+      const at = approach(rig, p);
+      if (!at) continue;
+      const t = {p, at};
       stand(rig, t.at);
       ghost.x = farProp.x - farProp.hx - 1.0;
       walkForward(rig, 0.8, () => { ghost.x += 1.2 * DT; maxAwake = Math.max(maxAwake, ph.dynamicItems.stats().propsAwake); });
@@ -463,6 +477,81 @@ describe('bounded: a walk through the Subway wakes only what is walked into', ()
     expect(st.propsAwake).toBe(0);
     expect(st.restingInWorld).toBe(0);
     expect(st.counts.shots).toBe(0);
+  });
+});
+
+describe('colliders stay in sync: a resting loose prop out of the cannon world is back in it when something flies at it', () => {
+  it('a can shot at a resting loose chair (its body parked with its inactive chunk) bounces off it, never passes through', () => {
+    const {p, ph, pose} = lone('officeChair', 10, 8, null);
+    ph.dynamicItems.shootProp(p, 0, new THREE.Vector3(p.x - p.hx, 0.5, p.z), new THREE.Vector3(1, 0, 0), 0.5);
+    for (let i = 0; i < 600; i++) ph.update(DT);
+    expect(ph.dynamicItems.stats()).toMatchObject({propsAwake: 0, resting: 1, restingInWorld: 0});
+    const chairX = pose().p.x, face = chairX - p.hx * (propPhysics('officeChair').fit ?? 1);
+    // a cola can on the floor 0.6 m west of it, kicked hard east along the floor
+    const obj = new THREE.Group();
+    const geo = new THREE.CylinderGeometry(0.033, 0.033, 0.122, 12);
+    geo.translate(0, 0.061, 0);
+    obj.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial()));
+    obj.position.set(face - 0.6, 0, p.z);
+    new THREE.Group().add(obj);
+    const can: PickupLike = {stack: {itemId: 'cola', uid: 1, count: 1}, x: obj.position.x, y: 0, z: p.z, obj};
+    expect(ph.dynamicItems.shootPickup(can, new THREE.Vector3(obj.position.x - 0.03, 0.06, p.z), new THREE.Vector3(1, 0.02, 0).normalize(), 1.6)).toBe(true);
+    let maxX = -Infinity, inWorld = 0;
+    for (let i = 0; i < 240; i++) { ph.update(DT); maxX = Math.max(maxX, obj.position.x); inWorld = Math.max(inWorld, ph.dynamicItems.stats().restingInWorld); }
+    console.info(`[sync] chair face x ${face.toFixed(2)}, can max x ${maxX.toFixed(2)}, resting chair body in the world: ${inWorld}`);
+    expect(inWorld).toBe(1); // its chunk came back with the flying can
+    expect(maxX).toBeLessThan(face + 0.05); // stopped at the chair
+    // control: the same kick in the empty room carries the can well past where the chair stands
+    const ph2 = new PhysicsSystem(null);
+    ph2.build(room([]));
+    const obj2 = obj.clone(true);
+    obj2.position.set(face - 0.6, 0, p.z);
+    obj2.quaternion.identity();
+    new THREE.Group().add(obj2);
+    const can2: PickupLike = {stack: {itemId: 'cola', uid: 2, count: 1}, x: obj2.position.x, y: 0, z: p.z, obj: obj2};
+    ph2.dynamicItems.shootPickup(can2, new THREE.Vector3(obj2.position.x - 0.03, 0.06, p.z), new THREE.Vector3(1, 0.02, 0).normalize(), 1.6);
+    let free = -Infinity;
+    for (let i = 0; i < 240; i++) { ph2.update(DT); free = Math.max(free, obj2.position.x); }
+    expect(free).toBeGreaterThan(face + 0.3);
+  });
+});
+
+describe('broadphase: SAP\'s exact pairs, linear in static bodies (physics/broadphase.ts)', () => {
+  it('LiveSAPBroadphase yields the same pairs in the same order as SAPBroadphase, with ~N instead of ~N^2 / 2 filter calls', () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const w = new CANNON.World();
+    for (let i = 0; i < 1500; i++) {
+      const b = new CANNON.Body({mass: 0, type: CANNON.Body.STATIC, collisionFilterGroup: 1, collisionFilterMask: i % 7 ? 6 : 2});
+      b.addShape(new CANNON.Box(new CANNON.Vec3(0.2 + rnd() * 2, 0.1 + rnd(), 0.2 + rnd() * 2)));
+      b.position.set(rnd() * 80, rnd() * 40, rnd() * 80);
+      w.addBody(b);
+    }
+    const live: CANNON.Body[] = [];
+    for (let i = 0; i < 24; i++) {
+      const b = new CANNON.Body({mass: 3, collisionFilterGroup: i % 3 ? 2 : 4, collisionFilterMask: 7});
+      b.addShape(new CANNON.Box(new CANNON.Vec3(0.3, 0.3, 0.3)));
+      b.position.set(rnd() * 80, rnd() * 40, rnd() * 80);
+      if (i % 5 === 0) b.sleepState = CANNON.Body.SLEEPING;
+      w.addBody(b);
+      live.push(b);
+    }
+    const sap = new CANNON.SAPBroadphase(w), fast = new LiveSAPBroadphase(w);
+    for (const bp of [sap, fast]) bp.useBoundingBoxes = true;
+    const calls = [0, 0];
+    [sap, fast].forEach((bp, k) => { const f = bp.needBroadphaseCollision.bind(bp); bp.needBroadphaseCollision = (a, b) => { calls[k]++; return f(a, b); }; });
+    for (let step = 0; step < 6; step++) {
+      for (const b of live) { b.position.x += (rnd() - 0.5) * 3; b.position.z += (rnd() - 0.5) * 3; b.aabbNeedsUpdate = true; }
+      sap.dirty = fast.dirty = true;
+      const a1: CANNON.Body[] = [], a2: CANNON.Body[] = [], b1: CANNON.Body[] = [], b2: CANNON.Body[] = [];
+      sap.collisionPairs(w, a1, a2);
+      fast.collisionPairs(w, b1, b2);
+      expect(b1.map(b => b.id)).toEqual(a1.map(b => b.id));
+      expect(b2.map(b => b.id)).toEqual(a2.map(b => b.id));
+      if (step === 0) expect(a1.length).toBeGreaterThan(0);
+    }
+    console.info(`[broadphase] ${w.bodies.length} bodies: SAP ${calls[0]} filter calls, LiveSAP ${calls[1]}`);
+    expect(calls[1] * 20).toBeLessThan(calls[0]);
   });
 });
 

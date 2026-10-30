@@ -474,7 +474,7 @@ async function main() {
     generation: {provider: null, model: null, credits: 0, note: 'No image / 3D / audio generation service was used: hand-dimensioned boxes / tubes and code-painted textures.'},
     rebuild: 'node tools/asset-pipeline/props/build-server-rack-r2.mjs',
     replaces: {
-      kind: 'serverRack', asset: 'B10 server-rack (assets/assets/officeAssets.ts OFFICE_ASSETS[server-rack], Meshy T2.5)',
+      kind: 'serverRack', asset: 'B10 server-rack (game/src/assets/officeAssets.ts OFFICE_ASSETS[server-rack], Meshy T2.5)',
       reason: 'empty 1.23 x 2.0 x 1.48 m cabinet; the door was a painted shattered-glass texture on overlapping huge sliver triangles (z-fighting, opaque "glass"); no rack hardware (evidence: reference/tasks/office-props-physics-scale-20261030/evidence/RACK/)',
       oldDerivative: {path: oldGlb, sha256: hashOf(oldGlb), kept: 'unchanged in Git (still registered as OFFICE_ASSETS[server-rack]; no kind renders it)'},
       rawMaster: {path: rawB10, sha256: hashOf(rawB10), kept: 'outside Git, read-only; not used as geometry'},

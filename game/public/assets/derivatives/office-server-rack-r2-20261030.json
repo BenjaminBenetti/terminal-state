@@ -12,7 +12,7 @@
  "rebuild": "node tools/asset-pipeline/props/build-server-rack-r2.mjs",
  "replaces": {
   "kind": "serverRack",
-  "asset": "B10 server-rack (assets/assets/officeAssets.ts OFFICE_ASSETS[server-rack], Meshy T2.5)",
+  "asset": "B10 server-rack (game/src/assets/officeAssets.ts OFFICE_ASSETS[server-rack], Meshy T2.5)",
   "reason": "empty 1.23 x 2.0 x 1.48 m cabinet; the door was a painted shattered-glass texture on overlapping huge sliver triangles (z-fighting, opaque \"glass\"); no rack hardware (evidence: reference/tasks/office-props-physics-scale-20261030/evidence/RACK/)",
   "oldDerivative": {
    "path": "game/public/assets/models/office-server-rack.glb",

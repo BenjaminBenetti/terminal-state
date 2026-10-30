@@ -87,10 +87,10 @@ export function contactRig(layout: StationLayout): ContactRig {
 
 /**
  * A stand point `dist` m (+ the player radius) off one face of `prop`, facing it, whose corridor (player-wide, from the face
- * out to the stand point, and 0.8 m beyond the prop for the shove) is free floor of the prop's storey with no other prop box
+ * out to the stand point, and `behind` m beyond the prop for the shove) is free floor of the prop's storey with no other prop box
  * in the way. Axis directions only, in the prop frame order front / back / sides. null: no free side.
  */
-export function approach(rig: ContactRig, prop: PropPlacement, dist = 1.0): {x: number; z: number; yaw: number; y: number} | null {
+export function approach(rig: ContactRig, prop: PropPlacement, dist = 1.0, behind = 0.8): {x: number; z: number; yaw: number; y: number} | null {
   const {L, layout} = rig;
   const r = 0.36, feet = prop.y;
   const f = {x: Math.sin(prop.rot), z: Math.cos(prop.rot)};
@@ -106,7 +106,7 @@ export function approach(rig: ContactRig, prop: PropPlacement, dist = 1.0): {x: 
     };
     let ok = true;
     // the walk-in corridor and the space the prop is shoved into
-    for (let s = -(face + 0.8); s <= face + dist + 0.3 + 1e-6 && ok; s += 0.1) {
+    for (let s = -(face + behind); s <= face + dist + 0.3 + 1e-6 && ok; s += 0.1) {
       if (Math.abs(s) < face + r) continue; // the prop itself
       ok = free(prop.x + ax * s, prop.z + az * s);
     }

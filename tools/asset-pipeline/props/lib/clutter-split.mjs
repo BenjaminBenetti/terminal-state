@@ -353,3 +353,62 @@ export async function cleanSupportTexture(doc, sharp, supports, thresh = 34, deb
   }
   return report;
 }
+
+/**
+ * GLASS (task office-props-physics-scale-20261030, lane FURN, primary follow-up): the bakery case's customer glass, inner pane and
+ * glazed top were PAINTED glass on the opaque body (a player at the customer side saw an opaque box, the loaves only from the open
+ * staff side). The glass triangles move to their own node 'glass' with the SAME glass material contract as the shop-cooler fix
+ * (task model-touchups-20261030, lane GLASS: base (0.092, 0.101, 0.1035) alpha 0.2, roughness 0.06, metallic 0, BLEND, double
+ * sided, untextured; GLTFLoader makes it transparent + depthWrite false, so it never casts the flashlight shadow — render/
+ * volumetric.ts markShadows / world/openables.ts takeover). Selected in the manifest frame: triangles of the case's MAIN shell
+ * component (the largest) above `minY`, inside |x| < `maxX`, whose base colour at the centroid is glassy (saturation < `sat`, value
+ * > `minV`). Returns {tris, area} moved.
+ */
+export const GLASS_MATERIAL = {baseColor: [0.092, 0.101, 0.1035, 0.2], roughness: 0.06, metallic: 0};
+export async function splitGlass(doc, sharp, {minY, maxX, sat = 0.22, minV = 110}) {
+  const pcs = components(doc);
+  const pc = pcs.reduce((best, q) => (q.comps.reduce((s, c) => s + c.n, 0) > best.comps.reduce((s, c) => s + c.n, 0) ? q : best));
+  const main = pc.comps.reduce((best, c) => (c.n > best.n ? c : best));
+  const prim = pc.prim, mesh = pc.mesh;
+  const tex = prim.getMaterial()?.getBaseColorTexture();
+  if (!tex) throw new Error('splitGlass: no base colour map');
+  const {data, info} = await sharp(Buffer.from(tex.getImage())).removeAlpha().raw().toBuffer({resolveWithObject: true});
+  const pos = prim.getAttribute('POSITION'), uv = prim.getAttribute('TEXCOORD_0'), I = triIndex(prim);
+  const a = [0, 0, 0], b = [0, 0, 0], c = [0, 0, 0], ta = [0, 0], tb = [0, 0], tc = [0, 0];
+  const glass = [], rest = [];
+  let area = 0;
+  for (let t = 0; t < I.length; t += 3) {
+    let isGlass = false;
+    if (pc.tri[t / 3] === main.id) {
+      pos.getElement(I[t], a); pos.getElement(I[t + 1], b); pos.getElement(I[t + 2], c);
+      const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3;
+      if (cy > minY && Math.abs(cx) < maxX) {
+        uv.getElement(I[t], ta); uv.getElement(I[t + 1], tb); uv.getElement(I[t + 2], tc);
+        const u = (ta[0] + tb[0] + tc[0]) / 3, v = (ta[1] + tb[1] + tc[1]) / 3;
+        const o = (Math.min(info.height - 1, Math.max(0, Math.floor(v * info.height))) * info.width + Math.min(info.width - 1, Math.max(0, Math.floor(u * info.width)))) * 3;
+        const r = data[o], g = data[o + 1], bl = data[o + 2], mx = Math.max(r, g, bl);
+        isGlass = mx > minV && (mx - Math.min(r, g, bl)) / mx < sat;
+        if (isGlass) {
+          const e1 = b.map((x, q) => x - a[q]), e2 = c.map((x, q) => x - a[q]);
+          area += Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]) / 2;
+        }
+      }
+    }
+    (isGlass ? glass : rest).push(I[t], I[t + 1], I[t + 2]);
+  }
+  if (!glass.length) throw new Error('splitGlass: no glass triangles selected');
+  const gp = prim.clone();
+  prim.getIndices().setArray(new Uint32Array(rest));
+  compactPrimitive(prim);
+  const idx = doc.createAccessor().setType('SCALAR').setBuffer(doc.getRoot().listBuffers()[0]).setArray(new Uint32Array(glass));
+  gp.setIndices(idx);
+  for (const s of gp.listSemantics()) if (s !== 'POSITION' && s !== 'NORMAL') gp.setAttribute(s, null); // untextured glass
+  const G = GLASS_MATERIAL;
+  gp.setMaterial(doc.createMaterial(`${prim.getMaterial().getName()}-glass`).setBaseColorFactor(G.baseColor).setAlphaMode('BLEND').setDoubleSided(true)
+    .setRoughnessFactor(G.roughness).setMetallicFactor(G.metallic));
+  compactPrimitive(gp);
+  const gm = doc.createMesh(`${mesh.getName()}-glass`).addPrimitive(gp);
+  const node = doc.createNode('glass').setMesh(gm);
+  (doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0]).addChild(node);
+  return {tris: glass.length / 3, area: +area.toFixed(4)};
+}

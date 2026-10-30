@@ -19,7 +19,8 @@
 //
 // Task office-interactions-layout-20261030 (lane PHYS): the office's movable furniture (gen/office/physics.ts OFFICE_PHYS ->
 // PROP_PHYSICS; every kind classified in damage/physicsAudit.ts PROP_PHYSICS_AUDIT). In office (tower) worlds only
-// (`contactOn`: StaticQuery.capAbove, or the `contactWake` override) — the Subway keeps exactly its iteration-07 / 08 rules:
+// (`contactOn`: StaticQuery.capAbove, or the `contactWake` override) — the Subway keeps exactly its iteration-07 / 08 rules
+// [superseded by task office-props-physics-scale-20261030 below: contact wake in every world, the Subway kinds calibrated]:
 //  - CONTACT WAKE: a walker moving into a light dynamic floor prop of a `contact` kind (the office kinds, calibrated castor / pad
 //    contacts) wakes it (not only a shot): within CONTACT_MARGIN of its box and heading for it, the prop goes loose (static body,
 //    no AABB) and the walker shove moves it from then on (iteration-07 kinds placed in the office keep the shot-first rule: their
@@ -413,10 +414,11 @@ export class DynamicItems {
   /**
    * Lane PHYS: give up to `n` detach slots back. Resting loose props (static bodies, also budget-frozen ones) still drawn by their
    * own meshes hand them back to their shared instances at their current pose (PropDetacher.reattach) and stay loose; oldest at
-   * rest first, a bullet-marked one only when far from every `wake` walker (its marks go), none beside an elevator shaft. Then,
-   * as the last resort, the damage system's own far marked props. At most RECLAIM_CHECKS candidates per call. Returns slots freed.
+   * rest first, none beside an elevator shaft. `marks` (on demand: a wake needs the slot now): a bullet-marked one too when far
+   * from every `wake` walker (its marks go), then, as the last resort, the damage system's own far marked props. Without it (the
+   * background reclaim) marks are never dropped. At most RECLAIM_CHECKS candidates per call. Returns slots freed.
    */
-  private reclaim(n: number, except?: Ent): number {
+  private reclaim(n: number, except?: Ent, marks = true): number {
     const d = this.detacher;
     if (!d?.reattach || n <= 0) return 0;
     let freed = 0, checks = 0;
@@ -427,15 +429,15 @@ export class DynamicItems {
       if (e === except) continue;
       checks++;
       if (this.nearCab(b.position.x, b.position.z)) continue;
-      const r = d.reattach(e.prop, this.farFromWakers(b.position.x, b.position.y, b.position.z));
-      if (r === 'marked') continue;
+      const r = d.reattach(e.prop, marks && this.farFromWakers(b.position.x, b.position.y, b.position.z));
+      if (r === 'marked') { this.reclaimQ.delete(e); this.reclaimQ.add(e); continue; } // kept: to the back, the next call looks further
       this.reclaimQ.delete(e);
       if (r !== 'ok') continue;
       e.parts = undefined;
       freed++;
       this.counts.reclaimed++;
     }
-    if (freed < n && d.reclaimMarked) freed += d.reclaimMarked((x, y, z) => this.farFromWakers(x, y, z), n - freed);
+    if (marks && freed < n && d.reclaimMarked) freed += d.reclaimMarked((x, y, z) => this.farFromWakers(x, y, z), n - freed);
     return freed;
   }
 
@@ -453,10 +455,13 @@ export class DynamicItems {
     return true;
   }
 
-  /** Lane PHYS: background reclaim — keep CONTACT_RESERVE + RECLAIM_AHEAD soft slots free (one prop per frame at most). */
+  /**
+   * Lane PHYS: background reclaim — keep CONTACT_RESERVE + RECLAIM_AHEAD soft slots free with resting unmarked props (one per frame
+   * at most; bullet marks are only ever dropped on demand, when a wake needs the slot).
+   */
   private reclaimAhead(): void {
     const room = this.detacher?.detachRoom?.();
-    if (room !== undefined && room < CONTACT_RESERVE + RECLAIM_AHEAD) this.reclaim(1);
+    if (room !== undefined && room < CONTACT_RESERVE + RECLAIM_AHEAD && this.reclaimQ.size) this.reclaim(1, undefined, false);
   }
 
   /** Lane PHYS: a prop starts to move — pickups lying on its top are woken with it (they fall / ride, never float). */

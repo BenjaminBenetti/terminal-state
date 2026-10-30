@@ -16,7 +16,7 @@ import {
   econCat, lootProfile, validateLootProfile, type OwnTable,
 } from '../src/items/lootTables';
 import {scarceFinds} from '../src/items/lootEconomy';
-import {holderFinds} from '../src/items/loot';
+import {describeLoot, holderFinds, lotPrompt} from '../src/items/loot';
 import {ITEM_CLASS, ITEM_PHYSICS} from '../src/damage/materials';
 import {ICONS} from '../src/ui/icons';
 import {MATERIAL_MODEL_SOURCE, materialItemModel} from '../src/world/materialItems';
@@ -48,6 +48,10 @@ describe('the three materials: stable ids, labels, passive kind, honest descript
       expect(ITEM_PHYSICS[id].mass).toBeGreaterThan(0.1);
     }
     expect(MATERIAL_NOTE).toMatch(/nothing to use by hand yet/);
+    // prompts / toasts name the count and nothing to use
+    expect(lotPrompt({itemId: ELECTRICAL_PARTS, count: 2}, true).text).toBe('Take 2 × Electrical parts');
+    expect(lotPrompt({itemId: BIO_MATER, count: 1}, false).text).toBe('Take Bio mater — no room');
+    expect(describeLoot([{itemId: SCRAP_METAL, count: 3}])).toBe('3 × Scrap');
     expect(itemDef(BIO_MATER).description).toMatch(/Not food and not medicine/);
   });
 });

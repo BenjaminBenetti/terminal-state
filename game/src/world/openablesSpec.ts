@@ -388,7 +388,9 @@ function bakeryTray(name: string, y: number, hx: number, z0: number, z1: number,
   return {
     name, glass: true,
     move: {type: 'slide', dir: [0, 0, -1], dist: bk(0.3), min: bk(0.16)},
-    boxes: tray('steelBright', bk(-hx), bk(y + 0.002), bk(z0), bk(hx), bk(y + lip), bk(z1)),
+    // the staff-side lip and its pull tab (what moves into view first), then the tray itself (floor + walls) carrying the loaves
+    boxes: [B('steelBright', bk(-hx), bk(y + 0.002), bk(z0 - 0.012), bk(hx), bk(y + lip + 0.012), bk(z0)), B('black', bk(-0.08), bk(y + 0.008), bk(z0 - 0.03), bk(0.08), bk(y + lip), bk(z0 - 0.012))],
+    tray: tray('steelBright', bk(-hx), bk(y + 0.002), bk(z0), bk(hx), bk(y + lip), bk(z1)),
     surfaces: [{y: bk(floor), x0: bk(-hx + 0.03), x1: bk(hx - 0.03), z0: bk(z0 + 0.03), z1: bk(z1 - 0.03), clear: bk(over)}],
   };
 }

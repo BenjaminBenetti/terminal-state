@@ -25,6 +25,7 @@
 //        provenance, allowlist and DELIVERED.json always describe every delivered asset)
 //        [--allowlist-out <file>]  write this task's allowlist entries to <file> instead of rewriting tools/release/public-inputs.json
 //        [--no-delivered]          leave reference/.../DELIVERED.json (the original delivery note) untouched
+//        env FURN_GHOST_DEBUG=<dir>  QA dumps of the support-texture cleanup (mask / ghosts / filled base map per separated asset)
 //
 // Task office-props-physics-scale-20261030 (lane FURN): FURNITURE-ONLY real size + LOCAL CLUTTER SEPARATION (no regeneration; the
 // pinned manifest, ledger and raw originals are unchanged). User: the lab bench "appears to small, almost like a mini version", "all the
@@ -44,7 +45,7 @@ import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
-import {cleanSupportTexture, cropPartTextures, extentOf, scaleGroundCentre, splitClutter} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
+import {GLASS_MATERIAL, cleanSupportTexture, cropPartTextures, extentOf, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -161,6 +162,9 @@ const FURNITURE = {
     clutter: c => c.min[1] >= 0.46 && c.max[1] <= 0.97 && Math.abs(c.centre[0]) < 0.7 && ext(c)[0] < 1.0,
     // the display deck and the two glass shelves (their texture had the loaves painted on / seen through them)
     supports: [{y: 0.477, tol: 0.007, x: [-0.76, 0.76]}, {y: 0.676, tol: 0.006}, {y: 0.852, tol: 0.007}],
+    // the customer glass (curved front), the inner pane and the glazed top were PAINTED on the opaque shell: they become a real
+    // transparent 'glass' node (the shop-cooler glass contract) so the loaves show from the customer side
+    glass: {minY: 0.49, maxX: 0.76},
     parts: {
       'bread': {box: [-0.63, 0.84, 0.02, -0.37, 0.96, 0.32], sizeM: 0.26, sizeAxis: 'longest', longX: true, item: true, label: 'round crusty loaf'},
     }},
@@ -231,10 +235,11 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
   for (const m of r.listMeshes()) transformMesh(m, T);
   // lane FURN (office-props-physics-scale-20261030): loose clutter separated in the manifest frame, then the FURNITURE-ONLY real size
   const F = FURNITURE[a.id];
-  let k = 1, split = null, ghosts = null;
+  let k = 1, split = null, ghosts = null, glass = null;
   const parts = [];
   if (F) {
     if (F.parts) split = await splitClutter(doc, F);
+    if (F.glass) glass = await splitGlass(doc, sharp, F.glass);
     if (F.supports) ghosts = await cleanSupportTexture(doc, sharp, F.supports, F.ghostThresh ?? 34, process.env.FURN_GHOST_DEBUG ? path.join(process.env.FURN_GHOST_DEBUG, `${a.id}-ghosts.png`) : null);
     const bb = getBounds(scene);
     k = F.sizeM / extentOf(bb, F.sizeAxis);
@@ -253,15 +258,18 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
       parts.push({id: p.id, glb: Buffer.from(await io.writeBinary(p.doc)), tris: p.tris, scale: s * p.scale, manifestFrame: p.before, stood, crop});
     }
   }
-  r.listMeshes().forEach((m, i) => m.setName(i ? `${a.id}-${i}` : a.id));
-  r.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${a.id}-${i}` : a.id));
-  r.listMaterials().forEach((m, i) => m.setName(i ? `office-${a.id}-${i}` : `office-${a.id}`));
+  // (lane FURN: a separated transparent 'glass' node keeps its names — damage/materials.ts partKeyClass reads /glass/)
+  r.listMeshes().filter(m => !/glass/.test(m.getName())).forEach((m, i) => m.setName(i ? `${a.id}-${i}` : a.id));
+  r.listNodes().filter(n => n.getMesh() && n.getName() !== 'glass').forEach((n, i) => n.setName(i ? `${a.id}-${i}` : a.id));
+  r.listMaterials().filter(m => !/-glass$/.test(m.getName())).forEach((m, i) => m.setName(i ? `office-${a.id}-${i}` : `office-${a.id}`));
+  for (const m of r.listMaterials().filter(q => /-glass$/.test(q.getName()))) m.setName(`office-${a.id}-glass`);
+  for (const m of r.listMeshes().filter(q => /glass/.test(q.getName()))) m.setName(`${a.id}-glass`);
   await doc.transform(dedup(), prune(),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [basePx, basePx], quality, slots: /^baseColor/}),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [otherPx, otherPx], quality, slots: /^(?!baseColor)/}));
   r.getAsset().generator = 'Terminal State tools/asset-pipeline/props/build-office-overhaul.mjs (glTF-Transform)';
   return {glb: Buffer.from(await io.writeBinary(doc)), scale: s * k, rawExtent: e0, parts,
-    furniture: F ? {k, removed: split?.removed ?? null, ghosts} : null};
+    furniture: F ? {k, removed: split?.removed ?? null, ghosts, glass} : null};
 }
 
 for (const a of ASSETS) {
@@ -292,7 +300,7 @@ for (const a of ASSETS) {
     glb = fs.readFileSync(outAbs); scale = reuse.scale; rawExtent = reuse.source.extent; step = reuse.textureStep;
     // lane FURN: separated parts of a reused derivative are reused with it (same raw, same files)
     parts = (reuse.parts ?? []).map(q => ({id: q.id, glb: fs.readFileSync(path.join(root, 'game/public', q.output.url)), tris: q.output.triangles, scale: q.scale, manifestFrame: q.manifestFrame, stood: q.stood, crop: q.textureCrop}));
-    furniture = reuse.furniture ? {k: reuse.furniture.scaleFromManifest, removed: reuse.furniture.removed, ghosts: reuse.furniture.supportTextureCleanup ?? null} : null;
+    furniture = reuse.furniture ? {k: reuse.furniture.scaleFromManifest, removed: reuse.furniture.removed, ghosts: reuse.furniture.supportTextureCleanup ?? null, glass: reuse.furniture.glass ?? null} : null;
   } else {
     for (step = 0; step < ladder.length; step++) {
       ({glb, scale, rawExtent, parts, furniture} = await derive(a, rawBytes, front, ladder[step]));
@@ -363,7 +371,9 @@ for (const a of ASSETS) {
     // lane FURN (office-props-physics-scale-20261030): furniture-only real size + the separated loose clutter (local operation on this raw)
     ...(F ? {furniture: {task: 'office-props-physics-scale-20261030 (lane FURN)', operation: F.parts ? 'local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale' : 'furniture-only rescale',
       manifestSizeM: a.sizeM, manifestSizeAxis: a.sizeAxis, sizeM: F.sizeM, sizeAxis: F.sizeAxis, basis: F.basis, scaleFromManifest: +furniture.k.toFixed(6), removed: furniture.removed,
-      ...(furniture.ghosts ? {supportTextureCleanup: furniture.ghosts, supportHeights: F.supports.map(q => q.y)} : {})},
+      ...(furniture.ghosts ? {supportTextureCleanup: furniture.ghosts, supportHeights: F.supports.map(q => q.y)} : {}),
+      ...(furniture.glass ? {glass: {...furniture.glass, node: 'glass', selection: F.glass, material: {...GLASS_MATERIAL, alphaMode: 'BLEND', doubleSided: true, textured: false},
+        contract: 'the shop-cooler glass fix (task model-touchups-20261030, lane GLASS): transparent, depthWrite false, never a flashlight-shadow caster'}} : {})},
       ...(partOut.length ? {parts: partOut} : {})} : {})});
   console.log(`${a.code} ${a.id}: ${rawTris} tris, ${(rawBytes.length / 1e6).toFixed(2)} MB -> ${(glb.length / 1e3).toFixed(0)} kB (tex step ${step}), dims ${dims.join(' x ')}${overBudget ? '  OVER BUDGET' : ''}${reuse ? ' (reused)' : ''}`);
   for (const q of partOut) console.log(`    part ${q.id}: ${q.output.triangles} tris, ${(q.output.bytes / 1e3).toFixed(0)} kB, dims ${q.output.dims.join(' x ')}, stood at x ${q.stood.min[0]}..${q.stood.max[0]} y ${q.stood.min[1]} z ${q.stood.min[2]}..${q.stood.max[2]}`);

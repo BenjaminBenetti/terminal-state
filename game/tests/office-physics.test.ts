@@ -10,7 +10,9 @@
 //  - loot: a holder never wakes by contact; a shot spill holder spills its finite lots exactly once (same ids / counts); a moving
 //    chair lifts a lot it hits off its holder exactly once;
 //  - the elevator cab: resting / moving loose props ride its dy and are swept out of a shutting doorway;
-//  - the Subway keeps its rules (no contact wake, no on-host decor).
+//  - task office-props-physics-scale-20261030 (lane PHYS): the Subway wakes by contact too (its light kinds carry calibrated
+//    castor / pad contacts, damage/materials.ts SUBWAY_CONTACT; tests/contact-physics.test.ts covers them in depth); holders
+//    still shots only, a light kind on a host stays static.
 import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
@@ -24,7 +26,7 @@ import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {OFFICE_KINDS, officeKindAsset, officeModelKey} from '../src/gen/office/kinds';
 import {OFFICE_PHYS} from '../src/gen/office/physics';
-import {PHYS_MATS, PROP_PHYSICS, ALL_PROP_KINDS, propPhysics} from '../src/damage/materials';
+import {PHYS_MATS, PROP_PHYSICS, ALL_PROP_KINDS, SUBWAY_CONTACT, propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT, unclassifiedPhysicsKinds} from '../src/damage/physicsAudit';
 import {PhysicsSystem} from '../src/physics/world';
 import {CONTACT_RANGE, CONTACT_RESERVE, MAX_DYNAMIC_PROPS, dynamicKind, type PickupLike, type Walker} from '../src/physics/dynamicItems';
@@ -142,7 +144,7 @@ describe('physics-affordance audit (PROP_PHYSICS_AUDIT): every prop kind classif
     console.info(`[audit] office: ${DYNAMIC_OFFICE.length} dynamic (${DYNAMIC_OFFICE.join(', ')}), ${STATIC_OFFICE.length} static`);
   });
 
-  it('the Subway keeps its classes: dynamic kinds and masses pinned, no castor / on-host / fit on any Subway kind', () => {
+  it('Subway kinds keep their classes and masses; their contact (castor / pad + wake) comes from SUBWAY_CONTACT only, never on-host', () => {
     const sub = ALL_PROP_KINDS.filter(k => PROP_PHYSICS_AUDIT[k].src === 'subway');
     const dyn = Object.fromEntries(sub.filter(k => PROP_PHYSICS_AUDIT[k].cls === 'dynamic').sort().map(k => [k, PROP_PHYSICS_AUDIT[k].mass]));
     console.info(`[subway] ${JSON.stringify(dyn)}`);
@@ -154,8 +156,11 @@ describe('physics-affordance audit (PROP_PHYSICS_AUDIT): every prop kind classif
     });
     for (const k of sub) {
       const ph = propPhysics(k);
-      expect(ph.mat === 'castor' || ph.mat === 'pad' || !!ph.onHost || ph.fit !== undefined || !!ph.contact, k).toBe(false);
-      expect(PROP_PHYSICS_AUDIT[k].contact ?? false, k).toBe(false);
+      expect(!!ph.onHost, k).toBe(false);
+      // task office-props-physics-scale-20261030 (lane PHYS): calibrated contact + wake exactly for the SUBWAY_CONTACT kinds
+      const overlay = !!SUBWAY_CONTACT[k] && ph.dynamic;
+      expect(ph.mat === 'castor' || ph.mat === 'pad' || !!ph.contact || ph.fit !== undefined, k).toBe(overlay);
+      expect(PROP_PHYSICS_AUDIT[k].contact ?? false, k).toBe(overlay && !isLootHolderKind(k));
     }
     // every office row of PROP_PHYSICS is an office kind (no Subway id overwritten)
     for (const k of Object.keys(PROP_PHYSICS)) if (PROP_PHYSICS[k].mat === 'castor' || PROP_PHYSICS[k].mat === 'pad' || PROP_PHYSICS[k].onHost || PROP_PHYSICS[k].contact) expect(OFFICE_KINDS as readonly string[]).toContain(k);
@@ -327,13 +332,15 @@ describe('a generated office level: bounded, local, the tower never wakes', () =
   const fresh = () => ({...generated, props: generated.props.map(p => ({...p}))});
   const layout = fresh();
 
-  it('office rules switch on by themselves in the tower world and stay off in the Subway', () => {
+  it('contact wake is on in every world; the office rules for uncalibrated kinds switch on by themselves in the tower only', () => {
     const ph = new PhysicsSystem(null);
     ph.build(layout);
     expect(ph.dynamicItems.contactOn).toBe(true);
+    expect(ph.dynamicItems.officeRules).toBe(true);
     const sub = new PhysicsSystem(null);
     sub.build(generateStation(424242));
-    expect(sub.dynamicItems.contactOn).toBe(false);
+    expect(sub.dynamicItems.contactOn).toBe(true); // task office-props-physics-scale-20261030: the Subway too
+    expect(sub.dynamicItems.officeRules).toBe(false);
   });
 
   it('no dynamic office prop starts inside a neighbour deeper than 2 cm (no pop when it wakes)', () => {
@@ -643,12 +650,12 @@ describe('the elevator cab: loose props inside ride its dy (resting and moving) 
 
 // ---------------------------------------------------------------------------------------------
 
-describe('the Subway keeps its rules', () => {
-  it('no contact wake (a trash can walked into stays put), no on-host decor', () => {
+describe('the Subway: contact wake for its light kinds (task office-props-physics-scale-20261030), holders by shots only', () => {
+  it('a suitcase walked into wakes; a trash can (spill holder) walked into stays put; no on-host decor', () => {
     const layout = generateStation(424242);
     const ph = new PhysicsSystem(null);
     ph.build(layout);
-    expect(ph.dynamicItems.contactOn).toBe(false);
+    expect(ph.dynamicItems.contactOn).toBe(true);
     ph.dynamicItems.detacher = detacher().d;
     const bin = layout.props.find(p => p.kind === 'bin' && ph.dynamicItems.isDynamicProp(p))!;
     expect(bin).toBeTruthy();
@@ -658,6 +665,13 @@ describe('the Subway keeps its rules', () => {
     for (let i = 0; i < 90; i++) { w.x += 1.4 * DT; ph.update(DT); }
     expect(bin.h).toBe(h0);
     expect(ph.dynamicItems.stats().counts.contacts).toBe(0);
+    const bag = layout.props.find(p => p.kind === 'rollingSuitcase' && ph.dynamicItems.isDynamicProp(p))!;
+    expect(bag).toBeTruthy();
+    w.x = bag.x - bag.hx - 1.0; w.z = bag.z; w.y = bag.y;
+    ph.update(DT);
+    for (let i = 0; i < 60; i++) { w.x += 1.4 * DT; ph.update(DT); }
+    expect(bag.h).toBe(0);
+    expect(ph.dynamicItems.stats().counts.contacts).toBe(1);
     // a light kind standing on a host (toolbox on a crate / cabinet) stays static in the Subway
     const top = layout.props.find(p => p.host !== undefined && dynamicKind(p.kind));
     if (top) expect(ph.dynamicItems.isDynamicProp(top)).toBe(false);

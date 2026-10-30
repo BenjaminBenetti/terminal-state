@@ -6675,8 +6675,8 @@
    "output": {
     "file": "game/public/assets/models/office-bakery-case.glb",
     "url": "assets/models/office-bakery-case.glb",
-    "sha256": "decef331c2a7e1d24c4368dfaa102793da049ebeb35b0d1717e5bf495e717c83",
-    "bytes": 334144,
+    "sha256": "c48e415b93094d81429962f6c53b68cc753201355b17298b38d01d58b3408ae0",
+    "bytes": 333084,
     "triangles": 1343,
     "dims": [
      1.9453,
@@ -6768,7 +6768,30 @@
      0.477,
      0.676,
      0.852
-    ]
+    ],
+    "glass": {
+     "tris": 105,
+     "area": 2.6748,
+     "node": "glass",
+     "selection": {
+      "minY": 0.49,
+      "maxX": 0.76
+     },
+     "material": {
+      "baseColor": [
+       0.092,
+       0.101,
+       0.1035,
+       0.2
+      ],
+      "roughness": 0.06,
+      "metallic": 0,
+      "alphaMode": "BLEND",
+      "doubleSided": true,
+      "textured": false
+     },
+     "contract": "the shop-cooler glass fix (task model-touchups-20261030, lane GLASS): transparent, depthWrite false, never a flashlight-shadow caster"
+    }
    },
    "parts": [
     {

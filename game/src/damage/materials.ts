@@ -271,7 +271,8 @@ export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' 
  * 1/60 s step a contact resists ~60x the Coulomb impulse (x ~4 corner contacts of a box on the floor): with the iteration-07 values
  * a shot or shoved box never slides, it only rocks / tips (fine for cans and bins, wrong for a castor chair). `castor` / `pad` are
  * Coulomb μ / ~240 so a body decelerates at ~μ·g: castors ≈ μ 0.15 (a chair coasts ~15 cm under buckshot and rolls ahead of the
- * walker), pads ≈ μ 0.3. The iteration-07 values stay as they are (Subway behaviour unchanged).
+ * walker), pads ≈ μ 0.3. The iteration-07 values stay as they are (task office-props-physics-scale-20261030: the Subway's light
+ * kinds now use castor / pad too, SUBWAY_CONTACT; the trash can and chunks / items keep the iteration-07 materials).
  */
 export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution: number}>> = {
   metal: {friction: 0.32, restitution: 0.34}, plastic: {friction: 0.42, restitution: 0.3}, soft: {friction: 0.7, restitution: 0.08},
@@ -373,7 +374,8 @@ export const PROP_PHYSICS: Record<string, PropPhysics> = {
  * and bundles — and `contact`: walking into one wakes it in every world (Subway and Office, where these kinds are imported too),
  * like the office furniture. `fit`: the collider inside the box of a chair pulled up to its table / desk (as the office chairs).
  * The Lane A trash can (`bin`, a spill holder: shots only) keeps its iteration-07 metal contact, so its shot response is unchanged.
- * `how` is the audit sentence (damage/physicsAudit.ts). Ids without a PROP_DEFS kind yet are listed for a later integration.
+ * `how` is the audit sentence (damage/physicsAudit.ts). Ids without a PROP_DEFS kind yet are listed for a later integration. The
+ * shopping cart (a loot holder that does not spill) and the other holders stay put: shots only, no overlay.
  */
 export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit?: number; how: string}>> = {
   rollingSuitcase: {mat: 'castor', how: 'rolling suitcase on spinner wheels (~9 kg): rolls ahead when walked into, slides / tips when shot'},
@@ -386,7 +388,6 @@ export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit
   ivPole: {mat: 'castor', how: 'IV pole on a five-castor base (~4 kg): rolls when bumped, tips under buckshot'},
   ingredientBin: {mat: 'castor', how: 'mobile ingredient bin on castors (~8 kg): rolls when bumped'},
   officeSwivelChair: {mat: 'castor', fit: 0.75, how: 'office swivel chair on castors (~12 kg): rolls away when bumped, like the office task chair'},
-  shoppingCart: {mat: 'castor', how: 'shopping cart (~15 kg; no PROP_DEFS kind yet): rolls when bumped'},
   oilRadiator: {mat: 'castor', how: 'oil-filled radiator on castors (~12 kg; no PROP_DEFS kind yet): rolls when bumped'},
   foldingChair: {mat: 'pad', fit: 0.75, how: 'folding chair (~4 kg): slides / tips when bumped or shot'},
   plasticStackChair: {mat: 'pad', fit: 0.75, how: 'plastic stacking chair (~3 kg): slides / tips when bumped or shot'},
@@ -400,7 +401,7 @@ export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit
   tripodWorkLight: {mat: 'pad', how: 'tripod work light (~6 kg): shoved / knocked over when bumped'},
   stepLadder: {mat: 'pad', how: 'folded-open step ladder (~7 kg): shoved / tipped when bumped'},
   foldingBarricade: {mat: 'pad', how: 'folding plastic barricade (~6 kg): shoved along when bumped'},
-  handToolbox: {mat: 'pad', how: 'hand toolbox (~6 kg): shoved when on the floor; on a host it stays put (no floating stacks)'},
+  handToolbox: {mat: 'pad', how: 'hand toolbox (~6 kg): shoved along when bumped where it stands on the floor'},
   coatRack: {mat: 'pad', how: 'coat rack on a weighted base (~6 kg): shoved / tipped when bumped'},
   bicycle: {mat: 'pad', how: 'parked bicycle (~13 kg): shoved / tipped when bumped'},
   crowdBarrier: {mat: 'pad', how: 'steel crowd barrier on feet (~16 kg): shoved along when bumped'},

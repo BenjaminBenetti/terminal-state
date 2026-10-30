@@ -6,13 +6,12 @@ import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {getBounds} from '@gltf-transform/functions';
 import {COMPANY_ASSETS, COMPANY_ASSET_IDS, COMPANY_MODEL_FILES, COMPANY_PART_ASSETS, COMPANY_PART_MODEL_FILES, companyAssetsReady, companySignatureAssets, loadCompanyAsset, type CompanyAssetId} from '../src/assets/companyAssets';
 import {COMPANY_DIMS, COMPANY_ASSET_SPECS, COMPANY_PART_DIMS} from '../src/assets/companyDims.generated';
-import {components} from '../../tools/asset-pipeline/props/lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
 import {OFFICE_ASSETS, OFFICE_MODEL_FILES} from '../src/assets/officeAssets';
 import type {CompanyId} from '../src/gen/office/overhaulTypes';
 
@@ -277,6 +276,8 @@ describe('separated loose clutter (lane FURN)', () => {
       expect(furnitureOf(id)!.removed!.tris, id).toBeGreaterThan(1000);
     }
     // the bakery case: no free-standing piece left inside the display (only the case, its glass shelves and their rails)
+    type Comp = {n: number; min: number[]; max: number[]; centre: number[]};
+    const {components} = await import(pathToFileURL(path.join(ROOT, 'tools/asset-pipeline/props/lib/clutter-split.mjs')).href) as {components: (doc: unknown) => {comps: Comp[]}[]};
     const doc = await io.read(path.join(PUB, COMPANY_ASSETS['bakery-case'].url!));
     const k = COMPANY_ASSETS['bakery-case'].dims![1] / 1.1104;
     const inside = components(doc).flatMap(pc => pc.comps).filter(c => c.min[1] >= 0.46 * k && c.max[1] <= 0.97 * k && Math.abs(c.centre[0]) < 0.7 * k);

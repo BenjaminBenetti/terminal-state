@@ -32,7 +32,8 @@ import type {StationLayout} from '../src/gen/station';
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
-const NEW = ['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes'] as const;
+const NEW = ['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
+  'bakeryCase'] as const; // + the bakery display case (task office-props-physics-scale-20261030, lane FURN)
 const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
 let models: Record<string, GLTF> = {};
 beforeAll(async () => { models = await openableModels(); }, 120000);
