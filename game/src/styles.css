@@ -123,14 +123,3 @@ button:disabled { opacity: 0.45; cursor: default; }
 .dmg-arc { position: absolute; width: 180px; height: 180px; left: -90px; top: -90px; border-radius: 50%; border-top: 6px solid rgba(210, 50, 40, 0.85); animation: fade 0.9s forwards; }
 @keyframes fade { from { opacity: 1; } to { opacity: 0; } }
 #flashlight-tag { position: absolute; right: 26px; bottom: 108px; font-size: 11px; letter-spacing: 0.12em; color: var(--cream-dim); }
-
-/* ---------- Iteration 16 TOWER / office-seamless LIFT: elevator floor list (the world keeps running; no fades) ---------- */
-#tower-choice { position: absolute; left: calc(50% + 70px); top: 50%; transform: translateY(-50%); min-width: 190px; background: rgba(18, 20, 22, 0.86); border-left: 4px solid var(--mustard); padding: 10px 12px 8px; pointer-events: auto; }
-#tower-choice .tc-title { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mustard); margin-bottom: 6px; }
-#tower-choice .tc-list { display: flex; flex-direction: column; gap: 2px; }
-#tower-choice .tc-item { font: inherit; font-size: 15px; text-align: left; color: var(--cream); background: rgba(40, 44, 48, 0.55); border: 1px solid transparent; padding: 4px 10px; cursor: pointer; }
-#tower-choice .tc-item.cur { color: var(--cream-dim); }
-#tower-choice .tc-item.sel { background: rgba(72, 62, 30, 0.85); border-color: var(--mustard); color: #fff3d6; }
-#tower-choice .tc-item:disabled { opacity: 0.4; cursor: default; }
-#tower-choice .tc-hint { margin-top: 6px; font-size: 11px; color: var(--cream-dim); font-weight: 400; }
-#tower-choice .tc-item.lit { color: #ffd08a; }

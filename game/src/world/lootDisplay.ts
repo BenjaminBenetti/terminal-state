@@ -4,6 +4,19 @@
 // writes only the nearby, currently visible lots (open containers, shelves within view distance),
 // so a much larger station costs the same per frame. The aimed lot is drawn separately with a
 // pulsing highlight copy.
+//
+// Task office-overhaul-20261030 (lane INTERACT, user feedback #12: "mousing over some small items like water bottles causes
+// them to go invisible"). ROOT CAUSE: the aimed lot leaves its instanced batch and only the highlight copy draws it. The
+// per-item highlight copies were cached across stations INSIDE this group, and game.ts registers the containers group (this
+// group's parent) with every new station's level culler (world/levelCulling.ts). A copy that already existed from an earlier
+// station / level / Retry was therefore registered with the box of the lot it last highlighted (stale, possibly another level
+// or 60 m away) and moved to the cull layer whenever that stale box was culled — and a copy culled when its culler was
+// abandoned kept the cull-layer mask, which the next culler then recorded as its "visible" mask, so it never drew again.
+// Hovering that item kind made the lot vanish until the crosshair left it. Only kinds hovered in an earlier build were hit
+// (hence "some small items": water bottles are the most hovered). FIX (general, every item kind): the highlight copies are
+// taken out of the group whenever the station's instances are dropped (clear(): before every build's culler registration),
+// re-attached lazily after it, and every time a copy is shown its meshes are put back on the layers the batches draw on — a
+// highlight copy is never culled, never on a stale box, never invisible; selection feedback never hides an item.
 
 import * as THREE from 'three';
 import {itemTemplate} from './pickups';
@@ -11,7 +24,10 @@ import {itemTemplate} from './pickups';
 export interface LotInstance { id: number; itemId: string; matrix: THREE.Matrix4 }
 
 interface Batch { parts: {im: THREE.InstancedMesh; local: THREE.Matrix4}[]; cap: number }
-interface Highlight { obj: THREE.Object3D; mats: THREE.MeshStandardMaterial[] }
+interface Highlight { obj: THREE.Object3D; mats: THREE.MeshStandardMaterial[]; meshes: THREE.Mesh[] }
+
+/** Layers a fresh object renders on (the camera layers; never the level culler's cull layer). */
+const DRAW_MASK = new THREE.Layers().mask;
 
 /** Faint warm self-glow so items read as silhouettes in dim rooms (pickups use the same idea). */
 const BASE_GLOW = new THREE.Color(0.03, 0.027, 0.021);
@@ -99,6 +115,9 @@ export class LotDisplay {
       this.hl.obj.matrix.copy(hlLot.matrix);
       this.hl.obj.matrixWorldNeedsUpdate = true;
       this.hl.obj.visible = true;
+      // Task office-overhaul-20261030 (INTERACT, #12): the copy stands in for the batch instance — always on the drawn layers
+      for (const m of this.hl.meshes) if (m.layers.mask !== DRAW_MASK) m.layers.mask = DRAW_MASK;
+      if (this.hl.obj.layers.mask !== DRAW_MASK) this.hl.obj.layers.mask = DRAW_MASK;
       this.visible++;
     }
   }
@@ -108,9 +127,11 @@ export class LotDisplay {
     if (!h) {
       const obj = itemTemplate(itemId).clone(true);
       const mats: THREE.MeshStandardMaterial[] = [];
+      const meshes: THREE.Mesh[] = [];
       obj.traverse(o => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
+        meshes.push(mesh);
         const clone = (src: THREE.Material) => {
           const c = src.clone() as THREE.MeshStandardMaterial;
           if (c.isMeshStandardMaterial) { if (c.map && !c.emissiveMap) c.emissiveMap = c.map; mats.push(c); }
@@ -121,11 +142,25 @@ export class LotDisplay {
       obj.matrixAutoUpdate = false;
       obj.visible = false;
       obj.name = `loot-highlight-${itemId}`;
-      this.group.add(obj);
-      h = {obj, mats};
+      h = {obj, mats, meshes};
       this.highlights.set(itemId, h);
     }
+    // Task office-overhaul-20261030 (INTERACT, #12): (re)attached lazily — after this station's culler registration
+    if (h.obj.parent !== this.group) this.group.add(h.obj);
     return h;
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT, #12): a cached highlight copy leaves the group (and any cull layer) until next used. */
+  private detachHighlight(h: Highlight): void {
+    h.obj.visible = false;
+    h.obj.parent?.remove(h.obj);
+    h.obj.layers.mask = DRAW_MASK;
+    for (const m of h.meshes) m.layers.mask = DRAW_MASK;
+  }
+
+  /** QA / tests: the highlight copy currently shown (null when no lot is aimed at). */
+  get highlightObject(): THREE.Object3D | null {
+    return this.hl?.obj ?? null;
   }
 
   pulse(time: number): void {
@@ -138,7 +173,9 @@ export class LotDisplay {
   clear(): void {
     for (const b of this.batches.values()) for (const p of b.parts) { this.group.remove(p.im); p.im.dispose(); }
     this.batches.clear();
-    if (this.hl) this.hl.obj.visible = false;
+    // Task office-overhaul-20261030 (INTERACT, #12): cached copies (and their materials / pipelines) are kept, but never stay in
+    // the group across a build, so the next station's culler can never register them with a stale box / cull mask.
+    for (const h of this.highlights.values()) this.detachHighlight(h);
     this.hl = null;
     this.visible = 0;
   }

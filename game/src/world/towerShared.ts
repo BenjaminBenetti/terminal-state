@@ -268,17 +268,25 @@ export const insideRect = (b: Rect2, x: number, z: number, inset = 0): boolean =
 
 export interface Box3Like { min: P3; max: P3 }
 
-/** Ray (o, unit d) vs axis-aligned box: entry distance (0 when inside) or null. */
-export function rayBox(o: P3, d: P3, b: Box3Like, maxT = Infinity): number | null {
-  let t0 = 0, t1 = maxT;
-  for (const k of ['x', 'y', 'z'] as const) {
-    const inv = 1 / (Math.abs(d[k]) < 1e-9 ? (d[k] < 0 ? -1e-9 : 1e-9) : d[k]);
-    let a = (b.min[k] - o[k]) * inv, c = (b.max[k] - o[k]) * inv;
-    if (a > c) [a, c] = [c, a];
-    t0 = Math.max(t0, a); t1 = Math.min(t1, c);
-    if (t0 > t1) return null;
-  }
-  return t0;
+/** One slab of rayBox: [t0, t1] narrowed by the slab [mn, mx] along one axis (o, d components); null when it misses. */
+function slab(o: number, d: number, mn: number, mx: number, t0: number, t1: number, out: [number, number]): boolean {
+  const inv = 1 / (Math.abs(d) < 1e-9 ? (d < 0 ? -1e-9 : 1e-9) : d);
+  let a = (mn - o) * inv, c = (mx - o) * inv;
+  if (a > c) { const s = a; a = c; c = s; }
+  out[0] = Math.max(t0, a); out[1] = Math.min(t1, c);
+  return out[0] <= out[1];
+}
+const slabT: [number, number] = [0, 0];
+
+/**
+ * Ray (o, unit d) vs axis-aligned box: entry distance (0 when inside) or null. `dy` lifts the box (task office-overhaul-20261030,
+ * lane LIFT: the cab's buttons are planned relative to its floor). Allocation-free (per-frame button picking).
+ */
+export function rayBox(o: P3, d: P3, b: Box3Like, maxT = Infinity, dy = 0): number | null {
+  if (!slab(o.x, d.x, b.min.x, b.max.x, 0, maxT, slabT)) return null;
+  if (!slab(o.y, d.y, b.min.y + dy, b.max.y + dy, slabT[0], slabT[1], slabT)) return null;
+  if (!slab(o.z, d.z, b.min.z, b.max.z, slabT[0], slabT[1], slabT)) return null;
+  return slabT[0];
 }
 
 /** A box around a wall-mounted point (centre p, room-facing normal (nx, nz)): w wide, h tall, d deep. */

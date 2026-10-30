@@ -32,6 +32,7 @@ import {makePlaceCtx} from '../placeKit';
 import {OFFICE_ENEMIES, officeWeaponPlan, placeOfficeEnemies, placeOfficeSupplies, placeOfficeWeapons, type SpawnField} from './spawns';
 import {addDaylight, windowSpans, type StoreyWindow} from './windows';
 import {officeIssues} from './validate';
+import {officeTenants} from './tenants'; // Task office-overhaul-20261030 (lane TENANTS)
 
 export {OFFICE_FLOORS, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
 export {officeIssues} from './validate';
@@ -289,6 +290,8 @@ function officeInfo(layout: StationLayout, f: TowerFrame, towers: readonly Carve
     start,
     name: f.name,
     gearSpots: towers.flatMap(t => gearSpots(layout, t)),
+    // Task office-overhaul-20261030 (lane TENANTS): the company of each office floor 2..8 (palette / finish for lane ARCH).
+    tenants: officeTenants(f.levelSeed).map(t => ({...t, palette: {...t.palette}})),
   };
 }
 

@@ -23,6 +23,8 @@ import type {StationLayout} from '../stationTypes';
 import {FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, SCISSOR_STAIR, landingRect, type TowerFrame} from './frame';
 import {landingStrip} from './dress';
 import {ENEMY_MIN_CELLS, OFFICE_ENEMIES} from './spawns';
+import {CORRIDOR_CLEAR_M, isNarrowPassage, isPlantKind, passageClear} from './companyDress';
+import {COMPANIES} from './companies';
 
 export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   const issues: string[] = [];
@@ -211,6 +213,9 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   }
   if (layout.pickups.some(p => p.itemId === (layout.startWeapon ?? 'rifle'))) issues.push('start weapon placed as a pickup');
 
+  // --- Task office-overhaul-20261030 (lane TENANTS): tenants, server rooms, corridor clearance ---------------------------------
+  issues.push(...tenantIssues(layout));
+
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
   issues.push(...traversalIssues(layout));
   issues.push(...doorwayIssues(layout));
@@ -222,3 +227,29 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   }));
   return issues;
 }
+
+/**
+ * Task office-overhaul-20261030 (lane TENANTS): the lobby has no tenant; every office floor 2..8 has its company (areas tagged, both
+ * signature kinds standing on it); every server room holds >= 2 racks (item 9); every narrow office corridor keeps a clear width
+ * >= 1.5 m at every cross-section and no dead plant / planter tree (item 8).
+ */
+export function tenantIssues(layout: StationLayout): string[] {
+  const issues: string[] = [];
+  const tenants = layout.office?.tenants;
+  if (!tenants || tenants.map(t => t.floor).join(',') !== '2,3,4,5,6,7,8') return ['tenants: floors 2..8 not all assigned'];
+  if (layout.areas.some(a => (a.level ?? 0) <= 1 && a.tenant)) issues.push('tenant area on the lobby / station');
+  for (const t of tenants) {
+    const c = COMPANIES[t.company];
+    if (!layout.areas.some(a => a.level === t.floor && a.tenant === t.company)) issues.push(`floor ${t.floor}: no ${t.company} areas`);
+    for (const k of c.signature) if (!layout.props.some(p => p.kind === k && p.level === t.floor)) issues.push(`floor ${t.floor}: ${t.company} signature ${k} missing`);
+  }
+  for (const a of layout.areas) {
+    if (a.purpose === 'office-server' && layout.props.filter(p => p.area === a.id && p.kind === 'serverRack').length < 2) issues.push(`server room ${a.id} (level ${a.level}) has < 2 racks`);
+    if (!isNarrowPassage(a)) continue;
+    const {clear} = passageClear(layout, a);
+    if (clear < CORRIDOR_CLEAR_M - 1e-6) issues.push(`corridor ${a.id} (level ${a.level}) clear width ${clear.toFixed(2)} m`);
+    if (layout.props.some(p => p.area === a.id && isPlantKind(p.kind) && p.kind !== 'pottedPlantSmall')) issues.push(`corridor ${a.id} (level ${a.level}): a large plant`);
+  }
+  return issues;
+}
+

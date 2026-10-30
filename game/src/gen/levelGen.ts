@@ -35,7 +35,7 @@
 
 import {CELL, FLOOR, MAX_DROP, NAV_STEP, SOLID, VOID, type Grid, type Ramp} from './grid';
 import type {Level, LevelLink} from './levels';
-import {STAIR, layStairRun, stairRunCells, type StairFlight} from './traversal';
+import {STAIR, STAIR_CLASS, layStairRun, stairRunCells, type StairFlight} from './traversal';
 import type {Kit, TrackBlock} from './stationKit';
 import {TRENCH_DEPTH, type Area, type Rect, type RailRun, type StationLayout} from './stationTypes';
 
@@ -540,7 +540,7 @@ export function deriveRails(levels: readonly Level[]): RailRun[] {
  * NAV_STEP (drops down to MAX_DROP one-way), nav links (ladders), and a free switch where a cell is
  * open on two levels at the same floor (stair runs carved into both grids). -1 = unreachable.
  */
-export function levelDistance(levels: readonly Level[], sx: number, sy: number, level = 0): Int32Array[] {
+export function levelDistance(levels: readonly Level[], sx: number, sy: number, level = 0, links?: readonly LevelLink[]): Int32Array[] {
   const {n, W, H, open, fl} = levelArrays(levels);
   const NL = levels.length;
   const dist = levels.map(() => new Int32Array(n).fill(-1));
@@ -575,6 +575,28 @@ export function levelDistance(levels: readonly Level[], sx: number, sy: number, 
     }
   }
   void H;
+  // Task office-overhaul-20261030 (lane STRUCT): player-only cross-level ladder links (the roof access ladder: a 'ladder' LevelLink
+  // without a nav / traversal id) join their foot and head cells both ways; re-flood from every newly reached end until stable.
+  const lad = (links ?? []).filter(k => k.kind === 'ladder' && k.traversalId === undefined);
+  for (let changed = lad.length > 0, guard = 0; changed && guard < 8; guard++) {
+    changed = false;
+    for (const k of lad) {
+      const g0 = levels[0].grid;
+      const [ax, ay] = g0.cellOf(k.bottom.x, k.bottom.z), [bx, by] = g0.cellOf(k.top.x, k.top.z);
+      if (!g0.inBounds(ax, ay) || !g0.inBounds(bx, by) || !levels[k.lower] || !levels[k.upper]) continue;
+      const a = ax + ay * W, b = bx + by * W;
+      const da = dist[k.lower][a], db = dist[k.upper][b];
+      for (const [fd, to, tc] of [[da, k.upper, b], [db, k.lower, a]] as const) {
+        if (fd < 0 || !ok[to][tc] || (dist[to][tc] >= 0 && dist[to][tc] <= fd + (k.cost ?? 10))) continue;
+        const sub = levelDistance(levels, tc % W, (tc / W) | 0, to);
+        for (let M = 0; M < NL; M++) for (let i = 0; i < n; i++) {
+          if (sub[M][i] < 0) continue;
+          const d = fd + (k.cost ?? 10) + sub[M][i];
+          if (dist[M][i] < 0 || d < dist[M][i]) { dist[M][i] = d; changed = true; }
+        }
+      }
+    }
+  }
   return dist;
 }
 
@@ -671,7 +693,8 @@ export function levelIssues(layout: StationLayout, dist?: Int32Array[], rules?: 
       const ov = overlapArea(layout, lv);
       if (ov < MIN_OVERLAP_M2) issues.push(`level ${lv} overlaps the main level by only ${ov.toFixed(0)} m²`);
     }
-    if (!layout.levelLinks.some(l => l.kind === 'stairs' && (l.upper === lv || l.lower === lv))) issues.push(`level ${lv} has no stairs`);
+    // Task office-overhaul-20261030 (lane STRUCT): a storey reached by a ladder link only (the roof) counts as connected.
+    if (!layout.levelLinks.some(l => (l.kind === 'stairs' || l.kind === 'ladder') && (l.upper === lv || l.lower === lv))) issues.push(`level ${lv} has no stairs`);
   }
   // Bands: slabs between stacked bands of different levels, headroom on walkable bands.
   const {open, fl, cl, W: AW, box: [bx0, by0, bx1, by1]} = levelArrays(levels);
@@ -706,7 +729,11 @@ export function levelIssues(layout: StationLayout, dist?: Int32Array[], rules?: 
   }
   // Flights: spec, landings, headroom.
   for (const f of layout.traversal.stairs) {
-    if (f.riser < 0.15 || f.riser > R.maxRiser + 1e-6 || Math.abs(f.tread - STAIR.tread) > 1e-6 || f.risers > STAIR.maxRisers) issues.push(`flight ${f.id} off spec`);
+    // Task office-overhaul-20261030 (lane STRUCT): classed flights (the transit hall's shared-pitch stair and stopped escalators)
+    // are checked against their own class (gen/traversal.ts STAIR_CLASS); every other flight against the station spec.
+    const C = f.spec ? STAIR_CLASS[f.spec] : null;
+    if (C ? f.riser < C.riser[0] - 1e-6 || f.riser > C.riser[1] + 1e-6 || f.tread < C.tread[0] - 1e-6 || f.tread > C.tread[1] + 1e-6 || f.risers > C.maxRisers
+      : f.riser < 0.15 || f.riser > R.maxRiser + 1e-6 || Math.abs(f.tread - STAIR.tread) > 1e-6 || f.risers > STAIR.maxRisers) issues.push(`flight ${f.id} off spec`);
     if (Math.abs(f.a1 - f.a0) < R.minFlightWidth - 1e-6) issues.push(`flight ${f.id} narrower than ${R.minFlightWidth} m`);
     const r = g0.ramps[f.ramp];
     if (r.headroom < FLIGHT_HEADROOM) issues.push(`flight ${f.id} headroom ${r.headroom}`);
@@ -771,7 +798,7 @@ export function levelIssues(layout: StationLayout, dist?: Int32Array[], rules?: 
   }
   // Reachability over every level from the player spawn.
   const [sx, sy] = g0.cellOf(layout.playerSpawn.x, layout.playerSpawn.z);
-  const dd = dist ?? levelDistance(levels, sx, sy);
+  const dd = dist ?? levelDistance(levels, sx, sy, 0, layout.levelLinks);
   // (The main level's own reachability is validateLayout's 'unreachable walkable cells'.)
   for (const L of levels) {
     if (!L.id) continue;

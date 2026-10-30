@@ -100,7 +100,7 @@ export interface AtmosphereParams {
   /** Density multiplier per area type / kind; `trackBed` = track-bed and tunnel cells. */
   areaDensity: Partial<Record<RoomType | AreaKind | 'trackBed' | 'default', number>>;
   /** Extra multiplier per level band (damp, dusty lower service level; airier upper deck). */
-  levelDensity: Partial<Record<LevelRole, number>>;
+  levelDensity: Partial<Record<LevelRole | 'roof', number>>;
   /** Iteration 13: multiplier of a clear / dense area (normal = 1). */
   classDensity: Record<AreaClass, number>;
   /** Iteration 13: chance of an area being clear / dense, per area group (seeded per station + area). */
@@ -171,7 +171,9 @@ export const ATMOSPHERE: AtmosphereParams = {
   },
   // Task office-seamless-20261029: 'office' = the tower storeys above the lobby: indoor office air, a light haze (less than
   // the station's main level and the lobby deck).
-  levelDensity: {main: 1, upper: 0.85, lower: 1.25, office: 0.75},
+  // Task office-overhaul-20261030 (lane ARCH): 'roof' = the open roof storey: the outdoor murk there is the scene fog (green on the
+  // roof: world/officeAtmosphere.ts) and the exterior's own fog; the lit indoor haze stays light up there.
+  levelDensity: {main: 1, upper: 0.85, lower: 1.25, office: 0.75, roof: 0.35},
   classDensity: {clear: 0.05, normal: 1, dense: 1.4},
   classOdds: {
     hall: {clear: 0.45, dense: 0.1},

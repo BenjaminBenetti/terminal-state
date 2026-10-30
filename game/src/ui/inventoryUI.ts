@@ -14,14 +14,20 @@
 // backpack into the pockets. The pockets heading shows their live count (12, +4 with a chest rig; extra pockets are
 // dashed). The WORN BACKPACK's contents are never shown or reachable here: its slot says to put it down (6) to open it;
 // dragging it out of the panel sets it down on the ground (gear/system.ts), exactly like 6 + click.
+//
+// Task office-overhaul-20261030 (lane INTERACT, #6): the GRENADE SLOT (key G) is the 6th cell of the quick-slot row
+// (data-bar="throw"): only throwables (flares) go in — drag them in / out, right-click / double-click / Equip a flare to put it
+// there. G no longer drops: dropping is dragging an item out of this panel (or Drop / Delete), which works for every slot.
+// (#1) the worn backpack's "contents hidden" label is gone; its contents still need the bag on the ground (tap E opens it).
 
 import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
-import {PACK_SIZE, type Bar, type Inventory, type SlotRef} from '../items/inventory';
+import {PACK_SIZE, THROW_REF, type Bar, type Inventory, type SlotRef} from '../items/inventory';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isBagItem} from '../items/gear';
 import {WEAPONS} from '../weapons/weapons';
 import {CRITICAL, LOW} from '../player/survival';
 import {GEAR_ICONS} from './gearIcons';
+import {ICONS} from './icons';
 import {ensureGearStyles} from './gearStyles';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -63,7 +69,8 @@ interface DragState {
 }
 
 const same = (a: SlotRef | null | undefined, b: SlotRef | null | undefined) => !!a && !!b && a.bar === b.bar && a.index === b.index;
-const slotSel = (r: SlotRef) => `#inv-${r.bar === 'hotbar' ? 'hotbar' : r.bar === 'gear' ? 'gear' : 'pack'} .slot[data-index="${r.index}"]`;
+// Task office-overhaul-20261030 (INTERACT): by data-bar (the grenade slot lives in the quick-slot row)
+const slotSel = (r: SlotRef) => `#inventory .slot[data-bar="${r.bar}"][data-index="${r.index}"]`;
 const GEAR_GHOST: Record<string, string> = {helmet: GEAR_ICONS.helmet, chest: GEAR_ICONS.vest, gloves: GEAR_ICONS.gloves, boots: GEAR_ICONS.boots, backpack: GEAR_ICONS.backpack};
 
 export class InventoryUI {
@@ -103,6 +110,7 @@ export class InventoryUI {
           return;
         }
         if (this.isGear(ref)) { this.lastClick = null; this.toggleWear(ref); return; } // Iteration 16: wear / take off
+        if (this.isThrowable(ref) && ref.bar !== 'throw') { this.lastClick = null; this.dropAt(ref, THROW_REF); return; } // INTERACT (#6)
       }
       this.click(ref);
     };
@@ -118,6 +126,7 @@ export class InventoryUI {
       if (def.kind === 'consumable') this.actions.use(ref);
       else if (def.kind === 'weapon') this.actions.equip(ref);
       else if (def.kind === 'gear') { this.toggleWear(ref); return; } // Iteration 16
+      else if (def.kind === 'throwable' && ref.bar !== 'throw') { this.dropAt(ref, THROW_REF); return; } // INTERACT (#6): into the grenade slot
       this.render();
     };
     const onDown = (e: PointerEvent) => {
@@ -175,6 +184,7 @@ export class InventoryUI {
     $('#btn-inv-equip').addEventListener('click', () => {
       if (!this.selected) return;
       if (this.isGear(this.selected)) { this.toggleWear(this.selected); return; } // Iteration 16: Wear / Take off
+      if (this.isThrowable(this.selected) && this.selected.bar !== 'throw') { this.dropAt(this.selected, THROW_REF); return; } // INTERACT (#6)
       this.actions.equip(this.selected);
       this.render();
     });
@@ -202,6 +212,12 @@ export class InventoryUI {
   private isGear(ref: SlotRef): boolean {
     const st = this.inv().get(ref);
     return !!st && itemDef(st.itemId).kind === 'gear';
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): a throwable (flare) — it belongs in the grenade slot. */
+  private isThrowable(ref: SlotRef): boolean {
+    const st = this.inv().get(ref);
+    return !!st && itemDef(st.itemId).kind === 'throwable';
   }
 
   /** Iteration 16: wear a gear item from a slot, or take worn gear off (refusals explained). */
@@ -317,7 +333,7 @@ export class InventoryUI {
   }
 
   /**
-   * QA / browser check: viewport centre of a slot spec — 'hotbar:N' / 'pack:N' / 'gear:N' (inventory panel),
+   * QA / browser check: viewport centre of a slot spec — 'hotbar:N' / 'pack:N' / 'gear:N' / 'throw:0' (inventory panel),
    * 'hud:N' (HUD quick slot), 'panel' (inside the panel, not a slot), 'out' (outside the panel).
    */
   pointFor(spec: string): {x: number; y: number} | null {
@@ -327,7 +343,7 @@ export class InventoryUI {
       return r.width > 0 ? {x: r.left + r.width / 2, y: r.top + r.height / 2} : null;
     };
     const [kind, n] = spec.split(':');
-    if (kind === 'hotbar' || kind === 'pack' || kind === 'gear') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
+    if (kind === 'hotbar' || kind === 'pack' || kind === 'gear' || kind === 'throw') return centre(document.querySelector(slotSel({bar: kind, index: Number(n)})));
     if (kind === 'hud') return centre(document.querySelector(`#hotbar .slot[data-index="${Number(n)}"]`));
     if (kind === 'panel') return centre(document.querySelector('#inv-detail'));
     const p = document.querySelector('#inventory .inv-panel')?.getBoundingClientRect();
@@ -396,6 +412,8 @@ export class InventoryUI {
     // Iteration 16: gear slots take only their gear; a backpack never goes into the quick slots / pockets
     if (a && t.bar === 'gear' && itemDef(a.itemId).gear?.slot !== GEAR_SLOTS[t.index]) bad = true;
     if (a && t.bar !== 'gear' && isBagItem(a.itemId)) bad = true;
+    if (a && t.bar === 'throw' && itemDef(a.itemId).kind !== 'throwable') bad = true; // INTERACT (#6): throwables only
+    if (a && b && d.from.bar === 'throw' && itemDef(b.itemId).kind !== 'throwable') bad = true;
     if (a && b && d.from.bar === 'gear' && itemDef(b.itemId).gear?.slot !== GEAR_SLOTS[d.from.index]) bad = true;
     el.classList.add(bad ? 'drop-bad' : 'drop-target');
     this.hoverEl = el;
@@ -416,15 +434,20 @@ export class InventoryUI {
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
       let cls = '';
+      // Task office-overhaul-20261030 (INTERACT, #6): the grenade slot
+      if (ref.bar === 'throw') {
+        lead = `<span class="key">G</span>${def ? '' : `<span class="ghost">${ICONS.flare}</span>`}`;
+        title = def ? ` title="${def.name} — grenade slot: hold G to ready it, release to throw. Drag to move · drag out of the panel to drop"` : ' title="Grenade slot (G): drag a flare here (or right-click one) — hold G to ready it, release to throw"';
+      }
       if (ref.bar === 'gear') {
         const slot = GEAR_SLOTS[ref.index];
         lead = `<span class="gslot">${GEAR_SLOT_NAMES[slot]}</span>${def ? '' : `<span class="ghost">${GEAR_GHOST[slot] ?? ''}</span>`}`;
-        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${def.name} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then E to open it (or drag it out of this panel)."`; }
+        if (def && isBagItem(def.id)) { cls = ' worn-bag'; title = ` title="${def.name} — worn. Its contents are only reachable on the ground: press 6, click to set it down, then tap E to open it (hold E picks it back up), or drag it out of this panel."`; }
         else if (!def) title = ` title="${GEAR_SLOT_NAMES[slot]}: drag ${slot === 'chest' ? 'an armor vest or a chest rig' : slot === 'backpack' ? 'a backpack' : `${slot === 'helmet' ? 'a helmet' : slot}`} here to wear it"`;
       } else if (ref.bar === 'pack' && ref.index >= PACK_SIZE) cls = ' gear-extra';
       return `<div class="slot${sel ? ' selected' : ''}${held ? ' held' : ''}${usable ? ' usable' : ''}${def ? ' filled' : ''}${cls}" data-bar="${ref.bar}" data-index="${ref.index}" role="button" tabindex="0"${title}>${lead}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? def.short : ''}</span>${count}</div>`;
     };
-    $('#inv-hotbar').innerHTML = inv.hotbar.map((_, i) => cell({bar: 'hotbar', index: i})).join('');
+    $('#inv-hotbar').innerHTML = inv.hotbar.map((_, i) => cell({bar: 'hotbar', index: i})).join('') + inv.throwSlot.map((_, i) => cell({bar: 'throw', index: i})).join(''); // + grenade slot (INTERACT)
     $('#inv-pack').innerHTML = inv.pack.map((_, i) => cell({bar: 'pack', index: i})).join('');
     this.renderGear(inv, cell);
     if (refocus) (document.querySelector(`#inventory .slot[data-bar="${refocus.bar}"][data-index="${refocus.index}"]`) as HTMLElement | null)?.focus();
@@ -437,7 +460,8 @@ export class InventoryUI {
     const fx = document.querySelector('#inv-detail .fx');
     if (fx) {
       fx.textContent = this.note || (def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
-        : def?.kind === 'gear' ? `${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}` : '');
+        : def?.kind === 'gear' ? `${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
+        : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') : ''); // INTERACT (#6)
       fx.classList.toggle('refused', !!this.note && this.noteBad);
     }
     const useBtn = $('#btn-inv-use') as HTMLButtonElement;
@@ -445,7 +469,7 @@ export class InventoryUI {
     useBtn.disabled = !def || def.kind !== 'consumable';
     const eq = $('#btn-inv-equip') as HTMLButtonElement;
     eq.textContent = def?.kind === 'gear' ? (worn ? 'Take off' : 'Wear') : 'Equip'; // Iteration 16
-    eq.disabled = !def || def.kind === 'ammo' || (worn && !!def && isBagItem(def.id));
+    eq.disabled = !def || def.kind === 'ammo' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT
     ($('#btn-inv-drop') as HTMLButtonElement).disabled = !def;
     const v = this.actions.vitals?.();
     const vit = document.querySelector('#inv-vitals');
@@ -469,7 +493,7 @@ export class InventoryUI {
     const note = document.querySelector('#inv-gear-note');
     if (note) {
       const bag = inv.worn('backpack');
-      note.innerHTML = bag ? `<b>${itemDef(bag.itemId).short}</b> — put it down (<b>6</b>, then click) to open it. Its contents are not reachable while you wear it.` : '';
+      note.innerHTML = bag ? `<b>${itemDef(bag.itemId).short}</b> — put it down (<b>6</b>, then click) and tap <b>E</b> to open it; hold <b>E</b> picks it back up. Its contents are not reachable while you wear it.` : '';
     }
   }
 }

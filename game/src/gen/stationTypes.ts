@@ -23,7 +23,9 @@ export type RoomType =
   // Iteration 16 (WORLD-GEN): office tower (gen/office/*) — lobby halls, corridors / elevator lobbies, open-plan cubicle
   // farms, enclosed office rooms (private / meeting / break / copy / storage / server / executive: by purpose), the elevator
   // cab and the stairwell vestibule. Never produced by generateStation.
-  | 'office-lobby' | 'office-corridor' | 'office-open' | 'office-room' | 'office-elevator' | 'office-stair';
+  | 'office-lobby' | 'office-corridor' | 'office-open' | 'office-room' | 'office-elevator' | 'office-stair'
+  // Task office-overhaul-20261030 (lane STRUCT): the tower's open-sky roof deck (layout level 9).
+  | 'office-roof';
 
 /**
  * Macro station archetype (iteration 04): recognisably different structures, not one template.
@@ -132,7 +134,11 @@ export interface SignPlacement {
   w?: number;
   /** Iteration 08: level the sign is mounted on (default 0; hang rods reach that level's ceiling); y is absolute. */
   level?: number;
+  /** Task office-overhaul-20261030 (lane TENANTS): company-styled plate (world/builder.ts signTexture); absent = the default plate. */
+  style?: SignStyle;
 }
+/** Task office-overhaul-20261030 (lane TENANTS): plate colours (0xRRGGBB) and typeface of a company / directory sign. */
+export interface SignStyle { bg: number; fg: number; accent?: number; font?: 'sans' | 'serif' | 'mono' | 'rounded' | 'condensed' }
 export interface PickupPlacement {
   itemId: string; count: number; x: number; y: number; z: number; area: number;
   /** Iteration 08: level the pickup rests on (default 0); y is absolute. */

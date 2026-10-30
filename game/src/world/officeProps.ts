@@ -19,7 +19,7 @@ import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {CELL, FLOOR} from '../gen/grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../gen/props';
 import {propShape, type ShapeMat} from '../gen/propShapes';
-import {OFFICE_KIND_ASSET, isOfficeKind, officeModelKey, officeShape, type OfficeKind} from '../gen/office/kinds';
+import {OFFICE_KIND_ASSET, isOfficeKind, officeKindAsset, officeModelKey, officeShape} from '../gen/office/kinds';
 import type {StationLayout} from '../gen/stationTypes';
 import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId, type OfficeTextureId} from '../assets/officeAssets';
 import {canvasTexture} from './canvasTextures';
@@ -44,7 +44,7 @@ export async function preloadOfficeAssets(layout: StationLayout, opts: {models?:
   const ids = new Set<OfficeAssetId>();
   // The Game loads the models through propModels (officeModelKeysFor); it preloads only the textures here (models: false).
   if (opts.models !== false) for (const p of layout.props) {
-    const id = OFFICE_KIND_ASSET[p.kind as OfficeKind | 'desk'] as OfficeAssetId | undefined;
+    const id = (OFFICE_KIND_ASSET as Readonly<Record<string, string | undefined>>)[p.kind] as OfficeAssetId | undefined;
     if (id) ids.add(id);
   }
   const texIds: OfficeTextureId[] = ['office-carpet', 'ceiling-tile', 'cubicle-fabric'];
@@ -117,9 +117,11 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
   const level = list[0].level ?? 0;
   void layout;
   if (kind === 'cubiclePartition') return partitions(group, list, wm, level);
-  const asset = OFFICE_KIND_ASSET[kind as OfficeKind | 'desk'];
+  // Task office-overhaul-20261030 (lane TENANTS): company / supporting kinds map to lane ASSETS' company models (companyAssets.ts
+  // COMPANY_MODEL_FILES, the same `office-<assetId>` library keys, loaded before entry via officeModelKeysFor); box forms until then.
+  const asset = officeKindAsset(kind);
   // The game's lazy prop library (office-<assetId> keys, ASSETS' OFFICE_MODEL_FILES) first, then this module's preload cache.
-  const gltf = asset ? lib[officeModelKey(asset)] ?? models.get(asset) : undefined;
+  const gltf = asset ? lib[officeModelKey(asset)] ?? models.get(asset as OfficeAssetId) : undefined;
   const def = PROP_DEFS[kind];
   if (gltf) {
     // The derivatives are at real size and the footprints are their measured bounds: a uniform fit to the footprint keeps the

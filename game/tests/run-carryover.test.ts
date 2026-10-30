@@ -36,7 +36,8 @@ function fakeEnvTextures(): Record<TextureKey, THREE.Texture> {
   return out;
 }
 
-const invItems = (inv: Inventory) => inv.hotbar.concat(inv.pack).filter(Boolean).map(s => `${s!.itemId}x${s!.count}${s!.mag !== undefined ? `@${s!.mag}` : ''}`).sort();
+// task office-overhaul-20261030 (INTERACT #6): + the grenade slot (the starter flare goes there now)
+const invItems = (inv: Inventory) => inv.hotbar.concat(inv.pack, inv.throwSlot ?? []).filter(Boolean).map(s => `${s!.itemId}x${s!.count}${s!.mag !== undefined ? `@${s!.mag}` : ''}`).sort();
 const countOf = (inv: Inventory, id: string) => inv.count(id);
 
 describe('levels registry', () => {

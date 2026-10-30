@@ -17,6 +17,39 @@ export type Vec3 = StandPoint;
 export const STAIR = {riser: 0.17, tread: 0.28, maxRisers: 12, landing: 1.2, topLanding: 1.0, headroom: 2.5};
 export type StairSpec = typeof STAIR;
 
+/**
+ * Task office-overhaul-20261030 (lane STRUCT): flight CLASSES other than the station stair (StairFlight.spec). The transit hall
+ * between the office station and the tower lobby lays a broad fixed stair and two STOPPED escalators side by side on ONE shared
+ * pitch line (one straight flight each, no landings: an escalator has none), so the lanes meet without walls or drops and the
+ * glass balustrades between them are railings. 'transit' = the fixed public stair beside escalators (~0.185 x 0.32 m steps),
+ * 'escalator' = stopped escalator steps (~0.19 x 0.35 m), both at about 30 degrees. Validation (levelIssues) checks them
+ * against these ranges instead of the station spec.
+ */
+export const STAIR_CLASS = {
+  transit: {riser: [0.15, 0.19] as const, tread: [0.28, 0.36] as const, maxRisers: 40},
+  escalator: {riser: [0.15, 0.21] as const, tread: [0.3, 0.42] as const, maxRisers: 40},
+};
+export type StairClass = keyof typeof STAIR_CLASS;
+/** Transit hall pitch (deg) shared by the fixed stair and the escalators; nominal step sizes; headroom over the run (m). */
+export const TRANSIT = {pitchDeg: 30, stairRiser: 0.185, escalatorRiser: 0.19, topLanding: 1.0, headroom: 2.5};
+
+/**
+ * The shared-pitch specs of a transit run of height `rise`: the fixed stair and the escalator each get an integer step count
+ * near their nominal riser, and treads that make both flights exactly the same length (one pitch line, one rect length).
+ */
+export function transitSpecs(rise: number): {stair: StairSpec; escalator: StairSpec; length: number; cells: number; slope: number} {
+  const slope = Math.tan(TRANSIT.pitchDeg * Math.PI / 180);
+  const length = Math.abs(rise) / slope;
+  const mk = (riser: number): StairSpec => {
+    const n = Math.max(1, Math.round(Math.abs(rise) / riser));
+    return {riser: Math.abs(rise) / n, tread: length / n, maxRisers: 64, landing: STAIR.landing, topLanding: TRANSIT.topLanding, headroom: TRANSIT.headroom};
+  };
+  const stair = mk(TRANSIT.stairRiser);
+  // Escalator steps: the largest step count whose riser is still >= the nominal 0.19 m (real escalator steps are ~0.2 m).
+  const escalator = mk(Math.abs(rise) / Math.max(1, Math.floor(Math.abs(rise) / TRANSIT.escalatorRiser)));
+  return {stair, escalator, length, cells: stairRunCells(rise, stair), slope};
+}
+
 /** Underpass below the tracks: platform 0, track bed -1.15, crossing passage floor (m). */
 export const UNDERPASS_FLOOR = -3.9;
 
@@ -35,6 +68,8 @@ export interface StairFlight {
   risers: number; riser: number; tread: number; headroom: number;
   /** Walkable stand points on the landings just above and below the flight. */
   top: Vec3; bottom: Vec3;
+  /** Task office-overhaul-20261030 (lane STRUCT): flight class other than the station stair (validation + render). */
+  spec?: StairClass;
 }
 
 /** A steel rescue ladder on a platform face, climbing from the track bed to the platform. */
@@ -56,8 +91,16 @@ export interface Ladder {
   top: Vec3;
   /** Ladder straight across on the other face of the same bed, or -1. */
   pair: number;
-  /** Grid nav link index. */
+  /** Grid nav link index (-1: none — the roof access ladder is a player-only climb, never in the AI graph). */
   link: number;
+  /**
+   * Task office-overhaul-20261030 (lane STRUCT): 'roof' = the CROSS-STOREY roof access ladder — a caged fixed ladder on a wall of
+   * the top office floor (`level`) climbing through a ceiling hatch to the roof deck (`topLevel`). Same scripted climb and the
+   * same climbing controls as the rescue ladders (ladderClimbPath / Player.startClimb); trench = -1, platform = the roof area.
+   */
+  kind?: 'rescue' | 'roof';
+  level?: number;
+  topLevel?: number;
 }
 
 /** An underpass: the crossing passage (bar) and the stair legs down to it from each platform. */
@@ -446,6 +489,8 @@ function addTraversalSigns(layout: StationLayout): void {
     }
   }
   for (const l of traversal.ladders) {
+    // Task office-overhaul-20261030 (lane STRUCT): the roof access ladder gets its own plate (beside it, on its storey's wall).
+    if (l.kind === 'roof') continue;
     push({x: l.x + 0.95, y: l.bottomY + 0.72, z: l.faceZ - l.dir * 0.02, rot: l.dir > 0 ? Math.PI : 0, kind: 'service', text: 'EMERGENCY LADDER', area: l.platform, w: 1.1});
   }
 }
@@ -478,13 +523,22 @@ export function traversalIssues(layout: StationLayout): string[] {
     if (lg.inBounds(cx, cy) && lg.rampIdx[lg.idx(cx, cy)] >= 0) issues.push(`pickup ${p.itemId} on stairs`);
   }
   for (const l of ladders) {
+    if (l.kind === 'roof') {
+      // Task office-overhaul-20261030 (lane STRUCT): the roof access ladder — foot on its storey, head on the roof deck, both clear.
+      const gb = grids[l.level ?? 0], gt = grids[l.topLevel ?? 0];
+      if (!gb || !gt) { issues.push(`ladder ${l.id} storeys missing`); continue; }
+      const [bx, by] = gb.cellOf(l.bottom.x, l.bottom.z), [tx, ty] = gt.cellOf(l.top.x, l.top.z);
+      if (!gb.passable(bx, by) || Math.abs(gb.floorAt(l.bottom.x, l.bottom.z) - l.bottomY) > 0.05 || !gb.circleClearH(l.bottom.x, l.bottom.z, 0.3, l.bottomY)) issues.push(`ladder ${l.id} foot blocked`);
+      if (!gt.passable(tx, ty) || Math.abs(gt.floorAt(l.top.x, l.top.z) - l.topY) > 0.05 || !gt.circleClearH(l.top.x, l.top.z, 0.34, l.topY)) issues.push(`ladder ${l.id} head blocked`);
+      continue;
+    }
     const [bx, by] = g.cellOf(l.bottom.x, l.bottom.z), [tx, ty] = g.cellOf(l.top.x, l.top.z);
     if (!g.passable(bx, by) || g.get(bx, by) !== VOID) issues.push(`ladder ${l.id} foot blocked`);
     if (!g.passable(tx, ty) || !g.circleClearH(l.top.x, l.top.z, 0.34, l.topY)) issues.push(`ladder ${l.id} head blocked`);
   }
   // No softlock: every walkable track-bed cell has a ladder within LADDER.cover metres.
   layout.trenches.forEach((t, ti) => {
-    const own = ladders.filter(l => l.trench === ti);
+    const own = ladders.filter(l => l.trench === ti && l.kind !== 'roof');
     if (!own.length) { issues.push(`track bed ${ti} has no ladder`); return; }
     for (let y = Math.round(t.z0 / CELL); y < Math.round(t.z1 / CELL); y++) {
       for (let x = Math.round(t.x0 / CELL); x < Math.round(t.x1 / CELL); x++) {
@@ -503,7 +557,7 @@ export function traversalSummary(layout: StationLayout) {
   const p3 = (p: Vec3) => ({x: r2(p.x), y: r2(p.y), z: r2(p.z)});
   return {
     stairs: layout.traversal.stairs.map(f => ({id: f.id, area: f.area, label: layout.areas[f.area]?.label, axis: f.axis, risers: f.risers, riser: r2(f.riser), tread: r2(f.tread), top: p3(f.top), bottom: p3(f.bottom)})),
-    ladders: layout.traversal.ladders.map(l => ({id: l.id, trench: l.trench, platform: l.platform, x: r2(l.x), faceZ: r2(l.faceZ), pair: l.pair, bottom: p3(l.bottom), top: p3(l.top)})),
+    ladders: layout.traversal.ladders.map(l => ({id: l.id, kind: l.kind ?? 'rescue', level: l.level ?? 0, topLevel: l.topLevel ?? 0, trench: l.trench, platform: l.platform, x: r2(l.x), faceZ: r2(l.faceZ), pair: l.pair, bottom: p3(l.bottom), top: p3(l.top)})),
     underpasses: layout.traversal.underpasses.map(u => ({bar: u.bar, floor: r2(layout.grid.floorAt((layout.areas[u.bar].x + layout.areas[u.bar].w / 2) * CELL, (layout.areas[u.bar].y + layout.areas[u.bar].h / 2) * CELL)), ceil: r2(layout.areas[u.bar].ceil), legs: u.legs.map(l => ({area: l.area, platform: l.platform, side: l.side, flights: l.flights}))})),
     // Iteration 08 (Lane A): stair runs between levels (lower / upper level, stand points, first flight).
     levelLinks: (layout.levelLinks ?? []).map(k => ({id: k.id, kind: k.kind, lower: k.lower, upper: k.upper, ramp: k.ramp, flight: k.traversalId, bottom: p3(k.bottom), top: p3(k.top), area: layout.areas[layout.traversal.stairs[k.traversalId ?? -1]?.area ?? -1]?.label})),

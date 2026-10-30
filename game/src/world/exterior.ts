@@ -11,18 +11,30 @@
 // Lighting: never the station light field — unlit node materials with a fake hemisphere + low sun, so it reads at dusk.
 // Fog: OFF on the materials; their own fog instead = the station FogExp2 over the part of the view ray INSIDE the
 // tower footprint (same density / colour as the interior: a far window across a dark floor is hazed like the floor)
-// plus a light exterior haze beyond. Budget: instancing; Meshy instances are split per quadrant so frustum culling
+// plus the outdoor fog beyond. Budget: instancing; Meshy instances are split per quadrant so frustum culling
 // drops whole quadrants; ~2k-tri dome; procedural blocks are 12 tris each.
+//
+// Task office-overhaul-20261030 (lane ARCH), feedback item 2 ("the outside world ... should have heavy fog applied, perhaps
+// a green fog ... Right now you can see too well and its obviously fake"): the light haze (0.0036/m: 30 % at 100 m) is now
+// a HEAVY sickly green-grey murk — lore: the green fog is infectious; visual only. Outdoor fog = exponential HEIGHT fog
+// (base density + a dense layer at street level with a scale height, integrated analytically along each view ray) plus a
+// range term, so the city dissolves within ~60-120 m and the street reads through thicker murk; the density drifts in slow
+// patches (world-space noise moving with the wind, TSL time). The dome is a green haze backdrop (fog colour at the horizon,
+// murky overcast above, slow billows) with only a faint ghost of the skyline panorama; far buildings fade exactly into it.
+// exteriorFogOpacity is the CPU mirror (tests). From the roof (role 'roof', outdoors) the view ray has no indoor part and a
+// tower shell (its facade below the roof deck) is drawn so the roof does not float. Tuning: exteriorFogTune (uniforms only;
+// __LL.towerExteriorTune still drives haze = fog colour, hazeDensity = base density, skyGain = skyline ghost strength).
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, type Node} from 'three/webgpu';
 import {
   Fn, abs, cameraPosition, clamp, dot, exp, float, floor, fract, hash, length, max, min, mix, normalWorld, normalize,
-  positionView, positionWorld, pow, select, smoothstep, texture, uniform, uv, vec2, vec3, attribute, atan,
+  positionView, positionWorld, pow, select, smoothstep, step, texture, time, uniform, uv, vec2, vec3, attribute, atan,
 } from 'three/tsl';
 import {mulberry32} from '../core/rng';
 import {MOOD} from './lights';
 import {canvasTexture} from './canvasTextures';
+import {wmHash, wmNoise} from './surfaceNodes';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Rect2} from './towerShared';
 import {OFFICE_ASSETS} from '../assets/officeAssets';
@@ -194,46 +206,125 @@ export function planExterior(o: {foot: Rect2; groundY: number; eyeAbove: number;
 // ---------------------------------------------------------------------------------------------
 // Shading (module singletons; per-section values are uniforms)
 
-export const EXT_U: Record<'box' | 'fogDensity' | 'fogColor' | 'haze' | 'hazeDensity' | 'sunDir' | 'sun' | 'sky' | 'ground' | 'zenith' | 'groundY' | 'skyline' | 'skyGain', AnyNode> = {
+/**
+ * Outdoor green fog defaults (task office-overhaul-20261030, lane ARCH). Linear colours. Optical depth along an outdoor ray
+ * of length L from eye height hc to point height hp (above the street) = L x mean(sigma(h)) + (L / range)^2 with
+ * sigma(h) = base + ground x exp(-h / height); the drifting patches scale it by 1 +- noise.
+ */
+export const EXT_FOG = {
+  /** Fog colour: sickly green-grey murk (sRGB hue ~93 deg, saturation ~0.19, lightness ~0.3: not neon). */
+  color: [0.07, 0.105, 0.048] as [number, number, number],
+  /** Density everywhere (1/m), the extra density at street level (1/m) and its scale height (m). */
+  base: 0.012, ground: 0.034, height: 16,
+  /** Range term (m): the optical depth gains (L / range)^2, so beyond ~120 m nothing reads. */
+  range: 120,
+  /** Patch variation of the density (+- fraction) and its drift (m/s). */
+  noise: 0.35, drift: 0.45,
+  /** How much of the skyline panorama ghosts through the horizon murk (0 = none). */
+  skyline: 0.12,
+} as const;
+
+export const EXT_U: Record<'box' | 'fogDensity' | 'fogColor' | 'haze' | 'hazeDensity' | 'sunDir' | 'sun' | 'sky' | 'ground' | 'zenith' | 'groundY' | 'skyline' | 'skyGain'
+  | 'fogGround' | 'fogHeight' | 'fogRange' | 'fogNoise' | 'fogDrift' | 'roofY', AnyNode> = {
   /** Tower footprint (x0, z0, x1, z1): the station fog applies inside it. */
   box: uniform(new THREE.Vector4(-1e5, -1e5, 1e5, 1e5)),
   fogDensity: uniform(MOOD.fogDensity),
   fogColor: uniform(new THREE.Color(MOOD.fogColor)),
-  haze: uniform(new THREE.Color(0.115, 0.1, 0.092)),
-  hazeDensity: uniform(0.0036),
+  /** The outdoor fog colour (task office-overhaul: the green murk; was a light dusk haze). */
+  haze: uniform(new THREE.Color(...EXT_FOG.color)),
+  /** Outdoor base density (1/m) everywhere (was 0.0036 haze). */
+  hazeDensity: uniform(EXT_FOG.base),
   sunDir: uniform(new THREE.Vector3(-0.62, 0.16, -0.77).normalize()),
-  sun: uniform(new THREE.Color(0.2, 0.115, 0.07)),
-  sky: uniform(new THREE.Color(0.075, 0.08, 0.092)),
-  ground: uniform(new THREE.Color(0.026, 0.024, 0.022)),
-  zenith: uniform(new THREE.Color(0.022, 0.026, 0.034)),
+  /** Sun glow through the murk (weak, sickly yellow-green). */
+  sun: uniform(new THREE.Color(0.1, 0.094, 0.05)),
+  sky: uniform(new THREE.Color(0.06, 0.074, 0.058)),
+  ground: uniform(new THREE.Color(0.022, 0.026, 0.02)),
+  zenith: uniform(new THREE.Color(0.042, 0.052, 0.04)),
   groundY: uniform(0),
   /** Skyline band: wraps, offset, e0, e1 (sin of elevation). */
   skyline: uniform(new THREE.Vector4(5, 0, -0.04, 0.42)),
-  skyGain: uniform(0.62),
+  /** Skyline ghost strength through the murk (0..1; was the panorama brightness 0.62). */
+  skyGain: uniform(EXT_FOG.skyline),
+  /** Extra street-level density (1/m), its scale height (m), the range term (m). */
+  fogGround: uniform(EXT_FOG.ground),
+  fogHeight: uniform(EXT_FOG.height),
+  fogRange: uniform(EXT_FOG.range),
+  /** Density patch variation (+- fraction) and drift speed (m/s). */
+  fogNoise: uniform(EXT_FOG.noise),
+  fogDrift: uniform(EXT_FOG.drift),
+  /** Roof deck y: a camera above it is outdoors (no indoor fog part on its view rays); far above = no roof. */
+  roofY: uniform(1e9),
 };
 
 /** Fake outdoor light: hemisphere (sky / ground) + a weak low sun. */
 const outdoorLight = (n: AnyNode): AnyNode => mix(EXT_U.ground, EXT_U.sky, n.y.mul(0.5).add(0.5)).add(EXT_U.sun.mul(max(dot(n, EXT_U.sunDir), 0)));
 
+/** Colour of the murk seen along direction `dir`: darker looking down into the street layer, a weak glow toward the sun. */
+const fogColorAt = (dir: AnyNode): AnyNode =>
+  EXT_U.haze.mul(mix(0.82, 1.06, smoothstep(-0.25, 0.08, dir.y))).add(EXT_U.sun.mul(pow(max(dot(dir, EXT_U.sunDir), 0), 6).mul(0.8)));
+
 /**
- * Exterior fog: the station's FogExp2 over the ray's part inside the tower footprint (view depth x that fraction,
- * as three's FogExp2), then a light haze over the outdoor part (toward the sun a little warmer).
+ * Fraction of the view ray inside the tower footprint (the indoor part, fogged with the station's FogExp2), 0 when the camera
+ * stands on the roof (outdoors).
  */
-export const exteriorFog = (col: AnyNode): AnyNode => {
-  const C = cameraPosition, D = positionWorld.sub(C).toVar();
+const indoorFraction = (C: AnyNode, D: AnyNode): AnyNode => {
   const dx = select(abs(D.x).lessThan(1e-4), float(1e-4), D.x), dz = select(abs(D.z).lessThan(1e-4), float(1e-4), D.z);
   const tx = select(dx.greaterThan(0), EXT_U.box.z.sub(C.x), EXT_U.box.x.sub(C.x)).div(dx);
   const tz = select(dz.greaterThan(0), EXT_U.box.w.sub(C.z), EXT_U.box.y.sub(C.z)).div(dz);
-  const tIn = clamp(min(min(tx, tz), 1), 0, 1).toVar();
-  const depthIn = positionView.z.negate().mul(tIn);
-  const fogF = float(1).sub(exp(EXT_U.fogDensity.mul(depthIn).pow(2).negate()));
+  return select(C.y.greaterThan(EXT_U.roofY), float(0), clamp(min(min(tx, tz), 1), 0, 1));
+};
+
+/** The station FogExp2 factor over the indoor part of the ray. */
+const indoorFog = (tIn: AnyNode): AnyNode => float(1).sub(exp(EXT_U.fogDensity.mul(positionView.z.negate().mul(tIn)).pow(2).negate()));
+
+/**
+ * Optical depth of the outdoor green fog over `L` metres of a ray from eye height `hc` to point height `hp` (m above the
+ * street): base x L + ground x mean(exp(-h / height)) x L + (L / range)^2. Mirrors exteriorFogDepth.
+ */
+const fogDepth = (L: AnyNode, hc: AnyNode, hp: AnyNode): AnyNode => {
+  const H = max(EXT_U.fogHeight, 0.5);
+  const ec = exp(hc.negate().div(H)), ep = exp(hp.negate().div(H));
+  const dh = hp.sub(hc);
+  // mean of exp(-h/H) along the segment: H (ec - ep) / (hp - hc); the midpoint value when nearly level
+  const meanE = select(abs(dh).lessThan(0.25), exp(hc.add(hp).mul(0.5).negate().div(H)), H.mul(ec.sub(ep)).div(select(abs(dh).lessThan(0.25), float(1), dh)));
+  const r = L.div(max(EXT_U.fogRange, 1));
+  return EXT_U.hazeDensity.add(EXT_U.fogGround.mul(meanE)).mul(L).add(r.mul(r));
+};
+
+/**
+ * Exterior fog: the station's FogExp2 over the ray's part inside the tower footprint (view depth x that fraction, as three's
+ * FogExp2), then the outdoor green height fog over the rest (drifting patches; toward the sun a little brighter).
+ */
+export const exteriorFog = (col: AnyNode): AnyNode => {
+  const C = cameraPosition, D = positionWorld.sub(C).toVar();
+  const tIn = indoorFraction(C, D).toVar();
+  const fogF = indoorFog(tIn);
   const dist = length(D);
   const dir = D.div(max(dist, 1e-3));
   const outside = dist.mul(float(1).sub(tIn));
-  const hazeF = float(1).sub(exp(EXT_U.hazeDensity.mul(outside).negate()));
-  const hazeCol = EXT_U.haze.add(EXT_U.sun.mul(pow(max(dot(dir, EXT_U.sunDir), 0), 6).mul(0.8)));
-  return mix(mix(col, hazeCol, hazeF), EXT_U.fogColor, fogF);
+  const hc = max(C.y.sub(EXT_U.groundY), 0), hp = max(positionWorld.y.sub(EXT_U.groundY), 0);
+  // slow drifting patches of thicker / thinner murk (world-space, moving with the wind; mean factor 1)
+  const drift = time.mul(EXT_U.fogDrift);
+  const patch = wmNoise((vec3 as AnyNode)(positionWorld.x.add(drift).div(38), positionWorld.y.div(24), positionWorld.z.sub(drift.mul(0.4)).div(38))) as AnyNode;
+  const tau = fogDepth(outside, hc, hp).mul(float(1).add(EXT_U.fogNoise.mul(patch.sub(0.5)).mul(2)));
+  const outF = float(1).sub(exp(tau.negate()));
+  return mix(mix(col, fogColorAt(dir), outF), EXT_U.fogColor, fogF);
 };
+
+/** CPU mirror of fogDepth (no patches): optical depth over L m from eye height hc to point height hp above the street. */
+export function exteriorFogDepth(L: number, hc: number, hp: number, p: {base: number; ground: number; height: number; range: number} = EXT_FOG): number {
+  const H = Math.max(p.height, 0.5);
+  hc = Math.max(0, hc); hp = Math.max(0, hp);
+  const dh = hp - hc;
+  const meanE = Math.abs(dh) < 0.25 ? Math.exp(-(hc + hp) / 2 / H) : H * (Math.exp(-hc / H) - Math.exp(-hp / H)) / dh;
+  const r = L / Math.max(p.range, 1);
+  return (p.base + p.ground * meanE) * L + r * r;
+}
+
+/** CPU mirror: opacity (0..1) of the outdoor fog over L m of ray from eye height hc to point height hp above the street. */
+export function exteriorFogOpacity(L: number, hc: number, hp = hc, p?: {base: number; ground: number; height: number; range: number}): number {
+  return 1 - Math.exp(-exteriorFogDepth(L, hc, hp, p));
+}
 
 const mats = new Map<string, MeshBasicNodeMaterial>();
 function basic(key: string, color: AnyNode, side: THREE.Side = THREE.FrontSide): MeshBasicNodeMaterial {
@@ -317,6 +408,32 @@ function blockMaterial(): MeshBasicNodeMaterial {
   })());
 }
 
+/**
+ * Task office-overhaul-20261030 (lane ARCH): the tower's own facade below the roof deck, seen only from the roof (outdoors,
+ * looking over the parapet): curtain-wall storeys (4.4 m) of dark glass between concrete spandrels and mullions, some panes
+ * broken out or boarded, sooty toward the top; outdoor-lit and fogged like the city. Its faces point outward, so from inside
+ * (behind every face) it is never drawn.
+ */
+function facadeMaterial(): MeshBasicNodeMaterial {
+  return basic('facade', Fn(() => {
+    const n = normalWorld;
+    const tangent = normalize(vec2(n.z.negate(), n.x).add(vec2(1e-4, 0)));
+    const s = positionWorld.x.mul(tangent.x).add(positionWorld.z.mul(tangent.y));
+    const h = positionWorld.y.sub(EXT_U.groundY);
+    const fy = fract(h.div(4.4)), fx = fract(s.div(1.5));
+    const storey = floor(h.div(4.4)), bay = floor(s.div(1.5));
+    const glassY = smoothstep(0.2, 0.215, fy).mul(float(1).sub(smoothstep(0.86, 0.875, fy)));
+    const glassX = smoothstep(0.04, 0.05, fx).mul(float(1).sub(smoothstep(0.95, 0.96, fx)));
+    const r = wmHash((vec3 as AnyNode)(bay, storey, 9)) as AnyNode;
+    const pane = mix(vec3(0.05, 0.06, 0.062), vec3(0.01, 0.01, 0.011), step(0.82, r));
+    const boarded = step(0.93, r);
+    const glass = mix(pane, vec3(0.22, 0.17, 0.11), boarded);
+    const concrete = vec3(0.34, 0.33, 0.31).mul(wmNoise(positionWorld.mul(0.8)).mul(0.25).add(0.85));
+    const albedo = mix(concrete, glass, glassY.mul(glassX)).mul(float(1).sub(smoothstep(10, 40, h).mul(0.25)));
+    return vec3(exteriorFog(albedo.mul(outdoorLight(n)).mul(1.1)));
+  })());
+}
+
 let groundTexCache: {key: string; tex: THREE.Texture} | null = null;
 let detailTex: THREE.Texture | null = null;
 function groundDetail(): THREE.Texture {
@@ -383,32 +500,37 @@ function groundMaterial(first: THREE.Texture): MeshBasicNodeMaterial {
   })());
 }
 
-/** Skyline + sky: panorama band (wrapped, mirrored every other wrap) over a dusk gradient with a low sun glow. */
+/**
+ * Sky (task office-overhaul-20261030, lane ARCH): a green haze backdrop — the murk's own colour at and below the horizon
+ * (fogColorAt: exactly what fully fogged buildings fade to), a murky overcast above with slow drifting billows, and only a
+ * faint ghost of the skyline panorama (skyGain) dissolved into the horizon murk. The indoor FogExp2 part still applies.
+ */
 let skylineNode: AnyNode = null;
 let skylineWanted: THREE.Texture | null = null;
 function skyMaterial(): MeshBasicNodeMaterial {
   skylineNode ??= texture(skylineWanted ?? skylineFallbackTexture());
   return basic('sky', Fn(() => {
-    const D = positionWorld.sub(cameraPosition);
+    const C = cameraPosition, D = positionWorld.sub(C).toVar();
     const dir = normalize(D).toVar();
     const e = dir.y;
-    const sunG = pow(max(dot(dir, EXT_U.sunDir), 0), 5);
-    const horizon = EXT_U.haze.mul(1.25).add(EXT_U.sun.mul(sunG.mul(1.4)));
-    const sky = mix(horizon, EXT_U.zenith, smoothstep(0.0, 0.55, e)).toVar();
-    const below = mix(horizon, EXT_U.ground.add(EXT_U.haze.mul(0.6)), smoothstep(0.0, -0.25, e));
-    // overcast streaks (cheap)
-    const cl = float(hash(floor(atan(dir.x, dir.z).mul(18)).add(floor(e.mul(40)).mul(31)))).mul(0.18).add(0.91);
-    const up = mix(below, sky.mul(cl), smoothstep(-0.01, 0.01, e));
-    const sk = EXT_U.skyline;
+    const murk = fogColorAt(dir).toVar();
     const az = atan(dir.x, dir.z).div(Math.PI * 2).add(0.5);
+    // overhead: murky overcast, a little lighter where the light diffuses through, slow billows drifting across
+    const billow = wmNoise((vec3 as AnyNode)(az.mul(14).add(time.mul(0.006)), e.mul(7), time.mul(0.01))) as AnyNode;
+    const streak = float(hash(floor(az.mul(110)).add(floor(e.mul(40)).mul(31)))).mul(0.06).add(0.97);
+    const over = mix(murk, EXT_U.zenith, smoothstep(0.03, 0.75, e)).mul(billow.mul(0.18).add(0.91)).mul(streak);
+    const up = mix(murk, over, smoothstep(0.0, 0.08, e));
+    // the skyline panorama barely ghosts through the horizon murk (its silhouettes tinted into the fog colour)
+    const sk = EXT_U.skyline;
     const uu = az.mul(sk.x).add(sk.y);
     const m2 = fract(uu.mul(0.5)).mul(2);
     const u: AnyNode = select((m2 as AnyNode).lessThan(1), m2, float(2).sub(m2 as AnyNode));
     const v: AnyNode = e.sub(sk.z).div(sk.w.sub(sk.z));
-    const pano = skylineNode.sample(vec2(u, clamp(v, 0.002, 0.998))).rgb.mul(EXT_U.skyGain);
-    const band = smoothstep(-0.02, 0.04, v).mul(float(1).sub(smoothstep(0.78, 1.0, v)));
-    const col = mix(up, pano, band);
-    return vec3(exteriorFog(col));
+    const pano = skylineNode.sample(vec2(u, clamp(v, 0.002, 0.998))).rgb;
+    const ghost = murk.mul(dot(pano, vec3(0.2126, 0.7152, 0.0722)).mul(3.2).add(0.55));
+    const band = smoothstep(-0.02, 0.06, v).mul(float(1).sub(smoothstep(0.55, 0.9, v))).mul(clamp(EXT_U.skyGain, 0, 1));
+    const col = mix(up, ghost, band);
+    return vec3(mix(col, EXT_U.fogColor, indoorFog(indoorFraction(C, D))));
   })(), THREE.BackSide);
 }
 
@@ -584,6 +706,24 @@ export function buildExterior(plan: ExteriorPlan, models: ExteriorModels = {}): 
   groundXform.value.set(c.x - H, c.z - H, 1 / (2 * H), 1 / (2 * H));
   const gm = new THREE.Mesh(ground, gmat); gm.name = 'tower-ext-ground'; root.add(gm);
   tris += triCount(ground);
+  // --- task office-overhaul-20261030 (lane ARCH): the tower facade below the roof deck (only when the level has a roof) ---
+  if (exteriorRoof !== null && exteriorRoof > gy + 4) {
+    const top = exteriorRoof, sp: number[] = [], sn: number[] = [];
+    const wall = (ax: number, az: number, bx: number, bz: number, nx: number, nz: number) => {
+      sp.push(ax, gy, az, bx, gy, bz, bx, top, bz, ax, gy, az, bx, top, bz, ax, top, az);
+      for (let k = 0; k < 6; k++) sn.push(nx, 0, nz);
+    };
+    // counter-clockwise seen from outside
+    wall(f.x1, f.z0, f.x0, f.z0, 0, -1); wall(f.x0, f.z1, f.x1, f.z1, 0, 1);
+    wall(f.x0, f.z0, f.x0, f.z1, -1, 0); wall(f.x1, f.z1, f.x1, f.z0, 1, 0);
+    const shell = new THREE.BufferGeometry();
+    shell.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+    shell.setAttribute('normal', new THREE.Float32BufferAttribute(sn, 3));
+    shell.computeBoundingSphere();
+    geometries.push(shell);
+    const sm = new THREE.Mesh(shell, facadeMaterial()); sm.name = 'tower-ext-shell'; root.add(sm);
+    tris += triCount(shell);
+  }
   // --- instancing helper (per quadrant) ---
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), tv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const placeMatrix = (x: number, y: number, z: number, yaw: number, s: [number, number, number]) => m4.compose(tv.set(x, y, z), q.setFromAxisAngle(up, yaw), sv.set(...s));
@@ -708,6 +848,40 @@ export function setExteriorEye(eyeAbove: number): void {
 export function setExteriorFootprint(r: Rect2 | null): void {
   if (r) EXT_U.box.value.set(r.x0, r.z0, r.x1, r.z1);
   else EXT_U.box.value.set(-1e5, -1e5, 1e5, 1e5);
+}
+
+/** Roof deck y of the level being built (task office-overhaul, lane ARCH): read by buildExterior (tower shell). */
+let exteriorRoof: number | null = null;
+
+/**
+ * Task office-overhaul-20261030 (lane ARCH): the roof deck of the current level (null: none). Set by the world builder for
+ * every build, before the exterior is built: the tower shell reaches up to it and a camera above it gets outdoor fog only.
+ */
+export function setExteriorRoof(y: number | null): void {
+  exteriorRoof = y !== null && Number.isFinite(y) ? y : null;
+  EXT_U.roofY.value = exteriorRoof !== null ? exteriorRoof - 0.3 : 1e9;
+}
+
+/** Outdoor fog knobs (uniform values only: no rebuild). Colours linear rgb. */
+export interface ExteriorFogTune {
+  color?: [number, number, number]; base?: number; ground?: number; height?: number; range?: number; noise?: number; drift?: number;
+  skyline?: number; sun?: [number, number, number]; sky?: [number, number, number]; zenith?: [number, number, number];
+}
+
+/**
+ * QA spot-check tuning of the green outdoor fog (e.g. `__LL.exteriorFogTune({base: 0.015, ground: 0.05})`); returns the
+ * current values plus the CPU-mirror opacity of a level ray at 30 / 80 / 150 m from floor 5's eye height (19 m).
+ */
+export function exteriorFogTune(o: ExteriorFogTune = {}): Record<string, unknown> {
+  const c3 = (k: 'haze' | 'sun' | 'sky' | 'zenith', v?: [number, number, number]) => { if (v) (EXT_U[k].value as THREE.Color).setRGB(...v); return (EXT_U[k].value as THREE.Color).toArray(); };
+  const num = (k: 'hazeDensity' | 'fogGround' | 'fogHeight' | 'fogRange' | 'fogNoise' | 'fogDrift' | 'skyGain', v?: number) => { if (typeof v === 'number' && Number.isFinite(v)) EXT_U[k].value = v; return EXT_U[k].value as number; };
+  const out = {
+    color: c3('haze', o.color), sun: c3('sun', o.sun), sky: c3('sky', o.sky), zenith: c3('zenith', o.zenith),
+    base: num('hazeDensity', o.base), ground: num('fogGround', o.ground), height: num('fogHeight', o.height), range: num('fogRange', o.range),
+    noise: num('fogNoise', o.noise), drift: num('fogDrift', o.drift), skyline: num('skyGain', o.skyline),
+  };
+  const p = {base: out.base, ground: out.ground, height: out.height, range: out.range};
+  return {...out, opacityAt19m: {d30: exteriorFogOpacity(30, 19, 19, p), d80: exteriorFogOpacity(80, 19, 19, p), d150: exteriorFogOpacity(150, 19, 19, p)}};
 }
 
 export type {N as ExteriorFloatNode};

@@ -144,6 +144,34 @@ export class Viewmodel {
     this.flash.renderOrder = 2;
   }
 
+  /**
+   * Task office-overhaul-20261030 (lane INTERACT, #1): an extra held item with its own hand pose — the worn backpack readied
+   * with 6 is held in front of you (gear/system.ts adds it once, before the warm-up, so its pipelines compile on the loading
+   * screen). `hip` = holder position in viewmodel camera space; no ADS pose (aim = hip). Replaces an earlier one of that id.
+   */
+  addHeldItem(id: string, obj: THREE.Object3D, pose: {hip: readonly [number, number, number]; yaw?: number; pitch?: number; roll?: number}): void {
+    const old = this.items.get(id);
+    if (old) { if (this.current === id) this.setItem(null); this.pivot.remove(old.root); }
+    obj.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.frustumCulled = false; });
+    const holder = new THREE.Group();
+    holder.name = `held-${id}`;
+    holder.add(obj);
+    holder.visible = false;
+    this.pivot.add(holder);
+    const hip = new THREE.Vector3(...pose.hip);
+    this.items.set(id, {root: holder, muzzle: new THREE.Vector3(), hip, aim: hip.clone(), hipYaw: pose.yaw ?? 0, hipPitch: pose.pitch ?? 0, hipRoll: pose.roll ?? 0});
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): whether a held model exists for `id` (QA / gear system). */
+  hasItem(id: string): boolean {
+    return this.items.has(id);
+  }
+
+  /** Task office-overhaul-20261030 (INTERACT): the held item id shown now (null: empty hands) — QA / tests. */
+  get heldItem(): string | null {
+    return this.current;
+  }
+
   setItem(itemId: string | null): void {
     if (this.current === itemId) return;
     if (this.current) this.items.get(this.current)!.root.visible = false;

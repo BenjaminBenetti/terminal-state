@@ -6,8 +6,9 @@
 //    with the doors open, landing doors shut when the cab is away), obstruction re-open, an enemy inside holds the doors;
 //  - Levels dynamic volume: support / collision / headroom / raycast / sight inside and outside the cab, through an open
 //    vs a shut doorway; with no volume every query is unchanged (Subway);
-//  - the runtime with the REAL Player body: walk in, choose 5, ride (carried by the cab's dy: never below its floor, never
-//    through its ceiling, y continuous), walk out on floor 5 — and the host's travel / setState are NEVER called;
+//  - the runtime with the REAL Player body: walk in, press the panel's 5 button (aim + E; task office-overhaul-20261030: no
+//    floor list), ride (carried by the cab's dy: never below its floor, never through its ceiling, y continuous), walk out on
+//    floor 5 — and the host's travel / setState are NEVER called;
 //  - riders: a pickup and a resting flare (real PickupManager / FlareSystem / PhysicsSystem) ride along;
 //  - per-storey windows, the exterior built once at street level (hidden in the station), the warm-up discovers every mesh,
 //    teardown leaves nothing, TSL builds on both backends, QA hooks.
@@ -29,7 +30,6 @@ import {planWindows} from '../src/world/officeWindows';
 import {EXTERIOR} from '../src/world/exterior';
 import {TowerRuntime, installTower, type TowerHost} from '../src/world/towerRuntime';
 import {towerQaApi} from '../src/world/towerQa';
-import {ChoiceModel} from '../src/ui/elevatorPanel';
 import {Player} from '../src/player/player';
 import {PickupManager} from '../src/world/pickups';
 import {Inventory} from '../src/items/inventory';
@@ -107,7 +107,7 @@ function makeHost(layout: StationLayout, player: {x: number; z: number; y: numbe
     scene, camera, player, zombies: [] as FakeZombie[], levels: levelsOf(layout as never), layout, mats, sfx: null,
     hud: {toast: (t: string) => { toasts.push(t); }}, warmRegistry: new WarmupRegistry(),
     atmosphere: {markShadows: (root: THREE.Object3D, s: boolean) => { markShadows(root, true, s); }},
-    interactHandlers: [] as (() => boolean)[], frameHooks: [] as ((dt: number) => void)[],
+    interactHandlers: [] as (() => boolean)[], pointerHandlers: [] as (() => boolean)[], frameHooks: [] as ((dt: number) => void)[],
     sectionHooks: [] as {build?(l: StationLayout): void; teardown?(): void}[], promptProviders: [] as (() => string | null)[],
     stateListeners: [] as ((s: never, p: never) => void)[], sectionPreloads: [] as ((l: StationLayout) => Promise<void>)[],
     state: 'playing', warming: false, prepareBeforeShow: async () => {},
@@ -389,6 +389,7 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     expect(host.sectionHooks).toHaveLength(1);
     expect(host.frameHooks).toHaveLength(1);
     expect(host.interactHandlers).toHaveLength(1);
+    expect(host.pointerHandlers).toHaveLength(1);
     expect(host.promptProviders).toHaveLength(1);
     expect(host.stateListeners).toHaveLength(1);
     expect(host.warmRegistry.names.pools).toContain('tower');
@@ -400,7 +401,7 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     expect(host.travel).not.toHaveBeenCalled();
   });
 
-  it('call -> walk in -> choose 5 -> RIDE (carried, continuous, never below the floor / through the ceiling) -> walk out on 5; no travel / state change ever', () => {
+  it('call -> walk in -> press 5 -> RIDE (carried, continuous, never below the floor / through the ceiling) -> walk out on 5; no travel / state change ever', () => {
     const layout = towerLayout();
     const P = new Player();
     P.spawn(LANDING.x, LANDING.z, 0, baseOf(1)); // facing -z: turn toward the doors below
@@ -426,16 +427,16 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     for (let i = 0; i < 8; i++) frame(['KeyW']);
     expect(rt.playerInCab()).toBe(true);
     for (let i = 0; i < 10; i++) frame([]);
-    // the floor panel: E opens the list, digit 5 queues floor 5
-    P.yaw = 0; // face the door wall (the panel is on it)
+    // the cab panel: aim at its 5 button and press E (a physical button: no list)
+    const b5 = e.plan.carButtons.find(b => b.floor === 5)!;
     host.camera.position.set(P.x, P.eye, P.z);
-    host.camera.lookAt(e.plan.panelLocal.x, e.plan.panelLocal.y + e.logic.y, e.plan.panelLocal.z);
+    host.camera.lookAt(b5.at.x, b5.at.y + e.logic.y, b5.at.z);
     host.camera.updateMatrixWorld(true);
     stepHooks(host, DT);
     expect(rt.target?.kind).toBe('panel');
+    expect(rt.target?.btn.id).toBe('car-5');
+    expect(host.promptProviders[0]()).toMatch(/Floor 5/);
     expect(host.interactHandlers[0]()).toBe(true);
-    expect(rt.choice.isOpen).toBe(true);
-    expect(rt.choice.handleKey('Digit5')).toBe(true);
     expect(e.logic.car.has(4)).toBe(true);
     // ride: the world keeps running, the player stands still inside
     const ys: number[] = [];
@@ -711,15 +712,6 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     expect(c3.enabled).toBe(true);
     expect(c3.levelAt).toBe(orig);
   });
-
-  it('the floor list: digits pick floors (1 = lobby), arrows + E confirm, Esc closes', () => {
-    const m = new ChoiceModel([{id: 'f8', label: '8', key: 8}, {id: 'f1', label: 'L', key: 1}, {id: 'open', label: 'open'}], 0);
-    expect(m.key('Digit1')).toEqual({type: 'pick', id: 'f1'});
-    m.key('ArrowDown');
-    expect(m.key('KeyE')).toEqual({type: 'pick', id: 'f1'});
-    expect(m.key('Escape')).toEqual({type: 'close'});
-    expect(m.key('KeyW')).toBeNull(); // movement keys reach the game
-  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -774,7 +766,7 @@ describe('windows of every storey, the exterior once at street level', () => {
 });
 
 describe('lifecycle, warm-up discovery, shaders', () => {
-  it('the warm-up plan discovers every mesh (cab, landing doors of every stop, hidden lit buttons, glass, exterior)', () => {
+  it('the warm-up plan discovers every mesh (cab, landing doors of every stop, hidden lit buttons / lanterns / hover rings, glass, exterior)', () => {
     const layout = towerLayout();
     const {host} = makeHost(layout);
     const rt = installTower(host as unknown as TowerHost);
@@ -788,8 +780,10 @@ describe('lifecycle, warm-up discovery, shaders', () => {
       names.add(m.name);
       for (const k of warmKeys(m)) expect(planned.has(k), `${m.name} ${k}`).toBe(true);
     });
-    for (const n of ['tower-cab-walls', 'tower-cab-light', 'tower-door-cab-l', 'tower-door-landing-r', 'tower-landing-frame', 'tower-landing-lining', 'tower-indicator-in', 'tower-indicator-out',
-      'tower-call-panel-lit', 'tower-floor-button-lit-5', 'tower-window-glass', 'tower-window-frames', 'tower-ext-ground', 'tower-ext-sky']) expect(names.has(n), n).toBe(true);
+    for (const n of ['tower-cab-walls', 'tower-cab-wood', 'tower-cab-mirror', 'tower-cab-floor', 'tower-cab-handrail', 'tower-cab-light', 'tower-cab-light-flicker', 'tower-door-cab-l',
+      'tower-door-landing-r', 'tower-landing-frame', 'tower-landing-buttons', 'tower-indicator-in', 'tower-indicator-out', 'tower-call-button-lit-up', 'tower-call-button-lit-down',
+      'tower-lantern-lit-up', 'tower-floor-button-lit-5', 'tower-button-lit-open', 'tower-button-hover-car', 'tower-button-hover-hall', 'tower-floor-panel-buttons',
+      'tower-window-glass', 'tower-window-frames', 'tower-ext-ground', 'tower-ext-sky']) expect(names.has(n), n).toBe(true);
   });
 
   it('teardown: the volume leaves Levels, nothing is left in the scene, geometries released, far plane restored', () => {

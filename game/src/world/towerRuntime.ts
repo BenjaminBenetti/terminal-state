@@ -1,17 +1,24 @@
 // Office tower runtime (iteration 16 lane TOWER; task office-seamless-20261029 lane LIFT): installs itself into Game through
-// the registries (sectionHooks / frameHooks / interactHandlers / promptProviders / stateListeners / warmRegistry); no other
-// Game code. Office Space is ONE continuous world (station, lobby, floors 2-8 at their real heights; lane GEN): this
-// runtime builds, ONCE per built world and before its warm-up, the physically travelling elevator (world/elevator.ts: a
-// cab that rides the shaft through every storey as a Levels dynamic volume — support, collision, rays and sight follow it —
-// with landing doors / call panels on every storey), the window glass of every storey (world/officeWindows.ts) and the city
-// outside at its real height (world/exterior.ts). Nothing here ever travels, fades, loads or changes the game state: the
-// world keeps running while you ride; moving between storeys only changes positions.
+// the registries (sectionHooks / frameHooks / interactHandlers / pointerHandlers / promptProviders / stateListeners /
+// warmRegistry); no other Game code. Office Space is ONE continuous world (station, lobby, floors 2-8 at their real heights;
+// lane GEN): this runtime builds, ONCE per built world and before its warm-up, the physically travelling elevator
+// (world/elevator.ts: a cab that rides the shaft through every storey as a Levels dynamic volume — support, collision, rays and
+// sight follow it — with landing doors / call stations on every storey), the window glass of every storey
+// (world/officeWindows.ts) and the city outside at its real height (world/exterior.ts). Nothing here ever travels, fades, loads
+// or changes the game state: the world keeps running while you ride; moving between storeys only changes positions.
+//
+// Task office-overhaul-20261030 (lane LIFT): every elevator button is a PHYSICAL target — no floor list / submenu. Aim the
+// crosshair at a button within reach (BUTTON_REACH, facing it, nothing structural in between) -> a hover ring + a small prompt;
+// LEFT CLICK (Game.pointerHandlers: the press is consumed and latched until release — no shot, flare, item use or backpack
+// placement) or E presses it: a floor button lights until the cab serves it (also while riding: it is queued), the landing up /
+// down buttons light until the cab arrives, door open re-opens / holds within the interlocks, door close shortens the dwell, the
+// alarm rings an existing cue.
 //
 // Per frame (Game.frameHooks: after the player and the enemies moved, before physics / camera / pickups): the elevator
 // logic steps, the cab volume follows it (floor, ceiling, reported storey, doorway gate), riders inside the cab are carried
 // by its dy (the player and its eye, enemy bodies, resting pickups; physics/world.ts carries bodies, corpses, casings,
-// chunks and resting flares in its own pass), the views follow, prompts / E targets, window push-out, exterior visibility.
-// No lights are added or removed (the cab glows by an emissive panel; the baked field).
+// chunks and resting flares in its own pass), the views follow (doors, indicator, lit buttons / lanterns, hover), the targeted
+// button + prompt, window push-out, exterior visibility. No lights are added or removed (emissive + the baked field).
 
 import * as THREE from 'three';
 import type {StationLayout} from '../gen/stationTypes';
@@ -19,11 +26,10 @@ import type {DynamicVolume, Levels, VolumeGate} from '../gen/levels';
 import type {WorldMaterials} from './materials';
 import type {WarmupRegistry} from '../render/warmup';
 import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from '../assets/officeAssets';
-import {ElevatorLogic, buildElevatorView, planElevator, type ElevatorEvent, type ElevatorPlan, type ElevatorView} from './elevator';
+import {BUTTON_REACH, ElevatorLogic, buildElevatorView, planElevator, type ElevatorEvent, type ElevatorPlan, type ElevatorView, type LampState, type LiftButton} from './elevator';
 import {buildWindows, planWindows, type WindowPlan, type WindowView} from './officeWindows';
 import {EXTERIOR, buildExterior, planExterior, setExteriorEye, setExteriorFootprint, setSkylineTexture, type ExteriorModels, type ExteriorPlan, type ExteriorView} from './exterior';
-import {floorLabel, gateLocal, gateWorld, inDoorway, insideRect, liftBox, pushOutRect, rayBox, readTowerInfo, towerCue, type Box3Like, type P3, type TowerInfo} from './towerShared';
-import {TowerChoice, type ChoiceItem} from '../ui/elevatorPanel';
+import {floorLabel, gateLocal, gateWorld, inDoorway, insideRect, pushOutRect, rayBox, readTowerInfo, towerCue, type P3, type TowerInfo} from './towerShared';
 import {RIDE_PAD, doorwayMover} from '../physics/world';
 
 /** What the tower needs from Game (structural: tests drive it with a fake host). */
@@ -40,6 +46,8 @@ export interface TowerHost {
   warmRegistry: WarmupRegistry;
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void};
   interactHandlers: (() => boolean)[];
+  /** Task office-overhaul-20261030 (lane LIFT): left-click handlers (Game consumes + latches the press when one returns true). */
+  pointerHandlers?: (() => boolean)[];
   frameHooks: ((dt: number) => void)[];
   sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
   promptProviders?: (() => string | null)[];
@@ -62,14 +70,18 @@ export interface TowerHost {
   world?: {culler?: unknown} | null;
 }
 
-/** Reach for the panels (m, eye to the box). */
-export const TOWER_REACH = 1.9;
+/** Reach for the buttons (m, eye to the button). */
+export const TOWER_REACH = BUTTON_REACH;
 /** Longest wait for the exterior assets before the office world is built (then: fallbacks + late upgrade). */
 export const PRELOAD_WAIT_MS = 8000;
 /** The motor hum (an existing cue, ~7 s) is re-struck this often while the cab moves. */
 const HUM_EVERY = 5;
+/** Door open / close buttons stay lit this long after a press; the alarm rings (and stays lit) this long. */
+const FLASH = 0.6;
+const ALARM_TIME = 1.6;
 
-type Target = {kind: 'call'; stop: number; t: number} | {kind: 'panel'; t: number};
+/** The button under the crosshair: kind 'call' = a landing call station, 'panel' = the cab's operating panel. */
+export interface Target { kind: 'call' | 'panel'; btn: LiftButton; t: number }
 
 export interface ElevatorRt {
   plan: ElevatorPlan;
@@ -83,11 +95,23 @@ export interface ElevatorRt {
   playerBlocks: boolean;
   hintT: number;
   humT: number;
-  litKey: string;
   /** The doorway was open last frame (its shutting sweeps loose things out of it). */
   gateWas: boolean;
   /** Riders carried on the last frame the cab moved (QA). */
   carried: {player: boolean; zombies: number; pickups: number};
+  /** Cab floor y at the start of this frame's step (= what the camera saw: per-frame picks use it). */
+  prevY: number;
+  /** Lit buttons / lanterns, refilled each frame (reused). */
+  lamps: LampState;
+  /** Remaining lit time of the door open / close / alarm buttons (s). */
+  flash: {open: number; close: number; alarm: number};
+  /** Indicator floor * 4 + dir + 1 last drawn. */
+  indKey: number;
+  /** Prompt texts per button id: [idle, lit / requested, here]. */
+  prompts: Map<string, [string, string, string]>;
+  /** Rider tests at prevY (created once). */
+  inside: (x: number, y: number, z: number) => boolean;
+  insideLoose: (x: number, y: number, z: number) => boolean;
 }
 
 export interface OfficeRt {
@@ -104,16 +128,35 @@ const EXT_MODEL_IDS: Record<keyof ExteriorModels, OfficeAssetId> = {car: 'car-wr
 
 interface CullerLike { enabled?: boolean; eyeOverride?: number | null; register?(root: THREE.Object3D): void; levelAt?: (x: number, y: number, z: number) => number }
 
+/** The prompt texts of a button: [idle, lit / requested, the cab is here]. */
+function buttonPrompts(b: LiftButton): [string, string, string] {
+  const k = '<b>[Click / E]</b> ';
+  const label = floorLabel(b.floor);
+  switch (b.kind) {
+    case 'floor': {
+      const name = label === 'L' ? 'Lobby (L)' : `Floor ${label}`;
+      return [`${k}${name}`, `${k}${name} · lit`, `${k}${name} · here — opens the doors`];
+    }
+    case 'up': case 'down': {
+      const dir = b.kind === 'up' ? 'going up ▲' : 'going down ▼';
+      return [`${k}Call the elevator · ${dir}`, `${k}Elevator called · ${dir}`, `${k}Hold the elevator doors`];
+    }
+    case 'open': return [`${k}Door open ◀|▶`, `${k}Door open ◀|▶`, `${k}Door open ◀|▶`];
+    case 'close': return [`${k}Door close ▶|◀`, `${k}Door close ▶|◀`, `${k}Door close ▶|◀`];
+    default: return [`${k}Alarm bell`, `${k}Alarm bell`, `${k}Alarm bell`];
+  }
+}
+
 export class TowerRuntime {
   /** The built office tower (null on the Subway / between worlds). */
   office: OfficeRt | null = null;
-  /** The list only lives while playing (pause / death close it; it never captures menu keys). */
-  readonly choice = new TowerChoice(() => this.host.state === 'playing');
-  /** Current E target + its prompt (read by the HUD through promptProviders). */
+  /** The button under the crosshair (within reach, in sight) + its prompt (read by the HUD through promptProviders). */
   target: Target | null = null;
   prompt: string | null = null;
-  /** Counters (QA / tests). */
-  readonly counts = {calls: 0, picks: 0, departs: 0, arrivals: 0, reopen: 0};
+  /** Counters (QA / tests): presses = every button press; calls = landing calls; picks = cab floor selections. */
+  readonly counts = {presses: 0, calls: 0, picks: 0, departs: 0, arrivals: 0, reopen: 0, alarms: 0};
+  /** Id of the last pressed button and how (QA). */
+  lastPress: {id: string; via: 'click' | 'key' | 'qa'} | null = null;
   private retired: (() => void)[] = [];
   private farWas: number | null = null;
   private cullerOff = false;
@@ -123,11 +166,14 @@ export class TowerRuntime {
   private glassTex: THREE.Texture | null | undefined = undefined;
   private preloading: Promise<void> | null = null;
   private upgradeQueued = false;
-  private choiceCtx: (() => boolean) | null = null;
+  private time = 0;
   private readonly frustum = new THREE.Frustum();
   private readonly pm = new THREE.Matrix4();
   private readonly vEye = new THREE.Vector3();
   private readonly vDir = new THREE.Vector3();
+  private readonly eyeP: P3 = {x: 0, y: 0, z: 0};
+  private readonly dirP: P3 = {x: 0, y: 0, z: 0};
+  private readonly hit: Target = {kind: 'panel', btn: null as unknown as LiftButton, t: 0};
 
   constructor(readonly host: TowerHost) {}
 
@@ -137,8 +183,9 @@ export class TowerRuntime {
     h.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     h.frameHooks.push(dt => this.frame(dt));
     h.interactHandlers.push(() => this.interact());
+    h.pointerHandlers?.push(() => this.pointer());
     h.promptProviders?.push(() => this.prompt);
-    h.stateListeners?.push(((state: string) => { if (state !== 'playing') this.choice.close(); }) as (state: never, prev: never) => void);
+    h.stateListeners?.push(((state: string) => { if (state !== 'playing') this.clearTarget(); }) as (state: never, prev: never) => void);
     h.warmRegistry.addPool('tower', () => (this.office ? [this.office.root] : []));
     // the office: fetch the exterior models / skyline / glass before the build (bounded: a slow network falls back to the
     // procedural stand-ins, upgraded in place behind prepareBeforeShow when they arrive)
@@ -174,7 +221,18 @@ export class TowerRuntime {
       root.add(view.root);
       o.geometries.push(...view.geometries);
       h.atmosphere?.markShadows(view.root, false);
-      o.elevator = {plan, view, logic, vol, gate, levels: h.levels, playerBlocks: false, hintT: 1e9, humT: 0, litKey: '', gateWas: false, carried: {player: false, zombies: 0, pickups: 0}};
+      const cabH = plan.cabH;
+      const e: ElevatorRt = {
+        plan, view, logic, vol, gate, levels: h.levels, playerBlocks: false, hintT: 1e9, humT: 0, gateWas: false, carried: {player: false, zombies: 0, pickups: 0},
+        prevY: logic.y,
+        lamps: {car: logic.car, hallUp: logic.hallUp, hallDown: logic.hallDown, open: false, close: false, alarm: false, lanternStop: -1, lanternDir: 0},
+        flash: {open: 0, close: 0, alarm: 0}, indKey: logic.floor * 4 + 1,
+        prompts: new Map(plan.buttons.map(b => [b.id, buttonPrompts(b)])),
+        inside: (x, y, z) => insideRect(cab, x, z) && y > e.prevY - 0.3 && y < e.prevY + cabH,
+        // loose things ride when their centre is within RIDE_PAD of the cab (lying across the door plane included)
+        insideLoose: (x, y, z) => insideRect(cab, x, z, -RIDE_PAD) && y > e.prevY - 0.3 && y < e.prevY + cabH,
+      };
+      o.elevator = e;
     }
     // --- windows: every span of every storey ---
     if (info.windows.length) {
@@ -216,7 +274,6 @@ export class TowerRuntime {
   }
 
   teardown(): void {
-    this.choice.close();
     const o = this.office;
     this.office = null;
     this.target = null;
@@ -247,6 +304,7 @@ export class TowerRuntime {
 
   /** Releases queued after the next warm-up (first played frame) or before the next build. */
   private flushRetired(): void {
+    if (!this.retired.length) return;
     const list = this.retired;
     this.retired = [];
     for (const fn of list) { try { fn(); } catch (err) { console.warn('tower: releasing previous-world resources failed', err); } }
@@ -303,17 +361,16 @@ export class TowerRuntime {
 
   frame(dt: number): void {
     this.flushRetired();
+    this.time += dt;
     const o = this.office;
     if (!o) { this.prompt = null; return; }
     const h = this.host;
     if (this.upgradeQueued && !h.warming) { this.upgradeQueued = false; void this.upgradeExterior(); }
     if (o.elevator) this.updateElevator(o.elevator, dt);
     if (o.windows) this.windowConstraints(o);
-    this.updateTarget(o);
+    if (o.elevator) this.updateTarget(o, o.elevator.prevY);
     this.updateCuller(o);
     if (o.exterior) this.updateExterior(o, dt);
-    // the list closes when its context goes away
-    if (this.choice.isOpen && this.choiceCtx && !this.choiceCtx()) this.choice.close();
   }
 
   /** The player stands inside the cab right now. */
@@ -323,55 +380,59 @@ export class TowerRuntime {
   }
 
   private updateElevator(e: ElevatorRt, dt: number): void {
-    const h = this.host, P = h.player, L = e.logic, G = e.plan.gate, cab = e.plan.info.cab, cabH = e.plan.cabH;
-    const prevY = L.y;
-    const inside = (x: number, y: number, z: number): boolean => insideRect(cab, x, z) && y > prevY - 0.3 && y < prevY + cabH;
-    // loose things ride when their centre is within RIDE_PAD of the cab (lying across the door plane included)
-    const insideLoose = (x: number, y: number, z: number): boolean => insideRect(cab, x, z, -RIDE_PAD) && y > prevY - 0.3 && y < prevY + cabH;
+    const h = this.host, P = h.player, L = e.logic, G = e.plan.gate;
+    e.prevY = L.y;
     const stopY = !L.moving && L.stop !== null ? L.stops[L.stop].y : NaN;
-    const atStop = (y: number) => Math.abs(y - stopY) < 1.2;
     // --- sense ---
-    const playerIn = P.alive && inside(P.x, P.y, P.z);
-    let doorway = P.alive && atStop(P.y) && inDoorway(G, P.x, P.z, P.radius);
+    const playerIn = P.alive && e.inside(P.x, P.y, P.z);
+    let doorway = P.alive && Math.abs(P.y - stopY) < 1.2 && inDoorway(G, P.x, P.z, P.radius);
     e.playerBlocks = doorway;
     e.hintT += dt;
     let enemyInside = false;
     for (const z of h.zombies) {
       const b = z.brain;
       if (!b.alive || z.ragdolled) continue;
-      if (atStop(b.y) && inDoorway(G, b.x, b.z, b.stats.radius)) doorway = true;
-      if (inside(b.x, b.y, b.z)) enemyInside = true;
+      if (Math.abs(b.y - stopY) < 1.2 && inDoorway(G, b.x, b.z, b.stats.radius)) doorway = true;
+      if (e.inside(b.x, b.y, b.z)) enemyInside = true;
     }
     const [ps, pl] = gateLocal(G, P.x, P.z);
     const pushOpen = playerIn && ps > -0.55 && Math.abs(pl) < G.hw;
     const ev = L.update(dt, {occupant: playerIn, doorway, enemyInside, pushOpen});
-    const dy = L.y - prevY;
+    const dy = L.y - e.prevY;
     // --- the cab volume follows the cab: support / collision / rays / sight inside it, the doorway gate ---
     const v = e.vol, near = e.plan.info.stops[L.nearest];
-    v.floorY = L.y; v.ceilY = L.y + cabH; v.level = near.levelId; v.area = near.area;
+    v.floorY = L.y; v.ceilY = L.y + e.plan.cabH; v.level = near.levelId; v.area = near.area;
     e.gate.open = L.gateOpen;
     // the landing doors shut: loose things lying in the doorway go to the nearer side (into the cab / onto the landing)
     if (e.gateWas && !e.gate.open && L.stop !== null) h.pickups?.relocate?.(doorwayMover(v, e.gate, L.stops[L.stop].y));
     e.gateWas = e.gate.open;
     // --- riders: carried by the cab's dy (the cab frame is exact: no jitter, no falling through, no ceiling crush) ---
     if (dy !== 0) {
-      e.carried = {player: false, zombies: 0, pickups: 0};
-      if (playerIn) { P.y += dy; if (typeof P.eye === 'number') P.eye += dy; e.carried.player = true; }
+      const c = e.carried;
+      c.player = false; c.zombies = 0;
+      if (playerIn) { P.y += dy; if (typeof P.eye === 'number') P.eye += dy; c.player = true; }
       for (const z of h.zombies) {
         const b = z.brain;
-        if (z.ragdolled || !inside(b.x, b.y, b.z)) continue; // ragdolls: physics/world.ts carries their bodies / frozen roots
+        if (z.ragdolled || !e.inside(b.x, b.y, b.z)) continue; // ragdolls: physics/world.ts carries their bodies / frozen roots
         b.y += dy;
         if (z.root) z.root.position.y += dy;
-        e.carried.zombies++;
+        c.zombies++;
       }
-      e.carried.pickups = h.pickups?.carry(insideLoose, dy) ?? 0;
+      c.pickups = h.pickups?.carry(e.insideLoose, dy) ?? 0;
     }
-    // --- views ---
+    // --- views: doors, indicator, lit buttons / lanterns, emissive flicker ---
     e.view.setCab(L.y, L.door);
     for (let i = 0; i < L.stops.length; i++) e.view.setLanding(i, L.landingDoor(i));
-    e.view.setIndicator(floorLabel(L.floor), L.moving ? Math.sign(L.v) || L.dir : 0);
-    const lit = `${[...L.hall].sort().join(',')}|${[...L.car].sort().join(',')}`;
-    if (lit !== e.litKey) { e.litKey = lit; e.view.setLit(L.hall, L.car); }
+    const dir = L.moving ? Math.sign(L.v) || L.dir : 0, floor = L.floor, key = floor * 4 + dir + 1;
+    if (key !== e.indKey) { e.indKey = key; e.view.setIndicator(floorLabel(floor), dir); }
+    const f = e.flash, lp = e.lamps;
+    f.open = Math.max(0, f.open - dt); f.close = Math.max(0, f.close - dt); f.alarm = Math.max(0, f.alarm - dt);
+    lp.open = f.open > 0; lp.close = f.close > 0 || L.closeRequested; lp.alarm = f.alarm > 0;
+    const top = L.stops.length - 1;
+    lp.lanternStop = !L.moving && L.stop !== null && L.door > 0.02 ? L.stop : -1;
+    lp.lanternDir = L.dir !== 0 ? L.dir : L.stop === top ? -1 : L.stop === 0 ? 1 : L.arrivalDir || L.lastDir;
+    e.view.setLamps(lp);
+    e.view.tick(this.time);
     if (L.moving) {
       e.humT += dt;
       if (e.humT >= HUM_EVERY) { e.humT = 0; towerCue(h.sfx, 'trainDistant', this.cabPoint(e, 1.4), {rate: 1.35, gain: 0.32}); }
@@ -455,123 +516,163 @@ export class TowerRuntime {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Targeting / interaction
+  // Buttons: targeting and pressing (no menus)
 
-  private eyeRay(): {o: P3; d: P3} {
-    const cam = this.host.camera;
-    const o = cam.getWorldPosition(this.vEye), d = cam.getWorldDirection(this.vDir);
-    return {o: {x: o.x, y: o.y, z: o.z}, d: {x: d.x, y: d.y, z: d.z}};
-  }
-
-  /** The panel under the crosshair within reach and in sight (never through a wall, slab or shut door). */
-  pick(o: OfficeRt): Target | null {
-    const e = o.elevator;
-    if (!e) return null;
-    const {o: eye, d} = this.eyeRay();
-    const L = this.host.levels, P = this.host.player;
-    let best: Target | null = null;
-    const test = (box: Box3Like, at: P3, make: (t: number) => Target): void => {
-      const t = rayBox(eye, d, box, TOWER_REACH);
-      if (t === null || (best && t >= best.t)) return;
-      if (!L.lineOfSight(eye, at, {slack: 0.12})) return;
-      best = make(t);
-    };
-    // landing call panels of the player's storey
-    e.plan.calls.forEach((c, i) => { if (Math.abs(e.plan.info.stops[i].y - P.y) < 2.5) test(c.box, c.eye, t => ({kind: 'call', stop: i, t})); });
-    // the floor panel inside the cab (moves with it)
-    if (this.playerInCab()) {
-      const y = e.logic.y, pe = e.plan.panelEye;
-      test(liftBox(e.plan.panelBox, y), {x: pe.x, y: pe.y + y, z: pe.z}, t => ({kind: 'panel', t}));
-    }
-    return best;
-  }
-
-  private updateTarget(o: OfficeRt): void {
-    const t = this.choice.isOpen || !this.host.player.alive ? null : this.pick(o);
-    this.target = t;
-    if (!t) { this.prompt = null; return; }
-    const e = o.elevator!, L = e.logic;
-    if (t.kind === 'call') {
-      const here = !L.moving && L.stop === t.stop;
-      this.prompt = here && L.door > 0.5 ? '<b>[E]</b> Hold the elevator doors' : L.hall.has(t.stop) ? '<b>[E]</b> Elevator called — on its way' : '<b>[E]</b> Call the elevator';
-    } else this.prompt = `<b>[E]</b> Elevator panel · ${L.moving ? `passing ${floorLabel(L.floor)}` : `floor ${floorLabel(L.floor)}`}`;
-  }
-
-  /** E handler (Game.interactHandlers): true when the tower handled it. */
-  interact(): boolean {
-    const o = this.office;
-    if (!o || this.choice.isOpen) return false;
-    const t = this.pick(o);
-    if (!t || !o.elevator) return false;
+  /**
+   * The button under the crosshair: within TOWER_REACH, its face toward the eye, nothing structural on the ray before it (a wall,
+   * slab or shut door never lets you press through). Cab buttons only from inside the cab (`cabY`: the cab floor the camera saw),
+   * landing buttons of the eye's storey. Allocation-free; the returned target is reused (copy what you keep).
+   */
+  pickButton(o: OfficeRt, cabY: number): Target | null {
     const e = o.elevator, h = this.host;
-    if (t.kind === 'call') {
-      towerCue(h.sfx, 'click', e.plan.calls[t.stop].at, {rate: 1.4});
-      this.callStop(e, t.stop);
-      return true;
+    if (!e || !h.player.alive) return null;
+    const cam = h.camera;
+    cam.getWorldPosition(this.vEye); cam.getWorldDirection(this.vDir);
+    const eye = this.eyeP, d = this.dirP;
+    eye.x = this.vEye.x; eye.y = this.vEye.y; eye.z = this.vEye.z;
+    d.x = this.vDir.x; d.y = this.vDir.y; d.z = this.vDir.z;
+    const plan = e.plan;
+    let best: LiftButton | null = null, bt = TOWER_REACH;
+    if (insideRect(plan.info.cab, eye.x, eye.z, -0.02) && eye.y > cabY && eye.y < cabY + plan.cabH) {
+      for (const b of plan.carButtons) {
+        if (d.x * b.n[0] + d.z * b.n[1] > -0.05) continue; // its face must look at the eye
+        const t = rayBox(eye, d, b.box, bt, cabY);
+        if (t !== null && t < bt) { bt = t; best = b; }
+      }
     }
-    towerCue(h.sfx, 'click', this.panelWorld(e), {rate: 1.4});
-    this.openFloorList(o, e);
+    const stops = plan.info.stops;
+    for (let i = 0; i < stops.length; i++) {
+      const sy = stops[i].y;
+      if (eye.y < sy || eye.y > sy + 2.7) continue;
+      for (const b of plan.hallButtons[i]) {
+        if (d.x * b.n[0] + d.z * b.n[1] > -0.05) continue;
+        const t = rayBox(eye, d, b.box, bt);
+        if (t !== null && t < bt) { bt = t; best = b; }
+      }
+    }
+    if (!best) return null;
+    // unobstructed: no wall / floor / ceiling / shut door between the eye and the button
+    const blocked = h.levels.raycast(eye, d, bt + 0.02);
+    if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return null;
+    const hit = this.hit;
+    hit.kind = best.where === 'car' ? 'panel' : 'call'; hit.btn = best; hit.t = bt;
+    return hit;
+  }
+
+  private updateTarget(o: OfficeRt, cabY: number): void {
+    const e = o.elevator;
+    const t = e && this.host.state === 'playing' ? this.pickButton(o, cabY) : null;
+    this.target = t;
+    e?.view.setHover(t?.btn ?? null);
+    this.prompt = t && e ? this.promptFor(e, t.btn) : null;
+  }
+
+  /** QA: re-target with the current camera now (after aiming the view directly). */
+  refreshTarget(): Target | null {
+    const o = this.office;
+    if (o?.elevator) this.updateTarget(o, o.elevator.logic.y);
+    return this.target;
+  }
+
+  private clearTarget(): void {
+    this.target = null;
+    this.prompt = null;
+    this.office?.elevator?.view.setHover(null);
+  }
+
+  private promptFor(e: ElevatorRt, b: LiftButton): string {
+    const p = e.prompts.get(b.id)!, L = e.logic;
+    const here = !L.moving && L.stop === b.stop;
+    if (b.kind === 'floor') return L.car.has(b.stop) ? p[1] : here ? p[2] : p[0];
+    if (b.kind === 'up' || b.kind === 'down') return here && L.door > 0.5 ? p[2] : (b.kind === 'up' ? L.hallUp : L.hallDown).has(b.stop) ? p[1] : p[0];
+    return p[0];
+  }
+
+  /** E handler (Game.interactHandlers): presses the button under the crosshair; true when the tower handled it. */
+  interact(): boolean {
+    return this.pressTargeted('key');
+  }
+
+  /** Left click (Game.pointerHandlers): presses the button under the crosshair; true = the click was the button's (no shot). */
+  pointer(): boolean {
+    return this.pressTargeted('click');
+  }
+
+  private pressTargeted(via: 'click' | 'key'): boolean {
+    const o = this.office, e = o?.elevator;
+    if (!o || !e || this.host.state !== 'playing') return false;
+    // called from Game.update before the frame hooks: the camera matches the cab at its current y
+    const t = this.pickButton(o, e.logic.y);
+    if (!t) return false;
+    this.press(e, t.btn, via);
     return true;
   }
 
-  private panelWorld(e: ElevatorRt): P3 {
-    const p = e.plan.panelLocal;
-    return {x: p.x, y: p.y + e.logic.y, z: p.z};
+  /** Presses a button through the elevator logic (the panels' rules: what a real press does). */
+  private press(e: ElevatorRt, b: LiftButton, via: 'click' | 'key' | 'qa'): void {
+    const h = this.host, L = e.logic;
+    this.counts.presses++;
+    this.lastPress = {id: b.id, via};
+    const at: P3 = b.where === 'car' ? {x: b.at.x, y: b.at.y + L.y, z: b.at.z} : b.at;
+    towerCue(h.sfx, 'click', at, {rate: 1.5, gain: 0.8});
+    switch (b.kind) {
+      case 'floor': {
+        const r = L.select(b.floor);
+        if (r.ok) { this.counts.picks++; this.onElevatorEvents(e, r.events); }
+        break;
+      }
+      case 'up': case 'down':
+        this.counts.calls++;
+        this.onElevatorEvents(e, L.call(b.floor, b.kind === 'up' ? 1 : -1));
+        break;
+      case 'open':
+        e.flash.open = FLASH;
+        this.onElevatorEvents(e, L.requestOpen());
+        break;
+      case 'close':
+        e.flash.close = FLASH;
+        L.requestClose();
+        break;
+      case 'alarm':
+        if (e.flash.alarm > 0) break; // already ringing
+        e.flash.alarm = ALARM_TIME;
+        this.counts.alarms++;
+        // the alarm: a buzz and a rattling bell from existing cues (pitched), no new audio
+        towerCue(h.sfx, 'denied', at, {rate: 0.7, gain: 1});
+        for (let i = 0; i < 6; i++) towerCue(h.sfx, 'click', at, {rate: 2.6 + (i % 2) * 0.3, gain: 0.85, delay: 0.08 + i * 0.11});
+        break;
+    }
   }
 
-  private callStop(e: ElevatorRt, i: number): void {
-    this.counts.calls++;
-    const ev = e.logic.call(e.logic.stops[i].floor);
-    if (ev.some(x => x.type === 'called')) this.host.hud.toast(`Elevator called to ${floorLabel(e.logic.stops[i].floor) === 'L' ? 'the lobby' : `floor ${e.logic.stops[i].floor}`}`);
-    this.onElevatorEvents(e, ev);
+  /** QA / tests: press a button by id through the logic (no aim / reach requirement). False when there is no such button. */
+  pressButton(id: string): boolean {
+    const e = this.office?.elevator;
+    const b = e?.plan.buttons.find(x => x.id === id);
+    if (!e || !b) return false;
+    this.press(e, b, 'qa');
+    return true;
   }
 
-  /** QA / tests: press the landing call button of `floor` (no position requirement). False when there is no such stop. */
+  /** QA / tests: press the landing call button of `floor` (up, or down on the top floor; no position requirement). */
   callFloor(floor: number): boolean {
     const e = this.office?.elevator;
     if (!e) return false;
     const i = e.logic.indexOf(floor);
     if (i < 0) return false;
-    this.callStop(e, i);
+    const b = e.plan.hallButtons[i]?.[0];
+    if (b) this.press(e, b, 'qa');
+    else { this.counts.calls++; this.onElevatorEvents(e, e.logic.call(floor)); }
     return true;
   }
 
-  /** The floor list (inside the cab): floors top-down, current / requested marked, plus "Open doors". */
-  openFloorList(o: OfficeRt, e: ElevatorRt): void {
-    const L = e.logic;
-    const items: ChoiceItem[] = L.stops.map((s, i) => ({s, i})).sort((a, b) => b.s.y - a.s.y).map(({s, i}) => {
-      const here = !L.moving && L.stop === i;
-      const lbl = s.floor <= 1 ? 'L  · lobby / street' : `${s.floor}`;
-      return {id: `f${s.floor}`, label: here ? `${floorLabel(s.floor)}  · here` : L.car.has(i) || L.hall.has(i) ? `${lbl}  ·  ●` : lbl, key: s.floor <= 9 ? s.floor : undefined, current: here, lit: L.car.has(i) || L.hall.has(i)};
-    });
-    items.push({id: 'open', label: '◀ ▶  open doors', disabled: L.moving});
-    // highlight: the next floor up (down from the top floor)
-    const cur = L.nearest, next = L.stops[cur + 1] ?? L.stops[cur - 1] ?? L.stops[cur];
-    const start = Math.max(0, items.findIndex(i => i.id === `f${next.floor}`));
-    this.choiceCtx = () => this.office === o && this.playerInCab();
-    this.choice.open(`Elevator · ${L.moving ? 'moving' : `floor ${floorLabel(L.floor)}`}`, items, start, id => this.pickFloor(e, id));
-  }
-
-  /** Cab panel choice without the list (QA / tests): a floor number or 'open'. False when not standing in the cab. */
-  panelPick(floor: number | 'open'): boolean {
+  /** QA / tests: a cab panel button (a floor number, 'open' / 'close' / 'alarm'); false when not standing in the cab. */
+  panelPick(floor: number | 'open' | 'close' | 'alarm'): boolean {
     const e = this.office?.elevator;
     if (!e || !this.playerInCab()) return false;
-    this.choice.close();
-    this.pickFloor(e, floor === 'open' ? 'open' : `f${floor}`);
+    const b = typeof floor === 'number' ? e.plan.carButtons.find(x => x.kind === 'floor' && x.floor === floor) : e.plan.carButtons.find(x => x.kind === floor);
+    if (!b) return false;
+    this.press(e, b, 'qa');
     return true;
-  }
-
-  private pickFloor(e: ElevatorRt, id: string): void {
-    if (this.office?.elevator !== e) return;
-    const h = this.host;
-    towerCue(h.sfx, 'click', this.panelWorld(e), {rate: 1.5});
-    if (id === 'open') { this.onElevatorEvents(e, e.logic.requestOpen()); return; }
-    const floor = Number(id.slice(1));
-    const r = e.logic.select(floor);
-    if (!r.ok) return;
-    this.counts.picks++;
-    if (r.events.some(x => x.type === 'selected')) h.hud.toast(`Floor ${floorLabel(floor)}`);
-    this.onElevatorEvents(e, r.events);
   }
 
   // -------------------------------------------------------------------------------------------
