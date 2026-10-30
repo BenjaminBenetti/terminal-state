@@ -40,7 +40,6 @@ const MELEE_CSS = `
 const BACK = GEAR_SLOTS.indexOf('backpack');
 /** Task gasmask-breach-20261030 (mask lane): the gas mask's gear slot index (HUD cell "Q", left of quick slot 1). */
 const MASK = GEAR_SLOTS.indexOf('mask');
-
 /** Crosshair hold ring (E held on a grounded bag): circumference of the r=13 progress circle. */
 const RING_C = 2 * Math.PI * 13;
 

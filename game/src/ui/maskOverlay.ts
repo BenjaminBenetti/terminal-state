@@ -4,8 +4,8 @@
 // crosshair, hold ring and the debug overlay (#perf-overlay, fixed z 80) all stay above it. No render pass, no renderer or
 // material change: one static full-viewport SVG (preserveAspectRatio none, so the visor always frames the screen) that the
 // compositor slides with a CSS transform.
-//  - a dark rubber bezel (vertical rubber gradient, a lighter retaining rim drawn in screen pixels) framing ONE wide visor with
-//    rounded corners and a slight nose-bridge dip in its lower edge;
+//  - a dark rubber bezel (vertical rubber gradient, a lighter retaining rim drawn in screen pixels, a soft shadow it casts onto
+//    the glass edge) framing ONE wide visor with rounded corners and a slight nose-bridge dip in its lower edge;
 //  - layered, lightly tinted glass inside the visor: a grey-green tint that is fully clear over the middle (the crosshair and
 //    the aim area stay untouched) and builds toward the rim, faint diagonal reflections in the upper corners, soft edge
 //    condensation along the rim and in the lower corners;
@@ -66,6 +66,7 @@ const SVG_GLASS = `<svg class="gm-glass" viewBox="0 0 1000 1000" preserveAspectR
   <polygon points="150,110 330,110 205,470 112,470" fill="url(#gm-shine)"/>
   <polygon points="700,108 758,108 640,372 604,372" fill="url(#gm-shine)" opacity="0.7"/>
 </g>
+<path d="${VISOR_PATH}" fill="none" stroke="rgba(0,0,0,0.3)" stroke-width="26" vector-effect="non-scaling-stroke"/>
 <path d="M-20 -20H1020V1020H-20Z${VISOR_PATH}" fill="url(#gm-rubber)" fill-rule="evenodd"/>
 <path d="${VISOR_PATH}" fill="none" stroke="#2c312e" stroke-width="7" vector-effect="non-scaling-stroke"/>
 <path d="${VISOR_PATH}" fill="none" stroke="rgba(150,160,152,0.22)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
@@ -115,11 +116,10 @@ export class MaskOverlay {
   set(cover: number, tone: MaskTone): void {
     const c = Math.max(0, Math.min(1, cover));
     const key = `${Math.round(c * 1000)}|${tone}`;
-    if (key === this.key) return;
-    this.key = key;
     this.shown = c;
     this.tone = tone;
-    if (!this.mount() || !this.el) return;
+    if (key === this.key || !this.mount() || !this.el) return; // (no DOM yet: nothing written, retried next call)
+    this.key = key;
     const e = ease(c);
     this.el.classList.toggle('show', c > 0);
     this.el.classList.toggle('low', tone === 'low');
