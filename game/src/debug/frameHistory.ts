@@ -12,11 +12,13 @@
 //  - flags: the game drew in that callback (menus redraw at 4 Hz, the warm-up skips the loop), or the slot is a GAP.
 //
 // A gap is an interval the page was not running frames for (tab in the background, window occluded / suspended,
-// debugger): it is kept and drawn as a gap but excluded from FPS / percentile statistics. Real stutters while the
-// page is visible are never smoothed or dropped — every slot is one real frame.
+// debugger): it is kept and drawn as a gap but excluded from FPS / percentile statistics. Gaps are the intervals in
+// which the page went hidden, or that are more than GAP_MS longer than the game's own work in them. A freeze inside
+// the game's callback (e.g. first-sight shader compiles) is a stutter however long it is: real stutters are never
+// smoothed or dropped — every slot is one real frame.
 
 export const HISTORY_FRAMES = 360;
-/** Longer rAF intervals than this are treated as a suspension gap even without a visibilitychange. */
+/** An interval this much longer than the game's own work in it is a suspension gap even without a visibilitychange. */
 export const GAP_MS = 3000;
 /** Statistics window for FPS / CPU / GPU averages (ms of frames). */
 export const RECENT_MS = 1000;
@@ -124,7 +126,7 @@ export class FrameHistory {
     const o = this.open;
     if (this.hasOpen) {
       const interval = Math.max(0, s.time - o.time);
-      const gap = this.gapPending || interval > GAP_MS;
+      const gap = this.gapPending || interval - o.cpu > GAP_MS;
       const i = this.head;
       this.interval[i] = interval;
       this.cpu[i] = o.cpu;

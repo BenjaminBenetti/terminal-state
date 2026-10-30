@@ -31,7 +31,6 @@ export interface PerfHost {
   readonly canvas: {readonly width: number; readonly height: number};
   readonly renderer: {
     readonly initialized: boolean;
-    readonly samples: number;
     getPixelRatio(): number;
     readonly backend: unknown;
     readonly info: {
@@ -78,7 +77,7 @@ const COLORS = {
 const OK_MS = 1000 / 60 * 1.05;
 
 const CSS = `
-#perf-overlay { position: fixed; left: 12px; top: 112px; z-index: 80; width: ${GRAPH_W + 24}px; max-height: calc(100vh - 124px); overflow: hidden;
+#perf-overlay { position: fixed; left: 12px; top: 100px; z-index: 80; width: ${GRAPH_W + 24}px; max-height: calc(100vh - 112px); overflow: hidden;
   box-sizing: border-box; padding: 8px 12px 9px; background: rgba(8, 9, 10, 0.8); border-left: 3px solid #4f8a87; color: #ece4cf;
   pointer-events: none; user-select: none; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
   font-weight: 400; letter-spacing: 0; text-shadow: none; }
@@ -87,19 +86,19 @@ const CSS = `
 #perf-overlay .po-legend { font-size: 9.5px; color: #b9b19c; margin: 3px 0 6px; white-space: nowrap; }
 #perf-overlay .po-legend i { display: inline-block; width: 8px; height: 8px; margin: 0 3px 0 7px; vertical-align: -1px; }
 #perf-overlay .po-legend i:first-child { margin-left: 0; }
-#perf-overlay dl { display: grid; grid-template-columns: 84px 1fr; gap: 1px 8px; margin: 0; }
+#perf-overlay dl { display: grid; grid-template-columns: 78px 1fr; gap: 1px 8px; margin: 0; }
 #perf-overlay dt { color: #b9b19c; }
 #perf-overlay dd { margin: 0; overflow-wrap: anywhere; }
 #perf-overlay .po-note { margin-top: 6px; font-size: 9.5px; line-height: 1.35; color: #8f887a; }
 `;
 
-const NOTE = 'Frame = time between animation frames (graph: newest right; dark base = game CPU). Game CPU = this game’s '
-  + 'main-thread JS; render submit is CPU encoding, not GPU work. GPU = summed render-pass time from timestamp queries '
-  + '(browser-quantized). Draws / triangles = three’s per-draw counts after frustum culling over every pass this '
-  + 'frame (shadow map, scene, fog / post, viewmodel), not unique visible triangles. GPU memory = three’s estimate of '
-  + 'what it tracks. System CPU % and GPU utilization % are not exposed to web pages.';
+const NOTE = 'System CPU % and GPU utilization % are not exposed to web pages. Game CPU = this game’s main-thread JS; '
+  + 'render submit is CPU encoding, not GPU work. Draws / triangles: every pass (shadow map, scene, fog / post, viewmodel) '
+  + 'after frustum culling, not unique visible triangles.';
 
 const fmt = (v: number | null | undefined, d = 1) => v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(d);
+/** Frame times: 0.1 ms below 100 ms, whole ms above. */
+const fms = (v: number | null | undefined) => fmt(v, v !== null && v !== undefined && v >= 100 ? 0 : 1);
 export function count(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(2)} M`;
   if (n >= 1e4) return `${(n / 1e3).toFixed(1)} k`;
@@ -241,7 +240,7 @@ export class PerfOverlay {
     chip(COLORS.bad, '<30 fps');
     chip(COLORS.cpuChip, 'game CPU');
     chip(COLORS.gpu, 'GPU');
-    chip(COLORS.gap, 'gap (hidden)');
+    chip(COLORS.gap, 'gap');
     const dl = doc.createElement('dl');
     for (const [key, label] of ROWS) {
       const dt = doc.createElement('dt');
@@ -273,7 +272,7 @@ export class PerfOverlay {
     if (this.scaleEl && this.scaleEl.textContent !== scaleText) this.scaleEl.textContent = scaleText;
     const h = this.host, r = h.renderer;
     this.set('fps', s.fps === null ? 'waiting for frames (the game loop starts after loading)' :`${fmt(s.fps)} · game drew ${fmt(s.renderedPerSec, 0)} frames/s (last 1 s)`);
-    this.set('frame', s.frames === 0 ? '—' : `${fmt(s.lastMs)} now · ${fmt(s.avgMs)} avg · ${fmt(s.p99Ms)} p99 · ${fmt(s.maxMs)} max`);
+    this.set('frame', s.frames === 0 ? '—' : `${fms(s.lastMs)} now · ${fms(s.avgMs)} avg · ${fms(s.p99Ms)} p99 · ${fms(s.maxMs)} max`);
     this.set('spikes', `${s.over33} >33 ms · ${s.over50} >50 ms in ${fmt(s.spanMs / 1000)} s`
       + (s.gaps > 0 ? ` · ${s.gaps} gap${s.gaps > 1 ? 's' : ''} (${fmt((s.lastGapMs ?? 0) / 1000)} s, not counted)` : ''));
     this.set('cpu', s.cpuAvgMs === null ? '—'
@@ -289,12 +288,12 @@ export class PerfOverlay {
     const ri = r.info.render, mem = r.info.memory;
     this.set('draws', ready ? `${count(ri.drawCalls)} · ${ri.frameCalls} render passes (last drawn frame)` : 'renderer initializing');
     this.set('tris', ready ? `${count(ri.triangles)} submitted, all passes${ri.lines > 0 ? ` · ${count(ri.lines)} lines` : ''}${ri.points > 0 ? ` · ${count(ri.points)} points` : ''}` : '—');
-    this.set('res', ready ? `≈${mb(mem.total)} · ${mem.textures} tex · ${mem.geometries} geo · ${mem.programs} programs` : '—');
+    this.set('res', ready ? `≈${mb(mem.total)} · tex ${mem.textures} · geo ${mem.geometries} · prog ${mem.programs}` : '—');
     const pm = (globalThis.performance as {memory?: {usedJSHeapSize?: number; jsHeapSizeLimit?: number}} | undefined)?.memory;
     this.set('heap', pm && typeof pm.usedJSHeapSize === 'number'
       ? `${mb(pm.usedJSHeapSize)} / ${mb(pm.jsHeapSizeLimit ?? 0)} limit (coarse)` : 'n/a — Chromium-only API');
     this.set('backend', this.backendText());
-    this.set('output', ready ? `${h.canvas.width}×${h.canvas.height} · DPR ${fmt(r.getPixelRatio(), 2)} · ${h.settings.quality} · ${r.samples > 0 ? `MSAA ${r.samples}×` : 'no MSAA'}` : '—');
+    this.set('output', ready ? `${h.canvas.width}×${h.canvas.height} · DPR ${fmt(r.getPixelRatio(), 2)} · quality ${h.settings.quality}` : '—');
     this.set('state', h.warming ? 'warm-up running (loop idle, no GPU timing)'
       : h.state === 'playing' ? 'playing'
         : h.state === 'paused' || h.state === 'inventory' || h.state === 'dead' || h.state === 'won' ? `${h.state} (menu: frame redrawn 4/s)` : h.state);
@@ -377,6 +376,7 @@ export class PerfOverlay {
     ctx.fillStyle = COLORS.label;
     ctx.font = '9px ui-monospace, monospace';
     ctx.textAlign = 'left';
+    let labelY = Infinity;
     for (const t of TARGET_LINES_MS) {
       if (t >= scale) continue;
       const ly = Math.round(y(t)) + 0.5;
@@ -384,7 +384,7 @@ export class PerfOverlay {
       ctx.moveTo(0, ly);
       ctx.lineTo(W, ly);
       ctx.stroke();
-      ctx.fillText(t.toFixed(1), 2, ly - 2);
+      if (labelY - ly >= 10) { ctx.fillText(t.toFixed(1), 2, ly - 2); labelY = ly; } // large scales squeeze the lines together
     }
     ctx.setLineDash([]);
   }

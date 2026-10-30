@@ -246,8 +246,9 @@ the page — use `?perf=1` there. `src/debug/` (`overlay.ts`, `frameHistory.ts`,
 - **Graph**: one bar per frame, newest right, never smoothed; colour by ≈60 / ≥30 / <30 fps, dashed 16.7 / 33.3 ms lines,
   scale = the smallest of 33 / 50 / 100 / 250 / 500 / 1000 ms holding the 95th percentile, longer spikes drawn clipped with
   a white cap (their value is the max). Dark base = the game's own main-thread time in that interval; a light tick = GPU
-  time where measured. Background-tab / suspended intervals (visibility change, or > 3 s) are grey gaps excluded from the
-  statistics; a freeze while the page is visible counts as a stutter.
+  time where measured. Background-tab / suspended intervals (the page went hidden, or the interval is > 3 s longer than the
+  game's own work in it) are grey gaps excluded from the statistics; a freeze inside the game's frame (e.g. first-sight
+  shader compiles) counts as a stutter however long.
 - **Game CPU ms**: this game's frame callback on the main thread (update, render submit = CPU command encoding — not GPU work).
 - **GPU ms**: summed render-pass time from WebGPU `timestamp-query` or WebGL `EXT_disjoint_timer_query_webgl2`, resolved
   asynchronously (one resolve in flight) and only while the overlay is shown; otherwise "n/a" with the reason.

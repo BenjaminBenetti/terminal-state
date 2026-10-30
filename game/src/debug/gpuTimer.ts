@@ -50,12 +50,12 @@ export function gpuTimingSupport(backend: TimingBackendLike | null | undefined):
     try { has = backend.device?.features?.has('timestamp-query') === true; } catch { has = false; }
     return has
       ? {available: true, kind: 'webgpu-timestamp-query', note: 'WebGPU timestamp-query; browser-quantized (Chrome: 0.1 ms)'}
-      : {available: false, kind: null, note: "this WebGPU device has no 'timestamp-query' feature (not exposed by the browser / adapter)"};
+      : {available: false, kind: null, note: "the WebGPU device has no 'timestamp-query'"};
   }
   if (backend.isWebGLBackend === true) {
     return backend.disjoint
       ? {available: true, kind: 'webgl2-disjoint-timer-query', note: 'EXT_disjoint_timer_query_webgl2 (per render call)'}
-      : {available: false, kind: null, note: 'EXT_disjoint_timer_query_webgl2 is not exposed by this browser / driver'};
+      : {available: false, kind: null, note: 'no EXT_disjoint_timer_query_webgl2'};
   }
   return {available: false, kind: null, note: 'unknown renderer backend'};
 }

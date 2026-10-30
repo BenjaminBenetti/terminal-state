@@ -92,7 +92,7 @@ export class CpuPressureWatch {
 
   constructor(private readonly ctor: PressureCtor | undefined = (globalThis as {PressureObserver?: PressureCtor}).PressureObserver) {
     this.supported = !!ctor && (!ctor.knownSources || ctor.knownSources.includes('cpu'));
-    this.note = this.supported ? 'waiting for the first sample' : 'this browser has no Compute Pressure API';
+    this.note = this.supported ? 'waiting for the first sample' : 'no Compute Pressure API';
   }
 
   start(): void {

@@ -67,6 +67,19 @@ describe('frame history', () => {
     expect(s.maxMs).toBeCloseTo(2000, 3);
   });
 
+  it('a freeze inside the game’s own callback counts however long (e.g. first-frame shader compiles on a software GL)', () => {
+    // browser spot check: the first frame after a warmup=off load compiled every program for 76 s on llvmpipe
+    const h = new FrameHistory();
+    let t = run(h, 10, 16.7);
+    h.push(sample(t + 1, {cpuMs: 76400})); // this callback blocks...
+    t += 1 + 76500; h.push(sample(t)); // ...so the next rAF comes 76.5 s later
+    run(h, 5, 16.7, t);
+    const s = h.summary();
+    expect(s.gaps).toBe(0);
+    expect(s.maxMs).toBeCloseTo(76500, 0);
+    expect(s.over50).toBe(1);
+  });
+
   it('background / suspension gaps are kept as gaps but excluded from FPS and frame statistics', () => {
     const h = new FrameHistory();
     let t = run(h, 60, 1000 / 60);
@@ -78,8 +91,8 @@ describe('frame history', () => {
     expect(s.lastGapMs).toBeCloseTo(12000, 3);
     expect(s.maxMs).toBeLessThan(17); // the 12 s gap is not a frame time
     expect(s.fps).toBeCloseTo(60, 0); // the FPS window stops at the gap (5 frames after it)
-    // a suspension without a visibility event (rAF stopped > GAP_MS) is a gap too
-    t += GAP_MS + 1; h.push(sample(t));
+    // a suspension without a visibility event (rAF stopped > GAP_MS beyond the game's own work) is a gap too
+    t += GAP_MS + 100; h.push(sample(t));
     s = h.summary();
     expect(s.gaps).toBe(2);
     expect(s.maxMs).toBeLessThan(17);
@@ -309,7 +322,7 @@ describe('browser signals', () => {
   });
 
   it('compute pressure: a coarse state when the browser has the API; a reason otherwise', async () => {
-    expect(new CpuPressureWatch(undefined)).toMatchObject({supported: false, state: null, note: 'this browser has no Compute Pressure API'});
+    expect(new CpuPressureWatch(undefined)).toMatchObject({supported: false, state: null, note: 'no Compute Pressure API'});
     let cb: (r: {state: 'fair'}[]) => void = () => {};
     class Ok { static knownSources = ['cpu']; constructor(f: typeof cb) { cb = f; } observe = vi.fn(async () => {}); disconnect = vi.fn(); }
     const w = new CpuPressureWatch(Ok as never);
@@ -403,7 +416,7 @@ function fakeHost(backend: TimingBackendLike = {isWebGLBackend: true, disjoint: 
     state: 'playing', warming: false, frameCpu: {updateMs: 2, renderMs: 3, rendered: true}, gpu: FALLBACK as GpuInfo | null,
     settings: {quality: 'high'}, canvas: {width: 1280, height: 720},
     renderer: {
-      initialized: true, samples: 4, getPixelRatio: () => 1, backend,
+      initialized: true, getPixelRatio: () => 1, backend,
       resolveTimestampsAsync: vi.fn(async () => 0),
       info: {frame: 0, render: {drawCalls: 412, frameCalls: 9, triangles: 1234567, points: 0, lines: 0}, memory: {total: 400 * 1048576, textures: 210, geometries: 980, programs: 133}},
     },
@@ -514,11 +527,12 @@ describe('overlay cost and content', () => {
     expect(text.cpu).toMatch(/render submit 3\.0/);
     expect(text.tris).toBe(`${count(1234567)} submitted, all passes`);
     expect(text.draws).toBe('412 · 9 render passes (last drawn frame)');
-    expect(text.gpu).toBe('n/a — EXT_disjoint_timer_query_webgl2 is not exposed by this browser / driver');
-    expect(text.syscpu).toMatch(/^n\/a — this browser has no Compute Pressure API/);
+    expect(text.gpu).toBe('n/a — no EXT_disjoint_timer_query_webgl2');
+    expect(text.syscpu).toBe('n/a — no Compute Pressure API');
     expect(text.loaf).toMatch(/^n\/a/); // Node has no long-animation-frame entries
     expect(text.backend).toMatch(/^WebGL2 fallback — forced by \?renderer=webgl2 · llvmpipe/);
-    expect(text.output).toBe('1280×720 · DPR 1.00 · high · MSAA 4×');
+    expect(text.output).toBe('1280×720 · DPR 1.00 · quality high');
+    expect(text.res).toBe('≈400 MB · tex 210 · geo 980 · prog 133');
     expect(text.state).toBe('playing');
     for (const k of ['gpu', 'syscpu', 'cpu', 'fps']) expect(text[k]).not.toMatch(/%/); // no utilization percentages anywhere
   });
