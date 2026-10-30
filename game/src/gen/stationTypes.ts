@@ -145,6 +145,8 @@ export interface PickupPlacement {
   level?: number;
   /** Task gasmask-breach-20261030 (mask lane): a found gas mask's fitted-filter charge (seconds left; gen/maskLoot.ts). */
   filter?: number;
+  /** Task gas-mask-roof-feedback-20261030 (item 10): the curated find reward this pickup is (items/lootTables.ts ROOF_FIND_KEY). */
+  reward?: string;
 }
 export type ZombieType = 'shambler' | 'coated';
 export interface ZombieSpawn {

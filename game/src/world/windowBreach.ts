@@ -5,24 +5,34 @@
 // hit counts for a pane when that face is a window span's (within FACE_TOL of plan.inner, facing the room, inside the opening)
 // and the ray, continued to the glass plane, lands inside the pane rectangle (minus a MULLION margin at its sides; y within
 // its sill..transom..head). The nearest-hit pipeline already resolved occlusion (an enemy / corpse / prop / stock in front
-// takes the bullet), and each pellet has exactly one world hit — so one pellet is at most one candidate.
+// takes the bullet), and each pellet has exactly one world hit — so one pellet ray is at most one contribution to one pane.
 //
-// Counting: at most ONE impact per pane per trigger pull (the pull's shot id): 9 shotgun pellets on one pane = 1 impact (it
-// needs 3 blasts like any gun); one blast across two panes counts one each. Panes count independently. The knife never
-// reaches this (Game.meleeContact has its own surface path). HITS_TO_BREAK impacts break a pane, once: a broken pane never
-// counts again (bullets pass out through the hole: no crater). Generated broken / boarded panes are inert (no count, no gas);
-// a generated-cracked pane counts from 0. Collision is never changed (the wall cell stays solid, the span collider stays).
+// Health (task gas-mask-roof-feedback-20261030, user item 2: "Just give the windows health tuned to 3 pistol shots"): a pane
+// has PANE_MAX_HP = 3 x the weapon table's ordinary pistol bullet damage (WEAPONS.pistol.damage 17 -> 51; derived, never a
+// literal). Every unobstructed bullet / pellet ray attributed to it subtracts that ray's REAL damage once — exactly what
+// Game.fire deals there (def.damage x range falloff; no fake pellet multiplier). So 3 pistol bullets break it, a rifle needs 3
+// (2 x 24 = 48 < 51), a shotgun blast breaks it when >= 4 of its 15-damage pellets land on it (a well-centred blast does), and
+// a blast with only some pellets on the pane contributes only those. The old one-impact-per-pane-per-pull rule is gone (the
+// pull id only keeps the glass cue / small burst to once per pane per pull — cosmetics, never the damage). Panes take damage
+// independently; the pane looks cracked from its first damage and breaks once at >= PANE_MAX_HP, once: a broken pane never
+// takes damage again (bullets pass out through the hole: no crater). The knife never reaches this (Game.meleeContact has its
+// own surface path). Generated broken / boarded panes are inert (no damage, no gas); a generated-cracked pane starts at full
+// health. Collision is never changed (the wall cell stays solid, the span collider stays).
 //
-// State: hits / broken / breach time per touched pane, in memory for the office world (seamless: never rebuilt by floor
-// travel); save() / restore() carry it across a rebuild (Subway <-> Office travel, Retry) through RUN's lane store.
+// State: damage / broken / breach time per touched pane, in memory for the office world (seamless: never rebuilt by floor
+// travel); save() / restore() carry it across a rebuild (Subway <-> Office travel, Retry) through RUN's lane store (v 2:
+// `damage`; a legacy v 1 `hits` counter converts to damage = min(PANE_MAX_HP, hits x PANE_MAX_HP / 3) — never refilled).
 
 import type {Vec3, WorldHit} from '../combat/hitscan';
 import {CELL, SOLID} from '../gen/grid';
+import {WEAPONS} from '../weapons/weapons';
 import {paneBreakable, paneId, setPaneLook, type PaneLook, type PanePlan, type WindowPlan, type WindowView} from './officeWindows';
 
 export const WINDOW_BREACH = {
-  /** Impacts (at most one per pane per trigger pull) that break a pane. */
-  HITS_TO_BREAK: 3,
+  /** Ordinary pistol bullets a pane's health is worth (PANE_MAX_HP = this x WEAPONS.pistol.damage). */
+  PISTOL_SHOTS: 3,
+  /** Legacy v 1 records only: the trigger-pull impacts that broke a pane under the old counter (hits -> damage conversion). */
+  LEGACY_HITS_TO_BREAK: 3,
   /** A wall hit counts within this distance (m) of the window wall's room-side face. */
   FACE_TOL: 0.35,
   /** Frame / mullion margin (m) at a pane's sides. */
@@ -30,6 +40,11 @@ export const WINDOW_BREACH = {
   /** Breach age (s) kept across a rebuild (the gas is fast-forwarded at most this far). */
   AGE_CAP_S: 90,
 } as const;
+
+/** A pane's health (damage points): three ordinary pistol bullets, derived from the weapon table (3 x 17 = 51). */
+export const PANE_MAX_HP: number = WINDOW_BREACH.PISTOL_SHOTS * WEAPONS.pistol.damage;
+/** Accumulated damage within this of PANE_MAX_HP breaks the pane (float sums of falloff-scaled pellets). */
+const HP_EPS = 1e-6;
 
 /** RUN lane store key (per section memory) of the panes' state. */
 export const WINDOWS_LANE = 'office.windows';
@@ -40,21 +55,29 @@ export interface PaneRef { id: string; plan: WindowPlan; pane: PanePlan }
 /** Where a bullet met a window opening: a pane (at = the point on the glass plane) or, null pane, a frame / inert pane. */
 export interface PaneHit { ref: PaneRef | null; plan: WindowPlan; pane: PanePlan | null; at: Vec3 }
 
-/** The state of a touched pane. */
-export interface PaneState { hits: number; broken: boolean; brokenAt: number; lastShot: number }
+/**
+ * The state of a touched pane: accumulated damage (0..PANE_MAX_HP), broken, breach time; `lastShot` = the last trigger pull that
+ * touched it (cosmetics only: the glass cue / small burst once per pane per pull).
+ */
+export interface PaneState { damage: number; broken: boolean; brokenAt: number; lastShot: number }
 
-/** What one bullet did to a pane. */
+/** What one bullet / pellet ray did to a pane. */
 export interface PaneImpact {
-  /** This pull's first impact on the pane (counted toward the break). */
-  counted: boolean;
-  /** The pane's look changed (cracked after the first impact / broken on the last). */
+  /** Damage this ray contributed (0: already broken / no damage). */
+  applied: number;
+  /** This pull's first ray on the pane (the glass cue + small burst play once per pane per pull). */
+  first: boolean;
+  /** The pane's look changed (cracked on its first damage / broken at full damage). */
   look: PaneLook | null;
   broke: boolean;
-  hits: number;
+  /** The pane's accumulated damage after this ray. */
+  damage: number;
 }
 
-/** Saved state (JSON-safe): hit counts of unbroken panes, ages (s, capped) of broken ones. */
-export interface WindowsRecord { v: 1; hits: Record<string, number>; broken: Record<string, number> }
+/** Saved state (JSON-safe, v 2): accumulated damage of unbroken panes, ages (s, capped) of broken ones. */
+export interface WindowsRecord { v: 2; damage: Record<string, number>; broken: Record<string, number> }
+/** The pre-health record (v 1): trigger-pull impact counts of unbroken panes (restore converts them; never written again). */
+export interface LegacyWindowsRecord { v: 1; hits: Record<string, number>; broken: Record<string, number> }
 
 /** A breach (a pane bullets broke) and its age. */
 export interface Breach { ref: PaneRef; age: number }
@@ -109,7 +132,7 @@ export class WindowBreaches {
   /** A pane's state (created on first touch). */
   private touch(id: string): PaneState {
     let s = this.state.get(id);
-    if (!s) this.state.set(id, (s = {hits: 0, broken: false, brokenAt: 0, lastShot: -1}));
+    if (!s) this.state.set(id, (s = {damage: 0, broken: false, brokenAt: 0, lastShot: -1}));
     return s;
   }
 
@@ -119,29 +142,34 @@ export class WindowBreaches {
   }
 
   /**
-   * One bullet / pellet of trigger pull `shot` on a breakable pane at game time `clock`: counts the pull's first impact on it,
-   * cracks it on the first impact, breaks it on the HITS_TO_BREAK-th (once).
+   * One bullet / pellet ray of trigger pull `shot` on a breakable pane at game time `clock`, dealing `damage` (what Game.fire deals
+   * for that ray: weapon damage x range falloff): its damage counts once, the pane cracks on its first damage and breaks (once)
+   * when the accumulated damage reaches PANE_MAX_HP. A broken pane takes nothing.
    */
-  impact(ref: PaneRef, shot: number, clock: number): PaneImpact {
+  impact(ref: PaneRef, damage: number, shot: number, clock: number): PaneImpact {
     const s = this.touch(ref.id);
-    if (s.broken || s.lastShot === shot) return {counted: false, look: null, broke: false, hits: s.hits};
+    if (s.broken) return {applied: 0, first: false, look: null, broke: false, damage: s.damage};
+    const first = s.lastShot !== shot;
     s.lastShot = shot;
-    s.hits++;
-    if (s.hits >= WINDOW_BREACH.HITS_TO_BREAK) {
+    const d = Number.isFinite(damage) && damage > 0 ? damage : 0;
+    if (d <= 0) return {applied: 0, first, look: null, broke: false, damage: s.damage};
+    s.damage = Math.min(PANE_MAX_HP, s.damage + d);
+    if (s.damage >= PANE_MAX_HP - HP_EPS) {
+      s.damage = PANE_MAX_HP;
       s.broken = true;
       s.brokenAt = clock;
       this.show(ref.id, 'broken');
-      return {counted: true, look: 'broken', broke: true, hits: s.hits};
+      return {applied: d, first, look: 'broken', broke: true, damage: s.damage};
     }
-    return {counted: true, look: this.show(ref.id, 'cracked') ? 'cracked' : null, broke: false, hits: s.hits};
+    return {applied: d, first, look: this.show(ref.id, 'cracked') ? 'cracked' : null, broke: false, damage: s.damage};
   }
 
-  /** QA / debug: break a pane outright (as if its last impact landed now). False when unknown or already broken. */
+  /** QA / debug: break a pane outright (as if its last damage landed now). False when unknown or already broken. */
   breakNow(id: string, clock: number): boolean {
     const ref = this.refs.get(id);
     if (!ref || this.broken(id)) return false;
     const s = this.touch(id);
-    s.hits = WINDOW_BREACH.HITS_TO_BREAK;
+    s.damage = PANE_MAX_HP;
     s.broken = true;
     s.brokenAt = clock;
     this.show(id, 'broken');
@@ -159,40 +187,46 @@ export class WindowBreaches {
     return out;
   }
 
-  /** JSON-safe state for the lane store (breach ages capped at AGE_CAP_S). */
+  /** JSON-safe state for the lane store (v 2: damage to 1e-3, breach ages capped at AGE_CAP_S). */
   save(clock: number): WindowsRecord {
-    const hits: Record<string, number> = {}, broken: Record<string, number> = {};
+    const damage: Record<string, number> = {}, broken: Record<string, number> = {};
     for (const [id, s] of this.state) {
       if (s.broken) broken[id] = Math.round(Math.min(WINDOW_BREACH.AGE_CAP_S, Math.max(0, clock - s.brokenAt)) * 1000) / 1000;
-      else if (s.hits > 0) hits[id] = s.hits;
+      else if (s.damage > 0) damage[id] = Math.max(0.001, Math.round(s.damage * 1000) / 1000);
     }
-    return {v: 1, hits, broken};
+    return {v: 2, damage, broken};
   }
 
   /**
-   * Restore a saved state at game time `clock` (looks applied; unknown ids ignored). Returns the restored breaches with their
-   * ages (the gas is fast-forwarded from them).
+   * Restore a saved state at game time `clock` (looks applied; unknown ids ignored). v 2 `damage` comes back as saved (capped at
+   * PANE_MAX_HP); a legacy v 1 `hits` counter becomes damage = min(PANE_MAX_HP, hits x PANE_MAX_HP / LEGACY_HITS_TO_BREAK).
+   * Broken stays broken, whatever else the record says; nothing is refilled. Returns the restored breaches with their ages (the
+   * gas is fast-forwarded from them).
    */
   restore(rec: unknown, clock: number): Breach[] {
-    const r = rec as Partial<WindowsRecord> | null;
-    if (!r || r.v !== 1) return [];
-    for (const [id, n] of Object.entries(r.hits ?? {})) {
-      if (!this.refs.has(id) || !(n > 0)) continue;
-      const s = this.touch(id);
-      s.hits = Math.min(WINDOW_BREACH.HITS_TO_BREAK - 1, Math.floor(n));
-      this.show(id, 'cracked');
-    }
+    const r = rec as {v?: unknown; damage?: Record<string, unknown>; hits?: Record<string, unknown>; broken?: Record<string, unknown>} | null;
+    if (!r || typeof r !== 'object' || (r.v !== 1 && r.v !== 2)) return [];
+    const dmg = new Map<string, number>();
+    const add = (id: string, d: number) => { if (this.refs.has(id) && d > 0) dmg.set(id, Math.max(dmg.get(id) ?? 0, Math.min(PANE_MAX_HP, d))); };
+    for (const [id, n] of Object.entries(r.hits ?? {})) add(id, Math.floor(Number(n) || 0) * PANE_MAX_HP / WINDOW_BREACH.LEGACY_HITS_TO_BREAK);
+    if (r.v === 2) for (const [id, d] of Object.entries(r.damage ?? {})) add(id, Number(d) || 0);
     const out: Breach[] = [];
     for (const [id, age] of Object.entries(r.broken ?? {})) {
       const ref = this.refs.get(id);
       if (!ref) continue;
       const a = Math.min(WINDOW_BREACH.AGE_CAP_S, Math.max(0, Number(age) || 0));
       const s = this.touch(id);
-      s.hits = WINDOW_BREACH.HITS_TO_BREAK;
+      s.damage = PANE_MAX_HP;
       s.broken = true;
       s.brokenAt = clock - a;
       this.show(id, 'broken');
       out.push({ref, age: a});
+      dmg.delete(id);
+    }
+    for (const [id, d] of dmg) {
+      const s = this.touch(id);
+      s.damage = d;
+      this.show(id, 'cracked');
     }
     return out;
   }

@@ -18,7 +18,7 @@
 //   cable trays / a mast (geometry listed in RoofInfo.structures, collision by hidden railings), and fixture-less overcast daylight
 //   over the deck (baked light field; no runtime light). layout.office.roof (RoofInfo); validation roofIssues.
 
-import type {Rng} from '../../core/rng';
+import {Rng, hashString} from '../../core/rng'; // (task gas-mask-roof-feedback-20261030: the roof find's own roll stream)
 import {CELL, FLOOR, SOLID} from '../grid';
 import type {Kit} from '../stationKit';
 import {LADDER, type Ladder} from '../traversal';
@@ -31,7 +31,9 @@ import type {RoofInfo} from './overhaulTypes';
 import {FLOOR_HEIGHT, MARGIN, OFFICE_ROOF_LEVEL, OFFICE_TOP_FLOOR, ROOF, type CoreUnit, type TowerFrame} from './frame';
 // Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache (placeRoofReward / roofRewardIssues / roofRewardPose).
 import {footprint, type PropPlacement} from '../props';
-import {ROOF_CACHE_KEY, type LootProfile} from '../../items/lootTables';
+import {ROOF_CACHE_KEY, ROOF_FIND_KEY, rewardFind, type LootProfile, type RewardFind} from '../../items/lootTables';
+// Task gas-mask-roof-feedback-20261030 (item 10): the roof FIND (placeRoofFind) — a weapon's own ammo box follows the weapon-find convention.
+import {WEAPON_FIND_AMMO} from '../weaponFinds';
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -298,7 +300,7 @@ export function roofDaylight(layout: StationLayout, f: TowerFrame, rc: RoofCarve
  * The layout.office.roof record. Lane ROOF (office-interactions-layout-20261030): `reward` = placeRoofReward's result (undefined:
  * no roof reward for this profile -> no field; null: no spot -> `reward: null`, rejected by roofIssues).
  */
-export function roofInfo(layout: StationLayout, rc: RoofCarve, ladder: Ladder, structures: readonly RoofStructure[], reward?: RoofReward | null): RoofInfo {
+export function roofInfo(layout: StationLayout, rc: RoofCarve, ladder: Ladder, structures: readonly RoofStructure[], reward?: RoofReward | null, find?: RoofFind | null): RoofInfo {
   const props = layout.props.filter(p => p.level === OFFICE_ROOF_LEVEL);
   const info: RoofInfo = {
     level: OFFICE_ROOF_LEVEL, baseY: rc.base9, parapet: ROOF.parapet,
@@ -309,6 +311,7 @@ export function roofInfo(layout: StationLayout, rc: RoofCarve, ladder: Ladder, s
     ],
   };
   if (reward !== undefined) info.reward = reward && {kind: reward.prop.kind, key: ROOF_CACHE_KEY, x: reward.prop.x, y: reward.prop.y, z: reward.prop.z, rot: reward.prop.rot, anchor: reward.anchor};
+  if (find !== undefined) info.find = find; // task gas-mask-roof-feedback-20261030 (item 10)
   return info;
 }
 
@@ -394,10 +397,146 @@ export function placeRoofReward(layout: StationLayout, f: TowerFrame, rc: RoofCa
   return null;
 }
 
-/** Roof reward invariants (roofIssues): exactly the one recorded holder, on the deck, its access strip reachable (`dist`). */
-export function roofRewardIssues(layout: StationLayout, dist?: Int32Array[]): string[] {
+// ---------------------------------------------------------------------------------------------
+// Task gas-mask-roof-feedback-20261030 (user item 10): THE ROOF FIND — "Roof also needs more loot. I got just a med kit in this run
+// ... It should have at least 1 gear or weapon item up there." The cache keeps its medicine + ammo box; beside it lies ONE curated
+// find (items/lootTables.ts ROOF_FIND): a non-starter long gun with a box of its own caliber, or a protective gear piece.
+
+/** Clear half-size (m) round a find's spot: no prop / plinth / structure / wall within it (a 0.9-1.0 m long gun at any yaw). */
+export const FIND_CLEAR = 0.48;
+/** Clear half-size (m) round the paired ammo box and its distance band (m) from the gun. */
+export const FIND_AMMO_CLEAR = 0.22;
+export const FIND_AMMO_GAP: readonly [number, number] = [0.5, 1.1];
+/** Rows (cell distance) of deck searched round the cache before the whole deck is scanned (the fallback). */
+const FIND_NEAR_M = 4;
+
+/** A placed roof find (the RoofInfo.find record; its pickups carry `reward: ROOF_FIND_KEY`). */
+export type RoofFind = NonNullable<RoofInfo['find']>;
+
+/**
+ * The roof find's item, rolled ONCE per logical Office level on its own stream (key `reward-find:roof-find` x the level's layout
+ * seed: independent of the generation attempt, every storey's draws and the rare-gear roll), from the find's rows minus any row
+ * naming the run's start weapon (the starter kit has it). A weapon row brings its own caliber box (WEAPON_FIND_AMMO) when the find
+ * pairs ammo. Null: no placeable row.
+ */
+export function rollRoofFind(layoutSeed: number, find: RewardFind, startWeapon: string): {itemId: string; ammo: {itemId: string; count: number} | null} | null {
+  const rows = find.items.filter(([id, w]) => w > 0 && id !== startWeapon);
+  if (!rows.length) return null;
+  const itemId = new Rng(hashString(`reward-find:${ROOF_FIND_KEY}`, layoutSeed >>> 0)).weighted(rows);
+  const pair = find.pairedAmmo ? WEAPON_FIND_AMMO[itemId] : undefined;
+  return {itemId, ammo: pair ? {itemId: pair[0], count: pair[1]} : null};
+}
+
+/**
+ * Lays the profile's roof find on the deck (after every other population: the earlier pickups keep their indices, the find's one or
+ * two pickups come last). Spots are VERIFIED, not assumed: a walkable deck cell reachable from the start (`dist`, the ladder link
+ * included) under the whole clear square, clear of every roof prop + plinth / vent / hatch / overrun footprint, of the core box and
+ * the hatch / ladder head keep-clear radius (findSpotTest). Preference: right beside the roof cache — on the
+ * deck at its sides / front corners, so opening the cache shows it —, then the nearest verified deck spots round it, then any
+ * verified deck spot (seeded order). A gun's ammo box must fit beside it too, or the gun spot is skipped. Returns undefined when
+ * the profile has no roof find, null when nothing fits (roofRewardIssues rejects the attempt: the generator retries).
+ */
+export function placeRoofFind(layout: StationLayout, f: TowerFrame, rc: RoofCarve, structures: readonly RoofStructure[], dist: readonly Int32Array[], rng: Rng, loot: LootProfile): RoofFind | null | undefined {
+  const find = rewardFind(loot, ROOF_FIND_KEY);
+  if (!find) return undefined;
+  const pick = rollRoofFind(layout.seed, find, layout.startWeapon ?? 'rifle');
+  if (!pick) return null;
+  const L = OFFICE_ROOF_LEVEL, g = layout.levels[L].grid, d = dist[L];
+  const ok = findSpotTest(layout, f, hatchRect(rc), structures, d);
+  const r = FIND_CLEAR, ra = FIND_AMMO_CLEAR;
+  /** The ammo box spot beside a gun at (x, z): the ring FIND_AMMO_GAP round it, away from the cache first. */
+  const ammoSpot = (x: number, z: number, away: number): [number, number] | null => {
+    for (const gap of [FIND_AMMO_GAP[0], (FIND_AMMO_GAP[0] + FIND_AMMO_GAP[1]) / 2, FIND_AMMO_GAP[1]]) {
+      for (let k = 0; k < 12; k++) {
+        const a = away + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+        const ax = r3(x + Math.sin(a) * gap), az = r3(z + Math.cos(a) * gap);
+        if (ok(ax, az, ra)) return [ax, az];
+      }
+    }
+    return null;
+  };
+  const tryAt = (x: number, z: number, away: number): RoofFind | null => {
+    x = r3(x); z = r3(z);
+    if (!ok(x, z, r)) return null;
+    const a = pick.ammo ? ammoSpot(x, z, away) : null;
+    if (pick.ammo && !a) return null;
+    const y = r3(rc.base9), area = rc.area.id;
+    layout.pickups.push({itemId: pick.itemId, count: 1, x, y, z, area, level: L, reward: ROOF_FIND_KEY});
+    if (pick.ammo && a) layout.pickups.push({itemId: pick.ammo.itemId, count: pick.ammo.count, x: a[0], y, z: a[1], area, level: L, reward: ROOF_FIND_KEY});
+    return {key: ROOF_FIND_KEY, itemId: pick.itemId, x, y, z, ammo: pick.ammo && a ? {...pick.ammo, x: a[0], z: a[1]} : null};
+  };
+  const cache = layout.props.find(p => p.purpose === ROOF_CACHE_KEY && (p.level ?? 0) === L);
+  if (cache) {
+    // beside the cache: its two sides (a little forward of its centre) and its two front corners, in seeded order
+    const fx = Math.sin(cache.rot), fz = Math.cos(cache.rot), sx = Math.cos(cache.rot), sz = -Math.sin(cache.rot);
+    const def = PROP_DEFS[cache.kind as PropKind], hw = (def?.w ?? 0.6) / 2, hd = (def?.d ?? 0.45) / 2;
+    const side = rng.chance(0.5) ? 1 : -1;
+    const beside: [number, number][] = [];
+    for (const s of [side, -side]) beside.push([s * (hw + r + 0.08), 0.15], [s * (hw + r * 0.6), hd + r + 0.2]);
+    for (const [a, b] of beside) {
+      const x = cache.x + sx * a + fx * b, z = cache.z + sz * a + fz * b;
+      const p = tryAt(x, z, Math.atan2(x - cache.x, z - cache.z));
+      if (p) return p;
+    }
+    // the nearest verified deck spots round it (cell centres within FIND_NEAR_M, nearest first)
+    const [ccx, ccy] = g.cellOf(cache.x, cache.z), n = Math.ceil(FIND_NEAR_M / CELL), ring: [number, number, number][] = [];
+    for (let oy = -n; oy <= n; oy++) for (let ox = -n; ox <= n; ox++) {
+      const [x, z] = g.center(ccx + ox, ccy + oy), dd = Math.hypot(x - cache.x, z - cache.z);
+      if (dd <= FIND_NEAR_M) ring.push([x, z, dd]);
+    }
+    ring.sort((p, q) => p[2] - q[2] || p[0] - q[0] || p[1] - q[1]);
+    for (const [x, z] of ring) { const p = tryAt(x, z, Math.atan2(x - cache.x, z - cache.z)); if (p) return p; }
+  }
+  // fallback: any verified deck spot (cell centres of the tower interior, seeded order)
+  const all: [number, number][] = [];
+  for (let y = 0; y < f.TD; y++) for (let x = 0; x < f.TW; x++) all.push(g.center(x + MARGIN, y + MARGIN));
+  for (const [x, z] of rng.shuffle(all)) { const p = tryAt(x, z, rng.range(-Math.PI, Math.PI)); if (p) return p; }
+  return null;
+}
+
+const SQUARE: readonly (readonly [number, number])[] = [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]];
+
+/**
+ * The roof find's spot test (placement and validation share it): (x, z) with a clear square of half-size `r` — every cell under it
+ * a walkable deck cell of the tower interior reachable from the start (`d`), none in the core box (the parapet walkway is fine: a
+ * find lying there is in plain view), outside the hatch / ladder head keep-clear radius, clear of every roof prop (+ its 0.1 m
+ * plinth margin) and structure footprint.
+ */
+function findSpotTest(layout: StationLayout, f: TowerFrame, hatch: {x0: number; z0: number; x1: number; z1: number}, structures: readonly {kind: string; x: number; z: number; w?: number; d?: number}[], d: Int32Array | undefined): (x: number, z: number, r: number) => boolean {
+  const L = OFFICE_ROOF_LEVEL, g = layout.levels[L].grid;
+  const core: Box = {x0: f.cx0 - 1, y0: f.cy0 - 5, x1: f.cx1 + 1, y1: f.cy1 + 1};
+  const hcx = (hatch.x0 + hatch.x1) / 2, hcz = (hatch.z0 + hatch.z1) / 2;
+  const solids = [
+    ...structures.filter(s => s.kind !== 'drain' && s.kind !== 'cableTray').map(s => ({x: s.x, z: s.z, hx: s.w !== undefined ? s.w / 2 : 0.35, hz: s.d !== undefined ? s.d / 2 : 0.35})),
+    ...layout.props.filter(p => (p.level ?? 0) === L).map(p => ({x: p.x, z: p.z, hx: p.hx + 0.1, hz: p.hz + 0.1})),
+  ];
+  const cellOk = (x: number, z: number) => {
+    const [cx, cy] = g.cellOf(x, z);
+    if (!g.walkable(cx, cy) || (d && d[g.idx(cx, cy)] < 0)) return false;
+    const tx = cx - MARGIN, ty = cy - MARGIN;
+    return !inside(core, tx, ty) && tx >= 0 && ty >= 0 && tx < f.TW && ty < f.TD;
+  };
+  // the centre, the corners and the edge midpoints of the clear square (cells are 0.5 m: no gap between samples ≤ r)
+  return (x, z, r) => {
+    for (const [ox, oz] of SQUARE) if (!cellOk(x + ox * r, z + oz * r)) return false;
+    return Math.hypot(x - hcx, z - hcz) >= HATCH_CLEAR + 0.8 + r && solids.every(s => Math.abs(s.x - x) >= s.hx + r || Math.abs(s.z - z) >= s.hz + r);
+  };
+}
+
+/**
+ * Roof reward invariants (roofIssues): exactly the one recorded holder, on the deck, its access strip reachable (`dist`); task
+ * gas-mask-roof-feedback-20261030: the recorded roof find is exactly its pickups (`reward: ROOF_FIND_KEY`: the item, + its ammo box),
+ * on the deck, never the start weapon, and — with the tower frame `f` — on spots that pass the placement's own spot test (clear
+ * of props / structures / hatch / core / walkway; reachable when `dist` is given).
+ */
+export function roofRewardIssues(layout: StationLayout, dist?: Int32Array[], f?: TowerFrame): string[] {
   const info = layout.office?.roof;
   if (!info) return [];
+  return [...roofCacheIssues(layout, dist), ...roofFindIssues(layout, dist, f)];
+}
+
+function roofCacheIssues(layout: StationLayout, dist?: Int32Array[]): string[] {
+  const info = layout.office!.roof!;
   const caches = layout.props.filter(p => p.purpose === ROOF_CACHE_KEY);
   if (info.reward === undefined) return caches.length ? [`${caches.length} roof reward holders without a roof reward`] : [];
   if (info.reward === null) return ['roof reward: no spot on the deck'];
@@ -409,6 +548,31 @@ export function roofRewardIssues(layout: StationLayout, dist?: Int32Array[]): st
   const fx = Math.round(Math.sin(c.rot)), fz = Math.round(Math.cos(c.rot));
   const [sx, sy] = g.cellOf(c.x + fx * (c.hx + CACHE_FRONT / 2), c.z + fz * (c.hz + CACHE_FRONT / 2));
   if (!g.walkable(sx, sy) || (dist && dist[OFFICE_ROOF_LEVEL][g.idx(sx, sy)] < 0)) issues.push('roof reward access strip blocked / unreachable');
+  return issues;
+}
+
+function roofFindIssues(layout: StationLayout, dist?: Int32Array[], f?: TowerFrame): string[] {
+  const info = layout.office!.roof!, L = OFFICE_ROOF_LEVEL;
+  const finds = layout.pickups.filter(p => p.reward === ROOF_FIND_KEY);
+  if (info.find === undefined) return finds.length ? [`${finds.length} roof find pickups without a roof find`] : [];
+  if (info.find === null) return ['roof find: no verified spot on the deck'];
+  const F = info.find, issues: string[] = [];
+  const main = finds.filter(p => p.itemId === F.itemId && p.count === 1 && Math.abs(p.x - F.x) < 1e-6 && Math.abs(p.z - F.z) < 1e-6);
+  const ammo = F.ammo ? finds.filter(p => p.itemId === F.ammo!.itemId && p.count === F.ammo!.count && Math.abs(p.x - F.ammo!.x) < 1e-6 && Math.abs(p.z - F.ammo!.z) < 1e-6) : [];
+  if (main.length !== 1 || (F.ammo ? ammo.length !== 1 : false) || finds.length !== 1 + (F.ammo ? 1 : 0)) return [`roof find pickups (${finds.map(p => `${p.itemId} x${p.count}`).join(', ')}) vs record ${F.itemId}${F.ammo ? ` + ${F.ammo.itemId} x${F.ammo.count}` : ''}`];
+  if (F.itemId === (layout.startWeapon ?? 'rifle')) issues.push('roof find is the start weapon');
+  const R = layout.levels[L], g = R.grid;
+  for (const p of finds) {
+    if ((p.level ?? 0) !== L || Math.abs(p.y - R.baseY) > 1e-3) issues.push(`roof find ${p.itemId} off the deck`);
+    const [cx, cy] = g.cellOf(p.x, p.z);
+    if (!g.walkable(cx, cy) || (dist && dist[L][g.idx(cx, cy)] < 0)) issues.push(`roof find ${p.itemId} not on a walkable / reachable deck cell`);
+  }
+  // re-verify the spots with the placement's own test (the recorded structures, the frame's core box / walkway)
+  if (f) {
+    const test = findSpotTest(layout, f, info.ladder.hatch, info.structures, dist?.[L]);
+    if (!test(F.x, F.z, FIND_CLEAR)) issues.push(`roof find ${F.itemId} spot not clear`);
+    if (F.ammo && !test(F.ammo.x, F.ammo.z, FIND_AMMO_CLEAR)) issues.push(`roof find ammo ${F.ammo.itemId} spot not clear`);
+  }
   return issues;
 }
 
@@ -494,6 +658,6 @@ export function roofIssues(layout: StationLayout, f: TowerFrame, dist: Int32Arra
   for (const z of roofZ) if (inHatch(z.x, z.z, 2.5)) issues.push('enemy at the roof hatch');
   if (layout.pickups.some(p => p.level === OFFICE_ROOF_LEVEL && inHatch(p.x, p.z, 1))) issues.push('pickup in the roof hatch zone');
   if (!layout.lights.some(l => l.level === OFFICE_ROOF_LEVEL && l.virtual)) issues.push('roof has no daylight');
-  issues.push(...roofRewardIssues(layout, dist)); // Task office-interactions-layout-20261030 (lane ROOF)
+  issues.push(...roofRewardIssues(layout, dist, f)); // Task office-interactions-layout-20261030 (lane ROOF) + the roof find (gas-mask-roof-feedback-20261030)
   return issues;
 }

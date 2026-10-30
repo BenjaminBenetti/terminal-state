@@ -6,32 +6,44 @@
 // come from the curated ROOF_CACHE table (items/lootTables.ts: a first-aid kit or a trauma kit + a full ammo box), rolled once, deterministic per seed, EXACT (the documented exception to the scarcity cut: nothing cut / re-themed /
 // converted, every lot placed), finite and remembered by run memory (take -> rebuild -> still taken). No rare-gear roll; every other
 // storey's holders / pickups / enemies are byte-identical to a build without the reward; the Subway never has one. Bounded corpus.
+//
+// Task gas-mask-roof-feedback-20261030 (user item 10: "Roof also needs more loot. I got just a med kit in this run ... It should have
+// at least 1 gear or weapon item up there"): the ROOF FIND (items/lootTables.ts ROOF_FIND, gen/office/roof.ts placeRoofFind) — ONE
+// non-starter long gun + a box of its own caliber, or a protective gear piece, laid on the deck beside the cache as layout pickups
+// (reward: ROOF_FIND_KEY), verified AFTER placement on many seeds (walkable, reachable from the start by the ladder, clear of props /
+// structures / the hatch), deterministic per level seed (Retry / revisits never re-roll it; a New Game seed rolls again), never the
+// start weapon, finite (layout pickup memory); every other storey's loot is unchanged (an explicit roof exception).
 
 import {describe, expect, it} from 'vitest';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {generateStation} from '../src/gen/station';
 import {officeIssues} from '../src/gen/office/validate';
-import {HATCH_CLEAR, ROOF_CACHE_ANCHORS, roofRewardIssues, roofRewardPose} from '../src/gen/office/roof';
+import {FIND_AMMO_CLEAR, FIND_CLEAR, HATCH_CLEAR, ROOF_CACHE_ANCHORS, rollRoofFind, roofRewardIssues, roofRewardPose} from '../src/gen/office/roof';
 import {MARGIN, OFFICE_ROOF_LEVEL, towerFrame} from '../src/gen/office/frame';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
 import {PROP_DEFS} from '../src/gen/props';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {
-  BASE_TABLES, BOX_COUNT, PROFILES, ROOF_CACHE, ROOF_CACHE_KEY, REWARD_TABLES, econCat, gearParams, rewardTable, validateLootProfile,
-  type LootProfile, type RewardTable,
+  BASE_TABLES, BOX_COUNT, PROFILES, REWARD_FINDS, ROOF_CACHE, ROOF_CACHE_KEY, ROOF_FIND, ROOF_FIND_KEY, REWARD_TABLES, econCat, gearParams,
+  rewardFind, rewardTable, validateLootProfile, type LootProfile, type RewardFind, type RewardTable,
 } from '../src/items/lootTables';
 import {REWARD_REPACKS, createHolderState, holderFinds, holderTable, rollLootItems, takeLot, type HolderKind, type Lot} from '../src/items/loot';
 import {holderSurfaces, placementBox} from '../src/items/lootLayout';
 import {Inventory} from '../src/items/inventory';
 import {GEAR_ITEMS} from '../src/items/gear';
-import {applyHolderRecord, captureHolder, holderKey} from '../src/run/memory';
+import {ITEMS} from '../src/items/items';
+import {ammoItemFor} from '../src/items/calibers';
+import {WEAPONS} from '../src/weapons/weapons';
+import {WEAPON_FIND_AMMO, findWeaponsFor} from '../src/gen/weaponFinds';
+import {placeSectionGear, rollLevelGear} from '../src/gen/gearLoot';
+import {applyHolderRecord, captureHolder, createMemory, holderKey, pickupPlan, takenLayoutPickups} from '../src/run/memory';
 import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
 
 const SEEDS = [11, 222, 3333, 0x5ea1e55, 90210];
 const OFFICE = PROFILES.office;
 /** The Office profile with no roof reward (the comparison build: same tables otherwise). */
-const NO_REWARD: LootProfile = {id: 'office', label: 'Office (no roof reward)', tables: {...BASE_TABLES, rewards: {}}, overrides: {}};
+const NO_REWARD: LootProfile = {id: 'office', label: 'Office (no roof reward)', tables: {...BASE_TABLES, rewards: {}, rewardFinds: {}}, overrides: {}};
 
 const cache = new Map<string, StationLayout>();
 const gen = (seed: number, profile: LootProfile = OFFICE): StationLayout => {
@@ -261,22 +273,28 @@ describe('the roof cache on the real Office Space level (bounded seed set)', () 
     expect(st3.lots).toEqual([]);
   });
 
-  it('no other storey changes: holders / pickups / enemies off the roof are identical to a build without the roof reward; no gear', () => {
+  it('no other storey changes: holders / pickups / enemies off the roof are identical to a build without the roof rewards; no gear roll', () => {
     for (const seed of SEEDS.slice(0, 3)) {
       const a = gen(seed), b = gen(seed, NO_REWARD);
       expect(a.attempt).toBe(b.attempt);
       expect(b.props.some(p => p.purpose === ROOF_CACHE_KEY)).toBe(false);
       expect(b.office!.roof!.reward).toBeUndefined();
+      expect(b.office!.roof!.find).toBeUndefined();
       expect(roofRewardIssues(b)).toEqual([]);
       // the reward is the only added prop, and the last loot holder: every other holder keeps its index and its lots
       expect(a.props.length).toBe(b.props.length + 1);
       expect(a.props[a.props.length - 1].purpose).toBe(ROOF_CACHE_KEY);
       const ha = layoutHolders(a, OFFICE).filter(h => h.areaType !== ROOF_CACHE_KEY), hb = layoutHolders(b, NO_REWARD);
       expect(ha).toEqual(hb);
-      // loose finds (floor supplies, weapon finds + ammo) unchanged in count and mix; none on the roof
-      expect(a.pickups).toEqual(b.pickups);
-      expect(a.pickups.some(p => p.level === OFFICE_ROOF_LEVEL)).toBe(false);
-      for (const p of a.pickups) expect(p.itemId in GEAR_ITEMS, p.itemId).toBe(false); // gear is the registry's one level roll
+      // loose finds (floor supplies, weapon finds + ammo) unchanged in count, mix, order and index; the roof find's pickups (task
+      // gas-mask-roof-feedback-20261030) are appended LAST and are the only pickups on the roof
+      const own = a.pickups.filter(p => p.reward === ROOF_FIND_KEY);
+      expect(own.length).toBeGreaterThanOrEqual(1);
+      expect(a.pickups.slice(0, a.pickups.length - own.length)).toEqual(b.pickups);
+      expect(a.pickups.slice(a.pickups.length - own.length)).toEqual(own);
+      expect(b.pickups.some(p => p.level === OFFICE_ROOF_LEVEL || p.reward)).toBe(false);
+      expect(a.pickups.filter(p => p.level === OFFICE_ROOF_LEVEL)).toEqual(own);
+      for (const p of b.pickups) expect(p.itemId in GEAR_ITEMS, p.itemId).toBe(false); // gear is the registry's one level roll (+ the roof find)
       expect(a.zombies.filter(z => z.level !== OFFICE_ROOF_LEVEL)).toEqual(b.zombies.filter(z => z.level !== OFFICE_ROOF_LEVEL));
       expect(a.office!.gearSpots).toEqual(b.office!.gearSpots);
     }
@@ -290,6 +308,155 @@ describe('the roof cache on the real Office Space level (bounded seed set)', () 
       expect(layoutHolders(l, PROFILES.subway)).toEqual(layoutHolders(l, subNo));
       expect(generateStation(s.seed, {startWeapon: 'pistol', loot: subNo}).pickups).toEqual(l.pickups);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Task gas-mask-roof-feedback-20261030 (item 10): the roof FIND.
+
+describe('roof find data (items/lootTables.ts ROOF_FIND): one meaningful existing weapon (+ its own ammo) or gear piece', () => {
+  it('rows are existing non-starter long guns and protective gear; a gun pairs the weapon-find box of its own caliber; valid in every profile', () => {
+    expect(REWARD_FINDS[ROOF_FIND_KEY]).toBe(ROOF_FIND);
+    expect(BASE_TABLES.rewardFinds?.[ROOF_FIND_KEY]).toBe(ROOF_FIND);
+    expect(rewardFind(OFFICE, ROOF_FIND_KEY)).toBe(ROOF_FIND);
+    expect(ROOF_FIND.pairedAmmo).toBe(true);
+    const ids = ROOF_FIND.items.map(r => r[0]);
+    expect(ids.length).toBeGreaterThan(1);
+    for (const id of ids) {
+      expect(ITEMS[id], id).toBeDefined();
+      const weapon = ITEMS[id].kind === 'weapon';
+      expect(weapon || id in GEAR_ITEMS, `${id}: a weapon or gear`).toBe(true);
+      if (weapon) {
+        expect(findWeaponsFor('pistol'), `${id}: a non-starter weapon (the shipped pistol start)`).toContain(id);
+        expect(WEAPON_FIND_AMMO[id][0]).toBe(ammoItemFor(WEAPONS[id].caliber!)); // its OWN caliber (the weapon-find convention)
+      } else {
+        expect(['backpack', 'gas_mask'], `${id}: no bag / mask (a roof stash of armour)`).not.toContain(id);
+      }
+    }
+    // weapons are the main share (the user's "gear or weapon"; guns 2 in 3)
+    const w = (pred: (id: string) => boolean) => ROOF_FIND.items.filter(r => pred(r[0])).reduce((s, r) => s + r[1], 0);
+    expect(w(id => ITEMS[id].kind === 'weapon') / w(() => true)).toBeCloseTo(2 / 3, 6);
+    for (const p of Object.values(PROFILES)) expect(validateLootProfile(p), p.id).toEqual([]);
+    expect(validateLootProfile(NO_REWARD)).toEqual([]);
+    const bad = (rf: RewardFind) => validateLootProfile({id: 'bad', label: 'bad', tables: {...BASE_TABLES, rewardFinds: {r: rf}}, overrides: {}}).join('\n');
+    expect(bad({...ROOF_FIND, items: [['no_such_item', 1]]})).toMatch(/unknown item id no_such_item/);
+    expect(bad({...ROOF_FIND, items: [['rifle', 0]]})).toMatch(/no item with weight > 0/);
+    // item weight overrides reach it (identity when untouched)
+    const noRifle: LootProfile = {id: 'x', label: 'x', tables: BASE_TABLES, overrides: {itemWeight: {rifle: 0}}};
+    expect(rewardFind(noRifle, ROOF_FIND_KEY)!.items.map(r => r[0])).toEqual(['shotgun', 'armor_vest', 'helmet']);
+  });
+
+  it('the roll: deterministic per level seed, never the start weapon, the documented shares; a gun brings its own ammo box, gear none', () => {
+    const N = 3000, seen: Record<string, number> = {};
+    for (let s = 0; s < N; s++) {
+      const a = rollRoofFind(s * 7919 + 1, ROOF_FIND, 'pistol')!;
+      expect(rollRoofFind(s * 7919 + 1, ROOF_FIND, 'pistol')).toEqual(a);
+      seen[a.itemId] = (seen[a.itemId] ?? 0) + 1;
+      const pair = WEAPON_FIND_AMMO[a.itemId];
+      expect(a.ammo).toEqual(pair ? {itemId: pair[0], count: pair[1]} : null);
+      // the rifle-start fallback never gets a second rifle
+      expect(rollRoofFind(s * 7919 + 1, ROOF_FIND, 'rifle')!.itemId).not.toBe('rifle');
+    }
+    const total = ROOF_FIND.items.reduce((t, r) => t + r[1], 0);
+    for (const [id, w] of ROOF_FIND.items) expect(Math.abs(seen[id] / N - w / total), id).toBeLessThan(0.03);
+    expect(rollRoofFind(1, {...ROOF_FIND, items: [['pistol', 1]]}, 'pistol')).toBe(null); // only the start weapon: nothing placeable
+  });
+});
+
+describe('the roof find on the real Office Space level: guaranteed AFTER placement, beside the cache, reachable, finite', () => {
+  // a bounded seed set (generation ~0.3 s each): the five above + 15 more
+  const MANY = [...SEEDS, ...Array.from({length: 15}, (_, i) => 1000 + i * 7717)];
+
+  it('every seed: exactly the recorded find on the deck (gun + its own box, or a gear piece), on verified, reachable spots beside the cache', () => {
+    const items: Record<string, number> = {};
+    let beside = 0;
+    for (const seed of MANY) {
+      const l = gen(seed), f = towerFrame(seed), R = l.levels[OFFICE_ROOF_LEVEL], g = R.grid;
+      expect(officeIssues(l, f), `seed ${seed}`).toEqual([]);
+      const F = l.office!.roof!.find!;
+      expect(F, `seed ${seed}`).toBeTruthy();
+      expect(F.key).toBe(ROOF_FIND_KEY);
+      const own = l.pickups.filter(p => p.reward === ROOF_FIND_KEY);
+      expect(own.map(p => [p.itemId, p.count]), `seed ${seed}`).toEqual([[F.itemId, 1], ...(F.ammo ? [[F.ammo.itemId, F.ammo.count]] : [])]);
+      expect(F).toMatchObject(rollRoofFind(l.seed, ROOF_FIND, 'pistol')!); // the placed item IS the roll: nothing re-picked by placement
+      items[F.itemId] = (items[F.itemId] ?? 0) + 1;
+      expect(F.itemId).not.toBe(l.startWeapon);
+      expect(ITEMS[F.itemId].kind === 'weapon' ? !!F.ammo : !F.ammo).toBe(true);
+      // reachable from the start (stairs + the roof ladder) on a walkable deck cell inside the tower, its clear square on the deck
+      const [sx, sy] = l.grid.cellOf(l.playerSpawn.x, l.playerSpawn.z);
+      const dist = levelDistance(l.levels, sx, sy, 0, l.levelLinks);
+      for (const p of own) {
+        expect(p.level).toBe(OFFICE_ROOF_LEVEL);
+        expect(p.y).toBeCloseTo(R.baseY, 3);
+        const r = p === own[0] ? FIND_CLEAR : FIND_AMMO_CLEAR;
+        for (const [ox, oz] of [[0, 0], [-r, -r], [r, -r], [-r, r], [r, r]]) {
+          const [cx, cy] = g.cellOf(p.x + ox, p.z + oz);
+          expect(g.walkable(cx, cy), `seed ${seed}: ${p.itemId}`).toBe(true);
+          expect(dist[OFFICE_ROOF_LEVEL][g.idx(cx, cy)], `seed ${seed}: ${p.itemId} reachable`).toBeGreaterThan(0);
+          expect(cx - MARGIN).toBeGreaterThanOrEqual(0); expect(cy - MARGIN).toBeGreaterThanOrEqual(0);
+          expect(cx - MARGIN).toBeLessThan(f.TW); expect(cy - MARGIN).toBeLessThan(f.TD);
+        }
+        // clear of every roof prop (+ plinth) and structure footprint, and of the hatch / ladder head
+        for (const q of l.props) if (q.level === OFFICE_ROOF_LEVEL) expect(Math.abs(q.x - p.x) >= q.hx + 0.1 + r - 1e-6 || Math.abs(q.z - p.z) >= q.hz + 0.1 + r - 1e-6, `seed ${seed}: ${p.itemId} vs ${q.kind}`).toBe(true);
+        const h = l.office!.roof!.ladder.hatch;
+        expect(Math.hypot(p.x - (h.x0 + h.x1) / 2, p.z - (h.z0 + h.z1) / 2)).toBeGreaterThan(HATCH_CLEAR + 0.8);
+      }
+      if (F.ammo) {
+        const gap = Math.hypot(F.ammo.x - F.x, F.ammo.z - F.z);
+        expect(gap).toBeGreaterThanOrEqual(0.5 - 1e-3); expect(gap).toBeLessThanOrEqual(1.1 + 1e-3);
+      }
+      // beside the roof cache (it is opened right there): count how often it is within 1.6 m of the crate
+      const c = l.office!.roof!.reward!;
+      const dc = Math.hypot(F.x - c.x, F.z - c.z);
+      expect(dc, `seed ${seed}: near the cache`).toBeLessThan(4.5);
+      if (dc < 1.6) beside++;
+      expect(roofRewardIssues(l, dist, f), `seed ${seed}`).toEqual([]);
+    }
+    console.info(`roof find over ${MANY.length} seeds: ${JSON.stringify(items)}; beside the cache (< 1.6 m) ${beside}/${MANY.length}`);
+    expect(beside).toBeGreaterThanOrEqual(MANY.length * 0.8);
+    // both kinds turn up across seeds (a gun in most)
+    expect(Object.keys(items).some(id => ITEMS[id].kind === 'weapon')).toBe(true);
+  });
+
+  it('deterministic: the same level seed regenerates the same find at the same pickup indices (Retry / revisits never re-roll it); validation catches a missing / moved find', () => {
+    for (const seed of SEEDS.slice(0, 2)) {
+      const a = gen(seed), b = generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'});
+      const ia = a.pickups.flatMap((p, i) => (p.reward ? [i] : [])), ib = b.pickups.flatMap((p, i) => (p.reward ? [i] : []));
+      expect(ib).toEqual(ia);
+      expect(ia.map(i => b.pickups[i])).toEqual(ia.map(i => a.pickups[i]));
+      expect(b.office!.roof!.find).toEqual(a.office!.roof!.find);
+      // a broken layout fails validation (the generator would retry): the find's pickup gone / moved into the hatch zone
+      const f = towerFrame(seed), gone = {...b, pickups: b.pickups.filter(p => !p.reward)};
+      expect(roofRewardIssues(gone, undefined, f).join('\n')).toMatch(/roof find pickups/);
+      const h = b.office!.roof!.ladder.hatch, moved = structuredClone(b.office!.roof!.find!);
+      moved.x = (h.x0 + h.x1) / 2; moved.z = (h.z0 + h.z1) / 2;
+      const bad = {...b, office: {...b.office!, roof: {...b.office!.roof!, find: moved}}, pickups: b.pickups.map(p => (p.reward && p.itemId === moved.itemId ? {...p, x: moved.x, z: moved.z} : p))};
+      expect(roofRewardIssues(bad, undefined, f).length).toBeGreaterThan(0);
+    }
+    // a New Game (new seeds) rolls again: different level seeds do not all give the same item
+    expect(new Set(SEEDS.map(s => gen(s).office!.roof!.find!.itemId)).size).toBeGreaterThan(1);
+  });
+
+  it('finite: taken once, the run memory (layout pickup indices) never offers it again on a rebuild / revisit; never duplicated', () => {
+    const seed = SEEDS[0], l = gen(seed);
+    const idx = l.pickups.flatMap((p, i) => (p.reward ? [i] : []));
+    // the section memory after taking the find (every other layout pickup still lying where it was)
+    const mem = createMemory({level: 'office', section: 'main'});
+    mem.pickups = l.pickups.flatMap((p, i) => (idx.includes(i) ? [] : [{stack: {itemId: p.itemId, count: p.count}, pose: {x: p.x, y: p.y, z: p.z, yaw: 0}, anchor: [p.x, p.y, p.z], layoutIndex: i}])) as never;
+    const again = generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}); // a rebuild (Subway <-> Office travel / Retry of a later level)
+    expect(takenLayoutPickups(again.pickups.length, structuredClone(mem))).toEqual(idx);
+    const plan = pickupPlan(again.pickups.length, mem);
+    expect(plan.fromLayout).toEqual([]); // nothing re-spawns from the layout: what is left comes from memory
+    expect(plan.restored.some(r => idx.includes(r.layoutIndex!))).toBe(false);
+    // one find per logical level: no other pickup of the level is a reward, and the gear roll / its placement are untouched
+    expect(l.pickups.filter(p => p.reward).length).toBe(idx.length);
+    const before = l.pickups.length;
+    const gearA = placeSectionGear(l, rollLevelGear(seed, 'office', ['main']).main);
+    l.pickups.length = before;
+    const b = gen(seed, NO_REWARD), beforeB = b.pickups.length;
+    const gearB = placeSectionGear(b, rollLevelGear(seed, 'office', ['main']).main);
+    b.pickups.length = beforeB;
+    expect(gearA).toEqual(gearB);
   });
 });
 

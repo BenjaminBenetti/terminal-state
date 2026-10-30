@@ -223,9 +223,10 @@ export class Game {
   readonly tower: TowerRuntime;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
-   * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it).
+   * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
+   * `damage` = what this ray deals (weapon damage x range falloff; task gas-mask-roof-feedback-20261030: pane health).
    */
-  readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number) => boolean)[] = [];
+  readonly bulletHitHandlers: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[] = [];
   /** Task gasmask-breach-20261030 (lane GAS): breakable office windows, the breach gas field and its exposure (`gas.protection`). */
   readonly gas: GasSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
@@ -1784,7 +1785,7 @@ export class Game {
       if (!fh) this.damage.knockPickups(o, d, bestT, wh, shot);
       else {
         if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
-        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
+        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir, shot.damage)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
       }
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
@@ -1802,7 +1803,7 @@ export class Game {
       } else if (!fh && wh.kind !== 'none') {
         // Lane D: material-matched persistent damage (craters / per-instance prop damage / breaking) + fx + sound
         // (task gasmask-breach-20261030: unless a lane handler takes the hit — an office window pane)
-        if (!this.bulletHit(wh, end, dir)) this.damage.hitWorld(wh, end, dir, shot);
+        if (!this.bulletHit(wh, end, dir, shot.damage)) this.damage.hitWorld(wh, end, dir, shot);
       }
       if (def.pellets === 1 ? this.shotCounter % 3 === 0 : i < 3) this.fx.tracer(muzzle, end);
     }
@@ -1835,9 +1836,12 @@ export class Game {
     this.alertZombies(def.noise);
   }
 
-  /** Task gasmask-breach-20261030: offer a bullet's world hit to the lane handlers (this trigger pull's id); true = handled. */
-  private bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3): boolean {
-    for (const h of this.bulletHitHandlers) if (h(wh, point, dir, this.shotCounter)) return true;
+  /**
+   * Task gasmask-breach-20261030: offer a bullet's world hit to the lane handlers (this trigger pull's id + the ray's damage after
+   * falloff, task gas-mask-roof-feedback-20261030); true = handled.
+   */
+  private bulletHit(wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, damage: number): boolean {
+    for (const h of this.bulletHitHandlers) if (h(wh, point, dir, this.shotCounter, damage)) return true;
     return false;
   }
 

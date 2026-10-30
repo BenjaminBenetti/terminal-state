@@ -69,6 +69,12 @@ export const GAS = {
   DPS_MAX: 8,
   /** The HUD tag shows from this eye concentration (a warning before the damage threshold). */
   HUD_MIN: 0.06,
+  /**
+   * Task gas-mask-roof-feedback-20261030 (item 10): the outside atmosphere on the Office roof deck — the eye's outdoor
+   * concentration = ROOF_OUTDOOR_C x the roof's outdoor weight (world/roofAir.ts roofBlend: 1 on the deck, ramping through the
+   * ladder hatch, 0 indoors), through the same exposure path: 0.6 -> 8 x (0.6 - 0.12) / 0.88 ≈ 4.4 hp/s unprotected.
+   */
+  ROOF_OUTDOOR_C: 0.6,
   // --- render (render/volumetricShaders.ts gas term) ---
   /** Extinction per metre at c = 1 (1/m). */
   EXT: 1.1,
