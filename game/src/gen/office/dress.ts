@@ -21,7 +21,7 @@ import {CELL, FLOOR, type Grid} from '../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {signDims, wallSignSpot} from '../doorways';
 import {
-  backed, cellsOfBox, doorSide, forceProp, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
+  backed, begin, cellsOfBox, commit, propBlocksDoorway, rollback, doorSide, forceProp, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
 } from '../placeKit';
 import type {Area, Door, LightPlacement, Side, SignPlacement, StationLayout} from '../stationTypes';
 import {CEIL, MARGIN, type TowerFrame} from './frame';
@@ -71,8 +71,29 @@ function perimeterStrip(d: OfficeDress): number[] {
 // ---------------------------------------------------------------------------------------------
 // Before dress()
 
+/**
+ * TENANTS: the storeys share ONE ramps list (gen/office/common.ts cropKit), and placeKit.makePlaceCtx keeps a 1.5 m "stair
+ * approach" clear beyond the ends of EVERY ramp in it — so the station stair run and the other storeys' scissor runs stamped
+ * phantom keep-out patches into the S band of every office floor (cubicle pods / company furniture there failed). While a storey
+ * is dressed (preDress .. end of postDress) its grid sees the ramps of other storeys parked far outside the grid (same indices,
+ * so its own rampIdx lookups are untouched); postDress restores the shared list.
+ */
+const SHARED_RAMPS = new WeakMap<Grid, Grid['ramps']>();
+function ownRampsOnly(g: Grid): void {
+  if (SHARED_RAMPS.has(g)) return;
+  const own = new Set<number>();
+  for (let i = 0; i < g.rampIdx.length; i++) if (g.rampIdx[i] >= 0) own.add(g.rampIdx[i]);
+  SHARED_RAMPS.set(g, g.ramps);
+  g.ramps = g.ramps.map((r, k) => (own.has(k) ? r : {...r, x: -10000, y: -10000}));
+}
+function restoreRamps(g: Grid): void {
+  const all = SHARED_RAMPS.get(g);
+  if (all) { g.ramps = all; SHARED_RAMPS.delete(g); }
+}
+
 export function preDress(d: OfficeDress): void {
   const g = officeGrid(d);
+  ownRampsOnly(g);
   d.held = perimeterStrip(d);
   // The row of the elevator landing strip farthest from the shaft (the rows nearer to it are the shaft opening's door zone,
   // gen/office/index.ts withShaftOpenings).
@@ -173,10 +194,16 @@ export function cubicleFarm(d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'open'
   };
   const collapsed = role === 'collapsed';
   for (const r of rows) {
-    for (const s of segs) {
-      const U0 = du + s.u0, U1 = U0 + 5 * s.n, V0 = dv + r.v0;
+    for (const s0 of segs) {
+      const V0 = dv + r.v0;
       const V1 = V0 + (r.kind === 'double' ? 8 : 4);
-      if (!box(U0, V0, U1, V1)) continue;
+      // TENANTS: a pod that does not fit (a stair approach, company furniture) shrinks / slides to the cubicles that do.
+      let fit: {U0: number; n: number} | null = null;
+      for (let off = 0; off <= 5 * (s0.n - 2) && !fit; off += 5) {
+        for (let n = s0.n - off / 5; n >= 2 && !fit; n--) if (box(du + s0.u0 + off, V0, du + s0.u0 + off + 5 * n, V1)) fit = {U0: du + s0.u0 + off, n};
+      }
+      if (!fit) continue;
+      const s = {u0: fit.U0 - du, n: fit.n}, U0 = fit.U0, U1 = U0 + 5 * s.n;
       if (collapsed && rng.chance(0.45)) continue;
       const spineV = r.kind === 'double' ? V0 + 4 : V0 + 4;
       const knock = collapsed ? 0.4 : 0.08;
@@ -233,10 +260,17 @@ function reception(d: OfficeDress, ctx: PlaceCtx, a: Area): void {
   // Waiting area (TENANTS: the neutral corporate lobby): two modern lobby sofas facing each other across a gap, lounge armchairs
   // closing the ends, planter trees against the walls (a dead pot plant here and there).
   const side = rng.chance(0.5) ? -1 : 1;
-  const wx = (a.x + (side < 0 ? a.w * 0.2 : a.w * 0.8)) * CELL, wz = (a.y + a.h * 0.5) * CELL;
-  let sx: number | null = null;
-  for (const [dz, rot] of [[-1.3, 0], [1.3, Math.PI]] as const) {
-    for (const dx of [0, 1, -1, 2, -2]) { const p = tryPlaceProp(ctx, a, 'lobbySofa', q4(wx + dx), q4(wz + dz), rot, {ring: 0.5}); if (p) { sx ??= p.x; break; } }
+  // The pair of sofas is placed together (all-or-nothing) at the first spot that takes both: the preferred end of the hall first.
+  let sx: number | null = null, wz = (a.y + a.h * 0.5) * CELL;
+  search: for (const fx of side < 0 ? [0.2, 0.8, 0.3, 0.7, 0.12, 0.88] : [0.8, 0.2, 0.7, 0.3, 0.88, 0.12]) {
+    for (const fz of [0.5, 0.42, 0.58, 0.35, 0.65]) for (const dx of [0, 1, -1, 2, -2]) {
+      const wx = (a.x + a.w * fx) * CELL, z = (a.y + a.h * fz) * CELL;
+      begin(ctx);
+      const p0 = tryPlaceProp(ctx, a, 'lobbySofa', q4(wx + dx), q4(z - 1.3), 0, {ring: 0.5});
+      const p1 = p0 && tryPlaceProp(ctx, a, 'lobbySofa', q4(wx + dx), q4(z + 1.3), Math.PI, {ring: 0.5});
+      if (p0 && p1) { commit(ctx); sx = p0.x; wz = z; break search; }
+      rollback(ctx);
+    }
   }
   if (sx !== null) for (const s of [-1, 1]) tryPlaceProp(ctx, a, 'loungeArmchair', q4(sx + s * (PROP_DEFS.lobbySofa.w / 2 + 1.1)), q4(wz), s < 0 ? Math.PI / 2 : -Math.PI / 2, {ring: 0.4});
   for (let i = 0, n = rng.int(2, 4); i < n; i++) placeAgainstWall(ctx, a, 'planterTree', {sides: ['S', 'E', 'W'], front: 0.5});
@@ -326,6 +360,7 @@ export function postDress(d: OfficeDress): void {
   officeLights(d);
   signage(d, ctx);
   companyPost(d, ctx);
+  restoreRamps(g);
 }
 
 /** Host decor (chair / monitor / ...) beside or on a host prop: collides, never blocks the walk grid; absolute y. */
@@ -341,6 +376,8 @@ export function hostDecor(d: OfficeDress, host: PropPlacement, hostIndex: number
       const i = g.idx(cx, cy);
       if (g.cells[i] !== FLOOR || (g.blocked[i] && !inBox(host, cx, cy))) return null;
     }
+    // TENANTS: a chair never reaches into a doorway's clear volume (company desks / consoles stand closer to doors).
+    if (propBlocksDoorway(d.layout, x, z, hx, hz, y, PROP_DEFS[kind].h)) return null;
   }
   const p: PropPlacement = {kind, x: Math.round(x * 1000) / 1000, z: Math.round(z * 1000) / 1000, y, rot: q, area: host.area, hx, hz, h: PROP_DEFS[kind].h, blocksSight: false, variant: 0, host: hostIndex, ...lv};
   d.layout.props.push(p);

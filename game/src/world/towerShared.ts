@@ -289,6 +289,31 @@ export function rayBox(o: P3, d: P3, b: Box3Like, maxT = Infinity, dy = 0): numb
   return slabT[0];
 }
 
+/**
+ * Ray (o, unit d) vs a vertical cylinder (centre x / z, radius r, from y0 to y1): the first t in [0, maxT] inside it, or null.
+ * Task office-overhaul-20261030 (lane LIFT): a living body in front of an elevator button takes the click (allocation-free).
+ */
+export function rayCylinder(o: P3, d: P3, cx: number, cz: number, r: number, y0: number, y1: number, maxT: number): number | null {
+  const ox = o.x - cx, oz = o.z - cz;
+  const a = d.x * d.x + d.z * d.z, b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - r * r;
+  let t0: number, t1: number;
+  if (a < 1e-12) { if (c > 0) return null; t0 = 0; t1 = maxT; }
+  else {
+    const disc = b * b - a * c;
+    if (disc < 0) return null;
+    const s = Math.sqrt(disc);
+    t0 = (-b - s) / a; t1 = (-b + s) / a;
+  }
+  if (Math.abs(d.y) < 1e-9) { if (o.y < y0 || o.y > y1) return null; }
+  else {
+    let ya = (y0 - o.y) / d.y, yb = (y1 - o.y) / d.y;
+    if (ya > yb) { const k = ya; ya = yb; yb = k; }
+    t0 = Math.max(t0, ya); t1 = Math.min(t1, yb);
+  }
+  t0 = Math.max(t0, 0); t1 = Math.min(t1, maxT);
+  return t0 <= t1 ? t0 : null;
+}
+
 /** A box around a wall-mounted point (centre p, room-facing normal (nx, nz)): w wide, h tall, d deep. */
 export function wallBox(p: P3, n: [number, number], w: number, h: number, d: number): Box3Like {
   const [nx, nz] = n;

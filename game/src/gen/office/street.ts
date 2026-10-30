@@ -93,7 +93,7 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
 
   // --- Transit hall geometry (tower-local): lanes [escalator 3][fixed stair 9-10][escalator 3] between 1-cell walls --------------
   const spec = transitSpecs(hu);
-  const len = spec.cells, lead = r2(len * CELL - spec.length);
+  const rl = spec.cells, lead = r2(rl * CELL - spec.length);
   // Rows of the run whose ceiling (pitch + headroom, max over the cell) is not yet a slab below the lobby floor: the box.
   const box = Math.ceil(2 * (lead + (TRANSIT.headroom + SLAB) / spec.slope) - 1e-9);
   const SW = rng.int(9, 10), EW = 3, LW = EW + SW + EW;
@@ -131,12 +131,12 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
   const thLo = Math.max(0, bx1 + 3 - thw), thHi = bx0 - 3;
   if (thHi < thLo) return fail('ticket-hall-width');
   const thx = rng.int(thLo, thHi);
-  const T: Rect = {x: TX + thx, y: TY + ry0 + len + 1, w: thw, h: thd};
+  const T: Rect = {x: TX + thx, y: TY + ry0 + rl + 1, w: thw, h: thd};
   if (!k.rectFree(T)) return fail('ticket-hall');
   const ticket = k.addArea(T, 'concourse', 'fare-hall', r1(rng.range(4.0, 4.6)), -1, {role: 'ticket-hall', label: 'Ticket hall'});
 
   // --- Transit run: one area on the station grid, its top rows (the box) also open on the lobby grid; three shared-pitch lanes --
-  const runR: Rect = {x: TX + bx0, y: TY + ry0, w: LW, h: len};
+  const runR: Rect = {x: TX + bx0, y: TY + ry0, w: LW, h: rl};
   if (!k.solid({x: runR.x - 1, y: runR.y - 1, w: runR.w + 2, h: runR.h + 1})) return fail('transit-run');
   const run = k.addArea(runR, 'passage', 'stair-core', TRANSIT.headroom, ticket.id, {role: 'stair', label: 'Escalators · Office tower', publicSpace: true});
   const g0 = k.grid(0), g1 = k.grid(1);
@@ -147,7 +147,7 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
     {kind: 'escalator', x0: bx0 + EW + SW, x1: bx1, flights: []},
   ];
   for (const ln of lanes) {
-    const r: Rect = {x: TX + ln.x0, y: runR.y, w: ln.x1 - ln.x0, h: len};
+    const r: Rect = {x: TX + ln.x0, y: runR.y, w: ln.x1 - ln.x0, h: rl};
     const cls = ln.kind === 'stair' ? 'transit' as const : 'escalator' as const;
     for (const fl of layStairRun([g0, g1], r, run.id, 'z', 'lo', hu, 0, ln.kind === 'stair' ? spec.stair : spec.escalator)) {
       fl.id = k.flights.length; fl.spec = cls; ln.flights.push(fl.id); k.flights.push(fl);
@@ -155,12 +155,11 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
   }
   // Below the box the run is on the station grid only: clear what layStairRun stamped into the (solid) lobby cells there, and
   // check the run's ceiling really is a slab below the lobby floor from the box down (else the lobby floor would cut into it).
-  for (let y = runR.y; y < runR.y + len; y++) for (let x = runR.x; x < runR.x + runR.w; x++) {
+  for (let y = runR.y; y < runR.y + rl; y++) for (let x = runR.x; x < runR.x + runR.w; x++) {
     const i = g1.idx(x, y);
     if (y >= runR.y + box) { g1.rampIdx[i] = -1; g1.floor[i] = 0; g1.ceil[i] = 0; if (g0.ceil[i] > hu - SLAB + 1e-6) return fail('transit-slab'); }
   }
-  const mouth = k.carveDoor({x: runR.x, y: runR.y + len, w: LW, h: 1}, ticket, run, 3.0, true);
-  meta.set(run.id, {role: 'transit', facade: []});
+  const mouth = k.carveDoor({x: runR.x, y: runR.y + rl, w: LW, h: 1}, ticket, run, 3.0, true);
 
   // --- Paid concourse east of the ticket hall, fare line in the shared wall ---------------------------------------------------
   const mw = rng.int(16, 22), mh = rng.int(30, 38);
@@ -267,7 +266,7 @@ export function carveStreet(k: Kit, rng: Rng, f: TowerFrame): StreetCarve | null
   const tower: CarvedTower = {at, floor: 1, core, meta, north: hall, south: transit};
   return {
     kit: k, name, towards: [terms[0], terms[1]], hu, tower, storefronts: shops.storefronts, platform: I,
-    hallRun: {run, lanes, x0: bx0, x1: bx1, y0: ry0, len, box, lead, slope: spec.slope, mouth}, pockets,
+    hallRun: {run, lanes, x0: bx0, x1: bx1, y0: ry0, len: rl, box, lead, slope: spec.slope, mouth}, pockets,
     ticketHall: ticket, paidHall: paid, hall, transit, security, east,
     entrance: {x0: ec - Math.floor(ew / 2), x1: ec - Math.floor(ew / 2) + ew},
   };

@@ -1134,13 +1134,14 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials): Ele
   const leaf = (parent: THREE.Object3D, w: number, sign: number, mat: THREE.Material, name: string, level?: number): Leaf => ({m: mesh(parent, leafGeo, mat, name, level), w, sign});
   const place = (lf: Leaf, open: number) => {
     const o = Math.max(0, Math.min(1, open));
-    const [x, z] = toW(lf.sign * (leafW / 2 + o * hw), lf.w); // open: the leaf's edge flush with the jamb (|l| = hw)
+    // open: the leaf's edge just inside its pocket (3 mm behind the jamb face: never coplanar with the linings / jamb returns)
+    const [x, z] = toW(lf.sign * (leafW / 2 + o * (hw + 0.003)), lf.w);
     lf.m.position.set(x, lf.m.position.y, z);
   };
   const cabLeaves = [leaf(cabG, -0.022, -1, M.cabSteel, 'tower-door-cab-l'), leaf(cabG, -0.022, 1, M.cabSteel, 'tower-door-cab-r')];
   for (const lf of cabLeaves) place(lf, 0);
   // hover rings (one in the cab for its panel, one for the landing stations)
-  const ringGeo = own(new THREE.RingGeometry(1.1, 1.36, 28));
+  const ringGeo = own(new THREE.RingGeometry(1.08, 1.3, 28)); // x the button radius: clear of the neighbouring caps
   const hoverCar = mesh(cabG, ringGeo, M.hover, 'tower-button-hover-car');
   const hoverHall = mesh(root, ringGeo, M.hover, 'tower-button-hover-hall');
   hoverCar.visible = hoverHall.visible = false;

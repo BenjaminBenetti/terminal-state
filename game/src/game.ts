@@ -1589,6 +1589,7 @@ export class Game {
       else if ((st.mag ?? 0) <= wdef.magazine * 0.25 && this.inv.count(wdef.ammoItem)) hint = 'Low — R to reload';
     } else if (def?.kind === 'consumable') hint = def.treats?.length ? this.injuries.treatmentHint(def) : useHint(def); // Iteration 16 (lane INJURY)
     else if (def?.kind === 'throwable') hint = throwHint(def); // Iteration 12 (LIGHT)
+    if (this.gear?.readied) hint = '6 slings it back on · 1-5 switch'; // Task office-overhaul-20261030 (INTERACT, #1)
     let prompt = '';
     for (const f of this.promptProviders) { const lp = f(); if (lp) { prompt = lp; break; } } // Iteration 16: lane prompts (grounded bag, elevator, …)
     const lanePrompt = !!prompt;
@@ -1609,8 +1610,8 @@ export class Game {
     const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
-      weaponName: def ? def.short : 'Empty hands',
-      mag: wdef && st ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
+      weaponName: this.gear?.readied ? 'Backpack · click sets it down' : def ? def.short : 'Empty hands', // INTERACT (#1): slot 6 in the hands
+      mag: wdef && st && !this.gear?.readied ? st.mag ?? 0 : null, reserve: wdef ? this.inv.count(wdef.ammoItem) : 0,
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,

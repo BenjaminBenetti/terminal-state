@@ -18,7 +18,8 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {CELL, FLOOR} from '../gen/grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../gen/props';
-import {propShape, type ShapeMat} from '../gen/propShapes';
+import {propShape, type ShapeMat, type ShapePart} from '../gen/propShapes';
+import {WATER_TOWER_STAND, waterTowerStand} from '../gen/office/companyKinds'; // Task office-overhaul-20261030 (lane TENANTS)
 import {OFFICE_KIND_ASSET, isOfficeKind, officeKindAsset, officeModelKey, officeShape} from '../gen/office/kinds';
 import type {StationLayout} from '../gen/stationTypes';
 import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId, type OfficeTextureId} from '../assets/officeAssets';
@@ -129,10 +130,23 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
     const size = modelSize(gltf);
     const k = Math.min(def.w / size.x, def.d / size.z);
     const fit = k > 0 && Number.isFinite(k) ? {w: size.x * k, h: size.y * k, d: size.z * k, anchor: 'bottom' as const} : {w: def.w, h: def.h, d: def.d, anchor: 'bottom' as const};
+    // TENANTS: the delivered water tank has no stand — it sits on the kind's steel stand (legs built here, the tank lifted onto them).
+    if (kind === 'waterTower') {
+      const up = new THREE.Matrix4().makeTranslation(0, WATER_TOWER_STAND, 0);
+      const n = instanceModel(group, gltf, list.map(p => placeM(p).multiply(up).multiply(FLIP)), fit, kind);
+      boxParts(group, waterTowerStand(def.w, def.d), list, wm, 'prop-waterTower-stand', level);
+      return n;
+    }
     return instanceModel(group, gltf, list.map(p => placeM(p).multiply(FLIP)), fit, kind);
   }
   const parts = isOfficeKind(kind) ? officeShape(kind) : propShape(kind);
   if (!parts) return 0;
+  boxParts(group, parts, list, wm, `prop-${kind}`, level);
+  return list.length;
+}
+
+/** Box-part forms instanced over the placements (one merged geometry per shape material). */
+function boxParts(group: THREE.Group, parts: readonly ShapePart[], list: PropPlacement[], wm: WorldMaterials, name: string, level: number): void {
   const pm = shapeMaterials(wm);
   const byMat = new Map<ShapeMat, THREE.BufferGeometry[]>();
   for (const p of parts) {
@@ -144,8 +158,7 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
     l.push(b);
   }
   const placements = list.map(placeM);
-  for (const [m, geos] of byMat) instanced(group, mergeBoxGeos(geos), pm[m], placements, `prop-${kind}-${m}`, level);
-  return list.length;
+  for (const [m, geos] of byMat) instanced(group, mergeBoxGeos(geos), pm[m], placements, `${name}-${m}`, level);
 }
 
 let fabricMat: THREE.Material | null = null;

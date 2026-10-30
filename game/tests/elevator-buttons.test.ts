@@ -377,6 +377,22 @@ describe('input ownership: a click on a targeted button never fires the weapon',
     expect(shoot(false)).toBeGreaterThan(3);
   });
 
+  it('a living enemy standing in front of a button takes the click (the gun fires); a dead one does not', () => {
+    const P = new Player();
+    const {host, rt, e} = makeHost(towerLayout(), P);
+    const b = byId(e, 'hall-4-up');
+    look(host, P, [12.55, baseOf(4) + 1.62, 8.2], b.at);
+    expect(rt.pickButton(rt.office!, e.logic.y)?.btn.id).toBe('hall-4-up');
+    const zb = {brain: {x: 12.55, z: 8.85, y: baseOf(4), alive: true, stats: {radius: 0.3}}, ragdolled: false};
+    host.zombies.push(zb);
+    expect(rt.pickButton(rt.office!, e.logic.y)).toBeNull();
+    expect(host.pointerHandlers[0]()).toBe(false);
+    expect(e.logic.hallUp.has(3)).toBe(false);
+    zb.brain.alive = false;
+    expect(host.pointerHandlers[0]()).toBe(true);
+    expect(e.logic.hallUp.has(3)).toBe(true);
+  });
+
   it("game.ts: the consuming pointer hook runs right after E and before the flare hold, the gun, item use and the lanes' frame hooks", () => {
     const src = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/readonly pointerHandlers: \(\(\) => boolean\)\[\] = \[\];/);
@@ -432,7 +448,7 @@ describe('the finish: geometry stays where it belongs', () => {
     });
   };
 
-  it('the cab group stays inside the shaft (doors shut and open, at several heights); its door leaves end flush with the jambs', () => {
+  it('the cab group stays inside the shaft (doors shut and open, at several heights); its open door leaves sit just inside their pockets (never in the opening)', () => {
     const P = new Player();
     const {e} = makeHost(towerLayout(), P);
     const G = e.plan.gate;

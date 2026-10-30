@@ -3,7 +3,7 @@
 // corridors) and 9 (server rooms hold servers). Node only (no GPU / browser).
 import {describe, expect, it} from 'vitest';
 import {COMPANIES, COMPANY_IDS, ROOMS, BASE_ROOMS, OPEN_STYLES, type RoomKey} from '../src/gen/office/companies';
-import {COMPANY_KINDS, COMPANY_KIND_ASSET, COMPANY_KIND_AUDIT, COMPANY_PROP_DEFS} from '../src/gen/office/companyKinds';
+import {COMPANY_KINDS, COMPANY_KIND_ASSET, COMPANY_KIND_AUDIT, COMPANY_PROP_DEFS, WATER_TOWER_STAND} from '../src/gen/office/companyKinds';
 import {TENANT_FLOORS, TWO_FLOOR_CHANCE, officeTenants} from '../src/gen/office/tenants';
 import {CORRIDOR_CLEAR_M, directoryLines, isNarrowPassage, passageClear} from '../src/gen/office/companyDress';
 import {OFFICE_GEN_STATS, generateOfficeLevel, officeIssues, towerFrame} from '../src/gen/office/index';
@@ -15,6 +15,7 @@ import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {ROOM_PURPOSES} from '../src/gen/purposes';
 import {ITEMS} from '../src/items/items';
 import type {StationLayout} from '../src/gen/stationTypes';
+import {scarceOdds} from '../src/gen/office/spawns';
 
 const cache = new Map<number, StationLayout>();
 const times: number[] = [];
@@ -82,7 +83,8 @@ describe('company catalogue', () => {
       const asset = COMPANY_KIND_ASSET[k];
       if (!asset) { expect(k).toBe('logoWall'); continue; }
       const spec = COMPANY_ASSET_SPECS[asset], dims = COMPANY_DIMS[asset];
-      if (dims) expect([def.w, def.h, def.d]).toEqual(dims.map(v => Math.round(v * 1000) / 1000));
+      // (the water tower's tank stands on the kind's steel stand: its height adds the stand)
+      if (dims) expect([def.w, def.h, def.d]).toEqual(dims.map((v, i) => Math.round((v + (i === 1 && k === 'waterTower' ? WATER_TOWER_STAND : 0)) * 1000) / 1000));
       else {
         const ext = spec.sizeAxis === 'h' ? def.h : spec.sizeAxis === 'w' ? def.w : Math.max(def.w, def.d, def.h);
         expect(ext, `${k} nominal ${spec.sizeAxis}`).toBeCloseTo(spec.sizeM, 2);
@@ -99,6 +101,22 @@ describe('company catalogue', () => {
       expect(p, key).toBeDefined();
       for (const spec of Object.values(p.loot)) for (const [id] of spec!.items) expect(ITEMS[id], `${key} ${id}`).toBeDefined();
     }
+  });
+});
+
+describe('loot tilt (within the existing scarcity)', () => {
+  it('a company floor shifts the mix of its scarce loose finds, never the expected count; holders follow its rooms\' themes', () => {
+    const sum = (o: number[]) => o.reduce((a, b) => a + b, 0);
+    const none = scarceOdds('none');
+    for (const t of ['medical', 'food', 'ammo', 'light'] as const) expect(sum(scarceOdds(t)), t).toBeCloseTo(sum(none), 9);
+    expect(scarceOdds('medical')[0]).toBeGreaterThan(none[0] * 1.5);
+    expect(scarceOdds('light')[1] + scarceOdds('light')[2]).toBeGreaterThan(none[1] + none[2]);
+    expect(scarceOdds('food')[3]).toBeGreaterThan(0);
+    expect(none[3]).toBe(0);
+    // Themed company rooms carry the company's theme (clinic -> medical, café -> food, security -> security).
+    expect(ROOM_PURPOSES['office-dispensary'].theme).toBe('medical');
+    expect(ROOM_PURPOSES['office-cafe'].theme).toBe('food');
+    expect(ROOM_PURPOSES['office-control'].theme).toBe('security');
   });
 });
 
@@ -165,7 +183,8 @@ describe('company floors in the generated tower', () => {
       expect(l.office!.tenants!.map(t => t.floor)).toEqual([...TENANT_FLOORS]);
       for (const t of l.office!.tenants!) {
         const c = COMPANIES[t.company];
-        const areas = l.areas.filter(a => a.level === t.floor);
+        // (scissor-stair runs span two storeys: no tenant, no company label)
+        const areas = l.areas.filter(a => a.level === t.floor && a.role !== 'stair');
         const props = l.props.filter(p => p.level === t.floor);
         expect(areas.every(a => a.tenant === t.company), `${s} floor ${t.floor} tenant tags`).toBe(true);
         for (const k of c.signature) expect(props.filter(p => p.kind === k).length, `${s} floor ${t.floor} ${t.company} ${k}`).toBeGreaterThan(0);
@@ -257,6 +276,34 @@ describe('company floors in the generated tower', () => {
     expect(rooms).toBeGreaterThan(SEEDS.length);
     expect(racks / rooms).toBeGreaterThanOrEqual(4);
     expect(extras).toBeGreaterThan(rooms);
+  });
+
+  it('delivered-model placement facts: kegerator in a corner with its -X side (portrait panel) on a wall, ship model / aquarium on a sideboard, no portal in a corridor', () => {
+    let kegs = 0, boards = 0;
+    for (const s of SEEDS) {
+      const l = gen(s);
+      for (const p of l.props) {
+        const lv = p.level ?? 0, g = l.levels[lv].grid;
+        if (p.kind === 'kegerator') {
+          kegs++;
+          const def = PROP_DEFS.kegerator, lx = Math.round(Math.cos(p.rot)), lz = Math.round(-Math.sin(p.rot));
+          const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot));
+          const side = g.cellOf(p.x - lx * (def.w / 2 + 0.2), p.z - lz * (def.w / 2 + 0.2));
+          const back = g.cellOf(p.x - fx * (def.d / 2 + 0.2), p.z - fz * (def.d / 2 + 0.2));
+          expect(g.area[g.idx(...side)] === p.area && g.walkable(...side), `${s} kegerator -X side open`).toBe(false);
+          expect(g.area[g.idx(...back)] === p.area && g.walkable(...back), `${s} kegerator back open`).toBe(false);
+        }
+        if (p.kind === 'shipModel' || p.kind === 'aquarium') {
+          boards++;
+          expect(p.host, `${s} ${p.kind} on a sideboard`).toBeDefined();
+          const h = l.props[p.host!];
+          expect(h.kind).toBe('cabinetLow');
+          expect(p.y).toBeCloseTo(h.y + PROP_DEFS.cabinetLow.h, 4);
+        }
+        if (p.kind === 'metalDetector') expect(l.areas[p.area].type).not.toBe('office-corridor');
+      }
+    }
+    process.stdout.write(`[office-tenants] kegerators ${kegs}, sideboard pieces ${boards}\n`);
   });
 
   it('company models load lazily per layout: only the kinds present (tenants on this level)', () => {

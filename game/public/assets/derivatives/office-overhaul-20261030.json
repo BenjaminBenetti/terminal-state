@@ -40,16 +40,21 @@
   "sha256": "c55dd4bcfdbab86e3c8e2b50119a38f57d5dfab6151e120476439c68198520c5"
  },
  "credits": {
-  "previews": 105,
-  "refines": 200,
-  "rejectedOrReplacedAttempts": 5,
-  "total": 305
+  "previews": 300,
+  "refines": 580,
+  "rejectedOrReplacedAttempts": 10,
+  "total": 880
  },
  "replacements": [
   {
    "code": "D09",
    "kind": "preview",
    "reason": "replacement 1/6: previous preview 01a18b06-609d-725f-b69a-a5eb0de85dbc was the wrong object (no bench/cabinets, loose parts) - see reject line; identical manifest args"
+  },
+  {
+   "code": "E09",
+   "kind": "preview",
+   "reason": "replacement 2/6: previous preview 01a18b19-c176-70de-a85d-dc25f7183e13 was the wrong object (door booth, no turnstile) - see reject line; identical manifest args"
   }
  ],
  "outputs": [
@@ -330,6 +335,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "bow and visible gumballs on +Z; tipped jar with gumballs spilled around the base (footprint ~1.4x height)"
    },
+   "note": "tipped jar with gumballs spilled around the base: footprint ~1.03 x 0.66 m at 0.75 m tall",
    "textures": [
     {
      "slot": "baseColor",
@@ -640,6 +646,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "TV at the back edge of the stand, controllers/console and open shelf toward +Z"
    },
+   "note": "TV on a low media stand (top ~0.93 m); console, controllers and open shelf on the -Z side",
    "textures": [
     {
      "slot": "baseColor",
@@ -795,6 +802,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "book faces on +Z"
    },
+   "note": "wide, deep bookcase (~1.13 x 2.2 x 0.67 m)",
    "textures": [
     {
      "slot": "baseColor",
@@ -1105,6 +1113,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "curved desk: monitors on the outer arc, keyboards/operator side on the concave +Z side"
    },
+   "note": "curved desk: monitors on the outer arc, operator side (concave) toward -Z",
    "textures": [
     {
      "slot": "baseColor",
@@ -1260,6 +1269,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "bull head toward +Z (length along Z, charges toward -Z after the turn)"
    },
+   "note": "length along Z, head toward -Z",
    "textures": [
     {
      "slot": "baseColor",
@@ -1420,6 +1430,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "white drawer cabinets on +Z, black epoxy top with flasks of green liquid, racks and microscope (replacement attempt 2)"
    },
+   "note": "replacement attempt 2 (attempt 1 was the wrong object)",
    "textures": [
     {
      "slot": "baseColor",
@@ -1730,6 +1741,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "city-block model on a wooden table, near-symmetric (front +Z by convention); white towers about as tall as the table"
    },
+   "note": "presentation table with tall white towers (~1.6 x 1.61 x 1.46 m)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2040,6 +2052,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "lens points native -X (rear hood/monitor on +X; review/raw-D13-big.png) -> rotated -90 deg so the lens faces -Z"
    },
+   "note": "native lens pointed -X; turned -90 deg so the lens faces -Z (~0.85 x 1.7 x 1.40 m)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2195,6 +2208,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "ring-shaped anchor desk with a tall backdrop panel at the back; blue/white panel and stripe logo face +Z"
    },
+   "note": "ring-shaped anchor desk with a tall backdrop panel on +Z (~2.6 x 1.24 x 1.77 m)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2350,6 +2364,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "group heads, gauges and portafilters on +Z; all-in-one freestanding machine (no separate cart), deep"
    },
+   "note": "freestanding all-in-one machine, no separate cart (~1.4 x 1.29 x 1.41 m, deep)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2505,6 +2520,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "long side with burlap sacks toward +Z; drum door and round cooling tray on the native +X end (runtime -X end); large: ~2.4 m long at h 1.8"
    },
+   "note": "large (~2.43 x 1.8 x 1.58 m); drum door and cooling tray at the -X end",
    "textures": [
     {
      "slot": "baseColor",
@@ -2660,6 +2676,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "console screen faces +Z (user stands on the +Z deck end); runtime: console at +Z end, deck toward -Z"
    },
+   "note": "console at the +Z end, deck toward -Z (~1.19 x 1.85 x 2.0 m)",
    "textures": [
     {
      "slot": "baseColor",
@@ -2815,6 +2832,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "sneaker shelves on +Z; tall black panel unit plus a lower side shelf unit"
    },
+   "note": "wide (2.32 m) tall panel unit plus a lower side shelf unit",
    "textures": [
     {
      "slot": "baseColor",
@@ -3125,6 +3143,7 @@
     "checks": "identity ok, single connected object, no ground slab, no floating junk",
     "observation": "head toward +Z, length along Z (runtime head toward -Z)"
    },
+   "note": "length along Z, head toward -Z",
    "textures": [
     {
      "slot": "baseColor",
@@ -3157,198 +3176,5958 @@
      "sha256": "da3326a6c5200816a84a31e182990e3f7638eda02c7542fc4d2f7894d283989d"
     }
    ]
+  },
+  {
+   "code": "D21",
+   "id": "jukebox",
+   "key": "office-jukebox",
+   "company": "lowtide",
+   "use": "company",
+   "placement": "wall",
+   "subject": "vintage 1950s jukebox with chrome trim, coloured light tubes and an arched glass top",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "vintage 1950s jukebox with chrome trim, coloured light tubes and an arched glass top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "vintage 1950s jukebox with chrome trim, coloured light tubes and an arched glass top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-b853-7440-829d-3cbbca04b66a",
+    "refine": "01a18b19-0e21-7771-b153-483a06979535"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-b853-7440-829d-3cbbca04b66a"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-0e21-7771-b153-483a06979535"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/jukebox/refine/jukebox-refine.glb (raw original, outside Git)",
+    "sha256": "99d886c6d67f341edd1a76314873491ac010a8ed8295f0b4d5426abccd7a21ce",
+    "bytes": 7469164,
+    "triangles": 3950,
+    "extent": [
+     0.7114,
+     0.9521,
+     0.5322
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3021312
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2126548
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2125996
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/jukebox/preview/jukebox-preview.glb",
+    "previewSha256": "f746e1ae542db492e7bcb85fdff12ffbaf7f227b982125f8059595bcf803fc0f",
+    "previewTriangles": 3950
+   },
+   "output": {
+    "file": "game/public/assets/models/office-jukebox.glb",
+    "url": "assets/models/office-jukebox.glb",
+    "sha256": "25fe301c5ab6a2b11ebf80b5c883212b5d8c1d14ddd16db31db0d58002716729",
+    "bytes": 509156,
+    "triangles": 3950,
+    "dims": [
+     1.1955,
+     1.6,
+     0.8944
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1.6,
+   "sizeAxis": "h",
+   "scale": 1.680411,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D21-D25.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "arched light tubes, record window and grille on +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 224841,
+     "sha256": "f24ed5ed441678dc4528b9e5129e5fe20f1e51c7fb13797967e29ba1f9824de9"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 86832,
+     "sha256": "9bf14b5e604d38ca77c3734fb880019c8c2242195ed5e8d82f7a9072205121b9"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26496,
+     "sha256": "18cfdbb9c4a9a5ad1e92075d714890ca699855f3a609ed56cf85a82ffccdb847"
+    }
+   ]
+  },
+  {
+   "code": "D22",
+   "id": "mixing-console",
+   "key": "office-mixing-console",
+   "company": "lowtide",
+   "use": "company",
+   "placement": "floor",
+   "subject": "large professional recording studio mixing console with rows of faders and knobs on a desk, two studio monitor speakers on top",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large professional recording studio mixing console with rows of faders and knobs on a desk, two studio monitor speakers on top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large professional recording studio mixing console with rows of faders and knobs on a desk, two studio monitor speakers on top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-bf7e-7355-b185-e572e59e51bd",
+    "refine": "01a18b19-14c9-7526-b885-eab9a524fe7f"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-bf7e-7355-b185-e572e59e51bd"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-14c9-7526-b885-eab9a524fe7f"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/mixing-console/refine/mixing-console-refine.glb (raw original, outside Git)",
+    "sha256": "2c78ce5f7220877465bd047e614c0f4da8a21132d0ddc7c5aa55d0cc9644aca8",
+    "bytes": 6320668,
+    "triangles": 3806,
+    "extent": [
+     0.9536,
+     0.5972,
+     0.9502
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2621318
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1559238
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1884074
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/mixing-console/preview/mixing-console-preview.glb",
+    "previewSha256": "d4a1922444c5413228a03aff8f25bd5b7db27acc7b47746e8919e353d9993791",
+    "previewTriangles": 3806
+   },
+   "output": {
+    "file": "game/public/assets/models/office-mixing-console.glb",
+    "url": "assets/models/office-mixing-console.glb",
+    "sha256": "a5d010457044cd528871e90967e4200a3131ec595a69b5efdb7765e68bf45ad9",
+    "bytes": 438332,
+    "triangles": 3806,
+    "dims": [
+     2,
+     1.2524,
+     1.9928
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4500,
+   "sizeM": 2,
+   "sizeAxis": "w",
+   "scale": 2.097287,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D21-D25.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "fader bed and meters on +Z, monitor speakers along the back; deep desk (~2 m at w 2.0)"
+   },
+   "note": "deep desk (~2.0 x 1.25 x 1.99 m), monitor speakers at the back",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 155331,
+     "sha256": "bcc593c74c85e559ae6a3039e12ed80d2b8148f2b4b371250c90f40bf733f5e7"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 32196,
+     "sha256": "98d602a23c97039b2898eab92f179f69b67a8c28ddd8b5755f4fc1c140f235d4"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18230,
+     "sha256": "493a35cb8be540e4890ca6084624038c90280d30fe154e2c5ab452aa90b251e4"
+    }
+   ]
+  },
+  {
+   "code": "D23",
+   "id": "exam-table",
+   "key": "office-exam-table",
+   "company": "calloway",
+   "use": "company",
+   "placement": "wall",
+   "subject": "medical examination table with mint green vinyl padding, paper roll, steel step and drawers",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "medical examination table with mint green vinyl padding, paper roll, steel step and drawers, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "medical examination table with mint green vinyl padding, paper roll, steel step and drawers, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-c6e9-73d8-9c5f-7a37b50c4f61",
+    "refine": "01a18b19-1c02-737d-945b-5821e0810eea"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-c6e9-73d8-9c5f-7a37b50c4f61"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-1c02-737d-945b-5821e0810eea"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/exam-table/refine/exam-table-refine.glb (raw original, outside Git)",
+    "sha256": "3e62d0992713817a676bd0eaac768d4a9cdda60644f002e0e760d64e14afa58e",
+    "bytes": 6581604,
+    "triangles": 2900,
+    "extent": [
+     0.9536,
+     0.4985,
+     0.3745
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2473890
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1999403
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1948720
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/exam-table/preview/exam-table-preview.glb",
+    "previewSha256": "28a7d7cca75a8b82eb1637e07e0f66f5443c49ceffeae217f6f6832efdd98ce5",
+    "previewTriangles": 2902
+   },
+   "output": {
+    "file": "game/public/assets/models/office-exam-table.glb",
+    "url": "assets/models/office-exam-table.glb",
+    "sha256": "f0208510ea5beb3b86f5f84b57513124c15fc5fc4755a8cee855534422db6d4c",
+    "bytes": 440364,
+    "triangles": 2900,
+    "dims": [
+     1.9,
+     0.9933,
+     0.7462
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.9,
+   "sizeAxis": "longest",
+   "scale": 1.99242,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D21-D25.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "long side along X; drawer fronts toward +Z; raised backrest at one end"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 183843,
+     "sha256": "d5748cca8235da25894f0151c12c85bdb067c6d3c729e795bf2c2b9c581882a4"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 89495,
+     "sha256": "20f3210815e8771f5043ba68a41a633f82a5144d1cdfce3934a6ce13399dc42d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 25400,
+     "sha256": "0624f8b43f8c4f2ed50f36cda185621bb7e0ff2bcd0a2fa098fdf92ac7f59526"
+    }
+   ]
+  },
+  {
+   "code": "D24",
+   "id": "vitals-monitor",
+   "key": "office-vitals-monitor",
+   "company": "calloway",
+   "use": "company",
+   "placement": "floor",
+   "subject": "wheeled patient vital-signs monitor on a pole stand with a screen, cables and an IV hook",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "wheeled patient vital-signs monitor on a pole stand with a screen, cables and an IV hook, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "wheeled patient vital-signs monitor on a pole stand with a screen, cables and an IV hook, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-cea9-75c1-99d7-1a73c4795eb6",
+    "refine": "01a18b19-236b-725c-b021-1a0b14144767"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-cea9-75c1-99d7-1a73c4795eb6"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-236b-725c-b021-1a0b14144767"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/vitals-monitor/refine/vitals-monitor-refine.glb (raw original, outside Git)",
+    "sha256": "6e0c913c5d50a335b64ae77720c7e4e5f35ca3c01067532973782fbf328cc861",
+    "bytes": 6483024,
+    "triangles": 2996,
+    "extent": [
+     0.5059,
+     0.9526,
+     0.3687
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2614479
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1585521
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2140039
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/vitals-monitor/preview/vitals-monitor-preview.glb",
+    "previewSha256": "2421feefef68675e7c12d9192cfbf3a9b189d74bcbde622162888090f7635f75",
+    "previewTriangles": 2996
+   },
+   "output": {
+    "file": "game/public/assets/models/office-vitals-monitor.glb",
+    "url": "assets/models/office-vitals-monitor.glb",
+    "sha256": "5f3eb63504bbea8abf377c074e3086083e8d73afcb4eefcafa300aca1674cf88",
+    "bytes": 396496,
+    "triangles": 2996,
+    "dims": [
+     0.8496,
+     1.6,
+     0.6192
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.6,
+   "sizeAxis": "h",
+   "scale": 1.67955,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D21-D25.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "screen on +Z, wheeled base"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 189011,
+     "sha256": "a61a7e540fc3b9847f6afafdc61bbd104220da04d527ba2a153968db1bcc093d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 53468,
+     "sha256": "7fab9f3255a411dce263e0c528c16723fe045dc3e478433dd791947ffde9e928"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 29560,
+     "sha256": "5ef70918bc34c5da24dc24afaa5f20c42ba05690109bc8792ccc5d22d749a80d"
+    }
+   ]
+  },
+  {
+   "code": "D25",
+   "id": "dress-form",
+   "key": "office-dress-form",
+   "company": "ardent",
+   "use": "company",
+   "placement": "floor",
+   "subject": "tailor dress form mannequin on a wooden tripod stand, draped with a half-sewn blush pink silk gown with pins",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "tailor dress form mannequin on a wooden tripod stand, draped with a half-sewn blush pink silk gown with pins, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "tailor dress form mannequin on a wooden tripod stand, draped with a half-sewn blush pink silk gown with pins, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-d578-7675-8ccd-9b2d943a60e9",
+    "refine": "01a18b19-2ad8-7503-ba25-422efbb5922b"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-d578-7675-8ccd-9b2d943a60e9"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-2ad8-7503-ba25-422efbb5922b"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/dress-form/refine/dress-form-refine.glb (raw original, outside Git)",
+    "sha256": "12b96ef760c294dee7a25c10a6c4784565962da99ff5f8bd603753bc688a4127",
+    "bytes": 5583852,
+    "triangles": 3404,
+    "extent": [
+     0.3154,
+     0.9517,
+     0.2202
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2489397
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1125397
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1826635
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/dress-form/preview/dress-form-preview.glb",
+    "previewSha256": "373a86552cf123792189013c8bbbddd772f58929a79493f1dd68bdc9b64d2074",
+    "previewTriangles": 3404
+   },
+   "output": {
+    "file": "game/public/assets/models/office-dress-form.glb",
+    "url": "assets/models/office-dress-form.glb",
+    "sha256": "8557aafc1e9760fb1acc9e19354bae7abd139a16d62a3ae1430ff5ef2e48b438",
+    "bytes": 278060,
+    "triangles": 3404,
+    "dims": [
+     0.5635,
+     1.7,
+     0.3934
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.7,
+   "sizeAxis": "h",
+   "scale": 1.786352,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D21-D25.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "blush gown on a thin stand; button placket toward +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 120351,
+     "sha256": "34a29a2808d86d16bffddba2c6035544142590cab880565f204888705fbd7ce5"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 25230,
+     "sha256": "144153b9682964fc97672b244567a5ab18ef72a7c257406b89efe5489e14ca59"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 11096,
+     "sha256": "f986a725d90c167a438cad9369824ee6ec3a9c5fc569bbe00513f84ad454607d"
+    }
+   ]
+  },
+  {
+   "code": "D26",
+   "id": "clothing-rack",
+   "key": "office-clothing-rack",
+   "company": "ardent",
+   "use": "company",
+   "placement": "floor",
+   "subject": "rolling chrome garment rack hung with designer coats and dresses in black, cream and blush tones",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "rolling chrome garment rack hung with designer coats and dresses in black, cream and blush tones, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "rolling chrome garment rack hung with designer coats and dresses in black, cream and blush tones, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-dc4a-74af-ab5b-3774d44b6302",
+    "refine": "01a18b19-31df-7361-bc32-e10197c650c3"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-dc4a-74af-ab5b-3774d44b6302"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-31df-7361-bc32-e10197c650c3"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/clothing-rack/refine/clothing-rack-refine.glb (raw original, outside Git)",
+    "sha256": "5921b58baba670bc89e45e3900a218dd775ba22f2e1193a6099741d38dc8d50b",
+    "bytes": 7210888,
+    "triangles": 4242,
+    "extent": [
+     0.9526,
+     0.8467,
+     0.3643
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3017607
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1684615
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2270493
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/clothing-rack/preview/clothing-rack-preview.glb",
+    "previewSha256": "6a0b53954e326dcea76c09ace77233b2663969b508ae5646fd6738ac59cdae54",
+    "previewTriangles": 4244
+   },
+   "output": {
+    "file": "game/public/assets/models/office-clothing-rack.glb",
+    "url": "assets/models/office-clothing-rack.glb",
+    "sha256": "3b695fb028b5be3069bfd61b011fd13fdd71c628c8dd5357b83a6cf39daa4134",
+    "bytes": 533344,
+    "triangles": 4242,
+    "dims": [
+     1.5,
+     1.3332,
+     0.5736
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4500,
+   "sizeM": 1.5,
+   "sizeAxis": "w",
+   "scale": 1.574578,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D26-D30.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "chrome rail with coats/dresses, near-symmetric (front +Z by convention)"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 230740,
+     "sha256": "3c83ea607be0c1cfb15f5e87188275dbc189b034d7ea1f0cf763851891790106"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 58416,
+     "sha256": "7b6bbfa2e2237d2c08cea825ee77e9b7b7ce00f32ee0f26e33aadf30fe5570e2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 32067,
+     "sha256": "7803e2f8dc8d7d2bf4cb7a9ba9be8b9e53ae8ffe90ad86f34fd869a3995ffd9e"
+    }
+   ]
+  },
+  {
+   "code": "D27",
+   "id": "ship-model",
+   "key": "office-ship-model",
+   "company": "tidewater",
+   "use": "company",
+   "placement": "floor",
+   "subject": "large detailed model of a cargo container ship inside a glass display case on a dark wooden cabinet",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large detailed model of a cargo container ship inside a glass display case on a dark wooden cabinet, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large detailed model of a cargo container ship inside a glass display case on a dark wooden cabinet, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-e7bb-746a-9f53-92ba75d348a6",
+    "refine": "01a18b19-38fc-77c3-b05b-9e3dc59f7e0b"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-e7bb-746a-9f53-92ba75d348a6"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-38fc-77c3-b05b-9e3dc59f7e0b"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/ship-model/refine/ship-model-refine.glb (raw original, outside Git)",
+    "sha256": "3ea91c62f357226c5971b7ac22766508dc5d2fcf9b3fbe2eb2a69c7d073dcded",
+    "bytes": 5757256,
+    "triangles": 3865,
+    "extent": [
+     0.9536,
+     0.3545,
+     0.2422
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2368195
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1531772
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1604888
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/ship-model/preview/ship-model-preview.glb",
+    "previewSha256": "6a30c95bafa27c22ed710657aaf25a95cfcaba9b1d9a79d997c04de5f4ee0d38",
+    "previewTriangles": 4058
+   },
+   "output": {
+    "file": "game/public/assets/models/office-ship-model.glb",
+    "url": "assets/models/office-ship-model.glb",
+    "sha256": "dc10ffce17cb7187aaef2f0dda67d9bd2331bd3c2cf32f7c83344d972ccf3c9a",
+    "bytes": 480996,
+    "triangles": 3865,
+    "dims": [
+     1.6,
+     0.5948,
+     0.4064
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4500,
+   "sizeM": 1.6,
+   "sizeAxis": "w",
+   "scale": 1.677829,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D26-D30.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "container ship in a glass case, NO cabinet (case only, low ~0.6 m at w 1.6): place on a sideboard/table"
+   },
+   "note": "glass display case only, no cabinet: low (~0.59 m) - stand it on a sideboard/table",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 178144,
+     "sha256": "22f646405e458e2101dbfe8b106110589cdfcb3b1e529ba350c05c02da82f089"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 51784,
+     "sha256": "7ab9d30b83ce4b18739353eca6fa30daa486b6bed1b40f237ead503c1c3fcca2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 22371,
+     "sha256": "be683b758b131c29483a5898a004290782771c9e3a99d7bd8638ec18a1a27a23"
+    }
+   ]
+  },
+  {
+   "code": "D28",
+   "id": "parcel-pallet",
+   "key": "office-parcel-pallet",
+   "company": "tidewater",
+   "use": "company",
+   "placement": "floor",
+   "subject": "wooden shipping pallet stacked with shrink-wrapped brown cardboard parcels with shipping labels",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "wooden shipping pallet stacked with shrink-wrapped brown cardboard parcels with shipping labels, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "wooden shipping pallet stacked with shrink-wrapped brown cardboard parcels with shipping labels, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-eeda-7582-8a7e-b08674d18a27",
+    "refine": "01a18b19-3ff7-7093-9d36-5c5c77d77b0b"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-eeda-7582-8a7e-b08674d18a27"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-3ff7-7093-9d36-5c5c77d77b0b"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/parcel-pallet/refine/parcel-pallet-refine.glb (raw original, outside Git)",
+    "sha256": "4f1162feb31564e55bc2af68b59b30bc0c3150eee46c23f532d2bbb15f1de179",
+    "bytes": 4953764,
+    "triangles": 2993,
+    "extent": [
+     0.7954,
+     0.8647,
+     0.9541
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2062959
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1146565
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1578782
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/parcel-pallet/preview/parcel-pallet-preview.glb",
+    "previewSha256": "046e50ae4bc0c06ce7a57fb48699fd635fb129db6ad07204d091f07bbcc60d8a",
+    "previewTriangles": 2995
+   },
+   "output": {
+    "file": "game/public/assets/models/office-parcel-pallet.glb",
+    "url": "assets/models/office-parcel-pallet.glb",
+    "sha256": "f019cf64e140c306dd3cbfec49f3125ca9686675bb3b293ecb476b87e9a724f8",
+    "bytes": 238040,
+    "triangles": 2993,
+    "dims": [
+     1.2,
+     1.3046,
+     1.4394
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.2,
+   "sizeAxis": "w",
+   "scale": 1.508656,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D26-D30.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "2x2x2 labelled parcels on a wooden pallet, bulky"
+   },
+   "note": "bulky 2x2x2 parcel stack on a pallet (~1.2 x 1.3 x 1.44 m)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 48612,
+     "sha256": "0b14558f29e7862a3bb5e63bf5a03bce7b564bfe156ca6fe586c6637f8c57b2b"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26590,
+     "sha256": "24fe64e86f2fa1e29b450aff5fd57955d13c8c6af12225d9f49ed448cc9c1ce2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 15942,
+     "sha256": "cdfc472fd01d3d4d3c065a33696bc82e35f56775709b0f21638290877483f966"
+    }
+   ]
+  },
+  {
+   "code": "D29",
+   "id": "nap-pod",
+   "key": "office-nap-pod",
+   "company": "nimbus",
+   "use": "company",
+   "placement": "wall",
+   "subject": "futuristic white office sleep pod lounge chair with a curved dome visor and grey cushions",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "futuristic white office sleep pod lounge chair with a curved dome visor and grey cushions, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "futuristic white office sleep pod lounge chair with a curved dome visor and grey cushions, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-f824-7109-b769-c0f514afe350",
+    "refine": "01a18b19-46fb-71ce-9a1f-0abd2dbf8fa4"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-f824-7109-b769-c0f514afe350"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-46fb-71ce-9a1f-0abd2dbf8fa4"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/nap-pod/refine/nap-pod-refine.glb (raw original, outside Git)",
+    "sha256": "5340c81f0e37e4719e861e16883ebf7ec2917ec41206c6655da186e0303fff72",
+    "bytes": 4847476,
+    "triangles": 3536,
+    "extent": [
+     0.9575,
+     0.6733,
+     0.8652
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1829419
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1417055
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1453006
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/nap-pod/preview/nap-pod-preview.glb",
+    "previewSha256": "3cc32bce05b9c4296025fb469bce243fb45f3aedb3f0d619a9c6860370c4df25",
+    "previewTriangles": 3536
+   },
+   "output": {
+    "file": "game/public/assets/models/office-nap-pod.glb",
+    "url": "assets/models/office-nap-pod.glb",
+    "sha256": "1c0e3d0dfe69761a1cf2b8eea0d0de7b40aaf72468649467be942c7f75bddb75",
+    "bytes": 290416,
+    "triangles": 3536,
+    "dims": [
+     1.8,
+     1.2658,
+     1.6265
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.8,
+   "sizeAxis": "longest",
+   "scale": 1.879856,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D26-D30.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "dome pod opening with grey cushions on +Z"
+   },
+   "note": "dome pod (~1.8 x 1.27 x 1.63 m), opening toward -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 109162,
+     "sha256": "aa016e337d22a67a0cbcb71fc022160cf77ac043ca475069d4a5ee33060f87cb"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 39357,
+     "sha256": "0839cee60052298e32d63ceda9bf32eca58ae94fbf365393e89bdddb7a1ca8ca"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 15727,
+     "sha256": "a5a55c071ac020c561ebcf0cb8716f6a7c0b00fc174e1a425ece33209e8c556e"
+    }
+   ]
+  },
+  {
+   "code": "D30",
+   "id": "kegerator",
+   "key": "office-kegerator",
+   "company": "nimbus",
+   "use": "company",
+   "placement": "wall",
+   "subject": "stainless steel kegerator fridge with three chrome beer taps and a drip tray, laptop stickers on the side",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "stainless steel kegerator fridge with three chrome beer taps and a drip tray, laptop stickers on the side, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "stainless steel kegerator fridge with three chrome beer taps and a drip tray, laptop stickers on the side, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b12-feeb-77cb-aa1e-b089b4358e02",
+    "refine": "01a18b19-4d53-7496-8311-09fa8beedfea"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b12-feeb-77cb-aa1e-b089b4358e02"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b19-4d53-7496-8311-09fa8beedfea"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/kegerator/refine/kegerator-refine.glb (raw original, outside Git)",
+    "sha256": "9337dbb93486dda453a3bf1da4332b399328a482d07a6e8857fa56757f91cea2",
+    "bytes": 5193692,
+    "triangles": 3023,
+    "extent": [
+     0.8955,
+     0.9507,
+     0.9302
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2064373
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1406997
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1570240
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/kegerator/preview/kegerator-preview.glb",
+    "previewSha256": "45837cb88659f209b570fd9f09b5734806cbd8caab898f1712b9c7189a2cdc38",
+    "previewTriangles": 3023
+   },
+   "output": {
+    "file": "game/public/assets/models/office-kegerator.glb",
+    "url": "assets/models/office-kegerator.glb",
+    "sha256": "9ca1131559a32e75873aab1cf635405edba6d81f6740488799c1f7af2d0d8dd0",
+    "bytes": 214100,
+    "triangles": 3023,
+    "dims": [
+     1.3187,
+     1.4,
+     1.3698
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 1.4,
+   "sizeAxis": "h",
+   "scale": 1.472624,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D26-D30.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "four taps on +Z; FLAG: refine texture painted a photoreal portrait of an elderly man (poster-like) on the native +X side panel next to the stickers - texture hallucination, not a usability defect; primary may decide"
+   },
+   "note": "bulky (~1.32 x 1.4 x 1.37 m); the refine texture painted a poster-like portrait of an elderly man on the -X side panel (texture hallucination; flagged for the primary)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 32832,
+     "sha256": "9cb8e3d5ccc6c7210a7d29ccb6995f8f87f365ab9d781c4cf113a016bee8e9ca"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 31981,
+     "sha256": "ed492ae34e3233347e1e2962727034c21963511115ec04679455be2f64f2566e"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 15950,
+     "sha256": "9e7d3cd0cc94ea429ee554671dd8feae9ba1c5fcf62f98f92738a3cf4a30270b"
+    }
+   ]
+  },
+  {
+   "code": "D31",
+   "id": "cctv-console",
+   "key": "office-cctv-console",
+   "company": "ironclad",
+   "use": "company",
+   "placement": "wall",
+   "subject": "security control desk with a wall of eight small surveillance monitors above it, joystick controller and radio",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "security control desk with a wall of eight small surveillance monitors above it, joystick controller and radio, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "security control desk with a wall of eight small surveillance monitors above it, joystick controller and radio, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-252f-714f-89fa-6062ceb65e51",
+    "refine": "01a18b1c-572c-7508-a969-75c526680617"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-252f-714f-89fa-6062ceb65e51"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-572c-7508-a969-75c526680617"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/cctv-console/refine/cctv-console-refine.glb (raw original, outside Git)",
+    "sha256": "2b4baf89da8559bb11ba93b7823eb2e4e96fa3567c283e4ae571204fddcf8260",
+    "bytes": 7165176,
+    "triangles": 4133,
+    "extent": [
+     0.9507,
+     0.4858,
+     0.5884
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3059168
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1650351
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2233894
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/cctv-console/preview/cctv-console-preview.glb",
+    "previewSha256": "d7a1ace7005b0d45cc6db835ce90e9c632541c64c4bf92e1c8eabfe4f9c3ae29",
+    "previewTriangles": 4133
+   },
+   "output": {
+    "file": "game/public/assets/models/office-cctv-console.glb",
+    "url": "assets/models/office-cctv-console.glb",
+    "sha256": "b633cb08bd9531704ca5469d0364d62ac429bfb0743b7588bebe080c42ab4b98",
+    "bytes": 438720,
+    "triangles": 4133,
+    "dims": [
+     2,
+     1.0221,
+     1.2378
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4500,
+   "sizeM": 2,
+   "sizeAxis": "w",
+   "scale": 2.103749,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D31-D35.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "wall of 15 monitors and the desk controls face +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 180801,
+     "sha256": "ce85c7352d027461649e02ba6a83c9a9376206ac45ae83dbefbc318a8a1d0190"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 44647,
+     "sha256": "e40c2d9e7efcb1b35e5c8fabe05af99d16ffbb255d20ac4c3def3843f433d3a1"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16846,
+     "sha256": "a46699e6019c4f5e3a63046021347f73620ad4f65bf0a6a89a4826b9c0136948"
+    }
+   ]
+  },
+  {
+   "code": "D32",
+   "id": "metal-detector",
+   "key": "office-metal-detector",
+   "company": "ironclad",
+   "use": "company",
+   "placement": "floor",
+   "subject": "walk-through security metal detector archway, grey panels with a small control box on top",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "walk-through security metal detector archway, grey panels with a small control box on top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "walk-through security metal detector archway, grey panels with a small control box on top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-2f42-740e-8406-95b810560e35",
+    "refine": "01a18b1c-5e0c-714f-a79d-21dde9f19431"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-2f42-740e-8406-95b810560e35"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-5e0c-714f-a79d-21dde9f19431"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/metal-detector/refine/metal-detector-refine.glb (raw original, outside Git)",
+    "sha256": "1b02baa5cb963df8124749268eb90dcaa523b5f2f9f286115c4f524fd505e8c3",
+    "bytes": 6813048,
+    "triangles": 2551,
+    "extent": [
+     0.958,
+     0.6763,
+     0.6113
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2816955
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1807757
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2060262
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/metal-detector/preview/metal-detector-preview.glb",
+    "previewSha256": "efd5952d3fe0e276bfd0d122a52987f4d03df4c580de5b6c955050ea09bdd4c5",
+    "previewTriangles": 2574
+   },
+   "output": {
+    "file": "game/public/assets/models/office-metal-detector.glb",
+    "url": "assets/models/office-metal-detector.glb",
+    "sha256": "844a2df979daa0a76cfa7d50a281542fb203c3335f9ec27abcdb65b1435b3471",
+    "bytes": 352596,
+    "triangles": 2551,
+    "dims": [
+     3.1165,
+     2.2,
+     1.9887
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2500,
+   "sizeM": 2.2,
+   "sizeAxis": "h",
+   "scale": 3.253143,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D31-D35.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "wide walk-through portal, control display faces +Z; ~3.1 x 2.2 x 2.0 m (the top beam assembly is deep)"
+   },
+   "note": "wide walk-through portal (~3.12 x 2.2 x 1.99 m); walk-through axis Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 169398,
+     "sha256": "6bc0264bc73b9208d1d01f125ef4ecb982d34b7a48ecbd74a09e6ab3b528b108"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 55342,
+     "sha256": "af8ca387ece513b5cdf3dbef070f80c03ed854aa97cca7f9353572bbcf9d7df7"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 15639,
+     "sha256": "5900cc9fe24d5df668bb93c8e71526eea0b53504f9c10a10d7c0bf9c4734eb26"
+    }
+   ]
+  },
+  {
+   "code": "D33",
+   "id": "vault-safe",
+   "key": "office-vault-safe",
+   "company": "pemberton",
+   "use": "company",
+   "placement": "wall",
+   "subject": "large antique cast-iron office safe with brass dial and handle, dark green paint with gold pinstripes, on small wheels",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large antique cast-iron office safe with brass dial and handle, dark green paint with gold pinstripes, on small wheels, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large antique cast-iron office safe with brass dial and handle, dark green paint with gold pinstripes, on small wheels, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-37b9-724c-a5ab-ccb552c7ccbe",
+    "refine": "01a18b1c-65a4-706a-88d0-095d711fd9d4"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-37b9-724c-a5ab-ccb552c7ccbe"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-65a4-706a-88d0-095d711fd9d4"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/vault-safe/refine/vault-safe-refine.glb (raw original, outside Git)",
+    "sha256": "b6a6d4be9e22e1617d4e3aa796cf6be72eed00368d16e3d1f8fd3f596284bea0",
+    "bytes": 5850880,
+    "triangles": 3499,
+    "extent": [
+     0.832,
+     0.9507,
+     0.8584
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2359297
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1617074
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1718850
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/vault-safe/preview/vault-safe-preview.glb",
+    "previewSha256": "196d1988dfe041c36731459949ca4f4fed69ce68c58449b4d4e6ab1b652a59a4",
+    "previewTriangles": 3499
+   },
+   "output": {
+    "file": "game/public/assets/models/office-vault-safe.glb",
+    "url": "assets/models/office-vault-safe.glb",
+    "sha256": "3eb0d1a30ef602f0c59d091bd88945b7e853199cd273a9fbc92dfd2c881e6573",
+    "bytes": 380020,
+    "triangles": 3499,
+    "dims": [
+     1.3128,
+     1.5,
+     1.3544
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.5,
+   "sizeAxis": "h",
+   "scale": 1.577811,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D31-D35.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "brass dial door on +Z, green with gold pinstripes, castor wheels"
+   },
+   "note": "bulky (~1.31 x 1.5 x 1.35 m); dial door -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 162588,
+     "sha256": "d74c1f7c0feb88876b9e378048b207827a5fa22dcad2acfdc4c4fa3e55aa2102"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 64541,
+     "sha256": "d4752aa60d20b6365cdd17cb0c6655350522a8706d8806edff7f92d2a76c596a"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18823,
+     "sha256": "62d296f4e033c383a277a859b7e74003022c3b160111bfe0655f229a364fc6e0"
+    }
+   ]
+  },
+  {
+   "code": "D34",
+   "id": "archive-boxes",
+   "key": "office-archive-boxes",
+   "company": "pemberton",
+   "use": "company",
+   "placement": "floor",
+   "subject": "tall messy stack of cardboard bankers archive boxes with handwritten year labels, some boxes tipped and crushed",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "tall messy stack of cardboard bankers archive boxes with handwritten year labels, some boxes tipped and crushed, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "tall messy stack of cardboard bankers archive boxes with handwritten year labels, some boxes tipped and crushed, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-3ea8-71c4-a146-e65964abe8e6",
+    "refine": "01a18b1c-6d59-72e1-8b4c-c0ee33461241"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-3ea8-71c4-a146-e65964abe8e6"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-6d59-72e1-8b4c-c0ee33461241"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/archive-boxes/refine/archive-boxes-refine.glb (raw original, outside Git)",
+    "sha256": "0e6ad2e4b4e9ff4b8d41f0bb6b74e656b919f7d71c0e55410a8964fcbee129ad",
+    "bytes": 4741848,
+    "triangles": 2378,
+    "extent": [
+     0.4233,
+     0.9521,
+     0.5352
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1951211
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1126472
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1516181
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/archive-boxes/preview/archive-boxes-preview.glb",
+    "previewSha256": "80ce16b3d6676b5fb8c235a2035c04f9f456867f0fc6f5ff0b40df9ee5871f5d",
+    "previewTriangles": 2380
+   },
+   "output": {
+    "file": "game/public/assets/models/office-archive-boxes.glb",
+    "url": "assets/models/office-archive-boxes.glb",
+    "sha256": "f3bbde81b21777ba29ce33b1663e8a5d91ed488ad2c7737060ed5f43d7c1db94",
+    "bytes": 189748,
+    "triangles": 2378,
+    "dims": [
+     0.578,
+     1.3,
+     0.7307
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2500,
+   "sizeM": 1.3,
+   "sizeAxis": "h",
+   "scale": 1.365334,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D31-D35.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "stack of labelled bankers boxes, labels toward +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 30553,
+     "sha256": "25096604ff30a19ed4a1e3729c8f326156fc808daa2fa741ed4ea1cf7a6994dc"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18276,
+     "sha256": "c28442996034b72569eeb8b3f96c28c77417853b19f8770414de8d991f1ee711"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7754,
+     "sha256": "eec9764ba6fbef7c896af1a1606e48fa7f4e9bf6eb99c712c6d316bb18adbe94"
+    }
+   ]
+  },
+  {
+   "code": "D35",
+   "id": "aquarium",
+   "key": "office-aquarium",
+   "company": "pawprint",
+   "use": "company",
+   "placement": "wall",
+   "subject": "large office aquarium fish tank on a black wooden cabinet, murky green water, plastic plants and a sunken ship ornament",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large office aquarium fish tank on a black wooden cabinet, murky green water, plastic plants and a sunken ship ornament, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large office aquarium fish tank on a black wooden cabinet, murky green water, plastic plants and a sunken ship ornament, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-45cb-7010-abfe-090a598fce23",
+    "refine": "01a18b1c-7411-7432-8889-f61dc715cda0"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-45cb-7010-abfe-090a598fce23"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-7411-7432-8889-f61dc715cda0"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/aquarium/refine/aquarium-refine.glb (raw original, outside Git)",
+    "sha256": "0bdbbb005b4370b45881b45e54cd670bc31265393b90d9435dd5d47a08bf6801",
+    "bytes": 6149412,
+    "triangles": 2859,
+    "extent": [
+     0.9629,
+     0.4082,
+     0.4463
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2630612
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1468003
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1885656
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/aquarium/preview/aquarium-preview.glb",
+    "previewSha256": "a3e77a4e8587258edbade9e39d5a4a2fad2f6e05b329814504dc85030375f1ba",
+    "previewTriangles": 2872
+   },
+   "output": {
+    "file": "game/public/assets/models/office-aquarium.glb",
+    "url": "assets/models/office-aquarium.glb",
+    "sha256": "0043542dbbe27245d0e2612ccfd7ce71257b169ee28e36e1b1a052c01714fc9e",
+    "bytes": 346456,
+    "triangles": 2859,
+    "dims": [
+     1.5,
+     0.6359,
+     0.6952
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.5,
+   "sizeAxis": "w",
+   "scale": 1.557809,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D31-D35.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "long glass tank with plants and sunken ship, NO cabinet (tank only, ~0.64 m tall at w 1.5): place on a sideboard/counter"
+   },
+   "note": "tank only, no cabinet (~1.5 x 0.64 x 0.70 m) - stand it on a sideboard/counter",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 151783,
+     "sha256": "8e71c1696d2dce12ee771693ab1f898e1e4dac19db7a9109f80023a2f7cf1664"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 34404,
+     "sha256": "c700199f652820712ff017cbce15be98cf23cc179d9053ea4a5d52851f29cf79"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 12837,
+     "sha256": "262392dc7ee603c6187521cab2736d5b630664618ec0659665f647d70f2c4bd0"
+    }
+   ]
+  },
+  {
+   "code": "D36",
+   "id": "cat-tree",
+   "key": "office-cat-tree",
+   "company": "pawprint",
+   "use": "company",
+   "placement": "floor",
+   "subject": "tall carpeted cat tree scratching tower with platforms, sisal rope posts and a dangling toy",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "tall carpeted cat tree scratching tower with platforms, sisal rope posts and a dangling toy, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "tall carpeted cat tree scratching tower with platforms, sisal rope posts and a dangling toy, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-4cfe-77cc-b616-fccc544b11ec",
+    "refine": "01a18b1c-7b4f-7612-84b6-ec4cbc312bc9"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-4cfe-77cc-b616-fccc544b11ec"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-7b4f-7612-84b6-ec4cbc312bc9"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/cat-tree/refine/cat-tree-refine.glb (raw original, outside Git)",
+    "sha256": "2204a20ecac1ee1682b1e67bbbcb88de28ca091864ff0dc3fa35daf17425f8fd",
+    "bytes": 6043836,
+    "triangles": 3523,
+    "extent": [
+     0.2856,
+     0.9517,
+     0.3413
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2723645
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1100166
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2067647
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/cat-tree/preview/cat-tree-preview.glb",
+    "previewSha256": "138a66b7ef7cfbe5cc87960e705f537e56f2159f4dfdcfdf956a34ab9f6ac565",
+    "previewTriangles": 3537
+   },
+   "output": {
+    "file": "game/public/assets/models/office-cat-tree.glb",
+    "url": "assets/models/office-cat-tree.glb",
+    "sha256": "2af93be4a9b92163acac9b680454c0004cfe45e483ad2aa388c27088a61677ee",
+    "bytes": 364240,
+    "triangles": 3523,
+    "dims": [
+     0.5403,
+     1.8,
+     0.6456
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.8,
+   "sizeAxis": "h",
+   "scale": 1.891432,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D36-D40.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "tall sisal post with small platforms and a dangling toy on a carpet base, plus a short scratching post; near-symmetric"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 189830,
+     "sha256": "525c0346a746428d517146dbe19a277289945f5ad74420404d788b1f9953c144"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 28790,
+     "sha256": "d6125f1aad74b597d5265c3af867820a3ce0f6a121cbf065a433b60b1c801a37"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14974,
+     "sha256": "7c7a7e79fec21f3e83cc303841457ff7d4175e922a39e659598b21aa1449b64a"
+    }
+   ]
+  },
+  {
+   "code": "D37",
+   "id": "dough-mixer",
+   "key": "office-dough-mixer",
+   "company": "goldencrust",
+   "use": "company",
+   "placement": "wall",
+   "subject": "industrial floor-standing stainless steel dough mixer with a large bowl and dough hook",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "industrial floor-standing stainless steel dough mixer with a large bowl and dough hook, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "industrial floor-standing stainless steel dough mixer with a large bowl and dough hook, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-5423-7395-bdac-b0d643a71311",
+    "refine": "01a18b1c-8226-7290-85fb-2bbfcbe4c24d"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-5423-7395-bdac-b0d643a71311"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-8226-7290-85fb-2bbfcbe4c24d"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/dough-mixer/refine/dough-mixer-refine.glb (raw original, outside Git)",
+    "sha256": "3ffb70f0b290740fb1e8152a8f79a29e7554b7bf1f29d22c1008cc807b60b2a5",
+    "bytes": 6348252,
+    "triangles": 3597,
+    "extent": [
+     0.4521,
+     0.9521,
+     0.5864
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2794102
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1328100
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2070211
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/dough-mixer/preview/dough-mixer-preview.glb",
+    "previewSha256": "957b486828eb328c21a9d4620b489a7eb240223062ddbe9a858d0670615ef1f3",
+    "previewTriangles": 3601
+   },
+   "output": {
+    "file": "game/public/assets/models/office-dough-mixer.glb",
+    "url": "assets/models/office-dough-mixer.glb",
+    "sha256": "e8ba11c7cab5d5544cba7a846064ecad162f42e3a3bc6253286756f906c643a5",
+    "bytes": 330888,
+    "triangles": 3597,
+    "dims": [
+     0.7123,
+     1.5,
+     0.9238
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.5,
+   "sizeAxis": "h",
+   "scale": 1.575385,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D36-D40.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "bowl and mixer head face +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 150611,
+     "sha256": "d4a8c6c0d26b2f54d2490416912089c7d283c2c9088117ae54b88596de3ce208"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 34264,
+     "sha256": "63485617a76a7eaaaafdff7aba510d6b48a1f81a1cd6e9903744e473750f0e17"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 12373,
+     "sha256": "365e16509bf89cf3daa0cc9a636f551a5dfdb798cee5db22a18206c6a7760c8e"
+    }
+   ]
+  },
+  {
+   "code": "D38",
+   "id": "bakery-case",
+   "key": "office-bakery-case",
+   "company": "goldencrust",
+   "use": "company",
+   "placement": "floor",
+   "subject": "curved glass bakery display case on a cream counter base with stale pastries, cakes and bread loaves inside",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "curved glass bakery display case on a cream counter base with stale pastries, cakes and bread loaves inside, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "curved glass bakery display case on a cream counter base with stale pastries, cakes and bread loaves inside, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-5b65-7743-9a3e-f561e6ea3faa",
+    "refine": "01a18b1c-8960-7153-8f0e-1f0cfbabd0d5"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-5b65-7743-9a3e-f561e6ea3faa"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-8960-7153-8f0e-1f0cfbabd0d5"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/bakery-case/refine/bakery-case-refine.glb (raw original, outside Git)",
+    "sha256": "81bbf3ba238082e449af71c4d5d9dbe744cf098b5c5156a4dd2df7587948ed6d",
+    "bytes": 5921228,
+    "triangles": 4396,
+    "extent": [
+     0.9478,
+     0.6577,
+     0.6743
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2340639
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1621104
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1738750
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/bakery-case/preview/bakery-case-preview.glb",
+    "previewSha256": "fc96117b6cade3af488dea822c21a29423dd7465136b25fd5cff5ffe1e8a2900",
+    "previewTriangles": 4409
+   },
+   "output": {
+    "file": "game/public/assets/models/office-bakery-case.glb",
+    "url": "assets/models/office-bakery-case.glb",
+    "sha256": "6f1611c80524610abb64858baf51e50b64fc517d96b31b5cd4495437abefe6a5",
+    "bytes": 454580,
+    "triangles": 4396,
+    "dims": [
+     1.6,
+     1.1104,
+     1.1384
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4500,
+   "sizeM": 1.6,
+   "sizeAxis": "w",
+   "scale": 1.688202,
+   "nativeFront": "-Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D36-D40.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "curved customer glass faces native -Z (open server side with shelves of bread on +Z) -> no rotation; runtime: curved glass -Z (front), server side +Z"
+   },
+   "note": "curved customer glass faces -Z (native, no rotation); open server side +Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 184308,
+     "sha256": "6ad043abcea89a89b1ca9529b81ad821d06ec39688e5e3f631d5e15dfd71c98d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 55038,
+     "sha256": "8463bdf22cf6bb7eea76200fb6f48199109035a58eefe0fbb4dabce4d076f79a"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 21462,
+     "sha256": "289dca7666814d414a4b352f899ec9577aa5498aaca3a6447c37a5d60bc0cf83"
+    }
+   ]
+  },
+  {
+   "code": "D39",
+   "id": "satellite-model",
+   "key": "office-satellite-model",
+   "company": "orbital",
+   "use": "company",
+   "placement": "floor",
+   "subject": "detailed satellite replica with gold foil body and blue solar panel wings, on a black display stand",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "detailed satellite replica with gold foil body and blue solar panel wings, on a black display stand, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "detailed satellite replica with gold foil body and blue solar panel wings, on a black display stand, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-62fd-711e-98ae-0f171816d53c",
+    "refine": "01a18b1c-903b-727f-9e84-75c9695bdaa1"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-62fd-711e-98ae-0f171816d53c"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-903b-727f-9e84-75c9695bdaa1"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/satellite-model/refine/satellite-model-refine.glb (raw original, outside Git)",
+    "sha256": "1ff6d03209edfdc578e6103e7ba687f5fabe6b484828f9aa1837b381e79cbb89",
+    "bytes": 7824044,
+    "triangles": 3948,
+    "extent": [
+     0.9575,
+     0.4766,
+     0.3755
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3545544
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1568508
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2500071
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/satellite-model/preview/satellite-model-preview.glb",
+    "previewSha256": "ea4d69124418076bfcbeb5bcd8cdee389add6697ad0c8e0a5ad1f459c82177f2",
+    "previewTriangles": 3951
+   },
+   "output": {
+    "file": "game/public/assets/models/office-satellite-model.glb",
+    "url": "assets/models/office-satellite-model.glb",
+    "sha256": "9098295f6b60cb7ed0fb936e6edc80066a3c72428604fee6fedffa5187ec9c75",
+    "bytes": 528188,
+    "triangles": 3948,
+    "dims": [
+     1.8,
+     0.8959,
+     0.7059
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1.8,
+   "sizeAxis": "longest",
+   "scale": 1.879856,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D36-D40.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "gold-foil satellite with blue solar wings along X on a black stand"
+   },
+   "note": "solar wings span X (1.8 m); ~0.9 m tall on its stand",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 255262,
+     "sha256": "1272a035262f9825c88fe29ffdc3737eff1e4117726445cfbbd9c55c30ff55ea"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 54293,
+     "sha256": "0acf1bc1e16888d2d4a486ee2dc099e7106c376f7d1e6f3f2c6b06689c056d87"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 32975,
+     "sha256": "64f1cfdc975fc7d2cda6a3f360d280d5471e8e8dd95bafa872eb29d95f6ef934"
+    }
+   ]
+  },
+  {
+   "code": "D40",
+   "id": "telescope",
+   "key": "office-telescope",
+   "company": "orbital",
+   "use": "company",
+   "placement": "floor",
+   "subject": "large white observatory telescope on a heavy black tripod mount",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large white observatory telescope on a heavy black tripod mount, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large white observatory telescope on a heavy black tripod mount, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b16-69ca-70e0-89aa-ce685a179421",
+    "refine": "01a18b1c-963b-7103-90e4-66267c4f3ffa"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b16-69ca-70e0-89aa-ce685a179421"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b1c-963b-7103-90e4-66267c4f3ffa"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/telescope/refine/telescope-refine.glb (raw original, outside Git)",
+    "sha256": "1d2106509e564dfe5af4fbed9dc0f6ae0e1fb88cf41635862e1dc4d80a3d55d2",
+    "bytes": 7299220,
+    "triangles": 3529,
+    "extent": [
+     0.4834,
+     0.9497,
+     0.7905
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2849471
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2040778
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2216522
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/telescope/preview/telescope-preview.glb",
+    "previewSha256": "d3b1e91ac4f878e936f77e0ee0207e044aaf3c1bdec1bcfed7f35c0d025df6f1",
+    "previewTriangles": 3529
+   },
+   "output": {
+    "file": "game/public/assets/models/office-telescope.glb",
+    "url": "assets/models/office-telescope.glb",
+    "sha256": "3174f986942e1e243f09dd0028d737eac6dd1008db3f57746be729e878220c68",
+    "bytes": 466532,
+    "triangles": 3529,
+    "dims": [
+     0.9162,
+     1.8,
+     1.4983
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.8,
+   "sizeAxis": "h",
+   "scale": 1.895319,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-D36-D40.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "tube along Z with the aperture at native -Z; front set +Z so after the 180 turn the aperture points +Z (back, toward a window/wall) and the eyepiece/handles face the room (-Z)"
+   },
+   "note": "aperture points +Z (toward the wall/window), eyepiece/handles face -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 202155,
+     "sha256": "0f1387c7a0deb5a68aeabb3175c1f1573995a3e4bebdcc4638163b3e85ed26e0"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 68105,
+     "sha256": "eb8db5afb57ea21b08ab1d283946fe607507bc77b96f1ceaadb706adea755738"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 25545,
+     "sha256": "fa0b8661f724ce1cda790bf60262a353b261faf20627e5b5561dcfbc143f1d07"
+    }
+   ]
+  },
+  {
+   "code": "E01",
+   "id": "executive-desk",
+   "key": "office-executive-desk",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "large dark walnut executive desk with green leather inlay top and brass drawer pulls",
+   "justification": "Executive suite dedicated furnishing",
+   "feedbackItem": 7,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large dark walnut executive desk with green leather inlay top and brass drawer pulls, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large dark walnut executive desk with green leather inlay top and brass drawer pulls, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-7c90-739c-9e7c-33e83de19d08",
+    "refine": "01a18b23-c034-7691-a8c5-210755dd8e30"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-7c90-739c-9e7c-33e83de19d08"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-c034-7691-a8c5-210755dd8e30"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/executive-desk/refine/executive-desk-refine.glb (raw original, outside Git)",
+    "sha256": "41950ec090d16fac1fe7fd968cea5c2de98bea02bb082080abca22ede6dc3a40",
+    "bytes": 7564820,
+    "triangles": 4158,
+    "extent": [
+     0.9502,
+     0.4619,
+     0.5127
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3199191
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1913368
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2242389
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/executive-desk/preview/executive-desk-preview.glb",
+    "previewSha256": "4c6ac12a199060d91aba8a1ab7c2f014f1cf228aa59bc0416d13a1a3001ef2b2",
+    "previewTriangles": 4160
+   },
+   "output": {
+    "file": "game/public/assets/models/office-executive-desk.glb",
+    "url": "assets/models/office-executive-desk.glb",
+    "sha256": "bef5423eef493ae01750fb979f41a6a0d21fed5e7f699c364fe3998bcb27ea67",
+    "bytes": 506668,
+    "triangles": 4158,
+    "dims": [
+     2,
+     0.9722,
+     1.0791
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 2,
+   "sizeAxis": "w",
+   "scale": 2.104829,
+   "nativeFront": "-Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "walnut pedestal desk, green leather top; front = visitor/modesty side (native -Z, no rotation); drawer/seat side is +Z: put the executive chair on +Z facing -Z"
+   },
+   "note": "front -Z = visitor/modesty side (native, no rotation); drawer/seat side +Z: put the executive chair on +Z facing -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 229687,
+     "sha256": "979bfe89216be4788181368223acdc256abf1c417e65525cc50139fa7a2529be"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 67743,
+     "sha256": "f05117cd1e85ee8332c7b0098606c69fc627450588bded478de595fae49ae3bb"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 24950,
+     "sha256": "9161281211ee052e275eb8aa4290fa5ac45fa6dc8dd972db5e6a80d916087c30"
+    }
+   ]
+  },
+  {
+   "code": "E02",
+   "id": "executive-chair",
+   "key": "office-executive-chair",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "high-back tufted brown leather executive office chair on a five-star base",
+   "justification": "Executive suite dedicated furnishing",
+   "feedbackItem": 7,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "high-back tufted brown leather executive office chair on a five-star base, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "high-back tufted brown leather executive office chair on a five-star base, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-848b-726e-8e63-36528bdd0caf",
+    "refine": "01a18b23-c6d1-76d0-8b28-69b14491ec96"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-848b-726e-8e63-36528bdd0caf"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-c6d1-76d0-8b28-69b14491ec96"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/executive-chair/refine/executive-chair-refine.glb (raw original, outside Git)",
+    "sha256": "e66bf43bc5b9ffc0f5e2e24c6250bdfb09ef1f3f67c74c1daa41f20f69016a92",
+    "bytes": 6223936,
+    "triangles": 3577,
+    "extent": [
+     0.5366,
+     0.9521,
+     0.5479
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2447645
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1877302
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1720665
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/executive-chair/preview/executive-chair-preview.glb",
+    "previewSha256": "3e8fd95e8b8873d585a401bccdb4f9ae70089e7fafc7caf57505070b211b9eba",
+    "previewTriangles": 3577
+   },
+   "output": {
+    "file": "game/public/assets/models/office-executive-chair.glb",
+    "url": "assets/models/office-executive-chair.glb",
+    "sha256": "804fb8dff7d914fe829ae39af2a3c5f8aa3e4e8b8c87691b33ba4d51d9fbb09f",
+    "bytes": 269436,
+    "triangles": 3577,
+    "dims": [
+     0.7045,
+     1.25,
+     0.7192
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 1.25,
+   "sizeAxis": "h",
+   "scale": 1.312821,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "tufted seat side faces +Z (runtime -Z)"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41132,
+     "sha256": "717f73e63d52308b54dd35ad441c53222cd8a9d0c34747a4750a4dee308c58d9"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 63593,
+     "sha256": "2a4a4faa81e850d7542457aa15b31caa79639b26c2292c65aeaf33acabc11f30"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 8418,
+     "sha256": "be598ab314d60d4579fd95648688dcb4dc8415e9576c4c1fc040d31cccdc44e6"
+    }
+   ]
+  },
+  {
+   "code": "E03",
+   "id": "chesterfield-sofa",
+   "key": "office-chesterfield-sofa",
+   "company": null,
+   "use": "support",
+   "placement": "wall",
+   "subject": "dark oxblood leather chesterfield sofa with deep button tufting",
+   "justification": "Executive suite seating",
+   "feedbackItem": 7,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "dark oxblood leather chesterfield sofa with deep button tufting, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "dark oxblood leather chesterfield sofa with deep button tufting, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-8a4c-7520-84c6-170c71c8d289",
+    "refine": "01a18b23-cddc-7573-83d5-583639e71f31"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-8a4c-7520-84c6-170c71c8d289"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-cddc-7573-83d5-583639e71f31"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/chesterfield-sofa/refine/chesterfield-sofa-refine.glb (raw original, outside Git)",
+    "sha256": "a3e1f5e1edf242bf6396d56731d6597427abe09dfb2a331cc9d690b34f3dfc23",
+    "bytes": 4897460,
+    "triangles": 4134,
+    "extent": [
+     0.9575,
+     0.3853,
+     0.522
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2021572
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1377327
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1323756
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/chesterfield-sofa/preview/chesterfield-sofa-preview.glb",
+    "previewSha256": "0d03930111679f58f40da603f07c845455b74b04f8a6708b073e3d20dd7c10cd",
+    "previewTriangles": 4134
+   },
+   "output": {
+    "file": "game/public/assets/models/office-chesterfield-sofa.glb",
+    "url": "assets/models/office-chesterfield-sofa.glb",
+    "sha256": "a4ac082aa2450a0a0d99241184c05b6e44c64b00ec5e6a6f4ba25c37898afcfb",
+    "bytes": 279844,
+    "triangles": 4134,
+    "dims": [
+     2.1,
+     0.8449,
+     1.1448
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 2.1,
+   "sizeAxis": "w",
+   "scale": 2.193166,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "seat faces +Z, oxblood button tufting"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 84806,
+     "sha256": "909615e32f37e17ab9017de594144af7e2133ddf5f1ed16b67878a78f98ad246"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 39795,
+     "sha256": "7c1aba4f56dca0919a53de9d2d656da0c0a0fe3c72fbfa74b19ee1768b028481"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5868,
+     "sha256": "bbfcd2f7349b9da49d2b307ea754a1ef5a24dd6cfea609e03634ffdf7373dc81"
+    }
+   ]
+  },
+  {
+   "code": "E04",
+   "id": "globe-bar",
+   "key": "office-globe-bar",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "antique world globe drinks cabinet on a carved wooden stand, lid open showing bottles and glasses",
+   "justification": "Executive suite signature piece",
+   "feedbackItem": 7,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "antique world globe drinks cabinet on a carved wooden stand, lid open showing bottles and glasses, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "antique world globe drinks cabinet on a carved wooden stand, lid open showing bottles and glasses, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-915f-7415-bd8b-103b06a0e9f9",
+    "refine": "01a18b23-d547-70de-a468-a0aeba727cf6"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-915f-7415-bd8b-103b06a0e9f9"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-d547-70de-a468-a0aeba727cf6"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/globe-bar/refine/globe-bar-refine.glb (raw original, outside Git)",
+    "sha256": "aeeaae4be4f6cb217afcaab8afcfb9289c532b6584ded71c47e4495a9f3dfb94",
+    "bytes": 8014436,
+    "triangles": 4123,
+    "extent": [
+     0.6367,
+     0.9517,
+     0.6377
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3555073
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1754627
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2521766
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/globe-bar/preview/globe-bar-preview.glb",
+    "previewSha256": "5b147e2f9cd33aa2692fc75a5912c319487b0014aa2e46b6247a93d533cd3af6",
+    "previewTriangles": 4125
+   },
+   "output": {
+    "file": "game/public/assets/models/office-globe-bar.glb",
+    "url": "assets/models/office-globe-bar.glb",
+    "sha256": "b20ca7abe2fdf416b155154ef6054182afd08429c12ef25071e554fdab954294",
+    "bytes": 304048,
+    "triangles": 4123,
+    "dims": [
+     0.6691,
+     1,
+     0.6701
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1,
+   "sizeAxis": "h",
+   "scale": 1.050795,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "globe lid open with bottles and glasses inside, carved stand; near-symmetric"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 70115,
+     "sha256": "33890c89cdfc785a56441e34e1cb8667ea5f3ea99d5278c46e6c6f9306714ade"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 52292,
+     "sha256": "265ee48732a54d9103d122ade60bb77d8d8a721bc0f875f6bc80bfbb7d6f29e4"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 24052,
+     "sha256": "dc698c416f0f9872511dd5c668690c0692e8c00b8f51d8e95306db0f573be205"
+    }
+   ]
+  },
+  {
+   "code": "E05",
+   "id": "server-cabinet",
+   "key": "office-server-cabinet",
+   "company": null,
+   "use": "support",
+   "placement": "wall",
+   "subject": "modern black server cabinet with perforated glass door, stacked rack servers with small status lights, cable bundles",
+   "justification": "Server rooms need real servers; variety beside the existing open rack",
+   "feedbackItem": 9,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "modern black server cabinet with perforated glass door, stacked rack servers with small status lights, cable bundles, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "modern black server cabinet with perforated glass door, stacked rack servers with small status lights, cable bundles, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-9c08-7771-b50e-fa9af7e4484d",
+    "refine": "01a18b23-dc7f-767a-8164-d7703048d4d0"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-9c08-7771-b50e-fa9af7e4484d"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-dc7f-767a-8164-d7703048d4d0"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/server-cabinet/refine/server-cabinet-refine.glb (raw original, outside Git)",
+    "sha256": "eb017adda3a4c74612030c671d31b5fe9d92ef1730b835d62520da09d03e8874",
+    "bytes": 4254752,
+    "triangles": 3009,
+    "extent": [
+     0.9502,
+     0.6514,
+     0.4497
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1506243
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1273831
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1309332
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/server-cabinet/preview/server-cabinet-preview.glb",
+    "previewSha256": "26c3a7bd11521ec833b111096f19a81520c86b66c611dff3fa0351cd85fb22aa",
+    "previewTriangles": 3011
+   },
+   "output": {
+    "file": "game/public/assets/models/office-server-cabinet.glb",
+    "url": "assets/models/office-server-cabinet.glb",
+    "sha256": "ad281f20c57129f633fd811fdd6ac0c39996c89ef18706c59ee2a8e61467702c",
+    "bytes": 284588,
+    "triangles": 3009,
+    "dims": [
+     2.9175,
+     2,
+     1.3808
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 2,
+   "sizeAxis": "h",
+   "scale": 3.070461,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "three-bay black cabinet, glass server bay faces +Z; wide (~2.9 x 2.0 x 1.4 m)"
+   },
+   "note": "wide three-bay cabinet (~2.92 x 2.0 x 1.38 m), glass server bay in the middle",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 91913,
+     "sha256": "509a7991a8dc9461138a53cf14b9fb498392f9a4ef6f31002fa0f519250b80ae"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 36452,
+     "sha256": "3ea14b723476869fadbbc99986db292c6bad57aee574c96378c19024f2e484a9"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 9492,
+     "sha256": "b3cf6c376b3f922016433161a5652d19c8933b385c0f1bec39bc2e69abf08158"
+    }
+   ]
+  },
+  {
+   "code": "E06",
+   "id": "crac-unit",
+   "key": "office-crac-unit",
+   "company": null,
+   "use": "support",
+   "placement": "wall",
+   "subject": "tall beige computer room precision air conditioning unit with vents and a small control screen",
+   "justification": "Server-room precision cooling unit (believable server room)",
+   "feedbackItem": 9,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "tall beige computer room precision air conditioning unit with vents and a small control screen, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "tall beige computer room precision air conditioning unit with vents and a small control screen, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-a3c9-70dc-a1f6-178815111c08",
+    "refine": "01a18b23-e35d-70ee-8691-f03eeb21b377"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-a3c9-70dc-a1f6-178815111c08"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-e35d-70ee-8691-f03eeb21b377"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/crac-unit/refine/crac-unit-refine.glb (raw original, outside Git)",
+    "sha256": "dfd74c05fab8eff9b0a35fb7aee685329b96882d7f9be43bd76f5816c9470d2c",
+    "bytes": 5776020,
+    "triangles": 2548,
+    "extent": [
+     0.2827,
+     0.9512,
+     0.3521
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2278176
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1546390
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1812183
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/crac-unit/preview/crac-unit-preview.glb",
+    "previewSha256": "1f8ff53c981eb0cf36a8754e9d2dcebd6e09eab430b62af0ac7157575d07d167",
+    "previewTriangles": 2550
+   },
+   "output": {
+    "file": "game/public/assets/models/office-crac-unit.glb",
+    "url": "assets/models/office-crac-unit.glb",
+    "sha256": "7c95c60a35862ba9a8d7f1f1b5b7c3f55dec7323d75d422fad614d784a6ab91e",
+    "bytes": 356392,
+    "triangles": 2548,
+    "dims": [
+     0.5647,
+     1.9,
+     0.7032
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2500,
+   "sizeM": 1.9,
+   "sizeAxis": "h",
+   "scale": 1.997536,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "control screen and panels on +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 168571,
+     "sha256": "9e008aceb45ac2b66ed0163b5355fee14b0b4202d38d488d852e32fb5aaf89c2"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 46426,
+     "sha256": "42c970d446228bc016bfc41a12b397ca5f844e434c366635cf989f2f6dc127f0"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18002,
+     "sha256": "391ecfb2d4d3d5e4e794359e7e41fa5c78bff83b6a4c2903287e471479157565"
+    }
+   ]
+  },
+  {
+   "code": "E07",
+   "id": "lobby-sofa",
+   "key": "office-lobby-sofa",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "modern grey upholstered modular lobby sofa on thin steel legs",
+   "justification": "Neutral lobby / reception seating (user: couches and sofas for lobby)",
+   "feedbackItem": 0,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "modern grey upholstered modular lobby sofa on thin steel legs, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "modern grey upholstered modular lobby sofa on thin steel legs, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-ae0a-76be-9c16-d14ecd494dd5",
+    "refine": "01a18b23-ea73-71eb-9fce-81e297a120b3"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-ae0a-76be-9c16-d14ecd494dd5"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-ea73-71eb-9fce-81e297a120b3"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/lobby-sofa/refine/lobby-sofa-refine.glb (raw original, outside Git)",
+    "sha256": "da9205b1991aff8e249204500604889919f5db7711a6ce2566e9705cce60ab7f",
+    "bytes": 6199520,
+    "triangles": 3438,
+    "extent": [
+     0.9556,
+     0.3433,
+     0.4507
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2810992
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 920837
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2299683
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/lobby-sofa/preview/lobby-sofa-preview.glb",
+    "previewSha256": "2287d0144c5307c0a06af26d1160d4ee212259412069a3aabf1c31def94ecfb9",
+    "previewTriangles": 3439
+   },
+   "output": {
+    "file": "game/public/assets/models/office-lobby-sofa.glb",
+    "url": "assets/models/office-lobby-sofa.glb",
+    "sha256": "b034348e38f94c773e0ee794523fc56c39658f3116d0a1722f30f318dbfde663",
+    "bytes": 355544,
+    "triangles": 3438,
+    "dims": [
+     2.2,
+     0.7903,
+     1.0376
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 2.2,
+   "sizeAxis": "w",
+   "scale": 2.3023,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "seat faces +Z, grey upholstery on steel legs"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 173348,
+     "sha256": "a86157b2b173467bbcb87427f83e17ce8fecde3b716bea6fea93468be2ab02a7"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 23892,
+     "sha256": "50f6d0e2326ab6d51fb940311b53fa06e451ff112b81353749a724d15b086d0b"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 11529,
+     "sha256": "2dc2fdfd4e4fbbd52af109ce26258ea028e1558fcad5ff697defdc9ee5638f73"
+    }
+   ]
+  },
+  {
+   "code": "E08",
+   "id": "planter-tree",
+   "key": "office-planter-tree",
+   "company": null,
+   "use": "support",
+   "placement": "wall",
+   "subject": "large square concrete planter box with a tall dead ficus tree, dry leaves",
+   "justification": "Large planters belong in lobbies / atria beside walls, not in corridors",
+   "feedbackItem": 8,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large square concrete planter box with a tall dead ficus tree, dry leaves, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "large square concrete planter box with a tall dead ficus tree, dry leaves, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b19-b805-72e2-89c5-f4187df314a9",
+    "refine": "01a18b23-f072-70e6-a595-914548799672"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-b805-72e2-89c5-f4187df314a9"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b23-f072-70e6-a595-914548799672"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/planter-tree/refine/planter-tree-refine.glb (raw original, outside Git)",
+    "sha256": "def92f8093b328fac8ffcca73f33cb7629b316f6bd2f8cd650d6ef2b780ee027",
+    "bytes": 7128224,
+    "triangles": 3027,
+    "extent": [
+     0.4487,
+     0.9531,
+     0.4199
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3069569
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1654781
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2205017
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/planter-tree/preview/planter-tree-preview.glb",
+    "previewSha256": "ad6218bc3602205219336b84505fbd0b68280b7c81bb731383f10ffbe9c7dfa4",
+    "previewTriangles": 3027
+   },
+   "output": {
+    "file": "game/public/assets/models/office-planter-tree.glb",
+    "url": "assets/models/office-planter-tree.glb",
+    "sha256": "ec06eca8db3579594607fb289c0378fb02ea21fe171352f3adc831d210a2aa7b",
+    "bytes": 411936,
+    "triangles": 3027,
+    "dims": [
+     1.0358,
+     2.2,
+     0.9693
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 2.2,
+   "sizeAxis": "h",
+   "scale": 2.308197,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E01-E08.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "concrete planter box with a dead ficus (dry brown leaves), symmetric"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 183035,
+     "sha256": "bb3a2a43dec9a0be3d5f635d991a479f580ec79c127cdb18c26e7da1292aea5e"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 39269,
+     "sha256": "2b31dd90c6f9632caad50d19fc90fb02d0db163b007e3fc722f58d6c5f34e588"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 9538,
+     "sha256": "aee4419a3c31a029d8e7f170091748ff2ded507ba042e491d6f6687871ff48db"
+    }
+   ]
+  },
+  {
+   "code": "E09",
+   "id": "security-turnstile",
+   "key": "office-security-turnstile",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "office lobby glass-wing speed gate turnstile pedestal, brushed steel cabinet with glass flap",
+   "justification": "Office lobby security gate line beside the transit entrance",
+   "feedbackItem": 11,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "office lobby glass-wing speed gate turnstile pedestal, brushed steel cabinet with glass flap, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "office lobby glass-wing speed gate turnstile pedestal, brushed steel cabinet with glass flap, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b23-b9e8-774a-a723-8ad5c7352645",
+    "refine": "01a18b26-d422-70bb-a457-1f36e519fec0"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 20,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b19-c176-70de-a85d-dc25f7183e13",
+     "rejected": "wrong object: a closed booth / elevator-cab-like box with door frames and sliding doors on its sides, no turnstile pedestal or glass wing"
+    },
+    {
+     "kind": "preview",
+     "task": "01a18b23-b9e8-774a-a723-8ad5c7352645"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-d422-70bb-a457-1f36e519fec0"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/security-turnstile/refine/security-turnstile-refine.glb (raw original, outside Git)",
+    "sha256": "66f8f1f3483cd3b9fb2cd621b3b70a2c7d8d7cba4e2808aa536e93d3e5124e3b",
+    "bytes": 4954584,
+    "triangles": 2309,
+    "extent": [
+     0.9497,
+     0.5991,
+     0.6113
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1987243
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1260270
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1597213
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/security-turnstile/preview-a2/security-turnstile-preview.glb",
+    "previewSha256": "6c0c5978bc0b3830f917114561fd15bb0bea3513b0223e5ef82f9b10b1b8ecbf",
+    "previewTriangles": 2309
+   },
+   "output": {
+    "file": "game/public/assets/models/office-security-turnstile.glb",
+    "url": "assets/models/office-security-turnstile.glb",
+    "sha256": "5036fca00b408301c3ea5e51de0b546dddcacd917a6835df700a9fa61bb41924",
+    "bytes": 185696,
+    "triangles": 2309,
+    "dims": [
+     1.5852,
+     1,
+     1.0204
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2500,
+   "sizeM": 1,
+   "sizeAxis": "h",
+   "scale": 1.669112,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "replacement attempt 2: two brushed-steel pedestals with glass flaps across one lane; walk-through axis is Z (pedestals spread along X)"
+   },
+   "note": "replacement attempt 2; two pedestals spread along X (1.59 m) with glass flaps across one lane; walk-through axis Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41324,
+     "sha256": "2295b91ce8b00276f9c2cf32f339f9272c461a52dffd0fe1ec1fc02d57a450fe"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 35174,
+     "sha256": "17bde6008600704ed20b22d8900df861fb2de9cbf89b3662bb7c15a198283d74"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13764,
+     "sha256": "e503b40d8e0de2542fdbe2e73820f781e70297a665bb35d35b0ee4cb8c678744"
+    }
+   ]
+  },
+  {
+   "code": "E10",
+   "id": "foosball-table",
+   "key": "office-foosball-table",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "foosball table with rows of red and blue players on steel rods, wooden cabinet",
+   "justification": "Company leisure amenity (user: football table)",
+   "feedbackItem": 0,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "foosball table with rows of red and blue players on steel rods, wooden cabinet, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "foosball table with rows of red and blue players on steel rods, wooden cabinet, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-c674-7238-b9c9-0676a8d8a27c",
+    "refine": "01a18b26-daf3-71bb-9189-8fd35dc0ab52"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-c674-7238-b9c9-0676a8d8a27c"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-daf3-71bb-9189-8fd35dc0ab52"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/foosball-table/refine/foosball-table-refine.glb (raw original, outside Git)",
+    "sha256": "f8638f88b08f5e90ff7522ca33919ad2fabcc603868c9a3e2eef1a560cb915bf",
+    "bytes": 6088100,
+    "triangles": 3938,
+    "extent": [
+     0.9507,
+     0.353,
+     0.854
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2470188
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1669817
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1769120
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/foosball-table/preview/foosball-table-preview.glb",
+    "previewSha256": "f4d19fcd4de408fff2e5360588c6ffc15031ab2785367a14584c3433a7b6335b",
+    "previewTriangles": 3938
+   },
+   "output": {
+    "file": "game/public/assets/models/office-foosball-table.glb",
+    "url": "assets/models/office-foosball-table.glb",
+    "sha256": "104151d80c13e9f6120c98820c36f0f327f2aa94d871953a411b39a548a051e0",
+    "bytes": 310132,
+    "triangles": 3938,
+    "dims": [
+     1.4,
+     0.5199,
+     1.2576
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 1.4,
+   "sizeAxis": "longest",
+   "scale": 1.472624,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "wooden cabinet, green pitch, red/blue players on rods; handles on both long sides (Z)"
+   },
+   "note": "rod handles stick out on both long sides (1.4 x 0.52 x 1.26 m incl. rods)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 64252,
+     "sha256": "9962a3f86cdb5294a99f004e8f8b4d73e8e473e46bb70d1076b1a6ca23851c32"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 68476,
+     "sha256": "22ef0631641716a2c919a186d2ad5e7541b3e2768e60b33ee0750de796b8ccf3"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 22627,
+     "sha256": "f628a13c13624d26121c3d77598f912514471ba52f6a402a9000f814fead7864"
+    }
+   ]
+  },
+  {
+   "code": "E11",
+   "id": "ping-pong-table",
+   "key": "office-ping-pong-table",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "blue table tennis table with net and two paddles on top",
+   "justification": "Company leisure amenity (user: ping pong table)",
+   "feedbackItem": 0,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "blue table tennis table with net and two paddles on top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "blue table tennis table with net and two paddles on top, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-ccff-722e-b9be-a694110c667c",
+    "refine": "01a18b26-e195-7348-a861-f5bb4bad767e"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-ccff-722e-b9be-a694110c667c"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-e195-7348-a861-f5bb4bad767e"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/ping-pong-table/refine/ping-pong-table-refine.glb (raw original, outside Git)",
+    "sha256": "0c22744453deeabd2022708ae9cd7279b3b1cae3338f16415e6dd7efab479142",
+    "bytes": 5885412,
+    "triangles": 2980,
+    "extent": [
+     0.832,
+     0.2847,
+     0.9419
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2645733
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1260625
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1825128
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/ping-pong-table/preview/ping-pong-table-preview.glb",
+    "previewSha256": "91747fc2f2474cdb3ca9b865f0a7282cef4591e75c1b5430e485460fedc1f739",
+    "previewTriangles": 2984
+   },
+   "output": {
+    "file": "game/public/assets/models/office-ping-pong-table.glb",
+    "url": "assets/models/office-ping-pong-table.glb",
+    "sha256": "b7cb6cb2dbeadf1e75b055aa9d4006dfd2067049a2e79c75dab4f5428ef87ffd",
+    "bytes": 327328,
+    "triangles": 2980,
+    "dims": [
+     2.4204,
+     0.8281,
+     2.74
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 2.74,
+   "sizeAxis": "longest",
+   "scale": 2.909032,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "blue table, net across X at mid-length, two red paddles; squat proportions (~2.4 x 0.8 x 2.74 m)"
+   },
+   "note": "squat table (~2.42 x 0.83 x 2.74 m); net across X at mid-length",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 144479,
+     "sha256": "e120bfeb388f6f2c97a98e58f935fd6e3392acb4827190000214b8a757f7df48"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 27712,
+     "sha256": "7b69368a6bd83fa7822541ac719b6d10c8f30f266f8ff9fddd03265984c84900"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 19611,
+     "sha256": "354192852542379bd3c3615e1a95efd971270e476cf95fb300974e9d77a38a4d"
+    }
+   ]
+  },
+  {
+   "code": "E12",
+   "id": "bean-bag",
+   "key": "office-bean-bag",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "slouched large fabric bean bag chair, faded orange",
+   "justification": "Lounge seating for creative companies",
+   "feedbackItem": 0,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "slouched large fabric bean bag chair, faded orange, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "slouched large fabric bean bag chair, faded orange, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-d3d3-72d5-8961-6d77f7e18aa5",
+    "refine": "01a18b26-e868-7388-8b11-a3898c8569b1"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-d3d3-72d5-8961-6d77f7e18aa5"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-e868-7388-8b11-a3898c8569b1"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/bean-bag/refine/bean-bag-refine.glb (raw original, outside Git)",
+    "sha256": "e4ed52407d6abedf0c075e1391022e8d16088dbafd3fe4f48840a7058561cc06",
+    "bytes": 4989544,
+    "triangles": 2118,
+    "extent": [
+     0.9209,
+     0.415,
+     0.9604
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2166954
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1225291
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1497566
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/bean-bag/preview/bean-bag-preview.glb",
+    "previewSha256": "9f6b92af399333fcc2db86f44419988fc9ebd2cd849d4321baa8565e62bfff56",
+    "previewTriangles": 2118
+   },
+   "output": {
+    "file": "game/public/assets/models/office-bean-bag.glb",
+    "url": "assets/models/office-bean-bag.glb",
+    "sha256": "e7a6a385a3fa9ab8c265bc103d0ae4feffa84e5f37db28fbf0d627260cf2d377",
+    "bytes": 134200,
+    "triangles": 2118,
+    "dims": [
+     0.8629,
+     0.3889,
+     0.9
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 0.9,
+   "sizeAxis": "longest",
+   "scale": 0.937062,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "faded orange slouched bean bag"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 19371,
+     "sha256": "6dac306b35e50097f0a8404dba25de61006348417a8e75dfde369c945813d8ee"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 23810,
+     "sha256": "b23d5ebfb66b59d946bf603bf3fa38df166c7789886d85fb94b3c82abb40b68d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 4653,
+     "sha256": "53839af01f523d3bec9eb99e4625a0cbed2438d74268ec4114880f45f8677fbf"
+    }
+   ]
+  },
+  {
+   "code": "E13",
+   "id": "lounge-armchair",
+   "key": "office-lounge-armchair",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "mid-century modern lounge armchair with walnut frame and teal upholstery",
+   "justification": "Reception / lounge seating across many companies",
+   "feedbackItem": 0,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "mid-century modern lounge armchair with walnut frame and teal upholstery, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "mid-century modern lounge armchair with walnut frame and teal upholstery, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-daea-727e-a09f-c669de7cd8e2",
+    "refine": "01a18b26-ef71-7162-8bf3-0709882e96b2"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-daea-727e-a09f-c669de7cd8e2"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-ef71-7162-8bf3-0709882e96b2"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/lounge-armchair/refine/lounge-armchair-refine.glb (raw original, outside Git)",
+    "sha256": "2aa8d42fd449b12918533b1688d622af4901aecebb3d104ac3ee4299c8a9be83",
+    "bytes": 7861124,
+    "triangles": 3176,
+    "extent": [
+     0.7915,
+     0.793,
+     0.9507
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3650745
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1443964
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2604045
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/lounge-armchair/preview/lounge-armchair-preview.glb",
+    "previewSha256": "d3a7dcad5c6e5e090f97e98cb47b3daabbfc9583a805aaa1c6fb56ab46d1efdb",
+    "previewTriangles": 3176
+   },
+   "output": {
+    "file": "game/public/assets/models/office-lounge-armchair.glb",
+    "url": "assets/models/office-lounge-armchair.glb",
+    "sha256": "0578bdf8fa1ba0421b11ea636c5430323254200f6cbd02b33c92632c058b3a58",
+    "bytes": 223620,
+    "triangles": 3176,
+    "dims": [
+     0.8484,
+     0.85,
+     1.0191
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3000,
+   "sizeM": 0.85,
+   "sizeAxis": "h",
+   "scale": 1.071921,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "walnut frame, teal cushions, seat faces +Z"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 49458,
+     "sha256": "0614b1f3f1a8645280326e5a4740c7c4956e3be8acd0373697f3d9f5bd9a64fd"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20761,
+     "sha256": "41dd6a28e6a384d238aaa93952dd694b26bee47aeb3a95ba1f7649ebdcebc4a9"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10698,
+     "sha256": "f6ee1e420d0c85e2235511e75bb5f0f1e88685149ab8d5d09f9e1411fecffa6d"
+    }
+   ]
+  },
+  {
+   "code": "E14",
+   "id": "potted-plant-small",
+   "key": "office-potted-plant-small",
+   "company": null,
+   "use": "support",
+   "placement": "wall",
+   "subject": "small dying potted office plant in a white ceramic pot, drooping leaves",
+   "justification": "Smaller plant for corridors / desks so plants never block a hallway",
+   "feedbackItem": 8,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "small dying potted office plant in a white ceramic pot, drooping leaves, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "small dying potted office plant in a white ceramic pot, drooping leaves, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-e16f-71b7-a316-d4e1ab22078f",
+    "refine": "01a18b26-f67b-7520-acda-d15f7b53704d"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-e16f-71b7-a316-d4e1ab22078f"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-f67b-7520-acda-d15f7b53704d"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/potted-plant-small/refine/potted-plant-small-refine.glb (raw original, outside Git)",
+    "sha256": "8e1fbb5e16b863f4b9be1e9fa34ac385cb9fbb09a14794fd467b86be65daa3a6",
+    "bytes": 6243724,
+    "triangles": 1766,
+    "extent": [
+     0.6685,
+     0.9551,
+     0.6836
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2753560
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1480130
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1915984
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/potted-plant-small/preview/potted-plant-small-preview.glb",
+    "previewSha256": "2bde2eb4d5f62067fe58d610128727367db57cb7b7ba0d8db8cf2b729192776f",
+    "previewTriangles": 1766
+   },
+   "output": {
+    "file": "game/public/assets/models/office-potted-plant-small.glb",
+    "url": "assets/models/office-potted-plant-small.glb",
+    "sha256": "415fcd6371fd06ee2526e67c61f22e0179b1359deb8001f88a19c9ba6041c57e",
+    "bytes": 176956,
+    "triangles": 1766,
+    "dims": [
+     0.4199,
+     0.6,
+     0.4294
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 0.6,
+   "sizeAxis": "h",
+   "scale": 0.628221,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "white ceramic pot, yellowing drooping leaves"
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42710,
+     "sha256": "9dd9ac8db57031b2a1d17c785e2794bf59679654c080d7d22d7eb768eef5d369"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 37518,
+     "sha256": "87046bb57f77cbaab162010e510eeaf8cf66c388463ce6b207a680b35551dea7"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13845,
+     "sha256": "3e649210c21d999c6bcb438801ee41641ab6ec3e434ea030850b2f44428b69e1"
+    }
+   ]
+  },
+  {
+   "code": "E15",
+   "id": "rooftop-hvac",
+   "key": "office-rooftop-hvac",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "large rooftop packaged air conditioning unit, grey steel housing with big round fan grilles",
+   "justification": "Roof dressing (new roof storey)",
+   "feedbackItem": 10,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large rooftop packaged air conditioning unit, grey steel housing with big round fan grilles, realistic game asset, on an abandoned city rooftop, weathered and grimy, single object, no ground plane",
+   "texturePrompt": "large rooftop packaged air conditioning unit, grey steel housing with big round fan grilles, realistic game asset, on an abandoned city rooftop, weathered and grimy, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 3500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-e8bf-717d-97c7-9370fea3f86d",
+    "refine": "01a18b26-fe14-700f-9dda-3d892688974c"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-e8bf-717d-97c7-9370fea3f86d"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b26-fe14-700f-9dda-3d892688974c"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/rooftop-hvac/refine/rooftop-hvac-refine.glb (raw original, outside Git)",
+    "sha256": "09eb180e07deb3cdbc0d8609d3579aeb1cd943fb741c852b2f59c4d970b2217f",
+    "bytes": 5789740,
+    "triangles": 3068,
+    "extent": [
+     0.8452,
+     0.9214,
+     0.9526
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2230825
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1774043
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1608015
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/rooftop-hvac/preview/rooftop-hvac-preview.glb",
+    "previewSha256": "e56877a918a0b7132d912cbed2999c65bb23c71f43fc5ba34bc0dcd5e4a66d45",
+    "previewTriangles": 3068
+   },
+   "output": {
+    "file": "game/public/assets/models/office-rooftop-hvac.glb",
+    "url": "assets/models/office-rooftop-hvac.glb",
+    "sha256": "031d7a2f14104f4723a69619cf18ca32570b86d82a361de8374673e142f7b333",
+    "bytes": 307164,
+    "triangles": 3068,
+    "dims": [
+     2.1294,
+     2.3213,
+     2.4
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 3500,
+   "sizeM": 2.4,
+   "sizeAxis": "longest",
+   "scale": 2.519323,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "grey housing, fan grilles on +Z and +X"
+   },
+   "note": "~2.13 x 2.32 x 2.4 m; fan grilles on -Z and both X sides, plain back +Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 101485,
+     "sha256": "7a309e88a8b3987eb7452a03ff6484516a409f8fd1096fbbc001c8799077953b"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 39595,
+     "sha256": "7811ca1c9ad53d44e96a05f86f059ebf57d1c16a1fb96e380ef4875395520cc6"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 8148,
+     "sha256": "d5f5e87cd1fefddecbfa1e85d6a90a30856d365377a3c17a3c5230837be12226"
+    }
+   ]
+  },
+  {
+   "code": "E16",
+   "id": "water-tower",
+   "key": "office-water-tower",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "classic wooden rooftop water tank with conical roof on a steel stand with ladder",
+   "justification": "Roof landmark (new roof storey)",
+   "feedbackItem": 10,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "classic wooden rooftop water tank with conical roof on a steel stand with ladder, realistic game asset, on an abandoned city rooftop, weathered and grimy, single object, no ground plane",
+   "texturePrompt": "classic wooden rooftop water tank with conical roof on a steel stand with ladder, realistic game asset, on an abandoned city rooftop, weathered and grimy, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 4000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-efc4-70cf-a911-30e67b7e062f",
+    "refine": "01a18b27-051c-73df-9273-252e81f10c72"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-efc4-70cf-a911-30e67b7e062f"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b27-051c-73df-9273-252e81f10c72"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/water-tower/refine/water-tower-refine.glb (raw original, outside Git)",
+    "sha256": "a076ddbd23114f75edc3709da99240888ff7a7947b67279d6a3d101f5fd2c5b3",
+    "bytes": 7519352,
+    "triangles": 3459,
+    "extent": [
+     0.9492,
+     0.9312,
+     0.9482
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3254756
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1749841
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2300810
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/water-tower/preview/water-tower-preview.glb",
+    "previewSha256": "7b725cd528e2eba3ee7f6b4691147128bf05ffa426f73f453de4f51e59f8cde4",
+    "previewTriangles": 3464
+   },
+   "output": {
+    "file": "game/public/assets/models/office-water-tower.glb",
+    "url": "assets/models/office-water-tower.glb",
+    "sha256": "817da4fde685ce996ec7bc59f88ac1ecdc3cd2c8719d509a37734a48a8e3d95b",
+    "bytes": 472444,
+    "triangles": 3459,
+    "dims": [
+     4.5873,
+     4.5,
+     4.5826
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 4000,
+   "sizeM": 4.5,
+   "sizeAxis": "h",
+   "scale": 4.832723,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "wooden tank with conical roof and ladder on +Z; no tall steel stand (tank sits low, ~4.5 m cube)"
+   },
+   "note": "tank sits low, no tall steel stand (~4.59 x 4.5 x 4.58 m); ladder on -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 219018,
+     "sha256": "cf2e24479c28da103ab1a8814ef9609dea13ae81fd05b9e71401a4107f12bb0a"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 38557,
+     "sha256": "d1c0b99015a55246bc4883efe46dd18cef74b7e205de2bdde188907a420bcf36"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 22253,
+     "sha256": "6c32a15240ce2ec1a12b35ad243ff1c40d8594ffe63ad5bb2780ba8b8a99b339"
+    }
+   ]
+  },
+  {
+   "code": "E17",
+   "id": "satellite-dish",
+   "key": "office-satellite-dish",
+   "company": null,
+   "use": "support",
+   "placement": "floor",
+   "subject": "large white satellite dish on a steel tripod mount with cables",
+   "justification": "Roof dressing (new roof storey)",
+   "feedbackItem": 10,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "large white satellite dish on a steel tripod mount with cables, realistic game asset, on an abandoned city rooftop, weathered and grimy, single object, no ground plane",
+   "texturePrompt": "large white satellite dish on a steel tripod mount with cables, realistic game asset, on an abandoned city rooftop, weathered and grimy, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2500
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-f748-7111-b999-3006a1b3a158",
+    "refine": "01a18b27-0bf7-7416-93a1-989fb2188cd7"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-f748-7111-b999-3006a1b3a158"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b27-0bf7-7416-93a1-989fb2188cd7"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/satellite-dish/refine/satellite-dish-refine.glb (raw original, outside Git)",
+    "sha256": "57e404ebc30833210167f09cdf6cdadd74da985d82692cc5dc9a5a581953cff3",
+    "bytes": 6993604,
+    "triangles": 2415,
+    "extent": [
+     0.8398,
+     0.9512,
+     0.7007
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2852322
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1847331
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2171992
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/satellite-dish/preview/satellite-dish-preview.glb",
+    "previewSha256": "21a055dc0e4258154ac4e1bc26b0c422d7354ff77517207d4a6863835ae2087b",
+    "previewTriangles": 2428
+   },
+   "output": {
+    "file": "game/public/assets/models/office-satellite-dish.glb",
+    "url": "assets/models/office-satellite-dish.glb",
+    "sha256": "9dad55294b8b62c602ab321966a8793ebd47bd29b7e9eefb5632491ab8db4383",
+    "bytes": 418772,
+    "triangles": 2415,
+    "dims": [
+     1.5893,
+     1.8,
+     1.326
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2500,
+   "sizeM": 1.8,
+   "sizeAxis": "longest",
+   "scale": 1.892402,
+   "nativeFront": "-Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "dish concave side and feed arm face native -Z -> no rotation; runtime dish faces -Z"
+   },
+   "note": "dish faces -Z (native, no rotation)",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 215877,
+     "sha256": "46e7931631f6cf86761bda54cb73491444bc4db2031bd559e4fb90eadcc598c8"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 65142,
+     "sha256": "e1382b77f43b64c25f128172d18b6fe682edbd9b33b21659649160f0dafa7a24"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 30859,
+     "sha256": "8d97c67b055546d43f0db5a443c5b5c72f80182ae7e54591fbc685520bce5bc6"
+    }
+   ]
+  },
+  {
+   "code": "E18",
+   "id": "toilet",
+   "key": "office-toilet",
+   "company": null,
+   "use": "support",
+   "placement": "wall",
+   "subject": "white porcelain toilet with tank and open seat, grimy and stained",
+   "justification": "The toilet is the stall loot spot the player opens and looks into",
+   "feedbackItem": 13,
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry) + refine (2K PBR texture, inherits the preview model)",
+   "previewPrompt": "white porcelain toilet with tank and open seat, grimy and stained, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "white porcelain toilet with tank and open seat, grimy and stained, realistic game asset, inside an abandoned office building, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "model_type": "smart-topology",
+    "ai_model": "meshy-t2.5",
+    "topology": "triangle",
+    "target_formats": [
+     "glb"
+    ],
+    "target_polycount": 2000
+   },
+   "refineArgs": {
+    "texture_resolution": "2k",
+    "enable_pbr": true,
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18b1c-fe7d-70d8-8b39-10a96ff186e4",
+    "refine": "01a18b27-1292-7181-8985-aa8e1bfc29be"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18b1c-fe7d-70d8-8b39-10a96ff186e4"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18b27-1292-7181-8985-aa8e1bfc29be"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/office-overhaul-20261030/assets/raw/toilet/refine/toilet-refine.glb (raw original, outside Git)",
+    "sha256": "0e143c43fece70ec6111b162e24621ef6c2b28ed5381484cdd9cd9503a5e4aa8",
+    "bytes": 4670168,
+    "triangles": 2076,
+    "extent": [
+     0.5308,
+     0.9536,
+     0.7769
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1855148
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1317505
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1388519
+     }
+    ],
+    "previewFile": "reference/tasks/office-overhaul-20261030/assets/raw/toilet/preview/toilet-preview.glb",
+    "previewSha256": "5d24e40cbedcbe3241f3247558483142135f9dec6874f031b9002d5db539b671",
+    "previewTriangles": 2076
+   },
+   "output": {
+    "file": "game/public/assets/models/office-toilet.glb",
+    "url": "assets/models/office-toilet.glb",
+    "sha256": "4dc5435cd3036a06b1ae5b55ae12effed343675f0e8d2ddf3be974012f742f78",
+    "bytes": 169120,
+    "triangles": 2076,
+    "dims": [
+     0.4453,
+     0.8,
+     0.6517
+    ],
+    "overBudget": false
+   },
+   "targetTriangles": 2000,
+   "sizeM": 0.8,
+   "sizeAxis": "h",
+   "scale": 0.838914,
+   "nativeFront": "+Z",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 512,
+    "jpegQuality": 85
+   },
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": "review/raw-E09-E18.png",
+    "checks": "identity ok, single connected object, no ground slab, no floating junk",
+    "observation": "bowl and open seat toward +Z, tank at the back (runtime: tank +Z against the wall, bowl -Z)"
+   },
+   "note": "tank at +Z (against the wall), bowl and open seat toward -Z",
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26577,
+     "sha256": "9b58e5d5f1f8a149df2bd7c35e6cfded6cfc0c8d39f0e087a7b38d9880b5fe88"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 36885,
+     "sha256": "bf299e5c600da8e5118111b57262124a1c3f40df4c452cd3256f959e6f057a10"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 9758,
+     "sha256": "8b3da165a1272ac3bfef1679a2a591f522e9c1d79776e2fa1b2f67104c08a478"
+    }
+   ]
   }
  ],
- "missing": [
-  {
-   "id": "jukebox",
-   "code": "D21",
-   "reason": "preview only"
-  },
-  {
-   "id": "mixing-console",
-   "code": "D22",
-   "reason": "preview only"
-  },
-  {
-   "id": "exam-table",
-   "code": "D23",
-   "reason": "preview only"
-  },
-  {
-   "id": "vitals-monitor",
-   "code": "D24",
-   "reason": "preview only"
-  },
-  {
-   "id": "dress-form",
-   "code": "D25",
-   "reason": "preview only"
-  },
-  {
-   "id": "clothing-rack",
-   "code": "D26",
-   "reason": "preview only"
-  },
-  {
-   "id": "ship-model",
-   "code": "D27",
-   "reason": "preview only"
-  },
-  {
-   "id": "parcel-pallet",
-   "code": "D28",
-   "reason": "preview only"
-  },
-  {
-   "id": "nap-pod",
-   "code": "D29",
-   "reason": "preview only"
-  },
-  {
-   "id": "kegerator",
-   "code": "D30",
-   "reason": "preview only"
-  },
-  {
-   "id": "cctv-console",
-   "code": "D31",
-   "reason": "preview only"
-  },
-  {
-   "id": "metal-detector",
-   "code": "D32",
-   "reason": "preview only"
-  },
-  {
-   "id": "vault-safe",
-   "code": "D33",
-   "reason": "preview only"
-  },
-  {
-   "id": "archive-boxes",
-   "code": "D34",
-   "reason": "preview only"
-  },
-  {
-   "id": "aquarium",
-   "code": "D35",
-   "reason": "preview only"
-  },
-  {
-   "id": "cat-tree",
-   "code": "D36",
-   "reason": "preview only"
-  },
-  {
-   "id": "dough-mixer",
-   "code": "D37",
-   "reason": "preview only"
-  },
-  {
-   "id": "bakery-case",
-   "code": "D38",
-   "reason": "preview only"
-  },
-  {
-   "id": "satellite-model",
-   "code": "D39",
-   "reason": "preview only"
-  },
-  {
-   "id": "telescope",
-   "code": "D40",
-   "reason": "preview only"
-  },
-  {
-   "id": "executive-desk",
-   "code": "E01",
-   "reason": "not generated"
-  },
-  {
-   "id": "executive-chair",
-   "code": "E02",
-   "reason": "not generated"
-  },
-  {
-   "id": "chesterfield-sofa",
-   "code": "E03",
-   "reason": "not generated"
-  },
-  {
-   "id": "globe-bar",
-   "code": "E04",
-   "reason": "not generated"
-  },
-  {
-   "id": "server-cabinet",
-   "code": "E05",
-   "reason": "not generated"
-  },
-  {
-   "id": "crac-unit",
-   "code": "E06",
-   "reason": "not generated"
-  },
-  {
-   "id": "lobby-sofa",
-   "code": "E07",
-   "reason": "not generated"
-  },
-  {
-   "id": "planter-tree",
-   "code": "E08",
-   "reason": "not generated"
-  },
-  {
-   "id": "security-turnstile",
-   "code": "E09",
-   "reason": "not generated"
-  },
-  {
-   "id": "foosball-table",
-   "code": "E10",
-   "reason": "not generated"
-  },
-  {
-   "id": "ping-pong-table",
-   "code": "E11",
-   "reason": "not generated"
-  },
-  {
-   "id": "bean-bag",
-   "code": "E12",
-   "reason": "not generated"
-  },
-  {
-   "id": "lounge-armchair",
-   "code": "E13",
-   "reason": "not generated"
-  },
-  {
-   "id": "potted-plant-small",
-   "code": "E14",
-   "reason": "not generated"
-  },
-  {
-   "id": "rooftop-hvac",
-   "code": "E15",
-   "reason": "not generated"
-  },
-  {
-   "id": "water-tower",
-   "code": "E16",
-   "reason": "not generated"
-  },
-  {
-   "id": "satellite-dish",
-   "code": "E17",
-   "reason": "not generated"
-  },
-  {
-   "id": "toilet",
-   "code": "E18",
-   "reason": "not generated"
-  }
- ]
+ "missing": []
 }

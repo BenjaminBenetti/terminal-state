@@ -20,7 +20,6 @@ import type {Game} from '../src/game';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
 import {installFakeDom, type FakeDom} from './helpers/fakeDom';
 
-installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
 const DT = 1 / 60;
@@ -34,7 +33,11 @@ function shell(seed = 4242) {
   const ring: (number | null)[] = [];
   const sel: boolean[] = [];
   const sp = layout.playerSpawn;
+  // the canvas shim only while the Viewmodel draws its muzzle-flash texture (its `document` has nothing but canvases; the bag view
+  // must see no DOM at all, exactly as in tests/gear-system.test.ts)
+  const unshim = installCanvasShim(false);
   const viewmodel = new Viewmodel({} as never, {water: new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.23, 0.07))});
+  unshim();
   const g = {
     scene: new THREE.Scene(), modifierSources: [] as (() => object)[], frameHooks: [] as ((dt: number) => void)[],
     interactHandlers: [] as (() => boolean)[], hitListeners: [] as ((h: {amount: number}) => void)[],

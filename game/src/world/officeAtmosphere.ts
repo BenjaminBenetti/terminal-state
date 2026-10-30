@@ -10,8 +10,8 @@
 import * as THREE from 'three';
 import type {StationLayout} from '../gen/stationTypes';
 import {MOOD, syncGlowFog} from './lights';
-import {EXT_U} from './exterior';
-import {preloadOfficeArch} from './officeArch';
+import {EXT_U, exteriorFogTune, type ExteriorFogTune} from './exterior';
+import {preloadOfficeArch, type OfficeArch, type OfficeSurfaceMaterial} from './officeArch';
 
 /** Scene fog on the roof: FogExp2 density (1/m). Colour = the outdoor murk (EXT_U.haze). */
 export const ROOF_FOG = {density: 0.016, below: 0.6, above: 0.9} as const;
@@ -100,7 +100,39 @@ export class OfficeAtmosphere {
   }
 }
 
+let installed: OfficeAtmosphere | null = null;
+
 /** Installs the office atmosphere hooks (call once, after the tower runtime so its frame hook runs after the tower's). */
 export function installOfficeAtmosphere(host: AtmosphereHost): OfficeAtmosphere {
-  return new OfficeAtmosphere(host);
+  return (installed = new OfficeAtmosphere(host));
+}
+
+/**
+ * QA hooks for short browser spot checks (spread into window.__LL by qa.ts: `...officeArchQaApi(game)`). Uniform values only:
+ *  - exteriorFogTune({color, base, ground, height, range, noise, drift, skyline, sun, sky, zenith}) -> current values + mirror opacity;
+ *  - officeArch() -> per-storey finish / wall / accent / carpet colours, material and accent-wall counts;
+ *  - officeArchTune({level, wall, accent, carpet, peel}) -> recolour one storey's office materials live (sRGB hex);
+ *  - roofFog() -> the current roof blend and scene fog.
+ */
+export function officeArchQaApi(game: {world?: {officeArch?: OfficeArch} | null; scene?: THREE.Scene}) {
+  return {
+    exteriorFogTune: (o: ExteriorFogTune = {}) => exteriorFogTune(o),
+    officeArch: () => game.world?.officeArch?.summary() ?? null,
+    officeArchTune: (o: {level: number; wall?: number; accent?: number; carpet?: number; peel?: number}) => {
+      const a = game.world?.officeArch;
+      if (!a) return null;
+      const set = (key: string, hex: number | undefined, peel?: number) => {
+        const m = a.material(key) as OfficeSurfaceMaterial | undefined;
+        if (!m) return false;
+        if (typeof hex === 'number') m.ofA.setHex(hex, THREE.SRGBColorSpace);
+        if (typeof peel === 'number') m.ofQ.x = peel;
+        return true;
+      };
+      return {wall: set(`office-wall@${o.level}`, o.wall, o.peel), accent: set(`office-accent@${o.level}`, o.accent, o.peel), carpet: set(`office-carpet@${o.level}`, o.carpet)};
+    },
+    roofFog: () => {
+      const f = game.scene?.fog as THREE.FogExp2 | null | undefined;
+      return {blend: installed?.blend ?? 0, density: f?.density ?? null, color: f?.color?.toArray() ?? null};
+    },
+  };
 }

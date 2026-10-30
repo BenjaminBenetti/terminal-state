@@ -7,6 +7,10 @@
 // every track bed; `finishTraversal` lifts dressing authored on the default floor onto the local
 // floor height and keeps loot off stairs; `traversalIssues` validates (generation retry guard).
 // Climbing (player and zombies) follows the same scripted path (`ladderClimbPath`).
+//
+// Task office-overhaul-20261030 (lane STRUCT): flight classes (STAIR_CLASS: the transit hall's shared-pitch fixed stair and stopped
+// escalators, transitSpecs) and the CROSS-STOREY roof access ladder (Ladder.kind 'roof': foot on the top office floor, head on the
+// roof deck; the same scripted climb / controls; no nav link — enemies never use it).
 
 import {CELL, FLOOR, VOID, rampHeight, type Grid, type Ramp, type StandPoint} from './grid';
 import type {Rect, SignPlacement, StationLayout} from './stationTypes';

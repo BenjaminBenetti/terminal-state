@@ -30,6 +30,13 @@ import {COMPANIES, type LootTilt} from './companies';
 const TILT: Readonly<Record<LootTilt, readonly [number, number, number, number]>> = {
   none: [1, 1, 1, 0], medical: [1.9, 0.6, 0.6, 0], light: [0.6, 1.5, 1.6, 0], ammo: [0.8, 0.7, 1.6, 0], food: [1, 0.6, 1, 0.5],
 };
+/** Scarce loose-find odds of a floor [med, battery, flare, food] under a company's tilt (sum = the untilted sum: same count). */
+export function scarceOdds(tilt: LootTilt): [number, number, number, number] {
+  const base = [FLOOR_ECONOMY.medKeep * 1.5, 0.35, 0.14] as const, w = TILT[tilt];
+  const sum = base[0] + base[1] + base[2];
+  const k = sum / (base[0] * w[0] + base[1] * w[1] + base[2] * w[2] + base[1] * w[3]);
+  return [Math.min(0.95, base[0] * w[0] * k), Math.min(0.95, base[1] * w[1] * k), Math.min(0.95, base[2] * w[2] * k), Math.min(0.95, base[1] * w[3] * k)];
+}
 function floorTilt(layout: StationLayout, levels: readonly number[]): LootTilt {
   const a = layout.areas.find(q => q.tenant && levels.includes(q.level ?? 0));
   return a?.tenant ? COMPANIES[a.tenant].loot : 'none';
@@ -162,10 +169,7 @@ export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: Spaw
     if (r < p9) place('ammo_pistol', 15, ammo); else if (r < pr) place('ammo_rifle', 30, ammo); else if (r < ps) place('ammo_shells', 8, ammo);
   }
   const scarce = rng.fork('scarce-floor');
-  const base = [FLOOR_ECONOMY.medKeep * 1.5, 0.35, 0.14] as const, w = TILT[tilt];
-  const sum = base[0] + base[1] + base[2];
-  const k = sum / (base[0] * w[0] + base[1] * w[1] + base[2] * w[2] + base[1] * w[3]);
-  const pMed = Math.min(0.95, base[0] * w[0] * k), pBat = Math.min(0.95, base[1] * w[1] * k), pFlare = Math.min(0.95, base[2] * w[2] * k), pFood = Math.min(0.95, base[1] * w[3] * k);
+  const [pMed, pBat, pFlare, pFood] = scarceOdds(tilt);
   if (scarce.chance(pMed)) place(scarce.chance(0.3) ? 'medkit' : 'bandage', 1, med);
   if (scarce.chance(pBat)) place(BATTERY_ID, 1, light);
   if (scarce.chance(pFlare)) place(FLARE_ID, 1, light);

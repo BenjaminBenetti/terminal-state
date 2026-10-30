@@ -82,7 +82,7 @@ describe('levels registry', () => {
     const levelSeed = 0x0ff1ce;
     const office = LEVELS.office.generate('main', {levelSeed, startWeapon: 'pistol'});
     expect(office.office?.storeys.map(s => s.floor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(office.levels.length).toBe(9);
+    expect(office.levels.length).toBe(10); // task office-overhaul-20261030 (lane STRUCT): + the roof (level 9)
     expect(storeyLabel(office, 1)).toBe('L');
     expect(storeyLabel(office, 5)).toBe('5');
     expect(storeyLabel(office, 0)).toBe('');

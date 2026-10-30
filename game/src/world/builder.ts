@@ -522,7 +522,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
   // Guard railings on drop edges (mezzanine/catwalk edges, light wells, stairwells, open flight sides).
   const rails = stationRails(layout, levels, cols);
-  for (const r of rails) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
+  // (task office-overhaul-20261030, lane STRUCT: collision-only rails — escalator balustrades, roof fixtures — draw their own geometry)
+  for (const r of rails) if (!(r as {hidden?: boolean}).hidden) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
 
   let instances = instancesFromTraversal;
   // Sleepers (instanced, every track of every bed), one instanced mesh per trim chunk.

@@ -93,6 +93,7 @@ export function towerQaApi(game: unknown) {
     const b = resolve(id);
     if (!b) return {ok: false, id, reason: 'no such button'};
     const p = g.player, at = worldAt(b);
+    if (!(Math.abs(p.eye - p.y - 1.3) < 0.7)) p.eye = p.y + 1.62; // a freshly placed player: Player.place leaves the eye relative
     face(g, at.x, at.y, at.z, p.eye);
     // the same pose Game.updateCamera gives the camera (no recoil / sway while QA aims)
     g.camera.position?.set(p.x, p.eye, p.z);

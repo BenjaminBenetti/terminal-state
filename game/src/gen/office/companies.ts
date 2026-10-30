@@ -45,7 +45,9 @@ export type Step =
   /** Against the facade (by the windows): placed after dress() released the window strip (postDress). */
   | {at: 'window'; kind: PropKind; n: Range; chance?: number}
   /** Planters in the room's corners (never in door zones). */
-  | {at: 'corners'; kind: PropKind; n: Range; chance?: number};
+  | {at: 'corners'; kind: PropKind; n: Range; chance?: number}
+  /** Pieces in front of the room's first `host` prop, turned toward it (studio cameras on the anchor desk). */
+  | {at: 'facing'; kind: PropKind; host: PropKind; n: Range; dist: number; chance?: number};
 
 /** Coarse role of a company room (gen/office/tower.ts OfficeAreaMeta.role: lighting, gear spots, signage). */
 export type RoomRole = 'meeting' | 'break' | 'copy' | 'storage' | 'server' | 'exec' | 'reception' | 'security' | 'amenity';
@@ -302,7 +304,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
       runs: 0, run: 'private', exec: false, labels: {meeting: 'Editorial room'},
       steps: {
         reception: [W('newsDesk', [0, 1], {wall: 'side', front: 1.0})],
-        studio: [ISLE('newsDesk', [1, 1], 1.0), SCAT('tvCamera', [2, 3], 0.6), W('crtTvCart', [0, 1], {front: 0.7})],
+        studio: [W('newsDesk', [1, 1], {wall: 'side', front: 0.4}), {at: 'facing', kind: 'tvCamera', host: 'newsDesk', n: [2, 3], dist: 1.6}, SCAT('tvCamera', [0, 1], 0.6), W('crtTvCart', [0, 1], {front: 0.7})],
         gallery: [ROW('monitorDesk', [2, 3], {wall: 'far', front: 1.0}), W('crtTvCart', [1, 1], {front: 0.7}), W('tvCamera', [0, 1], {front: 0.6})],
         newsroom: [W('tvCamera', [1, 1], {front: 0.6}), W('crtTvCart', [0, 1], {front: 0.7})],
       },
@@ -318,7 +320,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
       runs: 0, run: 'private', exec: false, labels: {meeting: 'Cupping room'},
       steps: {
         reception: [ISLE('table', [0, 1], 0.8)],
-        cafe: [ROW('espressoMachine', [1, 2], {wall: 'far', front: 1.0}), ISLE('table', [2, 3], 0.8), W('fridge', [1, 1], {front: 0.6}), W('couch', [0, 1], {front: 0.7}), SCAT('loungeArmchair', [1, 2], 0.5)],
+        cafe: [ROW('espressoMachine', [1, 2], {wall: 'far', front: 1.0}), W('fridge', [1, 1], {front: 0.6}), ISLE('table', [2, 3], 0.8), W('couch', [0, 1], {front: 0.7}), SCAT('loungeArmchair', [1, 2], 0.5)],
         roastery: [ISLE('coffeeRoaster', [1, 2], 0.9), ROW('cartonStack', [1, 3], {wall: 'any'}), W('shelf', [1, 1], {front: 0.8}), W('crate', [0, 2]), W('espressoMachine', [0, 1], {front: 0.9})],
         meeting: [W('espressoMachine', [0, 1], {front: 0.9})],
       },
@@ -334,7 +336,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
       runs: 0, run: 'private', exec: false, labels: {gym: 'Gait lab & gym', pods: 'Design studio'},
       steps: {
         reception: [W('sneakerWall', [1, 1], {front: 0.8})],
-        showroom: [ROW('sneakerWall', [2, 4], {wall: 'far', front: 1.0}), ROW('sneakerWall', [1, 3], {wall: 'side', front: 1.0}), ISLE('bench', [1, 2], 0.8), ISLE('treadmill', [0, 1], 0.8)],
+        showroom: [ROW('sneakerWall', [2, 4], {wall: 'far', front: 1.0}), ISLE('treadmill', [1, 1], 0.8), ROW('sneakerWall', [1, 3], {wall: 'side', front: 1.0}), ISLE('bench', [1, 2], 0.8)],
         gym: [ROWS('treadmill', [3, 6], {aisle: 1.1}), ROW('staffLockers', [1, 2], {wall: 'near', front: 0.8}), W('bench', [0, 1], {front: 0.6}), W('officeWaterCooler', [0, 1], {front: 0.6})],
         lounge: [SEATING, W('sneakerWall', [1, 1], {front: 0.8})],
       },
@@ -367,7 +369,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
       steps: {
         reception: [],
         listening: [ROW('jukebox', [1, 2], {wall: 'far', front: 0.9}), SEATING, SCAT('beanBag', [1, 2], 0.6), CORNERS('planterTree', [0, 1])],
-        recording: [ISLE('mixingConsole', [1, 1], 0.9), W('couch', [1, 1], {wall: 'near', front: 0.8}), ROW('officeShelf', [1, 1], {wall: 'side', front: 0.6}), W('jukebox', [0, 1], {front: 0.8})],
+        recording: [ISLE('mixingConsole', [1, 1], 0.9), W('jukebox', [0, 1], {front: 0.8}), W('couch', [1, 1], {wall: 'near', front: 0.8}), ROW('officeShelf', [1, 1], {wall: 'side', front: 0.6})],
         booth: [W('mixingConsole', [1, 1], {wall: 'far', front: 0.9}), W('couch', [0, 1], {front: 0.7})],
         lounge: [SEATING, W('jukebox', [1, 1], {front: 0.8}), SCAT('beanBag', [1, 2], 0.6)],
       },
@@ -427,7 +429,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
   nimbus: {
     id: 'nimbus', name: 'Nimbus Labs', short: 'Nimbus', tagline: 'Cloud Software · Series B',
     palette: {wall: 0xf0f0f5, accent: 0x3d8bfd, floor: 0x8a94a6, trim: 0xffffff, sign: 0x3d8bfd}, finish: 'creative', font: 'rounded',
-    signature: ['napPod', 'kegerator'], hero: 'kegerator', support: ['pingPongTable', 'foosballTable', 'beanBag', 'lobbySofa', 'pottedPlantSmall'],
+    signature: ['napPod', 'kegerator'], hero: 'napPod', support: ['pingPongTable', 'foosballTable', 'beanBag', 'lobbySofa', 'pottedPlantSmall'],
     program: {
       open: ['pods', 'pods'], rooms: [['lounge', 'naproom'], ['naproom', 'meeting']], ends: [['server', 'break'], ['server', 'storage']],
       runs: 0, run: 'private', exec: false, labels: {pods: 'Hot desks', lounge: 'Social hub'},
@@ -438,7 +440,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
         meeting: [W('kegerator', [0, 1], {front: 0.8})],
       },
     },
-    loot: 'food', note: 'Start-up: white and sky blue, hot desks, a kegerator in reception, a social hub with ping-pong and a nap room of sleep pods.',
+    loot: 'food', note: 'Start-up: white and sky blue, hot desks, a sleep pod showcased in reception, a social hub with the kegerator and ping-pong, and a nap room of sleep pods.',
   },
   ironclad: {
     id: 'ironclad', name: 'Ironclad Security', short: 'Ironclad', tagline: 'Guarding · Alarm Response',
@@ -514,7 +516,7 @@ export const COMPANIES: Readonly<Record<CompanyId, Company>> = {
       runs: 0, run: 'private', exec: true, labels: {pods: 'Engineering bay'},
       steps: {
         reception: [WIN('telescope', [1, 1])],
-        mission: [ISLE('conferenceTable', [1, 1], 0.7), ROW('monitorDesk', [2, 3], {wall: 'far', front: 1.0}), W('officeWhiteboard', [1, 1], {front: 0.6}), W('satelliteModel', [1, 1], {front: 0.6})],
+        mission: [W('satelliteModel', [1, 1], {front: 0.6}), ROW('monitorDesk', [2, 3], {wall: 'far', front: 1.0}), ISLE('conferenceTable', [1, 1], 0.7), W('officeWhiteboard', [1, 1], {front: 0.6})],
         observatory: [WIN('telescope', [2, 3]), W('loungeArmchair', [1, 2], {front: 0.6}), ISLE('table', [0, 1], 0.8), W('satelliteModel', [0, 1], {front: 0.6})],
         meeting: [WIN('telescope', [0, 1])],
       },

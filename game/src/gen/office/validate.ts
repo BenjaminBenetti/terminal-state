@@ -20,7 +20,9 @@ import {levelArrays, levelDistance, levelIssues, SLAB} from '../levelGen';
 import {levelsOf} from '../levels';
 import {traversalIssues} from '../traversal';
 import type {StationLayout} from '../stationTypes';
-import {FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, SCISSOR_STAIR, landingRect, type TowerFrame} from './frame';
+import {FLOOR_HEIGHT, MARGIN, OFFICE_FLOORS, OFFICE_ROOF_LEVEL, SCISSOR_STAIR, landingRect, type TowerFrame} from './frame';
+import {roofIssues} from './roof'; // Task office-overhaul-20261030 (lane STRUCT): the roof storey
+import {transitIssues} from './transit'; // Task office-overhaul-20261030 (lane STRUCT): the transit hall
 import {landingStrip} from './dress';
 import {ENEMY_MIN_CELLS, OFFICE_ENEMIES} from './spawns';
 import {CORRIDOR_CLEAR_M, isNarrowPassage, isPlantKind, passageClear} from './companyDress';
@@ -32,7 +34,8 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   if (!info || info.version !== 2) return ['no office info (v2)'];
   const levels = layout.levels, g0 = layout.grid;
   // --- Storeys and elevations ---------------------------------------------------------------------------------------------
-  if (levels.length !== 1 + OFFICE_FLOORS.length) return [`${levels.length} levels (want ${1 + OFFICE_FLOORS.length})`];
+  // (lane STRUCT: + the roof, level OFFICE_ROOF_LEVEL, checked by roofIssues)
+  if (levels.length !== 2 + OFFICE_FLOORS.length) return [`${levels.length} levels (want ${2 + OFFICE_FLOORS.length})`];
   if (levels[0].grid !== g0 || levels[0].role !== 'main' || levels[0].baseY !== 0) issues.push('level 0 is not the station main level');
   if (levels[1].role !== 'upper') issues.push('level 1 (lobby) role');
   const hu = levels[1].baseY;
@@ -40,7 +43,7 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   for (const L of levels) {
     if (L.id !== levels.indexOf(L)) issues.push(`level ${L.id} id mismatch`);
     if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);
-    if (L.id >= 2 && (L.role !== 'office' || Math.abs(L.baseY - (hu + FLOOR_HEIGHT * (L.id - 1))) > 1e-3)) issues.push(`level ${L.id} role ${L.role} / baseY ${L.baseY} not contiguous`);
+    if (L.id >= 2 && L.id !== OFFICE_ROOF_LEVEL && (L.role !== 'office' || Math.abs(L.baseY - (hu + FLOOR_HEIGHT * (L.id - 1))) > 1e-3)) issues.push(`level ${L.id} role ${L.role} / baseY ${L.baseY} not contiguous`);
   }
   for (const s of info.storeys) if (s.levelId !== s.floor || Math.abs(levels[s.levelId].baseY - s.baseY) > 1e-6) issues.push(`storey ${s.floor} record`);
   if (Math.abs(info.groundY - hu) > 1e-6) issues.push('groundY is not the lobby floor');
@@ -48,7 +51,8 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
   // --- Reachability from the platform start (walking + stairs) ---------------------------------------------------------------
   const st = info.start;
   const [sx, sy] = g0.cellOf(st.x, st.z);
-  const dist = levelDistance(levels, sx, sy, st.level);
+  // (lane STRUCT: + the player-only roof ladder link)
+  const dist = levelDistance(levels, sx, sy, st.level, layout.levelLinks);
   if (st.level !== 0 || Math.abs(st.x - layout.playerSpawn.x) > 1e-6 || Math.abs(st.z - layout.playerSpawn.z) > 1e-6) issues.push('start is not the platform spawn');
   if (!g0.circleClear(st.x, st.z, 0.34)) issues.push('start not clear');
   for (const L of levels) {
@@ -215,6 +219,9 @@ export function officeIssues(layout: StationLayout, f: TowerFrame): string[] {
 
   // --- Task office-overhaul-20261030 (lane TENANTS): tenants, server rooms, corridor clearance ---------------------------------
   issues.push(...tenantIssues(layout));
+  // --- Task office-overhaul-20261030 (lane STRUCT): the roof (reachable by the ladder, parapet closed, hatch zone clear) and the
+  // transit hall (widths, walkable stair + escalators, carved hand-over, clear mouths, gate gaps) -------------------------------
+  issues.push(...roofIssues(layout, f, dist), ...transitIssues(layout, f));
 
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
   issues.push(...traversalIssues(layout));

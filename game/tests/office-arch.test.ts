@@ -22,7 +22,7 @@ import {
   floorKindFor, floorMaterial, officeStyle, wallMaterial, type OfficeFinishFamily,
 } from '../src/world/officeArch';
 import {EXT_FOG, EXT_U, buildExterior, exteriorFogOpacity, exteriorFogTune, planExterior, setExteriorRoof} from '../src/world/exterior';
-import {OfficeAtmosphere, ROOF_FOG, roofBlend} from '../src/world/officeAtmosphere';
+import {OfficeAtmosphere, ROOF_FOG, officeArchQaApi, roofBlend} from '../src/world/officeAtmosphere';
 import {MOOD} from '../src/world/lights';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
 import type {TenantFinish, TenantPalette} from '../src/gen/office/overhaulTypes';
@@ -104,6 +104,10 @@ describe('office styles: tenant palette + finish -> bounded material parameters'
     expect(areaClass(area({type: 'office-corridor', kind: 'passage'}))).toBe('corridor');
     expect(areaClass(area({type: 'office-lobby', publicSpace: true}), {lobby: true})).toBe('lobby');
     expect(areaClass(area({}), {roof: true})).toBe('roof');
+    // a company name in the label never decides the finish (only the room part after the '·')
+    expect(areaClass(area({purpose: 'office-meeting', label: 'Pawprint Vet · Staff room'}))).toBe('room');
+    expect(areaClass(area({purpose: 'office-private', label: 'Goldencrust Bakery · Private office'}))).toBe('room');
+    expect(areaClass(area({purpose: 'office-roastery', label: 'Lowtide · Roastery'}))).toBe('kitchen');
     expect(floorKindFor('wet', st)).toBe('wet');
     expect(floorKindFor('server', st)).toBe('server');
     expect(floorKindFor('kitchen', st)).toBe('tile');
@@ -240,6 +244,22 @@ describe('office storeys look like an office, not the station', () => {
     for (const s of layout.office!.storeys) expect(accentLevels.has(s.levelId), `accent on storey ${s.floor}`).toBe(true);
   });
 
+  it('QA hooks: storey summary, live storey recolour (uniforms only), fog tune', () => {
+    const qa = officeArchQaApi({world: w, scene: new THREE.Scene()});
+    const sum = qa.officeArch()!;
+    expect(sum.storeys.length).toBe(layout.office!.storeys.length + (layout.office!.roof ? 1 : 0));
+    expect(sum.materials).toBeGreaterThan(10);
+    const lv = layout.office!.storeys[3].levelId;
+    const m = arch.material(`office-wall@${lv}`) as OfficeSurfaceMaterial;
+    const before = m.ofA.getHex(THREE.SRGBColorSpace), node = m.colorNode;
+    expect(qa.officeArchTune({level: lv, wall: 0x336699})).toMatchObject({wall: true});
+    expect(m.ofA.getHex(THREE.SRGBColorSpace)).toBe(0x336699);
+    expect(m.colorNode).toBe(node);
+    qa.officeArchTune({level: lv, wall: before});
+    expect(qa.roofFog().blend).toBeGreaterThanOrEqual(0);
+    expect(qa.exteriorFogTune().base).toBe(EXT_FOG.base);
+  });
+
   it('tenant palettes reach the materials (wall paint / carpet per storey; Area.tenant or layout.office.tenants)', () => {
     const tenantLevels = layout.office!.storeys.filter(s => s.floor >= 2);
     const walls = new Set(tenantLevels.map(s => (arch.material(`office-wall@${s.levelId}`) as OfficeSurfaceMaterial | undefined)?.ofA.getHex()));
@@ -336,8 +356,6 @@ describe('the roof storey (role roof): outdoors', () => {
     let n = 0;
     for (let i = 0; i < g.cells.length; i++) {
       if (g.cells[i] !== 1 || g.rampIdx[i] >= 0 || (layout.areas[g.area[i]]?.level ?? 0) !== top) continue;
-      const a = layout.areas[g.area[i]];
-      if (areaClass(a) === 'core' && layout.office!.roof) continue;
       expect(arch.floorKey(top, i)).toBe('office-floor-roof');
       const c = arch.ceilKey(top, g.area[i], i);
       expect(c === false || c === 'office-ceil-core').toBe(true);
@@ -346,6 +364,21 @@ describe('the roof storey (role roof): outdoors', () => {
     expect(n).toBeGreaterThan(20);
     const faces = arch.remapFaces(buildWorld(layout, mats, {}).wallFaces.filter(f => f.level === top && (layout.areas[f.area]?.level ?? 0) === top && !f.slope), mats.tileLowerHeight);
     expect(faces.some(f => f.finish === 'office-roof')).toBe(true);
+    if (layout.office!.roof) {
+      // STRUCT's roof: the deck has no ceiling mesh, and no ceiling floats over the floor-8 hatch shaft
+      const w = buildWorld(layout, mats, {});
+      const ceil: string[] = [];
+      w.group.traverse(o => { if ((o as THREE.Mesh).isMesh && /ceil|drop-ceiling/.test(o.name) && (o.userData.level === top)) ceil.push(o.name); });
+      expect(ceil).toEqual([]);
+      let above = 0;
+      w.group.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !/^office-drop-ceiling$|^arch-office-ceil/.test(o.name)) return;
+        const p = m.geometry.attributes.position;
+        for (let k = 0; k < p.count; k++) if (p.getY(k) > layout.office!.roof!.baseY + 0.5) above++;
+      });
+      expect(above).toBe(0);
+    }
   });
 
   it('roof blend ramps over the hatch climb, only over the tower; the outdoor scene fog applies there and is restored below', () => {

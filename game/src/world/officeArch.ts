@@ -178,7 +178,7 @@ const FLOOR_SPEC: Record<Exclude<FloorKind, 'carpet'>, {code: number; color: num
   vinyl: {code: 1, color: 0xbcb6a9, seam: 0.002, w: 0.3, d: 0.3, tone: 0.07, vary: 0.35, rough: 0.5, tile: 0.3},
   tile: {code: 4, color: 0xa9a59c, seam: 0.006, w: 0.3, d: 0.3, tone: 0.08, vary: 0.3, rough: 0.4, tile: 0.3},
   wet: {code: 4, color: 0x8e9392, seam: 0.005, w: 0.2, d: 0.2, tone: 0.1, vary: 0.3, rough: 0.45, tile: 0.2},
-  stone: {code: 2, color: 0xc4bdb1, seam: 0.003, w: 1.2, d: 0.6, tone: 0.12, vary: 0.5, rough: 0.32, tile: 0},
+  stone: {code: 2, color: 0xc4bdb1, seam: 0.004, w: 1.2, d: 0.6, tone: 0.12, vary: 0.45, rough: 0.32, tile: 0},
   concrete: {code: 3, color: 0x8e8b85, seam: 0.004, w: 2.4, d: 2.4, tone: 0.05, vary: 0.6, rough: 0.62, tile: 0},
   wood: {code: 5, color: 0x8a6a48, seam: 0.002, w: 1.2, d: 0.18, tone: 0.18, vary: 0.7, rough: 0.55, tile: 0},
   server: {code: 6, color: 0x9a9ea1, seam: 0.008, w: 0.6, d: 0.6, tone: 0.06, vary: 0.25, rough: 0.5, tile: 0.6},
@@ -202,12 +202,14 @@ export function areaClass(a: Area | undefined, o: {roof?: boolean; lobby?: boole
   if (o.roof) return 'roof';
   if (!a) return 'work';
   const t = a.type as string;
-  const s = `${t} ${a.purpose ?? ''} ${a.label ?? ''}`.toLowerCase();
+  // the label without its company prefix ("Goldencrust · Private office"): a company name never decides a room's finish
+  const label = (a.label ?? '').replace(/^[^·]*·\s*/, '');
+  const s = `${t} ${a.purpose ?? ''} ${label}`.toLowerCase();
   if (t === 'office-stair' || t === 'office-elevator' || t === 'stair-core' || t === 'exit-stair' || a.kind === 'closet' || t === 'janitor-closet' || t === 'supply-closet'
     || a.role === 'stair' || a.role === 'landing' || /stair|closet|riser|janitor|electrical|ladder|hatch/.test(s)) return 'core';
   if (t === 'washroom' || /wash ?room|toilet|restroom|\bwc\b|shower|locker/.test(s)) return 'wet';
   if (/server|data cent|data-cent|network|comms|\bit room/.test(s)) return 'server';
-  if (/break(?!out)|kitchen|pantry|caf[eé]|canteen|dining|bakery|coffee|espresso|\bbar\b|test-kitchen/.test(s)) return 'kitchen';
+  if (/break(?!out)|kitchen|pantry|caf[eé]|canteen|dining|bakery|coffee|espresso|roast|\bbar\b|test-kitchen/.test(s)) return 'kitchen';
   if (/\blab\b|laborator|clinic|medical|workshop|atelier|maker|garage|vet\b|grooming/.test(s)) return 'lab';
   if (/storage|archive|copy|mail|utility|supply|stock|plant room|mechanical|loading|vault/.test(s)) return 'utility';
   if (t === 'office-lobby') return o.lobby ? 'lobby' : 'feature';
@@ -290,35 +292,39 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
   const U = uv().mul(OFFICE_WALL_SPAN).toVar('ofWallUv');
   const s = U.x, h = U.y;
   const lum = dot(base.rgb, LUMA).toVar('ofLum');
-  const detail = clamp(lum.div(max(ofQ.z, 0.05)), 0.55, 1.35).toVar('ofDetail');
+  const detailRaw = clamp(lum.div(max(ofQ.z, 0.05)), 0.55, 1.35).toVar('ofDetailRaw');
+  // the plasterboard's own mottle, kept subtle under paint (T4 is a heavily flaked plaster: full contrast reads as damage)
+  const detail = mix(1, detailRaw, 0.45).toVar('ofDetail');
   const pw = positionWorld as AnyNode;
   const nLow = (wmNoise(pw.mul(0.42)) as AnyNode).toVar('ofNLow');
   const panelW = max(ofQ.y, 0.05);
   const nGrain = (wmNoise((vec3 as AnyNode)(s.mul(6.5), h.mul(0.45), floor(s.div(panelW)).mul(1.7))) as AnyNode).toVar('ofNGrain');
-  // The paint failed where T4 shows bare board, clustered by a broad noise (ofQ.x = how much of it shows).
-  const peel = smoothstep(0.31, 0.23, lum).mul(smoothstep(0.62, 0.78, nLow.add(ofQ.x.mul(0.5)))).toVar('ofPeel');
-  const board = vec3(0.3, 0.295, 0.28).mul(detail);
+  // The paint failed where T4 shows bare board (its darkest flakes), clustered in a few patches by a broad noise (ofQ.x = how
+  // much of it shows); the substrate is primer / plaster between a darker paint tone and grey.
+  const peel = smoothstep(0.27, 0.2, lum).mul(smoothstep(0.66, 0.8, nLow.add(ofQ.x.mul(0.4)))).toVar('ofPeel');
+  const board = mix(ofA.mul(0.72), vec3(0.32, 0.31, 0.29), 0.5).mul(detailRaw);
   const paint = mix(ofA.mul(detail), board, peel);
   const kind = ofP.w;
   const lowerPaint = mix(ofB.mul(detail), board, peel);
   // Wood panelling: vertical grain, grooves every panel width, a little T4 grime.
   const fs = fract(s.div(panelW));
   const groove = float(1).sub(smoothstep(0.004, 0.012, min(fs, fs.oneMinus()).mul(panelW)));
-  const wood = ofB.mul(mix(0.78, 1.15, nGrain)).mul(mix(1, 0.45, groove)).mul(mix(1, detail, 0.3));
+  const wood = ofB.mul(mix(0.78, 1.15, nGrain)).mul(mix(1, 0.45, groove)).mul(mix(1, detailRaw, 0.3));
   // Wet-room tile: 200 mm squares, grey grout.
   const grout = float(1).sub(smoothstep(0.002, 0.005, edgeDist(vec2(s, h).div(0.2), vec2(0.2, 0.2))));
-  const tile = mix(ofB.mul(mix(0.94, 1.04, nGrain)), ofB.mul(0.55), grout).mul(mix(1, detail, 0.25));
+  const tile = mix(ofB.mul(mix(0.94, 1.04, nGrain)), ofB.mul(0.55), grout).mul(mix(1, detailRaw, 0.25));
   // Stone panels 1.2 x 0.6 m: per-panel tone, soft veins, fine joints.
   const sq = vec2(s.div(1.2), h.div(0.6));
   const joint = float(1).sub(smoothstep(0.002, 0.006, edgeDist(sq, vec2(1.2, 0.6))));
-  const vein = smoothstep(0.46, 0.5, nGrain).mul(float(1).sub(smoothstep(0.5, 0.54, nGrain)));
+  // marble-like veins: thin contour lines of the broad noise (isotropic, organic)
+  const vein = float(1).sub(smoothstep(0.0, 0.035, abs(fract(nLow.mul(5)).sub(0.5))));
   const tone = wmHash((vec3 as AnyNode)(floor(sq.x), floor(sq.y), 5)) as AnyNode;
-  const stone = ofB.mul(tone.mul(0.2).add(0.9)).mul(float(1).sub(vein.mul(0.25))).mul(float(1).sub(joint.mul(0.5))).mul(mix(1, detail, 0.2));
+  const stone = ofB.mul(tone.mul(0.2).add(0.9)).mul(float(1).sub(vein.mul(0.22))).mul(float(1).sub(joint.mul(0.5))).mul(mix(1, detailRaw, 0.12));
   // Board-marked concrete: mottle, tie holes on a 0.6 m grid, board joints every panel width.
   const tq = fract(vec2(s, h).div(0.6)).sub(0.5);
   const hole = float(1).sub(smoothstep(0.01, 0.016, tq.length().mul(0.6)));
   const boardJ = float(1).sub(smoothstep(0.003, 0.008, edgeDist(vec2(s.div(panelW), h.div(2.4)), vec2(panelW, 2.4))));
-  const concrete = ofB.mul(mix(0.8, 1.12, nLow.mul(0.6).add(nGrain.mul(0.4)))).mul(mix(1, detail, 0.5)).mul(float(1).sub(hole.mul(0.55))).mul(float(1).sub(boardJ.mul(0.3)));
+  const concrete = ofB.mul(mix(0.8, 1.12, nLow.mul(0.6).add(nGrain.mul(0.4)))).mul(mix(1, detailRaw, 0.5)).mul(float(1).sub(hole.mul(0.55))).mul(float(1).sub(boardJ.mul(0.3)));
   const lower = paint.mul(isK(kind, LOWER.none)).add(lowerPaint.mul(isK(kind, LOWER.paint))).add(wood.mul(isK(kind, LOWER.wood)))
     .add(tile.mul(isK(kind, LOWER.tile))).add(stone.mul(isK(kind, LOWER.stone))).add(concrete.mul(isK(kind, LOWER.concrete)));
   const inLower = float(1).sub(step(ofP.y, h));
@@ -353,14 +359,14 @@ const FLOOR_COLOR: AnyNode = shadowSafe(Fn(() => {
   const lum = dot(base.rgb, LUMA);
   const detail = clamp(lum.div(max(ofQ.z, 0.02)), 0.2, 2.6);
   const carpet = isK(kind, 0);
-  const tex = mix(mix(1, detail, 0.55), mix(1, detail, 0.85), carpet);
-  // Pattern noise: along the planks for timber, isotropic otherwise; gravel speckle on the roof.
+  // loop-pile carpet: the T1 fibre speckle at half contrast (full contrast reads as salt and pepper on light tints)
+  const tex = mix(mix(1, detail, 0.55), mix(1, clamp(detail, 0.4, 1.8), 0.5), carpet);
+  // Pattern noise: along the planks for timber, isotropic mottle otherwise; gravel speckle on the roof.
   const ax = mix(2.2, 1.1, isK(kind, 5)), az = mix(2.2, 22, isK(kind, 5));
   const nF = wmNoise((vec3 as AnyNode)(P.x.mul(ax), P.y.mul(az), cell.y.mul(isK(kind, 5)).add(3))) as AnyNode;
-  const vein = smoothstep(0.47, 0.5, nF).mul(float(1).sub(smoothstep(0.5, 0.53, nF))).mul(isK(kind, 2));
   // roof gravel: the grain map's speckle pushed hard (no extra noise on every other floor)
   const gravel = mix(1, clamp(detail.mul(detail), 0.3, 2.2), isK(kind, 7));
-  const pattern = mix(1, mix(0.84, 1.14, nF), ofQ.x).mul(float(1).sub(vein.mul(0.3))).mul(gravel);
+  const pattern = mix(1, mix(0.84, 1.14, nF), ofQ.x).mul(gravel);
   const col = ofA.mul(tone).mul(tex).mul(pattern);
   return vec4(mix(col, ofB, seam), base.a);
 }, 'vec4')());
@@ -711,6 +717,8 @@ export class OfficeArch {
     const a = areaId >= 0 ? this.layout.areas[areaId] : undefined;
     const lv = this.officeLevel(a, lvl.id);
     if (lv < 0) return null;
+    // A band open above the roof deck (the floor-8 roof hatch rising into the sky) has no ceiling either.
+    if (i !== undefined && this.roofY !== null && lvl.id !== this.roofLevel && lvl.grid.hasCeil(i) && lvl.grid.ceil[i] > this.roofY + 0.5) return false;
     const cls = this.classOf(a, lv);
     const kind = ceilingKindFor(cls, this.styleOf(lv), a);
     if (kind === null) {

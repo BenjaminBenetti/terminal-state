@@ -11,6 +11,9 @@
 //  - A* from storey 0 to storey 8 within the game's expansion budget; 3D hearing attenuated per slab;
 //  - the REAL Office Space layout (LEVELS.office.generate('main')): ~1000 fixtures in one bake under budget, every storey
 //    picks its own slot, A* from the platform to every storey within the game budget, portals between consecutive storeys;
+//    task office-overhaul-20261030 (lane STRUCT): 10 storeys — the open-sky ROOF (level 9) packs its own light-field slot / band,
+//    is lit by its fixture-less daylight, joins floor 8 by a portal through the access hatch, is never on an AI route, and
+//    the station <-> lobby portal is the transit hall's box;
 //  - Subway regression: the iteration-08 bytes of the render fixture and a generated station's field, density, air and
 //    decay maps are unchanged (FNV-1a pinned before the N-storey engine change).
 import {describe, expect, it} from 'vitest';
@@ -455,22 +458,23 @@ describe('AI across 9 storeys', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-describe('the real Office Space layout (one 9-storey world)', () => {
+describe('the real Office Space layout (one 10-storey world: station, lobby, floors 2-8, the roof)', () => {
   it('one bake for ~1000 fixtures under the field budget; every storey its own slot and lit; A* to every storey; portals', () => {
     const l = LEVELS.office.generate('main', {levelSeed: 11, startWeapon: 'pistol'});
     const lv = stationLevels(l);
-    expect(lv.length).toBe(9);
-    expect(lv.map(L => L.role)).toEqual(['main', 'upper', 'office', 'office', 'office', 'office', 'office', 'office', 'office']);
+    expect(lv.length).toBe(10);
+    expect(lv.map(L => L.role)).toEqual(['main', 'upper', 'office', 'office', 'office', 'office', 'office', 'office', 'office', 'roof']);
     const t0 = performance.now();
     const f = bakeLightField({grid: l.grid, lights: l.lights, trenchFloorY: l.trench.floorY, levels: lv});
     const ms = performance.now() - t0;
-    expect(f.slots).toBe(9);
+    expect(f.slots).toBe(10);
     expect(f.stats.cut).toBe(0);
+    expect(f.stats.bands).toBeLessThanOrEqual(MAX_BANDS);
     expect(f.stats.bytes).toBeLessThan(32e6); // StationLighting's default budget: no downsampling
     expect(l.lights.length).toBeGreaterThan(600);
     // no fixture dropped or clamped: every working fixture's level is a slot of the field
     expect(l.lights.every(x => (x.level ?? 0) < f.slots)).toBe(true);
-    for (let L = 0; L < 9; L++) {
+    for (let L = 0; L < 10; L++) {
       const g = lv[L].grid;
       let n = 0, own = 0, lit = 0;
       for (let i = 0; i < g.w * g.h; i += 5) {
@@ -488,18 +492,22 @@ describe('the real Office Space layout (one 9-storey world)', () => {
     // A* from the player spawn to a floor cell of every storey, inside the game's budget
     const pf = new PathFinder(levelsOf(l));
     const sp = l.playerSpawn;
-    for (let L = 1; L < 9; L++) {
+    for (let L = 1; L < 10; L++) {
       const g = lv[L].grid;
       let t = -1;
       for (let i = Math.floor(g.w * g.h / 2); i < g.w * g.h && t < 0; i++) if (g.cells[i] === FLOOR && g.rampIdx[i] < 0 && g.passable(i % g.w, (i / g.w) | 0)) t = i;
+      // (lane STRUCT: the transit hall moved the station south, so the tower storeys may lie wholly in the grid's first half)
+      for (let i = 0; i < g.w * g.h && t < 0; i++) if (g.cells[i] === FLOOR && g.rampIdx[i] < 0 && g.passable(i % g.w, (i / g.w) | 0)) t = i;
       const p = pf.find(sp.x, sp.z, (t % g.w + 0.5) * CELL, (Math.floor(t / g.w) + 0.5) * CELL, 0.34, 26000, {ay: lv[0].grid.floorAt(sp.x, sp.z), by: g.floorOf(t)});
-      expect(p, `spawn -> storey ${L} (${pf.lastExpanded} expansions)`).not.toBeNull();
+      // the roof is a player-only climb (the access ladder is not in the AI graph): no enemy route reaches it
+      if (L === 9) expect(p, 'spawn -> roof must have no AI route').toBeNull();
+      else expect(p, `spawn -> storey ${L} (${pf.lastExpanded} expansions)`).not.toBeNull();
     }
-    // portal tiles join every pair of consecutive storeys (their stair runs), and the fog / decay maps cover them all
+    // portal tiles join every pair of consecutive storeys (their stair runs; the roof hatch), and the fog / decay maps cover them all
     const cu = new LevelCuller(lv, new LevelColumns(lv), () => 0) as unknown as {tiles: {a: number; b: number}[]};
-    for (let L = 0; L < 8; L++) expect(cu.tiles.some(t => t.a === L && t.b === L + 1), `portal ${L}-${L + 1}`).toBe(true);
-    expect(buildDensityMap(l, atmosphereFor(l)).slots).toBe(9);
-    expect(buildDecayField(l, lv).levels).toBe(9);
+    for (let L = 0; L < 9; L++) expect(cu.tiles.some(t => t.a === L && t.b === L + 1), `portal ${L}-${L + 1}`).toBe(true);
+    expect(buildDensityMap(l, atmosphereFor(l)).slots).toBe(10);
+    expect(buildDecayField(l, lv).levels).toBe(10);
     expect(levelIssues(l)).toEqual([]);
   });
 });

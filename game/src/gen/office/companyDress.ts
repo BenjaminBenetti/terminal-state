@@ -16,15 +16,15 @@
 //        - the company prefix on every area label of a tenant floor ("Pixelforge · Game lounge");
 //        - the lobby (floor 1, neutral): the TENANT DIRECTORY board (floor -> company plates in each company's colours).
 
-import {CELL} from '../grid';
-import {PROP_DEFS, type PropKind, type PropPlacement} from '../props';
+import {CELL, FLOOR} from '../grid';
+import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {
   OPPOSITE, WALL_ROT, backed, cellsOfBox, doorSide, mainDoor, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
 } from '../placeKit';
 import type {Area, Side, SignPlacement, SignStyle, StationLayout} from '../stationTypes';
 import {MARGIN} from './frame';
 import {BASE_ROOMS, COMPANIES, OPEN_STYLES, ROOMS, RUNS, roomSteps, type Company, type OpenStyle, type RoomInfo, type RoomKey, type Step} from './companies';
-import {COMPANY_KIND_ASSET, isCompanyKind} from './companyKinds';
+import {COMPANY_KIND_ASSET, ON_SIDEBOARD, SIDE_TO_WALL, isCompanyKind} from './companyKinds';
 import {officeTenants} from './tenants';
 import {COMPANY_ASSET_SPECS} from '../../assets/companyDims.generated';
 import {cubicleFarm, hostDecor, landingStrip, wallSign, type OfficeDress} from './dress';
@@ -145,9 +145,60 @@ function seating(ctx: PlaceCtx, a: Area, sofa: PropKind, chair: PropKind | undef
   for (const s of [-1, 1]) tryPlaceProp(ctx, a, chair, r3(p.x + fx * off + lx * 0.6 * s), r3(p.z + fz * off + lz * 0.6 * s), p.rot + Math.PI);
 }
 
+/**
+ * D30 kegerator (SIDE_TO_WALL): a room corner, back to one wall and its prop -X side against the other wall, never free-standing.
+ * The texture artefact (a painted portrait) is on the runtime GLB's +X panel (CPU ortho render of office-kegerator.glb), which the
+ * prop frame's 180-degree turn (world/officeProps.ts FLIP) puts at prop -X.
+ */
+function sideToWall(ctx: PlaceCtx, a: Area, kind: PropKind, front = 0.6): PropPlacement | null {
+  const {w, d} = PROP_DEFS[kind], e = 0.04;
+  const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
+  const cs: [number, number, number][] = [
+    [ax0 + w / 2 + e, az0 + d / 2 + e, 0],              // back N, -X -> W wall
+    [ax1 - w / 2 - e, az1 - d / 2 - e, Math.PI],        // back S, -X -> E wall
+    [ax0 + d / 2 + e, az1 - w / 2 - e, Math.PI / 2],    // back W, -X -> S wall
+    [ax1 - d / 2 - e, az0 + w / 2 + e, -Math.PI / 2],   // back E, -X -> N wall
+  ];
+  for (const [x, z, rot] of ctx.rng.shuffle(cs)) {
+    const p = tryPlaceProp(ctx, a, kind, r3(x), r3(z), rot, {front});
+    if (p) return p;
+  }
+  return null;
+}
+
+/**
+ * D27 ship model / D35 aquarium (ON_SIDEBOARD, delivered without cabinets): a cabinetLow sideboard against a wall (a holder with the
+ * room's loot table) with the piece standing on it, flush with its back (host decor). `post` = storey base for post-dress placements.
+ */
+function onSideboard(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], post = 0, checkZone = true): PropPlacement | null {
+  const base = placeAgainstWall(ctx, a, 'cabinetLow', {sides, front: 0.7, tries: 14, checkZone});
+  if (!base) return null;
+  base.y += post;
+  const host = ctx.layout.props.length - 1;
+  const cab = PROP_DEFS.cabinetLow, def = PROP_DEFS[kind];
+  const fx = Math.round(Math.sin(base.rot)), fz = Math.round(Math.cos(base.rot)), back = -(cab.d - def.d) / 2;
+  const {hx, hz} = footprint(kind, base.rot);
+  const p: PropPlacement = {kind, x: r3(base.x + fx * back), z: r3(base.z + fz * back), y: r3(base.y + cab.h), rot: base.rot, area: a.id, hx, hz, h: def.h,
+    blocksSight: false, variant: 0, host, ...(ctx.level ? {level: ctx.level} : {})};
+  ctx.layout.props.push(p);
+  return p;
+}
+
+/** Placement of a kind with a placement rule of its own (sideboard pieces, the kegerator), else null = not special. */
+function special(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], post = 0): PropPlacement | null | undefined {
+  if (ON_SIDEBOARD.has(kind)) return onSideboard(ctx, a, kind, sides, post) ?? (sides ? onSideboard(ctx, a, kind, undefined, post) : null);
+  if (SIDE_TO_WALL.has(kind)) { const p = sideToWall(ctx, a, kind); if (p) p.y += post; return p; }
+  return undefined;
+}
+
 /** Runs one recipe step in a room (pre-dress); window steps are deferred to post. */
 function runStep(d: OfficeDress, ctx: PlaceCtx, a: Area, s: Step, ds: Side): void {
   if (s.chance !== undefined && !ctx.rng.chance(s.chance)) return;
+  if ((s.at === 'wall' || s.at === 'row' || s.at === 'island' || s.at === 'scatter') && (ON_SIDEBOARD.has(s.kind) || SIDE_TO_WALL.has(s.kind))) {
+    const n = count(ctx, s.n), wall = 'wall' in s ? s.wall : undefined;
+    for (let i = 0; i < n; i++) special(ctx, a, s.kind, wall ? wallsFor(ctx, wall, ds) : undefined);
+    return;
+  }
   switch (s.at) {
     case 'wall': {
       const n = count(ctx, s.n);
@@ -176,6 +227,26 @@ function runStep(d: OfficeDress, ctx: PlaceCtx, a: Area, s: Step, ds: Side): voi
     case 'seating': seating(ctx, a, s.sofa, s.chair, ds); return;
     case 'corners': { const n = count(ctx, s.n); for (let i = 0; i < n; i++) corner(ctx, a, s.kind); return; }
     case 'window': (d.deferred ??= []).push({area: a.id, step: s}); return;
+    case 'facing': {
+      const host = ctx.layout.props.find(p => p.area === a.id && p.kind === s.host && (p.level ?? 0) === ctx.level);
+      if (!host) return;
+      const n = count(ctx, s.n);
+      const fx = Math.round(Math.sin(host.rot)), fz = Math.round(Math.cos(host.rot)), lx = fz, lz = -fx;
+      const span = PROP_DEFS[s.kind].w + 0.6;
+      // In front of the host (its +Z face); the far side only when nothing fits in front.
+      for (const side of [1, -1]) {
+        let got = 0;
+        for (let i = 0; i < n; i++) {
+          const t = (i - (n - 1) / 2) * span;
+          for (const dd of [0, 0.4, -0.3, 0.8]) {
+            const dist = (PROP_DEFS[s.host].d / 2 + s.dist + dd) * side;
+            if (tryPlaceProp(ctx, a, s.kind, q4(host.x + fx * dist + lx * t), q4(host.z + fz * dist + lz * t), side > 0 ? host.rot + Math.PI : host.rot)) { got++; break; }
+          }
+        }
+        if (got) break;
+      }
+      return;
+    }
   }
 }
 const runSteps = (d: OfficeDress, ctx: PlaceCtx, a: Area, steps: readonly Step[]) => { const ds = doorSideOf(ctx, a); for (const s of steps) runStep(d, ctx, a, s, ds); };
@@ -210,6 +281,13 @@ export function companyPre(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeArea
 /** The company's own pieces in rooms the default program dressed (meeting rooms, cubicle farms, private offices …). */
 export function companyExtras(d: OfficeDress, ctx: PlaceCtx, a: Area, m: OfficeAreaMeta): void {
   const c = companyOf(d);
+  if (c && m.role === 'bay') {
+    // The strip between the office run and the corridor (paralegal bay, nurses' station): filing at its ends, a pot plant.
+    const ends: Side[] = a.w >= a.h ? ['W', 'E'] : ['N', 'S'];
+    for (let i = 0, n = ctx.rng.int(1, 2); i < n; i++) placeAgainstWall(ctx, a, 'officeFiling', {sides: ends, front: 0.6, tries: 6});
+    placeAgainstWall(ctx, a, 'pottedPlantSmall', {sides: ends, front: 0.3, tries: 6});
+    return;
+  }
   if (!c || !m.program || m.role === 'server' || m.role === 'exec') return;
   const key = m.program;
   if (!(key === 'cubicles' || key === 'private' || key === 'partner' || BASE_ROOMS.has(key as RoomKey))) return;
@@ -244,17 +322,23 @@ function reception(d: OfficeDress, ctx: PlaceCtx, a: Area, c: Company): void {
   const meta = d.tower.meta.get(a.id);
   const free = sides.filter(s => !meta?.facade.includes(s));
   const heroSide = free[0] ?? sides[0];
-  if (isWallKind(c.hero)) {
-    if (!placeAgainstWall(ctx, a, c.hero, {sides: [heroSide], front: 0.8, tries: 10})) placeAgainstWall(ctx, a, c.hero, {sides: ['W', 'E', 'S'], front: 0.8});
-  } else {
-    const dz = rd ? rd.z + desk.d / 2 + 1.4 : deskZ + 2.2;
-    let ok = false;
-    for (const sx of heroSide === 'W' ? [-1, 1] : [1, -1]) for (const dx of [2.6, 3.1, 2.1, 3.6]) {
-      if (ok) break;
-      ok = !!tryPlaceProp(ctx, a, c.hero, q4(cx + sx * dx), q4(dz), Math.PI * (ctx.rng.chance(0.5) ? 0 : 1), {ring: 0.6});
-    }
-    if (!ok) scatter(ctx, a, c.hero, 0.6, 30);
+  const hero = c.hero;
+  const tries: (() => PropPlacement | null)[] = [];
+  // Sideboard pieces / the kegerator: their own placement rule (side walls first). The kegerator may take a corner by the glass:
+  // the window strip is released for that one placement (and the cells it covers leave the held list).
+  if (SIDE_TO_WALL.has(hero)) tries.push(() => besideGlass(d, a, () => sideToWall(ctx, a, hero)));
+  if (ON_SIDEBOARD.has(hero) || SIDE_TO_WALL.has(hero)) tries.push(() => special(ctx, a, hero, [heroSide, ...free.filter(q => q !== heroSide)]) ?? null, () => special(ctx, a, hero) ?? null);
+  else {
+  if (isWallKind(hero)) tries.push(() => placeAgainstWall(ctx, a, hero, {sides: [heroSide], front: 0.8, tries: 10}), () => placeAgainstWall(ctx, a, hero, {sides: ['W', 'E', 'S'], front: 0.6, tries: 16}));
+  const dz = rd ? rd.z + desk.d / 2 + 0.4 + PROP_DEFS[hero].d / 2 + 0.6 : deskZ + 2.2;
+  for (const ring of [0.6, 0.3]) for (const sx of heroSide === 'W' ? [-1, 1] : [1, -1]) for (const dx of [2.1, 2.6, 3.1, 3.6, 1.6]) {
+    tries.push(() => tryPlaceProp(ctx, a, hero, q4(cx + sx * (dx + Math.max(0, PROP_DEFS[hero].w - 1) / 2)), q4(dz), ctx.rng.chance(0.5) ? 0 : Math.PI, {ring}));
   }
+  // Bulky heroes (Ironclad's 3.1 m wide portal) end against a wall with no access strip, or anywhere on open floor.
+  tries.push(() => scatter(ctx, a, hero, 0.4, 40), () => placeAgainstWall(ctx, a, hero, {front: 0.5, tries: 24}), () => island(ctx, a, hero, 0.3),
+    () => placeAgainstWall(ctx, a, hero, {tries: 32}), () => scatter(ctx, a, hero, 0, 60));
+  }
+  if (!tries.some(t => t()) && SIDE_TO_WALL.has(hero)) (d.deferred ??= []).push({area: a.id, step: {at: 'corners', kind: hero, n: [1, 1]}});
   // Lounge seating on the other side, planters flanking the opening and in a corner.
   const seatSide = free[1] ?? (heroSide === 'W' ? 'E' : 'W');
   const sofa = placeAgainstWall(ctx, a, 'lobbySofa', {sides: [seatSide], front: 0.5, tries: 10});
@@ -266,6 +350,22 @@ function reception(d: OfficeDress, ctx: PlaceCtx, a: Area, c: Company): void {
   for (let i = 0; i < 2; i++) placeAgainstWall(ctx, a, 'planterTree', {sides: ['S'], front: 0.4, tries: 8});
   corner(ctx, a, 'planterTree');
   runSteps(d, ctx, a, roomSteps(c, 'reception'));
+}
+
+/** Runs a pre-dress placement with the room's window strip released; the cells the placed prop covers stay blocked (not held). */
+function besideGlass(d: OfficeDress, a: Area, fn: () => PropPlacement | null): PropPlacement | null {
+  const g = d.layout.levels[d.level].grid;
+  const mine = d.held.filter(i => g.area[i] === a.id);
+  for (const i of mine) g.blocked[i] = 0;
+  const p = fn();
+  const under = new Set<number>();
+  if (p) {
+    const [x0, y0, x1, y1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) under.add(g.idx(cx, cy));
+  }
+  for (const i of mine) g.blocked[i] = 1;
+  if (under.size) d.held = d.held.filter(i => !under.has(i));
+  return p;
 }
 
 /**
@@ -294,13 +394,13 @@ function execSuite(d: OfficeDress, ctx: PlaceCtx, a: Area): void {
   }
   const c = companyOf(d);
   const sides = sideWallsOf(ds);
-  placeAgainstWall(ctx, a, 'chesterfieldSofa', {sides, front: 0.8, tries: 12});
+  if (!placeAgainstWall(ctx, a, 'chesterfieldSofa', {sides, front: 0.8, tries: 12})) placeAgainstWall(ctx, a, 'chesterfieldSofa', {front: 0.6, tries: 20});
   const shelf: PropKind = c?.signature.includes('lawBookcase') ? 'lawBookcase' : 'officeShelf';
   for (const side of [far, ...ctx.rng.shuffle(sides.slice())]) {
     const [lo, hi] = wallRange(a, side);
     if (rowAlongWall(ctx, a, side, shelf, {from: lo + 0.45, to: hi - 0.45, max: 2, front: 0.6}).length) break;
   }
-  corner(ctx, a, 'globeBar') ?? placeAgainstWall(ctx, a, 'globeBar', {front: 0.4});
+  corner(ctx, a, 'globeBar') ?? placeAgainstWall(ctx, a, 'globeBar', {front: 0.4, tries: 20}) ?? scatter(ctx, a, 'globeBar', 0.4, 20);
   corner(ctx, a, 'planterTree');
   if (ctx.rng.chance(0.6)) placeAgainstWall(ctx, a, 'loungeArmchair', {sides, front: 0.5});
 }
@@ -318,9 +418,12 @@ function serverRoom(ctx: PlaceCtx, a: Area): void {
       if (racks.length >= 2) break;
     }
   }
+  // E05 is a 2.9 m three-bay run of cabinets: one per wall, sometimes a second on another wall.
+  let runs = ctx.rng.chance(0.4) ? 2 : 1;
   for (const side of ctx.rng.shuffle(SIDES.slice())) {
+    if (runs <= 0) break;
     const [lo, hi] = wallRange(a, side);
-    if (rowAlongWall(ctx, a, side, 'serverCabinet', {from: lo + 0.45, to: hi - 0.45, max: ctx.rng.int(1, 3), front: 0.9}).length) break;
+    runs -= rowAlongWall(ctx, a, side, 'serverCabinet', {from: lo + 0.45, to: hi - 0.45, max: 1, front: 0.9}).length;
   }
   placeAgainstWall(ctx, a, 'cracUnit', {front: 1.0, tries: 20});
 }
@@ -342,7 +445,10 @@ export function companyPost(d: OfficeDress, ctx: PlaceCtx): void {
   // Deferred window pieces (telescopes by the glass), now that the window strip is released.
   for (const {area, step} of d.deferred ?? []) {
     const a = layout.areas[area], m = d.tower.meta.get(area);
-    if (!a || !m || step.at !== 'window') continue;
+    if (!a || !m) continue;
+    // A kegerator hero that found no free corner before the window strip was released: a corner by the glass now.
+    if (step.at === 'corners' && SIDE_TO_WALL.has(step.kind)) { special(ctx, a, step.kind, undefined, d.base); continue; }
+    if (step.at !== 'window') continue;
     const n = count(ctx, step.n);
     for (let i = 0; i < n; i++) {
       const p = placeAgainstWall(ctx, a, step.kind, {sides: m.facade.length ? m.facade : undefined, front: 0.6, tries: 16});
@@ -388,6 +494,7 @@ export function companyPost(d: OfficeDress, ctx: PlaceCtx): void {
     signatureGuarantee(d, ctx, c);
   }
   corridorClearance(d, ctx);
+  sealPockets(d);
   if (c) {
     for (const id of d.tower.meta.keys()) {
       const a = layout.areas[id], m = d.tower.meta.get(id)!;
@@ -407,7 +514,13 @@ function signatureGuarantee(d: OfficeDress, ctx: PlaceCtx, c: Company): void {
   areas.sort((p, q) => rank(p) - rank(q) || q.a.w * q.a.h - p.a.w * p.a.h);
   for (const kind of c.signature) {
     if (layout.props.some(p => p.kind === kind && (p.level ?? 0) === d.level)) continue;
-    let placed: PropPlacement | null = null;
+    let placed: PropPlacement | null | undefined = null;
+    if (ON_SIDEBOARD.has(kind) || SIDE_TO_WALL.has(kind)) {
+      for (const {a} of areas) { if (special(ctx, a, kind, undefined, d.base)) { placed = undefined; break; } }
+      if (placed !== null) continue;
+      for (const {a} of areas) if (ON_SIDEBOARD.has(kind) ? onSideboard(ctx, a, kind, undefined, d.base, false) : null) break;
+      continue;
+    }
     for (const {a} of areas) {
       placed = placeAgainstWall(ctx, a, kind, {front: 0.5, tries: 12}) ?? scatter(ctx, a, kind, 0.4, 12);
       if (placed) break;
@@ -526,6 +639,35 @@ function corridorClearance(d: OfficeDress, ctx: PlaceCtx): void {
       p.y += d.base;
       const onStrip = p.x + p.hx > strip.x0 && p.x - p.hx < strip.x1 && p.z + p.hz > strip.z0 && p.z - p.hz < strip.z1;
       if (onStrip || passageClear(layout, a).clear < CORRIDOR_CLEAR_M - 1e-6) removeProps(d, new Set([p]));
+    }
+  }
+}
+
+/**
+ * Pockets (company floors): once the window strip is released, a row of furniture placed while it was held (a logo wall + a portal
+ * + turnstiles across a reception, say) can wall off strip cells behind it. One flood over the storey's free floor from its elevator
+ * lobby; free cells of the storey's areas it cannot reach are blocked (behind furniture: nobody walks, spawns or drops loot there).
+ */
+function sealPockets(d: OfficeDress): void {
+  if (!d.tower.tenant) return;
+  const {layout} = d;
+  const g = layout.levels[d.level].grid;
+  const free = (i: number) => g.cells[i] === FLOOR && !g.blocked[i];
+  const seen = new Uint8Array(g.w * g.h);
+  const stack: number[] = [];
+  const N = d.tower.north;
+  for (let y = N.y; y < N.y + N.h; y++) for (let x = N.x; x < N.x + N.w; x++) { const i = g.idx(x, y); if (free(i) && g.area[i] === N.id) { seen[i] = 1; stack.push(i); } }
+  if (!stack.length) return;
+  while (stack.length) {
+    const i = stack.pop()!;
+    for (const j of [i - 1, i + 1, i - g.w, i + g.w]) if (j >= 0 && j < seen.length && !seen[j] && free(j)) { seen[j] = 1; stack.push(j); }
+  }
+  for (const id of d.tower.meta.keys()) {
+    const a = layout.areas[id];
+    if (!a) continue;
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+      const i = g.idx(x, y);
+      if (g.area[i] === id && free(i) && !seen[i] && g.rampIdx[i] < 0) g.blocked[i] = 1;
     }
   }
 }

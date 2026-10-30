@@ -104,12 +104,23 @@ export function isCompanyKind(kind: string): kind is CompanyKind {
 }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
+/**
+ * E16 water tower: the delivered model is the ~4.6 m tank WITHOUT a stand, so the kind adds a low steel stand (dunnage frame) of
+ * this height under it (world/officeProps.ts builds the legs and lifts the model; the footprint height includes the stand). Kept
+ * under lane STRUCT's roof band (deck + 6 m): 4.5 + 1.2 = 5.7 m.
+ */
+export const WATER_TOWER_STAND = 1.2;
+/** D30 kegerator: a texture artefact (a portrait) on the model file's -X side panel = the prop frame's +X side after the -Z -> +Z
+ *  turn: that side always stands against a wall (gen/office/companyDress.ts corner placement). */
+export const SIDE_TO_WALL: ReadonlySet<string> = new Set(['kegerator']);
+/** D27 ship model / D35 aquarium came without their cabinets: they stand on a cabinetLow sideboard (host decor on its top). */
+export const ON_SIDEBOARD: ReadonlySet<string> = new Set(['shipModel', 'aquarium']);
 /** Footprint of a kind: the delivered model's measured bounds, else its nominal box. */
 function defOf(k: CompanyKind): PropDef {
   const s: KindSpec = SPECS[k];
   const dims = s.asset ? COMPANY_DIMS[s.asset] : null;
   const [w, d, h] = dims ? [dims[0], dims[2], dims[1]] : s.box;
-  return {w: r3(w), d: r3(d), h: r3(h), blocksSight: s.blocksSight ?? false};
+  return {w: r3(w), d: r3(d), h: r3(h + (k === 'waterTower' ? WATER_TOWER_STAND : 0)), blocksSight: s.blocksSight ?? false};
 }
 export const COMPANY_PROP_DEFS = Object.fromEntries(COMPANY_KINDS.map(k => [k, defOf(k)])) as Record<CompanyKind, PropDef>;
 
@@ -195,9 +206,24 @@ export function companyShape(kind: CompanyKind): ShapePart[] {
     case 'loungeArmchair': return [box('wood', [w, 0.3, d], [0, 0.15, 0]), box('partition', [w * 0.85, 0.12, d * 0.8], [0, 0.36, 0.03]), box('partition', [w * 0.85, h - 0.4, 0.12], [0, 0.4 + (h - 0.4) / 2, -d * 0.4])];
     case 'pottedPlantSmall': return [box('porcelain', [w * 0.7, h * 0.4, d * 0.7], [0, h * 0.2, 0]), box('black', [w, h * 0.55, d], [0, h * 0.68, 0])];
     case 'roofHvac': return [box('steelBright', [w, h * 0.85, d], [0, h * 0.425, 0]), box('grille', [w * 0.35, 0.05, d * 0.7], [-w * 0.22, h * 0.87, 0]), box('grille', [w * 0.35, 0.05, d * 0.7], [w * 0.22, h * 0.87, 0])];
-    case 'waterTower': return [leg('steelDark', -w * 0.35, -d * 0.35, h * 0.4, 0.12), leg('steelDark', w * 0.35, -d * 0.35, h * 0.4, 0.12), leg('steelDark', -w * 0.35, d * 0.35, h * 0.4, 0.12), leg('steelDark', w * 0.35, d * 0.35, h * 0.4, 0.12),
-      box('wood', [w * 0.9, h * 0.45, d * 0.9], [0, h * 0.4 + h * 0.225, 0]), box('wood', [w * 0.6, h * 0.15, d * 0.6], [0, h * 0.925, 0])];
+    case 'waterTower': {
+      // Tank over the steel stand (waterTowerStand: the same legs the model sits on).
+      const S = WATER_TOWER_STAND, t = h - S;
+      return [...waterTowerStand(w, d), box('wood', [w * 0.9, t * 0.75, d * 0.9], [0, S + t * 0.375, 0]), box('wood', [w * 0.6, t * 0.25, d * 0.6], [0, S + t * 0.875, 0])];
+    }
     case 'satelliteDish': return [box('steelDark', [0.5, 0.6, 0.5], [0, 0.3, 0]), box('counter', [w, h * 0.7, 0.08], [0, h * 0.6, 0.1])].map((p, i) => (i === 1 ? {...p, rx: -0.5} : p));
     case 'logoWall': return [box('woodVeneer', [w, h, d], [0, h / 2, 0]), box('steelDark', [w + 0.04, 0.06, d + 0.04], [0, 0.03, 0])];
   }
 }
+
+/** The water tower's steel stand (prop frame, from the deck up to WATER_TOWER_STAND): four legs, a ring beam, cross braces. */
+export function waterTowerStand(w: number, d: number): ShapePart[] {
+  const S = WATER_TOWER_STAND, lx = w * 0.36, lz = d * 0.36;
+  const out: ShapePart[] = [];
+  for (const [x, z] of [[-lx, -lz], [lx, -lz], [-lx, lz], [lx, lz]]) out.push(box('steelDark', [0.16, S, 0.16], [x, S / 2, z]));
+  out.push(box('steelDark', [2 * lx + 0.16, 0.14, 0.14], [0, S - 0.07, -lz]), box('steelDark', [2 * lx + 0.16, 0.14, 0.14], [0, S - 0.07, lz]));
+  out.push(box('steelDark', [0.14, 0.14, 2 * lz + 0.16], [-lx, S - 0.07, 0]), box('steelDark', [0.14, 0.14, 2 * lz + 0.16], [lx, S - 0.07, 0]));
+  out.push(box('steelDark', [2 * lx, 0.08, 0.08], [0, S * 0.45, -lz]), box('steelDark', [2 * lx, 0.08, 0.08], [0, S * 0.45, lz]));
+  return out;
+}
+

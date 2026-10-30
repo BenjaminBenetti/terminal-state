@@ -29,7 +29,7 @@ import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from '../assets/
 import {BUTTON_REACH, ElevatorLogic, buildElevatorView, planElevator, type ElevatorEvent, type ElevatorPlan, type ElevatorView, type LampState, type LiftButton} from './elevator';
 import {buildWindows, planWindows, type WindowPlan, type WindowView} from './officeWindows';
 import {EXTERIOR, buildExterior, planExterior, setExteriorEye, setExteriorFootprint, setSkylineTexture, type ExteriorModels, type ExteriorPlan, type ExteriorView} from './exterior';
-import {floorLabel, gateLocal, gateWorld, inDoorway, insideRect, pushOutRect, rayBox, readTowerInfo, towerCue, type P3, type TowerInfo} from './towerShared';
+import {floorLabel, gateLocal, gateWorld, inDoorway, insideRect, pushOutRect, rayBox, rayCylinder, readTowerInfo, towerCue, type P3, type TowerInfo} from './towerShared';
 import {RIDE_PAD, doorwayMover} from '../physics/world';
 
 /** What the tower needs from Game (structural: tests drive it with a fake host). */
@@ -520,7 +520,7 @@ export class TowerRuntime {
 
   /**
    * The button under the crosshair: within TOWER_REACH, its face toward the eye, nothing structural on the ray before it (a wall,
-   * slab or shut door never lets you press through). Cab buttons only from inside the cab (`cabY`: the cab floor the camera saw),
+   * slab or shut door never lets you press through) and no living enemy in front of it (the click is then the gun's). Cab buttons only from inside the cab (`cabY`: the cab floor the camera saw),
    * landing buttons of the eye's storey. Allocation-free; the returned target is reused (copy what you keep).
    */
   pickButton(o: OfficeRt, cabY: number): Target | null {
@@ -554,6 +554,14 @@ export class TowerRuntime {
     // unobstructed: no wall / floor / ceiling / shut door between the eye and the button
     const blocked = h.levels.raycast(eye, d, bt + 0.02);
     if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return null;
+    // a living enemy in front of the button takes the click: you can always shoot what stands before a panel
+    for (const z of h.zombies) {
+      const zb = z.brain;
+      if (!zb.alive || z.ragdolled) continue;
+      const dx = zb.x - eye.x, dz = zb.z - eye.z;
+      if (dx * dx + dz * dz > (bt + 1) * (bt + 1)) continue;
+      if (rayCylinder(eye, d, zb.x, zb.z, zb.stats.radius + 0.05, zb.y, zb.y + 1.9, bt) !== null) return null;
+    }
     const hit = this.hit;
     hit.kind = best.where === 'car' ? 'panel' : 'call'; hit.btn = best; hit.t = bt;
     return hit;

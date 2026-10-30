@@ -212,8 +212,8 @@ export function planExterior(o: {foot: Rect2; groundY: number; eyeAbove: number;
  * sigma(h) = base + ground x exp(-h / height); the drifting patches scale it by 1 +- noise.
  */
 export const EXT_FOG = {
-  /** Fog colour: sickly green-grey murk (sRGB hue ~93 deg, saturation ~0.19, lightness ~0.3: not neon). */
-  color: [0.07, 0.105, 0.048] as [number, number, number],
+  /** Fog colour: sickly green-grey murk (sRGB hue ~94 deg, saturation ~0.16, lightness ~0.3: not neon). */
+  color: [0.072, 0.1, 0.054] as [number, number, number],
   /** Density everywhere (1/m), the extra density at street level (1/m) and its scale height (m). */
   base: 0.012, ground: 0.034, height: 16,
   /** Range term (m): the optical depth gains (L / range)^2, so beyond ~120 m nothing reads. */

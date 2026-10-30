@@ -70,6 +70,40 @@ const BUDGET = a => (isLarge(a) ? 600_000 : 400_000);
 
 // Per-asset observations from the CPU-rendered QA views, for integrators (filled after inspection; mirrored in DELIVERED.json).
 const NOTES = {
+  'gumball-jar': 'tipped jar with gumballs spilled around the base: footprint ~1.03 x 0.66 m at 0.75 m tall',
+  'console-station': 'TV on a low media stand (top ~0.93 m); console, controllers and open shelf on the -Z side',
+  'law-bookcase': 'wide, deep bookcase (~1.13 x 2.2 x 0.67 m)',
+  'trading-desk': 'curved desk: monitors on the outer arc, operator side (concave) toward -Z',
+  'bull-statue': 'length along Z, head toward -Z',
+  'lab-bench': 'replacement attempt 2 (attempt 1 was the wrong object)',
+  'architect-model': 'presentation table with tall white towers (~1.6 x 1.61 x 1.46 m)',
+  'tv-camera': 'native lens pointed -X; turned -90 deg so the lens faces -Z (~0.85 x 1.7 x 1.40 m)',
+  'news-desk': 'ring-shaped anchor desk with a tall backdrop panel on +Z (~2.6 x 1.24 x 1.77 m)',
+  'espresso-machine': 'freestanding all-in-one machine, no separate cart (~1.4 x 1.29 x 1.41 m, deep)',
+  'coffee-roaster': 'large (~2.43 x 1.8 x 1.58 m); drum door and cooling tray at the -X end',
+  'treadmill': 'console at the +Z end, deck toward -Z (~1.19 x 1.85 x 2.0 m)',
+  'sneaker-wall': 'wide (2.32 m) tall panel unit plus a lower side shelf unit',
+  'rocking-horse': 'length along Z, head toward -Z',
+  'mixing-console': 'deep desk (~2.0 x 1.25 x 1.99 m), monitor speakers at the back',
+  'ship-model': 'glass display case only, no cabinet: low (~0.59 m) - stand it on a sideboard/table',
+  'parcel-pallet': 'bulky 2x2x2 parcel stack on a pallet (~1.2 x 1.3 x 1.44 m)',
+  'nap-pod': 'dome pod (~1.8 x 1.27 x 1.63 m), opening toward -Z',
+  'kegerator': 'bulky (~1.32 x 1.4 x 1.37 m); the refine texture painted a poster-like portrait of an elderly man on the -X side panel (texture hallucination; flagged for the primary)',
+  'metal-detector': 'wide walk-through portal (~3.12 x 2.2 x 1.99 m); walk-through axis Z',
+  'vault-safe': 'bulky (~1.31 x 1.5 x 1.35 m); dial door -Z',
+  'aquarium': 'tank only, no cabinet (~1.5 x 0.64 x 0.70 m) - stand it on a sideboard/counter',
+  'bakery-case': 'curved customer glass faces -Z (native, no rotation); open server side +Z',
+  'satellite-model': 'solar wings span X (1.8 m); ~0.9 m tall on its stand',
+  'telescope': 'aperture points +Z (toward the wall/window), eyepiece/handles face -Z',
+  'executive-desk': 'front -Z = visitor/modesty side (native, no rotation); drawer/seat side +Z: put the executive chair on +Z facing -Z',
+  'server-cabinet': 'wide three-bay cabinet (~2.92 x 2.0 x 1.38 m), glass server bay in the middle',
+  'security-turnstile': 'replacement attempt 2; two pedestals spread along X (1.59 m) with glass flaps across one lane; walk-through axis Z',
+  'foosball-table': 'rod handles stick out on both long sides (1.4 x 0.52 x 1.26 m incl. rods)',
+  'ping-pong-table': 'squat table (~2.42 x 0.83 x 2.74 m); net across X at mid-length',
+  'rooftop-hvac': '~2.13 x 2.32 x 2.4 m; fan grilles on -Z and both X sides, plain back +Z',
+  'water-tower': 'tank sits low, no tall steel stand (~4.59 x 4.5 x 4.58 m); ladder on -Z',
+  'satellite-dish': 'dish faces -Z (native, no rotation)',
+  'toilet': 'tank at +Z (against the wall), bowl and open seat toward -Z',
 };
 
 // ---------- ledger ----------
@@ -166,7 +200,7 @@ for (const a of ASSETS) {
     }
     if (step === ladder.length) step = ladder.length - 1;
     const jsonChunk = glb.subarray(20, 20 + glb.readUInt32LE(12)).toString();
-    if (/https?:|Signature|X-Amz|token/i.test(jsonChunk)) throw new Error(`URL/token-like string inside ${a.id} glTF JSON`);
+    if (/https?:|Signature=|X-Amz|Key-Pair-Id|token=/i.test(jsonChunk)) throw new Error(`URL/token-like string inside ${a.id} glTF JSON`);
     fs.writeFileSync(outAbs, glb);
   }
   // re-measure the written file
@@ -242,7 +276,8 @@ const prov = {schema: 'last-line-derivative/1', asset: 'office-overhaul-20261030
   credits: creditSummary, replacements,
   outputs, missing};
 const provBuf = Buffer.from(JSON.stringify(prov, null, 1) + '\n');
-if (/https?:|Signature|X-Amz|Key-Pair|token=/i.test(provBuf.toString())) throw new Error('URL/token-like string in public provenance');
+{ const hit = provBuf.toString().match(/.{0,60}(https?:|Signature=|X-Amz|Key-Pair-Id|token=).{0,20}/i);
+  if (hit) throw new Error(`URL/token-like string in public provenance: ...${hit[0]}...`); }
 const newFiles = outputs.map(o => ({path: o.output.url, buf: fs.readFileSync(path.join(root, 'game/public', o.output.url))}));
 if (outputs.length) { fs.writeFileSync(PROV, provBuf); newFiles.push({path: PROV_REL, buf: provBuf}); }
 
