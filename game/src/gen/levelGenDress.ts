@@ -14,9 +14,10 @@
 import type {Rng} from '../core/rng';
 import {CELL, FLOOR, type Grid} from './grid';
 import {purposeById} from './purposes';
+import {PUBLIC_FLOOR_WEIGHTS} from '../items/lootTables';
 import {signDims, wallSignSpot} from './doorways';
 import {LEVEL_LOWER, LEVEL_UPPER, levelArrays, levelDistance} from './levelGen';
-import {MIN_ZOMBIE_SPAWN_CELLS, type Area, type Door, type RoomType, type Side, type SignPlacement, type StationLayout} from './stationTypes';
+import {MIN_ZOMBIE_SPAWN_CELLS, type Area, type Door, type Side, type SignPlacement, type StationLayout} from './stationTypes';
 
 const platNo = (P: Area) => (P.label.match(/\d+(?:\s*·\s*\d+)?/)?.[0] ?? String(P.platformNo ?? 1)).replace(/\s+/g, ' ');
 
@@ -128,7 +129,8 @@ export function dressLevels(layout: StationLayout, _rng: Rng): void {
 // ---------------------------------------------------------------------------------------------
 // Spawns on the levels
 
-const PUBLIC_FLOOR: Partial<Record<RoomType, number>> = {'concourse': 0.4, 'passage': 0.25, 'service-corridor': 0};
+// Task loot-tables-20261030 (lane LOOT): where moved loose finds may land — items/lootTables.ts (its own copy, kept distinct).
+const PUBLIC_FLOOR = PUBLIC_FLOOR_WEIGHTS.stationLevels;
 const zombieWeight = (a: Area) => a.kind === 'platform' ? 2.2 : a.type === 'exit-stair' || a.type === 'washroom' ? 0.5 : a.type === 'eatery' || a.type === 'shop' ? 0.5 : a.publicSpace ? 1 : a.kind === 'closet' ? 0.6 : 1.4;
 
 /**

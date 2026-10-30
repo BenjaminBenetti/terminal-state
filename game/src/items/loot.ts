@@ -12,17 +12,26 @@
 // purpose (security → ammo / flares / torch batteries, medical → dressings, food → food and drink, service → batteries and
 // flares; ~15-20 % off-theme random finds). Most holders are now empty or nearly so — intended.
 
+// Task loot-tables-20261030 (lane LOOT): the TABLES moved to items/lootTables.ts (per-logical-level LootProfile: rate tables +
+// overrides; slot categories; named shared tables). Every roll function takes an optional trailing `profile` (default: the
+// level-agnostic baseline = today's tables, no overrides — byte-identical draws, tests/loot-golden.test.ts); ContainerManager.build
+// passes the section's logical level profile. holderTable() is the resolution step: which slot, which rows, empty chance, lots.
+
 import {hashString, mulberry32} from '../core/rng';
 import {PURPOSE_HOLDER_KINDS, type PurposeHolderKind} from '../gen/props';
 import {purposeLoot} from '../gen/purposes';
 import {P7_HOLDER_KINDS, P7_HOLDER_META, type P7HolderKind} from '../gen/props07';
 import {effectText, itemDef} from './items';
-import {ammoText, genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030)
+import {ammoText} from './calibers'; // lane AMMO (knife-melee-20261030)
 import type {Inventory} from './inventory';
 import {packItems, type Placement, type Surface} from './lootLayout';
 import {scarceFinds, type Find} from './lootEconomy';
 import {
-  OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind, type OpenableLoot,
+  BASELINE_PROFILE, LEGACY_CATS, catWeight, resolveRows, slotEmpty, slotLots, slotOf,
+  type ItemRows, type LegacyCat, type LootProfile, type LotRange, type OwnTable, type SlotCategory,
+} from './lootTables';
+import {
+  OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind,
 } from '../world/openablesSpec';
 
 /**
@@ -95,77 +104,74 @@ export interface HolderState {
 }
 
 // ---------------------------------------------------------------------------------------
-// Loot tables
-
-type Cat = 'food' | 'drink' | 'med' | 'ammo';
-const CATS: readonly Cat[] = ['food', 'drink', 'med', 'ammo'];
-type W4 = readonly [food: number, drink: number, med: number, ammo: number];
-
-/** Category weights by room type (`area.type`); unknown types use `default`. */
-const AREA_WEIGHTS: Record<string, W4> = {
-  'default': [1, 1, 1, 1],
-  'platform': [1, 1.2, 0.6, 0.8],
-  'passage': [1, 1.2, 0.6, 0.6],
-  'concourse': [1, 1.2, 0.6, 0.6],
-  'exit-stair': [0.8, 1, 0.8, 0.8],
-  'fare-hall': [1, 1.2, 0.8, 0.8],
-  'service-corridor': [0.6, 1, 1, 1.6],
-  'agent-office': [1.4, 1.6, 1.2, 1],
-  'storage': [1.4, 1.4, 1.2, 2],
-  'stock-room': [3, 3, 0.4, 0.3],
-  'crew-room': [2.6, 2.6, 0.8, 0.5],
-  'utility': [0.5, 1, 1, 2.4],
-  'supply-closet': [0.6, 0.8, 2.4, 1.6],
-  'janitor-closet': [0.4, 1, 1.2, 0.8],
-  'food-court': [3, 3, 0.15, 0.05],
-  'retail-arcade': [2.2, 2.4, 0.6, 0.2],
-  'washroom': [0.2, 0.6, 2, 0.3],
-  'eatery': [3, 3, 0.1, 0.05],
-  'shop': [2.4, 2.6, 0.7, 0.2],
-};
-/** Holder modifiers (multiplied with the room weights). */
-const HOLDER_MOD: Record<HolderKind, W4> = {
-  cabinetTall: [1, 1, 1.1, 1], cabinetLow: [1, 1, 1, 1], crate: [0.8, 0.9, 0.6, 1.6],
-  shelf: [1, 1, 0.9, 0.6], stall: [1.3, 1.3, 0.05, 0], vending: [1, 1, 0, 0], table: [1, 1.4, 0.1, 0], desk: [1, 1.3, 0.4, 0.2],
-  shopCounter: [1.3, 1.2, 0.1, 0.05], shopDisplay: [2, 0.6, 0, 0], shopBackbar: [1.4, 1, 0.1, 0.05], shopCooler: [0.15, 3, 0, 0],
-  // Purpose holders: used only when no purpose table applies (their purposes normally decide).
-  stockShelf: [1, 1, 0.9, 0.3], snackRack: [2, 0.5, 0, 0], hotdogCart: [1.5, 1.5, 0, 0], grillLine: [1.4, 1, 0, 0], espressoBar: [1, 1.4, 0, 0],
-  wokLine: [1.6, 0.8, 0, 0], deliLine: [1.4, 1, 0, 0], blenderBar: [0.5, 2, 0, 0], kitchenette: [2, 1, 0.1, 0], fridge: [0.6, 2.4, 0, 0],
-  gunLocker: [0, 0, 0.4, 3], monitorDesk: [1, 1.2, 0.2, 0.3], medCabinet: [0, 0.2, 3, 0],
-  ...P7_HOLDER_META.mod,
-  // Iteration 08 openable containers roll their own tables (world/openablesSpec.ts); these entries are never weighted.
-  ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, [1, 1, 1, 1]])) as unknown as Record<OpenableContainerKind, W4>,
-};
-/** Empty-roll chance of the original table roll (iteration 12: most holders end up empty anyway — items/lootEconomy.ts). */
-const EMPTY_CHANCE: Record<HolderKind, number> = {
-  cabinetTall: 0.08, cabinetLow: 0.1, crate: 0.12, shelf: 0.08, stall: 0.1, vending: 0.12, table: 0.65, desk: 0.55, shopCounter: 0.3, shopDisplay: 0.25, shopBackbar: 0.3, shopCooler: 0.15,
-  stockShelf: 0.12, snackRack: 0.15, hotdogCart: 0.2, grillLine: 0.35, espressoBar: 0.35, wokLine: 0.35, deliLine: 0.35, blenderBar: 0.35,
-  kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
-  ...P7_HOLDER_META.empty,
-  ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, containerLoot(k)?.empty ?? 1])) as unknown as Record<OpenableContainerKind, number>,
-};
-const LOT_COUNT: Record<HolderKind, readonly [number, number]> = {
-  cabinetTall: [2, 5], cabinetLow: [2, 4], crate: [1, 3], shelf: [2, 5], stall: [2, 5], vending: [3, 6], table: [1, 2], desk: [1, 2],
-  shopCounter: [1, 3], shopDisplay: [2, 4], shopBackbar: [1, 3], shopCooler: [3, 7],
-  stockShelf: [2, 5], snackRack: [2, 4], hotdogCart: [2, 4], grillLine: [1, 3], espressoBar: [1, 3], wokLine: [1, 3], deliLine: [1, 3], blenderBar: [1, 3],
-  kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
-  ...P7_HOLDER_META.lots,
-  ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, containerLoot(k)?.lots ?? [0, 0]])) as unknown as Record<OpenableContainerKind, readonly [number, number]>,
-};
-/** Stocked rooms get fuller shelves. */
-const FULL_ROOMS = new Set(['stock-room', 'food-court', 'retail-arcade', 'storage', 'crew-room', 'shop']);
+// Resolution (tables: items/lootTables.ts)
 
 type Row = readonly [itemId: string, weight: number];
-const POOL: Record<Cat, readonly Row[]> = {
-  food: [['chocolate', 1.2], ['chips', 1.1], ['beans', 0.9], ['noodles', 1]],
-  drink: [['water', 1.3], ['cola', 1.2], ['juice', 0.9]],
-  med: [['bandage', 1], ['medkit', 0.35]],
-  // Lane AMMO (knife-melee-20261030): generic ammo = ~1/3 each 9mm / 5.56×45mm / 12-gauge (was rifle 1.4 : shells 1, no 9mm —
-  // "the pistol ammo ... only spawns on the floor"). The category weight is unchanged, so the number of ammo lots is too.
-  ammo: genericAmmo(2.4),
-};
-/** Vending machines sell snacks, not tins of beans. */
-const VENDING_FOOD: readonly Row[] = [['chocolate', 1.5], ['chips', 1.5], ['noodles', 0.3]];
+
+/**
+ * Task loot-tables-20261030 (lane LOOT): what a holder rolls from under a profile — its SLOT category, where the rows come from
+ * ('own' openable table narrowed by the room's purpose / 'purpose' table for that holder kind / 'legacy' room-type tables /
+ * 'fixture' = baked contents, no loot), the resolved empty chance, lot range and item rows (legacy: flattened category x pool
+ * rows, what re-themed finds prefer). Baseline profile: the very same row arrays and numbers as the tables hold.
+ */
+export interface HolderTable {
+  slot: SlotCategory | undefined;
+  source: 'own' | 'purpose' | 'legacy' | 'fixture';
+  empty: number;
+  lots: LotRange;
+  rows: ItemRows;
+}
+
+export function holderTable(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE): HolderTable {
+  const T = profile.tables, slot = slotOf(kind);
+  // Iteration 08 (Lane I): new openable containers use their own tables whatever the room (a pharmacy bin is still a bin);
+  // fixtures (fire / defibrillator cabinets) hold only what is baked into their model.
+  const own = containerLoot(kind);
+  if (own === null) return {slot, source: 'fixture', empty: 1, lots: [0, 0], rows: []};
+  if (own !== undefined) return resolved(profile, slot, 'own', purposeRows(own, areaType, kind));
+  // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
+  // (`areaType` is the purpose id when the area has one; plain room types use the legacy tables).
+  const spec = purposeLoot(areaType, kind);
+  if (spec) return resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]});
+  const [lo, hi] = T.holderLots[kind];
+  // Stocked rooms get fuller shelves.
+  const full = T.fullRooms.kinds.includes(kind) && T.fullRooms.rooms.has(areaType);
+  return {slot, source: 'legacy', empty: slotEmpty(profile, slot, T.holderEmpty[kind]), lots: slotLots(profile, slot, full ? [lo, hi + T.fullRooms.extra] : T.holderLots[kind]), rows: legacyRows(kind, areaType, profile)};
+}
+
+/** The separate compartment roll of a desk-style holder (drawers / cupboards: their own table, slot 'container'); null: none. */
+export function compartmentTable(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE): HolderTable | null {
+  const inside = separateCompartmentLoot(kind);
+  return inside ? resolved(profile, slotOf(kind, true), 'own', purposeRows(inside, areaType, kind)) : null;
+}
+
+function resolved(profile: LootProfile, slot: SlotCategory | undefined, source: HolderTable['source'], t: OwnTable): HolderTable {
+  return {slot, source, empty: slotEmpty(profile, slot, t.empty), lots: slotLots(profile, slot, t.lots), rows: resolveRows(profile, t.items)};
+}
+
+/** Legacy category weights of a holder in a plain room (room type x holder modifier; categories with weight > 0). */
+function legacyCats(kind: HolderKind, areaType: string, profile: LootProfile): (readonly [LegacyCat, number])[] {
+  const T = profile.tables;
+  const room = T.areaWeights[areaType] ?? T.areaWeights.default;
+  const mod = T.holderMod[kind];
+  return LEGACY_CATS.map((c, i) => [c, catWeight(profile, c, room[i] * mod[i])] as const).filter(([, w]) => w > 0);
+}
+
+/** Items of a legacy category for a holder (vending machines sell snacks, not tins of beans). */
+function legacyPool(kind: HolderKind, cat: LegacyCat, profile: LootProfile): ItemRows {
+  return resolveRows(profile, kind === 'vending' && cat === 'food' ? profile.tables.vendingFood : profile.tables.pool[cat]);
+}
+
+/** The legacy tables flattened into weighted item rows (what a plain-room holder's re-themed finds prefer). */
+function legacyRows(kind: HolderKind, areaType: string, profile: LootProfile): Row[] {
+  const rows: Row[] = [];
+  for (const [c, w] of legacyCats(kind, areaType, profile)) {
+    const pool = legacyPool(kind, c, profile);
+    const total = pool.reduce((s, x) => s + x[1], 0);
+    for (const [id, x] of pool) rows.push([id, w * x / total]);
+  }
+  return rows;
+}
 
 function pick<T>(rows: readonly (readonly [T, number])[], r: () => number): T {
   const total = rows.reduce((s, row) => s + row[1], 0);
@@ -174,15 +180,12 @@ function pick<T>(rows: readonly (readonly [T, number])[], r: () => number): T {
   return rows[rows.length - 1][0];
 }
 
-function lotCount(itemId: string, kind: HolderKind, r: () => number): number {
-  const range = (a: number, b: number) => a + Math.floor(r() * (b - a + 1));
-  // Lane AMMO: per caliber (5.56×45mm = the old rifle rounds, 12-gauge = the old shells, 9mm = the old 9 mm boxes).
-  if (itemId === 'ammo_556') return kind === 'crate' || kind === 'gunLocker' ? range(8, 12) : range(5, 10);
-  if (itemId === 'ammo_12ga') return kind === 'crate' || kind === 'gunLocker' ? range(3, 6) : range(2, 4);
-  // 9mm: lane AMMO (knife-melee-20261030) — now ~1/3 of every generic ammo pick (it used to be a rare security find at 10-15 / 6-12),
-  // so a holder's 9mm lot is ~half a magazine like the other calibers (4-8 / 6-10): total holder ammo stays in its band (tests).
-  if (itemId === 'ammo_9mm') return kind === 'crate' || kind === 'gunLocker' ? range(6, 10) : range(4, 8);
-  return 1;
+/** Stack size of a rolled item: lootTables BOX_COUNT (big boxes in crates / gun lockers); unlisted items are single and draw nothing. */
+function lotCount(itemId: string, kind: HolderKind, r: () => number, profile: LootProfile): number {
+  const box = profile.tables.boxCount[itemId];
+  if (!box) return 1;
+  const [a, b] = profile.tables.bigBoxHolders.has(kind) ? box.big : box.small;
+  return a + Math.floor(r() * (b - a + 1));
 }
 
 function holderRng(seed: number, index: number, kind: HolderKind): () => number {
@@ -194,47 +197,30 @@ function scarceRng(seed: number, index: number, kind: HolderKind, part = ''): ()
   return mulberry32(hashString(`loot:${kind}:${index}${part}:scarce`, seed >>> 0));
 }
 
-/** The weighted item rows a holder's roll draws from (its purpose / own / room-type table) — what its re-themed finds prefer. */
-function tableRows(kind: HolderKind, areaType: string): Row[] {
-  const own = containerLoot(kind);
-  if (own !== undefined) return own ? purposeRows(own, areaType, kind).items.slice() : [];
-  const spec = purposeLoot(areaType, kind);
-  if (spec) return spec.items.slice();
-  const room = AREA_WEIGHTS[areaType] ?? AREA_WEIGHTS.default;
-  const mod = HOLDER_MOD[kind];
-  const rows: Row[] = [];
-  CATS.forEach((c, i) => {
-    const w = room[i] * mod[i];
-    if (w <= 0) return;
-    const pool = kind === 'vending' && c === 'food' ? VENDING_FOOD : POOL[c];
-    const total = pool.reduce((s, x) => s + x[1], 0);
-    for (const [id, x] of pool) rows.push([id, w * x / total]);
-  });
-  return rows;
+/** Iteration 12 (LOOT lane): the original roll thinned / re-themed into scarce finds (ammo exactly as rolled). */
+function scarce(raw: LootEntry[], s: () => number, kind: HolderKind, areaType: string, rows: readonly Row[], profile: LootProfile): LootEntry[] {
+  return scarceFinds(raw, findContext(kind, areaType, rows, profile), s).map(f => ({itemId: f.itemId, count: f.count}));
 }
 
-/** Iteration 12 (LOOT lane): the original roll thinned / re-themed into scarce finds (ammo exactly as rolled). */
-function scarce(raw: LootEntry[], s: () => number, kind: HolderKind, areaType: string, rows: readonly Row[]): LootEntry[] {
-  return scarceFinds(raw, {kind, areaKey: areaType, rows, boxCount: (id, r) => lotCount(id, kind, r)}, s).map(f => ({itemId: f.itemId, count: f.count}));
+function findContext(kind: HolderKind, areaType: string, rows: readonly Row[], profile: LootProfile) {
+  return {kind, areaKey: areaType, rows, boxCount: (id: string, r: () => number) => lotCount(id, kind, r, profile), profile};
 }
 
 /** Iteration 12 (LOOT lane, QA / tests): the holder's ORIGINAL table roll (the pre-scarcity contents; its ammo is what survives). */
-export function rollTableItems(seed: number, index: number, kind: HolderKind, areaType = 'default'): LootEntry[] {
-  return rollItems(holderRng(seed, index, kind), kind, areaType);
+export function rollTableItems(seed: number, index: number, kind: HolderKind, areaType = 'default', profile: LootProfile = BASELINE_PROFILE): LootEntry[] {
+  return rollItems(holderRng(seed, index, kind), kind, holderTable(kind, areaType, profile), areaType, profile);
 }
 
 /**
  * Iteration 12 (LOOT lane, QA / tests): the holder's contents before placement, each tagged `roll` (its original, exempt ammo
  * roll) or `find` (a scarce, re-themed find) — the same entries rollLootItems returns. Desk-style compartments included.
  */
-export function holderFinds(seed: number, index: number, kind: HolderKind, areaType: string, withCompartments = false): Find[] {
-  const ctx = (rows: readonly Row[]) => ({kind, areaKey: areaType, rows, boxCount: (id: string, r: () => number) => lotCount(id, kind, r)});
-  const rows = tableRows(kind, areaType);
-  const out = scarceFinds(rollItems(holderRng(seed, index, kind), kind, areaType), ctx(rows), scarceRng(seed, index, kind));
-  const inside = withCompartments ? separateCompartmentLoot(kind) : null;
+export function holderFinds(seed: number, index: number, kind: HolderKind, areaType: string, withCompartments = false, profile: LootProfile = BASELINE_PROFILE): Find[] {
+  const t = holderTable(kind, areaType, profile);
+  const out = scarceFinds(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), findContext(kind, areaType, t.rows, profile), scarceRng(seed, index, kind));
+  const inside = withCompartments ? compartmentTable(kind, areaType, profile) : null;
   if (inside) {
-    const own = purposeRows(inside, areaType, kind);
-    out.push(...scarceFinds(rollOwn(mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0)), kind, own), ctx(own.items), scarceRng(seed, index, kind, ':inside')));
+    out.push(...scarceFinds(rollRows(mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0)), kind, inside, profile), findContext(kind, areaType, inside.rows, profile), scarceRng(seed, index, kind, ':inside')));
   }
   return out;
 }
@@ -243,7 +229,7 @@ export function holderFinds(seed: number, index: number, kind: HolderKind, areaT
  * Iteration 08 (Lane I): an openable's own table narrowed to what its room / store purpose stocks (a pharmacy trash can holds
  * pharmacy things, a newsstand's its snacks) — or the purpose's own rows when nothing overlaps. Plain halls keep the table.
  */
-function purposeRows(own: OpenableLoot, areaType: string, kind: HolderKind): OpenableLoot {
+function purposeRows(own: OwnTable, areaType: string, kind: HolderKind): OwnTable {
   const spec = purposeLoot(areaType, kind);
   if (!spec || !spec.items.length) return own;
   const allowed = new Set(spec.items.map(r => r[0]));
@@ -251,50 +237,39 @@ function purposeRows(own: OpenableLoot, areaType: string, kind: HolderKind): Ope
   return {...own, items: rows.length ? rows : spec.items};
 }
 
-/** Iteration 08 (Lane I): an openable's own table (junk-tier bins, office drawers, lockers, ...): finite, small, never ammo-heavy. */
-function rollOwn(r: () => number, kind: HolderKind, loot: OpenableLoot): LootEntry[] {
-  if (!loot.items.length || r() < loot.empty) return [];
-  const [lo, hi] = loot.lots;
+/**
+ * One table roll (own / purpose tables): empty?, lot count, then per lot an item (+ its stack size). An empty row list is no loot
+ * (nothing drawn). Iteration 08 (Lane I): own tables (junk-tier bins, office drawers, lockers, ...) are finite, small, never
+ * ammo-heavy.
+ */
+function rollRows(r: () => number, kind: HolderKind, t: HolderTable, profile: LootProfile): LootEntry[] {
+  if (!t.rows.length || r() < t.empty) return [];
+  const [lo, hi] = t.lots;
   const n = lo + Math.floor(r() * (hi - lo + 1));
   const out: LootEntry[] = [];
   for (let i = 0; i < n; i++) {
-    const itemId = pick(loot.items, r);
-    out.push({itemId, count: lotCount(itemId, kind, r)});
+    const itemId = pick(t.rows, r);
+    out.push({itemId, count: lotCount(itemId, kind, r, profile)});
   }
   return out;
 }
 
-function rollItems(r: () => number, kind: HolderKind, areaType: string): LootEntry[] {
-  // Iteration 08 (Lane I): new openable containers use their own tables whatever the room (a pharmacy bin is still a bin);
-  // fixtures (fire / defibrillator cabinets) hold only what is baked into their model.
-  const own = containerLoot(kind);
-  if (own !== undefined) return own ? rollOwn(r, kind, purposeRows(own, areaType, kind)) : [];
-  // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
-  // (`areaType` is the purpose id when the area has one; plain room types use the tables below).
-  const spec = purposeLoot(areaType, kind);
-  if (spec) {
-    if (!spec.items.length || r() < (spec.empty ?? EMPTY_CHANCE[kind])) return [];
-    const [lo, hi] = spec.lots ?? LOT_COUNT[kind];
-    const n = lo + Math.floor(r() * (hi - lo + 1));
-    const out: LootEntry[] = [];
-    for (let i = 0; i < n; i++) {
-      const itemId = pick(spec.items, r);
-      out.push({itemId, count: lotCount(itemId, kind, r)});
-    }
-    return out;
-  }
-  if (r() < EMPTY_CHANCE[kind]) return [];
-  const [lo, hi0] = LOT_COUNT[kind];
-  const hi = hi0 + ((kind === 'shelf' || kind === 'stall') && FULL_ROOMS.has(areaType) ? 2 : 0);
+function rollItems(r: () => number, kind: HolderKind, t: HolderTable, areaType: string, profile: LootProfile): LootEntry[] {
+  if (t.source === 'fixture') return [];
+  if (t.source !== 'legacy') return rollRows(r, kind, t, profile);
+  // Legacy room-type tables: a category per lot (room x holder weights), then an item of it.
+  if (r() < t.empty) return [];
+  const [lo, hi] = t.lots;
   const n = lo + Math.floor(r() * (hi - lo + 1));
-  const room = AREA_WEIGHTS[areaType] ?? AREA_WEIGHTS.default;
-  const mod = HOLDER_MOD[kind];
-  const catRows = CATS.map((c, i) => [c, room[i] * mod[i]] as const).filter(([, w]) => w > 0);
+  const catRows = legacyCats(kind, areaType, profile);
+  if (!catRows.length) return [];
   const out: LootEntry[] = [];
   for (let i = 0; i < n; i++) {
     const cat = pick(catRows, r);
-    const itemId = pick(kind === 'vending' && cat === 'food' ? VENDING_FOOD : POOL[cat], r);
-    out.push({itemId, count: lotCount(itemId, kind, r)});
+    const rows = legacyPool(kind, cat, profile);
+    if (!rows.length) continue;
+    const itemId = pick(rows, r);
+    out.push({itemId, count: lotCount(itemId, kind, r, profile)});
   }
   return out;
 }
@@ -303,28 +278,29 @@ function rollItems(r: () => number, kind: HolderKind, areaType: string): LootEnt
  * Deterministic contents (no placement) of holder `index`; same seed → same items. Iteration 12 (LOOT lane): the scarce finds of
  * the original roll (items/lootEconomy.ts) — ammo as rolled, ~1 in 5 other entries, re-themed by the room's purpose.
  */
-export function rollLootItems(seed: number, index: number, kind: HolderKind, areaType = 'default'): LootEntry[] {
-  return scarce(rollItems(holderRng(seed, index, kind), kind, areaType), scarceRng(seed, index, kind), kind, areaType, tableRows(kind, areaType));
+export function rollLootItems(seed: number, index: number, kind: HolderKind, areaType = 'default', profile: LootProfile = BASELINE_PROFILE): LootEntry[] {
+  const t = holderTable(kind, areaType, profile);
+  return scarce(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
 }
 
 /** Deterministic contents placed on the holder's surfaces (items that fit nowhere are dropped). */
-export function rollHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[]): Lot[] {
+export function rollHolderLots(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], profile: LootProfile = BASELINE_PROFILE): Lot[] {
+  const t = holderTable(kind, areaType, profile);
   // Iteration 08 (Lane I): a surface holder that gained compartments (desk drawers) keeps its exposed surfaces' roll exactly and
   // rolls the compartments separately (own stream + table) — closed drawers are not where the old loot went.
-  const inside = separateCompartmentLoot(kind);
+  const inside = compartmentTable(kind, areaType, profile);
   if (inside && surfaces.some(s => s.part !== undefined)) {
     const exposed = surfaces.map((s, i) => ({s, i})).filter(e => e.s.part === undefined);
     const parts = surfaces.map((s, i) => ({s, i})).filter(e => e.s.part !== undefined);
     // Iteration 12 (LOOT lane): both rolls thinned by their own scarcity streams.
     const s1 = scarceRng(seed, index, kind), s2 = scarceRng(seed, index, kind, ':inside');
-    const rows = tableRows(kind, areaType);
-    const a = rollOn(holderRng(seed, index, kind), index * 1000, (r, k, at) => scarce(rollItems(r, k, at), s1, k, at, rows), kind, areaType, exposed);
+    const a = rollOn(holderRng(seed, index, kind), index * 1000, r => scarce(rollItems(r, kind, t, areaType, profile), s1, kind, areaType, t.rows, profile), exposed);
     const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
-    const b = rollOn(r2, index * 1000 + 500, (r, k, at) => { const own = purposeRows(inside, at, k); return scarce(rollOwn(r, k, own), s2, k, at, own.items); }, kind, areaType, parts);
+    const b = rollOn(r2, index * 1000 + 500, r => scarce(rollRows(r, kind, inside, profile), s2, kind, areaType, inside.rows, profile), parts);
     return [...a, ...b].map(l => tagPart(l, surfaces));
   }
   const r = holderRng(seed, index, kind);
-  const items = scarce(rollItems(r, kind, areaType), scarceRng(seed, index, kind), kind, areaType, tableRows(kind, areaType));
+  const items = scarce(rollItems(r, kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
   const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
   const lots: Lot[] = [];
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
@@ -337,8 +313,8 @@ function tagPart(l: Lot, surfaces: readonly Surface[]): Lot {
 }
 
 /** Rolls `roll` and packs it onto a subset of the holder's surfaces (placements keep FULL-list surface indices). */
-function rollOn(r: () => number, idBase: number, roll: (r: () => number, kind: HolderKind, areaType: string) => LootEntry[], kind: HolderKind, areaType: string, subset: {s: Surface; i: number}[]): Lot[] {
-  const items = roll(r, kind, areaType);
+function rollOn(r: () => number, idBase: number, roll: (r: () => number) => LootEntry[], subset: {s: Surface; i: number}[]): Lot[] {
+  const items = roll(r);
   if (!subset.length) return [];
   const placed = packItems(items.map(e => e.itemId), subset.map(e => e.s), r, false);
   const lots: Lot[] = [];
@@ -346,8 +322,9 @@ function rollOn(r: () => number, idBase: number, roll: (r: () => number, kind: H
   return lots;
 }
 
-export function createHolderState(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], lots?: Lot[]): HolderState {
-  const list = (lots ?? rollHolderLots(seed, index, kind, areaType, surfaces)).map(l => ({...l}));
+/** A holder's runtime state: its lots rolled ONCE (finite; never re-rolled) under the level's loot `profile`, or the given `lots`. */
+export function createHolderState(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], lots?: Lot[], profile: LootProfile = BASELINE_PROFILE): HolderState {
+  const list = (lots ?? rollHolderLots(seed, index, kind, areaType, surfaces, profile)).map(l => ({...l}));
   const alwaysOpen = isSurfaceKind(kind) && kind !== 'vending';
   const st: HolderState = {index, kind, areaType, open: alwaysOpen, searched: alwaysOpen, lots: list, rolled: list.length};
   const spec = openableSpec(kind);

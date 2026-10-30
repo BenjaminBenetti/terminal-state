@@ -9,6 +9,7 @@ import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from './props';
 import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type RoomPurpose, type RoomSlot} from './purposes';
 import {stockVariant} from './purposeShapes';
 import {BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, lootTheme} from '../items/lootEconomy';
+import {PUBLIC_FLOOR_WEIGHTS, econCat, floorChance, floorCount, lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {ITEMS} from '../items/items';
 import type {Wing} from './stationKit';
 import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
@@ -885,7 +886,8 @@ export function clearAround(g: Grid, x: number, y: number, r: number): boolean {
   return true;
 }
 
-export function placeSpawns(layout: StationLayout, rng: Rng): void {
+/** Task loot-tables-20261030 (lane LOOT): the loose floor finds follow `loot`'s Subway floor program (lootTables SUBWAY_FLOOR). */
+export function placeSpawns(layout: StationLayout, rng: Rng, loot: LootProfile = lootProfile('subway')): void {
   const g = layout.grid;
   const plat = layout.areas[layout.platform];
   // Platform 1, a fifth of the way along, looking down the platform with the tracks in view.
@@ -954,28 +956,33 @@ export function placeSpawns(layout: StationLayout, rng: Rng): void {
   // Iteration 05: where they turn up follows the room PURPOSE (gen/purposes.ts `floor`): ammo in
   // the security office, stores and electrical rooms, dressings in first-aid rooms and pharmacies,
   // nothing in florists or food counters; public halls keep a small share (dropped supplies).
-  const PUBLIC_FLOOR: Partial<Record<RoomType, number>> = {'fare-hall': 0.4, 'concourse': 0.4, 'food-court': 0.2, 'passage': 0.25, 'underpass': 0.3, 'platform': 0.5, 'retail-arcade': 0.25, 'exit-stair': 0.2};
+  const PUBLIC_FLOOR = PUBLIC_FLOOR_WEIGHTS.station;
   const floorWeight = (a: Area, cat: 'ammo' | 'med'): number => {
     const p = purposeById(a.purpose);
     if (p) return p.floor?.[cat] ?? 0;
     return PUBLIC_FLOOR[a.type] ?? 0;
   };
   const lootAreas = (cat: 'ammo' | 'med'): [Area, number][] => layout.areas.map(a => [a, floorWeight(a, cat)] as [Area, number]).filter(e => e[1] > 0);
-  const loot: [string, number][] = [];
-  for (let i = 0, n = rng.int(3, 4); i < n; i++) loot.push(['ammo_556', 30]);
-  for (let i = 0, n = rng.int(2, 3); i < n; i++) loot.push(['ammo_12ga', 8]);
-  // Iteration 12 (LOOT lane): scarce resources (items/lootEconomy.ts FLOOR_ECONOMY) — the ammo boxes above are unchanged; each old
-  // loose dressing / first-aid kit survives ~1 in 5 (own fork: the draws above stay as they were), plus sometimes a torch battery
-  // and a flare, dropped in service / security rooms first.
+  // Task loot-tables-20261030 (lane LOOT): the station's floor program as data (lootTables SUBWAY_FLOOR), interpreted in exactly the
+  // historical draw order: the ammo boxes' counts on the spawn stream; iteration 12 (LOOT lane) scarce resources — each old loose
+  // dressing / first-aid kit survives ~1 in 5 (counts on the spawn stream, keep draws on their own fork: the draws above stay as
+  // they were), plus sometimes a torch battery and a flare (scarce fork), dropped in service / security rooms first.
+  const prog = loot.tables.floor.subway;
+  const found: [string, number][] = [];
+  for (const b of prog.boxes) {
+    const [lo, hi] = floorCount(loot, econCat(b.itemId), b.n);
+    for (let i = 0, n = rng.int(lo, hi); i < n; i++) found.push([b.itemId, b.count]);
+  }
   const scarceFloor = rng.fork('scarce-floor');
-  for (let i = 0, n = rng.int(1, 2); i < n; i++) if (scarceFloor.chance(FLOOR_ECONOMY.medKeep)) loot.push(['medkit', 1]);
-  for (let i = 0, n = rng.int(2, 3); i < n; i++) if (scarceFloor.chance(FLOOR_ECONOMY.medKeep)) loot.push(['bandage', 1]);
-  if (scarceFloor.chance(FLOOR_ECONOMY.batteryChance)) loot.push([BATTERY_ID, 1]);
-  if (scarceFloor.chance(FLOOR_ECONOMY.flareChance)) loot.push([FLARE_ID, 1]);
+  for (const k of prog.kept) {
+    const [lo, hi] = floorCount(loot, econCat(k.itemId), k.n), keep = floorChance(loot, econCat(k.itemId), k.keep);
+    for (let i = 0, n = rng.int(lo, hi); i < n; i++) if (scarceFloor.chance(keep)) found.push([k.itemId, k.count]);
+  }
+  for (const c of prog.light) if (scarceFloor.chance(floorChance(loot, econCat(c.itemId), c.chance))) found.push([c.itemId, c.count]);
   const lightPool = layout.areas.filter(a => a.storefront === undefined && a.type !== 'stair-core')
     .map(a => [a, FLOOR_ECONOMY.themeWeight[lootTheme(a.purpose ?? a.type)]] as [Area, number]).filter(e => e[1] > 0);
   const pools = {ammo: lootAreas('ammo'), med: lootAreas('med'), light: lightPool};
-  for (const [id, count] of loot) {
+  for (const [id, count] of found) {
     const pool = pools[id.startsWith('ammo') ? 'ammo' : id === BATTERY_ID || id === FLARE_ID ? 'light' : 'med'];
     if (!pool.length || !(id in ITEMS)) continue;
     for (let t = 0; t < 10; t++) if (place(id, count, rng.weighted(pool))) break;

@@ -8,9 +8,10 @@ import type {Archetype} from '../../src/gen/stationTypes';
 import * as propsModule from '../../src/gen/props';
 import {PROP_DEFS} from '../../src/gen/props';
 import {cutSurfaces} from '../../src/gen/props07';
-import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind} from '../../src/items/loot';
+import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind, type Lot} from '../../src/items/loot';
 import {DEFAULT_SHELF, holderSurfaces, type Dims, type SurfaceOptions} from '../../src/items/lootLayout';
 import {openableActive} from '../../src/world/openablesSpec';
+import type {LootProfile} from '../../src/items/lootTables';
 
 /**
  * Fixed corpus: the first 3 seeds of a fixed sequence that the generator itself turns into each of the 6 macro archetypes (every
@@ -75,9 +76,15 @@ const FALLBACK: Record<string, Dims> = {
 /** Every runtime model present (the shipped build loads them all): surface openables with a model get their own index stream. */
 const ALL_MODELS = new Proxy({}, {get: () => ({}), has: () => true}) as Record<string, unknown>;
 
-/** Every finite stack of a generated station (holder lots + layout pickups). */
-export function stationEconomy(layout: StationLayout): EconEntry[] {
-  const out: EconEntry[] = [];
+/** Task loot-tables-20261030 (lane LOOT): one loot holder of a layout as the game rolls it (golden hashes, per-level corpora). */
+export interface LayoutHolder { kind: HolderKind; index: number; areaType: string; lots: readonly Lot[] }
+
+/**
+ * Every loot holder of a layout, in layout order, rolled as ContainerManager.build does (index + purpose key, every model loaded);
+ * `profile`: the logical level's loot profile (default: the baseline = today's tables, like ContainerManager.build's default).
+ */
+export function layoutHolders(layout: StationLayout, profile?: LootProfile): LayoutHolder[] {
+  const out: LayoutHolder[] = [];
   const opts = surfaceOpts();
   let ci = 0, si = 0;
   const openIdx = new Map<string, number>();
@@ -91,9 +98,16 @@ export function stationEconomy(layout: StationLayout): EconEntry[] {
     const areaType = p.purpose ?? area?.purpose ?? area?.type ?? 'default';
     let index: number;
     if (isC && openableActive(kind, ALL_MODELS)) { index = openIdx.get(kind) ?? 0; openIdx.set(kind, index + 1); } else index = isC ? ci++ : si++;
-    const st = createHolderState(layout.seed, index, kind as HolderKind, areaType, surfaces);
-    for (const l of st.lots) out.push({itemId: l.itemId, count: l.count, source: 'holder', holder: kind, area: areaType});
+    const st = createHolderState(layout.seed, index, kind as HolderKind, areaType, surfaces, undefined, profile);
+    out.push({kind: kind as HolderKind, index, areaType, lots: st.lots});
   }
+  return out;
+}
+
+/** Every finite stack of a generated station (holder lots + layout pickups); `profile` as layoutHolders. */
+export function stationEconomy(layout: StationLayout, profile?: LootProfile): EconEntry[] {
+  const out: EconEntry[] = [];
+  for (const h of layoutHolders(layout, profile)) for (const l of h.lots) out.push({itemId: l.itemId, count: l.count, source: 'holder', holder: h.kind, area: h.areaType});
   for (const q of layout.pickups) {
     const a = layout.areas[q.area];
     out.push({itemId: q.itemId, count: q.count, source: 'pickup', area: a?.purpose ?? a?.type ?? 'default'});

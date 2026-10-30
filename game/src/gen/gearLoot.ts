@@ -20,17 +20,15 @@ import {CELL, FLOOR, type Grid} from './grid';
 import {levelDistance} from './levelGen';
 import type {Area, PickupPlacement, StationLayout} from './stationTypes';
 import {GEAR_ITEMS} from '../items/gear';
+import {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, gearParams, lootProfile, type LootProfile} from '../items/lootTables';
 import type {LevelId} from '../levels/types';
 
 /** Task gasmask-breach-20261030 (mask lane): `filter` = a found gas mask's seeded filter charge (s), copied onto its placement. */
 export interface GearAssignment { itemId: string; filter?: number }
 
-/** Mean of the per-level gear count before the cap (Poisson). */
-export const GEAR_MEAN_PER_LEVEL = 1;
-/** Hard cap of gear items per logical level. */
-export const GEAR_CAP_PER_LEVEL = 5;
-/** Relative draw weights (the backpack a little more likely: it is the piece that changes play the most). */
-export const GEAR_WEIGHTS: Readonly<Record<string, number>> = {armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1};
+// Task loot-tables-20261030 (lane LOOT): the rarity data (mean / cap / weights) lives in items/lootTables.ts GEAR_LOOT (re-exported
+// here as the same values); the roll reads it through the logical level's loot profile — still ONE roll per logical level.
+export {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, GEAR_WEIGHTS} from '../items/lootTables';
 /** Minimum straight-line distance (m) of a gear find from the section's player spawn (3D for the office level). */
 export const GEAR_MIN_SPAWN_M = 6;
 
@@ -47,17 +45,19 @@ export function gearCountFor(u: number, mean = GEAR_MEAN_PER_LEVEL, cap = GEAR_C
 
 /**
  * The level-wide gear roll: section -> the gear items assigned to it. Every section key is present (possibly []).
- * Deterministic in (levelSeed, levelId, sections order).
+ * Deterministic in (levelSeed, levelId, sections order). `profile`: the level's loot profile (default: that level's; its gear data
+ * and overrides — the RNG key stays `gear-roll:${levelId}`, one roll per logical level).
  */
-export function rollLevelGear(levelSeed: number, levelId: LevelId, sections: readonly string[]): Record<string, GearAssignment[]> {
+export function rollLevelGear(levelSeed: number, levelId: LevelId, sections: readonly string[], profile: LootProfile = lootProfile(levelId)): Record<string, GearAssignment[]> {
   const out: Record<string, GearAssignment[]> = {};
   for (const s of sections) out[s] = [];
   if (!sections.length) return out;
+  const g = gearParams(profile);
   const rng = new Rng(hashString(`gear-roll:${levelId}`, (levelSeed >>> 0) ^ 0x6a09e667));
-  const n = gearCountFor(rng.next());
-  const w: Record<string, number> = {...GEAR_WEIGHTS};
-  for (const id of Object.keys(w)) if (!GEAR_ITEMS[id]) delete w[id];
-  for (let k = 0; k < n; k++) {
+  const n = gearCountFor(rng.next(), g.mean, g.cap);
+  const w: Record<string, number> = {...g.weights};
+  for (const id of Object.keys(w)) if (!GEAR_ITEMS[id] || !(w[id] > 0)) delete w[id];
+  for (let k = 0; k < n && Object.keys(w).length; k++) {
     const itemId = rng.weighted(Object.entries(w));
     w[itemId] *= 0.5;
     const section = sections[Math.min(sections.length - 1, Math.floor(rng.next() * sections.length))];
