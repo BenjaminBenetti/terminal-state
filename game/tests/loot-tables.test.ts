@@ -169,7 +169,7 @@ describe('profiles: one per logical level, today\'s tables, no overrides', () =>
 // Overrides
 
 type Units = Record<EconCat, number>;
-const zero = (): Units => ({food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0});
+const zero = (): Units => ({food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0, material: 0}); // + material: lane RACK (office-props-physics-scale-20261030)
 function holderUnits(layouts: readonly StationLayout[], profile?: LootProfile): Units {
   const u = zero();
   for (const l of layouts) for (const h of layoutHolders(l, profile)) for (const lot of h.lots) { const c = econCat(lot.itemId); if (c) u[c] += lot.count; }

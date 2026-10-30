@@ -81,7 +81,7 @@ import {applyHolders, captureHolders, capturePickups, restorePickup} from './run
 import {runBagStore} from './run/bagStore';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
-import {COMPANY_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor)
+import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
 import {officeModelKeysFor} from './gen/office/index'; // Iteration 16 (lane WORLD-GEN): the office models a section placed
 import {preloadOfficeAssets} from './world/officeProps'; // Iteration 16 (lane WORLD-GEN): carpet / ceiling / partition textures
 import {placementBox} from './items/lootLayout';
@@ -139,7 +139,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
   /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */

@@ -48,6 +48,18 @@ export interface BodyHost {
   readonly audio: PhysAudio | null;
   /** Task office-interactions-layout-20261030 (lane PHYS): the station statics' contact material (extra static bodies). */
   readonly staticMaterial?: CANNON.Material;
+  /**
+   * Task office-props-physics-scale-20261030 (lane PHYS): whether the lazy static collision chunk `key` (staticChunkKey) is in the
+   * world right now — resting loose props (static bodies) join the cannon world only with their chunk. Absent: always.
+   */
+  chunkActive?(key: number): boolean;
+}
+
+/** Task office-props-physics-scale-20261030 (lane PHYS): side of the lazy static collision chunks of physics/world.ts (m). */
+export const STATIC_CHUNK_M = 4;
+/** Lane PHYS: key of the static collision chunk holding (x, z) (physics/world.ts builds / toggles chunks by this key). */
+export function staticChunkKey(x: number, z: number): number {
+  return (Math.floor(z / STATIC_CHUNK_M) + 4096) * 8192 + (Math.floor(x / STATIC_CHUNK_M) + 4096);
 }
 
 export const CHUNK_MASK = GROUP_STATIC | GROUP_ITEM | GROUP_CHUNK;

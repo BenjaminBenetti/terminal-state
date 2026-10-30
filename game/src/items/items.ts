@@ -8,16 +8,20 @@
 // Iteration 16: 'gear' = character gear worn in a gear slot (items/gear.ts; lane GEAR).
 // Task gasmask-breach-20261030 (mask lane): 'supply' = a PASSIVE supply that worn gear draws by itself (the gas-mask filter):
 // never used, equipped, held as a weapon or thrown; it stacks in the pockets first (like ammo).
-export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply';
+// Task office-props-physics-scale-20261030 (lane RACK): 'material' = collectible crafting salvage (items/craftMaterials.ts) for a
+// FUTURE crafting system: passive like 'supply' (never used / equipped / thrown; pockets first), nothing consumes it yet.
+export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply' | 'material';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
   | 'rifle' | 'shotgun' | 'pistol' | 'ammo556' | 'ammo9mm' | 'ammo12ga' | 'medkit' | 'bandage' // lane AMMO: one icon per caliber
   | 'water' | 'cola' | 'juice' | 'chocolate' | 'chips' | 'beans' | 'noodles'
+  | 'bread' // lane FURN (office-props-physics-scale-20261030): the bakery case's loaves
   | 'battery' | 'flare'
   | 'knife' // lane KNIFE: the first melee weapon
   | 'filter' // mask lane: gas-mask filter canister
-  | GearIconKey | MedicalIconKey; // Iteration 16 (lanes GEAR / INJURY)
+  | GearIconKey | MedicalIconKey // Iteration 16 (lanes GEAR / INJURY)
+  | MaterialIconKey; // lane RACK (office-props-physics-scale-20261030): crafting materials
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -51,8 +55,10 @@ export interface ItemDef {
 import {GEAR_DIMS, GEAR_ITEMS, type GearIconKey, type GearSpec} from './gear';
 import type {Caliber} from './calibers';
 import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey} from './medical';
+import {MATERIAL_DIMS, MATERIAL_ITEMS, type MaterialIconKey} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
 
-export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles'] as const;
+// + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
+export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles', 'bread'] as const;
 export const DRINK_IDS = ['water', 'cola', 'juice'] as const;
 
 export const ITEMS: Record<string, ItemDef> = {
@@ -94,6 +100,10 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Ring-pull tin, eaten cold. The most filling find down here.'},
   noodles: {id: 'noodles', name: 'Instant noodle cup', short: 'Noodles', kind: 'consumable', stackMax: 4, hunger: 25, thirst: -3, useTime: 2.2, verb: 'eat', icon: 'noodles',
     description: 'No hot water, so you crunch them dry. Filling, salty.'},
+  // Task office-props-physics-scale-20261030 (lane FURN, user: "the bread should be a food item"): the loaf the bakery case used to
+  // have baked into its model, now a real pickup (model item-bread-t25.glb, cut out of the same Meshy case; finite case lots).
+  bread: {id: 'bread', name: 'Stale bread loaf', short: 'Bread', kind: 'consumable', stackMax: 3, hunger: 22, thirst: -3, useTime: 2.0, verb: 'eat', icon: 'bread',
+    description: 'A round crusty loaf from a bakery display case, gone hard as a brick. Filling once you work through the crust, and thirsty work.'},
   // --- Iteration 12 (LIGHT): light survival (authored models: world/authoredItems.ts) ---
   battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
@@ -105,6 +115,8 @@ export const ITEMS: Record<string, ItemDef> = {
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
   ...GEAR_ITEMS,
   ...MEDICAL_ITEMS,
+  // --- Task office-props-physics-scale-20261030 (lane RACK): crafting materials (items/craftMaterials.ts; no crafting yet) ---
+  ...MATERIAL_ITEMS,
 };
 
 export function itemDef(id: string): ItemDef {
@@ -173,6 +185,9 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   chips: {w: 0.2, d: 0.08, h: 0.27, shape: 'box'},
   beans: {w: 0.075, d: 0.075, h: 0.11, shape: 'cylinder'},
   noodles: {w: 0.095, d: 0.095, h: 0.105, shape: 'cylinder'},
+  // lane FURN (office-props-physics-scale-20261030): the measured runtime bounds of item-bread-t25.glb (assets/companyDims.generated.ts
+  // COMPANY_PART_DIMS.bread, so fitItemModel keeps it at scale 1): a round loaf, always resting on its base
+  bread: {w: 0.26, d: 0.2231, h: 0.0919, shape: 'flat'},
   // Lane AMMO (knife-melee-20261030): the measured runtime bounds of the Meshy T2.5 ammo boxes (assets/manifest.ts item_ammo_*;
   // derivatives/meshy-t25-ammo-20261030.json), so fitItemModel keeps them at scale 1. They stand upright ('flat': never laid down)
   // and are all < 0.176 m tall: they fit the 0.18 m desk-drawer / low-cupboard clearance (items/lootLayout.ts).
@@ -190,6 +205,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,
+  ...MATERIAL_DIMS, // lane RACK (office-props-physics-scale-20261030): authored models (world/materialItems.ts)
 };
 
 export function itemDims(id: string): ItemDims {

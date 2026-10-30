@@ -603,7 +603,7 @@ export function roofLadderPose(layout: StationLayout, end: 'bottom' | 'top' = 'b
 // Validation
 
 /** Roof invariants (generation retry guard + tests). `dist` = the walking distance field from the start (ladders included). */
-export function roofIssues(layout: StationLayout, f: TowerFrame, dist: Int32Array[]): string[] {
+export function roofIssues(layout: StationLayout, f: TowerFrame, dist: Int32Array[], maxEnemies: number | null): string[] {
   const issues: string[] = [];
   const info = layout.office?.roof;
   const L = layout.levels[OFFICE_ROOF_LEVEL], L8 = layout.levels[OFFICE_TOP_FLOOR];
@@ -653,8 +653,9 @@ export function roofIssues(layout: StationLayout, f: TowerFrame, dist: Int32Arra
     if (lv === OFFICE_TOP_FLOOR && near(lad.bottom.x, lad.bottom.z, 0.9)) issues.push(`prop ${p.kind} at the roof ladder foot`);
     if (lv === OFFICE_ROOF_LEVEL && p.y + p.h > L.sky!.ceil - 0.05) issues.push(`prop ${p.kind} above the roof band`);
   }
+  // Task enemy-spawn-tables-20261030 (lane SPAWN): `maxEnemies` = the accepted maximum of the spawn profile's 'roof' context (2).
   const roofZ = layout.zombies.filter(z => z.level === OFFICE_ROOF_LEVEL);
-  if (roofZ.length > 2) issues.push(`${roofZ.length} enemies on the roof`);
+  if (maxEnemies !== null && roofZ.length > maxEnemies) issues.push(`${roofZ.length} enemies on the roof`);
   for (const z of roofZ) if (inHatch(z.x, z.z, 2.5)) issues.push('enemy at the roof hatch');
   if (layout.pickups.some(p => p.level === OFFICE_ROOF_LEVEL && inHatch(p.x, p.z, 1))) issues.push('pickup in the roof hatch zone');
   if (!layout.lights.some(l => l.level === OFFICE_ROOF_LEVEL && l.virtual)) issues.push('roof has no daylight');

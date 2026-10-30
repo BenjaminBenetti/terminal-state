@@ -30,8 +30,9 @@ import {RAIL_H, RAIL_HALF, type DynamicVolume, type VolumeGate} from '../gen/lev
 import {StaticQuery, rampPieces, type StaticLayout} from './staticQuery';
 import {GROUP_CHUNK, GROUP_ITEM, GROUP_RAGDOLL, GROUP_STATIC, Ragdoll, RagdollJoint, type KillImpulse, type RagdollTarget} from './ragdoll';
 import {CasingSystem, type CasingAudio, type CasingKind} from './casings';
-import {PhysChunks, type BodyHost, type PhysAudio} from './chunks';
+import {PhysChunks, STATIC_CHUNK_M, type BodyHost, type PhysAudio} from './chunks';
 import {DynamicItems} from './dynamicItems';
+import {LiveSAPBroadphase, useSparseCollisionMatrix} from './broadphase';
 import {PHYS_MATS, type PhysMat} from '../damage/materials';
 import type {PropPlacement} from '../gen/props';
 
@@ -41,7 +42,7 @@ export type {CasingKind} from './casings';
 export const FIXED_DT = 1 / 60;
 export const MAX_SUBSTEPS = 3;
 export const MAX_SIMULATING_RAGDOLLS = 4;
-const CHUNK = 8; // cells (4 m)
+const CHUNK = STATIC_CHUNK_M / CELL; // cells (4 m; task office-props-physics-scale-20261030: shared with chunks.ts staticChunkKey)
 const ACTIVE_RADIUS = 3; // m around each simulating pelvis
 /** Iteration 07: m around each simulating item / prop / chunk body. */
 const BODY_RADIUS = 1.6;
@@ -272,6 +273,11 @@ export class PhysicsSystem implements BodyHost {
     this.refreshChunks();
   }
 
+  /** BodyHost (task office-props-physics-scale-20261030, lane PHYS): the static chunk `key` is in the world now. */
+  chunkActive(key: number): boolean {
+    return !!this.staticChunks.get(key)?.active;
+  }
+
   /** Iteration 08 (Lane B): register an external body owner (stepped / statics kept around it / cleared with the station). */
   addSource(s: BodySource): void {
     if (!this.sources.includes(s)) this.sources.push(s);
@@ -287,7 +293,10 @@ export class PhysicsSystem implements BodyHost {
     this.dispose();
     this.query = new StaticQuery(layout);
     const w = new CANNON.World({gravity: new CANNON.Vec3(0, -9.81, 0), allowSleep: true});
-    w.broadphase = new CANNON.SAPBroadphase(w);
+    // task office-props-physics-scale-20261030 (lane PHYS): SAP's exact pairs without its quadratic walk over static bodies, and
+    // an id-keyed first-contact matrix (physics/broadphase.ts) — the tower's chunks keep ~1300 static boxes around a moving body
+    w.broadphase = new LiveSAPBroadphase(w);
+    useSparseCollisionMatrix(w);
     // AABB pair tests: the default bounding-SPHERE test pairs every limb with every nearby 4 m
     // slab/wall box (~70 pairs per 4 ragdolls, ~2.7 ms/step of sphere-box narrowphase).
     w.broadphase.useBoundingBoxes = true;
@@ -454,7 +463,7 @@ export class PhysicsSystem implements BodyHost {
       for (const f of cab.fillers) {
         const want = !(f.gate.open && Math.abs(v.floorY - f.stop) < 0.05);
         if (want === f.inWorld) continue;
-        if (want) { this.clearDoorway(doorwayMover(v, f.gate, f.stop)); w.addBody(f.body); } else w.removeBody(f.body);
+        if (want) { this.clearDoorway(doorwayMover(v, f.gate, f.stop), gateRect(v, f.gate)); w.addBody(f.body); } else w.removeBody(f.body);
         f.inWorld = want;
       }
       this.keepAboveCabFloor(v);
@@ -506,7 +515,7 @@ export class PhysicsSystem implements BodyHost {
   }
 
   /** The landing doors shut on a doorway: simulating bodies and resting things in it go to the nearer side (never left inside the wall). */
-  private clearDoorway(move: DoorwayMove): void {
+  private clearDoorway(move: DoorwayMove, area?: {x0: number; z0: number; x1: number; z1: number}): void {
     for (const b of this.world!.bodies) {
       if (b.type !== CANNON.Body.DYNAMIC) continue;
       const p = b.position, to = move(p.x, p.y, p.z);
@@ -515,7 +524,7 @@ export class PhysicsSystem implements BodyHost {
       p.x += dx; p.z += dz; b.previousPosition.x += dx; b.previousPosition.z += dz; b.interpolatedPosition.x += dx; b.interpolatedPosition.z += dz;
       b.aabbNeedsUpdate = true;
     }
-    this.dynamicItems.relocate(move); // task office-interactions-layout-20261030 (lane PHYS): resting loose props (static bodies)
+    this.dynamicItems.relocate(move, area); // task office-interactions-layout-20261030 (lane PHYS): resting loose props (static bodies)
     this.casings.relocate(move);
     this.chunks.relocate(move);
     for (const s of this.sources) s.relocate?.(move);
@@ -526,7 +535,7 @@ export class PhysicsSystem implements BodyHost {
     const w = this.world!;
     // task office-interactions-layout-20261030 (lane PHYS): resting loose props (static bodies) ride too — first, while the
     // simulating bodies below are still at their pre-move positions (their placement height follows either way)
-    this.dynamicItems.carry((x, y, z) => inCab(v, floor, ceil, x, y, z), dy);
+    this.dynamicItems.carry((x, y, z) => inCab(v, floor, ceil, x, y, z), dy, {x0: v.x0 - RIDE_PAD, z0: v.z0 - RIDE_PAD, x1: v.x1 + RIDE_PAD, z1: v.z1 + RIDE_PAD});
     const shift = (b: CANNON.Body) => {
       b.position.y += dy; b.previousPosition.y += dy; b.interpolatedPosition.y += dy;
       b.aabbNeedsUpdate = true;
@@ -578,13 +587,14 @@ export class PhysicsSystem implements BodyHost {
     this.chunks.activePoints(pts);
     for (const s of this.sources) s.activePoints(pts);
     for (const p of pts) if (Number.isFinite(p.x + p.z)) around(p, BODY_RADIUS);
+    // task office-props-physics-scale-20261030 (lane PHYS): resting loose props (static bodies) come and go with their chunk
     for (const [k, c] of this.staticChunks) {
-      if (c.active && !need.has(k)) { for (const b of c.bodies) w.removeBody(b); c.active = false; }
+      if (c.active && !need.has(k)) { for (const b of c.bodies) w.removeBody(b); c.active = false; this.dynamicItems.chunkToggled(k, false); }
     }
     for (const k of need) {
       let c = this.staticChunks.get(k);
       if (!c) { c = {bodies: this.buildChunk(k), active: false}; this.staticChunks.set(k, c); }
-      if (!c.active) { for (const b of c.bodies) w.addBody(b); c.active = true; }
+      if (!c.active) { for (const b of c.bodies) w.addBody(b); c.active = true; this.dynamicItems.chunkToggled(k, true); }
     }
   }
 
@@ -698,6 +708,7 @@ export class PhysicsSystem implements BodyHost {
     const c = this.staticChunks.get(key);
     if (!c) return;
     if (c.active && this.world) for (const b of c.bodies) this.world.removeBody(b);
+    if (c.active) this.dynamicItems.chunkToggled(key, false); // lane PHYS: its resting loose props leave with it (refresh re-adds)
     this.staticChunks.delete(key);
     if (c.active) this.refreshChunks();
   }

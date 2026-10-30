@@ -102,7 +102,7 @@ export interface CensusInfo {
 // Items
 
 /** Display group of an item (economy category where it has one). */
-export type ItemGroup = 'food' | 'drink' | 'med' | 'ammo' | 'battery' | 'flare' | 'gear' | 'supply' | 'weapon';
+export type ItemGroup = 'food' | 'drink' | 'med' | 'ammo' | 'battery' | 'flare' | 'material' | 'gear' | 'supply' | 'weapon'; // + material: lane RACK (office-props-physics-scale-20261030)
 
 export interface ItemInfo {
   id: string;

@@ -114,8 +114,10 @@ export const WATER_TOWER_STAND = 1.2;
 /** D30 kegerator: a texture artefact (a portrait) on the model file's -X side panel = the prop frame's +X side after the -Z -> +Z
  *  turn: that side always stands against a wall (gen/office/companyDress.ts corner placement). */
 export const SIDE_TO_WALL: ReadonlySet<string> = new Set(['kegerator']);
-/** D27 ship model / D35 aquarium came without their cabinets: they stand on a cabinetLow sideboard (host decor on its top). */
-export const ON_SIDEBOARD: ReadonlySet<string> = new Set(['shipModel', 'aquarium']);
+/** D27 ship model / D35 aquarium came without their cabinets: they stand on a cabinetLow sideboard (host decor on its top). Task
+ *  office-props-physics-scale-20261030 (lane FURN, wave 2): + D15 espresso machine — a counter machine (rescaled to 0.78 m wide), it
+ *  stood on the floor at ~2x real size; on its counter it gets espresso cup stacks beside it (gen/office/hostClutter.ts). */
+export const ON_SIDEBOARD: ReadonlySet<string> = new Set(['shipModel', 'aquarium', 'espressoMachine']);
 /** Footprint of a kind: the delivered model's measured bounds, else its nominal box. */
 function defOf(k: CompanyKind): PropDef {
   const s: KindSpec = SPECS[k];
@@ -164,7 +166,7 @@ export function companyShape(kind: CompanyKind): ShapePart[] {
     case 'draftingTable': return [box('wood', [w, 0.04, d * 0.8], [0, 0.95, 0], ), leg('steelDark', -w / 2 + 0.06, 0, 0.93), leg('steelDark', w / 2 - 0.06, 0, 0.93), box('steelDark', [0.36, 0.6, 0.36], [0, 0.3, d * 0.35])].map((p, i) => (i === 0 ? {...p, rx: -0.35} : p));
     case 'tvCamera': return [box('steelDark', [w * 0.7, 0.2, d * 0.7], [0, 0.1, 0]), box('steelDark', [0.12, h * 0.5, 0.12], [0, h * 0.35, 0]), box('black', [w * 0.45, h * 0.25, d * 0.7], [0, h * 0.75, 0])];
     case 'newsDesk': return [box('accent', [w, h - 0.05, 0.08], [0, (h - 0.05) / 2, d / 2 - 0.04]), box('counter', [w, 0.05, d], [0, h - 0.025, 0]), box('panel', [0.06, h - 0.05, d], [-w / 2 + 0.03, (h - 0.05) / 2, 0]), box('panel', [0.06, h - 0.05, d], [w / 2 - 0.03, (h - 0.05) / 2, 0])];
-    case 'espressoMachine': return [box('wood', [w, 0.9, d], [0, 0.45, 0]), box('steelBright', [w * 0.7, 0.45, d * 0.6], [0, 1.125, -d * 0.1])];
+    case 'espressoMachine': return [box('steelBright', [w, h * 0.75, d * 0.9], [0, h * 0.375, 0]), box('black', [w * 0.25, h * 0.25, d * 0.3], [w * 0.3, h * 0.875, -d * 0.2])]; // lane FURN: the machine alone (it stands on a sideboard)
     case 'coffeeRoaster': return [box('black', [w * 0.7, h * 0.5, d * 0.6], [0, h * 0.25, -d * 0.1]), box('steelDark', [w * 0.5, h * 0.35, d * 0.4], [0, h * 0.65, -d * 0.1]), box('accent', [w * 0.6, 0.15, d * 0.4], [0, h * 0.35, d * 0.3])];
     case 'treadmill': return [box('black', [w * 0.8, 0.18, d * 0.9], [0, 0.09, d * 0.05]), box('steelDark', [0.05, h - 0.2, 0.05], [-w * 0.42, 0.2 + (h - 0.2) / 2, -d * 0.4]), box('steelDark', [0.05, h - 0.2, 0.05], [w * 0.42, 0.2 + (h - 0.2) / 2, -d * 0.4]), box('screen', [w * 0.7, 0.25, 0.1], [0, h - 0.12, -d * 0.42])];
     case 'sneakerWall': return [box('black', [w, h, d * 0.4], [0, h / 2, -d * 0.3]), ...[0.4, 0.8, 1.2, 1.6].map(y => box('accent', [w * 0.9, 0.1, d * 0.6], [0, y * h / 2, d * 0.1]))];

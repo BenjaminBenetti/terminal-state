@@ -19,7 +19,7 @@
 import {CELL, FLOOR} from '../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {
-  OPPOSITE, WALL_ROT, backed, cellsOfBox, doorSide, mainDoor, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, type PlaceCtx,
+  OPPOSITE, WALL_ROT, backed, cellsOfBox, doorSide, mainDoor, markCell, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, wallXZ, type PlaceCtx,
 } from '../placeKit';
 import type {Area, Side, SignPlacement, SignStyle, StationLayout} from '../stationTypes';
 import {MARGIN} from './frame';
@@ -28,6 +28,8 @@ import {COMPANY_KIND_ASSET, ON_SIDEBOARD, SIDE_TO_WALL, isCompanyKind} from './c
 import {officeTenants} from './tenants';
 import {COMPANY_ASSET_SPECS} from '../../assets/companyDims.generated';
 import {cubicleFarm, hostDecor, landingStrip, wallSign, type OfficeDress} from './dress';
+import {placeCounterCups, placeHostClutter} from './hostClutter'; // task office-props-physics-scale-20261030 (lane FURN)
+import {Rng} from '../../core/rng';
 import type {OfficeAreaMeta} from './tower';
 
 const q4 = (v: number) => Math.round(v * 4) / 4;
@@ -221,11 +223,70 @@ function onSideboard(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], pos
   const p: PropPlacement = {kind, x: r3(base.x + fx * back), z: r3(base.z + fz * back), y: r3(base.y + cab.h), rot: base.rot, area: a.id, hx, hz, h: def.h,
     blocksSight: false, variant: 0, host, ...(ctx.level ? {level: ctx.level} : {})};
   ctx.layout.props.push(p);
+  // Task office-props-physics-scale-20261030 (lane FURN, wave 2): the piece's span of the counter top is taken (the sideboard's loot
+  // surface skips it, as the desk monitor's `cut`); beside an espresso machine, its cup stacks (own seed from the spot: the room's
+  // stream is untouched)
+  (base.cut ??= []).push({y: cab.h, x0: r3(-def.w / 2 - 0.02), x1: r3(def.w / 2 + 0.02)});
+  if (kind === 'espressoMachine') {
+    const rng = new Rng(((Math.round(base.x * 100) * 73856093) ^ (Math.round(base.z * 100) * 19349663) ^ (ctx.level * 83492791)) >>> 0);
+    for (const sp of placeCounterCups(ctx.layout.props, base, host, def.w / 2, rng)) base.cut.push({y: cab.h, ...sp});
+  }
   return p;
 }
 
-/** Placement of a kind with a placement rule of its own (sideboard pieces, the kegerator), else null = not special. */
+/**
+ * Task office-props-physics-scale-20261030 (lane FURN, user: "some times these displays are placed backwards"): SERVE-OVER displays —
+ * kinds operable from their BACK (the bakery case's display trays pull out of its open staff side, prop -Z; its customer glass is the
+ * prop front +Z) — and the staff aisle (m) they keep behind them. They used to be wall / row pieces (back flush to the wall: the trays
+ * trapped against it) or turned at random (reception hero / islands / scatter: the open staff side to the room).
+ */
+export const SERVE_BEHIND: ReadonlyMap<string, number> = new Map([['bakeryCase', 1.0]]);
+
+/**
+ * A serve-over display like a shop counter: its back toward a wall with the staff aisle between them (open floor of the room, reserved
+ * so nothing is placed in it), its customer front to the room (+ a front strip); else free-standing with a walkway ring all round.
+ */
+function serveCounter(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], post = 0): PropPlacement | null {
+  const def = PROP_DEFS[kind], aisle = SERVE_BEHIND.get(kind) ?? 1.0, g = ctx.g;
+  // the preferred walls first, then any other (a held facade wall places nothing in pre-dress); never with its back to the door wall
+  // (customers would walk in behind the counter)
+  const ds = doorSideOf(ctx, a), pref = sides ?? [];
+  for (const side of [...pref, ...ctx.rng.shuffle(SIDES.filter(q => !pref.includes(q)))].filter(q => q !== ds)) {
+    const [lo, hi] = wallRange(a, side);
+    if (hi - lo < def.w + 0.3) continue;
+    const alongX = side === 'N' || side === 'S';
+    // cell-aligned slots along the wall, side by side (a row step's next unit lands beside the last; neighbours never share a cell)
+    const pitch = Math.ceil((def.w + 0.04) / CELL - 1e-6) * CELL;
+    for (let along = Math.ceil((lo + 0.45 + def.w / 2) / CELL - 1e-6) * CELL; along + def.w / 2 <= hi - 0.45 + 1e-6; along += pitch) {
+      const [x, z] = wallXZ(a, side, along, aisle + def.d / 2 + 0.03);
+      const [sx, sz] = wallXZ(a, side, along, (aisle + 0.03) / 2);
+      // the aisle strip behind it (narrower than the case: neighbours' strips stay apart)
+      const [x0, y0, x1, y1] = cellsOfBox(sx, sz, alongX ? def.w / 2 - 0.3 : aisle / 2 - 0.02, alongX ? aisle / 2 - 0.02 : def.w / 2 - 0.3);
+      let free = true;
+      for (let cy = y0; cy <= y1 && free; cy++) for (let cx = x0; cx <= x1; cx++) {
+        if (!g.inBounds(cx, cy) || !g.walkable(cx, cy) || g.area[g.idx(cx, cy)] !== a.id || ctx.keep[g.idx(cx, cy)]) { free = false; break; }
+      }
+      if (!free) continue;
+      const p = tryPlaceProp(ctx, a, kind, r3(x), r3(z), WALL_ROT[side], {front: 0.8});
+      if (!p) continue;
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) markCell(ctx, ctx.keep, g.idx(cx, cy));
+      p.y += post;
+      return p;
+    }
+  }
+  // free-standing near the room centre, its customer front toward the door, a walkway ring all round (the staff side included)
+  const rot = WALL_ROT[OPPOSITE[ds]];
+  const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL, la = a.w >= a.h;
+  for (const oa of [0, 0.75, -0.75, 1.5, -1.5, 2.25, -2.25, 3, -3, 4, -4]) for (const ob of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+    const p = tryPlaceProp(ctx, a, kind, q4(cx + (la ? oa : ob)), q4(cz + (la ? ob : oa)), rot, {ring: Math.max(0.9, aisle)});
+    if (p) { p.y += post; return p; }
+  }
+  return null;
+}
+
+/** Placement of a kind with a placement rule of its own (sideboard pieces, the kegerator, serve-over displays), else null = not special. */
 function special(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], post = 0): PropPlacement | null | undefined {
+  if (SERVE_BEHIND.has(kind)) return serveCounter(ctx, a, kind, sides, post); // lane FURN
   if (ON_SIDEBOARD.has(kind)) return onSideboard(ctx, a, kind, sides, post) ?? (sides ? onSideboard(ctx, a, kind, undefined, post) : null);
   if (SIDE_TO_WALL.has(kind)) { const p = sideToWall(ctx, a, kind); if (p) p.y += post; return p; }
   return undefined;
@@ -234,7 +295,7 @@ function special(ctx: PlaceCtx, a: Area, kind: PropKind, sides?: Side[], post = 
 /** Runs one recipe step in a room (pre-dress); window steps are deferred to post. */
 function runStep(d: OfficeDress, ctx: PlaceCtx, a: Area, s: Step, ds: Side): void {
   if (s.chance !== undefined && !ctx.rng.chance(s.chance)) return;
-  if ((s.at === 'wall' || s.at === 'row' || s.at === 'island' || s.at === 'scatter') && (ON_SIDEBOARD.has(s.kind) || SIDE_TO_WALL.has(s.kind))) {
+  if ((s.at === 'wall' || s.at === 'row' || s.at === 'island' || s.at === 'scatter') && (ON_SIDEBOARD.has(s.kind) || SIDE_TO_WALL.has(s.kind) || SERVE_BEHIND.has(s.kind))) {
     const n = count(ctx, s.n), wall = 'wall' in s ? s.wall : undefined;
     for (let i = 0; i < n; i++) special(ctx, a, s.kind, wall ? wallsFor(ctx, wall, ds) : undefined);
     return;
@@ -388,7 +449,7 @@ function reception(d: OfficeDress, ctx: PlaceCtx, a: Area, c: Company): void {
   // Sideboard pieces / the kegerator: their own placement rule (side walls first). The kegerator may take a corner by the glass:
   // the window strip is released for that one placement (and the cells it covers leave the held list).
   if (SIDE_TO_WALL.has(hero)) tries.push(() => besideGlass(d, a, () => sideToWall(ctx, a, hero)));
-  if (ON_SIDEBOARD.has(hero) || SIDE_TO_WALL.has(hero)) tries.push(() => special(ctx, a, hero, [heroSide, ...free.filter(q => q !== heroSide)]) ?? null, () => special(ctx, a, hero) ?? null);
+  if (ON_SIDEBOARD.has(hero) || SIDE_TO_WALL.has(hero) || SERVE_BEHIND.has(hero)) tries.push(() => special(ctx, a, hero, [heroSide, ...free.filter(q => q !== heroSide)]) ?? null, () => special(ctx, a, hero) ?? null);
   else {
   if (isWallKind(hero)) tries.push(() => placeAgainstWall(ctx, a, hero, {sides: [heroSide], front: 0.8, tries: 10}), () => placeAgainstWall(ctx, a, hero, {sides: ['W', 'E', 'S'], front: 0.6, tries: 16}));
   const dz = rd ? rd.z + desk.d / 2 + 0.4 + PROP_DEFS[hero].d / 2 + 0.6 : deskZ + 2.2;
@@ -475,7 +536,7 @@ function serverRoom(ctx: PlaceCtx, a: Area): void {
   if (racks.length < 2) {
     for (const side of ctx.rng.shuffle(SIDES.slice())) {
       const [lo, hi] = wallRange(a, side);
-      // (lane LAYOUT: the rack's glass door is 1.1 m wide — a 1.2 m service aisle in front, as between the free-standing rows)
+      // (lane LAYOUT: a 1.2 m service aisle in front, as between the free-standing rows; lane RACK: the rebuilt 42U rack's perforated door is 0.6 m wide)
       racks.push(...rowAlongWall(ctx, a, side, 'serverRack', {from: lo + 0.45, to: hi - 0.45, max: 4 - racks.length, front: 1.2}));
       if (racks.length >= 2) break;
     }
@@ -496,6 +557,8 @@ function serverRoom(ctx: PlaceCtx, a: Area): void {
 /** Chairs / stools pulled up to company work surfaces (sitter side +Z unless noted): host decor, collides, never blocks. */
 const SEAT_AT: Partial<Record<PropKind, {kind: PropKind; behind?: boolean; n?: number}>> = {
   tradingDesk: {kind: 'officeChair'}, mixingConsole: {kind: 'officeChair'}, cctvConsole: {kind: 'officeChair'}, monitorDesk: {kind: 'officeChair'},
+  // (lane FURN wave 2: the drafting table's baked stool was removed — an office chair is pulled up to it instead)
+  draftingTable: {kind: 'officeChair'},
   // (lane LAYOUT, per OPEN: no chair at the lab benches — their 15 drawers open on the sitter side and would pass through it)
   newsDesk: {kind: 'officeChair', behind: true, n: 2}, executiveDesk: {kind: 'executiveChair', behind: true},
 };
@@ -535,6 +598,9 @@ export function companyPost(d: OfficeDress, ctx: PlaceCtx): void {
       hostDecor(d, p, pi, seat.kind, p.x + fx * off * back + lx * t, p.z + fz * off * back + lz * t, back > 0 ? p.rot + Math.PI : p.rot, p.y, lv);
     }
   }
+  // Task office-props-physics-scale-20261030 (lane FURN): the lab benches' glassware / the trading desks' monitors and keyboards are
+  // separate props on their tops now (gen/office/hostClutter.ts; after the seats: a seat is host decor of the same desk)
+  placeHostClutter(layout.props, d.level, d.rng.fork('host-clutter'));
   if (c) {
     const style = companySignStyle(c);
     const t = d.tower.tenant!;
@@ -577,7 +643,7 @@ function signatureGuarantee(d: OfficeDress, ctx: PlaceCtx, c: Company): void {
   for (const kind of c.signature) {
     if (layout.props.some(p => p.kind === kind && (p.level ?? 0) === d.level)) continue;
     let placed: PropPlacement | null | undefined = null;
-    if (ON_SIDEBOARD.has(kind) || SIDE_TO_WALL.has(kind)) {
+    if (ON_SIDEBOARD.has(kind) || SIDE_TO_WALL.has(kind) || SERVE_BEHIND.has(kind)) {
       for (const {a} of areas) { if (special(ctx, a, kind, undefined, d.base)) { placed = undefined; break; } }
       if (placed !== null) continue;
       for (const {a} of areas) if (ON_SIDEBOARD.has(kind) ? onSideboard(ctx, a, kind, undefined, d.base, false) : null) break;

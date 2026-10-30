@@ -32,7 +32,8 @@ import type {StationLayout} from '../src/gen/station';
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
-const NEW = ['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes'] as const;
+const NEW = ['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
+  'bakeryCase'] as const; // + the bakery display case (task office-props-physics-scale-20261030, lane FURN)
 const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
 let models: Record<string, GLTF> = {};
 beforeAll(async () => { models = await openableModels(); }, 120000);
@@ -99,7 +100,8 @@ describe('each new openable: parts split from its model, animated, with real com
         // a revealed compartment: authored liner / tray / shelves, or (cavityHidden: the specimen fridge) the model's own cleared interior
         if (!ps.surfaces.length) expect(ps.contents, `${k} part ${i}: no compartment -> fixture contents`).toBeTruthy();
         else if (!ps.cavityHidden) expect(pm.inner.length + pm.tray.length, `${k} part ${i} compartment`).toBeGreaterThan(0);
-        else expect(ps.replaceInterior, `${k} part ${i}: the model's interior is cleared for the compartment`).toBe(true);
+        // task office-props-physics-scale-20261030 (lane RACK): or the model's own modelled shelves (the rebuilt rack: modelInterior)
+        else expect(ps.replaceInterior || ps.modelInterior, `${k} part ${i}: the model's interior is cleared for the compartment / modelled`).toBe(true);
         expect(cm.prompt(target(h, i)).startsWith(`<b>[E]</b> Open ${ps.name}`), `${k} ${i}`).toBe(true);
         // the moving part covers its closed compartment's opening (no gap to look through): its box reaches the liner's front
         if (ps.cavity && !ps.cavityHidden) {
@@ -234,7 +236,8 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
   it('fitted openings sweep clear of walls / doorways / props; most open fully; each holder is reachable from its stand point', () => {
     const counts = new Map<string, number>();
     let parts = 0, full = 0, reach = 0, holders = 0;
-    const lots = {old: 0, new: 0, oldAmmo: 0, newAmmo: 0};
+    const lots = {old: 0, new: 0, oldAmmo: 0, newAmmo: 0, material: 0, materialUnits: 0};
+    const materialKinds = new Set<string>();
     const missed = new Map<string, number>();
     const m = new THREE.Matrix4(), w = new THREE.Matrix4(), v = new THREE.Vector3();
     for (const seed of OFFICE_SEEDS) {
@@ -243,6 +246,8 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
       cm.build(l, {}, lootProfile('office'));
       const fit = new FitIndex(l);
       for (const h of cm.all) for (const lot of h.state.lots) {
+        // task office-props-physics-scale-20261030 (lane RACK): crafting materials are a separate, bounded resource (below)
+        if (econCat(lot.itemId) === 'material') { lots.material++; lots.materialUnits += lot.count; materialKinds.add(h.kind); continue; }
         const n = (NEW as readonly string[]).includes(h.kind) ? 'new' : 'old';
         lots[n]++;
         if (econCat(lot.itemId) === 'ammo') lots[n === 'new' ? 'newAmmo' : 'oldAmmo'] += lot.count;
@@ -287,6 +292,12 @@ describe('generated Office levels: placed, clear to open, reachable; the Subway 
     console.info(`[office-openables] holder lots: existing ${lots.old} (ammo ${lots.oldAmmo} rounds), new storage ${lots.new} (ammo ${lots.newAmmo} rounds)`);
     expect(lots.new / lots.old).toBeLessThan(0.2); // measured ~10-13 % (seeds 1-3; the denominator moves with the floor plans)
     expect(lots.newAmmo / lots.oldAmmo).toBeLessThan(0.05);
+    // lane RACK: electrical parts / scrap metal only in the server racks / cupboards (+ lab storage's bio mater, lane FURN), a finite
+    // handful per level (measured 9-37 units on seeds 1-3 with 23-59 racks)
+    console.info(`[office-openables] crafting materials: ${lots.material} lots / ${lots.materialUnits} units over ${OFFICE_SEEDS.length} levels in ${[...materialKinds].join(', ')}`);
+    for (const k of materialKinds) expect(HOLDER_ALLOW[k], k).toContain('material');
+    expect(lots.materialUnits / OFFICE_SEEDS.length).toBeGreaterThan(3);
+    expect(lots.materialUnits / OFFICE_SEEDS.length).toBeLessThan(60);
     // main's floor plans: 100 %; a front blocked by the next rack / a wall is a placement bug (gen/office: keep the door side clear)
     expect(reach / holders).toBeGreaterThan(0.8);
   });

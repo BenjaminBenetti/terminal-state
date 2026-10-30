@@ -16,14 +16,17 @@ import type {DamageClass} from '../../damage/materials';
 // Task office-overhaul-20261030 (lane TENANTS): the company / supporting kinds join the office kinds (same render path, PROP_DEFS,
 // damage specs); their footprints, model ids and stand-ins live in gen/office/companyKinds.ts.
 import {COMPANY_KINDS, COMPANY_KIND_ASSET, COMPANY_PROP_DAMAGE, COMPANY_PROP_DEFS, companyShape, isCompanyKind, type CompanyKind} from './companyKinds';
+// Task office-props-physics-scale-20261030 (lane FURN): the loose clutter separated from the lab bench / trading desk models (lab
+// glassware, microscope, monitors, keyboard) are office kinds too (props standing on their furniture's top): gen/office/clutterKinds.ts.
+import {CLUTTER_KINDS, CLUTTER_KIND_ASSET, CLUTTER_PROP_DAMAGE, CLUTTER_PROP_DEFS, clutterShape, isClutterKind, type ClutterKind} from './clutterKinds';
 
 const BASE_OFFICE_KINDS = [
   'officeChair', 'officeMonitor', 'officeFiling', 'officePhotocopier', 'officeWaterCooler', 'conferenceTable', 'deadPlant',
   'receptionDesk', 'serverRack', 'officeWhiteboard', 'officeShelf', 'cubiclePartition',
 ] as const;
 type BaseOfficeKind = (typeof BASE_OFFICE_KINDS)[number];
-export type OfficeKind = BaseOfficeKind | CompanyKind;
-export const OFFICE_KINDS: readonly OfficeKind[] = [...BASE_OFFICE_KINDS, ...COMPANY_KINDS];
+export type OfficeKind = BaseOfficeKind | CompanyKind | ClutterKind; // lane FURN: + ClutterKind
+export const OFFICE_KINDS: readonly OfficeKind[] = [...BASE_OFFICE_KINDS, ...COMPANY_KINDS, ...CLUTTER_KINDS];
 const OFFICE_KIND_SET: ReadonlySet<string> = new Set(OFFICE_KINDS);
 export function isOfficeKind(kind: string): kind is OfficeKind {
   return OFFICE_KIND_SET.has(kind);
@@ -35,6 +38,7 @@ export function isOfficeKind(kind: string): kind is OfficeKind {
  */
 export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
   ...COMPANY_PROP_DEFS,
+  ...CLUTTER_PROP_DEFS, // lane FURN
   officeChair: {w: 0.78, d: 0.73, h: 1.0, blocksSight: false},
   officeMonitor: {w: 0.55, d: 0.39, h: 0.41, blocksSight: false},
   /** Lateral filing cabinet (B3 is 1.32 m wide). */
@@ -44,7 +48,9 @@ export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
   conferenceTable: {w: 3.0, d: 1.35, h: 0.83, blocksSight: false},
   deadPlant: {w: 0.86, d: 0.89, h: 1.1, blocksSight: false},
   receptionDesk: {w: 2.6, d: 1.78, h: 1.12, blocksSight: false},
-  serverRack: {w: 1.23, d: 1.48, h: 2.0, blocksSight: true},
+  // Task office-props-physics-scale-20261030 (lane RACK): a real 42U 19-inch rack (600 x 1000 x 2000 mm; the local rebuild
+  // office-server-rack-r2, assets/officeAssets.ts OFFICE_LOCAL_MODELS) — was B10's squat 1.23 x 1.48 m broken-glass cabinet
+  serverRack: {w: 0.6, d: 1.0, h: 2.0, blocksSight: true},
   officeWhiteboard: {w: 1.8, d: 0.93, h: 1.62, blocksSight: false},
   officeShelf: {w: 2.22, d: 0.76, h: 1.8, blocksSight: false},
   /** Unit length (one cell); placements carry their run length in hx / hz. */
@@ -55,19 +61,20 @@ export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
 export const OFFICE_KIND_ASSET: Readonly<Partial<Record<BaseOfficeKind | 'desk', string>>> = {
   desk: 'office-desk', officeChair: 'office-chair', officeMonitor: 'office-monitor', officeFiling: 'filing-cabinet',
   officePhotocopier: 'photocopier', officeWaterCooler: 'water-cooler', conferenceTable: 'conference-table', deadPlant: 'dead-plant',
-  receptionDesk: 'reception-desk', serverRack: 'server-rack', officeWhiteboard: 'whiteboard', officeShelf: 'office-shelf',
+  receptionDesk: 'reception-desk', serverRack: 'server-rack-r2', officeWhiteboard: 'whiteboard', officeShelf: 'office-shelf', // lane RACK: the local rebuild
 };
 /** Lazy model-library key of an office asset id (ASSETS' OFFICE_MODEL_FILES / COMPANY_MODEL_FILES keys). */
 export const officeModelKey = (assetId: string): string => `office-${assetId}`;
 /** Asset id a kind renders with: the iteration-16 office models (OFFICE_KIND_ASSET) or lane ASSETS' company models (companyKinds). */
 export function officeKindAsset(kind: string): string | undefined {
-  return OFFICE_KIND_ASSET[kind as BaseOfficeKind | 'desk'] ?? COMPANY_KIND_ASSET[kind as CompanyKind];
+  return OFFICE_KIND_ASSET[kind as BaseOfficeKind | 'desk'] ?? COMPANY_KIND_ASSET[kind as CompanyKind] ?? CLUTTER_KIND_ASSET[kind as ClutterKind]; // lane FURN: + clutter
 }
 
 const NEVER = (cls: DamageClass) => ({cls, integrity: Infinity, breaks: 'never' as const});
 /** Damage specs (damage/materials.ts PROP_DAMAGE spreads this). */
 export const OFFICE_PROP_DAMAGE = {
   ...COMPANY_PROP_DAMAGE,
+  ...CLUTTER_PROP_DAMAGE, // lane FURN
   officeChair: NEVER('fabric'), officeMonitor: {...NEVER('plastic'), glass: {cls: 'screen' as const, integrity: 18, on: 'dead' as const}},
   officeFiling: NEVER('sheetMetal'), officePhotocopier: NEVER('plastic'), officeWaterCooler: NEVER('plastic'), conferenceTable: NEVER('laminate'),
   deadPlant: NEVER('plastic'), receptionDesk: NEVER('laminate'), serverRack: NEVER('sheetMetal'), officeWhiteboard: NEVER('laminate'),
@@ -79,6 +86,7 @@ const box = (m: ShapeMat, s: [number, number, number], p: [number, number, numbe
 /** Procedural stand-in forms (box parts, prop frame: origin bottom centre, front +Z). Partitions are built per placement. */
 export function officeShape(kind: OfficeKind): ShapePart[] | null {
   if (isCompanyKind(kind)) return companyShape(kind);
+  if (isClutterKind(kind)) return clutterShape(kind); // lane FURN
   const D = OFFICE_PROP_DEFS[kind];
   const {w, d, h} = D;
   switch (kind) {

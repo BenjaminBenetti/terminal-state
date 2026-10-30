@@ -568,7 +568,8 @@ export function holderPrompt(s: HolderState, o: {roomForAny: boolean; prying?: b
 /** HUD prompt for an aimed item. */
 export function lotPrompt(l: LootEntry, roomFor: boolean): {key: boolean; text: string} {
   const d = itemDef(l.itemId);
-  const what = d.kind === 'ammo' ? describeLoot([l]) : d.name;
+  // lane RACK (office-props-physics-scale-20261030): a lot of several crafting materials names its count ("2 × Electrical parts")
+  const what = d.kind === 'ammo' ? describeLoot([l]) : l.count > 1 ? `${l.count} × ${d.name}` : d.name;
   const fx = effectText(d);
   return {key: true, text: `Take ${what}${fx ? ` · ${fx}` : ''}${roomFor ? '' : ' — no room'}`};
 }

@@ -105,9 +105,38 @@ export function officeAssetsReady(use?: OfficeAssetUse): OfficeAssetId[] {
   return OFFICE_ASSET_IDS.filter(id => OFFICE_ASSETS[id].url !== null && (!use || OFFICE_ASSETS[id].use === use));
 }
 
+/**
+ * Task office-props-physics-scale-20261030 (lane RACK): LOCAL rebuilt derivatives — procedural geometry / code-painted textures made
+ * by a reproducible tools/asset-pipeline script (no generation service), each documented in its own derivative sidecar
+ * (public/assets/derivatives/<id>-*.json). A kind renders one in place of a delivered Meshy model (gen/office/kinds.ts
+ * OFFICE_KIND_ASSET); the Meshy entry above stays registered and unchanged (its provenance is untouched). Same conventions (metres,
+ * grounded, centred, front -Z) and the same lazy-library key scheme `office-<id>`.
+ */
+export interface OfficeLocalModel {
+  url: string;
+  bytes: number;
+  tris: number;
+  /** Measured runtime bounds [x, y, z] in metres. */
+  dims: readonly [number, number, number];
+  /** The delivered asset this rebuild replaces for its kind. */
+  replaces: OfficeAssetId;
+  /** Rebuild script + provenance sidecar. */
+  script: string;
+  provenance: string;
+}
+export const OFFICE_LOCAL_MODELS = {
+  // the 42U 19-inch server rack (kind serverRack): perforated see-through door, racked servers / switches / UPS with blinking LEDs
+  // (world/rackLeds.ts), three empty bays with cantilever loot shelves; replaces B10's empty broken-glass cabinet
+  'server-rack-r2': {url: 'assets/models/office-server-rack-r2.glb', bytes: 323704, tris: 2658, dims: [0.6, 2, 1], replaces: 'server-rack',
+    script: 'tools/asset-pipeline/props/build-server-rack-r2.mjs', provenance: 'assets/derivatives/office-server-rack-r2-20261030.json'},
+} as const satisfies Record<string, OfficeLocalModel>;
+export type OfficeLocalModelId = keyof typeof OFFICE_LOCAL_MODELS;
+
 /** Lazy-library file map (same shape as assets/loader.ts PropModelLibrary input) of the delivered models, keyed `office-<id>`. */
-export const OFFICE_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(
-  OFFICE_ASSET_IDS.flatMap(id => { const a = OFFICE_ASSETS[id]; return a.url ? [[`office-${id}`, {url: a.url, bytes: a.bytes}]] : []; }));
+export const OFFICE_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries([
+  ...OFFICE_ASSET_IDS.flatMap(id => { const a = OFFICE_ASSETS[id]; return a.url ? [[`office-${id}`, {url: a.url, bytes: a.bytes}]] : []; }),
+  ...Object.entries(OFFICE_LOCAL_MODELS).map(([id, a]) => [`office-${id}`, {url: a.url, bytes: a.bytes}]), // lane RACK: local rebuilds
+]);
 
 const modelCache = new Map<OfficeAssetId, Promise<GLTF | null>>();
 const textureCache = new Map<OfficeTextureId, Promise<THREE.Texture | null>>();

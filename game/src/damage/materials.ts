@@ -155,6 +155,7 @@ export const MODEL_KEY_CLASS: Record<string, DamageClass> = {
   rifle: 'steel', shotgun: 'steel', pistol: 'steel', knife: 'steel', bench: 'sheetMetal', light: 'sheetMetal', cabinetTall: 'sheetMetal', cabinetLow: 'sheetMetal', sign: 'sheetMetal',
   crate: 'wood', turnstile: 'steel', shelf: 'steel', vending: 'sheetMetal', stall: 'sheetMetal',
   item_water: 'plastic', item_cola: 'sheetMetal', item_juice: 'cardboard', item_chocolate: 'food', item_chips: 'food', item_beans: 'sheetMetal', item_noodles: 'food',
+  item_bread: 'food', // lane FURN (office-props-physics-scale-20261030): the bakery loaf
   item_ammo_9mm: 'cardboard', item_ammo_556: 'sheetMetal', item_ammo_12ga: 'cardboard', // lane AMMO (knife-melee-20261030): Meshy T2.5 ammo boxes
   trashCan: 'sheetMetal', shopCounter: 'laminate', shopBackbar: 'steel', shopCooler: 'sheetMetal', shopDisplay: 'steel',
   janitorCart: 'plastic', magazineRack: 'steel', techDisplay: 'laminate', hotdogCart: 'steel', gunLocker: 'sheetMetal',
@@ -239,11 +240,14 @@ export const ALL_PROP_KINDS = Object.keys(PROP_DEFS) as PropKind[];
 export const ITEM_CLASS: Record<string, DamageClass> = {
   rifle: 'steel', shotgun: 'steel', pistol: 'steel', knife: 'steel', ammo_556: 'sheetMetal', ammo_12ga: 'cardboard', ammo_9mm: 'cardboard', medkit: 'plastic', bandage: 'fabric', // lane AMMO: 5.56 steel can
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
+  bread: 'food', // lane FURN (office-props-physics-scale-20261030)
   battery: 'sheetMetal', flare: 'cardboard', // Iteration 12 (LIGHT): steel-jacketed D cell; waxed-paper road flare
   leg_splint: 'plastic', arm_sling: 'fabric', trauma_kit: 'fabric', // Iteration 16 (lane INJURY): foam splint roll; sling packet; nylon pouch
   // Iteration 16 (primary, for lane GEAR's items): soft armor / nylon / boots / gloves = fabric; the hard hat = plastic
   armor_vest: 'fabric', chest_rig: 'fabric', backpack: 'fabric', helmet: 'plastic', boots: 'fabric', gloves: 'fabric',
   gas_mask: 'rubber', gas_filter: 'sheetMetal', // task gasmask-breach-20261030 (mask lane): rubber full-face mask; painted steel filter canister
+  // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — circuit board + wire bundle; bent steel; plastic specimen jar
+  electrical_parts: 'plastic', scrap_metal: 'sheetMetal', bio_mater: 'plastic',
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -256,7 +260,9 @@ export function itemClass(itemId: string): DamageClass {
 /**
  * Contact / sound family of a rigid body (cannon contact material vs the static station). Task office-interactions-layout-20261030
  * (lane PHYS): + `castor` (wheeled furniture: office / executive chairs, mobile whiteboard, clothing rail, camera pedestal, vitals
- * stand) and `pad` (other loose office furniture: feet / fabric / pot bases on carpet). No Subway kind uses them.
+ * stand) and `pad` (other loose office furniture: feet / fabric / pot bases on carpet). Task office-props-physics-scale-20261030
+ * (lane PHYS): the Subway's light kinds use them too (SUBWAY_CONTACT: suitcases / strollers / wheelchairs roll, chairs / signs /
+ * bags slide on pads), so walking into one shoves it in every world.
  */
 export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' | 'glass' | 'flesh' | 'cloth' | 'castor' | 'pad';
 /**
@@ -265,7 +271,8 @@ export type PhysMat = 'metal' | 'plastic' | 'soft' | 'heavy' | 'stone' | 'wood' 
  * 1/60 s step a contact resists ~60x the Coulomb impulse (x ~4 corner contacts of a box on the floor): with the iteration-07 values
  * a shot or shoved box never slides, it only rocks / tips (fine for cans and bins, wrong for a castor chair). `castor` / `pad` are
  * Coulomb μ / ~240 so a body decelerates at ~μ·g: castors ≈ μ 0.15 (a chair coasts ~15 cm under buckshot and rolls ahead of the
- * walker), pads ≈ μ 0.3. The iteration-07 values stay as they are (Subway behaviour unchanged).
+ * walker), pads ≈ μ 0.3. The iteration-07 values stay as they are (task office-props-physics-scale-20261030: the Subway's light
+ * kinds now use castor / pad too, SUBWAY_CONTACT, the trash can included; chunks / items keep the iteration-07 materials).
  */
 export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution: number}>> = {
   metal: {friction: 0.32, restitution: 0.34}, plastic: {friction: 0.42, restitution: 0.3}, soft: {friction: 0.7, restitution: 0.08},
@@ -295,6 +302,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   cola: {mass: 0.37, shape: 'cylinder', mat: 'metal'}, beans: {mass: 0.45, shape: 'cylinder', mat: 'metal'},
   water: {mass: 0.55, shape: 'cylinder', mat: 'plastic'}, noodles: {mass: 0.09, shape: 'cylinder', mat: 'soft'},
   juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
+  bread: {mass: 0.45, shape: 'box', mat: 'soft'}, // lane FURN (office-props-physics-scale-20261030): a stale round loaf
   ammo_556: {mass: 0.9, shape: 'box', mat: 'metal'}, ammo_12ga: {mass: 0.7, shape: 'box', mat: 'soft'}, ammo_9mm: {mass: 0.5, shape: 'box', mat: 'soft'}, // lane AMMO: small steel 5.56 can
   medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
   rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},
@@ -308,6 +316,10 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   helmet: {mass: 0.4, shape: 'box', mat: 'soft'}, boots: {mass: 1.6, shape: 'box', mat: 'soft'}, gloves: {mass: 0.2, shape: 'box', mat: 'cloth'},
   // task gasmask-breach-20261030 (mask lane): full-face mask ~0.6 kg (rubber), 40 mm filter canister ~0.25 kg (steel)
   gas_mask: {mass: 0.6, shape: 'box', mat: 'soft'}, gas_filter: {mass: 0.25, shape: 'cylinder', mat: 'metal'},
+  // Task office-props-physics-scale-20261030 (lane RACK): board + relays + wire coil ~0.35 kg; bent brackets / plate / rail ~1.1 kg;
+  // a filled 0.4 l specimen jar ~0.35 kg (upright cylinder)
+  electrical_parts: {mass: 0.35, shape: 'box', mat: 'plastic'}, scrap_metal: {mass: 1.1, shape: 'box', mat: 'metal'},
+  bio_mater: {mass: 0.35, shape: 'cylinder', mat: 'plastic'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};
@@ -329,8 +341,10 @@ export interface PropPhysics {
    */
   fit?: number;
   /**
-   * Lane PHYS: in office worlds walking into it wakes it (physics/dynamicItems.ts contact wake). Only kinds with calibrated contact
-   * materials (castor / pad) set it: the iteration-07 kinds' sticky contacts make a shoved body tip and the walker pass into it.
+   * Lane PHYS: walking into it wakes it (physics/dynamicItems.ts contact wake; task office-props-physics-scale-20261030: in every
+   * world, the Subway too). Only kinds with calibrated contact materials (castor / pad) set it: the iteration-07 sticky contacts
+   * make a shoved body tip and the walker pass into it. Loot holders that do not spill never move; a spill holder knocked loose by
+   * contact spills its finite lots like a shot one.
    */
   contact?: boolean;
 }
@@ -353,9 +367,64 @@ export const PROP_PHYSICS: Record<string, PropPhysics> = {
   coatRack: {mass: 6, dynamic: true, mat: 'heavy'}, biohazardBin: {mass: 6, dynamic: true, mat: 'plastic'}, bicycle: {mass: 13, dynamic: true, mat: 'heavy'},
   wheelchair: {mass: 15, dynamic: true, mat: 'heavy'}, crowdBarrier: {mass: 16, dynamic: true, mat: 'heavy'},
 };
+
+/**
+ * Task office-props-physics-scale-20261030 (lane PHYS; user: "All physics objects should always be interactable, without needing
+ * to be shot first"): the CONTACT overlay of the Subway's light kinds (the rows above / PROP_DEFS.physics keep their mass and
+ * `dynamic`). Each gets a calibrated contact material — `castor` for what rolls on wheels / castors, `pad` for feet, bases, bags
+ * and bundles — and `contact`: walking into one wakes it in every world (Subway and Office, where these kinds are imported too),
+ * like the office furniture. `fit`: the collider inside the box of a chair pulled up to its table / desk (as the office chairs).
+ * Spill holders (the trash can, the wheelie bin) wake by contact too (coordinator follow-up: the user's rule is literal): a walk-in
+ * knocks one loose like a shot, its lid pops and its finite lots spill through ContainerManager.goLoose as the same pickups.
+ * `how` is the audit sentence (damage/physicsAudit.ts). Ids without a PROP_DEFS kind yet are listed for a later integration. The
+ * shopping cart and every other loot holder that does not spill stay put (no overlay: their lots would float).
+ */
+export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit?: number; how: string}>> = {
+  rollingSuitcase: {mat: 'castor', how: 'rolling suitcase on spinner wheels (~9 kg): rolls ahead when walked into, slides / tips when shot'},
+  babyStroller: {mat: 'castor', how: 'baby stroller (~9 kg): rolls away when bumped'},
+  wheelchair: {mat: 'castor', how: 'wheelchair (~15 kg): rolls away when bumped'},
+  handTruck: {mat: 'castor', how: 'hand truck (~14 kg) standing on its nose plate and wheels: shoved / rolled along when bumped'},
+  wheelieBin: {mat: 'castor', how: 'wheelie bin (~12 kg): a walk-in or a shot knocks it loose — its lid pops, its finite lots spill — then it rolls / rocks on its wheels'},
+  bin: {mat: 'pad', how: 'sheet-steel trash can with a liner (~7 kg): a walk-in or a shot knocks it loose — its lid pops, its finite lots spill — then it slides / tips on its base'},
+  mopBucketWringer: {mat: 'castor', how: 'mop bucket with wringer on castors (~8 kg): rolls when bumped'},
+  wetDryVac: {mat: 'castor', how: 'wet / dry shop vac on castors (~8 kg): rolls when bumped'},
+  ivPole: {mat: 'castor', how: 'IV pole on a five-castor base (~4 kg): rolls when bumped, tips under buckshot'},
+  ingredientBin: {mat: 'castor', how: 'mobile ingredient bin on castors (~8 kg): rolls when bumped'},
+  officeSwivelChair: {mat: 'castor', fit: 0.75, how: 'office swivel chair on castors (~12 kg): rolls away when bumped, like the office task chair'},
+  oilRadiator: {mat: 'castor', how: 'oil-filled radiator on castors (~12 kg; no PROP_DEFS kind yet): rolls when bumped'},
+  foldingChair: {mat: 'pad', fit: 0.75, how: 'folding chair (~4 kg): slides / tips when bumped or shot'},
+  plasticStackChair: {mat: 'pad', fit: 0.75, how: 'plastic stacking chair (~3 kg): slides / tips when bumped or shot'},
+  wetFloorSign: {mat: 'pad', how: 'A-frame wet-floor sign (~1.2 kg): knocked along / over when bumped'},
+  basketStack: {mat: 'pad', how: 'stack of shopping baskets (~3 kg): slides / topples when bumped'},
+  pedestalFan: {mat: 'pad', how: 'pedestal fan on a round base (~5 kg): slides / tips when bumped'},
+  drumFan: {mat: 'pad', how: 'drum fan on its frame (~14 kg): shoved along when bumped'},
+  fireExtinguisher: {mat: 'pad', how: 'free-standing fire extinguisher (~6 kg): shoved / knocked over when bumped'},
+  trashBagPile: {mat: 'pad', how: 'pile of full trash bags (~8 kg): shoved along when bumped'},
+  newspaperBundles: {mat: 'pad', how: 'tied newspaper bundles (~12 kg): shoved along when bumped'},
+  tripodWorkLight: {mat: 'pad', how: 'tripod work light (~6 kg): shoved / knocked over when bumped'},
+  stepLadder: {mat: 'pad', how: 'folded-open step ladder (~7 kg): shoved / tipped when bumped'},
+  foldingBarricade: {mat: 'pad', how: 'folding plastic barricade (~6 kg): shoved along when bumped'},
+  handToolbox: {mat: 'pad', how: 'hand toolbox (~6 kg): shoved along when bumped where it stands on the floor'},
+  coatRack: {mat: 'pad', how: 'coat rack on a weighted base (~6 kg): shoved / tipped when bumped'},
+  bicycle: {mat: 'pad', how: 'parked bicycle (~13 kg): shoved / tipped when bumped'},
+  crowdBarrier: {mat: 'pad', how: 'steel crowd barrier on feet (~16 kg): shoved along when bumped'},
+  spinnerRack: {mat: 'pad', how: 'spinner rack on its base (~14 kg): shoved / rocked when bumped'},
+  paperShredder: {mat: 'pad', how: 'bin-style paper shredder (~10 kg): shoved along when bumped'},
+  duffelBag: {mat: 'pad', how: 'duffel bag (~6 kg; no PROP_DEFS kind yet): shoved along when bumped'},
+  biohazardBin: {mat: 'pad', how: 'biohazard bin (~6 kg; no PROP_DEFS kind yet): shoved along when bumped'},
+};
+
+const overlaid = new Map<string, {base: PropPhysics; row: PropPhysics}>();
 export function propPhysics(kind: string): PropPhysics {
   const def = (PROP_DEFS as unknown as Record<string, {physics?: PropPhysics} | undefined>)[kind];
-  return def?.physics ?? PROP_PHYSICS[kind] ?? {mass: Infinity, dynamic: false};
+  const base = def?.physics ?? PROP_PHYSICS[kind];
+  if (!base) return {mass: Infinity, dynamic: false};
+  // task office-props-physics-scale-20261030 (lane PHYS): the Subway contact overlay (calibrated material + contact wake)
+  const c = base.dynamic ? SUBWAY_CONTACT[kind] : undefined;
+  if (!c) return base;
+  let o = overlaid.get(kind);
+  if (!o || o.base !== base) overlaid.set(kind, (o = {base, row: {...base, mat: c.mat, contact: true, ...(c.fit ? {fit: c.fit} : {})}}));
+  return o.row;
 }
 
 /** Rigid chunk family per damage class: contact material and density (kg/m^3, before a 0.5 fill factor). */

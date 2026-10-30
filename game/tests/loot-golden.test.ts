@@ -25,10 +25,18 @@
 //     gearPlaced 1a7b07f0 -> da46e2b8: the same floor-plan
 //     change moves the loose floor supplies and gear spots (the per-storey supply programs and the one gear roll per logical
 //     level are unchanged). Subway hashes f94f99ea / 574dd442 and gearRolls 77148ba3 are byte-identical.
-//  4. Task gas-mask-roof-feedback-20261030 (user item 10, the explicit ROOF exception): the Office appends its roof FIND (one gun +
+//  4. Task office-props-physics-scale-20261030 (user feedback 5–9: deliberate Office content / geometry changes; Subway hashes and
+//     the gear ROLL unchanged): officeHolders bebd9642 -> c36c5fba, officePickups f0e0d3d4 -> 1aa35d40, gearPlaced da46e2b8 ->
+//     2bc1c5bb. Causes: the server rack r2 (0.6 x 2.0 x 1.0 m, was 1.23 x 2.0 x 1.48) with its own bays and SERVER rows (electrical
+//     parts / scrap metal); furniture-only rescales (lab bench, trading desk, bean bag, bakery case, foosball / ping-pong legs,
+//     drafting table, espresso machine onto a sideboard counter, mixing console on a riser) that move company placements; the
+//     bakery case as a bread holder; bio mater in lab drawers; host-top clutter kinds; and a 1.5 m turning square reserved inside
+//     small office rooms (placeKit.makePlaceCtx). Different furniture sizes re-route the seeded office dressing, so the loose floor
+//     supplies and gear spots move with it (the per-storey programs and the one gear roll per logical level are unchanged).
+//  5. Task gas-mask-roof-feedback-20261030 (+ merge of main a0cf99a, after stage 4) (user item 10, the explicit ROOF exception): the Office appends its roof FIND (one gun +
 //     its own ammo box, or a gear piece: PickupPlacement.reward = ROOF_FIND_KEY) LAST in layout.pickups. Every other hash is
-//     byte-identical — officeHolders bebd9642, gearRolls 77148ba3, gearPlaced da46e2b8, both Subway hashes — and officePickups
-//     f0e0d3d4 is now pinned over the NON-reward pickups (identical: no storey's floor supplies / weapon finds moved); the roof
+//     byte-identical to main's stage 4 — officeHolders c36c5fba, gearRolls 77148ba3, gearPlaced 2bc1c5bb, both Subway hashes — and
+//     officePickups 1aa35d40 is now pinned over the NON-reward pickups (identical: no storey's floor supplies / weapon finds moved); the roof
 //     find's own pickups get the new pin officeRoofFind 3ba3548d (4 pickups over the 3 seeds; all pickups together would read
 //     8fe99b7a).
 
@@ -41,17 +49,17 @@ import type {LevelId} from '../src/levels/types';
 import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
 import {ROOF_FIND_KEY} from '../src/items/lootTables';
 
-/** Stage 3: office-interactions-layout; stage 4: + the roof find (stages 1 / 2 / 4 in the header). */
+/** Stage 4: office-props-physics-scale; stage 5: + the roof find (stages 1–3 in the header). */
 const GOLDEN = {
   subwayHolders: 'f94f99ea',
   subwayPickups: '574dd442',
-  officeHolders: 'bebd9642',
-  /** The Office's layout pickups WITHOUT the roof find's (stage 4: unchanged since stage 3). */
-  officePickups: 'f0e0d3d4',
-  /** Stage 4: the roof find's own pickups (PickupPlacement.reward). */
+  officeHolders: 'c36c5fba',
+  /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
+  officePickups: '1aa35d40',
+  /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
-  gearPlaced: 'da46e2b8',
+  gearPlaced: '2bc1c5bb',
 };
 
 function fnv() {

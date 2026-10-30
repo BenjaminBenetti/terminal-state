@@ -19,7 +19,12 @@ import {OFFICE_FLOOR, PUBLIC_FLOOR_WEIGHTS, econCat, floorChance, floorCount, lo
 import {ITEMS} from '../../items/items';
 import {WEAPON_FIND_AMMO, findWeaponsFor, type StartWeaponId} from '../weaponFinds';
 import {FIND_COPY_THRESHOLDS, FIND_MAX_PER_WEAPON} from '../weaponFinds'; // Task loot-reference-pages-20261030 (lane DATA)
-import type {Area, PickupPlacement, StationLayout, ZombieType} from '../stationTypes';
+import type {Area, PickupPlacement, StationLayout} from '../stationTypes';
+// Task enemy-spawn-tables-20261030 (lane SPAWN): the enemy controls are the Office's spawn profile (contexts street / floor / roof).
+import {
+  areaCap, areaSpawnWeight, reportSpawnCandidates, rollZombieTypes, spawnContext, spawnProfile,
+  type SpawnContextId, type SpawnProfile,
+} from '../../ai/spawnTables';
 import {OFFICE_FLOORS} from './frame';
 import {COMPANIES, type LootTilt} from './companies';
 
@@ -41,11 +46,17 @@ function floorTilt(layout: StationLayout, levels: readonly number[]): LootTilt {
   return a?.tenant ? COMPANIES[a.tenant].loot : 'none';
 }
 
-export const OFFICE_ENEMIES = {street: [5, 8] as const, floor: [3, 6] as const};
-/** Walking distance (cells) every enemy keeps from the platform start (18 m, the station rule). */
-export const ENEMY_MIN_CELLS = {start: 36};
-/** Straight-line keep-out (m) from a storey's stair landing / elevator landing: enemies, loose loot. */
-export const LANDING_KEEP_M = {enemy: 5, loot: 2.0};
+/**
+ * Lane SPAWN: the count ranges of the Office's spawn profile (ai/spawnTables.ts SPAWN_PROFILES.office contexts street / floor /
+ * roof) — read from the profile, kept as the established export. The enemies' walking distance from the start (was
+ * ENEMY_MIN_CELLS) and landing keep-off (was LANDING_KEEP_M.enemy) are the profile's placement rules (OFFICE_PLACEMENT).
+ */
+export const OFFICE_ENEMIES = {
+  street: spawnContext(spawnProfile('office'), 'street').count, floor: spawnContext(spawnProfile('office'), 'floor').count,
+  roof: spawnContext(spawnProfile('office'), 'roof').count,
+};
+/** Straight-line keep-out (m) of loose loot from a storey's stair landing / elevator landing (enemies: the spawn profile's rule). */
+export const LANDING_KEEP_M = {loot: 2.0};
 
 export interface SpawnField {
   /** Walking distance (cells) from the platform start on every level (-1 = unreachable). */
@@ -57,46 +68,51 @@ export interface SpawnField {
 const nearKeep = (f: SpawnField, lv: number, x: number, z: number, r: number): boolean => f.keep.some(k => k.level === lv && Math.hypot(k.x - x, k.z - z) < r);
 const NO_SPAWN_TYPES = new Set(['office-stair', 'stair-core', 'office-elevator']);
 
-const zombieWeight = (a: Area): number => a.kind === 'platform' ? 2.2 : a.type === 'exit-stair' || a.type === 'washroom' ? 0.5
-  : NO_SPAWN_TYPES.has(a.type) ? 0
-  : a.type === 'eatery' || a.type === 'shop' ? 0.5 : a.kind === 'closet' ? 0.5 : a.type === 'office-open' ? 1.6 : a.publicSpace ? 1 : 1.3;
-
-/** Enemies of the storeys `levels` (station + lobby: [0, 1]; office floor n: [n]); `range` = count range. Returns the count. */
-export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], range: readonly [number, number]): number {
-  const count = rng.int(range[0], range[1]);
-  const types: ZombieType[] = [];
-  for (let i = 0; i < count; i++) types.push(rng.chance(0.4) ? 'coated' : 'shambler');
-  if (!types.includes('coated')) types[0] = 'coated';
-  if (count > 1 && !types.includes('shambler')) types[1] = 'shambler';
+/**
+ * Enemies of the storeys `levels` (station + lobby: [0, 1]; office floor n: [n]; the roof: [9]) for the generation context `context`
+ * of the level's spawn `profile` (lane SPAWN: count, type roll, keep-away, area weights x room intensity, caps, tries, spacing — the
+ * established values, same draws). Returns the placed count.
+ */
+export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], profile: SpawnProfile, context: SpawnContextId): number {
+  const ctx = spawnContext(profile, context), pl = ctx.placement;
+  const count = rng.int(ctx.count[0], ctx.count[1]);
+  const types = rollZombieTypes(rng, count, profile.zombieTypes);
+  const areaW = new Map<number, number>();
+  const weightOf = (a: Area): number => {
+    let w = areaW.get(a.id);
+    if (w === undefined) areaW.set(a.id, (w = areaSpawnWeight(pl.areaWeights, profile, a)));
+    return w;
+  };
   const byArea = new Map<number, [number, number, number][]>();
   for (const lvId of levels) {
     const L = layout.levels[lvId], g = L.grid, d = field.dist[L.id];
     for (let y = 1; y < g.h - 1; y++) for (let x = 1; x < g.w - 1; x++) {
       const i = g.idx(x, y);
-      if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || d[i] < ENEMY_MIN_CELLS.start || !clearAround(g, x, y, 1)) continue;
+      if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || d[i] < pl.startCells || !clearAround(g, x, y, pl.clearCells)) continue;
       const a = layout.areas[g.area[i]];
-      if (!a || (a.level ?? 0) !== L.id || a.role === 'stair' || zombieWeight(a) <= 0) continue;
+      if (!a || (a.level ?? 0) !== L.id || a.role === 'stair' || !(weightOf(a) > 0)) continue;
       const [cx, cz] = g.center(x, y);
-      if (nearKeep(field, L.id, cx, cz, LANDING_KEEP_M.enemy)) continue;
+      if (nearKeep(field, L.id, cx, cz, pl.landingKeepM ?? 0)) continue;
       let l = byArea.get(a.id);
       if (!l) byArea.set(a.id, (l = []));
       l.push([L.id, x, y]);
     }
   }
-  const order = [...byArea.keys()].map(id => ({id, k: Math.pow(rng.next(), 1 / zombieWeight(layout.areas[id]))})).sort((p, q) => q.k - p.k).map(o => o.id);
+  reportSpawnCandidates(layout, context, byArea);
+  const order = [...byArea.keys()].map(id => ({id, k: Math.pow(rng.next(), 1 / weightOf(layout.areas[id]))})).sort((p, q) => q.k - p.k).map(o => o.id);
   const perArea = new Map<number, number>();
   let placed = 0;
-  for (const cap of [1, 2, 3]) {
+  for (const cap of pl.caps.passes) {
     for (const id of order) {
       if (placed >= count) break;
       const a = layout.areas[id];
-      if ((perArea.get(id) ?? 0) >= (a.kind === 'platform' ? cap + 1 : a.kind === 'closet' ? 1 : cap)) continue;
+      if ((perArea.get(id) ?? 0) >= areaCap(pl.caps, a, cap)) continue;
       const cells = byArea.get(id)!;
-      for (let t = 0; t < 14; t++) {
+      for (let t = 0; t < pl.tries; t++) {
         const [lv, x, y] = rng.pick(cells);
         const g = layout.levels[lv].grid;
         const [zx, zz] = g.center(x, y);
-        if (layout.zombies.some(z => (z.level ?? 0) === lv && Math.hypot(z.x - zx, z.z - zz) < 4)) continue;
+        if (layout.zombies.some(z => (z.level ?? 0) === lv && Math.hypot(z.x - zx, z.z - zz) < pl.spacingM)) continue;
         perArea.set(id, (perArea.get(id) ?? 0) + 1);
         layout.zombies.push({x: zx, z: zz, yaw: rng.range(-Math.PI, Math.PI), type: types[placed], area: id, ...(lv ? {level: lv, y: g.floorOf(g.idx(x, y))} : {})});
         placed++;

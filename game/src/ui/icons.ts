@@ -3,6 +3,7 @@
 import type {IconKey} from '../items/items';
 import {GEAR_ICONS} from './gearIcons'; // Iteration 16 (lane GEAR)
 import {MEDICAL_ICONS} from './medicalIcons'; // Iteration 16 (lane INJURY)
+import {MATERIAL_ICONS} from './materialIcons'; // lane RACK (office-props-physics-scale-20261030): crafting materials
 
 const S = (body: string) => `<svg viewBox="0 0 64 32" fill="currentColor" aria-hidden="true">${body}</svg>`;
 const DARK = '#15171a';
@@ -26,6 +27,8 @@ export const ICONS: Record<IconKey, string> = {
   chips: S(`<path d="M20 4h24l-2 4 2 16-2 5H22l-2-5 2-16z"/><path d="M24 13h16v7H24z" fill="${DARK}" opacity="0.45"/>`),
   beans: S(`<rect x="22" y="6" width="20" height="22" rx="2"/><rect x="21" y="6" width="22" height="3" rx="1" opacity="0.7"/><rect x="21" y="25" width="22" height="3" rx="1" opacity="0.7"/><rect x="22" y="13" width="20" height="8" fill="${DARK}" opacity="0.4"/>`),
   noodles: S(`<path d="M20 9h24l-3 20H23z"/><rect x="18" y="5" width="28" height="4" rx="1"/><rect x="21" y="15" width="22" height="5" fill="${DARK}" opacity="0.45"/>`),
+  // lane FURN (office-props-physics-scale-20261030): a round crusty loaf with scored top
+  bread: S(`<path d="M14 26c-3 0-4-3-3-6 2-7 10-12 21-12s19 5 21 12c1 3 0 6-3 6z"/><path d="M22 13l4 6M30 11l4 7M38 12l4 6" stroke="${DARK}" stroke-width="1.6" opacity="0.5"/>`),
   // Iteration 12 (LIGHT): D cell (upright, + nub) and road flare (tube, striker cap at the right).
   battery: S(`<rect x="25" y="7" width="14" height="22" rx="2"/><rect x="29" y="3" width="6" height="4" rx="1"/><rect x="25" y="12" width="14" height="6" fill="${DARK}" opacity="0.45"/>`),
   flare: S(`<rect x="6" y="12" width="40" height="9" rx="2"/><rect x="45" y="11" width="11" height="11" rx="2" opacity="0.75"/><rect x="14" y="13" width="18" height="7" fill="${DARK}" opacity="0.4"/>`),
@@ -35,6 +38,7 @@ export const ICONS: Record<IconKey, string> = {
   knife: S(`<rect x="4" y="13" width="4" height="7" rx="1.5"/><rect x="8" y="13.5" width="14" height="6" rx="2"/><path d="M11 13.5v6M15 13.5v6M19 13.5v6" stroke="${DARK}" stroke-width="1" opacity="0.5"/><rect x="22" y="9" width="3" height="15" rx="1"/><path d="M25 12.5h26l9 4.5-6 2.5H25z"/><path d="M28 12.5l1-1.5 1 1.5 1-1.5 1 1.5 1-1.5 1 1.5 1-1.5 1 1.5 1-1.5 1 1.5" fill="none" stroke="currentColor" stroke-width="0.8"/>`),
   ...GEAR_ICONS,
   ...MEDICAL_ICONS,
+  ...MATERIAL_ICONS,
 };
 
 /** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */
