@@ -216,7 +216,8 @@ describe('Meshy T2.5 bodies: rig, skin, clips, hit zones', () => {
       expect(hit.torso).toBeGreaterThan(0.1); expect(hit.torso).toBeLessThan(0.3);
       expect(hit.arm).toBeGreaterThan(0.04); expect(hit.arm).toBeLessThan(0.12);
       expect(hit.leg).toBeGreaterThan(0.06); expect(hit.leg).toBeLessThan(0.15);
-      const app = lib.build({body: id, wear: {lower: lib.wearables.find(w => w.slot === 'lower' && lib.supports(id, w.id))!.id}});
+      const lower = lib.wearables.find(w => w.slot === 'lower' && lib.supports(id, w.id));
+      const app = lib.build({body: id, wear: lower ? {lower: lower.id} : {}});
       expect(app.hit.head).toBeCloseTo((hit.head + 0) * HIT_CALIBRATION.head, 5);
       expect(app.girth.torso).toBeCloseTo(hit.torso / REFERENCE_HIT.torso, 5);
     }
@@ -265,16 +266,18 @@ describe('Meshy T2.5 garments: per-body fits on the new topology', () => {
   });
 
   it('the ragdoll builds and settles from every replaced body wearing its required pants (+ the replaced hoodie)', () => {
-    const g = new Grid(48, 48);
-    for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) g.set(x, y, x < 2 || y < 2 || x >= 46 || y >= 46 ? SOLID : FLOOR);
+    const g = new Grid(64, 48);
+    for (let y = 0; y < 48; y++) for (let x = 0; x < 64; x++) g.set(x, y, x < 2 || y < 2 || x >= 62 || y >= 46 ? SOLID : FLOOR);
     const ph = new PhysicsSystem(null);
     ph.build({grid: g, props: [], trench: {floorY: -1.15}} as unknown as Parameters<PhysicsSystem['build']>[0]);
     let seed = 7;
     const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     let n = 0;
     for (const id of replacedBodies) {
-      const lower = lib.wearables.find(w => w.slot === 'lower' && lib.supports(id, w.id) && (!lib.supports(id, 'hoodie') || lib.compatible(id, lib.wearable('hoodie')!, w)))!;
-      const look: ZombieLook = {body: id, wear: {lower: lower.id, ...(lib.supports(id, 'hoodie') ? {upper: 'hoodie'} : {})}};
+      // the body's required pants (if it has any fitted) + the replaced hoodie where it fits
+      const hoodie = lib.supports(id, 'hoodie');
+      const lower = lib.wearables.find(w => w.slot === 'lower' && lib.supports(id, w.id) && (!hoodie || lib.compatible(id, lib.wearable('hoodie')!, w)));
+      const look: ZombieLook = {body: id, wear: {...(lower ? {lower: lower.id} : {}), ...(hoodie ? {upper: 'hoodie'} : {})}};
       expect(lib.isValid(look), JSON.stringify(look)).toBe(true);
       const z = new ZombieActor(lib.build(look), {x: 6 + n * 4, z: 8, yaw: 0.2, type: 'shambler', area: 0}, rand);
       n++;

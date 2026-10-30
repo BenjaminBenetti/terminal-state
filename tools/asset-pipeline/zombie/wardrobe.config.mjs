@@ -53,6 +53,14 @@ export const T25 = {
 };
 export const T25_DENSIFY = {body: 0.0045, wearable: 0.007};
 /**
+ * Colour policy for every T2.5 body / wearable without its own `grade` (primary-approved for the hoodie, applied with the
+ * same documented method to the rest): the Meshy albedo (UV-covered texels) takes the ORIGINAL reference image's mean
+ * chromaticity (G/R, B/R of its alpha-masked pixels) at UNCHANGED mean luminance (references are lit photos) - only when
+ * the chroma deviation is real (> 8 %) and the per-channel linear gains stay modest ([0.8, 1.25]); otherwise no grade and
+ * the reason is recorded (e.g. near-zero blue of a saturated yellow). lib/grade.mjs; numbers in each derivative manifest.
+ */
+export const T25_GRADE = {mode: 'reference-chroma', luminance: 1, minDeviation: 0.08, gainRange: [0.8, 1.25], note: 'T25_GRADE policy: albedo chromaticity -> original reference mean (alpha-masked), luminance unchanged; only deviations > 8 % with gains in [0.8, 1.25]'};
+/**
  * Bodies whose shipped geometry must stay exactly as it is (verified by the build) while they have no T2.5 replacement:
  * body:scavenger (user-uploaded Pixal3D result; its T2.5 job uses a RECREATED reference, user update 01) until pinned.
  */

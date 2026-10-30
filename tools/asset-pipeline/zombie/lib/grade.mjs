@@ -47,19 +47,25 @@ export async function gradeBase(enc, low, grade, quality, referenceImage) {
   if (info.width !== info.height) throw new Error('grade: square atlas expected');
   const alb = coveredMean(data, info.width, low.uv, low.idx);
   let gains = grade.gainLinear, ref = null;
+  const ratios = m => ({GR: r4(m[1] / m[0]), BR: r4(m[2] / m[0])});
   if (grade.mode === 'reference-chroma') {
     ref = await referenceMean(referenceImage);
     const R = ref.mean, A = alb.mean;
     const yA = LUMA.reduce((s, w, c) => s + w * A[c], 0) * (grade.luminance ?? 1);
     const k = yA / LUMA.reduce((s, w, c) => s + w * R[c], 0); // target = reference chromaticity at the albedo's luminance
     gains = A.map((a, c) => (k * R[c]) / a);
+    // policy guards: only a MODEST correction of a REAL deviation (no grade for near-matches or for near-zero channels
+    // whose ratio is noise, e.g. the blue of a saturated yellow)
+    const dev = Math.max(Math.abs((A[1] / A[0]) / (R[1] / R[0]) - 1), Math.abs((A[2] / A[0]) / (R[2] / R[0]) - 1));
+    const [lo, hi] = grade.gainRange ?? [0.8, 1.25];
+    const skip = dev <= (grade.minDeviation ?? 0) ? `chroma deviation ${dev.toFixed(3)} <= ${grade.minDeviation}` : gains.some(g => g < lo || g > hi) ? `gains ${gains.map(g => g.toFixed(3)).join('/')} outside [${lo}, ${hi}]` : null;
+    if (skip) return {jpg: null, stats: {mode: grade.mode, applied: false, skipped: skip, albedoMeanLinear: alb.mean.map(r4), albedoRatios: ratios(alb.mean), referenceMeanLinear: ref.mean.map(r4), referenceRatios: ratios(ref.mean), note: grade.note}};
   }
   const lut = [0, 1, 2].map(c => Uint8Array.from({length: 256}, (_, v) => toSrgb(toLin(v) * gains[c])));
   for (let i = 0; i < data.length; i += 3) for (let c = 0; c < 3; c++) data[i + c] = lut[c][data[i + c]];
   const after = coveredMean(data, info.width, low.uv, low.idx);
   const jpg = await sharp(data, {raw: {width: info.width, height: info.height, channels: 3}}).jpeg({quality, mozjpeg: true, chromaSubsampling: '4:2:0'}).toBuffer();
-  const ratios = m => ({GR: r4(m[1] / m[0]), BR: r4(m[2] / m[0])});
-  return {jpg, stats: {mode: grade.mode ?? 'gains', gainLinear: gains.map(r4), luminance: grade.luminance ?? 1, from: enc.basePreview ? 'lossless stage preview (PNG)' : 'stage JPEG',
+  return {jpg, stats: {mode: grade.mode ?? 'gains', applied: true, gainLinear: gains.map(r4), luminance: grade.luminance ?? 1, from: enc.basePreview ? 'lossless stage preview (PNG)' : 'stage JPEG',
     albedoMeanLinearBefore: alb.mean.map(r4), albedoMeanLinearAfter: after.mean.map(r4), coveredTexels: alb.texels, albedoRatiosBefore: ratios(alb.mean), albedoRatiosAfter: ratios(after.mean),
     ...(ref ? {referenceMeanLinear: ref.mean.map(r4), referenceRatios: ratios(ref.mean), referencePixels: ref.pixels} : {}), note: grade.note}};
 }

@@ -51,7 +51,7 @@ import {Document} from '@gltf-transform/core';
 import {JOINTS} from './lib/skeleton.mjs';
 import {JOINT_NAMES} from './lib/skin.mjs';
 import {CLIP_SPECS} from './lib/clips.mjs';
-import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07, KEEP_BODY_FILES, SKIP_WEARABLES, T25} from './wardrobe.config.mjs';
+import {BODIES, WEARABLES, CANONICAL_BODY, SKIN, EXCLUDED_PAIRS, QUALITY, FIT07, KEEP_BODY_FILES, SKIP_WEARABLES, T25, T25_GRADE} from './wardrobe.config.mjs';
 import {gradeBase} from './lib/grade.mjs';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {NodeIO} from '@gltf-transform/core';
@@ -125,6 +125,12 @@ async function main() {
       return r.repose ? {...st, repose: r.repose} : st;
     });
     if (stage.issues.length) console.log(`  ! skeleton issues: ${stage.issues.join('; ')}`);
+    if (src.t25 && (T25[def.id]?.grade ?? T25_GRADE)) {
+      const gr = await gradeBase(stage.enc, stage.low, T25[def.id]?.grade ?? T25_GRADE, def.textures.jpegQuality, src.t25.inputImage && path.join(REPO, src.t25.inputImage));
+      if (gr.jpg) stage.enc = {...stage.enc, baseJpg: gr.jpg};
+      stage.colourGrade = gr.stats;
+      console.log('  colour grade', JSON.stringify(gr.stats));
+    }
     const sw = bodySkin(stage, {...SKIN, ...(def.skin ?? {})});
     if (def.trimBridges) {
       const tr = trimArmTorsoBridges(stage.low, sw, stage.skel);
@@ -160,6 +166,7 @@ async function main() {
     sources.push(src);
     console.log(`[${def.slot} ${def.id}] ${src.file}`);
     const cfg = cfgOf(def);
+    if (src.t25 && def.kind === 'pants') cfg.measureDensify = 0.008; // lib/fit.mjs: pants frame measured on an edge-split low mesh
     let g;
     if (def.kind === 'garment') {
       g = await garmentCanonical(() => loadSource(src), cfg, {skel: C.skel, rigDesc: C.rigDesc, welded: C.low.welded, weights: C.weldedWeights}, makeCache({src: srcKey(src), cfg, canonical: geometryHash(C.low.pos, C.low.idx)}), SKIN);
@@ -169,10 +176,10 @@ async function main() {
       g = await makeCache({src: srcKey(src), stageCfg})(`${def.kind}-${def.id}`, async () => (def.kind === 'pants' ? pantsStage : rigidStage)(await loadSource(src), stageCfg));
       console.log('  stage tris', g.low.idx.length / 3, g.frameSummary ? JSON.stringify(g.frameSummary) : '');
     }
-    if (src.t25 && T25[def.id]?.grade) {
-      // documented colour grade toward the original reference's tint (wardrobe.config.mjs T25 grade)
-      const gr = await gradeBase(g.enc, g.low, T25[def.id].grade, def.textures.jpegQuality, src.t25.inputImage && path.join(REPO, src.t25.inputImage));
-      g = {...g, enc: {...g.enc, baseJpg: gr.jpg}, colourGrade: gr.stats};
+    if (src.t25 && (T25[def.id]?.grade ?? T25_GRADE)) {
+      // documented colour grade toward the original reference's tint (wardrobe.config.mjs T25 grade / T25_GRADE policy)
+      const gr = await gradeBase(g.enc, g.low, T25[def.id]?.grade ?? T25_GRADE, def.textures.jpegQuality, src.t25.inputImage && path.join(REPO, src.t25.inputImage));
+      g = {...g, enc: gr.jpg ? {...g.enc, baseJpg: gr.jpg} : g.enc, colourGrade: gr.stats};
       console.log('  colour grade', JSON.stringify(gr.stats));
     }
     wear.push({id: def.id, def, cfg, src, g});
@@ -479,7 +486,7 @@ function bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit, 
     outputs: {glb: {path: rel(glb), bytes, sha256: sha, format: 'glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8'}},
     conventions: {units: 'metres', up: '+Y', facing: '+Z', floor: 'y = 0', origin: 'midpoint between the feet', handedness: 'L_ = character left = +X', heightM: extras.heightM, bindPose: 'A-pose (arm angles in skeleton.estimation)'},
     source: srcInfo(B.src, B.stage.master), placement: {...B.stage.placement, nativeBounds: undefined}, facing: B.stage.facing, poseCorrection: B.stage.repose ?? null, bridgeTrim: B.stage.bridgeTrim ?? null, skinOverrides: B.def.skin ?? null,
-    mesh: {node: 'ZombieBody', vertices: B.low.pos.length / 3, triangles: B.low.idx.length / 3, simplify: B.stage.stats.simplify, unwrap: B.stage.stats.unwrap, bake: (({ms, ...r}) => r)(B.stage.stats.bake), textures: B.def.textures},
+    mesh: {node: 'ZombieBody', vertices: B.low.pos.length / 3, triangles: B.low.idx.length / 3, simplify: B.stage.stats.simplify, unwrap: B.stage.stats.unwrap, bake: (({ms, ...r}) => r)(B.stage.stats.bake), textures: B.def.textures, ...(B.stage.colourGrade ? {colourGrade: B.stage.colourGrade} : {})},
     skeleton: {jointCount: JOINTS.length, joints: JOINTS.map(([n, p]) => ({name: n, parent: p, bindWorldPosition: r4(J[n])})), ends: B.skel.ends, boneLengthsM, validationIssues: B.stage.issues, estimation: B.skel.log},
     skinning: {method: 'skin.mjs region classification + chain weights + masked Laplacian smoothing (same as zombie-rigged body)', ...B.weldedWeights.stats},
     profile: B.profile,

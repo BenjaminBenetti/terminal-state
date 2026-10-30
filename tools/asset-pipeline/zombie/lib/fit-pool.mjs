@@ -25,7 +25,7 @@ export const threadCap = () => { const n = +(process.env.LL_THREADS || 0); retur
  * ONE body or wearable changed then refits only the pairs whose inputs changed; the output is identical to a full
  * refit (the cached value is the worker's own result).
  */
-const FIT_CODE = ['fit-worker.mjs', 'fit.mjs', 'fit07.mjs', 'pants.mjs', 'rigid.mjs', 'headwear.mjs', 'penetration.mjs', 'coat.mjs', 'skin.mjs', 'pose.mjs', 'mesh.mjs', 'bake.mjs'];
+const FIT_CODE = ['fit-worker.mjs', 'fit.mjs', 'fit07.mjs', 'pants.mjs', 'rigid.mjs', 'headwear.mjs', 'penetration.mjs', 'coat.mjs', 'skin.mjs', 'pose.mjs', 'mesh.mjs', 'bake.mjs', 'densify.mjs'];
 let fitCodeHash = null;
 function codeHash() {
   if (fitCodeHash) return fitCodeHash;
