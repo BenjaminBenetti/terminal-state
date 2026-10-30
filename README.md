@@ -39,6 +39,7 @@ calls or `reference/` mount. Models, textures, MP3s and provenance are checked i
 | `npm run ci:check` | Check the pinned workflow/build contract |
 | `npm run ci:test` | Packager rejection/manifest tests |
 | `npm run ci:package` | Validate and package an existing build locally for QA |
+| `npm run pages:build` / `npm run pages:check` | Generate / validate the reference website in `dist/pages/` |
 | `npm run game:e2e` | Historical browser playtest; environment caveats below |
 
 ## GitHub main → CI artifact → Everything
@@ -84,6 +85,37 @@ nine obsolete derivatives are omitted; **all nine remain tracked build inputs**.
 It checks runtime model references have actual packaged files. Input/policy
 changes require deliberate review. See the script's limits and tests; this is
 not a general JavaScript sandbox or a licensing audit.
+
+## Reference website (GitHub Pages)
+
+A public reference site, a landing page plus a **loot explorer**, is generated from the game source and published with GitHub
+Pages at **https://benjaminbenetti.github.io/terminal-state/**. The project path is expected; every link on the site is relative.
+The source repository stays private: the site publishes only generated reference pages and data, never the game or its source.
+
+- **Generated, not hand-written.** `tools/pages/` builds one `LootReference` object from the real exported game values
+  (`buildLootReference`, see [docs/loot-reference.md](docs/loot-reference.md)). It then renders static HTML/CSS/JS from that
+  object only. Levels, tables, items and special sources appear automatically. A loot source the generator does not know
+  fails the tests instead of vanishing.
+- **Local build.** `npm run pages:build` writes `dist/pages/` (git-ignored, separate from `dist/game/`). Vite SSR-bundles the
+  generator into a temporary module under `node_modules/.cache/`, so no new dependency is needed. The output is deterministic
+  for a fixed source. Every page shows the source commit (`GITHUB_SHA`, else `git rev-parse HEAD`, else `local`) and a data digest.
+- **Checks.** `npm run pages:check` validates `dist/pages/` and proves it is byte-identical to a fresh build. It checks the
+  output allowlist (html / css / js / json and one authored svg; no source maps, TypeScript, game assets or dotfiles), leaks
+  (workspace paths, `reference/`, env files, key-like secrets), links (all internal links and #fragments resolve; no
+  root-absolute or unlabelled external URLs), page structure and the `data/manifest.json` hashes. `npm run pages:test` runs
+  `game/tests/pages-output.test.ts` and `game/tests/loot-reference.test.ts`. Both also run in the normal `npm test`.
+- **Preview.** `npm run pages:preview` serves `dist/pages/` at http://127.0.0.1:4190/terminal-state/ (the published
+  sub-path). Opening `dist/pages/index.html` directly also works.
+- **Publication.** [`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs separately from the game build. Its
+  `pages-build` job runs on every push and pull request into main and on manual runs, with a read-only token: `npm ci`, build,
+  check, tests. It uploads the Pages artifact **only for main**. The `pages-deploy` job runs only for pushes / manual runs on
+  main, after `pages-build` passed for that exact commit. It is the only job with `pages: write` / `id-token: write`, uses the
+  `github-pages` environment and one non-cancelling `pages-deploy` concurrency group. It skips the deployment if main has
+  already moved past the commit, so an older run never overwrites a newer site. **Pull-request builds never publish.**
+  The official `configure-pages`, `upload-pages-artifact` and `deploy-pages` actions are pinned to commit SHAs
+  ([docs/ci-action-pins.json](docs/ci-action-pins.json); `npm run ci:check` verifies both workflows).
+- The game workflow, its required `build` check, the game artifact and `package-ci` are unchanged by the site. A merge that only
+  changes the site does not need a game release.
 
 ## Playing and scope
 

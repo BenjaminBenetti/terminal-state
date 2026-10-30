@@ -22,6 +22,17 @@ export type StartWeaponId = 'rifle' | 'pistol';
 export const FIND_MIN_SPAWN_M = 25;
 /** Hard cap of copies per non-start weapon. */
 export const FIND_MAX_PER_WEAPON = 2;
+/**
+ * Task loot-reference-pages-20261030 (lane DATA): copies of each non-start weapon from ONE uniform draw r — r < none: 0 copies,
+ * r < one: 1 copy, else FIND_MAX_PER_WEAPON (behaviour-preserving extraction of the former literals 0.06 / 0.86; also read by
+ * gen/office/spawns.ts officeWeaponPlan and the loot reference, tools/pages/lootReference.ts).
+ */
+export const FIND_COPY_THRESHOLDS = {none: 0.06, one: 0.86} as const;
+/**
+ * Task loot-reference-pages-20261030 (lane DATA): pistol start — the pistol's 9mm joins the loose-floor economy as `n` (uniform,
+ * inclusive) boxes of `count` rounds in back-of-house rooms (behaviour-preserving extraction of the former literals).
+ */
+export const PISTOL_START_BOXES = {itemId: 'ammo_9mm', count: 15, n: [3, 4] as const} as const;
 
 /**
  * The box of MATCHING ammo beside each weapon find: the weapon's own caliber (weapons/weapons.ts WeaponDef.caliber; tests keep the
@@ -106,7 +117,7 @@ export function placeWeaponFinds(layout: StationLayout, rng: Rng, start: StartWe
   const weapons = findWeaponsFor(start);
   for (const wid of weapons) {
     const r = rng.next();
-    const n = r < 0.06 ? 0 : r < 0.86 ? 1 : FIND_MAX_PER_WEAPON;
+    const n = r < FIND_COPY_THRESHOLDS.none ? 0 : r < FIND_COPY_THRESHOLDS.one ? 1 : FIND_MAX_PER_WEAPON;
     const mine: PickupPlacement[] = [];
     for (let k = 0; k < n; k++) {
       for (let t = 0; t < 14; t++) {
@@ -140,12 +151,12 @@ export function placeWeaponFinds(layout: StationLayout, rng: Rng, start: StartWe
   }
   // Pistol start: the pistol's 9mm (9×19mm) joins the loose-floor economy (a few boxes in back-of-house rooms).
   if (start === 'pistol') {
-    for (let k = 0, n = rng.int(3, 4); k < n; k++) {
+    for (let k = 0, n = rng.int(PISTOL_START_BOXES.n[0], PISTOL_START_BOXES.n[1]); k < n; k++) {
       for (let t = 0; t < 8; t++) {
         const a = rng.weighted(pool);
         const cells = cellsOf(a, 24, 8);
         if (!cells.length) continue;
-        placed.push(put(a, rng.pick(cells), 'ammo_9mm', 15));
+        placed.push(put(a, rng.pick(cells), PISTOL_START_BOXES.itemId, PISTOL_START_BOXES.count));
         break;
       }
     }

@@ -18,6 +18,7 @@ import {BATTERY_ID, FLARE_ID, FLOOR_ECONOMY} from '../../items/lootEconomy';
 import {OFFICE_FLOOR, PUBLIC_FLOOR_WEIGHTS, econCat, floorChance, floorCount, lootProfile, type LootProfile, type OfficeFloorProgram} from '../../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {ITEMS} from '../../items/items';
 import {WEAPON_FIND_AMMO, findWeaponsFor, type StartWeaponId} from '../weaponFinds';
+import {FIND_COPY_THRESHOLDS, FIND_MAX_PER_WEAPON} from '../weaponFinds'; // Task loot-reference-pages-20261030 (lane DATA)
 import type {Area, PickupPlacement, StationLayout, ZombieType} from '../stationTypes';
 import {OFFICE_FLOORS} from './frame';
 import {COMPANIES, type LootTilt} from './companies';
@@ -187,15 +188,24 @@ export function placeOfficeSupplies(layout: StationLayout, rng: Rng, field: Spaw
 // ---------------------------------------------------------------------------------------------
 // Weapon finds (level-wide plan)
 
+/**
+ * Storey weights of the level-wide weapon plan: [storey, weight] (1 = station + lobby, 2..8 = office floors). The security office
+ * (lobby) and the upper floors weigh more. Task loot-reference-pages-20261030 (lane DATA): behaviour-preserving extraction (same
+ * values, same order) so the loot reference can show them.
+ */
+export function officeWeaponStoreyWeights(): [number, number][] {
+  return OFFICE_FLOORS.map((f, i) => [f, f === 1 ? 1.6 : 0.8 + i * 0.08]);
+}
+
 /** Which storey (1 = station + lobby, 2..8 = office floors) holds each copy of each non-start weapon (deterministic). */
 export function officeWeaponPlan(levelSeed: number, start: StartWeaponId): Record<number, string[]> {
   const rng = new Rng(hashString(`office-weapons:${start}`, levelSeed >>> 0));
   const plan: Record<number, string[]> = Object.fromEntries(OFFICE_FLOORS.map(f => [f, []]));
-  // The security office (lobby) and the upper floors weigh more.
-  const w: [number, number][] = OFFICE_FLOORS.map((f, i) => [f, f === 1 ? 1.6 : 0.8 + i * 0.08]);
+  const w: [number, number][] = officeWeaponStoreyWeights();
   for (const wid of findWeaponsFor(start)) {
     const r = rng.next();
-    const n = r < 0.06 ? 0 : r < 0.86 ? 1 : 2;
+    // lane DATA (loot-reference-pages-20261030): the station's copy thresholds / cap (gen/weaponFinds.ts), same values as before
+    const n = r < FIND_COPY_THRESHOLDS.none ? 0 : r < FIND_COPY_THRESHOLDS.one ? 1 : FIND_MAX_PER_WEAPON;
     const taken = new Set<number>();
     for (let k = 0; k < n; k++) {
       const pool = w.filter(([s]) => !taken.has(s));

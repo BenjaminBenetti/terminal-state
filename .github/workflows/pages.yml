@@ -1,0 +1,94 @@
+name: Reference site (GitHub Pages)
+
+# Task loot-reference-pages-20261030 (lane SITE): the public reference site (landing page + loot explorer), generated from the
+# game source by tools/pages/ and published to GitHub Pages. Separate from the game build: game-build.yml and its required `build`
+# check, the game artifact and package-ci are unchanged. The game source repository stays private; only dist/pages/ is published.
+on:
+  push:
+    branches: [main]
+  # Pull requests into main build and validate the site but NEVER publish it. Plain pull_request: read-only token, no secrets;
+  # never the privileged target-branch variant.
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pages-build:
+    # Validation for every trigger. Only a push to main or a manual run on main uploads the Pages artifact.
+    name: pages-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - name: Check out source
+        # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote (same pin as game-build.yml).
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        # Official actions/setup-node v7.1.0 (node24), SHA verified with git ls-remote (same pin as game-build.yml).
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run pages:build
+      - run: npm run pages:check
+      - run: npm run pages:test
+      - name: Upload Pages artifact
+        # Pull requests (ref refs/pull/N/merge) and runs on other branches validate only and never publish.
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        # Official actions/upload-pages-artifact v5.0.0 (composite), SHA verified with git ls-remote.
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: dist/pages/
+
+  pages-deploy:
+    # Main only, after pages-build validated this exact commit. The only job with Pages / OIDC write permissions.
+    name: pages-deploy
+    needs: pages-build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # One deployment at a time and never cancelled midway; a newer queued run replaces an older queued one.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Newest-commit guard
+        # An older run must not overwrite the site of a newer main commit: deploy only if this commit is still main's head.
+        # Reads the ref with the job's own read-only token (no secrets). Fails closed if the API cannot be read.
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha')"
+          if [ "${head}" = "${SHA}" ]; then
+            echo "deploy=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "deploy=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice title=Pages deploy skipped::main is now ${head}; this run (${SHA}) leaves the newer commit's site in place."
+          fi
+      - name: Configure Pages
+        if: steps.newest.outputs.deploy == 'true'
+        # Official actions/configure-pages v6.0.0 (node24), SHA verified with git ls-remote. Reads the Pages configuration only.
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: steps.newest.outputs.deploy == 'true'
+        # Official actions/deploy-pages v5.0.1 (node24), SHA verified with git ls-remote.
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
