@@ -50,7 +50,7 @@ export class GasHud {
 
   private ensure(): boolean {
     if (this.tag) return true;
-    if (typeof document === 'undefined') return false;
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return false; // node tests
     const host = document.querySelector('#hud');
     if (!host) return false;
     if (!document.querySelector('#gas-css')) {
