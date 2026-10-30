@@ -372,6 +372,15 @@ export class Game {
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
+    // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
+    // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
+    this.gas.protection = () => this.gasMask.protects();
+    this.gas.hintFor = protectedNow => {
+      const m = this.gasMask;
+      if (protectedNow || m.state === 'donning') return '';
+      if (!m.worn) return 'No gas mask — get out of the gas';
+      return m.on ? 'No filter — the mask is not protecting you' : 'Put on your gas mask (Q)';
+    };
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
