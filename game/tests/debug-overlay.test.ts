@@ -7,6 +7,7 @@ import {GpuTimer, frameTotals, gpuTimingSupport, type TimingBackendLike, type Ti
 import {CpuPressureWatch, LongFrameWatch, summarizeLongFrames} from '../src/debug/browserSignals';
 import {PerfOverlay, TEXT_MS, count, installPerfOverlay, isOverlayToggle} from '../src/debug/overlay';
 import {createGameRenderer, describeBackend, rendererRequest, type GpuInfo} from '../src/render/backend';
+import {FrameBudget} from '../src/core/frameBudget'; // task frame-budget-deferral-20261030 (lane SCHED)
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -546,6 +547,28 @@ describe('overlay cost and content', () => {
     expect(text.res).toBe('≈400 MB · tex 210 · geo 980 · prog 133');
     expect(text.state).toBe('playing');
     for (const k of ['gpu', 'syscpu', 'cpu', 'fps']) expect(text[k]).not.toMatch(/%/); // no utilization percentages anywhere
+  });
+
+  it('task frame-budget-deferral (lane SCHED): deferred chunks stay inside game CPU, shown as their share; the queue row is read only while shown', () => {
+    const doc = new FakeDoc(), {host} = fakeHost();
+    const fb = new FrameBudget();
+    const diag = vi.spyOn(fb, 'diagnostics');
+    const h = Object.assign(host, {frameBudget: fb, frameCpu: {updateMs: 2, renderMs: 3, deferredMs: 1.5, rendered: true}});
+    const o = new PerfOverlay(h, doc as unknown as Document);
+    let t = frames(o, h, 240, 0);
+    expect(diag).not.toHaveBeenCalled(); // hidden: no scheduler read-out at all
+    expect(o.history.deferred[o.history.slot(0)]).toBeCloseTo(1.5, 5); // the sample is still recorded (typed array)
+    o.show();
+    t = frames(o, h, 60, t);
+    const {text, summary} = o.snapshot();
+    expect(diag).toHaveBeenCalled();
+    expect(summary.deferredAvgMs).toBeCloseTo(1.5, 5);
+    expect(text.cpu).toMatch(/· deferred 1\.50 \(max 1\.5\)$/); // part of the 5 ms callback the cpu avg already counts
+    expect(text.defer).toMatch(/^0 queued · \d+ chunks\/s · \d+ overdue\/s · 0 drops · budget 11\.7 ms @ 60 Hz \(default\)$/);
+    o.hide();
+    diag.mockClear();
+    frames(o, h, 60, t);
+    expect(diag).not.toHaveBeenCalled();
   });
 
   it('GPU ms from timestamp queries when supported; tracking only while shown and not during the warm-up', async () => {

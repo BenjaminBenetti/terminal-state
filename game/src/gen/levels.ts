@@ -301,6 +301,14 @@ export class Levels implements NavLevels {
   readonly links: LevelLink[];
   private railList: RailRun[] | null = null;
   private railIndex: Map<number, RailRun[]> | null = null;
+  /** Task frame-budget-deferral-20261030 (lane MEASURE): 1 = railIndex has rails at this column (railCrosses skips the map lookup). */
+  private railMask: Uint8Array | null = null;
+  /**
+   * Task frame-budget-deferral-20261030 (lane MEASURE): the level index whose band last cleared a cell in circleClear — tried
+   * first next time (circleClear is an existence test over the levels: any order gives the same answer; on the 10-storey office
+   * the right storey is usually found at once instead of after every storey below it).
+   */
+  private clearHint = 0;
   private parapetList: RailRun[] | null = null;
   private edgeList: {level: number; a: number; b: number}[] | null = null;
   private rayScratch: {fA: Float64Array; cA: Float64Array; fB: Float64Array; cB: Float64Array; open: Uint8Array; lid: Int32Array} | null = null;
@@ -539,6 +547,37 @@ export class Levels implements NavLevels {
     return best ?? loose;
   }
 
+  /**
+   * Task frame-budget-deferral-20261030 (lane MEASURE): `supportIn(wx, wz, y, tol)?.floor` without allocating — the same band
+   * choice as support(…, strict) (first of the highest floors, grid levels then volumes); -Infinity when nothing supports
+   * the feet (a real floor is never -Infinity). walkLineClear's per-sample query (A* string pulling).
+   */
+  private supportFloorIn(wx: number, wz: number, y: number, tol: number): number {
+    const g0 = this.main;
+    const cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
+    if (!g0.inBounds(cx, cy)) return -Infinity;
+    const i = cy * g0.w + cx;
+    let has = false, best = 0;
+    const vc = this.vcol(i);
+    for (let k = 0; k < this.list.length; k++) {
+      const g = this.list[k].grid;
+      if (!isOpen(g, i)) continue;
+      const f = floorNearCell(g, i, cx, cy, wx, wz);
+      if (f > y + tol) continue;
+      if (vc && gridHidden(vc, k, f)) continue;
+      if (ceilNearCell(g, i, cx, cy, wx, wz) >= y - CAP_TOL && (!has || f > best)) { has = true; best = f; }
+    }
+    if (vc) {
+      for (const cv of vc) {
+        if (!volumeBand(cv, this.list.length)) continue;
+        const f = VB.floor;
+        if (f > y + tol) continue;
+        if (VB.ceil >= y - CAP_TOL && (!has || f > best)) { has = true; best = f; }
+      }
+    }
+    return has ? best : -Infinity;
+  }
+
   /** Floor under an actor at height y (or -Infinity when nothing supports it). */
   floorAt(wx: number, wz: number, y: number, tol = STEP_UP): number {
     return this.supportAt(wx, wz, y, tol)?.floor ?? -Infinity;
@@ -684,23 +723,29 @@ export class Levels implements NavLevels {
 
   /** Railings touching column index i (cells on both sides of the railed edge). */
   railsAt(i: number): readonly RailRun[] | undefined {
-    if (!this.railIndex) {
-      const m = new Map<number, RailRun[]>();
-      const g0 = this.main;
-      for (const r of this.rails) {
-        const xa = Math.min(r.x0, r.x1), xb = Math.max(r.x0, r.x1), za = Math.min(r.z0, r.z1), zb = Math.max(r.z0, r.z1);
-        const cx0 = Math.floor((xa - 0.01) / CELL), cx1 = Math.floor((xb + 0.01) / CELL), cy0 = Math.floor((za - 0.01) / CELL), cy1 = Math.floor((zb + 0.01) / CELL);
-        for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
-          if (!g0.inBounds(cx, cy)) continue;
-          const k = cy * g0.w + cx;
-          let a = m.get(k);
-          if (!a) m.set(k, (a = []));
-          a.push(r);
-        }
+    if (!this.railIndex) this.buildRailIndex();
+    return this.railIndex!.get(i);
+  }
+
+  /** The rail column index (built once, like the rails it indexes) + its typed-array mask (task frame-budget-deferral-20261030). */
+  private buildRailIndex(): void {
+    const m = new Map<number, RailRun[]>();
+    const g0 = this.main;
+    const mask = new Uint8Array(g0.w * g0.h);
+    for (const r of this.rails) {
+      const xa = Math.min(r.x0, r.x1), xb = Math.max(r.x0, r.x1), za = Math.min(r.z0, r.z1), zb = Math.max(r.z0, r.z1);
+      const cx0 = Math.floor((xa - 0.01) / CELL), cx1 = Math.floor((xb + 0.01) / CELL), cy0 = Math.floor((za - 0.01) / CELL), cy1 = Math.floor((zb + 0.01) / CELL);
+      for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+        if (!g0.inBounds(cx, cy)) continue;
+        const k = cy * g0.w + cx;
+        let a = m.get(k);
+        if (!a) m.set(k, (a = []));
+        a.push(r);
+        mask[k] = 1;
       }
-      this.railIndex = m;
     }
-    return this.railIndex.get(i);
+    this.railIndex = m;
+    this.railMask = mask;
   }
 
   private buildRails(): RailRun[] {
@@ -978,7 +1023,10 @@ export class Levels implements NavLevels {
         if (g0.inBounds(cx, cy)) {
           const i = cy * g0.w + cx;
           const vc = this.vcol(i);
-          for (let k = 0; k < this.list.length; k++) {
+          const NL = this.list.length, h = this.clearHint < NL ? this.clearHint : 0;
+          for (let q = 0; q < NL; q++) {
+            // lane MEASURE: the hinted level first, then the others in index order (each exactly once; no side effects)
+            const k = q === 0 ? h : q <= h ? q - 1 : q;
             const g = this.list[k].grid;
             if (!isOpen(g, i) || g.blocked[i]) continue;
             const f = floorNearCell(g, i, cx, cy, wx, wz);
@@ -986,6 +1034,7 @@ export class Levels implements NavLevels {
             if (vc && gridHidden(vc, k, f)) continue;
             if (ceilNearCell(g, i, cx, cy, wx, wz) < Math.max(f, feet) + BODY_CLEAR) continue;
             ok = true;
+            this.clearHint = k;
             break;
           }
           if (!ok && vc) for (const c of vc) if (volumeBand(c, this.list.length) && Math.abs(VB.floor - feet) <= NAV_STEP && VB.ceil >= Math.max(VB.floor, feet) + BODY_CLEAR) { ok = true; break; }
@@ -1007,13 +1056,15 @@ export class Levels implements NavLevels {
   walkLineClear(ax: number, ay: number, az: number, bx: number, bz: number, r: number, by?: number): boolean {
     const d = Math.hypot(bx - ax, bz - az);
     const steps = Math.max(1, Math.ceil(d / (CELL * 0.4)));
-    let feet = this.supportIn(ax, az, ay + 0.05, NAV_STEP)?.floor ?? ay;
+    // lane MEASURE: supportIn(…)?.floor without allocating a Support per sample (A* string pulling calls this ~10^5 times a path)
+    const f0 = this.supportFloorIn(ax, az, ay + 0.05, NAV_STEP);
+    let feet = f0 === -Infinity ? ay : f0;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const px = ax + (bx - ax) * t, pz = az + (bz - az) * t;
-      const s = this.supportIn(px, pz, feet, NAV_STEP);
-      if (!s || Math.abs(s.floor - feet) > 0.3) return false;
-      feet = s.floor;
+      const s = this.supportFloorIn(px, pz, feet, NAV_STEP);
+      if (s === -Infinity || Math.abs(s - feet) > 0.3) return false;
+      feet = s;
       if (!this.circleClear(px, pz, r, feet)) return false;
     }
     if (this.railCrosses(ax, az, bx, bz, r * 0.5, feet)) return false;
@@ -1023,12 +1074,15 @@ export class Levels implements NavLevels {
   /** Whether a railing at about `feet` height lies within `r` of the segment a-b. */
   railCrosses(ax: number, az: number, bx: number, bz: number, r: number, feet: number): boolean {
     if (!this.rails.length) return false;
-    const g0 = this.main;
+    if (!this.railIndex) this.buildRailIndex();
+    const g0 = this.main, mask = this.railMask!, index = this.railIndex!;
     const x0 = Math.floor((Math.min(ax, bx) - r) / CELL), x1 = Math.floor((Math.max(ax, bx) + r) / CELL);
     const y0 = Math.floor((Math.min(az, bz) - r) / CELL), y1 = Math.floor((Math.max(az, bz) + r) / CELL);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
       if (!g0.inBounds(cx, cy)) continue;
-      const list = this.railsAt(cy * g0.w + cx);
+      const k = cy * g0.w + cx;
+      if (!mask[k]) continue; // lane MEASURE: no rail at this column (the typed array before the map lookup)
+      const list = index.get(k);
       if (!list) continue;
       for (const rl of list) {
         const base = Levels.railBaseAt(rl, (ax + bx) / 2, (az + bz) / 2);

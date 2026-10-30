@@ -7,6 +7,8 @@
 //    browser's own work and anything else on the main thread or GPU that delayed the frame;
 //  - cpu / update / render: main-thread ms spent inside the game's own frame callback (world update; render =
 //    scene traversal + command encoding / submission on the CPU — NOT GPU execution);
+//  - deferred: the part of cpu spent in deferred background chunks (core/frameBudget.ts; task frame-budget-deferral-20261030,
+//    lane SCHED) — already inside cpu, shown separately so deferral never hides work;
 //  - gpu: GPU ms of that callback's render passes, filled in asynchronously by timestamp queries when the backend
 //    supports them (NaN = unknown);
 //  - flags: the game drew in that callback (menus redraw at 4 Hz, the warm-up skips the loop), or the slot is a GAP.
@@ -38,6 +40,8 @@ export interface FrameSample {
   updateMs: number;
   /** Main-thread ms of render() inside it: traversal + command encoding / submission (0 when nothing was drawn). */
   renderMs: number;
+  /** Lane SCHED: main-thread ms of deferred background chunks inside it (part of cpuMs; 0 / absent when none ran). */
+  deferredMs?: number;
   /** The game drew this frame. */
   rendered: boolean;
   /** renderer.info.frame of this frame (matches the asynchronous GPU timings); -1 when nothing was drawn. */
@@ -71,6 +75,9 @@ export interface FrameSummary {
   cpuMaxMs: number | null;
   updateAvgMs: number | null;
   renderAvgMs: number | null;
+  /** Lane SCHED: deferred background chunk ms over the same window — mean per frame (all frames) and max. */
+  deferredAvgMs: number | null;
+  deferredMaxMs: number | null;
   /** GPU render-pass ms (timestamp queries) over the frames of the recent window that have a result. */
   gpuAvgMs: number | null;
   gpuMaxMs: number | null;
@@ -85,6 +92,8 @@ export class FrameHistory {
   readonly cpu: Float32Array;
   readonly update: Float32Array;
   readonly render: Float32Array;
+  /** Lane SCHED: deferred background chunk ms per slot (part of cpu). */
+  readonly deferred: Float32Array;
   readonly gpu: Float32Array;
   readonly frameId: Float64Array;
   readonly flags: Uint8Array;
@@ -97,7 +106,7 @@ export class FrameHistory {
   private gapPending = false;
   // the newest callback's sample: it becomes a slot when the next rAF timestamp closes its interval
   private hasOpen = false;
-  private open = {time: 0, cpu: 0, update: 0, render: 0, rendered: false, frameId: -1, gpu: NaN};
+  private open = {time: 0, cpu: 0, update: 0, render: 0, deferred: 0, rendered: false, frameId: -1, gpu: NaN};
   private readonly scratch: Float32Array;
 
   constructor(capacity = HISTORY_FRAMES) {
@@ -107,6 +116,7 @@ export class FrameHistory {
     this.cpu = new Float32Array(n);
     this.update = new Float32Array(n);
     this.render = new Float32Array(n);
+    this.deferred = new Float32Array(n);
     this.gpu = new Float32Array(n).fill(NaN);
     this.frameId = new Float64Array(n).fill(-1);
     this.flags = new Uint8Array(n);
@@ -132,6 +142,7 @@ export class FrameHistory {
       this.cpu[i] = o.cpu;
       this.update[i] = o.update;
       this.render[i] = o.render;
+      this.deferred[i] = o.deferred;
       this.gpu[i] = o.gpu;
       this.frameId[i] = o.rendered ? o.frameId : -1;
       this.flags[i] = (o.rendered ? RENDERED : 0) | (gap ? GAP : 0);
@@ -145,6 +156,7 @@ export class FrameHistory {
     o.cpu = s.cpuMs;
     o.update = s.updateMs;
     o.render = s.renderMs;
+    o.deferred = s.deferredMs ?? 0;
     o.rendered = s.rendered;
     o.frameId = s.rendered ? s.frameId : -1;
     o.gpu = NaN;
@@ -184,7 +196,7 @@ export class FrameHistory {
     const s: FrameSummary = {
       fps: null, renderedPerSec: null, lastMs: null, avgMs: null, p50Ms: null, p95Ms: null, p99Ms: null, maxMs: null,
       frames: 0, spanMs: 0, over33: 0, over50: 0, gaps: 0, lastGapMs: null,
-      cpuAvgMs: null, cpuMaxMs: null, updateAvgMs: null, renderAvgMs: null, gpuAvgMs: null, gpuMaxMs: null, gpuSamples: 0, gpuLastMs: null,
+      cpuAvgMs: null, cpuMaxMs: null, updateAvgMs: null, renderAvgMs: null, deferredAvgMs: null, deferredMaxMs: null, gpuAvgMs: null, gpuMaxMs: null, gpuSamples: 0, gpuLastMs: null,
     };
     if (this.count === 0) return s;
     const newest = this.slot(0);
@@ -216,7 +228,7 @@ export class FrameHistory {
       s.p99Ms = quantile(sorted, 0.99);
     }
     // recent window (newest frames back to ~1 s, stopping at a gap)
-    let win = 0, winMs = 0, rendered = 0, cpuSum = 0, cpuMax = 0, upd = 0, ren = 0, renN = 0, updN = 0, gpuSum = 0, gpuMax = 0, gpuN = 0;
+    let win = 0, winMs = 0, rendered = 0, cpuSum = 0, cpuMax = 0, upd = 0, ren = 0, renN = 0, updN = 0, gpuSum = 0, gpuMax = 0, gpuN = 0, defSum = 0, defMax = 0;
     for (let k = 0; k < this.count && winMs < RECENT_MS; k++) {
       const i = this.slot(k);
       if (this.isGap(i)) break;
@@ -224,6 +236,8 @@ export class FrameHistory {
       winMs += this.interval[i];
       cpuSum += this.cpu[i];
       if (this.cpu[i] > cpuMax) cpuMax = this.cpu[i];
+      defSum += this.deferred[i];
+      if (this.deferred[i] > defMax) defMax = this.deferred[i];
       if (this.update[i] > 0) { upd += this.update[i]; updN++; }
       if (this.isRendered(i)) { rendered++; ren += this.render[i]; renN++; }
       const g = this.gpu[i];
@@ -236,6 +250,8 @@ export class FrameHistory {
       s.cpuMaxMs = cpuMax;
       s.updateAvgMs = updN > 0 ? upd / updN : null;
       s.renderAvgMs = renN > 0 ? ren / renN : null;
+      s.deferredAvgMs = defSum / win;
+      s.deferredMaxMs = defMax;
     }
     if (gpuN > 0) { s.gpuAvgMs = gpuSum / gpuN; s.gpuMaxMs = gpuMax; s.gpuSamples = gpuN; }
     for (let k = 0; k < this.count; k++) {
