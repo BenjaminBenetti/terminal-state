@@ -7,6 +7,7 @@ import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
 import {warmupNote} from './render/warmup'; // Iteration 14
+import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -49,6 +50,9 @@ async function boot(): Promise<void> {
   const game = new Game(canvas, qa);
   if (qa) installQaHooks(game);
   (window as unknown as {__game?: Game}).__game = qa ? game : undefined;
+  // Performance / debug overlay: Ctrl+Shift+P toggles it (off by default; ?perf=1 starts it shown)
+  const perf = installPerfOverlay(game, {visible: params.get('perf') === '1'});
+  (window as unknown as {__perf?: PerfOverlay}).__perf = qa ? perf : undefined;
 
   // --- menus and settings ---
   // Iteration 16 (lane RUN): the title starts a NEW RUN in the chosen level; the pause menu travels to the other level (the run
@@ -129,13 +133,15 @@ async function boot(): Promise<void> {
   // Session-only quality override (?quality=low), e.g. for slow software renderers.
   if (params.get('quality') === 'low') { game.settings.quality = 'low'; ($('#set-quality') as HTMLSelectElement).value = 'low'; game.applySettings(); }
 
-  const loop = () => {
+  const loop = (time: number) => {
+    const t0 = performance.now();
     try {
       game.frame();
     } catch (err) {
       game.lastError = String((err as Error)?.stack ?? err);
       console.error(err);
     }
+    perf.frame(time, performance.now() - t0);
     requestAnimationFrame(loop);
   };
 
