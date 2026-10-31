@@ -266,7 +266,7 @@ reproduce the earlier pins byte for byte).
 - **Rooms.** Every annex area takes an EXISTING back-of-house purpose — pump room, electrical room, workshop, maintenance stores,
   custodial room, janitor / electrical / supply closet, service corridor — dressed by the core dresser's own rules (purpose rules,
   the composer, the iteration-07 dresser). Its holders are the existing kinds with their existing openables / physics classes.
-- **Intact vs picked over.** GEN's annexes are dozens of small rooms (census: ~68 areas, ~98 holders per annex) and those purposes'
+- **Intact vs picked over.** GEN's annexes are dozens of small rooms (census: ~68 areas, ~100 holders per annex) and those purposes'
   tables are ammo-heavy (ammo is never thinned): stocked as-is, two annexes added +390–570 rounds of holder ammo to a level (1.2–2×
   the core's). So only each annex's **deepest** holders keep their room purpose's table — one per 230 m² of annex floor (~7 per
   annex; area depth from the entry door: the reward is further in) — and every other annex holder is real, openable, finite storage
@@ -284,11 +284,11 @@ reproduce the earlier pins byte for byte).
 - **Never multiplied.** No guaranteed high-tier item: every stash may be empty, every floor find is a chance or passes the keep cut.
   The level's ONE rare-gear roll and mask roll never land in an annex (`gearAreaWeight` = 0 for extension areas; gear spacing
   ignores the annex finds), no weapon find is placed there, and the Office roof cache / roof find are untouched.
-- **Measured** (lane CONTENT census; Subway 24 seeds 0.21 annexes / level, Office 10 seeds 1.5): per annex ~145–150 props, ~7
-  intact + ~89 picked-over + 2 stash holders; holder finds ~31–34 ammo rounds + ~1.9 other finds (of them the stash ~7 rounds + ~1
-  find); floor finds ~12–14 rounds of 5.56, ~3.2 of 12-gauge, ~0.5 flares, ~0.5 batteries, ~0.3 dressings, ~0.1 first-aid kits. The
-  core's holder ammo is ~260 rounds per level (+ its floor boxes): one annex adds roughly an eighth of a level's ammo, worth the
-  dark detour, not a new economy.
+- **Measured** (lane CONTENT census; Subway 24 seeds 1.12 annexes / level, Office 10 seeds 1.5): per annex ~150–160 props, ~7–8
+  intact + ~90–95 picked-over + 2 stash holders; holder finds ~34–39 ammo rounds + ~1.8 other finds (of them the stash ~6–7 rounds +
+  ~0.8 find); floor finds ~9–14 rounds of 5.56, ~3 of 12-gauge, ~0.3–0.5 flares, ~0.6 batteries, ~0.4 dressings, ~0.1–0.2 first-aid
+  kits. The core's holder ammo is ~250–265 rounds per level (+ its floor boxes): one annex adds roughly an eighth of a level's
+  ammo, worth the dark detour, not a new economy.
 - **Finite and remembered** like every holder: contents roll once per holder stream, run memory keeps taken lots taken, nothing
   refills on revisit; Retry restores the level-entry state.
 

@@ -128,10 +128,10 @@ same family pool and zombie types, same tier.
   reference shows `service` as a zone context, never inside the whole-level total.
 - **Persistence.** Killed annex enemies stay dead for the run (the per-index memory, `game/src/run/memory.ts`); nothing respawns
   on entry; Retry / revisits regenerate the identical annex spawns from the seed.
-- **Census** (lane CONTENT, shipped code): Subway 24 seeds (`(i × 2654435761 + 12345) >>> 0`, i < 24) — 0.21 annexes per level
-  (20 with none, 3 with one, 1 with two), 4.6 placed per annex, 0.96 service spawns per level (max 10); Office 10 seeds (3, 7922,
-  15841, 23760, 31679, 39598, 11, 222, 3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex
-  run placed fewer than its count.
+- **Census** (lane CONTENT, shipped code incl. GEN-2's incidence): Subway 24 seeds (`(i × 2654435761 + 12345) >>> 0`, i < 24) —
+  1.12 annexes per level (3 with none, 15 with one, 6 with two; 6 of the 27 entered by a service hatch), 3.85 placed per annex,
+  4.3 service spawns per level (max 10) on top of the station's ~27; Office 10 seeds (3, 7922, 15841, 23760, 31679, 39598, 11, 222,
+  3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex run placed fewer than its count.
 
 ## Room modifiers
 

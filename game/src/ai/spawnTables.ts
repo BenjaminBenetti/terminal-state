@@ -327,8 +327,8 @@ export const SERVICE_PLACEMENT: PlacementRules = {
  * ~6.8 into an annex at the same density. The annex is cramped and much darker, so it gets ~60 % of that density: 3-5 per annex
  * (E 4). The level's own pool / zombie types apply (no annex families, no guarantee); killed annex enemies stay dead for the run
  * (the per-index memory); 0-2 annexes per level, so a level gains 0-10. Census (Track 2 lane CONTENT, docs/enemy-spawns.md): Subway
- * 24 seeds 0.21 annexes / level -> 0.96 service spawns / level; Office 10 seeds 1.5 annexes -> 5.6 / level; 3.7-4.6 placed per annex,
- * no run short of its count.
+ * 24 seeds 1.12 annexes / level (GEN-2 incidence) -> 4.3 service spawns / level (max 10) on top of the station's ~27; Office 10 seeds
+ * 1.5 annexes -> 5.6 / level (max 9); 3.7-3.9 placed per annex, no run short of its count.
  */
 export const SERVICE_ZONE_BUDGET: readonly [number, number] = [3, 5];
 /** The 'service' context of a level whose stations grow annexes (the per-annex zone budget; never regenerates a level). */

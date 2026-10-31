@@ -71,7 +71,7 @@ export const ANNEX_CONTENT = {
   p7Scale: 0.5,
   /**
    * Holders of one annex that keep their room purpose's loot table: one per `m2PerIntactHolder` m² of its floor (~8 for the 25 %
-   * target), its DEEPEST holders (area depth from the entry door: the reward is further in); every other annex holder (the stash
+   * target; census 7-8), its DEEPEST holders (area depth from the entry door: the reward is further in); every other annex holder (the stash
    * aside) is picked-over storage (items/lootTables.ts ANNEX_PICKED_KEY) — the measured reason is there.
    */
   m2PerIntactHolder: 230,
@@ -85,7 +85,7 @@ export const ANNEX_CONTENT = {
     /**
      * "Much darker": after the purpose's own light odds pick a profile, it drops one step (lit -> dim, dim -> dark) with this chance
      * — an annex of ~68 small areas otherwise reads like the core's back-of-house (census: ~32 steadily working fixtures per annex
-     * at the purposes' odds alone, ~16 with this). The entry corridor stays at least dim (the way out always shows).
+     * at the purposes' odds alone, ~19 of ~80 with this; ~17 more are dying / sputtering). The entry corridor stays at least dim.
      */
     darken: 0.5,
     /** Tunnel fixtures: the first at s in `first`, then every `step` m, none within `capClear` of the cap. */
