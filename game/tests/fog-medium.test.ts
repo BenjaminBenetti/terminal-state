@@ -113,7 +113,9 @@ describe('(a) persistence: world-anchored density, independent of where the came
   });
 
   it('no area is ever consumed: foggy areas stay foggy over 10 minutes of fog time (patches move through, never drain)', () => {
-    const l = station(0x1a2b3c), p = atmosphereFor(l), maps = mapsOf(l, p);
+    // Track 2 GEN-2: the CORE station (gen/trackExt coreView; DESIGN §0: rules over the core, extensions reported separately). Its
+    // live layout carries annexes now and is translated with them, so the world-anchored patches sample other noise there.
+    const l = coreView(station(0x1a2b3c)), p = atmosphereFor(l), maps = mapsOf(l, p);
     const pts = walkingPoints(l, 3);
     const byArea = new Map<number, {p: V3; slot: number}[]>();
     for (const q of pts) {
@@ -150,7 +152,9 @@ describe('(b) slightly less fog, with genuinely clear and dense areas', () => {
 
   it('area classes are seeded per station + area, by type; clear areas hold almost none, dense areas / track beds plenty', () => {
     for (const seed of Object.keys(ITER12_MEAN).map(Number)) {
-      const l = station(seed), p = atmosphereFor(l), maps = mapsOf(l, p);
+      // Track 2 GEN-2: the CORE station's volume fractions (DESIGN §0: the service annexes — corridors / plant rooms, never clear —
+      // are extension volume, reported separately, not part of the iteration-12 station's clear / dense split)
+      const l = coreView(station(seed)), p = atmosphereFor(l), maps = mapsOf(l, p);
       const areas = maps.map!.areas!;
       const n = {clear: 0, normal: 0, dense: 0};
       for (const a of areas) n[a.cls]++;

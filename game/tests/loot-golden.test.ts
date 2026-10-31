@@ -47,6 +47,16 @@
 //     gen/trackExt coreView(layout) (the core window, records translated back to the core frame at their exact core-frame
 //     positions, extension records filtered) reproduce stage 5 byte for byte (GOLDEN_CORE = the stage-5 values). Holder lots
 //     (holder-local positions), the Office (grows east / south, never translated) and the gear ROLL are unchanged.
+//  7. Track 2 lane GEN-2, SUBWAY ONLY — CAUSE: "core reserve enabled (authorized incidence change)" (no loot / gear rule changed).
+//     The Subway's TRACK_EXT.coreReserveM = 40 keeps 40 m of rock past every bed end still open after the archetype skeleton
+//     (gen/trackExt/index.ts reserveTunnelRoom), so later station growth plans around it: a LAYOUT change of the core station
+//     (rooms, holders, loose supplies and gear spots move with it). PROOF, every run: generated with the reserve OFF
+//     ({...TRACK_EXT, coreReserveM: 0}, tests/helpers/trackExtCore.ts; the GEN-2 planner and service hatches otherwise live),
+//     the core views reproduce stage 6's core values byte for byte (GOLDEN_CORE: subwayHolders f94f99ea, subwayPickups 574dd442,
+//     gearPlaced 2bc1c5bb) — the extensions still carry no loot and never touch the core. The live layouts (reserve on) are
+//     re-pinned: subwayHolders f94f99ea -> fdce066e, subwayPickups c335d6e0 -> 3787f796, gearPlaced f392f088 -> fee77ca3;
+//     their core views as GOLDEN_RESERVE (fdce066e / 6883e55a / 3d2b40a1). Holder lots are holder-local, so the live and core
+//     holder hashes agree. The Office (TRACK_EXT_OFFICE: no reserve), every Office hash and the gear ROLL are unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -57,22 +67,29 @@ import type {LevelId} from '../src/levels/types';
 import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
 import {ROOF_FIND_KEY} from '../src/items/lootTables';
 import {coreView} from '../src/gen/trackExt/index';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
 /** Stage 4: office-props-physics-scale; stage 5: + the roof find (stages 1–3 in the header). */
-/** Stage 5 (main): the core views of the live layouts reproduce these byte for byte (stage 6 proof). */
-const GOLDEN_CORE = {subwayPickups: '574dd442', gearPlaced: '2bc1c5bb'};
+/**
+ * Stage 5 (main): the core views of the layouts generated with the core reserve OFF reproduce these byte for byte (stage 6 / 7
+ * proof: the extensions never touch the core).
+ */
+const GOLDEN_CORE = {subwayHolders: 'f94f99ea', subwayPickups: '574dd442', gearPlaced: '2bc1c5bb'};
+/** Stage 7 (GEN-2): the core views of the live layouts — the core stations with the reserve (a layout change). */
+const GOLDEN_RESERVE = {subwayHolders: 'fdce066e', subwayPickups: '6883e55a', gearPlaced: '3d2b40a1'};
 const GOLDEN = {
-  subwayHolders: 'f94f99ea',
-  /** Stage 6 (Track 2): translated stations' pickups (core view: GOLDEN_CORE.subwayPickups). */
-  subwayPickups: 'c335d6e0',
+  /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
+  subwayHolders: 'fdce066e',
+  /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve. */
+  subwayPickups: '3787f796',
   officeHolders: 'c36c5fba',
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
   officePickups: '1aa35d40',
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
-  /** Stage 6 (Track 2): gear on translated stations (core view: GOLDEN_CORE.gearPlaced). */
-  gearPlaced: 'f392f088',
+  /** Stage 6 (Track 2): gear on translated stations; stage 7: + the core reserve. */
+  gearPlaced: 'fee77ca3',
 };
 
 function fnv() {
@@ -102,29 +119,36 @@ function mixPickups(f: ReturnType<typeof fnv>, list: readonly PickupPlacement[])
 }
 
 const subway = (() => { let c: StationLayout[] | null = null; return () => (c ??= ECONOMY_CORPUS.map(s => generateStation(s.seed, {startWeapon: 'pistol'}))); })();
+/** Stage 7 proof: the same corpus with the core reserve OFF. */
+const subwayOff = (() => { let c: StationLayout[] | null = null; return () => (c ??= ECONOMY_CORPUS.map(s => generateStation(s.seed, {startWeapon: 'pistol', trackExtensions: TRACK_EXT_RESERVE_OFF}))); })();
 const OFFICE_SEEDS = [11, 222, 3333];
 const office = (() => { let c: StationLayout[] | null = null; return () => (c ??= OFFICE_SEEDS.map(levelSeed => generateOfficeLevel({levelSeed, startWeapon: 'pistol'}))); })();
 const report = (name: string, hash: string, extra = '') => process.stdout.write(`[loot-golden] ${name}: ${hash}${extra ? ` (${extra})` : ''}\n`);
 
 describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
   it('Subway holder lots + pickups over the 18-station economy corpus', () => {
-    const fh = fnv(), fp = fnv(), fc = fnv(), fhc = fnv();
+    const fh = fnv(), fp = fnv(), fc = fnv(), fhc = fnv(), fo = fnv(), fho = fnv();
     let holders = 0, lots = 0, pickups = 0;
     for (const l of subway()) {
       const n = mixHolders(fh, l);
       holders += n.holders; lots += n.lots;
       mixPickups(fp, l.pickups);
       pickups += l.pickups.length;
-      // stage 6 proof: the core view (Track 2 extensions out, translated back) hashes exactly as main did
+      // the core view (Track 2 extensions out, translated back): the core station with the reserve (stage 7)
       const c = coreView(l);
       mixHolders(fhc, c);
       mixPickups(fc, c.pickups);
     }
+    // stage 6 / 7 proof: with the core reserve OFF, the core view hashes exactly as main did
+    for (const l of subwayOff()) { const c = coreView(l); mixHolders(fho, c); mixPickups(fo, c.pickups); }
     report('subwayHolders', fh.hex(), `${holders} holders, ${lots} lots`);
     report('subwayPickups', fp.hex(), `${pickups} pickups`);
-    report('subwayPickups (core view)', fc.hex());
-    expect(fhc.hex()).toBe(GOLDEN.subwayHolders);
-    expect(fc.hex()).toBe(GOLDEN_CORE.subwayPickups);
+    report('subwayHolders / subwayPickups (core view)', `${fhc.hex()} / ${fc.hex()}`);
+    report('subwayHolders / subwayPickups (core view, reserve off)', `${fho.hex()} / ${fo.hex()}`);
+    expect(fho.hex()).toBe(GOLDEN_CORE.subwayHolders);
+    expect(fo.hex()).toBe(GOLDEN_CORE.subwayPickups);
+    expect(fhc.hex()).toBe(GOLDEN_RESERVE.subwayHolders);
+    expect(fc.hex()).toBe(GOLDEN_RESERVE.subwayPickups);
     expect(fh.hex()).toBe(GOLDEN.subwayHolders);
     expect(fp.hex()).toBe(GOLDEN.subwayPickups);
   });
@@ -164,22 +188,26 @@ describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
     report('gearRolls', fr.hex(), `${items} items`);
     expect(fr.hex()).toBe(GOLDEN.gearRolls);
     // Placement of each layout's real level roll (plus the full set, so placement is exercised even when the roll is empty).
-    const fp = fnv(), fc = fnv();
-    const place = (l: StationLayout, level: LevelId, levelSeed: number) => {
+    const fp = fnv(), fc = fnv(), fo = fnv();
+    const place = (l: StationLayout, level: LevelId, levelSeed: number, f: ReturnType<typeof fnv> | null, core: ReturnType<typeof fnv>) => {
       const before = l.pickups.length;
       const rolled = rollLevelGear(levelSeed, level, ['main']).main;
       const all = ['armor_vest', 'chest_rig', 'backpack', 'helmet', 'boots', 'gloves'].map(itemId => ({itemId}));
       const placed = placeSectionGear(l, [...rolled, ...all]);
-      mixPickups(fp, placed);
+      if (f) mixPickups(f, placed);
       // stage 6 proof: the same gear in the core frame (gear never lands in an extension)
-      mixPickups(fc, coreView(l).pickups.slice(before));
+      mixPickups(core, coreView(l).pickups.slice(before));
       l.pickups.length = before; // the cached layout stays as generated
     };
-    subway().slice(0, 6).forEach((l, i) => place(l, 'subway', ECONOMY_CORPUS[i].seed));
-    office().forEach((l, i) => place(l, 'office', OFFICE_SEEDS[i]));
+    subway().slice(0, 6).forEach((l, i) => place(l, 'subway', ECONOMY_CORPUS[i].seed, fp, fc));
+    office().forEach((l, i) => place(l, 'office', OFFICE_SEEDS[i], fp, fc));
+    // stage 7 proof: the reserve-off Subway corpus (+ the same Office levels) places main's gear in the core frame
+    subwayOff().slice(0, 6).forEach((l, i) => place(l, 'subway', ECONOMY_CORPUS[i].seed, null, fo));
+    office().forEach((l, i) => place(l, 'office', OFFICE_SEEDS[i], null, fo));
     report('gearPlaced', fp.hex());
-    report('gearPlaced (core view)', fc.hex());
-    expect(fc.hex()).toBe(GOLDEN_CORE.gearPlaced);
+    report('gearPlaced (core view / reserve off)', `${fc.hex()} / ${fo.hex()}`);
+    expect(fo.hex()).toBe(GOLDEN_CORE.gearPlaced);
+    expect(fc.hex()).toBe(GOLDEN_RESERVE.gearPlaced);
     expect(fp.hex()).toBe(GOLDEN.gearPlaced);
   });
 });

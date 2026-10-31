@@ -102,18 +102,47 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
   '48596:rifle:deep': ['8388ceeb', 'ff5eebea', 'station 32 (L0 25 L1 2 L2 5)'],
 };
 /**
- * Stage 4 (Track 2, lane GEN — pin history in tests/enemy-spawn-parity.test.ts): the LIVE Subway layouts. Entries equal to
- * SUBWAY_GOLDEN are stations whose extensions never reach west / north (or that have none); the others are the same spawns and
- * pickups translated with the core (their core view reproduces SUBWAY_GOLDEN byte for byte, asserted every run).
+ * Stage 5 (Track 2 lane GEN-2 — pin history in tests/enemy-spawn-parity.test.ts; CAUSE: "core reserve enabled (authorized
+ * incidence change)"): the LIVE Subway layouts — the core station with the reserve, plus its extensions (tunnels, annexes off
+ * tunnels or service hatches; translated cores). Was (stage 4): every SUBWAY_GOLDEN entry, except the translated 42 rifle /
+ * pistol 17f06a80 (5b5d5bad / 2b39a883), 9001 fe56616a / 294e2619, 32758 aae8c931 / 27accbd0, 48596 14b06df2 / fe055a49.
  */
 export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
-  ...SUBWAY_GOLDEN,
-  // translated cores (same spawns / families / counts / areas; x / z shifted with the core)
-  '42:rifle': ['17f06a80', '5b5d5bad', 'station 30 (L0 24 L1 2 L2 4)'],
-  '42:pistol': ['17f06a80', '2b39a883', 'station 30 (L0 24 L1 2 L2 4)'],
-  '9001:rifle:side-mezzanine': ['fe56616a', '294e2619', 'station 30 (L0 23 L1 2 L2 5)'],
-  '32758:rifle:interchange': ['aae8c931', '27accbd0', 'station 31 (L0 23 L1 3 L2 5)'],
-  '48596:rifle:deep': ['14b06df2', 'fe055a49', 'station 32 (L0 25 L1 2 L2 5)'],
+  '1:rifle': ['71fdd11f', '70dde302', 'station 28 (L0 22 L1 2 L2 4)'],
+  '1:pistol': ['71fdd11f', '04660593', 'station 28 (L0 22 L1 2 L2 4)'],
+  '7:rifle': ['57751997', 'a3bb2bd6', 'station 23 (L0 18 L1 3 L2 2)'],
+  '7:pistol': ['57751997', 'cfa5e53e', 'station 23 (L0 18 L1 3 L2 2)'],
+  '42:rifle': ['7e096c0f', '401f6ea3', 'station 30 (L0 23 L1 2 L2 5)'],
+  '42:pistol': ['7e096c0f', '8dff5091', 'station 30 (L0 23 L1 2 L2 5)'],
+  '1234:rifle': ['02befcf6', '24fee8eb', 'station 31 (L0 21 L1 6 L2 4)'],
+  '1234:pistol': ['02befcf6', '6aeaa743', 'station 31 (L0 21 L1 6 L2 4)'],
+  '9001:rifle:side-mezzanine': ['b8410519', '0bfe5634', 'station 30 (L0 23 L1 2 L2 5)'],
+  '16920:rifle:island-ends': ['3109e626', '93c64910', 'station 30 (L0 22 L1 5 L2 3)'],
+  '24839:rifle:express': ['e54ed472', 'ba61040b', 'station 25 (L0 17 L1 4 L2 4)'],
+  '32758:rifle:interchange': ['5169b3f5', '8da5b0dd', 'station 31 (L0 23 L1 3 L2 5)'],
+  '40677:rifle:split': ['5e2bd6b6', '175d9888', 'station 23 (L0 18 L1 2 L2 3)'],
+  '48596:rifle:deep': ['790b8072', 'f0a91704', 'station 31 (L0 23 L1 3 L2 5)'],
+};
+/**
+ * Stage 5 (GEN-2): the CORE VIEW of the live Subway layouts — the core station generated with the reserve (a layout change; its
+ * extensions removed, translated back). 1234 (rifle / pistol): no bed end was open after its skeleton, the reserve kept nothing,
+ * its stage-3 values stand. With the reserve OFF the core view reproduces SUBWAY_GOLDEN (asserted every run).
+ */
+export const SUBWAY_GOLDEN_RESERVE: Record<string, readonly [string, string, string]> = {
+  '1:rifle': ['71fdd11f', '70dde302', 'station 28 (L0 22 L1 2 L2 4)'],
+  '1:pistol': ['71fdd11f', '04660593', 'station 28 (L0 22 L1 2 L2 4)'],
+  '7:rifle': ['f5a81d12', 'ea32d883', 'station 23 (L0 18 L1 3 L2 2)'],
+  '7:pistol': ['f5a81d12', 'dd514f9d', 'station 23 (L0 18 L1 3 L2 2)'],
+  '42:rifle': ['72488a07', '9d39170f', 'station 30 (L0 23 L1 2 L2 5)'],
+  '42:pistol': ['72488a07', '40f92764', 'station 30 (L0 23 L1 2 L2 5)'],
+  '1234:rifle': ['b1e955bd', '1c40b92a', 'station 31 (L0 21 L1 6 L2 4)'],
+  '1234:pistol': ['b1e955bd', '344c2e2d', 'station 31 (L0 21 L1 6 L2 4)'],
+  '9001:rifle:side-mezzanine': ['b8410519', '0bfe5634', 'station 30 (L0 23 L1 2 L2 5)'],
+  '16920:rifle:island-ends': ['50ada7aa', '4ea2039f', 'station 30 (L0 22 L1 5 L2 3)'],
+  '24839:rifle:express': ['e54ed472', 'ba61040b', 'station 25 (L0 17 L1 4 L2 4)'],
+  '32758:rifle:interchange': ['ef47e3af', '8b698a84', 'station 31 (L0 23 L1 3 L2 5)'],
+  '40677:rifle:split': ['bdbca849', '78360640', 'station 23 (L0 18 L1 2 L2 3)'],
+  '48596:rifle:deep': ['790b8072', 'f0a91704', 'station 31 (L0 23 L1 3 L2 5)'],
 };
 // Office: stage 3 (task track1-siren-blightbelly-20261031); pickups / counts as at stage 2 (task office-props-physics-scale-20261030).
 export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = {
@@ -145,6 +174,27 @@ export const SUBWAY_INVARIANT: Record<string, readonly [string, readonly number[
   '32758:rifle:interchange': ['ec69551c', [17]],
   '40677:rifle:split': ['ff8f1971', [6, 22]],
   '48596:rifle:deep': ['bf618337', [3, 15, 18, 19]],
+};
+/**
+ * Stage 5 (GEN-2, CAUSE "core reserve enabled (authorized incidence change)"): the invariants of the reserve-on CORE (core view of
+ * the live layouts). A LAYOUT change, not a family change: every rat/dog index list equals SUBWAY_INVARIANT's; the masked spec
+ * hash moves with the re-laid rooms (1234 unchanged: the reserve kept nothing there). Reserve off: SUBWAY_INVARIANT (asserted).
+ */
+export const SUBWAY_INVARIANT_RESERVE: Record<string, readonly [string, readonly number[]]> = {
+  '1:rifle': ['d23c1f65', [9, 25]],
+  '1:pistol': ['d23c1f65', [9, 25]],
+  '7:rifle': ['34045d37', [15]],
+  '7:pistol': ['34045d37', [15]],
+  '42:rifle': ['bd0188f8', [1, 25, 28]],
+  '42:pistol': ['bd0188f8', [1, 25, 28]],
+  '1234:rifle': ['b82e9831', [2, 4]],
+  '1234:pistol': ['b82e9831', [2, 4]],
+  '9001:rifle:side-mezzanine': ['ff7f9257', []],
+  '16920:rifle:island-ends': ['5753052f', [6]],
+  '24839:rifle:express': ['790c34ba', []],
+  '32758:rifle:interchange': ['4a473d2c', [17]],
+  '40677:rifle:split': ['8dab7ebd', [6, 22]],
+  '48596:rifle:deep': ['3587f288', [3, 15, 18, 19]],
 };
 export const OFFICE_INVARIANT: Record<string, readonly [string, readonly number[]]> = {
   '11:pistol': ['ada21f10', [6, 24, 26, 30]],
