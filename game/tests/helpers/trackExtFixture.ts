@@ -212,7 +212,7 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
     seed: 4242, attempt: 0, name: 'TrackExt Fixture', archetype: 'side-mezzanine', towards: ['North', 'South'],
     grid: g, areas, doors, props: [], lights, signs: [], pickups: [], zombies: [], storefronts: [], decor: [],
     playerSpawn: {x: 40, z: 24, yaw: 0}, trench, trenches: [trench], platform: P.id, platforms: [P.id],
-    traversal: {stairs: [], ladders: [], underpasses: []}, levels: [{id: 0, role: 'main', grid: g, baseY: 0}], levelLinks: [],
+    traversal: {stairs: [], ladders: [], underpasses: []}, levels: [{id: 0, role: 'main', grid: g, baseY: 0}], levelLinks: [], rails: [], // rails: coreView (decay) maps them
     extensions: ext,
   } as unknown as StationLayout;
   return {layout, ext, ids, east, west};
