@@ -67,7 +67,7 @@
     /* Iteration 16 (lane RUN): level choice (title), confirmations (pause / clear screen), the run line, the in-world travel overlay. */
     .level-choice { margin: 6px 0 4px; }
     .level-choice h3 { margin-top: 4px; }
-    .level-choice .levels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .level-choice .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; } /* (3 levels: task track3-eaton-centre-20261031) */
     .level-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 14px; background: #15171a; }
     .level-card b { font-size: 16px; letter-spacing: 0.04em; }
     .level-card span { font-size: 12.5px; line-height: 1.35; color: var(--cream-dim); }
@@ -121,6 +121,7 @@
           <div class="levels">
             <button type="button" class="level-card" data-level="subway" role="radio" aria-checked="true"><b>Subway</b><span>A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.</span></button>
             <button type="button" class="level-card" data-level="office" role="radio" aria-checked="false"><b>Office Space</b><span>A small subway stop under an office tower — climb the stairs into the lobby, then work up eight floors by stairwell or elevator. One continuous level.</span></button>
+            <button type="button" class="level-card" data-level="mall" role="radio" aria-checked="false"><b>The Eaton's Center</b><span>A subway station at the bottom of a vast open mall — look up through six rings of shops to the glass roof, then work your way up by escalator, stairs and bridges. One continuous level.</span></button>
           </div>
         </div>
         <p id="station-intro" class="intro"></p>
@@ -144,6 +145,7 @@
         <div class="actions">
           <button id="btn-resume" class="primary">Resume</button>
           <button id="btn-travel">Travel to Office Space</button>
+          <button id="btn-travel-2">Travel to The Eaton's Center</button>
           <button id="btn-new-game">New game</button>
           <button class="btn-fullscreen" type="button">Fullscreen</button>
         </div>
@@ -152,8 +154,8 @@
           <div class="actions"><button id="btn-travel-go" class="primary">Travel</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
         <div class="confirm danger hidden" id="confirm-new">
-          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and both levels are generated anew. This run is lost.</p>
-          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-cancel" type="button">Cancel</button></div>
+          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and every level is generated anew. This run is lost.</p>
+          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · The Eaton's Center</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
         <p class="fine fs-status"></p>
         <div class="settings">
@@ -200,6 +202,7 @@
           <button id="btn-death-retry" class="primary">Retry level</button>
           <button id="btn-death-new">New game · Subway</button>
           <button id="btn-death-new-other">New game · Office Space</button>
+          <button id="btn-death-new-third">New game · The Eaton's Center</button>
         </div>
       </div>
     </section>
@@ -213,11 +216,12 @@
         <div class="actions">
           <button id="btn-win-stay" class="primary">Keep exploring</button>
           <button id="btn-win-travel">Travel to Office Space</button>
+          <button id="btn-win-travel-2">Travel to The Eaton's Center</button>
           <button id="btn-win-new">New game</button>
         </div>
         <div class="confirm danger hidden" id="confirm-win-new">
-          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and both levels are generated anew. This run is lost.</p>
-          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-cancel" type="button">Cancel</button></div>
+          <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and every level is generated anew. This run is lost.</p>
+          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · The Eaton's Center</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
       </div>
     </section>

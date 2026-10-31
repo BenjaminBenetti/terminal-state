@@ -39,6 +39,9 @@ export const ctxAnchor = (contextId: string): string => `ctx-${slug(contextId)}`
 export const familyAnchor = (familyId: string): string => `family-${slug(familyId)}`;
 export const roomAnchor = (roomKey: string): string => `room-${slug(roomKey)}`;
 export const termAnchor = (term: string): string => `term-${slug(term)}`;
+/** Task track3-eaton-centre-20261031 (lane PROFILES): anchors of a level's family hooks and rare-placement rules. */
+export const hookAnchor = (family: string): string => `hook-${slug(family)}`;
+export const rareAnchor = (family: string): string => `rare-${slug(family)}`;
 
 export interface EnemySite {
   ref: EnemyReference;

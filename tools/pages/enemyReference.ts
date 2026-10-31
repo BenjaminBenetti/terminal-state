@@ -13,7 +13,7 @@
 
 import * as ST from '../../game/src/ai/spawnTables';
 import {
-  ALL_FAMILIES, ENEMY_FAMILY_IDS, SPAWN_PROFILES, acceptedPlaced, baseAreaWeight, roomIntensity, roomKey, roomModifier, setSpawnCensusHook,
+  ALL_FAMILIES, ENEMY_FAMILY_IDS, SPAWN_PROFILES, acceptedPlaced, baseAreaWeight, familyHookStatus, roomIntensity, roomKey, roomModifier, setSpawnCensusHook,
   spawnContext, spawnProfile, validateSpawnProfile,
   type AreaCaps, type AreaMatch, type AreaWeights, type EnemyFamilyId, type SpawnCandidateReport, type SpawnContextId, type SpawnContextRule,
   type SpawnProfile,
@@ -23,6 +23,7 @@ import {LEVELS, LEVEL_IDS} from '../../game/src/levels/registry';
 import type {LevelId} from '../../game/src/levels/types';
 import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS, OFFICE_ROOF_LEVEL} from '../../game/src/gen/office/frame';
+import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -33,6 +34,7 @@ import {
   type CensusCorpus, type EnemyFamilyInfo, type EnemyKnob, type EnemyLevelInfo, type EnemyReference, type LevelCensus, type LevelMovesInfo,
   type ModifierSemantics, type PlacementInfo, type RoomCensus, type RoomModifierTable, type RoomRow, type SourceLoc, type SpawnContextInfo,
   type VocabEntry, type ZombieTypeInfo,
+  type AmbientBudgetInfo, type FamilyHookInfo, type HordeInfo, type RareRuleInfo, // task track3-eaton-centre-20261031 (lane PROFILES)
 } from './enemyReferenceTypes';
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -61,11 +63,13 @@ const F = {
   officeSpawns: 'game/src/gen/office/spawns.ts', officeValidate: 'game/src/gen/office/validate.ts', roof: 'game/src/gen/office/roof.ts',
   frame: 'game/src/gen/office/frame.ts', grid: 'game/src/gen/grid.ts', stationKit: 'game/src/gen/stationKit.ts', purposes: 'game/src/gen/purposes.ts',
   memory: 'game/src/run/memory.ts', pistol: 'game/src/weapons/pistol.ts',
+  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center
+  mallIndex: 'game/src/gen/mall/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
-  F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol,
+  F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.mallTypes,
 ].slice().sort();
 
 /**
@@ -76,12 +80,16 @@ export const ENEMY_GENERATED_FROM: readonly string[] = [
  */
 export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
   generator: {fn: string; file: string; note: string};
-  contexts: Readonly<Partial<Record<SpawnContextId, {storeys: string; runs: number}>>>;
+  /** `hook`: a DATA-HOOK context the generator does not run yet (0 runs; task track3-eaton-centre-20261031, lane PROFILES). */
+  contexts: Readonly<Partial<Record<SpawnContextId, {storeys: string; runs: number; hook?: string}>>>;
+  /** The ambient context a spawn on layout storey `storey` belongs to (the census groups placed spawns by it). */
+  contextOf: (storey: number) => SpawnContextId;
 }>> = {
   subway: {
     generator: {fn: 'generateStation', file: F.station,
       note: 'One station per level seed: placeSpawns (fork "spawns", after the loose floor finds) places the station context on the main level, placeLevelSpawns (fork "levelSpawns") moves a weighted share onto the upper / lower storeys, assignEnemyArchetypes rolls every family at the end.'},
     contexts: {station: {storeys: 'the main level, then the storey moves onto the upper / lower levels', runs: 1}},
+    contextOf: () => 'station',
   },
   office: {
     generator: {fn: 'generateOfficeLevel', file: F.officeIndex,
@@ -91,6 +99,19 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       floor: {storeys: 'one office floor (each of floors 2..8)', runs: OFFICE_FLOORS.filter(f => f !== 1).length},
       roof: {storeys: 'the roof deck (level 9; the hatch / ladder zone held empty)', runs: 1},
     },
+    contextOf: storey => (storey <= 1 ? 'street' : storey === OFFICE_ROOF_LEVEL ? 'roof' : 'floor'),
+  },
+  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center — ONE level: the pit station + the retail rings
+  mall: {
+    generator: {fn: 'generateMallLevel', file: F.mallIndex,
+      note: `ONE continuous level (the subway station at the bottom of the open void and ${MALL_RINGS} retail rings around it) generated once per level seed: placeOfficeEnemies runs the pit context once and the ring context once per ring, each on its own fork (mall-enemies-<storey>); assignEnemyArchetypes rolls every ambient family; applyRareFamilyRules bounds the rare families; the roaming hordes (the separate horde pool) are placed LAST by ai/hordePlace.ts placeHordes. Moving between storeys never rerolls anything.`},
+    contexts: {
+      pit: {storeys: 'the subway station storey at the bottom of the void (level 0: platforms, plaza, courts)', runs: 1},
+      ring: {storeys: `one retail ring (each of levels 1..${MALL_RINGS}: gallery, shops, back rooms, service corridors)`, runs: MALL_RINGS},
+      service: {storeys: 'one Track2 service annex (per annex, annex areas only)', runs: 0,
+        hook: 'DATA HOOK, NOT INTEGRATED: Track2\'s same-world service annexes (0 / 1 / 2 per level) are not on main yet, so no generator runs this per-annex budget (0 runs; excluded from the level total). When they land each annex runs it once on its own fork with the mall\'s ambient family profile (no guaranteed Siren per annex), never as part of the horde pool.'},
+    },
+    contextOf: storey => (storey === 0 ? 'pit' : 'ring'),
   },
 };
 
@@ -195,14 +216,19 @@ interface CensusArea { key: string; keyKind: 'purpose' | 'room-type'; type: stri
 interface CensusLevel {
   seeds: number[];
   areas: CensusArea[];
-  /** One entry per placed spawn of every sample level. */
+  /** One entry per placed AMBIENT spawn of every sample level. */
   spawns: {family: string; type: string; key: string; kind: string; context: string}[];
+  /** Task track3-eaton-centre-20261031 (lane PROFILES): horde members (the separate pool; layout.zombies tagged `horde`) and groups. */
+  horde: {family: string; type: string; key: string; group: string; storey: number}[];
 }
 
-/** The generation context a placed spawn belongs to (Office: by storey; the Subway's single context incl. its storey moves). */
-function contextOfStorey(layout: StationLayout, storey: number): SpawnContextId {
-  if (!layout.office) return 'station';
-  return storey <= 1 ? 'street' : storey === OFFICE_ROOF_LEVEL ? 'roof' : 'floor';
+/**
+ * The generation context a placed AMBIENT spawn belongs to: the level adapter's storey rule (Office: by storey; the Subway's single
+ * context incl. its storey moves). Task track3-eaton-centre-20261031 (lane PROFILES): horde members (layout.zombies `horde`) are the
+ * separate horde pool — counted in census.horde, never in an ambient context.
+ */
+function contextOfSpawn(level: LevelId, z: {level?: number}): string {
+  return ENEMY_LEVEL_ADAPTER[level].contextOf(z.level ?? 0);
 }
 
 const censusCache = new Map<string, CensusLevel>();
@@ -215,7 +241,7 @@ export function enemyCensus(level: LevelId, seeds: readonly number[]): CensusLev
   const def = LEVELS[level];
   const profile = spawnProfile(level);
   const startWeapon = startWeaponFor(false);
-  const out: CensusLevel = {seeds: [...seeds], areas: [], spawns: []};
+  const out: CensusLevel = {seeds: [...seeds], areas: [], spawns: [], horde: []};
   seeds.forEach((seed, sample) => {
     for (const section of def.sections(seed)) {
       const reports: SpawnCandidateReport[] = [];
@@ -242,7 +268,8 @@ export function enemyCensus(level: LevelId, seeds: readonly number[]): CensusLev
       }
       for (const z of layout.zombies) {
         const a: Area | undefined = layout.areas[z.area];
-        out.spawns.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', kind: a?.kind ?? '?', context: contextOfStorey(layout, z.level ?? 0)});
+        if (z.horde !== undefined) { out.horde.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', group: `${sample}:${z.horde}`, storey: z.level ?? 0}); continue; }
+        out.spawns.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', kind: a?.kind ?? '?', context: contextOfSpawn(level, z)});
       }
     }
   });
@@ -277,6 +304,14 @@ function levelCensus(c: CensusLevel, families: readonly string[]): LevelCensus {
       return {kind, eligibleM2: rd(m2), placed, per100m2: per100(Object.values(placed).reduce((s, n) => s + n, 0), m2)};
     }),
     zombieTypes,
+    horde: c.horde.length ? {
+      members: c.horde.length, perLevel: rd(c.horde.length / Math.max(1, layouts)), groups: new Set(c.horde.map(h => h.group)).size,
+      groupsPerLevel: rd(new Set(c.horde.map(h => h.group)).size / Math.max(1, layouts)),
+      groupSizes: (() => { const m = new Map<string, number>(); for (const h of c.horde) m.set(h.group, (m.get(h.group) ?? 0) + 1); const v = [...m.values()]; return [Math.min(...v), Math.max(...v)] as const; })(),
+      byFamily: Object.fromEntries(families.map(f => [f, c.horde.filter(h => h.family === f).length])),
+      byStorey: (() => { const m: Record<string, number> = {}; for (const h of c.horde) m[h.storey] = (m[h.storey] ?? 0) + 1; return m; })(),
+      note: 'Horde members are the SEPARATE horde pool (profile.horde): not part of the ambient counts, contexts, eligible floor or room rows above.',
+    } : null,
     note: `SAMPLED: ${layouts} sample levels of the registered generator (seeds ${c.seeds.join(', ')}, shipped start weapon). Eligible floor = cells the generator's own candidate filter accepted (walking distance, clearance, storey, stair / landing keep-off, weight > 0) x ${cellM2} m² — never bounding boxes. Not exhaustive; not a runtime rule.`,
   };
 }
@@ -341,6 +376,8 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     if (issues.length) throw new Error(`invalid spawn profile: ${issues.join('; ')}`);
     const declared = Object.keys(ENEMY_LEVEL_ADAPTER[l].contexts).sort().join('|'), inProfile = Object.keys(profileOf(l).contexts).sort().join('|');
     if (declared !== inProfile) throw new Error(`level ${l}: adapter contexts ${declared} != profile contexts ${inProfile}`);
+    // task track3-eaton-centre-20261031 (lane PROFILES): a declared context no generator runs (0 runs) must say why (a data hook)
+    for (const [id, a] of Object.entries(ENEMY_LEVEL_ADAPTER[l].contexts)) if (a && a.runs === 0 && !a.hook) throw new Error(`level ${l}: context ${id} has 0 runs but no hook note`);
   }
 
   const families: EnemyFamilyInfo[] = ENEMY_FAMILY_IDS.map(id => {
@@ -352,13 +389,15 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
   const corpus: CensusCorpus[] = [];
   const levels: EnemyLevelInfo[] = LEVEL_IDS.map(l => {
     const P = profileOf(l), def = LEVELS[l], ad = ENEMY_LEVEL_ADAPTER[l];
-    const base = `SPAWN_PROFILES.${l}`;
+    // task track3-eaton-centre-20261031 (lane PROFILES): a profile declared as its own export (MALL_SPAWN_PROFILE) links there
+    const base = EXPORT_NAME.get(P) ?? `SPAWN_PROFILES.${l}`;
     const symbolOf = (obj: unknown, path: string) => EXPORT_NAME.get(obj) ?? path;
 
     // contexts
     const contexts: SpawnContextInfo[] = (Object.entries(P.contexts) as [SpawnContextId, SpawnContextRule][]).map(([id, c]) => {
       const a = ad.contexts[id]!;
       const pl = c.placement, plPath = `${base}.contexts.${id}.placement`;
+      const storeyed = pl.landingKeepM !== undefined; // lane PROFILES (track3): was l === 'office' (the same text for both shipped levels)
       const acc = acceptedPlaced(c);
       const rejection: string[] = [];
       if (acc.min !== null) rejection.push(`fewer than ${acc.min} placed in one run → the whole attempt is regenerated`);
@@ -373,13 +412,14 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
         'a FLOOR cell of the context\'s storeys (not the outer border row)',
         `walking distance from the start ≥ ${pl.startCells} cells (${pl.startCells * CELL} m)`,
         `every cell within ${pl.clearCells} cell(s) walkable`,
-        ...(l === 'office' ? ['not a stair ramp, not in a stair-role area, the area on its own storey', `≥ ${pl.landingKeepM ?? 0} m from every keep point of the storey`] : []),
+        // storeyed placements (the Office's placeOfficeEnemies, reused by the mall): the landing keep-off marks them (subway: none)
+        ...(storeyed ? ['not a stair ramp, not in a stair-role area, the area on its own storey', `≥ ${pl.landingKeepM ?? 0} m from every keep point of the storey`] : []),
         'the area\'s effective weight (area weight × room intensity) > 0',
       ];
       const explanation = [
         `Draw count = U{${c.count[0]}..${c.count[1]}} (one draw per run), then the zombie types of that many spawns.`,
         'Collect every eligible cell, grouped by area; order the areas by a weighted shuffle (Efraimidis–Spirakis keys u^(1/weight)).',
-        `For each cap pass (${pl.caps.passes.join(', ')}), walk the order: an area below its cap gets up to ${pl.tries} random cell picks; the first pick ≥ ${pl.spacingM} m from every enemy already placed${l === 'office' ? ' on that storey' : ''} takes one spawn.`,
+        `For each cap pass (${pl.caps.passes.join(', ')}), walk the order: an area below its cap gets up to ${pl.tries} random cell picks; the first pick ≥ ${pl.spacingM} m from every enemy already placed${storeyed ? ' on that storey' : ''} takes one spawn.`,
         'Stop when the count is reached. Spacing, caps and eligible floor can leave a run short of its count (placed < count); validation regenerates the attempt where the profile requires it.',
         'Each placed spawn is then a family by its own roll (see the family pool) — independent of the area unless a room modifier says otherwise.',
       ];
@@ -389,10 +429,10 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
         perLevel: {lo: a.runs * c.count[0], hi: a.runs * c.count[1], mean: a.runs * mean(c.count[0], c.count[1])},
         placement: {
           areaWeights: weightsInfo(pl.areaWeights), caps: capsInfo(pl.caps), triesPerArea: pl.tries,
-          spacing: {metres: pl.spacingM, scope: l === 'office' ? 'straight line, same storey' : 'straight line'},
+          spacing: {metres: pl.spacingM, scope: storeyed ? 'straight line, same storey' : 'straight line'},
           keepAway, eligibility, explanation, at: src.at(F.tables, symbolOf(pl, plPath)),
         },
-        rejection, at: src.at(F.tables, `${base}.contexts.${id}`),
+        rejection, ...(a.hook ? {hook: a.hook} : {}), at: src.at(F.tables, `${base}.contexts.${id}`),
       };
     });
     const total = {
@@ -474,6 +514,57 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       note: `${entries.length ? `${entries.length} explicit entr${entries.length === 1 ? 'y' : 'ies'}` : 'No explicit entries'}: every other room / family resolves to 1×. Rows list the room keys seen in the sampled census${cen ? '' : ' (census disabled: explicit entries only)'} plus any explicit entry; a key not listed resolves to 1× as well.`,
     };
 
+    // task track3-eaton-centre-20261031 (lane PROFILES): Track1 family hooks, rare placement, the horde pool, ambient budgets
+    const hookStatus = familyHookStatus(P);
+    const hooks: FamilyHookInfo[] = (P.familyHooks ?? []).map((h, i) => ({
+      family: h.family, share: h.share, active: hookStatus[i].active, status: hookStatus[i].status, note: h.note,
+      expectedPerLevelIfTyped: rd(h.share * total.mean), at: src.at(F.tables, `${symbolOf(P.familyHooks, `${base}.familyHooks`)}`),
+    }));
+    const typedShare = (f: string) => poolRows.find(r => r.family === f)?.share;
+    const rare: RareRuleInfo[] = (P.rare ?? []).map(r => {
+      const typed = typedShare(r.family), hook = P.familyHooks?.find(h => h.family === r.family);
+      const share = typed ?? hook?.share ?? 0;
+      return {
+        family: r.family, capPerLevel: r.capPerLevel, spacingM: r.spacingM, why: r.why, status: typed !== undefined ? 'live' as const : 'waiting' as const,
+        expectedBeforeCap: rd(share * total.mean),
+        semantics: `After the family roll, in spawn-index order: an ambient ${r.family} beyond the first ${r.capPerLevel} of the level, or closer than ${r.spacingM} m (straight 3D line) to an earlier kept one, becomes a zombie (same position, type and area) — applyRareFamilyRules, pure and RNG-free. Horde members are never touched.${typed !== undefined ? '' : ` Waiting: '${r.family}' is a family hook the registry does not export yet, so no spawn can be one.`}`,
+        at: src.at(F.tables, symbolOf(P.rare, `${base}.rare`)),
+      };
+    });
+    const H = P.horde;
+    let horde: HordeInfo | null = null;
+    if (H) {
+      const hd = H.families.reduce((s2, [, w]) => s2 + Math.max(0, w), 0);
+      const gMean = mean(H.groups[0], H.groups[1]), sMean = mean(H.size[0], H.size[1]);
+      const max = Math.min(H.budget.total, H.groups[1] * H.size[1]);
+      horde = {
+        label: H.label,
+        groups: {lo: H.groups[0], hi: H.groups[1], mean: gMean},
+        size: {lo: H.size[0], hi: H.size[1], mean: sMean},
+        pool: {denominator: hd, rows: H.families.map(([family, weight]) => ({family, weight, share: hd > 0 ? rd(Math.max(0, weight) / hd) : 0}))},
+        zombieTypes: {coatedChance: H.zombieTypes.coatedChance, atLeastOneEach: H.zombieTypes.atLeastOneEach},
+        budget: {...H.budget},
+        members: {meanBeforeBudget: rd(gMean * sMean), max,
+          note: `Groups U{${H.groups[0]}..${H.groups[1]}} × members U{${H.size[0]}..${H.size[1]}} per group, then the budgets: at most ${H.budget.total} horde members in the level, ${H.budget.perStorey} members and ${H.budget.groupsPerStorey} group(s) starting on one storey (a group that does not fit is trimmed or dropped, never topped up).`},
+        placement: {storeys: H.placement.storeys === 'rings' ? 'every retail ring storey' : `storeys ${H.placement.storeys.join(', ')}`, startM: H.placement.startM,
+          groupSpacingM: H.placement.groupSpacingM, memberSpacingM: H.placement.memberSpacingM, clusterM: H.placement.clusterM, ambientSpacingM: H.placement.ambientSpacingM},
+        patrol: {speed: H.patrol.speed, storeyChange: H.patrol.storeyChange, pauseChance: H.patrol.pauseChance, pause: [H.patrol.pause[0], H.patrol.pause[1]]},
+        semantics: [
+          'A SEPARATE pool: horde members are placed once at generation, after the ambient contexts and the ambient family roll, and never count against the ambient budget (or the reverse).',
+          'The horde family pool is explicit: the ambient rat/dog and Blightbelly shares are NOT applied to hordes, and Sirens never join an ordinary-zombie horde (validation rejects them).',
+          'Finite: no spawner, no kill top-up and no revisit respawn. Kills persist through the run memory like every enemy; a group whose members all died stays dead.',
+          'Members roam together on the patrol graph of real walkable links (gallery walkways, bridges, escalators / stairs); each member can break formation to chase with the ordinary AI.',
+        ],
+        at: src.at(F.tables, symbolOf(H, `${base}.horde`)),
+      };
+    }
+    const B = P.budgets?.ambient;
+    const budgets = B ? {ambient: {
+      total: B.total, perStorey: B.perStorey, contextsMax: contexts.reduce((s2, c) => s2 + c.runs * c.count.hi, 0),
+      note: 'Caps of the AMBIENT pool only: the whole-level total and one storey run. The contexts\' count ranges stay below them by construction (validation); the horde pool has its own budget.',
+      at: src.at(F.tables, `${base}.budgets`),
+    } satisfies AmbientBudgetInfo} : null;
+
     // knobs
     const knobs: EnemyKnob[] = [
       ...contexts.map(c => ({what: `count range (${c.id})`, value: [c.count.lo, c.count.hi] as const, at: src.at(F.tables, `${base}.contexts.${c.id}.count`)})),
@@ -492,6 +583,15 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       }),
       ...(mv ? [{what: 'storey moves (keep on main, passes, tries, spacing)', value: `${mv.mainKeep}, ${mv.passes}, ${mv.tries}, ${mv.spacingM} m / ${mv.spacingDy} m`, at: levelMoves!.at}] : []),
       {what: 'room modifiers', value: entries.length ? `${entries.length} entries` : 'none (all 1×)', at: src.at(F.tables, `${base}.rooms`), note: 'room key → family (or all) → {density, weight}'},
+      ...hooks.map(h => ({what: `family hook ${h.family} (ambient share)`, value: h.share, at: h.at, note: h.active ? 'registry exports it' : 'inactive until Track1'})),
+      ...rare.map(r => ({what: `rare ${r.family}: cap per level / spacing (m)`, value: `${r.capPerLevel} / ${r.spacingM}`, at: r.at})),
+      ...(horde ? [
+        {what: 'horde groups per level', value: [horde.groups.lo, horde.groups.hi] as const, at: horde.at},
+        {what: 'horde members per group', value: [horde.size.lo, horde.size.hi] as const, at: horde.at},
+        {what: 'horde budget (total / per storey / groups per storey)', value: `${horde.budget.total} / ${horde.budget.perStorey} / ${horde.budget.groupsPerStorey}`, at: horde.at},
+        {what: 'horde family pool', value: horde.pool.rows.map(r => `${r.family} ${r.weight}`).join(', '), at: horde.at},
+      ] : []),
+      ...(budgets ? [{what: 'ambient budget (total / per storey)', value: `${budgets.ambient.total} / ${budgets.ambient.perStorey}`, at: budgets.ambient.at}] : []),
     ];
 
     return {
@@ -500,7 +600,7 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       generator: {fn: ad.generator.fn, at: src.at(ad.generator.file, ad.generator.fn), note: ad.generator.note},
       total, contexts, pool, zombieTypes, levelMoves, rooms,
       census: cen ? levelCensus(cen, ENEMY_FAMILY_IDS) : null,
-      knobs,
+      knobs, hooks, rare, horde, budgets,
     };
   });
 

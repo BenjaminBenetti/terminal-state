@@ -53,9 +53,19 @@ export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   coated: {hp: 165, wanderSpeed: 0.55, chaseSpeed: 1.75, attackRange: 1.4, attackDamage: 15, attackDuration: 1.1, attackImpact: 0.45, sightRange: 16, radius: 0.38, chaseAnim: 'Run'},
 };
 
-export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate';
+// Task track3-eaton-centre-20261031 (lane HORDE): 'patrol' = a roaming-horde member walking in its group's formation (ai/horde.ts
+// steers it through `escort`). Only a brain with an escort ever enters it (no pre-mall enemy has one: their behaviour is unchanged).
+// It behaves like wandering for every existing mechanic: seeing the player -> chase, gunfire / damage -> chase, a seen light ->
+// investigate; when the chase / search / investigation ends the member idles a moment, then rejoins its group (idle -> patrol).
+export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate' | 'patrol';
 /** Iteration 12 (AI): states in which an enemy notices light (never while chasing / attacking / staggered / climbing). */
-const LURABLE: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate']);
+const LURABLE: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate', 'patrol']);
+
+/** Task track3-eaton-centre-20261031 (lane HORDE): a horde member's link to its group (ai/horde.ts): steers the 'patrol' state. */
+export interface PatrolLink {
+  /** Fill `out` (direction / speed / facing / anim) for one 'patrol' frame of brain `b` (sight was already checked: not seen). */
+  steer(b: ZombieBrain, out: BrainOutput, dt: number, w: BrainWorld, moved: number): void;
+}
 
 /** Iteration 12 (AI): an enemy's current light investigation (QA reads it through `brain.lure`). */
 export interface LureState {
@@ -188,6 +198,8 @@ export class ZombieBrain {
   /** Iteration 12 (AI): countdown to the next light check, and a private jitter stream (never consumes world.rand). */
   private lureCheckT: number;
   private lureSeed: number;
+  /** Task track3-eaton-centre-20261031 (lane HORDE): the roaming-horde group steering this member's 'patrol' state; null = ordinary enemy. */
+  escort: PatrolLink | null = null;
 
   constructor(readonly type: ZombieType, public x: number, public z: number, public yaw: number, readonly stats: ZombieStats = ZOMBIE_STATS[type]) {
     this.hp = stats.hp;
@@ -198,6 +210,13 @@ export class ZombieBrain {
 
   get alive(): boolean {
     return this.state !== 'dead';
+  }
+
+  /** Task track3-eaton-centre-20261031 (lane HORDE): start walking with the group (an idle / wandering member with an escort). */
+  joinPatrol(): boolean {
+    if (!this.escort || (this.state !== 'idle' && this.state !== 'wander' && this.state !== 'patrol')) return false;
+    if (this.state !== 'patrol') { this.setState('patrol'); this.path = []; }
+    return true;
   }
 
   /** Iteration 12 (AI): xorshift jitter for the lure timers (deterministic per spawn; leaves world.rand untouched). */
@@ -227,7 +246,7 @@ export class ZombieBrain {
     if (Math.hypot(x - this.x, z - this.z, y === undefined ? 0 : y - this.y) > radius) return;
     this.lastKnown = [x, z, y];
     this.aware = true;
-    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
+    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate' || this.state === 'patrol') {
       this.setState('chase');
       this.repathT = 0;
       this.path = []; // lane SCHED: the old wander / search path is no chase route (an immediate re-plan replaced it this frame anyway)
@@ -253,7 +272,7 @@ export class ZombieBrain {
     else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0 && o.stagger !== false) {
       this.setState('stagger', 0.35);
       this.staggerCd = 0.9;
-    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
+    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate' || this.state === 'patrol') {
       this.setState('chase');
       this.path = []; // lane SCHED: as in hear()
     }
@@ -369,6 +388,7 @@ export class ZombieBrain {
         out.anim = 'Idle';
         if (sees) { this.setState('chase'); this.repathT = 0; break; }
         if (this.stateT <= 0) {
+          if (this.escort) { this.setState('patrol'); this.path = []; break; } // lane HORDE: rejoin the group instead of wandering
           const p = w.randomNear(this.x, this.z, 6, this.y);
           const path = p && w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2]));
           if (path && path.length) { this.path = path; this.setState('wander', 12); }
@@ -467,6 +487,15 @@ export class ZombieBrain {
         // Iteration 12 (AI): slow walk to a seen light; the player in sight always wins.
         if (sees) { this.setState('chase'); this.repathT = 0; break; }
         this.investigate(dt, w, out, moved);
+        break;
+      }
+      case 'patrol': {
+        // Task track3-eaton-centre-20261031 (lane HORDE): walking in the group's formation; the player in sight always wins.
+        if (sees) { this.setState('chase'); this.repathT = 0; break; }
+        if (!this.escort) { this.setState('idle', 1); break; } // left its group: an ordinary enemy from now on
+        if (this.unseenT > 20) this.aware = false;
+        out.anim = 'Idle';
+        this.escort.steer(this, out, dt, w, moved);
         break;
       }
       case 'climb': {

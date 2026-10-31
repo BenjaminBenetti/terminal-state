@@ -145,7 +145,8 @@ export function areaNeglect(area: Area | undefined, levelRole: Level['role'], vo
  * heated tower storeys above the street (fewer leaks than the upper deck; no seepage).
  */
 // Task office-overhaul-20261030 (lane STRUCT): 'roof' = the open-sky roof deck: rained on for decades (ponding, streaks).
-export const LEVEL_WETNESS: Record<Level['role'], number> = {upper: 0.6, main: 1, lower: 1.4, office: 0.35, roof: 1.2};
+// Task track3-eaton-centre-20261031 (lane GEN): 'ring' = the mall's retail rings under the glass roof (dry like the office storeys).
+export const LEVEL_WETNESS: Record<Level['role'], number> = {upper: 0.6, main: 1, lower: 1.4, office: 0.35, roof: 1.2, ring: 0.35};
 /** Wetness never exceeds this (the lower level must still read as tile / paint with stains, not as a pattern). */
 export const WET_CAP = 0.7;
 

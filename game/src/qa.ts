@@ -16,9 +16,11 @@ import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
 import {creatureQaApi} from './ai/creatureQa';
 import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
+import {hordeQaApi} from './ai/hordeQa'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
 import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
+import {mallArchQaApi} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): mall finishes / atrium / fog / QA poses
 import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input walker, per-frame traversal trace, lifecycle counts
@@ -331,9 +333,13 @@ export function installQaHooks(game: Game): void {
     ...creatureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
     // Iteration 12 (AI): light lure — lightLure(), lureProbe(i?), goLureVantage({index, dist, ahead}), DEBUG qaLureLight / qaLureLightSet.
     ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // Task track3-eaton-centre-20261031 (lane HORDE): roaming hordes — hordes(), goHorde({group, ahead}), hordeKillCheck().
+    ...hordeQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
     ...towerQaApi(game), // Iteration 17 / office-overhaul (lane LIFT): tower(), towerGoLanding(floor), towerGoCab(), liftButtons(), liftAim(id), liftPress(id, 'mouse' | 'key'), liftState(), towerExteriorTune({...})
     ...officeArchQaApi(game), // Task office-overhaul-20261030 (lane ARCH): exteriorFogTune({...}), officeArch(), officeArchTune({...}), roofFog()
+    // Task track3-eaton-centre-20261031 (lane ARCH): mallArch(), mallFog({density, color}), mallSkylight(), mallCuller(), mallPoses(), mallPose(name)
+    ...mallArchQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...gasQaApi(game), // Task gasmask-breach-20261030 (lane GAS): windows(level?), windowAim(id), DEBUG windowBreak(id), gas(), gasTune({...})
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
@@ -628,6 +634,8 @@ export function installQaHooks(game: Game): void {
     travel: (level: LevelId, section = 'main', arrival?: Arrival) => game.travel({to: {level, section}, arrival: arrival ?? {kind: 'start'}, label: `QA travel · ${level}`, via: 'menu'}),
     /** QA: NewGame in a level (seeds optional) without entering play; resolves with the warm-up status. */
     newGame: (level: LevelId, seeds?: Partial<Record<LevelId, number>>) => game.newGame(level, {seeds}).then(w => w?.status ?? null),
+    /** Task track3-eaton-centre-20261031 (lane PACKAGE): the level's lazy working set, resident models / bytes, late fetches, level resources. */
+    levelAssets: () => game.levelAssetsQa(),
   };
   (window as unknown as {__LL: typeof api}).__LL = api;
 

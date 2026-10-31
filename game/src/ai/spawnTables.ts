@@ -38,6 +38,10 @@ import {MIN_ZOMBIE_SPAWN_CELLS} from '../gen/stationTypes';
 import type {LevelId} from '../levels/types';
 import {ROOM_LABEL} from '../gen/stationKit';
 import {ALL_PURPOSES} from '../gen/purposes';
+// Task track3-eaton-centre-20261031 (lane PROFILES): the horde pool's rules (lane HORDE owns the type / validation / defaults;
+// hordeSpec.ts imports only TYPES from this module, so there is no runtime import cycle).
+import {HORDE_FORBIDDEN_FAMILIES, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from './hordeSpec';
+export type {HordeRules} from './hordeSpec';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Families
@@ -141,8 +145,46 @@ export type RoomModifier = Readonly<Partial<Record<EnemyFamilyId | typeof ALL_FA
 /** Room key (purpose id, else room type) → modifier. Missing = 1. */
 export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
 
-export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof';
-export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof'];
+/**
+ * Generation contexts. Task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center adds 'pit' (the subway station storey at
+ * the bottom of the void, once), 'ring' (one retail ring, once per ring) and 'service' (Track2's per-annex zone budget — a DATA HOOK
+ * until Track2's same-world service annexes exist: 0 runs, excluded from the core totals; see MALL_SERVICE_HOOK).
+ */
+export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service';
+export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service'];
+
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): a Track1 FAMILY HOOK — an ambient family a level declares before the enemy
+ * registry has it. `family` is a plain string checked against the LIVE registry (ENEMY_FAMILY_IDS = ENEMY_ARCHETYPES): while the
+ * registry lacks it the hook is INACTIVE (it changes nothing: its share stays with the zombies of the typed pool); once the registry
+ * exports it, validation FAILS until the level lists it in its typed `families` pool (with this share) and drops the hook — so a
+ * Track1 merge cannot silently leave it out. Hooks never apply to the horde pool.
+ */
+export interface FamilyHook {
+  readonly family: string;
+  /** Share of the AMBIENT pool (0 < share < 1) the family takes from zombies once typed. */
+  readonly share: number;
+  readonly note: string;
+}
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): RARE PLACEMENT of a family over the whole logical level (applyRareFamilyRules,
+ * after the family roll; pure, no RNG): in spawn-index order a spawn of `family` beyond `capPerLevel`, or closer than `spacingM`
+ * (straight 3D line) to an earlier one, becomes a zombie (same position / type). Applies to typed families; a rule naming a hook
+ * family waits (no spawn can be that family yet). Horde members are never touched (hordes have their own pool).
+ */
+export interface RareFamilyRule {
+  readonly family: string;
+  readonly capPerLevel: number;
+  readonly spacingM: number;
+  readonly why: string;
+}
+/** Task track3-eaton-centre-20261031 (lane PROFILES): explicit caps of the AMBIENT pool (the horde pool's are horde.budget). */
+export interface AmbientBudget {
+  /** Ambient spawns in the whole logical level (Σ over the context runs). */
+  readonly total: number;
+  /** Ambient spawns of one storey run (every context's count hi must fit). */
+  readonly perStorey: number;
+}
 
 export interface SpawnProfile {
   /** The logical level (LevelId) a registered profile belongs to. */
@@ -153,6 +195,14 @@ export interface SpawnProfile {
   readonly contexts: Readonly<Partial<Record<SpawnContextId, SpawnContextRule>>>;
   readonly levelMoves?: LevelMoveRules;
   readonly rooms: RoomModifiers;
+  /** Task track3-eaton-centre-20261031 (lane HORDE / PROFILES): the SEPARATE roaming-horde pool (ai/hordeSpec.ts); absent = none. */
+  readonly horde?: HordeRules;
+  /** Lane PROFILES: Track1 family hooks of the ambient pool (FamilyHook); absent = none. */
+  readonly familyHooks?: readonly FamilyHook[];
+  /** Lane PROFILES: rare-placement rules (RareFamilyRule); absent = none. */
+  readonly rare?: readonly RareFamilyRule[];
+  /** Lane PROFILES: explicit ambient-pool caps (AmbientBudget); absent = the contexts' count ranges alone. */
+  readonly budgets?: {readonly ambient: AmbientBudget};
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -213,6 +263,91 @@ export const OFFICE_PLACEMENT: PlacementRules = {
 /** The shambler / coated roll of both levels (40 % coated, at least one of each). */
 export const ZOMBIE_TYPES: ZombieTypeRule = {coatedChance: 0.4, atLeastOneEach: true};
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task track3-eaton-centre-20261031 (lane PROFILES): THE EATON'S CENTER (LevelId 'mall', tier 2) — ONE logical level: the subway
+// station at the bottom of an open pit (storey 0) and six retail rings around the void (storeys 1..6), generated once per level
+// seed (gen/mall/index.ts, lane GEN). docs/enemy-spawns.md "The Eaton's Center".
+//
+// Two SEPARATE pools, never mixed:
+//  - AMBIENT (contexts 'pit' once + 'ring' once per ring, the generic Office placement gen/office/spawns.ts placeOfficeEnemies):
+//    zombies with the shipped ratdog 5 %, plus Track1's Blightbelly 5 % and a rare Siren ~5 % as FAMILY HOOKS (inactive until the
+//    registry exports them) with a whole-mall Siren cap + spacing (RareFamilyRule). Capped by budgets.ambient.
+//  - HORDE (ai/hordeSpec.ts HordeRules, placed LAST by ai/hordePlace.ts, lane HORDE): ordinary zombies only — its own explicit
+//    family pool (ratdog weight 0; Blightbelly / Siren never), 5..20 members per group, global + per-storey budgets.
+// Sized to the larger world but LESS dense than the Office (a ring is ~6-8x an Office storey; the hordes concentrate the threat):
+// ~8.5 ambient per ring vs 4.5 per Office floor.
+
+/** Mall area weights (the Office's rules; storefront / shop units are ordinary rooms here, galleries and courts public space). */
+export const MALL_AREA_WEIGHTS: AreaWeights = {
+  rules: [
+    {when: {kind: ['platform']}, weight: 2.2, why: 'the platforms of the station at the bottom of the pit'},
+    {when: {type: ['exit-stair', 'washroom']}, weight: 0.5, why: 'closed street exits and washrooms'},
+    {when: {type: ['office-stair', 'stair-core', 'office-elevator']}, weight: 0, why: 'never in a stairwell, stair core or an elevator cab'},
+    {when: {kind: ['closet']}, weight: 0.5, why: 'closets'},
+    {when: {publicSpace: true}, weight: 1, why: 'gallery walkways, bridges, the pit plaza and courts'},
+  ],
+  otherwise: 1.3,
+  otherwiseWhy: 'shop sales floors, stock rooms and back-of-house rooms',
+};
+/** Mall caps: passes 1 / 2 / 3; platforms one more; closets one. */
+export const MALL_CAPS: AreaCaps = {
+  passes: [1, 2, 3],
+  rules: [
+    {when: {kind: ['platform']}, plus: 1, why: 'platforms hold one more per pass'},
+    {when: {kind: ['closet']}, fixed: 1, why: 'closets: at most one'},
+  ],
+};
+/** Mall placement (every ambient context): the Office values — 14 tries, 4 m same-storey spacing, 36 cells (18 m), 5 m off landings. */
+export const MALL_PLACEMENT: PlacementRules = {
+  areaWeights: MALL_AREA_WEIGHTS, caps: MALL_CAPS, tries: 14, spacingM: 4, startCells: 36, clearCells: 1, landingKeepM: 5,
+};
+/** The mall's AMBIENT family pool (typed families only): the shipped ratdog 5 %; the Track1 hooks' shares stay with zombies until typed. */
+export const MALL_AMBIENT_POOL: FamilyPool = [['zombie', 0.95], ['ratdog', 0.05]];
+/** Track1 family hooks of the mall's ambient pool (inactive while the registry lacks them; see FamilyHook). */
+export const MALL_FAMILY_HOOKS: readonly FamilyHook[] = [
+  {family: 'blightbelly', share: 0.05, note: 'Track1 Blightbelly: 5 % of the AMBIENT pool (as in both existing levels); never in hordes.'},
+  {family: 'siren', share: 0.05, note: 'Track1 Siren (final user decision: rare Sirens MUST appear in the mall; never Subway, never hordes): ~5 % ambient share as the starting point, bounded by the rare rule (whole-mall cap + spacing). Appearance locked (uploads 1f8ac189…, fbe47869…).'},
+];
+/** Whole-mall rare placement: at most 4 Sirens (more than the Office's ~2: the world is far larger), >= 30 m apart. */
+export const MALL_RARE_RULES: readonly RareFamilyRule[] = [
+  {family: 'siren', capPerLevel: 4, spacingM: 30, why: 'rare ambient Sirens across the much larger mall: > 2 allowed, never two within earshot of one another'},
+];
+/**
+ * Track2 per-annex zone budget ('service' context): DATA HOOK, NOT INTEGRATED — Track2's same-world service annexes (~1/4 Subway
+ * area each, 0 / 1 / 2 per level) do not exist yet, so no generator runs it (0 runs). When they land, each annex runs it once on its
+ * own fork in annex areas only, with the mall's ambient family profile (no guaranteed Siren per annex), excluded from the core
+ * context totals and never part of the horde pool.
+ */
+export const MALL_SERVICE_HOOK: SpawnContextRule = {label: 'Service annex (Track2, per annex — NOT INTEGRATED)', count: [2, 4], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}};
+/**
+ * The mall's horde pool (lane HORDE's MALL_HORDE_RULES placement / patrol semantics; the pool, sizes and budgets declared here):
+ * 3..5 groups of 5..20 ordinary zombies, at most 64 horde members in the mall, one group (<= 20 members) starting per ring.
+ */
+export const MALL_HORDE: HordeRules = {
+  label: 'Roaming hordes',
+  groups: [3, 5],
+  size: [5, 20],
+  families: [['zombie', 1], ['ratdog', 0]],
+  zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
+  budget: {total: 64, perStorey: 20, groupsPerStorey: 1},
+  placement: MALL_HORDE_RULES.placement,
+  patrol: MALL_HORDE_RULES.patrol,
+};
+/** The mall's spawn profile (SPAWN_PROFILES.mall). */
+export const MALL_SPAWN_PROFILE: SpawnProfile = {
+  id: 'mall', label: 'The Eaton\'s Center', families: MALL_AMBIENT_POOL, zombieTypes: ZOMBIE_TYPES,
+  contexts: {
+    pit: {label: 'Pit station (platforms + plaza, storey 0)', count: [6, 9], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    ring: {label: 'Retail ring (each of storeys 1..6)', count: [7, 10], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    service: MALL_SERVICE_HOOK,
+  },
+  rooms: {},
+  horde: MALL_HORDE,
+  familyHooks: MALL_FAMILY_HOOKS,
+  rare: MALL_RARE_RULES,
+  budgets: {ambient: {total: 69, perStorey: 10}},
+};
+
 /**
  * THE PER-LEVEL PROFILES. Both shipped levels keep today's controls exactly and NO room modifiers (every room resolves to 1). A new
  * level adds its entry here (Record<LevelId, …> makes that mandatory); tests/enemy-spawn-tables.test.ts checks coverage.
@@ -235,6 +370,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
     },
     rooms: {},
   },
+  // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_SPAWN_PROFILE).
+  mall: MALL_SPAWN_PROFILE,
 };
 
 /** The spawn profile of a logical level. */
@@ -432,7 +569,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     if (pl.landingKeepM !== undefined) num(`${path}.landingKeepM`, pl.landingKeepM);
   };
 
-  known('profile', p, ['id', 'label', 'families', 'zombieTypes', 'contexts', 'levelMoves', 'rooms']);
+  known('profile', p, ['id', 'label', 'families', 'zombieTypes', 'contexts', 'levelMoves', 'rooms', 'horde', 'familyHooks', 'rare', 'budgets']);
   // --- families
   const seen = new Set<string>();
   let poolSum = 0;
@@ -503,5 +640,113 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
       if (fm.weight !== undefined) num(`${fp}.weight`, fm.weight);
     }
   }
+  // --- task track3-eaton-centre-20261031 (lane PROFILES): family hooks, rare rules, the horde pool, ambient budgets
+  const registry = ENEMY_FAMILY_IDS as readonly string[];
+  const hookIds = new Set<string>();
+  if (p.familyHooks !== undefined) {
+    if (!Array.isArray(p.familyHooks)) bad('familyHooks', 'not a list');
+    else {
+      let hookSum = 0;
+      p.familyHooks.forEach((h, i) => {
+        const hp = `familyHooks[${i}]`;
+        if (!h || typeof h !== 'object') { bad(hp, 'not a hook'); return; }
+        known(hp, h, ['family', 'share', 'note']);
+        if (typeof h.family !== 'string' || !/^[a-z][a-z0-9-]*$/.test(h.family)) bad(`${hp}.family`, `${String(h.family)} is not a family id`);
+        else if (registry.includes(h.family)) bad(`${hp}.family`, `the registry now exports '${h.family}' (Track1 merged): list it in the typed families pool with share ${h.share} and drop the hook`);
+        else if (hookIds.has(h.family)) bad(`${hp}.family`, `hook ${h.family} listed twice`);
+        else hookIds.add(h.family);
+        if (!(typeof h.share === 'number' && h.share > 0 && h.share < 1)) bad(`${hp}.share`, `${String(h.share)} is not in (0, 1)`);
+        else hookSum += h.share;
+        if (typeof h.note !== 'string' || !h.note) bad(`${hp}.note`, 'missing');
+      });
+      const zw = Array.isArray(p.families) ? p.families.find(r => r[0] === 'zombie')?.[1] ?? 0 : 0;
+      if (poolSum > 0 && hookSum >= zw / poolSum) bad('familyHooks', `hook shares ${hookSum} would leave no zombies (zombie share ${zw / poolSum})`);
+    }
+  }
+  if (p.rare !== undefined) {
+    if (!Array.isArray(p.rare)) bad('rare', 'not a list');
+    else {
+      const ruleIds = new Set<string>();
+      p.rare.forEach((r, i) => {
+        const rp = `rare[${i}]`;
+        if (!r || typeof r !== 'object') { bad(rp, 'not a rule'); return; }
+        known(rp, r, ['family', 'capPerLevel', 'spacingM', 'why']);
+        if (typeof r.family !== 'string' || !(registry.includes(r.family) || hookIds.has(r.family))) bad(`${rp}.family`, `${String(r.family)} is neither a typed family nor a hook of this profile`);
+        else if (r.family === 'zombie') bad(`${rp}.family`, 'zombies are the fallback family: they cannot be rare');
+        else if (ruleIds.has(r.family)) bad(`${rp}.family`, `rule for ${r.family} listed twice`);
+        else ruleIds.add(r.family);
+        int(`${rp}.capPerLevel`, r.capPerLevel);
+        num(`${rp}.spacingM`, r.spacingM);
+      });
+    }
+  }
+  if (p.horde !== undefined) {
+    issues.push(...validateHordeRules(p.horde, registry).map(s => `${p.id}: ${s}`));
+    const fams = Array.isArray(p.horde?.families) ? p.horde.families : [];
+    for (const f of registry) if (!fams.some(r => r[0] === f)) bad('horde.families', `family ${f} missing (list it with weight 0 to exclude it: the horde pool is explicit)`);
+    for (const [f, w] of fams) if ((hookIds.has(f) || HORDE_FORBIDDEN_FAMILIES.includes(f)) && w > 0) bad('horde.families', `${f} never joins an ordinary-zombie horde`);
+  }
+  if (p.budgets !== undefined) {
+    const b = p.budgets?.ambient;
+    if (!b || typeof b !== 'object') bad('budgets.ambient', 'missing');
+    else {
+      known('budgets', p.budgets, ['ambient']);
+      known('budgets.ambient', b, ['total', 'perStorey']);
+      int('budgets.ambient.total', b.total);
+      int('budgets.ambient.perStorey', b.perStorey);
+      if (nonNegInt(b.perStorey)) for (const [id, c] of Object.entries(p.contexts ?? {}) as [string, SpawnContextRule][]) {
+        if (c && Array.isArray(c.count) && nonNegInt(c.count[1]) && c.count[1] > b.perStorey) bad(`budgets.ambient.perStorey`, `${b.perStorey} < context ${id}'s count hi ${c.count[1]}`);
+      }
+      if (nonNegInt(b.total) && nonNegInt(b.perStorey) && b.total < b.perStorey) bad('budgets.ambient.total', `${b.total} < perStorey ${b.perStorey}`);
+    }
+  }
   return issues;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task track3-eaton-centre-20261031 (lane PROFILES): Track1 hooks, rare placement, budgets — resolution API (pure)
+
+/** Status of a profile's family hooks against the live registry: inactive while the registry lacks the family. */
+export function familyHookStatus(p: SpawnProfile, registry: readonly string[] = ENEMY_FAMILY_IDS): {family: string; share: number; active: boolean; status: string}[] {
+  return (p.familyHooks ?? []).map(h => {
+    const active = registry.includes(h.family);
+    return {family: h.family, share: h.share, active,
+      status: active ? `TYPED in the registry: list '${h.family}' in the typed pool (validation fails until then)` : `INACTIVE: the registry (${registry.join(', ')}) has no '${h.family}' yet — no spawn can be one; its share stays with zombies`};
+  });
+}
+
+/**
+ * The ambient pool once every hook is typed (documentation / tests): each hook's share comes out of the zombie weight, the typed
+ * families keep their weights. Equals the typed pool (same array) when the profile has no hooks.
+ */
+export function projectedAmbientPool(p: SpawnProfile): readonly (readonly [string, number])[] {
+  const hooks = p.familyHooks ?? [];
+  if (!hooks.length) return p.families;
+  const sum = p.families.reduce((s, [, w]) => s + Math.max(0, w), 0) || 1;
+  const take = hooks.reduce((s, h) => s + h.share, 0) * sum;
+  return [...p.families.map(([f, w]) => [f, f === 'zombie' ? w - take : w] as const), ...hooks.map(h => [h.family, h.share * sum] as const)];
+}
+
+/**
+ * Applies the profile's rare-placement rules to a generated layout AFTER the family roll (assignEnemyArchetypes): in spawn-index
+ * order, an ambient spawn of a rare family beyond the rule's cap, or within its spacing (3D straight line) of an earlier kept one,
+ * becomes a zombie (same position / type / area). Horde members are skipped. Pure and RNG-free; a no-op while no spawn is a rare
+ * family (every shipped level, and the mall until Track1 types the Siren). Returns how many spawns reverted.
+ */
+export function applyRareFamilyRules(layout: {zombies: {x: number; z: number; y?: number; archetype?: string; horde?: number}[]}, p: SpawnProfile): number {
+  let reverted = 0;
+  for (const r of p.rare ?? []) {
+    const kept: {x: number; y: number; z: number}[] = [];
+    for (const z of layout.zombies) {
+      if (z.horde !== undefined || z.archetype !== r.family) continue;
+      const y = z.y ?? 0;
+      if (kept.length >= r.capPerLevel || kept.some(k => Math.hypot(k.x - z.x, k.y - y, k.z - z.z) < r.spacingM)) {
+        (z as {archetype?: string}).archetype = 'zombie';
+        reverted++;
+        continue;
+      }
+      kept.push({x: z.x, y, z: z.z});
+    }
+  }
+  return reverted;
 }

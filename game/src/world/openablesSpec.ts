@@ -23,6 +23,7 @@
 // live in items/lootTables.ts, built with items/calibers.ts genericAmmo).
 // Task office-interactions-layout-20261030 (lane OPEN): the office kinds' audit rows live here now (OFFICE_OPEN_AUDIT, typed over OfficeKind).
 import type {OfficeKind} from '../gen/office/kinds';
+import {MALL_OPEN_AUDIT} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): the mall shop-fixture kinds' rows
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {COMPANY_DIMS} from '../assets/companyDims.generated'; // Task office-props-physics-scale-20261030 (lane FURN): furniture-only rescales
 
@@ -1031,6 +1032,8 @@ const OFFICE_OPEN_AUDIT: Readonly<Record<OfficeKind, {role: PropRole; cls: Audit
   rockingHorse: {role: 'decor', cls: 'none', how: 'rocking horse: nothing to open'},
   dressForm: {role: 'decor', cls: 'none', how: 'dress form: nothing to open'},
   catTree: {role: 'decor', cls: 'none', how: 'carpeted cat tree: nothing to open'},
+  // task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center shop fixtures (gen/mall/kinds.ts MALL_OPEN_AUDIT)
+  ...MALL_OPEN_AUDIT,
 };
 const OFFICE_AUDIT_KINDS: ReadonlySet<string> = new Set(Object.keys(OFFICE_OPEN_AUDIT));
 

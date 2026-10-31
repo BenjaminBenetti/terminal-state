@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import {packageSite,checkRuntime} from './package-ci.mjs';
+import {packageSite,checkRuntime,reportLines,MAX_FILE,MAX_FILES,STATIC_HOST_ADVISORY_BYTES} from './package-ci.mjs';
 const commit='0123456789abcdef0123456789abcdef01234567';
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 function fixture(t) {
@@ -60,4 +60,53 @@ test('allow namespace and shader comment but never external fetch of namespace',
 test('require commit and all copied public inputs',t=>{
   const f=fixture(t);assert.throws(()=>packageSite({root:f.root,commit:'main'}),/40-hex/);
   fs.unlinkSync(path.join(f.root,'dist/game/assets/audio/test.mp3'));assert.throws(f.run,/Missing public copy/);
+});
+
+// Task track3-eaton-centre-20261031 (lane PACKAGE): no artificial TOTAL cap (user decision 2026-10-31); the per-file and
+// file-count guards and every allowlist / path / URL check stay; sizes are reported exactly.
+test('manifest states no total cap, keeps the per-file / count guards and reports exact sizes by type and family',t=>{
+  const f=fixture(t);
+  f.put('game/public/assets/models/mall-fountain.glb','mall!');f.put('dist/game/assets/models/mall-fountain.glb','mall!');
+  f.put('game/public/assets/models/office-desk.glb','office');f.put('dist/game/assets/models/office-desk.glb','office');
+  f.put('game/public/assets/textures/mall/terrazzo.jpg','tex');f.put('dist/game/assets/textures/mall/terrazzo.jpg','tex');
+  const pol=JSON.parse(fs.readFileSync(path.join(f.root,'tools/release/public-inputs.json'),'utf8'));
+  for(const [rel,b] of [['assets/models/mall-fountain.glb','mall!'],['assets/models/office-desk.glb','office'],['assets/textures/mall/terrazzo.jpg','tex']]) pol.files.push({path:rel,bytes:Buffer.byteLength(b),sha256:sha(b)});
+  f.put('tools/release/public-inputs.json',JSON.stringify(pol));
+  f.put('dist/game/assets/index-test.js','fetch("assets/models/live.glb"); fetch("assets/audio/test.mp3"); fetch("assets/models/mall-fountain.glb"); fetch("assets/models/office-desk.glb"); fetch("assets/textures/mall/terrazzo.jpg");');
+  const m=f.run();
+  assert.equal(m.checks.maxTotalBytes,null);assert.equal(m.checks.maxFileBytes,MAX_FILE);assert.equal(m.checks.maxFiles,MAX_FILES);
+  assert.equal(m.totalBytes,m.files.reduce((s,e)=>s+e.bytes,0));
+  const r=m.report;
+  assert.equal(Object.values(r.byType).reduce((s,v)=>s+v.bytes,0),m.totalBytes);
+  assert.equal(Object.values(r.byType).reduce((s,v)=>s+v.files,0),m.fileCount);
+  assert.deepEqual(r.levelFamilies.models,{mall:{files:1,bytes:5},office:{files:1,bytes:6},shared:{files:1,bytes:4}});
+  assert.deepEqual(r.levelFamilies.textures,{mall:{files:1,bytes:3},office:{files:0,bytes:0},shared:{files:0,bytes:0}});
+  assert.deepEqual(r.byType.audio,{files:1,bytes:5});
+  assert.equal(r.excludedUnreferencedModelBytes,Buffer.byteLength('obsolete'));
+  assert.equal(r.largestFiles[0].path,'assets/index-test.js');
+  const lines=reportLines(m).join('\n');
+  assert.match(lines,/no total-size cap/);assert.match(lines,/models by family: mall 1 \/ 5 B · office 1 \/ 6 B · shared 1 \/ 4 B/);
+  assert.match(lines,/advisory \(not a CI limit\).*fits/);
+  assert.match(reportLines({...m,totalBytes:STATIC_HOST_ADVISORY_BYTES+1}).join('\n'),/exceeds by 1 B: use the dynamic app/);
+});
+test('a site above the removed 150 MiB total packages (no total cap) with exact totals; per-file guard unchanged',t=>{
+  const f=fixture(t), chunk=23*1024*1024, zero=sha(Buffer.alloc(chunk));
+  const pol=JSON.parse(fs.readFileSync(path.join(f.root,'tools/release/public-inputs.json'),'utf8'));
+  let refs='fetch("assets/models/live.glb"); fetch("assets/audio/test.mp3");';
+  for(let i=0;i<7;i++){ // 7 x 23 MiB = 161 MiB > the old 157,286,400 B cap; sparse inputs keep the fixture cheap
+    const rel=`assets/models/big-${i}.glb`;
+    for(const base of ['game/public','dist/game']){const p=path.join(f.root,base,rel);fs.writeFileSync(p,'');fs.truncateSync(p,chunk);}
+    pol.files.push({path:rel,bytes:chunk,sha256:zero});refs+=` fetch("${rel}");`;
+  }
+  f.put('tools/release/public-inputs.json',JSON.stringify(pol));f.put('dist/game/assets/index-test.js',refs);
+  const m=f.run();
+  assert(m.totalBytes>150*1024*1024);assert.equal(m.totalBytes,m.files.reduce((s,e)=>s+e.bytes,0));
+  assert.equal(m.report.levelFamilies.models.shared.bytes,7*chunk+Buffer.byteLength('live'));
+  for(let i=0;i<7;i++) assert.equal(fs.statSync(path.join(f.root,`artifacts/terminal-state-web/site/assets/models/big-${i}.glb`)).size,chunk);
+  const g=fixture(t);const p=path.join(g.root,'dist/game/assets/models/live.glb');fs.truncateSync(p,MAX_FILE+1);assert.throws(g.run,/size limit/);
+});
+test('file-count guard still rejects more than MAX_FILES outputs',t=>{
+  const f=fixture(t);
+  for(let i=0;i<=MAX_FILES;i++) f.put(`dist/game/assets/models/extra-${i}.glb`,'x');
+  assert.throws(f.run,/too many files/);
 });

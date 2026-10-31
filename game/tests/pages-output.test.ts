@@ -27,11 +27,13 @@ let site: Map<string, string>;
 let ref: LootReference;
 let enemyRef: EnemyReference;
 
+// Task track3-eaton-centre-20261031 (lane PROFILES): the full build now also samples The Eaton's Center (the largest generator) for
+// both censuses — the one-off build gets a 2-minute hook budget (the default 10 s hook timeout is not a coverage rule).
 beforeAll(() => {
   site = buildSite({commit: COMMIT, readSource: sourceReader(ROOT)});
   ref = JSON.parse(site.get('data/loot.json')!) as LootReference;
   enemyRef = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
-});
+}, 120000);
 
 const pages = () => [...site.keys()].filter(p => p.endsWith('.html'));
 /** Copy of the site with one file replaced / added (validator rejection tests). */
@@ -248,7 +250,7 @@ describe('enemy spawns section', () => {
   it('has the overview, families, how-to-read and one page per registered level, and nothing else under enemies/', () => {
     const expected = ['enemies/index.html', 'enemies/families.html', 'enemies/how-to-read.html', ...enemyRef.levels.map(l => levelPage(l.id))].sort();
     expect(enemyPages().sort()).toEqual(expected);
-    expect(enemyRef.levels.map(l => l.id)).toEqual(expect.arrayContaining(['subway', 'office']));
+    expect(enemyRef.levels.map(l => l.id)).toEqual(expect.arrayContaining(['subway', 'office', 'mall']));
     const index = site.get('enemies/index.html')!;
     for (const level of enemyRef.levels) expect(index).toContain(`href="${slug(level.id)}.html"`);
     expect(site.get('data/enemies.json')!.endsWith('\n')).toBe(true);
@@ -257,7 +259,8 @@ describe('enemy spawns section', () => {
   it('renders every context with its exact count range and E[count], every family share with its denominator', () => {
     for (const level of enemyRef.levels) {
       const html = site.get(levelPage(level.id))!;
-      expect(html).toContain(`<h1>${level.name.replace(/&/g, '&amp;')}: enemy spawns</h1>`);
+      // (task track3-eaton-centre-20261031: "The Eaton's Center" — the renderer escapes the apostrophe too)
+      expect(html).toContain(`<h1>${level.name.replace(/&/g, '&amp;').replace(/'/g, '&#39;')}: enemy spawns</h1>`);
       for (const c of level.contexts) {
         expect(html, c.id).toContain(`id="ctx-${slug(c.id)}"`);
         expect(html, c.id).toContain(`${range(c.count.lo, c.count.hi)}<span class="denom">U{${num(c.count.lo)}..${num(c.count.hi)}}</span>`);
@@ -426,6 +429,22 @@ describe('reference site validator rejects unsafe or broken output', () => {
       const file = `enemies/${slug(level.id)}.html`;
       return mutated(file, site.get(file)!.replace(`id="room-${slug(level.rooms.rows[0]!.room)}"`, 'id="room-gone"'));
     }, /no rendered place for room key/],
+    // task track3-eaton-centre-20261031 (lane PROFILES): the mall's horde pool / Track1 family hooks / rare rules must have their places
+    ['a level page missing its horde section', () => {
+      const level = enemyRef.levels.find(l => l.horde)!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace('id="horde"', 'id="horde-gone"'));
+    }, /no rendered place for horde pool/],
+    ['a level page missing a family hook anchor', () => {
+      const level = enemyRef.levels.find(l => l.hooks.length)!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace(`id="hook-${slug(level.hooks[0]!.family)}"`, 'id="hook-gone"'));
+    }, /no rendered place for family hook/],
+    ['a level page missing a rare rule anchor', () => {
+      const level = enemyRef.levels.find(l => l.rare.length)!;
+      const file = `enemies/${slug(level.id)}.html`;
+      return mutated(file, site.get(file)!.replace(`id="rare-${slug(level.rare[0]!.family)}"`, 'id="rare-gone"'));
+    }, /no rendered place for rare rule/],
     ['enemy data that the manifest digest does not name', () => {
       const data = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
       return mutated('data/enemies.json', `${JSON.stringify({...data, meta: {...data.meta, dataHash: 'ffffffff'}})}\n`);

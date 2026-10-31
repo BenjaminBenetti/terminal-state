@@ -37,6 +37,7 @@ import {
   BASELINE_PROFILE, BATTERY_ID, ECON_CATS, FLARE_ID, HOLDER_ALLOW, HP_MED, RANDOM_HOLDERS, THEME_OF_TYPE, catWeight, econCat, keepChance, resolveRows,
   type EconCat, type ItemRows, type LootProfile,
 } from './lootTables';
+import {CONTAINER_THEMED, type SalvageRule} from './lootTables'; // Task track3-eaton-centre-20261031 (lane PROFILES): salvage
 
 export type {LootTheme};
 export type {EconCat, ThemeEconomy} from './lootTables';
@@ -61,6 +62,39 @@ export function lootTheme(areaKey: string): LootTheme {
 /** Theme a holder's finds follow: its area's, except junk holders (random, like a public hall). */
 export function holderTheme(kind: string, areaKey: string): LootTheme {
   return RANDOM_HOLDERS.has(kind) ? 'public' : lootTheme(areaKey);
+}
+
+// ---------------------------------------------------------------------------------------
+// Task track3-eaton-centre-20261031 (lane PROFILES): SALVAGE (lootTables SalvageRule / LootTables.salvage) — crafting-material rows a
+// level adds to the own / purpose tables of a themed place. Absent in every shipped level's tables: withSalvage returns the very
+// same row array, so Subway / Office draws are byte-identical.
+
+/**
+ * The salvage rule a holder gets under `profile` (undefined: none): the purpose entry of its loot key, else its loot theme's entry.
+ * Never for junk holders (RANDOM_HOLDERS), container-themed storage (the container decides: CONTAINER_THEMED) or holders that may
+ * not hold crafting materials (HOLDER_ALLOW).
+ */
+export function salvageRule(profile: LootProfile, kind: string, areaKey: string): SalvageRule | undefined {
+  const sv = profile.tables.salvage;
+  if (!sv || RANDOM_HOLDERS.has(kind) || CONTAINER_THEMED.has(kind)) return undefined;
+  const allow = HOLDER_ALLOW[kind];
+  if (allow && !allow.includes('material')) return undefined;
+  return sv.purposes?.[areaKey] ?? sv.themes?.[lootTheme(areaKey)];
+}
+
+/**
+ * A holder's resolved rows with its salvage rows appended (the SAME array when it has no rule or an empty table): each salvage row
+ * weighs share / (1 − share) × Σ(rows) × its share of the salvage mix, then the profile's item / category weight overrides
+ * (resolveRows) — so before overrides a lot is salvage with probability `share`.
+ */
+export function withSalvage(profile: LootProfile, kind: string, areaKey: string, rows: ItemRows): ItemRows {
+  const rule = salvageRule(profile, kind, areaKey);
+  if (!rule || !rows.length) return rows;
+  const total = rows.reduce((s, r) => s + r[1], 0), mix = rule.rows.reduce((s, r) => s + r[1], 0);
+  if (!(total > 0) || !(mix > 0)) return rows;
+  const scale = rule.share / (1 - rule.share) * total / mix;
+  const extra = resolveRows(profile, rule.rows.map(([id, w]) => [id, w * scale] as const)).filter(r => r[1] > 0);
+  return extra.length ? [...rows, ...extra] : rows;
 }
 
 function allowedCats(kind: string): EconCat[] {

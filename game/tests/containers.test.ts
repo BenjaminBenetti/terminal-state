@@ -8,6 +8,7 @@ import {DEFAULT_SHELF, cabinetInsert, holderSurfaces, placementBox, type Dims} f
 import {PROP_DEFS, PURPOSE_HOLDER_KINDS, type PurposeHolderKind} from '../src/gen/props';
 import {P7_HOLDER_KINDS, type P7HolderKind} from '../src/gen/props07';
 import {OPENABLE_CONTAINER_KINDS, type OpenableContainerKind} from '../src/world/openablesSpec';
+import {MALL_HOLDER_KINDS, type MallHolderKind} from '../src/gen/mall/kinds'; // track3-eaton-centre-20261031 (lane SHOPS)
 
 const DIMS: Record<HolderKind, Dims> = {
   desk: {w: 1.5, d: 0.75, h: 0.76},
@@ -20,6 +21,8 @@ const DIMS: Record<HolderKind, Dims> = {
   ...Object.fromEntries(P7_HOLDER_KINDS.map(k => [k, PROP_DEFS[k]])) as unknown as Record<P7HolderKind, Dims>,
   // Iteration 08 (Lane I) openable containers (tests/openables.test.ts covers them).
   ...Object.fromEntries(OPENABLE_CONTAINER_KINDS.map(k => [k, PROP_DEFS[k]])) as unknown as Record<OpenableContainerKind, Dims>,
+  // Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center open shop holders (tests/mall-shops.test.ts covers them).
+  ...Object.fromEntries(MALL_HOLDER_KINDS.map(k => [k, PROP_DEFS[k]])) as unknown as Record<MallHolderKind, Dims>,
 };
 const surfaces = (k: HolderKind) => holderSurfaces(k, DIMS[k]);
 const ROOMS = ['storage', 'crew-room', 'utility', 'agent-office', 'supply-closet', 'stock-room', 'food-court', 'platform', 'something-new'];

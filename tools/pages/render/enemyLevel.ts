@@ -6,13 +6,15 @@ import type {EnemyLevelInfo, LevelCensus, PlacementInfo, SpawnContextInfo} from 
 import {badge, esc, filterBox, href, num, range, renderPage, searchAttr, table} from './html';
 import {probCell, prose, shareCell} from './common';
 import {
-  ALL_FAMILIES_KEY, ctxAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, familyAnchor, familyCell, familyLabel, keyKindLabel, labelWithId, modifierFieldLabel,
+  ALL_FAMILIES_KEY, ctxAnchor, hookAnchor, rareAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, familyAnchor, familyCell, familyLabel, keyKindLabel, labelWithId, modifierFieldLabel,
   modifierStatus, mult, roomAnchor, uniform, ZOMBIE_FAMILY, type EnemySite,
 } from './enemies';
 
 const SECTIONS: Array<[string, string]> = [
   ['contexts', 'Generation contexts'],
   ['families', 'Enemy families'],
+  ['family-hooks', 'Family hooks and rare placement'],
+  ['horde', 'Roaming hordes (separate pool)'],
   ['zombie-types', 'Zombie types'],
   ['placement', 'Placement rules'],
   ['storey-moves', 'Storey moves'],
@@ -23,7 +25,8 @@ const SECTIONS: Array<[string, string]> = [
 ];
 
 function toc(level: EnemyLevelInfo): string {
-  const shown = SECTIONS.filter(([id]) => (id === 'storey-moves' ? level.levelMoves !== null : true));
+  const shown = SECTIONS.filter(([id]) => (id === 'storey-moves' ? level.levelMoves !== null
+    : id === 'family-hooks' ? level.hooks.length + level.rare.length > 0 : id === 'horde' ? level.horde !== null : true));
   return `<nav class="toc" aria-label="${esc(level.name)} enemy spawn sections"><h2>On this page</h2><ul>${shown
     .map(([id, label]) => `<li><a href="#${esc(id)}">${esc(label)}</a></li>`).join('')}</ul></nav>`;
 }
@@ -40,7 +43,7 @@ function valueText(v: number | readonly [number, number] | string): string {
 
 function contextsSection(es: EnemySite, level: EnemyLevelInfo): string {
   const rows = level.contexts.map(c => [
-    `<a href="#${esc(ctxAnchor(c.id))}">${esc(c.label)}</a>${c.label === c.id ? '' : `<span class="item-id">${esc(c.id)}</span>`}`,
+    `<a href="#${esc(ctxAnchor(c.id))}">${esc(c.label)}</a>${c.label === c.id ? '' : `<span class="item-id">${esc(c.id)}</span>`}${c.hook ? ` ${badge('data hook', 'notderivable')}` : ''}`,
     prose(c.storeys),
     num(c.runs),
     `${range(c.count.lo, c.count.hi)}<span class="denom">${esc(uniform(c.count.lo, c.count.hi))}</span>`,
@@ -72,7 +75,81 @@ ${table({
 <p class="note">These are targets: the generator can place fewer when it runs out of eligible, spaced floor (see
 <a href="#placement">placement rules</a>). The game has no per-area or per-square-metre spawn rate; the count is spread over the
 eligible areas of the context.</p>
-<p>Generator: ${level.generator.at.symbol === level.generator.fn ? '' : `<code>${esc(level.generator.fn)}</code>, `}${enemySourceLoc(es, level.generator.at)}. ${prose(level.generator.note)}</p>`;
+<p>Generator: ${level.generator.at.symbol === level.generator.fn ? '' : `<code>${esc(level.generator.fn)}</code>, `}${enemySourceLoc(es, level.generator.at)}. ${prose(level.generator.note)}</p>
+${level.contexts.filter(c => c.hook).map(c => `<p class="note"><strong>${esc(c.label)}</strong> (<code>${esc(c.id)}</code>): ${prose(c.hook!)}</p>`).join('\n')}
+${ambientBudget(es, level)}`;
+}
+
+/** Task track3-eaton-centre-20261031 (lane PROFILES): the explicit ambient-pool caps (the horde pool has its own budget). */
+function ambientBudget(es: EnemySite, level: EnemyLevelInfo): string {
+  const b = level.budgets?.ambient;
+  if (!b) return '';
+  return `<section id="ambient-budget"><h3>Ambient budget</h3>
+<dl class="facts">
+<dt>Ambient spawns in the whole level</dt><dd>at most ${num(b.total)} (the contexts can try at most ${num(b.contextsMax)})</dd>
+<dt>Ambient spawns of one storey run</dt><dd>at most ${num(b.perStorey)}</dd>
+</dl>
+<p>${prose(b.note)}${level.horde ? ' Horde members are counted in the <a href="#horde">horde pool</a>, never here.' : ''}</p>
+<p class="note">Defined at ${enemySourceLoc(es, b.at)}.</p></section>`;
+}
+
+// ------------------------------------------------------------------------------------------------------------- hooks / rare / horde
+// Task track3-eaton-centre-20261031 (lane PROFILES): Track1 family hooks, rare placement and the separate roaming-horde pool.
+
+function hooksSection(es: EnemySite, level: EnemyLevelInfo): string {
+  if (!level.hooks.length && !level.rare.length) return '';
+  const hooks = level.hooks.length ? table({
+    caption: `${level.name}: ambient family hooks (Track1 families declared before the registry has them)`,
+    head: ['Family id', 'Ambient share once typed', 'Expected per level once typed', 'Status', 'Note'],
+    numeric: [2],
+    rowHeader: 0,
+    rows: level.hooks.map(h => [`<code>${esc(h.family)}</code>`, probCell(h.share), num(h.expectedPerLevelIfTyped), `${badge(h.active ? 'typed' : 'inactive', h.active ? 'exact' : 'notderivable')} ${prose(h.status)}`, prose(h.note)]),
+    rowAttrs: level.hooks.map(h => `id="${esc(hookAnchor(h.family))}"`),
+    className: 'rows',
+  }) : '';
+  const rare = level.rare.length ? table({
+    caption: `${level.name}: rare placement over the whole level (applied after the family roll)`,
+    head: ['Family id', 'Cap per level', 'Spacing (m)', 'Expected before the cap', 'Status', 'Why'],
+    numeric: [1, 2, 3],
+    rowHeader: 0,
+    rows: level.rare.map(r => [`<code>${esc(r.family)}</code>`, num(r.capPerLevel), num(r.spacingM), num(r.expectedBeforeCap), badge(r.status, r.status === 'live' ? 'exact' : 'notderivable'), prose(r.why)]),
+    rowAttrs: level.rare.map(r => `id="${esc(rareAnchor(r.family))}"`),
+    className: 'rows',
+  }) : '';
+  return `<h2 id="family-hooks">Family hooks and rare placement</h2>
+<p>A <em>family hook</em> declares an ambient family before the enemy registry exports it. While the registry lacks it the hook is
+<strong>inactive</strong>: no spawn can be that family and its share stays with the zombies of the typed pool above. Once the
+registry exports it, the profile must list it in its typed pool (validation fails until then). Hooks never apply to hordes.</p>
+${hooks}
+${rare}
+${level.rare.map(r => `<p>${prose(r.semantics)}</p>`).join('\n')}
+<p class="note">Defined at ${[...new Set([...level.hooks.map(h => h.at), ...level.rare.map(r => r.at)].map(a => enemySourceLoc(es, a)))].join(', ')}.</p>`;
+}
+
+function hordeSection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
+  const h = level.horde;
+  if (!h) return '';
+  const pool = table({
+    caption: `${level.name}: horde family pool (its OWN explicit pool; denominator ${num(h.pool.denominator)})`,
+    head: ['Family', 'Weight', 'Conditional share'],
+    numeric: [1],
+    rowHeader: 0,
+    rows: h.pool.rows.map(r => [familyCell(es, p, r.family), num(r.weight), r.weight > 0 ? shareCell(r.share, r.weight, h.pool.denominator) : '<span class="muted">never in a horde</span>']),
+  });
+  return `<h2 id="horde">${esc(h.label)} <span class="summary-meta">(separate pool)</span></h2>
+<dl class="facts">
+<dt>Groups per level</dt><dd>${range(h.groups.lo, h.groups.hi)} <span class="denom">${esc(uniform(h.groups.lo, h.groups.hi))}</span>, E = ${num(h.groups.mean)}</dd>
+<dt>Initial members per group</dt><dd>${range(h.size.lo, h.size.hi)} <span class="denom">${esc(uniform(h.size.lo, h.size.hi))}</span>, E = ${num(h.size.mean)}</dd>
+<dt>Horde budget</dt><dd>at most ${num(h.budget.total)} members in the level; ${num(h.budget.perStorey)} members and ${plural(h.budget.groupsPerStorey, 'group')} starting on one storey</dd>
+<dt>Members</dt><dd>E ≈ ${num(h.members.meanBeforeBudget)} before the budget; at most ${num(h.members.max)}</dd>
+<dt>Member types</dt><dd>coated with chance ${num(h.zombieTypes.coatedChance)}${h.zombieTypes.atLeastOneEach ? ', at least one of each' : ''}</dd>
+<dt>Starts</dt><dd>${prose(h.placement.storeys)}; ≥ ${num(h.placement.startM)} m walking from the player start; groups ≥ ${num(h.placement.groupSpacingM)} m apart; members ≥ ${num(h.placement.memberSpacingM)} m apart within ${num(h.placement.clusterM)} m of the group start; ≥ ${num(h.placement.ambientSpacingM)} m from ambient enemies</dd>
+<dt>Patrol</dt><dd>${num(h.patrol.speed)} m/s roam; a leg takes a vertical link with chance ${num(h.patrol.storeyChange)}; pauses with chance ${num(h.patrol.pauseChance)} for ${range(h.patrol.pause[0], h.patrol.pause[1])} s</dd>
+</dl>
+<p>${prose(h.members.note)}</p>
+${pool}
+<ul>${h.semantics.map(t => `<li>${prose(t)}</li>`).join('')}</ul>
+<p class="note">Defined at ${enemySourceLoc(es, h.at)}.</p>`;
 }
 
 // ------------------------------------------------------------------------------------------------------------- families
@@ -364,7 +441,22 @@ ${byKind}
 ${typesTable}
 ${rooms}
 ${unobserved ? `<p class="note">${plural(unobserved, 'room key')} of this level did not occur in the sample; they are still listed under
-<a href="#rooms">room modifiers</a>.</p>` : ''}`;
+<a href="#rooms">room modifiers</a>.</p>` : ''}
+${hordeCensus(es, level, census)}`;
+}
+
+/** Task track3-eaton-centre-20261031 (lane PROFILES): the separate horde pool in the sample. */
+function hordeCensus(es: EnemySite, level: EnemyLevelInfo, census: LevelCensus): string {
+  const h = census.horde;
+  if (!h) return '';
+  return `<h3>Horde members in the sample <span class="summary-meta">(separate pool)</span></h3>
+<dl class="facts">
+<dt>Members</dt><dd>${num(h.members)} over the sample (${num(h.perLevel)} per level)</dd>
+<dt>Groups</dt><dd>${num(h.groups)} (${num(h.groupsPerLevel)} per level), ${range(h.groupSizes[0], h.groupSizes[1])} members each</dd>
+<dt>By family</dt><dd>${Object.entries(h.byFamily).map(([f, n]) => `${esc(familyLabel(es, f))} ${num(n)}`).join(', ')}</dd>
+<dt>By starting storey</dt><dd>${Object.entries(h.byStorey).map(([st, n]) => `storey ${esc(st)}: ${num(n)}`).join(', ')}</dd>
+</dl>
+<p>${prose(h.note)}${level.horde ? ' Rules: <a href="#horde">roaming hordes</a>.' : ''}</p>`;
 }
 
 // ------------------------------------------------------------------------------------------------------------- page
@@ -387,6 +479,8 @@ export function renderEnemyLevelPage(es: EnemySite, level: EnemyLevelInfo): stri
 </dl>
 ${contextsSection(es, level)}
 ${familiesSection(es, level, p)}
+${hooksSection(es, level)}
+${hordeSection(es, level, p)}
 ${zombieTypesSection(es, level)}
 ${placementSection(es, level)}
 ${storeyMovesSection(es, level)}

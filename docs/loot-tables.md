@@ -300,6 +300,63 @@ To add a material: an `items/craftMaterials.ts` def, its dims, a model in `world
 `ui/materialIcons.ts`, `ITEM_CLASS` / `ITEM_PHYSICS` rows in `damage/materials.ts` and a `BOX_COUNT` entry. Then add rows to
 the holders it fits, and `'material'` to their `HOLDER_ALLOW`.
 
+## The Eaton's Center (`mall`)
+
+<!-- Task track3-eaton-centre-20261031 (lane PROFILES) -->
+
+User: "I also want the shopping mall to be a significant source of the crafting materials, the electrical parts, the scrap metal,
+and the bio material … It should be much more common in this area."
+
+`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE}` — every consumable, ammo /
+calibre, box size, scarcity, limb, rare-gear and reward table is the SAME object the Subway and the Office roll — plus
+`overrides` = `MALL_OVERRIDES` (`itemWeight: {bio_mater: 1.5}`). The Office's physical storeys idea applies: the station pit and the
+six rings are contexts of ONE logical level (one profile, one rare-gear roll, one gas-mask roll: `MASK_LOOT.levels.mall`, masks 1–2,
+filters 2–5).
+
+- **Salvage** (`LootTables.salvage`, `SalvageRule` / `SalvageTables`, logic `items/lootEconomy.ts` `salvageRule` / `withSalvage`):
+  crafting-material rows a level adds at RESOLUTION time to the own / purpose tables of a place whose purpose (first) or loot theme
+  has an entry. A rule `{rows, share}` makes the salvage rows `share` of the holder table's weight before overrides (each row weighs
+  share / (1 − share) × Σ(table) × its share of the mix), then the profile's item / category weights apply like any row. They are
+  rolled per lot and kept exactly as rolled (category `material`), finite and placed only where they fit (the holder's surfaces).
+  Never legacy room-type tables, curated rewards, fixtures, container-themed storage, junk holders, or holders whose `HOLDER_ALLOW`
+  excludes `material` (coolers, fridges, food lines, first-aid fixtures, gun lockers). Absent in `BASE_TABLES`: Subway and Office
+  draws are byte-identical (`withSalvage` returns the same array; `tests/loot-golden.test.ts`).
+- **`MALL_SALVAGE`** — the named mixes `MALL_ELECTRONICS_SALVAGE` (electrical parts 3 : scrap 0.7), `MALL_HARDWARE_SALVAGE` (scrap 3 :
+  parts 0.9), `MALL_BIO_SALVAGE` (bio mater), `MALL_STOCKROOM_SALVAGE` (scrap 1.6 : parts 1.1 : bio 0.15):
+  - by theme: tech 0.3 (electronics), service 0.3 (stock-room mix), medical 0.15 (bio), security 0.1 (hardware), personal 0.08;
+  - by purpose (lane SHOPS' `mall-*` ids): electronics / phone and their stock rooms 0.35–0.4, arcade / music stock rooms;
+    hardware 0.4 / 0.45, outdoors 0.25 / 0.3, sports, home, jewellery, luggage, toys, the gun shop's back office 0.2; clinic 0.2 /
+    0.25, pharmacy / optician stock rooms 0.2, pet 0.12 / 0.18, the florist's workroom 0.1; vacant units 0.2; janitorial 0.3; plus
+    the shared back-of-house ids (electrical room / closet, workshop, pump room) should the service ring use them.
+  - The mall purposes carry NO material rows of their own: salvage is the one dial (no double counting).
+- **Floor program** `MALL_FLOOR` (`BASE_TABLES.floor.mall`, interpreter `gen/mall/supplies.ts` `placeMallSupplies`, stream
+  `mall-supplies-<storey>`): the pit once (one ammo-band draw, one scarce draw, 1–2 loose salvage stacks) and every ring (two ammo
+  draws, two scarce draws, 2–4 loose salvage stacks: `MALL_LOOSE_SALVAGE`), placed in weighted zones (galleries 1, shop floors 0.8,
+  back of house 1.3, salvage × 2 in tech / service places) ≥ 16 walking cells from the start and off the landings.
+- **Rewards**: none of its own (the base reward tables are inherited but inert: no mall holder carries their keys). Weapon finds are
+  lane SHOPS' bounded once-per-run gun-shop plan (an explicit exception, like the Office's weapon plan).
+
+### Normalised census (the evidence)
+
+`game/tests/helpers/materialCensus.ts` (`runCensus` / `summarize`) measures any level the same way: holder lots AFTER fit
+(`layoutHolderDetails`: the ContainerManager.build roll + packing, with the pre-fit entries → fit failures, and the surface area =
+finite capacity) and loose pickups, counted only where the walking field from the arrival point (`levelDistance` over every storey's
+links) reaches the holder / pickup; usable floor = the reached walkable cells (0.25 m² each, stair runs once). Rates are per
+REACHABLE holder and per 100 m² of usable floor. `game/tests/mall-profiles.test.ts` prints the table and requires the mall's material
+rates to be > 3× the Office's both per holder and per 100 m² (consumables stay within the shared band).
+
+Measured (3 levels each, seeds 11 / 222 / 3333, pistol start, generator state of this task's checkpoint; see the task notes for the
+exact run):
+
+| | Office Space | The Eaton's Center |
+|---|---|---|
+| usable floor per run | ~8,530 m² | ~43,400 m² |
+| holders per run (all reachable) | 484 | ~830 |
+| material units per run (parts / scrap / bio) | 12.3 (9.7 / 2.7 / 0) | ~302 (124 / 151 / 26) |
+| material units per reachable holder | 0.026 | 0.33 (≈ 12.7×) |
+| material units per 100 m² | 0.145 | 0.70 (≈ 4.8×) |
+| fit failures (lots) | 0.8 % | 0.3 % |
+
 ## Verify
 
 - `tests/loot-golden.test.ts` hashes current behaviour:

@@ -1,0 +1,126 @@
+// Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped runtime assets — which lazy files belong to ONE logical level,
+// the selector that keeps them out of every other level's fetch and resident set, and working-set reporting. Pure data / logic
+// (no three.js), so the generator-side tests and the CI packager's path families agree with the runtime.
+//
+// How a level's assets load (verified against game.ts / assets/loader.ts, 2026-10-31):
+//  1. BOOT, once, behind the title screen (loadAssets: assets/manifest.ts MODEL_FILES + TEXTURE_FILES): weapons, zombie bodies /
+//     outfits, the ratdog, a few station props, the station textures. Every level needs them; they stay resident.
+//  2. PER LEVEL, behind THAT level's loading screen (Game.prepareSection, before anything of the new level is built):
+//     the lazy prop library (PropModelLibrary) fetches exactly the keys the generated layout placed (p7ModelKeysFor + the
+//     game's sectionModelKeys hooks, e.g. officeModelKeysFor — which also maps the mall's shop kinds), filtered here by
+//     `selectLevelKeys`; then the section preloads run (level textures: LevelResources.load); then buildSection builds the
+//     world and prepareGraphics warms every material / pipeline it discovers in the scene. Nothing of the level's world is
+//     fetched mid-play (the library and LevelResources count any late fetch: `stats.late`).
+//  3. RELEASE when the level changes (buildSection, right after the old world was torn down): the library keeps the new
+//     layout's keys plus up to 16 recently used SHARED extras; files owned by another level are never kept as extras
+//     (`foreignTo`), and LevelResources disposes every other level's textures / owned GPU resources (retainOnly).
+//     Peak while travelling = the old level's resident set + the new level's fetch (the old world must stay intact until the
+//     new one is ready, so a failed travel leaves the player where they were).
+//  Outside this scheme (unchanged, small): module caches of assets/officeAssets.ts (gear / medical models used in every level,
+//  the office textures, the tower's exterior wrecks) and world/officeProps.ts.
+//
+// Ownership is decided by the FILE PATH, never by the library key (the mall's shop kinds render through `office-<id>` keys,
+// gen/mall/kinds.ts MALL_KIND_ASSET): a path is LEVEL-ONLY when it matches its level's rule below. Everything else is shared —
+// office / company models stay shared because the mall's shops may reuse them; they are still fetched only when a layout uses
+// them and released when no layout does.
+
+/** A lazy runtime file (same shape as PropModelLibrary's file map). */
+export interface LazyFile { url: string; bytes: number }
+export type LazyFiles = Readonly<Record<string, LazyFile>>;
+
+export interface LevelOnlyRule {
+  /** levels/types.ts LevelId (string here so this module compiles before / independently of the registry). */
+  level: string;
+  /** Matches the level-only runtime paths (relative, as in the manifests: 'assets/models/…'). */
+  path: RegExp;
+}
+
+/**
+ * Level-only runtime paths. Mall: every `assets/models/mall-*.glb` derivative (lane ASSETS, assets/mallAssets.ts) and every
+ * texture under `assets/textures/mall/`. Same families as tools/release/package-ci.mjs `levelFamilies` (mall).
+ */
+export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
+  {level: 'mall', path: /^(?:\.\/)?assets\/(?:models\/mall-[A-Za-z0-9_-]+\.glb|textures\/mall\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+];
+
+/** The level that alone may load `url`, or null when it is shared. */
+export function levelOfAsset(url: string): string | null {
+  for (const r of LEVEL_ONLY_RULES) if (r.path.test(url)) return r.level;
+  return null;
+}
+
+/** The owning level of a lazy-library key (by its file path), or null when shared / unknown to `files`. */
+export function levelOfKey(key: string, files: LazyFiles): string | null {
+  const f = files[key];
+  return f ? levelOfAsset(f.url) : null;
+}
+
+/** May `level` load `url`? Shared files: yes; level-only files: only their own level. */
+export function assetAllowedIn(level: string, url: string): boolean {
+  const owner = levelOfAsset(url);
+  return owner === null || owner === level;
+}
+
+/**
+ * The keys `level` may fetch (deduplicated, input order) and the FOREIGN ones: keys whose file belongs to another level (a
+ * generator / mapping bug — never fetched, so another level's art is never downloaded or decoded here). Keys unknown to
+ * `files` pass through (the library ignores undelivered models).
+ */
+export function selectLevelKeys(level: string, keys: readonly string[], files: LazyFiles): {keys: string[]; foreign: string[]} {
+  const out: string[] = [], foreign: string[] = [], seen = new Set<string>();
+  for (const k of keys) {
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const owner = levelOfKey(k, files);
+    (owner === null || owner === level ? out : foreign).push(k);
+  }
+  return {keys: out, foreign};
+}
+
+/** Predicate for PropModelLibrary.trim: a key owned by a level other than `level` (released, never kept as a recent extra). */
+export function foreignTo(level: string, files: LazyFiles): (key: string) => boolean {
+  return key => { const owner = levelOfKey(key, files); return owner !== null && owner !== level; };
+}
+
+export interface ByteCount { files: number; bytes: number }
+
+export interface LevelWorkingSet {
+  level: string;
+  /** Every selected lazy file (catalogue bytes: the cooked GLB sizes, not decoded GPU memory). */
+  total: ByteCount;
+  /** Of which level-only (this level's own art) / shared. */
+  levelOnly: ByteCount;
+  shared: ByteCount;
+  /** Keys rejected as another level's (see selectLevelKeys). */
+  foreign: string[];
+  /** Requested keys without a delivered file (ignored by the library). */
+  undelivered: string[];
+}
+
+/** The lazy working set `level` fetches for `keys` (deterministic; used by tests, QA and the docs' byte numbers). */
+export function levelWorkingSet(level: string, keys: readonly string[], files: LazyFiles): LevelWorkingSet {
+  const {keys: ok, foreign} = selectLevelKeys(level, keys, files);
+  const ws: LevelWorkingSet = {level, total: {files: 0, bytes: 0}, levelOnly: {files: 0, bytes: 0}, shared: {files: 0, bytes: 0}, foreign, undelivered: []};
+  for (const k of ok) {
+    const f = files[k];
+    if (!f) { ws.undelivered.push(k); continue; }
+    const bucket = levelOfAsset(f.url) === level ? ws.levelOnly : ws.shared;
+    bucket.files++; bucket.bytes += f.bytes;
+    ws.total.files++; ws.total.bytes += f.bytes;
+  }
+  return ws;
+}
+
+/** Declared lazy catalogue by owner ('shared' + each level-only owner): what exists, not what any one level loads. */
+export function lazyCatalogue(files: LazyFiles): Record<string, ByteCount> {
+  const out: Record<string, ByteCount> = {shared: {files: 0, bytes: 0}};
+  for (const r of LEVEL_ONLY_RULES) out[r.level] ??= {files: 0, bytes: 0};
+  const seen = new Set<string>();
+  for (const f of Object.values(files)) {
+    if (seen.has(f.url)) continue; // two keys may share one file
+    seen.add(f.url);
+    const b = out[levelOfAsset(f.url) ?? 'shared'];
+    b.files++; b.bytes += f.bytes;
+  }
+  return out;
+}

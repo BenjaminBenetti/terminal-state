@@ -7,6 +7,7 @@
 import {PURPOSE_SURFACES, SHOP_COOLER_SURFACES, SHOP_DISPLAY_SURFACES, type PurposeHolderKind, type SurfaceSpec} from '../gen/props';
 import {itemDims} from './items';
 import {P7_SURFACES, type P7HolderKind} from '../gen/props07';
+import {MALL_SURFACES, type MallHolderKind} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): mall shop holders
 import {isOpenableKind, openableSurfaces, type OpenableContainerKind} from '../world/openablesSpec';
 
 export type Orient = 'up' | 'side' | 'back';
@@ -140,7 +141,9 @@ export type SurfaceHolder = 'cabinetTall' | 'cabinetLow' | 'crate' | 'shelf' | '
   // Iteration 07 (Lane P2): generated holders, measured surfaces (gen/props07.ts P7_SURFACES).
   | P7HolderKind
   // Iteration 08 (Lane I): openable containers (world/openablesSpec.ts): surfaces inside their compartments.
-  | OpenableContainerKind;
+  | OpenableContainerKind
+  // Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center open shop holders (gen/mall/kinds.ts MALL_SURFACES).
+  | MallHolderKind;
 
 /**
  * Storefront holder surfaces as fractions of the prop height (gen/props.ts SHOP_* constants over
@@ -247,7 +250,8 @@ export function holderSurfaces(kind: SurfaceHolder, def: Dims, o: SurfaceOptions
       out.push(...specSurfaces(SHOP_COOLER_SURFACES, def, 2.0));
       break;
     default: {
-      const spec = (PURPOSE_SURFACES as Partial<Record<string, SurfaceSpec[]>>)[kind] ?? (P7_SURFACES as Partial<Record<string, SurfaceSpec[]>>)[kind];
+      const spec = (PURPOSE_SURFACES as Partial<Record<string, SurfaceSpec[]>>)[kind] ?? (P7_SURFACES as Partial<Record<string, SurfaceSpec[]>>)[kind]
+        ?? (MALL_SURFACES as Partial<Record<string, readonly SurfaceSpec[]>>)[kind]; // track3 lane SHOPS
       if (spec) out.push(...spec.map(s => ({y: s.y + 0.002, x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, clear: s.clear})));
     }
   }

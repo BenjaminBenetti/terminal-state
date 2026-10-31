@@ -36,7 +36,9 @@ game modules (real exports)  ──>  buildLootReference()  ──>  LootReferen
 | Tables | Every named row list / `LootSpec` export of `lootTables.ts`, `OPENABLE_TABLES`, `GLOBAL_POOL`, `LEGACY_POOL`, `VENDING_FOOD`, `LIMB_ECONOMY.pool`, `REWARD_TABLES` picks, every purpose's `loot` in `gen/purposes.ts` |
 | What a holder rolls in a context | `items/loot.ts` `holderTable` / `compartmentTable` (the real resolution: own → purpose → legacy, narrowing, overrides) |
 | Scarcity stage | `THEME_ECONOMY`, `OFF_THEME_WEIGHTS`, `HOLDER_ALLOW`, `CONTAINER_THEMED`, `RANDOM_HOLDERS`, `THEME_OF_TYPE`, `LIMB_ECONOMY`, `BOX_COUNT`, `HANDFUL`; `items/lootEconomy.ts` `holderTheme` / `catAvailable` |
-| Loose floor programs | `SUBWAY_FLOOR`, `OFFICE_FLOOR` (+ `OFFICE_FLOOR_TILT`), `FLOOR_ECONOMY`, `PUBLIC_FLOOR_WEIGHTS`; `gen/office/spawns.ts` `scarceOdds`; `gen/office/companies.ts` `COMPANIES`; `gen/office/tenants.ts` |
+| Loose floor programs | `SUBWAY_FLOOR`, `OFFICE_FLOOR` (+ `OFFICE_FLOOR_TILT`), `MALL_FLOOR` (+ `MALL_LOOSE_SALVAGE`; `gen/mall/mallTypes.ts` `MALL_RINGS`), `FLOOR_ECONOMY`, `PUBLIC_FLOOR_WEIGHTS`; `gen/office/spawns.ts` `scarceOdds`; `gen/office/companies.ts` `COMPANIES`; `gen/office/tenants.ts` |
+| Salvage (crafting-material rows per purpose / theme) | a profile's `tables.salvage` (`MALL_SALVAGE`); `items/lootEconomy.ts` `salvageRule` / `withSalvage` (applied inside `holderTable`, so every holder context shows its salvage rows and the economy page lists the rules) |
+| Crafting-material richness | per level: Σ over the sampled census holders of their context's exact expected material units (before fit) + the floor program's expected material units (before placement); placed + reachable normalised rates are measured by `game/tests/mall-profiles.test.ts` |
 | Rare gear | `gearParams(profile)` (`GEAR_LOOT`), `items/gear.ts` `GEAR_ITEMS` |
 | Gas masks / filters | `gen/maskLoot.ts` `MASK_LOOT` |
 | Weapon finds | `gen/weaponFinds.ts` `findWeaponsFor`, `WEAPON_FIND_AMMO`, `FIND_COPY_THRESHOLDS`, `FIND_MAX_PER_WEAPON`, `PISTOL_START_BOXES`; `gen/office/spawns.ts` `officeWeaponStoreyWeights`; `weapons/pistol.ts` `startWeaponFor` |
@@ -113,6 +115,8 @@ read it. Do not hand-write its numbers.
   1. Empty chance: P(rolled) = 1 − empty.
   2. Lot count n ~ U{lo..hi}, so E[n] = (lo + hi) / 2.
   3. Per-lot pick, including the legacy category stage, plus the stack size (`BOX_COUNT` small / big).
+  3b. Salvage (a level whose profile has `tables.salvage`, e.g. the mall): the holder's resolved rows include its salvage rows
+     (crafting materials, `share` of the table weight before overrides) — shown per holder context.
   4. Scarcity: ammo and crafting materials (category `material`) are kept exactly. Any other entry survives with `keep(theme, cat)`. A survivor is on-theme with `on`
      (re-picked by the theme weights within `HOLDER_ALLOW`) or off-theme (`OFF_THEME_WEIGHTS`). A pick outside the allow list
      keeps the rolled item. Security rooms re-theme ammo from the generic pool.

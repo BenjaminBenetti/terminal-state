@@ -102,7 +102,12 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
       expect(l.profile.label).toBe(P.label);
       expect(l.profile.baseTables).toBe(P.tables === BASE_TABLES);
       expect(l.profile.validation).toEqual([]);
-      expect(l.profile.overrides).toEqual([]); // both shipped levels: no overrides (the user likes the current rates)
+      // the Subway / Office: no overrides (the user likes the current rates); task track3-eaton-centre-20261031 (lane PROFILES): the
+      // mall's explicit overrides (bio mater item weight) are listed exactly as the profile declares them
+      expect(l.profile.overrides).toEqual(l.id === 'mall'
+        ? Object.entries(P.overrides.itemWeight ?? {}).map(([key, multiplier]) => ({knob: 'itemWeight', key, multiplier}))
+        : []);
+      if (l.id === 'mall') expect(Object.keys(P.overrides)).toEqual(['itemWeight']);
     }
     const text = JSON.stringify(r.levels.map(l => [l.id, l.label, l.profile.id]));
     expect(text).not.toMatch(/reduced|deep|baseline/i);

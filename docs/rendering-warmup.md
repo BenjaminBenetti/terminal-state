@@ -23,6 +23,16 @@ the output pass and the overlay composite run through a few hidden real frames.
 code that adds it to the scene) is prepared with no warm-up change**, as long as it is in the scene when the station
 finishes building. `game/tests/warmup.test.ts` covers this by injecting an unfamiliar asset.
 
+**Level-scoped assets** (task track3-eaton-centre-20261031): a level's own art loads behind **that level's** loading
+screen, before its build and this warm-up. Release and limits are covered in `game/src/assets/levelAssets.ts`.
+- Lazy models come through the prop library: the layout's keys, filtered by `levelAssets.ts` `selectLevelKeys`.
+- Textures and level-only GPU resources go through `game.levelResources` (`assets/levelResources.ts`): `load` from a
+  section preload, `get` while building, `own` for anything made for one level.
+- Files under `assets/models/mall-*.glb` and `assets/textures/mall/` are loaded only for the mall. They are released on
+  travel to another level.
+- A fetch after the level is built counts as `late` (`__LL.levelAssets()`), because nothing of the level's world should
+  load mid-play.
+
 ## What needs registration (`game.warmRegistry`, a `WarmupRegistry`)
 
 | You add… | Do this | Example in the code |

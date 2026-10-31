@@ -29,7 +29,9 @@ import {FRIEZE_SIZE, type AtlasCell} from './wallDetailAtlas';
 
 export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete'
   // Task office-overhaul-20261030 (lane ARCH): office storey walls (painted plasterboard / feature finishes) and the roof parapets.
-  | 'officeWall' | 'officeRoof';
+  | 'officeWall' | 'officeRoof'
+  // Task track3-eaton-centre-20261031 (lane ARCH): The Eaton's Center front of house (gallery / shop finishes) and back of house.
+  | 'mallWall' | 'mallService';
 export type Finish = 'tile' | 'shopTile' | 'paint' | 'concrete' | 'office';
 export type Layer = 'flush' | 'decal' | 'soft' | 'cut' | 'proud';
 export type FeatureKind =
@@ -55,6 +57,10 @@ export const ZONE_TREATMENT: Record<WallZone, Treatment> = {
 
 export function finishFamily(finish: string): Finish {
   if (/^office-/.test(finish)) return 'office'; // task office-overhaul-20261030 (lane ARCH): world/officeArch.ts finish keys
+  // Task track3-eaton-centre-20261031 (lane ARCH): world/mallArch.ts keys — back-of-house painted block on the BLOCK grid; front of
+  // house plaster-like (no station grid, never cut).
+  if (/^mall-wall-boh/.test(finish)) return 'paint';
+  if (/^mall-/.test(finish)) return 'office';
   if (/shop/i.test(finish)) return 'shopTile';
   if (/tile/i.test(finish)) return 'tile';
   if (/paint|plaster|block/i.test(finish)) return 'paint';
@@ -65,6 +71,9 @@ export function treatmentOf(face: Pick<WallFace, 'zone' | 'finish'>): Treatment 
   // Task office-overhaul-20261030 (lane ARCH): office finishes never take a station treatment (whatever their zone).
   if (/^office-roof/.test(face.finish)) return 'officeRoof';
   if (/^office-/.test(face.finish)) return 'officeWall';
+  // Task track3-eaton-centre-20261031 (lane ARCH): mall finishes never take a station treatment either.
+  if (/^mall-wall-boh/.test(face.finish)) return 'mallService';
+  if (/^mall-/.test(face.finish)) return 'mallWall';
   if (face.zone === 'trackbed' && /platformFace/i.test(face.finish)) return 'trackFace';
   return ZONE_TREATMENT[face.zone] ?? 'servicePaint';
 }
@@ -106,6 +115,11 @@ export const RECIPES: Record<Treatment, Recipe> = {
   officeWall: {bay: 0, pilaster: 0, joint: 0, band: 'none', frieze: false, formwork: false, condition: [0.3, 0.7], hotspots: 0.45, tileLoss: 0, spall: 0, crack: 0.7, patch: 0, streak: 0.5, edgeChips: 0.15, cornerChips: 0.6, wear: 'kick', soot: 0.12, damp: 0.15, conduit: 0, switchBox: 0, pipe: 0, cables: false, breach: 0, recess: 0},
   // The roof's precast parapets / housings: weathering runs, damp at the foot, cracks; nothing mounted.
   officeRoof: {bay: 0, pilaster: 0, joint: 0.35, band: 'none', frieze: false, formwork: false, condition: [0.5, 0.85], hotspots: 0.6, tileLoss: 0, spall: 0, crack: 0.9, patch: 0, streak: 1.4, edgeChips: 0.3, cornerChips: 0.6, wear: 'none', soot: 0.3, damp: 0.6, conduit: 0, switchBox: 0, pipe: 0, cables: false, breach: 0, recess: 0},
+  // Task track3-eaton-centre-20261031 (lane ARCH): the mall's front of house (the finish shaders carry the identity: no station
+  // bands / pilasters / friezes, no service fittings, no cuts) — leak runs under the glass roof, cracks, kick scuffs, chipped corners.
+  mallWall: {bay: 0, pilaster: 0, joint: 0, band: 'none', frieze: false, formwork: false, condition: [0.3, 0.7], hotspots: 0.5, tileLoss: 0, spall: 0, crack: 0.8, patch: 0, streak: 0.6, edgeChips: 0.2, cornerChips: 0.7, wear: 'kick', soot: 0.1, damp: 0.2, conduit: 0, switchBox: 0, pipe: 0, cables: false, breach: 0, recess: 0},
+  // Back of house: painted block service corridors / stock rooms — conduits, switch boxes, a few pipes, kick wear, soot; no cuts.
+  mallService: {bay: 0, pilaster: 0, joint: 0, band: 'none', frieze: false, formwork: false, condition: [0.4, 0.8], hotspots: 0.6, tileLoss: 0, spall: 0, crack: 0.8, patch: 0.6, streak: 0.6, edgeChips: 0.4, cornerChips: 0.9, wear: 'kick', soot: 0.4, damp: 0.15, conduit: 0.5, switchBox: 0.6, pipe: 0.2, cables: false, breach: 0, recess: 0},
 };
 
 /** Iteration 12 (ARCH): condition added to every wall for ~30 years without upkeep (world/decay.ts ages the surfaces). */

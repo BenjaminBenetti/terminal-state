@@ -29,6 +29,10 @@ const pkg=JSON.parse(fs.readFileSync(new URL('package.json',root),'utf8'));
 assert.equal(pkg.name,'terminal-state');
 for(const alias of ['dev','build','preview']) assert.equal(pkg.scripts[alias],`npm run game:${alias}`);
 assert.equal(pkg.scripts.test,'npm run game:test');
+// Task track3-eaton-centre-20261031 (lane PACKAGE): the required `build` check (npm run ci:test) runs the packager tests AND the
+// dynamic-app wrapper tests (tools/deploy/dynamic-app: server, site verification, staging, Dockerfile contract).
+for (const t of ['tools/release/package-ci.test.mjs','tools/deploy/dynamic-app/dynamic-app.test.mjs'])
+  assert((pkg.scripts['ci:test'] ?? '').split(/\s+/).includes(t),`package.json ci:test must run ${t}`);
 
 // Task loot-reference-pages-20261030 (lane SITE): the separate reference-site workflow (pages.yml). It reuses the reviewed
 // checkout / setup-node pins plus the three official Pages actions; validation for every trigger, deployment only from main.

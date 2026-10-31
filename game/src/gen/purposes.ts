@@ -27,6 +27,7 @@ import type {AreaKind, RoomType, ShopUse} from './stationTypes';
 import {
   CACHE_CRATE, OFFICE_DESK, OFFICE_DRAWERS, STORE_DRINKS, STORE_SNACKS, TENANT_ARMS, TENANT_FRIDGE, TENANT_KITCHEN, TENANT_MEDS, TENANT_SNACKS,
   TENANT_SUPPLY, TENANT_TABLE, storeKitchen, storeTill, type ItemRow, type LootSpec,
+  type ItemRows, // Task track3-eaton-centre-20261031 (lane SHOPS): the mall purposes' row sets
   JUNK_ROWS, PERSONAL_ROWS, // Task office-interactions-layout-20261030 (lane LAYOUT): office support rooms / large-room fill
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
@@ -618,6 +619,10 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   // --- Iteration 16 (WORLD-GEN): OFFICE TOWER rooms (gen/office/*). Their slots are office room types only, so the subway's
   // back-of-house assignment never picks them; the office generator presets them per area (assignPurposes keeps presets).
   ...OFFICE_PURPOSES(),
+  // Task track3-eaton-centre-20261031 (lane SHOPS): THE EATON'S CENTER shop / back-of-house purposes ('mall-*'). Preset by the mall
+  // generator per shop (gen/mall/shops.ts), never drawn by assignRoomPurposes (weight 0; their slots are the mall's shop / stock-room
+  // types, which the Subway / Office back-of-house assignment never offers them: tests/purposes.test.ts).
+  ...MALL_PURPOSES(),
 };
 
 export const ALL_PURPOSES: readonly Purpose[] = [...Object.values(STORE_PURPOSES), ...Object.values(ROOM_PURPOSES)];
@@ -1013,3 +1018,135 @@ function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], D
   };
 }
 
+
+// ---------------------------------------------------------------------------------------
+// Task track3-eaton-centre-20261031 (lane SHOPS): THE EATON'S CENTER — the shop programs' purposes (gen/mall/shops.ts MALL_PROGRAMS
+// names them by id: `mall-<program>` = the sales floor, `mall-<program>-back` = its stock room / back office; service rooms and
+// kiosks have their own). Hoisted: spread into ROOM_PURPOSES above. User (track 3): "you go to like the gun shop and there's guns
+// right you know same thing for anything you know medicine and clothing and all that stuff".
+//
+// Themed stock per holder kind (gen/mall/shopsDress.ts places the holders): gun shops hold generic ammunition (the deliberate rule:
+// counters, ammo shelving, the forced gun locker, the back office) + flares / torch cells (their real weapons are the mall weapon
+// plan's finds, gen/mall/shopsWeapons.ts — an explicit exception, not a table roll); pharmacies / the clinic dressings and first-aid
+// kits (limb treatments come through the economy's med finds); outfitters / hardware flares and torch cells; grocers / food units
+// food and drink; clothing / books / toys / home what people leave behind (snacks, a drink, a dressing). Crafting materials come
+// through the mall loot profile's SALVAGE (items/lootTables.ts MALL_SALVAGE by purpose id / theme, lane PROFILES) — these tables
+// carry no material rows, so salvage is the ONE tuning dial (no double counting). The scarcity economy applies on top exactly as
+// everywhere else (items/lootEconomy.ts): ammo kept as rolled, ~1 in 4-5 other entries survive, re-themed by the purpose's theme.
+// No new item kinds; no gear rows (rare gear stays ONE roll per logical level).
+
+/** The mall purposes' themes per program (gen/mall/shops.ts reads them back for the census). */
+function MALL_PURPOSES(): Record<string, RoomPurpose> {
+  const SALES: readonly RoomType[] = ['shop'], BACK: readonly RoomType[] = ['stock-room'];
+  const LIT: LightOdds = [0.35, 0.45, 0.2], DIM: LightOdds = [0.15, 0.45, 0.4], DARK: LightOdds = [0.08, 0.42, 0.5];
+  const A = genericAmmo;
+  /** A display / shelf table of `rows` (lots / empty per holder class). */
+  const disp = (items: ItemRows, lots: readonly [number, number] = [1, 3], empty = 0.3): LootSpec => ({items, lots, empty});
+  const till = (items: ItemRows, empty = 0.45): LootSpec => storeTill(items, empty);
+  type Sales = {theme: LootTheme; stock: ItemRows; till?: ItemRows; loot?: LootTable; light?: LightOdds; warm?: boolean; floor?: FloorLoot; st?: StockTheme};
+  type Back = {theme?: LootTheme; stock: ItemRows; loot?: LootTable; floor?: FloorLoot; st?: StockTheme};
+  const LEFT: ItemRows = [['water', 1], ['chocolate', 0.8], ['cola', 0.6], ['bandage', 0.5], ['chips', 0.4]]; // what people leave behind
+  const BACK_COMMON: ItemRows = [['water', 1.2], ['beans', 0.8], ['bandage', 0.5], ['battery', 0.4], ['noodles', 0.4]];
+  const sales = (id: string, label: string, o: Sales): RoomPurpose => ({
+    id, category: 'back', theme: o.theme, label, slots: SALES, kinds: ['room'], weight: 0, max: 99, light: o.light ?? LIT, ...(o.warm ? {warm: true} : {}),
+    ...(o.st ? {stock: o.st} : {}), props: [],
+    loot: {
+      stockShelf: disp(o.stock, [1, 3], 0.25), shelf: disp(o.stock, [1, 3], 0.3), wallBay: disp(o.stock, [1, 3], 0.3), merchTable: disp(o.stock, [1, 2], 0.45),
+      glassCounter: disp(o.stock, [1, 2], 0.4), produceStand: disp(o.stock, [1, 3], 0.3), shopCounter: till(o.till ?? LEFT), shopCooler: {items: [['water', 3], ['cola', 2], ['juice', 2]], lots: [2, 5], empty: 0.2},
+      cabinetLow: disp(o.stock, [1, 2], 0.35), default: disp(o.stock, [1, 2], 0.35), ...o.loot,
+    },
+    floor: o.floor ?? {med: 0.3, ammo: 0.2},
+  });
+  const back = (id: string, label: string, o: Back, salesTheme: LootTheme): RoomPurpose => ({
+    id, category: 'back', theme: o.theme ?? salesTheme, label, slots: BACK, kinds: ['room', 'closet'], weight: 0, max: 99, light: DIM, stock: o.st ?? 'cartons', props: [],
+    loot: {
+      shelf: disp(o.stock, [1, 3], 0.25), stockShelf: disp(o.stock, [1, 3], 0.25), crate: disp([...o.stock, ...BACK_COMMON], [1, 3], 0.2),
+      cabinetTall: disp([...o.stock, ['bandage', 0.6], ['water', 0.6]], [1, 3], 0.2), cabinetLow: disp(BACK_COMMON, [1, 2], 0.3),
+      staffLockers: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.4}, desk: OFFICE_DESK, fridge: TENANT_FRIDGE, kitchenette: TENANT_KITCHEN,
+      default: disp([...o.stock, ...BACK_COMMON], [1, 2], 0.3), ...o.loot,
+    },
+    floor: o.floor ?? {med: 0.3, ammo: 0.3},
+  });
+  const pair = (prog: string, label: string, s: Sales, b: Back, backLabel = `${label} stock room`): [string, RoomPurpose][] =>
+    [[`mall-${prog}`, sales(`mall-${prog}`, label, s)], [`mall-${prog}-back`, back(`mall-${prog}-back`, backLabel, b, s.theme)]];
+  // --- stock rows per program ---
+  const GUNS: ItemRows = [...A(3.2), ['flare', 0.6], ['battery', 0.5]];
+  const OUTDOOR: ItemRows = [['flare', 1.6], ['battery', 1.3], ['water', 1.2], ['beans', 0.6], ['noodles', 0.5], ['bandage', 0.4]];
+  const MEDS: ItemRows = [['bandage', 3], ['medkit', 0.6], ['water', 0.4]];
+  const TECH: ItemRows = [['battery', 2.2], ['flare', 0.2], ['water', 0.3]];
+  const HARDWARE: ItemRows = [['battery', 1.4], ['flare', 0.8], ['water', 0.4], ['bandage', 0.3]];
+  const GROCERY: ItemRows = [['beans', 3], ['noodles', 2.6], ['chips', 2], ['chocolate', 1.6], ['water', 1.4], ['juice', 0.6]];
+  const SPORTS: ItemRows = [['water', 1.6], ['bandage', 1.2], ['chocolate', 0.8], ['juice', 0.6]];
+  const PET: ItemRows = [['beans', 2], ['water', 1.4], ['bandage', 0.6]];
+  const KIOSK: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
+  /** Mall office drawers: personal stock, no sidearm rows (9 mm-only stock is the Office's deliberate rule). */
+  const MGMT_DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['battery', 0.3]], lots: [1, 2], empty: 0.35};
+  return Object.fromEntries([
+    ...pair('guns', 'Gun shop', {theme: 'security', stock: GUNS, till: [['chocolate', 1], ['water', 1], ...A(0.8)], light: DIM, floor: {ammo: 1.6, med: 0.3},
+      loot: {gunLocker: {items: [...A(5.2), ['flare', 0.4]], lots: [1, 3], empty: 0.3}, shelf: disp([...A(4), ['flare', 0.5], ['battery', 0.4]], [1, 2], 0.5),
+        glassCounter: disp([...A(3), ['flare', 0.4], ['battery', 0.3]], [1, 2], 0.5), safe: disp([...A(2), ['medkit', 0.3], ['flare', 0.3]], [1, 2], 0.3)}},
+    {theme: 'security', stock: [...A(2.4), ['flare', 0.6], ['battery', 0.6], ['bandage', 0.6]], floor: {ammo: 1.4, med: 0.3},
+      loot: {safe: disp([...A(2), ['medkit', 0.3], ['flare', 0.3]], [1, 2], 0.3), gunLocker: {items: [...A(5.2), ['medkit', 0.2]], lots: [1, 3], empty: 0.3}, crate: CACHE_CRATE}},
+    'Gun shop back office'),
+    ...pair('outdoors', 'Outdoor outfitter', {theme: 'service', stock: OUTDOOR, till: [['water', 1], ['flare', 0.6], ['battery', 0.6]], floor: {med: 0.4, ammo: 0.4},
+      loot: {glassCounter: disp([['flare', 1], ['battery', 1], ...A(1.2)], [1, 2], 0.45)}},
+    {theme: 'food', stock: [['water', 2], ['beans', 1.6], ['noodles', 1.2], ['flare', 0.6]]}),
+    ...pair('pharmacy', 'Pharmacy', {theme: 'medical', stock: MEDS, till: [['bandage', 1], ['medkit', 0.25], ['water', 0.5]], st: 'pharmacy', floor: {med: 1.4},
+      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}, shopCooler: {items: [['water', 3], ['juice', 1]], lots: [2, 5], empty: 0.2}}},
+    {stock: [['bandage', 3], ['medkit', 0.8], ['water', 0.6]], st: 'pharmacy', floor: {med: 1.6},
+      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}}}, 'Pharmacy dispensary'),
+    ...pair('clinic', 'Walk-in clinic', {theme: 'medical', stock: MEDS, till: [['bandage', 1], ['water', 0.6]], light: DIM, floor: {med: 1.6},
+      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}, desk: {items: [['water', 1], ['bandage', 1], ['chocolate', 0.5]], lots: [1, 1], empty: 0.5}}},
+    {stock: [['bandage', 2.6], ['medkit', 0.8], ['water', 0.8]], floor: {med: 1.4}}, 'Clinic supply room'),
+    ...pair('electronics', 'Electronics store', {theme: 'tech', stock: TECH, till: [['water', 1], ['cola', 1], ['battery', 0.6]], st: 'devices', light: LIT},
+      {stock: [['battery', 2], ['water', 0.5], ['flare', 0.2]], st: 'devices'}),
+    ...pair('phone', 'Phone store', {theme: 'tech', stock: TECH, till: [['water', 1], ['battery', 0.8]], st: 'devices'}, {stock: [['battery', 2], ['water', 0.5]], st: 'devices'}),
+    ...pair('hardware', 'Hardware store', {theme: 'service', stock: HARDWARE, till: [['water', 1], ['battery', 0.6], ['flare', 0.4]], st: 'parts', floor: {ammo: 0.4, med: 0.4}},
+      {stock: [['battery', 1.2], ['flare', 0.8], ['water', 0.8]], st: 'parts'}),
+    ...pair('clothing', 'Clothing store', {theme: 'personal', stock: LEFT, warm: true}, {stock: [['water', 1], ['bandage', 0.8], ['chocolate', 0.6]]}),
+    ...pair('shoes', 'Shoe store', {theme: 'personal', stock: LEFT, warm: true}, {stock: [['water', 1], ['bandage', 0.6], ['chocolate', 0.6]]}),
+    ...pair('department', 'Department store', {theme: 'personal', stock: [...LEFT, ['juice', 0.4], ['noodles', 0.3]], warm: true, floor: {med: 0.5, ammo: 0.3}},
+      {stock: [['water', 1.2], ['beans', 0.8], ['bandage', 0.8], ['chocolate', 0.6]]}),
+    ...pair('grocery', 'Grocery store', {theme: 'food', stock: GROCERY, till: [['chocolate', 2], ['chips', 1], ['cola', 0.6]], st: 'grocery',
+      loot: {produceStand: disp([['beans', 1], ['chips', 0.6], ['juice', 1], ['water', 1]], [1, 3], 0.35), shopCooler: STORE_DRINKS, snackRack: STORE_SNACKS,
+        chestFreezer: disp([['water', 1], ['juice', 1], ['cola', 0.8], ['beans', 0.4]], [1, 3], 0.35)}},
+    {stock: [['beans', 3], ['noodles', 2.6], ['water', 2], ['cola', 1.2], ['chips', 1]], st: 'grocery'}),
+    ...pair('books', 'Bookstore', {theme: 'personal', stock: LEFT, warm: true}, {stock: [['water', 1], ['chocolate', 0.8], ['bandage', 0.5]]}),
+    ...pair('toys', 'Toy store', {theme: 'personal', stock: [['chocolate', 1.4], ['chips', 1], ['juice', 0.8], ['battery', 0.8], ['water', 0.6]]},
+      {stock: [['battery', 1], ['chocolate', 0.8], ['water', 0.8]]}),
+    ...pair('sports', 'Sporting goods', {theme: 'personal', stock: SPORTS, floor: {med: 0.6, ammo: 0.2}}, {stock: [['water', 1.4], ['bandage', 1], ['juice', 0.6]]}),
+    ...pair('jewelry', 'Jeweller', {theme: 'personal', stock: [['water', 0.8], ['chocolate', 0.6], ['bandage', 0.4], ['battery', 0.4]], warm: true,
+      loot: {safe: disp([['bandage', 0.6], ['medkit', 0.3], ...A(1.2)], [1, 2], 0.4)}},
+    {stock: [['water', 0.8], ['bandage', 0.6], ['battery', 0.5]], loot: {safe: disp([['bandage', 0.6], ['medkit', 0.3], ...A(1.2)], [1, 2], 0.4)}}, 'Jeweller back office'),
+    ...pair('home', 'Home store', {theme: 'personal', stock: [...LEFT, ['beans', 0.4]], warm: true,
+      loot: {fridge: TENANT_FRIDGE, kitchenette: TENANT_KITCHEN}}, {stock: [['water', 1], ['beans', 0.8], ['bandage', 0.5], ['battery', 0.4]]}),
+    ...pair('beauty', 'Beauty store', {theme: 'personal', stock: [['water', 1], ['bandage', 0.8], ['chocolate', 0.5]], warm: true}, {stock: [['water', 1], ['bandage', 0.8]]}),
+    ...pair('music', 'Music store', {theme: 'tech', stock: TECH, till: [['water', 1], ['cola', 0.8], ['battery', 0.5]]}, {stock: [['battery', 1.6], ['water', 0.6]]}),
+    ...pair('pet', 'Pet store', {theme: 'food', stock: PET, loot: {shopCooler: {items: [['water', 3], ['juice', 1]], lots: [2, 5], empty: 0.25}}}, {stock: [['beans', 2], ['water', 1.4], ['bandage', 0.5]]}),
+    ...pair('arcade', 'Arcade', {theme: 'tech', stock: [['battery', 1.6], ['chocolate', 1], ['chips', 0.8], ['cola', 0.8]], light: DARK,
+      loot: {shopCounter: till([['chocolate', 1], ['cola', 1], ['battery', 0.8]]), snackRack: STORE_SNACKS, vending: {items: [['chocolate', 2], ['chips', 2], ['cola', 2], ['water', 1]], lots: [3, 6], empty: 0.15}}},
+    {stock: [['battery', 1.4], ['cola', 0.8], ['water', 0.6]]}, 'Arcade back room'),
+    ...pair('luggage', 'Luggage store', {theme: 'personal', stock: LEFT}, {stock: [['water', 1], ['bandage', 0.6], ['battery', 0.4]]}),
+    ...pair('optical', 'Optician', {theme: 'medical', stock: [['bandage', 1.6], ['water', 0.8], ['medkit', 0.2]], light: DIM}, {stock: [['bandage', 1.4], ['water', 0.8]]}, 'Optician lab'),
+    ...pair('florist', 'Florist', {theme: 'food', stock: [['water', 2], ['juice', 0.6], ['chocolate', 0.4]], warm: true}, {stock: [['water', 1.6], ['bandage', 0.4]]}, 'Florist workroom'),
+    ...pair('vacant', 'Vacant unit', {theme: 'public', stock: [['water', 0.6], ['chips', 0.4], ['cola', 0.4], ['bandage', 0.2]], light: DARK}, {stock: [['water', 0.8], ['beans', 0.4], ['bandage', 0.3]]},
+      'Vacant unit back room'),
+    // Food-court / café units sell from their cuisine's store purpose (STORE_PURPOSES: burger, pizza … coffee, bakery); behind them a
+    // kitchen store room.
+    ['mall-food-back', back('mall-food-back', 'Kitchen store room', {stock: [['beans', 2.4], ['noodles', 2], ['water', 2], ['cola', 1.2], ['chips', 1], ['juice', 0.8]],
+      loot: {chestFreezer: disp([['water', 1], ['juice', 1], ['cola', 0.8], ['beans', 0.4]], [1, 3], 0.35)}}, 'food')],
+    // Kiosks (one room: a small unit or a gallery stall) and the mall's service rooms.
+    ['mall-kiosk', sales('mall-kiosk', 'Kiosk', {theme: 'food', stock: KIOSK, loot: {stall: disp(KIOSK, [2, 4], 0.2), snackRack: STORE_SNACKS}})],
+    ['mall-security', sales('mall-security', 'Mall security office', {theme: 'security', stock: [...A(1.4), ['bandage', 1], ['flare', 0.4], ['water', 0.6]], light: DIM, floor: {ammo: 2, med: 0.5},
+      loot: {gunLocker: {items: [...A(5.2), ['medkit', 0.3]], lots: [2, 4], empty: 0.1}, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ...A(0.5)], lots: [1, 2], empty: 0.4},
+        cabinetTall: disp([...A(1.4), ['bandage', 1], ['medkit', 0.4], ['water', 0.6]], [2, 4], 0.12), staffLockers: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.4}, crate: CACHE_CRATE}})],
+    ['mall-first-aid', sales('mall-first-aid', 'Mall first-aid station', {theme: 'medical', stock: MEDS, light: LIT, floor: {med: 2},
+      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 4], empty: 0.15}, desk: {items: [['water', 1], ['bandage', 1]], lots: [1, 1], empty: 0.5}}})],
+    ['mall-management', sales('mall-management', 'Mall management office', {theme: 'personal', stock: [['chocolate', 1], ['water', 0.8], ['bandage', 0.6], ['battery', 0.3]], light: DIM,
+      loot: {desk: OFFICE_DESK, cabinetLow: MGMT_DRAWERS, cabinetTall: disp([['water', 1], ['bandage', 0.8], ['chocolate', 0.8], ['battery', 0.4]], [1, 3], 0.2)}})],
+    ['mall-janitorial', sales('mall-janitorial', 'Janitorial room', {theme: 'service', stock: [['water', 1], ['bandage', 0.6], ['battery', 0.6], ['flare', 0.3]], light: DARK, st: 'cleaning',
+      loot: {stockShelf: disp([['water', 1], ['bandage', 0.6], ['battery', 0.4]], [1, 2], 0.4)}})],
+    ['mall-customer-service', sales('mall-customer-service', 'Customer service desk', {theme: 'personal', stock: [...LEFT, ['battery', 0.4]], light: LIT,
+      loot: {desk: OFFICE_DESK, cabinetLow: MGMT_DRAWERS}})],
+  ]);
+}

@@ -308,8 +308,9 @@ describe('purposes in generated levels', () => {
     expect(Math.min(...storeSets)).toBeGreaterThanOrEqual(6);
     expect(seenStores.size).toBeGreaterThanOrEqual(16);
     // Iteration 07: purposes built around generated props count once their signature model is integrated (gen/props07.ts).
-    // Iteration 16: the office tower's purposes ('office-*', gen/office/*) never fill station slots.
-    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-')).length - 2);
+    // Iteration 16: the office tower's purposes ('office-*', gen/office/*) never fill station slots. Task track3-eaton-centre-20261031
+    // (lane SHOPS): nor do The Eaton's Center's ('mall-*', preset per shop by gen/mall/shops.ts; weight 0).
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('mall-')).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

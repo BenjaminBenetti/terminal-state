@@ -21,11 +21,13 @@ import {hashString, mulberry32} from '../core/rng';
 import {PURPOSE_HOLDER_KINDS, type PurposeHolderKind} from '../gen/props';
 import {purposeLoot} from '../gen/purposes';
 import {P7_HOLDER_KINDS, P7_HOLDER_META, type P7HolderKind} from '../gen/props07';
+import {MALL_HOLDER_KINDS, type MallHolderKind} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): mall shop holders
 import {effectText, itemDef} from './items';
 import {ammoText} from './calibers'; // lane AMMO (knife-melee-20261030)
 import type {Inventory} from './inventory';
 import {packItems, type Placement, type Surface} from './lootLayout';
 import {scarceFinds, type Find} from './lootEconomy';
+import {withSalvage} from './lootEconomy'; // Task track3-eaton-centre-20261031 (lane PROFILES): mall salvage rows
 import {
   BASELINE_PROFILE, LEGACY_CATS, catWeight, resolveRows, slotEmpty, slotLots, slotOf,
   type ItemRows, type LegacyCat, type LootProfile, type LotRange, type OwnTable, type SlotCategory,
@@ -55,8 +57,11 @@ export type SurfaceKind = 'shelf' | 'stall' | 'vending' | 'table' | 'desk'
   // hot-dog cart, kitchen lines, staff kitchenette/fridge, gun locker, security desk, first-aid cabinet.
   | PurposeHolderKind
   // Iteration 07 (Lane P2): generated holders with measured surfaces (gen/props07.ts P7_HOLDER_KINDS).
-  | P7HolderKind;
-export const SURFACE_KINDS: readonly SurfaceKind[] = ['shelf', 'stall', 'vending', 'table', 'desk', 'shopCounter', 'shopDisplay', 'shopBackbar', 'shopCooler', ...PURPOSE_HOLDER_KINDS, ...P7_HOLDER_KINDS];
+  | P7HolderKind
+  // Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center open shop holders (gen/mall/kinds.ts MALL_SURFACES).
+  | MallHolderKind;
+export const SURFACE_KINDS: readonly SurfaceKind[] = ['shelf', 'stall', 'vending', 'table', 'desk', 'shopCounter', 'shopDisplay', 'shopBackbar', 'shopCooler', ...PURPOSE_HOLDER_KINDS, ...P7_HOLDER_KINDS,
+  ...MALL_HOLDER_KINDS];
 export function isSurfaceKind(kind: string): kind is SurfaceKind {
   return (SURFACE_KINDS as readonly string[]).includes(kind);
 }
@@ -74,6 +79,8 @@ export const HOLDER_LABEL: Record<HolderKind, string> = {
   gunLocker: 'gun locker', monitorDesk: 'security desk', medCabinet: 'first-aid cabinet',
   ...P7_HOLDER_META.label,
   ...OPENABLE_META.label,
+  // Task track3-eaton-centre-20261031 (lane SHOPS): mall shop holders
+  glassCounter: 'display counter', merchTable: 'display table', wallBay: 'shelving bay', produceStand: 'produce stand',
 };
 /** Back-compat alias (iteration 02 name). */
 export const CONTAINER_LABEL = HOLDER_LABEL;
@@ -134,11 +141,11 @@ export function holderTable(kind: HolderKind, areaType: string, profile: LootPro
   // fixtures (fire / defibrillator cabinets) hold only what is baked into their model.
   const own = containerLoot(kind);
   if (own === null) return {slot, source: 'fixture', empty: 1, lots: [0, 0], rows: []};
-  if (own !== undefined) return resolved(profile, slot, 'own', purposeRows(own, areaType, kind));
+  if (own !== undefined) return resolved(profile, slot, 'own', purposeRows(own, areaType, kind), kind, areaType);
   // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
   // (`areaType` is the purpose id when the area has one; plain room types use the legacy tables).
   const spec = purposeLoot(areaType, kind);
-  if (spec) return resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]});
+  if (spec) return resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]}, kind, areaType);
   const [lo, hi] = T.holderLots[kind];
   // Stocked rooms get fuller shelves.
   const full = T.fullRooms.kinds.includes(kind) && T.fullRooms.rooms.has(areaType);
@@ -148,11 +155,12 @@ export function holderTable(kind: HolderKind, areaType: string, profile: LootPro
 /** The separate compartment roll of a desk-style holder (drawers / cupboards: their own table, slot 'container'); null: none. */
 export function compartmentTable(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE): HolderTable | null {
   const inside = separateCompartmentLoot(kind);
-  return inside ? resolved(profile, slotOf(kind, true), 'own', purposeRows(inside, areaType, kind)) : null;
+  return inside ? resolved(profile, slotOf(kind, true), 'own', purposeRows(inside, areaType, kind), kind, areaType) : null;
 }
 
-function resolved(profile: LootProfile, slot: SlotCategory | undefined, source: HolderTable['source'], t: OwnTable): HolderTable {
-  return {slot, source, empty: slotEmpty(profile, slot, t.empty), lots: slotLots(profile, slot, t.lots), rows: resolveRows(profile, t.items)};
+/** Task track3-eaton-centre-20261031 (lane PROFILES): + the level's salvage rows (lootEconomy withSalvage; same array when none). */
+function resolved(profile: LootProfile, slot: SlotCategory | undefined, source: HolderTable['source'], t: OwnTable, kind: string, areaType: string): HolderTable {
+  return {slot, source, empty: slotEmpty(profile, slot, t.empty), lots: slotLots(profile, slot, t.lots), rows: withSalvage(profile, kind, areaType, resolveRows(profile, t.items))};
 }
 
 // ---------------------------------------------------------------------------------------

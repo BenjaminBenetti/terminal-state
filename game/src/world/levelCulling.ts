@@ -37,6 +37,19 @@
 //   Subway stations (<= 3 levels) keep the iteration-08 rule.
 // Culling only moves meshes to CULL_LAYER (render visibility); it never touches actors, items or any world state, and the
 // iteration-14 warm-up still finds culled meshes there (render/warmup.ts planWarmup 'full').
+//
+// Task track3-eaton-centre-20261031 (lane ARCH): the ATRIUM of The Eaton's Center — one open column from the subway platform
+// through six retail rings to the glass roof (35+ m), seen from almost everywhere on every storey. Pair portals would put
+// C(7, 2) = 21 copies of every void tile in the list, each sight-tested on every update, and PORTAL_MAX_DIST (55 m) would drop
+// the far end of a long galleria that the mall's light haze still shows (black pop-ins). With `opts.atrium` (a per-cell mask
+// of the void outline, mall layouts only) the void's columns become ATRIUM TILES instead: one tile per TILE x TILE cells, joining
+// every level whose walking zone its free bands reach. Per update: frustum + distance (the fog cull distance, not 55 m) on each
+// atrium tile, then sight tests nearest-first until ONE succeeds (at most ATRIUM_SIGHT_TESTS; a tile right beside the eye or
+// within ATRIUM_NEAR counts outright — the platform under the void, a balustrade, the glass lift cab). If the void is seen,
+// every frustum-visible atrium tile is visible for all its levels (over-drawing an occluded corner never pops; under-drawing
+// would), those levels join the breadth-first pass, and a mesh of such a level renders within PORTAL_MARGIN of a visible atrium
+// tile (per-entry tile lists, built once). Back-of-house meshes deeper than the margin from the void stay hidden when seen from
+// another storey. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -65,6 +78,12 @@ export const PORTAL_NEAR = 1.0;
 const EYE_TOL = 0.3;
 /** Stacks up to this many levels (every Subway station) keep the iteration-08 rule for untagged multi-level meshes. */
 export const LEGACY_STACK = 3;
+/** Task track3-eaton-centre-20261031 (lane ARCH): atrium tiles are tested up to this horizontal distance (m; capped by the fog). */
+export const ATRIUM_MAX_DIST = 240;
+/** Most sight tests per update before the void counts as unseen (nearest frustum-visible atrium tiles first). */
+export const ATRIUM_SIGHT_TESTS = 12;
+/** An atrium tile this close to the eye horizontally (m) is seen outright (balustrade edge, glass lift cab beside the void). */
+export const ATRIUM_NEAR = 2.5;
 
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
 
@@ -86,7 +105,11 @@ interface Entry {
   obj: THREE.Mesh; level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; mask: number; culled: boolean;
   /** Multi-level mesh (stair flight, tall shaft piece): renders when any of these levels does (level is NaN then). */
   levels?: readonly number[];
+  /** Task track3 (lane ARCH): atrium tiles within PORTAL_MARGIN of the box (built on first use; mall only). */
+  near?: Int32Array;
 }
+/** Task track3 (lane ARCH): an atrium tile — open void columns joining every level in `levels`. */
+interface AtriumTile { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; cells: number[]; levels: number[] }
 
 export class LevelCuller {
   readonly entries: Entry[] = [];
@@ -113,17 +136,23 @@ export class LevelCuller {
    * station.
    */
   eyeOverride: number | null = null;
+  /** Task track3 (lane ARCH): atrium tiles (mall only; empty elsewhere) and the last update's atrium diagnostics. */
+  private readonly atriumTiles: AtriumTile[] = [];
+  private atriumVis = new Uint8Array(0);
+  private readonly atriumLevels = new Set<number>();
+  atriumStats = {tiles: 0, inFrustum: 0, seen: false, sightTests: 0, levels: [] as number[]};
 
-  constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver) {
+  constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
+    opts?: {atrium?: Uint8Array}) {
     this.levelIds = levels.map(l => l.id);
-    if (levels.length > 1) this.buildPortals();
+    if (levels.length > 1) this.buildPortals(opts?.atrium);
   }
 
   /**
    * Portal tiles between every pair of levels (columns whose free band reaches both walking zones, and stair-run columns
    * shared by both grids). One pass over the columns; per pair, tiles keep the column order of the iteration-08 loop.
    */
-  private buildPortals(): void {
+  private buildPortals(atrium?: Uint8Array): void {
     const {W, H} = this.cols;
     const L = this.levels, NL = L.length;
     const zone = L.map(l => [l.baseY + ZONE[0], l.baseY + ZONE[1]] as const);
@@ -131,9 +160,32 @@ export class LevelCuller {
     const lo = new Float64Array(NL * NL).fill(Infinity), hi = new Float64Array(NL * NL).fill(-Infinity);
     const touched: number[] = [];
     const bandLo: number[] = [], bandHi: number[] = [], reach: number[] = [], open: number[] = [];
+    const aTiles = new Map<number, AtriumTile & {mask: number}>();
     for (let i = 0; i < W * H; i++) {
       const cnt = this.cols.count(i);
       if (!cnt) continue;
+      // Task track3 (lane ARCH): an atrium column joins every level its free bands reach in ONE atrium tile (no pair tiles).
+      if (atrium && atrium[i]) {
+        let mask = 0, y0 = Infinity, y1 = -Infinity;
+        for (let k = 0; k < cnt; k++) {
+          const g = L[this.cols.level(i, k)].grid;
+          if (g.cells[i] !== FLOOR && g.cells[i] !== VOID) continue;
+          const ra = ramp(g, i), f = ra ? ra[0] : g.floorOf(i), c = ra ? ra[1] : cellCeil(g, i);
+          y0 = Math.min(y0, f); y1 = Math.max(y1, c);
+          for (let a = 0; a < NL; a++) if (f <= zone[a][1] && c >= zone[a][0]) mask |= 1 << a;
+        }
+        if (mask) {
+          const cx = i % W, cy = (i - cx) / W, key = Math.floor(cy / TILE) * 100000 + Math.floor(cx / TILE);
+          let t = aTiles.get(key);
+          if (!t) aTiles.set(key, (t = {x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity, y0: Infinity, y1: -Infinity, cells: [], levels: [], mask: 0}));
+          t.x0 = Math.min(t.x0, cx * CELL); t.x1 = Math.max(t.x1, (cx + 1) * CELL);
+          t.z0 = Math.min(t.z0, cy * CELL); t.z1 = Math.max(t.z1, (cy + 1) * CELL);
+          t.y0 = Math.min(t.y0, y0); t.y1 = Math.max(t.y1, y1);
+          t.cells.push(i);
+          t.mask |= mask;
+        }
+        continue;
+      }
       touched.length = 0;
       const hit = (a: number, b: number, y0: number, y1: number) => {
         const k = a * NL + b;
@@ -180,7 +232,17 @@ export class LevelCuller {
       }
     }
     for (const k of [...pairTiles.keys()].sort((p, q) => p - q)) this.tiles.push(...pairTiles.get(k)!.values());
+    for (const k of [...aTiles.keys()].sort((p, q) => p - q)) {
+      const t = aTiles.get(k)!;
+      for (let a = 0; a < NL; a++) if ((t.mask >> a) & 1) t.levels.push(L[a].id);
+      this.atriumTiles.push({x0: t.x0, z0: t.z0, x1: t.x1, z1: t.z1, y0: t.y0, y1: t.y1, cells: t.cells, levels: t.levels});
+    }
+    this.atriumVis = new Uint8Array(this.atriumTiles.length);
+    this.atriumStats.tiles = this.atriumTiles.length;
   }
+
+  /** Task track3 (lane ARCH): atrium tiles of this culler (mall only). */
+  get atriumTileCount(): number { return this.atriumTiles.length; }
 
   get portalTiles(): number { return this.tiles.length; }
 
@@ -259,6 +321,8 @@ export class LevelCuller {
         return true;
       };
       const add = (other: number, t: Tile) => { let list = vis.get(other); if (!list) vis.set(other, (list = [])); list.push(t); };
+      // Task track3 (lane ARCH): the atrium first (mall only): its levels join `shown` before the pair-portal hops.
+      if (this.atriumTiles.length) this.updateAtrium(e, shown);
       // Breadth-first over levels (iteration 12: one extra hop, the lower level down the second run of a stair core seen
       // from the upper landing; task office-seamless-20261029: as many hops as storeys, e.g. up a scissor stair). A hop
       // tests the tiles with exactly one side among the levels shown so far; each tile's test runs at most once.
@@ -292,10 +356,10 @@ export class LevelCuller {
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
-      else if (en.levels) show = en.levels.some(l => here.has(l)) || en.levels.some(l => this.nearPortal(en, vis.get(l)));
+      else if (en.levels) show = en.levels.some(l => here.has(l)) || en.levels.some(l => this.nearPortal(en, vis.get(l))) || this.nearAtrium(en, en.levels);
       else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
-      // Another level: only near a portal tile the camera can see.
-      else show = this.nearPortal(en, vis.get(en.level));
+      // Another level: only near a portal tile the camera can see (task track3: or near a visible atrium tile of that level).
+      else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, [en.level]);
       if (show === !en.culled) continue;
       if (show) { en.obj.layers.mask = en.mask; en.culled = false; } else { en.mask = en.obj.layers.mask; en.obj.layers.set(CULL_LAYER); en.culled = true; }
     }
@@ -319,6 +383,62 @@ export class LevelCuller {
   private nearPortal(en: Entry, list: readonly Tile[] | undefined): boolean {
     if (list) for (const t of list) {
       if (en.x1 >= t.x0 - PORTAL_MARGIN && en.x0 <= t.x1 + PORTAL_MARGIN && en.z1 >= t.z0 - PORTAL_MARGIN && en.z0 <= t.z1 + PORTAL_MARGIN) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Task track3-eaton-centre-20261031 (lane ARCH): atrium visibility for this update (frustum + distance per atrium tile, then
+   * nearest-first sight tests until the void is seen). Marks atriumVis and adds the seen tiles' levels to `shown`.
+   */
+  private updateAtrium(e: THREE.Vector3, shown: Set<number>): void {
+    const T = this.atriumTiles, vis = this.atriumVis, st = this.atriumStats;
+    vis.fill(0);
+    this.atriumLevels.clear();
+    const maxD = Math.min(ATRIUM_MAX_DIST, this.maxDistance);
+    const cand: {k: number; d2: number}[] = [];
+    let near = false;
+    for (let k = 0; k < T.length; k++) {
+      const t = T[k];
+      const dx = Math.max(t.x0 - e.x, 0, e.x - t.x1), dz = Math.max(t.z0 - e.z, 0, e.z - t.z1), d2 = dx * dx + dz * dz;
+      if (d2 > maxD * maxD) continue;
+      const beside = d2 <= ATRIUM_NEAR * ATRIUM_NEAR && e.y >= t.y0 - 0.5 && e.y <= t.y1 + 0.5;
+      this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
+      if (!beside && !this.fr.intersectsBox(this.box)) continue;
+      vis[k] = 1;
+      if (beside) near = true;
+      cand.push({k, d2});
+    }
+    st.inFrustum = cand.length;
+    st.sightTests = 0;
+    let seen = near;
+    if (!seen && cand.length) {
+      cand.sort((a, b) => a.d2 - b.d2);
+      for (let c = 0; c < cand.length && c < ATRIUM_SIGHT_TESTS && !seen; c++) {
+        st.sightTests++;
+        seen = this.sees(e, T[cand[c].k] as unknown as Tile);
+      }
+    }
+    st.seen = seen;
+    if (!seen) { vis.fill(0); st.levels = []; return; }
+    for (const {k} of cand) for (const l of T[k].levels) { this.atriumLevels.add(l); shown.add(l); }
+    st.levels = [...this.atriumLevels].sort((a, b) => a - b);
+  }
+
+  /** Whether an entry of one of `levels` lies within PORTAL_MARGIN of an atrium tile visible this update (mall only). */
+  private nearAtrium(en: Entry, levels: readonly number[]): boolean {
+    if (!this.atriumTiles.length || !this.atriumStats.seen || !levels.some(l => this.atriumLevels.has(l))) return false;
+    if (!en.near) {
+      const out: number[] = [];
+      this.atriumTiles.forEach((t, k) => {
+        if (en.x1 >= t.x0 - PORTAL_MARGIN && en.x0 <= t.x1 + PORTAL_MARGIN && en.z1 >= t.z0 - PORTAL_MARGIN && en.z0 <= t.z1 + PORTAL_MARGIN) out.push(k);
+      });
+      en.near = Int32Array.from(out);
+    }
+    const vis = this.atriumVis;
+    for (let i = 0; i < en.near.length; i++) {
+      const k = en.near[i];
+      if (vis[k] && levels.some(l => this.atriumTiles[k].levels.includes(l))) return true;
     }
     return false;
   }

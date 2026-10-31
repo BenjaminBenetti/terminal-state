@@ -30,6 +30,7 @@ import {flightRailRuns} from '../gen/doorways';
 import {shapeMaterial} from './shapeMaterials';
 import type {StairFlight, Ladder} from '../gen/traversal';
 import type {OfficeTowerInfo} from '../gen/stationTypes';
+import {mallEscalatorFlights} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH)
 
 /** The builder's per-material quad accumulator. */
 export interface QuadSink { quad(p: number[][], n: readonly number[], uv: number[][]): void }
@@ -139,6 +140,9 @@ function flatQuad(sink: QuadSink, m: {u: number; v: number}, axisX: boolean, s0:
   }
 }
 
+/** Ramp headroom (m) from which a flight is an open well without a following ceiling (task track3-eaton-centre-20261031). */
+export const OPEN_WELL_HEADROOM = 10;
+
 /** Stair flight geometry for one grid ramp (`walls`: the union-aware wall lookup for handrails). */
 function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey) => QuadSink, steel: THREE.BufferGeometry[], walls: Grid, opts: {treads?: boolean; wallRails?: boolean} = {}): void {
   const area = layout.areas[g.area[g.idx(r.x, r.y)]];
@@ -151,7 +155,9 @@ function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMateria
   const kinks = [...new Set([lo, hi, r.s0, r.s1].filter(s => s >= lo - 1e-6 && s <= hi + 1e-6).map(s => Math.round(s * 1e4) / 1e4))].sort((p, q) => p - q);
   // Ceiling following the flight (one quad per straight piece across the full width).
   const ceilMat: MatKey = pub ? 'ceiling' : 'ceilingService';
-  for (let i = 0; i + 1 < kinks.length; i++) flatQuad(acc(ceilMat), mats.scale[ceilMat], axisX, kinks[i], kinks[i + 1], a0, a1, H(kinks[i]) + r.headroom, H(kinks[i + 1]) + r.headroom, false);
+  // Task track3-eaton-centre-20261031 (lane GEN): an OPEN well (Ramp.headroom >= OPEN_WELL_HEADROOM: the mall's escalators / stairs,
+  // capped by the cell ceiling, gen/levels.ts header) has no ceiling following the pitch. Every Subway / Office flight is < 3 m.
+  if (r.headroom < OPEN_WELL_HEADROOM) for (let i = 0; i + 1 < kinks.length; i++) flatQuad(acc(ceilMat), mats.scale[ceilMat], axisX, kinks[i], kinks[i + 1], a0, a1, H(kinks[i]) + r.headroom, H(kinks[i + 1]) + r.headroom, false);
   // Task office-overhaul-20261030 (lane STRUCT): an escalator flight keeps only its ceiling (buildEscalators draws the rest).
   if (opts.treads === false) return;
   // Side walls: world/levelGeometry.ts wall faces (iteration 08).
@@ -209,6 +215,10 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   // Task office-overhaul-20261030 (lane STRUCT): transit hall flights (escalators: ceiling only; the fixed stair: no wall rails).
   const office = (layout as {office?: OfficeTowerInfo}).office;
   const escRamps = new Set<number>((office?.transit?.escalators ?? []).flatMap(e => e.flights.map(i => layout.traversal.stairs[i]?.ramp ?? -1)));
+  // Task track3-eaton-centre-20261031 (lane ARCH): the mall's escalators (layout.mall.verticals) get the transit-hall escalator visuals.
+  const mallEsc = mallEscalatorFlights(layout);
+  const mallRamps = new Set<number>(mallEsc.map(e => e.flight.ramp));
+  for (const rr of mallRamps) escRamps.add(rr);
   const transitRamps = new Set<number>(layout.traversal.stairs.filter(f => f.spec).map(f => f.ramp));
   for (const L of levels) {
     const g = L.grid;
@@ -219,7 +229,7 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
       if (seen.some(q => same(q, r))) continue;
       seen.push(r);
       const cx = (r.x + r.w / 2) * CELL, cz = (r.y + r.h / 2) * CELL;
-      buildFlight(g, r, layout, mats, k => acc(k, cx, cz, L.id), steel, ctx ? unionWalls(r, ctx.cols) : g, {treads: !escRamps.has(ri), wallRails: !transitRamps.has(ri)});
+      buildFlight(g, r, layout, mats, k => acc(k, cx, cz, L.id), steel, ctx ? unionWalls(r, ctx.cols) : g, {treads: !escRamps.has(ri), wallRails: !transitRamps.has(ri) && !mallRamps.has(ri)});
     }
   }
 
@@ -262,6 +272,7 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   addMerged(group, ladder, ladderMaterial(mats), 'traversal-ladders');
   addMerged(group, stripes, hazardMaterial(mats), 'traversal-hazard');
   if (office) buildOfficeExtras(group, layout, office, mats);
+  if (mallEsc.length) buildMallEscalators(group, layout, mallEsc, mats); // task track3 (lane ARCH)
   return layout.traversal.ladders.length;
 }
 
@@ -383,6 +394,18 @@ function buildOfficeExtras(group: THREE.Group, layout: StationLayout, office: Of
     const L = lists();
     buildRoofFixtures(L, office);
     emitLists(group, L, mats, 'roof', [office.roof.level]);
+  }
+}
+
+/** Task track3-eaton-centre-20261031 (lane ARCH): the mall's stopped escalators, tagged with the two storeys each joins. */
+function buildMallEscalators(group: THREE.Group, layout: StationLayout, flights: ReturnType<typeof mallEscalatorFlights>, mats: WorldMaterials): void {
+  for (const {flight, lower, upper} of flights) {
+    const q = layout.traversal.stairs.find(f2 => f2.ramp === flight.ramp);
+    const r = layout.grid.ramps[flight.ramp];
+    if (!q || !r) continue;
+    const L = lists();
+    buildEscalator(L, r, q);
+    emitLists(group, L, mats, `mall-escalator-${flight.ramp}`, [lower, upper]);
   }
 }
 

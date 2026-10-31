@@ -166,6 +166,20 @@ export interface FieldSource {
    * cheaper to trace than to flood.
    */
   crossCull?: boolean;
+  /**
+   * Task track3-eaton-centre-20261031 (lane ARCH): extra direct light added after the fixtures, before the bounce pass (the mall's
+   * daylight through its glass roof: world/mallSkylight.ts). Absent (every Subway station, the Office): nothing changes.
+   * Receives the per-slot direct-light arrays (tinted fluence E, direction D, luminance EL) and the slots' column geometry.
+   */
+  extraDirect?: (ctx: ExtraDirectContext) => Record<string, number> | void;
+}
+
+/** Task track3 (lane ARCH): what FieldSource.extraDirect may add into (the bake's own arrays, slot-major as the fixtures write). */
+export interface ExtraDirectContext {
+  W: number; H: number; levels: readonly Level[]; geos: readonly ColumnGeometry[]; layers: readonly number[];
+  E: Float32Array[]; D: Float32Array[]; EL: Float32Array[];
+  /** Union of free bands per column (null for a single-level field). */
+  bands: {start: Int32Array; f: Float32Array; c: Float32Array} | null;
 }
 
 export interface BakedField {
@@ -194,7 +208,9 @@ export interface BakedField {
   groups: Int8Array;
   stats: {ms: number; bytes: number; fixtures: number; working: number; steady: number; circuits: [number, number, number]; rays: number; crossRays: number; slots: number;
     /** Most bands in one column, extended columns, columns with bands past MAX_BANDS (dropped), cross rays skipped by the flood. */
-    bands?: number; extCols?: number; cut?: number; crossCulled?: number};
+    bands?: number; extCols?: number; cut?: number; crossCulled?: number;
+    /** Task track3 (lane ARCH): FieldSource.extraDirect's stats (the mall skylight), when present. */
+    extra?: Record<string, number>};
 }
 
 /** [lo, hi] of slot s's header heights (floor = lo + byte / 255 * (hi - lo)). */
@@ -529,6 +545,9 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
     }
   }
 
+  // Task track3-eaton-centre-20261031 (lane ARCH): extra direct light (the mall skylight), steady (no flicker circuit share).
+  const extra = src.extraDirect ? src.extraDirect({W, H, levels: levels.slice(0, S), geos, layers: LS, E, D, EL, bands: U ? {start: U.start, f: U.f, c: U.c} : null}) ?? undefined : undefined;
+
   // --- Bounce fill per slot: half area mean, half local, then a short wall-respecting diffusion ------
   // (Open cells only, typed arrays and precomputed neighbour masks: this runs before the JIT warms up.)
   const bounce = geos.map((geo, s) => {
@@ -718,7 +737,7 @@ export function bakeLightField(src: FieldSource, p: FieldParams = DEFAULT_FIELD)
   return {
     w: W, h: H, layers: LAYERS, depth, slots: S, data, yMin, yMax, groups, hdr, slotY, masks,
     stats: {ms: performance.now() - t0, bytes: data.byteLength, fixtures: src.lights.length, working, steady, circuits, rays, crossRays, slots: S,
-      bands: maxBands, extCols, cut, crossCulled},
+      bands: maxBands, extCols, cut, crossCulled, ...(extra ? {extra} : {})},
   };
 }
 

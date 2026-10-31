@@ -318,6 +318,11 @@ export interface HolderContext {
   rewardPicks?: readonly string[];
   gates: StageGates;
   scarcity: ScarcityStage;
+  /**
+   * Task track3-eaton-centre-20261031 (lane PROFILES): the level's SALVAGE rows this holder's table gained (crafting materials kept
+   * exactly as rolled; `share` = their part of the table weight before overrides; `from` = the purpose entry or the loot theme).
+   */
+  salvage?: {from: string; share: number; rows: readonly TableRow[]};
   /** null for fixtures. */
   expected: ExpectedUnits | null;
   occurrence: OccurrenceInfo;
@@ -354,6 +359,8 @@ export interface EconomyInfo {
   handful: readonly {itemId: string; range: Range}[];
   handfulFallback: Range;
   limb: {share: Readonly<Record<string, number>>; holder: Readonly<Record<string, number>>; poolTable: string};
+  /** Task track3-eaton-centre-20261031 (lane PROFILES): the profile's salvage rules (absent = none: every shipped Subway / Office table). */
+  salvage?: {purposes: readonly {key: string; share: number; rows: readonly TableRow[]}[]; themes: readonly {key: string; share: number; rows: readonly TableRow[]}[]; note: string};
   legacy: {
     areaWeights: readonly {roomType: string; weights: readonly number[]}[];
     holderMod: readonly {kind: string; mod: readonly number[]}[];
@@ -495,6 +502,12 @@ export interface LevelInfo {
   floor: FloorProgramInfo;
   /** SpecialSource ids that apply to this level. */
   specials: readonly string[];
+  /**
+   * Task track3-eaton-centre-20261031 (lane PROFILES): CRAFTING-MATERIAL RICHNESS in native units — expected material units per sample
+   * level from its holders (Σ over the census holders of their context's exact expected units, BEFORE fit) and from the loose floor
+   * program (expected attempts, before placement), per material item, plus the holders per level whose context can yield one.
+   */
+  materials: {perLevelHolders: Readonly<Record<string, number>>; perLevelFloor: Readonly<Record<string, number>>; holdersPerLevel: number; materialHoldersPerLevel: number; note: string};
 }
 
 export interface PurposeInfo {

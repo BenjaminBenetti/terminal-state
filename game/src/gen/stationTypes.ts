@@ -9,6 +9,7 @@ import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 import type {MallInfo} from './mall/mallTypes';
+import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -157,6 +158,8 @@ export interface ZombieSpawn {
   /** Iteration 08 (Lane A): level of the spawn cell (default 0) and its absolute floor height (default 0). */
   level?: number;
   y?: number;
+  /** Task track3-eaton-centre-20261031 (lane HORDE): member of roaming horde group layout.hordes[horde]; absent = ambient enemy. */
+  horde?: number;
 }
 
 /**
@@ -276,6 +279,8 @@ export interface StationLayout {
   office?: OfficeTowerInfo;
   /** Task track3-eaton-centre-20261031: The Eaton's Center (LevelId 'mall') — written by gen/mall (lane GEN). */
   mall?: MallInfo;
+  /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */
+  hordes?: HordeGroupSpec[];
 }
 
 // ---------------------------------------------------------------------------------------

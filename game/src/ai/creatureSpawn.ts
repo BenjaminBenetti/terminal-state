@@ -43,11 +43,14 @@ export function pickEnemyArchetype(seed: number, index: number, pool: FamilyPool
  * (spawnTables roomFamilyPool: purpose / room-type modifiers; untouched when the room has no entry).
  */
 export function assignEnemyArchetypes(
-  layout: {seed: number; zombies: {archetype?: EnemyArchetypeId; area?: number}[]; areas?: readonly Pick<Area, 'purpose' | 'type'>[]},
+  layout: {seed: number; zombies: {archetype?: EnemyArchetypeId; area?: number; horde?: number}[]; areas?: readonly Pick<Area, 'purpose' | 'type'>[]},
   profile: SpawnProfile = spawnProfile('subway'),
 ): number {
   let n = 0;
   layout.zombies.forEach((s, i) => {
+    // Task track3-eaton-centre-20261031 (lane HORDE): roaming-horde members keep the family their horde pool gave them (ai/hordePlace.ts)
+    // — the ambient pool never applies to them. Skipping consumes no draw (the roll is a hash of (seed, index)).
+    if (s.horde !== undefined) return;
     const area = s.area !== undefined ? layout.areas?.[s.area] : undefined;
     s.archetype = pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area));
     if (s.archetype !== 'zombie') n++;
