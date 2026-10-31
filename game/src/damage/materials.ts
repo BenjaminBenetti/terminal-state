@@ -224,6 +224,8 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   medCabinet: NEVER('sheetMetal'), safe: NEVER('steel'), signalRack: NEVER('sheetMetal'),
   // Carton stack (decor): cardboard collapses into a low heap of flattened boxes.
   cartonStack: {cls: 'cardboard', integrity: 80, breaks: 'collapse'},
+  // Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a survivor's camp bed (mattress + bedding on pallets): soft, never breaks
+  palletBed: NEVER('fabric'),
   // Iteration 07 (Lane P2): generated prop types (class / breaks per type in gen/props07.ts).
   ...P7_PROP_DAMAGE,
   // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts).

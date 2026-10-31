@@ -31,6 +31,7 @@ import {
   JUNK_ROWS, PERSONAL_ROWS, // Task office-interactions-layout-20261030 (lane LAYOUT): office support rooms / large-room fill
   ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, // Track 2 (lane CONTENT): the service-annex holders' loot keys / tables
   ANNEX_SCRAPS, ANNEX_SCRAPS_KEY, ANNEX_SUPPLY, ANNEX_SUPPLY_KEY, // playtest revision: distributed supply / scraps holders
+  ANNEX_CACHE_CRATE, ANNEX_CACHE_KEY, ANNEX_CACHE_KIT, ANNEX_CACHE_PANTRY, // round 2 (lane CACHE, R5): the survivor caches deeper in
   SERVER_SPARES_ROWS, // task track2-playtest-revision (lane ROOMS): the annex signature rooms' tool / spares rows (+ TENANT_SUPPLY)
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
@@ -1210,6 +1211,13 @@ function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
     [ANNEX_SCRAPS_KEY]: {
       id: ANNEX_SCRAPS_KEY, category: 'back', theme: 'service', label: 'Picked-over stores (a leftover)', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
       light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_SCRAPS}, floor: {},
+    },
+    // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): the storage of a deep annex room a survivor lived in
+    // (gen/annexCache.ts; prop-level loot key like the stash): themed per container — pantry shelf, kit cabinet, supply crate (the
+    // only cache ammo) — every table exact, never empty, no salvage (items/lootTables.ts ANNEX_CACHE_*)
+    [ANNEX_CACHE_KEY]: {
+      id: ANNEX_CACHE_KEY, category: 'back', theme: 'personal', label: 'Survivor\'s cache', slots: ['storage'], kinds: ['room'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {shelf: ANNEX_CACHE_PANTRY, cabinetTall: ANNEX_CACHE_KIT, cabinetLow: ANNEX_CACHE_KIT, crate: ANNEX_CACHE_CRATE, default: ANNEX_CACHE_KIT}, floor: {},
     },
   };
 }

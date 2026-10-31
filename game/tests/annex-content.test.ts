@@ -26,7 +26,7 @@ import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind} f
 import {holderSurfaces} from '../src/items/lootLayout';
 import {PROP_DEFS} from '../src/gen/props';
 import {
-  ANNEX_FLOOR, ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, ROOF_CACHE_KEY, ROOF_FIND_KEY, lootProfile, validateLootProfile,
+  ANNEX_CACHE_KEY, ANNEX_FLOOR, ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, ROOF_CACHE_KEY, ROOF_FIND_KEY, lootProfile, validateLootProfile,
 } from '../src/items/lootTables';
 import {ITEMS} from '../src/items/items';
 import {OFFICE_SIREN_ELIGIBILITY, SERVICE_CONTEXT, SERVICE_ZONE_BUDGET, spawnContextOf, spawnProfile} from '../src/ai/spawnTables';
@@ -264,7 +264,8 @@ describe('service annex loot (finite, themed, appended, never multiplying the le
         const holders = l.props.slice(rep.first.props).filter(p => ids.has(p.area) && isLootHolderKind(p.kind) && p.host === undefined);
         const by = (k: string) => holders.filter(p => p.purpose === k);
         const stash = by(ANNEX_STASH_KEY), picked = by(ANNEX_PICKED_KEY), supply = by(ANNEX_SUPPLY_KEY), scraps = by(ANNEX_SCRAPS_KEY);
-        const special = new Set([ANNEX_STASH_KEY, ANNEX_PICKED_KEY, ANNEX_SUPPLY_KEY, ANNEX_SCRAPS_KEY]);
+        // (round 2, lane CACHE: + the survivor caches' own key — their storage is the cache, never a room-table "intact" holder)
+        const special = new Set([ANNEX_STASH_KEY, ANNEX_PICKED_KEY, ANNEX_SUPPLY_KEY, ANNEX_SCRAPS_KEY, ANNEX_CACHE_KEY]);
         const intact = holders.filter(p => !special.has(p.purpose ?? ''));
         expect(stash.length, `${l.seed} annex ${n.id} stashes`).toBeGreaterThanOrEqual(1);
         expect(stash.length).toBeLessThanOrEqual(2);

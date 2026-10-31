@@ -76,6 +76,26 @@ describe.runIf(!!process.env.ANNEX_PICTURES)('annex review pictures (ANNEX_PICTU
       await shoot(`supply-${hh.kind}-${L.areas[hh.prop.area].purpose}`, scene, {pos: [aim.x + (vx / n) * 1.8, fy + 1.6, aim.z + (vz / n) * 1.8], target: [aim.x, aim.y, aim.z]}, 0.5);
       report.push(`  lots: ${hh.state.lots.map(l => l.itemId).join(', ')}; depth ${L.areas[hh.prop.area].depth}`);
     }
+    // 3. (round 2, lane CACHE, R5) the survivor cache rooms (gen/annexCache.ts): from the doorway, and from the bedside toward the
+    // storage with its rolled lots (iteration-07 camp things need their models: not drawn here)
+    const {annexCachesOf} = await import('../src/gen/annexCache');
+    for (const c of annexCachesOf(L).filter(q => q.annex === A.id)) {
+      const a = L.areas[c.area], d = L.doors.find(q => q.a === a.id || q.b === a.id)!, bed = L.props[c.bed];
+      const dx = (d.x + d.w / 2) * CELL, dz = (d.y + d.h / 2) * CELL, ax = (a.x + a.w / 2) * CELL, az = (a.y + a.h / 2) * CELL;
+      const len = Math.hypot(ax - dx, az - dz) || 1, ux = (ax - dx) / len, uz = (az - dz) / len;
+      for (const i of c.holders) {
+        const hh = cm.all.find(q => q.prop === L.props[i])!;
+        const {aim} = cm.aimPoint(hh);
+        cm.target(new THREE.Vector3(dx + ux * 0.6, fy + 1.6, dz + uz * 0.6), new THREE.Vector3(aim.x, aim.y, aim.z).sub(new THREE.Vector3(dx, fy + 1.6, dz)).normalize(), levelsOf(L));
+        if (hh.open || !hh.state.open) cm.interact({container: hh, t: 1, lot: null, part: hh.open ? 0 : undefined} as never); // open it, as a player would
+      }
+      for (let t = 0; t < 1.5; t += 1 / 30) cm.update(1 / 30, t);
+      await shoot(`cache-${a.purpose}-from-door`, scene, {pos: [dx - ux * 0.4, fy + 1.65, dz - uz * 0.4], target: [ax, fy + 0.5, az]}, 0.55);
+      // the bed from ~2 m in front of it (its front faces the room), a little to one side
+      const fx = Math.sin(bed.rot), fz = Math.cos(bed.rot);
+      await shoot(`cache-${a.purpose}-bed`, scene, {pos: [bed.x + fx * 2.1 + fz * 0.6, fy + 1.6, bed.z + fz * 2.1 - fx * 0.6], target: [bed.x, fy + 0.25, bed.z]}, 0.55);
+      report.push(`cache room ${a.id} (${a.purpose}) depth ${c.depth}: ${c.holders.map(i => { const hh = cm.all.find(q => q.prop === L.props[i])!; return `${hh.kind} [${hh.state.lots.map(l => l.itemId).join(', ')}]`; }).join('; ')}; decor ${c.decor.map(i => L.props[i].kind).join(', ') || '-'}`);
+    }
     fs.writeFileSync(path.join(out, 'pictures.txt'), report.join('\n') + '\n');
   }, 900000);
 });
