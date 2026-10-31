@@ -18,7 +18,7 @@ import type {Rect, StationLayout} from '../stationTypes';
 import {levelDistance} from '../levelGen';
 import {Carver, type Carve} from './carve';
 import {reframe} from './core';
-import {isExtensionArea, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
+import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
 
 export * from './types';
 export {TRACK_EXT, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config';
@@ -139,7 +139,7 @@ export function finishExtensions(layout: StationLayout, ext: TrackExtensions, cr
     x0 = ox; y0 = oy;
   }
   const moved = x0 !== ox || y0 !== oy;
-  const coreXZ = moved ? layout.props.flatMap(p => [p.x, p.z]) : null;
+  const coreXZ = moved ? Object.fromEntries(CORE_XZ_KEYS.map(k => [k, (layout[k] as {x: number; z: number}[]).flatMap(p => [p.x, p.z])])) as Record<CoreXZKey, number[]> : null;
   const out = moved || x1 !== ox + W - 1 || y1 !== oy + H - 1 ? reframe(layout, x0 - ox, y0 - oy, x1 - x0 + 1, y1 - y0 + 1) : layout;
   attachExtensions(out, ext, {ox: x0, oy: y0, core: {x: ox - x0, y: oy - y0, w: W, h: H}});
   if (coreXZ) ext.coreXZ = coreXZ;

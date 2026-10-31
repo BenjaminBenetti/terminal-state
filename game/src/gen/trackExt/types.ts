@@ -93,12 +93,16 @@ export interface TrackExtensions {
   core: {x: number; y: number; w: number; h: number};
   shift: {x: number; z: number};
   /**
-   * (GEN addition) Only when the core was translated: the EXACT core-frame x / z of the core's props (pairs, layout.props order).
-   * A translated double can come back one ulp off, which flips cm / mm rounding ties: position-seeded consumers (shelf stock) and
-   * coreView read these instead.
+   * (GEN addition) Only when the core was translated: the EXACT core-frame x / z of the core's point records (pairs, in each list's
+   * order; records appended later have none). A translated double can come back one ulp off, which flips cm / mm rounding ties:
+   * position-seeded consumers (shelf stock) and coreView read these instead.
    */
-  coreXZ?: number[];
+  coreXZ?: Partial<Record<CoreXZKey, number[]>>;
 }
+
+/** Point-record lists of a layout whose exact core-frame positions a translated core keeps (TrackExtensions.coreXZ). */
+export type CoreXZKey = 'props' | 'lights' | 'signs' | 'pickups' | 'zombies';
+export const CORE_XZ_KEYS: readonly CoreXZKey[] = ['props', 'lights', 'signs', 'pickups', 'zombies'];
 
 /** Balance / geometry config of the track extensions of one level (gen/trackExt/config.ts TRACK_EXT). */
 export interface TrackExtConfig {

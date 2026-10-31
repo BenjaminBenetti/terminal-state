@@ -15,6 +15,7 @@ import {Levels, levelsOf, type DynamicVolume, type VolumeGate} from '../src/gen/
 import {CELL, PathFinder} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {levelFixture} from './helpers/levelFixture';
+import {coreView} from '../src/gen/trackExt/index';
 
 /** FNV-1a over the bytes of every pushed number (Float64) — order sensitive. */
 class Hash {
@@ -83,8 +84,10 @@ function fingerprint(L: Levels, layout: Pick<StationLayout, 'zombies'>, seed: nu
   return {lines: lines.hex, circles: circles.hex, support: support.hex, rails: rails.hex, finds: finds.hex};
 }
 
-function officeWithCab(open: boolean) {
-  const layout = LEVELS.office.generate('main', {levelSeed: 4242, startWeapon: 'pistol'});
+function officeWithCab(open: boolean, core = false) {
+  const live = LEVELS.office.generate('main', {levelSeed: 4242, startWeapon: 'pistol'});
+  // Track 2 (lane GEN): `core` = the level without its track extensions (gen/trackExt coreView) — the proof world
+  const layout = core ? coreView(live) : live;
   const E = layout.office!.elevator;
   const LV = new Levels(layout.levels, layout.levelLinks, layout.rails);
   const [nx, nz] = E.doorSide === 'N' ? [0, -1] : E.doorSide === 'S' ? [0, 1] : E.doorSide === 'W' ? [-1, 0] : [1, 0];
@@ -108,11 +111,15 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
     const shut = officeWithCab(false), open = officeWithCab(true);
     // bias half the samples into the shaft / landing neighbourhood so the volume paths are exercised
     const fp = (o: ReturnType<typeof officeWithCab>) => fingerprint(o.LV, o.layout, 0x0ff1ce, 2500, true);
+    // Track 2 proof: the same queries over the core level (no extensions, the core grid) reproduce the pre-Track-2 pins
+    check('OFFICE_SHUT core', fp(officeWithCab(false, true)), OFFICE_SHUT_CORE);
+    check('OFFICE_OPEN core', fp(officeWithCab(true, true)), OFFICE_OPEN_CORE);
     check('OFFICE_SHUT', fp(shut), OFFICE_SHUT);
     check('OFFICE_OPEN', fp(open), OFFICE_OPEN);
     // near the cab: lines from the landing into / through the doorway at the stop's floor
+    const cab = (list: ReturnType<typeof officeWithCab>[]) => {
     const h = new Hash(), r = rng(0xcab);
-    for (const o of [shut, open]) {
+    for (const o of list) {
       const c = o.E.cab, y = o.stop.y;
       for (let k = 0; k < 1500; k++) {
         const ax = c.x0 - 3 + r() * (c.x1 - c.x0 + 6), az = c.z0 - 3 + r() * (c.z1 - c.z0 + 6);
@@ -123,11 +130,16 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
         h.push(s ? s.floor : null);
       }
     }
-    check('OFFICE_CAB', h.hex, OFFICE_CAB);
+    return h.hex;
+    };
+    check('OFFICE_CAB core', cab([officeWithCab(false, true), officeWithCab(true, true)]), OFFICE_CAB_CORE);
+    check('OFFICE_CAB', cab([shut, open]), OFFICE_CAB);
   });
 
   it('a Subway station (seed 1234) and the hand-made 3-level fixture (railings, light well, alcoves)', () => {
     const sub = LEVELS.subway.generate('main', {levelSeed: 1234, startWeapon: 'pistol'});
+    // (Track 2: seed 1234 has no track extension; its core view is the layout itself)
+    check('SUBWAY core', fingerprint(levelsOf(coreView(sub)), coreView(sub), 0x5ab, 2500, true), SUBWAY);
     check('SUBWAY', fingerprint(levelsOf(sub), sub, 0x5ab, 2500, true), SUBWAY);
     const fx = levelFixture();
     const LF = new Levels(fx.levels, fx.levelLinks, fx.rails);
@@ -141,8 +153,18 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
 // same queries walk a different world. gen/levels.ts and gen/grid.ts are byte-identical to main 932624e (the query code is
 // unchanged) and the Subway / fixture fingerprints below did not move. Was {lines c9f3c098, circles 75e6b2f8, support a9ea28e1,
 // rails 9c7ef718, finds 46231f70} (shut = open, as now).
-const OFFICE_SHUT = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
-const OFFICE_OPEN = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
+// Track 2 — Beyond the Station (lane GEN): the office level now carries track extensions (tunnels east of its station's beds and
+// service annexes), stamped after every core pass; its grid grows east / south (same origin), so the office world the random
+// queries sample (cells drawn over W x H) changes. gen/levels.ts and gen/grid.ts are untouched. Translation-normalised proof
+// (every run): the same queries over the CORE level (gen/trackExt coreView: the core grid, extension cells / records out)
+// reproduce the pre-Track-2 pins byte for byte (OFFICE_*_CORE = the previous OFFICE_* values); the live pins below are the
+// extended world's.
+const OFFICE_SHUT_CORE = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
+const OFFICE_OPEN_CORE = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
+const OFFICE_CAB_CORE = '3570ed8b';
+const OFFICE_SHUT = {lines: 'e6296ba5', circles: 'c6c70805', support: '9728d7d2', rails: 'af1f34c5', finds: '11c31ab0'};
+const OFFICE_OPEN = {lines: 'e6296ba5', circles: 'c6c70805', support: '9728d7d2', rails: 'af1f34c5', finds: '11c31ab0'};
+/** (the near-cab queries only touch the tower: unchanged by the extensions) */
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};
 /** The fixture runs no PathFinder (finds = the empty hash). */

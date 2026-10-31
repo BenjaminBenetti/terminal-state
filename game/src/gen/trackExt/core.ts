@@ -14,7 +14,7 @@ import type {Level} from '../levels';
 import {shiftFlight, shiftRamp} from '../traversal';
 import type {StationLayout} from '../stationTypes';
 import {copyWindow} from './window';
-import {isExtensionArea} from './types';
+import {CORE_XZ_KEYS, isExtensionArea} from './types';
 
 /**
  * The layout in a new grid frame of w x h cells whose cell (0, 0) is the old cell (ox, oy) (negative = the old grid lands inside
@@ -103,8 +103,10 @@ export function coreView(layout: StationLayout): StationLayout {
   if (!e || !hasExtensionGrowth(layout)) return layout;
   const first = layout.areas.findIndex(a => isExtensionArea(a));
   const view = reframe(layout, e.core.x, e.core.y, e.core.w, e.core.h, first < 0 ? layout.areas.length : first);
-  // the core's props at their exact core-frame positions (a translated double may come back one ulp off)
-  const xz = e.coreXZ;
-  if (xz) for (let i = 0; i < Math.min(view.props.length, xz.length / 2); i++) { view.props[i].x = xz[2 * i]; view.props[i].z = xz[2 * i + 1]; }
+  // the core's point records at their exact core-frame positions (a translated double may come back one ulp off)
+  for (const k of CORE_XZ_KEYS) {
+    const xz = e.coreXZ?.[k], list = view[k] as {x: number; z: number}[];
+    if (xz) for (let i = 0; i < Math.min(list.length, xz.length / 2); i++) { list[i].x = xz[2 * i]; list[i].z = xz[2 * i + 1]; }
+  }
   return view;
 }

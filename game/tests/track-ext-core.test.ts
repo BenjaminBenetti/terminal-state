@@ -99,11 +99,12 @@ describe('track extensions — the core level is unchanged', () => {
     expect(matched).toBeGreaterThan(seedOf.size * 0.98);
     expect(same).toBe(matched);
     // shelf stock: the seed of every core holder is its seed in the station without extensions (exact core-frame positions)
-    expect(e.coreXZ?.length).toBe(2 * none.props.length);
+    const xz = e.coreXZ!.props!;
+    expect(xz.length).toBe(2 * none.props.length);
     for (let i = 0; i < none.props.length; i++) {
       const a = ext.props[i], b = none.props[i];
       expect(Math.abs(a.x - e.shift.x - b.x)).toBeLessThan(1e-9);
-      expect(holderStockSeed(ext.seed, a.kind, e.coreXZ![2 * i], e.coreXZ![2 * i + 1], a.y)).toBe(holderStockSeed(none.seed, b.kind, b.x, b.z, b.y));
+      expect(holderStockSeed(ext.seed, a.kind, xz[2 * i], xz[2 * i + 1], a.y)).toBe(holderStockSeed(none.seed, b.kind, b.x, b.z, b.y));
     }
   });
 });

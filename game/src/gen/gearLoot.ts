@@ -23,6 +23,7 @@ import {GEAR_ITEMS} from '../items/gear';
 import {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, gearParams, lootProfile, type LootProfile} from '../items/lootTables';
 import type {LevelId} from '../levels/types';
 import {isExtensionArea} from './trackExt/types'; // Track 2 (lane GEN)
+import {coreView, hasExtensionGrowth} from './trackExt/core';
 
 /** Task gasmask-breach-20261030 (mask lane): `filter` = a found gas mask's seeded filter charge (s), copied onto its placement. */
 export interface GearAssignment { itemId: string; filter?: number }
@@ -128,6 +129,20 @@ export function placeSectionGear(layout: StationLayout, items: readonly GearAssi
  * layout has no reachable floor cell at all). Deterministic for (layout, items, rng seed).
  */
 export function placeGear(layout: StationLayout, items: readonly GearAssignment[], rng: Rng): PickupPlacement[] {
+  // Track 2 (lane GEN): a layout whose track extensions grew / translated its grid places its gear in the CORE frame (gen/trackExt
+  // coreView: the station exactly as without them), so every choice — areas, cells, anchor-distance ties — is main's; the
+  // placements are then translated back into the layout.
+  const ext = layout.extensions;
+  if (ext && items.length && hasExtensionGrowth(layout)) {
+    const core = coreView(layout);
+    const out = placeGearIn(core, items, rng).map(p => ({...p, x: p.x + ext.shift.x, z: p.z + ext.shift.z}));
+    layout.pickups.push(...out);
+    return out;
+  }
+  return placeGearIn(layout, items, rng);
+}
+
+function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rng: Rng): PickupPlacement[] {
   const placed: PickupPlacement[] = [];
   if (!items.length) return placed;
   const levels = layout.levels?.length ? layout.levels : [{id: 0, role: 'main' as const, grid: layout.grid, baseY: 0}];

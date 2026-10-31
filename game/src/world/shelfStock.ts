@@ -199,7 +199,7 @@ export class ShelfStock implements FillerView {
     // Track 2 (lane GEN): stock seeds from CORE-frame positions, so a crop translation by track extensions keeps every shelf's stock:
     // the core's props at their exact core-frame x / z (extensions.coreXZ: a translated double can come back one ulp off and flip a
     // cm rounding tie), props appended after the core by their translated-back position.
-    const ext = layout.extensions, xz = ext?.coreXZ;
+    const ext = layout.extensions, xz = ext?.coreXZ?.props;
     const sx = ext?.shift.x ?? 0, sz = ext?.shift.z ?? 0;
     for (let pi = 0; pi < layout.props.length; pi++) {
       const p = layout.props[pi];
