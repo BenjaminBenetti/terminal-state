@@ -4,6 +4,7 @@
 // front of the cap is placed at the end of the walkable cells (where the player and bullets stop).
 
 import {CELL, FLOOR} from '../../gen/grid';
+import {TRACK_EXT} from '../../gen/trackExt/config'; // (pure data) the cap rock reservation the overhang lives in
 import type {StationLayout} from '../../gen/station';
 import type {WorldMaterials} from '../materials';
 import {Acc, basisOf, hashOf, prng, type V3} from './mesh';
@@ -15,11 +16,13 @@ export interface CapSpan { front: number; back: number; walkEnd: number }
 
 /** Depth (m) each cap kind needs behind its front face. */
 export const CAP_DEPTH = {rubble: 0.25, bulkhead: 0.45, gate: 0.75} as const;
+/** Rock skin (m) a cap leaves between its back and the end of the rock GEN reserves behind the cap plane. */
+export const CAP_SKIN = 0.1;
 /**
  * How far a cap may extend the shell past the path end (m): inside the rock lane GEN reserves behind the cap plane
- * (gen/trackExt/config.ts TRACK_EXT.tunnel.capDepth = 1.5 m), less a 0.1 m skin.
+ * (gen/trackExt/config.ts TRACK_EXT.tunnel.capDepth, 1.5 m today), less CAP_SKIN — derived, so a config change moves it too.
  */
-export const CAP_OVERHANG = 1.4;
+export const CAP_OVERHANG = TRACK_EXT.tunnel.capDepth - CAP_SKIN;
 
 /**
  * Where the walkable tunnel cells end (grid ground truth: far edge of the last walkable cell along the path) and the

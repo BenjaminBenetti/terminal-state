@@ -162,8 +162,12 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
 const OFFICE_SHUT_CORE = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
 const OFFICE_OPEN_CORE = {lines: '56f458a5', circles: 'f4c1a2a5', support: '6d441f6d', rails: 'aea167c5', finds: '4353c5dc'};
 const OFFICE_CAB_CORE = '3570ed8b';
-const OFFICE_SHUT = {lines: 'e6296ba5', circles: 'c6c70805', support: '9728d7d2', rails: 'af1f34c5', finds: '11c31ab0'};
-const OFFICE_OPEN = {lines: 'e6296ba5', circles: 'c6c70805', support: '9728d7d2', rails: 'af1f34c5', finds: '11c31ab0'};
+// Track 2 (lane CONTENT): office 4242's service annexes are now dressed (gen/annexContent.ts, appended after every core pass: prop
+// footprints block annex cells) — the live world the random queries sample changes again (was {lines e6296ba5, circles c6c70805,
+// support 9728d7d2, rails af1f34c5, finds 11c31ab0}); the core pins above still hold byte for byte (coreView drops the extensions'
+// cells, their blocked footprints and appended records). gen/levels.ts / gen/grid.ts untouched.
+const OFFICE_SHUT = {lines: 'd7c9a265', circles: 'fd0c3f65', support: '3633f80e', rails: 'c0990205', finds: '41c7c82f'};
+const OFFICE_OPEN = {lines: 'd7c9a265', circles: 'fd0c3f65', support: '3633f80e', rails: 'c0990205', finds: '41c7c82f'};
 /** (the near-cab queries only touch the tower: unchanged by the extensions) */
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};

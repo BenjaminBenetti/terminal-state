@@ -63,8 +63,9 @@ export const ANNEX_CONTENT = {
   /**
    * Prop budget of one annex: one placement per `m2PerProp` m² of its floor (an annex of ~1840 m² — the 25 % target — gets ~150,
    * about half the density of the core's back-of-house rooms: GEN's annexes are dozens of small rooms and closets). Rooms are dressed
-   * in priority order (the lead plant rooms, then rooms by size, then closets) until it is spent; the iteration-07 per-area budgets
-   * are scaled by `p7Scale`.
+   * in priority order (the lead plant rooms, then rooms by size, then closets) until it is spent (the room in progress finishes); the
+   * corridors' composition is bounded by its zone coverage cap and ANNEX_COMPOSE_BUDGET, the iteration-07 dresser stops at the budget
+   * (its per-area budgets scaled by `p7Scale`), host decor follows its host — measured <= ~1.15 x the budget (tests allow 1.25 x).
    */
   m2PerProp: 12,
   p7Scale: 0.5,
@@ -81,6 +82,12 @@ export const ANNEX_CONTENT = {
   lights: {
     /** Annex corridor fixtures every ~`corridorStep` m (rooms: 1, 2 along a long side > 9 m; closets 1). */
     corridorStep: 6.5,
+    /**
+     * "Much darker": after the purpose's own light odds pick a profile, it drops one step (lit -> dim, dim -> dark) with this chance
+     * — an annex of ~68 small areas otherwise reads like the core's back-of-house (census: ~32 steadily working fixtures per annex
+     * at the purposes' odds alone, ~16 with this). The entry corridor stays at least dim (the way out always shows).
+     */
+    darken: 0.5,
     /** Tunnel fixtures: the first at s in `first`, then every `step` m, none within `capClear` of the cap. */
     tunnel: {first: [5, 9] as const, step: [16, 24] as const, capClear: 4,
       /** Per fixture: dead, else dying (sputtering), else dim (power range, flicker chance). */
@@ -302,9 +309,9 @@ function pushLight(layout: StationLayout, a: Area, x: number, z: number, rot: nu
 }
 
 /**
- * Annex fixtures: corridors a line every ~corridorStep m, rooms 1-3 along their long axis, closets one; each area's profile from
- * its purpose's light odds (else LIGHT_ODDS by type) — the entry corridor (first annex area) at least 'dim' (the way out always
- * shows) — and fixture states exactly as applyLighting's profiles (lit: mostly working; dim: low output, about half dead,
+ * Annex fixtures: corridors a line every ~corridorStep m, rooms 1-2 along their long axis, closets one; each area's profile from
+ * its purpose's light odds (else LIGHT_ODDS by type), then one step darker with lights.darken — the entry corridor (first annex
+ * area) at least 'dim' (the way out always shows) — and fixture states exactly as applyLighting's profiles (lit: mostly working; dim: low output, about half dead,
  * flickering; dark: dead, sometimes one dying tube).
  */
 function lightAnnex(layout: StationLayout, areas: readonly Area[], rng: Rng): void {
@@ -312,6 +319,7 @@ function lightAnnex(layout: StationLayout, areas: readonly Area[], rng: Rng): vo
     const P = purposeById(a.purpose);
     const odds: LightOdds = P?.light ?? LIGHT_ODDS[a.type] ?? [0, 0.4, 0.6];
     let prof = rng.weighted([['lit', odds[0]], ['dim', odds[1]], ['dark', odds[2]]] as const);
+    if (prof !== 'dark' && rng.chance(ANNEX_CONTENT.lights.darken)) prof = prof === 'lit' ? 'dim' : 'dark';
     if (k === 0 && prof === 'dark') prof = 'dim';
     a.lighting = prof;
     const ax0 = a.x * CELL, az0 = a.y * CELL, aw = a.w * CELL, ah = a.h * CELL, alongX = aw >= ah, rot = alongX ? 0 : Math.PI / 2;
@@ -337,7 +345,7 @@ function lightAnnex(layout: StationLayout, areas: readonly Area[], rng: Rng): vo
 /**
  * Tunnel fixtures: sparse ceiling fixtures on the centreline (the first at s in tunnel.first, then every tunnel.step m, none within
  * capClear of the cap), oriented along the path; most are dead, the rest dying or dim and flickering — the tunnels read much
- * darker than the station. The tunnel area keeps its 'dark' profile. Returns the fixtures placed.
+ * darker than the station. The tunnel area's profile follows (dim with a steadily working fixture, else dark). Returns the count.
  */
 function lightTunnel(layout: StationLayout, t: TrackTunnel, rng: Rng): number {
   const T = ANNEX_CONTENT.lights.tunnel, a = layout.areas[t.areas[0]], g = layout.grid;
@@ -353,7 +361,7 @@ function lightTunnel(layout: StationLayout, t: TrackTunnel, rng: Rng): number {
     return {x: p.x + (q.x - p.x) * f, z: p.z + (q.z - p.z) * f, dx: (q.x - p.x) / len, dz: (q.z - p.z) / len};
   };
   const end = cum[cum.length - 1] - T.capClear;
-  let n = 0;
+  let n = 0, steady = false;
   for (let s = rng.range(T.first[0], T.first[1]); s < end; s += rng.range(T.step[0], T.step[1])) {
     const p = at(s), [cx, cy] = g.cellOf(p.x, p.z);
     if (!g.inBounds(cx, cy) || g.area[g.idx(cx, cy)] !== a.id) continue;
@@ -364,7 +372,10 @@ function lightTunnel(layout: StationLayout, t: TrackTunnel, rng: Rng): number {
     else { l.power = rng.range(T.power[0], T.power[1]); l.flicker = rng.chance(T.flicker); }
     layout.lights.push(l);
     n++;
+    if (!l.broken && !l.dying) steady = true;
   }
+  // the station's profile semantics: 'dark' = no steadily working fixture; a tunnel with a working (dim) one reads 'dim'
+  a.lighting = steady ? 'dim' : 'dark';
   return n;
 }
 

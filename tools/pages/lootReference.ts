@@ -137,9 +137,11 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   rewardFinds: readonly string[];
   storeys: boolean;
   floorMoved: boolean;
+  /** Track 2 (lane CONTENT): the level's station grows seeded service annexes (gen/annexContent.ts): their floor program variant. */
+  annex: boolean;
 }>> = {
-  subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: true},
-  office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], rewardFinds: [LT.ROOF_FIND_KEY], storeys: true, floorMoved: false},
+  subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: true, annex: true},
+  office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], rewardFinds: [LT.ROOF_FIND_KEY], storeys: true, floorMoved: false, annex: true},
 };
 
 /**
@@ -169,6 +171,9 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // resolution API (the reference resolves every value through it)
   resolveRows: 'API', catWeight: 'API', keepChance: 'API', slotEmpty: 'API', slotLots: 'API', floorChance: 'API', floorCount: 'API', gearParams: 'API',
   rewardTable: 'API', rewardFind: 'API', validateLootProfile: 'levels (profile validation)',
+  // Track 2 (lane CONTENT): the service-annex loot context (ANNEX_STASH / ANNEX_PICKED and their rows are row tables: auto-detected)
+  ANNEX_STASH_KEY: 'service-annex stash (loot key -> purpose annex-stash: holder contexts)', ANNEX_PICKED_KEY: 'service-annex picked-over storage (loot key -> purpose annex-picked: holder contexts)',
+  ANNEX_FLOOR: 'floor program (annex variant, per service annex)',
 };
 
 const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {
@@ -913,27 +918,41 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
   };
   const themeWeights = {name: 'FLOOR_ECONOMY.themeWeight (battery / flare / food finds, by room theme)', weights: {...LT.FLOOR_ECONOMY.themeWeight} as Record<string, number>};
   const purposeFloor = {name: 'purpose floor weights (gen/purposes.ts `floor`: ammo / med)', weights: Object.fromEntries(ALL_PURPOSES.filter(p => p.floor).flatMap(p => Object.entries(p.floor!).map(([c, w]) => [`${p.id}:${c}`, w as number])))};
-  if (kind === 'subway') {
-    const S = P.tables.floor.subway;
+  /** Finds of a Subway-shaped program (boxes / kept / light): the station's, and (Track 2) the per-annex one. */
+  const programFinds = (S: LT.SubwayFloorProgram, sym: string, keepSym: string, lightSym: string, firstNote?: string, keptNote = 'each copy kept with the keep chance (scarce-floor fork)'): FloorFind[] => {
     const finds: FloorFind[] = [];
-    S.boxes.forEach((b, i) => { const n = floorCount(P, econCat(b.itemId), b.n); finds.push(find('boxes', b.itemId, b.count, n, null, [{what: `copies of the ${b.itemId} box`, value: b.n, at: at(`SUBWAY_FLOOR.boxes`), overrides: ['floor.count', 'tables']}], i === 0 ? 'n copies on the spawn stream' : undefined)); });
+    S.boxes.forEach((b, i) => { const n = floorCount(P, econCat(b.itemId), b.n); finds.push(find('boxes', b.itemId, b.count, n, null, [{what: `copies of the ${b.itemId} box`, value: b.n, at: at(`${sym}.boxes`), overrides: ['floor.count', 'tables']}], i === 0 ? firstNote : undefined)); });
     for (const k of S.kept) {
       const n = floorCount(P, econCat(k.itemId), k.n), keep = floorChance(P, econCat(k.itemId), k.keep);
       finds.push(find('kept', k.itemId, k.count, n, keep, [
-        {what: `old loose ${k.itemId} copies`, value: k.n, at: at('SUBWAY_FLOOR.kept'), overrides: ['floor.count', 'tables']},
-        {what: 'keep chance per copy', value: k.keep, at: at('FLOOR_ECONOMY.medKeep'), overrides: ['floor.chance', 'tables']},
-      ], 'each copy kept with the keep chance (scarce-floor fork)'));
+        {what: `old loose ${k.itemId} copies`, value: k.n, at: at(`${sym}.kept`), overrides: ['floor.count', 'tables']},
+        {what: 'keep chance per copy', value: k.keep, at: at(keepSym), overrides: ['floor.chance', 'tables']},
+      ], keptNote));
     }
-    for (const c of S.light) finds.push(find('light', c.itemId, c.count, null, floorChance(P, econCat(c.itemId), c.chance), [{what: `${c.itemId} chance`, value: c.chance, at: at('FLOOR_ECONOMY'), overrides: ['floor.chance', 'tables']}]));
+    for (const c of S.light) finds.push(find('light', c.itemId, c.count, null, floorChance(P, econCat(c.itemId), c.chance), [{what: `${c.itemId} chance`, value: c.chance, at: at(lightSym), overrides: ['floor.chance', 'tables']}]));
+    return finds;
+  };
+  // Track 2 (lane CONTENT): the per-annex program (a variant of every annex-bearing level; not in the exact per-level totals)
+  const annexVariant = (): FloorVariant[] => {
+    const A = P.tables.floor.annex;
+    if (!A || !LEVEL_ADAPTER[level].annex) return [];
+    const finds = programFinds(A, 'ANNEX_FLOOR', 'ANNEX_FLOOR.kept', 'ANNEX_FLOOR.light', 'n copies on the annex\'s own fork', 'each copy kept with the keep chance (the annex\'s fork)');
+    return [{id: 'annex', label: 'Service annex (per annex)', runs: 'once per seeded service annex off a track tunnel (0-2 per level; gen/annexContent.ts placeAnnexFloor) — not in the per-level totals', finds, totals: totals(finds)}];
+  };
+  const annexNote = 'Service annexes (Track 2): the "annex" variant runs once per seeded annex (0-2 per level) on the annex\'s own fork; its finds land in the annex rooms (purpose `floor` weights; battery / flare: FLOOR_ECONOMY.themeWeight) and are NOT in the exact per-level totals (the annex count is a seeded census quantity).';
+  if (kind === 'subway') {
+    const S = P.tables.floor.subway;
+    const finds = programFinds(S, 'SUBWAY_FLOOR', 'FLOOR_ECONOMY.medKeep', 'FLOOR_ECONOMY', 'n copies on the spawn stream');
+    const annex = annexVariant();
     return {
       id: 'subway', level, label: 'Subway station loose floor supplies (once per station)',
-      variants: [{id: 'station', label: 'Station', runs: 'once per station (gen/stationDress.ts placeSpawns)', finds, totals: totals(finds)}],
+      variants: [{id: 'station', label: 'Station', runs: 'once per station (gen/stationDress.ts placeSpawns)', finds, totals: totals(finds)}, ...annex],
       placement: {derivable: false, reason: 'Each find is dropped into a weighted area (ammo / med: purpose `floor` weights, else PUBLIC_FLOOR_WEIGHTS.station; battery / flare: FLOOR_ECONOMY.themeWeight) on a free floor cell >= 12 m from the spawn (or on a low cabinet); a draw with no free cell places nothing. How often that happens depends on the generated layout.',
         weights: [{name: 'PUBLIC_FLOOR_WEIGHTS.station (public areas without a purpose)', weights: {...LT.PUBLIC_FLOOR_WEIGHTS.station} as Record<string, number>}, purposeFloor, themeWeights]},
       perLevel: {basis: 'exact expected attempts per Subway level (one station program), before placement', totals: totals(finds)},
       at: [at('SUBWAY_FLOOR'), B.src.at(F.stationDress, 'placeSpawns')],
       knobs: [{what: 'the whole program', value: 'SUBWAY_FLOOR', at: at('SUBWAY_FLOOR'), overrides: ['floor.chance', 'floor.count', 'tables']}],
-      notes: ['Ammo boxes are single-caliber (5.56 / 12-gauge); the pistol start\'s 9mm boxes are a separate weapon-finds source.', 'Zombies are placed on the same spawn stream afterwards: changing these draws moves them too.'],
+      notes: ['Ammo boxes are single-caliber (5.56 / 12-gauge); the pistol start\'s 9mm boxes are a separate weapon-finds source.', 'Zombies are placed on the same spawn stream afterwards: changing these draws moves them too.', ...(annex.length ? [annexNote] : [])],
     };
   }
   const O = P.tables.floor.office;
@@ -977,6 +996,8 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
   const addT = (list: readonly {itemId: string; copies: number; units: number}[], w: number) => { for (const t of list) { const e = per.get(t.itemId) ?? {copies: 0, units: 0}; e.copies += w * t.copies; e.units += w * t.units; per.set(t.itemId, e); } };
   addT(variants[0].totals, 1);
   for (const v of variants.slice(1)) addT(v.totals, TENANT_FLOORS.length * (v.tilt!.companies.length / COMPANY_IDS.length));
+  const annex = annexVariant();
+  variants.push(...annex);
   return {
     id: 'office', level, label: 'Office Space loose floor supplies (per physical storey, one profile)',
     variants,
@@ -993,6 +1014,7 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
     notes: [
       'A tilt shifts the MIX of the scarce finds, renormalised to the untilted total (same expected count; each odd capped at OFFICE_FLOOR.scarce.cap).',
       'Office Space is one logical level: the program runs once per physical storey under the one office profile.',
+      ...(annex.length ? [annexNote] : []),
     ],
   };
 }
