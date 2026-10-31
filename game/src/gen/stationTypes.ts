@@ -8,6 +8,7 @@ import type {ShopBox} from './storefronts';
 import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
+import type {MallInfo} from './mall/mallTypes';
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -273,6 +274,8 @@ export interface StationLayout {
   levelPlan?: LevelPlan;
   /** Iteration 16 / seamless (GEN): the office tower of the ONE continuous Office Space layout (gen/office/index.ts); absent on the Subway. */
   office?: OfficeTowerInfo;
+  /** Task track3-eaton-centre-20261031: The Eaton's Center (LevelId 'mall') — written by gen/mall (lane GEN). */
+  mall?: MallInfo;
 }
 
 // ---------------------------------------------------------------------------------------
