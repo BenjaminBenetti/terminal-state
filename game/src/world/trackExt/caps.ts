@@ -15,8 +15,11 @@ export interface CapSpan { front: number; back: number; walkEnd: number }
 
 /** Depth (m) each cap kind needs behind its front face. */
 export const CAP_DEPTH = {rubble: 0.25, bulkhead: 0.45, gate: 0.75} as const;
-/** How far a cap may extend the shell past the path end (m): < one cell, inside GEN's SOLID canvas margin. */
-export const CAP_OVERHANG = 0.45;
+/**
+ * How far a cap may extend the shell past the path end (m): inside the rock lane GEN reserves behind the cap plane
+ * (gen/trackExt/config.ts TRACK_EXT.tunnel.capDepth = 1.5 m), less a 0.1 m skin.
+ */
+export const CAP_OVERHANG = 1.4;
 
 /**
  * Where the walkable tunnel cells end (grid ground truth: far edge of the last walkable cell along the path) and the
@@ -41,8 +44,8 @@ export function capSpan(v: TunnelView, layout: StationLayout): CapSpan {
   if (!Number.isFinite(walkEnd)) walkEnd = L - 0.5;
   walkEnd = Math.min(walkEnd, L);
   const kind = v.t.cap.kind;
-  const front = kind === 'rubble' ? Math.max(0.5, Math.min(walkEnd, L - 0.3)) : Math.max(0.5, Math.min(walkEnd, L));
-  // Rubble piles back into the overhang (a longer slope); the others only use it when the walkable end is that close.
+  // Rubble: ankle-high scree from 1 m in front of the walkable end, the heap itself in the reserved rock behind it.
+  const front = kind === 'rubble' ? Math.max(0.5, walkEnd - 1.0) : Math.max(0.5, Math.min(walkEnd, L));
   const back = Math.min(L + CAP_OVERHANG, Math.max(kind === 'rubble' ? L + CAP_OVERHANG : L, front + CAP_DEPTH[kind]));
   return {front, back, walkEnd};
 }
@@ -131,7 +134,7 @@ function rubble(sink: ShellSink, v: TunnelView, k: number, mats: WorldMaterials,
   const conc = sink.get('platformFace', k, L), gravel = sink.get('ballast', k, L), slabs = sink.get('ceiling', k, L), panels = sink.get('tunnel', k, L), bars = sink.get('rail', k, L);
   const ms = mats.scale.platformFace, gs = mats.scale.ballast;
   // Toe ~1 m in front of the walkable end (only ankle-high scree there), crest against the ceiling at the back.
-  const toe = Math.max(0.3, span.front - 1.0), back = span.back;
+  const toe = Math.max(0.3, span.front), back = span.back, sW = Math.max(toe + 0.2, Math.min(span.walkEnd, back - 0.6));
   const D = back - toe;
   // Back plane: closes the section behind the heap.
   const B = section(v, back - 0.05);
@@ -144,9 +147,16 @@ function rubble(sink: ShellSink, v: TunnelView, k: number, mats: WorldMaterials,
     Math.sin(u * 7.3 + l * 3.1 + ph[0]) * 0.5 + Math.sin(u * 13.7 - l * 6.3 + ph[1]) * 0.3 + Math.sin(u * 23.1 + l * 11.9 + ph[2]) * 0.2;
   const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const heightAt = (u: number, l: number) => {
-    const body = 0.05 + 0.95 * Math.pow(smooth(0.12, 0.97, u), 0.8);
-    const h = body + skew * l * u + noise(u, l) * 0.09 * Math.sin(Math.PI * Math.min(1, u * 1.15));
-    return y0 + Math.max(0.03, Math.min(1, h)) * H;
+    const s = toe + u * D;
+    if (s < sW) {
+      // Scree in front of the walkable end: knee-high at most where the player can stand.
+      const k = (s - toe) / (sW - toe);
+      return y0 + Math.max(0.03, Math.min(0.3, 0.05 + 0.22 * k + noise(u, l) * 0.04));
+    }
+    const t = (s - sW) / Math.max(0.2, back - 0.05 - sW);
+    const body = 0.055 + 0.945 * Math.pow(smooth(0, 1, t), 0.75);
+    const h = body + skew * l * t + noise(u, l) * 0.08 * Math.sin(Math.PI * Math.min(1, t * 1.1));
+    return y0 + Math.max(0.055, Math.min(1, h)) * H;
   };
   const NU = 14, NL = 18;
   const grid: number[][] = [];
@@ -184,7 +194,7 @@ function rubble(sink: ShellSink, v: TunnelView, k: number, mats: WorldMaterials,
   for (let i = 0; i < n; i++) {
     const u = Math.pow(rnd(), 0.8) * 0.97, l = rnd() * 2 - 1;
     const s = toe + u * D, lat = l * (half - 0.1);
-    const r = u < 0.2 ? 0.08 + rnd() * 0.12 : (0.18 + rnd() * 0.42) * (0.7 + u * 0.6);
+    const r = s < sW ? 0.06 + rnd() * 0.1 : (0.18 + rnd() * 0.42) * (0.7 + u * 0.6);
     const p = v.f.at(s);
     const cy = heightAt(u, l) - r * (0.25 + rnd() * 0.35);
     rock(conc, [p.x + p.lx * lat, Math.max(y0 + r * 0.45, cy), p.z + p.lz * lat], r, rnd, ms);
@@ -198,9 +208,10 @@ function rubble(sink: ShellSink, v: TunnelView, k: number, mats: WorldMaterials,
     const tx: V3 = [ax[0] * ct, st, ax[2] * ct], ty: V3 = [-ax[0] * st, ct, -ax[2] * st];
     a.box([p.x + p.lx * lat, heightAt(u, l) - 0.12, p.z + p.lz * lat], [len, 0.075, wid], tx, ty, az, scale);
   };
+  const uHeap = (sW - toe) / D; // where the heap proper starts (scree before it)
   const nSlab = 5 + Math.floor(rnd() * 4);
   for (let i = 0; i < nSlab; i++) {
-    const u = 0.3 + rnd() * 0.55, l = rnd() * 1.7 - 0.85;
+    const u = uHeap + 0.08 + rnd() * (0.85 - uHeap), l = rnd() * 1.7 - 0.85;
     slab(i % 3 === 2 ? panels : slabs, u, l, 0.5 + rnd() * 0.5, 0.35 + rnd() * 0.35, -(0.55 + rnd() * 0.6), (rnd() - 0.5) * 0.9, i % 3 === 2 ? mats.scale.tunnel : mats.scale.ceiling);
   }
   // Broken ceiling hanging down over the crest.
@@ -215,7 +226,7 @@ function rubble(sink: ShellSink, v: TunnelView, k: number, mats: WorldMaterials,
   // Bent reinforcement sticking out of the face.
   const nBar = 4 + Math.floor(rnd() * 4);
   for (let i = 0; i < nBar; i++) {
-    const u = 0.35 + rnd() * 0.55, l = rnd() * 1.6 - 0.8, s = toe + u * D, lat = l * half;
+    const u = uHeap + 0.1 + rnd() * (0.9 - uHeap), l = rnd() * 1.6 - 0.8, s = toe + u * D, lat = l * half;
     const p = v.f.at(s);
     const a = Math.atan2(-p.tz, -p.tx) + (rnd() - 0.5) * 1.6, e = 0.2 + rnd() * 0.9;
     const dx = Math.cos(a) * Math.cos(e), dy = Math.sin(e), dz = Math.sin(a) * Math.cos(e);

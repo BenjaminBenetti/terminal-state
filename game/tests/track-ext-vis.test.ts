@@ -130,8 +130,8 @@ describe('track tunnel shell geometry', () => {
     }
   });
 
-  it('grid walls, floors and ceilings never show inside a corridor (no stair steps / z-fighting), and stay outside it', () => {
-    const {fx, w} = built();
+  it.each([['GEN all-corners raster', {}], ["DESIGN's centre raster", {centreRule: true}]] as const)('grid walls, floors and ceilings never show inside a corridor (no stair steps / z-fighting), and stay outside it (%s)', (_n, opts) => {
+    const {fx, w} = built(opts);
     const view = w.trackExt!.view;
     for (const f of w.wallFaces) {
       const mx = (f.x0 + f.x1) / 2 + f.nx * 0.01, mz = (f.z0 + f.z1) / 2 + f.nz * 0.01;

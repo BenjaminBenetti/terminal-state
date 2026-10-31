@@ -1,6 +1,7 @@
 // Track 2 (VIS lane): a small synthetic side-platform station whose two-track bed is continued by GEN-shaped track
-// tunnels (DESIGN §1 data model; no generator involved): rasterised exactly as DESIGN specifies (walkable FLOOR cell
-// when its centre is within width/2 - 0.3 of the centreline, grid.floor written, cap cells SOLID), an annex corridor +
+// tunnels (DESIGN §1 data model; no generator involved): rasterised as lane GEN does (gen/trackExt/types.ts: a cell is
+// walkable iff ALL FOUR CORNERS lie inside the smooth walls, |lat| <= width/2 and 0 <= s <= length; grid.floor written;
+// everything else SOLID, incl. the rock reserved behind the cap; `centreRule` = DESIGN's stricter approximation), an annex corridor +
 // room behind a door carved through the tunnel's side wall band, clue records and an `extensions` record.
 //
 //   grid 210 x 110 cells (105 x 55 m); platform x 25-55 m, z 20-28 (edge S); bed x 20-61 m, z 28-36 (tracks z 30, 34)
@@ -27,6 +28,8 @@ export interface TrackExtFixtureOpts {
   bendDoor?: boolean;
   /** Length of a STRAIGHT east tunnel (with bend 0; the grid grows east to fit). Default 34 m. */
   eastLen?: number;
+  /** Rasterise with DESIGN §1's "centre within width/2 - 0.3" instead of GEN's exact all-corners rule. */
+  centreRule?: boolean;
 }
 
 export interface TrackExtFixture {
@@ -88,19 +91,20 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
   const eastPath = pathOf(TX.x1, zc, 0, bend ? [{len: 14}, {turn: -bend, R: 16}, {len: 14}] : [{len: o.eastLen ?? 34}]);
   const westPath = pathOf(TX.x0, zc, Math.PI, [{len: 16}]);
   const tunnels: TrackTunnel[] = [];
-  const mk = (id: number, from: 'x0' | 'x1', path: {x: number; z: number}[], cap: TrackTunnel['cap']['kind']): TrackTunnel => {
+  const mk = (id: number, from: 'x0' | 'x1', path: {x: number; z: number}[], cap: TrackTunnel['cap']['kind'], first: number, arcs: {s: number; len: number; radius: number; turnDeg: number}[]): TrackTunnel => {
     const f = new TunnelFrame({id, trench: 0, from, floorY: TX.bedY, ceilY: TX.ceil, width: 8, path, length: 0, rails: [], cap: {kind: cap, s: 0}, areas: [], doors: [], clues: []});
     const p0 = f.first;
     // rails = lateral offsets (+left) of the bed's tracks at the mouth (TunnelFrame convention, or mirrored data).
     const rails = TX.tracks.map(tz => mirror * (tz - p0.z) / p0.lz);
-    return {id, trench: 0, from, floorY: TX.bedY, ceilY: TX.ceil, width: 8, path, length: f.length, rails, cap: {kind: cap, s: f.length}, areas: [], doors: [], clues: []};
+    // (+ lane GEN's additions firstStraight / arcs, so the fixture also type-checks against GEN's types.ts)
+    return {id, trench: 0, from, floorY: TX.bedY, ceilY: TX.ceil, width: 8, path, length: f.length, rails, cap: {kind: cap, s: f.length}, areas: [], doors: [], clues: [], firstStraight: first, arcs} as TrackTunnel;
   };
-  const east = mk(0, 'x1', eastPath, o.eastCap ?? 'rubble');
+  const east = mk(0, 'x1', eastPath, o.eastCap ?? 'rubble', bend ? 14 : o.eastLen ?? 34, bend ? [{s: 14, len: 16 * bend, radius: 16, turnDeg: (bend * 180) / Math.PI}] : []);
   tunnels.push(east);
-  const west = o.noWest ? null : mk(1, 'x0', westPath, o.westCap ?? 'bulkhead');
+  const west = o.noWest ? null : mk(1, 'x0', westPath, o.westCap ?? 'bulkhead', 16, []);
   if (west) tunnels.push(west);
 
-  // Rasterise each tunnel's walkable cells (DESIGN §1: centre within width/2 - 0.3; the cap's last 0.6 m stays SOLID).
+  // Rasterise each tunnel's walkable cells (GEN: all four corners inside; or DESIGN's centre within width/2 - 0.3).
   for (const t of tunnels) {
     const a = area(`tunnel${t.id}`, {x: 0, y: 0, w: 1, h: 1}, 'passage', 'passage', t.ceilY, false, {ext: 'tunnel', extId: t.id});
     t.areas.push(a.id);
@@ -109,8 +113,17 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x;
       if (g.cells[i] !== 0) continue;
-      const c = f.project((x + 0.5) * CELL, (y + 0.5) * CELL);
-      if (c.s < 0 || c.s > t.length - 0.6 || Math.abs(c.lat) > t.width / 2 - 0.3) continue;
+      if (o.centreRule) {
+        const c = f.project((x + 0.5) * CELL, (y + 0.5) * CELL);
+        if (c.s < 0 || c.s > t.length - 0.6 || Math.abs(c.lat) > t.width / 2 - 0.3) continue;
+      } else {
+        let ok = true;
+        for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+          const c = f.project((x + u) * CELL, (y + v) * CELL);
+          if (c.s < -1e-6 || c.s > t.length + 1e-6 || Math.abs(c.lat) > t.width / 2 + 1e-6) { ok = false; break; }
+        }
+        if (!ok) continue;
+      }
       g.cells[i] = FLOOR; g.floor[i] = t.floorY; g.ceil[i] = t.ceilY; g.area[i] = a.id;
       x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     }
@@ -129,7 +142,9 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
     return doors.length - 1;
   };
   const eastArea = areas[east.areas[0]];
-  const d0 = door({x: 140, y: 71, w: 3, h: 2}, eastArea, C);
+  // GEN: the entry door is carved in the rock between the (grid-aligned) shell wall and the corridor; DESIGN's centre rule
+  // leaves a SOLID row inside the wall, which the door then crosses too.
+  const d0 = door(o.centreRule ? {x: 140, y: 71, w: 3, h: 2} : {x: 140, y: 72, w: 3, h: 1}, eastArea, C);
   door({x: 150, y: 77, w: 3, h: 1}, C, R);
   const fE = new TunnelFrame(east);
   const dS = fE.project(70.75, 36).s;
@@ -161,10 +176,11 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
   }
 
   const lights: LightPlacement[] = [{x: 40, y: 4.25, z: 24, rot: 0, area: P.id, broken: false, flicker: false, warm: false, power: 1, dying: false}];
-  const ext: TrackExtensions = {
+  const ext = {
+    core: {x: 0, y: 0, w: W, h: H}, shift: {x: 0, z: 0}, // lane GEN's additions (unused by VIS)
     tunnels, annexes,
     log: [{trench: 0, from: 'x1', result: 'tunnel+annex'}, {trench: 0, from: 'x0', result: o.noWest ? 'omitted' : 'tunnel'}],
-  };
+  } as TrackExtensions;
   const layout = {
     seed: 4242, attempt: 0, name: 'TrackExt Fixture', archetype: 'side-mezzanine', towards: ['North', 'South'],
     grid: g, areas, doors, props: [], lights, signs: [], pickups: [], zombies: [], storefronts: [], decor: [],
