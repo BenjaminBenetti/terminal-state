@@ -18,7 +18,9 @@ jobs:
     # (the exact merged commit, or a manual run on main) upload release artifacts — see the upload steps.
     name: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Track 2 (PR #20): the full suite grew from ~11.5 to ~21 min on this runner (2 vCPU; vitest runs one worker, and two
+    # workers measured no faster). Same steps and checks, more wall time. Pending Main / user acceptance; revert = 20.
+    timeout-minutes: 30
     env:
       PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:

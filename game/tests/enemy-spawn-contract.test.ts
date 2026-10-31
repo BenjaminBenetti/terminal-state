@@ -195,7 +195,9 @@ describe('Siren eligibility criteria (synthetic storeys)', () => {
     expect(got2).toEqual(['siren', 'siren', 'siren', 'siren', 'zombie', 'zombie']);
     // other families never consult the rule; a single-context profile implies its context
     expect(eligibleFamily(P, 'blightbelly', L, L.zombies[0], 0)).toBe('blightbelly');
-    expect(spawnContextOf({}, SUBWAY, 0)).toBe('station');
+    // (Track 2, lane CONTENT: the shipped Subway has two contexts now — station + service — so a synthetic single-context profile)
+    expect(spawnContextOf({}, {...SUBWAY, contexts: {station: SUBWAY.contexts.station}}, 0)).toBe('station');
+    expect(spawnContextOf({}, SUBWAY, 0)).toBeUndefined();
     expect(spawnContextOf({}, OFFICE, 0)).toBeUndefined();
   });
 });

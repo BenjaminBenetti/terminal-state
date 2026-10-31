@@ -42,18 +42,21 @@ function valueText(v: number | readonly [number, number] | string): string {
 // ------------------------------------------------------------------------------------------------------------- contexts
 
 function contextsSection(es: EnemySite, level: EnemyLevelInfo): string {
+  // Track 2 (lane CONTENT): a zone context (service annexes) runs once per seeded zone: its per-level cells show the range over
+  // 0..max zones, its expectation per zone; it is not part of the whole-level row.
   const rows = level.contexts.map(c => [
     `<a href="#${esc(ctxAnchor(c.id))}">${esc(c.label)}</a>${c.label === c.id ? '' : `<span class="item-id">${esc(c.id)}</span>`}`,
     prose(c.storeys),
-    num(c.runs),
+    c.zone ? `${range(c.zone.runsPerLevel.lo, c.zone.runsPerLevel.hi)}<span class="denom">one per zone (seeded)</span>` : num(c.runs),
     `${range(c.count.lo, c.count.hi)}<span class="denom">${esc(uniform(c.count.lo, c.count.hi))}</span>`,
     num(c.count.mean),
-    range(c.perLevel.lo, c.perLevel.hi),
-    num(c.perLevel.mean),
+    c.zone ? `${range(c.zone.runsPerLevel.lo * c.count.lo, c.zone.perLevelMax)}<span class="denom">zone budget, not in the total</span>` : range(c.perLevel.lo, c.perLevel.hi),
+    c.zone ? `${num(c.count.mean)}<span class="denom">per zone</span>` : num(c.perLevel.mean),
   ]);
+  const zoneNotes = level.contexts.filter(c => c.zone).map(c => `<p class="note"><strong>${esc(c.label)}</strong>: ${prose(c.zone!.note)}</p>`).join('\n');
   rows.push([
     '<strong>Whole level</strong>',
-    'all contexts',
+    level.contexts.some(c => c.zone) ? 'all core contexts (zones reported separately)' : 'all contexts',
     '',
     '',
     '',
@@ -71,7 +74,7 @@ ${table({
     rowHeader: 0,
     rows,
   })}
-<p>${prose(level.total.note)}</p>
+<p>${prose(level.total.note)}</p>${zoneNotes ? `\n${zoneNotes}` : ''}
 <p class="note">These are targets: the generator can place fewer when it runs out of eligible, spaced floor (see
 <a href="#placement">placement rules</a>). The game has no per-area or per-square-metre spawn rate; the count is spread over the
 eligible areas of the context.</p>
@@ -247,7 +250,7 @@ function placementSection(es: EnemySite, level: EnemyLevelInfo): string {
       ? `<h4>Checks that reject a whole generation attempt</h4><ul>${c.rejection.map(r => `<li>${prose(r)}</li>`).join('')}</ul>`
       : '';
     return `<section id="${esc(ctxAnchor(c.id))}">
-<h3>${esc(c.label)} <span class="summary-meta">· ${esc(c.id)} · count ${range(c.count.lo, c.count.hi)} per run × ${plural(c.runs, 'run')}</span></h3>
+<h3>${esc(c.label)} <span class="summary-meta">· ${esc(c.id)} · count ${range(c.count.lo, c.count.hi)} per run × ${c.zone ? `one run per zone (${range(c.zone.runsPerLevel.lo, c.zone.runsPerLevel.hi)} per level)` : plural(c.runs, 'run')}</span></h3>
 <p>One run covers: ${prose(c.storeys)}. Count per run ${esc(c.count.distribution)}; E[count] = ${num(c.count.mean)}.</p>
 ${body}
 <h4>How a run places its count, and why it can fall short</h4>

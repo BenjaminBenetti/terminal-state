@@ -34,6 +34,7 @@ import {CELL, FLOOR, VOID} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/station';
 import {hashString, mulberry32} from '../core/rng';
+import {coreView, hasExtensionGrowth} from '../gen/trackExt/core'; // Track 2 (lane GEN)
 import {NodeMaterial, QuadMesh, RenderTarget, type Node} from 'three/webgpu';
 import {
   Fn, clamp, dot, float, floor, fract, int, ivec2, materialColor, materialRoughness, max, min, mix, modelWorldMatrix, normalLocal, positionWorld, pow,
@@ -125,6 +126,10 @@ export const DECAY_AGE = 1;
  */
 export function areaNeglect(area: Area | undefined, levelRole: Level['role'], voidCell: boolean): number {
   if (voidCell) return 0.85;
+  // Track 2 (VIS): the track tunnels beyond the beds and their service annexes: abandoned, wet, never maintained.
+  const ext = (area as {ext?: string} | undefined)?.ext;
+  if (ext === 'tunnel') return 0.88;
+  if (ext === 'annex') return Math.min(1, 0.86 + (area!.lighting === 'dark' ? 0.08 : area!.lighting === 'dim' ? 0.04 : 0));
   let n: number;
   if (!area) n = 0.7;
   else if (area.type === 'eatery' || area.type === 'shop') n = 0.62;
@@ -203,8 +208,29 @@ function valueNoise(seed: number, period: number): (x: number, y: number) => num
 /**
  * The station's decay field (deterministic per layout seed). Levels are `levels` in order (index = light-field
  * slot = layout.levels index).
+ * Track 2 (lane GEN): a layout whose track extensions grew its grid gets its CORE window from the core view (the level exactly as
+ * without them: same leak draws, lanes and noise frame), the rest (tunnels / annexes) from the field of the whole grid.
  */
 export function buildDecayField(layout: StationLayout, levels: readonly Level[]): DecayField {
+  const e = layout.extensions;
+  if (!e || !hasExtensionGrowth(layout)) return buildFieldOf(layout, levels);
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const core = coreView(layout);
+  const byId = new Map(core.levels.map(L => [L.id, L]));
+  const cf = buildFieldOf(core, levels.map(L => byId.get(L.id) ?? {...L, grid: core.grid}));
+  const full = buildFieldOf(layout, levels);
+  const {x, y, w, h} = e.core, W = full.w, H = full.h;
+  for (let L = 0; L < full.levels; L++) {
+    for (let r = 0; r < h; r++) {
+      const s = (L * w * h + r * w) * 4, d = (L * W * H + (r + y) * W + x) * 4;
+      full.data.set(cf.data.subarray(s, s + w * 4), d);
+    }
+  }
+  full.stats = {ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0, sources: cf.stats.sources, leaks: cf.stats.leaks};
+  return full;
+}
+
+function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayField {
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const g0 = levels[0].grid, W = g0.w, H = g0.h, S = levels.length, n = W * H;
   const data = new Uint8Array(W * H * S * 4);
@@ -281,8 +307,15 @@ export function buildDecayField(layout: StationLayout, levels: readonly Level[])
     }
     // --- B: wetness: leak patches (seeded), fixture drips, damp track bed.
     const wet = new Float32Array(n);
+    // Track 2 (VIS): extension cells (track tunnels / service annexes, Area.ext) take no part in the core's leak budget or
+    // placement (the core's leaks stay as they were); they get their own, damper pass below.
+    const extKind = (i: number): string | undefined => { const a = g.area[i]; return a >= 0 ? (layout.areas[a] as {ext?: string} | undefined)?.ext : undefined; };
+    const extCells: number[] = [];
     let openCells = 0;
-    for (let i = 0; i < n; i++) { if (open[i]) openCells++; if (g.cells[i] === VOID) wet[i] = 0.3; }
+    for (let i = 0; i < n; i++) {
+      if (open[i]) { if (extKind(i)) extCells.push(i); else openCells++; }
+      if (g.cells[i] === VOID) wet[i] = 0.3;
+    }
     const nLeaks = Math.min(160, Math.round(openCells * CELL * CELL / 55 * LEVEL_WETNESS[role]));
     const stamp = (cx: number, cy: number, r: number, s: number) => {
       const rc = Math.ceil(r / CELL);
@@ -296,11 +329,22 @@ export function buildDecayField(layout: StationLayout, levels: readonly Level[])
     let placed = 0;
     for (let k = 0, tries = 0; k < nLeaks && tries < nLeaks * 40; tries++) {
       const i = Math.floor(rnd() * n);
-      if (!open[i]) continue;
+      if (!open[i] || (extCells.length && extKind(i))) continue;
       // Most leaks come through walls and slab joints: prefer cells near a wall.
       if (openness[i] > 0.75 && rnd() < 0.65) continue;
       stamp(i % W, Math.floor(i / W), 1.0 + 3.0 * Math.pow(rnd(), 1.5), 0.4 + 0.6 * rnd());
       k++; placed++;
+    }
+    if (extCells.length) {
+      // Track 2 (VIS): the tunnels' ballast is as damp as the bed; the annexes leak about twice as often as the core.
+      const rx = mulberry32(seed ^ 0x7e57ab1e ^ Math.imul(L + 1, 0x85ebca6b));
+      for (const i of extCells) if (extKind(i) === 'tunnel') wet[i] = Math.max(wet[i], 0.3);
+      const nExt = Math.min(60, Math.round(extCells.length * CELL * CELL / 28));
+      for (let k = 0; k < nExt; k++) {
+        const i = extCells[Math.floor(rx() * extCells.length)];
+        stamp(i % W, Math.floor(i / W), 0.8 + 2.4 * Math.pow(rx(), 1.5), 0.45 + 0.55 * rx());
+        placed++;
+      }
     }
     // Seepage along the foot of the walls below ground (the lower level sits in wet rock).
     if (role === 'lower') for (let i = 0; i < n; i++) if (open[i]) wet[i] = 1 - (1 - wet[i]) * (1 - 0.22 * clamp01((0.8 - openness[i]) / 0.35));

@@ -10,7 +10,7 @@ import {buildBoth} from './helpers/tslShaders';
 import {CRATER_CAP, CraterField} from '../src/damage/craters';
 import {installWounds, hasWounds} from '../src/damage/wounds';
 import {objectData} from '../src/damage/tsl';
-import {Effects} from '../src/world/fx';
+import {Effects, STEAM_FX} from '../src/world/fx';
 import {PickupManager, itemTemplate} from '../src/world/pickups';
 import {LotDisplay} from '../src/world/lootDisplay';
 import {authoredItemModel, resetAuthoredItems, thrownFlareModel} from '../src/world/authoredItems';
@@ -105,11 +105,12 @@ describe('fx: particles, decals and tracers as node materials', () => {
   it('particle rings are ONE instanced sprite draw each (PointsNodeMaterial), fogged like the GLSL', () => {
     const fx = new Effects();
     const sprites = meshesOf(fx.group).filter(o => (o as unknown as THREE.Sprite).isSprite) as unknown as THREE.Sprite[];
-    expect(sprites.map(s => s.name).sort()).toEqual(['fx-particles', 'fx-sparks']);
+    // Track 2 (VIS): + the small non-hazardous steam ring (STEAM_FX.puffs slots).
+    expect(sprites.map(s => s.name).sort()).toEqual(['fx-particles', 'fx-sparks', 'fx-steam']);
     for (const s of sprites) {
       const m = s.material as unknown as PointsNodeMaterial;
       expect(m.isPointsNodeMaterial).toBe(true);
-      expect(s.count).toBeGreaterThan(100); // one quad per ring slot, instanced
+      expect(s.count).toBeGreaterThan(s.name === 'fx-steam' ? STEAM_FX.puffs - 1 : 100); // one quad per ring slot, instanced
       expect(m.sizeNode).toBeTruthy();
       expect(m.positionNode).toBeTruthy();
       expect(m.fog).toBe(false); // applied in the colour node (additive ring fades to black)

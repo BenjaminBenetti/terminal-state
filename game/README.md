@@ -342,6 +342,27 @@ The roof cache (a first-aid or trauma kit plus an ammo box) now has a **roof fin
 gun with a box of its own ammo (2 in 3), or an armor vest or hard hat (1 in 3). It is placed once per Office run, verified
 reachable on the deck after placement, and never re-rolled by Retry or revisits. See `docs/loot-tables.md` "Roof find".
 
+## Beyond the Station (Track 2)
+The track beds continue past the old black end walls into finite concrete tunnels (30–110 m, up to two bends). Each tunnel
+ends in a physical cap: a rubble heap, a bulkhead or a gate. Island-ends and express stations have no room past their bed
+ends, so instead they get service hatches in the outer bed wall.
+
+Up to two seeded service annexes per level are reached through a side door or a hatch. Each is about a quarter of the
+station's walkable area, at track-bed height. They are dark (untinted, mostly dying or dead fixtures), with pipes and
+conduits on board-formed concrete. Steam from the vents is visual only and never hurts. Each annex has:
+- **loot:** a deep stash or two, picked-over shelves, and nothing guaranteed;
+- **enemies:** 3–5 drawn from the level's own family pool;
+- **memory:** like every other room, nothing refills.
+
+Graffiti arrows and tags appear only on routes that lead to an annex. The bed ladders are the way back up.
+
+Most balance values live in one config block per subsystem:
+- tunnels and annexes: `TRACK_EXT` (`src/gen/trackExt/config.ts`);
+- annex enemies: `SERVICE_CONTEXT` (`src/ai/spawnTables.ts`);
+- annex loot: `ANNEX_STASH` / `ANNEX_PICKED` / `ANNEX_FLOOR` (`src/items/lootTables.ts`).
+
+The reusable interface for future track-bearing levels is in [docs/track-extensions.md](../docs/track-extensions.md).
+
 ## Performance overlay (Ctrl+Shift+P)
 Off by default; Ctrl+Shift+P toggles it in any state without pausing the game (held keys toggle once; the shortcut never
 reaches game input). Browsers or OSes that reserve the combination (e.g. Firefox: new private window) never deliver it to

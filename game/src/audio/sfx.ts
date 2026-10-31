@@ -126,11 +126,18 @@ const TYPE_ROOM: Record<string, RoomKind> = {
   'passage': 'medium', 'service-corridor': 'medium', 'exit-stair': 'medium', 'washroom': 'medium', 'stock-room': 'medium',
   'agent-office': 'small', 'crew-room': 'small', 'utility': 'small', 'storage': 'small', 'supply-closet': 'small', 'janitor-closet': 'small',
 };
+/** Track 2 (VIS): ambience-bed key of an area for Sfx.setRoom: a track tunnel takes the track-bed mix, others their type. */
+export function ambienceTypeFor(area: {type: string}): string {
+  return (area as {ext?: string}).ext === 'tunnel' ? 'track' : area.type;
+}
+
 /** Public, hard-floored areas (terrazzo/tile) -> crisper footsteps. */
 const TILE_FLOOR = new Set(['passage', 'fare-hall', 'concourse', 'food-court', 'retail-arcade', 'washroom', 'exit-stair']);
 
 /** Map a generated area (any RoomType, incl. ones added later) to a reverb room kind. */
 export function roomKindFor(area: {type: string; kind?: string; w?: number; h?: number}): RoomKind {
+  // Track 2 (VIS): the track tunnels beyond the beds ring like the bed itself; service annexes go by their room types.
+  if ((area as {ext?: string}).ext === 'tunnel') return 'tunnel';
   const m2 = (area.w ?? 0) * (area.h ?? 0) * 0.25; // cells are 0.5 m
   const known = TYPE_ROOM[area.type];
   if (known === 'large' && m2 > 0 && m2 < 90) return 'medium';

@@ -46,7 +46,7 @@ import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane 
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
-import {Sfx, humEmitters, roomKindFor} from './audio/sfx';
+import {Sfx, ambienceTypeFor, humEmitters, roomKindFor} from './audio/sfx';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
 import {ShelfStock} from './world/shelfStock';
@@ -94,6 +94,7 @@ import type {WebGPURenderer} from 'three/webgpu';
 import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, rendererRequest, watchDevice, type GameRenderer, type GpuInfo} from './render/backend';
 import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
+import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
@@ -191,6 +192,8 @@ export class Game {
   readonly torch: PlayerLight;
   /** Iteration 12 (LIGHT): thrown road flares (weapons/throwables.ts; a cannon BodySource of `physics`). */
   readonly flares = new FlareSystem(this.scene, this.physics, this.lightSources);
+  /** Track 2 (VIS): the service annexes' steam vents (visual only; Effects' bounded steam ring). */
+  private steamVents: SteamVents | null = null;
   /** Iteration 15: grenade-style flare input (T, or left click with a flare in hand): hold readies, release throws once. */
   readonly flareHold = new FlareHold();
   /** Iteration 15: the left button belonged to a flare hold; the gun ignores it until it is released. */
@@ -614,6 +617,7 @@ export class Game {
     this.propModels.trim(keep);
     this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     this.scene.add(this.world.group);
+    this.steamVents = new SteamVents(this.fx, annexVents(this.layout), this.layout.seed >>> 0); // Track 2 (VIS)
     if (!this.containers) {
       this.containers = new ContainerManager(this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, this.mats, () => this.inv);
       this.containers.onEvent = e => this.onContainerEvent(e);
@@ -1714,12 +1718,14 @@ export class Game {
     this.lightPool.update(dt, eye);
     prof.lap(SPAN.fx);
     this.fx.update(dt);
+    // Track 2 (VIS): annex steam near the player (visual only), lit by the light field + the torch.
+    if (this.steamVents?.count) this.steamVents.update(dt, eye, steamLight((x, y, z) => this.lightPool.sample(x, y, z), {eye, dir: look, on: this.torch.battery.emitting}));
     this.damage.update(dt); // Lane D: debris physics, knocked pickups
     prof.lap(SPAN.audio);
     // Audio: listener follows the camera; reverb room + ambience beds follow the current area.
     this.sfx.setListener(eye.x, eye.y, eye.z, p.yaw);
     const audioArea = this.layout.areas[this.levels.count > 1 ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z)];
-    if (audioArea) this.sfx.setRoom(roomKindFor(audioArea), audioArea.type);
+    if (audioArea) this.sfx.setRoom(roomKindFor(audioArea), ambienceTypeFor(audioArea)); // Track 2 (VIS): tunnels -> track bed
     this.sfx.vitals(dt, p.hp / p.maxHp, p.stamina / 100);
     this.sfx.ambience(dt);
     // viewmodel brightness follows nearby light

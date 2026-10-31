@@ -2,6 +2,7 @@
 // doorways, circulation and holder access; lazy per-station loading fetches exactly the models a station placed; the build is
 // deterministic. Holds for whatever subset of Lane P1's batch has been built + integrated so far (counts asserted at the bottom).
 import {describe, expect, it} from 'vitest';
+import {ANNEX_PICKED_KEY} from '../src/items/lootTables'; // Track 2 (lane CONTENT)
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -157,7 +158,10 @@ describe('iteration07 props in generated stations', () => {
         const uses = p7Spec(p.kind).uses;
         if (p.host !== undefined) {
           const host = l.props[p.host];
-          expect(uses.some(u => u.on?.includes(host.kind) && u.in.includes(host.purpose ?? p7AreaKey(l.areas[host.area]))), `${p.kind} on ${host.kind} in ${key}`).toBe(true);
+          // (Track 2, lane CONTENT: a service annex's picked-over loot key is set on its holders AFTER their decor was chosen by the
+          // area's purpose — a loot-only override, items/lootTables.ts ANNEX_PICKED_KEY)
+          const hostKey = host.purpose === ANNEX_PICKED_KEY ? p7AreaKey(l.areas[host.area]) : host.purpose ?? p7AreaKey(l.areas[host.area]);
+          expect(uses.some(u => u.on?.includes(host.kind) && u.in.includes(hostKey)), `${p.kind} on ${host.kind} in ${key}`).toBe(true);
         } else if (p.cluster !== undefined) {
           // Iteration 08: composed vignettes are the second placement authority — the kind belongs to its cluster type, and the
           // cluster type to the area's zone.

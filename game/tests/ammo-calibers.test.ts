@@ -11,6 +11,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {describe, expect, it} from 'vitest';
+import {coreView} from '../src/gen/trackExt/index'; // Track 2 (lane CONTENT): the core level's ammo
 import {NodeIO} from '@gltf-transform/core';
 import {
   AMMO_ITEM_IDS, CALIBER_IDS, LEGACY_AMMO_IDS, ammoItemFor, ammoText, caliberOfItem, canonicalItemId, genericAmmo,
@@ -309,7 +310,9 @@ describe('ammo availability stays in band of the pre-change census on both level
   });
 
   it('Office tower (30 levels, pistol start): rounds / boxes within ±10 %, magazine-equivalents within ±15 % of main 932624e', () => {
-    const now = census(OFFICE_SEEDS.map(OFFICE));
+    // (Track 2, lane CONTENT: the core level — its service annexes add an optional zone's ammo, measured on its own: ~+14 % over
+    // these 30 levels at 1.5 annexes per level; tests/annex-content.test.ts, docs/loot-tables.md "Service annexes")
+    const now = census(OFFICE_SEEDS.map(OFFICE).map(l => coreView(l)));
     expect(now.rounds / OFFICE_REF.rounds).toBeGreaterThan(0.9); expect(now.rounds / OFFICE_REF.rounds).toBeLessThan(1.1);
     expect(now.stacks / OFFICE_REF.stacks).toBeGreaterThan(0.9); expect(now.stacks / OFFICE_REF.stacks).toBeLessThan(1.1);
     expect(now.magEq / OFFICE_REF.magEq).toBeGreaterThan(0.85); expect(now.magEq / OFFICE_REF.magEq).toBeLessThan(1.15);

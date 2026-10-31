@@ -1,7 +1,7 @@
 // Iteration 05 (Lane R): room / store PURPOSE registry and its use by the level generator.
 import {describe, expect, it} from 'vitest';
 import {generateStation, type Area, type StationLayout} from '../src/gen/station';
-import {FLOOR} from '../src/gen/grid';
+import {FLOOR, VOID} from '../src/gen/grid';
 import {
   PROP_DEFS, PURPOSE_HOLDER_KINDS, PURPOSE_SURFACES, SHOP_COOLER_SURFACES, SHOP_DISPLAY_CASE, SHOP_DISPLAY_SURFACES,
   isPurposePropKind, type PropKind, type PropPlacement,
@@ -16,6 +16,7 @@ import {isP7Kind, p7KindsFor} from '../src/gen/props07';
 import {createHolderState, isContainerKind, isLootHolderKind, rollLootItems, type HolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {areaLevel, levelGrid} from '../src/gen/placeKit';
+import {isExtensionArea} from '../src/gen/trackExt/index';
 
 const SEEDS = Array.from({length: 14}, (_, i) => (i * 2654435761 + 777) >>> 0);
 const cache = new Map<number, StationLayout>();
@@ -159,6 +160,7 @@ describe('purposes in generated levels', () => {
     for (const l of SAMPLE()) {
       for (const a of l.areas) {
         if (a.storefront !== undefined || (a.publicSpace && a.type !== 'washroom')) continue;
+        if (isExtensionArea(a)) continue; // Track 2: tunnels / annexes are dressed by their own appended passes (lane CONTENT)
         expect(a.purpose, `${l.seed} ${a.type} ${a.label}`).toBeDefined();
         expect(ROOM_PURPOSES[a.purpose!].slots).toContain(a.type);
         const sig = SIGNATURE[a.purpose!];
@@ -277,14 +279,20 @@ describe('purposes in generated levels', () => {
           expect(free(p.x + fx * d, p.z + fz * d), `${l.seed} ${p.kind} front in ${l.areas[p.area].label}`).toBe(true);
         }
       }
-      // Door cells and the cells just inside each side stay walkable.
+      // Door cells and the cells just inside each side stay walkable. (Track 2 GEN-2: a service hatch's door opens onto its track
+      // bed — that side is the bed itself, standable at the bed floor: passable instead of walkable.)
+      const hatchDoors = new Set((l.extensions?.annexes ?? []).filter(n => n.bed).map(n => n.door));
       for (const d of l.doors) {
         if (d.fare || d.shopfront) continue;
         g = levelGrid(l, areaLevel(l.areas[d.a]));
         const horiz = d.h === 1;
         for (let k = 0; k < (horiz ? d.w : d.h); k++) {
           const x = horiz ? d.x + k : d.x, y = horiz ? d.y : d.y + k;
-          for (const s of [-1, 0, 1]) expect(g.walkable(horiz ? x : x + s, horiz ? y + s : y), `${l.seed} door ${d.id}`).toBe(true);
+          for (const s of [-1, 0, 1]) {
+            const cx = horiz ? x : x + s, cy = horiz ? y + s : y;
+            const ok = g.walkable(cx, cy) || (hatchDoors.has(d.id) && g.get(cx, cy) === VOID && g.passable(cx, cy));
+            expect(ok, `${l.seed} door ${d.id}`).toBe(true);
+          }
         }
       }
     }
@@ -309,7 +317,8 @@ describe('purposes in generated levels', () => {
     expect(seenStores.size).toBeGreaterThanOrEqual(16);
     // Iteration 07: purposes built around generated props count once their signature model is integrated (gen/props07.ts).
     // Iteration 16: the office tower's purposes ('office-*', gen/office/*) never fill station slots.
-    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-')).length - 2);
+    // Track 2 (lane CONTENT): the service-annex holder loot keys ('annex-stash', 'annex-picked') are prop-level keys, never an area's.
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('annex-')).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

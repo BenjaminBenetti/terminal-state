@@ -1,0 +1,171 @@
+# Track extensions: tunnels beyond the station and service annexes
+
+Track 2, "Beyond the Station". This is the reusable interface for every level whose station has track beds: the Subway, the
+Office's street station, and future levels such as Eaton Mall.
+
+## Overview
+
+The tracks no longer end at a black wall. Past a bed end, a finite concrete tunnel continues:
+- the same box section and width as the bed;
+- 30–110 m long, with 0–2 bends;
+- closed by a physical cap: a rubble heap, a concrete bulkhead or a closed gate.
+
+Off a tunnel's side wall, or behind a **service hatch** in the outer wall of a bed, a level can have up to two seeded
+**service annexes**. These are cramped, dark back-of-house areas about a quarter of the Subway's walkable exploration area
+(`SUBWAY_WALK_BASELINE_M2`, about 0.17–0.29 of it). Each is dressed, lit, populated and stocked like the station, all in the
+same level and world, with no loading. Graffiti arrows and tags appear only where a real route leads to an annex.
+
+## Opting a level in
+
+1. **Declare it in the registry.** In `game/src/levels/registry.ts`, `LEVELS[id].trackExtensions` is a required field:
+   `TrackExtConfig | 'none'`, read from `trackExtConfig(id)` in `game/src/gen/trackExt/config.ts`.
+   - `'none'` keeps the black end walls and barricades.
+   - `game/tests/track-ext-coverage.test.ts` fails when a generated level has track beds but declares neither a config nor
+     `'none'`.
+2. **Generate in this order:**
+   - After all of its own carving, the generator calls `extendTracks(k, rng.fork('track-ext'), cfg, ctx)` from
+     `game/src/gen/trackExt/index.ts`. It takes any `Kit` with trenches; `ctx` is
+     `{levelId, canvasGrow: 'any' | 'east-south', origin?, maxCells}`.
+   - After every core pass:
+     - `finishExtensions(layout, ext, {ox, oy, grow})` embeds the finished core into the larger grid its extensions need. With
+       `'any'` (the Subway), a west or north extension translates the core. With `'east-south'` (a fixed crop origin, as in
+       the Office), the grid only grows east and south.
+     - Then `populateExtensions(layout, rng, {loot, spawns, dressRng})` from `game/src/gen/annexContent.ts` dresses, lights,
+       stocks and populates the extensions.
+3. **Declare the spawn context.** Add an explicit `contexts.service` (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) in the
+   level's spawn profile, then follow [docs/level-enemy-contract.md](level-enemy-contract.md).
+4. **Register the reference adapters** in `tools/pages` (`LEVEL_ADAPTER`, `ENEMY_LEVEL_ADAPTER`). The pages build then shows
+   the annex loot and the service context.
+
+## Configuration (`TRACK_EXT` / `TRACK_EXT_OFFICE`, `game/src/gen/trackExt/config.ts`)
+
+| Setting | Values |
+|---|---|
+| Tunnel length | 30–110 m |
+| Bend arcs | 0 / 1 / 2, weights 0.35 / 0.45 / 0.2 |
+| Bend radius | 14–30 m |
+| Total turn | 80° or less |
+| Cap kinds | rubble / bulkhead / gate, weights 0.45 / 0.3 / 0.25 |
+| Cap depth | 1.5 m |
+
+**Annexes:**
+- **How many per level:** `annex.count` weights are 0.07 / 0.53 / 0.40 for 0 / 1 / 2 annexes. The level tries tunnels first,
+  then hatches; a failed attempt is omitted with no orphan door, clue or cell.
+- **Size:** `share` 0.25 of the baseline, jittered by 0.85–1.15, minimum `minShare` 0.15.
+- **Layout:** corridors 1.5–2 m wide; rooms from 3×3 m to 8×10 m; ceilings 2.4–2.8 m.
+- **Door placement:** a tunnel that hosts an annex gets a first straight of at least 21 m (`annex.hostFirstStraight`), which
+  leaves room for the door.
+
+**Core reserve (Subway only, `coreReserveM` 40):**
+- Right after the archetype skeleton, 40 m of rock is kept free past every bed end that is still open, so the rest of the
+  station plans around the tunnel room. This is a deliberate layout change to the core station, made for annex incidence.
+- With `coreReserveM: 0` (`TRACK_EXT_RESERVE_OFF`, `game/tests/helpers/trackExtCore.ts`), the core reproduces the earlier pins.
+- The Office uses `TRACK_EXT_OFFICE`: no reserve and the original annex planner.
+
+**Service hatches:**
+- **Why they exist:** island-ends and express stations have their paid-concourse end halls 1.5–4 m past every bed end, so no
+  tunnel fits.
+- **How they work:** an annex there is reached through a door in the bed's outer side wall near an end, 2–10 m from the end
+  face, never in a platform face. The annex sits at bed floor height. The way back is the bed's own ladders.
+
+**Measured incidence** (64-seed corpus): 60/64 Subway levels have at least one annex and 18/64 have two (0 / 1 / 2 =
+4 / 42 / 18); 16 of 78 annexes are behind a hatch.
+
+## Data model (`game/src/gen/trackExt/types.ts`)
+
+`layout.extensions?: TrackExtensions` holds `{tunnels, annexes, log, core, shift, coreXZ, vents?}`.
+
+**`TrackTunnel`:**
+- `trench`, `from` (`'x0' | 'x1'`), `floorY`, `ceilY`, `width`;
+- `path`: a world-metre centreline starting on the bed end face;
+- `length`, `rails`, `cap`, `areas`;
+- `doors`: annex entries;
+- `clues`: graffiti, present only on tunnels that lead to an annex.
+
+**`ServiceAnnex`:**
+- `tunnel`: `-1` for a hatch annex. Guard every `tunnels[annex.tunnel]` lookup.
+- `door`, `areas`, `floorY`, `ceilY`, `cells`, `areaM2`, `exit`.
+- `bed?`: a `BedEntry` for hatches. Its door record has `a === b ===` the entry corridor, because the bed has no area. Hatch
+  graffiti lives in `BedEntry.clues`.
+
+**Areas:**
+- Extension areas carry `area.ext = 'tunnel' | 'annex'` plus `extId`.
+- `isExtensionArea(area)` is the one marker every existing global pass skips, so a level's core content and RNG baseline are
+  preserved.
+- Extension props, lights, holders, pickups and zombies are appended after every core record.
+
+**`coreView(layout)`** (`game/src/gen/trackExt/core.ts`) returns the level exactly as it would be without its extensions:
+- extension cells go back to rock;
+- appended areas, doors and records are dropped;
+- coordinates are translated back.
+
+The golden tests use it for their translation-normalised proofs, and runtime fields such as decay use it.
+
+**Validation:** `extensionIssues(layout)` checks that:
+- every tunnel and annex cell is reachable from the platform (drops and ladders allowed), with a return path to a ladder;
+- there is at least 2.2 m of head clearance;
+- the cap has collision;
+- no walkable cell borders void or the outside of the canvas;
+- nothing overlaps;
+- every door joins exactly a tunnel or bed and an annex corridor.
+
+## Content (`game/src/gen/annexContent.ts`)
+
+**Rooms:** annex areas take existing back-of-house purposes: pump room, electrical room, workshop, maintenance storage,
+custodial room, janitor / electrical / supply closets, and service corridors.
+- Rooms are dressed by the existing dress, compose and iteration-07 machinery on their own rng fork.
+- The budget is one prop per 12 m², plus `ANNEX_COMPOSE_BUDGET` 12 generated-model clusters per annex.
+- Only existing prop kinds are used, so the openables and physics audits are unchanged.
+
+**Loot** (`game/src/items/lootTables.ts`), finite, seeded once, persisted by the usual keys and never refilled:
+- **Deepest holders:** each annex's deepest 7–8 holders keep their room's normal loot table.
+- **Stash:** one or two stash holders (a crate, then a tall cabinet) use `ANNEX_STASH`.
+- **Picked over:** the rest use `ANNEX_PICKED`: no ammo, 90 % empty.
+- **Floor:** `ANNEX_FLOOR` guarantees nothing.
+- **Untouched:** the level's single rare-gear roll, mask roll, weapon finds and Office roof cache and find are never
+  multiplied.
+
+**Enemies** (`SERVICE_CONTEXT`):
+- 3–5 per annex, at least 5 m apart and at least 6 m from the entrance.
+- Annex spawns are appended after every core spawn and tagged `markSpawnContext(layout, firstIndex, 'service')`.
+  `assignEnemyArchetypes` runs once afterwards.
+- They inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none, and the
+  Office's Siren eligibility stays `['floor']`.
+- They are excluded from the core station / street / floor counts and reported separately.
+- Measured: about 4.3 extra per Subway level.
+
+**Lights:** untinted. Annexes have about 80 fixtures each, mostly dim, dying or dead; the entry corridor is never fully dark.
+Tunnels have sparse fixtures, mostly dead or dying.
+
+**Steam vents:** `extensions.vents`, 3 per annex, placed over pump skids, water heaters and valves.
+
+## Presentation (`game/src/world/trackExt/`)
+
+- **Tunnel shell and grid geometry:**
+  - `TrackExtView.of(layout)` and `buildTrackExtensions(...)` build the smooth tunnel shell: concrete walls, flat ceiling,
+    ballast, and rails with instanced sleepers.
+  - Inside the shell, the stair-stepped grid walls are suppressed (`clipFaces`). The shell's own wall-treatment faces are
+    `shellDetailFaces`.
+  - The bed end plane and barricade disappear only where a tunnel continues.
+- **Caps, doors and graffiti:**
+  - Cap meshes: `caps.ts`, with `CAP_OVERHANG` derived from `capDepth`.
+  - Annex and hatch door frames carry a SERVICE plate.
+  - A local procedural graffiti atlas paints decals only at `clues`.
+- **Annex walls:**
+  - Annexes use the lower-level service look: board-formed concrete, pipes, conduits and damp.
+  - Annex wall detail has its own per-annex budget (`extWallDetailCaps`, `game/src/world/wallDetailPlan.ts`).
+  - Fittings keep out of doorway clear volumes.
+- **Steam:** a bounded, non-hazardous emitter in `game/src/world/fx.ts`, capped per annex. It is never the gas field and
+  never the flare smoke.
+- **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
+
+## Tests
+
+- **Track extensions:** `track-ext.test.ts` (generation and census), `track-ext-core.test.ts` (core identity and the
+  reserve-off proof), `track-ext-coverage.test.ts`, `track-ext-vis.test.ts`, and the opt-in `TRACK_EXT_GEN=1`
+  `track-ext-vis-gen.test.ts`.
+- **Content:** `annex-content.test.ts`.
+- **Pins:** the golden pin histories in `enemy-spawn-parity.test.ts`, `loot-golden.test.ts`, `office-gen.test.ts` and
+  `nav-query-fingerprint.test.ts` record every Track 2 re-pin with its cause and proof.
+- **Browser:** the spot check is `tools/qa/track2-walk-check.mjs`. It is one serial session: a real W walk from platform to
+  bed to tunnel to annex door, then the annex loot, then back up the ladder.

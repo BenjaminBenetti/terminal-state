@@ -3,6 +3,8 @@
 // right level's floor (never on stairs, stair approaches, landings or aperture edges), door / aisle clearance on every level,
 // finite unique loot holders, determinism and per-station budgets. Plus a hand-built two-level fixture for the level-aware kit.
 import {describe, expect, it} from 'vitest';
+import {coreView} from '../src/gen/trackExt/index'; // Track 2 (lane CONTENT): the core station's budgets
+import {ANNEX_CONTENT} from '../src/gen/annexContent'; // Track 2 (lane CONTENT): each annex's own allowance
 import {Rng} from '../src/core/rng';
 import {ARCHETYPES, generateStation, type Area, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, Grid, SOLID, VOID} from '../src/gen/grid';
@@ -306,18 +308,31 @@ describe('composed stations', () => {
   });
 
   it('budgets: placements, distinct kinds, draw-call estimate, triangles and texture memory stay bounded', () => {
-    for (const l of SEEDS.map(s => gen(s))) {
-      const p7 = l.props.filter(p => isP7Kind(p.kind));
+    const metrics = (props: readonly PropPlacement[]) => {
+      const p7 = props.filter(p => isP7Kind(p.kind));
       const kinds = new Set(p7.map(p => p.kind));
       const chunks = new Map<string, Set<string>>();
-      for (const p of l.props) { let s = chunks.get(p.kind); if (!s) chunks.set(p.kind, (s = new Set())); s.add(`${Math.floor(p.x / 18)},${Math.floor(p.z / 18)}`); }
-      const draws = [...chunks.values()].reduce((s, c) => s + c.size, 0);
+      for (const p of props) { let s = chunks.get(p.kind); if (!s) chunks.set(p.kind, (s = new Set())); s.add(`${Math.floor(p.x / 18)},${Math.floor(p.z / 18)}`); }
+      return {placements: props.length, draws: [...chunks.values()].reduce((s, c) => s + c.size, 0), kinds: kinds.size,
+        mb: [...kinds].reduce((s, k) => s + M[k].gpuBytes, 0) / 1e6, tris: p7.reduce((s, p) => s + M[p.kind].tris, 0)};
+    };
+    for (const l of SEEDS.map(s => gen(s))) {
       // Iteration-07 maxima over the same seeds: 718 placements, 428 draws, 60 p7 kinds, 230 MB, 0.84 M tris — +25 % for the levels.
-      expect(l.props.length, `${l.seed} placements`).toBeLessThanOrEqual(900);
-      expect(draws, `${l.seed} draws`).toBeLessThanOrEqual(540);
-      expect(kinds.size, `${l.seed} p7 kinds`).toBeLessThanOrEqual(64);
-      expect([...kinds].reduce((s, k) => s + M[k].gpuBytes, 0) / 1e6, `${l.seed} p7 texture MB`).toBeLessThanOrEqual(260);
-      expect(p7.reduce((s, p) => s + M[p.kind].tris, 0), `${l.seed} p7 tris`).toBeLessThanOrEqual(1.05e6);
+      // Track 2 (lane CONTENT): those caps hold for the CORE station (its core view); each seeded service annex adds its own
+      // explicit allowance (gen/annexContent.ts budgets; measured per annex ~150-160 placements, ~65-80 draw chunks, ~20-32k p7
+      // triangles; the annexes use the station's own p7 palette: no new kinds / textures beyond it).
+      const c = metrics(coreView(l).props), live = metrics(l.props);
+      expect(c.placements, `${l.seed} placements`).toBeLessThanOrEqual(900);
+      expect(c.draws, `${l.seed} draws`).toBeLessThanOrEqual(540);
+      expect(c.kinds, `${l.seed} p7 kinds`).toBeLessThanOrEqual(64);
+      expect(c.mb, `${l.seed} p7 texture MB`).toBeLessThanOrEqual(260);
+      expect(c.tris, `${l.seed} p7 tris`).toBeLessThanOrEqual(1.05e6);
+      const annexes = l.extensions?.annexes ?? [], m2 = annexes.reduce((s, n) => s + n.areaM2, 0);
+      expect(live.placements, `${l.seed} placements (+ annexes)`).toBeLessThanOrEqual(c.placements + Math.ceil(1.25 * m2 / ANNEX_CONTENT.m2PerProp));
+      expect(live.draws, `${l.seed} draws (+ annexes)`).toBeLessThanOrEqual(540 + 90 * annexes.length);
+      expect(live.kinds, `${l.seed} p7 kinds (+ annexes)`).toBeLessThanOrEqual(64);
+      expect(live.mb, `${l.seed} p7 texture MB (+ annexes)`).toBeLessThanOrEqual(260);
+      expect(live.tris, `${l.seed} p7 tris (+ annexes)`).toBeLessThanOrEqual(1.05e6 + 60e3 * annexes.length);
     }
   });
 });
