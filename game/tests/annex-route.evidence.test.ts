@@ -20,7 +20,7 @@ export const ROUTE_SAMPLE: readonly {level: LevelId; seed: number}[] = [
 ];
 
 describe.runIf(!!process.env.ANNEX_ROUTE)('annex discovery routes (evidence)', () => {
-  it('walks every annex of the sample', () => {
+  it.runIf(process.env.ROUTE_ONLY !== 'deeper')('walks every annex of the sample', () => {
     const out: RouteReport[] = [];
     for (const c of ROUTE_SAMPLE) {
       const l = freshLayout(c.level, c.seed);
@@ -29,4 +29,22 @@ describe.runIf(!!process.env.ANNEX_ROUTE)('annex discovery routes (evidence)', (
     mkdirSync('qa-artifacts/annex-route', {recursive: true});
     writeFileSync(`qa-artifacts/annex-route/${process.env.ROUTE_TAG ?? 'run'}.json`, JSON.stringify(out, null, 1));
   }, 1800000);
+
+  // Round 2 (studio-alpha-track2-round2-20261031-01, lane CACHE, R5): an explorer pushing on toward the annex's deep end ('deeper': the
+  // deepest frontier room by door hops, ties by walking distance — topology only, never the cache ground truth), opening what it
+  // passes; records when it reaches a survivor cache (rooms / metres / depth), the cache holders opened, their ids, the inventory delta.
+  //   ANNEX_ROUTE=1 ROUTE_ONLY=deeper [ROUTE_TAG=cache] [ROUTE_ROOMS_DEEP=40] ./node_modules/.bin/vitest run ... game/tests/annex-route.evidence.test.ts
+  it.runIf(process.env.ROUTE_ONLY !== 'nearest')('walks every annex of the sample toward its deep end (survivor caches)', () => {
+    const out: RouteReport[] = [];
+    for (const c of ROUTE_SAMPLE) {
+      const l = freshLayout(c.level, c.seed);
+      for (const a of l.extensions?.annexes ?? []) out.push(walkAnnexRoute(c.level, c.seed, a.id, models, {strategy: 'deeper', maxRooms: Number(process.env.ROUTE_ROOMS_DEEP ?? 40), openPerRoom: 10}));
+    }
+    mkdirSync('qa-artifacts/annex-route', {recursive: true});
+    writeFileSync(`qa-artifacts/annex-route/${process.env.ROUTE_TAG ?? 'run'}-deeper.json`, JSON.stringify(out, null, 1));
+    // compact summary (console output is swallowed by the runner)
+    writeFileSync('/tmp/annex-route-deeper.txt', out.map(r => `${r.level} ${r.seed} annex ${r.annex} (${r.entry}): rooms ${r.roomsVisited}/${r.roomsTotal}, ${r.metres} m, depth ${r.depthReached}/${r.maxDepth}; `
+      + `cache ${r.cache ? `room ${r.cache.area} at ${r.cache.metres} m / ${r.cache.rooms} rooms / depth ${r.cache.depth}; opened ${r.cache.holdersOpened} [${r.cache.holderIds.join(' ')}] took ${JSON.stringify(r.cache.taken)}` : 'NOT REACHED'}; `
+      + `inventory ${JSON.stringify(r.inventory)}; enemies aware ${r.enemies.aware}/${r.enemies.total}; returned ${r.returned}`).join('\n') + '\n');
+  }, 3600000);
 });

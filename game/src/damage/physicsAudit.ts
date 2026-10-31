@@ -73,6 +73,8 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   electricalPanel: ['fixture', 'electrical switchgear panel'],
   signalRack: ['anchored', 'signal equipment rack bolted down'],
   cartonStack: ['too heavy', 'carton stack (~40 kg): collapses when shot (breakable) rather than sliding'],
+  // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): the annex survivor cache's camp bed (gen/annexCache.ts)
+  palletBed: ['too heavy', 'camp bed: a foam mattress and bedding on two wooden pallets (~45 kg) lying flat against a wall: a body bump or a bullet does not shove it'],
   // iteration-07 generated floor kinds
   fareValidatorStand: ['anchored', 'fare validator post bolted to the floor'],
   newspaperVendingBox: ['too heavy', 'steel newspaper box (~35 kg), chained'],

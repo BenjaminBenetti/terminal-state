@@ -37,6 +37,8 @@ export const PURPOSE_PROP_KINDS = [
   // Back-of-house
   'staffLockers', 'kitchenette', 'fridge', 'couch', 'noticeBoard', 'janitorCart', 'mopSink', 'electricalPanel',
   'gunLocker', 'monitorDesk', 'medCabinet', 'safe', 'signalRack', 'cartonStack',
+  // Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a survivor's camp bed in an annex cache room (gen/annexCache.ts)
+  'palletBed',
 ] as const;
 export type PurposePropKind = (typeof PURPOSE_PROP_KINDS)[number];
 export function isPurposePropKind(kind: string): kind is PurposePropKind {
@@ -142,6 +144,12 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   safe: {w: 0.7, d: 0.7, h: 1.0, blocksSight: false},
   signalRack: {w: 1.2, d: 0.6, h: 2.1, blocksSight: true},
   cartonStack: {w: 1.0, d: 0.8, h: 1.3, blocksSight: false},
+  /**
+   * Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a survivor's camp bed — a foam mattress on two 1.0 x 0.8 m wooden
+   * pallets, a sleeping bag and a pillow (bedding, like a couch's cushions: no loose takeable clutter), long side to a wall. Real
+   * scale (scale-checked beside a runtime zombie): pallet deck 0.12 m, mattress top 0.26 m, pillow top 0.37 m.
+   */
+  palletBed: {w: 2.0, d: 0.84, h: 0.38, blocksSight: false},
   // --- Iteration 07 generated props (Lane P2): footprints = measured runtime model bounds (gen/props07.ts) ---
   ...P7_PROP_DEFS,
   // --- Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts) ---

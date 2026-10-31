@@ -241,6 +241,51 @@ Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 
   opening holders in placement order) took loot in every sampled annex, with the first find 2–5 rooms in. Before, they found
   nothing.
 
+**Survivor caches** (task `studio-alpha-track2-round2-20261031-01`, lane CACHE, R5; user: "there's not enough of a reason to go to this
+place, there should be some "cache" rooms that spawn deeper in, a room like a survivor had been living there"; `game/src/gen/annexCache.ts`,
+config `ANNEX_CACHE`).
+- **Pass order:** the LAST content pass (after lights, floor finds, vents and service spawns), per annex on its own fork
+  (`cache:<annexId>`). It only appends props, so every earlier record — holder indices and their loot, pickups, spawns — is unchanged
+  (the cache room's one fixture aside, below); their cells (access strips / stand points in front of the room's props, wall mounts,
+  floor finds, spawn points) are reserved before placing. It reuses the room-storage pass's annex-window place context.
+- **Deep, from the door-hop topology** (`Area.depth`, door hops from the annex entry — the bands `pickOver` and the service spawns use):
+  - a room in the deep THIRD of the annex's depth range; never a closet, a service corridor, a machinery hall, a signature room (its
+    machinery stays) or an entry room (depth <= dMin + 1); at least 3 m short side and 10.5 m²;
+  - a seeded weighted pick: dead ends x3 (two doors x1.5), +1 per hop past the shallowest candidate, free floor after the room's own
+    props (x0.2–x2), the stash's room x0.5; a room where the cache does not fit is rolled back and the next drawn (<= 5 per tier);
+  - ONE cache per annex; a SECOND in large annexes (>= 2000 m²), deep band only, never next door to the first;
+  - **fallback:** no deep room fits -> one cache in the middle band, then in any eligible room past the entry; none at all (an annex
+    of halls / signature rooms / closets only) -> no cache, reported by `annexCachesOf`.
+- **The room** (existing kinds + one local procedural kind; no new asset file):
+  - a **pallet bed** (`palletBed`, `gen/purposeShapes.ts`: foam mattress, open sleeping bag, pillow and a folded blanket on two wooden
+    pallets; 1.99 x 0.36 x 0.80 m) against a door-free wall first, a 0.6 m bedside strip kept clear;
+  - their **storage**, 2–3 holders (else the room is rolled back): an open shelf (pantry), a tall (else low) cabinet (kit), a crate
+    (supply crate); loot key `ANNEX_CACHE_KEY` — exact, never empty, 2–3 lots, themed per container, ammo only in the crate
+    (`docs/loot-tables.md` "Survivor caches");
+  - up to two **camp things** — existing iteration-07 kinds the level already loads and whose own placement spec allows the room's
+    purpose (work light, folding chair, portable generator, trash bags, water cooler, privacy screen, IV pole, drum fan, mop
+    bucket), separate props, never baked;
+  - a **working light**: the room's first ceiling fixture burns steadily, warm and low (power 0.55), the room at least 'dim' — a lit
+    doorway deep in the dark annex (no new light record).
+  - Placement goes through the dresser's own primitives: door zones / cells, access strips, room connectivity (`tryPlaceProp`), the
+    doorway clear volumes (`propBlocksDoorway`) and the mall's real-wall rule; every wall spot is enumerated in seeded order.
+- **Measured** (round 2; fresh New Game path):
+  - **Selection** over 51 annexes (Subway 1043 / 1002 / 777001 / 777002 / 4055629249 / 2563024239 / 774566179 + 30 more, Office
+    222 / 3333, Mall 846932 / 5150 / 9090): 60 caches, every annex has one, 9 large annexes have two; 59 in the deep band, ONE
+    middle-band fallback (Subway 92109: its deep rooms are small shelved stores where no bed + storage fits), none without a cache.
+    42 of 60 in dead ends; mostly pump rooms and first-aid posts, then stores, electrical / custodial rooms and workshops.
+  - **The room** (the 12-level sample, 20 caches): depth 6–15, 21–78 m in a straight line from the annex door (median ~59 m); 2.75
+    holders per cache (shelf + cabinet + crate in 15, two pieces in 5); a camp thing in 14 of 20 (work light, water cooler, drum
+    fan, mop bucket, IV pole, generator, folding chair).
+  - **Contents** (packed lots, `ContainerManager.build` with each level's profile): 6.75 lots per cache (4–9) — food 1.95, drink
+    1.85, dressings 0.8, first-aid kits 0.15, batteries 0.7, gas filters 0.25, ammo 1.05 lots (8.8 rounds); never empty, nothing else.
+  - **Discovery** (`tests/helpers/annexRoute.ts` strategy `deeper`: a real Player pushing on to the deepest frontier room, opening
+    what it passes; topology only): on Subway 1043 / 1002 (2 annexes), Office 222 (2), Mall 846932 every cache was reached — after
+    12, 27, 39, 41, 52 and 56 rooms (168–834 m of walking; 3 of 6 within 40 rooms), its 2–3 holders opened and 4–6 items taken
+    (inventory deltas and holder ids in `qa-artifacts/annex-route/<tag>-deeper.json`). A cache is a reward for exploring the annex,
+    not a find on the way in (the ordinary nearest-first route's first loot stays 2–5 rooms in).
+  - **Cost:** the cache pass takes 0.46 ms (Subway 424242, min of 5) to 0.5–0.9 ms (two annexes) per level.
+
 **Enemies** (`SERVICE_CONTEXT`):
 - **Count:** `SERVICE_ZONE_BUDGET` 5–6 per annex (was 3–5; about 80 % of the core's density; the hi fits the compact Mall's
   per-storey ambient cap of 6, as the registry contract requires).
@@ -332,6 +377,12 @@ Tunnels have sparse fixtures, mostly dead or dying.
   `track-ext-vis-gen.test.ts`.
 - **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
   anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
+- **Survivor caches (round 2, lane CACHE):** `annex-playtest.test.ts` "survivor caches deeper in" — the per-container exact tables on
+  every level profile (packed lots, no salvage / material / gear / mask / weapon, ammo only in the crate), and on the fresh-run sample
+  a deep-band cache room per annex (no signature / hall / corridor / entry room), the bed, 2–3 registered and stocked holders,
+  targetable from their stand points, the working light, the camp things' placement contract, the cache appended last; taken cache
+  lots stay taken across regenerate -> rebuild -> `applyHolders`. Opt-in evidence: `ANNEX_ROUTE=1 ROUTE_ONLY=deeper` (the deeper
+  route) and `ANNEX_PICTURES=1` (CPU pictures of the cache rooms, `qa-artifacts/track2-revision-pictures/cache-*.png`).
 - **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
   `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
   1–2 m, into `qa-artifacts/track2-revision-art/`).

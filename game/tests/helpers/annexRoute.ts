@@ -22,7 +22,8 @@ import {Player, STAND_EYE, type MoveInput} from '../../src/player/player';
 import {PropIndex} from '../../src/core/physics';
 import {ladderTarget} from '../../src/gen/traversal';
 import {Inventory} from '../../src/items/inventory';
-import {lootProfile} from '../../src/items/lootTables';
+import {ANNEX_CACHE_KEY, lootProfile} from '../../src/items/lootTables';
+import {ITEMS} from '../../src/items/items';
 import {WorldMaterials} from '../../src/world/materials';
 import {ContainerManager, type Holder} from '../../src/world/containers';
 import {ZombieBrain, type BrainWorld} from '../../src/ai/brain';
@@ -45,12 +46,31 @@ class Keys implements MoveInput {
 export interface RouteEvent { t: number; metres: number; rooms: number; what: string; detail?: Record<string, unknown> }
 export interface RouteReport {
   level: LevelId; seed: number; annex: number; entry: 'tunnel' | 'hatch'; areaM2: number;
+  /** Round 2 (lane CACHE, R5): how the next room is chosen ('nearest' unvisited by walking distance; 'deeper': see walkAnnexRoute). */
+  strategy: RouteStrategy;
   roomsVisited: number; roomsTotal: number; metres: number; seconds: number;
   holders: {opened: number; empty: number; stocked: number; takenItems: string[]};
   firstLoot: {metres: number; rooms: number; itemId: string; holder: string} | null;
   enemies: {total: number; aware: number; firstAware: {metres: number; rooms: number; dist: number} | null};
+  /**
+   * Round 2 (lane CACHE, R5): the survivor cache(s) met on the route — when the route first entered a cache room (route metres, rooms,
+   * door-hop depth of that room vs the annex's deepest), the cache holders opened there (ids `<kind>#<serial>@x,z`), what was taken
+   * from them (inventory delta) — null when the route never reached one. Ground truth is read only for this record, never to steer.
+   */
+  cache: {metres: number; rooms: number; depth: number; maxDepth: number; area: number; holdersOpened: number; holderIds: string[]; taken: Record<string, number>} | null;
+  /** Deepest door-hop depth the route reached / the annex's deepest. */
+  depthReached: number; maxDepth: number;
+  /** Inventory delta of the whole route (item -> count taken). */
+  inventory: Record<string, number>;
   returned: boolean; minY: number; maxDy: number; events: RouteEvent[];
 }
+/**
+ * Room choice of a route — 'nearest': the nearest unvisited annex area by walking distance (the playtest revision's ordinary route);
+ * 'deeper' (round 2, lane CACHE): an explorer pushing on into the annex — among the unvisited areas that share a door with an area
+ * already visited (the frontier: what the player can see the way to), the one deepest by door hops from the entry, ties by walking
+ * distance; dead ends are entered and the route backtracks to the frontier. Topology only: never the loot / cache ground truth.
+ */
+export type RouteStrategy = 'nearest' | 'deeper';
 
 /** A fresh New Game layout exactly as Game.newGame / prepareSection generate it. */
 export function freshLayout(level: LevelId, seed: number): StationLayout {
@@ -59,8 +79,9 @@ export function freshLayout(level: LevelId, seed: number): StationLayout {
   return LEVELS[level].generate('main', {levelSeed: seed, startWeapon: 'pistol', gear: run.gearFor(key as never)} as never);
 }
 
-/** Walks one annex's ordinary discovery route. `maxRooms` bounds the exploration (rooms in nearest-first order). */
-export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, models: Record<string, GLTF>, o: {maxRooms?: number; openPerRoom?: number} = {}): RouteReport {
+/** Walks one annex's ordinary discovery route. `maxRooms` bounds the exploration (rooms in the strategy's order). */
+export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, models: Record<string, GLTF>, o: {maxRooms?: number; openPerRoom?: number; strategy?: RouteStrategy} = {}): RouteReport {
+  const strategy = o.strategy ?? 'nearest';
   const layout = freshLayout(level, seed);
   const ext = layout.extensions!;
   const A: ServiceAnnex = ext.annexes.find(a => a.id === annexId)!;
@@ -142,28 +163,48 @@ export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, mo
     ev('tunnel mouth', {ok: walkTo(m.x, m.z, T.floorY)});
   }
   ev('annex door', {ok: walkTo(A.exit.x, A.exit.z, A.floorY)});
-  // 2. room by room: the nearest not-yet-visited annex area by walking distance (topology only)
+  // 2. room by room (topology only): 'nearest' — the nearest not-yet-visited annex area by walking distance; 'deeper' — the deepest
+  // area of the frontier (unvisited, sharing a door with a visited area or the way in), ties by walking distance
   const unvisited = new Set(A.areas);
   const maxRooms = o.maxRooms ?? A.areas.length, openPerRoom = o.openPerRoom ?? 6;
   let opened = 0, empty = 0, stocked = 0;
   const taken: string[] = [];
   let firstLoot: RouteReport['firstLoot'] = null;
+  const ids = new Set(A.areas), adj = new Map<number, number[]>();
+  for (const d of layout.doors) if (ids.has(d.a) && ids.has(d.b) && d.a !== d.b) { (adj.get(d.a) ?? adj.set(d.a, []).get(d.a)!).push(d.b); (adj.get(d.b) ?? adj.set(d.b, []).get(d.b)!).push(d.a); }
+  const seen = new Set<number>([layout.doors[A.door].a, layout.doors[A.door].b].filter(id => ids.has(id))); // the way in
+  const maxDepth = Math.max(...A.areas.map(id => layout.areas[id].depth));
+  let depthReached = 0, cache: RouteReport['cache'] = null;
+  const inv0 = new Map<string, number>(Object.keys(ITEMS).map(id => [id, inv.count(id)]));
+  const walkDist = (id: number) => {
+    const c = areaCentre(id), r = pf.find(p.x, p.z, c.x, c.z, 0.3, 400000, {ay: p.y, by: A.floorY});
+    if (!r) return Infinity;
+    let d = 0; for (let k = 1; k < r.length; k++) d += Math.hypot(r[k][0] - r[k - 1][0], r[k][1] - r[k - 1][1]);
+    return d;
+  };
   while (unvisited.size && rooms < maxRooms) {
-    let best = -1, bestD = Infinity;
-    for (const id of unvisited) {
-      const c = areaCentre(id), r = pf.find(p.x, p.z, c.x, c.z, 0.3, 400000, {ay: p.y, by: A.floorY});
-      if (!r) continue;
-      let d = 0; for (let k = 1; k < r.length; k++) d += Math.hypot(r[k][0] - r[k - 1][0], r[k][1] - r[k - 1][1]);
-      if (d < bestD) { bestD = d; best = id; }
+    let best = -1, bestD = Infinity, bestDepth = -1;
+    const cands = strategy === 'deeper' ? [...unvisited].filter(id => seen.has(id) || (adj.get(id) ?? []).some(q => !unvisited.has(q))) : [...unvisited];
+    for (const id of cands) {
+      const dep = layout.areas[id].depth;
+      if (strategy === 'deeper' && dep < bestDepth) continue;
+      const d = walkDist(id);
+      if (d === Infinity) continue;
+      if (strategy === 'deeper' ? dep > bestDepth || d < bestD : d < bestD) { bestD = d; best = id; bestDepth = dep; }
     }
     if (best < 0) break;
     unvisited.delete(best);
+    for (const q of adj.get(best) ?? []) seen.add(q);
     const c = areaCentre(best);
     if (!walkTo(c.x, c.z, A.floorY)) { ev('room unreachable', {area: best}); continue; }
     rooms++;
+    depthReached = Math.max(depthReached, layout.areas[best].depth);
     ev('room', {area: best, purpose: layout.areas[best].purpose, type: layout.areas[best].type, depth: layout.areas[best].depth, holders: cm.all.filter(h => h.prop.area === best).length});
     // try the room's holders a player would open / look at, in placement order (no stocked-first knowledge)
     const here = cm.all.filter(h => h.prop.area === best).slice(0, openPerRoom);
+    // (record only) a survivor cache room: the cache key is read to REPORT what the route met there, never to choose rooms / holders
+    const cacheHere = here.some(h => h.prop.purpose === ANNEX_CACHE_KEY);
+    if (cacheHere && !cache) { cache = {metres: +metres.toFixed(1), rooms, depth: layout.areas[best].depth, maxDepth, area: best, holdersOpened: 0, holderIds: [], taken: {}}; ev('cache room', {...cache}); }
     for (const h of here) {
       const {aim, stand} = cm.aimPoint(h);
       if (!walkTo(stand.x, stand.z, A.floorY, 20)) { ev('holder unreachable', {kind: h.kind, purpose: h.prop.purpose}); continue; }
@@ -172,12 +213,20 @@ export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, mo
       if (tg?.container !== h) { ev('holder not targeted', {kind: h.kind, purpose: h.prop.purpose, hit: tg?.container?.kind ?? null, d: +Math.hypot(aim.x - p.x, aim.z - p.z).toFixed(2)}); continue; }
       opened++;
       const got = openAndTake(cm, h, inv);
+      if (h.prop.purpose === ANNEX_CACHE_KEY && cache?.area === best) {
+        cache.holdersOpened++;
+        cache.holderIds.push(`${h.kind}#${h.serial}@${h.prop.x.toFixed(2)},${h.prop.z.toFixed(2)}`);
+        for (const id of got) cache.taken[id] = (cache.taken[id] ?? 0) + 1;
+        ev('cache holder', {kind: h.kind, serial: h.serial, got});
+      }
       if (got.length) {
         stocked++; taken.push(...got);
         if (!firstLoot) { firstLoot = {metres: +metres.toFixed(1), rooms, itemId: got[0], holder: h.kind}; ev('first loot', {...firstLoot}); }
       } else empty++;
     }
   }
+  const inventory: Record<string, number> = {};
+  for (const [id, n0] of inv0) { const dn = inv.count(id) - n0; if (dn) inventory[id] = dn; }
   // 3. back: the nearest rescue ladder of the bed the annex hangs off, climbed up
   const trench = A.tunnel >= 0 ? ext.tunnels[A.tunnel].trench : A.bed!.trench;
   const lad = layout.traversal.ladders.filter(l => l.trench === trench && (l.kind ?? 'rescue') === 'rescue')
@@ -195,9 +244,10 @@ export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, mo
   }
   ev('returned', {ok: returned});
   return {
-    level, seed, annex: A.id, entry, areaM2: A.areaM2, roomsVisited: rooms, roomsTotal: A.areas.length, metres: +metres.toFixed(1), seconds: +t.toFixed(1),
+    level, seed, annex: A.id, entry, areaM2: A.areaM2, strategy, roomsVisited: rooms, roomsTotal: A.areas.length, metres: +metres.toFixed(1), seconds: +t.toFixed(1),
     holders: {opened, empty, stocked, takenItems: taken}, firstLoot,
     enemies: {total: enemies.length, aware: enemies.filter(e => e.aware).length, firstAware},
+    cache, depthReached, maxDepth, inventory,
     returned, minY: +minY.toFixed(2), maxDy: +maxDy.toFixed(3), events,
   };
 }

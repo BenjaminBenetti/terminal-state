@@ -1345,6 +1345,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   // nothing to open
   ...['bench', 'column', 'fareGate', 'washCounter', 'shopGlazing', 'magazineRack', 'techDisplay', 'deviceWall', 'showcase', 'flowerStand', 'repairBench', 'breadRack',
     'couch', 'noticeBoard', 'janitorCart', 'mopSink', 'signalRack',
+    'palletBed', // lane CACHE (round 2, R5): a camp bed — mattress and bedding on pallets, nothing to open
     'payphone', 'emergencyCallPoint', 'fareValidatorStand', 'infoTouchKiosk', 'capsuleToyMachine', 'crowdBarrier', 'securityPodium', 'platformClock', 'cctvCamera',
     'shoeShineChair', 'babyStroller', 'bicycle', 'wheelchair', 'trashBagPile', 'foldingBarricade', 'wetFloorSign', 'urinal', 'handDryer',
     'mopBucketWringer', 'floorScrubber', 'floorBuffer', 'handTruck', 'palletJack', 'stepLadder', 'coatRack', 'pedestalFan',

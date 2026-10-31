@@ -97,14 +97,29 @@ proportion edits in the same script (`legs`: foosball +0.40 m, ping-pong +0.20 m
 0.45 m riser; drafting table / espresso machine rescaled by their own board / width).
 
 ### Service annexes (Track 2, lane CONTENT)
-The track tunnels' service annexes are dressed with EXISTING prop kinds only (`game/src/gen/annexContent.ts` through the core
-dresser: purpose rules, the composer, the iteration-07 dresser) — no new or changed kind, so every kind keeps its `OPENABLE_AUDIT` /
-physics class, and no scale check was due. Storage there opens like everywhere (same openables, finite seeded contents from the
+The track tunnels' service annexes are dressed with EXISTING prop kinds (`game/src/gen/annexContent.ts` through the core
+dresser: purpose rules, the composer, the iteration-07 dresser) — every kind keeps its `OPENABLE_AUDIT` / physics class (the one new
+kind, the survivor caches' `palletBed`, is classified and scale-checked below). Storage there opens like everywhere (same openables, finite seeded contents from the
 loot tables: an annex's deepest holders keep their room's table, the stash `ANNEX_STASH_KEY`, supply holders `ANNEX_SUPPLY_KEY`
 by depth band, a few scraps `ANNEX_SCRAPS_KEY`, the rest searched-clean `ANNEX_PICKED_KEY`; every bare annex room gets one storage
 piece — `docs/loot-tables.md` "Service annexes"); loose kinds keep their bounded physics; placement goes through the
 same primitive (door zones and clearance, access / swing strips, connectivity), on the annex floor (the trackbed, props lifted onto
 it like the core's).
+
+Survivor caches (task studio-alpha-track2-round2-20261031-01, lane CACHE, R5; `game/src/gen/annexCache.ts`): one NEW kind,
+`palletBed` — a survivor's camp bed, a local procedural purpose shape (`gen/purposeShapes.ts`; no model / asset file): a 14 cm foam
+mattress (vinyl cover), an open sleeping bag (accent palette), a pillow and a folded blanket on two 1.0 x 0.8 m wooden pallets.
+- Openables audit: `none` (no door, lid or drawer). Physics audit: static, `too heavy` — mattress and bedding on two pallets (~45 kg)
+  lying flat against a wall; a body bump or a bullet does not shove it. Damage: fabric, never breaks.
+- No baked loose clutter: the pillow / sleeping bag / blanket are bedding (like a couch's cushions, no item exists for them); the
+  cache's loose things are separate props (existing camp kinds) and its finds are real loot on the shelf / in the cabinet / crate.
+- Scale check (`node tools/asset-pipeline/props/scale-check.mjs --kind palletBed --kind crate` — the tool now renders authored
+  procedural purpose shapes for `--kind` too, flat stand-in colours per material): **W×H×D 1.99 × 0.36 × 0.80 m** (PROP_DEFS box
+  2.0 × 0.38 × 0.84), grounded (min-y 0, 18 contact clusters: the pallet runners over the full 1.99 × 0.80 m span), surfaces: pallet
+  deck 0.12 m, mattress top 0.26 m, sleeping bag 0.31 m, pillow / blanket 0.35 m — a low floor bed, its length a little over the
+  1.78 m reference zombie's height. Viewed beside zombie `lastshift` at runtime scale 1.0.
+- The cache's other pieces are existing kinds with their existing classes (shelf / cabinets / crate: open / existing openables, holder
+  statics; the camp things: their iteration-07 dynamic / static rows).
 
 ## 3. Movable things move
 Standing user rule (2026-10-30): **every physics object reacts to the player walking into it — no shot needed first** (task

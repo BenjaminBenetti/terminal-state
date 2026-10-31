@@ -193,6 +193,9 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // playtest revision (studio-alpha-track2-playtest-revision-20261031-01): the annex's distributed supply / scraps holders (exact tables)
   ANNEX_SUPPLY_KEY: 'service-annex supply holders (loot key -> purpose annex-supply: holder contexts; exact)', ANNEX_SCRAPS_KEY: 'service-annex scraps (loot key -> purpose annex-scraps: holder contexts; exact)',
   ANNEX_FLOOR: 'floor program (annex variant, per service annex)',
+  // round 2 (studio-alpha-track2-round2-20261031-01, lane CACHE, R5): the annex survivor caches (ANNEX_CACHE_PANTRY / _KIT / _CRATE and
+  // their rows are LootSpec / row tables: auto-detected)
+  ANNEX_CACHE_KEY: 'service-annex survivor cache storage (loot key -> purpose annex-cache: holder contexts by kind; exact, never empty, no salvage)',
 };
 
 const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {

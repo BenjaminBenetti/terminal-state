@@ -28,6 +28,9 @@
 //                 annex in its areas only, APPENDED after every core spawn and tagged markSpawnContext(…, 'service') (Track 1
 //                 contract, docs/level-enemy-contract.md §2); the caller then runs assignEnemyArchetypes ONCE (the level's own pool:
 //                 no annex families, no Siren unless the level's eligibility lists 'service' — none does).
+//  7. caches    — (task studio-alpha-track2-round2-20261031-01, lane CACHE, R5: gen/annexCache.ts) one SURVIVOR CACHE per annex (two in
+//                 large ones) in a deep-third room: a pallet bed, 2-3 storage holders (loot key ANNEX_CACHE_KEY: exact, never empty)
+//                 and a few camp things — appended LAST, so every record above is unchanged.
 // Holder contents roll at runtime from the seed (finite, remembered by run memory, never refilled) like every holder.
 
 import type {Rng} from '../core/rng';
@@ -47,6 +50,8 @@ import type {PropKind} from './props';
 import {isLootHolderKind, rollsPurposeTable} from '../items/loot';
 // Task track2-playtest-revision (lane ROOMS): room signatures + machinery, the room mix and the lean annex furniture rules
 import {ANNEX_RULES, assignAnnexRooms, placeAnnexMachinery, SIGNATURE_OF_PURPOSE, type AnnexMachine, type AnnexRoomPlan, type SignatureId} from './annexRooms';
+// Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): survivor caches deeper in
+import {placeAnnexCaches, type AnnexCacheRecord} from './annexCache';
 
 /**
  * Generated-model (iteration-07) placements the composition of ONE annex's corridors may add: the composer's own budget
@@ -122,7 +127,9 @@ export const ANNEX_CONTENT = {
 export interface ExtensionContentReport {
   annexes: {id: number; purposes: Record<string, number>; props: number; holders: number; stash: number; lights: number; pickups: number; service: {count: number; placed: number};
     /** (lane ROOMS) built room signatures (count per signature), machinery halls, assemblies, collision boxes, demoted signature rooms. */
-    signatures: Partial<Record<SignatureId, number>>; halls: number; machines: number; solids: number; demoted: number}[];
+    signatures: Partial<Record<SignatureId, number>>; halls: number; machines: number; solids: number; demoted: number;
+    /** (round 2, lane CACHE, R5) the annex's survivor caches (gen/annexCache.ts). */
+    caches: AnnexCacheRecord[]}[];
   tunnelLights: number;
   props: number; signs: number; lights: number; pickups: number; vents: number;
   /** Generation time of the pass (ms) and of its phases. */
@@ -169,6 +176,8 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
   // (lane ROOMS) the annexes only use iteration-07 kinds the core already places: no extra model download / GPU texture memory
   const coreKinds = new Set<string>();
   for (let i = 0; i < first.props; i++) if (isP7Kind(layout.props[i].kind)) coreKinds.add(layout.props[i].kind);
+  // (round 2, lane CACHE) the room-storage pass's annex-window place contexts, reused by the survivor caches (no second full-grid ctx)
+  const storageCtx = new Map<number, Map<number, PlaceCtx>>();
   const C = ANNEX_CONTENT, prio = (a: Area) => (a.kind === 'closet' ? 90 : a.kind === 'service' ? 95 : (k => (k < 0 ? 50 : k))(C.priority.indexOf(a.purpose ?? '')));
   for (const n of ext.annexes) {
     const areas = annexAreas(n).sort((p, q) => prio(p) - prio(q) || q.w * q.h - p.w * p.h || p.id - q.id);
@@ -191,7 +200,9 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
       phase,
     });
     rep.props += d.props; rep.signs += d.signs;
-    const added = placeRoomStorage(layout, annexAreas(n), root.fork(`storage:${n.id}`));
+    const sctx = new Map<number, PlaceCtx>();
+    storageCtx.set(n.id, sctx);
+    const added = placeRoomStorage(layout, annexAreas(n), root.fork(`storage:${n.id}`), sctx);
     rep.props += added;
     pickOver(layout, n, layout.props.length - d.props - added, new Set(stashes), root.fork(`loot:${n.id}`));
   }
@@ -226,6 +237,15 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
     }
   }
   phase('service');
+  // 7. (round 2, lane CACHE, R5) survivor caches deeper in (gen/annexCache.ts) — LAST and on their own forks, so every earlier record
+  // (dressing, loot keys and holder indices, lights, floor finds, vents, spawns) is unchanged; their cells are kept clear
+  const caches = new Map<number, AnnexCacheRecord[]>();
+  for (const n of ext.annexes) {
+    const p0 = layout.props.length;
+    caches.set(n.id, placeAnnexCaches(layout, n, annexAreas(n), coreKinds, root.fork(`cache:${n.id}`), {reuse: storageCtx.get(n.id), from: first}));
+    rep.props += layout.props.length - p0;
+  }
+  phase('cache');
   // report
   rep.lights = layout.lights.length - first.lights;
   rep.pickups = layout.pickups.length - first.pickups;
@@ -241,6 +261,7 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
       lights: layout.lights.slice(first.lights).filter(l => ids.has(l.area)).length, pickups: layout.pickups.slice(first.pickups).filter(p => ids.has(p.area)).length,
       service: svc.get(n.id) ?? {count: 0, placed: 0},
       signatures, halls: annexAreas(n).filter(a => a.extHall).length, machines: mr?.machines ?? 0, solids: mr?.solids ?? 0, demoted: mr?.demoted ?? 0,
+      caches: caches.get(n.id) ?? [],
     });
   }
   rep.ms = now() - t0;
@@ -365,13 +386,14 @@ function pickOver(layout: StationLayout, n: ServiceAnnex, from: number, stashes:
  * kinds in order, the first that fits against a wall through the dresser's own primitive: door zones, access strips,
  * connectivity). Returns the number placed. Its loot key comes from pickOver like every annex holder.
  */
-function placeRoomStorage(layout: StationLayout, areas: readonly Area[], rng: Rng): number {
+function placeRoomStorage(layout: StationLayout, areas: readonly Area[], rng: Rng, ctxs = new Map<number, PlaceCtx>()): number {
   const C = ANNEX_CONTENT.roomStorage, ids = new Set(areas.map(a => a.id));
   const has = new Set<number>();
   for (const p of layout.props) if (ids.has(p.area) && p.host === undefined && isLootHolderKind(p.kind)) has.add(p.area);
   const win = {x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity};
   for (const a of areas) { win.x0 = Math.min(win.x0, a.x - 4); win.y0 = Math.min(win.y0, a.y - 4); win.x1 = Math.max(win.x1, a.x + a.w + 3); win.y1 = Math.max(win.y1, a.y + a.h + 3); }
-  const ctxs = new Map<number, PlaceCtx>();
+  // (round 2, lane CACHE: `ctxs` may be the caller's map, so the survivor-cache pass reuses this annex-window context instead of
+  // building another full-grid one — same lazy creation, same rng, same placements)
   const ctxOf = (a: Area) => { const L = a.level ?? 0; let c = ctxs.get(L); if (!c) ctxs.set(L, (c = makePlaceCtx(layout, rng, L, win))); return c; };
   let n = 0;
   for (const a of areas) {
