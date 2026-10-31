@@ -161,6 +161,11 @@ export interface PickupPlacement {
   filter?: number;
   /** Task gas-mask-roof-feedback-20261030 (item 10): the curated find reward this pickup is (items/lootTables.ts ROOF_FIND_KEY). */
   reward?: string;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U11): resting yaw (rad) — a mall gun-shop gun lies along its display bench /
+   * rack (gen/mall/shopsWeapons.ts). Absent = the old seeded random yaw (game.ts buildSection still draws it: same stream).
+   */
+  yaw?: number;
 }
 export type ZombieType = 'shambler' | 'coated';
 export interface ZombieSpawn {

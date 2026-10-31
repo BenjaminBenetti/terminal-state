@@ -13,6 +13,10 @@
 //    shop brands coloured by program, escalators / stairs / elevator / washrooms, a "You are here" dot at the pylon);
 //  - WAYFINDING SIGNS (layout.signs, hung overhead, no collider): at every public run mouth — "Level N" up at the foot, "Level N" /
 //    "Subway" down at the head — and "Washrooms" over every public washroom passage mouth on the rings.
+// Task mall-playtest-revision-20261031 (lane ARCH): revised topology (station + 3 floors, corridor wings): a directory on EVERY storey
+// (anchor fallbacks: escalator -> stair -> elevator landing -> wayfinding links), the station-return chain (lane GEN's
+// wayfinding[].stationReturn) signed "Level k · Subway" at its run heads, and "Atrium · Escalators" signs inside every corridor wing
+// where it meets the atrium court (the way back from the branches).
 // Deterministic: candidates are scanned in a fixed order (no randomness; the rng parameter is reserved), so a seed always places the
 // same landmarks.
 
@@ -34,8 +38,10 @@ export const WAYFINDING = {y: 2.6, w: 1.3, out: 0.9} as const;
 export const WAYFINDING_STYLE: SignStyle = {bg: 0x1f2b38, fg: 0xf2efe6, accent: 0xd9a520, font: 'sans'};
 
 export interface LandmarkReport {
-  fountain: {x: number; z: number; half: number; area: number} | null;
+  fountain: {x: number; z: number; half: number; area: number; level: number} | null;
   pylons: {level: number; x: number; z: number; rot: number}[];
+  /** Storeys that got no directory (diagnostics: anchor count, reject reasons while trying that storey). */
+  pylonMiss: {level: number; anchors: number; rejects: Record<string, number>}[];
   signs: number;
   /** Candidates rejected per reason (diagnostics). */
   rejects: Record<string, number>;
@@ -89,7 +95,7 @@ function boxClear(ctx: PlaceCtx, x: number, z: number, hx: number, hz: number, r
 /** Places the mall's fountain, directory pylons and wayfinding signs (see the header). */
 export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkReport {
   void rng;
-  const rep: LandmarkReport = {fountain: null, pylons: [], signs: 0, rejects: {}};
+  const rep: LandmarkReport = {fountain: null, pylons: [], pylonMiss: [], signs: 0, rejects: {}};
   const why = (r: string) => { rep.rejects[r] = (rep.rejects[r] ?? 0) + 1; };
   const m = layout.mall;
   if (!m) return rep;
@@ -104,11 +110,26 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
   const doorFree = (x: number, z: number, hx: number, hz: number, y: number) => !propBlocksDoorway(layout, x, z, hx + 0.6, hz + 0.6, y, 2.2);
 
   // --- the fountain: the court of the pit bottom labelled 'Fountain court' (else the first great hall), nearest the void's mid line
+  // (task mall-playtest-revision: GEN's revised station courts may carry other roles — fall back to the public, non-platform station
+  // areas within 10 m of the atrium, largest first)
+  const pitPublic = layout.areas.filter(a => (a.level ?? 0) === m.void.floorLevel && a.publicSpace && a.kind !== 'platform' && !/track/i.test(a.label));
+  const nearVoid = (a: Area) => (a.x + a.w) * CELL > vb.x0 - 10 && a.x * CELL < vb.x1 + 10 && (a.y + a.h) * CELL > vb.z0 - 10 && a.y * CELL < vb.z1 + 10;
   const courtAreas = layout.areas.filter(a => (a.level ?? 0) === m.void.floorLevel && a.role === 'great-hall');
   const named = courtAreas.filter(a => /fountain/i.test(a.label));
-  const court = new Set((named.length ? named : courtAreas).map(a => a.id));
-  if (court.size) {
-    const lv = m.void.floorLevel, ctx = ctxOf(lv), g = ctx.g;
+  const fallback = pitPublic.filter(nearVoid).sort((a, b) => b.w * b.h - a.w * a.h || a.id - b.id);
+  // try the named court, the great halls, the public courts by the atrium, then any public station area (a crowded court: run mouths,
+  // dressing) until the fountain and its walkable ring fit
+  const courtSets: {lv: number; ids: Set<number>}[] = [named, courtAreas, fallback, pitPublic].filter(q => q.length).map(q => ({lv: m.void.floorLevel, ids: new Set(q.map(a => a.id))}));
+  // the revised station may be platforms + a narrow court: then the first floor's atrium court (under the skylight)
+  const floor1 = m.storeys.find(q => q.role === 'ring')?.level;
+  const court1 = floor1 !== undefined ? m.courts?.find(q => q.level === floor1)?.areas ?? [] : [];
+  if (floor1 !== undefined && court1.length) courtSets.push({lv: floor1, ids: new Set(court1)});
+  let court = courtSets[0]?.ids ?? new Set<number>();
+  for (const cset of courtSets) {
+    if (rep.fountain) break;
+    const cs = cset.ids;
+    court = cs;
+    const lv = cset.lv, ctx = ctxOf(lv), g = ctx.g;
     const mouths = mouthsOn(layout, lv);
     // track bed / platform-edge cells of the pit storey (keep 2 m off)
     const bed: V[] = [];
@@ -128,12 +149,14 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
         basin.y = base(lv);
         const spire = forceProp(ctx, a, 'fountainSpire', c.x, c.z, FOUNTAIN.spireHalf, FOUNTAIN.spireHalf, FOUNTAIN.spireH, false);
         spire.y = base(lv);
-        rep.fountain = {x: c.x, z: c.z, half: size.half, area: ai};
+        rep.fountain = {x: c.x, z: c.z, half: size.half, area: ai, level: lv};
         break;
       }
       if (rep.fountain) break;
     }
   }
+  // the pylons' "court" = the station's court set (the fountain's when it stands there)
+  court = (rep.fountain && rep.fountain.level === m.void.floorLevel ? courtSets.find(cs => cs.ids.has(rep.fountain!.area))?.ids : courtSets.find(cs => cs.lv === m.void.floorLevel)?.ids) ?? new Set<number>();
 
   // --- directory pylons: the pit court near its escalator feet, every ring near an escalator head ------------------------------
   const frontZones = m.shops.map(s => {
@@ -147,24 +170,50 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
   });
   for (const st of m.storeys) {
     const lv = st.level, ctx = ctxOf(lv);
-    const anchors = m.verticals.filter(v => v.kind === 'escalator' && (lv === m.void.floorLevel ? v.lower === lv : v.upper === lv))
+    // anchors (task mall-playtest-revision: fallbacks so EVERY storey gets its directory): escalator heads (the station: feet), then
+    // public stairs, then the elevator landing, then the storey's wayfinding link stand points
+    const runEnd = (kind: string) => m.verticals.filter(v => v.kind === kind && (lv === m.void.floorLevel ? v.lower === lv : v.upper === lv))
       .map(v => (lv === m.void.floorLevel && v.lower === lv ? {x: v.foot.x, z: v.foot.z, dir: {x: v.foot.x - v.head.x, z: v.foot.z - v.head.z}} : {x: v.head.x, z: v.head.z, dir: {x: v.head.x - v.foot.x, z: v.head.z - v.foot.z}}));
-    if (!anchors.length) continue;
+    const lift = m.elevators.flatMap(e => {
+      const c = {x: (e.shaft.x0 + e.shaft.x1) / 2, z: (e.shaft.z0 + e.shaft.z1) / 2}, vz = (m.void.bounds.z0 + m.void.bounds.z1) / 2;
+      const n = c.z < vz ? -1 : 1, edge = n < 0 ? e.shaft.z0 : e.shaft.z1;
+      return e.stops.some(q => q.level === lv) ? [{x: c.x, z: edge, dir: {x: 0, z: n}}] : [];
+    });
+    const links = (m.wayfinding?.find(w => w.level === lv)?.links ?? []).map(k => ({x: k.at.x, z: k.at.z, dir: {x: k.at.x - vc.x, z: k.at.z - vc.z}}));
+    const anchors = [...runEnd('escalator'), ...runEnd('stair'), ...lift, ...links];
+    const before = {...rep.rejects};
+    if (!anchors.length) { rep.pylonMiss.push({level: lv, anchors: 0, rejects: {}}); continue; }
     const mouths = mouthsOn(layout, lv);
     const lvRails = rails.filter(r => r.level === lv);
-    const ok = (id: number) => id >= 0 && (galleries.has(id) || court.has(id) || ((layout.areas[id]?.publicSpace ?? false) && layout.areas[id]?.role === 'great-hall'));
+    // public walkways: the galleries / courts / corridors of a floor; on the station storey any public court (never a platform)
+    const ok = (id: number) => id >= 0 && (galleries.has(id) || court.has(id) || ((layout.areas[id]?.publicSpace ?? false)
+      && (layout.areas[id]?.role === 'great-hall' || (lv === m.void.floorLevel && layout.areas[id]?.kind !== 'platform'))));
     let placed = false;
-    for (const an of anchors) {
-      const dl = Math.hypot(an.dir.x, an.dir.z) || 1, ux = an.dir.x / dl, uz = an.dir.z / dl;
-      // candidates: a fan beyond the mouth (along the run direction, then sideways), nearest to 4.5 m first
+    const faceTo = (an: V, x: number, z: number) => { const toX = an.x - x, toZ = an.z - z; return Math.abs(toZ) >= Math.abs(toX) ? (toZ >= 0 ? 0 : Math.PI) : (toX >= 0 ? Math.PI / 2 : -Math.PI / 2); };
+    // the last resort (a crowded court): every public cell within 12 m of an anchor, nearest to 4.5 m of one first
+    const wide = {x: 0, z: 0, dir: {x: 0, z: 0}, wide: true};
+    for (const an of [...anchors, wide]) {
       const cand: (V & {rot: number})[] = [];
-      for (let d = PYLON.near; d <= PYLON.far + 1e-6; d += 0.5) for (const side of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
-        const x = an.x + ux * d - uz * side, z = an.z + uz * d + ux * side;
-        const toX = an.x - x, toZ = an.z - z;
-        const rot = Math.abs(toZ) >= Math.abs(toX) ? (toZ >= 0 ? 0 : Math.PI) : (toX >= 0 ? Math.PI / 2 : -Math.PI / 2);
-        cand.push({x: Math.round(x / CELL) * CELL, z: Math.round(z / CELL) * CELL, rot});
+      if ((an as {wide?: boolean}).wide) {
+        const g = ctx.g;
+        for (let cy = 0; cy < g.h; cy++) for (let cx = 0; cx < g.w; cx++) {
+          const i = g.idx(cx, cy);
+          if (g.cells[i] !== FLOOR || !ok(g.area[i])) continue;
+          const x = (cx + 1) * CELL, z = (cy + 1) * CELL;
+          let best: V | null = null, bd = Infinity;
+          for (const a of anchors) { const d = Math.abs(Math.sqrt(d2(a, {x, z})) - 4.5); if (d < bd) { bd = d; best = a; } }
+          if (best && Math.sqrt(d2(best, {x, z})) <= 12) cand.push({x, z, rot: faceTo(best, x, z)});
+        }
+        cand.sort((p, q) => Math.min(...anchors.map(a => Math.abs(Math.sqrt(d2(p, a)) - 4.5))) - Math.min(...anchors.map(a => Math.abs(Math.sqrt(d2(q, a)) - 4.5))) || p.x - q.x || p.z - q.z);
+      } else {
+        const dl = Math.hypot(an.dir.x, an.dir.z) || 1, ux = an.dir.x / dl, uz = an.dir.z / dl;
+        // candidates: a fan beyond the mouth (along the run direction, then sideways), nearest to 4.5 m first
+        for (let d = PYLON.near; d <= PYLON.far + 1e-6; d += 0.5) for (const side of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+          const x = an.x + ux * d - uz * side, z = an.z + uz * d + ux * side;
+          cand.push({x: Math.round(x / CELL) * CELL, z: Math.round(z / CELL) * CELL, rot: faceTo(an, x, z)});
+        }
+        cand.sort((p, q) => Math.abs(Math.sqrt(d2(p, an)) - 4.5) - Math.abs(Math.sqrt(d2(q, an)) - 4.5) || p.x - q.x || p.z - q.z);
       }
-      cand.sort((p, q) => Math.abs(Math.sqrt(d2(p, an)) - 4.5) - Math.abs(Math.sqrt(d2(q, an)) - 4.5) || p.x - q.x || p.z - q.z);
       for (const c of cand) {
         const quarter = Math.abs(Math.sin(c.rot)) > 0.5;
         const hx = (quarter ? PYLON.d : PYLON.w) / 2, hz = (quarter ? PYLON.w : PYLON.d) / 2;
@@ -173,7 +222,7 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
         if (frontZones.some(f => f.level === lv && c.x + hx > f.x0 && c.x - hx < f.x1 && c.z + hz > f.z0 && c.z - hz < f.z1)) { why('pylon-entry'); continue; }
         // the fountain keeps its whole clearance ring (and the pylon its own beyond it)
         const fr = rep.fountain ? rep.fountain.half + (rep.fountain.half >= FOUNTAIN.half ? FOUNTAIN.ring : FOUNTAIN_SMALL.ring) + PYLON.ring : 0;
-        if (rep.fountain && lv === m.void.floorLevel && Math.abs(c.x - rep.fountain.x) < fr + hx && Math.abs(c.z - rep.fountain.z) < fr + hz) { why('pylon-fountain'); continue; }
+        if (rep.fountain && lv === rep.fountain.level && Math.abs(c.x - rep.fountain.x) < fr + hx && Math.abs(c.z - rep.fountain.z) < fr + hz) { why('pylon-fountain'); continue; }
         if (!boxClear(ctx, c.x, c.z, hx, hz, PYLON.ring, ok, r => why(`pylon-${r}`))) continue;
         if (!doorFree(c.x, c.z, hx, hz, base(lv))) { why('pylon-door'); continue; }
         const a = layout.areas[areaAt(lv, c.x, c.z)] as Area;
@@ -185,6 +234,11 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
         break;
       }
       if (placed) break;
+    }
+    if (!placed) {
+      const diff: Record<string, number> = {};
+      for (const [k, n] of Object.entries(rep.rejects)) if (n !== (before[k] ?? 0)) diff[k] = n - (before[k] ?? 0);
+      rep.pylonMiss.push({level: lv, anchors: anchors.length, rejects: diff});
     }
   }
 
@@ -198,6 +252,13 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
     else { b.foot.x += v.foot.x; b.foot.z += v.foot.z; b.head.x += v.head.x; b.head.z += v.head.z; b.n++; }
   }
   const label = (lv: number) => (lv === m.void.floorLevel ? 'Subway' : `Level ${lv}`);
+  // task mall-playtest-revision (station-return wayfinding): the runs of each storey's public way down to the station (lane GEN's
+  // wayfinding[].stationReturn) are signed "Level k · Subway" at their head, so the chain down is readable floor by floor
+  const returnRun = new Set<string>();
+  for (const w of m.wayfinding ?? []) for (const step of w.stationReturn) {
+    const v = m.verticals[step.vertical];
+    if (v && step.to !== m.void.floorLevel) returnRun.add(`${v.kind}|${v.lower}|${v.upper}|${Math.round(v.foot.x / 4)}|${Math.round(v.foot.z / 4)}`);
+  }
   const sign = (lv: number, at: V, face: V, text: string, arrow: SignPlacement['arrow']) => {
     const ai = areaAt(lv, at.x, at.z);
     if (ai < 0) return;
@@ -205,13 +266,41 @@ export function placeMallLandmarks(layout: StationLayout, rng: Rng): LandmarkRep
       level: lv, style: WAYFINDING_STYLE});
     rep.signs++;
   };
-  for (const b of [...banks.values()].sort((p, q) => p.lower - q.lower || p.foot.x - q.foot.x || p.foot.z - q.foot.z)) {
+  for (const [key, b] of [...banks.entries()].sort(([, p], [, q]) => p.lower - q.lower || p.foot.x - q.foot.x || p.foot.z - q.foot.z)) {
     const foot = {x: b.foot.x / b.n, z: b.foot.z / b.n}, head = {x: b.head.x / b.n, z: b.head.z / b.n};
     const dl = Math.hypot(head.x - foot.x, head.z - foot.z) || 1, ux = (head.x - foot.x) / dl, uz = (head.z - foot.z) / dl;
     // at the foot (lower storey), beyond the mouth, facing the walker who approaches it: "Level <upper>" up
     sign(b.lower, {x: foot.x - ux * WAYFINDING.out, z: foot.z - uz * WAYFINDING.out}, {x: -ux, z: -uz}, label(b.upper), 'up');
-    // at the head (upper storey): "Level <lower>" / "Subway" down
-    sign(b.upper, {x: head.x + ux * WAYFINDING.out, z: head.z + uz * WAYFINDING.out}, {x: ux, z: uz}, label(b.lower), 'down');
+    // at the head (upper storey): "Level <lower>" / "Subway" down ("Level <lower> · Subway" on the way back to the station)
+    sign(b.upper, {x: head.x + ux * WAYFINDING.out, z: head.z + uz * WAYFINDING.out}, {x: ux, z: uz}, returnRun.has(key) ? `${label(b.lower)} · Subway` : label(b.lower), 'down');
+  }
+  // corridor wings / branches beyond the atrium: where a corridor meets the atrium court, a sign inside the corridor facing a walker
+  // on the way out of it — "Atrium · Escalators" ahead (task mall-playtest-revision: the way back from every branch)
+  for (const st of m.storeys) {
+    const lv = st.level, g = levels[lv]?.grid;
+    const corr = new Set(m.corridors?.find(q => q.level === lv)?.areas ?? []), courts = new Set(m.courts?.find(q => q.level === lv)?.areas ?? []);
+    if (!g || !corr.size || !courts.size) continue;
+    const joins = new Map<number, {x: number; z: number; nx: number; nz: number; n: number}>();
+    for (let cy = 1; cy < g.h - 1; cy++) for (let cx = 1; cx < g.w - 1; cx++) {
+      const i = g.idx(cx, cy), a = g.area[i];
+      if (!corr.has(a) || g.cells[i] !== FLOOR) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const j = g.idx(cx + dx, cy + dy);
+        if (!courts.has(g.area[j]) || g.cells[j] !== FLOOR) continue;
+        let q = joins.get(a);
+        if (!q) joins.set(a, (q = {x: 0, z: 0, nx: 0, nz: 0, n: 0}));
+        q.x += (cx + 0.5) * CELL; q.z += (cy + 0.5) * CELL; q.nx -= dx; q.nz -= dy; q.n++;
+      }
+    }
+    for (const [a, q] of [...joins.entries()].sort((p, r) => p[0] - r[0])) {
+      if (q.n < 3) continue;
+      const jx = q.x / q.n, jz = q.z / q.n;
+      // the dominant axis of the corridor's direction away from the court
+      const n = Math.abs(q.nx) >= Math.abs(q.nz) ? {x: Math.sign(q.nx), z: 0} : {x: 0, z: Math.sign(q.nz)};
+      const at = {x: jx + n.x * 2.5, z: jz + n.z * 2.5};
+      if (areaAt(lv, at.x, at.z) !== a) continue;
+      sign(lv, at, n, 'Atrium · Escalators', 'up');
+    }
   }
   for (const a of layout.areas) {
     if (!a.publicSpace || !/washroom/i.test(a.label) || a.kind !== 'passage' || (a.level ?? 0) === m.void.floorLevel) continue;

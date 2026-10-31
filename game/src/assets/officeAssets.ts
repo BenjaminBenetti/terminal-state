@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {assetUrl} from './loader';
+import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy'; // lane FIX (U08)
 
 export type OfficeAssetId = 'gear-armor-vest' | 'gear-chest-rig' | 'gear-backpack' | 'gear-helmet' | 'gear-boots' | 'gear-gloves'
   | 'med-leg-splint' | 'med-arm-sling'
@@ -160,6 +161,9 @@ export function loadOfficeAsset(id: OfficeAssetId): Promise<GLTF | null> {
   return p;
 }
 
+/** Task mall-playtest-revision-20261031 (lane FIX, U08): office textures that map floors / walls / ceilings (16x requested). */
+export const OFFICE_TEXTURE_ROLE: Partial<Record<OfficeTextureId, SurfaceRole>> = {'office-wall': 'wall', 'office-carpet': 'floor', 'ceiling-tile': 'ceiling'};
+
 /** Loads (once, cached per id) an office texture with its colour space / wrapping set; null when absent or on error. Never throws. */
 export function loadOfficeTexture(id: OfficeTextureId): Promise<THREE.Texture | null> {
   let p = textureCache.get(id);
@@ -173,6 +177,9 @@ export function loadOfficeTexture(id: OfficeTextureId): Promise<THREE.Texture | 
       t.wrapS = spec.tileable || id === 'skyline' ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
       t.wrapT = spec.tileable ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
       t.anisotropy = 4;
+      // lane FIX (U08): the office's architectural maps (wall, carpet floor, ceiling tile) request 16x; others keep 4x
+      const role = OFFICE_TEXTURE_ROLE[id];
+      if (role) requestSurfaceAnisotropy(t, role);
       return t;
     } catch {
       return null;

@@ -1,7 +1,7 @@
 import {Game, type GameState} from './game';
 import {AssetLoadError} from './assets/loader';
 import {codeToSeed} from './core/rng';
-import {LEVELS, isLevelId, sectionLabel, travelTargets} from './levels/registry'; // Iteration 16 (lane RUN); + travelTargets (task track3-eaton-centre-20261031, lane GEN: three levels)
+import {LEVELS, isLevelId, levelDisplayName, sectionLabel, travelTargets} from './levels/registry'; // Iteration 16 (lane RUN); + travelTargets (task track3-eaton-centre-20261031, lane GEN: three levels)
 import type {LevelId} from './levels/types';
 import {setMallVariantOverride} from './gen/mall/frame'; // Task track3-eaton-centre-20261031 (lane GEN): QA ?mallVariant=
 import {renderControls} from './ui/hud';
@@ -65,16 +65,18 @@ async function boot(): Promise<void> {
   const closeConfirms = () => { for (const c of confirms) $(c).classList.add('hidden'); };
   const openConfirm = (id: string) => { closeConfirms(); $(id).classList.remove('hidden'); };
   for (const b of document.querySelectorAll<HTMLButtonElement>('.confirm .btn-cancel')) b.addEventListener('click', closeConfirms);
+  // task mall-playtest-revision-20261031 (lane GEN): run-aware display names (the mall's seeded "<Name> Center")
+  const nameOf = (l: LevelId) => levelDisplayName(l, game.run?.seeds?.[l]);
   // Task track3-eaton-centre-20261031 (lane GEN): every other level is a travel target (slot 0 = the old "other level").
   const travelTo = (to: LevelId) => {
     closeConfirms();
-    void game.travel({to: {level: to, section: LEVELS[to].entry}, arrival: {kind: 'start'}, label: `Travelling to ${LEVELS[to].name}`, via: 'menu'});
+    void game.travel({to: {level: to, section: LEVELS[to].entry}, arrival: {kind: 'start'}, label: `Travelling to ${nameOf(to)}`, via: 'menu'});
   };
   let travelTarget: LevelId | null = null;
   ['#btn-travel', '#btn-travel-2'].forEach((id, slot) => $(id).addEventListener('click', () => {
     travelTarget = travelTargets(game.run.current.level)[slot] ?? null;
     if (!travelTarget) return;
-    $('#confirm-travel .to').textContent = LEVELS[travelTarget].name;
+    $('#confirm-travel .to').textContent = nameOf(travelTarget);
     openConfirm('#confirm-travel');
   }));
   $('#btn-travel-go').addEventListener('click', () => { if (travelTarget) travelTo(travelTarget); });
@@ -99,17 +101,24 @@ async function boot(): Promise<void> {
     if (s !== 'paused' && s !== 'dead' && s !== 'won') return;
     closeConfirms();
     const cur = game.run.current, targets = travelTargets(cur.level), other = targets[0];
-    targets.forEach((t, slot) => { for (const id of slot ? ['#btn-travel-2', '#btn-win-travel-2'] : ['#btn-travel', '#btn-win-travel']) $(id).textContent = `Travel to ${LEVELS[t].name}`; });
-    $('#confirm-travel .to').textContent = LEVELS[other].name;
-    $('#pause-run').textContent = `This run: ${LEVELS[cur.level].name} · ${sectionLabel(cur)}. Travelling keeps everything you carry and your condition; only New game resets them. Nothing is saved when the page reloads.`;
+    targets.forEach((t, slot) => { for (const id of slot ? ['#btn-travel-2', '#btn-win-travel-2'] : ['#btn-travel', '#btn-win-travel']) $(id).textContent = `Travel to ${nameOf(t)}`; });
+    $('#confirm-travel .to').textContent = nameOf(other);
+    $('#pause-run').textContent = `This run: ${nameOf(cur.level)} · ${sectionLabel(cur)}. Travelling keeps everything you carry and your condition; only New game resets them. Nothing is saved when the page reloads.`;
+    // a new game rolls fresh seeds: the static (generic) names
     $('#btn-death-new').textContent = `New game · ${LEVELS[cur.level].name}`;
     $('#btn-death-new-other').textContent = `New game · ${LEVELS[other].name}`;
     if (targets[1]) $('#btn-death-new-third').textContent = `New game · ${LEVELS[targets[1]].name}`;
     const entry = game.run.entry;
     $('#death-note').textContent = entry
-      ? `Retry level puts you back where you entered ${LEVELS[entry.level].name}, exactly as you were then — the same kit, health, food and water, battery and injuries (no free heal or refill) — and the level as you found it. New game resets everything.`
+      ? `Retry level puts you back where you entered ${nameOf(entry.level)}, exactly as you were then — the same kit, health, food and water, battery and injuries (no free heal or refill) — and the level as you found it. New game resets everything.`
       : 'New game resets everything.';
-    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? "The Eaton's Center clear" : 'Station clear';
+    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : 'Station clear';
+  });
+  // task mall-playtest-revision-20261031 (lane GEN): the title's mall card names the prepared run's seeded mall
+  game.stateListeners.push((s: GameState) => {
+    if (s !== 'title') return;
+    const b = document.querySelector('.level-card[data-level="mall"] b');
+    if (b) b.textContent = nameOf('mall');
   });
   // the title's level choice (before the run starts): rebuilds the prepared run's start (same seeds) and warms it up
   const choice = document.querySelectorAll<HTMLButtonElement>('.level-card');
@@ -188,7 +197,7 @@ async function boot(): Promise<void> {
   // Iteration 07 (Lane P2): only this section's lazy prop models are fetched (with progress) before it is built and revealed.
   // Iteration 14 (primary): its pipelines, shadow variants, fog passes, held items and effects are prepared on the loading
   // screen (render/warmup.ts) before "Start run" becomes available; partial / failed results say so.
-  // (task track3-eaton-centre-20261031, lane GEN: + ?mallSeed=CODE for The Eaton's Center; ?level=mall starts there; QA-only
+  // (task track3-eaton-centre-20261031, lane GEN: + ?mallSeed=CODE for the mall (seeded "<Name> Center"); ?level=mall starts there; QA-only
   // ?mallVariant=galleria|oval-court|cross-galleria forces the mall's layout variant for this session)
   setMallVariantOverride(params.get('mallVariant'));
   const warm = await game.newGame(startLevel, {seeds: {subway: seedOf('seed'), office: seedOf('officeSeed'), mall: seedOf('mallSeed')},

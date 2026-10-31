@@ -31,7 +31,9 @@ import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input wal
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
 import {renderStats} from './render/backend'; // Iteration 13 (CORE)
-import {probeDecayGPU, type DecayProbe} from './world/decay'; // Iteration 13 (MAT-A): decay inputs as the GPU sees them
+import {decayDetailTexture, probeDecayGPU, type DecayProbe} from './world/decay'; // Iteration 13 (MAT-A): decay inputs as the GPU sees them
+import {anisotropyReport, observeBackendAnisotropy} from './render/anisotropy'; // Task mall-playtest-revision-20261031 (lane FIX, U08)
+import {anisotropyCapability} from './render/softwareGl'; // (lane FIX, U08)
 import {seedToCode} from './core/rng'; // Iteration 16 (lane RUN)
 import {memorySummary} from './run/memory'; // Iteration 16 (lane RUN)
 import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
@@ -43,6 +45,7 @@ import {SPAN_ABOUT, SPAN_COUNT} from './debug/updateProfile'; // Task frame-budg
 export function installQaHooks(game: Game): void {
   // task office-props-physics-scale-20261030 (lane PHYS): the goWalkInto target (walkIntoCheck)
   let walkInto: {prop: PropPlacement; index: number; x: number; z: number; contacts: number; shots: number; lots: number} | null = null;
+  let columnTarget: PropPlacement | null = null; // Task mall-playtest-revision-20261031 (lane FIX, U04): goColumn / columnCheck
   const api = {
     ready: () => game.state !== 'loading' && !!game.layout,
     state: () => game.state,
@@ -412,6 +415,13 @@ export function installQaHooks(game: Game): void {
      * {backend: 'webgpu' | 'webgl2-fallback', adapter, reason, requested, webgpuApi, glRenderer, label, deviceLost, errors, …}.
      */
     gpu: () => gpuQa(),
+    /**
+     * Task mall-playtest-revision-20261031 (lane FIX, U08): floor / wall / ceiling texture anisotropy on the ACTIVE backend —
+     * {backend, software, requested (16), supported (WebGL: EXT max; WebGPU: 16 spec clamp), supportedSource, cap, capReason,
+     * effective, roles: {floor | wall | ceiling | architecture | detail | other: {textures, requested: {value: n}, effective: {value: n}}},
+     * observed: {api: 'createSampler' | 'texParameterf', values: {anisotropy: count}} (what three handed the API), note}.
+     */
+    anisotropy: () => anisotropyReport(anisotropyCapability(game.softwareGl), game.scene, game.renderer.initialized ? observeBackendAnisotropy(game.renderer.backend) : null, [decayDetailTexture()]),
     /** Iteration 14: the loading-screen render warm-up's result (status, mode, plan counts, per-stage done / total / ms) and whether one runs now. */
     warmup: () => ({running: game.warming, result: game.warmup}),
     /**
@@ -601,6 +611,40 @@ export function installQaHooks(game: Game): void {
         }
       }
       return null;
+    },
+    /**
+     * Task mall-playtest-revision-20261031 (lane FIX, U04): stand 1.5 m off a round atrium column (layout props of kind
+     * 'atriumColumn', round: true — the `i`-th, else the nearest on the player's storey) on a free side, facing its centre at chest
+     * height. Then hold W (a real key) ~1 s and / or fire, and read columnCheck(). Returns the target or null.
+     */
+    goColumn: (i?: number) => {
+      const p = game.player, L = game.levels, props = game.layout.props;
+      const all = props.filter(q => q.kind === 'atriumColumn');
+      const lv = Math.max(0, L.levelAt(p.x, p.z, p.y + 0.05));
+      const list = i !== undefined ? all.slice(i, i + 1) : all.filter(q => (q.level ?? 0) === lv).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+      for (const c of [...list, ...(i === undefined ? all : [])]) {
+        for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (!api.teleport(c.x + ax * 1.5, c.z + az * 1.5, undefined, c.level ?? 0)) continue;
+          if (Math.hypot(p.x - (c.x + ax * 1.5), p.z - (c.z + az * 1.5)) > 0.2) continue;
+          api.lookAt(c.x, c.y + 1.4, c.z);
+          columnTarget = c;
+          return {index: all.indexOf(c), count: all.length, level: c.level ?? 0, at: {x: c.x, y: c.y, z: c.z}, r: c.hx, h: +c.h.toFixed(2), round: c.round === true,
+            hint: 'hold W ~1 s (contact stops at 0.64 m from the axis), fire at it, then __LL.columnCheck()'};
+        }
+      }
+      return null;
+    },
+    /** Lane FIX (U04): the goColumn target — player distance to its axis, contact (<= 0.30 + r + 2 cm) and what a bullet along the view hits. */
+    columnCheck: () => {
+      const c = columnTarget;
+      if (!c) return null;
+      const p = game.player, cam = game.camera;
+      const dir = cam.getWorldDirection(new THREE.Vector3());
+      const o = cam.getWorldPosition(new THREE.Vector3());
+      const hit = game.levels.raycast({x: o.x, y: o.y, z: o.z}, {x: dir.x, y: dir.y, z: dir.z}, 40, {props: game.layout.props});
+      const dist = Math.hypot(p.x - c.x, p.z - c.z);
+      return {dist: +dist.toFixed(3), contactDist: +(p.radius + c.hx).toFixed(3), touching: dist <= p.radius + c.hx + 0.02,
+        ray: {kind: hit.kind, t: +hit.t.toFixed(3), column: hit.prop !== undefined && game.layout.props[hit.prop] === c, prop: hit.prop !== undefined ? game.layout.props[hit.prop].kind : null}};
     },
     /** Lane PHYS: the goWalkInto target now — loose, how far it moved, contact wakes / shots since, prop physics + reclaim counters. */
     walkIntoCheck: () => {

@@ -21,7 +21,7 @@ import {shapeMaterial} from '../world/shapeMaterials';
 import {StaticQuery} from '../physics/staticQuery';
 import type {Grid} from '../gen/grid';
 import {raySphere, rayCapsule, type HitInfo, type Vec3, type WorldHit} from '../combat/hitscan';
-import {CHUNK_PHYS, DAMAGE_MATERIALS, STRUCTURAL_CLASS, itemClass, structuralKeyAt, type DamageClass, type StructuralKey} from './materials';
+import {CHUNK_PHYS, DAMAGE_MATERIALS, STRUCTURAL_CLASS, itemClass, ridesHost, structuralKeyAt, type DamageClass, type StructuralKey} from './materials'; // (+ ridesHost: task mall-playtest-revision-20261031, lane SHOPS U05)
 import {DebrisSystem, type DebrisSpawn} from './debris';
 import {CraterField} from './craters';
 import {PropDamage, type PropBreakEvent, type PropDamageHooks} from './propDamage';
@@ -171,6 +171,10 @@ export class DamageSystem {
       // Iteration 07: a light prop (trash can …) takes the shot's impulse at the hit point and goes loose
       if (!r.rubble && this.physics?.world && this.physics.dynamicItems.isDynamicProp(prop)) {
         if (this.physics.dynamicItems.shootProp(prop, wh.prop, r.point, dir, shot.damage * SHOT_IMPULSE_PER_DAMAGE)) this.counts.propsShoved++;
+      } else if (!r.rubble && this.physics?.world && prop.host !== undefined && ridesHost(prop.kind)) {
+        // Task mall-playtest-revision-20261031 (lane SHOPS, U05): a shot into garments hung on a garment rail shoves the rail they ride
+        const host = L.props[prop.host];
+        if (host && this.physics.dynamicItems.isDynamicProp(host) && this.physics.dynamicItems.shootProp(host, prop.host, r.point, dir, shot.damage * SHOT_IMPULSE_PER_DAMAGE)) this.counts.propsShoved++;
       }
       if (!r.rubble) {
         this.counts.prop++;

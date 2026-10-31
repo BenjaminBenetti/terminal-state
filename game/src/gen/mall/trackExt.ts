@@ -18,17 +18,18 @@ import type {TrackExtContext} from '../trackExt/types';
 export {isExtensionArea} from '../trackExt/types';
 
 /**
- * Grid cell budget (W x H) of the mall layout WITH its extensions (TrackExtContext.maxCells). The core mall grid is ~39-51k cells
- * (measured, 3 variants x 3 seeds; 7 storey grids of the same size); tunnels + annexes east / south of it may grow the grid to at
- * most 75k cells (~1.5-1.9x: per-level arrays — nav, decay, light / sky tops, the seven storey grids — scale with it).
+ * Grid cell budget (W x H) of the mall layout WITH its extensions (TrackExtContext.maxCells). Task mall-playtest-revision-20261031:
+ * the compact mall's core grid is ~26-33k cells (measured: 3 variants x 6 seeds; 4 storey grids of the same size; Track3: 39-52k x
+ * 7 grids) — the east tunnel + its annex may grow the grid to at most 75k cells (37-75k measured; per-level arrays scale with it; an
+ * extension that does not fit is simply not planned).
  */
 export const MALL_EXT_MAX_CELLS = 75_000;
 
 /**
  * The mall's extendTracks context: east / south growth only, from the fixed crop origin (canvas cells). OPTIONAL lane INTEG
- * addition: rockLevels [0] — only the pit station's storey must be rock around an extension; the rings (>= 5 m above the 4.4 m bed
- * ceiling, slabs between) may stand above a tunnel / annex (never their atrium void). Without it every bed end is "blocked at the
- * mouth" (the rings overhang the whole station).
+ * addition: rockLevels [0] — only the station's storey must be rock around an extension; the retail floors (>= 5 m above the 4.4 m
+ * bed ceiling, slabs between) may stand above a tunnel / annex (never their atrium openings: those lie over the station block).
+ * Without it a bed end under a retail floor is "blocked at the mouth". At most ONE annex (TRACK_EXT_MALL annex.max 1).
  */
 export function mallTrackExtContext(ox: number, oy: number): TrackExtContext {
   return {levelId: 'mall', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS, rockLevels: [0]};

@@ -33,7 +33,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {surface, type SurfaceName} from './canvasTextures';
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
-import {floorLabel, gateWorld, sideNormal, wallBox, type Box3Like, type DoorGate, type ElevatorInfo, type P3, type Rect2} from './towerShared';
+import {floorLabel, gateLocal, gateWorld, sideNormal, wallBox, type Box3Like, type DoorGate, type ElevatorInfo, type P3, type Rect2} from './towerShared';
 
 // ---------------------------------------------------------------------------------------------
 // Tuning
@@ -974,6 +974,132 @@ export function flickerLevel(t: number): number {
   return s > 1.3 ? (Math.sin(t * 57) > 0.2 ? 0.22 : 0.85) : 0.93;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Task mall-playtest-revision-20261031 (lane ARCH, U07: "elevator needs ropes pulling it up and down ... more detailing"): the glass
+// car's suspension and shaft equipment — glass views ONLY (the Office car / shaft never reach this: buildElevatorView gates it).
+//  - a fixed machine bed under the shaft's machine head (GLASS_RIG.headroom above the top stop) carrying the traction sheave over
+//    the car rope drop and a deflector sheave over the counterweight, the rope run between them;
+//  - hoist ropes from the traction sheave's tangent down to the car's crosshead hitch: the top is fixed, the length follows the car
+//    exactly at every stop and in motion;
+//  - a counterweight in the wider side gap on its own rails, roped 1:1 (car rope + counterweight rope = constant: it moves opposite);
+//  - T guide rails on both car sides (pit floor -> machine bed) with brackets, a car sling (stiles, crosshead, safety plank, hitch
+//    plate) with guide shoes on the rails, top / bottom fascia bands and glass mullions on the car;
+//  - a travelling cable hanging in a U-loop from mid-shaft to the car's underside (its bend moves at half the car's speed);
+//  - the pit (floor, walls, spring buffers) and a dark inner skin of the landing wall with the door holes (the shaft is never a
+//    see-through wall from the glass sides).
+// Pure plan (planGlassRig) + view pieces; no lights; bounded draw calls (one static rig mesh, five moving meshes, the sling).
+
+/** Glass-lift rig dimensions (m). */
+export const GLASS_RIG = {
+  /** Machine head underside above the top stop floor, and its height (lane ARCH's shaft tower draws the housing there). */
+  headroom: 3.4, headH: 1.2,
+  /** Pit floor below the bottom stop floor. */
+  pit: 0.6,
+  /** Crosshead hitch above the cab's interior height (cabH). */
+  hitch: 0.34,
+  /** Hoist ropes per cluster, radius, spacing (along the sheave axis). */
+  ropes: 4, ropeR: 0.0065, ropePitch: 0.045,
+  /** Traction sheave / deflector sheave radii; the sheave centre below the machine head underside. */
+  sheaveR: 0.24, deflR: 0.13, sheaveDrop: 0.32,
+  /** Counterweight: height, thickness (across the gap), width (along the side), the least side gap that holds it, its lowest
+   *  clearance above the bottom stop floor (when the car is at the top). */
+  cw: {h: 1.8, t: 0.16, w: 0.62, gapMin: 0.3, bottomClear: 0.35},
+  /** Guide rail blade / flange size. */
+  rail: 0.07,
+  /** Safety plank depth under the car floor (the sling's bottom). */
+  plank: 0.2,
+} as const;
+
+export interface GlassRig {
+  /** Bottom / top stop floor, the pit floor, the machine head underside, the traction sheave centre (absolute y). */
+  y0: number; yN: number; pitY: number; headY: number; sheaveY: number;
+  /** Shaft interior in the car frame (CabFrame): l0..l1 along the door wall, w0 (the landing face, = -gate.depth) .. w1 (rear). */
+  shaft: {l0: number; l1: number; w0: number; w1: number};
+  /** Car rope drop (frame l, w) and its hitch above the cab floor. */
+  car: {l: number; w: number; hitch: number};
+  /** Rope offsets (frame w) within a cluster (the sheave grooves). */
+  ropeW: number[];
+  /** Side of the counterweight / traction sheave offset (+1: +l), the counterweight (frame centre, height, thickness along l, width
+   *  along w; null: no side gap holds it) and the deflector centre. */
+  side: 1 | -1;
+  cw: {l: number; w: number; h: number; t: number; d: number} | null;
+  defl: {l: number; y: number} | null;
+  /** Traction sheave centre l (frame). */
+  sheaveL: number;
+  /** Car guide rail centre lines (blade toward the car along l) and counterweight rails (blade toward the weight along w). */
+  carRails: {l: number; w: number; face: 1 | -1}[];
+  cwRails: {l: number; w: number; face: 1 | -1}[];
+  /** Travelling cable: frame w of the run, car-leg / wall-leg l, fixed top y, length (excluding the bend), bend radius. */
+  cable: {w: number; lCar: number; lWall: number; fixY: number; len: number; r: number};
+}
+
+/** Counterweight top (absolute y) with the car floor at y: 1:1 roping (car rope + counterweight rope = constant). */
+export function rigCwTop(r: GlassRig, y: number): number {
+  return r.y0 + GLASS_RIG.cw.bottomClear + GLASS_RIG.cw.h + (r.yN - y);
+}
+
+/** Hoist rope span (absolute y, bottom -> top) of the car cluster with the car floor at y. */
+export function rigCarRope(r: GlassRig, y: number): [number, number] {
+  return [y + r.car.hitch, r.sheaveY];
+}
+
+/** Travelling cable bend bottom (absolute y) with the car floor at y (clamped above the pit floor). */
+export function rigCableBend(r: GlassRig, y: number): number {
+  const c = r.cable, yc = y - GLASS_RIG.plank + 0.02;
+  return Math.max(r.pitY + c.r + 0.03, (c.fixY + yc - c.len) / 2);
+}
+
+/** Plans the glass car's suspension / shaft equipment in the car frame (pure; from the elevator plan and its shaft). */
+export function planGlassRig(plan: ElevatorPlan): GlassRig {
+  const {info, gate: G, frame: F, cabH} = plan;
+  const R = GLASS_RIG, s = info.shaft;
+  const loc = [[s.x0, s.z0], [s.x1, s.z0], [s.x0, s.z1], [s.x1, s.z1]].map(([x, z]) => gateLocal(G, x, z));
+  const shaft = {l0: Math.min(...loc.map(q => q[1])), l1: Math.max(...loc.map(q => q[1])), w0: Math.min(...loc.map(q => -q[0])), w1: Math.max(...loc.map(q => -q[0]))};
+  const ys = info.stops.map(q => q.y).sort((a, b) => a - b);
+  const y0 = ys[0] ?? 0, yN = ys[ys.length - 1] ?? y0;
+  const headY = yN + R.headroom, sheaveY = headY - R.sheaveDrop;
+  const lmid = (F.lMin + F.lMax) / 2, wmid = F.depth / 2;
+  const car = {l: lmid, w: wmid, hitch: cabH + R.hitch};
+  const ropeW = Array.from({length: R.ropes}, (_, i) => (i - (R.ropes - 1) / 2) * R.ropePitch);
+  const gapR = shaft.l1 - F.lMax, gapL = F.lMin - shaft.l0;
+  const side: 1 | -1 = gapR >= gapL ? 1 : -1;
+  const gap = side > 0 ? gapR : gapL, other = side > 0 ? gapL : gapR;
+  // the car's guide rails sit a little off the car shell in both side gaps
+  const railOff = Math.max(0.05, Math.min(0.13, Math.min(gapL, gapR) * 0.3));
+  const carRails: GlassRig['carRails'] = [{l: F.lMin - railOff, w: wmid, face: 1}, {l: F.lMax + railOff, w: wmid, face: -1}];
+  // counterweight between the car rail and the shaft wall (needs the gap), on its own pair of rails (blades along w)
+  let cw: GlassRig['cw'] = null;
+  const cwRails: GlassRig['cwRails'] = [];
+  if (gap >= R.cw.gapMin) {
+    // behind the car rail line (toward the rear): the car rail's wall brackets (just in front of it) never cross its path
+    const t = R.cw.t, d = Math.min(R.cw.w, F.depth - wmid - 0.19);
+    const outer = side > 0 ? shaft.l1 - 0.07 : shaft.l0 + 0.07;
+    const l = outer - side * t / 2;
+    // keep it clear of the car rail's flange
+    if (d >= 0.3 && Math.abs(l - (side > 0 ? carRails[1].l : carRails[0].l)) >= t / 2 + R.rail * 0.7) {
+      cw = {l, w: wmid + 0.1 + d / 2, h: R.cw.h, t, d};
+      cwRails.push({l, w: cw.w - d / 2 - 0.045, face: 1}, {l, w: cw.w + d / 2 + 0.045, face: -1});
+    }
+  }
+  const sheaveL = car.l + side * R.sheaveR;
+  const defl = cw ? {l: cw.l - side * R.deflR, y: sheaveY + R.sheaveR - R.deflR} : null;
+  // travelling cable in the other side gap, off the rail line (toward the rear)
+  const cr = 0.07, lCar = side > 0 ? F.lMin - Math.min(other * 0.32, 0.17) : F.lMax + Math.min(other * 0.32, 0.17);
+  const lWall = lCar - side * 2 * cr; // the wall leg one bend diameter nearer the shaft wall
+  const fixY = (y0 + yN) / 2 + 1.2;
+  const cable = {w: Math.min(F.depth - 0.12, wmid + 0.48), lCar, lWall, fixY, len: fixY - y0 + 0.5, r: cr};
+  return {y0, yN, pitY: y0 - R.pit, headY, sheaveY, shaft, car, ropeW, side, cw, defl, sheaveL, carRails, cwRails, cable};
+}
+
+/** Glass-lift rig materials (module singletons; glass views only). */
+function rigMaterials() {
+  return {
+    steel: faceMat('tower-rig-steel', 'paintedSteel', {color: 0x45484b, metalness: 0.3, glow: 0.02}),
+    rope: faceMat('tower-rig-rope', 'brushedSteel', {color: 0x6a6d70, metalness: 0.7}),
+    sheave: faceMat('tower-rig-sheave', 'paintedSteel', {color: 0x9a7b2c, metalness: 0.25}),
+  };
+}
+
 /** Builds the moving cab and every stop's landing (doors, linings, frame, lantern, indicator, call station). */
 /**
  * Task track3-eaton-centre-20261031 (lane ARCH): the glass car of The Eaton's Center's glass elevator — every side / rear panel
@@ -1142,14 +1268,39 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
   // the floor indicator over the door (on the transom)
   P.box('dark', -0.18, 0.18, dH + 0.08, dH + 0.25, W0, W0 + 0.004);
   indParts.add('ind', quadGeometry(0.32, 0.14, {u0: 0, v0: 0, u1: 1, v1: 1}).translate(0, dH + 0.165, W0 + 0.005));
+  // task mall-playtest-revision-20261031 (lane ARCH, U07): the glass car's sling (stiles, crosshead, hitch plate, safety plank),
+  // guide shoes on the rails, a canopy over the ceiling, a skirt under the floor, glass mullions, the travelling-cable bracket
+  const rig = glass ? planGlassRig(plan) : null;
+  if (rig) {
+    const RG = GLASS_RIG, wm = rig.car.w, top = rig.car.hitch;
+    P.box('sling', lMin, lMax, H + 0.03, H + 0.15, 0, D);                 // canopy (car top)
+    P.box('sling', lMin, lMax, -RG.plank, -0.05, 0.004, D);              // skirt (the safety plank inside it)
+    const mw = 0.035, wMid = (W0 + PS + D - SHELL - PS) / 2;
+    for (const [a, b] of [[lMin - 0.004, lMin + SHELL + 0.004], [lMax - SHELL - 0.004, lMax + 0.004]]) P.box('steel', a, b, UP0, FRZ, wMid - mw / 2, wMid + mw / 2);
+    for (const f of [1 / 3, 2 / 3]) {
+      const l = lMin + SHELL + PS + (lMax - lMin - 2 * (SHELL + PS)) * f;
+      P.box('steel', l - mw / 2, l + mw / 2, UP0, FRZ, D - SHELL - 0.004, D + 0.004);
+    }
+    for (const sg of [-1, 1] as const) {
+      const lw = sg < 0 ? lMin : lMax, l1 = lw + sg * 0.005, l2 = lw + sg * 0.055;
+      P.box('sling', Math.min(l1, l2), Math.max(l1, l2), -RG.plank, top - 0.04, wm - 0.06, wm + 0.06);          // stile
+      const rail = rig.carRails[sg < 0 ? 0 : 1], tip = rail.l + rail.face * RG.rail / 2;
+      for (const y of [-RG.plank + 0.04, top - 0.1]) P.box('sling', Math.min(l2, tip), Math.max(l2, tip), y - 0.05, y + 0.05, wm - 0.045, wm + 0.045); // guide shoe
+    }
+    P.box('sling', lMin - 0.06, lMax + 0.06, top - 0.16, top - 0.04, wm - 0.07, wm + 0.07);                     // crosshead
+    P.box('sling', rig.car.l - 0.1, rig.car.l + 0.1, top - 0.04, top, wm - 0.1, wm + 0.1);                      // hitch plate
+    for (const rw of rig.ropeW) P.rod('sling', [rig.car.l, top - 0.01, wm + rw], [rig.car.l, top + 0.07, wm + rw], 0.012, false, 8); // shackles
+    const c = rig.cable, edge = rig.side > 0 ? lMin : lMax;
+    P.box('sling', Math.min(edge, c.lCar) - 0.03, Math.max(edge, c.lCar) + 0.03, -RG.plank, -RG.plank + 0.04, c.w - 0.04, c.w + 0.04);
+  }
   const cabMat: Record<string, THREE.Material> = {
     steel: M.cabSteel, wood: M.cabWood, mirror: M.cabMirror, dark: M.cabDark, ceil: M.cabCeil, rail: M.cabRail, field: floor.field, border: floor.border,
     light: M.light, flicker: M.lightFlicker,
-    ...(glass ? {glass: cabGlassMaterial()} : {}),
+    ...(glass ? {glass: cabGlassMaterial(), sling: rigMaterials().steel} : {}),
   };
   const cabNames: Record<string, string> = {
     steel: 'tower-cab-walls', wood: 'tower-cab-wood', mirror: 'tower-cab-mirror', dark: 'tower-cab-dark', ceil: 'tower-cab-ceiling', rail: 'tower-cab-handrail',
-    field: 'tower-cab-floor', border: 'tower-cab-floor-border', light: 'tower-cab-light', flicker: 'tower-cab-light-flicker', glass: 'tower-cab-glass',
+    field: 'tower-cab-floor', border: 'tower-cab-floor-border', light: 'tower-cab-light', flicker: 'tower-cab-light-flicker', glass: 'tower-cab-glass', sling: 'tower-cab-sling',
   };
   for (const key of Object.keys(cabMat)) { const g = P.take(key, MW); if (g) mesh(cabG, own(g), cabMat[key], cabNames[key]); }
   mesh(cabG, own(indParts.take('ind', MW)!), M.indicator, 'tower-indicator-in');
@@ -1263,12 +1414,127 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
     root.add(g);
     landings.push(g);
   });
+  // ===== task mall-playtest-revision-20261031 (lane ARCH, U07): the glass car's shaft equipment (static) + suspension (moving) =====
+  let rigUpdate: ((y: number) => void) | null = null;
+  if (rig) {
+    const RM = rigMaterials(), RG = GLASS_RIG, sh = rig.shaft, wm = rig.car.w;
+    const S = new Parts({st: 1, sv: 1, rp: 1});
+    const top = rig.headY;
+    // guide rails (T: blade toward the car / the weight, flange behind), pit floor -> machine bed, wall brackets at every stop
+    const blade = RG.rail, fl = 0.11, ft = 0.012, bt = 0.014;
+    const bedY = top - 0.05;
+    const brackets = plan.info.stops.map(q => q.y + 0.02); // on the shaft tower's storey girts (lane ARCH, mallArch.buildShaftTowers)
+    for (const r of rig.carRails) {
+      const lb = r.l - r.face * blade / 2, la = r.l + r.face * blade / 2, lf = lb - r.face * ft;
+      S.box('st', Math.min(lb, la), Math.max(lb, la), rig.pitY, bedY, r.w - bt / 2, r.w + bt / 2);
+      S.box('st', Math.min(lb, lf), Math.max(lb, lf), rig.pitY, bedY, r.w - fl / 2, r.w + fl / 2);
+      const wall = r.face > 0 ? sh.l0 + 0.03 : sh.l1 - 0.03;
+      for (const y of brackets) S.box('st', Math.min(lf, wall), Math.max(lf, wall), y - 0.06, y + 0.06, wm - 0.07, wm - 0.01);
+    }
+    for (const r of rig.cwRails) {
+      const wb = r.w - r.face * blade / 2, wa = r.w + r.face * blade / 2, wf = wb - r.face * ft;
+      S.box('st', r.l - bt / 2, r.l + bt / 2, rig.pitY, bedY, Math.min(wb, wa), Math.max(wb, wa));
+      S.box('st', r.l - fl / 2, r.l + fl / 2, rig.pitY, bedY, Math.min(wb, wf), Math.max(wb, wf));
+      const wall = rig.side > 0 ? sh.l1 - 0.03 : sh.l0 + 0.03;
+      for (const y of brackets) S.box('st', Math.min(r.l, wall), Math.max(r.l, wall), y - 0.05, y + 0.05, Math.min(wf, wf - r.face * 0.04), Math.max(wf, wf - r.face * 0.04));
+    }
+    // machine bed (a plate across the shaft under the head), the traction sheave + motor over the car rope drop, the deflector
+    S.box('st', sh.l0 + 0.02, sh.l1 - 0.02, bedY, top, Math.max(0, wm - 0.45), Math.min(sh.w1 - 0.02, wm + 0.45));
+    const sheave = (l: number, y: number, w: number, r: number, width: number) => {
+      S.rod('sv', [l, y, w - width / 2], [l, y, w + width / 2], r, false, 20);
+      S.rod('st', [l, y, w - width / 2 - 0.03], [l, y, w + width / 2 + 0.03], 0.035, false, 8); // axle
+      for (const sg of [-1, 1]) S.box('st', l - 0.05, l + 0.05, y - 0.05, bedY, w + sg * (width / 2 + 0.03) - 0.012, w + sg * (width / 2 + 0.03) + 0.012); // hangers
+    };
+    const spanW = (RG.ropes - 1) * RG.ropePitch + 0.08;
+    sheave(rig.sheaveL, rig.sheaveY, wm, RG.sheaveR, spanW);
+    S.rod('sv', [rig.sheaveL, rig.sheaveY, wm + spanW / 2 + 0.06], [rig.sheaveL, rig.sheaveY, wm + spanW / 2 + 0.38], 0.17, false, 16); // motor
+    if (rig.cw && rig.defl) {
+      sheave(rig.defl.l, rig.defl.y, rig.cw.w, RG.deflR, spanW);
+      // the rope run over the sheaves (traction sheave top -> deflector top)
+      for (const rw of rig.ropeW) S.rod('rp', [rig.sheaveL, rig.sheaveY + RG.sheaveR, wm + rw], [rig.defl.l, rig.defl.y + RG.deflR, rig.cw.w + rw], RG.ropeR, true, 6);
+    }
+    // the landing wall's inner skin (facing the car) with the door holes, its end caps behind the side glass, the pit
+    const hl0 = -hw - 0.02, hl1 = hw + 0.02, holes = plan.info.stops.map(q => [q.y, q.y + dH + 0.02] as const).sort((a, b) => a[0] - b[0]);
+    const skin = (l0: number, l1: number, y0: number, y1: number) => S.box('st', l0, l1, y0, y1, -0.06, -0.05);
+    skin(sh.l0 + 0.02, hl0, rig.pitY, top);
+    skin(hl1, sh.l1 - 0.02, rig.pitY, top);
+    let yb = rig.pitY;
+    for (const [a, b] of holes) { skin(hl0, hl1, yb, a); yb = b; }
+    skin(hl0, hl1, yb, top);
+    for (const l of [sh.l0 + 0.02, sh.l1 - 0.03]) S.box('st', l, l + 0.01, rig.pitY, top, sh.w0 + 0.02, -0.06);
+    S.box('st', sh.l0, sh.l1, rig.pitY - 0.05, rig.pitY, -0.06, sh.w1);
+    for (const l of [sh.l0 + 0.02, sh.l1 - 0.03]) S.box('st', l, l + 0.01, rig.pitY, rig.y0 - 0.01, -0.06, sh.w1 - 0.02);
+    S.box('st', sh.l0 + 0.02, sh.l1 - 0.02, rig.pitY, rig.y0 - 0.01, sh.w1 - 0.03, sh.w1 - 0.02);
+    // spring buffers (two under the car, one under the counterweight)
+    const buffer = (l: number, w: number, h: number) => {
+      S.rod('st', [l, rig.pitY, w], [l, rig.pitY + 0.06, w], 0.12, false, 12);
+      S.rod('sv', [l, rig.pitY + 0.06, w], [l, rig.pitY + h - 0.04, w], 0.075, false, 12);
+      S.rod('st', [l, rig.pitY + h - 0.04, w], [l, rig.pitY + h, w], 0.09, false, 12);
+    };
+    for (const sg of [-1, 1]) buffer(rig.car.l + sg * Math.min(0.5, (lMax - lMin) * 0.25), wm, 0.33);
+    if (rig.cw) buffer(rig.cw.l, rig.cw.w, 0.3);
+    // the travelling cable's wall clamp at mid-shaft
+    const c = rig.cable, cwall = rig.side > 0 ? sh.l0 + 0.03 : sh.l1 - 0.03;
+    S.box('st', Math.min(c.lWall, cwall) - 0.02, Math.max(c.lWall, cwall) + 0.02, c.fixY - 0.04, c.fixY + 0.08, c.w - 0.05, c.w + 0.05);
+    const keep = (key: string, mat: THREE.Material, name: string) => { const g = S.take(key, MW); if (g) mesh(root, own(g), mat, name); };
+    keep('st', RM.steel, 'tower-rig-static');
+    keep('sv', RM.sheave, 'tower-rig-sheaves');
+    keep('rp', RM.rope, 'tower-rig-rope-run');
+    // --- moving: rope clusters (unit length, scaled), the counterweight, the travelling cable (two legs + the bend) ---
+    const unitRopes = (): THREE.BufferGeometry => {
+      const U = new Parts();
+      for (const rw of rig.ropeW) U.rod('r', [0, 0, rw], [0, 1, rw], RG.ropeR, true, 6);
+      return own(U.take('r', MR)!);
+    };
+    const at = (m: THREE.Object3D, l: number, w: number) => { const [x, z] = toW(l, w); m.position.set(x, 0, z); };
+    const carRopes = mesh(root, unitRopes(), RM.rope, 'tower-rig-ropes-car');
+    at(carRopes, rig.car.l, wm);
+    let cwRopes: THREE.Mesh | null = null, cwBody: THREE.Mesh | null = null;
+    if (rig.cw) {
+      const {t, d, h} = rig.cw;
+      const B = new Parts();
+      for (const sg of [-1, 1]) B.box('b', -t / 2, t / 2, 0, h, sg * d / 2 - (sg > 0 ? 0.05 : 0), sg * d / 2 + (sg < 0 ? 0.05 : 0));  // side channels
+      B.box('b', -t / 2, t / 2, h - 0.1, h, -d / 2, d / 2);
+      B.box('b', -t / 2, t / 2, 0, 0.1, -d / 2, d / 2);
+      for (let y = 0.12; y + 0.11 <= h - 0.1; y += 0.122) B.box('b', -t / 2 + 0.012, t / 2 - 0.012, y, y + 0.11, -d / 2 + 0.05, d / 2 - 0.05); // filler weights
+      for (const sg of [-1, 1]) for (const y of [0.05, h - 0.05]) B.box('b', -0.04, 0.04, y - 0.04, y + 0.04, sg > 0 ? d / 2 - 0.02 : -d / 2 - 0.012, sg > 0 ? d / 2 + 0.012 : -d / 2 + 0.02); // shoes
+      for (const rw of rig.ropeW) B.rod('b', [0, h, rw], [0, h + 0.12, rw], 0.012, false, 8); // shackles
+      cwBody = mesh(root, own(B.take('b', MR)!), RM.steel, 'tower-rig-counterweight');
+      at(cwBody, rig.cw.l, rig.cw.w);
+      cwRopes = mesh(root, unitRopes(), RM.rope, 'tower-rig-ropes-cw');
+      at(cwRopes, rig.cw.l, rig.cw.w);
+    }
+    const legGeo = (): THREE.BufferGeometry => { const U = new Parts(); U.rod('c', [0, 0, 0], [0, 1, 0], 0.018, true, 8); return own(U.take('c', MR)!); };
+    const legCar = mesh(root, legGeo(), M.cabDark, 'tower-rig-cable-car');
+    const legWall = mesh(root, legGeo(), M.cabDark, 'tower-rig-cable-wall');
+    at(legCar, c.lCar, c.w);
+    at(legWall, c.lWall, c.w);
+    const bendG = new THREE.TorusGeometry(c.r, 0.018, 6, 10, Math.PI);
+    bendG.rotateZ(Math.PI);
+    const bend = mesh(root, own(bendG.applyMatrix4(MR)), M.cabDark, 'tower-rig-cable-bend');
+    at(bend, (c.lCar + c.lWall) / 2, c.w);
+    const span = (m: THREE.Object3D, y0: number, y1: number) => { m.position.y = y0; m.scale.set(1, Math.max(1e-3, y1 - y0), 1); };
+    rigUpdate = (y: number) => {
+      const [r0, r1] = rigCarRope(rig, y);
+      span(carRopes, r0, r1);
+      if (rig.cw && cwBody && cwRopes && rig.defl) {
+        const ct = rigCwTop(rig, y);
+        cwBody.position.y = ct - rig.cw.h;
+        span(cwRopes, ct + 0.1, rig.defl.y);
+      }
+      const yb = rigCableBend(rig, y) + c.r;
+      span(legCar, yb, y - RG.plank + 0.02);
+      span(legWall, yb, c.fixY);
+      bend.position.y = yb;
+    };
+    rigUpdate(plan.info.stops[0]?.y ?? 0);
+  }
   const carLamps = plan.carButtons.map(b => ({b, m: lit.get(b.id)!}));
   let hoverId = '';
   const ind = getIndicator();
   return {
     root, cab: cabG, landings, geometries, lit,
-    setCab: (y, door) => { cabG.position.y = y; for (const lf of cabLeaves) place(lf, door); },
+    setCab: (y, door) => { cabG.position.y = y; for (const lf of cabLeaves) place(lf, door); rigUpdate?.(y); },
     setLanding: (i, door) => { const ls = landingLeaves[i]; if (ls) for (const lf of ls) place(lf, door); },
     setIndicator: (text, dir) => ind.draw(text, dir),
     setLamps: s => {

@@ -1,21 +1,23 @@
-// Task track3-eaton-centre-20261031 (lane GEN): QA poses into The Eaton's Center for the primary's short serial browser spot checks
+// Task track3-eaton-centre-20261031 (lane GEN): QA poses into the mall for the primary's short serial browser spot checks
 // (qa.ts `__LL.goMall(name, ring?)`). Pure data: a standing pose {x, y (feet), z, yaw, pitch, level} on walkable floor, or null.
+// Task mall-playtest-revision-20261031 (lane GEN): three retail floors; + 'corridor' / 'wing-end'; 'bridge' has no target now (null).
 //
-//  - 'platform-lookup': on platform 1 under the open void, looking steeply up at the rings and the glass roof;
-//  - 'court': in the fountain court (north), looking across the platforms and up the void;
-//  - 'ring-edge' (ring 1..6, default 3): on that ring's gallery at the void's rail, looking across and down the atrium;
-//  - 'shopfront' (ring, default 2): on the gallery 3 m in front of the ring's widest shopfront, facing it;
-//  - 'escalator' (ring = the lower storey 0..5, default 0): 3 m in front of the bottom of an escalator bank, looking up it;
-//  - 'bridge' (default: the first bridge): at a bridge deck's end, looking along it;
+//  - 'platform-lookup': at the start on the north platform under the atrium, looking steeply up at the floors and the glass roof;
+//  - 'court': in the Fountain court (behind the north platform), looking across the platforms and up the atrium;
+//  - 'ring-edge' (floor 1..3, default 2): on that floor's gallery at the opening's rail, looking across and down the atrium;
+//  - 'shopfront' (floor, default 1): on the walkway 3 m in front of the floor's widest shopfront, facing it;
+//  - 'escalator' (lower storey 0..2, default 0): 3 m in front of the bottom of that storey's escalator bank, looking up it;
+//  - 'corridor' (floor, default 1): in the middle of the floor's longest corridor wing, looking along it;
+//  - 'wing-end' (floor, default 1): 6 m in front of a corridor end unit, facing it;
 //  - 'elevator': on the glass elevator's landing (station storey), facing the doors;
-//  - 'washrooms' (ring, default 1): at the gallery mouth of the ring's washroom passage.
+//  - 'washrooms' (floor, default 1): at the walkway mouth of the floor's washroom passage.
 // Yaw convention: forward = (-sin yaw, -cos yaw).
 
 import {CELL, FLOOR} from '../grid';
 import type {StationLayout} from '../stationTypes';
 
-export type MallPoseName = 'platform-lookup' | 'court' | 'ring-edge' | 'shopfront' | 'escalator' | 'bridge' | 'elevator' | 'washrooms';
-export const MALL_POSE_NAMES: readonly MallPoseName[] = ['platform-lookup', 'court', 'ring-edge', 'shopfront', 'escalator', 'bridge', 'elevator', 'washrooms'];
+export type MallPoseName = 'platform-lookup' | 'court' | 'ring-edge' | 'shopfront' | 'escalator' | 'corridor' | 'wing-end' | 'bridge' | 'elevator' | 'washrooms';
+export const MALL_POSE_NAMES: readonly MallPoseName[] = ['platform-lookup', 'court', 'ring-edge', 'shopfront', 'escalator', 'corridor', 'wing-end', 'elevator', 'washrooms'];
 export interface MallPose { x: number; y: number; z: number; yaw: number; pitch: number; level: number; name: MallPoseName }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -40,6 +42,7 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
   if (!m) return null;
   const vb = m.void.bounds, vcx = (vb.x0 + vb.x1) / 2, vcz = (vb.z0 + vb.z1) / 2;
   const base = (lv: number) => layout.levels[lv]?.baseY ?? 0;
+  const top = Math.max(1, layout.levels.length - 1);
   const pose = (lv: number, x: number, z: number, yaw: number, pitch: number): MallPose => ({x: r3(x), y: base(lv), z: r3(z), yaw: r3(yaw), pitch, level: lv, name});
   switch (name) {
     case 'platform-lookup': {
@@ -47,40 +50,43 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
       return pose(0, s.x, s.z, yawTo(s.x, s.z, vcx, vcz), 1.0);
     }
     case 'court': {
-      const p = stand(layout, 0, vcx - (vb.x1 - vb.x0) * 0.2, vb.z0 + 1.5);
+      const ca = layout.areas.find(a => (a.level ?? 0) === 0 && a.role === 'great-hall');
+      if (!ca) return null;
+      const p = stand(layout, 0, (ca.x + ca.w * 0.3) * CELL, (ca.y + 3) * CELL);
       return p ? pose(0, p[0], p[1], yawTo(p[0], p[1], vcx, vcz + 6), 0.55) : null;
     }
     case 'ring-edge': {
-      const lv = Math.max(1, Math.min(6, ring ?? 3));
-      // The gallery cell on the void's north rim nearest the void's middle column, 0.6 m back from the rail.
+      const lv = Math.max(1, Math.min(top, ring ?? 2));
+      // a walkway cell on that floor's opening rim (north side), near the opening's middle column, 0.35 m back from the rail
+      const op = m.void.openings?.find(o => o.level === lv);
+      const ob = op?.bounds ?? vb, ocx = (ob.x0 + ob.x1) / 2, ocz = (ob.z0 + ob.z1) / 2;
       const g = layout.levels[lv].grid;
-      const [cx] = g.cellOf(vcx, vcz);
-      for (let d = 0; d < g.w; d++) for (const x of [cx + d, cx - d]) {
-        for (let y = 1; y < g.h - 1; y++) {
-          const i = g.idx(x, y);
-          if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i]) continue;
-          const below = g.idx(x, y + 1);
-          if (g.cells[below] === FLOOR) continue;
+      const [cx] = g.cellOf(ocx, ocz);
+      const [, y0] = g.cellOf(ocx, ob.z0 - 3), [, y1] = g.cellOf(ocx, ocz);
+      for (let d = 0; d < 40; d++) for (const x of [cx + d, cx - d]) {
+        for (let y = Math.max(1, y0); y <= y1 && y < g.h - 1; y++) {
+          const i = g.idx(x, y), below = g.idx(x, y + 1);
+          if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i] || g.cells[below] !== 0 /* SOLID */) continue;
+          // the cell beyond is open below (a lower storey's band rises past this floor)
+          if (!layout.levels.some(L => L.id < lv && L.grid.cells[below] !== 0 && L.grid.ceil[below] > base(lv) + 1)) continue;
           const [wx, wz] = g.center(x, y);
-          if (wz < vb.z0 - 1 || wz > vcz) continue;
-          // the next cell south is the void (not a wall): its station band rises past this storey
-          if (layout.grid.cells[below] === 0 || layout.grid.ceil[below] < base(lv) + 2) continue;
-          return pose(lv, wx, wz - 0.35, yawTo(wx, wz, vcx, vb.z1), -0.35);
+          return pose(lv, wx, wz - 0.35, yawTo(wx, wz, ocx, ob.z1), -0.35);
         }
       }
       return null;
     }
     case 'shopfront': {
-      const lv = Math.max(1, Math.min(6, ring ?? 2));
+      const lv = Math.max(1, Math.min(top, ring ?? 1));
       const s = m.shops.filter(q => q.level === lv).sort((a, b) => b.width - a.width)[0];
       if (!s) return null;
       const f = s.frontage, fx = (f.x0 + f.x1) / 2, fz = (f.z0 + f.z1) / 2;
-      const [nx, nz] = f.side === 'N' ? [0, 1] : f.side === 'S' ? [0, -1] : f.side === 'W' ? [1, 0] : [-1, 0];
+      // frontage.side = the sales area's wall holding the frontage: the walkway lies beyond it
+      const [nx, nz] = f.side === 'N' ? [0, -1] : f.side === 'S' ? [0, 1] : f.side === 'W' ? [-1, 0] : [1, 0];
       const p = stand(layout, lv, fx + nx * 3, fz + nz * 3);
       return p ? pose(lv, p[0], p[1], yawTo(p[0], p[1], fx, fz), 0.05) : null;
     }
     case 'escalator': {
-      const lv = Math.max(0, Math.min(5, ring ?? 0));
+      const lv = Math.max(0, Math.min(top - 1, ring ?? 0));
       const v = m.verticals.find(q => q.kind === 'escalator' && q.lower === lv);
       if (!v) return null;
       const dx = v.head.x - v.foot.x, dz = v.head.z - v.foot.z, d = Math.hypot(dx, dz) || 1;
@@ -93,6 +99,25 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
       const p = stand(layout, b.level, b.from.x, b.from.z - 1.5);
       return p ? pose(b.level, p[0], p[1], yawTo(p[0], p[1], b.to.x, b.to.z), -0.05) : null;
     }
+    case 'corridor': {
+      const lv = Math.max(1, Math.min(top, ring ?? 1));
+      const ids = new Set((m.corridors ?? []).find(q => q.level === lv)?.areas ?? []);
+      const a = layout.areas.filter(q => ids.has(q.id)).sort((p, q) => Math.max(q.w, q.h) - Math.max(p.w, p.h))[0];
+      if (!a) return null;
+      const along = a.w >= a.h;
+      const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
+      const p = stand(layout, lv, along ? (a.x + 2) * CELL : cx, along ? cz : (a.y + 2) * CELL);
+      return p ? pose(lv, p[0], p[1], yawTo(p[0], p[1], along ? (a.x + a.w) * CELL : cx, along ? cz : (a.y + a.h) * CELL), 0.05) : null;
+    }
+    case 'wing-end': {
+      const lv = Math.max(1, Math.min(top, ring ?? 1));
+      const s = m.shops.find(q => q.level === lv && q.zone === 'end') ?? m.shops.find(q => q.zone === 'end');
+      if (!s) return null;
+      const f = s.frontage, fx = (f.x0 + f.x1) / 2, fz = (f.z0 + f.z1) / 2;
+      const [nx, nz] = f.side === 'N' ? [0, -1] : f.side === 'S' ? [0, 1] : f.side === 'W' ? [-1, 0] : [1, 0];
+      const p = stand(layout, s.level, fx + nx * 6, fz + nz * 6);
+      return p ? pose(s.level, p[0], p[1], yawTo(p[0], p[1], fx, fz), 0.05) : null;
+    }
     case 'elevator': {
       const v = m.verticals.find(q => q.kind === 'elevator');
       if (!v) return null;
@@ -101,14 +126,16 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
       return p ? pose(0, p[0], p[1], yawTo(p[0], p[1], cx, cz), 0.1) : null;
     }
     case 'washrooms': {
-      const lv = Math.max(1, Math.min(6, ring ?? 1));
+      const lv = Math.max(1, Math.min(top, ring ?? 1));
       const a = layout.areas.find(q => q.level === lv && q.type === 'passage' && q.label.startsWith('Washrooms'));
       if (!a) return null;
       const d = layout.doors.find(q => (q.a === a.id || q.b === a.id) && !q.staff && (q.level ?? 0) === lv && layout.areas[q.a === a.id ? q.b : q.a]?.role === 'mall');
       if (!d) return null;
       const dx = (d.x + d.w / 2) * CELL, dz = (d.y + d.h / 2) * CELL;
-      const toward = dx < vcx ? 1 : -1;
-      const p = stand(layout, lv, dx + toward * 3, dz);
+      // step out of the doorway onto the walkway (away from the passage)
+      const pa = a, vertical = d.h > d.w;
+      const out = vertical ? Math.sign(dx - (pa.x + pa.w / 2) * CELL) || 1 : Math.sign(dz - (pa.y + pa.h / 2) * CELL) || 1;
+      const p = stand(layout, lv, vertical ? dx + out * 3 : dx, vertical ? dz : dz + out * 3);
       return p ? pose(lv, p[0], p[1], yawTo(p[0], p[1], dx, dz), 0) : null;
     }
   }

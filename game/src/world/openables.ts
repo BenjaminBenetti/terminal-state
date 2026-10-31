@@ -665,10 +665,15 @@ export class OpenableSet {
     return out.copy(pm.bounds).applyMatrix4(tmpM2.multiplyMatrices(rt.matrix, tmpM)).expandByScalar(0.01);
   }
 
-  /** Holder-local transform of everything a part carries (slide parts: drawer contents); identity for hinges. */
+  /**
+   * Holder-local transform of everything a part carries (slide parts with a TRAY: drawer / display-tray contents); identity for hinges.
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U10): a slide part WITHOUT a tray is a sliding LID (the chest freezer's panes) —
+   * its compartment's contents stay in the basin. Carried, they rode 0.69 m sideways with the pane over the other half, ending under
+   * both panes 2.5 cm in the air (hidden, yet still targeted through the lids). Runtime pose only: holder lots are unchanged.
+   */
   carryMatrix(rt: OpenRT, i: number, out: THREE.Matrix4): THREE.Matrix4 {
     const spec = rt.spec.parts[i];
-    if (spec.move.type !== 'slide') return out.identity();
+    if (spec.move.type !== 'slide' || !spec.tray?.length) return out.identity();
     return partLocalMatrix(spec, rt.model.parts[i].pivot, partAmount(rt, i), out);
   }
 

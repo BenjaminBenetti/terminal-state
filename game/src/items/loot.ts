@@ -19,7 +19,7 @@
 
 import {hashString, mulberry32} from '../core/rng';
 import {PURPOSE_HOLDER_KINDS, type PurposeHolderKind} from '../gen/props';
-import {purposeLoot} from '../gen/purposes';
+import {purposeById, purposeLoot} from '../gen/purposes';
 import {P7_HOLDER_KINDS, P7_HOLDER_META, type P7HolderKind} from '../gen/props07';
 import {MALL_HOLDER_KINDS, type MallHolderKind} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): mall shop holders
 import {effectText, itemDef} from './items';
@@ -34,6 +34,7 @@ import {
 } from './lootTables';
 import {rewardTable, type RewardTable} from './lootTables'; // Task office-interactions-layout-20261030 (lane ROOF): curated rewards
 import {CONTAINER_THEMED} from './lootTables'; // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage
+import {HOLDER_ALLOW, STORAGE_FILL_CATS, STORAGE_FILL_FALLBACK, STORAGE_FILL_STOCK_THEMES, STORAGE_FILL_WEIGHTS, econCat, type EconCat} from './lootTables'; // Task mall-playtest-revision-20261031 (lane SHOPS, U10): storage fill
 import {
   OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind,
 } from '../world/openablesSpec';
@@ -382,7 +383,7 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
     const a = rollOn(holderRng(seed, index, kind), index * 1000, r => (t.exact ? rollItems(r, kind, t, areaType, profile) : scarce(rollItems(r, kind, t, areaType, profile), s1, kind, areaType, t.rows, profile)), exposed);
     const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
     const b = rollOn(r2, index * 1000 + 500, r => scarce(rollRows(r, kind, inside, profile), s2, kind, areaType, inside.rows, profile), parts);
-    return [...a, ...b].map(l => tagPart(l, surfaces));
+    return storageFill(seed, index, kind, areaType, surfaces, [...a, ...b].map(l => tagPart(l, surfaces)), inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
   }
   const r = holderRng(seed, index, kind);
   const raw = rollItems(r, kind, t, areaType, profile);
@@ -390,7 +391,75 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
   const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
   const lots: Lot[] = [];
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
-  return lots;
+  return storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+}
+
+/** Lot id offset of storage-fill lots (index * 1000 + FILL_ID_BASE + (compartment + 1) * 3 + k: clear of the roll's own ids). */
+export const FILL_ID_BASE = 600;
+/**
+ * Task mall-playtest-revision-20261031 (lane PROFILES): running tallies of the storage fill (census / QA only — a generation-time counter,
+ * never read by the game): empty compartments considered, compartments that drew lots, items drawn, items packed (drawn − packed = the
+ * fill's fit failures).
+ */
+export const STORAGE_FILL_STATS = {compartments: 0, rolled: 0, entries: 0, placed: 0};
+
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U10): the profile's STORAGE FILL (lootTables StorageFill / LootTables.storageFill,
+ * the mall only — absent elsewhere, so this returns `lots` untouched and no stream is drawn). Every compartment the holder's own roll
+ * left empty (openable part; a one-door / one-lid holder without parts = one compartment; exposed tops / shelves never) rolls once on
+ * `loot:<kind>:<index>:fill<part>`: chance x min(1, its loot area / `area`), then U{lots} items from the holder's resolved `rows` within
+ * the fill's categories and HOLDER_ALLOW, re-weighted by category (stack sizes as any roll of this holder kind), packed on that
+ * compartment's surfaces only (lane PROFILES, mall revision: drawn only among the pool items that fit that compartment alone). (Lane PROFILES, mall revision: the fill's `fallback` categories — snacks / drinks by default — join the
+ * pool only when it holds no other category — except in a place of a STORAGE_FILL_STOCK_THEMES theme (food), where they are its stock.)
+ */
+function storageFill(seed: number, index: number, kind: HolderKind, areaType: string, surfaces: readonly Surface[], lots: Lot[], rows: readonly Row[], profile: LootProfile): Lot[] {
+  const f = profile.tables.storageFill?.[kind];
+  if (!f || !rows.length) return lots;
+  const cats = f.cats ?? STORAGE_FILL_CATS, allow = HOLDER_ALLOW[kind];
+  const weights: Readonly<Partial<Record<EconCat, number>>> = f.weights ?? (f.cats ? {} : STORAGE_FILL_WEIGHTS);
+  // (lane PROFILES, mall revision) snacks / drinks only where nothing else fits — except in a food place, where they ARE its stock
+  const fb = f.fallback ?? (f.cats ? [] : STORAGE_FILL_FALLBACK);
+  const fallback = fb.length && STORAGE_FILL_STOCK_THEMES.includes(purposeById(areaType)?.theme ?? 'public') ? [] : fb;
+  let pool: Row[] = [];
+  for (const [id, w] of rows) {
+    const c = econCat(id);
+    if (c === null || !cats.includes(c) || (allow && !allow.includes(c))) continue;
+    const ww = w * (weights[c] ?? 1);
+    if (ww > 0) pool.push([id, ww]);
+  }
+  if (fallback.length && pool.some(([id]) => !fallback.includes(econCat(id)!))) pool = pool.filter(([id]) => !fallback.includes(econCat(id)!));
+  if (!pool.length) return lots;
+  // compartment -> its surface indices (a part index; -1 = the whole holder behind its one door / lid)
+  const single = !openableSpec(kind) && isContainerKind(kind);
+  const comps = new Map<number, number[]>();
+  surfaces.forEach((s, i) => {
+    const c = s.part ?? (single ? -1 : undefined);
+    if (c === undefined) return;
+    const l = comps.get(c);
+    if (l) l.push(i); else comps.set(c, [i]);
+  });
+  const full = new Set(lots.map(l => l.part ?? (single ? -1 : -2)));
+  const out = lots.slice();
+  for (const [c, idx] of [...comps].sort((a, b) => a[0] - b[0])) {
+    if (full.has(c)) continue;
+    STORAGE_FILL_STATS.compartments++;
+    const area = idx.reduce((a, i) => a + Math.max(0, surfaces[i].x1 - surfaces[i].x0) * Math.max(0, surfaces[i].z1 - surfaces[i].z0), 0);
+    const r = mulberry32(hashString(`loot:${kind}:${index}:fill${c}`, seed >>> 0));
+    if (r() >= f.chance * Math.min(1, area / f.area)) continue;
+    // (lane PROFILES, mall revision) draw only what fits this compartment on its own (a 5 cm tool-chest drawer takes a board of parts,
+    // never a bracket of scrap): no compartment rolls an item it must then drop. A pure fit test (no stream draw).
+    const own = idx.map(i => surfaces[i]);
+    const fits = pool.filter(([id]) => packItems([id], own, () => 0.5, false)[0]);
+    if (!fits.length) continue;
+    const n = f.lots[0] + Math.floor(r() * (f.lots[1] - f.lots[0] + 1));
+    STORAGE_FILL_STATS.rolled++;
+    STORAGE_FILL_STATS.entries += n;
+    const items: LootEntry[] = [];
+    for (let k = 0; k < n; k++) { const itemId = pick(fits, r); items.push({itemId, count: lotCount(itemId, kind, r, profile)}); }
+    const placed = packItems(items.map(e => e.itemId), own, r, false);
+    placed.forEach((p, k) => { if (p) { STORAGE_FILL_STATS.placed++; out.push(tagPart({id: index * 1000 + FILL_ID_BASE + (c + 1) * 3 + k, ...items[k], ...p, surface: idx[p.surface]}, surfaces)); } });
+  }
+  return out;
 }
 
 function tagPart(l: Lot, surfaces: readonly Surface[]): Lot {
@@ -544,9 +613,12 @@ export function partPrompt(s: HolderState, part: number, info: PartInfo, o: {roo
   }
 }
 
-/** Toast when a compartment is first opened: what is visibly inside, its fixture contents, or a clear "empty". */
-export function partOpenMessage(s: HolderState, part: number, info: PartInfo): {text: string; warn: boolean} {
-  const lots = lotsIn(s, part);
+/**
+ * Toast when a compartment is first opened: what is visibly inside, its fixture contents, or a clear "empty". `also` (task
+ * mall-playtest-revision-20261031, lane SHOPS U10): partner compartments that opened with it (openablesSpec PartSpec.opensWith).
+ */
+export function partOpenMessage(s: HolderState, part: number, info: PartInfo, also: readonly number[] = []): {text: string; warn: boolean} {
+  const lots = [...lotsIn(s, part), ...also.flatMap(j => lotsIn(s, j))];
   if (lots.length) return {text: `Inside: ${short(lotEntries(lots), 4)}`, warn: false};
   if (info.contents) return {text: `${cap(info.name)}: ${info.contents}`, warn: false};
   return {text: `${cap(info.name)}: empty`, warn: false};

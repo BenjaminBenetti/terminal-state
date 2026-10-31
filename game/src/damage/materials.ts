@@ -12,6 +12,7 @@ import {PROP_DEFS, type PropKind} from '../gen/props';
 import {P7_MODEL_CLASS, P7_PROP_DAMAGE} from '../gen/props07';
 import {OFFICE_PROP_DAMAGE} from '../gen/office/kinds'; // Iteration 16 (WORLD-GEN)
 import {officePropPhysics} from '../gen/office/physics'; // Task office-interactions-layout-20261030 (lane PHYS)
+import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments ride their rail
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -416,6 +417,17 @@ export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit
   duffelBag: {mat: 'pad', how: 'duffel bag (~6 kg; no PROP_DEFS kind yet): shoved along when bumped'},
   biohazardBin: {mat: 'pad', how: 'biohazard bin (~6 kg; no PROP_DEFS kind yet): shoved along when bumped'},
 };
+
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U05): kinds hung on their host (`PropPlacement.host`) that RIDE it when the host
+ * goes loose (physics/dynamicItems.ts: the rider's meshes join the host body's parts, its own collider goes) — gen/mall/kinds.ts
+ * MALL_RIDER_KINDS (garments on a garment rail). Every other host decor keeps its rule (on-top decor of a moving prop: the prop never
+ * goes loose while something rests on its top).
+ */
+const RIDER_KINDS: ReadonlySet<string> = new Set(MALL_RIDER_KINDS);
+export function ridesHost(kind: string): boolean {
+  return RIDER_KINDS.has(kind);
+}
 
 const overlaid = new Map<string, {base: PropPhysics; row: PropPhysics}>();
 export function propPhysics(kind: string): PropPhysics {

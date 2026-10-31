@@ -434,7 +434,9 @@ export function levelArrays(levels: readonly Level[]): LevelArrays {
       let lo = -1, hi = -1;
       for (let x = 0; x < W; x++) if (cells[r + x] !== SOLID) { if (lo < 0) lo = x; hi = x; }
       if (lo < 0) continue;
-      if (lo < bx0) bx0 = lo; if (hi + 1 > bx1) bx1 = hi + 1; if (y < by0) by0 = y; by1 = y + 1;
+      // (task mall-playtest-revision-20261031, lane GEN: by1 is a MAX over every upper level — it used to keep the last level's last
+      // row, which truncated a lower storey reaching further south than a smaller top storey; Subway / Office are unchanged)
+      if (lo < bx0) bx0 = lo; if (hi + 1 > bx1) bx1 = hi + 1; if (y < by0) by0 = y; if (y + 1 > by1) by1 = y + 1;
     }
   }
   if (bx1 <= bx0) { bx0 = by0 = bx1 = by1 = 0; }

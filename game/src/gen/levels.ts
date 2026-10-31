@@ -239,7 +239,7 @@ export interface LevelHit {
 
 export interface RaycastOpts {
   /** Exact prop boxes (absolute y / h): hitscan. Tested in 3D, so props on other levels never block a slab-separated ray. */
-  props?: readonly {x: number; y: number; z: number; hx: number; hz: number; h: number}[];
+  props?: readonly {x: number; y: number; z: number; hx: number; hz: number; h: number; round?: boolean}[]; // round: lane FIX (U04)
   /** Treat sight-blocking prop cells (grid.sightBlocked of the band's level) as opaque (line of sight). */
   sightProps?: boolean;
   /** Floor for VOID cells without an explicit height (legacy hand-built grids; layout.trench.floorY). */
@@ -831,7 +831,8 @@ export class Levels implements NavLevels {
         // cheap reject: distance from ray origin
         const dx = p.x - o.x, dz = p.z - o.z;
         if (dx * dx + dz * dz > (best.t + 2) * (best.t + 2)) continue;
-        const h = rayBox(o, d, p.x - p.hx, p.y, p.z - p.hz, p.x + p.hx, p.y + p.h, p.z + p.hz);
+        // lane FIX (U04): round props (mall atrium columns) are hit as their upright cylinder, not the square box
+        const h = p.round ? rayCylinder(o, d, p.x, p.z, p.hx, p.y, p.y + p.h) : rayBox(o, d, p.x - p.hx, p.y, p.z - p.hz, p.x + p.hx, p.y + p.h, p.z + p.hz);
         if (h && h.t < best.t) {
           best.t = h.t; best.kind = 'prop'; best.nx = h.n[0]; best.ny = h.n[1]; best.nz = h.n[2]; best.prop = i;
           best.cell = this.cellIndex(o.x + d.x * h.t, o.z + d.z * h.t);
@@ -1266,6 +1267,40 @@ function rayBox(o: Vec3, d: Vec3, x0: number, y0: number, z0: number, x1: number
     if (tmin > tmax) return null;
   }
   if (tmax < 0) return null;
+  return {t: Math.max(0, tmin), n};
+}
+
+/**
+ * Task mall-playtest-revision-20261031 (lane FIX, U04): ray vs an upright capped cylinder (axis y, centre cx / cz, radius r,
+ * y0..y1). Entry t (>= 0, 0 when the origin is inside) and the outward normal at the entry (side: radial; caps: +-y).
+ */
+export function rayCylinder(o: Vec3, d: Vec3, cx: number, cz: number, r: number, y0: number, y1: number): {t: number; n: [number, number, number]} | null {
+  const ox = o.x - cx, oz = o.z - cz;
+  let tmin = -Infinity, tmax = Infinity;
+  let n: [number, number, number] = [0, 0, 0];
+  // radial slab: |(o + d t).xz| <= r
+  const a = d.x * d.x + d.z * d.z, b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - r * r;
+  if (a < 1e-12) {
+    if (c > 0) return null;
+  } else {
+    const disc = b * b - a * c;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    const t1 = (-b - sq) / a, t2 = (-b + sq) / a;
+    tmin = t1; tmax = t2;
+    const hx = ox + d.x * t1, hz = oz + d.z * t1, l = Math.hypot(hx, hz) || 1;
+    n = [hx / l, 0, hz / l];
+  }
+  // vertical slab: y0 <= o.y + d.y t <= y1
+  if (Math.abs(d.y) < 1e-12) {
+    if (o.y < y0 || o.y > y1) return null;
+  } else {
+    let s1 = (y0 - o.y) / d.y, s2 = (y1 - o.y) / d.y, ny = -1;
+    if (s1 > s2) { const t = s1; s1 = s2; s2 = t; ny = 1; }
+    if (s1 > tmin) { tmin = s1; n = [0, ny, 0]; }
+    tmax = Math.min(tmax, s2);
+  }
+  if (tmin > tmax || tmax < 0) return null;
   return {t: Math.max(0, tmin), n};
 }
 

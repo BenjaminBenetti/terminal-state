@@ -36,7 +36,7 @@ import type {LevelId} from '../../game/src/levels/types';
 import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
-import {TRACK_EXT} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs)
+import {TRACK_EXT, TRACK_EXT_MALL} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -86,7 +86,7 @@ const F = {
   // task track1 (lane SPAWN): family stats / rules, the registry contract
   brain: 'game/src/ai/brain.ts', blightbelly: 'game/src/ai/blightbelly.ts', siren: 'game/src/ai/siren.ts', creatureActor: 'game/src/ai/creatureActor.ts',
   contract: 'game/src/levels/levelContract.ts',
-  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center
+  // task track3-eaton-centre-20261031 (lane PROFILES): the mall (seeded "<Name> Center")
   mallIndex: 'game/src/gen/mall/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
   // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
@@ -207,15 +207,18 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       service: {storeys: 'one seeded service annex off a track tunnel of the street station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
-  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center — ONE level: the pit station + the retail rings
+  // task track3-eaton-centre-20261031 (lane PROFILES): the mall — ONE level: the station + the retail floors. Task
+  // mall-playtest-revision-20261031 (lane PROFILES, U01): its display name is seeded per run ("<Name> Center", gen/mall/names.ts
+  // mallNameOf(levelSeed)); LevelId 'mall', tier 2; the compact design has ${MALL_RINGS} retail floors (MALL_RINGS = MALL_FLOORS)
   mall: {
     generator: {fn: 'generateMallLevel', file: F.mallIndex,
-      note: `ONE continuous level (the subway station at the bottom of the open void and ${MALL_RINGS} retail rings around it) generated once per level seed: placeOfficeEnemies runs the pit context once and the ring context once per ring, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') follow from ai/hordePlace.ts placeHordes; then (Track 2) the pit station's tunnels / service annexes are attached and placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end (horde members keep their own pool's family; Siren eligibility included) and applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly). Moving between storeys never rerolls anything.`},
+      note: `ONE continuous level (LevelId 'mall', tier 2; its display name is seeded per run: "<Name> Center", gen/mall/names.ts mallNameOf(levelSeed) — the same seed always gives the same name) — the subway station at the bottom of a small glass atrium and ${MALL_RINGS} retail floors above it, generated once per level seed: placeOfficeEnemies runs the pit context once (the station storey) and the ring context once per retail floor, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') follow from ai/hordePlace.ts placeHordes; then (Track 2) the station's tunnel / service annex (at most ${TRACK_EXT_MALL.annex.max}) is attached and placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end (horde members keep their own pool's family; Siren eligibility included) and applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly). Moving between storeys never rerolls anything.`},
     contexts: {
-      pit: {storeys: 'the subway station storey at the bottom of the void (level 0: platforms, plaza, courts)', runs: 1},
-      ring: {storeys: `one retail ring (each of levels 1..${MALL_RINGS}: gallery, shops, back rooms, service corridors)`, runs: MALL_RINGS},
-      // lane INTEG (Track2 integration): the pit station's service annexes — the same zone context as the Subway / Office
-      service: {storeys: 'one seeded service annex off a track tunnel / bed hatch of the pit station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT.annex.max], note: SERVICE_ZONE_NOTE}},
+      pit: {storeys: 'the subway station storey at the bottom of the atrium (level 0: platforms, Fountain court, station back of house)', runs: 1},
+      ring: {storeys: `one retail floor (each of levels 1..${MALL_RINGS}: atrium court galleries, corridor wings, shops, stock rooms, service corridors)`, runs: MALL_RINGS},
+      // lane INTEG (Track2 integration): the station's service annex — the same zone context as the Subway / Office; the mall grows at
+      // most TRACK_EXT_MALL.annex.max (1) annex (task mall-playtest-revision-20261031, lane GEN)
+      service: {storeys: 'one seeded service annex off the east track tunnel of the station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_MALL.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };

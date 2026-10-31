@@ -684,9 +684,12 @@ export class ContainerManager {
         if (g) spec.parts.forEach((q, i) => { if (i !== part && q.group === g) st.parts![i] = false; });
         st.parts[part] = true;
         st.seen![part] = true;
+        // Task mall-playtest-revision-20261031 (lane SHOPS, U10): partner parts open with it (a carton's two flaps)
+        const also = spec.parts[part].opensWith ?? [];
+        for (const j of also) { st.parts[j] = true; st.seen![j] = true; }
         st.searched = true;
         st.open = true;
-        const m = first ? partOpenMessage(st, part, this.partInfo(h, part)) : null;
+        const m = first ? partOpenMessage(st, part, this.partInfo(h, part), also) : null;
         this.emit({type: 'open', container: h, part, sound: spec.sound.open, rummage: this.partInfo(h, part).loot, ...(m ? {message: m.text, warn: m.warn} : {})}); // lane OPEN: per part
         break;
       }
@@ -695,6 +698,7 @@ export class ContainerManager {
         break;
       case 'close':
         st.parts[part] = false;
+        for (const j of spec.parts[part].opensWith ?? []) st.parts[j] = false; // (lane SHOPS U10: partner parts close with it)
         if (h.group === 'container') st.open = st.parts.some(Boolean);
         this.emit({type: 'close', container: h, part, sound: spec.sound.close});
         break;

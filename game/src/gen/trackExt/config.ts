@@ -94,7 +94,10 @@ export const TRACK_EXT_OFFICE: TrackExtConfig = {
  * Subway skeleton step (gen/station.ts reserveTunnelRoom) the mall generator never runs, so the mall's core layout is unchanged.
  * Its canvas has a fixed crop origin (east / south growth only: gen/mall/index.ts).
  */
-export const TRACK_EXT_MALL: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0};
+export const TRACK_EXT_MALL: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, annex: {...TRACK_EXT.annex, max: 1}};
+// (task mall-playtest-revision-20261031, lane GEN: annex.max 1 — the compact mall keeps AT MOST ONE service annex. Its smaller court
+// no longer covers the west bed end's tunnel stub, so a service hatch there could host a second annex next to the east tunnel's; the
+// brief keeps one per mall, proportionate to the ~8-10k m² core. Subway / Office configs are untouched.)
 
 /** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it). */
 export function trackExtConfig(levelId: string): TrackExtConfig {

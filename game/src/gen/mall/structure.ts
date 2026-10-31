@@ -1,14 +1,18 @@
 // Task track3-eaton-centre-20261031 (lane GEN): after the crop — the mall's level links, run railings, the patrol graph (lane HORDE),
 // the subway root report (Track2), the void outline and the layout.mall record (MallInfo). Pure data.
+// Task mall-playtest-revision-20261031 (lane GEN): station + three retail floors — per-floor atrium openings (nested outlines),
+// the glass-roof polygon, walkways = court galleries + corridor wings (patrol nodes on every walkway piece), lot families on the
+// shop records, per-storey wayfinding (directories / station return), MallInfo version 2.
 
 import {CELL, FLOOR, type Grid} from '../grid';
 import type {LevelLink, RailRun} from '../levels';
 import type {StairFlight} from '../traversal';
 import type {StationLayout} from '../stationTypes';
 import type {
-  MallBridge, MallElevator, MallInfo, MallPatrolNode, MallProgram, MallRect, MallShop, MallStorey, MallVerticalLink, SubwayRootAnchor,
+  MallElevator, MallInfo, MallOpening, MallPatrolNode, MallProgram, MallRect, MallShop, MallStorey, MallVerticalLink, MallWayfinding,
+  SubwayRootAnchor,
 } from './mallTypes';
-import {CLEAR, RINGS, ROOF, mallStoreyLabel} from './frame';
+import {CLEAR, FLOORS, ROOF, mallStoreyLabel} from './frame';
 import type {CellRect, MallCarve, RunCarve} from './carve';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -94,10 +98,15 @@ export function runRails(mc: MallCarve, c: Crop, flights: readonly StairFlight[]
 
 /** The void cell mask's outer boundary as a closed clockwise rectilinear polygon (world metres). */
 export function voidOutline(mc: MallCarve, c: Crop, W: number): {x: number; z: number}[] {
-  const m = mc.voidMask, at = (x: number, y: number) => x >= 0 && y >= 0 && x < W && m[y * W + x] === 1;
+  return maskOutline(mc.voidMask, {x0: mc.vx0, y0: mc.vz0, x1: mc.vx1, y1: mc.vz1}, c, W);
+}
+
+/** A cell mask's outer boundary (inside the bbox, exclusive ends) as a closed clockwise rectilinear polygon (world metres). */
+export function maskOutline(m: Uint8Array, b: {x0: number; y0: number; x1: number; y1: number}, c: Crop, W: number): {x: number; z: number}[] {
+  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < W && m[y * W + x] === 1;
   // Start at the top-left void cell's NW corner; walk the boundary keeping the void on the right (clockwise in screen x/z).
   let sx = -1, sy = -1;
-  outer: for (let y = mc.vz0; y < mc.vz1; y++) for (let x = mc.vx0; x < mc.vx1; x++) if (at(x, y)) { sx = x; sy = y; break outer; }
+  outer: for (let y = b.y0; y < b.y1; y++) for (let x = b.x0; x < b.x1; x++) if (at(x, y)) { sx = x; sy = y; break outer; }
   if (sx < 0) return [];
   const pts: {x: number; z: number}[] = [];
   // Directions: 0 = +x, 1 = +z, 2 = -x, 3 = -z (corner coordinates).
@@ -174,9 +183,10 @@ function storeyReach(g: Grid, x: number, z: number, y: number, max: number): Map
 }
 
 /**
- * Nodes on the gallery walkways of every ring (a loop around the void, ~10 m apart), on both station courts, on the bridge decks
- * and at both mouths of every public run; edges are verified straight walks on one storey (gallery / bridge) or the run itself
- * (escalator / stair between its mouth nodes).
+ * Patrol nodes on EVERY public walkway of every storey — the court galleries around the openings, the corridor wings / branches /
+ * loops / second courts (a node every ~8 m along each walkway piece's centre line, snapped to clear floor), the Fountain court on
+ * the station storey, and both mouths of every public run; edges are verified walks on one storey (the walk around props / wells
+ * stays short: <= 1.6x straight + 3 m) or the run itself (escalator / stair between its mouth nodes).
  */
 export function patrolGraph(layout: StationLayout, mc: MallCarve, c: Crop, flights: readonly StairFlight[]): MallPatrolNode[] {
   type N = {id: number; level: number; x: number; z: number; edges: {to: number; via?: 'escalator' | 'stair' | 'bridge' | 'gallery' | 'service'}[]};
@@ -194,65 +204,81 @@ export function patrolGraph(layout: StationLayout, mc: MallCarve, c: Crop, fligh
     }
     return null;
   };
-  const loops = new Map<number, N[]>();
-  for (let lv = 0; lv <= RINGS; lv++) {
+  const perLevel = new Map<number, N[]>();
+  const put = (lv: number, x: number, z: number): N | null => {
     const g = layout.levels[lv].grid, y = mc.bases[lv];
-    // Walkway centre lines: ring galleries (all four sides) / station courts (north + south, separate halves).
-    const zN = wzOf(c, mc.gz0) + 2.0, zS = wzOf(c, mc.gz1) - 2.0, xW = wxOf(c, mc.gx0) + 2.0, xE = wxOf(c, mc.gx1) - 2.0;
-    const raw: [number, number][] = [];
-    const span = (a: number, b: number, n: number) => Array.from({length: n + 1}, (_, i) => a + (b - a) * i / n);
-    const nx = Math.max(2, Math.round((xE - xW) / 10)), nz = Math.max(2, Math.round((zS - zN) / 10));
-    if (lv === 0) {
-      for (const xx of span(xW, xE, nx)) raw.push([xx, zN]);
-      for (const xx of span(xE, xW, nx)) raw.push([xx, zS]);
-    } else {
-      for (const xx of span(xW, xE, nx)) raw.push([xx, zN]);
-      for (const zz of span(zN, zS, nz).slice(1)) raw.push([xE, zz]);
-      for (const xx of span(xE, xW, nx).slice(1)) raw.push([xx, zS]);
-      for (const zz of span(zS, zN, nz).slice(1, -1)) raw.push([xW, zz]);
+    const p = near(g, x, z, y);
+    if (!p) return null;
+    const list = perLevel.get(lv) ?? [];
+    const dup = list.find(o => Math.hypot(o.x - p[0], o.z - p[1]) < 3);
+    if (dup) return dup;
+    const n = add(lv, p[0], p[1]);
+    list.push(n); perLevel.set(lv, list);
+    return n;
+  };
+  // Sample lines: per walkway piece a centre line along its long axis (the court: two lines beside the opening + two across).
+  const lines: {lv: number; pts: [number, number][]}[] = [];
+  const span = (a: number, b: number, n: number) => Array.from({length: n + 1}, (_, i) => a + (b - a) * i / n);
+  const lineOf = (lv: number, ax: number, az: number, bx: number, bz: number) => {
+    const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 8));
+    lines.push({lv, pts: span(0, 1, n).map(t => [ax + (bx - ax) * t, az + (bz - az) * t] as [number, number])});
+  };
+  for (let lv = 1; lv <= FLOORS; lv++) {
+    for (const w of mc.sk.walks) {
+      if (!w.floors.includes(lv)) continue;
+      const r = w.rect, x0 = wxOf(c, r.x) + 1.2, x1 = wxOf(c, r.x + r.w) - 1.2, z0 = wzOf(c, r.y) + 1.2, z1 = wzOf(c, r.y + r.h) - 1.2;
+      if (w.zone === 'court') {
+        // a loop around the court (inside its rim walkways)
+        lineOf(lv, x0 + 1, z0 + 1, x1 - 1, z0 + 1); lineOf(lv, x1 - 1, z0 + 1, x1 - 1, z1 - 1);
+        lineOf(lv, x1 - 1, z1 - 1, x0 + 1, z1 - 1); lineOf(lv, x0 + 1, z1 - 1, x0 + 1, z0 + 1);
+      } else if (r.w >= r.h) lineOf(lv, x0, (z0 + z1) / 2, x1, (z0 + z1) / 2);
+      else lineOf(lv, (x0 + x1) / 2, z0, (x0 + x1) / 2, z1);
     }
-    const list: N[] = [];
-    for (const [px, pz] of raw) {
-      const p = near(g, px, pz, y);
-      if (!p || list.some(o => Math.hypot(o.x - p[0], o.z - p[1]) < 3)) continue;
-      list.push(add(lv, p[0], p[1]));
+  }
+  {
+    const r = mc.sk.court0;
+    lineOf(0, wxOf(c, r.x) + 1.5, wzOf(c, r.y) + 2.0, wxOf(c, r.x + r.w) - 1.5, wzOf(c, r.y) + 2.0);
+  }
+  for (const L of lines) {
+    const g = layout.levels[L.lv].grid, y = mc.bases[L.lv];
+    let prev: N | null = null;
+    for (const [px, pz] of L.pts) {
+      const n = put(L.lv, px, pz);
+      if (!n) { prev = null; continue; }
+      if (prev && prev !== n) {
+        const straight = Math.hypot(prev.x - n.x, prev.z - n.z) / CELL;
+        const reach = storeyReach(g, prev.x, prev.z, y, Math.ceil(straight * 1.6 + 6));
+        const [bx, by] = g.cellOf(n.x, n.z);
+        if (reach.has(g.idx(bx, by))) link(prev, n, 'gallery');
+      }
+      prev = n;
     }
-    // Consecutive walkway nodes are joined when the walk between them stays short (around props / wells: <= 1.6x straight + 3 m).
-    for (let i = 0; i < list.length; i++) {
-      const a = list[i], b = list[(i + 1) % list.length];
-      if (lv === 0 && i === list.length - 1) break;
-      const straight = Math.hypot(a.x - b.x, a.z - b.z) / CELL;
-      const reach = storeyReach(g, a.x, a.z, y, Math.ceil(straight * 1.6 + 6));
-      const [bx, by] = g.cellOf(b.x, b.z);
-      if (reach.has(g.idx(bx, by))) link(a, b, 'gallery');
+  }
+  // Join every node to its nearest walkable neighbours on the storey (walkway pieces meeting at a corner / a wing mouth).
+  for (const [lv, list] of perLevel) {
+    const g = layout.levels[lv].grid, y = mc.bases[lv];
+    for (const n of list) {
+      const reach = storeyReach(g, n.x, n.z, y, 30);
+      const cands = list.filter(o => o !== n && !n.edges.some(e => e.to === o.id)).map(o => ({o, d: reach.get(g.idx(...g.cellOf(o.x, o.z))) ?? Infinity}))
+        .filter(e => e.d < Infinity).sort((p, q) => p.d - q.d);
+      for (const e of cands.slice(0, 2)) link(n, e.o, 'gallery');
     }
-    loops.set(lv, list);
   }
   const attach = (n: N, via: N['edges'][number]['via']) => {
     const g = layout.levels[n.level].grid, y = mc.bases[n.level];
     const reach = storeyReach(g, n.x, n.z, y, 80);
-    const cands = (loops.get(n.level) ?? []).filter(o => o !== n).map(o => ({o, d: reach.get(g.idx(...g.cellOf(o.x, o.z))) ?? Infinity}))
+    const cands = (perLevel.get(n.level) ?? []).filter(o => o !== n).map(o => ({o, d: reach.get(g.idx(...g.cellOf(o.x, o.z))) ?? Infinity}))
       .filter(e => e.d < Infinity).sort((p, q) => p.d - q.d);
     for (const e of cands.slice(0, 2)) link(n, e.o, via);
   };
-  // Bridges: a node at each deck end (on the void's edge rows) and mid-deck.
-  for (const b of mc.bridges) {
-    const g = layout.levels[b.level].grid, y = mc.bases[b.level];
-    const x = wxOf(c, (b.x0 + b.x1) / 2);
-    const ends = [near(g, x, wzOf(c, b.z0) + 0.25, y), near(g, x, wzOf(c, b.z1) - 0.25, y)];
-    const mid = near(g, x, (wzOf(c, b.z0) + wzOf(c, b.z1)) / 2, y);
-    if (!ends[0] || !ends[1] || !mid) continue;
-    const m = add(b.level, mid[0], mid[1]);
-    for (const e of ends) { const n = add(b.level, e![0], e![1]); link(n, m, 'bridge'); attach(n, 'gallery'); }
-  }
   // Public runs: a node 1.5 m beyond each mouth; the run edge between them.
   for (const rc of mc.runs) {
     const lanes = rc.lanes.map(ln => flights[ln.flights[0]]);
     const q = lanes[0];
-    const bot = q.h0 >= q.h1 ? q.bottom : q.bottom, top = q.top;
+    const bot = q.bottom, top = q.top;
     const dir = Math.sign((rc.axis === 'x' ? top.x - bot.x : top.z - bot.z)) || 1;
-    const ac = lanes.reduce((s, f) => s + (f.a0 + f.a1) / 2, 0) / lanes.length;
-    const P = (s: number) => (rc.axis === 'x' ? [s, ac] : [ac, s]) as [number, number];
+    const ac = lanes.reduce((sum, f) => sum + (f.a0 + f.a1) / 2, 0) / lanes.length;
+    const P = (v: number) => (rc.axis === 'x' ? [v, ac] : [ac, v]) as [number, number];
     const sb = (rc.axis === 'x' ? bot.x : bot.z) - dir * 1.5, st = (rc.axis === 'x' ? top.x : top.z) + dir * 1.5;
     const gb = layout.levels[rc.lower].grid, gt = layout.levels[rc.lower + 1].grid;
     const pb = near(gb, ...P(sb), mc.bases[rc.lower]), pt = near(gt, ...P(st), mc.bases[rc.lower + 1]);
@@ -261,7 +287,7 @@ export function patrolGraph(layout: StationLayout, mc: MallCarve, c: Crop, fligh
     link(nb, nt, rc.kind === 'escalator' ? 'escalator' : 'stair');
     attach(nb, 'gallery'); attach(nt, 'gallery');
   }
-  // Drop isolated nodes (a mouth / deck end that found no walkable gallery leg) and re-index.
+  // Drop isolated nodes and re-index.
   const keep = nodes.filter(n => n.edges.length > 0);
   const remap = new Map(keep.map((n, i) => [n.id, i]));
   return keep.map((n, i) => ({id: i, level: n.level, x: n.x, z: n.z, edges: n.edges.filter(e => remap.has(e.to)).map(e => ({to: remap.get(e.to)!, via: e.via}))}));
@@ -276,25 +302,28 @@ const PLACEHOLDER_PROGRAMS: readonly MallProgram[] = [
   'home', 'beauty', 'music', 'grocery', 'guns', 'optical', 'pet', 'luggage', 'clinic', 'arcade', 'florist',
 ];
 
+const areaCells = (layout: StationLayout, id: number, level: number): number => {
+  const a = layout.areas[id], g = layout.levels[level].grid;
+  let n = 0;
+  for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.area[g.idx(x, y)] === a.id && g.cells[g.idx(x, y)] === FLOOR) n++;
+  return n;
+};
+
 export function mallInfo(layout: StationLayout, mc: MallCarve, c: Crop, _flights: readonly StairFlight[], linkIds: {runs: number[][]; cores: number[][]},
   start: {x: number; z: number; yaw: number; level: number}): MallInfo {
   const storeys: MallStorey[] = mc.bases.map((y, level) => ({level, label: mallStoreyLabel(level), baseY: y, clear: level ? CLEAR.gallery : CLEAR.court, role: level ? 'ring' : 'station'}));
   const shops: MallShop[] = mc.shops.map((s, i) => {
-    const a = layout.areas[s.sales];
-    const g = layout.levels[s.level].grid;
-    let cells = 0;
-    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.area[g.idx(x, y)] === a.id && g.cells[g.idx(x, y)] === FLOOR) cells++;
-    const along = s.side === 'N' || s.side === 'S' ? s.rect.w : s.rect.h, deep = s.side === 'N' || s.side === 'S' ? s.rect.h : s.rect.w;
-    const program: MallProgram = s.kind === 'anchor' ? 'department' : PLACEHOLDER_PROGRAMS[(i * 7 + s.level * 3) % PLACEHOLDER_PROGRAMS.length];
+    const alongX = s.side === 'N' || s.side === 'S';
+    const along = alongX ? s.rect.w : s.rect.h, deep = alongX ? s.rect.h : s.rect.w;
+    const program: MallProgram = s.kind === 'anchor' ? 'department' : s.kind === 'food' ? 'food-court' : s.kind === 'kiosk' ? 'kiosk' : PLACEHOLDER_PROGRAMS[(i * 7 + s.level * 3) % PLACEHOLDER_PROGRAMS.length];
+    const fronts = s.fronts.map(q => ({...rectWorld(c, q.rect), side: q.side}));
     return {
-      id: s.id, area: s.sales, backroom: s.back, level: s.level, program, kind: s.kind, brand: `Unit ${s.id}`,
-      frontage: {...rectWorld(c, s.front), side: s.side}, salesArea: cells * CELL * CELL, depth: deep * CELL, width: along * CELL,
+      id: s.id, area: s.sales, ...(s.back !== undefined ? {backroom: s.back} : {}), level: s.level, program, kind: s.kind, brand: `Unit ${s.id}`,
+      frontage: fronts[0], salesArea: areaCells(layout, s.sales, s.level) * CELL * CELL, depth: deep * CELL, width: along * CELL,
+      lot: s.lot, zone: s.zone, frontages: fronts, stock: s.stock, stockArea: s.back !== undefined ? areaCells(layout, s.back, s.level) * CELL * CELL : 0,
+      serviceDoor: s.serviceDoor, ...(s.recess !== undefined ? {recess: s.recess} : {}),
     };
   });
-  const bridges: MallBridge[] = mc.bridges.map(b => ({
-    level: b.level, area: b.areas[0], width: (b.x1 - b.x0) * CELL,
-    from: {x: wxOf(c, (b.x0 + b.x1) / 2), z: wzOf(c, b.z0)}, to: {x: wxOf(c, (b.x0 + b.x1) / 2), z: wzOf(c, b.z1)},
-  }));
   const verticals: MallVerticalLink[] = [];
   mc.runs.forEach((rc, ri) => rc.lanes.forEach((_, li) => {
     const k = layout.levelLinks[linkIds.runs[ri][li]];
@@ -308,23 +337,63 @@ export function mallInfo(layout: StationLayout, mc: MallCarve, c: Crop, _flights
     const stops = mc.bases.map((y, level) => ({level, y}));
     const land = rectWorld(c, e.landing);
     const lx = (land.x0 + land.x1) / 2, lz = (land.z0 + land.z1) / 2;
-    verticals.push({kind: 'elevator', lower: 0, upper: RINGS, link: i, foot: {x: lx, y: 0, z: lz}, head: {x: lx, y: mc.bases[RINGS], z: lz}});
+    verticals.push({kind: 'elevator', lower: 0, upper: FLOORS, link: i, foot: {x: lx, y: 0, z: lz}, head: {x: lx, y: mc.bases[FLOORS], z: lz}});
     return {cab: rectWorld(c, e.cab), shaft: rectWorld(c, e.shaft), stops, glass: true};
   });
   const vb: MallRect = {x0: wxOf(c, mc.vx0), z0: wzOf(c, mc.vz0), x1: wxOf(c, mc.vx1), z1: wzOf(c, mc.vz1)};
   const outline = voidOutline(mc, c, mc.cw);
-  return {
-    version: 1, variant: mc.f.variant, name: mc.f.name, storeys,
+  const openings: MallOpening[] = [];
+  for (let lv = 1; lv <= FLOORS; lv++) {
+    const b = mc.sk.openBox[lv];
+    let cells = 0;
+    for (let y = b.y0; y < b.y1; y++) for (let x = b.x0; x < b.x1; x++) if (mc.sk.open[lv][y * mc.cw + x]) cells++;
+    openings.push({level: lv, outline: maskOutline(mc.sk.open[lv], b, c, mc.cw), bounds: {x0: wxOf(c, b.x0), z0: wzOf(c, b.y0), x1: wxOf(c, b.x1), z1: wzOf(c, b.y1)}, area: cells * CELL * CELL});
+  }
+  const top = openings[openings.length - 1];
+  const per = (m: Map<number, number[]>) => [...m].map(([level, areas]) => ({level, areas: [...areas]}));
+  const info: MallInfo = {
+    version: 2, variant: mc.f.variant, name: mc.f.name, storeys,
     void: {
-      outline, bounds: vb, openLevels: Array.from({length: RINGS}, (_, i) => i + 1), floorLevel: 0, roofSpringY: mc.roof.springY, roofApexY: mc.roof.apexY,
+      outline, bounds: vb, openings, openLevels: Array.from({length: FLOORS}, (_, i) => i + 1), floorLevel: 0, roofSpringY: mc.roof.springY, roofApexY: mc.roof.apexY,
     },
-    galleries: [...mc.galleries].map(([level, areas]) => ({level, areas: [...areas]})),
-    shops, bridges, verticals, elevators,
-    roof: {outline: vb, springY: mc.roof.springY, apexY: mc.roof.apexY, archSpacing: ROOF.archSpacing},
+    galleries: per(mc.galleries), courts: per(mc.courts), corridors: per(mc.corridors),
+    service: [{level: 0, areas: mc.stationBoh.filter(id => layout.areas[id]?.type === 'service-corridor')}, ...per(mc.service)],
+    shops, bridges: [], verticals, elevators,
+    roof: {outline: {...top.bounds}, polygon: top.outline, springY: mc.roof.springY, apexY: mc.roof.apexY, archSpacing: ROOF.archSpacing},
     patrol: [],
     subwayRoot: subwayRoot(layout, mc, c),
     start: {...start},
   };
+  info.wayfinding = mallWayfinding(info);
+  return info;
+}
+
+/**
+ * Directory / level-sign data per storey: the shops on it, every vertical link leaving it (stand point on this storey) and the public
+ * way back down to the station from its atrium court — one step per storey (an escalator going down when there is one, else a
+ * public stair, else the elevator).
+ */
+export function mallWayfinding(info: Pick<MallInfo, 'storeys' | 'shops' | 'verticals'>): MallWayfinding[] {
+  const out: MallWayfinding[] = [];
+  const at = (v: MallVerticalLink, lv: number) => (v.lower === lv ? {x: v.foot.x, z: v.foot.z} : {x: v.head.x, z: v.head.z});
+  for (const st of info.storeys) {
+    const lv = st.level;
+    const links = info.verticals.map((v, i) => ({v, i})).filter(({v}) => v.lower === lv || v.upper === lv || (v.kind === 'elevator' && v.lower <= lv && v.upper >= lv))
+      .map(({v, i}) => ({kind: v.kind, to: v.kind === 'elevator' ? (lv === v.lower ? v.upper : v.lower) : v.lower === lv ? v.upper : v.lower, at: v.kind === 'elevator' ? {x: v.foot.x, z: v.foot.z} : at(v, lv), vertical: i}));
+    const ret: MallWayfinding['stationReturn'][number][] = [];
+    for (let from = lv; from > 0; from--) {
+      const cands = info.verticals.map((v, i) => ({v, i})).filter(({v}) => v.upper === from && v.lower === from - 1 && (v.kind === 'escalator' || v.kind === 'stair'));
+      const pick = cands.find(q => q.v.kind === 'escalator') ?? cands[0];
+      if (pick) ret.push({kind: pick.v.kind, from, to: from - 1, at: {x: pick.v.head.x, z: pick.v.head.z}, vertical: pick.i});
+      else {
+        const e = info.verticals.findIndex(v => v.kind === 'elevator');
+        if (e >= 0) ret.push({kind: 'elevator', from, to: 0, at: {x: info.verticals[e].foot.x, z: info.verticals[e].foot.z}, vertical: e});
+        break;
+      }
+    }
+    out.push({level: lv, label: st.label, shops: info.shops.filter(s => s.level === lv).map(s => s.id), links, stationReturn: ret});
+  }
+  return out;
 }
 
 /** Track2 report (DERIVED, read-only): the pit station's trench ends as tunnel mouths, its platforms, the keep-clear volumes. */
@@ -335,7 +404,8 @@ export function subwayRoot(layout: StationLayout, mc: MallCarve, c: Crop): Subwa
     mouths.push({id: `bed${i}-x0`, x: t.x0, z, width, height, axis: 'x-', trackBed: i});
     mouths.push({id: `bed${i}-x1`, x: t.x1, z, width, height, axis: 'x+', trackBed: i});
   });
-  const keep: MallRect[] = [{x0: wxOf(c, mc.vx0), z0: wzOf(c, mc.vz0), x1: wxOf(c, mc.vx1), z1: wzOf(c, mc.vz1)}];
+  const b3 = mc.sk.openBox[FLOORS];
+  const keep: MallRect[] = [{x0: wxOf(c, b3.x0), z0: wzOf(c, b3.y0), x1: wxOf(c, b3.x1), z1: wzOf(c, b3.y1)}, rectWorld(c, mc.sk.court0)];
   for (const rc of mc.runs.filter(r => r.lower === 0)) keep.push(rectWorld(c, rc.rect));
   for (const e of mc.elevators) keep.push(rectWorld(c, e.shaft));
   return {level: 'mall', storey: 0, platformY: 0, trackBedY: layout.trench.floorY, platforms: [...layout.platforms], tunnelMouths: mouths, keepClear: keep};
@@ -361,6 +431,8 @@ export function mouthHolds(layout: StationLayout, mc: MallCarve, c: Crop): {leve
     hold(rc.lower, rc.rect); hold(rc.lower + 1, rc.rect);
     // The rest of the strip beside the run on the upper storey (the well's rim).
   }
-  for (const e of mc.elevators) for (let lv = 0; lv <= RINGS; lv++) hold(lv, e.landing);
+  for (const e of mc.elevators) for (let lv = 0; lv <= FLOORS; lv++) hold(lv, e.landing);
+  // the service-stair lobbies' front doors (2.5 m in front, every storey)
+  for (const cc of mc.cores) for (let lv = 0; lv <= FLOORS; lv++) hold(lv, {x: cc.lobby.x - 1, y: cc.lobby.y + cc.lobby.h + 1, w: 5, h: 5});
   return out;
 }

@@ -8,7 +8,7 @@
 //    constants (Siren hp = 2 x the shambler's), eligibility rules === the profile, the eligibility census === a fresh generation.
 
 import {describe, expect, it} from 'vitest';
-import {TRACK_EXT} from '../src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone)
+import {trackExtConfig} from '../src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone; task mall-playtest-revision-20261031: per level — the mall grows at most 1)
 import {existsSync, readFileSync} from 'node:fs';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import type {LevelId} from '../src/levels/types';
@@ -107,8 +107,9 @@ describe('enemy spawn reference: runtime agreement', () => {
         // reported separately: never part of the whole-level total
         expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service');
         if (c.zone) {
-          expect(c.zone.runsPerLevel).toEqual({lo: 0, hi: TRACK_EXT.annex.max});
-          expect(c.zone.perLevelMax).toBe(TRACK_EXT.annex.max * pc.count[1]);
+          const max = trackExtConfig(L.id as LevelId).annex.max;
+          expect(c.zone.runsPerLevel).toEqual({lo: 0, hi: max});
+          expect(c.zone.perLevelMax).toBe(max * pc.count[1]);
           continue;
         }
         lo += c.perLevel.lo; hi += c.perLevel.hi; mean += c.perLevel.mean;

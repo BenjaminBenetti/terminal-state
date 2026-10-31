@@ -55,7 +55,7 @@ export interface SlideMove {
   min?: number;
 }
 
-export interface SurfaceSpec { y: number; x0: number; x1: number; z0: number; z1: number; clear: number }
+export interface SurfaceSpec { y: number; x0: number; x1: number; z0: number; z1: number; clear: number; /** (lane SHOPS U10) snug packing: items/lootLayout.ts Surface.snug */ snug?: boolean }
 
 export interface PartSpec {
   /** HUD name of this compartment's moving part ("lid", "top drawer", "left locker" ...). */
@@ -106,6 +106,11 @@ export interface PartSpec {
   glass?: boolean;
   /** Parts of one group are mutually exclusive (sliding freezer panes: opening one closes the other). */
   group?: string;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U10): parts that open and close TOGETHER with this one (a carton's two flaps:
+   * with only one flap up, the other half's contents sat under the closed flap, out of sight of a standing player).
+   */
+  opensWith?: readonly number[];
   /** Initial ajar fraction (forced safe door): visual only, the compartment still counts as closed. */
   ajar?: number;
   /** Render the moving part double-sided (thin shells seen from inside when open: freezer panes). */
@@ -470,6 +475,21 @@ const MED_ROWS: readonly (readonly [number, number])[] = [[0.16, 0.28], [0.28, 0
   [1.1, 1.21], [1.21, 1.32], [1.32, 1.43]];
 const MED_DRAWER = {zCut: 0.193, zFront: 0.245, depth: 0.42, dist: 0.3, tight: true} as const;
 /**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U10): one M29 small drawer. modelDrawer's insets (tray 2 cm, items another 2 cm per
+ * side) left a 6 cm wide loot surface in a 14 cm column — narrower than every item of the cabinet's own rows (a dressing is 9.4 x 10 cm):
+ * all 33 drawers rejected every lot (fit test: 0 of 3 rows fit), so they were empty by construction. The tray now stands 5 mm inside
+ * the 14 cm front with its loot surface = its inside (11 cm) and SNUG packing (no random yaw, 4 mm gaps): a dressing (10 x 9.4 cm) or
+ * a cell fits; a med kit / bottle / splint stays for the top cupboard and the door bay.
+ */
+function medDrawer(name: string, x0: number, x1: number, y0: number, y1: number): PartSpec {
+  const p = modelDrawer(name, x0, x1, y0, y1, MED_DRAWER);
+  const s = p.surfaces[0], t = p.tray!;
+  // a 2 mm-raised tray (1 cm floor) and 1.5 mm head room under the lined cavity's top: an 11 cm front holds a 9.2 cm dressing
+  const tx0 = x0 + 0.005, tx1 = x1 - 0.005, ty0 = y0 + 0.002, ty1 = t[1].b[4], tz0 = t[0].b[2], tz1 = t[0].b[5], floor = ty0 + 0.01;
+  // the surface = the tray's inside (1 cm walls), snug-packed (lootLayout Surface.snug: square to the front, 4 mm gaps)
+  return {...p, tray: tray('inner', tx0, ty0, tz0, tx1, ty1, tz1), surfaces: [{...s, y: floor, x0: tx0 + 0.01, x1: tx1 - 0.01, clear: Math.round((y1 - floor - 0.0015) * 10000) / 10000, snug: true}]};
+}
+/**
  * Lane ASSETS batch 2 resume (lanes/ASSETS.notes 12c), measured by lane SHOPS in the prop frame (half turn; front +Z):
  * - M35 tall gun safe (0.82 x 1.80 x 0.60): door panel x -0.287..0.286, y 0.138..1.660, face z 0.235 inside a bezel at 0.242; hinge
  *   knuckles x 0.256..0.305 at z 0.274 (the viewer's right edge); spoke wheel x ~-0.02, y 0.98 to z 0.296; a solid body -> lined cavity.
@@ -612,9 +632,12 @@ export const OPENABLE_SPECS = {
       move: {type: 'slide', dir: [-s, 0.036, 0.017], dist: 0.69, min: 0.4},
       region: [s < 0 ? box(-0.69, 0.6, -0.35, 0.0, 0.9, 0.36) : box(0.0, 0.6, -0.35, 0.69, 0.9, 0.36)],
       cavity: s < 0 ? box(-0.69, 0.14, -0.27, 0.0, 0.84, 0.3) : box(0.0, 0.14, -0.27, 0.69, 0.84, 0.3), cavityRole: 'frost', replaceInterior: true,
+      // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the frozen stock packs lie OUTSIDE the loot surface's footprint (the
+      // back-wall strip z < -0.2 and the inner edge strip by the end cap): they stood ON the surface (0.30..0.37) and buried ~43 % of
+      // the freezer's lots up to 5 cm deep (contents embedded in geometry). Visual only: the surfaces / lots are unchanged (goldens).
       inner: s < 0
-        ? [B('frost', -0.68, 0.14, -0.26, -0.01, 0.3, 0.29), B('stock', -0.62, 0.3, -0.22, -0.4, 0.36, 0.0), B('stock', -0.3, 0.3, 0.02, -0.12, 0.34, 0.22)]
-        : [B('frost', 0.01, 0.14, -0.26, 0.68, 0.3, 0.29), B('stock', 0.12, 0.3, -0.2, 0.34, 0.35, 0.02), B('stock', 0.42, 0.3, 0.04, 0.64, 0.37, 0.24)],
+        ? [B('frost', -0.68, 0.14, -0.26, -0.01, 0.3, 0.29), B('stock', -0.62, 0.3, -0.262, -0.36, 0.36, -0.206), B('stock', -0.074, 0.3, -0.02, -0.016, 0.34, 0.2)]
+        : [B('frost', 0.01, 0.14, -0.26, 0.68, 0.3, 0.29), B('stock', 0.016, 0.3, -0.18, 0.074, 0.35, 0.02), B('stock', 0.36, 0.3, -0.262, 0.64, 0.37, -0.206)],
       surfaces: [{y: 0.302, x0: s < 0 ? -0.6 : 0.08, x1: s < 0 ? -0.08 : 0.6, z0: -0.2, z1: 0.22, clear: 0.28}],
     })),
     loot: LOOT.chestFreezer,
@@ -974,7 +997,9 @@ export const OPENABLE_SPECS = {
   pharmacyDispensaryCounter: {
     label: 'dispensary counter', model: 'office-pharmacy-dispensary-counter', turn: true, body: 'model', group: 'container',
     parts: [
-      ...([[0.11, 0.304], [0.308, 0.484], [0.488, 0.66], [0.664, 0.885]] as const).map(([y0, y1], i) => modelDrawer(i === 0 ? 'bottom drawer' : i === 3 ? 'top drawer' : 'drawer', -0.565, 0.19, y0, y1, DISP_DRAWER)),
+      // (Task mall-playtest-revision-20261031, lane SHOPS U10: replaceInterior — the model's own faces inside a drawer's cavity, e.g. a
+      // rail at ~0.56 m over the back of the opened third drawer, are dropped: the lined cavity + tray stand in, nothing pokes into lots)
+      ...([[0.11, 0.304], [0.308, 0.484], [0.488, 0.66], [0.664, 0.885]] as const).map(([y0, y1], i) => ({...modelDrawer(i === 0 ? 'bottom drawer' : i === 3 ? 'top drawer' : 'drawer', -0.565, 0.19, y0, y1, DISP_DRAWER), replaceInterior: true})),
       dispCupboard('left cupboard', -1.362, -0.982, -1, true),
       dispCupboard('cupboard', -0.978, -0.582, 1),
       dispCupboard('cupboard', 0.203, 0.568, -1),
@@ -1004,7 +1029,7 @@ export const OPENABLE_SPECS = {
   medicineDrawerCabinet: {
     label: 'medicine cabinet', model: 'office-medicine-drawer-cabinet', turn: true, body: 'model', group: 'container',
     parts: [
-      ...MED_ROWS.flatMap(([y0, y1], r) => MED_COLS.map(([x0, x1]) => modelDrawer(r === 0 ? 'bottom drawer' : r === MED_ROWS.length - 1 ? 'top drawer' : 'drawer', x0, x1, y0, y1, MED_DRAWER))),
+      ...MED_ROWS.flatMap(([y0, y1], r) => MED_COLS.map(([x0, x1]) => medDrawer(r === 0 ? 'bottom drawer' : r === MED_ROWS.length - 1 ? 'top drawer' : 'drawer', x0, x1, y0, y1))), // (lane SHOPS U10: medDrawer)
       mallDoor('top cupboard', -0.44, -0.016, 1.43, 1.845, 0.193, 0.27, -1, {
         cavity: box(-0.43, 1.44, -0.28, -0.026, 1.835, 0.19), replaceInterior: true,
         surfaces: [{y: 1.442, x0: -0.4, x1: -0.06, z0: -0.25, z1: 0.16, clear: 0.36}],
@@ -1045,6 +1070,13 @@ export const OPENABLE_SPECS = {
   gunSafeTall: {
     label: 'gun safe', model: 'office-gun-safe-tall', turn: true, body: 'model', group: 'container',
     parts: [mallDoor('safe door', -0.29, 0.29, 0.135, 1.665, 0.2, 0.31, 1, {
+      // Task mall-playtest-revision-20261031 (lane FIX, U06): the leaf turns on its KNUCKLE AXIS (x 0.2805, z 0.250; knuckles x 0.256..0.305,
+      // z 0.223..0.277) and takes the whole knuckles in front of the frame plane (0.242) with it — before, the region edge x 0.29 cut every
+      // knuckle in half and the pivot sat 1 cm off its axis, so the halves came apart / intersected. An inner plate closes the back of the
+      // single-faced leaf (the model's inward duplicate face was removed with the coplanar layers: build-mall-track3.mjs EDITS dedupe).
+      move: {type: 'hinge', axis: 'y', pivot: [0.2805, 0, 0.25], angle: 100 * P, min: 55 * P},
+      region: [box(-0.29, 0.135, 0.2, 0.29, 1.665, 0.31), box(0.29, 0.2, 0.2425, 0.312, 0.425, 0.285), box(0.29, 1.36, 0.2425, 0.312, 1.58, 0.285)],
+      plate: box(-0.28, 0.145, 0.201, 0.28, 1.655, 0.204),
       cavity: box(-0.27, 0.15, -0.27, 0.27, 1.65, 0.195), replaceInterior: true, cavityRole: 'steelDark',
       inner: [B('steelDark', -0.27, 1.25, -0.27, 0.27, 1.265, 0.17)],
       surfaces: [{y: 0.152, x0: -0.24, x1: 0.24, z0: -0.24, z1: 0.16, clear: 1.0}, {y: 1.267, x0: -0.24, x1: 0.24, z0: -0.24, z1: 0.14, clear: 0.36}],
@@ -1064,11 +1096,16 @@ export const OPENABLE_SPECS = {
   cardboardBoxFlaps: {
     label: 'cardboard box', model: 'office-cardboard-box-flaps', turn: true, body: 'model', group: 'container', spill: true,
     parts: ([[1, 'front flap'], [-1, 'back flap']] as const).map(([s, name]): PartSpec => ({
-      name,
+      name, opensWith: [s > 0 ? 1 : 0], // (lane SHOPS U10: both flaps open together)
       move: {type: 'hinge', axis: 'x', pivot: [0, 0.479, s * 0.186], angle: s * 110 * P, min: 50 * P},
       region: [s > 0 ? box(-0.28, 0.47, 0, 0.28, 0.49, 0.19) : box(-0.28, 0.47, -0.19, 0.28, 0.49, 0)],
       cavity: s > 0 ? box(-0.262, 0.01, 0, 0.262, 0.468, 0.182) : box(-0.262, 0.01, -0.182, 0.262, 0.468, 0), cavityHidden: true, modelInterior: true,
-      surfaces: [{y: 0.011, x0: -0.24, x1: 0.24, z0: s > 0 ? 0.02 : -0.165, z1: s > 0 ? 0.165 : -0.02, clear: 0.42}],
+      // Task mall-playtest-revision-20261031 (lane SHOPS, U10): a part-full carton — packed stock / paper (static, shown while the flap
+      // is open) fills its half to 0.16 m and its finds lie ON it (0.30 m left: a 0.27 m chips bag still stands). On the box floor
+      // (0.011) under 0.47 m walls they were hidden behind the near wall / the other (closed) flap from a standing player (ray-tested:
+      // 8 of 21 lots seen from the closest stand).
+      inner: [B('paper', -0.259, 0.012, s > 0 ? 0.003 : -0.181, 0.259, 0.16, s > 0 ? 0.181 : -0.003)],
+      surfaces: [{y: 0.161, x0: -0.24, x1: 0.24, z0: s > 0 ? 0.02 : -0.165, z1: s > 0 ? 0.165 : -0.02, clear: 0.295}],
     })),
     loot: LOOT.cardboardBoxFlaps,
     sound: {open: 'crate', close: 'crate'},

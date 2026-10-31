@@ -17,6 +17,7 @@ import {MOOD, syncGlowFog} from './lights';
 import {fogCullDistance} from './levelCulling';
 import type {MallArch} from './mallArch';
 import {skylightStats} from './mallSkylight';
+import {mallSkyTune, type MallSkyTune} from './mallExterior'; // task mall-playtest-revision (U02)
 
 /** The mall's scene fog (FogExp2) and camera far plane. */
 export const MALL_FOG = {density: 0.0115, color: 0x3a403c, far: 250};
@@ -84,9 +85,19 @@ export function installMallAtmosphere(host: AtmosphereHost): MallAtmosphere {
   return (installed = new MallAtmosphere(host));
 }
 
+/** Even-odd point-in-polygon (x / z). */
+function insidePoly(poly: readonly {x: number; z: number}[], x: number, z: number): boolean {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c;
+  }
+  return c;
+}
+
 export interface QaPose { name: string; x: number; z: number; yaw: number; level: number; look: {x: number; y: number; z: number} }
 
-/** Named QA poses of a mall layout: the platform look-up, a gallery void edge (ring 3), a themed shop interior. */
+/** Named QA poses of a mall layout: the platform look-up, a gallery edge of the middle floor, a themed shop interior. */
 export function mallQaPoses(layout: StationLayout): QaPose[] {
   const m = layout.mall;
   if (!m) return [];
@@ -96,19 +107,22 @@ export function mallQaPoses(layout: StationLayout): QaPose[] {
   // 1. platform look-up: the start pose, looking up at the vault over the void centre
   out.push({name: 'platform-lookup', x: m.start.x, z: m.start.z, yaw: yawTo(m.start.x, m.start.z, vc.x, vc.z), level: m.start.level,
     look: {x: vc.x, y: m.roof.springY - 2, z: vc.z}});
-  // 2. a gallery void edge on ring 3 (or the middle ring): the gallery cell nearest the void centre's long side, facing across
-  const ring = m.storeys.find(s => s.role === 'ring' && s.level === 3) ?? m.storeys.filter(s => s.role === 'ring')[Math.floor(m.storeys.length / 2)];
+  // 2. a gallery edge on the middle retail floor (task mall-playtest-revision: floor 2 of 3; that floor's own opening — the openings
+  //    widen upward): the gallery cell beside the opening nearest its centre's long side, facing across
+  const rings = m.storeys.filter(s => s.role === 'ring');
+  const ring = rings[Math.floor((rings.length - 1) / 2)];
   const levels = (layout as {levels?: {id: number; grid: {w: number; h: number; cells: Uint8Array; area: Int32Array | Int16Array | number[]}}[]}).levels;
   const gal = ring ? m.galleries.find(g => g.level === ring.level) : undefined;
   const grid = ring && levels ? levels.find(l => l.id === ring.level)?.grid : undefined;
   if (ring && gal && grid) {
     const set = new Set(gal.areas);
+    const open = m.void.openings?.find(o => o.level === ring.level)?.outline ?? m.void.outline;
     let best: {x: number; z: number; d: number} | null = null;
     for (let i = 0; i < grid.w * grid.h; i++) {
       if (grid.cells[i] !== 1 || !set.has(Number(grid.area[i]))) continue;
       const cx = i % grid.w, cy = (i - cx) / grid.w, x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
-      // next to the void: a closed neighbour on this ring inside the void bounds
-      const inV = (px: number, pz: number) => px > vb.x0 && px < vb.x1 && pz > vb.z0 && pz < vb.z1;
+      // next to the void: a neighbour inside this floor's opening
+      const inV = (px: number, pz: number) => insidePoly(open, px, pz);
       if (!inV(x + CELL, z) && !inV(x - CELL, z) && !inV(x, z + CELL) && !inV(x, z - CELL)) continue;
       const d = Math.abs(z - vc.z) < Math.abs(x - vc.x) ? Math.abs(x - vc.x) * 0.2 + Math.abs(z - vc.z) : Math.abs(x - vc.x) + Math.abs(z - vc.z) * 0.2;
       if (!best || d < best.d) best = {x, z, d};
@@ -140,7 +154,8 @@ export function mallQaPoses(layout: StationLayout): QaPose[] {
 
 /**
  * QA hooks (spread into window.__LL by qa.ts): mallArch() summary, mallFog({density, color}) tune, mallSkylight(), mallCuller(),
- * mallPoses(), mallPose(name) (teleport + look; returns the pose or null).
+ * mallPoses(), mallPose(name) (teleport + look; returns the pose or null); task mall-playtest-revision: mallSky({zenith, horizon,
+ * gas, curtain}) (the exterior murk / gas, U02), mallAds() (the ads drawn, D06).
  */
 export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atriumStats?: unknown; stats?: unknown; slabCulled?: number}} | null; layout?: StationLayout; scene?: THREE.Scene},
   lookAt: (x: number, y: number, z: number) => void, teleport: (x: number, z: number, yaw?: number, level?: number) => boolean) {
@@ -153,6 +168,15 @@ export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atr
       return {density: f?.density ?? null, color: f?.color?.getHex() ?? null, t36: fogTransmittance(36, f?.density), t100: fogTransmittance(100, f?.density)};
     },
     mallSkylight: () => skylightStats(),
+    // task mall-playtest-revision (lane ARCH): U02 exterior murk / gas tuning (uniforms only) and the D06 ads drawn
+    mallSky: (o: MallSkyTune = {}) => mallSkyTune(o),
+    mallAds: () => {
+      const a = game.world?.mallArch;
+      if (!a) return null;
+      const by: Record<string, number> = {};
+      for (const q of a.ads) by[`${q.kind}:${q.program}`] = (by[`${q.kind}:${q.program}`] ?? 0) + 1;
+      return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, by, first: a.ads.slice(0, 6).map(q => ({kind: q.kind, program: q.program, level: q.level, x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2)}))};
+    },
     mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null}), // (+ slabCulled: lane PERF)
     mallPoses: () => (game.layout ? mallQaPoses(game.layout) : []),
     mallPose: (name: string) => {

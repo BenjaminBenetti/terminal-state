@@ -88,6 +88,8 @@ export const ATRIUM_SIGHT_TESTS = 12;
 export const ATRIUM_NEAR = 2.5;
 /** The same for an eye inside the (solid) glass lift shaft (eyeOverride set): the shaft stands beside the void. */
 export const ATRIUM_CAB_NEAR = 8;
+/** Task mall-playtest-revision (lane ARCH, U07): an eye this close (m) to a glass lift shaft, looking at it, counts as at the car. */
+export const GLASS_LOBBY = 3.5;
 /**
  * A mesh of an atrium-visible storey renders within this distance (m) of a visible atrium tile: a gallery (4-6 m) plus a whole
  * sales floor (10-12 m) seen through its shopfront across the void (PORTAL_MARGIN 12 popped the back of the shop); stock rooms /
@@ -163,6 +165,8 @@ export class LevelCuller {
   eyeOverride: number | null = null;
   /** Task track3 (lane ARCH): atrium tiles (mall only; empty elsewhere) and the last update's atrium diagnostics. */
   private readonly atriumTiles: AtriumTile[] = [];
+  /** Task mall-playtest-revision (lane ARCH): the glazed lift shafts (mall only: the builder's slabs.see rects). */
+  private readonly glassShafts: {x0: number; z0: number; x1: number; z1: number}[];
   private atriumVis = new Uint8Array(0);
   private readonly atriumLevels = new Set<number>();
   atriumStats = {tiles: 0, inFrustum: 0, seen: false, sightTests: 0, levels: [] as number[]};
@@ -179,6 +183,7 @@ export class LevelCuller {
     this.levelIds = levels.map(l => l.id);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
     if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
+    this.glassShafts = opts?.atrium ? [...(opts.slabs?.see ?? [])] : [];
   }
 
   /** Task track3 (lane PERF): per storey floor plane, the cells open across it (summed-area table, (W + 1) x (H + 1)). */
@@ -370,6 +375,16 @@ export class LevelCuller {
       const tag = Array.isArray(m.userData.levels) ? (m.userData.levels as unknown[]).filter((l): l is number => typeof l === 'number' && this.levelIds.includes(l)) : [];
       if (tag.length) { entry.levels = tag; this.stats.multi++; this.entries.push(entry); return; }
       let level = typeof m.userData.level === 'number' ? m.userData.level : NaN;
+      // Task mall-playtest-revision-20261031 (lane ARCH, mall only: the culler has atrium tiles): an untagged mesh whose box sits in
+      // ONE storey's y band takes that storey — its box centre can lie in a wall / another area of a smaller mall (a 12 m dressing
+      // chunk 'purpose-8,3|panel' on floor 1 resolved to the station by levelAt and was culled while 87 px visible). The mall's
+      // storeys are distinct y bands (no split levels); Subway / Office keep the levelAt rule below.
+      if (Number.isNaN(level) && this.atriumTiles.length) {
+        const byY = [...this.levels].sort((p, q) => p.baseY - q.baseY);
+        const band = (y: number) => { let id = byY[0]?.id ?? 0; for (const l of byY) if (y >= l.baseY - 0.3) id = l.id; return id; };
+        const lo = band(b.min.y + 0.05), hi = band(Math.max(b.min.y + 0.05, b.max.y - 0.05));
+        if (lo === hi && b.max.y - b.min.y <= 4.5) level = lo;
+      }
       if (Number.isNaN(level)) {
         const lo = this.levelAt((b.min.x + b.max.x) / 2, b.min.y + 0.05, (b.min.z + b.max.z) / 2);
         const hi = this.levelAt((b.min.x + b.max.x) / 2, b.max.y - 0.05, (b.min.z + b.max.z) / 2);
@@ -499,8 +514,17 @@ export class LevelCuller {
   private updateAtrium(e: THREE.Vector3, shown: Set<number>, inCab = false): void {
     const T = this.atriumTiles, vis = this.atriumVis, st = this.atriumStats;
     // the eye inside the glass lift car (eyeOverride): its shaft is solid on every grid, so no sight ray can start there — the
-    // void beside the shaft counts as seen within ATRIUM_CAB_NEAR
-    const nearR = inCab ? ATRIUM_CAB_NEAR : ATRIUM_NEAR;
+    // void beside the shaft counts as seen within ATRIUM_CAB_NEAR. Task mall-playtest-revision (lane ARCH, U07): the same for an eye
+    // on a landing right in front of the glass shaft looking at it (through the open doors / the glass car to the atrium beyond:
+    // the sight rays would stop in the solid shaft) — conservative: it may draw a little more near the lift, never less.
+    let lobby = false;
+    for (const r of this.glassShafts) {
+      const dx = Math.max(r.x0 - e.x, 0, e.x - r.x1), dz = Math.max(r.z0 - e.z, 0, e.z - r.z1);
+      if (dx * dx + dz * dz > GLASS_LOBBY * GLASS_LOBBY) continue;
+      this.box.min.set(r.x0, e.y - 1.5, r.z0); this.box.max.set(r.x1, e.y + 1.5, r.z1);
+      if (this.fr.intersectsBox(this.box)) { lobby = true; break; }
+    }
+    const nearR = inCab || lobby ? ATRIUM_CAB_NEAR : ATRIUM_NEAR;
     vis.fill(0);
     this.atriumLevels.clear();
     const maxD = Math.min(ATRIUM_MAX_DIST, this.maxDistance);

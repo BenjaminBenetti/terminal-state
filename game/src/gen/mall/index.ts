@@ -1,15 +1,18 @@
-// Task track3-eaton-centre-20261031 (lane GEN): THE EATON'S CENTER (LevelId 'mall', tier 2) — the WHOLE mall as ONE continuous
-// StationLayout: `generateMallLevel(ctx)`.
+// Task track3-eaton-centre-20261031 (lane GEN): THE MALL (LevelId 'mall', tier 2) — the WHOLE mall as ONE continuous StationLayout:
+// `generateMallLevel(ctx)`.
+// Task mall-playtest-revision-20261031 (lane GEN): the compact redesign — station + THREE retail floors (was six rings), a small
+// irregular atrium (per-floor openings, nested and widening upward), corridor wings / branches / loops beyond it, shop units of ten
+// lot families (gen/mall/lots.ts), a seeded "<Name> Center" (gen/mall/names.ts; layout.name + layout.mall.name).
 //
-// levels[0] = the subway station at the bottom of the pit (role 'main', y 0): two side platforms on one double track bed under the
-// open void, the north (fountain) and south courts beside them; levels[1..6] = the retail rings (role 'ring', y = 5 m × k): a
-// gallery walkway ring around the void (railed on every edge), shop units on all four sides (sales floor + stock room, shopfronts
-// onto the gallery), a service-corridor loop with four corner service-stair cores and plant rooms, escalator banks / stairs between
-// every storey pair (open wells in the galleries), bridges across the void on some rings, glass-elevator shafts at the void edge,
-// a glass barrel-vault roof over the void (layout.mall.roof). Deterministic from (ctx.levelSeed, ctx.startWeapon); gear is NOT
-// placed here (the level registry appends ctx.gear once).
+// levels[0] = the subway station at the bottom of the atrium (role 'main', y 0): two side platforms on one double track bed under
+// the floor-1 opening, the Fountain court behind the north platform (station escalators, glass elevator), station back of house;
+// levels[1..3] = the retail floors (role 'ring', y = 5 m × k): the atrium court's galleries around that floor's opening (railed),
+// corridor wings off it (variant topology; upper floors may omit a wing), shop units extruded from every walkway edge, two
+// service-stair cores, a washroom passage per floor, escalator banks in the court strips + public stairs in the wings (open wells),
+// one glass elevator (4 stops), a glass roof over the top opening only (layout.mall.roof.polygon). Deterministic from
+// (ctx.levelSeed, ctx.startWeapon); gear is NOT placed here (the level registry appends ctx.gear once).
 //
-// Pipeline (the station / office machinery wherever it fits): frame (seeded variant) → carve (Kit with 7 level grids; the station
+// Pipeline (the station / office machinery wherever it fits): frame (seeded variant) → carve (Kit with 4 level grids; the station
 // with the shared Kit.sideBlock) → Track2 plan (extendTracks on rng.fork('track-ext'), lane INTEG: nothing written into the Kit) →
 // crop (fixed origin, canvas room east / south) → storeys / links / apertures / rails / rescue ladders → ONE stationDress.dress()
 // (run mouths / elevator landings held clear) → [lane SHOPS seam] → start → whole-level enemies (spawn profile 'pit' / 'ring'
@@ -39,7 +42,8 @@ import {assignMallPrograms} from './shops'; // lane SHOPS: programs / brands / p
 import {dressMallShops} from './shopsDress'; // lane SHOPS: the shop interiors (sales floors + stock rooms) by program recipe
 import {placeMallWeapons} from './shopsWeapons'; // lane SHOPS: the bounded once-per-run gun-shop weapon plan
 import {placeMallLandmarks, type LandmarkReport} from './landmarks'; // lane ARCH: fountain, directory pylons, wayfinding signs
-import {CROP_MARGIN, MALL_CANVAS, RINGS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
+import {placeAtriumColumns, type ColumnReport} from './columns'; // task mall-playtest-revision-20261031 (lane FIX, U04): round atrium columns = props
+import {CROP_MARGIN, FLOORS, MALL_CANVAS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
 import {carveMall, type MallCarve} from './carve';
 import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwayRoot, type Crop} from './structure';
 import {mallIssues} from './validate';
@@ -48,14 +52,15 @@ import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EX
 import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
 export {MALL_VARIANTS, mallFrame, mallVariantOf, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
-export {mallIssues, mallVoidCells} from './validate';
+export {mallIssues, mallVoidCells, mallRouteGroups} from './validate';
+export {mallNameOf, MALL_GENERIC_NAME} from './names';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
-const ATTEMPTS = 12;
+const ATTEMPTS = 10;
 /** Validation issues of rejected attempts (QA / tests). */
 export const MALL_REJECTS = new Map<string, number>();
 /** Timing of the last generateMallLevel call (ms), its attempts and the last attempt's issues (QA / tests). */
-export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, issues: [] as string[], landmarks: null as LandmarkReport | null}; // (+ landmarks: lane ARCH)
+export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, salt: 0, issues: [] as string[], landmarks: null as LandmarkReport | null, columns: null as ColumnReport | null}; // (+ landmarks: lane ARCH; + columns: lane FIX)
 
 export interface MallGenOptions {
   /** Force a named variant (tests / QA); default: the level seed's. */
@@ -66,7 +71,7 @@ export interface MallGenOptions {
   trackExt?: TrackExtConfig | 'none';
 }
 
-/** The ONE continuous Eaton's Center layout (station pit + six rings + the roof record). */
+/** The ONE continuous mall layout (station + three retail floors + the roof record). */
 export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   let f = mallFrame(ctx.levelSeed, opts.variant);
@@ -80,6 +85,7 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
     const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt);
     MALL_GEN_STATS.attempts = attempt + 1;
+    MALL_GEN_STATS.salt = MALL_GEN_STATS.carveFails;
     // A program that does not fit re-rolls the frame's free parameters (same variant) for the next attempt.
     if (!layout) { MALL_GEN_STATS.carveFails++; f = mallFrame(ctx.levelSeed, f.variant, MALL_GEN_STATS.carveFails); continue; }
     let issues = mallIssues(layout, {startCells: spawnStartCells(spawns)});
@@ -126,7 +132,7 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
     if (r.w <= 0 || r.h <= 0) continue;
     x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
   }
-  const use = Array.from({length: RINGS + 1}, (_, i) => i);
+  const use = Array.from({length: FLOORS + 1}, (_, i) => i);
   const c = cropKit(k, use, ox, oy, x1 - ox + CROP_MARGIN, y1 - oy + CROP_MARGIN);
   const crop: Crop = {ox, oy};
 
@@ -136,7 +142,7 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   const linkIds = mallLinks(mc, c.flights, links);
   const P1 = mc.block.platforms[0], P2 = mc.block.platforms[1];
   const layout: StationLayout = {
-    seed, attempt, name: f.name, archetype: 'side-mezzanine', towards: ['Union Yards', 'Harbourfront'], grid: c.grids[0], areas: k.areas, doors: k.doors,
+    seed, attempt, name: f.name, archetype: 'side-mezzanine', towards: ['Union Yards', 'Lakeshore Loop'], grid: c.grids[0], areas: k.areas, doors: k.doors,
     props: [], lights: [], signs: [], pickups: [], zombies: [], storefronts: [], decor: [],
     playerSpawn: {x: 0, z: 0, yaw: 0}, trench: c.trenches[0], trenches: c.trenches, platform: P1.id, platforms: [P1.id, P2.id],
     traversal: {stairs: c.flights, ladders: [], underpasses: []}, levels, levelLinks: links, rails: [],
@@ -154,7 +160,7 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   release();
 
   // --- Player start: on platform 1 under the open void, a third of the way along, looking along the platform toward the middle
-  const start = startOf(layout, mc);
+  const start = startOf(layout, mc, crop);
   // The mall record (shops, void, runs, bridges, elevators, roof, subway root); the patrol graph follows once the level is final.
   layout.mall = mallInfo(layout, mc, crop, c.flights, linkIds, start);
   // [lane SHOPS seam] programs / kinds / brands / fits of layout.mall.shops + their areas' purposes / labels (own fork); SHOPS'
@@ -166,16 +172,20 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   placeMallWeapons(layout, ctx.levelSeed, layout.startWeapon ?? 'rifle');
   // lane ARCH: the pit-plaza fountain, directory pylons and wayfinding signs (after the interiors, before the populations)
   MALL_GEN_STATS.landmarks = placeMallLandmarks(layout, rng.fork('mall-landmarks'));
+  // lane FIX (U04): the round atrium columns under each slab edge as round props (collision / bullets / nav; ARCH renders the records),
+  // after the shops / landmarks (the columns keep a walkable ring off them) and before the populations (enemies / supplies / hordes
+  // avoid them). Pure and deterministic (its fork draws nothing from `rng`).
+  MALL_GEN_STATS.columns = placeAtriumColumns(layout, rng.fork('mall-columns'));
 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
   const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0, layout.levelLinks), keep: keepPoints(layout, mc, crop)};
-  for (let lv = 0; lv <= RINGS; lv++) {
+  for (let lv = 0; lv <= FLOORS; lv++) {
     const context = lv === 0 ? (spawns.contexts.pit ? 'pit' : 'station') : (spawns.contexts.ring ? 'ring' : 'floor');
     placeOfficeEnemies(layout, rng.fork(`mall-enemies-${lv}`), field, [lv], spawns, context);
   }
   // Loose floor supplies: lane PROFILES' per-storey mall program (stream mall-supplies-<storey>).
-  for (let lv = 0; lv <= RINGS; lv++) placeMallSupplies(layout, rng.fork(`mall-supplies-${lv}`), field, [lv], lv === 0 ? 'pit' : 'ring', loot);
+  for (let lv = 0; lv <= FLOORS; lv++) placeMallSupplies(layout, rng.fork(`mall-supplies-${lv}`), field, [lv], lv === 0 ? 'pit' : 'ring', loot);
 
   // --- Lighting, traversal finishing, archetypes, the mall record, hordes ------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
@@ -204,22 +214,30 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   return layout;
 }
 
-function startOf(layout: StationLayout, mc: MallCarve): {x: number; z: number; yaw: number; level: number} {
-  const P = layout.areas[layout.platform], g = layout.grid;
-  const sx = P.x + Math.round(P.w * 0.3), sy = P.y + Math.floor(P.h / 2);
-  let spawn: [number, number] = [sx, sy];
-  search: for (let r = 0; r < 16; r++) for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
-    const x = sx + ox, y = sy + oy;
-    if (!g.inBounds(x, y) || g.area[g.idx(x, y)] !== P.id) continue;
+/**
+ * Player start: on the NORTH platform (Platform 2, which opens onto the Fountain court and its escalators) UNDER the floor-1 opening
+ * (the look-up column), clear of the platform edge, facing along the platform toward the escalators / the atrium's middle.
+ */
+function startOf(layout: StationLayout, mc: MallCarve, c: Crop): {x: number; z: number; yaw: number; level: number} {
+  const P = mc.block.platforms[1], g = layout.grid; // areas are already in cropped coordinates
+  const voidAt = (x: number, y: number) => mc.voidMask[(y + c.oy) * mc.cw + (x + c.ox)] === 1;
+  const sx = Math.round((mc.vx0 + mc.vx1) / 2) - c.ox, edge = P.y + P.h - 4;
+  let spawn: [number, number] | null = null;
+  search: for (let r = 0; r < 48; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const x = sx + dx, y = edge - 1 + dy;
+    if (y > edge - 1 || !g.inBounds(x, y) || g.area[g.idx(x, y)] !== P.id || !voidAt(x, y)) continue; // >= 1.5 m back from the edge
     let ok = true;
     for (let qy = -2; qy <= 2 && ok; qy++) for (let qx = -2; qx <= 2; qx++) if (!g.walkable(x + qx, y + qy)) { ok = false; break; }
     if (ok) { spawn = [x, y]; break search; }
   }
-  const [wx, wz] = g.center(spawn[0], spawn[1]);
-  void mc;
-  // Facing east along the platform (forward = (-sin yaw, -cos yaw)), a little toward the far platform and the rings above it.
-  layout.playerSpawn = {x: wx, z: wz, yaw: -Math.PI / 2 + 0.3};
-  return {x: wx, z: wz, yaw: layout.playerSpawn.yaw, level: 0};
+  const [wx, wz] = g.center(...(spawn ?? [sx, P.y + Math.floor(P.h / 2)]));
+  // Facing along the platform toward the station escalators (forward = (-sin yaw, -cos yaw)), a little toward the court.
+  const esc = mc.runs.find(r => r.lower === 0);
+  const ex = esc ? (esc.rect.x + esc.rect.w / 2 - c.ox) * CELL : wx + 10;
+  const yaw = Math.atan2(-(ex - wx), 6);
+  layout.playerSpawn = {x: wx, z: wz, yaw};
+  return {x: wx, z: wz, yaw, level: 0};
 }
 
 /** Points enemies / loot keep off: every public run's mouths, every elevator landing, every service-stair landing. */
@@ -228,7 +246,7 @@ function keepPoints(layout: StationLayout, mc: MallCarve, c: Crop): SpawnField['
   for (const k of layout.levelLinks) {
     out.push({level: k.lower, x: k.bottom.x, z: k.bottom.z}, {level: k.upper, x: k.top.x, z: k.top.z});
   }
-  for (const e of mc.elevators) for (let lv = 0; lv <= RINGS; lv++) out.push({level: lv, x: (e.landing.x + e.landing.w / 2 - c.ox) * CELL, z: (e.landing.y + e.landing.h / 2 - c.oy) * CELL});
+  for (const e of mc.elevators) for (let lv = 0; lv <= FLOORS; lv++) out.push({level: lv, x: (e.landing.x + e.landing.w / 2 - c.ox) * CELL, z: (e.landing.y + e.landing.h / 2 - c.oy) * CELL});
   return out;
 }
 
