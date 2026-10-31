@@ -98,7 +98,7 @@ export function annexWallMaterial(mats: WorldMaterials): THREE.Material {
   let m = annexMats.get(mats);
   if (!m) {
     const s = boardFormedSet();
-    const mm = new SurfaceNodeMaterial({map: s.map, roughnessMap: s.roughnessMap, normalMap: s.normalMap, roughness: 1, metalness: 0, color: 0xc4c0b6});
+    const mm = new SurfaceNodeMaterial({map: s.map, roughnessMap: s.roughnessMap, normalMap: s.normalMap, roughness: 1, metalness: 0, color: 0xaeaaa0});
     mm.normalScale.set(0.85, 0.85);
     worldMapped(mm, {span: [BOARD_SPAN, BOARD_SPAN], grime: [0.32, 0.5], macro: 0.32});
     mm.name = 'annex-wall';

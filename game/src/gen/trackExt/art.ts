@@ -179,7 +179,8 @@ export function endWall(layout: StationLayout, tr: Trench, from: BedEnd, id: num
     const da = dOf(p.z - p.hz), db = dOf(p.z + p.hz);
     blocked.push([Math.min(da, db) - STATION_ART.gap, Math.max(da, db) + STATION_ART.gap]);
   }
-  return {x, nx, edgeZ, dirZ, len: n * CELL, blocked, floor: g.floorOf(fi), ceil: g.hasCeil(fi) ? g.ceil[fi] : g.floorOf(fi) + 3.2, side: wallSide(south ? 'S' : 'N', from)};
+  // the run ends at an opening (a door frame stands in it) or at the platform's back corner: keep a little wall clear
+  return {x, nx, edgeZ, dirZ, len: n * CELL - (n < a.h ? 0.3 : 0.15), blocked, floor: g.floorOf(fi), ceil: g.hasCeil(fi) ? g.ceil[fi] : g.floorOf(fi) + 3.2, side: wallSide(south ? 'S' : 'N', from)};
 }
 
 /**
