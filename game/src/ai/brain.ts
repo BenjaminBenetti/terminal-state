@@ -42,6 +42,8 @@ export interface ZombieStats {
   chaseAnim: 'Run' | 'Walk';
   /** Iteration 07 (Lane Q): body turn rate outside attacks (rad/s; default 4.5) — the quadruped turns fast. */
   turnRate?: number;
+  /** Task track1-siren-blightbelly-20261031 (lane SIREN): recovery (s) after a swing before the next can start (default 0.45, as before). */
+  attackCooldown?: number;
   /** Iteration 08 (Lane B): clear height the body needs under soffits / slabs (m; default levels.BODY_CLEAR 1.6). */
   height?: number;
 }
@@ -53,7 +55,10 @@ export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   coated: {hp: 165, wanderSpeed: 0.55, chaseSpeed: 1.75, attackRange: 1.4, attackDamage: 15, attackDuration: 1.1, attackImpact: 0.45, sightRange: 16, radius: 0.38, chaseAnim: 'Run'},
 };
 
-export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate';
+export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate'
+  // Task track1-siren-blightbelly-20261031 (lane SIREN): the Siren's (ai/siren.ts SirenBrain) floor-hunched DORMANT state and her one-time
+  // RISE after the wake. The base brain never enters them (no case in step(), not LURABLE, hear() ignores them).
+  | 'dormant' | 'rise';
 /** Iteration 12 (AI): states in which an enemy notices light (never while chasing / attacking / staggered / climbing). */
 const LURABLE: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate']);
 
@@ -454,7 +459,7 @@ export class ZombieBrain {
           const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
           if (w.playerAlive && distP <= this.stats.attackRange + 0.45 && a < 1.2 && this.reachY(w, 0.15) && w.los(this.x, this.z, w.px, w.pz, this.y, w.py)) out.attackHit = true;
         }
-        if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; this.attackCd = 0.45; }
+        if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; this.attackCd = this.stats.attackCooldown ?? 0.45; } // lane SIREN: per-stats cooldown (default unchanged)
         break;
       }
       case 'stagger': {

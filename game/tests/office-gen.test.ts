@@ -284,7 +284,8 @@ describe('office level (one continuous layout)', () => {
         floors++;
       }
       expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
-      expect(l.zombies.every(z => z.archetype === 'zombie' || z.archetype === 'ratdog')).toBe(true);
+      // task track1-siren-blightbelly-20261031 (lane SPAWN): + the Blightbelly and the (Office-only) Siren families
+      expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie'))).toBe(true);
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
       pickups += l.pickups.length;
       for (const p of l.pickups) {
@@ -456,15 +457,20 @@ describe('the Subway is unchanged', () => {
     '42:rifle': '57dcd13b', '42:pistol': 'fd258bb9', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD', () => {
+    let replaced = 0;
     for (const [key, fp] of Object.entries(HEAD)) {
       const [seed, sw] = key.split(':');
       const l = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol'});
       // lane AMMO (knife-melee-20261030): the ammo item ids became caliber ids (ammo_rifle -> ammo_556, ...); with the old names
       // mapped back, the generated station must still be byte-identical (floor boxes / weapon-find companions are unchanged)
-      expect(fingerprint({...l, pickups: l.pickups.map(q => ({...q, itemId: LEGACY_NAME[q.itemId] ?? q.itemId}))}), key).toBe(fp);
+      // Task track1-siren-blightbelly-20261031 (lane SPAWN): the new families REPLACE zombie slots (same roll, rat/dogs identical);
+      // mapped back to 'zombie' the station is still byte-identical (enemy-spawn-parity.test.ts holds the invariant pins too)
+      const back = l.zombies.map(z => (z.archetype === 'blightbelly' || z.archetype === 'siren' ? (replaced++, {...z, archetype: 'zombie' as const}) : z));
+      expect(fingerprint({...l, zombies: back, pickups: l.pickups.map(q => ({...q, itemId: LEGACY_NAME[q.itemId] ?? q.itemId}))}), key).toBe(fp);
       expect(l.office).toBeUndefined();
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
       expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);
     }
+    expect(replaced, 'the corpus exercises the family mapping').toBeGreaterThan(0);
   });
 });

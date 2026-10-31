@@ -51,9 +51,18 @@ export interface SectionGenContext {
   gear?: readonly {itemId: string; filter?: number}[];
 }
 
+/**
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): a level's DIFFICULTY TIER — an integer >= 0 (Subway 0 = the starting level,
+ * Office Space 1). Metadata only: nothing scales counts / damage / loot by it and no enemy family is enabled by it (a level opts in
+ * to e.g. the Siren in its own spawn profile). levels/levelContract.ts validates every registered level declares one.
+ */
+export type LevelTier = number;
+
 /** A logical level as the registry describes it (levels/registry.ts, lane RUN). */
 export interface LevelDef {
   id: LevelId;
+  /** Difficulty tier (task track1, lane SPAWN): explicit for every level — never defaulted. */
+  tier: LevelTier;
   name: string;
   /** Short line for the level-select menu. */
   blurb: string;
