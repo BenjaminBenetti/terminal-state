@@ -25,13 +25,17 @@ export const SKY = {
   /** Overcast daylight through the green murk (linear RGB, ~unit luminance; cf. gen/office DAYLIGHT_TINT). */
   tint: [0.84, 1.0, 0.9] as readonly [number, number, number],
   /** Receivers lie within this horizontal distance of a sky column (m). */
-  reach: 14,
+  reach: 12,
   /** Azimuth samples per voxel. */
-  azimuths: 12,
+  azimuths: 8,
   /** Longest horizontal march (m). */
-  march: 70,
+  march: 50,
   /** Steepest slope considered (tan of ~88.5 deg); the zenith cap above it is added for sky columns. */
   tMax: 38,
+  /** Shallowest slope considered (tan ~7 deg): grazing sky contributes little (sin-weighted) and costs the longest marches. */
+  tMin: 0.12,
+  /** Receivers are evaluated once per BLOCK x BLOCK cells (same slot and band) and shared: daylight is smooth (linear filter). */
+  block: 2,
 };
 
 /** Union of free bands per column (start/f/c as world/lightField.ts unionBands). */
@@ -123,79 +127,102 @@ export function bakeSkylight(t: SkyTarget, spec: SkySpec): SkyStats {
   const capSin = Math.sin(Math.atan(SKY.tMax)); // zenith cap above tMax (sky columns only)
   const capOmega = 2 * Math.PI * (1 - capSin);
 
+  const B = Math.max(1, SKY.block);
+  const res = new Float64Array(4); // e, dx, dy, dz of one voxel
+  /** Sky seen from (px, py, pz) whose own column is ci: integrates every azimuth into res. */
+  const voxel = (ci: number, px: number, py: number, pz: number): void => {
+    let e = 0, dx = 0, dy = 0, dz = 0;
+    const cx = ci % W, cy = (ci - cx) / W;
+    // zenith cap: straight up out of a sky column whose roof band holds the point
+    const sb = skyBand[ci];
+    if (sb >= 0 && py >= bands.f[sb] - 0.1 && py <= bands.c[sb] + 0.1) { e += L * capOmega; dy += L * capOmega; }
+    const rise = roofY - py;
+    for (let j = 0; j < NA; j++) {
+      stats.marches++;
+      const ux = cosA[j], uz = sinA[j];
+      let tlo = SKY.tMin, thi = SKY.tMax;
+      let x = cx, y = cy;
+      const stepX = ux > 0 ? 1 : -1, stepY = uz > 0 ? 1 : -1;
+      const tDX = Math.abs(ux) > 1e-9 ? cell / Math.abs(ux) : Infinity, tDY = Math.abs(uz) > 1e-9 ? cell / Math.abs(uz) : Infinity;
+      let tMaxX = Math.abs(ux) > 1e-9 ? (ux > 0 ? (x + 1) * cell - px : px - x * cell) / Math.abs(ux) : Infinity;
+      let tMaxY = Math.abs(uz) > 1e-9 ? (uz > 0 ? (y + 1) * cell - pz : pz - y * cell) / Math.abs(uz) : Infinity;
+      let sIn = 0;
+      for (let guard = 0; guard < 4096; guard++) {
+        if (x < 0 || y < 0 || x >= W || y >= H) break;
+        stats.steps++;
+        const c2 = y * W + x;
+        const sOut = Math.min(tMaxX, tMaxY);
+        const b0 = bands.start[c2], b1 = bands.start[c2 + 1];
+        if (b0 === b1) break;
+        // the band holding the ray at entry (mid slope), else the one overlapping the entry heights most
+        const hm = py + sIn * (tlo + thi) / 2;
+        let best = -1;
+        for (let b = b0; b < b1; b++) if (hm >= bands.f[b] - 0.08 && hm <= bands.c[b] + 0.08) { best = b; break; }
+        if (best < 0) {
+          const ha = py + sIn * tlo, hb = py + sIn * thi;
+          let ov = 0;
+          for (let b = b0; b < b1; b++) { const o = Math.min(hb, bands.c[b]) - Math.max(ha, bands.f[b]); if (o > ov) { ov = o; best = b; } }
+          if (best < 0) break;
+        }
+        if (sIn > 1e-6) tlo = Math.max(tlo, (bands.f[best] - 0.08 - py) / sIn);
+        if (skyBand[c2] === best && sOut > 1e-6) {
+          // escape: slopes reaching the springing line before leaving this column
+          const tEsc = Math.max(tlo, rise / sOut);
+          if (tEsc < thi) {
+            const thA = Math.atan(tEsc), thB = Math.atan(thi);
+            const sa = Math.sin(thA), sb2 = Math.sin(thB);
+            const om = dphi * (sb2 - sa);
+            const hor = dphi * ((thB / 2 + Math.sin(2 * thB) / 4) - (thA / 2 + Math.sin(2 * thA) / 4));
+            e += L * om; dx += L * hor * ux; dz += L * hor * uz; dy += L * dphi * (sb2 * sb2 - sa * sa) / 2;
+            thi = tEsc;
+          }
+        } else if (sOut > 1e-6) {
+          thi = Math.min(thi, (bands.c[best] + 0.08 - py) / sOut);
+        }
+        if (tlo >= thi || sOut > maxS) break;
+        // the slopes left can only reach the springing line beyond the march range: done
+        if (rise > 0 && rise > thi * maxS) break;
+        sIn = sOut;
+        if (tMaxX < tMaxY) { tMaxX += tDX; x += stepX; } else { tMaxY += tDY; y += stepY; }
+      }
+    }
+    res[0] = e; res[1] = dx; res[2] = dy; res[3] = dz;
+  };
+  const group: number[] = [];
   for (let s = 0; s < t.slots.length; s++) {
     const g = t.slots[s], Ls = t.layers[s], E = t.E[s], Dv = t.D[s], EL = t.EL[s];
-    for (let i = 0; i < n; i++) {
-      if (!g.open[i] || dist[i] > reachC) continue;
-      stats.receivers++;
-      const cx = i % W, cy = (i - cx) / W;
-      const px = (cx + 0.5) * cell, pz = (cy + 0.5) * cell;
-      for (let k = 0; k < Ls; k++) {
-        const py = g.layerY[i * Ls + k];
-        stats.voxels++;
-        let e = 0, dx = 0, dy = 0, dz = 0;
-        // zenith cap: straight up out of a sky column whose roof band holds the point
-        const sb = skyBand[i];
-        if (sb >= 0 && py >= bands.f[sb] - 0.1 && py <= bands.c[sb] + 0.1) { e += L * capOmega; dy += L * capOmega; }
-        for (let j = 0; j < NA; j++) {
-          stats.marches++;
-          const ux = cosA[j], uz = sinA[j];
-          // slope interval still open, and the escaped part already integrated up to `top` (exclusive upper bound)
-          let tlo = 0, thi = SKY.tMax;
-          // 2D DDA from (px, pz) along (ux, uz)
-          let x = cx, y = cy;
-          const stepX = ux > 0 ? 1 : -1, stepY = uz > 0 ? 1 : -1;
-          const tDX = Math.abs(ux) > 1e-9 ? cell / Math.abs(ux) : Infinity, tDY = Math.abs(uz) > 1e-9 ? cell / Math.abs(uz) : Infinity;
-          let tMaxX = Math.abs(ux) > 1e-9 ? (ux > 0 ? (x + 1) * cell - px : px - x * cell) / Math.abs(ux) : Infinity;
-          let tMaxY = Math.abs(uz) > 1e-9 ? (uz > 0 ? (y + 1) * cell - pz : pz - y * cell) / Math.abs(uz) : Infinity;
-          let sIn = 0;
-          for (let guard = 0; guard < 4096; guard++) {
-            if (x < 0 || y < 0 || x >= W || y >= H) break;
-            stats.steps++;
-            const ci = y * W + x;
-            const sOut = Math.min(tMaxX, tMaxY);
-            // the band holding the ray at entry (mid slope)
-            const b0 = bands.start[ci], b1 = bands.start[ci + 1];
-            if (b0 === b1) break;
-            const tm = (tlo + thi) / 2, hm = py + sIn * tm;
-            let best = -1;
-            for (let b = b0; b < b1; b++) if (hm >= bands.f[b] - 0.08 && hm <= bands.c[b] + 0.08) { best = b; break; }
-            if (best < 0) {
-              // no band at the mid slope: the band overlapping the entry heights the most
-              const ha = py + sIn * tlo, hb = py + sIn * thi;
-              let ov = 0;
-              for (let b = b0; b < b1; b++) { const o = Math.min(hb, bands.c[b]) - Math.max(ha, bands.f[b]); if (o > ov) { ov = o; best = b; } }
-              if (best < 0) break;
-            }
-            const f = bands.f[best], c = bands.c[best];
-            if (sIn > 1e-6) tlo = Math.max(tlo, (f - 0.08 - py) / sIn);
-            if (skyBand[ci] === best && sOut > 1e-6) {
-              // escape: slopes reaching the springing line before leaving this column
-              const tEsc = Math.max(tlo, (roofY - py) / sOut);
-              if (tEsc < thi) {
-                const thA = Math.atan(tEsc), thB = Math.atan(thi);
-                const sa = Math.sin(thA), sb2 = Math.sin(thB);
-                const om = dphi * (sb2 - sa);
-                const hor = dphi * ((thB / 2 + Math.sin(2 * thB) / 4) - (thA / 2 + Math.sin(2 * thA) / 4));
-                const ver = dphi * (sb2 * sb2 - sa * sa) / 2;
-                e += L * om; dx += L * hor * ux; dz += L * hor * uz; dy += L * ver;
-                thi = tEsc;
-              }
-            } else if (sOut > 1e-6) {
-              thi = Math.min(thi, (c + 0.08 - py) / sOut);
-            }
-            if (tlo >= thi) break;
-            if (sOut > maxS) break;
-            sIn = sOut;
-            if (tMaxX < tMaxY) { tMaxX += tDX; x += stepX; } else { tMaxY += tDY; y += stepY; }
-          }
+    for (let by = 0; by < H; by += B) for (let bx = 0; bx < W; bx += B) {
+      // the block's receiving cells of this slot, grouped by band (floor / ceiling): one evaluation per group
+      const cells: number[] = [];
+      for (let yy = by; yy < Math.min(H, by + B); yy++) for (let xx = bx; xx < Math.min(W, bx + B); xx++) {
+        const i = yy * W + xx;
+        if (g.open[i] && dist[i] <= reachC) cells.push(i);
+      }
+      while (cells.length) {
+        const r0 = cells[0];
+        group.length = 0;
+        for (let q = cells.length - 1; q >= 0; q--) {
+          const i = cells[q];
+          if (Math.abs(g.floorH[i] - g.floorH[r0]) < 0.05 && Math.abs(g.ceilH[i] - g.ceilH[r0]) < 0.05 && (skyBand[i] >= 0) === (skyBand[r0] >= 0)) { group.push(i); cells.splice(q, 1); }
         }
-        if (e <= 0) continue;
-        const vi = (i * Ls + k) * 3;
-        E[vi] += e * tr; E[vi + 1] += e * tg; E[vi + 2] += e * tb;
-        Dv[vi] += dx * tl; Dv[vi + 1] += dy * tl; Dv[vi + 2] += dz * tl;
-        EL[i * Ls + k] += e * tl;
-        if (e * tl > stats.maxE) stats.maxE = e * tl;
+        stats.receivers += group.length;
+        // representative: the group's cell nearest the block centre
+        let rep = group[0], bd = Infinity;
+        for (const i of group) { const ix = i % W, iy = (i - ix) / W, d = (ix - bx - (B - 1) / 2) ** 2 + (iy - by - (B - 1) / 2) ** 2; if (d < bd) { bd = d; rep = i; } }
+        const rx = rep % W, ry = (rep - rx) / W;
+        for (let k = 0; k < Ls; k++) {
+          stats.voxels++;
+          voxel(rep, (rx + 0.5) * cell, g.layerY[rep * Ls + k], (ry + 0.5) * cell);
+          const e = res[0];
+          if (e <= 0) continue;
+          for (const i of group) {
+            const vi = (i * Ls + k) * 3;
+            E[vi] += e * tr; E[vi + 1] += e * tg; E[vi + 2] += e * tb;
+            Dv[vi] += res[1] * tl; Dv[vi + 1] += res[2] * tl; Dv[vi + 2] += res[3] * tl;
+            EL[i * Ls + k] += e * tl;
+          }
+          if (e * tl > stats.maxE) stats.maxE = e * tl;
+        }
       }
     }
   }

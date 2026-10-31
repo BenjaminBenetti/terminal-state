@@ -123,6 +123,7 @@ const F = {
 export const GENERATED_FROM: readonly string[] = [
   F.tables, F.items, F.gear, F.loot, F.economy, F.purposes, 'game/src/gen/props07.ts', F.openables, F.registry, F.gearLoot, F.maskLoot,
   F.weaponFinds, F.officeSpawns, F.companies, F.tenants, 'game/src/gen/office/frame.ts', F.starter, F.pistol,
+  'game/src/gen/mall/mallTypes.ts', // task track3-eaton-centre-20261031 (lane PROFILES): MALL_RINGS (the mall floor program's runs)
 ].slice().sort();
 
 /**
@@ -1203,7 +1204,7 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     perLevel: levels.map(l => LEVEL_ADAPTER[l].weapons === 'station'
       ? {level: l, summary: `gen/weaponFinds.ts placeWeaponFinds: plausible back-of-house rooms (security office, lockers, workshops, platform-end work zones), >= ${FIND_MIN_SPAWN_M} m from the spawn (straight line and path); a second copy well away from the first.`}
       : LEVEL_ADAPTER[l].weapons === 'mall-plan'
-      ? {level: l, summary: 'The Eaton\'s Center weapon plan (lane SHOPS, gen/mall/shops*.ts): ONE bounded plan per logical level puts the non-start weapon copies in gun-shop displays / gun lockers (each with a box of its own caliber beside it), however many gun shops the rings hold — no farming: a find is a layout pickup remembered by the run memory, never re-rolled.'}
+      ? {level: l, summary: `The Eaton's Center weapon plan (gen/mall/shopsWeapons.ts mallWeaponPlan / placeMallWeapons): ONE plan per logical level (stream mall-weapons:<start>) gives every non-start gun one or ${FIND_MAX_PER_WEAPON} copies from the same copy draw but never 0 (the gun shop always stocks it): copy 1 on a gun shop's display bench (else its floor near the counter) with a box of its OWN calibre beside it; second copies in a second gun shop, else the outfitter, else the mall security office, else not placed. However many gun shops the rings hold, at most ${FIND_MAX_PER_WEAPON} of each gun per run — layout pickups remembered by the run memory, never re-rolled.`}
       : {level: l, summary: `gen/office/spawns.ts officeWeaponPlan: ONE plan per level picks the storey of each copy (storey weights ${storeyW.map(([s, x]) => `${s === 1 ? 'street' : s}: ${rd(x / swd)}`).join(', ')} — first-copy shares), then placeOfficeWeapons drops it in a weighted room of that storey >= 30 cells walking from the start.`}),
     knobs: [
       {what: 'copy thresholds (0 / 1 / 2 copies)', value: `${FIND_COPY_THRESHOLDS.none} / ${FIND_COPY_THRESHOLDS.one}`, at: B.src.at(F.weaponFinds, 'FIND_COPY_THRESHOLDS'), overrides: ['none']},
@@ -1211,7 +1212,8 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
       {what: 'paired ammo box', value: 'WEAPON_FIND_AMMO', at: B.src.at(F.weaponFinds, 'WEAPON_FIND_AMMO'), overrides: ['none']},
       {what: 'office storey weights', value: 'officeWeaponStoreyWeights()', at: B.src.at(F.officeSpawns, 'officeWeaponStoreyWeights'), overrides: ['none']},
     ],
-    at: [B.src.at(F.weaponFinds, 'placeWeaponFinds'), B.src.at(F.officeSpawns, 'officeWeaponPlan'), B.src.at(F.officeSpawns, 'placeOfficeWeapons'), B.src.at(F.pistol, 'startWeaponFor')],
+    at: [B.src.at(F.weaponFinds, 'placeWeaponFinds'), B.src.at(F.officeSpawns, 'officeWeaponPlan'), B.src.at(F.officeSpawns, 'placeOfficeWeapons'), B.src.at(F.pistol, 'startWeaponFor'),
+      ...(levels.some(l => LEVEL_ADAPTER[l].weapons === 'mall-plan') ? [B.src.at('game/src/gen/mall/shopsWeapons.ts', 'mallWeaponPlan')] : [])], // track3 lane PROFILES
   });
   const boxLevels = levels.filter(l => LEVEL_ADAPTER[l].pistolBoxes);
   if (start === 'pistol' && boxLevels.length) {

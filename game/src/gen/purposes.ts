@@ -1052,13 +1052,17 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
     ...(o.st ? {stock: o.st} : {}), props: [],
     loot: {
       stockShelf: disp(o.stock, [1, 3], 0.25), shelf: disp(o.stock, [1, 3], 0.3), wallBay: disp(o.stock, [1, 3], 0.3), merchTable: disp(o.stock, [1, 2], 0.45),
-      glassCounter: disp(o.stock, [1, 2], 0.4), produceStand: disp(o.stock, [1, 3], 0.3), shopCounter: till(o.till ?? LEFT), shopCooler: {items: [['water', 3], ['cola', 2], ['juice', 2]], lots: [2, 5], empty: 0.2},
+      glassCounter: disp(o.stock, [1, 2], 0.4), produceStand: disp(o.stock, [1, 3], 0.3), bookstoreBookcase: disp(o.stock, [1, 2], 0.4), shopCounter: till(o.till ?? LEFT), shopCooler: {items: [['water', 3], ['cola', 2], ['juice', 2]], lots: [2, 5], empty: 0.2},
       cabinetLow: disp(o.stock, [1, 2], 0.35), default: disp(o.stock, [1, 2], 0.35), ...o.loot,
     },
     floor: o.floor ?? {med: 0.3, ammo: 0.2},
   });
+  // Stock rooms / back offices run the 'service' theme (lane PROFILES' mall salvage: stockroom scrap / wiring), except where the
+  // back room IS the program's stock: a gun shop's back office (security), a dispensary / clinic / optician lab (medical), an
+  // electronics / phone / music / arcade stock room (tech), a grocer's / kitchen / pet / florist store (food).
+  const BACK_THEME: Readonly<Record<LootTheme, LootTheme>> = {security: 'security', medical: 'medical', tech: 'tech', food: 'food', service: 'service', personal: 'service', public: 'service'};
   const back = (id: string, label: string, o: Back, salesTheme: LootTheme): RoomPurpose => ({
-    id, category: 'back', theme: o.theme ?? salesTheme, label, slots: BACK, kinds: ['room', 'closet'], weight: 0, max: 99, light: DIM, stock: o.st ?? 'cartons', props: [],
+    id, category: 'back', theme: o.theme ?? BACK_THEME[salesTheme], label, slots: BACK, kinds: ['room', 'closet'], weight: 0, max: 99, light: DIM, stock: o.st ?? 'cartons', props: [],
     loot: {
       shelf: disp(o.stock, [1, 3], 0.25), stockShelf: disp(o.stock, [1, 3], 0.25), crate: disp([...o.stock, ...BACK_COMMON], [1, 3], 0.2),
       cabinetTall: disp([...o.stock, ['bandage', 0.6], ['water', 0.6]], [1, 3], 0.2), cabinetLow: disp(BACK_COMMON, [1, 2], 0.3),
@@ -1083,9 +1087,10 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
   const MGMT_DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['battery', 0.3]], lots: [1, 2], empty: 0.35};
   return Object.fromEntries([
     ...pair('guns', 'Gun shop', {theme: 'security', stock: GUNS, till: [['chocolate', 1], ['water', 1], ...A(0.8)], light: DIM, floor: {ammo: 1.6, med: 0.3},
-      loot: {gunLocker: {items: [...A(5.2), ['flare', 0.4]], lots: [1, 3], empty: 0.3}, shelf: disp([...A(4), ['flare', 0.5], ['battery', 0.4]], [1, 2], 0.5),
-        glassCounter: disp([...A(3), ['flare', 0.4], ['battery', 0.3]], [1, 2], 0.5), safe: disp([...A(2), ['medkit', 0.3], ['flare', 0.3]], [1, 2], 0.3)}},
-    {theme: 'security', stock: [...A(2.4), ['flare', 0.6], ['battery', 0.6], ['bandage', 0.6]], floor: {ammo: 1.4, med: 0.3},
+      // (~100 loose rounds in a gun shop + its back office besides its weapon finds' own boxes: measured over generated malls, lanes/SHOPS.done)
+      loot: {gunLocker: {items: [...A(5.2), ['flare', 0.4]], lots: [1, 2], empty: 0.35}, shelf: disp([...A(3), ['flare', 0.6], ['battery', 0.5]], [1, 2], 0.6),
+        glassCounter: disp([...A(2.6), ['flare', 0.4], ['battery', 0.4]], [1, 2], 0.55), safe: disp([...A(2), ['medkit', 0.3], ['flare', 0.3]], [1, 2], 0.35)}},
+    {theme: 'security', stock: [...A(1.5), ['flare', 0.7], ['battery', 0.7], ['bandage', 0.7], ['water', 0.5]], floor: {ammo: 1.4, med: 0.3},
       loot: {safe: disp([...A(2), ['medkit', 0.3], ['flare', 0.3]], [1, 2], 0.3), gunLocker: {items: [...A(5.2), ['medkit', 0.2]], lots: [1, 3], empty: 0.3}, crate: CACHE_CRATE}},
     'Gun shop back office'),
     ...pair('outdoors', 'Outdoor outfitter', {theme: 'service', stock: OUTDOOR, till: [['water', 1], ['flare', 0.6], ['battery', 0.6]], floor: {med: 0.4, ammo: 0.4},
@@ -1138,8 +1143,8 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
     // Kiosks (one room: a small unit or a gallery stall) and the mall's service rooms.
     ['mall-kiosk', sales('mall-kiosk', 'Kiosk', {theme: 'food', stock: KIOSK, loot: {stall: disp(KIOSK, [2, 4], 0.2), snackRack: STORE_SNACKS}})],
     ['mall-security', sales('mall-security', 'Mall security office', {theme: 'security', stock: [...A(1.4), ['bandage', 1], ['flare', 0.4], ['water', 0.6]], light: DIM, floor: {ammo: 2, med: 0.5},
-      loot: {gunLocker: {items: [...A(5.2), ['medkit', 0.3]], lots: [2, 4], empty: 0.1}, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ...A(0.5)], lots: [1, 2], empty: 0.4},
-        cabinetTall: disp([...A(1.4), ['bandage', 1], ['medkit', 0.4], ['water', 0.6]], [2, 4], 0.12), staffLockers: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.4}, crate: CACHE_CRATE}})],
+      loot: {gunLocker: {items: [...A(5.2), ['medkit', 0.3]], lots: [1, 3], empty: 0.25}, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ...A(0.5)], lots: [1, 2], empty: 0.4},
+        cabinetTall: disp([...A(1.4), ['bandage', 1], ['medkit', 0.4], ['water', 0.6]], [1, 3], 0.2), staffLockers: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.4}, crate: CACHE_CRATE}})],
     ['mall-first-aid', sales('mall-first-aid', 'Mall first-aid station', {theme: 'medical', stock: MEDS, light: LIT, floor: {med: 2},
       loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 4], empty: 0.15}, desk: {items: [['water', 1], ['bandage', 1]], lots: [1, 1], empty: 0.5}}})],
     ['mall-management', sales('mall-management', 'Mall management office', {theme: 'personal', stock: [['chocolate', 1], ['water', 0.8], ['bandage', 0.6], ['battery', 0.3]], light: DIM,

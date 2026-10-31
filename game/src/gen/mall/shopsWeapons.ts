@@ -124,7 +124,8 @@ function placeIn(layout: StationLayout, s: MallShop, e: MallWeaponPlanEntry, ben
   // 1. a display bench of this shop (its customer side reachable)
   for (const b of layout.props.filter(p => p.kind === 'gunDisplay' && p.area === s.area && !benchUsed.has(p))) {
     const fx = Math.sin(b.rot), fz = Math.cos(b.rot), d = PROP_DEFS.gunDisplay.d;
-    if (!reach(b.x + fx * (d / 2 + 0.4), b.z + fz * (d / 2 + 0.4))) continue;
+    // the cell row just outside the bench's footprint on its customer (front) side
+    if (!reach(b.x + fx * (d / 2 + 0.75), b.z + fz * (d / 2 + 0.75))) continue;
     // local x of the bench: (cos rot, -sin rot); the gun left of centre, its ammo box at the right end
     const lx = Math.cos(b.rot), lz = -Math.sin(b.rot), y = r3(b.y + GUN_DISPLAY_TOP);
     benchUsed.add(b);

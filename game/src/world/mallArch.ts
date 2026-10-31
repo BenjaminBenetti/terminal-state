@@ -34,11 +34,13 @@ import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, type WorldMaterials} fro
 import {shapeMaterial} from './shapeMaterials';
 import {SIGN_ATLAS_CONTEXT, wmHash} from './surfaceNodes';
 import {CHUNK_M, RAIL_HEIGHT, cellCeil, type RailRun} from './levelGeometry';
+import {ATRIUM_MARGIN} from './levelCulling';
 import {
   GALLERY_FLOOR, PLAZA_FLOOR, PROGRAM_FINISH, SPACE_FINISH, bohClass, bohFinish, stockFinish,
   type MallCeilFinish, type MallFinishSet, type MallFloorFinish, type MallSpace, type MallWallFinish,
 } from './mallFinishes';
 import {MALL_FINISH_ATTR, MALL_SPAN, ceilRow, floorRow, mallSurfaceMaterial, wallRow, writeRow, MALL_TABLE_ROWS} from './mallSurfaces';
+import {mallTowerRecord} from '../gen/mall/elevator'; // the glass elevator's door side (lane GEN derives it; never re-derived here)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyNode = any;
@@ -298,7 +300,7 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: num
 }
 
 /** Aged brand fascia sign (canvas): brand name, pictogram, accent rule; grime gradient, a faded patch, a dropped letter. */
-export function brandSignTexture(brand: string, program: MallProgram, seed: number, w = 1024, h = 160): THREE.CanvasTexture {
+export function brandSignTexture(brand: string, program: MallProgram, seed: number, w = 768, h = 120): THREE.CanvasTexture {
   const st = BRAND_STYLE[program];
   return canvasTexture(w, h, seed, (ctx, cw, ch, rnd) => {
     ctx.fillStyle = st.bg;
@@ -343,15 +345,15 @@ export function brandSignTexture(brand: string, program: MallProgram, seed: numb
 /** Square blade sign (program pictogram over the brand initials) for the projecting signs. */
 function bladeSignTexture(brand: string, program: MallProgram, seed: number): THREE.CanvasTexture {
   const st = BRAND_STYLE[program];
-  return canvasTexture(256, 256, seed, (ctx, w, h, rnd) => {
+  return canvasTexture(128, 128, seed, (ctx, w, h, rnd) => {
     ctx.fillStyle = st.bg; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = st.accent; ctx.lineWidth = 8; ctx.strokeRect(10, 10, w - 20, h - 20);
+    ctx.strokeStyle = st.accent; ctx.lineWidth = 4; ctx.strokeRect(5, 5, w - 10, h - 10);
     if (st.icon !== 'none') drawIcon(ctx, st.icon, w / 2, h * 0.4, h * 0.42, st.accent);
     const words = (program === 'vacant' ? 'TO LET' : brand).split(/\s+/).filter(Boolean);
     const init = words.length > 1 ? words.slice(0, 3).map(s => s[0]).join('').toUpperCase() : (words[0] ?? '').slice(0, 6).toUpperCase();
     ctx.fillStyle = st.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    let size = 52; ctx.font = `bold ${size}px ${FONT[st.font]}`;
-    while (ctx.measureText(init).width > w - 40 && size > 18) { size -= 2; ctx.font = `bold ${size}px ${FONT[st.font]}`; }
+    let size = 26; ctx.font = `bold ${size}px ${FONT[st.font]}`;
+    while (ctx.measureText(init).width > w - 20 && size > 10) { size -= 1; ctx.font = `bold ${size}px ${FONT[st.font]}`; }
     ctx.fillText(init, w / 2, h * 0.8);
     ctx.fillStyle = `rgba(40,34,26,${0.18 + rnd() * 0.2})`; ctx.fillRect(0, 0, w, h);
   });
@@ -359,7 +361,7 @@ function bladeSignTexture(brand: string, program: MallProgram, seed: number): TH
 
 /** Storey label for the void fascias ('LEVEL 3'). */
 function levelLabelTexture(label: string, ring: number): THREE.CanvasTexture {
-  return canvasTexture(512, 160, 9100 + ring, (ctx, w, h, rnd) => {
+  return canvasTexture(384, 120, 9100 + ring, (ctx, w, h, rnd) => {
     ctx.fillStyle = '#2a2c2e'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#d9a520'; ctx.beginPath(); ctx.arc(h * 0.5, h * 0.5, h * 0.36, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#1f2225'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -413,6 +415,8 @@ interface SpaceInfo { space: MallSpace; ring: number; program?: MallProgram; sho
 export interface AtriumStats {
   meshes: number; triangles: number; roofPanes: number; arches: number; balustradeM: number; balustradeRuns: number; columns: number;
   signs: number; blades: number; labels: number; banners: number; downlights: number; shaftPanels: number; soffits: number; droppedFaces: number;
+  /** Build time of the atrium dressing (ms). */
+  ms: number;
 }
 
 export class MallArch {
@@ -438,7 +442,7 @@ export class MallArch {
   private nextRow = 0;
   private readonly floorCache = new Map<number, string | null>();
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -516,6 +520,19 @@ export class MallArch {
     }
   }
 
+  /**
+   * Back-of-house geometry deeper than the atrium culling margin goes into its own accumulator per side of the void ('~dN' ...;
+   * the same material): its meshes then have tight boxes beyond ATRIUM_MARGIN and stay culled when the void is seen from another
+   * storey (a corridor loop merged with the stock rooms in one 48 m chunk would always be within the margin).
+   */
+  private deepTag(x: number, z: number): string {
+    const b = this.info.void.bounds;
+    const dx = Math.max(b.x0 - x, 0, x - b.x1), dz = Math.max(b.z0 - z, 0, z - b.z1);
+    // per axis: a '~dN' mesh's whole box then lies MALL_DEEP beyond the void in z (the culler's margin test is per axis)
+    if (Math.max(dx, dz) < MALL_DEEP) return '';
+    return dz >= dx ? (z < b.z0 ? '~dN' : '~dS') : (x < b.x0 ? '~dW' : '~dE');
+  }
+
   private static boh(sp: SpaceInfo): boolean { return sp.space === 'stock' || sp.space === 'corridor' || sp.space === 'core' || sp.space === 'wash' || sp.space === 'plant'; }
 
   /** Table row of a finish (allocated once per distinct finish of this build). */
@@ -529,9 +546,12 @@ export class MallArch {
     return r;
   }
 
-  private wallKey(sp: SpaceInfo, fascia = false): string {
+  private wallKey(sp: SpaceInfo, fascia = false, f?: {x0: number; z0: number; x1: number; z1: number}): string {
     if (fascia) return `mall-wall|${this.row('w', SPACE_FINISH.fascia)}`;
-    return `mall-wall${MallArch.boh(sp) ? '-boh' : ''}|${this.row('w', this.finishOf(sp).wall)}`;
+    const boh = MallArch.boh(sp);
+    // a face is deep only when BOTH ends are deep on the same side (a wall running toward the void keeps its near end)
+    const t0 = boh && f ? this.deepTag(f.x0, f.z0) : '', tag = t0 && this.deepTag(f!.x1, f!.z1) === t0 ? t0 : '';
+    return `mall-wall${boh ? `-boh${tag}` : ''}|${this.row('w', this.finishOf(sp).wall)}`;
   }
 
   /** Whether the open cell in front of a face (plane + normal * CELL / 2) is a void column. */
@@ -543,16 +563,36 @@ export class MallArch {
     return cx >= 0 && cy >= 0 && cx < this.W && cy < this.H && this.atrium[cy * this.W + cx] === 1;
   }
 
-  /** Whether a face lies on an elevator shaft side (its plane on the shaft rect boundary, its span inside the side). */
-  private onShaft(f: FaceLike): boolean {
+  /**
+   * The side ('N' | 'S' | 'E' | 'W') of an elevator shaft a face lies on (its plane on the shaft rect boundary, its span inside
+   * that side), else null.
+   */
+  private shaftSide(f: FaceLike): 'N' | 'S' | 'E' | 'W' | null {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     for (const e of this.info.elevators) {
       const s = e.shaft, t = 0.02;
       if (alongX) {
-        if ((Math.abs(f.z0 - s.z0) < t || Math.abs(f.z0 - s.z1) < t) && Math.min(f.x0, f.x1) >= s.x0 - t && Math.max(f.x0, f.x1) <= s.x1 + t) return true;
-      } else if ((Math.abs(f.x0 - s.x0) < t || Math.abs(f.x0 - s.x1) < t) && Math.min(f.z0, f.z1) >= s.z0 - t && Math.max(f.z0, f.z1) <= s.z1 + t) return true;
+        if (Math.min(f.x0, f.x1) >= s.x0 - t && Math.max(f.x0, f.x1) <= s.x1 + t) { if (Math.abs(f.z0 - s.z0) < t) return 'N'; if (Math.abs(f.z0 - s.z1) < t) return 'S'; }
+      } else if (Math.min(f.z0, f.z1) >= s.z0 - t && Math.max(f.z0, f.z1) <= s.z1 + t) { if (Math.abs(f.x0 - s.x0) < t) return 'W'; if (Math.abs(f.x0 - s.x1) < t) return 'E'; }
     }
-    return false;
+    return null;
+  }
+
+  /** The glass sides of the shaft: every side but the landing-door side (lane GEN's mallTowerRecord doorSide). */
+  private glassSides(): Set<string> {
+    if (!this.glassSideCache) {
+      const rec = mallTowerRecord(this.layout) as {elevator?: {doorSide?: string}} | null;
+      const door = rec?.elevator?.doorSide ?? null;
+      this.glassSideCache = new Set(['N', 'S', 'E', 'W'].filter(sd => sd !== door));
+    }
+    return this.glassSideCache;
+  }
+  private glassSideCache: Set<string> | null = null;
+
+  /** A face on a glass side of the shaft (dropped: the glass shaft tower replaces it). */
+  private onShaft(f: FaceLike): boolean {
+    const sd = this.shaftSide(f);
+    return sd !== null && this.glassSides().has(sd);
   }
 
   /**
@@ -567,11 +607,13 @@ export class MallArch {
     for (const f of faces) {
       const isFloor = f.level === this.floorLevel;
       const up = /tileUpper/.test(f.finish) && f.vb0 !== undefined ? {vb0: f.vb0 - tileLowerHeight, vb1: (f.vb1 ?? f.vb0) - tileLowerHeight} : {};
+      if (this.onShaft(f)) { this.stats.droppedFaces++; continue; }
       if (isFloor && this.frontIsVoid(f)) {
-        if (this.onShaft(f)) { this.stats.droppedFaces++; continue; }
         if (f.y1 <= 3.0) { out.push(f); continue; } // the platform edge / bed walls under the atrium: the station's own
-        if (f.y0 >= spring - 0.02) { this.stats.droppedFaces++; continue; } // above the springing line: the vault / gables
-        const y1 = Math.min(f.y1, spring + 0.05);
+        // above ring 6: a white roof-edge beam, then the glazed clerestory up to the springing line and the vault (buildRoof)
+        const beamTop = this.topRingCeil + ROOF_BEAM;
+        if (f.y0 >= beamTop - 0.02 || f.y0 >= spring - 0.02) { this.stats.droppedFaces++; continue; }
+        const y1 = Math.min(f.y1, f.y0 >= this.topRingCeil - 0.05 ? beamTop : spring + 0.05);
         out.push({...f, finish: this.wallKey({space: 'gallery', ring: 0}, true), y1, vb0: f.y0, vb1: f.y0, openings: f.openings.filter(o => o.top > f.y0)});
         continue;
       }
@@ -579,10 +621,9 @@ export class MallArch {
       const sp = this.spaceOf(f.area, f.level);
       if (sp.space === 'station') { out.push(f); continue; }
       if (sp.space === 'plaza') { out.push({...f, finish: this.wallKey(sp), ...up}); continue; }
-      if (this.onShaft(f) && this.frontIsVoid(f)) { this.stats.droppedFaces++; continue; }
       // stair flight side walls: public flights white, service flights the core
       const space: SpaceInfo = f.slope ? (a?.publicSpace ? {space: 'gallery', ring: sp.ring} : {space: 'core', ring: sp.ring}) : sp;
-      out.push({...f, finish: this.wallKey(space), ...up});
+      out.push({...f, finish: this.wallKey(space, false, f), ...up});
     }
     return out;
   }
@@ -603,6 +644,10 @@ export class MallArch {
     }
     // the plaza rings never paint the track bed / platform cells under the atrium
     if (k && lvl.id === this.floorLevel && lvl.grid.cells[i] === VOID) return null;
+    if (k && k.startsWith('mall-floor-boh|')) {
+      const cx = i % this.W, cy = (i - cx) / this.W, tag = this.deepTag((cx + 0.5) * CELL, (cy + 0.5) * CELL);
+      if (tag) return k.replace('-boh|', `-boh${tag}|`);
+    }
     return k;
   }
 
@@ -618,7 +663,9 @@ export class MallArch {
     if (lvl.id === this.floorLevel && i !== undefined && this.atrium[i]) return `mall-ceil|${this.row('c', SPACE_FINISH.galleryCeil)}`; // bridge soffits over the pit
     const sp = this.spaceOf(areaId, lvl.id);
     if (sp.space === 'station') return null;
-    return `mall-ceil${MallArch.boh(sp) ? '-boh' : ''}|${this.row('c', this.finishOf(sp).ceil)}`;
+    const boh = MallArch.boh(sp);
+    const tag = boh && i !== undefined ? this.deepTag((i % this.W + 0.5) * CELL, (Math.floor(i / this.W) + 0.5) * CELL) : '';
+    return `mall-ceil${boh ? `-boh${tag}` : ''}|${this.row('c', this.finishOf(sp).ceil)}`;
   }
 
   /** Whether grid cell i lies inside the void outline bounds (the vault's footprint). */
@@ -656,7 +703,7 @@ export class MallArch {
   /** The material behind a mall key; undefined for any other key. */
   material(key: string): THREE.Material | undefined {
     if (!isMallKey(key)) return undefined;
-    const {base} = splitFinishKey(key);
+    const base = splitFinishKey(key).base.replace(/~d[NSEW]$/, '');
     switch (base) {
       case 'mall-wall': return mallSurfaceMaterial('wall');
       case 'mall-wall-boh': return mallSurfaceMaterial('wall', true);
@@ -674,7 +721,8 @@ export class MallArch {
   /** Architecture mesh name of a mall key ('mall-arch-wall', ...). */
   meshName(key: string): string | undefined {
     if (!isMallKey(key)) return undefined;
-    return `mall-arch-${splitFinishKey(key).base.slice(5)}`;
+    const base = splitFinishKey(key).base;
+    return `mall-arch-${base.replace(/~d[NSEW]$/, '').slice(5)}${/~d[NSEW]$/.test(base) ? '-deep' : ''}`;
   }
 
   /** Rail runs ARCH draws as glass balustrades (every ring storey run); the station storey keeps the steel guard rail. */
@@ -695,6 +743,7 @@ export class MallArch {
 
   /** Builds the atrium architecture and dressing into `group` (before the warm-up). Returns its stats. */
   buildAtrium(group: THREE.Group, rails: readonly RailRun[]): AtriumStats {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const add = (m: THREE.Mesh | null) => {
       if (!m) return;
       group.add(m);
@@ -707,6 +756,7 @@ export class MallArch {
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
     }
+    this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }
 
@@ -774,10 +824,41 @@ export class MallArch {
       for (let k = 2; k < SEG; k += 3) { const p = arc(k); steel.beam(V(l, p.a, R.springY), V(l, p.a, p.y), 0.08); }
       steel.beam(V(l, A0, R.springY), V(l, A1, R.springY), 0.2, 0.2);
     }
-    // the building's roof deck around the vault (membrane), seen through the glass instead of an empty sky edge
-    const yD = R.springY + 0.02, ring = 12;
-    const x0 = o.x0 - ring, x1 = o.x1 + ring, z0 = o.z0 - ring, z1 = o.z1 + ring;
+    // the clerestory: glazing on every void outline edge from the roof-edge beam (over ring 6's ceiling) up to the springing line,
+    // mullions every 1.5 m, a ledge plate at the springing line over the cells between the (stepped) outline and the vault's rect
+    const yB = this.topRingCeil + ROOF_BEAM;
+    const out = this.info.void.outline;
+    if (R.springY - yB > 0.2 && out.length >= 3) {
+      for (let i = 0; i < out.length; i++) {
+        const a = out[i], b = out[(i + 1) % out.length];
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        if (len < 0.05) continue;
+        const nx = -(b.z - a.z) / len, nz = (b.x - a.x) / len;
+        glass.quad([[a.x, yB, a.z], [b.x, yB, b.z], [b.x, R.springY, b.z], [a.x, R.springY, a.z]], [nx, 0, nz], [[0, yB], [len, yB], [len, R.springY], [0, R.springY]]);
+        for (let sx = 0; sx <= len + 1e-6; sx += Math.max(0.75, len / Math.max(1, Math.round(len / 1.5)))) {
+          const px = a.x + (b.x - a.x) * sx / len, pz = a.z + (b.z - a.z) * sx / len;
+          steel.beam(new THREE.Vector3(px, yB, pz), new THREE.Vector3(px, R.springY, pz), 0.07, 0.07);
+        }
+        steel.beam(new THREE.Vector3(a.x, R.springY - 0.05, a.z), new THREE.Vector3(b.x, R.springY - 0.05, b.z), 0.12, 0.1);
+      }
+    }
     const up = [0, 1, 0];
+    const ledge = new Mesher();
+    for (let cy = Math.floor(o.z0 / CELL); cy < Math.ceil(o.z1 / CELL); cy++) {
+      for (let cx = Math.floor(o.x0 / CELL); cx < Math.ceil(o.x1 / CELL);) {
+        const inside = (x: number) => x < this.W && cy >= 0 && cy < this.H && !this.atrium[cy * this.W + x];
+        if (cx < 0 || !inside(cx)) { cx++; continue; }
+        let e = cx + 1;
+        while (e < Math.ceil(o.x1 / CELL) && inside(e)) e++;
+        const ax = Math.max(o.x0, cx * CELL), bx = Math.min(o.x1, e * CELL), az = Math.max(o.z0, cy * CELL), bz = Math.min(o.z1, (cy + 1) * CELL);
+        ledge.quad([[ax, R.springY, az], [ax, R.springY, bz], [bx, R.springY, bz], [bx, R.springY, az]], [0, -1, 0], [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+        ledge.quad([[ax, R.springY + 0.01, az], [ax, R.springY + 0.01, bz], [bx, R.springY + 0.01, bz], [bx, R.springY + 0.01, az]], up, [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+        cx = e;
+      }
+    }
+    // the building's roof deck around the void (membrane) at the beam top, seen through the clerestory / vault glass
+    const yD = yB + 0.02, ring = 12;
+    const x0 = o.x0 - ring, x1 = o.x1 + ring, z0 = o.z0 - ring, z1 = o.z1 + ring;
     for (const [ax, az, bx, bz] of [[x0, z0, x1, o.z0], [x0, o.z1, x1, z1], [x0, o.z0, o.x0, o.z1], [o.x1, o.z0, x1, o.z1]]) {
       deck.quad([[ax, yD, az], [ax, yD, bz], [bx, yD, bz], [bx, yD, az]], up, [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
     }
@@ -785,6 +866,7 @@ export class MallArch {
     add(glass.mesh(this.dress.glassRoof, 'mall-roof-glass', {levels: all}));
     add(steel.mesh(this.dress.whiteSteel, 'mall-roof-steel', {levels: all}));
     add(deck.mesh(this.dress.membrane, 'mall-roof-deck', {levels: all}));
+    add(ledge.mesh(this.dress.whiteSteel, 'mall-roof-ledge', {levels: all}));
     // the overcast sky dome over the vault (unlit, never fogged, only seen through the glass)
     const dome = new THREE.SphereGeometry(190, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2);
     const sky = new THREE.Mesh(dome, this.dress.sky);
@@ -801,8 +883,13 @@ export class MallArch {
   private buildBalustrades(add: (m: THREE.Mesh | null) => void, rails: readonly RailRun[]): void {
     const lists = new Map<string, {level: number; glass: Mesher; rail: Mesher; shoe: Mesher}>();
     const PANEL = 1.5, GAP = 0.02, TOP = RAIL_HEIGHT;
+    // the pitched run rails along an escalator are its own glass balustrades (traversalBuilder's escalator visual): not twice
+    const esc = mallEscalatorFlights(this.layout).map(e => this.layout.grid.ramps[e.flight.ramp]).filter(Boolean).map(r => ({
+      x0: r.x * CELL - 0.4, z0: r.y * CELL - 0.4, x1: (r.x + r.w) * CELL + 0.4, z1: (r.y + r.h) * CELL + 0.4}));
+    const onEscalator = (r: RailRun) => Math.abs(r.y1 - r.y0) > 0.05 && esc.some(q =>
+      Math.min(r.x0, r.x1) >= q.x0 && Math.max(r.x0, r.x1) <= q.x1 && Math.min(r.z0, r.z1) >= q.z0 && Math.max(r.z0, r.z1) <= q.z1);
     for (const r of rails) {
-      if (!this.ownsRail(r) || (r as {hidden?: boolean}).hidden) continue;
+      if (!this.ownsRail(r) || (r as {hidden?: boolean}).hidden || onEscalator(r)) continue;
       const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
       if (len < 0.05) continue;
       const key = `${r.level}:${Math.floor((r.x0 + r.x1) / 2 / CHUNK_M)},${Math.floor((r.z0 + r.z1) / 2 / CHUNK_M)}`;
@@ -901,11 +988,11 @@ export class MallArch {
         {a: [s.x0, s.z0], b: [s.x1, s.z0], n: [0, -1]}, {a: [s.x1, s.z1], b: [s.x0, s.z1], n: [0, 1]},
         {a: [s.x0, s.z1], b: [s.x0, s.z0], n: [-1, 0]}, {a: [s.x1, s.z0], b: [s.x1, s.z1], n: [1, 0]},
       ];
+      const glassy = this.glassSides();
       for (const sd of sides) {
-        // atrium-facing: the cell just outside the side's midpoint is a void column
-        const mx = (sd.a[0] + sd.b[0]) / 2 + sd.n[0] * CELL / 2, mz = (sd.a[1] + sd.b[1]) / 2 + sd.n[1] * CELL / 2;
-        const cx = Math.floor(mx / CELL), cy = Math.floor(mz / CELL);
-        if (cx < 0 || cy < 0 || cx >= this.W || cy >= this.H || !this.voidCol[cy * this.W + cx]) continue;
+        // every side but the landing-door side (lane GEN's mallTowerRecord) is glazed on every storey
+        const name = sd.n[1] < 0 ? 'N' : sd.n[1] > 0 ? 'S' : sd.n[0] < 0 ? 'W' : 'E';
+        if (!glassy.has(name)) continue;
         const n = [sd.n[0], 0, sd.n[1]];
         const levelsY = [y0, ...ys.filter(y => y > y0 + 0.5), yTop];
         for (let k = 0; k + 1 < levelsY.length; k++) {
@@ -918,6 +1005,8 @@ export class MallArch {
       for (const [x, z] of [[s.x0, s.z0], [s.x1, s.z0], [s.x0, s.z1], [s.x1, s.z1]]) frame.box(x, (y0 + yTop) / 2, z, 0.2, yTop - y0, 0.2);
       // machine head on top
       frame.box((s.x0 + s.x1) / 2, yTop + 0.6, (s.z0 + s.z1) / 2, s.x1 - s.x0 + 0.3, 1.2, s.z1 - s.z0 + 0.3);
+      // the pit floor and the cap under the machine head (seen through the glass: never an empty shaft)
+      frame.box((s.x0 + s.x1) / 2, y0 - 0.05, (s.z0 + s.z1) / 2, s.x1 - s.x0, 0.1, s.z1 - s.z0);
     }
     const all = this.allLevels;
     add(glass.mesh(this.dress.glassRail, 'mall-shaft-glass', {levels: all}));
@@ -932,6 +1021,7 @@ export class MallArch {
     const boxOf = (level: number) => { let b = boxes.get(level); if (!b) boxes.set(level, (b = new Mesher())); return b; };
     const q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
     const doors = this.layout.doors ?? [];
+    const brandTex = new Map<string, THREE.Texture>(), bladeTex = new Map<string, THREE.Texture>();
     for (const s of this.info.shops) {
       if (s.kind === 'kiosk') continue;
       const st = this.storeyOf(s.level);
@@ -955,7 +1045,9 @@ export class MallArch {
       const bx = alongX ? cxw : plane + nrm[0] * 0.07, bz = alongX ? plane + nrm[1] * 0.07 : cxw;
       boxOf(s.level).box(bx, (head + top) / 2, bz, alongX ? w + 0.2 : 0.14, top - head, alongX ? 0.14 : w + 0.2);
       // the brand face
-      const tex = brandSignTexture(s.brand, s.program, hashStr(s.id));
+      const tk = `${s.brand}|${s.program}`;
+      let tex = brandTex.get(tk);
+      if (!tex) brandTex.set(tk, (tex = brandSignTexture(s.brand, s.program, hashStr(tk))));
       const fx = alongX ? cxw : plane + nrm[0] * 0.145, fz = alongX ? plane + nrm[1] * 0.145 : cxw;
       face(tex, new THREE.Matrix4().compose(new THREE.Vector3(fx, (head + top) / 2, fz), q.setFromAxisAngle(UP, yaw), new THREE.Vector3(sw, sh, 1)), s.level);
       this.stats.signs++;
@@ -963,7 +1055,8 @@ export class MallArch {
       if (w >= 3 && st.clear >= 3.4) {
         const be = a1 - 0.4, by = Math.min(st.baseY + st.clear - 0.55, top + 0.4);
         const bxx = alongX ? be : plane + nrm[0] * 0.55, bzz = alongX ? plane + nrm[1] * 0.55 : be;
-        const btex = bladeSignTexture(s.brand, s.program, hashStr(s.id) + 7);
+        let btex = bladeTex.get(tk);
+        if (!btex) bladeTex.set(tk, (btex = bladeSignTexture(s.brand, s.program, hashStr(tk) + 7)));
         const byaw = yaw + Math.PI / 2;
         for (const side of [0, Math.PI]) {
           face(btex, new THREE.Matrix4().compose(new THREE.Vector3(bxx, by, bzz), q.setFromAxisAngle(UP, byaw + side), new THREE.Vector3(0.62, 0.62, 1))
@@ -1021,28 +1114,26 @@ export class MallArch {
         }
       });
       atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
-      const byLevel = new Map<number, {m: THREE.Matrix4[]; rects: number[]}>();
+      const ms: THREE.Matrix4[] = [], rects: number[] = [], lv = new Set<number>();
       for (const [[, x, y, w, h], i] of mine) for (const e of faces.get(texs[i])!) {
-        let b = byLevel.get(e.level);
-        if (!b) byLevel.set(e.level, (b = {m: [], rects: []}));
-        b.m.push(e.m);
-        b.rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
+        ms.push(e.m);
+        lv.add(e.level);
+        rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
       }
-      const mat = signAtlasMaterial(atlas);
-      for (const [lv, b] of byLevel) {
-        const geo = new THREE.PlaneGeometry(1, 1);
-        geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(b.rects), 4));
-        const im = new THREE.InstancedMesh(geo, mat, b.m.length);
-        b.m.forEach((m, k) => im.setMatrixAt(k, m));
-        im.name = `mall-sign-faces-${pg}-${lv}`;
-        im.userData.level = lv;
-        im.computeBoundingSphere();
-        im.matrixAutoUpdate = false;
-        group.add(im);
-        this.stats.meshes++;
-        this.stats.triangles += 2 * b.m.length;
-      }
+      if (!ms.length) return;
+      const geo = new THREE.PlaneGeometry(1, 1);
+      geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(rects), 4));
+      const im = new THREE.InstancedMesh(geo, signAtlasMaterial(atlas), ms.length);
+      ms.forEach((m, k) => im.setMatrixAt(k, m));
+      im.name = `mall-sign-faces-${pg}`;
+      if (lv.size === 1) im.userData.level = [...lv][0]; else im.userData.levels = [...lv].sort((a, b) => a - b);
+      im.computeBoundingSphere();
+      im.matrixAutoUpdate = false;
+      group.add(im);
+      this.stats.meshes++;
+      this.stats.triangles += 2 * ms.length;
     });
+    for (const t of texs) t.dispose();
     void add;
   }
 
@@ -1181,17 +1272,20 @@ export function pointInPoly(poly: readonly {x: number; z: number}[], x: number, 
 
 const hashStr = (s: string): number => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 100000; };
 
-const ATLAS_W = 1024, ATLAS_CELL = 512, ATLAS_MAX_H = 2048, ATLAS_PAD = 4;
+const ATLAS_W = 1024, ATLAS_CELL = 500, ATLAS_MAX_H = 2048, ATLAS_PAD = 4;
 /** Atlas packing (512 px cells, rows, 2048 px pages): [page, x, y, w, h] per image + page heights. */
 export function packAtlas(sizes: readonly {width: number; height: number}[]): {cells: [number, number, number, number, number][]; pages: number[]} {
-  const cells: [number, number, number, number, number][] = [];
+  const dims = sizes.map(img => { const w = Math.min(ATLAS_CELL, Math.max(16, img.width)); return {w, h: Math.max(16, Math.round(w * img.height / Math.max(1, img.width)))}; });
+  // shelf packing, tallest first (fewer wasted rows); cells keep the input order
+  const order = dims.map((_, i) => i).sort((a, b) => dims[b].h - dims[a].h || a - b);
+  const cells: [number, number, number, number, number][] = new Array(sizes.length);
   const pages: number[] = [];
   let page = 0, col = 0, rowY = 0, rowH = 0;
-  for (const img of sizes) {
-    const w = ATLAS_CELL, h = Math.max(16, Math.round(ATLAS_CELL * img.height / Math.max(1, img.width)));
+  for (const i of order) {
+    const {w, h} = dims[i];
     if (col + w + 2 * ATLAS_PAD > ATLAS_W) { col = 0; rowY += rowH; rowH = 0; }
-    if (rowY + h + 2 * ATLAS_PAD > ATLAS_MAX_H) { pages.push(rowY); page++; col = 0; rowY = 0; rowH = 0; }
-    cells.push([page, col + ATLAS_PAD, rowY + ATLAS_PAD, w, h]);
+    if (rowY + h + 2 * ATLAS_PAD > ATLAS_MAX_H) { pages.push(rowY + rowH); page++; col = 0; rowY = 0; rowH = 0; }
+    cells[i] = [page, col + ATLAS_PAD, rowY + ATLAS_PAD, w, h];
     col += w + 2 * ATLAS_PAD;
     rowH = Math.max(rowH, h + 2 * ATLAS_PAD);
   }
@@ -1238,6 +1332,12 @@ export function downlightCanGeometry(h: number): THREE.BufferGeometry {
   g.translate(0, -h / 2, 0);
   return g;
 }
+
+/** Height (m) of the white roof-edge beam above the top ring's ceiling, under the clerestory glazing. */
+export const ROOF_BEAM = 0.6;
+
+/** Back of house this far (m) from the void bounds is 'deep' (MallArch.deepTag): beyond the culler's atrium margin. */
+export const MALL_DEEP = ATRIUM_MARGIN + 1;
 
 /** Number of surface materials (front / back of house per kind) — bounded by construction. */
 export const MALL_SURFACE_MATERIALS = 6;

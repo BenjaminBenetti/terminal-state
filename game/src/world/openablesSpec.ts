@@ -404,6 +404,14 @@ export const BAKERY_LEVELS = [bk(0.48), bk(0.678), bk(0.856)] as const;
  */
 const EXAM_Y: readonly (readonly [number, number])[] = [[0.125, 0.274], [0.277, 0.406], [0.41, 0.54]];
 const EXAM = {zCut: 0.185, zFront: 0.204, depth: 0.45, dist: 0.35, tight: true} as const;
+/**
+ * Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center bookstore bookcase (lane ASSETS M09, mall-bookstore-bookcase.glb,
+ * 1.2 x 2.257 x 0.547 m, file faces -Z): two drawers in its base plinth, measured in the prop frame (open-measure front-depth profiles):
+ * fronts x -0.565..-0.015 / 0.020..0.570 at z 0.216 (carcass frame 0.205..0.209, knobs to 0.266), y 0.065..0.33 under the base deck
+ * (0.36); the four open shelves above are the kind's own exposed surfaces (gen/mall/kinds.ts MALL_SURFACES).
+ */
+const BOOKCASE_X: readonly (readonly [number, number])[] = [[-0.56, -0.02], [0.025, 0.565]];
+const BOOKCASE_DRAWER = {zCut: 0.2, zFront: 0.216, depth: 0.4, dist: 0.3} as const;
 /** A tall cupboard bay of the E05 server cabinet run: two shelves inside its lined, hollow bay (x0..x1, floor 0.105, back -0.672). */
 function serverBay(name: string, x0: number, x1: number, hinge: -1 | 1): PartSpec {
   const ix0 = x0 + 0.012, ix1 = x1 - 0.012;
@@ -857,6 +865,14 @@ export const OPENABLE_SPECS = {
     contents: 'old case files',
     sound: {open: 'crate', close: 'crate'},
   },
+  // --- task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center ----------------------------------------------------------
+  /** M09 bookstore bookcase: two derived base drawers; its four open shelves (exposed surfaces) hold loot too (one own-table roll). */
+  bookstoreBookcase: {
+    label: 'bookcase', model: 'office-bookstore-bookcase', turn: true, body: 'model', group: 'container',
+    parts: BOOKCASE_X.map(([x0, x1], i) => modelDrawer(i ? 'right drawer' : 'left drawer', x0, x1, 0.07, 0.33, BOOKCASE_DRAWER)),
+    loot: LOOT.bookstoreBookcase,
+    sound: {open: 'desk', close: 'desk'},
+  },
 } as const satisfies Record<string, OpenableSpec>;
 
 export type OpenableKind = keyof typeof OPENABLE_SPECS;
@@ -870,7 +886,8 @@ export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingB
   'toiletStall', // task office-overhaul-20261030 (lane INTERACT): washroom cubicles
   // task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage
   'officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
-  'bakeryCase'] as const; // task office-props-physics-scale-20261030 (lane FURN): the bakery display case
+  'bakeryCase', // task office-props-physics-scale-20261030 (lane FURN): the bakery display case
+  'bookstoreBookcase'] as const; // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (base drawers + open shelves)
 export type OpenableContainerKind = (typeof OPENABLE_CONTAINER_KINDS)[number];
 
 /**

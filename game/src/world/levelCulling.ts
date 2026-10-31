@@ -47,9 +47,9 @@
 // atrium tile, then sight tests nearest-first until ONE succeeds (at most ATRIUM_SIGHT_TESTS; a tile right beside the eye or
 // within ATRIUM_NEAR counts outright — the platform under the void, a balustrade, the glass lift cab). If the void is seen,
 // every frustum-visible atrium tile is visible for all its levels (over-drawing an occluded corner never pops; under-drawing
-// would), those levels join the breadth-first pass, and a mesh of such a level renders within PORTAL_MARGIN of a visible atrium
-// tile (per-entry tile lists, built once). Back-of-house meshes deeper than the margin from the void stay hidden when seen from
-// another storey. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
+// would), those levels join the breadth-first pass, and a mesh of such a level renders within ATRIUM_MARGIN (20 m: a gallery plus a
+// whole sales floor seen through its shopfront) of a visible atrium tile (per-entry tile lists, built once). Back-of-house meshes
+// deeper than that (stock rooms, service corridors) stay hidden when seen from another storey. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -84,6 +84,14 @@ export const ATRIUM_MAX_DIST = 240;
 export const ATRIUM_SIGHT_TESTS = 12;
 /** An atrium tile this close to the eye horizontally (m) is seen outright (balustrade edge, glass lift cab beside the void). */
 export const ATRIUM_NEAR = 2.5;
+/** The same for an eye inside the (solid) glass lift shaft (eyeOverride set): the shaft stands beside the void. */
+export const ATRIUM_CAB_NEAR = 8;
+/**
+ * A mesh of an atrium-visible storey renders within this distance (m) of a visible atrium tile: a gallery (4-6 m) plus a whole
+ * sales floor (10-12 m) seen through its shopfront across the void (PORTAL_MARGIN 12 popped the back of the shop); stock rooms /
+ * service corridors behind (~20+ m from the void edge) stay hidden from other storeys.
+ */
+export const ATRIUM_MARGIN = 20;
 
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
 
@@ -105,7 +113,7 @@ interface Entry {
   obj: THREE.Mesh; level: number; x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; mask: number; culled: boolean;
   /** Multi-level mesh (stair flight, tall shaft piece): renders when any of these levels does (level is NaN then). */
   levels?: readonly number[];
-  /** Task track3 (lane ARCH): atrium tiles within PORTAL_MARGIN of the box (built on first use; mall only). */
+  /** Task track3 (lane ARCH): atrium tiles within ATRIUM_MARGIN of the box (built on first use; mall only). */
   near?: Int32Array;
 }
 /** Task track3 (lane ARCH): an atrium tile — open void columns joining every level in `levels`. */
@@ -322,7 +330,7 @@ export class LevelCuller {
       };
       const add = (other: number, t: Tile) => { let list = vis.get(other); if (!list) vis.set(other, (list = [])); list.push(t); };
       // Task track3 (lane ARCH): the atrium first (mall only): its levels join `shown` before the pair-portal hops.
-      if (this.atriumTiles.length) this.updateAtrium(e, shown);
+      if (this.atriumTiles.length) this.updateAtrium(e, shown, ov !== null);
       // Breadth-first over levels (iteration 12: one extra hop, the lower level down the second run of a stair core seen
       // from the upper landing; task office-seamless-20261029: as many hops as storeys, e.g. up a scissor stair). A hop
       // tests the tiles with exactly one side among the levels shown so far; each tile's test runs at most once.
@@ -391,8 +399,11 @@ export class LevelCuller {
    * Task track3-eaton-centre-20261031 (lane ARCH): atrium visibility for this update (frustum + distance per atrium tile, then
    * nearest-first sight tests until the void is seen). Marks atriumVis and adds the seen tiles' levels to `shown`.
    */
-  private updateAtrium(e: THREE.Vector3, shown: Set<number>): void {
+  private updateAtrium(e: THREE.Vector3, shown: Set<number>, inCab = false): void {
     const T = this.atriumTiles, vis = this.atriumVis, st = this.atriumStats;
+    // the eye inside the glass lift car (eyeOverride): its shaft is solid on every grid, so no sight ray can start there — the
+    // void beside the shaft counts as seen within ATRIUM_CAB_NEAR
+    const nearR = inCab ? ATRIUM_CAB_NEAR : ATRIUM_NEAR;
     vis.fill(0);
     this.atriumLevels.clear();
     const maxD = Math.min(ATRIUM_MAX_DIST, this.maxDistance);
@@ -402,7 +413,7 @@ export class LevelCuller {
       const t = T[k];
       const dx = Math.max(t.x0 - e.x, 0, e.x - t.x1), dz = Math.max(t.z0 - e.z, 0, e.z - t.z1), d2 = dx * dx + dz * dz;
       if (d2 > maxD * maxD) continue;
-      const beside = d2 <= ATRIUM_NEAR * ATRIUM_NEAR && e.y >= t.y0 - 0.5 && e.y <= t.y1 + 0.5;
+      const beside = d2 <= nearR * nearR && e.y >= t.y0 - 0.5 && e.y <= t.y1 + 0.5;
       this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
       if (!beside && !this.fr.intersectsBox(this.box)) continue;
       vis[k] = 1;
@@ -425,13 +436,13 @@ export class LevelCuller {
     st.levels = [...this.atriumLevels].sort((a, b) => a - b);
   }
 
-  /** Whether an entry of one of `levels` lies within PORTAL_MARGIN of an atrium tile visible this update (mall only). */
+  /** Whether an entry of one of `levels` lies within ATRIUM_MARGIN of an atrium tile visible this update (mall only). */
   private nearAtrium(en: Entry, levels: readonly number[]): boolean {
     if (!this.atriumTiles.length || !this.atriumStats.seen || !levels.some(l => this.atriumLevels.has(l))) return false;
     if (!en.near) {
       const out: number[] = [];
       this.atriumTiles.forEach((t, k) => {
-        if (en.x1 >= t.x0 - PORTAL_MARGIN && en.x0 <= t.x1 + PORTAL_MARGIN && en.z1 >= t.z0 - PORTAL_MARGIN && en.z0 <= t.z1 + PORTAL_MARGIN) out.push(k);
+        if (en.x1 >= t.x0 - ATRIUM_MARGIN && en.x0 <= t.x1 + ATRIUM_MARGIN && en.z1 >= t.z0 - ATRIUM_MARGIN && en.z0 <= t.z1 + ATRIUM_MARGIN) out.push(k);
       });
       en.near = Int32Array.from(out);
     }

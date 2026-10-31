@@ -66,8 +66,13 @@ export interface MallFrame {
   Ds: number; Db: number; D: number;
   /** Bridge storeys (rings that carry a bridge across the void). */
   bridgeRings: number[];
-  /** Glass elevators (1 or 2). */
+  /**
+   * Glass elevators: ONE multi-stop cab (the Office ElevatorLogic / towerRuntime, which runs one cab per world) at the void edge of
+   * the `liftSide` long gallery; its position along the void is seeded (`liftAt`).
+   */
   elevators: number;
+  liftSide: 'N' | 'S';
+  liftAt: number;
   /** Arm / tier extension of the void beyond its main rect (cells, z). */
   AE: number;
   /** Apse / tier inset (cells). */
@@ -80,14 +85,24 @@ export interface MallFrame {
 
 const NAMES = ["The Eaton's Center"];
 
-/** The variant of a level seed (deterministic; tests / QA may force one through generateMallLevel's options). */
-export function mallVariantOf(levelSeed: number): MallVariant {
-  return MALL_VARIANTS[hashString('mall-variant', levelSeed >>> 0) % MALL_VARIANTS.length];
+/** Session-only QA override of the variant (main.ts `?mallVariant=galleria|oval-court|cross-galleria`); undefined = the seed's. */
+let variantOverride: MallVariant | undefined;
+export function setMallVariantOverride(v: string | null | undefined): MallVariant | undefined {
+  variantOverride = (MALL_VARIANTS as readonly string[]).includes(v ?? '') ? v as MallVariant : undefined;
+  return variantOverride;
 }
 
-/** The mall frame of a level seed (optionally forcing the variant). */
-export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantOf(levelSeed)): MallFrame {
-  const rng = new Rng(hashString(`mall-frame-v1:${variant}`, levelSeed >>> 0));
+/** The variant of a level seed (deterministic; tests / QA may force one through generateMallLevel's options / the override). */
+export function mallVariantOf(levelSeed: number): MallVariant {
+  return variantOverride ?? MALL_VARIANTS[hashString('mall-variant', levelSeed >>> 0) % MALL_VARIANTS.length];
+}
+
+/**
+ * The mall frame of a level seed (optionally forcing the variant). `salt` > 0 re-rolls the frame's free parameters (sizes, slot /
+ * lift / bridge positions) of the SAME variant: generateMallLevel moves to the next salt when a frame's program does not fit.
+ */
+export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantOf(levelSeed), salt = 0): MallFrame {
+  const rng = new Rng(hashString(`mall-frame-v1:${variant}${salt ? `:${salt}` : ''}`, levelSeed >>> 0));
   const Ds = rng.int(20, 24), Db = rng.int(8, 10);
   // Void length (cells): the galleria is the long one (the reference photo), the oval court shorter and wider (its tiers), the
   // cross-galleria long with a transverse arm.
@@ -99,7 +114,7 @@ export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantO
   for (let ring = 1; ring <= RINGS; ring++) if (ring % 2 === 1 || rng.chance(0.35)) anchors.push({ring, side: rng.chance(0.5) ? 'N' : 'S'});
   return {
     levelSeed: levelSeed >>> 0, variant, name: NAMES[0], VL, Ds, Db, D: Ds + 1 + Db, bridgeRings,
-    elevators: variant === 'oval-court' ? 1 : 2, AE, inset,
+    elevators: 1, liftSide: variant === 'oval-court' ? 'S' : rng.chance(0.5) ? 'N' : 'S', liftAt: rng.range(0.4, 0.5), AE, inset,
     escA: rng.range(0.14, 0.2), escB: rng.range(0.6, 0.66), anchors,
   };
 }

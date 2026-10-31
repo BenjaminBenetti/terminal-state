@@ -17,6 +17,7 @@ import {FrameBudget} from '../src/core/frameBudget';
 import {S, UpdateProfiler} from '../src/debug/updateProfile';
 import {lureWorld} from '../src/ai/lightLure';
 import {HORDE_AI, HordeDirector, slotOffset} from '../src/ai/horde';
+import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from '../src/ai/chaseShare';
 import {placeHordes} from '../src/ai/hordePlace';
 import {HORDE_FORBIDDEN_FAMILIES, HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from '../src/ai/hordeSpec';
 import {ENEMY_FAMILY_IDS, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
@@ -27,6 +28,8 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import type {MallPatrolNode} from '../src/gen/mall/mallTypes';
 
 const DT = 1 / 60;
+/** Opt-in longer runs + baselines (LL_BENCH=1), as tests/frame-costs.bench.test.ts. */
+const BENCH = !!process.env.LL_BENCH;
 /** A shambler's sight range (m): ai/brain.ts ZOMBIE_STATS. */
 const ZOMBIE_SIGHT = 18;
 
@@ -43,7 +46,7 @@ function place(fx: RingMallFixture, rules: HordeRules, seed: number) {
 interface Player { x: number; y: number; z: number; alive: boolean }
 
 /** Game.updateZombies minus rendering / audio, with the horde director, on a fixture (optionally through a frame budget). */
-function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]}, o: {scheduler?: boolean; killed?: number[]; player?: Player; rules?: HordeRules; noHordes?: boolean; prof?: UpdateProfiler} = {}) {
+function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]}, o: {scheduler?: boolean; killed?: number[]; player?: Player; rules?: HordeRules; noHordes?: boolean; prof?: UpdateProfiler; noShare?: boolean; atrium?: boolean} = {}) {
   const prof = o.prof ?? null;
   const layout = fx.layout;
   const L: Levels = levelsOf(layout);
@@ -51,11 +54,15 @@ function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]},
   const pf = new PathFinder(L), fork = pf.fork();
   const player: Player = o.player ?? {x: -100, y: 0, z: -100, alive: false};
   const clock = {t: 0};
-  const fb = o.scheduler ? new FrameBudget({now: () => clock.t}) : null;
+  // the game's budget clock: real time (a frozen clock would make every chunk look free and run 48 per frame)
+  const fb = o.scheduler ? new FrameBudget() : null;
   const near = (x: number, z: number, y: number | undefined) => nearPlayerRule(Math.hypot(x - player.x, z - player.z, (y ?? player.y) - player.y), () => null);
-  const stats = {paths: 0, walk: 0};
-  const ps = new PathService((ax, az, bx, bz, op) => { stats.paths++; return pf.find(ax, az, bx, bz, 0.34, 26000, op); },
-    (ax, az, bx, bz, op, chunk) => fork.search(ax, az, bx, bz, 0.34, 26000, op, chunk), fb, near);
+  const stats = {paths: 0, walk: 0, byWho: {plain: {n: 0, ms: 0, max: 0}, chase: {n: 0, ms: 0, max: 0}, horde: {n: 0, ms: 0, max: 0}} as Record<'plain' | 'chase' | 'horde', {n: number; ms: number; max: number}>};
+  // atrium: the game's open-atrium configuration (layout.mall): local search bound, per-frame cap, strict seen near rule (no route
+  // field in this harness: an unknown route is not near), BrainWorld.atrium below
+  const ps = new PathService((ax, az, bx, bz, op) => { stats.paths++; return pf.find(ax, az, bx, bz, 0.34, searchExpand(op), op); },
+    (ax, az, bx, bz, op, chunk) => fork.search(ax, az, bx, bz, 0.34, searchExpand(op), op, chunk), fb, near,
+    o.atrium ? atriumPathOptions((x, z, y) => Math.hypot(x - player.x, z - player.z, (y ?? player.y) - player.y) < 4, (x, z, y) => atriumNearRule(Math.hypot(x - player.x, z - player.z, (y ?? player.y) - player.y), (y ?? player.y) - player.y, () => null)) : undefined);
   const killed = new Set(o.killed ?? []);
   const brains: (ZombieBrain | undefined)[] = layout.zombies.map((s, i) => {
     if (killed.has(i)) return undefined;
@@ -65,12 +72,27 @@ function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]},
   });
   // noHordes: the same bodies as ordinary enemies (idle / wander) — the cost baseline
   const director = new HordeDirector(layout, L, i => (o.noHordes ? undefined : brains[i]), (o.rules ?? MALL_HORDE_RULES).patrol, fx.patrol);
+  const share = o.noShare ? null : new ChaseShare(L);
   const rand = mulberry32(99);
   const world = (): BrainWorld => ({
     px: player.x, pz: player.z, py: player.y, playerAlive: player.alive,
     los: (ax, az, bx, bz, ay, by) => L.lineOfSight({x: ax, y: (ay ?? 0) + 1.5, z: az}, {x: bx, y: (by ?? 0) + 1.5, z: bz}),
     walkClear: (ax, az, bx, bz, r, ay, by) => { stats.walk++; return L.walkLineClear(ax, ay ?? 0, az, bx, bz, r, by); },
-    findPath: (ax, az, bx, bz, op) => { prof?.begin(S.path); const r = ps.request(ax, az, bx, bz, op); prof?.end(S.path); return r; },
+    findPath: (ax, az, bx, bz, op) => {
+      prof?.begin(S.path);
+      const t = performance.now();
+      // the game's brainWorld.findPath in an open-atrium level: a chase may join another chaser's recent route (ai/chaseShare.ts)
+      const shared = share ? share.lookup(ax, az, bx, bz, op) : undefined;
+      const r = shared !== undefined ? shared : ps.request(ax, az, bx, bz, op);
+      if (share && shared === undefined) share.remember(ax, az, bx, bz, op, r);
+      const ms = performance.now() - t;
+      prof?.end(S.path);
+      // who asked: a horde leg (group owner) / regroup (member), a brain's chase re-plan (defer = the brain), or an immediate request
+      const who = !op?.defer ? 'plain' : op.defer instanceof ZombieBrain ? 'chase' : 'horde';
+      const c = stats.byWho[who];
+      c.n++; c.ms += ms; if (ms > c.max) c.max = ms;
+      return r;
+    },
     randomNear: (x, z, r, y) => {
       const lv = y !== undefined ? L.levelAt(x, z, y + 0.05) : 0;
       const G = L.grid(lv);
@@ -83,20 +105,22 @@ function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]},
     },
     rand,
     ...lureWorld(L, {attracting: () => []}),
+    ...(o.atrium ? {atrium: true} : {}),
   });
   let frame = 0, raf = 0;
   const live = () => brains.filter((b): b is ZombieBrain => !!b);
   const sim = {
-    layout, L, pf, ps, fb, brains, director, player, stats, live,
+    layout, L, pf, ps, fb, brains, director, share, player, stats, live,
     get frame() { return frame; },
     /** One 60 Hz frame; returns {ms of the horde director, walk tests, path searches} of the frame. */
     step(onFrame?: () => void) {
       frame++;
       raf += 1000 / 60;
       clock.t = Math.max(clock.t, raf);
-      if (fb) { fb.hold(null); fb.beginFrame(raf, clock.t); }
+      if (fb) { fb.hold(null); fb.beginFrame(raf); }
       if (prof) { prof.frameBegin(); prof.lap(S.input); prof.lap(S.ai); }
       ps.tick();
+      share?.tick(DT);
       const w = world();
       const w0 = stats.walk, p0 = stats.paths;
       const t0 = performance.now();
@@ -625,6 +649,60 @@ describe('horde performance: bounded, phased, deferred far planning', () => {
   });
 });
 
+describe('horde chase across the atrium: one route search serves the charging crowd', () => {
+  it('members that see the player down the void share a group mate\'s fresh cross-storey route (answered at once, far fewer searches)', () => {
+    const run = (noShare: boolean) => {
+      const fx = ringMallFixture({storeys: 2, wide: true});
+      const rules = fxRules({groups: [1, 1], size: [16, 16], placement: {...MALL_HORDE_RULES.placement, startM: 20, groupSpacingM: 10}, patrol: {...MALL_HORDE_RULES.patrol, storeyChange: 0, pauseChance: 0}});
+      place(fx, rules, 2468);
+      const player: Player = {x: -100, y: 0, z: -100, alive: false};
+      const sim = makeSim(fx, {rules, player, noShare});
+      const g = sim.director.groups[0];
+      // walk until the crowd is on a long gallery beside the void (not in an end court)
+      const V = fx.dims.void, vx0 = (V.x0 + 6) * CELL, vx1 = (V.x1 - 6) * CELL;
+      sim.run(4);
+      for (let k = 0; k < 120 && !(g.ax > vx0 && g.ax < vx1); k++) sim.run(1);
+      expect(g.ax > vx0 && g.ax < vx1).toBe(true);
+      // the player in the pit plaza under the void, ~11-17 m from the crowd's gallery, in clear sight through the opening; a shot
+      const zc = ((V.y0 + V.y1) / 2 + 0.5) * CELL;
+      Object.assign(player, {x: g.ax, z: zc, y: 0, alive: true});
+      for (const m of g.members) m.brain.hear(player.x, player.z, 40, 0);
+      // mean walking route (stairs) from the members to the player, now and after 6 s of charging
+      const pf = new PathFinder(sim.L);
+      const route = () => {
+        let sum = 0, n = 0;
+        for (const m of g.members) {
+          const b = m.brain, p = pf.find(b.x, b.z, player.x, player.z, 0.34, 26000, {drops: true, ay: b.y, by: 0});
+          if (!p) continue;
+          let len = 0, px = b.x, pz = b.z;
+          for (const w of p) { len += Math.hypot(w[0] - px, w[1] - pz); px = w[0]; pz = w[1]; }
+          sum += len; n++;
+        }
+        return sum / Math.max(1, n);
+      };
+      const r0 = route();
+      const calls0 = sim.stats.paths;
+      let seeing = 0, off = 0;
+      sim.run(6, () => {
+        if (sim.frame % 30) return;
+        seeing = Math.max(seeing, g.members.filter(m => m.brain.alive && m.brain.aware && m.brain.state === 'chase').length);
+        for (const m of g.members) if (!supported(sim.L, m.brain.x, m.brain.z, m.brain.y)) off++;
+      });
+      return {searches: sim.stats.paths - calls0, hits: sim.share?.hits ?? 0, seeing, closed: r0 - route(), off};
+    };
+    const shared = run(false), alone = run(true);
+    console.info(`[horde share] 16 members charging a player ~10 m below through the void (route by the stairs), 6 s: with shared routes ${shared.searches} searches ` +
+      `(${shared.hits} chase asks answered from a mate's route), route to the player closed by ${shared.closed.toFixed(1)} m; searching alone ${alone.searches} searches, closed ${alone.closed.toFixed(1)} m`);
+    expect(shared.seeing).toBeGreaterThan(8);
+    expect(shared.hits).toBeGreaterThan(0);
+    expect(shared.searches).toBeLessThan(alone.searches * 0.6);
+    // the shared routes are real routes: the crowd closes in by the stairs as fast as when every member searches alone
+    expect(alone.closed).toBeGreaterThan(5);
+    expect(shared.closed).toBeGreaterThan(alone.closed * 0.75);
+    expect(shared.off).toBe(0);
+  });
+});
+
 describe('horde audio: the vocal gate and the 3-voice cap', () => {
   it('one idle groan per group per vocalGap at most, and never more than 3 enemy vocals at once (Sfx cap)', async () => {
     const {Sfx} = await import('../src/audio/sfx');
@@ -717,17 +795,21 @@ describe('the generated mall (lane GEN) — when registered', () => {
     expect(JSON.stringify(gen(SEEDS[0]).hordes)).toBe(JSON.stringify(mall(SEEDS[0]).hordes));
   });
 
-  (has ? it : it.skip)('roams the real mall: real links only, cohesive crowds, storey changes by escalator / stairs; bounded cost (update profile)', () => {
+  (has ? it : it.skip)('roams the real mall: real links only, cohesive crowds, storey changes by escalator / stairs; bounded cost (update profiler)', () => {
     const layout = mall(SEEDS[0]);
     const rules = mallRules();
-    const sim = makeSim({layout, patrol: layout.mall!.patrol}, {rules, scheduler: true, player: {x: layout.playerSpawn.x, y: 0, z: layout.playerSpawn.z, alive: true}});
+    const SECS = BENCH ? 180 : 120;
+    const spawnAt = () => ({x: layout.playerSpawn.x, y: 0, z: layout.playerSpawn.z, alive: true});
+    const prof = new UpdateProfiler(SECS * 60);
+    prof.startRecording();
+    const sim = makeSim({layout, patrol: layout.mall!.patrol}, {rules, scheduler: true, player: spawnAt(), prof, atrium: true}); // as the game runs the mall
     const gs = sim.director.groups;
     const lv0 = gs.map(g => sim.L.levelAt(g.ax, g.az, g.ay + 0.05));
     const prev = gs.map(g => ({x: g.ax, z: g.az, y: g.ay}));
     let bad = 0, jumps = 0, offGeom = 0, samples = 0, within = 0, changes = 0;
     const offWhere: string[] = [];
     const dirMs: number[] = [], aiMs: number[] = [], walk: number[] = [];
-    for (let f = 0; f < 60 * 180; f++) {
+    for (let f = 0; f < 60 * SECS; f++) {
       const r = sim.step(() => {
         gs.forEach((g, k) => {
           if (g.phase === 'dead') return;
@@ -743,7 +825,7 @@ describe('the generated mall (lane GEN) — when registered', () => {
       if (f % 30 === 0) {
         for (const g of gs) for (const m of g.members) {
           const b = m.brain;
-          if (b.alive && !supported(sim.L, b.x, b.z, b.y)) { offGeom++; if (offWhere.length < 6) offWhere.push(`g${g.spec.id} m${m.index} ${b.state} (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)}) support ${JSON.stringify(sim.L.supportIn(b.x, b.z, b.y + 0.05, 0.45))}`); }
+          if (b.alive && !supported(sim.L, b.x, b.z, b.y)) { offGeom++; if (offWhere.length < 6) offWhere.push(`g${g.spec.id} m${m.index} ${b.state} (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)})`); }
           if (m.formed && m.hasSlot) { samples++; if (m.slotErr() <= 3) within++; }
         }
       }
@@ -751,22 +833,29 @@ describe('the generated mall (lane GEN) — when registered', () => {
     const q = (v: number[], p: number) => [...v].sort((a, b) => a - b)[Math.min(v.length - 1, Math.floor(p * v.length))];
     const sum = sim.director.summary();
     const n = sim.live().length;
-    console.info(`[horde mall] 180 s on seed ${SEEDS[0]} (${n} enemies, ${gs.reduce((s2, g) => s2 + g.members.length, 0)} in ${gs.length} hordes): ` +
+    const rep = prof.report({window: SECS * 60, spikes: 4});
+    const span = (name: string) => { const x = rep.spans.find(t => t.name === name); return x ? `${name} avg ${x.avg.toFixed(3)} p95 ${x.p95.toFixed(3)} max ${x.max.toFixed(2)} ms (${x.count} calls)` : `${name} -`; };
+    console.info(`[horde mall] ${SECS} s on seed ${SEEDS[0]} (${n} enemies, ${gs.reduce((s2, g) => s2 + g.members.length, 0)} in ${gs.length} hordes, player at the pit start): ` +
       `legs ${sum.map(g => g.legs).join('/')}, walked ${sum.map(g => Math.round(g.walked)).join('/')} m, bad legs ${sum.map(g => g.badLegs).join('/')}, stalls ${sum.map(g => g.stalls).join('/')}, storey changes ${changes}; ` +
       `within 3 m of slot ${(within / Math.max(1, samples) * 100).toFixed(1)} %; director ms/frame med ${q(dirMs, 0.5).toFixed(3)} p99 ${q(dirMs, 0.99).toFixed(3)} max ${q(dirMs, 1).toFixed(3)}; ` +
-      `all-enemy brain+motor ms/frame med ${q(aiMs, 0.5).toFixed(2)} p99 ${q(aiMs, 0.99).toFixed(2)} max ${q(aiMs, 1).toFixed(2)}; walk tests/frame mean ${(walk.reduce((a, b) => a + b, 0) / walk.length).toFixed(1)} max ${Math.max(...walk)}; ` +
-      `path service ${JSON.stringify(sim.ps.stats)}; off-geometry members ${offGeom}: ${offWhere.join(' | ')}`);
-    // the same level / player with the horde members as ordinary enemies (report only: where do spikes come from?)
-    const base = makeSim({layout, patrol: layout.mall!.patrol}, {rules, scheduler: true, noHordes: true, player: {x: layout.playerSpawn.x, y: 0, z: layout.playerSpawn.z, alive: true}});
-    const baseMs: number[] = [], topH = aiMs.map((ms, i) => ({i, ms})).sort((a, b) => b.ms - a.ms).slice(0, 5);
-    for (let f = 0; f < 60 * 180; f++) baseMs.push(base.step().aiMs);
-    const topB = baseMs.map((ms, i) => ({i, ms})).sort((a, b) => b.ms - a.ms).slice(0, 5);
-    console.info(`[horde mall] baseline (horde bodies as ordinary enemies): all-enemy ms/frame med ${q(baseMs, 0.5).toFixed(2)} p99 ${q(baseMs, 0.99).toFixed(2)} max ${q(baseMs, 1).toFixed(2)}; ` +
-      `top frames with hordes ${topH.map(t => `#${t.i} ${t.ms.toFixed(1)}`).join(', ')}; baseline ${topB.map(t => `#${t.i} ${t.ms.toFixed(1)}`).join(', ')}`);
+      `walk tests/frame mean ${(walk.reduce((a, b) => a + b, 0) / walk.length).toFixed(1)} max ${Math.max(...walk)}; path service ${JSON.stringify(sim.ps.stats)}; requests by origin ${Object.entries(sim.stats.byWho).map(([k, v]) => `${k} ${v.n} (${v.ms.toFixed(0)} ms, max ${v.max.toFixed(2)})`).join(', ')}; off-geometry members ${offGeom} ${offWhere.join(' | ')}\n` +
+      `  update profiler: ${span('ai')}; ${span('ai.brain')}; ${span('ai.path')}; ${span('ai.motor')}; ${span('deferred')}; spikes ${rep.spikes.map(sp => `${sp.ms.toFixed(1)} ms [${sp.dominant.map(d => `${d.name} ${d.ms.toFixed(1)}×${d.count}`).join(', ')}]`).join(' | ')}`);
+    if (BENCH) {
+      // the same level / player with the horde members as ordinary enemies (where do the AI spikes come from?)
+      const base = makeSim({layout, patrol: layout.mall!.patrol}, {rules, scheduler: true, noHordes: true, player: spawnAt(), atrium: true});
+      const baseMs: number[] = [], topH = aiMs.map((ms, i) => ({i, ms})).sort((x, y) => y.ms - x.ms).slice(0, 5);
+      for (let f = 0; f < 60 * SECS; f++) baseMs.push(base.step().aiMs);
+      const topB = baseMs.map((ms, i) => ({i, ms})).sort((x, y) => y.ms - x.ms).slice(0, 5);
+      console.info(`[horde mall] all-enemy brain+motor ms/frame with hordes med ${q(aiMs, 0.5).toFixed(2)} p99 ${q(aiMs, 0.99).toFixed(2)} max ${q(aiMs, 1).toFixed(2)}; ` +
+        `the horde bodies as ordinary enemies med ${q(baseMs, 0.5).toFixed(2)} p99 ${q(baseMs, 0.99).toFixed(2)} max ${q(baseMs, 1).toFixed(2)}; ` +
+        `top frames with hordes ${topH.map(t => `#${t.i} ${t.ms.toFixed(1)}`).join(', ')}; without ${topB.map(t => `#${t.i} ${t.ms.toFixed(1)}`).join(', ')}`);
+    }
     expect(bad).toBe(0);
     expect(jumps).toBe(0);
     expect(offGeom).toBe(0);
     expect(within / Math.max(1, samples)).toBeGreaterThan(0.85);
     for (const g of sum) if (g.phase !== 'dead') expect(g.walked).toBeGreaterThan(20);
+    // the director itself stays a small, flat share of the frame (generous wall-clock bound; machine-dependent)
+    expect(q(dirMs, 0.5)).toBeLessThan(1);
   });
 });

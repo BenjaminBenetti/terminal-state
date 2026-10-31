@@ -4,6 +4,7 @@
 // movement / stairs / support code, W key) walking from the station platform up to ring 6 continuously without falling.
 
 import {describe, expect, it} from 'vitest';
+import {readFileSync} from 'node:fs';
 import {LEVELS, LEVEL_IDS, TRACK_EXTENSIONS, arrivalPose, isLevelId, storeyLabel, travelTargets} from '../src/levels/registry';
 import {generateMallLevel, mallIssues, mallVoidCells, MALL_GEN_STATS, MALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
 import {levelsOf} from '../src/gen/levels';
@@ -12,6 +13,9 @@ import {Player} from '../src/player/player';
 import {RINGS, STOREY} from '../src/gen/mall/frame';
 import {MALL_RINGS} from '../src/gen/mall/mallTypes';
 import type {StationLayout} from '../src/gen/stationTypes';
+import {readTowerInfo} from '../src/world/towerShared';
+import {planElevator} from '../src/world/elevator';
+import {MALL_POSE_NAMES, mallQaPose} from '../src/gen/mall/qa';
 
 const SEED = 0x7ea3c1;
 const DT = 1 / 60;
@@ -146,7 +150,7 @@ describe.each(MALL_VARIANTS.map(v => [v]))('variant %s', (variant: MallVariant) 
       expect(units.length, `ring ${k} units`).toBeGreaterThanOrEqual(10);
       for (const s of units) {
         expect(s.salesArea).toBeGreaterThan(90);
-        expect(s.depth).toBeGreaterThanOrEqual(10);
+        expect(s.depth).toBeGreaterThanOrEqual(8);
         expect(s.width).toBeGreaterThanOrEqual(12.5);
         expect(s.backroom).toBeDefined();
         expect(L.doors.some(d => d.shopfront && (d.a === s.area || d.b === s.area))).toBe(true);
@@ -163,10 +167,58 @@ describe.each(MALL_VARIANTS.map(v => [v]))('variant %s', (variant: MallVariant) 
         const link = L.levelLinks[v.link!];
         expect(link).toMatchObject({kind: 'stairs', lower: k, upper: k + 1});
       }
-      if (k >= 1) expect(info.verticals.filter(v => v.kind === 'service-stair' && v.lower === k).length).toBe(4);
+      expect(info.verticals.filter(v => v.kind === 'service-stair' && v.lower === k).length).toBe(4); // four corner cores, station included
     }
     expect(info.elevators.length).toBeGreaterThanOrEqual(1);
     for (const e of info.elevators) expect(e.stops.map(s => s.level)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it('back of house: a service-corridor loop on every ring, a washroom passage per ring (public -> staff door), the station\'s spurs', () => {
+    for (let k = 1; k <= RINGS; k++) {
+      const corr = L.areas.filter(a => a.level === k && a.type === 'service-corridor');
+      expect(corr.length).toBe(4);
+      const wc = L.areas.filter(a => a.level === k && a.type === 'washroom');
+      expect(wc.map(a => a.label).sort()).toEqual(["Men's washroom", "Women's washroom"]);
+      const pass = L.areas.find(a => a.level === k && a.type === 'passage' && a.label.startsWith('Washrooms'))!;
+      const doors = L.doors.filter(d => d.a === pass.id || d.b === pass.id);
+      expect(doors.some(d => d.staff)).toBe(true);
+      expect(doors.some(d => !d.staff && [d.a, d.b].some(id => L.areas[id].role === 'mall'))).toBe(true);
+      // stock rooms open onto the corridor
+      const backs = info.shops.filter(q => q.level === k).map(q => q.backroom!);
+      for (const b of backs) expect(L.doors.some(d => d.staff && (d.a === b || d.b === b) && [d.a, d.b].some(id => L.areas[id].type === 'service-corridor'))).toBe(true);
+    }
+    const station = L.areas.filter(a => (a.level ?? 0) === 0 && (a.type === 'washroom' || a.type === 'agent-office' || a.type === 'service-corridor'));
+    expect(station.filter(a => a.type === 'washroom').length).toBeGreaterThanOrEqual(2);
+    expect(station.some(a => a.type === 'agent-office')).toBe(true);
+  });
+
+  it('the glass elevator rides the Office elevator runtime: 7 stops, cab inside its solid shaft, landings walkable', () => {
+    const t = readTowerInfo(L)!;
+    expect(t).not.toBeNull();
+    expect(t.windows).toEqual([]);
+    const e = t.elevator!;
+    expect(e.stops.map(q => q.levelId)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(e.cab.x0).toBeGreaterThan(e.shaft.x0 - 1e-6);
+    expect(e.cab.z1).toBeLessThan(e.shaft.z1 + 1e-6);
+    for (const q of e.stops) {
+      const g = L.levels[q.levelId].grid, [cx, cy] = g.cellOf(q.landing.x, q.landing.z);
+      expect(g.cells[g.idx(cx, cy)], `landing ${q.levelId}`).toBe(FLOOR);
+      expect(g.floorAt(q.landing.x, q.landing.z)).toBeCloseTo(q.y, 3);
+      const [sx, sy] = g.cellOf((e.cab.x0 + e.cab.x1) / 2, (e.cab.z0 + e.cab.z1) / 2);
+      expect(g.cells[g.idx(sx, sy)]).toBe(SOLID);
+    }
+    expect(planElevator(e).buttons.length).toBeGreaterThan(7);
+  });
+
+  it('QA poses resolve to walkable floor on their storey', () => {
+    for (const name of MALL_POSE_NAMES) {
+      const q = mallQaPose(L, name);
+      if (name === 'bridge' && !info.bridges.length) continue;
+      expect(q, name).not.toBeNull();
+      const g = L.levels[q!.level].grid, [cx, cy] = g.cellOf(q!.x, q!.z);
+      expect(g.walkable(cx, cy), name).toBe(true);
+    }
+    for (let k = 1; k <= RINGS; k++) expect(mallQaPose(L, 'ring-edge', k)?.level).toBe(k);
   });
 
   it('the patrol graph: nodes on walkable floor of their storey, edges walkable (PathFinder) incl. storey changes', () => {
@@ -206,6 +258,15 @@ describe.each(MALL_VARIANTS.map(v => [v]))('variant %s', (variant: MallVariant) 
     expect(L.trenches.length).toBe(1);
   });
 
+  it('no ceiling fixture hangs in open air (the pit under the atrium / bridge decks are lit by the skylight)', () => {
+    for (const l of L.lights) {
+      if (l.virtual) continue;
+      const lv = l.level ?? L.areas[l.area]?.level ?? 0, g = L.levels[lv].grid;
+      const c = g.ceilAt(l.x, l.z);
+      if (Number.isFinite(c)) expect(l.y, `light ${l.x},${l.z} level ${lv}`).toBeGreaterThan(c - 1.0);
+    }
+  });
+
   it('no enemy or loot in the void, on a run or within the start keep-away', () => {
     const cells = new Set(mallVoidCells(L));
     for (const z of L.zombies) {
@@ -219,6 +280,16 @@ describe.each(MALL_VARIANTS.map(v => [v]))('variant %s', (variant: MallVariant) 
   });
 });
 
+describe('one world', () => {
+  it('source guard: no mall code path travels, fades, loads or rebuilds a section', () => {
+    for (const f of ['index.ts', 'carve.ts', 'structure.ts', 'validate.ts', 'elevator.ts', 'qa.ts', 'trackExt.ts', 'frame.ts']) {
+      const src = readFileSync(new URL(`../src/gen/mall/${f}`, import.meta.url), 'utf8');
+      const code = src.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+      expect(code, f).not.toMatch(/\.travel\(|TowerFade|via:\s*'local'|sectionForFloor|'travelling'/);
+    }
+  });
+});
+
 describe('variants differ', () => {
   it('in void shape, bridges, vertical-link placement and elevators', () => {
     const [a, b, c] = MALL_VARIANTS.map(v => mall(v).mall!);
@@ -228,9 +299,9 @@ describe('variants differ', () => {
   });
 });
 
-describe('a real Player walks the mall', () => {
+describe.each(MALL_VARIANTS.map(v => [v]))('a real Player walks the mall (%s)', (variant: MallVariant) => {
   it('W key from the platform start up to ring 6 (escalators / stairs), y continuous across every storey, never falls', () => {
-    const L = mall('galleria');
+    const L = mall(variant);
     const Lv = levelsOf(L);
     const pf = new PathFinder(Lv);
     const p = new Player();

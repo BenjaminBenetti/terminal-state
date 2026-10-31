@@ -299,6 +299,24 @@ export class ShopDresser {
     return p;
   }
 
+  /** Hangs `kind` (a garment group) from a rail host: centred, its top at the rail's top bar (host decor: it rides the rail). */
+  hang(host: PropPlacement, kind: PropKind): PropPlacement | null {
+    const hi = this.layout.props.indexOf(host);
+    if (hi < 0) return null;
+    const def = PROP_DEFS[kind], top = PROP_DEFS[host.kind].h;
+    if (def.h >= top || def.w > PROP_DEFS[host.kind].w + 1e-6) return null;
+    const {hx, hz} = footprint(kind, host.rot);
+    const p: PropPlacement = {kind, x: host.x, z: host.z, y: host.y + r3(top - 0.02 - def.h), rot: host.rot, area: host.area, hx, hz, h: def.h, blocksSight: false, variant: 0,
+      host: hi, ...(host.level ? {level: host.level} : {})};
+    this.layout.props.push(p);
+    this.placed.push(p);
+    return p;
+  }
+  /** Garment groups on a share of the rails just placed (a looted store: some rails stripped bare). */
+  dressRails(rails: readonly PropPlacement[], share = 0.65): void {
+    for (const r of rails) if ((r.kind === 'garmentRail' || r.kind === 'garmentRailRound') && this.rng.chance(share)) this.hang(r, 'garmentHangingGroup');
+  }
+
   /** Reserves frame cells (u0..u1 x v0..v1) as a keep-out (the shopfront entry, a staff gap). */
   keep(u0: number, u1: number, v0: number, v1: number): void {
     const [xa, za] = uvXZ(this.fr, u0, v0), [xb, zb] = uvXZ(this.fr, u1, v1);
@@ -312,11 +330,11 @@ export class ShopDresser {
   }
 }
 
+const FRONT_KINDS: ReadonlySet<string> = new Set(['stockShelf', 'shelf', 'wallBay', 'glassCounter', 'shopCooler', 'deviceWall', 'medCabinet', 'gunLocker', 'flowerStand',
+  'bookstoreBookcase', 'shopCounter', 'arcadeCabinet', 'magazineRack']);
 /** Access strip for a kind placed against a wall: holders / displays keep a customer strip, openables their swing (placeKit adds it). */
 function frontFor(kind: PropKind): number {
-  if (kind === 'stockShelf' || kind === 'shelf' || kind === 'wallBay' || kind === 'glassCounter' || kind === 'shopCooler' || kind === 'deviceWall'
-    || kind === 'medCabinet' || kind === 'gunLocker' || kind === 'flowerStand' || kind === 'sneakerWall' || kind === 'lawBookcase' || kind === 'shopCounter'
-    || kind === 'arcadeCabinet' || kind === 'magazineRack') return HOLDER_FRONT;
+  if (FRONT_KINDS.has(kind)) return HOLDER_FRONT;
   if (kind === 'cabinetTall' || kind === 'cabinetLow' || kind === 'staffLockers' || kind === 'safe' || kind === 'officeFiling') return 0.7;
   return 0.5;
 }
@@ -332,6 +350,8 @@ function topOf(kind: PropKind): number | undefined {
 
 type Recipe = (d: ShopDresser, f: MallShopFit) => void;
 const sv = (t: StockTheme) => stockVariant(t);
+/** An island count scaled with the sales floor: one per `per` m², clamped to [lo, hi]. */
+const per = (d: ShopDresser, m2: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(d.W * d.D / m2)));
 
 /** Cash wrap: a short counter run (+ register) facing the customers on the side away from the entry, at depth v. */
 function cashWrap(d: ShopDresser, kinds: readonly KindV[], n: number, v = 2.0): PropPlacement[] {
@@ -368,9 +388,10 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const till = run.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
     // customer side: display benches (the weapon finds), accessory bays + ammo shelving along the side walls
-    const benches = d.islands('gunDisplay', W >= 8 ? 2 : 1, {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: V - 1.0}, {ring: 0.8}).length;
+    const benches = d.islands('gunDisplay', per(d, 45, 1, 3), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: V - 1.0}, {ring: 0.8}).length;
     if (!benches && !d.sideRows([['gunDisplay', 0]], 1.4, V - 0.6, {max: 1})) d.againstWall('gunDisplay', 1, {front: 0.9});
     d.sideRows([['wallBay', 0], ['shelf', 0]], 1.4, V - 0.9);
+    d.islands('merchTable', per(d, 90, 0, 2), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: V - 1.0}, {ring: 0.9});
     d.againstWall('bin', 1);
   },
   outdoors(d) {
@@ -379,9 +400,10 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const coolers = d.backRow([['shopCooler', 0], ['shopCooler', 0]], W - 2.0, W - 0.2, {max: 2});
     d.backRow([['wallBay', 0], ['shelf', 0]], 0.25, W - (coolers ? 2.1 : 0.25));
     d.sideRows([['wallBay', 0]], 3.2, D - 1.2);
-    if (W * D >= 70) d.islands('tentDisplay', 1, {u0: 2, u1: W - 2, v0: D * 0.45, v1: D * 0.7}, {ring: 1.0});
-    d.islands('clothingRack', W * D >= 90 ? 4 : 2, {u0: 1.5, u1: W - 1.5, v0: 3.8, v1: D - 2.0}, {ring: 0.8});
-    d.islands('merchTable', 1, {u0: 1.6, u1: W - 1.6, v0: 3.2, v1: D - 2.4}, {ring: 0.9});
+    if (W * D >= 70) d.islands('tentDisplay', W * D >= 160 ? 2 : 1, {u0: 2, u1: W - 2, v0: D * 0.45, v1: D * 0.75}, {ring: 1.0});
+    if (W * D >= 120) d.aisles('shelf', [0], {u0: W * 0.55, u1: W - 1.3, v0: 3.4, v1: D - 1.8}, 1.2);
+    d.dressRails(d.islands('garmentRail', per(d, 25, 2, 8), {u0: 1.5, u1: W - 1.5, v0: 3.8, v1: D - 2.0}, {ring: 0.8}));
+    d.islands('merchTable', per(d, 70, 1, 3), {u0: 1.6, u1: W - 1.6, v0: 3.2, v1: D - 2.4}, {ring: 0.9});
     d.againstWall('bicycle', 1);
   },
   pharmacy(d) {
@@ -404,7 +426,8 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const {W, D, fr} = d;
     // reception + waiting, exam bays behind
     d.counterRun([['desk', 0]], 1.8, W / 2 - 1.0, W / 2 + 1.0, {max: 1});
-    d.sideRows([['lobbySofa', 0]], 1.4, Math.min(D * 0.45, 5), {max: 2});
+    d.sideRows([['lobbySofa', 0]], 1.4, Math.min(D * 0.45, 5), {max: per(d, 40, 2, 4)});
+    d.islands('plasticStackChair', per(d, 30, 1, 4), {u0: 1.2, u1: W - 1.2, v0: 2.6, v1: Math.min(D * 0.45, 5)}, {ring: 0.5});
     d.againstWall('pottedPlantSmall', 1, {walls: [fr.L, fr.R]});
     d.backRow([['examTable', 0], ['vitalsMonitor', 0], ['medCabinet', 0], ['examTable', 0], ['vitalsMonitor', 0]], 0.3, W - 0.3);
     d.sideRows([['medCabinet', 0], ['crashCart', 0], ['wheeledStretcher', 0]], Math.max(D * 0.5, 4.5), D - 1.2, {max: 3});
@@ -418,13 +441,15 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const tills = d.placed.filter(p => p.kind === 'shopCounter');
     if (tills[0]) d.onTop(tills[0], 'cashRegister', 0.35);
     d.sideRows([['deviceWall', 0], ['wallBay', 0], ['deviceWall', 0]], 1.6, D - 1.3);
-    d.islands('techDisplay', W * D >= 80 ? 4 : 2, {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
+    d.islands('techDisplay', per(d, 30, 2, 8), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
+    // TV display tables: a flat-screen set (lane ASSETS M10, loose on-host decor) on each, loot beside it
+    for (const t of d.islands('merchTable', per(d, 60, 1, 3), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0})) d.onTop(t, 'flatScreenTv', d.rng.chance(0.5) ? -0.15 : 0.15);
   },
   phone(d) {
     const {W, D} = d;
     d.backRow([['repairBench', 1], ['glassCounter', 0], ['shopCounter', 0]], 0.3, W - 0.3);
     d.sideRows([['deviceWall', 0]], 1.4, D - 1.2);
-    d.islands('techDisplay', 1, {u0: 1.6, u1: W - 1.6, v0: 2.2, v1: D - 1.9}, {ring: 0.9});
+    d.islands('techDisplay', per(d, 35, 1, 4), {u0: 1.6, u1: W - 1.6, v0: 2.2, v1: D - 1.9}, {ring: 0.9});
     d.againstWall('spinnerRack', 1);
   },
   hardware(d) {
@@ -439,38 +464,41 @@ const RECIPES: Record<MallRecipe, Recipe> = {
   },
   clothing(d) {
     const {W, D, fr} = d;
-    windowDisplay(d, 'dressForm', 2);
+    windowDisplay(d, 'mannequinFull', 2);
     const corner = d.rng.chance(0.5) ? 0.25 : W - 0.25 - PROP_DEFS.fittingRooms.w;
     d.backRow([['fittingRooms', 0]], corner, corner + PROP_DEFS.fittingRooms.w + 0.3, {max: 1, front: 1.0});
     d.backRow([['wallBay', 0]], 0.25, W - 0.25);
     d.sideRows([['wallBay', 0]], 2.4, D - 1.2);
     cashWrap(d, [['shopCounter', 0], ['glassCounter', 0]], 2, Math.min(D - 3, Math.max(2.4, D * 0.55)));
-    d.islands('clothingRack', Math.round(Math.min(6, W * D / 20)), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8});
-    d.islands('merchTable', W * D >= 60 ? 2 : 1, {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
-    d.islands('ottoman', 1, {u0: 1.2, u1: W - 1.2, v0: D * 0.5, v1: D - 1.6}, {ring: 0.7});
+    if (W * D >= 150) d.backRow([['fittingRooms', 0]], corner < W / 2 ? W - PROP_DEFS.fittingRooms.w - 0.6 : 0.25, corner < W / 2 ? W - 0.25 : PROP_DEFS.fittingRooms.w + 0.6, {max: 1, front: 1.0});
+    d.dressRails(d.islands('garmentRail', per(d, 25, 2, 9), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8}));
+    d.dressRails(d.islands('garmentRailRound', per(d, 45, 1, 4), {u0: 1.8, u1: W - 1.8, v0: 2.8, v1: D - 2.4}, {ring: 0.8}));
+    d.islands('merchTable', per(d, 60, 1, 4), {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
+    d.islands('ottoman', per(d, 80, 1, 2), {u0: 1.2, u1: W - 1.2, v0: D * 0.5, v1: D - 1.6}, {ring: 0.7});
     void fr;
   },
   shoes(d) {
     const {W, D} = d;
-    windowDisplay(d, 'dressForm', 1);
-    d.sideRows([['sneakerWall', 0]], 1.4, D - 1.0);
-    d.backRow([['wallBay', 0], ['sneakerWall', 0]], 0.25, W - 0.25);
+    windowDisplay(d, 'mannequinFull', 1);
+    d.sideRows([['wallBay', 0]], 1.4, D - 1.0);
+    d.backRow([['wallBay', 0], ['wallBay', 0]], 0.25, W - 0.25);
     cashWrap(d, [['shopCounter', 0]], 1, Math.min(D - 2.6, 2.2));
-    d.islands('ottoman', W * D >= 45 ? 3 : 2, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 1.8}, {ring: 0.7});
-    d.islands('merchTable', 1, {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
+    d.islands('ottoman', per(d, 25, 2, 8), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 1.8}, {ring: 0.7});
+    d.islands('merchTable', per(d, 70, 1, 3), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
   },
   department(d) {
     const {W, D, fr} = d;
-    windowDisplay(d, 'dressForm', 3);
+    windowDisplay(d, 'mannequinFull', 3);
     // cosmetics hall of glass counters in the front third; garment rails / mannequins / tables in the middle; fitting rooms, a bed
     // showroom corner and slatwall bays at the back; two cash wraps
     d.islands('glassCounter', Math.round(Math.min(6, W / 3)), {u0: 2, u1: W - 2, v0: 2.6, v1: Math.max(3.4, D * 0.3)}, {ring: 1.0});
     d.backRow([['fittingRooms', 0]], 0.25, PROP_DEFS.fittingRooms.w + 0.6, {max: 1, front: 1.0});
     d.backRow([['fittingRooms', 0]], W - PROP_DEFS.fittingRooms.w - 0.6, W - 0.25, {max: 1, front: 1.0});
-    d.backRow([['wallBay', 0], ['wallBay', 0], ['sneakerWall', 0]], 0.25, W - 0.25);
-    d.sideRows([['wallBay', 0], ['clothingRack', 0]], 2.4, D - 1.2);
-    d.islands('clothingRack', Math.round(Math.min(10, W * D / 30)), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8});
-    d.islands('dressForm', 3, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6});
+    d.backRow([['wallBay', 0], ['wallBay', 0], ['wallBay', 0]], 0.25, W - 0.25);
+    d.sideRows([['wallBay', 0], ['garmentRail', 0]], 2.4, D - 1.2);
+    d.dressRails(d.islands('garmentRail', Math.round(Math.min(8, W * D / 35)), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}));
+    d.dressRails(d.islands('garmentRailRound', per(d, 60, 1, 4), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}));
+    d.islands('mannequinFull', 3, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6});
     d.islands('merchTable', 3, {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.9});
     d.islands('displayBed', 1, {u0: 2, u1: W - 2, v0: D * 0.62, v1: D - 2.4}, {ring: 0.9, along: false});
     d.islands('loungeArmchair', 2, {u0: 2, u1: W - 2, v0: D * 0.62, v1: D - 2}, {ring: 0.6});
@@ -485,15 +513,22 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const gapR = d.rng.chance(0.5);
     const mods: KindV[] = [];
     for (let i = 0; i < 6; i++) mods.push([d.rng.chance(P?.display ?? 0) && mods.filter(m => m[0] === 'shopDisplay').length < 2 ? 'shopDisplay' : 'shopCounter', i]);
-    const run = d.counterRun(mods, 1.0, gapR ? 0.2 : 1.2, gapR ? W - 1.2 : W - 0.2);
+    // a deep unit (GEN's food ring: 10-12 m) is a counter-service restaurant: the counter part-way in, dining tables in front of it
+    const deep = D >= 7;
+    const V = deep ? Math.max(3.0, Math.min(D - 3.6, snapDn(D * 0.45))) : 1.0;
+    const run = d.counterRun(mods, V, gapR ? 0.2 : 1.2, gapR ? W - 1.2 : W - 0.2);
     const till = run.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
+    if (deep) {
+      d.islands('table', per(d, 30, 1, 4), {u0: 1.5, u1: W - 1.5, v0: 1.8, v1: V - 1.3}, {ring: 0.8});
+      d.againstWall('plasticStackChair', 2, {walls: [d.fr.L, d.fr.R]});
+    }
     const cooler = d.rng.chance(P?.cooler ?? 0.6) ? d.backRow([['shopCooler', 0]], gapR ? W - 1.0 : 0.15, gapR ? W - 0.15 : 1.0, {max: 1}) : 0;
     const kitchen = (P?.kitchen ?? [['shopBackbar', 0]]) as readonly KindV[];
     d.backRow(kitchen, cooler && !gapR ? 1.0 : 0.2, cooler && gapR ? W - 1.0 : W - 0.2);
     for (const r of P?.extras ?? []) d.sideRow(gapR ? 'L' : 'R', [[r.kind, typeof r.variant === 'number' ? r.variant : 0]], 2.4, D - 1.0, {max: 1});
     // bigger units: prep counters / the staff fridge / a chest freezer along the side walls behind the counter
-    if (D >= 4.5) d.sideRows([['shopBackbar', 0], ['fridge', 0], ['chestFreezer', 0]], 2.2, D - 1.0, {max: W * D >= 50 ? 3 : 1});
+    if (D >= 4.5) d.sideRows([['shopBackbar', 0], ['fridge', 0], ['chestFreezer', 0]], V + 1.2, D - 1.0, {max: W * D >= 50 ? 3 : 1});
   },
   cafe(d, f) {
     const {W, D} = d;
@@ -526,10 +561,11 @@ const RECIPES: Record<MallRecipe, Recipe> = {
   },
   books(d) {
     const {W, D} = d;
-    d.sideRows([['lawBookcase', 0]], 1.4, D - 1.0);
-    d.backRow([['lawBookcase', 0]], 0.25, W - 0.25);
+    d.sideRows([['bookstoreBookcase', 0]], 1.4, D - 1.0);
+    d.backRow([['bookstoreBookcase', 0]], 0.25, W - 0.25);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
-    d.islands('merchTable', W * D >= 50 ? 3 : 2, {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
+    if (W * D >= 100) d.aisles('bookstoreBookcase', [0], {u0: W * 0.5, u1: W - 1.3, v0: 3.2, v1: D - 1.6}, 1.2);
+    d.islands('merchTable', per(d, 40, 2, 6), {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
     d.islands('magazineRack', 1, {u0: 1.4, u1: W - 1.4, v0: 2.0, v1: 3.2}, {ring: 0.8});
     d.islands('loungeArmchair', 2, {u0: 1.4, u1: W - 1.4, v0: D * 0.6, v1: D - 1.8}, {ring: 0.6});
   },
@@ -539,19 +575,20 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.backRow([['wallBay', 0]], 0.25, W - 0.25);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
     d.againstWall('capsuleToyMachine', 2, {walls: [d.fr.L, d.fr.R]});
-    d.islands('merchTable', 2, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.4}, {ring: 0.9});
+    if (W * D >= 100) d.aisles('wallBay', [0], {u0: W * 0.5, u1: W - 1.3, v0: 3.2, v1: D - 1.6}, 1.2);
+    d.islands('merchTable', per(d, 50, 2, 5), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.4}, {ring: 0.9});
     if (W * D >= 50) d.islands('kiddieRide', 1, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
     d.islands('giantTeddy', 1, {u0: 1.2, u1: W - 1.2, v0: 2.2, v1: D - 1.6}, {ring: 0.6});
     d.islands('rockingHorse', 2, {u0: 1.2, u1: W - 1.2, v0: 2.2, v1: D - 1.6}, {ring: 0.6});
   },
   sports(d) {
     const {W, D} = d;
-    d.sideRows([['wallBay', 0], ['sneakerWall', 0]], 1.4, D - 1.0);
+    d.sideRows([['wallBay', 0], ['wallBay', 0]], 1.4, D - 1.0);
     d.backRow([['wallBay', 0]], 0.25, W - 0.25);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
-    d.islands('treadmill', W * D >= 70 ? 2 : 1, {u0: 1.8, u1: W - 1.8, v0: D * 0.55, v1: D - 2.0}, {ring: 0.8, along: false});
-    d.islands('clothingRack', 2, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D * 0.55}, {ring: 0.8});
-    d.islands('merchTable', 1, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
+    d.islands('treadmill', per(d, 60, 1, 4), {u0: 1.8, u1: W - 1.8, v0: D * 0.55, v1: D - 2.0}, {ring: 0.8, along: false});
+    d.dressRails(d.islands('garmentRail', per(d, 40, 2, 6), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D * 0.55}, {ring: 0.8}));
+    d.islands('merchTable', per(d, 70, 1, 3), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
     d.islands('ottoman', 1, {u0: 1.2, u1: W - 1.2, v0: 2.4, v1: D - 1.6}, {ring: 0.7});
     d.againstWall('bicycle', 2);
   },
@@ -561,17 +598,17 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const till = d.placed.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
     d.sideRows([['glassCounter', 0]], 1.5, D - 1.2);
-    d.islands('glassCounter', W * D >= 40 ? 2 : 1, {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
+    d.islands('glassCounter', per(d, 30, 1, 6), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
   },
   home(d) {
     const {W, D} = d;
     d.backRow([['kitchenette', 0], ['fridge', 0], ['cabinetTall', 0]], 0.3, W - 0.3);
     d.sideRows([['cabinetLow', 0], ['wallBay', 0]], 1.6, D - 1.2);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
-    d.islands('displayBed', W * D >= 90 ? 2 : 1, {u0: 2, u1: W - 2, v0: D * 0.45, v1: D - 2.2}, {ring: 0.9, along: false});
-    d.islands('lobbySofa', 1, {u0: 2, u1: W - 2, v0: 2.6, v1: D * 0.5}, {ring: 0.8});
-    d.islands('loungeArmchair', 2, {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 1.8}, {ring: 0.6});
-    d.islands('merchTable', 1, {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 0.9});
+    d.islands('displayBed', per(d, 60, 1, 4), {u0: 2, u1: W - 2, v0: D * 0.45, v1: D - 2.2}, {ring: 0.9, along: false});
+    d.islands('lobbySofa', per(d, 70, 1, 3), {u0: 2, u1: W - 2, v0: 2.6, v1: D * 0.5}, {ring: 0.8});
+    d.islands('loungeArmchair', per(d, 40, 2, 5), {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 1.8}, {ring: 0.6});
+    d.islands('merchTable', per(d, 60, 1, 3), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 0.9});
     d.againstWall('pottedPlantSmall', 2);
     d.islands('planterTree', 1, {u0: 1.2, u1: W - 1.2, v0: 1.6, v1: 3.0}, {ring: 0.6});
   },
@@ -582,14 +619,15 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     for (let k = 0, v = 2.2; k < 3 && v < D - 1.4; v += 1.4) if (d.put('salonChair', W - 0.75, v, OPP_ROT[fr.R])) k++;
     d.backRow([['wallBay', 0], ['glassCounter', 0]], 0.25, W - 0.25);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
-    d.islands('merchTable', 1, {u0: 1.8, u1: W - 1.8, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
+    d.islands('glassCounter', per(d, 70, 0, 3), {u0: 1.8, u1: W - 1.8, v0: 2.6, v1: D - 2.2}, {ring: 1.0});
+    d.islands('merchTable', per(d, 50, 1, 4), {u0: 1.8, u1: W - 1.8, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
   },
   music(d) {
     const {W, D} = d;
     d.sideRows([['wallBay', 0]], 1.4, D - 1.0);
     d.backRow([['wallBay', 0], ['jukebox', 0], ['wallBay', 0]], 0.25, W - 0.25);
     cashWrap(d, [['glassCounter', 0], ['shopCounter', 0]], 2, 2.0);
-    d.islands('merchTable', W * D >= 45 ? 3 : 2, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
+    d.islands('merchTable', per(d, 35, 2, 6), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
     d.islands('loungeArmchair', 1, {u0: 1.4, u1: W - 1.4, v0: D * 0.6, v1: D - 1.6}, {ring: 0.6});
   },
   pet(d) {
@@ -600,7 +638,8 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     for (const b of boards) d.onTop(b, 'aquarium', 0);
     d.sideRows([['stockShelf', sv('grocery')], ['wallBay', 0]], 2.6, D - 1.2);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
-    d.islands('catTree', 2, {u0: 1.4, u1: W - 1.4, v0: 2.4, v1: D - 1.8}, {ring: 0.7});
+    if (W * D >= 100) d.aisles('stockShelf', [sv('grocery')], {u0: W * 0.5, u1: W - 1.3, v0: 3.2, v1: D - 1.6}, 1.2);
+    d.islands('catTree', per(d, 50, 1, 3), {u0: 1.4, u1: W - 1.4, v0: 2.4, v1: D - 1.8}, {ring: 0.7});
     d.islands('merchTable', 1, {u0: 1.8, u1: W - 1.8, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
   },
   arcade(d) {
@@ -611,6 +650,7 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const till = counter.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
     d.againstWall('capsuleToyMachine', 2);
+    if (W * D >= 110) d.aisles('arcadeCabinet', [0], {u0: W * 0.45, u1: W - 1.6, v0: 3.4, v1: D - 1.8}, 1.6);
     d.islands('foosballTable', 1, {u0: 2, u1: W - 2, v0: 3.2, v1: D - 2.4}, {ring: 0.9});
     if (W * D >= 70) d.islands('pingPongTable', 1, {u0: 2.2, u1: W - 2.2, v0: 3.4, v1: D - 2.6}, {ring: 1.0});
     d.islands('kiddieRide', 1, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8});
@@ -622,13 +662,13 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.backRow([['wallBay', 0], ['glassCounter', 0]], 0.25, W - 0.25);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
     d.islands('merchTable', 1, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
-    d.islands('rollingSuitcase', 4, {u0: 1.2, u1: W - 1.2, v0: 2.2, v1: D - 1.4}, {ring: 0.5});
+    d.islands('rollingSuitcase', per(d, 12, 3, 10), {u0: 1.2, u1: W - 1.2, v0: 2.2, v1: D - 1.4}, {ring: 0.5});
   },
   optical(d) {
     const {W, D} = d;
     d.sideRows([['wallBay', 0]], 1.4, D - 1.0);
     d.backRow([['glassCounter', 0], ['desk', 0]], 0.25, W - 0.25);
-    d.islands('glassCounter', 1, {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
+    d.islands('glassCounter', per(d, 40, 1, 4), {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
     d.againstWall('officeChair', 1);
   },
@@ -702,6 +742,9 @@ const OPP_ROT: Record<Side, number> = {N: Math.PI, S: 0, W: -Math.PI / 2, E: Mat
 /** Stock-room recipe by program (shelving runs on the long walls, cartons, crates, the program's extras). */
 function dressBack(d: ShopDresser, f: MallShopFit): void {
   const {W, D} = d;
+  // a stock room the station dresser already furnished (its 'stock-room' purpose rules: shelving runs, cartons, crates) keeps that
+  // and only gains the program's own pieces (the gun shop's desk / safe / lockers, the dispensary's cabinets / specimen fridge …)
+  const pre = d.layout.props.filter(p => p.area === d.a.id).length >= 3;
   const st: StockTheme = f.program === 'pharmacy' || f.program === 'clinic' ? 'pharmacy' : f.program === 'electronics' || f.program === 'phone' ? 'devices'
     : f.program === 'hardware' ? 'parts' : f.program === 'grocery' || f.kind === 'food' || f.program === 'cafe' ? 'grocery' : 'cartons';
   const shelf: KindV = f.program === 'guns' || f.program === 'hardware' || f.program === 'outdoors' ? ['shelf', 0] : ['stockShelf', sv(st)];
@@ -716,8 +759,8 @@ function dressBack(d: ShopDresser, f: MallShopFit): void {
     food: [['fridge', 0], ['kitchenette', 0], ['chestFreezer', 0]],
     cafe: [['fridge', 0], ['kitchenette', 0]],
     grocery: [['fridge', 0], ['chestFreezer', 0], ['fridge', 0]],
-    clothing: [['clothingRack', 0], ['staffLockers', 0]],
-    department: [['clothingRack', 0], ['staffLockers', 0], ['desk', 0]],
+    clothing: [['garmentRail', 0], ['staffLockers', 0]],
+    department: [['garmentRail', 0], ['staffLockers', 0], ['desk', 0]],
     pet: [['fridge', 0], ['cabinetTall', 0]],
     arcade: [['electricalPanel', 0], ['cabinetTall', 0]],
     music: [['cabinetLow', 0]],
@@ -727,7 +770,10 @@ function dressBack(d: ShopDresser, f: MallShopFit): void {
   // program extras first (they are what makes the room), then shelving runs, then cartons / crates
   const ex = extras[f.recipe] ?? [['cabinetTall', 0]];
   const ax = (s: Side) => s === 'N' || s === 'S';
-  d.wallRun(long[0], ex, ax(long[0]) ? d.fr.x0 + 0.3 : d.fr.z0 + 0.3, ax(long[0]) ? d.fr.x1 - 0.3 : d.fr.z1 - 0.3);
+  // each extra once (the first long wall, the rest on the other)
+  d.wallRun(long[0], ex, ax(long[0]) ? d.fr.x0 + 0.3 : d.fr.z0 + 0.3, ax(long[0]) ? d.fr.x1 - 0.3 : d.fr.z1 - 0.3, {max: ex.length});
+  if (d.placed.length < ex.length) d.wallRun(long[1], ex.slice(d.placed.length), ax(long[1]) ? d.fr.x0 + 0.3 : d.fr.z0 + 0.3, ax(long[1]) ? d.fr.x1 - 0.3 : d.fr.z1 - 0.3, {max: ex.length - d.placed.length});
+  if (pre) return;
   for (const s of long) {
     const alongX = s === 'N' || s === 'S';
     d.wallRun(s, [shelf], alongX ? d.fr.x0 + 0.3 : d.fr.z0 + 0.3, alongX ? d.fr.x1 - 0.3 : d.fr.z1 - 0.3);
@@ -766,7 +812,7 @@ export interface ShopDressReport {
 const HOLDERISH = new Set(['shopCounter', 'shopDisplay', 'shopBackbar', 'shopCooler', 'stockShelf', 'shelf', 'snackRack', 'glassCounter', 'merchTable', 'wallBay', 'produceStand',
   'medCabinet', 'gunLocker', 'safe', 'staffLockers', 'cabinetTall', 'cabinetLow', 'crate', 'fridge', 'kitchenette', 'desk', 'monitorDesk', 'table', 'chestFreezer', 'shoppingCart',
   'crashCart', 'wheeledStretcher', 'rollingToolChest', 'examTable', 'biohazardFridge', 'labBench', 'vaultSafe', 'bakeryCase', 'officeFiling', 'vending', 'stall',
-  'grillLine', 'espressoBar', 'wokLine', 'deliLine', 'blenderBar', 'hotdogCart', 'bin']);
+  'grillLine', 'espressoBar', 'wokLine', 'deliLine', 'blenderBar', 'hotdogCart', 'bin', 'bookstoreBookcase']);
 
 /** Dresses every shop of layout.mall (after assignMallPrograms). Returns one report per shop. */
 export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressOpts = {}): ShopDressReport[] {
@@ -795,7 +841,7 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
     // the way in stays open: a 2 m deep keep-out behind the entry span (open counter fronts — food units, kiosks — serve over the
     // counter from the gallery: their door zone is enough; other open fronts keep a 3 m wide walk-in lane)
     if (fit.front === 'glazed') d.keep(fr.entry[0] - 0.25, fr.entry[1] + 0.25, 0, Math.min(2.0, fr.D * 0.4));
-    else if (fit.kind !== 'food' && fit.kind !== 'kiosk') d.keep(fr.W / 2 - 1.5, fr.W / 2 + 1.5, 0, Math.min(2.0, fr.D * 0.4));
+    else if (fit.kind !== 'kiosk' && !(fit.kind === 'food' && fr.D < 7)) d.keep(fr.W / 2 - 1.5, fr.W / 2 + 1.5, 0, Math.min(2.0, fr.D * 0.4));
     RECIPES[fit.recipe](d, fit);
     let backProps = 0;
     if (s.backroom !== undefined && layout.areas[s.backroom]) {
@@ -805,9 +851,9 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
       dressBack(bd, fit);
       backProps = bd.placed.length;
       d.placed.push(...bd.placed);
-      if (opts.lights !== false) shopLights(layout, b, 3.5);
+      if (opts.lights !== false) shopLights(layout, b, 5.0);
     }
-    if (opts.lights !== false) shopLights(layout, a, 4.0);
+    if (opts.lights !== false) shopLights(layout, a, 6.0);
     const own = d.placed.filter(p => p.area === a.id);
     const m2 = Math.max(1, s.salesArea || a.w * a.h * CELL * CELL);
     reports.push({shop: s.id, area: a.id, ...(s.backroom !== undefined ? {backroom: s.backroom} : {}), recipe: fit.recipe, props: own.length, backProps,

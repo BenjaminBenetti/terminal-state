@@ -41,8 +41,8 @@ import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
-import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
-import {GLASS_MATERIAL, cleanSupportTexture, cropPartTextures, extentOf, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs';
+import {flatten, clearNodeTransform, transformMesh, transformPrimitive, getBounds, textureCompress, prune, dedup, compactPrimitive} from '@gltf-transform/functions';
+import {GLASS_MATERIAL, components, cleanSupportTexture, cropPartTextures, extentOf, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs';
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -97,7 +97,52 @@ const NOTES = {};
 // Local edits after review (office lane-FURN mechanism, no regeneration): {glass: {minY, maxX}} -> transparent 'glass' node;
 // {clutter: c => bool, supports: [{y, tol}], parts: {<partId>: {box, sizeM, sizeAxis, label}}} -> baked loose items separated into
 // mall-<partId>.glb at their own real size (rule 4); {sizeM, sizeAxis, basis} -> furniture-only resize. Filled per accepted asset.
-const EDITS = {};
+const EDITS = {
+  // M01 (review/b1-raw-M01-M02.png): used as a wall-backed till / back counter (native +Z = drawers + hutch shelves toward the room, the
+  // oak screen to the wall). Counter top stood at 0.816 m and the counter was 1.05 m deep at the frozen 2.0 m width -> y x1.164 (top
+  // 0.95 m, rule 5 counters 0.9-1.0) and z x0.72 (0.76 m deep); width unchanged. The 84-tri box with a painted gauge face standing on
+  // the counter top (staff end, manifest frame x -0.89..-0.55, y 0.81..1.15, z -0.39..-0.07) is a loose item: dropped (rule 4).
+  'mall-cashwrap-counter': {basis: 'wall-backed till / back counter; counter top raised 0.816 -> 0.95 m and depth 1.05 -> 0.76 m (per-axis, furniture-only); loose gauge box dropped',
+    clutter: c => c.min[1] > 0.79 && c.max[1] < 1.2 && c.centre[0] < -0.45 && c.centre[2] < 0 && c.centre[2] > -0.5 && c.max[0] - c.min[0] < 0.45 && c.max[2] - c.min[2] < 0.45,
+    parts: {}, supports: [{y: 0.8162, tol: 0.006}], scaleAxes: [[1, 1.164], [2, 0.72]]}, // supports: the counter top (the box's painted ghost cleaned)
+  // M06 (review/M06-…-scale.png): at the frozen 1.0 m the garments spread ~0.70 m across (1.5x a shirt on a hanger beside the zombie):
+  // uniform resize to a 0.85 m hanging length (hook to hem; shirts / jackets on hangers ~0.75-0.9 m) -> ~0.6 m across.
+  'garment-hanging-group': {basis: 'hanging length 0.85 m (hook to hem), uniform', sizeM: 0.85, sizeAxis: 'h'},
+  // M03 (1R slot 81, review/b1g3-*): a squat single-sided section (W:H 1.39; 0.90 m tall at the frozen 1.25 m width): depth z x0.645,
+  // then uniform to 1.4 m tall -> 1.95 x 1.40 x 0.49 m (5 shelves ~0.25 m apart). Back-to-back pairs = the double-sided aisle run.
+  'retail-gondola': {basis: 'single-sided gondola section 1.4 m tall (uniform), depth trimmed to 0.49 m (z x0.645)', scaleAxes: [[2, 0.645]], sizeM: 1.4, sizeAxis: 'h'},
+  // M04 (1R slot 82): 1.2 m wide it stood 2.53 m tall and 0.94 m deep (shelves ~0.56 m) -> y x0.871 (2.2 m, SHOPS wallBay) and
+  // z x0.53 (0.50 m deep, shelves ~0.30 m); width kept.
+  'retail-wall-bay': {basis: 'wall bay 1.2 x 2.2 m (SHOPS wallBay), depth 0.50 m (per-axis y x0.871, z x0.53)', scaleAxes: [[1, 0.871], [2, 0.53]]},
+  // M11 (review/b1g3-*): counter top 0.514 m at the frozen 2.4 m width. The cluster of pill bottles / jars on the counter top's back-right
+  // (manifest frame x -0.98..-0.63, y 0.51..0.65, z 0.12..0.29) is loose clutter: dropped (rule 4), its painted ghost cleaned. Then y x1.387,
+  // z x0.75 and uniform to 3.2 m wide -> counter top 0.95 m, hutch top ~2.57 m, depth 0.69 m (a pharmacy back-wall counter).
+  'pharmacy-dispensary-counter': {basis: 'pharmacy back counter 3.2 m wide, counter top 0.95 m, depth 0.69 m (per-axis + uniform); loose bottle cluster dropped',
+    clutter: c => c.min[1] > 0.49 && c.max[1] < 0.7 && c.centre[0] < -0.55 && c.centre[0] > -1.05 && c.centre[2] > 0.05 && c.centre[2] < 0.35 && Math.max(c.max[0] - c.min[0], c.max[2] - c.min[2]) < 0.15,
+    parts: {}, supports: [{y: 0.5138, tol: 0.006}], scaleAxes: [[1, 1.387], [2, 0.75]], sizeM: 3.2, sizeAxis: 'w'},
+  // M12 (1R2 slot 84, review/b1g4-*): plain long counter, 0.83 m tall and 1.10 m deep at 2.6 m -> y x1.085 (0.90 m), z x0.77 (0.85 m).
+  // Its top 'belt channel' is a 0.6 m-deep open trough (floor 0.31 m, review/b1g4-scale-sheet.png) -> a procedural dark-rubber belt deck
+  // closes it just under the 0.898 m rim (runtime frame x -1.26..1.24, z +-0.36, y 0.865..0.888), so it reads as a counter with a belt.
+  'checkout-lane': {basis: 'lane counter 2.6 x 0.90 x 0.85 m (per-axis y x1.085, z x0.77) + procedural belt deck over the modelled trough',
+    scaleAxes: [[1, 1.085], [2, 0.77]], boxes: [{min: [-1.26, 0.865, -0.36], max: [1.24, 0.888, 0.36], color: [0.035, 0.035, 0.04, 1], roughness: 0.8, name: 'belt'}]},
+  // M14 (review/b1g4-*): two scoped rifles were modelled on the hook bars of the (open-backed) frame despite 'no guns'. Their bodies,
+  // scopes, mounts and small parts are separate components inside the rifle zone (manifest frame x -0.36..0.8, y 0.58..1.27, < 0.1 m
+  // deep, < 1.2 m long) -> dropped (rule 4; the uploaded guns stay the only weapons). Kept: the side posts (x +-0.95), the hook bars
+  // (1.26 m segments), the hooks (0.18 m deep), the two thin cradle pads on the bars (<= 0.01 m tall) and the lower shelf.
+  // (A first, looser predicate also took the 0.103 m-wide side posts and the bars — review/b1g4-runtime.png before this fix.)
+  'gun-wall-rack': {basis: 'empty long-gun rack; modelled rifles removed locally',
+    clutter: c => { const e = [0, 1, 2].map(k => c.max[k] - c.min[k]); return e[0] < 1.2 && e[2] < 0.1 && e[1] > 0.015 && c.centre[0] > -0.36 && c.centre[0] < 0.8 && c.centre[1] > 0.58 && c.centre[1] < 1.27; },
+    parts: {},
+    // the bar span under each rifle (x 0.30..0.95) was fused into the rifle and left with it: copies of the two kept 1.26 m bar segments
+    // (x -0.96..0.30, y ~0.80 / ~1.14) remapped onto x 0.29..0.95 close the bars to the right-hand post again
+    extend: [{pred: c => c.ext[0] > 1.2 && c.ext[0] < 1.4 && c.ext[1] < 0.06 && c.centre[1] > 0.7 && c.centre[1] < 1.25, from: [-0.96, 0.30], to: [0.29, 0.95]}]},
+  // M15 (review/b1g4-*): the sloped front glass and the glass shelf are thin separate components painted grey -> a real transparent
+  // 'glass' node (shop-cooler contract) so the felt deck (0.44 m) and shelf (~0.89 m) loot shows through; staff side open.
+  'glass-display-counter': {basis: 'glass made transparent (component split); depth 0.98 -> 0.71 m (z x0.72)',
+    glassComps: c => c.n < 60 && [...c.ext].sort((a, b) => a - b)[1] > 0.45, scaleAxes: [[2, 0.72]]},
+  // M16 (review/b1g4-*): 1.16 m tall at 1.5 m wide (3 planks) -> y x1.5 (1.74 m; planks read thicker, pipes taller).
+  'outdoors-plank-shelving': {basis: 'pipe + plank shelving 1.5 x 1.74 x 0.48 m (per-axis y x1.5)', scaleAxes: [[1, 1.5]]},
+};
 
 // ---------- records ----------
 const ledger = fs.existsSync(LEDGER) ? fs.readFileSync(LEDGER, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : [];
@@ -145,6 +190,81 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const ROT = {'+Z': Math.PI, '-Z': 0, '+X': Math.PI / 2, '-X': -Math.PI / 2};
 const sizeMOf = s => s.targetSize.sizeM, sizeAxisOf = s => s.targetSize.sizeAxis;
 
+/**
+ * Glass by COMPONENT (manifest frame): every connected component `pred(c)` selects (thin glass sheets modelled as their own pieces) moves
+ * to one untextured transparent node 'glass' with the shop-cooler glass contract (lib/clutter-split.mjs GLASS_MATERIAL, BLEND, double
+ * sided -> GLTFLoader transparent + depthWrite false, never a flashlight-shadow caster). Returns {tris, comps}.
+ */
+/**
+ * Local repair (manifest frame): copies of the components `pred` selects, remapped linearly along x from [from0, from1] to [to0, to1]
+ * (same material / UVs) — e.g. the hook-bar span that left with a removed, fused loose item. Returns the copied triangle count.
+ */
+function extendComps(doc, {pred, from, to}) {
+  let tris = 0;
+  for (const pc of components(doc)) {
+    const sel = new Set(pc.comps.filter(c => pred({...c, ext: [0, 1, 2].map(k => c.max[k] - c.min[k])})).map(c => c.id));
+    if (!sel.size) continue;
+    const I = pc.prim.getIndices().getArray(), keep = [];
+    for (let t = 0; t < I.length; t += 3) if (sel.has(pc.tri[t / 3])) keep.push(I[t], I[t + 1], I[t + 2]);
+    const cp = pc.prim.clone();
+    cp.setIndices(doc.createAccessor().setType('SCALAR').setBuffer(doc.getRoot().listBuffers()[0]).setArray(new Uint32Array(keep)));
+    compactPrimitive(cp);
+    const k = (to[1] - to[0]) / (from[1] - from[0]);
+    transformPrimitive(cp, [k, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, to[0] - k * from[0], 0, 0, 1]);
+    pc.mesh.addPrimitive(cp);
+    tris += keep.length / 3;
+  }
+  if (!tris) throw new Error('extendComps: nothing selected');
+  return tris;
+}
+
+/** Local procedural part: an axis-aligned untextured box (own material) as node `name` — e.g. a belt deck over a modelled trough. */
+function addBox(doc, {min, max, color, roughness = 0.85, metallic = 0, name = 'box'}) {
+  const P = [], N = [], I = [];
+  const faces = [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]];
+  for (const [ax, sg] of faces) {
+    const u = (ax + 1) % 3, v = (ax + 2) % 3, base = P.length / 3;
+    for (const [a, b] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+      const q = [0, 0, 0]; q[ax] = sg > 0 ? max[ax] : min[ax]; q[u] = a ? max[u] : min[u]; q[v] = b ? max[v] : min[v];
+      P.push(...q); const n = [0, 0, 0]; n[ax] = sg; N.push(...n);
+    }
+    I.push(...(sg > 0 ? [base, base + 1, base + 2, base, base + 2, base + 3] : [base, base + 2, base + 1, base, base + 3, base + 2]));
+  }
+  const buf = doc.getRoot().listBuffers()[0];
+  const prim = doc.createPrimitive()
+    .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setBuffer(buf).setArray(new Float32Array(P)))
+    .setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setBuffer(buf).setArray(new Float32Array(N)))
+    .setIndices(doc.createAccessor().setType('SCALAR').setBuffer(buf).setArray(new Uint32Array(I)))
+    .setMaterial(doc.createMaterial(name).setBaseColorFactor(color).setRoughnessFactor(roughness).setMetallicFactor(metallic));
+  (doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0]).addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
+  return {min, max};
+}
+
+function splitGlassComps(doc, pred) {
+  const pcs = components(doc);
+  let tris = 0; const comps = new Set();
+  for (const pc of pcs) {
+    const sel = new Set(pc.comps.filter(c => pred({...c, ext: [0, 1, 2].map(k => c.max[k] - c.min[k])})).map(c => c.id));
+    if (!sel.size) continue;
+    const I = pc.prim.getIndices().getArray(), glass = [], rest = [];
+    for (let t = 0; t < I.length; t += 3) (sel.has(pc.tri[t / 3]) ? glass : rest).push(I[t], I[t + 1], I[t + 2]);
+    if (!glass.length) continue;
+    const gp = pc.prim.clone();
+    pc.prim.getIndices().setArray(new Uint32Array(rest)); compactPrimitive(pc.prim);
+    gp.setIndices(doc.createAccessor().setType('SCALAR').setBuffer(doc.getRoot().listBuffers()[0]).setArray(new Uint32Array(glass)));
+    for (const sem of gp.listSemantics()) if (sem !== 'POSITION' && sem !== 'NORMAL') gp.setAttribute(sem, null);
+    const G = GLASS_MATERIAL;
+    gp.setMaterial(doc.createMaterial(`${pc.prim.getMaterial().getName()}-glass`).setBaseColorFactor(G.baseColor).setAlphaMode('BLEND').setDoubleSided(true)
+      .setRoughnessFactor(G.roughness).setMetallicFactor(G.metallic));
+    compactPrimitive(gp);
+    const node = doc.createNode('glass').setMesh(doc.createMesh(`${pc.mesh.getName()}-glass`).addPrimitive(gp));
+    (doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0]).addChild(node);
+    tris += glass.length / 3; for (const id of sel) comps.add(id);
+  }
+  if (!tris) throw new Error('splitGlassComps: no glass component selected');
+  return {tris, comps: comps.size};
+}
+
 async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
   const id = spec.assetId;
   const doc = await io.readBinary(new Uint8Array(rawBytes));
@@ -167,16 +287,21 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
   for (const m of r.listMeshes()) transformMesh(m, T);
   const E = EDITS[id];
   let k = 1, split = null, glass = null, ghosts = null;
-  const parts = [];
+  const parts = [], edits = {};
   if (E) {
     if (E.parts) split = await splitClutter(doc, E);
+    if (E.extend) for (const x of E.extend) (edits.extended ??= []).push({from: x.from, to: x.to, tris: extendComps(doc, x)});
     if (E.glass) glass = await splitGlass(doc, sharp, E.glass);
+    if (E.glassComps) glass = splitGlassComps(doc, E.glassComps);
     if (E.supports) ghosts = await cleanSupportTexture(doc, sharp, E.supports, E.ghostThresh ?? 34, null);
+    // furniture-only proportion edit: per-axis scale about the centred / grounded manifest frame, re-grounded (office lane-FURN scaleX)
+    if (E.scaleAxes) { for (const [ax, f] of E.scaleAxes) scaleAxis(doc, ax, f); scaleGroundCentre(doc, 1); }
+    if (E.boxes) edits.boxes = E.boxes.map(b => addBox(doc, b)); // post-scale frame (inside the bounds: grounding unchanged)
     if (E.sizeM) {
       const bb = getBounds(scene);
       k = E.sizeM / extentOf(bb, E.sizeAxis);
       scaleGroundCentre(doc, k);
-    }
+    } else scaleGroundCentre(doc, 1); // removed clutter / split glass can shift the bounds: re-ground and re-centre
     for (const p of split?.parts ?? []) {
       const pr = p.doc.getRoot();
       pr.listMeshes().forEach((m, i) => m.setName(i ? `${p.id}-${i}` : p.id));
@@ -188,16 +313,18 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
     }
   }
   // names: '<id>' meshes / nodes, 'mall-<id>' materials; a separated transparent 'glass' node keeps /glass/ (damage/materials.ts partKeyClass)
-  r.listMeshes().filter(m => !/glass/.test(m.getName())).forEach((m, i) => m.setName(i ? `${id}-${i}` : id));
-  r.listNodes().filter(n => n.getMesh() && n.getName() !== 'glass').forEach((n, i) => n.setName(i ? `${id}-${i}` : id));
-  r.listMaterials().filter(m => !/-glass$/.test(m.getName())).forEach((m, i) => m.setName(i ? `mall-${id}-${i}` : `mall-${id}`));
+  const kept = nm => /glass|^belt$/.test(nm);
+  r.listMeshes().filter(m => !kept(m.getName())).forEach((m, i) => m.setName(i ? `${id}-${i}` : id));
+  r.listNodes().filter(n => n.getMesh() && !kept(n.getName())).forEach((n, i) => n.setName(i ? `${id}-${i}` : id));
+  r.listMaterials().filter(m => !/-glass$|^belt$/.test(m.getName())).forEach((m, i) => m.setName(i ? `mall-${id}-${i}` : `mall-${id}`));
+  for (const m of r.listMaterials().filter(q => q.getName() === 'belt')) m.setName(`mall-${id}-belt`);
   for (const m of r.listMaterials().filter(q => /-glass$/.test(q.getName()))) m.setName(`mall-${id}-glass`);
   for (const m of r.listMeshes().filter(q => /glass/.test(q.getName()))) m.setName(`${id}-glass`);
   await doc.transform(dedup(), prune(),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [basePx, basePx], quality, slots: /^baseColor/}),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [otherPx, otherPx], quality, slots: /^(?!baseColor)/}));
   r.getAsset().generator = 'Terminal State tools/asset-pipeline/props/build-mall-track3.mjs (glTF-Transform)';
-  return {glb: Buffer.from(await io.writeBinary(doc)), scale: s * k, rawExtent: e0, parts, edits: E ? {k, removed: split?.removed ?? null, glass, ghosts} : null};
+  return {glb: Buffer.from(await io.writeBinary(doc)), scale: s * k, rawExtent: e0, parts, edits: E ? {k, removed: split?.removed ?? null, glass, ghosts, ...edits} : null};
 }
 
 async function measure(glb) {

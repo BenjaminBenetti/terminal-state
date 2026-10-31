@@ -330,6 +330,11 @@ const VOCABULARY: readonly VocabEntry[] = [
   {term: 'sampled density', unit: 'placed per 100 m² of eligible floor (sampled)', definition: 'Placed spawns divided by the eligible floor area of a small labelled seed corpus. Eligible = cells the generator\'s own candidate filter accepted (0.25 m² each), never map bounding boxes. A census, not a runtime rule.'},
   {term: 'density (room modifier)', unit: 'multiplier (1 = neutral)', definition: 'Local intensity of a family in a room: scales the room\'s area weight by the room intensity D and the family\'s part of the room mix. Never changes the count roll or a cap.'},
   {term: 'weight (room modifier)', unit: 'multiplier (1 = neutral)', definition: 'Conditional composition in a room: scales a family\'s pool weight for spawns that land in that room. Changes which family a spawn there becomes, never how many spawns the room attracts.'},
+  // task track3-eaton-centre-20261031 (lane PROFILES): the mall's hooks, rare placement, horde pool and budgets
+  {term: 'family hook', unit: 'share of the ambient pool once typed', definition: 'An ambient family a level declares before the enemy registry exports it (a plain string id). Inactive while the registry lacks it: no spawn can be that family and its share stays with zombies. Once the registry exports it, validation requires the level to list it in its typed pool.'},
+  {term: 'rare placement', unit: 'spawns per level (cap) and metres (spacing)', definition: 'A whole-level cap and minimum spacing for a rare family, applied after the family roll in spawn-index order: an extra or too-close spawn of that family becomes a zombie. Never touches horde members.'},
+  {term: 'horde pool', unit: 'groups per level × members per group', definition: 'The roaming hordes: a SEPARATE pool with its own explicit families, group count and group size ranges and budgets (members in the level, members and groups starting on one storey). Placed once at generation; no respawn or top-up; never counted in the ambient contexts.'},
+  {term: 'ambient budget', unit: 'ambient spawns per level / per storey run', definition: 'Explicit caps of the ambient pool (the contexts): the whole-level total and one storey run. The horde pool has its own budget.'},
 ];
 
 function semantics(src: Sources): ModifierSemantics {

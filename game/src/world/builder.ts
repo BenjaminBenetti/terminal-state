@@ -39,6 +39,7 @@ import {applyStationDecay, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
+import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
 import {MALL_FINISH_ATTR, MallArch, downlightLensMatrix, splitFinishKey} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium
 
 class Accum {
@@ -545,7 +546,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     for (const s of [-1, 1]) addBox('steel', l.x + ax * s, l.y + rod / 2, l.z + az * s, 0.015, rod, 0.015);
   }
   // Guard railings on drop edges (mezzanine/catwalk edges, light wells, stairwells, open flight sides).
-  const rails = stationRails(layout, levels, cols);
+  // Task track3-eaton-centre-20261031 (lane ARCH): the mall draws exactly its COLLISION rails (gen/levels.ts Levels.rails: the
+  // generator's list, else derived per storey — every ring's void edge, where the legacy derivation keeps one rail per column).
+  const rails: RailRun[] = mall ? [...levelsOf(layout as Parameters<typeof levelsOf>[0]).rails] as RailRun[] : stationRails(layout, levels, cols);
   // (task office-overhaul-20261030, lane STRUCT: collision-only rails — escalator balustrades, roof fixtures — draw their own geometry)
   // (task track3-eaton-centre-20261031, lane ARCH: the mall's ring rails are drawn as glass balustrades by MallArch.buildAtrium)
   for (const r of rails) if (!(r as {hidden?: boolean}).hidden && !mall?.ownsRail(r)) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);

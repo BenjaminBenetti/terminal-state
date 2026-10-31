@@ -3,6 +3,7 @@ import {AssetLoadError} from './assets/loader';
 import {codeToSeed} from './core/rng';
 import {LEVELS, isLevelId, sectionLabel, travelTargets} from './levels/registry'; // Iteration 16 (lane RUN); + travelTargets (task track3-eaton-centre-20261031, lane GEN: three levels)
 import type {LevelId} from './levels/types';
+import {setMallVariantOverride} from './gen/mall/frame'; // Task track3-eaton-centre-20261031 (lane GEN): QA ?mallVariant=
 import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
@@ -187,7 +188,9 @@ async function boot(): Promise<void> {
   // Iteration 07 (Lane P2): only this section's lazy prop models are fetched (with progress) before it is built and revealed.
   // Iteration 14 (primary): its pipelines, shadow variants, fog passes, held items and effects are prepared on the loading
   // screen (render/warmup.ts) before "Start run" becomes available; partial / failed results say so.
-  // (task track3-eaton-centre-20261031, lane GEN: + ?mallSeed=CODE for The Eaton's Center; ?level=mall starts there)
+  // (task track3-eaton-centre-20261031, lane GEN: + ?mallSeed=CODE for The Eaton's Center; ?level=mall starts there; QA-only
+  // ?mallVariant=galleria|oval-court|cross-galleria forces the mall's layout variant for this session)
+  setMallVariantOverride(params.get('mallVariant'));
   const warm = await game.newGame(startLevel, {seeds: {subway: seedOf('seed'), office: seedOf('officeSeed'), mall: seedOf('mallSeed')},
     onProgress: (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; }});
   if (game.state === 'error' || !warm) return; // the device was lost meanwhile (error screen already shown)

@@ -94,7 +94,7 @@ const S = (bg: number, fg: number, accent: number, font: SignStyle['font']): Sig
 export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   guns: {
     id: 'guns', label: 'Gun shop', brands: ['Ironside Arms', 'Northgate Firearms', 'Calder & Webb Gunsmiths', 'Lakehead Sporting Arms', 'Granite Ridge Arms', 'Bullseye Armoury'],
-    units: ['store'], min: {area: 40, depth: 6, width: 5}, weight: 0.4, count: [1, 2], rings: [0.6, 1, 1.1, 1.1, 0.9, 0.7],
+    units: ['store'], min: {area: 40, depth: 6, width: 5}, weight: 0, count: [1, 2], rings: [0.6, 1, 1.1, 1.1, 0.9, 0.7],
     purpose: 'mall-guns', back: 'mall-guns-back', front: 'glazed', shutter: [0.7, 0.3, 0], recipe: 'guns',
     finishes: [F('concrete-polished', 'pegboard', 'open-black', 0x5a3a22), F('vinyl-walnut', 'brick-red', 'tile-drop', 0x3f4a2f)],
     sign: S(0x1f2a1c, 0xe8dcb4, 0xb8402e, 'condensed'),
@@ -392,6 +392,10 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   const count = new Map<MallProgram, number>();
   const take = (i: number, p: MallProgram, k: MallUnitKind) => { prog[i] = p; kind[i] = k; count.set(p, (count.get(p) ?? 0) + 1); };
   const free = () => shops.map((_, i) => i).filter(i => prog[i] === undefined);
+  // per-mall maxima scale with the unit count (the catalogue's numbers are for a ~40-unit mall; GEN's rings hold ~13 units each)
+  const scale = Math.max(1, shops.length / 40);
+  const cap = (p: MallProgram) => (MALL_PROGRAMS[p].count[1] >= 99 ? 99 : p === 'guns' ? MALL_PROGRAMS[p].count[1] // gun shops stay rare: never scaled
+    : Math.max(MALL_PROGRAMS[p].count[1], Math.round(MALL_PROGRAMS[p].count[1] * scale)));
   const fits = (i: number, p: MallProgram) => {
     const d = MALL_PROGRAMS[p], s = shops[i];
     return area[i] >= d.min.area && s.depth >= d.min.depth - 1e-6 && s.width >= d.min.width - 1e-6;
@@ -400,24 +404,33 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   for (const i of free()) if (area[i] < KIOSK_MAX.area || shops[i].depth < KIOSK_MAX.depth) take(i, small(i), 'kiosk');
   function small(i: number): MallProgram {
     // small units: phone / jewellery / optical / florist / beauty / luggage concessions if they fit, else a generic kiosk
-    const opts2 = (['phone', 'jewelry', 'optical', 'florist', 'beauty', 'luggage'] as MallProgram[]).filter(p => fits(i, p) && (count.get(p) ?? 0) < MALL_PROGRAMS[p].count[1]);
+    const opts2 = (['phone', 'jewelry', 'optical', 'florist', 'beauty', 'luggage'] as MallProgram[]).filter(p => fits(i, p) && (count.get(p) ?? 0) < cap(p));
     return opts2.length && rng.chance(0.5) ? rng.pick(opts2) : 'kiosk';
   }
   // 2. the food-court ring: its mid-size units become food counters (cuisines rotate)
   const foodRing = opts.foodRing ?? (ringCount >= 2 ? (rng.chance(0.55) ? 1 : rng.chance(0.55) ? 2 : ringCount) : 1);
-  const ringUnits = free().filter(i => ring[i] === foodRing).length;
-  const foodUnits = free().filter(i => ring[i] === foodRing && area[i] <= FOOD_MAX_AREA && fits(i, 'food-court'));
+  const ringFree = free().filter(i => ring[i] === foodRing);
+  const ringUnits = ringFree.length;
+  // the food ring's smaller units (a 15-90 m² counter; on a ring of big units, its smaller ~60 %: deep units get in-unit dining)
+  const sizes = ringFree.map(i => area[i]).sort((a, b) => a - b);
+  const foodMax = Math.max(FOOD_MAX_AREA, sizes[Math.min(sizes.length - 1, Math.floor(sizes.length * 0.6))] ?? 0);
+  const foodUnits = ringFree.filter(i => area[i] <= foodMax && fits(i, 'food-court'));
   // at most ~60 % of the ring's units sell food (the rest stay real stores: a pharmacy / grocer often sits by a food court); the
   // smallest suitable units become the counters (a food-court counter is a 15-90 m² unit, its seating is the common food hall)
   const nFood = Math.min(foodUnits.length, Math.max(3, Math.round(ringUnits * 0.6)));
   const bySize = foodUnits.slice().sort((a, b) => area[a] - area[b] || a - b);
   for (const i of bySize.slice(0, nFood)) take(i, 'food-court', 'food');
-  // 3. anchors: the biggest units (department first, then grocery / home / sports / outdoors / hardware / electronics)
-  const anchorCands = free().filter(i => area[i] >= ANCHOR_MIN.area && shops[i].depth >= ANCHOR_MIN.depth).sort((a, b) => area[b] - area[a] || a - b);
+  // 3. anchors: the distinctly big units — at least ANCHOR_MIN and 1.4x the mall's median unit (GEN's ordinary units are already
+  // 130-240 m²: an anchor is a 24-30 m wide double unit) — department first, then grocery / home / sports / outdoors / hardware /
+  // electronics
+  const sorted = area.slice().sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  const anchorArea = Math.max(ANCHOR_MIN.area, median * 1.4);
+  const isAnchorSize = (i: number) => area[i] >= anchorArea && shops[i].depth >= ANCHOR_MIN.depth;
+  const anchorCands = free().filter(isAnchorSize).sort((a, b) => area[b] - area[a] || a - b);
   const anchorPlan: MallProgram[] = ['department', 'grocery', ...rng.shuffle(['home', 'sports', 'outdoors', 'hardware', 'electronics', 'department'] as MallProgram[])];
   const usedAnchorRings = new Set<number>();
   for (const p of anchorPlan) {
-    if ((count.get(p) ?? 0) >= MALL_PROGRAMS[p].count[1]) continue;
+    if ((count.get(p) ?? 0) >= cap(p)) continue;
     const c = anchorCands.filter(i => prog[i] === undefined && fits(i, p) && !usedAnchorRings.has(ring[i]))
       .sort((a, b) => MALL_PROGRAMS[p].rings[ring[b] - 1] * area[b] - MALL_PROGRAMS[p].rings[ring[a] - 1] * area[a] || a - b)[0];
     if (c === undefined) continue;
@@ -429,7 +442,7 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   const roles: number[] = [];
   for (let r = 1; r <= ringCount; r++) {
     const c = free().filter(i => ring[i] === r).sort((a, b) => area[a] - area[b] || a - b);
-    const n = c.length >= 9 ? 2 : c.length >= 4 ? 1 : 0;
+    const n = r === 1 && c.length >= 9 ? 2 : c.length >= 4 ? 1 : 0;
     for (let k = 0; k < n; k++) { take(c[k], 'service', 'service'); roles.push(c[k]); }
   }
   // 5. vacant units: ~8-12 % (upper rings more)
@@ -448,7 +461,7 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   if (rng.chance(0.4)) core.push('outdoors');
   for (const p of core) {
     const d = MALL_PROGRAMS[p];
-    if ((count.get(p) ?? 0) >= d.count[1]) continue;
+    if ((count.get(p) ?? 0) >= cap(p)) continue;
     if (p !== 'clothing' && p !== 'guns' && p !== 'outdoors' && (count.get(p) ?? 0) >= Math.max(1, d.count[0])) continue;
     const c = free().filter(i => fits(i, p));
     if (!c.length) continue;
@@ -459,14 +472,16 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   }
   function unitFor(i: number, p: MallProgram): MallUnitKind {
     const d = MALL_PROGRAMS[p];
-    if (d.units.includes('anchor') && area[i] >= ANCHOR_MIN.area && shops[i].depth >= ANCHOR_MIN.depth) return 'anchor';
+    if (d.units.includes('anchor') && isAnchorSize(i)) return 'anchor';
     return d.units.includes('store') ? 'store' : d.units[0];
   }
   // 7. fill: weighted picks with a strong repeat penalty and ring bias
   const fillable = (Object.values(MALL_PROGRAMS) as MallProgramDef[]).filter(d => d.weight > 0);
   for (const i of free()) {
-    const opts3 = fillable.filter(d => fits(i, d.id) && (count.get(d.id) ?? 0) < d.count[1])
+    let opts3 = fillable.filter(d => fits(i, d.id) && (count.get(d.id) ?? 0) < cap(d.id))
       .map(d => [d.id, d.weight * d.rings[ring[i] - 1] * Math.pow(0.3, count.get(d.id) ?? 0)] as [MallProgram, number]).filter(o => o[1] > 0);
+    // every fitting program at its cap: still a real store (repeat-penalised), never a run of vacant units
+    if (!opts3.length) opts3 = fillable.filter(d => fits(i, d.id)).map(d => [d.id, d.weight * d.rings[ring[i] - 1] * Math.pow(0.3, count.get(d.id) ?? 0)] as [MallProgram, number]).filter(o => o[1] > 0);
     if (!opts3.length) { take(i, area[i] < 30 ? 'kiosk' : 'vacant', area[i] < 30 ? 'kiosk' : 'vacant'); continue; }
     const p = rng.weighted(opts3);
     take(i, p, unitFor(i, p));
@@ -506,7 +521,9 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
     if (shutter === 'closed' && !second) shutter = 'partial';
     if (p === 'guns' || p === 'pharmacy' || p === 'grocery' || k === 'service') shutter = shutter === 'closed' ? 'partial' : shutter; // key programs stay reachable from the gallery
     const front: MallFront = k === 'food' || k === 'kiosk' ? 'open' : d.front;
-    const W = s.width;
+    // entry span along the FRONTAGE (its own length: piers / partial frontages are shorter than the unit)
+    const fw = s.frontage.side === 'N' || s.frontage.side === 'S' ? Math.abs(s.frontage.x1 - s.frontage.x0) : Math.abs(s.frontage.z1 - s.frontage.z0);
+    const W = fw > 0.5 ? fw : s.width;
     const ew = Math.min(W, Math.max(2.4, Math.min(4.0, W * (k === 'anchor' ? 0.5 : 0.4))));
     const e0 = front === 'open' ? 0 : Math.max(0, Math.min(W - ew, rng.chance(0.5) ? (W - ew) / 2 : rng.chance(0.5) ? 0.5 : W - ew - 0.5));
     const entry: [number, number] = front === 'open' ? [0, W] : [r2(e0), r2(e0 + ew)];

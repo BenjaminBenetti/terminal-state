@@ -16,6 +16,7 @@ import {CELL, FLOOR, SOLID} from '../grid';
 import {levelDistance, levelIssues, type LevelRules} from '../levelGen';
 import {levelsOf} from '../levels';
 import {traversalIssues} from '../traversal';
+import {doorwayIssues} from '../doorways';
 import type {StationLayout} from '../stationTypes';
 import {RINGS, STOREY} from './frame';
 
@@ -61,6 +62,7 @@ export function mallIssues(layout: StationLayout, opts: {startCells?: number} = 
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
   issues.push(...levelIssues(layout, dist, MALL_LEVEL_RULES));
   issues.push(...traversalIssues(layout));
+  issues.push(...doorwayIssues(layout)); // nothing blocks an opening's walk lanes (shopfronts: lane SHOPS' fits decide their lanes)
   const Lv = levelsOf(layout);
   const drops = Lv.unrailedDrops();
   if (drops.length) issues.push(`${drops.length} unrailed drops (first at ${drops[0].x0.toFixed(1)},${drops[0].z0.toFixed(1)} level ${drops[0].level})`);

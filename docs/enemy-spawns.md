@@ -138,6 +138,9 @@ candidate cells each context accepted. Static prose explains the rules; every nu
 - `game/tests/enemy-spawn-tables.test.ts` — coverage, neutral resolution, test-only 0 / 2 modifiers, validation, persistence.
 - `game/tests/enemy-spawn-reference.test.ts` — the reference: coverage, runtime agreement, census, maths, this page's names.
 - Downstream: the Subway fingerprints (`game/tests/office-gen.test.ts`) and loot goldens (`game/tests/loot-golden.test.ts`).
+- `game/tests/mall-profiles.test.ts` — the mall profile: validation of the hooks / rare rule / horde pool / budgets, the generator
+  asking for exactly `pit` + `ring`, ambient counts within contexts and budgets, horde groups of 5..20 within the horde budgets on
+  generated levels, determinism, and the reference's mall sections.
 
 ```sh
 ./node_modules/.bin/vitest run --config game/vitest.config.ts --maxWorkers=1 --no-file-parallelism \

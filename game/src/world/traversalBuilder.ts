@@ -397,16 +397,22 @@ function buildOfficeExtras(group: THREE.Group, layout: StationLayout, office: Of
   }
 }
 
-/** Task track3-eaton-centre-20261031 (lane ARCH): the mall's stopped escalators, tagged with the two storeys each joins. */
+/**
+ * Task track3-eaton-centre-20261031 (lane ARCH): the mall's stopped escalators, merged per storey pair (every bank between two rings
+ * is one mesh per material: ~6 pairs x 5 materials instead of 5 draw calls per escalator) and tagged with those two storeys.
+ */
 function buildMallEscalators(group: THREE.Group, layout: StationLayout, flights: ReturnType<typeof mallEscalatorFlights>, mats: WorldMaterials): void {
+  const pairs = new Map<string, {L: OfficeLists; lower: number; upper: number}>();
   for (const {flight, lower, upper} of flights) {
     const q = layout.traversal.stairs.find(f2 => f2.ramp === flight.ramp);
     const r = layout.grid.ramps[flight.ramp];
     if (!q || !r) continue;
-    const L = lists();
-    buildEscalator(L, r, q);
-    emitLists(group, L, mats, `mall-escalator-${flight.ramp}`, [lower, upper]);
+    const key = `${lower}-${upper}`;
+    let e = pairs.get(key);
+    if (!e) pairs.set(key, (e = {L: lists(), lower, upper}));
+    buildEscalator(e.L, r, q);
   }
+  for (const [key, e] of pairs) emitLists(group, e.L, mats, `mall-escalators-${key}`, [e.lower, e.upper]);
 }
 
 /**

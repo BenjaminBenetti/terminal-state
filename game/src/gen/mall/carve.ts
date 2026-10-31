@@ -223,7 +223,22 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     const r = {x: x0, y: mb, w, h: SW};
     return gz1 - (r.y + r.h) >= GALLERY.walkway ? r : null;
   };
-  const NA = stripN(xa, RL), NB = stripN(xb, RL), SA = stripS(xa, RL), SB = stripS(xb, RL);
+  // A slot is searched outward from its preferred position: the strip leaves a >= 4 m walkway, both mouths (6 cells beyond each end,
+  // across the strip rows) are gallery (never void, inside the gallery ring) and it keeps 6 cells from the side's other slot.
+  const mouthsClear = (r: CellRect) => {
+    for (let y = r.y; y < r.y + r.h; y++) for (const x of [...Array(6).keys()].flatMap(i => [r.x - 1 - i, r.x + r.w + i])) if (x < gx0 || x >= gx1 || isVoid(x, y)) return false;
+    return true;
+  };
+  const findSlot = (x0: number, strip: (x0: number, w: number) => CellRect | null, other: CellRect | null): CellRect | null => {
+    for (let d = 0; d < f.VL; d++) for (const x of d ? [x0 + d, x0 - d] : [x0]) {
+      if (x < gx0 + 8 || x + RL > gx1 - 8) continue;
+      if (other && x < other.x + other.w + 12 && x + RL > other.x - 12) continue;
+      const r = strip(x, RL);
+      if (r && mouthsClear(r)) return r;
+    }
+    return null;
+  };
+  const NA = findSlot(xa, stripN, null), NB = findSlot(xb, stripN, NA), SA = findSlot(xa, stripS, null), SB = findSlot(xb, stripS, SA);
   if (!NA || !NB || !SA || !SB) return fail('escalator-strip');
   // End stairs (storeys >= 1: the station's bed / platforms lie under the end galleries' strip on level 0): one 5-cell lane along
   // Z in the end gallery next to the void; west: odd storeys north half, even south; east mirrored.
@@ -263,7 +278,7 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
       for (let d = 0; d < f.VL; d++) for (const x of [p + d, p - d]) if (x >= vx0 + 2 && x + 7 <= vx1 - 2 && clearOf(x, slots)) { const s = strip(x, 7); if (s) return s; }
       return null;
     };
-    const cands: [CellRect | null, 'N' | 'S'][] = [[pick(0.42, [NA, NB], stripN), 'N'], [pick(0.88, [SA, SB], stripS), 'S']];
+    const cands: [CellRect | null, 'N' | 'S'][] = f.liftSide === 'N' ? [[pick(f.liftAt, [NA, NB], stripN), 'N'], [pick(0.88, [SA, SB], stripS), 'S']] : [[pick(f.liftAt, [SA, SB], stripS), 'S'], [pick(0.12, [NA, NB], stripN), 'N']];
     for (const [s, side] of cands.slice(0, f.elevators)) {
       if (!s) return fail('elevator-strip');
       const cab = {x: s.x + 1, y: s.y + 1, w: 5, h: 4};
@@ -522,7 +537,9 @@ interface UnitCtx {
 
 /** One shop unit: sales floor on the gallery (shopfront), stock room behind it (staff door), a staff door onto the corridor. */
 function carveUnit(k: Kit, rng: Rng, u: UnitCtx): ShopCarve | null {
-  const {lv, base, side, a0, w, Ds, Db} = u;
+  const {lv, base, side, a0, w} = u;
+  // Per unit the sales floor / stock room split of the band varies (sales 8-12+ m deep, stock room >= 3 m).
+  const Ds = Math.max(16, Math.min(u.D - 7, u.Ds + rng.int(-3, 3))), Db = u.D - 1 - Ds;
   const opt = {level: lv, floorY: base};
   let sales: Rect, back: Rect, front: Rect, sb: Rect, bc: Rect, galleryCell: [number, number];
   const fw = Math.max(4, w - 2);

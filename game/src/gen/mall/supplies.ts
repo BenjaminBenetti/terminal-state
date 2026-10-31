@@ -14,7 +14,7 @@
 import type {Rng} from '../../core/rng';
 import {purposeById, type LootTheme} from '../purposes';
 import {ITEMS} from '../../items/items';
-import {econCat, floorChance, floorCount, type LootProfile, type MallStoreyFloor, type LotRange} from '../../items/lootTables';
+import {econCat, floorChance, floorCount, type LootProfile, type LotRange} from '../../items/lootTables';
 import {BATTERY_ID, FLARE_ID} from '../../items/lootEconomy';
 import type {Area, PickupPlacement, StationLayout} from '../stationTypes';
 import {LANDING_KEEP_M, type SpawnField} from '../office/spawns';
@@ -34,14 +34,6 @@ export function mallFloorZone(layout: StationLayout, a: Area): MallFloorZone {
 }
 
 const themeOf = (a: Area): LootTheme => purposeById(a.purpose)?.theme ?? 'public';
-
-/** Expected pickups of one storey run before placement (QA / reference): ammo boxes, scarce finds and salvage stacks. */
-export function mallStoreyExpected(S: MallStoreyFloor, loot: LootProfile): {ammo: number; scarce: number; salvage: number} {
-  const last = S.ammo.thresholds.length ? floorChance(loot, 'ammo', S.ammo.thresholds[S.ammo.thresholds.length - 1]) : 0;
-  const sc = S.scarce.draws * (floorChance(loot, 'med', S.scarce.med) + floorChance(loot, 'battery', S.scarce.battery) + floorChance(loot, 'flare', S.scarce.flare));
-  const [lo, hi] = floorCount(loot, 'material', S.salvage.n);
-  return {ammo: S.ammo.draws * last, scarce: sc, salvage: (lo + hi) / 2};
-}
 
 /**
  * Loose supplies of the storeys `levels` (normally one) of the mall layout under the mall loot profile `loot`: `variant` 'pit' (the

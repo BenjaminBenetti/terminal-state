@@ -12,7 +12,8 @@
 //                   glass shelf INSIDE the case, the staff side open (no doors): role 'surface', class 'open';
 //   - merchTable    two-tier merchandising table (clothing / books / home / gifts): top + lower shelf;
 //   - wallBay       slatwall shelving bay (clothing / shoes / toys / sports / beauty / books): five shelves on a slatwall back;
-//   - produceStand  tiered produce stand (grocery): two angled bin decks.
+//   - produceStand  tiered produce stand (grocery): two angled bin decks;
+//   - bookstoreBookcase  open timber bookcase, EMPTY (books are not items; lane ASSETS' M09 model swaps in when delivered).
 //  fixtures / furniture:
 //   - gunDisplay    felt-topped display bench of the gun shop: the mall weapon plan's finds lie ON it (layout pickups,
 //                   gen/mall/shopsWeapons.ts), it is not a loot holder (no lots compete for its top);
@@ -23,7 +24,9 @@
 //   - ottoman       upholstered try-on ottoman (shoes / clothing): light, DYNAMIC (shoved when walked into / shot);
 //   - salonChair    hydraulic salon / barber chair bolted to the floor (beauty / service);
 //   - kiddieRide    coin-operated kiddie ride (toys / arcade): locked coin vault, too heavy;
-//   - tentDisplay   pitched display tent pegged to its plinth (outdoors).
+//   - tentDisplay   pitched display tent pegged to its plinth (outdoors);
+//   - garmentRail   EMPTY chrome garment rail on castors (clothing / department / sports / outdoors): light, DYNAMIC. The office
+//                   clothing rack / sneaker wall / law bookcase (baked garments / shoes / books) are NOT used in the mall (rule 4).
 //
 // No loose items are baked into any of them (root CLAUDE.md rule 4): the counters, tables, bays and stands are EMPTY fixtures; what
 // lies on them is real loot (items/loot.ts) or real props. Procedural box forms (mallShape) render until lane ASSETS delivers a model
@@ -34,6 +37,8 @@
 import type {PropDef, SurfaceSpec} from '../props';
 import type {ShapeMat, ShapePart} from '../propShapes';
 import type {DamageClass, PhysMat, StaticWhy} from '../../damage/materials';
+// Lane ASSETS' three-free measured bounds of the DELIVERED mall models (rewritten by tools/asset-pipeline/props/build-mall-track3.mjs).
+import {MALL_DIMS} from '../../assets/mallDims.generated';
 
 interface MallKindSpec {
   /** Nominal real-world box [w (x), d (z), h (y)] m (the procedural form is built to it; a delivered model's dims replace it). */
@@ -46,8 +51,9 @@ const SPECS = {
   // --- holders (open surfaces) ---
   glassCounter: {box: [1.5, 0.65, 1.0], cls: 'glass'},
   merchTable: {box: [1.6, 0.9, 0.84], cls: 'laminate'},
-  wallBay: {box: [1.2, 0.45, 2.2], cls: 'laminate'},
+  wallBay: {box: [1.2, 0.5, 2.2], cls: 'laminate'},
   produceStand: {box: [1.6, 1.0, 0.95], cls: 'wood'},
+  bookstoreBookcase: {box: [1.2, 0.547, 2.257], blocksSight: true, cls: 'wood'},
   // --- fixtures / furniture ---
   gunDisplay: {box: [1.4, 0.7, 0.9], cls: 'wood'},
   gunRack: {box: [2.0, 0.25, 1.3], cls: 'wood'},
@@ -58,6 +64,14 @@ const SPECS = {
   salonChair: {box: [0.7, 0.7, 1.1], cls: 'steel'},
   kiddieRide: {box: [0.9, 1.3, 1.3], cls: 'plastic'},
   tentDisplay: {box: [2.2, 2.2, 1.5], cls: 'fabric'},
+  garmentRail: {box: [1.5, 0.6, 1.55], cls: 'steel'},
+  // delivered by lane ASSETS (batch 1): a full-figure display mannequin (M07) and a flat-screen TV on its stand (M10, on display tables)
+  mannequinFull: {box: [0.449, 0.447, 1.85], cls: 'plastic'},
+  flatScreenTv: {box: [1.23, 0.5, 0.819], cls: 'plastic'},
+  // M06: a group of garments on hangers, hung on a garment rail (decor filler separated from the rail: root CLAUDE.md rule 4)
+  garmentHangingGroup: {box: [0.89, 0.59, 0.85], cls: 'fabric'},
+  // M05: an empty round garment rack (chrome ring on a centre post, castor base)
+  garmentRailRound: {box: [1.2, 1.19, 1.545], cls: 'steel'},
 } as const satisfies Record<string, MallKindSpec>;
 
 export type MallKind = keyof typeof SPECS;
@@ -79,9 +93,14 @@ export const MALL_MOUNT_Y: Readonly<Partial<Record<MallKind, number>>> = {gunRac
  * Lane ASSETS hook: asset id a kind renders with once its Meshy model is delivered (assets/mallAssets.ts; library key
  * `office-<assetId>`, the file faces -Z). Empty until a model lands: the procedural forms below render meanwhile.
  */
-export const MALL_KIND_ASSET: Readonly<Partial<Record<MallKind, string>>> = {};
-/** Lane ASSETS hook: a delivered model's measured bounds [x, y, z] (m) by asset id (assets' three-free dims file). */
-export const MALL_MODEL_DIMS: Readonly<Record<string, readonly [number, number, number]>> = {};
+export const MALL_KIND_ASSET: Readonly<Partial<Record<MallKind, string>>> = {
+  // batch 1 (lane ASSETS DELIVERED.json): M09 the empty bookcase (its shelf decks measured: MALL_SURFACES below), M07, M10
+  bookstoreBookcase: 'bookstore-bookcase', mannequinFull: 'mannequin-full', flatScreenTv: 'flat-screen-tv', garmentHangingGroup: 'garment-hanging-group',
+  // batch 1 group 2-3: M04 the wall bay (its decks measured: WALL_BAY_DECKS), M05 the round garment rack
+  wallBay: 'retail-wall-bay', garmentRailRound: 'garment-rail-round',
+};
+/** Lane ASSETS hook: a delivered model's measured bounds [x, y, z] (m) by asset id (assets/mallDims.generated.ts MALL_DIMS). */
+export const MALL_MODEL_DIMS: Readonly<Record<string, readonly [number, number, number]>> = MALL_DIMS;
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 function defOf(k: MallKind): PropDef {
@@ -104,9 +123,21 @@ export const MALL_PROP_DAMAGE = Object.fromEntries(MALL_KINDS.map(k => [k, {cls:
 export const GLASS_COUNTER = {deckY: 0.44, shelfY: 0.725, topY: 0.98} as const;
 /** Top of the gun display bench (weapon finds lie here; prop-relative). */
 export const GUN_DISPLAY_TOP = 0.9;
-const WALL_BAY_TIERS = [0.1125, 0.5625, 1.0125, 1.4625, 1.9125] as const;
+/**
+ * Wall bay decks (prop-relative) measured on the delivered M04 model (mall-retail-wall-bay.glb, 1.2 x 2.2 x 0.5 m, upward faces in the
+ * prop frame): a deep base deck 0.19 (z -0.236..0.25), three shallow shelves 0.52 / 0.80 / 1.08 (z -0.236..0.03) and a deep shelf 1.37
+ * (z -0.236..0.199) under the slatwall header (to 2.2). The procedural fallback is built to the same decks: [y, front z].
+ */
+const WALL_BAY_DECKS: readonly (readonly [number, number])[] = [[0.19, 0.23], [0.52, 0.02], [0.8, 0.02], [1.08, 0.02], [1.37, 0.18]];
+/**
+ * Bookcase shelf decks (prop-relative) measured on the delivered M09 model (mall-bookstore-bookcase.glb, upward faces in the prop frame
+ * after the half turn: decks 0.36 / 0.85 / 1.25 / 1.63 over x +-0.547, z -0.199..0.199; the top board's underside ~2.20). The
+ * procedural fallback is built to the same decks.
+ */
+const BOOKCASE_TIERS = [0.36, 0.85, 1.25, 1.63, 2.2] as const;
 
-export const MALL_SURFACES: Readonly<Record<MallHolderKind, readonly SurfaceSpec[]>> = {
+/** Exposed loot surfaces of the open mall holders and of the bookcase (an openable container: its shelves + its drawers' trays). */
+export const MALL_SURFACES: Readonly<Record<MallHolderKind | 'bookstoreBookcase', readonly SurfaceSpec[]>> = {
   glassCounter: [
     {y: GLASS_COUNTER.deckY, x0: -0.69, x1: 0.69, z0: -0.27, z1: 0.27, clear: 0.26},
     {y: GLASS_COUNTER.shelfY, x0: -0.67, x1: 0.67, z0: -0.17, z1: 0.17, clear: 0.24},
@@ -115,17 +146,18 @@ export const MALL_SURFACES: Readonly<Record<MallHolderKind, readonly SurfaceSpec
     {y: 0.84, x0: -0.72, x1: 0.72, z0: -0.37, z1: 0.37, clear: 0.5},
     {y: 0.2625, x0: -0.66, x1: 0.66, z0: -0.33, z1: 0.33, clear: 0.5},
   ],
-  wallBay: WALL_BAY_TIERS.slice(0, 4).map((y, i) => ({y, x0: -0.55, x1: 0.55, z0: -0.17, z1: 0.2, clear: r3(WALL_BAY_TIERS[i + 1] - y - 0.03)})),
+  wallBay: WALL_BAY_DECKS.map(([y, zf], i) => ({y, x0: -0.55, x1: 0.55, z0: -0.22, z1: zf, clear: r3(Math.min(0.5, (WALL_BAY_DECKS[i + 1]?.[0] ?? 1.9) - y - 0.03))})),
   produceStand: [
     {y: 0.565, x0: -0.74, x1: 0.74, z0: 0.06, z1: 0.43, clear: 0.35},
     {y: 0.83, x0: -0.74, x1: 0.74, z0: -0.43, z1: -0.06, clear: 0.4},
   ],
+  bookstoreBookcase: BOOKCASE_TIERS.slice(0, 4).map((y, i) => ({y, x0: -0.52, x1: 0.52, z0: -0.18, z1: 0.18, clear: r3(BOOKCASE_TIERS[i + 1] - y - 0.03)})),
 };
 
 // ---------------------------------------------------------------------------------------------
 // Physics affordance (gen/office/physics.ts OFFICE_PHYS spreads these; damage/physicsAudit.ts PROP_PHYSICS_AUDIT reads them).
 
-type MallPhys = {dynamic: true; mass: number; mat: PhysMat; how: string} | {dynamic: false; why: StaticWhy; how: string};
+type MallPhys = {dynamic: true; mass: number; mat: PhysMat; how: string; onHost?: boolean; fit?: number} | {dynamic: false; why: StaticWhy; how: string};
 const S = (why: StaticWhy, how: string): MallPhys => ({dynamic: false, why, how});
 
 export const MALL_PHYS = {
@@ -133,6 +165,7 @@ export const MALL_PHYS = {
   merchTable: S('holder', 'merchandising table (~35 kg) holding loot on its top and shelf: a holder stays put so its finite lots never float'),
   wallBay: S('holder', 'slatwall shelving bay fixed to the wall: a loot holder (its finite lots never float)'),
   produceStand: S('holder', 'timber produce stand (~60 kg) holding loot in its bins: a holder stays put'),
+  bookstoreBookcase: S('holder', 'tall timber bookcase (~45 kg) screwed to the wall, loot on its shelves: a holder stays put'),
   gunDisplay: S('built-in', 'felt-topped display bench bolted to the gun shop floor; weapon finds lie on it, so it never moves under them'),
   gunRack: S('mounted', 'empty long-gun rack screwed to the wall'),
   fittingRooms: S('partition', 'fitting cubicles: partition walls fixed to the floor and ceiling track'),
@@ -142,6 +175,12 @@ export const MALL_PHYS = {
   salonChair: S('anchored', 'hydraulic salon chair bolted to the floor (~60 kg)'),
   kiddieRide: S('too heavy', 'coin-operated kiddie ride (~150 kg) on its base'),
   tentDisplay: S('anchored', 'display tent guyed and screwed down to its timber plinth'),
+  garmentRail: {dynamic: true, mass: 14, mat: 'castor', how: 'empty chrome garment rail on castors (~14 kg): rolls away when walked into, slides / tips when shot'},
+  // (collider 1.2x its slim model box: the shoulders / base plate the walker meets first — a 0.45 m box let the camera clip 16 cm in)
+  mannequinFull: {dynamic: true, mass: 7, mat: 'pad', fit: 1.2, how: 'full-figure hollow plastic display mannequin on a base (~7 kg, tall and narrow): tips over when shot or bumped'},
+  garmentRailRound: {dynamic: true, mass: 18, mat: 'pad', how: 'empty round chrome garment rack (~18 kg): shoved across the floor when walked into, slides / tips when shot'},
+  garmentHangingGroup: S('host decor', 'garments on hangers riding their garment rail (decor filler, not items): they stay with the rail and the rail stays put while they hang on it (no floating stock)'),
+  flatScreenTv: {dynamic: true, mass: 15, mat: 'pad', onHost: true, how: 'flat-screen TV on its stand (~15 kg) on a display table: a shot slides / topples it off the table, a bump shoves it'},
 } satisfies Record<MallKind, MallPhys>;
 
 // ---------------------------------------------------------------------------------------------
@@ -154,6 +193,7 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   merchTable: {role: 'surface', cls: 'open', how: 'open merchandising table: loot on its top and lower shelf is reachable, nothing closes'},
   wallBay: {role: 'surface', cls: 'open', how: 'open slatwall shelving bay: loot on its shelves is reachable, no doors'},
   produceStand: {role: 'surface', cls: 'open', how: 'open produce stand: loot in its two bin decks is reachable, no lids'},
+  bookstoreBookcase: {role: 'storage', cls: 'openable', how: 'bookstore bookcase (EMPTY: no baked books): 2 derived base drawers + 4 open shelves'},
   gunDisplay: {role: 'surface', cls: 'none', how: 'solid felt-topped display bench: no door or drawer (the weapon finds lie on its top as pickups)'},
   gunRack: {role: 'decor', cls: 'none', how: 'empty open wall rack (cradle and hook bars, a cut cable lock): no door, lid or drawer'},
   fittingRooms: {role: 'decor', cls: 'none', how: 'curtained fitting cubicles: fixed cloth curtains, a bench and a mirror — nothing to open'},
@@ -163,6 +203,11 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   salonChair: {role: 'decor', cls: 'none', how: 'salon chair: nothing to open'},
   kiddieRide: {role: 'equipment', cls: 'exception', how: 'coin-operated ride: its coin box is a locked steel vault of a machine and coins are not items; one fused body'},
   tentDisplay: {role: 'decor', cls: 'none', how: 'pitched display tent: its zipped doorway is fabric over an empty floor, not storage'},
+  garmentRail: {role: 'decor', cls: 'none', how: 'empty garment rail on castors (no baked garments): nothing to open'},
+  mannequinFull: {role: 'decor', cls: 'none', how: 'display mannequin: nothing to open'},
+  flatScreenTv: {role: 'equipment', cls: 'none', how: 'flat-screen TV on its stand: no door, lid or drawer (a display set, not an item)'},
+  garmentHangingGroup: {role: 'decor', cls: 'none', how: 'garments on hangers on a rail (decor filler, not items): nothing to open'},
+  garmentRailRound: {role: 'decor', cls: 'none', how: 'empty round garment rack (no baked garments): nothing to open'},
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -201,7 +246,8 @@ export function mallShape(kind: MallKind): ShapePart[] {
       ...[0.35, 0.8, 1.25, 1.7].map(y => box('black', [w - 0.06, 0.008, 0.004], [0, y, -d / 2 + 0.032])),
       box('steelBright', [0.03, h, d], [-w / 2 + 0.015, h / 2, 0]),
       box('steelBright', [0.03, h, d], [w / 2 - 0.015, h / 2, 0]),
-      ...WALL_BAY_TIERS.map(y => box('woodVeneer', [w - 0.06, 0.025, d - 0.04], [0, y - 0.0125, 0.01])),
+      box('steelDark', [w - 0.06, WALL_BAY_DECKS[0][0], d - 0.02], [0, WALL_BAY_DECKS[0][0] / 2, 0.01]),
+      ...WALL_BAY_DECKS.slice(1).map(([y, zf]) => box('woodVeneer', [w - 0.06, 0.025, zf + d / 2 - 0.03], [0, y - 0.0125, (zf - d / 2 + 0.03) / 2])),
       box('accent', [w, 0.15, 0.05], [0, h - 0.075, -d / 2 + 0.05]),
     ];
     case 'produceStand': return [
@@ -270,6 +316,45 @@ export function mallShape(kind: MallKind): ShapePart[] {
       box('accent', [0.35, 0.42, 0.3], [0, 0.98, d / 2 - 0.2]),
       box('black', [0.4, 0.06, 0.35], [0, 0.8, -0.1]),
       box('steelDark', [0.25, 0.4, 0.2], [0, 0.5, -d / 2 + 0.1]),
+    ];
+    case 'bookstoreBookcase': return [
+      box('wood', [w, h, 0.02], [0, h / 2, -d / 2 + 0.01]),
+      box('wood', [0.05, h, d], [-w / 2 + 0.025, h / 2, 0]),
+      box('wood', [0.05, h, d], [w / 2 - 0.025, h / 2, 0]),
+      box('wood', [w, BOOKCASE_TIERS[0], d], [0, BOOKCASE_TIERS[0] / 2, 0]),
+      ...BOOKCASE_TIERS.slice(1, 4).map(y => box('woodVeneer', [w - 0.1, 0.03, d - 0.05], [0, y - 0.015, 0.0])),
+      box('wood', [w, h - BOOKCASE_TIERS[4], d], [0, (h + BOOKCASE_TIERS[4]) / 2, 0]),
+    ];
+    case 'garmentRail': return [
+      box('steelBright', [w, 0.03, 0.03], [0, h - 0.015, 0]),
+      box('steelBright', [0.03, h - 0.1, 0.03], [-w / 2 + 0.03, (h - 0.1) / 2 + 0.08, 0]),
+      box('steelBright', [0.03, h - 0.1, 0.03], [w / 2 - 0.03, (h - 0.1) / 2 + 0.08, 0]),
+      box('steelBright', [0.05, 0.03, d], [-w / 2 + 0.03, 0.08, 0]),
+      box('steelBright', [0.05, 0.03, d], [w / 2 - 0.03, 0.08, 0]),
+      ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => box('black', [0.05, 0.06, 0.05], [sx * (w / 2 - 0.03), 0.03, sz * (d / 2 - 0.03)])),
+    ];
+    case 'mannequinFull': return [
+      box('steelDark', [w * 0.8, 0.03, d * 0.8], [0, 0.015, 0]),
+      box('steelBright', [0.03, 0.75, 0.03], [0, 0.4, 0]),
+      box('porcelain', [w * 0.75, 0.75, d * 0.5], [0, 1.1, 0]),
+      box('porcelain', [w * 0.7, 0.2, d * 0.45], [0, 0.85, 0]),
+      box('porcelain', [0.2, 0.25, 0.22], [0, h - 0.125, 0]),
+    ];
+    case 'flatScreenTv': return [
+      box('steelDark', [0.4, 0.03, d * 0.7], [0, 0.015, 0]),
+      box('steelDark', [0.06, 0.12, 0.06], [0, 0.09, 0]),
+      box('black', [w, h - 0.12, 0.05], [0, 0.12 + (h - 0.12) / 2, 0]),
+      box('screen', [w - 0.04, h - 0.16, 0.005], [0, 0.12 + (h - 0.12) / 2, 0.028]),
+    ];
+    case 'garmentRailRound': return [
+      box('steelDark', [0.6, 0.05, 0.6], [0, 0.05, 0]),
+      box('steelBright', [0.04, h - 0.1, 0.04], [0, (h - 0.1) / 2 + 0.07, 0]),
+      box('steelBright', [w, 0.03, 0.03], [0, h - 0.05, 0]),
+      box('steelBright', [0.03, 0.03, d], [0, h - 0.05, 0]),
+    ];
+    case 'garmentHangingGroup': return [
+      ...[-0.36, -0.12, 0.12, 0.36].map(x => box('partition', [0.07, h * 0.82, d * 0.8], [x * w, h * 0.55, 0])),
+      box('steelBright', [w * 0.9, 0.02, 0.02], [0, h - 0.01, 0]),
     ];
     case 'tentDisplay': return [
       box('wood', [w, 0.1, d], [0, 0.05, 0]),

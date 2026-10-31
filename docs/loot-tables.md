@@ -309,7 +309,9 @@ and the bio material … It should be much more common in this area."
 
 `PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE}` — every consumable, ammo /
 calibre, box size, scarcity, limb, rare-gear and reward table is the SAME object the Subway and the Office roll — plus
-`overrides` = `MALL_OVERRIDES` (`itemWeight: {bio_mater: 1.5}`). The Office's physical storeys idea applies: the station pit and the
+`overrides` = `MALL_OVERRIDES`: `categoryWeight: {material: 0.6}` (the dial: every material row of the mall's tables, salvage
+included, weighs 0.6× — the raw shares gave ~13× the Office's materials per 100 m² once the shops were fully dressed) and
+`itemWeight: {bio_mater: 1.5}` (the scarcest material lifted). The Office's physical storeys idea applies: the station pit and the
 six rings are contexts of ONE logical level (one profile, one rare-gear roll, one gas-mask roll: `MASK_LOOT.levels.mall`, masks 1–2,
 filters 2–5).
 
@@ -335,6 +337,10 @@ filters 2–5).
   back of house 1.3, salvage × 2 in tech / service places) ≥ 16 walking cells from the start and off the landings.
 - **Rewards**: none of its own (the base reward tables are inherited but inert: no mall holder carries their keys). Weapon finds are
   lane SHOPS' bounded once-per-run gun-shop plan (an explicit exception, like the Office's weapon plan).
+- **Track2 service annexes** (NOT INTEGRATED: Track2 is not on main): annex holders / floor items will come from Track2's own annex
+  context (finite, seeded once, appended last) rolled under the mall profile — the annex purpose's theme decides any salvage; the
+  mall floor program skips extension areas (`gen/mall/index.ts` holds their cells); the ONE rare-gear roll, the gas-mask roll and
+  the rewards are never multiplied by annexes.
 
 ### Normalised census (the evidence)
 
@@ -345,16 +351,17 @@ links) reaches the holder / pickup; usable floor = the reached walkable cells (0
 REACHABLE holder and per 100 m² of usable floor. `game/tests/mall-profiles.test.ts` prints the table and requires the mall's material
 rates to be > 3× the Office's both per holder and per 100 m² (consumables stay within the shared band).
 
-Measured (3 levels each, seeds 11 / 222 / 3333, pistol start, generator state of this task's checkpoint; see the task notes for the
-exact run):
+Measured (3 levels each, seeds 11 / 222 / 3333, pistol start, the fully dressed shops at this task's checkpoint — the generator
+is still evolving, so re-run the test for current numbers):
 
 | | Office Space | The Eaton's Center |
 |---|---|---|
-| usable floor per run | ~8,530 m² | ~43,400 m² |
-| holders per run (all reachable) | 484 | ~830 |
-| material units per run (parts / scrap / bio) | 12.3 (9.7 / 2.7 / 0) | ~302 (124 / 151 / 26) |
-| material units per reachable holder | 0.026 | 0.33 (≈ 12.7×) |
-| material units per 100 m² | 0.145 | 0.70 (≈ 4.8×) |
+| usable floor per run (reached walkable) | ~8,530 m² | ~40,600 m² |
+| holders per run (all reachable) | 484 | ~2,620 |
+| material units per run (parts / scrap / bio) | 12.3 (9.7 / 2.7 / 0) | ~547 (215 / 265 / 67) |
+| material units per reachable holder | 0.026 | 0.198 (≈ 7.6×) |
+| material units per 100 m² | 0.145 | 1.35 (≈ 9.3×) |
+| food / drink / med per 100 m² | 0.30 / 0.34 / 0.18 | 0.53 / 0.61 / 0.25 |
 | fit failures (lots) | 0.8 % | 0.3 % |
 
 ## Verify

@@ -77,6 +77,8 @@ export function runCensus(layout: StationLayout, profile: LootProfile, zoneOf: (
   const cellM2 = CELL * CELL;
   // usable floor
   const zoneM2: Record<string, number> = {};
+  const zoneCache = new Map<number, string>();
+  const zone = (a: Area): string => { let z = zoneCache.get(a.id); if (z === undefined) zoneCache.set(a.id, (z = zoneOf(a))); return z; };
   let usable = 0;
   layout.levels.forEach((L, lv) => {
     const g = L.grid, d = dist[lv];
@@ -86,7 +88,7 @@ export function runCensus(layout: StationLayout, profile: LootProfile, zoneOf: (
       const a = layout.areas[g.area[i]];
       if (!a || a.role === 'stair' || (a.level ?? 0) !== lv) continue;
       usable += cellM2;
-      const z = zoneOf(a);
+      const z = zone(a);
       zoneM2[z] = (zoneM2[z] ?? 0) + cellM2;
     }
   });

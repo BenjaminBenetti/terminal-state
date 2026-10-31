@@ -84,7 +84,11 @@ describe('mall loot profile', () => {
     const rule = salvageRule(MALL, 'stockShelf', 'mall-electronics')!;
     expect(rule).toBe(MALL_SALVAGE.purposes!['mall-electronics']);
     const total = t.rows.reduce((s, r) => s + r[1], 0), mat = t.rows.filter(r => isMaterialItem(r[0])).reduce((s, r) => s + r[1], 0);
-    expect(mat / total).toBeCloseTo(rule.share, 10);
+    // `share` is before overrides; the mall's categoryWeight.material dial then scales the salvage rows (no bio rows in this mix)
+    const f = MALL.overrides.categoryWeight?.material ?? 1, eff = rule.share * f / (1 - rule.share + rule.share * f);
+    expect(rule.rows.some(([id]) => id === 'bio_mater')).toBe(false);
+    expect(mat / total).toBeCloseTo(eff, 10);
+    expect(holderTable('stockShelf' as HolderKind, 'mall-electronics', {...MALL, overrides: {}}).rows.filter(r => isMaterialItem(r[0])).reduce((s, r) => s + r[1], 0) / holderTable('stockShelf' as HolderKind, 'mall-electronics', {...MALL, overrides: {}}).rows.reduce((s, r) => s + r[1], 0)).toBeCloseTo(rule.share, 10);
     // the theme entry reaches a purpose without its own entry (tech theme -> electronics salvage)
     expect(salvageRule(MALL, 'stockShelf', 'mall-music')).toBe(MALL_SALVAGE.themes!.tech);
     // fixtures that may not hold materials, legacy halls, junk, container-themed storage: no salvage
@@ -100,7 +104,7 @@ describe('mall loot profile', () => {
     let mats = 0;
     for (let i = 0; i < 3000; i++) for (const e of rollLootItems(7, i, 'stockShelf' as HolderKind, 'mall-electronics', MALL)) if (isMaterialItem(e.itemId)) mats++;
     const raw = 3000 * (1 - t.empty) * (t.lots[0] + t.lots[1]) / 2;
-    expect(Math.abs(mats / raw - rule.share), `material lots ${mats} of ~${raw.toFixed(0)} rolled`).toBeLessThan(0.03);
+    expect(Math.abs(mats / raw - eff), `material lots ${mats} of ~${raw.toFixed(0)} rolled`).toBeLessThan(0.03);
   });
 
   it('floor program: bounded per storey, materials on the floors, deterministic, on its own storey', () => {

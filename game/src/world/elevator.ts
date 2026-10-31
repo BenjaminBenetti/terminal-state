@@ -28,6 +28,7 @@
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
+import {abs, cameraPosition, clamp, dot, float, normalWorld, normalize, positionWorld, vec3} from 'three/tsl'; // task track3 (lane ARCH): glass car
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {surface, type SurfaceName} from './canvasTextures';
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
@@ -974,7 +975,25 @@ export function flickerLevel(t: number): number {
 }
 
 /** Builds the moving cab and every stop's landing (doors, linings, frame, lantern, indicator, call station). */
-export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials): ElevatorView {
+/**
+ * Task track3-eaton-centre-20261031 (lane ARCH): the glass car of The Eaton's Center's glass elevator — every side / rear panel
+ * above the stainless wainscot is clear glass (no dark shell behind it): unlit, transparent, a little fresnel; never a shadow
+ * caster (transparent). One material, created once.
+ */
+let cabGlassMat: MeshBasicNodeMaterial | null = null;
+export function cabGlassMaterial(): MeshBasicNodeMaterial {
+  if (cabGlassMat) return cabGlassMat;
+  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide});
+  m.name = 'tower-cab-glass';
+  const v = normalize(cameraPosition.sub(positionWorld) as never) as unknown as ReturnType<typeof vec3>;
+  const fres = float(1).sub(abs(dot(normalize(normalWorld as never), v as never))).pow(2.5);
+  m.colorNode = vec3(0.12, 0.16, 0.15);
+  m.opacityNode = clamp(float(0.14).add(fres.mul(0.4)), 0, 0.8);
+  return (cabGlassMat = m);
+}
+
+export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts: {glass?: boolean} = {}): ElevatorView {
+  const glass = opts.glass === true; // task track3 (lane ARCH): the mall's glass car (the office car: false, unchanged)
   const {info, gate: G, doorH: dH, cabH: H, frame: F, cop} = plan;
   const M = elevatorMaterials();
   const floor = cabFloorMats(mats);
@@ -1002,10 +1021,17 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials): Ele
   const W0 = CAB_FRONT;                                                              // the front panelling's face
   const KICK = 0.14, LOW0 = 0.152, LOW1 = 0.86, UP0 = 0.874, UP1 = Math.min(2.29, H - 0.31), FRZ = UP1 + REVEAL;
   const PS = PANEL + POST;                                                           // corner post size
-  // shell behind the panels: dark, seen only through the reveals
-  P.box('dark', lMin, lMin + SHELL, 0, H, 0, D);
-  P.box('dark', lMax - SHELL, lMax, 0, H, 0, D);
-  P.box('dark', lMin + SHELL, lMax - SHELL, 0, H, D - SHELL, D);
+  // shell behind the panels: dark, seen only through the reveals (task track3, lane ARCH: the glass car's shell stops at the wainscot)
+  const shellTop = glass ? UP0 : H;
+  P.box('dark', lMin, lMin + SHELL, 0, shellTop, 0, D);
+  P.box('dark', lMax - SHELL, lMax, 0, shellTop, 0, D);
+  P.box('dark', lMin + SHELL, lMax - SHELL, 0, shellTop, D - SHELL, D);
+  if (glass) {
+    // clear glass from the wainscot to the frieze on both sides and the rear, in the shell planes
+    P.box('glass', lMin, lMin + SHELL, UP0, FRZ, W0 + PS, D - SHELL - PS);
+    P.box('glass', lMax - SHELL, lMax, UP0, FRZ, W0 + PS, D - SHELL - PS);
+    P.box('glass', lMin + SHELL + PS, lMax - SHELL - PS, UP0, FRZ, D - SHELL, D);
+  }
   // corner posts (steel angle in every vertical corner)
   P.box('steel', lMin + SHELL, lMin + SHELL + PS, 0, H, D - SHELL - PS, D - SHELL);
   P.box('steel', lMax - SHELL - PS, lMax - SHELL, 0, H, D - SHELL - PS, D - SHELL);
@@ -1017,7 +1043,7 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials): Ele
     const wa = W0 + PS + REVEAL, wb = FW - POST - REVEAL, mid = (wa + wb) / 2;
     for (const [w0, w1] of [[wa, mid - REVEAL / 2], [mid + REVEAL / 2, wb]]) {
       P.box('steel', a, b, LOW0, LOW1, w0, w1);
-      P.box('wood', a, b, UP0, UP1, w0, w1);
+      if (!glass) P.box('wood', a, b, UP0, UP1, w0, w1);
     }
     P.box('steel', left ? a : a - 0.004, left ? b + 0.004 : b, 0, KICK, W0 + PS, FW - POST); // kick plate, 4 mm proud
     P.box('steel', a, b, FRZ, H, W0 + PS, FW - POST);
@@ -1028,7 +1054,7 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials): Ele
     const bays: [number, number, 'wood' | 'mirror'][] = [[la, cm - cw / 2 - REVEAL / 2, 'wood'], [cm - cw / 2 + REVEAL / 2, cm + cw / 2 - REVEAL / 2, 'mirror'], [cm + cw / 2 + REVEAL / 2, lb, 'wood']];
     for (const [l0, l1, upper] of bays) {
       P.box('steel', l0, l1, LOW0, LOW1, FW, D - SHELL);
-      P.box(upper, l0, l1, UP0, UP1, FW, D - SHELL);
+      if (!glass) P.box(upper, l0, l1, UP0, UP1, FW, D - SHELL);
     }
     P.box('steel', FL + POST, FR - POST, 0, KICK, FW - 0.004, D - SHELL);
     P.box('steel', FL + POST, FR - POST, FRZ, H, FW, D - SHELL);
@@ -1119,10 +1145,11 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials): Ele
   const cabMat: Record<string, THREE.Material> = {
     steel: M.cabSteel, wood: M.cabWood, mirror: M.cabMirror, dark: M.cabDark, ceil: M.cabCeil, rail: M.cabRail, field: floor.field, border: floor.border,
     light: M.light, flicker: M.lightFlicker,
+    ...(glass ? {glass: cabGlassMaterial()} : {}),
   };
   const cabNames: Record<string, string> = {
     steel: 'tower-cab-walls', wood: 'tower-cab-wood', mirror: 'tower-cab-mirror', dark: 'tower-cab-dark', ceil: 'tower-cab-ceiling', rail: 'tower-cab-handrail',
-    field: 'tower-cab-floor', border: 'tower-cab-floor-border', light: 'tower-cab-light', flicker: 'tower-cab-light-flicker',
+    field: 'tower-cab-floor', border: 'tower-cab-floor-border', light: 'tower-cab-light', flicker: 'tower-cab-light-flicker', glass: 'tower-cab-glass',
   };
   for (const key of Object.keys(cabMat)) { const g = P.take(key, MW); if (g) mesh(cabG, own(g), cabMat[key], cabNames[key]); }
   mesh(cabG, own(indParts.take('ind', MW)!), M.indicator, 'tower-indicator-in');

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 11812,
-      "sha256": "e0cbf96ba575d59369651e03bec24fd2933c4ce182a1a58612ad6473bd2e5e55"
+      "bytes": 15043,
+      "sha256": "def0f97171df2d7b7196395ed976f47e30c22781f7e6e673721fba1edcada4c9"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1414,6 +1414,11 @@
       "sha256": "685156860b4caa08f0f3b2e2463313e4697262b69987e71e32a13c599fbab854"
     },
     {
+      "path": "assets/derivatives/mall-track3-20261031.json",
+      "bytes": 109910,
+      "sha256": "a4acff3ff25e4d57f31d9be7ac8bdbe08ac5ea05227cc7d5a5409e1e3b1a615e"
+    },
+    {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
       "bytes": 28564,
       "sha256": "16c2f68670691e29034f64cd044f94a7bb482a19adeb075db694a40801ae3219"
@@ -1747,6 +1752,86 @@
       "path": "assets/models/magazine-rack.glb",
       "bytes": 783032,
       "sha256": "ef5f410fe9d2d36e117526d4be958b089d35004307774ad241436bc14f726a0d"
+    },
+    {
+      "path": "assets/models/mall-bookstore-bookcase.glb",
+      "bytes": 285968,
+      "sha256": "735710dbdcfc0f60633a4550d56e28a360f1bfad180f10d87ae0ade30657acb2"
+    },
+    {
+      "path": "assets/models/mall-checkout-lane.glb",
+      "bytes": 313240,
+      "sha256": "43e7db668ecf1524bb398485f86ecf1bf6cfe56ae8ecc27b5da19c315edb6dcf"
+    },
+    {
+      "path": "assets/models/mall-clothing-wall-unit.glb",
+      "bytes": 251960,
+      "sha256": "97ff969a54d0ab724ec1be5d1609ccf4a308f60cdcc9eb04b3ef363e51d00d50"
+    },
+    {
+      "path": "assets/models/mall-flat-screen-tv.glb",
+      "bytes": 113260,
+      "sha256": "f1d425a6fd6f48c5467c8f5de7b78ac3ad4b6c80d100bfca5dd94d89b117fe0f"
+    },
+    {
+      "path": "assets/models/mall-garment-hanging-group.glb",
+      "bytes": 189524,
+      "sha256": "612663f12fa57f496080701115299274e3cfb31e2bc5573e269579917fd763a3"
+    },
+    {
+      "path": "assets/models/mall-garment-rail-round.glb",
+      "bytes": 144440,
+      "sha256": "be371e2ebddac44fa0c419ffd044c2e9a7f07c526a077e7fad6308b057bf1e4d"
+    },
+    {
+      "path": "assets/models/mall-glass-display-cabinet.glb",
+      "bytes": 211120,
+      "sha256": "daaea7a373e997b8901ec76a9986b384c8ae2c120e0e8d6efec215be988c7676"
+    },
+    {
+      "path": "assets/models/mall-glass-display-counter.glb",
+      "bytes": 222948,
+      "sha256": "155b383e47064574cfc4b5618cbff3fd72012ebac3c9b886e2e5ec859ea9d685"
+    },
+    {
+      "path": "assets/models/mall-gun-wall-rack.glb",
+      "bytes": 258320,
+      "sha256": "737e569dd19e08d58b359613627c768069fedaa7745e6e24ff322e069ff506b8"
+    },
+    {
+      "path": "assets/models/mall-mall-cashwrap-counter.glb",
+      "bytes": 349348,
+      "sha256": "a6838259657d702d5832f541cc8c6eb2cc3b603066b663dac5e5ff80d226ec7a"
+    },
+    {
+      "path": "assets/models/mall-mannequin-full.glb",
+      "bytes": 141884,
+      "sha256": "04f850509d4e21b0bcefbdea7899a3931fd2acd724f64502545dcfb056b933d1"
+    },
+    {
+      "path": "assets/models/mall-outdoors-plank-shelving.glb",
+      "bytes": 209988,
+      "sha256": "7fe70470aadc810162cd1965919c7efa1260f358f28e7ba7290e33867a8421f3"
+    },
+    {
+      "path": "assets/models/mall-pharmacy-dispensary-counter.glb",
+      "bytes": 201416,
+      "sha256": "120620dac3af31cb5a18ae4b95e879ae3e2ba2d6ae47e650ada5537d8b4bf53f"
+    },
+    {
+      "path": "assets/models/mall-produce-display-stand.glb",
+      "bytes": 196740,
+      "sha256": "b32324552192859facb1a14d32264d3838e0dc73aa91aec06561cf52ccf01478"
+    },
+    {
+      "path": "assets/models/mall-retail-gondola.glb",
+      "bytes": 219552,
+      "sha256": "ffcb48f31c7bb03bf8b20721e52078199e86f6807abffda00f8680547da9a05d"
+    },
+    {
+      "path": "assets/models/mall-retail-wall-bay.glb",
+      "bytes": 210904,
+      "sha256": "5682a1d5dea45055713b5de407bc4eaeb5ee7ac57ef9b3dec811ebd3aba4486e"
     },
     {
       "path": "assets/models/office-aquarium.glb",

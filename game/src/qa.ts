@@ -22,7 +22,9 @@ import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevat
 import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
 import {mallArchQaApi} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): mall finishes / atrium / fog / QA poses
 import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
-import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
+import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office';
+import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
+import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input walker, per-frame traversal trace, lifecycle counts
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
@@ -361,6 +363,23 @@ export function installQaHooks(game: Game): void {
       if (!q) return null;
       game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
       return q;
+    },
+    // Task track3-eaton-centre-20261031 (lane GEN): stand at a mall pose (gen/mall/qa.ts: 'platform-lookup', 'court', 'ring-edge',
+    // 'shopfront', 'escalator', 'bridge', 'elevator', 'washrooms'; `ring` = the storey for ring-edge / shopfront / escalator / washrooms).
+    goMall: (name: MallPoseName = 'platform-lookup', ring?: number) => {
+      const q = mallQaPose(game.layout, name, ring);
+      if (!q) return {ok: false, names: MALL_POSE_NAMES};
+      game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
+      return {ok: true, ...q, variant: game.layout.mall?.variant};
+    },
+    // Task track3-eaton-centre-20261031 (primary, lane SHOPS pose): stand at the entry of the nth shop of a program / recipe
+    // ('guns', 'pharmacy', …) looking in.
+    goShop: (program = 'guns', nth = 0) => {
+      const q = mallShopPose(game.layout, program, nth);
+      if (!q || !api.teleport(q.x, q.z, q.yaw, q.level)) return {ok: false, programs: [...new Set(game.layout.mall?.shops.map(s => s.program) ?? [])]};
+      game.player.pitch = -0.08;
+      const s = game.layout.mall?.shops.find(t => t.id === q.shop);
+      return {ok: true, ...q, brand: s?.brand, kind: s?.kind};
     },
     goTransit: (end: 'bottom' | 'top' = 'bottom', lane = 1) => {
       const q = transitPose(game.layout, end, lane);

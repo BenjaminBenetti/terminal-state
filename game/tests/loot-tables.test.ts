@@ -119,9 +119,16 @@ describe('profiles: one per logical level, today\'s tables, no overrides', () =>
       const p = lootProfile(id);
       expect(p).toBe(PROFILES[id]);
       expect(p.id).toBe(id);
+      expect(validateLootProfile(p)).toEqual([]);
+      // Task track3-eaton-centre-20261031 (lane PROFILES): the mall = the base tables + its salvage, with its explicit overrides
+      // (tests/mall-profiles.test.ts checks them); the Subway and the Office keep the shared tables and no overrides
+      if (id === 'mall') {
+        for (const [k, v] of Object.entries(BASE_TABLES)) expect((p.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
+        expect(p.tables.salvage).toBeDefined();
+        continue;
+      }
       expect(p.tables).toBe(BASE_TABLES);
       expect(Object.keys(p.overrides)).toEqual([]);
-      expect(validateLootProfile(p)).toEqual([]);
     }
     expect(validateLootProfile(BASELINE_PROFILE)).toEqual([]);
     expect(BASE_TABLES.limb).toBe(LIMB_ECONOMY); // the live object (tests zero it in place)

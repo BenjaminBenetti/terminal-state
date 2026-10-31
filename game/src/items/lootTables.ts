@@ -123,7 +123,7 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   // Task office-props-physics-scale-20261030 (lane FURN): the bakery display case (its trays of loaves are a shop display)
   bakeryCase: 'vend',
   // Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center open shop holders (gen/mall/kinds.ts)
-  glassCounter: 'countertop', merchTable: 'surface', wallBay: 'shelf', produceStand: 'shelf',
+  glassCounter: 'countertop', merchTable: 'surface', wallBay: 'shelf', produceStand: 'shelf', bookstoreBookcase: 'container',
 };
 /** Separate compartment rolls (desk / security-desk drawers, kitchenette cupboards) are closed storage. */
 export const COMPARTMENT_SLOT: SlotCategory = 'container';
@@ -184,7 +184,7 @@ export const HOLDER_MOD: Readonly<Record<string, CatWeights>> = {
   gunLocker: [0, 0, 0.4, 3], monitorDesk: [1, 1.2, 0.2, 0.3], medCabinet: [0, 0.2, 3, 0],
   ...p7(e => e.mod),
   // track3 lane SHOPS: mall shop holders (their purposes normally decide; these apply in a purpose-less area only)
-  glassCounter: [0.8, 0.6, 0.6, 0.2], merchTable: [1, 1, 0.4, 0.1], wallBay: [1, 1, 0.6, 0.2], produceStand: [2, 0.8, 0, 0],
+  glassCounter: [0.8, 0.6, 0.6, 0.2], merchTable: [1, 1, 0.4, 0.1], wallBay: [1, 1, 0.6, 0.2], produceStand: [2, 0.8, 0, 0], bookstoreBookcase: [1, 1, 0.5, 0.1],
 };
 /** Empty-roll chance of the original table roll (iteration 12: most holders end up empty anyway — items/lootEconomy.ts). */
 export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
@@ -192,7 +192,7 @@ export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
   stockShelf: 0.12, snackRack: 0.15, hotdogCart: 0.2, grillLine: 0.35, espressoBar: 0.35, wokLine: 0.35, deliLine: 0.35, blenderBar: 0.35,
   kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
   ...p7(e => e.empty),
-  glassCounter: 0.35, merchTable: 0.5, wallBay: 0.3, produceStand: 0.3, // track3 lane SHOPS
+  glassCounter: 0.35, merchTable: 0.5, wallBay: 0.3, produceStand: 0.3, bookstoreBookcase: 0.4, // track3 lane SHOPS
 };
 /** Lot-count range of the original table roll. */
 export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
@@ -201,7 +201,7 @@ export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
   stockShelf: [2, 5], snackRack: [2, 4], hotdogCart: [2, 4], grillLine: [1, 3], espressoBar: [1, 3], wokLine: [1, 3], deliLine: [1, 3], blenderBar: [1, 3],
   kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
   ...p7(e => e.lots),
-  glassCounter: [1, 3], merchTable: [1, 2], wallBay: [1, 3], produceStand: [1, 3], // track3 lane SHOPS
+  glassCounter: [1, 3], merchTable: [1, 2], wallBay: [1, 3], produceStand: [1, 3], bookstoreBookcase: [1, 2], // track3 lane SHOPS
 };
 /** Stocked rooms get fuller shelves: `extra` more lots at the high end for these holder kinds (legacy tables only). */
 export const FULL_ROOMS = {
@@ -450,6 +450,11 @@ export const SERVER_RACK_ROWS: ItemRows = [[ELECTRICAL_PARTS, 3], [SCRAP_METAL, 
 export const VAULT_ROWS: ItemRows = [...genericAmmo(2), ['bandage', 0.6], ['medkit', 0.3], ['flare', 0.2]];
 /** Archive box: mostly paper; rarely something forgotten. */
 export const ARCHIVE_ROWS: ItemRows = [['chocolate', 1], ['battery', 0.6], ['bandage', 0.5], ['flare', 0.3]];
+/**
+ * Task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (shelves + two base drawers): what people left behind on a
+ * shelf or in a staff drawer — narrowed to the shop purpose's rows like every non-themed container (items/loot.ts purposeRows).
+ */
+export const BOOKCASE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['cola', 0.5], ['bandage', 0.5], ['chips', 0.4], ['battery', 0.3]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
@@ -487,6 +492,8 @@ export const OPENABLE_TABLES = {
   archiveBoxes: {lots: [1, 1], empty: 0.7, items: ARCHIVE_ROWS},
   // lane FURN (office-props-physics-scale-20261030): the bakery case's three display trays (a handful of goldencrust floors only)
   bakeryCase: {lots: [3, 6], empty: 0.1, items: BAKERY_ROWS},
+  // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookcase (open shelves + 2 base drawers), placed in numbers in bookstores
+  bookstoreBookcase: {lots: [1, 2], empty: 0.55, items: BOOKCASE_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------
@@ -834,10 +841,14 @@ export const MALL_SALVAGE: SalvageTables = {
 /** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall). */
 export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE};
 /**
- * The mall's per-level overrides (the tuning dial on top of MALL_SALVAGE; docs/loot-tables.md): bio mater rows weigh 1.5x — the
- * scarcest material (pharmacy / clinic / optician / pet stock rooms only) lifted so it is a real mall find, not a rarity.
+ * The mall's per-level overrides — the tuning dial on top of MALL_SALVAGE (docs/loot-tables.md "The Eaton's Center"):
+ *  - categoryWeight.material 0.6: every material row of the mall's tables (the salvage rows included) weighs 0.6x — measured with
+ *    the fully dressed shops (~2,600 holders a run) the raw salvage shares gave ~13x the Office's materials per 100 m²; the dial
+ *    brings it to ~8x (per reachable holder ~7x), still the level's signature resource, not an avalanche;
+ *  - itemWeight.bio_mater 1.5: the scarcest material (pharmacy / clinic / optician / pet stock rooms only) lifted so it stays a real
+ *    mall find.
  */
-export const MALL_OVERRIDES: LootOverrides = {itemWeight: {[BIO_MATER]: 1.5}};
+export const MALL_OVERRIDES: LootOverrides = {categoryWeight: {material: 0.6}, itemWeight: {[BIO_MATER]: 1.5}};
 export const MALL_PROFILE: LootProfile = {id: 'mall', label: 'The Eaton\'s Center', tables: MALL_TABLES, overrides: MALL_OVERRIDES};
 
 /**

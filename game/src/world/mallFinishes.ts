@@ -211,6 +211,7 @@ export function bohClass(a: {type?: string; kind?: string; purpose?: string; lab
   if (/stair|landing|lift|elevator|shaft|riser|ladder/.test(s) || a.kind === 'closet') return 'core';
   if (/wash ?room|toilet|restroom|\bwc\b|shower|locker/.test(s)) return 'wash';
   if (/plant|mechanical|electrical|boiler|pump|loading|dock|refuse|compactor|generator/.test(s)) return 'plant';
+  if (/corridor|hallway|passage|service hall/.test(`${a.label ?? ''} ${a.purpose ?? ''}`.toLowerCase())) return 'corridor';
   if (/stock|storage|store ?room|backroom|back room|receiving|warehouse|supply/.test(s)) return 'stock';
   return 'corridor';
 }

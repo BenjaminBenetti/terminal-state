@@ -24,7 +24,7 @@ import {deriveRails, levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
-import {spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
+import {applyRareFamilyRules, spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
 import {lootProfile, type LootProfile} from '../../items/lootTables';
 import type {SectionGenContext} from '../../levels/types';
 import type {StationLayout} from '../stationTypes';
@@ -34,13 +34,15 @@ import {placeOfficeEnemies, type SpawnField} from '../office/spawns';
 import {placeHordes} from '../../ai/hordePlace'; // lane HORDE
 import {placeMallSupplies} from './supplies'; // lane PROFILES: the mall's per-storey loose floor program
 import {assignMallPrograms} from './shops'; // lane SHOPS: programs / brands / purposes of the shop units
+import {dressMallShops} from './shopsDress'; // lane SHOPS: the shop interiors (sales floors + stock rooms) by program recipe
+import {placeMallWeapons} from './shopsWeapons'; // lane SHOPS: the bounded once-per-run gun-shop weapon plan
 import {CROP_MARGIN, MALL_CANVAS, RINGS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
 import {carveMall, type MallCarve} from './carve';
 import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, type Crop} from './structure';
 import {mallIssues} from './validate';
 import {MALL_TRACK_EXTENSIONS, extendTracksSeam, isExtensionArea, type TrackExtensionsInterim} from './trackExt';
 
-export {MALL_VARIANTS, mallFrame, mallVariantOf, mallStoreyLabel, type MallVariant} from './frame';
+export {MALL_VARIANTS, mallFrame, mallVariantOf, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
 export {mallIssues, mallVoidCells} from './validate';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
@@ -60,7 +62,7 @@ export interface MallGenOptions {
 /** The ONE continuous Eaton's Center layout (station pit + six rings + the roof record). */
 export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  const f = mallFrame(ctx.levelSeed, opts.variant);
+  let f = mallFrame(ctx.levelSeed, opts.variant);
   const loot = opts.loot ?? lootProfile('mall');
   const spawns = opts.spawns ?? spawnProfile('mall');
   const seed = mallSeed(ctx.levelSeed);
@@ -70,7 +72,8 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
     const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns);
     MALL_GEN_STATS.attempts = attempt + 1;
-    if (!layout) { MALL_GEN_STATS.carveFails++; continue; }
+    // A program that does not fit re-rolls the frame's free parameters (same variant) for the next attempt.
+    if (!layout) { MALL_GEN_STATS.carveFails++; f = mallFrame(ctx.levelSeed, f.variant, MALL_GEN_STATS.carveFails); continue; }
     const issues = mallIssues(layout, {startCells: spawnStartCells(spawns)});
     MALL_GEN_STATS.issues = issues;
     if (!issues.length) { fallback = layout; break; }
@@ -129,7 +132,8 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
   // --- Dressing: ONE station dresser pass with the run mouths / runs / elevator landings held clear --------------------------
-  const release = holdCells(layout, mouthHolds(layout, mc, crop));
+  // (Track2 extension areas, once they exist, are held too: the station dresser never furnishes them — isExtensionArea.)
+  const release = holdCells(layout, [...mouthHolds(layout, mc, crop), ...extensionCells(layout)]);
   dress(layout, rng.fork('dress'));
   release();
 
@@ -140,6 +144,10 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // [lane SHOPS seam] programs / kinds / brands / fits of layout.mall.shops + their areas' purposes / labels (own fork); SHOPS'
   // interior dressing joins here too (after the station dresser, before the populations: loot follows the purposes).
   assignMallPrograms(layout, rng.fork('mall-shops'));
+  // lane SHOPS: interiors (after the station dresser: absolute heights; stock rooms it furnished only gain the program's pieces),
+  // then the gun shops' weapon finds (one plan per logical run from the level seed + start weapon; layout pickups, remembered).
+  dressMallShops(layout, rng.fork('mall-shop-dress'), {frame: 'absolute'});
+  placeMallWeapons(layout, ctx.levelSeed, layout.startWeapon ?? 'rifle');
 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -157,7 +165,9 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // --- Lighting, traversal finishing, archetypes, the mall record, hordes ------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
   finishTraversal(layout);
+  dropFloatingFixtures(layout);
   assignEnemyArchetypes(layout, spawns);
+  applyRareFamilyRules(layout, spawns); // lane PROFILES: the whole-mall rare caps / spacing (Track1's Siren) — RNG-free
   layout.mall.patrol = patrolGraph(layout, mc, crop, c.flights);
   // Hordes (lane HORDE) never start on a run (its flat top landing included) or in front of a mouth / elevator landing.
   const runHold = holdCells(layout, mouthHolds(layout, mc, crop));
@@ -194,6 +204,25 @@ function keepPoints(layout: StationLayout, mc: MallCarve, c: Crop): SpawnField['
   return out;
 }
 
+/**
+ * Ceiling fixtures the station dresser hung in OPEN AIR — over the void (the pit floor under the atrium, bridge decks) a fixture at
+ * the area's nominal pendant height has no ceiling above it: dropped (the atrium is lit by lane ARCH's skylight bake through the
+ * glass roof). A fixture counts as floating when it hangs more than 1 m below its column's ceiling on its storey.
+ */
+function dropFloatingFixtures(layout: StationLayout): number {
+  const before = layout.lights.length;
+  layout.lights = layout.lights.filter(l => {
+    if (l.virtual) return true;
+    const lv = l.level ?? layout.areas[l.area]?.level ?? 0, g = layout.levels[lv]?.grid;
+    if (!g) return true;
+    const [cx, cy] = g.cellOf(l.x, l.z);
+    if (!g.inBounds(cx, cy)) return true;
+    const c = g.ceilAt(l.x, l.z);
+    return !(Number.isFinite(c) && l.y < c - 1.0);
+  });
+  return before - layout.lights.length;
+}
+
 /** Cells of Track2 extension areas (none until Track2 integrates). */
 function extensionCells(layout: StationLayout): {level: number; cells: number[]}[] {
   const out: {level: number; cells: number[]}[] = [];
@@ -207,7 +236,7 @@ function extensionCells(layout: StationLayout): {level: number; cells: number[]}
 }
 
 /** QA / tests: one attempt (null when the program does not fit). */
-export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions = {}): StationLayout | null {
-  const f = mallFrame(ctx.levelSeed, opts.variant), seed = mallSeed(ctx.levelSeed);
+export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions & {salt?: number} = {}): StationLayout | null {
+  const f = mallFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
   return tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'));
 }

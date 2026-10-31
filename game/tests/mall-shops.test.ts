@@ -14,7 +14,7 @@ import {MALL_HOLDER_KINDS, MALL_KINDS, MALL_OPEN_AUDIT, MALL_PHYS, MALL_SURFACES
 import {MALL_PROGRAMS, assignMallPrograms, mallShopCensus, shopFit} from '../src/gen/mall/shops';
 import {dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
 import {MALL_FIND_WEAPONS, mallGearSpots, mallShopPose, mallWeaponPlan, placeMallWeapons} from '../src/gen/mall/shopsWeapons';
-import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
+import {OPENABLE_AUDIT, OPENABLE_CONTAINER_KINDS, openableSpec} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {dynamicKind} from '../src/physics/dynamicItems';
 import {HOLDER_ALLOW, HOLDER_SLOTS, econCat} from '../src/items/lootTables';
@@ -22,6 +22,7 @@ import {holderTable, isLootHolderKind, rollLootItems} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {WEAPON_FIND_AMMO} from '../src/gen/weaponFinds';
 import {mallShopsFixture} from './helpers/mallShopsFixture';
+import {generateMallLevel, mallIssues} from '../src/gen/mall/index';
 
 /** A dressed synthetic mall (absolute frame) for `seed`. */
 function dressed(seed: number, rings = 2, foodRing?: number): {layout: StationLayout; reports: ReturnType<typeof dressMallShops>} {
@@ -280,6 +281,17 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
     }
   });
 
+  it('the delivered bookcase (lane ASSETS M09) is an openable container: 2 derived base drawers + its open shelves', () => {
+    const spec = openableSpec('bookstoreBookcase')!;
+    expect(spec.model).toBe('office-bookstore-bookcase');
+    expect(spec.parts.length).toBe(2);
+    expect(OPENABLE_CONTAINER_KINDS as readonly string[]).toContain('bookstoreBookcase');
+    const surf = holderSurfaces('bookstoreBookcase', PROP_DEFS.bookstoreBookcase);
+    expect(surf.filter(q => q.part === undefined).length).toBe(4);
+    expect(surf.filter(q => q.part !== undefined).length).toBe(2);
+    expect(MALL_OPEN_AUDIT.bookstoreBookcase.cls).toBe('openable');
+  });
+
   it('holder kinds: slot, defaults, surfaces inside the footprint and under the top, open (not storage)', () => {
     for (const k of MALL_HOLDER_KINDS) {
       expect(isLootHolderKind(k), k).toBe(true);
@@ -304,7 +316,6 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
   it('shops place only classified kinds; reused kinds with display goods are the recorded exceptions; loose items are loot', () => {
     // reused catalogue kinds whose display goods are part of the fixture (never items): recorded with their reason
     const DISPLAY_GOODS: Record<string, string> = {
-      lawBookcase: 'books are decor (existing audit row)', sneakerWall: 'shoes are decor (existing audit row)', clothingRack: 'garments are decor (existing)',
       deviceWall: 'tethered demo devices on the wall unit (existing purpose prop)', techDisplay: 'tethered demo devices (existing purpose prop)',
       showcase: 'demo devices inside the glazed showcase (existing purpose prop)', flowerStand: 'flowers are shelf-stock filler (decor)', aquarium: 'fish tank decor (existing)',
     };
@@ -315,7 +326,16 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
       expect(PROP_PHYSICS_AUDIT[k], `${k} physics audit`).toBeDefined();
     }
     for (const k of Object.keys(DISPLAY_GOODS)) if (seen.has(k)) expect(OPENABLE_AUDIT.find(e => e.kind === k)!.how.length).toBeGreaterThan(8);
-    // the new mall kinds bake nothing: their forms are fixtures only (no loose-item materials in their stand-ins)
+    // rule 4: the office kinds with BAKED loose stock (garments / sneakers / books) never furnish a mall shop — the empty garmentRail /
+    // wallBay / bookstoreBookcase do (lane ASSETS' rule-4 replacements swap in as models)
+    for (const k of ['clothingRack', 'sneakerWall', 'lawBookcase']) expect(seen.has(k), `${k} (baked stock) placed`).toBe(false);
+    // separated decor rides a real host: garment groups hang on garment rails, TVs stand on display tables (lane ASSETS M06 / M10)
+    for (const s of SEEDS) {
+      const props = get(s).layout.props;
+      for (const p of props.filter(q => q.kind === 'garmentHangingGroup')) expect(['garmentRail', 'garmentRailRound']).toContain(props[p.host!]?.kind);
+      for (const p of props.filter(q => q.kind === 'flatScreenTv')) expect(props[p.host!]?.kind).toBe('merchTable');
+      for (const p of props.filter(q => q.kind === 'cashRegister')) expect(['shopCounter']).toContain(props[p.host!]?.kind);
+    }
     console.info(`[kinds placed] ${[...seen].sort().join(', ')}`);
   });
 });
@@ -407,5 +427,46 @@ describe('old levels unchanged', () => {
   it('the station store purposes and station back-of-house purposes are untouched by the mall entries', () => {
     expect(Object.keys(STORE_PURPOSES).length).toBe(18);
     expect(Object.values(ROOM_PURPOSES).filter(p => !p.id.startsWith('mall-')).every(p => p.weight >= 0)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// The generated mall (lane GEN's skeleton, gen/mall/index.ts calls assignMallPrograms -> dressMallShops -> placeMallWeapons).
+
+describe('generated mall: shops dressed, census, weapons (bounded seeds)', () => {
+  const GEN_SEEDS = [0x7ea3c1, 4242];
+  const gen = new Map<number, StationLayout>();
+  const mall = (seed: number) => { let L = gen.get(seed); if (!L) gen.set(seed, (L = generateMallLevel({levelSeed: seed, startWeapon: 'pistol'}))); return L; };
+
+  it('per-ring census: 8+ real stores, few vacant, every unit has a program / brand / dressed interior, no validation issues', () => {
+    for (const seed of GEN_SEEDS) {
+      const L = mall(seed);
+      expect(mallIssues(L), `seed ${seed}`).toEqual([]);
+      const census = mallShopCensus(L);
+      const rows = census.map(c => ({ring: c.ring, units: c.units, stores: c.stores, kiosks: c.kiosks, service: c.service, vacant: c.vacant, area: c.salesArea, depth: c.depth.mean, back: c.backrooms, programs: c.programs}));
+      console.info(`[gen census ${seed}] ${JSON.stringify(rows)}`);
+      const units = L.mall!.shops.length, vacant = L.mall!.shops.filter(s => s.kind === 'vacant').length;
+      expect(vacant / units, `seed ${seed} vacant share`).toBeLessThan(0.16);
+      for (const c of census) if (c.ring >= 1) expect(c.stores, `seed ${seed} ring ${c.ring}`).toBeGreaterThanOrEqual(Math.min(8, c.units - 3));
+      for (const s of L.mall!.shops) {
+        expect(shopFit(s), s.id).toBeDefined();
+        if (s.kind === 'vacant') continue;
+        const n = L.props.filter(p => p.area === s.area && p.kind !== 'shopGlazing' && p.kind !== 'shopShutter').length;
+        expect(n, `seed ${seed} ${s.id} ${s.program} ${s.salesArea} m²`).toBeGreaterThanOrEqual(s.kind === 'kiosk' ? 1 : 5);
+      }
+    }
+  });
+
+  it('gun shop(s): the plan\'s guns lie on display benches / the shop floor with their own calibre, reachable, no more than planned', () => {
+    for (const seed of GEN_SEEDS) {
+      const L = mall(seed);
+      const guns = L.mall!.shops.filter(s => s.program === 'guns');
+      expect(guns.length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
+      const plan = mallWeaponPlan(seed, 'pistol');
+      const found = L.pickups.filter(p => (MALL_FIND_WEAPONS as readonly string[]).includes(p.itemId) && L.mall!.shops.some(s => s.area === p.area));
+      expect(found.length, `seed ${seed}`).toBeLessThanOrEqual(plan.length);
+      for (const e of plan.filter(q => q.copy === 0)) expect(found.some(p => p.itemId === e.weapon && guns.some(g => g.area === p.area)), `seed ${seed} ${e.weapon}`).toBe(true);
+      console.info(`[gen weapons ${seed}] plan ${JSON.stringify(plan)} found ${JSON.stringify(found.map(p => ({id: p.itemId, area: p.area, y: p.y})))}`);
+    }
   });
 });

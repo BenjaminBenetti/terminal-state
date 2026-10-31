@@ -32,6 +32,8 @@
 // probes every 0.35 s (staggered by member). Path searches: one per patrol leg per group and rare regroups, through the game's
 // path service (immediate near the player, background chunks far away). Far calm members animate every 3rd frame (animStep).
 // AUDIO: one idle groan per group per 1.6 s at most (vocalGate), on top of the Sfx's global 3-voice enemy vocal cap.
+// CHASES: members' (and every chaser's) chase searches in an open-atrium level go through the level-wide route share, the per-frame
+// cap and the cross-storey sighted deferral of ai/chaseShare.ts (game.ts wires them for a layout with `mall`).
 
 import type {Waypoint} from '../gen/grid';
 import type {Levels} from '../gen/levels';
