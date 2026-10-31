@@ -57,6 +57,13 @@
 //     re-pinned: subwayHolders f94f99ea -> fdce066e, subwayPickups c335d6e0 -> 3787f796, gearPlaced f392f088 -> fee77ca3;
 //     their core views as GOLDEN_RESERVE (fdce066e / 6883e55a / 3d2b40a1). Holder lots are holder-local, so the live and core
 //     holder hashes agree. The Office (TRACK_EXT_OFFICE: no reserve), every Office hash and the gear ROLL are unchanged.
+//  8. Track 2 integration, SUBWAY ONLY — CAUSE: "openable wall mounts are never placed hidden behind a tall floor prop" (root
+//     CLAUDE.md prop rule 1; gen/props07Dress.ts tallInFront; evidence and seed list in tests/enemy-spawn-parity.test.ts pin
+//     stage 6: every changed layout had a first-aid kit / AED cabinet the old code hid behind a tall floor prop). Changed corpus
+//     stations: reserve off econ 9120 / 183338 (+ others in GEN's corpus), reserve on econ 48715. Re-pinned: GOLDEN_CORE (reserve
+//     off) subwayHolders f94f99ea -> 2e86346d, subwayPickups 574dd442 -> 4afa77bf; GOLDEN_RESERVE fdce066e -> a978aeed /
+//     6883e55a -> 745b6481; GOLDEN subwayHolders fdce066e -> a978aeed, subwayPickups 3787f796 -> e83c7811. gearPlaced (all three),
+//     every Office hash and the gear ROLL are unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -74,14 +81,14 @@ import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
  * Stage 5 (main): the core views of the layouts generated with the core reserve OFF reproduce these byte for byte (stage 6 / 7
  * proof: the extensions never touch the core).
  */
-const GOLDEN_CORE = {subwayHolders: 'f94f99ea', subwayPickups: '574dd442', gearPlaced: '2bc1c5bb'};
+const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearPlaced: '2bc1c5bb'}; // stage 8
 /** Stage 7 (GEN-2): the core views of the live layouts — the core stations with the reserve (a layout change). */
-const GOLDEN_RESERVE = {subwayHolders: 'fdce066e', subwayPickups: '6883e55a', gearPlaced: '3d2b40a1'};
+const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: 'fdce066e',
-  /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve. */
-  subwayPickups: '3787f796',
+  subwayHolders: 'a978aeed', // stage 8: + the hidden-mount fix
+  /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
+  subwayPickups: 'e83c7811',
   officeHolders: 'c36c5fba',
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
   officePickups: '1aa35d40',

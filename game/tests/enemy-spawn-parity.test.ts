@@ -53,6 +53,15 @@
 //     counts: 42 L0 24 -> 23 / L2 4 -> 5, 48596 32 -> 31 (L0 25 -> 23, L1 2 -> 3), the rest unchanged. The live layouts
 //     (+ extensions, translated cores) are re-pinned as SUBWAY_GOLDEN_TRACK2. Every Office pin is unchanged (the Office keeps
 //     TRACK_EXT_OFFICE: no reserve, the original planner).
+//  6. Track 2 integration — CAUSE: "openable wall mounts are never placed hidden behind a tall floor prop" (root CLAUDE.md prop
+//     rule 1, found by openables.test on the re-laid seed 424242: a first-aid kit 0.45 m behind a 1.83 m grill line could not be
+//     targeted from its stand spot). gen/props07Dress.ts tryWall now rejects a HIGH wall-mounted CONTAINER spot when a floor prop
+//     of its area stands in the 0.9 m in front of it reaching up to the mount (tallInFront; no randomness consumed). EVIDENCE
+//     (primary, one-off instrumented run, 194 generated layouts = this corpus, the 18-station economy corpus and GEN's 64-seed
+//     corpus, reserve off and on): 19 layouts changed and EVERY changed layout contained at least one mount the old code had
+//     placed at a flagged spot (23 hidden first-aid kits / AED cabinets in 21 layouts; no layout changed without one). Here only
+//     16920 (reserve off) moves: spec 85de6292 -> 5dddd587, masked c76d28e8 (was 2dfe6845); its pickups, context counts and rat/dog
+//     indices are unchanged, and its reserve-on core and live pins are unchanged. Every Office pin is unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';

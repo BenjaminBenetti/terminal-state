@@ -143,6 +143,23 @@ function clearOfDoors(ctx: Ctx, x: number, z: number, hx: number, hz: number, y:
 }
 
 /**
+ * Track 2 integration (found on a re-laid station, seed 424242): a high OPENABLE wall mount (first-aid kit, AED / extinguisher
+ * cabinet …: storage that must open, root CLAUDE.md prop rule 1) must stay reachable, so no floor prop of its area may stand in
+ * the 0.9 m in front of it reaching up to the mount (a 1.83 m grill line 0.45 m in front of a first-aid kit hid it from its
+ * stand spot). Lower furniture under a mount (counters, benches) stays allowed. Same area, so the heights compare in the area's
+ * frame. Consumes no randomness.
+ */
+function tallInFront(ctx: Ctx, a: Area, side: Side, t: number, extent: number, depth: number, mountY: number): boolean {
+  const [cx, cz] = wallXZ(a, side, t, depth + 0.03 + 0.45);
+  const n = side === 'N' || side === 'S', hx = n ? extent / 2 : 0.45, hz = n ? 0.45 : extent / 2;
+  for (const q of ctx.layout.props) {
+    if (q.area !== a.id || q.mounted || q.y + q.h <= mountY - 0.15) continue;
+    if (Math.abs(q.x - cx) < q.hx + hx && Math.abs(q.z - cz) < q.hz + hz) return true;
+  }
+  return false;
+}
+
+/**
  * One wall spot: back (or, `along`, the long side) against `side` at `t`; wall-backed over the item's extent up to `yb`, doorway
  * clear, then the dresser's checks. Low mounts (y < 0.9) are placed from the floor (they collide) and rendered `lift` higher.
  */
@@ -168,6 +185,7 @@ function tryWall(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, side: Side, t: num
     const n = side === 'N' || side === 'S';
     if (!ctx.api.cellsFree(a, sx, sz, n ? extent / 2 : 0.45, n ? 0.45 : extent / 2)) return null;
   }
+  if (high && isContainerKind(kind) && tallInFront(ctx, a, side, t, extent, depth, mountY!)) return null;
   const p = ctx.api.place(a, kind, r3(x), r3(z), rot, high ? {y: mountY!} : along ? {} : {front: use.front ?? (mountY !== null ? 0.6 : 0.9)});
   if (!p) return null;
   if (high) p.mounted = true;

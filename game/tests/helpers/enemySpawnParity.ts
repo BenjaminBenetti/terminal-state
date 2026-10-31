@@ -95,7 +95,7 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
   '1234:rifle': ['b1e955bd', '1c40b92a', 'station 31 (L0 21 L1 6 L2 4)'],
   '1234:pistol': ['b1e955bd', '344c2e2d', 'station 31 (L0 21 L1 6 L2 4)'],
   '9001:rifle:side-mezzanine': ['9f96c951', 'c8431649', 'station 30 (L0 23 L1 2 L2 5)'],
-  '16920:rifle:island-ends': ['85de6292', 'c2c7277a', 'station 30 (L0 22 L1 5 L2 3)'],
+  '16920:rifle:island-ends': ['5dddd587', 'c2c7277a', 'station 30 (L0 22 L1 5 L2 3)'], // stage 6: was 85de6292 (hidden-mount fix)
   '24839:rifle:express': ['1c6c666f', '60427365', 'station 25 (L0 17 L1 4 L2 4)'],
   '32758:rifle:interchange': ['409a0efd', 'e4e49861', 'station 31 (L0 23 L1 3 L2 5)'],
   '40677:rifle:split': ['ea09047b', '314cffa5', 'station 23 (L0 18 L1 2 L2 3)'],
@@ -169,7 +169,7 @@ export const SUBWAY_INVARIANT: Record<string, readonly [string, readonly number[
   '1234:rifle': ['b82e9831', [2, 4]],
   '1234:pistol': ['b82e9831', [2, 4]],
   '9001:rifle:side-mezzanine': ['8fcb9b7d', []],
-  '16920:rifle:island-ends': ['2dfe6845', [6]],
+  '16920:rifle:island-ends': ['c76d28e8', [6]], // stage 6: was 2dfe6845 (hidden-mount fix; rat/dog indices unchanged)
   '24839:rifle:express': ['8942a3d1', []],
   '32758:rifle:interchange': ['ec69551c', [17]],
   '40677:rifle:split': ['ff8f1971', [6, 22]],
