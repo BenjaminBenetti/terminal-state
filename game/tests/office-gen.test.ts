@@ -29,6 +29,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {corpusTotals} from './helpers/lootEconomy';
 import {LEGACY_AMMO_IDS} from '../src/items/calibers';
 import {coreView} from '../src/gen/trackExt/index';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
 /** Canonical dump hash of everything a generator produces (grids, areas, doors, props, lights, signs, loot, spawns). */
 function fingerprint(l: StationLayout): string {
@@ -464,12 +465,26 @@ describe('the Subway is unchanged', () => {
   // same fingerprint over gen/trackExt coreView(layout) (core window, records translated back at their exact core-frame
   // positions, extension records filtered) — reproduces HEAD byte for byte for every seed. LIVE = the fingerprints of the
   // extended stations (grid size, translated coordinates, extension cells / areas / doors): only seeds with extensions differ.
-  const LIVE: Record<string, string> = {...HEAD, '42:rifle': '8aa759c8', '42:pistol': '28d8c06f'};
-  it('generateStation output for existing seeds is byte-identical to HEAD (core view; live = + track extensions)', () => {
+  // Track 2 lane GEN-2 — CAUSE: "core reserve enabled (authorized incidence change)": the Subway's TRACK_EXT.coreReserveM = 40
+  // keeps rock past the bed ends still open after the archetype skeleton, so the core stations are re-laid (a layout change).
+  // PROOF (every run): generated with the reserve OFF ({...TRACK_EXT, coreReserveM: 0}), the core view reproduces HEAD byte for
+  // byte for every seed. CORE = the core view of the live stations (reserve on): 1234 keeps HEAD (its skeleton left no bed end
+  // open: the reserve kept nothing). LIVE (was {...HEAD, 42:rifle 8aa759c8, 42:pistol 28d8c06f}) = the live stations.
+  const CORE: Record<string, string> = {
+    '1:rifle': '2b009238', '1:pistol': 'caf6ec41', '7:rifle': 'f7bce5d9', '7:pistol': 'dd675be3',
+    '42:rifle': '811b8141', '42:pistol': '7434701e', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
+  };
+  const LIVE: Record<string, string> = {
+    '1:rifle': 'c427820b', '1:pistol': '5ecb0be6', '7:rifle': '97780ab3', '7:pistol': '97757449',
+    '42:rifle': '8f75cf60', '42:pistol': '67c40d1a', '1234:rifle': '2f49e529', '1234:pistol': '7597a315',
+  };
+  it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;
+    const core: Record<string, string> = {}, live: Record<string, string> = {};
     for (const [key, fp] of Object.entries(HEAD)) {
       const [seed, sw] = key.split(':');
       const l = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol'});
+      const off = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol', trackExtensions: TRACK_EXT_RESERVE_OFF});
       // lane AMMO (knife-melee-20261030): the ammo item ids became caliber ids (ammo_rifle -> ammo_556, ...); with the old names
       // mapped back, the generated station must still be byte-identical (floor boxes / weapon-find companions are unchanged)
       // Task track1-siren-blightbelly-20261031 (lane SPAWN): the new families REPLACE zombie slots (same roll, rat/dogs identical);
@@ -479,14 +494,15 @@ describe('the Subway is unchanged', () => {
         zombies: q.zombies.map(z => (z.archetype === 'blightbelly' || z.archetype === 'siren' ? (replaced++, {...z, archetype: 'zombie' as const}) : z)),
         pickups: q.pickups.map(p => ({...p, itemId: LEGACY_NAME[p.itemId] ?? p.itemId})),
       });
-      expect(fingerprint(legacy(coreView(l))), `${key} core`).toBe(fp);
-      const live = fingerprint(legacy(l));
-      if (live !== LIVE[key]) process.stdout.write(`[office-gen] LIVE ${key}: ${live}\n`);
-      expect(live, key).toBe(LIVE[key]);
+      expect(fingerprint(legacy(coreView(off))), `${key} core (reserve off)`).toBe(fp);
+      core[key] = fingerprint(legacy(coreView(l)));
+      live[key] = fingerprint(legacy(l));
       expect(l.office).toBeUndefined();
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
       expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);
     }
     expect(replaced, 'the corpus exercises the family mapping').toBeGreaterThan(0);
+    expect(core).toEqual(CORE);
+    expect(live).toEqual(LIVE);
   });
 });

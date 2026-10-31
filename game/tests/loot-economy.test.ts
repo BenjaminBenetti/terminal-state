@@ -18,6 +18,8 @@ import {ITEMS} from '../src/items/items';
 import {canonicalItemId} from '../src/items/calibers';
 import {openableActive} from '../src/world/openablesSpec';
 import {ECONOMY_CORPUS, corpusTotals, generateCorpus, nonAmmo, stationEconomy, type EconTotals} from './helpers/lootEconomy';
+import {coreView} from '../src/gen/trackExt/index';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
 /**
  * d632ce8 (iteration 11) census of the same 18-station corpus (tests/helpers/lootEconomy.ts, run on `git archive d632ce8` with
@@ -56,6 +58,14 @@ let corpus: StationLayout[] | null = null;
 const CORPUS = () => (corpus ??= generateCorpus());
 let totals: EconTotals | null = null;
 const TOTALS = () => (totals ??= corpusTotals(CORPUS()));
+/**
+ * Track 2 lane GEN-2 — CAUSE "core reserve enabled (authorized incidence change)": the Subway's core reserve re-lays the corpus
+ * stations (a layout change: the seeded weapon-copy draws and floor programs run on other rooms / rng positions). The EXACT
+ * d632ce8 equalities (weapon finds, loose floor ammo) are proven on the same corpus generated with the reserve OFF (core views:
+ * main's stations); the live corpus keeps the same rules within one station's draw.
+ */
+let totalsOff: EconTotals | null = null;
+const TOTALS_OFF = () => (totalsOff ??= corpusTotals(generateCorpus(TRACK_EXT_RESERVE_OFF).map(l => coreView(l))));
 const ratio = (now: number, base: number) => now / base;
 
 describe('scarce resources over the fixed corpus (vs d632ce8)', () => {
@@ -84,10 +94,15 @@ describe('scarce resources over the fixed corpus (vs d632ce8)', () => {
     const items = TOTALS().items;
     for (const id of ['ammo_rifle', 'ammo_shells', 'ammo_pistol'] as const) expect(ratio(items[canonicalItemId(id)] ?? 0, BASELINE.items[id]), id).toBeGreaterThan(0.75);
     expect(ratio(items.ammo_9mm ?? 0, BASELINE.items.ammo_pistol), 'more 9mm (holders too)').toBeGreaterThan(1.5);
-    expect(u.weapon).toBe(BASELINE.units.weapon);
+    // (GEN-2: exact on the reserve-off corpus = main's stations; the re-laid live corpus within one station's copy draw: <= 2 per
+    // weapon, each with its matching box)
+    expect(TOTALS_OFF().units.weapon).toBe(BASELINE.units.weapon);
+    expect(Math.abs(u.weapon - BASELINE.units.weapon)).toBeLessThanOrEqual(2);
     expect(u.other).toBe(0);
     // loose floor ammo boxes are untouched; loose meds thin like the rest
-    expect(TOTALS().bySource.pickup.ammo).toBe(BASELINE.bySource.pickup.ammo);
+    expect(TOTALS_OFF().bySource.pickup.ammo).toBe(BASELINE.bySource.pickup.ammo);
+    expect(ratio(TOTALS().bySource.pickup.ammo, BASELINE.bySource.pickup.ammo)).toBeGreaterThan(0.95);
+    expect(ratio(TOTALS().bySource.pickup.ammo, BASELINE.bySource.pickup.ammo)).toBeLessThan(1.05);
     expect(ratio(TOTALS().bySource.pickup.med, BASELINE.bySource.pickup.med)).toBeLessThan(0.4);
   });
 

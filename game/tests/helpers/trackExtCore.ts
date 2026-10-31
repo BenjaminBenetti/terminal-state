@@ -5,6 +5,7 @@
 // level.
 import type {Grid} from '../../src/gen/grid';
 import type {StationLayout} from '../../src/gen/stationTypes';
+import {TRACK_EXT, type TrackExtConfig} from '../../src/gen/trackExt/index';
 
 const round = (v: number) => (Number.isFinite(v) ? Math.round(v * 1e6) / 1e6 : v);
 
@@ -65,3 +66,10 @@ export function canonDiff(a: Record<string, unknown>, b: Record<string, unknown>
   }
   return out;
 }
+
+/**
+ * GEN-2: the Subway's track-extension config with the CORE RESERVE OFF (coreReserveM 0) — everything else (planner, hatches) as
+ * the live TRACK_EXT. The reserve is the only core-changing knob: generated with this, coreView(layout) must reproduce the
+ * pre-reserve (main) pins byte for byte — the reserve-off proof of every Subway golden.
+ */
+export const TRACK_EXT_RESERVE_OFF: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0};

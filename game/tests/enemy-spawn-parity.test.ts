@@ -38,6 +38,21 @@
 //     reproduce the stage-3 pins (SUBWAY_GOLDEN / OFFICE_GOLDEN, SUBWAY_INVARIANT / OFFICE_INVARIANT) byte for byte. The live
 //     layouts are pinned as SUBWAY_GOLDEN_TRACK2 (only the translated seeds differ: see the helper) and OFFICE_GOLDEN (the
 //     Office never translates: it grows east / south — unchanged).
+//  5. Track 2 lane GEN-2, SUBWAY ONLY — CAUSE: "core reserve enabled (authorized incidence change)". The user wants service
+//     annexes on basically every level with tracks; the primary authorized the Subway's TRACK_EXT.coreReserveM = 40: right
+//     after the archetype skeleton, 40 m of rock stay free past every bed end that is still open (gen/trackExt/index.ts
+//     reserveTunnelRoom, Kit.keepRock), so the station's later growth (exits, washrooms, storefronts, back-of-house) plans around
+//     it. That is a LAYOUT change of the core station (rooms move, later rng draws follow the changed layout), not a family /
+//     profile / spawn-code change: ai/spawnTables.ts, the family pools and every spawn pass are untouched, and every station
+//     count stays in [22, 32]. EVIDENCE, every run: (i) generated with the reserve OFF ({...TRACK_EXT, coreReserveM: 0}, the
+//     GEN-2 planner and hatches otherwise live), the core view still reproduces the stage-3 pins AND invariants byte for byte
+//     (SUBWAY_GOLDEN / SUBWAY_INVARIANT): the extensions never touch the core; (ii) with the reserve ON the core view is pinned
+//     as SUBWAY_GOLDEN_RESERVE + SUBWAY_INVARIANT_RESERVE (the new core layouts). The masked spec hash moved with the layout in
+//     12 of 14 entries; 1234 (rifle / pistol: two bed-hatch annexes, no bed end left open by its skeleton, so the reserve kept
+//     nothing) keeps every stage-3 value; EVERY rat/dog index list is identical to stage 3 (no family draw moved); station
+//     counts: 42 L0 24 -> 23 / L2 4 -> 5, 48596 32 -> 31 (L0 25 -> 23, L1 2 -> 3), the rest unchanged. The live layouts
+//     (+ extensions, translated cores) are re-pinned as SUBWAY_GOLDEN_TRACK2. Every Office pin is unchanged (the Office keeps
+//     TRACK_EXT_OFFICE: no reserve, the original planner).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -46,8 +61,15 @@ import {
   OFFICE_GOLDEN, OFFICE_INVARIANT, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_GOLDEN_TRACK2, SUBWAY_INVARIANT, SUBWAY_PARITY, contextCounts,
   familyIndices, maskedSpawnSpecHash, officeKey, pickupHash, spawnSpecHash, subwayKey,
 } from './helpers/enemySpawnParity'; // the pinned hashes live in the helper (shared with enemy-spawn-tables.test.ts)
+import {SUBWAY_GOLDEN_RESERVE, SUBWAY_INVARIANT_RESERVE} from './helpers/enemySpawnParity';
 import {coreView} from '../src/gen/trackExt/index';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 import type {StationLayout} from '../src/gen/stationTypes';
+import type {TrackExtConfig} from '../src/gen/trackExt/types';
+
+/** A Subway parity layout: the live config (reserve on), or `cfg` (the reserve-off proof). */
+const subwayAt = (c: (typeof SUBWAY_PARITY)[number], cfg?: TrackExtConfig) =>
+  generateStation(c.seed, {startWeapon: c.startWeapon, ...(c.archetype ? {archetype: c.archetype} : {}), ...(cfg ? {trackExtensions: cfg} : {})});
 
 const triple = (l: StationLayout): [string, string, string] => [spawnSpecHash(l), pickupHash(l), contextCounts(l)];
 
@@ -62,10 +84,15 @@ describe('enemy spawn INVARIANTS across the task-track1 family change (pinned fr
   };
   it('Subway: positions / count / order / types / areas / levels, rat/dog draws and pickups identical; only zombie slots changed family', () => {
     for (const c of SUBWAY_PARITY) {
-      const l = generateStation(c.seed, {startWeapon: c.startWeapon, ...(c.archetype ? {archetype: c.archetype} : {})});
-      const key = subwayKey(c), core = coreView(l); // stage 4: the translation-normalised core view
-      check(core, SUBWAY_INVARIANT[key], key);
-      expect([pickupHash(core), contextCounts(core)], key).toEqual(SUBWAY_GOLDEN[key].slice(1));
+      // stage 5 proof: the core RESERVE OFF reproduces the stage-3 invariants (stage 4: the translation-normalised core view)
+      const key = subwayKey(c), off = coreView(subwayAt(c, TRACK_EXT_RESERVE_OFF));
+      check(off, SUBWAY_INVARIANT[key], key);
+      expect([pickupHash(off), contextCounts(off)], key).toEqual(SUBWAY_GOLDEN[key].slice(1));
+      // stage 5 (core reserve on: a layout change): the new core's invariants; the same family rules, counts in [22, 32]
+      const l = subwayAt(c), core = coreView(l);
+      check(core, SUBWAY_INVARIANT_RESERVE[key], `${key} (reserve)`);
+      expect(core.zombies.length, key).toBeGreaterThanOrEqual(22);
+      expect(core.zombies.length, key).toBeLessThanOrEqual(32);
       expect(familyIndices(l, 'siren'), `${key}: no Siren in the Subway (core + extensions)`).toEqual([]);
     }
   });
@@ -80,16 +107,19 @@ describe('enemy spawn INVARIANTS across the task-track1 family change (pinned fr
 });
 
 describe('enemy spawn parity (full specs incl. family: pin stage 3, task track1)', () => {
-  it('Subway: spawn specs + downstream pickups byte-identical (the core view = stage 3; the live layouts = stage 4)', () => {
-    const core: Record<string, [string, string, string]> = {}, live: Record<string, [string, string, string]> = {};
+  it('Subway: spawn specs + downstream pickups byte-identical (reserve-off core view = stage 3; reserve-on core = stage 5; live = stage 5)', () => {
+    const off: Record<string, [string, string, string]> = {}, core: Record<string, [string, string, string]> = {}, live: Record<string, [string, string, string]> = {};
     for (const c of SUBWAY_PARITY) {
-      const l = generateStation(c.seed, {startWeapon: c.startWeapon, ...(c.archetype ? {archetype: c.archetype} : {})});
+      off[subwayKey(c)] = triple(coreView(subwayAt(c, TRACK_EXT_RESERVE_OFF)));
+      const l = subwayAt(c);
       core[subwayKey(c)] = triple(coreView(l));
       live[subwayKey(c)] = triple(l);
     }
-    if (JSON.stringify(core) !== JSON.stringify(SUBWAY_GOLDEN)) console.info(`[enemy-spawn-parity] subway core ${JSON.stringify(core, null, 1)}`);
+    if (JSON.stringify(off) !== JSON.stringify(SUBWAY_GOLDEN)) console.info(`[enemy-spawn-parity] subway reserve-off core ${JSON.stringify(off, null, 1)}`);
+    if (JSON.stringify(core) !== JSON.stringify(SUBWAY_GOLDEN_RESERVE)) console.info(`[enemy-spawn-parity] subway core ${JSON.stringify(core, null, 1)}`);
     if (JSON.stringify(live) !== JSON.stringify(SUBWAY_GOLDEN_TRACK2)) console.info(`[enemy-spawn-parity] subway live ${JSON.stringify(live, null, 1)}`);
-    expect(core).toEqual(SUBWAY_GOLDEN);
+    expect(off).toEqual(SUBWAY_GOLDEN);
+    expect(core).toEqual(SUBWAY_GOLDEN_RESERVE);
     expect(live).toEqual(SUBWAY_GOLDEN_TRACK2);
   });
 

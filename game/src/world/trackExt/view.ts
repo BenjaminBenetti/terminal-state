@@ -8,10 +8,15 @@
 //   such a cell outside the shell wall (a door passage on a bend) is drawn by the shell, clipped at the wall line.
 // - The black end plane and the hazard barricade of a bed end are suppressed only where a tunnel continues it
 //   (`continued`), and the default steel frame of a tunnel entry door is replaced by the shell's door frame.
+// - (GEN-2) Service hatches (ServiceAnnex.bed: an annex entered through a door in a track bed's side wall near an end no
+//   tunnel continues) change none of that: the grid builds the bed wall with the opening and its lintel, the builder's default
+//   steel frame frames the door, the end plane and barricade stay. The view only carries them (`hatches`, with a straight
+//   bed-frame TunnelFrame) for the SERVICE plate and the bed-wall graffiti (world/trackExt/hatch.ts); a level with hatches but
+//   no tunnel gets a view too (no tunnel: every grid rule above is a no-op).
 
 import {CELL, FLOOR, VOID, type Grid} from '../../gen/grid';
 import type {Area, StationLayout, Trench} from '../../gen/station';
-import type {TrackExtensions, TrackTunnel} from '../../gen/trackExt/types';
+import type {BedEntry, ServiceAnnex, TrackExtensions, TrackTunnel} from '../../gen/trackExt/types';
 import type {BuiltFace} from '../levelGeometry';
 import {TunnelFrame} from './frame';
 
@@ -41,11 +46,30 @@ export interface TunnelView {
   trench: Trench;
 }
 
+/**
+ * (GEN-2) A service hatch: its annex, bed entry, bed and the BED FRAME (BedEntry: a straight path from the end face along the bed
+ * centreline into the station, width = the bed's; leftSign +1) the entry's s / side / clues are written in.
+ */
+export interface HatchView {
+  annex: ServiceAnnex;
+  b: BedEntry;
+  trench: Trench;
+  f: TunnelFrame;
+}
+
+/** The bed frame of a hatch (see HatchView). Id 1000 + annex id (only used to seed / label). */
+export function bedFrame(b: Pick<BedEntry, 'from'>, trench: Trench, annexId: number): TunnelFrame {
+  const face = b.from === 'x1' ? trench.x1 : trench.x0, dir = b.from === 'x1' ? -1 : 1, cz = (trench.z0 + trench.z1) / 2;
+  return new TunnelFrame({id: 1000 + annexId, width: trench.z1 - trench.z0, path: [{x: face, z: cz}, {x: face + dir * (trench.x1 - trench.x0), z: cz}]}, 1);
+}
+
 /** Cell modes: 0 the builder draws it as usual; 1 the shell owns the cell (centre inside a corridor); 2 the cell straddles a shell wall. */
 export const CELL_BUILDER = 0, CELL_SHELL = 1, CELL_STRADDLE = 2;
 
 export class TrackExtView {
   readonly tunnels: TunnelView[];
+  /** (GEN-2) Service hatches in the bed walls (their plates and graffiti). */
+  readonly hatches: HatchView[];
   /** endKey(trench, from) of every bed end a tunnel continues. */
   readonly continued: Set<string>;
   /** layout.doors indices of tunnel entry doors (their frame is the shell's). */
@@ -63,6 +87,10 @@ export class TrackExtView {
       const sign = resolveLeftSign(t, layout, trench, this.notes);
       return {t, f: new TunnelFrame(t, sign), trench};
     });
+    this.hatches = ext.annexes.flatMap(annex => {
+      const b = annex.bed, trench = b ? layout.trenches[b.trench] : undefined;
+      return b && trench ? [{annex, b, trench, f: bedFrame(b, trench, annex.id)}] : [];
+    });
     this.continued = new Set(ext.tunnels.map(t => endKey(t.trench, t.from)));
     this.doorIds = new Set(ext.tunnels.flatMap(t => t.doors.map(d => d.door)));
     const g = layout.grid;
@@ -71,10 +99,10 @@ export class TrackExtView {
     this.tunnels.forEach((v, k) => markCells(g, v.f, k, this.mode, this.owner));
   }
 
-  /** View of a layout's extensions, or null when it has none (the builder then runs exactly as before). */
+  /** View of a layout's extensions, or null when it has neither a tunnel nor a service hatch (the builder then runs exactly as before). */
   static of(layout: StationLayout): TrackExtView | null {
     const e = extensionsOf(layout);
-    return e && e.tunnels.length ? new TrackExtView(layout, e) : null;
+    return e && (e.tunnels.length || e.annexes.some(a => a.bed)) ? new TrackExtView(layout, e) : null;
   }
 
   /** The shell owns this cell's floor and ceiling (level index 0 = the main grid the beds are carved in). */
