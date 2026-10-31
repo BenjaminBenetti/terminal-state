@@ -43,7 +43,7 @@ function parseArgs(argv) {
     if (k === '--glb') a.glb = v(); else if (k === '--out') a.out = v(); else if (k === '--role') a.role = v();
     else if (k === '--baseline') a.baseline = v(); else if (k === '--only') a.only = new Set(v().split(','));
     else if (k === '--meta') a.meta = v(); else if (k === '--ss') a.ss = +v(); else if (k === '--zombie') a.zombie = v();
-    else if (k === '--worst') a.worst = v(); else if (k === '--quick') a.quick = true; else if (k === '--clips') a.clips = v().split(','); else if (k === '--worst-point') a.worstPoint = v().split(',').map(Number);
+    else if (k === '--worst') a.worst = v(); else if (k === '--quick') a.quick = true; else if (k === '--clips') a.clips = v().split(','); else if (k === '--worst-point') a.worstPoints = v().split(';').map(q => { const f = q.split(','); return {p: f.slice(0, 3).map(Number), label: f.slice(3).join(',') || 'worst region'}; });
     else throw new Error('unknown argument ' + k);
   }
   if (!a.glb || !a.out) throw new Error('usage: --glb <siren.glb> --out <dir> [--role candidate|baseline] [--baseline <glb>] [--only sets]');
@@ -112,7 +112,7 @@ function apexTags(S, P, cam) {
     if (facing > 0.2 || (sideFacing > 0.5 && facing > -0.3)) tags.push({world: ap, text: `wearer's ${name} breast`, color: col});
     else if (facing < -0.2) { const sh = P.joint(side === 'right' ? 'R_UpperArm' : 'L_UpperArm'); if (sh) tags.push({world: [sh[0], sh[1] + 0.06, sh[2]], text: `wearer's ${name} shoulder`, color: col}); }
   }
-  if (tags.length === 2) { tags[0].dy = -9; tags[1].dy = 9; }
+  if (tags.length === 2) { tags[0].dy = -11; tags[1].dy = 11; }
   return tags;
 }
 function projLabel(cam, short = false) {
@@ -447,26 +447,29 @@ async function worstSet(a, S, meta) {
   const [clip, ts, region = 'reported region'] = a.worst.split(':');
   const t = +ts;
   const P = pose(S, clip, t);
+  const pts = a.worstPoints ?? [];
+  const COL = ['#ff4d4d', '#ffd84d', '#c58cff'];
+  const ptTags = pts.map((q, k) => ({world: q.p, text: `${k + 1}: ${q.label}`, color: COL[k % COL.length]}));
   const panels = [];
   const ctr = P.bounds.max.map((v, i) => (v + P.bounds.min[i]) / 2);
-  for (const az of a.worstPoint ? [-35, 145, 0, 180] : [-35, 145, 0, 180]) {
-    const cam = bodyCam(S, {azDeg: az, elDeg: 10, target: ctr, height: Math.max(1.0, P.bounds.max[1] - Math.max(-0.1, P.bounds.min[1]) + 0.3), w: 400, h: 520});
-    const pnl = await renderPanel(S, P, cam, {title: `az ${az}° (${VIEW_NAMES[az] ?? (az === -35 ? 'front-right 3/4' : 'back-left 3/4')})`, lines: [`${clip} @ ${t} s`], ss: a.ss});
-    if (a.worstPoint) pnl.tags = [...pnl.tags, {world: a.worstPoint, text: 'worst region', color: '#ff4d4d'}];
+  const W = 400, H = 520;
+  for (const az of [-35, 145, 0, 180]) {
+    const cam = bodyCam(S, {azDeg: az, elDeg: 10, target: ctr, height: Math.max(1.0, P.bounds.max[1] - Math.max(-0.1, P.bounds.min[1]) + 0.3), w: W, h: H});
+    const pnl = await renderPanel(S, P, cam, {title: `az ${az}° (${VIEW_NAMES[az] ?? (az === -35 ? 'front-right 3/4' : 'back-left 3/4')})`, lines: [`${clip} @ ${t} s · orthographic, el 10°`], ss: a.ss, tags: false});
+    pnl.tags = ptTags.map((tg, k) => ({...tg, text: `${k + 1}`, dy: 0}));
     panels.push(pnl);
   }
-  if (a.worstPoint) {
-    const p = a.worstPoint, hp = P.joint('Hips') ?? ctr;
-    const dl = (p[0] - hp[0]) * S.anat.left[0] + (p[2] - hp[2]) * S.anat.left[2], df = (p[0] - hp[0]) * S.anat.front[0] + (p[2] - hp[2]) * S.anat.front[2];
-    const az0 = Math.round(Math.atan2(dl, df) * 180 / Math.PI);
-    for (const az of [az0, az0 + 45]) {
-      const cam = bodyCam(S, {azDeg: az, elDeg: 10, target: p, height: 0.5, w: 400, h: 520});
-      const pnl = await renderPanel(S, P, cam, {title: `close-up, az ${az}° (facing the region)`, lines: [`${clip} @ ${t} s · orthographic 0.5 m window`], ss: a.ss, tags: false});
-      pnl.tags = [{world: p, text: 'worst region', color: '#ff4d4d'}];
-      panels.push(pnl);
-    }
+  const hp = P.joint('Hips') ?? ctr;
+  for (const [k, q] of pts.entries()) {
+    const dl = (q.p[0] - hp[0]) * S.anat.left[0] + (q.p[2] - hp[2]) * S.anat.left[2], df = (q.p[0] - hp[0]) * S.anat.front[0] + (q.p[2] - hp[2]) * S.anat.front[2];
+    const az = Math.round(Math.atan2(dl, df) * 180 / Math.PI);
+    const cam = bodyCam(S, {azDeg: az, elDeg: 10, target: q.p, height: 0.45, w: W, h: H});
+    const pnl = await renderPanel(S, P, cam, {title: `close-up ${k + 1}: ${q.label}`, lines: [`az ${az}° (facing the point), orthographic 0.45 m window`], ss: a.ss, tags: false});
+    pnl.tags = [{...ptTags[k], text: `${k + 1}`}];
+    panels.push(pnl);
   }
-  await save(await compose(panels, {cols: a.worstPoint ? 3 : 4, title: `${S.label} — worst remaining frame reported by lane FIT: ${clip} @ ${t} s — ${region}`, subtitle: `orthographic, elevation 10° · ${BELOW}`}), a.out, 'worst-frame.jpg', meta, {view: '4 views', clip, timeS: t, region, light: STUDIO, source: 'lane FIT fit-checks.json'});
+  await save(await compose(panels, {cols: 4, title: `${S.label} — worst remaining frame (lane FIT's metric): ${clip} @ ${t} s — ${region}`, subtitle: `numbered markers = deepest dress-inside-skin points of this frame by dress region (garment-metrics.mjs) · ${BELOW}`}), a.out, 'worst-frame.jpg', meta,
+    {view: '4 body-relative views + one close-up per point', clip, timeS: t, region, points: pts, light: STUDIO, source: "lane FIT's garment metric (tools/asset-pipeline/enemy/lib/garment-metrics.mjs measureFrame) evaluated on this asset"});
 }
 
 // ------------------------------------------------------------------------------------------------------------------- main

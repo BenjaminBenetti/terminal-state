@@ -182,7 +182,7 @@ function quantiles(arr, qs) { if (!arr.length) return qs.map(() => null); const 
 export function prepareFit(R, {dressNative}) {
   const body = R.meshes.find(m => m.name === 'SirenBody'), dress = R.meshes.find(m => m.name === 'SirenDress');
   if (!body || !dress) throw new Error('expected SirenBody + SirenDress');
-  if (dress.pos.length !== dressNative.length) throw new Error('dress vertex count differs from the source (topology changed)');
+  if (dressNative && dress.pos.length !== dressNative.length) throw new Error('dress vertex count differs from the source (topology changed)');
   const W0 = jointWorld(R, null);
   const bind = skinMesh(body, W0, true);
   const sk = skinMask(bind.pos, body.idx);
@@ -198,7 +198,9 @@ export function prepareFit(R, {dressNative}) {
   const facing = bodyFacing(bind.pos, hair, joints);
   const groups = vertexGroups(body, R.names);
   const breasts = breastSets(bind.pos, bodyN, hair, facing);
-  const regions = dressRegions(dressNative, dress.idx);
+  // regions need the source dress (native frame); without it (e.g. CI, no uploads) every vertex is 'skirt' — penetration totals,
+  // coverage, skin-through and floor stay valid, per-region / floating statistics do not
+  const regions = dressNative ? dressRegions(dressNative, dress.idx) : {region: new Uint8Array(dress.pos.length / 3).fill(5), edge: new Uint8Array(dress.pos.length / 3), names: DRESS_REGIONS, noSourceRegions: true};
   // skin covered by the dress in the bind pose (outward normal ray meets the dress within coverDist): torso / leg welded skin only
   const bindDress = skinMesh(dress, W0);
   const dg = new TriGrid(bindDress, dress.idx, 0.03), seenW = new Set(), coveredBind = [];
@@ -207,7 +209,7 @@ export function prepareFit(R, {dressNative}) {
     const nx = bodyN[i * 3], ny = bodyN[i * 3 + 1], nz = bodyN[i * 3 + 2];
     if (dg.ray(bind.pos[i * 3] + nx * 0.0015, bind.pos[i * 3 + 1] + ny * 0.0015, bind.pos[i * 3 + 2] + nz * 0.0015, nx, ny, nz, 0.08)) coveredBind.push(i);
   }
-  const dressIds = uniqueIds(dressNative);
+  const dressIds = uniqueIds(dressNative ?? dress.pos);
   return {R, body, dress, bodyRemap, hair, skinMaskInfo: {skinVertices: sk.skinVertices, windingFlipped: sk.flipped}, groups, facing, breasts, joints, nonHairIdx: skinIdx, regions, dressIds, coveredBind: Uint32Array.from(coveredBind), normalSign: sk.flipped ? -1 : 1};
 }
 

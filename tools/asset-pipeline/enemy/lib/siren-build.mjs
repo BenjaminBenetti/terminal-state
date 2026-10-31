@@ -4,8 +4,11 @@
 //      the origin, soles on y = 0) -> M_body; nothing is baked into the vertices;
 //   2. analysis copies (game space): dense surface samples, welded mesh, hair mask (base-colour luminance, analysis only);
 //   3. skeleton: lib/tpose-skeleton.mjs (shared 18-joint names / hierarchy);
-//   4. body weights (shared zombie skinning + hair post-pass), dress fit (lib/dress-fit.mjs: uniform scale + translation only)
-//      and dress weights (shared closest-point transfer);
+//   4. body weights (shared zombie skinning + hair post-pass); the dress:
+//      - cfg.dressMode 'refit' (the Siren since task siren-clothing-refit-20261031, user-authorised GARMENT-ONLY refit):
+//        lib/garment-refit.mjs re-derives the dress POSITION / NORMAL on the unchanged bind body (vertex count, indices, UVs,
+//        material, textures kept) and lib/garment-skin.mjs gives it skin-anchored weights; the body path is untouched;
+//      - 'uniform' (Track1 / the procedural stand-in): lib/dress-fit.mjs uniform scale + translation, shared closest-point weights;
 //   5. clips (lib/siren-clips.mjs) with floor solves (dormant knees / claws, prone death) and a per-frame floor guard;
 //   6. assembly (lib/siren-glb.mjs) + proofs (lib/proof.mjs).
 import {readSource, singlePrimitive, similarityMatrix, transformPositions, transformNormals, similarityScale, fingerprint} from './native-glb.mjs';
@@ -13,6 +16,9 @@ import {surfaceSamples, vertexLuminance, sampleAttribute} from './surface.mjs';
 import {estimateSkeleton} from './tpose-skeleton.mjs';
 import {weld, bodyWeights, dressWeights, spread, weightStats} from './siren-skin.mjs';
 import {fitDress, pokeThrough} from './dress-fit.mjs';
+import {refitDress} from './garment-refit.mjs';
+import {garmentWeights} from './garment-skin.mjs';
+import {skinMask, vertexGroups} from './garment-metrics.mjs';
 import {SIREN_CLIPS, RUN_GAIT, sampleClip, poseAtFrame, dormantPose, evalClip} from './siren-clips.mjs';
 import {assembleDocument} from './siren-glb.mjs';
 import {detectFacing, bodyProfile} from '../../zombie/lib/autorig.mjs';
@@ -22,6 +28,7 @@ import {Rig, V} from '../../zombie/lib/pose.mjs';
 import {realize} from '../../zombie/lib/clips.mjs';
 import {JOINT_NAMES} from '../../zombie/lib/skin.mjs';
 
+const isIdentityMatrix = m => m.every((v, i) => Math.abs(v - (i % 5 === 0 ? 1 : 0)) < 1e-12);
 const r4 = v => Array.isArray(v) ? v.map(x => +(+x).toFixed(4)) : +(+v).toFixed(4);
 const GROUP = {head: ['Head', 'Neck'], torso: ['Chest', 'Spine'], pelvis: ['Hips'], armL: ['L_UpperArm', 'L_Forearm'], armR: ['R_UpperArm', 'R_Forearm'], handL: ['L_Hand'], handR: ['R_Hand'], legL: ['L_Thigh', 'L_Shin', 'L_Foot'], legR: ['R_Thigh', 'R_Shin', 'R_Foot']};
 const groupOf = Object.fromEntries(Object.entries(GROUP).flatMap(([g, js]) => js.map(j => [JOINT_NAMES.indexOf(j), g])));
@@ -155,7 +162,21 @@ export async function buildSiren(cfg, log = () => {}) {
 
   // ---- dress ----
   let dress = null;
-  if (cfg.dress) {
+  if (cfg.dress && cfg.dressMode === 'refit') {
+    log('[4] dress REFIT (garment-only) + weights');
+    const dressSrc = await readSource(cfg.dress.file, cfg.dress.sha256);
+    const dp = singlePrimitive(dressSrc.doc, 'dress');
+    if (!isIdentityMatrix(dp.world)) throw new Error('dress refit expects the source node at identity (native frame)');
+    const didx = dp.prim.getIndices()?.getArray(); if (!didx) throw new Error('dress: non-indexed primitive (unsupported)');
+    const src = {pos: dp.prim.getAttribute('POSITION').getArray(), nrm: dp.prim.getAttribute('NORMAL').getArray(), idx: didx};
+    const sk = skinMask(P, native.idx);
+    const groups = vertexGroups({pos: P, ...bodyNative}, JOINT_NAMES);
+    const fit = refitDress(src, {pos: P, idx: native.idx, skin: sk.skin, groups, shoulderX: Math.abs(skel.joints.R_UpperArm[0])}, log);
+    const gw = garmentWeights({pos: fit.pos, idx: didx, region: fit.region}, {pos: P, idx: native.idx, skin: sk.skin, groups, joints: bodyNative.joints, weights: bodyNative.weights, jointPos: skel.joints}, JOINT_NAMES);
+    const I4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    dress = {mode: 'refit', src: dressSrc, fp: fingerprint(dressSrc.doc), prim: dp.prim, M: I4, refit: {pos: fit.pos, nrm: fit.nrm, region: fit.region, report: fit.report, skin: sk.skin, skinMask: {skinVertices: sk.skinVertices, windingFlipped: sk.flipped}},
+      fit: {mode: 'refit', report: fit.report}, pos: fit.pos, idx: didx, weights: gw, weightReport: gw.stats, native: {joints: gw.joints, weights: gw.weights}, mesh: {pos: fit.pos, joints: gw.joints, weights: gw.weights}};
+  } else if (cfg.dress) {
     log('[4] dress fit (uniform) + weights');
     const dressSrc = await readSource(cfg.dress.file, cfg.dress.sha256);
     const dp = singlePrimitive(dressSrc.doc, 'dress');
@@ -171,7 +192,7 @@ export async function buildSiren(cfg, log = () => {}) {
     const dw = await weld(DP, DN, didx);
     const tw = dressWeights(dw.welded, welded, sw, skel, cfg.dressSkin ?? {});
     const {flags, ...fitReport} = fit.report; void flags;
-    dress = {src: dressSrc, fp: fingerprint(dressSrc.doc), prim: dp.prim, M: Md, fit: {s: fit.s, t: fit.t, evaluations: fit.evaluations, init: fit.init, report: fitReport, initReport: (({flags: _f, ...r}) => r)(fit.initReport), weights: fit.weights, bands: fit.bands},
+    dress = {mode: 'uniform', src: dressSrc, fp: fingerprint(dressSrc.doc), prim: dp.prim, M: Md, fit: {s: fit.s, t: fit.t, evaluations: fit.evaluations, init: fit.init, report: fitReport, initReport: (({flags: _f, ...r}) => r)(fit.initReport), weights: fit.weights, bands: fit.bands},
       pos: DP, idx: didx, welded: dw.welded, map: dw.map, weights: tw, native: spread(dw.map, tw), mesh: {pos: dw.welded.pos, joints: tw.joints, weights: tw.weights}};
   }
 
@@ -221,16 +242,18 @@ export async function buildSiren(cfg, log = () => {}) {
       note: 'Root on the floor at the spawn point; Dormant frame 0 rests the knees / shins / claws on y = 0 (floor solve), the skirt pools below the floor line by up to dressMaxSinkBelowFloorM (skinning only).'},
     bindBoundsM: bb([P, dress?.pos]), clipBoundsM: {min: r4(allBox.min), max: r4(allBox.max)}, cullSphere: {center: r4(cc), radius: r4(cr)},
     modelSpace: '+Z forward, +Y up, +X = character left, metres; feet / Root at the origin',
-    note: 'User-supplied Siren (Pale Apparition body + Ghost Dress), appearance-locked: native vertices / UVs / normals / materials / textures unchanged; technical rig, uniform fit and procedural clips only.',
+    note: dress?.mode === 'refit'
+      ? 'User-supplied Siren (Pale Apparition body + Ghost Dress). Body appearance-locked (native vertices / UVs / normals / materials / textures unchanged); the dress is the user-authorised garment-only refit (POSITION / NORMAL / weights re-derived; UVs / indices / material / textures unchanged); technical rig and procedural clips.'
+      : 'User-supplied Siren (Pale Apparition body + Ghost Dress), appearance-locked: native vertices / UVs / normals / materials / textures unchanged; technical rig, uniform fit and procedural clips only.',
   };
   return {cfg, bodySrc, bodyFp, bp, place, native, P, N, welded, map, hairV, hairW, samples: S, hairS, skel, sw, bodyNative, bodyMesh, dress, rig, clips, ctx, dormant, death, guarded, verify, radii, extras, keyGround: groundLog,
-    stats: {seconds: +((Date.now() - t0) / 1000).toFixed(1), bodyWeights: weightStats(bodyNative), dressWeights: dress ? weightStats(dress.native) : null, weldedBodyVertices: welded.pos.length / 3, weldedDressVertices: dress ? dress.welded.pos.length / 3 : null,
-      pokeThroughBind: dress ? (({flags: _f, ...r}) => r)(pokeThrough({pos: P, nrm: N, testIds: [...Array(P.length / 3).keys()].filter(i => !hairV || !hairV[i])}, dress.pos, dress.idx)) : null, runGait: RUN_GAIT}};
+    stats: {seconds: +((Date.now() - t0) / 1000).toFixed(1), bodyWeights: weightStats(bodyNative), dressWeights: dress ? weightStats(dress.native) : null, weldedBodyVertices: welded.pos.length / 3, weldedDressVertices: dress ? (dress.welded ? dress.welded.pos.length / 3 : dress.refit.report.weldedVertices) : null,
+      pokeThroughBind: dress ? (({flags: _f, ...r}) => r)(pokeThrough({pos: P, nrm: N, testIds: [...Array(P.length / 3).keys()].filter(i => (dress.refit ? dress.refit.skin[i] : !hairV || !hairV[i]))}, dress.pos, dress.idx)) : null, runGait: RUN_GAIT}};
 }
 
 /** Assembles the runtime document from a build result. */
 export async function assemble(R, generator) {
   const parts = [{file: R.bodySrc.file, name: 'SirenBody', M: R.place.M, ...R.bodyNative}];
-  if (R.dress) parts.push({file: R.dress.src.file, name: 'SirenDress', M: R.dress.M, ...R.dress.native});
+  if (R.dress) parts.push({file: R.dress.src.file, name: 'SirenDress', M: R.dress.M, ...R.dress.native, ...(R.dress.refit ? {replace: {POSITION: R.dress.refit.pos, NORMAL: R.dress.refit.nrm}} : {})});
   return assembleDocument({parts, skel: R.skel, clips: R.clips, extras: R.extras, generator});
 }

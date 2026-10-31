@@ -312,7 +312,7 @@ export function refitDress(src, body, log = () => {}) {
       const p = [out[i * 3], out[i * 3 + 1], out[i * 3 + 2]];
       const s = skinDistance(F, p, 0.05); if (!s) continue;
       const need = MIN[region[i]];
-      if (s.sd < need) push.set(i, s.n.map(v => v * (need - s.sd)));
+      if (s.sd < need - 2e-4) push.set(i, s.n.map(v => v * (need - s.sd)));
     }
     pushLog.push(push.size);
     if (!push.size || round === REFIT.pushRounds) break;
