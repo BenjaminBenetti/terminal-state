@@ -19,7 +19,7 @@ import {
   spawnContext, spawnProfile, spawnRoomKeys, validateSpawnProfile, type RoomModifiers, type SpawnProfile,
 } from '../src/ai/spawnTables';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
-import {OFFICE_GOLDEN, SUBWAY_GOLDEN, SUBWAY_GOLDEN_RESERVE, SUBWAY_GOLDEN_TRACK2, contextCounts, pickupHash, spawnRecord, spawnSpecHash} from './helpers/enemySpawnParity';
+import {OFFICE_GOLDEN, OFFICE_GOLDEN_TRACK2, SUBWAY_GOLDEN, SUBWAY_GOLDEN_RESERVE, SUBWAY_GOLDEN_TRACK2, contextCounts, pickupHash, spawnRecord, spawnSpecHash} from './helpers/enemySpawnParity';
 import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 import {coreView} from '../src/gen/trackExt/index';
 import {ROOM_LABEL} from '../src/gen/stationKit';
@@ -120,7 +120,9 @@ describe('neutral room modifiers', () => {
       expect([spawnSpecHash(l), pickupHash(l)], `${seed}`).toEqual(SUBWAY_GOLDEN_TRACK2[`${seed}:rifle`].slice(0, 2));
     }
     const o = generateOfficeLevel({levelSeed: 222, startWeapon: 'pistol'}, lootProfile('office'), withRooms(OFFICE, ones));
-    expect([spawnSpecHash(o), pickupHash(o), contextCounts(o)]).toEqual([...OFFICE_GOLDEN['222:pistol']]);
+    // Track 2 (lane CONTENT): an Office with service annexes: the core view = OFFICE_GOLDEN, the live layout = stage 7
+    expect([spawnSpecHash(coreView(o)), pickupHash(coreView(o)), contextCounts(coreView(o))]).toEqual([...OFFICE_GOLDEN['222:pistol']]);
+    expect([spawnSpecHash(o), pickupHash(o), contextCounts(o)]).toEqual([...OFFICE_GOLDEN_TRACK2['222:pistol']]);
   });
 });
 

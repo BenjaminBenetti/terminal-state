@@ -62,12 +62,22 @@
 //     placed at a flagged spot (23 hidden first-aid kits / AED cabinets in 21 layouts; no layout changed without one). Here only
 //     16920 (reserve off) moves: spec 85de6292 -> 5dddd587, masked c76d28e8 (was 2dfe6845); its pickups, context counts and rat/dog
 //     indices are unchanged, and its reserve-on core and live pins are unchanged. Every Office pin is unchanged.
+//  7. Track 2 — Beyond the Station (lane CONTENT): the service annexes (off tunnels and service hatches) are populated
+//     (gen/annexContent.ts, own rng fork `track-ext-content`, after finishExtensions): the profile's new 'service' context (a
+//     per-annex zone budget, 3-5 spawns per annex) APPENDS its spawns after every core spawn (tagged markSpawnContext 'service'; y =
+//     the trackbed floor; assignEnemyArchetypes still runs ONCE after every context — its per-index roll leaves the core's families
+//     unchanged) and the per-annex floor program APPENDS its loose finds after every core pickup. contextCounts reports the service
+//     spawns separately (" + service N"). Cause of the re-pin: ONLY the live layouts of corpus entries that grow an annex —
+//     SUBWAY_GOLDEN_TRACK2 (7, 42, 1234, 16920, 24839, 32758, 40677, 48596; previous values in the helper) and the new
+//     OFFICE_GOLDEN_TRACK2 (222 / 3333 / 4242). Proof, every run: coreView(layout) (now also filtering the extensions' appended
+//     props / lights / signs / pickups / spawns) reproduces SUBWAY_GOLDEN_RESERVE / OFFICE_GOLDEN and the INVARIANT pins byte for
+//     byte, and the reserve-off core view SUBWAY_GOLDEN; no core pin moved.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {
-  OFFICE_GOLDEN, OFFICE_INVARIANT, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_GOLDEN_TRACK2, SUBWAY_INVARIANT, SUBWAY_PARITY, contextCounts,
+  OFFICE_GOLDEN, OFFICE_GOLDEN_TRACK2, OFFICE_INVARIANT, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_GOLDEN_TRACK2, SUBWAY_INVARIANT, SUBWAY_PARITY, contextCounts,
   familyIndices, maskedSpawnSpecHash, officeKey, pickupHash, spawnSpecHash, subwayKey,
 } from './helpers/enemySpawnParity'; // the pinned hashes live in the helper (shared with enemy-spawn-tables.test.ts)
 import {SUBWAY_GOLDEN_RESERVE, SUBWAY_INVARIANT_RESERVE} from './helpers/enemySpawnParity';
@@ -139,8 +149,8 @@ describe('enemy spawn parity (full specs incl. family: pin stage 3, task track1)
       core[officeKey(c)] = triple(coreView(l));
       live[officeKey(c)] = triple(l);
     }
-    if (JSON.stringify(live) !== JSON.stringify(OFFICE_GOLDEN)) console.info(`[enemy-spawn-parity] office ${JSON.stringify(live, null, 1)}`);
+    if (JSON.stringify(live) !== JSON.stringify(OFFICE_GOLDEN_TRACK2)) console.info(`[enemy-spawn-parity] office ${JSON.stringify(live, null, 1)}`);
     expect(core).toEqual(OFFICE_GOLDEN);
-    expect(live).toEqual(OFFICE_GOLDEN);
+    expect(live).toEqual(OFFICE_GOLDEN_TRACK2); // stage 7 (Track 2, lane CONTENT): + the annexes' appended service spawns / finds
   });
 });

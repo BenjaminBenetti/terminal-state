@@ -140,6 +140,12 @@ export interface TrackExtensions {
    * position-seeded consumers (shelf stock) and coreView read these instead.
    */
   coreXZ?: Partial<Record<CoreXZKey, number[]>>;
+  /**
+   * (lane CONTENT addition, gen/annexContent.ts) Steam vent spots of the annexes, placed from their dressing (over the pump skids /
+   * water heaters, then corridor walls): wall point (absolute y), blow direction, area id. world/trackExt/steam.ts annexVents uses
+   * them when present (visual only, never the gas field).
+   */
+  vents?: {x: number; y: number; z: number; dir: {x: number; y: number; z: number}; area: number}[];
 }
 
 /** Point-record lists of a layout whose exact core-frame positions a translated core keeps (TrackExtensions.coreXZ). */

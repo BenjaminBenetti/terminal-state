@@ -27,12 +27,13 @@ import {FIND_MAX_PER_WEAPON, FIND_MIN_SPAWN_M, findWeaponsFor, placeWeaponFinds,
 import {finishTraversal, placeLadders, shiftFlight, shiftRamp, traversalIssues} from './traversal';
 import {doorwayIssues} from './doorways';
 import {assignEnemyArchetypes} from '../ai/creatureSpawn';
-import {acceptedPlaced, spawnContext, spawnProfile, type SpawnProfile} from '../ai/spawnTables'; // Task enemy-spawn-tables-20261030 (lane SPAWN)
+import {acceptedPlaced, markSpawnContext, spawnContext, spawnProfile, type SpawnProfile} from '../ai/spawnTables'; // Task enemy-spawn-tables-20261030 (lane SPAWN)
 import {buildLevelLinks, buildLevels, deriveRails, levelDistance, levelIssues, registerApertures, shiftPlan} from './levelGen';
 import {dressLevels, lightServiceLevel, placeLevelSpawns} from './levelGenDress';
 import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 // Track 2 (lane GEN): tunnels past the bed ends + service annexes (gen/trackExt), planned before the crop, attached after every core pass.
-import {dropExtensions, extendTracks, extensionIssues, finishExtensions, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
+import {dropExtensions, extendTracks, extensionIssues, finishExtensions, isExtensionArea, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
+import {populateExtensions} from './annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
 /**
  * Track 2 (lane GEN): grid cell budget of a station with its track extensions (W x H of the cropped grid). The baked light field
@@ -406,6 +407,9 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   placeSpawns(layout, rng.fork('spawns'), loot, spawns);
   // Lane A: a weighted share of the zombies / loose supplies onto the upper and lower levels (totals kept).
   placeLevelSpawns(layout, rng.fork('levelSpawns'), spawns);
+  // Track 2 (lane CONTENT): every core spawn is the 'station' context (a side table keyed by the layout: no record changes); the
+  // profile has a second context now ('service', the annexes), so the station's spawns are tagged explicitly (Track 1 contract).
+  markSpawnContext(layout, 0, 'station');
   // Pistol lane: the non-starting weapons (+ matching ammo) as seeded map finds, away from the spawn, on any storey.
   layout.startWeapon = startWeapon;
   placeWeaponFinds(layout, rng.fork('weaponFinds'), startWeapon);
@@ -415,11 +419,17 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   lightServiceLevel(layout, rng.fork('serviceLights'));
   // Lane T: fixtures follow stepped ceilings, loot/props lifted to local floors, never on stairs; underpass + ladder signs.
   finishTraversal(layout);
-  // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed.
-  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the level's pool, per the spawn's room
   // Track 2 (lane GEN): only now the extensions join: the core is re-framed into the extended grid (translated when they reach
   // west / north) and their cells / areas / doors are appended (every pass above saw exactly the core world).
-  if (ext) layout = finishExtensions(layout, ext, {ox, oy, grow: 'any'});
+  if (ext) {
+    layout = finishExtensions(layout, ext, {ox, oy, grow: 'any'});
+    // Track 2 (lane CONTENT): their dressing / fixtures / loose finds / service spawns (context 'service', tagged) on the
+    // `track-ext-content` fork, APPENDED after every core record.
+    populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')});
+  }
+  // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed. ONCE, after every
+  // context (Track 2: also after the extensions' appended spawns; the roll is per spawn index, so the core's are unchanged).
+  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the level's pool, per the spawn's room
   return layout;
 }
 
@@ -449,9 +459,11 @@ export function validateLayout(layout: StationLayout, spawns: SpawnProfile = spa
     if (!any) issues.push(`area ${a.id} (${a.type}) unreachable`);
   }
   // Lane SPAWN: the accepted placed count and keep-away are the profile's station context (min 8; 36 cells = MIN_ZOMBIE_SPAWN_CELLS).
+  // Track 2 (lane CONTENT): the station context counts the CORE spawns only (the service annexes' zone budget is separate).
   const sc = spawnContext(spawns, 'station'), acc = acceptedPlaced(sc);
-  if (acc.min !== null && layout.zombies.length < acc.min) issues.push(`too few zombies: ${layout.zombies.length}`);
-  if (acc.max !== null && layout.zombies.length > acc.max) issues.push(`too many zombies: ${layout.zombies.length}`);
+  const stationN = layout.zombies.filter(z => !isExtensionArea(layout.areas[z.area])).length;
+  if (acc.min !== null && stationN < acc.min) issues.push(`too few zombies: ${stationN}`);
+  if (acc.max !== null && stationN > acc.max) issues.push(`too many zombies: ${stationN}`);
   for (const z of layout.zombies) {
     const zg = gridOf(z.level), zd = dists[z.level ?? 0] ?? dist;
     const [x, y] = zg.cellOf(z.x, z.z);

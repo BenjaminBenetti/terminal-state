@@ -76,6 +76,9 @@ export function zoneOf(layout: StationLayout, a: Area): Zone {
   const hallish = a.kind === 'concourse' || a.kind === 'passage' || a.kind === 'platform' || a.kind === 'service';
   // Maintenance catwalks along the tunnel walls stay clear like passages (only wall infrastructure).
   if (a.role === 'catwalk') return 'passage';
+  // Track 2 (lane CONTENT): a service annex's corridors (trackbed level, off a track tunnel) compose as the station's lower service
+  // level — pumps, transformers, tool bays, caches; its rooms keep their purpose rules ('room'). Core areas never carry `ext`.
+  if (a.ext === 'annex' && hallish) return 'lower';
   if (role === 'upper' && hallish && a.type !== 'platform') return 'upper';
   if (role === 'lower' && hallish) return 'lower';
   switch (a.type) {
@@ -264,9 +267,13 @@ export function adoptComposition(from: StationLayout, to: StationLayout): void {
  * Track 2 (lane GEN): carries a dressed station's composition record over to its RE-FRAMED copy (gen/trackExt/core.ts reframe:
  * the new frame's cell (0, 0) is the old cell (ox, oy), w x h cells) — world positions translated, the cell masks re-windowed.
  */
-export function reframeComposition(from: StationLayout, to: StationLayout, ox: number, oy: number, w: number, h: number): void {
-  const s = SUMMARY.get(from);
-  if (!s) return;
+export function reframeComposition(from: StationLayout, to: StationLayout, ox: number, oy: number, w: number, h: number, keepAreas = Infinity): void {
+  const s0 = SUMMARY.get(from);
+  if (!s0) return;
+  // Track 2 (lane CONTENT): a core view (keepAreas = the first extension area) leaves the extensions' appended clusters out (their ids
+  // come after the core's, so the core's keep theirs).
+  const s = keepAreas === Infinity ? s0 : {...s0, clusters: s0.clusters.filter(c => c.area < keepAreas), landmarks: s0.landmarks.filter(l => l.area < keepAreas),
+    areas: s0.areas.filter(a => a.area < keepAreas), plazas: s0.plazas.filter(r => r.area < keepAreas)};
   const dx = ox * CELL, dz = oy * CELL, W = from.grid.w, H = from.grid.h;
   const win = (m: Uint8Array): Uint8Array => {
     const out = new Uint8Array(w * h), sx0 = Math.max(0, ox), sx1 = Math.min(W, ox + w);
@@ -292,6 +299,15 @@ export interface ComposeApi {
   /** Iteration-07 generated kinds this station's palette loaded (legacy kinds always available). */
   palette: ReadonlySet<string>;
   ctxOf(a: Area): PlaceCtx;
+  /**
+   * Track 2 (lane CONTENT): an APPENDED composition pass over a subset of areas (the service annexes, gen/annexContent.ts): only
+   * these areas are composed, on their own generated-model budget (`p7Budget`, default COMPOSED_P7_BUDGET), and the clusters /
+   * landmarks / plazas / masks join the layout's existing record (`append`: ids continue after the core's). Absent = the station
+   * pass exactly as before.
+   */
+  areas?: (a: Area) => boolean;
+  p7Budget?: number;
+  append?: boolean;
 }
 
 interface Portal { via: 'door' | 'stair' | 'link'; x: number; z: number; nx: number; nz: number; cells: number[]; door?: Door; width: number }
@@ -308,6 +324,8 @@ interface CC {
   cover: Map<number, number>;
   /** Composed iteration-07 model placements so far (COMPOSED_P7_BUDGET). */
   p7: number;
+  /** Track 2 (lane CONTENT): this pass's generated-model budget (ComposeApi.p7Budget ?? COMPOSED_P7_BUDGET). */
+  p7Budget: number;
 }
 
 /**
@@ -328,9 +346,12 @@ export function floorCoverage(layout: StationLayout, a: Area): number {
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
 export function compose(layout: StationLayout, api: ComposeApi): CompositionSummary {
-  const sum: CompositionSummary = {clusters: [], landmarks: [], areas: [], plazas: [], propsBefore: layout.props.length, masks: []};
-  const cc: CC = {layout, api, rng: api.rng, sum, caches: 0, triage: 0, cover: new Map(), p7: 0};
-  const areas = layout.areas.filter(a => COMPOSED_ZONES.has(zoneOf(layout, a)));
+  // Track 2 (lane CONTENT): an appended pass continues the layout's record (cluster ids after the core's; spacing sees them).
+  const prev = api.append ? SUMMARY.get(layout) : undefined;
+  const sum: CompositionSummary = prev ?? {clusters: [], landmarks: [], areas: [], plazas: [], propsBefore: layout.props.length, masks: []};
+  const cc: CC = {layout, api, rng: api.rng, sum, caches: 0, triage: 0, cover: new Map(), p7: 0, p7Budget: api.p7Budget ?? COMPOSED_P7_BUDGET};
+  const areas = layout.areas.filter(a => COMPOSED_ZONES.has(zoneOf(layout, a)) && (!api.areas || api.areas(a)));
+  const area0 = sum.areas.length;
   // Pass 1: circulation (lanes + plazas) for every composed area first, so no cluster anywhere takes a lane cell.
   const portalsOf = new Map<number, Portal[]>();
   for (const a of areas) {
@@ -346,8 +367,15 @@ export function compose(layout: StationLayout, api: ComposeApi): CompositionSumm
   for (const a of areas) landmark(cc, api.ctxOf(a), a, zoneOf(layout, a), portalsOf.get(a.id)!);
   const order = [...areas].sort((p, q) => PROGRAM_ORDER.indexOf(zoneOf(layout, p)) - PROGRAM_ORDER.indexOf(zoneOf(layout, q)) || p.id - q.id);
   for (const a of order) PROGRAMS[zoneOf(layout, a)]?.(cc, api.ctxOf(a), a, portalsOf.get(a.id)!);
-  for (const r of sum.areas) r.coverage = Math.round(floorCoverage(layout, layout.areas[r.area]) * 1000) / 1000;
-  for (const a of areas) { const c = api.ctxOf(a); sum.masks[c.level] ??= {lane: c.lane, plaza: c.plaza}; }
+  for (const r of sum.areas.slice(area0)) r.coverage = Math.round(floorCoverage(layout, layout.areas[r.area]) * 1000) / 1000;
+  for (const a of areas) {
+    const c = api.ctxOf(a), m = sum.masks[c.level];
+    if (!m) sum.masks[c.level] = {lane: c.lane, plaza: c.plaza};
+    else if (m.lane !== c.lane) {
+      // (appended pass: its own context's lane / plaza cells join the record's masks)
+      for (let i = 0; i < m.lane.length && i < c.lane.length; i++) { if (c.lane[i]) m.lane[i] = 1; if (c.plaza[i]) m.plaza[i] = 1; }
+    }
+  }
   SUMMARY.set(layout, sum);
   return sum;
 }
@@ -355,7 +383,7 @@ export function compose(layout: StationLayout, api: ComposeApi): CompositionSumm
 // --- kinds ----------------------------------------------------------------------------------
 
 function available(cc: CC, k: PropKind): boolean {
-  return !isP7Kind(k) || (cc.api.palette.has(k) && cc.p7 < COMPOSED_P7_BUDGET);
+  return !isP7Kind(k) || (cc.api.palette.has(k) && cc.p7 < cc.p7Budget);
 }
 function pickKind(cc: CC, ks: Kinds): PropKind | null {
   const ok = ks.filter(k => available(cc, k));

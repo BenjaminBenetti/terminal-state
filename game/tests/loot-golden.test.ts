@@ -64,6 +64,15 @@
 //     off) subwayHolders f94f99ea -> 2e86346d, subwayPickups 574dd442 -> 4afa77bf; GOLDEN_RESERVE fdce066e -> a978aeed /
 //     6883e55a -> 745b6481; GOLDEN subwayHolders fdce066e -> a978aeed, subwayPickups 3787f796 -> e83c7811. gearPlaced (all three),
 //     every Office hash and the gear ROLL are unchanged.
+//  9. Track 2 — Beyond the Station (lane CONTENT): the service annexes (off tunnels and service hatches) are dressed and stocked
+//     (gen/annexContent.ts, own fork `track-ext-content`, after finishExtensions): their holders (room purposes' tables for each
+//     annex's deepest ~7 holders, the stash key ANNEX_STASH_KEY, the picked-over key ANNEX_PICKED_KEY for the rest) are APPENDED
+//     after every core prop (core holder indices unchanged) and their loose floor program (items/lootTables.ts ANNEX_FLOOR) after
+//     every core pickup (the Office's roof find stays the last CORE pickup; the annex finds follow it). Cause of the re-pin: the
+//     LIVE hashes of layouts with an annex — subwayHolders, subwayPickups, officeHolders, officePickups (values below, previous ones
+//     beside them). Proof, every run: the core views (coreView also filters the extensions' appended props / pickups) reproduce
+//     GOLDEN_RESERVE / GOLDEN_CORE byte for byte (now incl. officeHolders c36c5fba / officePickups 1aa35d40 and the roof find
+//     3ba3548d); the gear roll and every gear placement hash are unchanged (gear spacing ignores the annexes' finds).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -81,17 +90,17 @@ import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
  * Stage 5 (main): the core views of the layouts generated with the core reserve OFF reproduce these byte for byte (stage 6 / 7
  * proof: the extensions never touch the core).
  */
-const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearPlaced: '2bc1c5bb'}; // stage 8
+const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearPlaced: '2bc1c5bb', officeHolders: 'c36c5fba', officePickups: '1aa35d40'}; // stage 8 / 9
 /** Stage 7 (GEN-2): the core views of the live layouts — the core stations with the reserve (a layout change). */
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: 'a978aeed', // stage 8: + the hidden-mount fix
+  subwayHolders: 'e4c02d0b', // stage 9 (+ the service annexes' holders); stage 8: a978aeed (+ the hidden-mount fix)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
-  subwayPickups: 'e83c7811',
-  officeHolders: 'c36c5fba',
+  subwayPickups: 'f3f6cbd3', // stage 9 (+ the annexes' floor finds); stage 8: e83c7811
+  officeHolders: '595d8a54', // stage 9 (+ the annexes' holders); before: c36c5fba (= GOLDEN_CORE.officeHolders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
-  officePickups: '1aa35d40',
+  officePickups: 'b8b6ff4e', // stage 9 (+ the annexes' floor finds); before: 1aa35d40 (= GOLDEN_CORE.officePickups)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
@@ -161,22 +170,33 @@ describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
   });
 
   it('Office holder lots + pickups (level seeds 11 / 222 / 3333); the roof find hashed on its own (stage 4)', () => {
-    const fh = fnv(), fp = fnv(), fr = fnv();
+    const fh = fnv(), fp = fnv(), fr = fnv(), fhc = fnv(), fpc = fnv(), frc = fnv();
     let holders = 0, lots = 0, pickups = 0, finds = 0;
+    const roofSplit = (list: readonly PickupPlacement[]) => ({own: list.filter(p => p.reward === ROOF_FIND_KEY), rest: list.filter(p => p.reward !== ROOF_FIND_KEY), first: list.findIndex(p => p.reward === ROOF_FIND_KEY)});
     for (const l of office()) {
       const n = mixHolders(fh, l);
       holders += n.holders; lots += n.lots;
-      // the roof find comes LAST: every earlier pickup keeps its index
-      const own = l.pickups.filter(p => p.reward === ROOF_FIND_KEY), rest = l.pickups.slice(0, l.pickups.length - own.length);
-      expect(l.pickups.slice(rest.length).every(p => p.reward === ROOF_FIND_KEY)).toBe(true);
-      mixPickups(fp, rest);
-      pickups += rest.length;
-      mixPickups(fr, own);
-      finds += own.length;
+      const live = roofSplit(l.pickups);
+      mixPickups(fp, live.rest);
+      pickups += live.rest.length;
+      mixPickups(fr, live.own);
+      finds += live.own.length;
+      // the roof find comes LAST of the CORE's pickups: every earlier pickup keeps its index (stage 9: a service annex's own floor
+      // finds follow it — appended after every core record, in extension areas); the core view hashes as stage 5
+      const c = coreView(l), core = roofSplit(c.pickups);
+      expect(c.pickups.slice(core.first).every(p => p.reward === ROOF_FIND_KEY)).toBe(true);
+      expect(l.pickups.slice(0, c.pickups.length)).toEqual(c.pickups); // (the Office never translates)
+      mixHolders(fhc, c);
+      mixPickups(fpc, core.rest);
+      mixPickups(frc, core.own);
     }
     report('officeHolders', fh.hex(), `${holders} holders, ${lots} lots`);
     report('officePickups', fp.hex(), `${pickups} pickups`);
     report('officeRoofFind', fr.hex(), `${finds} pickups`);
+    report('officeHolders / officePickups / officeRoofFind (core view)', `${fhc.hex()} / ${fpc.hex()} / ${frc.hex()}`);
+    expect(fhc.hex()).toBe(GOLDEN_CORE.officeHolders);
+    expect(fpc.hex()).toBe(GOLDEN_CORE.officePickups);
+    expect(frc.hex()).toBe(GOLDEN.officeRoofFind);
     expect(fh.hex()).toBe(GOLDEN.officeHolders);
     expect(fp.hex()).toBe(GOLDEN.officePickups);
     expect(fr.hex()).toBe(GOLDEN.officeRoofFind);
@@ -197,13 +217,13 @@ describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
     // Placement of each layout's real level roll (plus the full set, so placement is exercised even when the roll is empty).
     const fp = fnv(), fc = fnv(), fo = fnv();
     const place = (l: StationLayout, level: LevelId, levelSeed: number, f: ReturnType<typeof fnv> | null, core: ReturnType<typeof fnv>) => {
-      const before = l.pickups.length;
+      const before = l.pickups.length, coreBefore = coreView(l).pickups.length; // (stage 9: the annexes' finds are not in the core view)
       const rolled = rollLevelGear(levelSeed, level, ['main']).main;
       const all = ['armor_vest', 'chest_rig', 'backpack', 'helmet', 'boots', 'gloves'].map(itemId => ({itemId}));
       const placed = placeSectionGear(l, [...rolled, ...all]);
       if (f) mixPickups(f, placed);
       // stage 6 proof: the same gear in the core frame (gear never lands in an extension)
-      mixPickups(core, coreView(l).pickups.slice(before));
+      mixPickups(core, coreView(l).pickups.slice(coreBefore));
       l.pickups.length = before; // the cached layout stays as generated
     };
     subway().slice(0, 6).forEach((l, i) => place(l, 'subway', ECONOMY_CORPUS[i].seed, fp, fc));

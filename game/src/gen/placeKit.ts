@@ -92,9 +92,14 @@ export function cellsOfBox(x: number, z: number, hx: number, hz: number): [numbe
 /** Clear stair approach in front of every flight end (m) and its cells. */
 export const STAIR_APPROACH = 1.5;
 
-export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceCtx {
+/**
+ * `win` (Track 2, lane CONTENT): only build the cell masks inside this cell window (inclusive) — an appended pass that dresses a
+ * known region (the service annexes) skips the whole-grid scans; masks outside it stay 0. Absent = the whole grid (as before).
+ */
+export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0, win?: {x0: number; y0: number; x1: number; y1: number}): PlaceCtx {
   const g = levelGrid(layout, level);
   const n = g.w * g.h;
+  const X0 = Math.max(0, win?.x0 ?? 0), Y0 = Math.max(0, win?.y0 ?? 0), X1 = Math.min(g.w - 1, win?.x1 ?? g.w - 1), Y1 = Math.min(g.h - 1, win?.y1 ?? g.h - 1);
   const zone = new Uint8Array(n), doorCell = new Uint8Array(n);
   const doorsOf = new Map<number, Door[]>();
   for (const d of layout.doors) {
@@ -110,7 +115,7 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceC
   const edge = new Uint8Array(n);
   const mark = (x: number, y: number) => { if (g.inBounds(x, y)) edge[g.idx(x, y)] = 1; };
   // Never dress stairs or the cell beside them; keep a 1.5 m approach clear beyond both ends of every flight.
-  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+  for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
     if (g.rampIdx[g.idx(x, y)] < 0) continue;
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) mark(x + ox, y + oy);
   }
@@ -142,7 +147,7 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceC
   if (levels.length > 1) {
     const others = levels.filter(L => L.id !== level).map(L => L.grid);
     const cells = g.cells, W = g.w;
-    for (let y = 1; y < g.h - 1; y++) for (let x = 1; x < W - 1; x++) {
+    for (let y = Math.max(1, Y0); y < Math.min(g.h - 1, Y1 + 1); y++) for (let x = Math.max(1, X0); x < Math.min(W - 1, X1 + 1); x++) {
       const i = y * W + x;
       if (cells[i] !== SOLID) continue;
       // Highest floor of this level beside the closed cell: an aperture when another level's band, open at this column, starts

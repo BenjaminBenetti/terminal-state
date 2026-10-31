@@ -317,7 +317,8 @@ describe('purposes in generated levels', () => {
     expect(seenStores.size).toBeGreaterThanOrEqual(16);
     // Iteration 07: purposes built around generated props count once their signature model is integrated (gen/props07.ts).
     // Iteration 16: the office tower's purposes ('office-*', gen/office/*) never fill station slots.
-    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-')).length - 2);
+    // Track 2 (lane CONTENT): the service-annex holder loot keys ('annex-stash', 'annex-picked') are prop-level keys, never an area's.
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('annex-')).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

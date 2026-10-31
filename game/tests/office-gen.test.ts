@@ -28,7 +28,7 @@ import {cutOfficeWindows} from '../src/world/officeProps';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {corpusTotals} from './helpers/lootEconomy';
 import {LEGACY_AMMO_IDS} from '../src/items/calibers';
-import {coreView} from '../src/gen/trackExt/index';
+import {coreView, isExtensionArea} from '../src/gen/trackExt/index';
 import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
 /** Canonical dump hash of everything a generator produces (grids, areas, doors, props, lights, signs, loot, spawns). */
@@ -277,7 +277,9 @@ describe('office level (one continuous layout)', () => {
     let floorEnemies = 0, floors = 0, pickups = 0;
     for (const levelSeed of LEVEL_SEEDS) {
       const l = gen(levelSeed);
-      const per = (lvs: number[]) => l.zombies.filter(z => lvs.includes(z.level ?? 0)).length;
+      // (Track 2, lane CONTENT: the core contexts' spawns; the service annexes' zone budget is separate — tests/annex-content.test.ts)
+      const core = l.zombies.filter(z => !isExtensionArea(l.areas[z.area]));
+      const per = (lvs: number[]) => core.filter(z => lvs.includes(z.level ?? 0)).length;
       expect(per([0, 1])).toBeGreaterThanOrEqual(OFFICE_ENEMIES.street[0]);
       expect(per([0, 1])).toBeLessThanOrEqual(OFFICE_ENEMIES.street[1]);
       for (let n = 2; n <= 8; n++) {
@@ -286,7 +288,7 @@ describe('office level (one continuous layout)', () => {
         floorEnemies += per([n]);
         floors++;
       }
-      expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
+      expect(core.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
       // task track1-siren-blightbelly-20261031 (lane SPAWN): + the Blightbelly and the (Office-only) Siren families
       expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie'))).toBe(true);
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
@@ -474,9 +476,13 @@ describe('the Subway is unchanged', () => {
     '1:rifle': '2b009238', '1:pistol': 'caf6ec41', '7:rifle': 'f7bce5d9', '7:pistol': 'dd675be3',
     '42:rifle': '811b8141', '42:pistol': '7434701e', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
   };
+  // Track 2 (lane CONTENT): the extensions are now populated (gen/annexContent.ts, own fork, appended after every core record:
+  // tunnel fixtures on every extended station; annex dressing / plates / fixtures / loose finds / service spawns) - every LIVE
+  // fingerprint moves (was 1 c427820b / 5ecb0be6, 7 97780ab3 / 97757449, 42 8f75cf60 / 67c40d1a, 1234 2f49e529 / 7597a315); the
+  // core view still equals CORE and the reserve-off core view HEAD (asserted below; coreView filters the appended records).
   const LIVE: Record<string, string> = {
-    '1:rifle': 'c427820b', '1:pistol': '5ecb0be6', '7:rifle': '97780ab3', '7:pistol': '97757449',
-    '42:rifle': '8f75cf60', '42:pistol': '67c40d1a', '1234:rifle': '2f49e529', '1234:pistol': '7597a315',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'b402c09e', '7:pistol': '35870a80',
+    '42:rifle': 'f1d3aed2', '42:pistol': '43e5c856', '1234:rifle': 'f4b97ce1', '1234:pistol': '8d0d8135',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

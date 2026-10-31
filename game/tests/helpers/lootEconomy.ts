@@ -3,6 +3,7 @@
 // world/containers.ts ContainerManager.build with every model loaded) and loose layout pickups (floor supplies, weapon finds and
 // their ammo, level-moved supplies). Only APIs that already existed at d632ce8 are used, so the same file measures the baseline
 // tree (git archive d632ce8) and the current tree with identical code.
+import {coreView} from '../../src/gen/trackExt/index'; // Track 2 (lane CONTENT): the core stations
 import {generateStation, pickArchetype, type StationLayout} from '../../src/gen/station';
 import type {TrackExtConfig} from '../../src/gen/trackExt/types';
 import type {Archetype} from '../../src/gen/stationTypes';
@@ -133,9 +134,14 @@ export interface EconTotals {
 
 const zero = (): Record<EconCat, number> => ({food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0, weapon: 0, other: 0});
 
-/** The corpus stations (live config; Track 2 GEN-2: `trackExtensions` = another config, e.g. the core reserve off). */
+/**
+ * The corpus stations (live config; Track 2 GEN-2: `trackExtensions` = another config, e.g. the core reserve off). Track 2 (lane
+ * CONTENT): their CORE level (gen/trackExt coreView) — the economy bands are the core station's (the d632ce8 baseline); a seeded
+ * service annex is an optional extra zone whose loot is measured on its own (tests/annex-content.test.ts, docs/loot-tables.md
+ * "Service annexes"). Stations without extensions are returned as generated.
+ */
 export function generateCorpus(trackExtensions?: TrackExtConfig | 'none'): StationLayout[] {
-  return ECONOMY_CORPUS.map(c => generateStation(c.seed, {startWeapon: 'pistol', ...(trackExtensions ? {trackExtensions} : {})}));
+  return ECONOMY_CORPUS.map(c => coreView(generateStation(c.seed, {startWeapon: 'pistol', ...(trackExtensions ? {trackExtensions} : {})})));
 }
 
 export function corpusTotals(layouts: readonly StationLayout[], econ: (l: StationLayout) => EconEntry[] = stationEconomy): EconTotals {

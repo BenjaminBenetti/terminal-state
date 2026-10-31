@@ -193,7 +193,7 @@ export interface EnemyLevelInfo {
 }
 
 export interface SpawnContextInfo {
-  /** Profile context id: 'station' (Subway); 'street' | 'floor' | 'roof' (Office, one logical level). */
+  /** Profile context id: 'station' (Subway); 'street' | 'floor' | 'roof' (Office, one logical level); 'service' (both: annex zone). */
   id: string;
   label: string;
   /** Which storeys ONE run covers ("main level (then storey moves)", "station + lobby (levels 0 + 1)", "one office floor"). */
@@ -202,8 +202,14 @@ export interface SpawnContextInfo {
   runs: number;
   /** Per run: U{lo..hi}, mean = (lo + hi) / 2. */
   count: {lo: number; hi: number; mean: number; distribution: string};
-  /** runs × count. */
+  /** runs × count. A zone context (below): per ANNEX (runs = 1 per annex), never folded into the level total. */
   perLevel: {lo: number; hi: number; mean: number};
+  /**
+   * Track 2 (lane CONTENT): a same-world ZONE context (the 'service' annexes): one run per seeded zone, `runsPerLevel` zones per
+   * level (a seeded census quantity, e.g. 0-2 annexes), its count a per-zone budget ADDITIVE to the core contexts and reported
+   * separately (excluded from EnemyLevelInfo.total). Absent = an ordinary context.
+   */
+  zone?: {runsPerLevel: {lo: number; hi: number}; perLevelMax: number; note: string};
   placement: PlacementInfo;
   /** Validation rules that reject a whole generation attempt (the generator retries with another attempt seed). */
   rejection: readonly string[];

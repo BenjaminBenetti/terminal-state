@@ -260,12 +260,15 @@ export function dropExtensions(layout: StationLayout): void {
   const g = layout.grid;
   const first = layout.areas.findIndex(a => isExtensionArea(a));
   if (first >= 0) {
-    for (let i = 0; i < g.cells.length; i++) if (g.area[i] >= first) { g.cells[i] = SOLID; g.area[i] = -1; g.floor[i] = 0; g.ceil[i] = 0; }
+    for (let i = 0; i < g.cells.length; i++) if (g.area[i] >= first) { g.cells[i] = SOLID; g.area[i] = -1; g.floor[i] = 0; g.ceil[i] = 0; g.blocked[i] = 0; g.sightBlocked[i] = 0; }
     layout.areas.length = first;
     const firstDoor = layout.doors.findIndex(d => d.a >= first || d.b >= first);
     if (firstDoor >= 0) layout.doors.length = firstDoor;
+    // (lane CONTENT) their appended content (gen/annexContent.ts: props, plates, fixtures, loose finds, service spawns) goes too
+    const keep = <T extends {area: number}>(list: T[]) => { const k = list.filter(r => r.area < first); list.length = 0; list.push(...k); };
+    keep(layout.props); keep(layout.signs); keep(layout.lights); keep(layout.pickups); keep(layout.zombies);
   }
-  ext.tunnels = []; ext.annexes = [];
+  ext.tunnels = []; ext.annexes = []; delete ext.vents;
   ext.log.push({trench: -1, from: 'x0', result: 'dropped: the finished layout failed validation with them'});
   if (layout.levels?.length) layout.levels = layout.levels.slice();
 }
@@ -351,6 +354,9 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
       const tr = ti !== undefined ? layout.trenches[ext.tunnels[ti].trench] : hb !== undefined ? layout.trenches[hb] : null;
       if (!tr || !(nx * CELL >= tr.x0 - 1e-6 && nx * CELL < tr.x1 && ny * CELL >= tr.z0 - 1e-6 && ny * CELL < tr.z1)) bad.edge++;
     }
+    // (lane CONTENT: cells under the annex dressing's props are not walkable floor — reachability is checked on the rest, exactly
+    // as validateLayout counts the core's walkable cells: FLOOR and not blocked)
+    if (g.blocked[i]) continue;
     if (dist[i] < 0) bad.unreached++;
     const tr = trenchOf(i);
     let l = cellsOfTrench.get(tr);

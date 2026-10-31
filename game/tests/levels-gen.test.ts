@@ -4,6 +4,7 @@
 // level, joined by enclosed stair cores. Pure data checks on generated stations (no three.js).
 
 import {describe, expect, it} from 'vitest';
+import {isExtensionArea} from '../src/gen/trackExt/index'; // Track 2 (lane CONTENT)
 import {ARCHETYPES, generateAttempt, generateStation, validateLayout, MIN_ZOMBIE_SPAWN_CELLS, type Archetype, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR, SOLID, VOID, type Grid} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
@@ -305,8 +306,10 @@ describe('multi-level stations (iteration 08, Lane A)', () => {
         if (a.level === LEVEL_UPPER && a.publicSpace) expect(a.lighting, `${tag} ${a.label}`).toBe('lit');
         if (a.level === LEVEL_LOWER) { lower++; if (a.lighting !== 'lit') lowerDark++; }
       }
-      expect(l.zombies.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min); // Iteration 12 (AI): doubled population
-      expect(l.zombies.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
+      // (Track 2, lane CONTENT: the station context's spawns; a service annex's zone budget is separate)
+      const station = l.zombies.filter(z => !isExtensionArea(l.areas[z.area]));
+      expect(station.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min); // Iteration 12 (AI): doubled population
+      expect(station.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
       zu += l.zombies.filter(z => z.level === LEVEL_UPPER).length;
       zl += l.zombies.filter(z => z.level === LEVEL_LOWER).length;
       pu += l.pickups.filter(p => p.level === LEVEL_UPPER).length;

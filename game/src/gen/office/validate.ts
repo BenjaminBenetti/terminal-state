@@ -29,7 +29,7 @@ import {landingStrip, signOverlaps} from './dress';
 import {acceptedPlaced, spawnContext, spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
 import {CORRIDOR_CLEAR_M, isNarrowPassage, isPlantKind, passageClear} from './companyDress';
 import {COMPANIES} from './companies';
-import {extensionIssues} from '../trackExt/index';
+import {extensionIssues, isExtensionArea} from '../trackExt/index';
 
 export function officeIssues(layout: StationLayout, f: TowerFrame, spawns: SpawnProfile = spawnProfile('office')): string[] {
   const issues: string[] = [];
@@ -201,7 +201,8 @@ export function officeIssues(layout: StationLayout, f: TowerFrame, spawns: Spawn
   if (info.windows.filter(w => w.kind === 'entrance').some(w => w.level !== 1)) issues.push('entrance span off the lobby');
 
   // --- Populations ----------------------------------------------------------------------------------------------------------
-  const count = (lvs: number[]) => layout.zombies.filter(z => lvs.includes(z.level ?? 0)).length;
+  // (Track 2, lane CONTENT: the street / floor contexts count the core spawns; the service annexes' zone budget is separate)
+  const count = (lvs: number[]) => layout.zombies.filter(z => lvs.includes(z.level ?? 0) && !isExtensionArea(layout.areas[z.area])).length;
   const outside = (n: number, c: {min: number | null; max: number | null}) => (c.min !== null && n < c.min) || (c.max !== null && n > c.max);
   const street = count([0, 1]), streetCtx = spawnContext(spawns, 'street'), floorCtx = spawnContext(spawns, 'floor');
   if (outside(street, acceptedPlaced(streetCtx))) issues.push(`station + lobby enemy count ${street}`);

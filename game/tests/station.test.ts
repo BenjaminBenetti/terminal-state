@@ -280,10 +280,12 @@ describe('station generator', () => {
       const [sx, sy] = g.cellOf(l.playerSpawn.x, l.playerSpawn.z);
       // Iteration 08: zombies stand on every level; distances / paths run through the stair cores.
       const dist = levelDistance(l.levels, sx, sy);
-      expect(l.zombies.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min);
-      expect(l.zombies.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
+      // Track 2 (lane CONTENT): the station context's spawns (the service annexes' zone budget is separate: tests/annex-content.test.ts)
+      const station = l.zombies.filter(z => !isExtensionArea(l.areas[z.area]));
+      expect(station.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min);
+      expect(station.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
       const pf = new PathFinder(levelsOf(l));
-      for (const z of l.zombies) {
+      for (const z of station) {
         const lg = l.levels[z.level ?? 0].grid;
         const [x, y] = lg.cellOf(z.x, z.z);
         expect(lg.cells[lg.idx(x, y)]).toBe(FLOOR);

@@ -36,7 +36,7 @@ game modules (real exports)  ──>  buildLootReference()  ──>  LootReferen
 | Tables | Every named row list / `LootSpec` export of `lootTables.ts`, `OPENABLE_TABLES`, `GLOBAL_POOL`, `LEGACY_POOL`, `VENDING_FOOD`, `LIMB_ECONOMY.pool`, `REWARD_TABLES` picks, every purpose's `loot` in `gen/purposes.ts` |
 | What a holder rolls in a context | `items/loot.ts` `holderTable` / `compartmentTable` (the real resolution: own → purpose → legacy, narrowing, overrides) |
 | Scarcity stage | `THEME_ECONOMY`, `OFF_THEME_WEIGHTS`, `HOLDER_ALLOW`, `CONTAINER_THEMED`, `RANDOM_HOLDERS`, `THEME_OF_TYPE`, `LIMB_ECONOMY`, `BOX_COUNT`, `HANDFUL`; `items/lootEconomy.ts` `holderTheme` / `catAvailable` |
-| Loose floor programs | `SUBWAY_FLOOR`, `OFFICE_FLOOR` (+ `OFFICE_FLOOR_TILT`), `FLOOR_ECONOMY`, `PUBLIC_FLOOR_WEIGHTS`; `gen/office/spawns.ts` `scarceOdds`; `gen/office/companies.ts` `COMPANIES`; `gen/office/tenants.ts` |
+| Loose floor programs | `SUBWAY_FLOOR`, `OFFICE_FLOOR` (+ `OFFICE_FLOOR_TILT`), `FLOOR_ECONOMY`, `PUBLIC_FLOOR_WEIGHTS`; `gen/office/spawns.ts` `scarceOdds`; `gen/office/companies.ts` `COMPANIES`; `gen/office/tenants.ts`; Track 2: `ANNEX_FLOOR` (the `annex` variant of every level whose `LEVEL_ADAPTER.annex` is set, outside the exact per-level totals) |
 | Rare gear | `gearParams(profile)` (`GEAR_LOOT`), `items/gear.ts` `GEAR_ITEMS` |
 | Gas masks / filters | `gen/maskLoot.ts` `MASK_LOOT` |
 | Weapon finds | `gen/weaponFinds.ts` `findWeaponsFor`, `WEAPON_FIND_AMMO`, `FIND_COPY_THRESHOLDS`, `FIND_MAX_PER_WEAPON`, `PISTOL_START_BOXES`; `gen/office/spawns.ts` `officeWeaponStoreyWeights`; `weapons/pistol.ts` `startWeaponFor` |

@@ -56,9 +56,13 @@ describe('track extensions — the core level is unchanged', () => {
       expect(ext.attempt).toBe(none.attempt);
       expect(ext.areas.slice(0, none.areas.length).some(isExtensionArea)).toBe(false);
       expect(ext.areas.slice(none.areas.length).every(isExtensionArea)).toBe(true);
-      expect(ext.props.length).toBe(none.props.length);
-      expect(ext.pickups.length).toBe(none.pickups.length);
-      expect(ext.zombies.length).toBe(none.zombies.length);
+      // (lane CONTENT) the core's point records first and unchanged in number; the extensions' own content appended after them,
+      // all in extension areas (coreView filters it back out)
+      for (const k of ['props', 'lights', 'signs', 'pickups', 'zombies'] as const) {
+        const list = ext[k] as {area: number}[], n = (none[k] as unknown[]).length;
+        expect(list.slice(0, n).some(r => isExtensionArea(ext.areas[r.area])), `${seed} ${k}: core records`).toBe(false);
+        expect(list.slice(n).every(r => isExtensionArea(ext.areas[r.area])), `${seed} ${k}: appended records`).toBe(true);
+      }
       sameCore(ext, none, `Subway ${seed}`);
     }
     expect(translated).toBeGreaterThanOrEqual(4);
@@ -71,9 +75,10 @@ describe('track extensions — the core level is unchanged', () => {
       if (ext.extensions!.core.x || ext.extensions!.core.y) translated++;
       // the same attempt and core records whatever the plan; only the plan's appended records differ
       expect(ext.attempt, `${seed}`).toBe(other.attempt);
-      expect(ext.props.length).toBe(other.props.length);
-      expect(ext.pickups.length).toBe(other.pickups.length);
-      expect(ext.zombies.length).toBe(other.zombies.length);
+      // (lane CONTENT: the annexes' own content is appended after the core's — compared on the core views)
+      expect(coreView(ext).props.length).toBe(coreView(other).props.length);
+      expect(coreView(ext).pickups.length).toBe(coreView(other).pickups.length);
+      expect(coreView(ext).zombies.length).toBe(coreView(other).zombies.length);
       expect(other.extensions!.annexes).toEqual([]);
       sameCore(ext, other, `Subway ${seed} (reserve on: two plans)`);
       // the reserve itself: compared with the station without extensions (main)
@@ -105,7 +110,10 @@ describe('track extensions — the core level is unchanged', () => {
       placeSectionGear(none, all.filter(g => !isMaskLootItem(g.itemId)));
       placeMaskLoot(none, all.filter(g => isMaskLootItem(g.itemId)));
       sameCore(ext, none, `${level} ${seed} (+ gear)`);
-      for (const p of ext.pickups) expect(isExtensionArea(ext.areas[p.area]), `${level} ${seed}: ${p.itemId}`).toBe(false);
+      // the gear / mask roll never lands in an extension (the annexes' own floor finds are theirs, appended before it)
+      const rolled = new Set(all.map(g => g.itemId));
+      for (const p of ext.pickups) if (rolled.has(p.itemId)) expect(isExtensionArea(ext.areas[p.area]), `${level} ${seed}: ${p.itemId}`).toBe(false);
+      expect(ext.pickups.filter(p => rolled.has(p.itemId)).length).toBe(none.pickups.filter(p => rolled.has(p.itemId)).length);
     }
   });
 
