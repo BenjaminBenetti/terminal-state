@@ -273,6 +273,10 @@ export function wallZone(level: Level, area: Area | undefined, voidCell: boolean
   if (stair) return 'stair';
   if (area && (area.type === 'eatery' || area.type === 'shop')) return 'shop';
   if (area && ((area.type as string) === 'exit-stair' || (area.type as string) === 'stair-core' || (area.role && STAIR_ROLES.has(area.role)))) return 'stair';
+  // Track 2 (VIS): service annexes off the track tunnels take the lower-level service look (lowerConcrete: formwork, pipes,
+  // conduits, damp); tunnel faces are replaced by the smooth shell (world/trackExt), the track-bed zone if any survive.
+  if (isExt(area, 'annex')) return 'lower';
+  if (isExt(area, 'tunnel')) return 'trackbed';
   if (level.role === 'lower' || area?.type === 'underpass') return 'lower';
   if (level.role === 'upper') return 'upper';
   // Task office-seamless-20261029: 'office' storeys (tower floors 2..8) take the main-level zones (public -> concourse,
@@ -281,8 +285,16 @@ export function wallZone(level: Level, area: Area | undefined, voidCell: boolean
   return !area || area.publicSpace ? 'concourse' : 'service';
 }
 
+/** Track 2: extension marker of an area (DESIGN §1 Area.ext; GEN). */
+function isExt(area: Area | undefined, kind: 'tunnel' | 'annex'): boolean {
+  return (area as {ext?: string} | undefined)?.ext === kind;
+}
+
 function kindOf(area: Area | undefined): WallKind {
   if (!area) return 'tile';
+  // Track 2 (VIS): annex rooms / corridors are cast concrete (the platform-face concrete), tunnels the tunnel lining.
+  if (isExt(area, 'annex')) return 'platformFace';
+  if (isExt(area, 'tunnel')) return 'tunnel';
   if (area.type === 'eatery' || area.type === 'shop') return 'shop';
   return area.publicSpace ? 'tile' : 'paint';
 }

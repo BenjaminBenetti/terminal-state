@@ -125,6 +125,10 @@ export const DECAY_AGE = 1;
  */
 export function areaNeglect(area: Area | undefined, levelRole: Level['role'], voidCell: boolean): number {
   if (voidCell) return 0.85;
+  // Track 2 (VIS): the track tunnels beyond the beds and their service annexes: abandoned, wet, never maintained.
+  const ext = (area as {ext?: string} | undefined)?.ext;
+  if (ext === 'tunnel') return 0.88;
+  if (ext === 'annex') return Math.min(1, 0.86 + (area!.lighting === 'dark' ? 0.08 : area!.lighting === 'dim' ? 0.04 : 0));
   let n: number;
   if (!area) n = 0.7;
   else if (area.type === 'eatery' || area.type === 'shop') n = 0.62;
