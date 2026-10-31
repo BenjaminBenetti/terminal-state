@@ -240,7 +240,7 @@ describe('mall spawn profile', () => {
     expect(P.families).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}));
     expect(P.families.map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
     expect(Object.fromEntries(P.families)).toMatchObject({blightbelly: 0.05, ratdog: 0.05, siren: MALL_SIREN_WEIGHT});
-    expect(MALL_SIREN_WEIGHT).toBe(0.5);
+    expect(MALL_SIREN_WEIGHT).toBe(0.8); // (the most the retail-room rule allows under cap 2: the placed share saturates at ~4.5 %)
     expect(P.rooms).toEqual({});
     // the Siren: retail-floor shops only (never the station, an annex or a horde), the Office's gates, <= 2 per mall, zombie fallback; 30 m apart
     expect(P.eligibility).toEqual({siren: MALL_SIREN_ELIGIBILITY});

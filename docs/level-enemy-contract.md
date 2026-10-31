@@ -84,7 +84,7 @@ profile, family list, tier or guarantee.
   `applyFamilySpacing(layout, profile)` (`game/src/ai/familySpacing.ts`) right after `assignEnemyArchetypes` — cap and spacing jointly,
   in spawn-index order, RNG-free.
 - The mall registers tier 2, `familyPool({siren: MALL_SIREN_WEIGHT})` (compact-mall census, task mall-playtest-revision-20261031:
-  draw weight 0.5, cap 2, 30 m — mean 0.69 Sirens per run, 3.6 % of the placed ambient enemies; the six-ring tuning was 0.32 / cap 4),
+  draw weight 0.8 (saturated), cap 2, 30 m — mean 0.85 Sirens per run, 4.5 % of the placed ambient enemies; the six-ring tuning was 0.32 / cap 4),
   `MALL_SIREN_ELIGIBILITY` (retail-floor shops / stock rooms only), the horde pool's route capacity / out-of-sight start
   (`HordePlacementRules.routeMPerMember` / `startClearM`) and `ENEMY_LEVEL_ADAPTER.mall`; details and the census in
   `docs/enemy-spawns.md` "The mall".

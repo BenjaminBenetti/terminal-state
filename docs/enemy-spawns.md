@@ -74,7 +74,7 @@ zone, accounted separately:
     annex (`TRACK_EXT_MALL.annex.max = 1`, one east tunnel; no hatches): 43 of 48 sampled malls had it, 3.5 service spawns per run
     (5 per annex in the 10-mall census; ~0.23 per 100 m² of tunnel + annex) — see `docs/track-extensions.md` "The mall".
   - `families` = `MALL_ENEMY_POOL` = `familyPool({siren: MALL_SIREN_WEIGHT})`: Blightbelly 0.05 and rat/dog 0.05 (the defaults), the
-    Siren's draw weight **0.5**, the zombie the remainder — rolled ONCE by `assignEnemyArchetypes(layout, spawnProfile('mall'))` after
+    Siren's draw weight **0.8**, the zombie the remainder (0.1) — rolled ONCE by `assignEnemyArchetypes(layout, spawnProfile('mall'))` after
     every ambient context.
   - `eligibility.siren` = `MALL_SIREN_ELIGIBILITY` (modelled on `OFFICE_SIREN_ELIGIBILITY`): context `ring` only (never the `pit`
     station storey, never a `service` annex, never a horde); area kind `room` — shop sales floors and stock rooms (never a court,
@@ -90,11 +90,15 @@ zone, accounted separately:
   - **Census** (mall revision, 48 generated malls: 24 tuning seeds `9100 + 104729k` + 24 validation seeds `50021 + 7919k`; weight × cap ×
     spacing swept offline over the same layouts — the family roll is a hash of (seed, index) — and the live assignment re-checked equal;
     `evidence/census/siren-sweep.json` in the task folder): only **~1.25 of the ~19.2 ambient slots** of a run are Siren-eligible (small
-    shops; 29 % of runs have none at all). The six-ring tuning (0.32 / cap 4) gave 0.44 per run, 60 % of runs none. At **0.5 / cap 2 /
-    30 m: mean 0.69 Sirens per run = 3.6 % of the placed ambient enemies, 44 % of runs none, max 2** (histogram 0:21 1:21 2:6; tuning
-    half 0.79, validation half 0.58), by storey floor 1 / 2 / 3 = 10 / 13 / 10, the station 0. Blightbelly 5.9 %, rat/dog 6.0 % of the
-    ambient enemies (their 5 % draw bands are never renormalised). Higher weights add little (0.8 / cap 2: 0.85 per run): eligibility,
-    not the draw, bounds her in the compact mall.
+    shops; 29 % of runs have none at all). The six-ring tuning (0.32 / cap 4) gave 0.44 per run, 60 % of runs none; a first compact
+    tuning 0.5 gave 0.69 (3.6 %, 44 % none). The standing user decision — "rare Sirens MUST appear in the Mall … roughly 5 % ambient
+    share" — takes the most the retail-room rule allows: at **0.8 / cap 2 / 30 m: mean 0.85 Sirens per run = 4.5 % of the placed ambient
+    enemies, 35 % of runs none, max 2** (histogram 0:17 1:21 2:10; tuning half 0.96 = 5.0 %, validation half 0.75 = 3.9 %), by storey
+    floor 1 / 2 / 3 = 14 / 15 / 12, the station 0. Blightbelly 5.8 %, rat/dog 6.0 % of the ambient enemies (their 5 % draw bands are
+    never renormalised). The draw SATURATES at 0.8: 0.85 and 0.9 give identical placements (every eligible slot outside the
+    Blightbelly / rat-dog bands is a Siren), so a ~5 % share every run (mean 0.9–1.0) is not reachable by the weight alone — it needs
+    more eligible slots (a `shop` / `stock-room` room density modifier, or cap 3: 0.8 / cap 3 → 0.92, 4.8 %), and the 29 % of runs
+    without any eligible retail room stay Siren-free whatever the weight.
   - `budgets.ambient` (`AmbientBudget`): **total 23, per storey 6** (was 69 / 10) — validation keeps every context's count hi within the
     per-storey cap.
 - **Horde pool** — `horde` (`HordeRules`, `game/src/ai/hordeSpec.ts` `MALL_HORDE_RULES`, lane HORDE's model; values lane PROFILES):

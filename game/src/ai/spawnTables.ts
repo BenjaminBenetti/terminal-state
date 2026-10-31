@@ -450,12 +450,16 @@ export const MALL_SIREN_SPACING: FamilySpacing = {
  * slot (MALL_SIREN_ELIGIBILITY), within the cap and 30 m apart (MALL_SIREN_SPACING), so the draw weight sits well above the placed
  * share. Task mall-playtest-revision-20261031 (lane PROFILES, D07): re-tuned for the COMPACT mall by a bounded census (48 generated
  * malls, evidence/census/siren-sweep.json in the task folder): only ~1.25 of the ~19.2 ambient slots of a run are eligible (small
- * shops; 29 % of runs have none at all), so 0.32 / cap 4 (the old six-ring tuning) gave 0.44 per run with 60 % of runs none. Now
- * 0.5 / cap 2 / 30 m: mean 0.69 Sirens per run = 3.6 % of the placed ambient enemies, 44 % of runs none, max 2 (13 % of runs), per
- * storey floor 1 / 2 / 3 = 10 / 13 / 10 (48 runs); never the station storey, an annex or a horde. Blightbelly 5.9 % / rat-dog 6.0 %
- * placed keep their 5 % draw bands (never renormalised). (Track3 census, six rings: 0.32 -> 2.88 per run, 4.9 %.)
+ * shops; 29 % of runs have none at all), so 0.32 / cap 4 (the old six-ring tuning) gave 0.44 per run with 60 % of runs none. The
+ * standing user decision ("rare Sirens MUST appear in the Mall … roughly 5 % ambient share") asks for the most the retail-room rule
+ * allows: 0.8 / cap 2 / 30 m = mean 0.85 Sirens per run = 4.5 % of the placed ambient enemies (tuning half 0.96 / 5.0 %, validation
+ * half 0.75 / 3.9 %), 35 % of runs none (29 % have no eligible slot at all), max 2 (21 % of runs), per storey floor 1 / 2 / 3 = 14 / 15
+ * / 12 (48 runs); never the station storey, an annex or a horde. The draw SATURATES here: 0.85 and 0.9 give the identical placements
+ * (every eligible slot outside the Blightbelly / rat-dog bands is already a Siren) — more would need more eligible slots (a room
+ * modifier or the cap), not a larger weight. Blightbelly 5.8 % / rat-dog 6.0 % placed keep their 5 % draw bands (never
+ * renormalised). (Track3 census, six rings: 0.32 -> 2.88 per run, 4.9 %; first compact tuning 0.5 -> 0.69, 3.6 %.)
  */
-export const MALL_SIREN_WEIGHT = 0.5;
+export const MALL_SIREN_WEIGHT = 0.8;
 /** The mall's AMBIENT pool: zombie (remainder), blightbelly 0.05, siren MALL_SIREN_WEIGHT, ratdog 0.05 (ENEMY_FAMILY_IDS order). */
 export const MALL_ENEMY_POOL: FamilyPool = familyPool({siren: MALL_SIREN_WEIGHT});
 /**
