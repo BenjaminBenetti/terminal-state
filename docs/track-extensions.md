@@ -423,9 +423,13 @@ Tunnels have sparse fixtures, mostly dead or dying.
   - **Positions:** `fanSources(layout)` gives the hub of every `fanWall` and the drum of every `fanUnit`
     (`layout.extensions.machines`).
   - **Voices:** a FIXED pool of two page-lifetime channels on the ambient bus (shot ducking, page pause mute). At the existing
-    emitter tick (every 12 frames) they follow the nearest fans within 14 m on the listener's storey (feet within 2.4 m of the
-    fan's floor). Inverse-distance panner (ref 1.4 m, rolloff 1.3); the world occlusion muffles the sound (gain −60 %, lowpass
+    emitter tick (every 12 frames) they follow the nearest fans within 70 m on the listener's storey (feet within 2.4 m of the
+    fan's floor). Inverse-distance panner (ref 7 m, rolloff 1.3); the world occlusion muffles the sound (gain −60 %, lowpass
     down to 12 %).
+  - **Radius (round 3):** user "ventilation fan sound effect does not play in a large enough radius. should be maybe 5x the
+    current radius". `FAN_RADIUS_SCALE` 5 scales the whole distance law: cut-off 14 → 70 m AND reference distance 1.4 → 7 m, so
+    5 d now sounds like d did. Round 2's 14 m cut-off sat where the inverse law was already ~8 %, so the fan was audible only within
+    ~6–8 m.
   - **Lifecycle:** `setWorld({fans})` on every level build releases the previous fans (empty without annexes). The gameplay voice
     pool, the Siren cues and the vocal gates are untouched.
   - **Evidence:** `fan-sound.test.ts` (fake WebAudio, structural only). Not auditioned by ear on the build worker.
