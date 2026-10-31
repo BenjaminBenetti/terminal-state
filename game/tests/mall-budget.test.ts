@@ -412,8 +412,9 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
 
   it('slab occlusion never hides a mesh with visible pixels (depth-buffered oracle) on QA poses across every storey', async () => {
     const {layout, world} = await realMall();
-    const poses: [Parameters<typeof mallQaPose>[1], number?][] = [['platform-lookup'], ['court'], ['ring-edge', 1], ['ring-edge', 3], ['ring-edge', 6],
-      ['shopfront', 2], ['shopfront', 5], ['escalator', 0], ['escalator', 3], ['bridge'], ['elevator'], ['washrooms', 1]];
+    // (+ task track3 lane ARCH: every ring edge and more escalators — the poses ARCH's former 20 m atrium margin missed slivers from)
+    const poses: [Parameters<typeof mallQaPose>[1], number?][] = [['platform-lookup'], ['court'], ['ring-edge', 1], ['ring-edge', 2], ['ring-edge', 3], ['ring-edge', 4],
+      ['ring-edge', 5], ['ring-edge', 6], ['shopfront', 2], ['shopfront', 5], ['escalator', 0], ['escalator', 1], ['escalator', 3], ['escalator', 5], ['bridge'], ['elevator'], ['washrooms', 1]];
     const culledLayer = new THREE.Layers();
     culledLayer.set(CULL_LAYER);
     const out: string[] = [];
@@ -434,9 +435,13 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
       const seen = visibleMeshes(world.group, cam, 128, 72, {minPx: 1});
       const pre = [...seen.keys()].filter(m => before.has(m));
       const hidden = [...seen.keys()].filter(m => m.layers.mask === culledLayer.mask && !before.has(m));
-      out.push(`${name}${ring ?? ''}: slab-culled ${world.culler.slabCulled}, oracle-visible ${seen.size}, visible-but-culled ${hidden.length}${hidden.length ? ` (${hidden.slice(0, 5).map(m => m.name).join(', ')})` : ''}`);
-      if (pre.length) out.push(`  (already culled without slab occlusion, ARCH's atrium margin: ${pre.map(m => `${m.name} ${seen.get(m)}px`).join(', ')})`);
+      // task track3 (lane ARCH): with the full mall culler (atrium + slab occlusion) NO oracle-visible mesh is culled by any rule
+      const hiddenAll = [...seen.keys()].filter(m => m.layers.mask === culledLayer.mask);
+      const drawn = drawnBy([world.group], cam);
+      out.push(`${name}${ring ?? ''}: drawn ${drawn.length} / ${(trisOf(drawn) / 1e6).toFixed(2)} M tris, slab-culled ${world.culler.slabCulled}, oracle-visible ${seen.size}, visible-but-culled ${hidden.length}${hidden.length ? ` (${hidden.slice(0, 5).map(m => m.name).join(', ')})` : ''}, any-rule ${hiddenAll.length}`);
+      if (pre.length) out.push(`  (culled with slab occlusion OFF — the 20 m atrium margin alone: ${pre.map(m => `${m.name} ${seen.get(m)}px`).join(', ')})`);
       expect(hidden.map(m => `${name}${ring ?? ''}: ${m.name} (${seen.get(m)} px)`)).toEqual([]);
+      expect(hiddenAll.map(m => `${name}${ring ?? ''}: ${m.name} (${seen.get(m)} px)`)).toEqual([]);
       checked++;
     }
     if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-slabs.txt', out.join('\n'));

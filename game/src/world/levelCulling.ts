@@ -47,9 +47,11 @@
 // atrium tile, then sight tests nearest-first until ONE succeeds (at most ATRIUM_SIGHT_TESTS; a tile right beside the eye or
 // within ATRIUM_NEAR counts outright — the platform under the void, a balustrade, the glass lift cab). If the void is seen,
 // every frustum-visible atrium tile is visible for all its levels (over-drawing an occluded corner never pops; under-drawing
-// would), those levels join the breadth-first pass, and a mesh of such a level renders within ATRIUM_MARGIN (20 m: a gallery plus a
-// whole sales floor seen through its shopfront) of a visible atrium tile (per-entry tile lists, built once). Back-of-house meshes
-// deeper than that (stock rooms, service corridors) stay hidden when seen from another storey. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
+// would), those levels join the breadth-first pass. With the mall's SLAB OCCLUSION (opts.slabs, lane PERF) every mesh of such a level
+// is a candidate and the slab planes (inside each slab, SLAB_DROP under the storey floor) remove the storey-occluded bulk exactly:
+// the former 20 m ATRIUM_MARGIN popped deep back-of-house slivers seen through distant openings (PERF's depth oracle: 22 meshes,
+// 1-8 px, on 17 poses), now 0 — and the start view draws fewer objects than margin + floor-height planes did. Without slabs (QA A/B)
+// the margin rule stands: a mesh of an atrium-visible level renders within ATRIUM_MARGIN of a visible atrium tile. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -105,6 +107,8 @@ export const ATRIUM_MARGIN = 20;
  * anything outside the grid and `see`-through cells — the glass lift shaft, closed on every grid but glazed — never cull).
  */
 const SLAB_EPS = 0.05;
+/** Task track3 (lane ARCH): slab planes sit this far under their storey floor (inside the slab; every mall slab is >= 0.4 m). */
+const SLAB_DROP = 0.2;
 
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
 
@@ -188,7 +192,10 @@ export class LevelCuller {
         for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) seeMask[cy * W + cx] = 1;
     }
     const lo: number[] = [], hi: number[] = [], ord: number[] = [];
-    for (const Y of planes) {
+    for (const Y0 of planes) {
+      // Task track3 (lane ARCH): the plane lies SLAB_DROP inside the slab under storey floor Y0 (a mesh starting on that floor is
+      // strictly above it, so the storey right above the eye can be slab-culled too); a band reaching into it stays open below.
+      const Y = Y0 - SLAB_DROP;
       const sat = new Int32Array((W + 1) * (H + 1));
       for (let cy = 0; cy < H; cy++) {
         let row = 0;
@@ -526,9 +533,15 @@ export class LevelCuller {
     st.levels = [...this.atriumLevels].sort((a, b) => a - b);
   }
 
-  /** Whether an entry of one of `levels` lies within ATRIUM_MARGIN of an atrium tile visible this update (mall only). */
+  /**
+   * Whether an entry of one of `levels` may show through the atrium this update (mall only). With slab occlusion (opts.slabs) the
+   * storey-occluded bulk is removed exactly afterwards, so EVERY mesh of a storey the void is seen into is a candidate (no distance
+   * margin: deep back-of-house slivers through distant openings are visible, the 20 m margin popped them — task track3 ARCH, the
+   * PERF oracle); without slabs the ATRIUM_MARGIN rule below stands.
+   */
   private nearAtrium(en: Entry, levels: readonly number[]): boolean {
     if (!this.atriumTiles.length || !this.atriumStats.seen || !levels.some(l => this.atriumLevels.has(l))) return false;
+    if (this.slabPlanes.length && this.slabs) return true;
     if (!en.near) {
       const out: number[] = [];
       this.atriumTiles.forEach((t, k) => {
