@@ -17,7 +17,7 @@ import {CELL_OF, GRAFFITI} from '../src/world/trackExt/graffiti';
 import {STEAM, SteamVents, annexVents} from '../src/world/trackExt/steam';
 import {Effects, STEAM_FX} from '../src/world/fx';
 import {planWarmup, warmKeys} from '../src/render/warmup';
-import {treatmentOf, planWallDetail, WALL_DETAIL_EXT_CAPS} from '../src/world/wallDetailPlan';
+import {treatmentOf, planWallDetail, extWallDetailCaps} from '../src/world/wallDetailPlan';
 import {areaNeglect} from '../src/world/decay';
 import {ambienceTypeFor, roomKindFor} from '../src/audio/sfx';
 import type {StationLayout} from '../src/gen/station';
@@ -454,8 +454,9 @@ describe('annex look and sound', () => {
     expect(first).toBeGreaterThan(0);
     for (let i = first; i < plan.faces.length; i++) expect(isExt(i)).toBe(true);
     const ext = plan.features.filter(f => isExt(f.face));
-    for (const layer of ['cut', 'decal', 'soft', 'flush', 'proud'] as const) expect(ext.filter(f => f.layer === layer).length).toBeLessThanOrEqual(WALL_DETAIL_EXT_CAPS[layer]);
-    expect(ext.filter(f => f.kind === 'breach').length).toBeLessThanOrEqual(WALL_DETAIL_EXT_CAPS.breach);
+    const caps = extWallDetailCaps(fx.layout as StationLayout);
+    for (const layer of ['cut', 'decal', 'soft', 'flush', 'proud'] as const) expect(ext.filter(f => f.layer === layer).length).toBeLessThanOrEqual(caps[layer]);
+    expect(ext.filter(f => f.kind === 'breach').length).toBeLessThanOrEqual(caps.breach);
   });
 
   it('a layout without extensions builds exactly as before (no view, no track-ext meshes)', () => {

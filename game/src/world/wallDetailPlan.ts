@@ -19,14 +19,13 @@
 import {CELL, FLOOR, SOLID, VOID} from '../gen/grid';
 import {Levels} from '../gen/levels';
 import {Rng, hashString} from '../core/rng';
-import {passageRails, signDims} from '../gen/doorways';
+import {doorClearVolumes, passageRails, signDims} from '../gen/doorways';
 import {storefrontParts} from '../gen/storefronts';
 import type {StationLayout} from '../gen/station';
 import type {WallFace, WallZone} from './wallFaces';
 import {faceFrame, normalizeFaces, stationWallFaces, type TreatFace} from './wallDetailFaces';
 import {CHUNK_M, stationLevels} from './levelGeometry';
 import {FRIEZE_SIZE, type AtlasCell} from './wallDetailAtlas';
-import {isExtensionArea} from '../gen/trackExt/types'; // Track 2 (lane GEN)
 
 export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete'
   // Task office-overhaul-20261030 (lane ARCH): office storey walls (painted plasterboard / feature finishes) and the roof parapets.
@@ -114,8 +113,13 @@ export const WALL_AGE_30Y = 0.12;
 
 /** Per-station bounded budgets (features; geometry counts are reported by the builder). */
 export const WALL_DETAIL_CAPS = {cut: 240, breach: 4, decal: 900, soft: 600, flush: 1400, proud: 220, perFaceCut: 4, perFaceCutPerM: 1 / 7};
-/** Track 2 (VIS): the extension areas' own budgets (all service annexes of a level together; about a quarter of the core's). */
+/** Track 2 (VIS): the extension areas' own budgets, PER service annex (about a quarter of the core's; the tunnels' few faces share them). */
 export const WALL_DETAIL_EXT_CAPS = {cut: 70, breach: 2, decal: 260, soft: 180, flush: 380, proud: 90};
+/** A level's whole extension budget: WALL_DETAIL_EXT_CAPS per annex (at least one unit when there are only tunnels). */
+export function extWallDetailCaps(layout: Pick<StationLayout, 'extensions'>): typeof WALL_DETAIL_EXT_CAPS {
+  const n = Math.max(1, layout.extensions?.annexes.length ?? 0), c = WALL_DETAIL_EXT_CAPS;
+  return {cut: c.cut * n, breach: c.breach * n, decal: c.decal * n, soft: c.soft * n, flush: c.flush * n, proud: c.proud * n};
+}
 
 /** Tile grids of the base finishes (must match the base wall textures). */
 export const SUBWAY = {w: 0.36, h: 0.15, split: 1.8, upperH: 0.2989 / 2};
@@ -220,7 +224,9 @@ export interface PlanOptions {
 export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): WallDetailPlan {
   // Track 2 (lane GEN): track-extension walls (tunnels / annexes) are not part of the core plan — its per-station caps, breaches
   // and seeds stay exactly the core's; the extensions' presentation plans their own walls (lane VIS).
-  const faces = normalizeFaces((opts.faces ?? stationWallFaces(layout)).filter(f => !isExtensionArea(layout.areas[f.area])));
+  // Track 2: extension faces (tunnels / annexes) stay in; they are re-ordered AFTER the core's below and planned on their own
+  // breach stream and caps (lane VIS), so the core's plan, caps and seeds are unchanged (lane GEN's preservation rule).
+  const faces = normalizeFaces(opts.faces ?? stationWallFaces(layout));
   const levels = new Levels(stationLevels(layout));
   const srng = new Rng(hashString('wall-detail', layout.seed >>> 0));
   const accent = STATION_ACCENTS[srng.int(0, STATION_ACCENTS.length - 1)];
@@ -262,17 +268,27 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   if (planned.some(isExtFace)) { const core = planned.filter(pf => !isExtFace(pf)), ext = planned.filter(isExtFace); planned.length = 0; planned.push(...core, ...ext); }
   const nCore = planned.findIndex(isExtFace) < 0 ? planned.length : planned.findIndex(isExtFace);
   ctx.near = new PlaneIndex(ctx);
+  if (nCore < planned.length) ctx.extDoors = doorClearVolumes(layout);
   planned.forEach((pf, i) => { pf.keepouts = keepoutsFor(ctx, pf); planFace(ctx, pf, i, {bayPhase, jointEvery}); });
   const byFace: Feature[][] = planned.map(() => []);
   for (const f of ctx.features) byFace[f.face].push(f);
   planBreaches(ctx, planned, srng.fork('breach'), byFace, 0, nCore);
-  if (nCore < planned.length) planBreaches(ctx, planned, srng.fork('breach-ext'), byFace, nCore, planned.length, WALL_DETAIL_EXT_CAPS.breach);
+  const extCapsAll = extWallDetailCaps(layout);
+  if (nCore < planned.length) planBreaches(ctx, planned, srng.fork('breach-ext'), byFace, nCore, planned.length, extCapsAll.breach);
   // Iteration 12 (ARCH): rust bleeding down the finish from wall-mounted steel (after every cut is final).
   planned.forEach((pf, i) => rustBleed({pf, idx: i, rng: new Rng(pf.face.seed ^ 0x7e57), placed: byFace[i]}, ctx));
   // Board-formed concrete last: its pattern runs around every cut, keep-out and other flush finish.
   planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
   const coreCaps = applyCaps(ctx.features.filter(f => f.face < nCore), planned);
-  const extCaps = nCore < planned.length ? applyCaps(ctx.features.filter(f => f.face >= nCore), planned, WALL_DETAIL_EXT_CAPS) : {features: [], dropped: 0};
+  // The annexes' many short walls plan far more detail than their budget: keep whole faces in a seeded shuffled order, so the
+  // bare walls are spread over every annex instead of the last-planned annex losing all of its detail.
+  let extOrder: Map<number, number> | undefined;
+  if (nCore < planned.length) {
+    const ids = planned.slice(nCore).map((_, k) => nCore + k), orng = srng.fork('caps-ext');
+    for (let k = ids.length - 1; k > 0; k--) { const j = orng.int(0, k); [ids[k], ids[j]] = [ids[j], ids[k]]; }
+    extOrder = new Map(ids.map((id, k) => [id, k]));
+  }
+  const extCaps = extOrder ? applyCaps(ctx.features.filter(f => f.face >= nCore), planned, extCapsAll, extOrder) : {features: [], dropped: 0};
   const features = [...coreCaps.features, ...extCaps.features], dropped = coreCaps.dropped + extCaps.dropped;
   const counts = Object.fromEntries(Object.keys(FEATURE_LAYER).map(k => [k, 0])) as Record<FeatureKind, number>;
   for (const f of features) counts[f.kind]++;
@@ -288,6 +304,8 @@ interface PlanCtx {
   rails: Box[];
   shopBoxes: Box[];
   near?: PlaneIndex;
+  /** Track 2: doorway clear volumes, kept out of extension faces only (annex doors may sit flush with a room corner). */
+  extDoors?: Box[];
 }
 
 /** Things that can sit against a wall, bucketed by wall plane (cell lines on X and on Z). */
@@ -376,6 +394,14 @@ function keepoutsFor(ctx: PlanCtx, pf: PlannedFace): PlannedFace['keepouts'] {
     }
   }
   const near = (ctx.near ?? new PlaneIndex(ctx)).at(pf.axis, planeOf(pf));
+  // Track 2: an annex door can sit flush with the corner of the room behind it, so a perpendicular wall's fittings would
+  // reach into its walk-through volume. Extension faces only: the core's plan is unchanged.
+  if (ctx.extDoors && (ctx.layout.areas[f.area] as {ext?: string} | undefined)?.ext) {
+    for (const b of ctx.extDoors) {
+      const r = boxOnFace(pf, b, 0.45);
+      if (r) add({s0: r.s0 - 0.05, s1: r.s1 + 0.05, y0: r.y0, y1: r.y1 + 0.05}, M.all & ~M.flush, 'door-clear');
+    }
+  }
   // Storefront frames / fascias / decor boxes against the wall.
   for (const b of near.shop) {
     const r = boxOnFace(pf, b, 0.35);
@@ -1115,10 +1141,11 @@ export function solidBehind(levels: Levels, pf: PlannedFace, r: Rect, depth: num
 // ---------------------------------------------------------------------------------------------
 
 /** Enforce per-station budgets (structure / identity first, then hotspot damage, then background). */
-function applyCaps(features: Feature[], faces: PlannedFace[], caps: Record<Layer, number> = WALL_DETAIL_CAPS): {features: Feature[]; dropped: number} {
+function applyCaps(features: Feature[], faces: PlannedFace[], caps: Record<Layer, number> = WALL_DETAIL_CAPS, faceOrder?: Map<number, number>): {features: Feature[]; dropped: number} {
   void faces;
   const rank = (f: Feature) => (f.layer === 'flush' ? 0 : f.kind === 'breach' ? 1 : f.hotspot !== undefined ? 2 : 3);
-  const order = features.map((f, i) => ({f, i})).sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i);
+  const fo = (f: Feature) => (faceOrder ? faceOrder.get(f.face) ?? 0 : 0);
+  const order = features.map((f, i) => ({f, i})).sort((a, b) => rank(a.f) - rank(b.f) || fo(a.f) - fo(b.f) || a.i - b.i);
   const used: Record<Layer, number> = {flush: 0, decal: 0, soft: 0, cut: 0, proud: 0};
   const cap: Record<Layer, number> = {flush: caps.flush, decal: caps.decal, soft: caps.soft, cut: caps.cut, proud: caps.proud};
   const keep = new Set<number>();
