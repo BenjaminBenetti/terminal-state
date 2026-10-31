@@ -535,7 +535,10 @@ describe('stack validation and the Subway regression', () => {
     // Track 2 lane GEN-2 — CAUSE: "core reserve enabled (authorized incidence change)": the Subway's core reserve re-lays station 1
     // (a layout change) and its live layout carries a track tunnel. PROOF (every run): generated with the reserve OFF, the CORE
     // view (gen/trackExt coreView) reproduces the iteration-16 pins byte for byte; the live station (reserve on + extensions)
-    // is pinned below (was the iteration-16 values: dc7abbcc / 1095b4d6 / fb391d51 / bf7c0c4).
+    // is pinned below (was the iteration-16 values: dc7abbcc / 1095b4d6 / fb391d51 / bf7c0c4). Track 2 (lane CONTENT): its tunnel
+    // now carries the sparse dim / dying tunnel fixtures (gen/annexContent.ts, appended layout.lights) and the tunnel's lighting
+    // profile follows them, so the live light field and the decay field's extension cells move (was a451242b / c645ac1f; the
+    // density and air maps and the slot / depth / header budget are unchanged; the reserve-off core view still holds).
     const maps = (s: StationLayout) => {
       const lv = stationLevels(s), f = bakeLightField({grid: s.grid, lights: s.lights, trenchFloorY: s.trench.floorY, levels: lv});
       expect([f.slots, f.depth, f.hdr]).toEqual([3, 24, 0]);
@@ -544,6 +547,6 @@ describe('stack validation and the Subway regression', () => {
       return [fnv(f.data), fnv(buildDensityMap(s, atmosphereFor(s)).data), fnv(buildAirMap(s).data), fnv(buildDecayField(s, lv).data)];
     };
     expect(maps(coreView(generateStation(1, {trackExtensions: TRACK_EXT_RESERVE_OFF})))).toEqual(['dc7abbcc', '1095b4d6', 'fb391d51', 'bf7c0c4']);
-    expect(maps(generateStation(1))).toEqual(['a451242b', 'fc9cf608', '8285fcc7', 'c645ac1f']);
+    expect(maps(generateStation(1))).toEqual(['912ec1a9', 'fc9cf608', '8285fcc7', '5725b18b']);
   });
 });

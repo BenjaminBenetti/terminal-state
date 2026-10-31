@@ -75,9 +75,10 @@ describe('track extensions — the core level is unchanged', () => {
       if (ext.extensions!.core.x || ext.extensions!.core.y) translated++;
       // the same attempt and core records whatever the plan; only the plan's appended records differ
       expect(ext.attempt, `${seed}`).toBe(other.attempt);
-      expect(ext.props.length).toBe(other.props.length);
-      expect(ext.pickups.length).toBe(other.pickups.length);
-      expect(ext.zombies.length).toBe(other.zombies.length);
+      // (lane CONTENT: the annexes' own content is appended after the core's — compared on the core views)
+      expect(coreView(ext).props.length).toBe(coreView(other).props.length);
+      expect(coreView(ext).pickups.length).toBe(coreView(other).pickups.length);
+      expect(coreView(ext).zombies.length).toBe(coreView(other).zombies.length);
       expect(other.extensions!.annexes).toEqual([]);
       sameCore(ext, other, `Subway ${seed} (reserve on: two plans)`);
       // the reserve itself: compared with the station without extensions (main)

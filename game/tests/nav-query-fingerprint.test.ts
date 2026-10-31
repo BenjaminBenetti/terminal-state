@@ -179,6 +179,9 @@ const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rai
 // Track 2 lane GEN-2 — CAUSE: "core reserve enabled (authorized incidence change)" + the GEN-2 incidence planner: the LIVE Subway
 // seed 1234 now carries two service-hatch annexes (it had no extension before; its core is unchanged: SUBWAY above, proven with
 // the reserve off and on), so the extended world the random queries sample (cells drawn over W x H) changes. Was = SUBWAY.
-const SUBWAY_LIVE = {lines: '98db9ae5', circles: '958d5d98', support: '0f5d72cc', rails: '967a2aa5', finds: 'fdfd6e2b'};
+// Track 2 (lane CONTENT): its two hatch annexes are now dressed (gen/annexContent.ts, appended after every core pass: prop footprints
+// block annex cells) — the live world changes again (was {lines 98db9ae5, circles 958d5d98, support 0f5d72cc, rails 967a2aa5,
+// finds fdfd6e2b}); SUBWAY (core, reserve off and on) still holds byte for byte. gen/levels.ts / gen/grid.ts untouched.
+const SUBWAY_LIVE = {lines: 'f3ead7d8', circles: 'f2f9e858', support: '14ebe369', rails: '967a2aa5', finds: '8b2e7b36'};
 /** The fixture runs no PathFinder (finds = the empty hash). */
 const FIXTURE = {lines: '2278f298', circles: 'c101d1b8', support: '1243b7fb', rails: 'ca023ed8', finds: '811c9dc5'};
