@@ -706,7 +706,8 @@ export const ANNEX_SCRAPS: LootSpec = {items: ANNEX_SCRAPS_ROWS, lots: [1, 1], e
  * and `salvage: false` (no crafting material on any level). Finite like every holder: rolled once per holder stream, remembered by
  * run memory, never refilled. No rare gear, mask or weapon (those stay the level's ONE rolls, never in an annex).
  *  - the open SHELF is the survivor's PANTRY: tins, noodles, chocolate, bottled water, a soda (food / drink only);
- *  - the tall / low CABINET their KIT: dressings, now and then a first-aid kit, torch batteries, gas-mask filters, bottled water;
+ *  - the tall / low CABINET their KIT: dressings, now and then a first-aid kit or a splint / sling, torch batteries, gas-mask filters,
+ *    bottled water;
  *  - the CRATE their SUPPLY CRATE — the ONLY cache holder with ammo (the deliberate ammo rule): generic ammo split evenly over the
  *    three calibers every level uses (9mm pistol start, 5.56 rifle, 12-gauge shotgun finds: genericAmmo), in the crate's big-box
  *    stacks (BOX_COUNT big: ~8 / 10 / 4.5 rounds a lot), plus a few tins, water, a dressing, a cell.
@@ -715,7 +716,10 @@ export const ANNEX_SCRAPS: LootSpec = {items: ANNEX_SCRAPS_ROWS, lots: [1, 1], e
  */
 export const ANNEX_CACHE_KEY = 'annex-cache';
 export const ANNEX_CACHE_PANTRY_ROWS: ItemRows = [['water', 1.2], ['beans', 1.1], ['noodles', 0.6], ['chocolate', 0.5], ['cola', 0.35]];
-export const ANNEX_CACHE_KIT_ROWS: ItemRows = [['bandage', 1.3], ['medkit', 0.45], ['battery', 0.9], ['gas_filter', 0.55], ['water', 0.4]];
+// (primary, after the first CI run: the injury economy's "treatments ≈ as common as med kits" — exact tables skip the limb conversion,
+// so the kit carries the survivor's own splint / sling and slightly fewer med kits: per Subway station treatments / med kits stays
+// in 0.8-1.7, injuries.test.ts)
+export const ANNEX_CACHE_KIT_ROWS: ItemRows = [['bandage', 1.3], ['medkit', 0.35], ['leg_splint', 0.12], ['arm_sling', 0.12], ['battery', 0.9], ['gas_filter', 0.55], ['water', 0.4]];
 export const ANNEX_CACHE_CRATE_ROWS: ItemRows = [...genericAmmo(1.5), ['beans', 0.5], ['water', 0.4], ['bandage', 0.4], ['battery', 0.3]];
 /** The cache's pantry shelf: food / drink, never empty, 2-3 lots (exact, no salvage). */
 export const ANNEX_CACHE_PANTRY: LootSpec = {items: ANNEX_CACHE_PANTRY_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};

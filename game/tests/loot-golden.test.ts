@@ -98,6 +98,11 @@
 //     1724, 468 -> 492); and the annex signature lockers' table without crafting materials (ANNEX_SPARES_ROWS). Re-pinned:
 //     subwayHolders 5c456623 -> 288dd84c, officeHolders 7e08e006 -> e69a7b80. Every pickup hash, core view, the reserve-off proof,
 //     the roof find and the gear roll / placement are unchanged.
+// 14. Same task, after the first PR CI run — LIVE Subway holders only. CAUSE: injuries.test's economy rule "treatments ≈ as common as
+//     med kits" (0.8-1.7 per station) fell to 0.796: the exact cache kit added med kits but no limb treatments (exact skips the limb
+//     conversion). The kit now carries a splint / sling (0.12 each) and med kits 0.35 (was 0.45): per station treatments 2.61, med
+//     kits 2.89. Re-pinned: subwayHolders 288dd84c -> de651870 (same holder / lot counts). Office holders, pickups, core views,
+//     reserve-off, roof find and gear unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -120,7 +125,7 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: '288dd84c', // stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
+  subwayHolders: 'de651870', // stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
   subwayPickups: '0467b2d6', // stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
   officeHolders: 'e69a7b80', // stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)

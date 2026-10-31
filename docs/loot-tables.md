@@ -302,14 +302,17 @@ reproduce the earlier pins byte for byte).
     | Holder | Table | Rows (weight) |
     |---|---|---|
     | open shelf — the pantry | `ANNEX_CACHE_PANTRY` | water 1.2, beans 1.1, noodles 0.6, chocolate 0.5, cola 0.35 |
-    | tall / low cabinet — the kit | `ANNEX_CACHE_KIT` | bandage 1.3, medkit 0.45, battery 0.9, gas_filter 0.55, water 0.4 |
+    | tall / low cabinet — the kit | `ANNEX_CACHE_KIT` | bandage 1.3, medkit 0.35, leg_splint 0.12, arm_sling 0.12, battery 0.9, gas_filter 0.55, water 0.4 |
     | crate — the supply crate | `ANNEX_CACHE_CRATE` | generic ammo 1.5 (~0.5 each 9mm / 5.56 / 12-gauge), beans 0.5, water 0.4, bandage 0.4, battery 0.3 |
 
+  - **Limb treatments (after the first PR CI run):** exact tables skip the scarcity step's limb conversion, so the first kit (med
+    kits only) pushed the Subway's per-station treatments / med kits to 0.796, below the injury economy's 0.8–1.7
+    (`injuries.test.ts`). The kit now carries the survivor's own splint / sling: per station treatments 2.61 vs med kits 2.89 (0.90).
   - **The ammo rule (deliberate):** only the cache CRATE holds ammo — generic rows over the three calibers every level uses (the 9mm
     pistol start, the 5.56 rifle and 12-gauge shotgun finds), in the crate's big-box stacks (`BOX_COUNT` big: ~8 / 10 / 4.5 rounds a
     lot). The pantry and the kit never hold ammo.
   - **Allocation (expected per cache, before fit; 3 holders x E[lots] 2.5 = 7.5 lots):** food 1.9 (tins 1.1, noodles 0.4,
-    chocolate 0.3), drink 1.6 (water 1.4, cola 0.2), dressings 1.2, first-aid kits 0.3, torch batteries 0.9, gas-mask filters 0.4,
+    chocolate 0.3), drink 1.6 (water 1.4, cola 0.2), dressings 1.1, first-aid kits 0.25, limb treatments (splint / sling) 0.16, torch batteries 0.85, gas-mask filters 0.4,
     ammo 1.2 lots (~9 rounds). A 2-holder cache (no third piece fitted: 14 of 60 measured) is ~2/3 of that. Measured on the sample
     (packed lots, `ContainerManager.build` with each level's profile): see `docs/track-extensions.md` "Survivor caches".
   - **Never a reward roll:** no rare gear, gas mask, weapon or crafting material (`salvage: false`: the mall's salvage rows never join
