@@ -142,7 +142,7 @@ export function mallQaPoses(layout: StationLayout): QaPose[] {
  * QA hooks (spread into window.__LL by qa.ts): mallArch() summary, mallFog({density, color}) tune, mallSkylight(), mallCuller(),
  * mallPoses(), mallPose(name) (teleport + look; returns the pose or null).
  */
-export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atriumStats?: unknown; stats?: unknown}} | null; layout?: StationLayout; scene?: THREE.Scene},
+export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atriumStats?: unknown; stats?: unknown; slabCulled?: number}} | null; layout?: StationLayout; scene?: THREE.Scene},
   lookAt: (x: number, y: number, z: number) => void, teleport: (x: number, z: number, yaw?: number, level?: number) => boolean) {
   return {
     mallArch: () => game.world?.mallArch?.summary() ?? null,
@@ -153,7 +153,7 @@ export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atr
       return {density: f?.density ?? null, color: f?.color?.getHex() ?? null, t36: fogTransmittance(36, f?.density), t100: fogTransmittance(100, f?.density)};
     },
     mallSkylight: () => skylightStats(),
-    mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null}),
+    mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null}), // (+ slabCulled: lane PERF)
     mallPoses: () => (game.layout ? mallQaPoses(game.layout) : []),
     mallPose: (name: string) => {
       const p = game.layout ? mallQaPoses(game.layout).find(q => q.name === name || q.name.startsWith(name)) : undefined;

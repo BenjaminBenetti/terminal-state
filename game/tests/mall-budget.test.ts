@@ -8,8 +8,12 @@
 // Fixes pinned here:
 //  - render/instancing.ts: attribute instancing (the path three uses above the uniform-block limit) — identical transform,
 //    one shared program per material; ON for the mall only (Game.buildSection), the Subway / Office build as before;
-//  - assets/textureRelease.ts: the mall's lazy models release their decoded images (ImageBitmaps, ~450 MB) once uploaded,
-//    keeping a 32² colour thumbnail for the colour samplers; boot models / other levels untouched;
+//  - assets/textureRelease.ts: in the mall the lazy AND boot models release their decoded images (ImageBitmaps: ~450 + ~370 MB)
+//    once uploaded; the three colour samplers read the exact thumbnails they would have drawn (pixel-identical results); uploads
+//    are staged behind the loading screen in byte-bounded batches (no title-frame peak of every decoded image + its GPU copy);
+//  - world/levelCulling.ts slab occlusion (mall only): a mesh behind a storey slab whose every ray from the eye crosses closed
+//    structure is not drawn (start view 1,524 -> 1,076 objects); a depth-buffered oracle on 12 QA poses finds no visible mesh
+//    it hides;
 //  - budgets for the real mall (seed t3a, the primary's QA seed): programs in the start view, render objects, triangles,
 //    geometry / canvas-texture bytes, materials, the lazy model working set (decoded texture bytes from the GLB headers).
 //    A budget failure means the mall's working set grew: measure again (LL_MALL_BUDGET_OUT=/tmp/x.json writes the numbers) and
@@ -20,18 +24,21 @@ import * as THREE from 'three';
 import {describe, expect, it} from 'vitest';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
-import {ShimContext, installCanvasShim} from './helpers/canvas2d';
+import {ShimCanvas, ShimContext, installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
 import {compileNodeMaterial} from './helpers/nodeCompile';
 import {attributeInstancing, setAttributeInstancing} from '../src/render/instancing';
-import {RELEASE_THUMB, modelTextures, releaseAfterUpload, releaseModelTexturesAfterUpload, textureReleaseStats} from '../src/assets/textureRelease';
+import {RELEASE_THUMB, SAMPLE_SIZES, modelTextures, pendingUploads, releaseAfterUpload, releaseModelTexturesAfterUpload, sampleSource, stageUploads, textureReleaseStats, trackUploads} from '../src/assets/textureRelease';
 import {LEVELS, arrivalPose} from '../src/levels/registry';
 import {codeToSeed} from '../src/core/rng';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {ContainerManager} from '../src/world/containers';
 import {ShelfStock} from '../src/world/shelfStock';
-import {fogCullDistance} from '../src/world/levelCulling';
+import {CULL_LAYER, fogCullDistance} from '../src/world/levelCulling';
+import {mallQaPose} from '../src/gen/mall/qa';
+import type {StationLayout} from '../src/gen/station';
+import {visibleMeshes} from './helpers/visibleMeshes';
 import {MALL_FOG} from '../src/world/mallAtmosphere';
 import {p7ModelKeysFor, P7_FILES} from '../src/gen/props07';
 import {officeModelKeysFor} from '../src/gen/office/index';
@@ -52,8 +59,9 @@ for (const k of ['clip', 'rect']) (ShimContext.prototype as unknown as Record<st
 const MALL_BUDGET = {
   /** Distinct GPU programs (vertex + fragment pairs) the start view needs with attribute instancing (measured 29). */
   startViewPrograms: 60,
-  /** Render objects (meshes + instanced meshes) in the start view after the culler + frustum (measured 1,527). */
-  startViewObjects: 2000,
+  /** Render objects / triangles in the start view after the culler (with slab occlusion) + frustum (measured 1,076 / 3.46 M;
+   *  1,524 / 4.97 M with the atrium rule alone). */
+  startViewObjects: 1400, startViewTriangles: 4.5e6,
   /** Whole level: render objects (5,468), triangles (13.9 M), geometry bytes (60 MB), materials (285). */
   objects: 7000, triangles: 18e6, geometryMB: 80, materials: 380,
   /** Canvas / data textures referenced by the level's materials, with mips (104 MB). */
@@ -138,15 +146,14 @@ describe('attribute instancing (render/instancing.ts)', () => {
     const i = src.indexOf('setAttributeInstancing(!!this.layout.mall)'), w = src.indexOf('this.world = buildWorld(');
     expect(i).toBeGreaterThan(0);
     expect(i).toBeLessThan(w);
-    expect(src).toMatch(/if \(this\.layout\.mall\) for \(const k of keep\) \{ const g = this\.propModels\.get\(k\); if \(g\) releaseModelTexturesAfterUpload\(g\); \}/);
   });
 });
 
-describe('mall lazy-model decoded images (assets/textureRelease.ts)', () => {
+describe('decoded model images released after upload in the mall (assets/textureRelease.ts)', () => {
   const bitmap = (w = 1024, h = 1024) => ({width: w, height: h, closed: false, close() { this.closed = true; }});
   const tick = () => new Promise(r => setTimeout(r, 1));
 
-  it('releases a decoded image once uploaded, waits for every texture sharing it, keeps a colour thumbnail and the texture\'s own hook', async () => {
+  it('releases a decoded image once uploaded, waits for every texture sharing it, keeps the texture\'s own hook', async () => {
     const s0 = {...textureReleaseStats};
     const bmA = bitmap(), a = new THREE.Texture(bmA as never);
     let own = 0;
@@ -154,13 +161,12 @@ describe('mall lazy-model decoded images (assets/textureRelease.ts)', () => {
     // GLTFLoader clones a texture per sampler: clones share the source
     const bmB = bitmap(512, 512), b = new THREE.Texture(bmB as never), b2 = b.clone();
     expect(b2.source).toBe(b.source);
-    expect(releaseAfterUpload([a, b, b2, a])).toBe(3);
+    expect(releaseAfterUpload([a, b, b2, a])).toBe(2); // two images
     a.onUpdate!(a); // three: upload done
     expect(own).toBe(1);
     expect((a.image as {width: number}).width).toBe(RELEASE_THUMB);
-    expect(a.onUpdate).not.toBeNull(); // the texture's own hook is back
     a.onUpdate!(a);
-    expect(own).toBe(2);
+    expect(own).toBe(2); // the texture's own hook keeps running
     b.onUpdate!(b);
     expect(b.image).toBe(bmB); // b2 has not been uploaded yet: the image stays
     b2.onUpdate!(b2);
@@ -172,7 +178,57 @@ describe('mall lazy-model decoded images (assets/textureRelease.ts)', () => {
     expect(textureReleaseStats.bytes - s0.bytes).toBe((1024 * 1024 + 512 * 512) * 4);
   });
 
-  it('never hooks canvases / image elements / data textures; collects every texture of a model', () => {
+  it('an image uploaded BEFORE the mall asked (boot models: the item icons at load) is released at once; trackers alone change nothing', async () => {
+    const bm = bitmap(256, 256), t = new THREE.Texture(bm as never);
+    expect(trackUploads([t])).toBe(1); // Game.load: a recorder only
+    t.onUpdate!(t); // uploaded by the icon render
+    expect(t.image).toBe(bm); // nothing released outside the mall
+    expect(releaseAfterUpload([t])).toBe(1); // the mall's buildSection
+    expect((t.image as {width: number}).width).toBe(RELEASE_THUMB);
+    await tick();
+    expect(bm.closed).toBe(true);
+  });
+
+  it('the colour samplers read the EXACT pixels they would have drawn from the original image (16 / 24 / 32 px)', async () => {
+    const restore = installCanvasShim(true); // rasterizing shim: real pixels
+    try {
+      const src = Object.assign(document.createElement('canvas') as unknown as ShimCanvas, {close() { /* a decoded bitmap */ }});
+      src.width = 64; src.height = 48;
+      for (let i = 0; i < src.data.length; i += 4) { src.data[i] = (i * 7) % 251; src.data[i + 1] = (i * 13) % 241; src.data[i + 2] = (i * 3) % 199; src.data[i + 3] = 255; }
+      const draw = (img: unknown, n: number) => { const c = document.createElement('canvas') as unknown as ShimCanvas; c.width = c.height = n; c.getContext().drawImage(img, 0, 0, n, n); return Array.from(c.data); };
+      const before = SAMPLE_SIZES.map(n => draw(src, n));
+      const t = new THREE.Texture(src as never);
+      releaseAfterUpload([t]);
+      t.onUpdate!(t);
+      expect(t.image).not.toBe(src);
+      SAMPLE_SIZES.forEach((n, k) => expect(draw(sampleSource(t.image, n), n)).toEqual(before[k]));
+      expect(sampleSource(src, 24)).toBe(src); // an image never released passes through (Subway / Office: byte-identical)
+      // every CPU reader of a model image draws through sampleSource at a size the release keeps
+      const read = (f: string) => readFileSync(fileURLToPath(new URL(`../src/${f}`, import.meta.url)), 'utf8');
+      expect(read('world/meshSplit.ts')).toMatch(/drawImage\(sampleSource\(img, 24\), 0, 0, 24, 24\)/);
+      expect(read('damage/wounds.ts')).toMatch(/drawImage\(sampleSource\(img, 16\), 0, 0, 16, 16\)/);
+      expect(read('damage/sample.ts')).toMatch(/const SIZE = 32;[\s\S]*drawImage\(sampleSource\(img, SIZE\), 0, 0, SIZE, SIZE\)/);
+      expect([...SAMPLE_SIZES]).toEqual([16, 24, 32]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('staged uploads: byte-bounded batches, each batch\'s bitmaps closed before the next batch uploads; only pending textures', async () => {
+    const bms = [bitmap(512, 512), bitmap(512, 512), bitmap(512, 512)], ts = bms.map(b => new THREE.Texture(b as never));
+    const done = new THREE.Texture(bitmap(64, 64) as never), other = new THREE.Texture(bitmap(64, 64) as never);
+    releaseAfterUpload([...ts, done]);
+    done.onUpdate!(done); // already uploaded: not staged again
+    trackUploads([other]); // tracked but not hooked for release: never staged
+    const closedAt: number[] = [];
+    const n = await stageUploads(t => { closedAt.push(bms.filter(b => b.closed).length); t.onUpdate!(t); }, [...ts, done, other], {batchBytes: 512 * 512 * 4});
+    expect(n).toBe(3);
+    expect(closedAt).toEqual([0, 1, 2]); // the previous batch's image was closed before each upload
+    expect(bms.every(b => b.closed)).toBe(true);
+    expect(pendingUploads([...ts, done, other])).toEqual([]);
+  });
+
+  it('never hooks canvases / image elements / data textures; collects every texture of a model; idempotent', () => {
     const canvas = new THREE.CanvasTexture(document.createElement('canvas') as never);
     const element = new THREE.Texture({width: 64, height: 64} as never);
     const data = new THREE.DataTexture(new Uint8Array(4), 1, 1);
@@ -183,14 +239,30 @@ describe('mall lazy-model decoded images (assets/textureRelease.ts)', () => {
     scene.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({map})));
     expect([...modelTextures({scene})].length).toBe(2);
     expect(releaseModelTexturesAfterUpload({scene})).toBe(2);
-    expect(releaseModelTexturesAfterUpload({scene})).toBe(0); // idempotent
+    expect(releaseModelTexturesAfterUpload({scene})).toBe(0);
+  });
+
+  it('game wiring: boot models tracked at load, lazy models after fetch, both released in the mall only, uploads staged before the warm-up mode check', () => {
+    const src = readFileSync(fileURLToPath(new URL('../src/game.ts', import.meta.url)), 'utf8');
+    const load = src.indexOf('async load('), icons = src.indexOf('await buildItemIcons(');
+    const track = src.indexOf('for (const g of Object.values(m)) trackUploads(modelTextures(g));');
+    expect(track).toBeGreaterThan(load);
+    expect(track).toBeLessThan(icons); // before the icons upload the guns / items
+    expect(src).toMatch(/await this\.propModels\.ensure\(lazyKeys, onProgress\);\s*for \(const k of lazyKeys\) \{ const g = this\.propModels\.get\(k\); if \(g\) trackUploads\(modelTextures\(g\)\); \}/);
+    expect(src).toMatch(/if \(this\.layout\.mall\) \{\s*for \(const k of keep\) \{ const g = this\.propModels\.get\(k\); if \(g\) releaseModelTexturesAfterUpload\(g\); \}\s*for \(const g of Object\.values\(this\.assets\.models\)\) releaseModelTexturesAfterUpload\(g\);\s*\}/);
+    const run = src.indexOf('private async runWarmup('), stage = src.indexOf('await this.stageLevelTextures(ui);', run), mode = src.indexOf('const mode = warmupMode(', run);
+    expect(stage).toBeGreaterThan(run);
+    expect(stage).toBeLessThan(mode); // runs with ?warmup=off too
+    expect(src).toMatch(/private async stageLevelTextures\(ui: WarmupUi\): Promise<void> \{\s*if \(!this\.layout\?\.mall/);
   });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
-describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budget', () => {
-  it('start view programs / objects, level objects / triangles / bytes / materials, lazy model working set within budget', async () => {
+/** The real mall t3a built once through the game's build path (shared by the budget and the slab-occlusion oracle tests). */
+let real: Promise<{layout: StationLayout; world: ReturnType<typeof buildWorld>; cm: ContainerManager; stock: ShelfStock; roots: THREE.Object3D[]; keys: string[]; lazyTex: number}> | null = null;
+function realMall() {
+  return (real ??= (async () => {
     const layout = LEVELS.mall.generate(LEVELS.mall.entry, {levelSeed: codeToSeed('t3a')!, startWeapon: 'pistol'});
     // the lazy working set exactly as Game.modelKeysFor selects it
     const keys = selectLevelKeys('mall', [...new Set([...p7ModelKeysFor(layout), ...officeModelKeysFor(layout as never), ...enemyModelKeysFor(layout)])], CATALOGUE).keys;
@@ -207,7 +279,44 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     cm.build(layout, models, lootProfile('mall'));
     const stock = new ShelfStock();
     stock.build(layout, {models, lotsOf: () => []});
-    const roots = [world.group, cm.group, stock.group];
+    world.culler.register(cm.group);
+    world.culler.register(stock.group);
+    world.culler.maxDistance = Math.min(fogCullDistance(MALL_FOG.density), MALL_FOG.far);
+    return {layout, world, cm, stock, roots: [world.group, cm.group, stock.group], keys, lazyTex};
+  })());
+}
+
+/** A game camera (fov 75, 960 x 540, the mall's far plane) at a pose's eye (floor + 1.62 m). */
+function eyeCam(x: number, floorY: number, z: number, yaw: number, pitch: number): THREE.PerspectiveCamera {
+  const cam = new THREE.PerspectiveCamera(75, 960 / 540, 0.05, MALL_FOG.far);
+  cam.position.set(x, floorY + 1.62, z);
+  cam.rotation.set(pitch, yaw, 0, 'YXZ');
+  cam.updateMatrixWorld(true);
+  cam.updateProjectionMatrix();
+  return cam;
+}
+
+/** Render objects a camera would draw (level culler + three's per-object frustum test). */
+function drawnBy(roots: readonly THREE.Object3D[], cam: THREE.PerspectiveCamera): THREE.Mesh[] {
+  const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+  const sph = new THREE.Sphere(), out: THREE.Mesh[] = [];
+  for (const r of roots) r.traverse(o => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    for (let p: THREE.Object3D | null = m; p; p = p.parent) if (!p.visible) return;
+    if (!cam.layers.test(m.layers)) return;
+    const im = m as THREE.InstancedMesh;
+    if (im.isInstancedMesh) { im.computeBoundingSphere(); sph.copy(im.boundingSphere!); } else { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); sph.copy(m.geometry.boundingSphere!); }
+    if (m.frustumCulled !== false && !fr.intersectsSphere(sph.applyMatrix4(m.matrixWorld))) return;
+    out.push(m);
+  });
+  return out;
+}
+const trisOf = (l: readonly THREE.Mesh[]) => l.reduce((s, m) => { const g = m.geometry; return s + (g.index ? g.index.count : g.attributes.position.count) / 3 * ((m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1); }, 0);
+
+describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budget', () => {
+  it('start view programs / objects, level objects / triangles / bytes / materials, lazy model working set within budget', async () => {
+    const {layout, world, roots, keys, lazyTex} = await realMall();
 
     // whole level
     const arrays = new Set<unknown>(), materials = new Set<THREE.Material>(), textures = new Set<THREE.Texture>();
@@ -243,32 +352,18 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
       canvasTex += !img.data && t.generateMipmaps && t.minFilter !== THREE.LinearFilter && t.minFilter !== THREE.NearestFilter ? raw * 4 / 3 : raw;
     }
 
-    // the start view (the title screen's first frame): the level culler + the frustum from the arrival pose
+    // the start view (the title screen's first frame): the level culler (+ the mall's slab occlusion) + the frustum, arrival pose
     const pose = arrivalPose(layout, {kind: 'start'} as never);
     const lv = pose.level ?? 0;
     const y0 = pose.y ?? (lv > 0 ? (layout.levels?.[lv - 1]?.grid ?? layout.grid) : layout.grid).floorAt(pose.x, pose.z);
-    const cam = new THREE.PerspectiveCamera(75, 960 / 540, 0.05, MALL_FOG.far);
-    cam.position.set(pose.x, y0 + 1.62, pose.z);
-    cam.rotation.set((pose as {pitch?: number}).pitch ?? 0, pose.yaw, 0, 'YXZ');
-    cam.updateMatrixWorld(true);
-    world.culler.register(cm.group);
-    world.culler.register(stock.group);
-    world.culler.maxDistance = Math.min(fogCullDistance(MALL_FOG.density), MALL_FOG.far);
+    const cam = eyeCam(pose.x, y0, pose.z, pose.yaw, (pose as {pitch?: number}).pitch ?? 0);
     for (const r of roots) r.updateMatrixWorld(true);
+    world.culler.slabs = false;
     world.culler.update(cam, true);
-    const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
-    const sph = new THREE.Sphere();
-    const inView: THREE.Mesh[] = [];
-    for (const r of roots) r.traverse(o => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh) return;
-      for (let p: THREE.Object3D | null = m; p; p = p.parent) if (!p.visible) return;
-      if (!cam.layers.test(m.layers)) return;
-      const im = m as THREE.InstancedMesh;
-      if (im.isInstancedMesh) { im.computeBoundingSphere(); sph.copy(im.boundingSphere!); } else { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); sph.copy(m.geometry.boundingSphere!); }
-      if (m.frustumCulled !== false && !fr.intersectsSphere(sph.applyMatrix4(m.matrixWorld))) return;
-      inView.push(m);
-    });
+    const noSlab = drawnBy(roots, cam);
+    world.culler.slabs = true;
+    world.culler.update(cam, true);
+    const inView = drawnBy(roots, cam);
     const smallInstanced = inView.filter(m => (m as THREE.InstancedMesh).isInstancedMesh && (m as THREE.InstancedMesh).count * 64 <= 65536).length;
     // distinct programs with attribute instancing (as Game.buildSection sets it for the mall): one compile per material /
     // attribute-layout group (GLSL node builder = the WebGL 2 path), deduplicated by the generated code
@@ -295,7 +390,7 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     }
 
     const report = {
-      startView: {objects: inView.length, smallInstanced, programsDefault: smallInstanced + codes.size, programsAttribute: codes.size},
+      startView: {objects: inView.length, triangles: Math.round(trisOf(inView)), objectsNoSlab: noSlab.length, trianglesNoSlab: Math.round(trisOf(noSlab)), slabCulled: world.culler.slabCulled, smallInstanced, programsDefault: smallInstanced + codes.size, programsAttribute: codes.size},
       level: {objects, triangles: Math.round(triangles), geometryMB: +(geometry / MB).toFixed(1), materials: materials.size, canvasTextureMB: +(canvasTex / MB).toFixed(1)},
       lazy: {models: keys.length, textureMB: +(lazyTex / MB).toFixed(1)},
     };
@@ -304,6 +399,8 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     expect(codes.size).toBeLessThanOrEqual(MALL_BUDGET.startViewPrograms);
     expect(codes.size * 10).toBeLessThan(smallInstanced + codes.size); // the fix: >= 10x fewer programs than three's default here
     expect(inView.length).toBeLessThanOrEqual(MALL_BUDGET.startViewObjects);
+    expect(trisOf(inView)).toBeLessThanOrEqual(MALL_BUDGET.startViewTriangles);
+    expect(inView.length).toBeLessThan(noSlab.length * 0.8); // slab occlusion: >= 20 % fewer objects than the atrium rule alone (measured -29 %)
     expect(objects).toBeLessThanOrEqual(MALL_BUDGET.objects);
     expect(triangles).toBeLessThanOrEqual(MALL_BUDGET.triangles);
     expect(geometry / MB).toBeLessThanOrEqual(MALL_BUDGET.geometryMB);
@@ -312,4 +409,39 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     expect(keys.length).toBeLessThanOrEqual(MALL_BUDGET.lazyModels);
     expect(lazyTex / MB).toBeLessThanOrEqual(MALL_BUDGET.lazyTextureMB);
   }, 240_000);
+
+  it('slab occlusion never hides a mesh with visible pixels (depth-buffered oracle) on QA poses across every storey', async () => {
+    const {layout, world} = await realMall();
+    const poses: [Parameters<typeof mallQaPose>[1], number?][] = [['platform-lookup'], ['court'], ['ring-edge', 1], ['ring-edge', 3], ['ring-edge', 6],
+      ['shopfront', 2], ['shopfront', 5], ['escalator', 0], ['escalator', 3], ['bridge'], ['elevator'], ['washrooms', 1]];
+    const culledLayer = new THREE.Layers();
+    culledLayer.set(CULL_LAYER);
+    const out: string[] = [];
+    let slabTotal = 0, checked = 0;
+    for (const [name, ring] of poses) {
+      const p = mallQaPose(layout, name, ring);
+      if (!p) continue;
+      const cam = eyeCam(p.x, p.y, p.z, p.yaw, p.pitch);
+      world.group.updateMatrixWorld(true);
+      // baseline: the culler without slab occlusion (ARCH's atrium rule hides deep back of house from other storeys by design)
+      world.culler.slabs = false;
+      world.culler.update(cam, true);
+      const before = new Set<THREE.Mesh>();
+      world.group.traverse(o => { if ((o as THREE.Mesh).isMesh && o.layers.mask === culledLayer.mask) before.add(o as THREE.Mesh); });
+      world.culler.slabs = true;
+      world.culler.update(cam, true);
+      slabTotal += world.culler.slabCulled;
+      const seen = visibleMeshes(world.group, cam, 128, 72, {minPx: 1});
+      const pre = [...seen.keys()].filter(m => before.has(m));
+      const hidden = [...seen.keys()].filter(m => m.layers.mask === culledLayer.mask && !before.has(m));
+      out.push(`${name}${ring ?? ''}: slab-culled ${world.culler.slabCulled}, oracle-visible ${seen.size}, visible-but-culled ${hidden.length}${hidden.length ? ` (${hidden.slice(0, 5).map(m => m.name).join(', ')})` : ''}`);
+      if (pre.length) out.push(`  (already culled without slab occlusion, ARCH's atrium margin: ${pre.map(m => `${m.name} ${seen.get(m)}px`).join(', ')})`);
+      expect(hidden.map(m => `${name}${ring ?? ''}: ${m.name} (${seen.get(m)} px)`)).toEqual([]);
+      checked++;
+    }
+    if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-slabs.txt', out.join('\n'));
+    expect(checked).toBeGreaterThanOrEqual(10);
+    expect(slabTotal).toBeGreaterThan(0); // the rule actually culls on these poses
+    world.culler.update(eyeCam(layout.mall!.start.x, 0, layout.mall!.start.z, 0, 0), true);
+  }, 300_000);
 });

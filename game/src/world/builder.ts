@@ -685,7 +685,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Iteration 08: level visibility culling (world/levelCulling.ts); game.ts registers its other station
   // groups (containers, stock) and calls culler.update(camera) before rendering.
   // Task track3-eaton-centre-20261031 (lane ARCH): in the mall the culler also gets the atrium columns (view-dependent visibility).
-  const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium} : undefined);
+  // Task track3-eaton-centre-20261031 (lane PERF): + slab occlusion in the mall (the glazed lift shaft is see-through: levelCulling.ts)
+  const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}} : undefined);
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: faces, rails, levelAt, culler,
     ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {})};

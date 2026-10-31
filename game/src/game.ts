@@ -70,7 +70,7 @@ import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iterati
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
-import {releaseModelTexturesAfterUpload, textureReleaseStats} from './assets/textureRelease'; // (lane PERF) mall lazy-model decoded images freed after upload
+import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
@@ -484,6 +484,9 @@ export class Game {
     this.assets = await loadAssets(onProgress);
     const m = this.assets.models;
     for (const g of Object.values(m)) g.scene.traverse(o => { const mesh = o as THREE.Mesh; if (mesh.isMesh) this.sharedGeometries.add(mesh.geometry); });
+    // Task track3-eaton-centre-20261031 (lane PERF): record the boot models' texture uploads (a recorder only; the item icons below
+    // upload many of them) so the mall can release their decoded images (assets/textureRelease.ts)
+    for (const g of Object.values(m)) trackUploads(modelTextures(g));
     const lb = new THREE.Box3().setFromObject(m.light.scene).getSize(new THREE.Vector3());
     this.mats = new WorldMaterials(this.assets.textures, 20261025, {w: lb.x, h: lb.y, d: lb.z});
     // Food/drink use the generated item models when the manifest has them (else stand-ins).
@@ -545,7 +548,9 @@ export class Game {
     this.lifecycleCounts.prepare++;
     this.propModels.sealed = this.levelResources.sealed = false; // lane PACKAGE (track3): the loading screen fetches the level's assets
     const layout = this.generateSection(key, run);
-    await this.propModels.ensure(this.modelKeysFor(layout, key.level), onProgress);
+    const lazyKeys = this.modelKeysFor(layout, key.level);
+    await this.propModels.ensure(lazyKeys, onProgress);
+    for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); } // (lane PERF, track3) upload recorder only
     for (const pre of this.sectionPreloads) {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
@@ -652,8 +657,12 @@ export class Game {
     // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
     // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
     setAttributeInstancing(!!this.layout.mall);
-    // (lane PERF) the mall's lazy models drop their decoded images once uploaded (assets/textureRelease.ts; boot models untouched)
-    if (this.layout.mall) for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
+    // (lane PERF) in the mall the level's lazy models AND the boot models drop their decoded images once uploaded (GPU textures and
+    // what is drawn unchanged; the colour samplers read exact thumbnails: assets/textureRelease.ts)
+    if (this.layout.mall) {
+      for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
+      for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
+    }
     this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     this.scene.add(this.world.group);
     if (!this.containers) {
@@ -1088,9 +1097,29 @@ export class Game {
     return run;
   }
 
+  /**
+   * Task track3-eaton-centre-20261031 (lane PERF): in the mall, upload the built level's model textures behind the loading screen
+   * in byte-bounded batches (assets/textureRelease.ts stageUploads), each batch's decoded images released before the next one,
+   * instead of the first frame uploading ~80 models' textures while every decoded copy is still resident (the load-time memory
+   * peak on a software rasterizer). Frames are held meanwhile (`warming`); prepareGraphics' finally clears it. No-op elsewhere.
+   */
+  private async stageLevelTextures(ui: WarmupUi): Promise<void> {
+    if (!this.layout?.mall || !this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return;
+    const textures = new Set<THREE.Texture>();
+    this.scene.traverse(o => collectTextures(o, textures));
+    const gen = this.stationGen;
+    this.warming = true;
+    ui.label.textContent = 'Preparing textures…';
+    await stageUploads(t => this.renderer.initTexture(t), textures, {
+      progress: (done, total) => { if (ui.bar) ui.bar.style.width = `${Math.floor(done / Math.max(1, total) * 100)}%`; },
+      alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
+    });
+  }
+
   private async runWarmup(ui: WarmupUi): Promise<WarmupResult> {
     this.lifecycleCounts.warmup++;
     const {bar, label, button} = ui;
+    await this.stageLevelTextures(ui); // Task track3-eaton-centre-20261031 (lane PERF): mall only; runs with ?warmup=off too
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
     if (!this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return (this.warmup = skippedWarmup('renderer or station not ready'));

@@ -93,6 +93,19 @@ export const ATRIUM_CAB_NEAR = 8;
  */
 export const ATRIUM_MARGIN = 20;
 
+/**
+ * Task track3-eaton-centre-20261031 (lane PERF): SLAB OCCLUSION (mall only, opts.slabs). The atrium rule above shows every mesh
+ * within ATRIUM_MARGIN of a visible void tile, on every storey; from the pit platform that is ~1,100 world meshes of which a
+ * depth-buffered oracle sees ~260 — the rest stand on gallery slabs seen from below (or under slabs seen from above). A mesh is
+ * now also hidden when, for some storey floor plane y = Y between the eye and the WHOLE mesh box, every ray from the eye to the
+ * box crosses that plane over closed structure: the box's 8 corners projected from the eye onto the plane bound every crossing
+ * point; if no cell of that rectangle is open across Y (no free band of any level straddles Y there, contiguous bands merged —
+ * the void, escalator / stair wells and band joints are open), every such ray leaves free space through a drawn floor, ceiling
+ * or wall before reaching the box. Exact in geometry, conservative in extent (bounding rectangle; boxes straddling a plane,
+ * anything outside the grid and `see`-through cells — the glass lift shaft, closed on every grid but glazed — never cull).
+ */
+const SLAB_EPS = 0.05;
+
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
 
 /** Lowest floor / highest ceiling of column i's band on grid g (ramps: the band the cell sweeps). */
@@ -149,11 +162,85 @@ export class LevelCuller {
   private atriumVis = new Uint8Array(0);
   private readonly atriumLevels = new Set<number>();
   atriumStats = {tiles: 0, inFrustum: 0, seen: false, sightTests: 0, levels: [] as number[]};
+  /** Task track3 (lane PERF): storey floor planes (y) and, per plane, a summed-area table of cells open across it (mall only). */
+  private readonly slabPlanes: number[] = [];
+  private readonly slabOpen: Int32Array[] = [];
+  /** Meshes hidden by slab occlusion in the last update (mall only; 0 elsewhere). */
+  slabCulled = 0;
+  /** Slab occlusion on / off (mall only; tests / QA A-B). */
+  slabs = true;
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
-    opts?: {atrium?: Uint8Array}) {
+    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
     this.levelIds = levels.map(l => l.id);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
+    if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
+  }
+
+  /** Task track3 (lane PERF): per storey floor plane, the cells open across it (summed-area table, (W + 1) x (H + 1)). */
+  private buildSlabs(see: readonly {x0: number; z0: number; x1: number; z1: number}[]): void {
+    const {W, H} = this.cols;
+    const base = Math.min(...this.levels.map(l => l.baseY));
+    const planes = [...new Set(this.levels.map(l => l.baseY).filter(y => y > base + 1))].sort((a, b) => a - b);
+    const seeMask = new Uint8Array(W * H);
+    for (const r of see) {
+      for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
+        for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) seeMask[cy * W + cx] = 1;
+    }
+    const lo: number[] = [], hi: number[] = [], ord: number[] = [];
+    for (const Y of planes) {
+      const sat = new Int32Array((W + 1) * (H + 1));
+      for (let cy = 0; cy < H; cy++) {
+        let row = 0;
+        for (let cx = 0; cx < W; cx++) {
+          const i = cy * W + cx;
+          let open = seeMask[i] === 1;
+          if (!open) {
+            lo.length = hi.length = ord.length = 0;
+            for (let k = 0; k < this.cols.count(i); k++) {
+              const g = this.levels[this.cols.level(i, k)].grid;
+              if (g.cells[i] !== FLOOR && g.cells[i] !== VOID) continue;
+              const ra = ramp(g, i);
+              ord.push(lo.length); lo.push(ra ? ra[0] : g.floorOf(i)); hi.push(ra ? ra[1] : cellCeil(g, i));
+            }
+            ord.sort((a, b) => lo[a] - lo[b]);
+            // merged free intervals (bands meeting at a joint are one open space: no floor / ceiling is drawn there)
+            let a = Infinity, b = -Infinity;
+            for (const q of ord) {
+              if (lo[q] > b + 0.02) { if (a < Y - SLAB_EPS && b > Y + SLAB_EPS) { open = true; break; } a = lo[q]; b = hi[q]; } else b = Math.max(b, hi[q]);
+            }
+            if (!open && a < Y - SLAB_EPS && b > Y + SLAB_EPS) open = true;
+          }
+          if (open) row++;
+          sat[(cy + 1) * (W + 1) + cx + 1] = sat[cy * (W + 1) + cx + 1] + row;
+        }
+      }
+      this.slabPlanes.push(Y);
+      this.slabOpen.push(sat);
+    }
+  }
+
+  /** Task track3 (lane PERF): whether a floor plane between the eye and the whole box blocks every ray to it (see SLAB_EPS). */
+  private slabHidden(en: Entry, e: THREE.Vector3): boolean {
+    const {W, H} = this.cols;
+    for (let p = 0; p < this.slabPlanes.length; p++) {
+      const Y = this.slabPlanes[p];
+      const up = e.y < Y - SLAB_EPS && en.y0 > Y + SLAB_EPS, down = e.y > Y + SLAB_EPS && en.y1 < Y - SLAB_EPS;
+      if (!up && !down) continue;
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let c = 0; c < 8; c++) {
+        const px = c & 1 ? en.x1 : en.x0, py = c & 2 ? en.y1 : en.y0, pz = c & 4 ? en.z1 : en.z0;
+        const t = (Y - e.y) / (py - e.y);
+        const x = e.x + (px - e.x) * t, z = e.z + (pz - e.z) * t;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+      }
+      const cx0 = Math.floor(x0 / CELL), cx1 = Math.floor(x1 / CELL), cy0 = Math.floor(z0 / CELL), cy1 = Math.floor(z1 / CELL);
+      if (cx0 < 0 || cy0 < 0 || cx1 >= W || cy1 >= H) continue; // leaves the grid: never culled by this plane
+      const s = this.slabOpen[p], R = W + 1;
+      const open = s[(cy1 + 1) * R + cx1 + 1] - s[cy0 * R + cx1 + 1] - s[(cy1 + 1) * R + cx0] + s[cy0 * R + cx0];
+      if (open === 0) return true;
+    }
+    return false;
   }
 
   /**
@@ -351,7 +438,7 @@ export class LevelCuller {
         hops++;
       }
     }
-    let culled = 0, fogged = 0;
+    let culled = 0, fogged = 0, slab = 0;
     // Iteration 12 (ARCH): three's FogExp2 fogs by VIEW DEPTH (-mvPosition.z), not distance: at the screen corners
     // a box 58 m away is only ~31 m deep (~17 % visible). Fog-cull a box only when its nearest point along the view
     // axis lies beyond maxDistance (conservative, so nothing still visible through the fog pops out at the edges).
@@ -368,6 +455,8 @@ export class LevelCuller {
       else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
       // Another level: only near a portal tile the camera can see (task track3: or near a visible atrium tile of that level).
       else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, [en.level]);
+      // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged)
+      if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHidden(en, e)) { show = false; slab++; }
       if (show === !en.culled) continue;
       if (show) { en.obj.layers.mask = en.mask; en.culled = false; } else { en.mask = en.obj.layers.mask; en.obj.layers.set(CULL_LAYER); en.culled = true; }
     }
@@ -378,6 +467,7 @@ export class LevelCuller {
     this.stats.hops = hops;
     this.stats.culled = culled;
     this.stats.fogged = fogged;
+    this.slabCulled = slab;
   }
 
   /** The eye's level set holding just `level` (eyeOverride). */
