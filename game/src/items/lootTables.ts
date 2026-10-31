@@ -189,7 +189,7 @@ export const HOLDER_MOD: Readonly<Record<string, CatWeights>> = {
   ...p7(e => e.mod),
   // track3 lane SHOPS: mall shop holders (their purposes normally decide; these apply in a purpose-less area only)
   glassCounter: [0.8, 0.6, 0.6, 0.2], merchTable: [1, 1, 0.4, 0.1], wallBay: [1, 1, 0.6, 0.2], produceStand: [2, 0.8, 0, 0], bookstoreBookcase: [1, 1, 0.5, 0.1],
-  retailGondola: [1.2, 1, 0.6, 0.1], clothingWallUnit: [1, 1, 0.6, 0.1], checkoutLane: [1.2, 1, 0.2, 0.05], outdoorsPlankShelving: [1, 1.2, 0.6, 0.2], storageTote: [1, 1, 0.8, 0.4],
+  retailGondola: [1.2, 1, 0.6, 0.1], clothingWallUnit: [1, 1, 0.6, 0.1], checkoutLane: [1.2, 1, 0.2, 0.05], outdoorsPlankShelving: [1, 1.2, 0.6, 0.2],
   shoeWallDisplay: [1, 1, 0.5, 0.1], foodCourtTableSet: [1, 1.4, 0.1, 0],
 };
 /** Empty-roll chance of the original table roll (iteration 12: most holders end up empty anyway — items/lootEconomy.ts). */
@@ -199,7 +199,7 @@ export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
   kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
   ...p7(e => e.empty),
   glassCounter: 0.35, merchTable: 0.5, wallBay: 0.3, produceStand: 0.3, bookstoreBookcase: 0.4, // track3 lane SHOPS
-  retailGondola: 0.3, clothingWallUnit: 0.5, checkoutLane: 0.45, outdoorsPlankShelving: 0.3, storageTote: 0.35, shoeWallDisplay: 0.4, foodCourtTableSet: 0.65,
+  retailGondola: 0.3, clothingWallUnit: 0.5, checkoutLane: 0.45, outdoorsPlankShelving: 0.3, shoeWallDisplay: 0.4, foodCourtTableSet: 0.65,
 };
 /** Lot-count range of the original table roll. */
 export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
@@ -209,7 +209,7 @@ export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
   kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
   ...p7(e => e.lots),
   glassCounter: [1, 3], merchTable: [1, 2], wallBay: [1, 3], produceStand: [1, 3], bookstoreBookcase: [1, 2], // track3 lane SHOPS
-  retailGondola: [1, 3], clothingWallUnit: [1, 2], checkoutLane: [1, 2], outdoorsPlankShelving: [1, 3], storageTote: [1, 2], shoeWallDisplay: [1, 2], foodCourtTableSet: [1, 2],
+  retailGondola: [1, 3], clothingWallUnit: [1, 2], checkoutLane: [1, 2], outdoorsPlankShelving: [1, 3], shoeWallDisplay: [1, 2], foodCourtTableSet: [1, 2],
 };
 /** Stocked rooms get fuller shelves: `extra` more lots at the high end for these holder kinds (legacy tables only). */
 export const FULL_ROOMS = {
@@ -479,6 +479,8 @@ export const GLASS_CABINET_ROWS: ItemRows = [['battery', 1], ['bandage', 0.9], [
 export const DISPENSARY_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.7], ['water', 0.5]];
 /** Lane SHOPS (track3, batch 2 M29): the medicine drawer cabinet (container-themed) — dressings in the small drawers, kits on the shelves. */
 export const MEDICINE_CABINET_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.6], ['water', 0.3]];
+/** Lane SHOPS (track3, M18): a stock-room storage tote — what stock rooms keep (narrowed to the room purpose's rows: room-themed). */
+export const TOTE_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['bandage', 0.5], ['battery', 0.5], ['chips', 0.4]];
 /** Lane SHOPS (track3): a gallery kiosk cart's cabinet — snacks, drinks, a cell. */
 export const KIOSK_CART_ROWS: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
 
@@ -527,6 +529,8 @@ export const OPENABLE_TABLES = {
   mallKioskCart: {lots: [1, 3], empty: 0.35, items: KIOSK_CART_ROWS},
   // lane SHOPS (track3): batch 2 M29 — one per pharmacy / clinic / first-aid room (35 compartments, most of them empty)
   medicineDrawerCabinet: {lots: [2, 4], empty: 0.3, items: MEDICINE_CABINET_ROWS},
+  // lane SHOPS (track3): M18 storage totes — 1-3 per stock room, so most stay empty
+  storageTote: {lots: [1, 2], empty: 0.55, items: TOTE_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------

@@ -853,8 +853,7 @@ function dressBack(d: ShopDresser, f: MallShopFit): void {
   // each extra once (the first long wall, the rest on the other)
   d.wallRun(long[0], ex, ax(long[0]) ? d.fr.x0 + 0.3 : d.fr.z0 + 0.3, ax(long[0]) ? d.fr.x1 - 0.3 : d.fr.z1 - 0.3, {max: ex.length});
   if (d.placed.length < ex.length) d.wallRun(long[1], ex.slice(d.placed.length), ax(long[1]) ? d.fr.x0 + 0.3 : d.fr.z0 + 0.3, ax(long[1]) ? d.fr.x1 - 0.3 : d.fr.z1 - 0.3, {max: ex.length - d.placed.length});
-  // storage totes (lane ASSETS M18) on the floor along the walls: their inner trays hold stock (an explicit openables exception:
-  // the lid flaps are modelled raised open)
+  // storage totes (lane ASSETS M18) on the floor along the walls: lidded spill boxes with a little room-themed stock inside
   d.againstWall('storageTote', d.rng.int(1, 3));
   if (pre) return;
   for (const s of long) {

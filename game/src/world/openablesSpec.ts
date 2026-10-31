@@ -1009,6 +1009,27 @@ export const OPENABLE_SPECS = {
     loot: LOOT.medicineDrawerCabinet,
     sound: {open: 'cabinetTall', close: 'cabinetTall'},
   },
+  /**
+   * Batch 1 M18 storage tote (mall-storage-tote.glb, lid closed locally by lane ASSETS: 0.60 x 0.48 x 0.59), measured in the prop frame
+   * (lane SHOPS ray casts): one rigid lid above y 0.414 (top 0.475, underside 0.437..0.442, skirt over the rim) hinged on its BACK
+   * edge (z -0.292, y 0.442: ASSETS' file +Z after the half turn); the tub's 7 mm walls taper from x +-0.238 / z +-0.231 (inner, at the
+   * floor 0.015) to x +-0.256 / z +-0.248 at 0.40, a flat insert plate across it at 0.366..0.376 -> a lined tub (replaceInterior drops the
+   * plate inside the liner) with its stock on the liner floor. A light SPILL holder: knocked loose, its lots spill once.
+   */
+  storageTote: {
+    label: 'storage tote', model: 'office-storage-tote', turn: true, body: 'model', group: 'container', spill: true,
+    parts: [{
+      name: 'tote lid',
+      move: {type: 'hinge', axis: 'x', pivot: [0, 0.442, -0.292], angle: -100 * P, min: 45 * P},
+      region: [box(-0.305, 0.414, -0.3, 0.305, 0.49, 0.3)],
+      plate: box(-0.26, 0.437, -0.26, 0.26, 0.44, 0.26),
+      cavity: box(-0.228, 0.02, -0.222, 0.228, 0.41, 0.222), replaceInterior: true,
+      rim: [0.27, -0.255, 0.255, 0.228, -0.222, 0.222, 0.412],
+      surfaces: [{y: 0.024, x0: -0.19, x1: 0.19, z0: -0.18, z1: 0.18, clear: 0.36}],
+    }],
+    loot: LOOT.storageTote,
+    sound: {open: 'crate', close: 'crate'},
+  },
 } as const satisfies Record<string, OpenableSpec>;
 
 export type OpenableKind = keyof typeof OPENABLE_SPECS;
@@ -1025,7 +1046,8 @@ export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingB
   'bakeryCase', // task office-props-physics-scale-20261030 (lane FURN): the bakery display case
   'bookstoreBookcase', // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (base drawers + open shelves)
   'mallCashwrapCounter', 'glassDisplayCabinet', 'pharmacyDispensaryCounter', 'mallKioskCart', // lane SHOPS: lane ASSETS batch 1 storage
-  'medicineDrawerCabinet'] as const; // lane SHOPS: lane ASSETS batch 2 M29
+  'medicineDrawerCabinet', // lane SHOPS: lane ASSETS batch 2 M29
+  'storageTote'] as const; // lane SHOPS: batch 1 M18 once lane ASSETS closed its lid (a lidded spill box)
 export type OpenableContainerKind = (typeof OPENABLE_CONTAINER_KINDS)[number];
 
 /**

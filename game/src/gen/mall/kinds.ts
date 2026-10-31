@@ -92,8 +92,8 @@ const SPECS = {
   outdoorsPlankShelving: {box: [1.5, 0.481, 1.742], cls: 'wood'},
   /** M17 mall kiosk cart: a 2-door lower cabinet, an open double-sided display box above, a canopy, push handles. */
   mallKioskCart: {box: [2.5, 1.46, 1.707], cls: 'laminate'},
-  /** M18 storage tote: its two lid flaps are modelled RAISED OPEN over an inner tray (0.376 m). */
-  storageTote: {box: [0.6, 0.59, 0.627], cls: 'plastic'},
+  /** M18 storage tote: a plastic tub under one hinged lid (lane ASSETS closed the modelled-open lid locally: s12b). */
+  storageTote: {box: [0.6, 0.59, 0.481], cls: 'plastic'},
   /** M19 shoe wall display: 6 shallow ledge rows in 3 columns on a wall panel. */
   shoeWallDisplay: {box: [2.0, 0.225, 1.995], cls: 'laminate'},
   /** M20 food-court table set: a table (top 0.75 m) and four stools on one floor-fixed frame. */
@@ -121,10 +121,10 @@ export function isMallKind(kind: string): kind is MallKind {
 /** Holder kinds among them (items/loot.ts SURFACE_KINDS; their surfaces: MALL_SURFACES). */
 export const MALL_HOLDER_KINDS = ['glassCounter', 'merchTable', 'wallBay', 'produceStand',
   // lane ASSETS batch 1 open holders
-  'retailGondola', 'clothingWallUnit', 'checkoutLane', 'outdoorsPlankShelving', 'storageTote', 'shoeWallDisplay', 'foodCourtTableSet'] as const satisfies readonly MallKind[];
+  'retailGondola', 'clothingWallUnit', 'checkoutLane', 'outdoorsPlankShelving', 'shoeWallDisplay', 'foodCourtTableSet'] as const satisfies readonly MallKind[];
 /** Openable mall containers (world/openablesSpec.ts OPENABLE_SPECS; derived drawers / doors measured on their models). */
 export const MALL_OPENABLE_KINDS = ['bookstoreBookcase', 'mallCashwrapCounter', 'glassDisplayCabinet', 'pharmacyDispensaryCounter', 'mallKioskCart',
-  'medicineDrawerCabinet'] as const satisfies readonly MallKind[];
+  'medicineDrawerCabinet', 'storageTote'] as const satisfies readonly MallKind[];
 export type MallOpenableKind = (typeof MALL_OPENABLE_KINDS)[number];
 export type MallHolderKind = (typeof MALL_HOLDER_KINDS)[number];
 export function isMallHolderKind(kind: string): kind is MallHolderKind {
@@ -231,8 +231,8 @@ export const MALL_SURFACES: Readonly<Record<MallHolderKind | MallOpenableKind, r
     {y: 0.87, x0: -0.67, x1: 0.67, z0: -0.2, z1: 0.22, clear: 0.24},
     {y: 1.14, x0: -0.7, x1: 0.7, z0: -0.22, z1: 0.22, clear: 0.5},
   ],
-  // M18 tote: the inner tray (0.376; walls at +-0.24, the raised lid flaps above the rim)
-  storageTote: [{y: 0.376, x0: -0.22, x1: 0.22, z0: -0.22, z1: 0.22, clear: 0.15}],
+  // M18 tote: none exposed (its tub is under the lid; nothing rides its lid: a spill holder never floats lots)
+  storageTote: [],
   // M19 shoe wall: ledges 0.30 / 0.54 / 1.01 / 1.24 full width, 0.78 left two columns, 1.46 centre column (z -0.11..0.113)
   shoeWallDisplay: ([[0.3, -0.97, 0.97], [0.54, -0.97, 0.97], [0.78, -0.96, 0.31], [1.01, -0.97, 0.97], [1.24, -0.97, 0.97], [1.46, -0.3, 0.31]] as const)
     .map(([y, x0, x1]) => ({y, x0, x1, z0: -0.1, z1: 0.1, clear: y === 1.46 ? 0.3 : 0.19})),
@@ -298,7 +298,7 @@ export const MALL_PHYS = {
   checkoutLane: S('holder', 'checkout lane counter fixed to the floor (~120 kg): a loot holder stays put'),
   outdoorsPlankShelving: S('holder', 'pipe-and-plank shelving bracketed to the wall: a loot holder stays put'),
   mallKioskCart: S('holder', 'braked kiosk cart (~150 kg loaded): a loot holder stays put so its finite lots never float'),
-  storageTote: S('holder', 'loaded storage tote with its lid flaps open (~15 kg): a holder that does not spill stays put (its finite lots would float); a lid that closes would make it a spill holder (lanes/SHOPS.done)'),
+  storageTote: {dynamic: true, mass: 4, mat: 'pad', how: 'plastic storage tote with a hinged lid (~4 kg with a little stock): an openable SPILL holder (openablesSpec `spill`) — a shot or a walk-in knocks it loose, its finite lots spill once as pickups (never float / duplicate), then it slides / tips'},
   shoeWallDisplay: S('holder', 'shoe wall display screwed to the wall: a loot holder stays put'),
   foodCourtTableSet: S('anchored', 'food-court table and four stools on one frame bolted to the floor; loot on the table top'),
   // task track3 (lane ARCH): landmarks
@@ -341,7 +341,7 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   outdoorsPlankShelving: {role: 'surface', cls: 'open', how: 'open pipe-and-plank shelving (M16): loot on its planks is reachable'},
   mallKioskCart: {role: 'storage', cls: 'openable', how: 'kiosk cart (M17): 2 derived lower-cabinet doors; its display box is open on both long sides'},
   medicineDrawerCabinet: {role: 'storage', cls: 'openable', how: 'medicine drawer cabinet (M29): 33 derived small drawers + a derived top cupboard door (left), a derived full-height door (right) over shelves; EXCEPTION inside: the bay\'s inner drawer bank is fixed (a drawer behind a door could be left out when the door shuts on it: nested compartments are not supported) — its top and the three shelves are the bay\'s loot surfaces'},
-  storageTote: {role: 'storage', cls: 'exception', how: 'storage tote (M18): EXCEPTION — its two lid flaps are modelled RAISED OPEN in the delivered mesh (no closed rest pose for the openables hinge to start from), so there is nothing to shut; the inner tray (0.376 m) is an open loot surface, always reachable. A lid that closes needs a local mesh edit by lane ASSETS (lanes/SHOPS.notes), not a regeneration'},
+  storageTote: {role: 'storage', cls: 'openable', how: 'storage tote (M18, lid closed locally by lane ASSETS): its derived lid lifts on the back edge over a lined tub (room-themed finite contents)'},
   shoeWallDisplay: {role: 'surface', cls: 'open', how: 'open shoe wall (M19): loot on its ledges is reachable'},
   foodCourtTableSet: {role: 'surface', cls: 'open', how: 'food-court table set (M20): open table top, stools; nothing to open'},
   // task track3 (lane ARCH): landmarks
@@ -535,8 +535,9 @@ export function mallShape(kind: MallKind): ShapePart[] {
       box('steelBright', [0.04, 0.95, 0.04], [0.88, 1.13, 0]),
     ];
     case 'storageTote': return [
-      box('plasticSeat', [w * 0.8, 0.37, d * 0.8], [0, 0.185, 0]),
-      box('plasticSeat', [w, 0.03, d], [0, 0.38, 0]),
+      box('plasticSeat', [w * 0.82, 0.41, d * 0.82], [0, 0.205, 0]),
+      box('plasticSeat', [w * 0.94, 0.03, d * 0.94], [0, 0.428, 0]),
+      box('plasticSeat', [w * 0.96, h - 0.443, d * 0.96], [0, (h + 0.443) / 2, 0]),
     ];
     case 'shoeWallDisplay': return [
       box('panel', [w, h, 0.03], [0, h / 2, -d / 2 + 0.015]),

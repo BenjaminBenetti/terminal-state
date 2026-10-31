@@ -298,8 +298,7 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
     for (const k of MALL_HOLDER_KINDS) {
       expect(isLootHolderKind(k), k).toBe(true);
       expect(HOLDER_SLOTS[k], k).toBeTruthy();
-      // (the M18 storage tote is storage whose lid flaps are modelled raised open: a reasoned exception, its tray an open surface)
-      expect(MALL_OPEN_AUDIT[k].cls, k).toBe(k === 'storageTote' ? 'exception' : 'open');
+      expect(MALL_OPEN_AUDIT[k].cls, k).toBe('open');
       const def = PROP_DEFS[k];
       const surf = holderSurfaces(k, def);
       expect(surf.length, k).toBe(MALL_SURFACES[k].length);
@@ -369,7 +368,8 @@ describe('lane ASSETS batch 1: measured models, openables, audits', () => {
 
   it('the four storage fixtures open (rule 1): measured drawers / doors, own themed finite tables, surfaces inside the box', () => {
     // (batch 2 M29: 33 small drawers + the top cupboard + the full-height door)
-    const PARTS: Record<string, number> = {mallCashwrapCounter: 6, glassDisplayCabinet: 2, pharmacyDispensaryCounter: 10, mallKioskCart: 2, medicineDrawerCabinet: 35};
+    // (M18 storage tote: its one lid, once lane ASSETS closed it)
+    const PARTS: Record<string, number> = {mallCashwrapCounter: 6, glassDisplayCabinet: 2, pharmacyDispensaryCounter: 10, mallKioskCart: 2, medicineDrawerCabinet: 35, storageTote: 1};
     for (const [k, n] of Object.entries(PARTS)) {
       const spec = openableSpec(k as never)!;
       expect(spec, k).toBeDefined();
@@ -390,7 +390,7 @@ describe('lane ASSETS batch 1: measured models, openables, audits', () => {
         expect(q.z1, k).toBeLessThanOrEqual(def.d / 2 + 1e-6);
         expect(q.y, k).toBeLessThanOrEqual(def.h);
       }
-      expect(MALL_PHYS[k as keyof typeof MALL_PHYS].dynamic, k).toBe(false);
+      expect(MALL_PHYS[k as keyof typeof MALL_PHYS].dynamic, k).toBe(k === 'storageTote');
     }
     // contents themed to the container: the dispensary holds medicine, whatever shop it stands in
     const cats: Record<string, number> = {};
@@ -410,10 +410,20 @@ describe('lane ASSETS batch 1: measured models, openables, audits', () => {
     }
   });
 
-  it('exceptions are explicit: the open bays / stands / lanes are open holders, the tote a reasoned storage exception, the gun rack empty decor', () => {
-    expect(MALL_OPEN_AUDIT.storageTote).toMatchObject({role: 'storage', cls: 'exception'});
-    expect(MALL_OPEN_AUDIT.storageTote.how.length).toBeGreaterThan(60);
-    expect(MALL_PHYS.storageTote.dynamic).toBe(false);
+  it('exceptions are explicit: the open bays / stands / lanes are open holders, the gun rack empty decor; the tote a lidded spill box', () => {
+    // M18 tote (lid closed locally by lane ASSETS): an openable lidded container that moves (rules 1-2) — a light dynamic SPILL holder
+    // (knocked loose, its finite lots spill once: nothing floats / duplicates), its lid hinged on the back edge, room-themed own table
+    expect(MALL_OPEN_AUDIT.storageTote).toMatchObject({role: 'storage', cls: 'openable'});
+    const tote = openableSpec('storageTote')!;
+    expect(tote.spill).toBe(true);
+    expect(tote.parts[0].move).toMatchObject({type: 'hinge', axis: 'x'});
+    expect((tote.parts[0].move as {pivot: readonly number[]}).pivot[2]).toBeLessThan(0);
+    expect(MALL_PHYS.storageTote).toMatchObject({dynamic: true, mat: 'pad'});
+    expect((MALL_PHYS.storageTote as {mass: number}).mass).toBeGreaterThanOrEqual(2);
+    expect((MALL_PHYS.storageTote as {mass: number}).mass).toBeLessThanOrEqual(8);
+    expect(dynamicKind('storageTote')).toBe(true);
+    expect(MALL_SURFACES.storageTote).toEqual([]);
+    expect(holderTable('storageTote', 'mall-guns-back').source).toBe('own');
     for (const k of ['clothingWallUnit', 'retailGondola', 'checkoutLane', 'produceStand', 'glassCounter', 'outdoorsPlankShelving', 'shoeWallDisplay', 'foodCourtTableSet'] as const) {
       expect(MALL_OPEN_AUDIT[k].cls, k).toBe('open');
       expect(MALL_SURFACES[k].length, k).toBeGreaterThan(0);
