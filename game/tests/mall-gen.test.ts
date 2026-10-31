@@ -5,7 +5,8 @@
 
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
-import {LEVELS, LEVEL_IDS, TRACK_EXTENSIONS, arrivalPose, isLevelId, storeyLabel, travelTargets} from '../src/levels/registry';
+import {LEVELS, LEVEL_IDS, arrivalPose, isLevelId, storeyLabel, travelTargets} from '../src/levels/registry';
+import {TRACK_EXT_MALL, trackExtCoverageIssues} from '../src/gen/trackExt/index'; // lane INTEG (Track2 integration)
 import {generateMallLevel, mallIssues, mallVoidCells, MALL_GEN_STATS, MALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
 import {levelsOf} from '../src/gen/levels';
 import {CELL, FLOOR, SOLID, PathFinder, type Waypoint} from '../src/gen/grid';
@@ -35,15 +36,19 @@ function mall(variant?: MallVariant, seed = SEED): StationLayout {
 }
 
 describe('The Eaton\'s Center: registration and selection', () => {
-  it('is a registered LevelId (tier 2) with a generator, travel targets, labels and an interim Track2 declaration', () => {
+  it('is a registered LevelId (tier 2) with a generator, travel targets, labels and a real Track2 declaration (extendTracks ran)', () => {
     expect(LEVEL_IDS).toEqual(['subway', 'office', 'mall']);
     expect(isLevelId('mall')).toBe(true);
     expect(LEVELS.mall.name).toBe("The Eaton's Center");
     expect(LEVELS.mall.sections(1)).toEqual(['main']);
     expect(travelTargets('mall')).toEqual(['subway', 'office']);
     expect(travelTargets('subway')).toEqual(['office', 'mall']);
-    expect(TRACK_EXTENSIONS.mall).toMatchObject({enabled: true});
+    // lane INTEG (Track2 integration): the real TrackExtConfig (never 'none'); the generator planned every bed end (coverage rule)
+    expect(LEVELS.mall.trackExtensions).toBe(TRACK_EXT_MALL);
+    expect(TRACK_EXT_MALL.coreReserveM).toBe(0);
     const L = LEVELS.mall.generate('main', {levelSeed: SEED, startWeapon: 'rifle'});
+    expect(L.extensions).toBeDefined();
+    expect(trackExtCoverageIssues('mall', LEVELS.mall.trackExtensions, L)).toEqual([]);
     expect(L.mall?.version).toBe(1);
     const pose = arrivalPose(L, {kind: 'start'});
     expect(pose).toMatchObject({source: 'start', level: 0});

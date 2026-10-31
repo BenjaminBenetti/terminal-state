@@ -56,10 +56,13 @@ pit (storey 0) and six retail rings around the void (storeys 1..6), generated on
   - `pit` — the station storey (platforms, plaza, courts), once per level: U{6..9}.
   - `ring` — one retail ring, once per ring (six runs): U{7..10} each. E ≈ 58.5 ambient enemies per level — sized to the larger
     world but less dense than the Office (a ring is ~6–8× an Office storey; the hordes concentrate the threat).
-  - `service` — Track2's per-annex zone budget (U{2..4} per annex). A **data hook, NOT INTEGRATED**: Track2's same-world service
-    annexes are not on main, so no generator runs it (0 runs; excluded from the level total; `MALL_SERVICE_HOOK`). When they land, each
-    annex runs it once on its own fork with the mall's ambient family profile, appended after every core spawn and tagged `service`;
-    no Siren there (the mall's Siren rule names `ring` only), never the horde pool.
+  - `service` — Track 2's per-annex zone budget `SERVICE_CONTEXT` (U{3..5} per annex), exactly as on the Subway / Office (see
+    "Service annexes" below; lane INTEG integration): one run per seeded service annex of the pit station on its own fork, appended
+    after every core spawn (hordes included) and tagged `service`, inheriting the mall's family pool; no Siren there (the mall's Siren
+    rule names `ring` only), never the horde pool, not in the pit / ring counts or the ambient budget. **Currently 0 runs in every
+    mall:** Track 2's planner finds no tunnel (both bed ends "blocked at the mouth": the rings overhang the whole station, and the
+    planner keeps rock on EVERY storey above an extension cell) and no hatch (both beds are flanked by platforms) — measured in
+    `docs/track-extensions.md` "The Eaton's Center".
   - `families` = `MALL_ENEMY_POOL` = `familyPool({siren: MALL_SIREN_WEIGHT})`: Blightbelly 0.05 and rat/dog 0.05 (the defaults), the
     Siren's draw weight 0.32, the zombie the remainder — rolled ONCE by `assignEnemyArchetypes(layout, spawnProfile('mall'))` after
     every ambient context.
@@ -163,7 +166,7 @@ same family pool and zombie types, same tier.
 
 | Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |
 |---|---|
-| Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service` |
+| Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service`, `SPAWN_PROFILES.mall.contexts.service` (lane INTEG; 0 annexes in the mall so far) |
 | Count | `SERVICE_ZONE_BUDGET` = U{3..5} **per annex** (one draw per annex run), additive to the core contexts |
 | Area weights | `SERVICE_AREA_WEIGHTS`: annex rooms 1.4, corridors 1.0, closets 0.6 |
 | Caps | `SERVICE_CAPS`: passes 1 / 2; closets 1 |

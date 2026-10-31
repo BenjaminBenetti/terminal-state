@@ -210,12 +210,12 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center — ONE level: the pit station + the retail rings
   mall: {
     generator: {fn: 'generateMallLevel', file: F.mallIndex,
-      note: `ONE continuous level (the subway station at the bottom of the open void and ${MALL_RINGS} retail rings around it) generated once per level seed: placeOfficeEnemies runs the pit context once and the ring context once per ring, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; assignEnemyArchetypes rolls every ambient family ONCE (Siren eligibility included); applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly); the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') are placed LAST by ai/hordePlace.ts placeHordes, after the ambient roll. Moving between storeys never rerolls anything.`},
+      note: `ONE continuous level (the subway station at the bottom of the open void and ${MALL_RINGS} retail rings around it) generated once per level seed: placeOfficeEnemies runs the pit context once and the ring context once per ring, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') follow from ai/hordePlace.ts placeHordes; then (Track 2) the pit station's tunnels / service annexes are attached and placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end (horde members keep their own pool's family; Siren eligibility included) and applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly). Moving between storeys never rerolls anything.`},
     contexts: {
       pit: {storeys: 'the subway station storey at the bottom of the void (level 0: platforms, plaza, courts)', runs: 1},
       ring: {storeys: `one retail ring (each of levels 1..${MALL_RINGS}: gallery, shops, back rooms, service corridors)`, runs: MALL_RINGS},
-      service: {storeys: 'one Track2 service annex (per annex, annex areas only)', runs: 0,
-        hook: 'DATA HOOK, NOT INTEGRATED: Track2\'s same-world service annexes (0 / 1 / 2 per level) are not on main yet, so no generator runs this per-annex budget (0 runs; excluded from the level total). When they land each annex runs it once on its own fork with the mall\'s ambient family profile (no Siren: the mall\'s Siren eligibility names the ring context only; no guaranteed reward per annex), appended after every core spawn and tagged service, never as part of the horde pool.'},
+      // lane INTEG (Track2 integration): the pit station's service annexes — the same zone context as the Subway / Office
+      service: {storeys: 'one seeded service annex off a track tunnel / bed hatch of the pit station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };

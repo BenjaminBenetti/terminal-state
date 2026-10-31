@@ -12,7 +12,6 @@ import type {StationLayout} from '../gen/stationTypes';
 import {isMaskLootItem, placeMaskLoot, placeSectionGear} from './gearAdapter';
 import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
 import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): The Eaton's Center
-import {MALL_TRACK_EXTENSIONS, type TrackExtConfigInterim} from '../gen/mall/trackExt'; // (lane GEN: Track2 interim declaration)
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
@@ -68,20 +67,14 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     blurb: 'A subway station at the bottom of a vast open mall — look up through six rings of shops to the glass roof, then work your way up by escalator, stairs and bridges.',
     entry: 'main',
     sections: () => ['main'],
+    // lane INTEG (Track2 integration): the pit station's beds are track-bearing — the real TrackExtConfig (TRACK_EXT_MALL), never
+    // 'none'; gen/mall/index.ts calls extendTracks at its seam (east / south growth from the fixed crop origin).
+    trackExtensions: trackExtConfig('mall'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`The Eaton's Center has no section '${section}'`);
-      return withGear(generateMallLevel(ctx), ctx);
+      return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx);
     },
   },
-};
-
-/**
- * Task track3-eaton-centre-20261031 (lane GEN): Track2 (same-world track extensions / service annexes) — each track-bearing level's
- * declaration. INTERIM data hook until Track2's `trackExtensions: TrackExtConfig | 'none'` lands (then it moves into LevelDef):
- * the mall is ENABLED; the Subway / Office are Track2's to declare (absent here = not yet declared).
- */
-export const TRACK_EXTENSIONS: Partial<Record<LevelId, TrackExtConfigInterim | 'none'>> = {
-  mall: MALL_TRACK_EXTENSIONS,
 };
 
 export function isLevelId(v: unknown): v is LevelId {

@@ -85,7 +85,15 @@ export const TRACK_EXT_OFFICE: TrackExtConfig = {
   hatch: undefined,
 };
 
+/**
+ * Task track3-eaton-centre-20261031 (lane INTEG, Track2 integration): THE EATON'S CENTER's pit station — TRACK_EXT (the GEN-2
+ * incidence planner: 0 / 1 / 2 wanted annexes, tunnels first, then service hatches) WITHOUT the core reserve: coreReserveM is a
+ * Subway skeleton step (gen/station.ts reserveTunnelRoom) the mall generator never runs, so the mall's core layout is unchanged.
+ * Its canvas has a fixed crop origin (east / south growth only: gen/mall/index.ts).
+ */
+export const TRACK_EXT_MALL: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0};
+
 /** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it). */
 export function trackExtConfig(levelId: string): TrackExtConfig {
-  return levelId === 'office' ? TRACK_EXT_OFFICE : TRACK_EXT;
+  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : TRACK_EXT;
 }

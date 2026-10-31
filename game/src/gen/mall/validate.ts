@@ -11,12 +11,15 @@
 // - Every ring: >= MIN_SHOPS shop units with a shopfront onto the gallery; every storey pair joined by >= 2 public runs.
 // - Placements: no enemy / pickup in the void, on a run (stairs / escalators) or on a run mouth / elevator landing; enemies
 //   >= the spawn profile's walking distance from the start.
+// - Track2 (lane INTEG): the pit station's tunnels / service annexes (gen/trackExt extensionIssues: reachability both ways, head
+//   clearance, rock on every other storey, caps, doors, clues). The generator drops invalid extensions (never a core retry).
 
 import {CELL, FLOOR, SOLID} from '../grid';
 import {levelDistance, levelIssues, type LevelRules} from '../levelGen';
 import {levelsOf} from '../levels';
 import {traversalIssues} from '../traversal';
 import {doorwayIssues} from '../doorways';
+import {extensionIssues} from '../trackExt/index'; // lane INTEG (Track2 integration)
 import type {StationLayout} from '../stationTypes';
 import {RINGS, STOREY} from './frame';
 
@@ -143,6 +146,8 @@ export function mallIssues(layout: StationLayout, opts: {startCells?: number} = 
     if (lv > 0 && vset.has(i) && !bridgeCells.has(`${lv}:${cx},${cy}`)) issues.push(`pickup ${p.itemId} in the void`);
     if (onRun(lv, p.x, p.z)) issues.push(`pickup ${p.itemId} on a vertical link`);
   }
+  // --- Track2 extensions (lane INTEG) -------------------------------------------------------------------------------------------
+  issues.push(...extensionIssues(layout, dist));
   return issues;
 }
 

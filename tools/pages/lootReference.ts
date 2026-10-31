@@ -147,9 +147,9 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
 }>> = {
   subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: true, annex: true},
   office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], rewardFinds: [LT.ROOF_FIND_KEY], storeys: true, floorMoved: false, annex: true},
-  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (its storey contexts: levelContexts; no tenant floors). Track3 x
-  // Track2 merge: annex false until the mall generates real service annexes (the mall-side integration turns it on).
-  mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: false},
+  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (its storey contexts: levelContexts; no tenant floors). Lane
+  // INTEG (Track2 integration): its pit station grows service annexes like the Subway / Office (the per-annex floor variant).
+  mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
@@ -1031,7 +1031,11 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
       notes: ['Ammo boxes are single-caliber (5.56 / 12-gauge); the pistol start\'s 9mm boxes are a separate weapon-finds source.', 'Zombies are placed on the same spawn stream afterwards: changing these draws moves them too.', ...(annex.length ? [annexNote] : [])],
     };
   }
-  if (kind === 'mall') return mallFloorProgram(B, level, P, find, at);
+  if (kind === 'mall') {
+    // lane INTEG (Track2 integration): + the per-annex variant (the mall's pit station grows service annexes; outside the totals)
+    const m = mallFloorProgram(B, level, P, find, at), annex = annexVariant();
+    return annex.length ? {...m, variants: [...m.variants, ...annex], notes: [...m.notes, annexNote]} : m;
+  }
   const O = P.tables.floor.office;
   const scarce = (tilt: LootTilt): FloorFind[] => {
     const odds = scarceOdds(tilt, O);

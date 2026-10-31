@@ -22,7 +22,7 @@ import {adoptComposition} from '../compose';
 import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
 
 export * from './types';
-export {TRACK_EXT, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config';
+export {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config'; // (+ TRACK_EXT_MALL: task track3, lane INTEG)
 export {copyWindow} from './window';
 export {coreView, hasExtensionGrowth, reframe} from './core';
 

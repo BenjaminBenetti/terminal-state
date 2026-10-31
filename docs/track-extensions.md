@@ -71,6 +71,33 @@ same level and world, with no loading. Graffiti arrows and tags appear only wher
 **Measured incidence** (64-seed corpus): 60/64 Subway levels have at least one annex and 18/64 have two (0 / 1 / 2 =
 4 / 42 / 18); 16 of 78 annexes are behind a hatch.
 
+## The Eaton's Center (`mall`, task track3-eaton-centre-20261031, lane INTEG)
+
+The mall opts in like the Office (a fixed crop origin):
+- `LEVELS.mall.trackExtensions = trackExtConfig('mall')` = `TRACK_EXT_MALL`: `TRACK_EXT` (the GEN-2 incidence planner and service
+  hatches) with `coreReserveM: 0` — the reserve is a Subway skeleton step the mall never runs, so the mall's core layout is unchanged.
+- `gen/mall/index.ts`: `extendTracks(k, rng.fork('track-ext'), cfg, mallTrackExtContext(ox, oy))` after all mall carving and before
+  the crop (`canvasGrow: 'east-south'`, origin = the fixed crop origin, `maxCells` `MALL_EXT_MAX_CELLS` 75k; the core grid is
+  ~39–51k cells); after the LAST core pass (hordes included) `finishExtensions(layout, ext, {ox, oy, grow: 'east-south'})` and
+  `populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')})`; then the ONE family roll and the Siren spacing.
+  Every mall global pass (shops, landmarks, ambient spawns, supplies, lighting, hordes, the patrol graph, the mall record) runs
+  before the attach, so none ever sees an extension area. Invalid extensions are dropped (`dropExtensions`), never a core retry;
+  `mallIssues` includes `extensionIssues`. `layout.mall.subwayRoot` is a derived report, recomputed after the attach.
+- Spawns: `SPAWN_PROFILES.mall.contexts.service = SERVICE_CONTEXT`; the Siren's eligibility names `ring` only. Loot: the mall loot
+  profile's base tables carry `floor.annex` (`ANNEX_FLOOR`); `LEVEL_ADAPTER.mall.annex` is on.
+
+**Measured: no extension fits the mall's current geometry** (every generated mall; 3 variants): both bed ends log
+`none: blocked at the mouth` and both hatch attempts `hatch: omitted (hatch wall)`, so 0 tunnels and 0 annexes per run.
+- Tunnels: the planner keeps `margin.core` cells of rock to every core cell that is open on ANY storey (and `attachExtensions` /
+  `extensionIssues` require rock on every other storey grid). The mall's beds end at the void's ends, directly under the rings'
+  end galleries, and the six rings (5 m above the station, slabs between) cover the whole footprint — so every bed end is blocked
+  at its mouth, although a 4.4 m tunnel under a 5 m storey would be physically clear.
+- Hatches: both beds of the mall's `sideBlock` are flanked by side platforms (a hatch is never cut into a platform face).
+- So the mall's `service` context runs 0 times and the pages show the mall's annex variant / zone with 0 annexes per level. The
+  plumbing (declaration, plan, attach, content, tags, validation) is in place: the mall gains annexes as soon as the planner can use
+  its station — see the lane INTEG report for the options (a per-level storey-clearance rule in the planner, or a mall station whose
+  bed ends reach past the ring footprint).
+
 ## Data model (`game/src/gen/trackExt/types.ts`)
 
 `layout.extensions?: TrackExtensions` holds `{tunnels, annexes, log, core, shift, coreXZ, vents?}`.

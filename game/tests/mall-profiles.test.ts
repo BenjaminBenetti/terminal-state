@@ -34,6 +34,8 @@ import {
 } from '../src/ai/spawnTables';
 import {assignEnemyArchetypes, pickEnemyArchetype} from '../src/ai/creatureSpawn';
 import {applyFamilySpacing} from '../src/ai/familySpacing';
+import {SERVICE_CONTEXT} from '../src/ai/spawnTables';
+import {TRACK_EXT_MALL, isExtensionArea} from '../src/gen/trackExt/index'; // lane INTEG (Track2 integration)
 import {HORDE_GROUP_SIZE} from '../src/ai/hordeSpec';
 import {buildEnemyReference, ENEMY_LEVEL_ADAPTER} from '../../tools/pages/enemyReference';
 import {runCensus, summarize, type CensusSummary} from './helpers/materialCensus';
@@ -165,8 +167,11 @@ describe('mall spawn profile', () => {
     expect(Object.keys(P.contexts).sort()).toEqual(['pit', 'ring', 'service']);
     expect(declaredSpawnContexts(P).sort()).toEqual([HORDE_CONTEXT, 'pit', 'ring', 'service'].sort());
     expect(ENEMY_LEVEL_ADAPTER.mall.contexts.ring!.runs).toBe(MALL_RINGS);
-    expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.runs).toBe(0);
-    expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.hook).toMatch(/NOT INTEGRATED/);
+    // lane INTEG (Track2 integration): 'service' is Track2's per-annex zone budget, as on the Subway / Office (one run per seeded annex)
+    expect(P.contexts.service).toBe(SERVICE_CONTEXT);
+    expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.runs).toBe(1);
+    expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.zone?.runsPerLevel).toEqual([0, TRACK_EXT_MALL.annex.max]);
+    expect(MALL_SIREN_ELIGIBILITY.contexts).not.toContain('service'); // no Siren in an annex
     // Track1 pool: every family in registry order, Blightbelly / rat-dog 5 % ambient, the Siren's census-tuned draw weight (not the Office's)
     expect(P.families).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}));
     expect(P.families.map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
@@ -215,7 +220,8 @@ describe('mall spawn profile', () => {
     const seen = new Set<string>();
     const contexts = new Proxy(P.contexts, {get: (t, k) => { if (typeof k === 'string') seen.add(k); return Reflect.get(t, k); }});
     const watched = generateMallLevel({levelSeed: SEEDS[0], startWeapon: 'pistol'}, {spawns: {...P, contexts} as SpawnProfile});
-    expect([...seen].filter(k => k in P.contexts).sort()).toEqual(['pit', 'ring']); // 'service' waits for Track2 (data hook)
+    // (lane INTEG: Track2's populateExtensions reads the 'service' zone context on every call, annexes or not)
+    expect([...seen].filter(k => k in P.contexts).sort()).toEqual(['pit', 'ring', 'service']);
     // determinism: the watched profile is the same data -> the identical level as the registry's generation
     const l0 = mall(SEEDS[0]);
     expect(JSON.stringify(watched.zombies)).toBe(JSON.stringify(l0.zombies));
@@ -223,15 +229,22 @@ describe('mall spawn profile', () => {
     const report: string[] = [];
     for (const seed of SEEDS) {
       const l = mall(seed);
-      const ambient = l.zombies.filter(z => z.horde === undefined), horde = l.zombies.filter(z => z.horde !== undefined);
+      // (Track2 integration: 'service' annex spawns are appended last, tagged, and NOT part of the pit / ring counts)
+      const service = l.zombies.filter((z, i) => z.horde === undefined && spawnContextOf(l, P, i) === 'service');
+      const ambient = l.zombies.filter((z, i) => z.horde === undefined && spawnContextOf(l, P, i) !== 'service'), horde = l.zombies.filter(z => z.horde !== undefined);
+      expect(service.every(z => isExtensionArea(l.areas[z.area]))).toBe(true);
+      expect(service.length).toBeLessThanOrEqual((l.extensions?.annexes.length ?? 0) * SERVICE_CONTEXT.count[1]);
       // every spawn carries its declared context: ambient 'pit' (storey 0) / 'ring' (storeys 1..6), horde members 'horde'
       l.zombies.forEach((z, i) => {
         const c = spawnContextOf(l, P, i);
-        expect(c, `seed ${seed} #${i}`).toBe(z.horde !== undefined ? HORDE_CONTEXT : (z.level ?? 0) === 0 ? 'pit' : 'ring');
+        expect(c, `seed ${seed} #${i}`).toBe(z.horde !== undefined ? HORDE_CONTEXT : isExtensionArea(l.areas[z.area]) ? 'service' : (z.level ?? 0) === 0 ? 'pit' : 'ring');
       });
       // hordes are appended after every ambient spawn (the ambient roll and run memory key on the index)
       const firstHorde = l.zombies.findIndex(z => z.horde !== undefined);
-      if (firstHorde >= 0) expect(l.zombies.slice(firstHorde).every(z => z.horde !== undefined)).toBe(true);
+      if (firstHorde >= 0) expect(l.zombies.slice(firstHorde).every((z, k) => z.horde !== undefined || spawnContextOf(l, P, firstHorde + k) === 'service')).toBe(true);
+      // ... and the annex 'service' spawns after every core spawn, hordes included (Track2: appended last)
+      const firstService = l.zombies.findIndex((_, i) => spawnContextOf(l, P, i) === 'service');
+      if (firstService >= 0) expect(l.zombies.slice(firstService).every((_, k) => spawnContextOf(l, P, firstService + k) === 'service')).toBe(true);
       // ambient: per storey within its context's count range, total within the ambient budget, families from the pool
       for (let lv = 0; lv <= MALL_RINGS; lv++) {
         const n = ambient.filter(z => (z.level ?? 0) === lv).length, c = (lv === 0 ? P.contexts.pit : P.contexts.ring)!;
@@ -314,8 +327,8 @@ describe('reference coverage (the generated pages document the mall automaticall
     const r = buildEnemyReference({censusSeeds: []});
     const m = r.levels.find(l => l.id === 'mall')!;
     expect(m.tier.value).toBe(2);
-    expect(m.contexts.map(c => [c.id, c.runs])).toEqual([['pit', 1], ['ring', MALL_RINGS], ['service', 0]]);
-    expect(m.contexts.find(c => c.id === 'service')!.hook).toMatch(/NOT INTEGRATED/);
+    expect(m.contexts.map(c => [c.id, c.runs])).toEqual([['pit', 1], ['ring', MALL_RINGS], ['service', 1]]);
+    expect(m.contexts.find(c => c.id === 'service')!.zone).toMatchObject({runsPerLevel: {lo: 0, hi: TRACK_EXT_MALL.annex.max}}); // (Track2: a zone, not in the total)
     expect(m.total.mean).toBe((P => (P.contexts.pit!.count[0] + P.contexts.pit!.count[1]) / 2 + MALL_RINGS * (P.contexts.ring!.count[0] + P.contexts.ring!.count[1]) / 2)(spawnProfile('mall')));
     expect(m.pool.rows.map(x => [x.family, x.weight])).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}).map(([f, w]) => [f, w]));
     expect(m.pool.eligibility.map(e => [e.family, e.contexts, e.maxPerLevel, e.spacing?.metres])).toEqual([['siren', ['ring'], 4, 30]]);

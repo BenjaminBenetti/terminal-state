@@ -270,7 +270,8 @@ describe('spawn census (real generators)', () => {
       });
       if (id === 'mall') {
         expect(l.zombies.some(z => z.horde !== undefined)).toBe(true);
-        expect(new Set(l.zombies.flatMap((z, i) => (z.horde === undefined ? [spawnContextOf(l, p, i)] : [])))).toEqual(new Set(['pit', 'ring']));
+        // (Track2 integration: + 'service' spawns when the level grew a service annex — appended last, tagged, ambient families)
+        expect(new Set(l.zombies.flatMap((z, i) => (z.horde === undefined && spawnContextOf(l, p, i) !== 'service' ? [spawnContextOf(l, p, i)] : [])))).toEqual(new Set(['pit', 'ring']));
         expect(l.zombies.filter(z => z.archetype === 'siren').length).toBeLessThanOrEqual(MALL_SIREN_ELIGIBILITY.maxPerLevel!);
       }
     }
