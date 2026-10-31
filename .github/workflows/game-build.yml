@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Track 2 (PR #20): the full suite grew from ~11.5 to ~21 min on this runner (2 vCPU; vitest runs one worker, and two
     # workers measured no faster). Same steps and checks, more wall time. Pending Main / user acceptance; revert = 20.
+    # (Track3 merge: Track3's own 45 min proposal was dropped in favour of this approved value — no further extension.)
     timeout-minutes: 30
     env:
       PUPPETEER_SKIP_DOWNLOAD: 'true'

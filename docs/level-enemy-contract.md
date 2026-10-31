@@ -72,6 +72,21 @@ profile, family list, tier or guarantee.
   die once per run like any other; nothing respawns on re-entry. Rare rewards (the level's gear roll, the roof cache / find) are
   per logical level and are not repeated by annexes (loot tables own that).
 
+## 2b. Separate pools and level-wide spacing (The Eaton's Center, task track3-eaton-centre-20261031)
+
+- **A separate horde pool** (`SpawnProfile.horde`, `HordeRules`): its members are placed AFTER `assignEnemyArchetypes` (appended last)
+  with the pool's OWN explicit families, and tagged `HORDE_CONTEXT` (`'horde'`) by `placeHordes`. The tag is declared by declaring
+  `horde` — it is never an ambient `contexts` entry and never an eligibility context (validation rejects both) — so no ambient family
+  roll or rule (no Siren) reaches a horde member. `declaredSpawnContexts(profile)` = the ambient contexts + `'horde'` when the
+  profile has hordes; the contract test checks every spawn against it.
+- **Level-wide spacing of a restricted family** (`SpawnProfile.spacing`, `FamilySpacing {spacingM, why}`; requires the family's
+  eligibility rule): Track1's `FamilyEligibility` has no spacing field, so the mall applies its 30 m Siren spacing with the post-pass
+  `applyFamilySpacing(layout, profile)` (`game/src/ai/familySpacing.ts`) right after `assignEnemyArchetypes` — cap and spacing jointly,
+  in spawn-index order, RNG-free.
+- The mall registers tier 2, `familyPool({siren: MALL_SIREN_WEIGHT})` (draw weight 0.32 by census: mean 2.88 Sirens per run, 4.93 %
+  of the placed ambient enemies), `MALL_SIREN_ELIGIBILITY` (ring shops only) and `ENEMY_LEVEL_ADAPTER.mall`; details and the census in
+  `docs/enemy-spawns.md` "The Eaton's Center".
+
 ## 3. What validation catches
 
 | Check | Where |
@@ -95,5 +110,5 @@ profile, family list, tier or guarantee.
 - [ ] Focused tests pass: `enemy-spawn-contract`, `enemy-spawn-tables`, `enemy-spawn-reference`, `enemy-spawn-parity` (pin only a
       new level's entries; never re-pin existing ones without a written cause), `pages-output`; `npm run pages:build && npm run
       pages:check`. The reference then lists the level, its tier, family shares, contexts and eligibility automatically.
-- [ ] Two-level UI helpers in `game/src/levels/registry.ts` (`otherLevel`, `sectionLabel`, `clearLabel`) still assume Subway /
-      Office; generalise them with the level's travel UI (outside this contract).
+- [ ] Travel UI helpers in `game/src/levels/registry.ts` (`otherLevel`, `travelTargets`, `sectionLabel`, `clearLabel`): generalised for
+      three levels with the mall (task track3); a new level adds its labels there.

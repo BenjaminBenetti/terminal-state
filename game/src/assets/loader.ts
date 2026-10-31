@@ -33,8 +33,13 @@ export class PropModelLibrary {
   private readonly recent: string[] = [];
   private readonly geometries = new WeakSet<THREE.BufferGeometry>();
   readonly failures: {key: string; url: string; reason: string}[] = [];
-  /** Bytes fetched so far (catalogue sizes) and fetch count (tests/QA). */
-  stats = {fetched: 0, bytes: 0, released: 0};
+  /**
+   * Bytes fetched so far (catalogue sizes) and fetch count (tests/QA). Task track3-eaton-centre-20261031 (lane PACKAGE): `late`
+   * counts fetches started while `sealed` (after a level was built: should stay 0 — a level's models load behind its loading screen).
+   */
+  stats = {fetched: 0, bytes: 0, released: 0, late: 0};
+  /** Lane PACKAGE: set once a level is built (Game.buildSection), cleared when the next level is prepared (Game.prepareSection). */
+  sealed = false;
   constructor(private readonly files: Readonly<Record<string, {url: string; bytes: number}>>, private readonly concurrency = 6,
     private readonly load: (url: string, onProgress: (f: number) => void) => Promise<GLTF> = defaultGltfLoad) {}
 
@@ -45,6 +50,10 @@ export class PropModelLibrary {
   /** Loaded models as a plain record (merged into the station builder's model map). */
   record(): Record<string, GLTF> { return Object.fromEntries(this.models); }
   loadedKeys(): string[] { return [...this.models.keys()]; }
+  /** Lane PACKAGE (track3): the lazy file map (assets/levelAssets.ts selects / reports on it). */
+  get catalogue(): Readonly<Record<string, {url: string; bytes: number}>> { return this.files; }
+  /** Lane PACKAGE (track3): catalogue bytes of the resident models (cooked GLB sizes; decoded GPU memory is larger). */
+  residentBytes(): number { let s = 0; for (const k of this.models.keys()) s += this.files[k]?.bytes ?? 0; return s; }
 
   /** Fetches every listed model not yet cached; resolves when all settled (failures recorded, never thrown). */
   async ensure(keys: readonly string[], onProgress?: (frac: number, label: string) => void): Promise<{loaded: string[]; failed: string[]; fetchedBytes: number}> {
@@ -59,6 +68,7 @@ export class PropModelLibrary {
         const key = todo[next++], f = this.files[key];
         let p = this.pending.get(key);
         if (!p) {
+          if (this.sealed) { this.stats.late++; console.warn(`Lazy model fetched mid-level (not behind a loading screen): ${key}`); }
           p = this.load(assetUrl(f.url), fr => { part.set(key, f.bytes * fr * 0.98); report(f.url.split('/').pop() ?? key); })
             .then(g => { this.models.set(key, g); g.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) this.geometries.add((o as THREE.Mesh).geometry); }); this.stats.fetched++; this.stats.bytes += f.bytes; fetchedBytes += f.bytes; return g; })
             .catch(err => { this.failures.push({key, url: f.url, reason: err instanceof Error ? err.message : String(err)}); return null; })
@@ -75,10 +85,16 @@ export class PropModelLibrary {
     return {loaded: want.filter(k => this.models.has(k)), failed: want.filter(k => !this.models.has(k)), fetchedBytes};
   }
 
-  /** Disposes models outside `keep` beyond the `extra` most recently used ones (re-fetched from the HTTP cache if needed again). */
-  trim(keep: ReadonlySet<string>, extra = 16): string[] {
+  /**
+   * Disposes models outside `keep` beyond the `extra` most recently used ones (re-fetched from the HTTP cache if needed again).
+   * Task track3-eaton-centre-20261031 (lane PACKAGE): models matching `evict` (assets/levelAssets.ts foreignTo: another level's
+   * own art) are always released when outside `keep`, never kept as a recent extra — the resident set follows the level.
+   */
+  trim(keep: ReadonlySet<string>, extra = 16, evict?: (key: string) => boolean): string[] {
     const spare = this.recent.filter(k => !keep.has(k) && this.models.has(k));
-    const drop = spare.slice(0, Math.max(0, spare.length - extra));
+    const forced = evict ? spare.filter(k => evict(k)) : [];
+    const rest = forced.length ? spare.filter(k => !forced.includes(k)) : spare;
+    const drop = [...forced, ...rest.slice(0, Math.max(0, rest.length - extra))];
     for (const k of drop) {
       const g = this.models.get(k)!;
       g.scene.traverse(o => {

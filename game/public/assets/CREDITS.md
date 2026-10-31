@@ -132,3 +132,45 @@ asserted** for any generated source. Full per-file provenance: `assets/derivativ
   `assets/derivatives/meshy-t25-ammo-20261030.json`.
 - Native downloads and the generation ledger are kept outside the repository (studio reference task folder).
   Printed graphics are fictional AI designs. Unapproved prototypes; no commercial clearance implied.
+
+<!-- BEGIN mall-track3-20261031 (build-mall-track3.mjs) -->
+## The Eaton's Center (Track3): mall fixtures, furniture and loose stock
+
+Generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's finite Track3 authorization; runtime derivatives built by `tools/asset-pipeline/props/build-mall-track3.mjs` (provenance: `assets/derivatives/mall-track3-20261031.json`). Provider terms apply; unapproved prototypes, no licence or commercial clearance implied. Raw masters are kept outside Git.
+
+- `assets/models/mall-mall-cashwrap-counter.glb` — mall-cashwrap-counter (M01; Meshy tasks 01a18f6d-0dcf-75de-86cd-d84576b1a75b / 01a18f71-48fd-7138-94df-1f5403fcab78)
+- `assets/models/mall-glass-display-cabinet.glb` — glass-display-cabinet (M02; Meshy tasks 01a18f6d-72c6-739f-94bd-cdf5ae046f1e / 01a18f71-6f33-701c-b77d-235c2c3bdcf0)
+- `assets/models/mall-retail-gondola.glb` — retail-gondola (M03; Meshy tasks 01a18f7a-15fd-7304-9761-45b34ccca444 / 01a18f81-1919-7444-afb3-dd3d0c99b737)
+- `assets/models/mall-retail-wall-bay.glb` — retail-wall-bay (M04; Meshy tasks 01a18f7a-3fcc-7122-9753-ef63d077d430 / 01a18f81-3e1f-7643-a5ac-aa4f9abab909)
+- `assets/models/mall-garment-rail-round.glb` — garment-rail-round (M05; Meshy tasks 01a18f7a-665a-7297-b2af-d45268cd7688 / 01a18f81-62e0-729c-8b70-f3861b42fc17)
+- `assets/models/mall-garment-hanging-group.glb` — garment-hanging-group (M06; Meshy tasks 01a18f71-e498-729d-bc23-760520baccb9 / 01a18f79-4edf-77ee-bbf5-65ff7db13cf6)
+- `assets/models/mall-mannequin-full.glb` — mannequin-full (M07; Meshy tasks 01a18f72-06cc-774e-9cc5-9f377271aacd / 01a18f79-72f9-7425-b55c-652c56bb4af6)
+- `assets/models/mall-clothing-wall-unit.glb` — clothing-wall-unit (M08; Meshy tasks 01a18f72-2fb1-77e1-a641-c8c5c4337d84 / 01a18f79-949e-7070-bc70-e5ed7b9b96c0)
+- `assets/models/mall-bookstore-bookcase.glb` — bookstore-bookcase (M09; Meshy tasks 01a18f72-7be3-742c-be0b-466a25c30389 / 01a18f79-b875-70de-954f-0acae1a1ef34)
+- `assets/models/mall-flat-screen-tv.glb` — flat-screen-tv (M10; Meshy tasks 01a18f72-a3c1-710a-a524-ad405bc13b6f / 01a18f79-e532-74f2-b439-2b677a227374)
+- `assets/models/mall-pharmacy-dispensary-counter.glb` — pharmacy-dispensary-counter (M11; Meshy tasks 01a18f7a-aaee-76c8-8297-491c5388da82 / 01a18f81-8c0d-7678-9ee3-8594ec698ea6)
+- `assets/models/mall-checkout-lane.glb` — checkout-lane (M12; Meshy tasks 01a18f81-b929-729e-9ee9-4f12d2ee97ee / 01a18f87-696a-7788-89cc-e4be7c6adecd)
+- `assets/models/mall-produce-display-stand.glb` — produce-display-stand (M13; Meshy tasks 01a18f81-e930-7196-9e6d-2ca29d3c7beb / 01a18f87-9527-7351-ac8c-4be214ff79a3)
+- `assets/models/mall-gun-wall-rack.glb` — gun-wall-rack (M14; Meshy tasks 01a18f82-10cd-77e2-94e6-52295d49fcec / 01a18f87-b89e-7077-bfa2-337e74525ea2)
+- `assets/models/mall-glass-display-counter.glb` — glass-display-counter (M15; Meshy tasks 01a18f82-379f-73f5-af50-fe1995b36f69 / 01a18f87-db71-728b-afd1-07fa5805b91c)
+- `assets/models/mall-outdoors-plank-shelving.glb` — outdoors-plank-shelving (M16; Meshy tasks 01a18f82-5d0e-719a-aaad-bcbd385e4abe / 01a18f88-0085-7658-ad0b-d67bb495d3c3)
+- `assets/models/mall-mall-kiosk-cart.glb` — mall-kiosk-cart (M17; Meshy tasks 01a18f88-2bcf-72f5-8758-11059c6ff548 / 01a18f92-42ce-709c-918c-fdb5016d9f84)
+- `assets/models/mall-storage-tote.glb` — storage-tote (M18; Meshy tasks 01a18f88-517f-72d0-bb0a-953bc8e545cc / 01a18f92-66c8-732e-a8b8-507680e37dfa)
+- `assets/models/mall-shoe-wall-display.glb` — shoe-wall-display (M19; Meshy tasks 01a18f88-76dc-734f-b861-ca2f46587d80 / 01a18f92-8c09-74ba-ade1-55e0a35bd7cb)
+- `assets/models/mall-food-court-table-set.glb` — food-court-table-set (M20; Meshy tasks 01a18f88-a19d-775f-bbec-678a2f0e8ca0 / 01a18f92-b352-724e-813c-554c1a771428)
+- `assets/models/mall-try-on-ottoman.glb` — try-on-ottoman (M24; Meshy tasks 01a18fc0-e43c-73b4-961d-aa5199eac603 / 01a18fc3-1488-77db-8722-48daa8b7e852)
+- `assets/models/mall-medicine-drawer-cabinet.glb` — medicine-drawer-cabinet (M29; Meshy tasks 01a18fc4-04a2-73b4-a836-bebadc58a555 / 01a18fc7-bb05-7511-ae95-620db8cc0e0b)
+- `assets/models/mall-multideck-open-cooler.glb` — multideck-open-cooler (M30; Meshy tasks 01a1903f-6812-7651-9001-db45814970b8 / 01a19041-b242-7696-b118-5e22e9fad19a)
+- `assets/models/mall-cafe-bistro-table.glb` — cafe-bistro-table (M31; Meshy tasks 01a19039-d0a8-70b6-bb7c-0e19e7f94c9b / 01a1903d-c7dc-73ef-a550-9e553646d9dc)
+- `assets/models/mall-cafe-chair.glb` — cafe-chair (M32; Meshy tasks 01a19039-f85a-7734-9d86-74764d0c465f / 01a1903d-e2c4-77ef-9430-f7674039c928)
+- `assets/models/mall-gun-safe-tall.glb` — gun-safe-tall (M35; Meshy tasks 01a18fc4-2dce-71de-b29d-20db0e9308c4 / 01a19038-eaf2-7597-ad20-640d32682560)
+- `assets/models/mall-camping-tent-display.glb` — camping-tent-display (M36; Meshy tasks 01a18fc1-0cda-7234-8908-7d041df68c99 / 01a18fc3-395b-7049-8caa-46d74563b38a)
+- `assets/models/mall-mall-bench.glb` — mall-bench (M37; Meshy tasks 01a19039-92e5-70b7-84c9-d683ff13dc7c / 01a1903d-aa61-709d-9a97-80cbce35c89a)
+- `assets/models/mall-tv-wall-bank.glb` — tv-wall-bank (M41; Meshy tasks 01a18fc1-362c-72cc-8257-3ae885cb9dac / 01a18fc3-5dc8-7339-9ed4-2ef6dc93bf7c)
+- `assets/models/mall-cosmetics-wall-unit.glb` — cosmetics-wall-unit (M42; Meshy tasks 01a19039-76b1-7175-9c97-b7b3e0258b1a / 01a1903d-886a-7426-93df-0da9d999b49a)
+- `assets/models/mall-dresser-drawers.glb` — dresser-drawers (M45; Meshy tasks 01a18fc4-5627-7004-a925-3d66f09fcb4e / 01a19039-18b9-730b-a7dc-33f196dffa24)
+- `assets/models/mall-cardboard-box-flaps.glb` — cardboard-box-flaps (M47; Meshy tasks 01a18fc4-7c86-77f6-8f7d-c237fdfc1509 / 01a19039-3664-754f-b149-7c504d6fea92)
+- `assets/models/mall-kiddie-ride.glb` — kiddie-ride (M50; Meshy tasks 01a18fc1-64a4-742e-a07a-dc3fc665bd7b / 01a18fc3-875b-76e5-8f6a-64222ed2ab97)
+- `assets/models/mall-salon-styling-chair.glb` — salon-styling-chair (M51; Meshy tasks 01a18fc1-8df4-71cb-8dd2-2b5adecd3d2a / 01a18fc3-aca4-7273-a1a2-9f21bd81d6b4)
+- `assets/models/mall-bed-display.glb` — bed-display (M52; Meshy tasks 01a18fc3-d691-72ff-92b9-6a59b9fcd8cd / 01a18fc7-93ff-75f0-b920-00beb0543755)
+<!-- END mall-track3-20261031 -->

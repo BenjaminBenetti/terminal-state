@@ -19,6 +19,7 @@
 
 import type {PhysMat, StaticWhy} from '../../damage/materials';
 import type {OfficeKind} from './kinds';
+import {MALL_PHYS} from '../mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): the mall shop-fixture kinds' rows
 
 /** `fit`: collider footprint scale (w / d) vs the prop box (chairs tuck under their desk; their box includes the armrests). */
 type DynOpts = {shape?: 'box' | 'cylinder'; onHost?: boolean; fit?: number};
@@ -121,6 +122,8 @@ export const OFFICE_PHYS = {
   studioMonitor: D(9, 'pad', 'studio monitor (~9 kg) on the mixing desk\'s meter shelf: a shot slides / topples it off', {onHost: true}),
   studioMonitorSmall: D(5, 'pad', 'small studio monitor (~5 kg) on the meter shelf: a shot slides / topples it off', {onHost: true}),
   espressoCups: D(0.6, 'glass', 'stack of four espresso cups (~0.6 kg) on the café counter: tips and scatters when shot', {onHost: true, shape: 'cylinder'}),
+  // --- task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center shop fixtures (gen/mall/kinds.ts MALL_PHYS) ---------------
+  ...MALL_PHYS,
 } satisfies Record<OfficeKind, OfficePhys>;
 
 /** Dynamic office kinds as PROP_PHYSICS rows (damage/materials.ts spreads them). */

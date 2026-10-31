@@ -190,6 +190,40 @@ export interface EnemyLevelInfo {
   eligibilityCensus: EligibilityCensus | null;
   /** Where to tune what. */
   knobs: readonly EnemyKnob[];
+  /** Lane PROFILES / HORDE: the SEPARATE roaming-horde pool (null = the level has no hordes). */
+  horde: HordeInfo | null;
+  /** Lane PROFILES: explicit ambient-pool caps (null = the contexts' count ranges alone). */
+  budgets: {ambient: AmbientBudgetInfo} | null;
+}
+
+/** Lane PROFILES / HORDE: the roaming-horde pool of a level (ai/hordeSpec.ts HordeRules). */
+export interface HordeInfo {
+  label: string;
+  /** Groups per level: U{lo..hi} (one draw per level). */
+  groups: {lo: number; hi: number; mean: number};
+  /** Initial members per group: U{lo..hi} (one draw per group; always inside 5..20). */
+  size: {lo: number; hi: number; mean: number};
+  /** The horde's OWN explicit family pool (never the ambient shares; Sirens never). */
+  pool: {denominator: number; rows: readonly {family: string; weight: number; share: number}[]};
+  zombieTypes: {coatedChance: number; atLeastOneEach: boolean};
+  budget: {total: number; perStorey: number; groupsPerStorey: number};
+  /** Members the groups try to start with: E before the budget (groups × size means) and the hard maximum after the budget. */
+  members: {meanBeforeBudget: number; max: number; note: string};
+  placement: {storeys: string; startM: number; groupSpacingM: number; memberSpacingM: number; clusterM: number; ambientSpacingM: number};
+  patrol: {speed: number; storeyChange: number; pauseChance: number; pause: Range};
+  /** Persistence / no-respawn semantics and pool separation (prose). */
+  semantics: readonly string[];
+  at: SourceLoc;
+}
+
+/** Lane PROFILES: explicit ambient caps vs what the contexts can try to place. */
+export interface AmbientBudgetInfo {
+  total: number;
+  perStorey: number;
+  /** Σ runs × count hi over the contexts that run (the most the ambient contexts can try to place). */
+  contextsMax: number;
+  note: string;
+  at: SourceLoc;
 }
 
 export interface SpawnContextInfo {
@@ -213,6 +247,8 @@ export interface SpawnContextInfo {
   placement: PlacementInfo;
   /** Validation rules that reject a whole generation attempt (the generator retries with another attempt seed). */
   rejection: readonly string[];
+  /** Task track3-eaton-centre-20261031 (lane PROFILES): set for a DATA-HOOK context (e.g. Track2's per-annex 'service' budget, 0 runs). */
+  hook?: string;
   at: SourceLoc;
 }
 
@@ -267,6 +303,11 @@ export interface EligibilityInfo {
   fallback: string;
   /** At most this many per generated level (all contexts), null = no cap. */
   maxPerLevel: number | null;
+  /**
+   * Lane INTEG (task track3-eaton-centre-20261031): the profile's whole-level spacing of this family (spawnTables FamilySpacing,
+   * applied jointly with the cap by ai/familySpacing.ts), null = none.
+   */
+  spacing: {metres: number; why: string; at: SourceLoc} | null;
   why: string;
   at: SourceLoc;
 }
@@ -371,6 +412,9 @@ export interface LevelCensus {
   byAreaKind: readonly {kind: string; eligibleM2: number; placed: Readonly<Record<string, number>>; per100m2: number | null}[];
   /** Zombie-family spawns by type over the sample. */
   zombieTypes: Readonly<Record<string, number>>;
+  /** Task track3-eaton-centre-20261031 (lane PROFILES): the separate horde pool over the sample (null = no horde members). */
+  horde: {members: number; perLevel: number; groups: number; groupsPerLevel: number; groupSizes: Range; byFamily: Readonly<Record<string, number>>;
+    byStorey: Readonly<Record<string, number>>; note: string} | null;
   note: string;
 }
 

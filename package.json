@@ -21,7 +21,7 @@
     "test": "npm run game:test",
     "ci:package": "node tools/release/package-ci.mjs",
     "ci:check": "node tools/release/check-workflow.mjs",
-    "ci:test": "node --test tools/release/package-ci.test.mjs",
+    "ci:test": "node --test tools/release/package-ci.test.mjs tools/deploy/dynamic-app/dynamic-app.test.mjs",
     "pages:build": "node tools/pages/run.mjs build",
     "pages:check": "node tools/pages/run.mjs check",
     "pages:preview": "vite preview --outDir dist/pages --base /terminal-state/ --host 127.0.0.1 --port 4190 --strictPort",

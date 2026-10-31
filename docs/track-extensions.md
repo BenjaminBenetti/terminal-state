@@ -71,6 +71,38 @@ same level and world, with no loading. Graffiti arrows and tags appear only wher
 **Measured incidence** (64-seed corpus): 60/64 Subway levels have at least one annex and 18/64 have two (0 / 1 / 2 =
 4 / 42 / 18); 16 of 78 annexes are behind a hatch.
 
+## The Eaton's Center (`mall`, task track3-eaton-centre-20261031, lane INTEG)
+
+The mall opts in like the Office (a fixed crop origin):
+- `LEVELS.mall.trackExtensions = trackExtConfig('mall')` = `TRACK_EXT_MALL`: `TRACK_EXT` (the GEN-2 incidence planner and service
+  hatches) with `coreReserveM: 0` — the reserve is a Subway skeleton step the mall never runs, so the mall's core layout is unchanged.
+- `gen/mall/index.ts`: `extendTracks(k, rng.fork('track-ext'), cfg, mallTrackExtContext(ox, oy))` after all mall carving and before
+  the crop (`canvasGrow: 'east-south'`, origin = the fixed crop origin, `maxCells` `MALL_EXT_MAX_CELLS` 75k; the core grid is
+  ~39–51k cells); after the LAST core pass (hordes included) `finishExtensions(layout, ext, {ox, oy, grow: 'east-south'})` and
+  `populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')})`; then the ONE family roll and the Siren spacing.
+  Every mall global pass (shops, landmarks, ambient spawns, supplies, lighting, hordes, the patrol graph, the mall record) runs
+  before the attach, so none ever sees an extension area. Invalid extensions are dropped (`dropExtensions`), never a core retry;
+  `mallIssues` includes `extensionIssues`. `layout.mall.subwayRoot` is a derived report, recomputed after the attach.
+- Spawns: `SPAWN_PROFILES.mall.contexts.service = SERVICE_CONTEXT`; the Siren's eligibility names `ring` only. Loot: the mall loot
+  profile's base tables carry `floor.annex` (`ANNEX_FLOOR`); `LEVEL_ADAPTER.mall.annex` is on.
+
+**Storeys above the station (`TrackExtContext.rockLevels`, opt-in, lane INTEG).** With the default rule (every level grid must be
+rock around an extension cell — right for the Subway's overlapping upper / lower levels) nothing fits the mall: both bed ends log
+`none: blocked at the mouth`, because the six rings (5 m above the station, slabs between) cover the whole footprint and the mall's
+beds end under the rings' end galleries. The mall therefore declares `rockLevels: [0]` (`mallTrackExtContext`): only the pit storey
+must be rock; another storey may stand above an extension cell when it is solid there or its floor clears the extension's ceiling
+by `EXT_STOREY_SLAB` (0.3 m; the bed ceiling is 4.4 m, ring 1 stands at 5 m), never its VOID (the atrium). The planner's core mask,
+the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels without it (Subway, Office) are unchanged.
+- Hatches stay refused in the mall (both beds of its `sideBlock` are flanked by side platforms), and the west bed end lies behind the
+  fixed crop origin (east / south growth only), so a mall has at most ONE tunnel (east) and one annex.
+- Measured (48 generated malls: 16 seeds `9100 + 104729k` x 3 variants; every attempt valid first time, none dropped):
+  - 1 tunnel per mall (east end), 45.5–103.5 m (mean 69.6), caps bulkhead 24 / gate 18 / rubble 6;
+  - annexes 0 / 1 / 2 = 3 / 45 / 0 (the 3 are one seed's "wants 0" draw), 1135–1957 m² (mean 1604), 47–84 areas;
+  - `service` spawns 3.88 per run (4.13 per annex, max 5): zombie 169 / rat-dog 13 / Blightbelly 4, no Siren;
+  - annex loot: 64–120 holders per annex (2 stashes each, the rest picked over), 2.5 annex floor finds per run;
+  - the core mall (spawns with their families, loot, props, lights, hordes, patrol graph, shops) is hash-identical with and without
+    the extensions (12 malls); the grid grows 1.29–1.86x east / south (55–75k cells, `MALL_EXT_MAX_CELLS` 75k).
+
 ## Data model (`game/src/gen/trackExt/types.ts`)
 
 `layout.extensions?: TrackExtensions` holds `{tunnels, annexes, log, core, shift, coreXZ, vents?}`.

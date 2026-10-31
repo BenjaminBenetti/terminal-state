@@ -24,6 +24,7 @@ import {Break, Fn, If, Loop, clamp, dot, float, int, length, materialColor as ma
 import {addNodeHook, nodeHookKeys} from '../render/nodeHooks';
 import {DAMAGE_MATERIALS, zombieMeshClass, type DamageClass} from './materials';
 import {dmgNoise, dmgPerturb, memoNode, objectData, toNodeMaterial, type TNode} from './tsl';
+import {sampleSource} from '../assets/textureRelease'; // Task track3-eaton-centre-20261031 (lane PERF): exact colour after a mall image release
 
 export const WOUND_MAX = 14;
 export const WOUND_HOOK = 'zombie-wounds-v1';
@@ -128,7 +129,7 @@ export function materialColor(mat: THREE.Material | undefined, fallback = 0x6e6a
       const c = document.createElement('canvas');
       c.width = c.height = 16;
       const ctx = c.getContext('2d', {willReadFrequently: true})!;
-      ctx.drawImage(img, 0, 0, 16, 16);
+      ctx.drawImage(sampleSource(img, 16), 0, 0, 16, 16); // (lane PERF: the released image's exact 16² draw; else img itself)
       const px = ctx.getImageData(0, 0, 16, 16).data;
       let r = 0, gg = 0, b = 0, n = 0;
       for (let i = 0; i < px.length; i += 4) { if (px[i + 3] < 128 || px[i] + px[i + 1] + px[i + 2] < 12) continue; r += px[i]; gg += px[i + 1]; b += px[i + 2]; n++; }

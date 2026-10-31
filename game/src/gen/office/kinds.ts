@@ -19,14 +19,17 @@ import {COMPANY_KINDS, COMPANY_KIND_ASSET, COMPANY_PROP_DAMAGE, COMPANY_PROP_DEF
 // Task office-props-physics-scale-20261030 (lane FURN): the loose clutter separated from the lab bench / trading desk models (lab
 // glassware, microscope, monitors, keyboard) are office kinds too (props standing on their furniture's top): gen/office/clutterKinds.ts.
 import {CLUTTER_KINDS, CLUTTER_KIND_ASSET, CLUTTER_PROP_DAMAGE, CLUTTER_PROP_DEFS, clutterShape, isClutterKind, type ClutterKind} from './clutterKinds';
+// Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center's shop-fixture kinds join the office kinds (same render path,
+// PROP_DEFS, damage specs, physics table, openables audit): gen/mall/kinds.ts.
+import {MALL_KINDS, MALL_KIND_ASSET, MALL_PROP_DAMAGE, MALL_PROP_DEFS, isMallKind, mallShape, type MallKind} from '../mall/kinds';
 
 const BASE_OFFICE_KINDS = [
   'officeChair', 'officeMonitor', 'officeFiling', 'officePhotocopier', 'officeWaterCooler', 'conferenceTable', 'deadPlant',
   'receptionDesk', 'serverRack', 'officeWhiteboard', 'officeShelf', 'cubiclePartition',
 ] as const;
 type BaseOfficeKind = (typeof BASE_OFFICE_KINDS)[number];
-export type OfficeKind = BaseOfficeKind | CompanyKind | ClutterKind; // lane FURN: + ClutterKind
-export const OFFICE_KINDS: readonly OfficeKind[] = [...BASE_OFFICE_KINDS, ...COMPANY_KINDS, ...CLUTTER_KINDS];
+export type OfficeKind = BaseOfficeKind | CompanyKind | ClutterKind | MallKind; // lane FURN: + ClutterKind; track3 lane SHOPS: + MallKind
+export const OFFICE_KINDS: readonly OfficeKind[] = [...BASE_OFFICE_KINDS, ...COMPANY_KINDS, ...CLUTTER_KINDS, ...MALL_KINDS];
 const OFFICE_KIND_SET: ReadonlySet<string> = new Set(OFFICE_KINDS);
 export function isOfficeKind(kind: string): kind is OfficeKind {
   return OFFICE_KIND_SET.has(kind);
@@ -39,6 +42,7 @@ export function isOfficeKind(kind: string): kind is OfficeKind {
 export const OFFICE_PROP_DEFS: Record<OfficeKind, PropDef> = {
   ...COMPANY_PROP_DEFS,
   ...CLUTTER_PROP_DEFS, // lane FURN
+  ...MALL_PROP_DEFS, // track3 lane SHOPS
   officeChair: {w: 0.78, d: 0.73, h: 1.0, blocksSight: false},
   officeMonitor: {w: 0.55, d: 0.39, h: 0.41, blocksSight: false},
   /** Lateral filing cabinet (B3 is 1.32 m wide). */
@@ -67,7 +71,8 @@ export const OFFICE_KIND_ASSET: Readonly<Partial<Record<BaseOfficeKind | 'desk',
 export const officeModelKey = (assetId: string): string => `office-${assetId}`;
 /** Asset id a kind renders with: the iteration-16 office models (OFFICE_KIND_ASSET) or lane ASSETS' company models (companyKinds). */
 export function officeKindAsset(kind: string): string | undefined {
-  return OFFICE_KIND_ASSET[kind as BaseOfficeKind | 'desk'] ?? COMPANY_KIND_ASSET[kind as CompanyKind] ?? CLUTTER_KIND_ASSET[kind as ClutterKind]; // lane FURN: + clutter
+  return OFFICE_KIND_ASSET[kind as BaseOfficeKind | 'desk'] ?? COMPANY_KIND_ASSET[kind as CompanyKind] ?? CLUTTER_KIND_ASSET[kind as ClutterKind] // lane FURN: + clutter
+    ?? MALL_KIND_ASSET[kind as MallKind]; // track3 lane SHOPS: + delivered mall fixture models
 }
 
 const NEVER = (cls: DamageClass) => ({cls, integrity: Infinity, breaks: 'never' as const});
@@ -75,6 +80,7 @@ const NEVER = (cls: DamageClass) => ({cls, integrity: Infinity, breaks: 'never' 
 export const OFFICE_PROP_DAMAGE = {
   ...COMPANY_PROP_DAMAGE,
   ...CLUTTER_PROP_DAMAGE, // lane FURN
+  ...MALL_PROP_DAMAGE, // track3 lane SHOPS
   officeChair: NEVER('fabric'), officeMonitor: {...NEVER('plastic'), glass: {cls: 'screen' as const, integrity: 18, on: 'dead' as const}},
   officeFiling: NEVER('sheetMetal'), officePhotocopier: NEVER('plastic'), officeWaterCooler: NEVER('plastic'), conferenceTable: NEVER('laminate'),
   deadPlant: NEVER('plastic'), receptionDesk: NEVER('laminate'), serverRack: NEVER('sheetMetal'), officeWhiteboard: NEVER('laminate'),
@@ -87,6 +93,7 @@ const box = (m: ShapeMat, s: [number, number, number], p: [number, number, numbe
 export function officeShape(kind: OfficeKind): ShapePart[] | null {
   if (isCompanyKind(kind)) return companyShape(kind);
   if (isClutterKind(kind)) return clutterShape(kind); // lane FURN
+  if (isMallKind(kind)) return mallShape(kind); // track3 lane SHOPS
   const D = OFFICE_PROP_DEFS[kind];
   const {w, d, h} = D;
   switch (kind) {

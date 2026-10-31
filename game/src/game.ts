@@ -8,6 +8,8 @@ import {CELL, PathFinder, nearestWalkable} from './gen/grid';
 import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
+import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'; // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
+import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorld, type BuiltWorld} from './world/builder';
 import {fogCullDistance} from './world/levelCulling';
@@ -33,7 +35,10 @@ import {ZombieActor} from './ai/zombieActor';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {FrameBudget} from './core/frameBudget'; // Task frame-budget-deferral-20261030 (lane SCHED): deferred background work
-import {PathService, nearPlayerRule} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
+import {PathService, nearPlayerRule, PATH_DEFER} from './ai/pathService'; // lane SCHED: far, not-in-sight chase re-plans through the frame budget
+import {HordeDirector} from './ai/horde'; // Task track3-eaton-centre-20261031 (lane HORDE): roaming hordes (layout.hordes)
+import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from './ai/chaseShare'; // lane HORDE (atrium AI): open-atrium chase relief (layout.mall only)
+import {spawnProfile} from './ai/spawnTables'; // lane HORDE: the level's horde patrol rules
 import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
@@ -63,6 +68,9 @@ import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-2026103
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
+import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
+import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
+import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
@@ -85,6 +93,7 @@ import {runBagStore} from './run/bagStore';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
+import {MALL_MODEL_FILES} from './assets/mallAssets'; // Task track3-eaton-centre-20261031 (lane ASSETS): mall-art models (keys office-<id>, level-only paths assets/models/mall-*.glb), fetched only for the keys a mall layout places
 import {officeModelKeysFor} from './gen/office/index'; // Iteration 16 (lane WORLD-GEN): the office models a section placed
 import {preloadOfficeAssets} from './world/officeProps'; // Iteration 16 (lane WORLD-GEN): carpet / ceiling / partition textures
 import {placementBox} from './items/lootLayout';
@@ -143,7 +152,9 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models
+  /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
+  readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
   /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */
@@ -160,6 +171,10 @@ export class Game {
   vocalReach: VocalReach | null = null;
   /** Task frame-budget-deferral-20261030 (lane SCHED): the brains' path requests — far, not-in-sight chase re-plans as frameBudget jobs (ai/pathService.ts). */
   pathService: PathService | null = null;
+  /** Task track3-eaton-centre-20261031 (lane HORDE): the live section's roaming-horde director (null: the level has no hordes). */
+  hordes: HordeDirector | null = null;
+  /** Lane HORDE (atrium AI): the open-atrium level's shared recent chase routes (null: not an atrium level — Subway, Office). */
+  chaseShare: ChaseShare | null = null;
   /**
    * Iteration 08 (Lane B): the station's stacked levels — every y-aware world query (support,
    * collision, ceilings, 3D raycasts / sight, nav). One level on single-storey layouts.
@@ -250,7 +265,7 @@ export class Game {
   readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
-  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN)
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
@@ -412,6 +427,7 @@ export class Game {
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     hookName('tower');
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
+    installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
     hookName('officeAtmosphere');
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
@@ -471,6 +487,9 @@ export class Game {
     this.assets = await loadAssets(onProgress);
     const m = this.assets.models;
     for (const g of Object.values(m)) g.scene.traverse(o => { const mesh = o as THREE.Mesh; if (mesh.isMesh) this.sharedGeometries.add(mesh.geometry); });
+    // Task track3-eaton-centre-20261031 (lane PERF): record the boot models' texture uploads (a recorder only; the item icons below
+    // upload many of them) so the mall can release their decoded images (assets/textureRelease.ts)
+    for (const g of Object.values(m)) trackUploads(modelTextures(g));
     const lb = new THREE.Box3().setFromObject(m.light.scene).getSize(new THREE.Vector3());
     this.mats = new WorldMaterials(this.assets.textures, 20261025, {w: lb.x, h: lb.y, d: lb.z});
     // Food/drink use the generated item models when the manifest has them (else stand-ins).
@@ -530,8 +549,11 @@ export class Game {
    */
   async prepareSection(key: SectionKey, run: RunState = this.run, onProgress?: (frac: number, label: string) => void): Promise<StationLayout> {
     this.lifecycleCounts.prepare++;
+    this.propModels.sealed = this.levelResources.sealed = false; // lane PACKAGE (track3): the loading screen fetches the level's assets
     const layout = this.generateSection(key, run);
-    await this.propModels.ensure(this.modelKeysFor(layout), onProgress);
+    const lazyKeys = this.modelKeysFor(layout, key.level);
+    await this.propModels.ensure(lazyKeys, onProgress);
+    for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); } // (lane PERF, track3) upload recorder only
     for (const pre of this.sectionPreloads) {
       try { await pre(layout); } catch (err) { console.warn('Iteration 16: a section preload failed', err); }
     }
@@ -539,9 +561,26 @@ export class Game {
   }
 
   /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
-  private modelKeysFor(layout: StationLayout): string[] {
+  private modelKeysFor(layout: StationLayout, level: LevelId): string[] {
     const extra = this.sectionModelKeys.flatMap(f => { try { return [...f(layout)]; } catch (err) { console.warn('Iteration 16: section model keys failed', err); return []; } });
-    return [...new Set([...p7ModelKeysFor(layout), ...extra])];
+    // Task track3-eaton-centre-20261031 (lane PACKAGE): another level's own art (assets/levelAssets.ts, e.g. mall-*.glb outside the
+    // mall) is never fetched or kept for this level
+    const sel = selectLevelKeys(level, [...new Set([...p7ModelKeysFor(layout), ...extra])], this.propModels.catalogue);
+    if (sel.foreign.length) console.warn(`Level ${level} asked for another level's models (skipped): ${sel.foreign.join(', ')}`);
+    return sel.keys;
+  }
+
+  /** Lane PACKAGE (track3): the current level's lazy working set / resident set (QA `__LL.levelAssets()`). */
+  levelAssetsQa() {
+    if (!this.layout) return null;
+    const level = this.run.current.level;
+    return {level, workingSet: levelWorkingSet(level, this.modelKeysFor(this.layout, level), this.propModels.catalogue),
+      resident: {models: this.propModels.loadedKeys().length, bytes: this.propModels.residentBytes(),
+        foreign: this.propModels.loadedKeys().filter(foreignTo(level, this.propModels.catalogue))}, // another level's own art still resident: should be []
+      library: {...this.propModels.stats},
+      levelResources: {summary: this.levelResources.summary(), stats: {...this.levelResources.stats}},
+      // Task track3-eaton-centre-20261031 (lane PERF): mall lazy-model decoded images released after upload; shared instancing programs
+      perf: {cpuCopies: {...textureReleaseStats}, attributeInstancing: attributeInstancing()}};
   }
 
   /**
@@ -575,6 +614,8 @@ export class Game {
     for (const z of this.zombies) { this.scene.remove(z.root); const old = z; this.retire(() => old.dispose()); }
     this.zombies = [];
     this.enemyIndex.clear();
+    this.hordes = null; // lane HORDE: the director belongs to the torn-down world
+    this.chaseShare = null;
     this.pickups.clear();
     this.layoutPickup.clear();
     this.containers?.clear();
@@ -612,9 +653,19 @@ export class Game {
     this.currentSeed = layout.seed >>> 0;
     this.rand = mulberry32(layout.seed ^ 0x5bd1e995);
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
-    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout));
+    const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout, key.level));
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
-    this.propModels.trim(keep);
+    this.propModels.trim(keep, 16, foreignTo(key.level, this.propModels.catalogue)); // lane PACKAGE (track3): another level's own art never lingers as an extra
+    this.levelResources.retainOnly(key.level, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
+    // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
+    // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
+    setAttributeInstancing(!!this.layout.mall);
+    // (lane PERF) in the mall the level's lazy models AND the boot models drop their decoded images once uploaded (GPU textures and
+    // what is drawn unchanged; the colour samplers read exact thumbnails: assets/textureRelease.ts)
+    if (this.layout.mall) {
+      for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
+      for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
+    }
     this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     this.scene.add(this.world.group);
     this.steamVents = new SteamVents(this.fx, annexVents(this.layout), this.layout.seed >>> 0); // Track 2 (VIS)
@@ -634,8 +685,14 @@ export class Game {
     // lane SCHED: the same search as below (brainWorld findPath); only far, not-in-sight chase re-plans are queued — and run
     // resumably on a fork of the finder (its own search buffers, allocated here on the loading screen; ~20 B per node)
     const farFinder = this.pathfinder.fork(), near = (x: number, z: number, y: number | undefined) => this.nearPlayer(x, z, y);
-    this.pathService = new PathService((ax, az, bx, bz, o) => this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, o),
-      (ax, az, bx, bz, o, chunk) => farFinder.search(ax, az, bx, bz, 0.34, 26000, o, chunk), this.frameBudget, near);
+    // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): an OPEN-ATRIUM level (layout.mall) adds the per-frame chase search
+    // cap / seen hand-over slack (ai/chaseShare.ts); every other level constructs the service exactly as before.
+    const atrium = this.layout.mall ? atriumPathOptions((x, z, y) => { const P = this.player; return Math.hypot(x - P.x, z - P.z, (y ?? P.y) - P.y) < PATH_DEFER.nearM; },
+      (x, z, y) => { const P = this.player, fy = y ?? P.y, r = this.vocalReach; return atriumNearRule(Math.hypot(x - P.x, z - P.z, fy - P.y), fy - P.y, () => r?.ready ? r.pathTo(x, fy + 1.2, z) : null); }) : undefined;
+    // (searchExpand: 26000 as always; a `local` request — only marked in an atrium level — gets ATRIUM_CHASE.localExpand)
+    this.pathService = new PathService((ax, az, bx, bz, o) => this.pathfinder.find(ax, az, bx, bz, 0.34, searchExpand(o), o),
+      (ax, az, bx, bz, o, chunk) => farFinder.search(ax, az, bx, bz, 0.34, searchExpand(o), o, chunk), this.frameBudget, near, atrium);
+    this.chaseShare = this.layout.mall ? new ChaseShare(this.levels) : null;
     this.sfx.setVocalReach(this.vocalReach);
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
@@ -712,6 +769,13 @@ export class Game {
       if (this.sirens.skip(this.layout.zombies[i])) continue; // Task track1-siren-blightbelly-20261031 (lane SIREN): no Siren without her model (never a zombie stand-in)
       this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
     }
+    // Task track3-eaton-centre-20261031 (lane HORDE): the roaming hordes walk the living members of their placed groups (killed
+    // members stayed dead above; a group with none left stays dead). No spawning here: members are layout.zombies entries.
+    if (this.layout.hordes?.length) {
+      const byIndex = new Map<number, EnemyActor>();
+      for (const [z, i] of this.enemyIndex) byIndex.set(i, z);
+      this.hordes = new HordeDirector(this.layout, this.levels, i => byIndex.get(i)?.brain, spawnProfile(key.level).horde?.patrol);
+    } else this.hordes = null;
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
@@ -733,8 +797,9 @@ export class Game {
     const codes = LEVEL_IDS.map(l => `${LEVELS[l].name} ${seedToCode(this.run.seeds[l])}`).join(' · ');
     $('#seed-line').textContent = `${LEVELS[key.level].name} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
-    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : 'Clear the station';
+    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : 'Clear the station'; // (+ mall: lane GEN)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
+    this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
   }
   genMs = 0;
@@ -840,7 +905,7 @@ export class Game {
     const flight = this.lifecycle.run(async () => {
       this.wireRunLanes();
       const def = LEVELS[level];
-      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed()};
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed()}; // (+ mall: lane GEN)
       const key: SectionKey = {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
       const ui = this.showLoading(`New run · ${def.name}. ${def.blurb}`, `Generating ${def.name}…`);
@@ -1013,9 +1078,12 @@ export class Game {
   updateStationIntro(): void {
     // Iteration 16 (RUN) / 17: per level — what is still alive here (kills earlier in the run stay dead)
     const k = this.run.current, n = this.zombies.filter(z => z.brain.alive).length;
+    // (task track3-eaton-centre-20261031, lane GEN: + The Eaton's Center)
     $('#station-intro').textContent = k.level === 'office'
       ? `Office Space — ${this.layout.name} and the tower above it, lobby to floor 8. ${n} infected reported in the station and on the floors. Clear them out.`
-      : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
+      : k.level === 'mall'
+        ? `The Eaton's Center — a subway station at the bottom of the pit and six rings of shops up to the glass roof. ${n} infected reported in the station and the mall. Clear them out.`
+        : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
   }
 
   /**
@@ -1033,9 +1101,29 @@ export class Game {
     return run;
   }
 
+  /**
+   * Task track3-eaton-centre-20261031 (lane PERF): in the mall, upload the built level's model textures behind the loading screen
+   * in byte-bounded batches (assets/textureRelease.ts stageUploads), each batch's decoded images released before the next one,
+   * instead of the first frame uploading ~80 models' textures while every decoded copy is still resident (the load-time memory
+   * peak on a software rasterizer). Frames are held meanwhile (`warming`); prepareGraphics' finally clears it. No-op elsewhere.
+   */
+  private async stageLevelTextures(ui: WarmupUi): Promise<void> {
+    if (!this.layout?.mall || !this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return;
+    const textures = new Set<THREE.Texture>();
+    this.scene.traverse(o => collectTextures(o, textures));
+    const gen = this.stationGen;
+    this.warming = true;
+    ui.label.textContent = 'Preparing textures…';
+    await stageUploads(t => this.renderer.initTexture(t), textures, {
+      progress: (done, total) => { if (ui.bar) ui.bar.style.width = `${Math.floor(done / Math.max(1, total) * 100)}%`; },
+      alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
+    });
+  }
+
   private async runWarmup(ui: WarmupUi): Promise<WarmupResult> {
     this.lifecycleCounts.warmup++;
     const {bar, label, button} = ui;
+    await this.stageLevelTextures(ui); // Task track3-eaton-centre-20261031 (lane PERF): mall only; runs with ?warmup=off too
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
     if (!this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return (this.warmup = skippedWarmup('renderer or station not ready'));
@@ -2045,7 +2133,11 @@ export class Game {
       findPath: (ax, az, bx, bz, opts) => {
         this.prof.begin(SPAN.path); // lane MEASURE: every path search (A* + string pulling) of this frame
         // lane SCHED: through the path service (immediate unless a far, not-in-sight chase re-plan: then possibly queued = undefined)
-        const path = this.pathService ? this.pathService.request(ax, az, bx, bz, opts) : this.pathfinder.find(ax, az, bx, bz, 0.34, 26000, opts);
+        // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): in an open-atrium level a chase may join a recent route of another
+        // chaser to the same goal (still answered at once; ai/chaseShare.ts). Other levels (no share): exactly the line below.
+        const C = this.chaseShare, shared = C ? C.lookup(ax, az, bx, bz, opts) : undefined;
+        const path = shared !== undefined ? shared : this.pathService ? this.pathService.request(ax, az, bx, bz, opts) : this.pathfinder.find(ax, az, bx, bz, 0.34, searchExpand(opts), opts);
+        if (C && shared === undefined) C.remember(ax, az, bx, bz, opts, path);
         this.prof.end(SPAN.path);
         return path;
       },
@@ -2068,6 +2160,8 @@ export class Game {
       rand: this.rand,
       // Iteration 12 (AI): light lure — this frame's attracting lights, 3D eye-to-point sight, standable goal near a lit spot (ai/lightLure.ts).
       ...lureWorld(L, this.lightSources),
+      // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): open-atrium chase rules (ai/brain.ts BrainWorld.atrium); absent elsewhere
+      ...(this.layout.mall ? {atrium: true} : {}),
     };
   }
 
@@ -2094,12 +2188,18 @@ export class Game {
     prof.begin(SPAN.vocal);
     this.vocalReach?.update(dt, p.x, p.y, p.z); // lane AUDIO: refresh the route field (<= 2.5 Hz) before vocals; lane SCHED: its slices run as frameBudget chunks
     prof.end(SPAN.vocal);
+    // Task track3-eaton-centre-20261031 (lane HORDE): the groups' patrol intent / formation slots before the members think
+    // (phased: far groups every 3rd frame; their leg searches go through the path service like far chase re-plans)
+    const H = this.hordes;
+    this.chaseShare?.tick(dt); // lane HORDE (atrium AI): the shared routes' clock
+    H?.update(dt, w, p);
     for (const z of this.zombies) {
       const b = z.brain;
       const seqBefore = b.attackSeq;
       prof.begin(SPAN.brain);
       const out = b.update(dt, w);
       prof.end(SPAN.brain);
+      if (H && out.alerted) H.alerted(b); // lane HORDE: group mates within earshot hear the call (brain.hear; never group-wide)
       prof.begin(SPAN.motor);
       if (out.face !== null) {
         let d = out.face - b.yaw;
@@ -2128,12 +2228,15 @@ export class Game {
       const cues = enemyCues(z);
       if (out.alerted) cues.alert(this.sfx, z);
       if (b.attackSeq !== seqBefore) cues.attack(this.sfx, z);
+      H?.vocalGate(b, z, dt, this.rand); // lane HORDE: one idle groan per group at a time (the Sfx's 3-voice vocal cap on top)
       cues.tick(this.sfx, z, dt, moved, dist, this.rand);
       if (out.attackHit) this.hurtPlayer(z);
-      z.animate(dt, out.anim, moved);
+      // lane HORDE: calm far horde members animate every 3rd frame (the skipped time is applied then); everyone else as before
+      const adt = H ? H.animStep(b, dt, dist) : dt;
+      if (adt > 0) z.animate(adt, out.anim, moved);
       z.syncTransform();
       if (!z.ragdolled) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder
-      z.updateVolumes();
+      if (adt > 0) z.updateVolumes();
       prof.end(SPAN.anim);
     }
   }

@@ -48,12 +48,15 @@ export function pickEnemyArchetype(seed: number, index: number, pool: FamilyPool
  * zombie). Same roll, no RNG, other families untouched. Call ONCE per level, after every context (annexes too) has placed.
  */
 export function assignEnemyArchetypes(
-  layout: {seed: number; zombies: ({archetype?: EnemyArchetypeId; area?: number} & EligibilitySpawn)[]; areas?: readonly (Pick<Area, 'purpose' | 'type'> & Partial<Pick<Area, 'kind' | 'w' | 'h'>>)[]} & EligibilityLayout,
+  layout: {seed: number; zombies: ({archetype?: EnemyArchetypeId; area?: number; horde?: number} & EligibilitySpawn)[]; areas?: readonly (Pick<Area, 'purpose' | 'type'> & Partial<Pick<Area, 'kind' | 'w' | 'h'>>)[]} & EligibilityLayout,
   profile: SpawnProfile,
 ): number {
   let n = 0;
   const placed = new Map<EnemyFamilyId, number>();
   layout.zombies.forEach((s, i) => {
+    // Task track3-eaton-centre-20261031 (lane HORDE): roaming-horde members keep the family their horde pool gave them (ai/hordePlace.ts)
+    // — the ambient pool never applies to them. Skipping consumes no draw (the roll is a hash of (seed, index)).
+    if (s.horde !== undefined) return;
     const area = s.area !== undefined ? layout.areas?.[s.area] : undefined;
     s.archetype = eligibleFamily(profile, pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area)), layout, s, i, placed);
     placed.set(s.archetype, (placed.get(s.archetype) ?? 0) + 1);

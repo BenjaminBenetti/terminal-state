@@ -39,6 +39,8 @@ import {applyStationDecay, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
+import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
+import {MALL_FINISH_ATTR, MallArch, downlightLensMatrix, splitFinishKey} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium
 import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt'; // Track 2 (VIS): tunnels beyond the beds
 
 class Accum {
@@ -48,7 +50,19 @@ class Accum {
   idx: number[] = [];
   /** Iteration 12 (ARCH): triangles (quads with one collapsed edge), indexed AFTER every quad (keeps the 6-index quad layout wallDetail cuts rely on). */
   tri: number[] = [];
+  /**
+   * Task track3-eaton-centre-20261031 (lane ARCH): the mall finish row of the next quads (world/mallSurfaces.ts 'aFinish'), set by
+   * the builder from a 'mall-…|row' key; -1 (every Subway / Office accumulator) writes no attribute: their geometry is unchanged.
+   */
+  fin = -1;
+  fid: number[] = [];
   quad(p: number[][], n: readonly number[], uv: number[][]) {
+    if (this.fin >= 0) {
+      // one row value per vertex this quad adds (3 for a collapsed quad, 4 otherwise)
+      let tri = false;
+      for (let i = 0; i < 4 && !tri; i++) { const a = p[i], b = p[(i + 1) % 4]; tri = Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7 && Math.abs(a[2] - b[2]) < 1e-7; }
+      for (let k = tri ? 3 : 4; k > 0; k--) this.fid.push(this.fin);
+    }
     const base = this.pos.length / 3;
     // A quad with zero height at one end (stair-wall zone slices) is a triangle: no zero-area triangle.
     let gone = -1;
@@ -79,6 +93,7 @@ class Accum {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    if (this.fid.length) g.setAttribute(MALL_FINISH_ATTR, new THREE.Float32BufferAttribute(this.fid, 1)); // task track3 (lane ARCH)
     const idx = this.tri.length ? this.idx.concat(this.tri) : this.idx;
     g.setIndex(this.pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
     g.computeBoundingSphere();
@@ -117,6 +132,8 @@ export interface BuiltWorld {
   culler: LevelCuller;
   /** Task office-overhaul-20261030 (lane ARCH): the office storeys' architecture (styles, finish keys, materials); office layouts only. */
   officeArch?: OfficeArch;
+  /** Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium (world/mallArch.ts); mall layouts only. */
+  mallArch?: MallArch;
   /** Track 2 (VIS): the track-extension presentation (tunnel shells, caps, door frames, graffiti); layouts with extensions only. */
   trackExt?: TrackExtBuilt;
 }
@@ -202,10 +219,14 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Architecture accumulators per (material, level:chunk). Task office-overhaul-20261030 (lane ARCH): keys are MatKeys or the
   // office finish keys of world/officeArch.ts ('office-…', office storeys only), resolved by scaleOf / matOf.
   const acc = new Map<string, {k: string; level: number; levels?: number[]; a: Accum}>();
-  const A = (k: string, chunk: string) => {
+  const A = (k0: string, chunk: string) => {
+    // Task track3-eaton-centre-20261031 (lane ARCH): a mall key carries its finish row ('mall-wall|12'): one accumulator (one
+    // material) per base key, the row written per vertex. Keys without '|' (Subway / Office) are untouched.
+    const {base: k, row} = k0.includes('|') ? splitFinishKey(k0) : {base: k0, row: -1};
     const key = `${k}@${chunk}`;
     let e = acc.get(key);
     if (!e) acc.set(key, (e = {k, level: Number(chunk.split(':')[0]), levels: chunkLevels(chunk), a: new Accum()}));
+    if (row >= 0 || e.a.fin >= 0) e.a.fin = row;
     return e.a;
   };
   // Task office-seamless-20261029: the storeys a stair flight joins (every level grid its ramp is carved into), from a
@@ -238,14 +259,16 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Task office-overhaul-20261030 (lane ARCH): the office storeys' architecture (null for the Subway: nothing changes there).
   const office = OfficeArch.for(layout, mats, levels);
   setExteriorRoof(office?.roofY ?? null);
-  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mats.scale[k as MatKey];
-  const matOf = (k: string): THREE.Material => office?.material(k) ?? mats.get(k as MatKey);
+  // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium (null for the Subway and the Office).
+  const mall = office ? null : MallArch.for(layout, mats, levels);
+  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? mats.scale[k as MatKey];
+  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? mats.get(k as MatKey);
 
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
   const cutFaces: BuiltFace[] = cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout);
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
-  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : cutFaces;
+  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : cutFaces;
   // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor
   // (no stair-stepped walls, bed end-face stubs or door reveals inside the shell; world/trackExt/view.ts). Null = unchanged.
   const ext = TrackExtView.of(layout);
@@ -352,7 +375,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
       const f = g.floorOf(i);
       for (let k = 0; k < cols.count(i); k++) { const M = cols.level(i, k); if (M !== L && Math.abs(cellCeilAt(levels[M].grid, i) - f) < 0.02) return null; }
       // Task office-overhaul-20261030 (lane ARCH): office storey floors (carpet tiles, vinyl, tile, stone, concrete, roof deck ...).
-      const of = office?.floorKey(L, i);
+      const of = office ? office.floorKey(L, i) : mall?.floorKey(L, i); // task track3 (lane ARCH): + the mall's floors
       if (of) return of;
       const dm = doorFloor.get(L * n0 + i);
       if (dm) return dm;
@@ -384,7 +407,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
     // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
     const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
-    const dk = office?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i];
+    const dk = office?.doorCeilKey(L, a, b) ?? mall?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i];
     // Track 2 (VIS): a tunnel door's cells inside the shell take the shell ceiling; the rest keep the door head.
     let owned = false;
     if (ext) for (let y = d.y; y < d.y + d.h && !owned; y++) for (let x = d.x; x < d.x + d.w; x++) if (ext.ownsCell(L, y * g0.w + x)) { owned = true; break; }
@@ -395,7 +418,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   for (const r of ceilingRuns(levels, cols, (L, i) => doorMask[L][i] === 1 || !!ext?.ownsCell(L, i))) {
     const a = r.voidCell ? undefined : layout.areas[r.area];
     // Task office-overhaul-20261030 (lane ARCH): office ceilings (T-bar grid, plaster, exposed slab, core); none on the open roof.
-    const oc = r.voidCell ? null : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null;
+    // Task track3-eaton-centre-20261031 (lane ARCH): the mall's ceilings; none over the void (the glass vault), track bed included.
+    const oc = r.voidCell ? (mall?.ceilKey(r.level, -1, r.row * g0.w + r.x0, r.y) ?? null) : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? mall?.ceilKey(r.level, r.area, r.row * g0.w + r.x0, r.y) ?? null;
     if (oc === false) continue;
     ceilRect(oc ?? (r.voidCell || !a || a.publicSpace ? 'ceiling' : 'ceilingService'), levels[r.level].id, r.x0 * CELL, r.row * CELL, r.x1 * CELL, (r.row + 1) * CELL, r.y);
   }
@@ -409,7 +433,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const geo = e.a.geometry();
     if (!geo) continue;
     const mesh = new THREE.Mesh(geo, matOf(e.k));
-    mesh.name = office?.meshName(e.k) ?? `arch-${key}`;
+    mesh.name = office?.meshName(e.k) ?? mall?.meshName(e.k) ?? `arch-${key}`;
     mesh.userData.level = e.level;
     if (e.levels) mesh.userData.levels = e.levels;
     mesh.matrixAutoUpdate = false;
@@ -480,7 +504,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const h = atBase ? d.height : Math.min(d.height, (g.hasCeil(i) ? g.ceil[i] : df + d.height) - df);
     const ft = 0.09, fd = CELL + 0.06;
     // Task office-overhaul-20261030 (lane ARCH): office doors get painted / timber joinery frames in the tenant's trim, not steel.
-    const fm = office?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel';
+    const fm = office?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a])
+      ?? mall?.doorTrimKey((d as {level?: number}).level ?? levelOf(layout.areas[d.a]), layout.areas[d.a]) ?? 'steel'; // task track3 (lane ARCH)
     if (d.h === 1) { // wall runs along X; jambs at both X ends of the opening
       const z = (d.y + 0.5) * CELL;
       const xa = d.x * CELL, xb = (d.x + d.w) * CELL;
@@ -543,9 +568,12 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     for (const s of [-1, 1]) addBox('steel', l.x + ax * s, l.y + rod / 2, l.z + az * s, 0.015, rod, 0.015);
   }
   // Guard railings on drop edges (mezzanine/catwalk edges, light wells, stairwells, open flight sides).
-  const rails = stationRails(layout, levels, cols);
+  // Task track3-eaton-centre-20261031 (lane ARCH): the mall draws exactly its COLLISION rails (gen/levels.ts Levels.rails: the
+  // generator's list, else derived per storey — every ring's void edge, where the legacy derivation keeps one rail per column).
+  const rails: RailRun[] = mall ? [...levelsOf(layout as Parameters<typeof levelsOf>[0]).rails] as RailRun[] : stationRails(layout, levels, cols);
   // (task office-overhaul-20261030, lane STRUCT: collision-only rails — escalator balustrades, roof fixtures — draw their own geometry)
-  for (const r of rails) if (!(r as {hidden?: boolean}).hidden) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
+  // (task track3-eaton-centre-20261031, lane ARCH: the mall's ring rails are drawn as glass balustrades by MallArch.buildAtrium)
+  for (const r of rails) if (!(r as {hidden?: boolean}).hidden && !mall?.ownsRail(r)) for (const geo of railGeometry(r)) trimList(r.kind === 'parapet' ? 'platformFace' : 'steel', geo.userData.cx, geo.userData.cz, r.level).push(geo);
 
   let instances = instancesFromTraversal;
   // Sleepers (instanced, every track of every bed), one instanced mesh per trim chunk.
@@ -623,12 +651,15 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   const fixtures: Fixture[] = layout.lights.map((l, i) => ({x: l.x, y: l.y, z: l.z, broken: l.broken, flicker: l.flicker, warm: l.warm, dying: l.dying, power: l.virtual ? 0 : l.power, area: l.area, phase: i * 1.7, level: l.broken ? 0 : 1}));
   const lightMats = layout.lights.map(l => new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y, l.z), new THREE.Quaternion().setFromAxisAngle(UP, l.rot), l.virtual ? HIDDEN : new THREE.Vector3(1, 1, 1)));
   let tubes: THREE.InstancedMesh | null = null;
-  if (models.light) instances += instanceModel(group, models.light, lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
+  // Task track3-eaton-centre-20261031 (lane ARCH): mall ring fixtures are square downlight cans (their tube = the can's lens).
+  const down = (i: number) => !!mall && mall.isDownlight(layout.lights[i]);
+  if (models.light) instances += instanceModel(group, models.light, mall ? lightMats.filter((_, i) => !down(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
+  if (mall) instances += mall.buildDownlights(group, lightMats, layout.lights, mats.fixture);
   {
     const geo = new THREE.BoxGeometry(mats.fixture.w * 0.82, 0.025, mats.fixture.d * 0.42);
     geo.translate(0, -mats.fixture.h - 0.004, 0);
     tubes = new THREE.InstancedMesh(geo, mats.get('tube'), layout.lights.length);
-    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, m));
+    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : m));
     const c = new THREE.Color();
     fixtures.forEach((f, i) => tubes!.setColorAt(i, f.broken ? c.setRGB(0.05, 0.05, 0.05) : c.setRGB(1, 1, 1)));
     tubes.name = 'light-tubes';
@@ -645,6 +676,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 
   // --- Signs (instanced: shared plates, one face mesh per distinct text) --------------------
   instances += buildSigns(group, layout, mats, models.sign, addBox);
+  // Task track3-eaton-centre-20261031 (lane ARCH): the mall atrium — glass vault + steel arches, glass balustrades, columns, the
+  // glass shaft tower, shopfront / blade / level signage, banners, escalator soffits (world/mallArch.ts).
+  if (mall) mall.buildAtrium(group, rails);
 
   for (const [key, e] of boxes) {
     if (!e.list.length) continue;
@@ -672,9 +706,12 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   });
   // Iteration 08: level visibility culling (world/levelCulling.ts); game.ts registers its other station
   // groups (containers, stock) and calls culler.update(camera) before rendering.
-  const culler = new LevelCuller(levels, cols, levelAt);
+  // Task track3-eaton-centre-20261031 (lane ARCH): in the mall the culler also gets the atrium columns (view-dependent visibility).
+  // Task track3-eaton-centre-20261031 (lane PERF): + slab occlusion in the mall (the glazed lift shaft is see-through: levelCulling.ts)
+  const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}} : undefined);
   culler.register(group);
-  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler, ...(office ? {officeArch: office} : {}), ...(trackExt ? {trackExt} : {})};
+  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
+    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {})};
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

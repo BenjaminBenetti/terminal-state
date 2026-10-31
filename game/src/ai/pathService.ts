@@ -66,6 +66,28 @@ export type SearchSteps = (ax: number, az: number, bx: number, bz: number, opts:
 export type NearPlayer = (x: number, z: number, y: number | undefined) => boolean;
 
 /**
+ * Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): options of an OPEN-ATRIUM level (the mall; ai/chaseShare.ts explains
+ * the measured problem and the relief). Absent (every other level): the service behaves exactly as before.
+ *  - `near`: the near rule of deferrable requests in the atrium (across storeys an unknown route is not near: nearSeenRule);
+ *    `seenGoalSlack`: the hand-over goal slack (m) of a deferred SEEN re-plan (`seen: true`; the player moves while it is searched);
+ *  - `syncCap` / `maxWait` / `critical`: at most `syncCap` synchronous chase searches (drops allowed) per frame; a further DEFERRABLE
+ *    request that is not `critical` (< 4 m straight from the player) is held to the next frame (answer undefined: its enemy asks again
+ *    every frame), at most `maxWait` frames in a row — then it runs whatever the count. Never dropped; requests that cannot be
+ *    deferred (no `defer`) are never held, they only count.
+ */
+export interface PathAtrium {
+  /**
+   * The service's near rule in the atrium level (replaces `near` for deferrable requests; chaseShare.ts atriumNearRule): on the
+   * player's storey the ordinary rule, across storeys nearSeenRule (an unknown route is not near).
+   */
+  near: NearPlayer;
+  seenGoalSlack: number;
+  syncCap: number;
+  maxWait: number;
+  critical: (x: number, z: number, y: number | undefined) => boolean;
+}
+
+/**
  * The NEAR rule (Game.nearPlayer): `d` = 3D straight distance to the player; `route()` = navigable route length from the
  * player (Infinity: beyond the field / unreachable; null: no route field). Near = never deferred.
  */
@@ -75,12 +97,26 @@ export function nearPlayerRule(d: number, route: () => number | null): boolean {
   return r !== null ? r <= PATH_DEFER.nearRouteM : d < PATH_DEFER.midM;
 }
 
+/**
+ * Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): the NEAR rule of a requester on ANOTHER storey than the player in an
+ * atrium level (PathAtrium.near via chaseShare.ts atriumNearRule):
+ * within nearM in a straight line, or a KNOWN navigable route <= nearRouteM. Unlike nearPlayerRule there is no straight-line
+ * fallback without a route field: across the void a few metres in a line is often 50-100 m by the escalators.
+ */
+export function nearSeenRule(d: number, route: () => number | null): boolean {
+  if (d < PATH_DEFER.nearM) return true;
+  const r = route();
+  return r !== null && r <= PATH_DEFER.nearRouteM;
+}
+
 interface Ticket {
   owner: object;
   ax: number; az: number; bx: number; bz: number;
   opts: PathOpts;
   state: 'queued' | 'running' | 'done';
   result: Waypoint[] | null;
+  /** Task track3 (atrium): hand-over goal slack of a deferred seen re-plan (absent: PATH_DEFER.goalSlack). */
+  goalSlack?: number;
   /** Service frame of the owner's last ask / of the search's end. */
   asked: number;
   doneAt: number;
@@ -104,6 +140,9 @@ export interface PathServiceStats {
   searches: number;
   chunks: number;
   maxChunks: number;
+  /** Task track3 (atrium, PathAtrium): deferrable requests held to a later frame by the per-frame cap / most synchronous chase searches in one frame. */
+  held?: number;
+  maxSync?: number;
 }
 
 let services = 0;
@@ -119,7 +158,12 @@ export class PathService {
   private readonly key = `path.far#${++services}`;
   private readonly steps: SearchSteps;
 
-  constructor(private readonly find: FindPath, steps: SearchSteps | null, scheduler: FrameScheduler | null, private readonly near: NearPlayer) {
+  /** Task track3 (atrium): synchronous chase searches this frame; frames each held owner has waited. */
+  private syncFrame = 0;
+  private readonly waited = new Map<object, number>();
+
+  constructor(private readonly find: FindPath, steps: SearchSteps | null, scheduler: FrameScheduler | null, private readonly near: NearPlayer, private readonly atrium?: PathAtrium) {
+    if (atrium) { this.stats.held = 0; this.stats.maxSync = 0; }
     this.sched = scheduler;
     this.gen = scheduler ? scheduler.generation : 0;
     // without a resumable search: the whole search in one chunk (still staggered: one per chunk)
@@ -129,6 +173,7 @@ export class PathService {
   /** Once per game update, before the enemies think (the idle checks count these frames). */
   tick(): void {
     this.frame++;
+    this.syncFrame = 0; // task track3 (atrium): the per-frame chase search count
   }
 
   /** Enemies with a queued, running or finished-but-not-taken search. */
@@ -140,9 +185,11 @@ export class PathService {
    * A brain's path request (BrainWorld.findPath). `opts.defer` = the requesting brain (a deferrable re-plan). Returns the path
    * (or null: none), or undefined = queued, ask again next frame.
    */
-  request(ax: number, az: number, bx: number, bz: number, opts: PathOpts & {defer?: object} = {}): Waypoint[] | null | undefined {
-    const {defer: owner, ...o} = opts;
-    if (!owner || !this.sched || this.near(ax, az, o.ay)) {
+  request(ax: number, az: number, bx: number, bz: number, opts: PathOpts & {defer?: object; seen?: boolean; local?: boolean} = {}): Waypoint[] | null | undefined {
+    const {defer: owner, seen, ...o} = opts;
+    if (!owner || !this.sched || (this.atrium ? this.atrium.near(ax, az, o.ay) : this.near(ax, az, o.ay))) {
+      // task track3 (atrium): over this frame's synchronous chase cap a deferrable, non-critical request waits a frame (re-asked)
+      if (owner && this.atrium && this.hold(owner, ax, az, o)) return undefined;
       if (owner) this.forget(owner); // near again (or never deferrable): a queued far search is superseded
       return this.immediate(ax, az, bx, bz, o);
     }
@@ -156,6 +203,7 @@ export class PathService {
     }
     if (!t) {
       t = {owner, ax, az, bx, bz, opts: o, state: 'queued', result: null, asked: this.frame, doneAt: -1};
+      if (seen && this.atrium) t.goalSlack = this.atrium.seenGoalSlack; // task track3 (atrium): the seen player moves meanwhile
       this.tickets.set(owner, t);
       this.line.push(t);
       this.stats.queued++;
@@ -172,7 +220,22 @@ export class PathService {
 
   private immediate(ax: number, az: number, bx: number, bz: number, o: PathOpts): Waypoint[] | null {
     this.stats.immediate++;
+    if (this.atrium && o.drops) { this.syncFrame++; if (this.syncFrame > this.stats.maxSync!) this.stats.maxSync = this.syncFrame; }
     return this.find(ax, az, bx, bz, o);
+  }
+
+  /**
+   * Task track3 (atrium): hold this deferrable request to a later frame? Only chase searches (drops), only beyond the critical
+   * distance, only while this frame already ran syncCap synchronous chase searches, and at most maxWait frames in a row per owner.
+   */
+  private hold(owner: object, ax: number, az: number, o: PathOpts): boolean {
+    const A = this.atrium!;
+    if (!o.drops || this.syncFrame < A.syncCap || A.critical(ax, az, o.ay)) { this.waited.delete(owner); return false; }
+    const n = this.waited.get(owner) ?? 0;
+    if (n >= A.maxWait) { this.waited.delete(owner); return false; }
+    this.waited.set(owner, n + 1);
+    this.stats.held!++;
+    return true;
   }
 
   /** The line's scheduler job is queued (true), or the scheduler refused it. */
@@ -249,7 +312,7 @@ export class PathService {
 
   private fits(t: Ticket, ax: number, az: number, bx: number, bz: number, o: PathOpts): boolean {
     const D = PATH_DEFER;
-    if (Math.hypot(t.bx - bx, t.bz - bz) > D.goalSlack || Math.hypot(t.ax - ax, t.az - az) > D.startSlack) return false;
+    if (Math.hypot(t.bx - bx, t.bz - bz) > (t.goalSlack ?? D.goalSlack) || Math.hypot(t.ax - ax, t.az - az) > D.startSlack) return false;
     if ((t.opts.by === undefined) !== (o.by === undefined) || (o.by !== undefined && Math.abs(t.opts.by! - o.by) > D.storeySlack)) return false;
     if ((t.opts.ay === undefined) !== (o.ay === undefined) || (o.ay !== undefined && Math.abs(t.opts.ay! - o.ay) > D.storeySlack)) return false;
     return !!t.opts.drops === !!o.drops && !!t.opts.noLinks === !!o.noLinks;

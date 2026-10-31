@@ -31,6 +31,8 @@ export const MASK_LOOT = {
   levels: {
     office: {masks: [1, 2], filters: [2, 5]},
     subway: {masks: [0, 1], filters: [0, 2]},
+    // Task track3-eaton-centre-20261031: the mall keeps the Office's mask / filter roll (lane PROFILES decision, PROFILES.done).
+    mall: {masks: [1, 2], filters: [2, 5]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */
   foundFilter: [0.35, 0.75] as const,

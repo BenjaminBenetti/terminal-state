@@ -34,6 +34,8 @@ import {
 import {LF, activeLightField, bindLightField, installLightFieldNode, setLightFieldLevels, stationFieldLight, type LightFieldLight} from './lightFieldNode';
 import {addNodeHook} from '../render/nodeHooks';
 import {stationLevels} from './levelGeometry';
+import {mallSkyField} from './mallSkylight'; // Task track3-eaton-centre-20261031 (lane ARCH): daylight through the mall's glass roof
+import {CELL} from '../gen/grid';
 
 /**
  * Mood tunables (the primary's knobs). r4 values in comments. Darker overall, deeper falloff between
@@ -276,7 +278,8 @@ export class StationLighting {
     private readonly tubes: THREE.InstancedMesh | null, private readonly opts: StationLightingOptions = {}) {
     const params: FieldParams = {...DEFAULT_FIELD, gain: DEFAULT_FIELD.gain * MOOD.fixtureGain, bounce: MOOD.bounce, ...opts.params};
     // Iteration 08: one level slot per station level (upper deck / main / lower crossing).
-    const full = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout)}, params);
+    // Task track3-eaton-centre-20261031 (lane ARCH): + the mall's daylight through the glass roof ({} for every other level).
+    const full = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: layout.trench.floorY, levels: stationLevels(layout), ...mallSkyField(layout, CELL)}, params);
     const max = this.max3D = opts.max3DTextureSize ?? max3DTextureSize(opts.renderer);
     const budget = opts.maxFieldBytes ?? 32e6;
     const k = Math.max(1, Math.ceil(Math.max(full.w, full.h) / max), Math.ceil(Math.sqrt(full.stats.bytes / budget)));

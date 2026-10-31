@@ -107,6 +107,9 @@ export class Carver {
         let open = false;
         for (let L = 0; L < grids.length && !open; L++) {
           const c = grids[L].cells[i];
+          // (task track3 lane INTEG, opt-in rockLevels: a storey that is not one of the station's may stand above an extension — only
+          // its VOID (an atrium / drop) blocks; extensionIssues checks the slab clearance)
+          if (ctx.rockLevels && !ctx.rockLevels.includes(L)) { if (c === VOID) open = true; continue; }
           if (c !== SOLID && !(L === 0 && c === VOID)) open = true;
         }
         if (open) base[(y - this.ncy) * this.ncw + (x - this.ncx)] = 1;
@@ -447,7 +450,7 @@ export class Carver {
         for (let x = xd - 1; x <= xd + dc && ok; x++) {
           const i = g.idx(x, wallRow);
           // the opening and a jamb either side are wall: rock on every level grid (a platform face is open floor: refused)
-          for (const L of this.k.levelGrids) if (L.cells[i] !== SOLID) { ok = false; break; }
+          for (const [li, L] of this.k.levelGrids.entries()) if ((!this.ctx.rockLevels || this.ctx.rockLevels.includes(li)) && L.cells[i] !== SOLID) { ok = false; break; }
           if (!ok || x < xd || x >= xd + dc) continue;
           // in front of the opening the bed itself; the opening keeps the core / extension margins (its own bed exempt)
           if (g.cells[g.idx(x, bedRow)] !== VOID || !this.coreFree(x, wallRow, t) || this.own[this.vi(x, wallRow)] !== 0 || !this.extFree(x, wallRow, group)) ok = false;

@@ -37,7 +37,7 @@ calls or `reference/` mount. Models, textures, MP3s and provenance are checked i
 | `npm run preview` / `npm run game:preview` | Preview the build |
 | `npm test` / `npm run game:test` | Game unit tests |
 | `npm run ci:check` | Check the pinned workflow/build contract |
-| `npm run ci:test` | Packager rejection/manifest tests |
+| `npm run ci:test` | Packager rejection/manifest tests + dynamic-app wrapper tests |
 | `npm run ci:package` | Validate and package an existing build locally for QA |
 | `npm run pages:build` / `npm run pages:check` | Generate / validate the reference website in `dist/pages/` |
 | `npm run game:e2e` | Historical browser playtest; environment caveats below |
@@ -59,7 +59,7 @@ A successful run on main uploads **`terminal-state-web-<full commit SHA>`**, con
 
 ```text
 site/             # self-contained static game; publish this directory only
-manifest.json     # commit, every site path/byte count/SHA-256, exclusions
+manifest.json     # commit, every site path/byte count/SHA-256, exclusions, size report
 ```
 
 It also uploads `terminal-state-manifest-<full commit SHA>` with the same manifest
@@ -77,7 +77,7 @@ local build. GitHub artifact access follows this private repository's permission
 
 `tools/release/package-ci.mjs` is the portable release path. It verifies every
 public input against the checked-in path/size/hash allowlist, rejects unexpected
-paths/types, symlinks, oversized files, source/maps/archives/secrets and external
+paths/types, symlinks, files over 25 MiB each, more than 1,000 files, source/maps/archives/secrets and external
 or root-absolute runtime asset URLs, and preserves every copied byte. It omits
 `assets/models/*.glb` only when no bundled JS/HTML contains that exact relative
 path: the same explicit reference check as the legacy release helper. Currently
@@ -85,6 +85,18 @@ nine obsolete derivatives are omitted; **all nine remain tracked build inputs**.
 It checks runtime model references have actual packaged files. Input/policy
 changes require deliberate review. See the script's limits and tests; this is
 not a general JavaScript sandbox or a licensing audit.
+
+**There is no total-size cap** (user decision 2026-10-31: quality and playability come first; the earlier 150 MiB total
+limit was removed with no replacement). The total is reported instead: the manifest has `totalBytes`, `checks.maxTotalBytes:
+null` and a `report` (bytes / files by type, model and texture bytes by path family — `mall-*` mall-only, `office-*` office
+catalogue, shared — the largest files and the excluded bytes), and the CI log prints the same plus an advisory line saying
+whether the site fits the existing static host (200 MiB = 209,715,200 B). That advisory is not a CI limit. The per-file
+and file-count guards and every allowlist / provenance / path / URL / symlink / secret check above are unchanged.
+When the official artifact is larger than the static host accepts, Main serves the **same official artifact** through a
+new dynamic Docker app built from [`tools/deploy/dynamic-app/`](tools/deploy/dynamic-app/CONTRACT.md) at the same commit
+(rootless zero-dependency Node static server; the existing playtest app stays). The game loads each level's lazy models
+and textures behind that level's loading screen and releases another level's own art on travel
+(`game/src/assets/levelAssets.ts`), so a bigger package does not mean a bigger browser working set.
 
 ## Reference website (GitHub Pages)
 

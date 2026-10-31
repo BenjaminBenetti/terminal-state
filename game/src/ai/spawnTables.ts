@@ -39,6 +39,10 @@ import {MIN_ZOMBIE_SPAWN_CELLS} from '../gen/stationTypes';
 import type {LevelId} from '../levels/types';
 import {ROOM_LABEL} from '../gen/stationKit';
 import {ALL_PURPOSES} from '../gen/purposes';
+// Task track3-eaton-centre-20261031 (lane PROFILES): the horde pool's rules (lane HORDE owns the type / validation / defaults;
+// hordeSpec.ts imports only TYPES from this module, so there is no runtime import cycle).
+import {HORDE_FORBIDDEN_FAMILIES, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from './hordeSpec';
+export type {HordeRules} from './hordeSpec';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Families
@@ -177,15 +181,42 @@ export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
 /**
  * Generation contexts (one count rule each). A same-world annex zone (e.g. Track 2's track-tunnel service annexes) adds its
  * own id here and declares its count in the profile of every level that has it (docs/level-enemy-contract.md).
+ * Task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center adds 'pit' (the subway station storey at the bottom of the
+ * void, once), 'ring' (one retail ring, once per ring); since the Track2 integration (lane INTEG) it declares Track2's 'service' zone
+ * context (SERVICE_CONTEXT) like the Subway / Office.
+ * Lane INTEG (Track1 integration): 'horde' = HORDE_CONTEXT, the tag of the SEPARATE roaming-horde pool's members. It is never a
+ * `contexts` entry: a profile declares it by declaring `horde` (HordeRules: groups x size, budgets, placement) — see
+ * declaredSpawnContexts. No ambient family rule (eligibility) can name it, so no ambient roll ever reaches a horde member.
  */
-export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'service';
+export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde';
 /**
  * Track 2 (lane CONTENT): 'service' = ONE run per seeded SERVICE ANNEX of a track-bearing level (gen/annexContent.ts
  * placeServiceSpawns; 0-2 annexes per level): a per-annex ZONE BUDGET placed in that annex's areas only, on its own fork, appended
  * after every core spawn and tagged markSpawnContext(…, 'service'); excluded from the core station / street / floor counts and
  * reported separately. No family is enabled by it (the Office's Siren eligibility lists only 'floor').
  */
-export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'service'];
+export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde'];
+/** Lane INTEG: the context tag of horde members (ai/hordePlace.ts placeHordes tags every member it appends). */
+export const HORDE_CONTEXT = 'horde' as const satisfies SpawnContextId;
+
+/**
+ * Lane INTEG (task track3-eaton-centre-20261031, Track1 integration): a whole-level minimum SPACING for a family that has an
+ * eligibility rule (Track1's FamilyEligibility has no spacing field, so the mall keeps its 30 m Siren spacing as this small
+ * post-pass: ai/familySpacing.ts applyFamilySpacing, run once right after assignEnemyArchetypes). In spawn-index order an
+ * ELIGIBLE draw of the family is placed only while fewer than the rule's maxPerLevel are kept AND it is at least `spacingM`
+ * (straight 3D line) from every kept one; otherwise it becomes the rule's fallback. Pure, RNG-free; horde members never take part.
+ */
+export interface FamilySpacing {
+  readonly spacingM: number;
+  readonly why: string;
+}
+/** Task track3-eaton-centre-20261031 (lane PROFILES): explicit caps of the AMBIENT pool (the horde pool's are horde.budget). */
+export interface AmbientBudget {
+  /** Ambient spawns in the whole logical level (Σ over the context runs). */
+  readonly total: number;
+  /** Ambient spawns of one storey run (every context's count hi must fit). */
+  readonly perStorey: number;
+}
 
 /**
  * Task track1-siren-blightbelly-20261031 (lane SPAWN): WHERE a family may take a placed slot. A spawn whose (unchanged) family roll
@@ -234,6 +265,12 @@ export interface SpawnProfile {
   readonly rooms: RoomModifiers;
   /** Per-family placement eligibility (task track1, lane SPAWN). Required for an OPT_IN_FAMILIES family with weight > 0. */
   readonly eligibility?: Readonly<Partial<Record<EnemyFamilyId, FamilyEligibility>>>;
+  /** Task track3-eaton-centre-20261031 (lane HORDE / PROFILES): the SEPARATE roaming-horde pool (ai/hordeSpec.ts); absent = none. */
+  readonly horde?: HordeRules;
+  /** Lane INTEG: whole-level spacing of families with an eligibility rule (FamilySpacing, ai/familySpacing.ts); absent = none. */
+  readonly spacing?: Readonly<Partial<Record<EnemyFamilyId, FamilySpacing>>>;
+  /** Lane PROFILES: explicit ambient-pool caps (AmbientBudget); absent = the contexts' count ranges alone. */
+  readonly budgets?: {readonly ambient: AmbientBudget};
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -294,6 +331,7 @@ export const OFFICE_PLACEMENT: PlacementRules = {
 /** The shambler / coated roll of both levels (40 % coated, at least one of each). */
 export const ZOMBIE_TYPES: ZombieTypeRule = {coatedChance: 0.4, atLeastOneEach: true};
 
+
 /**
  * Track 2 (lane CONTENT): area weights inside a SERVICE ANNEX (the cramped, dark back-of-house reached through a side door off a
  * track tunnel): rooms (pump / electrical rooms, stores, workshops) like the Subway's back-of-house, the 1.5-2 m service corridors
@@ -333,6 +371,114 @@ export const SERVICE_PLACEMENT: PlacementRules = {
 export const SERVICE_ZONE_BUDGET: readonly [number, number] = [3, 5];
 /** The 'service' context of a level whose stations grow annexes (the per-annex zone budget; never regenerates a level). */
 export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}};
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task track3-eaton-centre-20261031 (lane PROFILES): THE EATON'S CENTER (LevelId 'mall', tier 2) — ONE logical level: the subway
+// station at the bottom of an open pit (storey 0) and six retail rings around the void (storeys 1..6), generated once per level
+// seed (gen/mall/index.ts, lane GEN). docs/enemy-spawns.md "The Eaton's Center".
+//
+// Two SEPARATE pools, never mixed:
+//  - AMBIENT (contexts 'pit' once + 'ring' once per ring, the generic Office placement gen/office/spawns.ts placeOfficeEnemies, which
+//    tags each run's spawns with its context): the ambient family pool familyPool({siren: MALL_SIREN_WEIGHT}) — Track1's Blightbelly
+//    5 % and the rat/dog 5 % (default shares), a rare Siren (opt-in: MALL_SIREN_ELIGIBILITY + the whole-mall MALL_SIREN_SPACING),
+//    zombies the remainder; rolled ONCE by assignEnemyArchetypes after every ambient context. Capped by budgets.ambient.
+//  - HORDE (ai/hordeSpec.ts HordeRules, placed LAST by ai/hordePlace.ts, lane HORDE; members tagged HORDE_CONTEXT): ordinary zombies
+//    only — its own explicit family pool (Blightbelly / Siren / rat/dog weight 0; a Siren never, by validation), 5..20 members per
+//    group, global + per-storey budgets. Appended after the ambient family roll, which never reaches them.
+// Plus (lane INTEG, Track2 integration) the 'service' zone context SERVICE_CONTEXT: once per seeded service annex of the pit station
+// (Track 2's per-annex budget, the mall's family pool, no Siren), appended after every core spawn — hordes included.
+// Sized to the larger world but LESS dense than the Office (a ring is ~6-8x an Office storey; the hordes concentrate the threat):
+// ~8.5 ambient per ring vs 4.5 per Office floor.
+
+/** Mall area weights (the Office's rules; storefront / shop units are ordinary rooms here, galleries and courts public space). */
+export const MALL_AREA_WEIGHTS: AreaWeights = {
+  rules: [
+    {when: {kind: ['platform']}, weight: 2.2, why: 'the platforms of the station at the bottom of the pit'},
+    {when: {type: ['exit-stair', 'washroom']}, weight: 0.5, why: 'closed street exits and washrooms'},
+    {when: {type: ['office-stair', 'stair-core', 'office-elevator']}, weight: 0, why: 'never in a stairwell, stair core or an elevator cab'},
+    {when: {kind: ['closet']}, weight: 0.5, why: 'closets'},
+    {when: {publicSpace: true}, weight: 1, why: 'gallery walkways, bridges, the pit plaza and courts'},
+  ],
+  otherwise: 1.3,
+  otherwiseWhy: 'shop sales floors, stock rooms and back-of-house rooms',
+};
+/** Mall caps: passes 1 / 2 / 3; platforms one more; closets one. */
+export const MALL_CAPS: AreaCaps = {
+  passes: [1, 2, 3],
+  rules: [
+    {when: {kind: ['platform']}, plus: 1, why: 'platforms hold one more per pass'},
+    {when: {kind: ['closet']}, fixed: 1, why: 'closets: at most one'},
+  ],
+};
+/** Mall placement (every ambient context): the Office values — 14 tries, 4 m same-storey spacing, 36 cells (18 m), 5 m off landings. */
+export const MALL_PLACEMENT: PlacementRules = {
+  areaWeights: MALL_AREA_WEIGHTS, caps: MALL_CAPS, tries: 14, spacingM: 4, startCells: 36, clearCells: 1, landingKeepM: 5,
+};
+/**
+ * Lane INTEG (Track1 integration, modelled on OFFICE_SIREN_ELIGIBILITY): where a mall Siren may lie dormant. She is an
+ * ENCLOSED-SHOP encounter of the retail rings: context 'ring' only (never the 'pit' station storey with its platforms, plaza and
+ * courts, never a Track2 'service' annex, never a horde — hordes are a separate pool no ambient rule reaches); area kind 'room'
+ * (shop sales floors and stock rooms: never a gallery walkway, bridge or court — kind concourse —, a washroom passage or run —
+ * passage —, a service corridor — service — or a closet); never a washroom, stair core / landing, plant room (storage / utility)
+ * or an elevator. The Office's gates: room >= 4 x 4 m (shorter side 8 cells, 100 cells), a clear 1.5 x 1.5 m patch of its own
+ * floor, every doorway (shopfront included) >= 3 m away, a 2.5 m disc never seals passage, at most 4 in the whole mall. An
+ * ineligible or over-cap draw becomes an ordinary zombie.
+ */
+export const MALL_SIREN_ELIGIBILITY: FamilyEligibility = {
+  contexts: ['ring'],
+  kinds: ['room'],
+  excludeRooms: ['washroom', 'stair-core', 'storage', 'utility', 'office-stair', 'office-elevator'],
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4,
+  fallback: 'zombie',
+  why: 'enclosed shop sales floors / stock rooms of the retail rings only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 4 per mall',
+};
+/** Lane INTEG: the mall's whole-level Siren spacing (FamilySpacing; ai/familySpacing.ts) — the 30 m of the interim MALL_RARE_RULES. */
+export const MALL_SIREN_SPACING: FamilySpacing = {
+  spacingM: 30,
+  why: 'rare ambient Sirens across the much larger mall: > 2 allowed, never two within earshot of one another',
+};
+/**
+ * Lane INTEG: the mall's Siren DRAW weight, tuned by a generated-mall census to a rare ~5 % PLACED share of the ambient enemies
+ * (NOT the Office's 0.19). A draw only becomes a Siren in an eligible ring shop slot (~14 of the ~58.4 ambient slots of a run:
+ * MALL_SIREN_ELIGIBILITY), within the 4-per-mall cap and 30 m apart (MALL_SIREN_SPACING), so the draw weight sits well above the
+ * placed share. Census (88 generated malls, lane INTEG, 2026-10-31): mean 2.88 Sirens per run = 4.93 % of the placed ambient
+ * enemies, 2.3 % of runs none, max 4 (the cap; 34 % of runs), only on rings 1..6 (never the pit; hordes never). Blightbelly 5.2 %
+ * / rat-dog 5.0 % keep their shares (never renormalised). docs/enemy-spawns.md "The Eaton's Center".
+ */
+export const MALL_SIREN_WEIGHT = 0.32;
+/** The mall's AMBIENT pool: zombie (remainder), blightbelly 0.05, siren MALL_SIREN_WEIGHT, ratdog 0.05 (ENEMY_FAMILY_IDS order). */
+export const MALL_ENEMY_POOL: FamilyPool = familyPool({siren: MALL_SIREN_WEIGHT});
+/**
+ * The mall's horde pool (lane HORDE's MALL_HORDE_RULES placement / patrol semantics; the pool, sizes and budgets declared here):
+ * 3..5 groups of 5..20 ordinary zombies, at most 64 horde members in the mall, one group (<= 20 members) starting per ring. Every
+ * registry family is listed explicitly (lane INTEG): only the zombie has weight — no Blightbelly, Siren or rat/dog in a horde.
+ */
+export const MALL_HORDE: HordeRules = {
+  label: 'Roaming hordes',
+  groups: [3, 5],
+  size: [5, 20],
+  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]],
+  zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
+  budget: {total: 64, perStorey: 20, groupsPerStorey: 1},
+  placement: MALL_HORDE_RULES.placement,
+  patrol: MALL_HORDE_RULES.patrol,
+};
+/** The mall's spawn profile (SPAWN_PROFILES.mall). */
+export const MALL_SPAWN_PROFILE: SpawnProfile = {
+  id: 'mall', label: 'The Eaton\'s Center', families: MALL_ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
+  contexts: {
+    pit: {label: 'Pit station (platforms + plaza, storey 0)', count: [6, 9], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    ring: {label: 'Retail ring (each of storeys 1..6)', count: [7, 10], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    // lane INTEG (Track2 integration): the pit station's service annexes (LEVELS.mall.trackExtensions) — Track2's per-annex zone
+    // budget, as on the Subway / Office (logical-level inheritance; not in MALL_SIREN_ELIGIBILITY.contexts: no Siren in an annex).
+    service: SERVICE_CONTEXT,
+  },
+  rooms: {},
+  eligibility: {siren: MALL_SIREN_ELIGIBILITY},
+  spacing: {siren: MALL_SIREN_SPACING},
+  horde: MALL_HORDE,
+  budgets: {ambient: {total: 69, perStorey: 10}},
+};
 
 /**
  * Task track1-siren-blightbelly-20261031 (lane SPAWN): where an Office Siren may lie dormant. She is an INDOOR-ROOM encounter of the
@@ -396,6 +542,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
     rooms: {},
     eligibility: {siren: OFFICE_SIREN_ELIGIBILITY},
   },
+  // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_SPAWN_PROFILE).
+  mall: MALL_SPAWN_PROFILE,
 };
 
 /** The spawn profile of a logical level. */
@@ -740,7 +888,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     if (pl.landingKeepM !== undefined) num(`${path}.landingKeepM`, pl.landingKeepM);
   };
 
-  known('profile', p, ['id', 'label', 'families', 'zombieTypes', 'contexts', 'levelMoves', 'rooms', 'eligibility']);
+  known('profile', p, ['id', 'label', 'families', 'zombieTypes', 'contexts', 'levelMoves', 'rooms', 'eligibility', 'horde', 'spacing', 'budgets']);
   // --- families
   const seen = new Set<string>();
   let poolSum = 0;
@@ -811,6 +959,40 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
       if (fm.weight !== undefined) num(`${fp}.weight`, fm.weight);
     }
   }
+  // --- task track3-eaton-centre-20261031 (lane PROFILES / INTEG): the horde pool, whole-level family spacing, ambient budgets
+  const registry = ENEMY_FAMILY_IDS as readonly string[];
+  if (p.contexts && typeof p.contexts === 'object' && own(p.contexts, HORDE_CONTEXT)) bad(`contexts.${HORDE_CONTEXT}`, 'reserved for the separate horde pool: declare it with `horde` (HordeRules), never as an ambient context');
+  if (p.horde !== undefined) {
+    issues.push(...validateHordeRules(p.horde, registry).map(s => `${p.id}: ${s}`));
+    const fams = Array.isArray(p.horde?.families) ? p.horde.families : [];
+    for (const f of registry) if (!fams.some(r => r[0] === f)) bad('horde.families', `family ${f} missing (list it with weight 0 to exclude it: the horde pool is explicit)`);
+    for (const [f, w] of fams) if (HORDE_FORBIDDEN_FAMILIES.includes(f) && w > 0) bad('horde.families', `${f} never joins an ordinary-zombie horde`);
+  }
+  const sp = p.spacing;
+  if (sp !== undefined && (!sp || typeof sp !== 'object')) bad('spacing', 'not a map');
+  else if (sp) for (const [f, rule] of Object.entries(sp) as [string, FamilySpacing][]) {
+    const path = `spacing.${f}`;
+    if (!registry.includes(f)) bad(path, 'unknown family');
+    else if (!(p.eligibility && own(p.eligibility, f))) bad(path, `refines eligibility.${f}: declare that rule (its maxPerLevel is the cap the spacing shares)`);
+    if (!rule || typeof rule !== 'object') { bad(path, 'not a rule'); continue; }
+    known(path, rule, ['spacingM', 'why']);
+    if (!(finiteNonNeg(rule.spacingM) && rule.spacingM > 0)) bad(`${path}.spacingM`, `${String(rule.spacingM)} is not a finite distance > 0`);
+    if (typeof rule.why !== 'string' || !rule.why.trim()) bad(`${path}.why`, 'needs a reason');
+  }
+  if (p.budgets !== undefined) {
+    const b = p.budgets?.ambient;
+    if (!b || typeof b !== 'object') bad('budgets.ambient', 'missing');
+    else {
+      known('budgets', p.budgets, ['ambient']);
+      known('budgets.ambient', b, ['total', 'perStorey']);
+      int('budgets.ambient.total', b.total);
+      int('budgets.ambient.perStorey', b.perStorey);
+      if (nonNegInt(b.perStorey)) for (const [id, c] of Object.entries(p.contexts ?? {}) as [string, SpawnContextRule][]) {
+        if (c && Array.isArray(c.count) && nonNegInt(c.count[1]) && c.count[1] > b.perStorey) bad(`budgets.ambient.perStorey`, `${b.perStorey} < context ${id}'s count hi ${c.count[1]}`);
+      }
+      if (nonNegInt(b.total) && nonNegInt(b.perStorey) && b.total < b.perStorey) bad('budgets.ambient.total', `${b.total} < perStorey ${b.perStorey}`);
+    }
+  }
   // --- family eligibility (task track1-siren-blightbelly-20261031, lane SPAWN)
   const el = p.eligibility;
   if (el !== undefined && (!el || typeof el !== 'object')) bad('eligibility', 'not a map');
@@ -822,6 +1004,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     if (!Array.isArray(rule.contexts) || !rule.contexts.length) bad(`${path}.contexts`, 'needs at least one context');
     else for (const c of rule.contexts) {
       if (!(SPAWN_CONTEXT_IDS as readonly string[]).includes(c)) bad(`${path}.contexts`, `unknown spawn context ${c}`);
+      else if (c === HORDE_CONTEXT) bad(`${path}.contexts`, 'hordes are a separate pool with their own explicit families: no ambient family rule applies there (lane INTEG)');
       else if (!p.contexts || !own(p.contexts, c)) bad(`${path}.contexts`, `context ${c} is not declared by this profile`);
     }
     for (const k of rule.kinds ?? []) if (!own(AREA_KINDS, k)) bad(`${path}.kinds`, `unknown area kind ${k}`);
@@ -838,4 +1021,16 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     if (OPT_IN_FAMILIES.includes(f) && finiteNonNeg(w) && w > 0 && !(el && own(el, f))) bad(`families.${f}`, `opt-in family with weight ${w} needs an eligibility.${f} rule (where it may spawn)`);
   }
   return issues;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Lane INTEG (task track3-eaton-centre-20261031, Track1 integration): the contexts a profile declares
+
+/**
+ * Every context tag a spawn of a level built from `p` may carry: the ambient `contexts` (annex contexts included) plus
+ * HORDE_CONTEXT when the profile declares a horde pool. tests/enemy-spawn-contract.test.ts checks every placed spawn against it.
+ */
+export function declaredSpawnContexts(p: SpawnProfile): SpawnContextId[] {
+  const ids = Object.keys(p.contexts) as SpawnContextId[];
+  return p.horde ? [...ids, HORDE_CONTEXT] : ids;
 }

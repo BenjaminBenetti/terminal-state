@@ -11,7 +11,9 @@ import * as propsModule from '../../src/gen/props';
 import {PROP_DEFS} from '../../src/gen/props';
 import {cutSurfaces} from '../../src/gen/props07';
 import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind, type Lot} from '../../src/items/loot';
+import {compartmentTable, holderFinds, type LootEntry} from '../../src/items/loot'; // lane PROFILES (track3): layoutHolderDetails
 import {DEFAULT_SHELF, holderSurfaces, type Dims, type SurfaceOptions} from '../../src/items/lootLayout';
+import type {Surface} from '../../src/items/lootLayout'; // lane PROFILES (track3)
 import {openableActive} from '../../src/world/openablesSpec';
 import type {LootProfile} from '../../src/items/lootTables';
 
@@ -102,6 +104,36 @@ export function layoutHolders(layout: StationLayout, profile?: LootProfile): Lay
     if (isC && openableActive(kind, ALL_MODELS)) { index = openIdx.get(kind) ?? 0; openIdx.set(kind, index + 1); } else index = isC ? ci++ : si++;
     const st = createHolderState(layout.seed, index, kind as HolderKind, areaType, surfaces, undefined, profile);
     out.push({kind: kind as HolderKind, index, areaType, lots: st.lots});
+  }
+  return out;
+}
+
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): every loot holder with what the material census needs — the SAME index /
+ * purpose-key / surface rules as layoutHolders (unchanged above), plus the holder's prop (position / footprint / storey), its
+ * surfaces (finite capacity) and its PRE-FIT entries (the exact rollHolderLots roll before packing: items/loot.ts holderFinds with
+ * the compartment roll when the holder has compartment surfaces), so fit failures = entries − placed lots.
+ */
+export interface LayoutHolderDetail extends LayoutHolder { prop: StationLayout['props'][number]; surfaces: readonly Surface[]; entries: readonly LootEntry[] }
+export function layoutHolderDetails(layout: StationLayout, profile?: LootProfile): LayoutHolderDetail[] {
+  const out: LayoutHolderDetail[] = [];
+  const opts = surfaceOpts();
+  let ci = 0, si = 0;
+  const openIdx = new Map<string, number>();
+  for (const p of layout.props) {
+    const kind = p.kind as string;
+    if (!isLootHolderKind(kind)) continue;
+    const isC = isContainerKind(kind);
+    const def = (PROP_DEFS as unknown as Record<string, Dims | undefined>)[kind] ?? FALLBACK[kind] ?? {w: 1, d: 1, h: 1};
+    const surfaces = cutSurfaces(holderSurfaces(kind as never, def, opts), p.cut);
+    const area = layout.areas[p.area];
+    const areaType = p.purpose ?? area?.purpose ?? area?.type ?? 'default';
+    let index: number;
+    if (isC && openableActive(kind, ALL_MODELS)) { index = openIdx.get(kind) ?? 0; openIdx.set(kind, index + 1); } else index = isC ? ci++ : si++;
+    const st = createHolderState(layout.seed, index, kind as HolderKind, areaType, surfaces, undefined, profile);
+    const inside = !!compartmentTable(kind as HolderKind, areaType, profile) && surfaces.some(s => s.part !== undefined);
+    const entries = holderFinds(layout.seed, index, kind as HolderKind, areaType, inside, profile).map(e => ({itemId: e.itemId, count: e.count}));
+    out.push({kind: kind as HolderKind, index, areaType, lots: st.lots, prop: p, surfaces, entries});
   }
   return out;
 }

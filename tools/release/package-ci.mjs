@@ -10,13 +10,11 @@ import {execFileSync} from 'node:child_process';
 import {parseAst} from 'rolldown/parseAst';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-// Task track1-siren-blightbelly-20261031 (user decision 2026-10-31, reference/operations/full-game-tracks-20261031/
-// USER-DECISIONS.json): no artificial TOTAL game-content cap ("we do not need a package cap ... totally fine with the game
-// being any size it needs to be as long as it works"). MAX_TOTAL was 150 MiB; it is now only a runaway-packaging sanity
-// ceiling far above any planned content (the user expects ~10 GB eventually), not a content budget. The per-file limit, file
-// count, allowlisted exact-hash public inputs, path / symlink / bundle checks and truthful sizes are unchanged. An artifact
-// over the 200 MiB static-app limit is reported so Main hosts it as a dynamic app (Main-only; no worker deploy).
-const MAX_FILE = 25 * 1024 * 1024, MAX_TOTAL = 16 * 1024 * 1024 * 1024, MAX_FILES = 1000, STATIC_APP_BYTES = 200 * 1024 * 1024;
+// Task track3-eaton-centre-20261031 (lane PACKAGE): there is deliberately NO total-size cap. The artificial 150 MiB TOTAL
+// limit was removed by user decision (2026-10-31: quality and playability first; no replacement total cap). The total is
+// reported exactly (manifest totalBytes + report, console) instead. The per-file guard (MAX_FILE) and the file-count guard
+// (MAX_FILES) stay, as do the allowlist / provenance / path / symlink / secret / runtime-URL checks below.
+export const MAX_FILE = 25 * 1024 * 1024, MAX_FILES = 1000;
 const digest = b => crypto.createHash('sha256').update(b).digest('hex');
 const fail = m => { throw new Error(m); };
 const safePath = p => typeof p === 'string' && /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(p)
@@ -106,6 +104,51 @@ export function checkRuntime(text, rel, files) {
   }
 }
 
+// Task track3-eaton-centre-20261031 (lane PACKAGE): transparent size reporting in the manifest (`report`) and the CI log.
+// Deterministic (site-relative paths only, no timestamps). Families are PATH families, not runtime residency:
+// assets/models/mall-*.glb + assets/textures/mall/** are mall-only (game/src/assets/levelAssets.ts fetches them only for the
+// mall level); assets/models/office-*.glb + assets/textures/office/** are the office catalogue (its gear / medical models
+// are used in every level and the mall's shops may reuse office / company props); everything else is shared.
+const REPORT_TYPES = ['bundle', 'models', 'textures', 'audio', 'derivatives', 'notices'];
+const REPORT_FAMILIES = ['mall', 'office', 'shared'];
+const typeOf = rel => rel === 'index.html' || bundlePath(rel) ? 'bundle' : rel.startsWith('assets/models/') ? 'models'
+  : rel.startsWith('assets/textures/') ? 'textures' : rel.startsWith('assets/audio/') && rel.endsWith('.mp3') ? 'audio'
+  : rel.startsWith('assets/derivatives/') ? 'derivatives' : 'notices';
+const familyOf = rel => /^assets\/(?:models\/mall-|textures\/mall\/)/.test(rel) ? 'mall'
+  : /^assets\/(?:models\/office-|textures\/office\/)/.test(rel) ? 'office' : 'shared';
+const tally = keys => Object.fromEntries(keys.map(k => [k, {files: 0, bytes: 0}]));
+export function sizeReport(entries, excludedBytes = []) {
+  const byType = tally(REPORT_TYPES), models = tally(REPORT_FAMILIES), textures = tally(REPORT_FAMILIES);
+  for (const e of entries) {
+    const t = typeOf(e.path), fam = t === 'models' ? models : t === 'textures' ? textures : null;
+    byType[t].files++; byType[t].bytes += e.bytes;
+    if (fam) { fam[familyOf(e.path)].files++; fam[familyOf(e.path)].bytes += e.bytes; }
+  }
+  const largestFiles = [...entries].sort((a, b) => b.bytes - a.bytes || (a.path < b.path ? -1 : 1)).slice(0, 5).map(e => ({path: e.path, bytes: e.bytes}));
+  return {byType, levelFamilies: {models, textures}, largestFiles,
+    excludedUnreferencedModelBytes: excludedBytes.reduce((s, b) => s + b, 0)};
+}
+
+// Advisory only — NOT a CI limit: the existing static playtest host accepts at most 200 MiB. Above it, Main serves the same
+// official artifact through the dynamic app (tools/deploy/dynamic-app/CONTRACT.md). Printed so the CI log says which applies.
+export const STATIC_HOST_ADVISORY_BYTES = 200 * 1024 * 1024;
+const fmt = v => v.toLocaleString('en-US');
+export function reportLines(m) {
+  const r = m.report, part = o => Object.entries(o).map(([k, v]) => `${k} ${fmt(v.files)} / ${fmt(v.bytes)} B`).join(' · ');
+  const fits = m.totalBytes <= STATIC_HOST_ADVISORY_BYTES;
+  return [
+    `Packaged ${fmt(m.fileCount)} files / ${fmt(m.totalBytes)} bytes (${(m.totalBytes / 1048576).toFixed(2)} MiB) for ${m.commit}; no total-size cap (per file <= ${fmt(m.checks.maxFileBytes)} B, <= ${fmt(m.checks.maxFiles)} files).`,
+    `  by type: ${part(r.byType)}`,
+    `  models by family: ${part(r.levelFamilies.models)}`,
+    `  textures by family: ${part(r.levelFamilies.textures)}`,
+    `  largest: ${r.largestFiles.map(e => `${e.path} ${fmt(e.bytes)} B`).join(', ')}`,
+    `  excluded ${m.excludedUnreferencedModels.length} unreferenced models (${fmt(r.excludedUnreferencedModelBytes)} B; tracked build inputs, not shipped).`,
+    `  delivery advisory (not a CI limit): static host max ${fmt(STATIC_HOST_ADVISORY_BYTES)} B — ${fits
+      ? `fits (${fmt(STATIC_HOST_ADVISORY_BYTES - m.totalBytes)} B headroom)`
+      : `exceeds by ${fmt(m.totalBytes - STATIC_HOST_ADVISORY_BYTES)} B: use the dynamic app (tools/deploy/dynamic-app/CONTRACT.md)`}.`,
+  ];
+}
+
 export function packageSite({root = ROOT, commit, output} = {}) {
   const dist = path.join(root, 'dist/game'), pub = path.join(root, 'game/public');
   output ??= path.join(root, 'artifacts/terminal-state-web');
@@ -151,10 +194,11 @@ export function packageSite({root = ROOT, commit, output} = {}) {
     return {path: rel, bytes: b.length, sha256: digest(b)};
   });
   const totalBytes = entries.reduce((sum, e) => sum + e.bytes, 0);
-  if (totalBytes > MAX_TOTAL) fail('Artifact total size limit exceeded');
+  // No total cap (see MAX_FILE above): `maxTotalBytes: null` states it explicitly for manifest readers.
   const manifest = {schema:'terminal-state-static-ci-v1', commit, entry:'index.html', base:'./',
     fileCount:entries.length, totalBytes, publicInputPolicySha256:digest(fs.readFileSync(path.join(root,'tools/release/public-inputs.json'))),
-    checks:{publicInputsVerified:inputs.length, relativeUrls:true, noSymlinks:true, maxFileBytes:MAX_FILE, maxTotalBytes:MAX_TOTAL},
+    checks:{publicInputsVerified:inputs.length, relativeUrls:true, noSymlinks:true, maxFileBytes:MAX_FILE, maxFiles:MAX_FILES, maxTotalBytes:null},
+    report:sizeReport(entries, excludedUnreferencedModels.map(rel => fs.statSync(path.join(dist, rel)).size)),
     excludedUnreferencedModels, files:entries};
   for (const e of entries) {
     const dest = path.join(output, 'site', e.path);
@@ -169,6 +213,5 @@ export function packageSite({root = ROOT, commit, output} = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const commit = process.env.GITHUB_SHA || execFileSync('git',['rev-parse','HEAD'],{cwd:ROOT,encoding:'utf8'}).trim();
   const m = packageSite({commit});
-  console.log(`Packaged ${m.fileCount} files / ${m.totalBytes} bytes for ${m.commit}; excluded ${m.excludedUnreferencedModels.length} unreferenced models.`);
-  if (m.totalBytes > STATIC_APP_BYTES) console.log(`Note: ${(m.totalBytes / 1048576).toFixed(1)} MiB is over the ${STATIC_APP_BYTES / 1048576} MiB static-app limit — host as a dynamic app (Main-only).`);
+  for (const line of reportLines(m)) console.log(line);
 }

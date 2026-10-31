@@ -38,7 +38,9 @@ import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, typ
 
 /** 'office' (task office-seamless-20261029): a tower storey above the lobby (dry indoor air, office walls). 'roof' (task
  *  office-overhaul-20261030, lane STRUCT): the open-sky roof deck on top of the tower (outdoor air; see Level.sky). */
-export type LevelRole = 'main' | 'upper' | 'lower' | 'office' | 'roof';
+/** 'ring' (task track3-eaton-centre-20261031, lane GEN): a retail ring of The Eaton's Center (a stacked tower-like storey around the
+ *  open atrium: the engine treats it like an 'office' storey — e.g. physics caps solid columns above a column's top band). */
+export type LevelRole = 'main' | 'upper' | 'lower' | 'office' | 'roof' | 'ring';
 
 /**
  * Task office-overhaul-20261030 (lane STRUCT): an OPEN-SKY storey (the tower roof). Its grid bands end at `ceil` (a high

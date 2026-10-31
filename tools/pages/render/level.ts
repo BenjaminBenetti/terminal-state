@@ -125,6 +125,7 @@ ${table({
 </ul>
 <h3 id="specials">Special sources</h3>
 ${specials}
+${materialsSection(site, level)}
 
 <h2 id="contexts">Contexts within ${esc(level.label)}</h2>
 <p>${prose(ctxs.note)}</p>
@@ -141,6 +142,22 @@ ${purposes}`;
     lede: prose(level.blurb),
     body,
   });
+}
+
+/** Task track3-eaton-centre-20261031 (lane PROFILES): crafting-material richness in native units (expected, before fit / placement). */
+function materialsSection(site: Site, level: LevelInfo): string {
+  const m = level.materials;
+  const ids = [...new Set([...Object.keys(m.perLevelHolders), ...Object.keys(m.perLevelFloor)])];
+  return `<h2 id="materials">Crafting materials</h2>
+<p>${prose(m.note)}</p>
+${table({
+    caption: `${level.label}: expected crafting-material units per level (exact expectations before fit / placement)`,
+    head: ['Material', 'From holders (sampled holders, before fit)', 'From loose floor finds (before placement)', 'Total'],
+    numeric: [1, 2, 3],
+    rowHeader: 0,
+    rows: ids.map(id => [esc(itemName(site, id)), num(m.perLevelHolders[id] ?? 0), num(m.perLevelFloor[id] ?? 0), num((m.perLevelHolders[id] ?? 0) + (m.perLevelFloor[id] ?? 0))]),
+  })}
+<p>Holders per sample level: ${num(m.holdersPerLevel)}; of them ${num(m.materialHoldersPerLevel)} can yield a crafting material.</p>`;
 }
 
 // ------------------------------------------------------------------------------------------------------------- slot page
@@ -223,6 +240,7 @@ function holderContextBlock(site: Site, level: LevelInfo, page: string, h: Holde
       const t = tableNote;
       stages.push(`<li><strong>Item per lot</strong> from ${tableLink(site, page, h.tableId)}${t ? ` (${t.rows.length} rows, denominator ${num(t.denominator)})` : ''}: each row's share is conditional on one draw from this table. ${badge('conditional', 'conditional')}</li>`);
     }
+    if (h.salvage) stages.push(`<li><strong>Salvage rows.</strong> This level adds crafting-material rows to the table (${pct(h.salvage.share)} of its weight before overrides; from <code>${esc(h.salvage.from)}</code>): ${h.salvage.rows.map(r => `${esc(itemName(site, r.itemId))} ${pct(r.share)}`).join(', ')} of them. Materials are kept exactly as rolled. ${badge('exact', 'exact')}</li>`);
     stages.push(`<li><strong>Stack size.</strong> ${g.bigBoxes ? 'Ammo boxes use the large box-count ranges.' : 'Ammo boxes use the normal box-count ranges.'} See <a href="${esc(href(page, `${site.levelDir.get(level.id)!}/economy.html#stack-sizes`))}">stack sizes</a>.</li>`);
     stages.push(`<li><strong>Scarcity.</strong> ${scarcityText(h.scarcity)}</li>`);
     if (!h.scarcity.exempt) stages.push(`<li><strong>Limb treatments.</strong> ${pct(h.scarcity.limbShare)} of healing finds become a limb treatment (share from the ${h.scarcity.limbFrom === 'holder' ? 'holder kind' : 'theme'}).</li>`);
@@ -445,6 +463,7 @@ theme says so), then may be re-themed: on-theme with the on-theme chance, otherw
 ${themes}
 ${offTheme}
 ${pool}
+${e.salvage ? salvageBody(site, e.salvage) : ''}
 <h2 id="eligibility">Eligibility</h2>
 ${allow}
 <p>Container-themed holders (their own rows in every room): ${e.containerThemed.map(k => kindInline(site, k)).join(', ') || 'none'}.</p>
@@ -465,6 +484,19 @@ ${legacyMods}
 <p>Stocked rooms (${e.legacy.fullRooms.rooms.map(r => `<code>${esc(r)}</code>`).join(', ') || 'none'}) give ${e.legacy.fullRooms.kinds.map(k => kindInline(site, k)).join(', ') || 'no kinds'} up to ${num(e.legacy.fullRooms.extra)} extra lots.
 Category pools: ${Object.entries(e.legacy.pools).map(([cat, t]) => `<code>${esc(cat)}</code> ${tableLink(site, page, t)}`).join(', ')}; vending food: ${tableLink(site, page, e.legacy.vendingFood)}.</p>
 ${knobsTable(site, 'Tuning knobs: scarcity and economy', e.knobs, 'economy-knobs')}`;
+}
+
+/** Task track3-eaton-centre-20261031 (lane PROFILES): the level's salvage rules (crafting-material rows per purpose / theme). */
+function salvageBody(site: Site, sv: NonNullable<EconomyInfo['salvage']>): string {
+  const rows = [...sv.purposes.map(r => ({...r, by: 'purpose'})), ...sv.themes.map(r => ({...r, by: 'theme'}))];
+  return `<h2 id="salvage">Salvage (crafting materials)</h2>
+<p>${prose(sv.note)}</p>
+${table({
+    caption: 'Salvage rules (purpose entries win over theme entries)',
+    head: ['By', 'Key', 'Share of the table weight', 'Salvage mix (conditional shares)'],
+    numeric: [2],
+    rows: rows.map(r => [esc(r.by), `<code>${esc(r.key)}</code>`, pct(r.share), r.rows.map(x => `${esc(itemName(site, x.itemId))} ${pct(x.share)}`).join(', ')]),
+  })}`;
 }
 
 export function renderEconomyPage(site: Site, level: LevelInfo): string {

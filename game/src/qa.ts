@@ -16,13 +16,17 @@ import {CELL} from './gen/grid';
 import {damageQaApi} from './damage/qa';
 import {creatureQaApi} from './ai/creatureQa';
 import {lightLureQaApi} from './ai/lightLureQa'; // Iteration 12 (AI)
+import {hordeQaApi} from './ai/hordeQa'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
 import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
+import {mallArchQaApi} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): mall finishes / atrium / fog / QA poses
 import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
+import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
+import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses
 import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input walker, per-frame traversal trace, lifecycle counts
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
@@ -333,9 +337,13 @@ export function installQaHooks(game: Game): void {
     ...creatureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number): boolean => api.teleport(x, z, yaw)),
     // Iteration 12 (AI): light lure — lightLure(), lureProbe(i?), goLureVantage({index, dist, ahead}), DEBUG qaLureLight / qaLureLightSet.
     ...lightLureQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // Task track3-eaton-centre-20261031 (lane HORDE): roaming hordes — hordes(), goHorde({group, ahead}), hordeKillCheck().
+    ...hordeQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
     ...towerQaApi(game), // Iteration 17 / office-overhaul (lane LIFT): tower(), towerGoLanding(floor), towerGoCab(), liftButtons(), liftAim(id), liftPress(id, 'mouse' | 'key'), liftState(), towerExteriorTune({...})
     ...officeArchQaApi(game), // Task office-overhaul-20261030 (lane ARCH): exteriorFogTune({...}), officeArch(), officeArchTune({...}), roofFog()
+    // Task track3-eaton-centre-20261031 (lane ARCH): mallArch(), mallFog({density, color}), mallSkylight(), mallCuller(), mallPoses(), mallPose(name)
+    ...mallArchQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     ...gasQaApi(game), // Task gasmask-breach-20261030 (lane GAS): windows(level?), windowAim(id), DEBUG windowBreak(id), gas(), gasTune({...})
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): blight(), blightGo(i?, dist), blightAim(i?), blightGas(), DEBUG blightSpawnNear(dist) / blightKill(i?)
     ...blightbellyQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
@@ -361,6 +369,23 @@ export function installQaHooks(game: Game): void {
       if (!q) return null;
       game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
       return q;
+    },
+    // Task track3-eaton-centre-20261031 (lane GEN): stand at a mall pose (gen/mall/qa.ts: 'platform-lookup', 'court', 'ring-edge',
+    // 'shopfront', 'escalator', 'bridge', 'elevator', 'washrooms'; `ring` = the storey for ring-edge / shopfront / escalator / washrooms).
+    goMall: (name: MallPoseName = 'platform-lookup', ring?: number) => {
+      const q = mallQaPose(game.layout, name, ring);
+      if (!q) return {ok: false, names: MALL_POSE_NAMES};
+      game.player.place(q.x, q.z, q.yaw, q.y); game.player.pitch = q.pitch;
+      return {ok: true, ...q, variant: game.layout.mall?.variant};
+    },
+    // Task track3-eaton-centre-20261031 (primary, lane SHOPS pose): stand at the entry of the nth shop of a program / recipe
+    // ('guns', 'pharmacy', …) looking in.
+    goShop: (program = 'guns', nth = 0) => {
+      const q = mallShopPose(game.layout, program, nth);
+      if (!q || !api.teleport(q.x, q.z, q.yaw, q.level)) return {ok: false, programs: [...new Set(game.layout.mall?.shops.map(s => s.program) ?? [])]};
+      game.player.pitch = -0.08;
+      const s = game.layout.mall?.shops.find(t => t.id === q.shop);
+      return {ok: true, ...q, brand: s?.brand, kind: s?.kind};
     },
     goTransit: (end: 'bottom' | 'top' = 'bottom', lane = 1) => {
       const q = transitPose(game.layout, end, lane);
@@ -634,6 +659,8 @@ export function installQaHooks(game: Game): void {
     travel: (level: LevelId, section = 'main', arrival?: Arrival) => game.travel({to: {level, section}, arrival: arrival ?? {kind: 'start'}, label: `QA travel · ${level}`, via: 'menu'}),
     /** QA: NewGame in a level (seeds optional) without entering play; resolves with the warm-up status. */
     newGame: (level: LevelId, seeds?: Partial<Record<LevelId, number>>) => game.newGame(level, {seeds}).then(w => w?.status ?? null),
+    /** Task track3-eaton-centre-20261031 (lane PACKAGE): the level's lazy working set, resident models / bytes, late fetches, level resources. */
+    levelAssets: () => game.levelAssetsQa(),
   };
   (window as unknown as {__LL: typeof api}).__LL = api;
 

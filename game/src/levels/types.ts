@@ -13,7 +13,8 @@
 import type {StationLayout} from '../gen/stationTypes';
 import type {TrackExtConfig} from '../gen/trackExt/types';
 
-export type LevelId = 'subway' | 'office';
+// Task track3-eaton-centre-20261031 (lane GEN): + 'mall' — The Eaton's Center (tier 2; gen/mall/index.ts generateMallLevel).
+export type LevelId = 'subway' | 'office' | 'mall';
 
 /** A section of a logical level: every level is one section, 'main' (one continuous world). */
 export interface SectionKey {

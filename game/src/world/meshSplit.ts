@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {sampleSource} from '../assets/textureRelease'; // Task track3-eaton-centre-20261031 (lane PERF): exact paint after a mall image release
 
 /** Triangle soup: 3 vertices per triangle, `stride` floats per vertex laid out as `attrs`. */
 export interface Soup { attrs: {name: string; size: number; offset: number}[]; stride: number; data: Float32Array }
@@ -154,7 +155,7 @@ export function averageColor(mat: THREE.Material | undefined): THREE.Color | nul
     const c = document.createElement('canvas');
     c.width = c.height = 24;
     const ctx = c.getContext('2d', {willReadFrequently: true})!;
-    ctx.drawImage(img, 0, 0, 24, 24);
+    ctx.drawImage(sampleSource(img, 24), 0, 0, 24, 24); // (lane PERF: the released image's exact 24² draw; else img itself)
     const px = ctx.getImageData(0, 0, 24, 24).data;
     let r = 0, g = 0, b = 0, n = 0;
     for (let i = 0; i < px.length; i += 4) {

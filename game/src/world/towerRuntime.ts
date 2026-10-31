@@ -189,7 +189,8 @@ export class TowerRuntime {
     h.warmRegistry.addPool('tower', () => (this.office ? [this.office.root] : []));
     // the office: fetch the exterior models / skyline / glass before the build (bounded: a slow network falls back to the
     // procedural stand-ins, upgraded in place behind prepareBeforeShow when they arrive)
-    h.sectionPreloads?.push(layout => (readTowerInfo(layout) ? Promise.race([this.preload(), new Promise<void>(r => setTimeout(r, PRELOAD_WAIT_MS))]) : Promise.resolve()));
+    // (task track3-eaton-centre-20261031, lane GEN: only a world with windows — the Office — fetches the exterior city; the mall's elevator needs none)
+    h.sectionPreloads?.push(layout => (readTowerInfo(layout)?.windows.length ? Promise.race([this.preload(), new Promise<void>(r => setTimeout(r, PRELOAD_WAIT_MS))]) : Promise.resolve()));
   }
 
   // -------------------------------------------------------------------------------------------
@@ -199,7 +200,7 @@ export class TowerRuntime {
     if (this.office) this.teardown();
     const info = readTowerInfo(layout);
     if (!info) return;
-    void this.preload();
+    if (info.windows.length) void this.preload(); // (lane GEN: the mall's elevator-only world fetches no exterior assets)
     const h = this.host;
     const root = new THREE.Group();
     root.name = 'tower-office';
@@ -215,7 +216,7 @@ export class TowerRuntime {
       const s0 = stops[logic.stop ?? 0];
       const vol: DynamicVolume = {x0: cab.x0, z0: cab.z0, x1: cab.x1, z1: cab.z1, floorY: logic.y, ceilY: logic.y + plan.cabH, level: s0.levelId, area: s0.area, gates: [gate], stops: stops.map(s => s.y), name: 'elevator-cab'};
       h.levels.addDynamicVolume(vol);
-      const view = buildElevatorView(plan, h.mats);
+      const view = buildElevatorView(plan, h.mats, {glass: !!layout.mall}); // task track3 (lane ARCH): the mall's glass car
       view.setCab(logic.y, 0);
       view.setIndicator(floorLabel(logic.floor), 0);
       root.add(view.root);

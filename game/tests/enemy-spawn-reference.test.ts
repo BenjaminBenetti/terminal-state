@@ -176,8 +176,11 @@ describe('enemy spawn reference: runtime agreement', () => {
       const seed = ENEMY_CENSUS_SEEDS[1];
       const fresh = LEVELS[l].generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
       const cen = enemyCensus(l, [seed]);
-      expect(cen.spawns.length).toBe(fresh.zombies.length);
-      expect(cen.spawns.map(s => `${s.family}:${s.key}`)).toEqual(fresh.zombies.map(z => `${z.archetype}:${roomKey(fresh.areas[z.area])}`));
+      // task track3-eaton-centre-20261031 (lane PROFILES): horde members are the separate pool (census.horde), not ambient spawns
+      const ambient = fresh.zombies.filter(z => z.horde === undefined);
+      expect(cen.spawns.length).toBe(ambient.length);
+      expect(cen.horde.length).toBe(fresh.zombies.length - ambient.length);
+      expect(cen.spawns.map(s => `${s.family}:${s.key}`)).toEqual(ambient.map(z => `${z.archetype}:${roomKey(fresh.areas[z.area])}`));
       // every placed spawn stands in an area the generator reported as eligible
       const eligible = new Set(cen.areas.map(a => a.key));
       for (const s of cen.spawns) expect(eligible.has(s.key), s.key).toBe(true);

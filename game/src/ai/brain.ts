@@ -27,6 +27,7 @@ import type {Waypoint} from '../gen/grid';
 import {CLIMB, climbDuration, ladderClimbPath, sampleClimb, type ClimbPath, type Ladder, type Vec3} from '../gen/traversal';
 import type {LightSource, LightSourceKind} from '../world/lightSources';
 import {LURE, perceiveLight, type LurePart, type LureSighting, type SeePoint} from './lightLure';
+import {ATRIUM_CHASE} from './chaseShare'; // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI)
 
 export interface ZombieStats {
   hp: number;
@@ -55,12 +56,22 @@ export const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   coated: {hp: 165, wanderSpeed: 0.55, chaseSpeed: 1.75, attackRange: 1.4, attackDamage: 15, attackDuration: 1.1, attackImpact: 0.45, sightRange: 16, radius: 0.38, chaseAnim: 'Run'},
 };
 
-export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate'
+// Task track3-eaton-centre-20261031 (lane HORDE): 'patrol' = a roaming-horde member walking in its group's formation (ai/horde.ts
+// steers it through `escort`). Only a brain with an escort ever enters it (no pre-mall enemy has one: their behaviour is unchanged).
+// It behaves like wandering for every existing mechanic: seeing the player -> chase, gunfire / damage -> chase, a seen light ->
+// investigate; when the chase / search / investigation ends the member idles a moment, then rejoins its group (idle -> patrol).
+export type BrainState = 'idle' | 'wander' | 'chase' | 'search' | 'attack' | 'stagger' | 'climb' | 'dead' | 'investigate' | 'patrol'
   // Task track1-siren-blightbelly-20261031 (lane SIREN): the Siren's (ai/siren.ts SirenBrain) floor-hunched DORMANT state and her one-time
   // RISE after the wake. The base brain never enters them (no case in step(), not LURABLE, hear() ignores them).
   | 'dormant' | 'rise';
 /** Iteration 12 (AI): states in which an enemy notices light (never while chasing / attacking / staggered / climbing). */
-const LURABLE: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate']);
+const LURABLE: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate', 'patrol']);
+
+/** Task track3-eaton-centre-20261031 (lane HORDE): a horde member's link to its group (ai/horde.ts): steers the 'patrol' state. */
+export interface PatrolLink {
+  /** Fill `out` (direction / speed / facing / anim) for one 'patrol' frame of brain `b` (sight was already checked: not seen). */
+  steer(b: ZombieBrain, out: BrainOutput, dt: number, w: BrainWorld, moved: number): void;
+}
 
 /** Iteration 12 (AI): an enemy's current light investigation (QA reads it through `brain.lure`). */
 export interface LureState {
@@ -103,7 +114,7 @@ export interface BrainWorld {
    * re-plan of an enemy that does not see the player; the world MAY then answer `undefined` = "queued in the background, ask
    * again next frame" (the game does for far enemies: ai/pathService.ts). Without `defer` the answer is always immediate.
    */
-  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean; ay?: number; by?: number; defer?: object}): Waypoint[] | null | undefined;
+  findPath(ax: number, az: number, bx: number, bz: number, opts?: {drops?: boolean; noLinks?: boolean; ay?: number; by?: number; defer?: object; seen?: boolean; local?: boolean}): Waypoint[] | null | undefined;
   /** Iteration 08: `y` = feet height (stay on that storey); the optional 3rd element is the point's floor height. */
   randomNear(x: number, z: number, r: number, y?: number): [number, number] | [number, number, number] | null;
   rand(): number;
@@ -117,6 +128,13 @@ export interface BrainWorld {
   seePoint?: SeePoint;
   /** Iteration 12 (AI): standable [x, z, floor] near a lit point on the storey containing it (absent / null: the point on the enemy's storey). */
   lureGoal?(x: number, y: number, z: number): [number, number, number] | null;
+  /**
+   * Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): an OPEN-ATRIUM level (the mall: the game sets it only for a layout
+   * with `mall`; ai/chaseShare.ts ATRIUM_CHASE). A chase re-plan toward a SEEN player on another storey is then offered to the
+   * deferral (`defer` + `seen`: the path service still answers a NEAR enemy at once), and a re-plan whose goal has not moved
+   * materially keeps the current route a little longer (never within ATRIUM_CHASE.nearM). Absent: the established chase, unchanged.
+   */
+  atrium?: boolean;
 }
 
 export interface BrainOutput {
@@ -193,6 +211,12 @@ export class ZombieBrain {
   /** Iteration 12 (AI): countdown to the next light check, and a private jitter stream (never consumes world.rand). */
   private lureCheckT: number;
   private lureSeed: number;
+  /** Task track3-eaton-centre-20261031 (lane HORDE): the roaming-horde group steering this member's 'patrol' state; null = ordinary enemy. */
+  escort: PatrolLink | null = null;
+  /** Lane HORDE (atrium AI, w.atrium only): goal of the last planned chase route [x, z, y] and when; re-plans skipped by the throttle (QA). */
+  private plannedGoal: [number, number, number] | null = null;
+  private plannedT = 0;
+  throttled = 0;
 
   constructor(readonly type: ZombieType, public x: number, public z: number, public yaw: number, readonly stats: ZombieStats = ZOMBIE_STATS[type]) {
     this.hp = stats.hp;
@@ -203,6 +227,13 @@ export class ZombieBrain {
 
   get alive(): boolean {
     return this.state !== 'dead';
+  }
+
+  /** Task track3-eaton-centre-20261031 (lane HORDE): start walking with the group (an idle / wandering member with an escort). */
+  joinPatrol(): boolean {
+    if (!this.escort || (this.state !== 'idle' && this.state !== 'wander' && this.state !== 'patrol')) return false;
+    if (this.state !== 'patrol') { this.setState('patrol'); this.path = []; }
+    return true;
   }
 
   /** Iteration 12 (AI): xorshift jitter for the lure timers (deterministic per spawn; leaves world.rand untouched). */
@@ -232,7 +263,7 @@ export class ZombieBrain {
     if (Math.hypot(x - this.x, z - this.z, y === undefined ? 0 : y - this.y) > radius) return;
     this.lastKnown = [x, z, y];
     this.aware = true;
-    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
+    if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate' || this.state === 'patrol') {
       this.setState('chase');
       this.repathT = 0;
       this.path = []; // lane SCHED: the old wander / search path is no chase route (an immediate re-plan replaced it this frame anyway)
@@ -258,7 +289,7 @@ export class ZombieBrain {
     else if (this.state !== 'attack' && amount >= 20 && this.staggerCd <= 0 && o.stagger !== false) {
       this.setState('stagger', 0.35);
       this.staggerCd = 0.9;
-    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate') {
+    } else if (this.state === 'idle' || this.state === 'wander' || this.state === 'search' || this.state === 'investigate' || this.state === 'patrol') {
       this.setState('chase');
       this.path = []; // lane SCHED: as in hear()
     }
@@ -374,8 +405,9 @@ export class ZombieBrain {
         out.anim = 'Idle';
         if (sees) { this.setState('chase'); this.repathT = 0; break; }
         if (this.stateT <= 0) {
+          if (this.escort) { this.setState('patrol'); this.path = []; break; } // lane HORDE: rejoin the group instead of wandering
           const p = w.randomNear(this.x, this.z, 6, this.y);
-          const path = p && w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2]));
+          const path = p && this.localPath(w, p);
           if (path && path.length) { this.path = path; this.setState('wander', 12); }
           else this.stateT = 2 + w.rand() * 3;
         }
@@ -412,19 +444,33 @@ export class ZombieBrain {
         } else {
           this.repathT -= dt;
           let pending = false;
+          // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI; only with w.atrium): the goal has not moved materially since the
+          // route was planned (measured from the planned goal: drift accumulates), the route is still there and the goal is not
+          // close: keep it and look again shortly (at most ATRIUM_CHASE.holdMax without a re-plan).
+          const pg = this.plannedGoal;
+          if (w.atrium === true && (this.repathT <= 0 || (!this.path.length && this.pathFailT <= 0)) && pg && this.path.length && this.nextRepathT === null
+            && this.t - this.plannedT < ATRIUM_CHASE.holdMax && Math.hypot(goal[0] - pg[0], goal[1] - pg[1]) < ATRIUM_CHASE.moved
+            && Math.abs((goal[2] ?? this.y) - pg[2]) < 1 && Math.hypot(goal[0] - this.x, goal[1] - this.z) > ATRIUM_CHASE.nearM) {
+            this.repathT = ATRIUM_CHASE.recheck;
+            this.throttled++;
+          }
           if (this.repathT <= 0 || (!this.path.length && this.pathFailT <= 0)) {
             // Far goals re-plan less often (long detours on the large station are costly). Task frame-budget-deferral-20261030
             // (lane SCHED): the timer is drawn at the FIRST ask, before the search, exactly as before. Not seeing the player,
             // the re-plan may be queued (undefined): keep following the current path, ask again next frame; the timer starts
             // once the path is there (and a failed search draws its back-off then, as it always did after the search).
             this.nextRepathT ??= 0.45 + w.rand() * 0.2 + Math.min(0.9, Math.hypot(goal[0] - this.x, goal[1] - this.z) / 45);
-            const path = w.findPath(this.x, this.z, goal[0], goal[1], sees ? {drops: true, ...this.pathOpts(goal[2])} : {drops: true, ...this.pathOpts(goal[2]), defer: this});
+            // lane HORDE (atrium AI, only with w.atrium): a seen player on another storey is not 'critical near AI' by itself — offer
+            // the re-plan to the deferral (the service answers a near enemy at once and queues a far one; it keeps facing / following)
+            const seenFar = sees && w.atrium === true && Math.abs((w.py ?? this.y) - this.y) > ATRIUM_CHASE.dy;
+            const path = w.findPath(this.x, this.z, goal[0], goal[1], sees && !seenFar ? {drops: true, ...this.pathOpts(goal[2])} : seenFar ? {drops: true, ...this.pathOpts(goal[2]), defer: this, seen: true} : {drops: true, ...this.pathOpts(goal[2]), defer: this});
             if (path === undefined) pending = true;
             else {
               this.repathT = this.nextRepathT;
               this.nextRepathT = null;
               this.path = path ?? [];
               if (!path) { this.pathFailT = 1.2 + w.rand() * 0.6; this.repathT = this.pathFailT; }
+              if (w.atrium === true) { this.plannedGoal = path ? [goal[0], goal[1], goal[2] ?? this.y] : null; this.plannedT = this.t; } // lane HORDE: the throttle's reference
             }
           }
           const done = this.followPath(w, out, this.stats.chaseSpeed);
@@ -434,7 +480,7 @@ export class ZombieBrain {
             // Reached the last known position without seeing the player: search around.
             if (this.unseenT > 1.5) {
               const p = w.randomNear(this.x, this.z, 5, this.y);
-              this.path = p ? w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2])) ?? [] : [];
+              this.path = p ? this.localPath(w, p) ?? [] : [];
               this.setState('search', 8);
               this.lastKnown = null;
             }
@@ -443,7 +489,7 @@ export class ZombieBrain {
         if (this.unseenT > 9 && this.state === 'chase') {
           this.setState('search', 6);
           const p = w.randomNear(this.x, this.z, 5, this.y);
-          this.path = p ? w.findPath(this.x, this.z, p[0], p[1], this.pathOpts(p[2])) ?? [] : [];
+          this.path = p ? this.localPath(w, p) ?? [] : [];
         }
         break;
       }
@@ -472,6 +518,15 @@ export class ZombieBrain {
         // Iteration 12 (AI): slow walk to a seen light; the player in sight always wins.
         if (sees) { this.setState('chase'); this.repathT = 0; break; }
         this.investigate(dt, w, out, moved);
+        break;
+      }
+      case 'patrol': {
+        // Task track3-eaton-centre-20261031 (lane HORDE): walking in the group's formation; the player in sight always wins.
+        if (sees) { this.setState('chase'); this.repathT = 0; break; }
+        if (!this.escort) { this.setState('idle', 1); break; } // left its group: an ordinary enemy from now on
+        if (this.unseenT > 20) this.aware = false;
+        out.anim = 'Idle';
+        this.escort.steer(this, out, dt, w, moved);
         break;
       }
       case 'climb': {
@@ -566,6 +621,25 @@ export class ZombieBrain {
   /** Start / goal heights for a path request (the goal's storey when known; else the zombie's own). */
   private pathOpts(goalY: number | undefined): {ay: number; by: number} {
     return {ay: this.y, by: goalY ?? this.y};
+  }
+
+  /**
+   * A LOCAL path request (a wander / search target a few metres away). Task track3-eaton-centre-20261031 (lane HORDE, atrium AI):
+   * in an open-atrium level it is marked `local` (the game bounds its search: ATRIUM_CHASE.localExpand — a few-metre target whose
+   * route needs more is a detour round a wall / the void: the enemy just picks another spot later). Elsewhere: pathOpts unchanged.
+   */
+  private localOpts(w: BrainWorld, goalY: number | undefined): {ay: number; by: number; local?: true} {
+    return w.atrium === true ? {...this.pathOpts(goalY), local: true} : this.pathOpts(goalY);
+  }
+
+  /**
+   * The path to a LOCAL target p (wander / search spot). Lane HORDE (atrium AI, w.atrium only): a target the body can walk to in a
+   * straight line needs no search (one height-aware walk test instead of an A* + string pulling); otherwise the bounded local
+   * search. Elsewhere: exactly the established findPath call.
+   */
+  private localPath(w: BrainWorld, p: [number, number] | [number, number, number]): Waypoint[] | null | undefined {
+    if (w.atrium === true && w.walkClear(this.x, this.z, p[0], p[1], this.stats.radius * 0.9, this.y, p[2] ?? this.y)) return [[p[0], p[1], undefined, p[2] ?? this.y]];
+    return w.findPath(this.x, this.z, p[0], p[1], this.localOpts(w, p[2]));
   }
 
   /** Player within swiping reach vertically (feet heights). */

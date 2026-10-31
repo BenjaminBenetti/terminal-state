@@ -22,7 +22,7 @@ import {adoptComposition} from '../compose';
 import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
 
 export * from './types';
-export {TRACK_EXT, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config';
+export {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config'; // (+ TRACK_EXT_MALL: task track3, lane INTEG)
 export {copyWindow} from './window';
 export {coreView, hasExtensionGrowth, reframe} from './core';
 
@@ -128,6 +128,7 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
       b.clues.push({s: r4(beside), side: b.side, kind: 'tag', toward: -1});
     }
   }
+  if (ctx.rockLevels) ext.rockLevels = [...ctx.rockLevels]; // (task track3 lane INTEG, opt-in: attach / validation read it)
   CARVES.set(ext, C.carve);
   TRACK_EXT_STATS.ms += (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
   return ext;
@@ -223,7 +224,8 @@ export function attachExtensions(layout: StationLayout, ext: TrackExtensions, cr
     if (!g.inBounds(x, y)) throw new Error(`attachExtensions: cell ${x},${y} outside the grid`);
     const i = g.idx(x, y);
     if (g.cells[i] !== SOLID || g.area[i] !== -1) throw new Error(`attachExtensions: cell ${x},${y} is not rock`);
-    for (const L of layout.levels ?? []) if (L.grid !== g && L.grid.cells[i] !== SOLID) throw new Error(`attachExtensions: cell ${x},${y} open on level ${L.id}`);
+    // (task track3 lane INTEG, opt-in ext.rockLevels: only the station's storeys must be rock; extensionIssues checks the others' slab)
+    for (const L of layout.levels ?? []) if (L.grid !== g && (!ext.rockLevels || ext.rockLevels.includes(L.id)) && L.grid.cells[i] !== SOLID) throw new Error(`attachExtensions: cell ${x},${y} open on level ${L.id}`);
     g.cells[i] = FLOOR; g.area[i] = A(cell.area); g.floor[i] = cell.floor; g.ceil[i] = cell.ceil;
   }
   const dx = ox * CELL, dz = oy * CELL;
@@ -300,6 +302,8 @@ export function extensionAreaIds(layout: StationLayout): number[] {
 
 /** Minimum clear height (m) on every extension cell (doorways included). */
 export const EXT_HEAD_CLEARANCE = 2.2;
+/** (task track3 lane INTEG, opt-in rockLevels) Minimum slab (m) between an extension's ceiling and a storey standing above it. */
+export const EXT_STOREY_SLAB = 0.3;
 
 /**
  * Invariants of a layout's extensions (tests / QA; the generator's safety net): cells FLOOR at their area's floor with >= 2.2 m
@@ -343,7 +347,13 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
     const area = layout.areas[a];
     if (g.cells[i] !== FLOOR || Math.abs(g.floor[i] - (area.floorY ?? 0)) > 1e-6) bad.floor++;
     if (g.ceil[i] - g.floor[i] < EXT_HEAD_CLEARANCE - 1e-6) bad.head++;
-    for (const L of levels) if (L.grid !== g && L.grid.cells[i] !== SOLID) { bad.levels++; break; }
+    // (task track3 lane INTEG, opt-in ext.rockLevels: a storey that is not one of the station's may stand above the cell — solid there,
+    // or a floor at least EXT_STOREY_SLAB above the extension ceiling; never its VOID)
+    for (const L of levels) {
+      if (L.grid === g || L.grid.cells[i] === SOLID) continue;
+      if (ext.rockLevels && !ext.rockLevels.includes(L.id) && L.grid.cells[i] !== VOID && L.grid.floor[i] >= g.ceil[i] + EXT_STOREY_SLAB - 1e-6) continue;
+      bad.levels++; break;
+    }
     const x = i % W, y = (i - x) / W;
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
       const nx = x + ox, ny = y + oy;

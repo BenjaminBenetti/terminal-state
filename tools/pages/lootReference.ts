@@ -27,6 +27,8 @@ import {
   type HolderKind, type HolderTable,
 } from '../../game/src/items/loot';
 import {catAvailable, holderTheme} from '../../game/src/items/lootEconomy';
+import {salvageRule, withSalvage} from '../../game/src/items/lootEconomy'; // task track3-eaton-centre-20261031 (lane PROFILES): salvage
+import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // lane PROFILES: the mall's ring count (floor program runs)
 import {ALL_PURPOSES, ROOM_PURPOSES, STORE_PURPOSES, purposeById, purposeLoot, type Purpose} from '../../game/src/gen/purposes';
 import {P7_HOLDER_KINDS} from '../../game/src/gen/props07';
 import {OPENABLE_SPECS, containerLoot, isSpillHolderKind, openableSpec, separateCompartmentLoot} from '../../game/src/world/openablesSpec';
@@ -121,6 +123,7 @@ const F = {
 export const GENERATED_FROM: readonly string[] = [
   F.tables, F.items, F.gear, F.loot, F.economy, F.purposes, 'game/src/gen/props07.ts', F.openables, F.registry, F.gearLoot, F.maskLoot,
   F.weaponFinds, F.officeSpawns, F.companies, F.tenants, 'game/src/gen/office/frame.ts', F.starter, F.pistol,
+  'game/src/gen/mall/mallTypes.ts', // task track3-eaton-centre-20261031 (lane PROFILES): MALL_RINGS (the mall floor program's runs)
 ].slice().sort();
 
 /**
@@ -129,8 +132,10 @@ export const GENERATED_FROM: readonly string[] = [
  * and game/tests/loot-reference.test.ts checks every census pickup / holder of every level against the sources declared here.
  */
 export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
-  floor: 'subway' | 'office';
-  weapons: 'station' | 'office-plan';
+  /** Task track3-eaton-centre-20261031 (lane PROFILES): + 'mall' (gen/mall/supplies.ts placeMallSupplies, once per storey). */
+  floor: 'subway' | 'office' | 'mall';
+  /** + 'mall-plan' (task track3-eaton-centre-20261031): the mall's bounded once-per-run gun-shop weapon plan (lane SHOPS). */
+  weapons: 'station' | 'office-plan' | 'mall-plan';
   pistolBoxes: boolean;
   rewards: readonly string[];
   /** Task gas-mask-roof-feedback-20261030 (item 10): curated FIND reward keys the level's generator lays out (gen/office/roof.ts placeRoofFind). */
@@ -142,6 +147,9 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
 }>> = {
   subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: true, annex: true},
   office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], rewardFinds: [LT.ROOF_FIND_KEY], storeys: true, floorMoved: false, annex: true},
+  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (its storey contexts: levelContexts; no tenant floors). Lane
+  // INTEG (Track2 integration): its pit station grows service annexes like the Subway / Office (the per-annex floor variant).
+  mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
@@ -171,6 +179,9 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // resolution API (the reference resolves every value through it)
   resolveRows: 'API', catWeight: 'API', keepChance: 'API', slotEmpty: 'API', slotLots: 'API', floorChance: 'API', floorCount: 'API', gearParams: 'API',
   rewardTable: 'API', rewardFind: 'API', validateLootProfile: 'levels (profile validation)',
+  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (the row lists MALL_*_SALVAGE are tables: auto-detected)
+  MALL_FLOOR: 'floor program (mall)', MALL_SALVAGE: 'economy.salvage (mall) + holder salvage rows', MALL_TABLES: 'profile tables (mall)',
+  MALL_OVERRIDES: 'levels (profiles: mall overrides)', MALL_PROFILE: 'levels (profiles: mall)',
   // Track 2 (lane CONTENT): the service-annex loot context (ANNEX_STASH / ANNEX_PICKED and their rows are row tables: auto-detected)
   ANNEX_STASH_KEY: 'service-annex stash (loot key -> purpose annex-stash: holder contexts)', ANNEX_PICKED_KEY: 'service-annex picked-over storage (loot key -> purpose annex-picked: holder contexts)',
   ANNEX_FLOOR: 'floor program (annex variant, per service annex)',
@@ -295,6 +306,8 @@ export interface CensusLayout {
 const censusCache = new Map<string, CensusLayout>();
 
 function storeyName(layout: StationLayout, level: number): string | undefined {
+  // task track3-eaton-centre-20261031 (lane PROFILES): the mall's storeys (station pit + rings)
+  if (layout.mall) return level === 0 ? 'Station' : `Ring ${level}`;
   if (!layout.office) return undefined;
   if (level === 0) return 'Station';
   if (level === OFFICE_ROOF_LEVEL) return 'Roof';
@@ -674,10 +687,41 @@ function buildLevel(B: Builder, level: LevelId, P: LootProfile, census: readonly
     id: P.id, label: P.label, baseTables: P.tables === BASE_TABLES, overrides: overrideEntries(P), validation: validateLootProfile(P),
     at: B.src.at(F.tables, `PROFILES.${level}`),
   };
+  const floor = floorProgram(B, level, P);
   return {
     id: level, label: def.name, blurb: def.blurb, profile, contexts: levelContexts(level),
-    slots, holders, purposes, economy: economyOf(B, P), floor: floorProgram(B, level, P),
+    slots, holders, purposes, economy: economyOf(B, P), floor,
     specials: specials.filter(s => s.levels.includes(level)).map(s => s.id),
+    materials: materialRichness(level, holders, census, floor),
+  };
+}
+
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): crafting-material richness of a level in native units — Σ over the sampled
+ * census holders of their context's EXACT expected material units (before fit), per sample level; the loose floor program's expected
+ * material units per level (before placement). Placed + reachable counts after fit are measured by tests/mall-profiles.test.ts.
+ */
+function materialRichness(level: LevelId, holders: readonly HolderContext[], census: readonly CensusLayout[], floor: FloorProgramInfo): LevelInfo['materials'] {
+  const mats = Object.keys(ITEMS).filter(id => econCat(id) === 'material');
+  const byId = new Map(holders.map(h => [h.id, h]));
+  const perH: Record<string, number> = Object.fromEntries(mats.map(m => [m, 0]));
+  let total = 0, withMat = 0;
+  for (const c of census) for (const h of c.holders) {
+    total++;
+    let any = false;
+    for (const ctxId of [`${level}/${h.kind}@${h.areaKey}`, `${level}/${h.kind}.inside@${h.areaKey}`]) {
+      const ctx = byId.get(ctxId);
+      for (const it of ctx?.expected?.items ?? []) if (mats.includes(it.itemId) && it.units > 0) { perH[it.itemId] += it.units; any = true; }
+    }
+    if (any) withMat++;
+  }
+  const n = Math.max(1, census.length);
+  const perF: Record<string, number> = Object.fromEntries(mats.map(m => [m, 0]));
+  for (const t of floor.perLevel?.totals ?? []) if (mats.includes(t.itemId)) perF[t.itemId] = t.units;
+  return {
+    perLevelHolders: Object.fromEntries(mats.map(m => [m, rd(perH[m] / n)])), perLevelFloor: perF,
+    holdersPerLevel: rd(total / n), materialHoldersPerLevel: rd(withMat / n),
+    note: `Expected crafting-material units per sample level (${census.length} sample levels): holders = Σ over the sampled holders of their context's exact expected units BEFORE fit (an upper bound of what is placed); floor = the loose floor program's exact expected units per level BEFORE placement. Normalised placed + reachable rates (per holder / per 100 m²) are measured by game/tests/mall-profiles.test.ts.`,
   };
 }
 
@@ -740,9 +784,14 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
   }
   if (compartment) notes.push('Separate compartment roll (drawers / cupboards; own stream and scarcity stream). Rolled when the holder\'s openable model is active — the shipped build loads every model.');
   if (occurrence.basis === 'declared') notes.push('Declared by a purpose / reward but not placed in any sample level (not exhaustive).');
+  // task track3-eaton-centre-20261031 (lane PROFILES): the level's salvage rows in this holder's table
+  const rule = (ht.source === 'own' || ht.source === 'purpose') && ht.rows.length ? salvageRule(P, kind, areaKey) : undefined;
+  if (rule) notes.push(`Salvage: the ${level} profile adds crafting-material rows (${rd(rule.share)} of the table weight before overrides; kept exactly as rolled) — ${salvageOrigin(P, kind, areaKey)}.`);
   return {
     id, level, kind, kindLabel: label(kind), slot, compartment, areaKey, areaLabel, areaKind, source: ht.source, tableId,
-    ...(rewardPicks ? {rewardPicks} : {}), gates, scarcity, expected, occurrence, class: cls, notes,
+    ...(rewardPicks ? {rewardPicks} : {}), gates, scarcity,
+    ...(rule ? {salvage: {from: salvageOrigin(P, kind, areaKey), share: rule.share, rows: rowsTable(rule.rows)}} : {}),
+    expected, occurrence, class: cls, notes,
   };
 }
 
@@ -802,13 +851,19 @@ function identifyTable(B: Builder, level: LevelId, P: LootProfile, tag: string, 
         ]},
     }));
   }
-  // resolution under the level profile (identity when untouched; legacy rows are resolved by construction)
-  const resolved = ht.source === 'legacy' ? baseRows : resolveRows(P, baseRows);
+  // resolution under the level profile (identity when untouched; legacy rows are resolved by construction); task
+  // track3-eaton-centre-20261031 (lane PROFILES): + the level's salvage rows (lootEconomy withSalvage, the same array when none)
+  const reweighted = ht.source === 'legacy' ? baseRows : resolveRows(P, baseRows);
+  const resolved = ht.source === 'legacy' ? baseRows : withSalvage(P, kind, areaKey, reweighted);
+  const salvaged = resolved !== reweighted;
   let id = baseId;
   if (resolved !== baseRows && !sameRows(resolved, baseRows)) {
-    id = B.derived(`resolved:${baseId}${tag}|${rowKey(resolved)}`, () => ({
-      id: `${baseId}${tag}`, kind: B.tables.get(baseId)?.info.kind ?? 'named', label: `${B.tables.get(baseId)?.info.label ?? baseId} (resolved under ${level} overrides)`, rows: resolved,
-      at: B.tables.get(baseId)?.info.at ?? B.src.at(F.tables, 'resolveRows'), extra: {derivedFrom: [baseId], note: `Rows re-weighted by the ${level} profile's itemWeight / categoryWeight overrides (rows reaching 0 dropped).`},
+    const rule = salvaged ? salvageRule(P, kind, areaKey) : undefined;
+    const sv = rule ? `+salvage:${salvageOrigin(P, kind, areaKey)}` : '';
+    id = B.derived(`resolved:${baseId}${tag}${sv}|${rowKey(resolved)}`, () => ({
+      id: `${baseId}${tag}${sv}`, kind: B.tables.get(baseId)?.info.kind ?? 'named', label: `${B.tables.get(baseId)?.info.label ?? baseId} (resolved under ${level}${salvaged ? ': overrides + salvage rows' : ' overrides'})`, rows: resolved,
+      at: B.tables.get(baseId)?.info.at ?? B.src.at(F.tables, 'resolveRows'),
+      extra: {derivedFrom: [baseId], note: `Rows re-weighted by the ${level} profile's itemWeight / categoryWeight overrides (rows reaching 0 dropped)${salvaged ? `; plus the ${level} SALVAGE rows (crafting materials, ${rd(rule!.share)} of the table weight before overrides; kept exactly as rolled: items/lootEconomy.ts withSalvage)` : ''}.`},
     }));
   }
   const shown = B.tables.get(id)!.info.rows;
@@ -816,6 +871,11 @@ function identifyTable(B: Builder, level: LevelId, P: LootProfile, tag: string, 
     throw new Error(`table ${id} (${level} ${kind}${compartment ? '.inside' : ''}@${areaKey}) disagrees with holderTable(): the reference would drift`);
   }
   return id;
+}
+
+/** Lane PROFILES (track3): which salvage entry a holder's rule came from — the purpose id, else `theme-<theme>`. */
+function salvageOrigin(P: LootProfile, kind: string, areaKey: string): string {
+  return P.tables.salvage?.purposes?.[areaKey] && salvageRule(P, kind, areaKey) === P.tables.salvage.purposes[areaKey] ? areaKey : `theme-${holderTheme(kind, areaKey)}`;
 }
 
 function overrideEntries(P: LootProfile): OverrideEntry[] {
@@ -836,6 +896,16 @@ function overrideEntries(P: LootProfile): OverrideEntry[] {
 }
 
 function levelContexts(level: LevelId): LevelInfo['contexts'] {
+  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center — one logical level, its storeys are contexts
+  if (LEVEL_ADAPTER[level].floor === 'mall') {
+    return {
+      storeys: [
+        {id: 'pit', label: 'Pit station (storey 0)', layoutLevels: [0], floorVariant: 'pit', note: 'The subway station at the bottom of the open void (platforms, plaza, courts).'},
+        ...Array.from({length: MALL_RINGS}, (_, i) => ({id: `ring-${i + 1}`, label: `Ring ${i + 1}`, layoutLevels: [i + 1], floorVariant: 'ring', note: 'Gallery walkway around the void, shops with their back rooms, service corridors.'})),
+      ],
+      note: `The Eaton's Center is ONE logical level: one loot profile (shared base tables + the mall salvage), one rare-gear roll, one gas-mask roll for the whole mall. The pit and the ${MALL_RINGS} rings are CONTEXTS (they change room purposes and run the per-storey floor program), never separate levels or rolls.`,
+    };
+  }
   if (!LEVEL_ADAPTER[level].storeys) return {note: 'One continuous world; no storey / tenant contexts.'};
   const storeys: StoreyInfo[] = [
     {id: 'station', label: 'Station (platform storey)', layoutLevels: [0], floorVariant: 'street', note: 'Runs the street program together with the lobby (one run for both).'},
@@ -868,6 +938,12 @@ function economyOf(B: Builder, P: LootProfile): EconomyInfo {
     themes, offTheme: catShares(ECON_CATS.map(c => [c, catWeight(P, c, X.offTheme[c])] as const)),
     globalPool: Object.fromEntries(ECON_CATS.map(c => [c, poolId(X.globalPool[c], `GLOBAL_POOL.${c}`)])),
     themeOfType: {...THEME_OF_TYPE},
+    // task track3-eaton-centre-20261031 (lane PROFILES): salvage rules (absent for the shipped Subway / Office tables)
+    ...(X.salvage ? {salvage: {
+      purposes: Object.entries(X.salvage.purposes ?? {}).map(([key, r]) => ({key, share: r.share, rows: rowsTable(r.rows)})),
+      themes: Object.entries(X.salvage.themes ?? {}).map(([key, r]) => ({key, share: r!.share, rows: rowsTable(r!.rows)})),
+      note: 'Crafting-material rows added at resolution time to the own / purpose tables of a place whose purpose (first) or loot theme has an entry: each rule\'s rows take `share` of the holder table\'s weight before overrides, are rolled per lot like any row and kept exactly as rolled. Never legacy room-type tables, curated rewards, fixtures, container-themed storage, junk holders or holders whose allow list excludes materials (items/lootEconomy.ts salvageRule / withSalvage).',
+    }} : {}),
     allow: Object.entries(HOLDER_ALLOW).map(([kind, cats]) => ({kind, cats: [...(cats ?? [])]})),
     containerThemed: [...CONTAINER_THEMED].sort(), randomHolders: [...RANDOM_HOLDERS].sort(),
     boxCount: Object.entries(X.boxCount).map(([itemId, b]) => ({itemId, small: b.small, big: b.big})),
@@ -955,6 +1031,11 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
       notes: ['Ammo boxes are single-caliber (5.56 / 12-gauge); the pistol start\'s 9mm boxes are a separate weapon-finds source.', 'Zombies are placed on the same spawn stream afterwards: changing these draws moves them too.', ...(annex.length ? [annexNote] : [])],
     };
   }
+  if (kind === 'mall') {
+    // lane INTEG (Track2 integration): + the per-annex variant (the mall's pit station grows service annexes; outside the totals)
+    const m = mallFloorProgram(B, level, P, find, at), annex = annexVariant();
+    return annex.length ? {...m, variants: [...m.variants, ...annex], notes: [...m.notes, annexNote]} : m;
+  }
   const O = P.tables.floor.office;
   const scarce = (tilt: LootTilt): FloorFind[] => {
     const odds = scarceOdds(tilt, O);
@@ -1015,6 +1096,67 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
       'A tilt shifts the MIX of the scarce finds, renormalised to the untilted total (same expected count; each odd capped at OFFICE_FLOOR.scarce.cap).',
       'Office Space is one logical level: the program runs once per physical storey under the one office profile.',
       ...(annex.length ? [annexNote] : []),
+    ],
+  };
+}
+
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center loose floor program (items/lootTables.ts MALL_FLOOR, read
+ * through the mall profile; interpreted by gen/mall/supplies.ts placeMallSupplies once per storey: the pit once, each ring once).
+ * Expected copies are exact before placement; a salvage stack's size follows BOX_COUNT small (one find per possible stack size, so
+ * every generated pickup `item x count` has its documented source).
+ */
+type FindFn = (stage: string, itemId: string, count: number, copies: Range | null, chance: number | null, knobs: TuningKnob[], note?: string) => FloorFind;
+function mallFloorProgram(B: Builder, level: LevelId, P: LootProfile, find: FindFn, at: (s: string) => SourceLoc): FloorProgramInfo {
+  const M = P.tables.floor.mall;
+  const variant = (v: 'pit' | 'ring'): FloorFind[] => {
+    const S = M[v], path = `MALL_FLOOR.${v}`;
+    const out: FloorFind[] = [];
+    const th = S.ammo.thresholds.map((t, i) => floorChance(P, econCat(S.ammo.boxes[i].itemId), t));
+    const bands = thresholdBands(th);
+    S.ammo.boxes.forEach((b, i) => out.push(find('ammo.box', b.itemId, b.count, null, rd(S.ammo.draws * bands.probs[i]),
+      [{what: `box band ${i + 1} (cumulative threshold) x ${S.ammo.draws} draw(s)`, value: S.ammo.thresholds[i], at: at(`${path}.ammo`), overrides: ['floor.chance', 'tables']}],
+      i === 0 ? `${S.ammo.draws} draw(s), each one box by cumulative thresholds; none in ${rd(bands.none)} of the draws (chance column = expected boxes)` : undefined)));
+    const pMed = floorChance(P, 'med', S.scarce.med), pBat = floorChance(P, 'battery', S.scarce.battery), pFlare = floorChance(P, 'flare', S.scarce.flare);
+    const k = (what: string): TuningKnob[] => [{what, value: `${path}.scarce`, at: at(`${path}.scarce`), overrides: ['floor.chance', 'tables']}];
+    const d = S.scarce.draws;
+    out.push(find('scarce.med', 'medkit', 1, null, rd(d * pMed * S.scarce.medkit), k('med chance x first-aid-kit share x draws'), `${d} scarce draw(s): med ${rd(pMed)} each (a first-aid kit in ${S.scarce.medkit}), battery ${rd(pBat)}, flare ${rd(pFlare)} (chance column = expected finds)`));
+    out.push(find('scarce.med', 'bandage', 1, null, rd(d * pMed * (1 - S.scarce.medkit)), k('med chance x bandage share x draws')));
+    out.push(find('scarce.battery', LT.BATTERY_ID, 1, null, rd(d * pBat), k('battery chance x draws')));
+    out.push(find('scarce.flare', LT.FLARE_ID, 1, null, rd(d * pFlare), k('flare chance x draws')));
+    const n = floorCount(P, 'material', S.salvage.n), mean = meanInt(n[0], n[1]);
+    const rows = S.salvage.items.filter(r => r[1] > 0), tot = rows.reduce((a, r) => a + r[1], 0);
+    for (const [id, w] of rows) {
+      const box = P.tables.boxCount[id]?.small ?? [1, 1];
+      for (let c = box[0]; c <= box[1]; c++) {
+        out.push(find('salvage', id, c, null, rd(mean * (w / tot) / (box[1] - box[0] + 1)),
+          [{what: 'loose salvage stacks per storey', value: S.salvage.n, at: at(`${path}.salvage`), overrides: ['floor.count', 'tables']}],
+          id === rows[0][0] && c === box[0] ? `U{${n[0]}..${n[1]}} loose salvage stacks (salvage fork), item by weight, stack size BOX_COUNT small (chance column = expected stacks of this item and size)` : undefined));
+      }
+    }
+    return out;
+  };
+  const pit = variant('pit'), ring = variant('ring');
+  const variants: FloorVariant[] = [
+    {id: 'pit', label: 'Pit station (storey 0: platforms, plaza, courts)', runs: 'once per mall level', finds: pit, totals: totals(pit)},
+    {id: 'ring', label: 'Retail ring', runs: `once per ring (${MALL_RINGS} rings)`, finds: ring, totals: totals(ring)},
+  ];
+  const per = new Map<string, {copies: number; units: number}>();
+  for (const [list, w] of [[variants[0].totals, 1], [variants[1].totals, MALL_RINGS]] as const) for (const t of list) { const e = per.get(t.itemId) ?? {copies: 0, units: 0}; e.copies += w * t.copies; e.units += w * t.units; per.set(t.itemId, e); }
+  return {
+    id: 'mall', level, label: 'The Eaton\'s Center loose floor supplies (per storey: the pit and every ring, one profile)',
+    variants,
+    placement: {derivable: false, reason: `Each find goes to a weighted area of that storey (MALL_FLOOR.place: galleries / bridges ${M.place.gallery}, shop sales floors ${M.place.shop}, back of house ${M.place.back}; salvage x ${M.place.themed} in ${M.place.themedFor.join(' / ')}-themed places), a free walkable cell >= ${M.place.minCells} cells walking from the platform start and off the stair / escalator / elevator landings (10 tries); a draw with no free cell places nothing.`,
+      weights: [{name: 'MALL_FLOOR.place (zone weights)', weights: {gallery: M.place.gallery, shop: M.place.shop, back: M.place.back, themed: M.place.themed}}]},
+    perLevel: {basis: `exact expected attempts per mall level before placement: the pit run + ${MALL_RINGS} ring runs`, totals: [...per.entries()].map(([itemId, e]) => ({itemId, copies: rd(e.copies), units: rd(e.units)}))},
+    at: [at('MALL_FLOOR'), B.src.at('game/src/gen/mall/supplies.ts', 'placeMallSupplies')],
+    knobs: [
+      {what: 'the whole program', value: 'MALL_FLOOR', at: at('MALL_FLOOR'), overrides: ['floor.chance', 'floor.count', 'tables']},
+      {what: 'loose salvage mix', value: 'MALL_LOOSE_SALVAGE', at: at('MALL_LOOSE_SALVAGE'), overrides: ['tables']},
+    ],
+    notes: [
+      'Loose crafting materials (salvage) are the mall\'s addition to the shared floor economy; they are finite layout pickups like every floor find.',
+      'The mall is one logical level: the program runs once per physical storey under the one mall profile.',
     ],
   };
 }
@@ -1088,6 +1230,8 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     probability: 'Copies per non-start weapon: exact distribution of one uniform draw (thresholds FIND_COPY_THRESHOLDS), independent per weapon, before placement (placement retries can fail in a cramped layout).',
     perLevel: levels.map(l => LEVEL_ADAPTER[l].weapons === 'station'
       ? {level: l, summary: `gen/weaponFinds.ts placeWeaponFinds: plausible back-of-house rooms (security office, lockers, workshops, platform-end work zones), >= ${FIND_MIN_SPAWN_M} m from the spawn (straight line and path); a second copy well away from the first.`}
+      : LEVEL_ADAPTER[l].weapons === 'mall-plan'
+      ? {level: l, summary: `The Eaton's Center weapon plan (gen/mall/shopsWeapons.ts mallWeaponPlan / placeMallWeapons): ONE plan per logical level (stream mall-weapons:<start>) gives every non-start gun one or ${FIND_MAX_PER_WEAPON} copies from the same copy draw but never 0 (the gun shop always stocks it): copy 1 on a gun shop's display bench (else its floor near the counter) with a box of its OWN calibre beside it; second copies in a second gun shop, else the outfitter, else the mall security office, else not placed. However many gun shops the rings hold, at most ${FIND_MAX_PER_WEAPON} of each gun per run — layout pickups remembered by the run memory, never re-rolled.`}
       : {level: l, summary: `gen/office/spawns.ts officeWeaponPlan: ONE plan per level picks the storey of each copy (storey weights ${storeyW.map(([s, x]) => `${s === 1 ? 'street' : s}: ${rd(x / swd)}`).join(', ')} — first-copy shares), then placeOfficeWeapons drops it in a weighted room of that storey >= 30 cells walking from the start.`}),
     knobs: [
       {what: 'copy thresholds (0 / 1 / 2 copies)', value: `${FIND_COPY_THRESHOLDS.none} / ${FIND_COPY_THRESHOLDS.one}`, at: B.src.at(F.weaponFinds, 'FIND_COPY_THRESHOLDS'), overrides: ['none']},
@@ -1095,7 +1239,8 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
       {what: 'paired ammo box', value: 'WEAPON_FIND_AMMO', at: B.src.at(F.weaponFinds, 'WEAPON_FIND_AMMO'), overrides: ['none']},
       {what: 'office storey weights', value: 'officeWeaponStoreyWeights()', at: B.src.at(F.officeSpawns, 'officeWeaponStoreyWeights'), overrides: ['none']},
     ],
-    at: [B.src.at(F.weaponFinds, 'placeWeaponFinds'), B.src.at(F.officeSpawns, 'officeWeaponPlan'), B.src.at(F.officeSpawns, 'placeOfficeWeapons'), B.src.at(F.pistol, 'startWeaponFor')],
+    at: [B.src.at(F.weaponFinds, 'placeWeaponFinds'), B.src.at(F.officeSpawns, 'officeWeaponPlan'), B.src.at(F.officeSpawns, 'placeOfficeWeapons'), B.src.at(F.pistol, 'startWeaponFor'),
+      ...(levels.some(l => LEVEL_ADAPTER[l].weapons === 'mall-plan') ? [B.src.at('game/src/gen/mall/shopsWeapons.ts', 'mallWeaponPlan')] : [])], // track3 lane PROFILES
   });
   const boxLevels = levels.filter(l => LEVEL_ADAPTER[l].pistolBoxes);
   if (start === 'pistol' && boxLevels.length) {

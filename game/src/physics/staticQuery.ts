@@ -79,7 +79,8 @@ export class StaticQuery {
     this.grid = layout.grid;
     this.levels = levelsOf(layout);
     this.grids = this.levels.list.map(l => l.grid);
-    this.capAbove = this.levels.list.some(l => l.role === 'office');
+    // Task track3-eaton-centre-20261031 (lane GEN): the mall's retail rings ('ring') stack walls over open station columns too.
+    this.capAbove = this.levels.list.some(l => l.role === 'office' || l.role === 'ring');
     this.props = layout.props;
     this.trenchY = layout.trench.floorY;
     this.minFloor = Math.min(...this.grids.map(g => g.minFloor()), this.trenchY);

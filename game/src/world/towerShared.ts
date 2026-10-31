@@ -4,6 +4,7 @@
 // elevator uses, window push-out, ray-box targeting and small helpers. Pure (no three.js scene work): unit-testable.
 
 import {CELL, SOLID, type Grid} from '../gen/grid';
+import {mallTowerRecord} from '../gen/mall/elevator'; // Task track3-eaton-centre-20261031 (lane GEN): the mall's glass elevator
 
 export type Side = 'N' | 'S' | 'E' | 'W';
 export interface Rect2 { x0: number; z0: number; x1: number; z1: number }
@@ -101,11 +102,16 @@ export interface TowerLayoutLike {
   grid: Grid;
   levels?: readonly {id: number; baseY: number; grid: Grid}[];
   office?: unknown;
+  /** Task track3-eaton-centre-20261031 (lane GEN): The Eaton's Center record (its glass elevator rides the same runtime). */
+  mall?: unknown;
 }
 
-/** Reads and validates `layout.office` v2 (null when the layout has no office tower: the Subway). */
+/**
+ * Reads and validates `layout.office` v2 (null when the layout has no office tower: the Subway). Task track3-eaton-centre-20261031
+ * (lane GEN): a mall layout (no office record) yields its glass elevator in the same v2 shape (gen/mall/elevator.ts; no windows).
+ */
 export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
-  const o = layout.office as Record<string, unknown> | undefined;
+  const o = (layout.office ?? (layout.mall ? mallTowerRecord(layout as unknown as Parameters<typeof mallTowerRecord>[0]) : undefined)) as Record<string, unknown> | undefined;
   if (!o || typeof o !== 'object') return null;
   const lv = (id: number) => layout.levels?.find(l => l.id === id) ?? layout.levels?.[id];
   const floorHeight = Math.max(2.5, num(o.floorHeight, 4.4));

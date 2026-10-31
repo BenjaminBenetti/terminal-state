@@ -4,6 +4,7 @@
 // Node tests or for undrawable images the class palette is used instead).
 
 import * as THREE from 'three';
+import {sampleSource} from '../assets/textureRelease'; // Task track3-eaton-centre-20261031 (lane PERF): exact chip colours after a mall image release
 
 const SIZE = 32;
 const thumbs = new WeakMap<object, Uint8ClampedArray | null>();
@@ -17,7 +18,7 @@ function thumb(tex: THREE.Texture | null | undefined): Uint8ClampedArray | null 
     const c = document.createElement('canvas');
     c.width = c.height = SIZE;
     const ctx = c.getContext('2d', {willReadFrequently: true});
-    if (ctx) { ctx.drawImage(img, 0, 0, SIZE, SIZE); data = ctx.getImageData(0, 0, SIZE, SIZE).data; }
+    if (ctx) { ctx.drawImage(sampleSource(img, SIZE), 0, 0, SIZE, SIZE); data = ctx.getImageData(0, 0, SIZE, SIZE).data; } // (lane PERF: exact 32² draw of a released image)
   } catch { data = null; }
   thumbs.set(img as object, data);
   return data;

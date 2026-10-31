@@ -122,6 +122,14 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   vaultSafe: 'arms', labBench: 'medical', examTable: 'medical', biohazardFridge: 'medical',
   // Task office-props-physics-scale-20261030 (lane FURN): the bakery display case (its trays of loaves are a shop display)
   bakeryCase: 'vend',
+  // Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center open shop holders (gen/mall/kinds.ts)
+  glassCounter: 'countertop', merchTable: 'surface', wallBay: 'shelf', produceStand: 'shelf', bookstoreBookcase: 'container',
+  // lane ASSETS batch 1 fixtures (lane SHOPS): open holders + the openable back counters / cabinet / kiosk cart
+  retailGondola: 'shelf', clothingWallUnit: 'shelf', checkoutLane: 'countertop', outdoorsPlankShelving: 'shelf', storageTote: 'container', shoeWallDisplay: 'shelf',
+  foodCourtTableSet: 'surface', mallCashwrapCounter: 'countertop', glassDisplayCabinet: 'vend', pharmacyDispensaryCounter: 'medical', mallKioskCart: 'countertop',
+  medicineDrawerCabinet: 'medical', // lane ASSETS batch 2 M29 (lane SHOPS)
+  // lane ASSETS batch 2 resume (12c): the gun safe holds arms by the deliberate rule; the open cooler is cold food / drink
+  gunSafeTall: 'arms', dresserDrawers: 'container', cardboardBoxFlaps: 'container', multideckOpenCooler: 'cold', cosmeticsWallUnit: 'shelf',
 };
 /** Separate compartment rolls (desk / security-desk drawers, kitchenette cupboards) are closed storage. */
 export const COMPARTMENT_SLOT: SlotCategory = 'container';
@@ -181,6 +189,11 @@ export const HOLDER_MOD: Readonly<Record<string, CatWeights>> = {
   wokLine: [1.6, 0.8, 0, 0], deliLine: [1.4, 1, 0, 0], blenderBar: [0.5, 2, 0, 0], kitchenette: [2, 1, 0.1, 0], fridge: [0.6, 2.4, 0, 0],
   gunLocker: [0, 0, 0.4, 3], monitorDesk: [1, 1.2, 0.2, 0.3], medCabinet: [0, 0.2, 3, 0],
   ...p7(e => e.mod),
+  // track3 lane SHOPS: mall shop holders (their purposes normally decide; these apply in a purpose-less area only)
+  glassCounter: [0.8, 0.6, 0.6, 0.2], merchTable: [1, 1, 0.4, 0.1], wallBay: [1, 1, 0.6, 0.2], produceStand: [2, 0.8, 0, 0], bookstoreBookcase: [1, 1, 0.5, 0.1],
+  retailGondola: [1.2, 1, 0.6, 0.1], clothingWallUnit: [1, 1, 0.6, 0.1], checkoutLane: [1.2, 1, 0.2, 0.05], outdoorsPlankShelving: [1, 1.2, 0.6, 0.2],
+  multideckOpenCooler: [0.8, 2.4, 0, 0], cosmeticsWallUnit: [0.6, 0.6, 1, 0],
+  shoeWallDisplay: [1, 1, 0.5, 0.1], foodCourtTableSet: [1, 1.4, 0.1, 0],
 };
 /** Empty-roll chance of the original table roll (iteration 12: most holders end up empty anyway — items/lootEconomy.ts). */
 export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
@@ -188,6 +201,9 @@ export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
   stockShelf: 0.12, snackRack: 0.15, hotdogCart: 0.2, grillLine: 0.35, espressoBar: 0.35, wokLine: 0.35, deliLine: 0.35, blenderBar: 0.35,
   kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
   ...p7(e => e.empty),
+  glassCounter: 0.35, merchTable: 0.5, wallBay: 0.3, produceStand: 0.3, bookstoreBookcase: 0.4, // track3 lane SHOPS
+  retailGondola: 0.3, clothingWallUnit: 0.5, checkoutLane: 0.45, outdoorsPlankShelving: 0.3, shoeWallDisplay: 0.4, foodCourtTableSet: 0.65,
+  multideckOpenCooler: 0.25, cosmeticsWallUnit: 0.45,
 };
 /** Lot-count range of the original table roll. */
 export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
@@ -196,6 +212,9 @@ export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
   stockShelf: [2, 5], snackRack: [2, 4], hotdogCart: [2, 4], grillLine: [1, 3], espressoBar: [1, 3], wokLine: [1, 3], deliLine: [1, 3], blenderBar: [1, 3],
   kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
   ...p7(e => e.lots),
+  glassCounter: [1, 3], merchTable: [1, 2], wallBay: [1, 3], produceStand: [1, 3], bookstoreBookcase: [1, 2], // track3 lane SHOPS
+  retailGondola: [1, 3], clothingWallUnit: [1, 2], checkoutLane: [1, 2], outdoorsPlankShelving: [1, 3], shoeWallDisplay: [1, 2], foodCourtTableSet: [1, 2],
+  multideckOpenCooler: [2, 4], cosmeticsWallUnit: [1, 2],
 };
 /** Stocked rooms get fuller shelves: `extra` more lots at the high end for these holder kinds (legacy tables only). */
 export const FULL_ROOMS = {
@@ -248,6 +267,22 @@ export interface ThemeEconomy {
   cats: readonly EconCat[];
   /** On-theme category weights when the rolled item does not already fit. */
   weights: Readonly<Partial<Record<EconCat, number>>>;
+}
+
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): SALVAGE — crafting-material rows a level adds to the holders of a themed place
+ * (LootTables.salvage). `rows` = the salvage mix (relative weights); `share` = the fraction of the holder's resolved table weight the
+ * salvage rows take (0 < share < 1): each salvage row gets weight share / (1 − share) × Σ(table) × rowShare, then the level's item /
+ * category weight overrides like any row. Rolled per lot like every row and kept EXACTLY as rolled (category 'material'), so the
+ * share is the per-lot material chance before overrides. Applied at RESOLUTION time (items/lootEconomy.ts withSalvage) to own /
+ * purpose tables only (never legacy room-type tables, curated rewards or fixtures), only where the holder may hold materials
+ * (HOLDER_ALLOW), never to container-themed storage (CONTAINER_THEMED: the container decides) or junk holders.
+ */
+export interface SalvageRule { rows: ItemRows; share: number }
+/** Salvage per place: by purpose id first (gen/purposes.ts), else by the holder's loot theme. Absent = none (every shipped level). */
+export interface SalvageTables {
+  purposes?: Readonly<Record<string, SalvageRule>>;
+  themes?: Readonly<Partial<Record<LootTheme, SalvageRule>>>;
 }
 
 /**
@@ -319,6 +354,15 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
   serverCabinet: ['battery', 'flare', 'med', 'drink', 'material'], serverRack: ['battery', 'flare', 'material'], archiveBoxes: ['food', 'med', 'battery', 'flare'],
   // lane FURN (office-props-physics-scale-20261030): a bakery display case only ever holds food (its own rows: bread)
   bakeryCase: ['food'],
+  // Task track3-eaton-centre-20261031 (lane SHOPS): a produce stand holds food and drink only (its bins), never salvage or medicine
+  produceStand: ['food', 'drink'],
+  // lane SHOPS (track3): a glass display cabinet shows goods (no ammo / salvage); the dispensary counter holds medicine and bottled water;
+  // a kiosk cart snacks, drinks and cells; a food-court table what diners left
+  glassDisplayCabinet: ['food', 'drink', 'med', 'battery', 'flare'], pharmacyDispensaryCounter: ['med', 'drink'], mallKioskCart: ['food', 'drink', 'battery'],
+  foodCourtTableSet: ['food', 'drink'],
+  medicineDrawerCabinet: ['med', 'drink'], // lane SHOPS (track3, batch 2 M29): a medicine drawer cabinet holds medicine (and bottled water)
+  // lane SHOPS (track3, 12c): the gun safe — ammo / gun-care only (never guns: the weapon plan places those); the open cooler food / drink
+  gunSafeTall: ['ammo', 'flare', 'battery'], multideckOpenCooler: ['food', 'drink'],
 };
 /**
  * Task office-interactions-layout-20261030 (lane OPEN): openable containers whose OWN table is never narrowed to the room purpose's
@@ -327,7 +371,10 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
  * pharmacy things.)
  */
 export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
-  'bakeryCase']); // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
+  'bakeryCase', // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
+  'pharmacyDispensaryCounter', // lane SHOPS (track3): a dispensary counter holds medicine whatever shop it stands in
+  'medicineDrawerCabinet', // lane SHOPS (track3, batch 2 M29): so does the medicine drawer cabinet
+  'gunSafeTall']); // lane SHOPS (track3, 12c): a gun safe holds ammo / gun-care whatever back room it stands in (the deliberate ammo rule)
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
@@ -339,7 +386,8 @@ export const LIMB_ECONOMY = {
   share: {medical: 0.27, personal: 0.2, security: 0.2, service: 0.2, tech: 0.2, public: 0.19, food: 0.14} as Readonly<Record<LootTheme, number>>,
   /** First-aid fixtures hold treatments whatever room they hang in (a wall first-aid kit in an office break room / corridor). */
   holder: {firstAidWallKit: 0.36, medCabinet: 0.3, crashCart: 0.36, wheeledStretcher: 0.36,
-    examTable: 0.36, biohazardFridge: 0.3} as Readonly<Partial<Record<string, number>>>, // + office clinic storage (lane OPEN)
+    examTable: 0.36, biohazardFridge: 0.3, // + office clinic storage (lane OPEN)
+    pharmacyDispensaryCounter: 0.3, medicineDrawerCabinet: 0.3} as Readonly<Partial<Record<string, number>>>, // + the mall dispensary counter / medicine cabinet (track3 lane SHOPS)
   /** Splints a little ahead of slings: legs are hurt more often (hard landings, rat / dog bites go low). */
   pool: [[LEG_SPLINT, 1.1], [ARM_SLING, 0.9], [TRAUMA_KIT, 0.3]] as ItemRows,
 };
@@ -426,6 +474,29 @@ export const SERVER_RACK_ROWS: ItemRows = [[ELECTRICAL_PARTS, 3], [SCRAP_METAL, 
 export const VAULT_ROWS: ItemRows = [...genericAmmo(2), ['bandage', 0.6], ['medkit', 0.3], ['flare', 0.2]];
 /** Archive box: mostly paper; rarely something forgotten. */
 export const ARCHIVE_ROWS: ItemRows = [['chocolate', 1], ['battery', 0.6], ['bandage', 0.5], ['flare', 0.3]];
+/**
+ * Task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (shelves + two base drawers): what people left behind on a
+ * shelf or in a staff drawer — narrowed to the shop purpose's rows like every non-themed container (items/loot.ts purposeRows).
+ */
+export const BOOKCASE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['cola', 0.5], ['bandage', 0.5], ['chips', 0.4], ['battery', 0.3]];
+/** Lane SHOPS (track3): the till / back counter's drawers, cupboard and shelves — staff leftovers (narrowed to the shop purpose's rows). */
+export const CASHWRAP_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['battery', 0.6], ['bandage', 0.5], ['cola', 0.5], ['chips', 0.4]];
+/** Lane SHOPS (track3): a glass display cabinet's shelves — the shop's small goods (narrowed to its purpose's rows). */
+export const GLASS_CABINET_ROWS: ItemRows = [['battery', 1], ['bandage', 0.9], ['water', 0.6], ['chocolate', 0.5], ['flare', 0.2], ['medkit', 0.15]];
+/** Lane SHOPS (track3): the dispensary counter (container-themed: medicine in any shop) — dressings, first-aid kits, bottled water. */
+export const DISPENSARY_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.7], ['water', 0.5]];
+/** Lane SHOPS (track3, batch 2 M29): the medicine drawer cabinet (container-themed) — dressings in the small drawers, kits on the shelves. */
+export const MEDICINE_CABINET_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.6], ['water', 0.3]];
+/** Lane SHOPS (track3, M18): a stock-room storage tote — what stock rooms keep (narrowed to the room purpose's rows: room-themed). */
+export const TOTE_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['bandage', 0.5], ['battery', 0.5], ['chips', 0.4]];
+/** Lane SHOPS (track3, 12c M35): a tall gun safe — generic ammo (all calibres equal), flares, cells for the weapon lights; never a gun. */
+export const GUN_SAFE_ROWS: ItemRows = [...genericAmmo(2.6), ['flare', 0.5], ['battery', 0.4]];
+/** Lane SHOPS (track3, 12c M45): a dresser's drawers — household odds and ends (narrowed to the room purpose's rows). */
+export const DRESSER_ROWS: ItemRows = [['bandage', 0.7], ['battery', 0.6], ['chocolate', 0.6], ['water', 0.6], ['cola', 0.4], ['flare', 0.15]];
+/** Lane SHOPS (track3, 12c M47): a stock-room carton (narrowed to the room purpose's rows). */
+export const CARTON_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['chips', 0.6], ['chocolate', 0.5], ['battery', 0.3], ['bandage', 0.3]];
+/** Lane SHOPS (track3): a gallery kiosk cart's cabinet — snacks, drinks, a cell. */
+export const KIOSK_CART_ROWS: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
@@ -463,6 +534,21 @@ export const OPENABLE_TABLES = {
   archiveBoxes: {lots: [1, 1], empty: 0.7, items: ARCHIVE_ROWS},
   // lane FURN (office-props-physics-scale-20261030): the bakery case's three display trays (a handful of goldencrust floors only)
   bakeryCase: {lots: [3, 6], empty: 0.1, items: BAKERY_ROWS},
+  // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookcase (open shelves + 2 base drawers), placed in numbers in bookstores
+  bookstoreBookcase: {lots: [1, 2], empty: 0.55, items: BOOKCASE_ROWS},
+  // lane SHOPS (track3): lane ASSETS batch 1 storage — one counter / dispensary per shop, cabinets / carts a few per mall
+  mallCashwrapCounter: {lots: [1, 3], empty: 0.4, items: CASHWRAP_ROWS},
+  glassDisplayCabinet: {lots: [1, 3], empty: 0.45, items: GLASS_CABINET_ROWS},
+  pharmacyDispensaryCounter: {lots: [2, 4], empty: 0.25, items: DISPENSARY_ROWS},
+  mallKioskCart: {lots: [1, 3], empty: 0.35, items: KIOSK_CART_ROWS},
+  // lane SHOPS (track3): batch 2 M29 — one per pharmacy / clinic / first-aid room (35 compartments, most of them empty)
+  medicineDrawerCabinet: {lots: [2, 4], empty: 0.3, items: MEDICINE_CABINET_ROWS},
+  // lane SHOPS (track3): M18 storage totes — 1-3 per stock room, so most stay empty
+  storageTote: {lots: [1, 2], empty: 0.55, items: TOTE_ROWS},
+  // lane SHOPS (track3, 12c): one gun safe per gun / outdoors back room; dressers a few per home / department store; cartons 1-2 per stock room
+  gunSafeTall: {lots: [1, 3], empty: 0.3, items: GUN_SAFE_ROWS},
+  dresserDrawers: {lots: [1, 2], empty: 0.45, items: DRESSER_ROWS},
+  cardboardBoxFlaps: {lots: [1, 2], empty: 0.55, items: CARTON_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------
@@ -572,6 +658,47 @@ export const ANNEX_FLOOR: SubwayFloorProgram = {
   boxes: [{itemId: 'ammo_556', count: 30, n: [0, 1]}, {itemId: 'ammo_12ga', count: 8, n: [0, 1]}],
   kept: [{itemId: 'medkit', count: 1, n: [0, 1], keep: FLOOR_ECONOMY.medKeep}, {itemId: 'bandage', count: 1, n: [1, 2], keep: FLOOR_ECONOMY.medKeep}],
   light: [{itemId: BATTERY_ID, count: 1, chance: 0.6}, {itemId: FLARE_ID, count: 1, chance: 0.45}],
+};
+
+/**
+ * Task track3-eaton-centre-20261031 (lane PROFILES): loose floor finds of ONE storey of The Eaton's Center (gen/mall/supplies.ts
+ * placeMallSupplies, stream `mall-supplies-<storey>`, run once per storey under the ONE mall profile; variant `pit` = the subway
+ * station storey at the bottom of the void, `ring` = each retail ring). Draw order: `ammo.draws` draws against the cumulative
+ * `thresholds` -> `boxes[i]` or nothing; then the scarce finds (`scarce-floor` fork): `scarce.draws` times med (a `medkit` share of
+ * them a kit, else a bandage), battery, flare; then `salvage.n` loose crafting materials (`salvage` fork: items by `salvage.items`,
+ * stack size BOX_COUNT small). WHERE (`place`): a weighted area of the storey — gallery walkways / bridges (`gallery`), shop sales
+ * floors (`shop`, × `themed` when the shop's purpose theme is in `themedFor`), back of house (`back`) — on a free walkable cell
+ * >= `minCells` walking from the start and off the stair / escalator / elevator landings; a draw with no free cell places nothing.
+ * Bounded: at most ammo.draws + 4 × scarce.draws + salvage.n[1] pickups per storey.
+ */
+export interface MallStoreyFloor {
+  ammo: {draws: number; boxes: readonly {itemId: string; count: number}[]; thresholds: readonly number[]};
+  scarce: {draws: number; med: number; medkit: number; battery: number; flare: number};
+  salvage: {n: LotRange; items: ItemRows};
+}
+export interface MallFloorProgram {
+  pit: MallStoreyFloor;
+  ring: MallStoreyFloor;
+  place: {gallery: number; shop: number; back: number; themed: number; themedFor: readonly LootTheme[]; minCells: number};
+}
+/** Loose salvage on a mall floor: shopfitting scrap and stripped wiring first, now and then a dropped specimen jar. */
+export const MALL_LOOSE_SALVAGE: ItemRows = [[SCRAP_METAL, 1.4], [ELECTRICAL_PARTS, 1], [BIO_MATER, 0.2]];
+/**
+ * A ring is ~6-8x an Office storey's floor area but most of it is shop floors full of searchable holders: loose finds scale by ~2x
+ * per ring (two ammo-band draws, two scarce draws), not by area. The station pit runs the Office tower storey's odds once.
+ */
+export const MALL_FLOOR: MallFloorProgram = {
+  pit: {
+    ammo: {draws: 1, boxes: [{itemId: 'ammo_9mm', count: 15}, {itemId: 'ammo_556', count: 30}, {itemId: 'ammo_12ga', count: 8}], thresholds: [0.5, 0.75, 0.9]},
+    scarce: {draws: 1, med: FLOOR_ECONOMY.medKeep * 1.5, medkit: 0.3, battery: 0.35, flare: 0.14},
+    salvage: {n: [1, 2], items: MALL_LOOSE_SALVAGE},
+  },
+  ring: {
+    ammo: {draws: 2, boxes: [{itemId: 'ammo_9mm', count: 15}, {itemId: 'ammo_556', count: 30}, {itemId: 'ammo_12ga', count: 8}], thresholds: [0.4, 0.65, 0.8]},
+    scarce: {draws: 2, med: FLOOR_ECONOMY.medKeep * 1.5, medkit: 0.3, battery: 0.3, flare: 0.12},
+    salvage: {n: [2, 4], items: MALL_LOOSE_SALVAGE},
+  },
+  place: {gallery: 1, shop: 0.8, back: 1.3, themed: 2, themedFor: ['tech', 'service'], minCells: 16},
 };
 
 /**
@@ -693,21 +820,26 @@ export interface LootTables {
   offTheme: Readonly<Record<EconCat, number>>;
   globalPool: Readonly<Record<EconCat, ItemRows>>;
   limb: typeof LIMB_ECONOMY;
-  /** Loose floor programs. Track 2 (lane CONTENT): `annex` = once per service annex (absent = no annex floor finds). */
-  floor: {subway: SubwayFloorProgram; office: OfficeFloorProgram; annex?: SubwayFloorProgram};
+  /**
+   * Loose floor programs (+ task track3-eaton-centre-20261031 lane PROFILES: the mall's per-storey program). Track 2 (lane CONTENT):
+   * `annex` = once per service annex (absent = no annex floor finds).
+   */
+  floor: {subway: SubwayFloorProgram; office: OfficeFloorProgram; mall: MallFloorProgram; annex?: SubwayFloorProgram};
   /** Rare gear. */
   gear: GearLoot;
   /** Task office-interactions-layout-20261030 (lane ROOF): curated rewards by loot key (REWARD_TABLES; absent / {} = none). */
   rewards?: Readonly<Record<string, RewardTable>>;
   /** Task gas-mask-roof-feedback-20261030 (item 10): curated find rewards by key (REWARD_FINDS; absent / {} = none). */
   rewardFinds?: Readonly<Record<string, RewardFind>>;
+  /** Task track3-eaton-centre-20261031 (lane PROFILES): crafting-material salvage per place (SalvageTables; absent = none). */
+  salvage?: SalvageTables;
 }
 export const BASE_TABLES: LootTables = {
   areaWeights: AREA_WEIGHTS, holderMod: HOLDER_MOD, holderEmpty: HOLDER_EMPTY, holderLots: HOLDER_LOTS, fullRooms: FULL_ROOMS,
   pool: LEGACY_POOL, vendingFood: VENDING_FOOD,
   boxCount: BOX_COUNT, bigBoxHolders: BIG_BOX_HOLDERS, handful: HANDFUL, handfulFallback: HANDFUL_FALLBACK,
   themes: THEME_ECONOMY, offTheme: OFF_THEME_WEIGHTS, globalPool: GLOBAL_POOL, limb: LIMB_ECONOMY,
-  floor: {subway: SUBWAY_FLOOR, office: OFFICE_FLOOR, annex: ANNEX_FLOOR}, // Track 2 (lane CONTENT): + the per-annex program
+  floor: {subway: SUBWAY_FLOOR, office: OFFICE_FLOOR, mall: MALL_FLOOR, annex: ANNEX_FLOOR}, // + mall: read only by gen/mall/supplies.ts (lane PROFILES); Track 2 (lane CONTENT): + the per-annex program
   gear: GEAR_LOOT,
   rewards: REWARD_TABLES, // lane ROOF (office-interactions-layout-20261030)
   rewardFinds: REWARD_FINDS, // task gas-mask-roof-feedback-20261030 (item 10)
@@ -750,6 +882,80 @@ export interface LootProfile {
 /** Level-agnostic default of every roll function (QA / tests / callers without a level): today's tables, no overrides. */
 export const BASELINE_PROFILE: LootProfile = {id: 'baseline', label: 'Baseline (no level)', tables: BASE_TABLES, overrides: {}};
 
+// ---------------------------------------------------------------------------------------
+// Task track3-eaton-centre-20261031 (lane PROFILES): THE EATON'S CENTER (LevelId 'mall', tier 2). User: "I also want the shopping
+// mall to be a significant source of the crafting materials, the electrical parts, the scrap metal, and the bio material ... It
+// should be much more common in this area". docs/loot-tables.md "The Eaton's Center".
+//
+// The mall rolls the SHARED base tables (every consumable, ammo, box size, scarcity and limb number is the Subway / Office one) plus
+// MALL SALVAGE: crafting-material rows added at resolution time to the own / purpose tables of the shops and back-of-house rooms
+// whose purpose / theme fits (electronics -> electrical parts, hardware -> scrap metal, pharmacy / clinic -> bio mater, stock rooms
+// and service corridors -> mixed salvage), kept exactly as rolled like every material, finite and placed only where they fit (the
+// holder's surfaces: items/lootLayout.ts). Loose salvage lies on the floors too (MALL_FLOOR). Normalised richness vs the Office
+// (per holder / per 100 m² of usable floor, placed + reachable) is measured by game/tests/mall-profiles.test.ts.
+
+/** Electronics / phone / arcade / music stock and back rooms: salvaged boards and wiring first, some chassis scrap. */
+export const MALL_ELECTRONICS_SALVAGE: ItemRows = [[ELECTRICAL_PARTS, 3], [SCRAP_METAL, 0.7]];
+/** Hardware / home / sports / outdoors / workshops: offcuts, brackets and fixings first, some wiring. */
+export const MALL_HARDWARE_SALVAGE: ItemRows = [[SCRAP_METAL, 3], [ELECTRICAL_PARTS, 0.9]];
+/** Pharmacy / clinic / optical lab / pet care: sealed specimen jars of culture. */
+export const MALL_BIO_SALVAGE: ItemRows = [[BIO_MATER, 1]];
+/** Back of house (stock rooms, service corridors, loading): shelving brackets, conduit, cable, the odd forgotten jar. */
+export const MALL_STOCKROOM_SALVAGE: ItemRows = [[SCRAP_METAL, 1.6], [ELECTRICAL_PARTS, 1.1], [BIO_MATER, 0.15]];
+
+/**
+ * THE MALL SALVAGE (LootTables.salvage): purpose entries first (shared purpose ids that occur in the mall; SHOPS' mall purposes add
+ * theirs through their theme or here), else the holder's loot theme. Shares are per-lot material chances in a fitting holder.
+ * Food counters / coolers / fridges, first-aid fixtures and gun lockers never take materials (HOLDER_ALLOW); public halls roll the
+ * legacy tables (no salvage there: their salvage is the loose MALL_FLOOR program).
+ */
+export const MALL_SALVAGE: SalvageTables = {
+  purposes: {
+    // tech shops and their stock rooms (the 'tech' theme gives the rest of them electronics salvage at 0.3)
+    'mall-electronics': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.35}, 'mall-electronics-back': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.4},
+    'mall-phone': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.35}, 'mall-phone-back': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.4},
+    'mall-arcade-back': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.4}, 'mall-music-back': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.35},
+    // hardware / outdoors / sports / home / jewellery / luggage: scrap metal first
+    'mall-hardware': {rows: MALL_HARDWARE_SALVAGE, share: 0.4}, 'mall-hardware-back': {rows: MALL_HARDWARE_SALVAGE, share: 0.45},
+    'mall-outdoors': {rows: MALL_HARDWARE_SALVAGE, share: 0.25}, 'mall-outdoors-back': {rows: MALL_HARDWARE_SALVAGE, share: 0.3},
+    'mall-sports': {rows: MALL_HARDWARE_SALVAGE, share: 0.15}, 'mall-sports-back': {rows: MALL_HARDWARE_SALVAGE, share: 0.2},
+    'mall-home': {rows: MALL_STOCKROOM_SALVAGE, share: 0.15}, 'mall-home-back': {rows: MALL_STOCKROOM_SALVAGE, share: 0.25},
+    'mall-jewelry': {rows: MALL_HARDWARE_SALVAGE, share: 0.1}, 'mall-luggage': {rows: MALL_HARDWARE_SALVAGE, share: 0.1},
+    'mall-toys': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.12}, 'mall-department-back': {rows: MALL_STOCKROOM_SALVAGE, share: 0.2},
+    'mall-guns-back': {rows: MALL_HARDWARE_SALVAGE, share: 0.2},
+    // pharmacy / clinic / optician / first aid: bio mater (the 'medical' theme gives 0.15); pet care and the florist's workroom too
+    'mall-clinic': {rows: MALL_BIO_SALVAGE, share: 0.2}, 'mall-clinic-back': {rows: MALL_BIO_SALVAGE, share: 0.25},
+    'mall-pharmacy-back': {rows: MALL_BIO_SALVAGE, share: 0.2}, 'mall-optical-back': {rows: MALL_BIO_SALVAGE, share: 0.2},
+    'mall-pet': {rows: MALL_BIO_SALVAGE, share: 0.12}, 'mall-pet-back': {rows: MALL_BIO_SALVAGE, share: 0.18},
+    'mall-florist-back': {rows: MALL_BIO_SALVAGE, share: 0.1},
+    // stripped vacant units and the janitorial rooms: shopfitting debris, conduit, cable
+    'mall-vacant': {rows: MALL_STOCKROOM_SALVAGE, share: 0.2}, 'mall-vacant-back': {rows: MALL_STOCKROOM_SALVAGE, share: 0.2},
+    'mall-janitorial': {rows: MALL_STOCKROOM_SALVAGE, share: 0.3},
+    // shared back-of-house purposes, should the mall's service ring use them
+    'electrical-room': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.35}, 'electrical-closet': {rows: MALL_ELECTRONICS_SALVAGE, share: 0.35},
+    workshop: {rows: MALL_HARDWARE_SALVAGE, share: 0.35}, 'pump-room': {rows: MALL_HARDWARE_SALVAGE, share: 0.3},
+  },
+  themes: {
+    tech: {rows: MALL_ELECTRONICS_SALVAGE, share: 0.3},
+    service: {rows: MALL_STOCKROOM_SALVAGE, share: 0.3},
+    medical: {rows: MALL_BIO_SALVAGE, share: 0.15},
+    security: {rows: MALL_HARDWARE_SALVAGE, share: 0.1},
+    personal: {rows: MALL_STOCKROOM_SALVAGE, share: 0.08},
+  },
+};
+/** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall). */
+export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE};
+/**
+ * The mall's per-level overrides — the tuning dial on top of MALL_SALVAGE (docs/loot-tables.md "The Eaton's Center"):
+ *  - categoryWeight.material 0.6: every material row of the mall's tables (the salvage rows included) weighs 0.6x — measured with
+ *    the fully dressed shops (~2,600 holders a run) the raw salvage shares gave ~13x the Office's materials per 100 m²; the dial
+ *    brings it to ~8x (per reachable holder ~7x), still the level's signature resource, not an avalanche;
+ *  - itemWeight.bio_mater 1.5: the scarcest material (pharmacy / clinic / optician / pet stock rooms only) lifted so it stays a real
+ *    mall find.
+ */
+export const MALL_OVERRIDES: LootOverrides = {categoryWeight: {material: 0.6}, itemWeight: {[BIO_MATER]: 1.5}};
+export const MALL_PROFILE: LootProfile = {id: 'mall', label: 'The Eaton\'s Center', tables: MALL_TABLES, overrides: MALL_OVERRIDES};
+
 /**
  * THE PER-LEVEL PROFILES. Both current levels use today's tables with NO overrides (the user likes the current rates). A new level
  * adds its entry here (Record<LevelId, …> makes that mandatory); a deeper level tunes through `overrides` (docs/loot-tables.md).
@@ -757,6 +963,8 @@ export const BASELINE_PROFILE: LootProfile = {id: 'baseline', label: 'Baseline (
 export const PROFILES: Readonly<Record<LevelId, LootProfile>> = {
   subway: {id: 'subway', label: 'Subway', tables: BASE_TABLES, overrides: {}},
   office: {id: 'office', label: 'Office Space', tables: BASE_TABLES, overrides: {}},
+  // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_PROFILE).
+  mall: MALL_PROFILE,
 };
 
 /** The loot profile of a logical level. */
@@ -977,6 +1185,45 @@ export function validateLootProfile(p: LootProfile): string[] {
   chance('tables.floor.office.scarce.cap', O.scarce.cap); chance('tables.floor.office.scarce.medkit', O.scarce.medkit);
   O.scarce.food.forEach((id, i) => item(`tables.floor.office.scarce.food[${i}]`, id, 1));
   for (const [k, w] of Object.entries(O.tilt)) w.forEach((v, i) => weight(`tables.floor.office.tilt.${k}[${i}]`, v));
+  // Task track3-eaton-centre-20261031 (lane PROFILES): the mall's per-storey floor program
+  const M = t.floor.mall;
+  if (!M || typeof M !== 'object') bad('tables.floor.mall', 'missing');
+  else {
+    for (const v of ['pit', 'ring'] as const) {
+      const S2 = M[v], path = `tables.floor.mall.${v}`;
+      if (!S2) { bad(path, 'missing'); continue; }
+      if (!Number.isInteger(S2.ammo.draws) || S2.ammo.draws < 0) bad(`${path}.ammo.draws`, 'not an integer >= 0');
+      S2.ammo.boxes.forEach((b, i) => item(`${path}.ammo.boxes[${i}]`, b.itemId, b.count));
+      if (S2.ammo.thresholds.length !== S2.ammo.boxes.length) bad(`${path}.ammo.thresholds`, 'one threshold per box');
+      S2.ammo.thresholds.forEach((x, i) => { chance(`${path}.ammo.thresholds[${i}]`, x); if (i && x < S2.ammo.thresholds[i - 1]) bad(`${path}.ammo.thresholds`, 'thresholds must ascend'); });
+      if (!Number.isInteger(S2.scarce.draws) || S2.scarce.draws < 0) bad(`${path}.scarce.draws`, 'not an integer >= 0');
+      for (const k of ['med', 'medkit', 'battery', 'flare'] as const) chance(`${path}.scarce.${k}`, S2.scarce[k]);
+      range(`${path}.salvage.n`, S2.salvage.n);
+      rows(`${path}.salvage.items`, S2.salvage.items);
+      S2.salvage.items.forEach(([id], i) => { if (!isMaterialItem(id)) bad(`${path}.salvage.items[${i}]`, `${id} is not a crafting material`); });
+    }
+    for (const k of ['gallery', 'shop', 'back', 'themed'] as const) weight(`tables.floor.mall.place.${k}`, M.place[k]);
+    for (const th of M.place.themedFor) if (!(th in THEME_ECONOMY)) bad('tables.floor.mall.place.themedFor', `unknown loot theme ${th}`);
+    if (!Number.isInteger(M.place.minCells) || M.place.minCells < 0) bad('tables.floor.mall.place.minCells', 'not an integer >= 0');
+  }
+  // lane PROFILES: salvage (crafting-material rows per purpose / theme; purpose ids are checked by tests/mall-profiles.test.ts)
+  if (t.salvage !== undefined) {
+    const sv = t.salvage;
+    if (!sv || typeof sv !== 'object') bad('tables.salvage', 'not salvage tables');
+    else {
+      known('tables.salvage', sv, ['purposes', 'themes']);
+      const rule = (path: string, r: SalvageRule) => {
+        if (!r || typeof r !== 'object') { bad(path, 'not a salvage rule'); return; }
+        known(path, r, ['rows', 'share']);
+        rows(`${path}.rows`, r.rows);
+        if (Array.isArray(r.rows)) r.rows.forEach((row, i) => { if (!isMaterialItem(row[0])) bad(`${path}.rows[${i}]`, `${String(row[0])} is not a crafting material`); });
+        if (!(typeof r.share === 'number' && r.share > 0 && r.share < 1)) bad(`${path}.share`, `${String(r.share)} is not in (0, 1)`);
+        if (Array.isArray(r.rows) && !r.rows.some(row => finiteNonNeg(row[1]) && row[1] > 0)) bad(`${path}.rows`, 'no row with weight > 0');
+      };
+      for (const [k, r] of Object.entries(sv.purposes ?? {})) rule(`tables.salvage.purposes.${k}`, r);
+      for (const [k, r] of Object.entries(sv.themes ?? {})) { if (!(k in THEME_ECONOMY)) bad(`tables.salvage.themes.${k}`, 'unknown loot theme'); rule(`tables.salvage.themes.${k}`, r as SalvageRule); }
+    }
+  }
   weight('tables.gear.mean', t.gear.mean);
   if (!Number.isInteger(t.gear.cap) || t.gear.cap < 0) bad('tables.gear.cap', `${t.gear.cap} is not an integer >= 0`);
   mults('tables.gear.weights', t.gear.weights, k => k in GEAR_ITEMS, 'gear id');
