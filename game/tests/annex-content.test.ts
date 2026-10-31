@@ -230,7 +230,8 @@ describe('service annex room signatures (machinery halls, anchored machinery, an
     const annexes = l.extensions!.annexes.length;
     expect(b.records).toBe(l.extensions!.machines!.length);
     expect(b.draws).toBeGreaterThan(0);
-    expect(b.draws).toBeLessThanOrEqual(MACHINE_MATS.length * annexes);
+    // (track2 round 2, lane MOTION) + ONE draw per level: every wall fan's blades in one InstancedMesh (world/trackExt/motion.ts)
+    expect(b.draws).toBeLessThanOrEqual(MACHINE_MATS.length * annexes + (b.rotors ? 1 : 0));
     expect(b.triangles / annexes).toBeLessThan(60000);
     for (const m of b.meshes) { expect(m.parent).toBe(group); expect(m.userData.level).toBe(0); expect(m.userData.trackExt.part).toBe('machines'); }
   });

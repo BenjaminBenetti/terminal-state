@@ -190,7 +190,13 @@ runtime-scaled 1.78 m zombie):
   Collision is honest: every solid part is a collision-only `annexMachine` prop (player / zombie / bullet / ragdoll collision,
   blocked + sight cells, placed through the dresser's door zones, doorway clear volumes and connectivity check). Channels,
   basins and chutes are VISUAL water (no water physics, no hazard): their curbs / parapets / walls and water surfaces are
-  collision boxes, so nobody walks in; crossings are walkable. Visual-only parts stay within 0.28 m of a wall, above 2.2 m, flat
+  collision boxes, so nobody walks in; crossings are walkable. Track 2 round 2 (lane MOTION, `world/trackExt/motion.ts`): the water
+  and foam MOVE on the game clock — channels flow gate → culvert at 0.16–0.28 m/s (seeded), chute steps run toward the low end at
+  0.9 m/s, falls pour down at 1.2–1.6 m/s, basins drift 0.03 m/s and are stirred near the inlet pour (per-vertex flow, two shared
+  animated materials: advected noise + ripple slopes bump the normal, the albedo and the roughness; nothing changes height) — and
+  the wall fans' blades turn (one InstancedMesh per level, a blade per instance, 1.6–2.6 rev/s seeded, step capped below half the
+  blade spacing so it never strobes backwards). Inline fan units keep no rotor (no blades show through the casing). Visual-only
+  parts stay within 0.28 m of a wall, above 2.2 m, flat
   on the floor or over a blocked footprint (tested). `annexMachine` is classified in both audits: the openables audit's
   exception ("anchored heavy machinery / sealed plant: not storage") and the physics audit's `machinery` static class.
 - **Fewer, meaningful holders:** the existing purposes dress annex rooms with LEAN rule sets (`ANNEX_RULES`: stores keep
@@ -321,8 +327,11 @@ Tunnels have sparse fixtures, mostly dead or dying.
 - **Steam:** a bounded, non-hazardous emitter in `game/src/world/fx.ts`, capped per annex. It is never the gas field and
   never the flare smoke.
 - **Machinery** (lane ROOMS): `world/trackExt/machines.ts` `buildAnnexMachines` (called by `buildTrackExtensions`; stats in
-  `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material, built into the
-  station group at build time (warm-up discoverable).
+  `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material (+ one fan-rotor
+  InstancedMesh per level), built into the station group at build time (warm-up discoverable). `MachineBuild.update(t)` (Game.update,
+  game clock: a pause freezes it) drives the water clock uniform and the rotors; `MachineBuild.dispose()` (queued by
+  Game.leaveSection with the other world releases) frees its geometries and the rotor mesh; its materials and clock are per
+  WorldMaterials, reused by the next level.
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
 
 ## Tests
@@ -332,6 +341,10 @@ Tunnels have sparse fixtures, mostly dead or dying.
   `track-ext-vis-gen.test.ts`.
 - **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
   anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
+- **Water / fan motion (round 2, lane MOTION):** `annex-motion.test.ts` (per-vertex flow directions / speeds, surfaces in place,
+  the shared game-clock uniform, real GLSL builds of the materials, the CPU mirror travelling downstream, rotors pivoting on the hub
+  inside the fan box, the anti-strobe cap, dispose / rebuild without accumulation, draw budget); opt-in `MOTION_PICTURES=1` CPU
+  preview pair into `qa-artifacts/r2r4-motion/`.
 - **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
   `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
   1–2 m, into `qa-artifacts/track2-revision-art/`).

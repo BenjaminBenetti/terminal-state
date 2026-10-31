@@ -604,6 +604,10 @@ export class Game {
     if (this.world) {
       const oldGroup = this.world.group;
       this.scene.remove(oldGroup);
+      // Track 2 round 2 (lane MOTION): the annex machinery's own release (merged geometries, the fan-rotor InstancedMesh), queued
+      // with the other world releases (its shared materials stay cached for the next level's build)
+      const machines = this.world.trackExt?.machines;
+      if (machines) this.retire(() => machines.dispose());
       const instanced: THREE.InstancedMesh[] = [];
       oldGroup.traverse(o => {
         const mesh = o as THREE.Mesh;
@@ -1816,6 +1820,7 @@ export class Game {
     this.fx.update(dt);
     // Track 2 (VIS): annex steam near the player (visual only), lit by the light field + the torch.
     if (this.steamVents?.count) this.steamVents.update(dt, eye, steamLight((x, y, z) => this.lightPool.sample(x, y, z), {eye, dir: look, on: this.torch.battery.emitting}));
+    this.world.trackExt?.machines.update(this.time); // Track 2 round 2 (lane MOTION): annex water flow + wall-fan rotors, game clock
     this.damage.update(dt); // Lane D: debris physics, knocked pickups
     prof.lap(SPAN.audio);
     // Audio: listener follows the camera; reverb room + ambience beds follow the current area.

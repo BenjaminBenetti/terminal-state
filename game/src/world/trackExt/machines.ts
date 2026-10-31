@@ -7,9 +7,15 @@
 // local frame (origin = footprint centre on the floor, local X along w, local Z along d, front +Z, yawed by rot), merged into ONE
 // mesh per (annex, material) — about a dozen draws per annex, bounded triangles (stats). Materials are value-only clones of the
 // shared world-mapped shape materials (world/shapeMaterials.ts: painted / brushed steel, panel, concrete, grille, black) — the
-// same programs, no texture loads; the water is a glossy dark clone of the black surface. Built into the station group at build
+// same programs, no texture loads; the water / foam are motion.ts's animated flow materials (same colour / roughness values as the
+// old glossy dark clone of the black surface / the panel foam). Built into the station group at build
 // time (warm-up discoverable, docs/rendering-warmup.md). The solid parts match the collision boxes (gen machineBoxes): visual-only
 // parts stay within 0.28 m of a wall, above 2.2 m, flat on the floor or over a blocked footprint.
+//
+// Task track2-round2 (lane MOTION, world/trackExt/motion.ts): the water and foam move (each vertex carries its flow: channels
+// gate -> culvert, chute steps toward the low end, falls down, basins drift / stir; two animated materials shared by every annex)
+// and the wall fans' blades turn (one InstancedMesh per level, a blade per instance, about each fan's hub axis). MachineBuild
+// .update(t) advances both on the game clock (Game.update), .dispose() releases what the build made (Game.leaveSection).
 
 import * as THREE from 'three';
 import type {StationLayout} from '../../gen/station';
@@ -17,7 +23,8 @@ import {CELL} from '../../gen/grid';
 import {MACHINE_DIMS, channelSegments, chuteStepLevel, chuteSteps, type AnnexMachine} from '../../gen/annexRooms';
 import {cloneSurfaceMaterial, type WorldMaterials} from '../materials';
 import {shapeMaterial} from '../shapeMaterials';
-import {Acc} from './mesh';
+import {Acc, hashOf, prng} from './mesh';
+import {FlowAcc, MOTION, RotorSet, flowMaterial, motionClock, rotorMaterial, wallFanRotor, type FlowState, type RotorSpec} from './motion';
 
 /** Machinery material keys. */
 export type MachineMat = 'boiler' | 'genset' | 'turbine' | 'grey' | 'galv' | 'dark' | 'yellow' | 'concrete' | 'water' | 'foam' | 'grate' | 'black' | 'lagging';
@@ -46,6 +53,7 @@ export function machineMaterial(mats: WorldMaterials, k: MachineMat): THREE.Mate
   let c = matCache.get(mats);
   if (!c) matCache.set(mats, (c = new Map()));
   let m = c.get(k);
+  if (!m && (k === 'water' || k === 'foam')) c.set(k, (m = flowMaterial(mats, k, SPEC[k]))); // (lane MOTION) animated, same values
   if (!m) {
     const s = SPEC[k], src = shapeMaterial(mats, s.base);
     m = s.color === undefined && s.rough === undefined && s.metal === undefined ? src : cloneSurfaceMaterial(src);
@@ -68,10 +76,37 @@ type V = [number, number, number];
 
 class Build {
   private ox = 0; private oy = 0; private oz = 0; private c = 1; private s = 0;
+  /** (lane MOTION) The flow every water / foam vertex takes (world direction, m/s, turbulence); see flow(). */
+  private readonly fs: FlowState = {dx: 1, dy: 0, dz: 0, speed: 0, turb: 0.4};
   constructor(private readonly accs: Map<MachineMat, Acc>) {}
   /** Record frame: origin (x, y, z), yaw rot (local X -> (cos, 0, -sin), local Z -> (sin, 0, cos)). */
-  frame(m: AnnexMachine): void { this.ox = m.x; this.oy = m.y; this.oz = m.z; this.c = Math.cos(m.rot); this.s = Math.sin(m.rot); }
-  private acc(k: MachineMat): Acc { let a = this.accs.get(k); if (!a) this.accs.set(k, (a = new Acc())); return a; }
+  frame(m: AnnexMachine): void { this.ox = m.x; this.oy = m.y; this.oz = m.z; this.c = Math.cos(m.rot); this.s = Math.sin(m.rot); this.flow([1, 0, 0], 0, 0.4); }
+  private acc(k: MachineMat): Acc {
+    let a = this.accs.get(k);
+    if (!a) this.accs.set(k, (a = k === 'water' || k === 'foam' ? new FlowAcc(this.fs) : new Acc()));
+    return a;
+  }
+  /** (lane MOTION) Flow of the next water / foam vertices: LOCAL direction (unit), speed (m/s), turbulence 0..1. */
+  flow(dir: V, speed: number, turb: number): void {
+    const d = this.d(...dir);
+    Object.assign(this.fs, {dx: d[0], dy: d[1], dz: d[2], speed, turb});
+  }
+  /**
+   * (lane MOTION) Horizontal quad at height y split into cells of about `cell` m, each vertex with its own turbulence `turb(x, z)`
+   * (local) — an overflow basin stirred near its inlet and calm far from it. The current flow direction and speed.
+   */
+  flowGrid(k: MachineMat, x0: number, z0: number, x1: number, z1: number, y: number, cell: number, turb: (x: number, z: number) => number): void {
+    const a = this.acc(k), n: V = [0, 1, 0], nx = Math.max(1, Math.ceil((x1 - x0) / cell)), nz = Math.max(1, Math.ceil((z1 - z0) / cell)), ids: number[] = [];
+    for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+      const x = x0 + ((x1 - x0) * i) / nx, z = z0 + ((z1 - z0) * j) / nz;
+      this.fs.turb = turb(x, z);
+      ids.push(a.v(this.p(x, y, z), n, 0, 0));
+    }
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const q = j * (nx + 1) + i;
+      a.quad(ids[q], ids[q + 1], ids[q + nx + 2], ids[q + nx + 1]);
+    }
+  }
   private p(x: number, y: number, z: number): V { return [this.ox + x * this.c + z * this.s, this.oy + y, this.oz - x * this.s + z * this.c]; }
   private d(x: number, y: number, z: number): V { return [x * this.c + z * this.s, y, -x * this.s + z * this.c]; }
   /** Local axis-aligned box. */
@@ -262,7 +297,12 @@ function switchgear(b: Build, m: AnnexMachine, ceil: number): void {
 function channel(b: Build, m: AnnexMachine): void {
   const hw = m.w / 2, hd = m.d / 2, D = MACHINE_DIMS, r = rnd(m.seed);
   const segs = channelSegments(m.w, m.p);
+  // (lane MOTION) the flow runs from the sluice gate (world -X / -Z end, gen sewageLayout) toward the culvert: along local X, signed
+  // so it points to world +X (along-X channels) / +Z; a seeded slow sewage speed. The water under the crossings flows the same.
+  const C = MOTION.channel, fx = Math.cos(m.rot) - Math.sin(m.rot) >= 0 ? 1 : -1;
+  const speed = C.speed[0] + prng(hashOf('channel-flow', m.seed))() * (C.speed[1] - C.speed[0]);
   for (const [s0, s1] of segs) {
+    b.flow([fx, 0, 0], speed, C.turb);
     b.plane('water', s0, -hd + D.curb, s1, hd - D.curb, 0.03);
     for (const sg of [-1, 1] as const) {
       const za = sg < 0 ? -hd : hd - D.curb, zb = za + D.curb;
@@ -273,11 +313,13 @@ function channel(b: Build, m: AnnexMachine): void {
     // grated covers over part of the segment (visual: the water stays blocked under them)
     const len = s1 - s0;
     if (len > 2.5) { const c = s0 + 0.6 + r() * (len - 1.8); b.box('grate', c, D.curbH - 0.03, -hd + D.curb, c + 0.9, D.curbH, hd - D.curb); }
-    // flow scum streaks
+    // flow scum streaks (carried at the water's speed)
+    b.flow([fx, 0, 0], speed, C.scumTurb);
     b.plane('foam', s0 + 0.2, -0.08, s1 - 0.2, 0.06, 0.035);
   }
   // crossings: grated plates over the channel, flush (walkable), with kick plates
   const p = m.p ?? [];
+  b.flow([fx, 0, 0], speed, C.turb);
   for (let i = 0; i + 1 < p.length; i += 2) {
     b.plane('water', p[i], -hd + D.curb, p[i + 1], hd - D.curb, 0.01);
     // bearing bars across the channel (the water shows between them), edge angles and kick plates
@@ -299,36 +341,46 @@ function basin(b: Build, m: AnnexMachine): void {
   b.railZ('yellow', -hd + 0.15, hd - t, -hw + t / 2, h, h + 0.32, 1.4);
   b.railZ('yellow', -hd + 0.15, hd - t, hw - t / 2, h, h + 0.32, 1.4);
   // the water, a scum line, a submerged weir wall and a depth staff
-  b.plane('water', -hw + t, -hd, hw - t, hd - t, 0.05);
+  // (lane MOTION) a slow drift away from the inlet (local +Z), stirred where the pour lands and calm far from it; the scum line idles
+  const ix = m.p?.[0] ?? 0, iy = h + 0.42, B = MOTION.basin, lz = -hd + 1.3;
+  b.flow([0, 0, 1], B.drift, B.turb[0]);
+  b.flowGrid('water', -hw + t, -hd, hw - t, hd - t, 0.05, B.grid, (x, z) => B.turb[0] + (B.turb[1] - B.turb[0]) * Math.max(0, 1 - Math.hypot(x - ix, z - lz) / B.stirR));
+  b.flow([1, 0, 0], 0, B.scumTurb);
   b.box('foam', -hw + t, 0.05, hd - t - 0.05, hw - t, 0.06, hd - t);
   const wz = -hd + (hd * 2 - t) * (0.55 + r() * 0.15);
   b.box('concrete', -hw + t, 0, wz - 0.1, hw - t, 0.12, wz + 0.1);
   for (let k = 0; k < 8; k++) b.box(k % 2 ? 'yellow' : 'black', hw - t - 0.02, 0.06 + k * 0.1, hd - t - 0.5, hw - t, 0.16 + k * 0.1, hd - t - 0.38);
   // inlet: a big pipe out of the back wall pouring into the basin (inside the footprint)
-  const ix = m.p?.[0] ?? 0, iy = h + 0.42;
   b.cyl('dark', 'z', ix, iy, -hd, -hd + 0.75, 0.3, 16);
   b.cyl('dark', 'z', ix, iy, -hd + 0.68, -hd + 0.75, 0.36, 16);
   for (const sx of [-0.18, 0.18]) b.box('dark', ix + sx - 0.04, 0.05, -hd + 0.3, ix + sx + 0.04, iy - 0.28, -hd + 0.38);
+  b.flow([0, -1, 0], MOTION.fall.inlet, 1);
   b.wall('foam', 'z', -hd + 0.8, ix - 0.22, ix + 0.22, 0.05, iy - 0.22, 1);
+  b.flow([0, 0, 1], MOTION.landing.basin, 1);
   b.plane('foam', ix - 0.7, -hd + 0.75, ix + 0.7, -hd + 1.9, 0.055);
 }
 
 function chute(b: Build, m: AnnexMachine): void {
   const hw = m.w / 2, hd = m.d / 2, D = MACHINE_DIMS, t = D.chuteT, n = chuteSteps(m), H = D.chuteWall;
   const zi0 = -hd, zi1 = hd - t;
+  // (lane MOTION) the water runs down the steps toward the low end (p[1] = 1: the high inlet is +X, so it flows to -X), falls pour down
+  const fx = m.p?.[1] ? -1 : 1, U = MOTION.chute;
   b.box('concrete', -hw, 0, hd - t, hw, H, hd);
   b.box('yellow', -hw, H, hd - t, hw, H + 0.012, hd);
   b.railX('yellow', -hw + 0.12, hw - 0.12, hd - t / 2, H, H + 0.3, 1.5);
   for (let k = 0; k < n; k++) {
     const s0 = -hw + (k * m.w) / n, s1 = -hw + ((k + 1) * m.w) / n, lv = chuteStepLevel(m, k);
     if (lv > 0.06) b.box('concrete', s0, 0, zi0, s1, lv - 0.02, zi1);
+    b.flow([fx, 0, 0], U.speed, U.turb);
     b.plane('water', s0, zi0, s1, zi1, lv);
     // the fall onto the next (lower) step: a foaming face, and white water where it lands
     if (k + 1 < n) {
       const lv2 = chuteStepLevel(m, k + 1), x = s1;
+      b.flow([0, -1, 0], MOTION.fall.chute, 1);
       if (lv > lv2) b.wall('foam', 'x', x, zi0, zi1, lv2, lv, 1);
       else b.wall('foam', 'x', x, zi0, zi1, lv, lv2, -1);
       const lo = Math.min(lv, lv2), xl = lv > lv2 ? x : x - 0.45;
+      b.flow([fx, 0, 0], U.speed, 1);
       b.plane('foam', xl, zi0, xl + 0.45, zi1, lo + 0.006);
     }
   }
@@ -344,6 +396,7 @@ function chute(b: Build, m: AnnexMachine): void {
       for (const z of [zi0 + 0.08, zi1 - 0.08]) b.box('dark', Math.min(x, x - sg * 0.18), lv - 0.05, z - 0.06, Math.max(x, x - sg * 0.18), lv + 1.15, z + 0.06);
       b.box('dark', Math.min(x, x - sg * 0.12), lv + 0.35, zi0 + 0.14, Math.max(x, x - sg * 0.12), lv + 0.9, zi1 - 0.14);
       b.box('dark', Math.min(x, x - sg * 0.22), lv + 1.1, zi0, Math.max(x, x - sg * 0.22), lv + 1.22, zi1);
+      b.flow([0, -1, 0], MOTION.fall.weir, 1);
       b.wall('foam', 'x', x - sg * 0.2, zi0 + 0.2, zi1 - 0.2, lv, lv + 0.34, (-sg) as 1 | -1);
     } else {
       b.box('black', Math.min(xi, xi - sg * 0.01), 0.04, zi0 + 0.12, Math.max(xi, xi - sg * 0.01), 0.75, zi1 - 0.12);
@@ -432,7 +485,7 @@ function crane(b: Build, m: AnnexMachine): void {
 }
 
 function fanWall(b: Build, m: AnnexMachine): void {
-  const hw = m.w / 2, hd = m.d / 2, dia = m.p?.[0] ?? 1.6, R = dia / 2, cy = 0.25 + R + 0.05, r = rnd(m.seed);
+  const hw = m.w / 2, hd = m.d / 2, dia = m.p?.[0] ?? 1.6, R = dia / 2, cy = 0.25 + R + 0.05;
   // dark opening behind, the shroud (open tube), a square mounting frame on the wall, two feet
   b.cyl('black', 'z', 0, cy, -hd, -hd + 0.03, R, 24);
   b.tube('galv', 'z', 0, cy, -hd + 0.03, hd - 0.12, R + 0.04, 24);
@@ -440,15 +493,11 @@ function fanWall(b: Build, m: AnnexMachine): void {
   b.box('galv', -hw, cy - R - 0.12, -hd, hw, cy - R - 0.04, -hd + 0.12);
   b.box('galv', -hw, cy + R + 0.04, -hd, hw, cy + R + 0.12, -hd + 0.12);
   for (const s of [-1, 1]) { b.box('galv', s * hw - (s > 0 ? 0.08 : 0), 0, -hd, s * hw + (s < 0 ? 0.08 : 0), cy + R + 0.12, -hd + 0.12); b.box('dark', s * (R * 0.7) - 0.06, 0, -0.1, s * (R * 0.7) + 0.06, cy - R, 0.1); }
-  // motor + hub and pitched blades
+  // motor + hub (static: a plain cylinder looks the same turning); (lane MOTION) the pitched blades are the level's rotor
+  // InstancedMesh (motion.ts RotorSet / wallFanRotor: blade plane hz + 0.13, turning about local Z through (0, cy))
   const hz = -hd + 0.25;
   b.cyl('dark', 'z', 0, cy, -hd + 0.05, hz + 0.05, R * 0.24, 14);
   b.cyl('genset', 'z', 0, cy, hz + 0.05, hz + 0.22, R * 0.16, 14);
-  const nb = 5 + Math.floor(r() * 3), a0 = r() * Math.PI;
-  for (let k = 0; k < nb; k++) {
-    const a = a0 + (k / nb) * Math.PI * 2, rr = R * 0.58;
-    b.boxRotZ('galv', Math.cos(a) * rr, cy + Math.sin(a) * rr, hz + 0.13, R * 0.4, R * 0.11, 0.012, a, 0.45);
-  }
   // guard: concentric bands and four spokes at the front
   const gz = hd - 0.12;
   for (const f of [0.35, 0.68, 1]) b.tube('dark', 'z', 0, cy, gz - 0.02, gz, R * f, 20);
@@ -508,18 +557,50 @@ function tank(b: Build, m: AnnexMachine): void {
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 export interface MachineBuild {
+  /** Every mesh the build added to the group (merged per annex x material, + the level's fan-rotor InstancedMesh). */
   meshes: THREE.Mesh[];
-  /** Draws (one per annex x material) and triangles. */
+  /** Draws (one per annex x material, + 1 for the rotors) and triangles (the rotors: blades x 12). */
   draws: number;
   triangles: number;
   records: number;
+  /** (lane MOTION) Animated parts: water / foam meshes (per annex), wall fans with a rotor, their blade instances. */
+  motion: {water: number; foam: number; fans: number; blades: number};
+  /** (lane MOTION) The wall-fan rotors (null without wall fans): their specs (hub / axis / speed) and per-rotor angles. */
+  rotors: RotorSet | null;
+  /**
+   * (lane MOTION) Advance the water flow and the fan rotors to GAME time `t` (s; Game.update's clock — menus / pause / loading do
+   * not advance it, so the same t keeps everything still). Cheap: one uniform + one 64 B matrix per blade. No-op after dispose().
+   */
+  update(t: number): void;
+  /**
+   * (lane MOTION) Release what this build made: every merged geometry, the rotor InstancedMesh and its blade geometry (removed from
+   * the group). Idempotent. The materials and the clock uniform are shared per WorldMaterials (reused by the next level's build).
+   */
+  dispose(): void;
 }
 
 /** Builds every annex's machinery records into `group` (one merged mesh per annex and material). Empty without records. */
 export function buildAnnexMachines(group: THREE.Group, layout: StationLayout, mats: WorldMaterials): MachineBuild {
   const recs = layout.extensions?.machines ?? [];
-  const out: MachineBuild = {meshes: [], draws: 0, triangles: 0, records: recs.length};
+  const clock = motionClock(mats);
+  let rotors: RotorSet | null = null, disposed = false;
+  const out: MachineBuild = {
+    meshes: [], draws: 0, triangles: 0, records: recs.length, motion: {water: 0, foam: 0, fans: 0, blades: 0}, rotors: null,
+    update(t: number): void {
+      if (disposed) return;
+      clock.value = t;
+      rotors?.update(t);
+    },
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      for (const m of out.meshes) { m.removeFromParent(); if (m !== rotors?.mesh) m.geometry.dispose(); }
+      rotors?.dispose();
+      out.meshes.length = 0;
+    },
+  };
   if (!recs.length) return out;
+  const fans: RotorSpec[] = [];
   // annex of each record (by its area), so each annex's machinery culls on its own
   const annexOf = new Map<number, number>();
   for (const n of layout.extensions?.annexes ?? []) for (const id of n.areas) annexOf.set(id, n.id);
@@ -543,7 +624,7 @@ export function buildAnnexMachines(group: THREE.Group, layout: StationLayout, ma
         case 'culvert': culvert(b, m); break;
         case 'turbine': turbine(b, m, ceil); break;
         case 'crane': crane(b, m); break;
-        case 'fanWall': fanWall(b, m); break;
+        case 'fanWall': fanWall(b, m); fans.push(wallFanRotor(m)); break;
         case 'fanUnit': fanUnit(b, m, ceil); break;
         case 'duct': duct(b, m, ceil); break;
         case 'louvre': louvre(b, m); break;
@@ -563,7 +644,22 @@ export function buildAnnexMachines(group: THREE.Group, layout: StationLayout, ma
       out.meshes.push(mesh);
       out.draws++;
       out.triangles += acc.triangleCount;
+      if (k === 'water' || k === 'foam') out.motion[k]++;
     }
+  }
+  // (lane MOTION) every wall fan's blades: one InstancedMesh for the level (one draw, a blade per instance)
+  if (fans.length) {
+    rotors = out.rotors = new RotorSet(fans, rotorMaterial(mats));
+    const im = rotors.mesh;
+    im.name = 'annex-machines-fan-rotors';
+    im.userData.level = 0;
+    im.userData.trackExt = {tunnel: -1, part: 'machines', annex: -1};
+    group.add(im);
+    out.meshes.push(im);
+    out.draws++;
+    out.triangles += rotors.blades * 12;
+    out.motion.fans = fans.length;
+    out.motion.blades = rotors.blades;
   }
   return out;
 }
