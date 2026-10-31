@@ -69,6 +69,8 @@ import {installStalls, type StallSystem} from './world/stalls'; // Task office-o
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
+import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
+import {releaseModelTexturesAfterUpload, textureReleaseStats} from './assets/textureRelease'; // (lane PERF) mall lazy-model decoded images freed after upload
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
@@ -568,7 +570,9 @@ export class Game {
       resident: {models: this.propModels.loadedKeys().length, bytes: this.propModels.residentBytes(),
         foreign: this.propModels.loadedKeys().filter(foreignTo(level, this.propModels.catalogue))}, // another level's own art still resident: should be []
       library: {...this.propModels.stats},
-      levelResources: {summary: this.levelResources.summary(), stats: {...this.levelResources.stats}}};
+      levelResources: {summary: this.levelResources.summary(), stats: {...this.levelResources.stats}},
+      // Task track3-eaton-centre-20261031 (lane PERF): mall lazy-model decoded images released after upload; shared instancing programs
+      perf: {cpuCopies: {...textureReleaseStats}, attributeInstancing: attributeInstancing()}};
   }
 
   /**
@@ -645,6 +649,11 @@ export class Game {
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
     this.propModels.trim(keep, 16, foreignTo(key.level, this.propModels.catalogue)); // lane PACKAGE (track3): another level's own art never lingers as an extra
     this.levelResources.retainOnly(key.level, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
+    // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
+    // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
+    setAttributeInstancing(!!this.layout.mall);
+    // (lane PERF) the mall's lazy models drop their decoded images once uploaded (assets/textureRelease.ts; boot models untouched)
+    if (this.layout.mall) for (const k of keep) { const g = this.propModels.get(k); if (g) releaseModelTexturesAfterUpload(g); }
     this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
     this.scene.add(this.world.group);
     if (!this.containers) {
