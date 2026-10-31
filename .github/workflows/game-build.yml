@@ -18,7 +18,10 @@ jobs:
     # (the exact merged commit, or a manual run on main) upload release artifacts — see the upload steps.
     name: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Track3 (third level): 20 -> 45 min. The suite runs effectively one file at a time here (main 0b53b6d: npm test
+    # 499 s wall for 442 s of summed file time); the mall adds several generated-world suites, and the npm cache restore
+    # can stall ~10 min when the account's cache egress is over its limit (seen 2026-10-31). Same checks, more time.
+    timeout-minutes: 45
     env:
       PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
