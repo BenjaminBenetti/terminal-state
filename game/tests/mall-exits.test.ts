@@ -29,8 +29,8 @@ import {MALL_FOG} from '../src/world/mallAtmosphere';
 import {MALL_EXT_ORDER, mallSkyPalette} from '../src/world/mallExterior';
 import {EXT_FOG, exteriorFogOpacity} from '../src/world/exterior';
 import {
-  STREET_WORDS, apertureOf, buildStreetExit, cutExitOpenings, exitFrame, planStreet, streetExitMaterials, streetExitSpecs, streetFogOpacity,
-  streetMurkCpu, type StreetExitSpec,
+  STREET_WORDS, apertureOf, buildStreetExit, cellRect, cutExitOpenings, exitFrame, planStreet, streetExitMaterials, streetExitSpecs, streetFogOpacity,
+  streetMurkCpu, type StreetCell, type StreetExitSpec,
 } from '../src/world/mallStreetExit';
 import {readTowerInfo} from '../src/world/towerShared';
 import {roofAirOf} from '../src/world/roofAir';
@@ -73,6 +73,55 @@ const tris = (q: THREE.Mesh): {v: THREE.Vector3[]; n: THREE.Vector3; c: THREE.Ve
 };
 const Y1 = mallY(1);
 
+/**
+ * Text-facing check (primary's browser check: the hall-side signs read MIRRORED): for every triangle of `m` whose vertices all pick a
+ * lettered atlas cell, the world direction of increasing texture u (tangent T) and v (bitangent B) and the face normal. A canvas reads
+ * correctly for a viewer facing the face when the face points at that viewer, T runs to the viewer's right (forward x up) and B up.
+ * `facing`: 'hall' = the face looks into the hall (the viewer looks outward, forward = the exit's outward normal); 'street' = the face
+ * looks back at the mall from across the street (the same viewer, looking out at it).
+ */
+function textFaces(m: THREE.Mesh, pick: (i: number) => boolean): {n: THREE.Vector3; T: THREE.Vector3; B: THREE.Vector3}[] {
+  m.updateMatrixWorld(true);
+  const P = m.geometry.attributes.position, U = m.geometry.attributes.uv, idx = m.geometry.index!, out = [];
+  for (let t = 0; t < idx.count; t += 3) {
+    const ii = [0, 1, 2].map(k => idx.getX(t + k));
+    if (!ii.every(pick)) continue;
+    const p = ii.map(i => new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld)), uv = ii.map(i => [U.getX(i), U.getY(i)]);
+    const e1 = p[1].clone().sub(p[0]), e2 = p[2].clone().sub(p[0]);
+    const du1 = uv[1][0] - uv[0][0], dv1 = uv[1][1] - uv[0][1], du2 = uv[2][0] - uv[0][0], dv2 = uv[2][1] - uv[0][1], det = du1 * dv2 - du2 * dv1;
+    if (Math.abs(det) < 1e-12) continue;
+    out.push({n: e1.clone().cross(e2).normalize(), T: e1.clone().multiplyScalar(dv2).sub(e2.clone().multiplyScalar(dv1)).divideScalar(det), B: e2.clone().multiplyScalar(du1).sub(e1.clone().multiplyScalar(du2)).divideScalar(det)});
+  }
+  return out;
+}
+/** Every lettered face of an exit reads from the player's side (hall-side signage; the street's shop fascias seen through the glass). */
+function expectTextReads(ms: readonly THREE.Mesh[], nx: number, nz: number, label: string): void {
+  const out = new THREE.Vector3(nx, 0, nz), right = new THREE.Vector3(-nz, 0, nx); // forward (outward) x up
+  const inCell = (u: number, v: number, c: StreetCell) => { const [x, y, w, h] = cellRect(c, 0); return u >= x - 1e-5 && u <= x + w + 1e-5 && v >= y - 1e-5 && v <= y + h + 1e-5; };
+  const frame = ms.find(m => m.name.endsWith('-frame'))!, street = ms.find(m => m.name.endsWith('-street'))!;
+  const fu = frame.geometry.attributes.uv;
+  for (const c of ['sign', 'notice', 'noExit', 'plywood'] as const) {
+    const faces = textFaces(frame, i => inCell(fu.getX(i), fu.getY(i), c)).filter(f => f.n.dot(out) < -0.5); // faces looking into the hall
+    expect(faces.length, `${label} ${c}: a hall-facing face`).toBeGreaterThan(0);
+    for (const f of faces) {
+      expect(f.T.dot(right), `${label} ${c}: texture u runs to the viewer's right (not mirrored)`).toBeGreaterThan(0);
+      expect(f.B.y, `${label} ${c}: texture v runs up`).toBeGreaterThan(0);
+    }
+  }
+  // the lit sign: its glowing face points into the hall
+  const gl = frame.geometry.getAttribute('aGlow');
+  const glow = textFaces(frame, i => gl.getX(i) > 0.5);
+  expect(glow.length, `${label}: the lit sign face`).toBe(2);
+  for (const f of glow) expect(f.n.dot(out), `${label}: the lit sign faces the hall`).toBeLessThan(-0.99);
+  // the facades' shop fascias across the street (seen from the hall through the glass): read left to right too
+  const ac = street.geometry.getAttribute('aCell');
+  const isShop = (i: number) => (['shopA', 'shopB'] as const).some(c => { const r = cellRect(c); return Math.abs(ac.getX(i) - r[0]) < 1e-6 && Math.abs(ac.getY(i) - r[1]) < 1e-6; });
+  for (const f of textFaces(street, isShop).filter(q => q.n.dot(out) < -0.5)) {
+    expect(f.T.dot(right), `${label} shop fascia: not mirrored`).toBeGreaterThan(0);
+    expect(f.B.y, `${label} shop fascia: upright`).toBeGreaterThan(0);
+  }
+}
+
 describe('street exit record -> spec, exit frame', () => {
   it('reads lane GEN\'s record (panes, vestibule = facade - plane, hall ceiling, collider, view); none -> []', () => {
     const specs = streetExitSpecs(F.layout, () => NaN);
@@ -110,6 +159,7 @@ describe('street exit record -> spec, exit frame', () => {
       expect(p.z - o.z).toBeCloseTo(3 * n[1], 9);
       // the built exit: every exterior vertex inside the view volume (any side)
       const v = buildStreetExit({...s, panels: [{kind: 'door', s0: 11.6, s1: 12.5, y0: 5, y1: 7.3}, {kind: 'door', s0: 12.5, s1: 13.4, y0: 5, y1: 7.3}]});
+      expectTextReads(v.meshes, n[0], n[1], `side ${side}`); // the text reads from the hall whichever way the exit faces
       for (const m of v.meshes.filter(q => /street|fog/.test(q.name))) for (const t of tris(m)) for (const q of t.v) {
         expect(q.x >= s.view.x0 - 0.06 && q.x <= s.view.x1 + 0.06 && q.z >= s.view.z0 - 0.06 && q.z <= s.view.z1 + 0.06, `${side} ${m.name} ${q.toArray()}`).toBe(true);
       }
@@ -193,6 +243,10 @@ describe('the locked exit on the fixture build: visual = collision, legible lock
       const cx = Math.floor(t.c.x / CELL), cz = Math.floor(t.c.z / CELL);
       if (cx < MALL_FIX.W && cz >= 0 && cz < MALL_FIX.H) expect(g.cells[cz * MALL_FIX.W + cx], `frame at ${t.c.toArray()}`).toBe(SOLID);
     }
+  });
+
+  it('every sign / notice / NO EXIT plate / CLOSED board reads from inside the hall (not mirrored, upright); the lit sign faces the hall', () => {
+    expectTextReads(exitMeshes(fw()), 1, 0, 'fixture E');
   });
 
   it('the lock reads: a chain + padlock per leaf pair on the push bars, EXIT CLOSED / DOORS LOCKED sign, the notice and NO EXIT, plywood', () => {
@@ -407,6 +461,7 @@ describe('the REAL generator\'s exits (lane GEN; seed 4242, elbow-branch: the tw
         const c = e.collider;
         expect(q.x >= c.x0 - 1e-6 && q.x <= c.x1 + 1e-6 && q.z >= c.z0 - 1e-6 && q.z <= c.z1 + 1e-6 && q.y >= c.y0 - 1e-6 && q.y <= c.y1 + 1e-6, `${e.id} pane in the collider`).toBe(true);
       }
+      expectTextReads(mine, s.nx, s.nz, `4242 ${e.id} ${e.side}`);
       const alongX = e.side === 'N' || e.side === 'S';
       const fs = w.wallFaces.filter(f => f.level === e.level && (alongX ? Math.abs(f.z0 - e.door.plane) < 1e-6 && Math.abs(f.z1 - e.door.plane) < 1e-6 : Math.abs(f.x0 - e.door.plane) < 1e-6 && Math.abs(f.x1 - e.door.plane) < 1e-6) && f.y0 < e.door.y1 - 1e-3);
       expect(fs.some(f => f.openings.some(o => o.top >= Math.min(e.door.y1, f.y1) - 1e-6)), `${e.id}: the opening is cut`).toBe(true);

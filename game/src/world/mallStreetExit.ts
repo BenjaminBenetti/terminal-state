@@ -772,7 +772,8 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
   const panel = (cell: StreetCell, u0: number, u1: number, y0: number, y1: number, w: number, facing: -1 | 1, col: V3 = [1, 1, 1], glow = 0) => {
     y0 += oy; y1 += oy;
     const c: V3[] = facing < 0 ? [[u0, y0, w], [u1, y0, w], [u1, y1, w], [u0, y1, w]] : [[u1, y0, w], [u0, y0, w], [u0, y1, w], [u1, y1, w]];
-    frame.quad(c, [0, 0, facing], atlasUv(cell, [[0, 0], [1, 0], [1, 1], [0, 1]]), {color: col, aGlow: [glow]});
+    // (the canvas reads from the side the panel faces: faceUv runs texture u to that viewer's right)
+    frame.quad(c, [0, 0, facing], atlasUv(cell, faceUv([0, 0, facing], c)), {color: col, aGlow: [glow]});
   };
   let shards = 0;
   /** A pane (both faces); `broken`: only jagged corner shards left in the frame (the smashed outer set), seeded. */
@@ -894,10 +895,9 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     // (the street set carries no boards: its leaves are smashed in — the city is what the player should see through the chained set)
   };
   // reveal / vestibule pocket (indoors, lit): floor (mat + tile), side walls, soffit; the threshold under the inner set
-  const tileUv = (n: V3, c: V3[]) => faceUv(n, c).map(([a, b]) => [a / 1.2, b / 1.2] as [number, number]);
   const pocket = (cell: StreetCell, corners: V3[], n: V3, col: V3) => {
     const c = corners.map(p => [p[0], p[1] + oy, p[2]] as V3);
-    frame.quad(c, n, atlasUv(cell, tileUv(n, c).map(([a, b]) => [fract01(a), fract01(b)]) as [number, number][]), {color: col, aGlow: [0]});
+    frame.quad(c, n, atlasUv(cell, faceUv(n, c)), {color: col, aGlow: [0]}); // the cell stretched once over the face
   };
   if (B > 0.05) {
     pocket('paint', [[-hs, 0, 0], [-hs, 0, B], [-hs, H, B], [-hs, H, 0]], [1, 0, 0], [0.9, 0.88, 0.84]);
@@ -1040,17 +1040,22 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
   return {meshes: out, stats: {id: s.id, meshes: out.length, triangles, panes, shards, buildings: plan.buildings.length, cards: plan.cards.length}, plan, aperture, frame: f};
 }
 
-/** Face-local uv (metres) of an axis-aligned local quad: horizontal faces (u, w), vertical faces (along the face, y). */
-function faceUv(n: V3, c: V3[]): [number, number][] {
-  if (Math.abs(n[1]) > 0.5) return c.map(p => [p[0], p[2]] as [number, number]);
+/**
+ * Face uv (0..1 over the face) of an axis-aligned local quad, oriented so a canvas texture READS from the side the face looks at:
+ * texture u runs to the viewer's right — for a viewer facing the face (looking along -n) that is up x n = (nz, 0, -nx) in the
+ * exit frame (u along, y up, w out): -u on a hall-facing face (n = -w), +u on a street-facing one, +w / -w on the side faces —
+ * and v runs up. (Task mall-round2 browser check: the old mapping ran u along +u everywhere, mirroring every hall-side sign.)
+ * Horizontal faces: (u, w) normalized (no text there).
+ */
+export function faceUv(n: readonly number[], c: readonly (readonly number[])[]): [number, number][] {
+  const norm = (vals: number[]) => { const a = Math.min(...vals), b = Math.max(...vals), l = Math.max(1e-6, b - a); return vals.map(v => (v - a) / l); };
+  if (Math.abs(n[1]) > 0.5) { const us = norm(c.map(p => p[0])), ws = norm(c.map(p => p[2])); return c.map((_, i) => [us[i], ws[i]] as [number, number]); }
   const alongU = Math.abs(n[2]) > 0.5;
-  const s0 = Math.min(...c.map(p => (alongU ? p[0] : p[2]))), y0 = Math.min(...c.map(p => p[1]));
-  const s1 = Math.max(...c.map(p => (alongU ? p[0] : p[2]))), y1 = Math.max(...c.map(p => p[1]));
-  const sl = Math.max(1e-6, s1 - s0), yl = Math.max(1e-6, y1 - y0);
-  return c.map(p => [((alongU ? p[0] : p[2]) - s0) / sl, (p[1] - y0) / yl] as [number, number]);
+  // signed coordinate along the viewer's right: (nz, 0, -nx) . (u, y, w)
+  const right = c.map(p => (alongU ? Math.sign(n[2]) * p[0] : -Math.sign(n[0]) * p[2]));
+  const ss = norm(right), ys = norm(c.map(p => p[1]));
+  return c.map((_, i) => [ss[i], ys[i]] as [number, number]);
 }
-/** Clamp a tile coordinate into the cell (the pocket's few faces stretch once; no shader tiling on the lit frame material). */
-const fract01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // CPU mirrors (tests / QA)

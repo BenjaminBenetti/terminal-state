@@ -52,7 +52,9 @@ import {lootProfile} from '../src/items/lootTables';
 import {readTowerInfo} from '../src/world/towerShared';
 import {buildElevatorView, planElevator} from '../src/world/elevator';
 import {Inventory} from '../src/items/inventory';
-import {setMallVariantOverride} from '../src/gen/mall/frame';
+import {ROOF, setMallVariantOverride} from '../src/gen/mall/frame';
+import {registerMovingLift} from '../src/world/towerRuntime';
+import {OCCL_TOP} from '../src/world/levelCulling';
 import {markShadows} from '../src/render/volumetric';
 
 installCanvasShim(false);
@@ -309,6 +311,8 @@ function realMall(variant?: string): Promise<RealMall> {
       view.setCab(lift.stops[0].y, 0);
       world.group.add(view.root);
       for (const g of view.landings) world.culler.register(g);
+      // task mall-round2 (lane PERF): + the moving car / rig, as towerRuntime.build registers them in the mall
+      registerMovingLift(world.culler, view, lift.stops.map(q => q.levelId));
     }
     world.culler.maxDistance = Math.min(fogCullDistance(MALL_FOG.density), MALL_FOG.far);
     return {layout, world, cm, stock, roots: [world.group, cm.group, stock.group], keys, lazyTex};
@@ -513,12 +517,17 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
 // SpotLightShadow frustum on the camera's layers. Static world only (no enemies / viewmodel / loot display / post quads): Node
 // estimates, not llvmpipe or native measurements.
 
-/** Matched-view budget (static world, scene + flashlight shadow draws). Measured 20:5xZ (lanes/PERF.notes); before = 1366b95. */
+/**
+ * Matched-view budget (static world + the loot display filled for the eye, scene + flashlight shadow draws; lanes/PERF.notes).
+ * Follow-up (primary, after the browser check): the glass lift's car / rig and the loot display's batches are culler-registered too.
+ */
 const M05_BUDGET = {
-  /** Sum over the 7 matched views (measured 3,0xx; 3,479 at 1366b95). */
+  /** Sum over the 7 matched views (measured 3,062; ~3,545 before the lift / loot registration; 3,479 + loot at 1366b95). */
   total: 3250,
-  /** The worst matched view, ring-edge 2 (measured 733; 758 at 1366b95). */
+  /** The worst matched view, ring-edge 2 (measured 728). */
   worst: 800,
+  /** Draws the lift / loot registration removes over the 7 views (measured ~483: the loot display 538 -> 59). */
+  followUp: 300,
 } as const;
 
 const M05_POSES: [string, Parameters<typeof mallQaPose>[1] | 'start', number?][] = [['start', 'start'], ['platform-lookup', 'platform-lookup'],
@@ -569,14 +578,15 @@ function torchOn(cam: THREE.PerspectiveCamera): THREE.SpotLight {
 
 describe('M05 matched views (t3a, arcade-loop forced): draws per pass and occlusion correctness', () => {
   it('scene + flashlight-shadow draw estimates within budget, below 1366b95, occlusion hides nothing the eye or the torch sees', async () => {
-    const {layout, world, roots} = await realMall('arcade-loop');
+    const {layout, world, roots, cm} = await realMall('arcade-loop');
+    expect(OCCL_TOP).toBeLessThan(ROOF.spring); // the top storey's occlusion range stays under the vault's glass
     // game.ts buildSection: the station structure / holders cast + receive, shelf stock casts
     markShadows(world.group, true, true);
     markShadows(roots[1], true, true);
     markShadows(roots[2], true, false);
     const all = new THREE.Group();
     const lines: string[] = [];
-    let total = 0, worst = 0, totalOff = 0;
+    let total = 0, worst = 0, totalOff = 0, prevTotal = 0;
     try {
       for (const r of roots) all.add(r);
       for (const [label, name, ring] of M05_POSES) {
@@ -589,6 +599,9 @@ describe('M05 matched views (t3a, arcade-loop forced): draws per pass and occlus
         const cam = eyeCam(p!.x, p!.y, p!.z, p!.yaw, p!.pitch);
         const fl = torchOn(cam);
         world.culler.viewpoints = [fl];
+        // the loot display as the game fills it for this eye (ContainerManager.target sets the eye; update refreshes the lots)
+        (cm as unknown as {lastEye: THREE.Vector3}).lastEye.copy(cam.position);
+        cm.update(0.2, 0);
         const count = () => { world.culler.update(cam, true); fl.shadow.camera.layers.mask = cam.layers.mask; return [renderDraws(roots, cam), renderDraws(roots, fl.shadow.camera, true)]; };
         world.culler.occlusion = false;
         const [s0, h0] = count();
@@ -601,8 +614,25 @@ describe('M05 matched views (t3a, arcade-loop forced): draws per pass and occlus
           .concat([...fromTorch.keys()].filter(m => occluded.has(m)).map(m => `${label} torch: ${m.name} ${fromTorch.get(m)}px`));
         expect(bad).toEqual([]);
         expect(s1 + h1, label).toBeLessThanOrEqual(s0 + h0); // the occlusion only ever removes work
-        lines.push(`${label}: occlusion off ${s0} + ${h0} = ${s0 + h0} | on ${s1} + ${h1} = ${s1 + h1} (occluded ${occluded.size}, eye-visible ${fromEye.size})`);
+        // follow-up accounting: the lift car / rig and the loot display before this task registered them (lift: frustum only; loot:
+        // one unbounded batch per item type with a shown lot, drawn in both passes) vs now
+        const liftMeshes: THREE.Mesh[] = [], lootMeshes: THREE.InstancedMesh[] = [];
+        for (const r of roots) r.traverse(o => { if ((o as THREE.Mesh).isMesh && o.userData.dynamicBounds) (o.name.startsWith('loot-') ? lootMeshes : liftMeshes).push(o as THREE.InstancedMesh); });
+        const liftNow = renderDraws(liftMeshes, cam) + renderDraws(liftMeshes, fl.shadow.camera, true), lootNow = renderDraws(lootMeshes, cam) + renderDraws(lootMeshes, fl.shadow.camera, true);
+        const saved = liftMeshes.map(m => m.layers.mask);
+        liftMeshes.forEach(m => { m.layers.mask = cam.layers.mask; });
+        const liftBefore = renderDraws(liftMeshes, cam) + renderDraws(liftMeshes, fl.shadow.camera, true);
+        liftMeshes.forEach((m, i) => { m.layers.mask = saved[i]; });
+        const shownTypes = new Map<string, number>(); // item type -> draws of its old single batch (template parts x material groups)
+        for (const im of lootMeshes) if (im.count > 0 && !shownTypes.has(im.name)) {
+          const parts = lootMeshes.filter(q => q.name === im.name && q.userData.levels); // the all-storey batch: one per template part
+          shownTypes.set(im.name, parts.reduce((n, q) => n + (Array.isArray(q.material) ? q.material.length : 1), 0));
+        }
+        const lootBefore = 2 * [...shownTypes.values()].reduce((a, b) => a + b, 0);
+        const pre = s1 + h1 - liftNow - lootNow + liftBefore + lootBefore;
+        lines.push(`${label}: occlusion off ${s0} + ${h0} = ${s0 + h0} | on ${s1} + ${h1} = ${s1 + h1} (occluded ${occluded.size}, eye-visible ${fromEye.size}) | lift ${liftBefore} -> ${liftNow}, loot ${lootBefore} -> ${lootNow}; before this follow-up ~${pre}`);
         total += s1 + h1; totalOff += s0 + h0; worst = Math.max(worst, s1 + h1);
+        prevTotal += pre;
         if (label === 'corridor1') expect(s1 + h1).toBeLessThan((s0 + h0) * 0.75); // a corridor between shops: most holders sit behind walls
         cam.remove(fl, fl.target);
       }
@@ -611,8 +641,9 @@ describe('M05 matched views (t3a, arcade-loop forced): draws per pass and occlus
       world.culler.viewpoints = [];
       world.culler.occlusion = true;
     }
-    console.log(`[mall M05] ${lines.join(' ; ')} ; total ${total} (occlusion off ${totalOff}), worst ${worst}`);
-    if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-m05.txt', [...lines, `total ${total} (off ${totalOff}) worst ${worst}`].join('\n'));
+    console.log(`[mall M05] ${lines.join(' ; ')} ; total ${total} (occlusion off ${totalOff}, before the lift / loot registration ~${prevTotal}), worst ${worst}`);
+    if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-m05.txt', [...lines, `total ${total} (off ${totalOff}; before lift / loot registration ~${prevTotal}) worst ${worst}`].join('\n'));
+    expect(prevTotal - total).toBeGreaterThan(M05_BUDGET.followUp); // registering the lift / loot batches only removes draws
     expect(total).toBeLessThanOrEqual(M05_BUDGET.total);
     expect(worst).toBeLessThanOrEqual(M05_BUDGET.worst);
   }, 300_000);

@@ -565,7 +565,21 @@ export class ContainerManager {
         }
       }
     }
-    this.display.allocate(counts);
+    // Task mall-round2-20261031 (lane PERF, M05): in the mall the loot display batches per (item, storey) + one all-storey batch,
+    // frustum-bounded and registered with the level culler (world/lootDisplay.ts); elsewhere one unbounded batch per item as before
+    if (byStorey) {
+      const perStorey = new Map<string, Set<number>>();
+      for (const h of this.all) for (const l of h.state.lots) {
+        let set = perStorey.get(l.itemId);
+        if (!set) perStorey.set(l.itemId, (set = new Set()));
+        set.add(storeyOf(layout, h.prop.y));
+      }
+      this.display.storeyOf = y => storeyOf(layout, y);
+      this.display.allocate(counts, {perStorey, all: (layout.levels ?? []).map(l => l.id)});
+    } else {
+      this.display.storeyOf = null;
+      this.display.allocate(counts);
+    }
     this.lastEye.set(layout.playerSpawn.x, 1.6, layout.playerSpawn.z);
     this.dirty = true;
     this.group.updateMatrixWorld(true);

@@ -157,7 +157,8 @@ export const OCCL_BINS = 2048;
 export const OCCL_PAD = CELL;
 const OCCL_BELOW = 0.3;
 const OCCL_GAP = 0.1;
-const OCCL_TOP = 6;
+/** The top storey's range ends this far above its floor: under the vault's glass (gen/mall/frame.ts ROOF.spring 5.6 m). */
+export const OCCL_TOP = 5.5;
 /** Cross-storey buffers: angular bins, near-distance buckets and the bucket size (m). */
 export const OCCL_XBINS = 512;
 const OCCL_XJ = 32;
@@ -210,6 +211,12 @@ interface Entry {
   lb?: Float64Array;
   /** Its world matrix at registration / last refresh — a moved mesh (a sliding landing door, a swinging stall door) re-registers (mall only). */
   mw?: Float32Array;
+  /** Storeys (bit = level index) with an open cell within OCCL_PAD of the footprint (slice test). */
+  occMask?: number;
+  /** userData.dynamicBounds (mall only): bounds re-derived every update from the CURRENT world matrix / instance bounds (the lift cab
+   *  and rig, the loot display's pooled batches); `empty` while it holds nothing (then no rule decides it: it draws nothing). */
+  dyn?: boolean;
+  empty?: boolean;
   /** Task mall-round2 (lane ARCH, M09): the street exit opening this mesh is seen through (mall only; see ExitAperture). */
   aperture?: ExitAperture;
 }
@@ -282,12 +289,15 @@ export class LevelCuller {
   private readonly occlWv = new Float64Array(4);
   private readonly occlOn: boolean[] = [];
   private readonly occlHere = new Set<number>();
+  private readonly allLevelIds: ReadonlySet<number>;
+  private occlTopHi = -Infinity;
   private occlState = false;
   private readonly vp = new THREE.Vector3();
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
     this.levelIds = levels.map(l => l.id);
+    this.allLevelIds = new Set(this.levelIds);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
     if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
     if (levels.length > 1 && opts?.slabs) this.buildOcclusion(opts.slabs.see ?? []);
@@ -305,9 +315,12 @@ export class LevelCuller {
       for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
         for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) seeMask[cy * W + cx] = 1;
     }
+    const minBase = Math.min(...this.levels.map(l => l.baseY));
     for (const L of this.levels) {
       const above = this.levels.filter(o => o.baseY > L.baseY + 1).map(o => o.baseY);
-      const lo = L.baseY - OCCL_BELOW, hi = above.length ? Math.min(...above) - OCCL_GAP : L.baseY + OCCL_TOP;
+      // (the lowest storey's range is open below — floors / pits enclose everything under it; the top storey's ends OCCL_TOP above
+      // its floor, under the roof vault's glass, above which a ray can leave the building over columns nothing is drawn on)
+      const lo = L.baseY <= minBase + 1 ? -Infinity : L.baseY - OCCL_BELOW, hi = above.length ? Math.min(...above) - OCCL_GAP : L.baseY + OCCL_TOP;
       const closed = new Uint8Array(W * H);
       for (let i = 0; i < W * H; i++) {
         if (seeMask[i]) continue;
@@ -348,20 +361,34 @@ export class LevelCuller {
         }
       }
       this.occl.push({lo, hi, closed, openSat, runs: Float64Array.from(runs)});
+      this.occlTopHi = Math.max(this.occlTopHi, hi);
     }
   }
 
-  /** Task mall-round2 (lane PERF): the level index of an entry's occlusion test, or -1 (see OCCL_* — opt-outs). */
+  /**
+   * Task mall-round2 (lane PERF): an entry's occlusion test — its storey's level index (its box lies in that storey's range), -2 =
+   * SLICES (a multi-storey or taller mesh — escalators, stair flights, the glass lift's cab / rig: decided per storey slice of its box,
+   * hidden only when every slice is), or -1 (never; see OCCL_* — opt-outs). `occMask`: storeys with an open cell within OCCL_PAD of the
+   * footprint (a slice on another storey is never hidden).
+   */
   private occlusionLevel(en: Entry): number {
-    if (!this.occl.length || en.levels || Number.isNaN(en.level) || en.obj.userData.noOcclusion === true) return -1;
-    const k = this.levelIds.indexOf(en.level), o = this.occl[k];
-    if (!o || en.y0 < o.lo || en.y1 > o.hi) return -1;
+    if (!this.occl.length || en.obj.userData.noOcclusion === true) return -1;
     const {W, H} = this.cols;
     const cx0 = Math.floor((en.x0 - OCCL_PAD) / CELL), cx1 = Math.floor((en.x1 + OCCL_PAD) / CELL);
     const cy0 = Math.floor((en.z0 - OCCL_PAD) / CELL), cy1 = Math.floor((en.z1 + OCCL_PAD) / CELL);
     if (cx0 < 0 || cy0 < 0 || cx1 >= W || cy1 >= H) return -1;
-    const s = o.openSat, R = W + 1;
-    return s[(cy1 + 1) * R + cx1 + 1] - s[cy0 * R + cx1 + 1] - s[(cy1 + 1) * R + cx0] + s[cy0 * R + cx0] > 0 ? k : -1;
+    const R = W + 1;
+    let mask = 0;
+    this.occl.forEach((o, k) => {
+      const q = o!.openSat;
+      if (q[(cy1 + 1) * R + cx1 + 1] - q[cy0 * R + cx1 + 1] - q[(cy1 + 1) * R + cx0] + q[cy0 * R + cx0] > 0) mask |= 1 << k;
+    });
+    en.occMask = mask;
+    if (!en.levels && !Number.isNaN(en.level)) {
+      const k = this.levelIds.indexOf(en.level), o = this.occl[k];
+      if (o && en.y0 >= o.lo && en.y1 <= o.hi) return (mask >> k) & 1 ? k : -1;
+    }
+    return mask ? -2 : -1;
   }
 
   /**
@@ -371,17 +398,21 @@ export class LevelCuller {
    * in the render after this) — far inside the occlusion's footprint pad.
    */
   private refreshBox(en: Entry): void {
+    if (en.dyn) en.obj.updateWorldMatrix(true, false); // the cab / rig moved this frame: its matrices before the render's update
     const mw = en.mw!, e = en.obj.matrixWorld.elements;
     let moved = false;
     for (let i = 0; i < 16 && !moved; i++) moved = mw[i] !== Math.fround(e[i]);
     const lb = en.lb, bb = (en.obj as THREE.InstancedMesh).boundingBox;
-    const grown = !!lb && !!bb && !(bb.min.x >= lb[0] && bb.min.y >= lb[1] && bb.min.z >= lb[2] && bb.max.x <= lb[3] && bb.max.y <= lb[4] && bb.max.z <= lb[5]);
+    // a static batch only grows (reattach); a dynamic (pooled) one changes freely
+    const grown = !!lb && !!bb && (en.dyn ? bb.min.x !== lb[0] || bb.min.y !== lb[1] || bb.min.z !== lb[2] || bb.max.x !== lb[3] || bb.max.y !== lb[4] || bb.max.z !== lb[5]
+      : !(bb.min.x >= lb[0] && bb.min.y >= lb[1] && bb.min.z >= lb[2] && bb.max.x <= lb[3] && bb.max.y <= lb[4] && bb.max.z <= lb[5]));
     if (!moved && !grown) return;
     if (moved) mw.set(e);
     if (lb && bb) {
       lb[0] = bb.min.x; lb[1] = bb.min.y; lb[2] = bb.min.z; lb[3] = bb.max.x; lb[4] = bb.max.y; lb[5] = bb.max.z;
       this.box.copy(bb).applyMatrix4(en.obj.matrixWorld);
     } else this.box.setFromObject(en.obj);
+    if (en.dyn) en.empty = this.box.isEmpty();
     if (this.box.isEmpty()) return;
     en.x0 = this.box.min.x; en.y0 = this.box.min.y; en.z0 = this.box.min.z; en.x1 = this.box.max.x; en.y1 = this.box.max.y; en.z1 = this.box.max.z;
     en.near = undefined;
@@ -390,7 +421,7 @@ export class LevelCuller {
 
   /**
    * Task mall-round2 (lane PERF): the occlusion buffers of this decision — for the eye and every lit `viewpoints` entry, for each
-   * storey in `levels` (the storeys the eye sees: its own + those seen through the atrium). A viewpoint INSIDE the storey's height
+   * storey in `levels` (every storey: buffers are built lazily, on the first candidate that needs one). A viewpoint INSIDE the storey's height
    * range gets a same-storey buffer (OCCL_BINS: nearest covering run); one above / below it a cross-storey buffer (OCCL_XBINS x
    * OCCL_XJ: per bin and run-near-distance bucket, the nearest covering run — see occludedNow). A storey a viewpoint cannot decide
    * (inside a closed column of it, outside the grid) is not decided at all. Marks occlOn per level index; false when none.
@@ -581,10 +612,24 @@ export class LevelCuller {
    */
   private occludedNow(en: Entry): boolean {
     const k = en.occ!;
-    if (k < 0 || !this.occlOn[k]) return false;
-    const x0 = en.x0 - OCCL_PAD, x1 = en.x1 + OCCL_PAD, z0 = en.z0 - OCCL_PAD, z1 = en.z1 + OCCL_PAD;
+    if (k === -1) return false;
     this.box.min.set(en.x0, en.y0, en.z0); this.box.max.set(en.x1, en.y1, en.z1);
     if (!this.fr.intersectsBox(this.box)) return false;
+    if (k >= 0) return this.occlOn[k] ? this.hiddenSlice(en, k, en.y0, en.y1) : false;
+    // slices: every storey range the box reaches must hide its part of the box; a part above every range (roof) is never hidden
+    if (en.y1 > this.occlTopHi) return false;
+    for (let q = 0; q < this.occl.length; q++) {
+      const o = this.occl[q]!;
+      const y0 = Math.max(en.y0, o.lo), y1 = Math.min(en.y1, o.hi);
+      if (y0 > y1) continue;
+      if (!((en.occMask! >> q) & 1) || !this.occlOn[q] || !this.hiddenSlice(en, q, y0, y1)) return false;
+    }
+    return true;
+  }
+
+  /** Whether the part y0..y1 (inside storey q's range) of an entry's box is hidden from every viewpoint by storey q's closed columns. */
+  private hiddenSlice(en: Entry, k: number, sy0: number, sy1: number): boolean {
+    const x0 = en.x0 - OCCL_PAD, x1 = en.x1 + OCCL_PAD, z0 = en.z0 - OCCL_PAD, z1 = en.z1 + OCCL_PAD;
     const pts = this.occlPts, np = pts.length / 3, o = this.occl[k]!;
     for (let p = 0; p < np; p++) {
       const px = pts[3 * p], py = pts[3 * p + 1], pz = pts[3 * p + 2];
@@ -595,7 +640,7 @@ export class LevelCuller {
       const same = py > o.lo && py < o.hi;
       let j = 0;
       if (!same) {
-        const den = py <= o.lo ? en.y0 - py : py - en.y1;
+        const den = py <= o.lo ? sy0 - py : py - sy1;
         if (den <= 1e-6) return false;
         const fmax = (py <= o.lo ? o.lo - py : py - o.hi) / den;
         const fx = Math.max(Math.abs(x0 - px), Math.abs(x1 - px)), fz = Math.max(Math.abs(z0 - pz), Math.abs(z1 - pz));
@@ -642,7 +687,7 @@ export class LevelCuller {
     let occl = 0, culled = 0;
     for (const en of this.entries) {
       if (en.mw) this.refreshBox(en);
-      if (en.base && en.occ !== undefined && en.occ >= 0) {
+      if (en.base && en.occ !== undefined && en.occ !== -1) {
         const hide = this.occludedNow(en);
         if (hide !== !!en.occluded) {
           en.occluded = hide;
@@ -834,13 +879,16 @@ export class LevelCuller {
       if (!m.isMesh) return;
       this.stats.registered++;
       const im = m as THREE.InstancedMesh;
+      // Task mall-round2 (lane PERF): a dynamic-bounds mesh (mall only) registers even while empty / pooled (see Entry.dyn)
+      const dyn = this.occl.length > 0 && m.userData.dynamicBounds === true;
       if (im.isInstancedMesh) {
-        if (im.count === 0 || m.frustumCulled === false) { this.stats.uncullable++; return; }
-        im.computeBoundingBox();
+        if ((im.count === 0 || m.frustumCulled === false) && !dyn) { this.stats.uncullable++; return; }
+        if (!dyn || !im.boundingBox) im.computeBoundingBox();
         this.box.copy(im.boundingBox!).applyMatrix4(m.matrixWorld);
       } else this.box.setFromObject(m);
-      if (this.box.isEmpty()) { this.stats.uncullable++; return; }
+      if (this.box.isEmpty() && !dyn) { this.stats.uncullable++; return; }
       const b = this.box, entry = {obj: m, level: NaN, x0: b.min.x, z0: b.min.z, x1: b.max.x, z1: b.max.z, y0: b.min.y, y1: b.max.y, mask: m.layers.mask, culled: false} as Entry;
+      if (dyn) { entry.dyn = true; entry.empty = b.isEmpty(); }
       // Task mall-round2 (lane PERF): the mall tracks moved meshes, InstancedMesh bounds growth (a reattached loose prop) and the
       // occlusion test (refreshBox)
       if (this.occl.length) {
@@ -849,7 +897,7 @@ export class LevelCuller {
       }
       // Task office-seamless-20261029: a mesh tagged with several levels (stair flights) renders with any of them.
       const tag = Array.isArray(m.userData.levels) ? (m.userData.levels as unknown[]).filter((l): l is number => typeof l === 'number' && this.levelIds.includes(l)) : [];
-      if (tag.length) { entry.levels = tag; this.stats.multi++; this.entries.push(entry); return; }
+      if (tag.length) { entry.levels = tag; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return; }
       let level = typeof m.userData.level === 'number' ? m.userData.level : NaN;
       // Task mall-playtest-revision-20261031 (lane ARCH, mall only: the culler has atrium tiles): an untagged mesh whose box sits in
       // ONE storey's y band takes that storey — its box centre can lie in a wall / another area of a smaller mall (a 12 m dressing
@@ -868,7 +916,7 @@ export class LevelCuller {
           // Iteration 08: never level-culled. Tall stacks: render with every level whose storey (base .. base + 4.5 m) it spans.
           const span = this.levels.length > LEGACY_STACK ? this.levels.filter(l => l.baseY <= b.max.y + 0.3 && l.baseY + 4.5 >= b.min.y).map(l => l.id) : [];
           if (!span.length || span.length === this.levels.length) { this.stats.uncullable++; return; }
-          entry.levels = span; this.stats.multi++; this.entries.push(entry); return;
+          entry.levels = span; this.stats.multi++; if (this.occl.length) entry.occ = this.occlusionLevel(entry); this.entries.push(entry); return;
         }
         level = lo;
       }
@@ -942,7 +990,7 @@ export class LevelCuller {
     }
     let culled = 0, fogged = 0, slab = 0, occl = 0;
     // Task mall-round2 (lane PERF): same-storey occlusion buffers for this update (mall only; false elsewhere / when off)
-    const occlOn = this.occl.length ? this.prepareOcclusion(camera, shown, ov !== null) : false;
+    const occlOn = this.occl.length ? this.prepareOcclusion(camera, this.allLevelIds, ov !== null) : false; // (buffers built lazily)
     // Iteration 12 (ARCH): three's FogExp2 fogs by VIEW DEPTH (-mvPosition.z), not distance: at the screen corners
     // a box 58 m away is only ~31 m deep (~17 % visible). Fog-cull a box only when its nearest point along the view
     // axis lies beyond maxDistance (conservative, so nothing still visible through the fog pops out at the edges).
@@ -955,6 +1003,7 @@ export class LevelCuller {
     for (const en of this.entries) {
       let show: boolean;
       if (en.mw) this.refreshBox(en); // task mall-round2 (lane PERF): a moved mesh / grown InstancedMesh box first (mall only)
+      if (en.empty) { en.base = false; en.occluded = false; if (en.culled) { en.obj.layers.mask = en.mask; en.culled = false; } continue; } // holds nothing
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
@@ -969,7 +1018,7 @@ export class LevelCuller {
       // Task mall-round2 (lane PERF): same-storey occlusion last (only meshes every other rule shows; see OCCL_*)
       if (this.occl.length) {
         en.base = show;
-        en.occluded = show && occlOn && en.occ !== undefined && en.occ >= 0 && this.occludedNow(en);
+        en.occluded = show && occlOn && en.occ !== undefined && en.occ !== -1 && this.occludedNow(en);
         if (en.occluded) { show = false; occl++; }
       }
       if (show === !en.culled) continue;

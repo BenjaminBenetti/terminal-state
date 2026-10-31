@@ -126,6 +126,21 @@ export interface OfficeRt {
 
 const EXT_MODEL_IDS: Record<keyof ExteriorModels, OfficeAssetId> = {car: 'car-wreck', bus: 'bus-wreck', rubble: 'rubble-pile', tower: 'ruined-tower', midrise: 'ruined-midrise'};
 
+/**
+ * Task mall-round2-20261031 (lane PERF, M05): register a lift view's moving parts — the car and the shaft rig, everything but the
+ * landings (registered as static storey pieces) — with the level culler: tagged with every storey the shaft serves (`levels`) and
+ * dynamic bounds (world/levelCulling.ts re-derives their boxes every update). The mall's glass lift only.
+ */
+export function registerMovingLift(culler: {register(root: THREE.Object3D): void}, view: {root: THREE.Object3D; landings: readonly THREE.Object3D[]}, stopLevels: readonly number[]): void {
+  const levels = [...new Set(stopLevels)];
+  const lands = new Set<THREE.Object3D>(view.landings);
+  for (const c of [...view.root.children]) {
+    if (lands.has(c)) continue;
+    c.traverse(x => { if ((x as THREE.Mesh).isMesh) { x.userData.levels = levels; x.userData.dynamicBounds = true; } });
+    culler.register(c);
+  }
+}
+
 interface CullerLike { enabled?: boolean; eyeOverride?: number | null; register?(root: THREE.Object3D): void; levelAt?: (x: number, y: number, z: number) => number }
 
 /**
@@ -273,6 +288,10 @@ export class TowerRuntime {
     if (culler && typeof culler.register === 'function') {
       if (o.elevator) for (const g of o.elevator.view.landings) culler.register(g);
       if (o.windows) culler.register(o.windows.view.root);
+      // Task mall-round2-20261031 (lane PERF, M05): the mall's glass car + shaft rig (~35 meshes, drawn in both passes whenever in the
+      // frustum) obey the culler too: tagged with every storey the shaft serves and DYNAMIC bounds (the car, ropes, counterweight and
+      // travelling cable move: world/levelCulling.ts re-derives their boxes every update from the current matrices). Office unchanged.
+      if (o.elevator && layout.mall) registerMovingLift(culler as {register(root: THREE.Object3D): void}, o.elevator.view, o.elevator.plan.info.stops.map(s => s.levelId));
     }
     // An eye in the cab (inside the shaft, solid on every storey grid) is on the cab's storey: updateCuller sets the
     // culler's public LevelCuller.eyeOverride each frame (ENGINE, task office-seamless-20261029; no private-field patch).
