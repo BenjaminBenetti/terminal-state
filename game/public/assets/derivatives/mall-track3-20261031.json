@@ -3946,12 +3946,12 @@
    "output": {
     "file": "game/public/assets/models/mall-storage-tote.glb",
     "url": "assets/models/mall-storage-tote.glb",
-    "sha256": "f920ebcbe421a5a286239d1ad86dffdf45e2812e2437370467bf065e831dd14c",
+    "sha256": "5f8dc4ef6ec0981a0eeb753a493d02178153fd0a28f2f34fa749c12246b55206",
     "bytes": 147472,
     "triangles": 1478,
     "dims": [
      0.6,
-     0.6267,
+     0.4811,
      0.5897
     ],
     "overBudget": false,
@@ -3980,7 +3980,7 @@
     "jpegQuality": 85
    },
    "budget": 180000,
-   "transform": "rotateY(180deg) * uniform scale to 0.6 m (w), grounded (min y = 0), centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale to 0.6 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, lidClose",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -4030,7 +4030,48 @@
      "bytes": 2479,
      "sha256": "1b0948f5d6ad100b91d614d3a7ad2993c9061db971e91936f5309a7b77566455"
     }
-   ]
+   ],
+   "edits": {
+    "k": 1,
+    "removed": null,
+    "glass": null,
+    "ghosts": null,
+    "lidClosed": {
+     "tris": 324,
+     "comps": 7,
+     "verts": 530,
+     "angleDeg": -22.4,
+     "fitScale": [
+      0.9966,
+      1,
+      1.3581
+     ],
+     "before": {
+      "min": [
+       -0.291,
+       0.4313,
+       -0.1371
+      ],
+      "max": [
+       0.291,
+       0.6267,
+       0.2704
+      ]
+     },
+     "after": {
+      "min": [
+       -0.29,
+       0.4149,
+       -0.292
+      ],
+      "max": [
+       0.29,
+       0.4811,
+       0.292
+      ]
+     }
+    }
+   }
   },
   {
    "code": "M19",
@@ -4819,9 +4860,10 @@
     "rule4": "none",
     "scale": {
      "verdict": "ok",
-     "notes": "viewed after the 1.9 m height sizing: 0.94 x 1.90 x 1.18 m incl. the swung-open right door (body ~0.56 m deep); drawer grid 0.05-1.55 m, top cupboard above; grounded (4 contacts)",
+     "notes": "viewed AFTER the local door close: 0.94 x 1.90 x 0.65 m closed cabinet; left half drawer grid 0.1-1.5 m + top cupboard; right bay behind one full-height door (shut, 4 cm proud of the body, outside handle ~1.0 m); grounded (4 contacts)",
      "evidence": [
-      "review/b2g2-scale-sheet.png"
+      "review/M29-medicine-drawer-cabinet-scale.png",
+      "review/b2-M29-door-closed.png"
      ]
     }
    },

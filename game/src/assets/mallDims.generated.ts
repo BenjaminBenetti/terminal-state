@@ -44,7 +44,7 @@ export const MALL_DIMS: Readonly<Record<string, readonly [number, number, number
   'glass-display-counter': [1.5, 1.3547, 0.7055],
   'outdoors-plank-shelving': [1.5, 1.7423, 0.4809],
   'mall-kiosk-cart': [2.5, 1.7068, 1.4596],
-  'storage-tote': [0.6, 0.6267, 0.5897],
+  'storage-tote': [0.6, 0.4811, 0.5897],
   'shoe-wall-display': [2, 1.9952, 0.2254],
   'food-court-table-set': [1.499, 0.75, 1.4843],
   'try-on-ottoman': [0.9, 0.4222, 0.6384],

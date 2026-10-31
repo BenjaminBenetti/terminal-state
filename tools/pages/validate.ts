@@ -27,7 +27,11 @@ import {ACCESS_LABEL, href, NAV, SOURCE_REPO_URL} from './render/html';
 
 export type SiteFiles = ReadonlyMap<string, string>;
 
-export const SITE_LIMITS = {maxFiles: 1500, maxFileBytes: 6 * 1024 * 1024, maxTotalBytes: 48 * 1024 * 1024} as const;
+// Runaway-output guards, not content budgets. Task track3-eaton-centre-20261031: raised from 1500 files / 6 MiB per file /
+// 48 MiB total when the third level arrived. The mall has about twice the Office's holder kinds, so its per-table pages,
+// loot/mall slot pages and data/loot.json grew past the old values (1510 files; loot.json 6.29 MB at 95bb812). Still far
+// below GitHub Pages' own limits; still a hard failure for anything runaway.
+export const SITE_LIMITS = {maxFiles: 3000, maxFileBytes: 12 * 1024 * 1024, maxTotalBytes: 96 * 1024 * 1024} as const;
 
 /** Allowed output paths. Anything else (another extension, directory or name) is rejected. */
 export const ALLOWED_PATHS: readonly RegExp[] = [

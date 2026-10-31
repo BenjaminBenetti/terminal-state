@@ -1460,8 +1460,8 @@
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
-      "bytes": 182854,
-      "sha256": "b2c2be2887e4ac54f04ad739dd5e9b6f626a378719d49715331b8ad57e37a760"
+      "bytes": 183576,
+      "sha256": "ea46ea09845cd39fe795bbe9c745923335b04746a9742da23583fcce7817d443"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1931,7 +1931,7 @@
     {
       "path": "assets/models/mall-storage-tote.glb",
       "bytes": 147472,
-      "sha256": "f920ebcbe421a5a286239d1ad86dffdf45e2812e2437370467bf065e831dd14c"
+      "sha256": "5f8dc4ef6ec0981a0eeb753a493d02178153fd0a28f2f34fa749c12246b55206"
     },
     {
       "path": "assets/models/mall-try-on-ottoman.glb",

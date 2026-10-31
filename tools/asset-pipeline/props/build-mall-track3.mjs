@@ -148,6 +148,12 @@ const EDITS = {
   'shoe-wall-display': {basis: 'shoe wall 2.0 x 2.0 x 0.23 m (per-axis y x1.45)', scaleAxes: [[1, 1.45]]},
   // M20: table top 0.80 m at the frozen 1.6 m -> uniform to a 0.75 m table top (stool seats ~0.49 m).
   'food-court-table-set': {basis: 'uniform: table top 0.75 m', sizeM: 0.75, sizeAxis: 'h'},
+  // M18 (primary, recovery02): the lid flap is modelled RAISED OPEN (22.4 deg, free edge up at the front). Manifest frame (frozen 0.6 m
+  // width, front -Z, back +Z): everything starting above the 0.442 m rim (min y > 0.425: lid plate 190 tris, 2 ribs, 2 side arms, 2 back
+  // hinge pieces; no shared vertices with the box) is rotated -22.4 deg about X through its hinge line (y 0.431, z 0.249) so it lies flat,
+  // then fitted over the rim (x +-0.29, z +-0.292: the flap was only ~0.44 m long) — a closed lid on top of the box.
+  'storage-tote': {basis: 'lid (open in the model) rotated closed about its back hinge line and fitted over the rim (local)',
+    lidClose: {pred: c => c.min[1] > 0.425, pivot: [0.431, 0.249], angleDeg: -22.4, fit: {x: [-0.29, 0.29], z: [-0.292, 0.292]}}},
   // --- batch 2 ---
   // M29 (review/b2g2-*): its right-hand door is modelled swung open (adds depth / width) -> size by the cabinet height 1.9 m instead of
   // the frozen 1.2 m width.
@@ -265,6 +271,50 @@ function hingeCloseComps(doc, {pred, hinge: [hx, hz], sx = 1, dx = 0, dz = 0}) {
   return {tris, comps: comps.size, verts};
 }
 
+/**
+ * Local repair (manifest frame): a LID modelled raised open, rotated CLOSED about its horizontal hinge line along X through (py, pz) by
+ * angleDeg (right-handed about +X), then the selected vertices are fitted linearly onto `fit` ({x: [x0, x1], z: [z0, z1]} target ranges;
+ * y kept) and shifted by dy. Normals / tangents follow (rotation, then the inverse fit scale, renormalised). The selected components
+ * must share no vertex with the rest (checked). Returns {tris, comps, verts, angleDeg, before / after bounds}.
+ */
+function lidCloseComps(doc, {pred, pivot: [py, pz], angleDeg, fit = {}, dy = 0}) {
+  const a = angleDeg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+  const work = [];
+  for (const pc of components(doc)) {
+    const sel = new Set(pc.comps.filter(c => pred({...c, ext: [0, 1, 2].map(k => c.max[k] - c.min[k])})).map(c => c.id));
+    if (!sel.size) continue;
+    const I = pc.prim.getIndices().getArray(), mine = new Set(), other = new Set();
+    let tris = 0;
+    for (let t = 0; t < I.length; t += 3) { const m = sel.has(pc.tri[t / 3]); if (m) tris++; for (let k = 0; k < 3; k++) (m ? mine : other).add(I[t + k]); }
+    for (const v of mine) if (other.has(v)) throw new Error('lidCloseComps: a lid vertex is shared with the box');
+    work.push({pc, mine, tris, n: sel.size});
+  }
+  if (!work.length) throw new Error('lidCloseComps: nothing selected');
+  const rot = p => [p[0], py + (p[1] - py) * ca - (p[2] - pz) * sa, pz + (p[1] - py) * sa + (p[2] - pz) * ca];
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], before = {min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity]};
+  const p = [0, 0, 0];
+  for (const {pc, mine} of work) { const P = pc.prim.getAttribute('POSITION'); for (const v of mine) { P.getElement(v, p);
+    for (let k = 0; k < 3; k++) { before.min[k] = Math.min(before.min[k], p[k]); before.max[k] = Math.max(before.max[k], p[k]); }
+    const r = rot(p); for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], r[k]); hi[k] = Math.max(hi[k], r[k]); } } }
+  const S = [fit.x ? (fit.x[1] - fit.x[0]) / (hi[0] - lo[0]) : 1, 1, fit.z ? (fit.z[1] - fit.z[0]) / (hi[2] - lo[2]) : 1];
+  const O = [fit.x ? fit.x[0] - S[0] * lo[0] : 0, dy, fit.z ? fit.z[0] - S[2] * lo[2] : 0];
+  const dirT = d => { const r = [d[0], d[1] * ca - d[2] * sa, d[1] * sa + d[2] * ca]; const q = [r[0] / S[0], r[1], r[2] / S[2]]; const l = Math.hypot(...q) || 1; return q.map(c => c / l); };
+  const after = {min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity]};
+  let verts = 0, tris = 0, comps = 0; const n = [0, 0, 0], q = [0, 0, 0, 0];
+  for (const {pc, mine, tris: t, n: cn} of work) {
+    const P = pc.prim.getAttribute('POSITION'), N = pc.prim.getAttribute('NORMAL'), T = pc.prim.getAttribute('TANGENT');
+    for (const v of mine) {
+      P.getElement(v, p); const r = rot(p); const w = [S[0] * r[0] + O[0], r[1] + O[1], S[2] * r[2] + O[2]];
+      P.setElement(v, w); for (let k = 0; k < 3; k++) { after.min[k] = Math.min(after.min[k], w[k]); after.max[k] = Math.max(after.max[k], w[k]); }
+      if (N) { N.getElement(v, n); N.setElement(v, dirT(n)); }
+      if (T) { T.getElement(v, q); const r2 = [q[0], q[1] * ca - q[2] * sa, q[1] * sa + q[2] * ca]; const m = [r2[0] * S[0], r2[1], r2[2] * S[2]]; const l = Math.hypot(...m) || 1; T.setElement(v, [m[0] / l, m[1] / l, m[2] / l, q[3]]); }
+    }
+    verts += mine.size; tris += t; comps += cn;
+  }
+  const r4 = b => ({min: b.min.map(x => +x.toFixed(4)), max: b.max.map(x => +x.toFixed(4))});
+  return {tris, comps, verts, angleDeg, fitScale: S.map(x => +x.toFixed(4)), before: r4(before), after: r4(after)};
+}
+
 /** Local procedural part: an axis-aligned untextured box (own material) as node `name` — e.g. a belt deck over a modelled trough. */
 function addBox(doc, {min, max, color, roughness = 0.85, metallic = 0, name = 'box'}) {
   const P = [], N = [], I = [];
@@ -338,6 +388,7 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
   if (E) {
     if (E.parts) split = await splitClutter(doc, E);
     if (E.extend) for (const x of E.extend) (edits.extended ??= []).push({from: x.from, to: x.to, tris: extendComps(doc, x)});
+    if (E.lidClose) edits.lidClosed = lidCloseComps(doc, E.lidClose);
     if (E.hingeClose) edits.hingeClosed = {...hingeCloseComps(doc, E.hingeClose), hinge: E.hingeClose.hinge, sx: E.hingeClose.sx, dx: E.hingeClose.dx, dz: E.hingeClose.dz};
     if (E.glass) glass = await splitGlass(doc, sharp, E.glass);
     if (E.glassComps) glass = splitGlassComps(doc, E.glassComps);
