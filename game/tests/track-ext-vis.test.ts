@@ -288,7 +288,7 @@ describe('annex doors', () => {
   });
 
   it('straddling door-passage cells keep their outside part (clipped at the wall line)', () => {
-    const f = new TunnelFrame({id: 9, trench: 0, from: 'x1', floorY: -1.15, ceilY: 4.4, width: 8, path: [{x: 0, z: 0}, {x: 10, z: 0}], length: 10, rails: [], cap: {kind: 'rubble', s: 10}, areas: [], doors: [], clues: []});
+    const f = new TunnelFrame({id: 9, width: 8, path: [{x: 0, z: 0}, {x: 10, z: 0}]});
     // A cell centred 0.1 m outside the +left wall (z = -4): its outer 0.35 m stays.
     const poly = clipOutside(f, [[4, -4.35], [4.5, -4.35], [4.5, -3.85], [4, -3.85]])!;
     expect(poly).not.toBeNull();

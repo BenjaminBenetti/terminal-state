@@ -92,7 +92,7 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
   const westPath = pathOf(TX.x0, zc, Math.PI, [{len: 16}]);
   const tunnels: TrackTunnel[] = [];
   const mk = (id: number, from: 'x0' | 'x1', path: {x: number; z: number}[], cap: TrackTunnel['cap']['kind'], first: number, arcs: {s: number; len: number; radius: number; turnDeg: number}[]): TrackTunnel => {
-    const f = new TunnelFrame({id, trench: 0, from, floorY: TX.bedY, ceilY: TX.ceil, width: 8, path, length: 0, rails: [], cap: {kind: cap, s: 0}, areas: [], doors: [], clues: []});
+    const f = new TunnelFrame({id, width: 8, path});
     const p0 = f.first;
     // rails = lateral offsets (+left) of the bed's tracks at the mouth (TunnelFrame convention, or mirrored data).
     const rails = TX.tracks.map(tz => mirror * (tz - p0.z) / p0.lz);

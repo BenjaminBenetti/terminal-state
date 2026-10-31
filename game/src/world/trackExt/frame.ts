@@ -11,6 +11,9 @@
 
 import type {TrackTunnel} from '../../gen/trackExt/types';
 
+/** The fields of a TrackTunnel the frame needs (tests build bare shapes). */
+export type TunnelShape = Pick<TrackTunnel, 'id' | 'width' | 'path'>;
+
 export interface PathSample { x: number; z: number; s: number; tx: number; tz: number; lx: number; lz: number }
 
 /** Tunnel-local coordinates of a world point: arc length (extended linearly beyond both ends) and signed lateral offset (+left). */
@@ -26,7 +29,7 @@ export class TunnelFrame {
   readonly bounds: {x0: number; z0: number; x1: number; z1: number};
   private readonly segs: Float64Array; // per segment: ax, az, dx, dz, len, s0
 
-  constructor(readonly tunnel: TrackTunnel, leftSign: 1 | -1 = 1) {
+  constructor(readonly tunnel: TunnelShape, leftSign: 1 | -1 = 1) {
     this.leftSign = leftSign;
     this.half = tunnel.width / 2;
     const pts = dedupe(tunnel.path);
