@@ -172,7 +172,7 @@ export function ruleRows(value: object, prefix = ''): {what: string; value: numb
 }
 
 /** Track 2 (lane CONTENT): how the service-annex zone context relates to the level (shown with the context). */
-const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s own family pool and zombie types apply (no annex families, no guarantee; a Siren only where the level\'s eligibility lists \'service\' — none does). Killed annex enemies stay dead for the run (per-index memory).';
+const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, no Siren — a per-spawn probability, not a quota; the sampled census shows the placed outcome). No guarantee. Killed annex enemies stay dead for the run (per-index memory).';
 
 /**
  * GENERATOR ADAPTER: which generator reads each level's profile and how often each context runs per level. These are code paths
@@ -404,7 +404,9 @@ function levelCensus(c: CensusLevel, families: readonly string[]): LevelCensus {
     byContext: ctxIds.map(id => {
       const m2 = c.areas.filter(a => a.context === id).reduce((s, a) => s + a.cells, 0) * cellM2;
       const n = c.spawns.filter(s => s.context === id).length;
-      return {context: id, eligibleM2: rd(m2), placed: n, perLevel: rd(n / Math.max(1, layouts)), per100m2: per100(n, m2)};
+      const byFam: Record<string, number> = {};
+      for (const f of families) byFam[f] = c.spawns.filter(s => s.context === id && s.family === f).length;
+      return {context: id, eligibleM2: rd(m2), placed: n, perLevel: rd(n / Math.max(1, layouts)), per100m2: per100(n, m2), byFamily: byFam};
     }),
     byAreaKind: kinds.map(kind => {
       const m2 = c.areas.filter(a => a.kind === kind).reduce((s, a) => s + a.cells, 0) * cellM2;
@@ -647,6 +649,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
         count: {lo: c.count[0], hi: c.count[1], mean: mean(c.count[0], c.count[1]), distribution: `uniform integer U{${c.count[0]}..${c.count[1]}} (rng.int, inclusive)`},
         perLevel: {lo: a.runs * c.count[0], hi: a.runs * c.count[1], mean: a.runs * mean(c.count[0], c.count[1])},
         ...(a.zone ? {zone: {runsPerLevel: {lo: a.zone.runsPerLevel[0], hi: a.zone.runsPerLevel[1]}, perLevelMax: a.zone.runsPerLevel[1] * c.count[1], note: a.zone.note}} : {}),
+        ...(c.families ? {families: (() => {
+          const fams = c.families, den = fams.reduce((s2, [, w]) => s2 + w, 0);
+          return {rows: fams.map(([family, weight]) => ({family, weight, share: den > 0 ? rd(weight / den) : 0})),
+            note: 'This context\'s OWN pool: its spawns draw their family from it (the same single roll per spawn, room modifiers and eligibility on top) instead of the level pool. The shares are CONFIGURED selection probabilities per spawn, not quotas: a 5-6-enemy annex may hold none or several; the sampled census shows the placed outcome.',
+            at: src.at(F.tables, symbolOf(fams, `${base}.contexts.${id}.families`))};
+        })()} : {}),
         placement: {
           areaWeights: weightsInfo(pl.areaWeights), caps: capsInfo(pl.caps), triesPerArea: pl.tries,
           spacing: {metres: pl.spacingM, scope: storeyed ? 'straight line, same storey' : 'straight line'},

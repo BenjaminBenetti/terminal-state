@@ -216,20 +216,28 @@ const census = () => {
   if (!offices.length) for (let k = 0; k < OFFICE_RUNS; k++) offices.push(generateOfficeLevel({levelSeed: officeSeed(k), startWeapon: officeWeapon(k)}));
   if (!stations.length) for (let k = 0; k < SUBWAY_RUNS; k++) stations.push(generateStation(stationSeed(k), {startWeapon: 'rifle'}));
 };
-const share = (ls: StationLayout[], f: string) => {
+// (task studio-alpha-track2-round2-20261031-01, R6: the service annexes draw from their own pool — rat/dog 0.20 — so the level-pool
+// shares are measured on the CORE spawns, and the service spawns separately)
+const share = (ls: StationLayout[], f: string, P: SpawnProfile, service = false) => {
   let n = 0, t = 0;
-  for (const l of ls) for (const z of l.zombies) { t++; if ((z.archetype ?? 'zombie') === f) n++; }
+  for (const l of ls) l.zombies.forEach((z, i) => {
+    if ((spawnContextOf(l, P, i) === 'service') !== service) return;
+    t++; if ((z.archetype ?? 'zombie') === f) n++;
+  });
   return n / t;
 };
 
 describe('spawn census (real generators)', () => {
   it('Subway: zero Sirens; Blightbelly and rat/dog ~5 % of the placed enemies', () => {
     census();
-    expect(share(stations, 'siren')).toBe(0);
-    const b = share(stations, 'blightbelly'), r = share(stations, 'ratdog');
-    process.stdout.write(`\n[enemy-spawn-contract] Subway ${SUBWAY_RUNS} runs: blightbelly ${(b * 100).toFixed(2)} %, rat/dog ${(r * 100).toFixed(2)} %\n`);
+    expect(share(stations, 'siren', SUBWAY)).toBe(0);
+    expect(share(stations, 'siren', SUBWAY, true)).toBe(0);
+    const b = share(stations, 'blightbelly', SUBWAY), r = share(stations, 'ratdog', SUBWAY), rs = share(stations, 'ratdog', SUBWAY, true);
+    process.stdout.write(`\n[enemy-spawn-contract] Subway ${SUBWAY_RUNS} runs: core blightbelly ${(b * 100).toFixed(2)} %, rat/dog ${(r * 100).toFixed(2)} %; service rat/dog ${(rs * 100).toFixed(2)} %\n`);
     expect(Math.abs(b - 0.05)).toBeLessThan(0.02);
     expect(Math.abs(r - 0.05)).toBeLessThan(0.02);
+    // the service spawns' configured 0.20 (sampled outcome, ~200 spawns: a loose band, never a per-annex quota)
+    expect(Math.abs(rs - 0.2)).toBeLessThan(0.09);
   });
 
   it('Office: ~2 Sirens per complete run, only in eligible office-floor rooms; Blightbelly / rat/dog ~5 %; every spawn context-tagged', () => {
@@ -248,7 +256,8 @@ describe('spawn census (real generators)', () => {
       });
       expect(per[offices.indexOf(l)]).toBeLessThanOrEqual(OFFICE_SIREN_ELIGIBILITY.maxPerLevel!);
     }
-    const b = share(offices, 'blightbelly'), r = share(offices, 'ratdog');
+    const b = share(offices, 'blightbelly', OFFICE), r = share(offices, 'ratdog', OFFICE);
+    expect(share(offices, 'siren', OFFICE, true)).toBe(0);
     process.stdout.write(`\n[enemy-spawn-contract] Office ${OFFICE_RUNS} runs: Sirens / run mean ${mean.toFixed(2)}, none ${per.filter(v => !v).length}, max ${Math.max(...per)}; blightbelly ${(b * 100).toFixed(2)} %, rat/dog ${(r * 100).toFixed(2)} %\n`);
     expect(mean).toBeGreaterThan(1.3);
     expect(mean).toBeLessThan(2.7);

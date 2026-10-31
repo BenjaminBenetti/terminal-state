@@ -244,6 +244,12 @@ export interface SpawnContextInfo {
    * separately (excluded from EnemyLevelInfo.total). Absent = an ordinary context.
    */
   zone?: {runsPerLevel: {lo: number; hi: number}; perLevelMax: number; note: string};
+  /**
+   * Task studio-alpha-track2-round2-20261031-01 (R6): the context's OWN ambient family pool (SpawnContextRule.families; only the
+   * service annexes today): its CONFIGURED per-spawn selection shares, replacing the level pool for this context's spawns. Absent =
+   * the level pool.
+   */
+  families?: {rows: readonly {family: string; weight: number; share: number}[]; note: string; at: SourceLoc};
   placement: PlacementInfo;
   /** Validation rules that reject a whole generation attempt (the generator retries with another attempt seed). */
   rejection: readonly string[];
@@ -408,7 +414,8 @@ export interface LevelCensus {
   eligibleM2: number;
   /** Placed spawns per family: total over the sample, mean per level, per 100 m² eligible floor. SAMPLED. */
   placed: readonly {family: string; total: number; perLevel: number; per100m2: number}[];
-  byContext: readonly {context: string; eligibleM2: number; placed: number; perLevel: number; per100m2: number | null}[];
+  /** (R6) `byFamily`: the sampled PLACED outcome per family in that context (a census, never the configured share). */
+  byContext: readonly {context: string; eligibleM2: number; placed: number; perLevel: number; per100m2: number | null; byFamily: Readonly<Record<string, number>>}[];
   byAreaKind: readonly {kind: string; eligibleM2: number; placed: Readonly<Record<string, number>>; per100m2: number | null}[];
   /** Zombie-family spawns by type over the sample. */
   zombieTypes: Readonly<Record<string, number>>;

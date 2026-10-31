@@ -15,7 +15,7 @@
 import {hashString, mulberry32} from '../core/rng';
 import type {Area} from '../gen/stationTypes';
 import {
-  ENEMY_POOL, eligibleFamily, roomFamilyPool, type EligibilityLayout, type EligibilitySpawn, type EnemyFamilyId, type FamilyPool, type SpawnProfile,
+  ENEMY_POOL, eligibleFamily, roomFamilyPool, spawnContextOf, type EligibilityLayout, type EligibilitySpawn, type EnemyFamilyId, type FamilyPool, type SpawnProfile,
 } from './spawnTables';
 
 export {ENEMY_POOL, ENEMY_POPULATION_SCALE, ENEMY_SPAWNS, ENEMY_SPAWNS_BASELINE} from './spawnTables';
@@ -58,7 +58,11 @@ export function assignEnemyArchetypes(
     // — the ambient pool never applies to them. Skipping consumes no draw (the roll is a hash of (seed, index)).
     if (s.horde !== undefined) return;
     const area = s.area !== undefined ? layout.areas?.[s.area] : undefined;
-    s.archetype = eligibleFamily(profile, pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area)), layout, s, i, placed);
+    // Task studio-alpha-track2-round2-20261031-01 (R6): a spawn tagged with a context that brings its own pool (only 'service':
+    // SERVICE_FAMILY_POOL) draws from it; every other spawn keeps the level pool (same array, so the core draws are bit-identical)
+    const ctx = spawnContextOf(layout, profile, i);
+    const base = (ctx && profile.contexts[ctx]?.families) || profile.families;
+    s.archetype = eligibleFamily(profile, pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area, base)), layout, s, i, placed);
     placed.set(s.archetype, (placed.get(s.archetype) ?? 0) + 1);
     if (s.archetype !== 'zombie') n++;
   });
