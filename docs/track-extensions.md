@@ -253,8 +253,8 @@ Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 
 - **Families:** they inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none,
   and the Office's Siren eligibility stays `['floor']`.
 - **Counted separately:** they are excluded from the core station / street / floor counts and reported separately.
-- **Measured:** 5–7 per annex (Subway levels +7 / +12 / +14 with 1 / 2 annexes). The ordinary routes made 1–2 enemies aware, the
-  first usually within the first 0–3 rooms, with no gunfire in the simulation.
+- **Measured:** 5–6 per annex (Subway levels +5 / +6 with one annex, +10 to +12 with two). The ordinary routes made 1–3 enemies
+  aware, the first within the first 0–3 rooms, with no gunfire in the simulation.
 
 **Lights:** untinted. Annexes have about 80 fixtures each, mostly dim, dying or dead; the entry corridor is never fully dark.
 Tunnels have sparse fixtures, mostly dead or dying.

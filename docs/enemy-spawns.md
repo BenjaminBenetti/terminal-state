@@ -238,10 +238,11 @@ same family pool and zombie types, same tier.
   (Before the playtest revision's 5–6 budget.)
 - **Playtest-revision measurement** (fresh New Game path; Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
   5150 / 9090):
-  - **Placed:** 5–7 per annex (Subway levels +7 / +12 / +14 with 1 / 2 annexes, Office +10 / +11, Mall +5 to +7). All at the
-    annex floor, all reachable from the annex door, at least 2 depth bands each, mostly beyond 18 m of core station floor.
-  - **Encounters:** ordinary discovery routes (`tests/helpers/annexRoute.ts`, the game's real ZombieBrain) made 1–2 enemies aware
-    per route, the first usually within 0–3 rooms. Before, 0–2 of 3–5 (one route met none). The routes never shoot, so real play
+  - **Placed:** 5–6 per annex (parity corpus: Subway levels +5 / +6 with one annex, +10 / +11 / +12 with two; Office +10 / +11
+    with two; the Mall's one annex 5–6). All at the annex floor, all reachable from the annex door, at least 2 depth bands each,
+    mostly beyond 18 m of core station floor.
+  - **Encounters:** ordinary discovery routes (`tests/helpers/annexRoute.ts`, the game's real ZombieBrain) made 1–3 enemies aware
+    per route, the first within 0–3 rooms. Before, 0–2 of 3–5 (one route met none). The routes never shoot, so real play
     draws in more.
 
 ## Room modifiers
