@@ -16,6 +16,7 @@
 
 import * as THREE from 'three';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
+import {float, texture, uv, vertexColor} from 'three/tsl';
 import {canvasTexture} from '../canvasTextures';
 import type {StationArt, TrackTunnel} from '../../gen/trackExt/types';
 import type {Trench} from '../../gen/stationTypes';
@@ -261,10 +262,21 @@ export function graffitiAtlas(): THREE.Texture {
 }
 
 /** The shared decal material: atlas x vertex colour, alpha blended, no depth write, pulled toward the camera. */
+/**
+ * Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): LUMINOUS PAINT. The crew's pieces / stencils / tags carry a
+ * modest glow of their own colours (atlas x vertex tint x alpha x GRAFFITI_GLOW) so the invitation reads in the dark, foggy station:
+ * the first real-browser check (seed 00000ST, 640 x 360, quality low) showed the station art ~20 m from the spawn as a faint smear.
+ * Paint, not a lamp: no light is added (the core station's lighting is unchanged) and fog still applies.
+ */
+export const GRAFFITI_GLOW = 0.45;
+
 export function graffitiMaterial(): THREE.Material {
   if (!atlasMat) {
-    const m = new MeshStandardNodeMaterial({map: graffitiAtlas(), vertexColors: true, transparent: true, depthWrite: false, alphaTest: 0.02, roughness: 0.82, metalness: 0,
+    const atlas = graffitiAtlas();
+    const m = new MeshStandardNodeMaterial({map: atlas, vertexColors: true, transparent: true, depthWrite: false, alphaTest: 0.02, roughness: 0.82, metalness: 0,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
+    const t = texture(atlas, uv());
+    m.emissiveNode = t.rgb.mul(vertexColor().rgb).mul(t.a).mul(float(GRAFFITI_GLOW));
     m.name = 'track-ext-graffiti';
     atlasMat = m;
   }
