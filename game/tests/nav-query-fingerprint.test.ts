@@ -177,8 +177,11 @@ const OFFICE_CAB_CORE = '3570ed8b';
 // circles fd0c3f65, support 3633f80e, rails c0990205, finds 41c7c82f} (shut = open, as now).
 // (playtest revision, primary: annex room storage / loot classes / service bands on the merged ROOMS + ART lanes — the annex
 // props and spawns re-lay; lines 69abd718 -> 00dbccf8, circles 2ac511c5 -> 7dcfff05; the CORE pins are unchanged)
-const OFFICE_SHUT = {lines: '00dbccf8', circles: '7dcfff05', support: 'ea00599b', rails: '5e871885', finds: '0c734d22'};
-const OFFICE_OPEN = {lines: '00dbccf8', circles: '7dcfff05', support: 'ea00599b', rails: '5e871885', finds: '0c734d22'};
+// (round 2, task studio-alpha-track2-round2-20261031-01, R5 — CAUSE: the survivor caches' bed / storage / camp props block annex cells
+// (appended after every core pass); shut / open were {lines 00dbccf8, circles 7dcfff05, support ea00599b, rails 5e871885, finds
+// 0c734d22}; shut and open now differ in `support` only (the cab volume meets a changed live sample); the CORE pins are unchanged)
+const OFFICE_SHUT = {lines: '0df968c5', circles: 'f02026c5', support: '0b0117e0', rails: '78d6afa5', finds: '386187a3'};
+const OFFICE_OPEN = {lines: '0df968c5', circles: 'f02026c5', support: '97a0f8c5', rails: '78d6afa5', finds: '386187a3'};
 /** (the near-cab queries only touch the tower: unchanged by the extensions) */
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};
@@ -191,6 +194,7 @@ const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rai
 // (task track2-playtest-revision lane ROOMS: seed 1234's annexes re-laid — halls, machinery boxes, lean furniture; was {lines f3ead7d8,
 // circles f2f9e858, support 14ebe369, rails 967a2aa5, finds 8b2e7b36}; the core / reserve-off pins are unchanged)
 // (playtest revision, primary: circles e28fe105 -> 24650d58 — the annex room storage pieces; lines / support / rails / finds unchanged)
-const SUBWAY_LIVE = {lines: '5316efe5', circles: '24650d58', support: '8501fb29', rails: '8f0e3c65', finds: 'dcd8c5b9'};
+// (round 2, R5: lines 5316efe5 -> 0be2b9f8 — the survivor caches' props in seed 1234's annexes; the core / reserve-off pins unchanged)
+const SUBWAY_LIVE = {lines: '0be2b9f8', circles: '24650d58', support: '8501fb29', rails: '8f0e3c65', finds: 'dcd8c5b9'};
 /** The fixture runs no PathFinder (finds = the empty hash). */
 const FIXTURE = {lines: '2278f298', circles: 'c101d1b8', support: '1243b7fb', rails: 'ca023ed8', finds: '811c9dc5'};

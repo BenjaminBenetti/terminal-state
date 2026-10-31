@@ -90,6 +90,10 @@
 //     distance transform of 2 m core tiles (generation back at main's time; station.test's 400 ms budget failed at 406 ms on CI).
 //     Moved: ONLY live annex entries' spawn hashes and service counts (old values in the helper); station / street / floor / roof
 //     counts and every pickup hash unchanged; core views and invariants unchanged (asserted every run).
+// 11. Task studio-alpha-track2-round2-20261031-01 (round 2) — CAUSE: R6 "the rat-dog spawn rate should be boosted to 20% in this
+//     area": the service spawns draw their family from SERVICE_FAMILY_POOL (rat/dog 0.20), so the annex spawns' archetypes move (R5's
+//     caches are appended after the service run). Moved: ONLY live annex entries' spawn hashes (old values in the helper); every
+//     count, pickup hash, core view and invariant unchanged (asserted every run).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
