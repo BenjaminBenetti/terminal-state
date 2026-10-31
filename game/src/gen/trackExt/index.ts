@@ -15,9 +15,10 @@ import type {Rng} from '../../core/rng';
 import {CELL, FLOOR, NAV_STEP, SOLID, VOID, type Grid} from '../grid';
 import type {Kit} from '../stationKit';
 import type {Rect, StationLayout} from '../stationTypes';
-import {levelDistance} from '../levelGen';
+import {levelDistance, registerApertures} from '../levelGen';
 import {Carver, type Carve} from './carve';
 import {reframe} from './core';
+import {adoptComposition} from '../compose';
 import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
 
 export * from './types';
@@ -125,7 +126,7 @@ export function extensionRects(ext: TrackExtensions): Rect[] {
 /**
  * After the LAST core pass: re-frames the finished core layout (cropped at canvas origin (ox, oy)) into the grid its extensions
  * need — grown in any direction ('any': a west / north extension translates the core, a pure translation of finished records)
- * or east / south only ('east-south': a fixed origin) — then attaches them. Returns the (possibly new) layout object.
+ * or east / south only ('east-south': a fixed origin) — then attaches them. Re-frames IN PLACE: returns the same layout object.
  */
 export function finishExtensions(layout: StationLayout, ext: TrackExtensions, crop: {ox: number; oy: number; grow: 'any' | 'east-south'}): StationLayout {
   const {ox, oy} = crop, W = layout.grid.w, H = layout.grid.h;
@@ -140,10 +141,16 @@ export function finishExtensions(layout: StationLayout, ext: TrackExtensions, cr
   }
   const moved = x0 !== ox || y0 !== oy;
   const coreXZ = moved ? Object.fromEntries(CORE_XZ_KEYS.map(k => [k, (layout[k] as {x: number; z: number}[]).flatMap(p => [p.x, p.z])])) as Record<CoreXZKey, number[]> : null;
-  const out = moved || x1 !== ox + W - 1 || y1 !== oy + H - 1 ? reframe(layout, x0 - ox, y0 - oy, x1 - x0 + 1, y1 - y0 + 1) : layout;
-  attachExtensions(out, ext, {ox: x0, oy: y0, core: {x: ox - x0, y: oy - y0, w: W, h: H}});
+  if (moved || x1 !== ox + W - 1 || y1 !== oy + H - 1) {
+    // IN PLACE: the generator's layout object keeps its identity (attempt matching, generation-time hooks); its grids / records
+    // become the re-framed ones and its composition record the translated one
+    const view = reframe(layout, x0 - ox, y0 - oy, x1 - x0 + 1, y1 - y0 + 1);
+    Object.assign(layout, view);
+    adoptComposition(view, layout);
+  }
+  attachExtensions(layout, ext, {ox: x0, oy: y0, core: {x: ox - x0, y: oy - y0, w: W, h: H}});
   if (coreXZ) ext.coreXZ = coreXZ;
-  return out;
+  return layout;
 }
 
 /**
@@ -184,8 +191,12 @@ export function attachExtensions(layout: StationLayout, ext: TrackExtensions, cr
   ext.core = {...crop.core};
   ext.shift = {x: crop.core.x * CELL, z: crop.core.y * CELL};
   layout.extensions = ext;
-  // per-levels-array caches (levelArrays, levelsOf) were built on the core grid: a fresh array key rebuilds them
-  if (layout.levels?.length) layout.levels = layout.levels.slice();
+  // per-levels-array caches (levelArrays, levelsOf) were built on the core grid: a fresh array key rebuilds them; the light-well
+  // apertures are re-derived from the final grids (extension cells are open on the main level only: the masks do not change)
+  if (layout.levels?.length) {
+    layout.levels = layout.levels.slice();
+    if (layout.levels.length > 1) registerApertures(layout.levels);
+  }
 }
 
 /**

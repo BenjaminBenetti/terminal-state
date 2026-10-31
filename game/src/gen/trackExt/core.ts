@@ -9,7 +9,8 @@
 //    and by the translation-normalised golden proofs (tests/track-ext*.test.ts). Pure data; inputs are not modified.
 
 import {CELL, Grid, type NavLink} from '../grid';
-import {shiftPlan} from '../levelGen';
+import {registerApertures, shiftPlan} from '../levelGen';
+import {reframeComposition} from '../compose';
 import type {Level} from '../levels';
 import {shiftFlight, shiftRamp} from '../traversal';
 import type {StationLayout} from '../stationTypes';
@@ -88,6 +89,9 @@ export function reframe(layout: StationLayout, ox: number, oy: number, w: number
   };
   if (layout.levelPlan) view.levelPlan = shiftPlan(layout.levelPlan, ox, oy);
   if (keepAreas < layout.areas.length) delete view.extensions;
+  // per-grid caches of the stacked levels (light-well apertures) for the new grids; the composition record of the dressed station
+  if (levels.length > 1) registerApertures(levels);
+  reframeComposition(layout, view, ox, oy, w, h);
   return view;
 }
 
