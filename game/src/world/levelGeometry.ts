@@ -304,8 +304,10 @@ interface OtherRun { level: number; area: number; kind: WallKind; voidCell: bool
  * Every visible base-wall face of a (multi-level) station, merged into straight runs per level band.
  * Tiled walls yield one face per material band ('tileLower' up to the tile line, 'tileUpper' above).
  */
-export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, levels: Level[], cols: LevelColumns, opts: WallOptions): BuiltFace[] {
+export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> & Pick<Partial<StationLayout>, 'extensions'>, levels: Level[], cols: LevelColumns, opts: WallOptions): BuiltFace[] {
   const W = cols.W, H = cols.H;
+  // Track 2 (lane GEN): face seeds in the CORE frame (a crop translation by track extensions keeps every core face's detail).
+  const ox = layout.extensions?.core.x ?? 0, oy = layout.extensions?.core.y ?? 0;
   const out: BuiltFace[] = [];
   const TILE = opts.tileLowerHeight;
   // Areas holding a stair flight (any level): their walls are stair-core walls.
@@ -366,7 +368,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, 
         const mk = (finish: string, fy0: number, fy1: number, vb0: number, vb1: number, ops: {s0: number; s1: number; top: number}[], sl?: WallFace['slope']): void => {
           out.push({
             level: L.id, area, areaType: voidCell ? 'trackbed' : ar?.type ?? 'unknown', zone, x0, z0, x1, z1, nx: d.nx, nz: d.nz,
-            y0: fy0, y1: fy1, finish, openings: ops, seed: hash32(L.id, di, l, k0, fy0, finish.length), kind, vb0, vb1, ...(sl ? {slope: sl} : {}),
+            y0: fy0, y1: fy1, finish, openings: ops, seed: hash32(L.id, di, l - (alongX ? oy : ox), k0 - (alongX ? ox : oy), fy0, finish.length), kind, vb0, vb1, ...(sl ? {slope: sl} : {}),
           });
         };
         if (slope) {

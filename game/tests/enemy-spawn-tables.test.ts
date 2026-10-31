@@ -19,7 +19,8 @@ import {
   spawnContext, spawnProfile, spawnRoomKeys, validateSpawnProfile, type RoomModifiers, type SpawnProfile,
 } from '../src/ai/spawnTables';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
-import {OFFICE_GOLDEN, SUBWAY_GOLDEN, contextCounts, pickupHash, spawnRecord, spawnSpecHash} from './helpers/enemySpawnParity';
+import {OFFICE_GOLDEN, SUBWAY_GOLDEN, SUBWAY_GOLDEN_TRACK2, contextCounts, pickupHash, spawnRecord, spawnSpecHash} from './helpers/enemySpawnParity';
+import {coreView} from '../src/gen/trackExt/index';
 import {ROOM_LABEL} from '../src/gen/stationKit';
 
 const SUBWAY = spawnProfile('subway'), OFFICE = spawnProfile('office');
@@ -108,7 +109,9 @@ describe('neutral room modifiers', () => {
     expect(roomFamilyPool(withRooms(SUBWAY, ones), area)).toEqual(SUBWAY.families);
     for (const seed of [1, 42, 1234]) {
       const l = generateStation(seed, {spawns: withRooms(SUBWAY, ones)});
-      expect([spawnSpecHash(l), pickupHash(l)], `${seed}`).toEqual(SUBWAY_GOLDEN[`${seed}:rifle`].slice(0, 2));
+      // Track 2 (lane GEN): the core view reproduces main's pins; the live layout its stage-3 pins (helpers/enemySpawnParity.ts)
+      expect([spawnSpecHash(coreView(l)), pickupHash(coreView(l))], `${seed} core`).toEqual(SUBWAY_GOLDEN[`${seed}:rifle`].slice(0, 2));
+      expect([spawnSpecHash(l), pickupHash(l)], `${seed}`).toEqual(SUBWAY_GOLDEN_TRACK2[`${seed}:rifle`].slice(0, 2));
     }
     const o = generateOfficeLevel({levelSeed: 222, startWeapon: 'pistol'}, lootProfile('office'), withRooms(OFFICE, ones));
     expect([spawnSpecHash(o), pickupHash(o), contextCounts(o)]).toEqual([...OFFICE_GOLDEN['222:pistol']]);

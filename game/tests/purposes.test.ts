@@ -16,6 +16,7 @@ import {isP7Kind, p7KindsFor} from '../src/gen/props07';
 import {createHolderState, isContainerKind, isLootHolderKind, rollLootItems, type HolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {areaLevel, levelGrid} from '../src/gen/placeKit';
+import {isExtensionArea} from '../src/gen/trackExt/index';
 
 const SEEDS = Array.from({length: 14}, (_, i) => (i * 2654435761 + 777) >>> 0);
 const cache = new Map<number, StationLayout>();
@@ -159,6 +160,7 @@ describe('purposes in generated levels', () => {
     for (const l of SAMPLE()) {
       for (const a of l.areas) {
         if (a.storefront !== undefined || (a.publicSpace && a.type !== 'washroom')) continue;
+        if (isExtensionArea(a)) continue; // Track 2: tunnels / annexes are dressed by their own appended passes (lane CONTENT)
         expect(a.purpose, `${l.seed} ${a.type} ${a.label}`).toBeDefined();
         expect(ROOM_PURPOSES[a.purpose!].slots).toContain(a.type);
         const sig = SIGNATURE[a.purpose!];

@@ -21,6 +21,7 @@ import {
   type MediumMaps, type SpotInput, type V3,
 } from '../src/render/atmosphere';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
+import {coreView} from '../src/gen/trackExt/index';
 
 const stations = new Map<number, StationLayout>();
 const station = (seed: number) => { let s = stations.get(seed); if (!s) stations.set(seed, (s = generateStation(seed))); return s; };
@@ -176,7 +177,8 @@ describe('(b) slightly less fog, with genuinely clear and dense areas', () => {
     expect(ATMOSPHERE.density).toBeLessThan(ATMOSPHERE_ITER12.density * 0.8);
     const rows: string[] = [];
     for (const [seedS, old] of Object.entries(ITER12_MEAN)) {
-      const seed = Number(seedS), l = station(seed), p = atmosphereFor(l), maps = mapsOf(l, p);
+      // Track 2 (lane GEN): the CORE station's mean (gen/trackExt coreView: track tunnels / annexes are not the iteration-12 station)
+      const seed = Number(seedS), l = coreView(station(seed)), p = atmosphereFor(l), maps = mapsOf(l, p);
       const ms = [0, 60, 120, 180, 240, 300].map(t => mediumStats(l, maps, p, t, 7).mean);
       const avg = ms.reduce((a, b) => a + b, 0) / ms.length;
       rows.push(`seed ${seed} (${l.archetype}): iteration 12 ${(old * 1000).toFixed(1)} -> now ${(avg * 1000).toFixed(1)} (x${(avg / old).toFixed(2)}) e-3 /m`);

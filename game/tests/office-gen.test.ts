@@ -28,6 +28,7 @@ import {cutOfficeWindows} from '../src/world/officeProps';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {corpusTotals} from './helpers/lootEconomy';
 import {LEGACY_AMMO_IDS} from '../src/items/calibers';
+import {coreView} from '../src/gen/trackExt/index';
 
 /** Canonical dump hash of everything a generator produces (grids, areas, doors, props, lights, signs, loot, spawns). */
 function fingerprint(l: StationLayout): string {
@@ -247,10 +248,11 @@ describe('office level (one continuous layout)', () => {
   });
 
   it('station: a compact stop about one sixth of the base Subway, joined to the lobby by its straight stair run', () => {
-    const subway = [1, 7, 42, 1234, 99999].map(seed => levelMetrics(generateStation(seed)).walkM2.reduce((a, b) => a + b, 0));
+    // Track 2 (lane GEN): the CORE stations (gen/trackExt coreView: tunnels / annexes are reported by tests/track-ext*.test.ts)
+    const subway = [1, 7, 42, 1234, 99999].map(seed => levelMetrics(coreView(generateStation(seed))).walkM2.reduce((a, b) => a + b, 0));
     const subwayMean = subway.reduce((a, b) => a + b, 0) / subway.length;
     const all = LEVEL_SEEDS.concat([7, 99, 512]).map(levelSeed => gen(levelSeed));
-    const station = all.map(l => levelMetrics(l).walkM2[0]);
+    const station = all.map(l => levelMetrics(coreView(l)).walkM2[0]);
     const ratio = station.reduce((a, b) => a + b, 0) / station.length / subwayMean;
     const m = levelMetrics(all[0]).walkM2;
     process.stdout.write(`[office-gen] subway mean walk ${subwayMean.toFixed(0)} m2; station walk ${station.join(', ')} m2; ratio ${ratio.toFixed(3)}; storeys (seed 11) ${m.join(' / ')} m2\n`);
@@ -455,13 +457,24 @@ describe('the Subway is unchanged', () => {
     '1:rifle': 'f50fc2e7', '1:pistol': '94a7f554', '7:rifle': 'bdd4de2a', '7:pistol': '5f455d00',
     '42:rifle': '57dcd13b', '42:pistol': 'fd258bb9', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
   };
-  it('generateStation output for existing seeds is byte-identical to HEAD', () => {
+  // Track 2 — Beyond the Station (lane GEN): the live stations carry their track extensions (tunnels past the bed ends, service
+  // annexes), appended after every core pass; a station whose extension reaches west / north has its finished core re-framed
+  // (translated) into the larger grid. Every core decision is made in main's frame: the translation-normalised proof below — the
+  // same fingerprint over gen/trackExt coreView(layout) (core window, records translated back at their exact core-frame
+  // positions, extension records filtered) — reproduces HEAD byte for byte for every seed. LIVE = the fingerprints of the
+  // extended stations (grid size, translated coordinates, extension cells / areas / doors): only seeds with extensions differ.
+  const LIVE: Record<string, string> = {...HEAD, '42:rifle': '8aa759c8', '42:pistol': '28d8c06f'};
+  it('generateStation output for existing seeds is byte-identical to HEAD (core view; live = + track extensions)', () => {
     for (const [key, fp] of Object.entries(HEAD)) {
       const [seed, sw] = key.split(':');
       const l = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol'});
       // lane AMMO (knife-melee-20261030): the ammo item ids became caliber ids (ammo_rifle -> ammo_556, ...); with the old names
       // mapped back, the generated station must still be byte-identical (floor boxes / weapon-find companions are unchanged)
-      expect(fingerprint({...l, pickups: l.pickups.map(q => ({...q, itemId: LEGACY_NAME[q.itemId] ?? q.itemId}))}), key).toBe(fp);
+      const legacy = (q: StationLayout) => ({...q, pickups: q.pickups.map(p => ({...p, itemId: LEGACY_NAME[p.itemId] ?? p.itemId}))});
+      expect(fingerprint(legacy(coreView(l))), `${key} core`).toBe(fp);
+      const live = fingerprint(legacy(l));
+      if (live !== LIVE[key]) process.stdout.write(`[office-gen] LIVE ${key}: ${live}\n`);
+      expect(live, key).toBe(LIVE[key]);
       expect(l.office).toBeUndefined();
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
       expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);

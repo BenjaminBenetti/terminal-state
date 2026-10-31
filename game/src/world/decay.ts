@@ -34,6 +34,7 @@ import {CELL, FLOOR, VOID} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/station';
 import {hashString, mulberry32} from '../core/rng';
+import {coreView, hasExtensionGrowth} from '../gen/trackExt/core'; // Track 2 (lane GEN)
 import {NodeMaterial, QuadMesh, RenderTarget, type Node} from 'three/webgpu';
 import {
   Fn, clamp, dot, float, floor, fract, int, ivec2, materialColor, materialRoughness, max, min, mix, modelWorldMatrix, normalLocal, positionWorld, pow,
@@ -203,8 +204,29 @@ function valueNoise(seed: number, period: number): (x: number, y: number) => num
 /**
  * The station's decay field (deterministic per layout seed). Levels are `levels` in order (index = light-field
  * slot = layout.levels index).
+ * Track 2 (lane GEN): a layout whose track extensions grew its grid gets its CORE window from the core view (the level exactly as
+ * without them: same leak draws, lanes and noise frame), the rest (tunnels / annexes) from the field of the whole grid.
  */
 export function buildDecayField(layout: StationLayout, levels: readonly Level[]): DecayField {
+  const e = layout.extensions;
+  if (!e || !hasExtensionGrowth(layout)) return buildFieldOf(layout, levels);
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const core = coreView(layout);
+  const byId = new Map(core.levels.map(L => [L.id, L]));
+  const cf = buildFieldOf(core, levels.map(L => byId.get(L.id) ?? {...L, grid: core.grid}));
+  const full = buildFieldOf(layout, levels);
+  const {x, y, w, h} = e.core, W = full.w, H = full.h;
+  for (let L = 0; L < full.levels; L++) {
+    for (let r = 0; r < h; r++) {
+      const s = (L * w * h + r * w) * 4, d = (L * W * H + (r + y) * W + x) * 4;
+      full.data.set(cf.data.subarray(s, s + w * 4), d);
+    }
+  }
+  full.stats = {ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0, sources: cf.stats.sources, leaks: cf.stats.leaks};
+  return full;
+}
+
+function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayField {
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const g0 = levels[0].grid, W = g0.w, H = g0.h, S = levels.length, n = W * H;
   const data = new Uint8Array(W * H * S * 4);

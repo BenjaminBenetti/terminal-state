@@ -142,12 +142,13 @@ export function boxOverlap(p: Box3, q: Box3, eps = 0.002): Box3 | null {
 // ---------------------------------------------------------------------------------------------
 // Clearance API for prop placement
 
-const volumeCache = new WeakMap<StationLayout, {doors: number; vols: DoorClearVolume[]}>();
+const volumeCache = new WeakMap<StationLayout, {doors: number; ref: readonly Door[]; vols: DoorClearVolume[]}>();
 function cachedVolumes(layout: StationLayout): DoorClearVolume[] {
   const c = volumeCache.get(layout);
-  if (c && c.doors === layout.doors.length) return c.vols;
+  // (Track 2: a re-framed layout gets a new doors array: rebuilt)
+  if (c && c.doors === layout.doors.length && c.ref === layout.doors) return c.vols;
   const vols = doorClearVolumes(layout);
-  volumeCache.set(layout, {doors: layout.doors.length, vols});
+  volumeCache.set(layout, {doors: layout.doors.length, ref: layout.doors, vols});
   return vols;
 }
 

@@ -29,6 +29,7 @@ import {landingStrip, signOverlaps} from './dress';
 import {acceptedPlaced, spawnContext, spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
 import {CORRIDOR_CLEAR_M, isNarrowPassage, isPlantKind, passageClear} from './companyDress';
 import {COMPANIES} from './companies';
+import {extensionIssues} from '../trackExt/index';
 
 export function officeIssues(layout: StationLayout, f: TowerFrame, spawns: SpawnProfile = spawnProfile('office')): string[] {
   const issues: string[] = [];
@@ -238,6 +239,8 @@ export function officeIssues(layout: StationLayout, f: TowerFrame, spawns: Spawn
     const m = /^flight (\d+) off spec$/.exec(s);
     return !(m && scissorFlights.has(Number(m[1])));
   }));
+  // Track 2 (lane GEN): the station's tunnels / annexes (reachability both ways, clearance, caps, doors, clues).
+  issues.push(...extensionIssues(layout, dist));
   return issues;
 }
 

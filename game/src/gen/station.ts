@@ -31,6 +31,15 @@ import {acceptedPlaced, spawnContext, spawnProfile, type SpawnProfile} from '../
 import {buildLevelLinks, buildLevels, deriveRails, levelDistance, levelIssues, registerApertures, shiftPlan} from './levelGen';
 import {dressLevels, lightServiceLevel, placeLevelSpawns} from './levelGenDress';
 import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
+// Track 2 (lane GEN): tunnels past the bed ends + service annexes (gen/trackExt), planned before the crop, attached after every core pass.
+import {dropExtensions, extendTracks, extensionIssues, finishExtensions, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
+
+/**
+ * Track 2 (lane GEN): grid cell budget of a station with its track extensions (W x H of the cropped grid). The baked light field
+ * is W x H x 24 x 4 B on the Subway and downsamples above 32e6 B (~333k cells): the extensions stay well under it (the largest
+ * core stations are ~205k cells).
+ */
+export const STATION_EXT_MAX_CELLS = 260_000;
 
 export * from './stationTypes';
 export {ROOM_LABEL};
@@ -61,19 +70,24 @@ export function pickArchetype(seed: number): Archetype {
  * Task enemy-spawn-tables-20261030 (lane SPAWN): `spawns` = the logical level's enemy spawn profile (ai/spawnTables.ts; default:
  * the Subway's) — context 'station', the storey moves and the room modifiers; validation reads the same profile.
  */
-export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId; loot?: LootProfile; spawns?: SpawnProfile} = {}): StationLayout {
+export function generateStation(seed: number, opts: {archetype?: Archetype; startWeapon?: StartWeaponId; loot?: LootProfile; spawns?: SpawnProfile; trackExtensions?: TrackExtConfig | 'none'} = {}): StationLayout {
   const arch = opts.archetype ?? pickArchetype(seed);
   const sw = opts.startWeapon ?? 'rifle';
   const loot = opts.loot ?? lootProfile('subway');
   const spawns = opts.spawns ?? spawnProfile('subway');
+  // Track 2 (lane GEN): the level's track extensions (default: the Subway's config; 'none' = exactly the station without them).
+  const ext = opts.trackExtensions ?? trackExtConfig('subway');
   for (let attempt = 0; attempt < 24; attempt++) {
     const s = attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed);
-    const layout = tryGenerate(s, seed >>> 0, attempt, arch, sw, loot, spawns);
-    if (layout && validateLayout(layout, spawns).length === 0) return layout;
+    const layout = tryGenerate(s, seed >>> 0, attempt, arch, sw, loot, spawns, ext);
+    if (!layout) continue;
+    if (validateLayout(layout, spawns).length === 0) return layout;
+    // Track 2: extensions never decide a retry (the core keeps main's attempt): drop them and re-check the core.
+    if (layout.extensions?.tunnels.length) { dropExtensions(layout); if (validateLayout(layout, spawns).length === 0) { TRACK_EXT_STATS.rescued++; return layout; } }
   }
   // Extremely unlikely; fall back to a deterministic layout even with warnings.
   for (let attempt = 24; attempt < 60; attempt++) {
-    const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine', sw, loot, spawns);
+    const layout = tryGenerate(hashString('retry' + attempt, seed), seed >>> 0, attempt, attempt < 40 ? arch : 'side-mezzanine', sw, loot, spawns, ext);
     if (layout) return layout;
   }
   throw new Error('station generation failed');
@@ -84,11 +98,11 @@ export function generateStation(seed: number, opts: {archetype?: Archetype; star
  * no validation retry — tests use it to catch issues (e.g. decor in doorways) that a retry would
  * otherwise hide by silently picking another layout.
  */
-export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed), startWeapon: StartWeaponId = 'rifle', loot: LootProfile = lootProfile('subway'), spawns: SpawnProfile = spawnProfile('subway')): StationLayout | null {
-  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch, startWeapon, loot, spawns);
+export function generateAttempt(seed: number, attempt = 0, arch: Archetype = pickArchetype(seed), startWeapon: StartWeaponId = 'rifle', loot: LootProfile = lootProfile('subway'), spawns: SpawnProfile = spawnProfile('subway'), trackExtensions: TrackExtConfig | 'none' = trackExtConfig('subway')): StationLayout | null {
+  return tryGenerate(attempt === 0 ? seed >>> 0 : hashString('retry' + attempt, seed), seed >>> 0, attempt, arch, startWeapon, loot, spawns, trackExtensions);
 }
 
-function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype, startWeapon: StartWeaponId = 'rifle', loot: LootProfile = lootProfile('subway'), spawns: SpawnProfile = spawnProfile('subway')): StationLayout | null {
+function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Archetype, startWeapon: StartWeaponId = 'rifle', loot: LootProfile = lootProfile('subway'), spawns: SpawnProfile = spawnProfile('subway'), trackExt: TrackExtConfig | 'none' = 'none'): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng);
   const {areas, doors, wing} = k;
@@ -96,6 +110,8 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   const terms = rng.shuffle(TERMINALS.slice());
   const plan = buildSkeleton(k, arch, terms);
   if (!plan) return null;
+  // Track 2 (lane GEN): CORE-CHANGING option only (coreReserveM > 0; the default 0 keeps the station byte-identical).
+  if (trackExt !== 'none' && trackExt.coreReserveM > 0) reserveTunnelRoom(k, trackExt);
 
   // --- Sealed street exits: dead-end stair halls with a locked grille (no outside, no travel) ---
   const EXL = 20; // 4 m landing + 6 m stair
@@ -326,6 +342,11 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
     }
   }
 
+  // --- Track 2 (lane GEN): tunnels past the bed ends + service annexes, planned into the virtual canvas on their OWN fork (the
+  // main stream is untouched). The crop and every core pass below run exactly as without them; finishExtensions then re-frames
+  // the finished core into the extended grid (a pure translation) and stamps them in -------------------------------------------
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'subway', canvasGrow: 'any', maxCells: STATION_EXT_MAX_CELLS});
+
   // --- Crop the canvas to the station (iteration 08: every level grid, same bounds) ----------------
   const srcs = k.levelGrids;
   const src = k.g;
@@ -359,7 +380,7 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   for (const sf of shops.storefronts) { sf.ox -= ox; sf.oy -= oy; sf.ux -= ox; sf.uy -= oy; }
   const trenches = k.trenches.map(t => Kit.trenchWorld(t, ox, oy));
 
-  const layout: StationLayout = {
+  let layout: StationLayout = {
     seed, attempt, name, archetype: arch, towards: [terms[0], terms[1]], grid: g, areas, doors,
     props: [], lights: [], signs: [], pickups: [], zombies: [], storefronts: shops.storefronts, decor: [],
     playerSpawn: {x: 0, z: 0, yaw: 0},
@@ -395,6 +416,9 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   finishTraversal(layout);
   // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed.
   assignEnemyArchetypes(layout, spawns); // lane SPAWN: the level's pool, per the spawn's room
+  // Track 2 (lane GEN): only now the extensions join: the core is re-framed into the extended grid (translated when they reach
+  // west / north) and their cells / areas / doors are appended (every pass above saw exactly the core world).
+  if (ext) layout = finishExtensions(layout, ext, {ox, oy, grow: 'any'});
   return layout;
 }
 
@@ -477,6 +501,8 @@ export function validateLayout(layout: StationLayout, spawns: SpawnProfile = spa
   issues.push(...doorwayIssues(layout));
   // Iteration 08 (Lane A): stacked levels — overlap, slabs / headroom, stairs, railings, placements, reachability.
   if (layout.levels?.length) issues.push(...levelIssues(layout, dists));
+  // Track 2 (lane GEN): tunnels / annexes (reachability both ways, clearance, caps, doors, clues); absent extensions: none.
+  issues.push(...extensionIssues(layout, dists));
   return issues;
 }
 

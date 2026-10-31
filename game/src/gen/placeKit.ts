@@ -377,14 +377,15 @@ export function markCell(ctx: PlaceCtx, arr: Uint8Array, i: number): void {
 // Doorway clearance (bucketed)
 
 const DOOR_BUCKET = 4;
-const doorCache = new WeakMap<StationLayout, {doors: number; vols: DoorClearVolume[]; buckets: Map<number, number[]>}>();
+const doorCache = new WeakMap<StationLayout, {doors: number; ref?: readonly Door[]; vols: DoorClearVolume[]; buckets: Map<number, number[]>}>();
 /**
  * doorways.propBlocksDoorway with the clear volumes bucketed on a 4 m XZ grid (same volumes, same answer; generation calls it
  * thousands of times). Heights are absolute (a prop on another level passes its absolute base).
  */
 export function propBlocksDoorway(layout: StationLayout, x: number, z: number, hx: number, hz: number, y = 0, h = 2): DoorClearVolume | null {
   let c = doorCache.get(layout);
-  if (!c || c.doors !== layout.doors.length) {
+  // (Track 2: a re-framed layout gets a new doors array: rebuilt)
+  if (!c || c.doors !== layout.doors.length || c.ref !== layout.doors) {
     const vols = doorClearVolumes(layout), buckets = new Map<number, number[]>();
     vols.forEach((v, i) => {
       for (let bx = Math.floor(v.x0 / DOOR_BUCKET); bx <= Math.floor(v.x1 / DOOR_BUCKET); bx++) for (let bz = Math.floor(v.z0 / DOOR_BUCKET); bz <= Math.floor(v.z1 / DOOR_BUCKET); bz++) {
@@ -393,7 +394,7 @@ export function propBlocksDoorway(layout: StationLayout, x: number, z: number, h
         if (l) l.push(i); else buckets.set(k, [i]);
       }
     });
-    doorCache.set(layout, (c = {doors: layout.doors.length, vols, buckets}));
+    doorCache.set(layout, (c = {doors: layout.doors.length, ref: layout.doors, vols, buckets}));
   }
   const box = {x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, y0: y, y1: y + h};
   for (let bx = Math.floor(box.x0 / DOOR_BUCKET); bx <= Math.floor(box.x1 / DOOR_BUCKET); bx++) for (let bz = Math.floor(box.z0 / DOOR_BUCKET); bz <= Math.floor(box.z1 / DOOR_BUCKET); bz++) {

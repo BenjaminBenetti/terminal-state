@@ -254,6 +254,36 @@ export function compositionOf(layout: StationLayout): CompositionSummary | null 
   return SUMMARY.get(layout) ?? null;
 }
 
+/** Track 2 (lane GEN): `to` takes over `from`'s composition record (an in-place re-frame adopting its re-framed copy). */
+export function adoptComposition(from: StationLayout, to: StationLayout): void {
+  const s = SUMMARY.get(from);
+  if (s) SUMMARY.set(to, s);
+}
+
+/**
+ * Track 2 (lane GEN): carries a dressed station's composition record over to its RE-FRAMED copy (gen/trackExt/core.ts reframe:
+ * the new frame's cell (0, 0) is the old cell (ox, oy), w x h cells) — world positions translated, the cell masks re-windowed.
+ */
+export function reframeComposition(from: StationLayout, to: StationLayout, ox: number, oy: number, w: number, h: number): void {
+  const s = SUMMARY.get(from);
+  if (!s) return;
+  const dx = ox * CELL, dz = oy * CELL, W = from.grid.w, H = from.grid.h;
+  const win = (m: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(w * h), sx0 = Math.max(0, ox), sx1 = Math.min(W, ox + w);
+    if (sx1 > sx0) for (let y = 0; y < h; y++) { const sy = y + oy; if (sy >= 0 && sy < H) out.set(m.subarray(sy * W + sx0, sy * W + sx1), y * w + (sx0 - ox)); }
+    return out;
+  };
+  const p2 = (q: {x: number; z: number}) => ({x: q.x - dx, z: q.z - dz});
+  SUMMARY.set(to, {
+    ...s,
+    clusters: s.clusters.map(c => ({...c, x: c.x - dx, z: c.z - dz})),
+    landmarks: s.landmarks.map(l => ({...l, from: p2(l.from), to: p2(l.to)})),
+    areas: s.areas.map(a => ({...a, clusters: a.clusters.slice()})),
+    plazas: s.plazas.map(r => ({...r, x0: r.x0 - dx, z0: r.z0 - dz, x1: r.x1 - dx, z1: r.z1 - dz})),
+    masks: s.masks.map(m => ({lane: win(m.lane), plaza: win(m.plaza)})),
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Composer
 

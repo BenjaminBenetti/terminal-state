@@ -83,6 +83,20 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
   '40677:rifle:split': ['280e6a9b', '314cffa5', 'station 23 (L0 18 L1 2 L2 3)'],
   '48596:rifle:deep': ['41e72df3', 'ff5eebea', 'station 32 (L0 25 L1 2 L2 5)'],
 };
+/**
+ * Stage 3 (Track 2, lane GEN — pin history in tests/enemy-spawn-parity.test.ts): the LIVE Subway layouts. Entries equal to
+ * SUBWAY_GOLDEN are stations whose extensions never reach west / north (or that have none); the others are the same spawns and
+ * pickups translated with the core (their core view reproduces SUBWAY_GOLDEN byte for byte, asserted every run).
+ */
+export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
+  ...SUBWAY_GOLDEN,
+  // translated cores (same spawns / counts / areas; x / z shifted with the core)
+  '42:rifle': ['56f8c8ba', '5b5d5bad', 'station 30 (L0 24 L1 2 L2 4)'],
+  '42:pistol': ['56f8c8ba', '2b39a883', 'station 30 (L0 24 L1 2 L2 4)'],
+  '9001:rifle:side-mezzanine': ['5578005e', '294e2619', 'station 30 (L0 23 L1 2 L2 5)'],
+  '32758:rifle:interchange': ['5e7bcddb', '27accbd0', 'station 31 (L0 23 L1 3 L2 5)'],
+  '48596:rifle:deep': ['25cb63be', 'fe055a49', 'station 32 (L0 25 L1 2 L2 5)'],
+};
 // Office: stage 2 (task office-props-physics-scale-20261030) — see the pin history in tests/enemy-spawn-parity.test.ts.
 export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = {
   '11:pistol': ['5d274546', 'ef270423', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],

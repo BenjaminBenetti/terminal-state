@@ -18,32 +18,49 @@
 //     bc96b5e2, 4242 c008ba55 / ef25f3cf -> 8f127b50 / ba008081, 11:rifle 2f57fea3 / 9e782ad4 -> 5d274546 / 7cb613ae.
 //  (merge of task gas-mask-roof-feedback-20261030, no re-pin): the Office roof FIND's reward pickups (appended last, pinned in
 //     loot-golden officeRoofFind) are left out of pickupHash (helpers/enemySpawnParity.ts); every hash above is reproduced as is.
+//  3. Track 2 — Beyond the Station (lane GEN, track extensions): tunnels past the bed ends + service annexes are planned on their
+//     own rng fork and appended AFTER every core pass; when one reaches west / north of the station the finished core is re-framed
+//     (translated) into the larger grid (gen/trackExt/index.ts finishExtensions). Every core decision is made in main's frame:
+//     no spawn, count, area id, type or family changed — only absolute x / z of translated stations. Translation-normalised
+//     proof (below, every run): the SAME hashes over gen/trackExt coreView(layout) (the core window, records translated back to
+//     the core frame at their exact core-frame positions, extension records filtered) reproduce the main 932624e / stage-2 pins
+//     (SUBWAY_GOLDEN / OFFICE_GOLDEN) byte for byte. The live layouts are pinned as SUBWAY_GOLDEN_TRACK2 (only the translated
+//     seeds differ: see the helper) and OFFICE_GOLDEN (the Office never translates: it grows east / south — unchanged).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {
-  OFFICE_GOLDEN, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_PARITY, contextCounts, officeKey, pickupHash, spawnSpecHash, subwayKey,
+  OFFICE_GOLDEN, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_GOLDEN_TRACK2, SUBWAY_PARITY, contextCounts, officeKey, pickupHash, spawnSpecHash, subwayKey,
 } from './helpers/enemySpawnParity'; // the pinned hashes live in the helper (shared with enemy-spawn-tables.test.ts)
+import {coreView} from '../src/gen/trackExt/index';
+import type {StationLayout} from '../src/gen/stationTypes';
+
+const triple = (l: StationLayout): [string, string, string] => [spawnSpecHash(l), pickupHash(l), contextCounts(l)];
 
 describe('enemy spawn parity (pinned at main 932624e)', () => {
-  it('Subway: spawn specs + downstream pickups byte-identical', () => {
-    const got: Record<string, [string, string, string]> = {};
+  it('Subway: spawn specs + downstream pickups byte-identical (the core view = main; the live layouts = stage 3)', () => {
+    const core: Record<string, [string, string, string]> = {}, live: Record<string, [string, string, string]> = {};
     for (const c of SUBWAY_PARITY) {
       const l = generateStation(c.seed, {startWeapon: c.startWeapon, ...(c.archetype ? {archetype: c.archetype} : {})});
-      got[subwayKey(c)] = [spawnSpecHash(l), pickupHash(l), contextCounts(l)];
+      core[subwayKey(c)] = triple(coreView(l));
+      live[subwayKey(c)] = triple(l);
     }
-    if (JSON.stringify(got) !== JSON.stringify(SUBWAY_GOLDEN)) console.info(`[enemy-spawn-parity] subway ${JSON.stringify(got, null, 1)}`);
-    expect(got).toEqual(SUBWAY_GOLDEN);
+    if (JSON.stringify(core) !== JSON.stringify(SUBWAY_GOLDEN)) console.info(`[enemy-spawn-parity] subway core ${JSON.stringify(core, null, 1)}`);
+    if (JSON.stringify(live) !== JSON.stringify(SUBWAY_GOLDEN_TRACK2)) console.info(`[enemy-spawn-parity] subway live ${JSON.stringify(live, null, 1)}`);
+    expect(core).toEqual(SUBWAY_GOLDEN);
+    expect(live).toEqual(SUBWAY_GOLDEN_TRACK2);
   });
 
   it('Office: spawn specs (street, floors 2..8, roof) + downstream pickups byte-identical', () => {
-    const got: Record<string, [string, string, string]> = {};
+    const core: Record<string, [string, string, string]> = {}, live: Record<string, [string, string, string]> = {};
     for (const c of OFFICE_PARITY) {
       const l = generateOfficeLevel({levelSeed: c.levelSeed, startWeapon: c.startWeapon});
-      got[officeKey(c)] = [spawnSpecHash(l), pickupHash(l), contextCounts(l)];
+      core[officeKey(c)] = triple(coreView(l));
+      live[officeKey(c)] = triple(l);
     }
-    if (JSON.stringify(got) !== JSON.stringify(OFFICE_GOLDEN)) console.info(`[enemy-spawn-parity] office ${JSON.stringify(got, null, 1)}`);
-    expect(got).toEqual(OFFICE_GOLDEN);
+    if (JSON.stringify(live) !== JSON.stringify(OFFICE_GOLDEN)) console.info(`[enemy-spawn-parity] office ${JSON.stringify(live, null, 1)}`);
+    expect(core).toEqual(OFFICE_GOLDEN);
+    expect(live).toEqual(OFFICE_GOLDEN);
   });
 });

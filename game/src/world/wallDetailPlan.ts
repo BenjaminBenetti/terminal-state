@@ -26,6 +26,7 @@ import type {WallFace, WallZone} from './wallFaces';
 import {faceFrame, normalizeFaces, stationWallFaces, type TreatFace} from './wallDetailFaces';
 import {CHUNK_M, stationLevels} from './levelGeometry';
 import {FRIEZE_SIZE, type AtlasCell} from './wallDetailAtlas';
+import {isExtensionArea} from '../gen/trackExt/types'; // Track 2 (lane GEN)
 
 export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete'
   // Task office-overhaul-20261030 (lane ARCH): office storey walls (painted plasterboard / feature finishes) and the roof parapets.
@@ -215,7 +216,9 @@ export interface PlanOptions {
 
 /** Plan the wall treatment of a station. Deterministic for (layout, faces). */
 export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): WallDetailPlan {
-  const faces = normalizeFaces(opts.faces ?? stationWallFaces(layout));
+  // Track 2 (lane GEN): track-extension walls (tunnels / annexes) are not part of the core plan — its per-station caps, breaches
+  // and seeds stay exactly the core's; the extensions' presentation plans their own walls (lane VIS).
+  const faces = normalizeFaces((opts.faces ?? stationWallFaces(layout)).filter(f => !isExtensionArea(layout.areas[f.area])));
   const levels = new Levels(stationLevels(layout));
   const srng = new Rng(hashString('wall-detail', layout.seed >>> 0));
   const accent = STATION_ACCENTS[srng.int(0, STATION_ACCENTS.length - 1)];
