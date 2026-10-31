@@ -34,6 +34,8 @@ import {surface, type SurfaceName} from './canvasTextures';
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {floorLabel, gateLocal, gateWorld, sideNormal, wallBox, type Box3Like, type DoorGate, type ElevatorInfo, type P3, type Rect2} from './towerShared';
+// (task mall-round2-20261031, lane RUNTIME, M02: every stop label below is the stop's authored label — StopInfo.label — never the
+// Office numbering floorLabel(floor): the mall's station stop is 'S' and its retail floors '1' / '2' / '3', the Office keeps L / 2..8)
 
 // ---------------------------------------------------------------------------------------------
 // Tuning
@@ -398,7 +400,7 @@ export type LiftButtonKind = 'floor' | 'open' | 'close' | 'alarm' | 'up' | 'down
 
 /** One physical button: an in-world target (aim within reach + left click / E). */
 export interface LiftButton {
-  /** 'car-5', 'car-L', 'car-open', 'car-close', 'car-alarm'; 'hall-3-up', 'hall-L-up', 'hall-8-down'. */
+  /** 'car-5', 'car-L', 'car-open', 'car-close', 'car-alarm'; 'hall-3-up', 'hall-L-up', 'hall-8-down' (mall: 'car-S', 'hall-S-up', 'car-1'). */
   id: string;
   where: 'car' | 'hall';
   kind: LiftButtonKind;
@@ -406,7 +408,7 @@ export interface LiftButton {
   stop: number;
   /** Floor of that stop (0: open / close / alarm). */
   floor: number;
-  /** Glyph on the cap ('L', '2' … for floors; the kind for the rest). */
+  /** Glyph on the cap (the stop label: 'L', '2' … / mall 'S', '1' … for floors; the kind for the rest). */
   glyph: string;
   /** In the car's local frame (CabFrame: l along the door wall, w into the cab): y above the cab floor (car) / the stop floor (hall). */
   local: {l: number; y: number; w: number};
@@ -505,7 +507,7 @@ export function planElevator(info: ElevatorInfo): ElevatorPlan {
       box: wallBox({x: bx, y, z: bz}, panelN, carSize, carSize, 0.03)});
   };
   // floors bottom-up in two columns (L 2 / 3 4 / 5 6 / 7 8), as seen facing the panel: left column = smaller l
-  info.stops.forEach((st, i) => carBtn('floor', i, st.floor, floorLabel(st.floor), `car-${floorLabel(st.floor)}`, lp + (i % 2 ? COP_DX : -COP_DX), yFloor0 + Math.floor(i / 2) * COP_DY));
+  info.stops.forEach((st, i) => carBtn('floor', i, st.floor, st.label, `car-${st.label}`, lp + (i % 2 ? COP_DX : -COP_DX), yFloor0 + Math.floor(i / 2) * COP_DY));
   carBtn('open', -1, 0, 'open', 'car-open', lp - COP_DX, yDoor);
   carBtn('close', -1, 0, 'close', 'car-close', lp + COP_DX, yDoor);
   carBtn('alarm', -1, 0, 'alarm', 'car-alarm', lp - COP_DX, yAlarm);
@@ -519,7 +521,7 @@ export function planElevator(info: ElevatorInfo): ElevatorPlan {
     const nn: [number, number] = [nx, nz];
     calls.push({at, n: nn, box: wallBox(at, nn, 0.26, 0.4, 0.12), eye: {x: x + nx * 0.12, y: at.y, z: z + nz * 0.12}, l});
     const dirs: ('up' | 'down')[] = n < 2 ? [] : i === 0 ? ['up'] : i === n - 1 ? ['down'] : ['up', 'down'];
-    const label = floorLabel(st.floor);
+    const label = st.label;
     hallButtons.push(dirs.map((k): LiftButton => {
       const y = st.callPanel.y + (dirs.length > 1 ? (k === 'up' ? 0.055 : -0.055) : 0);
       const [hx, hz] = gateWorld(gate, hallFace + HALL_BTN_D, l), [bx, bz] = gateWorld(gate, hallFace, l);
@@ -593,6 +595,12 @@ const FLOOR_GLYPHS = Array.from({length: 15}, (_, i) => floorLabel(i + 1));
 const GLYPHS = [...FLOOR_GLYPHS, 'open', 'close', 'alarm', 'up', 'down', 'key', 'lantern-up', 'lantern-down'];
 const LIT_CELL = 24;
 const CELL_CAPACITY = 48, CELL_STEEL = 52, CELL_BLACK = 53, CELL_FIRE = 56;
+/**
+ * Task mall-round2-20261031 (lane RUNTIME, M02): stop labels outside the Office's FLOOR_GLYPHS — the mall's station stop 'S' and its
+ * first retail floor '1' — in FREE atlas cells [unlit, lit] (23 / 47 after the glyph rows, 54 / 55 after the steel / black cells), so
+ * every Office cell (and its UVs) stays exactly where it was. An unknown glyph still falls back to cell 0.
+ */
+const EXTRA_GLYPHS: Readonly<Record<string, readonly [number, number]>> = {S: [23, 47], 1: [54, 55]};
 /** Fraction of a cell's half-size the cap disc fills (4 px of steel margin keep mipmaps from bleeding into the neighbours). */
 const DISC_K = 28 / 32;
 
@@ -603,13 +611,21 @@ function cellUV(index: number, w = 1): UVRect {
   return {u0: cx / ATLAS_N, u1: (cx + w) / ATLAS_N, v0: 1 - (cy + 1) / ATLAS_N, v1: 1 - cy / ATLAS_N};
 }
 const glyphCell = (glyph: string, lit = false): number => {
+  const x = EXTRA_GLYPHS[glyph];
+  if (x) return x[lit ? 1 : 0];
   const i = GLYPHS.indexOf(glyph);
   return (i < 0 ? 0 : i) + (lit ? LIT_CELL : 0);
 };
+
+/** Tests / QA: every drawn button glyph and its atlas cells (unlit, lit) — a stop label missing here would show cell 0 ('L'). */
+export function buttonGlyphCells(): {glyph: string; unlit: number; lit: number}[] {
+  return [...GLYPHS.map((glyph, i) => ({glyph, unlit: i, lit: LIT_CELL + i})), ...Object.entries(EXTRA_GLYPHS).map(([glyph, [unlit, lit]]) => ({glyph, unlit, lit}))];
+}
 const cellCentre = (index: number): [number, number] => { const r = cellUV(index); return [(r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2]; };
 
 /** Braille dots (1 2 3 down the left, 4 5 6 down the right) beside the floor / door buttons (a tactile hint, not a reading aid). */
 const BRAILLE: Record<string, number[]> = {
+  S: [2, 3, 4], 1: [1], // (lane RUNTIME, M02: the mall's station / first-floor buttons)
   L: [1, 2, 3], 2: [1, 2], 3: [1, 4], 4: [1, 4, 5], 5: [1, 5], 6: [1, 2, 4], 7: [1, 2, 4, 5], 8: [1, 2, 5], 9: [2, 4], 10: [1], 11: [1], 12: [1, 2],
   13: [1, 4], 14: [1, 4, 5], 15: [1, 5], open: [1, 3, 5], close: [1, 4],
 };
@@ -704,6 +720,7 @@ class ButtonAtlas {
       if (ctx) {
         ctx.fillStyle = '#8c9093'; ctx.fillRect(0, 0, ATLAS_PX, ATLAS_PX);
         GLYPHS.forEach((g, i) => { drawCell(ctx, i, g, false); drawCell(ctx, LIT_CELL + i, g, true); });
+        for (const [g, [u, l]] of Object.entries(EXTRA_GLYPHS)) { drawCell(ctx, u, g, false); drawCell(ctx, l, g, true); }
         drawLabel(ctx, CELL_CAPACITY, 4, 'capacity');
         drawLabel(ctx, CELL_FIRE, 4, 'fire');
         const flat = (i: number, c: string) => { ctx.fillStyle = c; ctx.fillRect((i % ATLAS_N) * CELL_PX, Math.floor(i / ATLAS_N) * CELL_PX, CELL_PX, CELL_PX); };
@@ -1400,8 +1417,8 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
       lUp: mesh(g, overlay('lantern-up', () => corridor(quadGeometry(0.075, 0.095, cellUV(glyphCell('lantern-up', true))), 0.24, (LY0 + LY1) / 2, -d - 0.026)), M.lit, 'tower-lantern-lit-up', lvl),
       lDown: mesh(g, overlay('lantern-down', () => corridor(quadGeometry(0.075, 0.095, cellUV(glyphCell('lantern-down', true))), -0.24, (LY0 + LY1) / 2, -d - 0.026)), M.lit, 'tower-lantern-lit-down', lvl),
     };
-    lit.set(`lantern-${floorLabel(st.floor)}-up`, lamps.lUp);
-    lit.set(`lantern-${floorLabel(st.floor)}-down`, lamps.lDown);
+    lit.set(`lantern-${st.label}-up`, lamps.lUp);
+    lit.set(`lantern-${st.label}-down`, lamps.lDown);
     for (const b of list) {
       const geo = overlay(`${b.kind}|${b.local.l.toFixed(3)}|${b.local.y.toFixed(3)}`,
         () => corridor(capGeometry(b.r * 0.985, 0, cellUV(glyphCell(b.glyph, true)), steelPt), b.local.l, b.local.y, -d - HALL_PLATE_T - HALL_BTN_D - 0.001));
@@ -1571,5 +1588,5 @@ export function buildElevatorView(plan: ElevatorPlan, mats: WorldMaterials, opts
 /** Exposed for tests: the singleton indicator's texture and last drawn key. */
 export function indicatorState(): {texture: THREE.Texture; last: string} { const i = getIndicator(); return {texture: i.texture, last: i.last}; }
 
-/** Indicator text for a floor. */
+/** Indicator text for a floor (the Office numbering; a world's elevator shows its stops' own labels: towerShared stopLabel). */
 export const indicatorText = floorLabel;

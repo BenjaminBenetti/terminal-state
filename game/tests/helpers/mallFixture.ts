@@ -17,6 +17,9 @@
 //   floors    gallery x 12..48, z 12..41.5; shops north z 2.5..11.5 (4 units of different widths), south z 42..49.5 (3 units,
 //             stock rooms z 50..52, staff doors into the service corridor x 2..58, z 52.5..53.5), west x 2..11.5 (one deep unit);
 //             an EAST CORRIDOR x 48..58, z 28..32 off the gallery with a small unit either side (x 49..57, z 22.5..27.5 / 32.5..37.5)
+//   exits     (opt-in `{exits: true}`, task mall-round2-20261031 lane ARCH, M09) one LOCKED street exit in lane GEN's MallStreetExit shape
+//             (lanes/GEN.notes CONTRACT) at the floor-1 east corridor's end: plane x 58, opening z 28.5..31.5 (panes as gen/mall/exits.ts
+//             panelsOf), head y 9, a 2.5 m SOLID vestibule (collider x 58..60.5), the view volume x 60.5..80.5 (off the grid), z 22..38
 import {CELL, FLOOR, Grid, SOLID, VOID} from '../../src/gen/grid';
 import type {Level, LevelRole} from '../../src/gen/levels';
 import type {Area, Door, LightPlacement, StationLayout, Trench} from '../../src/gen/station';
@@ -79,7 +82,23 @@ export interface MallFixture {
 type MRect = {x0: number; z0: number; x1: number; z1: number};
 const cellsOf = (r: MRect) => ({x: Math.round(r.x0 / CELL), y: Math.round(r.z0 / CELL), w: Math.round((r.x1 - r.x0) / CELL), h: Math.round((r.z1 - r.z0) / CELL)});
 
-export function mallFixture(opts: {lights?: boolean} = {}): MallFixture {
+/** The fixture's opt-in street exit (lane GEN's MallStreetExit record shape; floor 1 = the street storey). */
+export const FIX_EXIT = {
+  id: 'exit-1', kind: 'corridor-end', level: 1, streetY: 6, side: 'E',
+  door: {plane: 58, s0: 28.5, s1: 31.5, y0: 6, y1: 9},
+  panels: [
+    {kind: 'sidelight', s0: 28.5, s1: 29.1, y0: 6, y1: 8.3}, {kind: 'door', s0: 29.1, s1: 30, y0: 6, y1: 8.3},
+    {kind: 'door', s0: 30, s1: 30.9, y0: 6, y1: 8.3}, {kind: 'sidelight', s0: 30.9, s1: 31.5, y0: 6, y1: 8.3},
+    {kind: 'transom', s0: 28.5, s1: 31.5, y0: 8.35, y1: 9},
+  ],
+  vestibule: 2.5, facade: 60.5,
+  collider: {x0: 58, z0: 27.5, x1: 60.5, z1: 32.5, y0: 6, y1: 9.4},
+  view: {x0: 60.5, z0: 22, x1: 80.5, z1: 38, y0: 5, y1: 36},
+  hall: {area: -1, depth: 10, width: 4, ceil: 9.4},
+  locked: true, sign: 'EXIT CLOSED', seed: 4242,
+} as const;
+
+export function mallFixture(opts: {lights?: boolean; exits?: boolean} = {}): MallFixture {
   const {W, H} = MALL_FIX, N = MALL_FIX.rings + 1;
   const grids = Array.from({length: N}, () => new Grid(W, H));
   grids[0].voidFloor = MALL_FIX.bedY;
@@ -212,6 +231,7 @@ export function mallFixture(opts: {lights?: boolean} = {}): MallFixture {
     patrol: [],
     subwayRoot: {level: 'mall', storey: 0, platformY: 0, trackBedY: MALL_FIX.bedY, platforms: [platform.id], tunnelMouths: [], keepClear: [{...v}]},
     start: {x: MALL_FIX.start.x, z: MALL_FIX.start.z, yaw: 0, level: 0},
+    ...(opts.exits ? {exits: [JSON.parse(JSON.stringify({...FIX_EXIT, hall: {...FIX_EXIT.hall, area: corridors[0][1]}}))]} : {}),
   } as unknown as MallInfo;
   const trench: Trench = {x0: MALL_FIX.bed.x0, x1: MALL_FIX.bed.x1, z0: MALL_FIX.bed.z0, z1: MALL_FIX.bed.z1, floorY: MALL_FIX.bedY, platformX0: MALL_FIX.bed.x0, platformX1: MALL_FIX.bed.x1, tracks: [], third: [], columns: false, ceil: MALL_FIX.apex} as unknown as Trench;
   const layout = {

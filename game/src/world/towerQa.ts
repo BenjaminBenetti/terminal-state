@@ -8,11 +8,12 @@
 // mousedown on the game canvas (Input -> Game.update -> pointerHandlers: no shot / flare / bag placement) or, with
 // via 'key', an E keydown — and resolves once the frame loop handled it (with the shots fired meanwhile: expected 0).
 // Ids: 'car-5', 'car-L', 'car-open', 'car-close', 'car-alarm', 'hall-3-up', 'hall-8-down'; shorthands '5' / 'L' / 'open' /
-// 'close' / 'alarm' (the cab panel) and 'up' / 'down' (the call station of the player's storey).
+// 'close' / 'alarm' (the cab panel) and 'up' / 'down' (the call station of the player's storey). Task mall-round2-20261031 (lane
+// RUNTIME, M02): ids / floor labels are each stop's own label — the mall's 'car-S' (station), 'car-1' … 'car-3', 'hall-S-up'.
 
 import type {TowerRuntime} from './towerRuntime';
-import type {LiftButton} from './elevator';
-import {floorLabel, gateWorld, insideRect} from './towerShared';
+import {indicatorState, type LiftButton} from './elevator';
+import {gateWorld, insideRect, stopLabel} from './towerShared';
 import {EXT_U} from './exterior';
 
 type Rgb = [number, number, number];
@@ -82,8 +83,9 @@ export function towerQaApi(game: unknown) {
     if (!e) return {office: !!rt().office, elevator: false};
     const L = e.logic, t = rt().target;
     return {
-      elevator: true, floor: floorLabel(L.floor), y: r3(L.y), phase: L.phase, doors: r3(L.door), state: L.state, gateOpen: e.gate.open,
-      queue: [...L.requests].map(k => floorLabel(L.stops[k].floor)), lit: e.plan.buttons.filter(lit).map(b => b.id),
+      elevator: true, floor: stopLabel(e.plan.info.stops, L.floor), y: r3(L.y), phase: L.phase, doors: r3(L.door), state: L.state, gateOpen: e.gate.open,
+      queue: [...L.requests].map(k => stopLabel(e.plan.info.stops, L.stops[k].floor)), lit: e.plan.buttons.filter(lit).map(b => b.id),
+      indicator: indicatorState().last, // lane RUNTIME (M02): what the live floor indicators show ('S|0', '2|1' = label|dir)
       target: t ? t.btn.id : null, reach: t ? r3(t.t) : null, prompt: rt().prompt, inCab: rt().playerInCab(),
       lastPress: rt().lastPress, counts: {...rt().counts},
     };
@@ -120,7 +122,7 @@ export function towerQaApi(game: unknown) {
           floor: L.floor, queue: [...L.requests].map(k => L.stops[k].floor).sort((a, b) => a - b), doors: r3(L.door), state: L.state,
           gateOpen: e!.gate.open, level: e!.vol.level, trips: L.trips, arrivals: L.arrivals,
         } : null,
-        stops: L ? L.stops.map((s, i) => ({floor: s.floor, label: floorLabel(s.floor), y: r3(s.y), landingDoor: r3(L.landingDoor(i)), hall: L.hall.has(i), up: L.hallUp.has(i), down: L.hallDown.has(i), car: L.car.has(i)})) : [],
+        stops: L ? L.stops.map((s, i) => ({floor: s.floor, label: stopLabel(e!.plan.info.stops, s.floor), y: r3(s.y), landingDoor: r3(L.landingDoor(i)), hall: L.hall.has(i), up: L.hallUp.has(i), down: L.hallDown.has(i), car: L.car.has(i)})) : [],
         landingDoors: L ? Object.fromEntries(L.stops.map((s, i) => [s.floor, r3(L.landingDoor(i))])) : {},
         riders: e ? {...e.carried} : null,
         player: {x: r3(P.x), y: r3(P.y), z: r3(P.z), level: g.levels?.levelAt(P.x, P.z, P.y) ?? -1, inCab: rt().playerInCab()},

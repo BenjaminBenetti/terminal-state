@@ -6036,12 +6036,12 @@
    "output": {
     "file": "game/public/assets/models/office-cctv-console.glb",
     "url": "assets/models/office-cctv-console.glb",
-    "sha256": "b633cb08bd9531704ca5469d0364d62ac429bfb0743b7588bebe080c42ab4b98",
-    "bytes": 438720,
-    "triangles": 4133,
+    "sha256": "89bbf3bbfdf21104e56e8e52551db5752b178acbc7ce22628a70cf10feed7310",
+    "bytes": 440548,
+    "triangles": 4153,
     "dims": [
      2,
-     1.0221,
+     1.6721,
      1.2378
     ],
     "overBudget": false
@@ -6057,7 +6057,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices",
+   "transform": "rotateY(180deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: lifted +0.65 m onto a console base (lane PROPS M03), then furniture-only rescale x1.0000 to 2 m (w), grounded / centred again",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -6096,7 +6096,61 @@
      "bytes": 16846,
      "sha256": "a46699e6019c4f5e3a63046021347f73620ad4f65bf0a6a89a4826b9c0136948"
     }
-   ]
+   ],
+   "furniture": {
+    "task": "mall-round2-20261031 (lane PROPS, M03)",
+    "operation": "console base (local riser with a front knee recess) under a console modelled sitting on the floor",
+    "manifestSizeM": 2,
+    "manifestSizeAxis": "w",
+    "sizeM": 2,
+    "sizeAxis": "w",
+    "basis": "width 2.0 m kept; lifted +0.65 m onto a console base with a front knee recess (desk top ~0.75 m, monitor bank ~0.94-1.64 m); rule-4 exception: the console-mounted control equipment on its desk (joystick, keypad, touch panel, radio base, gooseneck mic) stays in the model",
+    "scaleFromManifest": 1,
+    "removed": null,
+    "edits": {
+     "consoleBase": {
+      "dy": 0.65,
+      "body": {
+       "x": [
+        -0.94,
+        0.945
+       ],
+       "z": [
+        -0.293,
+        0.593
+       ],
+       "y": [
+        0.08,
+        0.65
+       ]
+      },
+      "kick": {
+       "x": [
+        -0.89,
+        0.895
+       ],
+       "z": [
+        -0.243,
+        0.543
+       ],
+       "y": [
+        0,
+        0.08
+       ]
+      },
+      "frontOverhang": 0.3259,
+      "tris": 20,
+      "color": [
+       0.06,
+       0.062,
+       0.068,
+       1
+      ],
+      "roughness": 0.7,
+      "metallic": 0.25
+     }
+    }
+   }
   },
   {
    "code": "D32",

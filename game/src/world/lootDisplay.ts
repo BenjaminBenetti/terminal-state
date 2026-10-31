@@ -24,6 +24,16 @@ import {itemTemplate} from './pickups';
 export interface LotInstance { id: number; itemId: string; matrix: THREE.Matrix4 }
 
 interface Batch { parts: {im: THREE.InstancedMesh; local: THREE.Matrix4}[]; cap: number }
+
+/**
+ * Task mall-round2-20261031 (lane PERF, user M05 "~1,500 draw calls"): in the mall the batches were the last always-drawn meshes — one
+ * per item type, frustumCulled off and never culler-registered, so every type with a lot within LOT_VIEW_DIST (any storey: XZ distance)
+ * drew in the scene AND the torch shadow pass looking anywhere. Now (storeyOf set): one batch per (item, storey) — its instances'
+ * bounds recomputed on every show, frustum-culled, tagged with its storey and `dynamicBounds` so the level culler's storey / slab /
+ * occlusion rules decide it (world/levelCulling.ts) — plus one all-storey batch per item for a lot that left its storey (a holder
+ * knocked off a gallery: its loot never loses its instance). Capacity per batch = the item's total lots (no overflow anywhere).
+ * Subway / Office: unchanged (storeyOf null).
+ */
 interface Highlight { obj: THREE.Object3D; mats: THREE.MeshStandardMaterial[]; meshes: THREE.Mesh[] }
 
 /** Layers a fresh object renders on (the camera layers; never the level culler's cull layer). */
@@ -40,6 +50,8 @@ export class LotDisplay {
   private hl: Highlight | null = null;
   /** Lots drawn by the last refresh (QA). */
   visible = 0;
+  /** Task mall-round2 (lane PERF): the storey of a lot height (the mall; null elsewhere: one batch per item type, unbounded). */
+  storeyOf: ((y: number) => number) | null = null;
 
   constructor() {
     this.group.name = 'loot-items';
@@ -59,29 +71,50 @@ export class LotDisplay {
     return m;
   }
 
-  /** (Re)allocates instance capacity for this station: lot count per item id. */
-  allocate(counts: Map<string, number>): void {
+  /**
+   * (Re)allocates instance capacity for this station: lot count per item id. `storeys` (the mall, with storeyOf): the storeys each
+   * item initially lies on and every storey id -> one batch per (item, storey) + one all-storey batch (see the note above).
+   */
+  allocate(counts: Map<string, number>, storeys?: {perStorey: Map<string, Set<number>>; all: readonly number[]}): void {
     this.clear();
     for (const [itemId, cap] of counts) {
       if (cap <= 0) continue;
       const tpl = itemTemplate(itemId);
       tpl.updateMatrixWorld(true);
-      const parts: Batch['parts'] = [];
-      tpl.traverse(o => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        const mat = Array.isArray(mesh.material) ? mesh.material.map(m => this.batchMat(m)) : this.batchMat(mesh.material);
-        const im = new THREE.InstancedMesh(mesh.geometry, mat, cap);
-        im.count = 0;
-        im.visible = false;
-        im.frustumCulled = false; // instances move in/out each refresh; the set is already distance-bounded
-        im.name = `loot-${itemId}`;
-        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.group.add(im);
-        parts.push({im, local: mesh.matrixWorld.clone()});
-      });
-      this.batches.set(itemId, {parts, cap});
+      const make = (key: string, tag: {level?: number; levels?: number[]} | null) => {
+        const parts: Batch['parts'] = [];
+        tpl.traverse(o => {
+          const mesh = o as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mat = Array.isArray(mesh.material) ? mesh.material.map(m => this.batchMat(m)) : this.batchMat(mesh.material);
+          const im = new THREE.InstancedMesh(mesh.geometry, mat, cap);
+          im.count = 0;
+          im.visible = false;
+          im.name = `loot-${itemId}`;
+          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          if (tag) {
+            // bounds follow the instances (show); the level culler decides it per storey (dynamic bounds: may start empty)
+            im.computeBoundingBox();
+            im.computeBoundingSphere();
+            if (tag.level !== undefined) im.userData.level = tag.level; else im.userData.levels = tag.levels;
+            im.userData.dynamicBounds = true;
+          } else im.frustumCulled = false; // instances move in/out each refresh; the set is already distance-bounded
+          this.group.add(im);
+          parts.push({im, local: mesh.matrixWorld.clone()});
+        });
+        this.batches.set(key, {parts, cap});
+      };
+      if (!storeys || !this.storeyOf) { make(itemId, null); continue; }
+      for (const s of storeys.perStorey.get(itemId) ?? []) make(`${itemId}|${s}`, {level: s});
+      make(`${itemId}|*`, {levels: [...storeys.all]});
     }
+  }
+
+  /** The batch of a lot (the mall: its storey's, else the item's all-storey batch). */
+  private batchKey(l: LotInstance): string {
+    if (!this.storeyOf) return l.itemId;
+    const k = `${l.itemId}|${this.storeyOf(l.matrix.elements[13])}`;
+    return this.batches.has(k) ? k : `${l.itemId}|*`;
   }
 
   /** Draws exactly `list` (the aimed lot, if any, as the highlight copy instead). */
@@ -91,22 +124,24 @@ export class LotDisplay {
     let hlLot: LotInstance | null = null;
     for (const l of list) {
       if (l.id === highlightId) { hlLot = l; continue; }
-      const b = this.batches.get(l.itemId);
+      const key = this.batchKey(l);
+      const b = this.batches.get(key);
       if (!b) continue;
-      const i = fill.get(l.itemId) ?? 0;
+      const i = fill.get(key) ?? 0;
       if (i >= b.cap) continue;
       for (const p of b.parts) p.im.setMatrixAt(i, m.multiplyMatrices(l.matrix, p.local));
-      fill.set(l.itemId, i + 1);
+      fill.set(key, i + 1);
     }
     this.visible = 0;
-    for (const [itemId, b] of this.batches) {
-      const n = fill.get(itemId) ?? 0;
+    for (const [key, b] of this.batches) {
+      const n = fill.get(key) ?? 0;
       this.visible += n;
       for (const p of b.parts) {
         if (p.im.count === 0 && n === 0) continue;
         p.im.count = n;
         p.im.visible = n > 0;
         p.im.instanceMatrix.needsUpdate = true;
+        if (this.storeyOf) { p.im.computeBoundingBox(); p.im.computeBoundingSphere(); } // task mall-round2 (lane PERF): bounded batches
       }
     }
     if (this.hl) { this.hl.obj.visible = false; this.hl = null; }

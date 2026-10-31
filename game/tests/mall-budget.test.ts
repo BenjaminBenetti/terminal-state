@@ -52,6 +52,10 @@ import {lootProfile} from '../src/items/lootTables';
 import {readTowerInfo} from '../src/world/towerShared';
 import {buildElevatorView, planElevator} from '../src/world/elevator';
 import {Inventory} from '../src/items/inventory';
+import {ROOF, setMallVariantOverride} from '../src/gen/mall/frame';
+import {registerMovingLift} from '../src/world/towerRuntime';
+import {OCCL_TOP} from '../src/world/levelCulling';
+import {markShadows} from '../src/render/volumetric';
 
 installCanvasShim(false);
 // the pickups' label atlas clips its cells (ShimContext has no clip(); structural run: a no-op, like every other draw here)
@@ -266,17 +270,28 @@ describe('decoded model images released after upload in the mall (assets/texture
 // ---------------------------------------------------------------------------------------------------------------------------
 
 /** The real mall t3a built once through the game's build path (shared by the budget and the slab-occlusion oracle tests). */
-let real: Promise<{layout: StationLayout; world: ReturnType<typeof buildWorld>; cm: ContainerManager; stock: ShelfStock; roots: THREE.Object3D[]; keys: string[]; lazyTex: number}> | null = null;
-function realMall() {
-  return (real ??= (async () => {
-    const layout = LEVELS.mall.generate(LEVELS.mall.entry, {levelSeed: codeToSeed('t3a')!, startWeapon: 'pistol'});
+type RealMall = {layout: StationLayout; world: ReturnType<typeof buildWorld>; cm: ContainerManager; stock: ShelfStock; roots: THREE.Object3D[]; keys: string[]; lazyTex: number};
+const realByVariant = new Map<string, Promise<RealMall>>();
+const modelCache = new Map<string, Promise<GLTF>>();
+const loadModel = (url: string) => { let m = modelCache.get(url); if (!m) modelCache.set(url, (m = loadStripped(url))); return m; };
+/**
+ * Task mall-round2-20261031 (lane PERF): `variant` forces a mall variant (the primary's M05 matched views use t3a with
+ * ?mallVariant=arcade-loop); default = the seed's own variant (the budget / slab-oracle tests below). Models are loaded once.
+ */
+function realMall(variant?: string): Promise<RealMall> {
+  const key = variant ?? '';
+  let r = realByVariant.get(key);
+  if (!r) realByVariant.set(key, (r = (async () => {
+    if (variant) setMallVariantOverride(variant);
+    let layout: StationLayout;
+    try { layout = LEVELS.mall.generate(LEVELS.mall.entry, {levelSeed: codeToSeed('t3a')!, startWeapon: 'pistol'}); } finally { if (variant) setMallVariantOverride(null); }
     // the lazy working set exactly as Game.modelKeysFor selects it
     const keys = selectLevelKeys('mall', [...new Set([...p7ModelKeysFor(layout), ...officeModelKeysFor(layout as never), ...enemyModelKeysFor(layout)])], CATALOGUE).keys;
     const lazyTex = keys.reduce((s, k) => s + glbTextureBytes(pub(CATALOGUE[k].url)), 0);
     const models: Record<string, GLTF> = {};
-    for (const k of keys) { if (!k.startsWith('enemy_')) models[k] = await loadStripped(CATALOGUE[k].url); }
+    for (const k of keys) { if (!k.startsWith('enemy_')) models[k] = await loadModel(CATALOGUE[k].url); }
     for (const k of ['light', 'sign', 'turnstile', 'bench', 'cabinetTall', 'cabinetLow', 'stall', 'vending', 'shelf', 'trashCan', 'crate', 'shopCounter', 'shopBackbar', 'shopCooler', 'shopDisplay', 'janitorCart', 'magazineRack', 'techDisplay'] as const) {
-      models[k] ??= await loadStripped((MODEL_FILES as Record<string, {url: string}>)[k].url);
+      models[k] ??= await loadModel((MODEL_FILES as Record<string, {url: string}>)[k].url);
     }
     const lb = new THREE.Box3().setFromObject(models.light.scene).getSize(new THREE.Vector3());
     const mats = new WorldMaterials(fakeEnvTextures(), 20261025, {w: lb.x, h: lb.y, d: lb.z});
@@ -296,10 +311,13 @@ function realMall() {
       view.setCab(lift.stops[0].y, 0);
       world.group.add(view.root);
       for (const g of view.landings) world.culler.register(g);
+      // task mall-round2 (lane PERF): + the moving car / rig, as towerRuntime.build registers them in the mall
+      registerMovingLift(world.culler, view, lift.stops.map(q => q.levelId));
     }
     world.culler.maxDistance = Math.min(fogCullDistance(MALL_FOG.density), MALL_FOG.far);
     return {layout, world, cm, stock, roots: [world.group, cm.group, stock.group], keys, lazyTex};
-  })());
+  })()));
+  return r;
 }
 
 /** A game camera (fov 75, 960 x 540, the mall's far plane) at a pose's eye (floor + 1.62 m). */
@@ -374,12 +392,19 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     const y0 = pose.y ?? (lv > 0 ? (layout.levels?.[lv - 1]?.grid ?? layout.grid) : layout.grid).floorAt(pose.x, pose.z);
     const cam = eyeCam(pose.x, y0, pose.z, pose.yaw, (pose as {pitch?: number}).pitch ?? 0);
     for (const r of roots) r.updateMatrixWorld(true);
+    // (task mall-round2 lane PERF: the slab A/B and the instancing ratio below are measured as pinned — without the newer same- /
+    // cross-storey occlusion, which then removes more on top: inViewOccl)
+    world.culler.occlusion = false;
     world.culler.slabs = false;
     world.culler.update(cam, true);
     const noSlab = drawnBy(roots, cam);
     world.culler.slabs = true;
     world.culler.update(cam, true);
     const inView = drawnBy(roots, cam);
+    const slabCulled = world.culler.slabCulled;
+    world.culler.occlusion = true;
+    world.culler.update(cam, true);
+    const inViewOccl = drawnBy(roots, cam);
     const smallInstanced = inView.filter(m => (m as THREE.InstancedMesh).isInstancedMesh && (m as THREE.InstancedMesh).count * 64 <= 65536).length;
     // distinct programs with attribute instancing (as Game.buildSection sets it for the mall): one compile per material /
     // attribute-layout group (GLSL node builder = the WebGL 2 path), deduplicated by the generated code
@@ -406,7 +431,8 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     }
 
     const report = {
-      startView: {objects: inView.length, triangles: Math.round(trisOf(inView)), objectsNoSlab: noSlab.length, trianglesNoSlab: Math.round(trisOf(noSlab)), slabCulled: world.culler.slabCulled, smallInstanced, programsDefault: smallInstanced + codes.size, programsAttribute: codes.size},
+      startView: {objects: inView.length, triangles: Math.round(trisOf(inView)), objectsNoSlab: noSlab.length, trianglesNoSlab: Math.round(trisOf(noSlab)), slabCulled, smallInstanced, programsDefault: smallInstanced + codes.size, programsAttribute: codes.size,
+        objectsOcclusion: inViewOccl.length, trianglesOcclusion: Math.round(trisOf(inViewOccl)), occlusionCulled: world.culler.occlusionCulled},
       level: {objects, triangles: Math.round(triangles), geometryMB: +(geometry / MB).toFixed(1), materials: materials.size, canvasTextureMB: +(canvasTex / MB).toFixed(1)},
       lazy: {models: keys.length, textureMB: +(lazyTex / MB).toFixed(1)},
     };
@@ -423,6 +449,8 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     // triangles still halve (657k -> 368k): pin both honestly.
     expect(inView.length).toBeLessThan(noSlab.length);
     expect(trisOf(inView)).toBeLessThan(trisOf(noSlab) * 0.7);
+    // task mall-round2 (lane PERF): the occlusion only removes (world/levelCulling.ts OCCL_*; correctness: 'M05 matched views' below)
+    expect(inViewOccl.length).toBeLessThanOrEqual(inView.length);
     expect(objects).toBeLessThanOrEqual(MALL_BUDGET.objects);
     expect(triangles).toBeLessThanOrEqual(MALL_BUDGET.triangles);
     expect(geometry / MB).toBeLessThanOrEqual(MALL_BUDGET.geometryMB);
@@ -473,5 +501,230 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     expect(checked).toBeGreaterThanOrEqual(10);
     expect(slabTotal).toBeGreaterThan(0); // the rule actually culls on these poses
     world.culler.update(eyeCam(layout.mall!.start.x, 0, layout.mall!.start.z, 0, 0), true);
+  }, 300_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task mall-round2-20261031 (lane PERF, user M05: "when looking certain directions there can be FPS drop, caused by ~1,500 draw
+// calls and the CPU spending a lot of time in the submit phase"). The primary's matched views (seed t3a, ?mallVariant=arcade-loop,
+// the 7 QA poses; evidence/perf/baseline-*.json at 1366b95, llvmpipe WebGL2: 286–863 draws, CPU submit ~0.06–0.07 ms per draw) and
+// lane PERF's census of the same views in Node (lanes/PERF.notes): only 8–47 % of the submitted meshes own a visible pixel; the bulk
+// were holders / props / room dressing behind walls — on the eye's storey and on the storeys seen through the atrium — each drawn in
+// the scene pass and again in the flashlight's shadow pass. Fixes: world/levelCulling.ts same- / cross-storey OCCLUSION (OCCL_*),
+// and storey-split chunks for the mall's openable holders / legacy container bodies / purpose dressing (a batch spanning two storeys
+// could never be culled). Estimates below mirror three r186's render lists (Renderer._projectObject / renderObject): one draw per
+// visible mesh x material group in the frustum (transparent double-sided: two), the flashlight pass = castShadow meshes in its
+// SpotLightShadow frustum on the camera's layers. Static world only (no enemies / viewmodel / loot display / post quads): Node
+// estimates, not llvmpipe or native measurements.
+
+/**
+ * Matched-view budget (static world + the loot display filled for the eye, scene + flashlight shadow draws; lanes/PERF.notes).
+ * Follow-up (primary, after the browser check): the glass lift's car / rig and the loot display's batches are culler-registered too.
+ */
+const M05_BUDGET = {
+  /** Sum over the 7 matched views (measured 3,062; ~3,545 before the lift / loot registration; 3,479 + loot at 1366b95). */
+  total: 3250,
+  /** The worst matched view, ring-edge 2 (measured 728). */
+  worst: 800,
+  /** Draws the lift / loot registration removes over the 7 views (measured ~483: the loot display 538 -> 59). */
+  followUp: 300,
+} as const;
+
+const M05_POSES: [string, Parameters<typeof mallQaPose>[1] | 'start', number?][] = [['start', 'start'], ['platform-lookup', 'platform-lookup'],
+  ['escalator1', 'escalator', 1], ['ring-edge2', 'ring-edge', 2], ['court1', 'court'], ['corridor1', 'corridor', 1], ['shopfront1', 'shopfront', 1]];
+
+/** three r186 render list of a camera under `roots`: draws (transparent double-sided = 2) of the meshes it would submit. */
+function renderDraws(roots: readonly THREE.Object3D[], cam: THREE.Camera, casters = false): number {
+  cam.updateMatrixWorld(true);
+  const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices((cam as THREE.PerspectiveCamera).projectionMatrix, cam.matrixWorldInverse));
+  const sph = new THREE.Sphere();
+  let n = 0;
+  const walk = (o: THREE.Object3D) => {
+    if (!o.visible) return;
+    const m = o as THREE.Mesh;
+    if (m.isMesh && o.layers.test(cam.layers) && (!casters || m.castShadow)) {
+      const im = m as THREE.InstancedMesh;
+      if (!(im.isInstancedMesh && im.count === 0)) {
+        let inView = true;
+        if (m.frustumCulled !== false) {
+          if (im.isInstancedMesh) { if (!im.boundingSphere) im.computeBoundingSphere(); sph.copy(im.boundingSphere!); } else { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); sph.copy(m.geometry.boundingSphere!); }
+          inView = fr.intersectsSphere(sph.applyMatrix4(m.matrixWorld));
+        }
+        if (inView) {
+          const mats = Array.isArray(m.material) ? m.geometry.groups.map(g => (m.material as THREE.Material[])[g.materialIndex!]).filter(Boolean) : [m.material as THREE.Material];
+          for (const mt of mats) if (mt.visible) n += !casters && mt.transparent && mt.side === THREE.DoubleSide && !mt.forceSinglePass ? 2 : 1;
+        }
+      }
+    }
+    for (const c of o.children) walk(c);
+  };
+  for (const r of roots) walk(r);
+  return n;
+}
+
+/** The game's flashlight (game.ts: SpotLight(.., 30 m, 0.58 rad, .., 1.2), camera-local offsets) on `cam`, torch on. */
+function torchOn(cam: THREE.PerspectiveCamera): THREE.SpotLight {
+  const fl = new THREE.SpotLight(0xfff4e2, 1, 30, 0.58, 0.7, 1.2);
+  fl.position.set(0.2, -0.15, 0.1);
+  fl.target.position.set(0.04, -0.12, -6);
+  cam.add(fl, fl.target);
+  cam.updateMatrixWorld(true);
+  fl.shadow.camera.near = 0.2;
+  fl.shadow.mapSize.set(1024, 1024);
+  fl.shadow.updateMatrices(fl);
+  fl.shadow.camera.layers.mask = cam.layers.mask; // ShadowNode.updateShadow: the camera's layers
+  return fl;
+}
+
+describe('M05 matched views (t3a, arcade-loop forced): draws per pass and occlusion correctness', () => {
+  it('scene + flashlight-shadow draw estimates within budget, below 1366b95, occlusion hides nothing the eye or the torch sees', async () => {
+    const {layout, world, roots, cm} = await realMall('arcade-loop');
+    expect(OCCL_TOP).toBeLessThan(ROOF.spring); // the top storey's occlusion range stays under the vault's glass
+    // game.ts buildSection: the station structure / holders cast + receive, shelf stock casts
+    markShadows(world.group, true, true);
+    markShadows(roots[1], true, true);
+    markShadows(roots[2], true, false);
+    const all = new THREE.Group();
+    const lines: string[] = [];
+    let total = 0, worst = 0, totalOff = 0, prevTotal = 0;
+    try {
+      for (const r of roots) all.add(r);
+      for (const [label, name, ring] of M05_POSES) {
+        let p: {x: number; y: number; z: number; yaw: number; pitch: number} | null;
+        if (name === 'start') {
+          const a = arrivalPose(layout, {kind: 'start'} as never), lv = a.level ?? 0;
+          p = {x: a.x, y: a.y ?? (lv > 0 ? layout.levels[lv].grid : layout.grid).floorAt(a.x, a.z), z: a.z, yaw: a.yaw, pitch: (a as {pitch?: number}).pitch ?? 0};
+        } else p = mallQaPose(layout, name, ring);
+        expect(p, label).toBeTruthy();
+        const cam = eyeCam(p!.x, p!.y, p!.z, p!.yaw, p!.pitch);
+        const fl = torchOn(cam);
+        world.culler.viewpoints = [fl];
+        // the loot display as the game fills it for this eye (ContainerManager.target sets the eye; update refreshes the lots)
+        (cm as unknown as {lastEye: THREE.Vector3}).lastEye.copy(cam.position);
+        cm.update(0.2, 0);
+        const count = () => { world.culler.update(cam, true); fl.shadow.camera.layers.mask = cam.layers.mask; return [renderDraws(roots, cam), renderDraws(roots, fl.shadow.camera, true)]; };
+        world.culler.occlusion = false;
+        const [s0, h0] = count();
+        world.culler.occlusion = true;
+        const [s1, h1] = count();
+        // correctness: no mesh the occlusion hides owns a pixel seen from the eye, nor from the flashlight (its shadow camera)
+        const occluded = new Set(world.culler.entries.filter(e => e.occluded).map(e => e.obj));
+        const fromEye = visibleMeshes(all, cam, 256, 144, {minPx: 1}), fromTorch = visibleMeshes(all, fl.shadow.camera as THREE.PerspectiveCamera, 160, 160, {minPx: 1});
+        const bad = [...fromEye.keys()].filter(m => occluded.has(m)).map(m => `${label} eye: ${m.name} ${fromEye.get(m)}px`)
+          .concat([...fromTorch.keys()].filter(m => occluded.has(m)).map(m => `${label} torch: ${m.name} ${fromTorch.get(m)}px`));
+        expect(bad).toEqual([]);
+        expect(s1 + h1, label).toBeLessThanOrEqual(s0 + h0); // the occlusion only ever removes work
+        // follow-up accounting: the lift car / rig and the loot display before this task registered them (lift: frustum only; loot:
+        // one unbounded batch per item type with a shown lot, drawn in both passes) vs now
+        const liftMeshes: THREE.Mesh[] = [], lootMeshes: THREE.InstancedMesh[] = [];
+        for (const r of roots) r.traverse(o => { if ((o as THREE.Mesh).isMesh && o.userData.dynamicBounds) (o.name.startsWith('loot-') ? lootMeshes : liftMeshes).push(o as THREE.InstancedMesh); });
+        const liftNow = renderDraws(liftMeshes, cam) + renderDraws(liftMeshes, fl.shadow.camera, true), lootNow = renderDraws(lootMeshes, cam) + renderDraws(lootMeshes, fl.shadow.camera, true);
+        const saved = liftMeshes.map(m => m.layers.mask);
+        liftMeshes.forEach(m => { m.layers.mask = cam.layers.mask; });
+        const liftBefore = renderDraws(liftMeshes, cam) + renderDraws(liftMeshes, fl.shadow.camera, true);
+        liftMeshes.forEach((m, i) => { m.layers.mask = saved[i]; });
+        const shownTypes = new Map<string, number>(); // item type -> draws of its old single batch (template parts x material groups)
+        for (const im of lootMeshes) if (im.count > 0 && !shownTypes.has(im.name)) {
+          const parts = lootMeshes.filter(q => q.name === im.name && q.userData.levels); // the all-storey batch: one per template part
+          shownTypes.set(im.name, parts.reduce((n, q) => n + (Array.isArray(q.material) ? q.material.length : 1), 0));
+        }
+        const lootBefore = 2 * [...shownTypes.values()].reduce((a, b) => a + b, 0);
+        const pre = s1 + h1 - liftNow - lootNow + liftBefore + lootBefore;
+        lines.push(`${label}: occlusion off ${s0} + ${h0} = ${s0 + h0} | on ${s1} + ${h1} = ${s1 + h1} (occluded ${occluded.size}, eye-visible ${fromEye.size}) | lift ${liftBefore} -> ${liftNow}, loot ${lootBefore} -> ${lootNow}; before this follow-up ~${pre}`);
+        total += s1 + h1; totalOff += s0 + h0; worst = Math.max(worst, s1 + h1);
+        prevTotal += pre;
+        if (label === 'corridor1') expect(s1 + h1).toBeLessThan((s0 + h0) * 0.75); // a corridor between shops: most holders sit behind walls
+        cam.remove(fl, fl.target);
+      }
+    } finally {
+      for (const r of [...all.children]) all.remove(r);
+      world.culler.viewpoints = [];
+      world.culler.occlusion = true;
+    }
+    console.log(`[mall M05] ${lines.join(' ; ')} ; total ${total} (occlusion off ${totalOff}, before the lift / loot registration ~${prevTotal}), worst ${worst}`);
+    if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-m05.txt', [...lines, `total ${total} (off ${totalOff}; before lift / loot registration ~${prevTotal}) worst ${worst}`].join('\n'));
+    expect(prevTotal - total).toBeGreaterThan(M05_BUDGET.followUp); // registering the lift / loot batches only removes draws
+    expect(total).toBeLessThanOrEqual(M05_BUDGET.total);
+    expect(worst).toBeLessThanOrEqual(M05_BUDGET.worst);
+  }, 300_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Task mall-round2-20261031 (lane ARCH, M09 for the M05 accounting): the LOCKED street exits' render cost on the same real mall
+// (t3a, arcade-loop forced: lane GEN places two entrance-hall exits there). Per exit 4 meshes = 4 scene draws when its opening may
+// be seen (frame, glass, street, fog cards; one shared material each = 4 programs for every exit, one shared 1024² canvas atlas)
+// + the frame in the flashlight pass when lit; ~1.1–2.0 k triangles. The aperture gate (world/levelCulling.ts ExitAperture) keeps
+// them out of every view that cannot see the opening (of the 7 matched views only corridor1 sees one: exit-1 down the corridor, 4 draws).
+const EXIT_BUDGET = {
+  /** Meshes (= scene draws) per exit (measured 4) and triangles per exit (measured 1,690–1,890 on t3a arcade-loop). */
+  meshes: 4, triangles: 2400,
+  /** Exit draws allowed in a matched view beyond `meshes` per exit the depth oracle sees there (measured 0; corridor1 sees exit-1). */
+  matchedViewDraws: 0,
+} as const;
+
+describe('M09 street exits on the matched-view mall (t3a, arcade-loop): per-exit cost, culled from the matched views, drawn at the exit', () => {
+  it('4 draws / <= 2.4 k tris per exit, shared materials + atlas; matched views draw an exit only when it is in sight; at the exit pose the oracle sees nothing culled', async () => {
+    const {layout, world, roots} = await realMall('arcade-loop');
+    markShadows(world.group, true, true); // game.ts buildSection: the station structure casts (the exit frame does: it is lit + opaque)
+    const exits = layout.mall!.exits ?? [];
+    expect(exits.length, 'lane GEN places exits on t3a arcade-loop').toBeGreaterThan(0);
+    const exitMeshes: THREE.Mesh[] = [];
+    world.group.traverse(o => { if ((o as THREE.Mesh).isMesh && o.name.startsWith('mall-exit-')) exitMeshes.push(o as THREE.Mesh); });
+    const cost = world.mallArch!.stats.exitCost;
+    expect(cost.length).toBe(exits.length);
+    const mats = new Set(exitMeshes.map(m => m.material as THREE.Material));
+    expect(mats.size).toBe(4); // every exit shares the four materials (four programs in total)
+    const atlases = new Set<THREE.Texture>();
+    for (const m of mats) { const t = (m as {map?: THREE.Texture | null}).map; if (t) atlases.add(t); }
+    expect(atlases.size).toBeLessThanOrEqual(1);
+    for (const c of cost) { expect(c.meshes, c.id).toBe(EXIT_BUDGET.meshes); expect(c.triangles, c.id).toBeLessThanOrEqual(EXIT_BUDGET.triangles); }
+    const culledLayer = (1 << CULL_LAYER) >>> 0;
+    const isCulled = (m: THREE.Object3D) => (m.layers.mask >>> 0) === culledLayer;
+    const lines: string[] = [`exits ${exits.map(e => `${e.id} ${e.kind} ${e.side}`).join(', ')}; per exit ${cost.map(c => `${c.id}: ${c.meshes} meshes / ${c.triangles} tris`).join(', ')}`];
+    // the 7 matched views (lane PERF's M05_POSES): no exit submitted (its opening is not in sight from any of them)
+    for (const [label, name, ring] of M05_POSES) {
+      let p: {x: number; y: number; z: number; yaw: number; pitch: number} | null;
+      if (name === 'start') {
+        const a = arrivalPose(layout, {kind: 'start'} as never), lv = a.level ?? 0;
+        p = {x: a.x, y: a.y ?? (lv > 0 ? layout.levels[lv].grid : layout.grid).floorAt(a.x, a.z), z: a.z, yaw: a.yaw, pitch: (a as {pitch?: number}).pitch ?? 0};
+      } else p = mallQaPose(layout, name, ring);
+      if (!p) continue;
+      const cam = eyeCam(p.x, p.y, p.z, p.yaw, p.pitch);
+      world.culler.update(cam, true);
+      const drawn = exitMeshes.filter(m => !isCulled(m));
+      const seen = visibleMeshes(world.group, cam, 128, 72, {minPx: 1});
+      lines.push(`${label}: exit meshes drawn ${drawn.length} (scene draws ${renderDraws(drawn, cam)}); oracle-visible ${exitMeshes.filter(m => seen.has(m)).map(m => `${m.name} ${seen.get(m)}px`).join(', ') || 'none'}`);
+      // an exit is submitted only when it is really in sight (corridor1 looks down the corridor to exit-1's doors: 4 draws, by
+      // design part of M05's count); never one the depth oracle sees culled
+      const inSight = new Set(exitMeshes.filter(m => seen.has(m)).map(m => m.userData.streetExit as string));
+      expect(renderDraws(drawn, cam), label).toBeLessThanOrEqual(EXIT_BUDGET.matchedViewDraws + EXIT_BUDGET.meshes * inSight.size);
+      expect(drawn.every(m => inSight.has(m.userData.streetExit as string)), `${label}: an exit drawn out of sight`).toBe(true);
+      expect(exitMeshes.filter(m => seen.has(m) && isCulled(m)).map(m => m.name), `${label}: exit visible but culled`).toEqual([]);
+    }
+    // at each exit's QA pose: its 4 meshes drawn = 4 scene draws (glass / fog cards single-sided: three would draw a transparent
+    // double-sided material twice), the frame in the torch pass; the depth oracle finds nothing visible culled
+    for (const [k, e] of exits.entries()) {
+      const p = mallQaPose(layout, 'street-exit', k);
+      expect(p, e.id).toBeTruthy();
+      const cam = eyeCam(p!.x, p!.y, p!.z, p!.yaw, p!.pitch);
+      const fl = torchOn(cam);
+      world.culler.viewpoints = [fl];
+      world.culler.update(cam, true);
+      fl.shadow.camera.layers.mask = cam.layers.mask;
+      const mine = exitMeshes.filter(m => m.userData.streetExit === e.id);
+      expect(mine.every(m => !isCulled(m)), `${e.id} drawn at its pose`).toBe(true);
+      const scene = renderDraws(mine, cam), torch = renderDraws(mine, fl.shadow.camera, true);
+      const vis = visibleMeshes(world.group, cam, 128, 72, {minPx: 1});
+      const bad = [...vis].filter(([m]) => isCulled(m)).map(([m, n]) => `${m.name} ${n}px`);
+      lines.push(`street-exit ${k} (${e.id}): exit scene draws ${scene} (${mine.length} meshes), torch ${torch}; visible ${mine.filter(m => vis.has(m)).map(m => `${m.name.split('-').pop()} ${vis.get(m)}px`).join(', ')}; visible-but-culled ${bad.length}`);
+      expect(bad, `${e.id}: visible but culled`).toEqual([]);
+      expect(scene).toBeLessThanOrEqual(EXIT_BUDGET.meshes); // frame, street, glass, fog cards: one draw each
+      expect(torch).toBeLessThanOrEqual(1); // only the frame casts (the street / fog / glass never: unlit or transparent)
+      expect(mine.filter(m => m.castShadow).map(m => m.name.split('-').pop())).toEqual(['frame']);
+      cam.remove(fl, fl.target);
+      world.culler.viewpoints = [];
+    }
+    void roots;
+    if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-exits.txt', lines.join('\n'));
   }, 300_000);
 });

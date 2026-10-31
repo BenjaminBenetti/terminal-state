@@ -747,6 +747,9 @@ export class Game {
     this.world.culler.register(this.containers.group);
     this.world.culler.register(this.stock.group);
     this.world.culler.maxDistance = fogCullDistance(MOOD.fogDensity);
+    // Task mall-round2-20261031 (lane PERF): the mall's same-storey occlusion keeps whatever the flashlight sees too (its shadow pass
+    // draws with the culler's layers); read only by that rule (world/levelCulling.ts OCCL_*), so Subway / Office are unaffected.
+    this.world.culler.viewpoints = [this.flashlight];
 
     // Iteration 16 (RUN) / 17: the level's world is now the run's current one; the player starts at its start pose
     this.run.current = {...key};

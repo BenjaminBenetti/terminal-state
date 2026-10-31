@@ -13,6 +13,13 @@
 //      ONE front layer over the union of the old coverage: no hole, no overlap;
 //   2. OPPOSITE-facing triangles in that plane that overlap the front layer are dropped (with a double-sided material they are drawn
 //      from the front too); the inside of the leaf gets a separate inner plate in the openable spec instead.
+//      Task mall-round2-20261031 (lane PROPS, M04 / M07): opt-in `clipOpposite: true` keeps the part of such an opposite triangle that
+//      the front layer does NOT cover (clipped exactly, attributes interpolated, its own winding), so a plane whose two layers cover
+//      different areas never opens a hole. The default (false) is the original behaviour, byte for byte.
+//      Opt-in `minAxisCos` (e.g. 0.98): only triangles whose 3D normal is within acos(minAxisCos) of the axis are candidates, so a
+//      larger plane tolerance (warped sheets) never treats a steep, narrow sliver as part of the plane. Default: no normal test.
+//      Opt-in `slab: [lo, hi]`: all three vertices must also lie in [lo, hi] along the axis (no tolerance margin), so a large plane
+//      tolerance never reaches a distinct surface just below / above (a shelf's lip underside 1.7 cm under its top).
 // Everything outside the box / off-plane is untouched (vertex order, indices, attributes).
 
 const EPS_AREA = 1e-9;
@@ -65,9 +72,12 @@ function triIndex(prim) {
  * `axis` (0 / 1 / 2) whose front faces point to `facing` (+1 / -1). `tol` = plane / box tolerance (m); `keep` = which overlapping
  * layer wins ('larger' / 'smaller' triangles first). Returns a provenance record.
  */
-export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, keep = 'larger'}) {
+export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, keep = 'larger', clipOpposite = false, minAxisCos = null, slab = null}) {
   const [ia, ib] = [[1, 2], [2, 0], [0, 1]][axis];
   const rec = {axis, facing, keep, box, planes: [], trianglesIn: 0, frontKept: 0, frontClipped: 0, frontDropped: 0, oppositeDropped: 0, piecesAdded: 0, overlapRemovedM2: 0};
+  if (clipOpposite) Object.assign(rec, {clipOpposite: true, oppositeClipped: 0});
+  if (minAxisCos !== null) rec.minAxisCos = minAxisCos;
+  if (slab) rec.slab = slab;
   for (const mesh of doc.getRoot().listMeshes()) for (const prim of mesh.listPrimitives()) {
     const pos = prim.getAttribute('POSITION');
     const I = triIndex(prim);
@@ -82,6 +92,12 @@ export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, ke
       if (!v.every(p => p.every((x, k) => x >= box.min[k] - tol && x <= box.max[k] + tol))) continue;
       const c = v.map(p => p[axis]);
       if (Math.max(...c) - Math.min(...c) > tol) continue;
+      if (slab && !c.every(x => x >= slab[0] && x <= slab[1])) continue;
+      if (minAxisCos !== null) {
+        const e1 = [0, 1, 2].map(k => v[1][k] - v[0][k]), e2 = [0, 1, 2].map(k => v[2][k] - v[0][k]);
+        const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        if (Math.abs(n[axis]) < minAxisCos * Math.hypot(n[0], n[1], n[2])) continue;
+      }
       const P = v.map(p => [p[ia], p[ib]]);
       const a = area2(P);
       if (Math.abs(a) < EPS_AREA) continue;
@@ -115,16 +131,20 @@ export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, ke
         for (const pc of pieces) add.push({src: c.t, poly: pc});
         kept.push(c.P);
       }
-      // opposite-facing triangles overlapping the front layer
-      let oppDropped = 0;
+      // opposite-facing triangles overlapping the front layer (barycentric payload: only used when clipOpposite keeps the remainder)
+      let oppDropped = 0, oppClipped = 0;
       for (const c of opp) {
-        let pieces = [c.P.map(p => [p[0], p[1]])];
+        let pieces = [c.P.map((p, k) => [p[0], p[1], k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0])];
         for (const K of kept) pieces = pieces.flatMap(pc => subtract(pc, K));
         const left = pieces.reduce((s, pc) => s + Math.abs(area2(pc)), 0);
-        if (c.area - left >= MIN_OVERLAP) { drop.add(c.t); oppDropped++; overlap += c.area - left; }
+        if (c.area - left >= MIN_OVERLAP) {
+          drop.add(c.t); oppDropped++; overlap += c.area - left;
+          if (clipOpposite && left > EPS_AREA) { oppClipped++; for (const pc of pieces) add.push({src: c.t, poly: pc, want: -facing}); }
+        }
       }
       if (!clipped && !dropped && !oppDropped) continue;
-      rec.planes.push({at: +g[0].plane.toFixed(5), front: front.length, clipped, dropped, opposite: opp.length, oppositeDropped: oppDropped, overlapM2: +overlap.toFixed(5)});
+      rec.planes.push({at: +g[0].plane.toFixed(5), front: front.length, clipped, dropped, opposite: opp.length, oppositeDropped: oppDropped, ...(clipOpposite ? {oppositeClipped: oppClipped} : {}), overlapM2: +overlap.toFixed(5)});
+      if (clipOpposite) rec.oppositeClipped += oppClipped;
       rec.frontClipped += clipped; rec.frontDropped += dropped; rec.oppositeDropped += oppDropped; rec.overlapRemovedM2 += overlap;
       rec.frontKept += front.length - clipped - dropped;
     }
@@ -134,11 +154,11 @@ export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, ke
     const newVerts = []; // [{src: t, w: [w0, w1, w2]}]
     const newIdx = [];
     for (let t = 0; t < I.length / 3; t++) if (!drop.has(t)) newIdx.push(I[3 * t], I[3 * t + 1], I[3 * t + 2]);
-    for (const {src, poly} of add) {
+    for (const {src, poly, want: wantDir} of add) {
       // keep the source triangle's winding: fan in polygon order, flipped when the polygon order is opposite to the source's
       const srcDir = Math.sign(area2(poly.map(p => [p[0], p[1]])));
       const ids = poly.map(p => { newVerts.push({src, w: [p[2], p[3], p[4]]}); return base + newVerts.length - 1; });
-      const want = facing; // every clipped piece is a front triangle
+      const want = wantDir ?? facing; // a clipped front piece faces `facing`; a kept opposite remainder (clipOpposite) faces -facing
       for (let k = 1; k + 1 < ids.length; k++) {
         const tri = srcDir === want ? [ids[0], ids[k], ids[k + 1]] : [ids[0], ids[k + 1], ids[k]];
         newIdx.push(...tri);

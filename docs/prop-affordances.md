@@ -199,6 +199,11 @@ Task office-props-physics-scale-20261030 (lane SCALE); root `CLAUDE.md` rules 4 
   overlapping) on the furniture's real support surface, so they move or can be taken. Separate them locally from an existing
   model (no regeneration without approval); keep the source provenance. Permanent structure — handles, hinges, shelves,
   built-in fixtures — stays in the model. A remaining baked case is listed as an exception with its reason.
+  - Explicit exception (task mall-round2-20261031, lane PROPS, M03): `cctvConsole` (D31) keeps the control equipment on its
+    desk slab — PTZ joystick and its coiled lead, CCTV keypad, a flush touch panel, a radio base unit, a gooseneck intercom
+    mic — as wired, console-mounted fixtures of the built-in security desk (no radio / joystick / microphone prop or item
+    exists in the catalogue). The console itself now stands on a local steel base (desk top 0.75 m):
+    `build-office-overhaul.mjs` FURNITURE `consoleBase`, `lib/console-base.mjs`.
 - **Inspect every new or changed prop beside a zombie** with `tools/asset-pipeline/props/scale-check.mjs` (CPU only, ~1 s;
   no browser / GPU / Blender). It renders FRONT and SIDE orthographic views on one ground line (0.1 m grid, labelled 0.5 m
   ticks, dashed seat 0.45 / desk 0.75 / counter 0.90 / door 2.00 m references) beside zombie `lastshift` (1.78 m bind mesh,

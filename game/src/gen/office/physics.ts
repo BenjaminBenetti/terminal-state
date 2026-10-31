@@ -77,7 +77,7 @@ export const OFFICE_PHYS = {
   parcelPallet: S('too heavy', 'pallet stacked with parcels (~250 kg): moves only with a pallet jack'),
   napPod: S('too heavy', 'nap pod (~150 kg)'),
   kegerator: S('too heavy', 'kegerator with kegs (~90 kg)'),
-  cctvConsole: S('built-in', 'CCTV control console built into the control room'),
+  cctvConsole: S('built-in', 'CCTV control console built into the control room / mall security office: a ~200 kg monitor cabinet on a steel console base (mall-round2 M03)'),
   metalDetector: S('anchored', 'walk-through metal detector arch bolted at the entry (~70 kg)'),
   vaultSafe: S('too heavy', 'antique vault safe (~500 kg)'),
   archiveBoxes: D(28, 'pad', 'stack of archive boxes full of paper (~28 kg): an openable spill holder (lane OPEN) — a shot or a walk-in knocks it loose and its finite lots spill (openablesSpec `spill`), then it slides / tips'),

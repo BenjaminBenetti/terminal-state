@@ -436,3 +436,25 @@ export function mouthHolds(layout: StationLayout, mc: MallCarve, c: Crop): {leve
   for (const cc of mc.cores) for (let lv = 0; lv <= FLOORS; lv++) hold(lv, {x: cc.lobby.x - 1, y: cc.lobby.y + cc.lobby.h + 1, w: 5, h: 5});
   return out;
 }
+
+/**
+ * Task mall-round2-20261031 (lane GEN, M09): the walkway in front of every DESIGNED street-exit corridor end (3 m deep, the street
+ * floor), held prop-free from the station dresser until the atrium columns so the locked glass doors keep their approach (the exit
+ * post-pass requires it). Round-2 variants only: [] for the original three (their dressing is untouched).
+ */
+export function exitHolds(layout: StationLayout, mc: MallCarve, c: Crop): {level: number; cells: number[]}[] {
+  const out: {level: number; cells: number[]}[] = [];
+  const g = layout.levels[1]?.grid;
+  if (!g) return out;
+  for (const e of mc.sk.ends) {
+    if (!e.exit) continue;
+    const cells: number[] = [];
+    for (let d = 1; d <= 6; d++) for (let t = e.a0; t < e.a1; t++) {
+      const [x, y] = e.dir === 'N' ? [t, e.line + d] : e.dir === 'S' ? [t, e.line - d] : e.dir === 'W' ? [e.line + d, t] : [e.line - d, t];
+      const cx = x - c.ox, cy = y - c.oy;
+      if (g.inBounds(cx, cy) && g.cells[g.idx(cx, cy)] === FLOOR) cells.push(g.idx(cx, cy));
+    }
+    out.push({level: 1, cells});
+  }
+  return out;
+}

@@ -53,7 +53,7 @@ export const COMPANY_DIMS: Record<string, readonly [number, number, number] | nu
   'parcel-pallet': [1.2, 1.3046, 1.4394],
   'nap-pod': [1.8, 1.2658, 1.6265],
   'kegerator': [1.3187, 1.4, 1.3698],
-  'cctv-console': [2, 1.0221, 1.2378],
+  'cctv-console': [2, 1.6721, 1.2378],
   'metal-detector': [3.1165, 2.2, 1.9887],
   'vault-safe': [1.3128, 1.5, 1.3544],
   'archive-boxes': [0.578, 1.3, 0.7307],

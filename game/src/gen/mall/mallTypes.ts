@@ -199,6 +199,48 @@ export interface SubwayRootAnchor {
   keepClear: readonly MallRect[];
 }
 
+/**
+ * Task mall-round2-20261031 (lane GEN, M09): a LOCKED glazed street exit at a street-level (floor 1) hall end (gen/mall/exits.ts).
+ * Render + QA data only: no Door record, no prop, no interaction, no Travel; the grid cells behind the glazing are SOLID (rock), so
+ * collision / bullets / sight stop at `door.plane`. Lane ARCH renders the doors, the vestibule and the city + Office-like green fog
+ * inside `view`.
+ */
+export interface MallStreetExit {
+  /** 'exit-1' / 'exit-2' (stable for a seed). */
+  id: string;
+  /** A floor-1 corridor the skeleton designed to end at the street | a short public hall carved off a floor-1 walkway wall. */
+  kind: 'corridor-end' | 'entrance-hall';
+  /** The street storey (layout.levels index): MALL_STREET_LEVEL (1). */
+  level: number;
+  /** Street / hall floor (absolute y) = layout.levels[level].baseY: the exterior ground. */
+  streetY: number;
+  /** OUTWARD side (toward the street). */
+  side: 'N' | 'S' | 'E' | 'W';
+  /**
+   * The locked inner glazed opening: `plane` = cross-axis coordinate (z for N / S, x for E / W) of the hall-end wall face (boundary
+   * between the hall's last floor row and the first rock row); s0..s1 = along-axis range of the opening (piers stay wall); y0 = the
+   * floor, y1 = the glazing head.
+   */
+  door: {plane: number; s0: number; s1: number; y0: number; y1: number};
+  /** Panes along the opening (+along order): push-bar door leaves (chained), sidelights, the transom. */
+  panels: readonly {kind: 'door' | 'sidelight' | 'transom'; s0: number; s1: number; y0: number; y1: number}[];
+  /** Vestibule pocket depth (m) between the inner glazing and the outer facade plane (SOLID cells: never walkable). */
+  vestibule: number;
+  /** Cross-axis coordinate of the outer facade (street face) = door.plane + outward * vestibule. */
+  facade: number;
+  /** The non-traversable collider = exactly the SOLID grid cells behind the inner plane (pocket + facade) across the opening + piers. */
+  collider: MallRect & {y0: number; y1: number};
+  /** Exterior VIEW volume beyond the facade (world AABB): no carved cell of any storey >= street inside it (within the grid), nothing
+   *  below reaching street level, never walkable, no gas rule. */
+  view: MallRect & {y0: number; y1: number};
+  /** The walkable hall in front of the doors: area id (street storey), depth straight back from the doors (m), clear width, ceiling y. */
+  hall: {area: number; depth: number; width: number; ceil: number};
+  locked: true;
+  /** Lock sign text (lane ARCH: chained push bars + this panel). */
+  sign: 'EXIT CLOSED';
+  seed: number;
+}
+
 /** layout.mall — written by lane GEN (gen/mall/index.ts). version 2 = the playtest revision (station + 3 floors). */
 export interface MallInfo {
   version: 1 | 2;
@@ -226,4 +268,6 @@ export interface MallInfo {
   subwayRoot: SubwayRootAnchor;
   /** Player start (station platform, level 0) = layout.playerSpawn. */
   start: {x: number; z: number; yaw: number; level: number};
+  /** Task mall-round2-20261031 (lane GEN, M09): the locked street exits (0..2, floor 1 only); absent in older fixtures. */
+  exits?: MallStreetExit[];
 }
