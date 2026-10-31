@@ -8,6 +8,8 @@
 // void); the glass roof spans the void above the top ring. Storey heights are real (no fake stacking): ring k floor =
 // baseY[k], all rings share the void outline (a genuine opening in every ring's floor slab and ceiling).
 
+import type {MallShopFit} from './shops';
+
 /** Number of retail rings above the station (the user: "about six different levels"). */
 export const MALL_RINGS = 6;
 
@@ -69,6 +71,8 @@ export interface MallShop {
   salesArea: number;
   depth: number;
   width: number;
+  /** Lane SHOPS' fit-out (recipe, finish, sign, front, shutter, entry span), attached by assignMallPrograms. */
+  fit?: MallShopFit;
 }
 
 /** A walkway crossing the void at one storey. */

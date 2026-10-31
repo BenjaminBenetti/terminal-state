@@ -30,7 +30,7 @@ import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/stationTypes';
 import type {MallInfo, MallProgram, MallShop} from '../gen/mall/mallTypes';
 import {canvasTexture} from './canvasTextures';
-import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
+import {SurfaceNodeMaterial, cloneSurfaceMaterial, surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {SIGN_ATLAS_CONTEXT, wmHash} from './surfaceNodes';
 import {CHUNK_M, RAIL_HEIGHT, cellCeil, type RailRun} from './levelGeometry';
@@ -415,6 +415,8 @@ interface SpaceInfo { space: MallSpace; ring: number; program?: MallProgram; sho
 export interface AtriumStats {
   meshes: number; triangles: number; roofPanes: number; arches: number; balustradeM: number; balustradeRuns: number; columns: number;
   signs: number; blades: number; labels: number; banners: number; downlights: number; shaftPanels: number; soffits: number; droppedFaces: number;
+  /** Shopfront props drawn (lane SHOPS' collision-only glazing / closed shutters) and visual-only partial shutters. */
+  glazing: number; shutters: number; partialShutters: number;
   /** Build time of the atrium dressing (ms). */
   ms: number;
 }
@@ -442,7 +444,7 @@ export class MallArch {
   private nextRow = 0;
   private readonly floorCache = new Map<number, string | null>();
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -752,7 +754,7 @@ export class MallArch {
     };
     for (const fn of [
       () => this.buildRoof(add), () => this.buildBalustrades(add, rails), () => this.buildColumns(add), () => this.buildShaftTowers(add),
-      () => this.buildSignage(group, add), () => this.buildBanners(add), () => this.buildEscalatorSoffits(add),
+      () => this.buildSignage(group, add), () => this.buildBanners(add), () => this.buildEscalatorSoffits(add), () => this.buildShopfronts(add, this.mats),
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
     }
@@ -1027,9 +1029,11 @@ export class MallArch {
       const st = this.storeyOf(s.level);
       if (!st) continue;
       const f = s.frontage;
-      const alongX = f.side === 'N' || f.side === 'S';
-      const nrm = f.side === 'N' ? [0, -1] : f.side === 'S' ? [0, 1] : f.side === 'E' ? [1, 0] : [-1, 0];
-      const plane = f.side === 'N' ? f.z0 : f.side === 'S' ? f.z1 : f.side === 'E' ? f.x1 : f.x0;
+      // the gallery side from GEOMETRY (lanes disagree on what frontage.side names: GEN's is the unit's side of the gallery)
+      const fg = this.frontGeometry(s);
+      if (!fg) continue;
+      const {alongX, nrm} = fg;
+      const plane = fg.galleryPlane;
       const a0 = alongX ? f.x0 : f.z0, a1 = alongX ? f.x1 : f.z1;
       const w = a1 - a0;
       if (w < 1) continue;
@@ -1135,6 +1139,114 @@ export class MallArch {
     });
     for (const t of texs) t.dispose();
     void add;
+  }
+
+  /**
+   * A shop frontage's geometry from the record AND the sales area (never from frontage.side alone: lanes name it differently):
+   * axis, outward normal toward the gallery, the door-row centre line, the gallery-side face plane, the span, the storey base.
+   */
+  frontGeometry(s: MallShop): {alongX: boolean; nrm: [number, number]; line: number; galleryPlane: number; s0: number; s1: number; base: number} | null {
+    const f = s.frontage, a = this.layout.areas[s.area];
+    if (!a) return null;
+    const alongX = Math.abs(f.x1 - f.x0) >= Math.abs(f.z1 - f.z0) ? true : false;
+    const acx = (a.x + a.w / 2) * CELL, acz = (a.y + a.h / 2) * CELL;
+    const fcx = (f.x0 + f.x1) / 2, fcz = (f.z0 + f.z1) / 2;
+    const sgn = alongX ? Math.sign(fcz - acz) || 1 : Math.sign(fcx - acx) || 1;
+    const nrm: [number, number] = alongX ? [0, sgn] : [sgn, 0];
+    const line = alongX ? fcz : fcx;
+    const galleryPlane = alongX ? (sgn > 0 ? Math.max(f.z0, f.z1) : Math.min(f.z0, f.z1)) : (sgn > 0 ? Math.max(f.x0, f.x1) : Math.min(f.x0, f.x1));
+    const s0 = alongX ? Math.min(f.x0, f.x1) : Math.min(f.z0, f.z1), s1 = alongX ? Math.max(f.x0, f.x1) : Math.max(f.z0, f.z1);
+    const base = a.floorY ?? this.storeyOf(s.level)?.baseY ?? 0;
+    return {alongX, nrm, line, galleryPlane, s0, s1, base};
+  }
+
+  /**
+   * Shopfronts (lane SHOPS' collision-only props, drawn exactly over their colliders: visual = collider):
+   *  - `shopGlazing`: a full-height frameless glass pane over the prop box (lit shopfront glass, transparent: never a shadow caster)
+   *    in a dark base rail + head rail (no posts: a shattered pane leaves nothing standing in its opening while the collider drops to
+   *    the 0.3 m base) and a bulkhead from the collider top to the opening head (above head height);
+   *  - `shopShutter`: a rolled-down slatted steel shutter over the prop box (curtain + head box + guide channels, aged paint);
+   *  - fit.shutter 'partial': the curtain rolled down only to ~2.4 m with its head box, offset to the gallery side of the glass —
+   *    visual only, above head height, no collider (a separate mesh the damage index never cuts).
+   * Merged per storey: 'shopfront-mall-glass-L', 'shopfront-mall-frame-L', 'shopfront-mall-shutter-L' (the damage system cuts a
+   * hit prop's triangles out of 'shopfront-*' meshes: glass shatters, the shutter dents) + 'mall-shutter-partial-L'.
+   */
+  buildShopfronts(add: (m: THREE.Mesh | null) => void, mats: WorldMaterials): void {
+    type Lists = {glass: Mesher; frame: Mesher; shutter: Mesher; partial: Mesher};
+    const per = new Map<number, Lists>();
+    const L = (lv: number): Lists => { let l = per.get(lv); if (!l) per.set(lv, (l = {glass: new Mesher(), frame: new Mesher(), shutter: new Mesher(), partial: new Mesher()})); return l; };
+    const doors = this.layout.doors ?? [];
+    const shopByArea = this.shopByArea;
+    const openingHead = (s: MallShop | undefined, base: number): number => {
+      if (!s) return base + 3.4;
+      const f = s.frontage;
+      const d = doors.find(dd => ((dd as {level?: number}).level ?? 0) === s.level && dd.x * CELL < Math.max(f.x0, f.x1) + 0.3 && (dd.x + dd.w) * CELL > Math.min(f.x0, f.x1) - 0.3
+        && dd.y * CELL < Math.max(f.z0, f.z1) + 0.3 && (dd.y + dd.h) * CELL > Math.min(f.z0, f.z1) - 0.3);
+      return base + (d?.height ?? 3.4);
+    };
+    // a vertical box between a0..a1 along the frontage, at `line` (thickness t), y0..y1
+    const vbox = (m: Mesher, alongX: boolean, a0: number, a1: number, line: number, t: number, y0: number, y1: number) => {
+      if (a1 - a0 < 1e-3 || y1 - y0 < 1e-3) return;
+      const c = (a0 + a1) / 2, w = a1 - a0;
+      m.box(alongX ? c : line, (y0 + y1) / 2, alongX ? line : c, alongX ? w : t, y1 - y0, alongX ? t : w);
+    };
+    const levelOfArea = (id: number) => this.layout.areas[id]?.level ?? 0;
+    for (const p of this.layout.props) {
+      if ((p.kind !== 'shopGlazing' && p.kind !== 'shopShutter') || p.shop !== undefined) continue;
+      const alongX = p.hx >= p.hz;
+      const a0 = alongX ? p.x - p.hx : p.z - p.hz, a1 = alongX ? p.x + p.hx : p.z + p.hz;
+      const line = alongX ? p.z : p.x, t = Math.min(alongX ? p.hz : p.hx, 0.06) * 2;
+      const y0 = p.y, y1 = p.y + p.h, lv = levelOfArea(p.area);
+      const lists = L(lv);
+      const shop = shopByArea.get(p.area);
+      const head = openingHead(shop, y0);
+      const n = alongX ? [0, 0, 1] : [1, 0, 0];
+      if (p.kind === 'shopGlazing') {
+        const J = 0.004, R = 0.11; // frameless butt-jointed glass: no post survives a shatter inside the walkway
+        // the pane (both faces; world-mapped grimy shopfront glass)
+        lists.glass.quad2(alongX ? [[a0 + J, y0 + R, line], [a1 - J, y0 + R, line], [a1 - J, y1 - 0.06, line], [a0 + J, y1 - 0.06, line]]
+          : [[line, y0 + R, a0 + J], [line, y0 + R, a1 - J], [line, y1 - 0.06, a1 - J], [line, y1 - 0.06, a0 + J]], n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+        vbox(lists.frame, alongX, a0, a1, line, t + 0.02, y0, y0 + R);          // base rail (the 0.3 m plinth left by a shatter)
+        vbox(lists.frame, alongX, a0, a1, line, t + 0.02, y1 - 0.06, y1);       // head rail
+        if (head > y1 + 0.02) vbox(lists.frame, alongX, a0, a1, line, 0.16, y1, head); // bulkhead to the opening head (above head height)
+        this.stats.glazing++;
+      } else {
+        // rolled-down shutter: slatted curtain, head box (gallery side), guide channels at both ends
+        const hb = 0.34;
+        vbox(lists.shutter, alongX, a0, a1, line, t, y0, y1 - hb);
+        vbox(lists.shutter, alongX, a0, a1, line, Math.max(t, 0.12), y1 - hb, y1);
+        vbox(lists.frame, alongX, a0, a0 + 0.06, line, t + 0.04, y0, y1);
+        vbox(lists.frame, alongX, a1 - 0.06, a1, line, t + 0.04, y0, y1);
+        vbox(lists.frame, alongX, a0, a1, line, t + 0.02, y0, y0 + 0.05);       // bottom bar
+        if (head > y1 + 0.02) vbox(lists.frame, alongX, a0, a1, line, 0.16, y1, head);
+        this.stats.shutters++;
+      }
+    }
+    // partial shutters (visual only): curtain down to ~2.4 m over the whole frontage, on the gallery side of the glazing
+    for (const s of this.info.shops) {
+      const fit = (s as {fit?: {shutter?: string}}).fit;
+      if (fit?.shutter !== 'partial') continue;
+      const g = this.frontGeometry(s);
+      if (!g) continue;
+      const a = this.layout.areas[s.area];
+      const top = g.base + Math.min(3.2, Math.max(2.4, (a?.ceil ?? g.base + 4) - g.base - 0.1));
+      const bottom = Math.max(g.base + 2.25, top - 0.8);
+      if (top - bottom < 0.15) continue;
+      const line = g.line + (g.alongX ? g.nrm[1] : g.nrm[0]) * 0.12;
+      const lists = L(s.level);
+      vbox(lists.partial, g.alongX, g.s0, g.s1, line, 0.05, bottom, top);
+      vbox(lists.partial, g.alongX, g.s0, g.s1, line, 0.14, top - 0.3, top);
+      const head = openingHead(s, g.base);
+      if (head > top + 0.02) vbox(lists.partial, g.alongX, g.s0, g.s1, g.line, 0.16, top, head);
+      this.stats.partialShutters++;
+    }
+    const glassMat = shopGlassMaterial(mats), shutterMat = shapeMaterial(mats, 'shutter');
+    for (const [lv, l] of per) {
+      add(l.glass.mesh(glassMat, `shopfront-mall-glass-${lv}`, {level: lv}));
+      add(l.frame.mesh(this.dress.darkSteel, `shopfront-mall-frame-${lv}`, {level: lv}));
+      add(l.shutter.mesh(shutterMat, `shopfront-mall-shutter-${lv}`, {level: lv}));
+      add(l.partial.mesh(shutterMat, `mall-shutter-partial-${lv}`, {level: lv}));
+    }
   }
 
   /** Hanging banners in the void: from just under the springing line, avoiding bridges and the shaft. */
@@ -1298,6 +1410,22 @@ function signAtlasMaterial(atlas: THREE.Texture): THREE.Material {
   const m = new MeshStandardNodeMaterial({map: atlas, roughness: 0.6});
   m.name = 'mall-sign-atlas';
   m.contextNode = SIGN_ATLAS_CONTEXT;
+  return m;
+}
+
+const shopGlass = new WeakMap<WorldMaterials, THREE.Material>();
+/**
+ * Mall shopfront glass: the lit, world-mapped grimy shopfront glass (the storefronts' program; damage cracks / shatters it) a
+ * little clearer than the subway kiosks'. Transparent, depth-write off: never a flashlight shadow caster. One per WorldMaterials.
+ */
+export function shopGlassMaterial(mats: WorldMaterials): THREE.Material {
+  let m = shopGlass.get(mats);
+  if (!m) {
+    m = cloneSurfaceMaterial(shapeMaterial(mats, 'glassShopfront'));
+    (m as SurfaceNodeMaterial).opacity = 0.34;
+    m.name = 'mall-shop-glass';
+    shopGlass.set(mats, m);
+  }
   return m;
 }
 

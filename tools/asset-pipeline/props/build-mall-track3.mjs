@@ -142,6 +142,12 @@ const EDITS = {
     glassComps: c => c.n < 60 && [...c.ext].sort((a, b) => a - b)[1] > 0.45, scaleAxes: [[2, 0.72]]},
   // M16 (review/b1g4-*): 1.16 m tall at 1.5 m wide (3 planks) -> y x1.5 (1.74 m; planks read thicker, pipes taller).
   'outdoors-plank-shelving': {basis: 'pipe + plank shelving 1.5 x 1.74 x 0.48 m (per-axis y x1.5)', scaleAxes: [[1, 1.5]]},
+  // M17 (review/b1g5-*): squat at the frozen 2.2 m (1.50 m tall); a per-axis stretch would make the spoked wheels oval -> uniform 2.5 m.
+  'mall-kiosk-cart': {basis: 'uniform 2.5 m long (incl. push handles) so the canopy stands ~1.7 m; wheels kept round', sizeM: 2.5, sizeAxis: 'w'},
+  // M19: 1.38 m tall at 2.0 m wide -> y x1.45 (2.0 m; thin ledges read slightly thicker).
+  'shoe-wall-display': {basis: 'shoe wall 2.0 x 2.0 x 0.23 m (per-axis y x1.45)', scaleAxes: [[1, 1.45]]},
+  // M20: table top 0.80 m at the frozen 1.6 m -> uniform to a 0.75 m table top (stool seats ~0.49 m).
+  'food-court-table-set': {basis: 'uniform: table top 0.75 m', sizeM: 0.75, sizeAxis: 'h'},
 };
 
 // ---------- records ----------

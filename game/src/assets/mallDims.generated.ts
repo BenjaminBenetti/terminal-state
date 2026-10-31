@@ -43,6 +43,10 @@ export const MALL_DIMS: Readonly<Record<string, readonly [number, number, number
   'gun-wall-rack': [2, 1.4756, 0.3075],
   'glass-display-counter': [1.5, 1.3547, 0.7055],
   'outdoors-plank-shelving': [1.5, 1.7423, 0.4809],
+  'mall-kiosk-cart': [2.5, 1.7068, 1.4596],
+  'storage-tote': [0.6, 0.6267, 0.5897],
+  'shoe-wall-display': [2, 1.9952, 0.2254],
+  'food-court-table-set': [1.499, 0.75, 1.4843],
 };
 
 export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
@@ -62,9 +66,9 @@ export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
   'gun-wall-rack': {code: 'M14', role: 'holder', programs: ['guns', 'outdoors'], sizeM: 2, sizeAxis: 'w', target: [2, 1.3, 0.25], placement: 'wall mount (base 1.0 m, SHOPS MALL_MOUNT_Y)', shopsKind: 'gunRack'},
   'glass-display-counter': {code: 'M15', role: 'holder', programs: ['guns', 'jewelry', 'optical', 'phone', 'beauty', 'electronics'], sizeM: 1.5, sizeAxis: 'w', target: [1.5, 1, 0.65], placement: 'row', shopsKind: 'glassCounter'},
   'outdoors-plank-shelving': {code: 'M16', role: 'holder', programs: ['outdoors', 'sports', 'home', 'hardware'], sizeM: 1.5, sizeAxis: 'w', target: [1.5, 2, 0.5], placement: 'wall', shopsKind: 'outdoorsPlankShelving'},
-  'mall-kiosk-cart': {code: 'M17', role: 'holder', programs: ['kiosk'], sizeM: 2.2, sizeAxis: 'w', target: [2.2, 2.4, 1.1], placement: 'free (gallery)', shopsKind: 'mallKioskCart'},
+  'mall-kiosk-cart': {code: 'M17', role: 'holder', programs: ['kiosk'], sizeM: 2.5, sizeAxis: 'w', target: [2.2, 2.4, 1.1], placement: 'free (gallery)', shopsKind: 'mallKioskCart'},
   'storage-tote': {code: 'M18', role: 'holder/movable', programs: ['all backrooms'], sizeM: 0.6, sizeAxis: 'w', target: [0.6, 0.38, 0.4], placement: 'floor / onTop (shelves)', shopsKind: 'storageTote'},
   'shoe-wall-display': {code: 'M19', role: 'holder', programs: ['shoes', 'sports', 'outdoors'], sizeM: 2, sizeAxis: 'w', target: [2, 2.2, 0.35], placement: 'wall', shopsKind: 'shoeWallDisplay'},
-  'food-court-table-set': {code: 'M20', role: 'furniture/holder', programs: ['food-court'], sizeM: 1.6, sizeAxis: 'w', target: [1.6, 0.75, 1.6], placement: 'free (hall)', shopsKind: 'foodCourtTableSet'},
+  'food-court-table-set': {code: 'M20', role: 'furniture/holder', programs: ['food-court'], sizeM: 0.75, sizeAxis: 'h', target: [1.6, 0.75, 1.6], placement: 'free (hall)', shopsKind: 'foodCourtTableSet'},
 };
 // END GENERATED

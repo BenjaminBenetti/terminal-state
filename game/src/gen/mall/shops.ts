@@ -344,7 +344,7 @@ export interface MallShopFit {
 
 /** The fit SHOPS attached to a shop record (undefined before assignMallPrograms). */
 export function shopFit(s: MallShop): MallShopFit | undefined {
-  return (s as MallShop & {fit?: MallShopFit}).fit;
+  return s.fit;
 }
 
 // ---------------------------------------------------------------------------------------------

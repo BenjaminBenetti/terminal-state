@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 15043,
-      "sha256": "def0f97171df2d7b7196395ed976f47e30c22781f7e6e673721fba1edcada4c9"
+      "bytes": 15683,
+      "sha256": "1df026f39fa489207b511ae149371e6b9097a03a4f870d4198766d45e99c0f29"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1415,8 +1415,8 @@
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
-      "bytes": 109910,
-      "sha256": "a4acff3ff25e4d57f31d9be7ac8bdbe08ac5ea05227cc7d5a5409e1e3b1a615e"
+      "bytes": 134784,
+      "sha256": "84c280f3e1d94b60e7ffd3a40eb2cc7b63d9fd9d7d2f76d91f2e2e71d884700f"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1774,6 +1774,11 @@
       "sha256": "f1d425a6fd6f48c5467c8f5de7b78ac3ad4b6c80d100bfca5dd94d89b117fe0f"
     },
     {
+      "path": "assets/models/mall-food-court-table-set.glb",
+      "bytes": 204492,
+      "sha256": "abe5cf11969affee48d18619eac18784ed26b203502ba909e840762ea749d713"
+    },
+    {
       "path": "assets/models/mall-garment-hanging-group.glb",
       "bytes": 189524,
       "sha256": "612663f12fa57f496080701115299274e3cfb31e2bc5573e269579917fd763a3"
@@ -1804,6 +1809,11 @@
       "sha256": "a6838259657d702d5832f541cc8c6eb2cc3b603066b663dac5e5ff80d226ec7a"
     },
     {
+      "path": "assets/models/mall-mall-kiosk-cart.glb",
+      "bytes": 349136,
+      "sha256": "969d0ac50f49f008d5ec3f7748489d6909acb22ca1be516a7046b92a72026eea"
+    },
+    {
       "path": "assets/models/mall-mannequin-full.glb",
       "bytes": 141884,
       "sha256": "04f850509d4e21b0bcefbdea7899a3931fd2acd724f64502545dcfb056b933d1"
@@ -1832,6 +1842,16 @@
       "path": "assets/models/mall-retail-wall-bay.glb",
       "bytes": 210904,
       "sha256": "5682a1d5dea45055713b5de407bc4eaeb5ee7ac57ef9b3dec811ebd3aba4486e"
+    },
+    {
+      "path": "assets/models/mall-shoe-wall-display.glb",
+      "bytes": 206620,
+      "sha256": "944d81063321b42985c108d4e56b0986c70e98c2cbd09d31995a4545a37f3f0e"
+    },
+    {
+      "path": "assets/models/mall-storage-tote.glb",
+      "bytes": 147472,
+      "sha256": "f920ebcbe421a5a286239d1ad86dffdf45e2812e2437370467bf065e831dd14c"
     },
     {
       "path": "assets/models/office-aquarium.glb",

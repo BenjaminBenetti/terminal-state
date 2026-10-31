@@ -144,14 +144,14 @@
   }
  ],
  "credits": {
-  "previews": 100,
-  "refines": 160,
+  "previews": 120,
+  "refines": 200,
   "rejectedOrReplacedAttempts": 20,
-  "total": 260
+  "total": 320
  },
  "authorityUse": {
   "attempts": 24,
-  "posts": 40,
+  "posts": 44,
   "max": {
    "attempts": 100,
    "credits": 1500,
@@ -2677,7 +2677,14 @@
     ],
     "checks": "1R2 slot 84: clean long counter — white / aluminium rim, black side panels, recessed top channel (belt), raised lettering on one end; PBR present; billed 10; reads as a generic long counter more than an unmistakable checkout lane (SHOPS may still prefer a procedural lane); per-axis trim",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed after the belt-deck fix: 2.60 x 0.90 x 0.85 m; top (belt deck) 0.89 m = counter height; grounded (15 contacts); previously an open 0.6 m trough (floor 0.31 m)",
+     "evidence": [
+      "review/b1g4-scale-M12-M15-fixed.png",
+      "review/b1g4-runtime-M12-M15.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -2894,7 +2901,13 @@
     ],
     "checks": "identity ok: distressed green-painted timber two-tier bin stand, open bins toward native +Z, centre dividers, EMPTY; PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 1.60 x 1.14 x 0.92 m; lower bin floor ~0.48 m, upper bin floor ~0.93 m (open front), top rim 1.14 (slants up to the back); grounded (5 contacts)",
+     "evidence": [
+      "review/b1g4-scale-sheet.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -3091,7 +3104,14 @@
     ],
     "checks": "gun rack: dark wood frame + steel hook bars + lower shelf with hooks, OPEN back (no board -> no painted gun ghosts); PBR present; billed 10",
     "rule4": "separated: two textured scoped rifles (bodies + scopes + mounts, separate components) dropped locally (EDITS clutter); uploaded guns stay the only weapons",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 2.00 x 1.48 x 0.31 m FLOOR-standing rack (posts to the floor, not a wall mount at 1.0 m); bars ~0.78 / 1.16 m with hooks, lower shelf 0.46 m, top board 1.47; rifles removed, bars repaired post to post; grounded (posts)",
+     "evidence": [
+      "review/b1g4-scale-sheet.png",
+      "review/b1g4-runtime-M14.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -3314,7 +3334,14 @@
     ],
     "checks": "dark-wood panelled base, sloped painted glass front + glass shelf (thin separate components), open staff side (native -Z), 4 dark posts with finials above the case; PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed after the depth trim: 1.50 x 1.35 x 0.71 m; felt deck 0.43 m, glass shelf 0.89 m, glass top 1.06 m (transparent node; the CPU renderer draws it dark), posts with finials to 1.35 m; grounded (4 contacts)",
+     "evidence": [
+      "review/b1g4-scale-M12-M15-fixed.png",
+      "review/b1g4-runtime-M12-M15.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -3535,7 +3562,13 @@
     ],
     "checks": "identity ok: oak planks (3 shelves + plank back) on black pipe uprights / brackets, EMPTY; PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 1.50 x 1.74 x 0.48 m; planks ~0.33 / 0.73 / 1.14 m on a plank back, pipe uprights to 1.74 with a top wall bracket; grounded (4 contacts)",
+     "evidence": [
+      "review/b1g4-scale-sheet.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -3575,32 +3608,813 @@
     "glass": null,
     "ghosts": null
    }
-  }
- ],
- "missing": [
+  },
   {
    "code": "M17",
    "id": "mall-kiosk-cart",
+   "key": "office-mall-kiosk-cart",
    "batch": 1,
-   "reason": "preview only"
+   "freezeSha256": "25262412095beffe998fb1e3a4ed802b490ef4c331ca1023bfd33a3db342d88f",
+   "frozenBy": "Studio Beta primary 0e9c0db3-e3fe-465b-942e-a22371d7d3f6 (reviewed all 20 prompts / exact args: explicit meshy-t2.5 smart-topology triangle glb previews; refines inherit (no ai_model), 2k + PBR; rule-4 empty fixtures; rule-5 target sizes)",
+   "frozenAt": "2026-10-31T00:47:03Z",
+   "category": "retail-fixtures",
+   "priority": "P1",
+   "role": "holder",
+   "programs": [
+    "kiosk"
+   ],
+   "shopsKind": "mallKioskCart",
+   "interaction": {
+    "openable": {
+     "class": "openable",
+     "how": "cabinet doors derived; top shelves open"
+    },
+    "physics": {
+     "class": "static",
+     "why": "too heavy",
+     "how": "~150 kg braked cart"
+    },
+    "lootSlot": "countertop + container"
+   },
+   "placement": "free (gallery)",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "shopping mall retail push-cart kiosk, dark wood body with brass trim, two large spoked wheels, striped fabric canopy on four turned posts, empty display shelves on top, closed cabinet doors below, realistic game asset, store fixture in an abandoned shopping mall, dusty and lightly worn, completely empty with no products, no merchandise and nothing on its shelves or surfaces, single object, no ground plane",
+   "texturePrompt": "shopping mall retail push-cart kiosk, dark wood body with brass trim, two large spoked wheels, striped fabric canopy on four turned posts, empty display shelves on top, closed cabinet doors below, realistic game asset, store fixture in an abandoned shopping mall, dusty and lightly worn, completely empty with no products, no merchandise and nothing on its shelves or surfaces, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 4500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18f88-2bcf-72f5-8758-11059c6ff548",
+    "refine": "01a18f92-42ce-709c-918c-fdb5016d9f84"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18f88-2bcf-72f5-8758-11059c6ff548",
+     "slot": 17,
+     "attemptId": "T3-017"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18f92-42ce-709c-918c-fdb5016d9f84",
+     "slot": 17,
+     "attemptId": "T3-017"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/mall-kiosk-cart/T3-017/refine/mall-kiosk-cart-refine.glb (raw original, outside Git)",
+    "sha256": "1fd6bbcb4b25a6f97c6402442e3574527564210ce9a85c67d5f963b5936434aa",
+    "bytes": 5689724,
+    "triangles": 4369,
+    "extent": [
+     0.9434,
+     0.644,
+     0.5508
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2254853
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1598452
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1612078
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/mall-kiosk-cart/T3-017/preview/mall-kiosk-cart-preview.glb",
+    "previewSha256": "ee9e4e6f2e07aab68d9637a34e649b052628010ab16a31587db777d8def3d2bb",
+    "previewTriangles": 4369
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-mall-kiosk-cart.glb",
+    "url": "assets/models/mall-mall-kiosk-cart.glb",
+    "sha256": "969d0ac50f49f008d5ec3f7748489d6909acb22ca1be516a7046b92a72026eea",
+    "bytes": 349136,
+    "triangles": 4369,
+    "dims": [
+     2.5,
+     1.7068,
+     1.4596
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 6291455
+   },
+   "targetTriangles": 4500,
+   "targetSize": {
+    "w": 2.2,
+    "h": 2.4,
+    "d": 1.1,
+    "sizeM": 2.2,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 2.5,
+   "sizeAxis": "w",
+   "scale": 2.650105,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "L",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 420000,
+   "transform": "rotateY(180deg) * uniform scale to 2.2 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, sizeM, sizeAxis",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b1g5-raw-ortho.png",
+     "review/b1g5-refine-thumbs.png"
+    ],
+    "checks": "identity ok: kiosk cart, red / cream striped scalloped canopy on 4 posts with finials, dark wood body, display window side (native +Z) with dark shelves, brass spoked wheels, push handles at one end; PBR present; billed 10",
+    "rule4": "none",
+    "scale": null
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 133937,
+     "sha256": "14225d0ea6259da0930f58c8bfdec1684ea285baf323a20339ea2043af190fc4"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14478,
+     "sha256": "fea2ec8b4ef1b2cca7a1188e7a373ee1245a5bcc15720ab9c7afefe4f8c8aa76"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3122,
+     "sha256": "074907aa703a4ebb93f43124c937f443b92a73ade9cee638e0b6e389f69c1d80"
+    }
+   ],
+   "edits": {
+    "k": 1.1363636117336184,
+    "removed": null,
+    "glass": null,
+    "ghosts": null
+   }
   },
   {
    "code": "M18",
    "id": "storage-tote",
+   "key": "office-storage-tote",
    "batch": 1,
-   "reason": "preview only"
+   "freezeSha256": "25262412095beffe998fb1e3a4ed802b490ef4c331ca1023bfd33a3db342d88f",
+   "frozenBy": "Studio Beta primary 0e9c0db3-e3fe-465b-942e-a22371d7d3f6 (reviewed all 20 prompts / exact args: explicit meshy-t2.5 smart-topology triangle glb previews; refines inherit (no ai_model), 2k + PBR; rule-4 empty fixtures; rule-5 target sizes)",
+   "frozenAt": "2026-10-31T00:47:03Z",
+   "category": "storage-openables",
+   "priority": "P1",
+   "role": "holder/movable",
+   "programs": [
+    "all backrooms"
+   ],
+   "shopsKind": "storageTote",
+   "interaction": {
+    "openable": {
+     "class": "openable",
+     "how": "2 hinged lid flaps (rule 1: lidded boxes open)"
+    },
+    "physics": {
+     "class": "dynamic",
+     "massKg": 4,
+     "contact": "pad",
+     "mat": "plastic",
+     "how": "spill holder: lid pops, finite lots drop once"
+    },
+    "lootSlot": "container (room-themed)"
+   },
+   "placement": "floor / onTop (shelves)",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "grey heavy-duty plastic storage tote box with a hinged two-flap lid, closed, stackable ribbed sides, moulded handles, realistic game asset, storage in the back room of an abandoned shopping mall store, dusty and lightly worn, closed, nothing on top of it, single object, no ground plane",
+   "texturePrompt": "grey heavy-duty plastic storage tote box with a hinged two-flap lid, closed, stackable ribbed sides, moulded handles, realistic game asset, storage in the back room of an abandoned shopping mall store, dusty and lightly worn, closed, nothing on top of it, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 1500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18f88-517f-72d0-bb0a-953bc8e545cc",
+    "refine": "01a18f92-66c8-732e-a8b8-507680e37dfa"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18f88-517f-72d0-bb0a-953bc8e545cc",
+     "slot": 18,
+     "attemptId": "T3-018"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18f92-66c8-732e-a8b8-507680e37dfa",
+     "slot": 18,
+     "attemptId": "T3-018"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/storage-tote/T3-018/refine/storage-tote-refine.glb (raw original, outside Git)",
+    "sha256": "6448f7b97c150997cc63a636c3ceb90a46d980e16d321b3d221f04ce782df1e7",
+    "bytes": 5275616,
+    "triangles": 1478,
+    "extent": [
+     0.9116,
+     0.9521,
+     0.896
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1985905
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1621861
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1571521
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/storage-tote/T3-018/preview/storage-tote-preview.glb",
+    "previewSha256": "2ef84acb6cd50dbdb03b29f885c41d1dbb2bc267d2d7fd29cf6bdb93dd0cc9fb",
+    "previewTriangles": 1478
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-storage-tote.glb",
+    "url": "assets/models/mall-storage-tote.glb",
+    "sha256": "f920ebcbe421a5a286239d1ad86dffdf45e2812e2437370467bf065e831dd14c",
+    "bytes": 147472,
+    "triangles": 1478,
+    "dims": [
+     0.6,
+     0.6267,
+     0.5897
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 2097151
+   },
+   "targetTriangles": 1500,
+   "targetSize": {
+    "w": 0.6,
+    "h": 0.38,
+    "d": 0.4,
+    "sizeM": 0.6,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 0.6,
+   "sizeAxis": "w",
+   "scale": 0.658168,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "S",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 180000,
+   "transform": "rotateY(180deg) * uniform scale to 0.6 m (w), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b1g5-raw-ortho.png",
+     "review/b1g5-refine-thumbs.png"
+    ],
+    "checks": "grey ribbed heavy-duty bin; the lid is a SEPARATE component (190 tris) modelled raised open; a shallow inner tray plate ~0.07 m below the rim; PBR present; billed 10",
+    "rule4": "none",
+    "scale": null
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 43531,
+     "sha256": "9487b5e85caf1ec03b09418d8d5ea0f9a4fd36ecd9c0ab87ef24b54cfc88022a"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14644,
+     "sha256": "6148f05ea2718b464295ea712b83a3ffa751e868c273f30ce787f6645e5f50cc"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2479,
+     "sha256": "1b0948f5d6ad100b91d614d3a7ad2993c9061db971e91936f5309a7b77566455"
+    }
+   ]
   },
   {
    "code": "M19",
    "id": "shoe-wall-display",
+   "key": "office-shoe-wall-display",
    "batch": 1,
-   "reason": "preview only"
+   "freezeSha256": "25262412095beffe998fb1e3a4ed802b490ef4c331ca1023bfd33a3db342d88f",
+   "frozenBy": "Studio Beta primary 0e9c0db3-e3fe-465b-942e-a22371d7d3f6 (reviewed all 20 prompts / exact args: explicit meshy-t2.5 smart-topology triangle glb previews; refines inherit (no ai_model), 2k + PBR; rule-4 empty fixtures; rule-5 target sizes)",
+   "frozenAt": "2026-10-31T00:47:03Z",
+   "category": "apparel-footwear",
+   "priority": "P1",
+   "role": "holder",
+   "programs": [
+    "shoes",
+    "sports",
+    "outdoors"
+   ],
+   "shopsKind": "shoeWallDisplay",
+   "interaction": {
+    "openable": {
+     "class": "open",
+     "how": "angled shelves (boots gear finds, shoebox filler M23)"
+    },
+    "physics": {
+     "class": "static",
+     "why": "mounted",
+     "how": "wall display"
+    },
+    "lootSlot": "shelf"
+   },
+   "placement": "wall",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "shoe store wall display, white grid of small angled shoe shelves with lip edges in six rows, backlit panel, empty with no shoes, realistic game asset, store fixture in an abandoned shopping mall, dusty and lightly worn, completely empty with no products, no merchandise and nothing on its shelves or surfaces, single object, no ground plane",
+   "texturePrompt": "shoe store wall display, white grid of small angled shoe shelves with lip edges in six rows, backlit panel, empty with no shoes, realistic game asset, store fixture in an abandoned shopping mall, dusty and lightly worn, completely empty with no products, no merchandise and nothing on its shelves or surfaces, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 3500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18f88-76dc-734f-b861-ca2f46587d80",
+    "refine": "01a18f92-8c09-74ba-ade1-55e0a35bd7cb"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18f88-76dc-734f-b861-ca2f46587d80",
+     "slot": 19,
+     "attemptId": "T3-019"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18f92-8c09-74ba-ade1-55e0a35bd7cb",
+     "slot": 19,
+     "attemptId": "T3-019"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/shoe-wall-display/T3-019/refine/shoe-wall-display-refine.glb (raw original, outside Git)",
+    "sha256": "ee08a3144e736711630bc86460981911c9e7be8c60935a11a5c760e31d0764f9",
+    "bytes": 3986096,
+    "triangles": 3350,
+    "extent": [
+     0.9531,
+     0.6558,
+     0.1074
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1539188
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1007486
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1293410
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/shoe-wall-display/T3-019/preview/shoe-wall-display-preview.glb",
+    "previewSha256": "1724568c1da1e3c1b45be7fd67fefc7e047b2353d501d2da38b18dfbeed8bd5b",
+    "previewTriangles": 3350
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-shoe-wall-display.glb",
+    "url": "assets/models/mall-shoe-wall-display.glb",
+    "sha256": "944d81063321b42985c108d4e56b0986c70e98c2cbd09d31995a4545a37f3f0e",
+    "bytes": 206620,
+    "triangles": 3350,
+    "dims": [
+     2,
+     1.9952,
+     0.2254
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 6291455
+   },
+   "targetTriangles": 3500,
+   "targetSize": {
+    "w": 2,
+    "h": 2.2,
+    "d": 0.35,
+    "sizeM": 2,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 2,
+   "sizeAxis": "w",
+   "scale": 2.098361,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "L",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 420000,
+   "transform": "rotateY(180deg) * uniform scale to 2 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b1g5-raw-ortho.png",
+     "review/b1g5-refine-thumbs.png"
+    ],
+    "checks": "identity ok: white slatwall shoe display, 3 columns x 6 rows of angled ledges with lips, EMPTY; PBR present; billed 10",
+    "rule4": "none",
+    "scale": null
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 71374,
+     "sha256": "ac3d4ab0dd8362b2e6b6891208bda1d5924800627bbf89d8db853ab1a3ca65e5"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 8528,
+     "sha256": "cbb930178e7d276c3b847627f41dd17924db6100c85d0f91755e373cc5de9cec"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 1421,
+     "sha256": "b8d626e8b2d0de845881744aecaf83a0c3fd16e0bcfdc82c311169bb8a84b1a4"
+    }
+   ],
+   "edits": {
+    "k": 1,
+    "removed": null,
+    "glass": null,
+    "ghosts": null
+   }
   },
   {
    "code": "M20",
    "id": "food-court-table-set",
+   "key": "office-food-court-table-set",
    "batch": 1,
-   "reason": "preview only"
+   "freezeSha256": "25262412095beffe998fb1e3a4ed802b490ef4c331ca1023bfd33a3db342d88f",
+   "frozenBy": "Studio Beta primary 0e9c0db3-e3fe-465b-942e-a22371d7d3f6 (reviewed all 20 prompts / exact args: explicit meshy-t2.5 smart-topology triangle glb previews; refines inherit (no ai_model), 2k + PBR; rule-4 empty fixtures; rule-5 target sizes)",
+   "frozenAt": "2026-10-31T00:47:03Z",
+   "category": "food-court-kitchen",
+   "priority": "P1",
+   "role": "furniture/holder",
+   "programs": [
+    "food-court"
+   ],
+   "shopsKind": "foodCourtTableSet",
+   "interaction": {
+    "openable": {
+     "class": "open",
+     "how": "table top = surface"
+    },
+    "physics": {
+     "class": "static",
+     "why": "anchored",
+     "how": "floor-fixed seating"
+    },
+    "lootSlot": "surface"
+   },
+   "placement": "free (hall)",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "food court table set, square laminate table top on a steel pedestal frame with four attached round swivel seats, fixed to the floor, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "texturePrompt": "food court table set, square laminate table top on a steel pedestal frame with four attached round swivel seats, fixed to the floor, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 3000,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18f88-a19d-775f-bbec-678a2f0e8ca0",
+    "refine": "01a18f92-b352-724e-813c-554c1a771428"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18f88-a19d-775f-bbec-678a2f0e8ca0",
+     "slot": 20,
+     "attemptId": "T3-020"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18f92-b352-724e-813c-554c1a771428",
+     "slot": 20,
+     "attemptId": "T3-020"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/food-court-table-set/T3-020/refine/food-court-table-set-refine.glb (raw original, outside Git)",
+    "sha256": "f75172819eeb7727b87a21d8bc82e4ffa31deea1ab5d6640972f15d0d2ec418c",
+    "bytes": 7098628,
+    "triangles": 3294,
+    "extent": [
+     0.9497,
+     0.4752,
+     0.9404
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3060568
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1703744
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2163282
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/food-court-table-set/T3-020/preview/food-court-table-set-preview.glb",
+    "previewSha256": "295ba8b4289f98d98789bb20fc4f59016d5fae29d01b992bf69397213a6919b8",
+    "previewTriangles": 3294
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-food-court-table-set.glb",
+    "url": "assets/models/mall-food-court-table-set.glb",
+    "sha256": "abe5cf11969affee48d18619eac18784ed26b203502ba909e840762ea749d713",
+    "bytes": 204492,
+    "triangles": 3294,
+    "dims": [
+     1.499,
+     0.75,
+     1.4843
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 2097151
+   },
+   "targetTriangles": 3000,
+   "targetSize": {
+    "w": 1.6,
+    "h": 0.75,
+    "d": 1.6,
+    "sizeM": 1.6,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 0.75,
+   "sizeAxis": "h",
+   "scale": 1.578346,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "M",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 260000,
+   "transform": "rotateY(180deg) * uniform scale to 1.6 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, sizeM, sizeAxis",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b1g5-raw-ortho.png",
+     "review/b1g5-refine-thumbs.png"
+    ],
+    "checks": "identity ok: square tan laminate pedestal table + 4 round steel pedestal stools with tan seats (separate base discs: a floor-fixed set); PBR present; billed 10",
+    "rule4": "none",
+    "scale": null
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 35174,
+     "sha256": "6816079ce367616cef260dc40d1ca710b6501f657860fa62e5f59a280710b65b"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16672,
+     "sha256": "d65bb55cdbdcf6ff1a842a273455b4c6e629daff4acd8213182678a2dd39dc7a"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 1923,
+     "sha256": "f0520b32ca62d9783ce74ae15c9391dccb2aa2e0cb91e9a4587980a5e8c2fa90"
+    }
+   ],
+   "edits": {
+    "k": 0.93685481425977,
+    "removed": null,
+    "glass": null,
+    "ghosts": null
+   }
   }
- ]
+ ],
+ "missing": []
 }

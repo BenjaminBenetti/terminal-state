@@ -154,4 +154,8 @@ Generated for this project with Meshy T2.5 (smart topology; text-to-3D preview +
 - `assets/models/mall-gun-wall-rack.glb` — gun-wall-rack (M14; Meshy tasks 01a18f82-10cd-77e2-94e6-52295d49fcec / 01a18f87-b89e-7077-bfa2-337e74525ea2)
 - `assets/models/mall-glass-display-counter.glb` — glass-display-counter (M15; Meshy tasks 01a18f82-379f-73f5-af50-fe1995b36f69 / 01a18f87-db71-728b-afd1-07fa5805b91c)
 - `assets/models/mall-outdoors-plank-shelving.glb` — outdoors-plank-shelving (M16; Meshy tasks 01a18f82-5d0e-719a-aaad-bcbd385e4abe / 01a18f88-0085-7658-ad0b-d67bb495d3c3)
+- `assets/models/mall-mall-kiosk-cart.glb` — mall-kiosk-cart (M17; Meshy tasks 01a18f88-2bcf-72f5-8758-11059c6ff548 / 01a18f92-42ce-709c-918c-fdb5016d9f84)
+- `assets/models/mall-storage-tote.glb` — storage-tote (M18; Meshy tasks 01a18f88-517f-72d0-bb0a-953bc8e545cc / 01a18f92-66c8-732e-a8b8-507680e37dfa)
+- `assets/models/mall-shoe-wall-display.glb` — shoe-wall-display (M19; Meshy tasks 01a18f88-76dc-734f-b861-ca2f46587d80 / 01a18f92-8c09-74ba-ade1-55e0a35bd7cb)
+- `assets/models/mall-food-court-table-set.glb` — food-court-table-set (M20; Meshy tasks 01a18f88-a19d-775f-bbec-678a2f0e8ca0 / 01a18f92-b352-724e-813c-554c1a771428)
 <!-- END mall-track3-20261031 -->

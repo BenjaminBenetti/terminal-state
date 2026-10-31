@@ -54,10 +54,10 @@ export const MALL_ASSETS: Readonly<Record<string, MallAssetEntry>> = {
   'gun-wall-rack': {url: 'assets/models/mall-gun-wall-rack.glb', bytes: 258320, tris: 1560, code: 'M14', key: 'office-gun-wall-rack'},
   'glass-display-counter': {url: 'assets/models/mall-glass-display-counter.glb', bytes: 222948, tris: 3551, code: 'M15', key: 'office-glass-display-counter'},
   'outdoors-plank-shelving': {url: 'assets/models/mall-outdoors-plank-shelving.glb', bytes: 209988, tris: 2316, code: 'M16', key: 'office-outdoors-plank-shelving'},
-  'mall-kiosk-cart': {url: null, bytes: 0, tris: 0, code: 'M17', key: 'office-mall-kiosk-cart'},
-  'storage-tote': {url: null, bytes: 0, tris: 0, code: 'M18', key: 'office-storage-tote'},
-  'shoe-wall-display': {url: null, bytes: 0, tris: 0, code: 'M19', key: 'office-shoe-wall-display'},
-  'food-court-table-set': {url: null, bytes: 0, tris: 0, code: 'M20', key: 'office-food-court-table-set'},
+  'mall-kiosk-cart': {url: 'assets/models/mall-mall-kiosk-cart.glb', bytes: 349136, tris: 4369, code: 'M17', key: 'office-mall-kiosk-cart'},
+  'storage-tote': {url: 'assets/models/mall-storage-tote.glb', bytes: 147472, tris: 1478, code: 'M18', key: 'office-storage-tote'},
+  'shoe-wall-display': {url: 'assets/models/mall-shoe-wall-display.glb', bytes: 206620, tris: 3350, code: 'M19', key: 'office-shoe-wall-display'},
+  'food-court-table-set': {url: 'assets/models/mall-food-court-table-set.glb', bytes: 204492, tris: 3294, code: 'M20', key: 'office-food-court-table-set'},
 };
 
 export const MALL_PART_ASSETS: Readonly<Record<string, MallPartEntry>> = {

@@ -41,6 +41,7 @@ import {MOOD} from '../src/world/lights';
 import {treatmentOf} from '../src/world/wallDetailPlan';
 import type {MallProgram} from '../src/gen/mall/mallTypes';
 import {readTowerInfo} from '../src/world/towerShared';
+import {PropDamage} from '../src/damage/propDamage';
 import {buildElevatorView, planElevator} from '../src/world/elevator';
 
 installCanvasShim(false);
@@ -505,6 +506,86 @@ describe('the REAL generated mall (lane GEN, seed 12345 galleria): finishes, bal
       expect([...vis].filter(([mm]) => culled(mm)).map(([mm, n]) => `${mm.name} L${mm.userData.level} ${n}px`), q.name).toEqual([]);
     }
   });
+
+  it('shopfronts (lane SHOPS collision-only props): every glazing pane / closed shutter is drawn exactly over its collider; partial curtains are visual-only above head height', () => {
+    const {layout, w} = get();
+    const m = layout.mall!;
+    const props = layout.props.filter(p => (p.kind === 'shopGlazing' || p.kind === 'shopShutter') && p.shop === undefined);
+    expect(props.filter(p => p.kind === 'shopGlazing').length).toBeGreaterThan(20);
+    const st = w.mallArch!.stats;
+    expect(st.glazing).toBe(props.filter(p => p.kind === 'shopGlazing').length);
+    expect(st.shutters).toBe(props.filter(p => p.kind === 'shopShutter').length);
+    type Tri = {c: THREE.Vector3; lo: THREE.Vector3; hi: THREE.Vector3};
+    const trisOf = (prefix: string): Tri[] => {
+      const out: Tri[] = [];
+      for (const q of meshes(w.group).filter(mm => mm.name.startsWith(prefix))) {
+        const P = q.geometry.attributes.position, idx = q.geometry.index!;
+        for (let t = 0; t < idx.count; t += 3) {
+          const v = [0, 1, 2].map(k => new THREE.Vector3().fromBufferAttribute(P, idx.getX(t + k)).applyMatrix4(q.matrixWorld));
+          const lo = v[0].clone().min(v[1]).min(v[2]), hi = v[0].clone().max(v[1]).max(v[2]);
+          out.push({c: v[0].clone().add(v[1]).add(v[2]).divideScalar(3), lo, hi});
+        }
+      }
+      return out;
+    };
+    const glass = trisOf('shopfront-mall-glass'), shutter = trisOf('shopfront-mall-shutter');
+    const inBox = (c: THREE.Vector3, p: (typeof props)[number], e: number) => c.x >= p.x - p.hx - e && c.x <= p.x + p.hx + e && c.z >= p.z - p.hz - e && c.z <= p.z + p.hz + e && c.y >= p.y - e && c.y <= p.y + p.h + e;
+    for (const p of props) {
+      const mine = (p.kind === 'shopGlazing' ? glass : shutter).filter(t => inBox(t.c, p, 0.03));
+      expect(mine.length, `${p.kind} at ${p.x},${p.z} has a visual`).toBeGreaterThan(0);
+      const alongX = p.hx >= p.hz;
+      const lo = Math.min(...mine.map(t => (alongX ? t.lo.x : t.lo.z))), hi = Math.max(...mine.map(t => (alongX ? t.hi.x : t.hi.z)));
+      const y0 = Math.min(...mine.map(t => t.lo.y)), y1 = Math.max(...mine.map(t => t.hi.y));
+      const half = alongX ? p.hx : p.hz;
+      expect(hi - lo, `${p.kind} span`).toBeGreaterThan(2 * half * 0.97);
+      expect(y1 - y0, `${p.kind} height`).toBeGreaterThan(p.h * (p.kind === 'shopGlazing' ? 0.9 : 0.97));
+      expect(y1).toBeLessThanOrEqual(p.y + p.h + 0.01);
+    }
+    // no full-height visual without a collider: every glass / shutter-curtain triangle below 2.1 m lies in a prop box
+    const base = (y: number) => Math.max(...m.storeys.filter(q => q.baseY <= y + 0.01).map(q => q.baseY));
+    for (const t of [...glass, ...shutter]) if (t.c.y < base(t.c.y) + 2.1) expect(props.some(p => inBox(t.c, p, 0.05)), `stray visual at ${t.c.toArray()}`).toBe(true);
+    // partial shutters: one per shop whose fit says so, every vertex above head height, never a damage-cut 'shopfront-' mesh
+    const partialShops = m.shops.filter(q => q.fit?.shutter === 'partial');
+    expect(st.partialShutters).toBe(partialShops.length);
+    for (const q of meshes(w.group).filter(mm => mm.name.startsWith('mall-shutter-partial'))) {
+      const P = q.geometry.attributes.position, b = m.storeys.find(x => x.level === q.userData.level)!.baseY;
+      for (let i = 0; i < P.count; i++) expect(P.getY(i)).toBeGreaterThanOrEqual(b + 2.2);
+    }
+    // batched: at most 4 shopfront meshes per storey
+    const sf = meshes(w.group).filter(mm => mm.name.startsWith('shopfront-mall-') || mm.name.startsWith('mall-shutter-partial'));
+    console.log(`[mall shopfronts] ${st.glazing} glazing panes, ${st.shutters} closed shutters, ${st.partialShutters} partial shutters -> ${sf.length} draw calls`);
+    expect(sf.length).toBeLessThanOrEqual(4 * m.storeys.length);
+    for (const q of sf) expect(matOf(q).transparent ? q.castShadow : false).toBe(false);
+  });
+
+  it('frontages face the gallery (derived from geometry, whatever frontage.side means): signs / curtains go on the gallery side', () => {
+    const {layout, w} = get();
+    const arch = w.mallArch!;
+    const gal = new Set(layout.mall!.galleries.flatMap(g => g.areas));
+    let checked = 0;
+    for (const s of layout.mall!.shops) {
+      const g = arch.frontGeometry(s)!;
+      const grid = layout.levels![s.level].grid;
+      const at = (d: number) => {
+        const x = g.alongX ? (g.s0 + g.s1) / 2 : g.line + g.nrm[0] * d, z = g.alongX ? g.line + g.nrm[1] * d : (g.s0 + g.s1) / 2;
+        const [cx, cy] = grid.cellOf(x, z);
+        return grid.area[grid.idx(cx, cy)];
+      };
+      expect(at(-1.5), `${s.id} inside`).toBe(s.area);
+      if (gal.has(at(2))) checked++;
+    }
+    expect(checked).toBeGreaterThan(layout.mall!.shops.length * 0.8);
+  });
+
+  it('a hit shopfront pane detaches into glass parts the damage system can shatter (merged shopfront mesh, glass class)', () => {
+    const {layout, w} = get();
+    const dmg = new PropDamage();
+    dmg.build(layout.props, [w.group]);
+    const p = layout.props.find(q => q.kind === 'shopGlazing' && q.shop === undefined)!;
+    const s = dmg.state(p);
+    expect(dmg.detach(s, true)).toBe(true);
+    expect(s.parts!.some(q => q.glass)).toBe(true);
+  });
 });
 
 describe('the glass elevator: shaft tower on the non-door sides (lane GEN door side), a glass car', () => {
@@ -541,6 +622,7 @@ describe('old levels unchanged: the Subway and the Office never reach the mall p
     expect(w.culler.atriumTileCount).toBe(0);
     for (const m of meshes(w.group)) {
       expect(m.name.startsWith('mall-'), m.name).toBe(false);
+      expect(m.name.startsWith('shopfront-mall-'), m.name).toBe(false);
       expect(m.geometry.getAttribute(MALL_FINISH_ATTR), m.name).toBeUndefined();
     }
   };
