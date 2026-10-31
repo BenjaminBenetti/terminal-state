@@ -289,12 +289,17 @@ export function stationP7Palette(dressRng: Rng): ReadonlySet<string> {
  * ceilings made relative where the rules read them) and lifted onto it at the end — what finishTraversal does for the core's props.
  * No fixtures (the caller lights the extensions).
  */
-export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => void}): {props: number; signs: number} {
+export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => void; phase?: (k: string) => void}): {props: number; signs: number} {
   const ids = new Set(areas.map(a => a.id));
   const inSet = (a: Area) => ids.has(a.id);
-  const ctxs = levelsOf(layout).map(L => makePlaceCtx(layout, rng, L.id));
-  const ctxOf = (a: Area): Ctx => ctxs[areaLevel(a)] ?? ctxs[0];
+  // contexts only for the levels the areas lie on, their masks built over the areas' bounding window (+ 4 cells)
+  const win = {x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity};
+  for (const a of areas) { win.x0 = Math.min(win.x0, a.x - 4); win.y0 = Math.min(win.y0, a.y - 4); win.x1 = Math.max(win.x1, a.x + a.w + 3); win.y1 = Math.max(win.y1, a.y + a.h + 3); }
+  const ctxs = new Map<number, Ctx>();
+  const ctxOf = (a: Area): Ctx => { const L = areaLevel(a); let c = ctxs.get(L); if (!c) ctxs.set(L, (c = makePlaceCtx(layout, rng, L, win))); return c; };
+  for (const a of areas) ctxOf(a);
   const p0 = layout.props.length, s0 = layout.signs.length;
+  o.phase?.('dress.ctx');
   // `maxProps`: the pass's prop budget — rooms are dressed in the given (priority) order until it is spent; the iteration-07
   // dresser stops placing at it too (its per-area budgets scaled by `p7Scale`)
   const cap = o.maxProps ?? Infinity, spent = () => layout.props.length - p0 >= cap;
@@ -304,11 +309,13 @@ export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[
     if (spent()) break;
     if (!COMPOSED_ZONES.has(zoneOf(layout, a))) dressByRules(ctxOf(a), a, ROOM_PURPOSES[a.purpose ?? ''] ?? ROOM_PURPOSES.storage);
   }
+  o.phase?.('dress.rules');
   compose(layout, {rng: rng.fork('compose'), palette: o.palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
+  o.phase?.('dress.compose');
   {
     const prng = rng.fork('p7');
-    const pctxs = ctxs.map(c => ({...c, rng: prng}));
-    const pctxOf = (a: Area): Ctx => pctxs[areaLevel(a)] ?? pctxs[0];
+    const pctxs = new Map([...ctxs].map(([L, c]) => [L, {...c, rng: prng}]));
+    const pctxOf = (a: Area): Ctx => pctxs.get(areaLevel(a)) ?? {...ctxOf(a), rng: prng};
     dressP7(layout, {
       rng: prng, areas: inSet, hostsFrom: p0, budgetScale: o.p7Scale,
       place: (a, kind, x, z, rot, q = {}) => (spent() ? null : tryPlaceProp(pctxOf(a), a, kind, x, z, rot, q)),
@@ -330,6 +337,7 @@ export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[
       backed: (a, side, t0, t1, yb) => backed(pctxOf(a), a, side, t0, t1, yb),
     });
   }
+  o.phase?.('dress.p7');
   // purpose plates on the outer side of each purpose room's main door (authored in the outer area's local frame)
   for (const a of areas) {
     const plate = PLATES[a.purpose ?? ''];

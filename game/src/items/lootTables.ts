@@ -546,8 +546,21 @@ export const ANNEX_STASH_KEY = 'annex-stash';
  * drink / medicine.
  */
 export const ANNEX_STASH_ROWS: ItemRows = [['water', 1.2], ['beans', 1], ['bandage', 1], ['medkit', 0.15], ['battery', 0.5], ['flare', 0.4], ...genericAmmo(1.4)];
-/** The stash table (lots / empty): one in five stashes is empty, the rest 1-3 lots. */
-export const ANNEX_STASH: LootSpec = {items: ANNEX_STASH_ROWS, lots: [1, 3], empty: 0.2};
+/** The stash table (lots / empty): about one stash in seven is empty, the rest 2-3 lots. */
+export const ANNEX_STASH: LootSpec = {items: ANNEX_STASH_ROWS, lots: [2, 3], empty: 0.15};
+/**
+ * Loot key (PropPlacement.purpose = gen/purposes.ts 'annex-picked') of an annex's PICKED-OVER storage: GEN's annexes are dozens of
+ * small plant rooms, stores and closets, and their purposes' ammo-heavy tables (ammo is never thinned) would have multiplied the
+ * level's ammo (measured: +390-570 rounds per level, 1.2-2x the core's holder ammo). So only the DEEPEST holders of each annex keep
+ * their room's table (gen/annexContent.ts ANNEX_CONTENT.m2PerIntactHolder: ~8 per annex; deeper = worth the walk); every other
+ * annex holder is real, openable, finite storage that someone already went through — mostly bare (like the Office's large-room
+ * fill, 'office-fill'), never ammo.
+ */
+export const ANNEX_PICKED_KEY = 'annex-picked';
+/** What a picked-over annex holder may still hold: a bottle of water, a tin, a dressing, a cell (theme 'service': thinned hard). */
+export const ANNEX_PICKED_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.4], ['bandage', 0.4], ['battery', 0.3]];
+/** The picked-over table: nine in ten are empty, the rest one lot. */
+export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], empty: 0.9};
 
 /**
  * Per service annex (gen/annexContent.ts placeAnnexFloor, fork `track-ext-content` → `loot`), the Subway program's shape: `boxes`

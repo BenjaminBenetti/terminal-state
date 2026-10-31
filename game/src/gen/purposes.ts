@@ -28,7 +28,7 @@ import {
   CACHE_CRATE, OFFICE_DESK, OFFICE_DRAWERS, STORE_DRINKS, STORE_SNACKS, TENANT_ARMS, TENANT_FRIDGE, TENANT_KITCHEN, TENANT_MEDS, TENANT_SNACKS,
   TENANT_SUPPLY, TENANT_TABLE, storeKitchen, storeTill, type ItemRow, type LootSpec,
   JUNK_ROWS, PERSONAL_ROWS, // Task office-interactions-layout-20261030 (lane LAYOUT): office support rooms / large-room fill
-  ANNEX_STASH, ANNEX_STASH_KEY, // Track 2 (lane CONTENT): the service-annex stash holders' loot key / table
+  ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, // Track 2 (lane CONTENT): the service-annex holders' loot keys / tables
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
@@ -1021,14 +1021,20 @@ function TENANT_PURPOSES(OPEN: readonly RoomType[], ROOM: readonly RoomType[], D
  * purposes (pump / electrical rooms, stores, workshops, custodial rooms, janitor / electrical / supply closets, service corridors:
  * the same rules as the core's); this is only the LOOT KEY of the stash holders a service annex hides in its dead-end rooms
  * (PropPlacement.purpose = ANNEX_STASH_KEY, like 'office-fill'): a survivor's stash rolling items/lootTables.ts ANNEX_STASH, theme
- * 'personal' (the scarcity cut re-themes kept finds to food / drink / medicine; ammo kept as rolled). Never drawn by
- * assignRoomPurposes: weight 0 and max 0 (it never fits a slot), placed by the annex dresser only.
+ * 'personal' (the scarcity cut re-themes kept finds to food / drink / medicine; ammo kept as rolled); and the loot key of the
+ * annex's PICKED-OVER storage (ANNEX_PICKED_KEY: every holder beyond the deepest few keeps its furniture but is mostly bare). Never
+ * drawn by assignRoomPurposes: weight 0 and max 0 (they never fit a slot), set by the annex dresser only.
  */
 function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
   return {
     [ANNEX_STASH_KEY]: {
       id: ANNEX_STASH_KEY, category: 'back', theme: 'personal', label: 'Hideout stash', slots: ['storage'], kinds: ['room', 'closet'], weight: 0, max: 0,
       light: [0, 0.3, 0.7], props: [], loot: {crate: ANNEX_STASH, cabinetTall: ANNEX_STASH, default: ANNEX_STASH}, floor: {},
+    },
+    // every annex holder beyond its deepest few (items/lootTables.ts ANNEX_PICKED_KEY): real, finite storage, picked over
+    [ANNEX_PICKED_KEY]: {
+      id: ANNEX_PICKED_KEY, category: 'back', theme: 'service', label: 'Picked-over stores', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_PICKED}, floor: {},
     },
   };
 }

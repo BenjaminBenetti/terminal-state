@@ -8,6 +8,7 @@
 
 import type {StationLayout} from '../../src/gen/stationTypes';
 import {ROOF_FIND_KEY} from '../../src/items/lootTables';
+import {isExtensionArea} from '../../src/gen/trackExt/index';
 
 export function fnv(s: string, h = 0x811c9dc5): number {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -54,15 +55,24 @@ export function pickupHash(l: StationLayout): string {
   return h.toString(16).padStart(8, '0');
 }
 
-/** Spawn counts per generation context: Subway 'station' (+ per storey); Office street / floors 2..8 / roof. */
+/**
+ * Spawn counts per generation context: Subway 'station' (+ per storey); Office street / floors 2..8 / roof. Track 2 (lane CONTENT):
+ * the service annexes' spawns (context 'service', in extension areas) are counted SEPARATELY (` + service N`, absent when none),
+ * so the core contexts' counts read exactly as before.
+ */
 export function contextCounts(l: StationLayout): string {
   const by = new Map<number, number>();
-  for (const z of l.zombies) by.set(z.level ?? 0, (by.get(z.level ?? 0) ?? 0) + 1);
-  if (!l.office) return `station ${l.zombies.length} (L0 ${by.get(0) ?? 0} L1 ${by.get(1) ?? 0} L2 ${by.get(2) ?? 0})`;
+  let service = 0;
+  for (const z of l.zombies) {
+    if (isExtensionArea(l.areas[z.area])) { service++; continue; }
+    by.set(z.level ?? 0, (by.get(z.level ?? 0) ?? 0) + 1);
+  }
+  const svc = service ? ` + service ${service}` : '';
+  if (!l.office) return `station ${l.zombies.length - service} (L0 ${by.get(0) ?? 0} L1 ${by.get(1) ?? 0} L2 ${by.get(2) ?? 0})${svc}`;
   const parts = [`street ${(by.get(0) ?? 0) + (by.get(1) ?? 0)}`];
   for (let n = 2; n <= 8; n++) parts.push(`f${n} ${by.get(n) ?? 0}`);
   parts.push(`roof ${by.get(9) ?? 0}`);
-  return parts.join(' ');
+  return parts.join(' ') + svc;
 }
 
 /** Subway parity corpus: the office-gen fingerprint seeds with both start weapons + one forced seed per archetype. */
@@ -109,11 +119,16 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
 export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   ...SUBWAY_GOLDEN,
   // translated cores (same spawns / families / counts / areas; x / z shifted with the core)
-  '42:rifle': ['17f06a80', '5b5d5bad', 'station 30 (L0 24 L1 2 L2 4)'],
-  '42:pistol': ['17f06a80', '2b39a883', 'station 30 (L0 24 L1 2 L2 4)'],
-  '9001:rifle:side-mezzanine': ['fe56616a', '294e2619', 'station 30 (L0 23 L1 2 L2 5)'],
   '32758:rifle:interchange': ['aae8c931', '27accbd0', 'station 31 (L0 23 L1 3 L2 5)'],
-  '48596:rifle:deep': ['14b06df2', 'fe055a49', 'station 32 (L0 25 L1 2 L2 5)'],
+  // Stage 5 (Track 2, lane CONTENT): stations with a service annex APPEND its service spawns (context 'service', counted separately)
+  // and its loose floor finds after every core record — the core view still reproduces SUBWAY_GOLDEN (asserted every run). Before
+  // (stage 4, translated cores): 42 17f06a80 / 5b5d5bad (pistol 2b39a883), 9001 fe56616a / 294e2619, 48596 14b06df2 / fe055a49,
+  // 16920 = SUBWAY_GOLDEN.
+  '42:rifle': ['8e2beb1a', '415337e2', 'station 30 (L0 24 L1 2 L2 4) + service 4'],
+  '42:pistol': ['8e2beb1a', 'c392434c', 'station 30 (L0 24 L1 2 L2 4) + service 4'],
+  '9001:rifle:side-mezzanine': ['5185b4b3', '01040514', 'station 30 (L0 23 L1 2 L2 5) + service 3'],
+  '16920:rifle:island-ends': ['f70291d9', '366aae1d', 'station 30 (L0 22 L1 5 L2 3) + service 5'],
+  '48596:rifle:deep': ['eb312772', '0ac9c3da', 'station 32 (L0 25 L1 2 L2 5) + service 3'],
 };
 // Office: stage 3 (task track1-siren-blightbelly-20261031); pickups / counts as at stage 2 (task office-props-physics-scale-20261030).
 export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = {
@@ -122,6 +137,18 @@ export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = 
   '3333:pistol': ['9720588a', 'bc96b5e2', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2'],
   '4242:pistol': ['46b33d60', 'ba008081', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0'],
   '11:rifle': ['73536b5a', '7cb613ae', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
+};
+
+/**
+ * Stage 5 (Track 2, lane CONTENT): the LIVE Office layouts. Levels whose street station grew service annexes append their service
+ * spawns (context 'service', counted separately) and loose floor finds after every core record; the core view still reproduces
+ * OFFICE_GOLDEN byte for byte (asserted every run). Entries without an annex equal OFFICE_GOLDEN.
+ */
+export const OFFICE_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
+  ...OFFICE_GOLDEN,
+  '222:pistol': ['72312ed5', 'e2d2d41d', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 7'],
+  '3333:pistol': ['149f6a02', 'adaf922a', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 6'],
+  '4242:pistol': ['b1c2b0ad', '36b424a5', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 9'],
 };
 
 /**

@@ -246,7 +246,7 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   if (ext) {
     finishExtensions(layout, ext, {ox, oy, grow: 'east-south'});
     // Track 2 (lane CONTENT): their dressing / fixtures / loose finds on the `track-ext-content` fork, APPENDED after every core record.
-    populateExtensions(layout, rng, {loot, dressRng: rng.fork('dress')});
+    populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')});
   }
   // ONCE, after every context (Track 2: also after the extensions' appended spawns; the roll is per spawn index: the core's unchanged).
   assignEnemyArchetypes(layout, spawns); // lane SPAWN: the Office's pool, per the spawn's room
