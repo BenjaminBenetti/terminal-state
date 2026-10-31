@@ -341,19 +341,25 @@ To add a material: an `items/craftMaterials.ts` def, its dims, a model in `world
 `ui/materialIcons.ts`, `ITEM_CLASS` / `ITEM_PHYSICS` rows in `damage/materials.ts` and a `BOX_COUNT` entry. Then add rows to
 the holders it fits, and `'material'` to their `HOLDER_ALLOW`.
 
-## The Eaton's Center (`mall`)
+## The mall (`mall`)
 
-<!-- Task track3-eaton-centre-20261031 (lane PROFILES) -->
+<!-- Task track3-eaton-centre-20261031 (lane PROFILES); re-proportioned for the compact mall by task mall-playtest-revision-20261031
+(lane PROFILES: D08, U10 follow-up). -->
 
 User: "I also want the shopping mall to be a significant source of the crafting materials, the electrical parts, the scrap metal,
-and the bio material … It should be much more common in this area."
+and the bio material … It should be much more common in this area." Mall playtest: "a lot of drawers and cupboards are openable however
+I'm not seeing much loot in them … just make sure we put loot inside the drawers and cupboards."
 
-`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE}` — every consumable, ammo /
-calibre, box size, scarcity, limb, rare-gear and reward table is the SAME object the Subway and the Office roll — plus
-`overrides` = `MALL_OVERRIDES`: `categoryWeight: {material: 0.6}` (the dial: every material row of the mall's tables, salvage
-included, weighs 0.6× — the raw shares gave ~13× the Office's materials per 100 m² once the shops were fully dressed) and
-`itemWeight: {bio_mater: 1.5}` (the scarcest material lifted). The Office's physical storeys idea applies: the station pit and the
-six rings are contexts of ONE logical level (one profile, one rare-gear roll, one gas-mask roll: `MASK_LOOT.levels.mall`, masks 1–2,
+The mall is ONE logical level, `LevelId` `mall` (tier 2); its display name is seeded per run — `<Name> Center`
+(`game/src/gen/mall/names.ts` `mallNameOf(levelSeed)`, stable for the same seed) — and the profile labels are generic
+(`Mall (seeded "<Name> Center")`). Since the playtest revision it is compact: the station + three retail floors (~6,600 m² of core
+floor, ~670 loot holders a run; the six-ring mall had ~43,800 m² and ~2,950 holders).
+
+`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL}` —
+every consumable, ammo / calibre, box size, scarcity, limb, rare-gear and reward table is the SAME object the Subway and the Office roll —
+plus `overrides` = `MALL_OVERRIDES`: `categoryWeight: {material: 0.25}` (the dial: every material row of the mall's tables, salvage and
+storage-fill pools included; six rings: 0.6) and `itemWeight: {bio_mater: 1.5}` (the scarcest material lifted). The station and the three
+retail floors are contexts of ONE logical level (one profile, one rare-gear roll, one gas-mask roll: `MASK_LOOT.levels.mall`, masks 1–2,
 filters 2–5).
 
 - **Salvage** (`LootTables.salvage`, `SalvageRule` / `SalvageTables`, logic `items/lootEconomy.ts` `salvageRule` / `withSalvage`):
@@ -370,40 +376,71 @@ filters 2–5).
   - by purpose (lane SHOPS' `mall-*` ids): electronics / phone and their stock rooms 0.35–0.4, arcade / music stock rooms;
     hardware 0.4 / 0.45, outdoors 0.25 / 0.3, sports, home, jewellery, luggage, toys, the gun shop's back office 0.2; clinic 0.2 /
     0.25, pharmacy / optician stock rooms 0.2, pet 0.12 / 0.18, the florist's workroom 0.1; vacant units 0.2; janitorial 0.3; plus
-    the shared back-of-house ids (electrical room / closet, workshop, pump room) should the service ring use them.
+    the shared back-of-house ids (electrical room / closet, workshop, pump room).
   - The mall purposes carry NO material rows of their own: salvage is the one dial (no double counting).
+- **Storage fill** (`LootTables.storageFill`, `StorageFill`, `MALL_STORAGE_FILL`; logic `items/loot.ts` `storageFill`; lane SHOPS built it
+  for U10, lane PROFILES tuned it): after a storage holder's own roll, every compartment it left EMPTY (an openable drawer / door / lid;
+  a one-door / one-lid holder = one compartment; exposed tops never) rolls once on its own stream `loot:<kind>:<index>:fill<part>`:
+  `chance` × min(1, compartment loot area / `area`), then U{lots} items drawn from the holder's resolved rows within `cats` and
+  `HOLDER_ALLOW` — only among the items that fit that compartment — re-weighted by category (default `STORAGE_FILL_WEIGHTS`: salvage
+  × 3, torch cells × 0.25), packed on that compartment only. Snacks / drinks are `STORAGE_FILL_FALLBACK`: they join the pool only when
+  it holds nothing else, except in food places (`STORAGE_FILL_STOCK_THEMES`: a grocer's / food unit's / pet shop's storage, where they
+  are the stock). Dressings only in medical storage (`MED_FILL`), food in kitchenettes / chest freezers (`FOOD_FILL`), a kiosk cart its
+  own snack / drink / cell stock, ammo only by the gun safe's arms rule. Finite, seeded once with the level, remembered by lot id like
+  every holder lot. **Chances** (per empty compartment): cash-wrap drawers 0.4, dresser drawers 0.43, totes 0.4, carton halves 0.5
+  (area 0.08), tall / low cabinets 0.45, desks 0.36, kiosk carts 0.32, bookcase drawers 0.25, glass display cabinets 0.25, kitchenettes
+  0.3, filing cabinets 0.3, tool-chest drawers 0.35, staff lockers 0.2, dispensary drawers / cupboards 0.35, the medicine cabinet's 33
+  pill drawers 0.16 (dressings: a pharmacy is a medicine source already), clinic storage 0.15–0.3, the gun safe 0.4. Absent in
+  `BASE_TABLES`: Subway / Office rolls untouched.
 - **Floor program** `MALL_FLOOR` (`BASE_TABLES.floor.mall`, interpreter `gen/mall/supplies.ts` `placeMallSupplies`, stream
-  `mall-supplies-<storey>`): the pit once (one ammo-band draw, one scarce draw, 1–2 loose salvage stacks) and every ring (two ammo
-  draws, two scarce draws, 2–4 loose salvage stacks: `MALL_LOOSE_SALVAGE`), placed in weighted zones (galleries 1, shop floors 0.8,
-  back of house 1.3, salvage × 2 in tech / service places) ≥ 16 walking cells from the start and off the landings.
+  `mall-supplies-<storey>`): the station once (one ammo-band draw, one scarce draw, one loose salvage stack) and every retail floor (two
+  ammo draws, two scarce draws, 1–3 loose salvage stacks: `MALL_LOOSE_SALVAGE`; six rings: 2–4), placed in weighted zones (galleries /
+  courts 1, shop floors 0.8, back of house 1.3, salvage × 2 in tech / service places) ≥ 16 walking cells from the start and off the
+  landings.
 - **Rewards**: none of its own (the base reward tables are inherited but inert: no mall holder carries their keys). Weapon finds are
-  lane SHOPS' bounded once-per-run gun-shop plan (an explicit exception, like the Office's weapon plan).
-- **Track2 service annexes** (NOT INTEGRATED: Track2 is not on main): annex holders / floor items will come from Track2's own annex
-  context (finite, seeded once, appended last) rolled under the mall profile — the annex purpose's theme decides any salvage; the
-  mall floor program skips extension areas (`gen/mall/index.ts` holds their cells); the ONE rare-gear roll, the gas-mask roll and
-  the rewards are never multiplied by annexes.
+  lane SHOPS' per-gun-shop stock (about one gun per gun shop, its own ammunition once; an explicit exception, like the Office's
+  weapon plan).
+- **Track2 service annex** (at most one per mall, `TRACK_EXT_MALL.annex.max = 1`): annex holders / floor items come from Track2's own
+  annex content (finite, seeded once, appended last), rolled under the mall profile — the annex purpose's theme decides any salvage;
+  the mall floor program never sees extension areas (they are attached after every core pass); the ONE rare-gear roll, the gas-mask
+  roll and the rewards are never multiplied by annexes.
 
 ### Normalised census (the evidence)
 
 `game/tests/helpers/materialCensus.ts` (`runCensus` / `summarize`) measures any level the same way: holder lots AFTER fit
-(`layoutHolderDetails`: the ContainerManager.build roll + packing, with the pre-fit entries → fit failures, and the surface area =
-finite capacity) and loose pickups, counted only where the walking field from the arrival point (`levelDistance` over every storey's
-links) reaches the holder / pickup; usable floor = the reached walkable cells (0.25 m² each, stair runs once). Rates are per
-REACHABLE holder and per 100 m² of usable floor. `game/tests/mall-profiles.test.ts` prints the table and requires the mall's material
-rates to be > 3× the Office's both per holder and per 100 m² (consumables stay within the shared band).
+(`layoutHolderDetails`: the ContainerManager.build roll + packing + the storage fill, with the pre-fit entries → fit failures, the
+fill's drawn-but-unpacked items included via `STORAGE_FILL_STATS`, and the surface area = finite capacity) and loose pickups, counted
+only where the walking field from the arrival point (`levelDistance` over every storey's links) reaches the holder / pickup; usable
+floor = the reached walkable cells (0.25 m² each, stair runs once). Rates are per REACHABLE holder and per 100 m² of usable floor;
+`{exclude}` leaves the Track2 extension areas out for a core-to-core comparison. `compartmentCensus` / `stockedRate` count the
+drawers / cupboards that hold something. `game/tests/mall-profiles.test.ts` prints the tables and requires: materials > 5× the
+Office per 100 m² and > 3.5× per reachable holder, core-to-core AND extension-inclusive (and < 25×: not an avalanche); each material
+> 3 units a run; fit loss < 5 %; reachable > 97 %; core food / drink / dressings per 100 m² < 2.5× the Office's (the consumables
+guard), ammo < 1.2×, torch cells < 4.5×; 28–50 % of the fill kinds' compartments stocked (30–55 % without the pill drawers), each
+common kind 22–75 %, the pill drawers < 30 %; materials > half of what the fill puts inside; ammo in the fill only in the gun safe.
 
-Measured (3 levels each, seeds 11 / 222 / 3333, pistol start, the fully dressed shops at this task's checkpoint — the generator
-is still evolving, so re-run the test for current numbers):
+Measured (task mall-playtest-revision-20261031, 10 compact malls = 3 variants × seeds 11 / 222 / 3333 + seed 44444; Office seeds
+11 / 222 / 3333; pistol start; `reference/tasks/mall-playtest-revision-20261031/evidence/census/after.json`):
 
-| | Office Space | The Eaton's Center |
-|---|---|---|
-| usable floor per run (reached walkable) | ~8,530 m² | ~40,600 m² |
-| holders per run (all reachable) | 484 | ~2,620 |
-| material units per run (parts / scrap / bio) | 12.3 (9.7 / 2.7 / 0) | ~547 (215 / 265 / 67) |
-| material units per reachable holder | 0.026 | 0.198 (≈ 7.6×) |
-| material units per 100 m² | 0.145 | 1.35 (≈ 9.3×) |
-| food / drink / med per 100 m² | 0.30 / 0.34 / 0.18 | 0.53 / 0.61 / 0.25 |
-| fit failures (lots) | 0.8 % | 0.3 % |
+| | Office Space (core) | Mall (core) | ratio | Mall + annex |
+|---|---|---|---|---|
+| usable floor per run (reached walkable) | ~8,530 m² | ~6,620 m² | | ~8,810 m² |
+| reachable holders per run | 484 | ~566 | | ~671 |
+| material units per run (parts / scrap / bio) | 12.3 (9.7 / 2.7 / 0) | ~134 (52.6 / 71.6 / 9.7) | 10.9× | ~144 |
+| material units per reachable holder | 0.026 | 0.224 | **8.6×** | 0.203 (10.7× the Office's 0.019 incl. its annexes) |
+| material units per 100 m² | 0.145 | 2.02 | **14.0×** | 1.63 (14.7× the Office's 0.112 incl. its annexes) |
+| food / drink / dressings per 100 m² | 0.30 / 0.34 / 0.18 | 0.64 / 0.77 / 0.40 | 2.2× / 2.3× / 2.2× | |
+| ammo / torch cells per 100 m² | 5.28 / 0.074 | 4.73 / 0.23 | 0.9× / 3.1× | |
+| fit failures (lots; holder rolls + storage fill) | 1.0 % | 1.6 % | | |
+
+Why the per-area ratio rose above the six-ring mall's 8.3× (per holder 7.0×): the compact mall packs its shops ~1.5× denser per m²
+(8.6 holders per 100 m² vs the Office's 5.7) and the U10 storage fill now puts ~84 material units a run INSIDE the drawers / cupboards
+(the open shelves' share fell with the dial 0.6 → 0.25); the loose floor salvage shrank with the smaller storeys. The per-holder
+ratio stays close to the accepted six-ring value. Drawer / cupboard compartments stocked (fill kinds): **35 %** of ~303 a run (38 %
+without the medicine cabinet's pill drawers; all openable holder compartments incl. crates / bins / toilet stalls 31 %) — cash wrap 41 %,
+cartons 38 %, totes 42 %, dressers 48 %, tall / low cabinets 58 % / 51 %, desks 38 %, glass cabinets 31 %, kiosk carts 39 %, bookcase
+drawers 27 %, staff lockers 37 %, kitchenettes 30 %, tool chests 22 %, pill drawers 23 % (SHOPS' first fill: 17 % overall; before it
+~5 %). What the fill puts inside per run: materials 84 units, dressings 11, food 6, drink 4, torch cells 6, flares 2.5.
 
 ## Verify
 

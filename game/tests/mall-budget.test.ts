@@ -418,7 +418,11 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     expect(codes.size * 4).toBeLessThan(smallInstanced + codes.size);
     expect(inView.length).toBeLessThanOrEqual(MALL_BUDGET.startViewObjects);
     expect(trisOf(inView)).toBeLessThanOrEqual(MALL_BUDGET.startViewTriangles);
-    expect(inView.length).toBeLessThan(noSlab.length * 0.8); // slab occlusion: >= 20 % fewer objects than the atrium rule alone (measured -29 %)
+    // slab occlusion vs the atrium rule alone: the six-ring mall culled >= 20 % of the OBJECTS (measured -29 %); the compact revised
+    // mall has far fewer storeys stacked over the start view, so the object count drops less (measured 364 -> 307, -16 %) while the
+    // triangles still halve (657k -> 368k): pin both honestly.
+    expect(inView.length).toBeLessThan(noSlab.length);
+    expect(trisOf(inView)).toBeLessThan(trisOf(noSlab) * 0.7);
     expect(objects).toBeLessThanOrEqual(MALL_BUDGET.objects);
     expect(triangles).toBeLessThanOrEqual(MALL_BUDGET.triangles);
     expect(geometry / MB).toBeLessThanOrEqual(MALL_BUDGET.geometryMB);

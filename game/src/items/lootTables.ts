@@ -661,9 +661,9 @@ export const ANNEX_FLOOR: SubwayFloorProgram = {
 };
 
 /**
- * Task track3-eaton-centre-20261031 (lane PROFILES): loose floor finds of ONE storey of The Eaton's Center (gen/mall/supplies.ts
+ * Task track3-eaton-centre-20261031 (lane PROFILES): loose floor finds of ONE storey of the mall (gen/mall/supplies.ts
  * placeMallSupplies, stream `mall-supplies-<storey>`, run once per storey under the ONE mall profile; variant `pit` = the subway
- * station storey at the bottom of the void, `ring` = each retail ring). Draw order: `ammo.draws` draws against the cumulative
+ * station storey at the bottom of the atrium, `ring` = each retail floor). Draw order: `ammo.draws` draws against the cumulative
  * `thresholds` -> `boxes[i]` or nothing; then the scarce finds (`scarce-floor` fork): `scarce.draws` times med (a `medkit` share of
  * them a kit, else a bandage), battery, flare; then `salvage.n` loose crafting materials (`salvage` fork: items by `salvage.items`,
  * stack size BOX_COUNT small). WHERE (`place`): a weighted area of the storey — gallery walkways / bridges (`gallery`), shop sales
@@ -686,17 +686,21 @@ export const MALL_LOOSE_SALVAGE: ItemRows = [[SCRAP_METAL, 1.4], [ELECTRICAL_PAR
 /**
  * A ring is ~6-8x an Office storey's floor area but most of it is shop floors full of searchable holders: loose finds scale by ~2x
  * per ring (two ammo-band draws, two scarce draws), not by area. The station pit runs the Office tower storey's odds once.
+ * Task mall-playtest-revision-20261031 (lane PROFILES, D08): the compact retail floors are ~1,200-2,700 m² (a little above an
+ * Office storey); the ammo / scarce draws are kept (mall ammo per 100 m² of core stays ~0.9x the Office's, food / drink / dressings
+ * inside the consumables guard), the loose SALVAGE re-proportioned to the smaller storeys: ring 2..4 -> 1..3, station 1..2 -> 1
+ * (crafting materials now come mostly from the shops' drawers / cupboards: MALL_STORAGE_FILL).
  */
 export const MALL_FLOOR: MallFloorProgram = {
   pit: {
     ammo: {draws: 1, boxes: [{itemId: 'ammo_9mm', count: 15}, {itemId: 'ammo_556', count: 30}, {itemId: 'ammo_12ga', count: 8}], thresholds: [0.5, 0.75, 0.9]},
     scarce: {draws: 1, med: FLOOR_ECONOMY.medKeep * 1.5, medkit: 0.3, battery: 0.35, flare: 0.14},
-    salvage: {n: [1, 2], items: MALL_LOOSE_SALVAGE},
+    salvage: {n: [1, 1], items: MALL_LOOSE_SALVAGE},
   },
   ring: {
     ammo: {draws: 2, boxes: [{itemId: 'ammo_9mm', count: 15}, {itemId: 'ammo_556', count: 30}, {itemId: 'ammo_12ga', count: 8}], thresholds: [0.4, 0.65, 0.8]},
     scarce: {draws: 2, med: FLOOR_ECONOMY.medKeep * 1.5, medkit: 0.3, battery: 0.3, flare: 0.12},
-    salvage: {n: [2, 4], items: MALL_LOOSE_SALVAGE},
+    salvage: {n: [1, 3], items: MALL_LOOSE_SALVAGE},
   },
   place: {gallery: 1, shop: 0.8, back: 1.3, themed: 2, themedFor: ['tech', 'service'], minCells: 16},
 };
@@ -890,7 +894,7 @@ export const BASELINE_PROFILE: LootProfile = {id: 'baseline', label: 'Baseline (
 // ---------------------------------------------------------------------------------------
 // Task track3-eaton-centre-20261031 (lane PROFILES): THE EATON'S CENTER (LevelId 'mall', tier 2). User: "I also want the shopping
 // mall to be a significant source of the crafting materials, the electrical parts, the scrap metal, and the bio material ... It
-// should be much more common in this area". docs/loot-tables.md "The Eaton's Center".
+// should be much more common in this area". docs/loot-tables.md "The mall" (the display name is seeded per run: "<Name> Center").
 //
 // The mall rolls the SHARED base tables (every consumable, ammo, box size, scarcity and limb number is the Subway / Office one) plus
 // MALL SALVAGE: crafting-material rows added at resolution time to the own / purpose tables of the shops and back-of-house rooms
@@ -982,46 +986,82 @@ export interface StorageFill {
   cats?: readonly EconCat[];
   /** Row-weight multipliers by category (absent category: 1; default STORAGE_FILL_WEIGHTS when `cats` is absent too). */
   weights?: Readonly<Partial<Record<EconCat, number>>>;
+  /**
+   * Task mall-playtest-revision-20261031 (lane PROFILES, U10 follow-up): FALLBACK categories (a subset of `cats`) — drawn only when the
+   * compartment's pool holds no row of any other category (default STORAGE_FILL_FALLBACK when `cats` is absent too; [] otherwise).
+   */
+  fallback?: readonly EconCat[];
 }
 /**
  * What a storage fill draws by default: the shop's stock (food / drink weighed down), torch cells, flares and the place's salvage — no
  * dressings (first-aid storage only: MED_FILL) and no ammo (the arms rule only).
+ * Task mall-playtest-revision-20261031 (lane PROFILES, U10 follow-up): the drawers / cupboards now favour the mall's CRAFTING
+ * MATERIALS (x3 on the place's salvage rows — only where the place carries salvage: electronics / hardware / stock rooms /
+ * medical labs, never a food unit's cupboard) and the small themed items (torch cells, flares) over snacks: food / drink 0.25 -> 0.05
+ * (lane PROFILES' consumables guard: mall food / drink / dressings per 100 m² of core stay < 2.5x the Office's — the compact mall's
+ * dense shop rolls alone reach ~1.8x; measured in game/tests/mall-profiles.test.ts).
  */
 export const STORAGE_FILL_CATS: readonly EconCat[] = ['food', 'drink', 'battery', 'flare', 'material'];
-export const STORAGE_FILL_WEIGHTS: Readonly<Partial<Record<EconCat, number>>> = {food: 0.25, drink: 0.25};
-const MED_FILL = {cats: ['med', 'drink'], weights: {drink: 0.5}} as const;
+export const STORAGE_FILL_WEIGHTS: Readonly<Partial<Record<EconCat, number>>> = {battery: 0.25, material: 3};
+/**
+ * (lane PROFILES, mall revision) Snacks / drinks fill a drawer or cupboard only where the place stocks nothing else that fits there
+ * (an optician's display cabinet: bottled water) or where they ARE the place's stock (STORAGE_FILL_STOCK_THEMES: a grocer's / food
+ * unit's / pet shop's storage); elsewhere the fill is the place's salvage (stock rooms: shelving brackets, conduit, cable; tills: a
+ * dead card reader's boards), torch cells and flares — the consumables guard (docs/loot-tables.md) holds.
+ */
+export const STORAGE_FILL_FALLBACK: readonly EconCat[] = ['food', 'drink'];
+/** (lane PROFILES, mall revision) Loot themes whose fallback categories are the place's OWN stock (never held back): food places. */
+export const STORAGE_FILL_STOCK_THEMES: readonly LootTheme[] = ['food'];
+const MED_FILL = {cats: ['med', 'drink'], weights: {drink: 0.25}} as const; // (lane PROFILES, mall revision: drink 0.5 -> 0.25)
 const FOOD_FILL = {cats: ['food', 'drink'], weights: {}} as const;
 const ARMS_FILL = {cats: ['ammo', 'flare', 'battery'], weights: {}} as const;
+/** (lane PROFILES, mall revision) a kiosk cart's cupboards: its own snack / drink / cell stock at its row weights. */
+const KIOSK_FILL = {cats: ['food', 'drink', 'battery'], weights: {}} as const;
 const fillRule = (chance: number, area = 0.12, lots: LotRange = [1, 1], o?: {cats: readonly EconCat[]; weights: Readonly<Partial<Record<EconCat, number>>>}): StorageFill =>
   ({chance, area, lots, ...(o ? {cats: o.cats, weights: o.weights} : {})});
 /**
  * The mall's storage fill (lane SHOPS, U10): drawers / cupboards / cabinets a shop or its stock room is fitted with (the mall's own
- * storage + the station / office storage reused in its back rooms). Drawers and cupboards lead; the numerous stock-room totes /
- * cartons and the bookcases' drawers are lighter; the gun safe tops up with ammo by the deliberate arms rule; crates, bins, coolers,
- * old / vault safes (already themed ammo / medicine stores) and open holders are unchanged. Measured effect on the dressed synthetic mall: see lanes/SHOPS.done (U10).
+ * storage + the station / office storage reused in its back rooms); the gun safe tops up with ammo by the deliberate arms rule;
+ * crates, bins, coolers, old / vault safes (already themed ammo / medicine stores) and open holders are unchanged.
+ * Task mall-playtest-revision-20261031 (lane PROFILES, U10 follow-up — the user: "make sure we put loot inside the drawers and
+ * cupboards"): SHOPS' first fill left ~17 % of the drawer / cupboard compartments of a generated compact mall stocked (cash wrap 16 %,
+ * bookcase drawers 14 %, cartons 10 %, medicine cabinet 12 %, tool chest 4 %: evidence/census/baseline-before.json). Chances raised so
+ * a player opening drawers / cupboards in shops and stock rooms finds something themed in roughly a third to a half of them. MEASURED
+ * stocked rate per compartment (the holder's own roll included; 10 generated malls, task folder evidence/census/after.json):
+ *   cash-wrap drawers 41 %, carton halves 38 %, totes 42 %, dresser drawers 48 %, tall / low cabinets 58 % / 51 %, desks 38 %, kiosk
+ *   carts 39 %, staff lockers 37 %, glass display cabinets 31 %, kitchenette cupboards 30 %, dispensary drawers / cupboards 30 %,
+ *   bookcase drawers 27 %, tool-chest drawers 22 % (shallow top drawers take only flat items); the medicine cabinet's 33 pill drawers
+ *   23 % (dressings only: a pharmacy is a medicine source already; every pill drawer filled would flood dressings past the
+ *   consumables guard). Overall 35 % of the drawer / cupboard compartments of a mall hold something (38 % without the pill drawers);
+ *   the rest are the intentional empty odds. Still finite, seeded once, remembered by lot id; the themes and HOLDER_ALLOW unchanged.
  */
 export const MALL_STORAGE_FILL: Readonly<Partial<Record<string, StorageFill>>> = {
-  // the mall's own storage (lane ASSETS models; the medicine cabinet's 33 pill drawers (0.04 m²) each 10 %, its cupboard / door bay too)
-  mallCashwrapCounter: fillRule(0.14), pharmacyDispensaryCounter: fillRule(0.22, 0.12, [1, 1], MED_FILL), medicineDrawerCabinet: fillRule(0.1, 0.04, [1, 1], MED_FILL), dresserDrawers: fillRule(0.16),
-  glassDisplayCabinet: fillRule(0.12, 0.3), mallKioskCart: fillRule(0.16, 0.2), bookstoreBookcase: fillRule(0.1), storageTote: fillRule(0.12), cardboardBoxFlaps: fillRule(0.12),
+  // the mall's own storage (lane ASSETS models; the medicine cabinet's 33 pill drawers (0.04 m²) each 16 %, its cupboard / door bay too)
+  mallCashwrapCounter: fillRule(0.4), pharmacyDispensaryCounter: fillRule(0.35, 0.12, [1, 1], MED_FILL), medicineDrawerCabinet: fillRule(0.16, 0.04, [1, 1], MED_FILL), dresserDrawers: fillRule(0.43),
+  glassDisplayCabinet: fillRule(0.25, 0.3), mallKioskCart: fillRule(0.32, 0.2, [1, 1], KIOSK_FILL), bookstoreBookcase: fillRule(0.25), storageTote: fillRule(0.4), cardboardBoxFlaps: fillRule(0.5, 0.08),
   gunSafeTall: fillRule(0.4, 0.1, [1, 1], ARMS_FILL),
   // station / office storage in the mall's back rooms, offices, clinic and food units
-  cabinetTall: fillRule(0.12), cabinetLow: fillRule(0.12), staffLockers: fillRule(0.08, 0.1), kitchenette: fillRule(0.08, 0.2, [1, 1], FOOD_FILL), desk: fillRule(0.08), monitorDesk: fillRule(0.08),
-  filingCabinet: fillRule(0.08), officeFiling: fillRule(0.08), chestFreezer: fillRule(0.08, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.15, 0.12, [1, 1], MED_FILL),
-  labBench: fillRule(0.06, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.2, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.12, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.04),
+  cabinetTall: fillRule(0.45), cabinetLow: fillRule(0.45), staffLockers: fillRule(0.2, 0.1), kitchenette: fillRule(0.3, 0.2, [1, 1], FOOD_FILL), desk: fillRule(0.36), monitorDesk: fillRule(0.3),
+  filingCabinet: fillRule(0.3), officeFiling: fillRule(0.3), chestFreezer: fillRule(0.2, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.25, 0.12, [1, 1], MED_FILL),
+  labBench: fillRule(0.15, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.3, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.25, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.35),
 };
 /** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall) + (lane SHOPS, U10) its storage fill. */
 export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL};
 /**
- * The mall's per-level overrides — the tuning dial on top of MALL_SALVAGE (docs/loot-tables.md "The Eaton's Center"):
- *  - categoryWeight.material 0.6: every material row of the mall's tables (the salvage rows included) weighs 0.6x — measured with
- *    the fully dressed shops (~2,600 holders a run) the raw salvage shares gave ~13x the Office's materials per 100 m²; the dial
- *    brings it to ~8x (per reachable holder ~7x), still the level's signature resource, not an avalanche;
+ * The mall's per-level overrides — the tuning dial on top of MALL_SALVAGE (docs/loot-tables.md "The mall"):
+ *  - categoryWeight.material: every material row of the mall's tables (the salvage rows included, and so the storage fill's pools)
+ *    weighs this much. Track3 (six rings, ~2,600 holders a run): 0.6 brought the raw ~13x the Office's materials per 100 m² to ~8x
+ *    (per reachable holder ~7x). Task mall-playtest-revision-20261031 (lane PROFILES, D08): 0.6 -> 0.25 — the compact mall packs its
+ *    shops ~1.5x denser per m² (8.6 vs 5.7 holders per 100 m² in the Office) and the U10 storage fill now puts the salvage INSIDE the
+ *    drawers / cupboards (x3 there); with 0.25 the open shelves keep a lighter share, and the whole mall measures ~14x the Office per
+ *    100 m² of core and ~8.5x per reachable holder (same-method census, evidence/census/after.json; without the fill ~7x / ~4x) —
+ *    the level's signature resource, concentrated in its storage;
  *  - itemWeight.bio_mater 1.5: the scarcest material (pharmacy / clinic / optician / pet stock rooms only) lifted so it stays a real
  *    mall find.
  */
-export const MALL_OVERRIDES: LootOverrides = {categoryWeight: {material: 0.6}, itemWeight: {[BIO_MATER]: 1.5}};
-export const MALL_PROFILE: LootProfile = {id: 'mall', label: 'The Eaton\'s Center', tables: MALL_TABLES, overrides: MALL_OVERRIDES};
+export const MALL_OVERRIDES: LootOverrides = {categoryWeight: {material: 0.25}, itemWeight: {[BIO_MATER]: 1.5}};
+/** (mall revision, U01) the label is the generic one: the mall's display name is seeded per run ("<Name> Center", gen/mall/names.ts). */
+export const MALL_PROFILE: LootProfile = {id: 'mall', label: 'Mall (seeded "<Name> Center")', tables: MALL_TABLES, overrides: MALL_OVERRIDES};
 
 /**
  * THE PER-LEVEL PROFILES. Both current levels use today's tables with NO overrides (the user likes the current rates). A new level
@@ -1295,11 +1335,13 @@ export function validateLootProfile(p: LootProfile): string[] {
   for (const [k, f] of Object.entries(t.storageFill ?? {})) {
     const path = `tables.storageFill.${k}`;
     if (!f || typeof f !== 'object') { bad(path, 'not a storage fill'); continue; }
-    known(path, f, ['chance', 'area', 'lots', 'cats', 'weights']);
+    known(path, f, ['chance', 'area', 'lots', 'cats', 'weights', 'fallback']);
     chance(`${path}.chance`, f.chance);
     if (!(typeof f.area === 'number' && f.area > 0)) bad(`${path}.area`, `${String(f.area)} is not > 0`);
     range(`${path}.lots`, f.lots);
     for (const c of f.cats ?? []) if (!isCat(c)) bad(`${path}.cats`, `unknown economy category ${c}`);
+    // (lane PROFILES, mall revision) fallback categories are a subset of the fill's categories
+    for (const c of f.fallback ?? []) if (!(f.cats ?? STORAGE_FILL_CATS).includes(c)) bad(`${path}.fallback`, `${c} is not one of the fill's categories`);
     mults(`${path}.weights`, f.weights, isCat, 'economy category');
   }
   weight('tables.gear.mean', t.gear.mean);

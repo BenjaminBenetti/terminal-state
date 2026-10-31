@@ -186,6 +186,8 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the per-compartment storage fill (LootTables.storageFill; mall only)
   STORAGE_FILL_CATS: 'economy.storageFill (default categories)', STORAGE_FILL_WEIGHTS: 'economy.storageFill (default category weights)',
   MALL_STORAGE_FILL: 'economy.storageFill (mall) + holder notes',
+  // task mall-playtest-revision-20261031 (lane PROFILES, U10 follow-up): the fill's fallback categories and the themes they are stock in
+  STORAGE_FILL_FALLBACK: 'economy.storageFill (default fallback categories) + holder notes', STORAGE_FILL_STOCK_THEMES: 'economy.storageFill (themes whose fallback categories are their stock)',
   // Track 2 (lane CONTENT): the service-annex loot context (ANNEX_STASH / ANNEX_PICKED and their rows are row tables: auto-detected)
   ANNEX_STASH_KEY: 'service-annex stash (loot key -> purpose annex-stash: holder contexts)', ANNEX_PICKED_KEY: 'service-annex picked-over storage (loot key -> purpose annex-picked: holder contexts)',
   ANNEX_FLOOR: 'floor program (annex variant, per service annex)',
@@ -310,8 +312,8 @@ export interface CensusLayout {
 const censusCache = new Map<string, CensusLayout>();
 
 function storeyName(layout: StationLayout, level: number): string | undefined {
-  // task track3-eaton-centre-20261031 (lane PROFILES): the mall's storeys (station pit + rings)
-  if (layout.mall) return level === 0 ? 'Station' : `Ring ${level}`;
+  // task track3-eaton-centre-20261031 (lane PROFILES): the mall's storeys (station + retail floors; mall revision: 'Level k', as the signs)
+  if (layout.mall) return level === 0 ? 'Station' : `Level ${level}`;
   if (!layout.office) return undefined;
   if (level === 0) return 'Station';
   if (level === OFFICE_ROOF_LEVEL) return 'Roof';
@@ -793,7 +795,7 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
   if (rule) notes.push(`Salvage: the ${level} profile adds crafting-material rows (${rd(rule.share)} of the table weight before overrides; kept exactly as rolled) — ${salvageOrigin(P, kind, areaKey)}.`);
   // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the level's storage fill of this holder kind (items/loot.ts storageFill)
   const sf = P.tables.storageFill?.[kind];
-  if (sf && ht.rows.length && ht.source !== 'reward' && ht.source !== 'fixture') notes.push(`Storage fill: each compartment this roll leaves empty rolls once more on its own stream — ${rd(sf.chance)} x min(1, compartment loot area / ${sf.area} m²), U{${sf.lots[0]}..${sf.lots[1]}} lots from these rows within ${(sf.cats ?? LT.STORAGE_FILL_CATS).join(' / ')}${Object.keys(sf.weights ?? (sf.cats ? {} : LT.STORAGE_FILL_WEIGHTS)).length ? ` (row weights x ${Object.entries(sf.weights ?? (sf.cats ? {} : LT.STORAGE_FILL_WEIGHTS)).map(([c, w]) => `${c} ${w}`).join(', ')})` : ''} (HOLDER_ALLOW applies; not in the expected values above).`);
+  if (sf && ht.rows.length && ht.source !== 'reward' && ht.source !== 'fixture') notes.push(`Storage fill: each compartment this roll leaves empty rolls once more on its own stream — ${rd(sf.chance)} x min(1, compartment loot area / ${sf.area} m²), U{${sf.lots[0]}..${sf.lots[1]}} lots from these rows within ${(sf.cats ?? LT.STORAGE_FILL_CATS).join(' / ')}${Object.keys(sf.weights ?? (sf.cats ? {} : LT.STORAGE_FILL_WEIGHTS)).length ? ` (row weights x ${Object.entries(sf.weights ?? (sf.cats ? {} : LT.STORAGE_FILL_WEIGHTS)).map(([c, w]) => `${c} ${w}`).join(', ')})` : ''}${(sf.fallback ?? (sf.cats ? [] : LT.STORAGE_FILL_FALLBACK)).length ? `; ${(sf.fallback ?? LT.STORAGE_FILL_FALLBACK).join(' / ')} only when nothing else of these rows fits there (except in ${LT.STORAGE_FILL_STOCK_THEMES.join(' / ')}-themed places, where they are the stock)` : ''}, only among the items that fit the compartment (HOLDER_ALLOW applies; not in the expected values above).`);
   return {
     id, level, kind, kindLabel: label(kind), slot, compartment, areaKey, areaLabel, areaKind, source: ht.source, tableId,
     ...(rewardPicks ? {rewardPicks} : {}), gates, scarcity,
@@ -903,14 +905,16 @@ function overrideEntries(P: LootProfile): OverrideEntry[] {
 }
 
 function levelContexts(level: LevelId): LevelInfo['contexts'] {
-  // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center — one logical level, its storeys are contexts
+  // task track3-eaton-centre-20261031 (lane PROFILES): the mall — one logical level, its storeys are contexts. Task
+  // mall-playtest-revision-20261031 (lane PROFILES, U01): the compact design (station + ${MALL_RINGS} retail floors); the display name
+  // is seeded per run ("<Name> Center", gen/mall/names.ts mallNameOf(levelSeed)), the LevelId stays 'mall' (tier 2)
   if (LEVEL_ADAPTER[level].floor === 'mall') {
     return {
       storeys: [
-        {id: 'pit', label: 'Pit station (storey 0)', layoutLevels: [0], floorVariant: 'pit', note: 'The subway station at the bottom of the open void (platforms, plaza, courts).'},
-        ...Array.from({length: MALL_RINGS}, (_, i) => ({id: `ring-${i + 1}`, label: `Ring ${i + 1}`, layoutLevels: [i + 1], floorVariant: 'ring', note: 'Gallery walkway around the void, shops with their back rooms, service corridors.'})),
+        {id: 'pit', label: 'Station (storey 0)', layoutLevels: [0], floorVariant: 'pit', note: 'The subway station at the bottom of the small glass atrium (platforms, the Fountain court, station back of house).'},
+        ...Array.from({length: MALL_RINGS}, (_, i) => ({id: `ring-${i + 1}`, label: `Level ${i + 1}`, layoutLevels: [i + 1], floorVariant: 'ring', note: 'Retail floor: atrium court galleries, corridor wings, shops of ten lot families with their stock rooms, service corridors.'})),
       ],
-      note: `The Eaton's Center is ONE logical level: one loot profile (shared base tables + the mall salvage), one rare-gear roll, one gas-mask roll for the whole mall. The pit and the ${MALL_RINGS} rings are CONTEXTS (they change room purposes and run the per-storey floor program), never separate levels or rolls.`,
+      note: `The mall (LevelId 'mall', tier 2; its display name is seeded per run — "<Name> Center", gen/mall/names.ts mallNameOf(levelSeed); the same seed always gives the same name) is ONE logical level: one loot profile (shared base tables + the mall salvage + the per-compartment storage fill of its drawers / cupboards), one rare-gear roll, one gas-mask roll for the whole mall. The station and the ${MALL_RINGS} retail floors are CONTEXTS (they change room purposes and run the per-storey floor program), never separate levels or rolls.`,
     };
   }
   if (!LEVEL_ADAPTER[level].storeys) return {note: 'One continuous world; no storey / tenant contexts.'};
@@ -953,8 +957,10 @@ function economyOf(B: Builder, P: LootProfile): EconomyInfo {
     }} : {}),
     // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the per-compartment storage fill (absent for the Subway / Office tables)
     ...(X.storageFill ? {storageFill: {
-      kinds: Object.entries(X.storageFill).map(([kind, f]) => ({kind, chance: f!.chance, area: f!.area, lots: f!.lots, cats: [...(f!.cats ?? LT.STORAGE_FILL_CATS)], weights: {...(f!.weights ?? (f!.cats ? {} : LT.STORAGE_FILL_WEIGHTS))} as Record<string, number>})),
-      note: 'After a storage holder\'s own roll, each compartment it left empty (an openable part; a one-door / one-lid holder = one compartment; exposed tops / shelves never) rolls once on its own stream loot:<kind>:<index>:fill<part>: chance x min(1, the compartment\'s loot area / area), then U{lots} items from the holder\'s resolved rows within `cats` and HOLDER_ALLOW (row weights x `weights` by category), packed on that compartment only. Finite, seeded once, remembered by lot id (items/loot.ts storageFill).',
+      kinds: Object.entries(X.storageFill).map(([kind, f]) => ({kind, chance: f!.chance, area: f!.area, lots: f!.lots, cats: [...(f!.cats ?? LT.STORAGE_FILL_CATS)], weights: {...(f!.weights ?? (f!.cats ? {} : LT.STORAGE_FILL_WEIGHTS))} as Record<string, number>,
+        fallback: [...(f!.fallback ?? (f!.cats ? [] : LT.STORAGE_FILL_FALLBACK))]})),
+      stockThemes: [...LT.STORAGE_FILL_STOCK_THEMES],
+      note: 'After a storage holder\'s own roll, each compartment it left empty (an openable part; a one-door / one-lid holder = one compartment; exposed tops / shelves never) rolls once on its own stream loot:<kind>:<index>:fill<part>: chance x min(1, the compartment\'s loot area / area), then U{lots} items from the holder\'s resolved rows within `cats` and HOLDER_ALLOW (row weights x `weights` by category) — only among the items that fit that compartment — packed on that compartment only. `fallback` categories (snacks / drinks) join only when the pool holds no other category, except in a place whose loot theme is in `stockThemes` (food places: they are its stock). Finite, seeded once, remembered by lot id (items/loot.ts storageFill).',
     }} : {}),
     allow: Object.entries(HOLDER_ALLOW).map(([kind, cats]) => ({kind, cats: [...(cats ?? [])]})),
     containerThemed: [...CONTAINER_THEMED].sort(), randomHolders: [...RANDOM_HOLDERS].sort(),
@@ -1150,17 +1156,17 @@ function mallFloorProgram(B: Builder, level: LevelId, P: LootProfile, find: Find
   };
   const pit = variant('pit'), ring = variant('ring');
   const variants: FloorVariant[] = [
-    {id: 'pit', label: 'Pit station (storey 0: platforms, plaza, courts)', runs: 'once per mall level', finds: pit, totals: totals(pit)},
-    {id: 'ring', label: 'Retail ring', runs: `once per ring (${MALL_RINGS} rings)`, finds: ring, totals: totals(ring)},
+    {id: 'pit', label: 'Station (storey 0: platforms, Fountain court, station back of house)', runs: 'once per mall level', finds: pit, totals: totals(pit)},
+    {id: 'ring', label: 'Retail floor', runs: `once per retail floor (${MALL_RINGS} floors)`, finds: ring, totals: totals(ring)},
   ];
   const per = new Map<string, {copies: number; units: number}>();
   for (const [list, w] of [[variants[0].totals, 1], [variants[1].totals, MALL_RINGS]] as const) for (const t of list) { const e = per.get(t.itemId) ?? {copies: 0, units: 0}; e.copies += w * t.copies; e.units += w * t.units; per.set(t.itemId, e); }
   return {
-    id: 'mall', level, label: 'The Eaton\'s Center loose floor supplies (per storey: the pit and every ring, one profile)',
+    id: 'mall', level, label: 'Mall ("<Name> Center", seeded) loose floor supplies (per storey: the station and every retail floor, one profile)',
     variants,
-    placement: {derivable: false, reason: `Each find goes to a weighted area of that storey (MALL_FLOOR.place: galleries / bridges ${M.place.gallery}, shop sales floors ${M.place.shop}, back of house ${M.place.back}; salvage x ${M.place.themed} in ${M.place.themedFor.join(' / ')}-themed places), a free walkable cell >= ${M.place.minCells} cells walking from the platform start and off the stair / escalator / elevator landings (10 tries); a draw with no free cell places nothing.`,
+    placement: {derivable: false, reason: `Each find goes to a weighted area of that storey (MALL_FLOOR.place: galleries / corridors ${M.place.gallery}, shop sales floors ${M.place.shop}, back of house ${M.place.back}; salvage x ${M.place.themed} in ${M.place.themedFor.join(' / ')}-themed places), a free walkable cell >= ${M.place.minCells} cells walking from the platform start and off the stair / escalator / elevator landings (10 tries); a draw with no free cell places nothing.`,
       weights: [{name: 'MALL_FLOOR.place (zone weights)', weights: {gallery: M.place.gallery, shop: M.place.shop, back: M.place.back, themed: M.place.themed}}]},
-    perLevel: {basis: `exact expected attempts per mall level before placement: the pit run + ${MALL_RINGS} ring runs`, totals: [...per.entries()].map(([itemId, e]) => ({itemId, copies: rd(e.copies), units: rd(e.units)}))},
+    perLevel: {basis: `exact expected attempts per mall level before placement: the station run + ${MALL_RINGS} retail-floor runs`, totals: [...per.entries()].map(([itemId, e]) => ({itemId, copies: rd(e.copies), units: rd(e.units)}))},
     at: [at('MALL_FLOOR'), B.src.at('game/src/gen/mall/supplies.ts', 'placeMallSupplies')],
     knobs: [
       {what: 'the whole program', value: 'MALL_FLOOR', at: at('MALL_FLOOR'), overrides: ['floor.chance', 'floor.count', 'tables']},

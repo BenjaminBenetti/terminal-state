@@ -52,6 +52,14 @@ export interface HordePlacementRules {
    * no route bound (the budgets alone). It never changes a draw: it only clips a group's size / removes a storey option.
    */
   readonly routeMPerMember?: number;
+  /**
+   * Task mall-playtest-revision-20261031 (lane PROFILES, D07): minimum STRAIGHT 3D distance (m) of a group's start node from the player
+   * start — out of an ordinary zombie's sight on arrival: shambler sight 18 m + the members' clusterM (7 m) + a 3 m margin = 28 in the
+   * mall. The compact mall's atrium overlooks the station from every retail floor, so a 45-walking-metre start alone stood in plain
+   * view of the platform (seed 32451: a floor-3 group 24.9 m from the start sent two members down to the player at once). Absent =
+   * no such rule.
+   */
+  readonly startClearM?: number;
 }
 
 export interface HordePatrolRules {
@@ -98,7 +106,7 @@ export interface HordeGroupSpec {
  * retail floor with 150-500 m of patrol route per floor; was 6 rings / ~40,000 m²): 1..2 groups (was 3..5) of 5..20 ordinary zombies
  * (the user's range), at most 32 horde members in the mall (was 64), one group (<= 20) starting per retail floor, a group never larger
  * than its start floor's route holds (18 route metres per member: a big floor-1 loop takes 20, a short top-floor court ~8-16), never
- * within 45 walking metres of the subway start. Ordinary zombies only (rat/dog listed with weight 0: excluded).
+ * within 45 walking metres of the subway start nor within 28 m (straight 3D) of it — out of sight on arrival across the atrium. Ordinary zombies only (rat/dog listed with weight 0: excluded).
  */
 export const MALL_HORDE_RULES: HordeRules = {
   label: 'Roaming hordes',
@@ -107,7 +115,7 @@ export const MALL_HORDE_RULES: HordeRules = {
   families: [['zombie', 1], ['ratdog', 0]],
   zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
   budget: {total: 32, perStorey: 20, groupsPerStorey: 1},
-  placement: {storeys: 'rings', startM: 45, groupSpacingM: 30, memberSpacingM: 1.1, clusterM: 7, ambientSpacingM: 2.5, routeMPerMember: 18},
+  placement: {storeys: 'rings', startM: 45, groupSpacingM: 30, memberSpacingM: 1.1, clusterM: 7, ambientSpacingM: 2.5, routeMPerMember: 18, startClearM: 28},
   patrol: {speed: 0.45, storeyChange: 0.3, pauseChance: 0.35, pause: [2, 7]},
 };
 
@@ -172,10 +180,11 @@ export function validateHordeRules(h: HordeRules, familyIds: readonly string[], 
   const p = h.placement;
   if (!p || typeof p !== 'object') bad('placement', 'missing');
   else {
-    known('placement', p, ['storeys', 'startM', 'groupSpacingM', 'memberSpacingM', 'clusterM', 'ambientSpacingM', 'routeMPerMember']);
+    known('placement', p, ['storeys', 'startM', 'groupSpacingM', 'memberSpacingM', 'clusterM', 'ambientSpacingM', 'routeMPerMember', 'startClearM']);
     if (p.storeys !== 'rings' && !(Array.isArray(p.storeys) && p.storeys.every(nonNegInt))) bad('placement.storeys', `${JSON.stringify(p.storeys)} is not 'rings' or storey indices`);
     for (const k of ['startM', 'groupSpacingM', 'memberSpacingM', 'clusterM', 'ambientSpacingM'] as const) num(`placement.${k}`, p[k]);
     if (p.routeMPerMember !== undefined && !(finiteNonNeg(p.routeMPerMember) && p.routeMPerMember > 0)) bad('placement.routeMPerMember', `${String(p.routeMPerMember)} is not a finite length > 0`);
+    if (p.startClearM !== undefined && !finiteNonNeg(p.startClearM)) bad('placement.startClearM', `${String(p.startClearM)} is not a finite distance >= 0`);
     if (finiteNonNeg(p.memberSpacingM) && p.memberSpacingM < 0.8) bad('placement.memberSpacingM', 'members would overlap (bodies are ~0.7 m wide)');
   }
   const q = h.patrol;

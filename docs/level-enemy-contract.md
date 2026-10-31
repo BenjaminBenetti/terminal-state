@@ -2,7 +2,7 @@
 
 <!-- Task track1-siren-blightbelly-20261031 (lane SPAWN). Background on every spawn control: docs/enemy-spawns.md. -->
 
-How a new logical level (e.g. the Eaton Mall) or a same-world annex zone (e.g. track-tunnel service annexes) declares its enemies.
+How a new logical level (e.g. the mall, `LevelId` `mall`) or a same-world annex zone (e.g. track-tunnel service annexes) declares its enemies.
 Everything below is source-backed and validated: a missing tier, profile, family or context is a test / build **error**, never a
 silent Subway or Office default. Nothing assumes there are only two levels.
 
@@ -15,7 +15,7 @@ silent Subway or Office default. Nothing assumes there are only two levels.
 
 ```ts
 mall: {
-  id: 'mall', label: 'Eaton Mall',
+  id: 'mall', label: 'Mall (seeded "<Name> Center")',   // (the display name is seeded per run: gen/mall/names.ts)
   families: familyPool({siren: MALL_SIREN_WEIGHT}),   // or familyPool() — Blightbelly 5 % on, Siren off, rat/dog 5 %
   zombieTypes: ZOMBIE_TYPES,
   contexts: {                                          // one entry per context the generator runs; counts are explicit
@@ -72,7 +72,7 @@ profile, family list, tier or guarantee.
   die once per run like any other; nothing respawns on re-entry. Rare rewards (the level's gear roll, the roof cache / find) are
   per logical level and are not repeated by annexes (loot tables own that).
 
-## 2b. Separate pools and level-wide spacing (The Eaton's Center, task track3-eaton-centre-20261031)
+## 2b. Separate pools and level-wide spacing (the mall, task track3-eaton-centre-20261031)
 
 - **A separate horde pool** (`SpawnProfile.horde`, `HordeRules`): its members are placed AFTER `assignEnemyArchetypes` (appended last)
   with the pool's OWN explicit families, and tagged `HORDE_CONTEXT` (`'horde'`) by `placeHordes`. The tag is declared by declaring
@@ -83,9 +83,11 @@ profile, family list, tier or guarantee.
   eligibility rule): Track1's `FamilyEligibility` has no spacing field, so the mall applies its 30 m Siren spacing with the post-pass
   `applyFamilySpacing(layout, profile)` (`game/src/ai/familySpacing.ts`) right after `assignEnemyArchetypes` — cap and spacing jointly,
   in spawn-index order, RNG-free.
-- The mall registers tier 2, `familyPool({siren: MALL_SIREN_WEIGHT})` (draw weight 0.32 by census: mean 2.88 Sirens per run, 4.93 %
-  of the placed ambient enemies), `MALL_SIREN_ELIGIBILITY` (ring shops only) and `ENEMY_LEVEL_ADAPTER.mall`; details and the census in
-  `docs/enemy-spawns.md` "The Eaton's Center".
+- The mall registers tier 2, `familyPool({siren: MALL_SIREN_WEIGHT})` (compact-mall census, task mall-playtest-revision-20261031:
+  draw weight 0.5, cap 2, 30 m — mean 0.69 Sirens per run, 3.6 % of the placed ambient enemies; the six-ring tuning was 0.32 / cap 4),
+  `MALL_SIREN_ELIGIBILITY` (retail-floor shops / stock rooms only), the horde pool's route capacity / out-of-sight start
+  (`HordePlacementRules.routeMPerMember` / `startClearM`) and `ENEMY_LEVEL_ADAPTER.mall`; details and the census in
+  `docs/enemy-spawns.md` "The mall".
 
 ## 3. What validation catches
 

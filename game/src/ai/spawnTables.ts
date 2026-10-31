@@ -181,7 +181,7 @@ export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
 /**
  * Generation contexts (one count rule each). A same-world annex zone (e.g. Track 2's track-tunnel service annexes) adds its
  * own id here and declares its count in the profile of every level that has it (docs/level-enemy-contract.md).
- * Task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center adds 'pit' (the subway station storey at the bottom of the
+ * Task track3-eaton-centre-20261031 (lane PROFILES): the mall adds 'pit' (the subway station storey at the bottom of the
  * void, once), 'ring' (one retail ring, once per ring); since the Track2 integration (lane INTEG) it declares Track2's 'service' zone
  * context (SERVICE_CONTEXT) like the Subway / Office.
  * Lane INTEG (Track1 integration): 'horde' = HORDE_CONTEXT, the tag of the SEPARATE roaming-horde pool's members. It is never a
@@ -394,7 +394,8 @@ export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per ann
 // SEPARATELY from the core (station / retail) numbers: the annex is optional (0..1 per mall).
 // Density (mall revision, measured: evidence/census in the task folder): ambient ~19 per run = ~0.30 per 100 m² of core (station 3..5
 // on ~1,180 m², 4..6 per retail floor of 1,200-2,700 m²) — lighter than the Office's ~0.45 ambient, because the hordes (~1.5 groups,
-// ~18 members, on the retail floors only) concentrate the mall's threat; core total ~0.58 per 100 m² (old mall 0.26, sparse and vast).
+// ~16 members, on the retail floors only) concentrate the mall's threat; core total ~0.53-0.67 per 100 m² (old mall 0.26, sparse and
+// vast). Census: evidence/census/final-census.md in the task folder; docs/enemy-spawns.md "The mall".
 
 /** Mall area weights (the Office's rules; storefront / shop units are ordinary rooms here, galleries and courts public space). */
 export const MALL_AREA_WEIGHTS: AreaWeights = {
@@ -434,24 +435,27 @@ export const MALL_SIREN_ELIGIBILITY: FamilyEligibility = {
   contexts: ['ring'],
   kinds: ['room'],
   excludeRooms: ['washroom', 'stair-core', 'storage', 'utility', 'office-stair', 'office-elevator'],
-  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4,
+  // (mall revision, D07) the Office's room gates unchanged; the whole-mall cap 4 -> 2 for the compact mall (census below)
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 2,
   fallback: 'zombie',
-  why: 'enclosed shop sales floors / stock rooms of the retail rings only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 4 per mall',
+  why: 'enclosed shop sales floors / stock rooms of the retail floors only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 2 per mall',
 };
 /** Lane INTEG: the mall's whole-level Siren spacing (FamilySpacing; ai/familySpacing.ts) — the 30 m of the interim MALL_RARE_RULES. */
 export const MALL_SIREN_SPACING: FamilySpacing = {
   spacingM: 30,
-  why: 'rare ambient Sirens across the much larger mall: > 2 allowed, never two within earshot of one another',
+  why: 'rare ambient Sirens (at most 2 in the compact mall): never two within earshot of one another',
 };
 /**
- * Lane INTEG: the mall's Siren DRAW weight, tuned by a generated-mall census to a rare ~5 % PLACED share of the ambient enemies
- * (NOT the Office's 0.19). A draw only becomes a Siren in an eligible ring shop slot (~14 of the ~58.4 ambient slots of a run:
- * MALL_SIREN_ELIGIBILITY), within the 4-per-mall cap and 30 m apart (MALL_SIREN_SPACING), so the draw weight sits well above the
- * placed share. Census (88 generated malls, lane INTEG, 2026-10-31): mean 2.88 Sirens per run = 4.93 % of the placed ambient
- * enemies, 2.3 % of runs none, max 4 (the cap; 34 % of runs), only on rings 1..6 (never the pit; hordes never). Blightbelly 5.2 %
- * / rat-dog 5.0 % keep their shares (never renormalised). docs/enemy-spawns.md "The Eaton's Center".
+ * The mall's Siren DRAW weight (NOT the Office's 0.19). A draw only becomes a Siren in an eligible retail-floor shop / stock-room
+ * slot (MALL_SIREN_ELIGIBILITY), within the cap and 30 m apart (MALL_SIREN_SPACING), so the draw weight sits well above the placed
+ * share. Task mall-playtest-revision-20261031 (lane PROFILES, D07): re-tuned for the COMPACT mall by a bounded census (48 generated
+ * malls, evidence/census/siren-sweep.json in the task folder): only ~1.25 of the ~19.2 ambient slots of a run are eligible (small
+ * shops; 29 % of runs have none at all), so 0.32 / cap 4 (the old six-ring tuning) gave 0.44 per run with 60 % of runs none. Now
+ * 0.5 / cap 2 / 30 m: mean 0.69 Sirens per run = 3.6 % of the placed ambient enemies, 44 % of runs none, max 2 (13 % of runs), per
+ * storey floor 1 / 2 / 3 = 10 / 13 / 10 (48 runs); never the station storey, an annex or a horde. Blightbelly 5.9 % / rat-dog 6.0 %
+ * placed keep their 5 % draw bands (never renormalised). (Track3 census, six rings: 0.32 -> 2.88 per run, 4.9 %.)
  */
-export const MALL_SIREN_WEIGHT = 0.32;
+export const MALL_SIREN_WEIGHT = 0.5;
 /** The mall's AMBIENT pool: zombie (remainder), blightbelly 0.05, siren MALL_SIREN_WEIGHT, ratdog 0.05 (ENEMY_FAMILY_IDS order). */
 export const MALL_ENEMY_POOL: FamilyPool = familyPool({siren: MALL_SIREN_WEIGHT});
 /**

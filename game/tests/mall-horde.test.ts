@@ -3,6 +3,11 @@
 // Runs on a SYNTHETIC ring mall (tests/helpers/hordeMallFixture.ts: storeys of galleries round an open void joined by real stair
 // runs) with the game's own brain / motor / PathFinder / PathService / FrameBudget; the generated mall (lane GEN) is covered in the
 // last block when it is registered. Old levels: no hordes, no horde tags (their parity / fingerprint suites stay as they are).
+// Task mall-playtest-revision-20261031 (lane PROFILES, D07): updated for the COMPACT mall — 1..2 groups, budget 32, the route capacity
+// (routeMPerMember) and out-of-sight start (startClearM) knobs (own placement test; the behaviour tests run without them on the small
+// fixture), the generated-mall block counts the Track2 annex's 'service' spawns outside the ambient budget. The real-mall roam (seed
+// 32451) failed before the start keep-off: a floor-3 group placed 24.9 m (3D) from the platform start sent two members down to the
+// standing player at once, so the group never walked (engaged); with startClearM 28 its groups start out of sight and roam.
 
 import {describe, expect, it} from 'vitest';
 import {ringMallFixture, ringY, type RingMallFixture} from './helpers/hordeMallFixture';
@@ -18,7 +23,7 @@ import {S, UpdateProfiler} from '../src/debug/updateProfile';
 import {lureWorld} from '../src/ai/lightLure';
 import {HORDE_AI, HordeDirector, slotOffset} from '../src/ai/horde';
 import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from '../src/ai/chaseShare';
-import {placeHordes} from '../src/ai/hordePlace';
+import {patrolRouteM, placeHordes} from '../src/ai/hordePlace';
 import {HORDE_FORBIDDEN_FAMILIES, HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from '../src/ai/hordeSpec';
 import {ENEMY_FAMILY_IDS, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
@@ -33,9 +38,14 @@ const BENCH = !!process.env.LL_BENCH;
 /** A shambler's sight range (m): ai/brain.ts ZOMBIE_STATS. */
 const ZOMBIE_SIGHT = 18;
 
-/** Fixture rules: the mall's pool / sizes / budgets, placement distances scaled to the 40 x 14 m fixture rings. */
+/**
+ * Fixture rules: the mall's pool / sizes / budgets, placement distances scaled to the 40 x 14 m fixture rings. (Task
+ * mall-playtest-revision-20261031, lane PROFILES: the compact mall's route capacity and out-of-sight start are left out here — the
+ * fixture's ~100 m loops would hold 5 members; they have their own placement test below.)
+ */
 function fxRules(o: Partial<HordeRules> = {}): HordeRules {
-  return {...MALL_HORDE_RULES, placement: {...MALL_HORDE_RULES.placement, startM: 12, groupSpacingM: 10}, ...o};
+  const {routeMPerMember: _r, startClearM: _s, ...placement} = MALL_HORDE_RULES.placement;
+  return {...MALL_HORDE_RULES, placement: {...placement, startM: 12, groupSpacingM: 10}, ...o};
 }
 
 function place(fx: RingMallFixture, rules: HordeRules, seed: number) {
@@ -202,7 +212,7 @@ describe('horde rules: the separate pool (ai/hordeSpec.ts)', () => {
     expect(v({families: [['zombie', 0]]}).join()).toMatch(/positive weight/);
     expect(v({budget: {total: 4, perStorey: 20, groupsPerStorey: 1}}).join()).toMatch(/cannot hold one group/);
     expect(v({patrol: {...MALL_HORDE_RULES.patrol, speed: 2.5}}).join()).toMatch(/slow roam/);
-    expect(v({placement: {...MALL_HORDE_RULES.placement, memberSpacingM: 0.4}}).join()).toMatch(/overlap/);
+    expect(v({placement: {...fxRules().placement, memberSpacingM: 0.4}}).join()).toMatch(/overlap/);
   });
 
   it('formation slots: one leader, staggered rows of 2 / 3, never two members on one slot', () => {
@@ -284,6 +294,36 @@ describe('horde placement: seeded, bounded, once (ai/hordePlace.ts)', () => {
       const z = fx.layout.zombies[i];
       if (z.level === a.level) expect(Math.hypot(z.x - a.x, z.z - a.z)).toBeGreaterThanOrEqual(rules.placement.ambientSpacingM - 1e-9);
     }
+  });
+
+  it('route capacity and the out-of-sight start (mall revision): a group never outgrows its start storey\'s patrol route, never starts in view of the player', () => {
+    // the fixture rings' gallery loops: the route a storey holds at 10 / 20 m per member
+    const fx0 = ringMallFixture({storeys: 4});
+    const route = [1, 2, 3].map(s => patrolRouteM(fx0.patrol, s));
+    expect(route.every(m => m > 60)).toBe(true);
+    let placed = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const fx = ringMallFixture({storeys: 4});
+      const per = 10, rules = fxRules({groups: [2, 2], size: [5, 20], budget: {total: 40, perStorey: 20, groupsPerStorey: 1}, placement: {...fxRules().placement, routeMPerMember: per}});
+      const rep = place(fx, rules, seed * 131);
+      for (const s of [1, 2, 3]) expect(rep.routeCapacity[s]).toBe(Math.floor(route[s - 1] / per));
+      for (const h of fx.layout.hordes!) { expect(h.members.length).toBeLessThanOrEqual(rep.routeCapacity[h.level]); placed++; }
+      // a capacity below a minimum group leaves the storey out entirely (never a horde under five)
+      const fy = ringMallFixture({storeys: 4});
+      const none = place(fy, fxRules({placement: {...fxRules().placement, routeMPerMember: route.reduce((a, b) => Math.max(a, b)) / 4}}), seed * 131);
+      expect(none.placed).toBe(0);
+      expect(fy.layout.hordes).toEqual([]);
+    }
+    expect(placed).toBeGreaterThan(12);
+    // startClearM: every start node within the keep-off (straight 3D from the player start) is refused; all of them -> no group
+    const fx = ringMallFixture({storeys: 4});
+    const sp = {x: fx.layout.playerSpawn.x, z: fx.layout.playerSpawn.z};
+    const far = Math.max(...fx.patrol.filter(n => n.level > 0).map(n => Math.hypot(n.x - sp.x, ringY(n.level), n.z - sp.z)));
+    expect(place(fx, fxRules({placement: {...fxRules().placement, startClearM: far + 1}}), 5).placed).toBe(0);
+    const fz = ringMallFixture({storeys: 4});
+    const keep = 14;
+    place(fz, fxRules({groups: [3, 3], placement: {...fxRules().placement, startClearM: keep}}), 5);
+    for (const h of fz.layout.hordes!) expect(Math.hypot(h.start.x - sp.x, h.start.y, h.start.z - sp.z)).toBeGreaterThanOrEqual(keep);
   });
 
   it('no rules / no patrol graph = no hordes (the Subway and Office Space generate none)', () => {
@@ -446,7 +486,7 @@ describe('horde behaviour on the ring fixture (brain + motor + PathFinder + dire
   it('can be watched and avoided: across the void the player sees the crowd coming and keeps away without ever being noticed', () => {
     // the wide fixture: 100 x 34 m rings round a 74 x 22 m void (28 m between the long galleries)
     const fx = ringMallFixture({storeys: 2, wide: true});
-    const rules = fxRules({groups: [1, 1], size: [12, 12], placement: {...MALL_HORDE_RULES.placement, startM: 20, groupSpacingM: 10}, patrol: {...MALL_HORDE_RULES.patrol, storeyChange: 0, pauseChance: 0.1}});
+    const rules = fxRules({groups: [1, 1], size: [12, 12], placement: {...fxRules().placement, startM: 20, groupSpacingM: 10}, patrol: {...MALL_HORDE_RULES.patrol, storeyChange: 0, pauseChance: 0.1}});
     place(fx, rules, 1717);
     const player: Player = {x: 0, y: 0, z: 0, alive: true};
     const sim = makeSim(fx, {rules, player});
@@ -653,7 +693,7 @@ describe('horde chase across the atrium: one route search serves the charging cr
   it('members that see the player down the void share a group mate\'s fresh cross-storey route (answered at once, far fewer searches)', () => {
     const run = (noShare: boolean) => {
       const fx = ringMallFixture({storeys: 2, wide: true});
-      const rules = fxRules({groups: [1, 1], size: [16, 16], placement: {...MALL_HORDE_RULES.placement, startM: 20, groupSpacingM: 10}, patrol: {...MALL_HORDE_RULES.patrol, storeyChange: 0, pauseChance: 0}});
+      const rules = fxRules({groups: [1, 1], size: [16, 16], placement: {...fxRules().placement, startM: 20, groupSpacingM: 10}, patrol: {...MALL_HORDE_RULES.patrol, storeyChange: 0, pauseChance: 0}});
       place(fx, rules, 2468);
       const player: Player = {x: -100, y: 0, z: -100, alive: false};
       const sim = makeSim(fx, {rules, player, noShare});
@@ -784,8 +824,9 @@ describe('the generated mall (lane GEN) — when registered', () => {
         }
       }
       for (const [, n] of perStorey) expect(n).toBeLessThanOrEqual(rules.budget.perStorey);
-      // ambient and horde pools never mix: every non-horde enemy is ambient, and the ambient count stays within its own budget
-      const ambient = layout.zombies.filter(z => z.horde === undefined).length;
+      // ambient and horde pools never mix: every non-horde core enemy is ambient, and the ambient count stays within its own budget
+      // (task mall-playtest-revision-20261031, lane PROFILES: the Track2 annex's 'service' spawns are accounted separately)
+      const ambient = layout.zombies.filter(z => z.horde === undefined && !layout.areas[z.area]?.ext).length;
       const amb = (SPAWN_PROFILES as Record<string, (typeof SPAWN_PROFILES)['subway']>).mall.budgets?.ambient;
       if (amb) expect(ambient).toBeLessThanOrEqual(amb.total);
       lines.push(`seed ${seed} (${layout.mall!.variant}): ${hs.length} groups [${hs.map(h => `L${h.level}:${h.members.length}`).join(' ')}] = ${total} horde + ${ambient} ambient; patrol ${layout.mall!.patrol.length} nodes`);
@@ -838,6 +879,7 @@ describe('the generated mall (lane GEN) — when registered', () => {
     console.info(`[horde mall] ${SECS} s on seed ${SEEDS[0]} (${n} enemies, ${gs.reduce((s2, g) => s2 + g.members.length, 0)} in ${gs.length} hordes, player at the pit start): ` +
       `legs ${sum.map(g => g.legs).join('/')}, walked ${sum.map(g => Math.round(g.walked)).join('/')} m, bad legs ${sum.map(g => g.badLegs).join('/')}, stalls ${sum.map(g => g.stalls).join('/')}, storey changes ${changes}; ` +
       `within 3 m of slot ${(within / Math.max(1, samples) * 100).toFixed(1)} %; director ms/frame med ${q(dirMs, 0.5).toFixed(3)} p99 ${q(dirMs, 0.99).toFixed(3)} max ${q(dirMs, 1).toFixed(3)}; ` +
+      `groups ${sum.map(g => `#${g.id} L${g.startLevel} ${g.phase} (engaged ${g.engaged}, returning ${g.returning})`).join(' | ')}; ` +
       `walk tests/frame mean ${(walk.reduce((a, b) => a + b, 0) / walk.length).toFixed(1)} max ${Math.max(...walk)}; path service ${JSON.stringify(sim.ps.stats)}; requests by origin ${Object.entries(sim.stats.byWho).map(([k, v]) => `${k} ${v.n} (${v.ms.toFixed(0)} ms, max ${v.max.toFixed(2)})`).join(', ')}; off-geometry members ${offGeom} ${offWhere.join(' | ')}\n` +
       `  update profiler: ${span('ai')}; ${span('ai.brain')}; ${span('ai.path')}; ${span('ai.motor')}; ${span('deferred')}; spikes ${rep.spikes.map(sp => `${sp.ms.toFixed(1)} ms [${sp.dominant.map(d => `${d.name} ${d.ms.toFixed(1)}×${d.count}`).join(', ')}]`).join(' | ')}`);
     if (BENCH) {

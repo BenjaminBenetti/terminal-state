@@ -73,7 +73,11 @@ describe('plan: the mall storage fill (themed, finite, deterministic; old levels
       expect(isLootHolderKind(kind), kind).toBe(true);
       expect(compartments(kind).size, `${kind} has compartments`).toBeGreaterThan(0);
       expect(f!.chance, kind).toBeGreaterThan(0);
-      expect(f!.chance, kind).toBeLessThanOrEqual(0.4);
+      // (lane PROFILES, U10 follow-up: the fill now targets roughly a third to a half of the compartments stocked — chances up to 0.5;
+      // never a guaranteed fill: the empty odds stay intentional. Generated-mall stocked rates: tests/mall-profiles.test.ts.)
+      expect(f!.chance, kind).toBeLessThanOrEqual(0.5);
+      // (lane PROFILES) fallback categories (snacks / drinks held back where the place stocks other fill rows) are fill categories
+      for (const c of f!.fallback ?? []) expect(f!.cats ?? STORAGE_FILL_CATS, `${kind} fallback ${c}`).toContain(c);
       if ((f!.cats ?? STORAGE_FILL_CATS).includes('ammo')) expect(kind, 'ammo only by the arms rule').toBe('gunSafeTall');
       if ((f!.cats ?? STORAGE_FILL_CATS).includes('med')) expect(['pharmacyDispensaryCounter', 'medicineDrawerCabinet', 'examTable', 'labBench', 'biohazardFridge', 'crashCart'], `${kind}: dressings only in medical storage`).toContain(kind);
     }

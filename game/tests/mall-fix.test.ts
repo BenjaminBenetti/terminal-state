@@ -194,7 +194,7 @@ describe('U04 round atrium columns: generation-time records', () => {
   it('only gen/mall/columns.ts sets `round` (Subway / Office props keep their box collision)', () => {
     const src = path.join(REPO, 'game/src');
     const hits: string[] = [];
-    const walk = (d: string) => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f); if (fs.statSync(q).isDirectory()) walk(q); else if (/\.ts$/.test(f) && /\.round = true|round: true/.test(fs.readFileSync(q, 'utf8'))) hits.push(path.relative(src, q)); } };
+    const walk = (d: string) => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f); if (fs.statSync(q).isDirectory()) walk(q); else if (/\.ts$/.test(f) && fs.readFileSync(q, 'utf8').split('\n').some(l => !/^\s*(\/\/|\*)/.test(l) && /\.round = true|round: true/.test(l))) hits.push(path.relative(src, q)); } }; // code lines only (doc comments may name the flag)
     walk(src);
     expect(hits).toEqual(['gen/mall/columns.ts']);
   });

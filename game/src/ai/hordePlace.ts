@@ -8,7 +8,8 @@
 //  1. groups = rng.int(rules.groups) (the level tries to place that many);
 //  2. per group: a start storey among the eligible ones that still have room in the horde budget (perStorey members,
 //     groupsPerStorey groups) and an eligible start node there — a patrol node (layout.mall.patrol) on a walkable, clear,
-//     non-stair cell, at least placement.startM walking metres from the player start, groupSpacingM from every other group's
+//     non-stair cell, at least placement.startM walking metres (and placement.startClearM straight 3D metres: lane PROFILES, mall
+//     revision) from the player start, groupSpacingM from every other group's
 //     start on that storey; size = rng.int(rules.size) clipped to the remaining total / storey budget and (task
 //     mall-playtest-revision-20261031, lane PROFILES) to the storey's ROUTE CAPACITY (placement.routeMPerMember: patrol-route metres
 //     per member) (a group that cannot get HORDE_GROUP_SIZE.min members is not placed: never a horde of fewer than five);
@@ -114,12 +115,16 @@ export function placeHordes(layout: StationLayout, rules: HordeRules | undefined
     dist = levelDistance(layout.levels, sx, sy, layout.mall?.start.level ?? 0, layout.levelLinks);
   }
   const startCells = Math.ceil(P.startM / CELL);
+  // (lane PROFILES, mall revision) the player start in 3D: a start node within startClearM (straight) is in plain view on arrival
+  const st = layout.mall?.start ?? {x: layout.playerSpawn.x, z: layout.playerSpawn.z, level: 0};
+  const stG = layout.levels[st.level ?? 0]?.grid ?? layout.grid, stY = stG.cellFloor(...stG.cellOf(st.x, st.z));
   const byStorey = new Map<number, MallPatrolNode[]>();
   for (const n of patrol) {
     if (!storeys.includes(n.level) || !n.edges.length) continue;
     const g = layout.levels[n.level].grid, [cx, cy] = g.cellOf(n.x, n.z);
     const d = dist[n.level]?.[g.idx(cx, cy)] ?? -1;
     if (d < startCells || !standable(layout, n.level, n.x, n.z)) continue;
+    if (P.startClearM !== undefined && Math.hypot(n.x - st.x, g.cellFloor(cx, cy) - stY, n.z - st.z) < P.startClearM) continue;
     let l = byStorey.get(n.level);
     if (!l) byStorey.set(n.level, (l = []));
     l.push(n);
