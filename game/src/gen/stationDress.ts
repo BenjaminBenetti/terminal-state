@@ -14,7 +14,7 @@ import {ITEMS} from '../items/items';
 import type {Wing} from './stationKit';
 import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
 import {dressP7} from './props07Dress';
-import {p7Palette} from './props07';
+import {isP7Kind, p7Palette} from './props07';
 import {COMPOSED_ZONES, compose, zoneOf} from './compose';
 import {passageWallsAlongX, signDims, wallSignSpot} from './doorways';
 import {
@@ -291,7 +291,11 @@ export function stationP7Palette(dressRng: Rng): ReadonlySet<string> {
  */
 export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => number | void; phase?: (k: string) => void;
   /** (task track2-playtest-revision, lane ROOMS) per-area furniture rules replacing the purpose's own (lean annex rule sets); undefined = the purpose's. */
-  rules?: (a: Area) => readonly PropRule[] | undefined}): {props: number; signs: number} {
+  rules?: (a: Area) => readonly PropRule[] | undefined;
+  /** (lane ROOMS) Only these iteration-07 kinds may be placed (composer + dresser): no model the level does not already load. */
+  kinds?: ReadonlySet<string>;
+  /** (lane ROOMS) Iteration-07 dresser placements: at most `perArea(a)` per area and `total` over the pass (the composer has its own p7Budget). */
+  p7Cap?: {perArea: (a: Area) => number; total: number}}): {props: number; signs: number} {
   const ids = new Set(areas.map(a => a.id));
   const inSet = (a: Area) => ids.has(a.id);
   // contexts only for the levels the areas lie on, their masks built over the areas' bounding window (+ 4 cells)
@@ -316,15 +320,21 @@ export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[
     dressByRules(ctxOf(a), a, own ? {...P, props: own} : P);
   }
   o.phase?.('dress.rules');
-  compose(layout, {rng: rng.fork('compose'), palette: o.palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
+  const palette = o.kinds ? new Set([...o.palette].filter(k => o.kinds!.has(k))) : o.palette;
+  compose(layout, {rng: rng.fork('compose'), palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
   o.phase?.('dress.compose');
   {
     const prng = rng.fork('p7');
     const pctxs = new Map([...ctxs].map(([L, c]) => [L, {...c, rng: prng}]));
+    // (lane ROOMS) the pass's iteration-07 cap: per area and in total
+    const capOf = new Map<number, number>();
+    let capTotal = 0;
+    const capped = (a: Area, kind: PropKind): boolean => !!o.p7Cap && isP7Kind(kind) && (capTotal >= o.p7Cap.total || (capOf.get(a.id) ?? 0) >= o.p7Cap.perArea(a));
+    const counted = (a: Area, p: PropPlacement | null): PropPlacement | null => { if (p && o.p7Cap && isP7Kind(p.kind)) { capTotal++; capOf.set(a.id, (capOf.get(a.id) ?? 0) + 1); } return p; };
     const pctxOf = (a: Area): Ctx => pctxs.get(areaLevel(a)) ?? {...ctxOf(a), rng: prng};
     dressP7(layout, {
-      rng: prng, areas: inSet, hostsFrom: p0, budgetScale: o.p7Scale,
-      place: (a, kind, x, z, rot, q = {}) => (spent() ? null : tryPlaceProp(pctxOf(a), a, kind, x, z, rot, q)),
+      rng: prng, areas: inSet, hostsFrom: p0, budgetScale: o.p7Scale, ...(o.kinds ? {kinds: o.kinds} : {}),
+      place: (a, kind, x, z, rot, q = {}) => (spent() || capped(a, kind) ? null : counted(a, tryPlaceProp(pctxOf(a), a, kind, x, z, rot, q))),
       cellsFree: (a, x, z, hx, hz) => {
         const c = pctxOf(a), g = c.g;
         const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);

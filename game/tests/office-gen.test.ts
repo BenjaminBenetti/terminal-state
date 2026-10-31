@@ -485,8 +485,8 @@ describe('the Subway is unchanged', () => {
   // fingerprints of the annex-bearing seeds move (was 7 b402c09e / 35870a80, 42 f1d3aed2 / 43e5c856, 1234 f4b97ce1 / 8d0d8135);
   // seed 1 (no annex) and every CORE / reserve-off HEAD fingerprint are unchanged (asserted below).
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '29d7dc7c', '7:pistol': '5283b25e',
-    '42:rifle': '648cd3b3', '42:pistol': 'a9e56fce', '1234:rifle': '8cef650c', '1234:pistol': '3a562709',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'bcabf2ef', '7:pistol': '5c7e39d9',
+    '42:rifle': '868cb75f', '42:pistol': '7a6f4ce4', '1234:rifle': '8136ba0b', '1234:pistol': '522bba4a',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

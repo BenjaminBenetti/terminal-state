@@ -100,7 +100,9 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
         const budget = Math.round(n.areaM2 / ANNEX_CONTENT.m2PerProp);
         // (the room in progress finishes, the corridors' composition is coverage-capped, host decor follows its host: <= 1.25 x)
         expect(list.length, `${l.seed} annex ${n.id} props`).toBeLessThanOrEqual(budget * 1.25);
-        expect(list.length).toBeGreaterThan(budget * 0.5);
+        // (lane ROOMS: the lean annex furniture + capped equipment props leave the budget part-used; the rooms' identity is their
+        // machinery: ~40-110 dressing props per annex, was ~150)
+        expect(list.length).toBeGreaterThan(budget * 0.2);
         expect(list.filter(p => p.cluster !== undefined && isP7Kind(p.kind)).length).toBeLessThanOrEqual(ANNEX_COMPOSE_BUDGET + 2);
       }
     }

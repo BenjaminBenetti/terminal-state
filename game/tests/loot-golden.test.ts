@@ -75,10 +75,10 @@
 //     3ba3548d); the gear roll and every gear placement hash are unchanged (gear spacing ignores the annexes' finds).
 // 10. Task track2-playtest-revision-20261031 (lane ROOMS) — CAUSE: "annex machinery halls + room signatures" (user feedback 4 / 5):
 //     the annexes grow 2-3 larger machinery halls (gen/trackExt/carve.ts) and take room signatures with anchored machinery and
-//     LEAN furniture (gen/annexRooms.ts: fewer, meaningful holders - the corpus' live holder count 6136 over 18 stations), so every
+//     LEAN furniture (gen/annexRooms.ts: fewer, meaningful holders - the corpus' live holder count is now 5953 over 18 stations), so every
 //     annex holder / floor find is re-laid and the crop translation of extended stations changes. Re-pinned LIVE hashes only:
-//     subwayHolders e4c02d0b -> 2bcd208a, subwayPickups f3f6cbd3 -> f200b288, officeHolders 595d8a54 -> becf2700, officePickups
-//     b8b6ff4e -> ebe6d297, gearPlaced fee77ca3 -> 879dd375 (the live gear coordinates of translated stations; its core-frame
+//     subwayHolders e4c02d0b -> 63f11838, subwayPickups f3f6cbd3 -> 5ae2b384, officeHolders 595d8a54 -> f07d82e0, officePickups
+//     b8b6ff4e -> 92a1d2ed, gearPlaced fee77ca3 -> 879dd375 (the live gear coordinates of translated stations; its core-frame
 //     placement is unchanged). PROOF, every run: GOLDEN_CORE / GOLDEN_RESERVE (incl. both core gearPlaced hashes), the roof find
 //     and the gear roll are byte-identical; no loot table, rule or roll changed.
 
@@ -103,12 +103,12 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: '2bcd208a', // stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
+  subwayHolders: '63f11838', // stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
-  subwayPickups: 'f200b288', // stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
-  officeHolders: 'becf2700', // stage 10; stage 9: 595d8a54 (+ the annexes' holders)
+  subwayPickups: '5ae2b384', // stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
+  officeHolders: 'f07d82e0', // stage 10; stage 9: 595d8a54 (+ the annexes' holders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
-  officePickups: 'ebe6d297', // stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
+  officePickups: '92a1d2ed', // stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',

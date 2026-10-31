@@ -68,6 +68,8 @@ export const ANNEX_CONTENT = {
    */
   m2PerProp: 12,
   p7Scale: 0.5,
+  /** (lane ROOMS) Iteration-07 dresser placements per annex (the lean furniture no longer exhausts m2PerProp first). */
+  p7Max: 10,
   /**
    * Holders of one annex that keep their room purpose's loot table: one per `m2PerIntactHolder` m² of its floor (~8 for the 25 %
    * target; census 7-8), its DEEPEST holders (area depth from the entry door: the reward is further in); every other annex holder (the stash
@@ -147,6 +149,9 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
   const machines: AnnexMachine[] = [];
   const mrep = new Map<number, {built: Map<number, SignatureId>; demoted: number; solids: number; machines: number}>();
   const palette = ext.annexes.length ? stationP7Palette(o.dressRng) : new Set<string>();
+  // (lane ROOMS) the annexes only use iteration-07 kinds the core already places: no extra model download / GPU texture memory
+  const coreKinds = new Set<string>();
+  for (let i = 0; i < first.props; i++) if (isP7Kind(layout.props[i].kind)) coreKinds.add(layout.props[i].kind);
   const C = ANNEX_CONTENT, prio = (a: Area) => (a.kind === 'closet' ? 90 : a.kind === 'service' ? 95 : (k => (k < 0 ? 50 : k))(C.priority.indexOf(a.purpose ?? '')));
   for (const n of ext.annexes) {
     const areas = annexAreas(n).sort((p, q) => prio(p) - prio(q) || q.w * q.h - p.w * p.h || p.id - q.id);
@@ -162,6 +167,10 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
       },
       // (lane ROOMS) lean furniture of the existing purposes in annex rooms: fewer, meaningful holders (gen/annexRooms.ts ANNEX_RULES)
       rules: a => ANNEX_RULES[a.purpose ?? ''],
+      kinds: coreKinds,
+      // (lane ROOMS) the iteration-07 equipment props stay about where the old dense dressing left them (~16 per annex): one per
+      // room, two per machinery hall, none from the dresser in closets / corridors (the composer dresses corridors), C.p7Max in total
+      p7Cap: {perArea: a => (a.kind !== 'room' ? 0 : a.extHall ? 2 : 1), total: C.p7Max},
       phase,
     });
     rep.props += d.props; rep.signs += d.signs;
