@@ -40,11 +40,14 @@ describe.runIf(!!process.env.TRACK_EXT_PREVIEW)('track extension CPU previews (T
       {name: 'straight-to-bend', opts: {}, cam: (_fx, at) => ({pos: at(2, 1.0, 1.65), target: at(20, 0.5, 1.3), fov: 75})},
       {name: 'in-bend', opts: {}, cam: (_fx, at) => ({pos: at(15, 0.6, 1.65), target: at(26, -1.2, 1.4), fov: 75})},
       {name: 'door', opts: {}, cam: (fx, at) => { const d = fx.east.doors[0]; return {pos: at(d.s - 4.5, 1.4, 1.65), target: at(d.s, -4, 1.3), fov: 75}; }},
+      {name: 'door-on-bend', opts: {bendDoor: true}, cam: (_fx, at) => ({pos: at(17.5, 1.6, 1.65), target: at(22, -4.2, 1.1), fov: 75})},
+      {name: 'door-on-bend-threshold', opts: {bendDoor: true}, cam: (_fx, at) => ({pos: at(21, -1.5, 1.7), target: at(22.2, -5.5, -0.2), fov: 75}), ambient: 0.5},
       {name: 'graffiti', opts: {}, cam: (_fx, at) => ({pos: at(2.5, 0.3, 1.65), target: at(5, -4, 1.6), fov: 70})},
       {name: 'graffiti-tag', opts: {}, cam: (_fx, at) => ({pos: at(3.5, -0.8, 1.65), target: at(5.5, 4, 1.8), fov: 70})},
       {name: 'cap-rubble', opts: {eastCap: 'rubble'}, cam: (fx, at) => ({pos: at(fx.east.length - 7, 0.8, 1.65), target: at(fx.east.length, -0.2, 1.4), fov: 75})},
       {name: 'cap-gate', opts: {eastCap: 'gate'}, cam: (fx, at) => ({pos: at(fx.east.length - 6, 1.0, 1.65), target: at(fx.east.length, -0.2, 1.8), fov: 75})},
       {name: 'cap-bulkhead', opts: {}, cam: (_fx, at) => ({pos: at(10, 0.8, 1.65, 'west'), target: at(16, -0.2, 1.5, 'west'), fov: 75})},
+      {name: 'long-straight-gate', opts: {bend: 0, eastLen: 100, eastCap: 'gate'}, cam: (_fx, at) => ({pos: at(2, 1.0, 1.65), target: at(40, 0.4, 1.3), fov: 70})},
       {name: 'bed-end-no-tunnel', opts: {noWest: true}, cam: (_fx) => ({pos: [28, 0.5, 31], target: [19, 0.2, 32], fov: 75})},
     ];
     const {TunnelFrame} = await import('../src/world/trackExt/frame');
@@ -72,7 +75,7 @@ describe.runIf(!!process.env.TRACK_EXT_PREVIEW)('track extension CPU previews (T
       const t0 = performance.now();
       const px = renderMeshes(w.group, {far: 60, ...cam}, {width: W, height: H, flashlight: true, ambient: shot.ambient ?? 0.38, fog: 0.025});
       await sharp(px, {raw: {width: W, height: H, channels: 3}}).png().toFile(path.join(OUT, `${shot.name}.png`));
-      report.push(`${shot.name}: ${Math.round(performance.now() - t0)} ms; trackExt ${JSON.stringify(w.trackExt?.stats)}`);
+      report.push(`${shot.name}: ${Math.round(performance.now() - t0)} ms; trackExt ${JSON.stringify(w.trackExt?.stats)}; per tunnel ${JSON.stringify(w.trackExt?.shells.perTunnel.map(p => ({id: p.id, length: Math.round(p.length * 10) / 10, draws: p.draws, triangles: p.triangles, instances: p.instances, cap: p.cap.kind})))}`);
     }
     fs.writeFileSync(path.join(OUT, 'previews.txt'), report.join('\n') + '\n');
     expect(report.length).toBeGreaterThan(0);

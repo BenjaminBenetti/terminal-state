@@ -77,11 +77,21 @@ export function deadLensMaterial(mats: WorldMaterials): THREE.Material {
   return m;
 }
 
+/** Broad surfaces split into arc-length chunks (frustum culling); trim, caps and doors merge into one mesh per tunnel. */
+const CHUNKED = new Set<ShellMat>(['tunnel', 'ceiling', 'ballast']);
+
 /** Accumulators keyed by material and (tunnel, chunk). */
 export class ShellSink {
   readonly accs = new Map<string, {mat: ShellMat; tunnel: number; chunk: number; acc: Acc}>();
+  /** Per tunnel: chunk count and length (equal chunks of <= SHELL.chunk m over the shell: no sliver chunk at the end). */
+  private readonly chunks = new Map<number, {n: number; len: number}>();
+  setShell(tunnel: number, length: number): void {
+    const n = Math.max(1, Math.ceil(length / SHELL.chunk - 1e-6));
+    this.chunks.set(tunnel, {n, len: length / n});
+  }
   get(mat: ShellMat, tunnel: number, s: number): Acc {
-    const chunk = Math.max(0, Math.floor(s / SHELL.chunk));
+    const c = this.chunks.get(tunnel) ?? {n: Infinity, len: SHELL.chunk};
+    const chunk = CHUNKED.has(mat) ? Math.max(0, Math.min(c.n - 1, Math.floor(s / c.len))) : 0;
     const key = `${mat}|${tunnel}|${chunk}`;
     let e = this.accs.get(key);
     if (!e) this.accs.set(key, (e = {mat, tunnel, chunk, acc: new Acc()}));
@@ -100,6 +110,7 @@ export function buildShells(group: THREE.Group, view: TrackExtView, layout: Stat
   view.tunnels.forEach((v, k) => {
     const openings = doorOpenings(v, layout);
     const span = capSpan(v, layout);
+    sink.setShell(k, span.back);
     perTunnel.push({id: v.t.id, length: v.f.length, meshes: 0, draws: 0, triangles: 0, instances: 0, openings, cap: {...span, kind: v.t.cap.kind}});
     buildTunnel(sink, sleepers, v, k, layout, mats, openings, span.back);
     buildCap(sink, v, k, mats, span, layout.seed >>> 0);
@@ -277,7 +288,7 @@ function buildTunnel(sink: ShellSink, sleepers: Map<string, {tunnel: number; lis
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), pos = new THREE.Vector3();
   for (let s = first; s < end - 0.35; s += SHELL.sleeperStep) {
     const p = f.at(s);
-    const key = `${k}:${Math.floor(s / SHELL.chunk)}`;
+    const key = `${k}`; // one instanced mesh per tunnel (12-triangle boxes; per-chunk meshes would only add draws)
     let e = sleepers.get(key);
     if (!e) sleepers.set(key, (e = {tunnel: k, list: []}));
     q.setFromAxisAngle(UP, Math.atan2(-p.tz, p.tx));
@@ -398,23 +409,31 @@ function straddleCells(sink: ShellSink, view: TrackExtView, layout: StationLayou
     const v = view.tunnels[view.owner[i]];
     if (!v) continue;
     const x = i % g.w, y = (i - x) / g.w;
-    const x0 = x * CELL, z0 = y * CELL, x1 = x0 + CELL, z1 = z0 + CELL;
-    const poly = clipOutside(v.f, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
-    if (!poly || polyArea(poly) < 1e-4) continue;
     const area = layout.areas[g.area[i]];
-    const s = v.f.project(x0 + CELL / 2, z0 + CELL / 2).s;
     const floorKey: MatKey = area?.publicSpace ? 'terrazzo' : 'concrete';
     const ceilKey: MatKey = area?.publicSpace ? 'ceiling' : 'ceilingService';
-    const fl = sink.get(floorKey, view.owner[i], s), ce = sink.get(ceilKey, view.owner[i], s);
     const fy = g.floorOf(i), cy = cellCeil(g, i);
     const fs = mats.scale[floorKey] ?? fm, cs = mats.scale[ceilKey] ?? cmS;
-    fl.fan(poly.map(([px, pz]) => fl.v([px, fy, pz], [0, 1, 0], px / fs.u, -pz / fs.v)));
-    ce.fan(poly.map(([px, pz]) => ce.v([px, cy, pz], [0, -1, 0], px / cs.u, pz / cs.v)));
+    // Quarter cells, each clipped at the wall's tangent there (a curved wall line within ~2 mm), overlapping the shell's
+    // strip by 4 mm so no crack opens along the wall line.
+    const h = CELL / 2;
+    for (const [qx, qz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const x0 = x * CELL + qx * h, z0 = y * CELL + qz * h, x1 = x0 + h, z1 = z0 + h;
+      const poly = clipOutside(v.f, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 0.004);
+      if (!poly || polyArea(poly) < 1e-5) continue;
+      const s = v.f.project(x0 + h / 2, z0 + h / 2).s;
+      const fl = sink.get(floorKey, view.owner[i], s), ce = sink.get(ceilKey, view.owner[i], s);
+      fl.fan(poly.map(([px, pz]) => fl.v([px, fy, pz], [0, 1, 0], px / fs.u, -pz / fs.v)));
+      ce.fan(poly.map(([px, pz]) => ce.v([px, cy, pz], [0, -1, 0], px / cs.u, pz / cs.v)));
+    }
   }
 }
 
-/** The part of a convex polygon outside the corridor, clipped at the nearest shell wall's local line (null if none). */
-export function clipOutside(f: TunnelFrame, poly: [number, number][]): [number, number][] | null {
+/**
+ * The part of a convex polygon outside the corridor, clipped at the nearest shell wall's local tangent line (null if
+ * none). `bias` (m) moves the cut that far INTO the corridor (a small overlap with the shell's floor / ceiling strip).
+ */
+export function clipOutside(f: TunnelFrame, poly: [number, number][], bias = 0): [number, number][] | null {
   let cx = 0, cz = 0;
   for (const [x, z] of poly) { cx += x; cz += z; }
   cx /= poly.length; cz /= poly.length;
@@ -423,7 +442,7 @@ export function clipOutside(f: TunnelFrame, poly: [number, number][]): [number, 
   const p = f.at(Math.max(0, Math.min(f.length, c.s)));
   const ox = side * p.lx, oz = side * p.lz;
   const wx = p.x + ox * f.half, wz = p.z + oz * f.half;
-  const d = (q: [number, number]) => (q[0] - wx) * ox + (q[1] - wz) * oz;
+  const d = (q: [number, number]) => (q[0] - wx) * ox + (q[1] - wz) * oz + bias;
   const out: [number, number][] = [];
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i], b = poly[(i + 1) % poly.length], da = d(a), db = d(b);

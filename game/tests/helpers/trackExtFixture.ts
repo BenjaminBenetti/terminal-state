@@ -23,6 +23,10 @@ export interface TrackExtFixtureOpts {
   mirrored?: boolean;
   /** Omit the west tunnel (its end keeps the black plane + barricade). */
   noWest?: boolean;
+  /** Add a second annex door on the east arc's outer wall (a door rect straddling the curved wall line). */
+  bendDoor?: boolean;
+  /** Length of a STRAIGHT east tunnel (with bend 0; the grid grows east to fit). Default 34 m. */
+  eastLen?: number;
 }
 
 export interface TrackExtFixture {
@@ -57,7 +61,8 @@ export function pathOf(x: number, z: number, heading: number, segs: ({len: numbe
 }
 
 export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
-  const {W, H} = TX;
+  const H = TX.H;
+  const W = Math.max(TX.W, Math.ceil((TX.x1 + (o.eastLen ?? 0) + 6) / CELL));
   const g = new Grid(W, H);
   g.voidFloor = TX.bedY;
   const areas: Area[] = [];
@@ -80,7 +85,7 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
   const zc = (TX.bedZ0 + TX.bedZ1) / 2;
   const bend = ((o.bend ?? 60) * Math.PI) / 180;
   // East: heading +X; a left turn (toward -Z) decreases the heading angle in (x, z).
-  const eastPath = pathOf(TX.x1, zc, 0, bend ? [{len: 14}, {turn: -bend, R: 16}, {len: 14}] : [{len: 34}]);
+  const eastPath = pathOf(TX.x1, zc, 0, bend ? [{len: 14}, {turn: -bend, R: 16}, {len: 14}] : [{len: o.eastLen ?? 34}]);
   const westPath = pathOf(TX.x0, zc, Math.PI, [{len: 16}]);
   const tunnels: TrackTunnel[] = [];
   const mk = (id: number, from: 'x0' | 'x1', path: {x: number; z: number}[], cap: TrackTunnel['cap']['kind']): TrackTunnel => {
@@ -132,9 +137,32 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
   east.doors.push({annex: 0, door: d0, s: dS, side: (-1 * mirror) as 1 | -1});
   east.clues.push({s: 4, side: (-1 * mirror) as 1 | -1, kind: 'arrow', toward: 1}, {s: 5.5, side: (1 * mirror) as 1 | -1, kind: 'tag', toward: 1});
 
+  const annexes: TrackExtensions['annexes'] = [{id: 0, tunnel: 0, door: d0, areas: [C.id, R.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: C.w * C.h + R.w * R.h, areaM2: (C.w * C.h + R.w * R.h) * 0.25, exit: {x: 70.75, z: 36}}];
+  if (o.bendDoor && bend) {
+    // A second door on the arc's OUTER (right) wall: an axis-aligned 3 x 3 cell rect straddling the curved wall line,
+    // into a small room carved only outside the corridor.
+    const sD = 22, out = fE.at(sD);
+    const ox = -out.lx, oz = -out.lz; // outward = right of travel (documented convention)
+    const [wx, wz] = fE.point(sD, -4);
+    const room = area('bendRoom', {x: 0, y: 0, w: 1, h: 1}, 'room', 'storage', TX.annexCeil, false, {ext: 'annex', extId: 1, floorY: TX.bedY});
+    let rx0: number = W, ry0: number = H, rx1 = 0, ry1 = 0;
+    const rc = [wx + ox * 3, wz + oz * 3];
+    for (let y = Math.floor((rc[1] - 2.2) / CELL); y <= Math.floor((rc[1] + 2.2) / CELL); y++) for (let x = Math.floor((rc[0] - 2.2) / CELL); x <= Math.floor((rc[0] + 2.2) / CELL); x++) {
+      const c = fE.project((x + 0.5) * CELL, (y + 0.5) * CELL);
+      if (Math.abs(c.lat) < 4 + 0.6 && c.s > 0 && c.s < fE.length) continue;
+      carve({x, y, w: 1, h: 1}, FLOOR, TX.bedY, TX.annexCeil, room.id);
+      rx0 = Math.min(rx0, x); ry0 = Math.min(ry0, y); rx1 = Math.max(rx1, x); ry1 = Math.max(ry1, y);
+    }
+    Object.assign(room, {x: rx0, y: ry0, w: rx1 - rx0 + 1, h: ry1 - ry0 + 1});
+    const dc = [wx + ox * 0.25, wz + oz * 0.25];
+    const d1 = door({x: Math.floor(dc[0] / CELL) - 1, y: Math.floor(dc[1] / CELL) - 1, w: 3, h: 3}, eastArea, room);
+    east.doors.push({annex: 1, door: d1, s: sD, side: (-1 * mirror) as 1 | -1});
+    annexes.push({id: 1, tunnel: 0, door: d1, areas: [room.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: room.w * room.h, areaM2: room.w * room.h * 0.25, exit: {x: wx, z: wz}});
+  }
+
   const lights: LightPlacement[] = [{x: 40, y: 4.25, z: 24, rot: 0, area: P.id, broken: false, flicker: false, warm: false, power: 1, dying: false}];
   const ext: TrackExtensions = {
-    tunnels, annexes: [{id: 0, tunnel: 0, door: d0, areas: [C.id, R.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: C.w * C.h + R.w * R.h, areaM2: (C.w * C.h + R.w * R.h) * 0.25, exit: {x: 70.75, z: 36}}],
+    tunnels, annexes,
     log: [{trench: 0, from: 'x1', result: 'tunnel+annex'}, {trench: 0, from: 'x0', result: o.noWest ? 'omitted' : 'tunnel'}],
   };
   const layout = {

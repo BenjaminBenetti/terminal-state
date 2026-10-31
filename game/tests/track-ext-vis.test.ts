@@ -268,6 +268,25 @@ describe('annex doors', () => {
     expect(n).toBe(0);
   });
 
+  it('a door on the arc: the curved wall opens over the door rect and the floor runs on through the threshold', () => {
+    const {fx, w} = built({bendDoor: true});
+    const t = fx.east, f = new TunnelFrame(t), view = w.trackExt!.view;
+    const op = w.trackExt!.shells.perTunnel[0].openings.find(o => o.door === t.doors[1].door)!;
+    expect(op.s0).toBeLessThan(22);
+    expect(op.s1).toBeGreaterThan(22);
+    expect(op.s1 - op.s0).toBeGreaterThan(1.0);
+    expect(op.s1 - op.s0).toBeLessThan(2.6);
+    expect([...view.mode].filter(m => m === 2).length).toBeGreaterThan(0); // some door cells straddle the curved wall
+    // Walking out through the opening: there is floor at floorY under every step, inside and beyond the wall line.
+    for (const s of [op.s0 + 0.25, (op.s0 + op.s1) / 2, op.s1 - 0.25]) for (let lat = -3.25; lat >= -4.7; lat -= 0.1) {
+      const [x, z] = f.point(s, lat);
+      const g = fx.layout.grid, i = Math.floor(z / 0.5) * g.w + Math.floor(x / 0.5);
+      if (g.cells[i] !== 1 && Math.abs(lat) > 4) continue; // rock beside the passage
+      const down = raycastAll(w, new THREE.Vector3(x, t.floorY + 0.05, z), new THREE.Vector3(0, -1, 0), 0.3);
+      expect(down.some(h => Math.abs(h.point.y - t.floorY) < 1e-3), `floor at s ${s.toFixed(2)} lat ${lat.toFixed(2)}`).toBe(true);
+    }
+  });
+
   it('straddling door-passage cells keep their outside part (clipped at the wall line)', () => {
     const f = new TunnelFrame({id: 9, trench: 0, from: 'x1', floorY: -1.15, ceilY: 4.4, width: 8, path: [{x: 0, z: 0}, {x: 10, z: 0}], length: 10, rails: [], cap: {kind: 'rubble', s: 10}, areas: [], doors: [], clues: []});
     // A cell centred 0.1 m outside the +left wall (z = -4): its outer 0.35 m stays.
@@ -390,6 +409,12 @@ describe('warm-up, draws and lights', () => {
       expect(p.triangles / p.length).toBeLessThan(260); // < 26k triangles per 100 m incl. the cap
     }
     expect(st.per100m.triangles).toBeLessThan(26000);
+    // A 100 m straight tunnel (+ the 16 m west one): a few draws per 48 m chunk, ~10k triangles per 100 m.
+    const long = built({bend: 0, eastLen: 100, eastCap: 'gate'});
+    const pl = long.w.trackExt!.shells.perTunnel[0];
+    expect(pl.length).toBeCloseTo(100, 6);
+    expect(pl.draws).toBeLessThanOrEqual(4 * Math.ceil(pl.length / SHELL.chunk) + 10);
+    expect(pl.triangles).toBeLessThan(16000);
     // No lights: layout lights untouched, no three.js lights in the world, none tinted.
     expect(fx.layout.lights.length).toBe(1);
     let lights = 0; w.group.traverse(o => { if ((o as THREE.Light).isLight) lights++; });
