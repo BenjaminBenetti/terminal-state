@@ -502,7 +502,7 @@ export function validateLayout(layout: StationLayout, spawns: SpawnProfile = spa
   // Iteration 08 (Lane A): stacked levels — overlap, slabs / headroom, stairs, railings, placements, reachability.
   if (layout.levels?.length) issues.push(...levelIssues(layout, dists));
   // Track 2 (lane GEN): tunnels / annexes (reachability both ways, clearance, caps, doors, clues); absent extensions: none.
-  issues.push(...extensionIssues(layout));
+  issues.push(...extensionIssues(layout, dists));
   return issues;
 }
 

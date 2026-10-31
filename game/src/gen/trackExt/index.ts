@@ -255,7 +255,7 @@ export const EXT_HEAD_CLEARANCE = 2.2;
  * rescue ladder of its own bed without drops; caps solid; entry doors join exactly a tunnel area and an annex corridor; clues
  * only on tunnels with a door, before it, pointing toward it.
  */
-export function extensionIssues(layout: StationLayout): string[] {
+export function extensionIssues(layout: StationLayout, dists?: readonly Int32Array[]): string[] {
   const ext = layout.extensions;
   if (!ext) return [];
   const issues: string[] = [];
@@ -273,7 +273,8 @@ export function extensionIssues(layout: StationLayout): string[] {
   };
   const start = layout.office?.start ?? {...layout.playerSpawn, level: 0};
   const [sx, sy] = levels[0].grid.cellOf(start.x, start.z);
-  const dist = levelDistance(levels, sx, sy, start.level ?? 0, layout.levelLinks)[0];
+  // (the caller's reachability from the start, when it has it: validateLayout / officeIssues)
+  const dist = (dists ?? levelDistance(levels, sx, sy, start.level ?? 0, layout.levelLinks))[0];
   const cellsOfTrench = new Map<number, number[]>();
   let bad = {floor: 0, head: 0, levels: 0, edge: 0, unreached: 0};
   for (let i = 0; i < g.cells.length; i++) {

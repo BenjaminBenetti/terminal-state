@@ -240,7 +240,7 @@ export function officeIssues(layout: StationLayout, f: TowerFrame, spawns: Spawn
     return !(m && scissorFlights.has(Number(m[1])));
   }));
   // Track 2 (lane GEN): the station's tunnels / annexes (reachability both ways, clearance, caps, doors, clues).
-  issues.push(...extensionIssues(layout));
+  issues.push(...extensionIssues(layout, dist));
   return issues;
 }
 
