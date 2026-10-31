@@ -45,6 +45,7 @@ import {cutOfficeShaftDoors} from './officeProps'; // task mall-playtest-revisio
 import {GLASS_RIG} from './elevator';
 import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
 import {adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06)
+import {buildStreetExit, cutExitOpenings, streetExitSpecs, type StreetExitSpec, type StreetExitStats} from './mallStreetExit'; // task mall-round2 (M09)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -436,6 +437,8 @@ export interface AtriumStats {
   flatGlazingM2: number;
   /** D06: ad faces drawn (lane SHOPS' records / ARCH's gallery billboards). */
   shopAds: number; galleryAds: number;
+  /** Task mall-round2 (M09): locked street exits drawn (lane GEN's layout.mall.exits) and the cost of each (meshes = draws, tris). */
+  exits: number; exitCost: StreetExitStats[];
   /** Build time of the atrium dressing (ms). */
   ms: number;
 }
@@ -473,7 +476,7 @@ export class MallArch {
   /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
   ads: MallAd[] = [];
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, exits: 0, exitCost: [], ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -657,6 +660,18 @@ export class MallArch {
     return cutOfficeShaftDoors(faces, {office: rec} as unknown as Parameters<typeof cutOfficeShaftDoors>[1]);
   }
 
+  /**
+   * Task mall-round2-20261031 (lane ARCH, M09): the locked street exits (lane GEN's layout.mall.exits, normalized for the renderer;
+   * [] when the layout has none — every older fixture / seed without a suitable hall end).
+   */
+  exits(): StreetExitSpec[] {
+    return (this.exitCache ??= streetExitSpecs(this.layout, (lv, x, z) => {
+      const g = this.gridOf(lv), cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
+      return cx >= 0 && cy >= 0 && cx < this.W && cy < this.H ? cellCeil(g, cy * this.W + cx) : NaN;
+    }));
+  }
+  private exitCache: StreetExitSpec[] | null = null;
+
   /** A face on a glass side of the shaft (dropped: the glass shaft tower replaces it). */
   private onShaft(f: FaceLike): boolean {
     const sd = this.shaftSide(f);
@@ -672,7 +687,8 @@ export class MallArch {
   remapFaces<F extends FaceLike>(faces: F[], tileLowerHeight: number): F[] {
     const out: F[] = [];
     const spring = this.info.roof.springY;
-    for (const f of this.cutShaftDoors(faces)) {
+    // (task mall-round2 M09: + each locked street exit's glazed opening cut out of its hall-end wall face; collision stays GEN's rock)
+    for (const f of cutExitOpenings(this.cutShaftDoors(faces), this.exits())) {
       const isFloor = f.level === this.floorLevel;
       const up = /tileUpper/.test(f.finish) && f.vb0 !== undefined ? {vb0: f.vb0 - tileLowerHeight, vb1: (f.vb1 ?? f.vb0) - tileLowerHeight} : {};
       if (this.onShaft(f)) { this.stats.droppedFaces++; continue; }
@@ -818,7 +834,7 @@ export class MallArch {
     for (const fn of [
       () => this.buildRoof(add), () => this.buildBalustrades(add, rails), () => this.buildColumns(add), () => this.buildShaftTowers(add),
       () => this.buildSignage(group, add), () => this.buildBanners(add), () => this.buildEscalatorSoffits(add), () => this.buildShopfronts(add, this.mats),
-      () => this.buildFountain(add), () => this.buildAds(group, add),
+      () => this.buildFountain(add), () => this.buildAds(group, add), () => this.buildStreetExits(add),
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
     }
@@ -1515,6 +1531,21 @@ export class MallArch {
     }
     if (opaque.size) this.buildAtlasFaces(group, opaque, 'mall-ad-faces', false);
     if (cut.size) this.buildAtlasFaces(group, cut, 'mall-ad-decals', true);
+  }
+
+  /**
+   * Task mall-round2-20261031 (lane ARCH, M09): the locked glazed street exits (world/mallStreetExit.ts) — per exit four meshes (door
+   * frame / lock / signage / vestibule, glass, the street view, its fog cards), tagged with the street storey and the exit's
+   * aperture (world/levelCulling.ts draws them only while the opening may be seen). View only: nothing walkable, no gas rule.
+   */
+  buildStreetExits(add: (m: THREE.Mesh | null) => void): void {
+    this.stats.exitCost = [];
+    for (const s of this.exits()) {
+      const v = buildStreetExit(s);
+      for (const m of v.meshes) add(m);
+      this.stats.exitCost.push(v.stats);
+    }
+    this.stats.exits = this.stats.exitCost.length;
   }
 
   /** Distance (m, 0..0.3) from an ad record back to the solid wall behind it on its storey grid (0: none found within 0.3 m). */

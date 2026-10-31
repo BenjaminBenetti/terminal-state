@@ -464,8 +464,12 @@ export class OpenableSet {
     return rt;
   }
 
-  /** Builds the station's instanced bodies + closed parts (per kind, 12 m chunks). */
-  finish(): void {
+  /**
+   * Builds the station's instanced bodies + closed parts (per kind, 12 m chunks). Task mall-round2-20261031 (lane PERF): `byStorey`
+   * (the mall) also splits a chunk per storey — one batch spanning two storeys had a box the level culler could never level- / slab- /
+   * occlusion-cull (world/levelCulling.ts); identity is unchanged (every holder still owns exactly one slot per closed part).
+   */
+  finish(byStorey = false): void {
     const byKind = new Map<OpenableKind, OpenHolder[]>();
     for (const h of this.pending) {
       const rt = h.open!;
@@ -478,7 +482,7 @@ export class OpenableSet {
       const m = this.model(kind);
       const chunks = new Map<string, OpenHolder[]>();
       for (const h of list) {
-        const key = `${Math.floor(h.prop.x / CHUNK)},${Math.floor(h.prop.z / CHUNK)}`;
+        const key = `${byStorey ? `${h.prop.level ?? 0}:` : ''}${Math.floor(h.prop.x / CHUNK)},${Math.floor(h.prop.z / CHUNK)}`;
         let l = chunks.get(key);
         if (!l) chunks.set(key, (l = []));
         l.push(h);

@@ -112,6 +112,62 @@ const SLAB_EPS = 0.05;
 /** Task track3 (lane ARCH): slab planes sit this far under their storey floor (inside the slab; every mall slab is >= 0.4 m). */
 const SLAB_DROP = 0.2;
 
+/**
+ * Task mall-round2-20261031 (lane ARCH, M09): a locked street exit's glazed opening (world/mallStreetExit.ts apertureOf): the hall-side
+ * wall plane (x for E / W exits, z for N / S), the span along it, floor / head y, the outward normal. Meshes tagged
+ * `userData.aperture` (the exit's doors, glass, the street view and its fog beyond the glass — mall only) render only when, besides
+ * their storey's usual rule, the opening itself is potentially visible: eye on the hall side, within the fog distance, the opening
+ * (+ its reveal) in the frustum, and a sight ray through the free bands reaching a hall cell right in front of it (every 0.25 m
+ * along the span at four heights) — or the eye right beside it, or inside a glazed lift shaft (rays cannot start in its solid
+ * cells: conservative). Every view of the exterior passes through the opening, so this never hides a visible pixel; from rooms
+ * beside / behind the exit (walls between) the street is not submitted at all. Untagged meshes (Subway / Office) never reach it.
+ */
+export interface ExitAperture { nx: number; nz: number; plane: number; s0: number; s1: number; y0: number; y1: number }
+/** An eye this close (m, horizontally) to an exit opening at its height sees it outright. */
+export const EXIT_NEAR = 1.2;
+
+/**
+ * Task mall-round2-20261031 (lane PERF, user: "when looking certain directions there can be FPS drop, caused by ~1,500 draw calls
+ * and the CPU spending a lot of time in submit"): SAME-STOREY OCCLUSION (mall only, with slab occlusion; opts.slabs). PERF's
+ * matched-view census (seed t3a, arcade-loop, the primary's QA poses; lanes/PERF.notes) found that of the meshes the culler +
+ * frustum submitted only 8–47 % own a single visible pixel (depth oracle) — the bulk are props, loot holders, room dressing and
+ * shell chunks ON THE EYE'S STOREY inside shops, stock rooms and back-of-house behind walls, each drawn in the scene pass AND again
+ * in the flashlight shadow pass (~0.06 ms of CPU submit per draw on the primary's llvmpipe baseline). The atrium / slab rules
+ * above only reason across storeys.
+ *
+ * Rule: a storey's walls are the columns CLOSED over its whole height range [base - OCCL_BELOW, next storey base - OCCL_GAP]
+ * (no free band of any level there; the glazed lift shaft and other `see` rects are open). A ray between two points inside that
+ * range stays inside it, so it can only pass a closed column by crossing a drawn wall face (the builder draws a face wherever a
+ * free band borders closed space). Per update, for each viewpoint (the eye and `viewpoints` — the flashlight, whose shadow pass
+ * uses the same layers) a 1D polar occlusion buffer is built from the boundary runs of those columns (straight runs of cell
+ * edges between open and closed columns with the closed side on the same side: crossing one anywhere enters a closed column):
+ * bin b holds the smallest far-end distance of a run whose angular span FULLY covers the bin. A single-storey mesh whose box lies
+ * in that range is hidden when, for every viewpoint, every bin its footprint (padded by OCCL_PAD) overlaps is covered closer than
+ * the footprint's nearest point — then every ray to every point of it crosses a wall first (conservative: corners between runs
+ * and partly covered bins count as open). A hidden mesh never draws a visible pixel, and since nothing from the flashlight's
+ * position reaches it either it can never win a shadow-map depth test: both passes are unchanged except for the work.
+ * Exact per frame: between the culler's full updates (skipped for < 0.25 m / small turns) the occlusion part re-runs whenever a
+ * viewpoint moved (mesh visibility around a corner changes with any step). Opt-outs: userData.noOcclusion, meshes not touching an
+ * open cell of their storey, multi-storey / unlevelled meshes, the eye in the lift cab (eyeOverride) or inside a closed column.
+ * An InstancedMesh whose bounds grew (damage/propDamage.ts reattach: a loose prop handed back where it came to rest) has its
+ * registered box refreshed before every decision (mall only).
+ */
+export const OCCL_BINS = 4096;
+/** Footprint pad (m): a mesh flush with a wall face (signs, shelving) is decided by the open cell in front of it. */
+export const OCCL_PAD = CELL;
+const OCCL_BELOW = 0.3;
+const OCCL_GAP = 0.1;
+const OCCL_TOP = 6;
+/** Cross-storey buffers: angular bins, near-distance buckets and the bucket size (m). */
+export const OCCL_XBINS = 512;
+const OCCL_XJ = 32;
+const OCCL_XS = 2;
+/** Between full updates the occlusion re-runs once a viewpoint moved this far (m). */
+const OCCL_MOVE = 1e-3;
+const TAU = Math.PI * 2;
+/** One storey's occlusion data: its height range, closed columns (1) and boundary runs (x0, z0, x1, z1 per run). */
+interface OcclLevel { lo: number; hi: number; closed: Uint8Array; openSat: Int32Array; runs: Float64Array }
+
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
 
 /** Lowest floor / highest ceiling of column i's band on grid g (ramps: the band the cell sweeps). */
@@ -134,6 +190,16 @@ interface Entry {
   levels?: readonly number[];
   /** Task track3 (lane ARCH): atrium tiles within ATRIUM_MARGIN of the box (built on first use; mall only). */
   near?: Int32Array;
+  /** Task mall-round2 (lane PERF): level index of the same-storey occlusion test (-1: never occlusion-culled); mall only. */
+  occ?: number;
+  /** Shown by every other rule at the last full update (the occlusion refresh between full updates decides only these). */
+  base?: boolean;
+  /** Hidden by the occlusion rule at the last decision. */
+  occluded?: boolean;
+  /** InstancedMesh: its local bounding box at registration (min xyz, max xyz) — a grown box re-registers the entry (mall only). */
+  lb?: Float64Array;
+  /** Task mall-round2 (lane ARCH, M09): the street exit opening this mesh is seen through (mall only; see ExitAperture). */
+  aperture?: ExitAperture;
 }
 /** Task track3 (lane ARCH): an atrium tile — open void columns joining every level in `levels`. */
 interface AtriumTile { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; cells: number[]; levels: number[] }
@@ -177,13 +243,307 @@ export class LevelCuller {
   slabCulled = 0;
   /** Slab occlusion on / off (mall only; tests / QA A-B). */
   slabs = true;
+  /** Task mall-round2 (lane ARCH, M09): street-exit meshes hidden by their aperture gate in the last update, and the gate's memo. */
+  apertureCulled = 0;
+  private readonly apertureSeenMemo = new Map<ExitAperture, boolean>();
+  /** Task mall-round2 (lane PERF): same-storey occlusion on / off (mall only; tests / QA A-B). */
+  occlusion = true;
+  /** Meshes hidden by the same-storey occlusion at the last decision (mall only; 0 elsewhere). */
+  occlusionCulled = 0;
+  /**
+   * Task mall-round2 (lane PERF): further viewpoints whose sight also keeps a mesh drawn (game.ts: the flashlight — its shadow pass
+   * draws with these layers). Only the same-storey occlusion reads them.
+   */
+  viewpoints: THREE.Object3D[] = [];
+  /** Per level index: same-storey occlusion data (mall only; empty elsewhere). */
+  private readonly occl: (OcclLevel | null)[] = [];
+  /** Polar buffers per (viewpoint, level index) and the viewpoints / levels of the last occlusion decision. */
+  private readonly occlBufs: Float32Array[] = [];
+  private readonly occlX: Float32Array[] = [];
+  private readonly occlPts: number[] = [];
+  private readonly occlRange: number[] = [];
+  private readonly occlOn: boolean[] = [];
+  private readonly occlHere = new Set<number>();
+  private occlState = false;
+  private readonly vp = new THREE.Vector3();
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
     this.levelIds = levels.map(l => l.id);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
     if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
+    if (levels.length > 1 && opts?.slabs) this.buildOcclusion(opts.slabs.see ?? []);
     this.glassShafts = opts?.atrium ? [...(opts.slabs?.see ?? [])] : [];
+  }
+
+  /**
+   * Task mall-round2 (lane PERF): per storey, its closed columns (no free band of any level over the storey's height range; `see`
+   * rects open), their summed-area table of OPEN cells and the boundary runs between open and closed columns.
+   */
+  private buildOcclusion(see: readonly {x0: number; z0: number; x1: number; z1: number}[]): void {
+    const {W, H} = this.cols;
+    const seeMask = new Uint8Array(W * H);
+    for (const r of see) {
+      for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy < Math.min(H, Math.ceil(r.z1 / CELL)); cy++)
+        for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(W, Math.ceil(r.x1 / CELL)); cx++) seeMask[cy * W + cx] = 1;
+    }
+    for (const L of this.levels) {
+      const above = this.levels.filter(o => o.baseY > L.baseY + 1).map(o => o.baseY);
+      const lo = L.baseY - OCCL_BELOW, hi = above.length ? Math.min(...above) - OCCL_GAP : L.baseY + OCCL_TOP;
+      const closed = new Uint8Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        if (seeMask[i]) continue;
+        let open = false;
+        for (let k = 0; k < this.cols.count(i) && !open; k++) {
+          const g = this.levels[this.cols.level(i, k)].grid;
+          if (g.cells[i] !== FLOOR && g.cells[i] !== VOID) continue;
+          const [f, c] = bandOf(g, i);
+          open = f < hi && c > lo;
+        }
+        if (!open) closed[i] = 1;
+      }
+      const openSat = new Int32Array((W + 1) * (H + 1));
+      for (let cy = 0; cy < H; cy++) {
+        let row = 0;
+        for (let cx = 0; cx < W; cx++) { row += 1 - closed[cy * W + cx]; openSat[(cy + 1) * (W + 1) + cx + 1] = openSat[cy * (W + 1) + cx + 1] + row; }
+      }
+      // boundary runs: cell edges between an open and a closed column, merged along a straight line while the closed side stays
+      const runs: number[] = [];
+      for (let cy = 1; cy < H; cy++) { // edges z = cy * CELL (closed below: -1, above: +1)
+        let start = -1, side = 0;
+        for (let cx = 0; cx <= W; cx++) {
+          const s = cx < W ? closed[(cy - 1) * W + cx] - closed[cy * W + cx] : 0;
+          if (s !== side) {
+            if (side !== 0) runs.push(start * CELL, cy * CELL, cx * CELL, cy * CELL);
+            start = cx; side = s;
+          }
+        }
+      }
+      for (let cx = 1; cx < W; cx++) { // edges x = cx * CELL
+        let start = -1, side = 0;
+        for (let cy = 0; cy <= H; cy++) {
+          const s = cy < H ? closed[cy * W + cx - 1] - closed[cy * W + cx] : 0;
+          if (s !== side) {
+            if (side !== 0) runs.push(cx * CELL, start * CELL, cx * CELL, cy * CELL);
+            start = cy; side = s;
+          }
+        }
+      }
+      this.occl.push({lo, hi, closed, openSat, runs: Float64Array.from(runs)});
+    }
+  }
+
+  /** Task mall-round2 (lane PERF): the level index of an entry's occlusion test, or -1 (see OCCL_* — opt-outs). */
+  private occlusionLevel(en: Entry): number {
+    if (!this.occl.length || en.levels || Number.isNaN(en.level) || en.obj.userData.noOcclusion === true) return -1;
+    const k = this.levelIds.indexOf(en.level), o = this.occl[k];
+    if (!o || en.y0 < o.lo || en.y1 > o.hi) return -1;
+    const {W, H} = this.cols;
+    const cx0 = Math.floor((en.x0 - OCCL_PAD) / CELL), cx1 = Math.floor((en.x1 + OCCL_PAD) / CELL);
+    const cy0 = Math.floor((en.z0 - OCCL_PAD) / CELL), cy1 = Math.floor((en.z1 + OCCL_PAD) / CELL);
+    if (cx0 < 0 || cy0 < 0 || cx1 >= W || cy1 >= H) return -1;
+    const s = o.openSat, R = W + 1;
+    return s[(cy1 + 1) * R + cx1 + 1] - s[cy0 * R + cx1 + 1] - s[(cy1 + 1) * R + cx0] + s[cy0 * R + cx0] > 0 ? k : -1;
+  }
+
+  /** Task mall-round2 (lane PERF): an InstancedMesh entry whose bounds grew since registration takes its new box (mall only). */
+  private refreshBox(en: Entry): void {
+    const lb = en.lb, bb = (en.obj as THREE.InstancedMesh).boundingBox;
+    if (!lb || !bb || (bb.min.x >= lb[0] && bb.min.y >= lb[1] && bb.min.z >= lb[2] && bb.max.x <= lb[3] && bb.max.y <= lb[4] && bb.max.z <= lb[5])) return;
+    lb[0] = bb.min.x; lb[1] = bb.min.y; lb[2] = bb.min.z; lb[3] = bb.max.x; lb[4] = bb.max.y; lb[5] = bb.max.z;
+    this.box.copy(bb).applyMatrix4(en.obj.matrixWorld);
+    en.x0 = this.box.min.x; en.y0 = this.box.min.y; en.z0 = this.box.min.z; en.x1 = this.box.max.x; en.y1 = this.box.max.y; en.z1 = this.box.max.z;
+    en.near = undefined;
+    en.occ = this.occlusionLevel(en);
+  }
+
+  /**
+   * Task mall-round2 (lane PERF): the occlusion buffers of this decision — for the eye and every lit `viewpoints` entry, for each
+   * storey in `levels` (the storeys the eye sees: its own + those seen through the atrium). A viewpoint INSIDE the storey's height
+   * range gets a same-storey buffer (OCCL_BINS: nearest covering run); one above / below it a cross-storey buffer (OCCL_XBINS x
+   * OCCL_XJ: per bin and run-near-distance bucket, the nearest covering run — see occludedNow). A storey a viewpoint cannot decide
+   * (inside a closed column of it, outside the grid) is not decided at all. Marks occlOn per level index; false when none.
+   */
+  private prepareOcclusion(levels: ReadonlySet<number>, inCab: boolean): boolean {
+    const on = this.occlOn, NL = this.occl.length;
+    on.length = NL;
+    on.fill(false);
+    const pts = this.occlPts;
+    pts.length = 0;
+    this.occlRange.length = 0;
+    this.occlState = this.occlusion && this.enabled;
+    if (this.occlHere !== levels) { this.occlHere.clear(); for (const l of levels) this.occlHere.add(l); }
+    if (!NL || !this.occlusion || !this.enabled || inCab) return false;
+    const e = this.eye;
+    pts.push(e.x, e.y, e.z);
+    this.occlRange.push(Infinity);
+    for (const v of this.viewpoints) {
+      // a dark / hidden light draws no shadow pass: its sight keeps nothing
+      if (!v.visible || (v as THREE.Light).isLight && (v as THREE.Light).intensity <= 0) continue;
+      v.updateWorldMatrix(true, false);
+      this.vp.setFromMatrixPosition(v.matrixWorld);
+      pts.push(this.vp.x, this.vp.y, this.vp.z);
+      // a light's shadow camera reaches its distance only (three: SpotLightShadow far = light.distance)
+      const d = (v as THREE.SpotLight).isLight ? (v as THREE.SpotLight).distance ?? 0 : 0;
+      this.occlRange.push(d > 0 ? d : Infinity);
+    }
+    const {W, H} = this.cols, np = pts.length / 3;
+    if (np > 4) return false; // (buffer slots: 4 viewpoints per storey)
+    let any = false;
+    for (const id of levels) {
+      const k = this.levelIds.indexOf(id), o = this.occl[k];
+      if (!o) continue;
+      let ok = true;
+      for (let p = 0; p < np && ok; p++) {
+        const py = pts[3 * p + 1];
+        if (py <= o.lo || py >= o.hi) continue; // cross-storey: decided from anywhere
+        const cx = Math.floor(pts[3 * p] / CELL), cy = Math.floor(pts[3 * p + 2] / CELL);
+        ok = cx >= 0 && cy >= 0 && cx < W && cy < H && o.closed[cy * W + cx] === 0;
+      }
+      if (!ok) continue;
+      for (let p = 0; p < np; p++) {
+        const slot = k * 4 + p, px = pts[3 * p], py = pts[3 * p + 1], pz = pts[3 * p + 2];
+        if (py > o.lo && py < o.hi) this.rasterRuns((this.occlBufs[slot] ??= new Float32Array(OCCL_BINS)), o.runs, px, pz);
+        else this.rasterRunsX((this.occlX[slot] ??= new Float32Array(OCCL_XBINS * OCCL_XJ)), o.runs, px, pz);
+      }
+      on[k] = true;
+      any = true;
+    }
+    return any;
+  }
+
+  /** Same-storey polar buffer from (px, pz): bin = smallest far-end distance of a boundary run covering the whole bin. */
+  private rasterRuns(buf: Float32Array, runs: Float64Array, px: number, pz: number): void {
+    buf.fill(Infinity);
+    const K = OCCL_BINS / TAU;
+    for (let r = 0; r < runs.length; r += 4) {
+      const ax = runs[r] - px, az = runs[r + 1] - pz, bx = runs[r + 2] - px, bz = runs[r + 3] - pz;
+      const cross = ax * bz - az * bx;
+      if (Math.abs(cross) < 1e-9) continue; // seen edge-on (the viewpoint on its line): covers no bin
+      const d = Math.sqrt(Math.max(ax * ax + az * az, bx * bx + bz * bz));
+      let t0 = Math.atan2(az, ax), t1 = Math.atan2(bz, bx);
+      if (cross < 0) { const t = t0; t0 = t1; t1 = t; }
+      if (t1 < t0) t1 += TAU;
+      const b0 = Math.ceil((t0 + Math.PI) * K + 1e-6), b1 = Math.floor((t1 + Math.PI) * K - 1e-6) - 1;
+      for (let b = b0; b <= b1; b++) {
+        const i = b >= OCCL_BINS ? b - OCCL_BINS : b;
+        if (d < buf[i]) buf[i] = d;
+      }
+    }
+  }
+
+  /**
+   * Cross-storey polar buffer from (px, pz): T[bin * OCCL_XJ + j] = smallest far-end distance of a run covering the whole bin whose
+   * NEAR distance is at least j * OCCL_XS (bucketed, then suffix minima over j).
+   */
+  private rasterRunsX(T: Float32Array, runs: Float64Array, px: number, pz: number): void {
+    T.fill(Infinity);
+    const K = OCCL_XBINS / TAU, J = OCCL_XJ;
+    for (let r = 0; r < runs.length; r += 4) {
+      const ax = runs[r] - px, az = runs[r + 1] - pz, bx = runs[r + 2] - px, bz = runs[r + 3] - pz;
+      const cross = ax * bz - az * bx;
+      if (Math.abs(cross) < 1e-9) continue;
+      const d1 = Math.sqrt(Math.max(ax * ax + az * az, bx * bx + bz * bz));
+      // nearest point of the run to the viewpoint
+      const ex = bx - ax, ez = bz - az, ll = ex * ex + ez * ez;
+      const t = ll > 0 ? Math.min(1, Math.max(0, -(ax * ex + az * ez) / ll)) : 0;
+      const d0 = Math.hypot(ax + ex * t, az + ez * t);
+      const j = Math.min(J - 1, Math.floor(d0 / OCCL_XS));
+      let t0 = Math.atan2(az, ax), t1 = Math.atan2(bz, bx);
+      if (cross < 0) { const q = t0; t0 = t1; t1 = q; }
+      if (t1 < t0) t1 += TAU;
+      const b0 = Math.ceil((t0 + Math.PI) * K + 1e-6), b1 = Math.floor((t1 + Math.PI) * K - 1e-6) - 1;
+      for (let b = b0; b <= b1; b++) {
+        const i = (b >= OCCL_XBINS ? b - OCCL_XBINS : b) * J + j;
+        if (d1 < T[i]) T[i] = d1;
+      }
+    }
+    for (let b = 0; b < OCCL_XBINS; b++) for (let j = J - 2, i = b * J + j; j >= 0; j--, i--) if (T[i + 1] < T[i]) T[i] = T[i + 1];
+  }
+
+  /**
+   * Whether an occlusion candidate is hidden from every viewpoint of the last prepareOcclusion (see OCCL_*). Only meshes in the
+   * eye's frustum are decided (the renderer frustum-culls the rest; a mesh turning into view is drawn until the next decision).
+   * Cross-storey (the viewpoint above / below the mesh's storey range [lo, hi]): a ray to a point P of the box is inside the range
+   * only over its last part, from the horizontal distance f(P) * |P| on (f = (lo - eye y) / (P.y - eye y) from below, (eye y - hi) /
+   * (eye y - P.y) from above; largest at the box's lowest / highest point: fmax); a storey run crossed there enters a closed column.
+   * So a bin is blocked when a run covering it lies between fmax * (the footprint's far distance) and its near distance.
+   */
+  private occludedNow(en: Entry): boolean {
+    const k = en.occ!;
+    if (k < 0 || !this.occlOn[k]) return false;
+    const x0 = en.x0 - OCCL_PAD, x1 = en.x1 + OCCL_PAD, z0 = en.z0 - OCCL_PAD, z1 = en.z1 + OCCL_PAD;
+    this.box.min.set(en.x0, en.y0, en.z0); this.box.max.set(en.x1, en.y1, en.z1);
+    if (!this.fr.intersectsBox(this.box)) return false;
+    const pts = this.occlPts, np = pts.length / 3, o = this.occl[k]!;
+    for (let p = 0; p < np; p++) {
+      const px = pts[3 * p], py = pts[3 * p + 1], pz = pts[3 * p + 2];
+      if (px >= x0 && px <= x1 && pz >= z0 && pz <= z1) return false;
+      const dx = Math.max(x0 - px, 0, px - x1), dz = Math.max(z0 - pz, 0, pz - z1);
+      const near = Math.sqrt(dx * dx + dz * dz) - 1e-4;
+      if (near > this.occlRange[p]) continue; // beyond this light's shadow camera: it never draws the mesh
+      const same = py > o.lo && py < o.hi;
+      let j = 0;
+      if (!same) {
+        const den = py <= o.lo ? en.y0 - py : py - en.y1;
+        if (den <= 1e-6) return false;
+        const fmax = (py <= o.lo ? o.lo - py : py - o.hi) / den;
+        const fx = Math.max(Math.abs(x0 - px), Math.abs(x1 - px)), fz = Math.max(Math.abs(z0 - pz), Math.abs(z1 - pz));
+        j = Math.floor(fmax * Math.sqrt(fx * fx + fz * fz) / OCCL_XS) + 1;
+        if (fmax >= 1 || j >= OCCL_XJ) return false;
+      }
+      // the footprint excludes the viewpoint: its angular span (< pi) around the direction to its centre, no wrap-around
+      const tc = Math.atan2((z0 + z1) / 2 - pz, (x0 + x1) / 2 - px), cs = Math.cos(tc), sn = Math.sin(tc);
+      let a0 = Infinity, a1 = -Infinity;
+      for (let c = 0; c < 4; c++) {
+        const rx = (c & 1 ? x1 : x0) - px, rz = (c & 2 ? z1 : z0) - pz;
+        const a = Math.atan2(rz * cs - rx * sn, rx * cs + rz * sn);
+        if (a < a0) a0 = a; if (a > a1) a1 = a;
+      }
+      const NB = same ? OCCL_BINS : OCCL_XBINS, K = NB / TAU;
+      const buf = same ? this.occlBufs[k * 4 + p] : this.occlX[k * 4 + p], stride = same ? 1 : OCCL_XJ;
+      const b0 = Math.floor((tc + a0 + Math.PI) * K), b1 = Math.floor((tc + a1 + Math.PI) * K);
+      for (let b = b0; b <= b1; b++) {
+        const i = ((b % NB) + NB) % NB;
+        if (buf[i * stride + j] >= near) return false; // a ray into the footprint may reach it before any wall
+      }
+    }
+    return true;
+  }
+
+  /** Between full updates: re-decide the occlusion candidates when the eye / a viewpoint moved (exact per frame). */
+  private refreshOcclusion(): void {
+    if (!this.occl.length) return;
+    const prev = this.occlPts, e = this.eye;
+    let moved = (this.occlusion && this.enabled) !== this.occlState
+      || Math.abs(prev[0] - e.x) > OCCL_MOVE || Math.abs(prev[1] - e.y) > OCCL_MOVE || Math.abs(prev[2] - e.z) > OCCL_MOVE;
+    let n = 3;
+    for (const v of this.viewpoints) {
+      if (moved) break;
+      if (!v.visible || (v as THREE.Light).isLight && (v as THREE.Light).intensity <= 0) continue;
+      v.updateWorldMatrix(true, false);
+      this.vp.setFromMatrixPosition(v.matrixWorld);
+      moved = n + 2 >= prev.length || Math.abs(prev[n] - this.vp.x) > OCCL_MOVE || Math.abs(prev[n + 1] - this.vp.y) > OCCL_MOVE || Math.abs(prev[n + 2] - this.vp.z) > OCCL_MOVE;
+      n += 3;
+    }
+    if (!moved && n !== prev.length && prev.length) moved = true; // a light switched on / off
+    if (!moved) return; // the last decision stands
+    this.prepareOcclusion(this.occlHere, this.last.ov !== null);
+    let occl = 0, culled = 0;
+    for (const en of this.entries) {
+      if (en.lb) this.refreshBox(en);
+      if (en.base && en.occ !== undefined && en.occ >= 0) {
+        const hide = this.occludedNow(en);
+        if (hide !== !!en.occluded) {
+          en.occluded = hide;
+          if (hide) { en.mask = en.obj.layers.mask; en.obj.layers.set(CULL_LAYER); en.culled = true; } else { en.obj.layers.mask = en.mask; en.culled = false; }
+        }
+      }
+      if (en.occluded) occl++;
+      if (en.culled) culled++;
+    }
+    this.occlusionCulled = occl;
+    this.stats.culled = culled;
   }
 
   /** Task track3 (lane PERF): per storey floor plane, the cells open across it (summed-area table, (W + 1) x (H + 1)). */
@@ -371,6 +731,8 @@ export class LevelCuller {
       } else this.box.setFromObject(m);
       if (this.box.isEmpty()) { this.stats.uncullable++; return; }
       const b = this.box, entry = {obj: m, level: NaN, x0: b.min.x, z0: b.min.z, x1: b.max.x, z1: b.max.z, y0: b.min.y, y1: b.max.y, mask: m.layers.mask, culled: false} as Entry;
+      // Task mall-round2 (lane PERF): the mall tracks InstancedMesh bounds growth (a reattached loose prop) and the occlusion test
+      if (this.occl.length && im.isInstancedMesh) { const lb = im.boundingBox!; entry.lb = Float64Array.of(lb.min.x, lb.min.y, lb.min.z, lb.max.x, lb.max.y, lb.max.z); }
       // Task office-seamless-20261029: a mesh tagged with several levels (stair flights) renders with any of them.
       const tag = Array.isArray(m.userData.levels) ? (m.userData.levels as unknown[]).filter((l): l is number => typeof l === 'number' && this.levelIds.includes(l)) : [];
       if (tag.length) { entry.levels = tag; this.stats.multi++; this.entries.push(entry); return; }
@@ -398,6 +760,10 @@ export class LevelCuller {
       }
       // Not a station level (e.g. builder STAIR_LEVEL flights, seen from both levels): fog culling only.
       entry.level = this.levelIds.includes(level) ? level : NaN;
+      // Task mall-round2 (lane ARCH, M09): a street exit's meshes carry their glazed opening (mall only; never set elsewhere)
+      const ap = m.userData.aperture as ExitAperture | undefined;
+      if (ap && [ap.plane, ap.s0, ap.s1, ap.y0, ap.y1, ap.nx, ap.nz].every(Number.isFinite)) entry.aperture = ap;
+      if (this.occl.length) entry.occ = this.occlusionLevel(entry); // task mall-round2 (lane PERF), mall only
       this.entries.push(entry);
     });
   }
@@ -410,7 +776,7 @@ export class LevelCuller {
     const q = camera.quaternion, l = this.last;
     const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
     if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
-      && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) return;
+      && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(); return; }
     Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, ov});
     const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
     // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
@@ -460,7 +826,9 @@ export class LevelCuller {
         hops++;
       }
     }
-    let culled = 0, fogged = 0, slab = 0;
+    let culled = 0, fogged = 0, slab = 0, occl = 0;
+    // Task mall-round2 (lane PERF): same-storey occlusion buffers for this update (mall only; false elsewhere / when off)
+    const occlOn = this.occl.length ? this.prepareOcclusion(shown, ov !== null) : false;
     // Iteration 12 (ARCH): three's FogExp2 fogs by VIEW DEPTH (-mvPosition.z), not distance: at the screen corners
     // a box 58 m away is only ~31 m deep (~17 % visible). Fog-cull a box only when its nearest point along the view
     // axis lies beyond maxDistance (conservative, so nothing still visible through the fog pops out at the edges).
@@ -468,8 +836,11 @@ export class LevelCuller {
     const fl = Math.hypot(me[8], me[9], me[10]) || 1;
     const fx = -me[8] / fl, fy = -me[9] / fl, fz = -me[10] / fl;
     const far = this.maxDistance;
+    this.apertureSeenMemo.clear();
+    let apCulled = 0;
     for (const en of this.entries) {
       let show: boolean;
+      if (en.lb) this.refreshBox(en); // task mall-round2 (lane PERF): a grown InstancedMesh box first (mall only)
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
@@ -477,8 +848,16 @@ export class LevelCuller {
       else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
       // Another level: only near a portal tile the camera can see (task track3: or near a visible atrium tile of that level).
       else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, [en.level]);
+      // Task mall-round2 (lane ARCH, M09): a street exit's doors / street view only while its glazed opening may be seen (mall only)
+      if (show && this.enabled && en.aperture && !this.apertureSeen(en.aperture, e, ov !== null)) { show = false; apCulled++; }
       // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged)
       if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHidden(en, e)) { show = false; slab++; }
+      // Task mall-round2 (lane PERF): same-storey occlusion last (only meshes every other rule shows; see OCCL_*)
+      if (this.occl.length) {
+        en.base = show;
+        en.occluded = show && occlOn && en.occ !== undefined && en.occ >= 0 && this.occludedNow(en);
+        if (en.occluded) { show = false; occl++; }
+      }
       if (show === !en.culled) continue;
       if (show) { en.obj.layers.mask = en.mask; en.culled = false; } else { en.mask = en.obj.layers.mask; en.obj.layers.set(CULL_LAYER); en.culled = true; }
     }
@@ -490,6 +869,47 @@ export class LevelCuller {
     this.stats.culled = culled;
     this.stats.fogged = fogged;
     this.slabCulled = slab;
+    this.occlusionCulled = occl;
+    this.apertureCulled = apCulled;
+  }
+
+  /**
+   * Task mall-round2-20261031 (lane ARCH, M09): whether a street exit's glazed opening may be seen from the eye this update (memoised
+   * per aperture): hall side, fog distance, beside it, the opening (+ 0.6 m reveal) in the frustum, then sight rays through the free
+   * bands to the hall cells in front of it. An eye in the lift cab / a glazed shaft skips the rays (they cannot start in its solid
+   * cells): conservative.
+   */
+  private apertureSeen(a: ExitAperture, e: THREE.Vector3, inCab: boolean): boolean {
+    const memo = this.apertureSeenMemo.get(a);
+    if (memo !== undefined) return memo;
+    const r = this.apertureTest(a, e, inCab);
+    this.apertureSeenMemo.set(a, r);
+    return r;
+  }
+
+  private apertureTest(a: ExitAperture, e: THREE.Vector3, inCab: boolean): boolean {
+    const alongX = a.nz !== 0, n = alongX ? a.nz : a.nx;
+    const sd = ((alongX ? e.z : e.x) - a.plane) * n; // signed distance, outward positive
+    if (sd > 0.05) return false; // the eye is never outside; a stray override position: hidden
+    const along = alongX ? e.x : e.z;
+    const da = Math.max(a.s0 - along, 0, along - a.s1);
+    const d2 = da * da + sd * sd;
+    if (d2 > this.maxDistance * this.maxDistance) return false;
+    if (d2 <= EXIT_NEAR * EXIT_NEAR && e.y >= a.y0 - 0.5 && e.y <= a.y1 + 0.5) return true;
+    const p0 = a.plane, p1 = a.plane + n * 0.6;
+    if (alongX) { this.box.min.set(a.s0, a.y0, Math.min(p0, p1)); this.box.max.set(a.s1, a.y1, Math.max(p0, p1)); }
+    else { this.box.min.set(Math.min(p0, p1), a.y0, a.s0); this.box.max.set(Math.max(p0, p1), a.y1, a.s1); }
+    if (!this.fr.intersectsBox(this.box)) return false;
+    if (inCab || this.glassShafts.some(r => e.x >= r.x0 && e.x <= r.x1 && e.z >= r.z0 && e.z <= r.z1)) return true;
+    // sight: every CELL / 2 along the span (ends inset 0.1 m), to the hall cell centre in front of the plane, at four heights
+    const inset = CELL / 2, ys = [Math.min(a.y1 - 0.2, Math.max(a.y0 + 0.2, e.y)), (a.y0 + a.y1) / 2, a.y0 + 0.3, a.y1 - 0.2];
+    const n0 = a.s0 + 0.1, n1 = a.s1 - 0.1, steps = Math.max(1, Math.ceil((n1 - n0) / (CELL / 2)));
+    for (let k = 0; k <= steps; k++) {
+      const s = n0 + ((n1 - n0) * k) / steps;
+      const tx = alongX ? s : a.plane - n * inset, tz = alongX ? a.plane - n * inset : s;
+      for (const ty of ys) if (this.ray(e.x, e.y, e.z, tx, ty, tz)) return true;
+    }
+    return false;
   }
 
   /** The eye's level set holding just `level` (eyeOverride). */
@@ -666,7 +1086,7 @@ export class LevelCuller {
 
   /** Show everything again (debug / before disposal). */
   reset(): void {
-    for (const en of this.entries) if (en.culled) { en.obj.layers.mask = en.mask; en.culled = false; }
+    for (const en of this.entries) if (en.culled) { en.obj.layers.mask = en.mask; en.culled = false; en.occluded = false; }
   }
 }
 

@@ -19,7 +19,10 @@ export interface StopInfo {
   y: number;
   /** Landing strip area id on that storey (-1 unknown). */
   area: number;
+  /** Short stop label on buttons / indicators: the storey's authored label (Office 'L' / '2'..'8'; mall 'S' / '1'..'3'). */
   label: string;
+  /** Task mall-round2-20261031 (lane RUNTIME, M02): the storey's long name for prompts when authored (mall 'Subway' / 'Level 1'). */
+  name?: string;
   /** Call panel on the landing wall beside the door (absolute y). */
   callPanel: P3;
   /** Walkable stand point just outside the door. */
@@ -42,7 +45,7 @@ export interface ElevatorInfo {
   stops: StopInfo[];
 }
 
-export interface StoreyInfo { floor: number; levelId: number; baseY: number; label: string; clear: number }
+export interface StoreyInfo { floor: number; levelId: number; baseY: number; label: string; clear: number; name?: string }
 
 /** kind 'entrance' = the lobby's street doors (sill 0): boarded up (scenery only; the wall cells are solid). */
 export interface WindowSpan extends Rect2 {
@@ -72,8 +75,19 @@ export interface TowerInfo {
   name: string;
 }
 
-/** Floor label for panels / lists ("L" for the lobby). */
+/** Floor label for panels / lists ("L" for the lobby): the Office numbering, the fallback for a record without storey labels. */
 export const floorLabel = (f: number): string => (f <= 1 ? 'L' : String(f));
+
+/**
+ * Task mall-round2-20261031 (lane RUNTIME, M02): the display label of stop `floor` from the record's own stops (readTowerInfo keeps
+ * each storey's authored label: the Office 'L' / '2'..'8', the mall 'S' (station) / '1'..'3'), else the floorLabel numbering.
+ * Every elevator label consumer (cab / hall buttons, ids, indicator, prompts, QA) goes through the stop labels, never floorLabel
+ * alone: on the mall floors 0 and 1 both read 'L' ("two lobby levels"). Allocation-free (per-frame indicator).
+ */
+export function stopLabel(stops: readonly {floor: number; label: string}[], floor: number): string {
+  for (const s of stops) if (s.floor === floor) return s.label;
+  return floorLabel(floor);
+}
 
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const isSide = (v: unknown): v is Side => v === 'N' || v === 'S' || v === 'E' || v === 'W';
@@ -123,7 +137,8 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
     if (!Number.isFinite(floor)) return [];
     const levelId = Math.round(num(s.levelId, floor));
     const baseY = num(s.baseY, lv(levelId)?.baseY ?? 0);
-    return [{floor, levelId, baseY, label: typeof s.label === 'string' ? s.label : floorLabel(floor), clear: num(s.clear, floor <= 1 ? 4 : 2.9)}];
+    return [{floor, levelId, baseY, label: typeof s.label === 'string' ? s.label : floorLabel(floor), clear: num(s.clear, floor <= 1 ? 4 : 2.9),
+      ...(typeof s.name === 'string' ? {name: s.name} : {})}];
   }) : [];
   if (!storeys.length) {
     const fl = rawFloors.length ? rawFloors : (layout.levels ?? []).map(l => l.id).filter(id => id >= 1);
@@ -157,7 +172,7 @@ export function readTowerInfo(layout: TowerLayoutLike): TowerInfo | null {
       const y = num(s.y, st?.baseY ?? lv(levelId)?.baseY ?? 0);
       const out = {x: door.x + nx * (depth + 1), z: door.z + nz * (depth + 1)};
       return [{
-        floor, levelId, y, area: Math.round(num(s.area, -1)), label: st?.label ?? floorLabel(floor),
+        floor, levelId, y, area: Math.round(num(s.area, -1)), label: st?.label ?? floorLabel(floor), ...(st?.name ? {name: st.name} : {}),
         callPanel: p3(s.callPanel, {x: door.x + nx * depth + (nz !== 0 ? door.width / 2 + 0.35 : 0), y: y + 1.2, z: door.z + nz * depth + (nx !== 0 ? door.width / 2 + 0.35 : 0)}),
         landing: {x: num((s.landing as Record<string, unknown> | undefined)?.x, out.x), z: num((s.landing as Record<string, unknown> | undefined)?.z, out.z)},
       }];

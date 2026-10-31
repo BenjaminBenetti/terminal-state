@@ -45,6 +45,7 @@ import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, transformPrimitive, getBounds, textureCompress, prune, dedup, compactPrimitive} from '@gltf-transform/functions';
 import {GLASS_MATERIAL, components, cleanSupportTexture, cropPartTextures, extentOf, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs';
 import {dedupeCoplanar} from './lib/coplanar-dedupe.mjs'; // Task mall-playtest-revision-20261031 (lane FIX, U06)
+import {cleanPanelGhosts, rebuildPanel, snapVertices} from './lib/panel-repair.mjs'; // Task mall-round2-20261031 (lane PROPS, M04)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -188,7 +189,24 @@ const EDITS = {
   // M31: diameter == height in the model -> uniform to a 0.75 m table top (frozen h), diameter 0.75 m.
   'cafe-bistro-table': {basis: 'uniform: table top 0.75 m (frozen h)', sizeM: 0.75, sizeAxis: 'h'},
   // M30 (2R slot 85): open two-bay multideck 1.65 m tall at the frozen 1.9 m width -> y x1.2 (~1.98 m, frozen 2.0 m).
-  'multideck-open-cooler': {basis: 'open multideck 1.9 m wide (frozen), height stretched to ~2.0 m (per-axis y x1.2)', scaleAxes: [[1, 1.2]]},
+  // Task mall-round2-20261031 (lane PROPS, M04 — user: "the back of the 'cooler' prop has some messed up geometry"; label 'open cooler'):
+  // measured in the final frame (front -Z) — the INNER back wall (z +0.340, seen through the open front) is a zero-thickness double sheet
+  // (a -Z and a +Z layer in one plane over 78 % of the wall, double-sided material -> z-fighting) with two wedge-shaped HOLES (21 %, a
+  // 'V', ~0.53 m2) onto the outer back shell 13 cm behind; the refine texture of the outer back (z +0.4745) carries a painted ghost of the
+  // shelves seen through that V; the 1.20 m shelf's centre-right segment is warped (front corner x 0.028, z -0.278 raised to 1.310).
+  // panelRebuild: the wall slab (both layers + the shelves' rear strips in that plane, 56 tris) -> ONE quad facing the front, UV-mapped
+  // onto a uniform 2.4 % patch of the wall's own texture island (base ~213/215/212, flat normal; no TANGENT attribute: UVs stay
+  // non-degenerate). snap: the warped corner back onto the shelf plane (y 1.1952 at z -0.278). dedupe: the deck (0.474), the shelves
+  // (0.73 / 0.955 underside / 0.97 / 1.20 / 1.49, tilted <= 6 mm over their depth) and the roof top (1.934) are zero-thickness double
+  // sheets too (8.1 m2 of opposite-facing overlap): one up-facing layer kept per level (positions unchanged: the loot decks stay put).
+  // panelGhosts: the outer back's painted V refilled from its own clean texels (region = the V only).
+  'multideck-open-cooler': {basis: 'open multideck 1.9 m wide (frozen), height stretched to ~2.0 m (per-axis y x1.2); inner back wall rebuilt as one panel (holes + double sheet), warped shelf corner flattened, painted ghost on the outer back cleaned (local)',
+    scaleAxes: [[1, 1.2]],
+    panelRebuild: [{axis: 2, at: 0.3405, tol: 0.004, facing: -1, rect: [-0.918, 0.918, 0.538, 1.866], uv: {centre: [0.52464, 0.60894], perMetre: 0.0125}}],
+    snap: [{box: {min: [0.02, 1.25, -0.29], max: [0.04, 1.32, -0.27]}, axis: 1, value: 1.1952}],
+    dedupe: [[0.465, 0.482, 0.004, -0.40], [0.72, 0.742, 0.007, -0.30], [0.947, 0.96, 0.007, -0.30], [0.963, 0.98, 0.007, -0.30], [1.185, 1.21, 0.007, -0.30],
+      [1.478, 1.5, 0.007, -0.30], [1.925, 1.945, 0.003, -0.42]].map(([y0, y1, tol, z0]) => ({box: {min: [-0.95, y0, z0], max: [0.95, y1, y0 > 1.9 ? 0.47 : 0.35]}, axis: 1, facing: 1, tol})),
+    panelGhosts: [{axis: 2, at: 0.4745, tol: 0.003, facing: 1, region: {min: [-0.42, 0.5, 0.46], max: [0.42, 1.9, 0.49]}, thresh: 10}]},
 };
 
 // ---------- records ----------
@@ -426,8 +444,14 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
       k = E.sizeM / extentOf(bb, E.sizeAxis);
       scaleGroundCentre(doc, k);
     } else scaleGroundCentre(doc, 1); // removed clutter / split glass can shift the bounds: re-ground and re-centre
+    // (lane PROPS, M04) broken flat panels, in the final frame (measured on the delivered derivative; bounds unchanged): rebuild a
+    // panel's slab as one clean quad, snap warped vertices back onto their plane (before the dedupe of that plane)
+    if (E.panelRebuild) edits.panelRebuild = E.panelRebuild.map(p => rebuildPanel(doc, p));
+    if (E.snap) edits.snapped = E.snap.map(p => snapVertices(doc, p));
     // (lane FIX, U06) coplanar duplicate layers, in the final frame (boxes measured on the delivered derivative; bounds unchanged)
     if (E.dedupe) edits.coplanarDedupe = E.dedupe.map(d => dedupeCoplanar(doc, d));
+    // (lane PROPS, M04) a ghost painted into a face's texture (the refine baked the view through the holes onto the outer back)
+    if (E.panelGhosts) { edits.panelGhosts = []; for (const g of E.panelGhosts) edits.panelGhosts.push(await cleanPanelGhosts(doc, sharp, g)); }
     for (const p of split?.parts ?? []) {
       const pr = p.doc.getRoot();
       pr.listMeshes().forEach((m, i) => m.setName(i ? `${p.id}-${i}` : p.id));

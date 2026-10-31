@@ -30,10 +30,21 @@ const RETIRE_SLEEP = 0.3;
 /** Hard cap: a chunk body never simulates longer than this. */
 const MAX_SIM = 9;
 
-/** Impact sound hook (audio/sfx.ts physImpact): family + contact speed (m/s). */
-export type ImpactFamily = 'can' | 'light' | 'heavy' | 'prop' | 'flesh' | 'stone' | 'wood' | 'glass' | 'metal';
+/**
+ * Impact sound hook (audio/sfx.ts physImpact): family + contact speed (m/s). Task mall-round2-20261031 (lane AUDIO, M01): + 'cardboard'
+ * (loose props of damage class cardboard — physics/dynamicItems.ts propImpactFamily; every other loose prop stays 'prop').
+ */
+export type ImpactFamily = 'can' | 'light' | 'heavy' | 'prop' | 'cardboard' | 'flesh' | 'stone' | 'wood' | 'glass' | 'metal';
 export interface PhysAudio {
-  physImpact?(x: number, y: number, z: number, speed: number, family: ImpactFamily): void;
+  /** `mass` (kg, optional): the striking body's mass (the cardboard thud deepens with it; other families ignore it). */
+  physImpact?(x: number, y: number, z: number, speed: number, family: ImpactFamily, mass?: number): void;
+  /**
+   * Task mall-round2-20261031 (lane AUDIO, M01): one drag tick of a cardboard prop sliding along its floor at `speed` m/s (the caller
+   * paces the ticks: physics/dynamicItems.ts PROP_DRAG, never per frame); `id` = the moving prop (stable key: one drag voice each).
+   */
+  propDrag?(x: number, y: number, z: number, speed: number, id: object): void;
+  /** M01: that prop stopped sliding (or stopped simulating / the world was cleared): release its drag sound now (short fade). */
+  propDragStop?(id: object): void;
 }
 
 /** What a chunk / item body needs from the physics system. */

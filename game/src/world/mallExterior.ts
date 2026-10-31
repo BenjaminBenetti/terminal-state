@@ -61,7 +61,46 @@ export const hazeSat = (): AnyNode => {
 const gainAt = (e: AnyNode): AnyNode => mix(MALL_SKY_U.horizon, MALL_SKY_U.zenith, smoothstep(0.0, 0.85, e));
 
 /** A weak sickly sun glow through the murk (the Office's EXT_U.sun / sunDir). */
-const sunGlow = (dir: AnyNode): AnyNode => EXT_U.sun.mul(pow(max(dot(dir, EXT_U.sunDir), 0), 6).mul(0.8));
+export const sunGlow = (dir: AnyNode): AnyNode => EXT_U.sun.mul(pow(max(dot(dir, EXT_U.sunDir), 0), 6).mul(0.8));
+
+/**
+ * Task mall-round2-20261031 (lane ARCH, M09): the murk seen along `dir` at and below the horizon — the colour fully fogged street /
+ * facades fade into behind the locked street exits (world/mallStreetExit.ts): the roof sky's own horizon colour (hazeSat x horizon
+ * gain, a little darker looking down into the street murk) + the sun glow. Same palette as the dome below (one source of truth).
+ */
+export const murkAt = (dir: AnyNode): AnyNode =>
+  hazeSat().mul(MALL_SKY_U.horizon).mul(mix(0.82, 1.0, smoothstep(-0.25, 0.06, dir.y as AnyNode))).add(sunGlow(dir));
+
+let skyPano: AnyNode = null;
+/**
+ * The sky colour along a view direction (unit vector from the eye): the Office murk colour (saturated), dark overhead, billows with
+ * contrast, the sun glow and the Office's skyline ghost band (call inside a TSL Fn). Task mall-round2 (M09): shared by the roof dome
+ * and the street exits' backdrop (the same sky through the roof glass and through the doors).
+ */
+export const mallSkyColour = (dirIn: AnyNode): AnyNode => {
+  skyPano ??= texture(skylineFallbackTexture());
+  const dir = (dirIn as AnyNode).toVar();
+  const e = dir.y;
+  const base = hazeSat().toVar();
+  const az = atan(dir.x, dir.z).div(Math.PI * 2).add(0.5);
+  // slow billows (two octaves) and streaks: +-18 % structure in the murk overhead
+  const billow = wmNoise((vec3 as AnyNode)(az.mul(14).add(time.mul(0.006)), e.mul(7), time.mul(0.01))) as AnyNode;
+  const billow2 = wmNoise((vec3 as AnyNode)(az.mul(37).sub(time.mul(0.011)), e.mul(19), time.mul(0.017).add(4.1))) as AnyNode;
+  const streak = float(hash(floor(az.mul(110)).add(floor(e.mul(40)).mul(31)))).mul(0.05).add(0.975);
+  const over = base.mul(gainAt(e)).mul(billow.mul(0.26).add(billow2.mul(0.1)).add(0.82)).mul(streak);
+  // below the horizon a little darker (looking down into the street murk), as the Office's fogColorAt
+  const col = mix(base.mul(MALL_SKY_U.horizon).mul(0.82), over, smoothstep(-0.25, 0.06, e)).add(sunGlow(dir)).toVar();
+  // the skyline panorama barely ghosts through the horizon murk (the Office's skyline band)
+  const sk = EXT_U.skyline;
+  const uu = az.mul(sk.x).add(sk.y);
+  const m2 = fract(uu.mul(0.5)).mul(2);
+  const u: AnyNode = select((m2 as AnyNode).lessThan(1), m2, float(2).sub(m2 as AnyNode));
+  const v: AnyNode = e.sub(sk.z).div(sk.w.sub(sk.z));
+  const pano = (skyPano as AnyNode).sample(vec2(u, clamp(v, 0.002, 0.998))).rgb;
+  const ghost = base.mul(MALL_SKY_U.horizon).mul(dot(pano, vec3(0.2126, 0.7152, 0.0722)).mul(3.2).add(0.55));
+  const band = smoothstep(-0.02, 0.06, v).mul(float(1).sub(smoothstep(0.55, 0.9, v))).mul(clamp(EXT_U.skyGain, 0, 1));
+  return vec3(mix(col, ghost, band));
+};
 
 let skyMat: MeshBasicNodeMaterial | null = null;
 /**
@@ -73,35 +112,12 @@ export function mallSkyMaterial(): MeshBasicNodeMaterial {
   if (skyMat) return skyMat;
   const m = new MeshBasicNodeMaterial({side: THREE.BackSide, fog: false, depthWrite: false});
   m.name = 'mall-sky';
-  const sky = texture(skylineFallbackTexture());
-  m.colorNode = Fn(() => {
-    const dir = normalize(positionWorld.sub(cameraPosition)).toVar();
-    const e = dir.y;
-    const base = hazeSat().toVar();
-    const az = atan(dir.x, dir.z).div(Math.PI * 2).add(0.5);
-    // slow billows (two octaves) and streaks: +-18 % structure in the murk overhead
-    const billow = wmNoise((vec3 as AnyNode)(az.mul(14).add(time.mul(0.006)), e.mul(7), time.mul(0.01))) as AnyNode;
-    const billow2 = wmNoise((vec3 as AnyNode)(az.mul(37).sub(time.mul(0.011)), e.mul(19), time.mul(0.017).add(4.1))) as AnyNode;
-    const streak = float(hash(floor(az.mul(110)).add(floor(e.mul(40)).mul(31)))).mul(0.05).add(0.975);
-    const over = base.mul(gainAt(e)).mul(billow.mul(0.26).add(billow2.mul(0.1)).add(0.82)).mul(streak);
-    // below the horizon a little darker (looking down into the street murk), as the Office's fogColorAt
-    const col = mix(base.mul(MALL_SKY_U.horizon).mul(0.82), over, smoothstep(-0.25, 0.06, e)).add(sunGlow(dir)).toVar();
-    // the skyline panorama barely ghosts through the horizon murk (the Office's skyline band)
-    const sk = EXT_U.skyline;
-    const uu = az.mul(sk.x).add(sk.y);
-    const m2 = fract(uu.mul(0.5)).mul(2);
-    const u: AnyNode = select((m2 as AnyNode).lessThan(1), m2, float(2).sub(m2 as AnyNode));
-    const v: AnyNode = e.sub(sk.z).div(sk.w.sub(sk.z));
-    const pano = (sky as AnyNode).sample(vec2(u, clamp(v, 0.002, 0.998))).rgb;
-    const ghost = base.mul(MALL_SKY_U.horizon).mul(dot(pano, vec3(0.2126, 0.7152, 0.0722)).mul(3.2).add(0.55));
-    const band = smoothstep(-0.02, 0.06, v).mul(float(1).sub(smoothstep(0.55, 0.9, v))).mul(clamp(EXT_U.skyGain, 0, 1));
-    return vec3(mix(col, ghost, band));
-  })();
+  m.colorNode = Fn(() => mallSkyColour(normalize(positionWorld.sub(cameraPosition))))();
   return (skyMat = m);
 }
 
 /** Drifting murk density at a world point (0..1): two octaves of world noise moving with the Office fog's wind. */
-const gasDensity = (p: AnyNode, scale: number): AnyNode => {
+export const gasDensity = (p: AnyNode, scale: number): AnyNode => {
   const drift = time.mul(EXT_U.fogDrift);
   const q = (vec3 as AnyNode)(p.x.add(drift).div(scale), p.y.div(scale * 0.4), p.z.sub(drift.mul(0.55)).div(scale));
   const n1 = wmNoise(q) as AnyNode;
@@ -110,7 +126,7 @@ const gasDensity = (p: AnyNode, scale: number): AnyNode => {
 };
 
 /** Gas colour from its density: bright sickly rims (lit thin edges) and dark dense cores, both the Office hue. */
-const gasColour = (dir: AnyNode, dens: AnyNode): AnyNode => {
+export const gasColour = (dir: AnyNode, dens: AnyNode): AnyNode => {
   const rim = smoothstep(0.04, 0.4, dens).mul(float(1).sub(smoothstep(0.5, 0.95, dens)));
   const lit = hazeSat().mul(MALL_SKY_U.gasLit).add(EXT_U.sun.mul(0.5)), core = hazeSat().mul(MALL_SKY_U.gasCore);
   return mix(core, lit, clamp(rim.mul(0.85).add(float(1).sub(dens).mul(0.15)), 0, 1)).add(sunGlow(dir).mul(0.5));

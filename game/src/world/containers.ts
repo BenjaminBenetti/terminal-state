@@ -234,6 +234,13 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** Task mall-round2-20261031 (lane PERF): the storey (level id) whose floor holds height y (the highest base at or below it). */
+function storeyOf(layout: StationLayout, y: number): number {
+  let id = 0, best = -Infinity;
+  for (const l of layout.levels ?? []) if (l.baseY <= y + 0.3 && l.baseY > best) { best = l.baseY; id = l.id; }
+  return id;
+}
+
 /** Holder-local transform of a placed lot: resting position, yaw, then lie-down orientation. */
 function lotLocalMatrix(l: Lot): THREE.Matrix4 {
   const d = itemDims(l.itemId);
@@ -533,14 +540,16 @@ export class ContainerManager {
       if (!l) placements.set(kind as LegacyKind, (l = []));
       l.push(matrix.clone());
     }
-    this.openables.finish();
+    // Task mall-round2-20261031 (lane PERF): in the mall the chunks are per storey too (a batch spanning two storeys was never culled)
+    const byStorey = !!(layout as {mall?: unknown}).mall;
+    this.openables.finish(byStorey);
     // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props.
     for (const [kind, mats4] of placements) {
       const chunks = new Map<string, THREE.Matrix4[]>();
       const v = new THREE.Vector3();
       for (const m of mats4) {
         v.setFromMatrixPosition(m);
-        const key = `${Math.floor(v.x / 12)},${Math.floor(v.z / 12)}`;
+        const key = `${byStorey ? `${storeyOf(layout, v.y)}:` : ''}${Math.floor(v.x / 12)},${Math.floor(v.z / 12)}`;
         let l = chunks.get(key);
         if (!l) chunks.set(key, (l = []));
         l.push(m);

@@ -120,7 +120,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // task gas-mask-roof-feedback-20261030: silencing a sounding cough (plays nothing)
     'stopCough',
     // Task track1-siren-blightbelly-20261031 (lane AUDIO): hum / hiss fades + bookkeeping (play nothing)
-    'sirenHumStop', 'stopTrack1Cues', 'sweepTrack1', 'fadeVoice']);
+    'sirenHumStop', 'stopTrack1Cues', 'sweepTrack1', 'fadeVoice',
+    // Task mall-round2-20261031 (lane AUDIO, M01): releasing cardboard drag voices (plays nothing)
+    'propDragStop', 'stopDrags']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
@@ -153,7 +155,8 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       flareBurnStart: () => { const h = sfx.flareBurnStart(6, 0.1, 6); h.setPos(6.5, 0.1, 6); h.stop(); },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
-      physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },
+      physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'cardboard', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },
+      propDrag: () => { ctx.currentTime += 1; sfx.propDrag(2, 0, 2, 1.2, z); }, // M01 (lane AUDIO): a cardboard prop's drag tick
       groan: () => { sfx.groan(4, 1.6, 4, false); sfx.groan(4, 1.6, 4, true); }, zombieAttack: () => sfx.zombieAttack(3, 1.5, 3), zombieDeath: () => sfx.zombieDeath(3, 1.4, 3),
       zombieGait: () => { for (let i = 0; i < 20; i++) { ctx.currentTime += 0.2; sfx.zombieGait(z, 2, 2, 1.5, 0.2, i % 2 === 0); } },
       zombieStep: () => { ctx.currentTime += 1; sfx.zombieStep(2, 2, true); sfx.zombieStep(2, 2, false, 1, -1.15); },

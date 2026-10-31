@@ -24,9 +24,22 @@ import {Rng, hashString} from '../../core/rng';
 import {transitSpecs} from '../traversal';
 import {mallNameOf} from './names';
 
-/** Named seeded layout variants (layout.mall.variant): genuinely different topologies, not decoration. */
-export type MallVariant = 'terrace-cross' | 'arcade-loop' | 'elbow-branch';
-export const MALL_VARIANTS: readonly MallVariant[] = ['terrace-cross', 'arcade-loop', 'elbow-branch'];
+/**
+ * Named seeded layout variants (layout.mall.variant): genuinely different topologies, not decoration.
+ * Task mall-round2-20261031 (lane GEN, M08: "increase floor plan diversity a bit more"): + three topologies, each with a floor-1
+ * street arcade ending at the locked glass street doors (M09):
+ *  - 'tee-junction': a south spine off the court meets a cross corridor (a T away from the court: a three-way junction); one arm runs
+ *    on to the street (floor 1), the other ends in an anchor; floor 3 keeps the spine;
+ *  - 'twin-court': a west corridor to a SECOND court (a hub with its own anchor and a street arcade off it) + an east wing;
+ *  - 'offset-arcade': a south arcade offset from the court by a block of back-to-back shops, joined to it by two links (a loop on
+ *    floors 1-2), continuing on floor 1 to the street; a west wing on every floor.
+ * The three original variants keep their exact output for a given (seed, variant) (their branches / draws are untouched).
+ */
+export type MallVariant = 'terrace-cross' | 'arcade-loop' | 'elbow-branch' | 'tee-junction' | 'twin-court' | 'offset-arcade';
+export const MALL_VARIANTS: readonly MallVariant[] = ['terrace-cross', 'arcade-loop', 'elbow-branch', 'tee-junction', 'twin-court', 'offset-arcade'];
+/** The original three (playtest revision) and the round-2 additions. */
+export const MALL_VARIANTS_V2: readonly MallVariant[] = MALL_VARIANTS.slice(0, 3);
+export const MALL_VARIANTS_ADDED: readonly MallVariant[] = MALL_VARIANTS.slice(3);
 
 /** Retail floors above the station (the user: "about half the height"; old: six rings). */
 export const FLOORS = 3;
@@ -98,9 +111,18 @@ export function setMallVariantOverride(v: string | null | undefined): MallVarian
   return variantOverride;
 }
 
-/** The variant of a level seed (deterministic; tests / QA may force one through generateMallLevel's options / the override). */
+/**
+ * The variant of a level seed (deterministic; tests / QA may force one through generateMallLevel's options / the override).
+ * Round 2: a seed first draws original-vs-added (each variant ~1/6 of seeds); seeds that stay on the originals keep EXACTLY their
+ * previous variant (the v2 draw), so their mall is unchanged; the others take one of the added topologies.
+ */
 export function mallVariantOf(levelSeed: number): MallVariant {
-  return variantOverride ?? MALL_VARIANTS[hashString('mall-variant-v2', levelSeed >>> 0) % MALL_VARIANTS.length];
+  if (variantOverride) return variantOverride;
+  const s = levelSeed >>> 0;
+  // drawn through the mulberry32 mixer (a raw FNV hash of a sibling salt would correlate with the v2 draw mod 3)
+  const r = new Rng(hashString('mall-variant-v3', s));
+  if (r.next() * MALL_VARIANTS.length < MALL_VARIANTS_V2.length) return MALL_VARIANTS_V2[hashString('mall-variant-v2', s) % MALL_VARIANTS_V2.length];
+  return MALL_VARIANTS_ADDED[Math.floor(r.next() * MALL_VARIANTS_ADDED.length)];
 }
 
 /**
@@ -115,12 +137,17 @@ export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantO
   let step2: [number, number, number, number], step3: [number, number, number, number];
   if (variant === 'terrace-cross') { step2 = pick4(3, 5); step3 = pick4(3, 5); }
   else if (variant === 'arcade-loop') { step2 = [0, rng.int(6, 9), 0, rng.int(3, 5)]; step3 = [rng.int(0, 2), rng.int(6, 9), 0, rng.int(3, 5)]; }
+  // round 2: 'tee-junction' steps deep toward its south spine, 'twin-court' drifts west toward its second court, 'offset-arcade'
+  // twists the other way from 'elbow-branch' (floor 2 grows east, floor 3 west / south)
+  else if (variant === 'tee-junction') { step2 = [rng.int(2, 4), rng.int(2, 4), 0, rng.int(5, 8)]; step3 = [rng.int(2, 4), rng.int(2, 4), 0, rng.int(5, 8)]; }
+  else if (variant === 'twin-court') { step2 = [rng.int(6, 9), 0, 0, rng.int(3, 5)]; step3 = [rng.int(6, 9), rng.int(0, 2), 0, rng.int(3, 5)]; }
+  else if (variant === 'offset-arcade') { step2 = [0, rng.int(6, 8), 0, rng.int(0, 2)]; step3 = [rng.int(6, 8), 0, 0, rng.int(4, 6)]; }
   else { step2 = [rng.int(6, 8), 0, 0, rng.int(0, 2)]; step3 = [0, rng.int(6, 8), 0, rng.int(4, 6)]; }
   const corners = ['NW', 'NE', 'SW', 'SE'] as const;
   return {
     levelSeed: levelSeed >>> 0, variant, name: mallNameOf(levelSeed),
     Lp: rng.int(104, 124),
-    VW: rng.int(24, 32), atX: variant === 'arcade-loop' ? rng.range(0.3, 0.42) : variant === 'elbow-branch' ? rng.range(0.5, 0.62) : rng.range(0.42, 0.58),
+    VW: rng.int(24, 32), atX: variant === 'arcade-loop' ? rng.range(0.3, 0.42) : variant === 'elbow-branch' ? rng.range(0.5, 0.62) : variant === 'twin-court' ? rng.range(0.55, 0.68) : rng.range(0.42, 0.58),
     nOff: rng.int(2, 3), bedOver: rng.int(4, 12),
     step2, step3,
     notch: rng.chance(0.85) ? rng.pick(corners) : null,

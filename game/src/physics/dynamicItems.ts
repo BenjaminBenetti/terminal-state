@@ -59,7 +59,7 @@
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import {rayAabb, type Vec3} from '../combat/hitscan';
-import {itemPhysics, propPhysics, ridesHost, type PhysMat} from '../damage/materials';
+import {itemPhysics, propDamageSpec, propPhysics, ridesHost, type PhysMat} from '../damage/materials';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {isLootHolderKind} from '../items/loot';
 import {isSpillHolderKind} from '../world/openablesSpec';
@@ -103,6 +103,27 @@ export function dynamicKind(kind: string): boolean {
   const ph = propPhysics(kind);
   return ph.dynamic && Number.isFinite(ph.mass) && !(isLootHolderKind(kind) && !isSpillHolderKind(kind));
 }
+/**
+ * Task mall-round2-20261031 (lane AUDIO, M01; user: "cardboard boxes play the metal clanking sound when being pushed around, should
+ * actually be more of a cardboard sound" — a general statement, every level): the contact-sound family of a loose prop. Every loose
+ * prop used to strike as 'prop' -> audio/sfx.ts propTopple, a Sound Lab METAL TRASH CAN topple ("a hollow metallic crash followed by a
+ * short rolling rattle"), whatever it was made of. A kind whose damage class (damage/materials.ts propDamageSpec, the one material
+ * registry bullets / debris already use) is cardboard strikes as 'cardboard' instead — Mall cardboard boxes (cardboardBoxFlaps), Office
+ * archive boxes, Subway newspaper bundles today, any later cardboard kind automatically. Every other loose prop (the steel trash can the
+ * clip was recorded for, chairs, bins, carts …) keeps 'prop' exactly as before; items / chunks / filler stock keep their own families.
+ */
+export function propImpactFamily(kind: string): ImpactFamily {
+  return propDamageSpec(kind).cls === 'cardboard' ? 'cardboard' : 'prop';
+}
+/**
+ * M01: a 'cardboard' loose prop sliding along its floor sounds a short drag scuff per TICK (audio/sfx.ts propDrag), released
+ * (propDragStop) as soon as it stops sliding, leaves the simulation or the world is cleared. Sliding = grounded (lowest point within
+ * `ground` of its floor, |vy| < maxVy, not tumbling: spin < maxSpin) and horizontal speed >= `start` (a sounding drag keeps going down to
+ * `release`: hysteresis). Ticks are `slowGap` s apart at `start` speed, down to `fastGap` at `fast` m/s and above — never per frame, and
+ * never closer than `fastGap` even across a restart. A sounding drag is released once the prop has not slid for `hold` s (a hop over a
+ * bump does not stutter it off / on); leaving the simulation releases it at once.
+ */
+export const PROP_DRAG = {start: 0.35, release: 0.2, ground: 0.06, maxVy: 0.35, maxSpin: 4, slowGap: 0.34, fastGap: 0.22, fast: 2.5, hold: 0.12} as const;
 /** Largest velocity change one bullet gives a light item (m/s) and spin cap (rad/s). */
 export const MAX_SHOT_DV = 5.5;
 const MAX_SPIN = 40;
@@ -180,6 +201,13 @@ interface Ent {
    * garments on a garment rail) — their meshes are among `parts` while it is drawn by its own meshes, their colliders are gone.
    */
   riders?: {prop: PropPlacement; index: number}[];
+  /**
+   * Task mall-round2-20261031 (lane AUDIO, M01): a 'cardboard' prop's drag sound is sounding (PROP_DRAG) / clock of its next tick /
+   * clock since when it has not slid (release after PROP_DRAG.hold).
+   */
+  dragging?: boolean;
+  dragT?: number;
+  dragOff?: number;
 }
 
 export interface DynHit { t: number; point: THREE.Vector3; normal: THREE.Vector3; pickup?: PickupLike; prop?: PropPlacement; propIndex?: number; ent?: Ent }
@@ -273,7 +301,8 @@ export class DynamicItems {
    * (pickups on a prop's top woken with it).
    */
   readonly counts = {activated: 0, shots: 0, retired: 0, frozen: 0, reactivated: 0, pushes: 0, impacts: 0, props: 0, knockOn: 0, clamped: 0, contacts: 0, carried: 0, hostSlabs: 0,
-    reclaimed: 0, redetached: 0, riders: 0, clipped: 0};
+    reclaimed: 0, redetached: 0, riders: 0, clipped: 0,
+    drags: 0, dragStops: 0}; // task mall-round2-20261031 (lane AUDIO, M01): cardboard drag ticks sent / drag releases
 
   /** Lane PHYS: whether walking into a light prop wakes it (see contactWake; task office-props-physics-scale-20261030: every world). */
   get contactOn(): boolean {
@@ -337,7 +366,8 @@ export class DynamicItems {
       if (v < 0.75) return;
       e.soundT = this.clock + 0.14;
       this.counts.impacts++;
-      this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, e.kind === 'prop' ? 'prop' : e.fam);
+      // task mall-round2-20261031 (lane AUDIO, M01): a prop's family is propImpactFamily ('prop' or 'cardboard'), set in entForProp
+      this.host.audio?.physImpact?.(body.position.x, body.position.y, body.position.z, v, e.fam, e.mass);
     });
     return body;
   }
@@ -564,6 +594,7 @@ export class DynamicItems {
     if (!b) return;
     this.syncEnt(e, false);
     this.active.delete(e);
+    if (e.dragging) this.dragStop(e); // task mall-round2-20261031 (lane AUDIO, M01): no drag sound outlives the simulation
     // props keep their body as a STATIC obstacle at the current pose (also while frozen by the budget)
     if (e.kind === 'prop') {
       b.velocity.setZero();
@@ -705,7 +736,7 @@ export class DynamicItems {
     const half = shape === 'cylinder' ? new THREE.Vector3(Math.min(w, d) / 2, h / 2, Math.min(w, d) / 2) : new THREE.Vector3(w / 2, h / 2, d / 2);
     const center = new THREE.Vector3(0, h / 2, 0);
     if (shape === 'box') this.clearStart(prop, center, half);
-    e = {kind: 'prop', serial: 0, body: null, pending: null, center, half, shape, mass: ph.mass, mat: ph.mat ?? 'metal', fam: 'prop',
+    e = {kind: 'prop', serial: 0, body: null, pending: null, center, half, shape, mass: ph.mass, mat: ph.mat ?? 'metal', fam: propImpactFamily(prop.kind),
       t: 0, sleepT: 0, soundT: 0, shots: 0, prop, propIndex: index, contact: !!ph.contact, restKey: null, rad: half.length()};
     this.maxRad = Math.max(this.maxRad, e.rad!);
     const body = this.host.world ? this.makeBody(e, this.objMatrix(e, new THREE.Matrix4())) : null;
@@ -892,17 +923,19 @@ export class DynamicItems {
     for (const e of live) {
       if (e.pickup && !e.pickup.obj.parent) { this.forget(e.pickup.obj, e); continue; }
       const b = e.body;
-      if (!b || b.type !== CANNON.Body.DYNAMIC) { this.active.delete(e); continue; }
+      if (!b || b.type !== CANNON.Body.DYNAMIC) { this.active.delete(e); if (e.dragging) this.dragStop(e); continue; } // M01: released
       e.t += dt;
       if (!Number.isFinite(b.position.x + b.position.y + b.position.z + b.quaternion.w)) {
         // solver blew up: put it back where it was last finite (never lose loot)
         w?.removeBody(b);
         e.body = null;
         this.active.delete(e);
+        if (e.dragging) this.dragStop(e); // M01: released
         continue;
       }
       if (groundClamp(b, this.host.statics)) this.counts.clamped++;
       this.syncEnt(e, true);
+      if (e.fam === 'cardboard') this.dragAudio(e, b); // task mall-round2-20261031 (lane AUDIO, M01)
       // cannon's own sleep can flicker on polygonal contacts (a can on its side): also count "calm" time
       e.sleepT = restTime(b, Math.max(e.half.x, e.half.y, e.half.z), e.sleepT, dt);
       const slow = b.velocity.length() < 0.3 && b.angularVelocity.length() < 3;
@@ -934,6 +967,44 @@ export class DynamicItems {
     this.wakeNeighbours();
     this.shoveByWalkers(dt);
     this.reclaimAhead();
+  }
+
+  /**
+   * Task mall-round2-20261031 (lane AUDIO, M01): drag ticks of a simulating 'cardboard' prop (PROP_DRAG) — one audio.propDrag call per
+   * tick while it slides along its floor, a single propDragStop when it stops sliding. O(1) per simulating cardboard body per frame
+   * (at most MAX_DYNAMIC_PROPS of them).
+   */
+  private dragAudio(e: Ent, b: CANNON.Body): void {
+    const a = this.host.audio;
+    if (!a?.propDrag || !e.prop) return;
+    const D = PROP_DRAG, h = Math.hypot(b.velocity.x, b.velocity.z);
+    if (b.aabbNeedsUpdate) b.updateAABB();
+    let grounded = Math.abs(b.velocity.y) < D.maxVy && b.angularVelocity.length() < D.maxSpin;
+    if (grounded && this.host.statics) {
+      const g = this.host.statics.cellGround(b.position.x, b.position.z, b.position.y);
+      grounded = !Number.isFinite(g) || Math.abs(b.aabb.lowerBound.y - g) < D.ground;
+    }
+    if (grounded && h >= (e.dragging ? D.release : D.start)) {
+      e.dragOff = undefined;
+      if (this.clock >= (e.dragT ?? 0)) {
+        a.propDrag(b.position.x, b.aabb.lowerBound.y, b.position.z, h, e.prop);
+        const s = Math.min(1, Math.max(0, (h - D.start) / (D.fast - D.start)));
+        e.dragT = this.clock + D.slowGap + (D.fastGap - D.slowGap) * s;
+        e.dragging = true; // a drag is sounding from its first tick on (a restart inside the gap waits for its tick)
+        this.counts.drags++;
+      }
+    } else if (e.dragging) {
+      e.dragOff ??= this.clock;
+      if (this.clock - e.dragOff >= D.hold - 1e-9) this.dragStop(e);
+    }
+  }
+
+  /** M01: release a sounding drag (stopped sliding for PROP_DRAG.hold / retired / cleared). The tick clock is kept (min gap holds). */
+  private dragStop(e: Ent): void {
+    e.dragging = false;
+    e.dragOff = undefined;
+    this.counts.dragStops++;
+    if (e.prop) this.host.audio?.propDragStop?.(e.prop);
   }
 
   /**
@@ -1149,7 +1220,7 @@ export class DynamicItems {
 
   /** Remove every body (New Station). Pickup objects / prop placements belong to their owners. */
   clear(): void {
-    for (const e of this.ents.values()) if (e.body) this.host.world?.removeBody(e.body);
+    for (const e of this.ents.values()) { if (e.dragging) this.dragStop(e); if (e.body) this.host.world?.removeBody(e.body); } // M01: drags released
     this.ents.clear();
     for (const b of this.hostSlabs.values()) this.host.world?.removeBody(b); // lane PHYS
     this.hostSlabs.clear();

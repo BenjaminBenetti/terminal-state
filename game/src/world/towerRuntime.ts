@@ -29,7 +29,7 @@ import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from '../assets/
 import {BUTTON_REACH, ElevatorLogic, buildElevatorView, planElevator, type ElevatorEvent, type ElevatorPlan, type ElevatorView, type LampState, type LiftButton} from './elevator';
 import {buildWindows, planWindows, type WindowPlan, type WindowView} from './officeWindows';
 import {EXTERIOR, buildExterior, planExterior, setExteriorEye, setExteriorFootprint, setSkylineTexture, type ExteriorModels, type ExteriorPlan, type ExteriorView} from './exterior';
-import {floorLabel, gateLocal, gateWorld, inDoorway, insideRect, pushOutRect, rayBox, rayCylinder, readTowerInfo, towerCue, type P3, type TowerInfo} from './towerShared';
+import {gateLocal, gateWorld, inDoorway, insideRect, pushOutRect, rayBox, rayCylinder, readTowerInfo, stopLabel, towerCue, type P3, type TowerInfo} from './towerShared';
 import {RIDE_PAD, doorwayMover} from '../physics/world';
 
 /** What the tower needs from Game (structural: tests drive it with a fake host). */
@@ -128,13 +128,17 @@ const EXT_MODEL_IDS: Record<keyof ExteriorModels, OfficeAssetId> = {car: 'car-wr
 
 interface CullerLike { enabled?: boolean; eyeOverride?: number | null; register?(root: THREE.Object3D): void; levelAt?: (x: number, y: number, z: number) => number }
 
-/** The prompt texts of a button: [idle, lit / requested, the cab is here]. */
-function buttonPrompts(b: LiftButton): [string, string, string] {
+/**
+ * The prompt texts of a button: [idle, lit / requested, the cab is here]. Task mall-round2-20261031 (lane RUNTIME, M02): a floor
+ * button names its stop by the stop's own label (b.glyph = StopInfo.label) and, when the record authors one, the storey name
+ * (`name`: the mall's 'Subway (S)' / 'Level 1'); without a name the Office wording is unchanged ('Lobby (L)', 'Floor 5').
+ */
+function buttonPrompts(b: LiftButton, stopName?: string): [string, string, string] {
   const k = '<b>[Click / E]</b> ';
-  const label = floorLabel(b.floor);
+  const label = b.glyph;
   switch (b.kind) {
     case 'floor': {
-      const name = label === 'L' ? 'Lobby (L)' : `Floor ${label}`;
+      const name = stopName ? (stopName.endsWith(` ${label}`) ? stopName : `${stopName} (${label})`) : label === 'L' ? 'Lobby (L)' : `Floor ${label}`;
       return [`${k}${name}`, `${k}${name} · lit`, `${k}${name} · here — opens the doors`];
     }
     case 'up': case 'down': {
@@ -218,7 +222,7 @@ export class TowerRuntime {
       h.levels.addDynamicVolume(vol);
       const view = buildElevatorView(plan, h.mats, {glass: !!layout.mall}); // task track3 (lane ARCH): the mall's glass car
       view.setCab(logic.y, 0);
-      view.setIndicator(floorLabel(logic.floor), 0);
+      view.setIndicator(stopLabel(stops, logic.floor), 0);
       root.add(view.root);
       o.geometries.push(...view.geometries);
       h.atmosphere?.markShadows(view.root, false);
@@ -228,7 +232,7 @@ export class TowerRuntime {
         prevY: logic.y,
         lamps: {car: logic.car, hallUp: logic.hallUp, hallDown: logic.hallDown, open: false, close: false, alarm: false, lanternStop: -1, lanternDir: 0},
         flash: {open: 0, close: 0, alarm: 0}, indKey: logic.floor * 4 + 1,
-        prompts: new Map(plan.buttons.map(b => [b.id, buttonPrompts(b)])),
+        prompts: new Map(plan.buttons.map(b => [b.id, buttonPrompts(b, stops[b.stop]?.name)])),
         inside: (x, y, z) => insideRect(cab, x, z) && y > e.prevY - 0.3 && y < e.prevY + cabH,
         // loose things ride when their centre is within RIDE_PAD of the cab (lying across the door plane included)
         insideLoose: (x, y, z) => insideRect(cab, x, z, -RIDE_PAD) && y > e.prevY - 0.3 && y < e.prevY + cabH,
@@ -425,7 +429,7 @@ export class TowerRuntime {
     e.view.setCab(L.y, L.door);
     for (let i = 0; i < L.stops.length; i++) e.view.setLanding(i, L.landingDoor(i));
     const dir = L.moving ? Math.sign(L.v) || L.dir : 0, floor = L.floor, key = floor * 4 + dir + 1;
-    if (key !== e.indKey) { e.indKey = key; e.view.setIndicator(floorLabel(floor), dir); }
+    if (key !== e.indKey) { e.indKey = key; e.view.setIndicator(stopLabel(e.plan.info.stops, floor), dir); }
     const f = e.flash, lp = e.lamps;
     f.open = Math.max(0, f.open - dt); f.close = Math.max(0, f.close - dt); f.alarm = Math.max(0, f.alarm - dt);
     lp.open = f.open > 0; lp.close = f.close > 0 || L.closeRequested; lp.alarm = f.alarm > 0;
