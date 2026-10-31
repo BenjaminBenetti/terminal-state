@@ -292,7 +292,9 @@ describe('enemy spawns section', () => {
       for (const c of level.contexts) {
         const pl = c.placement;
         // Each context either renders its own rules or names the earlier context with identical values.
-        const own = html.includes(`${level.name} · ${c.label}: area weights`);
+        // (lane INTEG, Track2 integration: the mall's 'service' zone has its own SERVICE_PLACEMENT — "The Eaton's Center" caption is
+        // rendered with the apostrophe escaped, so the own-rules check escapes the level name like the heading check above)
+        const own = html.includes(`${level.name.replace(/&/g, '&amp;').replace(/'/g, '&#39;')} · ${c.label}: area weights`);
         if (own) {
           for (const r of pl.areaWeights.rules) expect(html, `${c.id} ${r.match}`).toContain(`<td class="num">${num(r.weight)}</td>`);
           expect(html).toContain(`at least ${num(pl.spacing.metres)} m between spawns`);
