@@ -8,7 +8,8 @@ const settle = () => new Promise(r => setTimeout(r, 40));
 const panners = (c: FakeCtx) => c.nodes.filter(n => n.kind === 'panner') as Panner[];
 const convolvers = (c: FakeCtx) => c.nodes.filter(n => n.kind === 'convolver').length;
 /** 5 looping beds (wind, rumble, HVAC, fridge, buzz) + the positional fridge-hum emitter. */
-const BED_LOOPS = 6;
+// five beds + the fridge emitter + (task studio-alpha-track2-round2-20261031-01, R4) the two fan channels on the HVAC recording
+const BED_LOOPS = 8;
 
 function makeSfx() {
   const made: FakeCtx[] = [];

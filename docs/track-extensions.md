@@ -325,6 +325,20 @@ Tunnels have sparse fixtures, mostly dead or dying.
   `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material, built into the
   station group at build time (warm-up discoverable).
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
+- **Fan noise** (round 2, R4 audio; `game/src/audio/fanSound.ts`, `audio/sfx.ts` `updateFans`): user "ventaliation fan should
+  spin, and make noise."
+  - **Source:** an accepted existing recording only, `bed-hvac-02-loop.mp3` (Sound Lab prompt "a steady ventilation system, air
+    rushing through ducts and a constant fan hum"). The bounded local edit is runtime-only: a per-fan playback rate 0.9–1.1
+    (seeded), a 70 Hz highpass and a 5.2 kHz lowpass. No new file, no synthesis, no provider audio.
+  - **Positions:** `fanSources(layout)` gives the hub of every `fanWall` and the drum of every `fanUnit`
+    (`layout.extensions.machines`).
+  - **Voices:** a FIXED pool of two page-lifetime channels on the ambient bus (shot ducking, page pause mute). At the existing
+    emitter tick (every 12 frames) they follow the nearest fans within 14 m on the listener's storey (feet within 2.4 m of the
+    fan's floor). Inverse-distance panner (ref 1.4 m, rolloff 1.3); the world occlusion muffles the sound (gain −60 %, lowpass
+    down to 12 %).
+  - **Lifecycle:** `setWorld({fans})` on every level build releases the previous fans (empty without annexes). The gameplay voice
+    pool, the Siren cues and the vocal gates are untouched.
+  - **Evidence:** `fan-sound.test.ts` (fake WebAudio, structural only). Not auditioned by ear on the build worker.
 
 ## Tests
 

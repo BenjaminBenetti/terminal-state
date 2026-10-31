@@ -52,6 +52,7 @@ import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNI
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
 import {Sfx, ambienceTypeFor, humEmitters, roomKindFor} from './audio/sfx';
+import {fanSources} from './audio/fanSound';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
 import {ShelfStock} from './world/shelfStock';
@@ -733,7 +734,8 @@ export class Game {
       },
     });
     // Audio: occlusion-lite (no line of sight -> muffled) + humming vending/stall emitters. Same Sfx/context.
-    this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props)});
+    // (R4, round 2) + the service annexes' fans (audio/fanSound.ts; an empty list without annexes releases the previous world's fans)
+    this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props), fans: fanSources(this.layout)});
     // Iteration 05: every fixture baked into a persistent light field (camera-independent; no pooled lights).
     const max3D = maxTexture3DSize(this.renderer.backend as never); // Iteration 13 (CORE): WebGPU device limit / WebGL 2 MAX_3D_TEXTURE_SIZE
     // Iteration 13 (LIGHTING): `renderer` registers the TSL light-field node (world/lightFieldNode.ts) in its node library.
