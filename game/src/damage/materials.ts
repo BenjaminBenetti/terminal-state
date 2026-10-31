@@ -211,6 +211,9 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   shopCounter: NEVER('laminate'), shopDisplay: NEVER('steel', SHATTER(35)), shopBackbar: NEVER('steel'), shopCooler: NEVER('sheetMetal', SHATTER(45)),
   // Shopfront glazing: the panes shatter; the 0.3 m plinth stays solid (jump through), bullets and sight pass.
   shopGlazing: NEVER('steel', SHATTER(40)), shopShutter: NEVER('sheetMetal'),
+  // Task track2-playtest-revision (lane ROOMS): annex machinery (boilers, gensets, turbines, fans, channel curbs / basin parapets):
+  // heavy steel / concrete plant — sparks and dents, never breaks (no destructibility system implied).
+  annexMachine: NEVER('steel'),
   stockShelf: NEVER('steel'), snackRack: NEVER('steel'), magazineRack: NEVER('steel'), techDisplay: NEVER('laminate', SCREEN(25)),
   deviceWall: NEVER('laminate', SCREEN(25)), showcase: NEVER('steel', SHATTER(35)), flowerStand: NEVER('wood'), repairBench: NEVER('wood'),
   hotdogCart: NEVER('steel'), grillLine: NEVER('steel'), pizzaOven: NEVER('steel'), espressoBar: NEVER('steel'), wokLine: NEVER('steel'),

@@ -99,6 +99,11 @@ export interface Area extends Rect {
    */
   ext?: 'tunnel' | 'annex';
   extId?: number;
+  /**
+   * Task track2-playtest-revision (lane ROOMS): an annex MACHINERY HALL — one of the larger, taller rooms that break up the tight
+   * service network (gen/trackExt/carve.ts, TrackExtConfig.annex.hall); its signature content comes from gen/annexRooms.ts.
+   */
+  extHall?: boolean;
 }
 
 export interface Door extends Rect {

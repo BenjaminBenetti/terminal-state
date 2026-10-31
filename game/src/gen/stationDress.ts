@@ -6,7 +6,7 @@
 import {Rng} from '../core/rng';
 import {CELL, FLOOR, type Grid} from './grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from './props';
-import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type RoomPurpose, type RoomSlot} from './purposes';
+import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type PropRule, type RoomPurpose, type RoomSlot} from './purposes';
 import {stockVariant} from './purposeShapes';
 import {BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, lootTheme} from '../items/lootEconomy';
 import {PUBLIC_FLOOR_WEIGHTS, econCat, floorChance, floorCount, lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
@@ -289,7 +289,9 @@ export function stationP7Palette(dressRng: Rng): ReadonlySet<string> {
  * ceilings made relative where the rules read them) and lifted onto it at the end — what finishTraversal does for the core's props.
  * No fixtures (the caller lights the extensions).
  */
-export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => void; phase?: (k: string) => void}): {props: number; signs: number} {
+export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => number | void; phase?: (k: string) => void;
+  /** (task track2-playtest-revision, lane ROOMS) per-area furniture rules replacing the purpose's own (lean annex rule sets); undefined = the purpose's. */
+  rules?: (a: Area) => readonly PropRule[] | undefined}): {props: number; signs: number} {
   const ids = new Set(areas.map(a => a.id));
   const inSet = (a: Area) => ids.has(a.id);
   // contexts only for the levels the areas lie on, their masks built over the areas' bounding window (+ 4 cells)
@@ -302,12 +304,16 @@ export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[
   o.phase?.('dress.ctx');
   // `maxProps`: the pass's prop budget — rooms are dressed in the given (priority) order until it is spent; the iteration-07
   // dresser stops placing at it too (its per-area budgets scaled by `p7Scale`)
-  const cap = o.maxProps ?? Infinity, spent = () => layout.props.length - p0 >= cap;
-  o.pre?.(ctxOf);
+  // (lane ROOMS: `pre` may return how many of its placements are budget-exempt — the annexes' collision-only machinery boxes)
+  const cap = o.maxProps ?? Infinity;
+  const exempt = o.pre?.(ctxOf) ?? 0;
+  const spent = () => layout.props.length - p0 - exempt >= cap;
   // rooms / closets: their purpose's rules (corridors are composed below)
   for (const a of areas) {
     if (spent()) break;
-    if (!COMPOSED_ZONES.has(zoneOf(layout, a))) dressByRules(ctxOf(a), a, ROOM_PURPOSES[a.purpose ?? ''] ?? ROOM_PURPOSES.storage);
+    if (COMPOSED_ZONES.has(zoneOf(layout, a))) continue;
+    const P = ROOM_PURPOSES[a.purpose ?? ''] ?? ROOM_PURPOSES.storage, own = o.rules?.(a);
+    dressByRules(ctxOf(a), a, own ? {...P, props: own} : P);
   }
   o.phase?.('dress.rules');
   compose(layout, {rng: rng.fork('compose'), palette: o.palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
@@ -368,6 +374,9 @@ const PLATES: Record<string, string> = {
   'stock-room': 'STOCK ROOM', 'janitor-closet': 'JANITOR', 'supply-closet': 'SUPPLIES',
   // Iteration 07 (Lane P2): rooms built around the new generated props.
   'workshop': 'WORKSHOP', 'pump-room': 'PUMP ROOM', 'lost-property': 'LOST PROPERTY', 'revenue-room': 'REVENUE ROOM', 'custodial-room': 'CUSTODIAL',
+  // Task track2-playtest-revision (lane ROOMS): the service annexes' signature rooms (gen/annexRooms.ts; never core purposes).
+  'boiler-room': 'BOILER ROOM', 'generator-room': 'GENERATORS · DANGER', 'sewage-room': 'SEWAGE', 'overflow-chamber': 'OVERFLOW',
+  'spillway': 'SPILLWAY', 'turbine-hall': 'TURBINE HALL', 'ventilation-plant': 'VENTILATION',
 };
 
 /** Back-of-house wing of an area from its ancestry (food court / agent office / platform staff side). */

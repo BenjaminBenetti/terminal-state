@@ -7,13 +7,17 @@
 // skipped them), on its OWN rng fork (`track-ext-content`; forks are position-independent: no core stream is consumed) and APPENDS
 // everything after the core's records — props, signs, lights, pickups (and the service-context spawns) — so every core index,
 // persistence key and pinned record is unchanged (coreView(layout) filters them back out). Passes, each on its own sub-fork:
-//  1. purposes  — every annex area takes an EXISTING back-of-house purpose (gen/purposes.ts): pump room / electrical room / workshop /
-//                 maintenance stores / custodial room for rooms, janitor / electrical / supply closets, service corridors; the area's
-//                 RoomType follows the purpose's slot (the purpose ↔ slot contract of the core);
-//  2. dressing  — gen/stationDress.ts dressExtensionAreas: the core's purpose rules, the composer (annex corridors compose as the
-//                 lower service level: pump skids, transformer banks, tool bays, caches) on its own generated-model budget
-//                 ANNEX_COMPOSE_BUDGET, the iteration-07 dresser, purpose door plates — plus one STASH holder per annex (two in big
-//                 ones) in its dead-end rooms (loot key items/lootTables.ts ANNEX_STASH_KEY);
+//  1. purposes  — (task track2-playtest-revision, lane ROOMS: gen/annexRooms.ts) machinery halls and about half of the medium rooms
+//                 take a ROOM SIGNATURE (boiler / generator / sewage / overflow / spillway / turbine / ventilation) under a bounded
+//                 anti-repetition rule, the other rooms an existing utility purpose (workshop, stores, electrical, pump, custodial,
+//                 first aid), closets janitor / electrical / supply closets, corridors service corridors; the area's RoomType follows
+//                 the purpose's slot (the purpose ↔ slot contract of the core);
+//  2. dressing  — gen/stationDress.ts dressExtensionAreas: FIRST the signature layouts (gen/annexRooms.ts placeAnnexMachinery:
+//                 anchored machinery records in layout.extensions.machines + collision-only 'annexMachine' boxes, budget-exempt),
+//                 then the purpose rules (the lean annex rule sets ANNEX_RULES for the existing purposes: fewer, meaningful holders),
+//                 the composer (annex corridors compose as the lower service level: pump skids, transformer banks, tool bays, caches)
+//                 on its own generated-model budget ANNEX_COMPOSE_BUDGET, the iteration-07 dresser, purpose door plates — plus one
+//                 STASH holder per annex (two in big ones) in its dead-end rooms (loot key items/lootTables.ts ANNEX_STASH_KEY);
 //  3. lights    — untinted layout.lights: annex fixtures with the purposes' light odds, one step darker half the time (low,
 //                 flickering, dead; the entry corridor at least dim), sparse mostly dead / dying fixtures down the tunnels (much
 //                 darker than the station);
@@ -41,6 +45,8 @@ import {ITEMS} from '../items/items';
 import {PENDANT_Y, type Area, type LightPlacement, type PickupPlacement, type RoomType, type StationLayout} from './stationTypes';
 import type {PropKind} from './props';
 import {isLootHolderKind} from '../items/loot';
+// Task track2-playtest-revision (lane ROOMS): room signatures + machinery, the room mix and the lean annex furniture rules
+import {ANNEX_RULES, assignAnnexRooms, placeAnnexMachinery, SIGNATURE_OF_PURPOSE, type AnnexMachine, type AnnexRoomPlan, type SignatureId} from './annexRooms';
 
 /**
  * Generated-model (iteration-07) placements the composition of ONE annex's corridors may add: the composer's own budget
@@ -51,15 +57,8 @@ export const ANNEX_COMPOSE_BUDGET = 12;
 /** A steam vent spot (world/trackExt/steam.ts SteamVent): wall point (absolute y), blow direction, area id. */
 export interface AnnexVent { x: number; y: number; z: number; dir: {x: number; y: number; z: number}; area: number }
 
-/** THE annex content config (one exported block). */
+/** THE annex content config (one exported block). (Lane ROOMS: the room mix / signatures live in gen/annexRooms.ts ANNEX_ROOMS.) */
 export const ANNEX_CONTENT = {
-  /** Room purposes drawn for annex rooms (existing ids; [purpose, weight]); each repeat within one annex × `repeat`. */
-  rooms: [['pump-room', 1.3], ['electrical-room', 1.2], ['workshop', 1], ['storage', 1.1], ['custodial-room', 0.8]] as readonly (readonly [string, number])[],
-  /** The first purposes of every annex (its largest fitting rooms): every annex reads as plant / service space. */
-  lead: ['pump-room', 'electrical-room'] as readonly string[],
-  /** Closet purposes (existing ids). */
-  closets: [['janitor-closet', 1.4], ['electrical-closet', 1], ['supply-closet', 0.7]] as readonly (readonly [string, number])[],
-  repeat: 0.3,
   /**
    * Prop budget of one annex: one placement per `m2PerProp` m² of its floor (an annex of ~1840 m² — the 25 % target — gets ~150,
    * about half the density of the core's back-of-house rooms: GEN's annexes are dozens of small rooms and closets). Rooms are dressed
@@ -75,8 +74,9 @@ export const ANNEX_CONTENT = {
    * aside) is picked-over storage (items/lootTables.ts ANNEX_PICKED_KEY) — the measured reason is there.
    */
   m2PerIntactHolder: 230,
-  /** Dressing priority of room purposes (lower first; unlisted after). */
-  priority: ['pump-room', 'electrical-room', 'workshop', 'custodial-room', 'storage'] as readonly string[],
+  /** Dressing priority of room purposes (lower first; unlisted after): the signature rooms, then the small utility rooms. */
+  priority: ['turbine-hall', 'spillway', 'overflow-chamber', 'boiler-room', 'generator-room', 'sewage-room', 'ventilation-plant',
+    'workshop', 'first-aid-room', 'electrical-room', 'pump-room', 'custodial-room', 'storage'] as readonly string[],
   /** Stash holders per annex: one, two when the annex has at least `stashTwoRooms` rooms; kinds in order. */
   stash: {kinds: ['crate', 'cabinetTall'] as readonly PropKind[], twoRooms: 7},
   lights: {
@@ -101,7 +101,9 @@ export const ANNEX_CONTENT = {
 
 /** What populateExtensions appended (census / tests). */
 export interface ExtensionContentReport {
-  annexes: {id: number; purposes: Record<string, number>; props: number; holders: number; stash: number; lights: number; pickups: number; service: {count: number; placed: number}}[];
+  annexes: {id: number; purposes: Record<string, number>; props: number; holders: number; stash: number; lights: number; pickups: number; service: {count: number; placed: number};
+    /** (lane ROOMS) built room signatures (count per signature), machinery halls, assemblies, collision boxes, demoted signature rooms. */
+    signatures: Partial<Record<SignatureId, number>>; halls: number; machines: number; solids: number; demoted: number}[];
   tunnelLights: number;
   props: number; signs: number; lights: number; pickups: number; vents: number;
   /** Generation time of the pass (ms) and of its phases. */
@@ -136,22 +138,36 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
   let tp = t0;
   const phase = (k: string) => { const t = now(); rep.phases[k] = (rep.phases[k] ?? 0) + t - tp; tp = t; };
   const annexAreas = (n: ServiceAnnex) => n.areas.map(id => layout.areas[id]).filter((a): a is Area => !!a && isExtensionArea(a));
-  // 1. purposes
-  for (const n of ext.annexes) assignAnnexPurposes(layout, annexAreas(n), root.fork(`purposes:${n.id}`));
+  // 1. purposes (lane ROOMS: signatures for the halls and half of the medium rooms, the anti-repetition rule; gen/annexRooms.ts)
+  const plans = new Map<number, AnnexRoomPlan>();
+  for (const n of ext.annexes) plans.set(n.id, assignAnnexPurposes(layout, annexAreas(n), root.fork(`purposes:${n.id}`)));
   phase('purposes');
-  // 2. dressing (+ stashes), one pass per annex (its own budget; areas in priority order)
+  // 2. dressing (+ the signature machinery, + stashes), one pass per annex (its own budget; areas in priority order)
   const stashes: number[] = [];
+  const machines: AnnexMachine[] = [];
+  const mrep = new Map<number, {built: Map<number, SignatureId>; demoted: number; solids: number; machines: number}>();
   const palette = ext.annexes.length ? stationP7Palette(o.dressRng) : new Set<string>();
   const C = ANNEX_CONTENT, prio = (a: Area) => (a.kind === 'closet' ? 90 : a.kind === 'service' ? 95 : (k => (k < 0 ? 50 : k))(C.priority.indexOf(a.purpose ?? '')));
   for (const n of ext.annexes) {
     const areas = annexAreas(n).sort((p, q) => prio(p) - prio(q) || q.w * q.h - p.w * p.h || p.id - q.id);
     const d = dressExtensionAreas(layout, areas, root.fork(`dress:${n.id}`), {
       palette, p7Budget: ANNEX_COMPOSE_BUDGET, maxProps: Math.round(n.areaM2 / C.m2PerProp), p7Scale: C.p7Scale,
-      pre: ctxOf => { stashes.push(...placeStashes(layout, annexAreas(n), ctxOf, root.fork(`stash:${n.id}`))); }, phase,
+      pre: ctxOf => {
+        // (lane ROOMS) the signature layouts first (they need the most floor), budget-exempt collision boxes; then the stashes
+        const m0 = machines.length;
+        const r = placeAnnexMachinery(layout, plans.get(n.id)!, annexAreas(n), ctxOf, root.fork(`machinery:${n.id}`), machines, setPurpose, utilityFits);
+        mrep.set(n.id, {built: r.built, demoted: r.demoted, solids: r.solids, machines: machines.length - m0});
+        stashes.push(...placeStashes(layout, annexAreas(n), ctxOf, root.fork(`stash:${n.id}`)));
+        return r.solids;
+      },
+      // (lane ROOMS) lean furniture of the existing purposes in annex rooms: fewer, meaningful holders (gen/annexRooms.ts ANNEX_RULES)
+      rules: a => ANNEX_RULES[a.purpose ?? ''],
+      phase,
     });
     rep.props += d.props; rep.signs += d.signs;
     pickOver(layout, n, layout.props.length - d.props, new Set(stashes));
   }
+  if (ext.annexes.length) ext.machines = machines;
   phase('dress');
   // 3. lights
   const lr = root.fork('lights');
@@ -190,10 +206,13 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
     const purposes: Record<string, number> = {};
     for (const a of annexAreas(n)) purposes[a.purpose ?? a.type] = (purposes[a.purpose ?? a.type] ?? 0) + 1;
     const props = layout.props.slice(first.props).filter(p => ids.has(p.area));
+    const mr = mrep.get(n.id), signatures: Partial<Record<SignatureId, number>> = {};
+    for (const s of mr?.built.values() ?? []) signatures[s] = (signatures[s] ?? 0) + 1;
     rep.annexes.push({
       id: n.id, purposes, props: props.length, holders: props.filter(p => p.host === undefined && isLootHolderKind(p.kind)).length, stash: stashes.filter(i => ids.has(layout.props[i].area)).length,
       lights: layout.lights.slice(first.lights).filter(l => ids.has(l.area)).length, pickups: layout.pickups.slice(first.pickups).filter(p => ids.has(p.area)).length,
       service: svc.get(n.id) ?? {count: 0, placed: 0},
+      signatures, halls: annexAreas(n).filter(a => a.extHall).length, machines: mr?.machines ?? 0, solids: mr?.solids ?? 0, demoted: mr?.demoted ?? 0,
     });
   }
   rep.ms = now() - t0;
@@ -219,30 +238,20 @@ function setPurpose(a: Area, pid: string): void {
   if (pid !== 'service-corridor') a.label = p.label;
 }
 
+/** A utility purpose (existing id) fits an annex room: its size minimum and generated signature models (the core's rule). */
+const utilityFits = (pid: string, a: Area): boolean => !!ROOM_PURPOSES[pid] && fitsRoom(ROOM_PURPOSES[pid], a);
+
 /**
- * Every area of one annex takes an existing back-of-house purpose: corridors 'service-corridor'; the largest rooms the `lead`
- * purposes first (pump room, electrical room) when they fit (size minimum, generated signature models present), then weighted
- * draws with a repeat penalty (a room too small for any: maintenance stores); closets a weighted closet purpose.
+ * (Lane ROOMS) Every area of one annex takes a purpose through gen/annexRooms.ts assignAnnexRooms: machinery halls and about half
+ * of the medium rooms a ROOM SIGNATURE (boiler / generator / sewage / overflow / spillway / turbine / ventilation; the bounded
+ * anti-repetition rule), the other rooms a small utility purpose (existing ids, hop rule + repeat penalty), closets a weighted closet
+ * purpose, corridors 'service-corridor'. Returns the plan the machinery pass builds the signature layouts from.
  */
-function assignAnnexPurposes(layout: StationLayout, areas: readonly Area[], rng: Rng): void {
-  void layout;
-  const C = ANNEX_CONTENT, used = new Map<string, number>();
-  const take = (a: Area, pid: string) => { setPurpose(a, pid); used.set(pid, (used.get(pid) ?? 0) + 1); };
-  const rooms = areas.filter(a => a.kind === 'room').sort((p, q) => q.w * q.h - p.w * p.h || p.id - q.id);
-  const done = new Set<number>();
-  for (const pid of C.lead) {
-    const a = rooms.find(r => !done.has(r.id) && fitsRoom(ROOM_PURPOSES[pid], r));
-    if (a) { take(a, pid); done.add(a.id); }
-  }
-  for (const a of areas) {
-    if (done.has(a.id)) continue;
-    if (a.kind === 'service') { take(a, 'service-corridor'); continue; }
-    const table = a.kind === 'closet' ? C.closets : C.rooms;
-    const opts = table.filter(([pid]) => ROOM_PURPOSES[pid] && (a.kind === 'closet' || fitsRoom(ROOM_PURPOSES[pid], a)))
-      .map(([pid, w]) => [pid, w * Math.pow(C.repeat, used.get(pid) ?? 0)] as [string, number]);
-    take(a, opts.length ? rng.weighted(opts) : a.kind === 'closet' ? 'janitor-closet' : 'storage');
-  }
+function assignAnnexPurposes(layout: StationLayout, areas: readonly Area[], rng: Rng): AnnexRoomPlan {
+  return assignAnnexRooms(layout, areas, rng, setPurpose, utilityFits);
 }
+/** (Lane ROOMS) The signature of an annex area's purpose (undefined for utility rooms / closets / corridors). */
+export const annexSignatureOf = (a: Pick<Area, 'purpose'>): SignatureId | undefined => SIGNATURE_OF_PURPOSE[a.purpose ?? ''];
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // 2. Stash holders
@@ -320,7 +329,9 @@ function lightAnnex(layout: StationLayout, areas: readonly Area[], rng: Rng): vo
     if (k === 0 && prof === 'dark') prof = 'dim';
     a.lighting = prof;
     const ax0 = a.x * CELL, az0 = a.y * CELL, aw = a.w * CELL, ah = a.h * CELL, alongX = aw >= ah, rot = alongX ? 0 : Math.PI / 2;
-    const n = a.kind === 'closet' ? 1 : a.kind === 'service' ? Math.max(1, Math.round(Math.max(aw, ah) / ANNEX_CONTENT.lights.corridorStep)) : Math.max(aw, ah) > 9 ? 2 : 1;
+    // (lane ROOMS: a machinery hall gets a fixture every ~5 m of its long side, at least 2)
+    const n = a.kind === 'closet' ? 1 : a.kind === 'service' ? Math.max(1, Math.round(Math.max(aw, ah) / ANNEX_CONTENT.lights.corridorStep))
+      : a.extHall ? Math.max(2, Math.round(Math.max(aw, ah) / 5)) : Math.max(aw, ah) > 9 ? 2 : 1;
     const own: LightPlacement[] = [];
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;

@@ -16,6 +16,9 @@ export type PropKind =
   // Collision-only storefront parts (rendered by the storefront builder): shopfront glazing and a
   // rolled-down shutter across an opening. Their hx/hz/h are per placement.
   | 'shopGlazing' | 'shopShutter'
+  // Task track2-playtest-revision (lane ROOMS): collision-only box of a service annex's anchored MACHINERY (gen/annexRooms.ts
+  // machineBoxes; drawn by world/trackExt/machines.ts from layout.extensions.machines). hx/hz/h per placement; variant = MachineKind index.
+  | 'annexMachine'
   // Iteration 05 (Lane R): room/store PURPOSE props (gen/purposes.ts registry). Rendered by
   // world/storefrontBuilder.ts: Lane A generated models when present (PURPOSE_MODEL_KEYS), authored
   // textured parts (gen/purposeShapes.ts) otherwise. Holders among them have PURPOSE_SURFACES.
@@ -89,6 +92,8 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   shopCooler: {w: 0.75, d: 0.75, h: 2.0, blocksSight: true},
   shopGlazing: {w: 1, d: 0.12, h: 2.7, blocksSight: false},
   shopShutter: {w: 1, d: 0.12, h: 2.7, blocksSight: true},
+  /** (lane ROOMS) Annex machinery collision box: dimensions per placement (this is only the nominal default). */
+  annexMachine: {w: 1, d: 1, h: 1, blocksSight: false},
   // --- Iteration 05 purpose props (authored dims; gen/purposeShapes.ts builds to these) ---
   /** Store shelving: the shelf unit with themed back stock (variant = STOCK_THEMES index); loot in front. */
   stockShelf: {w: 1.2, d: 0.45, h: 1.85, blocksSight: false},

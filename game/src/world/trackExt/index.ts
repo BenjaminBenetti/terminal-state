@@ -22,6 +22,7 @@ import {graffitiDecals, graffitiMaterial, type GraffitiDecal} from './graffiti';
 import {hatchGraffiti, hatchPlates, type HatchPlate} from './hatch';
 import {serviceSignMaterial} from './shell';
 import type {TrackExtView} from './view';
+import {buildAnnexMachines, type MachineBuild} from './machines'; // task track2-playtest-revision (lane ROOMS): annex machinery
 
 export {TrackExtView, extOf, extensionsOf, continuedEnds, endKey, bedFrame, type HatchView} from './view';
 export {HATCH_PLATE, type HatchPlate} from './hatch';
@@ -43,6 +44,8 @@ export interface TrackExtStats {
   decals: number;
   /** (GEN-2) Service hatches in bed walls (plates built). */
   hatches: number;
+  /** (lane ROOMS) The annexes' machinery: draws (one per annex x material), triangles, records (not in per100m: tunnels only). */
+  machines: {draws: number; triangles: number; records: number};
 }
 
 export interface TrackExtBuilt {
@@ -51,6 +54,8 @@ export interface TrackExtBuilt {
   decals: GraffitiDecal[];
   /** (GEN-2) SERVICE plates over the service hatches in bed walls. */
   plates: HatchPlate[];
+  /** (lane ROOMS) The annex machinery meshes. */
+  machines: MachineBuild;
   stats: TrackExtStats;
 }
 
@@ -100,18 +105,21 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
     group.add(mesh);
     decalTris = acc.triangleCount;
   }
+  // (lane ROOMS) the annexes' anchored machinery: merged procedural geometry, one mesh per annex and material
+  const machines = buildAnnexMachines(group, layout, mats);
   const lengthM = view.tunnels.reduce((n, v) => n + v.f.length, 0);
   const draws = shells.meshes.length + (geo ? 1 : 0) + hatchMeshes.length;
   const triangles = shells.perTunnel.reduce((n, p) => n + p.triangles, 0) + decalTris + steel.triangleCount + sign.triangleCount;
   const per = lengthM > 0 ? 100 / lengthM : 0;
   return {
-    view, shells, decals, plates,
+    view, shells, decals, plates, machines,
     stats: {
-      tunnels: view.tunnels.length, lengthM, meshes: draws, draws, triangles,
+      tunnels: view.tunnels.length, lengthM, meshes: draws + machines.draws, draws: draws + machines.draws, triangles: triangles + machines.triangles,
       instances: shells.perTunnel.reduce((n, p) => n + p.instances, 0),
       per100m: {draws: Math.round(draws * per * 10) / 10, triangles: Math.round(triangles * per)},
       decals: decals.length,
       hatches: plates.length,
+      machines: {draws: machines.draws, triangles: machines.triangles, records: machines.records},
     },
   };
 }

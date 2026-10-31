@@ -20,6 +20,7 @@ import {Carver, type BedEndInfo, type Carve} from './carve';
 import {reframe} from './core';
 import {adoptComposition} from '../compose';
 import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
+import {TRACK_EXT} from './config';
 
 export * from './types';
 export {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config'; // (+ TRACK_EXT_MALL: task track3, lane INTEG)
@@ -270,7 +271,7 @@ export function dropExtensions(layout: StationLayout): void {
     const keep = <T extends {area: number}>(list: T[]) => { const k = list.filter(r => r.area < first); list.length = 0; list.push(...k); };
     keep(layout.props); keep(layout.signs); keep(layout.lights); keep(layout.pickups); keep(layout.zombies);
   }
-  ext.tunnels = []; ext.annexes = []; delete ext.vents;
+  ext.tunnels = []; ext.annexes = []; delete ext.vents; delete ext.machines;
   ext.log.push({trench: -1, from: 'x0', result: 'dropped: the finished layout failed validation with them'});
   if (layout.levels?.length) layout.levels = layout.levels.slice();
 }
@@ -418,8 +419,10 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
     for (const id of n.areas) {
       const a = layout.areas[id];
       if (!a || a.ext !== 'annex' || a.extId !== n.id) { issues.push(`annex ${n.id}: area ${id} record`); continue; }
-      const h = a.ceil - n.floorY;
-      if (h < 2.4 - 1e-6 || h > 2.8 + 1e-6) issues.push(`annex ${n.id}: area ${id} ceiling ${h.toFixed(2)} m`);
+      // (lane ROOMS: a machinery hall, Area.extHall, has the taller hall ceiling range; every other annex area 2.4-2.8 m)
+      const h = a.ceil - n.floorY, [lo, hi] = a.extHall ? TRACK_EXT.annex.hall?.ceil ?? [0, 0] : TRACK_EXT.annex.ceil;
+      if (h < lo - 1e-6 || h > hi + 1e-6) issues.push(`annex ${n.id}: area ${id} ceiling ${h.toFixed(2)} m`);
+      if (a.extHall && a.kind !== 'room') issues.push(`annex ${n.id}: hall ${id} is not a room`);
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.area[g.idx(x, y)] !== id) { issues.push(`annex ${n.id}: area ${id} rect not its own`); y = a.y + a.h; break; }
     }
     if (n.tunnel >= 0) {

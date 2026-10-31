@@ -1302,6 +1302,9 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   {kind: 'booth', cls: 'exception', how: 'station-agent booth door: structural (part of the booth enclosure)'},
   {kind: 'exitStair', cls: 'exception', how: 'locked street-exit grille: structural'},
   {kind: 'shopShutter', cls: 'exception', how: 'rolled-down shopfront shutter: structural (closed store)'},
+  // task track2-playtest-revision (lane ROOMS): the annex machinery's collision boxes — anchored plant, not storage (boiler shells,
+  // generator sets, turbine casings, fan shrouds, live switchgear lineups, channel / basin / chute walls)
+  {kind: 'annexMachine', cls: 'exception', how: 'anchored heavy machinery / sealed plant equipment (boilers, gensets, turbine, fans, live switchgear, water channels): not storage; the rooms\' storage is their own openable holders'},
   // nothing to open
   ...['bench', 'column', 'fareGate', 'washCounter', 'shopGlazing', 'magazineRack', 'techDisplay', 'deviceWall', 'showcase', 'flowerStand', 'repairBench', 'breadRack',
     'couch', 'noticeBoard', 'janitorCart', 'mopSink', 'signalRack',

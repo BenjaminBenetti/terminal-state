@@ -32,6 +32,7 @@
 //    area). The way in is the bed (drop from the platform), the way back up the bed's rescue ladders (extensionIssues checks both).
 
 import type {Area} from '../stationTypes';
+import type {AnnexMachine} from '../annexRooms';
 
 /** Which bed end a tunnel continues: the bed's west (x0) or east (x1) end face. */
 export type BedEnd = 'x0' | 'x1';
@@ -78,7 +79,7 @@ export interface ServiceAnnex {
   door: number;
   /** All annex rooms + corridors (layout.areas ids). */
   areas: number[];
-  /** Cramped: ceiling ~2.4–2.8 m above floor (ceilY = the highest area ceiling). */
+  /** Cramped: ceiling ~2.4–2.8 m above floor; (lane ROOMS) machinery halls 3.6–4.2 m (ceilY = the highest area ceiling). */
   floorY: number;
   ceilY: number;
   /** Walkable FLOOR cells / m² (doorways included). */
@@ -146,6 +147,13 @@ export interface TrackExtensions {
    * them when present (visual only, never the gas field).
    */
   vents?: {x: number; y: number; z: number; dir: {x: number; y: number; z: number}; area: number}[];
+  /**
+   * (task track2-playtest-revision lane ROOMS addition, gen/annexRooms.ts) The annexes' anchored machinery ASSEMBLIES (boiler banks,
+   * generator sets, switchgear, channels, basins, spillway chutes, turbines, fans, ducts, pipe runs …): world/trackExt/machines.ts
+   * draws them as merged procedural geometry; their solid parts are collision-only 'annexMachine' props (machineBoxes). Absent
+   * without annexes.
+   */
+  machines?: AnnexMachine[];
   /**
    * (task track3 lane INTEG addition, OPT-IN) The level-grid indices that must stay rock around / under every extension cell, when
    * the level declared TrackExtContext.rockLevels (absent = every level grid, the Subway / Office rule).
@@ -222,6 +230,15 @@ export interface TrackExtConfig {
     loopChance: number;
     /** Growth attempts per annex. */
     steps: number;
+    /**
+     * (task track2-playtest-revision, lane ROOMS; optional) MACHINERY HALLS: larger, taller rooms (Area.extHall) that regularly break
+     * up the tight corridors / rooms (user: "keep that tight claustrophobic feel … break it up with bigger rooms"). Per annex
+     * `count` halls are wanted; hall k is attempted once the annex has grown to (k + 0.5) / (count + 1) of its area target (a rhythm
+     * along the growth, not a cluster), only off a CORRIDOR at least `spacing` areas past the previous hall on its branch (the root
+     * corridor counts 1), only while the hall keeps the annex within its area target (+ `slack`), with `tries` placements per attempt.
+     * Short / long side and ceiling ranges in metres (ceiling above the floor; the annex rooms keep `ceil`). Absent = no halls.
+     */
+    hall?: {count: [number, number]; short: [number, number]; long: [number, number]; ceil: [number, number]; spacing: number; tries: number; slack: number};
   };
   /**
    * CORE-CHANGING option (0 = off, the DESIGN §0 default: the core stays byte-identical): metres of rock kept free straight past

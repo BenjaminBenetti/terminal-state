@@ -12,6 +12,7 @@ import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {ANNEX_COMPOSE_BUDGET, ANNEX_CONTENT, extensionContentOf} from '../src/gen/annexContent';
+import {ROOM_SIGNATURES, SIGNATURE_IDS} from '../src/gen/annexRooms';
 import {ROOM_PURPOSES} from '../src/gen/purposes';
 import {coreView, dropExtensions, isExtensionArea, TRACK_EXT, trackExtConfig, type TrackExtConfig} from '../src/gen/trackExt/index';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
@@ -51,7 +52,9 @@ const reference = (l: StationLayout): StationLayout => (l.office
   : generateStation(l.seed, {trackExtensions: noAnnex(trackExtConfig('subway'))}));
 const annexAreas = (l: StationLayout) => l.extensions!.annexes.flatMap(n => n.areas.map(id => l.areas[id]));
 const inAnnex = (l: StationLayout) => { const s = new Set(l.extensions!.annexes.flatMap(n => n.areas)); return (r: {area: number}) => s.has(r.area); };
-const ALLOWED = new Set(['pump-room', 'electrical-room', 'workshop', 'storage', 'custodial-room', 'janitor-closet', 'electrical-closet', 'supply-closet', 'service-corridor']);
+// (task track2-playtest-revision, lane ROOMS: + the seven room signatures and the first-aid post among the utility rooms)
+const ALLOWED = new Set(['pump-room', 'electrical-room', 'workshop', 'storage', 'custodial-room', 'first-aid-room', 'janitor-closet', 'electrical-closet', 'supply-closet', 'service-corridor',
+  ...SIGNATURE_IDS.map(s => ROOM_SIGNATURES[s].purpose)]);
 
 describe('service annex dressing (existing purposes and prop kinds, appended, budgeted)', () => {
   it('every annex area takes an existing back-of-house purpose of the service set, its RoomType one of the purpose\'s slots', () => {
@@ -68,8 +71,10 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
           if (a.kind === 'service') expect(a.purpose).toBe('service-corridor');
           used.add(a.purpose!);
         }
-        // the lead plant rooms (when a room fits them): every annex reads as plant / service space
-        for (const pid of ANNEX_CONTENT.lead) expect(used.has(pid), `${l.seed} annex ${n.id} has a ${pid}`).toBe(true);
+        // (lane ROOMS) several different room signatures per annex, and at least one machinery hall
+        const sigs = new Set([...used].filter(p => SIGNATURE_IDS.some(s => ROOM_SIGNATURES[s].purpose === p)));
+        expect(sigs.size, `${l.seed} annex ${n.id} signatures ${[...sigs]}`).toBeGreaterThanOrEqual(4);
+        expect(n.areas.some(id => l.areas[id].extHall), `${l.seed} annex ${n.id} hall`).toBe(true);
       }
     }
   });
@@ -89,7 +94,8 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
         if (!isP7Kind(p.kind)) expect(openAudit.has(p.kind) || !isLootHolderKind(p.kind), `${p.kind} openables audit`).toBe(true);
       }
       for (const n of l.extensions!.annexes) {
-        const ids = new Set(n.areas), list = l.props.slice(rep.first.props).filter(p => ids.has(p.area));
+        // (lane ROOMS: the machinery's collision-only boxes are budget-exempt — the dressing budget counts the rest)
+        const ids = new Set(n.areas), list = l.props.slice(rep.first.props).filter(p => ids.has(p.area) && p.kind !== 'annexMachine');
         const budget = Math.round(n.areaM2 / ANNEX_CONTENT.m2PerProp);
         // (the room in progress finishes, the corridors' composition is coverage-capped, host decor follows its host: <= 1.25 x)
         expect(list.length, `${l.seed} annex ${n.id} props`).toBeLessThanOrEqual(budget * 1.25);
