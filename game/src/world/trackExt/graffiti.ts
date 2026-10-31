@@ -247,9 +247,10 @@ export interface GraffitiDecal { tunnel: number; clue: number; cell: number; s: 
 
 /**
  * Decals for a tunnel's clue records (and nothing else): arrows point (as seen by a viewer facing the wall) toward the
- * clue's `toward` along the path. `avoid` = wall spans to keep clear (door openings: [s0, s1, side]).
+ * clue's `toward` along the path. `avoid` = wall spans to keep clear (door openings: [s0, s1, side]). (GEN-2: a service
+ * hatch's bed-wall clues use the same painter in the hatch's straight bed frame: hatch.ts.)
  */
-export function graffitiDecals(acc: Acc, t: TrackTunnel, f: TunnelFrame, seed: number, avoid: readonly {s0: number; s1: number; side: 1 | -1}[] = []): GraffitiDecal[] {
+export function graffitiDecals(acc: Acc, t: Pick<TrackTunnel, 'id' | 'floorY' | 'clues'>, f: TunnelFrame, seed: number, avoid: readonly {s0: number; s1: number; side: 1 | -1}[] = []): GraffitiDecal[] {
   const out: GraffitiDecal[] = [];
   const y0 = t.floorY, half = f.half;
   t.clues.forEach((c, ci) => {

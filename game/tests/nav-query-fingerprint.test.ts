@@ -16,6 +16,8 @@ import {CELL, PathFinder} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {levelFixture} from './helpers/levelFixture';
 import {coreView} from '../src/gen/trackExt/index';
+import {generateStation} from '../src/gen/station';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
 /** FNV-1a over the bytes of every pushed number (Float64) — order sensitive. */
 class Hash {
@@ -138,9 +140,12 @@ describe('nav query fingerprints (behaviour preservation of the string-pulling h
 
   it('a Subway station (seed 1234) and the hand-made 3-level fixture (railings, light well, alcoves)', () => {
     const sub = LEVELS.subway.generate('main', {levelSeed: 1234, startWeapon: 'pistol'});
-    // (Track 2: seed 1234 has no track extension; its core view is the layout itself)
+    // Track 2 GEN-2 proof: with the core reserve OFF the core view reproduces the pin (the extensions never touch the core)
+    const off = generateStation(1234, {startWeapon: 'pistol', trackExtensions: TRACK_EXT_RESERVE_OFF});
+    check('SUBWAY core (reserve off)', fingerprint(levelsOf(coreView(off)), coreView(off), 0x5ab, 2500, true), SUBWAY);
+    // reserve on: seed 1234's skeleton leaves no bed end open, so the reserve keeps nothing and its core is unchanged
     check('SUBWAY core', fingerprint(levelsOf(coreView(sub)), coreView(sub), 0x5ab, 2500, true), SUBWAY);
-    check('SUBWAY', fingerprint(levelsOf(sub), sub, 0x5ab, 2500, true), SUBWAY);
+    check('SUBWAY', fingerprint(levelsOf(sub), sub, 0x5ab, 2500, true), SUBWAY_LIVE);
     const fx = levelFixture();
     const LF = new Levels(fx.levels, fx.levelLinks, fx.rails);
     check('FIXTURE', fingerprint(LF, fx, 0xf1f, 3000, false), FIXTURE);
@@ -171,5 +176,9 @@ const OFFICE_OPEN = {lines: 'd7c9a265', circles: 'fd0c3f65', support: '3633f80e'
 /** (the near-cab queries only touch the tower: unchanged by the extensions) */
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};
+// Track 2 lane GEN-2 — CAUSE: "core reserve enabled (authorized incidence change)" + the GEN-2 incidence planner: the LIVE Subway
+// seed 1234 now carries two service-hatch annexes (it had no extension before; its core is unchanged: SUBWAY above, proven with
+// the reserve off and on), so the extended world the random queries sample (cells drawn over W x H) changes. Was = SUBWAY.
+const SUBWAY_LIVE = {lines: '98db9ae5', circles: '958d5d98', support: '0f5d72cc', rails: '967a2aa5', finds: 'fdfd6e2b'};
 /** The fixture runs no PathFinder (finds = the empty hash). */
 const FIXTURE = {lines: '2278f298', circles: 'c101d1b8', support: '1243b7fb', rails: 'ca023ed8', finds: '811c9dc5'};

@@ -3,6 +3,8 @@
 // distribution incl. 0 / 1 / 2-annex seeds, annex areas and their ratio to the measured Subway baseline, generation time),
 // occupancy / omission rules, reachability both ways (PathFinder), clue validity and the baseline constant itself.
 // The core-preservation proofs live in tests/track-ext-core.test.ts, the level coverage in tests/track-ext-coverage.test.ts.
+// GEN-2: the Subway's incidence over the 64-seed corpus (annexes on basically every level, ~a third with two, never more),
+// annex-aware first straights, and SERVICE-HATCH annexes (a door in a bed's side wall where no tunnel continues the end).
 import {describe, expect, it} from 'vitest';
 import {generateStation, STATION_EXT_MAX_CELLS} from '../src/gen/station';
 import {generateOfficeLevel, OFFICE_EXT_MAX_CELLS} from '../src/gen/office/index';
@@ -14,10 +16,18 @@ import {buildPath, pointAt, project, walkCells, tubeCells} from '../src/gen/trac
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const SUBWAY_SEEDS = Array.from({length: 24}, (_, i) => (i * 2654435761 + 12345) >>> 0);
+/** GEN-2: the 64-seed incidence corpus (the first 24 are SUBWAY_SEEDS). */
+const SUBWAY_CORPUS = Array.from({length: 64}, (_, i) => (i * 2654435761 + 12345) >>> 0);
 const OFFICE_SEEDS = [3, 7922, 15841, 23760, 31679, 39598];
-/** Seeds by annex count (found by the census; deterministic). */
-const SUBWAY_ANNEX = {0: 12345, 1: 4055629249, 2: 2563024239};
+/** Seeds by annex count (found by the census; deterministic). GEN-2 (core reserve + incidence planner): re-found. */
+const SUBWAY_ANNEX = {0: 2027820797, 1: 4055629249, 2: 2563024239};
 const OFFICE_ANNEX = {0: 31679, 1: 3, 2: 7922};
+/** GEN-2: service-hatch levels — island-ends (one hatch), express (two hatches), interchange (a tunnel annex + a hatch). */
+const SUBWAY_HATCH = {one: 2654448106, two: 1549120013, mixed: 774566179};
+/** Distinct entry of an annex: its tunnel, or its bed end (service hatch). */
+const entryKey = (a: TrackExtensions['annexes'][number]) => (a.bed ? `bed ${a.bed.trench}${a.bed.from}` : `tunnel ${a.tunnel}`);
+/** Extension group of an annex (its tunnel's; a hatch annex is its own). */
+const groupOfAnnex = (a: TrackExtensions['annexes'][number]) => (a.tunnel >= 0 ? a.tunnel : 1000 + a.id);
 
 const subCache = new Map<number, StationLayout>(), offCache = new Map<number, StationLayout>();
 const sub = (seed: number) => { let l = subCache.get(seed); if (!l) subCache.set(seed, (l = generateStation(seed))); return l; };
@@ -83,7 +93,7 @@ describe('track extensions — generation', () => {
     const t0 = TRACK_EXT_STATS.ms, c0 = TRACK_EXT_STATS.calls;
     const lines: string[] = [];
     for (const [name, list, budget] of [['Subway', SUBWAY_SEEDS.map(sub), STATION_EXT_MAX_CELLS], ['Office', OFFICE_SEEDS.map(off), OFFICE_EXT_MAX_CELLS]] as const) {
-      let ends = 0, tunnels = 0, levelsWith = 0, bends = 0, translated = 0;
+      let ends = 0, tunnels = 0, levelsWith = 0, bends = 0, translated = 0, hatches = 0;
       const lens: number[] = [], annexDist = [0, 0, 0], areas: number[] = [], caps: Record<string, number> = {}, cells: number[] = [];
       for (const l of list) {
         const e = l.extensions as TrackExtensions;
@@ -118,8 +128,9 @@ describe('track extensions — generation', () => {
           expect(t.rails.length).toBe(tr.tracks.length);
         }
         annexDist[e.annexes.length]++;
+        hatches += e.annexes.filter(a => a.bed).length;
         expect(e.annexes.length).toBeLessThanOrEqual(TRACK_EXT.annex.max);
-        expect(new Set(e.annexes.map(a => a.tunnel)).size).toBe(e.annexes.length);
+        expect(new Set(e.annexes.map(entryKey)).size).toBe(e.annexes.length);
         for (const a of e.annexes) {
           areas.push(a.areaM2);
           expect(a.areaM2).toBeGreaterThanOrEqual(TRACK_EXT.annex.minShare * SUBWAY_WALK_BASELINE_M2 - 1e-6);
@@ -132,7 +143,7 @@ describe('track extensions — generation', () => {
       const ratios = areas.map(a => r2(a / SUBWAY_WALK_BASELINE_M2));
       lines.push(`${name} (${list.length} levels): tunnels ${tunnels}/${ends} bed ends, levels with >= 1 tunnel ${levelsWith}/${list.length}, translated cores ${translated}, ` +
         `length min ${Math.min(...lens)} mean ${r2(lens.reduce((a, b) => a + b, 0) / Math.max(1, lens.length))} max ${Math.max(...lens)} m, bends ${bends}, caps ${JSON.stringify(caps)}; ` +
-        `annexes per level 0/1/2 = ${annexDist.join('/')}, areas ${areas.map(Math.round).join(', ')} m², ratio to the baseline ${ratios.join(', ')} ` +
+        `annexes per level 0/1/2 = ${annexDist.join('/')} (${hatches} via a bed hatch), areas ${areas.map(Math.round).join(', ')} m², ratio to the baseline ${ratios.join(', ')} ` +
         `(mean ${r2(ratios.reduce((a, b) => a + b, 0) / Math.max(1, ratios.length))}); grid cells max ${Math.max(...cells)} (budget ${budget})`);
       expect(tunnels, `${name}: some tunnels`).toBeGreaterThan(0);
     }
@@ -145,14 +156,51 @@ describe('track extensions — generation', () => {
   it('seeded 0 / 1 / 2-annex levels exist on both levels', () => {
     for (const [n, seed] of Object.entries(SUBWAY_ANNEX)) expect(sub(seed).extensions!.annexes.length, `Subway ${seed}`).toBe(Number(n));
     for (const [n, seed] of Object.entries(OFFICE_ANNEX)) expect(off(seed).extensions!.annexes.length, `Office ${seed}`).toBe(Number(n));
+    // GEN-2: service-hatch levels
+    expect(sub(SUBWAY_HATCH.one).extensions!.annexes.map(a => a.tunnel)).toEqual([-1]);
+    expect(sub(SUBWAY_HATCH.two).extensions!.annexes.map(a => a.tunnel)).toEqual([-1, -1]);
+    expect(sub(SUBWAY_HATCH.mixed).extensions!.annexes.map(a => a.tunnel >= 0).sort()).toEqual([false, true]);
   });
 
+  it('GEN-2 incidence over the 64-seed corpus: >= 85 % of Subway levels with an annex, 20-40 % with two, never more; island-ends / express too', () => {
+    const t0 = performance.now();
+    const dist = [0, 0, 0], per: Record<string, {n: number; annex: number}> = {};
+    let hatches = 0, attempts = 0, withTunnel = 0, wantZero = 0;
+    const ratios: number[] = [];
+    for (const seed of SUBWAY_CORPUS) {
+      const l = sub(seed), e = l.extensions!;
+      expect(e.annexes.length, `${seed}`).toBeLessThanOrEqual(TRACK_EXT.annex.max);
+      expect(new Set(e.annexes.map(entryKey)).size).toBe(e.annexes.length);
+      dist[e.annexes.length]++;
+      const a = per[l.archetype] ??= {n: 0, annex: 0};
+      a.n++;
+      if (e.annexes.length) a.annex++;
+      if (e.tunnels.length) withTunnel++;
+      if (e.log.some(g => /level wants 0/.test(g.result))) wantZero++;
+      hatches += e.annexes.filter(n => n.bed).length;
+      attempts += l.attempt + 1;
+      for (const n of e.annexes) ratios.push(n.areaM2 / SUBWAY_WALK_BASELINE_M2);
+    }
+    const n = SUBWAY_CORPUS.length, r2 = (v: number) => Math.round(v * 100) / 100;
+    report(`GEN-2 incidence (${n} Subway levels): with a tunnel ${withTunnel}, annexes 0/1/2 = ${dist.join('/')} (${hatches} via a bed hatch; ${wantZero} levels wanted none), ` +
+      `per archetype ${Object.entries(per).map(([k, v]) => `${k} ${v.annex}/${v.n}`).join(', ')}; ratio to the baseline min ${r2(Math.min(...ratios))} mean ${r2(ratios.reduce((x, y) => x + y, 0) / ratios.length)} max ${r2(Math.max(...ratios))}; ` +
+      `attempts ${attempts} (mean ${(attempts / n).toFixed(2)}); ${((performance.now() - t0) / n).toFixed(0)} ms per level (cache misses incl.)`);
+    expect((dist[1] + dist[2]) / n).toBeGreaterThanOrEqual(0.85);
+    expect(dist[2] / n).toBeGreaterThanOrEqual(0.2);
+    expect(dist[2] / n).toBeLessThanOrEqual(0.4);
+    // the archetypes whose bed ends cannot continue as tunnels (paid end halls past every end) get annexes through hatches
+    for (const k of ['island-ends', 'express']) expect(per[k].annex / per[k].n, k).toBeGreaterThanOrEqual(0.8);
+    expect(hatches).toBeGreaterThan(0);
+    // each annex still ~a quarter of the baseline (the same band as before GEN-2)
+    for (const r of ratios) { expect(r).toBeGreaterThanOrEqual(TRACK_EXT.annex.minShare - 1e-9); expect(r).toBeLessThanOrEqual(TRACK_EXT.annex.share * TRACK_EXT.annex.jitter[1] * 1.06); }
+  }, 180000);
+
   it('occupancy: extensions never overlap the core or each other (margins), and failed attempts leave nothing behind', () => {
-    for (const l of [sub(SUBWAY_ANNEX[2]), sub(SUBWAY_ANNEX[1]), off(OFFICE_ANNEX[2]), off(OFFICE_ANNEX[1])]) {
+    for (const l of [sub(SUBWAY_ANNEX[2]), sub(SUBWAY_ANNEX[1]), sub(SUBWAY_HATCH.two), sub(SUBWAY_HATCH.mixed), off(OFFICE_ANNEX[2]), off(OFFICE_ANNEX[1])]) {
       const e = l.extensions!, g = l.grid, W = g.w;
       const groupOf = new Map<number, number>();
       for (const t of e.tunnels) for (const a of t.areas) groupOf.set(a, t.id);
-      for (const n of e.annexes) for (const a of n.areas) groupOf.set(a, n.tunnel);
+      for (const n of e.annexes) for (const a of n.areas) groupOf.set(a, groupOfAnnex(n));
       // every extension area is referenced by exactly one record; every extension door joins areas of one group
       const ext = l.areas.filter(isExtensionArea);
       expect(ext.length).toBe(groupOf.size);
@@ -160,7 +208,11 @@ describe('track extensions — generation', () => {
       expect(l.areas.slice(firstExt).every(isExtensionArea)).toBe(true);
       const extDoors = l.doors.filter(d => d.a >= firstExt || d.b >= firstExt);
       for (const d of extDoors) expect(groupOf.get(d.a), `door ${d.id}`).toBe(groupOf.get(d.b));
-      expect(extDoors.filter(d => l.areas[d.a].ext === 'tunnel').length).toBe(e.annexes.length);
+      expect(extDoors.filter(d => l.areas[d.a].ext === 'tunnel').length).toBe(e.annexes.filter(n => n.tunnel >= 0).length);
+      // GEN-2: a hatch door joins the bed and its corridor (a = b = the corridor)
+      expect(extDoors.filter(d => d.a === d.b).length).toBe(e.annexes.filter(n => n.bed).length);
+      const hatchCell = new Map<number, number>();
+      for (const n of e.annexes) if (n.bed) { const d = l.doors[n.door]; for (let x = d.x; x < d.x + d.w; x++) hatchCell.set(g.idx(x, d.y), n.bed.trench); }
       // margins: no core open cell (any level) and no other group's cell within the margin of an extension cell, except a
       // tunnel mouth onto its own bed
       const extCell = (i: number) => g.area[i] >= firstExt;
@@ -176,9 +228,9 @@ describe('track extensions — generation', () => {
           if (cheb > TRACK_EXT.margin.core) continue;
           const open = l.levels.some(L => L.grid.cells[j] !== SOLID);
           if (!open) continue;
-          // the tunnel's own bed at its mouth
+          // the tunnel's own bed at its mouth (GEN-2: a hatch door's own bed in front of it)
           const t = a.ext === 'tunnel' ? e.tunnels[a.extId!] : null;
-          const tr = t ? l.trenches[t.trench] : null;
+          const tr = t ? l.trenches[t.trench] : hatchCell.has(i) ? l.trenches[hatchCell.get(i)!] : null;
           if (tr && g.cells[j] === VOID && (x + ox) * CELL >= tr.x0 - 1e-6 && (x + ox) * CELL < tr.x1 && (y + oy) * CELL >= tr.z0 - 1e-6 && (y + oy) * CELL < tr.z1) continue;
           bad++;
         }
@@ -190,7 +242,7 @@ describe('track extensions — generation', () => {
   });
 
   it('reachability both ways: platform -> bed -> tunnel -> annex door -> the farthest annex cell, and back to a bed ladder (PathFinder)', () => {
-    for (const l of [sub(SUBWAY_ANNEX[2]), off(OFFICE_ANNEX[2])]) {
+    for (const l of [sub(SUBWAY_ANNEX[2]), sub(SUBWAY_HATCH.two), sub(SUBWAY_HATCH.mixed), off(OFFICE_ANNEX[2])]) {
       const e = l.extensions!, g = l.grid;
       // the platform, track beds, tunnels and annexes are all on the main level grid (rescue ladders = its nav links)
       const finder = new PathFinder(g);
@@ -204,7 +256,7 @@ describe('track extensions — generation', () => {
         const into = finder.find(start.x, start.z, fx, fz, 0.3, 400000, {drops: true});
         expect(into, `${l.seed} annex ${n.id}: platform -> annex`).not.toBeNull();
         // out: from the annex back to a rescue ladder foot of the tunnel's own bed WITHOUT drops, then up its link
-        const tr = e.tunnels[n.tunnel].trench;
+        const tr = n.bed ? n.bed.trench : e.tunnels[n.tunnel].trench;
         const lad = l.traversal.ladders.filter(q => q.trench === tr && q.kind !== 'roof');
         expect(lad.length).toBeGreaterThan(0);
         const back = finder.find(fx, fz, lad[0].bottom.x, lad[0].bottom.z, 0.3, 400000, {drops: false, noLinks: true});
@@ -243,6 +295,69 @@ describe('track extensions — generation', () => {
     }
     report(`clues: ${clued}/${annexTunnels} tunnels with an annex door carry graffiti (chance ${TRACK_EXT.clues.chance})`);
     expect(annexTunnels).toBeGreaterThan(0);
+  });
+
+  it('GEN-2 annex-aware first straight: tunnels planned as annex hosts can take a door (door window on their first straight)', () => {
+    let hosts = 0, ineligible = 0;
+    for (const l of SUBWAY_CORPUS.map(sub)) {
+      for (const g of l.extensions!.log) if (/annex: not eligible/.test(g.result)) ineligible++;
+      for (const t of l.extensions!.tunnels) if (t.doors.length) { hosts++; expect(t.firstStraight).toBeGreaterThanOrEqual(TRACK_EXT.annex.doorMinS + TRACK_EXT.annex.doorCells * CELL + 0.5 - 1e-6); }
+    }
+    report(`annex-aware first straights: ${hosts} tunnel annexes, ${ineligible} tunnels without a door window (64 levels)`);
+    // the original planner left 18 tunnels without a door window at the same reserve (census before GEN-2)
+    expect(ineligible).toBeLessThanOrEqual(8);
+  });
+
+  it('GEN-2 service hatches: a door in the bed side wall near an end no tunnel continues, the annex in the rock behind, clues on that wall only', () => {
+    let seen = 0;
+    for (const l of [...SUBWAY_CORPUS.map(sub)]) {
+      const e = l.extensions!, g = l.grid;
+      for (const n of e.annexes) {
+        if (!n.bed) continue;
+        seen++;
+        const b = n.bed, tr = l.trenches[b.trench], d = l.doors[n.door];
+        expect(n.tunnel).toBe(-1);
+        expect(b.door).toBe(n.door);
+        // no tunnel continues that end (its end plane / barricade stay); the hatch is near it
+        expect(e.tunnels.some(t => t.trench === b.trench && t.from === b.from)).toBe(false);
+        expect(b.s).toBeGreaterThanOrEqual(TRACK_EXT.hatch!.s[0] - CELL);
+        expect(b.s).toBeLessThanOrEqual(TRACK_EXT.hatch!.s[1] + CELL);
+        // the opening: one row in the bed's side wall, rock jambs on every level (never a platform face), bed cells in front
+        const row = b.wall === 'N' ? Math.round(tr.z0 / CELL) - 1 : Math.round(tr.z1 / CELL);
+        expect(d.y).toBe(row);
+        expect(d.h).toBe(1);
+        expect(d.a).toBe(d.b);
+        for (const x of [d.x - 1, d.x + d.w]) for (const L of l.levels) expect(L.grid.cells[g.idx(x, row)], `${l.seed} jamb`).toBe(SOLID);
+        for (let x = d.x; x < d.x + d.w; x++) {
+          expect(g.cells[g.idx(x, row + (b.wall === 'N' ? 1 : -1))]).toBe(VOID);
+          expect(g.cells[g.idx(x, row)]).toBe(FLOOR);
+          expect(g.floorOf(g.idx(x, row))).toBeCloseTo(tr.floorY, 4);
+          expect(g.ceil[g.idx(x, row)] - g.floorOf(g.idx(x, row))).toBeGreaterThanOrEqual(2.2 - 1e-6);
+        }
+        // the entry corridor runs away from the bed into the rock behind the wall; every annex area at the bed floor (the
+        // room graph may wrap past the bed end: the core margins are extensionIssues' / the occupancy test's)
+        const corr = l.areas[d.b];
+        if (b.wall === 'N') expect(corr.y + corr.h).toBe(row); else expect(corr.y).toBe(row + 1);
+        for (const id of n.areas) expect(l.areas[id].floorY).toBeCloseTo(tr.floorY, 6);
+        // clues: on the hatch's wall, on the approach (beyond the door), pointing toward it
+        for (const c of b.clues) { expect(c.side).toBe(b.side); expect(c.toward).toBe(-1); expect(c.s).toBeGreaterThan(b.s + b.width / 2); }
+      }
+      expect(extensionIssues(l), `${l.seed}`).toEqual([]);
+    }
+    expect(seen).toBeGreaterThan(5);
+    // a broken hatch record is caught (door moved off the wall / a = b broken / clue pointing away)
+    const l = sub(SUBWAY_HATCH.one), n = l.extensions!.annexes[0], d = l.doors[n.door];
+    const keep = {a: d.a, s: n.bed!.s, clues: n.bed!.clues};
+    d.a = -1;
+    expect(extensionIssues(l).some(q => /does not join the bed/.test(q))).toBe(true);
+    d.a = keep.a;
+    n.bed!.s += 3;
+    expect(extensionIssues(l).some(q => /bed entry position/.test(q))).toBe(true);
+    n.bed!.s = keep.s;
+    n.bed!.clues = [{s: n.bed!.s + 9, side: n.bed!.side, kind: 'arrow', toward: 1}];
+    expect(extensionIssues(l).some(q => /does not point toward the door/.test(q))).toBe(true);
+    n.bed!.clues = keep.clues;
+    expect(extensionIssues(l)).toEqual([]);
   });
 
   it('extension cells: tunnel floors at the bed floor, flush mouths, solid caps, annex ceilings 2.4-2.8 m, >= 2.2 m clearance', () => {

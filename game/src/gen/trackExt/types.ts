@@ -24,6 +24,12 @@
 //  - Extension areas / doors are APPENDED after every core area / door (ids >= the core's), and their cells are stamped into the
 //    main level grid only AFTER every core pass ran (gen/trackExt/index.ts attachExtensions): every existing pass sees exactly the
 //    core world. Content for extensions comes from appended passes on their own forks (lanes VIS / CONTENT).
+//  - (GEN-2) SERVICE-HATCH annexes: where no tunnel continues a bed end (island-ends / express stations: the archetype's paid end
+//    halls stand 1.5-4 m past every bed end, on the same main level), an annex may instead be entered through a door in a track
+//    bed's SIDE WALL near that end (never a platform face: the wall cells must be rock), with the annex in the rock behind it at
+//    the bed floor. Such an annex has `tunnel: -1` and a `bed` record (BedEntry). Its entry door joins the bed (VOID cells, no
+//    area) and the annex's entry corridor, so the Door record carries a = b = that corridor (a door never references a missing
+//    area). The way in is the bed (drop from the platform), the way back up the bed's rescue ladders (extensionIssues checks both).
 
 import type {Area} from '../stationTypes';
 
@@ -66,8 +72,9 @@ export interface TrackTunnel {
 
 export interface ServiceAnnex {
   id: number;
+  /** The tunnel whose side wall holds the entry door; -1 = a service-hatch annex entered from a track bed (see `bed`). */
   tunnel: number;
-  /** Entry door (layout.doors index) on the tunnel wall. */
+  /** Entry door (layout.doors index) on the tunnel wall (or the bed wall: `bed`). */
   door: number;
   /** All annex rooms + corridors (layout.areas ids). */
   areas: number[];
@@ -79,6 +86,41 @@ export interface ServiceAnnex {
   areaM2: number;
   /** The door (identifiable way out). */
   exit: {x: number; z: number};
+  /** (GEN-2) Only on service-hatch annexes (tunnel = -1): the door in the track bed's side wall. */
+  bed?: BedEntry;
+}
+
+/**
+ * (GEN-2) The entry of a service-hatch annex: a door in the SIDE WALL of a track bed near one of its ends (an end no tunnel
+ * continues; its black end plane and barricade stay). BED FRAME (so lane VIS can reuse its tunnel-frame tools): the travel
+ * line runs along the bed centreline FROM the end face INTO the station; `s` = metres from the end face along it, `side` = the
+ * wall, +1 = left of that travel (the TrackTunnel convention: facing +X, left is -Z). World positions are in the layout frame.
+ */
+export interface BedEntry {
+  /** Index into layout.trenches. */
+  trench: number;
+  /** The bed end it is near. */
+  from: BedEnd;
+  /** Which side wall: 'N' = the bed's z0 wall (faces +Z into the bed), 'S' = its z1 wall (faces -Z). */
+  wall: 'N' | 'S';
+  /** The same wall in the bed frame (+1 = left of travel from the end face into the station). */
+  side: 1 | -1;
+  /** Entry door (layout.doors index; = ServiceAnnex.door). Its rect is the opening cut through the wall's cell row. */
+  door: number;
+  /** Door centre: arc position in the bed frame (m from the end face) and its world point ON the wall plane. */
+  s: number;
+  x: number;
+  z: number;
+  /** Opening width (m) along the wall, floor (= the bed floor = the annex floor) and head (absolute y). */
+  width: number;
+  floorY: number;
+  head: number;
+  /**
+   * Graffiti on the same bed wall (side = `side`), ONLY because this route exists: an arrow on the approach from the platforms
+   * (s > the door's) pointing toward the door (toward = -1: toward smaller s, i.e. toward the end face), optionally a tag beside
+   * the door. Positions lie on solid wall (rock cells), clear of the opening.
+   */
+  clues: {s: number; side: 1 | -1; kind: 'arrow' | 'tag'; toward: 1 | -1}[];
 }
 
 export interface TrackExtensions {
@@ -133,9 +175,21 @@ export interface TrackExtConfig {
   /** Rock margins (cells) between an extension and the core / another extension group. */
   margin: {core: number; ext: number};
   annex: {
-    /** Chance per eligible tunnel (first straight long enough) to attempt an annex. */
+    /** Chance per eligible tunnel (first straight long enough) to attempt an annex (only without `count`: the original planner). */
     chance: number;
-    /** At most this many annexes per level, each on a different tunnel. */
+    /**
+     * (GEN-2, optional: the incidence planner) Seeded per-level weights of WANTING 0 / 1 / 2 annexes. The wanted count is then
+     * attempted over the level's candidates in a seeded order — eligible tunnels first, then (with `hatch`) the bed ends no
+     * tunnel continues — until it is met or the candidates run out (`chance` is not used). Absent: one `chance` roll per tunnel.
+     */
+    count?: [number, number, number];
+    /**
+     * (GEN-2, optional) Annex-aware first straight (m): while the level still wants an annex host, a tunnel is planned with a
+     * first straight of at least this (an annex door sits on it: doorMinS + the door + room for the entry corridor); if no such
+     * shape fits that end, the ordinary shapes are tried. 0 / absent = off.
+     */
+    hostFirstStraight?: number;
+    /** At most this many annexes per level, each on a different tunnel (or bed end). */
     max: number;
     /** Size target as a share of the Subway walkable-exploration baseline (SUBWAY_WALK_BASELINE_M2). */
     share: number;
@@ -170,12 +224,18 @@ export interface TrackExtConfig {
    * washrooms, storefronts, back-of-house) leaves room for a tunnel there. Changes the core layouts of the level that sets it.
    */
   coreReserveM: number;
+  /**
+   * (GEN-2, optional) Service-hatch annexes (ServiceAnnex.bed): a door in a track bed's side wall near a bed end that no tunnel
+   * continues. `s` = range (m) of the door centre's distance from the end face; the opening keeps one wall cell to the end face.
+   * Absent = no hatches (annexes only off tunnels).
+   */
+  hatch?: {s: [number, number]};
   clues: {
-    /** Chance that a tunnel leading to an annex door carries graffiti at all. */
+    /** Chance that a tunnel (or bed wall: a service hatch) leading to an annex door carries graffiti at all. */
     chance: number;
     /** Mouth clue arc position range (m). */
     mouthS: [number, number];
-    /** The second clue this far (m) before the door (only when it falls past the mouth clue). */
+    /** The second clue this far (m) before the door (only when it falls past the mouth clue); a hatch's arrow on the bed wall. */
     beforeDoor: number;
     /** Chance of a tag beside the door. */
     tagChance: number;

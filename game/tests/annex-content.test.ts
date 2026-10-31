@@ -13,7 +13,7 @@ import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {ANNEX_COMPOSE_BUDGET, ANNEX_CONTENT, extensionContentOf} from '../src/gen/annexContent';
 import {ROOM_PURPOSES} from '../src/gen/purposes';
-import {coreView, dropExtensions, isExtensionArea, TRACK_EXT} from '../src/gen/trackExt/index';
+import {coreView, dropExtensions, isExtensionArea, TRACK_EXT, trackExtConfig, type TrackExtConfig} from '../src/gen/trackExt/index';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
 import {propBlocksDoorway} from '../src/gen/placeKit';
@@ -34,19 +34,28 @@ import {CAP_OVERHANG, CAP_SKIN} from '../src/world/trackExt/caps';
 import {placeSectionGear, rollLevelGear} from '../src/gen/gearLoot';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
 
-/** Seeds by annex count (deterministic; tests/track-ext.test.ts census). */
-const SUBWAY = {1: 4055629249, 2: 2563024239, none: 12345};
+/** Seeds by annex count (deterministic; tests/track-ext.test.ts census); `hatch`: a tunnel annex + a service-hatch annex (GEN-2). */
+const SUBWAY = {1: 4055629249, 2: 2563024239, none: 2027820797, hatch: 774566179};
 const OFFICE = {1: 3, 2: 7922};
 const cache = new Map<string, StationLayout>();
 const sub = (seed: number) => { const k = `s${seed}`; let l = cache.get(k); if (!l) cache.set(k, (l = generateStation(seed))); return l; };
 const off = (seed: number) => { const k = `o${seed}`; let l = cache.get(k); if (!l) cache.set(k, (l = generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}))); return l; };
-const WITH = () => [sub(SUBWAY[1]), sub(SUBWAY[2]), off(OFFICE[1]), off(OFFICE[2])];
+const WITH = () => [sub(SUBWAY[1]), sub(SUBWAY[2]), sub(SUBWAY.hatch), off(OFFICE[1]), off(OFFICE[2])];
+/**
+ * The same level with NO annexes (its own track config, no annex wanted / allowed): the same core (the GEN-2 core reserve is a
+ * core layout decision independent of the annexes) and tunnels but no annex content — the reference for "the core is unchanged".
+ */
+const noAnnex = (cfg: TrackExtConfig): TrackExtConfig => ({...cfg, annex: {...cfg.annex, max: 0, ...(cfg.annex.count ? {count: [1, 0, 0] as [number, number, number]} : {})}});
+const reference = (l: StationLayout): StationLayout => (l.office
+  ? generateOfficeLevel({levelSeed: [OFFICE[1], OFFICE[2]].find(s => off(s) === l)!, startWeapon: 'pistol'}, undefined, undefined, noAnnex(trackExtConfig('office')))
+  : generateStation(l.seed, {trackExtensions: noAnnex(trackExtConfig('subway'))}));
 const annexAreas = (l: StationLayout) => l.extensions!.annexes.flatMap(n => n.areas.map(id => l.areas[id]));
 const inAnnex = (l: StationLayout) => { const s = new Set(l.extensions!.annexes.flatMap(n => n.areas)); return (r: {area: number}) => s.has(r.area); };
 const ALLOWED = new Set(['pump-room', 'electrical-room', 'workshop', 'storage', 'custodial-room', 'janitor-closet', 'electrical-closet', 'supply-closet', 'service-corridor']);
 
 describe('service annex dressing (existing purposes and prop kinds, appended, budgeted)', () => {
   it('every annex area takes an existing back-of-house purpose of the service set, its RoomType one of the purpose\'s slots', () => {
+    expect(sub(SUBWAY.hatch).extensions!.annexes.some(n => n.tunnel === -1), 'a service-hatch annex is dressed too').toBe(true);
     for (const l of WITH()) {
       expect(l.extensions!.annexes.length).toBeGreaterThan(0);
       for (const n of l.extensions!.annexes) {
@@ -124,9 +133,10 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
     const a = generateStation(SUBWAY[1]), b = sub(SUBWAY[1]);
     const rep = extensionContentOf(a)!;
     expect(a.props.slice(rep.first.props).map(p => [p.kind, p.x, p.y, p.z, p.rot, p.purpose ?? ''])).toEqual(b.props.slice(rep.first.props).map(p => [p.kind, p.x, p.y, p.z, p.rot, p.purpose ?? '']));
-    const none = generateStation(SUBWAY[1], {trackExtensions: 'none'});
-    for (const k of ['props', 'lights', 'signs', 'pickups', 'zombies'] as const) expect(coreView(a)[k].length, k).toBe(none[k].length);
-    expect(coreView(a).zombies.map(z => z.archetype)).toEqual(none.zombies.map(z => z.archetype));
+    const ref = coreView(reference(b));
+    for (const k of ['props', 'lights', 'signs', 'pickups', 'zombies'] as const) expect(coreView(a)[k].length, k).toBe(ref[k].length);
+    expect(coreView(a).zombies.map(z => z.archetype)).toEqual(ref.zombies.map(z => z.archetype));
+    expect(coreView(a).props.map(p => [p.kind, p.x, p.z, p.purpose ?? ''])).toEqual(ref.props.map(p => [p.kind, p.x, p.z, p.purpose ?? '']));
   });
 });
 
@@ -216,11 +226,13 @@ describe('service annex loot (finite, themed, appended, never multiplying the le
   it('the level\'s ONE gear roll lands exactly where it would without the annexes (never in one)', () => {
     for (const [level, seed] of [['subway', SUBWAY[2]], ['office', OFFICE[2]]] as const) {
       const live = level === 'subway' ? generateStation(seed, {startWeapon: 'pistol'}) : generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'});
-      const none = level === 'subway' ? generateStation(seed, {startWeapon: 'pistol', trackExtensions: 'none'}) : generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}, undefined, undefined, 'none');
+      const cfg = noAnnex(trackExtConfig(level));
+      const none = level === 'subway' ? generateStation(seed, {startWeapon: 'pistol', trackExtensions: cfg}) : generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}, undefined, undefined, cfg);
+      expect(live.extensions!.annexes.length).toBeGreaterThan(0);
       const items = [...rollLevelGear(seed, level, ['main']).main, ...['armor_vest', 'backpack', 'helmet', 'boots'].map(itemId => ({itemId}))];
       const a = placeSectionGear(live, items), b = placeSectionGear(none, items);
-      expect(a.map(p => [p.itemId, p.area, Math.round((p.x - live.extensions!.shift.x) * 1000), Math.round((p.z - live.extensions!.shift.z) * 1000)]))
-        .toEqual(b.map(p => [p.itemId, p.area, Math.round(p.x * 1000), Math.round(p.z * 1000)]));
+      const inCore = (q: StationLayout, p: {x: number; z: number}) => [Math.round((p.x - q.extensions!.shift.x) * 1000), Math.round((p.z - q.extensions!.shift.z) * 1000)];
+      expect(a.map(p => [p.itemId, p.area, ...inCore(live, p)])).toEqual(b.map(p => [p.itemId, p.area, ...inCore(none, p)]));
       for (const p of a) expect(isExtensionArea(live.areas[p.area])).toBe(false);
     }
   });
@@ -236,8 +248,7 @@ describe('service spawns (the \'service\' zone context)', () => {
   it('appended after every core spawn, in annex areas only, tagged \'service\'; the core\'s tags / families unchanged', () => {
     for (const l of WITH()) {
       const rep = extensionContentOf(l)!, P = spawnProfile(l.office ? 'office' : 'subway'), own = inAnnex(l);
-      const none = l.office ? generateOfficeLevel({levelSeed: OFFICE[l.extensions!.annexes.length as 1 | 2], startWeapon: 'pistol'}, undefined, undefined, 'none')
-        : generateStation(SUBWAY[l.extensions!.annexes.length as 1 | 2], {trackExtensions: 'none'});
+      const none = reference(l);
       expect(rep.first.zombies).toBe(none.zombies.length);
       l.zombies.forEach((z, i) => {
         const ctx = spawnContextOf(l, P, i);
