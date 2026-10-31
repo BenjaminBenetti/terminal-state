@@ -113,6 +113,8 @@ export const WALL_AGE_30Y = 0.12;
 
 /** Per-station bounded budgets (features; geometry counts are reported by the builder). */
 export const WALL_DETAIL_CAPS = {cut: 240, breach: 4, decal: 900, soft: 600, flush: 1400, proud: 220, perFaceCut: 4, perFaceCutPerM: 1 / 7};
+/** Track 2 (VIS): the extension areas' own budgets (all service annexes of a level together; about a quarter of the core's). */
+export const WALL_DETAIL_EXT_CAPS = {cut: 70, breach: 2, decal: 260, soft: 180, flush: 380, proud: 90};
 
 /** Tile grids of the base finishes (must match the base wall textures). */
 export const SUBWAY = {w: 0.36, h: 0.15, split: 1.8, upperH: 0.2989 / 2};
@@ -251,16 +253,24 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
     planned.push({face, atFloor: Math.abs(face.y0 - face.base) < 0.02 && !sl, sloped: !!sl, treatment, finish: fam, condition, len, c0, dir, axis, splits, ends: faceEnds(layout, levels, face, len),
       keepouts: [], accent: hexRgb(R.band === 'station' ? accent : hall)});
   }
+  // Track 2 (VIS): faces of extension areas (track tunnels / service annexes, Area.ext) are planned AFTER the core's, with
+  // their own breach stream and budgets (WALL_DETAIL_EXT_CAPS), so the core station's treatment does not change with them.
+  const isExtFace = (pf: PlannedFace) => !!(layout.areas[pf.face.area] as {ext?: string} | undefined)?.ext;
+  if (planned.some(isExtFace)) { const core = planned.filter(pf => !isExtFace(pf)), ext = planned.filter(isExtFace); planned.length = 0; planned.push(...core, ...ext); }
+  const nCore = planned.findIndex(isExtFace) < 0 ? planned.length : planned.findIndex(isExtFace);
   ctx.near = new PlaneIndex(ctx);
   planned.forEach((pf, i) => { pf.keepouts = keepoutsFor(ctx, pf); planFace(ctx, pf, i, {bayPhase, jointEvery}); });
   const byFace: Feature[][] = planned.map(() => []);
   for (const f of ctx.features) byFace[f.face].push(f);
-  planBreaches(ctx, planned, srng.fork('breach'), byFace);
+  planBreaches(ctx, planned, srng.fork('breach'), byFace, 0, nCore);
+  if (nCore < planned.length) planBreaches(ctx, planned, srng.fork('breach-ext'), byFace, nCore, planned.length, WALL_DETAIL_EXT_CAPS.breach);
   // Iteration 12 (ARCH): rust bleeding down the finish from wall-mounted steel (after every cut is final).
   planned.forEach((pf, i) => rustBleed({pf, idx: i, rng: new Rng(pf.face.seed ^ 0x7e57), placed: byFace[i]}, ctx));
   // Board-formed concrete last: its pattern runs around every cut, keep-out and other flush finish.
   planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
-  const {features, dropped} = applyCaps(ctx.features, planned);
+  const coreCaps = applyCaps(ctx.features.filter(f => f.face < nCore), planned);
+  const extCaps = nCore < planned.length ? applyCaps(ctx.features.filter(f => f.face >= nCore), planned, WALL_DETAIL_EXT_CAPS) : {features: [], dropped: 0};
+  const features = [...coreCaps.features, ...extCaps.features], dropped = coreCaps.dropped + extCaps.dropped;
   const counts = Object.fromEntries(Object.keys(FEATURE_LAYER).map(k => [k, 0])) as Record<FeatureKind, number>;
   for (const f of features) counts[f.kind]++;
   return {faces: planned, features, counts, dropped, accent, hotspots: ctx.hot};
@@ -1023,10 +1033,11 @@ function proudRun(st: FaceState, ctx: PlanCtx, kind: 'conduit' | 'pipe' | 'cable
 // ---------------------------------------------------------------------------------------------
 // Station-level: a few genuinely broken sections
 
-function planBreaches(ctx: PlanCtx, faces: PlannedFace[], rng: Rng, byFace: Feature[][]): void {
+function planBreaches(ctx: PlanCtx, faces: PlannedFace[], rng: Rng, byFace: Feature[][], from = 0, to = faces.length, maxBreach: number = WALL_DETAIL_CAPS.breach): void {
   type Cand = {i: number; score: number};
   const cands: Cand[] = [];
   faces.forEach((pf, i) => {
+    if (i < from || i >= to) return;
     const R = RECIPES[pf.treatment];
     if (R.breach <= 0 || pf.len < 3 || pf.face.y1 - pf.face.y0 < 2.3) return;
     const area = ctx.layout.areas[pf.face.area];
@@ -1034,7 +1045,7 @@ function planBreaches(ctx: PlanCtx, faces: PlannedFace[], rng: Rng, byFace: Feat
     cands.push({i, score: R.breach * (0.4 + pf.condition + dark) * (0.6 + 0.8 * new Rng(pf.face.seed ^ 0xb4ea).next())});
   });
   cands.sort((a, b) => b.score - a.score || a.i - b.i);
-  const want = Math.min(WALL_DETAIL_CAPS.breach, 2 + (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.25) ? 1 : 0));
+  const want = Math.min(maxBreach, 2 + (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.25) ? 1 : 0));
   const placedAt: [number, number, number][] = [];
   for (const c of cands) {
     if (placedAt.length >= want) break;
@@ -1101,12 +1112,12 @@ export function solidBehind(levels: Levels, pf: PlannedFace, r: Rect, depth: num
 // ---------------------------------------------------------------------------------------------
 
 /** Enforce per-station budgets (structure / identity first, then hotspot damage, then background). */
-function applyCaps(features: Feature[], faces: PlannedFace[]): {features: Feature[]; dropped: number} {
+function applyCaps(features: Feature[], faces: PlannedFace[], caps: Record<Layer, number> = WALL_DETAIL_CAPS): {features: Feature[]; dropped: number} {
   void faces;
   const rank = (f: Feature) => (f.layer === 'flush' ? 0 : f.kind === 'breach' ? 1 : f.hotspot !== undefined ? 2 : 3);
   const order = features.map((f, i) => ({f, i})).sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i);
   const used: Record<Layer, number> = {flush: 0, decal: 0, soft: 0, cut: 0, proud: 0};
-  const cap: Record<Layer, number> = {flush: WALL_DETAIL_CAPS.flush, decal: WALL_DETAIL_CAPS.decal, soft: WALL_DETAIL_CAPS.soft, cut: WALL_DETAIL_CAPS.cut, proud: WALL_DETAIL_CAPS.proud};
+  const cap: Record<Layer, number> = {flush: caps.flush, decal: caps.decal, soft: caps.soft, cut: caps.cut, proud: caps.proud};
   const keep = new Set<number>();
   for (const {f, i} of order) {
     if (used[f.layer] >= cap[f.layer]) continue;
