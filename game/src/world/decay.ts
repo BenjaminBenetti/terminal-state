@@ -126,6 +126,10 @@ export const DECAY_AGE = 1;
  */
 export function areaNeglect(area: Area | undefined, levelRole: Level['role'], voidCell: boolean): number {
   if (voidCell) return 0.85;
+  // Track 2 (VIS): the track tunnels beyond the beds and their service annexes: abandoned, wet, never maintained.
+  const ext = (area as {ext?: string} | undefined)?.ext;
+  if (ext === 'tunnel') return 0.88;
+  if (ext === 'annex') return Math.min(1, 0.86 + (area!.lighting === 'dark' ? 0.08 : area!.lighting === 'dim' ? 0.04 : 0));
   let n: number;
   if (!area) n = 0.7;
   else if (area.type === 'eatery' || area.type === 'shop') n = 0.62;
@@ -303,8 +307,15 @@ function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayFie
     }
     // --- B: wetness: leak patches (seeded), fixture drips, damp track bed.
     const wet = new Float32Array(n);
+    // Track 2 (VIS): extension cells (track tunnels / service annexes, Area.ext) take no part in the core's leak budget or
+    // placement (the core's leaks stay as they were); they get their own, damper pass below.
+    const extKind = (i: number): string | undefined => { const a = g.area[i]; return a >= 0 ? (layout.areas[a] as {ext?: string} | undefined)?.ext : undefined; };
+    const extCells: number[] = [];
     let openCells = 0;
-    for (let i = 0; i < n; i++) { if (open[i]) openCells++; if (g.cells[i] === VOID) wet[i] = 0.3; }
+    for (let i = 0; i < n; i++) {
+      if (open[i]) { if (extKind(i)) extCells.push(i); else openCells++; }
+      if (g.cells[i] === VOID) wet[i] = 0.3;
+    }
     const nLeaks = Math.min(160, Math.round(openCells * CELL * CELL / 55 * LEVEL_WETNESS[role]));
     const stamp = (cx: number, cy: number, r: number, s: number) => {
       const rc = Math.ceil(r / CELL);
@@ -318,11 +329,22 @@ function buildFieldOf(layout: StationLayout, levels: readonly Level[]): DecayFie
     let placed = 0;
     for (let k = 0, tries = 0; k < nLeaks && tries < nLeaks * 40; tries++) {
       const i = Math.floor(rnd() * n);
-      if (!open[i]) continue;
+      if (!open[i] || (extCells.length && extKind(i))) continue;
       // Most leaks come through walls and slab joints: prefer cells near a wall.
       if (openness[i] > 0.75 && rnd() < 0.65) continue;
       stamp(i % W, Math.floor(i / W), 1.0 + 3.0 * Math.pow(rnd(), 1.5), 0.4 + 0.6 * rnd());
       k++; placed++;
+    }
+    if (extCells.length) {
+      // Track 2 (VIS): the tunnels' ballast is as damp as the bed; the annexes leak about twice as often as the core.
+      const rx = mulberry32(seed ^ 0x7e57ab1e ^ Math.imul(L + 1, 0x85ebca6b));
+      for (const i of extCells) if (extKind(i) === 'tunnel') wet[i] = Math.max(wet[i], 0.3);
+      const nExt = Math.min(60, Math.round(extCells.length * CELL * CELL / 28));
+      for (let k = 0; k < nExt; k++) {
+        const i = extCells[Math.floor(rx() * extCells.length)];
+        stamp(i % W, Math.floor(i / W), 0.8 + 2.4 * Math.pow(rx(), 1.5), 0.45 + 0.55 * rx());
+        placed++;
+      }
     }
     // Seepage along the foot of the walls below ground (the lower level sits in wet rock).
     if (role === 'lower') for (let i = 0; i < n; i++) if (open[i]) wet[i] = 1 - (1 - wet[i]) * (1 - 0.22 * clamp01((0.8 - openness[i]) / 0.35));

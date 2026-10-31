@@ -39,6 +39,7 @@ import {applyStationDecay, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
+import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt'; // Track 2 (VIS): tunnels beyond the beds
 
 class Accum {
   pos: number[] = [];
@@ -116,6 +117,8 @@ export interface BuiltWorld {
   culler: LevelCuller;
   /** Task office-overhaul-20261030 (lane ARCH): the office storeys' architecture (styles, finish keys, materials); office layouts only. */
   officeArch?: OfficeArch;
+  /** Track 2 (VIS): the track-extension presentation (tunnel shells, caps, door frames, graffiti); layouts with extensions only. */
+  trackExt?: TrackExtBuilt;
 }
 
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
@@ -242,7 +245,11 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
   const cutFaces: BuiltFace[] = cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout);
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
-  const faces: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : cutFaces;
+  const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : cutFaces;
+  // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor
+  // (no stair-stepped walls, bed end-face stubs or door reveals inside the shell; world/trackExt/view.ts). Null = unchanged.
+  const ext = TrackExtView.of(layout);
+  const faces: BuiltFace[] = ext ? ext.clipFaces(remapped) : remapped;
   const emitFace = (f: BuiltFace) => {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     const plane = alongX ? f.z0 : f.x0;
@@ -337,6 +344,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     const g = levels[L].grid, id = levels[L].id, W = g.w;
     const floorKey = (i: number): string | null => {
       if (covered[L][i] || g.rampIdx[i] >= 0 || !cols.has(i, L)) return null;
+      if (ext?.ownsCell(L, i)) return null; // Track 2 (VIS): the tunnel shell's ballast floor
       const c = g.cells[i];
       if (c === VOID) return 'ballast';
       if (c !== FLOOR) return null;
@@ -376,10 +384,15 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     // The opening head d.height above a door standing at its storey's base (iteration 08: level 0 at y 0; task
     // office-seamless-20261029: any storey's baseY in a tower world), else the carved cell ceiling.
     const atBase = L === 0 ? df === 0 : storeyDoors && Math.abs(df - levels[L].baseY) < 1e-4;
-    ceilRect(office?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), levels[L].id, x0, z0, x1, z1, atBase ? df + d.height : g.ceil[i]);
+    const dk = office?.doorCeilKey(L, a, b) ?? (b.publicSpace ? 'ceiling' : 'ceilingService'), dy = atBase ? df + d.height : g.ceil[i];
+    // Track 2 (VIS): a tunnel door's cells inside the shell take the shell ceiling; the rest keep the door head.
+    let owned = false;
+    if (ext) for (let y = d.y; y < d.y + d.h && !owned; y++) for (let x = d.x; x < d.x + d.w; x++) if (ext.ownsCell(L, y * g0.w + x)) { owned = true; break; }
+    if (!owned) ceilRect(dk, levels[L].id, x0, z0, x1, z1, dy);
+    else for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) if (!ext!.ownsCell(L, y * g0.w + x)) ceilRect(dk, levels[L].id, x * CELL, y * CELL, (x + 1) * CELL, (y + 1) * CELL, dy);
   }
   // Ceilings of every level band (slab undersides between overlapping levels included).
-  for (const r of ceilingRuns(levels, cols, (L, i) => doorMask[L][i] === 1)) {
+  for (const r of ceilingRuns(levels, cols, (L, i) => doorMask[L][i] === 1 || !!ext?.ownsCell(L, i))) {
     const a = r.voidCell ? undefined : layout.areas[r.area];
     // Task office-overhaul-20261030 (lane ARCH): office ceilings (T-bar grid, plaster, exposed slab, core); none on the open roof.
     const oc = r.voidCell ? null : office?.ceilKey(r.level, r.area, r.row * g0.w + r.x0) ?? null;
@@ -417,21 +430,26 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
   // Iteration 08 (Lane W): zone wall treatments + deterioration over the published faces: insets cut
   // into the arch wall meshes above, plus one merged 'wall-detail' group (world/wallDetail.ts).
-  try { buildWallDetail(group, layout, mats, faces); } catch (e) { console.warn('wall detail skipped', e); }
+  // Track 2 (VIS): + the tunnel shells' straight walls (treatment only: the shell draws them; world/trackExt/shell.ts).
+  const treatFaces = ext ? faces.concat(shellDetailFaces(ext, layout)) : faces;
+  try { buildWallDetail(group, layout, mats, treatFaces); } catch (e) { console.warn('wall detail skipped', e); }
   // Iteration 12 (ARCH): ~30 years without upkeep on walls / floors / ceilings (world/decay.ts): the station's decay
   // field (traffic lanes, edges, leaks, neglect) + the architectural materials' decay hook. Surfaces only.
   try { applyStationDecay(layout, levels, mats); } catch (e) { console.warn('surface decay skipped', e); }
 
   // Tunnel mouths fade to black beyond the platform ends.
   const voidMat = new MeshBasicNodeMaterial({color: 0x030303}); // Iteration 13 (MAT-A): node material
-  for (const t of layout.trenches) {
-    for (const x of [t.x0 + 0.01, t.x1 - 0.01]) {
+  for (const [ti, t] of layout.trenches.entries()) {
+    for (const [x, end] of [[t.x0 + 0.01, 'x0'], [t.x1 - 0.01, 'x1']] as const) {
+      if (ext?.continued.has(`${ti}:${end}`)) continue; // Track 2 (VIS): a tunnel continues this bed end
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(t.z1 - t.z0, t.ceil - trenchY), voidMat);
       plane.position.set(x, (t.ceil + trenchY) / 2, (t.z0 + t.z1) / 2);
       plane.rotation.y = x < (t.x0 + t.x1) / 2 ? Math.PI / 2 : -Math.PI / 2;
       group.add(plane);
     }
   }
+  // Track 2 (VIS): tunnel shells (walls, ceiling, ballast, track, caps), annex door frames + plates, graffiti clues.
+  const trackExt = ext ? buildTrackExtensions(group, ext, layout, mats) : undefined;
 
   // --- Procedural trim: door frames, rails, sleepers, coverboard, handrails, rods ----------
   // Merged per (material, level, coarse trim chunk): trim is cheap, so its chunks are larger than the
@@ -449,8 +467,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     b.translate(cx, cy, cz);
     trimList(mat, cx, cz, levelAt(cx, cy, cz)).push(b);
   };
+  const extDoors = new Set(ext ? [...ext.doorIds].map(i => layout.doors[i]) : []);
   for (const d of layout.doors) {
     if (d.shopfront) continue; // storefront frames are built by storefrontBuilder
+    if (extDoors.has(d)) continue; // Track 2 (VIS): tunnel entry doors are framed by the shell (world/trackExt/shell.ts)
     const g = gridOf((d as {level?: number}).level ?? levelOf(layout.areas[d.a]));
     const i = g.idx(d.x, d.y), df = g.floorOf(i);
     // Opening height above the door's own floor (iteration 08: doors on upper/lower levels; task office-seamless-20261029:
@@ -501,7 +521,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Iteration 07 (Lane DW): rails stop short of every opening (gen/doorways.ts passageRails).
   // Iteration 08: per level (each level's passages against its own grid, lifted to its floor).
   for (const L of levels) {
-    const mine = levels.length === 1 ? layout : {...layout, grid: L.grid, areas: layout.areas.map(a => (levelOf(a) === L.id ? a : {...a, type: 'storage' as const}))};
+    // Track 2 (VIS): extension areas (tunnels / annexes) never get passage wall handrails (their floors are not at y 0).
+    const anyExt = !!ext || layout.areas.some(a => (a as {ext?: string}).ext);
+    const mine = levels.length === 1 && !anyExt ? layout : {...layout, grid: L.grid, areas: layout.areas.map(a => (levelOf(a) === L.id && !(a as {ext?: string}).ext ? a : {...a, type: 'storage' as const}))};
     for (const b of passageRails(mine)) {
       const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
       // passageRails heights are above y 0: lifted to the level's floor there (level 0: its base, y 0 in every station).
@@ -652,7 +674,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // groups (containers, stock) and calls culler.update(camera) before rendering.
   const culler = new LevelCuller(levels, cols, levelAt);
   culler.register(group);
-  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: faces, rails, levelAt, culler, ...(office ? {officeArch: office} : {})};
+  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler, ...(office ? {officeArch: office} : {}), ...(trackExt ? {trackExt} : {})};
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
