@@ -14,7 +14,7 @@ import type {StationLayout} from '../../gen/station';
 import type {TrackTunnel} from '../../gen/trackExt/types';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {signPlate} from '../canvasTextures';
-import {cellCeil} from '../levelGeometry';
+import {cellCeil, type BuiltFace} from '../levelGeometry';
 import type {MatKey, WorldMaterials} from '../materials';
 import {TunnelFrame, renderStations} from './frame';
 import {Acc, basisOf, hashOf, prng, type V3} from './mesh';
@@ -156,6 +156,62 @@ export function buildShells(group: THREE.Group, view: TrackExtView, layout: Stat
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+
+/** `areaType` of the wall-treatment faces published for the shell's straight walls (shellDetailFaces). */
+export const SHELL_FACE_TYPE = 'track-tunnel-shell';
+
+/**
+ * Wall-treatment faces (lane W, world/wallDetail.ts) for the AXIS-ALIGNED straight runs of the shell walls — the first
+ * straight in line with the bed, and any later straight that happens to be axis-aligned — so the tunnel continues the
+ * bed's treatment (stains, streaks, soot, damp, cables, joints) past the mouth. Zone 'trackbed', finish 'tunnel', the
+ * tunnel's (extension) area: planned in the extension partition with its own budget. Door openings are keep-outs; the
+ * cap's last metres are left plain. Not drawn by the builder (the shell draws the wall); cut features find no grid wall
+ * quad to cut there and are dropped by the pass.
+ */
+export function shellDetailFaces(view: TrackExtView, layout: StationLayout): BuiltFace[] {
+  const out: BuiltFace[] = [];
+  for (const v of view.tunnels) {
+    const {t, f} = v;
+    const area = t.areas[0] ?? -1;
+    const openings = doorOpenings(v, layout);
+    const end = Math.min(f.length, capSpan(v, layout).front - 0.5);
+    const st = renderStations(f, [], 1e9).filter(s => s < end - 1e-6).concat(end);
+    // Maximal axis-aligned runs [a, b].
+    const runs: [number, number, 'x' | 'z'][] = [];
+    for (let j = 0; j + 1 < st.length; j++) {
+      const m = f.at((st[j] + st[j + 1]) / 2);
+      const ax = Math.abs(m.tx) > 0.99999 ? 'x' : Math.abs(m.tz) > 0.99999 ? 'z' : null;
+      if (!ax) continue;
+      const r = runs[runs.length - 1];
+      if (r && r[2] === ax && Math.abs(r[1] - st[j]) < 1e-6) r[1] = st[j + 1];
+      else runs.push([st[j], st[j + 1], ax]);
+    }
+    for (const [a, b, ax] of runs) {
+      if (b - a < 2) continue;
+      for (const side of [1, -1] as const) {
+        const pa = f.point(a, side * f.half), pb = f.point(b, side * f.half), m = f.at((a + b) / 2);
+        const nx = Math.round(-side * m.lx), nz = Math.round(-side * m.lz);
+        const alongX = ax === 'x';
+        const c0 = alongX ? Math.min(pa[0], pb[0]) : Math.min(pa[1], pb[1]), c1 = alongX ? Math.max(pa[0], pb[0]) : Math.max(pa[1], pb[1]);
+        const plane = alongX ? (pa[1] + pb[1]) / 2 : (pa[0] + pb[0]) / 2;
+        // Door openings, and the graffiti patches (kept clean of stains / cables: keep-outs up to above the marks).
+        const marks = t.clues.filter(c => c.side === side).map(c => ({side, s0: c.s - 1.25, s1: c.s + 1.25, head: t.floorY + 2.6}));
+        const ops = [...openings, ...marks].filter(o => o.side === side && o.s1 > a && o.s0 < b).map(o => {
+          const qa = f.point(o.s0, side * f.half), qb = f.point(o.s1, side * f.half);
+          const u0 = (alongX ? Math.min(qa[0], qb[0]) : Math.min(qa[1], qb[1])) - c0, u1 = (alongX ? Math.max(qa[0], qb[0]) : Math.max(qa[1], qb[1])) - c0;
+          return {s0: Math.max(0, u0), s1: Math.min(c1 - c0, u1), top: o.head};
+        });
+        out.push({
+          level: 0, area, areaType: SHELL_FACE_TYPE, zone: 'trackbed',
+          x0: alongX ? c0 : plane, z0: alongX ? plane : c0, x1: alongX ? c1 : plane, z1: alongX ? plane : c1, nx, nz,
+          y0: t.floorY, y1: t.ceilY, finish: 'tunnel', openings: ops, seed: hashOf('shell-face', layout.seed >>> 0, t.id, side, Math.round(a * 100)),
+          kind: 'tunnel', vb0: t.floorY, vb1: t.floorY,
+        });
+      }
+    }
+  }
+  return out;
+}
 
 /** Wall openings of a tunnel's entry doors: where the door rect crosses the shell wall line (grid ground truth). */
 export function doorOpenings(v: TunnelView, layout: StationLayout): ShellOpening[] {

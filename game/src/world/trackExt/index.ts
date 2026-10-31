@@ -22,6 +22,7 @@ import type {TrackExtView} from './view';
 
 export {TrackExtView, extOf, extensionsOf, continuedEnds, endKey} from './view';
 export {TunnelFrame} from './frame';
+export {shellDetailFaces, SHELL_FACE_TYPE} from './shell';
 
 export interface TrackExtStats {
   tunnels: number;

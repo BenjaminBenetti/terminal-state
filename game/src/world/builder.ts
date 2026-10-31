@@ -39,7 +39,7 @@ import {applyStationDecay, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
-import {TrackExtView, buildTrackExtensions, type TrackExtBuilt} from './trackExt'; // Track 2 (VIS): tunnels beyond the beds
+import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt'; // Track 2 (VIS): tunnels beyond the beds
 
 class Accum {
   pos: number[] = [];
@@ -430,7 +430,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   }
   // Iteration 08 (Lane W): zone wall treatments + deterioration over the published faces: insets cut
   // into the arch wall meshes above, plus one merged 'wall-detail' group (world/wallDetail.ts).
-  try { buildWallDetail(group, layout, mats, faces); } catch (e) { console.warn('wall detail skipped', e); }
+  // Track 2 (VIS): + the tunnel shells' straight walls (treatment only: the shell draws them; world/trackExt/shell.ts).
+  const treatFaces = ext ? faces.concat(shellDetailFaces(ext, layout)) : faces;
+  try { buildWallDetail(group, layout, mats, treatFaces); } catch (e) { console.warn('wall detail skipped', e); }
   // Iteration 12 (ARCH): ~30 years without upkeep on walls / floors / ceilings (world/decay.ts): the station's decay
   // field (traffic lanes, edges, leaks, neglect) + the architectural materials' decay hook. Surfaces only.
   try { applyStationDecay(layout, levels, mats); } catch (e) { console.warn('surface decay skipped', e); }
@@ -672,7 +674,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // groups (containers, stock) and calls culler.update(camera) before rendering.
   const culler = new LevelCuller(levels, cols, levelAt);
   culler.register(group);
-  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: faces, rails, levelAt, culler, ...(office ? {officeArch: office} : {}), ...(trackExt ? {trackExt} : {})};
+  return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler, ...(office ? {officeArch: office} : {}), ...(trackExt ? {trackExt} : {})};
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

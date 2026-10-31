@@ -12,7 +12,7 @@ import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {TunnelFrame} from '../src/world/trackExt/frame';
 import {TrackExtView, outsideIntervals, resolveLeftSign} from '../src/world/trackExt/view';
-import {SHELL, clipOutside, sleeperPhase} from '../src/world/trackExt/shell';
+import {SHELL, SHELL_FACE_TYPE, clipOutside, sleeperPhase} from '../src/world/trackExt/shell';
 import {CELL_OF, GRAFFITI} from '../src/world/trackExt/graffiti';
 import {STEAM, SteamVents, annexVents} from '../src/world/trackExt/steam';
 import {Effects, STEAM_FX} from '../src/world/fx';
@@ -137,8 +137,15 @@ describe('track tunnel shell geometry', () => {
       const mx = (f.x0 + f.x1) / 2 + f.nx * 0.01, mz = (f.z0 + f.z1) / 2 + f.nz * 0.01;
       expect(view.insideAny(mx, mz, 0.02, 0), `face ${JSON.stringify(f)}`).toBe(false);
     }
+    // Tunnel-area faces: only the treatment faces published for the shell's straight walls, ON the wall line.
     const tunnelAreas = new Set(fx.ext.tunnels.flatMap(t => t.areas));
-    expect(w.wallFaces.some(f => tunnelAreas.has(f.area))).toBe(false);
+    const shellFaces = w.wallFaces.filter(f => tunnelAreas.has(f.area));
+    expect(shellFaces.length).toBeGreaterThan(0);
+    for (const f of shellFaces) {
+      expect(f.areaType).toBe(SHELL_FACE_TYPE);
+      const t = fx.ext.tunnels.find(tt => tt.areas.includes(f.area))!, fr = new TunnelFrame(t);
+      for (const u of [0, 0.5, 1]) expect(Math.abs(Math.abs(fr.project(f.x0 + (f.x1 - f.x0) * u, f.z0 + (f.z1 - f.z0) * u).lat) - t.width / 2)).toBeLessThan(1e-3);
+    }
     let checked = 0;
     w.group.traverse(o => {
       const m = o as THREE.Mesh;
