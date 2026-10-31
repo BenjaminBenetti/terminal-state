@@ -4,7 +4,9 @@
 //  - a KIOSK CART (`mallKioskCart`, M17: a 2-door lower cabinet = an openable container, an open double-sided display box) on at most
 //    one spot per retail ring, long side along the walkway, its doors toward the shops (away from the void);
 //  - FOOD-HALL SEATING (`foodCourtTableSet`, M20: a table + four stools on one floor-fixed frame) in the gallery of the food-court
-//    ring, nearest the food counters, up to COMMONS.seat.max sets ("its seating is the common food hall": gen/mall/shops.ts).
+//    ring, nearest the food counters, up to COMMONS.seat.max sets ("its seating is the common food hall": gen/mall/shops.ts);
+//  - MALL BENCHES (`mallBench`, batch 2 resume M37: 1.70 m, seat 0.45, slim backrest; bolted down) — up to COMMONS.bench.perRing per
+//    ring, spaced apart, long side along the walkway, the seat facing the atrium.
 // A spot is taken only where it is clearly out of the way: the footprint AND a clear ring around it (kiosk 1.8 m, seating 0.9 m)
 // are walkable GALLERY floor (never a bridge deck, a shop, a door zone, a stair approach / link landing (placeKit edge mask), a
 // void / aperture setback or a ramp), a set distance from every railing run (void edges, escalator balustrades), every run mouth
@@ -22,11 +24,13 @@ import type {Area, StationLayout} from '../stationTypes';
 export const COMMONS = {
   kiosk: {ring: 1.8, rail: 1.6, mouth: 4.5, lift: 2.5, entry: 2.0, front: 0.9, perRing: 1},
   seat: {ring: 0.9, rail: 1.2, mouth: 3.0, lift: 1.5, entry: 1.5, gap: 3.4, max: 6},
+  bench: {ring: 0.8, rail: 1.0, mouth: 3.5, lift: 1.5, entry: 1.5, gap: 6.0, perRing: 3},
 } as const;
 
 export interface CommonsReport {
   kiosks: {level: number; x: number; z: number; rot: number}[];
   seats: {level: number; x: number; z: number}[];
+  benches: {level: number; x: number; z: number; rot: number}[];
   rejects: Record<string, number>;
 }
 
@@ -68,7 +72,7 @@ const centreOff = (e: number) => (Math.ceil((e - 0.08) / CELL - 1e-9) % 2 === 1 
 
 /** Furnishes the gallery commons (see the header). `ctxOf`: the shop dresser's per-storey place contexts. */
 export function dressMallCommons(layout: StationLayout, ctxOf: (level: number) => PlaceCtx, rng: Rng, placed?: PropPlacement[]): CommonsReport {
-  const rep: CommonsReport = {kiosks: [], seats: [], rejects: {}};
+  const rep: CommonsReport = {kiosks: [], seats: [], benches: [], rejects: {}};
   const why = (r: string) => { rep.rejects[r] = (rep.rejects[r] ?? 0) + 1; };
   const m = layout.mall;
   if (!m) return rep;
@@ -190,7 +194,24 @@ export function dressMallCommons(layout: StationLayout, ctxOf: (level: number) =
       const rot = alongX ? (z >= vc.z ? 0 : Math.PI) : (x >= vc.x ? Math.PI / 2 : -Math.PI / 2);
       const a = fits('mallKioskCart', x, z, rot, K, ent, 'kiosk');
       if (!a) continue;
-      if (put('mallKioskCart', x, z, rot, a, 1.0, K.front)) { kiosks++; rep.kiosks.push({level: lv, x, z, rot}); }
+      if (put('mallKioskCart', x, z, rot, a, K.ring, K.front)) { kiosks++; rep.kiosks.push({level: lv, x, z, rot}); }
+    }
+
+    // --- mall benches (lane ASSETS M37, bolted down): a few per ring, long side along the walkway, the seat facing the atrium ---------
+    const B = COMMONS.bench, bd = PROP_DEFS.mallBench;
+    const bent = entries(B.entry);
+    const got: V[] = [];
+    for (const i of order) {
+      if (got.length >= B.perRing) break;
+      const cx = i % g.w, cy = (i - cx) / g.w;
+      const alongX = runAlong(cx, cy, 1, 0) >= runAlong(cx, cy, 0, 1);
+      const x = cx * CELL + centreOff(alongX ? bd.w : bd.d), z = cy * CELL + centreOff(alongX ? bd.d : bd.w);
+      if (got.some(q => Math.hypot(q.x - x, q.z - z) < B.gap)) continue;
+      // the seat (+Z) toward the void centre (a synthetic mall without a void: +z / +x)
+      const rot = alongX ? (z <= vc.z || !Number.isFinite(vc.z) ? 0 : Math.PI) : (x <= vc.x || !Number.isFinite(vc.x) ? Math.PI / 2 : -Math.PI / 2);
+      const a = fits('mallBench', x, z, rot, B, bent, 'bench');
+      if (!a) continue;
+      if (put('mallBench', x, z, rot, a, B.ring)) { got.push({x, z}); rep.benches.push({level: lv, x, z, rot}); }
     }
   }
   return rep;

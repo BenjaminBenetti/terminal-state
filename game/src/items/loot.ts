@@ -83,6 +83,7 @@ export const HOLDER_LABEL: Record<HolderKind, string> = {
   glassCounter: 'display counter', merchTable: 'display table', wallBay: 'shelving bay', produceStand: 'produce stand', bookstoreBookcase: 'bookcase',
   retailGondola: 'gondola shelf', clothingWallUnit: 'clothing bay', checkoutLane: 'checkout', outdoorsPlankShelving: 'plank shelving', storageTote: 'storage tote',
   shoeWallDisplay: 'shoe wall', foodCourtTableSet: 'table',
+  multideckOpenCooler: 'open cooler', cosmeticsWallUnit: 'cosmetics stand', // lane ASSETS batch 2 resume (12c)
 };
 /** Back-compat alias (iteration 02 name). */
 export const CONTAINER_LABEL = HOLDER_LABEL;

@@ -103,6 +103,23 @@ const SPECS = {
   /** M29 medicine drawer cabinet: a 3 x 11 grid of small drawers + a top cupboard (left), one full-height door over an inner drawer
    *  bank and three shelves (right). */
   medicineDrawerCabinet: {box: [0.936, 0.65, 1.9], blocksSight: true, cls: 'sheetMetal'},
+  // --- lane ASSETS batch 2 resume + 2R (lanes/ASSETS.notes section 12c; the info desk M40 stays procedural) ---
+  /** M35 tall gun safe: one full-height door hinged on its right edge (viewer's), spoke wheel + dial; a solid body (lined cavity). */
+  gunSafeTall: {box: [0.823, 0.6, 1.8], blocksSight: true, cls: 'steel'},
+  /** M45 dresser: four drawers (2 x 2) under a 0.85 m top. */
+  dresserDrawers: {box: [1.4, 0.501, 0.85], cls: 'wood'},
+  /** M47 cardboard box: a taped carton (hollow shell), its top cut into two flaps on the long edges. */
+  cardboardBoxFlaps: {box: [0.55, 0.376, 0.483], cls: 'cardboard'},
+  /** M30 open multideck cooler: two open bays, a deck and four shelves, no doors / glass (grocery / café). */
+  multideckOpenCooler: {box: [1.9, 0.951, 1.978], blocksSight: true, cls: 'sheetMetal'},
+  /** M42 cosmetics wall unit: a white frame with clear acrylic tiers on its sides and a front plinth ledge. */
+  cosmeticsWallUnit: {box: [1.067, 0.442, 2.2], cls: 'plastic'},
+  /** M37 mall bench: a 1.70 m bench, seat 0.45 m, slim backrest to 0.81 m (galleries). */
+  mallBench: {box: [1.7, 0.596, 0.812], cls: 'steel'},
+  /** M31 café bistro table: a 0.75 m marble disc on a round foot. */
+  cafeBistroTable: {box: [0.75, 0.756, 0.75], cls: 'terrazzo'},
+  /** M32 café chair: bentwood-style chair, seat 0.43 m. */
+  cafeChair: {box: [0.447, 0.537, 0.88], cls: 'wood'},
   // --- task track3 (lane ARCH): landmarks / navigation (gen/mall/landmarks.ts places them, world/mallArch.ts draws them) ---
   /** Pit-plaza fountain basin: square stone basin with a 0.4 m sitting ledge (half size 1.6 m; a 1.25 m fallback). */
   fountainBasin: {box: [3.2, 3.2, 0.5], cls: 'terrazzo'},
@@ -121,10 +138,12 @@ export function isMallKind(kind: string): kind is MallKind {
 /** Holder kinds among them (items/loot.ts SURFACE_KINDS; their surfaces: MALL_SURFACES). */
 export const MALL_HOLDER_KINDS = ['glassCounter', 'merchTable', 'wallBay', 'produceStand',
   // lane ASSETS batch 1 open holders
-  'retailGondola', 'clothingWallUnit', 'checkoutLane', 'outdoorsPlankShelving', 'shoeWallDisplay', 'foodCourtTableSet'] as const satisfies readonly MallKind[];
+  'retailGondola', 'clothingWallUnit', 'checkoutLane', 'outdoorsPlankShelving', 'shoeWallDisplay', 'foodCourtTableSet',
+  // lane ASSETS batch 2 resume (12c) open holders
+  'multideckOpenCooler', 'cosmeticsWallUnit'] as const satisfies readonly MallKind[];
 /** Openable mall containers (world/openablesSpec.ts OPENABLE_SPECS; derived drawers / doors measured on their models). */
 export const MALL_OPENABLE_KINDS = ['bookstoreBookcase', 'mallCashwrapCounter', 'glassDisplayCabinet', 'pharmacyDispensaryCounter', 'mallKioskCart',
-  'medicineDrawerCabinet', 'storageTote'] as const satisfies readonly MallKind[];
+  'medicineDrawerCabinet', 'storageTote', 'gunSafeTall', 'dresserDrawers', 'cardboardBoxFlaps'] as const satisfies readonly MallKind[];
 export type MallOpenableKind = (typeof MALL_OPENABLE_KINDS)[number];
 export type MallHolderKind = (typeof MALL_HOLDER_KINDS)[number];
 export function isMallHolderKind(kind: string): kind is MallHolderKind {
@@ -150,6 +169,9 @@ export const MALL_KIND_ASSET: Readonly<Partial<Record<MallKind, string>>> = {
   // batch 2 (lanes/ASSETS.notes section 12; M35 / M45 / M47 and the rest NOT delivered: their kinds keep their existing forms)
   ottoman: 'try-on-ottoman', tentDisplay: 'camping-tent-display', tvWall: 'tv-wall-bank', kiddieRide: 'kiddie-ride', salonChair: 'salon-styling-chair',
   displayBed: 'bed-display', medicineDrawerCabinet: 'medicine-drawer-cabinet',
+  // batch 2 resume + 2R (lanes/ASSETS.notes section 12c)
+  gunSafeTall: 'gun-safe-tall', dresserDrawers: 'dresser-drawers', cardboardBoxFlaps: 'cardboard-box-flaps', multideckOpenCooler: 'multideck-open-cooler',
+  cosmeticsWallUnit: 'cosmetics-wall-unit', mallBench: 'mall-bench', cafeBistroTable: 'cafe-bistro-table', cafeChair: 'cafe-chair',
 };
 /** Lane ASSETS hook: a delivered model's measured bounds [x, y, z] (m) by asset id (assets/mallDims.generated.ts MALL_DIMS). */
 export const MALL_MODEL_DIMS: Readonly<Record<string, readonly [number, number, number]>> = MALL_DIMS;
@@ -233,6 +255,27 @@ export const MALL_SURFACES: Readonly<Record<MallHolderKind | MallOpenableKind, r
   ],
   // M18 tote: none exposed (its tub is under the lid; nothing rides its lid: a spill holder never floats lots)
   storageTote: [],
+  // --- batch 2 resume (12c), measured on the runtime GLBs in the prop frame (upward planes + ray casts) ---
+  // M30 multideck: deck 0.474 (z -0.296..0.443; shelf above from z 0.28 back) and shelves 0.73 / 0.973 / 1.20 / 1.49 (z -0.341..0.280)
+  // in two bays split at x ~0.03; canopy underside ~1.82
+  multideckOpenCooler: ([[0.474, 0.23], [0.73, 0.2], [0.973, 0.2], [1.2, 0.25], [1.49, 0.3]] as const).flatMap(([y, clear]) => [
+    {y, x0: -0.89, x1: -0.01, z0: -0.31, z1: 0.26, clear},
+    {y, x0: 0.06, x1: 0.89, z0: -0.31, z1: 0.26, clear},
+  ]),
+  // M42 cosmetics unit: the plinth ledge 0.29 in front of the frame (frame face z 0.057), acrylic tiers 0.79 / 0.99 both sides and
+  // 1.18 / 1.37 on the +x side (x +-0.32..0.534, z -0.221..0.099)
+  cosmeticsWallUnit: [
+    {y: 0.29, x0: -0.28, x1: 0.28, z0: 0.07, z1: 0.21, clear: 0.5},
+    ...([-1, 1] as const).flatMap(sx => [0.79, 0.99].map(y => ({y, x0: sx < 0 ? -0.52 : 0.34, x1: sx < 0 ? -0.34 : 0.52, z0: -0.2, z1: 0.08,
+      clear: y === 0.79 || sx > 0 ? 0.16 : 0.4}))),
+    {y: 1.18, x0: 0.34, x1: 0.52, z0: -0.2, z1: 0.08, clear: 0.16},
+    {y: 1.37, x0: 0.34, x1: 0.52, z0: -0.2, z1: 0.08, clear: 0.4},
+  ],
+  // M35 gun safe: none exposed (its 1.8 m top is out of reach); M47 carton: none (a spill holder never carries lots on its flaps)
+  gunSafeTall: [],
+  cardboardBoxFlaps: [],
+  // M45 dresser: its top 0.85 (x +-0.696, z -0.248..0.244)
+  dresserDrawers: [{y: 0.848, x0: -0.64, x1: 0.64, z0: -0.21, z1: 0.21, clear: 0.5}],
   // M19 shoe wall: ledges 0.30 / 0.54 / 1.01 / 1.24 full width, 0.78 left two columns, 1.46 centre column (z -0.11..0.113)
   shoeWallDisplay: ([[0.3, -0.97, 0.97], [0.54, -0.97, 0.97], [0.78, -0.96, 0.31], [1.01, -0.97, 0.97], [1.24, -0.97, 0.97], [1.46, -0.3, 0.31]] as const)
     .map(([y, x0, x1]) => ({y, x0, x1, z0: -0.1, z1: 0.1, clear: y === 1.46 ? 0.3 : 0.19})),
@@ -305,6 +348,15 @@ export const MALL_PHYS = {
   fountainBasin: S('built-in', 'fountain basin: a cast-in-place stone basin built into the plaza slab (several tonnes, plumbed in); it cannot move'),
   fountainSpire: S('built-in', 'bronze fountain centrepiece bolted through the basin floor onto its plumbing riser'),
   directoryPylon: S('anchored', 'mall directory pylon: a steel totem bolted to the floor slab (wired for its long-dead backlight)'),
+  // lane ASSETS batch 2 resume + 2R (12c)
+  gunSafeTall: S('too heavy', 'tall steel gun safe (M35, ~250 kg) bolted down: a loot holder that cannot be shoved'),
+  dresserDrawers: S('holder', 'solid timber dresser (M45, ~55 kg) with four drawers and loot on its top: a holder stays put so its finite lots never float'),
+  cardboardBoxFlaps: {dynamic: true, mass: 3, mat: 'pad', how: 'taped cardboard box (~3 kg with a little stock): an openable SPILL holder (openablesSpec `spill`) — a shot or a walk-in knocks it loose, its finite lots spill once as pickups, then it slides / tips'},
+  multideckOpenCooler: S('too heavy', 'open multideck cooler (M30, ~200 kg, plumbed / wired in): a loot holder on its decks that cannot be shoved'),
+  cosmeticsWallUnit: S('mounted', 'cosmetics wall unit (M42) fixed to the wall: a loot holder on its acrylic tiers and ledge'),
+  mallBench: S('anchored', 'mall bench (M37, ~60 kg steel and timber) bolted to the gallery floor like every public mall bench: a walk-in or a shot cannot move it'),
+  cafeBistroTable: {dynamic: true, mass: 15, mat: 'pad', how: 'café bistro table (M31: marble disc on a cast foot, ~15 kg): shoved when walked into, slides / tips when shot (furniture, not a loot holder: nothing rides its top)'},
+  cafeChair: {dynamic: true, mass: 5, mat: 'pad', how: 'café chair (M32, ~5 kg timber): shoved aside when walked into, tips when shot'},
 } satisfies Record<MallKind, MallPhys>;
 
 // ---------------------------------------------------------------------------------------------
@@ -348,6 +400,15 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   fountainBasin: {role: 'decor', cls: 'none', how: 'fountain basin (stagnant water, debris): a built-in stone basin, nothing to open'},
   fountainSpire: {role: 'decor', cls: 'none', how: 'bronze fountain centrepiece: sealed casting, nothing to open'},
   directoryPylon: {role: 'equipment', cls: 'none', how: 'directory pylon: sealed steel totem with printed plan faces (backlight dead), no door or panel to open'},
+  // lane ASSETS batch 2 resume + 2R (12c)
+  gunSafeTall: {role: 'storage', cls: 'openable', how: 'tall gun safe (M35): its derived full-height door (hinged on the right edge) over a lined cavity with a shelf; ammo / gun-care by the deliberate rule, never guns'},
+  dresserDrawers: {role: 'storage', cls: 'openable', how: 'dresser (M45): 4 derived drawers (2 x 2) with lined cavities; its top is an exposed surface'},
+  cardboardBoxFlaps: {role: 'storage', cls: 'openable', how: 'cardboard box (M47): its closed top derived into two flaps hinged on the long edges over its hollow shell'},
+  multideckOpenCooler: {role: 'surface', cls: 'open', how: 'open multideck cooler (M30): no doors or glass by design — loot on its deck and shelves is reachable'},
+  cosmeticsWallUnit: {role: 'surface', cls: 'open', how: 'cosmetics wall unit (M42): open acrylic tiers and a plinth ledge, nothing closes'},
+  mallBench: {role: 'decor', cls: 'none', how: 'mall bench (M37): a seat with a slim backrest, nothing to open'},
+  cafeBistroTable: {role: 'decor', cls: 'none', how: 'café bistro table (M31): a marble top on a foot, no drawer (movable furniture, not a loot holder)'},
+  cafeChair: {role: 'decor', cls: 'none', how: 'café chair (M32): nothing to open'},
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -555,6 +616,47 @@ export function mallShape(kind: MallKind): ShapePart[] {
       box('accent', [w * 0.82, (h - 0.08) * 0.6, d * 0.82], [0, 0.08 + (h - 0.08) * 0.3, 0]),
       box('accent', [w * 0.55, (h - 0.08) * 0.4, d * 0.55], [0, 0.08 + (h - 0.08) * 0.8, 0]),
       box('black', [0.7, 0.55, 0.01], [0, 0.355, d * 0.41 + 0.006]),
+    ];
+    case 'gunSafeTall': return [
+      box('steelDark', [w, h, d - 0.06], [0, h / 2, -0.03]),
+      box('steelDark', [w - 0.24, h - 0.3, 0.03], [0, 0.14 + (h - 0.3) / 2, d / 2 - 0.045]),
+      box('steelBright', [0.2, 0.2, 0.06], [0, 0.98, d / 2 - 0.03]),
+    ];
+    case 'dresserDrawers': return [
+      box('wood', [w, h - 0.05, d - 0.06], [0, (h - 0.05) / 2, -0.03]),
+      box('woodVeneer', [w, 0.05, d], [0, h - 0.025, 0]),
+      ...[[-0.3, 0.26], [0.3, 0.26], [-0.3, 0.6], [0.3, 0.6]].map(([x, y]) => box('woodVeneer', [0.54, 0.28, 0.02], [x, y, d / 2 - 0.04])),
+    ];
+    case 'cardboardBoxFlaps': return [box('wood', [w, h, d], [0, h / 2, 0])];
+    case 'multideckOpenCooler': return [
+      box('steelDark', [w, 0.47, d - 0.05], [0, 0.235, -0.025]),
+      box('steelDark', [w, h, 0.12], [0, h / 2, -d / 2 + 0.06]),
+      box('steelDark', [0.04, h, d], [-w / 2 + 0.02, h / 2, 0]),
+      box('steelDark', [0.04, h, d], [w / 2 - 0.02, h / 2, 0]),
+      ...[0.73, 0.973, 1.2, 1.49].map(y => box('steelBright', [w - 0.08, 0.02, 0.62], [0, y - 0.01, -0.03])),
+      box('steelDark', [w, 0.14, d], [0, h - 0.07, 0]),
+    ];
+    case 'cosmeticsWallUnit': return [
+      box('porcelain', [0.61, h, 0.27], [0, h / 2, -0.085]),
+      box('porcelain', [0.61, 0.29, 0.44], [0, 0.145, 0]),
+      ...[0.79, 0.99].flatMap(y => [box('glass', [0.21, 0.01, 0.32], [-0.43, y - 0.005, -0.06]), box('glass', [0.21, 0.01, 0.32], [0.43, y - 0.005, -0.06])]),
+      ...[1.18, 1.37].map(y => box('glass', [0.21, 0.01, 0.32], [0.43, y - 0.005, -0.06])),
+    ];
+    case 'mallBench': return [
+      box('wood', [w, 0.05, 0.36], [0, 0.425, 0.1]),
+      box('steelDark', [0.06, 0.4, 0.36], [-0.63, 0.2, 0.1]),
+      box('steelDark', [0.06, 0.4, 0.36], [0.63, 0.2, 0.1]),
+      box('wood', [w - 0.06, 0.3, 0.04], [0, h - 0.15, -d / 2 + 0.04]),
+    ];
+    case 'cafeBistroTable': return [
+      box('porcelain', [w, 0.03, d], [0, h - 0.015, 0]),
+      box('steelDark', [0.06, h - 0.05, 0.06], [0, (h - 0.03) / 2, 0]),
+      box('steelDark', [0.42, 0.03, 0.42], [0, 0.015, 0]),
+    ];
+    case 'cafeChair': return [
+      box('wood', [w - 0.04, 0.04, d - 0.12], [0, 0.41, 0.03]),
+      ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => box('wood', [0.03, 0.41, 0.03], [sx * (w / 2 - 0.04), 0.205, sz * (d / 2 - 0.08)])),
+      box('wood', [w - 0.04, h - 0.45, 0.03], [0, 0.45 + (h - 0.45) / 2, -d / 2 + 0.02]),
     ];
     case 'medicineDrawerCabinet': return [
       box('panel', [w, h, d - 0.07], [0, h / 2, -0.035]),

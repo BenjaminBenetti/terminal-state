@@ -469,6 +469,17 @@ const MED_COLS: readonly (readonly [number, number])[] = [[-0.438, -0.298], [-0.
 const MED_ROWS: readonly (readonly [number, number])[] = [[0.16, 0.28], [0.28, 0.39], [0.39, 0.5], [0.54, 0.65], [0.65, 0.76], [0.76, 0.87], [0.87, 0.98], [0.98, 1.1],
   [1.1, 1.21], [1.21, 1.32], [1.32, 1.43]];
 const MED_DRAWER = {zCut: 0.193, zFront: 0.245, depth: 0.42, dist: 0.3, tight: true} as const;
+/**
+ * Lane ASSETS batch 2 resume (lanes/ASSETS.notes 12c), measured by lane SHOPS in the prop frame (half turn; front +Z):
+ * - M35 tall gun safe (0.82 x 1.80 x 0.60): door panel x -0.287..0.286, y 0.138..1.660, face z 0.235 inside a bezel at 0.242; hinge
+ *   knuckles x 0.256..0.305 at z 0.274 (the viewer's right edge); spoke wheel x ~-0.02, y 0.98 to z 0.296; a solid body -> lined cavity.
+ * - M45 dresser (1.40 x 0.85 x 0.50): drawer fronts z 0.213..0.217 (stiles 0.198, pulls to 0.238 at x +-0.30), columns x -0.58..-0.03
+ *   / 0.03..0.58, rows 0.11..0.415 / 0.46..0.745 between full-depth boards (0.10 / 0.43-0.46 / 0.75-0.77), carcass back -0.201.
+ * - M47 cardboard box (0.55 x 0.48 x 0.38): a hollow 6 mm shell (floor 0.009, walls x +-0.264..0.275 / z +-0.185..0.187) under one
+ *   closed top 0.474..0.483 — cut into two flaps on its LONG edges (z +-0.186; the openables hinge turns about x or y only: the printed
+ *   tape band across the top reads as slit tape), each over its half of the real interior.
+ */
+const DRESSER_DRAWER = {zCut: 0.2, zFront: 0.217, depth: 0.36, dist: 0.3} as const;
 /** A tall cupboard bay of the E05 server cabinet run: two shelves inside its lined, hollow bay (x0..x1, floor 0.105, back -0.672). */
 function serverBay(name: string, x0: number, x1: number, hinge: -1 | 1): PartSpec {
   const ix0 = x0 + 0.012, ix1 = x1 - 0.012;
@@ -1030,6 +1041,38 @@ export const OPENABLE_SPECS = {
     loot: LOOT.storageTote,
     sound: {open: 'crate', close: 'crate'},
   },
+  /** Batch 2 resume M35 tall gun safe: its derived full-height door (right-hand hinge) over a lined steel cavity with a shelf. */
+  gunSafeTall: {
+    label: 'gun safe', model: 'office-gun-safe-tall', turn: true, body: 'model', group: 'container',
+    parts: [mallDoor('safe door', -0.29, 0.29, 0.135, 1.665, 0.2, 0.31, 1, {
+      cavity: box(-0.27, 0.15, -0.27, 0.27, 1.65, 0.195), replaceInterior: true, cavityRole: 'steelDark',
+      inner: [B('steelDark', -0.27, 1.25, -0.27, 0.27, 1.265, 0.17)],
+      surfaces: [{y: 0.152, x0: -0.24, x1: 0.24, z0: -0.24, z1: 0.16, clear: 1.0}, {y: 1.267, x0: -0.24, x1: 0.24, z0: -0.24, z1: 0.14, clear: 0.36}],
+    })],
+    loot: LOOT.gunSafeTall,
+    sound: {open: 'gunLocker', close: 'gunLocker'},
+  },
+  /** Batch 2 resume M45 dresser: 4 derived drawers (2 x 2) with lined cavities; its top is an exposed surface. */
+  dresserDrawers: {
+    label: 'dresser', model: 'office-dresser-drawers', turn: true, body: 'model', group: 'container',
+    parts: ([[0.11, 0.415, 'bottom'], [0.46, 0.745, 'top']] as const).flatMap(([y0, y1, row]) =>
+      ([[-0.58, -0.025, 'left'], [0.025, 0.58, 'right']] as const).map(([x0, x1, side]) => modelDrawer(`${row} ${side} drawer`, x0, x1, y0, y1, DRESSER_DRAWER))),
+    loot: LOOT.dresserDrawers,
+    sound: {open: 'desk', close: 'desk'},
+  },
+  /** Batch 2 resume M47 cardboard box: its closed top derived into two flaps hinged on the long edges over the hollow shell. */
+  cardboardBoxFlaps: {
+    label: 'cardboard box', model: 'office-cardboard-box-flaps', turn: true, body: 'model', group: 'container', spill: true,
+    parts: ([[1, 'front flap'], [-1, 'back flap']] as const).map(([s, name]): PartSpec => ({
+      name,
+      move: {type: 'hinge', axis: 'x', pivot: [0, 0.479, s * 0.186], angle: s * 110 * P, min: 50 * P},
+      region: [s > 0 ? box(-0.28, 0.47, 0, 0.28, 0.49, 0.19) : box(-0.28, 0.47, -0.19, 0.28, 0.49, 0)],
+      cavity: s > 0 ? box(-0.262, 0.01, 0, 0.262, 0.468, 0.182) : box(-0.262, 0.01, -0.182, 0.262, 0.468, 0), cavityHidden: true, modelInterior: true,
+      surfaces: [{y: 0.011, x0: -0.24, x1: 0.24, z0: s > 0 ? 0.02 : -0.165, z1: s > 0 ? 0.165 : -0.02, clear: 0.42}],
+    })),
+    loot: LOOT.cardboardBoxFlaps,
+    sound: {open: 'crate', close: 'crate'},
+  },
 } as const satisfies Record<string, OpenableSpec>;
 
 export type OpenableKind = keyof typeof OPENABLE_SPECS;
@@ -1047,7 +1090,8 @@ export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingB
   'bookstoreBookcase', // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (base drawers + open shelves)
   'mallCashwrapCounter', 'glassDisplayCabinet', 'pharmacyDispensaryCounter', 'mallKioskCart', // lane SHOPS: lane ASSETS batch 1 storage
   'medicineDrawerCabinet', // lane SHOPS: lane ASSETS batch 2 M29
-  'storageTote'] as const; // lane SHOPS: batch 1 M18 once lane ASSETS closed its lid (a lidded spill box)
+  'storageTote', // lane SHOPS: batch 1 M18 once lane ASSETS closed its lid (a lidded spill box)
+  'gunSafeTall', 'dresserDrawers', 'cardboardBoxFlaps'] as const; // lane SHOPS: batch 2 resume (12c) storage
 export type OpenableContainerKind = (typeof OPENABLE_CONTAINER_KINDS)[number];
 
 /**

@@ -128,6 +128,8 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   retailGondola: 'shelf', clothingWallUnit: 'shelf', checkoutLane: 'countertop', outdoorsPlankShelving: 'shelf', storageTote: 'container', shoeWallDisplay: 'shelf',
   foodCourtTableSet: 'surface', mallCashwrapCounter: 'countertop', glassDisplayCabinet: 'vend', pharmacyDispensaryCounter: 'medical', mallKioskCart: 'countertop',
   medicineDrawerCabinet: 'medical', // lane ASSETS batch 2 M29 (lane SHOPS)
+  // lane ASSETS batch 2 resume (12c): the gun safe holds arms by the deliberate rule; the open cooler is cold food / drink
+  gunSafeTall: 'arms', dresserDrawers: 'container', cardboardBoxFlaps: 'container', multideckOpenCooler: 'cold', cosmeticsWallUnit: 'shelf',
 };
 /** Separate compartment rolls (desk / security-desk drawers, kitchenette cupboards) are closed storage. */
 export const COMPARTMENT_SLOT: SlotCategory = 'container';
@@ -190,6 +192,7 @@ export const HOLDER_MOD: Readonly<Record<string, CatWeights>> = {
   // track3 lane SHOPS: mall shop holders (their purposes normally decide; these apply in a purpose-less area only)
   glassCounter: [0.8, 0.6, 0.6, 0.2], merchTable: [1, 1, 0.4, 0.1], wallBay: [1, 1, 0.6, 0.2], produceStand: [2, 0.8, 0, 0], bookstoreBookcase: [1, 1, 0.5, 0.1],
   retailGondola: [1.2, 1, 0.6, 0.1], clothingWallUnit: [1, 1, 0.6, 0.1], checkoutLane: [1.2, 1, 0.2, 0.05], outdoorsPlankShelving: [1, 1.2, 0.6, 0.2],
+  multideckOpenCooler: [0.8, 2.4, 0, 0], cosmeticsWallUnit: [0.6, 0.6, 1, 0],
   shoeWallDisplay: [1, 1, 0.5, 0.1], foodCourtTableSet: [1, 1.4, 0.1, 0],
 };
 /** Empty-roll chance of the original table roll (iteration 12: most holders end up empty anyway — items/lootEconomy.ts). */
@@ -200,6 +203,7 @@ export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
   ...p7(e => e.empty),
   glassCounter: 0.35, merchTable: 0.5, wallBay: 0.3, produceStand: 0.3, bookstoreBookcase: 0.4, // track3 lane SHOPS
   retailGondola: 0.3, clothingWallUnit: 0.5, checkoutLane: 0.45, outdoorsPlankShelving: 0.3, shoeWallDisplay: 0.4, foodCourtTableSet: 0.65,
+  multideckOpenCooler: 0.25, cosmeticsWallUnit: 0.45,
 };
 /** Lot-count range of the original table roll. */
 export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
@@ -210,6 +214,7 @@ export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
   ...p7(e => e.lots),
   glassCounter: [1, 3], merchTable: [1, 2], wallBay: [1, 3], produceStand: [1, 3], bookstoreBookcase: [1, 2], // track3 lane SHOPS
   retailGondola: [1, 3], clothingWallUnit: [1, 2], checkoutLane: [1, 2], outdoorsPlankShelving: [1, 3], shoeWallDisplay: [1, 2], foodCourtTableSet: [1, 2],
+  multideckOpenCooler: [2, 4], cosmeticsWallUnit: [1, 2],
 };
 /** Stocked rooms get fuller shelves: `extra` more lots at the high end for these holder kinds (legacy tables only). */
 export const FULL_ROOMS = {
@@ -356,6 +361,8 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
   glassDisplayCabinet: ['food', 'drink', 'med', 'battery', 'flare'], pharmacyDispensaryCounter: ['med', 'drink'], mallKioskCart: ['food', 'drink', 'battery'],
   foodCourtTableSet: ['food', 'drink'],
   medicineDrawerCabinet: ['med', 'drink'], // lane SHOPS (track3, batch 2 M29): a medicine drawer cabinet holds medicine (and bottled water)
+  // lane SHOPS (track3, 12c): the gun safe — ammo / gun-care only (never guns: the weapon plan places those); the open cooler food / drink
+  gunSafeTall: ['ammo', 'flare', 'battery'], multideckOpenCooler: ['food', 'drink'],
 };
 /**
  * Task office-interactions-layout-20261030 (lane OPEN): openable containers whose OWN table is never narrowed to the room purpose's
@@ -366,7 +373,8 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
 export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
   'bakeryCase', // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
   'pharmacyDispensaryCounter', // lane SHOPS (track3): a dispensary counter holds medicine whatever shop it stands in
-  'medicineDrawerCabinet']); // lane SHOPS (track3, batch 2 M29): so does the medicine drawer cabinet
+  'medicineDrawerCabinet', // lane SHOPS (track3, batch 2 M29): so does the medicine drawer cabinet
+  'gunSafeTall']); // lane SHOPS (track3, 12c): a gun safe holds ammo / gun-care whatever back room it stands in (the deliberate ammo rule)
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
@@ -481,6 +489,12 @@ export const DISPENSARY_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.7], ['wat
 export const MEDICINE_CABINET_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.6], ['water', 0.3]];
 /** Lane SHOPS (track3, M18): a stock-room storage tote — what stock rooms keep (narrowed to the room purpose's rows: room-themed). */
 export const TOTE_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['bandage', 0.5], ['battery', 0.5], ['chips', 0.4]];
+/** Lane SHOPS (track3, 12c M35): a tall gun safe — generic ammo (all calibres equal), flares, cells for the weapon lights; never a gun. */
+export const GUN_SAFE_ROWS: ItemRows = [...genericAmmo(2.6), ['flare', 0.5], ['battery', 0.4]];
+/** Lane SHOPS (track3, 12c M45): a dresser's drawers — household odds and ends (narrowed to the room purpose's rows). */
+export const DRESSER_ROWS: ItemRows = [['bandage', 0.7], ['battery', 0.6], ['chocolate', 0.6], ['water', 0.6], ['cola', 0.4], ['flare', 0.15]];
+/** Lane SHOPS (track3, 12c M47): a stock-room carton (narrowed to the room purpose's rows). */
+export const CARTON_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['chips', 0.6], ['chocolate', 0.5], ['battery', 0.3], ['bandage', 0.3]];
 /** Lane SHOPS (track3): a gallery kiosk cart's cabinet — snacks, drinks, a cell. */
 export const KIOSK_CART_ROWS: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
 
@@ -531,6 +545,10 @@ export const OPENABLE_TABLES = {
   medicineDrawerCabinet: {lots: [2, 4], empty: 0.3, items: MEDICINE_CABINET_ROWS},
   // lane SHOPS (track3): M18 storage totes — 1-3 per stock room, so most stay empty
   storageTote: {lots: [1, 2], empty: 0.55, items: TOTE_ROWS},
+  // lane SHOPS (track3, 12c): one gun safe per gun / outdoors back room; dressers a few per home / department store; cartons 1-2 per stock room
+  gunSafeTall: {lots: [1, 3], empty: 0.3, items: GUN_SAFE_ROWS},
+  dresserDrawers: {lots: [1, 2], empty: 0.45, items: DRESSER_ROWS},
+  cardboardBoxFlaps: {lots: [1, 2], empty: 0.55, items: CARTON_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------
