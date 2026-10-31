@@ -321,7 +321,10 @@ describe('composed stations', () => {
       // Track 2 (lane CONTENT): those caps hold for the CORE station (its core view); each seeded service annex adds its own
       // explicit allowance (gen/annexContent.ts budgets; measured per annex ~150-160 placements, ~65-80 draw chunks, ~20-32k p7
       // triangles; the annexes use the station's own p7 palette: no new kinds / textures beyond it).
-      const c = metrics(coreView(l).props), live = metrics(l.props);
+      // (task track2-playtest-revision, lane ROOMS: the annex machinery's collision-only 'annexMachine' boxes are not drawn props —
+      // the machinery is merged world geometry, bounded per annex in world/trackExt/machines.ts and annex-content.test — and are
+      // exempt from the annex dressing budget; they are left out of the prop metrics)
+      const c = metrics(coreView(l).props), live = metrics(l.props.filter(p => p.kind !== 'annexMachine'));
       expect(c.placements, `${l.seed} placements`).toBeLessThanOrEqual(900);
       expect(c.draws, `${l.seed} draws`).toBeLessThanOrEqual(540);
       expect(c.kinds, `${l.seed} p7 kinds`).toBeLessThanOrEqual(64);

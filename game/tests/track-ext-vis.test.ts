@@ -15,6 +15,7 @@ import {TrackExtView, bedFrame, outsideIntervals, resolveLeftSign} from '../src/
 import {HATCH_PLATE} from '../src/world/trackExt/hatch';
 import {SHELL, SHELL_FACE_TYPE, clipOutside, sleeperPhase} from '../src/world/trackExt/shell';
 import {CELL_OF, GRAFFITI} from '../src/world/trackExt/graffiti';
+import {ANNEX_WALL, BOARD_SPAN} from '../src/world/trackExt/wallFinish';
 import {STEAM, SteamVents, annexVents} from '../src/world/trackExt/steam';
 import {Effects, STEAM_FX} from '../src/world/fx';
 import {planWarmup, warmKeys} from '../src/render/warmup';
@@ -108,9 +109,11 @@ describe('track tunnel shell geometry', () => {
     }
   });
 
-  it('the mouth meets the bed seamlessly: same wall planes, ceiling, floor and wall texture mapping at the end face', () => {
+  // (playtest revision, lane ART) the shell walls are the cast board-formed lining at its 2.4 m span (world/trackExt/wallFinish.ts),
+  // still world-continuous along X from the mouth; a concrete portal rib covers the joint with the station's bed lining
+  it('the mouth meets the bed seamlessly: same wall planes, ceiling and floor; the lining mapping continues world X; a portal at the joint', () => {
     const {fx, w} = built();
-    const tr = fx.layout.trenches[0], m = mats.scale.tunnel;
+    const tr = fx.layout.trenches[0], m = {u: BOARD_SPAN, v: BOARD_SPAN};
     for (const t of fx.ext.tunnels) {
       const f = new TunnelFrame(t);
       const xm = t.from === 'x1' ? tr.x1 : tr.x0;
@@ -128,6 +131,10 @@ describe('track tunnel shell geometry', () => {
         expect(q.v).toBeCloseTo((q.p.y - tr.floorY) / m.v, 4);
         expect([tr.floorY, tr.ceil].some(y => Math.abs(q.p.y - y) < 1e-4)).toBe(true);
       }
+      // the portal: concrete just inside the mouth on both walls (0 <= s <= portal depth), proud of the wall by its rib depth
+      const portal = extMeshes(w, 'platformFace').filter(mm => mm.userData.trackExt.tunnel === t.id).flatMap(verts).filter(p => { const c = f.project(p.x, p.z); return c.s > -1e-3 && c.s < SHELL.portal.depth + 1e-3; });
+      for (const side of [1, -1]) expect(portal.some(p => Math.abs(f.project(p.x, p.z).lat - side * (t.width / 2 - SHELL.portal.proud)) < 1e-3)).toBe(true);
+      expect(mats.get('tunnel')).not.toBe(extMeshes(w, 'tunnel').find(mm => mm.userData.trackExt.tunnel === t.id)!.material);
     }
   });
 
@@ -446,8 +453,19 @@ describe('service hatches in a bed wall (GEN-2 entry type)', () => {
     const wb = buildWorld(bare.layout, mats, {});
     expect(wb.trackExt).toBeUndefined();
     expect(JSON.stringify(w.wallFaces)).toBe(JSON.stringify(wb.wallFaces));
-    const arch = (x: BuiltWorld) => { const out: string[] = []; x.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.trackExt) out.push(`${m.name}:${m.geometry.attributes.position?.count}`); }); return out.sort(); };
+    // (playtest revision, lane ART) the architecture is identical; the wall TREATMENT differs only under the painted hatch clue
+    // marks (keep-outs: no cable / stain / fitting across the paint) — every other face plans exactly the same features
+    const arch = (x: BuiltWorld) => { const out: string[] = []; x.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.trackExt && !m.name.startsWith('wall-detail')) out.push(`${m.name}:${m.geometry.attributes.position?.count}`); }); return out.sort(); };
     expect(arch(w)).toEqual(arch(wb));
+    const pw = planWallDetail(fx.layout as StationLayout, {faces: w.wallFaces}), pb = planWallDetail(bare.layout as StationLayout, {faces: wb.wallFaces});
+    expect(pw.faces.length).toBe(pb.faces.length);
+    const painted = pw.faces.map(pf => pf.keepouts.filter(k => k.why === 'graffiti'));
+    expect(painted.some(k => k.length)).toBe(true);
+    const feats = (p: typeof pw, i: number) => JSON.stringify(p.features.filter(f => f.face === i));
+    pw.faces.forEach((_, i) => {
+      if (!painted[i].length) { expect(feats(pw, i), `face ${i}`).toBe(feats(pb, i)); return; }
+      for (const f of pw.features.filter(q => q.face === i)) for (const k of painted[i]) expect(f.s0 < k.s1 && f.s1 > k.s0 && f.y0 < k.y1 && f.y1 > k.y0, `${f.kind} across the paint`).toBe(false);
+    });
     // warm-up discoverable
     const scene = new THREE.Scene();
     scene.add(w.group);
@@ -560,7 +578,7 @@ describe('annex look and sound', () => {
     const annexAreas = new Set(fx.ext.annexes.flatMap(a => a.areas));
     const faces = w.wallFaces.filter(f => annexAreas.has(f.area));
     expect(faces.length).toBeGreaterThan(4);
-    for (const f of faces) { expect(f.zone).toBe('lower'); expect(f.finish).toBe('platformFace'); expect(treatmentOf(f)).toBe('lowerConcrete'); }
+    for (const f of faces) { expect(f.zone).toBe('lower'); expect(f.finish).toBe(ANNEX_WALL); expect(treatmentOf(f)).toBe('lowerConcrete'); }
     const room = fx.layout.areas[fx.ids.annexRoom], tunnel = fx.layout.areas[fx.east.areas[0]];
     expect(areaNeglect(room, 'main', false)).toBeGreaterThanOrEqual(0.86);
     expect(areaNeglect(tunnel, 'main', false)).toBeGreaterThanOrEqual(0.85);

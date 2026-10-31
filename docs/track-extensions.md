@@ -13,7 +13,8 @@ The tracks no longer end at a black wall. Past a bed end, a finite concrete tunn
 Off a tunnel's side wall, or behind a **service hatch** in the outer wall of a bed, a level can have up to two seeded
 **service annexes**. These are cramped, dark back-of-house areas about a quarter of the Subway's walkable exploration area
 (`SUBWAY_WALK_BASELINE_M2`, about 0.17–0.29 of it). Each is dressed, lit, populated and stocked like the station, all in the
-same level and world, with no loading. Graffiti arrows and tags appear only where a real route leads to an annex.
+same level and world, with no loading. Graffiti arrows and tags appear only where a real route leads to an annex, and (playtest
+revision) the platforms announce every real annex entrance with station-surface art: see "Station invitation art" below.
 
 ## Opting a level in
 
@@ -53,6 +54,15 @@ same level and world, with no loading. Graffiti arrows and tags appear only wher
   then hatches; a failed attempt is omitted with no orphan door, clue or cell.
 - **Size:** `share` 0.25 of the baseline, jittered by 0.85–1.15, minimum `minShare` 0.15.
 - **Layout:** corridors 1.5–2 m wide; rooms from 3×3 m to 8×10 m; ceilings 2.4–2.8 m.
+- **Machinery halls** (`annex.hall`, task track2-playtest-revision, lane ROOMS): 2–3 larger, taller rooms per annex
+  (9–12 × 12–16 m, ceilings 3.6–4.2 m; `Area.extHall`) inside the SAME area target, so the tight network stays and is
+  regularly broken by a big room:
+  - hall k is attempted once the annex has grown to (k + 0.5) / (count + 1) of its target (a rhythm, not a cluster);
+  - only off a corridor at least `spacing` (2) areas past the previous hall on its branch, only while the hall keeps the annex
+    within its target (+ 2 % slack) and the grid budget (the Mall's hard cell budget included); 8 seeded placements per attempt;
+  - a hall is a room later areas may branch off (parent weight 2.2).
+  Measured: 1–3 halls per annex on the fixed seed set; the 64-seed incidence is unchanged (0 / 1 / 2 = 4 / 42 / 18, 16 hatches,
+  ratio to the baseline 0.15 / 0.25 / 0.29 min / mean / max).
 - **Door placement:** a tunnel that hosts an annex gets a first straight of at least 21 m (`annex.hostFirstStraight`), which
   leaves room for the door.
 
@@ -126,6 +136,8 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
   preserved.
 - Extension props, lights, holders, pickups and zombies are appended after every core record.
 
+**`StationArt`** (`TrackExtensions.art`, playtest revision): station-surface invitation art records — see "Station invitation art".
+
 **`coreView(layout)`** (`game/src/gen/trackExt/core.ts`) returns the level exactly as it would be without its extensions:
 - extension cells go back to rock;
 - appended areas, doors and records are dropped;
@@ -133,9 +145,14 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
 
 The golden tests use it for their translation-normalised proofs, and runtime fields such as decay use it.
 
+**Machinery** (`extensions.machines`, lane ROOMS): the annexes' anchored machinery records (`AnnexMachine`, `gen/annexRooms.ts`):
+kind, area, footprint centre on the floor, quarter-turn yaw, w × d × h and kind parameters. `machineBoxes(record)` gives the solid
+parts' collision boxes; each is one collision-only `annexMachine` prop (per-placement box). `coreView` drops them with the
+extensions; `dropExtensions` deletes them.
+
 **Validation:** `extensionIssues(layout)` checks that:
 - every tunnel and annex cell is reachable from the platform (drops and ladders allowed), with a return path to a ladder;
-- there is at least 2.2 m of head clearance;
+- there is at least 2.2 m of head clearance; annex ceilings are 2.4–2.8 m, machinery halls 3.6–4.2 m (and a hall is a room);
 - the cap has collision;
 - no walkable cell borders void or the outside of the canvas;
 - nothing overlaps;
@@ -143,28 +160,101 @@ The golden tests use it for their translation-normalised proofs, and runtime fie
 
 ## Content (`game/src/gen/annexContent.ts`)
 
-**Rooms:** annex areas take existing back-of-house purposes: pump room, electrical room, workshop, maintenance storage,
-custodial room, janitor / electrical / supply closets, and service corridors.
-- Rooms are dressed by the existing dress, compose and iteration-07 machinery on their own rng fork.
-- The budget is one prop per 12 m², plus `ANNEX_COMPOSE_BUDGET` 12 generated-model clusters per annex.
-- Only existing prop kinds are used, so the openables and physics audits are unchanged.
+**Room signatures** (task track2-playtest-revision-20261031, lane ROOMS, `gen/annexRooms.ts`; user feedback 4 / 5: "the same
+rooms repeating … think boiler room, generator room, sewage room, overflow room, spill way, turbine room, ventilation room … with
+custom layout and props"; keep the tight feel, "break it up with bigger rooms"). Seven reusable signatures, each a LAYOUT of
+anchored machinery with its own footprint, focal point, circulation and materials (dimensions from the scale checks beside a
+runtime-scaled 1.78 m zombie):
 
-**Loot** (`game/src/items/lootTables.ts`), finite, seeded once, persisted by the usual keys and never refilled:
-- **Deepest holders:** each annex's deepest 7–8 holders keep their room's normal loot table.
-- **Stash:** one or two stash holders (a crate, then a tall cabinet) use `ANNEX_STASH`.
-- **Picked over:** the rest use `ANNEX_PICKED`: no ammo, 90 % empty.
-- **Floor:** `ANNEX_FLOOR` guarantees nothing.
-- **Untouched:** the level's single rare-gear roll, mask roll, weapon finds and Office roof cache and find are never
+| Signature (purpose) | Min room | Layout / focal point | Assemblies (W × H × D) |
+|---|---|---|---|
+| Boiler room (`boiler-room`) | 5 × 6 m | a bank of 2 (halls 3) horizontal fire-tube boilers backed on one wall, burner fronts into a ≥ 1.5 m aisle, flue stacks into the ceiling, a lagged pipe header with branch drops on the back wall (halls: a breeching duct overhead) | boiler 2.0 × 1.9 × 3.0–3.5 (shell Ø 1.45–1.7, oxide red); bank 6.2 × 2.4 × 3.0; expansion tank 1 × 1.9 × 1 |
+| Generator room (`generator-room`) | 5 × 6.5 m | diesel generator sets as ISLANDS on concrete plinths with a 1 m walkway ring (halls: a pair across a 1.2 m aisle), a switchgear lineup on a wall with a 1 m front strip, a fuel day tank, exhaust risers into the ceiling | genset 3.5–4.0 × 1.75 × 1.5 (ochre; radiator, engine, alternator, silencer); switchgear n × 0.8 × 2.1 × 0.6 |
+| Sewage channel (`sewage-room`) | 4.5 × 7 m | a contained channel down the room's length (dark water at +3 cm, 0.22 m curbs, yellow handrails), 1–2 walkable grated crossings, grating walkways both sides, a sluice gate at the inlet wall, a culvert mouth at the outlet (stops 1.5 m short of a door wall) | channel L × 1.5–2.0 (curbs 0.15 × 0.22, rails 1.05) |
+| Overflow chamber (`overflow-chamber`) | 6 × 6.5 m | a deep basin against the far wall behind a 0.92 m concrete parapet and handrail, an inlet pipe pouring in above the parapet, a submerged weir and a depth staff, a ≥ 1.2 m walkway in front (halls: pump controls + dosing tank) | basin up to 6 × 4 (halls 10 × 7) × 0.92 (+ rail 1.24) |
+| Spillway (`spillway`) | 6 × 8.5 m | a stepped concrete chute along a door-free long wall — 3–5 cascades from a 0.6 m inlet weir (sluice frame) down to a culvert mouth — behind a 0.8 m wall + handrail, a grating catwalk along it, sluice control panels opposite | chute L × 0.8 (+ rail 1.1) × 1.75–2.25 |
+| Turbine hall (`turbine-hall`, halls only) | 9 × 12 m | a turbine-generator set on a 0.4 m plinth down the hall (ribbed casing, coupling, generator with cooling bands, exciter), its penstock from the end wall (or from the ceiling when that wall has a door), a 1.2 m ring, an overhead travelling crane, control panels, an oil tank | set 6–10 × 2.8 × 2.75–3.0 (slate blue / grey) |
+| Ventilation plant (`ventilation-plant`) | 4.5 × 5.5 m | 1–3 big axial wall fans (shroud, pitched blades, guard) on the far wall, an inline fan unit with its duct riser, ducts along the ceiling (bottom ≥ 2.25 m), louvres | wall fan Ø 1.2–2.6 (2.2 × 2.35 × 0.75 at Ø 1.9); inline unit 2 × ceiling × 1.5 |
+
+- **Halls first, then about 60 % of the medium rooms** (short side ≥ 4.5 m, ≥ 26 m²) take a signature; the other rooms keep a
+  small utility role (workshop, maintenance stores, electrical room, pump room, custodial room, first-aid post), closets stay
+  janitor / electrical / supply closets, corridors stay composed service corridors.
+- **The anti-repetition rule** (bounded, seeded): halls first (largest first), then the chosen rooms in door-graph traversal
+  order; a room never takes a signature already used by an annex room within 2 door hops (one door, or across one corridor /
+  hall); weight = signature weight × hall preference (halls) × 6 while unused in the annex × 0.2 ^ uses. A layout that cannot
+  be built in its room (doors / proportions) undoes itself and tries up to 2 other eligible signatures under the same rule,
+  then the room becomes a utility room. Measured on the fixed seed set: 5–7 distinct signatures per annex, all seven across it.
+- **Machinery** is world geometry from the records (`world/trackExt/machines.ts`): locally authored boxes / cylinders merged into
+  one mesh per (annex, material) — about 12 draws and 18–33k triangles per annex — with value-only clones of the shared
+  world-mapped shape materials (painted / brushed steel, panel, concrete, grille, black: no texture loads, shared programs).
+  Collision is honest: every solid part is a collision-only `annexMachine` prop (player / zombie / bullet / ragdoll collision,
+  blocked + sight cells, placed through the dresser's door zones, doorway clear volumes and connectivity check). Channels,
+  basins and chutes are VISUAL water (no water physics, no hazard): their curbs / parapets / walls and water surfaces are
+  collision boxes, so nobody walks in; crossings are walkable. Visual-only parts stay within 0.28 m of a wall, above 2.2 m, flat
+  on the floor or over a blocked footprint (tested). `annexMachine` is classified in both audits: the openables audit's
+  exception ("anchored heavy machinery / sealed plant: not storage") and the physics audit's `machinery` static class.
+- **Fewer, meaningful holders:** the existing purposes dress annex rooms with LEAN rule sets (`ANNEX_RULES`: stores keep
+  shelving, workshops a tool locker, electrical rooms panels + a cabinet, closets one fixture; first-aid posts a medicine
+  cabinet), the signature purposes carry a tool locker / spares shelf / crate where the room's function suggests it, and the
+  iteration-07 dresser adds equipment props (pumps, compressors, transformers, disconnects, ladders …: non-lead uses, so no
+  station palette changes). Annex holders dropped from ~100–125 to ~41–64 per annex; the machinery's collision boxes are
+  budget-exempt (`dressExtensionAreas` `pre` / `rules`).
+- Halls get a fixture every ~5 m of their long side (at least 2).
+
+**Loot** (`game/src/items/lootTables.ts`), finite, seeded once, persisted by the usual keys and never refilled.
+
+*Playtest revision* (task `studio-alpha-track2-playtest-revision-20261031-01`; user: two fresh runs with "no loot and no
+enemies in the area").
+
+Diagnosis, `reference/tasks/track2-playtest-revision-20261031/DIAGNOSIS-BASELINE.md`:
+- Every annex holder was generated, registered, unculled, reachable and targetable.
+- Yet 94–98 % rolled EMPTY. The picked-over table (90 % empty) and the stash were cut a SECOND time by the level-wide scarcity
+  economy (`items/lootEconomy.ts` `scarceFinds` keeps only ammo / materials exactly).
+- The stocked few sat deepest.
+- An ordinary room-by-room route opened 9–22 holders per annex and found nothing.
+
+Now:
+- **Exact annex tables:** `LootSpec.exact` rolls exactly, with no scarcity cut, re-theme or limb conversion; a level's slot
+  scaling still applies. It is set on the annex keys only, so every core table is unchanged.
+- **Supply:** `ANNEX_SUPPLY` holders, never empty, one ordinary supply each (water, a soda, tins, noodles, chocolate, a dressing, now and then a first-aid kit, a cell, a flare; no ammo, no crafting materials). One
+  per 170 m² of annex, 6–12, chosen by door-hop DEPTH BAND:
+  - half in the entry third, 30 % in the middle, the rest deep;
+  - at most 2 per room;
+  - only holders that roll their room purpose's table (`rollsPurposeTable`; not first-aid wall kits / fixture cabinets).
+- **Scraps:** `ANNEX_SCRAPS`, one leftover each, in 12 % of the other picked-over holders, at most 6.
+- **Searched clean:** `ANNEX_PICKED` (exact, `empty: 1`) for the rest.
+- **Stash:** 1–2 stash holders, a crate and then a tall cabinet, use `ANNEX_STASH` (exact, `empty: 0.1`, 2–3 lots).
+- **Deepest holders:** each annex's deepest ~8 holders keep their room's table (scarcity as in the core; ammo-led).
+- **Room storage:** every annex room / closet the dressing left with no loot holder gets one storage piece (`placeRoomStorage`):
+  open shelving first, else a low cabinet / crate or a tall cabinet.
+- **Floor:** `ANNEX_FLOOR` unchanged (chances only).
+- **Untouched:** the level's single rare-gear roll, mask roll, weapon finds and the Office roof cache / find are never
   multiplied.
 
+Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 / 5150 /
+9090:
+- **Holders:** 49–75 per annex, **28–38 % stocked** (the core station stocks ~1/3).
+- **Finds:** 18–28 non-ammo holder finds per annex, the core station's density.
+- **Ammo:** holder ammo stays in its old range.
+- **Access:** every stocked holder is reachable and targetable from its stand point.
+- **Discovery routes:** ordinary routes (`tests/helpers/annexRoute.ts`: a real Player, nearest-unvisited room by walking distance,
+  opening holders in placement order) took loot in every sampled annex, with the first find 2–5 rooms in. Before, they found
+  nothing.
+
 **Enemies** (`SERVICE_CONTEXT`):
-- 3–5 per annex, at least 5 m apart and at least 6 m from the entrance.
-- Annex spawns are appended after every core spawn and tagged `markSpawnContext(layout, firstIndex, 'service')`.
-  `assignEnemyArchetypes` runs once afterwards.
-- They inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none, and the
-  Office's Siren eligibility stays `['floor']`.
-- They are excluded from the core station / street / floor counts and reported separately.
-- Measured: about 4.3 extra per Subway level.
+- **Count:** `SERVICE_ZONE_BUDGET` 5–6 per annex (was 3–5; about 80 % of the core's density; the hi fits the compact Mall's
+  per-storey ambient cap of 6, as the registry contract requires).
+- **Spread:** across entry / middle / deep door-hop bands (equal quotas; the remainder to the middle).
+- **Earshot:** cells beyond `SERVICE_EARSHOT_M` (18 m, rifle earshot through rock) of every core floor cell are preferred.
+  Before, station gunfire pulled a hatch annex's near enemies out before the player arrived.
+- **Spacing:** at least 5 m apart and at least 6 m from the entrance.
+- **Ordering and tagging:** annex spawns are appended after every core spawn and tagged
+  `markSpawnContext(layout, firstIndex, 'service')`. `assignEnemyArchetypes` runs once afterwards.
+- **Families:** they inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none,
+  and the Office's Siren eligibility stays `['floor']`.
+- **Counted separately:** they are excluded from the core station / street / floor counts and reported separately.
+- **Measured:** 5–6 per annex (Subway levels +5 / +6 with one annex, +10 to +12 with two). The ordinary routes made 1–3 enemies
+  aware, the first within the first 0–3 rooms, with no gunfire in the simulation.
 
 **Lights:** untinted. Annexes have about 80 fixtures each, mostly dim, dying or dead; the entry corridor is never fully dark.
 Tunnels have sparse fixtures, mostly dead or dying.
@@ -187,8 +277,52 @@ Tunnels have sparse fixtures, mostly dead or dying.
   - Annexes use the lower-level service look: board-formed concrete, pipes, conduits and damp.
   - Annex wall detail has its own per-annex budget (`extWallDetailCaps`, `game/src/world/wallDetailPlan.ts`).
   - Fittings keep out of doorway clear volumes.
+- **Wall finish** (playtest revision, lane ART: "the wall textures look low res"; `game/src/world/trackExt/wallFinish.ts`):
+  - Diagnosis: the annex walls used the `platformFace` material — the 256 x 256 `platform-authored-backing` set (a 5.7 KB colour
+    JPEG) over 2 x 2 m = **128 texels / m**: ~3x magnified at 2 m and ~6x at 1 m in a 1.5–2 m corridor (1080p, 75° fov: ~380 screen
+    px / m at 2 m), mipmapped but never minified there, so simply blurry; the formwork overlay on top was 110 px / m. The tunnel shell
+    walls used the bed lining `tunnel` (1024 x 384 over 3.6 x 1.38 m = 284 texels / m) whose stamped repair patches repeat every
+    3.6 m along and four times up a 5.5 m tunnel wall.
+  - Fix: one local procedural **board-formed concrete** set (canvas, painted once per page, deterministic; no image asset, no
+    provider): colour 1024 x 1024 over 2.4 x 2.4 m = **427 texels / m**; roughness and normal 512 x 512 from the same height field
+    (0.15 m boards with their own tone and grain imprint, 1.2 m panel joints, tie cones on a 0.6 m grid, bug holes). Annex walls
+    (`WallKind 'annex'` → finish `annexWall`) take it world-mapped with the shared world-mapping macro tone variation (~1.4 m
+    world-space features) and floor grime, plus the decay hook (`platformFace` profile); the formwork overlay is not drawn over it.
+    The tunnel shell walls take it on their developed UVs (`tunnel` profile decay); a 0.3 m concrete portal rib and soffit beam
+    at the mouth mark where the station's bed lining (unchanged) ends.
+  - Cost: two materials (two programs), created lazily per `WorldMaterials` only when a level has extensions, in the station scene
+    at build (warmed up; no first-use compile). Textures: 1024² sRGB + 2 x 512² ≈ 4 + 2 x 1 MiB, **≈ 8 MiB GPU with mips**. Geometry:
+    walls unchanged (same quads); the portal adds 3 boxes (36 triangles) per tunnel into its existing concrete mesh. Draws: annex
+    wall quads no longer share a 48 m chunk mesh with the core's platform-face concrete, +1 to +4 draws per level measured (seeds
+    4055629249, 2654448106, 1043, 774566179); the formwork overlay quads on annex walls are gone.
+- **Station invitation art** (playtest revision, lane ART; `game/src/gen/trackExt/art.ts`, `world/trackExt/graffiti.ts`,
+  `graffitiArt.ts`):
+  - Records: `planStationArt` runs at the end of `finishExtensions` (after the attach, on the track-ext fork `station-art`, which
+    never advances its parent) for every REAL annex entrance at a bed end — a tunnel with an annex door (target: its mouth) or a
+    service hatch (target: its door). It places: a large full-colour letter **piece** ("REKS", non-directional) on a bed side wall a
+    platform faces (the 6 m stub past the platform end, or the outer wall beside an island), the crew's gas-mask **watcher**
+    (non-directional) on the other faced wall or beside the piece, and stencilled **SERVICE + arrow** marks (directional, toward the
+    entrance) on those walls and on the **end wall of every platform** beside that bed at that end (the wall a player walking
+    down the platform faces).
+  - Rules (`stationArtRecordIssues`, part of `extensionIssues`): only at a real entrance; on solid rock wall (side-wall row SOLID,
+    bed in front) a platform faces, or on a solid platform end wall with the platform in front; clear of hatch openings / plates
+    (0.6 m), hatch clue marks, wall signs and props against the wall; under the ceiling; stencils point toward the entrance, the piece
+    and watcher never do. A planned record that would fail is dropped (art never invalidates a level). No annex: no art.
+  - Measured (24-seed Subway corpus): 27 annexes on 21 levels, every entrance gets a piece; 98 records (27 pieces, 18 watchers, 23
+    side-wall stencils, 30 platform end-wall stencils), ~4.7 per level with art; planning 0.5 ms mean, 2.5 ms max per level.
+  - Presentation: the graffiti atlas is ONE 2048 x 1024 canvas (≈ 10.7 MiB GPU with mips; it was 1024 x 1024): the eight 512 x 256
+    arrow / tag cells in the left half, the piece (1024 x 512), the watcher (512 x 512) and the SERVICE stencils (512 x 256, right
+    / left: only the arrow mirrors) in the right half, painted by local canvas code. Art decals join the clue marks in the ONE
+    graffiti mesh per level (one draw). The in-tunnel / hatch marks are bigger (arrows 2.0 x 1.0 m at 1.7 m above the bed, tags
+    2.2 x 1.1 m), and a route's later arrows (before a tunnel door, a hatch's approach arrow) use the SERVICE stencil.
+  - Keep-outs: every painted rect (art + hatch clue marks; `stationArtKeepouts`) is a wall-detail keep-out on its wall plane for
+    every layer — no cables, stains, cuts or fittings across the paint. This changes the core bed walls' treatment only under the
+    paint (the authorised station-surface change); the core layout, records, RNG streams and every core pin are unchanged.
 - **Steam:** a bounded, non-hazardous emitter in `game/src/world/fx.ts`, capped per annex. It is never the gas field and
   never the flare smoke.
+- **Machinery** (lane ROOMS): `world/trackExt/machines.ts` `buildAnnexMachines` (called by `buildTrackExtensions`; stats in
+  `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material, built into the
+  station group at build time (warm-up discoverable).
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
 
 ## Tests
@@ -196,7 +330,11 @@ Tunnels have sparse fixtures, mostly dead or dying.
 - **Track extensions:** `track-ext.test.ts` (generation and census), `track-ext-core.test.ts` (core identity and the
   reserve-off proof), `track-ext-coverage.test.ts`, `track-ext-vis.test.ts`, and the opt-in `TRACK_EXT_GEN=1`
   `track-ext-vis-gen.test.ts`.
-- **Content:** `annex-content.test.ts`.
+- **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
+  anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
+- **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
+  `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
+  1–2 m, into `qa-artifacts/track2-revision-art/`).
 - **Pins:** the golden pin histories in `enemy-spawn-parity.test.ts`, `loot-golden.test.ts`, `office-gen.test.ts` and
   `nav-query-fingerprint.test.ts` record every Track 2 re-pin with its cause and proof.
 - **Browser:** the spot check is `tools/qa/track2-walk-check.mjs`. It is one serial session: a real W walk from platform to

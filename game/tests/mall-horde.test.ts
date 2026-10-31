@@ -25,7 +25,8 @@ import {HORDE_AI, HordeDirector, slotOffset} from '../src/ai/horde';
 import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from '../src/ai/chaseShare';
 import {patrolRouteM, placeHordes} from '../src/ai/hordePlace';
 import {HORDE_FORBIDDEN_FAMILIES, HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from '../src/ai/hordeSpec';
-import {ENEMY_FAMILY_IDS, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
+import {ENEMY_FAMILY_IDS, SERVICE_ZONE_BUDGET, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
+import {isExtensionArea} from '../src/gen/trackExt/types';
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
 import {enemiesToSpawn, mergeKilled, createMemory, cloneMemory} from '../src/run/memory';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
@@ -827,8 +828,11 @@ describe('the generated mall (lane GEN) — when registered', () => {
       // ambient and horde pools never mix: every non-horde core enemy is ambient, and the ambient count stays within its own budget
       // (task mall-playtest-revision-20261031, lane PROFILES: the Track2 annex's 'service' spawns are accounted separately)
       const ambient = layout.zombies.filter(z => z.horde === undefined && !layout.areas[z.area]?.ext).length;
+      // (playtest revision: the annex 'service' spawns, checked against their own per-annex zone budget below)
+      const service = layout.zombies.filter(z => z.horde === undefined && isExtensionArea(layout.areas[z.area])).length;
       const amb = (SPAWN_PROFILES as Record<string, (typeof SPAWN_PROFILES)['subway']>).mall.budgets?.ambient;
       if (amb) expect(ambient).toBeLessThanOrEqual(amb.total);
+      expect(service).toBeLessThanOrEqual(SERVICE_ZONE_BUDGET[1] * (layout.extensions?.annexes.length ?? 0));
       lines.push(`seed ${seed} (${layout.mall!.variant}): ${hs.length} groups [${hs.map(h => `L${h.level}:${h.members.length}`).join(' ')}] = ${total} horde + ${ambient} ambient; patrol ${layout.mall!.patrol.length} nodes`);
     }
     console.info(`[horde mall] placement\n  ${lines.join('\n  ')}`);

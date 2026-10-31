@@ -55,6 +55,8 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   washCounter: ['built-in', 'plumbed wash counter with basins'],
   shopGlazing: ['structure', 'shopfront glazing (shatters; the plinth stays)'],
   shopShutter: ['structure', 'rolled-down shop shutter'],
+  // task track2-playtest-revision (lane ROOMS): collision box of an annex machinery assembly (gen/annexRooms.ts)
+  annexMachine: ['machinery', 'anchored plant built into a service annex (boiler bank, generator set, turbine, fans, switchgear, channel curbs / basin parapets / spillway chute walls): tonnes of bolted steel and cast concrete'],
   magazineRack: ['fixture', 'loaded wire magazine rack, a store fixture'],
   techDisplay: ['built-in', 'store display table with devices'],
   deviceWall: ['built-in', 'wall display of devices'],

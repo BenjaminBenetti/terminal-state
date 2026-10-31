@@ -12,6 +12,8 @@ import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {ANNEX_COMPOSE_BUDGET, ANNEX_CONTENT, extensionContentOf} from '../src/gen/annexContent';
+import {ANNEX_ROOMS, ROOM_SIGNATURES, SIGNATURE_IDS, annexDoorGraph, isSolidMachine, machineBoxes} from '../src/gen/annexRooms';
+import {installCanvasShim} from './helpers/canvas2d';
 import {ROOM_PURPOSES} from '../src/gen/purposes';
 import {coreView, dropExtensions, isExtensionArea, TRACK_EXT, trackExtConfig, type TrackExtConfig} from '../src/gen/trackExt/index';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
@@ -24,7 +26,7 @@ import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind} f
 import {holderSurfaces} from '../src/items/lootLayout';
 import {PROP_DEFS} from '../src/gen/props';
 import {
-  ANNEX_FLOOR, ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, ROOF_CACHE_KEY, ROOF_FIND_KEY, lootProfile, validateLootProfile,
+  ANNEX_FLOOR, ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, ROOF_CACHE_KEY, ROOF_FIND_KEY, lootProfile, validateLootProfile,
 } from '../src/items/lootTables';
 import {ITEMS} from '../src/items/items';
 import {OFFICE_SIREN_ELIGIBILITY, SERVICE_CONTEXT, SERVICE_ZONE_BUDGET, spawnContextOf, spawnProfile} from '../src/ai/spawnTables';
@@ -51,7 +53,9 @@ const reference = (l: StationLayout): StationLayout => (l.office
   : generateStation(l.seed, {trackExtensions: noAnnex(trackExtConfig('subway'))}));
 const annexAreas = (l: StationLayout) => l.extensions!.annexes.flatMap(n => n.areas.map(id => l.areas[id]));
 const inAnnex = (l: StationLayout) => { const s = new Set(l.extensions!.annexes.flatMap(n => n.areas)); return (r: {area: number}) => s.has(r.area); };
-const ALLOWED = new Set(['pump-room', 'electrical-room', 'workshop', 'storage', 'custodial-room', 'janitor-closet', 'electrical-closet', 'supply-closet', 'service-corridor']);
+// (task track2-playtest-revision, lane ROOMS: + the seven room signatures and the first-aid post among the utility rooms)
+const ALLOWED = new Set(['pump-room', 'electrical-room', 'workshop', 'storage', 'custodial-room', 'first-aid-room', 'janitor-closet', 'electrical-closet', 'supply-closet', 'service-corridor',
+  ...SIGNATURE_IDS.map(s => ROOM_SIGNATURES[s].purpose)]);
 
 describe('service annex dressing (existing purposes and prop kinds, appended, budgeted)', () => {
   it('every annex area takes an existing back-of-house purpose of the service set, its RoomType one of the purpose\'s slots', () => {
@@ -68,8 +72,10 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
           if (a.kind === 'service') expect(a.purpose).toBe('service-corridor');
           used.add(a.purpose!);
         }
-        // the lead plant rooms (when a room fits them): every annex reads as plant / service space
-        for (const pid of ANNEX_CONTENT.lead) expect(used.has(pid), `${l.seed} annex ${n.id} has a ${pid}`).toBe(true);
+        // (lane ROOMS) several different room signatures per annex, and at least one machinery hall
+        const sigs = new Set([...used].filter(p => SIGNATURE_IDS.some(s => ROOM_SIGNATURES[s].purpose === p)));
+        expect(sigs.size, `${l.seed} annex ${n.id} signatures ${[...sigs]}`).toBeGreaterThanOrEqual(4);
+        expect(n.areas.some(id => l.areas[id].extHall), `${l.seed} annex ${n.id} hall`).toBe(true);
       }
     }
   });
@@ -89,11 +95,14 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
         if (!isP7Kind(p.kind)) expect(openAudit.has(p.kind) || !isLootHolderKind(p.kind), `${p.kind} openables audit`).toBe(true);
       }
       for (const n of l.extensions!.annexes) {
-        const ids = new Set(n.areas), list = l.props.slice(rep.first.props).filter(p => ids.has(p.area));
+        // (lane ROOMS: the machinery's collision-only boxes are budget-exempt — the dressing budget counts the rest)
+        const ids = new Set(n.areas), list = l.props.slice(rep.first.props).filter(p => ids.has(p.area) && p.kind !== 'annexMachine');
         const budget = Math.round(n.areaM2 / ANNEX_CONTENT.m2PerProp);
         // (the room in progress finishes, the corridors' composition is coverage-capped, host decor follows its host: <= 1.25 x)
         expect(list.length, `${l.seed} annex ${n.id} props`).toBeLessThanOrEqual(budget * 1.25);
-        expect(list.length).toBeGreaterThan(budget * 0.5);
+        // (lane ROOMS: the lean annex furniture + capped equipment props leave the budget part-used; the rooms' identity is their
+        // machinery: ~40-110 dressing props per annex, was ~150)
+        expect(list.length).toBeGreaterThan(budget * 0.2);
         expect(list.filter(p => p.cluster !== undefined && isP7Kind(p.kind)).length).toBeLessThanOrEqual(ANNEX_COMPOSE_BUDGET + 2);
       }
     }
@@ -140,6 +149,93 @@ describe('service annex dressing (existing purposes and prop kinds, appended, bu
   });
 });
 
+// Task track2-playtest-revision-20261031 (lane ROOMS): room signatures, machinery halls and the anti-repetition rule.
+describe('service annex room signatures (machinery halls, anchored machinery, anti-repetition, fewer holders)', () => {
+  const sigOf = (a: Area) => SIGNATURE_IDS.find(s => ROOM_SIGNATURES[s].purpose === a.purpose);
+
+  it('every solid machinery record is exactly its collision-only boxes; visual-only parts stay out of the walking space', () => {
+    const seen = new Set<string>();
+    for (const l of WITH()) {
+      const recs = l.extensions!.machines!, g = l.grid, own = inAnnex(l);
+      expect(recs.length).toBeGreaterThan(0);
+      const boxes = l.props.filter(p => p.kind === 'annexMachine');
+      expect(boxes.every(own)).toBe(true);
+      let n = 0;
+      for (const m of recs) {
+        const a = l.areas[m.area];
+        expect(own(m), `${l.seed} ${m.kind} in an annex`).toBe(true);
+        // machinery only in signature rooms, at their floor
+        const s = sigOf(a);
+        expect(s, `${l.seed} ${m.kind} in ${a.purpose}`).toBeDefined();
+        seen.add(s!);
+        expect(m.y).toBeCloseTo(a.floorY!, 6);
+        const bx = machineBoxes(m);
+        n += bx.length;
+        expect(bx.length > 0).toBe(isSolidMachine(m.kind));
+        for (const b of bx) {
+          const p = boxes.find(q => q.area === m.area && Math.abs(q.x - b.x) < 1e-3 && Math.abs(q.z - b.z) < 1e-3 && Math.abs(q.hx - b.hx) < 1e-3 && Math.abs(q.hz - b.hz) < 1e-3 && Math.abs(q.h - b.h) < 1e-3);
+          expect(p, `${l.seed} ${m.kind} box at ${b.x},${b.z}`).toBeDefined();
+          expect(p!.blocksSight).toBe(b.sight);
+          expect(b.h).toBeLessThanOrEqual(a.ceil - a.floorY! + 1e-6);
+          const [cx, cy] = g.cellOf(b.x, b.z);
+          expect(g.blocked[g.idx(cx, cy)], `${l.seed} ${m.kind} box cell blocked`).toBe(1);
+        }
+        // visual-only parts: against a wall (<= 0.3 m deep), above head height, flat on the floor or over the blocked footprint
+        const wallGap = Math.min(m.x - a.x * CELL, (a.x + a.w) * CELL - m.x, m.z - a.y * CELL, (a.y + a.h) * CELL - m.z);
+        if (m.kind === 'header' || m.kind === 'pipeRun' || m.kind === 'louvre') { expect(m.d).toBeLessThanOrEqual(0.3); expect(wallGap).toBeLessThanOrEqual(m.d / 2 + 0.01); }
+        if (m.kind === 'duct') expect(m.p![0] - m.h / 2, `${l.seed} duct headroom`).toBeGreaterThanOrEqual(2.2);
+        if (m.kind === 'crane') expect(m.p![0] - 0.22).toBeGreaterThanOrEqual(2.2);
+        if (m.kind === 'catwalk') expect(m.h).toBeLessThanOrEqual(0.04);
+        if (m.kind === 'gate' || m.kind === 'culvert') { const [cx, cy] = g.cellOf(m.x, m.z); expect(g.blocked[g.idx(cx, cy)] === 1 || wallGap <= 0.3).toBe(true); }
+      }
+      expect(boxes.length, `${l.seed} one prop per box`).toBe(n);
+    }
+    // the corpus shows the whole vocabulary
+    expect([...seen].sort()).toEqual([...SIGNATURE_IDS].sort());
+  });
+
+  it('anti-repetition: no two annex rooms within two door hops share a signature; >= 4 signatures and >= 1 hall per annex; fewer holders', () => {
+    for (const l of WITH()) {
+      const rep = extensionContentOf(l)!;
+      for (const n of l.extensions!.annexes) {
+        const areas = n.areas.map(id => l.areas[id]), {adj} = annexDoorGraph(l, areas);
+        for (const a of areas) {
+          const s = sigOf(a);
+          if (!s) continue;
+          const d = new Map([[a.id, 0]]), q = [a.id];
+          for (let h = 0; h < q.length; h++) for (const o of adj.get(q[h]) ?? []) if (!d.has(o) && d.get(q[h])! < ANNEX_ROOMS.hops) { d.set(o, d.get(q[h])! + 1); q.push(o); }
+          for (const id of q) if (id !== a.id) expect(sigOf(l.areas[id]), `${l.seed} rooms ${a.id} / ${id} both ${s}`).not.toBe(s);
+        }
+        const r = rep.annexes.find(x => x.id === n.id)!;
+        expect(Object.keys(r.signatures).length).toBeGreaterThanOrEqual(4);
+        expect(r.halls).toBeGreaterThanOrEqual(1);
+        // meaningful storage: ~35-60 holders per annex (was ~100-125)
+        expect(r.holders, `${l.seed} annex ${n.id} holders`).toBeGreaterThanOrEqual(30);
+        // playtest revision: + one storage piece in each room / closet the dressing left without one (ANNEX_CONTENT.roomStorage)
+        expect(r.holders).toBeLessThanOrEqual(90);
+      }
+    }
+  });
+
+  it('the machinery builds into a bounded number of merged meshes per annex in the station group', async () => {
+    installCanvasShim(false);
+    const THREE = await import('three');
+    const {WorldMaterials} = await import('../src/world/materials');
+    const {TEXTURE_FILES} = await import('../src/assets/manifest');
+    const {buildAnnexMachines, MACHINE_MATS} = await import('../src/world/trackExt/machines');
+    const tex: Record<string, InstanceType<typeof THREE.Texture>> = {};
+    for (const k of Object.keys(TEXTURE_FILES)) tex[k] = new THREE.Texture({width: 64, height: 64} as unknown as HTMLImageElement);
+    const mats = new WorldMaterials(tex as never, 7, {w: 1.2, h: 0.19, d: 0.17});
+    const l = sub(SUBWAY[2]), group = new THREE.Group(), b = buildAnnexMachines(group, l, mats);
+    const annexes = l.extensions!.annexes.length;
+    expect(b.records).toBe(l.extensions!.machines!.length);
+    expect(b.draws).toBeGreaterThan(0);
+    expect(b.draws).toBeLessThanOrEqual(MACHINE_MATS.length * annexes);
+    expect(b.triangles / annexes).toBeLessThan(60000);
+    for (const m of b.meshes) { expect(m.parent).toBe(group); expect(m.userData.level).toBe(0); expect(m.userData.trackExt.part).toBe('machines'); }
+  });
+});
+
 describe('service annex loot (finite, themed, appended, never multiplying the level\'s rewards)', () => {
   it('tables: the stash / picked-over / floor program are valid and source-backed', () => {
     expect(validateLootProfile(lootProfile('subway'))).toEqual([]);
@@ -156,22 +252,34 @@ describe('service annex loot (finite, themed, appended, never multiplying the le
     expect(ANNEX_STASH.empty).toBeGreaterThan(0);
   });
 
-  it('holders: 1-2 stashes per annex in dead-end rooms, the deepest few intact, the rest picked over', () => {
+  it('holders: 1-2 stashes in dead-end rooms, the deepest few intact, supply by depth band, a few scraps, the rest searched clean', () => {
+    // playtest revision (studio-alpha-track2-playtest-revision-20261031-01): gen/annexContent.ts pickOver — supply holders by door-hop
+    // depth band (entry / middle / deep), <= perArea per room; <= scrapsMax scraps; the rest ANNEX_PICKED (searched clean)
+    const L = ANNEX_CONTENT.loot;
     for (const l of WITH()) {
       const rep = extensionContentOf(l)!;
       for (const n of l.extensions!.annexes) {
         const ids = new Set(n.areas);
         const holders = l.props.slice(rep.first.props).filter(p => ids.has(p.area) && isLootHolderKind(p.kind) && p.host === undefined);
-        const stash = holders.filter(p => p.purpose === ANNEX_STASH_KEY), picked = holders.filter(p => p.purpose === ANNEX_PICKED_KEY);
-        const intact = holders.filter(p => p.purpose !== ANNEX_STASH_KEY && p.purpose !== ANNEX_PICKED_KEY);
+        const by = (k: string) => holders.filter(p => p.purpose === k);
+        const stash = by(ANNEX_STASH_KEY), picked = by(ANNEX_PICKED_KEY), supply = by(ANNEX_SUPPLY_KEY), scraps = by(ANNEX_SCRAPS_KEY);
+        const special = new Set([ANNEX_STASH_KEY, ANNEX_PICKED_KEY, ANNEX_SUPPLY_KEY, ANNEX_SCRAPS_KEY]);
+        const intact = holders.filter(p => !special.has(p.purpose ?? ''));
         expect(stash.length, `${l.seed} annex ${n.id} stashes`).toBeGreaterThanOrEqual(1);
         expect(stash.length).toBeLessThanOrEqual(2);
         for (const s of stash) expect(['crate', 'cabinetTall']).toContain(s.kind);
         expect(intact.length).toBeLessThanOrEqual(Math.max(1, Math.round(n.areaM2 / ANNEX_CONTENT.m2PerIntactHolder)));
-        expect(picked.length).toBeGreaterThan(intact.length);
-        // intact = the deepest: no picked-over holder lies deeper than the shallowest intact one
+        const want = Math.max(L.supply[0], Math.min(L.supply[1], Math.round(n.areaM2 / L.m2PerSupply)));
+        expect(supply.length, `${l.seed} annex ${n.id} supply`).toBe(Math.min(want, supply.length + scraps.length + picked.length));
+        expect(scraps.length).toBeLessThanOrEqual(L.scrapsMax);
+        const per = new Map<number, number>();
+        for (const p of supply) per.set(p.area, (per.get(p.area) ?? 0) + 1);
+        for (const v of per.values()) expect(v).toBeLessThanOrEqual(L.perArea);
+        // the entry third holds supply when it has candidate holders; the intact room-table holders stay the deepest
         const depth = (p: {area: number}) => l.areas[p.area].depth;
-        if (intact.length && picked.length) expect(Math.max(...picked.map(depth))).toBeLessThanOrEqual(Math.min(...intact.map(depth)));
+        const others = [...supply, ...scraps, ...picked], ds = others.map(depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
+        if (others.some(p => depth(p) - dMin < (dMax - dMin) / 3)) expect(supply.filter(p => depth(p) - dMin < (dMax - dMin) / 3).length).toBeGreaterThanOrEqual(1);
+        if (intact.length && others.length) expect(Math.max(...others.map(depth))).toBeLessThanOrEqual(Math.min(...intact.map(depth)));
         // persistence keys (kind + storey + position) are unique
         const keys = holders.map(p => holderKey(p.kind, p.level, p.x, p.z));
         expect(new Set(keys).size).toBe(keys.length);

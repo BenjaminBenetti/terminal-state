@@ -3,6 +3,7 @@
 // (a back plane / slab spanning wall to wall, floor to ceiling); the grid cells behind the cap are SOLID (GEN), so the
 // front of the cap is placed at the end of the walkable cells (where the player and bullets stop).
 
+import {BOARD_SPAN} from './wallFinish';
 import {CELL, FLOOR} from '../../gen/grid';
 import {TRACK_EXT} from '../../gen/trackExt/config'; // (pure data) the cap rock reservation the overhang lives in
 import type {StationLayout} from '../../gen/station';
@@ -215,7 +216,7 @@ function rubble(sink: ShellSink, v: TunnelView, k: number, mats: WorldMaterials,
   const nSlab = 5 + Math.floor(rnd() * 4);
   for (let i = 0; i < nSlab; i++) {
     const u = uHeap + 0.08 + rnd() * (0.85 - uHeap), l = rnd() * 1.7 - 0.85;
-    slab(i % 3 === 2 ? panels : slabs, u, l, 0.5 + rnd() * 0.5, 0.35 + rnd() * 0.35, -(0.55 + rnd() * 0.6), (rnd() - 0.5) * 0.9, i % 3 === 2 ? mats.scale.tunnel : mats.scale.ceiling);
+    slab(i % 3 === 2 ? panels : slabs, u, l, 0.5 + rnd() * 0.5, 0.35 + rnd() * 0.35, -(0.55 + rnd() * 0.6), (rnd() - 0.5) * 0.9, i % 3 === 2 ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale.ceiling); // (playtest revision) the shell lining's span
   }
   // Broken ceiling hanging down over the crest.
   for (let i = 0; i < 3; i++) {

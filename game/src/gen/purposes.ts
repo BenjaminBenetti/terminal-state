@@ -30,6 +30,8 @@ import {
   type ItemRows, // Task track3-eaton-centre-20261031 (lane SHOPS): the mall purposes' row sets
   JUNK_ROWS, PERSONAL_ROWS, // Task office-interactions-layout-20261030 (lane LAYOUT): office support rooms / large-room fill
   ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, // Track 2 (lane CONTENT): the service-annex holders' loot keys / tables
+  ANNEX_SCRAPS, ANNEX_SCRAPS_KEY, ANNEX_SUPPLY, ANNEX_SUPPLY_KEY, // playtest revision: distributed supply / scraps holders
+  SERVER_SPARES_ROWS, // task track2-playtest-revision (lane ROOMS): the annex signature rooms' tool / spares rows (+ TENANT_SUPPLY)
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
@@ -1169,7 +1171,28 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
  * drawn by assignRoomPurposes: weight 0 and max 0 (they never fit a slot), set by the annex dresser only.
  */
 function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
+  // Task track2-playtest-revision (lane ROOMS): the seven annex ROOM SIGNATURES (gen/annexRooms.ts builds their machinery; these
+  // purposes carry the label, plate, light odds and the few MEANINGFUL storage holders the room's function suggests — a tool locker
+  // by the boilers / gensets / turbine, spares shelving in the fan plant, a crate on the channel walkways). Never drawn by
+  // assignRoomPurposes (weight 0, max 0): set by the annex room assignment only. Loot rows: existing tables (the primary owns the
+  // annex loot policy and may re-balance them).
+  const SPARES: LootSpec = {items: SERVER_SPARES_ROWS, lots: [1, 3], empty: 0.3};
+  const SUPPLY: LootSpec = {items: TENANT_SUPPLY.items, lots: [1, 2], empty: 0.35};
+  const sig = (id: string, label: string, light: LightOdds, props: PropRule[], warm = false): RoomPurpose => ({
+    id, category: 'back', theme: 'service', label, slots: ['utility'], kinds: ['room'], weight: 0, max: 0, light, ...(warm ? {warm} : {}), stock: 'parts',
+    props, loot: {cabinetTall: SPARES, shelf: SUPPLY, cabinetLow: SUPPLY, crate: CACHE_CRATE, default: SUPPLY}, floor: {ammo: 0.5, med: 0.3},
+  });
+  const locker = (chance: number, n: [number, number] = [1, 1]): PropRule => ({kind: 'cabinetTall', at: 'wall', wall: 'side', n, chance, front: 0.8});
+  const crate = (chance: number): PropRule => ({kind: 'crate', at: 'wall', wall: 'any', n: [1, 1], chance});
+  const shelf = (chance: number): PropRule => ({kind: 'shelf', at: 'wall', wall: 'any', n: [1, 1], chance, front: 0.8});
   return {
+    'boiler-room': sig('boiler-room', 'Boiler room', [0.15, 0.5, 0.35], [locker(0.6), shelf(0.35)], true),
+    'generator-room': sig('generator-room', 'Generator room', [0.2, 0.5, 0.3], [locker(0.7), crate(0.35)]),
+    'sewage-room': sig('sewage-room', 'Sewage channel', [0.05, 0.4, 0.55], [crate(0.5), locker(0.35)]),
+    'overflow-chamber': sig('overflow-chamber', 'Overflow chamber', [0.05, 0.45, 0.5], [crate(0.5), shelf(0.3)]),
+    'spillway': sig('spillway', 'Spillway', [0.1, 0.45, 0.45], [locker(0.5), crate(0.4)]),
+    'turbine-hall': sig('turbine-hall', 'Turbine hall', [0.2, 0.5, 0.3], [locker(0.8, [1, 2]), shelf(0.6), crate(0.5)]),
+    'ventilation-plant': sig('ventilation-plant', 'Ventilation plant', [0.1, 0.45, 0.45], [shelf(0.5), crate(0.4)]),
     [ANNEX_STASH_KEY]: {
       id: ANNEX_STASH_KEY, category: 'back', theme: 'personal', label: 'Hideout stash', slots: ['storage'], kinds: ['room', 'closet'], weight: 0, max: 0,
       light: [0, 0.3, 0.7], props: [], loot: {crate: ANNEX_STASH, cabinetTall: ANNEX_STASH, default: ANNEX_STASH}, floor: {},
@@ -1178,6 +1201,15 @@ function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
     [ANNEX_PICKED_KEY]: {
       id: ANNEX_PICKED_KEY, category: 'back', theme: 'service', label: 'Picked-over stores', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
       light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_PICKED}, floor: {},
+    },
+    // playtest revision: the annex's distributed ordinary finds (gen/annexContent.ts pickOver): supply holders, a few scraps
+    [ANNEX_SUPPLY_KEY]: {
+      id: ANNEX_SUPPLY_KEY, category: 'back', theme: 'service', label: 'Service stores (supplies)', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_SUPPLY}, floor: {},
+    },
+    [ANNEX_SCRAPS_KEY]: {
+      id: ANNEX_SCRAPS_KEY, category: 'back', theme: 'service', label: 'Picked-over stores (a leftover)', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_SCRAPS}, floor: {},
     },
   };
 }

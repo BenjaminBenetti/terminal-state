@@ -134,6 +134,17 @@ export interface HolderTable {
   empty: number;
   lots: LotRange;
   rows: ItemRows;
+  /** Playtest revision: an annex-local table (LootSpec.exact) — no level-wide scarcity cut (a level's slot scaling still applies). */
+  exact?: boolean;
+}
+
+/**
+ * Playtest revision: does a holder kind roll its ROOM PURPOSE's table (the loot key / area purpose decides)? False for the openable
+ * containers with their own tables and the fixtures (holderTable below: `containerLoot(kind) !== undefined`): a loot key never
+ * changes what a first-aid wall kit or an extinguisher cabinet holds.
+ */
+export function rollsPurposeTable(kind: string): boolean {
+  return containerLoot(kind) === undefined;
 }
 
 export function holderTable(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE): HolderTable {
@@ -149,6 +160,7 @@ export function holderTable(kind: HolderKind, areaType: string, profile: LootPro
   // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
   // (`areaType` is the purpose id when the area has one; plain room types use the legacy tables).
   const spec = purposeLoot(areaType, kind);
+  if (spec?.exact) return {...resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]}, kind, areaType), exact: true};
   if (spec) return resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]}, kind, areaType);
   const [lo, hi] = T.holderLots[kind];
   // Stocked rooms get fuller shelves.
@@ -277,7 +289,8 @@ export function holderFinds(seed: number, index: number, kind: HolderKind, areaT
   const t = holderTable(kind, areaType, profile);
   // lane ROOF: a curated reward is exact (every entry its own roll, nothing cut)
   if (t.source === 'reward') return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile).map(e => ({...e, source: 'roll' as const}));
-  const out = scarceFinds(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), findContext(kind, areaType, t.rows, profile), scarceRng(seed, index, kind));
+  const out = t.exact ? rollItems(holderRng(seed, index, kind), kind, t, areaType, profile).map(e => ({...e, source: 'roll' as const}))
+    : scarceFinds(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), findContext(kind, areaType, t.rows, profile), scarceRng(seed, index, kind));
   const inside = withCompartments ? compartmentTable(kind, areaType, profile) : null;
   if (inside) {
     out.push(...scarceFinds(rollRows(mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0)), kind, inside, profile), findContext(kind, areaType, inside.rows, profile), scarceRng(seed, index, kind, ':inside')));
@@ -367,17 +380,21 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
     const parts = surfaces.map((s, i) => ({s, i})).filter(e => e.s.part !== undefined);
     // Iteration 12 (LOOT lane): both rolls thinned by their own scarcity streams.
     const s1 = scarceRng(seed, index, kind), s2 = scarceRng(seed, index, kind, ':inside');
-    const a = rollOn(holderRng(seed, index, kind), index * 1000, r => scarce(rollItems(r, kind, t, areaType, profile), s1, kind, areaType, t.rows, profile), exposed);
+    const a = rollOn(holderRng(seed, index, kind), index * 1000, r => (t.exact ? rollItems(r, kind, t, areaType, profile) : scarce(rollItems(r, kind, t, areaType, profile), s1, kind, areaType, t.rows, profile)), exposed);
     const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
     const b = rollOn(r2, index * 1000 + 500, r => scarce(rollRows(r, kind, inside, profile), s2, kind, areaType, inside.rows, profile), parts);
-    return storageFill(seed, index, kind, areaType, surfaces, [...a, ...b].map(l => tagPart(l, surfaces)), inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+    const ab = [...a, ...b].map(l => tagPart(l, surfaces));
+    return t.exact ? ab : storageFill(seed, index, kind, areaType, surfaces, ab, inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
   }
   const r = holderRng(seed, index, kind);
-  const items = scarce(rollItems(r, kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
+  const raw = rollItems(r, kind, t, areaType, profile);
+  const items = t.exact ? raw : scarce(raw, scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
   const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
   const lots: Lot[] = [];
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
-  return storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+  // (playtest revision: an exact annex table is the annex's whole budget — the mall's storage fill never tops it up, so a searched-clean
+  // holder stays clean and the annex economy is the same on every level)
+  return t.exact ? lots : storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
 }
 
 /** Lot id offset of storage-fill lots (index * 1000 + FILL_ID_BASE + (compartment + 1) * 3 + k: clear of the roll's own ids). */

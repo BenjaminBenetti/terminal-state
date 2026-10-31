@@ -239,7 +239,7 @@ export function subtractBands(a: Lin, bs: readonly Lin[], out: Piece[] = []): Pi
 // Wall faces
 
 /** Builder edge kinds (material families). */
-export type WallKind = 'tile' | 'paint' | 'shop' | 'tunnel' | 'platformFace' | 'slab';
+export type WallKind = 'tile' | 'paint' | 'shop' | 'tunnel' | 'platformFace' | 'slab' | 'annex';
 
 /** A published face plus what the builder needs to render it. */
 export interface BuiltFace extends WallFace {
@@ -292,8 +292,9 @@ function isExt(area: Area | undefined, kind: 'tunnel' | 'annex'): boolean {
 
 function kindOf(area: Area | undefined): WallKind {
   if (!area) return 'tile';
-  // Track 2 (VIS): annex rooms / corridors are cast concrete (the platform-face concrete), tunnels the tunnel lining.
-  if (isExt(area, 'annex')) return 'platformFace';
+  // Track 2 (VIS): annex rooms / corridors are cast concrete, tunnels the tunnel lining. Playtest revision (lane ART): the annexes'
+  // own board-formed finish ('annexWall', world/trackExt/wallFinish.ts) instead of the 128 texel / m platform-face backing.
+  if (isExt(area, 'annex')) return 'annex';
   if (isExt(area, 'tunnel')) return 'tunnel';
   if (area.type === 'eatery' || area.type === 'shop') return 'shop';
   return area.publicSpace ? 'tile' : 'paint';
@@ -597,6 +598,7 @@ export function finishFor(kind: WallKind, upper: boolean): string {
     case 'shop': return 'tileShop';
     case 'tunnel': return 'tunnel';
     case 'platformFace': case 'slab': return 'platformFace';
+    case 'annex': return 'annexWall';
   }
 }
 

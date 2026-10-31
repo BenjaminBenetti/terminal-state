@@ -136,7 +136,17 @@ describe('track extensions — generation', () => {
           expect(a.areaM2).toBeGreaterThanOrEqual(TRACK_EXT.annex.minShare * SUBWAY_WALK_BASELINE_M2 - 1e-6);
           expect(a.areaM2).toBeLessThanOrEqual(TRACK_EXT.annex.share * TRACK_EXT.annex.jitter[1] * SUBWAY_WALK_BASELINE_M2 * 1.06);
           expect(a.ceilY - a.floorY).toBeGreaterThanOrEqual(2.4 - 1e-6);
-          expect(a.ceilY - a.floorY).toBeLessThanOrEqual(2.8 + 1e-6);
+          // (task track2-playtest-revision, lane ROOMS: an annex with a machinery hall reaches the hall ceiling range)
+          const H = TRACK_EXT.annex.hall!, halls = a.areas.map(id => l.areas[id]).filter(q => q.extHall);
+          expect(a.ceilY - a.floorY).toBeLessThanOrEqual((halls.length ? H.ceil[1] : 2.8) + 1e-6);
+          expect(halls.length).toBeLessThanOrEqual(H.count[1]);
+          for (const q of halls) {
+            expect(q.kind).toBe('room');
+            expect(q.ceil - q.floorY!).toBeGreaterThanOrEqual(H.ceil[0] - 1e-6);
+            expect(Math.min(q.w, q.h) * CELL).toBeGreaterThanOrEqual(H.short[0] - 1e-6);
+            expect(Math.max(q.w, q.h) * CELL).toBeLessThanOrEqual(H.long[1] + 1e-6);
+          }
+          for (const id of a.areas) if (!l.areas[id].extHall) expect(l.areas[id].ceil - a.floorY).toBeLessThanOrEqual(2.8 + 1e-6);
         }
       }
       const r2 = (v: number) => Math.round(v * 100) / 100;

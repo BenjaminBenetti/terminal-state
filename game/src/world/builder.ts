@@ -41,7 +41,8 @@ import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane 
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
 import {MALL_FINISH_ATTR, MallArch, downlightLensMatrix, splitFinishKey} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium
-import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt'; // Track 2 (VIS): tunnels beyond the beds
+import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt';
+import {ANNEX_WALL, BOARD_SPAN, annexWallMaterial} from './trackExt/wallFinish'; // Track 2 playtest revision (lane ART) // Track 2 (VIS): tunnels beyond the beds
 
 class Accum {
   pos: number[] = [];
@@ -261,8 +262,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   setExteriorRoof(office?.roofY ?? null);
   // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium (null for the Subway and the Office).
   const mall = office ? null : MallArch.for(layout, mats, levels);
-  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? mats.scale[k as MatKey];
-  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? mats.get(k as MatKey);
+  // Track 2 playtest revision (lane ART): + the annexes' board-formed wall finish (world/trackExt/wallFinish.ts), created on first use.
+  const scaleOf = (k: string): {u: number; v: number} => office?.scale(k) ?? mall?.scale(k) ?? (k === ANNEX_WALL ? {u: BOARD_SPAN, v: BOARD_SPAN} : mats.scale[k as MatKey]);
+  const matOf = (k: string): THREE.Material => office?.material(k) ?? mall?.material(k) ?? (k === ANNEX_WALL ? annexWallMaterial(mats) : mats.get(k as MatKey));
 
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).

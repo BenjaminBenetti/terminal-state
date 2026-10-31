@@ -73,6 +73,26 @@
 //     beside them). Proof, every run: the core views (coreView also filters the extensions' appended props / pickups) reproduce
 //     GOLDEN_RESERVE / GOLDEN_CORE byte for byte (now incl. officeHolders c36c5fba / officePickups 1aa35d40 and the roof find
 //     3ba3548d); the gear roll and every gear placement hash are unchanged (gear spacing ignores the annexes' finds).
+// 10. Task track2-playtest-revision-20261031 (lane ROOMS) — CAUSE: "annex machinery halls + room signatures" (user feedback 4 / 5):
+//     the annexes grow 2-3 larger machinery halls (gen/trackExt/carve.ts) and take room signatures with anchored machinery and
+//     LEAN furniture (gen/annexRooms.ts: fewer, meaningful holders - the corpus' live holder count is now 5953 over 18 stations), so every
+//     annex holder / floor find is re-laid and the crop translation of extended stations changes. Re-pinned LIVE hashes only:
+//     subwayHolders e4c02d0b -> 63f11838, subwayPickups f3f6cbd3 -> 5ae2b384, officeHolders 595d8a54 -> f07d82e0, officePickups
+//     b8b6ff4e -> 92a1d2ed, gearPlaced fee77ca3 -> 879dd375 (the live gear coordinates of translated stations; its core-frame
+//     placement is unchanged). PROOF, every run: GOLDEN_CORE / GOLDEN_RESERVE (incl. both core gearPlaced hashes), the roof find
+//     and the gear roll are byte-identical; no loot table, rule or roll changed.
+// 11. Track 2 playtest revision (task studio-alpha-track2-playtest-revision-20261031-01, primary) — LIVE only. CAUSE: the user's two
+//     fresh runs found no annex loot; diagnosis (reference/tasks/track2-playtest-revision-20261031/DIAGNOSIS-BASELINE.md): 94-98 % of
+//     annex holders rolled empty (the picked-over / stash tables were cut a second time by the level-wide scarcity economy). Now the
+//     annex tables roll exactly (LootSpec.exact), supply / scraps / searched-clean classes by depth band (gen/annexContent.ts
+//     pickOver), one storage piece per bare annex room, the service budget / bands, the station-surface invitation art. Re-pinned:
+//     subwayHolders 63f11838 -> fe63d0aa, subwayPickups 5ae2b384 -> 0467b2d6, officeHolders f07d82e0 -> 0c130bc9, officePickups
+//     92a1d2ed -> 5fa98572. Every core view, the reserve-off proof, the Office roof find and the gear roll / placement are unchanged.
+// 12. Same task, after merging main ce83b48 (mall revision) — LIVE holders only. CAUSE: CI found crafting materials in the annex
+//     supply / scraps rows (a Subway must never hold a material: craft-materials / office-openables), so they are removed; the supply
+//     depth bands are thirds of the annex ROOMS' door-hop range (was: its holders'), so "entry" means the first rooms walked into.
+//     Re-pinned: subwayHolders fe63d0aa -> 5c456623, officeHolders 0c130bc9 -> 7e08e006 (holder and lot counts unchanged); every
+//     pickup hash, core view, the reserve-off proof, the roof find and the gear roll / placement are unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -95,17 +115,17 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: 'e4c02d0b', // stage 9 (+ the service annexes' holders); stage 8: a978aeed (+ the hidden-mount fix)
+  subwayHolders: '5c456623', // stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
-  subwayPickups: 'f3f6cbd3', // stage 9 (+ the annexes' floor finds); stage 8: e83c7811
-  officeHolders: '595d8a54', // stage 9 (+ the annexes' holders); before: c36c5fba (= GOLDEN_CORE.officeHolders)
+  subwayPickups: '0467b2d6', // stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
+  officeHolders: '7e08e006', // stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
-  officePickups: 'b8b6ff4e', // stage 9 (+ the annexes' floor finds); before: 1aa35d40 (= GOLDEN_CORE.officePickups)
+  officePickups: '5fa98572', // stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
   /** Stage 6 (Track 2): gear on translated stations; stage 7: + the core reserve. */
-  gearPlaced: 'fee77ca3',
+  gearPlaced: '879dd375', // stage 10 (translated live coordinates); was fee77ca3
 };
 
 function fnv() {

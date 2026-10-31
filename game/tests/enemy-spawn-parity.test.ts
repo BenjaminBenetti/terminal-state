@@ -72,6 +72,24 @@
 //     OFFICE_GOLDEN_TRACK2 (222 / 3333 / 4242). Proof, every run: coreView(layout) (now also filtering the extensions' appended
 //     props / lights / signs / pickups / spawns) reproduces SUBWAY_GOLDEN_RESERVE / OFFICE_GOLDEN and the INVARIANT pins byte for
 //     byte, and the reserve-off core view SUBWAY_GOLDEN; no core pin moved.
+//  8. Task track2-playtest-revision-20261031 (lane ROOMS) — CAUSE: "annex machinery halls + room signatures" (user feedback 4 / 5):
+//     gen/trackExt/carve.ts grows 2-3 larger, taller MACHINERY HALLS per annex inside the same area target (the annex rng draws
+//     and the room graphs change; the crop / core translation follows), and gen/annexRooms.ts lays out the seven room signatures
+//     (collision-only 'annexMachine' boxes, lean annex furniture), so every annex is re-laid: its service spawns and loose finds
+//     land elsewhere. Moved: ONLY the live entries of annex levels — SUBWAY_GOLDEN_TRACK2 7 / 42 / 1234 / 16920 / 24839 / 32758 /
+//     40677 / 48596 and OFFICE_GOLDEN_TRACK2 222 / 3333 / 4242 (old values beside them in the helper); every station / street /
+//     floor / roof count and every service count is unchanged; the non-annex entries (Subway 1, 9001; Office 11) are unchanged.
+//     PROOF, every run: the core views reproduce SUBWAY_GOLDEN_RESERVE / OFFICE_GOLDEN and the INVARIANT pins byte for byte, the
+//     reserve-off core view SUBWAY_GOLDEN; no core pin moved.
+//  9. Task studio-alpha-track2-playtest-revision-20261031-01 (primary) — CAUSE: "annexes had no findable loot / few enemies" (user
+//     playtest): service budget 3-5 -> 5-7 over entry / middle / deep depth bands, out of station earshot where possible; annex
+//     loot classes and one storage piece per bare annex room; the station invitation art. Moved: ONLY live annex entries (old
+//     values in the helper); core views and invariants unchanged.
+// 10. Same task, after merging main ce83b48 (mall revision) — CAUSE: "service budget 5-6 + O(1) earshot test": the registry
+//     contract bounds every context's count hi by budgets.ambient.perStorey (the compact mall's is 6), and the earshot test is a
+//     distance transform of 2 m core tiles (generation back at main's time; station.test's 400 ms budget failed at 406 ms on CI).
+//     Moved: ONLY live annex entries' spawn hashes and service counts (old values in the helper); station / street / floor / roof
+//     counts and every pickup hash unchanged; core views and invariants unchanged (asserted every run).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
