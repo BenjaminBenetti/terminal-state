@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 18071,
-      "sha256": "b50e2e23831852bb9a315b0216c29191189e3b4490bf0dfb943b4b161b105fe4"
+      "bytes": 18851,
+      "sha256": "55a8d86386b8ca8a211830d036b78c2b8adec173024114a9a02f373fa82462a4"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1394,6 +1394,11 @@
       "sha256": "51d536d39b4627c65f823504f60417ed0a6c7e05b8f8f8d8c98d8770e43866bc"
     },
     {
+      "path": "assets/derivatives/annex-genset-20261031.json",
+      "bytes": 3205,
+      "sha256": "4a8f1dac0a1e97f52187b72124d3117386e4bae510cac2eb039e8ed9930928c8"
+    },
+    {
       "path": "assets/derivatives/audio-cough.json",
       "bytes": 24088,
       "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
@@ -1692,6 +1697,11 @@
       "path": "assets/models/ammo-9mm-t25.glb",
       "bytes": 178096,
       "sha256": "fd4d594e9240188ce09eb5da5b2a5f0ce565aca5fc47e83aafd23a06acf604bd"
+    },
+    {
+      "path": "assets/models/annex-genset.glb",
+      "bytes": 861608,
+      "sha256": "8114442613db67103792ae8b81d7daa8e074fe70b7e94161fd1a03367ff9899c"
     },
     {
       "path": "assets/models/bench-t25r1.glb",

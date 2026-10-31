@@ -174,3 +174,11 @@ Generated for this project with Meshy T2.5 (smart topology; text-to-3D preview +
 - `assets/models/mall-salon-styling-chair.glb` — salon-styling-chair (M51; Meshy tasks 01a18fc1-8df4-71cb-8dd2-2b5adecd3d2a / 01a18fc3-aca4-7273-a1a2-9f21bd81d6b4)
 - `assets/models/mall-bed-display.glb` — bed-display (M52; Meshy tasks 01a18fc3-d691-72ff-92b9-6a59b9fcd8cd / 01a18fc7-93ff-75f0-b920-00beb0543755)
 <!-- END mall-track3-20261031 -->
+
+<!-- BEGIN annex-genset-20261031 (build-annex-genset.mjs) -->
+## Beyond the Station round 2: the annex generator set
+
+Generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's task-specific 100-credit authorization (1 attempt, 15 credits); runtime derivative built by `tools/asset-pipeline/props/build-annex-genset.mjs` (provenance: `assets/derivatives/annex-genset-20261031.json`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters are kept outside Git.
+
+- `assets/models/annex-genset.glb` — industrial diesel generator set (Meshy tasks 01a19395-4d7a-75f7-84ec-5ba5d6a1a7be / 01a19396-6537-77f8-8b17-20ffef3ff302)
+<!-- END annex-genset-20261031 -->

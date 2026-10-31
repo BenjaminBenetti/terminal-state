@@ -1,0 +1,105 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "annex-genset-20261031",
+ "task": "studio-alpha-track2-round2-20261031-01",
+ "lane": "R3 (primary, sole Meshy submitter)",
+ "status": "runtime derivative of ONE new industrial generator-set model generated for this project with Meshy T2.5 (smart topology) through the Meshy MCP under the user's task-specific \"100 credit budget\"; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "rebuild": "node tools/asset-pipeline/props/build-annex-genset.mjs",
+ "rawStorage": "reference/tasks/track2-round2-20261031/meshy/raw/annex-genset-01/attempt-01/{preview,refine}/ (immutable native GLBs + maps, read-only) + reference/tasks/track2-round2-20261031/meshy/LEDGER.jsonl + MANIFEST.json; outside Git",
+ "convention": "metres at real size (length 3.5 m along X), +Y up, front +Z (the annex machine frame), grounded (min y = 0), centred on x / z; shared path (not mall-*)",
+ "modelProof": {
+  "requested": {
+   "ai_model": "meshy-t2.5",
+   "model_type": "smart-topology",
+   "target_polycount": 12000,
+   "target_formats": [
+    "glb"
+   ],
+   "refine": "enable_pbr true, texture_resolution 2k, ai_model omitted (inherits the preview model: documented)"
+  },
+  "evidence": [
+   "exact create arguments recorded in the fsynced ledger intent line before each paid call; ack with the returned task id right after",
+   "the preview billed 5 credits (the T2 / T2.5 tier; 7.1 / 6 / latest bill 20) and returned a triangle-only mesh near target_polycount (11,576)",
+   "the Meshy task GET response does not echo ai_model / model_type, so the request record + billing tier are the model proof"
+  ]
+ },
+ "tasks": {
+  "preview": "01a19395-4d7a-75f7-84ec-5ba5d6a1a7be",
+  "refine": "01a19396-6537-77f8-8b17-20ffef3ff302"
+ },
+ "source": {
+  "file": "raw/annex-genset-01/attempt-01/refine/model.glb",
+  "bytes": 7420456,
+  "sha256": "20f743902d901feaca7cc316ee517bf8a6cf41233aabe77b2e43aca6b734cf71",
+  "previewSha256": "3eca2f872dc1192777d86beb38799c483609781a9bfdbbd04725ace4e7e9328b"
+ },
+ "ledger": {
+  "attempts": 1,
+  "attemptedPOSTs": 2,
+  "accepted": 1,
+  "credits": {
+   "billed": 15,
+   "reserved": 0,
+   "unspentOf100": 85
+  },
+  "stop": "first accepted usable model (attempt 1); generation stopped, no further POST under this authority"
+ },
+ "derivative": {
+  "scale": 3.68724,
+  "rawExtent": [
+   0.9492,
+   0.4546,
+   0.3364
+  ],
+  "dims": [
+   3.5,
+   1.6762,
+   1.2405
+  ],
+  "triangles": 11565,
+  "meshes": 1,
+  "primitives": 1,
+  "materials": 1,
+  "textures": [
+   {
+    "slot": "baseColor",
+    "size": [
+     1024,
+     1024
+    ],
+    "mime": "image/jpeg",
+    "bytes": 244678
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     256,
+     256
+    ],
+    "mime": "image/jpeg",
+    "bytes": 19883
+   },
+   {
+    "slot": "normal",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 26301
+   }
+  ],
+  "gpuBytesWithMips": 7340031,
+  "texturePolicy": {
+   "base": 1024,
+   "mr": 256,
+   "normal": 512,
+   "quality": 86
+  }
+ },
+ "output": {
+  "url": "assets/models/annex-genset.glb",
+  "bytes": 861608,
+  "sha256": "8114442613db67103792ae8b81d7daa8e074fe70b7e94161fd1a03367ff9899c"
+ }
+}

@@ -401,6 +401,20 @@ Tunnels have sparse fixtures, mostly dead or dying.
   Game.leaveSection with the other world releases) frees its geometries and the rotor mesh; its materials and clock are per
   WorldMaterials, reused by the next level.
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
+- **Generator model** (round 2, R3; user: "Generate a model for the generator"): ONE generated industrial diesel genset,
+  `assets/models/annex-genset.glb` (Meshy T2.5 smart topology, 2K PBR refine, under the user's task-specific 100-credit budget:
+  1 attempt, 2 POSTs, 15 credits; provenance `assets/derivatives/annex-genset-20261031.json`, rebuilt by
+  `tools/asset-pipeline/props/build-annex-genset.mjs` from the immutable raw outside Git).
+  - **Derivative:** 3.5 × 1.68 × 1.24 m at real size, front +Z, grounded; 11,565 triangles, one mesh / one material; maps base
+    colour 1024², metallic-roughness 256², normal 512² (JPEG; ~7 MiB GPU with mips; 862 KB file). A SHARED lazy model (not
+    `mall-*`): `assets/annexGenset.ts` `gensetModelKeysFor` asks the loading screen for it when a section has a genset record.
+  - **Runtime:** `world/builder.ts` instances it on every genset record (`machines.ts` `gensetModelFit`: on the 0.15 m plinth, one
+    uniform scale inside the record's body / collision box — typically 0.955 → 3.34 × 1.60 × 1.19 m), bucketed by scale (one
+    `addInstancedModel` call each, 1–2 draws per level). The procedural radiator / engine / alternator body is then skipped; the
+    plinth, the exhaust silencer (posts from the model's top) and the riser stay. Without the model the procedural genset stands.
+  - **Collision / interaction:** unchanged (`machineBoxes`, anchored machinery, no interaction; the 1 m access ring and the hall
+    aisle stay clear). Evidence: `annex-genset.test.ts`; scale check beside the runtime zombie
+    (`node tools/asset-pipeline/props/scale-check.mjs --prop game/public/assets/models/annex-genset.glb --scale 0.955`).
 - **Fan noise** (round 2, R4 audio; `game/src/audio/fanSound.ts`, `audio/sfx.ts` `updateFans`): user "ventaliation fan should
   spin, and make noise."
   - **Source:** an accepted existing recording only, `bed-hvac-02-loop.mp3` (Sound Lab prompt "a steady ventilation system, air

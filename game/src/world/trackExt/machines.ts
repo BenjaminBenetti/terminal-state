@@ -247,16 +247,19 @@ function header(b: Build, m: AnnexMachine): void {
   }
 }
 
-function genset(b: Build, m: AnnexMachine, ceil: number): void {
+function genset(b: Build, m: AnnexMachine, ceil: number, model = false): void {
   const hw = m.w / 2, hd = m.d / 2, top = m.h;
   b.box('concrete', -hw, 0, -hd, hw, 0.15, hd);
   for (const s of [-1, 1]) b.box('yellow', -hw, 0.15, s * hd - (s > 0 ? 0.05 : 0), hw, 0.165, s * hd + (s < 0 ? 0.05 : 0));
+  // (round 2, R3) with the generated genset model loaded (world/builder.ts places it on this plinth: GENSET_MODEL_FIT) only the
+  // plinth and the exhaust (silencer on posts over the engine, riser into the ceiling) stay procedural
+  const ex0 = -hw + 0.12 + 0.42 + 0.12, ex1 = hw - 1.25;
+  if (model) { gensetExhaust(b, m, ceil, hd, ex0, ex1, top - 0.05); return; }
   b.box('dark', -hw + 0.1, 0.15, -hd + 0.12, hw - 0.1, 0.28, hd - 0.12);
   // radiator end (-X), engine block, rocker covers, turbo / air filter, alternator (+X), control box
   const rx0 = -hw + 0.12, rx1 = rx0 + 0.42;
   b.box('genset', rx0, 0.28, -hd + 0.15, rx1, top, hd - 0.15);
   b.box('grate', rx0 - 0.02, 0.4, -hd + 0.22, rx0, top - 0.12, hd - 0.22);
-  const ex0 = rx1 + 0.12, ex1 = hw - 1.25;
   b.box('genset', ex0, 0.28, -hd + 0.28, ex1, 1.08, hd - 0.28);
   b.box('genset', ex0 + 0.1, 1.08, -0.3, ex1 - 0.1, 1.28, 0.3);
   for (let x = ex0 + 0.25; x < ex1 - 0.15; x += 0.42) b.cyl('dark', 'y', x, 0, 1.28, 1.36, 0.07, 8);
@@ -266,11 +269,26 @@ function genset(b: Build, m: AnnexMachine, ceil: number): void {
   b.cyl('dark', 'x', 0.28 + 0.44, 0, hw - 0.2, hw - 0.12, 0.34, 18);
   b.box('grey', ex1 + 0.2, 0.28 + 0.9, hd - 0.38, hw - 0.3, 0.28 + 1.38, hd - 0.12);
   b.box('black', ex1 + 0.28, 0.28 + 1.02, hd - 0.12, hw - 0.38, 0.28 + 1.3, hd - 0.11);
-  // exhaust: silencer on a frame over the engine, riser into the ceiling (inside the footprint)
-  const sy = Math.min(top + 0.25, ceil - 0.5);
+  gensetExhaust(b, m, ceil, hd, ex0, ex1, 1.08);
+}
+
+/** The genset's exhaust: silencer on a frame over the engine (posts from `postY`), riser into the ceiling (inside the footprint). */
+function gensetExhaust(b: Build, m: AnnexMachine, ceil: number, hd: number, ex0: number, ex1: number, postY: number): void {
+  const sy = Math.min(m.h + 0.25, ceil - 0.5);
   b.cyl('lagging', 'x', sy, -hd + 0.42, ex0, ex1, 0.2, 14);
-  b.box('dark', ex0 + 0.1, 1.08, -hd + 0.36, ex0 + 0.16, sy, -hd + 0.48); b.box('dark', ex1 - 0.16, 1.08, -hd + 0.36, ex1 - 0.1, sy, -hd + 0.48);
+  b.box('dark', ex0 + 0.1, postY, -hd + 0.36, ex0 + 0.16, sy, -hd + 0.48); b.box('dark', ex1 - 0.16, postY, -hd + 0.36, ex1 - 0.1, sy, -hd + 0.48);
   b.cyl('dark', 'y', ex1 - 0.1, -hd + 0.42, sy, ceil - 0.01, 0.11, 10, false);
+}
+
+/**
+ * (round 2, R3) Where the generated genset model sits on a genset record: on the 0.15 m plinth, front +Z, yawed by the record; one
+ * UNIFORM scale so it fits the record's body box (length m.w, depth m.d - 0.2 for the plinth edge strips, height m.h - 0.15 above
+ * the plinth: the collision box machineBoxes() is m.h tall). `dims` = the model's real-size W x H x D (ANNEX_GENSET.dims).
+ */
+export function gensetModelFit(m: Pick<AnnexMachine, 'x' | 'y' | 'z' | 'rot' | 'w' | 'd' | 'h'>, dims: readonly [number, number, number]): {matrix: THREE.Matrix4; scale: number; size: [number, number, number]} {
+  const s = Math.min(m.w / dims[0], (m.d - 0.2) / dims[2], (m.h - 0.15) / dims[1]);
+  const matrix = new THREE.Matrix4().makeRotationY(m.rot).setPosition(m.x, m.y + 0.15, m.z);
+  return {matrix, scale: s, size: [dims[0] * s, dims[1] * s, dims[2] * s]};
 }
 
 function switchgear(b: Build, m: AnnexMachine, ceil: number): void {
@@ -580,7 +598,7 @@ export interface MachineBuild {
 }
 
 /** Builds every annex's machinery records into `group` (one merged mesh per annex and material). Empty without records. */
-export function buildAnnexMachines(group: THREE.Group, layout: StationLayout, mats: WorldMaterials): MachineBuild {
+export function buildAnnexMachines(group: THREE.Group, layout: StationLayout, mats: WorldMaterials, o: {gensetModel?: boolean} = {}): MachineBuild {
   const recs = layout.extensions?.machines ?? [];
   const clock = motionClock(mats);
   let rotors: RotorSet | null = null, disposed = false;
@@ -614,7 +632,7 @@ export function buildAnnexMachines(group: THREE.Group, layout: StationLayout, ma
       switch (m.kind) {
         case 'boiler': boiler(b, m, ceil); break;
         case 'header': header(b, m); break;
-        case 'genset': genset(b, m, ceil); break;
+        case 'genset': genset(b, m, ceil, !!o.gensetModel); break;
         case 'switchgear': switchgear(b, m, ceil); break;
         case 'channel': channel(b, m); break;
         case 'basin': basin(b, m); break;
