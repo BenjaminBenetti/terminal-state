@@ -293,7 +293,8 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   // Iteration 12 (ARCH): rust bleeding down the finish from wall-mounted steel (after every cut is final).
   planned.forEach((pf, i) => rustBleed({pf, idx: i, rng: new Rng(pf.face.seed ^ 0x7e57), placed: byFace[i]}, ctx));
   // Board-formed concrete last: its pattern runs around every cut, keep-out and other flush finish.
-  planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
+  // (Track 2 playtest revision, lane ART: not over the annexes' own board-formed finish, which carries its panels at 427 texels / m)
+  planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && pf.face.finish !== 'annexWall' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
   const coreCaps = applyCaps(ctx.features.filter(f => f.face < nCore), planned);
   // The annexes' many short walls plan far more detail than their budget: keep whole faces in a seeded shuffled order, so the
   // bare walls are spread over every annex instead of the last-planned annex losing all of its detail.

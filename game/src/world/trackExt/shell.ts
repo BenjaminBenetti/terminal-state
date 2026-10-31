@@ -19,6 +19,7 @@ import {cellCeil, type BuiltFace} from '../levelGeometry';
 import type {MatKey, WorldMaterials} from '../materials';
 import {TunnelFrame, renderStations} from './frame';
 import {Acc, basisOf, hashOf, prng, type V3} from './mesh';
+import {BOARD_SPAN, tunnelShellMaterial} from './wallFinish';
 import {CELL_BUILDER, type TrackExtView, type TunnelView} from './view';
 import {buildCap, capSpan, type CapSpan} from './caps';
 
@@ -34,6 +35,8 @@ export const SHELL = {
   sleeperStep: 0.65, sleeper: [0.24, 0.14, 2.5] as const,
   /** Cable tray height above the bed and bracket spacing; dead bulkhead lamps every `lampStep` at `lampY`. */
   trayY: 3.25, trayStep: 2.4, lampY: 2.85, lampStep: 14,
+  /** (playtest revision, lane ART) The portal at the mouth: rib depth along the tunnel, how far it stands proud, soffit beam height. */
+  portal: {depth: 0.3, proud: 0.08, beam: 0.15},
 } as const;
 
 /** A wall opening of the shell: arc span on one side, head height (absolute). */
@@ -119,7 +122,7 @@ export function buildShells(group: THREE.Group, view: TrackExtView, layout: Stat
   straddleCells(sink, view, layout, mats);
 
   const meshes: THREE.Object3D[] = [];
-  const matOf = (m: ShellMat): THREE.Material => m === 'sign' ? serviceSignMaterial(mats) : m === 'lens' ? deadLensMaterial(mats) : m === 'hazard' ? extra.hazard : m === 'void' ? extra.void : mats.get(m);
+  const matOf = (m: ShellMat): THREE.Material => m === 'sign' ? serviceSignMaterial(mats) : m === 'lens' ? deadLensMaterial(mats) : m === 'hazard' ? extra.hazard : m === 'void' ? extra.void : m === 'tunnel' ? tunnelShellMaterial(mats) : mats.get(m);
   for (const [key, e] of sink.accs) {
     const geo = e.acc.geometry();
     if (!geo) continue;
@@ -277,7 +280,8 @@ function buildTunnel(sink: ShellSink, sleepers: Map<string, {tunnel: number; lis
   const m0 = f.first;
 
   // --- Walls (both sides), openings cut with a lintel above ------------------------------------------------------
-  const wm = mats.scale.tunnel;
+  // (playtest revision, lane ART) the cast board-formed lining (world/trackExt/wallFinish.ts) at its real 2.4 m span
+  const wm = {u: BOARD_SPAN, v: BOARD_SPAN};
   for (const side of [1, -1] as const) {
     const lat = side * half;
     const inward: [number, number] = [-side * m0.lx, -side * m0.lz];
@@ -305,6 +309,18 @@ function buildTunnel(sink: ShellSink, sleepers: Map<string, {tunnel: number; lis
       const i2 = a.v([pb[0], y1, pb[1]], nB, ub, vt), i3 = a.v([pa[0], y1, pa[1]], nA, ua, vt);
       a.quad(i0, i1, i2, i3);
     }
+  }
+
+  // --- (playtest revision, lane ART) the PORTAL at the mouth: where the station box ends and the cast tunnel lining starts, a
+  // concrete rib on both walls and a soffit beam across the ceiling (0.3 m deep, 8 cm proud / 15 cm deep: no clearance lost)
+  {
+    const P = SHELL.portal, b = basisOf(m0.tx, m0.tz), conc = sink.get('platformFace', k, P.depth / 2), cs = mats.scale.platformFace;
+    for (const side of [1, -1] as const) {
+      const c = f.point(P.depth / 2, side * (half - P.proud / 2));
+      conc.box([c[0], (y0 + y1) / 2, c[1]], [P.depth / 2, (y1 - y0) / 2, P.proud / 2], b.x, b.y, b.z, cs);
+    }
+    const c = f.point(P.depth / 2, 0);
+    conc.box([c[0], y1 - P.beam / 2, c[1]], [P.depth / 2, P.beam / 2, half - P.proud], b.x, b.y, b.z, cs);
   }
 
   // --- Ceiling (developed mapping) and ballast floor (world-planar, as the bed) ----------------------------------
