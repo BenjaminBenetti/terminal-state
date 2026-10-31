@@ -26,6 +26,7 @@ unchanged; a tuning change will move it.
 | Curated rewards (the Office roof cache) | `REWARD_TABLES`, `ROOF_CACHE`, `ROOF_CACHE_KEY`, `rewardTable()`; `LootTables.rewards` |
 | Curated find rewards (the Office roof find: a gun + its own ammo, or gear) | `REWARD_FINDS`, `ROOF_FIND`, `ROOF_FIND_KEY`, `rewardFind()`; `LootTables.rewardFinds` |
 | Service annexes (Track 2): stash, picked-over storage, per-annex floor program | `ANNEX_STASH_KEY` / `ANNEX_STASH` (`ANNEX_STASH_ROWS`), `ANNEX_PICKED_KEY` / `ANNEX_PICKED` (`ANNEX_PICKED_ROWS`), `ANNEX_FLOOR` (`LootTables.floor.annex`) |
+| Service annexes: survivor caches deeper in (round 2) | `ANNEX_CACHE_KEY`; per container `ANNEX_CACHE_PANTRY` / `ANNEX_CACHE_KIT` / `ANNEX_CACHE_CRATE` (`ANNEX_CACHE_*_ROWS`); `LootSpec.salvage: false` |
 
 Per-room stock stays with its room in `gen/purposes.ts` (each purpose's `loot` per holder kind). That is where "this room
 makes sense" lives. Purposes reference the named shared tables above.
@@ -286,6 +287,39 @@ reproduce the earlier pins byte for byte).
     - **Exact means the whole budget:** the mall's storage fill (`LootTables.storageFill`) never tops up an exact annex table, so a
       searched-clean holder stays clean and the annex economy is the same on every level.
     - **Room storage:** every annex room / closet the dressing left without a holder gets one storage piece (open shelving first).
+    - **Signature-room lockers** (the deepest intact holders of a boiler / generator / turbine room roll their room table):
+      `ANNEX_SPARES_ROWS` = the server spares without the crafting materials (battery 1.4, flare 0.6, bandage 0.5, water 0.6).
+      Round 2 fix: they used `SERVER_SPARES_ROWS`, so a Subway annex could hold electrical parts (Subway 1002 / 1043 / 1234); the
+      Subway never holds a material (`craft-materials.test.ts` now also checks those annexes).
+- **Survivor caches** (task `studio-alpha-track2-round2-20261031-01`, lane CACHE, R5; user: "there's not enough of a reason to go to
+  this place, there should be some "cache" rooms that spawn deeper in, a room like a survivor had been living there").
+  - **Where / what:** one room per annex (two in large ones) in the deep third of its door-hop range, set up as a survivor's room — a
+    pallet bed, their own storage and a few camp things (`gen/annexCache.ts`; placement rules in `docs/track-extensions.md`).
+  - **Loot key:** `ANNEX_CACHE_KEY` (`'annex-cache'`), a prop-level key like the stash (`gen/purposes.ts` purpose `annex-cache`, theme
+    `personal`, never an area purpose). Set LAST, after `pickOver`, which therefore never relabels a cache holder.
+  - **Themed per container, one key** (the purpose's loot by holder kind), every table `exact`, `empty: 0`, 2–3 lots:
+
+    | Holder | Table | Rows (weight) |
+    |---|---|---|
+    | open shelf — the pantry | `ANNEX_CACHE_PANTRY` | water 1.2, beans 1.1, noodles 0.6, chocolate 0.5, cola 0.35 |
+    | tall / low cabinet — the kit | `ANNEX_CACHE_KIT` | bandage 1.3, medkit 0.35, leg_splint 0.12, arm_sling 0.12, battery 0.9, gas_filter 0.55, water 0.4 |
+    | crate — the supply crate | `ANNEX_CACHE_CRATE` | generic ammo 1.5 (~0.5 each 9mm / 5.56 / 12-gauge), beans 0.5, water 0.4, bandage 0.4, battery 0.3 |
+
+  - **Limb treatments (after the first PR CI run):** exact tables skip the scarcity step's limb conversion, so the first kit (med
+    kits only) pushed the Subway's per-station treatments / med kits to 0.796, below the injury economy's 0.8–1.7
+    (`injuries.test.ts`). The kit now carries the survivor's own splint / sling: per station treatments 2.61 vs med kits 2.89 (0.90).
+  - **The ammo rule (deliberate):** only the cache CRATE holds ammo — generic rows over the three calibers every level uses (the 9mm
+    pistol start, the 5.56 rifle and 12-gauge shotgun finds), in the crate's big-box stacks (`BOX_COUNT` big: ~8 / 10 / 4.5 rounds a
+    lot). The pantry and the kit never hold ammo.
+  - **Allocation (expected per cache, before fit; 3 holders x E[lots] 2.5 = 7.5 lots):** food 1.9 (tins 1.1, noodles 0.4,
+    chocolate 0.3), drink 1.6 (water 1.4, cola 0.2), dressings 1.1, first-aid kits 0.25, limb treatments (splint / sling) 0.16, torch batteries 0.85, gas-mask filters 0.4,
+    ammo 1.2 lots (~9 rounds). A 2-holder cache (no third piece fitted: 14 of 60 measured) is ~2/3 of that. Measured on the sample
+    (packed lots, `ContainerManager.build` with each level's profile): see `docs/track-extensions.md` "Survivor caches".
+  - **Never a reward roll:** no rare gear, gas mask, weapon or crafting material (`salvage: false`: the mall's salvage rows never join
+    these tables — `items/lootEconomy.ts salvageRule`); the gas filter is the ordinary spare canister (a `supply` item with no
+    economy category: its `itemWeight` is the tuning dial). Exact means the whole budget: no scarcity cut, re-theme, limb conversion
+    or storage fill. Finite: rolled once per holder stream, remembered by run memory (`captureHolders` / `applyHolders`), never
+    refilled.
 - **Floor program** `ANNEX_FLOOR` (once per annex, the Subway program's shape): a 5.56 box (30) n 0–1, a 12-gauge box (8) n 0–1;
   medkit n 0–1 and bandage n 1–2, each kept with `FLOOR_ECONOMY.medKeep` (0.2); a battery (chance 0.6) and a flare (0.45). Landing:
   the annex rooms' purpose `floor` weights (ammo / med) and `FLOOR_ECONOMY.themeWeight` (battery / flare), on free floor cells off

@@ -42,6 +42,8 @@ import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (la
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
 import {MALL_FINISH_ATTR, MallArch, downlightLensMatrix, splitFinishKey} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's finishes + atrium
 import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt';
+import {gensetModelFit} from './trackExt/machines'; // (round 2, R3)
+import {ANNEX_GENSET} from '../assets/annexGenset.generated'; // (round 2, R3)
 import {ANNEX_WALL, BOARD_SPAN, annexWallMaterial} from './trackExt/wallFinish'; // Track 2 playtest revision (lane ART) // Track 2 (VIS): tunnels beyond the beds
 
 class Accum {
@@ -475,7 +477,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     }
   }
   // Track 2 (VIS): tunnel shells (walls, ceiling, ballast, track, caps), annex door frames + plates, graffiti clues.
-  const trackExt = ext ? buildTrackExtensions(group, ext, layout, mats) : undefined;
+  // (round 2, R3) the generated genset model (ANNEX_GENSET, lazy: game.ts sectionModelKeys) replaces the procedural genset body
+  const gensetGltf = models[ANNEX_GENSET.key];
+  const trackExt = ext ? buildTrackExtensions(group, ext, layout, mats, {gensetModel: !!gensetGltf}) : undefined;
+  if (trackExt && gensetGltf) trackExt.gensets = placeGensetModels(group, layout, gensetGltf);
 
   // --- Procedural trim: door frames, rails, sleepers, coverboard, handrails, rods ----------
   // Merged per (material, level, coarse trim chunk): trim is cheap, so its chunks are larger than the
@@ -1072,6 +1077,27 @@ export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: TH
     }
   });
   return count;
+}
+
+/**
+ * (round 2, R3) Instances the generated genset model on every genset record of the layout (world/trackExt/machines.ts
+ * gensetModelFit: on the plinth, one uniform scale inside the record's body box), bucketed by scale so each bucket is one
+ * addInstancedModel call. The GLTF's geometry / material stay owned by the model library (like every lazy prop model).
+ */
+function placeGensetModels(group: THREE.Group, layout: StationLayout, gltf: GLTF): {instances: number; draws: number; triangles: number} {
+  const recs = (layout.extensions?.machines ?? []).filter(m => m.kind === 'genset');
+  const buckets = new Map<string, {size: [number, number, number]; list: THREE.Matrix4[]}>();
+  for (const m of recs) {
+    const f = gensetModelFit(m, ANNEX_GENSET.dims);
+    const k = f.size.map(v => v.toFixed(3)).join(',');
+    let b = buckets.get(k);
+    if (!b) buckets.set(k, (b = {size: f.size, list: []}));
+    b.list.push(f.matrix);
+  }
+  const n0 = group.children.length;
+  let instances = 0;
+  for (const b of buckets.values()) instances += addInstancedModel(group, gltf, b.list, {w: b.size[0], h: b.size[1], d: b.size[2], anchor: 'bottom'}, ANNEX_GENSET.key);
+  return {instances, draws: group.children.length - n0, triangles: instances * ANNEX_GENSET.tris};
 }
 
 export function gridStats(g: Grid): {floor: number; void: number} {

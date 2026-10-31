@@ -357,6 +357,8 @@ function rollItems(r: () => number, kind: HolderKind, t: HolderTable, areaType: 
 export function rollLootItems(seed: number, index: number, kind: HolderKind, areaType = 'default', profile: LootProfile = BASELINE_PROFILE): LootEntry[] {
   const t = holderTable(kind, areaType, profile);
   if (t.source === 'reward') return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile); // lane ROOF: exact, no scarcity cut
+  // (round 2, lane CACHE: an annex-local exact table too — as holderFinds / rollHolderLots roll it; this QA helper used to cut it)
+  if (t.exact) return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile);
   return scarce(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
 }
 

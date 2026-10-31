@@ -503,8 +503,10 @@ describe('loot reference: probability maths and override / empty-table paths', (
   });
 
   it('an override that zeroes every category gives empty tables: nothing drawn anywhere, still well-formed', () => {
+    // (round 2, lane CACHE: + the gas-mask filter canister of the annex survivor caches' kit — a supply item with no economy category,
+    // so its item weight is the dial that zeroes it)
     const nothing: LootProfile = {id: 'nothing', label: 'Nothing (test only)', tables: BASE_TABLES,
-      overrides: {categoryWeight: {food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0, material: 0}}}; // + material: lane RACK (office-props-physics-scale-20261030)
+      overrides: {categoryWeight: {food: 0, drink: 0, med: 0, ammo: 0, battery: 0, flare: 0, material: 0}, itemWeight: {gas_filter: 0}}}; // + material: lane RACK (office-props-physics-scale-20261030)
     const r = buildLootReference({profileFor: () => nothing, censusSeeds: [11]});
     for (const l of r.levels) for (const h of l.holders) {
       if (!h.expected) continue;

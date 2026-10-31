@@ -52,6 +52,8 @@ import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNI
 import {Hud} from './ui/hud';
 import {InventoryUI} from './ui/inventoryUI';
 import {Sfx, ambienceTypeFor, humEmitters, roomKindFor} from './audio/sfx';
+import {fanSources} from './audio/fanSound';
+import {ANNEX_GENSET, gensetModelKeysFor} from './assets/annexGenset';
 import {PhysicsSystem, killImpulseStrength} from './physics/world';
 import {DamageSystem} from './damage/system';
 import {ShelfStock} from './world/shelfStock';
@@ -154,7 +156,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -277,7 +279,8 @@ export class Game {
   /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
   readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
   /** Extra `propModels` keys a section needs besides its p7 props (lane WORLD-GEN: office models): fetched before the build, kept by the trim. */
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor];
+  // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor];
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -604,6 +607,10 @@ export class Game {
     if (this.world) {
       const oldGroup = this.world.group;
       this.scene.remove(oldGroup);
+      // Track 2 round 2 (lane MOTION): the annex machinery's own release (merged geometries, the fan-rotor InstancedMesh), queued
+      // with the other world releases (its shared materials stay cached for the next level's build)
+      const machines = this.world.trackExt?.machines;
+      if (machines) this.retire(() => machines.dispose());
       const instanced: THREE.InstancedMesh[] = [];
       oldGroup.traverse(o => {
         const mesh = o as THREE.Mesh;
@@ -733,7 +740,8 @@ export class Game {
       },
     });
     // Audio: occlusion-lite (no line of sight -> muffled) + humming vending/stall emitters. Same Sfx/context.
-    this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props)});
+    // (R4, round 2) + the service annexes' fans (audio/fanSound.ts; an empty list without annexes releases the previous world's fans)
+    this.sfx.setWorld({occlusion: (x, z, y) => this.soundOccluded(x, z, y) ? 1 : 0, emitters: humEmitters(this.layout.props), fans: fanSources(this.layout)});
     // Iteration 05: every fixture baked into a persistent light field (camera-independent; no pooled lights).
     const max3D = maxTexture3DSize(this.renderer.backend as never); // Iteration 13 (CORE): WebGPU device limit / WebGL 2 MAX_3D_TEXTURE_SIZE
     // Iteration 13 (LIGHTING): `renderer` registers the TSL light-field node (world/lightFieldNode.ts) in its node library.
@@ -1819,6 +1827,7 @@ export class Game {
     this.fx.update(dt);
     // Track 2 (VIS): annex steam near the player (visual only), lit by the light field + the torch.
     if (this.steamVents?.count) this.steamVents.update(dt, eye, steamLight((x, y, z) => this.lightPool.sample(x, y, z), {eye, dir: look, on: this.torch.battery.emitting}));
+    this.world.trackExt?.machines.update(this.time); // Track 2 round 2 (lane MOTION): annex water flow + wall-fan rotors, game clock
     this.damage.update(dt); // Lane D: debris physics, knocked pickups
     prof.lap(SPAN.audio);
     // Audio: listener follows the camera; reverb room + ambience beds follow the current area.

@@ -59,6 +59,12 @@ export interface LootSpec {
    * keeps the scarcity economy unchanged.
    */
   exact?: boolean;
+  /**
+   * Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): `false` = a level's SALVAGE rows (LootTables.salvage, the mall's
+   * crafting materials) never join this table (items/lootEconomy.ts salvageRule) — the annex survivor caches hold no crafting material
+   * on any level. Absent = the level's salvage rule applies as before.
+   */
+  salvage?: false;
 }
 /** A holder kind's OWN table (openable containers; desk-style drawers): lot range, empty chance, item rows. */
 export interface OwnTable { lots: LotRange; empty: number; items: ItemRows }
@@ -474,6 +480,13 @@ export const COLD_MED_ROWS: ItemRows = [['bandage', 1.6], ['medkit', 0.6], ['wat
 export const BAKERY_ROWS: ItemRows = [['bread', 1]];
 export const SERVER_SPARES_ROWS: ItemRows = [['battery', 1.4], ['flare', 0.6], ['bandage', 0.5], ['water', 0.6], [ELECTRICAL_PARTS, 0.8], [SCRAP_METAL, 0.25]];
 /**
+ * Task studio-alpha-track2-round2-20261031-01 (round 2): the annex signature rooms' tool lockers — the server spares WITHOUT the
+ * crafting materials. The annexes grow on the Subway too, and the Subway never holds a material (craft-materials test); the
+ * playtest revision's lockers used SERVER_SPARES_ROWS, so a deep intact boiler / generator-room locker could roll electrical parts
+ * (found on Subway 1002 / 1043 / 1234). Materials stay in the server racks / cupboards.
+ */
+export const ANNEX_SPARES_ROWS: ItemRows = SERVER_SPARES_ROWS.filter(([id]) => !isMaterialItem(id));
+/**
  * Task office-props-physics-scale-20261030 (lane RACK): the rebuilt 42U rack's three empty bays — mostly salvage: electrical parts
  * (the common find), some scrap metal (bent rails / brackets), now and then a spare torch cell or a flare left on a shelf. The
  * materials are kept as rolled (scarcity: category 'material'); the cell / flare rows are thinned like every consumable.
@@ -683,6 +696,37 @@ export const ANNEX_SUPPLY: LootSpec = {items: ANNEX_SUPPLY_ROWS, lots: [1, 1], e
 export const ANNEX_SCRAPS_KEY = 'annex-scraps';
 export const ANNEX_SCRAPS_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.5], ['bandage', 0.5], ['battery', 0.4]];
 export const ANNEX_SCRAPS: LootSpec = {items: ANNEX_SCRAPS_ROWS, lots: [1, 1], empty: 0, exact: true};
+
+/**
+ * Task studio-alpha-track2-round2-20261031-01 (lane CACHE, item R5; user: "there's not enough of a reason to go to this place, there
+ * should be some "cache" rooms that spawn deeper in, a room like a survivor had been living there"): loot key of the storage in an
+ * annex SURVIVOR CACHE room (gen/annexCache.ts: a deep, quiet room with a pallet bed, the survivor's own storage and a few camp
+ * things). ONE key, themed per container (gen/purposes.ts 'annex-cache' loot by holder kind), every table rolled EXACTLY
+ * (LootSpec.exact: no scarcity cut, no re-theme / limb conversion; the Mall's storage fill never tops it up), NEVER EMPTY, 2-3 lots,
+ * and `salvage: false` (no crafting material on any level). Finite like every holder: rolled once per holder stream, remembered by
+ * run memory, never refilled. No rare gear, mask or weapon (those stay the level's ONE rolls, never in an annex).
+ *  - the open SHELF is the survivor's PANTRY: tins, noodles, chocolate, bottled water, a soda (food / drink only);
+ *  - the tall / low CABINET their KIT: dressings, now and then a first-aid kit or a splint / sling, torch batteries, gas-mask filters,
+ *    bottled water;
+ *  - the CRATE their SUPPLY CRATE — the ONLY cache holder with ammo (the deliberate ammo rule): generic ammo split evenly over the
+ *    three calibers every level uses (9mm pistol start, 5.56 rifle, 12-gauge shotgun finds: genericAmmo), in the crate's big-box
+ *    stacks (BOX_COUNT big: ~8 / 10 / 4.5 rounds a lot), plus a few tins, water, a dressing, a cell.
+ * Expected per cache before fit (3 holders x E[lots] 2.5): food ~1.9, drink ~1.6, dressings ~1.2, first-aid kits ~0.3, batteries
+ * ~0.9, gas filters ~0.4, ammo ~1.2 lots (~9 rounds); a 2-holder cache (no third piece fitted) ~2/3 of that. docs/loot-tables.md.
+ */
+export const ANNEX_CACHE_KEY = 'annex-cache';
+export const ANNEX_CACHE_PANTRY_ROWS: ItemRows = [['water', 1.2], ['beans', 1.1], ['noodles', 0.6], ['chocolate', 0.5], ['cola', 0.35]];
+// (primary, after the first CI run: the injury economy's "treatments ≈ as common as med kits" — exact tables skip the limb conversion,
+// so the kit carries the survivor's own splint / sling and slightly fewer med kits: per Subway station treatments / med kits stays
+// in 0.8-1.7, injuries.test.ts)
+export const ANNEX_CACHE_KIT_ROWS: ItemRows = [['bandage', 1.3], ['medkit', 0.35], ['leg_splint', 0.12], ['arm_sling', 0.12], ['battery', 0.9], ['gas_filter', 0.55], ['water', 0.4]];
+export const ANNEX_CACHE_CRATE_ROWS: ItemRows = [...genericAmmo(1.5), ['beans', 0.5], ['water', 0.4], ['bandage', 0.4], ['battery', 0.3]];
+/** The cache's pantry shelf: food / drink, never empty, 2-3 lots (exact, no salvage). */
+export const ANNEX_CACHE_PANTRY: LootSpec = {items: ANNEX_CACHE_PANTRY_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
+/** The cache's kit cabinet: medicine, cells, gas-mask filters, water, never empty, 2-3 lots (exact, no salvage). */
+export const ANNEX_CACHE_KIT: LootSpec = {items: ANNEX_CACHE_KIT_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
+/** The cache's supply crate: the deliberate ammo (generic calibers) + a few supplies, never empty, 2-3 lots (exact, no salvage). */
+export const ANNEX_CACHE_CRATE: LootSpec = {items: ANNEX_CACHE_CRATE_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
 
 /**
  * Per service annex (gen/annexContent.ts placeAnnexFloor, fork `track-ext-content` → `loot`), the Subway program's shape: `boxes`

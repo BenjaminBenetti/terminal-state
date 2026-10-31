@@ -52,6 +52,8 @@ export interface TrackExtStats {
 
 export interface TrackExtBuilt {
   view: TrackExtView;
+  /** (round 2, R3) The generated genset model's instances (world/builder.ts placeGensetModels); absent when it is not loaded. */
+  gensets?: {instances: number; draws: number; triangles: number};
   shells: ShellBuild;
   decals: GraffitiDecal[];
   /** (GEN-2) SERVICE plates over the service hatches in bed walls. */
@@ -72,7 +74,7 @@ export function voidMaterial(mats: WorldMaterials): THREE.Material {
 }
 
 /** Build every tunnel's shell, cap, door frames and graffiti (+ GEN-2: service-hatch plates and graffiti) into the station group. */
-export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, layout: StationLayout, mats: WorldMaterials): TrackExtBuilt {
+export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, layout: StationLayout, mats: WorldMaterials, o: {gensetModel?: boolean} = {}): TrackExtBuilt {
   const shells = buildShells(group, view, layout, mats, {hazard: hazardMaterial(mats), void: voidMaterial(mats)});
   // Graffiti: one merged decal mesh for the level (shared atlas material).
   const acc = new Acc();
@@ -112,7 +114,7 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
     decalTris = acc.triangleCount;
   }
   // (lane ROOMS) the annexes' anchored machinery: merged procedural geometry, one mesh per annex and material
-  const machines = buildAnnexMachines(group, layout, mats);
+  const machines = buildAnnexMachines(group, layout, mats, o); // (round 2, R3) gensetModel: the generated genset replaces the procedural body
   const lengthM = view.tunnels.reduce((n, v) => n + v.f.length, 0);
   const draws = shells.meshes.length + (geo ? 1 : 0) + hatchMeshes.length;
   const triangles = shells.perTunnel.reduce((n, p) => n + p.triangles, 0) + decalTris + steel.triangleCount + sign.triangleCount;

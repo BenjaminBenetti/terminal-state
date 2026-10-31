@@ -88,6 +88,9 @@ export async function loadRuntime() {
     `export {isContainerKind} from '${G}/items/loot';`,
     `export {isP7Kind, p7ModelKey, p7Spec, P7_FILES} from '${G}/gen/props07';`,
     `export {MODEL_FILES} from '${G}/assets/manifest';`,
+    // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): authored procedural purpose shapes (box parts) render too
+    `export {purposePropShape, PURPOSE_ACCENT} from '${G}/gen/purposeShapes';`,
+    `export {PURPOSE_PROP_KINDS, PURPOSE_MODEL_KEYS} from '${G}/gen/props';`,
   ].join('\n');
   const bundle = await rolldown({
     input: 'scale-check-entry', platform: 'node', logLevel: 'silent',
@@ -151,7 +154,48 @@ export async function resolveKind(kind) {
     const key = rt.MODEL_FOR[kind], file = modelFileOf(rt, key);
     if (file) return {kind, file, path: 'Subway model (world/builder.ts MODEL_FOR addInstancedModel)', fit: {type: 'box', ...box}, turn: false, lift: 0, def, modelKey: key};
   }
+  // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a purpose kind without a runtime model renders its AUTHORED box parts
+  // (gen/purposeShapes.ts purposePropShape, variant 0) exactly as world/storefrontBuilder.ts buildPurposeProps builds them: prop frame,
+  // no fit / scale (the parts are authored in metres inside PROP_DEFS)
+  if (rt.PURPOSE_PROP_KINDS.includes(kind) && !rt.PURPOSE_MODEL_KEYS[kind]) {
+    const parts = rt.purposePropShape(kind, 0);
+    if (parts?.length) return {kind, file: path.join(GAME, 'src/gen/purposeShapes.ts'), parts, accent: rt.PURPOSE_ACCENT[kind]?.[0] ?? 0xb0a890,
+      path: 'procedural purpose shape (gen/purposeShapes.ts parts; world/storefrontBuilder.ts buildPurposeProps)', fit: null, turn: false, lift: 0, def, modelKey: null,
+      notes: ['authored box parts (no model file): drawn with flat stand-in colours per material key']};
+  }
   return {kind, file: null, path: 'procedural box form (no runtime model)', def};
+}
+
+/** Flat stand-in colours (0..1, x200 in the rasterizer) of the authored part materials (world/shapeMaterials.ts / purposeTextures.ts). */
+const PART_RGB = {
+  wood: 0x8a6a45, woodVeneer: 0x8a6a45, vinyl: 0x56604a, cardboard: 0xa8865a, steelDark: 0x3a3d40, steelBright: 0xa9adb0, black: 0x1e1e1e,
+  panel: 0x8f9396, partition: 0xa3b3ae, counter: 0xb9b2a4, concrete: 0x8c8a85, porcelain: 0xe6e4df,
+  paintRed: 0xb23a2e, paintYellow: 0xd9a520, paintGreen: 0x3f7d4a, paintWhite: 0xe8e4da, paintBlue: 0x2f5f9a, paintOrange: 0xd9732a,
+};
+/**
+ * Triangles of authored box parts ({m, s, p, rx?, ry?}: rotateX, then rotateY, then translate — the builder's order) as a loadModel()
+ * result: the fit box is the kind's PROP_DEFS box (so applyTransform keeps the authored frame), `name` = `<kind>/<material>`.
+ */
+function partsModel(kind, parts, def, accent) {
+  const tris = [];
+  const rgb = hex => [((hex >> 16) & 255) / 200, ((hex >> 8) & 255) / 200, (hex & 255) / 200, 1];
+  for (const part of parts) {
+    const [sx, sy, sz] = part.s.map(v => v / 2), cx = Math.cos(part.rx ?? 0), snx = Math.sin(part.rx ?? 0), cy = Math.cos(part.ry ?? 0), sny = Math.sin(part.ry ?? 0);
+    const xf = ([x, y, z]) => {
+      const y1 = y * cx - z * snx, z1 = y * snx + z * cx; // rotateX
+      const x2 = x * cy + z1 * sny, z2 = -x * sny + z1 * cy; // rotateY
+      return [x2 + part.p[0], y1 + part.p[1], z2 + part.p[2]];
+    };
+    const v = [];
+    for (const x of [-sx, sx]) for (const y of [-sy, sy]) for (const z of [-sz, sz]) v.push(xf([x, y, z]));
+    const bc = rgb(part.m === 'accent' ? accent : PART_RGB[part.m] ?? 0x9a9a9a);
+    // 6 faces (corner index = 4 * xi + 2 * yi + zi)
+    for (const [a, b, c, d] of [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]) {
+      tris.push({p: [v[a], v[b], v[c]], uv: null, img: null, bc, blend: false, name: `${kind}/${part.m}`});
+      tris.push({p: [v[a], v[c], v[d]], uv: null, img: null, bc, blend: false, name: `${kind}/${part.m}`});
+    }
+  }
+  return {file: `procedural:${kind}`, tris, fitBox: {min: [-def.w / 2, 0, -def.d / 2], max: [def.w / 2, def.h, def.d / 2]}};
 }
 
 /** Kind sets for --batch / --list. */
@@ -594,7 +638,8 @@ export async function measureProp(spec) {
     if (!base.file && !spec.model) return {label: spec.label ?? spec.kind, kind: spec.kind, skipped: base.path};
   }
   const file = spec.model ?? spec.file ?? base.file;
-  const model = await loadModel(path.resolve(file));
+  // (lane CACHE, R5) an authored procedural purpose shape: its box parts, unless a --model GLB is swapped in
+  const model = base.parts && !spec.model ? partsModel(spec.kind, base.parts, base.def, base.accent) : await loadModel(path.resolve(file));
   const o = {
     fit: spec.fit ?? base.fit ?? null, scale: spec.scale ?? null,
     turn: spec.turn ?? base.turn ?? false, lift: spec.lift ?? base.lift ?? 0,

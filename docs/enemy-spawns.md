@@ -223,9 +223,16 @@ same family pool and zombie types, same tier.
 - **Placement.** One run per annex on its own fork (`track-ext-content` → `service:<annex>`), in that annex's areas only, AFTER
   every core spawn (the core's indices, rolls, run-memory keys and parity pins are unchanged) and tagged
   `markSpawnContext(layout, first, 'service')`; `assignEnemyArchetypes(layout, profile)` then runs ONCE over every context.
-- **Families.** The level's own pool: zombie / Blightbelly / rat-dog shares apply automatically. No Siren in an annex: the Subway
-  has none, and the Office's `OFFICE_SIREN_ELIGIBILITY.contexts` is `['floor']` (it does not list `service`), so a Siren draw there
-  falls back to a zombie; her whole-level rarity and `maxPerLevel` stay level-wide.
+- **Families (round 2, R6).** The annexes have their OWN ambient pool, `SERVICE_FAMILY_POOL` (`SpawnContextRule.families` on
+  `SERVICE_CONTEXT`): rat/dog **0.20**, Blightbelly 0.05 (unchanged), Siren 0, ordinary zombies the remainder 0.75. User (round 2):
+  "the rat-dog spawn rate should be boosted to 20% in this area." `assignEnemyArchetypes` reads it only for spawns tagged
+  `'service'` (`spawnContextOf`): the same single `enemyRoll(seed, index)`, room modifiers and eligibility on top. Every core
+  context keeps the level pool (the same array, so core draws are bit-identical), and hordes are skipped as before.
+  - **Configured vs placed:** 0.20 is a per-spawn selection probability, not a quota; a 5–6-enemy annex may hold none or several.
+    Sampled outcomes: the 36-run Subway census in `enemy-spawn-contract.test.ts` placed 19.1 % rat/dogs among service spawns (core
+    5.0 %); the R6 sample (`service-families.test.ts`: Subway 1043 / 1002, Office 222, Mall 846932) placed 8 of 33 (24 %).
+  - **No Siren in an annex:** the service pool lists her at 0, and the Office's `OFFICE_SIREN_ELIGIBILITY.contexts` stays
+    `['floor']`; her whole-level rarity and `maxPerLevel` stay level-wide.
 - **Counted separately.** The core contexts' validation counts (Subway `station` ≥ 8; Office `street` / `floor`) and the census /
   parity counts exclude annex spawns (`tests/helpers/enemySpawnParity.ts` `contextCounts` prints them as `+ service N`); the
   reference shows `service` as a zone context, never inside the whole-level total.

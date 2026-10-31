@@ -489,9 +489,12 @@ describe('the Subway is unchanged', () => {
   // (same task, after merging main ce83b48: the service budget 5-6 (the registry contract's per-storey bound: the compact mall's is
   // 6), the O(1) earshot test, supply bands over the annex rooms' depth range, no crafting materials in the annex tables; stage
   // before: 7 b96c5d08 / ef6fdaba, 1234 8351ab93 / 901c3c60; 42 drew the same; CORE unchanged)
+  // (round 2, task studio-alpha-track2-round2-20261031-01 — CAUSE: R5 survivor caches (bed / storage / camp props appended, the
+  // cache room's lit fixture), R6 service family pool, the signature lockers without materials; stage before: 7 3275dde8 / c0e8c846,
+  // 42 62c4187f / da0b79d6, 1234 67a308e5 / fcda47b2; seed 1 (no annex) and CORE unchanged)
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '3275dde8', '7:pistol': 'c0e8c846',
-    '42:rifle': '62c4187f', '42:pistol': 'da0b79d6', '1234:rifle': '67a308e5', '1234:pistol': 'fcda47b2',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'e3af4b69', '7:pistol': '7e118e47',
+    '42:rifle': '608b33e4', '42:pistol': 'e7fb9e97', '1234:rifle': '87eba43d', '1234:pistol': '35497900',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

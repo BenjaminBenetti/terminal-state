@@ -49,6 +49,8 @@ export const PURPOSE_ACCENT: Partial<Record<PurposePropKind, number[]>> = {
   magazineRack: [0xb33a2e, 0x283593],
   techDisplay: [0x00acc1, 0x7e57c2],
   deviceWall: [0x00acc1, 0x7e57c2, 0x212121],
+  // lane CACHE (round 2, R5): sleeping bags — navy, olive drab, rust, faded teal
+  palletBed: [0x2c3f5c, 0x4a5a34, 0x7a3a26, 0x2f5a5a],
 };
 
 // ---------------------------------------------------------------------------------------
@@ -774,6 +776,29 @@ function cartonStack(): PurposePart[] {
   ];
 }
 
+/**
+ * Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a survivor's camp bed in an annex cache room — two 1.0 x 0.8 m wooden
+ * pallets (three runners + five deck boards each, deck at 0.12 m) under a 14 cm foam mattress (vinyl cover, mattress top 0.26 m), an
+ * open sleeping bag (accent: the kind's palette) with its top flap turned back, a pillow at the head (-X) and a folded blanket at the
+ * foot. Bedding only (like a couch's cushions) — no loose takeable clutter is baked in. Long side (X) to a wall, front +Z.
+ */
+function palletBed(): PurposePart[] {
+  const out: PurposePart[] = [];
+  for (const cx of [-0.5, 0.5]) {
+    const x0 = cx - 0.495, x1 = cx + 0.495;
+    for (const z of [-0.35, 0, 0.35]) out.push(bb('wood', x0, 0, z - 0.05, x1, 0.1, z + 0.05));
+    for (let k = 0; k < 5; k++) { const x = cx - 0.435 + k * 0.2175; out.push(bb('wood', x - 0.06, 0.1, -0.4, x + 0.06, 0.122, 0.4)); }
+  }
+  out.push(
+    bb('vinyl', -0.98, 0.122, -0.4, 0.95, 0.262, 0.39),
+    bb('accent', -0.56, 0.262, -0.37, 0.92, 0.305, 0.35),
+    box('accent', [0.3, 0.03, 0.74], [-0.4, 0.32, -0.01], 0, 0.06),
+    box('paintWhite', [0.36, 0.1, 0.52], [-0.78, 0.312, -0.04], 0, 0.1),
+    bb('paintRed', 0.56, 0.305, -0.34, 0.9, 0.355, 0.04),
+  );
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------
 // Registry
 
@@ -783,6 +808,7 @@ const FACTORIES: Record<PurposePropKind, Factory> = {
   hotdogCart, grillLine, pizzaOven, espressoBar, wokLine, deliLine, blenderBar, breadRack,
   staffLockers, kitchenette, fridge, couch, noticeBoard, janitorCart, mopSink, electricalPanel,
   gunLocker, monitorDesk, medCabinet, safe, signalRack, cartonStack,
+  palletBed, // lane CACHE (round 2, R5)
 };
 
 /** Every purpose kind with an authored shape (all of them). */

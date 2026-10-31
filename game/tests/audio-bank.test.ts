@@ -113,6 +113,8 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
   const INFRA = new Set(['constructor', 'init', 'create', 'ready', 'setVolume', 'setMuted', 'applyGain', 'suspend', 'resume', 'pause', 'sync', 'debugState', 'live',
     'setListener', 'setWorld', 'prune', 'release', 'take', 'dist', 'setPannerPos', 'makePanner', 'voice', 'playClip', 'play', 'buildReverb', 'ir', 'loadSlot', 'setRoom',
     'startAmbient', 'onCueReady', 'loopSource', 'attachBed', 'applyBeds', 'updateEmitter', 'duck', 'around', 'stopReload',
+    // task studio-alpha-track2-round2-20261031-01 (R4): the annex fans' fixed channels (HVAC recording; fan-sound.test.ts)
+    'updateFans',
     // iteration 12 (AUDIO): hit-confirm dip + flare-loop plumbing / lifecycle
     'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares',
     // task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + cross-storey step gate

@@ -37,7 +37,7 @@ import {
   BASELINE_PROFILE, BATTERY_ID, ECON_CATS, FLARE_ID, HOLDER_ALLOW, HP_MED, RANDOM_HOLDERS, THEME_OF_TYPE, catWeight, econCat, keepChance, resolveRows,
   type EconCat, type ItemRows, type LootProfile,
 } from './lootTables';
-import {CONTAINER_THEMED, type SalvageRule} from './lootTables'; // Task track3-eaton-centre-20261031 (lane PROFILES): salvage
+import {CONTAINER_THEMED, type LootSpec, type SalvageRule} from './lootTables'; // Task track3-eaton-centre-20261031 (lane PROFILES): salvage (+ LootSpec: round 2 lane CACHE)
 
 export type {LootTheme};
 export type {EconCat, ThemeEconomy} from './lootTables';
@@ -79,6 +79,10 @@ export function salvageRule(profile: LootProfile, kind: string, areaKey: string)
   if (!sv || RANDOM_HOLDERS.has(kind) || CONTAINER_THEMED.has(kind)) return undefined;
   const allow = HOLDER_ALLOW[kind];
   if (allow && !allow.includes('material')) return undefined;
+  // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a table that opts out (LootSpec.salvage false: the annex survivor
+  // caches) never takes the level's salvage rows
+  const own = purposeById(areaKey)?.loot as Partial<Record<string, LootSpec>> | undefined;
+  if ((own?.[kind] ?? own?.default)?.salvage === false) return undefined;
   return sv.purposes?.[areaKey] ?? sv.themes?.[lootTheme(areaKey)];
 }
 

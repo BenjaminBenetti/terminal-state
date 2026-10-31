@@ -12,7 +12,19 @@ import {fakeEnvTextures, openableModels} from './helpers/openablesFixture';
 import {freshLayout} from './helpers/annexRoute';
 import {ANNEX_CONTENT, SERVICE_EARSHOT_M} from '../src/gen/annexContent';
 import {ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, econCat, lootProfile} from '../src/items/lootTables';
-import {holderTable, rollHolderLots} from '../src/items/loot';
+import {ANNEX_CACHE_CRATE, ANNEX_CACHE_KEY, ANNEX_CACHE_KIT, ANNEX_CACHE_PANTRY, type LootSpec} from '../src/items/lootTables';
+import {holderTable, rollHolderLots, type HolderKind} from '../src/items/loot';
+import {ANNEX_CACHE, annexCachesOf} from '../src/gen/annexCache';
+import {annexSignatureOf, extensionContentOf} from '../src/gen/annexContent';
+import {holderSurfaces} from '../src/items/lootLayout';
+import {isMaterialItem} from '../src/items/craftMaterials';
+import {GEAR_ITEMS} from '../src/items/gear';
+import {ITEMS} from '../src/items/items';
+import {PROP_DEFS} from '../src/gen/props';
+import {isP7Kind, p7Spec} from '../src/gen/props07';
+import {p7AreaKey} from '../src/gen/props07Dress';
+import {propBlocksDoorway} from '../src/gen/placeKit';
+import {levelsOf} from '../src/gen/levels';
 import {SERVICE_ZONE_BUDGET} from '../src/ai/spawnTables';
 import {WorldMaterials} from '../src/world/materials';
 import {ContainerManager} from '../src/world/containers';
@@ -124,28 +136,139 @@ describe('fresh New Game annexes: findable finite loot, encounterable enemies (p
     const cm2 = new ContainerManager(models, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), () => inv);
     cm2.build(layout, {}, lootProfile('subway'));
     const ids = new Set(layout.extensions!.annexes[0].areas);
-    const h = cm2.all.find(q => ids.has(q.prop.area) && q.prop.purpose === ANNEX_SUPPLY_KEY && q.state.lots.length)!;
-    expect(h).toBeDefined();
-    const n0 = h.state.lots.length, lot = h.state.lots[0];
-    if (h.open || !h.state.open) cm2.interact({container: h, t: 1, lot: null, part: h.open ? 0 : undefined} as never);
-    for (let t = 0; t < 1.5; t += 1 / 30) cm2.update(1 / 30, t);
-    cm2.interact({container: h, t: 1, lot, part: lot.part} as never);
-    expect(inv.count(lot.itemId)).toBeGreaterThan(0);
-    expect(h.state.lots.length).toBe(n0 - 1);
+    // the ordinary supply holder, and (round 2, lane CACHE, R5) a survivor-cache holder: one lot taken from each
+    const take = (h: (typeof cm2.all)[number]) => {
+      const n0 = h.state.lots.length, lot = h.state.lots[0];
+      if (h.open || !h.state.open) cm2.interact({container: h, t: 1, lot: null, part: h.open ? 0 : undefined} as never);
+      for (let t = 0; t < 1.5; t += 1 / 30) cm2.update(1 / 30, t);
+      const c0 = inv.count(lot.itemId);
+      cm2.interact({container: h, t: 1, lot, part: lot.part} as never);
+      expect(inv.count(lot.itemId), `${h.kind} ${h.prop.purpose} lot taken`).toBeGreaterThan(c0);
+      expect(h.state.lots.length).toBe(n0 - 1);
+      return {h, n0, lot};
+    };
+    const taken = [
+      take(cm2.all.find(q => ids.has(q.prop.area) && q.prop.purpose === ANNEX_SUPPLY_KEY && q.state.lots.length)!),
+      take(cm2.all.find(q => ids.has(q.prop.area) && q.prop.purpose === ANNEX_CACHE_KEY && q.state.lots.length)!),
+    ];
     const recs = captureHolders(cm2);
     // the revisit: the same section regenerated and rebuilt, the run memory applied (Game.buildSection order)
     const again = freshLayout('subway', 1043);
     const cm3 = new ContainerManager(models, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), () => new Inventory());
     cm3.build(again, {}, lootProfile('subway'));
     applyHolders(cm3, recs);
-    const back = cm3.all.find(q => q.prop.x === h.prop.x && q.prop.z === h.prop.z && q.kind === h.kind)!;
-    expect(back.state.lots.length).toBe(n0 - 1);
-    expect(back.state.lots.some(l => l.id === lot.id)).toBe(false);
+    for (const {h, n0, lot} of taken) {
+      const back = cm3.all.find(q => q.prop.x === h.prop.x && q.prop.z === h.prop.z && q.kind === h.kind)!;
+      expect(back.prop.purpose).toBe(h.prop.purpose);
+      expect(back.state.lots.length, `${h.prop.purpose} stays taken`).toBe(n0 - 1);
+      expect(back.state.lots.some(l => l.id === lot.id)).toBe(false);
+    }
     void cm;
     const mem = createMemory({level: 'subway', section: 'main'});
     const z = layout.zombies.findIndex(s => ids.has(s.area));
     mem.killed = mergeKilled(mem.killed, [z]);
     expect(enemiesToSpawn(layout.zombies.length, mem)).not.toContain(z);
     void THREE;
+  });
+});
+
+// Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5; user: "there's not enough of a reason to go to this place, there should
+// be some "cache" rooms that spawn deeper in, a room like a survivor had been living there"): gen/annexCache.ts survivor caches.
+const CACHE_TABLES: Readonly<Record<string, LootSpec>> = {shelf: ANNEX_CACHE_PANTRY, cabinetTall: ANNEX_CACHE_KIT, cabinetLow: ANNEX_CACHE_KIT, crate: ANNEX_CACHE_CRATE};
+const notReward = (id: string) => !isMaterialItem(id) && !(id in GEAR_ITEMS) && ITEMS[id]?.kind !== 'weapon';
+
+describe('survivor caches deeper in (round 2, lane CACHE, R5)', () => {
+  it('cache tables: exact, never empty, 2-3 lots, themed per container; no salvage / material / gear / mask / weapon; ammo only in the crate', () => {
+    for (const level of ['subway', 'office', 'mall'] as LevelId[]) {
+      const P = lootProfile(level);
+      for (const [kind, spec] of Object.entries(CACHE_TABLES)) {
+        const t = holderTable(kind as HolderKind, ANNEX_CACHE_KEY, P);
+        expect([t.exact, t.empty, t.lots], `${level} ${kind}`).toEqual([true, 0, [2, 3]]);
+        // the mall's salvage never joins (LootSpec.salvage false): exactly the table's own rows
+        expect(t.rows.map(r => r[0]), `${level} ${kind} rows`).toEqual(spec.items.map(r => r[0]));
+        for (const [id] of t.rows) expect(notReward(id), `${level} ${kind} ${id}`).toBe(true);
+        expect(t.rows.some(([id]) => econCat(id) === 'ammo'), `${level} ${kind} ammo`).toBe(kind === 'crate');
+        // PACKED lots on the holder's real surfaces (rollHolderLots: what ContainerManager places): never empty, its own rows only
+        const surf = holderSurfaces(kind as never, PROP_DEFS[kind as HolderKind]);
+        let lots = 0;
+        for (let i = 0; i < 40; i++) {
+          const placed = rollHolderLots(31, i, kind as HolderKind, ANNEX_CACHE_KEY, surf, P);
+          expect(placed.length, `${level} ${kind} #${i}`).toBeGreaterThanOrEqual(1);
+          for (const l of placed) expect(spec.items.some(r => r[0] === l.itemId), `${level} ${kind} ${l.itemId}`).toBe(true);
+          lots += placed.length;
+        }
+        expect(lots / 40, `${level} ${kind} packed lots / holder`).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('every sampled annex: a cache in a deep-third room (no signature / hall / corridor / entry room), bed + 2-3 stocked cache holders + camp things', () => {
+    for (const [level, seed] of SAMPLE) {
+      const {layout, cm} = fresh(level, seed);
+      const rep = extensionContentOf(layout)!, caches = annexCachesOf(layout), L = levelsOf(layout);
+      for (const n of layout.extensions!.annexes) {
+        const mine = caches.filter(c => c.annex === n.id), tag = `${level} ${seed} annex ${n.id}`;
+        expect(mine.length, `${tag} caches`).toBeGreaterThanOrEqual(1);
+        expect(mine.length).toBeLessThanOrEqual(n.areaM2 >= ANNEX_CACHE.twoM2 ? 2 : 1);
+        expect(rep.annexes.find(r => r.id === n.id)!.caches).toEqual(mine);
+        const ds = n.areas.map(id => layout.areas[id].depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
+        for (const c of mine) {
+          const a = layout.areas[c.area];
+          // the deep third of the annex's door-hop range (the rule; the sample never needs the documented fallback)
+          expect(c.tier, `${tag} tier`).toBe('deep');
+          expect(Math.min(2, Math.floor((3 * (a.depth - dMin)) / (dMax - dMin + 1e-9))), `${tag} band`).toBe(2);
+          expect(a.kind, `${tag} a room`).toBe('room');
+          expect(a.extHall, `${tag} not a hall`).toBeFalsy();
+          expect(annexSignatureOf(a), `${tag} not a signature room`).toBeUndefined();
+          expect(a.depth).toBeGreaterThan(dMin + 1);
+          expect(n.areas).toContain(c.area);
+          // the survivor's working light: a steady warm fixture, the room never 'dark'
+          expect(layout.lights.slice(rep.first.lights).some(x => x.area === c.area && !x.broken && !x.dying && x.warm), `${tag} working light`).toBe(true);
+          expect(a.lighting).not.toBe('dark');
+          // the rest spot, its storage, its camp things: in the room, on the annex floor, clear of every doorway
+          const bed = layout.props[c.bed];
+          expect(bed.kind).toBe('palletBed');
+          const pieces = [c.bed, ...c.holders, ...c.decor].map(i => layout.props[i]);
+          for (const p of pieces) {
+            expect(p.area).toBe(c.area);
+            expect(p.y, `${tag} ${p.kind} on the floor`).toBeCloseTo(a.floorY!, 5);
+            expect(propBlocksDoorway(layout, p.x, p.z, p.hx, p.hz, p.y, p.h), `${tag} ${p.kind} in a doorway`).toBeNull();
+          }
+          for (const p of c.decor.map(i => layout.props[i])) {
+            expect(isP7Kind(p.kind), p.kind).toBe(true);
+            expect(p7Spec(p.kind as never).uses.some(u => u.in.includes(p7AreaKey(a))), `${p.kind} allowed in ${a.purpose}`).toBe(true);
+            expect(layout.props.slice(0, rep.first.props).some(q => q.kind === p.kind), `${p.kind} already loaded by the level`).toBe(true);
+          }
+          // 2-3 holders, registered by ContainerManager.build with the level's profile, stocked from the cache table of their kind
+          expect(c.holders.length).toBeGreaterThanOrEqual(ANNEX_CACHE.minHolders);
+          expect(c.holders.length).toBeLessThanOrEqual(3);
+          let lots = 0;
+          for (const i of c.holders) {
+            const p = layout.props[i], h = cm.all.find(q => q.prop === p)!;
+            expect(h, `${tag} ${p.kind} registered`).toBeDefined();
+            expect(p.purpose).toBe(ANNEX_CACHE_KEY);
+            expect(h.state.lots.length, `${tag} ${p.kind} stocked`).toBeGreaterThanOrEqual(1);
+            for (const l of h.state.lots) {
+              expect(CACHE_TABLES[p.kind].items.some(r => r[0] === l.itemId), `${tag} ${p.kind} ${l.itemId}`).toBe(true);
+              expect(notReward(l.itemId)).toBe(true);
+            }
+            lots += h.state.lots.length;
+            // reachable / targetable: from the holder's stand point the game's own targeting finds it
+            const {aim, stand} = cm.aimPoint(h);
+            const [sx, sy] = layout.grid.cellOf(stand.x, stand.z);
+            expect(layout.grid.walkable(sx, sy), `${tag} ${p.kind} stand point walkable`).toBe(true);
+            const eye = new THREE.Vector3(stand.x, a.floorY! + 1.6, stand.z), dir = new THREE.Vector3(aim.x, aim.y, aim.z).sub(eye).normalize();
+            expect(cm.target(eye, dir, L)?.container, `${tag} ${p.kind} targetable`).toBe(h);
+          }
+          expect(lots, `${tag} cache lots`).toBeGreaterThanOrEqual(2 * c.holders.length - 1);
+        }
+      }
+      // pickOver never relabels a cache holder: the cache pieces are the level's LAST props (appended after every other annex record,
+      // so every earlier holder index / loot roll is unchanged) and no other prop carries the cache key
+      const pieces = new Set(caches.flatMap(c => [c.bed, ...c.holders, ...c.decor]));
+      const firstPiece = Math.min(...pieces);
+      expect(pieces.size, `${level} ${seed} cache pieces are the tail`).toBe(layout.props.length - firstPiece);
+      layout.props.forEach((p, i) => { if (p.purpose === ANNEX_CACHE_KEY) expect(pieces.has(i)).toBe(true); });
+    }
   });
 });

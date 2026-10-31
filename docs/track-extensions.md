@@ -190,7 +190,13 @@ runtime-scaled 1.78 m zombie):
   Collision is honest: every solid part is a collision-only `annexMachine` prop (player / zombie / bullet / ragdoll collision,
   blocked + sight cells, placed through the dresser's door zones, doorway clear volumes and connectivity check). Channels,
   basins and chutes are VISUAL water (no water physics, no hazard): their curbs / parapets / walls and water surfaces are
-  collision boxes, so nobody walks in; crossings are walkable. Visual-only parts stay within 0.28 m of a wall, above 2.2 m, flat
+  collision boxes, so nobody walks in; crossings are walkable. Track 2 round 2 (lane MOTION, `world/trackExt/motion.ts`): the water
+  and foam MOVE on the game clock — channels flow gate → culvert at 0.16–0.28 m/s (seeded), chute steps run toward the low end at
+  0.9 m/s, falls pour down at 1.2–1.6 m/s, basins drift 0.03 m/s and are stirred near the inlet pour (per-vertex flow, two shared
+  animated materials: advected noise + ripple slopes bump the normal, the albedo and the roughness; nothing changes height) — and
+  the wall fans' blades turn (one InstancedMesh per level, a blade per instance, 1.6–2.6 rev/s seeded, step capped below half the
+  blade spacing so it never strobes backwards). Inline fan units keep no rotor (no blades show through the casing). Visual-only
+  parts stay within 0.28 m of a wall, above 2.2 m, flat
   on the floor or over a blocked footprint (tested). `annexMachine` is classified in both audits: the openables audit's
   exception ("anchored heavy machinery / sealed plant: not storage") and the physics audit's `machinery` static class.
 - **Fewer, meaningful holders:** the existing purposes dress annex rooms with LEAN rule sets (`ANNEX_RULES`: stores keep
@@ -241,6 +247,51 @@ Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 
   opening holders in placement order) took loot in every sampled annex, with the first find 2–5 rooms in. Before, they found
   nothing.
 
+**Survivor caches** (task `studio-alpha-track2-round2-20261031-01`, lane CACHE, R5; user: "there's not enough of a reason to go to this
+place, there should be some "cache" rooms that spawn deeper in, a room like a survivor had been living there"; `game/src/gen/annexCache.ts`,
+config `ANNEX_CACHE`).
+- **Pass order:** the LAST content pass (after lights, floor finds, vents and service spawns), per annex on its own fork
+  (`cache:<annexId>`). It only appends props, so every earlier record — holder indices and their loot, pickups, spawns — is unchanged
+  (the cache room's one fixture aside, below); their cells (access strips / stand points in front of the room's props, wall mounts,
+  floor finds, spawn points) are reserved before placing. It reuses the room-storage pass's annex-window place context.
+- **Deep, from the door-hop topology** (`Area.depth`, door hops from the annex entry — the bands `pickOver` and the service spawns use):
+  - a room in the deep THIRD of the annex's depth range; never a closet, a service corridor, a machinery hall, a signature room (its
+    machinery stays) or an entry room (depth <= dMin + 1); at least 3 m short side and 10.5 m²;
+  - a seeded weighted pick: dead ends x3 (two doors x1.5), +1 per hop past the shallowest candidate, free floor after the room's own
+    props (x0.2–x2), the stash's room x0.5; a room where the cache does not fit is rolled back and the next drawn (<= 5 per tier);
+  - ONE cache per annex; a SECOND in large annexes (>= 2000 m²), deep band only, never next door to the first;
+  - **fallback:** no deep room fits -> one cache in the middle band, then in any eligible room past the entry; none at all (an annex
+    of halls / signature rooms / closets only) -> no cache, reported by `annexCachesOf`.
+- **The room** (existing kinds + one local procedural kind; no new asset file):
+  - a **pallet bed** (`palletBed`, `gen/purposeShapes.ts`: foam mattress, open sleeping bag, pillow and a folded blanket on two wooden
+    pallets; 1.99 x 0.36 x 0.80 m) against a door-free wall first, a 0.6 m bedside strip kept clear;
+  - their **storage**, 2–3 holders (else the room is rolled back): an open shelf (pantry), a tall (else low) cabinet (kit), a crate
+    (supply crate); loot key `ANNEX_CACHE_KEY` — exact, never empty, 2–3 lots, themed per container, ammo only in the crate
+    (`docs/loot-tables.md` "Survivor caches");
+  - up to two **camp things** — existing iteration-07 kinds the level already loads and whose own placement spec allows the room's
+    purpose (work light, folding chair, portable generator, trash bags, water cooler, privacy screen, IV pole, drum fan, mop
+    bucket), separate props, never baked;
+  - a **working light**: the room's first ceiling fixture burns steadily, warm and low (power 0.55), the room at least 'dim' — a lit
+    doorway deep in the dark annex (no new light record).
+  - Placement goes through the dresser's own primitives: door zones / cells, access strips, room connectivity (`tryPlaceProp`), the
+    doorway clear volumes (`propBlocksDoorway`) and the mall's real-wall rule; every wall spot is enumerated in seeded order.
+- **Measured** (round 2; fresh New Game path):
+  - **Selection** over 51 annexes (Subway 1043 / 1002 / 777001 / 777002 / 4055629249 / 2563024239 / 774566179 + 30 more, Office
+    222 / 3333, Mall 846932 / 5150 / 9090): 60 caches, every annex has one, 9 large annexes have two; 59 in the deep band, ONE
+    middle-band fallback (Subway 92109: its deep rooms are small shelved stores where no bed + storage fits), none without a cache.
+    42 of 60 in dead ends; mostly pump rooms and first-aid posts, then stores, electrical / custodial rooms and workshops.
+  - **The room** (the 12-level sample, 20 caches): depth 6–15, 21–78 m in a straight line from the annex door (median ~59 m); 2.75
+    holders per cache (shelf + cabinet + crate in 15, two pieces in 5); a camp thing in 14 of 20 (work light, water cooler, drum
+    fan, mop bucket, IV pole, generator, folding chair).
+  - **Contents** (packed lots, `ContainerManager.build` with each level's profile): 6.75 lots per cache (4–9) — food 1.95, drink
+    1.85, dressings 0.8, first-aid kits 0.15, batteries 0.7, gas filters 0.25, ammo 1.05 lots (8.8 rounds); never empty, nothing else.
+  - **Discovery** (`tests/helpers/annexRoute.ts` strategy `deeper`: a real Player pushing on to the deepest frontier room, opening
+    what it passes; topology only): on Subway 1043 / 1002 (2 annexes), Office 222 (2), Mall 846932 every cache was reached — after
+    12, 27, 39, 41, 52 and 56 rooms (168–834 m of walking; 3 of 6 within 40 rooms), its 2–3 holders opened and 4–6 items taken
+    (inventory deltas and holder ids in `qa-artifacts/annex-route/<tag>-deeper.json`). A cache is a reward for exploring the annex,
+    not a find on the way in (the ordinary nearest-first route's first loot stays 2–5 rooms in).
+  - **Cost:** the cache pass takes 0.46 ms (Subway 424242, min of 5) to 0.5–0.9 ms (two annexes) per level.
+
 **Enemies** (`SERVICE_CONTEXT`):
 - **Count:** `SERVICE_ZONE_BUDGET` 5–6 per annex (was 3–5; about 80 % of the core's density; the hi fits the compact Mall's
   per-storey ambient cap of 6, as the registry contract requires).
@@ -250,8 +301,9 @@ Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 
 - **Spacing:** at least 5 m apart and at least 6 m from the entrance.
 - **Ordering and tagging:** annex spawns are appended after every core spawn and tagged
   `markSpawnContext(layout, firstIndex, 'service')`. `assignEnemyArchetypes` runs once afterwards.
-- **Families:** they inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none,
-  and the Office's Siren eligibility stays `['floor']`.
+- **Families:** they inherit the level's profile and tier, but draw from the annexes' own pool `SERVICE_FAMILY_POOL` (round 2:
+  rat/dog 0.20, Blightbelly 0.05, Siren 0, zombies 0.75; a configured selection share, not a quota). There are no Sirens in
+  `'service'`. Core contexts and hordes keep their pools (docs/enemy-spawns.md).
 - **Counted separately:** they are excluded from the core station / street / floor counts and reported separately.
 - **Measured:** 5–6 per annex (Subway levels +5 / +6 with one annex, +10 to +12 with two). The ordinary routes made 1–3 enemies
   aware, the first within the first 0–3 rooms, with no gunfire in the simulation.
@@ -295,6 +347,28 @@ Tunnels have sparse fixtures, mostly dead or dying.
     walls unchanged (same quads); the portal adds 3 boxes (36 triangles) per tunnel into its existing concrete mesh. Draws: annex
     wall quads no longer share a 48 m chunk mesh with the core's platform-face concrete, +1 to +4 draws per level measured (seeds
     4055629249, 2654448106, 1043, 774566179); the formwork overlay quads on annex walls are gone.
+  - **R1 "concrete at distance"** (task track2-round2, lane CONCRETE; user: "Wall texture looks low detail still, likely due to the
+    distance, it just doesn't give that concrete vibe"). Diagnosis with numbers (opt-in `game/tests/r1-concrete-preview.test.ts`,
+    box-filtered mips of the painted set): texel density was not the cause — at 1080p / 75° with the native 16x request the colour
+    map is sampled at mip 0–2.6 (≤ 1.5 cm texels) everywhere within 10 m (720p: ≤ 3.2). The CONTENT was: linear luminance varied only
+    3.5 % (rel. std) at 0.3 m texels and 2.7 % at 0.6 m, roughness was a flat 0.87 ± 0.03, and 67 % of the vertical tone profile was
+    one perfectly periodic 0.15 m board-seam stripe (plus cupped-looking board relief and wood grain) — it read as plank cladding.
+    Most of its 15 % mip-0 variation (grain, speckle, 1–4 mm bug holes) is gone by mip 2–3, which a software rasterizer's 1x
+    anisotropy cap reaches already at 2–4 m along a corridor wall (mip 3.7 at 4 m, 5.7 at 8 m in a 1.5 m corridor).
+  - Fix (same three maps and sizes, same two materials / programs, no draw change): the board imprint becomes faint (random board
+    widths 0.09–0.2 m, broken hairline seams, no cupping); structure moves to 0.15–1.2 m: a tileable domain-warped fBm cement-paste
+    cloud and a sparse stain level set (colour, roughness, relief), two panels of their own tone / sheen, panel joints with grout
+    bleed and chipped arrises, a pour-lift line, tie holes (open cones or grout plugs) with rust / water runs, small mortar patches,
+    honeycomb at the joints, lime runs, hairline cracks; the normal map comes from a float relief field (panel offset, pillowing
+    between ties, paste undulation, fine "orange peel") added to the painted height. The large stains stay small on purpose: a
+    distinctive shape would mark the 2.4 m repeat (seen in an intermediate render); variation above ~1 m is world-space — the annex
+    macro tone 0.32 → 0.4 (`ANNEX_MACRO`, a uniform) and the decay hook. normalScale 0.85 → 1. Result: luminance 11 % at 0.3 m /
+    8 % at 0.6 m texels, roughness 0.66–1.0 (mean 0.80), stripe share 2 %, mean albedo +5 %. Resident GPU memory unchanged (≈ 8 MiB
+    with mips); one-time paint adds ~0.1 s of JS (fBm grids, upsampling, relief) at the first extension level of a page.
+  - Untouched: `render/anisotropy.ts` / `render/softwareGl.ts` (maps created at 8x like every canvas surface set, 16x requested at
+    build as 'wall'; the software cap still applies), mipmaps, warm-up, the annex floors (`concrete` canvas, 512² over 2 m = 256
+    texels / m, colour only, roughness 0.92, no normal map) and ceilings (`ceilingService`, the authored 1024 x 341 ceiling set over
+    3.6 x 1.15 m ≈ 284 texels / m with ORM + normal). Tests: `game/tests/wall-finish-concrete.test.ts`.
 - **Station invitation art** (playtest revision, lane ART; `game/src/gen/trackExt/art.ts`, `world/trackExt/graffiti.ts`,
   `graffitiArt.ts`):
   - Records: `planStationArt` runs at the end of `finishExtensions` (after the attach, on the track-ext fork `station-art`, which
@@ -321,9 +395,40 @@ Tunnels have sparse fixtures, mostly dead or dying.
 - **Steam:** a bounded, non-hazardous emitter in `game/src/world/fx.ts`, capped per annex. It is never the gas field and
   never the flare smoke.
 - **Machinery** (lane ROOMS): `world/trackExt/machines.ts` `buildAnnexMachines` (called by `buildTrackExtensions`; stats in
-  `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material, built into the
-  station group at build time (warm-up discoverable).
+  `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material (+ one fan-rotor
+  InstancedMesh per level), built into the station group at build time (warm-up discoverable). `MachineBuild.update(t)` (Game.update,
+  game clock: a pause freezes it) drives the water clock uniform and the rotors; `MachineBuild.dispose()` (queued by
+  Game.leaveSection with the other world releases) frees its geometries and the rotor mesh; its materials and clock are per
+  WorldMaterials, reused by the next level.
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
+- **Generator model** (round 2, R3; user: "Generate a model for the generator"): ONE generated industrial diesel genset,
+  `assets/models/annex-genset.glb` (Meshy T2.5 smart topology, 2K PBR refine, under the user's task-specific 100-credit budget:
+  1 attempt, 2 POSTs, 15 credits; provenance `assets/derivatives/annex-genset-20261031.json`, rebuilt by
+  `tools/asset-pipeline/props/build-annex-genset.mjs` from the immutable raw outside Git).
+  - **Derivative:** 3.5 × 1.68 × 1.24 m at real size, front +Z, grounded; 11,565 triangles, one mesh / one material; maps base
+    colour 1024², metallic-roughness 256², normal 512² (JPEG; ~7 MiB GPU with mips; 862 KB file). A SHARED lazy model (not
+    `mall-*`): `assets/annexGenset.ts` `gensetModelKeysFor` asks the loading screen for it when a section has a genset record.
+  - **Runtime:** `world/builder.ts` instances it on every genset record (`machines.ts` `gensetModelFit`: on the 0.15 m plinth, one
+    uniform scale inside the record's body / collision box — typically 0.955 → 3.34 × 1.60 × 1.19 m), bucketed by scale (one
+    `addInstancedModel` call each, 1–2 draws per level). The procedural radiator / engine / alternator body is then skipped; the
+    plinth, the exhaust silencer (posts from the model's top) and the riser stay. Without the model the procedural genset stands.
+  - **Collision / interaction:** unchanged (`machineBoxes`, anchored machinery, no interaction; the 1 m access ring and the hall
+    aisle stay clear). Evidence: `annex-genset.test.ts`; scale check beside the runtime zombie
+    (`node tools/asset-pipeline/props/scale-check.mjs --prop game/public/assets/models/annex-genset.glb --scale 0.955`).
+- **Fan noise** (round 2, R4 audio; `game/src/audio/fanSound.ts`, `audio/sfx.ts` `updateFans`): user "ventaliation fan should
+  spin, and make noise."
+  - **Source:** an accepted existing recording only, `bed-hvac-02-loop.mp3` (Sound Lab prompt "a steady ventilation system, air
+    rushing through ducts and a constant fan hum"). The bounded local edit is runtime-only: a per-fan playback rate 0.9–1.1
+    (seeded), a 70 Hz highpass and a 5.2 kHz lowpass. No new file, no synthesis, no provider audio.
+  - **Positions:** `fanSources(layout)` gives the hub of every `fanWall` and the drum of every `fanUnit`
+    (`layout.extensions.machines`).
+  - **Voices:** a FIXED pool of two page-lifetime channels on the ambient bus (shot ducking, page pause mute). At the existing
+    emitter tick (every 12 frames) they follow the nearest fans within 14 m on the listener's storey (feet within 2.4 m of the
+    fan's floor). Inverse-distance panner (ref 1.4 m, rolloff 1.3); the world occlusion muffles the sound (gain −60 %, lowpass
+    down to 12 %).
+  - **Lifecycle:** `setWorld({fans})` on every level build releases the previous fans (empty without annexes). The gameplay voice
+    pool, the Siren cues and the vocal gates are untouched.
+  - **Evidence:** `fan-sound.test.ts` (fake WebAudio, structural only). Not auditioned by ear on the build worker.
 
 ## Tests
 
@@ -332,6 +437,16 @@ Tunnels have sparse fixtures, mostly dead or dying.
   `track-ext-vis-gen.test.ts`.
 - **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
   anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
+- **Water / fan motion (round 2, lane MOTION):** `annex-motion.test.ts` (per-vertex flow directions / speeds, surfaces in place,
+  the shared game-clock uniform, real GLSL builds of the materials, the CPU mirror travelling downstream, rotors pivoting on the hub
+  inside the fan box, the anti-strobe cap, dispose / rebuild without accumulation, draw budget); opt-in `MOTION_PICTURES=1` CPU
+  preview pair into `qa-artifacts/r2r4-motion/`.
+- **Survivor caches (round 2, lane CACHE):** `annex-playtest.test.ts` "survivor caches deeper in" — the per-container exact tables on
+  every level profile (packed lots, no salvage / material / gear / mask / weapon, ammo only in the crate), and on the fresh-run sample
+  a deep-band cache room per annex (no signature / hall / corridor / entry room), the bed, 2–3 registered and stocked holders,
+  targetable from their stand points, the working light, the camp things' placement contract, the cache appended last; taken cache
+  lots stay taken across regenerate -> rebuild -> `applyHolders`. Opt-in evidence: `ANNEX_ROUTE=1 ROUTE_ONLY=deeper` (the deeper
+  route) and `ANNEX_PICTURES=1` (CPU pictures of the cache rooms, `qa-artifacts/track2-revision-pictures/cache-*.png`).
 - **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
   `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
   1–2 m, into `qa-artifacts/track2-revision-art/`).

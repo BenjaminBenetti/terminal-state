@@ -55,7 +55,8 @@ function contextsSection(es: EnemySite, level: EnemyLevelInfo): string {
     c.zone ? `${range(c.zone.runsPerLevel.lo * c.count.lo, c.zone.perLevelMax)}<span class="denom">zone budget, not in the total</span>` : range(c.perLevel.lo, c.perLevel.hi),
     c.zone ? `${num(c.count.mean)}<span class="denom">per zone</span>` : num(c.perLevel.mean),
   ]);
-  const zoneNotes = level.contexts.filter(c => c.zone).map(c => `<p class="note"><strong>${esc(c.label)}</strong>: ${prose(c.zone!.note)}</p>`).join('\n');
+  const zoneNotes = level.contexts.filter(c => c.zone).map(c => `<p class="note"><strong>${esc(c.label)}</strong>: ${prose(c.zone!.note)}</p>`).join('\n')
+    + level.contexts.filter(c => c.families).map(c => `<p class="note"><strong>${esc(c.label)}: its own family pool</strong> (configured selection share per spawn) — ${c.families!.rows.map(r => `${esc(r.family)} ${num(Math.round(r.share * 1000) / 10)} %`).join(' · ')}. ${prose(c.families!.note)}</p>`).join('\n');
   rows.push([
     '<strong>Whole level</strong>',
     level.contexts.some(c => c.zone) ? 'all core contexts (zones reported separately)' : 'all contexts',
@@ -411,10 +412,11 @@ function censusSection(es: EnemySite, level: EnemyLevelInfo, p: string, census: 
   const byContext = census.byContext.length
     ? table({
       caption: `${level.name}: placed spawns per generation context (sampled)`,
-      head: ['Context', 'Eligible floor m²', 'Placed over the sample', 'Mean per level', 'Per 100 m² eligible floor (sampled)'],
+      head: ['Context', 'Eligible floor m²', 'Placed over the sample', 'Mean per level', 'Per 100 m² eligible floor (sampled)', 'Placed by family (sampled outcome)'],
       numeric: [1, 2, 3, 4],
       rowHeader: 0,
-      rows: census.byContext.map(c => [`<a href="#${esc(ctxAnchor(c.context))}">${esc(ctxLabel(c.context))}</a>`, num(c.eligibleM2), num(c.placed), num(c.perLevel), per100(c.per100m2)]),
+      rows: census.byContext.map(c => [`<a href="#${esc(ctxAnchor(c.context))}">${esc(ctxLabel(c.context))}</a>`, num(c.eligibleM2), num(c.placed), num(c.perLevel), per100(c.per100m2),
+        Object.entries(c.byFamily).filter(([, n]) => n > 0).map(([f, n]) => `${esc(f)} ${num(n)}${c.placed ? ` (${num(Math.round(1000 * n / c.placed) / 10)} %)` : ''}`).join(' · ') || '—']),
     })
     : '';
   const byKind = census.byAreaKind.length

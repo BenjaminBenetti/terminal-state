@@ -23,6 +23,7 @@
 // 2 convolvers total.
 
 import {ClipBank, type Clip, type CueId} from './bank';
+import {FAN_SOUND, audibleFans, type FanSource} from './fanSound'; // task studio-alpha-track2-round2-20261031-01 (R4): fan noise
 import {makeIR} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
 import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
@@ -44,6 +45,8 @@ export type Surface = 'concrete' | 'tile' | 'metal' | 'flesh' | 'wood' | 'glass'
 export type BreakCue = 'breakGlass' | 'breakWood' | 'debrisFall' | 'fleshTear';
 export type CasingKind = 'rifle' | 'shell';
 interface Pos { x: number; y: number; z: number }
+/** Eye height over the feet (m): the fan storey gate compares the listener's feet with a fan's floor. */
+const FAN_EYE_H = 1.6;
 type BedName = 'wind' | 'rumble' | 'hvac' | 'fridge' | 'buzz';
 const BED_CUE: Record<BedName, CueId> = {wind: 'bedWind', rumble: 'bedRumble', hvac: 'bedHvac', fridge: 'bedFridge', buzz: 'bedBuzz'};
 
@@ -443,6 +446,10 @@ export class Sfx {
   private emitterSrc: AudioBufferSourceNode | null = null;
   private emitterPanner: PannerNode | null = null;
   private emitters: Pos[] = [];
+  // (R4, round 2) the service annexes' fans: a FIXED pool of FAN_SOUND.voices page-lifetime channels (the bedHvac recording) that
+  // follow the nearest audible fans on the listener's storey; never more voices, never re-created
+  private fans: FanSource[] = [];
+  private fanCh: {g: GainNode; lp: BiquadFilterNode; pan: PannerNode; src: AudioBufferSourceNode | null; on: FanSource | null}[] = [];
   private emitterTick = 0;
   private emitterOn = false;
   private profile: BedProfile = BEDS['passage'];
@@ -568,7 +575,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -576,6 +583,7 @@ export class Sfx {
       ambientSources: this.ambient.length, sounds: this.soundsStarted, room: this.roomKind, area: this.areaType, floor: this.floor,
       voices: this.voices.length, hrtfVoices: this.voices.filter(v => v.hrtf).length, panners: this.pannersCreated,
       convolvers: this.convolversCreated, dropped: this.dropped, culled: this.culled, emitters: this.emitters.length, emitterOn: this.emitterOn,
+      fans: {sources: this.fans.length, channels: this.fanCh.length, active: this.fanCh.filter(c => c.on).length, looping: this.fanCh.filter(c => c.src).length},
       beds, bedsPlaying: (Object.keys(this.bedSources) as BedName[]), listener: {...this.listener}, bank: this.bank.stats(),
       confirmVoices: this.voices.filter(v => v.fg).length, confirms: this.confirms, flareLoops: this.flareLoops.filter(l => !l.stopped).length,
       vocal: {voices: this.voices.filter(v => v.vocal !== undefined && v.end > (this.ctx?.currentTime ?? 0)).length, gate: !!this.reach, ...this.vstats},
@@ -610,16 +618,22 @@ export class Sfx {
         l.setOrientation?.(fx, 0, fz, 0, 1, 0);
       }
     }
-    if (++this.emitterTick >= 12) { this.emitterTick = 0; this.updateEmitter(); this.updateLoops(false); }
+    if (++this.emitterTick >= 12) { this.emitterTick = 0; this.updateEmitter(); this.updateFans(); this.updateLoops(false); }
   }
 
   /**
    * Per-station hooks: occlusion (0 = clear .. 1 = blocked) and humming fixture positions. Iteration 12: a new station
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
-  setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]}): void {
+  setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
     if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
+    if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
+      this.fans = o.fans.slice(0, 64);
+      const t = this.ctx?.currentTime ?? 0;
+      for (const ch of this.fanCh) { ch.on = null; ch.g.gain.cancelScheduledValues(t); ch.g.gain.setTargetAtTime(0, t, 0.08); }
+      this.emitterTick = 99;
+    }
   }
 
   /** Task office-overhaul-20261030 (lane AUDIO): the built world's navigable-route source for enemy vocals (null = straight line). */
@@ -892,6 +906,18 @@ export class Sfx {
     em.connect(pan).connect(bus);
     this.emitterGain = em;
     this.emitterPanner = pan;
+    // (R4) fan channels: gain -> highpass -> lowpass (occlusion / distance) -> panner -> the ambient bus (shot ducking, pause mute)
+    for (let k = 0; k < FAN_SOUND.voices; k++) {
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = FAN_SOUND.highpassHz; hp.Q.value = 0.5;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = FAN_SOUND.lowpassHz; lp.Q.value = 0.5;
+      const fp = this.makePanner(ctx, false, FAN_SOUND.ref, FAN_SOUND.rolloff);
+      g.connect(hp).connect(lp).connect(fp).connect(bus);
+      this.fanCh.push({g, lp, pan: fp, src: null, on: null});
+    }
     this.ambientLoops++;
     this.applyBeds(0.05);
   }
@@ -924,6 +950,33 @@ export class Sfx {
     const src = this.loopSource(clip, g);
     if (src) this.bedSources[name] = src;
     if (name === 'fridge' && this.emitterGain && !this.emitterSrc) this.emitterSrc = this.loopSource(clip, this.emitterGain);
+    // (R4) the fans reuse the accepted HVAC recording (fan hum + duct air), one looping source per channel, random phase each
+    if (name === 'hvac') for (const ch of this.fanCh) if (!ch.src) ch.src = this.loopSource(clip, ch.g);
+  }
+
+  /** (R4) Point the fixed fan channels at the nearest audible fans (storey-gated, occlusion-muffled); fade the rest out. */
+  private updateFans(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.fanCh.length) return;
+    const L = this.listener, t = ctx.currentTime;
+    const picks = this.fans.length ? audibleFans(this.fans, L, L.y - FAN_EYE_H, this.fanCh.length) : [];
+    const keep = new Set(picks.map(p => p.fan));
+    const free = this.fanCh.filter(ch => !ch.on || !keep.has(ch.on));
+    for (const ch of free) if (ch.on) { ch.on = null; ch.g.gain.cancelScheduledValues(t); ch.g.gain.setTargetAtTime(0, t, 0.4); }
+    for (const p of picks) {
+      let ch = this.fanCh.find(c => c.on === p.fan);
+      if (!ch) {
+        ch = free.shift();
+        if (!ch) continue;
+        ch.on = p.fan;
+        this.setPannerPos(ch.pan, p.fan.x, p.fan.y, p.fan.z);
+        if (ch.src) ch.src.playbackRate.setTargetAtTime(p.fan.rate, t, 0.05);
+      }
+      const occ = this.occlusion && p.dist > 1.5 ? clamp01(this.occlusion(p.fan.x, p.fan.z, p.fan.y)) : 0;
+      ch.g.gain.cancelScheduledValues(t);
+      ch.g.gain.setTargetAtTime(FAN_SOUND.gain * AMBIENT_LEVEL * (1 - 0.6 * occ), t, 0.4);
+      ch.lp.frequency.setTargetAtTime(FAN_SOUND.lowpassHz * (occ > 0 ? 0.12 + 0.88 * (1 - occ) : 1), t, 0.3);
+    }
   }
 
   private applyBeds(tc: number): void {

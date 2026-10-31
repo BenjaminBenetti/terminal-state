@@ -150,6 +150,12 @@ export interface SpawnContextRule {
   readonly count: readonly [number, number];
   readonly placement: PlacementRules;
   readonly accept: PlacedCheck;
+  /**
+   * Task studio-alpha-track2-round2-20261031-01 (R6): this context's OWN ambient family pool, replacing the level's `families` for
+   * spawns tagged with this context (markSpawnContext / spawnContextOf) — the same single (seed, index) roll, room modifiers and
+   * eligibility on top. Absent (every core context) = the level pool, bit-identical. Hordes never read it.
+   */
+  readonly families?: FamilyPool;
 }
 /** Subway storey moves (gen/levelGenDress.ts placeLevelSpawns) — totals unchanged. */
 export interface LevelMoveRules {
@@ -363,7 +369,7 @@ export const SERVICE_PLACEMENT: PlacementRules = {
  * to the core contexts. Census basis (docs/enemy-spawns.md "Service annexes"): an annex is ~25 % of the Subway's walkable-exploration
  * baseline (~1840 m² of the 7371 m² core station, gen/trackExt/config.ts); the station's 22-32 spawns over that baseline would put
  * ~6.8 into an annex at the same density. The annex is cramped and much darker, so it gets ~60 % of that density: 3-5 per annex
- * (E 4). The level's own pool / zombie types apply (no annex families, no guarantee); killed annex enemies stay dead for the run
+ * (E 4). The level's zombie types apply (round 2: its own family pool, SERVICE_FAMILY_POOL); killed annex enemies stay dead for the run
  * (the per-index memory); 0-2 annexes per level, so a level gains 0-10. Census (Track 2 lane CONTENT, docs/enemy-spawns.md): Subway
  * 24 seeds 1.12 annexes / level (GEN-2 incidence) -> 4.3 service spawns / level (max 10) on top of the station's ~27; Office 10 seeds
  * 1.5 annexes -> 5.6 / level (max 9); 3.7-3.9 placed per annex, no run short of its count.
@@ -372,10 +378,18 @@ export const SERVICE_ZONE_BUDGET: readonly [number, number] = [5, 6];
 // Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): [3, 5] -> [5, 6] (E 5.5, ~80 % of the core's density instead of
 // ~60 %), placed across entry / middle / deep depth bands and out of station-gunfire earshot where possible (gen/annexContent.ts
 // placeServiceSpawns). Measured before: an ordinary 10-room discovery route met 0-2 of an annex's 3-5 enemies (closed rooms; user
-// report: "no enemies in the area"). Still one level-wide pool (no annex families), finite (killed stay dead), no guarantee. The hi is
+// report: "no enemies in the area"). Finite (killed stay dead), no guarantee (round 2: the annexes' own family pool SERVICE_FAMILY_POOL). The hi is
 // bounded by the registry contract (every context's count hi fits the level's budgets.ambient.perStorey: the compact mall's is 6).
+/**
+ * Task studio-alpha-track2-round2-20261031-01 (R6): the service annexes' own ambient family pool. User (round 2): "the rat-dog spawn
+ * rate should be boosted to 20% in this area." Rat/dog 0.20 (the level default 0.05), Blightbelly 0.05 (unchanged), Siren 0 (never in
+ * an annex), ordinary zombies the remainder 0.75 — a CONFIGURED selection share per service spawn, not a quota: a 5–6-enemy annex
+ * may hold none or several. Same count, same placement, same single roll per spawn; the core contexts and hordes are untouched.
+ */
+export const SERVICE_FAMILY_SHARES: Readonly<Partial<Record<ShareFamilyId, number>>> = {ratdog: 0.2, blightbelly: 0.05, siren: 0};
+export const SERVICE_FAMILY_POOL: FamilyPool = familyPool(SERVICE_FAMILY_SHARES);
 /** The 'service' context of a level whose stations grow annexes (the per-annex zone budget; never regenerates a level). */
-export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}};
+export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}, families: SERVICE_FAMILY_POOL};
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Task track3-eaton-centre-20261031 (lane PROFILES): THE MALL (LevelId 'mall', tier 2; display name seeded per run: "<Name> Center",
@@ -669,11 +683,14 @@ export function roomIntensity(p: SpawnProfile, a: Pick<Area, 'purpose' | 'type'>
   return den > 0 ? all * (num / den) : 0;
 }
 
-/** The family pool for a spawn in an area: the profile's pool itself (same array) without an entry, else p·w·d per family. */
-export function roomFamilyPool(p: SpawnProfile, a: Pick<Area, 'purpose' | 'type'> | undefined): FamilyPool {
-  if (!a || !hasRoomEntry(p, a)) return p.families;
+/**
+ * The family pool for a spawn in an area: `base` (the profile's pool itself, same array, unless a context brings its own:
+ * SpawnContextRule.families) without a room entry, else base·w·d per family.
+ */
+export function roomFamilyPool(p: SpawnProfile, a: Pick<Area, 'purpose' | 'type'> | undefined, base: FamilyPool = p.families): FamilyPool {
+  if (!a || !hasRoomEntry(p, a)) return base;
   const [byP, byT] = entries(p, a);
-  return p.families.map(([f, w]) => [f, Math.max(0, w) * (byP?.[f]?.weight ?? byT?.[f]?.weight ?? 1) * (byP?.[f]?.density ?? byT?.[f]?.density ?? 1)] as const);
+  return base.map(([f, w]) => [f, Math.max(0, w) * (byP?.[f]?.weight ?? byT?.[f]?.weight ?? 1) * (byP?.[f]?.density ?? byT?.[f]?.density ?? 1)] as const);
 }
 
 /** The effective area weight of the weighted area order: baseline × room intensity (× 1 is exact). */
@@ -939,7 +956,25 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     const path = `contexts.${id}`;
     if (!(SPAWN_CONTEXT_IDS as readonly string[]).includes(id)) bad(path, 'unknown spawn context');
     if (!c || typeof c !== 'object') { bad(path, 'missing'); continue; }
-    known(path, c, ['label', 'count', 'placement', 'accept']);
+    known(path, c, ['label', 'count', 'placement', 'accept', 'families']);
+    if (c.families !== undefined) {
+      // (R6) a context's own pool: every family exactly once, weights finite >= 0, sum > 0; an opt-in family (the Siren) > 0 needs the
+      // profile's eligibility rule for it, listing this context
+      const cs = new Set<string>();
+      let sum = 0;
+      if (!Array.isArray(c.families)) bad(`${path}.families`, 'not a pool');
+      else c.families.forEach((row, i) => {
+        const [f, w] = Array.isArray(row) ? row : [undefined, undefined];
+        if (typeof f !== 'string' || !(ENEMY_FAMILY_IDS as readonly string[]).includes(f)) bad(`${path}.families[${i}]`, `unknown family ${String(f)}`);
+        else if (cs.has(f)) bad(`${path}.families[${i}]`, `family ${f} listed twice`);
+        else cs.add(f);
+        num(`${path}.families[${i}].weight`, w);
+        if (finiteNonNeg(w)) sum += w;
+        if (typeof f === 'string' && OPT_IN_FAMILIES.includes(f as EnemyFamilyId) && finiteNonNeg(w) && w > 0 && !p.eligibility?.[f as EnemyFamilyId]?.contexts.includes(id as SpawnContextId)) bad(`${path}.families.${f}`, `opt-in family with weight ${w} needs an eligibility.${f} rule listing '${id}'`);
+      });
+      if (Array.isArray(c.families)) for (const f of ENEMY_FAMILY_IDS) if (!cs.has(f)) bad(`${path}.families`, `family ${f} missing (list it with weight 0 to exclude it)`);
+      if (Array.isArray(c.families) && sum <= 0) bad(`${path}.families`, 'every family weight is 0');
+    }
     const [lo, hi] = Array.isArray(c.count) ? c.count : [undefined, undefined];
     if (!(nonNegInt(lo) && nonNegInt(hi) && lo <= hi && c.count.length === 2)) bad(`${path}.count`, `range ${JSON.stringify(c.count)} is not integers 0 <= lo <= hi`);
     else if (hi > 0) places = true;
