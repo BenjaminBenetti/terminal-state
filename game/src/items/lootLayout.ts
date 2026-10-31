@@ -26,6 +26,12 @@ export interface Surface {
    * belongs to — its items are only seen / taken while that part is open. Absent: an exposed surface (always open).
    */
   part?: number;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U10): a SNUG compartment (the medicine cabinet's 14 cm pill drawers): items go in
+   * square to the front (no random yaw) with SNUG_GAP between them, so a dressing fits a tray only a little wider than itself. Absent
+   * on every Subway / Office surface: their packing (and its random draws) is exactly as before.
+   */
+  snug?: boolean;
 }
 
 /** Placement of one item on a surface (holder-local). y is the resting height. */
@@ -264,6 +270,8 @@ export function holderSurfaces(kind: SurfaceHolder, def: Dims, o: SurfaceOptions
 // Packing
 
 const GAP = 0.018;
+/** Task mall-playtest-revision-20261031 (lane SHOPS, U10): spacing on a snug surface (Surface.snug). */
+const SNUG_GAP = 0.004;
 
 /**
  * Places items on surfaces left-to-right without overlap (deterministic for a given `rnd`).
@@ -284,16 +292,18 @@ export function packItems(itemIds: readonly string[], surfaces: readonly Surface
       const lie = lying || (!!s.spill && rnd() < 0.7);
       let placed = false;
       const jitter = (rnd() * 2 - 1);
+      const gap = s.snug ? SNUG_GAP : GAP; // (lane SHOPS U10: snug compartments; the jitter is still drawn — same stream for every surface)
       for (const orient of orientOptions(id, lie)) {
         const o = orientedSize(id, orient);
         if (o.sy + 0.004 > s.clear) continue;
         // Facing the front first; turned 90° when that is the only way it fits (crates, narrow tiers).
         for (const base of [0, Math.PI / 2]) {
-          const yaw = base + jitter * (s.spill ? 1.3 : orient === 'up' ? 0.3 : 0.18);
+          const yaw = base + (s.snug ? 0 : jitter * (s.spill ? 1.3 : orient === 'up' ? 0.3 : 0.18));
           const c = Math.abs(Math.cos(yaw)), si = Math.abs(Math.sin(yaw));
           const sx = c * o.sx + si * o.sz, sz = si * o.sx + c * o.sz;
-          if (sz > s.z1 - s.z0 || used[i] + sx + GAP > width(s)) continue;
-          used[i] += sx + GAP;
+          const tol = s.snug ? 1e-9 : 0; // (snug only: exact old comparisons elsewhere)
+          if (sz > s.z1 - s.z0 + tol || used[i] + sx + gap > width(s) + tol) continue;
+          used[i] += sx + gap;
           bins[i].push({item, orient, yaw, sx, sy: o.sy, sz});
           placed = true;
           break;

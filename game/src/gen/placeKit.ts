@@ -82,7 +82,28 @@ export interface PlaceCtx {
   aperture: Uint8Array;
   doorsOf: Map<number, Door[]>;
   tx: Tx;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U09): REAL-WALL placement (set by makePlaceCtx for a mall layout:
+   * strictWalls). placeAgainstWall / rowAlongWall then only accept a spot whose back is a solid wall over the prop's whole width
+   * (placeKit.backed: no opening, aperture, railing, void or open floor of the next area behind it) — the bounding-rect side of a
+   * mall gallery / court / platform is often open floor. Vending machines also keep VENDING_CLEAR_AHEAD of open floor in front.
+   * Absent / false (Subway, Office): exactly the old behaviour.
+   */
+  strictWalls?: boolean;
 }
+
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U09): a mall layout — one of its storeys has the retail 'ring' role (gen/levels.ts
+ * LevelRole; only the mall generator uses it). Its wall placements need a real wall behind them (PlaceCtx.strictWalls).
+ */
+export function strictWalls(layout: StationLayout): boolean {
+  return levelsOf(layout).some(L => L.role === 'ring');
+}
+/**
+ * U09: open floor a vending machine keeps in front of its face in a strict-wall (mall) layout: its 1.0 m approach strip plus a
+ * 1.4 m passing lane, so a machine against a gallery wall never pinches the walkway (m).
+ */
+export const VENDING_CLEAR_AHEAD = 2.4;
 
 export function cellsOfBox(x: number, z: number, hx: number, hz: number): [number, number, number, number] {
   const e = 0.04;
@@ -168,7 +189,9 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0, win?: {
       for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { const j = i + oy * W + ox; if (cells[j] === FLOOR) edge[j] = 1; }
     }
   }
-  return {layout, level, g, rng, zone, doorCell, keep: new Uint8Array(n), edge, lane: new Uint8Array(n), plaza: new Uint8Array(n), aperture, doorsOf, tx: {log: null, props: 0, depth: 0}};
+  const ctx: PlaceCtx = {layout, level, g, rng, zone, doorCell, keep: new Uint8Array(n), edge, lane: new Uint8Array(n), plaza: new Uint8Array(n), aperture, doorsOf, tx: {log: null, props: 0, depth: 0}};
+  if (strictWalls(layout)) ctx.strictWalls = true; // Task mall-playtest-revision-20261031 (lane SHOPS, U09): mall only
+  return ctx;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -534,11 +557,48 @@ export function placeAgainstWall(ctx: PlaceCtx, area: Area, kind: PropKind, opts
     const [lo, hi] = wallRange(area, side);
     if (hi - lo < def.w + 0.3) continue;
     const along = Math.round(ctx.rng.range(lo + def.w / 2 + 0.1, hi - def.w / 2 - 0.1) * 4) / 4;
+    if (!strictWallOk(ctx, area, side, along, kind, opts.y)) continue; // Task mall-playtest-revision-20261031 (lane SHOPS, U09): mall only
     const s = wallSpot(area, side, along, kind);
     const p = tryPlaceProp(ctx, area, kind, s.x, s.z, s.rot, opts);
-    if (p) return p;
+    if (p) { reserveAhead(ctx, area, side, along, kind); return p; } // (U09: mall vending keeps its lane)
   }
   return null;
+}
+
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U09; user: "vending machines should always have their back to a wall"): in a
+ * strict-wall (mall) context, a prop with its back to `side` of `area` at `t` (world m along the wall) needs a REAL wall behind its
+ * whole width (backed: solid, no opening / aperture / railing / void / open floor of the next area, at its base or mount height
+ * `y`), and a vending machine VENDING_CLEAR_AHEAD of walkable floor in front of its face (approach + passing lane). Always true
+ * for a non-strict context (Subway / Office: unchanged).
+ */
+export function strictWallOk(ctx: PlaceCtx, area: Area, side: Side, t: number, kind: PropKind, y = 0): boolean {
+  if (!ctx.strictWalls) return true;
+  const def = PROP_DEFS[kind];
+  if (!backed(ctx, area, side, t - def.w / 2, t + def.w / 2, areaBase(ctx.layout, area) + y)) return false;
+  return kind !== 'vending' || clearAhead(ctx, area, side, t, kind, VENDING_CLEAR_AHEAD);
+}
+/** U09: cells of the `dist` m strip in front of a wall-backed prop's face (its width). */
+function aheadCells(area: Area, side: Side, t: number, kind: PropKind, dist: number): [number, number, number, number] {
+  const def = PROP_DEFS[kind], s = wallSpot(area, side, t, kind);
+  const fx = Math.round(Math.sin(s.rot)), fz = Math.round(Math.cos(s.rot));
+  const cx = s.x + fx * (def.d / 2 + dist / 2), cz = s.z + fz * (def.d / 2 + dist / 2), hw = def.w / 2 - 0.02;
+  return cellsOfBox(cx, cz, fx ? dist / 2 : hw, fz ? dist / 2 : hw);
+}
+/** U09: that strip is walkable floor on the context's level. */
+function clearAhead(ctx: PlaceCtx, area: Area, side: Side, t: number, kind: PropKind, dist: number): boolean {
+  const [x0, y0, x1, y1] = aheadCells(area, side, t, kind, dist);
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (!ctx.g.walkable(cx, cy)) return false;
+  return true;
+}
+/**
+ * U09: after a strict-wall (mall) vending machine is placed, its approach + passing lane stays reserved (keep mask, in the open
+ * transaction) so later dressing passes (composition clusters, purpose props) never fill it. No-op for other kinds / contexts.
+ */
+export function reserveAhead(ctx: PlaceCtx, area: Area, side: Side, t: number, kind: PropKind): void {
+  if (!ctx.strictWalls || kind !== 'vending') return;
+  const [x0, y0, x1, y1] = aheadCells(area, side, t, kind, VENDING_CLEAR_AHEAD);
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (ctx.g.inBounds(cx, cy)) setMask(ctx, ctx.keep, ctx.g.idx(cx, cy), 1);
 }
 
 /**
@@ -553,8 +613,12 @@ export function rowAlongWall(ctx: PlaceCtx, area: Area, side: Side, kind: PropKi
   let t = from + def.w / 2, inCluster = 0;
   while (t + def.w / 2 <= to && out.length < (o.max ?? 99)) {
     const s = wallSpot(area, side, t, kind);
-    const p = tryPlaceProp(ctx, area, kind, s.x, s.z, s.rot, {front: o.front, variant: o.variant?.()});
+    // Task mall-playtest-revision-20261031 (lane SHOPS, U09): a strict-wall (mall) context skips spots without a real wall behind
+    // (same draws as before: the variant is drawn first; a non-strict context is unchanged)
+    const variant = o.variant?.();
+    const p = strictWallOk(ctx, area, side, t, kind) ? tryPlaceProp(ctx, area, kind, s.x, s.z, s.rot, {front: o.front, variant}) : null;
     if (p) {
+      reserveAhead(ctx, area, side, t, kind); // (U09: mall vending keeps its lane)
       out.push(p);
       inCluster++;
       t += def.w + 0.02;

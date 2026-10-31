@@ -34,6 +34,7 @@ import {
 } from './lootTables';
 import {rewardTable, type RewardTable} from './lootTables'; // Task office-interactions-layout-20261030 (lane ROOF): curated rewards
 import {CONTAINER_THEMED} from './lootTables'; // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage
+import {HOLDER_ALLOW, STORAGE_FILL_CATS, STORAGE_FILL_WEIGHTS, econCat, type EconCat} from './lootTables'; // Task mall-playtest-revision-20261031 (lane SHOPS, U10): storage fill
 import {
   OPENABLE_CONTAINER_KINDS, OPENABLE_META, containerLoot, openableSpec, separateCompartmentLoot, type OpenableContainerKind,
 } from '../world/openablesSpec';
@@ -369,14 +370,63 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
     const a = rollOn(holderRng(seed, index, kind), index * 1000, r => scarce(rollItems(r, kind, t, areaType, profile), s1, kind, areaType, t.rows, profile), exposed);
     const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
     const b = rollOn(r2, index * 1000 + 500, r => scarce(rollRows(r, kind, inside, profile), s2, kind, areaType, inside.rows, profile), parts);
-    return [...a, ...b].map(l => tagPart(l, surfaces));
+    return storageFill(seed, index, kind, surfaces, [...a, ...b].map(l => tagPart(l, surfaces)), inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
   }
   const r = holderRng(seed, index, kind);
   const items = scarce(rollItems(r, kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
   const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
   const lots: Lot[] = [];
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
-  return lots;
+  return storageFill(seed, index, kind, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+}
+
+/** Lot id offset of storage-fill lots (index * 1000 + FILL_ID_BASE + (compartment + 1) * 3 + k: clear of the roll's own ids). */
+const FILL_ID_BASE = 600;
+
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U10): the profile's STORAGE FILL (lootTables StorageFill / LootTables.storageFill,
+ * the mall only — absent elsewhere, so this returns `lots` untouched and no stream is drawn). Every compartment the holder's own roll
+ * left empty (openable part; a one-door / one-lid holder without parts = one compartment; exposed tops / shelves never) rolls once on
+ * `loot:<kind>:<index>:fill<part>`: chance x min(1, its loot area / `area`), then U{lots} items from the holder's resolved `rows` within
+ * the fill's categories and HOLDER_ALLOW, re-weighted by category (stack sizes as any roll of this holder kind), packed on that
+ * compartment's surfaces only.
+ */
+function storageFill(seed: number, index: number, kind: HolderKind, surfaces: readonly Surface[], lots: Lot[], rows: readonly Row[], profile: LootProfile): Lot[] {
+  const f = profile.tables.storageFill?.[kind];
+  if (!f || !rows.length) return lots;
+  const cats = f.cats ?? STORAGE_FILL_CATS, allow = HOLDER_ALLOW[kind];
+  const weights: Readonly<Partial<Record<EconCat, number>>> = f.weights ?? (f.cats ? {} : STORAGE_FILL_WEIGHTS);
+  const pool: Row[] = [];
+  for (const [id, w] of rows) {
+    const c = econCat(id);
+    if (c === null || !cats.includes(c) || (allow && !allow.includes(c))) continue;
+    const ww = w * (weights[c] ?? 1);
+    if (ww > 0) pool.push([id, ww]);
+  }
+  if (!pool.length) return lots;
+  // compartment -> its surface indices (a part index; -1 = the whole holder behind its one door / lid)
+  const single = !openableSpec(kind) && isContainerKind(kind);
+  const comps = new Map<number, number[]>();
+  surfaces.forEach((s, i) => {
+    const c = s.part ?? (single ? -1 : undefined);
+    if (c === undefined) return;
+    const l = comps.get(c);
+    if (l) l.push(i); else comps.set(c, [i]);
+  });
+  const full = new Set(lots.map(l => l.part ?? (single ? -1 : -2)));
+  const out = lots.slice();
+  for (const [c, idx] of [...comps].sort((a, b) => a[0] - b[0])) {
+    if (full.has(c)) continue;
+    const area = idx.reduce((a, i) => a + Math.max(0, surfaces[i].x1 - surfaces[i].x0) * Math.max(0, surfaces[i].z1 - surfaces[i].z0), 0);
+    const r = mulberry32(hashString(`loot:${kind}:${index}:fill${c}`, seed >>> 0));
+    if (r() >= f.chance * Math.min(1, area / f.area)) continue;
+    const n = f.lots[0] + Math.floor(r() * (f.lots[1] - f.lots[0] + 1));
+    const items: LootEntry[] = [];
+    for (let k = 0; k < n; k++) { const itemId = pick(pool, r); items.push({itemId, count: lotCount(itemId, kind, r, profile)}); }
+    const placed = packItems(items.map(e => e.itemId), idx.map(i => surfaces[i]), r, false);
+    placed.forEach((p, k) => { if (p) out.push(tagPart({id: index * 1000 + FILL_ID_BASE + (c + 1) * 3 + k, ...items[k], ...p, surface: idx[p.surface]}, surfaces)); });
+  }
+  return out;
 }
 
 function tagPart(l: Lot, surfaces: readonly Surface[]): Lot {
@@ -530,9 +580,12 @@ export function partPrompt(s: HolderState, part: number, info: PartInfo, o: {roo
   }
 }
 
-/** Toast when a compartment is first opened: what is visibly inside, its fixture contents, or a clear "empty". */
-export function partOpenMessage(s: HolderState, part: number, info: PartInfo): {text: string; warn: boolean} {
-  const lots = lotsIn(s, part);
+/**
+ * Toast when a compartment is first opened: what is visibly inside, its fixture contents, or a clear "empty". `also` (task
+ * mall-playtest-revision-20261031, lane SHOPS U10): partner compartments that opened with it (openablesSpec PartSpec.opensWith).
+ */
+export function partOpenMessage(s: HolderState, part: number, info: PartInfo, also: readonly number[] = []): {text: string; warn: boolean} {
+  const lots = [...lotsIn(s, part), ...also.flatMap(j => lotsIn(s, j))];
   if (lots.length) return {text: `Inside: ${short(lotEntries(lots), 4)}`, warn: false};
   if (info.contents) return {text: `${cap(info.name)}: ${info.contents}`, warn: false};
   return {text: `${cap(info.name)}: empty`, warn: false};

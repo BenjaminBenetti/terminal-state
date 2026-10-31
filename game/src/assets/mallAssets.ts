@@ -63,7 +63,7 @@ export const MALL_ASSETS: Readonly<Record<string, MallAssetEntry>> = {
   'multideck-open-cooler': {url: 'assets/models/mall-multideck-open-cooler.glb', bytes: 259620, tris: 2595, code: 'M30', key: 'office-multideck-open-cooler'},
   'cafe-bistro-table': {url: 'assets/models/mall-cafe-bistro-table.glb', bytes: 116524, tris: 1516, code: 'M31', key: 'office-cafe-bistro-table'},
   'cafe-chair': {url: 'assets/models/mall-cafe-chair.glb', bytes: 144552, tris: 1487, code: 'M32', key: 'office-cafe-chair'},
-  'gun-safe-tall': {url: 'assets/models/mall-gun-safe-tall.glb', bytes: 179724, tris: 2428, code: 'M35', key: 'office-gun-safe-tall'},
+  'gun-safe-tall': {url: 'assets/models/mall-gun-safe-tall.glb', bytes: 186564, tris: 2474, code: 'M35', key: 'office-gun-safe-tall'},
   'camping-tent-display': {url: 'assets/models/mall-camping-tent-display.glb', bytes: 223400, tris: 2058, code: 'M36', key: 'office-camping-tent-display'},
   'mall-bench': {url: 'assets/models/mall-mall-bench.glb', bytes: 128072, tris: 1763, code: 'M37', key: 'office-mall-bench'},
   'mall-info-desk': {url: null, bytes: 0, tris: 0, code: 'M40', key: 'office-mall-info-desk'},

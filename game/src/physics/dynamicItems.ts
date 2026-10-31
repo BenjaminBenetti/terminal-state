@@ -59,7 +59,7 @@
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import {rayAabb, type Vec3} from '../combat/hitscan';
-import {itemPhysics, propPhysics, type PhysMat} from '../damage/materials';
+import {itemPhysics, propPhysics, ridesHost, type PhysMat} from '../damage/materials';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {isLootHolderKind} from '../items/loot';
 import {isSpillHolderKind} from '../world/openablesSpec';
@@ -175,6 +175,11 @@ interface Ent {
   rad?: number;
   /** Lane PHYS: pickups lying under it when it went loose (its spilled lots): not knocked by it until it has moved off them. */
   under?: Set<PickupLike>;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U05): host decor hung on this prop that rides it (damage/materials.ts ridesHost:
+   * garments on a garment rail) — their meshes are among `parts` while it is drawn by its own meshes, their colliders are gone.
+   */
+  riders?: {prop: PropPlacement; index: number}[];
 }
 
 export interface DynHit { t: number; point: THREE.Vector3; normal: THREE.Vector3; pickup?: PickupLike; prop?: PropPlacement; propIndex?: number; ent?: Ent }
@@ -243,6 +248,8 @@ export class DynamicItems {
   private readonly hostSlabs = new Map<PropPlacement, CANNON.Body>();
   /** Lane PHYS: props that something rests on (never go loose: no floating stacks). */
   private readonly supportsMemo = new WeakMap<PropPlacement, boolean>();
+  /** Task mall-playtest-revision-20261031 (lane SHOPS, U05): host index -> rider prop indices, per statics props array. */
+  private readonly riderIndex = new WeakMap<readonly PropPlacement[], Map<number, number[]>>();
   /** Task office-props-physics-scale-20261030 (lane PHYS): entities with a SIMULATING (dynamic) body. */
   private readonly active = new Set<Ent>();
   /** Lane PHYS: loose props with a static body (resting / budget-frozen) per static chunk key (chunks.ts staticChunkKey). */
@@ -438,6 +445,9 @@ export class DynamicItems {
       if (r === 'marked') { this.reclaimQ.delete(e); this.reclaimQ.add(e); continue; } // kept: to the back, the next call looks further
       this.reclaimQ.delete(e);
       if (r !== 'ok') continue;
+      // Task mall-playtest-revision-20261031 (lane SHOPS, U05): its riders hand their meshes back too, at the pose they ride at (one
+      // that cannot keeps its own meshes where they are: redetach picks the same meshes up again, detachForPhysics is idempotent)
+      for (const rd of e.riders ?? []) d.reattach(rd.prop, true);
       e.parts = undefined;
       freed++;
       this.counts.reclaimed++;
@@ -455,7 +465,7 @@ export class DynamicItems {
     if (!meshes || !meshes.length) return false;
     const carried = this.holderLoose?.(prop) ?? [];
     const inv = new THREE.Matrix4().compose(tv.set(b.position.x, b.position.y, b.position.z), tq.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w), ts.set(1, 1, 1)).invert();
-    e.parts = [...meshes, ...carried].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
+    e.parts = [...meshes, ...carried, ...this.riderMeshes(e)].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
     this.counts.redetached++;
     return true;
   }
@@ -624,6 +634,43 @@ export class DynamicItems {
     return Math.abs(prop.y - (q.y + q.h)) < 0.03 && Math.abs(prop.x - q.x) <= q.hx && Math.abs(prop.z - q.z) <= q.hz;
   }
 
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U05): the riders of prop `index` — host decor hung on it (`host === index`) of a
+   * kind that rides its host (damage/materials.ts ridesHost: garment groups on a garment rail). One index pass per statics (the
+   * world's layout.props), then a lookup.
+   */
+  private ridersOf(index: number): {prop: PropPlacement; index: number}[] {
+    const props = this.host.statics?.props;
+    if (!props) return [];
+    let m = this.riderIndex.get(props);
+    if (!m) {
+      m = new Map();
+      props.forEach((q, i) => {
+        if (q.host === undefined || !ridesHost(q.kind)) return;
+        const l = m!.get(q.host);
+        if (l) l.push(i); else m!.set(q.host, [i]);
+      });
+      this.riderIndex.set(props, m);
+    }
+    return (m.get(index) ?? []).map(i => ({prop: props[i], index: i}));
+  }
+
+  /**
+   * Lane SHOPS (U05): the riders' render meshes, detached so the host body drives them (damage/propDamage.ts detachForPhysics: forced
+   * slot, idempotent — a rider still drawn by its own meshes returns them again). Their colliders go for good (h 0, like the host's
+   * own: the host's oriented box covers them; nothing stationary is left where they hung).
+   */
+  private riderMeshes(e: Ent): THREE.Object3D[] {
+    const out: THREE.Object3D[] = [];
+    for (const r of e.riders ?? []) {
+      const meshes = this.detacher?.detachForPhysics(r.prop, r.index) ?? null;
+      if (meshes) out.push(...meshes);
+      r.prop.h = 0;
+      r.prop.blocksSight = false;
+    }
+    return out;
+  }
+
   /** Lane PHYS: another prop rests on this one's top (it would float if this one moved). */
   private supportsOther(p: PropPlacement): boolean {
     let v = this.supportsMemo.get(p);
@@ -666,7 +713,8 @@ export class DynamicItems {
     const bm = new THREE.Matrix4().compose(tv.set(body.position.x, body.position.y, body.position.z), tq.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w), ts.set(1, 1, 1));
     const inv = bm.clone().invert();
     const carried = this.holderLoose?.(prop) ?? []; // iteration 08 (Lane I): spill + carry the holder's own lid / liner
-    e.parts = [...meshes, ...carried].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
+    e.riders = this.ridersOf(index); // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments hung on it ride it
+    e.parts = [...meshes, ...carried, ...this.riderMeshes(e)].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
     this.markUnder(e, body); // lane PHYS: its spilled lots (and anything on the floor beneath it) lie inside its collider
     // loose from now on: no longer an AABB obstacle for walking / hitscan / statics (hit-tested here)
     prop.h = 0;

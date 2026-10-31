@@ -79,6 +79,21 @@ function pushOutOfBox(px: number, pz: number, r: number, bx0: number, bz0: numbe
   return [0, b + r];
 }
 
+/**
+ * Task mall-playtest-revision-20261031 (lane FIX, U04): push a circle (px, pz, r) out of an upright CYLINDER prop (centre cx, cz,
+ * radius cr) — the mall's round atrium columns (PropPlacement.round): contact with the visible round column, not its square box.
+ */
+export function pushOutOfCircle(px: number, pz: number, r: number, cx: number, cz: number, cr: number): [number, number] | null {
+  const dx = px - cx, dz = pz - cz, R = r + cr, d2 = dx * dx + dz * dz;
+  if (d2 >= R * R) return null;
+  if (d2 > 1e-12) { const d = Math.sqrt(d2); return [dx / d * (R - d), dz / d * (R - d)]; }
+  return [R, 0];
+}
+
+/** A prop's push-out: its box, or (round props) its cylinder of radius hx. */
+const pushOutOfProp = (x: number, z: number, r: number, pr: PropPlacement): [number, number] | null =>
+  pr.round ? pushOutOfCircle(x, z, r, pr.x, pr.z, pr.hx) : pushOutOfBox(x, z, r, pr.x - pr.hx, pr.z - pr.hz, pr.x + pr.hx, pr.z + pr.hz);
+
 /** Whether grid cell (cx, cy) blocks a body centred at (x, z) whose feet are at `feet`. */
 export function cellBlocks(grid: Grid, cx: number, cy: number, x: number, z: number, feet?: number): boolean {
   if (feet === undefined) return grid.impassable(cx, cy);
@@ -110,7 +125,7 @@ export function resolveCircle(world: CollisionWorld, props: PropIndex | null, x:
       for (const i of props.near(x - r, z - r, x + r, z + r, scratch)) {
         const pr = props.props[i];
         if (feet !== undefined && (pr.y + pr.h <= feet + 0.02 || pr.y >= feet + BODY_H)) continue;
-        const p = pushOutOfBox(x, z, r, pr.x - pr.hx, pr.z - pr.hz, pr.x + pr.hx, pr.z + pr.hz);
+        const p = pushOutOfProp(x, z, r, pr); // lane FIX (U04): round props collide as their cylinder
         if (p) { x += p[0]; z += p[1]; moved = true; }
       }
     }
@@ -153,7 +168,7 @@ function resolveLevels(L: Levels, props: PropIndex | null, x: number, z: number,
       for (const i of props.near(x - r, z - r, x + r, z + r, scratch)) {
         const pr = props.props[i];
         if (pr.y + pr.h <= feet + 0.02 || pr.y >= feet + BODY_H) continue;
-        const p = pushOutOfBox(x, z, r, pr.x - pr.hx, pr.z - pr.hz, pr.x + pr.hx, pr.z + pr.hz);
+        const p = pushOutOfProp(x, z, r, pr); // lane FIX (U04): round props collide as their cylinder
         if (p) { x += p[0]; z += p[1]; moved = true; }
       }
     }

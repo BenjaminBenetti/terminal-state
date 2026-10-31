@@ -8,6 +8,7 @@ import {Fn, float, materialColor, materialRoughness, min, positionWorld, smooths
 import type {TextureKey} from '../assets/manifest';
 import {ENV_TEXTURE_LAYOUT} from '../assets/manifest';
 import {addNodeHook, copyNodeHooks, hasNodeHook} from '../render/nodeHooks';
+import {ANISO_ROLE, requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
 import {ballast, concreteFloor, crateWood, paintedBlock, signPlate, terrazzo, canvasTexture, surface, type SurfaceName} from './canvasTextures';
 import {WM_CONTEXT, WM_NORMAL, asColor, isNodeMaterial, lfFloorAtNode, matRef, sharedStage, skipInShadowPass, wmNoise, wmUp} from './surfaceNodes';
 
@@ -120,6 +121,7 @@ export function thinTrim<M extends MeshStandardNodeMaterial>(m: M): M {
     if (!t || t.anisotropy <= 1) continue;
     const c = t.clone();
     c.anisotropy = 1;
+    c.userData[ANISO_ROLE] = 'thin-trim'; // lane FIX (U08): the clone copied the source's surface role; thin trim stays at 1x
     c.needsUpdate = true;
     m[k] = c;
   }
@@ -166,7 +168,7 @@ function cropTexture(src: THREE.Texture, u0: number, v0: number, u1: number, v1:
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = 4;
-  return t;
+  return requestSurfaceAnisotropy(t, 'wall'); // lane FIX (U08): the wall-tile crops request 16x (render/anisotropy.ts)
 }
 
 export class WorldMaterials {
@@ -221,10 +223,11 @@ export class WorldMaterials {
     this.mats.set('ceilingService', pbr(tex.ceilingColor, tex.ceilingOrm, tex.ceilingNormal, {color: 0xb8b4aa}));
     this.mats.set('tunnel', pbr(tex.tunnelColor, tex.tunnelOrm, tex.tunnelNormal));
     this.mats.set('platformFace', pbr(tex.backingColor, tex.backingOrm, tex.backingNormal, {color: 0xa8a49b}));
-    this.mats.set('paint', std({map: paintedBlock(seed + 1), roughness: 0.9}));
-    this.mats.set('terrazzo', std({map: terrazzo(seed + 2), roughness: 0.62}));
-    this.mats.set('concrete', std({map: concreteFloor(seed + 3), roughness: 0.92}));
-    this.mats.set('ballast', std({map: ballast(seed + 4), roughness: 1}));
+    // lane FIX (U08): painted block walls and the terrazzo / concrete / ballast floors request 16x (canvas default 4x)
+    this.mats.set('paint', std({map: requestSurfaceAnisotropy(paintedBlock(seed + 1), 'wall'), roughness: 0.9}));
+    this.mats.set('terrazzo', std({map: requestSurfaceAnisotropy(terrazzo(seed + 2), 'floor'), roughness: 0.62}));
+    this.mats.set('concrete', std({map: requestSurfaceAnisotropy(concreteFloor(seed + 3), 'floor'), roughness: 0.92}));
+    this.mats.set('ballast', std({map: requestSurfaceAnisotropy(ballast(seed + 4), 'floor'), roughness: 1}));
     // Iteration 04: trim/columns/track use shared world-mapped surface sets (real-scale, no stretching
     // on instance-scaled columns or long boxes), consistent with the procedural prop materials.
     this.mats.set('steel', thinTrim(surfaceMaterial('paintedSteel', {metalness: 0.3}, {grime: [0.3, 0.45], macro: 0.15})));

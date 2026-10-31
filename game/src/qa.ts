@@ -31,7 +31,9 @@ import {walkerQaApi} from './qaWalk'; // Iteration 17 (seamless): real-input wal
 import {lightQaApi} from './player/lightQa'; // Iteration 12 (LIGHT)
 import {qaStandFree} from './world/shelfStock'; // Lane S: stand-point check of goStockedShelf
 import {renderStats} from './render/backend'; // Iteration 13 (CORE)
-import {probeDecayGPU, type DecayProbe} from './world/decay'; // Iteration 13 (MAT-A): decay inputs as the GPU sees them
+import {decayDetailTexture, probeDecayGPU, type DecayProbe} from './world/decay'; // Iteration 13 (MAT-A): decay inputs as the GPU sees them
+import {anisotropyReport, observeBackendAnisotropy} from './render/anisotropy'; // Task mall-playtest-revision-20261031 (lane FIX, U08)
+import {anisotropyCapability} from './render/softwareGl'; // (lane FIX, U08)
 import {seedToCode} from './core/rng'; // Iteration 16 (lane RUN)
 import {memorySummary} from './run/memory'; // Iteration 16 (lane RUN)
 import {parseSectionId} from './run/bagStore'; // Iteration 16 (lane RUN)
@@ -412,6 +414,13 @@ export function installQaHooks(game: Game): void {
      * {backend: 'webgpu' | 'webgl2-fallback', adapter, reason, requested, webgpuApi, glRenderer, label, deviceLost, errors, …}.
      */
     gpu: () => gpuQa(),
+    /**
+     * Task mall-playtest-revision-20261031 (lane FIX, U08): floor / wall / ceiling texture anisotropy on the ACTIVE backend —
+     * {backend, software, requested (16), supported (WebGL: EXT max; WebGPU: 16 spec clamp), supportedSource, cap, capReason,
+     * effective, roles: {floor | wall | ceiling | architecture | detail | other: {textures, requested: {value: n}, effective: {value: n}}},
+     * observed: {api: 'createSampler' | 'texParameterf', values: {anisotropy: count}} (what three handed the API), note}.
+     */
+    anisotropy: () => anisotropyReport(anisotropyCapability(game.softwareGl), game.scene, game.renderer.initialized ? observeBackendAnisotropy(game.renderer.backend) : null, [decayDetailTexture()]),
     /** Iteration 14: the loading-screen render warm-up's result (status, mode, plan counts, per-stage done / total / ms) and whether one runs now. */
     warmup: () => ({running: game.warming, result: game.warmup}),
     /**

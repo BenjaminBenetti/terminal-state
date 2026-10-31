@@ -4,6 +4,18 @@
 import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MODEL_FILES, TEXTURE_FILES, type ModelKey, type TextureKey} from './manifest';
+import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy'; // lane FIX (U08)
+
+/**
+ * Task mall-playtest-revision-20261031 (lane FIX, U08): the surface each environment texture maps — wall tiles, tunnel lining and
+ * platform backing are walls, the platform slab / safety edge floors, the ceiling kit the ceiling. Every one requests 16x
+ * (render/anisotropy.ts; was 4x), clamped by the active backend.
+ */
+export function envTextureRole(key: TextureKey): SurfaceRole {
+  if (key.startsWith('platform') || key.startsWith('edge')) return 'floor';
+  if (key.startsWith('ceiling')) return 'ceiling';
+  return 'wall';
+}
 
 export interface AssetBundle {
   models: Record<ModelKey, GLTF>;
@@ -152,7 +164,7 @@ export async function loadAssets(onProgress: (frac: number, label: string) => vo
         const spec = TEXTURE_FILES[e.key as TextureKey];
         t.colorSpace = spec.srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.anisotropy = 4;
+        requestSurfaceAnisotropy(t, envTextureRole(e.key as TextureKey)); // lane FIX (U08): 16x requested (was 4)
         textures[e.key as TextureKey] = t;
         done();
       }, undefined, fail);

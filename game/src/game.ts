@@ -98,6 +98,8 @@ import {officeModelKeysFor} from './gen/office/index'; // Iteration 16 (lane WOR
 import {preloadOfficeAssets} from './world/officeProps'; // Iteration 16 (lane WORLD-GEN): carpet / ceiling / partition textures
 import {placementBox} from './items/lootLayout';
 import {adaptToSoftwareGl, type SoftwareGlState} from './render/softwareGl';
+import {observeBackendAnisotropy} from './render/anisotropy'; // Task mall-playtest-revision-20261031 (lane FIX, U08): 16x surface anisotropy, QA counts
+import {requestArchitectureAnisotropy} from './world/surfaceAnisotropy'; // (lane FIX, U08)
 // Iteration 13 (CORE): WebGPURenderer (WebGPU backend, WebGL 2 fallback), backend diagnostics, viewmodel overlay pass
 import type {WebGPURenderer} from 'three/webgpu';
 import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, rendererRequest, watchDevice, type GameRenderer, type GpuInfo} from './render/backend';
@@ -471,6 +473,7 @@ export class Game {
       this.gpu = gpu;
       watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.onDeviceLost?.(text); }});
       this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers / adapters
+      observeBackendAnisotropy(this.renderer.backend); // lane FIX (U08): count the anisotropy values the backend hands the API (__LL.anisotropy())
       installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
       console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
@@ -667,6 +670,7 @@ export class Game {
       for (const g of Object.values(this.assets.models)) releaseModelTexturesAfterUpload(g);
     }
     this.world = buildWorld(this.layout, this.mats, {...this.assets.models, ...this.propModels.record()} as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>);
+    requestArchitectureAnisotropy(this.world.group); // lane FIX (U08): every floor / wall / ceiling map asks for 16x before the first frame
     this.scene.add(this.world.group);
     this.steamVents = new SteamVents(this.fx, annexVents(this.layout), this.layout.seed >>> 0); // Track 2 (VIS)
     if (!this.containers) {
@@ -782,7 +786,10 @@ export class Game {
       const p = this.layout.pickups[i];
       const st = this.inv.makeStack(p.itemId, p.count);
       if (p.filter !== undefined) st.filter = p.filter; // mask lane: a found gas mask's seeded, partly used filter (gen/maskLoot.ts)
-      this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, this.rand() * Math.PI * 2), i);
+      // Task mall-playtest-revision-20261031 (lane SHOPS, U11): a placement's own yaw (a gun lying along its gun-shop bench) wins; the
+      // random yaw is still drawn so every other pickup keeps its stream. No pickup is ever filtered by the player's loadout here.
+      const yaw = this.rand() * Math.PI * 2;
+      this.layoutPickup.set(this.pickups.add(st, p.x, p.y, p.z, p.yaw ?? yaw), i);
     }
     for (const rec of plan.restored) {
       const pk = restorePickup(this.pickups, this.inv, rec);

@@ -42,6 +42,7 @@ import {CELL, FLOOR} from '../grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, footprint, type PropKind, type PropPlacement} from '../props';
 import {
   areaBase, areaLevel, cellsOfBox, forceProp, levelGrid, makePlaceCtx, markCell, mountProp, relCeil, tryPlaceProp, wallSpot,
+  placeAgainstWall, // (Task mall-playtest-revision-20261031, lane SHOPS U09: the arcade's vending machine)
   type PlaceCtx,
 } from '../placeKit';
 import {stockVariant, type StockTheme} from '../purposeShapes';
@@ -50,7 +51,9 @@ import type {Area, ShopUse, Side, StationLayout} from '../stationTypes';
 import type {MallShop} from './mallTypes';
 import {GARMENT_RAIL_Y, MALL_MOUNT_Y} from './kinds';
 import {dressMallCommons, type CommonsReport} from './commons';
-import {shopFit, type MallRecipe, type MallShopFit} from './shops';
+import {placeMallAds, type MallAdsReport} from './ads'; // Task mall-playtest-revision-20261031 (lane SHOPS, D06)
+import {inferLot, shopFit, type MallRecipe, type MallShopFit} from './shops';
+import {mallLot, type MallLotFamily} from './lots'; // Task mall-playtest-revision-20261031 (lane GEN's lot families)
 
 // ---------------------------------------------------------------------------------------------
 // Frame of one unit: u along the frontage (0 at the x0 / z0 end), v depth from the frontage into the unit.
@@ -126,11 +129,15 @@ const snapUp = (v: number) => Math.ceil(v / CELL - 1e-6) * CELL;
 const snapDn = (v: number) => Math.floor(v / CELL + 1e-6) * CELL;
 /** Access strip (m) kept in front of a holder / display (customers stand there to reach it). */
 const HOLDER_FRONT = 0.8;
+/** Task mall-playtest-revision-20261031 (lane SHOPS, D02): lattice spots tried per island the coarse grid could not place. */
+const ISLAND_FILL_TRIES = 40;
 
 type KindV = readonly [PropKind, number];
 
 export class ShopDresser {
   readonly placed: PropPlacement[] = [];
+  /** Task mall-playtest-revision-20261031 (lane SHOPS, D02): the unit's lot family (gen/mall/lots.ts; inferred for lot-less units). */
+  lot?: MallLotFamily;
   constructor(readonly layout: StationLayout, readonly ctx: PlaceCtx, readonly fr: ShopFrame, readonly rng: Rng) {}
   get W(): number { return this.fr.W; }
   get D(): number { return this.fr.D; }
@@ -197,6 +204,19 @@ export class ShopDresser {
       for (const [du, dv] of [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25], [0.5, 0.25], [-0.5, -0.25]]) {
         const p = this.put(kind, Math.round((u + du) * 4) / 4, Math.round((v + dv) * 4) / 4, rot, {ring, variant: o.variant});
         if (p) { out.push(p); break; }
+      }
+    }
+    // Task mall-playtest-revision-20261031 (lane SHOPS, D02 "dense with props"): the coarse grid above misses free floor between the
+    // pieces already placed (a corner unit's second entry, a focal display, wall runs): a seeded pass over a 0.5 m lattice of the zone
+    // fills the rest of the requested count (bounded: ISLAND_FILL_TRIES per missing island)
+    if (out.length < n) {
+      const lattice: [number, number][] = [];
+      for (let v = zone.v0; v <= zone.v1 + 1e-6; v += 0.5) for (let u = zone.u0; u <= zone.u1 + 1e-6; u += 0.5) lattice.push([Math.round(u * 4) / 4, Math.round(v * 4) / 4]);
+      let tries = (n - out.length) * ISLAND_FILL_TRIES;
+      for (const [u, v] of this.rng.shuffle(lattice)) {
+        if (out.length >= n || tries-- <= 0) break;
+        const p = this.put(kind, u, v, rot, {ring, variant: o.variant});
+        if (p) out.push(p);
       }
     }
     return out;
@@ -396,6 +416,8 @@ const per = (d: ShopDresser, m2: number, lo: number, hi: number) => Math.max(lo,
  */
 function cashWrap(d: ShopDresser, kinds: readonly KindV[], n: number, v = 2.0, back = true): PropPlacement[] {
   const {W, fr} = d;
+  // Task mall-playtest-revision-20261031 (lane SHOPS, D02): a narrow deep boutique has its till at the far end (lots.ts layout intent)
+  if (d.lot?.shape === 'narrow-deep' && d.D >= 8) { v = Math.max(v, d.D - 2.6); back = false; }
   const entryMid = (fr.entry[0] + fr.entry[1]) / 2;
   const leftSide = entryMid > W / 2; // entry on the right half -> wrap on the left
   const len = kinds.slice(0, n).reduce((s, [k]) => s + slot(PROP_DEFS[k].w), 0) || slot(PROP_DEFS.shopCounter.w) * n;
@@ -440,6 +462,44 @@ function windowDisplay(d: ShopDresser, kind: PropKind, n: number): number {
   const spots = [0.9, W - 0.9, 2.1, W - 2.1].filter(u => u < fr.entry[0] - 0.6 || u > fr.entry[1] + 0.6);
   for (const u of spots) { if (k >= n) break; if (d.put(kind, u, 1.35, fr.face)) k++; }
   return k;
+}
+
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, D02 — "the stores ... a bit more character, a bit more love"): each program's FOCAL
+ * merchandising piece on the entry axis just behind the entry keep-out, facing the walkway — the first thing seen through the door:
+ * the gun shop's first display bench, a mannequin pair in the clothing / department store, the outfitter's pitched tent, the toy shop's
+ * giant teddy, a TV table in electronics, a new-releases table in the bookshop … An END unit (lots.ts 'end') puts it on the corridor
+ * axis further in. Skipped when it does not fit (never forced).
+ */
+const FOCAL: Partial<Record<MallRecipe, readonly KindV[]>> = {
+  guns: [['gunDisplay', 0]], clothing: [['mannequinFull', 0], ['mannequinFull', 1]], department: [['mannequinFull', 0], ['mannequinFull', 1]],
+  shoes: [['merchTable', 0]], sports: [['merchTable', 0]], outdoors: [['tentDisplay', 0]], electronics: [['merchTable', 0]], phone: [['techDisplay', 0]],
+  books: [['merchTable', 0]], toys: [['giantTeddy', 0]], home: [['merchTable', 0]], beauty: [['glassCounter', 0]], jewelry: [['glassCounter', 0]],
+  optical: [['glassCounter', 0]], music: [['merchTable', 0]], pet: [['catTree', 0]], luggage: [['rollingSuitcase', 0], ['rollingSuitcase', 1]],
+  florist: [['planterTree', 0]],
+};
+export const MALL_FOCAL = FOCAL;
+function focalDisplay(d: ShopDresser, f: MallShopFit): PropPlacement[] {
+  const kinds = FOCAL[f.recipe];
+  if (!kinds || f.kind === 'kiosk' || f.kind === 'food' || f.kind === 'service' || f.kind === 'vacant') return [];
+  const {fr, W, D} = d;
+  const end = d.lot?.shape === 'end';
+  const u0 = end ? W / 2 : (fr.entry[0] + fr.entry[1]) / 2;
+  const v0 = end ? Math.max(3.0, D * 0.4) : Math.min(Math.max(2.6, D * 0.3), Math.max(2.6, D - 2.4));
+  const out: PropPlacement[] = [];
+  const pair = kinds.length > 1;
+  for (const [k, [kind, variant]] of kinds.entries()) {
+    const du = pair ? (k ? 0.55 : -0.55) : 0;
+    for (const [eu, ev] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [1, 0], [-1, 0]]) {
+      const u = Math.round((u0 + du + eu) * 4) / 4, v = Math.round((v0 + ev) * 4) / 4;
+      if (u < 0.5 || u > W - 0.5) continue;
+      const p = d.put(kind, u, v, fr.face, {ring: pair ? 0.5 : 0.8, variant});
+      if (p) { out.push(p); break; }
+    }
+  }
+  // the electronics focal table carries a flat-screen set
+  for (const p of out) if (f.recipe === 'electronics' && p.kind === 'merchTable') d.onTop(p, 'flatScreenTv', 0);
+  return out;
 }
 
 const RECIPES: Record<MallRecipe, Recipe> = {
@@ -607,7 +667,10 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     // a deep unit (GEN's food ring: 10-12 m) is a counter-service restaurant: the counter part-way in, dining tables in front of it
     const deep = D >= 7;
     const V = deep ? Math.max(3.0, Math.min(D - 3.6, snapDn(D * 0.45))) : 1.0;
-    const run = d.counterRun(mods, V, gapR ? 0.2 : 1.2, gapR ? W - 1.2 : W - 0.2);
+    // (lane SHOPS, mall revision: a compact food stall — lots.ts 'counter' — keeps only a 0.8 m staff flap; its staff come in from
+    // the kitchen store at the back)
+    const gap = W < 7 ? 0.8 : 1.2;
+    const run = d.counterRun(mods, V, gapR ? 0.2 : gap, gapR ? W - gap : W - 0.2);
     const till = run.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
     if (deep) {
@@ -628,8 +691,17 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const {W, D} = d;
     const P = STORE_PURPOSES[(f.cuisine ?? 'coffee') as ShopUse];
     const gapR = d.rng.chance(0.5);
-    const counterV = Math.min(D - 2.6, Math.max(1.0, D * 0.55));
-    const run = d.counterRun([['shopCounter', 0], ['shopDisplay', 0], ['bakeryCase', 0]], counterV, gapR ? 0.2 : 1.2, gapR ? W - 1.2 : W - 0.2, {max: 3});
+    // (lane SHOPS, mall revision: a café in a food-court stall — lots.ts 'counter' — serves over a front counter, its seating is the
+    // common food court; a café in a shop unit keeps its counter part-way in with tables in front)
+    const stall = d.lot?.shape === 'counter' || f.kind === 'food';
+    const counterV = stall ? 1.0 : Math.min(D - 2.6, Math.max(1.0, D * 0.55));
+    // the seating floor between the entry keep-out (2 m) and the counter's customer strip (0.6 m): one row of bistro sets in a
+    // compact café, more in a deep one
+    const seatV1 = Math.max(snapUp(counterV) - 0.6, 2.2);
+    const gap = W < 7 ? 0.8 : 1.2;
+    const menu: readonly KindV[] = f.cuisine === 'bakery' || f.cuisine === 'donut' ? [['bakeryCase', 0], ['shopCounter', 0], ['bakeryCase', 0], ['shopDisplay', 0]]
+      : [['shopCounter', 0], ['shopDisplay', 0], ['bakeryCase', 0]];
+    const run = d.counterRun(menu, counterV, gapR ? 0.2 : gap, gapR ? W - gap : W - 0.2, {max: stall ? 4 : 3});
     const till = run.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
     // the grab-and-go open multideck (lane ASSETS M30) at the back corner when it fits, else the glass-door cooler
@@ -637,8 +709,8 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.backRow([...(P?.kitchen ?? [['espressoBar', 0]]) as readonly KindV[], ['shopBackbar', 0]], 0.2, W - (md ? 2.3 : 1.1));
     if (!md) d.backRow([['shopCooler', 0]], W - 1.0, W - 0.15, {max: 1});
     // café seating: bistro tables (lane ASSETS M31) with their chairs (M32), movable
-    if (!bistroSets(d, W * D >= 40 ? 3 : 2, {u0: 1.4, u1: W - 1.4, v0: 1.6, v1: counterV - 1.1})) {
-      d.islands('foodCourtTableSet', 1, {u0: 1.5, u1: W - 1.5, v0: 1.8, v1: counterV - 1.2}, {ring: 0.8});
+    if (!stall && !bistroSets(d, W * D >= 40 ? 3 : 2, {u0: 1.0, u1: W - 1.0, v0: 2.2, v1: seatV1})) {
+      d.islands('foodCourtTableSet', 1, {u0: 1.5, u1: W - 1.5, v0: 2.2, v1: seatV1}, {ring: 0.8});
     }
     d.againstWall('plasticStackChair', 1);
   },
@@ -772,7 +844,10 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.islands('foosballTable', 1, {u0: 2, u1: W - 2, v0: 3.2, v1: D - 2.4}, {ring: 0.9});
     if (W * D >= 70) d.islands('pingPongTable', 1, {u0: 2.2, u1: W - 2.2, v0: 3.4, v1: D - 2.6}, {ring: 1.0});
     d.islands('kiddieRide', 1, {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8});
-    d.againstWall('vending', 1, {front: 1.0});
+    // Task mall-playtest-revision-20261031 (lane SHOPS, U09): back to a REAL wall of the unit (placeKit.placeAgainstWall: strict in the
+    // mall — solid wall behind its width, approach + passing lane in front), never the frontage
+    const vm = placeAgainstWall(d.ctx, d.a, 'vending', {sides: [d.fr.L, d.fr.R, d.fr.back], front: 1.0, tries: 16});
+    if (vm) d.placed.push(vm);
   },
   luggage(d) {
     const {W, D} = d;
@@ -801,12 +876,14 @@ const RECIPES: Record<MallRecipe, Recipe> = {
   },
   kiosk(d) {
     const {W, D} = d;
-    if (W >= 3 && D >= 3.4) {
+    // (lane SHOPS, mall revision: a kiosk cell — lots.ts 'cell', 2.5-3.5 m deep — serves over a counter just behind its open front
+    // (the first metre is the frontage's door zone), the seller behind it; a back-wall rack where depth is left)
+    if (W >= 3 && D >= 2.5) {
       d.counterRun([['shopCounter', 0]], 1.0, Math.max(0.2, W / 2 - 1.0), Math.min(W - 0.2, W / 2 + 1.0), {max: 1});
       const till = d.placed.find(p => p.kind === 'shopCounter');
       if (till) d.onTop(till, 'cashRegister', 0.35);
     }
-    d.backRow([['stockShelf', sv('snacks')], ['wallBay', 0]], 0.2, W - 0.2, {max: 2});
+    if (D >= 3.2) d.backRow([['stockShelf', sv('snacks')], ['wallBay', 0]], 0.2, W - 0.2, {max: 2});
     d.againstWall('snackRack', 1, {walls: [d.fr.L, d.fr.R]});
   },
   security(d) {
@@ -920,9 +997,13 @@ export interface MallDressOpts {
   fronts?: boolean;
   /** Furnish the gallery commons (kiosk carts, food-hall seating: gen/mall/commons.ts; default true). */
   commons?: boolean;
+  /** Task mall-playtest-revision-20261031 (lane SHOPS, D06): the shops' ad records (gen/mall/ads.ts; default true; absolute frame only). */
+  ads?: boolean;
 }
 /** The last dressMallShops call's gallery-commons report (diagnostics / tests). */
 export const MALL_COMMONS_STATS: {last: CommonsReport | null} = {last: null};
+/** Task mall-playtest-revision-20261031 (lane SHOPS, D06): the last dressMallShops call's ad report. */
+export const MALL_ADS_STATS: {last: MallAdsReport | null} = {last: null};
 
 export interface ShopDressReport {
   shop: string;
@@ -969,11 +1050,23 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
     const frontStart = side === 'N' || side === 'S' ? Math.min(s.frontage.x0, s.frontage.x1) : Math.min(s.frontage.z0, s.frontage.z1);
     const fr = frameOf(a, side, fit.entry, frontStart);
     const d = new ShopDresser(layout, ctx, fr, srng);
+    d.lot = mallLot(s.lot ?? inferLot(s, s.salesArea || a.w * a.h * CELL * CELL));
     if (opts.fronts !== false) shopfront(layout, ctx, s, fit, fr);
     // the way in stays open: a 2 m deep keep-out behind the entry span (open counter fronts — food units, kiosks — serve over the
     // counter from the gallery: their door zone is enough; other open fronts keep a 3 m wide walk-in lane)
     if (fit.front === 'glazed') d.keep(fr.entry[0] - 0.25, fr.entry[1] + 0.25, 0, Math.min(2.0, fr.D * 0.4));
     else if (fit.kind !== 'kiosk' && !(fit.kind === 'food' && fr.D < 7)) d.keep(fr.W / 2 - 1.5, fr.W / 2 + 1.5, 0, Math.min(2.0, fr.D * 0.4));
+    // Task mall-playtest-revision-20261031 (lane SHOPS, D02): a corner unit's SECOND shopfront (MallShop.frontages[1]): its glazing /
+    // shutter and its own entry keep-out, before the recipe furnishes the floor
+    const f2 = s.frontages?.[1];
+    if (f2 && fit.entry2) {
+      const s2 = {...s, frontage: f2} as MallShop, side2 = frontageSide(a, s2);
+      const fr2 = frameOf(a, side2, fit.entry2, side2 === 'N' || side2 === 'S' ? Math.min(f2.x0, f2.x1) : Math.min(f2.z0, f2.z1));
+      if (opts.fronts !== false) shopfront(layout, ctx, s2, {...fit, entry: fit.entry2}, fr2);
+      if (fit.front === 'glazed') new ShopDresser(layout, ctx, fr2, srng).keep(fr2.entry[0] - 0.25, fr2.entry[1] + 0.25, 0, Math.min(2.0, fr2.D * 0.4));
+    }
+    // the program's FOCAL display on the entry axis, seen from the walkway (placed first: the recipe flows around it)
+    focalDisplay(d, fit);
     RECIPES[fit.recipe](d, fit);
     let backProps = 0;
     if (s.backroom !== undefined && layout.areas[s.backroom]) {
@@ -994,6 +1087,9 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
   // the gallery commons: a kiosk cart per ring, food-hall seating on the food-court ring (gen/mall/commons.ts)
   if (opts.commons !== false) MALL_COMMONS_STATS.last = dressMallCommons(layout, ctxOf, rng.fork('commons'));
   if (opts.frame === 'absolute') liftPlaced(layout, first);
+  // Task mall-playtest-revision-20261031 (lane SHOPS, D06): the shops' ad / fashion-merchandising records (gen/mall/ads.ts) — read the
+  // final absolute prop heights, so only in the absolute frame (the generator's)
+  if (opts.ads !== false && opts.frame === 'absolute') MALL_ADS_STATS.last = placeMallAds(layout, rng.fork('ads'));
   return reports;
 }
 

@@ -1,57 +1,89 @@
-// Task track3-eaton-centre-20261031 (lane SHOPS): THE MALL WEAPON PLAN — real guns + matching-calibre ammo in The Eaton's Center's gun
-// shop(s). Pure data, deterministic. An EXPLICIT EXCEPTION to the loot tables (like gen/weaponFinds.ts / gen/office/spawns.ts officeWeaponPlan,
+// Task track3-eaton-centre-20261031 (lane SHOPS): THE MALL WEAPON PLAN — real guns + matching-calibre ammo in the mall's gun shop(s).
+// Pure data, deterministic. An EXPLICIT EXCEPTION to the loot tables (like gen/weaponFinds.ts / gen/office/spawns.ts officeWeaponPlan,
 // docs/loot-tables.md "Explicit exceptions"): weapon finds are layout pickups, never holder rolls.
 //
-// User (track 3): "you go to like the gun shop and there's guns right". Coordination brief §3: "Gun shops must contain finite
-// accessible real weapon find(s) and matching ammo, not just signs or rolls that fail fit. Multiple duplicate gun shops cannot farm
-// unlimited guaranteed weapons: bounded, once-per-logical-run sources with persistence."
-//
-//  - PLAN (mallWeaponPlan): ONE plan per logical mall run, from the level seed + the run's start weapon (stream
-//    `mall-weapons:<start>`): every real gun the player did NOT start with (pistol / shotgun / rifle) gets copies from the station's
-//    copy draw (gen/weaponFinds.ts FIND_COPY_THRESHOLDS: ~86 % one, ~14 % FIND_MAX_PER_WEAPON = 2) — but never 0: the mall's gun shop
-//    always stocks it. So the whole mall holds at most 2 of each non-start gun however many gun shops it has (a second gun shop
-//    shares the same plan: it gets a planned second copy or none — duplicates never multiply the finds).
-//  - WHERE (placeMallWeapons): copy 1 of every planned gun lies on a gun shop's DISPLAY BENCH (gen/mall/kinds.ts gunDisplay: a static,
-//    non-holder bench, so no loot lot competes for its top) with a box of its OWN calibre beside it (WEAPON_FIND_AMMO: 15 x 9 mm /
-//    6 x 12-gauge / 20 x 5.56); benches fill in order, then the gun shop's open floor near its counter. Second copies go to the
-//    second gun shop, else the outdoor outfitter, else the mall security office, else they are not placed (bounded, reported).
-//    Every spot is ACCESSIBLE: the bench's customer side / the floor cell is walkable and reachable from the shop's entry on its
-//    storey grid (distance field), and on the floor 1 m clear of other pickups.
-//  - FINITE + PERSISTED: ordinary layout pickups appended in plan order (run/memory.ts remembers taken layout pickup indices: taken stays
+// Task mall-playtest-revision-20261031 (lane SHOPS, U11 — user: "gun store didn't have a gun! I think it should have on average 1
+// gun"). The track-3 plan was ONE mall-wide quota (every gun the player did NOT start with, 1-2 copies: ~2.3 guns per mall), hosted
+// by the first gun shop; a second gun shop only got a planned SECOND copy (~14 % per gun), so it was usually empty, and copies could
+// land in the outfitter / security office instead. The plan also filtered the stock by the run's start weapon (stream
+// `mall-weapons:<start>`): physical shop stock depended on the player's loadout. Replaced by a PER-GUN-SHOP allocation:
+//  - STOCK (gunShopStock): every gun shop draws its OWN stock from (level seed, shop id) — stream `mall-gunshop:<shop id>`, independent
+//    per shop: 0 guns with p GUN_SHOP_STOCK.none (5 %), 1 with 90 %, 2 with 5 % => exactly 1.0 gun per gun shop in expectation,
+//    bounded (MAX_GUNS_PER_SHOP 2; P(empty) 5 %, documented). Which guns: GUN_SHOP_WEAPONS weights (pistol / shotgun / rifle), two
+//    different guns when it stocks two. At most MAX_STOCKED_GUN_SHOPS (2) gun shops per mall are stocked (the catalogue caps gun shops
+//    at 2 anyway), so a mall holds 0..4 shop guns, ~1.35 on average with the catalogue's ~35 % second gun shop.
+//  - LOADOUT-FREE: the start weapon, the inventory, a Travel arrival and earlier visits never enter the plan — the stock is a fact of
+//    the level seed (the start-weapon argument of placeMallWeapons is accepted and IGNORED). Runtime never filters layout pickups by
+//    the player's inventory either (game.ts buildSection spawns every layout pickup on a first visit: run/memory.ts pickupPlan; after
+//    that exactly the remembered loose items: taken stays taken).
+//  - WHERE (placeMallWeapons): each gun on one of ITS shop's display benches (gen/mall/kinds.ts gunDisplay: a static non-holder bench,
+//    no loot lot competes for its top; the bench's customer side reachable from the shop entry on its storey grid), lying along the
+//    bench (PickupPlacement.yaw) with ONE box of its own calibre beside it (WEAPON_FIND_AMMO); benches full -> the lower cradle shelf
+//    of the shop's gun rack (M14, its front reachable); else the shop floor near its counter (reported 'floor'); else not placed
+//    (reported `missed` — tests require none on the fixtures).
+//  - FINITE + PERSISTED: ordinary layout pickups appended in shop order (run/memory.ts remembers taken layout pickup indices: taken stays
 //    taken across revisits / saves; a New Game seed rolls a new plan). Nothing re-rolls.
-// Call after the dressing is final (absolute prop heights: after stationDress.dress() lifted the pre-dress), before gear placement.
+// Call after the dressing is final (absolute prop heights), before gear placement.
 
 import {Rng, hashString} from '../../core/rng';
 import {CELL, FLOOR, type Grid} from '../grid';
 import {PROP_DEFS, type PropPlacement} from '../props';
 import {levelGrid} from '../placeKit';
-import {FIND_COPY_THRESHOLDS, FIND_MAX_PER_WEAPON, WEAPON_FIND_AMMO, type StartWeaponId} from '../weaponFinds';
+import {WEAPON_FIND_AMMO, type StartWeaponId} from '../weaponFinds';
 import type {PickupPlacement, StationLayout} from '../stationTypes';
 import type {MallShop} from './mallTypes';
-import {GUN_DISPLAY_TOP} from './kinds';
+import {GUN_DISPLAY_TOP, GUN_RACK_SHELF_Y} from './kinds';
 import {shopFit} from './shops';
 import {frameOf, frontageSide, uvXZ} from './shopsDress';
 
 /** The real guns a mall gun shop can stock (the knife is melee, never a find). */
 export const MALL_FIND_WEAPONS = ['pistol', 'shotgun', 'rifle'] as const;
+/** Per-gun-shop stock draw r: r < none -> 0 guns, r < one -> 1 gun, else MAX_GUNS_PER_SHOP. E = 0.90 + 2 x 0.05 = 1.0. */
+export const GUN_SHOP_STOCK = {none: 0.05, one: 0.95} as const;
+export const MAX_GUNS_PER_SHOP = 2;
+/** Gun shops stocked per mall (sorted by shop id; the catalogue never makes more than 2). */
+export const MAX_STOCKED_GUN_SHOPS = 2;
+/** Which gun a shop stocks (weights; a second gun is drawn from the rest). */
+export const GUN_SHOP_WEAPONS: readonly (readonly [(typeof MALL_FIND_WEAPONS)[number], number])[] = [['pistol', 0.4], ['shotgun', 0.35], ['rifle', 0.25]];
+
+/** Exact per-gun-shop distribution of the number of guns (documentation / tests / the loot reference). */
+export function gunShopStockDistribution(): {guns: number; p: number}[] {
+  return [{guns: 0, p: GUN_SHOP_STOCK.none}, {guns: 1, p: GUN_SHOP_STOCK.one - GUN_SHOP_STOCK.none}, {guns: MAX_GUNS_PER_SHOP, p: 1 - GUN_SHOP_STOCK.one}];
+}
+/** One-line description of the plan (tools/pages/lootReference.ts reads it). */
+export const MALL_WEAPON_PLAN_SUMMARY = `Per gun shop (gen/mall/shopsWeapons.ts gunShopStock / placeMallWeapons): every gun shop draws its own stock from the level seed and its shop id (stream mall-gunshop:<shop id>, independent per shop): 0 guns ${GUN_SHOP_STOCK.none * 100} %, 1 gun ${Math.round((GUN_SHOP_STOCK.one - GUN_SHOP_STOCK.none) * 100)} %, ${MAX_GUNS_PER_SHOP} different guns ${Math.round((1 - GUN_SHOP_STOCK.one) * 100)} % (1.0 per gun shop on average; pistol / shotgun / rifle weights ${GUN_SHOP_WEAPONS.map(w => w[1]).join(' / ')}), at most ${MAX_STOCKED_GUN_SHOPS} gun shops stocked. Each gun lies on one of its shop's display benches (else its gun rack's cradle shelf, else its floor near the counter) with ONE box of its own calibre beside it. Independent of the start weapon, the inventory and Travel; layout pickups, so taken stays taken.`;
 
 export interface MallWeaponPlanEntry {
   weapon: string;
-  /** 0 = the gun shop's guaranteed copy, 1 = a planned second copy. */
+  /** The gun shop (MallShop.id) stocking it. */
+  shop: string;
+  /** 0 = the shop's first gun, 1 = its second. */
   copy: number;
 }
 
-/** The mall's weapon plan for one logical run (deterministic per level seed + start weapon). */
-export function mallWeaponPlan(levelSeed: number, start: StartWeaponId): MallWeaponPlanEntry[] {
-  const rng = new Rng(hashString(`mall-weapons:${start}`, levelSeed >>> 0));
-  const out: MallWeaponPlanEntry[] = [];
-  for (const w of MALL_FIND_WEAPONS) {
-    if (w === start) continue;
-    const r = rng.next();
-    const n = r < FIND_COPY_THRESHOLDS.one ? 1 : FIND_MAX_PER_WEAPON;
-    for (let k = 0; k < n; k++) out.push({weapon: w, copy: k});
+/** The stock of ONE gun shop: deterministic per (level seed, shop id), independent of every other shop and of the loadout. */
+export function gunShopStock(levelSeed: number, shopId: string): string[] {
+  const rng = new Rng(hashString(`mall-gunshop:${shopId}`, levelSeed >>> 0));
+  const r = rng.next();
+  const n = r < GUN_SHOP_STOCK.none ? 0 : r < GUN_SHOP_STOCK.one ? 1 : MAX_GUNS_PER_SHOP;
+  const out: string[] = [];
+  let pool = GUN_SHOP_WEAPONS.slice();
+  for (let k = 0; k < n && pool.length; k++) {
+    const w = rng.weighted(pool);
+    out.push(w);
+    pool = pool.filter(e => e[0] !== w);
   }
   return out;
+}
+
+/** The mall's gun shops (sorted by id) that get a stock draw. */
+export function stockedGunShops(shops: readonly MallShop[]): MallShop[] {
+  return shops.filter(s => (shopFit(s)?.program ?? s.program) === 'guns').sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, MAX_STOCKED_GUN_SHOPS);
+}
+
+/** The mall's weapon plan: every stocked gun shop's own stock, in shop order (deterministic per level seed; loadout-free). */
+export function mallWeaponPlan(levelSeed: number, shops: readonly MallShop[]): MallWeaponPlanEntry[] {
+  return stockedGunShops(shops).flatMap(s => gunShopStock(levelSeed, s.id).map((weapon, copy) => ({weapon, shop: s.id, copy})));
 }
 
 export interface MallWeaponFind {
@@ -60,37 +92,40 @@ export interface MallWeaponFind {
   shop: string;
   area: number;
   level: number;
-  on: 'display' | 'floor';
+  on: 'display' | 'rack' | 'floor';
   /** layout.pickups indices of the gun and its ammo box. */
   pickups: [number, number];
 }
 export interface MallWeaponReport {
   plan: MallWeaponPlanEntry[];
   finds: MallWeaponFind[];
-  /** Planned copies with no host shop / no accessible spot (bounded: simply not placed). */
+  /** Planned guns with no accessible spot in their shop (bounded: simply not placed). */
   missed: MallWeaponPlanEntry[];
+  /** Per stocked gun shop: what it drew and what was placed (QA / tests / lanes/SHOPS.done). */
+  shops: {shop: string; stock: string[]; placed: number}[];
 }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
-/** Places the plan's guns + matching ammo (see header). Appends to layout.pickups; returns what went where. */
-export function placeMallWeapons(layout: StationLayout, levelSeed: number, start: StartWeaponId): MallWeaponReport {
-  const plan = mallWeaponPlan(levelSeed, start);
-  const report: MallWeaponReport = {plan, finds: [], missed: []};
+/**
+ * Places every stocked gun shop's guns + matching ammo (see header). Appends to layout.pickups; returns what went where. `_start` is
+ * accepted for the old call sites and IGNORED: the shop stock never depends on the player's loadout.
+ */
+export function placeMallWeapons(layout: StationLayout, levelSeed: number, _start?: StartWeaponId): MallWeaponReport {
+  void _start;
   const mall = layout.mall;
-  if (!mall) { report.missed.push(...plan); return report; }
-  const byProgram = (p: string) => mall.shops.filter(s => shopFit(s)?.program === p || (p === 'security' && shopFit(s)?.recipe === 'security')).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const guns = byProgram('guns');
-  const second = [...guns.slice(1), ...byProgram('outdoors'), ...byProgram('security')];
-  const benchUsed = new Set<PropPlacement>();
-  for (const e of plan) {
-    const hosts = e.copy === 0 ? [...guns, ...byProgram('outdoors'), ...byProgram('security')] : second;
-    let done = false;
-    for (const s of hosts) {
-      const f = placeIn(layout, s, e, benchUsed);
-      if (f) { report.finds.push(f); done = true; break; }
+  const report: MallWeaponReport = {plan: [], finds: [], missed: [], shops: []};
+  if (!mall) return report;
+  report.plan = mallWeaponPlan(levelSeed, mall.shops);
+  const used = new Set<PropPlacement>();
+  for (const s of stockedGunShops(mall.shops)) {
+    const entries = report.plan.filter(e => e.shop === s.id);
+    let placed = 0;
+    for (const e of entries) {
+      const f = placeIn(layout, s, e, used);
+      if (f) { report.finds.push(f); placed++; } else report.missed.push(e);
     }
-    if (!done) report.missed.push(e);
+    report.shops.push({shop: s.id, stock: entries.map(e => e.weapon), placed});
   }
   return report;
 }
@@ -110,7 +145,11 @@ function entryCell(layout: StationLayout, s: MallShop, g: Grid): number {
   return -1;
 }
 
-function placeIn(layout: StationLayout, s: MallShop, e: MallWeaponPlanEntry, benchUsed: Set<PropPlacement>): MallWeaponFind | null {
+/** World point of a host-local (x, z) offset (prop frame: local x = (cos rot, -sin rot), local +z = (sin rot, cos rot)). */
+const local = (p: PropPlacement, lx: number, lz: number): [number, number] =>
+  [p.x + Math.cos(p.rot) * lx + Math.sin(p.rot) * lz, p.z - Math.sin(p.rot) * lx + Math.cos(p.rot) * lz];
+
+function placeIn(layout: StationLayout, s: MallShop, e: MallWeaponPlanEntry, used: Set<PropPlacement>): MallWeaponFind | null {
   const a = layout.areas[s.area];
   if (!a) return null;
   const level = a.level ?? 0;
@@ -121,19 +160,27 @@ function placeIn(layout: StationLayout, s: MallShop, e: MallWeaponPlanEntry, ben
   const reach = (x: number, z: number) => { const [cx, cy] = g.cellOf(x, z); return g.inBounds(cx, cy) && dist[g.idx(cx, cy)] >= 0; };
   const [ammo, cnt] = WEAPON_FIND_AMMO[e.weapon] ?? ['ammo_9mm', 15];
   const push = (p: PickupPlacement): number => { layout.pickups.push(p); return layout.pickups.length - 1; };
+  const lv = level ? {level} : {};
+  // a gun + its box on a host top at prop-relative height `top`: the gun along the host's long axis (yaw = host rot) left of centre
+  const onHost = (h: PropPlacement, top: number, gx: number, ax: number, lz: number, on: 'display' | 'rack'): MallWeaponFind => {
+    used.add(h);
+    const y = r3(h.y + top), [gxw, gzw] = local(h, gx, lz), [axw, azw] = local(h, ax, lz);
+    const gi = push({itemId: e.weapon, count: 1, x: r3(gxw), y, z: r3(gzw), area: a.id, yaw: r3(h.rot), ...lv});
+    const ai = push({itemId: ammo, count: cnt, x: r3(axw), y, z: r3(azw), area: a.id, yaw: r3(h.rot), ...lv});
+    return {weapon: e.weapon, copy: e.copy, shop: s.id, area: a.id, level, on, pickups: [gi, ai]};
+  };
+  const front = (h: PropPlacement, d: number) => local(h, 0, d / 2 + 0.75);
   // 1. a display bench of this shop (its customer side reachable)
-  for (const b of layout.props.filter(p => p.kind === 'gunDisplay' && p.area === s.area && !benchUsed.has(p))) {
-    const fx = Math.sin(b.rot), fz = Math.cos(b.rot), d = PROP_DEFS.gunDisplay.d;
-    // the cell row just outside the bench's footprint on its customer (front) side
-    if (!reach(b.x + fx * (d / 2 + 0.75), b.z + fz * (d / 2 + 0.75))) continue;
-    // local x of the bench: (cos rot, -sin rot); the gun left of centre, its ammo box at the right end
-    const lx = Math.cos(b.rot), lz = -Math.sin(b.rot), y = r3(b.y + GUN_DISPLAY_TOP);
-    benchUsed.add(b);
-    const gi = push({itemId: e.weapon, count: 1, x: r3(b.x - lx * 0.15), y, z: r3(b.z - lz * 0.15), area: a.id, ...(level ? {level} : {})});
-    const ai = push({itemId: ammo, count: cnt, x: r3(b.x + lx * 0.52), y, z: r3(b.z + lz * 0.52), area: a.id, ...(level ? {level} : {})});
-    return {weapon: e.weapon, copy: e.copy, shop: s.id, area: a.id, level, on: 'display', pickups: [gi, ai]};
+  for (const b of layout.props.filter(p => p.kind === 'gunDisplay' && p.area === s.area && !used.has(p))) {
+    if (!reach(...front(b, PROP_DEFS.gunDisplay.d))) continue;
+    return onHost(b, GUN_DISPLAY_TOP, -0.15, 0.52, 0, 'display');
   }
-  // 2. the shop's open floor: a reachable cell with a clear 1-cell ring, 1.2 m from other pickups, nearest the shop's counters
+  // 2. the lower cradle shelf of one of its gun racks (M14; its front reachable: the staff zone behind the counter has a gap)
+  for (const r of layout.props.filter(p => p.kind === 'gunRack' && p.area === s.area && !used.has(p))) {
+    if (!reach(...front(r, PROP_DEFS.gunRack.d))) continue;
+    return onHost(r, GUN_RACK_SHELF_Y, -0.35, 0.65, 0.02, 'rack');
+  }
+  // 3. the shop's open floor: a reachable cell with a clear 1-cell ring, 1.2 m from other pickups, nearest the shop's counters
   const counters = layout.props.filter(p => p.area === s.area && (p.kind === 'glassCounter' || p.kind === 'shopCounter'));
   const cells: [number, number][] = [];
   for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
@@ -152,8 +199,8 @@ function placeIn(layout: StationLayout, s: MallShop, e: MallWeaponPlanEntry, ben
   const i = cells[0][0];
   const [x, z] = g.center(i % g.w, (i / g.w) | 0);
   const fy = g.floorOf(i);
-  const gi = push({itemId: e.weapon, count: 1, x: r3(x), y: r3(fy), z: r3(z), area: a.id, ...(level ? {level} : {})});
-  const ai = push({itemId: ammo, count: cnt, x: r3(x + 0.45), y: r3(fy), z: r3(z), area: a.id, ...(level ? {level} : {})});
+  const gi = push({itemId: e.weapon, count: 1, x: r3(x), y: r3(fy), z: r3(z), area: a.id, ...lv});
+  const ai = push({itemId: ammo, count: cnt, x: r3(x + 0.45), y: r3(fy), z: r3(z), area: a.id, ...lv});
   return {weapon: e.weapon, copy: e.copy, shop: s.id, area: a.id, level, on: 'floor', pickups: [gi, ai]};
 }
 

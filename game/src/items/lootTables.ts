@@ -833,6 +833,11 @@ export interface LootTables {
   rewardFinds?: Readonly<Record<string, RewardFind>>;
   /** Task track3-eaton-centre-20261031 (lane PROFILES): crafting-material salvage per place (SalvageTables; absent = none). */
   salvage?: SalvageTables;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS, U10): per-COMPARTMENT storage fill by holder kind (StorageFill; absent = none:
+   * every Subway / Office table, so their rolls stay byte-identical — tests/loot-golden.test.ts).
+   */
+  storageFill?: Readonly<Partial<Record<string, StorageFill>>>;
 }
 export const BASE_TABLES: LootTables = {
   areaWeights: AREA_WEIGHTS, holderMod: HOLDER_MOD, holderEmpty: HOLDER_EMPTY, holderLots: HOLDER_LOTS, fullRooms: FULL_ROOMS,
@@ -943,8 +948,70 @@ export const MALL_SALVAGE: SalvageTables = {
     personal: {rows: MALL_STOCKROOM_SALVAGE, share: 0.08},
   },
 };
-/** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall). */
-export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE};
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U10 — user: "a lot of drawers and cupboards are openable however I'm not seeing
+ * much loot in them ... just make sure we put loot inside the drawers and cupboards"): STORAGE FILL — a per-compartment roll for the
+ * closed storage of a level (LootTables.storageFill, by holder kind).
+ *
+ * Why: a storage holder rolls ONE table roll for the whole unit (own empty 0.3-0.55, 1-3 lots), the iteration-12 scarcity cut keeps
+ * ~1 in 5 non-ammo entries (1 in 16 in the 'service'-themed mall stock rooms) and the survivors spread over EVERY surface of the unit
+ * — exposed tops / shelves included. Measured on the dressed synthetic mall (2 seeds, mall profile): ~5 % of compartments held
+ * anything (cash-wrap counter 3 of 84, medicine cabinet 2 of 350, bookcase drawers 2 of 88, totes 19 of 121, carton flaps 19 of 196,
+ * kitchenette cupboards 1 of 72, desk drawers 1 of 48), although every placed lot was visible and takeable once opened.
+ *
+ * What: AFTER the holder's own roll (its lots, streams and placements unchanged), every compartment it left EMPTY rolls once on its
+ * own stream `loot:<kind>:<index>:fill<part>` (a one-door / one-lid holder is one compartment): with probability `chance` x
+ * min(1, compartment loot area / `area`) — so a 6 cm wide pill drawer is far less likely than a cupboard — it gets U{lots} lots drawn
+ * from the holder's RESOLVED rows (its own / purpose table: container- or purpose-themed, incl. the place's salvage rows) restricted to
+ * `cats` and HOLDER_ALLOW and re-weighted by category (`weights`), packed on that compartment's own surfaces only (an item that fits
+ * nowhere is dropped). Defaults (STORAGE_FILL_CATS / STORAGE_FILL_WEIGHTS): the shop's own stock — food and drink at 0.35 of their row
+ * weight (lane PROFILES' guard: mall consumables per 100 m² stay < 2.5x the Office's), torch cells, flares and the place's salvage
+ * (crafting materials: the mall's signature resource, only where its rows carry them); dressings only in first-aid / medical storage
+ * (MED_FILL), food in food storage (FOOD_FILL), ammo only by the deliberate arms rule. Finite, seeded once with the level, remembered
+ * by lot id like every holder lot (never re-rolled on open / close / revisit). Not every drawer holds something: these are the
+ * intentional empty odds.
+ */
+export interface StorageFill {
+  /** Chance an empty compartment gets lots (full-size compartment). */
+  chance: number;
+  /** Loot area (m², its surfaces summed) at and above which the full chance applies; smaller compartments scale linearly. */
+  area: number;
+  /** Lots per filled compartment. */
+  lots: LotRange;
+  /** Economy categories the fill draws (default STORAGE_FILL_CATS). */
+  cats?: readonly EconCat[];
+  /** Row-weight multipliers by category (absent category: 1; default STORAGE_FILL_WEIGHTS when `cats` is absent too). */
+  weights?: Readonly<Partial<Record<EconCat, number>>>;
+}
+/**
+ * What a storage fill draws by default: the shop's stock (food / drink weighed down), torch cells, flares and the place's salvage — no
+ * dressings (first-aid storage only: MED_FILL) and no ammo (the arms rule only).
+ */
+export const STORAGE_FILL_CATS: readonly EconCat[] = ['food', 'drink', 'battery', 'flare', 'material'];
+export const STORAGE_FILL_WEIGHTS: Readonly<Partial<Record<EconCat, number>>> = {food: 0.35, drink: 0.35};
+const MED_FILL = {cats: ['med', 'drink'], weights: {drink: 0.5}} as const;
+const FOOD_FILL = {cats: ['food', 'drink'], weights: {}} as const;
+const ARMS_FILL = {cats: ['ammo', 'flare', 'battery'], weights: {}} as const;
+const fillRule = (chance: number, area = 0.12, lots: LotRange = [1, 1], o?: {cats: readonly EconCat[]; weights: Readonly<Partial<Record<EconCat, number>>>}): StorageFill =>
+  ({chance, area, lots, ...(o ? {cats: o.cats, weights: o.weights} : {})});
+/**
+ * The mall's storage fill (lane SHOPS, U10): drawers / cupboards / cabinets a shop or its stock room is fitted with (the mall's own
+ * storage + the station / office storage reused in its back rooms). Drawers and cupboards lead; the numerous stock-room totes /
+ * cartons and the bookcases' drawers are lighter; the gun safe tops up with ammo by the deliberate arms rule; crates, bins, coolers,
+ * old / vault safes (already themed ammo / medicine stores) and open holders are unchanged. Measured effect on the dressed synthetic mall: see lanes/SHOPS.done (U10).
+ */
+export const MALL_STORAGE_FILL: Readonly<Partial<Record<string, StorageFill>>> = {
+  // the mall's own storage (lane ASSETS models; the medicine cabinet's 33 pill drawers (0.04 m²) each 10 %, its cupboard / door bay too)
+  mallCashwrapCounter: fillRule(0.22), pharmacyDispensaryCounter: fillRule(0.22, 0.12, [1, 1], MED_FILL), medicineDrawerCabinet: fillRule(0.1, 0.04, [1, 1], MED_FILL), dresserDrawers: fillRule(0.25),
+  glassDisplayCabinet: fillRule(0.18, 0.3), mallKioskCart: fillRule(0.25, 0.2), bookstoreBookcase: fillRule(0.15), storageTote: fillRule(0.18), cardboardBoxFlaps: fillRule(0.18),
+  gunSafeTall: fillRule(0.4, 0.1, [1, 1], ARMS_FILL),
+  // station / office storage in the mall's back rooms, offices, clinic and food units
+  cabinetTall: fillRule(0.18), cabinetLow: fillRule(0.18), staffLockers: fillRule(0.12, 0.1), kitchenette: fillRule(0.12, 0.2, [1, 1], FOOD_FILL), desk: fillRule(0.12), monitorDesk: fillRule(0.12),
+  filingCabinet: fillRule(0.12), officeFiling: fillRule(0.12), chestFreezer: fillRule(0.12, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.15, 0.12, [1, 1], MED_FILL),
+  labBench: fillRule(0.06, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.2, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.12, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.06),
+};
+/** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall) + (lane SHOPS, U10) its storage fill. */
+export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL};
 /**
  * The mall's per-level overrides — the tuning dial on top of MALL_SALVAGE (docs/loot-tables.md "The Eaton's Center"):
  *  - categoryWeight.material 0.6: every material row of the mall's tables (the salvage rows included) weighs 0.6x — measured with
@@ -1223,6 +1290,17 @@ export function validateLootProfile(p: LootProfile): string[] {
       for (const [k, r] of Object.entries(sv.purposes ?? {})) rule(`tables.salvage.purposes.${k}`, r);
       for (const [k, r] of Object.entries(sv.themes ?? {})) { if (!(k in THEME_ECONOMY)) bad(`tables.salvage.themes.${k}`, 'unknown loot theme'); rule(`tables.salvage.themes.${k}`, r as SalvageRule); }
     }
+  }
+  // Task mall-playtest-revision-20261031 (lane SHOPS, U10): storage fill (holder kinds are checked by tests/mall-storage-loot.test.ts)
+  for (const [k, f] of Object.entries(t.storageFill ?? {})) {
+    const path = `tables.storageFill.${k}`;
+    if (!f || typeof f !== 'object') { bad(path, 'not a storage fill'); continue; }
+    known(path, f, ['chance', 'area', 'lots', 'cats', 'weights']);
+    chance(`${path}.chance`, f.chance);
+    if (!(typeof f.area === 'number' && f.area > 0)) bad(`${path}.area`, `${String(f.area)} is not > 0`);
+    range(`${path}.lots`, f.lots);
+    for (const c of f.cats ?? []) if (!isCat(c)) bad(`${path}.cats`, `unknown economy category ${c}`);
+    mults(`${path}.weights`, f.weights, isCat, 'economy category');
   }
   weight('tables.gear.mean', t.gear.mean);
   if (!Number.isInteger(t.gear.cap) || t.gear.cap < 0) bad('tables.gear.cap', `${t.gear.cap} is not an integer >= 0`);

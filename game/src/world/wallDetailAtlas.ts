@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import {Painter, mixHex, type SurfaceSet} from './canvasTextures';
+import {requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
 
 export type AtlasId = 'detail' | 'soft';
 type Pt = [number, number];
@@ -456,6 +457,8 @@ export function wallDetailTextures(): WallDetailTextures {
   // Anisotropic filtering only where it shows (the colour map); roughness / normal / soft stains are
   // low-frequency (cheaper sampling, notably on software rasterizers such as llvmpipe).
   for (const t of [detail.map, detail.roughnessMap, detail.normalMap, soft]) if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = t === detail.map ? 4 : 1; }
+  // lane FIX (U08): the wall-treatment colour map is a wall surface map: 16x requested (was 4x; the low-frequency maps keep 1x)
+  if (detail.map) requestSurfaceAnisotropy(detail.map, 'wall');
   const mip = 4 / 3;
   const bytes = Math.round((DW * DH * 4 + (DW / 2) * (DH / 2) * 4 * 2 + SW * SH * 4) * mip);
   textures = {detail, soft, bytes};
@@ -519,6 +522,7 @@ export function friezeTexture(name: string, accent: string): THREE.CanvasTexture
   t = p.finish([1, 1]).map as THREE.CanvasTexture;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   t.anisotropy = 4;
+  requestSurfaceAnisotropy(t, 'wall'); // lane FIX (U08): wall mosaic frieze, 16x requested
   friezes.set(key, t);
   return t;
 }

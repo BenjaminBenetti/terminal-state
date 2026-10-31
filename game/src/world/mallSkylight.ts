@@ -230,28 +230,42 @@ export function bakeSkylight(t: SkyTarget, spec: SkySpec): SkyStats {
   return stats;
 }
 
-/** The glazed cells (roof outline) of a grid W x H with cell size `cell`. */
-export function glazedMask(W: number, H: number, cell: number, outline: {x0: number; z0: number; x1: number; z1: number}): Uint8Array {
+/**
+ * The glazed cells of a grid W x H with cell size `cell`: inside the roof outline (bounds) and, when given (task
+ * mall-playtest-revision, MallRoof.polygon = the top atrium opening), inside that polygon — glass only over the atrium.
+ */
+export function glazedMask(W: number, H: number, cell: number, outline: {x0: number; z0: number; x1: number; z1: number}, polygon?: readonly {x: number; z: number}[]): Uint8Array {
   const m = new Uint8Array(W * H);
+  const poly = polygon && polygon.length >= 3 ? polygon : null;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const px = (x + 0.5) * cell, pz = (y + 0.5) * cell;
-    if (px >= outline.x0 && px <= outline.x1 && pz >= outline.z0 && pz <= outline.z1) m[y * W + x] = 1;
+    if (px >= outline.x0 && px <= outline.x1 && pz >= outline.z0 && pz <= outline.z1 && (!poly || insidePoly(poly, px, pz))) m[y * W + x] = 1;
   }
   return m;
+}
+
+/** Even-odd point-in-polygon (x / z). */
+function insidePoly(poly: readonly {x: number; z: number}[], x: number, z: number): boolean {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c;
+  }
+  return c;
 }
 
 /**
  * The FieldSource hook of a mall layout (spread into bakeLightField's source: world/lights.ts); {} for any other layout, so the
  * Subway and the Office bake exactly as before.
  */
-export function mallSkyField(layout: {mall?: {roof: {springY: number; outline: {x0: number; z0: number; x1: number; z1: number}}}}, cell: number):
+export function mallSkyField(layout: {mall?: {roof: {springY: number; outline: {x0: number; z0: number; x1: number; z1: number}; polygon?: readonly {x: number; z: number}[]}}}, cell: number):
   {extraDirect?: (ctx: {W: number; H: number; geos: readonly SkySlot[]; layers: readonly number[]; E: Float32Array[]; D: Float32Array[]; EL: Float32Array[];
     bands: SkyBands | null}) => Record<string, number>} {
   const roof = layout.mall?.roof;
   if (!roof) return {};
   return {
     extraDirect: ctx => {
-      const glazed = glazedMask(ctx.W, ctx.H, cell, roof.outline);
+      const glazed = glazedMask(ctx.W, ctx.H, cell, roof.outline, roof.polygon);
       const bands = ctx.bands ?? skyBandsOf(ctx.geos, ctx.W * ctx.H);
       const st = bakeSkylight({W: ctx.W, H: ctx.H, cell, slots: ctx.geos, layers: ctx.layers, E: ctx.E, D: ctx.D, EL: ctx.EL, bands}, {roofY: roof.springY, glazed});
       lastSkyStats = st;

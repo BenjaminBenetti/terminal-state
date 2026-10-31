@@ -24,8 +24,8 @@
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
-import {abs, cameraPosition, clamp, dot, float, floor, fract, max, min, mix, normalWorld, normalize, positionLocal, positionWorld, smoothstep, step, uv, vec2, vec3} from 'three/tsl';
-import {CELL, FLOOR, VOID, rampHeight} from '../gen/grid';
+import {abs, cameraPosition, clamp, dot, float, floor, fract, max, min, mix, normalWorld, normalize, positionWorld, smoothstep, step, uv, vec2, vec3} from 'three/tsl';
+import {CELL, FLOOR, SOLID, VOID, rampHeight} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/stationTypes';
 import type {MallInfo, MallProgram, MallShop} from '../gen/mall/mallTypes';
@@ -41,6 +41,10 @@ import {
 } from './mallFinishes';
 import {MALL_FINISH_ATTR, MALL_SPAN, ceilRow, floorRow, mallSurfaceMaterial, wallRow, writeRow, MALL_TABLE_ROWS} from './mallSurfaces';
 import {mallTowerRecord} from '../gen/mall/elevator'; // the glass elevator's door side (lane GEN derives it; never re-derived here)
+import {cutOfficeShaftDoors} from './officeProps'; // task mall-playtest-revision (U07): the same landing-doorway cut as the Office
+import {GLASS_RIG} from './elevator';
+import {MALL_EXT_ORDER, buildMallExteriorGas, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
+import {adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,7 +90,8 @@ function roofGlass(): MeshBasicNodeMaterial {
   const grime = smoothstep(0.55, 0.95, r).mul(0.32);
   const v = normalize(cameraPosition.sub(positionWorld) as AnyNode);
   const fres = float(1).sub(abs(dot(normalize(normalWorld as AnyNode), v))).pow(3);
-  const pane = mix(vec3(0.62, 0.7, 0.66), vec3(0.4, 0.4, 0.34), grime.mul(2.2));
+  // (task mall-playtest-revision U02: tinted toward the toxic murk outside — it is lit by the green gas, not a clean sky)
+  const pane = mix(vec3(0.5, 0.6, 0.5), vec3(0.36, 0.36, 0.28), grime.mul(2.2));
   m.colorNode = mix(pane, vec3(0.78, 0.8, 0.78), bar);
   m.opacityNode = clamp(max(bar.mul(0.96), float(0.12).add(grime).add(fres.mul(0.3)).mul(float(1).sub(broken))), 0, 1);
   m.userData.mallGlass = 'roof';
@@ -108,17 +113,6 @@ function railGlass(): MeshBasicNodeMaterial {
   return m;
 }
 
-/** Overcast sky seen through the vault: an unlit green-grey dome (the outside murk, gen/office DAYLIGHT lore), no fog. */
-function skyMaterial(): MeshBasicNodeMaterial {
-  const m = new MeshBasicNodeMaterial({side: THREE.BackSide, fog: false, depthWrite: false});
-  m.name = 'mall-sky';
-  const d = normalize(positionLocal as AnyNode) as AnyNode;
-  const t = clamp(d.y, 0, 1);
-  const n = wmHash(vec3(floor(d.x.mul(9)), floor(d.z.mul(9)), 3)) as AnyNode;
-  m.colorNode = mix(vec3(0.36, 0.42, 0.37), vec3(0.6, 0.65, 0.6), t.pow(0.6)).mul(n.mul(0.06).add(0.97));
-  return m;
-}
-
 /** The mall's dressing materials (shared per WorldMaterials; every one in the scene before the warm-up). */
 export function mallDressMaterials(mats: WorldMaterials): MallDressMaterials {
   let d = dressCache.get(mats);
@@ -133,7 +127,7 @@ export function mallDressMaterials(mats: WorldMaterials): MallDressMaterials {
     columnRender: named(surfaceMaterial('paintedPanel', {color: 0xeeece6, roughness: 1}, {grime: [0.35, 0.9], macro: 0.08}), 'mall-column-render'),
     columnTile: named(surfaceMaterial('shopTile', {color: 0x3a3c40, roughness: 1}, {grime: [0.2, 0.5], macro: 0.12}), 'mall-column-tile'),
     membrane: named(surfaceMaterial('paintedPanel', {color: 0x4a4b48, roughness: 1}, {macro: 0.2}), 'mall-roof-deck'),
-    sky: skyMaterial(),
+    sky: mallSkyMaterial(), // task mall-playtest-revision (U02): the Office's exterior murk (world/mallExterior.ts)
     can: named(surfaceMaterial('paintedPanel', {color: 0xdedcd6, roughness: 1}, {macro: 0.05}), 'mall-downlight-can'),
     trimLight: named(thinTrim(surfaceMaterial('paintedPanel', {color: 0xd8d6d0, roughness: 1}, {grime: [0.2, 0.4], macro: 0.1})), 'mall-trim-light'),
     trimDark: named(thinTrim(surfaceMaterial('paintedSteel', {color: 0x2e3032, metalness: 0.3}, {grime: [0.2, 0.4], macro: 0.1})), 'mall-trim-dark'),
@@ -381,9 +375,14 @@ function levelLabelTexture(label: string, ring: number): THREE.CanvasTexture {
   });
 }
 
-/** Hanging banner (vertical, torn foot: alpha cut-out): the mall's name or a faded event. */
-function bannerTexture(i: number): THREE.CanvasTexture {
-  const texts = ["THE EATON'S CENTER", 'SPRING · SALE', 'SIX LEVELS · 200 SHOPS', 'OPEN LATE', "THE EATON'S CENTER", 'GRAND REOPENING'];
+/**
+ * Hanging banner (vertical, torn foot: alpha cut-out): the mall's name or a faded event. Task mall-playtest-revision (U01 render):
+ * the name is the layout's seeded "<Name> Center" (layout.mall.name), the counts the real ones — never a literal.
+ */
+function bannerTexture(i: number, name: string, floors: number, shops: number): THREE.CanvasTexture {
+  const words = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
+  const nm = name.toUpperCase();
+  const texts = [nm, 'SPRING · SALE', `${words[floors] ?? floors} LEVELS · ${shops} SHOPS`, 'OPEN LATE', nm, 'GRAND REOPENING'];
   const cols = [['#8a1f24', '#f2e8d8'], ['#1f3a5a', '#f2e8d8'], ['#2e4a32', '#efe4c8'], ['#3a2a4a', '#f0e2f2']];
   const [bg, fg] = cols[i % cols.length];
   return canvasTexture(256, 1024, 9300 + i, (ctx, w, h, rnd) => {
@@ -426,6 +425,12 @@ export interface AtriumStats {
   glazing: number; shutters: number; partialShutters: number;
   /** Landmarks drawn (gen/mall/landmarks.ts): fountains and directory pylons. */
   fountains: number; pylons: number;
+  /** Task mall-playtest-revision (U02): exterior gas layers drawn over / round the glass roof. */
+  exteriorGas: number;
+  /** Flat glazing (m²) over the part of the top opening outside the vault. */
+  flatGlazingM2: number;
+  /** D06: ad faces drawn (lane SHOPS' records / ARCH's gallery billboards). */
+  shopAds: number; galleryAds: number;
   /** Build time of the atrium dressing (ms). */
   ms: number;
 }
@@ -441,6 +446,12 @@ export class MallArch {
    * The level culler's atrium tiles and the fascia / soffit finishes use it.
    */
   readonly atrium: Uint8Array;
+  /**
+   * Task mall-playtest-revision-20261031 (lane ARCH): per cell, 1 = under the glazed roof (inside MallRoof.polygon — the TOP
+   * atrium opening — else the roof outline): no ceiling there; a band rising to the roof there gets the slab-edge / roof-edge
+   * treatment whatever storey it belongs to (the openings widen upward: the jutting galleries of floors 1-2 are open to the glass).
+   */
+  readonly roofCell: Uint8Array;
   private readonly W: number;
   private readonly H: number;
   private readonly galleryAreas = new Set<number>();
@@ -452,8 +463,12 @@ export class MallArch {
   private readonly rows = new Map<string, number>();
   private nextRow = 0;
   private readonly floorCache = new Map<number, string | null>();
+  /** D06: gallery billboard candidate walls (collected by remapFaces). */
+  private readonly adWalls: AdWall[] = [];
+  /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
+  ads: MallAd[] = [];
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -473,13 +488,20 @@ export class MallArch {
     this.voidCol = new Uint8Array(n);
     const gf = this.gridOf(this.floorLevel);
     this.atrium = new Uint8Array(n);
-    const poly = info.void.outline, b = info.void.bounds;
+    this.roofCell = new Uint8Array(n);
+    // the atrium = the union of every storey's opening (task mall-playtest-revision: v2 openings are nested, widening upward, so
+    // the union is the top opening; v1 = the one outline): the level culler's atrium tiles join every band rising in it
+    const polys: {poly: readonly {x: number; z: number}[]; b: {x0: number; z0: number; x1: number; z1: number}}[] = [{poly: info.void.outline, b: info.void.bounds}];
+    for (const o of info.void.openings ?? []) if (o.outline.length >= 3) polys.push({poly: o.outline, b: o.bounds});
+    const rp = info.roof.polygon && info.roof.polygon.length >= 3 ? info.roof.polygon : null, ro = info.roof.outline;
+    if (rp) polys.push({poly: rp, b: ro});
     for (let i = 0; i < n; i++) {
+      const cx = i % this.W, cy = (i - cx) / this.W, x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
+      if (x >= ro.x0 - 0.01 && x <= ro.x1 + 0.01 && z >= ro.z0 - 0.01 && z <= ro.z1 + 0.01 && (!rp || pointInPoly(rp, x, z))) this.roofCell[i] = 1;
+      if (polys.some(({poly, b}) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && (poly.length < 3 || pointInPoly(poly, x, z)))) this.atrium[i] = 1;
       const c = gf.cells[i];
       if (c !== FLOOR && c !== VOID) continue;
       if (gf.rampIdx[i] < 0 && cellCeil(gf, i) >= spring - 0.5) this.voidCol[i] = 1;
-      const cx = i % this.W, cy = (i - cx) / this.W, x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
-      if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && (poly.length < 3 || pointInPoly(poly, x, z))) this.atrium[i] = 1;
     }
     // plaza courts: public, non-platform areas of the pit-bottom storey near the void (their own ring centre each)
     const vb = info.void.bounds, pad = 10;
@@ -571,13 +593,22 @@ export class MallArch {
     return `mall-wall${boh ? `-boh${tag}` : ''}|${this.row('w', this.finishOf(sp).wall)}`;
   }
 
-  /** Whether the open cell in front of a face (plane + normal * CELL / 2) is a void column. */
-  private frontIsVoid(f: FaceLike): boolean {
+  /**
+   * Whether the open cell in front of a face (plane + normal * CELL / 2) is a band rising to the glazed roof: the station's atrium
+   * column, or (task mall-playtest-revision: openings widening upward) a retail floor's jutting gallery open to the roof. Its faces
+   * are slab edges (white fascias) and, above the top floor, the roof-edge beam under the clerestory.
+   */
+  private bandFront(f: FaceLike): boolean {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
     const mx = alongX ? (f.x0 + f.x1) / 2 : f.x0 + f.nx * CELL / 2;
     const mz = alongX ? f.z0 + f.nz * CELL / 2 : (f.z0 + f.z1) / 2;
     const cx = Math.floor(mx / CELL), cy = Math.floor(mz / CELL);
-    return cx >= 0 && cy >= 0 && cx < this.W && cy < this.H && this.atrium[cy * this.W + cx] === 1;
+    if (cx < 0 || cy < 0 || cx >= this.W || cy >= this.H) return false;
+    const i = cy * this.W + cx;
+    if (!this.atrium[i] && !this.roofCell[i]) return false;
+    const g = this.gridOf(f.level), c = g.cells[i];
+    if (c !== FLOOR && c !== VOID) return false;
+    return cellCeil(g, i) >= this.info.roof.springY - 0.5;
   }
 
   /**
@@ -606,6 +637,21 @@ export class MallArch {
   }
   private glassSideCache: Set<string> | null = null;
 
+  /**
+   * Task mall-playtest-revision-20261031 (lane ARCH, U07: "there is a wall where the door should be, and you can walk through the
+   * wall when the door is open"). Cause: the landing-door side of the shaft kept its full wall face on every storey (only the glass
+   * sides were dropped) while the cab's Levels gate opened the collision through those solid cells — a painted wall you could walk
+   * through. The Office cuts its doorways in cutOfficeShaftDoors (world/officeProps.ts, layout.office only); the mall now feeds the
+   * SAME cut its glass-elevator record (gen/mall/elevator.ts mallTowerRecord): door width x SHAFT_DOOR_H (= LIFT_DOOR_H = the gate's
+   * clear height) above every stop, so the open doorway is a real aperture (linings, landing leaves, the cab) and the shut landing
+   * leaves fill it — the visual matches the gate.
+   */
+  private cutShaftDoors<F extends FaceLike>(faces: F[]): F[] {
+    const rec = mallTowerRecord(this.layout) as {elevator?: unknown} | null;
+    if (!rec?.elevator) return faces;
+    return cutOfficeShaftDoors(faces, {office: rec} as unknown as Parameters<typeof cutOfficeShaftDoors>[1]);
+  }
+
   /** A face on a glass side of the shaft (dropped: the glass shaft tower replaces it). */
   private onShaft(f: FaceLike): boolean {
     const sd = this.shaftSide(f);
@@ -621,13 +667,13 @@ export class MallArch {
   remapFaces<F extends FaceLike>(faces: F[], tileLowerHeight: number): F[] {
     const out: F[] = [];
     const spring = this.info.roof.springY;
-    for (const f of faces) {
+    for (const f of this.cutShaftDoors(faces)) {
       const isFloor = f.level === this.floorLevel;
       const up = /tileUpper/.test(f.finish) && f.vb0 !== undefined ? {vb0: f.vb0 - tileLowerHeight, vb1: (f.vb1 ?? f.vb0) - tileLowerHeight} : {};
       if (this.onShaft(f)) { this.stats.droppedFaces++; continue; }
-      if (isFloor && this.frontIsVoid(f)) {
-        if (f.y1 <= 3.0) { out.push(f); continue; } // the platform edge / bed walls under the atrium: the station's own
-        // above ring 6: a white roof-edge beam, then the glazed clerestory up to the springing line and the vault (buildRoof)
+      if (this.bandFront(f)) {
+        if (isFloor && f.y1 <= 3.0) { out.push(f); continue; } // the platform edge / bed walls under the atrium: the station's own
+        // above the top floor: a white roof-edge beam, then the glazed clerestory up to the springing line and the roof (buildRoof)
         const beamTop = this.topRingCeil + ROOF_BEAM;
         if (f.y0 >= beamTop - 0.02 || f.y0 >= spring - 0.02) { this.stats.droppedFaces++; continue; }
         const y1 = Math.min(f.y1, f.y0 >= this.topRingCeil - 0.05 ? beamTop : spring + 0.05);
@@ -637,6 +683,10 @@ export class MallArch {
       const a = f.area >= 0 ? this.layout.areas[f.area] : undefined;
       const sp = this.spaceOf(f.area, f.level);
       if (sp.space === 'station') { out.push(f); continue; }
+      // D06: long opening-free public walls (courts, corridors, the plaza) are gallery billboard candidates
+      if ((sp.space === 'plaza' || sp.space === 'gallery') && !f.slope && !f.openings.length && Math.hypot(f.x1 - f.x0, f.z1 - f.z0) >= 3.8) {
+        this.adWalls.push({level: f.level, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, nx: f.nx, nz: f.nz, y0: f.y0, y1: f.y1});
+      }
       if (sp.space === 'plaza') { out.push({...f, finish: this.wallKey(sp), ...up}); continue; }
       // stair flight side walls: public flights white, service flights the core
       const space: SpaceInfo = f.slope ? (a?.publicSpace ? {space: 'gallery', ring: sp.ring} : {space: 'core', ring: sp.ring}) : sp;
@@ -675,7 +725,7 @@ export class MallArch {
     const spring = this.info.roof.springY;
     if (i !== undefined) {
       const top = y ?? cellCeil(lvl.grid, i);
-      if (top >= spring - 0.5 && this.inVoidOutline(i)) return false;
+      if (top >= spring - 0.5 && this.roofCell[i]) return false;
     }
     if (lvl.id === this.floorLevel && i !== undefined && this.atrium[i]) return `mall-ceil|${this.row('c', SPACE_FINISH.galleryCeil)}`; // bridge soffits over the pit
     const sp = this.spaceOf(areaId, lvl.id);
@@ -683,13 +733,6 @@ export class MallArch {
     const boh = MallArch.boh(sp);
     const tag = boh && i !== undefined ? this.deepTag((i % this.W + 0.5) * CELL, (Math.floor(i / this.W) + 0.5) * CELL) : '';
     return `mall-ceil${boh ? `-boh${tag}` : ''}|${this.row('c', this.finishOf(sp).ceil)}`;
-  }
-
-  /** Whether grid cell i lies inside the void outline bounds (the vault's footprint). */
-  private inVoidOutline(i: number): boolean {
-    const cx = i % this.W, cy = (i - cx) / this.W;
-    const x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL, b = this.info.roof.outline;
-    return x >= b.x0 - 0.01 && x <= b.x1 + 0.01 && z >= b.z0 - 0.01 && z <= b.z1 + 0.01;
   }
 
   /** Soffit of a door opening (null: station rule). */
@@ -770,7 +813,7 @@ export class MallArch {
     for (const fn of [
       () => this.buildRoof(add), () => this.buildBalustrades(add, rails), () => this.buildColumns(add), () => this.buildShaftTowers(add),
       () => this.buildSignage(group, add), () => this.buildBanners(add), () => this.buildEscalatorSoffits(add), () => this.buildShopfronts(add, this.mats),
-      () => this.buildFountain(add),
+      () => this.buildFountain(add), () => this.buildAds(group, add),
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
     }
@@ -784,9 +827,47 @@ export class MallArch {
     return tops.length ? Math.max(...tops) : this.info.roof.springY - 1;
   }
 
-  /** The glass barrel vault, steel arches, purlins, edge girders, gable fans, the roof deck ring and the sky dome. */
+  /** The atrium opening of a retail floor (v2 void.openings; v1 / unknown: the floor-1 void outline). */
+  openingOf(level: number): readonly {x: number; z: number}[] {
+    const o = this.info.void.openings?.find(q => q.level === level);
+    return o && o.outline.length >= 3 ? o.outline : this.info.void.outline;
+  }
+
+  /**
+   * The glazed outline of the roof: MallRoof.polygon (task mall-playtest-revision: the TOP atrium opening — glass only over the
+   * atrium), else (v1 records) the floor-1 void outline under the roof outline's vault.
+   */
+  roofPolygon(): readonly {x: number; z: number}[] {
+    const p = this.info.roof.polygon;
+    return p && p.length >= 3 ? p : this.info.void.outline;
+  }
+
+  /**
+   * The barrel vault's footprint: the largest axis-aligned rectangle of glazed cells (v2: inside the roof polygon; the rest of the
+   * polygon is flat glazing at the springing line), else (v1) the roof outline.
+   */
+  vaultRect(): {x0: number; z0: number; x1: number; z1: number} {
+    if (this.vaultCache) return this.vaultCache;
+    const R = this.info.roof;
+    let v = {...R.outline};
+    if (R.polygon && R.polygon.length >= 3) {
+      const cx0 = Math.max(0, Math.floor(R.outline.x0 / CELL)), cy0 = Math.max(0, Math.floor(R.outline.z0 / CELL));
+      const cx1 = Math.min(this.W, Math.ceil(R.outline.x1 / CELL)), cy1 = Math.min(this.H, Math.ceil(R.outline.z1 / CELL));
+      const r = maxRect(cx1 - cx0, cy1 - cy0, (x, y) => this.roofCell[(cy0 + y) * this.W + cx0 + x] === 1);
+      if (r) v = {x0: (cx0 + r.x0) * CELL, z0: (cy0 + r.y0) * CELL, x1: (cx0 + r.x1) * CELL, z1: (cy0 + r.y1) * CELL};
+    }
+    return (this.vaultCache = v);
+  }
+  private vaultCache: {x0: number; z0: number; x1: number; z1: number} | null = null;
+
+  /**
+   * The glass roof (task mall-playtest-revision: over the TOP atrium opening only): a barrel vault over its largest rectangle (glass
+   * panes, white steel arch trusses, purlins, edge girders, glazed gable fans), flat glazing on light steel rafters over the rest of
+   * the opening at the springing line, the clerestory on every edge of the opening from the roof-edge beam up to the springing line,
+   * the building's roof deck outside it, the sky (the Office's exterior murk) and the toxic gas drifting outside (U02).
+   */
   private buildRoof(add: (m: THREE.Mesh | null) => void): void {
-    const R = this.info.roof, o = R.outline;
+    const R = this.info.roof, o = this.vaultRect();
     const alongX = o.x1 - o.x0 >= o.z1 - o.z0;
     const L0 = alongX ? o.x0 : o.z0, L1 = alongX ? o.x1 : o.z1;
     const A0 = alongX ? o.z0 : o.x0, A1 = alongX ? o.z1 : o.x1;
@@ -807,10 +888,8 @@ export class MallArch {
       for (let k = 0; k < SEG; k++) {
         const p = arc(k), q = arc(k + 1);
         const mx = (p.a + q.a) / 2 - mid, my = (p.y + q.y) / 2 - R.springY;
-        const nl = Math.hypot(mx / half, my / rise) || 1;
         const nA = -(mx / (half * half)), nY = -(my / (rise * rise)); // inward normal of the ellipse
         const nn = Math.hypot(nA, nY) || 1;
-        void nl;
         const n = alongX ? [0, nY / nn, nA / nn] : [nA / nn, nY / nn, 0];
         glass.quad([P(la, p.a, p.y), P(lb, p.a, p.y), P(lb, q.a, q.y), P(la, q.a, q.y)], n, [[la, sAt[k]], [lb, sAt[k]], [lb, sAt[k + 1]], [la, sAt[k + 1]]]);
         this.stats.roofPanes++;
@@ -829,7 +908,7 @@ export class MallArch {
       }
       this.stats.arches++;
     }
-    // purlins (glazing rails) along the vault at every other arch segment, the ridge, and the edge girders at the springing
+    // purlins (glazing rails) along the vault at every other arch segment, and the edge girders at the springing
     for (let k = 2; k < SEG; k += 3) { const p = arc(k); steel.beam(V(L0, p.a, p.y - 0.1), V(L1, p.a, p.y - 0.1), 0.08, 0.1); }
     for (const a of [A0, A1]) steel.beam(V(L0, a, R.springY - 0.25), V(L1, a, R.springY - 0.25), 0.45, 0.5);
     // glazed gable fans at both ends (the vault's end arches) with an end arch
@@ -842,10 +921,10 @@ export class MallArch {
       for (let k = 2; k < SEG; k += 3) { const p = arc(k); steel.beam(V(l, p.a, R.springY), V(l, p.a, p.y), 0.08); }
       steel.beam(V(l, A0, R.springY), V(l, A1, R.springY), 0.2, 0.2);
     }
-    // the clerestory: glazing on every void outline edge from the roof-edge beam (over ring 6's ceiling) up to the springing line,
-    // mullions every 1.5 m, a ledge plate at the springing line over the cells between the (stepped) outline and the vault's rect
+    // the clerestory: glazing on every edge of the glazed opening from the roof-edge beam (over the top floor's ceiling) up to the
+    // springing line, mullions every 1.5 m
     const yB = this.topRingCeil + ROOF_BEAM;
-    const out = this.info.void.outline;
+    const out = this.roofPolygon();
     if (R.springY - yB > 0.2 && out.length >= 3) {
       for (let i = 0; i < out.length; i++) {
         const a = out[i], b = out[(i + 1) % out.length];
@@ -860,24 +939,72 @@ export class MallArch {
         steel.beam(new THREE.Vector3(a.x, R.springY - 0.05, a.z), new THREE.Vector3(b.x, R.springY - 0.05, b.z), 0.12, 0.1);
       }
     }
+    // cells at the springing line: inside the opening but outside the vault = FLAT GLAZING (rafters every 3 m both ways); inside
+    // the vault rect but outside the opening (v1 records only) = an opaque ledge plate
     const up = [0, 1, 0];
     const ledge = new Mesher();
-    for (let cy = Math.floor(o.z0 / CELL); cy < Math.ceil(o.z1 / CELL); cy++) {
-      for (let cx = Math.floor(o.x0 / CELL); cx < Math.ceil(o.x1 / CELL);) {
-        const inside = (x: number) => x < this.W && cy >= 0 && cy < this.H && !this.atrium[cy * this.W + x];
-        if (cx < 0 || !inside(cx)) { cx++; continue; }
+    const inVault = (x: number, z: number) => x > o.x0 && x < o.x1 && z > o.z0 && z < o.z1;
+    const B = {x0: Math.min(o.x0, R.outline.x0), z0: Math.min(o.z0, R.outline.z0), x1: Math.max(o.x1, R.outline.x1), z1: Math.max(o.z1, R.outline.z1)};
+    const cx0 = Math.max(0, Math.floor(B.x0 / CELL)), cx1 = Math.min(this.W, Math.ceil(B.x1 / CELL));
+    const cy0 = Math.max(0, Math.floor(B.z0 / CELL)), cy1 = Math.min(this.H, Math.ceil(B.z1 / CELL));
+    const hasPoly = !!(R.polygon && R.polygon.length >= 3);
+    const kindAt = (cx: number, cy: number): 'flat' | 'ledge' | 'deck' | 'vault' => {
+      const x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
+      const glazed = this.roofCell[cy * this.W + cx] === 1 && (hasPoly || pointInPoly(out, x, z));
+      if (inVault(x, z)) return glazed ? 'vault' : 'ledge';
+      return glazed ? 'flat' : 'deck';
+    };
+    let flatCells = 0;
+    const flat = new Uint8Array(this.W * this.H);
+    for (let cy = cy0; cy < cy1; cy++) {
+      for (let cx = cx0; cx < cx1;) {
+        const k = kindAt(cx, cy);
         let e = cx + 1;
-        while (e < Math.ceil(o.x1 / CELL) && inside(e)) e++;
-        const ax = Math.max(o.x0, cx * CELL), bx = Math.min(o.x1, e * CELL), az = Math.max(o.z0, cy * CELL), bz = Math.min(o.z1, (cy + 1) * CELL);
-        ledge.quad([[ax, R.springY, az], [ax, R.springY, bz], [bx, R.springY, bz], [bx, R.springY, az]], [0, -1, 0], [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
-        ledge.quad([[ax, R.springY + 0.01, az], [ax, R.springY + 0.01, bz], [bx, R.springY + 0.01, bz], [bx, R.springY + 0.01, az]], up, [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+        while (e < cx1 && kindAt(e, cy) === k) e++;
+        const ax = cx * CELL, bx = e * CELL, az = cy * CELL, bz = (cy + 1) * CELL;
+        if (k === 'flat') {
+          glass.quad([[ax, R.springY, az], [ax, R.springY, bz], [bx, R.springY, bz], [bx, R.springY, az]], [0, -1, 0], [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+          for (let x = cx; x < e; x++) flat[cy * this.W + x] = 1;
+          flatCells += e - cx;
+        } else if (k === 'ledge') {
+          ledge.quad([[ax, R.springY, az], [ax, R.springY, bz], [bx, R.springY, bz], [bx, R.springY, az]], [0, -1, 0], [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+          ledge.quad([[ax, R.springY + 0.01, az], [ax, R.springY + 0.01, bz], [bx, R.springY + 0.01, bz], [bx, R.springY + 0.01, az]], up, [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+        } else if (k === 'deck') {
+          const yD = yB + 0.02;
+          deck.quad([[ax, yD, az], [ax, yD, bz], [bx, yD, bz], [bx, yD, az]], up, [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
+        }
         cx = e;
       }
     }
-    // the building's roof deck around the void (membrane) at the beam top, seen through the clerestory / vault glass
+    // rafters under the flat glazing: along x on every 3 m z line, along z on every 3 m x line (runs over flat cells)
+    const RAF = Math.round(3 / CELL);
+    for (let cy = cy0; cy <= cy1; cy++) {
+      if (cy % RAF) continue;
+      for (let cx = cx0; cx < cx1;) {
+        const on = (x: number) => (flat[cy * this.W + x] || (cy > 0 && flat[(cy - 1) * this.W + x])) === 1;
+        if (!on(cx)) { cx++; continue; }
+        let e = cx + 1;
+        while (e < cx1 && on(e)) e++;
+        steel.beam(new THREE.Vector3(cx * CELL, R.springY - 0.1, cy * CELL), new THREE.Vector3(e * CELL, R.springY - 0.1, cy * CELL), 0.1, 0.16);
+        cx = e;
+      }
+    }
+    for (let cx = cx0; cx <= cx1; cx++) {
+      if (cx % RAF) continue;
+      for (let cy = cy0; cy < cy1;) {
+        const on = (y: number) => (flat[y * this.W + cx] || (cx > 0 && flat[y * this.W + cx - 1])) === 1;
+        if (!on(cy)) { cy++; continue; }
+        let e = cy + 1;
+        while (e < cy1 && on(e)) e++;
+        steel.beam(new THREE.Vector3(cx * CELL, R.springY - 0.1, cy * CELL), new THREE.Vector3(cx * CELL, R.springY - 0.1, e * CELL), 0.1, 0.16);
+        cy = e;
+      }
+    }
+    this.stats.flatGlazingM2 = flatCells * CELL * CELL;
+    // the building's roof deck around the opening (membrane) at the beam top, seen through the clerestory / vault glass
     const yD = yB + 0.02, ring = 12;
-    const x0 = o.x0 - ring, x1 = o.x1 + ring, z0 = o.z0 - ring, z1 = o.z1 + ring;
-    for (const [ax, az, bx, bz] of [[x0, z0, x1, o.z0], [x0, o.z1, x1, z1], [x0, o.z0, o.x0, o.z1], [o.x1, o.z0, x1, o.z1]]) {
+    const x0 = B.x0 - ring, x1 = B.x1 + ring, z0 = B.z0 - ring, z1 = B.z1 + ring;
+    for (const [ax, az, bx, bz] of [[x0, z0, x1, B.z0], [x0, B.z1, x1, z1], [x0, B.z0, B.x0, B.z1], [B.x1, B.z0, x1, B.z1]]) {
       deck.quad([[ax, yD, az], [ax, yD, bz], [bx, yD, bz], [bx, yD, az]], up, [[ax, az], [ax, bz], [bx, bz], [bx, az]]);
     }
     const all = this.allLevels;
@@ -885,16 +1012,22 @@ export class MallArch {
     add(steel.mesh(this.dress.whiteSteel, 'mall-roof-steel', {levels: all}));
     add(deck.mesh(this.dress.membrane, 'mall-roof-deck', {levels: all}));
     add(ledge.mesh(this.dress.whiteSteel, 'mall-roof-ledge', {levels: all}));
-    // the overcast sky dome over the vault (unlit, never fogged, only seen through the glass)
+    // the sky over the roof: the Office's exterior murk (task mall-playtest-revision U02; unlit, never fogged, depth-write off,
+    // drawn first, only seen through the glass)
     const dome = new THREE.SphereGeometry(190, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2);
     const sky = new THREE.Mesh(dome, this.dress.sky);
-    sky.position.set((o.x0 + o.x1) / 2, this.topRingCeil, (o.z0 + o.z1) / 2);
+    sky.position.set((B.x0 + B.x1) / 2, this.topRingCeil, (B.z0 + B.z1) / 2);
     sky.name = 'mall-sky';
     sky.userData.levels = all;
-    sky.renderOrder = -5;
+    sky.renderOrder = MALL_EXT_ORDER.sky;
     sky.matrixAutoUpdate = false;
     sky.updateMatrix();
     add(sky);
+    // U02: the toxic gas drifting above / round the glass roof (outside only: over the vault apex, on the roof round the vault, a
+    // curtain beyond the roof edge), composited under every glass (world/mallExterior.ts)
+    const ext = buildMallExteriorGas({roof: {...B}, vault: {...o}, deckY: yD, springY: R.springY, apexY: R.apexY});
+    for (const m of ext.meshes) { m.userData.levels = all; add(m); }
+    this.stats.exteriorGas = ext.stats.layers;
   }
 
   /** Glass balustrades + stainless handrails + base shoes on every owned rail run (per storey, per 48 m chunk). */
@@ -942,6 +1075,12 @@ export class MallArch {
    * every storey (never through a bridge, escalator, shaft or a ring floor).
    */
   private buildColumns(add: (m: THREE.Mesh | null) => void): void {
+    // Task mall-playtest-revision-20261031 (lane FIX U04 -> ARCH render): columns are layout records (props of kind 'atriumColumn',
+    // with their colliders / nav / bullet blocking) — drawn exactly there (visual = collider). The v2 atrium widens upward, so the
+    // old placement (0.6 m into the floor-1 opening, up to the roof) would stand in open air above floor 1: without records, a v2
+    // mall draws none (never a column ending at nothing); v1 records keep the old placement.
+    const recs = this.layout.props.filter(p => (p.kind as string) === 'atriumColumn');
+    if (recs.length || (this.info.void.openings?.length ?? 0) > 0) { this.buildColumnRecords(add, recs); return; }
     const out = this.info.void.outline;
     if (out.length < 3) return;
     const ringsOpen = this.levels.filter(l => l.id !== this.floorLevel);
@@ -994,6 +1133,24 @@ export class MallArch {
     add(tile.mesh(this.dress.columnTile, 'mall-column-bands', {levels: all}));
   }
 
+  /** Round columns from layout records (kind 'atriumColumn': x, z, y = foot, h, hx = radius): render + dark tile plinth / head bands. */
+  private buildColumnRecords(add: (m: THREE.Mesh | null) => void, recs: readonly {x: number; z: number; y: number; h: number; hx: number; level?: number}[]): void {
+    if (!recs.length) return;
+    const shaft = new Mesher(), tile = new Mesher();
+    const lv = new Set<number>();
+    for (const p of recs) {
+      const R = Math.max(0.1, p.hx), y0 = p.y, top = p.y + p.h;
+      shaft.cyl(p.x, y0, p.z, R, top - y0, 18);
+      tile.cyl(p.x, y0, p.z, R + 0.012, Math.min(0.32, (top - y0) * 0.2), 18);
+      if (top - y0 > 1.6) tile.cyl(p.x, top - 0.5, p.z, R + 0.012, 0.42, 18); // a band under the slab it carries
+      for (const st of this.info.storeys) if (st.baseY <= top + 0.01 && st.baseY + st.clear >= y0 - 0.01) lv.add(st.level);
+    }
+    this.stats.columns = recs.length;
+    const levels = lv.size ? [...lv].sort((a, b) => a - b) : this.allLevels;
+    add(shaft.mesh(this.dress.columnRender, 'mall-columns', {levels}));
+    add(tile.mesh(this.dress.columnTile, 'mall-column-bands', {levels}));
+  }
+
   /** Steel-frame glass shaft towers: glazing on every atrium-facing side, corner posts, storey girts, the machine head. */
   private buildShaftTowers(add: (m: THREE.Mesh | null) => void): void {
     if (!this.info.elevators.length) return;
@@ -1001,7 +1158,8 @@ export class MallArch {
     for (const e of this.info.elevators) {
       const s = e.shaft;
       const ys = e.stops.map(q => q.y).sort((a, b) => a - b);
-      const y0 = Math.min(ys[0] ?? 0, this.gridOf(this.floorLevel).floorAt((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2)), yTop = (ys[ys.length - 1] ?? 0) + 3.4;
+      // (task mall-playtest-revision U07: the head / pit match the glass car's rig — world/elevator.ts GLASS_RIG / planGlassRig)
+      const y0 = Math.min(ys[0] ?? 0, this.gridOf(this.floorLevel).floorAt((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2)), yTop = (ys[ys.length - 1] ?? 0) + GLASS_RIG.headroom;
       const sides: {a: [number, number]; b: [number, number]; n: [number, number]}[] = [
         {a: [s.x0, s.z0], b: [s.x1, s.z0], n: [0, -1]}, {a: [s.x1, s.z1], b: [s.x0, s.z1], n: [0, 1]},
         {a: [s.x0, s.z1], b: [s.x0, s.z0], n: [-1, 0]}, {a: [s.x1, s.z0], b: [s.x1, s.z1], n: [1, 0]},
@@ -1021,10 +1179,10 @@ export class MallArch {
         }
       }
       for (const [x, z] of [[s.x0, s.z0], [s.x1, s.z0], [s.x0, s.z1], [s.x1, s.z1]]) frame.box(x, (y0 + yTop) / 2, z, 0.2, yTop - y0, 0.2);
-      // machine head on top
-      frame.box((s.x0 + s.x1) / 2, yTop + 0.6, (s.z0 + s.z1) / 2, s.x1 - s.x0 + 0.3, 1.2, s.z1 - s.z0 + 0.3);
-      // the pit floor and the cap under the machine head (seen through the glass: never an empty shaft)
-      frame.box((s.x0 + s.x1) / 2, y0 - 0.05, (s.z0 + s.z1) / 2, s.x1 - s.x0, 0.1, s.z1 - s.z0);
+      // machine head housing on top (the machine bed, sheaves, rails, pit and ropes inside are the car rig's: world/elevator.ts)
+      frame.box((s.x0 + s.x1) / 2, yTop + GLASS_RIG.headH / 2, (s.z0 + s.z1) / 2, s.x1 - s.x0 + 0.3, GLASS_RIG.headH, s.z1 - s.z0 + 0.3);
+      // a cornice band round the housing's foot
+      frame.box((s.x0 + s.x1) / 2, yTop + 0.06, (s.z0 + s.z1) / 2, s.x1 - s.x0 + 0.42, 0.12, s.z1 - s.z0 + 0.42);
     }
     const all = this.allLevels;
     add(glass.mesh(this.dress.glassRail, 'mall-shaft-glass', {levels: all}));
@@ -1087,11 +1245,12 @@ export class MallArch {
         this.stats.blades++;
       }
     }
-    // Level labels on the void fascias: on the longest outline edges, facing into the void, two per edge
-    const out = this.info.void.outline;
+    // Level labels on the slab-edge fascias: on the longest edges of THAT floor's opening (task mall-playtest-revision: the openings
+    // widen upward, each floor's slab edge is its own outline), facing into the void, two per edge
     const rings = this.info.storeys.filter(s => s.role === 'ring');
-    const edges = out.map((a, i) => ({a, b: out[(i + 1) % out.length]})).map(e => ({...e, len: Math.hypot(e.b.x - e.a.x, e.b.z - e.a.z)})).sort((p, q2) => q2.len - p.len).slice(0, 2);
     for (const st of rings) {
+      const out = this.openingOf(st.level);
+      const edges = out.map((a, i) => ({a, b: out[(i + 1) % out.length]})).map(e => ({...e, len: Math.hypot(e.b.x - e.a.x, e.b.z - e.a.z)})).sort((p, q2) => q2.len - p.len).slice(0, 2);
       const prev = this.info.storeys.filter(s => s.baseY < st.baseY).sort((a, b) => b.baseY - a.baseY)[0];
       const slab = prev ? st.baseY - (prev.baseY + prev.clear) : 1;
       const hgt = Math.min(0.55, slab - 0.2);
@@ -1103,10 +1262,8 @@ export class MallArch {
         for (const t of [0.25, 0.75]) {
           let nx = -tz, nz = tx;
           const px = e.a.x + tx * e.len * t, pz = e.a.z + tz * e.len * t;
-          const cx = Math.floor((px + nx * 0.3) / CELL), cy = Math.floor((pz + nz * 0.3) / CELL);
-          if (cx < 0 || cy < 0 || cx >= this.W || cy >= this.H || !this.voidCol[cy * this.W + cx]) { nx = -nx; nz = -nz; }
-          const ix = Math.floor((px + nx * 0.3) / CELL), iy = Math.floor((pz + nz * 0.3) / CELL);
-          if (ix < 0 || iy < 0 || ix >= this.W || iy >= this.H || !this.voidCol[iy * this.W + ix]) continue;
+          if (!pointInPoly(out, px + nx * 0.3, pz + nz * 0.3)) { nx = -nx; nz = -nz; }
+          if (!pointInPoly(out, px + nx * 0.3, pz + nz * 0.3)) continue;
           const yaw = Math.atan2(nx, nz);
           face(tex, new THREE.Matrix4().compose(new THREE.Vector3(px + nx * 0.025, st.baseY - 0.12 - hgt / 2, pz + nz * 0.025), q.setFromAxisAngle(UP, yaw), new THREE.Vector3(hgt * 3.2, hgt, 1)), st.level);
           this.stats.labels++;
@@ -1281,6 +1438,138 @@ export class MallArch {
   }
 
   /**
+   * Task mall-playtest-revision-20261031 (lane ARCH, D06): advertising faces — lane SHOPS' records (`layout.mall.ads`: posters, lightboxes,
+   * billboards, glass decals in / at their shops) + ARCH's gallery billboards on long blank public walls (world/mallAds.ts
+   * planGalleryAds) — original vector art (fictional brands, generic dressed adult silhouettes, theme motifs), one canvas each,
+   * packed into atlas pages: per page and storey ONE instanced face mesh (opaque pages; decals on cut-out pages), frames / boxes
+   * merged per storey. Faces / frames sit on the wall (never a collider: nothing to bump, nothing blocks a door or a sign).
+   */
+  buildAds(group: THREE.Group, add: (m: THREE.Mesh | null) => void): void {
+    const shopAds = adsOf(this.layout);
+    const gallery = planGalleryAds(this.adWalls, this.layout, hashStr(this.info.name) + this.layout.seed, lv => this.storeyOf(lv)?.baseY ?? 0);
+    this.ads = [...shopAds, ...gallery];
+    this.stats.shopAds = shopAds.length;
+    this.stats.galleryAds = gallery.length;
+    if (!this.ads.length) return;
+    const shopBrand = new Map(this.info.shops.map(q => [q.id, q.brand]));
+    const opaque = new Map<THREE.Texture, {m: THREE.Matrix4; level: number}[]>(), cut = new Map<THREE.Texture, {m: THREE.Matrix4; level: number}[]>();
+    const frames = new Map<number, {dark: Mesher; light: Mesher}>();
+    const fr = (lv: number) => { let f = frames.get(lv); if (!f) frames.set(lv, (f = {dark: new Mesher(), light: new Mesher()})); return f; };
+    const q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
+    for (const ad of this.ads) {
+      const tex = adTexture(ad, ad.shop ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name);
+      const yaw = Math.atan2(ad.nx, ad.nz), alongX = Math.abs(ad.nz) > 0.5;
+      // wall-mounted kinds stand on the real wall plane behind the record (whatever its proud offset): probe the storey grid
+      const back = ad.kind === 'decal' ? 0 : this.wallBehind(ad);
+      const at = (d: number) => new THREE.Vector3(ad.x + ad.nx * (d - back), ad.y, ad.z + ad.nz * (d - back));
+      const faceAt = (d: number, turn: number) => new THREE.Matrix4().compose(at(d), q.setFromAxisAngle(UP, yaw + turn), new THREE.Vector3(ad.w, ad.h, 1));
+      // a box of size (along the wall) x (height) x (depth from the wall) with its back on the wall plane
+      const box = (m: Mesher, dy: number, wAlong: number, h: number, d0: number, d1: number, off = 0) => {
+        const c = at((d0 + d1) / 2);
+        const ox = alongX ? off : 0, oz = alongX ? 0 : off;
+        m.box(c.x + ox, ad.y + dy, c.z + oz, alongX ? wAlong : d1 - d0, h, alongX ? d1 - d0 : wAlong);
+      };
+      const F = fr(ad.level);
+      let list = opaque;
+      switch (ad.kind) {
+        case 'decal':
+          list = cut;
+          (cut.get(tex) ?? cut.set(tex, []).get(tex)!).push({m: faceAt(0.012, 0), level: ad.level}, {m: faceAt(-0.012, Math.PI), level: ad.level});
+          continue;
+        case 'poster': {
+          // a snap frame (aluminium) on a dark backing plate
+          box(F.dark, 0, ad.w + 0.02, ad.h + 0.02, 0, 0.012);
+          for (const sg of [-1, 1]) {
+            box(F.light, sg * (ad.h / 2 + 0.012), ad.w + 0.05, 0.03, 0, 0.026);
+            box(F.light, 0, 0.03, ad.h + 0.05, 0, 0.026, sg * (ad.w / 2 + 0.012));
+          }
+          list.get(tex) ?? list.set(tex, []);
+          list.get(tex)!.push({m: faceAt(0.016, 0), level: ad.level});
+          break;
+        }
+        case 'lightbox':
+          box(F.dark, 0, ad.w + 0.08, ad.h + 0.08, 0, 0.12);
+          list.get(tex) ?? list.set(tex, []);
+          list.get(tex)!.push({m: faceAt(0.122, 0), level: ad.level});
+          break;
+        default: {
+          // billboard: a deep frame and a lamp bar on two arms over the top edge
+          box(F.dark, 0, ad.w + 0.14, ad.h + 0.14, 0, 0.07);
+          box(F.dark, ad.h / 2 + 0.2, ad.w * 0.7, 0.07, 0.32, 0.42);
+          for (const sg of [-0.3, 0.3]) box(F.dark, ad.h / 2 + 0.13, 0.04, 0.12, 0.04, 0.4, sg * ad.w);
+          list.get(tex) ?? list.set(tex, []);
+          list.get(tex)!.push({m: faceAt(0.072, 0), level: ad.level});
+        }
+      }
+    }
+    for (const [lv, f] of frames) {
+      add(f.dark.mesh(this.dress.darkSteel, `mall-ad-frames-${lv}`, {level: lv}));
+      add(f.light.mesh(this.dress.trimLight, `mall-ad-trim-${lv}`, {level: lv}));
+    }
+    if (opaque.size) this.buildAtlasFaces(group, opaque, 'mall-ad-faces', false);
+    if (cut.size) this.buildAtlasFaces(group, cut, 'mall-ad-decals', true);
+  }
+
+  /** Distance (m, 0..0.3) from an ad record back to the solid wall behind it on its storey grid (0: none found within 0.3 m). */
+  private wallBehind(ad: MallAd): number {
+    const g = this.gridOf(ad.level);
+    for (let d = 0; d <= 0.3 + 1e-9; d += 0.005) {
+      const x = ad.x - ad.nx * d, z = ad.z - ad.nz * d;
+      const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
+      if (cx < 0 || cy < 0 || cx >= this.W || cy >= this.H) return 0;
+      if (g.cells[cy * this.W + cx] === SOLID) {
+        // the boundary of that cell facing the record
+        const plane = Math.abs(ad.nx) > 0.5 ? (ad.nx > 0 ? (cx + 1) * CELL : cx * CELL) : (ad.nz > 0 ? (cy + 1) * CELL : cy * CELL);
+        return Math.max(0, Math.abs(ad.nx) > 0.5 ? (ad.x - plane) * ad.nx : (ad.z - plane) * ad.nz);
+      }
+    }
+    return 0;
+  }
+
+  /** Atlas pages of canvas faces: per page and storey ONE instanced plane mesh (cut-out pages: alpha-tested, double-sided). */
+  private buildAtlasFaces(group: THREE.Group, faces: Map<THREE.Texture, {m: THREE.Matrix4; level: number}[]>, name: string, cutout: boolean): void {
+    const texs = [...faces.keys()];
+    const imgs = texs.map(t => t.image as {width: number; height: number});
+    const {cells, pages} = packAtlas(imgs);
+    pages.forEach((Hh, pg) => {
+      const mine = cells.map((c, i) => [c, i] as const).filter(([c]) => c[0] === pg);
+      const atlas = canvasTexture(ATLAS_W, Hh, 9800 + pg + (cutout ? 50 : 0), ctx => {
+        if (cutout) ctx.clearRect(0, 0, ATLAS_W, Hh); else { ctx.fillStyle = '#1f2225'; ctx.fillRect(0, 0, ATLAS_W, Hh); }
+        for (const [[, x, y, w, h], i] of mine) {
+          const img = imgs[i] as unknown as CanvasImageSource;
+          if (!cutout) ctx.drawImage(img, x - 4, y - 4, w + 8, h + 8);
+          ctx.drawImage(img, x, y, w, h);
+        }
+      });
+      atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
+      const mat = signAtlasMaterial(atlas);
+      mat.name = cutout ? 'mall-ad-decal-atlas' : 'mall-ad-atlas';
+      if (cutout) { mat.alphaTest = 0.5; mat.side = THREE.DoubleSide; mat.transparent = false; }
+      const byLevel = new Map<number, {ms: THREE.Matrix4[]; rects: number[]}>();
+      for (const [[, x, y, w, h], i] of mine) for (const e of faces.get(texs[i])!) {
+        let b = byLevel.get(e.level);
+        if (!b) byLevel.set(e.level, (b = {ms: [], rects: []}));
+        b.ms.push(e.m);
+        b.rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
+      }
+      for (const [lv, b] of byLevel) {
+        const geo = new THREE.PlaneGeometry(1, 1);
+        geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(b.rects), 4));
+        const im = new THREE.InstancedMesh(geo, mat, b.ms.length);
+        b.ms.forEach((m, k) => im.setMatrixAt(k, m));
+        im.name = `${name}-${pg}-${lv}`;
+        im.userData.level = lv;
+        im.computeBoundingSphere();
+        im.matrixAutoUpdate = false;
+        group.add(im);
+        this.stats.meshes++;
+        this.stats.triangles += 2 * b.ms.length;
+      }
+    });
+    for (const t of texs) t.dispose();
+  }
+
+  /**
    * The pit-plaza fountain (gen/mall/landmarks.ts `fountainBasin` + `fountainSpire`), drawn exactly in its colliders: a square
    * dark-granite basin wall with a broad pale-stone coping (the sitting ledge, 0.45-0.5 m), a dark basin floor, stagnant water at
    * 0.3 m (algae, scum, floating debris: the pumps died decades ago), and a tiered verdigris-bronze centrepiece on a stone plinth.
@@ -1361,7 +1650,7 @@ export class MallArch {
         const len = Math.min(9, top - Math.max(floorY + 3, this.topRingCeil - 12));
         if (len < 3) continue;
         const k = this.stats.banners;
-        const mat = bannerMaterial(k);
+        const mat = bannerMaterial(k, this.info.name, this.info.storeys.filter(q => q.role === 'ring').length, this.info.shops.filter(q => q.kind !== 'vacant' && q.kind !== 'service').length);
         const w = 1.6;
         const g = new THREE.PlaneGeometry(w, len);
         const mesh = new THREE.Mesh(g, mat);
@@ -1464,6 +1753,33 @@ export function mallEscalatorFlights(layout: StationLayout): {flight: {ramp: num
   return out;
 }
 
+/**
+ * Largest axis-aligned rectangle of cells where `ok(x, y)` holds in a w x h window (histogram / stack method, O(w h)); ties prefer
+ * the more square one. Cell coordinates, x1 / y1 exclusive; null when no cell holds.
+ */
+export function maxRect(w: number, h: number, ok: (x: number, y: number) => boolean): {x0: number; y0: number; x1: number; y1: number} | null {
+  const hist = new Int32Array(w);
+  let best: {x0: number; y0: number; x1: number; y1: number} | null = null, bestA = 0, bestS = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) hist[x] = ok(x, y) ? hist[x] + 1 : 0;
+    const st: number[] = [];
+    for (let x = 0; x <= w; x++) {
+      const cur = x < w ? hist[x] : 0;
+      let start = x;
+      while (st.length && hist[st[st.length - 1]] >= cur) {
+        const top = st.pop()!, hh = hist[top];
+        const left = st.length ? st[st.length - 1] + 1 : 0, ww = x - left;
+        const a = ww * hh, sq = Math.min(ww, hh) / Math.max(ww, hh, 1);
+        if (hh > 0 && (a > bestA || (a === bestA && sq > bestS))) { bestA = a; bestS = sq; best = {x0: left, y0: y - hh + 1, x1: x, y1: y + 1}; }
+        start = left;
+      }
+      void start;
+      if (x < w) st.push(x);
+    }
+  }
+  return best;
+}
+
 /** Even-odd point-in-polygon (x / z). */
 export function pointInPoly(poly: readonly {x: number; z: number}[], x: number, z: number): boolean {
   let c = false;
@@ -1521,16 +1837,17 @@ export function shopGlassMaterial(mats: WorldMaterials): THREE.Material {
   return m;
 }
 
-const bannerMats: THREE.Material[] = [];
-/** Banner cloth: alpha-tested (opaque cut-out: torn foot), double-sided, lit. */
-function bannerMaterial(i: number): THREE.Material {
-  const k = i % 6;
-  if (!bannerMats[k]) {
-    const m = new SurfaceNodeMaterial({map: bannerTexture(k), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95, metalness: 0});
+const bannerMats = new Map<string, THREE.Material>();
+/** Banner cloth: alpha-tested (opaque cut-out: torn foot), double-sided, lit (one per text: name / counts per mall). */
+function bannerMaterial(i: number, name: string, floors: number, shops: number): THREE.Material {
+  const k = i % 6, key = `${k}|${name}|${floors}|${shops}`;
+  let m = bannerMats.get(key);
+  if (!m) {
+    m = new SurfaceNodeMaterial({map: bannerTexture(k, name, floors, shops), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95, metalness: 0});
     m.name = `mall-banner-${k}`;
-    bannerMats[k] = m;
+    bannerMats.set(key, m);
   }
-  return bannerMats[k];
+  return m;
 }
 
 /** Every mall material a build may use (warm-up coverage tests): surfaces + dressing + banners. */
@@ -1625,7 +1942,7 @@ export function directoryPlanTexture(layout: StationLayout, level: number, here:
     ctx.fillStyle = '#efeadf'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#1f2b38'; ctx.fillRect(0, 0, W, 64);
     ctx.fillStyle = '#d9a520'; ctx.font = 'bold 13px "Helvetica Neue", Arial, sans-serif'; ctx.textBaseline = 'middle';
-    ctx.fillText("THE EATON'S CENTER · DIRECTORY", 12, 17);
+    ctx.fillText(`${m.name.toUpperCase()} · DIRECTORY`, 12, 17); // (task mall-playtest-revision: the seeded name)
     ctx.fillStyle = '#f2efe6'; ctx.font = 'bold 26px "Helvetica Neue", Arial, sans-serif';
     ctx.fillText(level === m.void.floorLevel ? 'SUBWAY · COURTS' : (st?.label ?? `Level ${level}`).toUpperCase(), 12, 45);
     // plan area
@@ -1650,7 +1967,7 @@ export function directoryPlanTexture(layout: StationLayout, level: number, here:
     }
     // the void (dark) on the rings; the pit storey's atrium shows as the platforms under it
     if (level !== m.void.floorLevel) {
-      const o = m.void.outline;
+      const o = m.void.openings?.find(q => q.level === level)?.outline ?? m.void.outline; // (task mall-playtest-revision: this floor's opening)
       ctx.fillStyle = '#2a3a52';
       ctx.beginPath(); o.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.z)) : ctx.moveTo(X(p.x), Y(p.z)))); ctx.closePath(); ctx.fill();
       for (const br of m.bridges.filter(q => q.level === level)) { ctx.strokeStyle = '#d6d0c2'; ctx.lineWidth = Math.max(2, br.width * k); ctx.beginPath(); ctx.moveTo(X(br.from.x), Y(br.from.z)); ctx.lineTo(X(br.to.x), Y(br.to.z)); ctx.stroke(); }
