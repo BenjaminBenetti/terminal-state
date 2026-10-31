@@ -42,8 +42,17 @@ export async function proveAppearance(out, parts) {
     const s = srcFp.primitives[0];
     const attrs = {};
     let ok = !!o && !!m;
+    const refitSems = p.refit ? ['POSITION', 'NORMAL'] : [];
     for (const [sem, a] of Object.entries(s.attributes)) {
       const b = o?.attributes[sem];
+      if (refitSems.includes(sem)) {
+        // user-authorised garment refit: the attribute is re-derived (same type / count); it must be exactly the refit array
+        const want = sha(Buffer.from(Float32Array.from(p.refit[sem === 'POSITION' ? 'pos' : 'nrm']).buffer));
+        const eq = !!b && ['type', 'componentType', 'normalized', 'count'].every(k => a[k] === b[k]) && b.sha256 === want;
+        attrs[sem] = {count: a.count, sourceSha256: a.sha256, sha256: b?.sha256 ?? null, refit: true, equalToRefit: eq, equal: eq};
+        ok &&= eq;
+        continue;
+      }
       const eq = !!b && ['type', 'componentType', 'normalized', 'count', 'sha256'].every(k => a[k] === b[k]);
       attrs[sem] = {count: a.count, sha256: a.sha256, equal: eq};
       ok &&= eq;
@@ -55,11 +64,11 @@ export async function proveAppearance(out, parts) {
     // bind pose = M * native
     const world = jointWorld(R, null);
     const sk = skinMesh(m, world, true);
-    const expect = transformPositions(m.pos, p.M);
+    const expect = p.refit ? Float32Array.from(p.refit.pos) : transformPositions(m.pos, p.M);
     let maxErr = 0; for (let i = 0; i < expect.length; i++) maxErr = Math.max(maxErr, Math.abs(expect[i] - sk.pos[i]));
     let maxAng = 0, zeroNormals = 0;
     if (m.nrm && sk.nrm) {
-      const en = transformNormals(m.nrm, p.M);
+      const en = p.refit ? Float32Array.from(p.refit.nrm) : transformNormals(m.nrm, p.M);
       for (let i = 0; i < en.length; i += 3) {
         // zero-length source normals (degenerate in the supplied data, carried over byte-identical) have no direction to compare
         if (Math.hypot(m.nrm[i], m.nrm[i + 1], m.nrm[i + 2]) < 1e-6) { zeroNormals++; continue; }
@@ -73,7 +82,7 @@ export async function proveAppearance(out, parts) {
     let wBad = 0; for (let i = 0; i < m.weights.length; i += 4) if (m.weights[i] + m.weights[i + 1] + m.weights[i + 2] + m.weights[i + 3] !== 255) wBad++;
     ok &&= wBad === 0;
     result.parts.push({name: p.name, source: {file: p.srcFile, sha256: p.srcSha256}, mode: s.mode, attributes: attrs, indices: {...s.indices, equal: idxEq}, materialEqual: matEq, attributesAdded: ['JOINTS_0', 'WEIGHTS_0'], unexpectedAttributes: extraAttrs,
-      bindPose: {maxPositionErrorM: +maxErr.toExponential(3), maxNormalAngleRad: +maxAng.toExponential(3), zeroLengthSourceNormalsSkipped: zeroNormals, equal: bindOk, rule: 'CPU glTF skinning at rest (JointWorld * IBM) vs M_fit * native, float32'},
+      bindPose: {maxPositionErrorM: +maxErr.toExponential(3), maxNormalAngleRad: +maxAng.toExponential(3), zeroLengthSourceNormalsSkipped: zeroNormals, equal: bindOk, rule: p.refit ? 'CPU glTF skinning at rest (JointWorld * IBM) vs the refit POSITION / NORMAL (M = identity), float32' : 'CPU glTF skinning at rest (JointWorld * IBM) vs M_fit * native, float32'},
       weightRowsNot255: wBad, ok});
     result.ok &&= ok;
   }
@@ -93,4 +102,48 @@ export async function proveAppearance(out, parts) {
   result.ok &&= texOk && pixOk;
   result.extensionsUsed = outFp.extensionsUsed;
   return result;
+}
+
+// ------------------------------------------------------------------------------------------------ body invariance (refit task)
+const accSha = a => (a ? {type: a.getType(), componentType: a.getComponentType(), normalized: a.getNormalized(), count: a.getCount(), sha256: sha(Buffer.from(a.getArray().buffer, a.getArray().byteOffset, a.getArray().byteLength))} : null);
+
+/**
+ * Task siren-clothing-refit-20261031: the BODY of a written Siren GLB is identical to a reference build (main's asset): every body
+ * primitive attribute incl. JOINTS_0 / WEIGHTS_0 and the indices (sha256 of the raw bytes), its material (texture slots by image
+ * sha256) and texture bytes, its skin (joint names, inverse bind matrices bytes), the joint hierarchy and every joint's bind TRS, every
+ * animation (names, channels: target / path, sampler interpolation, input / output bytes) and the gameplay extras (clips, hitRadii,
+ * heightM, ends, joints, archetype, modelSpace). Also the dress's UVs / indices / material / textures vs the reference. Returns
+ * {ok, ...per-item results, extrasChanged: keys that differ (dress-dependent bounds are expected to)}.
+ */
+export async function proveBodyInvariance(outFile, refFile) {
+  const read = async f => (await loadRigged(f)).doc;
+  const [A, B] = [await read(outFile), await read(refFile)];
+  const node = (d, n) => d.getRoot().listNodes().find(x => x.getName() === n);
+  const res = {reference: refFile, items: {}, ok: true};
+  const put = (k, eq, detail = {}) => { res.items[k] = {equal: eq, ...detail}; res.ok &&= eq; };
+  const bodyA = node(A, 'SirenBody').getMesh().listPrimitives()[0], bodyB = node(B, 'SirenBody').getMesh().listPrimitives()[0];
+  for (const sem of [...new Set([...bodyA.listSemantics(), ...bodyB.listSemantics()])]) { const a = accSha(bodyA.getAttribute(sem)), b = accSha(bodyB.getAttribute(sem)); put('body.' + sem, JSON.stringify(a) === JSON.stringify(b), {sha256: a?.sha256, count: a?.count}); }
+  { const a = accSha(bodyA.getIndices()), b = accSha(bodyB.getIndices()); put('body.indices', JSON.stringify(a) === JSON.stringify(b), {sha256: a?.sha256, count: a?.count}); }
+  const fpA = fingerprint(A), fpB = fingerprint(B);
+  const matOf = (fp, mesh) => JSON.stringify(texKeyed(fp.primitives.find(x => x.mesh === mesh)?.material, fp));
+  put('body.material', matOf(fpA, 'SirenBody') === matOf(fpB, 'SirenBody'));
+  put('textures.bytes', JSON.stringify(fpA.textures.map(t => t.sha256).sort()) === JSON.stringify(fpB.textures.map(t => t.sha256).sort()), {sha256: fpA.textures.map(t => t.sha256)});
+  const skinA = node(A, 'SirenBody').getSkin(), skinB = node(B, 'SirenBody').getSkin();
+  put('body.skin.joints', JSON.stringify(skinA.listJoints().map(j => j.getName())) === JSON.stringify(skinB.listJoints().map(j => j.getName())));
+  { const a = accSha(skinA.getInverseBindMatrices()), b = accSha(skinB.getInverseBindMatrices()); put('body.skin.inverseBindMatrices', JSON.stringify(a) === JSON.stringify(b), {sha256: a.sha256}); }
+  const joints = d => node(d, 'SirenBody').getSkin().listJoints().map(j => ({name: j.getName(), parent: j.getParentNode()?.getName() ?? null, t: j.getTranslation(), r: j.getRotation(), s: j.getScale()}));
+  put('skeleton.jointsTRS', JSON.stringify(joints(A)) === JSON.stringify(joints(B)), {joints: joints(A).length});
+  const anims = d => d.getRoot().listAnimations().map(an => ({name: an.getName(), channels: an.listChannels().map(c => ({target: c.getTargetNode().getName(), path: c.getTargetPath(), interpolation: c.getSampler().getInterpolation(), input: accSha(c.getSampler().getInput()).sha256, output: accSha(c.getSampler().getOutput()).sha256}))}));
+  put('animations', JSON.stringify(anims(A)) === JSON.stringify(anims(B)), {clips: anims(A).map(a => [a.name, a.channels.length])});
+  const exA = A.getRoot().listScenes()[0].getExtras().enemySiren ?? {}, exB = B.getRoot().listScenes()[0].getExtras().enemySiren ?? {};
+  const GAMEPLAY = ['clips', 'hitRadii', 'heightM', 'ends', 'joints', 'archetype', 'modelSpace', 'meshes', 'version'];
+  for (const k of GAMEPLAY) put('extras.' + k, JSON.stringify(exA[k]) === JSON.stringify(exB[k]));
+  res.extrasChanged = [...new Set([...Object.keys(exA), ...Object.keys(exB)])].filter(k => JSON.stringify(exA[k]) !== JSON.stringify(exB[k]));
+  const dA = node(A, 'SirenDress').getMesh().listPrimitives()[0], dB = node(B, 'SirenDress').getMesh().listPrimitives()[0];
+  for (const sem of ['TEXCOORD_0']) { const a = accSha(dA.getAttribute(sem)), b = accSha(dB.getAttribute(sem)); put('dress.' + sem, JSON.stringify(a) === JSON.stringify(b), {sha256: a?.sha256}); }
+  { const a = accSha(dA.getIndices()), b = accSha(dB.getIndices()); put('dress.indices', JSON.stringify(a) === JSON.stringify(b), {sha256: a?.sha256}); }
+  put('dress.material', matOf(fpA, 'SirenDress') === matOf(fpB, 'SirenDress'));
+  res.dressChanged = Object.fromEntries(['POSITION', 'NORMAL', 'JOINTS_0', 'WEIGHTS_0'].map(sem => [sem, {reference: accSha(dB.getAttribute(sem))?.sha256, output: accSha(dA.getAttribute(sem))?.sha256}]));
+  { const a = accSha(node(A, 'SirenDress').getSkin().getInverseBindMatrices()), b = accSha(node(B, 'SirenDress').getSkin().getInverseBindMatrices()); res.dressChanged.inverseBindMatrices = {reference: b.sha256, output: a.sha256}; }
+  return res;
 }

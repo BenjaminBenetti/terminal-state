@@ -5,6 +5,9 @@
 //     skinning AND three.js SkinnedMesh), 18 shared joints, 6 clips, weights normalised (rows sum to 255), extras;
 //  2. the shipped enemy-siren.glb against its sidecar (accessor / texture sha256 recorded from the verified uploads at build
 //     time, pinned upload hashes, clips, joints, weights, file hash) — and, when the uploads are staged locally, the full proof.
+// Task siren-clothing-refit-20261031 (lane FIT): the dress is now the user-authorised garment-only REFIT (its POSITION / NORMAL /
+// weights re-derived; UVs / indices / material / textures still the upload's); the BODY is pinned to main's pre-refit asset
+// (4ac5d8ca…: accessor / IBM / skeleton / clip digests below), CI-safe (no uploads needed).
 import {describe, expect, it, beforeAll, afterAll} from 'vitest';
 import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -119,8 +122,11 @@ describe('shipped enemy-siren.glb (user-supplied Siren, appearance-locked)', () 
     expect(bytes.length).toBe(side.output.bytes);
     expect(statSync(glb).size).toBeLessThan(25 * 1024 * 1024);
     expect(side.provenance.sources.map((s: {uploadId: string; sha256: string}) => [s.uploadId, s.sha256])).toEqual([[UPLOADS.body.id, UPLOADS.body.sha256], [UPLOADS.dress.id, UPLOADS.dress.sha256]]);
-    expect(side.provenance.status).toMatch(/appearance-locked, technical rig \/ fit only; no licence clearance implied/);
+    expect(side.provenance.status).toMatch(/body appearance-locked .*dress = user-authorised garment-only refit .*no licence clearance implied/);
+    expect(side.provenance.generation).toMatch(/^none/);
     expect(side.appearanceLock.proof.ok).toBe(true);
+    expect(side.appearanceLock.bodyInvariance.ok).toBe(true);
+    expect(side.provenance.sourcesVerified.after.map((s: {sha256: string}) => s.sha256)).toEqual([UPLOADS.body.sha256, UPLOADS.dress.sha256]);
   });
 
   it('carries the uploads\' native accessors and texture bytes exactly as recorded from the verified sources', async () => {
@@ -141,12 +147,37 @@ describe('shipped enemy-siren.glb (user-supplied Siren, appearance-locked)', () 
     }
   });
 
+  it('keeps the BODY identical to main\'s pre-refit asset (4ac5d8ca…): accessors incl. weights, skin IBMs, skeleton, clips (pinned)', async () => {
+    const doc = await io().read(glb);
+    const body = doc.getRoot().listNodes().find(n => n.getName() === 'SirenBody')!;
+    const prim = body.getMesh()!.listPrimitives()[0];
+    const PIN = {POSITION: '4252d319391cdb642f76e90ba72c3e92cdabc62e04a0cb506f5f66cd164ed634', NORMAL: '48efbd16b8c7edba7d821a22578e93a70b44cf2c7b9cc28f2f951ee651846ae7',
+      TEXCOORD_0: '32f1323acc186c53ea29c1c9e906dbb0c7341a3163856d9afd6a9c58c842122b', JOINTS_0: 'a919fca456fd01a6f6024db71d8687ee7a270cf507f1444478d83d09fdd8e20c',
+      WEIGHTS_0: '532f29471dd2a4fe3e238e43d5ce670869a407820bbaaec7b3b5b35e6133c26c'};
+    for (const [sem, h] of Object.entries(PIN)) expect(sha(bytesOf(prim.getAttribute(sem)!.getArray()!)), sem).toBe(h);
+    expect(sha(bytesOf(prim.getIndices()!.getArray()!))).toBe('2eae702d67a24d9be78ce632b6c58cb8d78b7fa6495baa1cc781214f4186783e');
+    expect(sha(bytesOf(body.getSkin()!.getInverseBindMatrices()!.getArray()!))).toBe('4626dd50932aa3486d79eb3140f3f28200bf7a45b8aeb9d12fac2ccf458a5b3d');
+    const joints = body.getSkin()!.listJoints().map(j => `${j.getName()}|${j.getParentNode()?.getName() ?? ''}|${j.getTranslation().join(',')}|${j.getRotation().join(',')}|${j.getScale().join(',')}`).join('\n');
+    expect(sha(new TextEncoder().encode(joints))).toBe('258e9233cebc36cd70722f666f380acbf35693c613f1214583fdebffe8099032');
+    const anim = doc.getRoot().listAnimations().map(an => an.listChannels().map(c => `${an.getName()}|${c.getTargetNode()!.getName()}|${c.getTargetPath()}|${c.getSampler()!.getInterpolation()}|${sha(bytesOf(c.getSampler()!.getInput()!.getArray()!))}|${sha(bytesOf(c.getSampler()!.getOutput()!.getArray()!))}`).join('\n')).join('\n');
+    expect(sha(new TextEncoder().encode(anim))).toBe('e7de1b8c08efac3efad06d820765edbf3340c81d2b395b3aa59fec3176323960');
+    // the dress keeps the upload's UVs / indices; its POSITION / NORMAL are the recorded refit arrays
+    const dress = doc.getRoot().listNodes().find(n => n.getName() === 'SirenDress')!.getMesh()!.listPrimitives()[0];
+    expect(sha(bytesOf(dress.getAttribute('TEXCOORD_0')!.getArray()!))).toBe('f6b782cd2b5e05f398420d9d9464f18c541d1b2fbfbb24566c23e2cbbd74de1e');
+    expect(sha(bytesOf(dress.getIndices()!.getArray()!))).toBe('4d336a50e0f9308b0f41897e460b124e0bdd93330be598f13898e51c9d50d3c0');
+    for (const sem of ['POSITION', 'NORMAL']) expect(sha(bytesOf(dress.getAttribute(sem)!.getArray()!)), sem).toBe(side.fit.dress.changedAttributes[sem].refit);
+  });
+
   const staged = path.join(ROOT, '.cache/track1-siren-20261031');
   it.skipIf(!existsSync(path.join(staged, UPLOADS.body.id + '.glb')))('full appearance proof against the staged uploads (local only)', async () => {
     const N = await lib('native-glb.mjs'), P = await lib('proof.mjs');
     const body = await N.readSource(path.join(staged, UPLOADS.body.id + '.glb'), UPLOADS.body.sha256);
     const dress = await N.readSource(path.join(staged, UPLOADS.dress.id + '.glb'), UPLOADS.dress.sha256);
-    const proof = await P.proveAppearance(glb, [{name: 'SirenBody', srcDoc: body.doc, M: side.fit.body.matrix}, {name: 'SirenDress', srcDoc: dress.doc, M: side.fit.dress.matrix}]) as Proof;
+    // the refitted dress: UVs / indices / material / textures equal the upload's, POSITION / NORMAL = the shipped refit arrays and
+    // the bind pose (CPU skinning at rest) reproduces them (M = identity)
+    const shipped = (await io().read(glb)).getRoot().listNodes().find(n => n.getName() === 'SirenDress')!.getMesh()!.listPrimitives()[0];
+    const refit = {pos: shipped.getAttribute('POSITION')!.getArray(), nrm: shipped.getAttribute('NORMAL')!.getArray()};
+    const proof = await P.proveAppearance(glb, [{name: 'SirenBody', srcDoc: body.doc, M: side.fit.body.matrix}, {name: 'SirenDress', srcDoc: dress.doc, M: side.fit.dress.matrix, refit}]) as Proof;
     expect(proof.ok).toBe(true);
   }, 120_000);
 });
