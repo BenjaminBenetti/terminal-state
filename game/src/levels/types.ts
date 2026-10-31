@@ -11,6 +11,7 @@
 // elevator / windows / exterior runtime = lane LIFT.
 
 import type {StationLayout} from '../gen/stationTypes';
+import type {TrackExtConfig} from '../gen/trackExt/types';
 
 // Task track3-eaton-centre-20261031 (lane GEN): + 'mall' — The Eaton's Center (tier 2; gen/mall/index.ts generateMallLevel).
 export type LevelId = 'subway' | 'office' | 'mall';
@@ -73,4 +74,10 @@ export interface LevelDef {
   sections(levelSeed: number): string[];
   /** Deterministic section layout. */
   generate(section: string, ctx: SectionGenContext): StationLayout;
+  /**
+   * Track 2 (lane GEN): the level's track extensions — tunnels past its track-bed ends and service annexes (gen/trackExt), or
+   * 'none' (the beds keep their black end walls). REQUIRED on every level: a level whose layouts carry track beds must decide
+   * (tests/track-ext-coverage.test.ts fails for a track-bearing level whose generator ignores its config).
+   */
+  trackExtensions: TrackExtConfig | 'none';
 }

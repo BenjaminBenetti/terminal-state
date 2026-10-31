@@ -28,6 +28,8 @@ import {cutOfficeWindows} from '../src/world/officeProps';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {corpusTotals} from './helpers/lootEconomy';
 import {LEGACY_AMMO_IDS} from '../src/items/calibers';
+import {coreView, isExtensionArea} from '../src/gen/trackExt/index';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
 /** Canonical dump hash of everything a generator produces (grids, areas, doors, props, lights, signs, loot, spawns). */
 function fingerprint(l: StationLayout): string {
@@ -247,10 +249,11 @@ describe('office level (one continuous layout)', () => {
   });
 
   it('station: a compact stop about one sixth of the base Subway, joined to the lobby by its straight stair run', () => {
-    const subway = [1, 7, 42, 1234, 99999].map(seed => levelMetrics(generateStation(seed)).walkM2.reduce((a, b) => a + b, 0));
+    // Track 2 (lane GEN): the CORE stations (gen/trackExt coreView: tunnels / annexes are reported by tests/track-ext*.test.ts)
+    const subway = [1, 7, 42, 1234, 99999].map(seed => levelMetrics(coreView(generateStation(seed))).walkM2.reduce((a, b) => a + b, 0));
     const subwayMean = subway.reduce((a, b) => a + b, 0) / subway.length;
     const all = LEVEL_SEEDS.concat([7, 99, 512]).map(levelSeed => gen(levelSeed));
-    const station = all.map(l => levelMetrics(l).walkM2[0]);
+    const station = all.map(l => levelMetrics(coreView(l)).walkM2[0]);
     const ratio = station.reduce((a, b) => a + b, 0) / station.length / subwayMean;
     const m = levelMetrics(all[0]).walkM2;
     process.stdout.write(`[office-gen] subway mean walk ${subwayMean.toFixed(0)} m2; station walk ${station.join(', ')} m2; ratio ${ratio.toFixed(3)}; storeys (seed 11) ${m.join(' / ')} m2\n`);
@@ -274,7 +277,9 @@ describe('office level (one continuous layout)', () => {
     let floorEnemies = 0, floors = 0, pickups = 0;
     for (const levelSeed of LEVEL_SEEDS) {
       const l = gen(levelSeed);
-      const per = (lvs: number[]) => l.zombies.filter(z => lvs.includes(z.level ?? 0)).length;
+      // (Track 2, lane CONTENT: the core contexts' spawns; the service annexes' zone budget is separate — tests/annex-content.test.ts)
+      const core = l.zombies.filter(z => !isExtensionArea(l.areas[z.area]));
+      const per = (lvs: number[]) => core.filter(z => lvs.includes(z.level ?? 0)).length;
       expect(per([0, 1])).toBeGreaterThanOrEqual(OFFICE_ENEMIES.street[0]);
       expect(per([0, 1])).toBeLessThanOrEqual(OFFICE_ENEMIES.street[1]);
       for (let n = 2; n <= 8; n++) {
@@ -283,7 +288,7 @@ describe('office level (one continuous layout)', () => {
         floorEnemies += per([n]);
         floors++;
       }
-      expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
+      expect(core.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
       // task track1-siren-blightbelly-20261031 (lane SPAWN): + the Blightbelly and the (Office-only) Siren families
       expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie'))).toBe(true);
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
@@ -456,21 +461,54 @@ describe('the Subway is unchanged', () => {
     '1:rifle': 'f50fc2e7', '1:pistol': '94a7f554', '7:rifle': 'bdd4de2a', '7:pistol': '5f455d00',
     '42:rifle': '57dcd13b', '42:pistol': 'fd258bb9', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
   };
-  it('generateStation output for existing seeds is byte-identical to HEAD', () => {
+  // Track 2 — Beyond the Station (lane GEN): the live stations carry their track extensions (tunnels past the bed ends, service
+  // annexes), appended after every core pass; a station whose extension reaches west / north has its finished core re-framed
+  // (translated) into the larger grid. Every core decision is made in main's frame: the translation-normalised proof below — the
+  // same fingerprint over gen/trackExt coreView(layout) (core window, records translated back at their exact core-frame
+  // positions, extension records filtered) — reproduces HEAD byte for byte for every seed. LIVE = the fingerprints of the
+  // extended stations (grid size, translated coordinates, extension cells / areas / doors): only seeds with extensions differ.
+  // Track 2 lane GEN-2 — CAUSE: "core reserve enabled (authorized incidence change)": the Subway's TRACK_EXT.coreReserveM = 40
+  // keeps rock past the bed ends still open after the archetype skeleton, so the core stations are re-laid (a layout change).
+  // PROOF (every run): generated with the reserve OFF ({...TRACK_EXT, coreReserveM: 0}), the core view reproduces HEAD byte for
+  // byte for every seed. CORE = the core view of the live stations (reserve on): 1234 keeps HEAD (its skeleton left no bed end
+  // open: the reserve kept nothing). LIVE (was {...HEAD, 42:rifle 8aa759c8, 42:pistol 28d8c06f}) = the live stations.
+  const CORE: Record<string, string> = {
+    '1:rifle': '2b009238', '1:pistol': 'caf6ec41', '7:rifle': 'f7bce5d9', '7:pistol': 'dd675be3',
+    '42:rifle': '811b8141', '42:pistol': '7434701e', '1234:rifle': '85bc7a40', '1234:pistol': '145c9083',
+  };
+  // Track 2 (lane CONTENT): the extensions are now populated (gen/annexContent.ts, own fork, appended after every core record:
+  // tunnel fixtures on every extended station; annex dressing / plates / fixtures / loose finds / service spawns) - every LIVE
+  // fingerprint moves (was 1 c427820b / 5ecb0be6, 7 97780ab3 / 97757449, 42 8f75cf60 / 67c40d1a, 1234 2f49e529 / 7597a315); the
+  // core view still equals CORE and the reserve-off core view HEAD (asserted below; coreView filters the appended records).
+  const LIVE: Record<string, string> = {
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'b402c09e', '7:pistol': '35870a80',
+    '42:rifle': 'f1d3aed2', '42:pistol': '43e5c856', '1234:rifle': 'f4b97ce1', '1234:pistol': '8d0d8135',
+  };
+  it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;
+    const core: Record<string, string> = {}, live: Record<string, string> = {};
     for (const [key, fp] of Object.entries(HEAD)) {
       const [seed, sw] = key.split(':');
       const l = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol'});
+      const off = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol', trackExtensions: TRACK_EXT_RESERVE_OFF});
       // lane AMMO (knife-melee-20261030): the ammo item ids became caliber ids (ammo_rifle -> ammo_556, ...); with the old names
       // mapped back, the generated station must still be byte-identical (floor boxes / weapon-find companions are unchanged)
       // Task track1-siren-blightbelly-20261031 (lane SPAWN): the new families REPLACE zombie slots (same roll, rat/dogs identical);
       // mapped back to 'zombie' the station is still byte-identical (enemy-spawn-parity.test.ts holds the invariant pins too)
-      const back = l.zombies.map(z => (z.archetype === 'blightbelly' || z.archetype === 'siren' ? (replaced++, {...z, archetype: 'zombie' as const}) : z));
-      expect(fingerprint({...l, zombies: back, pickups: l.pickups.map(q => ({...q, itemId: LEGACY_NAME[q.itemId] ?? q.itemId}))}), key).toBe(fp);
+      const legacy = (q: StationLayout) => ({
+        ...q,
+        zombies: q.zombies.map(z => (z.archetype === 'blightbelly' || z.archetype === 'siren' ? (replaced++, {...z, archetype: 'zombie' as const}) : z)),
+        pickups: q.pickups.map(p => ({...p, itemId: LEGACY_NAME[p.itemId] ?? p.itemId})),
+      });
+      expect(fingerprint(legacy(coreView(off))), `${key} core (reserve off)`).toBe(fp);
+      core[key] = fingerprint(legacy(coreView(l)));
+      live[key] = fingerprint(legacy(l));
       expect(l.office).toBeUndefined();
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
       expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);
     }
     expect(replaced, 'the corpus exercises the family mapping').toBeGreaterThan(0);
+    expect(core).toEqual(CORE);
+    expect(live).toEqual(LIVE);
   });
 });

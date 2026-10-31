@@ -15,6 +15,7 @@
 // start weapon, finite (layout pickup memory); every other storey's loot is unchanged (an explicit roof exception).
 
 import {describe, expect, it} from 'vitest';
+import {coreView} from '../src/gen/trackExt/index'; // Track 2 (lane CONTENT)
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {generateStation} from '../src/gen/station';
 import {officeIssues} from '../src/gen/office/validate';
@@ -277,7 +278,12 @@ describe('the roof cache on the real Office Space level (bounded seed set)', () 
 
   it('no other storey changes: holders / pickups / enemies off the roof are identical to a build without the roof rewards; no gear roll', () => {
     for (const seed of SEEDS.slice(0, 3)) {
-      const a = gen(seed), b = gen(seed, NO_REWARD);
+      // Track 2 (lane CONTENT): the core views — a level's service annexes append their own content after every core record
+      // (after the roof rewards too), on their own forks; it is identical with and without the rewards (asserted below)
+      const A = gen(seed), B = gen(seed, NO_REWARD), a = coreView(A), b = coreView(B);
+      const placed = (q: StationLayout['props']) => q.map(p => [p.kind, p.x, p.y, p.z, p.rot, p.purpose ?? '']);
+      expect(placed(A.props.slice(a.props.length))).toEqual(placed(B.props.slice(b.props.length)));
+      expect(A.zombies.slice(a.zombies.length)).toEqual(B.zombies.slice(b.zombies.length));
       expect(a.attempt).toBe(b.attempt);
       expect(b.props.some(p => p.purpose === ROOF_CACHE_KEY)).toBe(false);
       expect(b.office!.roof!.reward).toBeUndefined();

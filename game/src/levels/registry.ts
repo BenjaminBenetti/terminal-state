@@ -1,7 +1,8 @@
 // Iteration 16 (lane RUN) / iteration 17 (seamless): the logical levels of the game (levels/types.ts). Each level is ONE
 // continuous world, section 'main':
 //  - subway: generateStation(levelSeed, {startWeapon}) with ZERO changes to its output; the level-wide gear roll (lane GEAR)
-//    is appended to layout.pickups afterwards (no gear => identical).
+//    is appended to layout.pickups afterwards (no gear => identical). Track 2 (lane GEN): + the level's track extensions
+//    (LevelDef.trackExtensions), attached after every core pass (the core station is unchanged up to a crop translation).
 //  - office: lane GEN's generateOfficeLevel(ctx) — the compact station, the tower lobby and office floors 2–8 at their real
 //    heights in one layout (stairs + a moving elevator between them; nothing inside the level is a travel).
 // A level regenerates identically from its seed: the run memory (run/memory.ts) carries what changed.
@@ -11,7 +12,7 @@ import type {StationLayout} from '../gen/stationTypes';
 import {isMaskLootItem, placeMaskLoot, placeSectionGear} from './gearAdapter';
 import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
 import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): The Eaton's Center
-import {MALL_TRACK_EXTENSIONS, type TrackExtConfigInterim} from '../gen/mall/trackExt'; // (lane GEN: Track2 interim declaration)
+import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
@@ -38,9 +39,10 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     blurb: 'A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.',
     entry: 'main',
     sections: () => ['main'],
+    trackExtensions: trackExtConfig('subway'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`Subway has no section '${section}'`);
-      return withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon}), ctx);
+      return withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions}), ctx);
     },
   },
   office: {
@@ -50,9 +52,10 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     blurb: 'A small subway stop under an office tower — climb the stairs into the lobby, then work up eight floors by stairwell or elevator.',
     entry: 'main',
     sections: () => ['main'],
+    trackExtensions: trackExtConfig('office'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`Office Space has no section '${section}'`);
-      return withGear(generateOfficeLevel(ctx), ctx);
+      return withGear(generateOfficeLevel(ctx, undefined, undefined, LEVELS.office.trackExtensions), ctx);
     },
   },
   // Task track3-eaton-centre-20261031 (lane GEN): THE EATON'S CENTER — a subway station at the bottom of an open pit under a glass
@@ -64,20 +67,14 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     blurb: 'A subway station at the bottom of a vast open mall — look up through six rings of shops to the glass roof, then work your way up by escalator, stairs and bridges.',
     entry: 'main',
     sections: () => ['main'],
+    // lane INTEG (Track2 integration): the pit station's beds are track-bearing — the real TrackExtConfig (TRACK_EXT_MALL), never
+    // 'none'; gen/mall/index.ts calls extendTracks at its seam (east / south growth from the fixed crop origin).
+    trackExtensions: trackExtConfig('mall'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`The Eaton's Center has no section '${section}'`);
-      return withGear(generateMallLevel(ctx), ctx);
+      return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx);
     },
   },
-};
-
-/**
- * Task track3-eaton-centre-20261031 (lane GEN): Track2 (same-world track extensions / service annexes) — each track-bearing level's
- * declaration. INTERIM data hook until Track2's `trackExtensions: TrackExtConfig | 'none'` lands (then it moves into LevelDef):
- * the mall is ENABLED; the Subway / Office are Track2's to declare (absent here = not yet declared).
- */
-export const TRACK_EXTENSIONS: Partial<Record<LevelId, TrackExtConfigInterim | 'none'>> = {
-  mall: MALL_TRACK_EXTENSIONS,
 };
 
 export function isLevelId(v: unknown): v is LevelId {

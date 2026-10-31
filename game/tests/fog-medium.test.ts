@@ -21,6 +21,7 @@ import {
   type MediumMaps, type SpotInput, type V3,
 } from '../src/render/atmosphere';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
+import {coreView} from '../src/gen/trackExt/index';
 
 const stations = new Map<number, StationLayout>();
 const station = (seed: number) => { let s = stations.get(seed); if (!s) stations.set(seed, (s = generateStation(seed))); return s; };
@@ -112,7 +113,9 @@ describe('(a) persistence: world-anchored density, independent of where the came
   });
 
   it('no area is ever consumed: foggy areas stay foggy over 10 minutes of fog time (patches move through, never drain)', () => {
-    const l = station(0x1a2b3c), p = atmosphereFor(l), maps = mapsOf(l, p);
+    // Track 2 GEN-2: the CORE station (gen/trackExt coreView; DESIGN §0: rules over the core, extensions reported separately). Its
+    // live layout carries annexes now and is translated with them, so the world-anchored patches sample other noise there.
+    const l = coreView(station(0x1a2b3c)), p = atmosphereFor(l), maps = mapsOf(l, p);
     const pts = walkingPoints(l, 3);
     const byArea = new Map<number, {p: V3; slot: number}[]>();
     for (const q of pts) {
@@ -149,7 +152,9 @@ describe('(b) slightly less fog, with genuinely clear and dense areas', () => {
 
   it('area classes are seeded per station + area, by type; clear areas hold almost none, dense areas / track beds plenty', () => {
     for (const seed of Object.keys(ITER12_MEAN).map(Number)) {
-      const l = station(seed), p = atmosphereFor(l), maps = mapsOf(l, p);
+      // Track 2 GEN-2: the CORE station's volume fractions (DESIGN §0: the service annexes — corridors / plant rooms, never clear —
+      // are extension volume, reported separately, not part of the iteration-12 station's clear / dense split)
+      const l = coreView(station(seed)), p = atmosphereFor(l), maps = mapsOf(l, p);
       const areas = maps.map!.areas!;
       const n = {clear: 0, normal: 0, dense: 0};
       for (const a of areas) n[a.cls]++;
@@ -176,7 +181,8 @@ describe('(b) slightly less fog, with genuinely clear and dense areas', () => {
     expect(ATMOSPHERE.density).toBeLessThan(ATMOSPHERE_ITER12.density * 0.8);
     const rows: string[] = [];
     for (const [seedS, old] of Object.entries(ITER12_MEAN)) {
-      const seed = Number(seedS), l = station(seed), p = atmosphereFor(l), maps = mapsOf(l, p);
+      // Track 2 (lane GEN): the CORE station's mean (gen/trackExt coreView: track tunnels / annexes are not the iteration-12 station)
+      const seed = Number(seedS), l = coreView(station(seed)), p = atmosphereFor(l), maps = mapsOf(l, p);
       const ms = [0, 60, 120, 180, 240, 300].map(t => mediumStats(l, maps, p, t, 7).mean);
       const avg = ms.reduce((a, b) => a + b, 0) / ms.length;
       rows.push(`seed ${seed} (${l.archetype}): iteration 12 ${(old * 1000).toFixed(1)} -> now ${(avg * 1000).toFixed(1)} (x${(avg / old).toFixed(2)}) e-3 /m`);

@@ -10,11 +10,12 @@
 // placed here (the level registry appends ctx.gear once).
 //
 // Pipeline (the station / office machinery wherever it fits): frame (seeded variant) → carve (Kit with 7 level grids; the station
-// with the shared Kit.sideBlock) → Track2 seam (extendTracksSeam: NOT INTEGRATED, a no-op on rng.fork('track-ext')) → crop (fixed
-// origin, canvas room east / south) → storeys / links / apertures / rails / rescue ladders → ONE stationDress.dress() (run mouths /
-// elevator landings held clear) → [lane SHOPS seam] → start → whole-level enemies (spawn profile 'pit' / 'ring' contexts) /
-// loose supplies → applyLighting → finishTraversal → enemy archetypes → layout.mall (MallInfo + patrol graph) → [lane HORDE:
-// placeHordes] → validation (retry on issues).
+// with the shared Kit.sideBlock) → Track2 plan (extendTracks on rng.fork('track-ext'), lane INTEG: nothing written into the Kit) →
+// crop (fixed origin, canvas room east / south) → storeys / links / apertures / rails / rescue ladders → ONE stationDress.dress()
+// (run mouths / elevator landings held clear) → [lane SHOPS seam] → start → whole-level enemies (spawn profile 'pit' / 'ring'
+// contexts) / loose supplies → applyLighting → finishTraversal → layout.mall (MallInfo + patrol graph) → [lane HORDE: placeHordes]
+// → Track2 attach (finishExtensions: the grid grows east / south; populateExtensions: annex content + 'service' spawns, appended)
+// → enemy archetypes ONCE + the Siren spacing → validation (retry on issues; extensions never decide a retry).
 
 import {Rng, hashString} from '../../core/rng';
 import {CELL} from '../grid';
@@ -40,9 +41,11 @@ import {placeMallWeapons} from './shopsWeapons'; // lane SHOPS: the bounded once
 import {placeMallLandmarks, type LandmarkReport} from './landmarks'; // lane ARCH: fountain, directory pylons, wayfinding signs
 import {CROP_MARGIN, MALL_CANVAS, RINGS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
 import {carveMall, type MallCarve} from './carve';
-import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, type Crop} from './structure';
+import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwayRoot, type Crop} from './structure';
 import {mallIssues} from './validate';
-import {MALL_TRACK_EXTENSIONS, extendTracksSeam, isExtensionArea, type TrackExtensionsInterim} from './trackExt';
+import {mallTrackExtContext} from './trackExt'; // lane INTEG (Track2 integration): the mall's extendTracks parameters
+import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
+import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
 export {MALL_VARIANTS, mallFrame, mallVariantOf, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
 export {mallIssues, mallVoidCells} from './validate';
@@ -59,6 +62,8 @@ export interface MallGenOptions {
   variant?: MallVariant;
   loot?: LootProfile;
   spawns?: SpawnProfile;
+  /** Track2 (lane INTEG): the level's track-extension declaration (default LEVELS.mall's: trackExtConfig('mall')); 'none' = no extensions. */
+  trackExt?: TrackExtConfig | 'none';
 }
 
 /** The ONE continuous Eaton's Center layout (station pit + six rings + the roof record). */
@@ -67,16 +72,23 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
   let f = mallFrame(ctx.levelSeed, opts.variant);
   const loot = opts.loot ?? lootProfile('mall');
   const spawns = opts.spawns ?? spawnProfile('mall');
+  const trackExt = opts.trackExt ?? trackExtConfig('mall');
   const seed = mallSeed(ctx.levelSeed);
   let fallback: StationLayout | null = null;
   MALL_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt);
     MALL_GEN_STATS.attempts = attempt + 1;
     // A program that does not fit re-rolls the frame's free parameters (same variant) for the next attempt.
     if (!layout) { MALL_GEN_STATS.carveFails++; f = mallFrame(ctx.levelSeed, f.variant, MALL_GEN_STATS.carveFails); continue; }
-    const issues = mallIssues(layout, {startCells: spawnStartCells(spawns)});
+    let issues = mallIssues(layout, {startCells: spawnStartCells(spawns)});
+    // Track2 (lane INTEG): extensions never decide a retry (the core keeps its attempt): drop them and re-check the core.
+    if (issues.length && (layout.extensions?.tunnels.length || layout.extensions?.annexes.length)) {
+      dropExtensions(layout);
+      issues = mallIssues(layout, {startCells: spawnStartCells(spawns)});
+      if (!issues.length) TRACK_EXT_STATS.rescued++;
+    }
     MALL_GEN_STATS.issues = issues;
     if (!issues.length) { fallback = layout; break; }
     for (const i of new Set(issues.map(q => q.replace(/-?[\d.]+/g, '#')))) MALL_REJECTS.set(i, (MALL_REJECTS.get(i) ?? 0) + 1);
@@ -95,17 +107,20 @@ const spawnStartCells = (p: SpawnProfile): number => {
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile): StationLayout | null {
+function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none' = 'none'): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: MALL_CANVAS.levels, w: MALL_CANVAS.w, h: MALL_CANVAS.h});
   const mc = carveMall(k, rng, f);
   if (!mc) return null;
 
-  // --- Track2 seam: AFTER all mall carving, BEFORE the crop (NOT INTEGRATED — Track2 pending; rng fork only) -------------------
-  const extensions: TrackExtensionsInterim = extendTracksSeam(k, rng.fork('track-ext'), MALL_TRACK_EXTENSIONS, {levelId: 'mall', canvasGrow: 'east-south'});
-
-  // --- Crop: fixed origin (the outer corridor's NW corner CROP_MARGIN cells in), extent of everything carved (+ extensions) ----
+  // --- Crop origin: fixed (the outer corridor's NW corner CROP_MARGIN cells in) ----------------------------------------------
   const ox = mc.X0 - CROP_MARGIN, oy = mc.Z0 - CROP_MARGIN;
+  // --- Track2 seam (lane INTEG): AFTER all mall carving, BEFORE the crop — the tunnels past the pit station's bed ends + service
+  // annexes are PLANNED on their own fork (east / south of the fixed origin only); the crop and every core pass below run exactly as
+  // without them; finishExtensions grows the grid and stamps them after the last core pass.
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, mallTrackExtContext(ox, oy));
+
+  // --- Crop: extent of everything carved (the extensions join later, finishExtensions) ----------------------------------------
   let x1 = mc.X1, y1 = mc.Z1;
   for (const r of [...k.areas, ...k.doors, ...k.trenches.map(t => ({x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0}))]) {
     if (r.w <= 0 || r.h <= 0) continue;
@@ -127,15 +142,14 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
     traversal: {stairs: c.flights, ladders: [], underpasses: []}, levels, levelLinks: links, rails: [],
   };
   P1.towardsN = layout.towards[0]; P2.towardsS = layout.towards[1];
-  (layout as StationLayout & {extensions?: TrackExtensionsInterim}).extensions = extensions; // Track2 data hook (NOT INTEGRATED)
   registerApertures(layout.levels);
   layout.rails = [...deriveRails(layout.levels), ...runRails(mc, crop, c.flights)];
   layout.traversal.ladders = placeLadders(layout);
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
   // --- Dressing: ONE station dresser pass with the run mouths / runs / elevator landings held clear --------------------------
-  // (Track2 extension areas, once they exist, are held too: the station dresser never furnishes them — isExtensionArea.)
-  const release = holdCells(layout, [...mouthHolds(layout, mc, crop), ...extensionCells(layout)]);
+  // (Track2 extension areas do not exist yet — they are attached after the last core pass: the dresser never sees them.)
+  const release = holdCells(layout, mouthHolds(layout, mc, crop));
   dress(layout, rng.fork('dress'));
   release();
 
@@ -156,29 +170,37 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
   const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0, layout.levelLinks), keep: keepPoints(layout, mc, crop)};
-  // Global mall passes skip Track2 extension areas (isExtensionArea) once they exist: hold their cells while populating.
-  const extHold = holdCells(layout, extensionCells(layout));
   for (let lv = 0; lv <= RINGS; lv++) {
     const context = lv === 0 ? (spawns.contexts.pit ? 'pit' : 'station') : (spawns.contexts.ring ? 'ring' : 'floor');
     placeOfficeEnemies(layout, rng.fork(`mall-enemies-${lv}`), field, [lv], spawns, context);
   }
   // Loose floor supplies: lane PROFILES' per-storey mall program (stream mall-supplies-<storey>).
   for (let lv = 0; lv <= RINGS; lv++) placeMallSupplies(layout, rng.fork(`mall-supplies-${lv}`), field, [lv], lv === 0 ? 'pit' : 'ring', loot);
-  extHold();
 
   // --- Lighting, traversal finishing, archetypes, the mall record, hordes ------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
   finishTraversal(layout);
   dropFloatingFixtures(layout);
-  // Track1 contract (lane INTEG): the ambient runs above were tagged 'pit' / 'ring' by placeOfficeEnemies (markSpawnContext); ONE
-  // family roll for every ambient context, then the mall's Siren spacing (FamilySpacing: the cap + 30 m, jointly) — RNG-free.
-  assignEnemyArchetypes(layout, spawns);
-  applyFamilySpacing(layout, spawns);
   layout.mall.patrol = patrolGraph(layout, mc, crop, c.flights);
-  // Hordes (lane HORDE) never start on a run (its flat top landing included) or in front of a mouth / elevator landing.
+  // Hordes (lane HORDE) never start on a run (its flat top landing included) or in front of a mouth / elevator landing. They read
+  // ambient POSITIONS only (keep-off), never families, so the one family roll may run after them.
   const runHold = holdCells(layout, mouthHolds(layout, mc, crop));
   placeHordes(layout, spawns.horde, rng.fork('mall-hordes'), {dist: field.dist});
   runHold();
+  // Track2 (lane INTEG): only now the extensions join — the finished core is re-framed into the grid grown east / south (same
+  // origin: every world coordinate and core record stays put) and their cells / areas / doors are appended; their dressing, lights,
+  // loose finds and 'service' spawns follow on the `track-ext-content` fork, APPENDED after every core record (hordes included).
+  if (ext) {
+    finishExtensions(layout, ext, {ox, oy, grow: 'east-south'});
+    populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')});
+  }
+  layout.mall.subwayRoot = subwayRoot(layout, mc, crop); // DERIVED report: now from the real extensions
+  // Track1 contract (lane INTEG): the ambient runs above were tagged 'pit' / 'ring' by placeOfficeEnemies, the hordes 'horde', the
+  // annex runs 'service' (markSpawnContext); ONE family roll after every context (horde members keep their pool's family: skipped),
+  // then the mall's Siren spacing (FamilySpacing: the cap + 30 m, jointly) — RNG-free. The roll is per spawn index: appending the
+  // annex spawns after the hordes leaves every ambient draw unchanged.
+  assignEnemyArchetypes(layout, spawns);
+  applyFamilySpacing(layout, spawns);
   return layout;
 }
 
@@ -229,20 +251,8 @@ function dropFloatingFixtures(layout: StationLayout): number {
   return before - layout.lights.length;
 }
 
-/** Cells of Track2 extension areas (none until Track2 integrates). */
-function extensionCells(layout: StationLayout): {level: number; cells: number[]}[] {
-  const out: {level: number; cells: number[]}[] = [];
-  for (const a of layout.areas) {
-    if (!isExtensionArea(a)) continue;
-    const lv = a.level ?? 0, g = layout.levels[lv].grid, cells: number[] = [];
-    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.area[g.idx(x, y)] === a.id) cells.push(g.idx(x, y));
-    out.push({level: lv, cells});
-  }
-  return out;
-}
-
 /** QA / tests: one attempt (null when the program does not fit). */
 export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions & {salt?: number} = {}): StationLayout | null {
   const f = mallFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
-  return tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'));
+  return tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'));
 }

@@ -62,6 +62,12 @@ profile, family list, tier or guarantee.
 - Inheritance: zombie / Blightbelly / rat-dog shares apply automatically (the pool is profile-wide). **Sirens are NOT eligible in
   an annex context unless the level's `eligibility.siren.contexts` lists it deliberately**; if it does, retune that level's siren
   weight so the WHOLE level stays at its target — `maxPerLevel` already counts every context of the level. Never "2 per annex".
+- **Implemented (Track 2, lane CONTENT):** `'service'` is in `SPAWN_CONTEXT_IDS`; `SERVICE_CONTEXT` (`game/src/ai/spawnTables.ts`: a
+  per-annex budget U{3..5}, annex area weights / caps, 5 m spacing, 6 m off the annex door) is declared by the Subway and the Office;
+  `game/src/gen/annexContent.ts` `placeServiceSpawns` appends one run per annex and tags it `markSpawnContext(layout, first,
+  'service')` (the Subway's station spawns are tagged `'station'` explicitly — its profile has two contexts now); the generators call
+  `assignEnemyArchetypes` once afterwards. `OFFICE_SIREN_ELIGIBILITY.contexts` stays `['floor']`. Details and census:
+  `docs/enemy-spawns.md` "Service annexes".
 - Persistence: killed enemies are the generic per-index run memory (`game/src/run/memory.ts` `enemiesToSpawn`), so annex enemies
   die once per run like any other; nothing respawns on re-entry. Rare rewards (the level's gear roll, the roof cache / find) are
   per logical level and are not repeated by annexes (loot tables own that).

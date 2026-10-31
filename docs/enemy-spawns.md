@@ -31,6 +31,8 @@ A profile holds:
     `gen/levelGenDress.ts` `placeLevelSpawns`).
   - `office` (ONE logical level) → `street` (station + lobby, once), `floor` (once per office floor 2..8) and `roof` (once), all
     run by `gen/office/index.ts` through `gen/office/spawns.ts` `placeOfficeEnemies`. Changing floors never rerolls anything.
+  - both → `service` (Track 2): once per seeded **service annex** of the level's station (0–2), a per-annex ZONE budget run by
+    `game/src/gen/annexContent.ts` `placeServiceSpawns` (see "Service annexes" below).
 - `families` — the family pool `[family, weight]`, every family listed (weight 0 excludes). Every placed spawn draws its family
   independently with `enemyRoll(level seed, spawn index)` (`game/src/ai/creatureSpawn.ts` `assignEnemyArchetypes`), walking the pool
   in registry order: a drawn family REPLACES a zombie, never adds a spawn.
@@ -54,10 +56,12 @@ pit (storey 0) and six retail rings around the void (storeys 1..6), generated on
   - `pit` — the station storey (platforms, plaza, courts), once per level: U{6..9}.
   - `ring` — one retail ring, once per ring (six runs): U{7..10} each. E ≈ 58.5 ambient enemies per level — sized to the larger
     world but less dense than the Office (a ring is ~6–8× an Office storey; the hordes concentrate the threat).
-  - `service` — Track2's per-annex zone budget (U{2..4} per annex). A **data hook, NOT INTEGRATED**: Track2's same-world service
-    annexes are not on main, so no generator runs it (0 runs; excluded from the level total; `MALL_SERVICE_HOOK`). When they land, each
-    annex runs it once on its own fork with the mall's ambient family profile, appended after every core spawn and tagged `service`;
-    no Siren there (the mall's Siren rule names `ring` only), never the horde pool.
+  - `service` — Track 2's per-annex zone budget `SERVICE_CONTEXT` (U{3..5} per annex), exactly as on the Subway / Office (see
+    "Service annexes" below; lane INTEG integration): one run per seeded service annex of the pit station on its own fork, appended
+    after every core spawn (hordes included) and tagged `service`, inheriting the mall's family pool; no Siren there (the mall's Siren
+    rule names `ring` only), never the horde pool, not in the pit / ring counts or the ambient budget. A mall has at most one annex
+    (one east tunnel; no hatches): 0 / 1 annex in 3 / 45 of 48 sampled malls, 3.88 service spawns per run — see
+    `docs/track-extensions.md` "The Eaton's Center" (the opt-in `rockLevels` rule that lets the planner use the pit station).
   - `families` = `MALL_ENEMY_POOL` = `familyPool({siren: MALL_SIREN_WEIGHT})`: Blightbelly 0.05 and rat/dog 0.05 (the defaults), the
     Siren's draw weight 0.32, the zombie the remainder — rolled ONCE by `assignEnemyArchetypes(layout, spawnProfile('mall'))` after
     every ambient context.
@@ -137,7 +141,8 @@ maxPerLevel?, fallback, why}}`. Checked only for spawns that drew the family (no
 sends the draw to `fallback`. Never renormalised, so no other family's draw or share moves.
 
 - **Contexts** come from the generator's own tags: each placement routine calls `markSpawnContext(layout, first, context)` (the
-  Office's `placeOfficeEnemies` does); a single-context profile (the Subway's `station`) needs none. Untagged = never eligible.
+  Office's `placeOfficeEnemies`, the Subway's station run in `gen/station.ts` and the annexes' `placeServiceSpawns` do); a
+  single-context profile would need none (the Subway has two since Track 2: `station` + `service`). Untagged = never eligible.
 - **Office Siren** (`OFFICE_SIREN_ELIGIBILITY`), an indoor-room encounter of the office floors: context `floor` only (no station,
   lobby — context `street` — or roof); kind `room` (no corridor `office-corridor` / passage, no closet); never `washroom`,
   `office-stair`, `stair-core`, `office-elevator` (nor `office-lobby` / `office-roof`); room ≥ 4 × 4 m (shorter side 8 cells, 100
@@ -148,6 +153,44 @@ sends the draw to `fallback`. Never renormalised, so no other family's draw or s
   that fell back, by first failed criterion: context 26.7 %, size 21.8 %, kind 21.1 %, door 16.8 %, passage 5.3 %, room 5.1 %,
   clear 1.8 %, cap 1.3 %. A 2.5 × 2.5 m clear patch was rejected: only ~2.4 eligible slots per run in furnished rooms.
 - **Subway**: no `eligibility` (Siren weight 0; validation forbids a Siren weight without a rule — `OPT_IN_FAMILIES`).
+
+## Service annexes (Track 2 zone context `service`)
+
+<!-- Track 2 — Beyond the Station (lane CONTENT) -->
+
+The track tunnels past the station's bed ends can lead, through a side door, to a seeded **service annex**: a cramped, dark
+back-of-house of plant rooms, stores, closets and 1.5–2 m corridors (`game/src/gen/trackExt/` generates it; 0–2 per level, each
+~25 % of the Subway's walkable exploration area). It is part of its LOGICAL level (docs/level-enemy-contract.md §2): same profile,
+same family pool and zombie types, same tier.
+
+| Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |
+|---|---|
+| Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service`, `SPAWN_PROFILES.mall.contexts.service` (lane INTEG; at most one annex per mall) |
+| Count | `SERVICE_ZONE_BUDGET` = U{3..5} **per annex** (one draw per annex run), additive to the core contexts |
+| Area weights | `SERVICE_AREA_WEIGHTS`: annex rooms 1.4, corridors 1.0, closets 0.6 |
+| Caps | `SERVICE_CAPS`: passes 1 / 2; closets 1 |
+| Spacing / tries | 5 m (wider than the station's 4 m: dark and cramped) / 12 |
+| Keep-away | ≥ 36 walking cells from the start, 3 × 3 clear, ≥ 6 m from the annex's entry door (`landingKeepM`: its keep point) |
+| Accept | `{min: null, max: 'count'}` — never regenerates a level (extensions never decide a retry) |
+
+- **Why 3–5.** An annex is ~25 % of the Subway's walkable-exploration baseline (~1840 m² of 7371 m²); the station's 22–32 spawns
+  over that baseline would put ~6.8 into an annex at the same density. The annex is cramped and much darker, so it gets ~60 % of
+  that density (E 4 per annex) — fair, never a corridor ambush at the door.
+- **Placement.** One run per annex on its own fork (`track-ext-content` → `service:<annex>`), in that annex's areas only, AFTER
+  every core spawn (the core's indices, rolls, run-memory keys and parity pins are unchanged) and tagged
+  `markSpawnContext(layout, first, 'service')`; `assignEnemyArchetypes(layout, profile)` then runs ONCE over every context.
+- **Families.** The level's own pool: zombie / Blightbelly / rat-dog shares apply automatically. No Siren in an annex: the Subway
+  has none, and the Office's `OFFICE_SIREN_ELIGIBILITY.contexts` is `['floor']` (it does not list `service`), so a Siren draw there
+  falls back to a zombie; her whole-level rarity and `maxPerLevel` stay level-wide.
+- **Counted separately.** The core contexts' validation counts (Subway `station` ≥ 8; Office `street` / `floor`) and the census /
+  parity counts exclude annex spawns (`tests/helpers/enemySpawnParity.ts` `contextCounts` prints them as `+ service N`); the
+  reference shows `service` as a zone context, never inside the whole-level total.
+- **Persistence.** Killed annex enemies stay dead for the run (the per-index memory, `game/src/run/memory.ts`); nothing respawns
+  on entry; Retry / revisits regenerate the identical annex spawns from the seed.
+- **Census** (lane CONTENT, shipped code incl. GEN-2's incidence): Subway 24 seeds (`(i × 2654435761 + 12345) >>> 0`, i < 24) —
+  1.12 annexes per level (3 with none, 15 with one, 6 with two; 6 of the 27 entered by a service hatch), 3.85 placed per annex,
+  4.3 service spawns per level (max 10) on top of the station's ~27; Office 10 seeds (3, 7922, 15841, 23760, 31679, 39598, 11, 222,
+  3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex run placed fewer than its count.
 
 ## Room modifiers
 
@@ -189,6 +232,8 @@ sends the draw to `fallback`. Never renormalised, so no other family's draw or s
   and the registry disagree.
 - **Add a generation context**: add its id to `SpawnContextId` / `SPAWN_CONTEXT_IDS`, declare it in the profile and the adapter, and
   read it in the generator. `game/tests/enemy-spawn-tables.test.ts` checks that a generator asks for exactly its declared contexts.
+  A same-world ZONE context that runs once per seeded zone (like `service`, once per annex) declares `zone: {runsPerLevel, note}` in
+  its `ENEMY_LEVEL_ADAPTER` entry: the reference then shows it per zone and keeps it out of the whole-level total.
 
 ## How it reaches the website
 
@@ -217,6 +262,9 @@ tiers), `enemies/<level>.html` (profile, eligibility), `enemies/families.html` (
   once-per-run dead indices.
 - `game/tests/enemy-spawn-tables.test.ts` — coverage, neutral resolution, test-only 0 / 2 modifiers, validation, persistence.
 - `game/tests/enemy-spawn-reference.test.ts` — the reference: coverage, runtime agreement, census, maths, this page's names.
+- `game/tests/annex-content.test.ts` (Track 2) — the `service` zone: declared per annex-bearing level, appended after every core spawn
+  and tagged, annex areas only, within the per-annex budget / keep-off / spacing, the core's spawns and families unchanged, no
+  Siren in an annex, kills remembered. Stage 5 of the parity pins: the live layouts of annex seeds (core views unchanged).
 - Downstream: the Subway fingerprints (`game/tests/office-gen.test.ts`) and loot goldens (`game/tests/loot-golden.test.ts`).
 - `game/tests/mall-profiles.test.ts` — the mall profile: the Track1 pool, Siren rule, spacing, horde pool and budgets and their
   validation, the generator asking for exactly `pit` + `ring`, context tags (`pit` / `ring` / `horde`), ambient counts within contexts

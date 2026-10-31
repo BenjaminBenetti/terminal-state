@@ -8,6 +8,7 @@
 //    constants (Siren hp = 2 x the shambler's), eligibility rules === the profile, the eligibility census === a fresh generation.
 
 import {describe, expect, it} from 'vitest';
+import {TRACK_EXT} from '../src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone)
 import {existsSync, readFileSync} from 'node:fs';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import type {LevelId} from '../src/levels/types';
@@ -102,6 +103,14 @@ describe('enemy spawn reference: runtime agreement', () => {
         expect(c.placement.caps.passes).toEqual([...pl.caps.passes]);
         expect([c.placement.triesPerArea, c.placement.spacing.metres]).toEqual([pl.tries, pl.spacingM]);
         expect(c.placement.keepAway[0]).toMatchObject({value: pl.startCells, metres: pl.startCells * CELL});
+        // Track 2 (lane CONTENT): the 'service' annex context is a ZONE (one run per seeded annex, 0-TRACK_EXT.annex.max per level),
+        // reported separately: never part of the whole-level total
+        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service');
+        if (c.zone) {
+          expect(c.zone.runsPerLevel).toEqual({lo: 0, hi: TRACK_EXT.annex.max});
+          expect(c.zone.perLevelMax).toBe(TRACK_EXT.annex.max * pc.count[1]);
+          continue;
+        }
         lo += c.perLevel.lo; hi += c.perLevel.hi; mean += c.perLevel.mean;
       }
       expect([L.total.lo, L.total.hi, L.total.mean]).toEqual([lo, hi, mean]);
@@ -139,7 +148,10 @@ describe('enemy spawn reference: runtime agreement', () => {
     setSpawnCensusHook(r => reports.push(r));
     try { layout = LEVELS.office.generate('main', {levelSeed: 222, startWeapon: 'pistol'}); } finally { setSpawnCensusHook(null); }
     for (const r of reports) if (r.layout === layout) runs.set(r.context, (runs.get(r.context) ?? 0) + 1);
-    expect(Object.fromEntries(runs)).toEqual(Object.fromEntries(level('office').contexts.map(c => [c.id, c.runs])));
+    // (Track 2, lane CONTENT: the 'service' zone runs once per seeded service annex of THIS level — its count of annexes)
+    const annexes = (layout as unknown as {extensions?: {annexes: unknown[]}}).extensions?.annexes.length ?? 0;
+    expect(Object.fromEntries(runs)).toEqual(Object.fromEntries(level('office').contexts.map(c => [c.id, c.zone ? annexes : c.runs]).filter(([, n]) => n)));
+    expect(annexes, 'office 222 exercises the service zone').toBeGreaterThan(0);
     expect(level('office').contexts.find(c => c.id === 'floor')!.runs).toBe(OFFICE_FLOORS.length - 1);
   });
 

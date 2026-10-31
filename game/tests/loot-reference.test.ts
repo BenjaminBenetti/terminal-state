@@ -15,7 +15,7 @@ import {describe, expect, it} from 'vitest';
 import {existsSync, readFileSync} from 'node:fs';
 import * as LT from '../src/items/lootTables';
 import {
-  BASE_TABLES, HOLDER_SLOTS, OFFICE_FLOOR, OPENABLE_TABLES, PROFILES, REWARD_FINDS, REWARD_TABLES, SLOT_CATEGORIES, SUBWAY_FLOOR, THEME_ECONOMY,
+  ANNEX_FLOOR, BASE_TABLES, HOLDER_SLOTS, OFFICE_FLOOR, OPENABLE_TABLES, PROFILES, REWARD_FINDS, REWARD_TABLES, SLOT_CATEGORIES, SUBWAY_FLOOR, THEME_ECONOMY,
   OFF_THEME_WEIGHTS, BOX_COUNT, gearParams, lootProfile, type LootProfile, type LootSpec, type OwnTable,
 } from '../src/items/lootTables';
 import {ITEMS} from '../src/items/items';
@@ -218,9 +218,19 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
     expect(sub.filter(f => f.stage === 'kept').map(f => [f.itemId, f.copies, f.chance])).toEqual(SUBWAY_FLOOR.kept.map(k => [k.itemId, k.n, k.keep]));
     expect(sub.filter(f => f.stage === 'light').map(f => [f.itemId, f.chance])).toEqual(SUBWAY_FLOOR.light.map(c => [c.itemId, c.chance]));
     const off = level('office').floor;
-    expect(off.variants.map(v => v.id)).toEqual(['street', ...Object.keys(OFFICE_FLOOR.tilt).map(t => `tower:${t}`)]);
+    expect(off.variants.map(v => v.id)).toEqual(['street', ...Object.keys(OFFICE_FLOOR.tilt).map(t => `tower:${t}`), 'annex']);
     for (const c of Object.values(COMPANIES)) expect(Object.keys(OFFICE_FLOOR.tilt), `company tilt ${c.loot}`).toContain(c.loot);
-    for (const v of off.variants.slice(1)) {
+    // Track 2 (lane CONTENT): every annex-bearing level shows the per-annex program (items/lootTables.ts ANNEX_FLOOR) as its 'annex'
+    // variant, outside the exact per-level totals
+    for (const id of LEVEL_IDS) {
+      const a = level(id).floor.variants.find(v => v.id === 'annex');
+      expect(!!a, `${id} annex variant`).toBe(LEVEL_ADAPTER[id].annex);
+      if (!a) continue;
+      expect(a.finds.filter(f => f.stage === 'boxes').map(f => [f.itemId, f.count, f.copies])).toEqual(ANNEX_FLOOR.boxes.map(b => [b.itemId, b.count, b.n]));
+      expect(a.finds.filter(f => f.stage === 'kept').map(f => [f.itemId, f.copies, f.chance])).toEqual(ANNEX_FLOOR.kept.map(k => [k.itemId, k.n, k.keep]));
+      expect(a.finds.filter(f => f.stage === 'light').map(f => [f.itemId, f.chance])).toEqual(ANNEX_FLOOR.light.map(c => [c.itemId, c.chance]));
+    }
+    for (const v of off.variants.filter(q => q.id.startsWith('tower:'))) {
       const t = v.tilt!.id as keyof typeof OFFICE_FLOOR.tilt;
       expect(v.tilt!.odds).toEqual(scarceOdds(t).map(rd));
       const boxes = v.finds.filter(f => f.stage === 'tower.box');

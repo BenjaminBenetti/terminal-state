@@ -28,6 +28,9 @@ import {installCanvasShim} from './helpers/canvas2d';
 import {CELL, FLOOR, PathFinder} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
 import {generateStation} from '../src/gen/station';
+import {coreView} from '../src/gen/trackExt/index';
+import type {StationLayout} from '../src/gen/stationTypes';
+import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 import {levelIssues} from '../src/gen/levelGen';
 import {
   LightFieldVolume, MAX_BANDS, MAX_SLOTS, bakeLightField, columnMask, downsampleField, fieldDepth, fieldSlot, isExtendedHeader, levelGeometries,
@@ -529,14 +532,21 @@ describe('stack validation and the Subway regression', () => {
     const ff = bakeLightField({grid: layout.grid, lights: layout.lights, trenchFloorY: -1.15, levels});
     expect(ff.hdr).toBe(0);
     expect(fnv(ff.data)).toBe('52cd2160');
-    const s1 = generateStation(1), lv = stationLevels(s1);
-    const f = bakeLightField({grid: s1.grid, lights: s1.lights, trenchFloorY: s1.trench.floorY, levels: lv});
-    expect([f.slots, f.depth, f.hdr]).toEqual([3, 24, 0]);
-    expect(fnv(f.data)).toBe('dc7abbcc');
-    expect(fnv(buildDensityMap(s1, atmosphereFor(s1)).data)).toBe('1095b4d6');
-    expect(fnv(buildAirMap(s1).data)).toBe('fb391d51');
-    expect(fnv(buildDecayField(s1, lv).data)).toBe('bf7c0c4');
-    // every legacy column's header still names its bands with the iteration-08 byte
-    for (let i = 0; i < f.w * f.h; i++) expect(isExtendedHeader(f.data[i * 4 + 3])).toBe(false);
+    // Track 2 lane GEN-2 — CAUSE: "core reserve enabled (authorized incidence change)": the Subway's core reserve re-lays station 1
+    // (a layout change) and its live layout carries a track tunnel. PROOF (every run): generated with the reserve OFF, the CORE
+    // view (gen/trackExt coreView) reproduces the iteration-16 pins byte for byte; the live station (reserve on + extensions)
+    // is pinned below (was the iteration-16 values: dc7abbcc / 1095b4d6 / fb391d51 / bf7c0c4). Track 2 (lane CONTENT): its tunnel
+    // now carries the sparse dim / dying tunnel fixtures (gen/annexContent.ts, appended layout.lights) and the tunnel's lighting
+    // profile follows them, so the live light field and the decay field's extension cells move (was a451242b / c645ac1f; the
+    // density and air maps and the slot / depth / header budget are unchanged; the reserve-off core view still holds).
+    const maps = (s: StationLayout) => {
+      const lv = stationLevels(s), f = bakeLightField({grid: s.grid, lights: s.lights, trenchFloorY: s.trench.floorY, levels: lv});
+      expect([f.slots, f.depth, f.hdr]).toEqual([3, 24, 0]);
+      // every legacy column's header still names its bands with the iteration-08 byte
+      for (let i = 0; i < f.w * f.h; i++) expect(isExtendedHeader(f.data[i * 4 + 3])).toBe(false);
+      return [fnv(f.data), fnv(buildDensityMap(s, atmosphereFor(s)).data), fnv(buildAirMap(s).data), fnv(buildDecayField(s, lv).data)];
+    };
+    expect(maps(coreView(generateStation(1, {trackExtensions: TRACK_EXT_RESERVE_OFF})))).toEqual(['dc7abbcc', '1095b4d6', 'fb391d51', 'bf7c0c4']);
+    expect(maps(generateStation(1))).toEqual(['912ec1a9', 'fc9cf608', '8285fcc7', '5725b18b']);
   });
 });

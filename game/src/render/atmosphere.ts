@@ -491,6 +491,8 @@ export function areaMultiplier(layout: StationLayout, i: number, p: Pick<Atmosph
   const ai = g.area[i];
   const a = layout.areas[ai];
   if (!a) return ad.default ?? 1;
+  // Track 2 (lane GEN): a track tunnel continues the bed (its group: the track bed); annex rooms / corridors go by their type
+  if (a.ext === 'tunnel') return ad.trackBed ?? ad.default ?? 1;
   const base = ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1;
   if (!p.classDensity || !p.classOdds) return base;
   return base * p.classDensity[areaClassOf(layout, ai, p as Pick<AtmosphereParams, 'classOdds'>)];

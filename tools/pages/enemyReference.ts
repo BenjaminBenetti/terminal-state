@@ -36,6 +36,7 @@ import type {LevelId} from '../../game/src/levels/types';
 import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
+import {TRACK_EXT} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -87,12 +88,14 @@ const F = {
   contract: 'game/src/levels/levelContract.ts',
   // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center
   mallIndex: 'game/src/gen/mall/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
+  // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
+  trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes,
+  F.contract, F.mallTypes, F.trackExt,
 ].slice().sort();
 
 /**
@@ -168,6 +171,9 @@ export function ruleRows(value: object, prefix = ''): {what: string; value: numb
   return out;
 }
 
+/** Track 2 (lane CONTENT): how the service-annex zone context relates to the level (shown with the context). */
+const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s own family pool and zombie types apply (no annex families, no guarantee; a Siren only where the level\'s eligibility lists \'service\' — none does). Killed annex enemies stay dead for the run (per-index memory).';
+
 /**
  * GENERATOR ADAPTER: which generator reads each level's profile and how often each context runs per level. These are code paths
  * of the generators (not data), declared here — `Record<LevelId, …>` makes a new level fail to typecheck until it is documented,
@@ -179,32 +185,37 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
   /**
    * The profile's AMBIENT contexts (=== Object.keys(profile.contexts); the horde pool's tag is reported in the horde section).
    * `hook`: a DATA-HOOK context the generator does not run yet (0 runs; task track3-eaton-centre-20261031, lane PROFILES).
+   * `zone` (Track 2): a same-world zone context — one run per seeded zone, `runsPerLevel` zones per level (never in the total).
    */
-  contexts: Readonly<Partial<Record<SpawnContextId, {storeys: string; runs: number; hook?: string}>>>;
+  contexts: Readonly<Partial<Record<SpawnContextId, {storeys: string; runs: number; hook?: string; zone?: {runsPerLevel: readonly [number, number]; note: string}}>>>;
 }>> = {
   subway: {
     generator: {fn: 'generateStation', file: F.station,
-      note: 'One station per level seed: placeSpawns (fork "spawns", after the loose floor finds) places the station context on the main level, placeLevelSpawns (fork "levelSpawns") moves a weighted share onto the upper / lower storeys, assignEnemyArchetypes rolls every family at the end.'},
-    contexts: {station: {storeys: 'the main level, then the storey moves onto the upper / lower levels', runs: 1}},
+      note: 'One station per level seed: placeSpawns (fork "spawns", after the loose floor finds) places the station context on the main level, placeLevelSpawns (fork "levelSpawns") moves a weighted share onto the upper / lower storeys; then (Track 2) placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family once at the end.'},
+    contexts: {
+      station: {storeys: 'the main level, then the storey moves onto the upper / lower levels', runs: 1},
+      service: {storeys: 'one seeded service annex off a track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT.annex.max], note: SERVICE_ZONE_NOTE}},
+    },
   },
   office: {
     generator: {fn: 'generateOfficeLevel', file: F.officeIndex,
-      note: 'ONE continuous level (station, lobby, office floors 2..8, roof) generated once per level seed: placeOfficeEnemies runs once per storey context on its own fork, assignEnemyArchetypes rolls every family at the end. Changing floors never rerolls anything.'},
+      note: 'ONE continuous level (station, lobby, office floors 2..8, roof) generated once per level seed: placeOfficeEnemies runs once per storey context on its own fork, then (Track 2) placeServiceSpawns runs the service context once per seeded service annex of the street station, appended last; assignEnemyArchetypes rolls every family once at the end. Changing floors never rerolls anything.'},
     contexts: {
       street: {storeys: 'station + tower lobby (levels 0 and 1)', runs: 1},
       floor: {storeys: 'one office floor (each of floors 2..8)', runs: OFFICE_FLOORS.filter(f => f !== 1).length},
       roof: {storeys: 'the roof deck (level 9; the hatch / ladder zone held empty)', runs: 1},
+      service: {storeys: 'one seeded service annex off a track tunnel of the street station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
   // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center — ONE level: the pit station + the retail rings
   mall: {
     generator: {fn: 'generateMallLevel', file: F.mallIndex,
-      note: `ONE continuous level (the subway station at the bottom of the open void and ${MALL_RINGS} retail rings around it) generated once per level seed: placeOfficeEnemies runs the pit context once and the ring context once per ring, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; assignEnemyArchetypes rolls every ambient family ONCE (Siren eligibility included); applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly); the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') are placed LAST by ai/hordePlace.ts placeHordes, after the ambient roll. Moving between storeys never rerolls anything.`},
+      note: `ONE continuous level (the subway station at the bottom of the open void and ${MALL_RINGS} retail rings around it) generated once per level seed: placeOfficeEnemies runs the pit context once and the ring context once per ring, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') follow from ai/hordePlace.ts placeHordes; then (Track 2) the pit station's tunnels / service annexes are attached and placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end (horde members keep their own pool's family; Siren eligibility included) and applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly). Moving between storeys never rerolls anything.`},
     contexts: {
       pit: {storeys: 'the subway station storey at the bottom of the void (level 0: platforms, plaza, courts)', runs: 1},
       ring: {storeys: `one retail ring (each of levels 1..${MALL_RINGS}: gallery, shops, back rooms, service corridors)`, runs: MALL_RINGS},
-      service: {storeys: 'one Track2 service annex (per annex, annex areas only)', runs: 0,
-        hook: 'DATA HOOK, NOT INTEGRATED: Track2\'s same-world service annexes (0 / 1 / 2 per level) are not on main yet, so no generator runs this per-annex budget (0 runs; excluded from the level total). When they land each annex runs it once on its own fork with the mall\'s ambient family profile (no Siren: the mall\'s Siren eligibility names the ring context only; no guaranteed reward per annex), appended after every core spawn and tagged service, never as part of the horde pool.'},
+      // lane INTEG (Track2 integration): the pit station's service annexes — the same zone context as the Subway / Office
+      service: {storeys: 'one seeded service annex off a track tunnel / bed hatch of the pit station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };
@@ -599,7 +610,9 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     const contexts: SpawnContextInfo[] = (Object.entries(P.contexts) as [SpawnContextId, SpawnContextRule][]).map(([id, c]) => {
       const a = ad.contexts[id]!;
       const pl = c.placement, plPath = `${base}.contexts.${id}.placement`;
-      const storeyed = pl.landingKeepM !== undefined; // lane PROFILES (track3): was l === 'office' (the same text for both shipped levels)
+      // lane PROFILES (track3): was l === 'office' (the same text for both shipped levels). Track3 x Track2 merge: a Track 2 zone context
+      // (placeServiceSpawns) keeps Track 2's text — storeyed only on the Office — so the Subway / Office pages read exactly as on Track 2.
+      const storeyed = pl.landingKeepM !== undefined && (!a.zone || l === 'office');
       const acc = acceptedPlaced(c);
       const rejection: string[] = [];
       if (acc.min !== null) rejection.push(`fewer than ${acc.min} placed in one run → the whole attempt is regenerated`);
@@ -625,10 +638,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
         'Stop when the count is reached. Spacing, caps and eligible floor can leave a run short of its count (placed < count); validation regenerates the attempt where the profile requires it.',
         'Each placed spawn is then a family by its own roll (see the family pool) — independent of the area unless a room modifier says otherwise.',
       ];
+      if (a.zone) eligibility.push(`an area of the zone (one service annex), ≥ ${pl.landingKeepM ?? 0} m from the annex's entry door (its keep point)`);
       return {
         id, label: c.label, storeys: a.storeys, runs: a.runs,
         count: {lo: c.count[0], hi: c.count[1], mean: mean(c.count[0], c.count[1]), distribution: `uniform integer U{${c.count[0]}..${c.count[1]}} (rng.int, inclusive)`},
         perLevel: {lo: a.runs * c.count[0], hi: a.runs * c.count[1], mean: a.runs * mean(c.count[0], c.count[1])},
+        ...(a.zone ? {zone: {runsPerLevel: {lo: a.zone.runsPerLevel[0], hi: a.zone.runsPerLevel[1]}, perLevelMax: a.zone.runsPerLevel[1] * c.count[1], note: a.zone.note}} : {}),
         placement: {
           areaWeights: weightsInfo(pl.areaWeights), caps: capsInfo(pl.caps), triesPerArea: pl.tries,
           spacing: {metres: pl.spacingM, scope: storeyed ? 'straight line, same storey' : 'straight line'},
@@ -637,9 +652,10 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
         rejection, ...(a.hook ? {hook: a.hook} : {}), at: src.at(F.tables, `${base}.contexts.${id}`),
       };
     });
+    const core = contexts.filter(c => !c.zone), zones = contexts.filter(c => c.zone);
     const total = {
-      lo: contexts.reduce((s, c) => s + c.perLevel.lo, 0), hi: contexts.reduce((s, c) => s + c.perLevel.hi, 0), mean: contexts.reduce((s, c) => s + c.perLevel.mean, 0),
-      note: 'Spawns the level\'s context runs try to place (Σ runs × count). The family roll replaces, never adds; placed totals can fall short where eligible, spaced cells run out.',
+      lo: core.reduce((s, c) => s + c.perLevel.lo, 0), hi: core.reduce((s, c) => s + c.perLevel.hi, 0), mean: core.reduce((s, c) => s + c.perLevel.mean, 0),
+      note: `Spawns the level's context runs try to place (Σ runs × count). The family roll replaces, never adds; placed totals can fall short where eligible, spaced cells run out.${zones.length ? ` Not included: the zone context${zones.length === 1 ? '' : 's'} ${zones.map(c => `'${c.id}'`).join(', ')} (a per-zone budget of ${zones.map(c => `${c.count.lo}-${c.count.hi} per zone, 0-${c.zone!.perLevelMax} per level`).join('; ')}), reported separately.` : ''}`,
     };
 
     // family pool (task track1: + eligibility; a restricted family and its fallback are measured, not derived)

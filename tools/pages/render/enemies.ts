@@ -255,7 +255,7 @@ export function renderEnemiesIndex(es: EnemySite): string {
   const p = ENEMIES_INDEX;
   const {ref} = es;
   const cards = ref.levels.map(level => {
-    const contexts = level.contexts.map(c => `${esc(c.label)} ${range(c.count.lo, c.count.hi)}${c.runs !== 1 ? ` × ${num(c.runs)} runs` : ''}`).join(' · ');
+    const contexts = level.contexts.map(c => `${esc(c.label)} ${range(c.count.lo, c.count.hi)}${c.zone ? ` × ${range(c.zone.runsPerLevel.lo, c.zone.runsPerLevel.hi)} zones (zone budget, not in the total)` : c.runs !== 1 ? ` × ${num(c.runs)} runs` : ''}`).join(' · ');
     return `<li class="card">
 <h3><a href="${esc(href(p, enemyLevelPage(level.id)))}">${esc(level.name)}</a></h3>
 <p>${prose(level.blurb)}</p>
@@ -275,10 +275,10 @@ export function renderEnemiesIndex(es: EnemySite): string {
       `<a href="${esc(href(p, enemyLevelPage(level.id)))}">${esc(level.name)}</a>`,
       `<a href="${esc(href(p, `${enemyLevelPage(level.id)}#${ctxAnchor(c.id)}`))}">${esc(c.label)}</a><span class="item-id">${esc(c.id)}</span>`,
       prose(c.storeys),
-      num(c.runs),
+      c.zone ? `${range(c.zone.runsPerLevel.lo, c.zone.runsPerLevel.hi)} <span class="denom">one per zone</span>` : num(c.runs),
       `${range(c.count.lo, c.count.hi)} <span class="denom">${esc(uniform(c.count.lo, c.count.hi))}</span>`,
       num(c.count.mean),
-      `${range(c.perLevel.lo, c.perLevel.hi)} <span class="denom">E = ${num(c.perLevel.mean)}</span>`,
+      c.zone ? `${range(c.zone.runsPerLevel.lo * c.count.lo, c.zone.perLevelMax)} <span class="denom">zone budget (E = ${num(c.count.mean)} per zone)</span>` : `${range(c.perLevel.lo, c.perLevel.hi)} <span class="denom">E = ${num(c.perLevel.mean)}</span>`,
     ])),
   });
 

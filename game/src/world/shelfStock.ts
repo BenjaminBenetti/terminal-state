@@ -186,7 +186,7 @@ export class ShelfStock implements FillerView {
   // Build
 
   /** Dress every stocked holder of the station and bake the rest meshes. Replaces the previous station's stock. */
-  build(layout: Pick<StationLayout, 'props' | 'areas' | 'seed'> & {storefronts?: StationLayout['storefronts']}, deps: StockDeps): void {
+  build(layout: Pick<StationLayout, 'props' | 'areas' | 'seed'> & {storefronts?: StationLayout['storefronts']; extensions?: StationLayout['extensions']}, deps: StockDeps): void {
     const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.clear();
     this.seed = layout.seed >>> 0;
@@ -196,7 +196,13 @@ export class ShelfStock implements FillerView {
     // 1. holders + their boards / lots / seeds
     type Pre = {prop: PropPlacement; kind: string; category: StockCategory; boards: Board[]; lots: Box3Like[]; seed: number; back: boolean; area: number; shop?: number};
     const pre: Pre[] = [];
-    for (const p of layout.props) {
+    // Track 2 (lane GEN): stock seeds from CORE-frame positions, so a crop translation by track extensions keeps every shelf's stock:
+    // the core's props at their exact core-frame x / z (extensions.coreXZ: a translated double can come back one ulp off and flip a
+    // cm rounding tie), props appended after the core by their translated-back position.
+    const ext = layout.extensions, xz = ext?.coreXZ?.props;
+    const sx = ext?.shift.x ?? 0, sz = ext?.shift.z ?? 0;
+    for (let pi = 0; pi < layout.props.length; pi++) {
+      const p = layout.props[pi];
       if (!isStockedKind(p.kind)) continue;
       const area = layout.areas[p.area];
       const purpose = p.purpose ?? area?.purpose;
@@ -205,7 +211,7 @@ export class ShelfStock implements FillerView {
       const boards = stockBoards(p.kind, p.variant, {deck: p.kind === 'stockShelf' ? deck : p.kind === 'deviceWall' ? wallDeck : null});
       if (!boards.length) continue;
       const shop = p.shop ?? (area as {storefront?: number} | undefined)?.storefront;
-      pre.push({prop: p, kind: p.kind, category, boards, lots: deps.lotsOf?.(p) ?? [], seed: holderStockSeed(this.seed, p.kind, p.x, p.z, p.y), back: shop === undefined, area: p.area, shop});
+      pre.push({prop: p, kind: p.kind, category, boards, lots: deps.lotsOf?.(p) ?? [], seed: holderStockSeed(this.seed, p.kind, xz && 2 * pi < xz.length ? xz[2 * pi] : p.x - sx, xz && 2 * pi < xz.length ? xz[2 * pi + 1] : p.z - sz, p.y), back: shop === undefined, area: p.area, shop});
     }
     // 2. dress (station-wide bound: back-of-house rows thin first, then all)
     const passes: {cap: (h: Pre) => number; name: string}[] = [
