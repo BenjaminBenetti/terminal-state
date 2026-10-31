@@ -1,13 +1,13 @@
 {
  "asset": "enemy-siren",
- "task": "studio-track1-siren-blightbelly-20261031-01",
- "lane": "RIGS (appearance-locked Siren rig path)",
+ "task": "studio-siren-clothing-refit-20261031-01 (dress refit) on studio-track1-siren-blightbelly-20261031-01 (rig)",
+ "lane": "FIT (garment-only refit) / RIGS (appearance-locked body rig)",
  "generatedBy": "tools/asset-pipeline/enemy/build-siren.mjs",
- "builtAt": "2026-10-31T01:16:22.727Z",
+ "builtAt": "2026-10-31T04:06:02.023Z",
  "output": {
   "file": "game/public/assets/models/enemy-siren.glb",
-  "bytes": 12873516,
-  "sha256": "4ac5d8cae88e1655d0e721eeab2442d16d12697a695a433b6670f0a35997098b",
+  "bytes": 12873732,
+  "sha256": "71934d7e26d5c9698f2ea6241ed7047744f0e4bebd25d76d8010e9303a8ca3a0",
   "meshes": [
    {
     "name": "SirenBody",
@@ -32,8 +32,16 @@
   "extrasKey": "scene.userData.enemySiren"
  },
  "provenance": {
-  "status": "user-supplied, appearance-locked, technical rig / fit only; no licence clearance implied",
+  "status": "user-supplied; body appearance-locked (technical rig / uniform fit only); dress = user-authorised garment-only refit of the supplied GhostDress; no licence clearance implied",
   "userDirection": "\"Don't don't modify the siren. The siren's already perfect.\" — appearance locked: no regeneration, redesign, reshaping, retexturing; originals untouched.",
+  "refitAuthority": {
+   "date": "2026-10-31",
+   "task": "studio-siren-clothing-refit-20261031-01",
+   "scope": "remodel / refit the existing DRESS only to the unchanged body (garment geometry, fit, skin weights); body appearance, rig, clips, gameplay unchanged; no new generation; renderings for human approval before merge / publication",
+   "userWords": "\"the clothing needs to actually be fit to her model not just like staying rigid and just like crammed inside her model ... do a close refit clothing refit\"",
+   "coverage": "the wearer's anatomical RIGHT breast covered, LEFT exposed (the dress's own torn one-strap design)",
+   "humanApproval": "pending (private preview)"
+  },
   "sources": [
    {
     "uploadId": "1f8ac189e97848b984697f9ab4f4a7c7",
@@ -54,11 +62,42 @@
     "filenameLabelIsNotProvenance": true
    }
   ],
+  "sourcesVerified": {
+   "before": [
+    {
+     "uploadId": "1f8ac189e97848b984697f9ab4f4a7c7",
+     "sha256": "6437be9e8ce2d0c254ad9ef12d22ac6f521c640ab7844d36e84825dc232900b4",
+     "mode": "444"
+    },
+    {
+     "uploadId": "fbe47869acac46f3a52d808bab79f80a",
+     "sha256": "aa3e731f0bfd6f1a80c5c0ee56c019f1c0d1625c347c5978db56988fa55a2a8c",
+     "mode": "444"
+    }
+   ],
+   "after": [
+    {
+     "uploadId": "1f8ac189e97848b984697f9ab4f4a7c7",
+     "sha256": "6437be9e8ce2d0c254ad9ef12d22ac6f521c640ab7844d36e84825dc232900b4",
+     "mode": "444"
+    },
+    {
+     "uploadId": "fbe47869acac46f3a52d808bab79f80a",
+     "sha256": "aa3e731f0bfd6f1a80c5c0ee56c019f1c0d1625c347c5978db56988fa55a2a8c",
+     "mode": "444"
+    }
+   ]
+  },
+  "previousAsset": {
+   "sha256": "4ac5d8cae88e1655d0e721eeab2442d16d12697a695a433b6670f0a35997098b",
+   "commit": "0b53b6d19b0e7c85fbe5dd84c482b014e338df57",
+   "dress": "uniform scale 1.285299 + translation (-0.032857, 0.781470, -0.010275) m, no rotation (Track1)"
+  },
   "generation": "none — no model / image / audio generation was used for the Siren",
-  "licence": "no licence or commercial clearance implied by this integration"
+  "licence": "no licence or commercial clearance implied by this integration; the conditional prototype licensing caveats of the supplied uploads are unchanged; user approval of the refit appearance is not legal clearance"
  },
  "appearanceLock": {
-  "preserved": "native POSITION / NORMAL / TEXCOORD_0 / indices / materials / textures (image bytes) — byte-identical; positions differ only by the recorded uniform transform, applied through the skins' inverse bind matrices",
+  "preserved": "BODY: native POSITION / NORMAL / TEXCOORD_0 / indices / material / texture bytes byte-identical (positions differ only by the recorded uniform transform in the skin's inverse bind matrices); body JOINTS_0 / WEIGHTS_0, skin IBMs, skeleton, clips identical to the reference build. DRESS: TEXCOORD_0 / indices / material / texture bytes byte-identical; POSITION / NORMAL re-derived by the refit (same vertex count / order)",
   "added": "JOINTS_0 / WEIGHTS_0 per native vertex, 18-joint skeleton, two skins sharing it, 6 procedural clips, scene extras, node / mesh names",
   "proof": {
    "file": "game/public/assets/models/enemy-siren.glb",
@@ -119,12 +158,18 @@
      "attributes": {
       "POSITION": {
        "count": 29319,
-       "sha256": "24ebb3e0040201e40e015dda39def3c834d4f4b1ff0f2b630cc2ef67fc917a72",
+       "sourceSha256": "24ebb3e0040201e40e015dda39def3c834d4f4b1ff0f2b630cc2ef67fc917a72",
+       "sha256": "6fd9a482335099eabb901d314bb665aa771119a65c7eaf143bc1848075dbf8fa",
+       "refit": true,
+       "equalToRefit": true,
        "equal": true
       },
       "NORMAL": {
        "count": 29319,
-       "sha256": "7bda0747450c3bdc9526ab7f6c9b7b6422e79e238893296a952399d6b41fc60f",
+       "sourceSha256": "7bda0747450c3bdc9526ab7f6c9b7b6422e79e238893296a952399d6b41fc60f",
+       "sha256": "cebf228bcdc23761410fd90495d7318d32ee1aa6368d3a64580cc732f11fd4f6",
+       "refit": true,
+       "equalToRefit": true,
        "equal": true
       },
       "TEXCOORD_0": {
@@ -146,11 +191,11 @@
      ],
      "unexpectedAttributes": [],
      "bindPose": {
-      "maxPositionErrorM": 1.192e-7,
-      "maxNormalAngleRad": 0.0004468,
+      "maxPositionErrorM": 2.98e-8,
+      "maxNormalAngleRad": 0.0004282,
       "zeroLengthSourceNormalsSkipped": 102,
       "equal": true,
-      "rule": "CPU glTF skinning at rest (JointWorld * IBM) vs M_fit * native, float32"
+      "rule": "CPU glTF skinning at rest (JointWorld * IBM) vs the refit POSITION / NORMAL (M = identity), float32"
      },
      "weightRowsNot255": 0,
      "ok": true
@@ -217,6 +262,165 @@
    },
    "ok": true,
    "extensionsUsed": []
+  },
+  "bodyInvariance": {
+   "reference": {
+    "file": ".cache/siren-refit-20261031/enemy-siren-main-4ac5d8ca.glb",
+    "sha256": "4ac5d8cae88e1655d0e721eeab2442d16d12697a695a433b6670f0a35997098b",
+    "commit": "0b53b6d19b0e7c85fbe5dd84c482b014e338df57"
+   },
+   "items": {
+    "body.POSITION": {
+     "equal": true,
+     "sha256": "4252d319391cdb642f76e90ba72c3e92cdabc62e04a0cb506f5f66cd164ed634",
+     "count": 20781
+    },
+    "body.TEXCOORD_0": {
+     "equal": true,
+     "sha256": "32f1323acc186c53ea29c1c9e906dbb0c7341a3163856d9afd6a9c58c842122b",
+     "count": 20781
+    },
+    "body.NORMAL": {
+     "equal": true,
+     "sha256": "48efbd16b8c7edba7d821a22578e93a70b44cf2c7b9cc28f2f951ee651846ae7",
+     "count": 20781
+    },
+    "body.JOINTS_0": {
+     "equal": true,
+     "sha256": "a919fca456fd01a6f6024db71d8687ee7a270cf507f1444478d83d09fdd8e20c",
+     "count": 20781
+    },
+    "body.WEIGHTS_0": {
+     "equal": true,
+     "sha256": "532f29471dd2a4fe3e238e43d5ce670869a407820bbaaec7b3b5b35e6133c26c",
+     "count": 20781
+    },
+    "body.indices": {
+     "equal": true,
+     "sha256": "2eae702d67a24d9be78ce632b6c58cb8d78b7fa6495baa1cc781214f4186783e",
+     "count": 76590
+    },
+    "body.material": {
+     "equal": true
+    },
+    "textures.bytes": {
+     "equal": true,
+     "sha256": [
+      "6c523d3446912b69f4d4985f49fa142a455cd9641a595310d38107942c0ef4af",
+      "a80a8977c8883b47e38064b48de3f7761fe9cf69dcb292c64d8410d317b24087",
+      "e1bc4fbb69191a9c1b598f7c79612869f1b474f5662118cec971d104df0fd1e7",
+      "908dd56030dc7c0b253e26e2f07af0d3cbd79956b81483030d1416fa1744f2c5"
+     ]
+    },
+    "body.skin.joints": {
+     "equal": true
+    },
+    "body.skin.inverseBindMatrices": {
+     "equal": true,
+     "sha256": "4626dd50932aa3486d79eb3140f3f28200bf7a45b8aeb9d12fac2ccf458a5b3d"
+    },
+    "skeleton.jointsTRS": {
+     "equal": true,
+     "joints": 18
+    },
+    "animations": {
+     "equal": true,
+     "clips": [
+      [
+       "Dormant",
+       18
+      ],
+      [
+       "Rise",
+       18
+      ],
+      [
+       "Run",
+       18
+      ],
+      [
+       "Attack",
+       18
+      ],
+      [
+       "Hit",
+       18
+      ],
+      [
+       "Death",
+       18
+      ]
+     ]
+    },
+    "extras.clips": {
+     "equal": true
+    },
+    "extras.hitRadii": {
+     "equal": true
+    },
+    "extras.heightM": {
+     "equal": true
+    },
+    "extras.ends": {
+     "equal": true
+    },
+    "extras.joints": {
+     "equal": true
+    },
+    "extras.archetype": {
+     "equal": true
+    },
+    "extras.modelSpace": {
+     "equal": true
+    },
+    "extras.meshes": {
+     "equal": true
+    },
+    "extras.version": {
+     "equal": true
+    },
+    "dress.TEXCOORD_0": {
+     "equal": true,
+     "sha256": "f6b782cd2b5e05f398420d9d9464f18c541d1b2fbfbb24566c23e2cbbd74de1e"
+    },
+    "dress.indices": {
+     "equal": true,
+     "sha256": "4d336a50e0f9308b0f41897e460b124e0bdd93330be598f13898e51c9d50d3c0"
+    },
+    "dress.material": {
+     "equal": true
+    }
+   },
+   "ok": true,
+   "extrasChanged": [
+    "dormant",
+    "bindBoundsM",
+    "clipBoundsM",
+    "cullSphere",
+    "note"
+   ],
+   "dressChanged": {
+    "POSITION": {
+     "reference": "24ebb3e0040201e40e015dda39def3c834d4f4b1ff0f2b630cc2ef67fc917a72",
+     "output": "6fd9a482335099eabb901d314bb665aa771119a65c7eaf143bc1848075dbf8fa"
+    },
+    "NORMAL": {
+     "reference": "7bda0747450c3bdc9526ab7f6c9b7b6422e79e238893296a952399d6b41fc60f",
+     "output": "cebf228bcdc23761410fd90495d7318d32ee1aa6368d3a64580cc732f11fd4f6"
+    },
+    "JOINTS_0": {
+     "reference": "a6fd1d337efa46de59207e14fa702e66901b25f61ad0673379af222eafd0f5e9",
+     "output": "512b29aaefcb8f54fdb8d6b04cbce219e46d91eadeaa9bbe1b65196a5eecac93"
+    },
+    "WEIGHTS_0": {
+     "reference": "41d1e7029573a4cf5ca269c85ac207f5b219ba7e80a7e6998950475ac0f39fa2",
+     "output": "ec55cb036f2726920e122a84c7e22ead22573a0b7b38f7a49a514fc79b84b73a"
+    },
+    "inverseBindMatrices": {
+     "reference": "f4a882fd41ffff1ce63f660bdc2bd3a42bc48e0f4bdbc9cdf6749cfe4feb4456",
+     "output": "45711ccd38583ee61df92c17eaea2bda337c56d6d7b63d5a56630a0f7e13f4f6"
+    }
+   }
   }
  },
  "fit": {
@@ -267,107 +471,152 @@
    "rule": "uniform scale to the 1.70 m head / hair top (game-scale choice; ordinary zombies 1.65-1.80 m); feet midpoint to the origin; soles on y = 0; facing +Z (detected from the feet)"
   },
   "dress": {
-   "uniformScale": 1.285299,
-   "translationM": [
-    -0.032857,
-    0.78147,
-    -0.010275
-   ],
-   "rotation": "none (the dress faces +Z like the body)",
+   "mode": "refit",
    "matrix": [
-    1.285298912,
+    1,
     0,
     0,
     0,
     0,
-    1.285298912,
+    1,
     0,
     0,
     0,
     0,
-    1.285298912,
+    1,
     0,
-    -0.032856734,
-    0.781469912,
-    -0.010274749,
+    0,
+    0,
+    0,
     1
    ],
-   "solve": {
-    "method": "Nelder-Mead over (s, tx, ty, tz) from a measured scan; objective = skin poke-through depth^2 (exact ray test) + strap-on-shoulder gap + bodice ease + hem clearance",
-    "init": {
-     "s": 1.3,
-     "t": [
-      -0.04,
-      0.79,
-      -0.012
-     ]
+   "rotation": "none, no mirror: the dress's own strap / cup side (its -X) already lands on the wearer's RIGHT when both face +Z",
+   "method": "lib/garment-refit.mjs: cylinder coordinates about the dress's own axis -> vertical landmark map (empire seam -> under-bust, cup peak -> top of the breast, skirt keeps Track1's x1.2853 length) + upper-bodice angle warp -> radius from the body's own torso surface closed by a smoothing filter + per-region cloth offset + the dress's own relief; skirt hangs from the hip with its own A-line flare, clear of the legs; strap re-routed over the right shoulder on the skin between its re-placed bases; collision push-out with diffusion; normals rotated from the source normals",
+   "changedAttributes": {
+    "POSITION": {
+     "source": "24ebb3e0040201e40e015dda39def3c834d4f4b1ff0f2b630cc2ef67fc917a72",
+     "refit": "6fd9a482335099eabb901d314bb665aa771119a65c7eaf143bc1848075dbf8fa"
     },
-    "evaluations": 323,
-    "weights": {
-     "pen": 30000,
-     "strap": 40000,
-     "ease": 3,
-     "hem": 10000
+    "NORMAL": {
+     "source": "7bda0747450c3bdc9526ab7f6c9b7b6422e79e238893296a952399d6b41fc60f",
+     "refit": "cebf228bcdc23761410fd90495d7318d32ee1aa6368d3a64580cc732f11fd4f6"
     }
    },
-   "result": {
-    "E": 367.43062,
-    "pokeThrough": {
-     "skinVerticesTested": 7061,
-     "verticesThrough": 13,
-     "maxDepthM": 0.0599,
-     "byRegionMaxDepthM": {
-      "y1.35:sideR": 0.02,
-      "y1.20:frontR": 0.033,
-      "y1.15:sideR": 0.06,
-      "y0.85:backR": 0.002
-     }
+   "report": {
+    "method": "lib/garment-refit.mjs",
+    "params": {
+     "trackScale": 1.2853,
+     "seamN": 0.175,
+     "peakN": 0.335,
+     "strapN": 0.345,
+     "strapBlend": [
+      0.335,
+      0.37
+     ],
+     "underBustY": 1.155,
+     "breastTopY": 1.335,
+     "hipY": 0.86,
+     "offsets": [
+      [
+       1.17,
+       0.006
+      ],
+      [
+       1.13,
+       0.004
+      ],
+      [
+       1.02,
+       0.008
+      ],
+      [
+       0.86,
+       0.008
+      ]
+     ],
+     "smallSigma": {
+      "th": 1,
+      "y": 2
+     },
+     "largeSigma": {
+      "th": 2,
+      "y": 7
+     },
+     "legClear": 0.022,
+     "flareScale": 0.85,
+     "strapClear": 0.003,
+     "cupWarp": {
+      "deg": 18,
+      "side": -100,
+      "peak": -65,
+      "medial": 10
+     },
+     "minClear": {
+      "strap": 0.0015,
+      "cup": 0.004,
+      "band": 0.003,
+      "waist": 0.004,
+      "hip": 0.004,
+      "skirt": 0.008
+     },
+     "pushRounds": 5
     },
     "strap": {
-     "samples": 216,
-     "meanGapM": -0.0182
+     "sourceBases": {
+      "front": [
+       -0.0994,
+       0.3499,
+       0.0466
+      ],
+      "back": [
+       -0.1072,
+       0.3445,
+       -0.1072
+      ]
+     },
+     "targetBases": {
+      "front": [
+       -0.078,
+       1.3521,
+       0.0472
+      ],
+      "back": [
+       -0.0959,
+       1.3461,
+       -0.1192
+      ]
+     },
+     "pathLengthM": 0.2462,
+     "sourceLengthM": 0.4683
     },
-    "bodice": {
-     "samples": 2182,
-     "meanDistToSkinM": 0.0514
-    },
-    "hemY": 0.1824
+    "pushRounds": [
+     943,
+     26,
+     4,
+     2,
+     1,
+     1
+    ],
+    "zeroLengthSourceNormalsCarried": 102,
+    "weldedVertices": 15719,
+    "components": 13859
    },
-   "initial": {
-    "E": 773.80102,
-    "pokeThrough": {
-     "skinVerticesTested": 7522,
-     "verticesThrough": 24,
-     "maxDepthM": 0.0728,
-     "byRegionMaxDepthM": {
-      "y1.00:frontL": 0.001,
-      "y1.35:sideR": 0.009,
-      "y1.35:backR": 0.057,
-      "y1.20:frontR": 0.044,
-      "y1.30:frontR": 0.073,
-      "y1.15:sideR": 0.072
-     }
-    },
-    "strap": {
-     "samples": 205,
-     "meanGapM": 0.0011
-    },
-    "bodice": {
-     "samples": 2051,
-     "meanDistToSkinM": 0.0512
-    },
-    "hemY": 0.1841
+   "bodySkinMask": {
+    "skinVertices": 12481,
+    "windingFlipped": false
    },
    "pokeThroughAllSkinBind": {
-    "tested": 7061,
-    "count": 13,
-    "maxM": 0.0599,
-    "sumSq": 0.011479039780458725,
+    "tested": 7185,
+    "count": 18,
+    "maxM": 0.068,
+    "sumSq": 0.01746121193124027,
     "byRegion": {
-     "y1.35:sideR": 0.02,
-     "y1.20:frontR": 0.033,
-     "y1.15:sideR": 0.06,
-     "y0.85:backR": 0.002
+     "y1.35:frontR": 0.022,
+     "y1.30:backR": 0.068,
+     "y1.25:frontR": 0.009,
+     "y1.20:frontR": 0.042,
+     "y1.20:sideR": 0.054,
+     "y1.25:sideR": 0.023
     }
    }
   }
@@ -898,20 +1147,31 @@
    }
   },
   "dress": {
-   "method": "zombie/lib/skin.mjs transferWeights (closest body point, Head->Neck, skirt rule)",
+   "method": "anchor = closest torso / leg skin point (bind): body weights interpolated there (Head -> Neck); skirt rule below the hip line (Hips + both thighs by lateral position, never shins); masked Laplacian smoothing; top-4 normalised",
    "stats": {
-    "method": "closest-point transfer from body weights (barycentric), Head->Neck, centre-faded skirt rule below crotch, masked smoothing",
-    "maxDistToBodyM": 0.3265,
-    "verticesFartherThan10cm": 8210,
-    "thighFollowMax": 0.45,
-    "smoothIters": 3,
-    "mode": "rule",
-    "sleeveless": true,
-    "rowsWithArmWeightMovedToChest": 278
+    "weldedVertices": 15719,
+    "anchored": 4474,
+    "skirtRule": 11801,
+    "anchorBeyond20cm": 0,
+    "rowsWithArmInfluence": 814,
+    "rowsWithShinFootInfluence": 7018,
+    "params": {
+     "hipY": 0.86,
+     "crotchY": 0.771,
+     "tau0": 1,
+     "tau1": 1,
+     "tauFullY": 0.62,
+     "hemShin": 0.6,
+     "sideSharpness": 2.5,
+     "smoothIters": 4,
+     "smoothLambda": 0.5,
+     "fittedLambda": 0.15
+    },
+    "method": "anchor = closest torso / leg skin point (bind): body weights interpolated there (Head -> Neck); skirt rule below the hip line (Hips + both thighs by lateral position, never shins); masked Laplacian smoothing; top-4 normalised"
    },
    "check": {
     "vertices": 29319,
-    "maxSumError": 5.96e-8,
+    "maxSumError": 4.47e-8,
     "badEntries": 0
    }
   },
@@ -1008,19 +1268,19 @@
     "bodyFramesBelowMinus1cm": 0,
     "topY": 0.7202,
     "maxLegReach": 0,
-    "dressMinY": -0.2219,
-    "dressMaxSinkBelowFloorM": 0.2219,
+    "dressMinY": -0.0862,
+    "dressMaxSinkBelowFloorM": 0.0862,
     "dressFramesWithVerticesBelowFloor": 121,
-    "dressMaxShareBelowFloor": 0.3346,
+    "dressMaxShareBelowFloor": 0.0325,
     "boundsM": {
      "min": [
-      -0.4279,
-      -0.2219,
-      -0.715
+      -0.3583,
+      -0.0862,
+      -0.6176
      ],
      "max": [
-      0.3626,
-      0.7265,
+      0.3379,
+      0.7202,
       0.7033
      ]
     }
@@ -1031,18 +1291,18 @@
     "bodyFramesBelowMinus1cm": 0,
     "topY": 1.5517,
     "maxLegReach": 0,
-    "dressMinY": -0.2489,
-    "dressMaxSinkBelowFloorM": 0.2489,
-    "dressFramesWithVerticesBelowFloor": 16,
-    "dressMaxShareBelowFloor": 0.4283,
+    "dressMinY": -0.0936,
+    "dressMaxSinkBelowFloorM": 0.0936,
+    "dressFramesWithVerticesBelowFloor": 12,
+    "dressMaxShareBelowFloor": 0.0451,
     "boundsM": {
      "min": [
-      -0.4278,
-      -0.2489,
-      -0.7119
+      -0.3581,
+      -0.0936,
+      -0.6772
      ],
      "max": [
-      0.3679,
+      0.3712,
       1.5517,
       0.757
      ]
@@ -1054,14 +1314,14 @@
     "bodyFramesBelowMinus1cm": 0,
     "topY": 1.4548,
     "maxLegReach": 0.9208,
-    "dressMinY": -0.0256,
-    "dressMaxSinkBelowFloorM": 0.0256,
-    "dressFramesWithVerticesBelowFloor": 6,
-    "dressMaxShareBelowFloor": 0.0004,
+    "dressMinY": 0.1891,
+    "dressMaxSinkBelowFloorM": 0,
+    "dressFramesWithVerticesBelowFloor": 0,
+    "dressMaxShareBelowFloor": 0,
     "boundsM": {
      "min": [
-      -0.4173,
-      -0.0256,
+      -0.4014,
+      -0.0022,
       -0.4544
      ],
      "max": [
@@ -1077,15 +1337,15 @@
     "bodyFramesBelowMinus1cm": 0,
     "topY": 1.5807,
     "maxLegReach": 0.8677,
-    "dressMinY": -0.004,
-    "dressMaxSinkBelowFloorM": 0.004,
+    "dressMinY": 0.1763,
+    "dressMaxSinkBelowFloorM": 0,
     "dressFramesWithVerticesBelowFloor": 0,
     "dressMaxShareBelowFloor": 0,
     "boundsM": {
      "min": [
-      -0.4184,
-      -0.004,
-      -0.4139
+      -0.3856,
+      -0.0019,
+      -0.2666
      ],
      "max": [
       0.4717,
@@ -1100,7 +1360,7 @@
     "bodyFramesBelowMinus1cm": 0,
     "topY": 1.5843,
     "maxLegReach": 0.8885,
-    "dressMinY": 0.0531,
+    "dressMinY": 0.2512,
     "dressMaxSinkBelowFloorM": 0,
     "dressFramesWithVerticesBelowFloor": 0,
     "dressMaxShareBelowFloor": 0,
@@ -1108,10 +1368,10 @@
      "min": [
       -0.4869,
       0,
-      -0.4139
+      -0.2607
      ],
      "max": [
-      0.3685,
+      0.3357,
       1.5843,
       0.757
      ]
@@ -1123,14 +1383,14 @@
     "bodyFramesBelowMinus1cm": 0,
     "topY": 1.6609,
     "maxLegReach": 0.9138,
-    "dressMinY": -0.2338,
-    "dressMaxSinkBelowFloorM": 0.2338,
-    "dressFramesWithVerticesBelowFloor": 39,
-    "dressMaxShareBelowFloor": 0.4764,
+    "dressMinY": -0.1517,
+    "dressMaxSinkBelowFloorM": 0.1517,
+    "dressFramesWithVerticesBelowFloor": 37,
+    "dressMaxShareBelowFloor": 0.1892,
     "boundsM": {
      "min": [
       -0.7416,
-      -0.2338,
+      -0.1517,
       -0.8037
      ],
      "max": [
@@ -1327,12 +1587,12 @@
   },
   "dormant": {
    "footprintM": {
-    "minX": -0.4278,
-    "maxX": 0.3625,
-    "minZ": -0.7119,
+    "minX": -0.3581,
+    "maxX": 0.3377,
+    "minZ": -0.6176,
     "maxZ": 0.7006
    },
-   "topY": 0.7215,
+   "topY": 0.7162,
    "lowestBodyY": 0.0041,
    "groundingOffsetM": 0,
    "hipsOffsetY": -0.4196,
@@ -1353,18 +1613,18 @@
    "min": [
     -0.7379,
     0,
-    -0.2729
+    -0.1969
    ],
    "max": [
     0.7392,
     1.7,
-    0.2524
+    0.1911
    ]
   },
   "clipBoundsM": {
    "min": [
     -0.7416,
-    -0.2489,
+    -0.1517,
     -0.8037
    ],
    "max": [
@@ -1376,16 +1636,16 @@
   "cullSphere": {
    "center": [
     -0.0461,
-    0.706,
+    0.7546,
     0.2209
    ],
-   "radius": 1.5638
+   "radius": 1.5346
   },
   "modelSpace": "+Z forward, +Y up, +X = character left, metres; feet / Root at the origin",
-  "note": "User-supplied Siren (Pale Apparition body + Ghost Dress), appearance-locked: native vertices / UVs / normals / materials / textures unchanged; technical rig, uniform fit and procedural clips only."
+  "note": "User-supplied Siren (Pale Apparition body + Ghost Dress). Body appearance-locked (native vertices / UVs / normals / materials / textures unchanged); the dress is the user-authorised garment-only refit (POSITION / NORMAL / weights re-derived; UVs / indices / material / textures unchanged); technical rig and procedural clips."
  },
  "stats": {
-  "seconds": 54.6,
+  "seconds": 13,
   "bodyWeights": {
    "vertices": 20781,
    "maxSumError": 2.98e-8,
@@ -1393,21 +1653,23 @@
   },
   "dressWeights": {
    "vertices": 29319,
-   "maxSumError": 5.96e-8,
+   "maxSumError": 4.47e-8,
    "badEntries": 0
   },
   "weldedBodyVertices": 15426,
   "weldedDressVertices": 15719,
   "pokeThroughBind": {
-   "tested": 7061,
-   "count": 13,
-   "maxM": 0.0599,
-   "sumSq": 0.011479039780458725,
+   "tested": 7185,
+   "count": 18,
+   "maxM": 0.068,
+   "sumSq": 0.01746121193124027,
    "byRegion": {
-    "y1.35:sideR": 0.02,
-    "y1.20:frontR": 0.033,
-    "y1.15:sideR": 0.06,
-    "y0.85:backR": 0.002
+    "y1.35:frontR": 0.022,
+    "y1.30:backR": 0.068,
+    "y1.25:frontR": 0.009,
+    "y1.20:frontR": 0.042,
+    "y1.20:sideR": 0.054,
+    "y1.25:sideR": 0.023
    }
   },
   "runGait": {
@@ -1416,20 +1678,20 @@
   }
  },
  "evidence": [
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/originals-native.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/rigged-bind-beside-zombie.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/skeleton.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/clips-front.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/clips-side.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/clips-three-quarter.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/dormant-closeup.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/dress-fit.png",
-  "reference/tasks/track1-siren-blightbelly-20261031/evidence/RIGS/siren-bind-static.glb"
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/originals-native.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/rigged-bind-beside-zombie.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/skeleton.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/clips-front.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/clips-side.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/clips-three-quarter.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/dormant-closeup.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/dress-fit.png",
+  "reference/tasks/siren-clothing-refit-20261031/evidence/FIT/builder/siren-bind-static.glb"
  ],
  "limitations": [
-  "Linear blend skinning only (no corrective shapes): shoulders lose some volume when the T-pose arms come down; knees / ankles crease in the kneeling Dormant / Death poses.",
-  "The dress is skinned to the body (closest-point transfer, skirt rule below the crotch); in kneeling / prone poses the skirt passes below the floor line (dressMaxSinkBelowFloorM per clip in clips.verify), hidden by the floor in game.",
-  "Hair is part of the body mesh: it is weighted to the head / neck / chest chain (never the arms) and deforms rigidly with them (no hair simulation).",
-  "The supplied dress is a torn one-strap slip: with the faithful uniform fit its bodice leaves the chest and the left flank / hip uncovered — a property of the supplied art, not changed here."
+  "Body (unchanged, inherited): linear blend skinning only (no corrective shapes): shoulders lose some volume when the T-pose arms come down; knees / ankles crease in the kneeling Dormant / Death poses; hair is part of the body mesh and deforms rigidly with the head / neck / chest (no hair simulation).",
+  "Dress (refit): linear-blend skinned like the body, no cloth simulation: in strong hip / knee flexion (Run, Attack, Rise, kneeling Dormant) the thighs / knees pass through the skirt and its hem fringe in places, and the arm pressed to the side meets the cup side; the skirt does not drape or pool — it follows the thighs.",
+  "Dress (refit): in the kneeling / prone poses the hem / fringe still passes below the floor line (dressMaxSinkBelowFloorM per clip in clips.verify; far less than before), hidden by the floor in game.",
+  "Dress (refit): the hem sits at the knee (~0.42 m; fringe to ~0.33 m) — the bodice moved up onto the bust and the skirt kept its length, so it reads shorter than the Track1 placement (hem ~0.27 m); the left flank stays torn open from the under-bust to the hip and the left breast is exposed, as the supplied dress is designed."
  ]
 }
