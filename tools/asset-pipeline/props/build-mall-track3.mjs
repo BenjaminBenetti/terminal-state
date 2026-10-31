@@ -164,6 +164,19 @@ const EDITS = {
   // seated 18 mm proud of the drawer pulls (dz -0.066). Then uniform to 1.9 m tall.
   'medicine-drawer-cabinet': {basis: 'right door (open in the model) rotated closed about its hinge + width-fitted to its bay (local); uniform: cabinet height 1.9 m', sizeM: 1.9, sizeAxis: 'h',
     hingeClose: {pred: c => c.max[2] <= 0.04 && c.min[2] < -0.12 && c.min[0] > -0.61 && c.max[0] < -0.48, hinge: [-0.551, 0.036], sx: 0.731, dx: -0.034, dz: -0.066}},
+  // --- batch 2 resume (recovery02, after the provider-limit pause) + 2R ---
+  // M35 (review/b2r-refines-raw.png): 0.82 m deep at the frozen 1.8 m height (a gun safe is ~0.6 m) -> depth z x0.76.
+  'gun-safe-tall': {basis: 'tall safe 1.8 m (frozen h), depth trimmed to 0.60 m (z x0.76)', scaleAxes: [[2, 0.76]]},
+  // M45: 4-drawer dresser at the frozen 1.4 m width stood 0.98 m tall and 0.94 m deep -> y x0.866, z x0.53 (0.85 x 0.50 m frozen).
+  'dresser-drawers': {basis: 'dresser 1.4 x 0.85 x 0.50 m (frozen; per-axis y x0.866, z x0.53)', scaleAxes: [[1, 0.866], [2, 0.53]]},
+  // M42: at the frozen 1.2 m width (incl. the cantilevered acrylic side tiers) it stood 2.48 m -> uniform to the frozen 2.2 m height.
+  'cosmetics-wall-unit': {basis: 'uniform: unit height 2.2 m (frozen h; width incl. side acrylic tiers)', sizeM: 2.2, sizeAxis: 'h'},
+  // M37: the model has a slim backrest; at the frozen 1.8 m the seat top stood ~0.48 m -> uniform 1.7 m long (seat ~0.45 m).
+  'mall-bench': {basis: 'uniform: 1.7 m long so the slatted seat top is ~0.45 m', sizeM: 1.7, sizeAxis: 'w'},
+  // M31: diameter == height in the model -> uniform to a 0.75 m table top (frozen h), diameter 0.75 m.
+  'cafe-bistro-table': {basis: 'uniform: table top 0.75 m (frozen h)', sizeM: 0.75, sizeAxis: 'h'},
+  // M30 (2R slot 85): open two-bay multideck 1.65 m tall at the frozen 1.9 m width -> y x1.2 (~1.98 m, frozen 2.0 m).
+  'multideck-open-cooler': {basis: 'open multideck 1.9 m wide (frozen), height stretched to ~2.0 m (per-axis y x1.2)', scaleAxes: [[1, 1.2]]},
 };
 
 // ---------- records ----------

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 16799,
-      "sha256": "583a1dd5910027b3b330ffb203fb758992e3337ae0fe617e07a6e71063c6bb1c"
+      "bytes": 18071,
+      "sha256": "b50e2e23831852bb9a315b0216c29191189e3b4490bf0dfb943b4b161b105fe4"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1460,8 +1460,8 @@
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
-      "bytes": 183576,
-      "sha256": "ea46ea09845cd39fe795bbe9c745923335b04746a9742da23583fcce7817d443"
+      "bytes": 237102,
+      "sha256": "fde0b63ae6d4fe2c3958d421d189010513d017b4c44cf8c6aef931e33ebbe928"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1819,9 +1819,24 @@
       "sha256": "735710dbdcfc0f60633a4550d56e28a360f1bfad180f10d87ae0ade30657acb2"
     },
     {
+      "path": "assets/models/mall-cafe-bistro-table.glb",
+      "bytes": 116524,
+      "sha256": "be49c149607cb7011713cc9317ce46a11ddbdebb62ae5d6c740f3e21cb0c5f55"
+    },
+    {
+      "path": "assets/models/mall-cafe-chair.glb",
+      "bytes": 144552,
+      "sha256": "4f504fc4ab4980c1086bc2d240da7b44b81de5f953faf1defd8afc33787ac544"
+    },
+    {
       "path": "assets/models/mall-camping-tent-display.glb",
       "bytes": 223400,
       "sha256": "c7bdce318b7257ac6035ba29d2fd83c1ee22817bf32dc78eb9aee42229af5389"
+    },
+    {
+      "path": "assets/models/mall-cardboard-box-flaps.glb",
+      "bytes": 86548,
+      "sha256": "730ce14c4b0726f7af331919d4c50824460dcf4bf89b143af66bfd3152c975c8"
     },
     {
       "path": "assets/models/mall-checkout-lane.glb",
@@ -1832,6 +1847,16 @@
       "path": "assets/models/mall-clothing-wall-unit.glb",
       "bytes": 251960,
       "sha256": "97ff969a54d0ab724ec1be5d1609ccf4a308f60cdcc9eb04b3ef363e51d00d50"
+    },
+    {
+      "path": "assets/models/mall-cosmetics-wall-unit.glb",
+      "bytes": 197740,
+      "sha256": "5fb0195ad81f0aeb95f533927526ce78bfb757036f50415a024f3ff6db5766ce"
+    },
+    {
+      "path": "assets/models/mall-dresser-drawers.glb",
+      "bytes": 158640,
+      "sha256": "1a69c5a12ccefe5891f224d3ebf99e55c6c447789338c68f604de8d54784bfb6"
     },
     {
       "path": "assets/models/mall-flat-screen-tv.glb",
@@ -1864,6 +1889,11 @@
       "sha256": "155b383e47064574cfc4b5618cbff3fd72012ebac3c9b886e2e5ec859ea9d685"
     },
     {
+      "path": "assets/models/mall-gun-safe-tall.glb",
+      "bytes": 179724,
+      "sha256": "6583e0cd5b7a40f403474f6074a6a449300a239bd0863916d03e0aa97c5988a9"
+    },
+    {
       "path": "assets/models/mall-gun-wall-rack.glb",
       "bytes": 258320,
       "sha256": "737e569dd19e08d58b359613627c768069fedaa7745e6e24ff322e069ff506b8"
@@ -1872,6 +1902,11 @@
       "path": "assets/models/mall-kiddie-ride.glb",
       "bytes": 201168,
       "sha256": "8588ea097a987ada64421a40958b3bd14e34e068ca9eea6d952d452074a96052"
+    },
+    {
+      "path": "assets/models/mall-mall-bench.glb",
+      "bytes": 128072,
+      "sha256": "9e539c81e9ca85d169cf710d9c5caed06cb1f6b5a874c8f7e97f7ffadde8ef63"
     },
     {
       "path": "assets/models/mall-mall-cashwrap-counter.glb",
@@ -1892,6 +1927,11 @@
       "path": "assets/models/mall-medicine-drawer-cabinet.glb",
       "bytes": 204976,
       "sha256": "67d1c182beb3319d2034d4e4dceaf2fe9114a2ce3570c8a7b5feaf06b99dc19e"
+    },
+    {
+      "path": "assets/models/mall-multideck-open-cooler.glb",
+      "bytes": 259620,
+      "sha256": "bc16fab843b1d493a56054980f7e3c063a87b241516ce0925a6b19f5cd0913c3"
     },
     {
       "path": "assets/models/mall-outdoors-plank-shelving.glb",
