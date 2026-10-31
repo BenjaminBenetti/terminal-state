@@ -302,6 +302,28 @@ Tunnels have sparse fixtures, mostly dead or dying.
     walls unchanged (same quads); the portal adds 3 boxes (36 triangles) per tunnel into its existing concrete mesh. Draws: annex
     wall quads no longer share a 48 m chunk mesh with the core's platform-face concrete, +1 to +4 draws per level measured (seeds
     4055629249, 2654448106, 1043, 774566179); the formwork overlay quads on annex walls are gone.
+  - **R1 "concrete at distance"** (task track2-round2, lane CONCRETE; user: "Wall texture looks low detail still, likely due to the
+    distance, it just doesn't give that concrete vibe"). Diagnosis with numbers (opt-in `game/tests/r1-concrete-preview.test.ts`,
+    box-filtered mips of the painted set): texel density was not the cause — at 1080p / 75° with the native 16x request the colour
+    map is sampled at mip 0–2.6 (≤ 1.5 cm texels) everywhere within 10 m (720p: ≤ 3.2). The CONTENT was: linear luminance varied only
+    3.5 % (rel. std) at 0.3 m texels and 2.7 % at 0.6 m, roughness was a flat 0.87 ± 0.03, and 67 % of the vertical tone profile was
+    one perfectly periodic 0.15 m board-seam stripe (plus cupped-looking board relief and wood grain) — it read as plank cladding.
+    Most of its 15 % mip-0 variation (grain, speckle, 1–4 mm bug holes) is gone by mip 2–3, which a software rasterizer's 1x
+    anisotropy cap reaches already at 2–4 m along a corridor wall (mip 3.7 at 4 m, 5.7 at 8 m in a 1.5 m corridor).
+  - Fix (same three maps and sizes, same two materials / programs, no draw change): the board imprint becomes faint (random board
+    widths 0.09–0.2 m, broken hairline seams, no cupping); structure moves to 0.15–1.2 m: a tileable domain-warped fBm cement-paste
+    cloud and a sparse stain level set (colour, roughness, relief), two panels of their own tone / sheen, panel joints with grout
+    bleed and chipped arrises, a pour-lift line, tie holes (open cones or grout plugs) with rust / water runs, small mortar patches,
+    honeycomb at the joints, lime runs, hairline cracks; the normal map comes from a float relief field (panel offset, pillowing
+    between ties, paste undulation, fine "orange peel") added to the painted height. The large stains stay small on purpose: a
+    distinctive shape would mark the 2.4 m repeat (seen in an intermediate render); variation above ~1 m is world-space — the annex
+    macro tone 0.32 → 0.4 (`ANNEX_MACRO`, a uniform) and the decay hook. normalScale 0.85 → 1. Result: luminance 11 % at 0.3 m /
+    8 % at 0.6 m texels, roughness 0.66–1.0 (mean 0.80), stripe share 2 %, mean albedo +5 %. Resident GPU memory unchanged (≈ 8 MiB
+    with mips); one-time paint adds ~0.1 s of JS (fBm grids, upsampling, relief) at the first extension level of a page.
+  - Untouched: `render/anisotropy.ts` / `render/softwareGl.ts` (maps created at 8x like every canvas surface set, 16x requested at
+    build as 'wall'; the software cap still applies), mipmaps, warm-up, the annex floors (`concrete` canvas, 512² over 2 m = 256
+    texels / m, colour only, roughness 0.92, no normal map) and ceilings (`ceilingService`, the authored 1024 x 341 ceiling set over
+    3.6 x 1.15 m ≈ 284 texels / m with ORM + normal). Tests: `game/tests/wall-finish-concrete.test.ts`.
 - **Station invitation art** (playtest revision, lane ART; `game/src/gen/trackExt/art.ts`, `world/trackExt/graffiti.ts`,
   `graffitiArt.ts`):
   - Records: `planStationArt` runs at the end of `finishExtensions` (after the attach, on the track-ext fork `station-art`, which
