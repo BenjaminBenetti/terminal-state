@@ -32,7 +32,7 @@ import {buildLevelLinks, buildLevels, deriveRails, levelDistance, levelIssues, r
 import {dressLevels, lightServiceLevel, placeLevelSpawns} from './levelGenDress';
 import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 // Track 2 (lane GEN): tunnels past the bed ends + service annexes (gen/trackExt), planned before the crop, attached after every core pass.
-import {attachExtensions, copyWindow, dropExtensions, extendTracks, extensionIssues, extensionRects, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
+import {dropExtensions, extendTracks, extensionIssues, finishExtensions, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
 
 /**
  * Track 2 (lane GEN): grid cell budget of a station with its track extensions (W x H of the cropped grid). The baked light field
@@ -343,7 +343,8 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   }
 
   // --- Track 2 (lane GEN): tunnels past the bed ends + service annexes, planned into the virtual canvas on their OWN fork (the
-  // main stream is untouched); their cells are stamped only after every core pass below (attachExtensions) ------------------------
+  // main stream is untouched). The crop and every core pass below run exactly as without them; finishExtensions then re-frames
+  // the finished core into the extended grid (a pure translation) and stamps them in -------------------------------------------
   const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'subway', canvasGrow: 'any', maxCells: STATION_EXT_MAX_CELLS});
 
   // --- Crop the canvas to the station (iteration 08: every level grid, same bounds) ----------------
@@ -355,14 +356,18 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
     if (r.w <= 0 || r.h <= 0) continue;
     x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1);
   }
-  // Track 2: the core window (the crop without extensions), then the extensions widen the bbox (west / north = a pure translation).
-  const core = {x0, y0, w: x1 - x0 + 5, h: y1 - y0 + 5};
-  if (ext) for (const r of extensionRects(ext)) { x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1); }
   const ox = x0 - 2, oy = y0 - 2;
   const grids = srcs.map(sg => {
     const out = new Grid(x1 - x0 + 5, y1 - y0 + 5);
-    // Lane T (iteration 05): floor heights + stair ramps travel with the crop (Track 2: a window may reach past the canvas: rock).
-    copyWindow(sg, out, ox, oy);
+    for (let y = 0; y < out.h; y++) {
+      const s = (y + oy) * sg.w + ox, d = y * out.w;
+      out.cells.set(sg.cells.subarray(s, s + out.w), d);
+      out.area.set(sg.area.subarray(s, s + out.w), d);
+      out.ceil.set(sg.ceil.subarray(s, s + out.w), d);
+      // Lane T (iteration 05): floor heights + stair ramps travel with the crop.
+      out.floor.set(sg.floor.subarray(s, s + out.w), d);
+      out.rampIdx.set(sg.rampIdx.subarray(s, s + out.w), d);
+    }
     out.voidFloor = sg.voidFloor;
     return out;
   });
@@ -375,7 +380,7 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   for (const sf of shops.storefronts) { sf.ox -= ox; sf.oy -= oy; sf.ux -= ox; sf.uy -= oy; }
   const trenches = k.trenches.map(t => Kit.trenchWorld(t, ox, oy));
 
-  const layout: StationLayout = {
+  let layout: StationLayout = {
     seed, attempt, name, archetype: arch, towards: [terms[0], terms[1]], grid: g, areas, doors,
     props: [], lights: [], signs: [], pickups: [], zombies: [], storefronts: shops.storefronts, decor: [],
     playerSpawn: {x: 0, z: 0, yaw: 0},
@@ -411,8 +416,9 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   finishTraversal(layout);
   // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed.
   assignEnemyArchetypes(layout, spawns); // lane SPAWN: the level's pool, per the spawn's room
-  // Track 2 (lane GEN): only now the extension cells / areas / doors join the layout (appended; every pass above saw the core only).
-  if (ext) attachExtensions(layout, ext, {ox, oy, core: {x: core.x0 - 2 - ox, y: core.y0 - 2 - oy, w: core.w, h: core.h}});
+  // Track 2 (lane GEN): only now the extensions join: the core is re-framed into the extended grid (translated when they reach
+  // west / north) and their cells / areas / doors are appended (every pass above saw exactly the core world).
+  if (ext) layout = finishExtensions(layout, ext, {ox, oy, grow: 'any'});
   return layout;
 }
 

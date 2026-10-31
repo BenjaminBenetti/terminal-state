@@ -22,6 +22,7 @@ import type {Area, PickupPlacement, StationLayout} from './stationTypes';
 import {GEAR_ITEMS} from '../items/gear';
 import {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, gearParams, lootProfile, type LootProfile} from '../items/lootTables';
 import type {LevelId} from '../levels/types';
+import {isExtensionArea} from './trackExt/types'; // Track 2 (lane GEN)
 
 /** Task gasmask-breach-20261030 (mask lane): `filter` = a found gas mask's seeded filter charge (s), copied onto its placement. */
 export interface GearAssignment { itemId: string; filter?: number }
@@ -103,6 +104,8 @@ const ANCHOR = /locker|cabinet|shelf|crate|safe|carton|rack|filing|desk|counter|
 
 /** How likely an area is to hold a gear find (0 = never). Exported for tests. */
 export function gearAreaWeight(a: Area): number {
+  // Track 2 (lane GEN): the level's ONE gear roll stays in the core station (track tunnels / service annexes never multiply it).
+  if (isExtensionArea(a)) return 0;
   if (a.kind === 'platform' || a.kind === 'passage' || a.kind === 'concourse') return 0;
   if (a.storefront !== undefined && a.type !== 'shop' && a.type !== 'eatery') return 0;
   const words = `${a.type} ${a.role ?? ''} ${a.purpose ?? ''}`;

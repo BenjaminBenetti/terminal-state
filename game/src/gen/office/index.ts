@@ -45,7 +45,7 @@ import {placeRoofFind, placeRoofReward} from './roof'; // Task office-interactio
 import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, transitRails, transitSigns} from './transit';
 // Track 2 (lane GEN): tunnels past the station's bed ends + service annexes (gen/trackExt): the crop origin is FIXED, so they grow
 // east / south only; planned before the crop, attached after every core pass.
-import {attachExtensions, dropExtensions, extendTracks, extensionRects, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
+import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
 
 /**
  * Track 2 (lane GEN): grid cell budget (W x H) of the office layout with its track extensions. The baked light field is
@@ -135,7 +135,8 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   bases[OFFICE_ROOF_LEVEL] = r3(bases[OFFICE_TOP_FLOOR] + FLOOR_HEIGHT);
   const rc: RoofCarve = carveRoof(k, f, TX, TY, bases[OFFICE_TOP_FLOOR], bases[OFFICE_ROOF_LEVEL]);
 
-  // --- Track 2 (lane GEN): tunnels past the station's bed ends + annexes on their OWN fork (east / south of the fixed origin) ---
+  // --- Track 2 (lane GEN): tunnels past the station's bed ends + annexes on their OWN fork (east / south of the fixed origin;
+  // the crop and every core pass below run exactly as without them; finishExtensions grows the grid and stamps them at the end) --
   const ox = TX - MARGIN, oy = TY - MARGIN;
   const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'office', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: OFFICE_EXT_MAX_CELLS});
 
@@ -145,9 +146,6 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
     if (r.w <= 0 || r.h <= 0) continue;
     x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1);
   }
-  // Track 2: the core window (same origin), then the extensions widen the grid east / south.
-  const coreW = x1 - ox + 3, coreH = y1 - oy + 3;
-  if (ext) for (const r of extensionRects(ext)) { x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1); }
   const c = cropKit(k, [0, ...OFFICE_FLOORS, OFFICE_ROOF_LEVEL], ox, oy, x1 - ox + 3, y1 - oy + 3, s.storefronts);
   for (const t of towers) t.at = {ox: MARGIN, oy: MARGIN, level: t.at.level, base: t.at.base};
 
@@ -243,9 +241,9 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures, roofReward, roofFind); // (lane ROOF: + the reward record; + the roof find)
   layout.office.transit = transitInfo(layout, s, transitLinkIds);
   streetSigns(layout, s, f, rc);
-  // Track 2 (lane GEN): only now the extension cells / areas / doors join the layout (appended; every pass above saw the core only).
-  if (ext) attachExtensions(layout, ext, {ox, oy, core: {x: 0, y: 0, w: coreW, h: coreH}});
-  return layout;
+  // Track 2 (lane GEN): only now the extensions join: the finished core is re-framed into the grid grown east / south (same origin)
+  // and their cells / areas / doors are appended (every pass above saw exactly the core world).
+  return ext ? finishExtensions(layout, ext, {ox, oy, grow: 'east-south'}) : layout;
 }
 
 function linkOf(id: number, lower: number, upper: number, flights: readonly {ramp: number; id: number; bottom: {x: number; y: number; z: number}; top: {x: number; y: number; z: number}}[]): LevelLink {

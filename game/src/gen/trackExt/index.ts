@@ -17,10 +17,13 @@ import type {Kit} from '../stationKit';
 import type {Rect, StationLayout} from '../stationTypes';
 import {levelDistance} from '../levelGen';
 import {Carver, type Carve} from './carve';
+import {reframe} from './core';
 import {isExtensionArea, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
 
 export * from './types';
 export {TRACK_EXT, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config';
+export {copyWindow} from './window';
+export {coreView, hasExtensionGrowth, reframe} from './core';
 
 /** Carves of extendTracks results (canvas frame) until attachExtensions applies them. */
 const CARVES = new WeakMap<TrackExtensions, Carve>();
@@ -120,23 +123,24 @@ export function extensionRects(ext: TrackExtensions): Rect[] {
 }
 
 /**
- * Copies the canvas window [ox, ox + out.w) x [oy, oy + out.h) of `src` into `out` (cells, areas, ceilings, floors, ramps);
- * parts of the window outside the canvas stay rock. Identical to the plain row copy when the window lies inside the canvas.
+ * After the LAST core pass: re-frames the finished core layout (cropped at canvas origin (ox, oy)) into the grid its extensions
+ * need — grown in any direction ('any': a west / north extension translates the core, a pure translation of finished records)
+ * or east / south only ('east-south': a fixed origin) — then attaches them. Returns the (possibly new) layout object.
  */
-export function copyWindow(src: Grid, out: Grid, ox: number, oy: number): void {
-  const sx0 = Math.max(0, ox), sx1 = Math.min(src.w, ox + out.w);
-  if (sx1 <= sx0) return;
-  const n = sx1 - sx0;
-  for (let y = 0; y < out.h; y++) {
-    const sy = y + oy;
-    if (sy < 0 || sy >= src.h) continue;
-    const s = sy * src.w + sx0, d = y * out.w + (sx0 - ox);
-    out.cells.set(src.cells.subarray(s, s + n), d);
-    out.area.set(src.area.subarray(s, s + n), d);
-    out.ceil.set(src.ceil.subarray(s, s + n), d);
-    out.floor.set(src.floor.subarray(s, s + n), d);
-    out.rampIdx.set(src.rampIdx.subarray(s, s + n), d);
+export function finishExtensions(layout: StationLayout, ext: TrackExtensions, crop: {ox: number; oy: number; grow: 'any' | 'east-south'}): StationLayout {
+  const {ox, oy} = crop, W = layout.grid.w, H = layout.grid.h;
+  let x0 = ox, y0 = oy, x1 = ox + W - 1, y1 = oy + H - 1;
+  for (const r of extensionRects(ext)) {
+    if (r.w <= 0 || r.h <= 0) continue;
+    x0 = Math.min(x0, r.x - 2); y0 = Math.min(y0, r.y - 2); x1 = Math.max(x1, r.x + r.w + 1); y1 = Math.max(y1, r.y + r.h + 1);
   }
+  if (crop.grow === 'east-south') {
+    if (x0 < ox || y0 < oy) throw new Error('finishExtensions: an east / south level extended west / north');
+    x0 = ox; y0 = oy;
+  }
+  const out = x0 !== ox || y0 !== oy || x1 !== ox + W - 1 || y1 !== oy + H - 1 ? reframe(layout, x0 - ox, y0 - oy, x1 - x0 + 1, y1 - y0 + 1) : layout;
+  attachExtensions(out, ext, {ox: x0, oy: y0, core: {x: ox - x0, y: oy - y0, w: W, h: H}});
+  return out;
 }
 
 /**
