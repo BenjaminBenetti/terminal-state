@@ -7,6 +7,7 @@
 //      Subway (gen/station.ts → gen/stationDress.ts placeSpawns): 'station';
 //      Office Space (gen/office/index.ts → gen/office/spawns.ts placeOfficeEnemies), ONE logical level: 'street' (station +
 //      lobby, once), 'floor' (once per office floor 2..8), 'roof' (once). No per-floor reroll of the level.
+//      Both (Track 2, lane CONTENT): 'service' (once per seeded service annex off a track tunnel, gen/annexContent.ts; appended last).
 //  - `levelMoves`: the Subway's storey moves after placement (gen/levelGenDress.ts placeLevelSpawns);
 //  - `families`: the enemy family pool [family, weight] (an independent per-spawn roll REPLACES a zombie: ai/creatureSpawn.ts);
 //  - `zombieTypes`: the shambler / coated type roll of every spawn (+ at least one of each). Appearance (wardrobe outfits,
@@ -188,6 +189,12 @@ export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
  * declaredSpawnContexts. No ambient family rule (eligibility) can name it, so no ambient roll ever reaches a horde member.
  */
 export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde';
+/**
+ * Track 2 (lane CONTENT): 'service' = ONE run per seeded SERVICE ANNEX of a track-bearing level (gen/annexContent.ts
+ * placeServiceSpawns; 0-2 annexes per level): a per-annex ZONE BUDGET placed in that annex's areas only, on its own fork, appended
+ * after every core spawn and tagged markSpawnContext(…, 'service'); excluded from the core station / street / floor counts and
+ * reported separately. No family is enabled by it (the Office's Siren eligibility lists only 'floor').
+ */
 export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde'];
 /** Lane INTEG: the context tag of horde members (ai/hordePlace.ts placeHordes tags every member it appends). */
 export const HORDE_CONTEXT = 'horde' as const satisfies SpawnContextId;
@@ -436,6 +443,46 @@ export const MALL_SPAWN_PROFILE: SpawnProfile = {
 };
 
 /**
+ * Track 2 (lane CONTENT): area weights inside a SERVICE ANNEX (the cramped, dark back-of-house reached through a side door off a
+ * track tunnel): rooms (pump / electrical rooms, stores, workshops) like the Subway's back-of-house, the 1.5-2 m service corridors
+ * less (nobody is jumped point-blank in a corridor), closets least.
+ */
+export const SERVICE_AREA_WEIGHTS: AreaWeights = {
+  rules: [
+    {when: {kind: ['closet']}, weight: 0.6, why: 'annex closets (janitor / electrical / supply)'},
+    {when: {kind: ['service']}, weight: 1, why: 'annex service corridors (1.5-2 m wide)'},
+  ],
+  otherwise: 1.4,
+  otherwiseWhy: 'annex rooms (pump / electrical rooms, stores, workshops, custodial rooms)',
+};
+/** Annex caps: passes 1 / 2 (a cramped room holds at most two); closets one. */
+export const SERVICE_CAPS: AreaCaps = {
+  passes: [1, 2],
+  rules: [{when: {kind: ['closet']}, fixed: 1, why: 'closets: at most one'}],
+};
+/**
+ * Annex placement (each annex run): 12 tries, 5 m spacing (wider than the station's 4 m: the annex is dark and cramped), >= 36
+ * walking cells from the start (an annex lies far beyond it anyway), 3 x 3 clear, and 6 m straight-line keep-off from the annex's
+ * entry door (its keep point): the way in and out is never guarded point-blank.
+ */
+export const SERVICE_PLACEMENT: PlacementRules = {
+  areaWeights: SERVICE_AREA_WEIGHTS, caps: SERVICE_CAPS, tries: 12, spacingM: 5, startCells: MIN_ZOMBIE_SPAWN_CELLS, clearCells: 1, landingKeepM: 6,
+};
+/**
+ * THE PER-ANNEX ZONE BUDGET (Track 2, lane CONTENT): spawns ONE service-annex run tries to place, rng.int(lo, hi) per annex, ADDITIVE
+ * to the core contexts. Census basis (docs/enemy-spawns.md "Service annexes"): an annex is ~25 % of the Subway's walkable-exploration
+ * baseline (~1840 m² of the 7371 m² core station, gen/trackExt/config.ts); the station's 22-32 spawns over that baseline would put
+ * ~6.8 into an annex at the same density. The annex is cramped and much darker, so it gets ~60 % of that density: 3-5 per annex
+ * (E 4). The level's own pool / zombie types apply (no annex families, no guarantee); killed annex enemies stay dead for the run
+ * (the per-index memory); 0-2 annexes per level, so a level gains 0-10. Census (Track 2 lane CONTENT, docs/enemy-spawns.md): Subway
+ * 24 seeds 1.12 annexes / level (GEN-2 incidence) -> 4.3 service spawns / level (max 10) on top of the station's ~27; Office 10 seeds
+ * 1.5 annexes -> 5.6 / level (max 9); 3.7-3.9 placed per annex, no run short of its count.
+ */
+export const SERVICE_ZONE_BUDGET: readonly [number, number] = [3, 5];
+/** The 'service' context of a level whose stations grow annexes (the per-annex zone budget; never regenerates a level). */
+export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}};
+
+/**
  * Task track1-siren-blightbelly-20261031 (lane SPAWN): where an Office Siren may lie dormant. She is an INDOOR-ROOM encounter of the
  * office floors (2..8): never on the station or in the lobby (context 'street'), never on the roof (context 'roof'), never in a
  * corridor (kind passage), closet, washroom, stairwell / stair core or the elevator. Her room is at least 4 x 4 m (shorter side 8
@@ -478,6 +525,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
     id: 'subway', label: 'Subway', families: ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
     contexts: {
       station: {label: 'Station', count: [ENEMY_SPAWNS.min, ENEMY_SPAWNS.max], placement: SUBWAY_PLACEMENT, accept: {min: 8, max: null}},
+      // Track 2 (lane CONTENT): the station's service annexes (LEVELS.subway.trackExtensions) — the per-annex zone budget.
+      service: SERVICE_CONTEXT,
     },
     levelMoves: {areaWeights: SUBWAY_AREA_WEIGHTS, mainKeep: 6, passes: 3, tries: 12, spacingM: 4, spacingDy: 2, startCells: MIN_ZOMBIE_SPAWN_CELLS},
     rooms: {},
@@ -488,6 +537,9 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
       street: {label: 'Station + lobby', count: [5, 8], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
       floor: {label: 'Office floor', count: [3, 6], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
       roof: {label: 'Roof', count: [0, 2], placement: OFFICE_PLACEMENT, accept: {min: null, max: 'count'}},
+      // Track 2 (lane CONTENT): the street station's service annexes (LEVELS.office.trackExtensions) — the per-annex zone budget. Not
+      // in OFFICE_SIREN_ELIGIBILITY.contexts: no Siren is ever drawn in an annex (her whole-level rarity and cap are unchanged).
+      service: SERVICE_CONTEXT,
     },
     rooms: {},
     eligibility: {siren: OFFICE_SIREN_ELIGIBILITY},

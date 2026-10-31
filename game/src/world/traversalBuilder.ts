@@ -31,6 +31,7 @@ import {shapeMaterial} from './shapeMaterials';
 import type {StairFlight, Ladder} from '../gen/traversal';
 import type {OfficeTowerInfo} from '../gen/stationTypes';
 import {mallEscalatorFlights} from './mallArch'; // Task track3-eaton-centre-20261031 (lane ARCH)
+import {continuedEnds, endKey} from './trackExt/view'; // Track 2 (VIS): no barricade where a tunnel continues the bed
 
 /** The builder's per-material quad accumulator. */
 export interface QuadSink { quad(p: number[][], n: readonly number[], uv: number[][]): void }
@@ -51,8 +52,8 @@ function ladderMaterial(mats: WorldMaterials): THREE.Material {
   return m;
 }
 
-/** Yellow/black hazard stripes (ladder edge markings, tunnel barricade planks); repeats along u. */
-function hazardMaterial(mats: WorldMaterials): SurfaceNodeMaterial {
+/** Yellow/black hazard stripes (ladder edge markings, tunnel barricade planks); repeats along u. Track 2 (VIS): also the tunnel caps. */
+export function hazardMaterial(mats: WorldMaterials): SurfaceNodeMaterial {
   let m = hazardMats.get(mats);
   if (!m) {
     const tex = canvasTexture(256, 128, 5051, (ctx, w, h, rnd) => {
@@ -260,8 +261,10 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   // Iteration 07 (Lane DW): set 0.12 m off the end wall so the planks lie inside the player's
   // collision radius (0.3 m) of that wall — the barricade really blocks (was 0.4 m: you could
   // step 0.16 m through the planks).
-  for (const t of layout.trenches) {
-    for (const x of [t.x0 + 0.12, t.x1 - 0.12]) {
+  const continued = continuedEnds(layout);
+  for (const [ti, t] of layout.trenches.entries()) {
+    for (const [x, end] of [[t.x0 + 0.12, 'x0'], [t.x1 - 0.12, 'x1']] as const) {
+      if (continued.has(endKey(ti, end))) continue;
       const zc = (t.z0 + t.z1) / 2, w = t.z1 - t.z0 - 0.3;
       for (const zz of [t.z0 + 0.25, t.z1 - 0.25, zc]) box(steel, x, t.floorY + 0.65, zz, 0.08, 1.3, 0.08);
       for (const y of [0.55, 1.1]) box(stripes, x + (x < (t.x0 + t.x1) / 2 ? 0.06 : -0.06), t.floorY + y, zc, 0.03, 0.2, w, 0.6);

@@ -42,6 +42,14 @@ export interface P7DressApi {
   doors(area: Area): readonly Door[];
   /** Wall backing on the area's level (absolute yb; apertures never back anything). */
   backed(area: Area, side: Side, t0: number, t1: number, yb: number): boolean;
+  /**
+   * Track 2 (lane CONTENT): an APPENDED pass over a subset of areas (the service annexes): only these areas get uses, and only props
+   * from index `hostsFrom` on are hosts for on-top decor / chairs. Absent = the station pass exactly as before.
+   */
+  areas?: (area: Area) => boolean;
+  hostsFrom?: number;
+  /** Track 2 (lane CONTENT): scales each area's p7Budget (the annexes' sparser dressing; default 1). */
+  budgetScale?: number;
 }
 
 const OPP: Record<Side, Side> = {N: 'S', S: 'N', W: 'E', E: 'W'};
@@ -78,6 +86,7 @@ export function dressP7(layout: StationLayout, api: P7DressApi): P7DressStats {
   const palette = p7Palette(p => prng.chance(p));
   const ctx: Ctx = {layout, api, st, palette, kindPos: null};
   for (const a of layout.areas) {
+    if (api.areas && !api.areas(a)) continue; // Track 2 (lane CONTENT): an appended subset pass
     // Composed areas: only their wall / ceiling infrastructure (floor vignettes come from gen/compose.ts).
     const composed = api.composed(a);
     const uses = p7UsesFor(p7AreaKey(a)).filter(u => palette.has(u.kind) && (!composed || ((isHigh(u.use) || u.use.at === 'mount') && !COMPOSED_KINDS.has(u.kind))));
@@ -85,7 +94,8 @@ export function dressP7(layout: StationLayout, api: P7DressApi): P7DressStats {
     const lead = composed ? [] : uses.filter(u => u.use.lead);
     const floor = api.rng.shuffle(uses.filter(u => (composed || !u.use.lead) && !isHigh(u.use)));
     const high = api.rng.shuffle(uses.filter(u => (composed || !u.use.lead) && isHigh(u.use)));
-    const budget = p7Budget(a);
+    const b0 = p7Budget(a), k = api.budgetScale ?? 1;
+    const budget = k === 1 ? b0 : {floor: Math.max(1, Math.round(b0.floor * k)), high: Math.max(1, Math.round(b0.high * k))};
     let nf = 0, nh = 0;
     for (const {kind, use} of [...lead, ...floor, ...high]) {
       const hi = isHigh(use);
@@ -143,6 +153,23 @@ function clearOfDoors(ctx: Ctx, x: number, z: number, hx: number, hz: number, y:
 }
 
 /**
+ * Track 2 integration (found on a re-laid station, seed 424242): a high OPENABLE wall mount (first-aid kit, AED / extinguisher
+ * cabinet …: storage that must open, root CLAUDE.md prop rule 1) must stay reachable, so no floor prop of its area may stand in
+ * the 0.9 m in front of it reaching up to the mount (a 1.83 m grill line 0.45 m in front of a first-aid kit hid it from its
+ * stand spot). Lower furniture under a mount (counters, benches) stays allowed. Same area, so the heights compare in the area's
+ * frame. Consumes no randomness.
+ */
+function tallInFront(ctx: Ctx, a: Area, side: Side, t: number, extent: number, depth: number, mountY: number): boolean {
+  const [cx, cz] = wallXZ(a, side, t, depth + 0.03 + 0.45);
+  const n = side === 'N' || side === 'S', hx = n ? extent / 2 : 0.45, hz = n ? 0.45 : extent / 2;
+  for (const q of ctx.layout.props) {
+    if (q.area !== a.id || q.mounted || q.y + q.h <= mountY - 0.15) continue;
+    if (Math.abs(q.x - cx) < q.hx + hx && Math.abs(q.z - cz) < q.hz + hz) return true;
+  }
+  return false;
+}
+
+/**
  * One wall spot: back (or, `along`, the long side) against `side` at `t`; wall-backed over the item's extent up to `yb`, doorway
  * clear, then the dresser's checks. Low mounts (y < 0.9) are placed from the floor (they collide) and rendered `lift` higher.
  */
@@ -168,6 +195,7 @@ function tryWall(ctx: Ctx, a: Area, kind: P7Kind, use: P7Use, side: Side, t: num
     const n = side === 'N' || side === 'S';
     if (!ctx.api.cellsFree(a, sx, sz, n ? extent / 2 : 0.45, n ? 0.45 : extent / 2)) return null;
   }
+  if (high && isContainerKind(kind) && tallInFront(ctx, a, side, t, extent, depth, mountY!)) return null;
   const p = ctx.api.place(a, kind, r3(x), r3(z), rot, high ? {y: mountY!} : along ? {} : {front: use.front ?? (mountY !== null ? 0.6 : 0.9)});
   if (!p) return null;
   if (high) p.mounted = true;
@@ -375,7 +403,7 @@ function dressHosts(ctx: Ctx): void {
   const perArea = new Map<string, number>();
   const hosts = layout.props.length;
   const chairs: {x: number; z: number; hx: number; hz: number}[] = [];
-  for (let i = 0; i < hosts; i++) {
+  for (let i = api.hostsFrom ?? 0; i < hosts; i++) {
     const host = layout.props[i];
     if (host.host !== undefined || host.mounted) continue;
     const area = layout.areas[host.area];

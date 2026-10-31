@@ -17,6 +17,7 @@ import {generateStation} from '../src/gen/station';
 import {planWallDetail, treatmentOf, finishFamily, RECIPES} from '../src/world/wallDetailPlan';
 import {LevelColumns, extractWallFaces, stationLevels} from '../src/world/levelGeometry';
 import {cutOfficeWindows} from '../src/world/officeProps';
+import {TrackExtView, shellDetailFaces} from '../src/world/trackExt';
 import {
   CORE_WALL, LOBBY_PALETTE, LOWER, NEUTRAL_PALETTE, OfficeArch, OfficeSurfaceMaterial, WET_WALL, areaClass, boundColor, ceilingKindFor, ceilingMaterial,
   floorKindFor, floorMaterial, officeStyle, wallMaterial, type OfficeFinishFamily,
@@ -138,7 +139,10 @@ describe('office storeys look like an office, not the station', () => {
     }
     expect(office).toBeGreaterThan(200);
     // the station storey: the same finishes the builder produced before the office remap (same extractor, same order)
-    const raw = cutOfficeWindows(extractWallFaces(layout, levels, new LevelColumns(levels), {tileLowerHeight: mats.tileLowerHeight}), layout);
+    const raw0 = cutOfficeWindows(extractWallFaces(layout, levels, new LevelColumns(levels), {tileLowerHeight: mats.tileLowerHeight}), layout);
+    // Track 2: the builder leaves a track tunnel's stair-stepped grid walls to the smooth tunnel shell (TrackExtView.clipFaces)
+    // and appends the shell's own wall-treatment faces (shellDetailFaces) after the grid faces.
+    const view = TrackExtView.of(layout), raw = view ? [...view.clipFaces(raw0), ...shellDetailFaces(view, layout)] : raw0;
     expect(raw.length).toBe(w.wallFaces.length);
     raw.forEach((f, i) => { if (!officeArea(f.area)) expect(w.wallFaces[i].finish).toBe(f.finish); });
   });

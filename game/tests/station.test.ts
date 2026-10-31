@@ -15,6 +15,7 @@ import {isLootHolderKind} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {freshSeed} from '../src/core/rng';
 import {ENEMY_SPAWNS} from '../src/ai/creatureSpawn';
+import {isExtensionArea} from '../src/gen/trackExt/index';
 
 const SEEDS = Array.from({length: 12}, (_, i) => (i * 2654435761 + 12345) >>> 0);
 const cache = new Map<string, StationLayout>();
@@ -115,9 +116,10 @@ describe('station generator', () => {
       // The fare line separates paid from unpaid: every fare door joins a paid area to an unpaid one.
       for (const d of l.doors.filter(x => x.fare)) expect(!!l.areas[d.a].paid && !l.areas[d.b].paid).toBe(true);
       // Back-of-house ceilings are low (iteration 08: relative to the area's own level floor); corridors
-      // 3 m wide, upper maintenance catwalks 1.5 m.
-      for (const a of l.areas.filter(x => !x.publicSpace)) expect(a.ceil - (a.floorY ?? 0), `${tag} ${a.label}`).toBeLessThanOrEqual(3.0);
-      for (const a of l.areas.filter(x => x.kind === 'service')) expect(Math.min(a.w, a.h) * CELL, `${tag} ${a.label}`).toBeGreaterThanOrEqual(a.role === 'catwalk' ? 1.5 : 3);
+      // 3 m wide, upper maintenance catwalks 1.5 m. Track 2: rules of the CORE station (tunnels / annexes: tests/track-ext*.test.ts).
+      const core = l.areas.filter(x => !isExtensionArea(x));
+      for (const a of core.filter(x => !x.publicSpace)) expect(a.ceil - (a.floorY ?? 0), `${tag} ${a.label}`).toBeLessThanOrEqual(3.0);
+      for (const a of core.filter(x => x.kind === 'service')) expect(Math.min(a.w, a.h) * CELL, `${tag} ${a.label}`).toBeGreaterThanOrEqual(a.role === 'catwalk' ? 1.5 : 3);
     }
   });
 
@@ -278,10 +280,12 @@ describe('station generator', () => {
       const [sx, sy] = g.cellOf(l.playerSpawn.x, l.playerSpawn.z);
       // Iteration 08: zombies stand on every level; distances / paths run through the stair cores.
       const dist = levelDistance(l.levels, sx, sy);
-      expect(l.zombies.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min);
-      expect(l.zombies.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
+      // Track 2 (lane CONTENT): the station context's spawns (the service annexes' zone budget is separate: tests/annex-content.test.ts)
+      const station = l.zombies.filter(z => !isExtensionArea(l.areas[z.area]));
+      expect(station.length).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min);
+      expect(station.length).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
       const pf = new PathFinder(levelsOf(l));
-      for (const z of l.zombies) {
+      for (const z of station) {
         const lg = l.levels[z.level ?? 0].grid;
         const [x, y] = lg.cellOf(z.x, z.z);
         expect(lg.cells[lg.idx(x, y)]).toBe(FLOOR);

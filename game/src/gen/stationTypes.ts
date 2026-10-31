@@ -10,6 +10,7 @@ import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 import type {MallInfo} from './mall/mallTypes';
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
+import type {TrackExtensions} from './trackExt/types';
 
 export type AreaKind = 'platform' | 'passage' | 'concourse' | 'service' | 'room' | 'closet';
 /** Deliberate mixed lighting: public pockets lit, back-of-house dim or dark (no working light). */
@@ -92,6 +93,12 @@ export interface Area extends Rect {
   level?: number;
   /** Task office-overhaul-20261030 (lane TENANTS): the company occupying this office area (office floors 2..8 only). */
   tenant?: CompanyId;
+  /**
+   * Track 2 (lane GEN, gen/trackExt/types.ts): a track-extension area — a tunnel continuing a track bed, or a service annex
+   * room / corridor — and the index of its tunnel / annex in layout.extensions. Every core pass skips it (isExtensionArea).
+   */
+  ext?: 'tunnel' | 'annex';
+  extId?: number;
 }
 
 export interface Door extends Rect {
@@ -281,6 +288,11 @@ export interface StationLayout {
   mall?: MallInfo;
   /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */
   hordes?: HordeGroupSpec[];
+  /**
+   * Track 2 (lane GEN): the track extensions (tunnels past the bed ends, service annexes) of a track-bearing level that opted in
+   * (gen/trackExt); absent on levels without them ('none').
+   */
+  extensions?: TrackExtensions;
 }
 
 // ---------------------------------------------------------------------------------------

@@ -419,6 +419,29 @@ describe('reach + occlusion in generated stations', () => {
     }
     expect(n).toBeGreaterThan(150);
   });
+
+  it('no wall-mounted container is hidden behind a tall floor prop of its area (gen/props07Dress.ts tallInFront)', () => {
+    // Track 2 integration: seed 424242 (a first-aid kit 0.45 m behind a 1.83 m grill line) and stations the fix changed.
+    let mounts = 0;
+    for (const seed of [1, 424242, 9120, 183338]) {
+      const l = station(seed);
+      for (const m of l.props) {
+        if (!m.mounted || !isLootHolderKind(m.kind) || !OPENABLE_CONTAINER_KINDS.includes(m.kind as never)) continue;
+        mounts++;
+        // the mount faces into its area: along X for a quarter turn, else along Z, toward the area's centre
+        const a = l.areas[m.area], alongX = Math.abs(Math.sin(m.rot)) > 0.5;
+        const sign = alongX ? Math.sign((a.x + a.w / 2) * 0.5 - m.x) : Math.sign((a.y + a.h / 2) * 0.5 - m.z);
+        const d = alongX ? m.hx : m.hz, w = alongX ? m.hz : m.hx;
+        const cx = alongX ? m.x + sign * (d + 0.45) : m.x, cz = alongX ? m.z : m.z + sign * (d + 0.45);
+        const hx = alongX ? 0.4 : w, hz = alongX ? w : 0.4;
+        for (const q of l.props) {
+          if (q === m || q.area !== m.area || q.mounted || q.y + q.h <= m.y - 0.15) continue;
+          expect(Math.abs(q.x - cx) < q.hx + hx && Math.abs(q.z - cz) < q.hz + hz, `seed ${seed} ${m.kind} at ${m.x.toFixed(2)},${m.z.toFixed(2)} behind ${q.kind}`).toBe(false);
+        }
+      }
+    }
+    expect(mounts).toBeGreaterThan(10);
+  });
 });
 
 describe('item / chunk collision follows the compartments', () => {

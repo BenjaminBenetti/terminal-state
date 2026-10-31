@@ -91,12 +91,13 @@ function roomLights(ctx: Ctx, area: Area): void {
   }
 }
 
-function wallSign(ctx: Ctx, area: Area, side: Side, t: number, y: number, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>) {
+function wallSign(ctx: Ctx, area: Area, side: Side, t: number, y: number, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>, base?: number) {
   // Iteration 07 (Lane DW): a plate never floats across an opening (or past a corner) — it slides
   // along the wall to the nearest wall-backed spot (deterministic, no RNG); where the wall left
   // beside openings is too short it gets a narrower plate (down to 1 m), else it is left out.
   // Iteration 08: plates on another level are authored in its local height frame; wall backing tests absolute heights.
-  const yb = y + (areaLevel(area) ? areaBase(ctx.layout, area) : 0);
+  // Track 2 (lane CONTENT): `base` = the local frame's floor of a main-level area off floor 0 (a service annex on the trackbed).
+  const yb = y + (base ?? (areaLevel(area) ? areaBase(ctx.layout, area) : 0));
   let spot = wallSignSpot(ctx.g, area, side, t, yb, signDims(s));
   for (const f of [0.8, 0.6, 0.45]) {
     if (spot !== null) break;
@@ -115,14 +116,14 @@ function wallSign(ctx: Ctx, area: Area, side: Side, t: number, y: number, s: Omi
 }
 
 /** Sign on `area`'s side of a door: above the opening when there is a soffit, else beside it. */
-function signAtDoor(ctx: Ctx, d: Door, area: Area, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>) {
+function signAtDoor(ctx: Ctx, d: Door, area: Area, s: Omit<SignPlacement, 'x' | 'y' | 'z' | 'rot' | 'area'>, base?: number) {
   const side = doorSide(d, area);
   const mid = d.h === 1 ? (d.x + d.w / 2) * CELL : (d.y + d.h / 2) * CELL;
   const room = area.ceil - d.height;
-  if (room >= 0.5) wallSign(ctx, area, side, mid, Math.min(d.height + 0.32, area.ceil - 0.24), s);
+  if (room >= 0.5) wallSign(ctx, area, side, mid, Math.min(d.height + 0.32, area.ceil - 0.24), s, base);
   // Beside it: 0.2 m clear of the opening edge whatever the plate's width (was a fixed 0.75 m from
   // the edge to the centre, so wide plates reached back into the opening).
-  else { const w = s.w ?? 1.1; wallSign(ctx, area, side, mid + ((d.h === 1 ? d.w : d.h) * CELL / 2 + 0.2 + w / 2), 1.9, {...s, w}); }
+  else { const w = s.w ?? 1.1; wallSign(ctx, area, side, mid + ((d.h === 1 ? d.w : d.h) * CELL / 2 + 0.2 + w / 2), 1.9, {...s, w}, base); }
 }
 
 const other = (ctx: Ctx, d: Door, a: Area) => ctx.layout.areas[d.a === a.id ? d.b : d.a];
@@ -262,6 +263,102 @@ export function liftLevels(layout: StationLayout, marks: {lights: number; signs:
   };
   for (let i = marks.lights; i < layout.lights.length; i++) lift(layout.lights[i] as LightPlacement & {level?: number});
   for (let i = marks.signs; i < layout.signs.length; i++) lift(layout.signs[i] as SignPlacement & {level?: number});
+}
+
+/**
+ * Track 2 (lane CONTENT): the iteration-07 palette a station's dress() drew (gen/props07.ts p7Palette on the `p7` → `palette` fork of
+ * its dress rng): forks are position-independent, so the appended extension dressing re-derives the SAME palette (no extra model
+ * kinds / downloads for the annexes).
+ */
+export function stationP7Palette(dressRng: Rng): ReadonlySet<string> {
+  const palRng = dressRng.fork('p7').fork('palette');
+  return p7Palette(p => palRng.chance(p));
+}
+
+/**
+ * Track 2 (lane CONTENT): dresses EXTENSION areas (the service annexes, gen/annexContent.ts) of a FINISHED layout with this dresser's
+ * own machinery, every placement APPENDED after the core's (core records / indices / grid masks untouched; cells of other areas are
+ * never touched: every primitive checks the area id), on forks of `rng`:
+ *  - `pre(ctxOf)` first (the caller's own placements through the same contexts, e.g. the annex stash holders);
+ *  - the purpose rules (dressByRules) for rooms / closets;
+ *  - the composer (gen/compose.ts) for the annex corridors (zone 'lower') on its own generated-model budget `p7Budget`, its
+ *    clusters appended to the layout's composition record;
+ *  - the iteration-07 dresser (gen/props07Dress.ts) for their generated props and on-top decor / chairs (hosts: the new props only);
+ *  - purpose door plates (PUMP ROOM, ELECTRICAL · DANGER, JANITOR …) on the outer side of each purpose room's main door.
+ * The areas lie on the main level at their own floor (the trackbed, floorY -1.15): everything is authored relative to it (area
+ * ceilings made relative where the rules read them) and lifted onto it at the end — what finishTraversal does for the core's props.
+ * No fixtures (the caller lights the extensions).
+ */
+export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => void; phase?: (k: string) => void}): {props: number; signs: number} {
+  const ids = new Set(areas.map(a => a.id));
+  const inSet = (a: Area) => ids.has(a.id);
+  // contexts only for the levels the areas lie on, their masks built over the areas' bounding window (+ 4 cells)
+  const win = {x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity};
+  for (const a of areas) { win.x0 = Math.min(win.x0, a.x - 4); win.y0 = Math.min(win.y0, a.y - 4); win.x1 = Math.max(win.x1, a.x + a.w + 3); win.y1 = Math.max(win.y1, a.y + a.h + 3); }
+  const ctxs = new Map<number, Ctx>();
+  const ctxOf = (a: Area): Ctx => { const L = areaLevel(a); let c = ctxs.get(L); if (!c) ctxs.set(L, (c = makePlaceCtx(layout, rng, L, win))); return c; };
+  for (const a of areas) ctxOf(a);
+  const p0 = layout.props.length, s0 = layout.signs.length;
+  o.phase?.('dress.ctx');
+  // `maxProps`: the pass's prop budget — rooms are dressed in the given (priority) order until it is spent; the iteration-07
+  // dresser stops placing at it too (its per-area budgets scaled by `p7Scale`)
+  const cap = o.maxProps ?? Infinity, spent = () => layout.props.length - p0 >= cap;
+  o.pre?.(ctxOf);
+  // rooms / closets: their purpose's rules (corridors are composed below)
+  for (const a of areas) {
+    if (spent()) break;
+    if (!COMPOSED_ZONES.has(zoneOf(layout, a))) dressByRules(ctxOf(a), a, ROOM_PURPOSES[a.purpose ?? ''] ?? ROOM_PURPOSES.storage);
+  }
+  o.phase?.('dress.rules');
+  compose(layout, {rng: rng.fork('compose'), palette: o.palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
+  o.phase?.('dress.compose');
+  {
+    const prng = rng.fork('p7');
+    const pctxs = new Map([...ctxs].map(([L, c]) => [L, {...c, rng: prng}]));
+    const pctxOf = (a: Area): Ctx => pctxs.get(areaLevel(a)) ?? {...ctxOf(a), rng: prng};
+    dressP7(layout, {
+      rng: prng, areas: inSet, hostsFrom: p0, budgetScale: o.p7Scale,
+      place: (a, kind, x, z, rot, q = {}) => (spent() ? null : tryPlaceProp(pctxOf(a), a, kind, x, z, rot, q)),
+      cellsFree: (a, x, z, hx, hz) => {
+        const c = pctxOf(a), g = c.g;
+        const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
+        for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+          if (!g.inBounds(cx, cy)) return false;
+          const i = g.idx(cx, cy);
+          if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || c.zone[i] || c.doorCell[i] || c.edge[i] || c.lane[i] || c.plaza[i]) return false;
+        }
+        return true;
+      },
+      doorSide: a => { const d = mainDoor(pctxOf(a), a); return d ? doorSide(d, a) : null; },
+      grid: a => pctxOf(a).g,
+      base: a => areaBase(layout, a),
+      composed: a => COMPOSED_ZONES.has(zoneOf(layout, a)),
+      doors: a => pctxOf(a).doorsOf.get(a.id) ?? [],
+      backed: (a, side, t0, t1, yb) => backed(pctxOf(a), a, side, t0, t1, yb),
+    });
+  }
+  o.phase?.('dress.p7');
+  // purpose plates on the outer side of each purpose room's main door (authored in the outer area's local frame)
+  for (const a of areas) {
+    const plate = PLATES[a.purpose ?? ''];
+    if (!plate) continue;
+    const d = (ctxOf(a).doorsOf.get(a.id) ?? []).find(q => q.a === a.parent || q.b === a.parent);
+    if (!d) continue;
+    const out = other(ctxOf(a), d, a), base = areaBase(layout, out);
+    if (!inSet(out)) continue;
+    const ceil = out.ceil;
+    out.ceil = ceil - base;
+    try { signAtDoor(ctxOf(out), d, out, {kind: 'service', text: plate, w: 1.3}, base); } finally { out.ceil = ceil; }
+  }
+  // lift onto the areas' own floor (props: the floor of their cell; plates: their area's floor)
+  for (let i = p0; i < layout.props.length; i++) {
+    const p = layout.props[i];
+    if (p.level) continue;
+    const g = layout.grid, [cx, cy] = g.cellOf(p.x, p.z), k = g.inBounds(cx, cy) ? g.idx(cx, cy) : -1;
+    p.y += k >= 0 && g.cells[k] === FLOOR && g.rampIdx[k] < 0 ? g.floorOf(k) : areaBase(layout, layout.areas[p.area]);
+  }
+  for (let i = s0; i < layout.signs.length; i++) { const sg = layout.signs[i]; if (!sg.level) sg.y += areaBase(layout, layout.areas[sg.area]); }
+  return {props: layout.props.length - p0, signs: layout.signs.length - s0};
 }
 
 /** Door plates per room purpose (kept short: they render on 1.0–1.6 m plates). */

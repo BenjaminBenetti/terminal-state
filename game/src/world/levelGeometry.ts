@@ -273,6 +273,10 @@ export function wallZone(level: Level, area: Area | undefined, voidCell: boolean
   if (stair) return 'stair';
   if (area && (area.type === 'eatery' || area.type === 'shop')) return 'shop';
   if (area && ((area.type as string) === 'exit-stair' || (area.type as string) === 'stair-core' || (area.role && STAIR_ROLES.has(area.role)))) return 'stair';
+  // Track 2 (VIS): service annexes off the track tunnels take the lower-level service look (lowerConcrete: formwork, pipes,
+  // conduits, damp); tunnel faces are replaced by the smooth shell (world/trackExt), the track-bed zone if any survive.
+  if (isExt(area, 'annex')) return 'lower';
+  if (isExt(area, 'tunnel')) return 'trackbed';
   if (level.role === 'lower' || area?.type === 'underpass') return 'lower';
   if (level.role === 'upper') return 'upper';
   // Task office-seamless-20261029: 'office' storeys (tower floors 2..8) take the main-level zones (public -> concourse,
@@ -281,8 +285,16 @@ export function wallZone(level: Level, area: Area | undefined, voidCell: boolean
   return !area || area.publicSpace ? 'concourse' : 'service';
 }
 
+/** Track 2: extension marker of an area (DESIGN §1 Area.ext; GEN). */
+function isExt(area: Area | undefined, kind: 'tunnel' | 'annex'): boolean {
+  return (area as {ext?: string} | undefined)?.ext === kind;
+}
+
 function kindOf(area: Area | undefined): WallKind {
   if (!area) return 'tile';
+  // Track 2 (VIS): annex rooms / corridors are cast concrete (the platform-face concrete), tunnels the tunnel lining.
+  if (isExt(area, 'annex')) return 'platformFace';
+  if (isExt(area, 'tunnel')) return 'tunnel';
   if (area.type === 'eatery' || area.type === 'shop') return 'shop';
   return area.publicSpace ? 'tile' : 'paint';
 }
@@ -304,8 +316,10 @@ interface OtherRun { level: number; area: number; kind: WallKind; voidCell: bool
  * Every visible base-wall face of a (multi-level) station, merged into straight runs per level band.
  * Tiled walls yield one face per material band ('tileLower' up to the tile line, 'tileUpper' above).
  */
-export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, levels: Level[], cols: LevelColumns, opts: WallOptions): BuiltFace[] {
+export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> & Pick<Partial<StationLayout>, 'extensions'>, levels: Level[], cols: LevelColumns, opts: WallOptions): BuiltFace[] {
   const W = cols.W, H = cols.H;
+  // Track 2 (lane GEN): face seeds in the CORE frame (a crop translation by track extensions keeps every core face's detail).
+  const ox = layout.extensions?.core.x ?? 0, oy = layout.extensions?.core.y ?? 0;
   const out: BuiltFace[] = [];
   const TILE = opts.tileLowerHeight;
   // Areas holding a stair flight (any level): their walls are stair-core walls.
@@ -366,7 +380,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'>, 
         const mk = (finish: string, fy0: number, fy1: number, vb0: number, vb1: number, ops: {s0: number; s1: number; top: number}[], sl?: WallFace['slope']): void => {
           out.push({
             level: L.id, area, areaType: voidCell ? 'trackbed' : ar?.type ?? 'unknown', zone, x0, z0, x1, z1, nx: d.nx, nz: d.nz,
-            y0: fy0, y1: fy1, finish, openings: ops, seed: hash32(L.id, di, l, k0, fy0, finish.length), kind, vb0, vb1, ...(sl ? {slope: sl} : {}),
+            y0: fy0, y1: fy1, finish, openings: ops, seed: hash32(L.id, di, l - (alongX ? oy : ox), k0 - (alongX ? ox : oy), fy0, finish.length), kind, vb0, vb1, ...(sl ? {slope: sl} : {}),
           });
         };
         if (slope) {

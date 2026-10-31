@@ -5,6 +5,7 @@
 // player spawn, on its storey's floor, off stair flights, spaced, reachable) and spread over areas, deterministically.
 
 import {describe, expect, it} from 'vitest';
+import {isExtensionArea} from '../src/gen/trackExt/index'; // Track 2 (lane CONTENT)
 import {ARCHETYPES, generateStation, MIN_ZOMBIE_SPAWN_CELLS, type StationLayout} from '../src/gen/station';
 import {FLOOR, PathFinder} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
@@ -32,12 +33,14 @@ describe('doubled enemy population (mandate F)', () => {
     let total = 0, rat = 0, coated = 0, zombies = 0, offMain = 0;
     const counts: number[] = [];
     for (const l of ALL()) {
-      const n = l.zombies.length;
+      // Track 2 (lane CONTENT): the station context's spawns (a service annex's zone budget is separate: tests/annex-content.test.ts)
+      const station = l.zombies.filter(z => !isExtensionArea(l.areas[z.area]));
+      const n = station.length;
       counts.push(n);
       expect(n, `${l.seed}`).toBeGreaterThanOrEqual(ENEMY_SPAWNS.min);
       expect(n, `${l.seed}`).toBeLessThanOrEqual(ENEMY_SPAWNS.max);
       total += n;
-      for (const z of l.zombies) {
+      for (const z of station) {
         if (z.archetype === 'ratdog') rat++;
         else { zombies++; if (z.type === 'coated') coated++; }
         if (z.level) offMain++;

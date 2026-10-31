@@ -92,9 +92,14 @@ export function cellsOfBox(x: number, z: number, hx: number, hz: number): [numbe
 /** Clear stair approach in front of every flight end (m) and its cells. */
 export const STAIR_APPROACH = 1.5;
 
-export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceCtx {
+/**
+ * `win` (Track 2, lane CONTENT): only build the cell masks inside this cell window (inclusive) — an appended pass that dresses a
+ * known region (the service annexes) skips the whole-grid scans; masks outside it stay 0. Absent = the whole grid (as before).
+ */
+export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0, win?: {x0: number; y0: number; x1: number; y1: number}): PlaceCtx {
   const g = levelGrid(layout, level);
   const n = g.w * g.h;
+  const X0 = Math.max(0, win?.x0 ?? 0), Y0 = Math.max(0, win?.y0 ?? 0), X1 = Math.min(g.w - 1, win?.x1 ?? g.w - 1), Y1 = Math.min(g.h - 1, win?.y1 ?? g.h - 1);
   const zone = new Uint8Array(n), doorCell = new Uint8Array(n);
   const doorsOf = new Map<number, Door[]>();
   for (const d of layout.doors) {
@@ -110,7 +115,7 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceC
   const edge = new Uint8Array(n);
   const mark = (x: number, y: number) => { if (g.inBounds(x, y)) edge[g.idx(x, y)] = 1; };
   // Never dress stairs or the cell beside them; keep a 1.5 m approach clear beyond both ends of every flight.
-  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+  for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
     if (g.rampIdx[g.idx(x, y)] < 0) continue;
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) mark(x + ox, y + oy);
   }
@@ -142,7 +147,7 @@ export function makePlaceCtx(layout: StationLayout, rng: Rng, level = 0): PlaceC
   if (levels.length > 1) {
     const others = levels.filter(L => L.id !== level).map(L => L.grid);
     const cells = g.cells, W = g.w;
-    for (let y = 1; y < g.h - 1; y++) for (let x = 1; x < W - 1; x++) {
+    for (let y = Math.max(1, Y0); y < Math.min(g.h - 1, Y1 + 1); y++) for (let x = Math.max(1, X0); x < Math.min(W - 1, X1 + 1); x++) {
       const i = y * W + x;
       if (cells[i] !== SOLID) continue;
       // Highest floor of this level beside the closed cell: an aperture when another level's band, open at this column, starts
@@ -377,14 +382,15 @@ export function markCell(ctx: PlaceCtx, arr: Uint8Array, i: number): void {
 // Doorway clearance (bucketed)
 
 const DOOR_BUCKET = 4;
-const doorCache = new WeakMap<StationLayout, {doors: number; vols: DoorClearVolume[]; buckets: Map<number, number[]>}>();
+const doorCache = new WeakMap<StationLayout, {doors: number; ref?: readonly Door[]; vols: DoorClearVolume[]; buckets: Map<number, number[]>}>();
 /**
  * doorways.propBlocksDoorway with the clear volumes bucketed on a 4 m XZ grid (same volumes, same answer; generation calls it
  * thousands of times). Heights are absolute (a prop on another level passes its absolute base).
  */
 export function propBlocksDoorway(layout: StationLayout, x: number, z: number, hx: number, hz: number, y = 0, h = 2): DoorClearVolume | null {
   let c = doorCache.get(layout);
-  if (!c || c.doors !== layout.doors.length) {
+  // (Track 2: a re-framed layout gets a new doors array: rebuilt)
+  if (!c || c.doors !== layout.doors.length || c.ref !== layout.doors) {
     const vols = doorClearVolumes(layout), buckets = new Map<number, number[]>();
     vols.forEach((v, i) => {
       for (let bx = Math.floor(v.x0 / DOOR_BUCKET); bx <= Math.floor(v.x1 / DOOR_BUCKET); bx++) for (let bz = Math.floor(v.z0 / DOOR_BUCKET); bz <= Math.floor(v.z1 / DOOR_BUCKET); bz++) {
@@ -393,7 +399,7 @@ export function propBlocksDoorway(layout: StationLayout, x: number, z: number, h
         if (l) l.push(i); else buckets.set(k, [i]);
       }
     });
-    doorCache.set(layout, (c = {doors: layout.doors.length, vols, buckets}));
+    doorCache.set(layout, (c = {doors: layout.doors.length, ref: layout.doors, vols, buckets}));
   }
   const box = {x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, y0: y, y1: y + h};
   for (let bx = Math.floor(box.x0 / DOOR_BUCKET); bx <= Math.floor(box.x1 / DOOR_BUCKET); bx++) for (let bz = Math.floor(box.z0 / DOOR_BUCKET); bz <= Math.floor(box.z1 / DOOR_BUCKET); bz++) {

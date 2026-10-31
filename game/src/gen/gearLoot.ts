@@ -22,6 +22,8 @@ import type {Area, PickupPlacement, StationLayout} from './stationTypes';
 import {GEAR_ITEMS} from '../items/gear';
 import {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, gearParams, lootProfile, type LootProfile} from '../items/lootTables';
 import type {LevelId} from '../levels/types';
+import {isExtensionArea} from './trackExt/types'; // Track 2 (lane GEN)
+import {coreView, hasExtensionGrowth} from './trackExt/core';
 
 /** Task gasmask-breach-20261030 (mask lane): `filter` = a found gas mask's seeded filter charge (s), copied onto its placement. */
 export interface GearAssignment { itemId: string; filter?: number }
@@ -103,6 +105,8 @@ const ANCHOR = /locker|cabinet|shelf|crate|safe|carton|rack|filing|desk|counter|
 
 /** How likely an area is to hold a gear find (0 = never). Exported for tests. */
 export function gearAreaWeight(a: Area): number {
+  // Track 2 (lane GEN): the level's ONE gear roll stays in the core station (track tunnels / service annexes never multiply it).
+  if (isExtensionArea(a)) return 0;
   if (a.kind === 'platform' || a.kind === 'passage' || a.kind === 'concourse') return 0;
   if (a.storefront !== undefined && a.type !== 'shop' && a.type !== 'eatery') return 0;
   const words = `${a.type} ${a.role ?? ''} ${a.purpose ?? ''}`;
@@ -125,6 +129,20 @@ export function placeSectionGear(layout: StationLayout, items: readonly GearAssi
  * layout has no reachable floor cell at all). Deterministic for (layout, items, rng seed).
  */
 export function placeGear(layout: StationLayout, items: readonly GearAssignment[], rng: Rng): PickupPlacement[] {
+  // Track 2 (lane GEN): a layout whose track extensions grew / translated its grid places its gear in the CORE frame (gen/trackExt
+  // coreView: the station exactly as without them), so every choice — areas, cells, anchor-distance ties — is main's; the
+  // placements are then translated back into the layout.
+  const ext = layout.extensions;
+  if (ext && items.length && hasExtensionGrowth(layout)) {
+    const core = coreView(layout);
+    const out = placeGearIn(core, items, rng).map(p => ({...p, x: p.x + ext.shift.x, z: p.z + ext.shift.z}));
+    layout.pickups.push(...out);
+    return out;
+  }
+  return placeGearIn(layout, items, rng);
+}
+
+function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rng: Rng): PickupPlacement[] {
   const placed: PickupPlacement[] = [];
   if (!items.length) return placed;
   const levels = layout.levels?.length ? layout.levels : [{id: 0, role: 'main' as const, grid: layout.grid, baseY: 0}];
@@ -164,7 +182,8 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (!g.walkable(x + ox, y + oy) || g.rampIdx[g.idx(x + ox, y + oy)] >= 0) return false;
     return true;
   };
-  const near = (lv: number, x: number, z: number, r: number) => layout.pickups.some(p => (p.level ?? 0) === lv && Math.hypot(p.x - x, p.z - z) < r);
+  // (Track 2, lane CONTENT: a service annex's own loose finds — behind rock, appended before the gear — never move a gear spot)
+  const near = (lv: number, x: number, z: number, r: number) => layout.pickups.some(p => (p.level ?? 0) === lv && !isExtensionArea(layout.areas[p.area]) && Math.hypot(p.x - x, p.z - z) < r);
   const cellOk = (a: Area | null, lv: number, i: number, strict: boolean): boolean => {
     const g = gridOf(lv), dl = dist[lv];
     if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0) return false;

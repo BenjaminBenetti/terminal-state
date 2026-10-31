@@ -595,6 +595,53 @@ export const OFFICE_FLOOR: OfficeFloorProgram = {
   tilt: OFFICE_FLOOR_TILT,
 };
 
+// ---------------------------------------------------------------------------------------
+// Track 2 (lane CONTENT): the SERVICE ANNEX loot context — the cramped, dark back-of-house reached through a side door off a track
+// tunnel (gen/trackExt; 0-2 per track-bearing level, each ~25 % of the Subway's walkable exploration area). Its rooms are dressed
+// with the existing back-of-house purposes (pump / electrical rooms, stores, workshops, custodial rooms, closets, service
+// corridors), so their holders roll those purposes' tables exactly like the core's; the annex ADDS (gen/annexContent.ts, own forks,
+// appended after every core record): a STASH holder in its dead-end rooms (loot key ANNEX_STASH_KEY → ANNEX_STASH) and a loose
+// floor program per annex (ANNEX_FLOOR). Worth the walk, never guaranteed: every stash may be empty, the floor finds are chances,
+// the scarcity cut applies, and the level's ONE rare-gear roll, mask roll, weapon finds and the Office roof rewards are untouched
+// (they never land in an annex).
+
+/** Loot key (PropPlacement.purpose = gen/purposes.ts 'annex-stash') of the stash holders a service annex hides in its dead ends. */
+export const ANNEX_STASH_KEY = 'annex-stash';
+/**
+ * A survivor's stash left in a service annex (a crate / tall cabinet in a dead-end room): bottled water and tins, dressings, now
+ * and then a first-aid kit, a torch battery or a flare, and generic ammo (~1/3 each caliber; kept exactly as rolled like all ammo).
+ * Room theme 'personal' (gen/purposes.ts 'annex-stash'): the scarcity cut keeps ~1 in 5 non-ammo entries, re-themed to food /
+ * drink / medicine.
+ */
+export const ANNEX_STASH_ROWS: ItemRows = [['water', 1.2], ['beans', 1], ['bandage', 1], ['medkit', 0.15], ['battery', 0.5], ['flare', 0.4], ...genericAmmo(1.4)];
+/** The stash table (lots / empty): about one stash in seven is empty, the rest 2-3 lots. */
+export const ANNEX_STASH: LootSpec = {items: ANNEX_STASH_ROWS, lots: [2, 3], empty: 0.15};
+/**
+ * Loot key (PropPlacement.purpose = gen/purposes.ts 'annex-picked') of an annex's PICKED-OVER storage: GEN's annexes are dozens of
+ * small plant rooms, stores and closets, and their purposes' ammo-heavy tables (ammo is never thinned) would have multiplied the
+ * level's ammo (measured: +390-570 rounds per level, 1.2-2x the core's holder ammo). So only the DEEPEST holders of each annex keep
+ * their room's table (gen/annexContent.ts ANNEX_CONTENT.m2PerIntactHolder: ~8 per annex; deeper = worth the walk); every other
+ * annex holder is real, openable, finite storage that someone already went through — mostly bare (like the Office's large-room
+ * fill, 'office-fill'), never ammo.
+ */
+export const ANNEX_PICKED_KEY = 'annex-picked';
+/** What a picked-over annex holder may still hold: a bottle of water, a tin, a dressing, a cell (theme 'service': thinned hard). */
+export const ANNEX_PICKED_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.4], ['bandage', 0.4], ['battery', 0.3]];
+/** The picked-over table: nine in ten are empty, the rest one lot. */
+export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], empty: 0.9};
+
+/**
+ * Per service annex (gen/annexContent.ts placeAnnexFloor, fork `track-ext-content` → `loot`), the Subway program's shape: `boxes`
+ * (n copies each), the old loose dressings / kits (`n`, each kept with `keep`), then the `light` finds (chances). Landing: the
+ * annex rooms' purpose `floor` weights (ammo / med) and FLOOR_ECONOMY.themeWeight (battery / flare). At most one box of each
+ * caliber, a kit only through the keep cut: nothing high-tier is guaranteed.
+ */
+export const ANNEX_FLOOR: SubwayFloorProgram = {
+  boxes: [{itemId: 'ammo_556', count: 30, n: [0, 1]}, {itemId: 'ammo_12ga', count: 8, n: [0, 1]}],
+  kept: [{itemId: 'medkit', count: 1, n: [0, 1], keep: FLOOR_ECONOMY.medKeep}, {itemId: 'bandage', count: 1, n: [1, 2], keep: FLOOR_ECONOMY.medKeep}],
+  light: [{itemId: BATTERY_ID, count: 1, chance: 0.6}, {itemId: FLARE_ID, count: 1, chance: 0.45}],
+};
+
 /**
  * Task track3-eaton-centre-20261031 (lane PROFILES): loose floor finds of ONE storey of The Eaton's Center (gen/mall/supplies.ts
  * placeMallSupplies, stream `mall-supplies-<storey>`, run once per storey under the ONE mall profile; variant `pit` = the subway
@@ -755,8 +802,11 @@ export interface LootTables {
   offTheme: Readonly<Record<EconCat, number>>;
   globalPool: Readonly<Record<EconCat, ItemRows>>;
   limb: typeof LIMB_ECONOMY;
-  /** Loose floor programs (+ task track3-eaton-centre-20261031 lane PROFILES: the mall's per-storey program). */
-  floor: {subway: SubwayFloorProgram; office: OfficeFloorProgram; mall: MallFloorProgram};
+  /**
+   * Loose floor programs (+ task track3-eaton-centre-20261031 lane PROFILES: the mall's per-storey program). Track 2 (lane CONTENT):
+   * `annex` = once per service annex (absent = no annex floor finds).
+   */
+  floor: {subway: SubwayFloorProgram; office: OfficeFloorProgram; mall: MallFloorProgram; annex?: SubwayFloorProgram};
   /** Rare gear. */
   gear: GearLoot;
   /** Task office-interactions-layout-20261030 (lane ROOF): curated rewards by loot key (REWARD_TABLES; absent / {} = none). */
@@ -771,7 +821,7 @@ export const BASE_TABLES: LootTables = {
   pool: LEGACY_POOL, vendingFood: VENDING_FOOD,
   boxCount: BOX_COUNT, bigBoxHolders: BIG_BOX_HOLDERS, handful: HANDFUL, handfulFallback: HANDFUL_FALLBACK,
   themes: THEME_ECONOMY, offTheme: OFF_THEME_WEIGHTS, globalPool: GLOBAL_POOL, limb: LIMB_ECONOMY,
-  floor: {subway: SUBWAY_FLOOR, office: OFFICE_FLOOR, mall: MALL_FLOOR}, // + mall: read only by gen/mall/supplies.ts (lane PROFILES)
+  floor: {subway: SUBWAY_FLOOR, office: OFFICE_FLOOR, mall: MALL_FLOOR, annex: ANNEX_FLOOR}, // + mall: read only by gen/mall/supplies.ts (lane PROFILES); Track 2 (lane CONTENT): + the per-annex program
   gear: GEAR_LOOT,
   rewards: REWARD_TABLES, // lane ROOF (office-interactions-layout-20261030)
   rewardFinds: REWARD_FINDS, // task gas-mask-roof-feedback-20261030 (item 10)
@@ -1096,6 +1146,13 @@ export function validateLootProfile(p: LootProfile): string[] {
   S.boxes.forEach((b, i) => { item(`tables.floor.subway.boxes[${i}]`, b.itemId, b.count); range(`tables.floor.subway.boxes[${i}].n`, b.n); });
   S.kept.forEach((b, i) => { item(`tables.floor.subway.kept[${i}]`, b.itemId, b.count); range(`tables.floor.subway.kept[${i}].n`, b.n); chance(`tables.floor.subway.kept[${i}].keep`, b.keep); });
   S.light.forEach((b, i) => { item(`tables.floor.subway.light[${i}]`, b.itemId, b.count); chance(`tables.floor.subway.light[${i}].chance`, b.chance); });
+  // Track 2 (lane CONTENT): the per-annex program (same shape as the Subway's)
+  const A = t.floor.annex;
+  if (A) {
+    A.boxes.forEach((b, i) => { item(`tables.floor.annex.boxes[${i}]`, b.itemId, b.count); range(`tables.floor.annex.boxes[${i}].n`, b.n); });
+    A.kept.forEach((b, i) => { item(`tables.floor.annex.kept[${i}]`, b.itemId, b.count); range(`tables.floor.annex.kept[${i}].n`, b.n); chance(`tables.floor.annex.kept[${i}].keep`, b.keep); });
+    A.light.forEach((b, i) => { item(`tables.floor.annex.light[${i}]`, b.itemId, b.count); chance(`tables.floor.annex.light[${i}].chance`, b.chance); });
+  }
   const O = t.floor.office;
   item('tables.floor.office.street.box', O.street.box.itemId, O.street.box.count);
   item('tables.floor.office.street.extra', O.street.extra.itemId, O.street.extra.count);

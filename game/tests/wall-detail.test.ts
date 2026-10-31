@@ -19,7 +19,7 @@ import {stationLevels} from '../src/world/levelGeometry';
 import type {WallZone} from '../src/world/wallFaces';
 import {normalizeFaces, stationWallFaces, faceFrame} from '../src/world/wallDetailFaces';
 import {
-  FEATURE_LAYER, RECIPES, WALL_DETAIL_CAPS, ZONE_TREATMENT, finishFamily, perFaceCutCap, planWallDetail, solidBehind, subwayCourse, treatmentOf,
+  FEATURE_LAYER, RECIPES, WALL_DETAIL_CAPS, ZONE_TREATMENT, extWallDetailCaps, finishFamily, perFaceCutCap, planWallDetail, solidBehind, subwayCourse, treatmentOf,
   type Feature, type PlannedFace, type WallDetailPlan,
 } from '../src/world/wallDetailPlan';
 import {ATLAS_CELLS, ATLAS_SIZE, atlasCells, type AtlasCell} from '../src/world/wallDetailAtlas';
@@ -42,6 +42,9 @@ const gen = (seed: number, archetype?: Archetype): StationLayout => {
 const PER_ARCH = () => ARCHETYPES.map((a, i) => gen(7001 + i * 31, a));
 const plans = new Map<StationLayout, WallDetailPlan>();
 const planOf = (l: StationLayout) => { let p = plans.get(l); if (!p) plans.set(l, (p = planWallDetail(l))); return p; };
+// Track 2: extension walls (track tunnels / service annexes, Area.ext) are planned after the core's on their own budget
+// (extWallDetailCaps: WALL_DETAIL_EXT_CAPS per annex); the per-station caps below are the core's.
+const extFeature = (l: StationLayout, p: WallDetailPlan, f: Feature) => !!(l.areas[p.faces[f.face].face.area] as {ext?: string} | undefined)?.ext;
 
 function fakeEnvTextures(): Record<TextureKey, THREE.Texture> {
   const out = {} as Record<TextureKey, THREE.Texture>;
@@ -173,7 +176,8 @@ describe('wall treatment: placement invariants', () => {
       const p = planOf(l);
       const levels = new Levels(stationLevels(l));
       const br = p.features.filter(f => f.kind === 'breach');
-      expect(br.length).toBeLessThanOrEqual(WALL_DETAIL_CAPS.breach);
+      expect(br.filter(f => !extFeature(l, p, f)).length).toBeLessThanOrEqual(WALL_DETAIL_CAPS.breach);
+      expect(br.filter(f => extFeature(l, p, f)).length).toBeLessThanOrEqual(extWallDetailCaps(l).breach);
       total += br.length;
       for (const b of br) {
         const pf = p.faces[b.face];
@@ -246,13 +250,12 @@ describe('wall treatment: determinism and budgets', () => {
   it('stays within per-station budgets', () => {
     for (const l of PER_ARCH()) {
       const p = planOf(l);
-      const per = {flush: 0, decal: 0, soft: 0, cut: 0, proud: 0};
-      for (const f of p.features) per[f.layer]++;
-      expect(per.cut).toBeLessThanOrEqual(WALL_DETAIL_CAPS.cut);
-      expect(per.decal).toBeLessThanOrEqual(WALL_DETAIL_CAPS.decal);
-      expect(per.soft).toBeLessThanOrEqual(WALL_DETAIL_CAPS.soft);
-      expect(per.flush).toBeLessThanOrEqual(WALL_DETAIL_CAPS.flush);
-      expect(per.proud).toBeLessThanOrEqual(WALL_DETAIL_CAPS.proud);
+      const per = {flush: 0, decal: 0, soft: 0, cut: 0, proud: 0}, ext = {...per};
+      for (const f of p.features) (extFeature(l, p, f) ? ext : per)[f.layer]++;
+      for (const k of Object.keys(per) as (keyof typeof per)[]) {
+        expect(per[k], k).toBeLessThanOrEqual(WALL_DETAIL_CAPS[k]);
+        expect(ext[k], `ext ${k}`).toBeLessThanOrEqual(extWallDetailCaps(l)[k]);
+      }
       const cutsPerFace = new Map<number, number>();
       for (const f of p.features) if (f.layer === 'cut' && f.kind !== 'breach') cutsPerFace.set(f.face, (cutsPerFace.get(f.face) ?? 0) + 1);
       for (const [i, n] of cutsPerFace) expect(n).toBeLessThanOrEqual(perFaceCutCap(p.faces[i].len));

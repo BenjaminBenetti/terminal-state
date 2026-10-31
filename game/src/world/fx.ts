@@ -119,7 +119,8 @@ class Particles {
     };
   }
 
-  spawn(p: THREE.Vector3, vx: number, vy: number, vz: number, size: number, life: number, color: THREE.Color, alpha: number, grow = 0, grav = 0, drag = 3): void {
+  /** Returns the ring slot used (Track 2: the steam ring relights its puffs per slot). */
+  spawn(p: {x: number; y: number; z: number}, vx: number, vy: number, vz: number, size: number, life: number, color: THREE.Color, alpha: number, grow = 0, grav = 0, drag = 3): number {
     const i = this.next;
     this.next = (this.next + 1) % this.cap;
     if (this.life[i] <= 0) this.live++;
@@ -134,6 +135,18 @@ class Particles {
     this.drag[i] = drag;
     this.a0[i] = this.alpha[i] = alpha;
     this.points.visible = true;
+    return i;
+  }
+
+  /** Track 2 (VIS): recolour every live particle: rgb = base[slot] * light(position). */
+  relight(base: Float32Array, light: (x: number, y: number, z: number) => number): void {
+    if (this.live <= 0) return;
+    for (let i = 0; i < this.cap; i++) {
+      if (this.life[i] <= 0) continue;
+      const j = i * 3, k = light(this.pos[j], this.pos[j + 1], this.pos[j + 2]);
+      this.col[j] = base[j] * k; this.col[j + 1] = base[j + 1] * k; this.col[j + 2] = base[j + 2] * k;
+    }
+    this.attrs.aColor.needsUpdate = true;
   }
 
   update(dt: number): void {
@@ -240,6 +253,13 @@ class Decals {
 }
 
 const C = (hex: number) => new THREE.Color(hex);
+
+/**
+ * Track 2 (VIS): visual, NON-HAZARDOUS steam (service-annex vents; world/trackExt/steam.ts drives it). Its own small ring
+ * (one draw, in fx.group = the warm-up's 'effects' pool): never the gas field, never the 4-slot flare smoke, and never
+ * more than `puffs` live puffs per level (the ring is that size and refuses new puffs while full).
+ */
+export const STEAM_FX = {puffs: 24} as const;
 const STYLE: Record<Exclude<FxSurface, 'flesh'>, {dust: THREE.Color; chip: THREE.Color; dustN: number; chipN: number; sparks: number; decal: 'hole' | 'metal' | 'wood'; size: number}> = {
   // Iteration 06 (Lane D): glass (crushed glitter, no dust) and soft goods (fabric / card / packaging fibre puff).
   glass: {dust: C(0xdfe8ea), chip: C(0xe6eff0), dustN: 1, chipN: 6, sparks: 0, decal: 'metal', size: 0.035},
@@ -254,6 +274,9 @@ export class Effects {
   readonly group = new THREE.Group();
   private readonly soft: Particles;
   private readonly glow: Particles;
+  /** Track 2 (VIS): the steam ring (STEAM_FX.puffs) and each slot's unlit colour (relit per frame from the light field). */
+  private readonly steamRing: Particles;
+  private readonly steamBase = new Float32Array(STEAM_FX.puffs * 3);
   private readonly decals: Record<'hole' | 'metal' | 'wood' | 'blood', Decals>;
   private time = 0;
   private decalTick = 0;
@@ -284,7 +307,9 @@ export class Effects {
     const glowTex = disc([[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.7)'], [1, 'rgba(255,255,255,0)']]);
     this.soft = new Particles(320, softTex, false);
     this.glow = new Particles(160, glowTex, true);
-    this.group.add(this.soft.points, this.glow.points);
+    this.steamRing = new Particles(STEAM_FX.puffs, softTex, false);
+    this.steamRing.points.name = 'fx-steam';
+    this.group.add(this.soft.points, this.glow.points, this.steamRing.points);
 
     const holeTex = (rim: string, core: string, cracks: string, seed: number) => canvasTexture(64, 64, seed, (ctx, w, h, rand) => {
       const gr = ctx.createRadialGradient(w / 2, h / 2, 1, w / 2, h / 2, w / 2);
@@ -363,6 +388,23 @@ export class Effects {
     } else if (s !== 'glass' && s !== 'soft' && Math.random() < 0.35) this.glow.spawn(p, 0, 0, 0, 0.06, 0.035, this.ember, 0.35);
     if (opts.decal !== false) this.decals[st.decal].add(pos, n, st.size * rnd(0.85, 1.15), this.time);
   }
+
+  /**
+   * Track 2 (VIS): one steam puff (visual only, no gameplay effect). Refused (false) while STEAM_FX.puffs are alive, so
+   * a busy vent never recycles a visible puff. `color` is the unlit tint; relightSteam scales it by the local light.
+   */
+  steam(pos: {x: number; y: number; z: number}, vx: number, vy: number, vz: number, size: number, life: number, color: THREE.Color, alpha: number, grow = 0.7, rise = 0.18, drag = 1.1): boolean {
+    if (this.steamRing.live >= STEAM_FX.puffs) return false;
+    const i = this.steamRing.spawn(pos, vx, vy, vz, size, life, color, alpha, grow, -rise, drag);
+    this.steamBase[i * 3] = color.r; this.steamBase[i * 3 + 1] = color.g; this.steamBase[i * 3 + 2] = color.b;
+    return true;
+  }
+
+  /** Track 2 (VIS): live steam puffs (<= STEAM_FX.puffs). */
+  steamLive(): number { return this.steamRing.live; }
+
+  /** Track 2 (VIS): scale every live puff's tint by `light` at its position (unlit sprites would glow in the dark). */
+  relightSteam(light: (x: number, y: number, z: number) => number): void { this.steamRing.relight(this.steamBase, light); }
 
   /** Iteration 06 (Lane D): electrical sparks (a screen / panel dying), no decal. */
   sparks(pos: THREE.Vector3, normal: THREE.Vector3, n = 10): void {
@@ -450,6 +492,7 @@ export class Effects {
     this.time += dt;
     this.soft.update(dt);
     this.glow.update(dt);
+    this.steamRing.update(dt);
     if (this.tracerLines.visible) {
       let any = false;
       for (let i = 0; i < this.tracerCap; i++) {
@@ -468,13 +511,14 @@ export class Effects {
   }
 
   /** Bounded pool usage (QA/debug). */
-  stats(): {particles: number; sparks: number; decals: number; blood: number} {
-    return {particles: this.soft.live, sparks: this.glow.live, decals: this.decals.hole.used + this.decals.metal.used + this.decals.wood.used, blood: this.decals.blood.used};
+  stats(): {particles: number; sparks: number; decals: number; blood: number; steam: number} {
+    return {particles: this.soft.live, sparks: this.glow.live, decals: this.decals.hole.used + this.decals.metal.used + this.decals.wood.used, blood: this.decals.blood.used, steam: this.steamRing.live};
   }
 
   clear(): void {
     this.soft.clear();
     this.glow.clear();
+    this.steamRing.clear();
     for (const d of Object.values(this.decals)) d.clear();
     this.tracerLife.fill(0);
     this.tracerPos.fill(0);
