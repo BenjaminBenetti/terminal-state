@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import {CELL, FLOOR, type Grid} from '../../gen/grid';
 import type {StationLayout} from '../../gen/station';
 import type {TrackTunnel} from '../../gen/trackExt/types';
+import {HATCH_CLUE_KEEPOUT} from '../../gen/trackExt/art';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {signPlate} from '../canvasTextures';
 import {cellCeil, type BuiltFace} from '../levelGeometry';
@@ -195,7 +196,7 @@ export function shellDetailFaces(view: TrackExtView, layout: StationLayout): Bui
         const c0 = alongX ? Math.min(pa[0], pb[0]) : Math.min(pa[1], pb[1]), c1 = alongX ? Math.max(pa[0], pb[0]) : Math.max(pa[1], pb[1]);
         const plane = alongX ? (pa[1] + pb[1]) / 2 : (pa[0] + pb[0]) / 2;
         // Door openings, and the graffiti patches (kept clean of stains / cables: keep-outs up to above the marks).
-        const marks = t.clues.filter(c => c.side === side).map(c => ({side, s0: c.s - 1.25, s1: c.s + 1.25, head: t.floorY + 2.6}));
+        const marks = t.clues.filter(c => c.side === side).map(c => ({side, s0: c.s - HATCH_CLUE_KEEPOUT.half, s1: c.s + HATCH_CLUE_KEEPOUT.half, head: t.floorY + HATCH_CLUE_KEEPOUT.y1}));
         const ops = [...openings, ...marks].filter(o => o.side === side && o.s1 > a && o.s0 < b).map(o => {
           const qa = f.point(o.s0, side * f.half), qb = f.point(o.s1, side * f.half);
           const u0 = (alongX ? Math.min(qa[0], qb[0]) : Math.min(qa[1], qb[1])) - c0, u1 = (alongX ? Math.max(qa[0], qb[0]) : Math.max(qa[1], qb[1])) - c0;

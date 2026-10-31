@@ -11,8 +11,9 @@
 // passes (they run before attachExtensions), explicitly for passes that run on the finished layout (gear / mask placement,
 // runtime fields). Their content comes from appended passes on their own forks (lanes VIS / CONTENT).
 
-import type {Rng} from '../../core/rng';
+import {Rng} from '../../core/rng';
 import {CELL, FLOOR, NAV_STEP, SOLID, VOID, type Grid} from '../grid';
+import {planStationArt, stationArtIssues} from './art';
 import type {Kit} from '../stationKit';
 import type {Rect, StationLayout} from '../stationTypes';
 import {levelDistance, registerApertures} from '../levelGen';
@@ -25,9 +26,12 @@ export * from './types';
 export {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config'; // (+ TRACK_EXT_MALL: task track3, lane INTEG)
 export {copyWindow} from './window';
 export {coreView, hasExtensionGrowth, reframe} from './core';
+export {STATION_ART, HATCH_CLUE_KEEPOUT, endWall, planStationArt, rockSpans, stationArtIssues, stationArtKeepouts, stationArtRecordIssues, wallFacesPlatform, wallSide, artX, type ArtKeepout} from './art'; // (playtest revision, lane ART)
 
 /** Carves of extendTracks results (canvas frame) until attachExtensions applies them. */
 const CARVES = new WeakMap<TrackExtensions, Carve>();
+/** (Track 2 playtest revision, lane ART) Seed of each plan's station-art fork (rng.fork('station-art') of the track-ext stream). */
+const ART_SEEDS = new WeakMap<TrackExtensions, number>();
 
 /**
  * Census / QA counters: extendTracks calls / time, layouts whose extensions were dropped (the attempt failed validation) and
@@ -130,6 +134,9 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
   }
   if (ctx.rockLevels) ext.rockLevels = [...ctx.rockLevels]; // (task track3 lane INTEG, opt-in: attach / validation read it)
   CARVES.set(ext, C.carve);
+  // (Track 2 playtest revision, lane ART) the station art is planned after the attach (it needs the finished station's walls,
+  // platforms and signs); its own fork (a fork never advances its parent: every draw above is unchanged)
+  ART_SEEDS.set(ext, rng.fork('station-art').seed);
   TRACK_EXT_STATS.ms += (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
   return ext;
 }
@@ -200,6 +207,14 @@ export function finishExtensions(layout: StationLayout, ext: TrackExtensions, cr
   }
   attachExtensions(layout, ext, {ox: x0, oy: y0, core: {x: ox - x0, y: oy - y0, w: W, h: H}});
   if (coreXZ) ext.coreXZ = coreXZ;
+  // (Track 2 playtest revision, lane ART) station-surface invitation art at every real annex entrance (data only; appended to
+  // the extensions record: every core record stays as it is)
+  const seed = ART_SEEDS.get(ext);
+  if (seed !== undefined) {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    ext.art = planStationArt(layout, ext, new Rng(seed));
+    TRACK_EXT_STATS.ms += (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
+  }
   return layout;
 }
 
@@ -270,7 +285,7 @@ export function dropExtensions(layout: StationLayout): void {
     const keep = <T extends {area: number}>(list: T[]) => { const k = list.filter(r => r.area < first); list.length = 0; list.push(...k); };
     keep(layout.props); keep(layout.signs); keep(layout.lights); keep(layout.pickups); keep(layout.zombies);
   }
-  ext.tunnels = []; ext.annexes = []; delete ext.vents;
+  ext.tunnels = []; ext.annexes = []; delete ext.vents; delete ext.art;
   ext.log.push({trench: -1, from: 'x0', result: 'dropped: the finished layout failed validation with them'});
   if (layout.levels?.length) layout.levels = layout.levels.slice();
 }
@@ -427,6 +442,8 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
       if (!ext.tunnels[n.tunnel]?.doors.some(d => d.annex === n.id && d.door === n.door)) issues.push(`annex ${n.id}: no door record on tunnel ${n.tunnel}`);
     } else issues.push(...hatchIssues(layout, n, levels));
   }
+  // (Track 2 playtest revision, lane ART) station art only at real entrances, pointing toward them, on rock walls platforms face
+  issues.push(...stationArtIssues(layout));
   return issues;
 }
 

@@ -446,8 +446,19 @@ describe('service hatches in a bed wall (GEN-2 entry type)', () => {
     const wb = buildWorld(bare.layout, mats, {});
     expect(wb.trackExt).toBeUndefined();
     expect(JSON.stringify(w.wallFaces)).toBe(JSON.stringify(wb.wallFaces));
-    const arch = (x: BuiltWorld) => { const out: string[] = []; x.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.trackExt) out.push(`${m.name}:${m.geometry.attributes.position?.count}`); }); return out.sort(); };
+    // (playtest revision, lane ART) the architecture is identical; the wall TREATMENT differs only under the painted hatch clue
+    // marks (keep-outs: no cable / stain / fitting across the paint) — every other face plans exactly the same features
+    const arch = (x: BuiltWorld) => { const out: string[] = []; x.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.trackExt && !m.name.startsWith('wall-detail')) out.push(`${m.name}:${m.geometry.attributes.position?.count}`); }); return out.sort(); };
     expect(arch(w)).toEqual(arch(wb));
+    const pw = planWallDetail(fx.layout as StationLayout, {faces: w.wallFaces}), pb = planWallDetail(bare.layout as StationLayout, {faces: wb.wallFaces});
+    expect(pw.faces.length).toBe(pb.faces.length);
+    const painted = pw.faces.map(pf => pf.keepouts.filter(k => k.why === 'graffiti'));
+    expect(painted.some(k => k.length)).toBe(true);
+    const feats = (p: typeof pw, i: number) => JSON.stringify(p.features.filter(f => f.face === i));
+    pw.faces.forEach((_, i) => {
+      if (!painted[i].length) { expect(feats(pw, i), `face ${i}`).toBe(feats(pb, i)); return; }
+      for (const f of pw.features.filter(q => q.face === i)) for (const k of painted[i]) expect(f.s0 < k.s1 && f.s1 > k.s0 && f.y0 < k.y1 && f.y1 > k.y0, `${f.kind} across the paint`).toBe(false);
+    });
     // warm-up discoverable
     const scene = new THREE.Scene();
     scene.add(w.group);
