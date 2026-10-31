@@ -43,6 +43,16 @@ import {officeTenants} from './tenants'; // Task office-overhaul-20261030 (lane 
 import {carveRoof, dressRoof, roofCoreCells, roofDaylight, roofHold, roofInfo, roofLadder, roofSky, roofStrip, type RoofCarve} from './roof';
 import {placeRoofFind, placeRoofReward} from './roof'; // Task office-interactions-layout-20261030 (lane ROOF): the roof reward cache (+ the roof find: gas-mask-roof-feedback-20261030)
 import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, transitRails, transitSigns} from './transit';
+// Track 2 (lane GEN): tunnels past the station's bed ends + service annexes (gen/trackExt): the crop origin is FIXED, so they grow
+// east / south only; planned before the crop, attached after every core pass.
+import {attachExtensions, dropExtensions, extendTracks, extensionRects, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
+
+/**
+ * Track 2 (lane GEN): grid cell budget (W x H) of the office layout with its track extensions. The baked light field is
+ * W x H x 73 x 4 B here (10 storeys) and downsamples above 32e6 B (~109k cells); every per-level array (nav, decay, ten storey
+ * grids) scales with it too, so the budget stays well below: the core office grid is ~22-26k cells.
+ */
+export const OFFICE_EXT_MAX_CELLS = 80_000;
 
 export {OFFICE_FLOORS, OFFICE_ROOF_LEVEL, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, towerFrame, officeSeed} from './frame';
 export {roofLadderPose} from './roof';
@@ -67,7 +77,7 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
  * (lane SPAWN): `spawns` = the logical level's enemy spawn profile (default: the Office's; contexts street / floor / roof, ONE
  * profile and one generation for the whole level — no per-floor reroll); validation reads the same profile.
  */
-export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = lootProfile('office'), spawns: SpawnProfile = spawnProfile('office')): StationLayout {
+export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = lootProfile('office'), spawns: SpawnProfile = spawnProfile('office'), trackExt: TrackExtConfig | 'none' = trackExtConfig('office')): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const f = towerFrame(ctx.levelSeed);
   const seed = officeSeed(ctx.levelSeed);
@@ -75,10 +85,16 @@ export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = 
   OFFICE_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt);
     OFFICE_GEN_STATS.attempts = attempt + 1;
     if (!layout) { OFFICE_GEN_STATS.carveFails++; continue; }
-    const issues = officeIssues(layout, f, spawns);
+    let issues = officeIssues(layout, f, spawns);
+    // Track 2: extensions never decide a retry (the core keeps its attempt): drop them and re-check the core.
+    if (issues.length && layout.extensions?.tunnels.length) {
+      dropExtensions(layout);
+      issues = officeIssues(layout, f, spawns);
+      if (!issues.length) TRACK_EXT_STATS.rescued++;
+    }
     if (!issues.length) { fallback = layout; break; }
     for (const i of new Set(issues.map(q => q.replace(/-?[\d.]+/g, '#')))) OFFICE_REJECTS.set(i, (OFFICE_REJECTS.get(i) ?? 0) + 1);
     fallback ??= layout;
@@ -89,9 +105,9 @@ export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = 
 }
 
 /** One generation attempt (QA / tests: what the retry loop sees); null when the station program does not fit. */
-export function officeAttempt(ctx: SectionGenContext, attempt: number, loot: LootProfile = lootProfile('office'), spawns: SpawnProfile = spawnProfile('office')): StationLayout | null {
+export function officeAttempt(ctx: SectionGenContext, attempt: number, loot: LootProfile = lootProfile('office'), spawns: SpawnProfile = spawnProfile('office'), trackExt: TrackExtConfig | 'none' = trackExtConfig('office')): StationLayout | null {
   const seed = officeSeed(ctx.levelSeed);
-  return tryLevel(towerFrame(ctx.levelSeed), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, loot, spawns);
+  return tryLevel(towerFrame(ctx.levelSeed), attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, loot, spawns, trackExt);
 }
 
 /** @deprecated The office is ONE section ('main'): use generateOfficeLevel. Kept while callers migrate. */
@@ -102,7 +118,7 @@ export function generateOfficeSection(_section: string, ctx: SectionGenContext):
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile): StationLayout | null {
+function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none' = 'none'): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: OFFICE_CANVAS.levels, w: OFFICE_CANVAS.w, h: OFFICE_CANVAS.h});
   const s = carveStreet(k, rng, f);
@@ -119,13 +135,19 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   bases[OFFICE_ROOF_LEVEL] = r3(bases[OFFICE_TOP_FLOOR] + FLOOR_HEIGHT);
   const rc: RoofCarve = carveRoof(k, f, TX, TY, bases[OFFICE_TOP_FLOOR], bases[OFFICE_ROOF_LEVEL]);
 
+  // --- Track 2 (lane GEN): tunnels past the station's bed ends + annexes on their OWN fork (east / south of the fixed origin) ---
+  const ox = TX - MARGIN, oy = TY - MARGIN;
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'office', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: OFFICE_EXT_MAX_CELLS});
+
   // --- Crop: tower interior NW corner at grid cell (MARGIN, MARGIN) on every storey ----------------------------------------
   let x1 = TX + f.TW, y1 = TY + f.TD;
   for (const r of [...k.areas, ...k.doors, ...k.trenches.map(t => ({x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0}))]) {
     if (r.w <= 0 || r.h <= 0) continue;
     x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1);
   }
-  const ox = TX - MARGIN, oy = TY - MARGIN;
+  // Track 2: the core window (same origin), then the extensions widen the grid east / south.
+  const coreW = x1 - ox + 3, coreH = y1 - oy + 3;
+  if (ext) for (const r of extensionRects(ext)) { x1 = Math.max(x1, r.x + r.w - 1); y1 = Math.max(y1, r.y + r.h - 1); }
   const c = cropKit(k, [0, ...OFFICE_FLOORS, OFFICE_ROOF_LEVEL], ox, oy, x1 - ox + 3, y1 - oy + 3, s.storefronts);
   for (const t of towers) t.at = {ox: MARGIN, oy: MARGIN, level: t.at.level, base: t.at.base};
 
@@ -221,6 +243,8 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   layout.office.roof = roofInfo(layout, rc, roof.ladder, roofDress.structures, roofReward, roofFind); // (lane ROOF: + the reward record; + the roof find)
   layout.office.transit = transitInfo(layout, s, transitLinkIds);
   streetSigns(layout, s, f, rc);
+  // Track 2 (lane GEN): only now the extension cells / areas / doors join the layout (appended; every pass above saw the core only).
+  if (ext) attachExtensions(layout, ext, {ox, oy, core: {x: 0, y: 0, w: coreW, h: coreH}});
   return layout;
 }
 

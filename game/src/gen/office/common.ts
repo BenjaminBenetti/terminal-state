@@ -4,6 +4,7 @@
 import {Grid} from '../grid';
 import {Kit} from '../stationKit';
 import {shiftFlight, shiftRamp, type StairFlight} from '../traversal';
+import {copyWindow} from '../trackExt/index';
 import {TRENCH_DEPTH, type Storefront, type Trench} from '../stationTypes';
 
 export interface Cropped {
@@ -21,14 +22,8 @@ export function cropKit(k: Kit, use: readonly number[], ox: number, oy: number, 
   const grids = use.map(L => {
     const sg = k.levelGrids[L];
     const out = new Grid(w, h);
-    for (let y = 0; y < h; y++) {
-      const s = (y + oy) * sg.w + ox, d = y * w;
-      out.cells.set(sg.cells.subarray(s, s + w), d);
-      out.area.set(sg.area.subarray(s, s + w), d);
-      out.ceil.set(sg.ceil.subarray(s, s + w), d);
-      out.floor.set(sg.floor.subarray(s, s + w), d);
-      out.rampIdx.set(sg.rampIdx.subarray(s, s + w), d);
-    }
+    // Track 2 (lane GEN): the window may reach past the canvas (east / south track extensions): that part stays rock.
+    copyWindow(sg, out, ox, oy);
     out.voidFloor = sg.voidFloor;
     return out;
   });
