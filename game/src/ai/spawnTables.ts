@@ -368,7 +368,11 @@ export const SERVICE_PLACEMENT: PlacementRules = {
  * 24 seeds 1.12 annexes / level (GEN-2 incidence) -> 4.3 service spawns / level (max 10) on top of the station's ~27; Office 10 seeds
  * 1.5 annexes -> 5.6 / level (max 9); 3.7-3.9 placed per annex, no run short of its count.
  */
-export const SERVICE_ZONE_BUDGET: readonly [number, number] = [3, 5];
+export const SERVICE_ZONE_BUDGET: readonly [number, number] = [5, 7];
+// Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): [3, 5] -> [5, 7] (E 6, ~90 % of the core's density instead of
+// ~60 %), placed across entry / middle / deep depth bands and out of station-gunfire earshot where possible (gen/annexContent.ts
+// placeServiceSpawns). Measured before: an ordinary 10-room discovery route met 0-2 of an annex's 3-5 enemies (closed rooms; user
+// report: "no enemies in the area"). Still one level-wide pool (no annex families), finite (killed stay dead), no guarantee.
 /** The 'service' context of a level whose stations grow annexes (the per-annex zone budget; never regenerates a level). */
 export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}};
 

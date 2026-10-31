@@ -50,7 +50,15 @@ export type ItemRow = readonly [itemId: string, weight: number];
 /** Weighted item rows. An EMPTY table (`[]`) is allowed and means "no loot" (nothing is drawn). */
 export type ItemRows = readonly ItemRow[];
 /** A purpose's table for one holder kind (gen/purposes.ts): `lots` / `empty` default to the holder kind's (HOLDER_LOTS / HOLDER_EMPTY). */
-export interface LootSpec { items: ItemRows; lots?: LotRange; empty?: number }
+export interface LootSpec {
+  items: ItemRows; lots?: LotRange; empty?: number;
+  /**
+   * Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): an ANNEX-LOCAL table rolled EXACTLY — no level-wide
+   * scarcity cut / re-theme (items/lootEconomy.ts scarceFinds) and no slot scaling: its own `empty` / `lots` / rows ARE the odds.
+   * Only the service-annex keys (ANNEX_*) set it; every core table keeps the scarcity economy unchanged.
+   */
+  exact?: boolean;
+}
 /** A holder kind's OWN table (openable containers; desk-style drawers): lot range, empty chance, item rows. */
 export interface OwnTable { lots: LotRange; empty: number; items: ItemRows }
 /** Legacy category weights [food, drink, med, ammo] (room types, holder modifiers). */
@@ -627,13 +635,13 @@ export const OFFICE_FLOOR: OfficeFloorProgram = {
 export const ANNEX_STASH_KEY = 'annex-stash';
 /**
  * A survivor's stash left in a service annex (a crate / tall cabinet in a dead-end room): bottled water and tins, dressings, now
- * and then a first-aid kit, a torch battery or a flare, and generic ammo (~1/3 each caliber; kept exactly as rolled like all ammo).
- * Room theme 'personal' (gen/purposes.ts 'annex-stash'): the scarcity cut keeps ~1 in 5 non-ammo entries, re-themed to food /
- * drink / medicine.
+ * and then a first-aid kit, a torch battery or a flare, and generic ammo (~1/3 each caliber).
+ * Playtest revision: rolled EXACTLY (`exact`). Before, the level-wide scarcity cut ALSO applied on top of these odds (~1 in 5
+ * non-ammo entries kept) and most stashes came up empty or ammo-only (main 312a653, seed 1043: 0 of 2 stashes stocked).
  */
 export const ANNEX_STASH_ROWS: ItemRows = [['water', 1.2], ['beans', 1], ['bandage', 1], ['medkit', 0.15], ['battery', 0.5], ['flare', 0.4], ...genericAmmo(1.4)];
-/** The stash table (lots / empty): about one stash in seven is empty, the rest 2-3 lots. */
-export const ANNEX_STASH: LootSpec = {items: ANNEX_STASH_ROWS, lots: [2, 3], empty: 0.15};
+/** The stash table (lots / empty): about one stash in ten is empty, the rest 2-3 lots (exact). */
+export const ANNEX_STASH: LootSpec = {items: ANNEX_STASH_ROWS, lots: [2, 3], empty: 0.1, exact: true};
 /**
  * Loot key (PropPlacement.purpose = gen/purposes.ts 'annex-picked') of an annex's PICKED-OVER storage: GEN's annexes are dozens of
  * small plant rooms, stores and closets, and their purposes' ammo-heavy tables (ammo is never thinned) would have multiplied the
@@ -643,10 +651,35 @@ export const ANNEX_STASH: LootSpec = {items: ANNEX_STASH_ROWS, lots: [2, 3], emp
  * fill, 'office-fill'), never ammo.
  */
 export const ANNEX_PICKED_KEY = 'annex-picked';
-/** What a picked-over annex holder may still hold: a bottle of water, a tin, a dressing, a cell (theme 'service': thinned hard). */
+/** What a picked-over annex holder may still hold (rows kept for the reference; ANNEX_PICKED itself is searched clean). */
 export const ANNEX_PICKED_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.4], ['bandage', 0.4], ['battery', 0.3]];
-/** The picked-over table: nine in ten are empty, the rest one lot. */
-export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], empty: 0.9};
+/**
+ * The picked-over table. Playtest revision: SEARCHED CLEAN (empty 1, exact). Before, it was 90 % empty AND thinned by the
+ * level-wide scarcity cut: measured 4 of 609 Subway picked holders stocked (0.7 %), so an ordinary route through an annex opened
+ * only empty storage (user report: "I couldn't find one piece of loot"). The annex's finds now come from its distributed SUPPLY
+ * holders (ANNEX_SUPPLY, spread entry -> deep), a few SCRAPS (ANNEX_SCRAPS), the stash and the deepest room-table holders
+ * (gen/annexContent.ts pickOver) — deterministic counts per annex, not a per-holder lottery.
+ */
+export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], empty: 1, exact: true};
+
+/**
+ * Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): loot key of an annex SUPPLY holder — ordinary finite
+ * supplies an explorer reliably finds along the way (gen/annexContent.ts ANNEX_CONTENT.loot: ~1 per 200 m² of annex, 5-10,
+ * spread evenly from the entry to the deep end, <= 2 per room). Never empty, 1-2 lots, rolled exactly; no ammo (the annex's ammo
+ * stays its deepest room-table holders' + stash + floor boxes, as before) and nothing high-tier guaranteed (a kit is a 1-in-~25 row).
+ * Calibration: the core Subway station stocks ~1/3 of its holders (77-99 of 238-290 on seeds 1043 / 1002 / 777001 / 777002) and
+ * yields ~60-100 non-ammo supplies; an annex is ~1/4 of its walkable area, so ~15-25 non-ammo finds per annex is the core's density.
+ */
+export const ANNEX_SUPPLY_KEY = 'annex-supply';
+export const ANNEX_SUPPLY_ROWS: ItemRows = [
+  ['water', 1], ['cola', 0.45], ['beans', 0.85], ['noodles', 0.4], ['chocolate', 0.4], ['bandage', 0.75], ['medkit', 0.12],
+  ['battery', 0.6], ['flare', 0.35], ['electrical_parts', 0.3], ['scrap_metal', 0.3],
+];
+export const ANNEX_SUPPLY: LootSpec = {items: ANNEX_SUPPLY_ROWS, lots: [1, 2], empty: 0, exact: true};
+/** Playtest revision: loot key of an annex SCRAPS holder — one leftover item in otherwise picked-over storage (a capped few per annex). */
+export const ANNEX_SCRAPS_KEY = 'annex-scraps';
+export const ANNEX_SCRAPS_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.5], ['bandage', 0.5], ['battery', 0.4], ['scrap_metal', 0.3], ['electrical_parts', 0.2]];
+export const ANNEX_SCRAPS: LootSpec = {items: ANNEX_SCRAPS_ROWS, lots: [1, 1], empty: 0, exact: true};
 
 /**
  * Per service annex (gen/annexContent.ts placeAnnexFloor, fork `track-ext-content` → `loot`), the Subway program's shape: `boxes`

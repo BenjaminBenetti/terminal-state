@@ -30,6 +30,7 @@ import {
   type ItemRows, // Task track3-eaton-centre-20261031 (lane SHOPS): the mall purposes' row sets
   JUNK_ROWS, PERSONAL_ROWS, // Task office-interactions-layout-20261030 (lane LAYOUT): office support rooms / large-room fill
   ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, // Track 2 (lane CONTENT): the service-annex holders' loot keys / tables
+  ANNEX_SCRAPS, ANNEX_SCRAPS_KEY, ANNEX_SUPPLY, ANNEX_SUPPLY_KEY, // playtest revision: distributed supply / scraps holders
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
@@ -1178,6 +1179,15 @@ function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
     [ANNEX_PICKED_KEY]: {
       id: ANNEX_PICKED_KEY, category: 'back', theme: 'service', label: 'Picked-over stores', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
       light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_PICKED}, floor: {},
+    },
+    // playtest revision: the annex's distributed ordinary finds (gen/annexContent.ts pickOver): supply holders, a few scraps
+    [ANNEX_SUPPLY_KEY]: {
+      id: ANNEX_SUPPLY_KEY, category: 'back', theme: 'service', label: 'Service stores (supplies)', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_SUPPLY}, floor: {},
+    },
+    [ANNEX_SCRAPS_KEY]: {
+      id: ANNEX_SCRAPS_KEY, category: 'back', theme: 'service', label: 'Picked-over stores (a leftover)', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_SCRAPS}, floor: {},
     },
   };
 }

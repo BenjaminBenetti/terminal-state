@@ -33,7 +33,7 @@ import {isP7Kind} from './props07';
 import {LIGHT_ODDS, clearAround, dressExtensionAreas, stationP7Palette} from './stationDress';
 import {placeAgainstWall, type PlaceCtx} from './placeKit';
 import {isExtensionArea, type ServiceAnnex, type TrackTunnel} from './trackExt/types';
-import {ANNEX_PICKED_KEY, ANNEX_STASH_KEY, BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, econCat, floorChance, floorCount, type LootProfile} from '../items/lootTables';
+import {ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, econCat, floorChance, floorCount, type LootProfile} from '../items/lootTables';
 import {areaCap, areaSpawnWeight, markSpawnContext, reportSpawnCandidates, rollZombieTypes, type SpawnContextRule, type SpawnProfile} from '../ai/spawnTables';
 import {levelDistance} from './levelGen';
 import {lootTheme} from '../items/lootEconomy';
@@ -77,6 +77,16 @@ export const ANNEX_CONTENT = {
   m2PerIntactHolder: 230,
   /** Dressing priority of room purposes (lower first; unlisted after). */
   priority: ['pump-room', 'electrical-room', 'workshop', 'custodial-room', 'storage'] as readonly string[],
+  /**
+   * Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): the annex's ORDINARY FINDS, deterministic per annex
+   * (pickOver). Measured on main 312a653: 94-98 % of annex holders were empty — the picked-over table (90 % empty) was ALSO cut by
+   * the level-wide scarcity economy, and the few stocked holders were the deepest — so ordinary routes opened only empty storage.
+   * Now: `supply` holders (items/lootTables.ts ANNEX_SUPPLY: never empty, 1-2 ordinary supplies) — one per `m2PerSupply` m²,
+   * clamped to `supply`, by DEPTH BAND (door-hop depth thirds from the annex entry: `bands` = entry / middle shares, the deep end
+   * the rest), at most `perArea` per room; then `scrapsShare` of the remaining picked-over holders (at most `scrapsMax`) keep ONE leftover
+   * (ANNEX_SCRAPS); the rest are searched clean (ANNEX_PICKED). The stash and the deepest room-table holders are unchanged.
+   */
+  loot: {m2PerSupply: 200, supply: [5, 10] as const, bands: [0.4, 0.35] as const, perArea: 2, scrapsShare: 0.12, scrapsMax: 6},
   /** Stash holders per annex: one, two when the annex has at least `stashTwoRooms` rooms; kinds in order. */
   stash: {kinds: ['crate', 'cabinetTall'] as readonly PropKind[], twoRooms: 7},
   lights: {
@@ -150,7 +160,7 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
       pre: ctxOf => { stashes.push(...placeStashes(layout, annexAreas(n), ctxOf, root.fork(`stash:${n.id}`))); }, phase,
     });
     rep.props += d.props; rep.signs += d.signs;
-    pickOver(layout, n, layout.props.length - d.props, new Set(stashes));
+    pickOver(layout, n, layout.props.length - d.props, new Set(stashes), root.fork(`loot:${n.id}`));
   }
   phase('dress');
   // 3. lights
@@ -282,15 +292,41 @@ function placeStashes(layout: StationLayout, areas: readonly Area[], ctxOf: (a: 
  * Loot keys of one annex's holders (props from index `from`): its deepest round(areaM2 / m2PerIntactHolder) holders keep their room
  * purpose's table (area depth desc, then placement order); every other holder except the stashes gets ANNEX_PICKED_KEY.
  */
-function pickOver(layout: StationLayout, n: ServiceAnnex, from: number, stashes: ReadonlySet<number>): void {
-  const ids = new Set(n.areas), list: number[] = [];
+function pickOver(layout: StationLayout, n: ServiceAnnex, from: number, stashes: ReadonlySet<number>, rng: Rng): void {
+  const C = ANNEX_CONTENT.loot, ids = new Set(n.areas), list: number[] = [];
   for (let i = from; i < layout.props.length; i++) {
     const p = layout.props[i];
     if (ids.has(p.area) && !stashes.has(i) && p.host === undefined && isLootHolderKind(p.kind)) list.push(i);
   }
-  list.sort((p, q) => layout.areas[layout.props[q].area].depth - layout.areas[layout.props[p].area].depth || p - q);
+  const depth = (i: number) => layout.areas[layout.props[i].area].depth;
+  list.sort((p, q) => depth(q) - depth(p) || p - q);
   const intact = Math.max(1, Math.round(n.areaM2 / ANNEX_CONTENT.m2PerIntactHolder));
-  for (const i of list.slice(intact)) layout.props[i].purpose = ANNEX_PICKED_KEY;
+  // playtest revision: SUPPLY holders by DEPTH BAND (area door-hop depth from the annex entry, thirds of its range): the entry band
+  // gets `bands[0]` of them, the middle `bands[1]`, the deep end the rest (a band short of holders passes its share on); inside a
+  // band a seeded pick, <= perArea per room. Then a capped few SCRAPS; every other non-intact holder is searched clean.
+  const rest = list.slice(intact).reverse();
+  const k = Math.min(rest.length, Math.max(C.supply[0], Math.min(C.supply[1], Math.round(n.areaM2 / C.m2PerSupply))));
+  const ds = rest.map(depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
+  const bandOf = (i: number) => (dMax <= dMin ? 0 : Math.min(2, Math.floor((3 * (depth(i) - dMin)) / (dMax - dMin + 1e-9))));
+  const want = [Math.ceil(k * C.bands[0]), Math.ceil(k * C.bands[1]), 0];
+  want[2] = Math.max(0, k - want[0] - want[1]);
+  const supply = new Set<number>(), perArea = new Map<number, number>();
+  const take = (band: number, n: number) => {
+    let got = 0;
+    for (const i of rng.shuffle(rest.filter(i => bandOf(i) === band || band < 0))) {
+      if (got >= n) break;
+      const a = layout.props[i].area;
+      if (supply.has(i) || (perArea.get(a) ?? 0) >= C.perArea) continue;
+      supply.add(i); perArea.set(a, (perArea.get(a) ?? 0) + 1); got++;
+    }
+    return got;
+  };
+  let carry = 0;
+  for (const b of [0, 1, 2]) carry = want[b] + carry - take(b, want[b] + carry);
+  if (carry > 0) take(-1, carry);
+  const others = rest.filter(i => !supply.has(i));
+  const scraps = new Set(rng.shuffle(others.slice()).slice(0, Math.min(C.scrapsMax, Math.round(C.scrapsShare * others.length))));
+  for (const i of rest) layout.props[i].purpose = supply.has(i) ? ANNEX_SUPPLY_KEY : scraps.has(i) ? ANNEX_SCRAPS_KEY : ANNEX_PICKED_KEY;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -462,19 +498,33 @@ function placeServiceSpawns(layout: StationLayout, n: ServiceAnnex, areas: reado
   }
   reportSpawnCandidates(layout, 'service', byArea);
   const order = [...byArea.keys()].map(id => ({id, k: Math.pow(rng.next(), 1 / weightOf.get(id)!)})).sort((p, q) => q.k - p.k).map(o => o.id);
-  const perArea = new Map<number, number>();
+  // Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): ENCOUNTERABLE placement. Measured on main 312a653: an
+  // ordinary 10-room route met 0-2 of an annex's 3-5 enemies (closed rooms, 5 m spacing anywhere), and station gunfire (heard by 3D
+  // straight-line distance through rock, Game.alertZombies) pulled the near ones out of a hatch annex before the player arrived.
+  // Now the count is split over three DEPTH BANDS of the candidate rooms (entry / middle / deep: equal quotas, the remainder to the
+  // middle; a band without room passes its quota on), and inside a band cells beyond SERVICE_EARSHOT_M of every core station floor
+  // cell are preferred (all cells when none is).
+  const depths = order.map(id => layout.areas[id].depth), dMin = Math.min(...depths), dMax = Math.max(...depths);
+  const bandOf = (id: number) => (dMax <= dMin ? 1 : Math.min(2, Math.floor((3 * (layout.areas[id].depth - dMin)) / (dMax - dMin + 1e-9))));
+  const quota = [Math.floor(count / 3), count - 2 * Math.floor(count / 3), Math.floor(count / 3)];
+  const quiet = coreEarshot(layout, areas, SERVICE_EARSHOT_M);
+  const quietCells = new Map<number, [number, number][]>();
+  for (const [id, cells] of byArea) { const q = cells.filter(([x, y]) => { const [cx, cz] = g.center(x, y); return !quiet(cx, cz); }); if (q.length) quietCells.set(id, q); }
+  const perArea = new Map<number, number>(), perBand = [0, 0, 0];
   let placed = 0;
-  for (const cap of pl.caps.passes) {
+  for (const band of [1, 0, 2, -1]) for (const cap of pl.caps.passes) {
     for (const id of order) {
       if (placed >= count) break;
+      if (band >= 0 && (bandOf(id) !== band || perBand[band] >= quota[band])) continue;
       const a = layout.areas[id];
       if ((perArea.get(id) ?? 0) >= areaCap(pl.caps, a, cap)) continue;
-      const cells = byArea.get(id)!;
+      const cells = quietCells.get(id) ?? byArea.get(id)!;
       for (let t = 0; t < pl.tries; t++) {
         const [x, y] = rng.pick(cells);
         const [zx, zz] = g.center(x, y);
         if (layout.zombies.some(z => (z.level ?? 0) === 0 && Math.hypot(z.x - zx, z.z - zz) < pl.spacingM)) continue;
         perArea.set(id, (perArea.get(id) ?? 0) + 1);
+        perBand[bandOf(id)]++;
         // y: the spawn's absolute floor height (ZombieSpawn.y; the annex lies on the trackbed, not at the main level's 0)
         layout.zombies.push({x: zx, z: zz, y: g.floorOf(g.idx(x, y)), yaw: rng.range(-Math.PI, Math.PI), type: types[placed], area: id});
         placed++;
@@ -483,6 +533,37 @@ function placeServiceSpawns(layout: StationLayout, n: ServiceAnnex, areas: reado
     }
   }
   return {count, placed};
+}
+
+/** Playtest revision: rifle earshot through rock (weapons.ts rifle noise 30 m x HEARING.wall 0.6). */
+export const SERVICE_EARSHOT_M = 18;
+
+/**
+ * Playtest revision: "is (x, z) within `r` m (plan distance) of a CORE station floor cell" — the core cells (any storey, non-extension
+ * area, walkable) around the annex's box, bucketed into 2 m tiles; a tile counts when its centre is within r + its half-diagonal
+ * (conservative). Cheap: one pass over the box per annex.
+ */
+function coreEarshot(layout: StationLayout, areas: readonly Area[], r: number): (x: number, z: number) => boolean {
+  const g = layout.grid, pad = Math.ceil(r / CELL) + 2, B = 4;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const a of areas) { x0 = Math.min(x0, a.x); y0 = Math.min(y0, a.y); x1 = Math.max(x1, a.x + a.w); y1 = Math.max(y1, a.y + a.h); }
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(g.w - 1, x1 + pad); y1 = Math.min(g.h - 1, y1 + pad);
+  const bw = Math.floor((x1 - x0) / B) + 1, bh = Math.floor((y1 - y0) / B) + 1, occ = new Uint8Array(bw * bh);
+  const grids = layout.levels?.length ? layout.levels.map(L => L.grid) : [g];
+  for (const G of grids) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const ar = G.area[G.idx(x, y)];
+    if (ar < 0 || isExtensionArea(layout.areas[ar]) || !G.walkable(x, y)) continue;
+    occ[Math.floor((y - y0) / B) * bw + Math.floor((x - x0) / B)] = 1;
+  }
+  const tile = B * CELL, reach = r + tile * Math.SQRT1_2, rb = Math.ceil(reach / tile);
+  return (wx, wz) => {
+    const bx = Math.floor((wx / CELL - x0) / B), by = Math.floor((wz / CELL - y0) / B);
+    for (let j = by - rb; j <= by + rb; j++) for (let i = bx - rb; i <= bx + rb; i++) {
+      if (i < 0 || j < 0 || i >= bw || j >= bh || !occ[j * bw + i]) continue;
+      if (Math.hypot((x0 + (i + 0.5) * B) * CELL - wx, (y0 + (j + 0.5) * B) * CELL - wz) <= reach) return true;
+    }
+    return false;
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
