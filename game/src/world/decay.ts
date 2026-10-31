@@ -25,7 +25,9 @@
 //    Bounded cost: 3 light-field texel fetches (level slot pick: column header + extended-column group texel, which the
 //    shader only reads for a tower column; band floor / ceiling; world/lightFieldNode.ts lfBandAt),
 //    4 texture fetches, no loops, no branches around texture samples (uniform control flow, WGSL-safe).
-//    The detail texture has anisotropy 1 (render/softwareGl.ts, materials.ts thinTrim).
+//    The detail texture had anisotropy 1 (render/softwareGl.ts, materials.ts thinTrim). Task mall-playtest-revision-20261031
+//    (lane FIX, U08): it is sampled on floors / walls / ceilings only (never thin trim) and now requests 16x like the surface
+//    maps (render/anisotropy.ts); a software rasterizer / adapter still clamps every sampler to 1x (render/softwareGl.ts).
 // The wall-treatment pass (world/wallDetailPlan.ts) adds the discrete pieces on walls (cracks, chips, lost tiles,
 // leak streaks, rust bleed below wall-mounted steel) at its 30-year condition (WALL_AGE_30Y).
 
@@ -41,6 +43,7 @@ import {
   screenCoordinate, smoothstep, step, texture, textureLoad, uniform, varying, vec2, vec3, vec4,
 } from 'three/tsl';
 import {addNodeHook} from '../render/nodeHooks';
+import {requestSurfaceAnisotropy} from '../render/anisotropy'; // lane FIX (U08)
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, worldMapped, type MatKey, type WorldMapping, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {asColor, isNodeMaterial, lfBandNode, matRef, pick, sharedStage, skipInShadowPass} from './surfaceNodes';
@@ -505,7 +508,7 @@ export function decayDetailData(size = DETAIL_SIZE, seed = 0x1d2e3f): Uint8Array
 }
 
 let detailTex: THREE.DataTexture | null = null;
-/** The shared detail texture (generated on first use; anisotropy 1, mipmapped, repeating, linear data). */
+/** The shared detail texture (generated on first use; 16x requested (lane FIX, U08), mipmapped, repeating, linear data). */
 export function decayDetailTexture(): THREE.DataTexture {
   if (detailTex) return detailTex;
   const t = new THREE.DataTexture(decayDetailData(), DETAIL_SIZE, DETAIL_SIZE, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -513,10 +516,10 @@ export function decayDetailTexture(): THREE.DataTexture {
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
-  t.anisotropy = 1;
   t.colorSpace = THREE.NoColorSpace;
   t.name = 'decay-detail';
   t.needsUpdate = true;
+  requestSurfaceAnisotropy(t, 'detail'); // lane FIX (U08): was 1x; floors / walls / ceilings only
   return (detailTex = t);
 }
 

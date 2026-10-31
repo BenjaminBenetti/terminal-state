@@ -5095,7 +5095,13 @@
     ],
     "checks": "2R slot 85: open-front two-bay multideck, white body, 5 empty shelf levels visible through the open front (no panes: no front geometry except the base grille rail and canopy strips), louvred base grille, feet; cosmetic: tan diagonal texture wedges baked on the back wall and a faint pattern on the outer back face; empty; 2595 tris PBR",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 1.90 x 1.98 x 0.95 m open multideck (y x1.2), deck 0.47 m + shelves 0.73 / 0.97 / 1.20 / 1.49 m (two bays, 0.62 m deep), canopy top 1.94-1.98; reads as a supermarket cold wall beside the zombie; grounded, 4 feet; cosmetic tan wedges on the back-wall texture",
+     "evidence": [
+      "review/M30-multideck-open-cooler-scale.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -5669,9 +5675,9 @@
    "output": {
     "file": "game/public/assets/models/mall-gun-safe-tall.glb",
     "url": "assets/models/mall-gun-safe-tall.glb",
-    "sha256": "6583e0cd5b7a40f403474f6074a6a449300a239bd0863916d03e0aa97c5988a9",
-    "bytes": 179724,
-    "triangles": 2428,
+    "sha256": "c342367b0f9522c4254f6f77039242c9b28365ffec25a772cc78163d0e8bc1a0",
+    "bytes": 186564,
+    "triangles": 2474,
     "dims": [
      0.8225,
      1.8,
@@ -5703,7 +5709,7 @@
     "jpegQuality": 85
    },
    "budget": 260000,
-   "transform": "rotateY(180deg) * uniform scale to 1.8 m (h), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes",
+   "transform": "rotateY(180deg) * uniform scale to 1.8 m (h), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes, dedupe",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -5756,7 +5762,79 @@
     "k": 1,
     "removed": null,
     "glass": null,
-    "ghosts": null
+    "ghosts": null,
+    "coplanarDedupe": [
+     {
+      "axis": 2,
+      "facing": -1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.31,
+        0.12,
+        -0.245
+       ],
+       "max": [
+        0.31,
+        1.68,
+        -0.225
+       ]
+      },
+      "planes": [
+       {
+        "at": -0.2356,
+        "front": 62,
+        "clipped": 11,
+        "dropped": 0,
+        "opposite": 5,
+        "oppositeDropped": 5,
+        "overlapM2": 0.74554
+       }
+      ],
+      "trianglesIn": 117,
+      "frontKept": 51,
+      "frontClipped": 11,
+      "frontDropped": 0,
+      "oppositeDropped": 5,
+      "piecesAdded": 24,
+      "overlapRemovedM2": 0.74554
+     },
+     {
+      "axis": 2,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.42,
+        -0.01,
+        0.29
+       ],
+       "max": [
+        0.42,
+        1.81,
+        0.31
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.29944,
+        "front": 28,
+        "clipped": 23,
+        "dropped": 0,
+        "opposite": 4,
+        "oppositeDropped": 4,
+        "overlapM2": 1.23009
+       }
+      ],
+      "trianglesIn": 32,
+      "frontKept": 5,
+      "frontClipped": 23,
+      "frontDropped": 0,
+      "oppositeDropped": 4,
+      "piecesAdded": 65,
+      "overlapRemovedM2": 1.23009
+     }
+    ]
    }
   },
   {

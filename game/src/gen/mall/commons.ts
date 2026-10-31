@@ -93,7 +93,8 @@ export function dressMallCommons(layout: StationLayout, ctxOf: (level: number) =
      * Shopfront entry zones `depth` m out into the gallery: the entry span of a glazed front (shop.fit.entry; the glazing beside it
      * is a wall), the whole frontage of an open front (food / kiosk counters serve over it); 0.5 m extra along the frontage.
      */
-    const entries = (depth: number): Box[] => shops.flatMap(s => {
+    // (Task mall-playtest-revision-20261031, lane SHOPS: a corner unit's second shopfront — MallShop.frontages[1], fit.entry2 — too)
+    const entries = (depth: number): Box[] => shops.flatMap(s0 => [s0, ...(s0.frontages?.[1] && s0.fit ? [{...s0, frontage: s0.frontages[1], fit: {...s0.fit, entry: s0.fit.entry2 ?? s0.fit.entry}}] : [])]).flatMap(s => {
       const f = s.frontage, a = layout.areas[s.area], fit = s.fit;
       if (fit?.shutter === 'closed') return [];
       const alongX = Math.abs(f.x1 - f.x0) >= Math.abs(f.z1 - f.z0);

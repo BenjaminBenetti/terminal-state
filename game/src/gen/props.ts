@@ -284,6 +284,12 @@ export interface PropPlacement {
   level?: number;
   /** Iteration 08 (Lane P): composition cluster (index into compositionOf(layout).clusters) the prop belongs to. */
   cluster?: number;
+  /**
+   * Task mall-playtest-revision-20261031 (lane FIX, U04): an upright CYLINDER of radius hx (= hz) instead of the box — player /
+   * zombie contact (core/physics.ts) and bullets / melee / flashlight (gen/levels.ts raycast) use the circle; grid masks, ragdoll
+   * statics and loose-item queries keep the box. The mall's round atrium columns (gen/mall/columns.ts).
+   */
+  round?: boolean;
 }
 
 export function footprint(kind: PropKind, rot: number): {hx: number; hz: number} {

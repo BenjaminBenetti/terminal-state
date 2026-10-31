@@ -36,6 +36,42 @@ import {
  */
 type Ctx = PlaceCtx;
 
+/**
+ * Task mall-playtest-revision-20261031 (lane FIX, U03): a station column (or a hanging plate's rods) must END AT A REAL CEILING.
+ * In the mall pit the carve raises the ceiling of every cell under the atrium void to the roof apex and under a bridge deck to
+ * the deck underside (gen/mall/carve.ts), and no ceiling is drawn there (MallArch.ceilKey) — a 4.4 m column at the area ceiling
+ * would end in open air. True when no cell of the footprint has its ceiling more than 5 cm above `top`. Subway / Office platform,
+ * concourse and food-court cells always carry their area's ceiling, so their columns (and the RNG draws) are unchanged.
+ */
+export function ceilingAtTop(g: Grid, x: number, z: number, hx: number, hz: number, top: number): boolean {
+  const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+    if (!g.inBounds(cx, cy)) continue;
+    const i = g.idx(cx, cy);
+    if (g.hasCeil(i) && g.ceil[i] > top + 0.05) return false;
+  }
+  return true;
+}
+/**
+ * (lane FIX, U03) a HUNG sign's two drop rods (world/builder.ts: at +-0.38 w along the plate, up to the area ceiling) both end at a
+ * real ceiling — never in mid-air under the atrium / a jutting gallery open to the roof.
+ */
+export function hungRoofed(g: Grid, x: number, z: number, rot: number, w: number, ceil: number): boolean {
+  const ax = Math.cos(rot) * w * 0.38, az = -Math.sin(rot) * w * 0.38;
+  const ok = ceilingAtTop(g, x + ax, z + az, 0.05, 0.05, ceil) && ceilingAtTop(g, x - ax, z - az, 0.05, 0.05, ceil);
+  if (!ok) OPEN_AIR_REFUSED.signs++;
+  return ok;
+}
+const COLUMN_HALF = PROP_DEFS.column.w / 2;
+/** (lane FIX, U03) what the open-air rule refused in the last dress() (QA / tests: the old code placed these). */
+export const OPEN_AIR_REFUSED = {columns: 0, signs: 0};
+/** (lane FIX, U03) a station column of height `h` at (x, z) has a real ceiling over its whole footprint. */
+const columnRoofed = (ctx: Ctx, x: number, z: number, h: number): boolean => {
+  const ok = ceilingAtTop(ctx.g, x, z, COLUMN_HALF, COLUMN_HALF, ctx.g.floorAt(x, z) + h);
+  if (!ok) OPEN_AIR_REFUSED.columns++;
+  return ok;
+};
+
 const EXIT_STREETS = ['Hollis St', 'Wexford Ave', 'Garnet St', 'Linden Ave', 'Carver St', 'Dorset Rd', 'Marlowe St', 'Ashby Ave', 'Fulton St', 'Bramley Rd', 'Pruitt Ave', 'Calder St', '4th Ave', 'King St', 'Queen St', 'Front St'];
 
 // ---------------------------------------------------------------------------------------
@@ -132,6 +168,7 @@ const other = (ctx: Ctx, d: Door, a: Area) => ctx.layout.areas[d.a === a.id ? d.
 // Dressing
 
 export function dress(layout: StationLayout, rng: Rng): void {
+  OPEN_AIR_REFUSED.columns = 0; OPEN_AIR_REFUSED.signs = 0; // (lane FIX, U03)
   // Iteration 08 (Lane P): one placement context per level (its grid, doors, masks); every area is dressed on its own level.
   const ctxs = levelsOf(layout).map(L => makePlaceCtx(layout, rng, L.id));
   const ctx = ctxs[0];
@@ -451,7 +488,11 @@ function dressPlatform(ctx: Ctx, a: Area): void {
   for (const row of rows) {
     const colZ = (row + 0.5) * CELL;
     const cols: number[] = [];
-    for (let x = ax0 + 4.25; x < ax0 + aw - 3; x += spacing) if (tryPlaceProp(ctx, a, 'column', x, colZ, 0, {checkZone: false, h: a.ceil})) cols.push(x);
+    for (let x = ax0 + 4.25; x < ax0 + aw - 3; x += spacing) {
+      // (lane FIX, U03) no column under open air (mall atrium / bridge): the bay rhythm stays for the benches (same draws)
+      if (!columnRoofed(ctx, x, colZ, a.ceil)) { cols.push(x); continue; }
+      if (tryPlaceProp(ctx, a, 'column', x, colZ, 0, {checkZone: false, h: a.ceil})) cols.push(x);
+    }
     const benchRot = !island ? (edges[0] === 'N' ? Math.PI : 0) : row < a.y + a.h / 2 ? Math.PI : 0;
     for (let i = 0; i + 1 < cols.length; i++) if (cols[i + 1] - cols[i] < spacing + 0.1) benchSlots.push({x: (cols[i] + cols[i + 1]) / 2, z: colZ, rot: island && rows.length === 1 && i % 2 ? Math.PI - benchRot : benchRot});
     // Iteration 08 (Lane P): bins / newspaper boxes at the bench bays and barricades in empty bays come from the composer.
@@ -475,8 +516,12 @@ function dressPlatform(ctx: Ctx, a: Area): void {
       const x = Math.round(rng.range(ax0 + 8, ax0 + aw - 8) * 4) / 4;
       const z = (rows[0] + 0.5) * CELL;
       const d = PROP_DEFS.vending.d / 2 + 0.01;
-      tryPlaceProp(ctx, a, 'vending', x, z - d, Math.PI, {checkZone: false, front: 1.0, variant: rng.int(0, 2)});
-      tryPlaceProp(ctx, a, 'vending', x, z + d, 0, {checkZone: false, front: 1.0, variant: rng.int(0, 2)});
+      // Task mall-playtest-revision-20261031 (lane SHOPS, U09): a free-standing back-to-back pair has no wall behind it — never in
+      // the mall (PlaceCtx.strictWalls); the Subway / Office keep it (same draws)
+      const v0 = rng.int(0, 2);
+      if (!ctx.strictWalls) tryPlaceProp(ctx, a, 'vending', x, z - d, Math.PI, {checkZone: false, front: 1.0, variant: v0});
+      const v1 = rng.int(0, 2);
+      if (!ctx.strictWalls) tryPlaceProp(ctx, a, 'vending', x, z + d, 0, {checkZone: false, front: 1.0, variant: v1});
     }
   }
   const lightRows = island ? [0.25, 0.75] : [0.3, 0.76];
@@ -512,7 +557,10 @@ function dressPlatform(ctx: Ctx, a: Area): void {
     const toward = (e === 'N' ? a.towardsN : a.towardsS) ?? layout.towards[i];
     const plateZ = e === 'N' ? az0 + 2.6 : az1 - 2.6;
     for (let x = ax0 + 12 + i * 6; x < ax0 + aw - 8; x += 24) {
-      layout.signs.push({x, y: 3.05, z: plateZ, rot: rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2, kind: 'platform', text: `${n + i}  ·  TO ${toward.toUpperCase()}`, area: a.id, hang: true, w: 2.4});
+      const rot = rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2;
+      // (lane FIX, U03) hung on rods to the area ceiling: never under open air (the rods would end in mid-air); same draws
+      if (!hungRoofed(g, x, plateZ, rot, 2.4, a.ceil)) continue;
+      layout.signs.push({x, y: 3.05, z: plateZ, rot, kind: 'platform', text: `${n + i}  ·  TO ${toward.toUpperCase()}`, area: a.id, hang: true, w: 2.4});
     }
   }
   // Wayfinding over openings.
@@ -541,7 +589,9 @@ function dressPassage(ctx: Ctx, a: Area): void {
   if (a.role === 'transfer' || a.role === 'escalator') {
     // Long passages: hanging wayfinding every ~12 m, benches and bins along the walls.
     for (let t = 6; t < len - 4; t += 12) {
-      layout.signs.push({x: alongX ? ax0 + t : ax0 + aw / 2, y: Math.min(a.ceil - 0.5, 2.9), z: alongX ? az0 + ah / 2 : az0 + t, rot: alongX ? Math.PI / 2 : 0, kind: 'info', text, area: a.id, hang: true, w: 2.4});
+      const sx = alongX ? ax0 + t : ax0 + aw / 2, sz = alongX ? az0 + ah / 2 : az0 + t, rot = alongX ? Math.PI / 2 : 0;
+      if (!hungRoofed(ctx.g, sx, sz, rot, 2.4, a.ceil)) continue; // (lane FIX, U03) its rods never end under open air
+      layout.signs.push({x: sx, y: Math.min(a.ceil - 0.5, 2.9), z: sz, rot, kind: 'info', text, area: a.id, hang: true, w: 2.4});
     }
     // Iteration 08 (Lane P): benches + bins are composed waiting nooks (gen/compose.ts), not random wall spots.
   }
@@ -560,6 +610,7 @@ function columnRow(ctx: Ctx, a: Area, frac: number, spacing: number, h: number) 
   const across = ((alongX ? a.y + Math.floor(a.h * frac) : a.x + Math.floor(a.w * frac)) + 0.5) * CELL;
   for (let i = 0; i < n; i++) {
     const t = (Math.round((start + i * spacing) / CELL - 0.5) + 0.5) * CELL;
+    if (!columnRoofed(ctx, alongX ? t : across, alongX ? across : t, h)) continue; // (lane FIX, U03) never under open air
     tryPlaceProp(ctx, a, 'column', alongX ? t : across, alongX ? across : t, 0, {h});
   }
 }
@@ -649,7 +700,8 @@ function dressFoodCourt(ctx: Ctx, a: Area): void {
   if (x1 - x0 > 16 && z1 - z0 > 8 && rng.chance(0.7)) {
     const sp = rng.range(8, 10);
     for (let x = x0 + (x1 - x0) % sp / 2 + sp / 2; x < x1 - 2; x += sp) for (const z of z1 - z0 > 14 ? [z0 + (z1 - z0) / 3, z0 + (z1 - z0) * 2 / 3] : [(z0 + z1) / 2]) {
-      tryPlaceProp(ctx, a, 'column', (Math.floor(x / CELL) + 0.5) * CELL, (Math.floor(z / CELL) + 0.5) * CELL, 0, {h: a.ceil});
+      const cx = (Math.floor(x / CELL) + 0.5) * CELL, cz = (Math.floor(z / CELL) + 0.5) * CELL;
+      if (columnRoofed(ctx, cx, cz, a.ceil)) tryPlaceProp(ctx, a, 'column', cx, cz, 0, {h: a.ceil}); // (lane FIX, U03) never under open air
     }
   }
   // Seating: a grid of 4-tops or communal rows (tables pushed together along their length).
@@ -726,7 +778,9 @@ function dressArcade(ctx: Ctx, a: Area, kioskAllowed: boolean): boolean {
   // Hanging wayfinding down the concourse.
   const len = (alongX ? a.w : a.h) * CELL;
   for (let t = 8; t < len - 6; t += 16) {
-    layout.signs.push({x: alongX ? a.x * CELL + t : (a.x + a.w / 2) * CELL, y: Math.min(a.ceil - 0.45, 2.85), z: alongX ? (a.y + a.h / 2) * CELL : a.y * CELL + t, rot: alongX ? Math.PI / 2 : 0, kind: 'info', text: 'TO TRAINS · EXITS · FOOD COURT', area: a.id, hang: true, w: 2.8});
+    const sx = alongX ? a.x * CELL + t : (a.x + a.w / 2) * CELL, sz = alongX ? (a.y + a.h / 2) * CELL : a.y * CELL + t, rot = alongX ? Math.PI / 2 : 0;
+    if (!hungRoofed(ctx.g, sx, sz, rot, 2.8, a.ceil)) continue; // (lane FIX, U03) its rods never end under open air (mall galleries)
+    layout.signs.push({x: sx, y: Math.min(a.ceil - 0.45, 2.85), z: sz, rot, kind: 'info', text: 'TO TRAINS · EXITS · FOOD COURT', area: a.id, hang: true, w: 2.8});
   }
   return kiosk;
 }

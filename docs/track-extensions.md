@@ -1,7 +1,7 @@
 # Track extensions: tunnels beyond the station and service annexes
 
 Track 2, "Beyond the Station". This is the reusable interface for every level whose station has track beds: the Subway, the
-Office's street station, and future levels such as Eaton Mall.
+Office's street station and the mall (`LevelId` `mall`, seeded display name `<Name> Center`).
 
 ## Overview
 
@@ -71,7 +71,7 @@ same level and world, with no loading. Graffiti arrows and tags appear only wher
 **Measured incidence** (64-seed corpus): 60/64 Subway levels have at least one annex and 18/64 have two (0 / 1 / 2 =
 4 / 42 / 18); 16 of 78 annexes are behind a hatch.
 
-## The Eaton's Center (`mall`, task track3-eaton-centre-20261031, lane INTEG)
+## The mall (`mall`, task track3-eaton-centre-20261031, lane INTEG)
 
 The mall opts in like the Office (a fixed crop origin):
 - `LEVELS.mall.trackExtensions = trackExtConfig('mall')` = `TRACK_EXT_MALL`: `TRACK_EXT` (the GEN-2 incidence planner and service

@@ -11,7 +11,8 @@ import {generateStation} from '../gen/station';
 import type {StationLayout} from '../gen/stationTypes';
 import {isMaskLootItem, placeMaskLoot, placeSectionGear} from './gearAdapter';
 import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
-import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): The Eaton's Center
+import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): the mall
+import {MALL_GENERIC_NAME, mallNameOf} from '../gen/mall/names'; // task mall-playtest-revision-20261031 (lane GEN): seeded "<Name> Center"
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
@@ -58,20 +59,22 @@ export const LEVELS: Record<LevelId, LevelDef> = {
       return withGear(generateOfficeLevel(ctx, undefined, undefined, LEVELS.office.trackExtensions), ctx);
     },
   },
-  // Task track3-eaton-centre-20261031 (lane GEN): THE EATON'S CENTER — a subway station at the bottom of an open pit under a glass
-  // roof, six retail rings around the void (gen/mall/index.ts). ONE continuous world, section 'main'.
+  // Task track3-eaton-centre-20261031 (lane GEN): THE MALL — a subway station under a glass atrium (gen/mall/index.ts). ONE continuous
+  // world, section 'main'. Task mall-playtest-revision-20261031 (lane GEN): three retail floors; the DISPLAY name is seeded per run
+  // ("<Name> Center", gen/mall/names.ts mallNameOf(levelSeed); levelDisplayName below) — `name` is the generic label for menus that
+  // have no level seed yet.
   mall: {
     id: 'mall',
     tier: 2, // lane INTEG (Track1 level contract): level 2 difficulty — after the Subway (0) and Office Space (1); metadata only
-    name: "The Eaton's Center",
-    blurb: 'A subway station at the bottom of a vast open mall — look up through six rings of shops to the glass roof, then work your way up by escalator, stairs and bridges.',
+    name: MALL_GENERIC_NAME,
+    blurb: 'A subway station under a small glass atrium — look up to the sky, then explore three floors of shops, corridors and arcades by escalator, stairs or the glass elevator.',
     entry: 'main',
     sections: () => ['main'],
     // lane INTEG (Track2 integration): the pit station's beds are track-bearing — the real TrackExtConfig (TRACK_EXT_MALL), never
     // 'none'; gen/mall/index.ts calls extendTracks at its seam (east / south growth from the fixed crop origin).
     trackExtensions: trackExtConfig('mall'),
     generate: (section, ctx) => {
-      if (section !== 'main') throw new Error(`The Eaton's Center has no section '${section}'`);
+      if (section !== 'main') throw new Error(`${MALL_GENERIC_NAME} has no section '${section}'`);
       return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx);
     },
   },
@@ -105,6 +108,15 @@ export function travelTargets(level: LevelId): LevelId[] {
   return LEVEL_IDS.filter(l => l !== level);
 }
 
+/**
+ * Display name of a logical level in a run (task mall-playtest-revision-20261031, lane GEN): the mall's seeded "<Name> Center" when the
+ * run's level seed is known (the same seed always gives the same name: revisits / Travel agree with layout.mall.name), else the
+ * static LEVELS name ("Shopping Center" for the mall).
+ */
+export function levelDisplayName(level: LevelId, levelSeed?: number): string {
+  return level === 'mall' && levelSeed !== undefined && Number.isFinite(levelSeed) ? mallNameOf(levelSeed) : LEVELS[level].name;
+}
+
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
   return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : 'Station';
@@ -116,8 +128,8 @@ export function clearLabel(key: SectionKey): string {
 }
 
 /**
- * Storey label of a layout level id: the office's ('L' = lobby, '2'..'8'); the mall's ('Subway', 'Level 1' … 'Level 6'; lane GEN,
- * task track3-eaton-centre-20261031); '' for the Subway.
+ * Storey label of a layout level id: the office's ('L' = lobby, '2'..'8'); the mall's ('Subway', 'Level 1' … 'Level 3'; lane GEN);
+ * '' for the Subway.
  */
 export function storeyLabel(layout: StationLayout, level: number): string {
   const s = layout.office?.storeys.find(t => t.levelId === level);

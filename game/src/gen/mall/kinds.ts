@@ -127,6 +127,10 @@ const SPECS = {
   fountainSpire: {box: [1.7, 1.7, 2.3], cls: 'steel'},
   /** Freestanding directory pylon (both faces: the storey plan with a "You are here" dot). */
   directoryPylon: {box: [0.9, 0.3, 2.1], cls: 'sheetMetal'},
+  // --- task mall-playtest-revision-20261031 (lane FIX, U04): round atrium column (gen/mall/columns.ts places it, world/mallArch.ts
+  // draws it; PropPlacement.round: contact + bullets use the exact cylinder, R 0.34; h per placement = floor to the ceiling over it) ---
+  /** Round atrium column under a slab edge (white render, tile bands): a structural record, not furniture. */
+  atriumColumn: {box: [0.68, 0.68, 4.6], blocksSight: true, cls: 'plaster'},
 } as const satisfies Record<string, MallKindSpec>;
 
 export type MallKind = keyof typeof SPECS;
@@ -202,6 +206,11 @@ export const GLASS_COUNTER = {deckY: 0.434, shelfY: 0.893, topY: 1.06} as const;
 /** Top of the gun display bench (weapon finds lie here; prop-relative). */
 export const GUN_DISPLAY_TOP = 0.9;
 /**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U11): the M14 gun rack's lower cradle shelf (prop-relative; lanes/ASSETS.notes
+ * section 10: hook bars 0.78 / 1.16, lower shelf 0.46) — the second host of a gun shop's stock when its display benches are taken.
+ */
+export const GUN_RACK_SHELF_Y = 0.46;
+/**
  * Wall bay decks (prop-relative) measured on the delivered M04 model (mall-retail-wall-bay.glb, 1.2 x 2.2 x 0.5 m, upward faces in the
  * prop frame): a deep base deck 0.19 (z -0.236..0.25), three shallow shelves 0.52 / 0.80 / 1.08 (z -0.236..0.03) and a deep shelf 1.37
  * (z -0.236..0.199) under the slatwall header (to 2.2). The procedural fallback is built to the same decks: [y, front z].
@@ -217,6 +226,13 @@ const BOOKCASE_TIERS = [0.36, 0.85, 1.25, 1.63, 2.2] as const;
 const GONDOLA_DECKS: readonly (readonly [number, number])[] = [[0.18, 0.2], [0.36, 0.12], [0.63, 0.12], [0.8, 0.12], [0.98, 0.12], [1.18, 0.12]];
 /** Rail height (prop-relative) garment groups hang from, per rail host (M05 ring 1.31 m, M08 rail 1.915 m). */
 export const GARMENT_RAIL_Y: Readonly<Partial<Record<MallKind, number>>> = {garmentRail: 1.53, garmentRailRound: 1.31, clothingWallUnit: 1.915};
+/**
+ * Task mall-playtest-revision-20261031 (lane SHOPS, U05 — user: "clothing racks can move with physics however the clothes on the rack
+ * stay put, floating in the air"): host decor that is MOUNTED on its host (`PropPlacement.host`) and rides it — when the host goes
+ * loose (physics/dynamicItems.ts) the rider's meshes become parts of the host's body (translate + rotate with it) and its own static
+ * collider goes (h 0). The garment groups on a garment rail / round rack; on the static clothing bay they simply stay with the bay.
+ */
+export const MALL_RIDER_KINDS: readonly MallKind[] = ['garmentHangingGroup'];
 
 /** Exposed loot surfaces of the open mall holders and of the bookcase (an openable container: its shelves + its drawers' trays). */
 export const MALL_SURFACES: Readonly<Record<MallHolderKind | MallOpenableKind, readonly SurfaceSpec[]>> = {
@@ -330,7 +346,9 @@ export const MALL_PHYS = {
   // (collider 1.2x its slim model box: the shoulders / base plate the walker meets first — a 0.45 m box let the camera clip 16 cm in)
   mannequinFull: {dynamic: true, mass: 7, mat: 'pad', fit: 1.2, how: 'full-figure hollow plastic display mannequin on a base (~7 kg, tall and narrow): tips over when shot or bumped'},
   garmentRailRound: {dynamic: true, mass: 18, mat: 'pad', how: 'empty round chrome garment rack (~18 kg): shoved across the floor when walked into, slides / tips when shot'},
-  garmentHangingGroup: S('host decor', 'garments on hangers riding their garment rail (decor filler, not items): they stay with the rail and the rail stays put while they hang on it (no floating stock)'),
+  // Task mall-playtest-revision-20261031 (lane SHOPS, U05): the old sentence claimed the rail stays put while garments hang on it — it
+  // did not (the rail's body moved, the garments floated). They now RIDE the rail (MALL_RIDER_KINDS, physics/dynamicItems.ts riders).
+  garmentHangingGroup: S('host decor', 'garments on hangers hung on their garment rail (decor filler, not items): they ride the rail — when a walk-in or a shot sends the rail loose they become parts of its body and translate / rotate with it (no floating stock, no stationary collider left behind); on the static clothing bay they stay with the bay'),
   flatScreenTv: {dynamic: true, mass: 15, mat: 'pad', onHost: true, how: 'flat-screen TV on its stand (~15 kg) on a display table: a shot slides / topples it off the table, a bump shoves it'},
   mallCashwrapCounter: S('holder', 'till / back counter with hutch (~150 kg) built against the wall: a loot holder (drawers, cupboard, shelves) stays put'),
   glassDisplayCabinet: S('holder', 'glass display cabinet (~70 kg loaded): a loot holder stays put so its finite lots never float'),
@@ -348,6 +366,7 @@ export const MALL_PHYS = {
   fountainBasin: S('built-in', 'fountain basin: a cast-in-place stone basin built into the plaza slab (several tonnes, plumbed in); it cannot move'),
   fountainSpire: S('built-in', 'bronze fountain centrepiece bolted through the basin floor onto its plumbing riser'),
   directoryPylon: S('anchored', 'mall directory pylon: a steel totem bolted to the floor slab (wired for its long-dead backlight)'),
+  atriumColumn: S('structure', 'round atrium column (lane FIX, U04): load-bearing reinforced-concrete column under a slab edge, floor to ceiling; it cannot move'),
   // lane ASSETS batch 2 resume + 2R (12c)
   gunSafeTall: S('too heavy', 'tall steel gun safe (M35, ~250 kg) bolted down: a loot holder that cannot be shoved'),
   dresserDrawers: S('holder', 'solid timber dresser (M45, ~55 kg) with four drawers and loot on its top: a holder stays put so its finite lots never float'),
@@ -400,6 +419,7 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   fountainBasin: {role: 'decor', cls: 'none', how: 'fountain basin (stagnant water, debris): a built-in stone basin, nothing to open'},
   fountainSpire: {role: 'decor', cls: 'none', how: 'bronze fountain centrepiece: sealed casting, nothing to open'},
   directoryPylon: {role: 'equipment', cls: 'none', how: 'directory pylon: sealed steel totem with printed plan faces (backlight dead), no door or panel to open'},
+  atriumColumn: {role: 'decor', cls: 'none', how: 'round atrium column (lane FIX, U04): building structure, nothing to open'},
   // lane ASSETS batch 2 resume + 2R (12c)
   gunSafeTall: {role: 'storage', cls: 'openable', how: 'tall gun safe (M35): its derived full-height door (hinged on the right edge) over a lined cavity with a shelf; ammo / gun-care by the deliberate rule, never guns'},
   dresserDrawers: {role: 'storage', cls: 'openable', how: 'dresser (M45): 4 derived drawers (2 x 2) with lined cavities; its top is an exposed surface'},
@@ -420,6 +440,7 @@ export function mallShape(kind: MallKind): ShapePart[] {
   const {w, d, h} = MALL_PROP_DEFS[kind];
   // task track3 (lane ARCH): the landmarks are drawn by world/mallArch.ts (water, tiers, canvas plan faces): no box form here
   if (kind === 'fountainBasin' || kind === 'fountainSpire' || kind === 'directoryPylon') return [];
+  if (kind === 'atriumColumn') return []; // lane FIX (U04): drawn by world/mallArch.ts buildColumns from the record
   switch (kind) {
     case 'glassCounter': {
       const {deckY, shelfY, topY} = GLASS_COUNTER;

@@ -244,11 +244,14 @@ describe('the generated mall: before / after (update-profile style measurement)'
       for (const [k, x] of [['before', off], ['after ', on]] as const) {
         lines.push(`${name} ${k}: AI ms med ${x.s.med.toFixed(2)} p95 ${x.s.p95.toFixed(2)} p99 ${x.s.p99.toFixed(2)} max ${x.s.max.toFixed(1)} (background chunks max ${x.s.deferredMax.toFixed(1)}, AI+background max ${x.s.totalMax.toFixed(1)}); frames > 10 ms ${x.s.frames10ms}; sync searches ${x.s.searches} (max ${x.s.searchesMaxPerFrame}/frame, ${x.s.searchMsMaxPerFrame.toFixed(1)} ms); expansions per search p99 ${x.s.expP99} max ${x.s.expMax}, max/frame ${x.s.expMaxPerFrame}; shared ${x.hits} throttled ${x.throttled} held ${x.held}; top ${x.s.top.slice(0, 2).join(' | ')}`);
       }
-      expect(on.s.expMax).toBeLessThan(off.s.expMax);
+      // (task mall-playtest-revision-20261031, lane PROFILES: the compact mall's re-proportioned population (~37-50 enemies, was ~100)
+      // leaves the largest search at the pit start equal with and without the relief — never larger with it; the per-frame bound and
+      // the halved synchronous search work below still hold)
+      expect(on.s.expMax).toBeLessThanOrEqual(off.s.expMax);
       expect(on.s.expMaxPerFrame).toBeLessThanOrEqual(3000);
       expect(on.s.searches).toBeLessThan(off.s.searches * 0.7);
     }
-    console.info(`[atrium mall] seed 32451, ${SECS} s per run (100 enemies incl. hordes)\n  ${lines.join('\n  ')}`);
+    console.info(`[atrium mall] seed 32451, ${SECS} s per run (${layout.zombies.length} enemies incl. hordes)\n  ${lines.join('\n  ')}`);
   });
 });
 

@@ -32,6 +32,7 @@
 //
 // Usage:
 //   node tools/asset-pipeline/props/build-mall-track3.mjs [--policy lean|balanced] [--only M01,M05] [--allowlist-out <file>]
+//        [--no-delivered]   do not rewrite the Track3 delivery note (later local repairs, e.g. lane FIX U06 M35)
 //   node tools/asset-pipeline/props/build-mall-track3.mjs --dry-run      plan only: verify freezes / ledger / raws, write NOTHING
 //   node tools/asset-pipeline/props/build-mall-track3.mjs --dry-run --fixture <any.glb> --fixture-code M05 [--fixture-front +Z]
 //        exercise the derive path on a local GLB under a manifest spec -> /tmp/track3-fixture/mall-<id>.glb + report (never public)
@@ -43,6 +44,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, transformPrimitive, getBounds, textureCompress, prune, dedup, compactPrimitive} from '@gltf-transform/functions';
 import {GLASS_MATERIAL, components, cleanSupportTexture, cropPartTextures, extentOf, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs';
+import {dedupeCoplanar} from './lib/coplanar-dedupe.mjs'; // Task mall-playtest-revision-20261031 (lane FIX, U06)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -75,6 +77,8 @@ const POLICY = argOf('--policy') ?? 'lean';
 if (!['lean', 'balanced'].includes(POLICY)) throw new Error('--policy lean|balanced');
 const ONLY = argOf('--only') ? new Set(argOf('--only').split(',')) : null;
 const ALLOW_OUT = argOf('--allowlist-out');
+// (lane FIX, U06) a later local repair must not rewrite the closed Track3 task's delivery note (reference/.../DELIVERED.json)
+const NO_DELIVERED = process.argv.includes('--no-delivered');
 const FIXTURE = argOf('--fixture'), FIXTURE_CODE = argOf('--fixture-code'), FIXTURE_FRONT = argOf('--fixture-front') ?? '+Z';
 if (FIXTURE && !DRY) throw new Error('--fixture is a dry-run tool (never writes public files): add --dry-run');
 
@@ -166,7 +170,15 @@ const EDITS = {
     hingeClose: {pred: c => c.max[2] <= 0.04 && c.min[2] < -0.12 && c.min[0] > -0.61 && c.max[0] < -0.48, hinge: [-0.551, 0.036], sx: 0.731, dx: -0.034, dz: -0.066}},
   // --- batch 2 resume (recovery02, after the provider-limit pause) + 2R ---
   // M35 (review/b2r-refines-raw.png): 0.82 m deep at the frozen 1.8 m height (a gun safe is ~0.6 m) -> depth z x0.76.
-  'gun-safe-tall': {basis: 'tall safe 1.8 m (frozen h), depth trimmed to 0.60 m (z x0.76)', scaleAxes: [[2, 0.76]]},
+  // Task mall-playtest-revision-20261031 (lane FIX, U06: "the new vault asset has flickering on the door / messed up triangles"): the raw
+  // refine (and its preview) models the door face as two interleaved, partly overlapping front-facing tilings + 5 inward-facing triangles
+  // all in ONE plane (runtime frame z -0.2354; ~0.75 m2 of overlap over ~40 % of the door) and the material is double-sided -> z-fighting.
+  // dedupe (lib/coplanar-dedupe.mjs, final derivative frame, front -Z): one front layer over the old coverage (larger triangles keep their
+  // texture, the others are clipped exactly around them; no hole / overlap), inward-facing duplicates dropped (the openable spec gives the
+  // leaf an inner plate). The back plane (z +0.30, against the wall) had the same stacking: repaired the same way (front +Z).
+  'gun-safe-tall': {basis: 'tall safe 1.8 m (frozen h), depth trimmed to 0.60 m (z x0.76); coplanar duplicate door / back layers removed (local)', scaleAxes: [[2, 0.76]],
+    dedupe: [{box: {min: [-0.31, 0.12, -0.245], max: [0.31, 1.68, -0.225]}, axis: 2, facing: -1, tol: 0.001},
+      {box: {min: [-0.42, -0.01, 0.29], max: [0.42, 1.81, 0.31]}, axis: 2, facing: 1, tol: 0.001}]},
   // M45: 4-drawer dresser at the frozen 1.4 m width stood 0.98 m tall and 0.94 m deep -> y x0.866, z x0.53 (0.85 x 0.50 m frozen).
   'dresser-drawers': {basis: 'dresser 1.4 x 0.85 x 0.50 m (frozen; per-axis y x0.866, z x0.53)', scaleAxes: [[1, 0.866], [2, 0.53]]},
   // M42: at the frozen 1.2 m width (incl. the cantilevered acrylic side tiers) it stood 2.48 m -> uniform to the frozen 2.2 m height.
@@ -414,6 +426,8 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
       k = E.sizeM / extentOf(bb, E.sizeAxis);
       scaleGroundCentre(doc, k);
     } else scaleGroundCentre(doc, 1); // removed clutter / split glass can shift the bounds: re-ground and re-centre
+    // (lane FIX, U06) coplanar duplicate layers, in the final frame (boxes measured on the delivered derivative; bounds unchanged)
+    if (E.dedupe) edits.coplanarDedupe = E.dedupe.map(d => dedupeCoplanar(doc, d));
     for (const p of split?.parts ?? []) {
       const pr = p.doc.getRoot();
       pr.listMeshes().forEach((m, i) => m.setName(i ? `${p.id}-${i}` : p.id));
@@ -666,5 +680,5 @@ if (ALLOW_OUT) fs.writeFileSync(ALLOW_OUT, JSON.stringify({note: 'entries build-
   files: allow.files.filter(f => MY_PATHS.has(f.path) || f.path === CREDITS_REL)}, null, 2) + '\n');
 else fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
 for (const [f, a, b] of regNext) if (a !== b) fs.writeFileSync(f, b);
-{ const tmp = `${DELIVERED}.tmp-${process.pid}`; const fd = fs.openSync(tmp, 'w'); fs.writeSync(fd, JSON.stringify(delivered, null, 1) + '\n'); fs.fsyncSync(fd); fs.closeSync(fd); fs.renameSync(tmp, DELIVERED); }
+if (!NO_DELIVERED) { const tmp = `${DELIVERED}.tmp-${process.pid}`; const fd = fs.openSync(tmp, 'w'); fs.writeSync(fd, JSON.stringify(delivered, null, 1) + '\n'); fs.fsyncSync(fd); fs.closeSync(fd); fs.renameSync(tmp, DELIVERED); }
 console.log(`mall models ready ${outputs.length}/${SPECS.size} frozen (${(totalBytes / 1e6).toFixed(2)} MB runtime, ~${(gpu / 1e6).toFixed(0)} MB GPU textures, ${POLICY}); credits ${JSON.stringify(creditSummary)}; allowlist ${added.length} own entries${dropped.length ? `, dropped ${dropped.join(', ')}` : ''}`);

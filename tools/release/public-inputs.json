@@ -1460,8 +1460,8 @@
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
-      "bytes": 237102,
-      "sha256": "fde0b63ae6d4fe2c3958d421d189010513d017b4c44cf8c6aef931e33ebbe928"
+      "bytes": 238801,
+      "sha256": "1f5cb16c85516c14d6b06fbd3d8199139d7720728ac57c29ee2e5aa664b083fd"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1890,8 +1890,8 @@
     },
     {
       "path": "assets/models/mall-gun-safe-tall.glb",
-      "bytes": 179724,
-      "sha256": "6583e0cd5b7a40f403474f6074a6a449300a239bd0863916d03e0aa97c5988a9"
+      "bytes": 186564,
+      "sha256": "c342367b0f9522c4254f6f77039242c9b28365ffec25a772cc78163d0e8bc1a0"
     },
     {
       "path": "assets/models/mall-gun-wall-rack.glb",

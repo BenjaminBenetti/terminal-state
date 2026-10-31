@@ -25,6 +25,7 @@
 import {Rng} from '../../core/rng';
 import type {Area, SignStyle, StationLayout} from '../stationTypes';
 import type {MallProgram, MallShop, MallUnitKind} from './mallTypes';
+import {lotSuits, mallLot, type MallLotFamily, type MallLotId} from './lots'; // Task mall-playtest-revision-20261031 (lane GEN's lot families)
 
 // ---------------------------------------------------------------------------------------------
 // Finish ids (lane ARCH maps them to materials: world/mallArch.ts). Data only: a shop's floor / wall / ceiling treatment.
@@ -94,35 +95,35 @@ const S = (bg: number, fg: number, accent: number, font: SignStyle['font']): Sig
 export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   guns: {
     id: 'guns', label: 'Gun shop', brands: ['Ironside Arms', 'Northgate Firearms', 'Calder & Webb Gunsmiths', 'Lakehead Sporting Arms', 'Granite Ridge Arms', 'Bullseye Armoury'],
-    units: ['store'], min: {area: 40, depth: 6, width: 5}, weight: 0, count: [1, 2], rings: [0.6, 1, 1.1, 1.1, 0.9, 0.7],
+    units: ['store'], min: {area: 30, depth: 5.5, width: 4.5}, weight: 0, count: [1, 2], rings: [0.6, 1, 1.1, 1.1, 0.9, 0.7],
     purpose: 'mall-guns', back: 'mall-guns-back', front: 'glazed', shutter: [0.7, 0.3, 0], recipe: 'guns',
     finishes: [F('concrete-polished', 'pegboard', 'open-black', 0x5a3a22), F('vinyl-walnut', 'brick-red', 'tile-drop', 0x3f4a2f)],
     sign: S(0x1f2a1c, 0xe8dcb4, 0xb8402e, 'condensed'),
   },
   outdoors: {
     id: 'outdoors', label: 'Outdoor outfitter', brands: ['Northline Outfitters', 'Timber Trail Supply', 'Boreal Gear Co.', 'Canoe & Compass', 'Muskoka Expedition', 'Bruce Trail Outdoor'],
-    units: ['store', 'anchor'], min: {area: 55, depth: 7, width: 6}, weight: 0.5, count: [1, 2], rings: [0.8, 1, 1.2, 1, 0.9, 0.7],
+    units: ['store', 'anchor'], min: {area: 55, depth: 5.5, width: 6}, weight: 0.5, count: [1, 2], rings: [0.8, 1, 1.2, 1, 0.9, 0.7],
     purpose: 'mall-outdoors', back: 'mall-outdoors-back', front: 'glazed', shutter: [0.75, 0.25, 0], recipe: 'outdoors',
     finishes: [F('vinyl-oak', 'wood-panel', 'wood-slat', 0x2f5a3a), F('concrete-polished', 'brick-white', 'open-black', 0xb8642a)],
     sign: S(0x2f4a2a, 0xf2ead6, 0xd9a23a, 'serif'),
   },
   pharmacy: {
     id: 'pharmacy', label: 'Pharmacy', brands: ['Queen Street Pharmacy', 'Mercy Drug Mart', 'Carlton Apothecary', 'Bayview Pharmacy', 'Green Cross Dispensary', 'Harbourfront Rx'],
-    units: ['store', 'anchor'], min: {area: 55, depth: 7, width: 6}, weight: 0.6, count: [1, 2], rings: [1.4, 1.2, 1, 0.8, 0.7, 0.6],
+    units: ['store', 'anchor'], min: {area: 28, depth: 5, width: 4.5}, weight: 0.6, count: [1, 2], rings: [1.4, 1.2, 1, 0.8, 0.7, 0.6],
     purpose: 'mall-pharmacy', back: 'mall-pharmacy-back', front: 'glazed', shutter: [0.7, 0.3, 0], recipe: 'pharmacy',
     finishes: [F('tile-white', 'paint-white', 'tile-drop', 0xc62828), F('tile-grey', 'paint-teal', 'tile-drop', 0x00897b)],
     sign: S(0xf4f4ef, 0xb71c1c, 0x00897b, 'sans'),
   },
   clinic: {
     id: 'clinic', label: 'Walk-in clinic', brands: ['Dundas Walk-In Clinic', 'CityCare Medical', 'Albion Family Clinic', 'Front Street Health Centre'],
-    units: ['store', 'service'], min: {area: 40, depth: 6, width: 5}, weight: 0.3, count: [1, 1], rings: [0.4, 0.8, 1, 1.2, 1.3, 1.3],
+    units: ['store', 'service'], min: {area: 30, depth: 5.5, width: 5}, weight: 0.3, count: [1, 1], rings: [0.4, 0.8, 1, 1.2, 1.3, 1.3],
     purpose: 'mall-clinic', back: 'mall-clinic-back', front: 'glazed', shutter: [0.8, 0.2, 0], recipe: 'clinic',
     finishes: [F('tile-white', 'paint-sage', 'tile-drop', 0x2e7d6b), F('vinyl-oak', 'paint-white', 'tile-drop', 0x1565c0)],
     sign: S(0xffffff, 0x1565c0, 0x2e7d6b, 'rounded'),
   },
   electronics: {
     id: 'electronics', label: 'Electronics store', brands: ['Voltage Electronics', 'Circuit Square', 'Kilowatt Audio & Video', 'NovaTech', 'Pixel Harbour', 'Megahertz'],
-    units: ['store', 'anchor'], min: {area: 50, depth: 7, width: 6}, weight: 0.8, count: [1, 2], rings: [1.1, 1.3, 1.1, 1, 0.8, 0.7],
+    units: ['store', 'anchor'], min: {area: 45, depth: 5.5, width: 6}, weight: 0.8, count: [1, 2], rings: [1.1, 1.3, 1.1, 1, 0.8, 0.7],
     purpose: 'mall-electronics', back: 'mall-electronics-back', front: 'glazed', shutter: [0.65, 0.35, 0], recipe: 'electronics',
     finishes: [F('epoxy-grey', 'paint-charcoal', 'open-black', 0x00acc1), F('tile-white', 'slatwall-grey', 'tile-drop', 0x7e57c2)],
     sign: S(0x121417, 0x4dd0e1, 0x7e57c2, 'mono'),
@@ -143,7 +144,7 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   },
   clothing: {
     id: 'clothing', label: 'Clothing store', brands: ['Thread & Needle', 'Harbour Line Apparel', 'Wool & Wren', 'Urban Ledger', 'Fieldnote Clothing', 'Kensington Denim', 'Copper Fox', 'Stitch Society'],
-    units: ['store', 'anchor'], min: {area: 40, depth: 6, width: 5}, weight: 2.2, count: [2, 6], rings: [1.2, 1.3, 1.3, 1.1, 0.8, 0.6],
+    units: ['store', 'anchor'], min: {area: 35, depth: 6, width: 4.5}, weight: 2.2, count: [2, 6], rings: [1.2, 1.3, 1.3, 1.1, 0.8, 0.6],
     purpose: 'mall-clothing', back: 'mall-clothing-back', front: 'glazed', shutter: [0.6, 0.35, 0.05], recipe: 'clothing',
     finishes: [F('vinyl-oak', 'paint-white', 'plaster-white', 0x8d6e63), F('stone-black', 'brick-white', 'open-black', 0xd4a017)],
     sign: S(0xf5f1e8, 0x2a2522, 0x8d6e63, 'serif'),
@@ -157,7 +158,7 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   },
   department: {
     id: 'department', label: 'Department store', brands: ['Halloway\'s', 'Simcoe & Ashby', 'Merriweather\'s', 'The Grand Emporium', 'Kingsley Bros.'],
-    units: ['anchor', 'store'], min: {area: 150, depth: 10, width: 10}, weight: 0, count: [1, 2], rings: [1.3, 1.2, 1, 0.8, 0.5, 0.4],
+    units: ['anchor', 'store'], min: {area: 120, depth: 10, width: 10}, weight: 0, count: [1, 2], rings: [1.3, 1.2, 1, 0.8, 0.5, 0.4],
     purpose: 'mall-department', back: 'mall-department-back', front: 'glazed', shutter: [0.8, 0.2, 0], recipe: 'department',
     finishes: [F('terrazzo-cream', 'paint-white', 'plaster-white', 0x7b1fa2), F('carpet-burgundy', 'wallpaper-damask', 'plaster-white', 0xb08d57)],
     sign: S(0x1b1b2f, 0xe8d8a8, 0xb08d57, 'serif'),
@@ -171,7 +172,7 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   },
   cafe: {
     id: 'cafe', label: 'Café', brands: [],
-    units: ['store', 'food'], min: {area: 25, depth: 4.5, width: 4}, weight: 0.9, count: [1, 3], rings: [1.1, 1.1, 1, 1, 1, 0.9],
+    units: ['store', 'food'], min: {area: 16, depth: 4, width: 4}, weight: 0.9, count: [1, 3], rings: [1.1, 1.1, 1, 1, 1, 0.9],
     purpose: 'coffee', back: 'mall-food-back', front: 'open', shutter: [0.7, 0.3, 0], recipe: 'cafe',
     finishes: [F('vinyl-oak', 'brick-red', 'wood-slat', 0x6d4c41, ['quarry-red', 'tile-subway']), F('checker-bw', 'tile-subway', 'plaster-white', 0x1b5e20, ['quarry-red', 'tile-subway'])],
     sign: S(0x25352f, 0xefe6cf, 0xc99a2e, 'serif'),
@@ -192,14 +193,14 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   },
   toys: {
     id: 'toys', label: 'Toy store', brands: ['Kite & Marble', 'Toybox Junction', 'Tin Soldier Toys', 'Whirligig', 'Play Parade'],
-    units: ['store'], min: {area: 40, depth: 6, width: 5}, weight: 0.6, count: [1, 2], rings: [0.8, 1, 1.2, 1.2, 1, 0.8],
+    units: ['store'], min: {area: 40, depth: 6, width: 4.5}, weight: 0.6, count: [1, 2], rings: [0.8, 1, 1.2, 1.2, 1, 0.8],
     purpose: 'mall-toys', back: 'mall-toys-back', front: 'glazed', shutter: [0.65, 0.35, 0], recipe: 'toys',
     finishes: [F('rubber-sport', 'paint-blush', 'plaster-white', 0xffb300), F('vinyl-oak', 'paint-teal', 'tile-drop', 0xe53935)],
     sign: S(0xffb300, 0x1a237e, 0xe53935, 'rounded'),
   },
   sports: {
     id: 'sports', label: 'Sporting goods', brands: ['Peak Performance Sports', 'Goal Line Athletics', 'Rink & Field', 'Endurance Sports Co.', 'Northern Sport'],
-    units: ['store', 'anchor'], min: {area: 50, depth: 7, width: 6}, weight: 0.6, count: [1, 2], rings: [1, 1.1, 1.1, 1, 0.8, 0.7],
+    units: ['store', 'anchor'], min: {area: 45, depth: 5.5, width: 6}, weight: 0.6, count: [1, 2], rings: [1, 1.1, 1.1, 1, 0.8, 0.7],
     purpose: 'mall-sports', back: 'mall-sports-back', front: 'glazed', shutter: [0.7, 0.3, 0], recipe: 'sports',
     finishes: [F('rubber-sport', 'slatwall-grey', 'open-black', 0x1565c0), F('vinyl-oak', 'paint-white', 'open-black', 0xd32f2f)],
     sign: S(0x0d47a1, 0xffffff, 0xd32f2f, 'condensed'),
@@ -213,7 +214,7 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   },
   home: {
     id: 'home', label: 'Home store', brands: ['Hearth & Home', 'Lantern Lane Living', 'Oak & Linen', 'Nest Interiors', 'Willowbrook Home'],
-    units: ['store', 'anchor'], min: {area: 60, depth: 7, width: 6}, weight: 0.6, count: [1, 2], rings: [0.6, 0.9, 1.1, 1.3, 1.2, 1],
+    units: ['store', 'anchor'], min: {area: 55, depth: 5.5, width: 6}, weight: 0.6, count: [1, 2], rings: [0.6, 0.9, 1.1, 1.3, 1.2, 1],
     purpose: 'mall-home', back: 'mall-home-back', front: 'glazed', shutter: [0.7, 0.3, 0], recipe: 'home',
     finishes: [F('vinyl-oak', 'paint-sage', 'plaster-white', 0x8d6e63), F('carpet-charcoal', 'brick-white', 'wood-slat', 0x5d4037)],
     sign: S(0xf2ede4, 0x4e342e, 0x8d6e63, 'serif'),
@@ -241,7 +242,7 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
   },
   arcade: {
     id: 'arcade', label: 'Arcade', brands: ['Pixel Palace', 'Neon Joystick', 'Galaxy Arcade', 'Token Town', 'High Score'],
-    units: ['store', 'anchor'], min: {area: 50, depth: 7, width: 6}, weight: 0.4, count: [1, 1], rings: [0.6, 0.8, 1, 1.1, 1.3, 1.4],
+    units: ['store', 'anchor'], min: {area: 50, depth: 5.5, width: 6}, weight: 0.4, count: [1, 1], rings: [0.6, 0.8, 1, 1.1, 1.3, 1.4],
     purpose: 'mall-arcade', back: 'mall-arcade-back', front: 'open', shutter: [0.6, 0.4, 0], recipe: 'arcade',
     finishes: [F('carpet-blue', 'paint-charcoal', 'open-black', 0xe040fb), F('stone-black', 'paint-navy', 'open-black', 0x00e5ff)],
     sign: S(0x120024, 0xff4081, 0x00e5ff, 'mono'), signLit: [0.75, 0.2, 0.05],
@@ -340,6 +341,8 @@ export interface MallShopFit {
   shutter: MallShutter;
   /** Glazed fronts: the entry span along the frontage (metres from the frontage's start, x0 / z0 end), glazing elsewhere. */
   entry: readonly [number, number];
+  /** Task mall-playtest-revision-20261031 (lane SHOPS): corner units — the entry span along the SECOND shopfront (MallShop.frontages[1]). */
+  entry2?: readonly [number, number];
 }
 
 /** The fit SHOPS attached to a shop record (undefined before assignMallPrograms). */
@@ -370,9 +373,59 @@ function ringOf(layout: StationLayout, level: number): number {
   return rings.indexOf(st) + 1;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Task mall-playtest-revision-20261031 (lane SHOPS, D04): the catalogue rotation. The full catalogue stays (28 MallProgram ids, 32
+// recipes, every delivered model reachable through some recipe); a smaller mall of ~18-24 units shows a curated subset per seed.
+
+/** Programs every mall has when a unit suits them: the gun shop, clothes, a pharmacy, a café (food counters are their own family). */
+export const MALL_ALWAYS: readonly MallProgram[] = ['guns', 'clothing', 'pharmacy', 'cafe'];
+/**
+ * The rotating catalogue in its ring order (interleaved big / small, so a window of consecutive entries mixes unit sizes). A mall
+ * walks it from a seeded start (mallRotation): early entries are featured, the tail only when units are left.
+ */
+export const MALL_ROTATION: readonly MallProgram[] = ['electronics', 'jewelry', 'books', 'phone', 'sports', 'beauty', 'hardware', 'optical', 'toys', 'music',
+  'home', 'florist', 'shoes', 'pet', 'outdoors', 'luggage', 'arcade', 'clinic', 'grocery', 'department'];
+/** Programs of the deep anchor units, in their base order (mallAnchorOrder rotates it per mall). */
+export const MALL_ANCHOR_PROGRAMS: readonly MallProgram[] = ['department', 'grocery', 'home', 'sports', 'outdoors', 'hardware', 'electronics'];
+/** The last assignMallPrograms call's rotation (QA / tests / lanes/SHOPS.done): the order walked and the programs it placed. */
+export const MALL_ASSIGN_STATS: {last: {rotation: MallProgram[]; featured: MallProgram[]} | null} = {last: null};
+
+/** The mall's rotation order: the ring from a seeded start, adjacent pairs swapped at random (deterministic per rng). */
+export function mallRotation(rng: Rng): MallProgram[] {
+  const n = MALL_ROTATION.length, off = rng.int(0, n - 1);
+  const out = [...MALL_ROTATION.slice(off), ...MALL_ROTATION.slice(0, off)];
+  for (let k = 0; k + 1 < n; k += 2) if (rng.chance(0.5)) [out[k], out[k + 1]] = [out[k + 1], out[k]];
+  return out;
+}
+/** The anchors' order for this mall: department or grocery first (alternating by seed), the others shuffled after. */
+export function mallAnchorOrder(rng: Rng): MallProgram[] {
+  const first: MallProgram[] = rng.chance(0.5) ? ['department', 'grocery'] : ['grocery', 'department'];
+  return [...first, ...rng.shuffle(MALL_ANCHOR_PROGRAMS.filter(p => !first.includes(p)))];
+}
+
+/**
+ * A lot family for a unit that has none (synthetic fixtures; GEN's generator always sets MallShop.lot): from its size / proportions,
+ * the family whose shape it reads as.
+ */
+export function inferLot(s: MallShop, area: number): MallLotId {
+  const w = s.width, d = s.depth;
+  if (area < KIOSK_MAX.area || d < KIOSK_MAX.depth) return 'kiosk-cell';
+  if (area >= 240 && d >= 12) return 'anchor-deep';
+  if (w >= 1.6 * d && d <= 8) return 'wide-showroom';
+  if (d >= 1.6 * w && w <= 6.5) return 'narrow-boutique';
+  if (area <= 60) return 'compact-square';
+  if (area >= 140) return 'end-unit';
+  return 'standard-line';
+}
+
 export interface AssignOpts {
   /** Force the food-court ring (1-based); default seeded. */
   foodRing?: number;
+  /**
+   * Task mall-playtest-revision-20261031 (lane SHOPS): force programs onto shop ids (tests / QA: e.g. a second gun shop). Forced
+   * units are taken first; everything else is assigned as usual.
+   */
+  force?: Readonly<Record<string, MallProgram>>;
 }
 
 /**
@@ -400,96 +453,110 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
     const d = MALL_PROGRAMS[p], s = shops[i];
     return area[i] >= d.min.area && s.depth >= d.min.depth - 1e-6 && s.width >= d.min.width - 1e-6;
   };
-  // 1. kiosks: units too small for a real store
-  for (const i of free()) if (area[i] < KIOSK_MAX.area || shops[i].depth < KIOSK_MAX.depth) take(i, small(i), 'kiosk');
+  // 0. forced programs (tests / QA)
+  for (const i of free()) {
+    const p = opts.force?.[shops[i].id];
+    if (p) take(i, p, MALL_PROGRAMS[p].units.includes('store') ? 'store' : MALL_PROGRAMS[p].units[0]);
+  }
+  // Task mall-playtest-revision-20261031 (lane SHOPS, D02 / D04 — user: "we need more varied shop size ... a bakery shouldn't be that
+  // big ... still using all the stores we have and of course we'll randomly swap them in"). Programs follow the unit's LOT FAMILY
+  // (gen/mall/lots.ts, lane GEN: MallShop.lot; a lot-less unit — synthetic fixtures — gets one inferred from its size: inferLot) and
+  // a seeded CATALOGUE ROTATION: a few programs every mall has (MALL_ALWAYS), the rest in a per-mall order (mallRotation) — a small
+  // mall shows a curated subset, the next seed another. Every pick: the family suits it (lotSuits), the program's own minimum size
+  // fits, and the best free unit wins by family typicality x floor bias x size match.
+  const lotOf = (i: number): MallLotFamily | undefined => mallLot(shops[i].lot ?? inferLot(shops[i], area[i]));
+  const suits = (i: number, p: MallProgram) => lotSuits(shops[i].lot ?? inferLot(shops[i], area[i]), p) && fits(i, p);
+  const floorIdx = (i: number) => (ringCount <= 1 ? 0 : Math.max(0, Math.min(5, Math.round((ring[i] - 1) * 5 / (ringCount - 1)))));
+  /** How typical p is for the unit's family (its `programs` order). */
+  const typical = (i: number, p: MallProgram) => { const f = lotOf(i); if (!f) return 1; const k = f.programs.indexOf(p); return k < 0 ? 0.5 : 1 / (1 + 0.2 * k); };
+  const score = (i: number, p: MallProgram) => {
+    const d = MALL_PROGRAMS[p];
+    return typical(i, p) * d.rings[floorIdx(i)] * (1 / (1 + Math.abs(area[i] - d.min.area * 1.8) / (d.min.area + 20))) * (0.85 + 0.3 * rng.next());
+  };
+  const bestUnit = (p: MallProgram, cands: number[]): number | undefined => {
+    let b: number | undefined, bs = -1;
+    for (const i of cands) { const v = score(i, p); if (v > bs) { bs = v; b = i; } }
+    return b;
+  };
+  const isShape = (i: number, shape: MallLotFamily['shape']) => lotOf(i)?.shape === shape;
+  // 1. kiosk cells: kiosks (a lot-less unit too small for a store may be a small concession, as before)
+  for (const i of free()) if (isShape(i, 'cell')) take(i, shops[i].lot ? 'kiosk' : small(i), 'kiosk');
   function small(i: number): MallProgram {
-    // small units: phone / jewellery / optical / florist / beauty / luggage concessions if they fit, else a generic kiosk
     const opts2 = (['phone', 'jewelry', 'optical', 'florist', 'beauty', 'luggage'] as MallProgram[]).filter(p => fits(i, p) && (count.get(p) ?? 0) < cap(p));
     return opts2.length && rng.chance(0.5) ? rng.pick(opts2) : 'kiosk';
   }
-  // 2. the food-court ring: its mid-size units become food counters (cuisines rotate)
-  const foodRing = opts.foodRing ?? (ringCount >= 2 ? (rng.chance(0.55) ? 1 : rng.chance(0.55) ? 2 : ringCount) : 1);
-  const ringFree = free().filter(i => ring[i] === foodRing);
-  const ringUnits = ringFree.length;
-  // the food ring's smaller units (a 15-90 m² counter; on a ring of big units, its smaller ~60 %: deep units get in-unit dining)
-  const sizes = ringFree.map(i => area[i]).sort((a, b) => a - b);
-  const foodMax = Math.max(FOOD_MAX_AREA, sizes[Math.min(sizes.length - 1, Math.floor(sizes.length * 0.6))] ?? 0);
-  const foodUnits = ringFree.filter(i => area[i] <= foodMax && fits(i, 'food-court'));
-  // at most ~60 % of the ring's units sell food (the rest stay real stores: a pharmacy / grocer often sits by a food court); the
-  // smallest suitable units become the counters (a food-court counter is a 15-90 m² unit, its seating is the common food hall)
-  const nFood = Math.min(foodUnits.length, Math.max(3, Math.round(ringUnits * 0.6)));
-  const bySize = foodUnits.slice().sort((a, b) => area[a] - area[b] || a - b);
-  for (const i of bySize.slice(0, nFood)) take(i, 'food-court', 'food');
-  // 3. anchors: the distinctly big units — at least ANCHOR_MIN and 1.4x the mall's median unit (GEN's ordinary units are already
-  // 130-240 m²: an anchor is a 24-30 m wide double unit) — department first, then grocery / home / sports / outdoors / hardware /
-  // electronics
-  const sorted = area.slice().sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-  const anchorArea = Math.max(ANCHOR_MIN.area, median * 1.4);
-  const isAnchorSize = (i: number) => area[i] >= anchorArea && shops[i].depth >= ANCHOR_MIN.depth;
-  const anchorCands = free().filter(isAnchorSize).sort((a, b) => area[b] - area[a] || a - b);
-  const anchorPlan: MallProgram[] = ['department', 'grocery', ...rng.shuffle(['home', 'sports', 'outdoors', 'hardware', 'electronics', 'department'] as MallProgram[])];
-  const usedAnchorRings = new Set<number>();
-  for (const p of anchorPlan) {
-    if ((count.get(p) ?? 0) >= cap(p)) continue;
-    const c = anchorCands.filter(i => prog[i] === undefined && fits(i, p) && !usedAnchorRings.has(ring[i]))
-      .sort((a, b) => MALL_PROGRAMS[p].rings[ring[b] - 1] * area[b] - MALL_PROGRAMS[p].rings[ring[a] - 1] * area[a] || a - b)[0];
-    if (c === undefined) continue;
-    take(c, p, 'anchor');
-    usedAnchorRings.add(ring[c]);
-    if (usedAnchorRings.size >= Math.max(2, Math.ceil(ringCount / 2))) break;
+  // 2. food counters: cuisines (their seating is the common food court); with three or more, the biggest is a café stall (menu
+  // rotates: coffee / donut / bakery / juice). The sit-down café with its bistro tables is MALL_ALWAYS' (a shop unit, step 6).
+  const counters = free().filter(i => isShape(i, 'counter')).sort((a, b) => area[a] - area[b] || a - b);
+  if (counters.length >= 3 && suits(counters[counters.length - 1], 'cafe')) take(counters.pop()!, 'cafe', 'food');
+  for (const i of counters) take(i, suits(i, 'food-court') ? 'food-court' : 'cafe', 'food');
+  // 3. anchors: the deep anchor units take the big programs in the mall's seeded anchor order (department / grocery first on most
+  // seeds), each once
+  const anchorOrder = mallAnchorOrder(rng);
+  for (const i of free().filter(q => isShape(q, 'deep')).sort((a, b) => area[b] - area[a] || a - b)) {
+    const p = anchorOrder.find(q => suits(i, q) && (count.get(q) ?? 0) === 0);
+    if (p) take(i, p, 'anchor');
   }
-  // 4. service rooms: one per ring (two on the busiest), the smallest non-kiosk units; roles rotate (security on the lowest ring)
+  // 4. service rooms: mall security (+ one rotating role in a mall of 22+ units) in the smallest units whose family allows one
   const roles: number[] = [];
-  for (let r = 1; r <= ringCount; r++) {
-    const c = free().filter(i => ring[i] === r).sort((a, b) => area[a] - area[b] || a - b);
-    const n = r === 1 && c.length >= 9 ? 2 : c.length >= 4 ? 1 : 0;
-    for (let k = 0; k < n; k++) { take(c[k], 'service', 'service'); roles.push(c[k]); }
-  }
-  // 5. vacant units: ~8-12 % (upper rings more)
-  const vac = free();
-  const nVac = Math.round(vac.length * rng.range(0.08, 0.12));
-  for (let k = 0; k < nVac; k++) {
-    const c = free();
+  const nService = shops.length >= 22 ? 2 : shops.length >= 6 ? 1 : 0;
+  for (let k = 0; k < nService; k++) {
+    const c = free().filter(i => (lotOf(i)?.service ?? true) && !isShape(i, 'cell') && !isShape(i, 'counter')).sort((a, b) => area[a] - area[b] || a - b);
     if (!c.length) break;
-    const w = c.map(i => [i, 0.6 + 0.3 * ring[i] + (area[i] < 30 ? 0.4 : 0)] as [number, number]);
+    take(c[0], 'service', 'service');
+    roles.push(c[0]);
+  }
+  // 5. vacant units: ~5-9 % of what is left, in families that may stand empty (corridor wings / upper floors more, the atrium less)
+  const nVac = Math.round(free().length * rng.range(0.05, 0.09));
+  for (let k = 0; k < nVac; k++) {
+    const c = free().filter(i => lotOf(i)?.vacant ?? true);
+    if (!c.length) break;
+    const w = c.map(i => [i, (0.6 + 0.3 * ring[i]) * (shops[i].zone === 'atrium' ? 0.4 : shops[i].zone === 'corridor' || shops[i].zone === 'end' ? 1.3 : 1)] as [number, number]);
     take(rng.weighted(w), 'vacant', 'vacant');
   }
-  // 6. the required core on the best-fitting units (then guns / outdoors: rare-ish, 1 each + a seeded second)
-  const core: MallProgram[] = ['pharmacy', 'electronics', 'hardware', 'clothing', 'clothing', 'grocery', 'guns', 'outdoors', 'clinic', 'phone', 'shoes',
-    'books', 'toys', 'sports', 'jewelry', 'home', 'beauty', 'music', 'pet', 'arcade', 'cafe'];
-  if (rng.chance(0.35)) core.push('guns');
-  if (rng.chance(0.4)) core.push('outdoors');
-  for (const p of core) {
-    const d = MALL_PROGRAMS[p];
-    if ((count.get(p) ?? 0) >= cap(p)) continue;
-    if (p !== 'clothing' && p !== 'guns' && p !== 'outdoors' && (count.get(p) ?? 0) >= Math.max(1, d.count[0])) continue;
-    const c = free().filter(i => fits(i, p));
-    if (!c.length) continue;
-    // prefer ring bias x a modest size match (the smallest unit that comfortably fits keeps the big ones for big programs)
-    const score = (i: number) => d.rings[ring[i] - 1] * (1 / (1 + Math.abs(area[i] - d.min.area * 1.8) / (d.min.area + 20))) * (0.85 + 0.3 * rng.next());
-    const best = c.map(i => [i, score(i)] as [number, number]).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
-    take(best, p, unitFor(best, p));
+  // 6. what every mall has: a gun shop (a second one in a big mall, 25 %), clothing (a second, 50 %), a pharmacy, a café
+  const always: MallProgram[] = [...MALL_ALWAYS];
+  if (shops.length >= 18 && rng.chance(0.25)) always.push('guns');
+  if (free().length >= 14 && rng.chance(0.5)) always.push('clothing');
+  for (const p of always) {
+    if ((count.get(p) ?? 0) >= cap(p) || (p === 'cafe' && shops.some((_q, j) => prog[j] === 'cafe' && !isShape(j, 'counter')))) continue;
+    const i = bestUnit(p, free().filter(q => suits(q, p)));
+    if (i !== undefined) take(i, p, unitFor(i, p));
   }
-  function unitFor(i: number, p: MallProgram): MallUnitKind {
-    const d = MALL_PROGRAMS[p];
-    if (d.units.includes('anchor') && isAnchorSize(i)) return 'anchor';
-    return d.units.includes('store') ? 'store' : d.units[0];
+  // 7. the rotation: every rotating program once, in the mall's seeded order, while units suit it; then the rest of the units by
+  // weighted picks (repeat-penalised) among the programs their family suits
+  const rotation = mallRotation(rng);
+  MALL_ASSIGN_STATS.last = {rotation, featured: []};
+  for (const p of rotation) {
+    if (!free().length) break;
+    if ((count.get(p) ?? 0) > 0 || cap(p) <= 0) continue;
+    const i = bestUnit(p, free().filter(q => suits(q, p)));
+    if (i === undefined) continue;
+    take(i, p, unitFor(i, p));
+    MALL_ASSIGN_STATS.last.featured.push(p);
   }
-  // 7. fill: weighted picks with a strong repeat penalty and ring bias
-  const fillable = (Object.values(MALL_PROGRAMS) as MallProgramDef[]).filter(d => d.weight > 0);
+  const fillable = (Object.values(MALL_PROGRAMS) as MallProgramDef[]).filter(d => d.weight > 0 || d.id === 'guns' || d.id === 'department' || d.id === 'grocery');
   for (const i of free()) {
-    let opts3 = fillable.filter(d => fits(i, d.id) && (count.get(d.id) ?? 0) < cap(d.id))
-      .map(d => [d.id, d.weight * d.rings[ring[i] - 1] * Math.pow(0.3, count.get(d.id) ?? 0)] as [MallProgram, number]).filter(o => o[1] > 0);
-    // every fitting program at its cap: still a real store (repeat-penalised), never a run of vacant units
-    if (!opts3.length) opts3 = fillable.filter(d => fits(i, d.id)).map(d => [d.id, d.weight * d.rings[ring[i] - 1] * Math.pow(0.3, count.get(d.id) ?? 0)] as [MallProgram, number]).filter(o => o[1] > 0);
+    const w = (d: MallProgramDef) => (d.weight || 0.3) * typical(i, d.id) * d.rings[floorIdx(i)] * Math.pow(0.3, count.get(d.id) ?? 0);
+    let opts3 = fillable.filter(d => suits(i, d.id) && (count.get(d.id) ?? 0) < cap(d.id)).map(d => [d.id, w(d)] as [MallProgram, number]).filter(o => o[1] > 0);
+    if (!opts3.length) opts3 = fillable.filter(d => suits(i, d.id) && d.id !== 'guns').map(d => [d.id, w(d)] as [MallProgram, number]).filter(o => o[1] > 0);
     if (!opts3.length) { take(i, area[i] < 30 ? 'kiosk' : 'vacant', area[i] < 30 ? 'kiosk' : 'vacant'); continue; }
     const p = rng.weighted(opts3);
     take(i, p, unitFor(i, p));
   }
+  function unitFor(i: number, p: MallProgram): MallUnitKind {
+    const d = MALL_PROGRAMS[p], f = lotOf(i);
+    if (p === 'food-court') return 'food';
+    if (d.units.includes('anchor') && (f?.shape === 'deep' || (f?.shape === 'end' && (p === 'department' || p === 'grocery')))) return 'anchor';
+    if (p === 'cafe' && f?.shape === 'counter') return 'food';
+    return d.units.includes('store') ? 'store' : d.units[0];
+  }
+  void opts.foodRing;
   // 8. fits: brand, purposes, finish, sign, shutter, entry; Area purpose / label
   const usedBrands = new Set<string>();
   const roleIdx = new Map<number, number>(roles.map((i, k) => [i, k]));
   let cuisineK = rng.int(0, FOOD_CUISINES.length - 1), cafeK = rng.int(0, CAFE_MENUS.length - 1), kioskK = rng.int(0, 50);
+  const roleOff = rng.int(0, SERVICE_ROLES.length - 2); // (lane SHOPS, mall revision: the second service room's role rotates)
   for (let i = 0; i < shops.length; i++) {
     const s = shops[i], p = prog[i]!, k = kind[i]!, d = MALL_PROGRAMS[p];
     let purpose = d.purpose, backPurpose: string | undefined = d.back, recipe: MallRecipe = d.recipe, cuisine: string | undefined, brand: string;
@@ -499,7 +566,8 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
       backPurpose = 'mall-food-back';
       brand = pickBrand(rng, FOOD_BRANDS[cuisine] ?? [cuisine], usedBrands);
     } else if (p === 'service') {
-      const role = SERVICE_ROLES[(roleIdx.get(i) ?? 0) % SERVICE_ROLES.length];
+      const ri = roleIdx.get(i) ?? 0;
+      const role = SERVICE_ROLES[ri === 0 ? 0 : 1 + ((ri - 1 + roleOff) % (SERVICE_ROLES.length - 1))];
       purpose = role.purpose; recipe = role.recipe; brand = role.brand; backPurpose = undefined;
     } else if (p === 'kiosk') {
       brand = d.brands[kioskK++ % d.brands.length];
@@ -524,10 +592,19 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
     // entry span along the FRONTAGE (its own length: piers / partial frontages are shorter than the unit)
     const fw = s.frontage.side === 'N' || s.frontage.side === 'S' ? Math.abs(s.frontage.x1 - s.frontage.x0) : Math.abs(s.frontage.z1 - s.frontage.z0);
     const W = fw > 0.5 ? fw : s.width;
-    const ew = Math.min(W, Math.max(2.4, Math.min(4.0, W * (k === 'anchor' ? 0.5 : 0.4))));
-    const e0 = front === 'open' ? 0 : Math.max(0, Math.min(W - ew, rng.chance(0.5) ? (W - ew) / 2 : rng.chance(0.5) ? 0.5 : W - ew - 0.5));
-    const entry: [number, number] = front === 'open' ? [0, W] : [r2(e0), r2(e0 + ew)];
-    const fit: MallShopFit = {program: p, kind: k, brand, purpose, ...(backPurpose ? {backPurpose} : {}), recipe, ...(cuisine ? {cuisine} : {}), finish, sign, front, shutter, entry};
+    // (lane SHOPS, mall revision: a 'wide' lot front — showroom / end unit / anchor — opens half its frontage like an anchor)
+    const wide = k === 'anchor' || mallLot(s.lot)?.front === 'wide';
+    const span = (len: number): [number, number] => {
+      const ew = Math.min(len, Math.max(2.4, Math.min(wide ? 6.0 : 4.0, len * (wide ? 0.5 : 0.4))));
+      const e0 = front === 'open' ? 0 : Math.max(0, Math.min(len - ew, rng.chance(0.5) ? (len - ew) / 2 : rng.chance(0.5) ? 0.5 : len - ew - 0.5));
+      return front === 'open' ? [0, len] : [r2(e0), r2(e0 + ew)];
+    };
+    const entry = span(W);
+    // corner units (lot 'corner-double'): the second shopfront's own entry span (MallShop.frontages[1])
+    const f2 = s.frontages?.[1];
+    const entry2 = f2 ? span(f2.side === 'N' || f2.side === 'S' ? Math.abs(f2.x1 - f2.x0) : Math.abs(f2.z1 - f2.z0)) : undefined;
+    const fit: MallShopFit = {program: p, kind: k, brand, purpose, ...(backPurpose ? {backPurpose} : {}), recipe, ...(cuisine ? {cuisine} : {}), finish, sign, front, shutter, entry,
+      ...(entry2 ? {entry2} : {})};
     out[i] = fit;
     s.program = p; s.kind = k; s.brand = brand;
     (s as MallShop & {fit?: MallShopFit}).fit = fit;
