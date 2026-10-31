@@ -286,7 +286,8 @@ describe('office level (one continuous layout)', () => {
         floors++;
       }
       expect(l.zombies.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
-      expect(l.zombies.every(z => z.archetype === 'zombie' || z.archetype === 'ratdog')).toBe(true);
+      // task track1-siren-blightbelly-20261031 (lane SPAWN): + the Blightbelly and the (Office-only) Siren families
+      expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie'))).toBe(true);
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
       pickups += l.pickups.length;
       for (const p of l.pickups) {
@@ -465,12 +466,19 @@ describe('the Subway is unchanged', () => {
   // extended stations (grid size, translated coordinates, extension cells / areas / doors): only seeds with extensions differ.
   const LIVE: Record<string, string> = {...HEAD, '42:rifle': '8aa759c8', '42:pistol': '28d8c06f'};
   it('generateStation output for existing seeds is byte-identical to HEAD (core view; live = + track extensions)', () => {
+    let replaced = 0;
     for (const [key, fp] of Object.entries(HEAD)) {
       const [seed, sw] = key.split(':');
       const l = generateStation(Number(seed), {startWeapon: sw as 'rifle' | 'pistol'});
       // lane AMMO (knife-melee-20261030): the ammo item ids became caliber ids (ammo_rifle -> ammo_556, ...); with the old names
       // mapped back, the generated station must still be byte-identical (floor boxes / weapon-find companions are unchanged)
-      const legacy = (q: StationLayout) => ({...q, pickups: q.pickups.map(p => ({...p, itemId: LEGACY_NAME[p.itemId] ?? p.itemId}))});
+      // Task track1-siren-blightbelly-20261031 (lane SPAWN): the new families REPLACE zombie slots (same roll, rat/dogs identical);
+      // mapped back to 'zombie' the station is still byte-identical (enemy-spawn-parity.test.ts holds the invariant pins too)
+      const legacy = (q: StationLayout) => ({
+        ...q,
+        zombies: q.zombies.map(z => (z.archetype === 'blightbelly' || z.archetype === 'siren' ? (replaced++, {...z, archetype: 'zombie' as const}) : z)),
+        pickups: q.pickups.map(p => ({...p, itemId: LEGACY_NAME[p.itemId] ?? p.itemId})),
+      });
       expect(fingerprint(legacy(coreView(l))), `${key} core`).toBe(fp);
       const live = fingerprint(legacy(l));
       if (live !== LIVE[key]) process.stdout.write(`[office-gen] LIVE ${key}: ${live}\n`);
@@ -479,5 +487,6 @@ describe('the Subway is unchanged', () => {
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
       expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);
     }
+    expect(replaced, 'the corpus exercises the family mapping').toBeGreaterThan(0);
   });
 });

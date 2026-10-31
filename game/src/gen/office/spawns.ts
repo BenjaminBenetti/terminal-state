@@ -22,7 +22,7 @@ import {FIND_COPY_THRESHOLDS, FIND_MAX_PER_WEAPON} from '../weaponFinds'; // Tas
 import type {Area, PickupPlacement, StationLayout} from '../stationTypes';
 // Task enemy-spawn-tables-20261030 (lane SPAWN): the enemy controls are the Office's spawn profile (contexts street / floor / roof).
 import {
-  areaCap, areaSpawnWeight, reportSpawnCandidates, rollZombieTypes, spawnContext, spawnProfile,
+  areaCap, areaSpawnWeight, markSpawnContext, reportSpawnCandidates, rollZombieTypes, spawnContext, spawnProfile,
   type SpawnContextId, type SpawnProfile,
 } from '../../ai/spawnTables';
 import {OFFICE_FLOORS} from './frame';
@@ -75,6 +75,7 @@ const NO_SPAWN_TYPES = new Set(['office-stair', 'stair-core', 'office-elevator']
  */
 export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: SpawnField, levels: readonly number[], profile: SpawnProfile, context: SpawnContextId): number {
   const ctx = spawnContext(profile, context), pl = ctx.placement;
+  const first = layout.zombies.length; // Task track1-siren-blightbelly-20261031 (lane SPAWN): context tag below (no RNG, no data change)
   const count = rng.int(ctx.count[0], ctx.count[1]);
   const types = rollZombieTypes(rng, count, profile.zombieTypes);
   const areaW = new Map<number, number>();
@@ -120,6 +121,7 @@ export function placeOfficeEnemies(layout: StationLayout, rng: Rng, field: Spawn
       }
     }
   }
+  markSpawnContext(layout, first, context); // lane SPAWN (task track1): family eligibility reads the spawn's context
   return placed;
 }
 

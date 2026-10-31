@@ -5,7 +5,8 @@ MP3 encoding) of a raw clip generated with the user's local Last Line Sound Lab 
 (Stable Audio 3 Small-SFX, stabilityai/stable-audio-3-small-sfx via stabilityai/stable-audio-3-optimized,
 w8a8 profile). Per-file sources, prompts, seeds and hashes: ../derivatives/audio-iteration05.json
 (iteration-06 breaking cues i06-*.mp3: ../derivatives/audio-iteration06.json; player gas coughs cough-*.mp3:
-../derivatives/audio-cough.json).
+../derivatives/audio-cough.json; Siren hum / scream and Blightbelly burst / gas hiss t1-*.mp3:
+../derivatives/audio-track1.json).
 
 Powered by Stability AI.
 
