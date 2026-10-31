@@ -216,7 +216,7 @@ Diagnosis, `reference/tasks/track2-playtest-revision-20261031/DIAGNOSIS-BASELINE
 Now:
 - **Exact annex tables:** `LootSpec.exact` rolls exactly, with no scarcity cut, re-theme or limb conversion; a level's slot
   scaling still applies. It is set on the annex keys only, so every core table is unchanged.
-- **Supply:** `ANNEX_SUPPLY` holders, never empty, one ordinary supply each (water, tins, a dressing, a cell, a flare, scrap). One
+- **Supply:** `ANNEX_SUPPLY` holders, never empty, one ordinary supply each (water, a soda, tins, noodles, chocolate, a dressing, now and then a first-aid kit, a cell, a flare; no ammo, no crafting materials). One
   per 170 m² of annex, 6–12, chosen by door-hop DEPTH BAND:
   - half in the entry third, 30 % in the middle, the rest deep;
   - at most 2 per room;
@@ -242,7 +242,8 @@ Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 
   nothing.
 
 **Enemies** (`SERVICE_CONTEXT`):
-- **Count:** `SERVICE_ZONE_BUDGET` 5–7 per annex (was 3–5; about 90 % of the core's density).
+- **Count:** `SERVICE_ZONE_BUDGET` 5–6 per annex (was 3–5; about 80 % of the core's density; the hi fits the compact Mall's
+  per-storey ambient cap of 6, as the registry contract requires).
 - **Spread:** across entry / middle / deep door-hop bands (equal quotas; the remainder to the middle).
 - **Earshot:** cells beyond `SERVICE_EARSHOT_M` (18 m, rifle earshot through rock) of every core floor cell are preferred.
   Before, station gunfire pulled a hatch annex's near enemies out before the player arrived.

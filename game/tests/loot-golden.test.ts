@@ -88,6 +88,11 @@
 //     pickOver), one storage piece per bare annex room, the service budget / bands, the station-surface invitation art. Re-pinned:
 //     subwayHolders 63f11838 -> fe63d0aa, subwayPickups 5ae2b384 -> 0467b2d6, officeHolders f07d82e0 -> 0c130bc9, officePickups
 //     92a1d2ed -> 5fa98572. Every core view, the reserve-off proof, the Office roof find and the gear roll / placement are unchanged.
+// 12. Same task, after merging main ce83b48 (mall revision) — LIVE holders only. CAUSE: CI found crafting materials in the annex
+//     supply / scraps rows (a Subway must never hold a material: craft-materials / office-openables), so they are removed; the supply
+//     depth bands are thirds of the annex ROOMS' door-hop range (was: its holders'), so "entry" means the first rooms walked into.
+//     Re-pinned: subwayHolders fe63d0aa -> 5c456623, officeHolders 0c130bc9 -> 7e08e006 (holder and lot counts unchanged); every
+//     pickup hash, core view, the reserve-off proof, the roof find and the gear roll / placement are unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -110,10 +115,10 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: 'fe63d0aa', // stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
+  subwayHolders: '5c456623', // stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
   subwayPickups: '0467b2d6', // stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
-  officeHolders: '0c130bc9', // stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
+  officeHolders: '7e08e006', // stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
   officePickups: '5fa98572', // stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */

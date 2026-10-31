@@ -383,7 +383,8 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
     const a = rollOn(holderRng(seed, index, kind), index * 1000, r => (t.exact ? rollItems(r, kind, t, areaType, profile) : scarce(rollItems(r, kind, t, areaType, profile), s1, kind, areaType, t.rows, profile)), exposed);
     const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
     const b = rollOn(r2, index * 1000 + 500, r => scarce(rollRows(r, kind, inside, profile), s2, kind, areaType, inside.rows, profile), parts);
-    return storageFill(seed, index, kind, areaType, surfaces, [...a, ...b].map(l => tagPart(l, surfaces)), inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+    const ab = [...a, ...b].map(l => tagPart(l, surfaces));
+    return t.exact ? ab : storageFill(seed, index, kind, areaType, surfaces, ab, inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
   }
   const r = holderRng(seed, index, kind);
   const raw = rollItems(r, kind, t, areaType, profile);
@@ -391,7 +392,9 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
   const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
   const lots: Lot[] = [];
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
-  return storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+  // (playtest revision: an exact annex table is the annex's whole budget — the mall's storage fill never tops it up, so a searched-clean
+  // holder stays clean and the annex economy is the same on every level)
+  return t.exact ? lots : storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
 }
 
 /** Lot id offset of storage-fill lots (index * 1000 + FILL_ID_BASE + (compartment + 1) * 3 + k: clear of the roll's own ids). */

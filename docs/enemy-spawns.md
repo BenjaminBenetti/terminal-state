@@ -202,7 +202,7 @@ same family pool and zombie types, same tier.
 | Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |
 |---|---|
 | Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service`, `SPAWN_PROFILES.mall.contexts.service` (lane INTEG; at most one annex per mall) |
-| Count | `SERVICE_ZONE_BUDGET` = U{5..7} **per annex** (one draw per annex run), additive to the core contexts (playtest revision: was U{3..5}) |
+| Count | `SERVICE_ZONE_BUDGET` = U{5..6} **per annex** (one draw per annex run), additive to the core contexts (playtest revision: was U{3..5}) |
 | Area weights | `SERVICE_AREA_WEIGHTS`: annex rooms 1.4, corridors 1.0, closets 0.6 |
 | Caps | `SERVICE_CAPS`: passes 1 / 2; closets 1 |
 | Spacing / tries | 5 m (wider than the station's 4 m: dark and cramped) / 12 |
@@ -211,9 +211,11 @@ same family pool and zombie types, same tier.
 | Earshot (playtest revision) | cells beyond `SERVICE_EARSHOT_M` (18 m) of every core station floor cell preferred (rifle earshot through rock; all cells when none is) |
 | Accept | `{min: null, max: 'count'}` — never regenerates a level (extensions never decide a retry) |
 
-- **Why 5–7 (playtest revision, was 3–5).**
+- **Why 5–6 (playtest revision, was 3–5).**
   - **Density:** an annex is ~25 % of the Subway's walkable-exploration baseline (~1840 m² of 7371 m²). The station's 22–32 spawns
-    over that baseline would put ~6.8 into an annex at the same density, so 5–7 is ~90 % of it.
+    over that baseline would put ~6.8 into an annex at the same density, so 5–6 is ~80 % of it.
+  - **Bound:** the registry contract requires every context's count hi to fit the level's `budgets.ambient.perStorey`; the compact
+    Mall's is 6 (mall revision D07), so the shared per-annex hi is 6.
   - **What the user saw:** at 3–5 (60 %), an ordinary room-by-room route met 0–2 of an annex's enemies. They sat in closed rooms,
     and station gunfire (heard by straight-line distance through rock) pulled a hatch annex's near ones out. The user's two fresh
     runs found none.
@@ -233,7 +235,7 @@ same family pool and zombie types, same tier.
   1.12 annexes per level (3 with none, 15 with one, 6 with two; 6 of the 27 entered by a service hatch), 3.85 placed per annex,
   4.3 service spawns per level (max 10) on top of the station's ~27; Office 10 seeds (3, 7922, 15841, 23760, 31679, 39598, 11, 222,
   3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex run placed fewer than its count.
-  (Before the playtest revision's 5–7 budget.)
+  (Before the playtest revision's 5–6 budget.)
 - **Playtest-revision measurement** (fresh New Game path; Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
   5150 / 9090):
   - **Placed:** 5–7 per annex (Subway levels +7 / +12 / +14 with 1 / 2 annexes, Office +10 / +11, Mall +5 to +7). All at the

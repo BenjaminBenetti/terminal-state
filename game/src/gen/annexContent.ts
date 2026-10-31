@@ -336,7 +336,8 @@ function pickOver(layout: StationLayout, n: ServiceAnnex, from: number, stashes:
   const rest = list.slice(intact).reverse().filter(i => rollsPurposeTable(layout.props[i].kind));
   for (const i of list.slice(intact)) if (!rollsPurposeTable(layout.props[i].kind)) layout.props[i].purpose = ANNEX_PICKED_KEY;
   const k = Math.min(rest.length, Math.max(C.supply[0], Math.min(C.supply[1], Math.round(n.areaM2 / C.m2PerSupply))));
-  const ds = rest.map(depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
+  // (the bands are thirds of the ANNEX's door-hop range — its rooms', not its holders' — so "entry" means the first rooms walked into)
+  const ds = n.areas.map(id => layout.areas[id].depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
   const bandOf = (i: number) => (dMax <= dMin ? 0 : Math.min(2, Math.floor((3 * (depth(i) - dMin)) / (dMax - dMin + 1e-9))));
   const want = [Math.ceil(k * C.bands[0]), Math.ceil(k * C.bands[1]), 0];
   want[2] = Math.max(0, k - want[0] - want[1]);
@@ -601,8 +602,9 @@ export const SERVICE_EARSHOT_M = 18;
 
 /**
  * Playtest revision: "is (x, z) within `r` m (plan distance) of a CORE station floor cell" — the core cells (any storey, non-extension
- * area, walkable) around the annex's box, bucketed into 2 m tiles; a tile counts when its centre is within r + its half-diagonal
- * (conservative). Cheap: one pass over the box per annex.
+ * area, walkable) around the annex's box, bucketed into 2 m tiles; one exact distance transform of that tile grid, and a point counts
+ * when its tile's centre lies within r + a tile diagonal of a core tile's centre (conservative: a "quiet" point is > r m from every
+ * core cell). One pass over the box per annex; O(1) per query.
  */
 function coreEarshot(layout: StationLayout, areas: readonly Area[], r: number): (x: number, z: number) => boolean {
   const g = layout.grid, pad = Math.ceil(r / CELL) + 2, B = 4;
@@ -616,15 +618,34 @@ function coreEarshot(layout: StationLayout, areas: readonly Area[], r: number): 
     if (ar < 0 || isExtensionArea(layout.areas[ar]) || !G.walkable(x, y)) continue;
     occ[Math.floor((y - y0) / B) * bw + Math.floor((x - x0) / B)] = 1;
   }
-  const tile = B * CELL, reach = r + tile * Math.SQRT1_2, rb = Math.ceil(reach / tile);
+  const d2 = sqDistanceTransform(occ, bw, bh), tile = B * CELL, reach = r / tile + Math.SQRT2;
   return (wx, wz) => {
     const bx = Math.floor((wx / CELL - x0) / B), by = Math.floor((wz / CELL - y0) / B);
-    for (let j = by - rb; j <= by + rb; j++) for (let i = bx - rb; i <= bx + rb; i++) {
-      if (i < 0 || j < 0 || i >= bw || j >= bh || !occ[j * bw + i]) continue;
-      if (Math.hypot((x0 + (i + 0.5) * B) * CELL - wx, (y0 + (j + 0.5) * B) * CELL - wz) <= reach) return true;
-    }
-    return false;
+    return bx < 0 || by < 0 || bx >= bw || by >= bh || d2[by * bw + bx] <= reach * reach;
   };
+}
+
+/** Squared Euclidean distance (cell units²) from every cell of a w x h 0/1 mask to the nearest set cell (Felzenszwalb–Huttenlocher). */
+function sqDistanceTransform(mask: Uint8Array, w: number, h: number): Float64Array {
+  const INF = 1e20, out = new Float64Array(w * h), n = Math.max(w, h);
+  const f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+  for (let i = 0; i < w * h; i++) out[i] = mask[i] ? 0 : INF;
+  const pass = (len: number, at: (q: number) => number) => {
+    for (let q = 0; q < len; q++) f[q] = out[at(q)];
+    let k = 0;
+    v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+    for (let q = 1; q < len; q++) {
+      let s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) { k--; s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+      k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
+    }
+    k = 0;
+    for (let q = 0; q < len; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+    for (let q = 0; q < len; q++) out[at(q)] = d[q];
+  };
+  for (let y = 0; y < h; y++) pass(w, q => y * w + q);
+  for (let x = 0; x < w; x++) pass(h, q => q * w + x);
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

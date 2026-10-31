@@ -486,9 +486,12 @@ describe('the Subway is unchanged', () => {
   // seed 1 (no annex) and every CORE / reserve-off HEAD fingerprint are unchanged (asserted below).
   // (playtest revision, primary: annex loot classes / room storage / service bands + the station-surface invitation art on the
   // merged ROOMS + ART lanes; stage before: 7 bcabf2ef / 5c7e39d9, 42 868cb75f / 7a6f4ce4, 1234 8136ba0b / 522bba4a; CORE unchanged)
+  // (same task, after merging main ce83b48: the service budget 5-6 (the registry contract's per-storey bound: the compact mall's is
+  // 6), the O(1) earshot test, supply bands over the annex rooms' depth range, no crafting materials in the annex tables; stage
+  // before: 7 b96c5d08 / ef6fdaba, 1234 8351ab93 / 901c3c60; 42 drew the same; CORE unchanged)
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'b96c5d08', '7:pistol': 'ef6fdaba',
-    '42:rifle': '62c4187f', '42:pistol': 'da0b79d6', '1234:rifle': '8351ab93', '1234:pistol': '901c3c60',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '3275dde8', '7:pistol': 'c0e8c846',
+    '42:rifle': '62c4187f', '42:pistol': 'da0b79d6', '1234:rifle': '67a308e5', '1234:pistol': 'fcda47b2',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

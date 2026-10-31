@@ -276,11 +276,15 @@ reproduce the earlier pins byte for byte).
   - **Now:** the annex keys are `LootSpec.exact` tables (no second cut). Per annex (`gen/annexContent.ts` `pickOver` /
     `ANNEX_CONTENT.loot`):
     - **Supply:** `ANNEX_SUPPLY_KEY` (`'annex-supply'`) holders, one per 170 m², 6–12. Half in the entry third (door-hop depth),
-      30 % in the middle, the rest deep; ≤ 2 per room; only holders that roll their room purpose's table.
+      30 % in the middle, the rest deep (thirds of the annex rooms' door-hop range); ≤ 2 per room; only holders that roll their
+      room purpose's table.
       `ANNEX_SUPPLY` = water 1, cola 0.45, beans 0.85, noodles 0.4, chocolate 0.4, bandage 0.75, medkit 0.12, battery 0.6, flare
-      0.35, electrical parts 0.3, scrap metal 0.3; one lot, never empty, no ammo.
-    - **Scraps:** `ANNEX_SCRAPS_KEY` (`'annex-scraps'`) for 12 % of the other picked holders (≤ 6), one leftover each.
+      0.35; one lot, never empty, no ammo and no crafting materials (those stay in the server racks / cupboards).
+    - **Scraps:** `ANNEX_SCRAPS_KEY` (`'annex-scraps'`) for 12 % of the other picked holders (≤ 6), one leftover each (water 1,
+      beans 0.6, chips 0.5, bandage 0.5, battery 0.4).
     - **Searched clean:** `ANNEX_PICKED` (exact, `empty: 1`) for the rest.
+    - **Exact means the whole budget:** the mall's storage fill (`LootTables.storageFill`) never tops up an exact annex table, so a
+      searched-clean holder stays clean and the annex economy is the same on every level.
     - **Room storage:** every annex room / closet the dressing left without a holder gets one storage piece (open shelving first).
 - **Floor program** `ANNEX_FLOOR` (once per annex, the Subway program's shape): a 5.56 box (30) n 0–1, a 12-gauge box (8) n 0–1;
   medkit n 0–1 and bandage n 1–2, each kept with `FLOOR_ECONOMY.medKeep` (0.2); a battery (chance 0.6) and a flare (0.45). Landing:

@@ -672,14 +672,16 @@ export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], e
  * yields ~60-100 non-ammo supplies; an annex is ~1/4 of its walkable area, so ~15-25 non-ammo finds per annex is the core's density.
  */
 export const ANNEX_SUPPLY_KEY = 'annex-supply';
+// (no crafting materials: they belong to the server racks / cupboards only — items/lootTables.ts HOLDER_ALLOW, craft-materials /
+// office-openables tests: "the Subway never holds a material")
 export const ANNEX_SUPPLY_ROWS: ItemRows = [
   ['water', 1], ['cola', 0.45], ['beans', 0.85], ['noodles', 0.4], ['chocolate', 0.4], ['bandage', 0.75], ['medkit', 0.12],
-  ['battery', 0.6], ['flare', 0.35], ['electrical_parts', 0.3], ['scrap_metal', 0.3],
+  ['battery', 0.6], ['flare', 0.35],
 ];
 export const ANNEX_SUPPLY: LootSpec = {items: ANNEX_SUPPLY_ROWS, lots: [1, 1], empty: 0, exact: true};
 /** Playtest revision: loot key of an annex SCRAPS holder — one leftover item in otherwise picked-over storage (a capped few per annex). */
 export const ANNEX_SCRAPS_KEY = 'annex-scraps';
-export const ANNEX_SCRAPS_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.5], ['bandage', 0.5], ['battery', 0.4], ['scrap_metal', 0.3], ['electrical_parts', 0.2]];
+export const ANNEX_SCRAPS_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.5], ['bandage', 0.5], ['battery', 0.4]];
 export const ANNEX_SCRAPS: LootSpec = {items: ANNEX_SCRAPS_ROWS, lots: [1, 1], empty: 0, exact: true};
 
 /**
