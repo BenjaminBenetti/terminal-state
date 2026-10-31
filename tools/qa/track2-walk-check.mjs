@@ -12,13 +12,13 @@ import path from 'node:path';
 import {launchBrowser, withBrowserLock} from './browser-env.mjs';
 import {serveStatic} from './static-server.mjs';
 
-const code = process.argv[2] ?? '00000RU'; // seed 1002: a tunnel annex ~30 m of walking from the start
+const code = process.argv[2] ?? '00000SZ'; // seed 1043: one tunnel annex ~27 m of walking from the start, the smallest grid of the candidates
 const out = path.resolve(process.argv[3] ?? 'qa-artifacts/track2-walk');
 fs.mkdirSync(out, {recursive: true});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const anon = () => { try { const s = fs.readFileSync('/sys/fs/cgroup/memory.stat', 'utf8'); const g = k => Number(new RegExp(`^${k} (\\d+)$`, 'm').exec(s)?.[1] ?? 0); return g('anon') + g('shmem'); } catch { return 0; } };
 const report = {code, started: new Date().toISOString(), steps: [], consoleErrors: [], peakGiB: 0, guard: false};
-const step = (name, data) => { report.steps.push({name, ...data}); console.log(name, JSON.stringify(data).slice(0, 900)); };
+const step = (name, data) => { const gib = +(anon() / 1024 ** 3).toFixed(2); report.steps.push({name, gib, ...data}); console.log(name, `${gib} GiB`, JSON.stringify(data).slice(0, 900)); };
 
 await withBrowserLock(async () => {
   const {server, port} = await serveStatic(path.resolve('dist/game'), {prefix: '/'});
@@ -29,7 +29,7 @@ await withBrowserLock(async () => {
     const page = await browser.newPage();
     page.on('console', m => { if (m.type() === 'error' && report.consoleErrors.length < 20) report.consoleErrors.push(m.text().slice(0, 300)); });
     page.on('pageerror', e => { if (report.consoleErrors.length < 20) report.consoleErrors.push(`pageerror: ${String(e).slice(0, 300)}`); });
-    await page.setViewport({width: 960, height: 540});
+    await page.setViewport({width: 800, height: 450});
     const t0 = Date.now();
     await page.goto(`http://127.0.0.1:${port}/index.html?qa=1&seed=${code}&quality=low&warmup=off`);
     let ready = false;
@@ -41,9 +41,11 @@ await withBrowserLock(async () => {
     const waitGame = async (sec, capS = 240) => { const c0 = await clock(), r0 = Date.now(); while ((await clock()) - c0 < sec && Date.now() - r0 < capS * 1000) await sleep(600); return +((await clock()) - c0).toFixed(2); };
     const waitFor = async (fn, capS, arg) => { const r0 = Date.now(); while (Date.now() - r0 < capS * 1000) { if (await ev(fn, arg)) return true; await sleep(700); } return false; };
     const shot = n => page.screenshot({path: path.join(out, `${code}-${n}.png`)});
+    step('title', {});
     await page.click('#btn-start');
     await waitFor(() => window.__LL.state() === 'playing', 180);
     await waitGame(1, 180);
+    step('playing', {});
 
     // The level's extensions (gen/trackExt): prefer an annex reached through a tunnel, nearest to the start.
     const info = await ev(() => {
