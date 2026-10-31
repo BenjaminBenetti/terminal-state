@@ -741,9 +741,9 @@
    "output": {
     "file": "game/public/assets/models/mall-retail-gondola.glb",
     "url": "assets/models/mall-retail-gondola.glb",
-    "sha256": "ffcb48f31c7bb03bf8b20721e52078199e86f6807abffda00f8680547da9a05d",
-    "bytes": 219552,
-    "triangles": 3152,
+    "sha256": "08b2b35a44e2aabf2a568b564dbfab78f51f25ab6a872ce787849b7af5f8b1d7",
+    "bytes": 253776,
+    "triangles": 3512,
     "dims": [
      1.9496,
      1.4,
@@ -775,7 +775,7 @@
     "jpegQuality": 85
    },
    "budget": 260000,
-   "transform": "rotateY(180deg) * uniform scale to 1.25 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes, sizeM, sizeAxis",
+   "transform": "rotateY(180deg) * uniform scale to 1.25 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes, sizeM, sizeAxis, dedupe",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -829,7 +829,302 @@
     "k": 1.559716978475893,
     "removed": null,
     "glass": null,
-    "ghosts": null
+    "ghosts": null,
+    "coplanarDedupe": [
+     {
+      "axis": 2,
+      "facing": -1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        0.25,
+        -0.1311
+       ],
+       "max": [
+        0.98,
+        1.25,
+        -0.1291
+       ]
+      },
+      "planes": [
+       {
+        "at": -0.13198,
+        "front": 166,
+        "clipped": 28,
+        "dropped": 0,
+        "opposite": 12,
+        "oppositeDropped": 12,
+        "oppositeClipped": 2,
+        "overlapM2": 0.0265
+       }
+      ],
+      "trianglesIn": 178,
+      "frontKept": 138,
+      "frontClipped": 28,
+      "frontDropped": 0,
+      "oppositeDropped": 12,
+      "piecesAdded": 345,
+      "overlapRemovedM2": 0.0265,
+      "clipOpposite": true,
+      "oppositeClipped": 2,
+      "minAxisCos": 0.98
+     },
+     {
+      "axis": 2,
+      "facing": -1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        -0.01,
+        -0.0867
+       ],
+       "max": [
+        -0.93,
+        1.41,
+        -0.0847
+       ]
+      },
+      "planes": [
+       {
+        "at": -0.08574,
+        "front": 8,
+        "clipped": 3,
+        "dropped": 0,
+        "opposite": 6,
+        "oppositeDropped": 6,
+        "oppositeClipped": 5,
+        "overlapM2": 0.00495
+       }
+      ],
+      "trianglesIn": 20,
+      "frontKept": 5,
+      "frontClipped": 3,
+      "frontDropped": 0,
+      "oppositeDropped": 6,
+      "piecesAdded": 17,
+      "overlapRemovedM2": 0.00495,
+      "clipOpposite": true,
+      "oppositeClipped": 5,
+      "minAxisCos": 0.98
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        0.597,
+        -0.14
+       ],
+       "max": [
+        0.98,
+        0.6005,
+        0.245
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.59844,
+        "front": 10,
+        "clipped": 6,
+        "dropped": 0,
+        "opposite": 4,
+        "oppositeDropped": 4,
+        "oppositeClipped": 2,
+        "overlapM2": 0.34238
+       }
+      ],
+      "trianglesIn": 14,
+      "frontKept": 4,
+      "frontClipped": 6,
+      "frontDropped": 0,
+      "oppositeDropped": 4,
+      "piecesAdded": 17,
+      "overlapRemovedM2": 0.34238,
+      "clipOpposite": true,
+      "oppositeClipped": 2,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.597,
+       0.6005
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        0.7765,
+        -0.14
+       ],
+       "max": [
+        0.98,
+        0.7805,
+        0.245
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.778,
+        "front": 4,
+        "clipped": 0,
+        "dropped": 0,
+        "opposite": 2,
+        "oppositeDropped": 2,
+        "oppositeClipped": 1,
+        "overlapM2": 0.16838
+       }
+      ],
+      "trianglesIn": 6,
+      "frontKept": 4,
+      "frontClipped": 0,
+      "frontDropped": 0,
+      "oppositeDropped": 2,
+      "piecesAdded": 1,
+      "overlapRemovedM2": 0.16838,
+      "clipOpposite": true,
+      "oppositeClipped": 1,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.7765,
+       0.7805
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": -1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        0.7905,
+        -0.14
+       ],
+       "max": [
+        0.98,
+        0.795,
+        0.245
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.7921,
+        "front": 11,
+        "clipped": 2,
+        "dropped": 2,
+        "opposite": 3,
+        "oppositeDropped": 3,
+        "oppositeClipped": 3,
+        "overlapM2": 0.51314
+       }
+      ],
+      "trianglesIn": 14,
+      "frontKept": 7,
+      "frontClipped": 2,
+      "frontDropped": 2,
+      "oppositeDropped": 3,
+      "piecesAdded": 38,
+      "overlapRemovedM2": 0.51314,
+      "clipOpposite": true,
+      "oppositeClipped": 3,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.7905,
+       0.795
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        0.9505,
+        -0.14
+       ],
+       "max": [
+        0.98,
+        0.956,
+        0.245
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.95192,
+        "front": 13,
+        "clipped": 4,
+        "dropped": 5,
+        "opposite": 7,
+        "oppositeDropped": 7,
+        "oppositeClipped": 1,
+        "overlapM2": 1.5336
+       }
+      ],
+      "trianglesIn": 20,
+      "frontKept": 4,
+      "frontClipped": 4,
+      "frontDropped": 5,
+      "oppositeDropped": 7,
+      "piecesAdded": 9,
+      "overlapRemovedM2": 1.5336,
+      "clipOpposite": true,
+      "oppositeClipped": 1,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.9505,
+       0.956
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.98,
+        1.1565,
+        -0.14
+       ],
+       "max": [
+        0.98,
+        1.1625,
+        0.245
+       ]
+      },
+      "planes": [
+       {
+        "at": 1.15804,
+        "front": 19,
+        "clipped": 11,
+        "dropped": 3,
+        "opposite": 2,
+        "oppositeDropped": 2,
+        "oppositeClipped": 2,
+        "overlapM2": 0.51806
+       }
+      ],
+      "trianglesIn": 21,
+      "frontKept": 5,
+      "frontClipped": 11,
+      "frontDropped": 3,
+      "oppositeDropped": 2,
+      "piecesAdded": 33,
+      "overlapRemovedM2": 0.51806,
+      "clipOpposite": true,
+      "oppositeClipped": 2,
+      "minAxisCos": 0.98,
+      "slab": [
+       1.1565,
+       1.1625
+      ]
+     }
+    ]
    }
   },
   {
@@ -956,9 +1251,9 @@
    "output": {
     "file": "game/public/assets/models/mall-retail-wall-bay.glb",
     "url": "assets/models/mall-retail-wall-bay.glb",
-    "sha256": "5682a1d5dea45055713b5de407bc4eaeb5ee7ac57ef9b3dec811ebd3aba4486e",
-    "bytes": 210904,
-    "triangles": 2492,
+    "sha256": "3646e29a5d35bf866bb7cbdabc0de4ce2f544bd1a854ab1189ccfd513e924be4",
+    "bytes": 217504,
+    "triangles": 2365,
     "dims": [
      1.2,
      2.1998,
@@ -990,7 +1285,7 @@
     "jpegQuality": 85
    },
    "budget": 420000,
-   "transform": "rotateY(180deg) * uniform scale to 1.2 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes",
+   "transform": "rotateY(180deg) * uniform scale to 1.2 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes, dedupe",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -1044,7 +1339,48 @@
     "k": 1,
     "removed": null,
     "glass": null,
-    "ghosts": null
+    "ghosts": null,
+    "coplanarDedupe": [
+     {
+      "axis": 2,
+      "facing": -1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.61,
+        -0.01,
+        0.2347
+       ],
+       "max": [
+        0.61,
+        2.21,
+        0.2367
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.23498,
+        "front": 211,
+        "clipped": 11,
+        "dropped": 94,
+        "opposite": 130,
+        "oppositeDropped": 130,
+        "oppositeClipped": 0,
+        "overlapM2": 1.05252
+       }
+      ],
+      "trianglesIn": 341,
+      "frontKept": 106,
+      "frontClipped": 11,
+      "frontDropped": 94,
+      "oppositeDropped": 130,
+      "piecesAdded": 108,
+      "overlapRemovedM2": 1.05252,
+      "clipOpposite": true,
+      "oppositeClipped": 0,
+      "minAxisCos": 0.98
+     }
+    ]
    }
   },
   {
@@ -5052,9 +5388,9 @@
    "output": {
     "file": "game/public/assets/models/mall-multideck-open-cooler.glb",
     "url": "assets/models/mall-multideck-open-cooler.glb",
-    "sha256": "bc16fab843b1d493a56054980f7e3c063a87b241516ce0925a6b19f5cd0913c3",
-    "bytes": 259620,
-    "triangles": 2595,
+    "sha256": "4985f9a33488b39f0826cad7a91ead07549b7cd39ce2809f19677745dd5d76c5",
+    "bytes": 270372,
+    "triangles": 2533,
     "dims": [
      1.9,
      1.9777,
@@ -5086,7 +5422,7 @@
     "jpegQuality": 85
    },
    "budget": 420000,
-   "transform": "rotateY(180deg) * uniform scale to 1.9 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes",
+   "transform": "rotateY(180deg) * uniform scale to 1.9 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, scaleAxes, panelRebuild, snap, dedupe, panelGhosts",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -5111,8 +5447,8 @@
       1024
      ],
      "mime": "image/jpeg",
-     "bytes": 96600,
-     "sha256": "04665561bc6086aceee8c22e264b9af1ba4e76ce086515d68d1185caba7c62f9"
+     "bytes": 96256,
+     "sha256": "fd986f8d685b8bc1b80972648749ce432f4f7261501f1412dfa282ce72553daf"
     },
     {
      "slot": "metallicRoughness",
@@ -5121,8 +5457,8 @@
       256
      ],
      "mime": "image/jpeg",
-     "bytes": 12743,
-     "sha256": "ab52fcd9727ec6dc9762b1439bd34c83718e98e6049bd06c5fd7cde804f2f57d"
+     "bytes": 12706,
+     "sha256": "7559efc5b39596bbcc74ba37a9026b8b63068029d4edc67796c5eb28348b129a"
     },
     {
      "slot": "normal",
@@ -5131,15 +5467,405 @@
       256
      ],
      "mime": "image/jpeg",
-     "bytes": 1720,
-     "sha256": "d7b6c083c4085e3214589c079ac1ef7a31fa8ebb3253e8e5eea8aa8fe67ecb26"
+     "bytes": 1799,
+     "sha256": "d65430fc09e8332e77736fdeb41f108c90f0c9187ee3604ced8c31c5d0d8a37a"
     }
    ],
    "edits": {
     "k": 1,
     "removed": null,
     "glass": null,
-    "ghosts": null
+    "ghosts": null,
+    "panelRebuild": [
+     {
+      "axis": 2,
+      "at": 0.3405,
+      "tol": 0.004,
+      "facing": -1,
+      "rect": [
+       -0.918,
+       0.918,
+       0.538,
+       1.866
+      ],
+      "uv": {
+       "centre": [
+        0.52464,
+        0.60894
+       ],
+       "perMetre": 0.0125
+      },
+      "removed": {
+       "tris": 56,
+       "facingPlus": 44,
+       "facingMinus": 12,
+       "areaM2": 3.87981
+      },
+      "added": 2,
+      "addedAreaM2": 2.43821
+     }
+    ],
+    "snapped": [
+     {
+      "box": {
+       "min": [
+        0.02,
+        1.25,
+        -0.29
+       ],
+       "max": [
+        0.04,
+        1.32,
+        -0.27
+       ]
+      },
+      "axis": 1,
+      "value": 1.1952,
+      "verts": 2
+     }
+    ],
+    "coplanarDedupe": [
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        0.462,
+        -0.4
+       ],
+       "max": [
+        0.95,
+        0.482,
+        0.35
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.46856,
+        "front": 17,
+        "clipped": 7,
+        "dropped": 3,
+        "opposite": 23,
+        "oppositeDropped": 23,
+        "oppositeClipped": 4,
+        "overlapM2": 3.7363
+       }
+      ],
+      "trianglesIn": 40,
+      "frontKept": 7,
+      "frontClipped": 7,
+      "frontDropped": 3,
+      "oppositeDropped": 23,
+      "piecesAdded": 68,
+      "overlapRemovedM2": 3.7363,
+      "clipOpposite": true,
+      "oppositeClipped": 4,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.462,
+       0.482
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        0.7205,
+        -0.3
+       ],
+       "max": [
+        0.95,
+        0.745,
+        0.35
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.72396,
+        "front": 28,
+        "clipped": 6,
+        "dropped": 16,
+        "opposite": 23,
+        "oppositeDropped": 23,
+        "oppositeClipped": 1,
+        "overlapM2": 3.57981
+       }
+      ],
+      "trianglesIn": 51,
+      "frontKept": 6,
+      "frontClipped": 6,
+      "frontDropped": 16,
+      "oppositeDropped": 23,
+      "piecesAdded": 33,
+      "overlapRemovedM2": 3.57981,
+      "clipOpposite": true,
+      "oppositeClipped": 1,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.7205,
+       0.745
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        0.947,
+        -0.3
+       ],
+       "max": [
+        0.95,
+        0.962,
+        0.35
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.95223,
+        "front": 3,
+        "clipped": 0,
+        "dropped": 0,
+        "opposite": 7,
+        "oppositeDropped": 4,
+        "oppositeClipped": 4,
+        "overlapM2": 0.29409
+       }
+      ],
+      "trianglesIn": 10,
+      "frontKept": 3,
+      "frontClipped": 0,
+      "frontDropped": 0,
+      "oppositeDropped": 4,
+      "piecesAdded": 8,
+      "overlapRemovedM2": 0.29409,
+      "clipOpposite": true,
+      "oppositeClipped": 4,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.947,
+       0.962
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        0.963,
+        -0.3
+       ],
+       "max": [
+        0.95,
+        0.98,
+        0.35
+       ]
+      },
+      "planes": [
+       {
+        "at": 0.96967,
+        "front": 28,
+        "clipped": 5,
+        "dropped": 16,
+        "opposite": 24,
+        "oppositeDropped": 24,
+        "oppositeClipped": 0,
+        "overlapM2": 3.47033
+       }
+      ],
+      "trianglesIn": 52,
+      "frontKept": 7,
+      "frontClipped": 5,
+      "frontDropped": 16,
+      "oppositeDropped": 24,
+      "piecesAdded": 33,
+      "overlapRemovedM2": 3.47033,
+      "clipOpposite": true,
+      "oppositeClipped": 0,
+      "minAxisCos": 0.98,
+      "slab": [
+       0.963,
+       0.98
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        1.1855,
+        -0.3
+       ],
+       "max": [
+        0.95,
+        1.215,
+        0.35
+       ]
+      },
+      "planes": [
+       {
+        "at": 1.18903,
+        "front": 29,
+        "clipped": 7,
+        "dropped": 15,
+        "opposite": 26,
+        "oppositeDropped": 26,
+        "oppositeClipped": 1,
+        "overlapM2": 3.81078
+       }
+      ],
+      "trianglesIn": 55,
+      "frontKept": 7,
+      "frontClipped": 7,
+      "frontDropped": 15,
+      "oppositeDropped": 26,
+      "piecesAdded": 37,
+      "overlapRemovedM2": 3.81078,
+      "clipOpposite": true,
+      "oppositeClipped": 1,
+      "minAxisCos": 0.98,
+      "slab": [
+       1.1855,
+       1.215
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        1.48,
+        -0.3
+       ],
+       "max": [
+        0.95,
+        1.5,
+        0.35
+       ]
+      },
+      "planes": [
+       {
+        "at": 1.48512,
+        "front": 29,
+        "clipped": 7,
+        "dropped": 16,
+        "opposite": 23,
+        "oppositeDropped": 23,
+        "oppositeClipped": 0,
+        "overlapM2": 3.45955
+       }
+      ],
+      "trianglesIn": 52,
+      "frontKept": 6,
+      "frontClipped": 7,
+      "frontDropped": 16,
+      "oppositeDropped": 23,
+      "piecesAdded": 38,
+      "overlapRemovedM2": 3.45955,
+      "clipOpposite": true,
+      "oppositeClipped": 0,
+      "minAxisCos": 0.98,
+      "slab": [
+       1.48,
+       1.5
+      ]
+     },
+     {
+      "axis": 1,
+      "facing": 1,
+      "keep": "larger",
+      "box": {
+       "min": [
+        -0.95,
+        1.925,
+        -0.42
+       ],
+       "max": [
+        0.95,
+        1.945,
+        0.47
+       ]
+      },
+      "planes": [
+       {
+        "at": 1.93372,
+        "front": 2,
+        "clipped": 0,
+        "dropped": 0,
+        "opposite": 4,
+        "oppositeDropped": 4,
+        "oppositeClipped": 0,
+        "overlapM2": 1.59037
+       }
+      ],
+      "trianglesIn": 27,
+      "frontKept": 2,
+      "frontClipped": 0,
+      "frontDropped": 0,
+      "oppositeDropped": 4,
+      "piecesAdded": 0,
+      "overlapRemovedM2": 1.59037,
+      "clipOpposite": true,
+      "oppositeClipped": 0,
+      "minAxisCos": 0.98,
+      "slab": [
+       1.925,
+       1.945
+      ]
+     }
+    ],
+    "panelGhosts": [
+     {
+      "axis": 2,
+      "at": 0.468,
+      "tol": 0.0085,
+      "facing": 1,
+      "region": {
+       "min": [
+        -0.41,
+        0.52,
+        0.455
+       ],
+       "max": [
+        0.41,
+        1.88,
+        0.49
+       ]
+      },
+      "all": true,
+      "clone": {
+       "along": 0,
+       "by": 0.45
+      },
+      "faces": 14,
+      "masked": 175567,
+      "candidates": 53584,
+      "ghostTexels": 53584,
+      "median": [
+       221,
+       221,
+       218
+      ],
+      "sources": 109568,
+      "cloned": 53584,
+      "baseColor": "2048x2048",
+      "metallicRoughness": "2048x2048",
+      "normal": "2048x2048"
+     }
+    ]
    }
   },
   {

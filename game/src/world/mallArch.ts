@@ -21,6 +21,9 @@
 //    brands from layout.mall.shops, aged), Level labels on the void fascias; hanging banners in the void; square downlight cans
 //    for the ring fixtures (the baked light set is unchanged); escalator truss soffits under the open escalators.
 // Draw cost is bounded: merged per material and per storey (and per 48 m chunk for the long balustrade runs); one sign atlas.
+// 3. Task mall-round2-20261031 (lane ARCH, M09): lane GEN's LOCKED street exits (layout.mall.exits) — the opening cut out of the
+//    hall-end wall face (remapFaces), the chained glazed doors / vestibule / the city + Office fog beyond (buildStreetExits ->
+//    world/mallStreetExit.ts), 4 aperture-gated meshes per exit, the exterior kept under the roof deck (exits(): capY).
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
@@ -45,7 +48,7 @@ import {cutOfficeShaftDoors} from './officeProps'; // task mall-playtest-revisio
 import {GLASS_RIG} from './elevator';
 import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
 import {adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06)
-import {buildStreetExit, cutExitOpenings, streetExitSpecs, type StreetExitSpec, type StreetExitStats} from './mallStreetExit'; // task mall-round2 (M09)
+import {buildStreetExit, cutExitOpenings, setStreetHaze, streetExitSpecs, streetExitTune, type StreetExitSpec, type StreetExitStats, type StreetExitTune} from './mallStreetExit'; // task mall-round2 (M09)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -425,7 +428,7 @@ interface SpaceInfo { space: MallSpace; ring: number; program?: MallProgram; sho
 /** Atrium statistics (QA / tests / render-cost report). */
 export interface AtriumStats {
   meshes: number; triangles: number; roofPanes: number; arches: number; balustradeM: number; balustradeRuns: number; columns: number;
-  signs: number; blades: number; labels: number; banners: number; downlights: number; shaftPanels: number; soffits: number; droppedFaces: number;
+  signs: number; blades: number; labels: number; banners: number; downlights: number; shaftPanels: number; shaftSpandrels: number; soffits: number; droppedFaces: number;
   /** Shopfront props drawn (lane SHOPS' collision-only glazing / closed shutters) and visual-only partial shutters. */
   glazing: number; shutters: number; partialShutters: number;
   /** Landmarks drawn (gen/mall/landmarks.ts): fountains and directory pylons. */
@@ -476,7 +479,7 @@ export class MallArch {
   /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
   ads: MallAd[] = [];
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, exits: 0, exitCost: [], ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, exits: 0, exitCost: [], ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -665,10 +668,11 @@ export class MallArch {
    * [] when the layout has none — every older fixture / seed without a suitable hall end).
    */
   exits(): StreetExitSpec[] {
+    // the exterior stays under the roof deck (buildRoof: topRingCeil + ROOF_BEAM): never seen through the atrium glass
     return (this.exitCache ??= streetExitSpecs(this.layout, (lv, x, z) => {
       const g = this.gridOf(lv), cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
       return cx >= 0 && cy >= 0 && cx < this.W && cy < this.H ? cellCeil(g, cy * this.W + cx) : NaN;
-    }));
+    }, this.topRingCeil + ROOF_BEAM - 0.1));
   }
   private exitCache: StreetExitSpec[] | null = null;
 
@@ -1199,6 +1203,7 @@ export class MallArch {
           this.stats.shaftPanels++;
           frame.beam(new THREE.Vector3(sd.a[0], levelsY[k], sd.a[1]), new THREE.Vector3(sd.b[0], levelsY[k], sd.b[1]), 0.14, 0.18);
         }
+        this.shaftSpandrels(frame, sd, y0, yTop);
       }
       for (const [x, z] of [[s.x0, s.z0], [s.x1, s.z0], [s.x0, s.z1], [s.x1, s.z1]]) frame.box(x, (y0 + yTop) / 2, z, 0.2, yTop - y0, 0.2);
       // machine head housing on top (the machine bed, sheaves, rails, pit and ropes inside are the car rig's: world/elevator.ts)
@@ -1209,6 +1214,47 @@ export class MallArch {
     const all = this.allLevels;
     add(glass.mesh(this.dress.glassRail, 'mall-shaft-glass', {levels: all}));
     add(frame.mesh(this.dress.darkSteel, 'mall-shaft-frame', {levels: all}));
+  }
+
+  /**
+   * Task mall-round2-20261031 (lane PERF, M05 — the slab-oracle case on GEN's offset-arcade plan): a glazed shaft side drops the
+   * shaft's wall faces (the glass replaces them), so where the column just outside the glass is CLOSED (a floor slab between a
+   * storey's ceiling and the next floor, a wall) nothing was drawn behind the glass: a ray through the glass car entered the hollow
+   * slab and left it through back faces — one saw storey-2 fixtures through the slab edge (the level culler's slab / occlusion rules
+   * rightly assume closed columns are bounded by drawn faces). Close it: an opaque spandrel (the frame's dark steel, one more part of
+   * the same mesh: no draw call) 3 cm behind the glass, facing into the shaft, over every closed height range of each outside cell.
+   */
+  private shaftSpandrels(frame: Mesher, sd: {a: [number, number]; b: [number, number]; n: [number, number]}, y0: number, yTop: number): void {
+    const dx = sd.b[0] - sd.a[0], dz = sd.b[1] - sd.a[1], len = Math.hypot(dx, dz);
+    const ux = dx / len, uz = dz / len, cells = Math.round(len / CELL);
+    const n = [-sd.n[0], 0, -sd.n[1]]; // facing into the shaft
+    const g0 = this.levels[0].grid;
+    for (let k = 0; k < cells; k++) {
+      const s0 = k * len / cells, s1 = (k + 1) * len / cells, sm = (s0 + s1) / 2;
+      const [cx, cy] = g0.cellOf(sd.a[0] + ux * sm + sd.n[0] * CELL / 2, sd.a[1] + uz * sm + sd.n[1] * CELL / 2);
+      if (cx < 0 || cy < 0 || cx >= g0.w || cy >= g0.h) continue;
+      const i = g0.idx(cx, cy);
+      // free bands of every storey in that column (a ramp sweeps its whole pitch), merged
+      const bands: [number, number][] = [];
+      for (const L of this.levels) {
+        const g = L.grid, c = g.cells[i];
+        if (c !== FLOOR && c !== VOID) continue;
+        const r = g.rampIdx[i];
+        bands.push(r >= 0 ? [Math.min(g.ramps[r].h0, g.ramps[r].h1), cellCeil(g, i)] : [g.floorOf(i), cellCeil(g, i)]);
+      }
+      bands.sort((p, q) => p[0] - q[0]);
+      let y = y0;
+      const closed: [number, number][] = [];
+      for (const [f, c] of bands) { if (f > y + 0.02) closed.push([y, Math.min(f, yTop)]); y = Math.max(y, c); if (y >= yTop) break; }
+      if (y < yTop - 0.02) closed.push([y, yTop]);
+      const off = 0.03, px = sd.n[0] * off, pz = sd.n[1] * off;
+      const ax = sd.a[0] + ux * s0 + px, az = sd.a[1] + uz * s0 + pz, bx = sd.a[0] + ux * s1 + px, bz = sd.a[1] + uz * s1 + pz;
+      for (const [ya, yb] of closed) {
+        if (yb - ya < 0.02) continue;
+        frame.quad([[ax, ya, az], [bx, ya, bz], [bx, yb, bz], [ax, yb, az]], n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+        this.stats.shaftSpandrels++;
+      }
+    }
   }
 
   /** Shopfront fascia signs, projecting blade signs and the Level labels on the void fascias (one atlas). */
@@ -1547,6 +1593,11 @@ export class MallArch {
     }
     this.stats.exits = this.stats.exitCost.length;
   }
+
+  /** QA (world/mallAtmosphere.ts mallExits): the street exits' look (uniform values only; world/mallStreetExit.ts STREET_U). */
+  streetExitTune(o: StreetExitTune = {}): Required<StreetExitTune> { return streetExitTune(o); }
+  /** The mall haze over the indoor part of the exits' view rays follows the scene fog (MallAtmosphere.apply, the QA fog tune). */
+  setStreetHaze(density: number, color: number): void { setStreetHaze(density, color); }
 
   /** Distance (m, 0..0.3) from an ad record back to the solid wall behind it on its storey grid (0: none found within 0.3 m). */
   private wallBehind(ad: MallAd): number {

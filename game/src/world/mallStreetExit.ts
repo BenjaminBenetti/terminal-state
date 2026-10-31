@@ -5,12 +5,15 @@
 // intact: gen/mall/*); this module RENDERS them. View only: no walkable outside, no Travel, no gas exposure (strictly visual).
 //
 // Per exit, in the exit's local frame (u along the opening, w outward from the hall-side wall plane, y above the street):
-//  1. FRAME (lit, opaque; one merged mesh): the aluminium / bronze storefront door set(s) — jambs, head, transom, mullions, leaf stiles
-//     and rails with kick plates — the reveal / vestibule pocket (floor mat + tile, side walls, soffit), the LOCK made legible: push
-//     bars with a heavy chain wrapped through them and a padlock, plywood boards over lower panes, a taped paper notice ("THIS EXIT IS
-//     LOCKED ... USE THE SUBWAY") and a "NO EXIT" plate on the glass, a dimly lit "EXIT CLOSED / DOORS LOCKED" box sign over the doors;
-//  2. GLASS (transparent, dirty, double-sided; one mesh): every pane exactly inside GEN's collider (visual = collision). It writes depth
-//     (like the roof glass: the screen-space interior haze stops at it) and draws after the exterior (renderOrder): far panes first;
+//  1. FRAME (lit, opaque; one merged mesh): two aluminium / bronze storefront door sets laid out from GEN's panes — the LOCKED inner set
+//     on the hall-side plane and the street set on the facade plane, smashed in long ago (frames + corner shards) — jambs, head,
+//     transom, mullions, leaf stiles and rails with kick plates; the vestibule pocket (floor tile + mat, side walls, soffit); the LOCK
+//     made legible: push bars with a heavy chain wrapped through each leaf pair and a padlock, a plywood board over a lower pane, a taped
+//     paper notice ("THIS EXIT IS LOCKED ... PLEASE USE THE SUBWAY") and a "NO EXIT" plate on the glass, a dimly lit "EXIT CLOSED /
+//     DOORS LOCKED" box sign over the doors;
+//  2. GLASS (transparent, dirty, double-sided; one mesh): the chained set's panes exactly inside GEN's collider (visual = collision) +
+//     the street set's shards. It writes depth (like the roof glass: the screen-space interior haze stops at it) and draws after the
+//     exterior (renderOrder): far panes first;
 //  3. STREET (unlit outdoor shading like the Office city: fake hemisphere + weak sun; one mesh): pavement slabs, curb, the road with
 //     faded lane markings, the far pavement, ruined facades (atlas variants, jagged broken tops, exposed slabs), a second row of taller
 //     silhouettes, wrecked cars, rubble, lamp posts, an entrance canopy; a backdrop box (back / sides / lid) painted with the roof's
@@ -76,6 +79,13 @@ export interface StreetExitSpec {
   hallCeil: number;
   /** Panes along the opening (lane GEN's MallStreetExit.panels: push-bar leaves, sidelights, the transom; world along coords). */
   panels: readonly {kind: 'door' | 'sidelight' | 'transom'; s0: number; s1: number; y0: number; y1: number}[];
+  /**
+   * Highest world y of the exterior (the mall's roof deck less a margin; Infinity = the view volume's top). Every interior eye is below
+   * the deck, so a ray leaving through the roof glazing is already climbing: exterior geometry kept below the deck can only ever be
+   * seen through the exit's opening — the premise of the culler's aperture gate (before this cap the facades / backdrop rising to
+   * streetY + 30 showed through the atrium glass from the platform: seed 4242, 24 px).
+   */
+  capY: number;
   seed: number;
 }
 
@@ -89,7 +99,7 @@ const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.
  * Lane GEN's exit records (layout.mall.exits, read loosely: nothing breaks before / without them) -> normalized specs.
  * `ceilAt(level, x, z)`: the clear ceiling of a storey cell (the hall in front of the opening).
  */
-export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number, x: number, z: number) => number): StreetExitSpec[] {
+export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number, x: number, z: number) => number, capY = Infinity): StreetExitSpec[] {
   const raw = ((layout.mall as {exits?: unknown[]} | undefined)?.exits ?? []) as Record<string, unknown>[];
   const out: StreetExitSpec[] = [];
   raw.forEach((r, k) => {
@@ -122,7 +132,7 @@ export function streetExitSpecs(layout: {mall?: unknown}, ceilAt: (level: number
     out.push({
       id: String(r.id ?? `X${k + 1}`), level, streetY, nx, nz, plane, s0, s1, y0, y1, collider, view: {...view}, vestibule,
       hallCeil: num(hall?.ceil, num(ceilAt(level, hx, hz), y1 + 0.6)), panels: panels.length ? panels : defaultPanels(s0, s1, y0, y1),
-      seed: num(r.seed, 7919 * (k + 1)) >>> 0,
+      capY, seed: num(r.seed, 7919 * (k + 1)) >>> 0,
     });
   });
   return out;
@@ -471,7 +481,9 @@ let cardMat: MeshBasicNodeMaterial | null = null;
  */
 export function streetFogCardMaterial(): MeshBasicNodeMaterial {
   if (cardMat) return cardMat;
-  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false});
+  // FrontSide: the cards face the hall (the eye is always inside) and the street layer faces up — three draws a transparent
+  // DoubleSide material twice (back then front faces): single-sided keeps the cards ONE draw
+  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: false, side: THREE.FrontSide, fog: false});
   m.name = 'mall-exit-fog';
   const ex = attribute('aExit', 'vec4') as AnyNode, card = attribute('aCard', 'vec2') as AnyNode;
   const dir = normalize(positionWorld.sub(cameraPosition) as AnyNode) as AnyNode;
@@ -487,12 +499,14 @@ export function streetFogCardMaterial(): MeshBasicNodeMaterial {
 let glassMat: MeshBasicNodeMaterial | null = null;
 /**
  * The doors' glass: unlit, dirty (smears, a grime band low down and round the edges, hand marks at push height), a faint murk tint,
- * grazing views denser; transparent, double-sided, DEPTH-WRITING (the interior haze stops at it, like the roof glass) — never a shadow
+ * grazing views denser; transparent, both faces in the geometry, DEPTH-WRITING (the interior haze stops at it, like the roof glass) — never a shadow
  * caster. uv = pane-local 0..1.
  */
 export function streetExitGlassMaterial(): MeshBasicNodeMaterial {
   if (glassMat) return glassMat;
-  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: true, side: THREE.DoubleSide, fog: false});
+  // FrontSide: every pane / shard carries both faces in the geometry (pane()), so the glass is ONE draw (three draws a transparent
+  // DoubleSide material twice)
+  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: true, side: THREE.FrontSide, fog: false});
   m.name = 'mall-exit-glass';
   const t = uv() as AnyNode;
   const P = positionWorld as AnyNode;
@@ -626,11 +640,20 @@ export interface StreetPlan {
   ground: {y: number; opacity: number};
 }
 
+/**
+ * The exterior never reaches lower than this under the street (m): lane GEN's view volume only guarantees that no lower storey /
+ * extension cell under it reaches above streetY - 0.3 (gen/mall/exits.ts EXIT.slab), so a backdrop dipping deeper could show inside
+ * a station room's band (seed 4242: 24 px seen from the platform before this bound).
+ */
+export const STREET_SLAB = 0.25;
+
 /** Lays out the street outside an exit inside its view volume (deterministic per seed). */
 export function planStreet(s: StreetExitSpec): StreetPlan {
   const f = exitFrame(s);
   const lb = localBox(f, s.view, s.streetY);
-  const vol = {u0: lb.u0, u1: lb.u1, w0: Math.max(lb.w0, 0), w1: lb.w1, y0: Math.max(lb.y0, -0.5), y1: lb.y1};
+  // (never below STREET_SLAB under the street: GEN only guarantees nothing of a lower storey reaches above streetY - 0.3 there)
+  // (and never above the mall's roof deck: StreetExitSpec.capY)
+  const vol = {u0: lb.u0, u1: lb.u1, w0: Math.max(lb.w0, 0), w1: lb.w1, y0: Math.max(lb.y0, -STREET_SLAB), y1: Math.min(lb.y1, (Number.isFinite(s.capY) ? s.capY : Infinity) - s.streetY)};
   const r = mulberry32(s.seed ^ 0x5eed);
   const B = Math.min(Math.max(s.vestibule, vol.w0), vol.w1 - 2);
   const D = vol.w1 - B; // depth of the volume beyond the building line (lane GEN: 12-30 m)
@@ -656,8 +679,8 @@ export function planStreet(s: StreetExitSpec): StreetPlan {
       if (bw < 3) break;
       const set = Math.min(r() * 1.4, Math.max(0, wMax - w0 - 1));
       const d = row === 1 ? 8 + r() * 6 : 10 + r() * 12;
-      const hMax = row === 1 ? 26 : 40;
-      const h = Math.min(yTop, (row === 1 ? 9 : 18) + r() * (hMax - (row === 1 ? 9 : 18)));
+      // (heights within the cap under the mall's roof deck: row 1 three- to six-storey blocks, row 2 near the cap)
+      const h = row === 1 ? Math.min(yTop, 7 + r() * Math.max(0, Math.min(yTop, 24) - 7)) : yTop * (0.8 + 0.2 * r());
       const collapsed = row === 1 && r() < 0.12;
       buildings.push({u0: u, u1: u + bw, w0: w0 + set, w1: Math.min(wMax, w0 + set + d), h: collapsed ? 3 + r() * 3 : h, kind: collapsed ? 'collapsed' : kinds[Math.floor(r() * 4)],
         shop: r() < 0.5 ? 'shopA' : 'shopB', seed: Math.floor(r() * 1e9), row});
@@ -698,7 +721,7 @@ export function planStreet(s: StreetExitSpec): StreetPlan {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Build
 
-export interface StreetExitStats { id: string; meshes: number; triangles: number; panes: number; buildings: number; cards: number }
+export interface StreetExitStats { id: string; meshes: number; triangles: number; panes: number; shards: number; buildings: number; cards: number }
 export interface StreetExitView { meshes: THREE.Mesh[]; stats: StreetExitStats; plan: StreetPlan; aperture: StreetExitAperture; frame: ExitFrame }
 
 const ALU: V3[] = [[0.56, 0.57, 0.56], [0.2, 0.18, 0.15]];
@@ -751,14 +774,35 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     const c: V3[] = facing < 0 ? [[u0, y0, w], [u1, y0, w], [u1, y1, w], [u0, y1, w]] : [[u1, y0, w], [u0, y0, w], [u0, y1, w], [u1, y1, w]];
     frame.quad(c, [0, 0, facing], atlasUv(cell, [[0, 0], [1, 0], [1, 1], [0, 1]]), {color: col, aGlow: [glow]});
   };
-  const pane = (acc: Acc, u0: number, u1: number, y0: number, y1: number, w: number) => {
+  let shards = 0;
+  /** A pane (both faces); `broken`: only jagged corner shards left in the frame (the smashed outer set), seeded. */
+  const pane = (acc: Acc, u0: number, u1: number, y0: number, y1: number, w: number, broken = false) => {
     if (u1 - u0 < 0.02 || y1 - y0 < 0.02) return;
     y0 += oy; y1 += oy;
-    const c: V3[] = [[u0, y0, w], [u1, y0, w], [u1, y1, w], [u0, y1, w]];
     const t: [number, number][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
-    acc.quad(c, [0, 0, -1], t);
-    acc.quad(c, [0, 0, 1], t);
-    panes++;
+    if (!broken) {
+      const c: V3[] = [[u0, y0, w], [u1, y0, w], [u1, y1, w], [u0, y1, w]];
+      acc.quad(c, [0, 0, -1], t);
+      acc.quad(c, [0, 0, 1], t);
+      panes++;
+      return;
+    }
+    // jagged shards left in two or three corners (triangles in the frame), the rest broken out
+    const W = u1 - u0, Hh = y1 - y0;
+    for (const [cu, cy, su, sy] of [[u0, y0, 1, 1], [u1, y0, -1, 1], [u1, y1, -1, -1], [u0, y1, 1, -1]] as const) {
+      if (r() < 0.35) continue;
+      const a = W * (0.18 + r() * 0.3), b = Hh * (0.12 + r() * 0.25);
+      const p: V3[] = [[cu, cy, w], [cu + su * a, cy, w], [cu, cy + sy * b, w]];
+      for (const n of [[0, 0, -1], [0, 0, 1]] as V3[]) {
+        const ax = p[1][0] - p[0][0], ay = p[1][1] - p[0][1], bx = p[2][0] - p[0][0], by = p[2][1] - p[0][1];
+        const flip = (ax * by - ay * bx) * n[2] < 0;
+        const q = flip ? [p[0], p[2], p[1]] : p, tq = flip ? [t[0], t[3], t[1]] : [t[0], t[1], t[3]];
+        const base = acc.count;
+        for (let k = 0; k < 3; k++) acc.vert(q[k], n, tq[k], {});
+        acc.idx.push(base, base + 1, base + 2);
+      }
+      shards++;
+    }
   };
   /**
    * One storefront door set at depth w (glass plane), laid out from GEN's panels: jambs + head round the opening, a mullion at every
@@ -776,7 +820,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
     const leafTop = low.length ? Math.max(...low.map(p => p.y1)) : H - HEAD;
     if (tr && leafTop < H - HEAD - 0.05) {
       fbox(-hs + J, hs - J, leafTop, Math.max(leafTop + 0.08, tr.y0 + 0.04), w - t, w + t, alu); // transom bar
-      pane(acc, -hs + J, hs - J, Math.max(leafTop + 0.08, tr.y0 + 0.04), H - HEAD, w);
+      pane(acc, -hs + J, hs - J, Math.max(leafTop + 0.08, tr.y0 + 0.04), H - HEAD, w, !hall && r() < 0.6);
     } else if (leafTop < H - HEAD - 0.01) fbox(-hs + J, hs - J, leafTop, H - HEAD, w - t, w + t, alu); // a deep head instead
     // mullions: before / after a sidelight, across a gap between panels, and from the jambs to a first / last panel that leaves room
     let prevEnd = -hs + J, prevKind = 'jamb';
@@ -794,7 +838,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
       if (p.kind === 'sidelight') {
         const a = p.u0 + (p.u0 > -hs + J + 1e-3 ? m : 0), b = p.u1 - (p.u1 < hs - J - 1e-3 ? m : 0);
         fbox(a, b, 0, 0.12, w - t, w + t, alu); // sill
-        pane(acc, a, b, 0.12, leafTop, w);
+        pane(acc, a, b, 0.12, leafTop, w, !hall && r() < 0.7);
         continue;
       }
       doors.push(p);
@@ -803,7 +847,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
       fbox(b - st, b, 0, leafTop, w - t * 0.7, w + t * 0.7, alu);
       fbox(a + st, b - st, leafTop - 0.09, leafTop, w - t * 0.7, w + t * 0.7, alu);
       fbox(a + st, b - st, 0, 0.26, w - t * 0.7, w + t * 0.7, kick); // kick plate / bottom rail
-      pane(acc, a + st, b - st, 0.26, leafTop - 0.09, w);
+      pane(acc, a + st, b - st, 0.26, leafTop - 0.09, w, !hall); // the street set's leaves: smashed in
       if (hall) {
         // push bar (panic bar) on the hall side with end brackets
         const pw = w - t * 0.7 - 0.07;
@@ -846,10 +890,8 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
         const d = doors[Math.floor(r() * doors.length)];
         fbox(d.u0 + st, d.u1 - st, 0.27, 0.92, w - t * 0.7 - 0.03, w - t * 0.7 - 0.012, [1, 1, 1], 'plywood');
       }
-    } else {
-      // the street set: every leaf's lower pane boarded from the street side (their backs seen through the glass)
-      for (const d of doors) fbox(d.u0 + st, d.u1 - st, 0.27, 1.1, w + t * 0.7 + 0.012, w + t * 0.7 + 0.03, [0.92, 0.9, 0.86], 'plywood');
     }
+    // (the street set carries no boards: its leaves are smashed in — the city is what the player should see through the chained set)
   };
   // reveal / vestibule pocket (indoors, lit): floor (mat + tile), side walls, soffit; the threshold under the inner set
   const tileUv = (n: V3, c: V3[]) => faceUv(n, c).map(([a, b]) => [a / 1.2, b / 1.2] as [number, number]);
@@ -957,7 +999,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
   if (plan.pavement[1] - B > 2.2 && H < 3.0) sbox(-hs - 0.9, hs + 0.9, H + oy + 0.35, H + oy + 0.55, B, B + 1.9, [0.22, 0.22, 0.21]); // entrance canopy
   // backdrop box (back / sides / lid), facing the doors: the roof's own sky colour along each ray
   const bk = (c: V3[], n: V3) => street.quad(c, n, [[0, 0], [1, 0], [1, 1], [0, 1]], {color: [1, 1, 1], aCell: sky, aExit: exitAttr});
-  const yb = Math.min(V.y0, curbY) - 0.3, yt = V.y1 - 0.05, wb = V.w1 - 0.05, wn = B;
+  const yb = V.y0, yt = V.y1 - 0.05, wb = V.w1 - 0.05, wn = B;
   bk([[V.u0, yb, wb], [V.u1, yb, wb], [V.u1, yt, wb], [V.u0, yt, wb]], [0, 0, -1]);
   bk([[V.u0 + 0.05, yb, wn], [V.u0 + 0.05, yb, wb], [V.u0 + 0.05, yt, wb], [V.u0 + 0.05, yt, wn]], [1, 0, 0]);
   bk([[V.u1 - 0.05, yb, wb], [V.u1 - 0.05, yb, wn], [V.u1 - 0.05, yt, wn], [V.u1 - 0.05, yt, wb]], [-1, 0, 0]);
@@ -995,7 +1037,7 @@ export function buildStreetExit(s: StreetExitSpec): StreetExitView {
   named(fog.mesh(f, streetFogCardMaterial(), 'fog'), 'fog', MALL_EXT_ORDER.gas);
   named(glass.mesh(f, streetExitGlassMaterial(), 'glass'), 'glass', 0);
   const triangles = out.reduce((t, m) => t + (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
-  return {meshes: out, stats: {id: s.id, meshes: out.length, triangles, panes, buildings: plan.buildings.length, cards: plan.cards.length}, plan, aperture, frame: f};
+  return {meshes: out, stats: {id: s.id, meshes: out.length, triangles, panes, shards, buildings: plan.buildings.length, cards: plan.cards.length}, plan, aperture, frame: f};
 }
 
 /** Face-local uv (metres) of an axis-aligned local quad: horizontal faces (u, w), vertical faces (along the face, y). */
@@ -1022,6 +1064,12 @@ export function streetMurkCpu(): RGB {
 /** Opacity of the street fog over L m of ray at eye height hc to a point at height hp above the street: exactly the Office's. */
 export function streetFogOpacity(L: number, hc = 1.6, hp = hc): number {
   return exteriorFogOpacity(L, hc, hp);
+}
+
+/** The mall's indoor haze over the indoor part of the street exits' view rays (world/mallAtmosphere.ts apply: the QA fog tune too). */
+export function setStreetHaze(density: number, color: number): void {
+  const c = new THREE.Color(color);
+  STREET_U.haze.value.set(c.r, c.g, c.b, density);
 }
 
 export interface StreetExitTune { light?: number; cards?: number; glass?: number; glow?: number }

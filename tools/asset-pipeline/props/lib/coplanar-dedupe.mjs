@@ -16,6 +16,10 @@
 //      Task mall-round2-20261031 (lane PROPS, M04 / M07): opt-in `clipOpposite: true` keeps the part of such an opposite triangle that
 //      the front layer does NOT cover (clipped exactly, attributes interpolated, its own winding), so a plane whose two layers cover
 //      different areas never opens a hole. The default (false) is the original behaviour, byte for byte.
+//      Opt-in `minAxisCos` (e.g. 0.98): only triangles whose 3D normal is within acos(minAxisCos) of the axis are candidates, so a
+//      larger plane tolerance (warped sheets) never treats a steep, narrow sliver as part of the plane. Default: no normal test.
+//      Opt-in `slab: [lo, hi]`: all three vertices must also lie in [lo, hi] along the axis (no tolerance margin), so a large plane
+//      tolerance never reaches a distinct surface just below / above (a shelf's lip underside 1.7 cm under its top).
 // Everything outside the box / off-plane is untouched (vertex order, indices, attributes).
 
 const EPS_AREA = 1e-9;
@@ -68,10 +72,12 @@ function triIndex(prim) {
  * `axis` (0 / 1 / 2) whose front faces point to `facing` (+1 / -1). `tol` = plane / box tolerance (m); `keep` = which overlapping
  * layer wins ('larger' / 'smaller' triangles first). Returns a provenance record.
  */
-export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, keep = 'larger', clipOpposite = false}) {
+export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, keep = 'larger', clipOpposite = false, minAxisCos = null, slab = null}) {
   const [ia, ib] = [[1, 2], [2, 0], [0, 1]][axis];
   const rec = {axis, facing, keep, box, planes: [], trianglesIn: 0, frontKept: 0, frontClipped: 0, frontDropped: 0, oppositeDropped: 0, piecesAdded: 0, overlapRemovedM2: 0};
   if (clipOpposite) Object.assign(rec, {clipOpposite: true, oppositeClipped: 0});
+  if (minAxisCos !== null) rec.minAxisCos = minAxisCos;
+  if (slab) rec.slab = slab;
   for (const mesh of doc.getRoot().listMeshes()) for (const prim of mesh.listPrimitives()) {
     const pos = prim.getAttribute('POSITION');
     const I = triIndex(prim);
@@ -86,6 +92,12 @@ export function dedupeCoplanar(doc, {box, axis = 2, facing = -1, tol = 0.001, ke
       if (!v.every(p => p.every((x, k) => x >= box.min[k] - tol && x <= box.max[k] + tol))) continue;
       const c = v.map(p => p[axis]);
       if (Math.max(...c) - Math.min(...c) > tol) continue;
+      if (slab && !c.every(x => x >= slab[0] && x <= slab[1])) continue;
+      if (minAxisCos !== null) {
+        const e1 = [0, 1, 2].map(k => v[1][k] - v[0][k]), e2 = [0, 1, 2].map(k => v[2][k] - v[0][k]);
+        const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        if (Math.abs(n[axis]) < minAxisCos * Math.hypot(n[0], n[1], n[2])) continue;
+      }
       const P = v.map(p => [p[ia], p[ib]]);
       const a = area2(P);
       if (Math.abs(a) < EPS_AREA) continue;

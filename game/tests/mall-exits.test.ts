@@ -363,7 +363,7 @@ describe('no indoor gas at the exits; shaders; warm-up; cost', () => {
     for (const m of streetExitMaterials()) expect(planned.has(m), m.name).toBe(true);
   });
 
-  it('cost per exit: 4 draws (one per mesh: shared materials / one atlas), bounded triangles', () => {
+  it('cost per exit: 4 draws (one per mesh: shared single-pass materials / one atlas), bounded triangles', () => {
     const w = fw(), c = w.mallArch!.stats.exitCost[0];
     const per = Object.fromEntries(exitMeshes(w).map(m => [m.name, (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3]));
     if (process.env.LL_MALL_EXIT_OUT) writeFileSync(process.env.LL_MALL_EXIT_OUT, JSON.stringify({cost: c, perMesh: per, plan: planStreet(w.mallArch!.exits()[0])}, null, 1)); // (vitest hides console output)
@@ -371,8 +371,68 @@ describe('no indoor gas at the exits; shaders; warm-up; cost', () => {
     expect(c.triangles).toBeLessThan(4000);
     const mats4 = new Set(exitMeshes(w).map(matOf));
     expect(mats4.size).toBe(4);
+    // one draw each: three renders a transparent DoubleSide material in two passes (back, front) — none of these is
+    for (const m of mats4) expect(m.transparent && m.side === THREE.DoubleSide && !m.forceSinglePass, m.name).toBe(false);
     for (const m of streetExitMaterials()) expect(mats4.has(m)).toBe(true);
   });
+});
+
+describe('the REAL generator\'s exits (lane GEN; seed 4242, elbow-branch: the two leaks this lane found and fixed)', () => {
+  it('inside the view, above the slab bound, under the roof deck, off open cells; panes in the collider; the cut; drawn from the exit pose, never seen culled from the platform / court', async () => {
+    const {generateMallLevel} = await import('../src/gen/mall/index');
+    const {mallQaPose} = await import('../src/gen/mall/qa');
+    const layout = generateMallLevel({levelSeed: 4242, startWeapon: 'pistol'} as never) as StationLayout;
+    const exits = layout.mall!.exits ?? [];
+    expect(exits.length, 'lane GEN places street exits on this seed').toBeGreaterThan(0);
+    const w = buildWorld(layout, mats(), {});
+    w.culler.maxDistance = Math.min(Math.sqrt(-Math.log(0.002)) / MALL_FOG.density, MALL_FOG.far);
+    const specs = w.mallArch!.exits();
+    const g0 = layout.levels[0].grid;
+    for (const [k, e] of exits.entries()) {
+      const s = specs[k], mine = exitMeshes(w).filter(m => m.userData.streetExit === e.id);
+      expect(mine.length, e.id).toBe(4);
+      expect(s.capY).toBeLessThan(e.view.y1); // the roof-deck cap is active (GEN's view reaches streetY + 30)
+      for (const m of mine.filter(q => /street|fog/.test(q.name))) for (const t of tris(m)) for (const q of t.v) {
+        expect(q.x >= e.view.x0 - 0.06 && q.x <= e.view.x1 + 0.06 && q.z >= e.view.z0 - 0.06 && q.z <= e.view.z1 + 0.06, `${m.name} in view`).toBe(true);
+        expect(q.y, `${m.name} above the slab bound`).toBeGreaterThanOrEqual(e.streetY - 0.25 - 1e-6);
+        expect(q.y, `${m.name} under the roof deck`).toBeLessThanOrEqual(s.capY + 1e-6);
+        const cx = Math.floor(q.x / CELL), cz = Math.floor(q.z / CELL);
+        if (cx < 0 || cz < 0 || cx >= g0.w || cz >= g0.h) continue;
+        for (const L of layout.levels) {
+          const i = cz * g0.w + cx, c = L.grid.cells[i];
+          if (c === FLOOR || c === VOID) expect(q.y < L.grid.floorOf(i) - 0.05 || q.y > L.grid.ceil[i] + 0.05, `${m.name} inside an open cell of L${L.id}`).toBe(true);
+        }
+      }
+      for (const t of tris(mine.find(q => q.name.endsWith('glass'))!)) for (const q of t.v) {
+        const c = e.collider;
+        expect(q.x >= c.x0 - 1e-6 && q.x <= c.x1 + 1e-6 && q.z >= c.z0 - 1e-6 && q.z <= c.z1 + 1e-6 && q.y >= c.y0 - 1e-6 && q.y <= c.y1 + 1e-6, `${e.id} pane in the collider`).toBe(true);
+      }
+      const alongX = e.side === 'N' || e.side === 'S';
+      const fs = w.wallFaces.filter(f => f.level === e.level && (alongX ? Math.abs(f.z0 - e.door.plane) < 1e-6 && Math.abs(f.z1 - e.door.plane) < 1e-6 : Math.abs(f.x0 - e.door.plane) < 1e-6 && Math.abs(f.x1 - e.door.plane) < 1e-6) && f.y0 < e.door.y1 - 1e-3);
+      expect(fs.some(f => f.openings.some(o => o.top >= Math.min(e.door.y1, f.y1) - 1e-6)), `${e.id}: the opening is cut`).toBe(true);
+    }
+    const eye = (p: {x: number; y: number; z: number; yaw: number; pitch: number}) => {
+      const c = new THREE.PerspectiveCamera(75, 960 / 540, 0.05, MALL_FOG.far);
+      c.position.set(p.x, p.y + 1.62, p.z); c.rotation.set(p.pitch, p.yaw, 0, 'YXZ'); c.updateMatrixWorld(true); c.updateProjectionMatrix();
+      return c;
+    };
+    const poses: [string, ReturnType<typeof mallQaPose>, boolean][] = [
+      ...exits.map((_, k) => [`street-exit ${k}`, mallQaPose(layout, 'street-exit', k), true] as [string, ReturnType<typeof mallQaPose>, boolean]),
+      ['platform-lookup', mallQaPose(layout, 'platform-lookup'), false], ['court', mallQaPose(layout, 'court'), false],
+    ];
+    for (const [label, p, atExit] of poses) {
+      if (!p) continue;
+      const c = eye(p);
+      w.culler.update(c, true);
+      const vis = visibleMeshes(w.group, c, 128, 72, {minPx: 1});
+      expect([...vis].filter(([m]) => culled(m)).map(([m, n]) => `${m.name} ${n}px`), `${label}: visible but culled`).toEqual([]);
+      if (atExit) {
+        const k = Number(label.split(' ')[1]), mine = exitMeshes(w).filter(m => m.userData.streetExit === exits[k].id);
+        expect(mine.every(m => !culled(m)), `${label}: drawn`).toBe(true);
+        expect(vis.get(mine.find(m => m.name.endsWith('street'))!) ?? 0, `${label}: street pixels`).toBeGreaterThan(0);
+      } else expect(exitMeshes(w).every(culled), `${label}: no exit submitted`).toBe(true);
+    }
+  }, 120_000);
 });
 
 describe('old levels unchanged; a mall without exits unchanged', () => {

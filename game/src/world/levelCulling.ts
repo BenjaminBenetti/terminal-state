@@ -152,7 +152,7 @@ export const EXIT_NEAR = 1.2;
  * An InstancedMesh whose bounds grew (damage/propDamage.ts reattach: a loose prop handed back where it came to rest) has its
  * registered box refreshed before every decision (mall only).
  */
-export const OCCL_BINS = 4096;
+export const OCCL_BINS = 2048;
 /** Footprint pad (m): a mesh flush with a wall face (signs, shelving) is decided by the open cell in front of it. */
 export const OCCL_PAD = CELL;
 const OCCL_BELOW = 0.3;
@@ -162,9 +162,19 @@ const OCCL_TOP = 6;
 export const OCCL_XBINS = 512;
 const OCCL_XJ = 32;
 const OCCL_XS = 2;
+const TAU = Math.PI * 2;
+/** cos / sin of the bin edges (edge e at angle -pi + e * 2 pi / bins; e = 0..bins) of the same- and cross-storey buffers. */
+function binEdges(n: number): {cos: Float64Array; sin: Float64Array} {
+  const cos = new Float64Array(n + 1), sin = new Float64Array(n + 1);
+  for (let e = 0; e <= n; e++) { const t = -Math.PI + e * TAU / n; cos[e] = Math.cos(t); sin[e] = Math.sin(t); }
+  return {cos, sin};
+}
+const OCCL_EDGES = binEdges(OCCL_BINS);
+const OCCL_XEDGES = binEdges(OCCL_XBINS);
+/** Margin (rad) around the camera's azimuth range within which the occlusion buffers are rasterized. */
+const OCCL_WEDGE_MARGIN = 0.25;
 /** Between full updates the occlusion re-runs once a viewpoint moved this far (m). */
 const OCCL_MOVE = 1e-3;
-const TAU = Math.PI * 2;
 /** One storey's occlusion data: its height range, closed columns (1) and boundary runs (x0, z0, x1, z1 per run). */
 interface OcclLevel { lo: number; hi: number; closed: Uint8Array; openSat: Int32Array; runs: Float64Array }
 
@@ -198,6 +208,8 @@ interface Entry {
   occluded?: boolean;
   /** InstancedMesh: its local bounding box at registration (min xyz, max xyz) — a grown box re-registers the entry (mall only). */
   lb?: Float64Array;
+  /** Its world matrix at registration / last refresh — a moved mesh (a sliding landing door, a swinging stall door) re-registers (mall only). */
+  mw?: Float32Array;
   /** Task mall-round2 (lane ARCH, M09): the street exit opening this mesh is seen through (mall only; see ExitAperture). */
   aperture?: ExitAperture;
 }
@@ -262,6 +274,12 @@ export class LevelCuller {
   private readonly occlX: Float32Array[] = [];
   private readonly occlPts: number[] = [];
   private readonly occlRange: number[] = [];
+  private readonly occlBuilt: number[] = [];
+  private readonly occlBuiltX: number[] = [];
+  private occlStamp = 0;
+  private occlW0 = -Infinity;
+  private occlW1 = Infinity;
+  private readonly occlWv = new Float64Array(4);
   private readonly occlOn: boolean[] = [];
   private readonly occlHere = new Set<number>();
   private occlState = false;
@@ -346,15 +364,28 @@ export class LevelCuller {
     return s[(cy1 + 1) * R + cx1 + 1] - s[cy0 * R + cx1 + 1] - s[(cy1 + 1) * R + cx0] + s[cy0 * R + cx0] > 0 ? k : -1;
   }
 
-  /** Task mall-round2 (lane PERF): an InstancedMesh entry whose bounds grew since registration takes its new box (mall only). */
+  /**
+   * Task mall-round2 (lane PERF): a registered mesh that MOVED (world matrix changed: sliding lift landing doors, swinging doors) or an
+   * InstancedMesh whose bounds grew (damage/propDamage.ts reattach: a pushed prop handed back where it came to rest) takes its new box
+   * before any decision (mall only; the registered box was the only one before). At most one frame behind a move (matrices update
+   * in the render after this) — far inside the occlusion's footprint pad.
+   */
   private refreshBox(en: Entry): void {
+    const mw = en.mw!, e = en.obj.matrixWorld.elements;
+    let moved = false;
+    for (let i = 0; i < 16 && !moved; i++) moved = mw[i] !== Math.fround(e[i]);
     const lb = en.lb, bb = (en.obj as THREE.InstancedMesh).boundingBox;
-    if (!lb || !bb || (bb.min.x >= lb[0] && bb.min.y >= lb[1] && bb.min.z >= lb[2] && bb.max.x <= lb[3] && bb.max.y <= lb[4] && bb.max.z <= lb[5])) return;
-    lb[0] = bb.min.x; lb[1] = bb.min.y; lb[2] = bb.min.z; lb[3] = bb.max.x; lb[4] = bb.max.y; lb[5] = bb.max.z;
-    this.box.copy(bb).applyMatrix4(en.obj.matrixWorld);
+    const grown = !!lb && !!bb && !(bb.min.x >= lb[0] && bb.min.y >= lb[1] && bb.min.z >= lb[2] && bb.max.x <= lb[3] && bb.max.y <= lb[4] && bb.max.z <= lb[5]);
+    if (!moved && !grown) return;
+    if (moved) mw.set(e);
+    if (lb && bb) {
+      lb[0] = bb.min.x; lb[1] = bb.min.y; lb[2] = bb.min.z; lb[3] = bb.max.x; lb[4] = bb.max.y; lb[5] = bb.max.z;
+      this.box.copy(bb).applyMatrix4(en.obj.matrixWorld);
+    } else this.box.setFromObject(en.obj);
+    if (this.box.isEmpty()) return;
     en.x0 = this.box.min.x; en.y0 = this.box.min.y; en.z0 = this.box.min.z; en.x1 = this.box.max.x; en.y1 = this.box.max.y; en.z1 = this.box.max.z;
     en.near = undefined;
-    en.occ = this.occlusionLevel(en);
+    if (en.occ !== undefined) en.occ = this.occlusionLevel(en);
   }
 
   /**
@@ -364,7 +395,7 @@ export class LevelCuller {
    * OCCL_XJ: per bin and run-near-distance bucket, the nearest covering run — see occludedNow). A storey a viewpoint cannot decide
    * (inside a closed column of it, outside the grid) is not decided at all. Marks occlOn per level index; false when none.
    */
-  private prepareOcclusion(levels: ReadonlySet<number>, inCab: boolean): boolean {
+  private prepareOcclusion(camera: THREE.Camera, levels: ReadonlySet<number>, inCab: boolean): boolean {
     const on = this.occlOn, NL = this.occl.length;
     on.length = NL;
     on.fill(false);
@@ -401,64 +432,143 @@ export class LevelCuller {
         ok = cx >= 0 && cy >= 0 && cx < W && cy < H && o.closed[cy * W + cx] === 0;
       }
       if (!ok) continue;
-      for (let p = 0; p < np; p++) {
-        const slot = k * 4 + p, px = pts[3 * p], py = pts[3 * p + 1], pz = pts[3 * p + 2];
-        if (py > o.lo && py < o.hi) this.rasterRuns((this.occlBufs[slot] ??= new Float32Array(OCCL_BINS)), o.runs, px, pz);
-        else this.rasterRunsX((this.occlX[slot] ??= new Float32Array(OCCL_XBINS * OCCL_XJ)), o.runs, px, pz);
-      }
-      on[k] = true;
+      on[k] = true; // (its buffers are built on first use: occlBuffer)
       any = true;
     }
+    this.occlStamp++;
+    if (any) this.viewWedge(camera);
     return any;
   }
 
-  /** Same-storey polar buffer from (px, pz): bin = smallest far-end distance of a boundary run covering the whole bin. */
+  /**
+   * The camera's frustum as an azimuth range [occlW0, occlW1] (rad, + a margin), or the full circle when it holds the vertical:
+   * buffers are rasterized only there (an unrasterized bin is open — never hides anything; candidates outside the frustum are not
+   * decided at all).
+   */
+  private viewWedge(camera: THREE.Camera): void {
+    const me = camera.matrixWorld.elements, cam = camera as THREE.PerspectiveCamera;
+    this.occlW0 = -Infinity; this.occlW1 = Infinity;
+    if (!cam.isPerspectiveCamera) return;
+    const tv = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) / (cam.zoom || 1), th = tv * cam.aspect;
+    const rl = Math.hypot(me[0], me[1], me[2]) || 1, ul = Math.hypot(me[4], me[5], me[6]) || 1, fl = Math.hypot(me[8], me[9], me[10]) || 1;
+    const rx = me[0] / rl, ry = me[1] / rl, rz = me[2] / rl, ux = me[4] / ul, uy = me[5] / ul, uz = me[6] / ul;
+    const fx = -me[8] / fl, fy = -me[9] / fl, fz = -me[10] / fl;
+    // the vertical (up or down) inside the view cone: its ground projection is every azimuth
+    for (const sg of [1, -1]) { const z = sg * fy; if (z > 0 && Math.abs(sg * ry) <= th * z && Math.abs(sg * uy) <= tv * z) return; }
+    const af = Math.atan2(fz, fx);
+    let lo = Infinity, hi = -Infinity;
+    for (let c = 0; c < 4; c++) {
+      const sx = c & 1 ? th : -th, sy = c & 2 ? tv : -tv;
+      const dx = fx + rx * sx + ux * sy, dz = fz + rz * sx + uz * sy;
+      let a = Math.atan2(dz, dx) - af;
+      a -= TAU * Math.round(a / TAU);
+      if (a < lo) lo = a; if (a > hi) hi = a;
+    }
+    if (hi - lo + 2 * OCCL_WEDGE_MARGIN >= Math.PI) return;
+    this.occlW0 = af + lo - OCCL_WEDGE_MARGIN; this.occlW1 = af + hi + OCCL_WEDGE_MARGIN;
+    this.occlWv[0] = Math.cos(this.occlW0); this.occlWv[1] = Math.sin(this.occlW0); this.occlWv[2] = Math.cos(this.occlW1); this.occlWv[3] = Math.sin(this.occlW1);
+  }
+
+  /** A run (relative endpoints) lies wholly beyond one boundary ray of the view wedge (< pi): it can cover no wedge bin. */
+  private outsideWedge(ax: number, az: number, bx: number, bz: number): boolean {
+    if (!Number.isFinite(this.occlW0)) return false;
+    const w = this.occlWv;
+    return (w[0] * az - w[1] * ax < 0 && w[0] * bz - w[1] * bx < 0) || (ax * w[3] - az * w[2] < 0 && bx * w[3] - bz * w[2] < 0);
+  }
+
+  /** The polar buffer of viewpoint p for level index k in this decision (built on first use). */
+  private occlBuffer(k: number, p: number, same: boolean): Float32Array {
+    const slot = k * 4 + p, o = this.occl[k]!, pts = this.occlPts;
+    const stamp = (same ? this.occlBuilt : this.occlBuiltX);
+    if (same) {
+      const buf = (this.occlBufs[slot] ??= new Float32Array(OCCL_BINS));
+      if (stamp[slot] !== this.occlStamp) { this.rasterRuns(buf, o.runs, pts[3 * p], pts[3 * p + 2]); stamp[slot] = this.occlStamp; }
+      return buf;
+    }
+    const T = (this.occlX[slot] ??= new Float32Array(OCCL_XBINS * OCCL_XJ));
+    if (stamp[slot] !== this.occlStamp) { this.rasterRunsX(T, o.runs, pts[3 * p], pts[3 * p + 2]); stamp[slot] = this.occlStamp; }
+    return T;
+  }
+
+  /** Bin range [b0, b1] of an angular span clipped to the view wedge (b1 < b0: nothing), in an nb-bin circle (b0 may exceed nb). */
+  private wedgeBins(t0: number, t1: number, nb: number): [number, number] {
+    const K = nb / TAU;
+    let b0 = Math.ceil((t0 + Math.PI) * K + 1e-6), b1 = Math.floor((t1 + Math.PI) * K - 1e-6) - 1;
+    if (Number.isFinite(this.occlW0)) {
+      // the wedge in the same unwrapped frame as [t0, t1] (t0 in [-pi, pi], t1 < t0 + 2 pi)
+      let w0 = this.occlW0, w1 = this.occlW1;
+      const sh = TAU * Math.round(((t0 + t1) / 2 - (w0 + w1) / 2) / TAU);
+      w0 += sh; w1 += sh;
+      b0 = Math.max(b0, Math.floor((w0 + Math.PI) * K));
+      b1 = Math.min(b1, Math.ceil((w1 + Math.PI) * K));
+    }
+    return [b0, b1];
+  }
+
+  /**
+   * Same-storey polar buffer from (px, pz): bin = the smallest distance by which some boundary run covering the WHOLE bin is crossed
+   * by every ray of the bin (a straight run at perpendicular distance p in direction phi is crossed at p / cos(theta - phi): largest
+   * at one of the bin's edges).
+   */
   private rasterRuns(buf: Float32Array, runs: Float64Array, px: number, pz: number): void {
     buf.fill(Infinity);
-    const K = OCCL_BINS / TAU;
+    const NB = OCCL_BINS, CE = OCCL_EDGES.cos, SE = OCCL_EDGES.sin;
     for (let r = 0; r < runs.length; r += 4) {
       const ax = runs[r] - px, az = runs[r + 1] - pz, bx = runs[r + 2] - px, bz = runs[r + 3] - pz;
       const cross = ax * bz - az * bx;
-      if (Math.abs(cross) < 1e-9) continue; // seen edge-on (the viewpoint on its line): covers no bin
-      const d = Math.sqrt(Math.max(ax * ax + az * az, bx * bx + bz * bz));
+      if (Math.abs(cross) < 1e-9 || this.outsideWedge(ax, az, bx, bz)) continue; // edge-on (the viewpoint on its line) / out of view
+      const ex = bx - ax, ez = bz - az, len = Math.hypot(ex, ez);
+      let nx = -ez / len, nz = ex / len, pd = ax * nx + az * nz;
+      if (pd < 0) { nx = -nx; nz = -nz; pd = -pd; }
       let t0 = Math.atan2(az, ax), t1 = Math.atan2(bz, bx);
       if (cross < 0) { const t = t0; t0 = t1; t1 = t; }
       if (t1 < t0) t1 += TAU;
-      const b0 = Math.ceil((t0 + Math.PI) * K + 1e-6), b1 = Math.floor((t1 + Math.PI) * K - 1e-6) - 1;
+      const [b0, b1] = this.wedgeBins(t0, t1, NB);
       for (let b = b0; b <= b1; b++) {
-        const i = b >= OCCL_BINS ? b - OCCL_BINS : b;
+        const i = ((b % NB) + NB) % NB;
+        const c = Math.min(CE[i] * nx + SE[i] * nz, CE[i + 1] * nx + SE[i + 1] * nz);
+        if (c <= 1e-9) continue;
+        const d = pd / c;
         if (d < buf[i]) buf[i] = d;
       }
     }
   }
 
   /**
-   * Cross-storey polar buffer from (px, pz): T[bin * OCCL_XJ + j] = smallest far-end distance of a run covering the whole bin whose
-   * NEAR distance is at least j * OCCL_XS (bucketed, then suffix minima over j).
+   * Cross-storey polar buffer from (px, pz): T[bin * OCCL_XJ + j] = the smallest per-bin FAR crossing distance of a run covering the
+   * whole bin whose per-bin NEAR crossing distance is at least j * OCCL_XS (bucketed, then suffix minima over j).
    */
   private rasterRunsX(T: Float32Array, runs: Float64Array, px: number, pz: number): void {
     T.fill(Infinity);
-    const K = OCCL_XBINS / TAU, J = OCCL_XJ;
+    const NB = OCCL_XBINS, J = OCCL_XJ, CE = OCCL_XEDGES.cos, SE = OCCL_XEDGES.sin, K = NB / TAU;
     for (let r = 0; r < runs.length; r += 4) {
       const ax = runs[r] - px, az = runs[r + 1] - pz, bx = runs[r + 2] - px, bz = runs[r + 3] - pz;
       const cross = ax * bz - az * bx;
-      if (Math.abs(cross) < 1e-9) continue;
-      const d1 = Math.sqrt(Math.max(ax * ax + az * az, bx * bx + bz * bz));
-      // nearest point of the run to the viewpoint
-      const ex = bx - ax, ez = bz - az, ll = ex * ex + ez * ez;
-      const t = ll > 0 ? Math.min(1, Math.max(0, -(ax * ex + az * ez) / ll)) : 0;
-      const d0 = Math.hypot(ax + ex * t, az + ez * t);
-      const j = Math.min(J - 1, Math.floor(d0 / OCCL_XS));
+      if (Math.abs(cross) < 1e-9 || this.outsideWedge(ax, az, bx, bz)) continue;
+      const ex = bx - ax, ez = bz - az, len = Math.hypot(ex, ez);
+      let nx = -ez / len, nz = ex / len, pd = ax * nx + az * nz;
+      if (pd < 0) { nx = -nx; nz = -nz; pd = -pd; }
+      const bf = ((Math.floor((Math.atan2(nz, nx) + Math.PI) * K) % NB) + NB) % NB; // the bin holding the foot of the perpendicular
       let t0 = Math.atan2(az, ax), t1 = Math.atan2(bz, bx);
       if (cross < 0) { const q = t0; t0 = t1; t1 = q; }
       if (t1 < t0) t1 += TAU;
-      const b0 = Math.ceil((t0 + Math.PI) * K + 1e-6), b1 = Math.floor((t1 + Math.PI) * K - 1e-6) - 1;
+      const [b0, b1] = this.wedgeBins(t0, t1, NB);
       for (let b = b0; b <= b1; b++) {
-        const i = (b >= OCCL_XBINS ? b - OCCL_XBINS : b) * J + j;
-        if (d1 < T[i]) T[i] = d1;
+        const i = ((b % NB) + NB) % NB;
+        const c0 = CE[i] * nx + SE[i] * nz, c1 = CE[i + 1] * nx + SE[i + 1] * nz, lo = Math.min(c0, c1);
+        if (lo <= 1e-9) continue;
+        const far = pd / lo, near = i === bf ? pd : pd / Math.max(c0, c1);
+        const k = i * J + Math.min(J - 1, Math.floor(near / OCCL_XS));
+        if (far < T[k]) T[k] = far;
       }
     }
-    for (let b = 0; b < OCCL_XBINS; b++) for (let j = J - 2, i = b * J + j; j >= 0; j--, i--) if (T[i + 1] < T[i]) T[i] = T[i + 1];
+    // suffix minima over the buckets, only where runs were rasterized (the view wedge; elsewhere every bin stays open)
+    let s0 = 0, s1 = OCCL_XBINS - 1;
+    if (Number.isFinite(this.occlW0)) { s0 = Math.floor((this.occlW0 + Math.PI) * OCCL_XBINS / TAU) - 1; s1 = Math.ceil((this.occlW1 + Math.PI) * OCCL_XBINS / TAU) + 1; }
+    for (let q = s0; q <= s1; q++) {
+      const b = ((q % OCCL_XBINS) + OCCL_XBINS) % OCCL_XBINS;
+      for (let j = J - 2, i = b * J + j; j >= 0; j--, i--) if (T[i + 1] < T[i]) T[i] = T[i + 1];
+    }
   }
 
   /**
@@ -501,7 +611,7 @@ export class LevelCuller {
         if (a < a0) a0 = a; if (a > a1) a1 = a;
       }
       const NB = same ? OCCL_BINS : OCCL_XBINS, K = NB / TAU;
-      const buf = same ? this.occlBufs[k * 4 + p] : this.occlX[k * 4 + p], stride = same ? 1 : OCCL_XJ;
+      const buf = this.occlBuffer(k, p, same), stride = same ? 1 : OCCL_XJ;
       const b0 = Math.floor((tc + a0 + Math.PI) * K), b1 = Math.floor((tc + a1 + Math.PI) * K);
       for (let b = b0; b <= b1; b++) {
         const i = ((b % NB) + NB) % NB;
@@ -512,7 +622,7 @@ export class LevelCuller {
   }
 
   /** Between full updates: re-decide the occlusion candidates when the eye / a viewpoint moved (exact per frame). */
-  private refreshOcclusion(): void {
+  private refreshOcclusion(camera: THREE.Camera): void {
     if (!this.occl.length) return;
     const prev = this.occlPts, e = this.eye;
     let moved = (this.occlusion && this.enabled) !== this.occlState
@@ -528,10 +638,10 @@ export class LevelCuller {
     }
     if (!moved && n !== prev.length && prev.length) moved = true; // a light switched on / off
     if (!moved) return; // the last decision stands
-    this.prepareOcclusion(this.occlHere, this.last.ov !== null);
+    this.prepareOcclusion(camera, this.occlHere, this.last.ov !== null);
     let occl = 0, culled = 0;
     for (const en of this.entries) {
-      if (en.lb) this.refreshBox(en);
+      if (en.mw) this.refreshBox(en);
       if (en.base && en.occ !== undefined && en.occ >= 0) {
         const hide = this.occludedNow(en);
         if (hide !== !!en.occluded) {
@@ -731,8 +841,12 @@ export class LevelCuller {
       } else this.box.setFromObject(m);
       if (this.box.isEmpty()) { this.stats.uncullable++; return; }
       const b = this.box, entry = {obj: m, level: NaN, x0: b.min.x, z0: b.min.z, x1: b.max.x, z1: b.max.z, y0: b.min.y, y1: b.max.y, mask: m.layers.mask, culled: false} as Entry;
-      // Task mall-round2 (lane PERF): the mall tracks InstancedMesh bounds growth (a reattached loose prop) and the occlusion test
-      if (this.occl.length && im.isInstancedMesh) { const lb = im.boundingBox!; entry.lb = Float64Array.of(lb.min.x, lb.min.y, lb.min.z, lb.max.x, lb.max.y, lb.max.z); }
+      // Task mall-round2 (lane PERF): the mall tracks moved meshes, InstancedMesh bounds growth (a reattached loose prop) and the
+      // occlusion test (refreshBox)
+      if (this.occl.length) {
+        entry.mw = Float32Array.from(m.matrixWorld.elements);
+        if (im.isInstancedMesh) { const lb = im.boundingBox!; entry.lb = Float64Array.of(lb.min.x, lb.min.y, lb.min.z, lb.max.x, lb.max.y, lb.max.z); }
+      }
       // Task office-seamless-20261029: a mesh tagged with several levels (stair flights) renders with any of them.
       const tag = Array.isArray(m.userData.levels) ? (m.userData.levels as unknown[]).filter((l): l is number => typeof l === 'number' && this.levelIds.includes(l)) : [];
       if (tag.length) { entry.levels = tag; this.stats.multi++; this.entries.push(entry); return; }
@@ -776,7 +890,7 @@ export class LevelCuller {
     const q = camera.quaternion, l = this.last;
     const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
     if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
-      && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(); return; }
+      && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(camera); return; }
     Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, ov});
     const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
     // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
@@ -828,7 +942,7 @@ export class LevelCuller {
     }
     let culled = 0, fogged = 0, slab = 0, occl = 0;
     // Task mall-round2 (lane PERF): same-storey occlusion buffers for this update (mall only; false elsewhere / when off)
-    const occlOn = this.occl.length ? this.prepareOcclusion(shown, ov !== null) : false;
+    const occlOn = this.occl.length ? this.prepareOcclusion(camera, shown, ov !== null) : false;
     // Iteration 12 (ARCH): three's FogExp2 fogs by VIEW DEPTH (-mvPosition.z), not distance: at the screen corners
     // a box 58 m away is only ~31 m deep (~17 % visible). Fog-cull a box only when its nearest point along the view
     // axis lies beyond maxDistance (conservative, so nothing still visible through the fog pops out at the edges).
@@ -840,7 +954,7 @@ export class LevelCuller {
     let apCulled = 0;
     for (const en of this.entries) {
       let show: boolean;
-      if (en.lb) this.refreshBox(en); // task mall-round2 (lane PERF): a grown InstancedMesh box first (mall only)
+      if (en.mw) this.refreshBox(en); // task mall-round2 (lane PERF): a moved mesh / grown InstancedMesh box first (mall only)
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog

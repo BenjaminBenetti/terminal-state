@@ -60,6 +60,7 @@ export class MallAtmosphere {
     cam.updateProjectionMatrix();
     const culler = this.host.world?.culler;
     if (culler) culler.maxDistance = Math.min(fogCullDistance(density), MALL_FOG.far);
+    this.host.world?.mallArch?.setStreetHaze?.(density, color); // task mall-round2 (lane ARCH, M09): the street exits' indoor ray part
     this.active = true;
   }
 
@@ -157,7 +158,7 @@ export function mallQaPoses(layout: StationLayout): QaPose[] {
  * mallPoses(), mallPose(name) (teleport + look; returns the pose or null); task mall-playtest-revision: mallSky({zenith, horizon,
  * gas, curtain}) (the exterior murk / gas, U02), mallAds() (the ads drawn, D06).
  */
-export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atriumStats?: unknown; stats?: unknown; slabCulled?: number}} | null; layout?: StationLayout; scene?: THREE.Scene},
+export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atriumStats?: unknown; stats?: unknown; slabCulled?: number; occlusionCulled?: number; occlusion?: boolean; update?(c: THREE.Camera, force?: boolean): void}} | null; layout?: StationLayout; scene?: THREE.Scene; camera?: THREE.Camera},
   lookAt: (x: number, y: number, z: number) => void, teleport: (x: number, z: number, yaw?: number, level?: number) => boolean) {
   return {
     mallArch: () => game.world?.mallArch?.summary() ?? null,
@@ -177,7 +178,23 @@ export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atr
       for (const q of a.ads) by[`${q.kind}:${q.program}`] = (by[`${q.kind}:${q.program}`] ?? 0) + 1;
       return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, by, first: a.ads.slice(0, 6).map(q => ({kind: q.kind, program: q.program, level: q.level, x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2)}))};
     },
-    mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null}), // (+ slabCulled: lane PERF)
+    mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null,
+      occlusionCulled: game.world?.culler?.occlusionCulled ?? null, occlusion: game.world?.culler?.occlusion ?? null}), // (+ slabCulled: lane PERF; + occlusion: task mall-round2 lane PERF)
+    // Task mall-round2-20261031 (lane PERF, M05): same-storey occlusion A/B at one pose (world/levelCulling.ts OCCL_*): on / off, re-culled now
+    mallOcclusion: (on?: boolean) => {
+      const c = game.world?.culler;
+      if (!c || typeof c.occlusion !== 'boolean') return null;
+      if (typeof on === 'boolean') { c.occlusion = on; if (game.camera) c.update?.(game.camera, true); }
+      return {occlusion: c.occlusion, occlusionCulled: c.occlusionCulled ?? null};
+    },
+    // Task mall-round2-20261031 (lane ARCH, M09): the locked street exits — per exit cost (meshes = draws, tris), the aperture gate's
+    // last count, and the look (uniforms only: light / cards / glass / glow); pose: __LL.goMall('street-exit', i)
+    mallExits: (o: {light?: number; cards?: number; glass?: number; glow?: number} = {}) => {
+      const a = game.world?.mallArch;
+      if (!a) return null;
+      return {tune: a.streetExitTune(o), exits: a.stats.exitCost, apertureCulled: (game.world?.culler as {apertureCulled?: number} | undefined)?.apertureCulled ?? null,
+        at: a.exits().map(s => ({id: s.id, level: s.level, side: s.nz ? (s.nz > 0 ? 'S' : 'N') : (s.nx > 0 ? 'E' : 'W'), plane: s.plane, s0: s.s0, s1: s.s1, streetY: s.streetY, capY: +s.capY.toFixed(2)}))};
+    },
     mallPoses: () => (game.layout ? mallQaPoses(game.layout) : []),
     mallPose: (name: string) => {
       const p = game.layout ? mallQaPoses(game.layout).find(q => q.name === name || q.name.startsWith(name)) : undefined;

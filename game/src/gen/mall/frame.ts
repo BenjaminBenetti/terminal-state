@@ -121,8 +121,13 @@ export function mallVariantOf(levelSeed: number): MallVariant {
   const s = levelSeed >>> 0;
   // drawn through the mulberry32 mixer (a raw FNV hash of a sibling salt would correlate with the v2 draw mod 3)
   const r = new Rng(hashString('mall-variant-v3', s));
-  if (r.next() * MALL_VARIANTS.length < MALL_VARIANTS_V2.length) return MALL_VARIANTS_V2[hashString('mall-variant-v2', s) % MALL_VARIANTS_V2.length];
+  if (r.next() * MALL_VARIANTS.length < MALL_VARIANTS_V2.length) return mallVariantV2Of(s);
   return MALL_VARIANTS_ADDED[Math.floor(r.next() * MALL_VARIANTS_ADDED.length)];
+}
+
+/** The variant a level seed drew before round 2 (one of the original three) — for samples tuned on those layouts. */
+export function mallVariantV2Of(levelSeed: number): MallVariant {
+  return MALL_VARIANTS_V2[hashString('mall-variant-v2', levelSeed >>> 0) % MALL_VARIANTS_V2.length];
 }
 
 /**

@@ -115,10 +115,33 @@ const EDITS = {
   'garment-hanging-group': {basis: 'hanging length 0.85 m (hook to hem), uniform', sizeM: 0.85, sizeAxis: 'h'},
   // M03 (1R slot 81, review/b1g3-*): a squat single-sided section (W:H 1.39; 0.90 m tall at the frozen 1.25 m width): depth z x0.645,
   // then uniform to 1.4 m tall -> 1.95 x 1.40 x 0.49 m (5 shelves ~0.25 m apart). Back-to-back pairs = the double-sided aisle run.
-  'retail-gondola': {basis: 'single-sided gondola section 1.4 m tall (uniform), depth trimmed to 0.49 m (z x0.645)', scaleAxes: [[2, 0.645]], sizeM: 1.4, sizeAxis: 'h'},
+  // Task mall-round2-20261031 (lane PROPS, M07 follow-up — primary: "shelving bay" may also mean this free-standing gondola, label
+  // 'gondola shelf'): measured in the final frame (front -Z) — 220 coplanar pairs, 0.90 m2 of overlap. Each shelf is a ~3 cm slab built
+  // of interleaved internal sheets 1-5 mm apart; most of the overlap is INSIDE those closed slabs (planes ~0.599 / 0.779 / 0.793 /
+  // 0.953 / 1.158, hidden from every view). The visible fights (thin lines, ~1 % of pixels) are stacked layers on the shelves' front-lip
+  // plane (z -0.130), the left upright's front (z -0.086) and the centre divider (x ~+0.004..0.013, a stack of thin sheets). dedupe: one
+  // layer facing the shopper on the lip and upright planes (clipOpposite: no hole; minAxisCos: no steep slivers) and on the internal
+  // planes inside strict slabs that exclude every shelf's visible top and bottom faces (each slab's majority facing kept; positions
+  // unchanged: decks / loot unchanged). The divider is NOT deduped: clipping its sheet stack fragments it (59 -> 557 tris, over the
+  // byte budget -> lower texture step) for a < 0.1 % pixel effect.
+  'retail-gondola': {basis: 'single-sided gondola section 1.4 m tall (uniform), depth trimmed to 0.49 m (z x0.645); coplanar duplicate layers removed (shelf lips, upright, divider, internal shelf sheets; local)',
+    scaleAxes: [[2, 0.645]], sizeM: 1.4, sizeAxis: 'h',
+    dedupe: [
+      {box: {min: [-0.98, 0.25, -0.1311], max: [0.98, 1.25, -0.1291]}, axis: 2, facing: -1, tol: 0.001, clipOpposite: true, minAxisCos: 0.98},
+      {box: {min: [-0.98, -0.01, -0.0867], max: [-0.93, 1.41, -0.0847]}, axis: 2, facing: -1, tol: 0.001, clipOpposite: true, minAxisCos: 0.98},
+      ...[[0.597, 0.6005, 1], [0.7765, 0.7805, 1], [0.7905, 0.795, -1], [0.9505, 0.956, 1], [1.1565, 1.1625, 1]].map(([y0, y1, facing]) => ({box: {min: [-0.98, y0, -0.14], max: [0.98, y1, 0.245]},
+        axis: 1, facing, tol: +(y1 - y0).toFixed(4), slab: [y0, y1], clipOpposite: true, minAxisCos: 0.98}))]},
   // M04 (1R slot 82): 1.2 m wide it stood 2.53 m tall and 0.94 m deep (shelves ~0.56 m) -> y x0.871 (2.2 m, SHOPS wallBay) and
   // z x0.53 (0.50 m deep, shelves ~0.30 m); width kept.
-  'retail-wall-bay': {basis: 'wall bay 1.2 x 2.2 m (SHOPS wallBay), depth 0.50 m (per-axis y x0.871, z x0.53)', scaleAxes: [[1, 0.871], [2, 0.53]]},
+  // Task mall-round2-20261031 (lane PROPS, M07 — user: "shelving bay has a few flickering issues / triangle issues"; label 'shelving bay'):
+  // measured in the final frame (front -Z) — the slatwall back panel's shopper-facing plane (z +0.2357, 341 tris) carries, besides its
+  // -Z face, an opposite-facing (+Z) layer over its lower diagonal half and a diagonal band of 3-5 overlapping same-facing triangles
+  // (327 coplanar pairs, 1.30 m2 of overlap; double-sided material -> the layers' different UV islands / normal-map texels z-fight as the
+  // view moves). dedupe: ONE -Z layer over the old coverage (larger triangles keep their texture, the rest clipped exactly around them),
+  // +Z duplicates dropped where covered (clipOpposite keeps any uncovered remainder: no hole). Decks, uprights and bounds unchanged.
+  'retail-wall-bay': {basis: 'wall bay 1.2 x 2.2 m (SHOPS wallBay), depth 0.50 m (per-axis y x0.871, z x0.53); coplanar duplicate layers of the slatwall back panel removed (local)',
+    scaleAxes: [[1, 0.871], [2, 0.53]],
+    dedupe: [{box: {min: [-0.61, -0.01, 0.2347], max: [0.61, 2.21, 0.2367]}, axis: 2, facing: -1, tol: 0.001, clipOpposite: true, minAxisCos: 0.98}]},
   // M11 (review/b1g3-*): counter top 0.514 m at the frozen 2.4 m width. The cluster of pill bottles / jars on the counter top's back-right
   // (manifest frame x -0.98..-0.63, y 0.51..0.65, z 0.12..0.29) is loose clutter: dropped (rule 4), its painted ghost cleaned. Then y x1.387,
   // z x0.75 and uniform to 3.2 m wide -> counter top 0.95 m, hutch top ~2.57 m, depth 0.69 m (a pharmacy back-wall counter).
@@ -192,21 +215,27 @@ const EDITS = {
   // Task mall-round2-20261031 (lane PROPS, M04 — user: "the back of the 'cooler' prop has some messed up geometry"; label 'open cooler'):
   // measured in the final frame (front -Z) — the INNER back wall (z +0.340, seen through the open front) is a zero-thickness double sheet
   // (a -Z and a +Z layer in one plane over 78 % of the wall, double-sided material -> z-fighting) with two wedge-shaped HOLES (21 %, a
-  // 'V', ~0.53 m2) onto the outer back shell 13 cm behind; the refine texture of the outer back (z +0.4745) carries a painted ghost of the
+  // 'V', ~0.53 m2) onto the outer back shell 13 cm behind; the refine texture of the outer back (z +0.461..0.475) carries a painted ghost of the
   // shelves seen through that V; the 1.20 m shelf's centre-right segment is warped (front corner x 0.028, z -0.278 raised to 1.310).
   // panelRebuild: the wall slab (both layers + the shelves' rear strips in that plane, 56 tris) -> ONE quad facing the front, UV-mapped
   // onto a uniform 2.4 % patch of the wall's own texture island (base ~213/215/212, flat normal; no TANGENT attribute: UVs stay
   // non-degenerate). snap: the warped corner back onto the shelf plane (y 1.1952 at z -0.278). dedupe: the deck (0.474), the shelves
-  // (0.73 / 0.955 underside / 0.97 / 1.20 / 1.49, tilted <= 6 mm over their depth) and the roof top (1.934) are zero-thickness double
-  // sheets too (8.1 m2 of opposite-facing overlap): one up-facing layer kept per level (positions unchanged: the loot decks stay put).
-  // panelGhosts: the outer back's painted V refilled from its own clean texels (region = the V only).
+  // (0.73 / 0.955 underside / 0.97 / 1.20 / 1.49) and the roof top (1.934) are zero-thickness double sheets too (8.1 m2 of
+  // opposite-facing overlap), some warped up to ~15 mm across a triangle and crossing each other: one up-facing layer kept per level
+  // (tolerance 1.6 cm inside a strict per-level slab, only triangles within 11 deg of horizontal; 7 mm for the 0.955 underside /
+  // 0.97 top pair, 1.7 cm apart; the 1.20 slab holds that shelf's warped bottom piece, which crosses its top) — positions unchanged:
+  // the loot decks stay put.
+  // panelGhosts: the outer back's painted V (only ~8-12 levels darker than its plain finish: a threshold catches fragments) — every texel
+  // of the outer back inside the V's region refilled (all maps) by a clone stamp from the same face 0.45 m to the side (same height).
   'multideck-open-cooler': {basis: 'open multideck 1.9 m wide (frozen), height stretched to ~2.0 m (per-axis y x1.2); inner back wall rebuilt as one panel (holes + double sheet), warped shelf corner flattened, painted ghost on the outer back cleaned (local)',
     scaleAxes: [[1, 1.2]],
     panelRebuild: [{axis: 2, at: 0.3405, tol: 0.004, facing: -1, rect: [-0.918, 0.918, 0.538, 1.866], uv: {centre: [0.52464, 0.60894], perMetre: 0.0125}}],
     snap: [{box: {min: [0.02, 1.25, -0.29], max: [0.04, 1.32, -0.27]}, axis: 1, value: 1.1952}],
-    dedupe: [[0.465, 0.482, 0.004, -0.40], [0.72, 0.742, 0.007, -0.30], [0.947, 0.96, 0.007, -0.30], [0.963, 0.98, 0.007, -0.30], [1.185, 1.21, 0.007, -0.30],
-      [1.478, 1.5, 0.007, -0.30], [1.925, 1.945, 0.003, -0.42]].map(([y0, y1, tol, z0]) => ({box: {min: [-0.95, y0, z0], max: [0.95, y1, y0 > 1.9 ? 0.47 : 0.35]}, axis: 1, facing: 1, tol})),
-    panelGhosts: [{axis: 2, at: 0.4745, tol: 0.003, facing: 1, region: {min: [-0.42, 0.5, 0.46], max: [0.42, 1.9, 0.49]}, thresh: 10}]},
+    // [slab lo, slab hi, plane tolerance, box z0] per level: the slab (strict) keeps each level off the lip undersides 1.5-1.7 cm below
+    dedupe: [[0.462, 0.482, 0.016, -0.40], [0.7205, 0.745, 0.016, -0.30], [0.947, 0.962, 0.007, -0.30], [0.963, 0.98, 0.007, -0.30], [1.1855, 1.215, 0.016, -0.30],
+      [1.48, 1.5, 0.016, -0.30], [1.925, 1.945, 0.003, -0.42]].map(([y0, y1, tol, z0]) => ({box: {min: [-0.95, y0, z0], max: [0.95, y1, y0 > 1.9 ? 0.47 : 0.35]}, axis: 1, facing: 1, tol,
+      slab: [y0, y1], clipOpposite: true, minAxisCos: 0.98})),
+    panelGhosts: [{axis: 2, at: 0.468, tol: 0.0085, facing: 1, region: {min: [-0.41, 0.52, 0.455], max: [0.41, 1.88, 0.49]}, all: true, clone: {along: 0, by: 0.45}}]},
 };
 
 // ---------- records ----------

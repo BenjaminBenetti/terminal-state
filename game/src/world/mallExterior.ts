@@ -14,6 +14,8 @@
 // exactly like the sky = invisible, a milky glass film, the interior haze marched past the glass) — all four addressed (the glass
 // film / depth: world/mallArch.ts roofGlass; the skylight tint: world/mallSkylight.ts SKY.tint).
 // Strictly visual: no gas field, exposure, damage, cough or mask rule (world/gas/* is untouched; inert in the mall).
+// Task mall-round2-20261031 (lane ARCH, M09): the sky colour (mallSkyColour), the horizon murk (murkAt) and the gas density / colour are
+// exported unchanged for the locked street exits' view (world/mallStreetExit.ts): one palette through the roof glass and the doors.
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';

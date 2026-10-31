@@ -52,7 +52,7 @@ import {placeStreetExits, type DesignedExitEnd} from './exits'; // task mall-rou
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
 import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
-export {MALL_VARIANTS, mallFrame, mallVariantOf, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
+export {MALL_VARIANTS, mallFrame, mallVariantOf, mallVariantV2Of, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
 export {mallIssues, mallVoidCells, mallRouteGroups} from './validate';
 export {mallNameOf, MALL_GENERIC_NAME} from './names';
 export {placeStreetExits, MALL_STREET_LEVEL, MALL_EXIT_STATS, EXIT, exitColliderCells} from './exits';

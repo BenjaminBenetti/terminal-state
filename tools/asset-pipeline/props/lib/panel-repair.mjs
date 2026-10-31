@@ -110,9 +110,14 @@ export function snapVertices(doc, {box, axis, value}) {
  * Painted ghost on a flat face: the faces lying on the plane `at` (+-tol, |n . axis| >= 0.9 toward `facing`) are rasterised in UV space;
  * a texel is a ghost CANDIDATE only where its interpolated 3D position lies inside `region` ({min, max}); a candidate whose 5 x 5 local
  * mean departs from the face's median colour by more than `thresh` (max channel, 0-255) is a ghost (dilated 2 texels inside the region)
- * and copies a clean texel of the same face nearby (deterministic PRNG; sources >= 3 texels inside the face) in every map. Returns counts.
+ * and copies a clean texel of the same face nearby (deterministic PRNG; sources >= 3 texels inside the face) in every map. `all: true`
+ * refills EVERY face texel inside the region (a low-contrast ghost on a plain finish that a threshold only catches in fragments); the
+ * sources then come from the face outside the region. `clone: {along, by}` (a clone stamp instead of scattered random texels, which
+ * leave a speckled patch): a ghost texel at 3D point q copies the face texel at q shifted by `by` m along axis `along`, away from the
+ * region's centre (found through the face's own UVs; a shifted point that misses the face or lands on a ghost falls back to the random
+ * pick) — the finish keeps its grain and its gradient across the other axis. Returns counts.
  */
-export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, region, thresh = 10}) {
+export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, region, thresh = 10, all = false, clone = null}) {
   const faces = [];
   const mats = new Set();
   for (const prim of doc.getRoot().listMeshes().flatMap(m => m.listPrimitives())) {
@@ -126,7 +131,7 @@ export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, regio
       mats.add(prim.getMaterial());
     }
   }
-  const report = {axis, at, facing, region, thresh, faces: faces.length};
+  const report = {axis, at, tol, facing, region, ...(all ? {all: true} : {thresh}), ...(clone ? {clone} : {}), faces: faces.length};
   if (!faces.length) throw new Error('cleanPanelGhosts: no face selected');
   const slots = [];
   for (const m of mats) for (const [slot, tex] of [['baseColor', m.getBaseColorTexture()], ['metallicRoughness', m.getMetallicRoughnessTexture()], ['normal', m.getNormalTexture()]]) {
@@ -137,7 +142,7 @@ export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, regio
   if (!base) throw new Error('cleanPanelGhosts: no base colour map');
   const B = await decode(base.tex);
   const {W, H} = B;
-  const M = new Uint8Array(W * H), R = new Uint8Array(W * H);
+  const M = new Uint8Array(W * H), R = new Uint8Array(W * H), Q = new Map(); // Q: 3D point of each region texel (clone stamp)
   const inR = q => q.every((x, k) => x >= region.min[k] && x <= region.max[k]);
   for (const f of faces) {
     const s = f.uv.map(([u, v]) => [u * W, v * H]);
@@ -154,7 +159,7 @@ export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, regio
       const i = y * W + x;
       M[i] = 1;
       const q = [0, 1, 2].map(k => w0 * f.p[0][k] + w1 * f.p[1][k] + w2 * f.p[2][k]);
-      if (inR(q)) R[i] = 1;
+      if (inR(q)) { R[i] = 1; if (clone && !Q.has(i)) Q.set(i, q); }
     }
   }
   const med = [0, 1, 2].map(ch => { const h = new Uint32Array(256); let n = 0; for (let i = 0; i < W * H; i++) if (M[i]) { h[B.data[i * 3 + ch]]++; n++; } let acc = 0; for (let v = 0; v < 256; v++) { acc += h[v]; if (acc >= n / 2) return v; } return 0; });
@@ -166,6 +171,7 @@ export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, regio
     masked++;
     if (!R[i]) continue;
     candidates++;
+    if (all) { G[i] = 1; continue; }
     const s = [0, 0, 0]; let n = 0;
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
       const xx = x + dx, yy = y + dy;
@@ -192,17 +198,39 @@ export async function cleanPanelGhosts(doc, sharp, {axis, at, tol, facing, regio
   let seed = 0x2545f491;
   const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
   const source = new Map();
+  const [ia, ib] = AX[axis];
+  const mid = clone ? (region.min[clone.along] + region.max[clone.along]) / 2 : 0;
+  const texelAt = q => { // the face texel under 3D point q (projected on the plane), or -1
+    for (const f of faces) {
+      const a = f.p[0], b = f.p[1], c = f.p[2];
+      const d = (b[ia] - a[ia]) * (c[ib] - a[ib]) - (c[ia] - a[ia]) * (b[ib] - a[ib]);
+      if (Math.abs(d) < 1e-12) continue;
+      const w1 = ((q[ia] - a[ia]) * (c[ib] - a[ib]) - (c[ia] - a[ia]) * (q[ib] - a[ib])) / d, w2 = ((b[ia] - a[ia]) * (q[ib] - a[ib]) - (q[ia] - a[ia]) * (b[ib] - a[ib])) / d, w0 = 1 - w1 - w2;
+      if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue;
+      const u = w0 * f.uv[0][0] + w1 * f.uv[1][0] + w2 * f.uv[2][0], v = w0 * f.uv[0][1] + w1 * f.uv[1][1] + w2 * f.uv[2][1];
+      const tx = Math.min(W - 1, Math.max(0, Math.floor(u * W))), ty = Math.min(H - 1, Math.max(0, Math.floor(v * H)));
+      return ty * W + tx;
+    }
+    return -1;
+  };
+  let cloned = 0;
   for (let i = 0; i < W * H; i++) {
     if (!G2[i]) continue;
     const x = i % W, y = (i - x) / W;
     let src = -1;
+    if (clone && Q.has(i)) {
+      const q = Q.get(i).slice();
+      q[clone.along] += q[clone.along] < mid ? -clone.by : clone.by;
+      const j = texelAt(q);
+      if (j >= 0 && M[j] && !G2[j]) { src = j; cloned++; }
+    }
     for (let t = 0; t < 128 && src < 0; t++) {
       const r = 6 + t * 3, xx = Math.round(x + (rnd() * 2 - 1) * r), yy = Math.round(y + (rnd() * 2 - 1) * r);
       if (xx >= 0 && yy >= 0 && xx < W && yy < H && srcOK[yy * W + xx]) src = yy * W + xx;
     }
     source.set(i, src >= 0 ? src : pool[Math.floor(rnd() * pool.length)]);
   }
-  Object.assign(report, {masked, candidates, ghostTexels: ghosts, median: med, sources: pool.length});
+  Object.assign(report, {masked, candidates, ghostTexels: ghosts, median: med, sources: pool.length, ...(clone ? {cloned} : {})});
   for (const s of slots) {
     const D = s === base ? B : await decode(s.tex);
     for (const [i, j] of source) {

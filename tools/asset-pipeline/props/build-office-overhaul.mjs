@@ -46,6 +46,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
 import {GLASS_MATERIAL, addPlinth, cleanSupportTexture, cropPartTextures, extentOf, legExtend, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
+import {addConsoleBase} from './lib/console-base.mjs'; // task mall-round2-20261031 (lane PROPS, M03)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -209,6 +210,18 @@ const FURNITURE = {
       'studio-monitor-small': {box: [-0.88, 0.57, 0.49, -0.455, 0.8, 0.88], sizeM: 0.417, sizeAxis: 'w', label: 'studio monitor (small)'},
     },
     plinth: {dy: 0.45, inset: 0.05}},
+  // Task mall-round2-20261031 (lane PROPS, M03 — user: "the big multi screen security system thing, like with 20 screens, appears sitting
+  // on the floor and doesn't look natural at all"; the mall security room's island cctvConsole, also the Office ironclad rooms): D31 is
+  // a 5 x 3 bank of 15 monitors in one cabinet (y 0.18-1.02) on the rear half of a 9 cm desk slab (x -0.960..0.965, z +-0.613, top
+  // 0.097) on 4.5 cm corner pads, so the bottom monitor row sat at knee height and the desk at the floor. Lifted +0.65 m onto a console
+  // base (desk top 0.747 m, monitors ~0.94-1.64 m, overall 1.672 m): a steel box inset 2 cm under the slab, recessed 0.30 m at the
+  // operator front (-Z) for knee space, on a toe kick (0.08 m, inset 0.05). Width 2.0 m kept (manifest size). Rule 4 — EXPLICIT
+  // EXCEPTION, kept in the model: the console's own control equipment on the desk slab (PTZ joystick + its coiled lead, CCTV keypad, a
+  // flush touch panel, a radio base unit, a gooseneck intercom mic) — wired, console-mounted fixtures of a security desk; none is an
+  // item / prop of the catalogue (no radio / joystick / microphone kind or item exists), so they stay part of the built-in console.
+  'cctv-console': {sizeM: 2, sizeAxis: 'w', basis: 'width 2.0 m kept; lifted +0.65 m onto a console base with a front knee recess (desk top ~0.75 m, monitor bank ~0.94-1.64 m); rule-4 exception: the console-mounted control equipment on its desk (joystick, keypad, touch panel, radio base, gooseneck mic) stays in the model',
+    operation: 'console base (local riser with a front knee recess) under a console modelled sitting on the floor',
+    consoleBase: {dy: 0.65, rect: {x: [-0.94, 0.945], z: [-0.293, 0.593]}, kick: {h: 0.08, inset: 0.05}}},
 };
 const partUrl = (pid, p) => (p.item ? `assets/models/item-${pid}-t25.glb` : `assets/models/office-${pid}.glb`);
 const PART_PATHS = Object.values(FURNITURE).flatMap(f => Object.entries(f.parts ?? {}).map(([pid, p]) => partUrl(pid, p)));
@@ -284,6 +297,7 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
     if (F.legs) edits.legs = {...F.legs, ...legExtend(doc, F.legs.cut, F.legs.dy)};
     if (F.scaleX) { scaleAxis(doc, 0, F.scaleX); edits.scaleX = F.scaleX; }
     if (F.plinth) edits.plinth = addPlinth(doc, F.plinth.dy, F.plinth.inset);
+    if (F.consoleBase) edits.consoleBase = addConsoleBase(doc, F.consoleBase); // task mall-round2-20261031 (lane PROPS, M03)
     const bb = getBounds(scene);
     k = F.sizeM / extentOf(bb, F.sizeAxis);
     scaleGroundCentre(doc, k);
@@ -411,11 +425,11 @@ for (const a of ASSETS) {
     output: {file: `game/public/${outRel}`, url: outRel, sha256: sha(glb), bytes: glb.length, triangles: tris, dims, overBudget},
     targetTriangles: a.tris, sizeM: F?.sizeM ?? a.sizeM, sizeAxis: F?.sizeAxis ?? a.sizeAxis, scale: +scale.toFixed(6), nativeFront: front, textureStep: step,
     textureSizes: {baseColor: ladder[step][0], other: ladder[step][1], jpegQuality: ladder[step][2]},
-    transform: `rotateY(${({'+Z': '180', '-Z': '0', '+X': '90', '-X': '-90'})[front]}deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices${F ? `; lane FURN: ${F.parts ? 'loose clutter separated, then ' : ''}furniture-only rescale x${furniture.k.toFixed(4)} to ${F.sizeM} m (${F.sizeAxis}), grounded / centred again` : ''}`, front: '-Z', up: '+Y',
+    transform: `rotateY(${({'+Z': '180', '-Z': '0', '+X': '90', '-X': '-90'})[front]}deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices${F ? `; lane FURN: ${F.parts ? 'loose clutter separated, then ' : ''}${F.consoleBase ? `lifted +${F.consoleBase.dy} m onto a console base (lane PROPS M03), then ` : ''}furniture-only rescale x${furniture.k.toFixed(4)} to ${F.sizeM} m (${F.sizeAxis}), grounded / centred again` : ''}`, front: '-Z', up: '+Y',
     review: {evidence: j.accepted.evidence ?? null, checks: j.accepted.checks ?? null, observation: j.accepted.observation ?? null},
     ...(NOTES[a.id] ? {note: NOTES[a.id]} : {}), textures,
     // lane FURN (office-props-physics-scale-20261030): furniture-only real size + the separated loose clutter (local operation on this raw)
-    ...(F ? {furniture: {task: 'office-props-physics-scale-20261030 (lane FURN)', operation: F.parts ? 'local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale' : 'furniture-only rescale',
+    ...(F ? {furniture: {task: F.consoleBase ? 'mall-round2-20261031 (lane PROPS, M03)' : 'office-props-physics-scale-20261030 (lane FURN)', operation: F.operation ?? (F.parts ? 'local separation of baked loose clutter (connected components on the worktop / desk top / display shelves) + furniture-only rescale' : 'furniture-only rescale'),
       manifestSizeM: a.sizeM, manifestSizeAxis: a.sizeAxis, sizeM: F.sizeM, sizeAxis: F.sizeAxis, basis: F.basis, scaleFromManifest: +furniture.k.toFixed(6), removed: furniture.removed,
       ...(furniture.ghosts ? {supportTextureCleanup: furniture.ghosts, supportHeights: F.supports.map(q => q.y)} : {}),
       ...(furniture.edits ? {edits: furniture.edits} : {}),
