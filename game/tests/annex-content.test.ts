@@ -24,7 +24,7 @@ import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind} f
 import {holderSurfaces} from '../src/items/lootLayout';
 import {PROP_DEFS} from '../src/gen/props';
 import {
-  ANNEX_FLOOR, ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, ROOF_CACHE_KEY, ROOF_FIND_KEY, lootProfile, validateLootProfile,
+  ANNEX_FLOOR, ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, ROOF_CACHE_KEY, ROOF_FIND_KEY, lootProfile, validateLootProfile,
 } from '../src/items/lootTables';
 import {ITEMS} from '../src/items/items';
 import {OFFICE_SIREN_ELIGIBILITY, SERVICE_CONTEXT, SERVICE_ZONE_BUDGET, spawnContextOf, spawnProfile} from '../src/ai/spawnTables';
@@ -156,22 +156,34 @@ describe('service annex loot (finite, themed, appended, never multiplying the le
     expect(ANNEX_STASH.empty).toBeGreaterThan(0);
   });
 
-  it('holders: 1-2 stashes per annex in dead-end rooms, the deepest few intact, the rest picked over', () => {
+  it('holders: 1-2 stashes in dead-end rooms, the deepest few intact, supply by depth band, a few scraps, the rest searched clean', () => {
+    // playtest revision (studio-alpha-track2-playtest-revision-20261031-01): gen/annexContent.ts pickOver — supply holders by door-hop
+    // depth band (entry / middle / deep), <= perArea per room; <= scrapsMax scraps; the rest ANNEX_PICKED (searched clean)
+    const L = ANNEX_CONTENT.loot;
     for (const l of WITH()) {
       const rep = extensionContentOf(l)!;
       for (const n of l.extensions!.annexes) {
         const ids = new Set(n.areas);
         const holders = l.props.slice(rep.first.props).filter(p => ids.has(p.area) && isLootHolderKind(p.kind) && p.host === undefined);
-        const stash = holders.filter(p => p.purpose === ANNEX_STASH_KEY), picked = holders.filter(p => p.purpose === ANNEX_PICKED_KEY);
-        const intact = holders.filter(p => p.purpose !== ANNEX_STASH_KEY && p.purpose !== ANNEX_PICKED_KEY);
+        const by = (k: string) => holders.filter(p => p.purpose === k);
+        const stash = by(ANNEX_STASH_KEY), picked = by(ANNEX_PICKED_KEY), supply = by(ANNEX_SUPPLY_KEY), scraps = by(ANNEX_SCRAPS_KEY);
+        const special = new Set([ANNEX_STASH_KEY, ANNEX_PICKED_KEY, ANNEX_SUPPLY_KEY, ANNEX_SCRAPS_KEY]);
+        const intact = holders.filter(p => !special.has(p.purpose ?? ''));
         expect(stash.length, `${l.seed} annex ${n.id} stashes`).toBeGreaterThanOrEqual(1);
         expect(stash.length).toBeLessThanOrEqual(2);
         for (const s of stash) expect(['crate', 'cabinetTall']).toContain(s.kind);
         expect(intact.length).toBeLessThanOrEqual(Math.max(1, Math.round(n.areaM2 / ANNEX_CONTENT.m2PerIntactHolder)));
-        expect(picked.length).toBeGreaterThan(intact.length);
-        // intact = the deepest: no picked-over holder lies deeper than the shallowest intact one
+        const want = Math.max(L.supply[0], Math.min(L.supply[1], Math.round(n.areaM2 / L.m2PerSupply)));
+        expect(supply.length, `${l.seed} annex ${n.id} supply`).toBe(Math.min(want, supply.length + scraps.length + picked.length));
+        expect(scraps.length).toBeLessThanOrEqual(L.scrapsMax);
+        const per = new Map<number, number>();
+        for (const p of supply) per.set(p.area, (per.get(p.area) ?? 0) + 1);
+        for (const v of per.values()) expect(v).toBeLessThanOrEqual(L.perArea);
+        // the entry third holds supply when it has candidate holders; the intact room-table holders stay the deepest
         const depth = (p: {area: number}) => l.areas[p.area].depth;
-        if (intact.length && picked.length) expect(Math.max(...picked.map(depth))).toBeLessThanOrEqual(Math.min(...intact.map(depth)));
+        const others = [...supply, ...scraps, ...picked], ds = others.map(depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
+        if (others.some(p => depth(p) - dMin < (dMax - dMin) / 3)) expect(supply.filter(p => depth(p) - dMin < (dMax - dMin) / 3).length).toBeGreaterThanOrEqual(1);
+        if (intact.length && others.length) expect(Math.max(...others.map(depth))).toBeLessThanOrEqual(Math.min(...intact.map(depth)));
         // persistence keys (kind + storey + position) are unique
         const keys = holders.map(p => holderKey(p.kind, p.level, p.x, p.z));
         expect(new Set(keys).size).toBe(keys.length);

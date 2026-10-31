@@ -184,6 +184,8 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   MALL_OVERRIDES: 'levels (profiles: mall overrides)', MALL_PROFILE: 'levels (profiles: mall)',
   // Track 2 (lane CONTENT): the service-annex loot context (ANNEX_STASH / ANNEX_PICKED and their rows are row tables: auto-detected)
   ANNEX_STASH_KEY: 'service-annex stash (loot key -> purpose annex-stash: holder contexts)', ANNEX_PICKED_KEY: 'service-annex picked-over storage (loot key -> purpose annex-picked: holder contexts)',
+  // playtest revision (studio-alpha-track2-playtest-revision-20261031-01): the annex's distributed supply / scraps holders (exact tables)
+  ANNEX_SUPPLY_KEY: 'service-annex supply holders (loot key -> purpose annex-supply: holder contexts; exact)', ANNEX_SCRAPS_KEY: 'service-annex scraps (loot key -> purpose annex-scraps: holder contexts; exact)',
   ANNEX_FLOOR: 'floor program (annex variant, per service annex)',
 };
 
@@ -741,7 +743,8 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
   const areaLabel = isReward ? (P.tables.rewards?.[areaKey]?.label ?? areaKey) : purpose?.label ?? areaKey;
   let tableId: string | null = null;
   let rewardPicks: string[] | undefined;
-  const scarcity = scarcityOf(P, kind, areaKey, isReward);
+  const exact = !!ht.exact; // playtest revision: an annex-local exact table (LootSpec.exact) skips the scarcity stage like a reward
+  const scarcity = scarcityOf(P, kind, areaKey, isReward || exact);
   const gates: StageGates = {
     empty: ht.empty, pNotEmpty: 0, lots: ht.lots, expectedLotsIfRolled: rd(meanInt(ht.lots[0], ht.lots[1])),
     bigBoxes: P.tables.bigBoxHolders.has(kind),
@@ -770,7 +773,8 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
     tableId = identifyTable(B, level, P, tag, kind, areaKey, compartment, ht);
     B.use(tableId, id);
     const {out, pRoll} = rawLot(P, kind, areaKey, ht);
-    const final = finalLot(P, kind, areaKey, ht.rows, out);
+    const final = exact ? out : finalLot(P, kind, areaKey, ht.rows, out);
+    if (exact) notes.push('Annex-local exact table (LootSpec.exact): its own empty / lots / rows are the odds — no keep cut, no re-theme, no limb conversion (the level\'s slot scaling still applies).');
     gates.pNotEmpty = rd(pRoll);
     expected = expectedOf([{pRoll, lots: ht.lots, raw: out, final}]);
     if (ht.source === 'legacy') {

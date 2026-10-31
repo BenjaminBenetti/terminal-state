@@ -133,7 +133,7 @@ export interface HolderTable {
   empty: number;
   lots: LotRange;
   rows: ItemRows;
-  /** Playtest revision: an annex-local table (LootSpec.exact) — rolled exactly, no scarcity cut, no slot scaling. */
+  /** Playtest revision: an annex-local table (LootSpec.exact) — no level-wide scarcity cut (a level's slot scaling still applies). */
   exact?: boolean;
 }
 
@@ -150,7 +150,7 @@ export function holderTable(kind: HolderKind, areaType: string, profile: LootPro
   // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
   // (`areaType` is the purpose id when the area has one; plain room types use the legacy tables).
   const spec = purposeLoot(areaType, kind);
-  if (spec?.exact) return {...resolved(profile, undefined, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]}, kind, areaType), slot, exact: true};
+  if (spec?.exact) return {...resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]}, kind, areaType), exact: true};
   if (spec) return resolved(profile, slot, 'purpose', {items: spec.items, empty: spec.empty ?? T.holderEmpty[kind], lots: spec.lots ?? T.holderLots[kind]}, kind, areaType);
   const [lo, hi] = T.holderLots[kind];
   // Stocked rooms get fuller shelves.

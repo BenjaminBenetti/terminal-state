@@ -54,8 +54,9 @@ export interface LootSpec {
   items: ItemRows; lots?: LotRange; empty?: number;
   /**
    * Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): an ANNEX-LOCAL table rolled EXACTLY — no level-wide
-   * scarcity cut / re-theme (items/lootEconomy.ts scarceFinds) and no slot scaling: its own `empty` / `lots` / rows ARE the odds.
-   * Only the service-annex keys (ANNEX_*) set it; every core table keeps the scarcity economy unchanged.
+   * scarcity cut / re-theme / limb conversion (items/lootEconomy.ts scarceFinds): its own `empty` / `lots` / rows ARE the odds (a
+   * level profile's slot scaling still applies, as for every table). Only the service-annex keys (ANNEX_*) set it; every core table
+   * keeps the scarcity economy unchanged.
    */
   exact?: boolean;
 }
