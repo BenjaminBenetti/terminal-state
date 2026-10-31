@@ -3,7 +3,8 @@
 // Per seed: builds the world, checks no grid wall face shows inside a corridor, every entry door got a wall opening, every
 // cap span is sane, and prints draws / triangles; with TRACK_EXT_PREVIEW=1 also renders mouth / mid / cap / door views
 // (CPU, real textures) into qa-artifacts/track-ext-vis/gen/. Seeds without extensions are reported and skipped (before
-// lane GEN's code is merged, every seed is).
+// lane GEN's code is merged, every seed is). GEN-2: service hatches (annexes entered through a bed side wall) are checked too —
+// the end keeps its plane / barricade, the bed wall face carries the opening, a SERVICE plate is built — and previewed.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import fs from 'node:fs';
@@ -42,7 +43,7 @@ describe.runIf(!!process.env.TRACK_EXT_GEN)('track-extension presentation on gen
       const L = generateStation(seed);
       const tg = performance.now() - t0;
       const e = (L as {extensions?: TrackExtensions}).extensions;
-      if (!e?.tunnels.length) { report.push(`seed ${seed} ${L.archetype}: no extensions`); continue; }
+      if (!e?.tunnels.length && !e?.annexes.some(a => a.bed)) { report.push(`seed ${seed} ${L.archetype}: no extensions`); continue; }
       const t1 = performance.now();
       const w = buildWorld(L, mats, {});
       const tb = performance.now() - t1;
@@ -57,6 +58,28 @@ describe.runIf(!!process.env.TRACK_EXT_GEN)('track-extension presentation on gen
         for (const o of p.openings) { expect(o.s1 - o.s0).toBeGreaterThan(0.9); expect(o.head).toBeGreaterThan(t.floorY + 2); }
         expect(p.cap.back).toBeGreaterThanOrEqual(t.length - 1e-6);
         expect(p.cap.walkEnd).toBeLessThanOrEqual(t.length + 1e-6);
+      }
+      for (const h of te.view.hatches) {
+        const b = h.b, d = L.doors[b.door];
+        expect(te.view.continued.has(`${b.trench}:${b.from}`), `seed ${seed} hatch ${h.annex.id}: end continued`).toBe(false);
+        expect(te.plates.some(q => q.annex === h.annex.id), `seed ${seed} hatch ${h.annex.id}: plate`).toBe(true);
+        const faces = w.wallFaces.filter(f => f.areaType === 'trackbed' && Math.abs(f.z0 - b.z) < 1e-6 && Math.abs(f.z1 - b.z) < 1e-6);
+        const x0 = d.x * 0.5, x1 = (d.x + d.w) * 0.5;
+        const opened = faces.some(f => f.openings.some(o => Math.abs(Math.min(f.x0, f.x1) + o.s0 - x0) < 1e-6 && Math.abs(Math.min(f.x0, f.x1) + o.s1 - x1) < 1e-6 && Math.abs(o.top - b.head) < 1e-3))
+          || faces.some(f => Math.abs(Math.min(f.x0, f.x1) - x0) < 1e-6 && Math.abs(Math.max(f.x0, f.x1) - x1) < 1e-6 && Math.abs(f.y0 - b.head) < 1e-3);
+        expect(opened, `seed ${seed} hatch ${h.annex.id}: bed wall opening`).toBe(true);
+        report.push(`  hatch annex ${h.annex.id}: bed ${b.trench} ${b.from} ${b.wall} wall, s ${b.s} m, door x ${x0}-${x1} head ${b.head}, clues ${JSON.stringify(b.clues.map(c => [c.kind, c.s]))}`);
+        if (render) {
+          const f = h.f, y = b.floorY;
+          const cams: [string, {pos: [number, number, number]; target: [number, number, number]; fov: number}][] = [
+            ['bed', {pos: (([x, z]) => [x, y + 1.65, z] as [number, number, number])(f.point(b.s + 9, -b.side * 1.6)), target: [b.x, y + 1.2, b.z], fov: 75}],
+            ['in', {pos: [b.x, y + 1.65, b.z + (b.wall === 'N' ? -5 : 5)], target: [b.x, y + 1.0, b.z + (b.wall === 'N' ? 2 : -2)], fov: 75}],
+          ];
+          for (const [name, cam] of cams) {
+            const px = renderMeshes(w.group, {far: 60, ...cam}, {width: 800, height: 450, flashlight: true, ambient: 0.4, fog: 0.025});
+            await sharp(px, {raw: {width: 800, height: 450, channels: 3}}).png().toFile(path.join(OUT, `seed${seed}-hatch${h.annex.id}-${name}.png`));
+          }
+        }
       }
       report.push(`seed ${seed} ${L.archetype}: gen ${tg.toFixed(0)} ms, build ${tb.toFixed(0)} ms; tunnels ${e.tunnels.length} annexes ${e.annexes.length}; ${JSON.stringify(te.stats)}`);
       for (const p of te.shells.perTunnel) report.push(`  tunnel ${p.id}: ${p.length.toFixed(1)} m, ${p.draws} draws, ${p.triangles} tris, cap ${p.cap.kind} front ${p.cap.front.toFixed(2)} walkEnd ${p.cap.walkEnd.toFixed(2)} back ${p.cap.back.toFixed(2)}, openings ${JSON.stringify(p.openings.map(o => [+o.s0.toFixed(2), +o.s1.toFixed(2), o.side, +o.head.toFixed(2)]))}`);
