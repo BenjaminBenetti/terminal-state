@@ -27,7 +27,9 @@ export function mallTowerRecord(layout: Pick<StationLayout, 'mall' | 'levels' | 
   const width = 1.5;
   const landing = {x: cx, z: r3(wallZ + n * 0.75)};
   const g = layout.grid;
-  const storeys = m.storeys.map(s => ({floor: s.level, levelId: s.level, baseY: s.baseY, label: s.level === 0 ? 'S' : String(s.level), clear: s.clear}));
+  // task mall-round2-20261031 (lane RUNTIME, M02): `name` = the storey's HUD name ('Subway' / 'Level 1') for the button prompts; the
+  // runtime shows these short labels on every button / indicator (no Office 'L' numbering: the station is not a second lobby)
+  const storeys = m.storeys.map(s => ({floor: s.level, levelId: s.level, baseY: s.baseY, label: s.level === 0 ? 'S' : String(s.level), name: s.label, clear: s.clear}));
   return {
     version: 2,
     floors: storeys.map(s => s.floor),

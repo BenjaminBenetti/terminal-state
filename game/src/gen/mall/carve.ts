@@ -17,13 +17,14 @@
 //  6. the station's back of house (washrooms, agent office, maintenance store) on a spur off the Fountain court.
 
 import type {Rng} from '../../core/rng';
-import {CELL, FLOOR, SOLID} from '../grid';
+import {CELL, FLOOR, SOLID, VOID} from '../grid';
 import {Kit, type TrackBlock} from '../stationKit';
 import {STAIR, layStairRun, stairRunCells, type StairFlight, type StairSpec} from '../traversal';
 import {DOOR_HEIGHT, type Area, type Rect} from '../stationTypes';
 import {CLEAR, CORE, FLOORS, ROOF, RUN, STOREY, mallStoreyLabel, type MallFrame} from './frame';
 import {MALL_LOTS, type MallLotId, type MallLotStock, type MallLotZone} from './lots';
-import {decompose, overlaps, planSkeleton, type CellRect, type MallSkeleton, type RunPlan, type Side4} from './skeleton';
+import {decompose, overlaps, planSkeleton, type CellRect, type EndSpec, type MallSkeleton, type RunPlan, type Side4} from './skeleton';
+import {EXIT} from './exits';
 
 export {decompose, type CellRect} from './skeleton';
 
@@ -216,6 +217,20 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     runs.push(rc);
   }
 
+  // --- 3b. Task mall-round2-20261031 (lane GEN, M09): the designed street-exit corridor ends — their outside (the vestibule pocket
+  // + the near exterior view, EXIT.reserve) stays free of every later room on every retail floor: its rock cells are marked VOID
+  // while the cores / lots / washrooms are carved (rectFree refuses them) and turn back to rock at the end. An end whose outside is
+  // already built over falls back to an end unit on floor 1. (Only the round-2 variants design such ends.)
+  const reservedCells: [number, number][] = [];
+  sk.ends.forEach((e, ei) => {
+    if (!e.exit) return;
+    const r = exitReserveRect(e);
+    let clear = r.x >= 1 && r.y >= 1 && r.x + r.w <= W - 1 && r.y + r.h <= H - 1;
+    for (let lv = 1; lv <= FLOORS && clear; lv++) { const g = k.grid(lv); for (let y = r.y; y < r.y + r.h && clear; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.cells[g.idx(x, y)] !== SOLID) { clear = false; break; } }
+    if (!clear) { const {exit: _x, ...rest} = e; sk.ends[ei] = {...rest, pref: {...rest.pref, 1: 'end-unit'}}; return; }
+    for (let lv = 1; lv <= FLOORS; lv++) { const g = k.grid(lv); for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { g.cells[g.idx(x, y)] = VOID; reservedCells.push([lv, g.idx(x, y)]); } }
+  });
+
   // --- 4. Two service-stair cores behind the court's north edge (beside their lobbies; on level 0 onto the Fountain court) -----
   const cores: CoreCarve[] = [];
   const L = 2 * CORE.landing + SERVICE_RUN_CELLS, WH = 2 * CORE.lane + CORE.divider, FW = WH + 1 + 3;
@@ -312,6 +327,8 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
   // --- 6. The station's back of house: a spur off the Fountain court's west wall ---------------------------------------------
   const stationBoh = stationServices(k, rng.fork('station-boh'), sk, court0);
   if (!stationBoh) return fail('station-boh');
+  // (3b) the reserved street-exit outsides are rock again
+  for (const [lv, i] of reservedCells) k.grid(lv).cells[i] = SOLID;
 
   // --- Extent ---------------------------------------------------------------------------------------------------------------
   let X0 = Infinity, Z0 = Infinity, X1 = -Infinity, Z1 = -Infinity;
@@ -783,3 +800,19 @@ export function floorCells(g: {cells: Uint8Array; idx: (x: number, y: number) =>
 }
 
 export {overlaps};
+
+/**
+ * Task mall-round2-20261031 (lane GEN, M09): the canvas cell rect kept free beyond a designed street-exit end on every retail floor —
+ * the vestibule pocket and the near part of the exterior view (EXIT.vest + the minimum view depth + 4 cells), EXIT.viewSide[1] / 3
+ * cells wider than the corridor each side.
+ */
+export function exitReserveRect(e: Pick<EndSpec, 'dir' | 'line' | 'a0' | 'a1'>): CellRect {
+  const D = EXIT.vest + EXIT.viewDepth[0] + 4, s = Math.ceil(EXIT.viewSide[1] / 3);
+  const t0 = e.a0 - s, t1 = e.a1 + s;
+  switch (e.dir) {
+    case 'N': return {x: t0, y: e.line - D + 1, w: t1 - t0, h: D};
+    case 'S': return {x: t0, y: e.line, w: t1 - t0, h: D};
+    case 'W': return {x: e.line - D + 1, y: t0, w: D, h: t1 - t0};
+    default: return {x: e.line, y: t0, w: D, h: t1 - t0};
+  }
+}

@@ -1465,8 +1465,8 @@
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
-      "bytes": 238801,
-      "sha256": "1f5cb16c85516c14d6b06fbd3d8199139d7720728ac57c29ee2e5aa664b083fd"
+      "bytes": 252240,
+      "sha256": "b827d4678468e925596ac24f28a666fd1f3bf447cd2f8190f05d89bf2895949a"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1495,8 +1495,8 @@
     },
     {
       "path": "assets/derivatives/office-overhaul-20261030.json",
-      "bytes": 285563,
-      "sha256": "0b8591078558d666fb6a20601b0c793e9b3f41618c4a4ebdafc7a76b2b889985"
+      "bytes": 286924,
+      "sha256": "912556de9ea3eb57f2711f36a516c5094a484663d0dd22b6e5b78dbc2b429cd4"
     },
     {
       "path": "assets/derivatives/office-server-rack-r2-20261030.json",
@@ -1940,8 +1940,8 @@
     },
     {
       "path": "assets/models/mall-multideck-open-cooler.glb",
-      "bytes": 259620,
-      "sha256": "bc16fab843b1d493a56054980f7e3c063a87b241516ce0925a6b19f5cd0913c3"
+      "bytes": 270372,
+      "sha256": "4985f9a33488b39f0826cad7a91ead07549b7cd39ce2809f19677745dd5d76c5"
     },
     {
       "path": "assets/models/mall-outdoors-plank-shelving.glb",
@@ -1960,13 +1960,13 @@
     },
     {
       "path": "assets/models/mall-retail-gondola.glb",
-      "bytes": 219552,
-      "sha256": "ffcb48f31c7bb03bf8b20721e52078199e86f6807abffda00f8680547da9a05d"
+      "bytes": 253776,
+      "sha256": "08b2b35a44e2aabf2a568b564dbfab78f51f25ab6a872ce787849b7af5f8b1d7"
     },
     {
       "path": "assets/models/mall-retail-wall-bay.glb",
-      "bytes": 210904,
-      "sha256": "5682a1d5dea45055713b5de407bc4eaeb5ee7ac57ef9b3dec811ebd3aba4486e"
+      "bytes": 217504,
+      "sha256": "3646e29a5d35bf866bb7cbdabc0de4ce2f544bd1a854ab1189ccfd513e924be4"
     },
     {
       "path": "assets/models/mall-salon-styling-chair.glb",
@@ -2050,8 +2050,8 @@
     },
     {
       "path": "assets/models/office-cctv-console.glb",
-      "bytes": 438720,
-      "sha256": "b633cb08bd9531704ca5469d0364d62ac429bfb0743b7588bebe080c42ab4b98"
+      "bytes": 440548,
+      "sha256": "89bbf3bbfdf21104e56e8e52551db5752b178acbc7ce22628a70cf10feed7310"
     },
     {
       "path": "assets/models/office-chesterfield-sofa.glb",

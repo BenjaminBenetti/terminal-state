@@ -54,8 +54,14 @@ export const HORDE_AI = {
   /** Trail crumb spacing and the crumbs kept (80 x 0.5 m = 40 m: longer than a 20-member column). */
   trailStep: 0.5,
   trailCrumbs: 80,
-  /** A member this close to its slot stands. */
+  /**
+   * A standing member walks again when its slot is farther than arriveR; a WALKING member stands only within settleR. Task
+   * mall-round2-20261031 (lane RUNTIME, M06): this hysteresis keeps a member walking behind its slot between the validateEvery slot
+   * refreshes — the single `d < arriveR` test stood it for one frame before every refresh: an Idle (arms hanging) <-> Walk (arms
+   * raised) clip flip about four times a second, at every distance ("hordes constantly raise and lower their arms").
+   */
   arriveR: 0.5,
+  settleR: 0.2,
   /** Catch-up: anchor speed + catchK per metre of slot error, capped at maxCatch x the member's wander speed (a hurried walk). */
   catchK: 0.8,
   maxCatch: 1.6,
@@ -170,6 +176,9 @@ export class HordeMember implements PatrolLink {
   private stuckT = 0;
   /** Animation LOD accumulator (s). */
   animAcc = 0;
+  /** Task mall-round2-20261031 (lane RUNTIME, M06): last patrol frame walked (stand <-> walk hysteresis); QA: switches between the two. */
+  private walking = false;
+  gaitFlips = 0;
   /** QA: largest slot error seen while formed (m), seconds spent formed with an error above 3 m. */
   maxErr = 0;
   farT = 0;
@@ -200,6 +209,13 @@ export class HordeMember implements PatrolLink {
 
   /** PatrolLink: one 'patrol' frame (sight already checked by the brain). */
   steer(b: ZombieBrain, out: BrainOutput, dt: number, w: BrainWorld, moved: number): void {
+    this.steerFrame(b, out, dt, w, moved);
+    // task mall-round2-20261031 (lane RUNTIME, M06): the stand <-> walk state of this frame (hysteresis in steerFrame; QA counter)
+    const walk = out.anim === 'Walk';
+    if (walk !== this.walking) { this.walking = walk; this.gaitFlips++; }
+  }
+
+  private steerFrame(b: ZombieBrain, out: BrainOutput, dt: number, w: BrainWorld, moved: number): void {
     const G = this.group, A = HORDE_AI;
     out.speed = 0; out.dirX = out.dirZ = 0; out.anim = 'Idle';
     const stand = () => { out.speed = 0; out.anim = 'Idle'; out.face = G.heading + this.jyaw; };
@@ -219,7 +235,7 @@ export class HordeMember implements PatrolLink {
     }
     const sameStorey = Math.abs(ty - b.y) <= 1.2;
     const d = Math.hypot(tx - b.x, tz - b.z);
-    if (sameStorey && d < A.arriveR) { this.via = null; this.viaArc = -Infinity; this.blocked = false; stand(); return; }
+    if (sameStorey && d < (this.walking ? A.settleR : A.arriveR)) { this.via = null; this.viaArc = -Infinity; this.blocked = false; stand(); return; }
     // blocked probe (staggered): straight walk to the slot? else the nearest walkable trail crumb ahead; else a regroup path
     this.probeT -= dt;
     if (this.probeT <= 0 || this.stuckT > 1.2) {
@@ -767,7 +783,7 @@ export class HordeDirector {
       const ms = g.members.map(m => {
         const b = m.brain;
         const role: HordeMemberStats['role'] = !b.alive ? 'dead' : m.detached ? 'detached' : b.state === 'patrol' ? (m.slot === 0 ? 'leader' : 'follower') : b.state === 'idle' ? 'returning' : 'engaged';
-        return {index: m.index, state: b.state, slot: m.slot, slotErr: r2(m.formed && m.hasSlot ? m.slotErr() : -1), role, at: {x: r2(b.x), y: r2(b.y), z: r2(b.z)}, maxErr: r2(m.maxErr), farT: r2(m.farT), regroups: m.regroups};
+        return {index: m.index, state: b.state, slot: m.slot, slotErr: r2(m.formed && m.hasSlot ? m.slotErr() : -1), role, at: {x: r2(b.x), y: r2(b.y), z: r2(b.z)}, maxErr: r2(m.maxErr), farT: r2(m.farT), regroups: m.regroups, gaitFlips: m.gaitFlips};
       });
       const count = (role: string) => ms.filter(x => x.role === role).length;
       const lv = this.levels.levelAt(g.ax, g.az, g.ay + 0.05);

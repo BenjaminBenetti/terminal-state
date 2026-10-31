@@ -43,6 +43,9 @@ export interface EndSpec {
   a1: number;
   /** Preferred family per floor (falls back to smaller families when it does not fit). */
   pref: Readonly<Record<number, MallLotId>>;
+  /** Task mall-round2-20261031 (lane GEN, M09): on the street floor this end meets the street — no unit; the locked glazed exit
+   *  (gen/mall/exits.ts 'corridor-end') closes it. The carver keeps its outside clear of lots. */
+  exit?: true;
 }
 
 export interface RunPlan {
@@ -215,6 +218,12 @@ export function planSkeleton(rng: Rng, f: MallFrame, block: TrackBlock, W: numbe
     const [a0, a1] = dir === 'W' || dir === 'E' ? [r.y, r.y + r.h] : [r.x, r.x + r.w];
     ends.push({id, dir, line, a0, a1, pref});
   };
+  /** (round 2, M09) a floor-1 corridor end that meets the street: no unit, the locked glazed exit closes it (gen/mall/exits.ts). */
+  const exitEnd = (id: string, r: CellRect, dir: Side4) => {
+    const line = dir === 'W' ? r.x - 1 : dir === 'E' ? r.x + r.w : dir === 'N' ? r.y - 1 : r.y + r.h;
+    const [a0, a1] = dir === 'W' || dir === 'E' ? [r.y, r.y + r.h] : [r.x, r.x + r.w];
+    ends.push({id, dir, line, a0, a1, pref: {}, exit: true});
+  };
   const stairs: {wing: string; r: CellRect; lower: number; side?: 'lo' | 'hi'}[] = [];
   // rows / columns of a wing must meet the court: clamp into the court's span
   const zClamp = (z: number) => clampZ(z, Math.max(court.y + 2, stripN.y1 + 1), court.y + court.h - 2 - WW);
@@ -256,6 +265,68 @@ export function planSkeleton(rng: Rng, f: MallFrame, block: TrackBlock, W: numbe
     const wW = wing('branch-W', rect(xw1 - f.branchLen - 8, zw, xw1, zw + WW), [1], 'corridor', 'West arcade');
     endOf('end-W', wW, 'W', {1: 'end-unit'});
     stairs.push({wing: 'arcade-S', r: sA, lower: 1}, {wing: 'arcade-N', r: nA, lower: 2});
+  } else if (f.variant === 'tee-junction') {
+    // task mall-round2-20261031 (lane GEN, M08): a south SPINE off the court (every floor) meets a cross corridor away from the
+    // court — a T, a three-way junction with its own adjacency: one arm (floors 1-2) ends in an anchor (floor 1) / end unit (floor
+    // 2), the other is a STREET ARCADE (floor 1 only) running on to the locked glass street doors (M09); floor 3 keeps the spine
+    // (an end unit closes it over the junction)
+    const xs = clampZ(Math.round(court.x + (court.w - WW) * rng.range(0.3, 0.7)), court.x + 4, court.x + court.w - 4 - WW);
+    const ys0 = southEdge(xs, xs + WW);
+    const yT = ys0 + f.wingB;
+    const spine = wing('wing-S', rect(xs, ys0, xs + WW, yT), [1, 2, 3], 'corridor', 'South mall');
+    wing('tee', rect(xs, yT, xs + WW, yT + WW), [1, 2], 'corridor', 'Junction');
+    const streetE = rng.chance(0.5), LSt = rng.int(16, 24);
+    const arm = wing(streetE ? 'arm-W' : 'arm-E', streetE ? rect(xs - f.wingA, yT, xs, yT + WW) : rect(xs + WW, yT, xs + WW + f.wingA, yT + WW), [1, 2], 'corridor', streetE ? 'West arm' : 'East arm');
+    const st = wing('street', streetE ? rect(xs + WW, yT, xs + WW + LSt, yT + WW) : rect(xs - LSt, yT, xs, yT + WW), [1], 'corridor', 'Street arcade');
+    endOf('end-S3', spine, 'S', {3: 'end-unit'});
+    endOf('end-arm', arm, streetE ? 'W' : 'E', {1: 'anchor-deep', 2: 'end-unit'});
+    exitEnd('exit-street', st, streetE ? 'E' : 'W');
+    stairs.push({wing: 'arm', r: arm, lower: 1}, {wing: 'wing-S', r: spine, lower: 2});
+  } else if (f.variant === 'twin-court') {
+    // task mall-round2-20261031 (lane GEN, M08): a west corridor (every floor) to a SECOND court (floors 1-2): a hub of its own with
+    // an anchor across it (floor 1) / end unit (floor 2) and a short street arcade off its north or south side (floor 1) to the
+    // locked street doors; an east wing (floors 1-2); floor 3 keeps the corridor (an end unit closes it over the second court)
+    const zw = zClamp(zm + f.wingOff - (WW >> 1));
+    const xw1 = westEdge(zw, zw + WW);
+    const wW = wing('wing-W', rect(xw1 - f.wingA, zw, xw1, zw + WW), [1, 2, 3], 'corridor', 'West mall');
+    const c2w = rng.int(20, 24), c2o = rng.int(6, 9);
+    const c2 = wing('court-W', rect(wW.x - c2w, zw - c2o, wW.x, zw + WW + c2o), [1, 2], 'court2', 'West court');
+    endOf('end-W3', wW, 'W', {3: 'end-unit'});
+    endOf('end-court-W', c2, 'W', {1: 'anchor-deep', 2: 'end-unit'});
+    const north = rng.chance(0.5), WS = rng.int(10, 12), LSt = rng.int(16, 24);
+    const sx = c2.x + Math.round((c2w - WS) * rng.range(0.25, 0.75));
+    const st = wing('street', north ? rect(sx, c2.y - LSt, sx + WS, c2.y) : rect(sx, c2.y + c2.h, sx + WS, c2.y + c2.h + LSt), [1], 'corridor', 'Street arcade');
+    exitEnd('exit-street', st, north ? 'N' : 'S');
+    const ze = zClamp(zm - f.wingOff - (WW >> 1));
+    const xe0 = eastEdge(ze, ze + WW);
+    const wE = wing('wing-E', rect(xe0, ze, xe0 + f.wingB, ze + WW), [1, 2], 'corridor', 'East wing');
+    endOf('end-E', wE, 'E', {1: 'end-unit', 2: 'end-unit'});
+    stairs.push({wing: 'wing-E', r: wE, lower: 1}, {wing: 'wing-W', r: wW, lower: 2});
+  } else if (f.variant === 'offset-arcade') {
+    // task mall-round2-20261031 (lane GEN, M08): a SOUTH ARCADE offset from the court by a block of back-to-back shops and joined to
+    // it by two links (a loop court -> west link -> arcade -> east link -> court on floors 1-2); the arcade runs on, on floor 1
+    // only, as a street arcade to the locked street doors, its other end an anchor; a west wing on every floor; floor 3 keeps the
+    // east link (an end unit closes it)
+    if (court.w < 2 * WW + 30) return fail('offset-narrow');
+    const LL = rng.int(26, 32);
+    const xl0 = court.x + rng.int(2, 6);
+    const xl1 = Math.max(xl0 + WW + 22, court.x + court.w - WW - rng.int(2, 6));
+    const ysW = southEdge(xl0, xl0 + WW), ysE = southEdge(xl1, xl1 + WW);
+    const ya = Math.max(ysW, ysE) + LL;
+    wing('link-W', rect(xl0, ysW, xl0 + WW, ya), [1, 2], 'link', 'West link');
+    const lE = wing('link-E', rect(xl1, ysE, xl1 + WW, ya), [1, 2, 3], 'link', 'East link');
+    const streetE = rng.chance(0.5), ext = rng.int(8, 14), LSt = rng.int(16, 24);
+    const aS = wing('arcade-S', rect(xl0 - ext, ya, xl1 + WW + ext, ya + WW), [1, 2], 'corridor', 'South arcade');
+    const st = wing('street', streetE ? rect(aS.x + aS.w, ya, aS.x + aS.w + LSt, ya + WW) : rect(aS.x - LSt, ya, aS.x, ya + WW), [1], 'corridor', 'Street arcade');
+    endOf('end-arcade', aS, streetE ? 'W' : 'E', {1: 'anchor-deep', 2: 'end-unit'});
+    endOf('end-arcade-2', aS, streetE ? 'E' : 'W', {2: 'end-unit'});
+    exitEnd('exit-street', st, streetE ? 'E' : 'W');
+    endOf('end-link-E3', lE, 'S', {3: 'end-unit'});
+    const zw = zClamp(zm + f.wingOff - (WW >> 1));
+    const xw1 = westEdge(zw, zw + WW);
+    const wW = wing('wing-W', rect(xw1 - f.wingA, zw, xw1, zw + WW), [1, 2, 3], 'corridor', 'West wing');
+    endOf('end-W', wW, 'W', {1: 'end-unit', 2: 'end-unit', 3: 'end-unit'});
+    stairs.push({wing: 'arcade-S', r: aS, lower: 1}, {wing: 'wing-W', r: wW, lower: 2});
   } else {
     // an elbow: a south wing turning west (floors 1-2) and a west wing (every floor); on floor 1 a link joins their west ends
     // (a loop around the south-west block), on floor 2 both end in shops, floor 3 keeps the west wing

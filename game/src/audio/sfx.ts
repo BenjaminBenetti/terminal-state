@@ -172,8 +172,53 @@ const CLOSE_CUE: Record<string, CueId> = {
 };
 const EAT_CUE: Record<string, CueId> = {chips: 'eatChips', chocolate: 'eatChocolate', beans: 'eatBeans', noodles: 'eatNoodles'};
 const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater', juice: 'drinkJuice'};
-/** Iteration 07 (Lane K): rigid item / chunk contact families -> Sound Lab cues (bank i07k + reused impacts). */
-const PHYS_CUE: Record<ImpactFamily, CueId> = {can: 'itemCan', light: 'itemLight', heavy: 'impactMetal', prop: 'propTopple', flesh: 'chunkFlesh', stone: 'debrisFall', wood: 'impactWood', glass: 'impactGlass', metal: 'impactSheetMetal'};
+/**
+ * Iteration 07 (Lane K): rigid item / chunk contact families -> Sound Lab cues (bank i07k + reused impacts). Task mall-round2-20261031
+ * (lane AUDIO, M01): 'cardboard' -> its body cue; physImpact layers it per CARDBOARD_AUDIO.thud.
+ */
+export const PHYS_CUE: Readonly<Record<ImpactFamily, CueId>> = {can: 'itemCan', light: 'itemLight', heavy: 'impactMetal', prop: 'propTopple', cardboard: 'land', flesh: 'chunkFlesh', stone: 'debrisFall', wood: 'impactWood', glass: 'impactGlass', metal: 'impactSheetMetal'};
+/** Web Audio BiquadFilter lowpass Q is in dB: -3.01 dB = Butterworth (flat passband, no resonant bump at the cutoff). */
+const LP_FLAT_Q_DB = -3.01;
+/**
+ * Task mall-round2-20261031 (lane AUDIO, M01; user: "cardboard boxes play the metal clanking sound when being pushed around, should
+ * actually be more of a cardboard sound" — a general statement, every level). Cause (traced): every loose prop struck as family 'prop'
+ * -> propTopple, the Sound Lab take of "a metal trash can knocked over, toppling and clanging onto a concrete floor, a hollow metallic
+ * crash followed by a short rolling rattle" (i07k-prop-topple-*: ~1.05 s to -30 dB, bright energy kept long after the strike), and
+ * nothing at all sounded while a prop slid. Loose props of damage class cardboard (physics/dynamicItems.ts propImpactFamily) now strike
+ * as 'cardboard' and, while sliding on their floor, sound a paced drag (dynamicItems.ts PROP_DRAG -> propDrag / propDragStop). Both
+ * reuse ACCEPTED Sound Lab clips already in the bank; the only processing is playback rate, a flat lowpass and a truncation fade
+ * (no new clip, no synthesis):
+ *  - thud: 'land' ("a person in boots landing hard on a concrete floor, a heavy thud with a clothing rustle": dull, non-tonal, <= 85 ms
+ *    to -30 dB) as the body + a short 'jump' layer ("a short boot scuff on concrete with a quick clothing rustle") as the papery slap.
+ *    Rate (cardboardThudRate) falls with the prop's mass (a 3 kg carton sounds lighter than a 28 kg archive stack), rises a little with
+ *    impact speed. Same detection, throttle and 'fall' bucket as before.
+ *  - drag: one 'jump' scuff (lowpassed, slowed, truncated to maxDur) per drag tick; one voice per prop (a new tick hands over from the
+ *    previous one in `handoff` s), at most `maxVoices` at once plus its own 'drag' token bucket; propDragStop fades it in `release` s.
+ * Not chosen (structural measurements, reference/tasks/mall-round2-20261031/evidence/audio): hitKill (the player's kill confirm),
+ * zombieStep (enemy footsteps), itemLight / search (strongly tonal: whitened tonality 0.44 / 0.45 vs land 0.02), crateClose (woody
+ * 0.34 s tail). Levels / rates are first estimates for an ear pass — this routing was NOT auditioned.
+ */
+export const CARDBOARD_AUDIO = {
+  thud: {
+    body: {cue: 'land', gain: 1.4, lowpass: 2400},
+    slap: {cue: 'jump', gain: 1.6, rateMul: 0.78, lowpass: 3000, maxDur: 0.16, fade: 0.04},
+    /** Rate: `rateLight` at <= `lightKg`, minus `perDouble` per doubling of mass, floored at `rateHeavy`; x (`speed0` + `speedK` x s). */
+    rateLight: 1.3, rateHeavy: 0.95, lightKg: 3, perDouble: 0.11, speed0: 0.94, speedK: 0.1,
+    base: 0.35, ref: 1.6, rolloff: 1.4, send: 0.3, maxDist: 22, jitter: 0.06,
+  },
+  drag: {
+    cue: 'jump', gain: 1.6, lowpass: 3000, rate: [0.84, 0.96], level: [0.35, 1], fast: 2.5, maxDur: 0.26, fade: 0.05,
+    ref: 1.3, rolloff: 1.5, send: 0.2, maxDist: 16, jitter: 0.06, gainJitter: 1.5, maxVoices: 3, handoff: 0.03, release: 0.06,
+  },
+} as const satisfies {thud: {body: CueRef; slap: CueRef; [k: string]: unknown}; drag: CueRef};
+type CueRef = {cue: CueId; [k: string]: unknown};
+
+/** M01: playback rate of a cardboard thud for a prop of `mass` kg (undefined: a light carton) at normalised impact speed s (0..1). */
+export function cardboardThudRate(mass: number | undefined, s: number): number {
+  const T = CARDBOARD_AUDIO.thud, m = mass !== undefined && mass > 0 && Number.isFinite(mass) ? mass : T.lightKg;
+  const r = Math.max(T.rateHeavy, Math.min(T.rateLight, T.rateLight - T.perDouble * Math.log2(m / T.lightKg)));
+  return r * (T.speed0 + T.speedK * clamp01(s));
+}
 const IMPACT_CUE: Record<Surface, CueId> = {concrete: 'impactConcrete', tile: 'impactTile', metal: 'impactMetal', wood: 'impactWood', flesh: 'impactFlesh', glass: 'impactGlass', sheet: 'impactSheetMetal'};
 
 /**
@@ -212,12 +257,19 @@ interface PlayOpts {
   /** Random +/- dB applied to the gain (default 1). */
   gainJitter?: number;
   filter?: FilterSpec;
+  /**
+   * Task mall-round2-20261031 (lane AUDIO, M01): play at most this long (s of output, after the rate), ending with a `fadeOut` s
+   * linear fade (default 0.04) — a bounded window of a longer clip. Absent: the whole clip, as before.
+   */
+  maxDur?: number;
+  fadeOut?: number;
 }
 
 const MAX_VOICES = 44;
 const MAX_HRTF = 6;
 /** Token buckets: [refill per second, burst]. */
-const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2], confirm: [14, 4], flicker: [3, 2]} as const;
+const BUCKETS = {casing: [22, 6], impact: [26, 6], step: [10, 4], fall: [9, 3], drip: [3, 2], confirm: [14, 4], flicker: [3, 2],
+  drag: [10, 3]} as const; // task mall-round2-20261031 (lane AUDIO, M01): cardboard drag ticks, all props together
 type BucketName = keyof typeof BUCKETS;
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -359,7 +411,11 @@ export class Sfx {
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
-  private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}, confirm: {n: 4, t: 0}, flicker: {n: 2, t: 0}};
+  private tokens: Record<BucketName, {n: number; t: number}> = {casing: {n: 6, t: 0}, impact: {n: 6, t: 0}, step: {n: 4, t: 0}, fall: {n: 3, t: 0}, drip: {n: 2, t: 0}, confirm: {n: 4, t: 0}, flicker: {n: 2, t: 0},
+    drag: {n: 3, t: 0}};
+  // Task mall-round2-20261031 (lane AUDIO, M01): the sounding drag voice per sliding cardboard prop + counters (debugState().drag).
+  private drags = new Map<object, Voice>();
+  private dragStats = {ticks: 0, stops: 0, capped: 0, handoffs: 0};
   // Iteration 12 (AUDIO): foreground hit confirm — the latest player shot (onset time, voice) and its confirms so far.
   private revOut: GainNode | null = null;
   private shotAt = -Infinity;
@@ -519,7 +575,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -532,6 +588,7 @@ export class Sfx {
       confirmVoices: this.voices.filter(v => v.fg).length, confirms: this.confirms, flareLoops: this.flareLoops.filter(l => !l.stopped).length,
       vocal: {voices: this.voices.filter(v => v.vocal !== undefined && v.end > (this.ctx?.currentTime ?? 0)).length, gate: !!this.reach, ...this.vstats},
       t1: {humVoices: [...this.t1Hums.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, hissVoices: this.t1Hisses.filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.t1Stats}, // track1 (lane AUDIO)
+      drag: {voices: [...this.drags.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.dragStats}, // M01 (lane AUDIO)
     };
   }
 
@@ -569,7 +626,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopTrack1Cues(0.05); } // track1 (lane AUDIO): hums / hisses too
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
     if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
       this.fans = o.fans.slice(0, 64);
@@ -704,7 +761,13 @@ export class Sfx {
       node = node.connect(f);
     }
     node.connect(gn).connect(v.inp);
-    const dur = clip.dur / rate;
+    const full = clip.dur / rate;
+    const dur = o.maxDur !== undefined && o.maxDur > 0 ? Math.min(full, o.maxDur) : full;
+    if (dur < full) { // M01: a truncated window fades out instead of clicking off
+      const f = Math.min(o.fadeOut ?? 0.04, dur * 0.5);
+      gn.gain.setValueAtTime(g, t + dur - f);
+      gn.gain.linearRampToValueAtTime(0, t + dur);
+    }
     this.soundsStarted++;
     v.pending++;
     v.srcs.push(src);
@@ -1243,16 +1306,65 @@ export class Sfx {
    * Iteration 07 (Lane K): a rigid item / chunk / loose prop striking the station at `speed` m/s —
    * can: aluminium can / tin clatter; light: bottle / box / bag knock; heavy: a dropped gun; prop: a
    * trash can toppling; flesh: a torn chunk slapping down; stone / wood / glass / metal: chips (low).
+   * Task mall-round2-20261031 (lane AUDIO, M01): cardboard: a loose cardboard prop's soft thud (CARDBOARD_AUDIO.thud; `mass` kg sets
+   * its weight); every other family is unchanged.
    */
-  physImpact(x: number, y: number, z: number, speed: number, family: ImpactFamily): void {
+  physImpact(x: number, y: number, z: number, speed: number, family: ImpactFamily, mass?: number): void {
     if (!this.live || speed < 0.6) return;
     const L = this.listener;
     if (Math.hypot(x - L.x, z - L.z) > 24) { this.culled++; return; }
-    if (!this.take(family === 'prop' ? 'fall' : 'casing')) return;
+    if (!this.take(family === 'prop' || family === 'cardboard' ? 'fall' : 'casing')) return;
     const s = clamp01(speed / 5);
+    if (family === 'cardboard') {
+      const T = CARDBOARD_AUDIO.thud, rate = cardboardThudRate(mass, s);
+      const v = this.voice({at: {x, y, z}, ref: T.ref, rolloff: T.rolloff, send: T.send, pri: 0, maxDist: T.maxDist, gain: T.base + (1 - T.base) * 0.75 * Math.pow(s, 0.8)});
+      if (this.play(v, T.body.cue, {rate, jitter: T.jitter, gain: T.body.gain, filter: {type: 'lowpass', freq: T.body.lowpass, q: LP_FLAT_Q_DB}})) {
+        this.play(v, T.slap.cue, {rate: rate * T.slap.rateMul, jitter: T.jitter, gain: T.slap.gain, filter: {type: 'lowpass', freq: T.slap.lowpass, q: LP_FLAT_Q_DB}, maxDur: T.slap.maxDur, fadeOut: T.slap.fade});
+      }
+      return;
+    }
     const base = family === 'prop' ? 0.45 : family === 'stone' || family === 'wood' || family === 'glass' || family === 'metal' ? 0.1 : 0.25;
     const v = this.voice({at: {x, y, z}, ref: family === 'prop' ? 1.8 : 1.1, rolloff: 1.4, send: 0.35, pri: 0, maxDist: 24, gain: base + (1 - base) * 0.75 * Math.pow(s, 0.8)});
     this.play(v, PHYS_CUE[family], {rate: 0.92 + 0.16 * s, jitter: 0.07});
+  }
+  /**
+   * Task mall-round2-20261031 (lane AUDIO, M01): one drag tick of the cardboard prop `id` sliding along its floor at `speed` m/s
+   * (physics/dynamicItems.ts paces the ticks, PROP_DRAG; never per frame) — a short lowpassed 'jump' scuff (CARDBOARD_AUDIO.drag). One
+   * voice per prop: a still-sounding previous tick hands over (fades in `handoff` s). Bounded by distance, `maxVoices` drag voices at
+   * once (further props wait for the next tick), the 'drag' token bucket and the expendable (pri 0) voice cap.
+   */
+  propDrag(x: number, y: number, z: number, speed: number, id: object): void {
+    const ctx = this.live;
+    if (!ctx || !(speed > 0.05)) return;
+    const D = CARDBOARD_AUDIO.drag, L = this.listener, now = ctx.currentTime;
+    const prev = this.drags.get(id);
+    if (prev) { this.drags.delete(id); if (prev.end > now) { this.fadeVoice(prev, D.handoff); this.dragStats.handoffs++; } }
+    if (Math.hypot(x - L.x, z - L.z) > D.maxDist) { this.culled++; return; }
+    let n = 0;
+    for (const [k, v] of this.drags) { if (v.end > now) n++; else this.drags.delete(k); }
+    if (n >= D.maxVoices) { this.dragStats.capped++; return; }
+    if (!this.take('drag')) return;
+    const s = clamp01(speed / D.fast);
+    const v = this.voice({at: {x, y, z}, ref: D.ref, rolloff: D.rolloff, send: D.send, pri: 0, maxDist: D.maxDist, gain: D.level[0] + (D.level[1] - D.level[0]) * s});
+    const clip = this.play(v, D.cue, {rate: D.rate[0] + (D.rate[1] - D.rate[0]) * s, jitter: D.jitter, gainJitter: D.gainJitter, gain: D.gain,
+      filter: {type: 'lowpass', freq: D.lowpass, q: LP_FLAT_Q_DB}, maxDur: D.maxDur, fadeOut: D.fade});
+    if (!v || !clip) return;
+    this.drags.set(id, v);
+    this.dragStats.ticks++;
+  }
+  /** M01: the prop `id` stopped sliding (or stopped simulating): its sounding drag fades out in CARDBOARD_AUDIO.drag.release s. Idempotent. */
+  propDragStop(id: object): void {
+    const v = this.drags.get(id);
+    if (!v) return;
+    this.drags.delete(id);
+    const ctx = this.ctx;
+    if (ctx && v.end > ctx.currentTime) { this.fadeVoice(v, CARDBOARD_AUDIO.drag.release); this.dragStats.stops++; }
+  }
+  /** M01: every sounding drag fades out (a new station). */
+  private stopDrags(fadeS: number): void {
+    const ctx = this.ctx;
+    for (const v of this.drags.values()) if (ctx && v.end > ctx.currentTime) this.fadeVoice(v, fadeS);
+    this.drags.clear();
   }
   /** Ragdoll / corpse hitting the ground; strength 0..1. Rate-limited for multi-bone contacts. */
   bodyFall(x: number, y: number, z: number, strength: number): void {

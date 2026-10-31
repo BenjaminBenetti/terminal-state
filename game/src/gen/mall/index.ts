@@ -45,15 +45,17 @@ import {placeMallLandmarks, type LandmarkReport} from './landmarks'; // lane ARC
 import {placeAtriumColumns, type ColumnReport} from './columns'; // task mall-playtest-revision-20261031 (lane FIX, U04): round atrium columns = props
 import {CROP_MARGIN, FLOORS, MALL_CANVAS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
 import {carveMall, type MallCarve} from './carve';
-import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwayRoot, type Crop} from './structure';
+import {exitHolds, mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwayRoot, type Crop} from './structure';
 import {mallIssues} from './validate';
 import {mallTrackExtContext} from './trackExt'; // lane INTEG (Track2 integration): the mall's extendTracks parameters
+import {placeStreetExits, type DesignedExitEnd} from './exits'; // task mall-round2-20261031 (lane GEN, M09): locked street exits
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
 import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
-export {MALL_VARIANTS, mallFrame, mallVariantOf, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
+export {MALL_VARIANTS, mallFrame, mallVariantOf, mallVariantV2Of, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
 export {mallIssues, mallVoidCells, mallRouteGroups} from './validate';
 export {mallNameOf, MALL_GENERIC_NAME} from './names';
+export {placeStreetExits, MALL_STREET_LEVEL, MALL_EXIT_STATS, EXIT, exitColliderCells} from './exits';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
 const ATTEMPTS = 10;
@@ -69,7 +71,12 @@ export interface MallGenOptions {
   spawns?: SpawnProfile;
   /** Track2 (lane INTEG): the level's track-extension declaration (default LEVELS.mall's: trackExtConfig('mall')); 'none' = no extensions. */
   trackExt?: TrackExtConfig | 'none';
+  /** Task mall-round2-20261031 (lane GEN, M09): the locked street-exit post-pass (default true; false = the core layout only). */
+  streetExits?: boolean;
 }
+
+/** The designed street-exit corridor ends of a layout's skeleton (cropped cells), for the post-pass (set by tryLevel). */
+const DESIGNED_EXITS = new WeakMap<StationLayout, DesignedExitEnd[]>();
 
 /** The ONE continuous mall layout (station + three retail floors + the roof record). */
 export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions = {}): StationLayout {
@@ -100,6 +107,9 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
     for (const i of new Set(issues.map(q => q.replace(/-?[\d.]+/g, '#')))) MALL_REJECTS.set(i, (MALL_REJECTS.get(i) ?? 0) + 1);
     fallback ??= layout;
   }
+  // Task mall-round2-20261031 (lane GEN, M09): the locked street exits — an APPEND-ONLY post-pass on the chosen layout (its areas /
+  // lights are the last records: the core of an existing (seed, variant) stays identical; gen/mall/exits.ts).
+  if (fallback && opts.streetExits !== false) placeStreetExits(fallback, DESIGNED_EXITS.get(fallback) ?? [], ctx.levelSeed);
   MALL_GEN_STATS.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
   if (fallback) return fallback;
   throw new Error('mall level generation failed');
@@ -155,6 +165,8 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
 
   // --- Dressing: ONE station dresser pass with the run mouths / runs / elevator landings held clear --------------------------
   // (Track2 extension areas do not exist yet — they are attached after the last core pass: the dresser never sees them.)
+  // (round 2, M09) designed street-exit approaches stay prop-free through the dressers / landmarks / columns (round-2 variants only)
+  const exitHold = holdCells(layout, exitHolds(layout, mc, crop));
   const release = holdCells(layout, mouthHolds(layout, mc, crop));
   dress(layout, rng.fork('dress'));
   release();
@@ -176,6 +188,7 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // after the shops / landmarks (the columns keep a walkable ring off them) and before the populations (enemies / supplies / hordes
   // avoid them). Pure and deterministic (its fork draws nothing from `rng`).
   MALL_GEN_STATS.columns = placeAtriumColumns(layout, rng.fork('mall-columns'));
+  exitHold();
 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -211,7 +224,16 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // annex spawns after the hordes leaves every ambient draw unchanged.
   assignEnemyArchetypes(layout, spawns);
   applyFamilySpacing(layout, spawns);
+  DESIGNED_EXITS.set(layout, designedExitEnds(mc, crop));
   return layout;
+}
+
+/** The skeleton's designed street-exit corridor ends (EndSpec.exit, floor 1) in cropped grid cells. */
+function designedExitEnds(mc: MallCarve, c: Crop): DesignedExitEnd[] {
+  return mc.sk.ends.filter(e => e.exit).map(e => {
+    const alongX = e.dir === 'N' || e.dir === 'S';
+    return {dir: e.dir, line: e.line - (alongX ? c.oy : c.ox), a0: e.a0 - (alongX ? c.ox : c.oy), a1: e.a1 - (alongX ? c.ox : c.oy)};
+  });
 }
 
 /**
@@ -272,5 +294,7 @@ function dropFloatingFixtures(layout: StationLayout): number {
 /** QA / tests: one attempt (null when the program does not fit). */
 export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions & {salt?: number} = {}): StationLayout | null {
   const f = mallFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
-  return tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'));
+  const L = tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'));
+  if (L && opts.streetExits !== false) placeStreetExits(L, DESIGNED_EXITS.get(L) ?? [], ctx.levelSeed);
+  return L;
 }

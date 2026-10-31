@@ -634,6 +634,32 @@ export function installQaHooks(game: Game): void {
       }
       return null;
     },
+    /**
+     * Task mall-round2-20261031 (lane PROPS, M03 / M04 / M07): QA-only view setup (no interaction) — stand `dist` m off the nearest
+     * placement of `kind` (the player's storey first, then any storey unless `level` is given) on its `view` side ('front' = the prop's
+     * front, 'left34' / 'right34' = 35 deg off it, 'rear'), with a line of sight to that face, looking at `aimH` x its height. E.g.
+     * goProp('cctvConsole') (mall security room island / Office ironclad), goProp('multideckOpenCooler', undefined, 'front', 1.6, 0.55)
+     * (its inner back wall through the open front), goProp('wallBay', undefined, 'right34', 1.8). Returns the target or null.
+     */
+    goProp: (kind: string, level?: number, view: 'front' | 'left34' | 'right34' | 'rear' = 'front', dist = 2.2, aimH = 0.6) => {
+      const p = game.player, L = game.levels;
+      const lv = level ?? Math.max(0, L.levelAt(p.x, p.z, p.y + 0.05));
+      const all = game.layout.props.filter(q => q.kind === kind);
+      const byDist = (a: PropPlacement, b: PropPlacement) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z);
+      const list = [...all.filter(q => (q.level ?? 0) === lv).sort(byDist), ...(level === undefined ? all.filter(q => (q.level ?? 0) !== lv) : [])];
+      const yaw = {front: 0, left34: 0.61, right34: -0.61, rear: Math.PI}[view];
+      for (const q of list) {
+        const dir = {x: Math.sin(q.rot + yaw), z: Math.cos(q.rot + yaw)};
+        const face = Math.abs(dir.x) * q.hx + Math.abs(dir.z) * q.hz;
+        const sx = q.x + dir.x * (face + dist), sz = q.z + dir.z * (face + dist), qlv = q.level ?? 0;
+        if (!api.teleport(sx, sz, undefined, qlv) || Math.hypot(p.x - sx, p.z - sz) > 0.4) continue;
+        const aimY = q.y + q.h * aimH;
+        if (!L.lineOfSight({x: p.x, y: p.y + 1.6, z: p.z}, {x: q.x + dir.x * (face + 0.05), y: aimY, z: q.z + dir.z * (face + 0.05)}, {slack: 0.3})) continue;
+        api.lookAt(q.x, aimY, q.z);
+        return {kind, count: all.length, level: qlv, view, at: {x: q.x, y: q.y, z: q.z}, rot: +q.rot.toFixed(3), h: +q.h.toFixed(3), stand: {x: +sx.toFixed(2), z: +sz.toFixed(2)}};
+      }
+      return null;
+    },
     /** Lane FIX (U04): the goColumn target — player distance to its axis, contact (<= 0.30 + r + 2 cm) and what a bullet along the view hits. */
     columnCheck: () => {
       const c = columnTarget;

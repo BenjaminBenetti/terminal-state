@@ -6,19 +6,27 @@
 // branches per variant, >= 2 independent routes station <-> every floor, wayfinding, the patrol graph over corridors, Track2's seam
 // (rockLevels [0], one east tunnel) — and a REAL Player (the game's own movement / stairs / support code, W key) walking from the
 // station platform up to the top floor continuously without falling. Layouts are cached per file (3 variants x 1 seed + 1 extra seed).
+// Task mall-round2-20261031 (lane GEN): M08 — six topologies (+ 'tee-junction' / 'twin-court' / 'offset-arcade'), every per-variant
+// case runs on all six; the seed -> variant draw (originals keep their exact previous variant); the original three variants' core
+// geometry for (SEED, variant) pinned to main 1366b95 and identical with / without the street-exit post-pass. M09 — locked street
+// exits only on the street storey (floor 1), SOLID behind the glass, a view volume outside every storey, connectivity intact, and a
+// real Player (walk / sprint / jump) that can never pass the glass; bullets / sight stop at it.
 
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {hashString} from '../src/core/rng';
+import {levelDistance} from '../src/gen/levelGen';
 import {LEVELS, LEVEL_IDS, arrivalPose, isLevelId, levelDisplayName, storeyLabel, travelTargets} from '../src/levels/registry';
 import {TRACK_EXT_MALL, extensionIssues, trackExtCoverageIssues} from '../src/gen/trackExt/index';
-import {generateMallLevel, mallIssues, mallRouteGroups, mallVoidCells, MALL_GEN_STATS, MALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
+import {generateMallLevel, mallIssues, mallRouteGroups, mallVoidCells, mallVariantOf, setMallVariantOverride, exitColliderCells, EXIT, MALL_GEN_STATS, MALL_STREET_LEVEL, MALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
 import {MALL_GENERIC_NAME, MALL_NAME_HEADS, REAL_NAME_BLOCKLIST, mallNameCandidates, mallNameOf} from '../src/gen/mall/names';
 import {MALL_LOTS, MALL_LOT_IDS, lotSuits, lotsForProgram} from '../src/gen/mall/lots';
 import {MALL_PROGRAMS} from '../src/gen/mall/shops';
 import {levelsOf} from '../src/gen/levels';
 import {CELL, FLOOR, SOLID, PathFinder, type Waypoint} from '../src/gen/grid';
 import {Player} from '../src/player/player';
-import {FLOORS, STOREY} from '../src/gen/mall/frame';
+import {FLOORS, MALL_VARIANTS_ADDED, MALL_VARIANTS_V2, STOREY} from '../src/gen/mall/frame';
 import {MALL_FLOORS, type MallProgram} from '../src/gen/mall/mallTypes';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {readTowerInfo} from '../src/world/towerShared';
@@ -32,8 +40,35 @@ const OLD = {walk: 43_300, units: 80, spring: 36};
 
 class Keys {
   held = new Set<string>();
+  /** A key pressed this frame (jump). */
+  tap = '';
   down(c: string) { return this.held.has(c); }
-  hit() { return false; }
+  hit(c: string) { return c === this.tap; }
+}
+
+/**
+ * GEN-owned core geometry of a mall layout (street-exit halls and Track2 extensions excluded; no props / programs / labels: other
+ * lanes' data) — the M08 stability pin of the original variants.
+ */
+function coreGeometry(L: StationLayout): string {
+  const halls = new Set((L.mall?.exits ?? []).filter(e => e.kind === 'entrance-hall').map(e => e.hall.area));
+  const keep = (id: number) => !halls.has(id) && !L.areas[id]?.ext;
+  const m = L.mall!;
+  return createHash('sha1').update(JSON.stringify([
+    L.areas.filter(a => keep(a.id)).map(a => [a.id, a.x, a.y, a.w, a.h, a.kind, a.type, a.level ?? 0, Math.round(a.ceil * 1000), a.parent, a.role ?? '', a.publicSpace]),
+    L.doors.filter(d => keep(d.a) && keep(d.b)).map(d => [d.x, d.y, d.w, d.h, d.a, d.b, Math.round(d.height * 1000), !!d.shopfront, !!d.staff, d.level ?? 0]),
+    m.shops.map(q => [q.id, q.area, q.backroom ?? -1, q.level, q.lot, q.zone, q.frontages, q.salesArea, q.depth, q.width]),
+    L.traversal.stairs.filter(f => keep(f.area)).map(f => [f.area, f.axis, f.s0, f.s1, f.h0, f.h1, f.a0, f.a1]),
+    m.verticals, m.void, m.storeys, m.galleries, m.corridors, m.service, m.start,
+  ])).digest('hex').slice(0, 16);
+}
+/** coreGeometry() of (SEED, variant) at main 1366b95 (before round 2), computed on the base generator with the same function. */
+const BASE_CORE: Readonly<Record<string, string>> = {'terrace-cross': 'c6782ae4c690ad5a', 'arcade-loop': '5fee780212ff1967', 'elbow-branch': '1796f5f9f13a0065'};
+/** World cells (street storey grid indices) of a world box. */
+function boxCells(L: StationLayout, b: {x0: number; z0: number; x1: number; z1: number}): number[] {
+  const g = L.grid, out: number[] = [];
+  for (let y = Math.max(0, Math.round(b.z0 / CELL)); y < Math.min(g.h, Math.round(b.z1 / CELL)); y++) for (let x = Math.max(0, Math.round(b.x0 / CELL)); x < Math.min(g.w, Math.round(b.x1 / CELL)); x++) out.push(g.idx(x, y));
+  return out;
 }
 
 const cache = new Map<string, {L: StationLayout; ms: number; attempts: number}>();
@@ -284,6 +319,71 @@ describe.each(MALL_VARIANTS.map(v => [v]))('variant %s', (variant: MallVariant) 
     for (const i of mallVoidCells(L)) expect(ext.has(L.grid.area[i])).toBe(false);
   });
 
+  it('M09 street exits: only on the street storey (floor 1), locked, SOLID behind the glass, a view outside every storey, hall reachable', () => {
+    const exits = info.exits ?? [];
+    expect(exits.length).toBeGreaterThan(0); // (SEED has exits in every variant; some terrace-cross seeds have none: GEN.done limits)
+    expect(exits.length).toBeLessThanOrEqual(EXIT.max);
+    if ((MALL_VARIANTS_ADDED as readonly string[]).includes(variant)) expect(exits.some(e => e.kind === 'corridor-end'), 'a designed street arcade').toBe(true);
+    else expect(exits.every(e => e.kind === 'entrance-hall')).toBe(true);
+    // street level = the first storey above the rock storeys (the station box): floor 1
+    expect(MALL_STREET_LEVEL).toBe(1);
+    expect(Math.max(...L.extensions!.rockLevels!)).toBe(MALL_STREET_LEVEL - 1);
+    const g0 = L.grid, [sx, sy] = g0.cellOf(info.start.x, info.start.z);
+    const dist = levelDistance(L.levels, sx, sy, 0, L.levelLinks);
+    for (const e of exits) {
+      expect(e.level).toBe(MALL_STREET_LEVEL);
+      expect(e.streetY).toBe(L.levels[MALL_STREET_LEVEL].baseY);
+      expect(e.locked).toBe(true);
+      expect(e.sign).toBe('EXIT CLOSED');
+      const g = L.levels[e.level].grid, alongX = e.side === 'N' || e.side === 'S', out = e.side === 'N' || e.side === 'W' ? -1 : 1;
+      const cellAt = (sAlong: number, d: number) => { const [x, z] = alongX ? [sAlong, e.door.plane + out * d] : [e.door.plane + out * d, sAlong]; const [cx, cy] = g.cellOf(x, z); return g.idx(cx, cy); };
+      // the glazing plane: hall floor just inside (public walkway, reachable from the start), rock just outside on every storey >= street
+      for (let a = e.door.s0 + 0.25; a < e.door.s1; a += 0.5) {
+        const inn = cellAt(a, -0.25), outC = cellAt(a, 0.25);
+        expect(g.cells[inn]).toBe(FLOOR);
+        expect(L.areas[g.area[inn]].publicSpace).toBe(true);
+        expect(dist[e.level][inn], 'hall reachable').toBeGreaterThanOrEqual(0);
+        for (let lv = MALL_STREET_LEVEL; lv <= FLOORS; lv++) expect(L.levels[lv].grid.cells[outC]).toBe(SOLID);
+      }
+      expect(e.door.y1).toBeLessThanOrEqual(e.hall.ceil - 0.3 + 1e-6);
+      expect(e.panels.filter(q => q.kind === 'door').length).toBeGreaterThanOrEqual(2);
+      expect(Math.abs(e.facade - e.door.plane)).toBeCloseTo(e.vestibule, 6);
+      // the collider = SOLID cells (unbreakable rock: no prop / Door / shop glazing) on every storey >= street, never reachable
+      const col = exitColliderCells(L, e);
+      expect(col.length).toBeGreaterThan(0);
+      for (const i of col) for (let lv = MALL_STREET_LEVEL; lv <= FLOORS; lv++) { expect(L.levels[lv].grid.cells[i]).toBe(SOLID); expect(dist[lv][i]).toBe(-1); }
+      // the view volume: outside the footprint of every storey >= street; nothing below reaches street level; nothing placed there
+      for (const i of boxCells(L, e.view)) {
+        for (let lv = MALL_STREET_LEVEL; lv <= FLOORS; lv++) expect(L.levels[lv].grid.cells[i], 'view over a storey').toBe(SOLID);
+        if (g0.cells[i] !== SOLID) expect(g0.ceil[i]).toBeLessThanOrEqual(e.streetY - EXIT.slab + 1e-6);
+      }
+      const inBox = (b: {x0: number; z0: number; x1: number; z1: number}, x: number, z: number) => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1;
+      for (const b of [e.collider, e.view]) {
+        expect(L.doors.some(d => (d.level ?? 0) === e.level && inBox(b, (d.x + d.w / 2) * CELL, (d.y + d.h / 2) * CELL))).toBe(false);
+        for (const list of [L.props, L.pickups, L.zombies] as {x: number; z: number; level?: number}[][]) expect(list.some(q => (q.level ?? 0) >= e.level && inBox(b, q.x, q.z))).toBe(false);
+      }
+      // the hall: a public walkway area on the street storey, lit by the daylight through the glass
+      const hall = L.areas[e.hall.area];
+      expect(hall.level).toBe(MALL_STREET_LEVEL);
+      expect(hall.publicSpace).toBe(true);
+      expect(L.lights.some(l => l.virtual && l.level === e.level && Math.abs((alongX ? l.z : l.x) - e.door.plane) < 1.2)).toBe(true);
+    }
+    // the primary's QA pose stands in each hall facing its doors
+    for (let i = 0; i < exits.length; i++) {
+      const q = mallQaPose(L, 'street-exit', i)!;
+      expect(q, `street-exit ${i}`).not.toBeNull();
+      const g = L.levels[q.level].grid, [cx, cy] = g.cellOf(q.x, q.z);
+      expect(q.level).toBe(MALL_STREET_LEVEL);
+      expect(g.walkable(cx, cy)).toBe(true);
+    }
+    expect(mallQaPose(L, 'street-exit', exits.length)).toBeNull();
+    for (let i = 1; i < exits.length; i++) {
+      const c = (e: (typeof exits)[number]) => [e.side === 'N' || e.side === 'S' ? (e.door.s0 + e.door.s1) / 2 : e.door.plane, e.side === 'N' || e.side === 'S' ? e.door.plane : (e.door.s0 + e.door.s1) / 2];
+      const [ax, az] = c(exits[0]), [bx, bz] = c(exits[i]);
+      expect(Math.hypot(ax - bx, az - bz)).toBeGreaterThanOrEqual(EXIT.apart * CELL - 6);
+    }
+  });
+
   it('no enemy / loot in the void or on a run; no ceiling fixture in open air', () => {
     const cells = new Set(mallVoidCells(L));
     for (const z of L.zombies) {
@@ -303,21 +403,76 @@ describe.each(MALL_VARIANTS.map(v => [v]))('variant %s', (variant: MallVariant) 
 });
 
 describe('variants differ in geometry, adjacency and routes (not decoration)', () => {
-  it('different corridor topology, opening outlines, stair placement', () => {
+  it('different corridor topology, opening outlines, stair placement, route graph (loops / dead ends / junctions)', () => {
     const ms = MALL_VARIANTS.map(v => mall(v).mall!);
+    // route graph of the patrol nodes: independent loops (E - V + 1 per component), dead ends (degree 1), junctions (degree >= 3)
+    const route = (m: (typeof ms)[number]) => {
+      const E = m.patrol.reduce((a, n) => a + n.edges.length, 0) / 2;
+      return [E - m.patrol.length + 1, m.patrol.filter(n => n.edges.length === 1).length, m.patrol.filter(n => n.edges.length >= 3).length];
+    };
     const sig = (m: (typeof ms)[number]) => JSON.stringify([
       m.corridors!.map(c => c.areas.length), m.void.openings!.map(o => o.outline.length),
-      m.verticals.filter(v => v.kind === 'stair').map(v => [v.lower, Math.round(v.foot.x), Math.round(v.foot.z)]),
+      m.verticals.filter(v => v.kind === 'stair').map(v => [v.lower, Math.round(v.foot.x), Math.round(v.foot.z)]), route(m),
     ]);
-    expect(new Set(ms.map(sig)).size).toBe(3);
-    // union coverage of the lot families over the three runs
+    expect(new Set(ms.map(sig)).size).toBe(MALL_VARIANTS.length);
+    // union coverage of the lot families over the runs
     expect(new Set(ms.flatMap(m => m.shops.map(s => s.lot))).size).toBeGreaterThanOrEqual(9);
+  });
+});
+
+describe('variant selection (M08)', () => {
+  it('six topologies; seeds staying on the originals keep their exact previous variant; ~1/6 each; ?mallVariant= takes the new ids', () => {
+    expect(MALL_VARIANTS).toEqual([...MALL_VARIANTS_V2, ...MALL_VARIANTS_ADDED]);
+    expect(MALL_VARIANTS_V2).toEqual(['terrace-cross', 'arcade-loop', 'elbow-branch']);
+    const count: Record<string, number> = {};
+    for (let i = 0; i < 600; i++) {
+      const sd = (i * 2654435761) >>> 0, v = mallVariantOf(sd);
+      count[v] = (count[v] ?? 0) + 1;
+      if ((MALL_VARIANTS_V2 as readonly string[]).includes(v)) expect(v).toBe(MALL_VARIANTS_V2[hashString('mall-variant-v2', sd) % 3]);
+    }
+    for (const v of MALL_VARIANTS) { expect(count[v], v).toBeGreaterThan(60); expect(count[v], v).toBeLessThan(140); }
+    try {
+      for (const v of MALL_VARIANTS_ADDED) { expect(setMallVariantOverride(v)).toBe(v); expect(mallVariantOf(1)).toBe(v); }
+    } finally { setMallVariantOverride(null); }
+    expect(mallVariantOf(1)).toBe(MALL_VARIANTS_V2[hashString('mall-variant-v2', 1) % 3]);
+  });
+});
+
+describe('the original variants are unchanged (M08 stability, M05 matched views)', () => {
+  it.each(MALL_VARIANTS_V2.map(v => [v]))('%s: core geometry of (SEED, variant) = main 1366b95; the exit post-pass only appends', (variant: MallVariant) => {
+    const L = mall(variant);
+    expect(coreGeometry(L)).toBe(BASE_CORE[variant]);
+    const P = generateMallLevel({levelSeed: SEED, startWeapon: 'rifle'}, {variant, streetExits: false});
+    expect(P.mall!.exits).toBeUndefined();
+    expect(coreGeometry(P)).toBe(BASE_CORE[variant]);
+    // every core record keeps its index and value; the post-pass appends the hall areas + virtual daylight lights only
+    expect(L.areas.slice(0, P.areas.length)).toEqual(P.areas);
+    expect(L.areas.length - P.areas.length).toBe(L.mall!.exits!.filter(e => e.kind === 'entrance-hall').length);
+    expect(L.lights.slice(0, P.lights.length)).toEqual(P.lights);
+    expect(L.lights.slice(P.lights.length).every(l => l.virtual && l.level === MALL_STREET_LEVEL)).toBe(true);
+    for (const k of ['doors', 'props', 'pickups', 'zombies', 'signs', 'rails', 'levelLinks', 'playerSpawn'] as const) expect(L[k], k).toEqual(P[k]);
+    const {exits: _e, ...core} = L.mall!;
+    expect(core).toEqual(P.mall);
+    // grids: identical except the hall cells (rock before, hall floor after); connectivity of every core cell unchanged
+    const halls = new Set(L.mall!.exits!.map(e => e.hall.area));
+    const [sx, sy] = L.grid.cellOf(L.mall!.start.x, L.mall!.start.z);
+    const dl = levelDistance(L.levels, sx, sy, 0, L.levelLinks), dp = levelDistance(P.levels, sx, sy, 0, P.levelLinks);
+    L.levels.forEach((lv, li) => {
+      const a = lv.grid, b = P.levels[li].grid;
+      let diff = 0;
+      for (let i = 0; i < a.cells.length; i++) {
+        if (halls.has(a.area[i]) && li === MALL_STREET_LEVEL) { expect(b.cells[i]).toBe(SOLID); continue; }
+        if (a.cells[i] !== b.cells[i] || a.area[i] !== b.area[i] || a.ceil[i] !== b.ceil[i] || a.floor[i] !== b.floor[i] || a.blocked[i] !== b.blocked[i] || dl[li][i] !== dp[li][i]) diff++;
+      }
+      expect(diff, `level ${li}`).toBe(0);
+    });
+    expect(mallIssues(P)).toEqual([]);
   });
 });
 
 describe('one world', () => {
   it('source guard: no mall code path travels, fades, loads or rebuilds a section', () => {
-    for (const f of ['index.ts', 'carve.ts', 'skeleton.ts', 'structure.ts', 'validate.ts', 'elevator.ts', 'qa.ts', 'trackExt.ts', 'frame.ts', 'lots.ts', 'names.ts']) {
+    for (const f of ['index.ts', 'carve.ts', 'skeleton.ts', 'structure.ts', 'validate.ts', 'elevator.ts', 'qa.ts', 'trackExt.ts', 'frame.ts', 'lots.ts', 'names.ts', 'exits.ts']) {
       const src = readFileSync(new URL(`../src/gen/mall/${f}`, import.meta.url), 'utf8');
       const code = src.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
       expect(code, f).not.toMatch(/\.travel\(|TowerFade|via:\s*'local'|sectionForFloor|'travelling'/);
@@ -379,5 +534,44 @@ describe.each(MALL_VARIANTS.map(v => [v]))('a real Player walks the mall (%s)', 
     expect(maxDy).toBeLessThan(0.12); // no snap / teleport between storeys
     expect(minVy).toBeGreaterThan(-3); // never fell (no missing slab, no void drop)
     expect(p.alive).toBe(true);
+  });
+});
+
+describe('a locked street exit stops a real Player and bullets (M09)', () => {
+  it.each([['arcade-loop'], ['tee-junction']] as [MallVariant][])('%s: walking / sprinting / jumping into the glass never passes it', (variant) => {
+    const L = mall(variant), Lv = levelsOf(L), e = L.mall!.exits![0];
+    const alongX = e.side === 'N' || e.side === 'S', out = e.side === 'N' || e.side === 'W' ? -1 : 1;
+    const at = (sAlong: number, d: number): [number, number] => (alongX ? [sAlong, e.door.plane + out * d] : [e.door.plane + out * d, sAlong]);
+    const c = (e.door.s0 + e.door.s1) / 2;
+    const keys = new Keys();
+    // straight at the doors, sprinting + jumping at a leaf edge, diagonally across the opening toward a pier
+    for (const [s0, aim, sprint, jump] of [[c, c, false, false], [c, e.door.s0 + 0.3, true, true], [e.door.s0 + 0.6, e.door.s1 + 1, true, false]] as const) {
+      const p = new Player();
+      const [px, pz] = at(s0, -2.5);
+      p.spawn(px, pz, 0, e.streetY);
+      let minGap = Infinity;
+      for (let t = 0; t < 240; t++) {
+        const [tx, tz] = at(aim, 4);
+        p.yaw = Math.atan2(-(tx - p.x), -(tz - p.z));
+        keys.held = new Set(['KeyW', ...(sprint ? ['ShiftLeft'] : [])]);
+        keys.tap = jump && t % 25 === 0 ? 'Space' : '';
+        p.update(DT, keys, Lv, null, {aiming: false, speedMult: 1, canSprint: true});
+        const gap = -out * ((alongX ? p.z : p.x) - e.door.plane); // > 0: the hall side
+        minGap = Math.min(minGap, gap);
+        expect(gap, `t ${t}`).toBeGreaterThan(p.radius - 0.02);
+        expect(Lv.levelAt(p.x, p.z, p.y + 0.05)).toBe(e.level);
+      }
+      expect(minGap, 'pressed against the glass').toBeLessThan(p.radius + 0.3);
+      expect(p.y).toBeCloseTo(e.streetY, 1);
+      expect(p.alive).toBe(true);
+    }
+    // bullets / sight stop at the glass: a ray from inside straight out hits the wall at the plane, at any height of the opening
+    const [ox, oz] = at(c, -2);
+    for (const y of [0.3, 1.4, 2.6]) {
+      const h = Lv.raycast({x: ox, y: e.streetY + y, z: oz}, alongX ? {x: 0, y: 0, z: out} : {x: out, y: 0, z: 0}, 40);
+      expect(h.kind).toBe('wall');
+      expect(h.t).toBeCloseTo(2, 1);
+    }
+    expect(Lv.lineOfSight({x: ox, y: e.streetY + 1.6, z: oz}, (() => { const [bx, bz] = at(c, 6); return {x: bx, y: e.streetY + 1.6, z: bz}; })())).toBe(false);
   });
 });

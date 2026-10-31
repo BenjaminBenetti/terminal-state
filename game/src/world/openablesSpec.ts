@@ -1229,7 +1229,7 @@ const OFFICE_OPEN_AUDIT: Readonly<Record<OfficeKind, {role: PropRole; cls: Audit
   roofHvac: {role: 'equipment', cls: 'exception', how: 'rooftop HVAC service panels: machinery, screwed shut'},
   // --- nothing to open ---
   receptionDesk: {role: 'surface', cls: 'none', how: 'solid counter block: closed panels front AND back (both sides measured), no drawers or doors modelled'},
-  cctvConsole: {role: 'equipment', cls: 'none', how: 'monitor wall on a flat board: no drawers modelled'},
+  cctvConsole: {role: 'equipment', cls: 'none', how: 'CCTV console (D31, mall-round2 M03): a 15-monitor cabinet on its desk slab on a solid steel console base with a knee recess — no door, drawer or lid modelled (the base is a plain plinth, not a cupboard)'},
   tradingDesk: {role: 'surface', cls: 'none', how: 'open curved desk on legs with a PC tower: no drawers (its monitors / keyboard are separate tradingMonitor / tradingKeyboard props)'},
   newsDesk: {role: 'surface', cls: 'none', how: 'anchor desk with a closed front: no drawers modelled'},
   consoleStation: {role: 'surface', cls: 'none', how: 'open media stand (console / pads on open shelves): no doors or drawers'},

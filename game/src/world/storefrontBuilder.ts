@@ -176,6 +176,7 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
   const buckets = new Map<string, {mat: string; geos: THREE.BufferGeometry[]}>();
   const shapes = new Map<string, PurposePart[]>();
   const tmp = new THREE.Color(), paintCol = new THREE.Color();
+  const byStorey = !!(layout as {mall?: unknown}).mall; // task mall-round2 (lane PERF): storey-split chunks, mall only
   for (const kind of PURPOSE_PROP_KINDS) {
     if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (lockers, safe) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
@@ -201,7 +202,9 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
       if (!parts.length) continue;
       instances++;
       const m4 = placeM(p);
-      const chunk = `${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`;
+      // Task mall-round2-20261031 (lane PERF): in the mall a chunk is also per storey ('<storey>:<cx>,<cz>'): a chunk holding two
+      // storeys' fixtures had a box spanning both, so the level culler could never level- / slab- / occlusion-cull it (world/levelCulling.ts)
+      const chunk = `${byStorey ? `${p.level ?? 0}:` : ''}${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`;
       const accent = tmp.set(p.shop !== undefined ? layout.storefronts[p.shop]?.color ?? 0xb0a890
         : palette?.length ? palette[Math.abs(Math.round(p.x * 7 + p.z * 13 + p.variant)) % palette.length] : 0xb0a890);
       for (const part of parts) {

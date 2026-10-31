@@ -10,13 +10,15 @@
 //  - 'corridor' (floor, default 1): in the middle of the floor's longest corridor wing, looking along it;
 //  - 'wing-end' (floor, default 1): 6 m in front of a corridor end unit, facing it;
 //  - 'elevator': on the glass elevator's landing (station storey), facing the doors;
-//  - 'washrooms' (floor, default 1): at the walkway mouth of the floor's washroom passage.
+//  - 'washrooms' (floor, default 1): at the walkway mouth of the floor's washroom passage;
+//  - 'street-exit' (exit index, default 0; task mall-round2-20261031 lane GEN, M09): ~6 m inside the hall in front of a locked street
+//    exit, facing its doors (null when the mall has none; NOT in MALL_POSE_NAMES: some seeds may have no exit).
 // Yaw convention: forward = (-sin yaw, -cos yaw).
 
 import {CELL, FLOOR} from '../grid';
 import type {StationLayout} from '../stationTypes';
 
-export type MallPoseName = 'platform-lookup' | 'court' | 'ring-edge' | 'shopfront' | 'escalator' | 'corridor' | 'wing-end' | 'bridge' | 'elevator' | 'washrooms';
+export type MallPoseName = 'platform-lookup' | 'court' | 'ring-edge' | 'shopfront' | 'escalator' | 'corridor' | 'wing-end' | 'bridge' | 'elevator' | 'washrooms' | 'street-exit';
 export const MALL_POSE_NAMES: readonly MallPoseName[] = ['platform-lookup', 'court', 'ring-edge', 'shopfront', 'escalator', 'corridor', 'wing-end', 'elevator', 'washrooms'];
 export interface MallPose { x: number; y: number; z: number; yaw: number; pitch: number; level: number; name: MallPoseName }
 
@@ -137,6 +139,15 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
       const out = vertical ? Math.sign(dx - (pa.x + pa.w / 2) * CELL) || 1 : Math.sign(dz - (pa.y + pa.h / 2) * CELL) || 1;
       const p = stand(layout, lv, vertical ? dx + out * 3 : dx, vertical ? dz : dz + out * 3);
       return p ? pose(lv, p[0], p[1], yawTo(p[0], p[1], dx, dz), 0) : null;
+    }
+    case 'street-exit': {
+      const e = m.exits?.[Math.max(0, ring ?? 0)];
+      if (!e) return null;
+      const alongX = e.side === 'N' || e.side === 'S', out = e.side === 'N' || e.side === 'W' ? -1 : 1;
+      const c = (e.door.s0 + e.door.s1) / 2, back = Math.min(6, Math.max(2, e.hall.depth - 1));
+      const tx = alongX ? c : e.door.plane, tz = alongX ? e.door.plane : c;
+      const p = stand(layout, e.level, alongX ? c : e.door.plane - out * back, alongX ? e.door.plane - out * back : c);
+      return p ? pose(e.level, p[0], p[1], yawTo(p[0], p[1], tx, tz), 0.05) : null;
     }
   }
   return null;
