@@ -48,7 +48,21 @@ describe.runIf(!!process.env.ANNEX_PICTURES)('annex review pictures (ANNEX_PICTU
       report.push(`${name}: cam ${JSON.stringify(cam)}`);
     };
     const L = freshLayout('subway', 1043);
-    const w = buildWorld(L, mats, {});
+    // (round 2, R3) the generated genset (its own base-colour map decoded here: Node's GLTFLoader has no image decoder)
+    const {loadStripped} = await import('./helpers/openablesFixture');
+    const {ANNEX_GENSET} = await import('../src/assets/annexGenset');
+    const genset = await loadStripped(ANNEX_GENSET.url);
+    {
+      const {NodeIO} = await import('@gltf-transform/core');
+      const gd = await new NodeIO().read(path.join(GAME, 'public', ANNEX_GENSET.url));
+      const img = gd.getRoot().listMaterials()[0].getBaseColorTexture()!.getImage()!;
+      const {data, info} = await sharp(Buffer.from(img)).ensureAlpha().raw().toBuffer({resolveWithObject: true});
+      const c = new ShimCanvas(true); c.width = info.width; c.height = info.height; c.data.set(data);
+      const t = new THREE.Texture(c as unknown as HTMLImageElement); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace;
+      genset.scene.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { (m.material as THREE.MeshStandardMaterial).map = t; (m.material as THREE.MeshStandardMaterial).needsUpdate = true; } });
+    }
+    const w = buildWorld(L, mats, {[ANNEX_GENSET.key]: genset});
+    report.push(`gensets: ${JSON.stringify(w.trackExt?.gensets ?? null)}`);
     const cm = new ContainerManager(models, mats, () => ({}) as never);
     cm.build(L, {}, lootProfile('subway'));
     const scene = new THREE.Group();
