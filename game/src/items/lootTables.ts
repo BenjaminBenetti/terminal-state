@@ -480,6 +480,13 @@ export const COLD_MED_ROWS: ItemRows = [['bandage', 1.6], ['medkit', 0.6], ['wat
 export const BAKERY_ROWS: ItemRows = [['bread', 1]];
 export const SERVER_SPARES_ROWS: ItemRows = [['battery', 1.4], ['flare', 0.6], ['bandage', 0.5], ['water', 0.6], [ELECTRICAL_PARTS, 0.8], [SCRAP_METAL, 0.25]];
 /**
+ * Task studio-alpha-track2-round2-20261031-01 (round 2): the annex signature rooms' tool lockers — the server spares WITHOUT the
+ * crafting materials. The annexes grow on the Subway too, and the Subway never holds a material (craft-materials test); the
+ * playtest revision's lockers used SERVER_SPARES_ROWS, so a deep intact boiler / generator-room locker could roll electrical parts
+ * (found on Subway 1002 / 1043 / 1234). Materials stay in the server racks / cupboards.
+ */
+export const ANNEX_SPARES_ROWS: ItemRows = SERVER_SPARES_ROWS.filter(([id]) => !isMaterialItem(id));
+/**
  * Task office-props-physics-scale-20261030 (lane RACK): the rebuilt 42U rack's three empty bays — mostly salvage: electrical parts
  * (the common find), some scrap metal (bent rails / brackets), now and then a spare torch cell or a flare left on a shelf. The
  * materials are kept as rolled (scarcity: category 'material'); the cell / flare rows are thinned like every consumable.

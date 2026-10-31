@@ -287,6 +287,10 @@ reproduce the earlier pins byte for byte).
     - **Exact means the whole budget:** the mall's storage fill (`LootTables.storageFill`) never tops up an exact annex table, so a
       searched-clean holder stays clean and the annex economy is the same on every level.
     - **Room storage:** every annex room / closet the dressing left without a holder gets one storage piece (open shelving first).
+    - **Signature-room lockers** (the deepest intact holders of a boiler / generator / turbine room roll their room table):
+      `ANNEX_SPARES_ROWS` = the server spares without the crafting materials (battery 1.4, flare 0.6, bandage 0.5, water 0.6).
+      Round 2 fix: they used `SERVER_SPARES_ROWS`, so a Subway annex could hold electrical parts (Subway 1002 / 1043 / 1234); the
+      Subway never holds a material (`craft-materials.test.ts` now also checks those annexes).
 - **Survivor caches** (task `studio-alpha-track2-round2-20261031-01`, lane CACHE, R5; user: "there's not enough of a reason to go to
   this place, there should be some "cache" rooms that spawn deeper in, a room like a survivor had been living there").
   - **Where / what:** one room per annex (two in large ones) in the deep third of its door-hop range, set up as a survivor's room — a

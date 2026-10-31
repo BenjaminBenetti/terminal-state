@@ -167,5 +167,10 @@ describe('loot: economy category material — finite, themed, kept as rolled, ne
       for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `seed ${seed} ${h.kind}`).toBe(false);
       for (const p of l.pickups) expect(isMaterialItem(p.itemId)).toBe(false);
     }
+    // (round 2) its service annexes too: the signature lockers once rolled the server spares' electrical parts (1002 / 1043 / 1234)
+    for (const seed of [1002, 1043, 1234]) {
+      const l = generateStation(seed);
+      for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `annex seed ${seed} ${h.kind}`).toBe(false);
+    }
   });
 });
