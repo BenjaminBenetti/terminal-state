@@ -1445,8 +1445,8 @@
     },
     {
       "path": "assets/derivatives/enemy-siren.json",
-      "bytes": 30099,
-      "sha256": "2c8e08d1e0676190efa43047b0ea3618828d20bc569157b2647c8b8f069eaaed"
+      "bytes": 39019,
+      "sha256": "45f8fb48e7c9a59073bf85bee544c37e5775bb3f4652a0945fff506f22fbcb39"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -1720,8 +1720,8 @@
     },
     {
       "path": "assets/models/enemy-siren.glb",
-      "bytes": 12873516,
-      "sha256": "4ac5d8cae88e1655d0e721eeab2442d16d12697a695a433b6670f0a35997098b"
+      "bytes": 12873732,
+      "sha256": "71934d7e26d5c9698f2ea6241ed7047744f0e4bebd25d76d8010e9303a8ca3a0"
     },
     {
       "path": "assets/models/gun-locker.glb",

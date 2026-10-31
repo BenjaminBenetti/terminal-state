@@ -7,6 +7,7 @@
 //    (typed arrays / Uint8Arrays as read; nothing decoded, re-encoded, quantised or re-indexed);
 //  - ADDED: JOINTS_0 (UNSIGNED_BYTE) + WEIGHTS_0 (normalised UNSIGNED_BYTE, rows sum to exactly 255) per native vertex, an
 //    18-joint hierarchy (identity bind rotations, game metres), one skin per mesh sharing the joints, the clips, scene extras;
+//  - parts may REPLACE attributes (p.replace, e.g. the refitted dress POSITION / NORMAL in game metres with M = identity);
 //  - the uniform unit-fit (scale + Y rotation + translation, incl. any source node transform) is folded into each skin's
 //    inverse bind matrices: IBM_j = T(-J_j) * M_fit. Mesh nodes sit at the scene root with identity transforms, so both the
 //    glTF spec (node transform of a skinned mesh ignored) and three.js (bindMatrix = node world = identity) render the bind
@@ -70,6 +71,14 @@ export async function assembleDocument({parts, skel, clips, extras, extrasKey = 
     for (const [name] of JOINTS) skin.addJoint(nodes[name]);
     node.setSkin(skin);
     const prim = node.getMesh().listPrimitives()[0];
+    // garment refit (task siren-clothing-refit-20261031): re-derived attributes replace the source accessors (same count / type);
+    // indices, UVs, material and textures stay the source objects
+    for (const [sem, arr] of Object.entries(p.replace ?? {})) {
+      const old = prim.getAttribute(sem);
+      if (!old || old.getCount() * old.getElementSize() !== arr.length) throw new Error(`${p.name}: replacement ${sem} does not match the source accessor`);
+      prim.setAttribute(sem, doc.createAccessor(`${p.name}_${sem.toLowerCase()}_refit`).setType(old.getType()).setArray(Float32Array.from(arr)).setBuffer(buf));
+      if (!old.listParents().some(x => x !== root && x !== old)) old.dispose();
+    }
     const q = quantizeWeights(p.joints, p.weights);
     prim.setAttribute('JOINTS_0', doc.createAccessor(p.name + '_joints').setType('VEC4').setArray(q.joints).setBuffer(buf));
     prim.setAttribute('WEIGHTS_0', doc.createAccessor(p.name + '_weights').setType('VEC4').setArray(q.weights).setNormalized(true).setBuffer(buf));
