@@ -24,7 +24,8 @@ import {deriveRails, levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
-import {applyRareFamilyRules, spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
+import {spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
+import {applyFamilySpacing} from '../../ai/familySpacing'; // lane INTEG (Track1 integration): the whole-mall Siren spacing post-pass
 import {lootProfile, type LootProfile} from '../../items/lootTables';
 import type {SectionGenContext} from '../../levels/types';
 import type {StationLayout} from '../stationTypes';
@@ -166,8 +167,10 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   applyLighting(layout, rng.fork('lighting'));
   finishTraversal(layout);
   dropFloatingFixtures(layout);
+  // Track1 contract (lane INTEG): the ambient runs above were tagged 'pit' / 'ring' by placeOfficeEnemies (markSpawnContext); ONE
+  // family roll for every ambient context, then the mall's Siren spacing (FamilySpacing: the cap + 30 m, jointly) — RNG-free.
   assignEnemyArchetypes(layout, spawns);
-  applyRareFamilyRules(layout, spawns); // lane PROFILES: the whole-mall rare caps / spacing (Track1's Siren) — RNG-free
+  applyFamilySpacing(layout, spawns);
   layout.mall.patrol = patrolGraph(layout, mc, crop, c.flights);
   // Hordes (lane HORDE) never start on a run (its flat top landing included) or in front of a mouth / elevator landing.
   const runHold = holdCells(layout, mouthHolds(layout, mc, crop));

@@ -190,42 +190,10 @@ export interface EnemyLevelInfo {
   eligibilityCensus: EligibilityCensus | null;
   /** Where to tune what. */
   knobs: readonly EnemyKnob[];
-  /** Task track3-eaton-centre-20261031 (lane PROFILES): Track1 family hooks of the ambient pool (empty = none). */
-  hooks: readonly FamilyHookInfo[];
-  /** Lane PROFILES: rare-placement rules (whole-level cap + spacing; empty = none). */
-  rare: readonly RareRuleInfo[];
   /** Lane PROFILES / HORDE: the SEPARATE roaming-horde pool (null = the level has no hordes). */
   horde: HordeInfo | null;
   /** Lane PROFILES: explicit ambient-pool caps (null = the contexts' count ranges alone). */
   budgets: {ambient: AmbientBudgetInfo} | null;
-}
-
-/** Task track3-eaton-centre-20261031 (lane PROFILES): a Track1 family hook (a family declared before the registry has it). */
-export interface FamilyHookInfo {
-  family: string;
-  /** Share of the AMBIENT pool once typed (taken from zombies). */
-  share: number;
-  /** True when the live registry exports the family (validation then requires it in the typed pool). */
-  active: boolean;
-  status: string;
-  note: string;
-  /** share × the level's ambient E[total]: expected spawns per level once typed, before any rare cap / placement shortfall. */
-  expectedPerLevelIfTyped: number;
-  at: SourceLoc;
-}
-
-/** Lane PROFILES: a rare-placement rule (applied after the family roll, in spawn-index order; extras become zombies). */
-export interface RareRuleInfo {
-  family: string;
-  capPerLevel: number;
-  spacingM: number;
-  why: string;
-  /** 'live' (typed family) or 'waiting' (hook family: no spawn can be one yet). */
-  status: 'live' | 'waiting';
-  /** Expected spawns of the family per level BEFORE the cap (share × ambient E[total]); the cap then bounds the placed count. */
-  expectedBeforeCap: number;
-  semantics: string;
-  at: SourceLoc;
 }
 
 /** Lane PROFILES / HORDE: the roaming-horde pool of a level (ai/hordeSpec.ts HordeRules). */
@@ -329,6 +297,11 @@ export interface EligibilityInfo {
   fallback: string;
   /** At most this many per generated level (all contexts), null = no cap. */
   maxPerLevel: number | null;
+  /**
+   * Lane INTEG (task track3-eaton-centre-20261031): the profile's whole-level spacing of this family (spawnTables FamilySpacing,
+   * applied jointly with the cap by ai/familySpacing.ts), null = none.
+   */
+  spacing: {metres: number; why: string; at: SourceLoc} | null;
   why: string;
   at: SourceLoc;
 }

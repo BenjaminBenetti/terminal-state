@@ -5,8 +5,9 @@
 //    holder and per 100 m² of usable floor, mall vs Office by the same method — materials significantly richer, consumables not
 //    inflated, fit failures and reachability measured;
 //  - enemies: SPAWN_PROFILES.mall — ambient contexts (pit once, ring per ring, Track2 'service' as a NOT-INTEGRATED data hook),
-//    the typed ambient pool + Track1 family hooks (inactive until the registry has them) + the rare Siren rule, the SEPARATE horde
-//    pool and its budgets, measured on generated mall layouts; determinism; the reference covers every new registration.
+//    the Track1 ambient pool familyPool({siren: MALL_SIREN_WEIGHT}) (Blightbelly / rat-dog 5 %) with the mall's Siren eligibility
+//    (ring shops only, <= 4) + whole-mall 30 m spacing (lane INTEG: applyFamilySpacing), the SEPARATE horde pool (tagged 'horde',
+//    ordinary zombies only) and its budgets, measured on generated mall layouts; determinism; the reference covers the mall.
 // Bounded: 3 mall + 3 Office levels (the census corpus), one extra mall generation (watched profile = determinism check).
 
 import {describe, expect, it} from 'vitest';
@@ -27,9 +28,12 @@ import {
 } from '../src/items/lootTables';
 import {MATERIAL_IDS, isMaterialItem} from '../src/items/craftMaterials';
 import {
-  ENEMY_FAMILY_IDS, MALL_SPAWN_PROFILE, SPAWN_PROFILES, applyRareFamilyRules, familyHookStatus, projectedAmbientPool, spawnProfile,
-  validateSpawnProfile, type SpawnProfile,
+  ENEMY_FAMILY_IDS, HORDE_CONTEXT, MALL_SIREN_ELIGIBILITY, MALL_SIREN_SPACING, MALL_SIREN_WEIGHT, MALL_SPAWN_PROFILE, SPAWN_PROFILES,
+  declaredSpawnContexts, eligibilityFailure, familyPool, markSpawnContext, spawnContextOf, spawnProfile, validateSpawnProfile,
+  type FamilyEligibility, type SpawnProfile,
 } from '../src/ai/spawnTables';
+import {assignEnemyArchetypes, pickEnemyArchetype} from '../src/ai/creatureSpawn';
+import {applyFamilySpacing} from '../src/ai/familySpacing';
 import {HORDE_GROUP_SIZE} from '../src/ai/hordeSpec';
 import {buildEnemyReference, ENEMY_LEVEL_ADAPTER} from '../../tools/pages/enemyReference';
 import {runCensus, summarize, type CensusSummary} from './helpers/materialCensus';
@@ -154,51 +158,60 @@ describe('normalised material census (placed + reachable, mall vs Office, same m
 
 describe('mall spawn profile', () => {
   const P = spawnProfile('mall');
-  it('is registered and valid: pit once, ring per ring, Track2 service as a 0-run data hook; ambient pool + hooks + rare rule + horde', () => {
+  it('is registered and valid: pit once, ring per ring, Track2 service as a 0-run data hook; Track1 pool + Siren rule + spacing + horde', () => {
     expect(SPAWN_PROFILES.mall).toBe(MALL_SPAWN_PROFILE);
+    expect(LEVELS.mall.tier).toBe(2);
     expect(validateSpawnProfile(P)).toEqual([]);
     expect(Object.keys(P.contexts).sort()).toEqual(['pit', 'ring', 'service']);
+    expect(declaredSpawnContexts(P).sort()).toEqual([HORDE_CONTEXT, 'pit', 'ring', 'service'].sort());
     expect(ENEMY_LEVEL_ADAPTER.mall.contexts.ring!.runs).toBe(MALL_RINGS);
     expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.runs).toBe(0);
     expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.hook).toMatch(/NOT INTEGRATED/);
-    expect(P.families).toEqual([['zombie', 0.95], ['ratdog', 0.05]]);
+    // Track1 pool: every family in registry order, Blightbelly / rat-dog 5 % ambient, the Siren's census-tuned draw weight (not the Office's)
+    expect(P.families).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}));
+    expect(P.families.map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
+    expect(Object.fromEntries(P.families)).toMatchObject({blightbelly: 0.05, ratdog: 0.05, siren: MALL_SIREN_WEIGHT});
+    expect(MALL_SIREN_WEIGHT).not.toBe(0.19);
     expect(P.rooms).toEqual({});
+    // the Siren: ring shops only (never the pit, an annex or a horde), the Office's gates, <= 4 per mall, zombie fallback; 30 m apart
+    expect(P.eligibility).toEqual({siren: MALL_SIREN_ELIGIBILITY});
+    expect(MALL_SIREN_ELIGIBILITY).toMatchObject({contexts: ['ring'], kinds: ['room'], minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4, fallback: 'zombie'});
+    for (const k of ['washroom', 'stair-core', 'storage', 'utility']) expect(MALL_SIREN_ELIGIBILITY.excludeRooms).toContain(k);
+    expect(P.spacing).toEqual({siren: MALL_SIREN_SPACING});
+    expect(MALL_SIREN_SPACING.spacingM).toBe(30);
     // the ambient budget holds every context run, and the level total
     const ctxMax = P.contexts.pit!.count[1] + MALL_RINGS * P.contexts.ring!.count[1];
     expect(P.budgets!.ambient.total).toBeGreaterThanOrEqual(ctxMax);
-    // Track1 hooks: inactive while the registry lacks them; the projected pool once typed
-    const st = familyHookStatus(P);
-    expect(st.map(h => [h.family, h.share, h.active])).toEqual([['blightbelly', 0.05, false], ['siren', 0.05, false]]);
-    const proj = Object.fromEntries(projectedAmbientPool(P));
-    expect(proj.zombie).toBeCloseTo(0.85, 12);
-    expect([proj.ratdog, proj.blightbelly, proj.siren]).toEqual([0.05, 0.05, 0.05]);
-    expect(P.rare).toEqual([expect.objectContaining({family: 'siren', capPerLevel: 4})]);
-    expect(P.rare![0].capPerLevel).toBeGreaterThan(2); // the larger mall may hold more than the Office's ~2
-    // the horde pool: explicit, ordinary zombies only, 5..20 per group, separate budgets
+    // the horde pool: explicit (every registry family listed), ordinary zombies only, 5..20 per group, separate budgets
     const H = P.horde!;
     expect(H.size).toEqual([HORDE_GROUP_SIZE.min, HORDE_GROUP_SIZE.max]);
-    expect(Object.fromEntries(H.families)).toEqual({zombie: 1, ratdog: 0});
+    expect(Object.fromEntries(H.families)).toEqual({zombie: 1, blightbelly: 0, siren: 0, ratdog: 0});
     expect(H.budget.total).toBeGreaterThanOrEqual(H.size[0]);
     expect(H.budget.perStorey).toBeLessThanOrEqual(H.budget.total);
   });
 
-  it('validation enforces the hook / horde / rare / budget semantics', () => {
-    const bad: [string, SpawnProfile][] = [
-      ['hook naming a typed family (Track1 merged)', {...P, familyHooks: [{family: 'ratdog', share: 0.05, note: 'x'}]}],
-      ['hook share 0', {...P, familyHooks: [{family: 'siren', share: 0, note: 'x'}]}],
-      ['hook listed twice', {...P, familyHooks: [{family: 'siren', share: 0.05, note: 'x'}, {family: 'siren', share: 0.05, note: 'y'}]}],
-      ['hooks eating every zombie', {...P, familyHooks: [{family: 'siren', share: 0.96, note: 'x'}]}],
-      ['rare rule for an unknown family', {...P, rare: [{family: 'dragon', capPerLevel: 1, spacingM: 1, why: ''}]}],
-      ['rare rule for zombies', {...P, rare: [{family: 'zombie', capPerLevel: 1, spacingM: 1, why: ''}]}],
-      ['siren in the horde pool', {...P, horde: {...P.horde!, families: [['zombie', 1], ['ratdog', 0], ['siren' as never, 0.1]]}}],
-      ['horde pool missing a family', {...P, horde: {...P.horde!, families: [['zombie', 1]]}}],
-      ['horde group above 20', {...P, horde: {...P.horde!, size: [5, 25]}}],
-      ['ambient budget below a context', {...P, budgets: {ambient: {total: 69, perStorey: 5}}}],
+  it('validation enforces the Siren / spacing / horde / budget semantics', () => {
+    const rule = MALL_SIREN_ELIGIBILITY;
+    const bad: [string, SpawnProfile, RegExp][] = [
+      ['siren weighted without a rule', {...P, eligibility: undefined, spacing: undefined}, /opt-in family .* needs an eligibility.siren rule/],
+      ['siren eligible in a horde', {...P, eligibility: {siren: {...rule, contexts: ['ring', HORDE_CONTEXT]}}}, /separate pool/],
+      ['horde declared as an ambient context', {...P, contexts: {...P.contexts, [HORDE_CONTEXT]: P.contexts.ring!}}, /reserved for the separate horde pool/],
+      ['spacing without an eligibility rule', {...P, spacing: {blightbelly: {spacingM: 10, why: 'x'}}}, /refines eligibility.blightbelly/],
+      ['spacing of 0 m', {...P, spacing: {siren: {spacingM: 0, why: 'x'}}}, /not a finite distance > 0/],
+      ['spacing without a reason', {...P, spacing: {siren: {spacingM: 30, why: ' '}}}, /needs a reason/],
+      ['spacing unknown knob', {...P, spacing: {siren: {...MALL_SIREN_SPACING, cap: 2} as never}}, /unknown knob/],
+      ['siren in the horde pool', {...P, horde: {...P.horde!, families: [['zombie', 1], ['blightbelly', 0], ['siren', 0.1], ['ratdog', 0]]}}, /siren never joins/],
+      ['horde pool missing a family', {...P, horde: {...P.horde!, families: [['zombie', 1]]}}, /family blightbelly missing/],
+      ['horde group above 20', {...P, horde: {...P.horde!, size: [5, 25]}}, /./],
+      ['ambient budget below a context', {...P, budgets: {ambient: {total: 69, perStorey: 5}}}, /perStorey/],
     ];
-    for (const [what, p] of bad) expect(validateSpawnProfile(p).length, what).toBeGreaterThan(0);
+    for (const [what, p, re] of bad) expect(validateSpawnProfile(p).join('\n'), what).toMatch(re);
+    // a rule naming the pit would be VALID data (the pit is a declared context): the mall's own rule is what keeps her out of it
+    expect(validateSpawnProfile({...P, eligibility: {siren: {...rule, contexts: ['pit', 'ring']}}})).toEqual([]);
+    expect(rule.contexts).toEqual(['ring']);
   });
 
-  it('generated mall: the generator asks for exactly pit + ring; ambient within contexts / budgets; hordes separate, 5..20, within budgets; deterministic', () => {
+  it('generated mall: the generator asks for exactly pit + ring; tags; ambient within contexts / budgets; Sirens eligible + spaced; hordes separate; deterministic', () => {
     const seen = new Set<string>();
     const contexts = new Proxy(P.contexts, {get: (t, k) => { if (typeof k === 'string') seen.add(k); return Reflect.get(t, k); }});
     const watched = generateMallLevel({levelSeed: SEEDS[0], startWeapon: 'pistol'}, {spawns: {...P, contexts} as SpawnProfile});
@@ -211,7 +224,15 @@ describe('mall spawn profile', () => {
     for (const seed of SEEDS) {
       const l = mall(seed);
       const ambient = l.zombies.filter(z => z.horde === undefined), horde = l.zombies.filter(z => z.horde !== undefined);
-      // ambient: per storey within its context's count range, total within the ambient budget, families from the typed pool
+      // every spawn carries its declared context: ambient 'pit' (storey 0) / 'ring' (storeys 1..6), horde members 'horde'
+      l.zombies.forEach((z, i) => {
+        const c = spawnContextOf(l, P, i);
+        expect(c, `seed ${seed} #${i}`).toBe(z.horde !== undefined ? HORDE_CONTEXT : (z.level ?? 0) === 0 ? 'pit' : 'ring');
+      });
+      // hordes are appended after every ambient spawn (the ambient roll and run memory key on the index)
+      const firstHorde = l.zombies.findIndex(z => z.horde !== undefined);
+      if (firstHorde >= 0) expect(l.zombies.slice(firstHorde).every(z => z.horde !== undefined)).toBe(true);
+      // ambient: per storey within its context's count range, total within the ambient budget, families from the pool
       for (let lv = 0; lv <= MALL_RINGS; lv++) {
         const n = ambient.filter(z => (z.level ?? 0) === lv).length, c = (lv === 0 ? P.contexts.pit : P.contexts.ring)!;
         expect(n, `seed ${seed} storey ${lv}`).toBeGreaterThanOrEqual(c.count[0]);
@@ -219,10 +240,25 @@ describe('mall spawn profile', () => {
       }
       expect(ambient.length).toBeLessThanOrEqual(P.budgets!.ambient.total);
       expect(ambient.every(z => (ENEMY_FAMILY_IDS as readonly string[]).includes(z.archetype ?? 'zombie'))).toBe(true);
-      // the rare rule is a no-op until Track1 types the Siren (no spawn can be one)
-      const copy = l.zombies.map(z => ({...z}));
-      expect(applyRareFamilyRules({zombies: copy}, P)).toBe(0);
-      expect(copy).toEqual(l.zombies);
+      // Sirens: drawn by the roll, eligible ring-shop slots only, <= 4, >= 30 m apart; the post-pass is idempotent
+      const sirens = l.zombies.map((z, i) => [z, i] as const).filter(([z]) => z.archetype === 'siren');
+      expect(sirens.length).toBeLessThanOrEqual(MALL_SIREN_ELIGIBILITY.maxPerLevel!);
+      for (const [z, i] of sirens) {
+        expect(z.horde).toBeUndefined();
+        expect((z.level ?? 0) >= 1).toBe(true);
+        expect(['shop', 'stock-room']).toContain(l.areas[z.area].type);
+        expect(eligibilityFailure(MALL_SIREN_ELIGIBILITY, l, z, spawnContextOf(l, P, i))).toBeNull();
+        expect(pickEnemyArchetype(l.seed, i, P.families)).toBe('siren');
+      }
+      for (let a = 0; a < sirens.length; a++) for (let b = a + 1; b < sirens.length; b++) {
+        const [p, q] = [sirens[a][0], sirens[b][0]];
+        expect(Math.hypot(p.x - q.x, (p.y ?? 0) - (q.y ?? 0), p.z - q.z)).toBeGreaterThanOrEqual(MALL_SIREN_SPACING.spacingM);
+      }
+      // idempotent: re-running the family roll + the spacing post-pass on the generated level changes nothing (Retry / revisit)
+      const before = JSON.stringify(l.zombies);
+      assignEnemyArchetypes(l, P);
+      applyFamilySpacing(l, P);
+      expect(JSON.stringify(l.zombies)).toBe(before);
       // hordes: their own pool (ordinary zombies), 5..20 per group, the horde budgets — never counted as ambient
       const groups = new Map<number, typeof horde>();
       for (const z of horde) { const g = groups.get(z.horde!) ?? []; g.push(z); groups.set(z.horde!, g); }
@@ -230,40 +266,67 @@ describe('mall spawn profile', () => {
       expect(groups.size).toBeLessThanOrEqual(H.groups[1]);
       expect(horde.length).toBeLessThanOrEqual(H.budget.total);
       for (const g of groups.values()) { expect(g.length).toBeGreaterThanOrEqual(H.size[0]); expect(g.length).toBeLessThanOrEqual(H.size[1]); }
-      const perStorey = new Map<number, number>(), groupsPerStorey = new Map<number, Set<number>>();
-      for (const z of horde) { perStorey.set(z.level ?? 0, (perStorey.get(z.level ?? 0) ?? 0) + 1); (groupsPerStorey.get(z.level ?? 0) ?? groupsPerStorey.set(z.level ?? 0, new Set()).get(z.level ?? 0)!).add(z.horde!); }
       expect(horde.every(z => z.archetype === undefined || z.archetype === 'zombie')).toBe(true);
-      report.push(`seed ${seed}: ambient ${ambient.length} (ratdog ${ambient.filter(z => z.archetype === 'ratdog').length}), horde groups ${groups.size} [${[...groups.values()].map(g => g.length).join(', ')}] = ${horde.length}`);
+      const fam = (f: string) => ambient.filter(z => (z.archetype ?? 'zombie') === f).length;
+      report.push(`seed ${seed}: ambient ${ambient.length} (siren ${fam('siren')}, blightbelly ${fam('blightbelly')}, ratdog ${fam('ratdog')}), horde groups ${groups.size} [${[...groups.values()].map(g => g.length).join(', ')}] = ${horde.length}`);
     }
     process.stdout.write(`\n[mall-profiles] spawns: ${report.join(' | ')}\n`);
   });
 
-  it('applyRareFamilyRules: cap + spacing in spawn-index order, horde members untouched (test profile on a typed family)', () => {
-    const T: SpawnProfile = {...P, familyHooks: [], rare: [{family: 'ratdog', capPerLevel: 2, spacingM: 10, why: 'test'}]};
+  it('applyFamilySpacing: cap + spacing jointly in spawn-index order (a capped draw is placed once an earlier one is spaced out); others / hordes untouched', () => {
+    // synthetic ring storey: one eligible room, a near-certain Siren draw (test pool), cap 2, 10 m spacing
+    const T: SpawnProfile = {
+      ...P, families: familyPool({siren: 0.85}),
+      eligibility: {siren: {contexts: ['ring'], maxPerLevel: 2, fallback: 'zombie', why: 'test'} satisfies FamilyEligibility},
+      spacing: {siren: {spacingM: 10, why: 'test'}},
+    };
     expect(validateSpawnProfile(T)).toEqual([]);
-    const zs = [
-      {x: 0, z: 0, archetype: 'ratdog'}, {x: 5, z: 0, archetype: 'ratdog'}, {x: 30, z: 0, archetype: 'ratdog'},
-      {x: 60, z: 0, archetype: 'ratdog'}, {x: 90, z: 0, archetype: 'ratdog', horde: 0}, {x: 0, z: 0, y: 12, archetype: 'ratdog'},
-    ];
-    expect(applyRareFamilyRules({zombies: zs}, T)).toBe(3);
-    expect(zs.map(z => z.archetype)).toEqual(['ratdog', 'zombie', 'ratdog', 'zombie', 'ratdog', 'zombie']);
+    const seed = 77;
+    const draws = Array.from({length: 40}, (_, i) => pickEnemyArchetype(seed, i, T.families));
+    const sirenIdx = draws.flatMap((f, i) => (f === 'siren' ? [i] : [])).slice(0, 5);
+    expect(sirenIdx.length).toBe(5);
+    const n = sirenIdx[4] + 1;
+    // A (0 m) kept, B (5 m: too close to A) spaced, C (30 m) kept — assignEnemyArchetypes alone capped it —, D (60 m) capped, E: horde
+    const xs = [0, 5, 30, 60, 90];
+    const L = {
+      seed, areas: [{type: 'shop' as const, purpose: 'mall-vacant', kind: 'room' as const, w: 40, h: 40}],
+      zombies: Array.from({length: n}, (_, i) => ({x: 500 + i * 50, z: 0, y: 5, level: 1, area: 0, archetype: undefined as string | undefined, horde: undefined as number | undefined})),
+    };
+    sirenIdx.forEach((i, k) => { L.zombies[i].x = xs[k]; });
+    L.zombies[sirenIdx[4]].horde = 0;
+    markSpawnContext(L, 0, 'ring');
+    assignEnemyArchetypes(L as never, T);
+    expect(sirenIdx.map(i => L.zombies[i].archetype)).toEqual(['siren', 'siren', 'zombie', 'zombie', undefined]); // Track1's cap alone
+    const others = L.zombies.map((z, i) => (sirenIdx.includes(i) ? null : z.archetype));
+    const rep = applyFamilySpacing(L as never, T);
+    expect(sirenIdx.map(i => L.zombies[i].archetype)).toEqual(['siren', 'zombie', 'siren', 'zombie', undefined]);
+    expect(rep).toEqual([{family: 'siren', eligible: 4, kept: 2, spaced: 1, capped: 1}]);
+    expect(L.zombies.map((z, i) => (sirenIdx.includes(i) ? null : z.archetype))).toEqual(others);
+    // a profile without spacing is a no-op
+    const snap = JSON.stringify(L.zombies);
+    expect(applyFamilySpacing(L as never, {...T, spacing: undefined})).toEqual([]);
+    expect(JSON.stringify(L.zombies)).toBe(snap);
   });
 });
 
 describe('reference coverage (the generated pages document the mall automatically)', () => {
-  it('the enemy reference shows the mall contexts, the inactive hooks, the waiting rare rule, the horde pool and the ambient budget', () => {
+  it('the enemy reference shows the mall tier, contexts, the Siren rule with its spacing, the horde pool and the ambient budget', () => {
     const r = buildEnemyReference({censusSeeds: []});
     const m = r.levels.find(l => l.id === 'mall')!;
+    expect(m.tier.value).toBe(2);
     expect(m.contexts.map(c => [c.id, c.runs])).toEqual([['pit', 1], ['ring', MALL_RINGS], ['service', 0]]);
     expect(m.contexts.find(c => c.id === 'service')!.hook).toMatch(/NOT INTEGRATED/);
     expect(m.total.mean).toBe((P => (P.contexts.pit!.count[0] + P.contexts.pit!.count[1]) / 2 + MALL_RINGS * (P.contexts.ring!.count[0] + P.contexts.ring!.count[1]) / 2)(spawnProfile('mall')));
-    expect(m.hooks.map(h => [h.family, h.active])).toEqual([['blightbelly', false], ['siren', false]]);
-    expect(m.rare.map(x => [x.family, x.status, x.capPerLevel])).toEqual([['siren', 'waiting', 4]]);
-    expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['ratdog', 0]]);
+    expect(m.pool.rows.map(x => [x.family, x.weight])).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}).map(([f, w]) => [f, w]));
+    expect(m.pool.eligibility.map(e => [e.family, e.contexts, e.maxPerLevel, e.spacing?.metres])).toEqual([['siren', ['ring'], 4, 30]]);
+    expect(m.pool.eligibility[0].criteria.join(' ')).toMatch(/30 m/);
+    expect(m.knobs.find(k => k.what === 'spacing (siren, m)')!.value).toBe(30);
+    expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]]);
+    expect(m.horde!.semantics.join(' ')).toMatch(new RegExp(`'${HORDE_CONTEXT}'`));
     expect(m.horde!.size).toMatchObject({lo: 5, hi: 20});
     expect(m.budgets!.ambient.total).toBe(spawnProfile('mall').budgets!.ambient.total);
-    // the shipped levels carry none of it (their reference numbers are unchanged)
-    for (const id of ['subway', 'office']) { const l = r.levels.find(x => x.id === id)!; expect([l.hooks, l.rare, l.horde, l.budgets]).toEqual([[], [], null, null]); }
+    // the shipped levels carry none of the mall's extras (their reference numbers are unchanged)
+    for (const id of ['subway', 'office']) { const l = r.levels.find(x => x.id === id)!; expect([l.horde, l.budgets]).toEqual([null, null]); expect(l.pool.eligibility.every(e => e.spacing === null)).toBe(true); }
   });
 
   it('the material census helper works for any registered level profile (the mall profile is the one ContainerManager.build passes)', () => {

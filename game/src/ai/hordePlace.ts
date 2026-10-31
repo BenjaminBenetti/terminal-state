@@ -24,7 +24,7 @@ import {levelDistance} from '../gen/levelGen';
 import type {MallPatrolNode} from '../gen/mall/mallTypes';
 import type {StationLayout, ZombieSpawn} from '../gen/stationTypes';
 import type {EnemyArchetypeId} from './creatureSpawn';
-import {rollZombieTypes} from './spawnTables';
+import {HORDE_CONTEXT, markSpawnContext, rollZombieTypes} from './spawnTables';
 import {HORDE_GROUP_SIZE, hordeFamilyRoll, pickHordeFamily, type HordeGroupSpec, type HordeRules} from './hordeSpec';
 
 export interface HordePlacementReport {
@@ -78,6 +78,7 @@ function onStair(layout: StationLayout, g: StationLayout['grid'], i: number): bo
  * Places the level's hordes (see the file comment). Mutates layout.zombies (appends) and sets layout.hordes. Returns a report.
  */
 export function placeHordes(layout: StationLayout, rules: HordeRules | undefined, rng: Rng, opts: HordePlaceOptions = {}): HordePlacementReport {
+  const first = layout.zombies.length; // lane INTEG (Track1 integration): the members appended below are tagged HORDE_CONTEXT
   const report: HordePlacementReport = {asked: 0, placed: 0, members: 0, perStorey: {}, skipped: [], eligibleNodes: {}};
   layout.hordes = [];
   if (!rules) return report;
@@ -160,6 +161,9 @@ export function placeHordes(layout: StationLayout, rules: HordeRules | undefined
     report.members += picked.length;
   }
   for (const [s, n] of groupsOn) report.perStorey[s] = {groups: n, members: membersOn.get(s) ?? 0};
+  // Lane INTEG (Track1 integration): every member carries the horde pool's own declared context (spawnTables declaredSpawnContexts),
+  // never an ambient one — no ambient family rule (eligibility) can name it. Generation-time side table: layout data unchanged.
+  markSpawnContext(layout, first, HORDE_CONTEXT);
   return report;
 }
 

@@ -8,6 +8,9 @@
 //  - census of the real generators: zero Sirens in the Subway, Office Sirens only in eligible office-floor rooms, ~2 per run,
 //    Blightbelly ~5 % of the placed enemies on both levels, rat/dog ~5 %;
 //  - spawn context tags cover every spawn of every registered level; killed indices stay dead for the new families.
+//  - lane INTEG (task track3-eaton-centre-20261031): The Eaton's Center is registered (tier 2): its ambient spawns carry 'pit' /
+//    'ring', its horde members the horde pool's own declared context (declaredSpawnContexts) — never an ambient family. The
+//    synthetic "unregistered level" of the registry test is now 'arcade' (the id 'mall' is a real level).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -17,8 +20,9 @@ import {LEVELS, LEVEL_IDS, levelTier} from '../src/levels/registry';
 import {levelTiers, validateLevelRegistry} from '../src/levels/levelContract';
 import {assignEnemyArchetypes, enemyRoll, pickEnemyArchetype} from '../src/ai/creatureSpawn';
 import {
-  DEFAULT_FAMILY_SHARES, ENEMY_FAMILY_IDS, ENEMY_POOL, OFFICE_ENEMY_POOL, OFFICE_SIREN_ELIGIBILITY, OFFICE_SIREN_WEIGHT, OPT_IN_FAMILIES,
-  SPAWN_PROFILES, eligibilityFailure, eligibleFamily, familyPool, markSpawnContext, roomFamilyPool, sealsPassage, spawnContextOf, spawnProfile,
+  DEFAULT_FAMILY_SHARES, ENEMY_FAMILY_IDS, ENEMY_POOL, HORDE_CONTEXT, MALL_SIREN_ELIGIBILITY, OFFICE_ENEMY_POOL, OFFICE_SIREN_ELIGIBILITY, OFFICE_SIREN_WEIGHT,
+  OPT_IN_FAMILIES, SPAWN_PROFILES, declaredSpawnContexts, eligibilityFailure, eligibleFamily, familyPool, markSpawnContext, roomFamilyPool, sealsPassage,
+  spawnContextOf, spawnProfile,
   validateSpawnProfile, type EnemyFamilyId, type FamilyEligibility, type SpawnProfile,
 } from '../src/ai/spawnTables';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
@@ -32,6 +36,7 @@ describe('level registry contract: explicit tiers + profiles', () => {
     expect(validateLevelRegistry()).toEqual([]);
     expect(levelTier('subway')).toBe(0);
     expect(levelTier('office')).toBe(1);
+    expect(levelTier('mall')).toBe(2); // lane INTEG: The Eaton's Center
     expect(levelTiers()).toEqual(LEVEL_IDS.map(id => ({id, tier: LEVELS[id].tier})));
     for (const id of LEVEL_IDS) {
       expect(Number.isInteger(LEVELS[id].tier) && LEVELS[id].tier >= 0, id).toBe(true);
@@ -42,27 +47,27 @@ describe('level registry contract: explicit tiers + profiles', () => {
   it('a level without a tier / profile, a bad tier, a mismatched id or a stray entry is an error — never a default', () => {
     const levels = {...LEVELS} as Record<string, unknown>;
     const profiles = {...SPAWN_PROFILES} as Record<string, SpawnProfile | undefined>;
-    const mall = {...LEVELS.office, id: 'mall', tier: 1};
+    const arcade = {...LEVELS.office, id: 'arcade', tier: 1}; // lane INTEG: an UNREGISTERED id ('mall' is registered now)
     const v = (ids: string[], l: Record<string, unknown>, p: Record<string, SpawnProfile | undefined>) => validateLevelRegistry(ids, l as never, p);
     // a new level registered with a tier but no spawn profile
-    expect(v([...LEVEL_IDS, 'mall'], {...levels, mall}, profiles).join('\n')).toMatch(/mall: no spawn profile/);
+    expect(v([...LEVEL_IDS, 'arcade'], {...levels, arcade}, profiles).join('\n')).toMatch(/arcade: no spawn profile/);
     // ... with a profile but no tier
-    const {tier: _drop, ...noTier} = mall;
-    const mallProfile = {...OFFICE, id: 'mall', label: 'Mall'};
-    expect(v([...LEVEL_IDS, 'mall'], {...levels, mall: noTier}, {...profiles, mall: mallProfile}).join('\n')).toMatch(/mall: no difficulty tier/);
-    for (const bad of [-1, 1.5, NaN, '1']) expect(v([...LEVEL_IDS, 'mall'], {...levels, mall: {...mall, tier: bad}}, {...profiles, mall: mallProfile}).join('\n')).toMatch(/mall: tier .* not an integer/);
+    const {tier: _drop, ...noTier} = arcade;
+    const arcadeProfile = {...OFFICE, id: 'arcade', label: 'Arcade'};
+    expect(v([...LEVEL_IDS, 'arcade'], {...levels, arcade: noTier}, {...profiles, arcade: arcadeProfile}).join('\n')).toMatch(/arcade: no difficulty tier/);
+    for (const bad of [-1, 1.5, NaN, '1']) expect(v([...LEVEL_IDS, 'arcade'], {...levels, arcade: {...arcade, tier: bad}}, {...profiles, arcade: arcadeProfile}).join('\n')).toMatch(/arcade: tier .* not an integer/);
     // ... fully declared: valid (the contract accepts any number of levels)
-    expect(v([...LEVEL_IDS, 'mall'], {...levels, mall}, {...profiles, mall: mallProfile})).toEqual([]);
+    expect(v([...LEVEL_IDS, 'arcade'], {...levels, arcade}, {...profiles, arcade: arcadeProfile})).toEqual([]);
     // no LEVELS entry, mismatched ids, a profile / level outside LEVEL_IDS, an invalid profile
-    expect(v([...LEVEL_IDS, 'mall'], levels, {...profiles, mall: mallProfile}).join('\n')).toMatch(/mall: no LEVELS entry/);
+    expect(v([...LEVEL_IDS, 'arcade'], levels, {...profiles, arcade: arcadeProfile}).join('\n')).toMatch(/arcade: no LEVELS entry/);
     expect(v([...LEVEL_IDS], {...levels, office: {...LEVELS.office, id: 'subway'}}, profiles).join('\n')).toMatch(/office: LEVELS entry has id 'subway'/);
     expect(v([...LEVEL_IDS], levels, {...profiles, office: {...OFFICE, id: 'subway'}}).join('\n')).toMatch(/office: spawn profile has id/);
-    expect(v([...LEVEL_IDS], {...levels, mall}, profiles).join('\n')).toMatch(/mall: LEVELS entry for a level not in LEVEL_IDS/);
-    expect(v([...LEVEL_IDS], levels, {...profiles, mall: mallProfile}).join('\n')).toMatch(/mall: spawn profile for a level not in LEVEL_IDS/);
+    expect(v([...LEVEL_IDS], {...levels, arcade}, profiles).join('\n')).toMatch(/arcade: LEVELS entry for a level not in LEVEL_IDS/);
+    expect(v([...LEVEL_IDS], levels, {...profiles, arcade: arcadeProfile}).join('\n')).toMatch(/arcade: spawn profile for a level not in LEVEL_IDS/);
     expect(v([...LEVEL_IDS], levels, {...profiles, subway: {...SUBWAY, families: [['zombie', 1]]}}).join('\n')).toMatch(/family blightbelly missing/);
     expect(v(['subway', 'subway', 'office'], levels, profiles).join('\n')).toMatch(/listed twice/);
-    expect(() => levelTier('mall' as never)).toThrow(/not registered/);
-    expect(() => spawnProfile('mall' as never)).toThrow(/no spawn profile/);
+    expect(() => levelTier('arcade' as never)).toThrow(/not registered/);
+    expect(() => spawnProfile('arcade' as never)).toThrow(/no spawn profile/);
   });
 });
 
@@ -253,7 +258,19 @@ describe('spawn census (real generators)', () => {
     for (const id of LEVEL_IDS) {
       const l = LEVELS[id].generate('main', {levelSeed: 4242, startWeapon: 'rifle'});
       const p = spawnProfile(id);
-      l.zombies.forEach((_, i) => expect(Object.keys(p.contexts), `${id}#${i}`).toContain(spawnContextOf(l, p, i)));
+      // lane INTEG: the declared contexts = the ambient `contexts` + the horde pool's own context when the profile has hordes
+      l.zombies.forEach((_, i) => expect(declaredSpawnContexts(p), `${id}#${i}`).toContain(spawnContextOf(l, p, i)));
+      // the horde pool's members (and only they) carry its context; no ambient family roll ever reaches them
+      l.zombies.forEach((z, i) => {
+        expect(spawnContextOf(l, p, i) === HORDE_CONTEXT, `${id}#${i} horde tag`).toBe(z.horde !== undefined);
+        if (z.horde !== undefined) expect(z.archetype ?? 'zombie', `${id}#${i} horde family`).toBe('zombie');
+        if (z.archetype === 'siren') expect(eligibilityFailure(p.eligibility!.siren!, l, z, spawnContextOf(l, p, i)), `${id}#${i} siren`).toBeNull();
+      });
+      if (id === 'mall') {
+        expect(l.zombies.some(z => z.horde !== undefined)).toBe(true);
+        expect(new Set(l.zombies.flatMap((z, i) => (z.horde === undefined ? [spawnContextOf(l, p, i)] : [])))).toEqual(new Set(['pit', 'ring']));
+        expect(l.zombies.filter(z => z.archetype === 'siren').length).toBeLessThanOrEqual(MALL_SIREN_ELIGIBILITY.maxPerLevel!);
+      }
     }
   });
 

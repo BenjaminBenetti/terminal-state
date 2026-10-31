@@ -59,6 +59,7 @@ export const LEVELS: Record<LevelId, LevelDef> = {
   // roof, six retail rings around the void (gen/mall/index.ts). ONE continuous world, section 'main'.
   mall: {
     id: 'mall',
+    tier: 2, // lane INTEG (Track1 level contract): level 2 difficulty — after the Subway (0) and Office Space (1); metadata only
     name: "The Eaton's Center",
     blurb: 'A subway station at the bottom of a vast open mall — look up through six rings of shops to the glass roof, then work your way up by escalator, stairs and bridges.',
     entry: 'main',

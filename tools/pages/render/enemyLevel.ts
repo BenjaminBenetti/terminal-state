@@ -5,10 +5,10 @@
 // Task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: + the difficulty tier, the profile's family eligibility rules and
 // the sampled eligibility census (draws vs placed per level of a restricted family).
 import type {EligibilityCensus, EnemyLevelInfo, LevelCensus, PlacementInfo, SpawnContextInfo} from '../enemyReferenceTypes';
-import {badge, esc, filterBox, href, num, range, renderPage, searchAttr, slug, table} from './html';
+import {badge, esc, filterBox, href, num, range, renderPage, searchAttr, table} from './html';
 import {probCell, prose, shareCell} from './common';
 import {
-  ALL_FAMILIES_KEY, ctxAnchor, hookAnchor, rareAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, expectedCell, familyAnchor, familyCell, familyLabel,
+  ALL_FAMILIES_KEY, ctxAnchor, eligAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, expectedCell, familyAnchor, familyCell, familyLabel,
   keyKindLabel, labelWithId, modifierFieldLabel, modifierStatus, mult, poolShareCell, roomAnchor, uniform, ZOMBIE_FAMILY, type EnemySite,
 } from './enemies';
 
@@ -16,7 +16,6 @@ const SECTIONS: Array<[string, string]> = [
   ['contexts', 'Generation contexts'],
   ['families', 'Enemy families'],
   ['eligibility', 'Family eligibility'],
-  ['family-hooks', 'Family hooks and rare placement'],
   ['horde', 'Roaming hordes (separate pool)'],
   ['zombie-types', 'Zombie types'],
   ['placement', 'Placement rules'],
@@ -29,7 +28,7 @@ const SECTIONS: Array<[string, string]> = [
 
 function toc(level: EnemyLevelInfo): string {
   const shown = SECTIONS.filter(([id]) => (id === 'storey-moves' ? level.levelMoves !== null : id === 'eligibility' ? level.pool.eligibility.length > 0
-    : id === 'family-hooks' ? level.hooks.length + level.rare.length > 0 : id === 'horde' ? level.horde !== null : true));
+    : id === 'horde' ? level.horde !== null : true));
   return `<nav class="toc" aria-label="${esc(level.name)} enemy spawn sections"><h2>On this page</h2><ul>${shown
     .map(([id, label]) => `<li><a href="#${esc(id)}">${esc(label)}</a></li>`).join('')}</ul></nav>`;
 }
@@ -96,38 +95,8 @@ function ambientBudget(es: EnemySite, level: EnemyLevelInfo): string {
 <p class="note">Defined at ${enemySourceLoc(es, b.at)}.</p></section>`;
 }
 
-// ------------------------------------------------------------------------------------------------------------- hooks / rare / horde
-// Task track3-eaton-centre-20261031 (lane PROFILES): Track1 family hooks, rare placement and the separate roaming-horde pool.
-
-function hooksSection(es: EnemySite, level: EnemyLevelInfo): string {
-  if (!level.hooks.length && !level.rare.length) return '';
-  const hooks = level.hooks.length ? table({
-    caption: `${level.name}: ambient family hooks (Track1 families declared before the registry has them)`,
-    head: ['Family id', 'Ambient share once typed', 'Expected per level once typed', 'Status', 'Note'],
-    numeric: [2],
-    rowHeader: 0,
-    rows: level.hooks.map(h => [`<code>${esc(h.family)}</code>`, probCell(h.share), num(h.expectedPerLevelIfTyped), `${badge(h.active ? 'typed' : 'inactive', h.active ? 'exact' : 'notderivable')} ${prose(h.status)}`, prose(h.note)]),
-    rowAttrs: level.hooks.map(h => `id="${esc(hookAnchor(h.family))}"`),
-    className: 'rows',
-  }) : '';
-  const rare = level.rare.length ? table({
-    caption: `${level.name}: rare placement over the whole level (applied after the family roll)`,
-    head: ['Family id', 'Cap per level', 'Spacing (m)', 'Expected before the cap', 'Status', 'Why'],
-    numeric: [1, 2, 3],
-    rowHeader: 0,
-    rows: level.rare.map(r => [`<code>${esc(r.family)}</code>`, num(r.capPerLevel), num(r.spacingM), num(r.expectedBeforeCap), badge(r.status, r.status === 'live' ? 'exact' : 'notderivable'), prose(r.why)]),
-    rowAttrs: level.rare.map(r => `id="${esc(rareAnchor(r.family))}"`),
-    className: 'rows',
-  }) : '';
-  return `<h2 id="family-hooks">Family hooks and rare placement</h2>
-<p>A <em>family hook</em> declares an ambient family before the enemy registry exports it. While the registry lacks it the hook is
-<strong>inactive</strong>: no spawn can be that family and its share stays with the zombies of the typed pool above. Once the
-registry exports it, the profile must list it in its typed pool (validation fails until then). Hooks never apply to hordes.</p>
-${hooks}
-${rare}
-${level.rare.map(r => `<p>${prose(r.semantics)}</p>`).join('\n')}
-<p class="note">Defined at ${[...new Set([...level.hooks.map(h => h.at), ...level.rare.map(r => r.at)].map(a => enemySourceLoc(es, a)))].join(', ')}.</p>`;
-}
+// ------------------------------------------------------------------------------------------------------------- horde
+// Task track3-eaton-centre-20261031 (lane PROFILES): the separate roaming-horde pool.
 
 function hordeSection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
   const h = level.horde;
@@ -223,11 +192,11 @@ ${restricted}`;
 function eligibilitySection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
   const el = level.pool.eligibility;
   if (!el.length) return '';
-  const blocks = el.map(e => `<section id="elig-${esc(slug(e.family))}">
+  const blocks = el.map(e => `<section id="${esc(eligAnchor(e.family))}">
 <h3>${esc(familyLabel(es, e.family))} <span class="summary-meta">· ${esc(e.family)}</span></h3>
 <p>${prose(e.why)}. A draw of ${esc(familyLabel(es, e.family))} becomes ${familyCell(es, p, e.fallback)} unless <strong>every</strong> criterion holds:</p>
 <ol>${e.criteria.map(c => `<li>${prose(c)}</li>`).join('')}</ol>
-<p class="note">Rule defined at ${enemySourceLoc(es, e.at)}.</p>
+${e.spacing ? `<p>Whole-level spacing ${num(e.spacing.metres)} m: ${prose(e.spacing.why)}. ${enemySourceLoc(es, e.spacing.at)}</p>\n` : ''}<p class="note">Rule defined at ${enemySourceLoc(es, e.at)}.</p>
 </section>`).join('\n');
   return `<h2 id="eligibility">Family eligibility</h2>
 <p>A family with an eligibility rule takes a placed slot only where its rule holds. Its <em>draw</em> share (weight / Σ weights)
@@ -538,7 +507,6 @@ export function renderEnemyLevelPage(es: EnemySite, level: EnemyLevelInfo): stri
 ${contextsSection(es, level)}
 ${familiesSection(es, level, p)}
 ${eligibilitySection(es, level, p)}
-${hooksSection(es, level)}
 ${hordeSection(es, level, p)}
 ${zombieTypesSection(es, level)}
 ${placementSection(es, level)}
