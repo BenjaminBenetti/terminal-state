@@ -10,7 +10,7 @@
 //   WEST tunnel (x0 end): 16 m straight -X, cap (default bulkhead), no door, no clues
 import {CELL, FLOOR, Grid, VOID} from '../../src/gen/grid';
 import type {Area, Door, LightPlacement, StationLayout, Trench} from '../../src/gen/station';
-import type {TrackExtensions, TrackTunnel} from '../../src/gen/trackExt/types';
+import type {BedEntry, TrackExtensions, TrackTunnel} from '../../src/gen/trackExt/types';
 import {TunnelFrame} from '../../src/world/trackExt/frame';
 
 export const TX = {W: 210, H: 110, bedY: -1.15, ceil: 4.4, bedZ0: 28, bedZ1: 36, x0: 20, x1: 61, tracks: [30, 34], annexCeil: -1.15 + 2.6} as const;
@@ -30,6 +30,13 @@ export interface TrackExtFixtureOpts {
   eastLen?: number;
   /** Rasterise with DESIGN §1's "centre within width/2 - 0.3" instead of GEN's exact all-corners rule. */
   centreRule?: boolean;
+  /**
+   * (GEN-2) A SERVICE-HATCH annex at the bed's x0 end (implies no west tunnel): a door through the bed's S wall (x 22-23.5 m,
+   * wall row z 36-36.5) into a corridor running south and a room; bed-wall clues (an arrow on the approach, a tag beside).
+   */
+  hatch?: boolean;
+  /** (GEN-2) Only the hatch annex: no tunnel at all (the view must still exist for its plate / graffiti). */
+  hatchOnly?: boolean;
 }
 
 export interface TrackExtFixture {
@@ -100,8 +107,8 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
     return {id, trench: 0, from, floorY: TX.bedY, ceilY: TX.ceil, width: 8, path, length: f.length, rails, cap: {kind: cap, s: f.length}, areas: [], doors: [], clues: [], firstStraight: first, arcs} as TrackTunnel;
   };
   const east = mk(0, 'x1', eastPath, o.eastCap ?? 'rubble', bend ? 14 : o.eastLen ?? 34, bend ? [{s: 14, len: 16 * bend, radius: 16, turnDeg: (bend * 180) / Math.PI}] : []);
-  tunnels.push(east);
-  const west = o.noWest ? null : mk(1, 'x0', westPath, o.westCap ?? 'bulkhead', 16, []);
+  if (!o.hatchOnly) tunnels.push(east);
+  const west = o.noWest || o.hatch || o.hatchOnly ? null : mk(1, 'x0', westPath, o.westCap ?? 'bulkhead', 16, []);
   if (west) tunnels.push(west);
 
   // Rasterise each tunnel's walkable cells (GEN: all four corners inside; or DESIGN's centre within width/2 - 0.3).
@@ -132,15 +139,17 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
 
   // Annex: a 2 m corridor parallel to the east tunnel's +Z wall and a room behind it; doors carved through the bands.
   const doors: Door[] = [];
-  const C = area('annexCorridor', {x: 130, y: 73, w: 40, h: 4}, 'service', 'service-corridor', TX.annexCeil, false, {ext: 'annex', extId: 0, floorY: TX.bedY});
-  const R = area('annexRoom', {x: 140, y: 78, w: 26, h: 18}, 'room', 'utility', TX.annexCeil, false, {ext: 'annex', extId: 0, floorY: TX.bedY});
-  carve(C, FLOOR, TX.bedY, TX.annexCeil, C.id);
-  carve(R, FLOOR, TX.bedY, TX.annexCeil, R.id);
   const door = (r: {x: number; y: number; w: number; h: number}, a: Area, b: Area) => {
     carve(r, FLOOR, TX.bedY, TX.bedY + 2.3, b.id);
     doors.push({...r, id: doors.length, a: a.id, b: b.id, height: 2.3, arch: false} as Door);
     return doors.length - 1;
   };
+  const annexes: TrackExtensions['annexes'] = [];
+  if (!o.hatchOnly) {
+  const C = area('annexCorridor', {x: 130, y: 73, w: 40, h: 4}, 'service', 'service-corridor', TX.annexCeil, false, {ext: 'annex', extId: 0, floorY: TX.bedY});
+  const R = area('annexRoom', {x: 140, y: 78, w: 26, h: 18}, 'room', 'utility', TX.annexCeil, false, {ext: 'annex', extId: 0, floorY: TX.bedY});
+  carve(C, FLOOR, TX.bedY, TX.annexCeil, C.id);
+  carve(R, FLOOR, TX.bedY, TX.annexCeil, R.id);
   const eastArea = areas[east.areas[0]];
   // GEN: the entry door is carved in the rock between the (grid-aligned) shell wall and the corridor; DESIGN's centre rule
   // leaves a SOLID row inside the wall, which the door then crosses too.
@@ -152,7 +161,7 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
   east.doors.push({annex: 0, door: d0, s: dS, side: (-1 * mirror) as 1 | -1});
   east.clues.push({s: 4, side: (-1 * mirror) as 1 | -1, kind: 'arrow', toward: 1}, {s: 5.5, side: (1 * mirror) as 1 | -1, kind: 'tag', toward: 1});
 
-  const annexes: TrackExtensions['annexes'] = [{id: 0, tunnel: 0, door: d0, areas: [C.id, R.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: C.w * C.h + R.w * R.h, areaM2: (C.w * C.h + R.w * R.h) * 0.25, exit: {x: 70.75, z: 36}}];
+  annexes.push({id: 0, tunnel: 0, door: d0, areas: [C.id, R.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: C.w * C.h + R.w * R.h, areaM2: (C.w * C.h + R.w * R.h) * 0.25, exit: {x: 70.75, z: 36}});
   if (o.bendDoor && bend) {
     // A second door on the arc's OUTER (right) wall: an axis-aligned 3 x 3 cell rect straddling the curved wall line,
     // into a small room carved only outside the corridor.
@@ -174,12 +183,30 @@ export function trackExtFixture(o: TrackExtFixtureOpts = {}): TrackExtFixture {
     east.doors.push({annex: 1, door: d1, s: sD, side: (-1 * mirror) as 1 | -1});
     annexes.push({id: 1, tunnel: 0, door: d1, areas: [room.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: room.w * room.h, areaM2: room.w * room.h * 0.25, exit: {x: wx, z: wz}});
   }
+  }
+  if (o.hatch || o.hatchOnly) {
+    // (GEN-2) the hatch door is cut through the bed's S wall row (cells y 72); a = b = the entry corridor (the bed has no area)
+    const id = annexes.length;
+    const HC = area('hatchCorridor', {x: 43, y: 73, w: 4, h: 12}, 'service', 'service-corridor', TX.annexCeil, false, {ext: 'annex', extId: id, floorY: TX.bedY});
+    const HR = area('hatchRoom', {x: 38, y: 86, w: 14, h: 12}, 'room', 'storage', TX.annexCeil, false, {ext: 'annex', extId: id, floorY: TX.bedY});
+    carve(HC, FLOOR, TX.bedY, TX.annexCeil, HC.id);
+    carve(HR, FLOOR, TX.bedY, TX.annexCeil, HR.id);
+    const dh = door({x: 44, y: 72, w: 3, h: 1}, HC, HC);
+    door({x: 44, y: 85, w: 3, h: 1}, HC, HR);
+    // bed frame from the x0 end (travel +X: left = -Z = the N wall): the S wall is side -1
+    const bed: BedEntry = {
+      trench: 0, from: 'x0', wall: 'S', side: -1, door: dh, s: 2.75, x: 22.75, z: TX.bedZ1, width: 1.5, floorY: TX.bedY, head: TX.bedY + 2.3,
+      clues: [{s: 12.75, side: -1, kind: 'arrow', toward: -1}, {s: 5.4, side: -1, kind: 'tag', toward: -1}],
+    };
+    annexes.push({id, tunnel: -1, door: dh, areas: [HC.id, HR.id], floorY: TX.bedY, ceilY: TX.annexCeil, cells: HC.w * HC.h + HR.w * HR.h + 6, areaM2: (HC.w * HC.h + HR.w * HR.h + 6) * 0.25, exit: {x: 22.75, z: TX.bedZ1 + 0.25}, bed});
+    ids.hatchDoor = dh;
+  }
 
   const lights: LightPlacement[] = [{x: 40, y: 4.25, z: 24, rot: 0, area: P.id, broken: false, flicker: false, warm: false, power: 1, dying: false}];
   const ext = {
     core: {x: 0, y: 0, w: W, h: H}, shift: {x: 0, z: 0}, // lane GEN's additions (unused by VIS)
     tunnels, annexes,
-    log: [{trench: 0, from: 'x1', result: 'tunnel+annex'}, {trench: 0, from: 'x0', result: o.noWest ? 'omitted' : 'tunnel'}],
+    log: [{trench: 0, from: 'x1', result: o.hatchOnly ? 'omitted' : 'tunnel+annex'}, {trench: 0, from: 'x0', result: o.hatch || o.hatchOnly ? 'hatch annex' : o.noWest ? 'omitted' : 'tunnel'}],
   } as TrackExtensions;
   const layout = {
     seed: 4242, attempt: 0, name: 'TrackExt Fixture', archetype: 'side-mezzanine', towards: ['North', 'South'],

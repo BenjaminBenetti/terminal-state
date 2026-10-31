@@ -17,7 +17,7 @@ import {ROOM_LABEL, type Kit, type TrenchCells} from '../stationKit';
 import type {Area, AreaKind, Door, Rect, RoomType} from '../stationTypes';
 import {buildPath, pathEnd, pointAt, samplePath, tubeCells, walkCells, type ShapeStep, type TubeCells, type TunnelPath, type Vec2} from './path';
 import {SUBWAY_WALK_BASELINE_M2} from './config';
-import type {BedEnd, CapKind, ServiceAnnex, TrackExtConfig, TrackExtContext, TrackExtensions, TrackTunnel} from './types';
+import type {BedEnd, BedEntry, CapKind, ServiceAnnex, TrackExtConfig, TrackExtContext, TrackExtensions, TrackTunnel} from './types';
 
 /** Cells of virtual canvas around the core bbox the extensions may use (> longest tunnel + an annex). */
 const PAD = 420;
@@ -42,12 +42,18 @@ export interface Carve {
   core: {x0: number; y0: number; x1: number; y1: number};
 }
 
-interface BedEndInfo {
+export interface BedEndInfo {
   trench: number; t: TrenchCells; from: BedEnd;
   /** Face column boundary (cells): x1 for 'x1', x0 for 'x0'; travel direction along X. */
   face: number; dir: 1 | -1;
   half: number; cz: number; floorY: number;
 }
+
+/** (GEN-2) What an annex grows from: its extension group, floor, the area its entry door opens from (-1: a bed) and its tunnel. */
+interface AnnexEntry { group: number; floorY: number; area: number; tunnel: number }
+
+/** (GEN-2) A planned service hatch: the bed-entry record (canvas frame; door = local door index, no clues yet). */
+export type HatchEntry = Omit<BedEntry, 'clues'>;
 
 interface PlannedTunnel {
   id: number; end: BedEndInfo; path: TunnelPath; length: number; firstStraight: number;
@@ -208,13 +214,15 @@ export class Carver {
     return out;
   }
 
-  private shapes(rng: Rng, cls: number): ShapeStep[][] {
+  private shapes(rng: Rng, cls: number, minFirst = 0): ShapeStep[][] {
     const T = this.cfg.tunnel, total = T.length[1] + T.capDepth + 2;
     const R = () => Math.round(rng.range(T.radius[0], T.radius[1]));
     const turn = () => rng.pick(T.turnsDeg) * (rng.chance(0.5) ? 1 : -1);
-    // first straight: often long enough for an annex door (s >= doorMinS on the bed-aligned run), else short (an early bend)
+    // first straight: often long enough for an annex door (s >= doorMinS on the bed-aligned run), else short (an early bend);
+    // (GEN-2) an annex host (minFirst > 0) always long enough: drawn in [minFirst, firstStraight max]
     const mid = Math.min(T.firstStraight[1], this.cfg.annex.doorMinS + 4);
-    const fs = () => Math.round((rng.chance(0.6) ? rng.range(mid, T.firstStraight[1]) : rng.range(T.firstStraight[0], mid)) * 2) / 2;
+    const host = Math.min(minFirst, T.firstStraight[1]);
+    const fs = () => Math.round((minFirst > 0 ? rng.range(host, T.firstStraight[1]) : rng.chance(0.6) ? rng.range(mid, T.firstStraight[1]) : rng.range(T.firstStraight[0], mid)) * 2) / 2;
     const out: ShapeStep[][] = [];
     const finish = (steps: ShapeStep[]) => {
       let len = 0;
@@ -237,35 +245,46 @@ export class Carver {
     return out;
   }
 
-  /** Plans (and claims) a tunnel at a bed end; returns the reason when none fits. */
-  planTunnel(end: BedEndInfo, rng: Rng): PlannedTunnel | string {
+  /**
+   * Plans (and claims) a tunnel at a bed end; returns the reason when none fits. (GEN-2) `minFirst` > 0: an annex host — every
+   * shape's first straight is at least that long; when none of those fits this end, the ordinary shapes are tried after them.
+   */
+  planTunnel(end: BedEndInfo, rng: Rng, minFirst = 0): PlannedTunnel | string {
     const T = this.cfg.tunnel, id = this.tunnels.length;
     const start: Vec2 = {x: end.face * CELL, z: end.cz}, dir: Vec2 = {x: end.dir, z: 0};
     const want = rng.range(T.length[0], T.length[1]);
     const cls = rng.weighted(T.arcWeights.map((w, i) => [i, w] as [number, number]));
     // the drawn shape (3 parameterisations) first, then the other classes (2 each) as fallbacks
-    const cands: {steps: ShapeStep[]; drawn: boolean}[] = [];
-    for (let i = 0; i < 3; i++) for (const s of this.shapes(rng, cls)) cands.push({steps: s, drawn: true});
-    for (const c of [0, 1, 2]) if (c !== cls) for (let i = 0; i < (c === 0 ? 1 : 2); i++) for (const s of this.shapes(rng, c)) cands.push({steps: s, drawn: false});
-    let best: {path: TunnelPath; tube: TubeCells; L: number; score: number} | null = null;
+    const shapeList = (mf: number) => {
+      const out: {steps: ShapeStep[]; drawn: boolean}[] = [];
+      for (let i = 0; i < 3; i++) for (const s of this.shapes(rng, cls, mf)) out.push({steps: s, drawn: true});
+      for (const c of [0, 1, 2]) if (c !== cls) for (let i = 0; i < (c === 0 ? 1 : 2); i++) for (const s of this.shapes(rng, c, mf)) out.push({steps: s, drawn: false});
+      return out;
+    };
+    // (cast: `choose` below assigns it from a closure)
+    let best = null as {path: TunnelPath; tube: TubeCells; L: number; score: number} | null;
     let why = 'blocked at the mouth';
     const ok = (x: number, y: number) => this.cellOk(x, y, id, end.t);
     // every shape shares its first straight (>= firstStraight[0]): blocked there = no tunnel at this end
     const shared = tubeCells(buildPath(start, dir, [{line: T.firstStraight[0] + T.capDepth + 1}]), end.half, T.firstStraight[0], T.capDepth, ok);
     if (shared.limit < T.firstStraight[0] - 1e-6) return shared.limit > 0 ? `too short (${shared.limit.toFixed(1)} m free)` : why;
-    for (const c of cands) {
-      const path = buildPath(start, dir, c.steps);
-      const tube = tubeCells(path, end.half, T.length[1], T.capDepth, ok);
-      const limit = tube.limit;
-      let L = Math.min(want, limit);
-      if (L < T.length[0]) { if (limit > 0) why = `too short (${limit.toFixed(1)} m free)`; continue; }
-      L = this.budgetLength(path, end.half, T.length[0], L);
-      if (L < T.length[0]) { why = 'grid budget'; continue; }
-      // prefer reaching the drawn length with the drawn shape, then the least grid growth (1 m per GROWTH_CELLS_PER_M cells)
-      const score = Math.min(L, want) + (c.drawn ? 6 : 0) - this.growthOf(path, end.half, L) / GROWTH_CELLS_PER_M;
-      if (!best || score > best.score + 1e-9) best = {path, tube, L: Math.floor(L * 2) / 2, score};
-      if (c.drawn && L >= want - 1e-6) break;
-    }
+    const choose = (cands: {steps: ShapeStep[]; drawn: boolean}[]) => {
+      for (const c of cands) {
+        const path = buildPath(start, dir, c.steps);
+        const tube = tubeCells(path, end.half, T.length[1], T.capDepth, ok);
+        const limit = tube.limit;
+        let L = Math.min(want, limit);
+        if (L < T.length[0]) { if (limit > 0) why = `too short (${limit.toFixed(1)} m free)`; continue; }
+        L = this.budgetLength(path, end.half, T.length[0], L);
+        if (L < T.length[0]) { why = 'grid budget'; continue; }
+        // prefer reaching the drawn length with the drawn shape, then the least grid growth (1 m per GROWTH_CELLS_PER_M cells)
+        const score = Math.min(L, want) + (c.drawn ? 6 : 0) - this.growthOf(path, end.half, L) / GROWTH_CELLS_PER_M;
+        if (!best || score > best.score + 1e-9) best = {path, tube, L: Math.floor(L * 2) / 2, score};
+        if (c.drawn && L >= want - 1e-6) break;
+      }
+    };
+    choose(shapeList(minFirst));
+    if (!best && minFirst > 0) choose(shapeList(0));
     if (!best) return why;
     const {path, tube} = best;
     const L = best.L;
@@ -380,7 +399,7 @@ export class Carver {
         const xc = xd - rng.int(0, Math.max(0, cw - dc));
         const root: Rect = north ? {x: xc, y: wallRow - cl, w: cw, h: cl} : {x: xc, y: wallRow + 1, w: cw, h: cl};
         if (!this.rectOk(root, group) || !this.fits({x0: root.x, y0: root.y, x1: root.x + root.w - 1, y1: root.y + root.h - 1})) { last = 'entry corridor blocked'; continue; }
-        const res = this.grow(pt, annexId, rng, root, north ? 'N' : 'S', {x: xd, y: wallRow, w: dc, h: 1}, target, minM2);
+        const res = this.grow({group, floorY: end.floorY, area: pt.area, tunnel: pt.id}, annexId, rng, root, north ? 'N' : 'S', {x: xd, y: wallRow, w: dc, h: 1}, target, minM2);
         if (typeof res === 'string') { last = res; continue; }
         const doorS = (end.dir > 0 ? xd - end.face : end.face - (xd + dc)) * CELL + dc * CELL / 2;
         return {...res, doorS, side};
@@ -389,12 +408,99 @@ export class Carver {
     return last;
   }
 
+  /** (GEN-2) Extension group of a hatch annex (after every tunnel's group). */
+  private hatchGroups = 0;
+
+  /** (GEN-2) Bed-wall row and the row of bed cells in front of it, for a side wall of a bed. */
+  private static wallRows(t: TrenchCells, wall: 'N' | 'S'): {wallRow: number; bedRow: number} {
+    return wall === 'N' ? {wallRow: t.y0 - 1, bedRow: t.y0} : {wallRow: t.y1, bedRow: t.y1 - 1};
+  }
+
+  /** (GEN-2) Cell column of bed-frame arc position s (m from the end face, into the station) — fractional, in cell units. */
+  private static colAt(end: BedEndInfo, s: number): number {
+    return end.face - end.dir * s / CELL;
+  }
+
   /**
-   * Room-graph growth from the entry corridor `root` (running away from the tunnel toward `away`). Transactional: claims cells
-   * as it goes; on failure every claim and record is rolled back.
+   * (GEN-2) Tries to grow a SERVICE-HATCH annex at a bed end no tunnel continues: a door through one of the bed's side walls
+   * (`hatch.s` m from the end face; the wall cells and a jamb either side must be rock on every level grid — never a platform
+   * face), the entry corridor running straight away from the bed into the rock, then the same room-graph growth as off a tunnel.
+   * Claims it on success; returns the reason on failure (nothing claimed, nothing recorded).
    */
-  private grow(pt: PlannedTunnel, annexId: number, rng: Rng, root: Rect, away: 'N' | 'S', doorRect: Rect, targetM2: number, minM2: number): {annex: ServiceAnnex; door: number} | string {
-    const A = this.cfg.annex, group = pt.id, floorY = pt.end.floorY;
+  planHatch(end: BedEndInfo, annexId: number, rng: Rng): {annex: ServiceAnnex; door: number; entry: HatchEntry} | string {
+    const A = this.cfg.annex, H = this.cfg.hatch;
+    if (!H) return 'no hatches configured';
+    const t = end.t, dc = A.doorCells, g = this.k.g, group = this.tunnels.length + this.hatchGroups;
+    const target = A.share * SUBWAY_WALK_BASELINE_M2 * rng.range(A.jitter[0], A.jitter[1]);
+    const minM2 = A.minShare * SUBWAY_WALK_BASELINE_M2;
+    const cellsOf = (m: number) => Math.max(1, Math.round(m / CELL));
+    let last = 'no hatch wall fits';
+    for (const wall of rng.shuffle(['N', 'S'] as ('N' | 'S')[])) {
+      const {wallRow, bedRow} = Carver.wallRows(t, wall);
+      if (wallRow < 1 || wallRow >= this.H - 1) continue;
+      for (let tryK = 0; tryK < 5; tryK++) {
+        const s = rng.range(H.s[0], H.s[1]);
+        const xd = Math.round(Carver.colAt(end, s) - dc / 2);
+        // inside the bed span, one wall cell between the opening and the end face
+        if (xd < t.x0 + 1 || xd + dc > t.x1 - 1) { last = 'hatch off the bed'; continue; }
+        let ok = true;
+        for (let x = xd - 1; x <= xd + dc && ok; x++) {
+          const i = g.idx(x, wallRow);
+          // the opening and a jamb either side are wall: rock on every level grid (a platform face is open floor: refused)
+          for (const L of this.k.levelGrids) if (L.cells[i] !== SOLID) { ok = false; break; }
+          if (!ok || x < xd || x >= xd + dc) continue;
+          // in front of the opening the bed itself; the opening keeps the core / extension margins (its own bed exempt)
+          if (g.cells[g.idx(x, bedRow)] !== VOID || !this.coreFree(x, wallRow, t) || this.own[this.vi(x, wallRow)] !== 0 || !this.extFree(x, wallRow, group)) ok = false;
+        }
+        if (!ok) { last = 'hatch wall'; continue; }
+        const north = wall === 'N';
+        const cw = rng.int(cellsOf(A.corridorWidth[0]), cellsOf(A.corridorWidth[1]));
+        const cl = rng.int(cellsOf(A.corridorLength[0]), cellsOf(A.corridorLength[1]));
+        const xc = xd - rng.int(0, Math.max(0, cw - dc));
+        const root: Rect = north ? {x: xc, y: wallRow - cl, w: cw, h: cl} : {x: xc, y: wallRow + 1, w: cw, h: cl};
+        if (!this.rectOk(root, group) || !this.fits({x0: root.x, y0: root.y, x1: root.x + root.w - 1, y1: root.y + root.h - 1})) { last = 'entry corridor blocked'; continue; }
+        const doorRect: Rect = {x: xd, y: wallRow, w: dc, h: 1};
+        const res = this.grow({group, floorY: end.floorY, area: -1, tunnel: -1}, annexId, rng, root, north ? 'N' : 'S', doorRect, target, minM2);
+        if (typeof res === 'string') { last = res; continue; }
+        this.hatchGroups++;
+        // the opening on the wall plane (the bed's z0 / z1 face); bed frame: travel from the end face into the station
+        const head = this.carve.cells.find(c => c.x === xd && c.y === wallRow)!.ceil;
+        const entry: HatchEntry = {
+          trench: end.trench, from: end.from, wall, side: (wall === 'S') === (end.dir > 0) ? 1 : -1, door: res.door,
+          s: round(Math.abs(end.face - (xd + dc / 2)) * CELL), x: round((xd + dc / 2) * CELL), z: round((north ? t.y0 : t.y1) * CELL),
+          width: dc * CELL, floorY: end.floorY, head,
+        };
+        return {...res, entry};
+      }
+    }
+    return last;
+  }
+
+  /**
+   * (GEN-2) Graffiti spot check on a hatch's bed wall: the wall row cells under the bed-frame span [s0, s1] are rock on the main
+   * level grid (a real wall face from the bed floor up: not a platform face, opening or another extension's cell).
+   */
+  bedWallSolid(entry: Pick<HatchEntry, 'trench' | 'from' | 'wall'>, s0: number, s1: number): boolean {
+    const end = this.bedEnds().find(e => e.trench === entry.trench && e.from === entry.from);
+    if (!end) return false;
+    const {wallRow} = Carver.wallRows(end.t, entry.wall), g = this.k.g;
+    const a = Carver.colAt(end, s0), b = Carver.colAt(end, s1);
+    const x0 = Math.floor(Math.min(a, b)), x1 = Math.ceil(Math.max(a, b)) - 1;
+    if (x0 < end.t.x0 || x1 >= end.t.x1) return false;
+    for (let x = x0; x <= x1; x++) {
+      if (!g.inBounds(x, wallRow) || g.cells[g.idx(x, wallRow)] !== SOLID) return false;
+      const i = this.vi(x, wallRow);
+      if (i < 0 || this.own[i] !== 0) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Room-graph growth from the entry corridor `root` (running away from the tunnel / bed toward `away`). Transactional: claims
+   * cells as it goes; on failure every claim and record is rolled back.
+   */
+  private grow(from: AnnexEntry, annexId: number, rng: Rng, root: Rect, away: 'N' | 'S', doorRect: Rect, targetM2: number, minM2: number): {annex: ServiceAnnex; door: number} | string {
+    const A = this.cfg.annex, group = from.group, floorY = from.floorY;
     const a0 = this.carve.areas.length, d0 = this.carve.doors.length, c0 = this.carve.cells.length, r0 = this.carve.rects.length;
     const claimed: number[] = [];
     const box0 = {...this.box};
@@ -482,8 +588,9 @@ export class Carver {
     const growth = (r: Rect) => this.cellsFor(this.grown({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1})) - this.cellsFor(this.box);
 
     // root corridor + the entry door (tunnel area -> corridor) + a room at its far end (dead ends end in rooms)
-    const rootA = addArea(root, 'corridor', pt.area, 1);
-    const entry = addDoor(doorRect, pt.area, rootA.area);
+    const rootA = addArea(root, 'corridor', from.area, 1);
+    // (GEN-2: a hatch door joins the bed, which has no area: a = b = the entry corridor)
+    const entry = addDoor(doorRect, from.area >= 0 ? from.area : rootA.area, rootA.area);
     const endRoom = (c: AnnexArea, dirSide: 'N' | 'S' | 'E' | 'W'): boolean => {
       for (let k = 0; k < 6; k++) {
         const [along, deep] = roomDims(rng.chance(0.2));
@@ -581,7 +688,7 @@ export class Carver {
     const areas = list.map(e => e.area);
     const ceilY = Math.max(...areas.map(i => this.carve.areas[i].ceil));
     const ex = (doorRect.x + doorRect.w / 2) * CELL, ez = (doorRect.y + doorRect.h / 2) * CELL;
-    return {annex: {id: annexId, tunnel: pt.id, door: entry, areas, floorY, ceilY, cells, areaM2: cells * CELL * CELL, exit: {x: ex, z: ez}}, door: entry};
+    return {annex: {id: annexId, tunnel: from.tunnel, door: entry, areas, floorY, ceilY, cells, areaM2: cells * CELL * CELL, exit: {x: ex, z: ez}}, door: entry};
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -6,6 +6,7 @@
 //   floors / ceilings: skip cells where view.ownsCell(L, i); black end planes / barricades: skip view.continued ends;
 //   default door frames: skip view.doorIds;
 //   const built = buildTrackExtensions(group, view, layout, mats);   // shell + caps + doors + graffiti, into the station
+//   (GEN-2) service hatches in bed walls (ServiceAnnex.bed): the grid draws the opening + frame; this adds plate + graffiti
 //
 // Everything is added to the station group at build time with existing or shared materials (no first-use compile; see
 // docs/rendering-warmup.md); steam lives in the effects pool (world/fx.ts Effects.steam, world/trackExt/steam.ts).
@@ -18,9 +19,12 @@ import {hazardMaterial} from '../traversalBuilder';
 import {Acc} from './mesh';
 import {buildShells, type ShellBuild} from './shell';
 import {graffitiDecals, graffitiMaterial, type GraffitiDecal} from './graffiti';
+import {hatchGraffiti, hatchPlates, type HatchPlate} from './hatch';
+import {serviceSignMaterial} from './shell';
 import type {TrackExtView} from './view';
 
-export {TrackExtView, extOf, extensionsOf, continuedEnds, endKey} from './view';
+export {TrackExtView, extOf, extensionsOf, continuedEnds, endKey, bedFrame, type HatchView} from './view';
+export {HATCH_PLATE, type HatchPlate} from './hatch';
 export {TunnelFrame} from './frame';
 export {shellDetailFaces, SHELL_FACE_TYPE} from './shell';
 
@@ -37,12 +41,16 @@ export interface TrackExtStats {
   per100m: {draws: number; triangles: number};
   /** Graffiti decals placed (clue records x marks). */
   decals: number;
+  /** (GEN-2) Service hatches in bed walls (plates built). */
+  hatches: number;
 }
 
 export interface TrackExtBuilt {
   view: TrackExtView;
   shells: ShellBuild;
   decals: GraffitiDecal[];
+  /** (GEN-2) SERVICE plates over the service hatches in bed walls. */
+  plates: HatchPlate[];
   stats: TrackExtStats;
 }
 
@@ -54,7 +62,7 @@ export function voidMaterial(mats: WorldMaterials): THREE.Material {
   return m;
 }
 
-/** Build every tunnel's shell, cap, door frames and graffiti into the station group. */
+/** Build every tunnel's shell, cap, door frames and graffiti (+ GEN-2: service-hatch plates and graffiti) into the station group. */
 export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, layout: StationLayout, mats: WorldMaterials): TrackExtBuilt {
   const shells = buildShells(group, view, layout, mats, {hazard: hazardMaterial(mats), void: voidMaterial(mats)});
   // Graffiti: one merged decal mesh for the level (shared atlas material).
@@ -64,6 +72,22 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
     const avoid = shells.perTunnel[k]?.openings ?? [];
     decals.push(...graffitiDecals(acc, v.t, v.f, layout.seed >>> 0, avoid));
   });
+  // (GEN-2) service hatches: the bed-wall graffiti joins the same decal mesh; their plates merge into one steel + one sign mesh
+  decals.push(...hatchGraffiti(acc, view.hatches, layout.seed >>> 0));
+  const steel = new Acc(), sign = new Acc();
+  const plates = hatchPlates(steel, sign, view.hatches);
+  const hatchMeshes: THREE.Mesh[] = [];
+  for (const [a, mat, part] of [[steel, mats.get('steel'), 'hatch-steel'], [sign, serviceSignMaterial(mats), 'hatch-sign']] as const) {
+    const g = a.geometry();
+    if (!g) continue;
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.name = `track-ext-${part}`;
+    mesh.userData.level = 0;
+    mesh.userData.trackExt = {tunnel: -1, part};
+    mesh.matrixAutoUpdate = false;
+    group.add(mesh);
+    hatchMeshes.push(mesh);
+  }
   let decalTris = 0;
   const geo = acc.geometry();
   if (geo) {
@@ -77,16 +101,17 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
     decalTris = acc.triangleCount;
   }
   const lengthM = view.tunnels.reduce((n, v) => n + v.f.length, 0);
-  const draws = shells.meshes.length + (geo ? 1 : 0);
-  const triangles = shells.perTunnel.reduce((n, p) => n + p.triangles, 0) + decalTris;
+  const draws = shells.meshes.length + (geo ? 1 : 0) + hatchMeshes.length;
+  const triangles = shells.perTunnel.reduce((n, p) => n + p.triangles, 0) + decalTris + steel.triangleCount + sign.triangleCount;
   const per = lengthM > 0 ? 100 / lengthM : 0;
   return {
-    view, shells, decals,
+    view, shells, decals, plates,
     stats: {
       tunnels: view.tunnels.length, lengthM, meshes: draws, draws, triangles,
       instances: shells.perTunnel.reduce((n, p) => n + p.instances, 0),
       per100m: {draws: Math.round(draws * per * 10) / 10, triangles: Math.round(triangles * per)},
       decals: decals.length,
+      hatches: plates.length,
     },
   };
 }

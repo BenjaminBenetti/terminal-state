@@ -16,13 +16,13 @@ import {CELL, FLOOR, NAV_STEP, SOLID, VOID, type Grid} from '../grid';
 import type {Kit} from '../stationKit';
 import type {Rect, StationLayout} from '../stationTypes';
 import {levelDistance, registerApertures} from '../levelGen';
-import {Carver, type Carve} from './carve';
+import {Carver, type BedEndInfo, type Carve} from './carve';
 import {reframe} from './core';
 import {adoptComposition} from '../compose';
 import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
 
 export * from './types';
-export {TRACK_EXT, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config';
+export {TRACK_EXT, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config';
 export {copyWindow} from './window';
 export {coreView, hasExtensionGrowth, reframe} from './core';
 
@@ -47,26 +47,60 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
   TRACK_EXT_STATS.calls++;
   const C = new Carver(k, cfg, ctx);
   const ext = C.carve.ext;
+  const A = cfg.annex;
+  // (GEN-2) the incidence planner: a seeded per-level wanted annex count (own fork: the original planner's draws are untouched)
+  const want = A.count ? Math.min(A.max, rng.fork('annex-count').weighted(A.count.map((w, i) => [i, w] as [number, number]))) : 0;
+  let hosts = 0;
+  const open: BedEndInfo[] = [];
   // tunnels: bed ends in a seeded order, each on its own fork (independent of the others' draws)
   for (const e of rng.fork('order').shuffle(C.bedEnds())) {
-    const r = C.planTunnel(e, rng.fork(`tunnel:${e.trench}:${e.from}`));
+    // (GEN-2) annex-aware first straight while the level still wants an annex host
+    const host = A.count && A.hostFirstStraight && hosts < want ? A.hostFirstStraight : 0;
+    const r = C.planTunnel(e, rng.fork(`tunnel:${e.trench}:${e.from}`), host);
     ext.log.push({trench: e.trench, from: e.from, result: typeof r === 'string' ? `none: ${r}` : `tunnel ${r.length} m`});
+    if (typeof r === 'string') open.push(e);
+    else if (host && C.doorWindow(r)) hosts++;
   }
   const planned = C.planned;
   ext.tunnels = planned.map(pt => C.tunnelRecord(pt));
-  // annexes: up to cfg.annex.max, each on a different eligible tunnel, a seeded chance per eligible tunnel
-  const ar = rng.fork('annexes');
-  for (const pt of ar.shuffle(planned.slice())) {
-    if (ext.annexes.length >= cfg.annex.max) break;
-    const tr = ext.tunnels[pt.id], ln = (result: string) => ext.log.push({trench: tr.trench, from: tr.from, result});
-    if (!C.doorWindow(pt)) { ln('annex: not eligible (first straight too short)'); continue; }
-    const fr = rng.fork(`annex:${pt.id}`);
-    if (!fr.chance(cfg.annex.chance)) { ln('annex: not rolled'); continue; }
-    const res = C.planAnnex(pt, ext.annexes.length, fr);
-    if (typeof res === 'string') { ln(`annex: omitted (${res})`); continue; }
+  const addTunnelAnnex = (res: Exclude<ReturnType<Carver['planAnnex']>, string>, tr: TrackExtensions['tunnels'][number], ln: (s: string) => void) => {
     ext.annexes.push(res.annex);
     tr.doors.push({annex: res.annex.id, door: res.door, s: r4(res.doorS), side: res.side});
     ln(`annex ${res.annex.id}: ${Math.round(res.annex.areaM2)} m² in ${res.annex.areas.length} areas`);
+  };
+  const ar = rng.fork('annexes');
+  if (!A.count) {
+    // annexes: up to cfg.annex.max, each on a different eligible tunnel, a seeded chance per eligible tunnel
+    for (const pt of ar.shuffle(planned.slice())) {
+      if (ext.annexes.length >= A.max) break;
+      const tr = ext.tunnels[pt.id], ln = (result: string) => ext.log.push({trench: tr.trench, from: tr.from, result});
+      if (!C.doorWindow(pt)) { ln('annex: not eligible (first straight too short)'); continue; }
+      const fr = rng.fork(`annex:${pt.id}`);
+      if (!fr.chance(A.chance)) { ln('annex: not rolled'); continue; }
+      const res = C.planAnnex(pt, ext.annexes.length, fr);
+      if (typeof res === 'string') { ln(`annex: omitted (${res})`); continue; }
+      addTunnelAnnex(res, tr, ln);
+    }
+  } else {
+    // (GEN-2) the wanted count over the candidates in a seeded order: eligible tunnels first, then service hatches at the bed
+    // ends no tunnel continues (cfg.hatch) — each candidate at most one annex, until the count is met
+    const tunnels = ar.shuffle(planned.slice()), hatches = cfg.hatch ? ar.shuffle(open.slice()) : [];
+    for (const pt of tunnels) {
+      const tr = ext.tunnels[pt.id], ln = (result: string) => ext.log.push({trench: tr.trench, from: tr.from, result});
+      if (ext.annexes.length >= want) { ln(`annex: not wanted (level wants ${want})`); continue; }
+      if (!C.doorWindow(pt)) { ln('annex: not eligible (first straight too short)'); continue; }
+      const res = C.planAnnex(pt, ext.annexes.length, rng.fork(`annex:${pt.id}`));
+      if (typeof res === 'string') { ln(`annex: omitted (${res})`); continue; }
+      addTunnelAnnex(res, tr, ln);
+    }
+    for (const e of hatches) {
+      const ln = (result: string) => ext.log.push({trench: e.trench, from: e.from, result});
+      if (ext.annexes.length >= want) { ln(`hatch: not wanted (level wants ${want})`); continue; }
+      const res = C.planHatch(e, ext.annexes.length, rng.fork(`hatch:${e.trench}:${e.from}`));
+      if (typeof res === 'string') { ln(`hatch: omitted (${res})`); continue; }
+      ext.annexes.push({...res.annex, bed: {...res.entry, clues: []}});
+      ln(`annex ${res.annex.id} via a bed hatch (${res.entry.wall} wall, ${res.entry.s.toFixed(1)} m from the end): ${Math.round(res.annex.areaM2)} m² in ${res.annex.areas.length} areas`);
+    }
   }
   // graffiti clues: only on tunnels that really lead to an annex door, all before (and pointing toward) the door
   for (const tr of ext.tunnels) {
@@ -78,6 +112,21 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
     const before = r4(d.s - cfg.clues.beforeDoor);
     if (before > mouth + 4) tr.clues.push({s: before, side: d.side, kind: 'arrow', toward: 1});
     if (cr.chance(cfg.clues.tagChance) && d.s - 1.6 > 0) tr.clues.push({s: r4(d.s - 1.6), side: d.side, kind: 'tag', toward: 1});
+  }
+  // (GEN-2) service hatches: graffiti on the hatch's own bed wall only (the route exists), on solid wall clear of the opening —
+  // an arrow on the approach from the platforms pointing back toward the door, sometimes a tag beside it
+  for (const n of ext.annexes) {
+    const b = n.bed;
+    if (!b) continue;
+    const cr = rng.fork(`hatch-clues:${n.id}`);
+    if (!cr.chance(cfg.clues.chance)) continue;
+    const span = 1.25, beside = b.s + b.width / 2 + 0.4 + span;
+    for (const s of [b.s + cfg.clues.beforeDoor, b.s + 7, beside]) {
+      if (C.bedWallSolid(b, s - span, s + span)) { b.clues.push({s: r4(s), side: b.side, kind: 'arrow', toward: -1}); break; }
+    }
+    if (cr.chance(cfg.clues.tagChance) && C.bedWallSolid(b, beside - span, beside + span) && !b.clues.some(c => Math.abs(c.s - beside) < 2 * span)) {
+      b.clues.push({s: r4(beside), side: b.side, kind: 'tag', toward: -1});
+    }
   }
   CARVES.set(ext, C.carve);
   TRACK_EXT_STATS.ms += (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
@@ -187,6 +236,7 @@ export function attachExtensions(layout: StationLayout, ext: TrackExtensions, cr
     n.door = D(n.door);
     n.areas = n.areas.map(A);
     n.exit = {x: r4(n.exit.x - dx), z: r4(n.exit.z - dz)};
+    if (n.bed) { n.bed.door = D(n.bed.door); n.bed.x = r4(n.bed.x - dx); n.bed.z = r4(n.bed.z - dz); }
   }
   ext.core = {...crop.core};
   ext.shift = {x: crop.core.x * CELL, z: crop.core.y * CELL};
@@ -253,7 +303,8 @@ export const EXT_HEAD_CLEARANCE = 2.2;
  * head clearance and rock on every other level grid; no walkable extension cell borders the grid edge or a track bed (except a
  * tunnel mouth onto its own bed); every extension cell reachable from the start (walking, drops, ladders) AND walkable back to a
  * rescue ladder of its own bed without drops; caps solid; entry doors join exactly a tunnel area and an annex corridor; clues
- * only on tunnels with a door, before it, pointing toward it.
+ * only on tunnels with a door, before it, pointing toward it. (GEN-2) Service-hatch annexes: their door cells are the only annex
+ * cells that may touch a bed (their own), the walk back runs to a ladder of that bed, and hatchIssues checks the entry.
  */
 export function extensionIssues(layout: StationLayout, dists?: readonly Int32Array[]): string[] {
   const ext = layout.extensions;
@@ -268,9 +319,15 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
   const trenchOf = (i: number): number => {
     const a = g.area[i];
     if (tunnelOfArea.has(a)) return ext.tunnels[tunnelOfArea.get(a)!].trench;
-    if (annexOfArea.has(a)) return ext.tunnels[ext.annexes[annexOfArea.get(a)!].tunnel].trench;
+    if (annexOfArea.has(a)) { const n = ext.annexes[annexOfArea.get(a)!]; return n.bed ? n.bed.trench : ext.tunnels[n.tunnel]?.trench ?? -1; }
     return -1;
   };
+  // (GEN-2) service-hatch door cells: the only annex cells that may touch a track bed (their own)
+  const hatchCell = new Map<number, number>();
+  for (const n of ext.annexes) {
+    const d = n.bed ? layout.doors[n.door] : undefined;
+    if (d) for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) if (g.inBounds(x, y)) hatchCell.set(g.idx(x, y), n.bed!.trench);
+  }
   const start = layout.office?.start ?? {...layout.playerSpawn, level: 0};
   const [sx, sy] = levels[0].grid.cellOf(start.x, start.z);
   // (the caller's reachability from the start, when it has it: validateLayout / officeIssues)
@@ -289,9 +346,9 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
       const nx = x + ox, ny = y + oy;
       if (!g.inBounds(nx, ny)) { bad.edge++; continue; }
       if (g.cells[g.idx(nx, ny)] !== VOID) continue;
-      // a tunnel's mouth cells touch their own bed; nothing else may border a track bed
-      const ti = tunnelOfArea.get(a);
-      const tr = ti !== undefined ? layout.trenches[ext.tunnels[ti].trench] : null;
+      // a tunnel's mouth cells touch their own bed (and a service hatch's door cells theirs); nothing else may border a track bed
+      const ti = tunnelOfArea.get(a), hb = hatchCell.get(i);
+      const tr = ti !== undefined ? layout.trenches[ext.tunnels[ti].trench] : hb !== undefined ? layout.trenches[hb] : null;
       if (!tr || !(nx * CELL >= tr.x0 - 1e-6 && nx * CELL < tr.x1 && ny * CELL >= tr.z0 - 1e-6 && ny * CELL < tr.z1)) bad.edge++;
     }
     if (dist[i] < 0) bad.unreached++;
@@ -349,8 +406,50 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
       if (h < 2.4 - 1e-6 || h > 2.8 + 1e-6) issues.push(`annex ${n.id}: area ${id} ceiling ${h.toFixed(2)} m`);
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.area[g.idx(x, y)] !== id) { issues.push(`annex ${n.id}: area ${id} rect not its own`); y = a.y + a.h; break; }
     }
+    if (n.tunnel >= 0) {
+      if (n.bed) issues.push(`annex ${n.id}: both a tunnel and a bed entry`);
+      if (!ext.tunnels[n.tunnel]?.doors.some(d => d.annex === n.id && d.door === n.door)) issues.push(`annex ${n.id}: no door record on tunnel ${n.tunnel}`);
+    } else issues.push(...hatchIssues(layout, n, levels));
   }
   return issues;
+}
+
+/**
+ * (GEN-2) The entry of a service-hatch annex: a bed-entry record; a door joining exactly the bed and an annex corridor (a = b =
+ * the corridor), one cell row in the bed's side wall inside the bed span, bed cells in front of every opening cell, corridor
+ * cells behind, a rock jamb either side on every level grid (a wall, never a platform face); no tunnel continuing that end;
+ * record positions matching the door; clues only on its wall, on the approach (beyond the door), pointing to it, over rock.
+ */
+function hatchIssues(layout: StationLayout, n: TrackExtensions['annexes'][number], levels: readonly {grid: Grid}[]): string[] {
+  const ext = layout.extensions!, b = n.bed, g = layout.grid, out: string[] = [];
+  if (!b) return [`annex ${n.id}: neither a tunnel nor a bed entry`];
+  const tr = layout.trenches[b.trench], door = layout.doors[n.door];
+  if (!tr || !door || b.door !== n.door) return [`annex ${n.id}: bed entry record`];
+  if (ext.tunnels.some(t => t.trench === b.trench && t.from === b.from)) out.push(`annex ${n.id}: a hatch at a bed end a tunnel continues`);
+  const corr = layout.areas[door.b];
+  if (door.a !== door.b || !corr || corr.ext !== 'annex' || corr.kind !== 'service' || !n.areas.includes(corr.id)) out.push(`annex ${n.id}: hatch door ${n.door} does not join the bed and an annex corridor`);
+  const z0 = Math.round(tr.z0 / CELL), z1 = Math.round(tr.z1 / CELL), bx0 = Math.round(tr.x0 / CELL), bx1 = Math.round(tr.x1 / CELL);
+  const row = b.wall === 'N' ? z0 - 1 : z1, bedRow = b.wall === 'N' ? z0 : z1 - 1, outRow = b.wall === 'N' ? row - 1 : row + 1;
+  if (door.h !== 1 || door.y !== row || door.x < bx0 + 1 || door.x + door.w > bx1 - 1) out.push(`annex ${n.id}: hatch door ${n.door} not in the bed's ${b.wall} wall`);
+  else {
+    let bedSide = 0, corrSide = 0;
+    for (let x = door.x; x < door.x + door.w; x++) {
+      if (g.cells[g.idx(x, bedRow)] === VOID) bedSide++;
+      if (g.area[g.idx(x, outRow)] === door.b) corrSide++;
+    }
+    if (bedSide !== door.w || corrSide !== door.w) out.push(`annex ${n.id}: hatch door ${n.door} not between the bed and its corridor`);
+    jamb: for (const x of [door.x - 1, door.x + door.w]) for (const L of levels) if (L.grid.cells[g.idx(x, row)] !== SOLID) { out.push(`annex ${n.id}: hatch door ${n.door} without a wall jamb`); break jamb; }
+  }
+  const face = b.from === 'x1' ? tr.x1 : tr.x0, cx = (door.x + door.w / 2) * CELL;
+  if (Math.abs(b.x - cx) > 1e-3 || Math.abs(b.z - (b.wall === 'N' ? tr.z0 : tr.z1)) > 1e-3 || Math.abs(b.s - Math.abs(face - cx)) > 1e-3 || Math.abs(b.width - door.w * CELL) > 1e-6) out.push(`annex ${n.id}: bed entry position`);
+  if (b.side !== ((b.wall === 'S') === (b.from === 'x1') ? 1 : -1)) out.push(`annex ${n.id}: bed entry side`);
+  if (Math.abs(b.floorY - n.floorY) > 1e-6 || Math.abs(b.floorY - tr.floorY) > 1e-6 || Math.abs(b.head - g.ceil[g.idx(door.x, door.y)]) > 1e-3) out.push(`annex ${n.id}: bed entry heights`);
+  for (const c of b.clues) {
+    if (c.side !== b.side || c.toward !== -1 || c.s <= b.s + b.width / 2) { out.push(`annex ${n.id}: hatch clue at ${c.s} does not point toward the door`); continue; }
+    const xc = face + (b.from === 'x1' ? -c.s : c.s);
+    for (let x = Math.floor((xc - 0.95) / CELL); x <= Math.floor((xc + 0.95) / CELL); x++) if (!g.inBounds(x, row) || g.cells[g.idx(x, row)] !== SOLID) { out.push(`annex ${n.id}: hatch clue at ${c.s} not on a wall`); break; }
+  }
+  return out;
 }
 
 /** Cells reachable from `starts` over passable cells with |step| <= NAV_STEP (no drops, no links). */

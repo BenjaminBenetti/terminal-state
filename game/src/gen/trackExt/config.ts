@@ -1,6 +1,7 @@
 // Track 2 (lane GEN): THE balance / geometry config of the track extensions (one exported block, TRACK_EXT) and the measured
 // Subway walkable-exploration baseline the annex size target is a share of. Per-level variants only differ where the level's
-// structure requires it (none today: the level-specific grid budgets / crop rules are the generator's TrackExtContext).
+// structure requires it (the level-specific grid budgets / crop rules are the generator's TrackExtContext): the Office street
+// station keeps the original planner (TRACK_EXT_OFFICE), the Subway adds the GEN-2 incidence options.
 
 import type {TrackExtConfig} from './types';
 
@@ -15,7 +16,20 @@ import type {TrackExtConfig} from './types';
  */
 export const SUBWAY_WALK_BASELINE_M2 = 7371;
 
-/** Track extension config (every track-bearing level today: the Subway and the Office street station). */
+/**
+ * Track extension config of the Subway (the Office street station uses TRACK_EXT_OFFICE: the same block minus the GEN-2 options).
+ *
+ * GEN-2 (user: service annexes "present randomly on basically every level that has a subway track", "multiple can spawn, two"):
+ *  - coreReserveM 40: AUTHORIZED, documented CORE-CHANGING Subway layout change (decided by the primary for the incidence
+ *    requirement): 40 m of rock stay free straight past every bed end that is still open right after the archetype skeleton,
+ *    so the station's later growth leaves room for a tunnel there (gen/trackExt/index.ts reserveTunnelRoom);
+ *  - annex.count: seeded per-level weights of wanting 0 / 1 / 2 annexes, attempted over the level's candidates (tunnels first,
+ *    then service hatches) — `annex.chance` is the Office's per-tunnel roll and unused here;
+ *  - annex.hostFirstStraight: a tunnel planned while the level still wants an annex host gets a first straight long enough for
+ *    the door (doorMinS + the door + a few metres of door positions);
+ *  - hatch: where no tunnel continues a bed end (island-ends / express: the paid end halls stand 1.5-4 m past every bed end),
+ *    the annex may be entered by a service door in the bed's side wall 2-10 m from that end (ServiceAnnex.bed).
+ */
 export const TRACK_EXT: TrackExtConfig = {
   tunnel: {
     length: [30, 110],
@@ -30,6 +44,8 @@ export const TRACK_EXT: TrackExtConfig = {
   margin: {core: 1, ext: 2},
   annex: {
     chance: 0.6,
+    count: [0.07, 0.53, 0.4],
+    hostFirstStraight: 21,
     max: 2,
     share: 0.25,
     jitter: [0.85, 1.15],
@@ -47,7 +63,8 @@ export const TRACK_EXT: TrackExtConfig = {
     loopChance: 0.7,
     steps: 420,
   },
-  coreReserveM: 0,
+  coreReserveM: 40,
+  hatch: {s: [2, 10]},
   clues: {
     chance: 0.85,
     mouthS: [3, 7],
@@ -56,7 +73,19 @@ export const TRACK_EXT: TrackExtConfig = {
   },
 };
 
+/**
+ * The Office street station: TRACK_EXT without the GEN-2 options — the original planner (one `annex.chance` roll per eligible
+ * tunnel, annexes off tunnels only) and no core reserve (its fixed-origin canvas only grows east / south; the reserve is a Subway
+ * layout change). Its extensions, and every Office pin, stay exactly as before GEN-2.
+ */
+export const TRACK_EXT_OFFICE: TrackExtConfig = {
+  ...TRACK_EXT,
+  annex: {...TRACK_EXT.annex, count: undefined, hostFirstStraight: undefined},
+  coreReserveM: 0,
+  hatch: undefined,
+};
+
 /** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it). */
-export function trackExtConfig(_levelId: string): TrackExtConfig {
-  return TRACK_EXT;
+export function trackExtConfig(levelId: string): TrackExtConfig {
+  return levelId === 'office' ? TRACK_EXT_OFFICE : TRACK_EXT;
 }

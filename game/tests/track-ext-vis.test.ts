@@ -11,7 +11,8 @@ import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {TunnelFrame} from '../src/world/trackExt/frame';
-import {TrackExtView, outsideIntervals, resolveLeftSign} from '../src/world/trackExt/view';
+import {TrackExtView, bedFrame, outsideIntervals, resolveLeftSign} from '../src/world/trackExt/view';
+import {HATCH_PLATE} from '../src/world/trackExt/hatch';
 import {SHELL, SHELL_FACE_TYPE, clipOutside, sleeperPhase} from '../src/world/trackExt/shell';
 import {CELL_OF, GRAFFITI} from '../src/world/trackExt/graffiti';
 import {STEAM, SteamVents, annexVents} from '../src/world/trackExt/steam';
@@ -341,6 +342,129 @@ describe('graffiti clues', () => {
     const a = buildWorld(trackExtFixture().layout, mats, {}), b = built().w;
     expect(a.trackExt!.decals).toEqual(b.trackExt!.decals);
     expect(a.trackExt!.stats).toEqual(b.trackExt!.stats);
+  });
+});
+
+// (GEN-2) The service-hatch entry type: an annex entered through a door in the bed's side wall near an end no tunnel continues.
+describe('service hatches in a bed wall (GEN-2 entry type)', () => {
+  const trimNear = (w: BuiltWorld, x0: number, x1: number, z0: number, z1: number) => {
+    let n = 0;
+    w.group.traverse(o => { if (o.name.startsWith('trim-steel')) n += verts(o as THREE.Mesh).filter(p => p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1).length; });
+    return n;
+  };
+
+  it('the bed wall opens over the hatch door (walk-through below the head, lintel above it, a steel frame); the end plane and barricade stay', () => {
+    const {fx, w} = built({hatch: true});
+    const view = w.trackExt!.view, h = view.hatches[0], b = h.b, d = fx.layout.doors[b.door];
+    expect(view.hatches.length).toBe(1);
+    expect(fx.ext.annexes[h.annex.id].tunnel).toBe(-1);
+    // the door rect is the opening through the S wall row; the record matches it
+    expect(d.y * 0.5).toBeCloseTo(TX.bedZ1, 6);
+    expect((d.x + d.w / 2) * 0.5).toBeCloseTo(b.x, 6);
+    expect(d.a).toBe(d.b);
+    // no tunnel continues the x0 end: its black end plane and barricade stay; the builder frames the hatch door (not the shell)
+    expect(view.continued.has('0:x0')).toBe(false);
+    expect(view.doorIds.has(b.door)).toBe(false);
+    let plane = false;
+    w.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && (m.geometry as THREE.PlaneGeometry).type === 'PlaneGeometry' && (m.material as THREE.MeshBasicMaterial).color?.getHex() === 0x030303 && Math.abs(m.position.x - (TX.x0 + 0.01)) < 1e-6) plane = true; });
+    expect(plane).toBe(true);
+    const hz = w.group.getObjectByName('traversal-hazard') as THREE.Mesh;
+    expect(verts(hz).some(p => Math.abs(p.x - TX.x0) < 0.5)).toBe(true);
+    // walk-through: a ray from the bed into the opening below the head passes the wall and the corridor, into the room beyond
+    const toWall = new THREE.Vector3(0, 0, 1);
+    const below = raycastAll(w, new THREE.Vector3(b.x, TX.bedY + 1, 33), toWall, 30).find(q => (q.object as THREE.Mesh).isMesh);
+    expect(below!.point.z).toBeGreaterThan(42);
+    // above the head: the bed wall's lintel at the wall plane
+    const above = raycastAll(w, new THREE.Vector3(b.x, b.head + 0.75, 33), toWall, 30).find(q => (q.object as THREE.Mesh).isMesh);
+    expect(above!.point.z).toBeCloseTo(TX.bedZ1, 2);
+    expect(above!.object.name.startsWith('arch-')).toBe(true);
+    // beside the opening (between it and the end face): solid bed wall
+    const beside = raycastAll(w, new THREE.Vector3(b.x - 1.4, TX.bedY + 1, 33), toWall, 30).find(q => (q.object as THREE.Mesh).isMesh);
+    expect(beside!.point.z).toBeCloseTo(TX.bedZ1, 2);
+    // the builder's default steel frame (jambs + head) stands in the opening's wall cell
+    expect(trimNear(w, d.x * 0.5 - 0.2, (d.x + d.w) * 0.5 + 0.2, TX.bedZ1 - 0.1, TX.bedZ1 + 0.6)).toBeGreaterThan(0);
+    // the grid wall faces: the bed's S face carries the opening (top = the door head) or ends in a lintel face over it
+    const bedFaces = w.wallFaces.filter(f => f.areaType === 'trackbed' && Math.abs(f.z0 - TX.bedZ1) < 1e-6 && Math.abs(f.z1 - TX.bedZ1) < 1e-6);
+    const opened = bedFaces.some(f => f.openings.some(o => Math.abs(f.x0 + o.s0 - d.x * 0.5) < 1e-6 && Math.abs(f.x0 + o.s1 - (d.x + d.w) * 0.5) < 1e-6 && Math.abs(o.top - b.head) < 1e-3))
+      || bedFaces.some(f => Math.abs(f.x0 - d.x * 0.5) < 1e-6 && Math.abs(f.x1 - (d.x + d.w) * 0.5) < 1e-6 && Math.abs(f.y0 - b.head) < 1e-3);
+    expect(opened).toBe(true);
+  });
+
+  it('a SERVICE plate over the opening on the bed side, facing into the bed, under the bed ceiling', () => {
+    const {w} = built({hatch: true});
+    const [p] = w.trackExt!.plates, b = w.trackExt!.view.hatches[0].b;
+    expect(w.trackExt!.plates.length).toBe(1);
+    expect(p.nz).toBe(-1); // the S wall faces -Z into the bed
+    expect(p.x).toBeCloseTo(b.x, 6);
+    expect(p.y - p.h / 2).toBeGreaterThan(b.head + 0.05);
+    expect(p.y + p.h / 2).toBeLessThan(TX.ceil);
+    const sign = extMeshes(w, 'hatch-sign');
+    expect(sign.length).toBe(1);
+    for (const v of verts(sign[0])) expect(v.z).toBeGreaterThan(TX.bedZ1 - 2 * HATCH_PLATE.proud - 0.01);
+    for (const v of verts(sign[0])) expect(v.z).toBeLessThan(TX.bedZ1);
+    expect(sign[0].geometry.attributes.normal.getZ(0)).toBeCloseTo(-1, 6);
+    expect(extMeshes(w, 'hatch-steel').length).toBe(1);
+    expect(w.trackExt!.stats.hatches).toBe(1);
+  });
+
+  it('graffiti only at the hatch clue records, on its bed wall, pointing toward the door', () => {
+    const {fx, w} = built({hatch: true});
+    const h = w.trackExt!.view.hatches[0], b = h.b;
+    const decals = w.trackExt!.decals.filter(d => d.tunnel === 1000 + h.annex.id);
+    expect(decals.length).toBe(b.clues.reduce((m, c) => m + (c.kind === 'tag' ? 2 : 1), 0));
+    for (const d of decals) {
+      const c = b.clues[d.clue];
+      expect(d.side).toBe(b.side);
+      // world X of the mark along the bed (from the x0 end face) and the viewer's right for the S wall (inward -Z): -X
+      const x = TX.x0 + d.s;
+      expect(Math.abs(d.s - c.s)).toBeLessThan(2.5);
+      expect(x - d.w / 2).toBeGreaterThan(b.x + b.width / 2); // off the opening, on the approach side
+      expect(d.dir).toBe('right'); // toward -X = toward the door
+      expect(d.y - d.h / 2).toBeGreaterThan(TX.bedY + 0.5);
+    }
+    // the decal vertices lie on the bed's S wall plane (just proud of it)
+    const mesh = w.group.getObjectByName('track-ext-graffiti') as THREE.Mesh;
+    const onWall = verts(mesh).filter(p => p.x < TX.x0 + 20 && p.z > TX.bedZ1 - 0.1);
+    expect(onWall.length).toBeGreaterThan(0);
+    for (const p of onWall) expect(p.z).toBeCloseTo(TX.bedZ1 - GRAFFITI.offset, 4);
+    // the bed frame: s from the end face into the station, +1 = left of travel
+    const f = bedFrame(b, fx.layout.trenches[0], h.annex.id);
+    expect(f.point(b.s, b.side * f.half)).toEqual([b.x, b.z]);
+  });
+
+  it('a level with only a hatch (no tunnel): a view for its plate and graffiti, and otherwise the builder exactly as without a view', () => {
+    const {fx, w} = built({hatchOnly: true});
+    const view = w.trackExt!.view;
+    expect(view.tunnels.length).toBe(0);
+    expect(view.hatches.length).toBe(1);
+    expect(view.continued.size).toBe(0);
+    expect([...view.mode].every(m => m === 0)).toBe(true);
+    expect(new Set(extMeshes(w).map(m => m.userData.trackExt.part))).toEqual(new Set(['hatch-steel', 'hatch-sign', 'graffiti']));
+    // the same layout built without the view (extensions record removed): identical grid walls and architecture meshes
+    const bare = trackExtFixture({hatchOnly: true});
+    delete (bare.layout as {extensions?: unknown}).extensions;
+    const wb = buildWorld(bare.layout, mats, {});
+    expect(wb.trackExt).toBeUndefined();
+    expect(JSON.stringify(w.wallFaces)).toBe(JSON.stringify(wb.wallFaces));
+    const arch = (x: BuiltWorld) => { const out: string[] = []; x.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.trackExt) out.push(`${m.name}:${m.geometry.attributes.position?.count}`); }); return out.sort(); };
+    expect(arch(w)).toEqual(arch(wb));
+    // warm-up discoverable
+    const scene = new THREE.Scene();
+    scene.add(w.group);
+    const keys = new Set(planWarmup(scene, {mode: 'full', cameraMask: 1, pools: []}).items.flatMap(i => warmKeys(i.object)));
+    for (const m of extMeshes(w)) for (const k of warmKeys(m)) expect(keys.has(k), `${m.name} ${k}`).toBe(true);
+    void fx;
+  });
+
+  it('the hatch annex takes the annex look and steam like any annex', () => {
+    const {fx, w} = built({hatchOnly: true});
+    const areas = new Set(fx.ext.annexes[0].areas);
+    const faces = w.wallFaces.filter(f => areas.has(f.area));
+    expect(faces.length).toBeGreaterThan(4);
+    for (const f of faces) expect(treatmentOf(f)).toBe('lowerConcrete');
+    const vents = annexVents(fx.layout);
+    expect(vents.length).toBeGreaterThan(0);
+    for (const v of vents) expect(areas.has(v.area!)).toBe(true);
   });
 });
 

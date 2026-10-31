@@ -83,7 +83,7 @@ export function generateStation(seed: number, opts: {archetype?: Archetype; star
     if (!layout) continue;
     if (validateLayout(layout, spawns).length === 0) return layout;
     // Track 2: extensions never decide a retry (the core keeps main's attempt): drop them and re-check the core.
-    if (layout.extensions?.tunnels.length) { dropExtensions(layout); if (validateLayout(layout, spawns).length === 0) { TRACK_EXT_STATS.rescued++; return layout; } }
+    if (layout.extensions?.tunnels.length || layout.extensions?.annexes.length) { dropExtensions(layout); if (validateLayout(layout, spawns).length === 0) { TRACK_EXT_STATS.rescued++; return layout; } }
   }
   // Extremely unlikely; fall back to a deterministic layout even with warnings.
   for (let attempt = 24; attempt < 60; attempt++) {
@@ -110,7 +110,8 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   const terms = rng.shuffle(TERMINALS.slice());
   const plan = buildSkeleton(k, arch, terms);
   if (!plan) return null;
-  // Track 2 (lane GEN): CORE-CHANGING option only (coreReserveM > 0; the default 0 keeps the station byte-identical).
+  // Track 2 (lane GEN): CORE-CHANGING option only (coreReserveM > 0; 0 keeps the station byte-identical to main). GEN-2: the
+  // Subway's TRACK_EXT enables it (authorized incidence change: 40 m of rock kept past every bed end still open here).
   if (trackExt !== 'none' && trackExt.coreReserveM > 0) reserveTunnelRoom(k, trackExt);
 
   // --- Sealed street exits: dead-end stair halls with a locked grille (no outside, no travel) ---
