@@ -35,7 +35,7 @@ import {CELL, FLOOR, SOLID} from './grid';
 import {ROOM_PURPOSES, purposeById, type LightOdds, type RoomPurpose} from './purposes';
 import {isP7Kind} from './props07';
 import {LIGHT_ODDS, clearAround, dressExtensionAreas, stationP7Palette} from './stationDress';
-import {placeAgainstWall, type PlaceCtx} from './placeKit';
+import {areaBase, makePlaceCtx, placeAgainstWall, type PlaceCtx} from './placeKit';
 import {isExtensionArea, type ServiceAnnex, type TrackTunnel} from './trackExt/types';
 import {ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, econCat, floorChance, floorCount, type LootProfile} from '../items/lootTables';
 import {areaCap, areaSpawnWeight, markSpawnContext, reportSpawnCandidates, rollZombieTypes, type SpawnContextRule, type SpawnProfile} from '../ai/spawnTables';
@@ -44,7 +44,7 @@ import {lootTheme} from '../items/lootEconomy';
 import {ITEMS} from '../items/items';
 import {PENDANT_Y, type Area, type LightPlacement, type PickupPlacement, type RoomType, type StationLayout} from './stationTypes';
 import type {PropKind} from './props';
-import {isLootHolderKind} from '../items/loot';
+import {isLootHolderKind, rollsPurposeTable} from '../items/loot';
 // Task track2-playtest-revision (lane ROOMS): room signatures + machinery, the room mix and the lean annex furniture rules
 import {ANNEX_RULES, assignAnnexRooms, placeAnnexMachinery, SIGNATURE_OF_PURPOSE, type AnnexMachine, type AnnexRoomPlan, type SignatureId} from './annexRooms';
 
@@ -88,7 +88,14 @@ export const ANNEX_CONTENT = {
    * the rest), at most `perArea` per room; then `scrapsShare` of the remaining picked-over holders (at most `scrapsMax`) keep ONE leftover
    * (ANNEX_SCRAPS); the rest are searched clean (ANNEX_PICKED). The stash and the deepest room-table holders are unchanged.
    */
-  loot: {m2PerSupply: 200, supply: [5, 10] as const, bands: [0.4, 0.35] as const, perArea: 2, scrapsShare: 0.12, scrapsMax: 6},
+  loot: {m2PerSupply: 170, supply: [6, 12] as const, bands: [0.5, 0.3] as const, perArea: 2, scrapsShare: 0.12, scrapsMax: 6},
+  /**
+   * Playtest revision: every annex room / closet the dressing left WITHOUT any loot holder gets one searchable piece of storage
+   * (placeRoomStorage, after the dressing): open shelving first (its finds are visible before anything opens), else a low cabinet /
+   * crate (rooms) or a tall cabinet (closets). Measured on the merged rooms: an ordinary 10-area route passed 0-2 holders — most
+   * plant rooms and closets held none — so even stocked supply holders were out of the way.
+   */
+  roomStorage: {room: ['shelf', 'cabinetLow', 'crate'] as readonly PropKind[], closet: ['shelf', 'cabinetTall'] as readonly PropKind[]},
   /** Stash holders per annex: one, two when the annex has at least `stashTwoRooms` rooms; kinds in order. */
   stash: {kinds: ['crate', 'cabinetTall'] as readonly PropKind[], twoRooms: 7},
   lights: {
@@ -184,7 +191,9 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
       phase,
     });
     rep.props += d.props; rep.signs += d.signs;
-    pickOver(layout, n, layout.props.length - d.props, new Set(stashes), root.fork(`loot:${n.id}`));
+    const added = placeRoomStorage(layout, annexAreas(n), root.fork(`storage:${n.id}`));
+    rep.props += added;
+    pickOver(layout, n, layout.props.length - d.props - added, new Set(stashes), root.fork(`loot:${n.id}`));
   }
   if (ext.annexes.length) ext.machines = machines;
   phase('dress');
@@ -322,7 +331,10 @@ function pickOver(layout: StationLayout, n: ServiceAnnex, from: number, stashes:
   // playtest revision: SUPPLY holders by DEPTH BAND (area door-hop depth from the annex entry, thirds of its range): the entry band
   // gets `bands[0]` of them, the middle `bands[1]`, the deep end the rest (a band short of holders passes its share on); inside a
   // band a seeded pick, <= perArea per room. Then a capped few SCRAPS; every other non-intact holder is searched clean.
-  const rest = list.slice(intact).reverse();
+  // (a holder kind with its own table — a first-aid wall kit, an extinguisher cabinet — is never a supply / scraps pick: its loot key
+  // does not decide what it holds)
+  const rest = list.slice(intact).reverse().filter(i => rollsPurposeTable(layout.props[i].kind));
+  for (const i of list.slice(intact)) if (!rollsPurposeTable(layout.props[i].kind)) layout.props[i].purpose = ANNEX_PICKED_KEY;
   const k = Math.min(rest.length, Math.max(C.supply[0], Math.min(C.supply[1], Math.round(n.areaM2 / C.m2PerSupply))));
   const ds = rest.map(depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
   const bandOf = (i: number) => (dMax <= dMin ? 0 : Math.min(2, Math.floor((3 * (depth(i) - dMin)) / (dMax - dMin + 1e-9))));
@@ -345,6 +357,35 @@ function pickOver(layout: StationLayout, n: ServiceAnnex, from: number, stashes:
   const others = rest.filter(i => !supply.has(i));
   const scraps = new Set(rng.shuffle(others.slice()).slice(0, Math.min(C.scrapsMax, Math.round(C.scrapsShare * others.length))));
   for (const i of rest) layout.props[i].purpose = supply.has(i) ? ANNEX_SUPPLY_KEY : scraps.has(i) ? ANNEX_SCRAPS_KEY : ANNEX_PICKED_KEY;
+}
+
+/**
+ * Playtest revision: one storage holder in each annex room / closet that has none after the dressing (ANNEX_CONTENT.roomStorage
+ * kinds in order, the first that fits against a wall through the dresser's own primitive: door zones, access strips,
+ * connectivity). Returns the number placed. Its loot key comes from pickOver like every annex holder.
+ */
+function placeRoomStorage(layout: StationLayout, areas: readonly Area[], rng: Rng): number {
+  const C = ANNEX_CONTENT.roomStorage, ids = new Set(areas.map(a => a.id));
+  const has = new Set<number>();
+  for (const p of layout.props) if (ids.has(p.area) && p.host === undefined && isLootHolderKind(p.kind)) has.add(p.area);
+  const win = {x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity};
+  for (const a of areas) { win.x0 = Math.min(win.x0, a.x - 4); win.y0 = Math.min(win.y0, a.y - 4); win.x1 = Math.max(win.x1, a.x + a.w + 3); win.y1 = Math.max(win.y1, a.y + a.h + 3); }
+  const ctxs = new Map<number, PlaceCtx>();
+  const ctxOf = (a: Area) => { const L = a.level ?? 0; let c = ctxs.get(L); if (!c) ctxs.set(L, (c = makePlaceCtx(layout, rng, L, win))); return c; };
+  let n = 0;
+  for (const a of areas) {
+    if ((a.kind !== 'room' && a.kind !== 'closet') || has.has(a.id)) continue;
+    for (const kind of a.kind === 'closet' ? C.closet : C.room) {
+      const p = placeAgainstWall({...ctxOf(a), rng}, a, kind, {tries: 10, front: 0.6});
+      if (!p) continue;
+      // onto the area's own floor (as dressExtensionAreas lifts its placements; the annex lies at the bed floor, not at 0)
+      const g = layout.grid, [cx, cy] = g.cellOf(p.x, p.z), k = g.inBounds(cx, cy) ? g.idx(cx, cy) : -1;
+      p.y += k >= 0 && g.cells[k] === FLOOR && g.rampIdx[k] < 0 ? g.floorOf(k) : areaBase(layout, a);
+      n++;
+      break;
+    }
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

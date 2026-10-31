@@ -161,14 +161,15 @@ export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, mo
     const c = areaCentre(best);
     if (!walkTo(c.x, c.z, A.floorY)) { ev('room unreachable', {area: best}); continue; }
     rooms++;
-    ev('room', {area: best, purpose: layout.areas[best].purpose, type: layout.areas[best].type});
+    ev('room', {area: best, purpose: layout.areas[best].purpose, type: layout.areas[best].type, depth: layout.areas[best].depth, holders: cm.all.filter(h => h.prop.area === best).length});
     // try the room's holders a player would open / look at, in placement order (no stocked-first knowledge)
     const here = cm.all.filter(h => h.prop.area === best).slice(0, openPerRoom);
     for (const h of here) {
       const {aim, stand} = cm.aimPoint(h);
-      if (!walkTo(stand.x, stand.z, A.floorY, 20)) continue;
+      if (!walkTo(stand.x, stand.z, A.floorY, 20)) { ev('holder unreachable', {kind: h.kind, purpose: h.prop.purpose}); continue; }
       const eye = new THREE.Vector3(p.x, p.y + STAND_EYE, p.z), dir = new THREE.Vector3(aim.x, aim.y, aim.z).sub(eye).normalize();
-      if (cm.target(eye, dir, L)?.container !== h) continue;
+      const tg = cm.target(eye, dir, L);
+      if (tg?.container !== h) { ev('holder not targeted', {kind: h.kind, purpose: h.prop.purpose, hit: tg?.container?.kind ?? null, d: +Math.hypot(aim.x - p.x, aim.z - p.z).toFixed(2)}); continue; }
       opened++;
       const got = openAndTake(cm, h, inv);
       if (got.length) {

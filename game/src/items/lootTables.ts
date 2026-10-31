@@ -665,8 +665,8 @@ export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], e
 
 /**
  * Playtest revision (studio-alpha-track2-playtest-revision-20261031-01): loot key of an annex SUPPLY holder — ordinary finite
- * supplies an explorer reliably finds along the way (gen/annexContent.ts ANNEX_CONTENT.loot: ~1 per 200 m² of annex, 5-10,
- * spread evenly from the entry to the deep end, <= 2 per room). Never empty, 1-2 lots, rolled exactly; no ammo (the annex's ammo
+ * supplies an explorer reliably finds along the way (gen/annexContent.ts ANNEX_CONTENT.loot: ~1 per 170 m² of annex, 6-12, half
+ * of them in the entry third, <= 2 per room). Never empty, one lot, rolled exactly; no ammo (the annex's ammo
  * stays its deepest room-table holders' + stash + floor boxes, as before) and nothing high-tier guaranteed (a kit is a 1-in-~25 row).
  * Calibration: the core Subway station stocks ~1/3 of its holders (77-99 of 238-290 on seeds 1043 / 1002 / 777001 / 777002) and
  * yields ~60-100 non-ammo supplies; an annex is ~1/4 of its walkable area, so ~15-25 non-ammo finds per annex is the core's density.
@@ -676,7 +676,7 @@ export const ANNEX_SUPPLY_ROWS: ItemRows = [
   ['water', 1], ['cola', 0.45], ['beans', 0.85], ['noodles', 0.4], ['chocolate', 0.4], ['bandage', 0.75], ['medkit', 0.12],
   ['battery', 0.6], ['flare', 0.35], ['electrical_parts', 0.3], ['scrap_metal', 0.3],
 ];
-export const ANNEX_SUPPLY: LootSpec = {items: ANNEX_SUPPLY_ROWS, lots: [1, 2], empty: 0, exact: true};
+export const ANNEX_SUPPLY: LootSpec = {items: ANNEX_SUPPLY_ROWS, lots: [1, 1], empty: 0, exact: true};
 /** Playtest revision: loot key of an annex SCRAPS holder — one leftover item in otherwise picked-over storage (a capped few per annex). */
 export const ANNEX_SCRAPS_KEY = 'annex-scraps';
 export const ANNEX_SCRAPS_ROWS: ItemRows = [['water', 1], ['beans', 0.6], ['chips', 0.5], ['bandage', 0.5], ['battery', 0.4], ['scrap_metal', 0.3], ['electrical_parts', 0.2]];

@@ -211,7 +211,8 @@ describe('service annex room signatures (machinery halls, anchored machinery, an
         expect(r.halls).toBeGreaterThanOrEqual(1);
         // meaningful storage: ~35-60 holders per annex (was ~100-125)
         expect(r.holders, `${l.seed} annex ${n.id} holders`).toBeGreaterThanOrEqual(30);
-        expect(r.holders).toBeLessThanOrEqual(70);
+        // playtest revision: + one storage piece in each room / closet the dressing left without one (ANNEX_CONTENT.roomStorage)
+        expect(r.holders).toBeLessThanOrEqual(90);
       }
     }
   });

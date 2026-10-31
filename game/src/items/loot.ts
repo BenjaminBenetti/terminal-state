@@ -137,6 +137,15 @@ export interface HolderTable {
   exact?: boolean;
 }
 
+/**
+ * Playtest revision: does a holder kind roll its ROOM PURPOSE's table (the loot key / area purpose decides)? False for the openable
+ * containers with their own tables and the fixtures (holderTable below: `containerLoot(kind) !== undefined`): a loot key never
+ * changes what a first-aid wall kit or an extinguisher cabinet holds.
+ */
+export function rollsPurposeTable(kind: string): boolean {
+  return containerLoot(kind) === undefined;
+}
+
 export function holderTable(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE): HolderTable {
   const T = profile.tables, slot = slotOf(kind);
   // Lane ROOF (office-interactions-layout-20261030): a holder whose loot key names a curated reward (the Office roof cache) rolls it.
