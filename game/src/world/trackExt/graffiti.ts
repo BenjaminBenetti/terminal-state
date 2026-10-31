@@ -6,27 +6,51 @@
 // (the record exists only when the route really exists, GEN), tinted per clue with a vertex colour, all merged into one
 // mesh per level with one shared material (one draw; the atlas is painted once per session). Deterministic per seed.
 
+//
+// Track 2 playtest revision (lane ART): the atlas grows to 2048 x 1024 (still ONE atlas, one material, one draw per level). The
+// left half keeps the eight 512 x 256 cells (arrows, tags); the right half holds the STATION-SURFACE invitation art painted by
+// world/trackExt/graffitiArt.ts — a full-colour letter piece (1024 x 512), the crew's gas-mask watcher (512 x 512) and the
+// stencilled SERVICE + arrow mark (right / left, 512 x 256 each). The marks are bigger and more legible than before (arrows
+// 2.0 x 1.0 m at eye height from the bed); a route's later arrows (the one before a tunnel door, a hatch's approach arrow) use the
+// SERVICE stencil. stationArtDecals paints the station-art records (gen/trackExt/art.ts) on the bed walls into the same mesh.
+
 import * as THREE from 'three';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {canvasTexture} from '../canvasTextures';
-import type {TrackTunnel} from '../../gen/trackExt/types';
+import type {StationArt, TrackTunnel} from '../../gen/trackExt/types';
+import type {Trench} from '../../gen/stationTypes';
 import {Acc, hashOf, prng, type V3} from './mesh';
 import type {TunnelFrame} from './frame';
+import {paintPiece, paintServiceStencil, paintWatcher} from './graffitiArt';
+import {bedFrame} from './view';
 
-/** Atlas: 1024 x 1024, cells of 512 x 256 (2 columns x 4 rows). */
-export const ATLAS = {w: 1024, h: 1024, cw: 512, ch: 256} as const;
+/** Atlas: 2048 x 1024. Legacy cells 0-7: 512 x 256 (2 columns x 4 rows, left half); art cells 8-11 in the right half. */
+export const ATLAS = {w: 2048, h: 1024, cw: 512, ch: 256} as const;
 export type ArrowStyle = 'bold' | 'chevron' | 'stencil';
 export const ARROW_STYLES: readonly ArrowStyle[] = ['bold', 'chevron', 'stencil'];
-/** Cell index of an arrow style + direction, and of the tags. */
+/** Cell index of an arrow style + direction, the tags and the station-art cells (right / left pairs keep even = right). */
 export const CELL_OF = {
   arrow: (style: ArrowStyle, dir: 'left' | 'right') => ARROW_STYLES.indexOf(style) * 2 + (dir === 'left' ? 1 : 0),
   tag: (variant: 0 | 1) => 6 + variant,
+  piece: 8,
+  watcher: 9,
+  service: (dir: 'left' | 'right') => (dir === 'left' ? 11 : 10),
 } as const;
+/** Pixel rect [x, y, w, h] of an atlas cell (y down). */
+export function cellRect(cell: number): [number, number, number, number] {
+  const {cw, ch} = ATLAS;
+  if (cell < 8) return [(cell % 2) * cw, Math.floor(cell / 2) * ch, cw, ch];
+  if (cell === 8) return [1024, 0, 1024, 512];
+  if (cell === 9) return [1024, 512, 512, 512];
+  return [1536, cell === 10 ? 512 : 768, 512, 256];
+}
 /** Spray colours (sRGB): red, white, yellow, green, blue, orange. */
 export const SPRAY = ['#d0202a', '#ecebe4', '#f2c21a', '#36b24a', '#2b7fd8', '#f0661c'] as const;
+/** Stencil colours: the bright cans that read across a dark bed (white, yellow, orange, cyan). */
+export const STENCIL_SPRAY = ['#ecebe4', '#f2c21a', '#f0661c', '#5fd8e8'] as const;
 
-/** Decal sizes (m) and heights above the bed. */
-export const GRAFFITI = {arrowW: 1.6, arrowH: 0.8, arrowY: 1.5, tagW: 1.9, tagH: 0.95, tagY: 1.95, tagArrowW: 1.2, tagArrowH: 0.6, tagArrowY: 1.1, offset: 0.012} as const;
+/** Decal sizes (m) and heights above the bed (playtest revision: bigger, at eye height from the bed). */
+export const GRAFFITI = {arrowW: 2.0, arrowH: 1.0, arrowY: 1.7, tagW: 2.2, tagH: 1.1, tagY: 2.3, tagArrowW: 1.4, tagArrowH: 0.7, tagArrowY: 1.25, offset: 0.012} as const;
 
 type Ctx = CanvasRenderingContext2D;
 type Pt = [number, number];
@@ -199,14 +223,14 @@ export function paintGraffitiAtlas(ctx: Ctx, w: number, h: number): void {
   ctx.clearRect(0, 0, w, h);
   const {cw, ch} = ATLAS;
   const sx = w / ATLAS.w, sy = h / ATLAS.h;
-  const cell = (i: number, f: (rnd: () => number) => void, mirror = false) => {
-    const col = i % 2, row = Math.floor(i / 2);
+  const cell = (i: number, f: (rnd: () => number, w: number, h: number) => void, mirror = false) => {
+    const [x, y, rw, rh] = cellRect(i);
     ctx.save();
     ctx.scale(sx, sy);
-    ctx.translate(col * cw, row * ch);
-    if (mirror) { ctx.translate(cw, 0); ctx.scale(-1, 1); }
-    cellH = ch;
-    f(prng(hashOf('graffiti-cell', i)));
+    ctx.translate(x, y);
+    if (mirror) { ctx.translate(rw, 0); ctx.scale(-1, 1); }
+    cellH = rh;
+    f(prng(hashOf('graffiti-cell', i)), rw, rh);
     cellH = Infinity;
     ctx.restore();
   };
@@ -216,6 +240,11 @@ export function paintGraffitiAtlas(ctx: Ctx, w: number, h: number): void {
   });
   cell(CELL_OF.tag(0), rnd => tag(ctx, 0, cw, ch, rnd));
   cell(CELL_OF.tag(1), rnd => tag(ctx, 1, cw, ch, rnd));
+  // (playtest revision, lane ART) the station-surface invitation art
+  cell(CELL_OF.piece, (rnd, w, h) => paintPiece(ctx, w, h, rnd));
+  cell(CELL_OF.watcher, (rnd, w, h) => paintWatcher(ctx, w, h, rnd));
+  cell(CELL_OF.service('right'), (rnd, w, h) => paintServiceStencil(ctx, w, h, rnd, 'right'));
+  cell(CELL_OF.service('left'), (rnd, w, h) => paintServiceStencil(ctx, w, h, rnd, 'left'));
 }
 
 let atlasTex: THREE.Texture | null = null;
@@ -242,22 +271,27 @@ export function graffitiMaterial(): THREE.Material {
   return atlasMat;
 }
 
+
 /** One placed decal (for tests / QA). */
 export interface GraffitiDecal { tunnel: number; clue: number; cell: number; s: number; side: 1 | -1; dir: 'left' | 'right'; color: string; w: number; h: number; y: number }
+
+const rgbOf = (css: string): V3 => { const c = new THREE.Color().setStyle(css); return [c.r, c.g, c.b]; };
 
 /**
  * Decals for a tunnel's clue records (and nothing else): arrows point (as seen by a viewer facing the wall) toward the
  * clue's `toward` along the path. `avoid` = wall spans to keep clear (door openings: [s0, s1, side]). (GEN-2: a service
- * hatch's bed-wall clues use the same painter in the hatch's straight bed frame: hatch.ts.)
+ * hatch's bed-wall clues use the same painter in the hatch's straight bed frame: hatch.ts.) Playtest revision: a route's later
+ * arrows — every arrow after a tunnel's first (the one before the door) and a hatch's approach arrow — are the stencilled
+ * SERVICE mark in a bright can, the first stays a sprayed arrow; all marks are bigger and higher than before.
  */
 export function graffitiDecals(acc: Acc, t: Pick<TrackTunnel, 'id' | 'floorY' | 'clues'>, f: TunnelFrame, seed: number, avoid: readonly {s0: number; s1: number; side: 1 | -1}[] = []): GraffitiDecal[] {
   const out: GraffitiDecal[] = [];
   const y0 = t.floorY, half = f.half;
   t.clues.forEach((c, ci) => {
     const rnd = prng(hashOf('graffiti', seed, t.id, ci));
-    const color = SPRAY[Math.floor(rnd() * SPRAY.length)];
-    const col = new THREE.Color().setStyle(color);
-    const rgb: V3 = [col.r, col.g, col.b];
+    const service = c.kind === 'arrow' && (ci > 0 || t.id >= 1000);
+    const color = service ? STENCIL_SPRAY[Math.floor(rnd() * STENCIL_SPRAY.length)] : SPRAY[Math.floor(rnd() * SPRAY.length)];
+    const rgb = rgbOf(color);
     // Keep the mark off door openings on its wall.
     let s = Math.max(1, Math.min(f.length - 1, c.s));
     const width = c.kind === 'tag' ? GRAFFITI.tagW : GRAFFITI.arrowW;
@@ -270,7 +304,7 @@ export function graffitiDecals(acc: Acc, t: Pick<TrackTunnel, 'id' | 'floorY' | 
     const jitter = (rnd() - 0.5) * 0.12;
     if (c.kind === 'arrow') {
       const style = ARROW_STYLES[Math.floor(rnd() * ARROW_STYLES.length)];
-      const cell = CELL_OF.arrow(style, dir);
+      const cell = service ? CELL_OF.service(dir) : CELL_OF.arrow(style, dir);
       strip(acc, f, c.side, s, GRAFFITI.arrowW, y0 + GRAFFITI.arrowY + jitter, GRAFFITI.arrowH, cell, rgb, half);
       out.push({tunnel: t.id, clue: ci, cell, s, side: c.side, dir, color, w: GRAFFITI.arrowW, h: GRAFFITI.arrowH, y: y0 + GRAFFITI.arrowY + jitter});
     } else {
@@ -287,11 +321,65 @@ export function graffitiDecals(acc: Acc, t: Pick<TrackTunnel, 'id' | 'floorY' | 
   return out;
 }
 
+/** One placed station-art decal (tests / QA): the record index, its cell, world centre (wall plane) and size. */
+export interface StationArtDecal { art: number; kind: StationArt['kind']; cell: number; dir: 'left' | 'right'; x: number; y: number; z: number; w: number; h: number; color: string }
+
+/** Tints of the full-colour cells (warm / neutral / cool), per record variant: the same piece reads a little different per level. */
+const ART_TINTS = ['#ffffff', '#fff1e4', '#e8f4ff'] as const;
+
+/**
+ * (Playtest revision, lane ART) Decals of the station-surface invitation art records (gen/trackExt/art.ts) on the bed walls, in each
+ * record's bed frame: the piece and the watcher in full colour, the SERVICE stencil in a bright can pointing (for a viewer facing
+ * the wall) toward the record's entrance along the bed. Same strips, atlas and mesh as the clue marks.
+ */
+export function stationArtDecals(acc: Acc, art: readonly StationArt[], trenches: readonly Trench[], seed: number): StationArtDecal[] {
+  const out: StationArtDecal[] = [];
+  art.forEach((a, i) => {
+    const tr = trenches[a.trench];
+    if (!tr) return;
+    const rnd = prng(hashOf('station-art', seed, a.variant, i));
+    if (a.wall === 'end') {
+      // a platform end wall (plane x = end.x, inward normal ±X): the viewer facing it has right = (0, 0, -nx)
+      const e = a.end;
+      if (!e) return;
+      const dir: 'left' | 'right' = -e.nx * (a.toward || 1) >= 0 ? 'right' : 'left';
+      const cell = a.kind === 'piece' ? CELL_OF.piece : a.kind === 'character' ? CELL_OF.watcher : CELL_OF.service(dir);
+      const color = a.kind === 'stencil' ? STENCIL_SPRAY[Math.floor(rnd() * STENCIL_SPRAY.length)] : ART_TINTS[a.variant % ART_TINTS.length];
+      planeStrip(acc, [e.x + e.nx * GRAFFITI.offset, a.y, e.z], [e.nx, 0, 0], a.w, a.h, cell, rgbOf(color));
+      out.push({art: i, kind: a.kind, cell, dir, x: e.x, y: a.y, z: e.z, w: a.w, h: a.h, color});
+      return;
+    }
+    const f = bedFrame(a, tr, a.annex);
+    const p = f.at(a.s);
+    const inward: V3 = [-a.side * p.lx, 0, -a.side * p.lz];
+    const right: V3 = [inward[2], 0, -inward[0]];
+    const dir: 'left' | 'right' = (p.tx * right[0] + p.tz * right[2]) * (a.toward || 1) >= 0 ? 'right' : 'left';
+    const cell = a.kind === 'piece' ? CELL_OF.piece : a.kind === 'character' ? CELL_OF.watcher : CELL_OF.service(dir);
+    const color = a.kind === 'stencil' ? STENCIL_SPRAY[Math.floor(rnd() * STENCIL_SPRAY.length)] : ART_TINTS[a.variant % ART_TINTS.length];
+    strip(acc, f, a.side, a.s, a.w, a.y, a.h, cell, rgbOf(color), f.half);
+    const [x, z] = f.point(a.s, a.side * f.half);
+    out.push({art: i, kind: a.kind, cell, dir, x, y: a.y, z, w: a.w, h: a.h, color});
+  });
+  return out;
+}
+
+/** A flat decal quad on a vertical wall plane (centre `c`, inward normal `n`), unmirrored for a viewer facing the wall. */
+function planeStrip(acc: Acc, c: V3, n: V3, w: number, h: number, cell: number, rgb: V3): void {
+  const [cx, cy, cw, ch] = cellRect(cell);
+  const du = 0.5 / ATLAS.w, dv = 0.5 / ATLAS.h;
+  const u0 = cx / ATLAS.w + du, u1 = (cx + cw) / ATLAS.w - du, v1 = 1 - cy / ATLAS.h - dv, v0 = 1 - (cy + ch) / ATLAS.h + dv;
+  const r: V3 = [n[2], 0, -n[0]];
+  const at = (k: number, yy: number): V3 => [c[0] + r[0] * k * w / 2, yy, c[2] + r[2] * k * w / 2];
+  const a = acc.v(at(-1, c[1] - h / 2), n, u0, v0, rgb), b = acc.v(at(1, c[1] - h / 2), n, u1, v0, rgb);
+  const d = acc.v(at(1, c[1] + h / 2), n, u1, v1, rgb), e = acc.v(at(-1, c[1] + h / 2), n, u0, v1, rgb);
+  acc.quad(a, b, d, e);
+}
+
 /** A wall-following decal strip centred at arc s on `side`, unmirrored for a viewer facing the wall. */
 function strip(acc: Acc, f: TunnelFrame, side: 1 | -1, s: number, w: number, yc: number, h: number, cell: number, rgb: V3, half: number): void {
-  const col = cell % 2, row = Math.floor(cell / 2);
-  const u0 = (col * ATLAS.cw) / ATLAS.w, u1 = ((col + 1) * ATLAS.cw) / ATLAS.w;
-  const v1 = 1 - (row * ATLAS.ch) / ATLAS.h, v0 = 1 - ((row + 1) * ATLAS.ch) / ATLAS.h;
+  const [cx, cy, cw, ch] = cellRect(cell);
+  const u0 = cx / ATLAS.w, u1 = (cx + cw) / ATLAS.w;
+  const v1 = 1 - cy / ATLAS.h, v0 = 1 - (cy + ch) / ATLAS.h;
   const n = Math.max(1, Math.ceil(w / 0.25));
   const p = f.at(s);
   const inward: V3 = [-side * p.lx, 0, -side * p.lz];
@@ -299,14 +387,16 @@ function strip(acc: Acc, f: TunnelFrame, side: 1 | -1, s: number, w: number, yc:
   const sigma = p.tx * right[0] + p.tz * right[2] >= 0 ? 1 : -1; // +1: s grows to the viewer's right
   const lat = side * (half - GRAFFITI.offset);
   const ids: [number, number][] = [];
+  // a half-texel inset on every side: no bleed from the neighbouring cells
+  const du = 0.5 / ATLAS.w, dv = 0.5 / ATLAS.h;
   for (let j = 0; j <= n; j++) {
     const sj = s - w / 2 + (w * j) / n;
     const q = f.at(sj);
     const [x, z] = f.point(sj, lat);
     const nn: V3 = [-side * q.lx, 0, -side * q.lz];
     const t = sigma > 0 ? j / n : 1 - j / n;
-    const u = u0 + (u1 - u0) * (0.01 + t * 0.98);
-    ids.push([acc.v([x, yc - h / 2, z], nn, u, v0 + 0.002, rgb), acc.v([x, yc + h / 2, z], nn, u, v1 - 0.002, rgb)]);
+    const u = u0 + du + (u1 - u0 - 2 * du) * t;
+    ids.push([acc.v([x, yc - h / 2, z], nn, u, v0 + dv, rgb), acc.v([x, yc + h / 2, z], nn, u, v1 - dv, rgb)]);
   }
   for (let j = 0; j < n; j++) acc.quad(ids[j][0], ids[j + 1][0], ids[j + 1][1], ids[j][1]);
 }

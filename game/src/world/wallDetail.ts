@@ -12,6 +12,7 @@
 // so the whole treatment costs at most 8 draw calls, independent of how many chips there are.
 // Materials and atlases are generated once per page and shared by every station.
 
+import {extensionWallMaterials} from './trackExt/wallFinish';
 import * as THREE from 'three';
 import type {StationLayout} from '../gen/station';
 import type {WallFace} from './wallFaces';
@@ -142,6 +143,7 @@ export function buildWallDetail(world: THREE.Group, layout: StationLayout, mats:
   const baseMats = new Set<THREE.Material>(BASE_KEYS.map(k => { try { return mats.get(k); } catch { return null; } }).filter((m): m is THREE.Material => !!m));
   baseMats.add(shapeMaterial(mats, 'tileShop'));
   baseMats.add(archShopMaterial(mats, 'tileShop')); // iteration 12 (ARCH): unit interiors use a decayed copy
+  for (const m of extensionWallMaterials(mats)) baseMats.add(m); // Track 2 playtest revision (lane ART): the annexes' board-formed walls
   const baseMeshes: THREE.Mesh[] = [];
   world.traverse(o => {
     const m = o as THREE.Mesh;

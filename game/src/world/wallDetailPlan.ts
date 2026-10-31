@@ -26,6 +26,7 @@ import type {WallFace, WallZone} from './wallFaces';
 import {faceFrame, normalizeFaces, stationWallFaces, type TreatFace} from './wallDetailFaces';
 import {CHUNK_M, stationLevels} from './levelGeometry';
 import {FRIEZE_SIZE, type AtlasCell} from './wallDetailAtlas';
+import {stationArtKeepouts, type ArtKeepout} from '../gen/trackExt/art'; // Track 2 playtest revision (lane ART)
 
 export type Treatment = 'platformTile' | 'trackTunnel' | 'trackFace' | 'concourseTile' | 'shopTile' | 'servicePaint' | 'stairCore' | 'upperFinish' | 'lowerConcrete'
   // Task office-overhaul-20261030 (lane ARCH): office storey walls (painted plasterboard / feature finishes) and the roof parapets.
@@ -249,7 +250,7 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   const bayPhase = srng.range(0, 1);
   const jointEvery = srng.int(2, 4);
   const hallAccent = new Map<number, string>();
-  const ctx: PlanCtx = {layout, levels, features: [], hot: 0, rails: passageRails(layout), shopBoxes: shopBoxes(layout)};
+  const ctx: PlanCtx = {layout, levels, features: [], hot: 0, rails: passageRails(layout), shopBoxes: shopBoxes(layout), art: stationArtKeepouts(layout)};
   const planned: PlannedFace[] = [];
   for (const face0 of faces) {
     const sl = face0.slope;
@@ -292,7 +293,8 @@ export function planWallDetail(layout: StationLayout, opts: PlanOptions = {}): W
   // Iteration 12 (ARCH): rust bleeding down the finish from wall-mounted steel (after every cut is final).
   planned.forEach((pf, i) => rustBleed({pf, idx: i, rng: new Rng(pf.face.seed ^ 0x7e57), placed: byFace[i]}, ctx));
   // Board-formed concrete last: its pattern runs around every cut, keep-out and other flush finish.
-  planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
+  // (Track 2 playtest revision, lane ART: not over the annexes' own board-formed finish, which carries its panels at 427 texels / m)
+  planned.forEach((pf, i) => { if (RECIPES[pf.treatment].formwork && pf.finish === 'concrete' && pf.face.finish !== 'annexWall' && !pf.sloped && pf.face.y1 - pf.face.y0 > 1.2) formworkRun({pf, idx: i, rng: new Rng(pf.face.seed ^ 0xf0f0), placed: byFace[i]}, ctx); });
   const coreCaps = applyCaps(ctx.features.filter(f => f.face < nCore), planned);
   // The annexes' many short walls plan far more detail than their budget: keep whole faces in a seeded shuffled order, so the
   // bare walls are spread over every annex instead of the last-planned annex losing all of its detail.
@@ -320,6 +322,12 @@ interface PlanCtx {
   near?: PlaneIndex;
   /** Track 2: doorway clear volumes, kept out of extension faces only (annex doors may sit flush with a room corner). */
   extDoors?: Box[];
+  /**
+   * Track 2 playtest revision (lane ART): the painted wall rects — station-surface invitation art and service-hatch clue marks
+   * (gen/trackExt/art.ts stationArtKeepouts). No layer crosses the paint (no cables, stains, cuts or fittings over it). Empty
+   * without extensions: such stations plan exactly as before.
+   */
+  art?: ArtKeepout[];
 }
 
 /** Things that can sit against a wall, bucketed by wall plane (cell lines on X and on Z). */
@@ -406,6 +414,14 @@ function keepoutsFor(ctx: PlanCtx, pf: PlannedFace): PlannedFace['keepouts'] {
       const m = OPENING_MARGIN[layer];
       add({s0: o.s0 - m, s1: o.s1 + m, y0: f.y0 - 1, y1: o.top + m}, LAYER_BIT[layer], 'opening');
     }
+  }
+  // Track 2 playtest revision (lane ART): painted rects (station art, hatch clue marks) on this wall plane
+  for (const k of ctx.art ?? []) {
+    if (k.axis !== pf.axis || Math.abs(k.plane - planeOf(pf)) > 0.05 || (pf.axis === 'z' ? f.nz : f.nx) !== k.n) continue;
+    const a = sOf(pf, k.c0), b = sOf(pf, k.c1);
+    const s0 = Math.min(a, b), s1 = Math.max(a, b);
+    if (s1 < 0 || s0 > pf.len || k.y1 < f.y0 || k.y0 > f.y1) continue;
+    add({s0, s1, y0: k.y0, y1: k.y1}, M.all, 'graffiti');
   }
   const near = (ctx.near ?? new PlaneIndex(ctx)).at(pf.axis, planeOf(pf));
   // Track 2: an annex door can sit flush with the corner of the room behind it, so a perpendicular wall's fittings would

@@ -151,6 +151,49 @@ export interface TrackExtensions {
    * the level declared TrackExtContext.rockLevels (absent = every level grid, the Subway / Office rule).
    */
   rockLevels?: number[];
+  /**
+   * (Track 2 playtest revision, lane ART: gen/trackExt/art.ts) Station-surface invitation art on the bed walls the platforms face,
+   * at the bed end of every real annex entrance (planned after the attach on rng.fork('station-art'); absent / empty = none).
+   */
+  art?: StationArt[];
+}
+
+/**
+ * (Track 2 playtest revision, lane ART) One piece of station-surface invitation art on a bed's side wall, near the bed end of a
+ * real annex entrance (gen/trackExt/art.ts). Bed frame as BedEntry: `s` = metres from that end face into the station along the
+ * bed, `side` = the wall (+1 = left of that travel). World positions follow from the trench (layout frame).
+ */
+export interface StationArt {
+  /** The annex it invites to (ServiceAnnex.id) and how it is entered at this bed end: its tunnel's mouth, or its service hatch. */
+  annex: number;
+  entry: 'tunnel' | 'hatch';
+  /**
+   * The bed (layout.trenches index), the end, and the wall: a side wall of the bed ('N' = its z0 wall facing +Z, 'S' = its z1 wall)
+   * or 'end' = the END WALL of a platform beside that bed at that end (the wall a player walking down the platform faces; see `end`).
+   * `side`: the side wall (bed frame); for 'end', the side of the bed the platform lies on.
+   */
+  trench: number;
+  from: BedEnd;
+  wall: 'N' | 'S' | 'end';
+  side: 1 | -1;
+  /**
+   * 'end' records only: the platform (area id), its end wall plane (world x) and inward normal (±1 along X), the centre (world z).
+   * Their `toward` is along world Z (+1 = toward +Z): toward the bed's edge; `target` = the bed's centre line z.
+   */
+  end?: {platform: number; x: number; nx: 1 | -1; z: number};
+  /** 'piece' / 'character' are non-directional; 'stencil' (SERVICE + arrow) points along the bed toward `target`. */
+  kind: 'piece' | 'character' | 'stencil';
+  /** Centre: bed-frame s (for 'end': the end wall plane's s) and absolute y (m); size on the wall (m). */
+  s: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Arrow direction along s (+1 = into the station, -1 = toward the end face); 0 = non-directional. */
+  toward: -1 | 0 | 1;
+  /** Bed-frame s of the entrance: 0 = the tunnel mouth (the end face), else the hatch door centre. */
+  target: number;
+  /** Deterministic presentation variant (colours / tint). */
+  variant: number;
 }
 
 /** Point-record lists of a layout whose exact core-frame positions a translated core keeps (TrackExtensions.coreXZ). */

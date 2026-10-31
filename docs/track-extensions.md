@@ -13,7 +13,8 @@ The tracks no longer end at a black wall. Past a bed end, a finite concrete tunn
 Off a tunnel's side wall, or behind a **service hatch** in the outer wall of a bed, a level can have up to two seeded
 **service annexes**. These are cramped, dark back-of-house areas about a quarter of the Subway's walkable exploration area
 (`SUBWAY_WALK_BASELINE_M2`, about 0.17–0.29 of it). Each is dressed, lit, populated and stocked like the station, all in the
-same level and world, with no loading. Graffiti arrows and tags appear only where a real route leads to an annex.
+same level and world, with no loading. Graffiti arrows and tags appear only where a real route leads to an annex, and (playtest
+revision) the platforms announce every real annex entrance with station-surface art: see "Station invitation art" below.
 
 ## Opting a level in
 
@@ -126,6 +127,8 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
   preserved.
 - Extension props, lights, holders, pickups and zombies are appended after every core record.
 
+**`StationArt`** (`TrackExtensions.art`, playtest revision): station-surface invitation art records — see "Station invitation art".
+
 **`coreView(layout)`** (`game/src/gen/trackExt/core.ts`) returns the level exactly as it would be without its extensions:
 - extension cells go back to rock;
 - appended areas, doors and records are dropped;
@@ -187,6 +190,47 @@ Tunnels have sparse fixtures, mostly dead or dying.
   - Annexes use the lower-level service look: board-formed concrete, pipes, conduits and damp.
   - Annex wall detail has its own per-annex budget (`extWallDetailCaps`, `game/src/world/wallDetailPlan.ts`).
   - Fittings keep out of doorway clear volumes.
+- **Wall finish** (playtest revision, lane ART: "the wall textures look low res"; `game/src/world/trackExt/wallFinish.ts`):
+  - Diagnosis: the annex walls used the `platformFace` material — the 256 x 256 `platform-authored-backing` set (a 5.7 KB colour
+    JPEG) over 2 x 2 m = **128 texels / m**: ~3x magnified at 2 m and ~6x at 1 m in a 1.5–2 m corridor (1080p, 75° fov: ~380 screen
+    px / m at 2 m), mipmapped but never minified there, so simply blurry; the formwork overlay on top was 110 px / m. The tunnel shell
+    walls used the bed lining `tunnel` (1024 x 384 over 3.6 x 1.38 m = 284 texels / m) whose stamped repair patches repeat every
+    3.6 m along and four times up a 5.5 m tunnel wall.
+  - Fix: one local procedural **board-formed concrete** set (canvas, painted once per page, deterministic; no image asset, no
+    provider): colour 1024 x 1024 over 2.4 x 2.4 m = **427 texels / m**; roughness and normal 512 x 512 from the same height field
+    (0.15 m boards with their own tone and grain imprint, 1.2 m panel joints, tie cones on a 0.6 m grid, bug holes). Annex walls
+    (`WallKind 'annex'` → finish `annexWall`) take it world-mapped with the shared world-mapping macro tone variation (~1.4 m
+    world-space features) and floor grime, plus the decay hook (`platformFace` profile); the formwork overlay is not drawn over it.
+    The tunnel shell walls take it on their developed UVs (`tunnel` profile decay); a 0.3 m concrete portal rib and soffit beam
+    at the mouth mark where the station's bed lining (unchanged) ends.
+  - Cost: two materials (two programs), created lazily per `WorldMaterials` only when a level has extensions, in the station scene
+    at build (warmed up; no first-use compile). Textures: 1024² sRGB + 2 x 512² ≈ 4 + 2 x 1 MiB, **≈ 8 MiB GPU with mips**. Geometry:
+    walls unchanged (same quads); the portal adds 3 boxes (36 triangles) per tunnel into its existing concrete mesh. Draws: annex
+    wall quads no longer share a 48 m chunk mesh with the core's platform-face concrete, +1 to +4 draws per level measured (seeds
+    4055629249, 2654448106, 1043, 774566179); the formwork overlay quads on annex walls are gone.
+- **Station invitation art** (playtest revision, lane ART; `game/src/gen/trackExt/art.ts`, `world/trackExt/graffiti.ts`,
+  `graffitiArt.ts`):
+  - Records: `planStationArt` runs at the end of `finishExtensions` (after the attach, on the track-ext fork `station-art`, which
+    never advances its parent) for every REAL annex entrance at a bed end — a tunnel with an annex door (target: its mouth) or a
+    service hatch (target: its door). It places: a large full-colour letter **piece** ("REKS", non-directional) on a bed side wall a
+    platform faces (the 6 m stub past the platform end, or the outer wall beside an island), the crew's gas-mask **watcher**
+    (non-directional) on the other faced wall or beside the piece, and stencilled **SERVICE + arrow** marks (directional, toward the
+    entrance) on those walls and on the **end wall of every platform** beside that bed at that end (the wall a player walking
+    down the platform faces).
+  - Rules (`stationArtRecordIssues`, part of `extensionIssues`): only at a real entrance; on solid rock wall (side-wall row SOLID,
+    bed in front) a platform faces, or on a solid platform end wall with the platform in front; clear of hatch openings / plates
+    (0.6 m), hatch clue marks, wall signs and props against the wall; under the ceiling; stencils point toward the entrance, the piece
+    and watcher never do. A planned record that would fail is dropped (art never invalidates a level). No annex: no art.
+  - Measured (24-seed Subway corpus): 27 annexes on 21 levels, every entrance gets a piece; 98 records (27 pieces, 18 watchers, 23
+    side-wall stencils, 30 platform end-wall stencils), ~4.7 per level with art; planning 0.5 ms mean, 2.5 ms max per level.
+  - Presentation: the graffiti atlas is ONE 2048 x 1024 canvas (≈ 10.7 MiB GPU with mips; it was 1024 x 1024): the eight 512 x 256
+    arrow / tag cells in the left half, the piece (1024 x 512), the watcher (512 x 512) and the SERVICE stencils (512 x 256, right
+    / left: only the arrow mirrors) in the right half, painted by local canvas code. Art decals join the clue marks in the ONE
+    graffiti mesh per level (one draw). The in-tunnel / hatch marks are bigger (arrows 2.0 x 1.0 m at 1.7 m above the bed, tags
+    2.2 x 1.1 m), and a route's later arrows (before a tunnel door, a hatch's approach arrow) use the SERVICE stencil.
+  - Keep-outs: every painted rect (art + hatch clue marks; `stationArtKeepouts`) is a wall-detail keep-out on its wall plane for
+    every layer — no cables, stains, cuts or fittings across the paint. This changes the core bed walls' treatment only under the
+    paint (the authorised station-surface change); the core layout, records, RNG streams and every core pin are unchanged.
 - **Steam:** a bounded, non-hazardous emitter in `game/src/world/fx.ts`, capped per annex. It is never the gas field and
   never the flare smoke.
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
@@ -197,6 +241,9 @@ Tunnels have sparse fixtures, mostly dead or dying.
   reserve-off proof), `track-ext-coverage.test.ts`, `track-ext-vis.test.ts`, and the opt-in `TRACK_EXT_GEN=1`
   `track-ext-vis-gen.test.ts`.
 - **Content:** `annex-content.test.ts`.
+- **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
+  `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
+  1–2 m, into `qa-artifacts/track2-revision-art/`).
 - **Pins:** the golden pin histories in `enemy-spawn-parity.test.ts`, `loot-golden.test.ts`, `office-gen.test.ts` and
   `nav-query-fingerprint.test.ts` record every Track 2 re-pin with its cause and proof.
 - **Browser:** the spot check is `tools/qa/track2-walk-check.mjs`. It is one serial session: a real W walk from platform to
