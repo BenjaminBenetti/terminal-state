@@ -102,5 +102,9 @@ export function coreView(layout: StationLayout): StationLayout {
   const e = layout.extensions;
   if (!e || !hasExtensionGrowth(layout)) return layout;
   const first = layout.areas.findIndex(a => isExtensionArea(a));
-  return reframe(layout, e.core.x, e.core.y, e.core.w, e.core.h, first < 0 ? layout.areas.length : first);
+  const view = reframe(layout, e.core.x, e.core.y, e.core.w, e.core.h, first < 0 ? layout.areas.length : first);
+  // the core's props at their exact core-frame positions (a translated double may come back one ulp off)
+  const xz = e.coreXZ;
+  if (xz) for (let i = 0; i < Math.min(view.props.length, xz.length / 2); i++) { view.props[i].x = xz[2 * i]; view.props[i].z = xz[2 * i + 1]; }
+  return view;
 }

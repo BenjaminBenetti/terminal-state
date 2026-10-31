@@ -199,7 +199,8 @@ export class Carver {
     const out: BedEndInfo[] = [];
     this.k.trenches.forEach((t, ti) => {
       const g = this.k.g;
-      const floorY = g.floorOf(g.idx(t.x0, t.y0));
+      // the bed's own floor (float32 in the grid: rounded back to the mm it was authored at)
+      const floorY = Math.round(g.floorOf(g.idx(t.x0, t.y0)) * 1000) / 1000;
       for (const from of ['x0', 'x1'] as const) {
         out.push({trench: ti, t, from, face: from === 'x1' ? t.x1 : t.x0, dir: from === 'x1' ? 1 : -1, half: (t.y1 - t.y0) * CELL / 2, cz: (t.y0 + t.y1) * CELL / 2, floorY});
       }
@@ -588,7 +589,8 @@ export class Carver {
 
   tunnelRecord(pt: PlannedTunnel): TrackTunnel {
     const end = pt.end, t = end.t;
-    const path = samplePath(pt.path, pt.length).map(p => ({x: round(p.x), z: round(p.z)}));
+    // <= 0.5 m spacing even after rounding the samples to 0.1 mm
+    const path = samplePath(pt.path, pt.length, CELL - 0.01).map(p => ({x: round(p.x), z: round(p.z)}));
     const rails = t.tracks.map(z => round(end.dir > 0 ? end.cz - z : z - end.cz));
     const arcs: TrackTunnel['arcs'] = [];
     for (const q of pt.path.prims) {

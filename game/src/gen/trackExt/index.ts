@@ -138,8 +138,11 @@ export function finishExtensions(layout: StationLayout, ext: TrackExtensions, cr
     if (x0 < ox || y0 < oy) throw new Error('finishExtensions: an east / south level extended west / north');
     x0 = ox; y0 = oy;
   }
-  const out = x0 !== ox || y0 !== oy || x1 !== ox + W - 1 || y1 !== oy + H - 1 ? reframe(layout, x0 - ox, y0 - oy, x1 - x0 + 1, y1 - y0 + 1) : layout;
+  const moved = x0 !== ox || y0 !== oy;
+  const coreXZ = moved ? layout.props.flatMap(p => [p.x, p.z]) : null;
+  const out = moved || x1 !== ox + W - 1 || y1 !== oy + H - 1 ? reframe(layout, x0 - ox, y0 - oy, x1 - x0 + 1, y1 - y0 + 1) : layout;
   attachExtensions(out, ext, {ox: x0, oy: y0, core: {x: ox - x0, y: oy - y0, w: W, h: H}});
+  if (coreXZ) ext.coreXZ = coreXZ;
   return out;
 }
 
@@ -204,6 +207,26 @@ export function dropExtensions(layout: StationLayout): void {
   ext.tunnels = []; ext.annexes = [];
   ext.log.push({trench: -1, from: 'x0', result: 'dropped: the finished layout failed validation with them'});
   if (layout.levels?.length) layout.levels = layout.levels.slice();
+}
+
+/**
+ * Coverage rule of the track-bearing interface (tests/track-ext-coverage.test.ts): a level whose layout carries track beds must
+ * declare `trackExtensions` (a config or 'none'), and its generator must honour the declaration — a config yields
+ * layout.extensions with a log entry for every bed end; 'none' yields none.
+ */
+export function trackExtCoverageIssues(levelId: string, decl: TrackExtConfig | 'none' | undefined, layout: StationLayout): string[] {
+  if (!layout.trenches.length) return [];
+  if (decl === undefined) return [`${levelId}: track beds but no trackExtensions declaration (a config or 'none')`];
+  if (decl === 'none') return layout.extensions ? [`${levelId}: declared 'none' but the layout carries extensions`] : [];
+  const ext = layout.extensions;
+  if (!ext) return [`${levelId}: trackExtensions declared but the generator never called extendTracks (no layout.extensions)`];
+  const issues: string[] = [];
+  layout.trenches.forEach((_, ti) => {
+    for (const from of ['x0', 'x1'] as const) {
+      if (!ext.log.some(g => g.trench === ti && g.from === from && /^(tunnel|none)/.test(g.result))) issues.push(`${levelId}: bed end ${ti}${from} never planned`);
+    }
+  });
+  return issues;
 }
 
 /** Ids of the extension areas of a layout (tunnels / annexes), ascending. */

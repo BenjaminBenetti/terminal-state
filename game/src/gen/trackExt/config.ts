@@ -10,10 +10,10 @@ import type {TrackExtConfig} from './types';
  * area id, track beds (VOID) excluded, × 0.25 m² per cell — geometric floor (props not subtracted; annexes are measured the same
  * way, undressed). Stair runs carved into two level grids count on both.
  * Measured by lane GEN over the 64-seed corpus seeds (i * 2654435761 + 12345) >>> 0, i = 0..63, generateStation(seed,
- * {trackExtensions: 'none'}) (= main): mean 7347 m², median 7300 m², min 5061 m², max 9513 m² (tests/track-ext.test.ts re-measures
- * a 24-seed sample and checks this constant stays within 5 % of it).
+ * {trackExtensions: 'none'}) (= the core station): mean 7370.6 m², median 7312.5 m², min 5060.8 m², max 9512.8 m² (the constant
+ * is the mean; tests/track-ext.test.ts re-measures a 16-seed sample and checks it stays within 6 %).
  */
-export const SUBWAY_WALK_BASELINE_M2 = 7347;
+export const SUBWAY_WALK_BASELINE_M2 = 7371;
 
 /** Track extension config (every track-bearing level today: the Subway and the Office street station). */
 export const TRACK_EXT: TrackExtConfig = {
