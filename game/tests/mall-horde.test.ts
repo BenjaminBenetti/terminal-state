@@ -20,7 +20,8 @@ import {HORDE_AI, HordeDirector, slotOffset} from '../src/ai/horde';
 import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from '../src/ai/chaseShare';
 import {placeHordes} from '../src/ai/hordePlace';
 import {HORDE_FORBIDDEN_FAMILIES, HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from '../src/ai/hordeSpec';
-import {ENEMY_FAMILY_IDS, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
+import {ENEMY_FAMILY_IDS, SERVICE_ZONE_BUDGET, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
+import {isExtensionArea} from '../src/gen/trackExt/types';
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
 import {enemiesToSpawn, mergeKilled, createMemory, cloneMemory} from '../src/run/memory';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
@@ -785,9 +786,13 @@ describe('the generated mall (lane GEN) — when registered', () => {
       }
       for (const [, n] of perStorey) expect(n).toBeLessThanOrEqual(rules.budget.perStorey);
       // ambient and horde pools never mix: every non-horde enemy is ambient, and the ambient count stays within its own budget
-      const ambient = layout.zombies.filter(z => z.horde === undefined).length;
+      // (playtest revision: the annex 'service' spawns are a separate, additive zone budget — SERVICE_ZONE_BUDGET per annex — not part
+      // of the core ambient budget, which is the pit + ring contexts' maxima: 9 + 6 x 10 = 69; they are checked on their own below)
+      const service = layout.zombies.filter(z => z.horde === undefined && isExtensionArea(layout.areas[z.area])).length;
+      const ambient = layout.zombies.filter(z => z.horde === undefined).length - service;
       const amb = (SPAWN_PROFILES as Record<string, (typeof SPAWN_PROFILES)['subway']>).mall.budgets?.ambient;
       if (amb) expect(ambient).toBeLessThanOrEqual(amb.total);
+      expect(service).toBeLessThanOrEqual(SERVICE_ZONE_BUDGET[1] * (layout.extensions?.annexes.length ?? 0));
       lines.push(`seed ${seed} (${layout.mall!.variant}): ${hs.length} groups [${hs.map(h => `L${h.level}:${h.members.length}`).join(' ')}] = ${total} horde + ${ambient} ambient; patrol ${layout.mall!.patrol.length} nodes`);
     }
     console.info(`[horde mall] placement\n  ${lines.join('\n  ')}`);

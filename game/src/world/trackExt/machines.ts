@@ -354,10 +354,12 @@ function chute(b: Build, m: AnnexMachine): void {
 
 /** Floor grating (walkway): bearing bars across the walk every 0.12 m on two edge angles and cross bars (the floor shows through). */
 function catwalk(b: Build, m: AnnexMachine): void {
+  // (playtest revision, primary) a floor grating stays under 2 cm: doorway clear volumes start 2 cm above the floor
+  // (gen/doorways.ts DOOR_CLEAR.floor), so a catwalk running up to a door never pokes into its walk-through volume
   const hw = m.w / 2, hd = m.d / 2;
-  b.box('dark', -hw, 0, -hd, hw, 0.035, -hd + 0.04); b.box('dark', -hw, 0, hd - 0.04, hw, 0.035, hd);
-  for (let x = -hw + 0.06; x < hw - 0.03; x += 0.12) b.box('galv', x - 0.012, 0.004, -hd + 0.04, x + 0.012, 0.03, hd - 0.04);
-  for (let x = -hw + 1.2; x < hw - 0.2; x += 1.2) b.box('dark', x - 0.025, 0, -hd, x + 0.025, 0.032, hd);
+  b.box('dark', -hw, 0, -hd, hw, 0.018, -hd + 0.04); b.box('dark', -hw, 0, hd - 0.04, hw, 0.018, hd);
+  for (let x = -hw + 0.06; x < hw - 0.03; x += 0.12) b.box('galv', x - 0.012, 0.003, -hd + 0.04, x + 0.012, 0.016, hd - 0.04);
+  for (let x = -hw + 1.2; x < hw - 0.2; x += 1.2) b.box('dark', x - 0.025, 0, -hd, x + 0.025, 0.017, hd);
 }
 
 function gate(b: Build, m: AnnexMachine): void {

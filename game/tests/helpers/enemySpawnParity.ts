@@ -129,21 +129,27 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
  * (pistol 7cefb386); 1234 9dfb7d48 / bb4af627 (pistol dda30867); 16920 463c82be / ec88e4cc; 24839 48e23d1e / 51ae0a89; 32758
  * dc230828 / 143e86f3; 40677 f9aec9de / 0b478480; 48596 e109a6c9 / b0ca260f.
  */
+/*
+ * (stage 9, task studio-alpha-track2-playtest-revision-20261031-01, primary — loot / spawn policy on the merged ROOMS + ART lanes:
+ * the service budget 3-5 -> 5-7 per annex over entry / middle / deep depth bands, out of station earshot where possible; the annex
+ * loot classes (supply / scraps / searched-clean), one storage piece per bare annex room; the station-surface invitation art).
+ * Every core view, reserve-off and invariant pin is unchanged (asserted every run). Stage 8 values: 7:rifle f73050bc / 1d5815a2; 7:pistol f73050bc / 38baae1c; 42:rifle 7c5214d9 / 5256f8b2; 42:pistol 7c5214d9 / 6f9b0dbb; 1234:rifle fc3eacab / cb685936; 1234:pistol fc3eacab / 22e20aed; 16920:rifle:island-ends 1b98382c / 95dbe074; 24839:rifle:express 8c8eb43e / 0c54c1fa; 32758:rifle:interchange 78505d98 / 73049aa2; 40677:rifle:split c03144c2 / 88097a6a; 48596:rifle:deep 7bf42ed5 / 3b8238ae.
+ */
 export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   '1:rifle': ['71fdd11f', '70dde302', 'station 28 (L0 22 L1 2 L2 4)'],
   '1:pistol': ['71fdd11f', '04660593', 'station 28 (L0 22 L1 2 L2 4)'],
-  '7:rifle': ['f73050bc', '1d5815a2', 'station 23 (L0 18 L1 3 L2 2) + service 4'],
-  '7:pistol': ['f73050bc', '38baae1c', 'station 23 (L0 18 L1 3 L2 2) + service 4'],
-  '42:rifle': ['7c5214d9', '5256f8b2', 'station 30 (L0 23 L1 2 L2 5) + service 4'],
-  '42:pistol': ['7c5214d9', '6f9b0dbb', 'station 30 (L0 23 L1 2 L2 5) + service 4'],
-  '1234:rifle': ['fc3eacab', 'cb685936', 'station 31 (L0 21 L1 6 L2 4) + service 6'],
-  '1234:pistol': ['fc3eacab', '22e20aed', 'station 31 (L0 21 L1 6 L2 4) + service 6'],
+  '7:rifle': ['f0b50643', '1d5815a2', 'station 23 (L0 18 L1 3 L2 2) + service 6'],
+  '7:pistol': ['f0b50643', '38baae1c', 'station 23 (L0 18 L1 3 L2 2) + service 6'],
+  '42:rifle': ['74c78b25', '9be118c8', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
+  '42:pistol': ['74c78b25', '186f52a5', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
+  '1234:rifle': ['f6922bcf', '45845216', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
+  '1234:pistol': ['f6922bcf', 'a9d8de05', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
   '9001:rifle:side-mezzanine': ['b8410519', '0bfe5634', 'station 30 (L0 23 L1 2 L2 5)'],
-  '16920:rifle:island-ends': ['1b98382c', '95dbe074', 'station 30 (L0 22 L1 5 L2 3) + service 10'],
-  '24839:rifle:express': ['8c8eb43e', '0c54c1fa', 'station 25 (L0 17 L1 4 L2 4) + service 4'],
-  '32758:rifle:interchange': ['78505d98', '73049aa2', 'station 31 (L0 23 L1 3 L2 5) + service 9'],
-  '40677:rifle:split': ['c03144c2', '88097a6a', 'station 23 (L0 18 L1 2 L2 3) + service 4'],
-  '48596:rifle:deep': ['7bf42ed5', '3b8238ae', 'station 31 (L0 23 L1 3 L2 5) + service 3'],
+  '16920:rifle:island-ends': ['78645bed', '613f7960', 'station 30 (L0 22 L1 5 L2 3) + service 14'],
+  '24839:rifle:express': ['63d81fe7', '0c54c1fa', 'station 25 (L0 17 L1 4 L2 4) + service 6'],
+  '32758:rifle:interchange': ['ab6883a1', 'e2507d64', 'station 31 (L0 23 L1 3 L2 5) + service 13'],
+  '40677:rifle:split': ['a56c9a6c', '88097a6a', 'station 23 (L0 18 L1 2 L2 3) + service 6'],
+  '48596:rifle:deep': ['f8c1b6e2', 'b2698499', 'station 31 (L0 23 L1 3 L2 5) + service 5'],
 };
 /**
  * Stage 5 (GEN-2): the CORE VIEW of the live Subway layouts — the core station generated with the reserve (a layout change; its
@@ -182,11 +188,12 @@ export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = 
  */
 // (stage 8, task track2-playtest-revision lane ROOMS: the annex machinery halls / room signatures re-lay the annexes; stage 7 values
 // 222 fc17be7a / e2d2d41d, 3333 66709f4c / adaf922a, 4242 b7048532 / 36b424a5; every count unchanged)
+// (stage 9, playtest revision primary: service budget / bands, annex loot classes, room storage, station art; stage 8 values 222:pistol 57b015b9 / c4c75d94, 3333:pistol be3cd48c / a5b54a21, 4242:pistol 4465b640 / 28e20508)
 export const OFFICE_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   ...OFFICE_GOLDEN,
-  '222:pistol': ['57b015b9', 'c4c75d94', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 7'],
-  '3333:pistol': ['be3cd48c', 'a5b54a21', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 6'],
-  '4242:pistol': ['4465b640', '28e20508', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 9'],
+  '222:pistol': ['77e4f2eb', 'c4c75d94', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 11'],
+  '3333:pistol': ['a6396e3c', 'f86503e8', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 10'],
+  '4242:pistol': ['776cf71a', 'fa22f50e', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 13'],
 };
 
 /**

@@ -266,16 +266,22 @@ reproduce the earlier pins byte for byte).
 - **Rooms.** Every annex area takes an EXISTING back-of-house purpose — pump room, electrical room, workshop, maintenance stores,
   custodial room, janitor / electrical / supply closet, service corridor — dressed by the core dresser's own rules (purpose rules,
   the composer, the iteration-07 dresser). Its holders are the existing kinds with their existing openables / physics classes.
-- **Intact vs picked over.** GEN's annexes are dozens of small rooms (census: ~68 areas, ~100 holders per annex) and those purposes'
-  tables are ammo-heavy (ammo is never thinned): stocked as-is, two annexes added +390–570 rounds of holder ammo to a level (1.2–2×
-  the core's). So only each annex's **deepest** holders keep their room purpose's table — one per 230 m² of annex floor (~7 per
-  annex; area depth from the entry door: the reward is further in) — and every other annex holder is real, openable, finite storage
-  that someone already went through: loot key `ANNEX_PICKED_KEY` (`'annex-picked'`, purpose `annex-picked`, theme `service`):
-  `ANNEX_PICKED` = water / tins / snacks / a dressing / a cell, 1 lot, empty 0.9, never ammo (the Office's `office-fill` precedent).
-- **Stash.** One holder per annex (two when it has ≥ 7 rooms) — a crate, then a tall cabinet — against a wall of a dead-end room:
-  loot key `ANNEX_STASH_KEY` (`'annex-stash'`, purpose `annex-stash`, theme `personal`): `ANNEX_STASH` = water 1.2, beans 1,
-  bandage 1, medkit 0.15, battery 0.5, flare 0.4, generic ammo 1.4 (~1/3 each caliber); 2–3 lots, empty 0.15; the scarcity cut
-  applies (kept non-ammo finds re-themed to food / drink / medicine).
+- **Playtest revision** (task `studio-alpha-track2-playtest-revision-20261031-01`, user: "I couldn't find one piece of loot").
+  - **Before:**
+    - The deepest ~8 holders kept their room table; the rest were `ANNEX_PICKED`, 90 % empty, AND cut again by the level-wide
+      scarcity economy.
+    - Measured on main 312a653: 4 of 609 Subway picked holders stocked; 94–98 % of annex holders empty.
+    - The CONTENT census counted ~34–39 ammo ROUNDS (never thinned) and recorded ~1.8 other finds per annex, but nothing checked
+      that against what a player opens.
+  - **Now:** the annex keys are `LootSpec.exact` tables (no second cut). Per annex (`gen/annexContent.ts` `pickOver` /
+    `ANNEX_CONTENT.loot`):
+    - **Supply:** `ANNEX_SUPPLY_KEY` (`'annex-supply'`) holders, one per 170 m², 6–12. Half in the entry third (door-hop depth),
+      30 % in the middle, the rest deep; ≤ 2 per room; only holders that roll their room purpose's table.
+      `ANNEX_SUPPLY` = water 1, cola 0.45, beans 0.85, noodles 0.4, chocolate 0.4, bandage 0.75, medkit 0.12, battery 0.6, flare
+      0.35, electrical parts 0.3, scrap metal 0.3; one lot, never empty, no ammo.
+    - **Scraps:** `ANNEX_SCRAPS_KEY` (`'annex-scraps'`) for 12 % of the other picked holders (≤ 6), one leftover each.
+    - **Searched clean:** `ANNEX_PICKED` (exact, `empty: 1`) for the rest.
+    - **Room storage:** every annex room / closet the dressing left without a holder gets one storage piece (open shelving first).
 - **Floor program** `ANNEX_FLOOR` (once per annex, the Subway program's shape): a 5.56 box (30) n 0–1, a 12-gauge box (8) n 0–1;
   medkit n 0–1 and bandage n 1–2, each kept with `FLOOR_ECONOMY.medKeep` (0.2); a battery (chance 0.6) and a flare (0.45). Landing:
   the annex rooms' purpose `floor` weights (ammo / med) and `FLOOR_ECONOMY.themeWeight` (battery / flare), on free floor cells off
@@ -284,11 +290,13 @@ reproduce the earlier pins byte for byte).
 - **Never multiplied.** No guaranteed high-tier item: every stash may be empty, every floor find is a chance or passes the keep cut.
   The level's ONE rare-gear roll and mask roll never land in an annex (`gearAreaWeight` = 0 for extension areas; gear spacing
   ignores the annex finds), no weapon find is placed there, and the Office roof cache / roof find are untouched.
-- **Measured** (lane CONTENT census; Subway 24 seeds 1.12 annexes / level, Office 10 seeds 1.5): per annex ~150–160 props, ~7–8
-  intact + ~90–95 picked-over + 2 stash holders; holder finds ~34–39 ammo rounds + ~1.8 other finds (of them the stash ~6–7 rounds +
-  ~0.8 find); floor finds ~9–14 rounds of 5.56, ~3 of 12-gauge, ~0.3–0.5 flares, ~0.6 batteries, ~0.4 dressings, ~0.1–0.2 first-aid
-  kits. The core's holder ammo is ~250–265 rounds per level (+ its floor boxes): one annex adds roughly an eighth of a level's
-  ammo, worth the dark detour, not a new economy.
+- **Measured** (playtest revision; fresh New Game path, Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
+  5150 / 9090):
+  - **Holders:** 49–75 per annex, **28–38 % stocked** (the core station stocks ~1/3).
+  - **Finds:** 18–28 non-ammo holder finds per annex, ~the core's density for ~1/4 of its area; holder ammo in its old range.
+  - **Floor:** the floor program is unchanged.
+  - **Access:** every stocked holder is reachable and targetable.
+  - **Discovery routes:** ordinary routes took loot in every sampled annex, the first find 2–5 rooms in.
 - **Finite and remembered** like every holder: contents roll once per holder stream, run memory keeps taken lots taken, nothing
   refills on revisit; Retry restores the level-entry state.
 

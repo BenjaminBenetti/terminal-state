@@ -166,16 +166,22 @@ same family pool and zombie types, same tier.
 | Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |
 |---|---|
 | Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service`, `SPAWN_PROFILES.mall.contexts.service` (lane INTEG; at most one annex per mall) |
-| Count | `SERVICE_ZONE_BUDGET` = U{3..5} **per annex** (one draw per annex run), additive to the core contexts |
+| Count | `SERVICE_ZONE_BUDGET` = U{5..7} **per annex** (one draw per annex run), additive to the core contexts (playtest revision: was U{3..5}) |
 | Area weights | `SERVICE_AREA_WEIGHTS`: annex rooms 1.4, corridors 1.0, closets 0.6 |
 | Caps | `SERVICE_CAPS`: passes 1 / 2; closets 1 |
 | Spacing / tries | 5 m (wider than the station's 4 m: dark and cramped) / 12 |
 | Keep-away | ≥ 36 walking cells from the start, 3 × 3 clear, ≥ 6 m from the annex's entry door (`landingKeepM`: its keep point) |
+| Depth bands (playtest revision) | the count split over the annex's entry / middle / deep door-hop thirds (equal quotas, remainder to the middle; a band without room passes its quota on) |
+| Earshot (playtest revision) | cells beyond `SERVICE_EARSHOT_M` (18 m) of every core station floor cell preferred (rifle earshot through rock; all cells when none is) |
 | Accept | `{min: null, max: 'count'}` — never regenerates a level (extensions never decide a retry) |
 
-- **Why 3–5.** An annex is ~25 % of the Subway's walkable-exploration baseline (~1840 m² of 7371 m²); the station's 22–32 spawns
-  over that baseline would put ~6.8 into an annex at the same density. The annex is cramped and much darker, so it gets ~60 % of
-  that density (E 4 per annex) — fair, never a corridor ambush at the door.
+- **Why 5–7 (playtest revision, was 3–5).**
+  - **Density:** an annex is ~25 % of the Subway's walkable-exploration baseline (~1840 m² of 7371 m²). The station's 22–32 spawns
+    over that baseline would put ~6.8 into an annex at the same density, so 5–7 is ~90 % of it.
+  - **What the user saw:** at 3–5 (60 %), an ordinary room-by-room route met 0–2 of an annex's enemies. They sat in closed rooms,
+    and station gunfire (heard by straight-line distance through rock) pulled a hatch annex's near ones out. The user's two fresh
+    runs found none.
+  - **Fairness kept:** no corridor ambush at the door (6 m keep-off) and no respawn.
 - **Placement.** One run per annex on its own fork (`track-ext-content` → `service:<annex>`), in that annex's areas only, AFTER
   every core spawn (the core's indices, rolls, run-memory keys and parity pins are unchanged) and tagged
   `markSpawnContext(layout, first, 'service')`; `assignEnemyArchetypes(layout, profile)` then runs ONCE over every context.
@@ -191,6 +197,14 @@ same family pool and zombie types, same tier.
   1.12 annexes per level (3 with none, 15 with one, 6 with two; 6 of the 27 entered by a service hatch), 3.85 placed per annex,
   4.3 service spawns per level (max 10) on top of the station's ~27; Office 10 seeds (3, 7922, 15841, 23760, 31679, 39598, 11, 222,
   3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex run placed fewer than its count.
+  (Before the playtest revision's 5–7 budget.)
+- **Playtest-revision measurement** (fresh New Game path; Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
+  5150 / 9090):
+  - **Placed:** 5–7 per annex (Subway levels +7 / +12 / +14 with 1 / 2 annexes, Office +10 / +11, Mall +5 to +7). All at the
+    annex floor, all reachable from the annex door, at least 2 depth bands each, mostly beyond 18 m of core station floor.
+  - **Encounters:** ordinary discovery routes (`tests/helpers/annexRoute.ts`, the game's real ZombieBrain) made 1–2 enemies aware
+    per route, the first usually within 0–3 rooms. Before, 0–2 of 3–5 (one route met none). The routes never shoot, so real play
+    draws in more.
 
 ## Room modifiers
 

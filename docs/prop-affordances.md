@@ -100,8 +100,9 @@ proportion edits in the same script (`legs`: foosball +0.40 m, ping-pong +0.20 m
 The track tunnels' service annexes are dressed with EXISTING prop kinds only (`game/src/gen/annexContent.ts` through the core
 dresser: purpose rules, the composer, the iteration-07 dresser) — no new or changed kind, so every kind keeps its `OPENABLE_AUDIT` /
 physics class, and no scale check was due. Storage there opens like everywhere (same openables, finite seeded contents from the
-loot tables: an annex's deepest holders keep their room's table, the stash `ANNEX_STASH_KEY`, the rest picked-over storage
-`ANNEX_PICKED_KEY` — `docs/loot-tables.md` "Service annexes"); loose kinds keep their bounded physics; placement goes through the
+loot tables: an annex's deepest holders keep their room's table, the stash `ANNEX_STASH_KEY`, supply holders `ANNEX_SUPPLY_KEY`
+by depth band, a few scraps `ANNEX_SCRAPS_KEY`, the rest searched-clean `ANNEX_PICKED_KEY`; every bare annex room gets one storage
+piece — `docs/loot-tables.md` "Service annexes"); loose kinds keep their bounded physics; placement goes through the
 same primitive (door zones and clearance, access / swing strips, connectivity), on the annex floor (the trackbed, props lifted onto
 it like the core's).
 

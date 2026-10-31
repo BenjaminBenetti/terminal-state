@@ -201,22 +201,59 @@ runtime-scaled 1.78 m zombie):
   budget-exempt (`dressExtensionAreas` `pre` / `rules`).
 - Halls get a fixture every ~5 m of their long side (at least 2).
 
-**Loot** (`game/src/items/lootTables.ts`), finite, seeded once, persisted by the usual keys and never refilled:
-- **Deepest holders:** each annex's deepest 7–8 holders keep their room's normal loot table.
-- **Stash:** one or two stash holders (a crate, then a tall cabinet) use `ANNEX_STASH`.
-- **Picked over:** the rest use `ANNEX_PICKED`: no ammo, 90 % empty.
-- **Floor:** `ANNEX_FLOOR` guarantees nothing.
-- **Untouched:** the level's single rare-gear roll, mask roll, weapon finds and Office roof cache and find are never
+**Loot** (`game/src/items/lootTables.ts`), finite, seeded once, persisted by the usual keys and never refilled.
+
+*Playtest revision* (task `studio-alpha-track2-playtest-revision-20261031-01`; user: two fresh runs with "no loot and no
+enemies in the area").
+
+Diagnosis, `reference/tasks/track2-playtest-revision-20261031/DIAGNOSIS-BASELINE.md`:
+- Every annex holder was generated, registered, unculled, reachable and targetable.
+- Yet 94–98 % rolled EMPTY. The picked-over table (90 % empty) and the stash were cut a SECOND time by the level-wide scarcity
+  economy (`items/lootEconomy.ts` `scarceFinds` keeps only ammo / materials exactly).
+- The stocked few sat deepest.
+- An ordinary room-by-room route opened 9–22 holders per annex and found nothing.
+
+Now:
+- **Exact annex tables:** `LootSpec.exact` rolls exactly, with no scarcity cut, re-theme or limb conversion; a level's slot
+  scaling still applies. It is set on the annex keys only, so every core table is unchanged.
+- **Supply:** `ANNEX_SUPPLY` holders, never empty, one ordinary supply each (water, tins, a dressing, a cell, a flare, scrap). One
+  per 170 m² of annex, 6–12, chosen by door-hop DEPTH BAND:
+  - half in the entry third, 30 % in the middle, the rest deep;
+  - at most 2 per room;
+  - only holders that roll their room purpose's table (`rollsPurposeTable`; not first-aid wall kits / fixture cabinets).
+- **Scraps:** `ANNEX_SCRAPS`, one leftover each, in 12 % of the other picked-over holders, at most 6.
+- **Searched clean:** `ANNEX_PICKED` (exact, `empty: 1`) for the rest.
+- **Stash:** 1–2 stash holders, a crate and then a tall cabinet, use `ANNEX_STASH` (exact, `empty: 0.1`, 2–3 lots).
+- **Deepest holders:** each annex's deepest ~8 holders keep their room's table (scarcity as in the core; ammo-led).
+- **Room storage:** every annex room / closet the dressing left with no loot holder gets one storage piece (`placeRoomStorage`):
+  open shelving first, else a low cabinet / crate or a tall cabinet.
+- **Floor:** `ANNEX_FLOOR` unchanged (chances only).
+- **Untouched:** the level's single rare-gear roll, mask roll, weapon finds and the Office roof cache / find are never
   multiplied.
 
+Measured on the merged tree, fresh New Game path, Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 / 5150 /
+9090:
+- **Holders:** 49–75 per annex, **28–38 % stocked** (the core station stocks ~1/3).
+- **Finds:** 18–28 non-ammo holder finds per annex, the core station's density.
+- **Ammo:** holder ammo stays in its old range.
+- **Access:** every stocked holder is reachable and targetable from its stand point.
+- **Discovery routes:** ordinary routes (`tests/helpers/annexRoute.ts`: a real Player, nearest-unvisited room by walking distance,
+  opening holders in placement order) took loot in every sampled annex, with the first find 2–5 rooms in. Before, they found
+  nothing.
+
 **Enemies** (`SERVICE_CONTEXT`):
-- 3–5 per annex, at least 5 m apart and at least 6 m from the entrance.
-- Annex spawns are appended after every core spawn and tagged `markSpawnContext(layout, firstIndex, 'service')`.
-  `assignEnemyArchetypes` runs once afterwards.
-- They inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none, and the
-  Office's Siren eligibility stays `['floor']`.
-- They are excluded from the core station / street / floor counts and reported separately.
-- Measured: about 4.3 extra per Subway level.
+- **Count:** `SERVICE_ZONE_BUDGET` 5–7 per annex (was 3–5; about 90 % of the core's density).
+- **Spread:** across entry / middle / deep door-hop bands (equal quotas; the remainder to the middle).
+- **Earshot:** cells beyond `SERVICE_EARSHOT_M` (18 m, rifle earshot through rock) of every core floor cell are preferred.
+  Before, station gunfire pulled a hatch annex's near enemies out before the player arrived.
+- **Spacing:** at least 5 m apart and at least 6 m from the entrance.
+- **Ordering and tagging:** annex spawns are appended after every core spawn and tagged
+  `markSpawnContext(layout, firstIndex, 'service')`. `assignEnemyArchetypes` runs once afterwards.
+- **Families:** they inherit the level's profile, tier and family pool. There are no Sirens in `'service'`: the Subway has none,
+  and the Office's Siren eligibility stays `['floor']`.
+- **Counted separately:** they are excluded from the core station / street / floor counts and reported separately.
+- **Measured:** 5–7 per annex (Subway levels +7 / +12 / +14 with 1 / 2 annexes). The ordinary routes made 1–2 enemies aware, the
+  first usually within the first 0–3 rooms, with no gunfire in the simulation.
 
 **Lights:** untinted. Annexes have about 80 fixtures each, mostly dim, dying or dead; the entry corridor is never fully dark.
 Tunnels have sparse fixtures, mostly dead or dying.

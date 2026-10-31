@@ -30,6 +30,7 @@ import type {Rng} from '../core/rng';
 import {CELL, FLOOR} from './grid';
 import type {Area, Door, StationLayout} from './stationTypes';
 import {areaConnected, begin, cellsOfBox, commit, markCell, propBlocksDoorway, rollback, type PlaceCtx} from './placeKit';
+import {doorClearVolumes} from './doorways';
 import type {PropRule} from './purposes';
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -467,8 +468,41 @@ function wallPipes(e: Env, n: number, skip: readonly Side[] = []): void {
     if (n-- <= 0) break;
     const len = wallLen(e, s), y = Math.min(e.ceil - 0.22, 2.75);
     if (y < 1.9 || len < 2) continue;
-    addVisual(e, onWall(e, 'pipeRun', s, len / 2, len, 0.28, 0.3, [y, e.rng.int(2, 3)]));
+    const pipes = e.rng.int(2, 3);
+    // (playtest revision, primary) the run is split around every doorway clear volume of the room's doors it would cross (a door
+    // in this wall, or one flush with the corner in the next wall): under a 2.4 m ceiling the pipes hang to ~1.9 m, below a
+    // doorway's 2.1 m clear top (tests/doorways.test.ts "no rendered mesh crosses an opening")
+    for (const [p, q] of pipeSpans(e, s, len, y)) addVisual(e, onWall(e, 'pipeRun', s, (p + q) / 2, q - p, 0.28, 0.3, [y, pipes]));
   }
+}
+
+/** The layout's doorway clear volumes, computed once per (layout, door count): the annex doors are all carved before machinery. */
+const CLEAR = new WeakMap<StationLayout, {n: number; v: ReturnType<typeof doorClearVolumes>}>();
+function clearVolumesOf(layout: StationLayout): ReturnType<typeof doorClearVolumes> {
+  let c = CLEAR.get(layout);
+  if (!c || c.n !== layout.doors.length) CLEAR.set(layout, (c = {n: layout.doors.length, v: doorClearVolumes(layout)}));
+  return c.v;
+}
+
+/** Spans (m along wall `s`) of a pipe run at centre height `y` that stay clear of the room's doorway clear volumes (+ 0.25 m). */
+function pipeSpans(e: Env, s: Side, len: number, y: number): [number, number][] {
+  const ids = new Set(e.doors.map(d => d.id)), y0 = e.floorY + y - 0.4, y1 = e.floorY + y + 0.15, band = 0.45, m = 0.25;
+  const cuts: [number, number][] = [];
+  for (const v of clearVolumesOf(e.layout)) {
+    if (!ids.has(v.door) || v.y1 <= y0 || v.y0 >= y1) continue;
+    let along: [number, number] | null = null;
+    if (s === 'N' && v.z0 < e.z0 + band && v.z1 > e.z0) along = [v.x0 - e.x0, v.x1 - e.x0];
+    else if (s === 'S' && v.z1 > e.z1 - band && v.z0 < e.z1) along = [v.x0 - e.x0, v.x1 - e.x0];
+    else if (s === 'W' && v.x0 < e.x0 + band && v.x1 > e.x0) along = [v.z0 - e.z0, v.z1 - e.z0];
+    else if (s === 'E' && v.x1 > e.x1 - band && v.x0 < e.x1) along = [v.z0 - e.z0, v.z1 - e.z0];
+    if (along) cuts.push([along[0] - m, along[1] + m]);
+  }
+  cuts.sort((p, q) => p[0] - q[0]);
+  const out: [number, number][] = [];
+  let t = 0;
+  for (const [p, q] of cuts) { if (p > t) out.push([t, Math.min(p, len)]); t = Math.max(t, q); }
+  if (len > t) out.push([t, len]);
+  return out.filter(([p, q]) => q - p >= 1.0);
 }
 
 // --- BOILER ROOM: a bank of horizontal fire-tube boilers (burner fronts into an aisle), flue stacks, a pipe header on the back wall
