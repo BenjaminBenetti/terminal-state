@@ -18,15 +18,56 @@
 //     bc96b5e2, 4242 c008ba55 / ef25f3cf -> 8f127b50 / ba008081, 11:rifle 2f57fea3 / 9e782ad4 -> 5d274546 / 7cb613ae.
 //  (merge of task gas-mask-roof-feedback-20261030, no re-pin): the Office roof FIND's reward pickups (appended last, pinned in
 //     loot-golden officeRoofFind) are left out of pickupHash (helpers/enemySpawnParity.ts); every hash above is reproduced as is.
+//  3. Task track1-siren-blightbelly-20261031 (lane SPAWN), BOTH levels: the user-requested families Blightbelly (5 % on every level)
+//     and Siren (Office only, ~2 per run) REPLACE shares of the zombie slots. CAUSE: the family field only — the pools became
+//     Subway [zombie 0.9, blightbelly 0.05, siren 0, ratdog 0.05] and Office [zombie 0.71, blightbelly 0.05, siren 0.19 (draw
+//     weight; ineligible draws stay zombies), ratdog 0.05] on the SAME per-spawn roll, the new families inserted before the
+//     rat/dog. EVIDENCE (separated from the invariants, first test below): the family-masked spec hash (count, order, type, exact
+//     x / y / z / yaw, area, level), the pickup hash and the context counts equal the values computed from the untouched main
+//     dba90dd sources, the rat/dog indices are identical and every old zombie slot is a zombie / Blightbelly / Siren now (also over
+//     40 + 40 extra seeds per level in the lane census). Spec hashes: 1 a71290f4 -> 52c57838, 7 f8281aad -> 9ffd5bd5, 42 4c817345
+//     -> 1d09d867, 1234 e1e089f5 -> b1e955bd, 9001 689b3629 -> 9f96c951, 32758 9c1d3f5f -> 409a0efd, 40677 280e6a9b -> ea09047b,
+//     48596 41e72df3 -> 8388ceeb (16920 / 24839 drew no Blightbelly: unchanged); Office 11 5d274546 -> 73536b5a, 222 24f81c38 ->
+//     5e4e485b, 3333 73e3a9b0 -> 9720588a, 4242 8f127b50 -> 46b33d60. Every pickup hash and context count is unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {
-  OFFICE_GOLDEN, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_PARITY, contextCounts, officeKey, pickupHash, spawnSpecHash, subwayKey,
+  OFFICE_GOLDEN, OFFICE_INVARIANT, OFFICE_PARITY, SUBWAY_GOLDEN, SUBWAY_INVARIANT, SUBWAY_PARITY, contextCounts, familyIndices,
+  maskedSpawnSpecHash, officeKey, pickupHash, spawnSpecHash, subwayKey,
 } from './helpers/enemySpawnParity'; // the pinned hashes live in the helper (shared with enemy-spawn-tables.test.ts)
+import type {StationLayout} from '../src/gen/stationTypes';
 
-describe('enemy spawn parity (pinned at main 932624e)', () => {
+const NEW_FAMILIES = ['blightbelly', 'siren'] as const;
+
+describe('enemy spawn INVARIANTS across the task-track1 family change (pinned from the untouched main dba90dd sources)', () => {
+  const check = (l: StationLayout, inv: readonly [string, readonly number[]], key: string) => {
+    expect(maskedSpawnSpecHash(l), `${key} masked spec`).toBe(inv[0]);
+    expect(familyIndices(l, 'ratdog'), `${key} rat/dog indices`).toEqual([...inv[1]]);
+    // every non-rat/dog slot (the old zombie slots) is a zombie or one of the new families
+    for (const z of l.zombies) expect(['zombie', 'ratdog', ...NEW_FAMILIES], key).toContain(z.archetype ?? 'zombie');
+  };
+  it('Subway: positions / count / order / types / areas / levels, rat/dog draws and pickups identical; only zombie slots changed family', () => {
+    for (const c of SUBWAY_PARITY) {
+      const l = generateStation(c.seed, {startWeapon: c.startWeapon, ...(c.archetype ? {archetype: c.archetype} : {})});
+      const key = subwayKey(c);
+      check(l, SUBWAY_INVARIANT[key], key);
+      expect([pickupHash(l), contextCounts(l)], key).toEqual(SUBWAY_GOLDEN[key].slice(1));
+      expect(familyIndices(l, 'siren'), `${key}: no Siren in the Subway`).toEqual([]);
+    }
+  });
+  it('Office: the same invariants for station + lobby, floors 2..8 and roof', () => {
+    for (const c of OFFICE_PARITY) {
+      const l = generateOfficeLevel({levelSeed: c.levelSeed, startWeapon: c.startWeapon});
+      const key = officeKey(c);
+      check(l, OFFICE_INVARIANT[key], key);
+      expect([pickupHash(l), contextCounts(l)], key).toEqual(OFFICE_GOLDEN[key].slice(1));
+    }
+  });
+});
+
+describe('enemy spawn parity (full specs incl. family: pin stage 3, task track1)', () => {
   it('Subway: spawn specs + downstream pickups byte-identical', () => {
     const got: Record<string, [string, string, string]> = {};
     for (const c of SUBWAY_PARITY) {

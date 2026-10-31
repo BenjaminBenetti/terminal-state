@@ -10,19 +10,31 @@
 // The contract is tools/pages/enemyReferenceTypes.ts; the guide is docs/enemy-spawns.md. game/tests/enemy-spawn-reference.test.ts
 // checks coverage (unknown registrations fail), determinism and runtime agreement. Gameplay is untouched: this module only READS
 // game modules (it is never part of the game bundle).
+//
+// Task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: + each level's explicit difficulty TIER (levels/registry.ts), the
+// registry contract check (levels/levelContract.ts validateLevelRegistry), every family's combat STATS / behaviour rules read from
+// its exported constants (ENEMY_FAMILY_ADAPTER: brain.ts ZOMBIE_STATS, ai/blightbelly.ts, ai/siren.ts, ai/creatureActor.ts), the
+// profiles' family ELIGIBILITY rules and a sampled ELIGIBILITY census (draws vs placed of a restricted family). A spawn's context
+// is the generator's own tag (spawnTables spawnContextOf), never inferred from the storey.
 
 import * as ST from '../../game/src/ai/spawnTables';
 import {
-  ALL_FAMILIES, ENEMY_FAMILY_IDS, SPAWN_PROFILES, acceptedPlaced, baseAreaWeight, roomIntensity, roomKey, roomModifier, setSpawnCensusHook,
-  spawnContext, spawnProfile, validateSpawnProfile,
-  type AreaCaps, type AreaMatch, type AreaWeights, type EnemyFamilyId, type SpawnCandidateReport, type SpawnContextId, type SpawnContextRule,
-  type SpawnProfile,
+  ALL_FAMILIES, ENEMY_FAMILY_IDS, PASSAGE_NOOK_CELLS, SPAWN_PROFILES, acceptedPlaced, baseAreaWeight, eligibilityFailure, roomFamilyPool, roomIntensity,
+  roomKey, roomModifier, setSpawnCensusHook, spawnContext, spawnContextOf, spawnProfile, validateSpawnProfile,
+  type AreaCaps, type AreaMatch, type AreaWeights, type EnemyFamilyId, type FamilyEligibility, type SpawnCandidateReport, type SpawnContextId,
+  type SpawnContextRule, type SpawnProfile,
 } from '../../game/src/ai/spawnTables';
 import {ENEMY_ARCHETYPES} from '../../game/src/ai/creatureArchetypes';
+import {pickEnemyArchetype} from '../../game/src/ai/creatureSpawn';
+import {ZOMBIE_STATS, type ZombieStats} from '../../game/src/ai/brain';
+import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../../game/src/ai/blightbelly';
+import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE} from '../../game/src/ai/siren';
+import {LUNGE as RATDOG_LUNGE, RATDOG_STATS} from '../../game/src/ai/creatureActor';
 import {LEVELS, LEVEL_IDS} from '../../game/src/levels/registry';
+import {validateLevelRegistry} from '../../game/src/levels/levelContract';
 import type {LevelId} from '../../game/src/levels/types';
 import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
-import {OFFICE_FLOORS, OFFICE_ROOF_LEVEL} from '../../game/src/gen/office/frame';
+import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -30,9 +42,9 @@ import {startWeaponFor} from '../../game/src/weapons/pistol';
 import {rd} from './probability';
 import {
   ENEMY_REFERENCE_SCHEMA,
-  type CensusCorpus, type EnemyFamilyInfo, type EnemyKnob, type EnemyLevelInfo, type EnemyReference, type LevelCensus, type LevelMovesInfo,
-  type ModifierSemantics, type PlacementInfo, type RoomCensus, type RoomModifierTable, type RoomRow, type SourceLoc, type SpawnContextInfo,
-  type VocabEntry, type ZombieTypeInfo,
+  type CensusCorpus, type EligibilityCensus, type EligibilityInfo, type EnemyFamilyInfo, type EnemyKnob, type EnemyLevelInfo, type EnemyReference,
+  type FamilyRuleGroup, type FamilyStatsVariant, type LevelCensus, type LevelMovesInfo, type ModifierSemantics, type PlacementInfo, type RoomCensus,
+  type RoomModifierTable, type RoomRow, type SourceLoc, type SpawnContextInfo, type VocabEntry, type ZombieTypeInfo,
 } from './enemyReferenceTypes';
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -49,10 +61,17 @@ export interface EnemyReferenceOptions {
   censusSeeds?: readonly number[];
   /** TESTS ONLY: the profile a level resolves with (default: the registered spawnProfile(level)). Requires censusSeeds: []. */
   profileFor?: (level: LevelId) => SpawnProfile;
+  /** Eligibility census seeds per level with an eligibility rule (default ENEMY_ELIGIBILITY_SEEDS when the census is on). */
+  eligibilitySeeds?: readonly number[];
 }
 
 /** The fixed SAMPLED census seeds (a few per level; not exhaustive). */
 export const ENEMY_CENSUS_SEEDS: readonly number[] = [11, 222, 3333, 44444];
+/**
+ * Task track1 (lane SPAWN): the fixed SAMPLED eligibility-census seeds (levels whose profile restricts a family — the Office's
+ * Siren): 20 generated levels, enough to show draws vs placed per level; the 400-run tuning census is in docs/enemy-spawns.md.
+ */
+export const ENEMY_ELIGIBILITY_SEEDS: readonly number[] = Array.from({length: 20}, (_, k) => 5003 + 7919 * k);
 
 const F = {
   tables: 'game/src/ai/spawnTables.ts', spawn: 'game/src/ai/creatureSpawn.ts', archetypes: 'game/src/ai/creatureArchetypes.ts',
@@ -61,12 +80,89 @@ const F = {
   officeSpawns: 'game/src/gen/office/spawns.ts', officeValidate: 'game/src/gen/office/validate.ts', roof: 'game/src/gen/office/roof.ts',
   frame: 'game/src/gen/office/frame.ts', grid: 'game/src/gen/grid.ts', stationKit: 'game/src/gen/stationKit.ts', purposes: 'game/src/gen/purposes.ts',
   memory: 'game/src/run/memory.ts', pistol: 'game/src/weapons/pistol.ts',
+  // task track1 (lane SPAWN): family stats / rules, the registry contract
+  brain: 'game/src/ai/brain.ts', blightbelly: 'game/src/ai/blightbelly.ts', siren: 'game/src/ai/siren.ts', creatureActor: 'game/src/ai/creatureActor.ts',
+  contract: 'game/src/levels/levelContract.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
-  F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol,
+  F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
+  F.contract,
 ].slice().sort();
+
+/**
+ * Task track1 (lane SPAWN): FAMILY ADAPTER — where each family's combat stats and behaviour constants are exported. `Record<
+ * EnemyFamilyId, …>` makes a new family fail to typecheck until its exports are named here; every numeric / boolean / string leaf of
+ * a rules constant is listed (labelled below when known, else by its key path) so a new knob can never be silently dropped.
+ */
+export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
+  stats: readonly {variant: string | null; stats: ZombieStats; file: string; symbol: string}[];
+  rules: readonly {title: string; value: object; file: string; symbol: string}[];
+}>> = {
+  zombie: {
+    stats: [
+      {variant: 'shambler', stats: ZOMBIE_STATS.shambler, file: F.brain, symbol: 'ZOMBIE_STATS.shambler'},
+      {variant: 'coated', stats: ZOMBIE_STATS.coated, file: F.brain, symbol: 'ZOMBIE_STATS.coated'},
+    ],
+    rules: [],
+  },
+  blightbelly: {
+    stats: [{variant: null, stats: BLIGHTBELLY_STATS, file: F.blightbelly, symbol: 'BLIGHTBELLY_STATS'}],
+    rules: [{title: 'Death burst (once, when killed)', value: BLIGHTBELLY_BURST, file: F.blightbelly, symbol: 'BLIGHTBELLY_BURST'}],
+  },
+  siren: {
+    stats: [{variant: null, stats: SIREN_STATS, file: F.siren, symbol: 'SIREN_STATS'}],
+    rules: [
+      {title: 'Dormant wake rules', value: SIREN_WAKE, file: F.siren, symbol: 'SIREN_WAKE'},
+      {title: 'Claw lunge', value: SIREN_CLAW, file: F.siren, symbol: 'SIREN_CLAW'},
+    ],
+  },
+  ratdog: {
+    stats: [{variant: null, stats: RATDOG_STATS, file: F.creatureActor, symbol: 'RATDOG_STATS'}],
+    rules: [{title: 'Bite lunge', value: RATDOG_LUNGE, file: F.creatureActor, symbol: 'LUNGE'}],
+  },
+};
+
+/** Labels + units of known rule constant leaves (key path → [label, unit]). Unknown leaves show their key path. */
+const RULE_LABEL: Readonly<Record<string, readonly [string, string]>> = {
+  // ai/blightbelly.ts BLIGHTBELLY_BURST
+  delayS: ['delay between the kill and the burst', 's'], centreY: ['burst centre above the feet', 'm'],
+  blastMax: ['blast damage to the player at most (inside the inner radius)', 'hp'], blastInner: ['full-damage inner radius', 'm'],
+  blastRadius: ['blast radius (linear falloff to 0)', 'm'], bodySamples: ['player body sample heights (damage x visible fraction)', 'm'],
+  enemyMax: ['blast damage to other enemies at most', 'hp'], noise: ['burst noise hearing radius', 'm'],
+  maxPerFrame: ['bursts processed per frame at most', ''], maxQueued: ['queued bursts at most', ''], maxPops: ['visible pustule pops at most', ''],
+  gasRadius: ['toxic gas source radius', 'm'], gasPeak: ['toxic gas source peak concentration', 'relative'],
+  gasEmitS: ['toxic gas emission time', 's'], gasDurationS: ['toxic gas cloud life (then it is gone)', 's'],
+  // ai/siren.ts SIREN_WAKE / SIREN_CLAW
+  proximityM: ['proximity wake: plan distance to the player (with a sight line)', 'm'], proximityDy: ['proximity wake: max height difference (same storey)', 'm'],
+  onDamage: ['a direct hit wakes her', ''], gunfireHearing: ['gunfire / noise wakes her while dormant', ''], sightCone: ['ordinary sight cone while dormant', ''],
+  lightLure: ['lured by lights while dormant', ''], flares: ['flares wake her', ''],
+  'flashlight.kinds': ['light kinds that wake her (beam cone + range + clear ray)', ''], 'flashlight.period': ['flashlight check period', 's'],
+  'flashlight.minIntensity': ['minimum emitting brightness of the beam', 'relative'], 'flashlight.maxRange': ['flashlight wake range cap', 'm'],
+  'flashlight.points': ['body sample points of the dormant pose (any one lit wakes her)', 'points'],
+  riseS: ['rise after the wake (default; the Rise clip length when present)', 's'], riseMin: ['rise at least', 's'], riseMax: ['rise at most', 's'],
+  'lunge.from': ['lunge starts this far into the swing', 's'], 'lunge.speed': ['lunge speed', 'm/s'], 'lunge.stop': ['no lunge closer than', 'm'],
+  // ai/creatureActor.ts LUNGE
+  from: ['lunge starts this far into the bite', 's'], to: ['lunge ends', 's'], speed: ['lunge speed', 'm/s'], stop: ['no lunge closer than', 'm'],
+};
+
+/** Every leaf of a rules constant as a row (nested objects flattened by key path; arrays: numbers joined, else their length). */
+export function ruleRows(value: object, prefix = ''): {what: string; value: number | string; unit: string}[] {
+  const out: {what: string; value: number | string; unit: string}[] = [];
+  for (const [k, v] of Object.entries(value)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    const [label, unit] = RULE_LABEL[key] ?? [key, ''];
+    if (v && typeof v === 'object' && !Array.isArray(v)) { out.push(...ruleRows(v, key)); continue; }
+    let shown: number | string;
+    if (Array.isArray(v)) shown = v.every(x => typeof x === 'number') ? v.join(', ') : v.every(x => typeof x === 'string') ? v.join(', ') : v.length;
+    else if (typeof v === 'boolean') shown = v ? 'yes' : 'no';
+    else if (typeof v === 'number' || typeof v === 'string') shown = v;
+    else continue;
+    out.push({what: label, value: shown, unit});
+  }
+  return out;
+}
 
 /**
  * GENERATOR ADAPTER: which generator reads each level's profile and how often each context runs per level. These are code paths
@@ -199,10 +295,14 @@ interface CensusLevel {
   spawns: {family: string; type: string; key: string; kind: string; context: string}[];
 }
 
-/** The generation context a placed spawn belongs to (Office: by storey; the Subway's single context incl. its storey moves). */
-function contextOfStorey(layout: StationLayout, storey: number): SpawnContextId {
-  if (!layout.office) return 'station';
-  return storey <= 1 ? 'street' : storey === OFFICE_ROOF_LEVEL ? 'roof' : 'floor';
+/**
+ * The generation context of placed spawn `i`: the generator's own tag (spawnTables markSpawnContext; a single-context profile implies
+ * its context). Task track1 (lane SPAWN): an untagged spawn of a multi-context profile fails the build (coverage), never a guess.
+ */
+function contextOfSpawn(layout: StationLayout, profile: SpawnProfile, i: number): SpawnContextId {
+  const c = spawnContextOf(layout, profile, i);
+  if (!c) throw new Error(`level ${profile.id}: spawn ${i} carries no generation context (its placement routine must call markSpawnContext)`);
+  return c;
 }
 
 const censusCache = new Map<string, CensusLevel>();
@@ -240,10 +340,10 @@ export function enemyCensus(level: LevelId, seeds: readonly number[]): CensusLev
         const rules = a.level && profile.levelMoves && c.context === 'station' ? profile.levelMoves.areaWeights : ctx.placement.areaWeights;
         out.areas.push({key: roomKey(a), keyKind: a.purpose !== undefined ? 'purpose' : 'room-type', type: a.type, kind: a.kind, context: c.context, cells: c.cells, baseWeight: baseAreaWeight(rules, a), sample});
       }
-      for (const z of layout.zombies) {
+      layout.zombies.forEach((z, i) => {
         const a: Area | undefined = layout.areas[z.area];
-        out.spawns.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', kind: a?.kind ?? '?', context: contextOfStorey(layout, z.level ?? 0)});
-      }
+        out.spawns.push({family: z.archetype ?? 'zombie', type: z.type, key: a ? roomKey(a) : '?', kind: a?.kind ?? '?', context: contextOfSpawn(layout, profile, i)});
+      });
     }
   });
   censusCache.set(key, out);
@@ -282,6 +382,83 @@ function levelCensus(c: CensusLevel, families: readonly string[]): LevelCensus {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
+// Task track1 (lane SPAWN): family eligibility — plain criteria + a sampled census of draws vs placed
+
+/** The criteria of an eligibility rule in check order (every number read from the rule). */
+export function eligibilityCriteria(rule: FamilyEligibility, P: SpawnProfile): string[] {
+  const ctx = rule.contexts.map(c => `${P.contexts[c]?.label ?? c} (${c})`).join(' / ');
+  const out = [`the spawn's generation context is ${ctx}; draws in any other context fall back`];
+  if (rule.kinds?.length) out.push(`area kind ${list(rule.kinds)}`);
+  if (rule.excludeRooms?.length) out.push(`never in (room type or purpose): ${rule.excludeRooms.join(', ')}`);
+  if (rule.minSideCells !== undefined) out.push(`the area's shorter side ≥ ${rule.minSideCells} cells (${rd(rule.minSideCells * CELL)} m)`);
+  if (rule.minAreaCells !== undefined) out.push(`the area ≥ ${rule.minAreaCells} cells (${rd(rule.minAreaCells * CELL * CELL)} m²)`);
+  if (rule.clearCells !== undefined) {
+    const side = rd((2 * rule.clearCells + 1) * CELL);
+    out.push(`a clear ${side} × ${side} m patch: every cell within ${rule.clearCells} cell(s) is walkable floor of the same area`);
+  }
+  if (rule.doorKeepM !== undefined) out.push(`≥ ${rule.doorKeepM} m from the centre of every doorway of its area`);
+  if (rule.passageRadiusM !== undefined) out.push(`fair passage: a ${rule.passageRadiusM} m disc around the spawn, treated as blocked, never splits the storey's walkable floor (pockets of ≤ ${PASSAGE_NOOK_CELLS} cells ignored)`);
+  if (rule.maxPerLevel !== undefined) out.push(`at most ${rule.maxPerLevel} per generated level (all contexts; later draws in spawn order fall back)`);
+  return out;
+}
+
+const eligibilityCache = new Map<string, EligibilityCensus>();
+
+/** Draws vs placed of every restricted family of a level over `seeds` (the registered generator). Cached per process. */
+export function eligibilityCensus(level: LevelId, seeds: readonly number[]): EligibilityCensus {
+  const key = `${level}:${seeds.join(',')}`;
+  const hit = eligibilityCache.get(key);
+  if (hit) return hit;
+  const def = LEVELS[level], P = spawnProfile(level), startWeapon = startWeaponFor(false);
+  const rules = Object.entries(P.eligibility ?? {}) as [EnemyFamilyId, FamilyEligibility][];
+  const placedBy = new Map<string, number>();
+  let total = 0, layouts = 0;
+  const R = rules.map(([family]) => ({family, draws: 0, placed: 0, per: [] as number[], fallbacks: new Map<string, number>(), byContext: new Map<string, number>()}));
+  for (const seed of seeds) for (const section of def.sections(seed)) {
+    const l = def.generate(section, {levelSeed: seed, startWeapon});
+    layouts++;
+    const perLayout = R.map(() => 0);
+    l.zombies.forEach((z, i) => {
+      const fam = z.archetype ?? 'zombie';
+      total++;
+      placedBy.set(fam, (placedBy.get(fam) ?? 0) + 1);
+      const drawn = pickEnemyArchetype(l.seed, i, roomFamilyPool(P, l.areas[z.area]));
+      rules.forEach(([f, rule], k) => {
+        const r = R[k], ctx = contextOfSpawn(l, P, i);
+        if (fam === f) { r.placed++; perLayout[k]++; r.byContext.set(ctx, (r.byContext.get(ctx) ?? 0) + 1); }
+        if (drawn !== f) return;
+        r.draws++;
+        if (fam !== f) { const why = eligibilityFailure(rule, l, z, ctx) ?? 'cap'; r.fallbacks.set(why, (r.fallbacks.get(why) ?? 0) + 1); }
+      });
+    });
+    perLayout.forEach((n, k) => R[k].per.push(n));
+  }
+  const out: EligibilityCensus = {
+    seeds: [...seeds], layouts,
+    note: `SAMPLED: ${layouts} generated levels of LEVELS.${level}.generate (seeds ${seeds[0]}..${seeds[seeds.length - 1]}, ${seeds.length} seeds, shipped start weapon). A draw is a spawn whose roll lands on the family; it is placed only where the eligibility rule holds, otherwise it becomes the fallback family. Not exhaustive; not a runtime rule.`,
+    placed: ENEMY_FAMILY_IDS.map(f => ({family: f, total: placedBy.get(f) ?? 0, perLevel: rd((placedBy.get(f) ?? 0) / Math.max(1, layouts)), share: rd((placedBy.get(f) ?? 0) / Math.max(1, total))})),
+    restricted: R.map(r => {
+      const max = r.per.length ? Math.max(...r.per) : 0;
+      return {
+        family: r.family, draws: r.draws, placed: r.placed,
+        perLevel: {mean: rd(r.placed / Math.max(1, layouts)), none: r.per.filter(n => n === 0).length, max,
+          histogram: Array.from({length: max + 1}, (_, n) => ({count: n, layouts: r.per.filter(v => v === n).length}))},
+        fallbacks: [...r.fallbacks].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([reason, draws]) => ({reason, draws})),
+        byContext: [...r.byContext].sort((a, b) => a[0].localeCompare(b[0])).map(([context, placed]) => ({context, placed})),
+      };
+    }),
+  };
+  eligibilityCache.set(key, out);
+  return out;
+}
+
+function statsVariant(v: {variant: string | null; stats: ZombieStats}, at: SourceLoc): FamilyStatsVariant {
+  const s = v.stats;
+  return {variant: v.variant, hp: s.hp, wanderSpeed: s.wanderSpeed, chaseSpeed: s.chaseSpeed, attackRange: s.attackRange, attackDamage: s.attackDamage,
+    attackDuration: s.attackDuration, attackImpact: s.attackImpact, attackCooldown: s.attackCooldown ?? null, sightRange: s.sightRange, radius: s.radius, at};
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
 // Static vocabulary / semantics (prose; every number elsewhere is read from the profiles)
 
 const VOCABULARY: readonly VocabEntry[] = [
@@ -290,7 +467,10 @@ const VOCABULARY: readonly VocabEntry[] = [
   {term: 'area weight', unit: 'relative (no unit)', definition: 'Relative preference of an area in the weighted area order (Efraimidis–Spirakis keys u^(1/w)): areas with more weight tend to be visited earlier in each cap pass. Never a chance and never a count.'},
   {term: 'cap', unit: 'spawns per area', definition: 'Most spawns an area may hold after each pass (passes 1, 2, 3); platforms hold one more, closets / closed exits / storefront units at most one.'},
   {term: 'family weight', unit: 'relative (no unit)', definition: 'Weight of an enemy family in the level pool; only meaningful against the denominator Σ weights.'},
-  {term: 'share', unit: 'conditional chance per placed spawn', definition: 'weight / denominator: the chance that ONE placed spawn is that family (an independent per-spawn roll keyed on level seed + spawn index that REPLACES a zombie). Not a chance per area or per m².'},
+  {term: 'share', unit: 'conditional chance per placed spawn', definition: 'weight / denominator: the chance that the roll of ONE placed spawn draws that family (an independent per-spawn roll keyed on level seed + spawn index that REPLACES a zombie). For a family without an eligibility rule that is its placed share; a restricted family places fewer (see eligibility). Not a chance per area or per m².'},
+  {term: 'eligibility', unit: 'rule per family and level', definition: 'Where a restricted family may take a placed slot (contexts, rooms, clearance, doorways, fair passage, a per-level cap). A draw that fails it becomes the fallback family (a zombie): the other families\' draws never change, and the restricted family\'s placed count is measured by the sampled eligibility census.'},
+  {term: 'tier', unit: 'integer >= 0 per level', definition: 'The level\'s explicit difficulty tier (Subway 0 = the starting level). Metadata only: nothing scales counts, damage or loot by it, and no family is enabled by it.'},
+  {term: 'family stats', unit: 'hp, m/s, m, s', definition: 'Health (hp), wander / chase speed (m/s), attack range (m, centre to centre) and damage per hit (hp), swing length / impact / recovery (s), sight range and body radius (m), read from each family\'s exported constants.'},
   {term: 'placed', unit: 'spawns', definition: 'What the generator actually placed: below the count when the eligible, spaced cells run out (Subway attempts with fewer than the accepted minimum, and Office runs outside their count range, are regenerated).'},
   {term: 'sampled density', unit: 'placed per 100 m² of eligible floor (sampled)', definition: 'Placed spawns divided by the eligible floor area of a small labelled seed corpus. Eligible = cells the generator\'s own candidate filter accepted (0.25 m² each), never map bounding boxes. A census, not a runtime rule.'},
   {term: 'density (room modifier)', unit: 'multiplier (1 = neutral)', definition: 'Local intensity of a family in a room: scales the room\'s area weight by the room intensity D and the family\'s part of the room mix. Never changes the count roll or a cap.'},
@@ -331,8 +511,13 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
   const seeds = opts.censusSeeds ?? ENEMY_CENSUS_SEEDS;
   if (opts.profileFor && seeds.length) throw new Error('buildEnemyReference: profileFor (tests only) needs censusSeeds: [] — the census runs the registered generators');
   const profileOf = (l: LevelId) => opts.profileFor?.(l) ?? spawnProfile(l);
+  const eSeeds = opts.eligibilitySeeds ?? (seeds.length ? ENEMY_ELIGIBILITY_SEEDS : []);
+  if (opts.profileFor && eSeeds.length) throw new Error('buildEnemyReference: profileFor (tests only) needs eligibilitySeeds: [] as well');
 
   // --- coverage of the registries (unknown registrations fail the build)
+  // task track1 (lane SPAWN): every registered level declares a tier + a valid profile (levels/levelContract.ts)
+  const contract = validateLevelRegistry();
+  if (contract.length) throw new Error(`level registry contract: ${contract.join('; ')}`);
   const archetypeIds = Object.keys(ENEMY_ARCHETYPES);
   if (archetypeIds.join('|') !== ENEMY_FAMILY_IDS.join('|')) throw new Error(`enemy families ${ENEMY_FAMILY_IDS.join(', ')} != archetype registry ${archetypeIds.join(', ')}`);
   if (Object.keys(SPAWN_PROFILES).sort().join('|') !== [...LEVEL_IDS].sort().join('|')) throw new Error('SPAWN_PROFILES and LEVEL_IDS disagree');
@@ -344,9 +529,13 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
   }
 
   const families: EnemyFamilyInfo[] = ENEMY_FAMILY_IDS.map(id => {
-    const d = ENEMY_ARCHETYPES[id];
+    const d = ENEMY_ARCHETYPES[id], ad = ENEMY_FAMILY_ADAPTER[id];
+    // the registry's stats (when set) must be the very constant the adapter reads: the reference never shows other numbers
+    if (d.stats && !ad.stats.some(v => v.stats === d.stats)) throw new Error(`family ${id}: ENEMY_ARCHETYPES.${id}.stats is not ${ad.stats.map(v => v.symbol).join(' / ')}`);
+    const stats = ad.stats.map(v => statsVariant(v, src.at(v.file, v.symbol)));
+    const rules: FamilyRuleGroup[] = ad.rules.map(r => ({title: r.title, rows: ruleRows(r.value), at: src.at(r.file, r.symbol)}));
     return {id, label: d.label, model: d.model, variants: VARIANTS[id] ?? null,
-      levels: LEVEL_IDS.filter(l => profileOf(l).families.some(([f, w]) => f === id && w > 0)), at: src.at(F.archetypes, `ENEMY_ARCHETYPES.${id}`)};
+      levels: LEVEL_IDS.filter(l => profileOf(l).families.some(([f, w]) => f === id && w > 0)), at: src.at(F.archetypes, `ENEMY_ARCHETYPES.${id}`), stats, rules};
   });
 
   const corpus: CensusCorpus[] = [];
@@ -400,13 +589,22 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       note: 'Spawns the level\'s context runs try to place (Σ runs × count). The family roll replaces, never adds; placed totals can fall short where eligible, spaced cells run out.',
     };
 
-    // family pool
+    // family pool (task track1: + eligibility; a restricted family and its fallback are measured, not derived)
+    const rules = Object.entries(P.eligibility ?? {}) as [EnemyFamilyId, FamilyEligibility][];
+    const affected = new Set<string>(rules.flatMap(([f, r]) => [f, r.fallback]));
+    const elig = rules.length && eSeeds.length ? eligibilityCensus(l, eSeeds) : null;
     const denominator = P.families.reduce((s, [, w]) => s + w, 0);
-    const poolRows = P.families.map(([family, weight]) => ({family, weight, share: denominator > 0 ? rd(weight / denominator) : 0}));
+    const poolRows = P.families.map(([family, weight]) => ({family, weight, share: denominator > 0 ? rd(weight / denominator) : 0,
+      ...(rules.some(([f]) => f === family) ? {restricted: true} : {})}));
+    const eligibility: EligibilityInfo[] = rules.map(([family, rule]) => ({family, contexts: [...rule.contexts], criteria: eligibilityCriteria(rule, P),
+      fallback: rule.fallback, maxPerLevel: rule.maxPerLevel ?? null, why: rule.why, at: src.at(F.tables, symbolOf(rule, `${base}.eligibility.${family}`))}));
     const pool = {
       denominator, rows: poolRows,
-      roll: 'Every placed spawn draws its family independently: roll = enemyRoll(level seed, spawn index) ∈ [0, 1), walked over the pool weights of the spawn\'s room (the level pool when the room has no modifier). A rat/dog REPLACES a zombie; it never adds to the count.',
-      expectedPerLevel: poolRows.map(r => ({family: r.family, mean: rd(r.share * total.mean)})),
+      roll: `Every placed spawn draws its family independently: roll = enemyRoll(level seed, spawn index) ∈ [0, 1), walked over the pool weights of the spawn's room (the level pool when the room has no modifier), in registry order (the rat/dog keeps the top band). A drawn family REPLACES a zombie; it never adds to the count.${rules.length ? ` Then the eligibility rule${rules.length === 1 ? '' : 's'} of ${rules.map(([f]) => f).join(', ')}: a draw where the rule fails becomes the fallback family — the other families' draws are untouched.` : ''}`,
+      expectedPerLevel: poolRows.map(r => affected.has(r.family)
+        ? {family: r.family, mean: elig ? elig.placed.find(x => x.family === r.family)!.perLevel : null, basis: 'sampled' as const}
+        : {family: r.family, mean: rd(r.share * total.mean), basis: 'exact' as const}),
+      eligibility,
       at: src.at(F.tables, symbolOf(P.families, `${base}.families`)),
     };
 
@@ -436,6 +634,7 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     // census + room modifiers
     const cen = seeds.length ? enemyCensus(l, seeds) : null;
     if (cen) corpus.push({level: l, seeds: cen.seeds, startWeapon: startWeaponFor(false), note: `${cen.seeds.length} sample levels of LEVELS.${l}.generate (shipped start weapon); not exhaustive.`});
+    if (elig) corpus.push({level: l, seeds: elig.seeds, startWeapon: startWeaponFor(false), note: `Eligibility census: ${elig.layouts} sample levels of LEVELS.${l}.generate (draws vs placed of the restricted families); not exhaustive.`});
     const entries: RoomModifierTable['entries'][number][] = [];
     for (const [room, mod] of Object.entries(P.rooms).sort(([a], [b]) => a.localeCompare(b))) {
       for (const [family, fm] of Object.entries(mod)) if (fm) entries.push({room, family, density: fm.density ?? null, weight: family === ALL_FAMILIES ? null : (fm as {weight?: number}).weight ?? null});
@@ -492,14 +691,19 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       }),
       ...(mv ? [{what: 'storey moves (keep on main, passes, tries, spacing)', value: `${mv.mainKeep}, ${mv.passes}, ${mv.tries}, ${mv.spacingM} m / ${mv.spacingDy} m`, at: levelMoves!.at}] : []),
       {what: 'room modifiers', value: entries.length ? `${entries.length} entries` : 'none (all 1×)', at: src.at(F.tables, `${base}.rooms`), note: 'room key → family (or all) → {density, weight}'},
+      ...eligibility.map(e => ({what: `eligibility (${e.family})`, value: `${e.contexts.join(' / ')}; fallback ${e.fallback}${e.maxPerLevel !== null ? `; at most ${e.maxPerLevel} per level` : ''}`, at: e.at})),
+      {what: 'difficulty tier', value: def.tier, at: src.at(F.registry, `LEVELS.${l}.tier`), note: 'metadata only (no scaling)'},
     ];
 
     return {
       id: l, name: def.name, blurb: def.blurb,
+      tier: {value: def.tier, at: src.at(F.registry, `LEVELS.${l}.tier`),
+        note: 'Explicit difficulty tier of the level (0 = the starting level). Metadata only: no automatic scaling of counts, damage or loot, and no enemy family is enabled by it.'},
       profile: {label: P.label, at: src.at(F.tables, base)},
       generator: {fn: ad.generator.fn, at: src.at(ad.generator.file, ad.generator.fn), note: ad.generator.note},
       total, contexts, pool, zombieTypes, levelMoves, rooms,
       census: cen ? levelCensus(cen, ENEMY_FAMILY_IDS) : null,
+      eligibilityCensus: elig,
       knobs,
     };
   });
