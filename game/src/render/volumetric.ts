@@ -223,6 +223,8 @@ export class VolumetricAtmosphere {
   private gasData: Uint8Array | null = null;
   private readonly gasDirty = new Set<number>();
   private gasAny = false;
+  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): non-zero gas bytes (temporary puffs expire: the gate closes again). */
+  private gasNonZero = 0;
   private gasUploads = 0;
   /** Task gasmask-breach-20261030: the gas term's look (sync copies it into the uniforms). */
   readonly gasLook: GasLook = {ext: GAS.EXT, scatter: GAS.SCATTER, emission: GAS.EMISSION, noise: GAS.NOISE, tint: [...GAS.TINT]};
@@ -404,6 +406,7 @@ export class VolumetricAtmosphere {
     this.gasTex.name = 'fog-gas-map';
     this.gasDirty.clear();
     this.gasAny = false;
+    this.gasNonZero = 0; // lane BLIGHT
     this.u.gasOn.value = 0;
     this.field = field;
     this.epoch = null; // the fog clock restarts at the station's first frame
@@ -497,7 +500,7 @@ export class VolumetricAtmosphere {
     const m = this.densityMap, data = this.gasData;
     if (!m || !data || slot < 0 || slot >= m.slots) return;
     const base = slot * m.w * m.h;
-    let any = false;
+    let nz = this.gasNonZero; // lane BLIGHT: count non-zero bytes so the gate closes once every layer is clean again
     for (let y = 0; y < rect.h; y++) {
       const gy = rect.y0 + y;
       if (gy < 0 || gy >= m.h) continue;
@@ -506,11 +509,13 @@ export class VolumetricAtmosphere {
         if (gx < 0 || gx >= m.w) continue;
         const v = field[y * rect.w + x];
         const b = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
-        data[base + gy * m.w + gx] = b;
-        if (b) any = true;
+        const o = base + gy * m.w + gx;
+        if ((data[o] !== 0) !== (b !== 0)) nz += b ? 1 : -1;
+        data[o] = b;
       }
     }
-    if (any) this.gasAny = true;
+    this.gasNonZero = nz;
+    this.gasAny = nz > 0;
     this.gasDirty.add(slot);
   }
 

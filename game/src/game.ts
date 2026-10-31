@@ -65,6 +65,9 @@ import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iterati
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
+import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
+import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
+import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
@@ -140,7 +143,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
   readonly devPistol = devPistolRequested();
   /** Starting weapon: the pistol (PISTOL_ART_READY: the user's pistol.glb is in), so rifle + shotgun are seeded finds. Generation receives it. */
@@ -241,6 +244,10 @@ export class Game {
   readonly gas: GasSystem;
   /** Task gas-mask-roof-feedback-20261030 (item 1): coughing while toxic gas hurts the unprotected player (audio/cough.ts). */
   readonly cough: CoughFeedback;
+  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly death burst — blast, pustule VFX, burst / hiss, gas puff (ai/blightBurst.ts). */
+  readonly blight: BlightBurstSystem;
+  /** Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle — dormant vein patches, wake persistence, model-missing skip (ai/sirenSystem.ts). */
+  readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
   run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
@@ -419,6 +426,13 @@ export class Game {
     };
     this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
     hookName('cough');
+    // Task track1-siren-blightbelly-20261031 (lane BLIGHT): after GAS (bursts add gas puffs); frame hook + section hooks. The lazy
+    // enemy models (ai/enemyModels.ts) are fetched per layout through propModels like the office models.
+    this.blight = installBlightBurst(this, {rand: () => this.rand()});
+    hookName('blight');
+    this.sectionModelKeys.push(enemyModelKeysFor);
+    this.sirens = installSirens(this); // Task track1-siren-blightbelly-20261031 (lane SIREN): frame hook (wake memory, vein fades), section teardown, warm pool 'siren-veins'
+    hookName('sirens');
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -694,7 +708,10 @@ export class Game {
     // Iteration 07 (Lane Q): each spawn's archetype comes from the layout (~5 % rat/dog, ai/creatureSpawn.ts).
     // Iteration 16 (RUN): enemies killed earlier in this run stay dead (not spawned again).
     this.enemyFallbacks = 0;
-    for (const i of enemiesToSpawn(this.layout.zombies.length, mem)) this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
+    for (const i of enemiesToSpawn(this.layout.zombies.length, mem)) {
+      if (this.sirens.skip(this.layout.zombies[i])) continue; // Task track1-siren-blightbelly-20261031 (lane SIREN): no Siren without her model (never a zombie stand-in)
+      this.enemyIndex.set(this.spawnEnemy(this.layout.zombies[i], i), i);
+    }
     // Iteration 16 (RUN): first visit: the generated pickups; afterwards exactly the remembered loose items (dropped ones too)
     const plan = pickupPlan(this.layout.pickups.length, mem);
     for (const i of plan.fromLayout) {
@@ -1061,15 +1078,18 @@ export class Game {
   spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
     const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
     const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
-    const {actor: z, fallback} = createEnemyActor(s, models, this.rand, () => {
+    // Task track1-siren-blightbelly-20261031 (lane BLIGHT): + the lazily loaded enemy models of this layout (ai/enemyModels.ts)
+    const {actor: z, fallback} = createEnemyActor(s, withEnemyModels(models, k => this.propModels.get(k)), this.rand, () => {
       const source = looks.bodies.length ? looks.build(pickZombieLook(this.currentSeed, i, s.type, looks.available)) : models.zombie;
       if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
       return new ZombieActor(source, s, this.rand);
     });
     if (fallback) this.enemyFallbacks++;
     this.damage.installZombie(z); // Lane D: own wound-patched material clones (body + every wearable)
+    this.blight.adopt(z); // Task track1-siren-blightbelly-20261031 (lane BLIGHT): a Blightbelly reports its single death to the burst (others: no-op)
     // Lane T: spawn on the local floor height; Lane B (iteration 08): of the spawn's own level
     z.brain.y = z.root.position.y = s.y ?? this.levels.grid(s.level ?? 0).floorAt(s.x, s.z);
+    this.sirens.adopt(z, s, i); // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant (+ vein patch) or remembered awake (others: no-op)
     this.zombies.push(z);
     this.scene.add(z.root);
     this.atmosphere.markShadows(z.root, false); // Lane F: enemies block the flashlight beam
@@ -2122,9 +2142,12 @@ export class Game {
     const p = this.player;
     // Iteration 16: one hit pipeline — location -> armor (worn gear) -> HP -> listeners (limb injuries)
     // Iteration 16 (lane INJURY): rat / dog bites are 'creature' hits that land low (legs ~58 %, player/injuries.ts biteHitLocation)
-    const creature = archetypeOf(z) !== 'zombie';
+    // Task track1-siren-blightbelly-20261031 (lane SIREN): the Siren's claw swipe is a standing humanoid melee hit (melee locations, 'zombie' source), attacker 'siren'
+    // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's fist slam too (an ordinary zombie hit: melee locations, 'zombie' source), attacker 'blightbelly'
+    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly';
+    const creature = archetypeOf(z) !== 'zombie' && !claw;
     const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie',
-      location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature ? archetypeOf(z) : z.brain.type};
+      location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature || claw ? archetypeOf(z) : z.brain.type};
     const resolved = this.applyPlayerHit(hit);
     const amount = resolved.applied;
     const dx = z.brain.x - p.x, dz = z.brain.z - p.z;
@@ -2137,6 +2160,31 @@ export class Game {
     this.recoilYaw += Math.sign(right) * 0.03;
     this.sfx.hurt();
     this.cancelUse('hit'); // a zombie hit knocks the item away from the face (nothing consumed)
+  }
+
+  /**
+   * Task track1-siren-blightbelly-20261031 (lane BLIGHT): a Blightbelly's death blast reaching the player from (fromX, fromZ) — the
+   * one hit pipeline (armour / injuries; source 'blast'), the HUD damage direction, a camera shake, the hurt cue; an item being
+   * used is knocked away like any hit. The gas mask plays no part (it only filters the gas cloud).
+   */
+  blastPlayer(hit: PlayerHit, fromX: number, fromZ: number): ResolvedHit {
+    const p = this.player, resolved = this.applyPlayerHit(hit);
+    const dx = fromX - p.x, dz = fromZ - p.z, s = Math.sin(p.yaw), c = Math.cos(p.yaw);
+    this.hud.damage(Math.atan2(dx * c - dz * s, -dx * s - dz * c), resolved.applied);
+    this.shake = Math.min(1, this.shake + 0.5 + resolved.applied / 40);
+    this.recoilPitch += 0.03;
+    this.sfx.hurt();
+    this.cancelUse('hit');
+    return resolved;
+  }
+
+  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): an enemy killed by a Blightbelly's blast — the normal kill bookkeeping (stats, death cue, ragdoll). */
+  blastKill(z: BlightEnemy, dir: THREE.Vector3, point: THREE.Vector3): void {
+    const e = z as EnemyActor;
+    if (!this.zombies.includes(e)) return;
+    this.stats.kills++;
+    enemyCues(e).death(this.sfx, e);
+    this.physics.ragdoll(e, {dir, point, strength: killImpulseStrength('shotgun', 6, 9)});
   }
 
   /** Iteration 16: apply a hit to the player through armor; notifies hitListeners. Other damage sources (falls) use this too. */
