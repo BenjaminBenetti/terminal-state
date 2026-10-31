@@ -59,10 +59,9 @@ pit (storey 0) and six retail rings around the void (storeys 1..6), generated on
   - `service` — Track 2's per-annex zone budget `SERVICE_CONTEXT` (U{3..5} per annex), exactly as on the Subway / Office (see
     "Service annexes" below; lane INTEG integration): one run per seeded service annex of the pit station on its own fork, appended
     after every core spawn (hordes included) and tagged `service`, inheriting the mall's family pool; no Siren there (the mall's Siren
-    rule names `ring` only), never the horde pool, not in the pit / ring counts or the ambient budget. **Currently 0 runs in every
-    mall:** Track 2's planner finds no tunnel (both bed ends "blocked at the mouth": the rings overhang the whole station, and the
-    planner keeps rock on EVERY storey above an extension cell) and no hatch (both beds are flanked by platforms) — measured in
-    `docs/track-extensions.md` "The Eaton's Center".
+    rule names `ring` only), never the horde pool, not in the pit / ring counts or the ambient budget. A mall has at most one annex
+    (one east tunnel; no hatches): 0 / 1 annex in 3 / 45 of 48 sampled malls, 3.88 service spawns per run — see
+    `docs/track-extensions.md` "The Eaton's Center" (the opt-in `rockLevels` rule that lets the planner use the pit station).
   - `families` = `MALL_ENEMY_POOL` = `familyPool({siren: MALL_SIREN_WEIGHT})`: Blightbelly 0.05 and rat/dog 0.05 (the defaults), the
     Siren's draw weight 0.32, the zombie the remainder — rolled ONCE by `assignEnemyArchetypes(layout, spawnProfile('mall'))` after
     every ambient context.
@@ -166,7 +165,7 @@ same family pool and zombie types, same tier.
 
 | Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |
 |---|---|
-| Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service`, `SPAWN_PROFILES.mall.contexts.service` (lane INTEG; 0 annexes in the mall so far) |
+| Declared in | `SPAWN_PROFILES.subway.contexts.service`, `SPAWN_PROFILES.office.contexts.service`, `SPAWN_PROFILES.mall.contexts.service` (lane INTEG; at most one annex per mall) |
 | Count | `SERVICE_ZONE_BUDGET` = U{3..5} **per annex** (one draw per annex run), additive to the core contexts |
 | Area weights | `SERVICE_AREA_WEIGHTS`: annex rooms 1.4, corridors 1.0, closets 0.6 |
 | Caps | `SERVICE_CAPS`: passes 1 / 2; closets 1 |

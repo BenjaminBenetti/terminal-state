@@ -146,6 +146,11 @@ export interface TrackExtensions {
    * them when present (visual only, never the gas field).
    */
   vents?: {x: number; y: number; z: number; dir: {x: number; y: number; z: number}; area: number}[];
+  /**
+   * (task track3 lane INTEG addition, OPT-IN) The level-grid indices that must stay rock around / under every extension cell, when
+   * the level declared TrackExtContext.rockLevels (absent = every level grid, the Subway / Office rule).
+   */
+  rockLevels?: number[];
 }
 
 /** Point-record lists of a layout whose exact core-frame positions a translated core keeps (TrackExtensions.coreXZ). */
@@ -251,6 +256,13 @@ export interface TrackExtContext {
   origin?: {x: number; y: number};
   /** Final grid cell budget (W x H): the light field / density maps grow with it. */
   maxCells: number;
+  /**
+   * (task track3 lane INTEG addition, OPT-IN; default: every level grid) Level grids that must stay ROCK around / under every
+   * extension cell — the storeys of the station itself. Any other storey may stand ABOVE an extension cell when it is solid there or
+   * its floor clears the extension's ceiling by EXT_STOREY_SLAB (extensionIssues); its VOID (an atrium / drop) always blocks. For a
+   * level whose upper storeys overhang the whole station far above it (The Eaton's Center: rings >= 5 m above the 4.4 m bed ceiling).
+   */
+  rockLevels?: readonly number[];
 }
 
 /** True for areas of the track extensions (tunnels / annexes): every core pass skips them. */

@@ -24,7 +24,12 @@ export {isExtensionArea} from '../trackExt/types';
  */
 export const MALL_EXT_MAX_CELLS = 75_000;
 
-/** The mall's extendTracks context: east / south growth only, from the fixed crop origin (canvas cells). */
+/**
+ * The mall's extendTracks context: east / south growth only, from the fixed crop origin (canvas cells). OPTIONAL lane INTEG
+ * addition: rockLevels [0] — only the pit station's storey must be rock around an extension; the rings (>= 5 m above the 4.4 m bed
+ * ceiling, slabs between) may stand above a tunnel / annex (never their atrium void). Without it every bed end is "blocked at the
+ * mouth" (the rings overhang the whole station).
+ */
 export function mallTrackExtContext(ox: number, oy: number): TrackExtContext {
-  return {levelId: 'mall', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS};
+  return {levelId: 'mall', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS, rockLevels: [0]};
 }

@@ -6,7 +6,7 @@
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {LEVELS, LEVEL_IDS, arrivalPose, isLevelId, storeyLabel, travelTargets} from '../src/levels/registry';
-import {TRACK_EXT_MALL, trackExtCoverageIssues} from '../src/gen/trackExt/index'; // lane INTEG (Track2 integration)
+import {TRACK_EXT_MALL, extensionIssues, trackExtCoverageIssues} from '../src/gen/trackExt/index'; // lane INTEG (Track2 integration)
 import {generateMallLevel, mallIssues, mallVoidCells, MALL_GEN_STATS, MALL_VARIANTS, type MallVariant} from '../src/gen/mall/index';
 import {levelsOf} from '../src/gen/levels';
 import {CELL, FLOOR, SOLID, PathFinder, type Waypoint} from '../src/gen/grid';
@@ -49,6 +49,12 @@ describe('The Eaton\'s Center: registration and selection', () => {
     const L = LEVELS.mall.generate('main', {levelSeed: SEED, startWeapon: 'rifle'});
     expect(L.extensions).toBeDefined();
     expect(trackExtCoverageIssues('mall', LEVELS.mall.trackExtensions, L)).toEqual([]);
+    // opt-in rockLevels [0] (lane INTEG): only the pit storey must be rock, so the east bed end grows a real tunnel under the rings;
+    // the west end lies behind the fixed crop origin; hatches are refused (both beds flanked by platforms)
+    expect(L.extensions!.rockLevels).toEqual([0]);
+    expect(L.extensions!.tunnels.map(t => t.from)).toEqual(['x1']);
+    expect(extensionIssues(L)).toEqual([]);
+    expect(L.mall!.subwayRoot.tunnelMouths.length).toBe(2 * L.trenches.length);
     expect(L.mall?.version).toBe(1);
     const pose = arrivalPose(L, {kind: 'start'});
     expect(pose).toMatchObject({source: 'start', level: 0});
