@@ -10,7 +10,13 @@ import {execFileSync} from 'node:child_process';
 import {parseAst} from 'rolldown/parseAst';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const MAX_FILE = 25 * 1024 * 1024, MAX_TOTAL = 150 * 1024 * 1024, MAX_FILES = 1000;
+// Task track1-siren-blightbelly-20261031 (user decision 2026-10-31, reference/operations/full-game-tracks-20261031/
+// USER-DECISIONS.json): no artificial TOTAL game-content cap ("we do not need a package cap ... totally fine with the game
+// being any size it needs to be as long as it works"). MAX_TOTAL was 150 MiB; it is now only a runaway-packaging sanity
+// ceiling far above any planned content (the user expects ~10 GB eventually), not a content budget. The per-file limit, file
+// count, allowlisted exact-hash public inputs, path / symlink / bundle checks and truthful sizes are unchanged. An artifact
+// over the 200 MiB static-app limit is reported so Main hosts it as a dynamic app (Main-only; no worker deploy).
+const MAX_FILE = 25 * 1024 * 1024, MAX_TOTAL = 16 * 1024 * 1024 * 1024, MAX_FILES = 1000, STATIC_APP_BYTES = 200 * 1024 * 1024;
 const digest = b => crypto.createHash('sha256').update(b).digest('hex');
 const fail = m => { throw new Error(m); };
 const safePath = p => typeof p === 'string' && /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(p)
@@ -164,4 +170,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const commit = process.env.GITHUB_SHA || execFileSync('git',['rev-parse','HEAD'],{cwd:ROOT,encoding:'utf8'}).trim();
   const m = packageSite({commit});
   console.log(`Packaged ${m.fileCount} files / ${m.totalBytes} bytes for ${m.commit}; excluded ${m.excludedUnreferencedModels.length} unreferenced models.`);
+  if (m.totalBytes > STATIC_APP_BYTES) console.log(`Note: ${(m.totalBytes / 1048576).toFixed(1)} MiB is over the ${STATIC_APP_BYTES / 1048576} MiB static-app limit — host as a dynamic app (Main-only).`);
 }

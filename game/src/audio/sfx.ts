@@ -103,6 +103,11 @@ export const CUE_GAIN: Record<CueId, number> = {
   jump: 0.16, land: 0.3, crouch: 0.13, ladder: 0.24,
   zombieGroan: 0.55, zombieGroanDeep: 0.6, zombieAttack: 0.6, zombieDeath: 0.6, zombieStep: 0.26, zombieStepHeavy: 0.3,
   creatureGrowl: 0.5, creatureSnarl: 0.6, creatureBite: 0.58, creatureYelp: 0.55, creatureDeath: 0.6, creatureStep: 0.24, // iteration 07 (Lane Q)
+  // Task track1-siren-blightbelly-20261031 (lane AUDIO): the t1-* clips are LOUDNESS-levelled (hum / hiss -18, scream -16 LUFS; burst peak-bound), so these gains set the
+  // mix directly (derivatives/audio-track1.json mixCalibration, momentary max at the source): scream -15.8 LUFS = the loudest enemy
+  // vocal (+2.7 LU over a zombie groan, +1.3 over a zombie death; peak -6.7 dBFS, through the existing compressor — no clipping
+  // jump); hum -24.3 (soft, ~6 LU under a groan); burst -20.8 with a -1.9 dBFS transient; hiss -24.9 (~ a flesh tear).
+  sirenHum: 0.3, sirenScream: 0.9, blightBurst: 0.9, blightHiss: 0.32,
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
@@ -291,6 +296,22 @@ interface FlareLoop {
 }
 const NOOP_FLARE: FlareBurnHandle = {setPos() {}, stop() {}, playing: false};
 
+/**
+ * Task track1-siren-blightbelly-20261031 (lane AUDIO): the new enemies' Sound Lab cues (clips t1-*.mp3, tools/audio-pipeline/build-track1.mjs; provenance
+ * derivatives/audio-track1.json). All world-placed. The hum is an enemy VOCAL ('idle': navigable-route gate, vocal cap, occlusion /
+ * storey rules — vocal()); the wake scream an 'alert' vocal (sight rule + alert bias, pri 2); the burst / hiss are combat cues (never
+ * route-gated, like enemy deaths; occlusion muffles them through walls / slabs). Scream, burst and hiss sound at most ONCE per enemy
+ * (the id object); a hum phrase is one voice per Siren. Hum pacing belongs to the caller (ai/sirenCues.ts SIREN_HUM_PACE).
+ */
+export const SIREN_HUM = {ref: 2.2, rolloff: 1.1, maxDist: 24, send: 0.45, fadeOutS: 0.35, jitter: 0.02} as const;
+export const TRACK1_VOICE = {
+  scream: {ref: 2.4, rolloff: 1, maxDist: 44, send: 0.55, humFadeS: 0.12},
+  burst: {ref: 2.5, rolloff: 1, maxDist: 45, send: 0.55},
+  /** At most `max` gas hisses sound at once (the oldest fades out to make room). */
+  hiss: {ref: 2, rolloff: 1.1, maxDist: 30, send: 0.4, max: 3, fadeOutS: 0.4},
+} as const;
+export const TRACK1_CUE_IDS = ['sirenHum', 'sirenScream', 'blightBurst', 'blightHiss'] as const satisfies readonly CueId[];
+
 /** Weapon sound kinds (WeaponDef.sound). */
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
@@ -345,6 +366,11 @@ export class Sfx {
   private confirms = 0;
   // Iteration 12 (AUDIO): burning flare loops (bounded, FLARE_LOOP.max).
   private flareLoops: FlareLoop[] = [];
+  // Task track1-siren-blightbelly-20261031 (lane AUDIO): the sounding hum phrase per Siren, the live gas hisses, once-per-enemy memories and counters (debugState().t1).
+  private t1Hums = new Map<object, Voice>();
+  private t1Hisses: Voice[] = [];
+  private t1Once = {scream: new WeakSet<object>(), burst: new WeakSet<object>(), hiss: new WeakSet<object>()};
+  private t1Stats = {hums: 0, humsSilent: 0, screams: 0, bursts: 0, hisses: 0, repeats: 0};
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   // Task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + counters (debugState().vocal).
@@ -486,7 +512,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -497,6 +523,7 @@ export class Sfx {
       beds, bedsPlaying: (Object.keys(this.bedSources) as BedName[]), listener: {...this.listener}, bank: this.bank.stats(),
       confirmVoices: this.voices.filter(v => v.fg).length, confirms: this.confirms, flareLoops: this.flareLoops.filter(l => !l.stopped).length,
       vocal: {voices: this.voices.filter(v => v.vocal !== undefined && v.end > (this.ctx?.currentTime ?? 0)).length, gate: !!this.reach, ...this.vstats},
+      t1: {humVoices: [...this.t1Hums.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, hissVoices: this.t1Hisses.filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.t1Stats}, // track1 (lane AUDIO)
     };
   }
 
@@ -534,7 +561,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); }
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopTrack1Cues(0.05); } // track1 (lane AUDIO): hums / hisses too
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
   }
 
@@ -1422,5 +1449,109 @@ export class Sfx {
     l.fade.gain.cancelScheduledValues(t);
     l.fade.gain.setTargetAtTime(0, t, f / 3);
     try { l.src.stop(t + f + 0.05); } catch { /* already stopped */ }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task track1-siren-blightbelly-20261031 (lane AUDIO): Siren hum / scream, Blightbelly burst / gas hiss (Sound Lab clips t1-*;
+  // silent no-ops when audio is paused / not started or a clip is missing). See SIREN_HUM / TRACK1_VOICE.
+
+  /**
+   * One short hum PHRASE (a whole Sound Lab take, 4.4–5.5 s) at a dormant Siren's mouth. An enemy vocal ('idle': navigable-route
+   * gate, vocal cap, occlusion / storey rules). Returns the phrase length (s); 0 = nothing played (gated / culled / paused / clip
+   * missing / a phrase of this Siren still sounding / she already screamed). The caller paces the next phrase (dur + a gap).
+   */
+  sirenHum(id: object, x: number, y: number, z: number): number {
+    const ctx = this.live;
+    if (!ctx || this.t1Once.scream.has(id)) return 0;
+    this.sweepTrack1(ctx.currentTime);
+    if (this.t1Hums.has(id)) return 0; // one phrase at a time per Siren
+    const v = this.vocal('idle', {at: {x, y, z}, hrtf: true, ref: SIREN_HUM.ref, rolloff: SIREN_HUM.rolloff, send: SIREN_HUM.send, pri: 1, maxDist: SIREN_HUM.maxDist});
+    const clip = this.play(v, 'sirenHum', {jitter: SIREN_HUM.jitter, gainJitter: 0.5});
+    if (!v || !clip) { this.t1Stats.humsSilent++; return 0; }
+    this.t1Hums.set(id, v);
+    this.t1Stats.hums++;
+    return clip.dur;
+  }
+
+  /** Fade this Siren's sounding hum phrase (wake / death / despawn). Idempotent; plays nothing. */
+  sirenHumStop(id: object, fadeS: number = SIREN_HUM.fadeOutS): void {
+    const v = this.t1Hums.get(id);
+    if (!v) return;
+    this.t1Hums.delete(id);
+    this.fadeVoice(v, fadeS);
+  }
+
+  /**
+   * The Siren's wake scream: fades her hum, then ONE piercing scream ('alert' vocal, pri 2). At most once per Siren (`id`): a
+   * repeated call returns false and plays nothing (no scream farming); the first call is remembered even if nothing could sound.
+   * Level: CUE_GAIN.sirenScream through the existing master compressor (no extra gain stage). Returns true when a scream started.
+   */
+  sirenScream(id: object, x: number, y: number, z: number): boolean {
+    if (this.t1Once.scream.has(id)) { this.t1Stats.repeats++; return false; }
+    this.t1Once.scream.add(id);
+    this.sirenHumStop(id, TRACK1_VOICE.scream.humFadeS);
+    const s = TRACK1_VOICE.scream;
+    const v = this.vocal('alert', {at: {x, y, z}, hrtf: true, ref: s.ref, rolloff: s.rolloff, send: s.send, pri: 2, maxDist: s.maxDist});
+    const ok = !!this.play(v, 'sirenScream', {jitter: 0.02, gainJitter: 0.5});
+    if (ok) this.t1Stats.screams++;
+    return ok;
+  }
+
+  /**
+   * The Blightbelly's pustule / gas burst at death (combat cue: never route-gated; occlusion muffles it). At most once per
+   * Blightbelly (`id`): several pellets on the killing frame or a revisit play nothing more. Returns true when it started.
+   */
+  blightBurst(id: object, x: number, y: number, z: number): boolean {
+    if (this.t1Once.burst.has(id)) { this.t1Stats.repeats++; return false; }
+    this.t1Once.burst.add(id);
+    const b = TRACK1_VOICE.burst;
+    const ok = !!this.play(this.voice({at: {x, y, z}, hrtf: true, ref: b.ref, rolloff: b.rolloff, send: b.send, pri: 2, maxDist: b.maxDist}), 'blightBurst', {jitter: 0.04, gainJitter: 0.5});
+    if (ok) this.t1Stats.bursts++;
+    return ok;
+  }
+
+  /**
+   * The gas venting from the burst body (a ~3.9 s hiss that fades), positional, `delayS` after now (e.g. 0.15 after blightBurst).
+   * At most once per Blightbelly and TRACK1_VOICE.hiss.max at once (the oldest fades). Returns true when it started.
+   */
+  blightHiss(id: object, x: number, y: number, z: number, delayS = 0): boolean {
+    if (this.t1Once.hiss.has(id)) { this.t1Stats.repeats++; return false; }
+    this.t1Once.hiss.add(id);
+    const ctx = this.live;
+    if (!ctx) return false;
+    this.sweepTrack1(ctx.currentTime);
+    const h = TRACK1_VOICE.hiss;
+    while (this.t1Hisses.length >= h.max) this.fadeVoice(this.t1Hisses.shift()!, 0.15);
+    const v = this.voice({at: {x, y, z}, ref: h.ref, rolloff: h.rolloff, send: h.send, pri: 1, maxDist: h.maxDist});
+    if (!this.play(v, 'blightHiss', {delay: Math.max(0, Math.min(2, delayS)), jitter: 0.03, gainJitter: 0.5}) || !v) return false;
+    this.t1Hisses.push(v);
+    this.t1Stats.hisses++;
+    return true;
+  }
+
+  /** Fade every sounding Siren hum and gas hiss (a new section via setWorld, or the caller's teardown). */
+  stopTrack1Cues(fadeS = 0.1): void {
+    for (const v of this.t1Hums.values()) this.fadeVoice(v, fadeS);
+    this.t1Hums.clear();
+    for (const v of this.t1Hisses) this.fadeVoice(v, fadeS);
+    this.t1Hisses = [];
+  }
+
+  /** Drop hum / hiss bookkeeping of voices that already ended (bounded maps / lists). */
+  private sweepTrack1(now: number): void {
+    for (const [k, v] of this.t1Hums) if (v.end <= now) this.t1Hums.delete(k);
+    if (this.t1Hisses.length) this.t1Hisses = this.t1Hisses.filter(v => v.end > now);
+  }
+
+  /** Fade a voice to silence over `fadeS` and stop its sources (vocal-steal style); it leaves the vocal cap at once. */
+  private fadeVoice(v: Voice, fadeS: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    v.inp.gain.cancelScheduledValues(t);
+    v.inp.gain.setTargetAtTime(0, t, f / 3);
+    for (const src of v.srcs) { try { src.stop(t + f + 0.02); } catch { /* already stopped */ } }
+    v.vocal = undefined;
+    v.end = Math.min(v.end, t + f + 0.03);
   }
 }

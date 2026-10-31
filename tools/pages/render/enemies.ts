@@ -13,6 +13,8 @@
 // Coverage: every level, generation context, family and room key gets a stable anchor (ctx-*, family-*, room-*) that
 // tools/pages/validate.ts checks against data/enemies.json. An unknown key kind / modifier field, or a reference to a family or
 // context the object does not register, throws here so the build fails instead of silently dropping it.
+// Task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: + level tiers, family stats / behaviour rules, eligibility rules
+// (draw share vs measured placed share) and the sampled eligibility census.
 import {ENEMY_REFERENCE_SCHEMA, type EnemyFamilyInfo, type EnemyLevelInfo, type EnemyReference, type RoomRow, type SourceLoc} from '../enemyReferenceTypes';
 import {badge, esc, href, num, pct, range, renderPage, repoLink, slug, table, type Crumb, type SiteContext} from './html';
 import {prose, shareCell} from './common';
@@ -114,6 +116,17 @@ export function makeEnemySite(ref: EnemyReference, ctx: SiteContext): EnemySite 
     };
     for (const r of level.pool.rows) family(r.family, `${at} family pool`);
     for (const r of level.pool.expectedPerLevel) family(r.family, `${at} expected per level`);
+    if (!Number.isInteger(level.tier.value) || level.tier.value < 0) throw new Error(`${at} has no valid difficulty tier (${String(level.tier.value)})`);
+    for (const e of level.pool.eligibility) {
+      family(e.family, `${at} eligibility`);
+      family(e.fallback, `${at} eligibility fallback`);
+      for (const c of e.contexts) context(c, `eligibility of ${e.family}`);
+      if (!level.pool.rows.some(r => r.family === e.family && r.restricted)) throw new Error(`${at} eligibility of ${e.family} has no restricted pool row`);
+    }
+    if (level.eligibilityCensus) {
+      for (const p of level.eligibilityCensus.placed) family(p.family, `${at} eligibility census`);
+      for (const r of level.eligibilityCensus.restricted) { family(r.family, `${at} eligibility census`); for (const c of r.byContext) context(c.context, 'eligibility census'); }
+    }
     for (const e of level.rooms.entries) if (e.family !== ALL_FAMILIES_KEY) family(e.family, `${at} room entry ${e.room}`);
     for (const row of level.rooms.rows) {
       keyKindLabel(row.keyKind);
@@ -179,9 +192,38 @@ export function modifierStatus(es: EnemySite, level: EnemyLevelInfo): string {
   return `${off} of ${rows} room keys have a non-neutral modifier`;
 }
 
-/** Family shares of a level as compact text ("Infected 95% · …"). */
+/** Measured (sampled) placed share of a family in a level, or null when the level has no eligibility census. */
+export function placedShare(level: EnemyLevelInfo, family: string): number | null {
+  return level.eligibilityCensus?.placed.find(p => p.family === family)?.share ?? null;
+}
+
+/** True when an eligibility rule changes the family's placed share: it is restricted, or it is a restricted family's fallback. */
+export function eligibilityAffects(level: EnemyLevelInfo, family: string): boolean {
+  return level.pool.eligibility.some(e => e.family === family || e.fallback === family);
+}
+
+/** Family shares of a level as compact text ("Infected 95% · …"); an eligibility-affected family shows draw and measured placed share. */
 function familyMix(es: EnemySite, level: EnemyLevelInfo): string {
-  return level.pool.rows.map(r => `${esc(familyLabel(es, r.family))} ${pct(r.share)}`).join(' · ');
+  return level.pool.rows.map(r => {
+    const hit = eligibilityAffects(level, r.family), placed = hit ? placedShare(level, r.family) : null;
+    return `${esc(familyLabel(es, r.family))} ${pct(r.share)}${hit ? ` of draws${placed !== null ? ` (placed ${pct(placed)}, sampled)` : ''}` : ''}`;
+  }).join(' · ');
+}
+
+/** A pool share cell; a restricted family (or a restricted family's fallback) adds its measured placed share. */
+export function poolShareCell(level: EnemyLevelInfo, row: EnemyLevelInfo['pool']['rows'][number]): string {
+  const cell = shareCell(row.share, row.weight, level.pool.denominator);
+  if (!eligibilityAffects(level, row.family)) return cell;
+  const placed = placedShare(level, row.family);
+  const why = row.restricted ? 'eligibility rule' : 'takes the fallback draws of an eligibility rule';
+  return `${cell}<span class="denom">draw share; ${placed !== null ? `placed ${pct(placed)} ${badge('sampled', 'info')}` : 'placed share not measured in this build'} (${why})</span>`;
+}
+
+/** Expected-per-level cell: exact, sampled (eligibility census) or not measured. */
+export function expectedCell(e: EnemyLevelInfo['pool']['expectedPerLevel'][number] | undefined): string {
+  if (!e) return '<span class="muted">not stated</span>';
+  if (e.mean === null) return '<span class="muted">not measured in this build</span>';
+  return e.basis === 'sampled' ? `${num(e.mean)} ${badge('sampled', 'info')}` : num(e.mean);
 }
 
 /** The "three kinds of number" explanation, shared by the index and the how-to-read page. */
@@ -215,6 +257,7 @@ export function renderEnemiesIndex(es: EnemySite): string {
     return `<li class="card">
 <h3><a href="${esc(href(p, enemyLevelPage(level.id)))}">${esc(level.name)}</a></h3>
 <p>${prose(level.blurb)}</p>
+<p class="stat">Difficulty tier: ${num(level.tier.value)}</p>
 <p class="stat">Contexts (count per run): ${contexts}</p>
 <p class="stat">Spawns tried per level: ${range(level.total.lo, level.total.hi)} (E = ${num(level.total.mean)})</p>
 <p class="stat">Family mix (conditional): ${familyMix(es, level)}</p>
@@ -246,7 +289,7 @@ export function renderEnemiesIndex(es: EnemySite): string {
       familyCell(es, p, f.id),
       ...ref.levels.map(level => {
         const row = level.pool.rows.find(r => r.family === f.id);
-        return row ? shareCell(row.share, row.weight, level.pool.denominator) : '<span class="muted">not in this level\'s pool</span>';
+        return row ? poolShareCell(level, row) : '<span class="muted">not in this level\'s pool</span>';
       }),
     ]),
     className: 'rows',
@@ -312,9 +355,30 @@ export function renderEnemyFamilies(es: EnemySite): string {
       const expected = level.pool.expectedPerLevel.find(e => e.family === f.id);
       const link = `<a href="${esc(href(p, `${enemyLevelPage(level.id)}#${familyAnchor(f.id)}`))}">${esc(level.name)}</a>`;
       return row
-        ? [link, num(row.weight), shareCell(row.share, row.weight, level.pool.denominator), expected ? num(expected.mean) : '<span class="muted">not stated</span>']
+        ? [link, num(row.weight), poolShareCell(level, row), expectedCell(expected)]
         : [link, '<span class="muted">not in pool</span>', '<span class="muted">never spawns here</span>', '0'];
     });
+    const stat = (v: number | null, unit: string) => (v === null ? '<span class="muted">brain default</span>' : `${num(v)} ${esc(unit)}`);
+    const stats = f.stats.length
+      ? table({
+        caption: `${f.label}: combat figures (read from the family's exported stats)`,
+        head: [f.stats.some(v => v.variant) ? 'Type' : 'Family', 'Health', 'Wander speed', 'Chase speed', 'Attack range', 'Damage per hit', 'Swing / lands at / recovery', 'Sight range', 'Body radius', 'Defined at'],
+        rowHeader: 0,
+        rows: f.stats.map(v => [
+          v.variant ? esc(v.variant) : esc(f.label), stat(v.hp, 'hp'), stat(v.wanderSpeed, 'm/s'), stat(v.chaseSpeed, 'm/s'), stat(v.attackRange, 'm'),
+          stat(v.attackDamage, 'hp'), `${num(v.attackDuration)} s / ${num(v.attackImpact)} s / ${stat(v.attackCooldown, 's')}`, stat(v.sightRange, 'm'), stat(v.radius, 'm'),
+          enemySourceLoc(es, v.at),
+        ]),
+      })
+      : '<p class="muted">No combat figures exported.</p>';
+    const rules = f.rules.map(g => table({
+      caption: `${f.label}: ${g.title}`,
+      head: ['Rule', 'Value', 'Unit'],
+      rowHeader: 0,
+      rows: g.rows.map(r => [prose(r.what), typeof r.value === 'number' ? num(r.value) : prose(r.value), esc(r.unit)]),
+    }) + `<p class="note">${esc(g.title)} defined at ${enemySourceLoc(es, g.at)}.</p>`).join('\n');
+    const restricted = ref.levels.flatMap(level => level.pool.eligibility.filter(e => e.family === f.id).map(e =>
+      `<li><a href="${esc(href(p, `${enemyLevelPage(level.id)}#elig-${slug(f.id)}`))}">${esc(level.name)}</a>: ${prose(e.why)}; elsewhere a draw becomes ${esc(familyLabel(es, e.fallback))}.</li>`));
     const levels = f.levels.length
       ? f.levels.map(id => esc(es.levels.get(id)?.name ?? id)).join(', ')
       : 'none';
@@ -327,8 +391,12 @@ export function renderEnemyFamilies(es: EnemySite): string {
 <dt>Variants inside the family</dt><dd>${f.variants ? prose(f.variants) : 'None'}</dd>
 <dt>Defined at</dt><dd>${enemySourceLoc(es, f.at)}</dd>
 </dl>
+${restricted.length ? `<p><strong>Eligibility rule</strong> (it only takes placed slots where the rule holds):</p><ul>${restricted.join('')}</ul>` : ''}
+<h3>Combat and behaviour</h3>
+${stats}
+${rules}
 ${table({
-      caption: `${f.label}: weight and conditional share per level (expected per level = share × spawns tried per level, before any placement shortfall)`,
+      caption: `${f.label}: weight and conditional share per level (expected per level = share × spawns tried per level, before any placement shortfall; sampled where an eligibility rule applies)`,
       head: ['Level', 'Weight', 'Conditional share', 'Expected per level'],
       numeric: [1, 3],
       rowHeader: 0,
@@ -427,8 +495,12 @@ generation context. Where a page shows enemies per 100 m², it is a <em>sampled<
 the generator's own filter accepted, over a named seed corpus. It is never computed from map bounding boxes.</li>
 <li><strong>No chance that a particular room holds an enemy.</strong> That depends on the generated layout: how many areas exist,
 how much eligible floor each has, and what was placed before it.</li>
-<li><strong>No difficulty, health or damage figures.</strong> These pages describe where and how many enemies spawn, not how they
-fight.</li>
+<li><strong>No automatic difficulty scaling.</strong> Each level shows its explicit difficulty tier, but nothing in the game scales
+counts, health, damage or loot by tier, and no enemy family is enabled by it: a level opts in to a family in its own spawn profile.
+Combat figures on the families page are each family's exported source values, not tier-adjusted.</li>
+<li><strong>No exact placed count for a restricted family.</strong> Where an eligibility rule applies (for example a family that
+only lies in certain rooms), its draw share is exact but how many it actually places depends on the generated rooms: those figures
+are measured over a named sample and labelled sampled.</li>
 </ul>
 </section>`;
   return renderPage(es.ctx, {

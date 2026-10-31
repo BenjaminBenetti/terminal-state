@@ -3,7 +3,8 @@
 // front of a pane and aims the view at it — the shots are then fired through the normal input / Game.fire path (each ray's real
 // damage counts against the pane's health, PANE_MAX_HP); windowBreak(id) is a DEBUG shortcut (as if its last damage landed now).
 // gas() reports the exposure at the eye (breach field / the roof's outside air) and per gassed storey; gasTune() edits the gas
-// term's look live (uniform values only, no rebuild).
+// term's look live (uniform values only, no rebuild). Task track1-siren-blightbelly-20261031 (lane BLIGHT): gas() also lists
+// the temporary local puffs (Blightbelly death clouds) and their part of the eye concentration.
 
 import type {GasSystem} from './system';
 import {GAS} from './field';
@@ -74,6 +75,8 @@ export function gasQaApi(game: unknown) {
         source: e.source, outdoor: r3(e.outdoor), roof: !!s.roof, roofOutdoorC: GAS.ROOF_OUTDOOR_C,
         volumetric: g.atmosphere?.active ?? false, ticks: f?.ticks ?? 0, counts: {...s.counts}, hud: {...s.hud.shown},
         storeys: f ? f.storeys.map(st => { const x = st.stats(); return {...x, max: r3(x.max), poolMean: r3(x.poolMean)}; }) : [],
+        // task track1-siren-blightbelly-20261031 (lane BLIGHT): the temporary local puffs (any level) and their part of the eye c
+        puff: r3(e.puff ?? 0), puffs: s.puffs.stats().map(p => ({...p, x: r3(p.x), z: r3(p.z), age: r3(p.age), max: r3(p.max)})), puffCounts: {...s.puffs.counts},
         layers: g.atmosphere?.gasDebug?.() ?? null,
       };
     },

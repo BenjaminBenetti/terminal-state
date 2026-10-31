@@ -6,7 +6,11 @@
 // system decides whether an arm / leg gets injured (it sees the hit BEFORE armor reduction, plus the absorbed part).
 
 export type HitLocation = 'head' | 'torso' | 'arm' | 'leg';
-export type HitSource = 'zombie' | 'creature' | 'fall' | 'other';
+/**
+ * Task track1-siren-blightbelly-20261031 (lane BLIGHT): 'blast' = a physical blast (a Blightbelly's death burst) — armour and
+ * limb injuries treat it like any hit (injury cause 'hit'); the gas mask has nothing to do with it (only the gas cloud).
+ */
+export type HitSource = 'zombie' | 'creature' | 'fall' | 'other' | 'blast';
 
 export interface PlayerHit {
   /** Raw damage before armor. */

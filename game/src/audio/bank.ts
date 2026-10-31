@@ -12,13 +12,16 @@ import {CLIP_MANIFEST_I07Q} from './manifest.iteration07q.generated';
 import {CLIP_MANIFEST_I11} from './manifest.iteration11.generated';
 import {CLIP_MANIFEST_I12} from './manifest.iteration12.generated';
 import {CLIP_MANIFEST_COUGH} from './manifest.cough.generated'; // task gas-mask-roof-feedback-20261030: the player's gas cough
+import {CLIP_MANIFEST_T1} from './manifest.track1.generated'; // Task track1-siren-blightbelly-20261031 (lane AUDIO): Siren / Blightbelly
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
  * (tools/audio-pipeline/build-iteration06.mjs; provenance derivatives/audio-iteration06.json), the iteration-07/11 cues and
  * the iteration-12 light-survival cues (tools/audio-pipeline/build-iteration12.mjs; provenance derivatives/audio-iteration12.json).
+ * Task track1-siren-blightbelly-20261031 (lane AUDIO): + the Siren hum / scream and Blightbelly burst / gas hiss
+ * (tools/audio-pipeline/build-track1.mjs; provenance derivatives/audio-track1.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -34,6 +37,9 @@ export const CUES = [
   'zombieGroan', 'zombieGroanDeep', 'zombieAttack', 'zombieDeath', 'zombieStep', 'zombieStepHeavy',
   // Iteration 07 (Lane Q, tools/asset-pipeline/creature/build-audio.mjs): rat/dog creature vocals + paw scrabble.
   'creatureGrowl', 'creatureSnarl', 'creatureBite', 'creatureYelp', 'creatureDeath', 'creatureStep',
+  // Task track1-siren-blightbelly-20261031 (lane AUDIO, tools/audio-pipeline/build-track1.mjs): Siren hum phrases + wake scream,
+  // Blightbelly death burst + gas-venting hiss.
+  'sirenHum', 'sirenScream', 'blightBurst', 'blightHiss',
   'casingBrass', 'casingHull', 'bodyFall', 'hurt', 'hitTick', 'hitKill',
   'bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz',
   'shotgunPump', 'shellInsert', 'rifleMagOut', 'rifleMagIn', 'rifleCharge', 'rifleMagDrop', 'dryFire', 'equip',
