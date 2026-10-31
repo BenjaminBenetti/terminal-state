@@ -205,7 +205,9 @@ Tunnels have sparse fixtures, mostly dead or dying.
     at the mouth mark where the station's bed lining (unchanged) ends.
   - Cost: two materials (two programs), created lazily per `WorldMaterials` only when a level has extensions, in the station scene
     at build (warmed up; no first-use compile). Textures: 1024² sRGB + 2 x 512² ≈ 4 + 2 x 1 MiB, **≈ 8 MiB GPU with mips**. Geometry:
-    walls unchanged (same quads); the portal adds 3 boxes (36 triangles) per tunnel into its existing concrete mesh.
+    walls unchanged (same quads); the portal adds 3 boxes (36 triangles) per tunnel into its existing concrete mesh. Draws: annex
+    wall quads no longer share a 48 m chunk mesh with the core's platform-face concrete, +1 to +4 draws per level measured (seeds
+    4055629249, 2654448106, 1043, 774566179); the formwork overlay quads on annex walls are gone.
 - **Station invitation art** (playtest revision, lane ART; `game/src/gen/trackExt/art.ts`, `world/trackExt/graffiti.ts`,
   `graffitiArt.ts`):
   - Records: `planStationArt` runs at the end of `finishExtensions` (after the attach, on the track-ext fork `station-art`, which
@@ -219,6 +221,8 @@ Tunnels have sparse fixtures, mostly dead or dying.
     bed in front) a platform faces, or on a solid platform end wall with the platform in front; clear of hatch openings / plates
     (0.6 m), hatch clue marks, wall signs and props against the wall; under the ceiling; stencils point toward the entrance, the piece
     and watcher never do. A planned record that would fail is dropped (art never invalidates a level). No annex: no art.
+  - Measured (24-seed Subway corpus): 27 annexes on 21 levels, every entrance gets a piece; 98 records (27 pieces, 18 watchers, 23
+    side-wall stencils, 30 platform end-wall stencils), ~4.7 per level with art; planning 0.5 ms mean, 2.5 ms max per level.
   - Presentation: the graffiti atlas is ONE 2048 x 1024 canvas (≈ 10.7 MiB GPU with mips; it was 1024 x 1024): the eight 512 x 256
     arrow / tag cells in the left half, the piece (1024 x 512), the watcher (512 x 512) and the SERVICE stencils (512 x 256, right
     / left: only the arrow mirrors) in the right half, painted by local canvas code. Art decals join the clue marks in the ONE
