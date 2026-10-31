@@ -46,6 +46,7 @@ import {holdCells, mouthZones, transitInfo, transitLinks, transitPreDress, trans
 // Track 2 (lane GEN): tunnels past the station's bed ends + service annexes (gen/trackExt): the crop origin is FIXED, so they grow
 // east / south only; planned before the crop, attached after every core pass.
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
+import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
 /**
  * Track 2 (lane GEN): grid cell budget (W x H) of the office layout with its track extensions. The baked light field is
@@ -229,7 +230,6 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   layout.lights = layout.lights.filter(l => (l.level ?? layout.areas[l.area]?.level ?? 0) !== OFFICE_ROOF_LEVEL);
   landingLights(layout, f, towers, bases);
   finishTraversal(layout);
-  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the Office's pool, per the spawn's room
   const windows: StoreyWindow[] = [];
   for (const t of towers) {
     const spans = windowSpans(layout, f, t, t.floor, t.floor === 1 ? s.entrance : null);
@@ -243,7 +243,14 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   streetSigns(layout, s, f, rc);
   // Track 2 (lane GEN): only now the extensions join: the finished core is re-framed into the grid grown east / south (same origin)
   // and their cells / areas / doors are appended (every pass above saw exactly the core world).
-  return ext ? finishExtensions(layout, ext, {ox, oy, grow: 'east-south'}) : layout;
+  if (ext) {
+    finishExtensions(layout, ext, {ox, oy, grow: 'east-south'});
+    // Track 2 (lane CONTENT): their dressing / fixtures / loose finds on the `track-ext-content` fork, APPENDED after every core record.
+    populateExtensions(layout, rng, {loot, dressRng: rng.fork('dress')});
+  }
+  // ONCE, after every context (Track 2: also after the extensions' appended spawns; the roll is per spawn index: the core's unchanged).
+  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the Office's pool, per the spawn's room
+  return layout;
 }
 
 function linkOf(id: number, lower: number, upper: number, flights: readonly {ramp: number; id: number; bottom: {x: number; y: number; z: number}; top: {x: number; y: number; z: number}}[]): LevelLink {

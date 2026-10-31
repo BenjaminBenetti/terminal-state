@@ -31,7 +31,8 @@ export function reframe(layout: StationLayout, ox: number, oy: number, w: number
   const crop = (g: Grid): Grid => {
     const out = new Grid(w, h);
     copyWindow(g, out, ox, oy, true);
-    if (keepAreas < layout.areas.length) for (let i = 0; i < out.cells.length; i++) if (out.area[i] >= keepAreas) { out.cells[i] = 0; out.area[i] = -1; out.floor[i] = 0; out.ceil[i] = 0; }
+    // (lane CONTENT: the extensions' appended props mark blocked / sight-blocked cells there too — back to plain rock)
+    if (keepAreas < layout.areas.length) for (let i = 0; i < out.cells.length; i++) if (out.area[i] >= keepAreas) { out.cells[i] = 0; out.area[i] = -1; out.floor[i] = 0; out.ceil[i] = 0; out.blocked[i] = 0; out.sightBlocked[i] = 0; }
     out.voidFloor = g.voidFloor;
     out.ramps = ramps;
     const idx = (i: number) => { const x = i % W, y = (i - x) / W; return x - ox < 0 || y - oy < 0 || x - ox >= w || y - oy >= h ? -1 : (y - oy) * w + (x - ox); };
@@ -46,6 +47,9 @@ export function reframe(layout: StationLayout, ox: number, oy: number, w: number
   const grids = new Map<Grid, Grid>();
   const gridOf = (g: Grid) => { let o = grids.get(g); if (!o) grids.set(g, (o = crop(g))); return o; };
   const p3 = <T extends {x: number; z: number}>(p: T): T => ({...p, x: p.x - dx, z: p.z - dz});
+  // Track 2 (lane CONTENT): the extensions' own point records (gen/annexContent.ts: appended after every core record, in extension
+  // areas) leave with their areas; the core's keep their order and indices (prop host indices, holder / pickup / spawn keys).
+  const core = <T extends {area: number}>(list: readonly T[]): readonly T[] => (keepAreas < layout.areas.length ? list.filter(r => r.area < keepAreas) : list);
   const rail = <T extends {x0: number; z0: number; x1: number; z1: number}>(r: T): T => ({...r, x0: r.x0 - dx, z0: r.z0 - dz, x1: r.x1 - dx, z1: r.z1 - dz});
   const levels: Level[] = (layout.levels ?? []).map(L => {
     const out: Level = {...L, grid: gridOf(L.grid)};
@@ -68,11 +72,11 @@ export function reframe(layout: StationLayout, ox: number, oy: number, w: number
     grid: gridOf(layout.grid),
     areas: layout.areas.slice(0, keepAreas).map(a => ({...a, x: a.x - ox, y: a.y - oy})),
     doors: layout.doors.slice(0, nDoors).map(d => ({...d, x: d.x - ox, y: d.y - oy})),
-    props: layout.props.map(p3),
-    lights: layout.lights.map(p3),
-    signs: layout.signs.map(p3),
-    pickups: layout.pickups.map(p3),
-    zombies: layout.zombies.map(p3),
+    props: core(layout.props).map(p3),
+    lights: core(layout.lights).map(p3),
+    signs: core(layout.signs).map(p3),
+    pickups: core(layout.pickups).map(p3),
+    zombies: core(layout.zombies).map(p3),
     storefronts: layout.storefronts.map(s => ({...s, ox: s.ox - ox, oy: s.oy - oy, ux: s.ux - ox, uy: s.uy - oy})),
     decor: layout.decor.map(b => ({...b, x0: b.x0 - dx, x1: b.x1 - dx, z0: b.z0 - dz, z1: b.z1 - dz})),
     playerSpawn: p3(layout.playerSpawn),
@@ -91,7 +95,7 @@ export function reframe(layout: StationLayout, ox: number, oy: number, w: number
   if (keepAreas < layout.areas.length) delete view.extensions;
   // per-grid caches of the stacked levels (light-well apertures) for the new grids; the composition record of the dressed station
   if (levels.length > 1) registerApertures(levels);
-  reframeComposition(layout, view, ox, oy, w, h);
+  reframeComposition(layout, view, ox, oy, w, h, keepAreas < layout.areas.length ? keepAreas : Infinity);
   return view;
 }
 

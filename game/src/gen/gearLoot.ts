@@ -182,7 +182,8 @@ function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rn
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (!g.walkable(x + ox, y + oy) || g.rampIdx[g.idx(x + ox, y + oy)] >= 0) return false;
     return true;
   };
-  const near = (lv: number, x: number, z: number, r: number) => layout.pickups.some(p => (p.level ?? 0) === lv && Math.hypot(p.x - x, p.z - z) < r);
+  // (Track 2, lane CONTENT: a service annex's own loose finds — behind rock, appended before the gear — never move a gear spot)
+  const near = (lv: number, x: number, z: number, r: number) => layout.pickups.some(p => (p.level ?? 0) === lv && !isExtensionArea(layout.areas[p.area]) && Math.hypot(p.x - x, p.z - z) < r);
   const cellOk = (a: Area | null, lv: number, i: number, strict: boolean): boolean => {
     const g = gridOf(lv), dl = dist[lv];
     if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0) return false;

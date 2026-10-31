@@ -33,6 +33,7 @@ import {dressLevels, lightServiceLevel, placeLevelSpawns} from './levelGenDress'
 import {lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 // Track 2 (lane GEN): tunnels past the bed ends + service annexes (gen/trackExt), planned before the crop, attached after every core pass.
 import {dropExtensions, extendTracks, extensionIssues, finishExtensions, reserveTunnelRoom, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from './trackExt/index';
+import {populateExtensions} from './annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
 /**
  * Track 2 (lane GEN): grid cell budget of a station with its track extensions (W x H of the cropped grid). The baked light field
@@ -414,11 +415,16 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   lightServiceLevel(layout, rng.fork('serviceLights'));
   // Lane T: fixtures follow stepped ceilings, loot/props lifted to local floors, never on stairs; underpass + ladder signs.
   finishTraversal(layout);
-  // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed.
-  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the level's pool, per the spawn's room
   // Track 2 (lane GEN): only now the extensions join: the core is re-framed into the extended grid (translated when they reach
   // west / north) and their cells / areas / doors are appended (every pass above saw exactly the core world).
-  if (ext) layout = finishExtensions(layout, ext, {ox, oy, grow: 'any'});
+  if (ext) {
+    layout = finishExtensions(layout, ext, {ox, oy, grow: 'any'});
+    // Track 2 (lane CONTENT): their dressing / fixtures / loose finds on the `track-ext-content` fork, APPENDED after every core record.
+    populateExtensions(layout, rng, {loot, dressRng: rng.fork('dress')});
+  }
+  // Iteration 07 (Lane Q): per-spawn seed-weighted enemy archetype (~5 % rat/dog), keyed on the station seed. ONCE, after every
+  // context (Track 2: also after the extensions' appended spawns; the roll is per spawn index, so the core's are unchanged).
+  assignEnemyArchetypes(layout, spawns); // lane SPAWN: the level's pool, per the spawn's room
   return layout;
 }
 
