@@ -480,9 +480,13 @@ describe('the Subway is unchanged', () => {
   // tunnel fixtures on every extended station; annex dressing / plates / fixtures / loose finds / service spawns) - every LIVE
   // fingerprint moves (was 1 c427820b / 5ecb0be6, 7 97780ab3 / 97757449, 42 8f75cf60 / 67c40d1a, 1234 2f49e529 / 7597a315); the
   // core view still equals CORE and the reserve-off core view HEAD (asserted below; coreView filters the appended records).
+  // Task track2-playtest-revision-20261031 (lane ROOMS) — CAUSE: "annex machinery halls + room signatures": the annexes are re-laid
+  // (larger, taller halls in the room graph; signature machinery records + collision-only boxes; lean annex furniture), so the LIVE
+  // fingerprints of the annex-bearing seeds move (was 7 b402c09e / 35870a80, 42 f1d3aed2 / 43e5c856, 1234 f4b97ce1 / 8d0d8135);
+  // seed 1 (no annex) and every CORE / reserve-off HEAD fingerprint are unchanged (asserted below).
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'b402c09e', '7:pistol': '35870a80',
-    '42:rifle': 'f1d3aed2', '42:pistol': '43e5c856', '1234:rifle': 'f4b97ce1', '1234:pistol': '8d0d8135',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'bcabf2ef', '7:pistol': '5c7e39d9',
+    '42:rifle': '868cb75f', '42:pistol': '7a6f4ce4', '1234:rifle': '8136ba0b', '1234:pistol': '522bba4a',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

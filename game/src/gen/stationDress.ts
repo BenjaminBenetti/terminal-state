@@ -6,7 +6,7 @@
 import {Rng} from '../core/rng';
 import {CELL, FLOOR, type Grid} from './grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from './props';
-import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type RoomPurpose, type RoomSlot} from './purposes';
+import {ROOM_PURPOSES, assignRoomPurposes, purposeById, type PropRule, type RoomPurpose, type RoomSlot} from './purposes';
 import {stockVariant} from './purposeShapes';
 import {BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, lootTheme} from '../items/lootEconomy';
 import {PUBLIC_FLOOR_WEIGHTS, econCat, floorChance, floorCount, lootProfile, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
@@ -14,7 +14,7 @@ import {ITEMS} from '../items/items';
 import type {Wing} from './stationKit';
 import {dressStorefront, rugBoxes, type ShopDressApi} from './storefronts';
 import {dressP7} from './props07Dress';
-import {p7Palette} from './props07';
+import {isP7Kind, p7Palette} from './props07';
 import {COMPOSED_ZONES, compose, zoneOf} from './compose';
 import {passageWallsAlongX, signDims, wallSignSpot} from './doorways';
 import {
@@ -289,7 +289,13 @@ export function stationP7Palette(dressRng: Rng): ReadonlySet<string> {
  * ceilings made relative where the rules read them) and lifted onto it at the end — what finishTraversal does for the core's props.
  * No fixtures (the caller lights the extensions).
  */
-export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => void; phase?: (k: string) => void}): {props: number; signs: number} {
+export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[], rng: Rng, o: {palette: ReadonlySet<string>; p7Budget: number; maxProps?: number; p7Scale?: number; pre?: (ctxOf: (a: Area) => PlaceCtx) => number | void; phase?: (k: string) => void;
+  /** (task track2-playtest-revision, lane ROOMS) per-area furniture rules replacing the purpose's own (lean annex rule sets); undefined = the purpose's. */
+  rules?: (a: Area) => readonly PropRule[] | undefined;
+  /** (lane ROOMS) Only these iteration-07 kinds may be placed (composer + dresser): no model the level does not already load. */
+  kinds?: ReadonlySet<string>;
+  /** (lane ROOMS) Iteration-07 dresser placements: at most `perArea(a)` per area and `total` over the pass (the composer has its own p7Budget). */
+  p7Cap?: {perArea: (a: Area) => number; total: number}}): {props: number; signs: number} {
   const ids = new Set(areas.map(a => a.id));
   const inSet = (a: Area) => ids.has(a.id);
   // contexts only for the levels the areas lie on, their masks built over the areas' bounding window (+ 4 cells)
@@ -302,23 +308,33 @@ export function dressExtensionAreas(layout: StationLayout, areas: readonly Area[
   o.phase?.('dress.ctx');
   // `maxProps`: the pass's prop budget — rooms are dressed in the given (priority) order until it is spent; the iteration-07
   // dresser stops placing at it too (its per-area budgets scaled by `p7Scale`)
-  const cap = o.maxProps ?? Infinity, spent = () => layout.props.length - p0 >= cap;
-  o.pre?.(ctxOf);
+  // (lane ROOMS: `pre` may return how many of its placements are budget-exempt — the annexes' collision-only machinery boxes)
+  const cap = o.maxProps ?? Infinity;
+  const exempt = o.pre?.(ctxOf) ?? 0;
+  const spent = () => layout.props.length - p0 - exempt >= cap;
   // rooms / closets: their purpose's rules (corridors are composed below)
   for (const a of areas) {
     if (spent()) break;
-    if (!COMPOSED_ZONES.has(zoneOf(layout, a))) dressByRules(ctxOf(a), a, ROOM_PURPOSES[a.purpose ?? ''] ?? ROOM_PURPOSES.storage);
+    if (COMPOSED_ZONES.has(zoneOf(layout, a))) continue;
+    const P = ROOM_PURPOSES[a.purpose ?? ''] ?? ROOM_PURPOSES.storage, own = o.rules?.(a);
+    dressByRules(ctxOf(a), a, own ? {...P, props: own} : P);
   }
   o.phase?.('dress.rules');
-  compose(layout, {rng: rng.fork('compose'), palette: o.palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
+  const palette = o.kinds ? new Set([...o.palette].filter(k => o.kinds!.has(k))) : o.palette;
+  compose(layout, {rng: rng.fork('compose'), palette, ctxOf, areas: inSet, p7Budget: o.p7Budget, append: true});
   o.phase?.('dress.compose');
   {
     const prng = rng.fork('p7');
     const pctxs = new Map([...ctxs].map(([L, c]) => [L, {...c, rng: prng}]));
+    // (lane ROOMS) the pass's iteration-07 cap: per area and in total
+    const capOf = new Map<number, number>();
+    let capTotal = 0;
+    const capped = (a: Area, kind: PropKind): boolean => !!o.p7Cap && isP7Kind(kind) && (capTotal >= o.p7Cap.total || (capOf.get(a.id) ?? 0) >= o.p7Cap.perArea(a));
+    const counted = (a: Area, p: PropPlacement | null): PropPlacement | null => { if (p && o.p7Cap && isP7Kind(p.kind)) { capTotal++; capOf.set(a.id, (capOf.get(a.id) ?? 0) + 1); } return p; };
     const pctxOf = (a: Area): Ctx => pctxs.get(areaLevel(a)) ?? {...ctxOf(a), rng: prng};
     dressP7(layout, {
-      rng: prng, areas: inSet, hostsFrom: p0, budgetScale: o.p7Scale,
-      place: (a, kind, x, z, rot, q = {}) => (spent() ? null : tryPlaceProp(pctxOf(a), a, kind, x, z, rot, q)),
+      rng: prng, areas: inSet, hostsFrom: p0, budgetScale: o.p7Scale, ...(o.kinds ? {kinds: o.kinds} : {}),
+      place: (a, kind, x, z, rot, q = {}) => (spent() || capped(a, kind) ? null : counted(a, tryPlaceProp(pctxOf(a), a, kind, x, z, rot, q))),
       cellsFree: (a, x, z, hx, hz) => {
         const c = pctxOf(a), g = c.g;
         const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
@@ -368,6 +384,9 @@ const PLATES: Record<string, string> = {
   'stock-room': 'STOCK ROOM', 'janitor-closet': 'JANITOR', 'supply-closet': 'SUPPLIES',
   // Iteration 07 (Lane P2): rooms built around the new generated props.
   'workshop': 'WORKSHOP', 'pump-room': 'PUMP ROOM', 'lost-property': 'LOST PROPERTY', 'revenue-room': 'REVENUE ROOM', 'custodial-room': 'CUSTODIAL',
+  // Task track2-playtest-revision (lane ROOMS): the service annexes' signature rooms (gen/annexRooms.ts; never core purposes).
+  'boiler-room': 'BOILER ROOM', 'generator-room': 'GENERATORS · DANGER', 'sewage-room': 'SEWAGE', 'overflow-chamber': 'OVERFLOW',
+  'spillway': 'SPILLWAY', 'turbine-hall': 'TURBINE HALL', 'ventilation-plant': 'VENTILATION',
 };
 
 /** Back-of-house wing of an area from its ancestry (food court / agent office / platform staff side). */

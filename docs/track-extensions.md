@@ -54,6 +54,15 @@ revision) the platforms announce every real annex entrance with station-surface 
   then hatches; a failed attempt is omitted with no orphan door, clue or cell.
 - **Size:** `share` 0.25 of the baseline, jittered by 0.85–1.15, minimum `minShare` 0.15.
 - **Layout:** corridors 1.5–2 m wide; rooms from 3×3 m to 8×10 m; ceilings 2.4–2.8 m.
+- **Machinery halls** (`annex.hall`, task track2-playtest-revision, lane ROOMS): 2–3 larger, taller rooms per annex
+  (9–12 × 12–16 m, ceilings 3.6–4.2 m; `Area.extHall`) inside the SAME area target, so the tight network stays and is
+  regularly broken by a big room:
+  - hall k is attempted once the annex has grown to (k + 0.5) / (count + 1) of its target (a rhythm, not a cluster);
+  - only off a corridor at least `spacing` (2) areas past the previous hall on its branch, only while the hall keeps the annex
+    within its target (+ 2 % slack) and the grid budget (the Mall's hard cell budget included); 8 seeded placements per attempt;
+  - a hall is a room later areas may branch off (parent weight 2.2).
+  Measured: 1–3 halls per annex on the fixed seed set; the 64-seed incidence is unchanged (0 / 1 / 2 = 4 / 42 / 18, 16 hatches,
+  ratio to the baseline 0.15 / 0.25 / 0.29 min / mean / max).
 - **Door placement:** a tunnel that hosts an annex gets a first straight of at least 21 m (`annex.hostFirstStraight`), which
   leaves room for the door.
 
@@ -136,9 +145,14 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
 
 The golden tests use it for their translation-normalised proofs, and runtime fields such as decay use it.
 
+**Machinery** (`extensions.machines`, lane ROOMS): the annexes' anchored machinery records (`AnnexMachine`, `gen/annexRooms.ts`):
+kind, area, footprint centre on the floor, quarter-turn yaw, w × d × h and kind parameters. `machineBoxes(record)` gives the solid
+parts' collision boxes; each is one collision-only `annexMachine` prop (per-placement box). `coreView` drops them with the
+extensions; `dropExtensions` deletes them.
+
 **Validation:** `extensionIssues(layout)` checks that:
 - every tunnel and annex cell is reachable from the platform (drops and ladders allowed), with a return path to a ladder;
-- there is at least 2.2 m of head clearance;
+- there is at least 2.2 m of head clearance; annex ceilings are 2.4–2.8 m, machinery halls 3.6–4.2 m (and a hall is a room);
 - the cap has collision;
 - no walkable cell borders void or the outside of the canvas;
 - nothing overlaps;
@@ -146,11 +160,46 @@ The golden tests use it for their translation-normalised proofs, and runtime fie
 
 ## Content (`game/src/gen/annexContent.ts`)
 
-**Rooms:** annex areas take existing back-of-house purposes: pump room, electrical room, workshop, maintenance storage,
-custodial room, janitor / electrical / supply closets, and service corridors.
-- Rooms are dressed by the existing dress, compose and iteration-07 machinery on their own rng fork.
-- The budget is one prop per 12 m², plus `ANNEX_COMPOSE_BUDGET` 12 generated-model clusters per annex.
-- Only existing prop kinds are used, so the openables and physics audits are unchanged.
+**Room signatures** (task track2-playtest-revision-20261031, lane ROOMS, `gen/annexRooms.ts`; user feedback 4 / 5: "the same
+rooms repeating … think boiler room, generator room, sewage room, overflow room, spill way, turbine room, ventilation room … with
+custom layout and props"; keep the tight feel, "break it up with bigger rooms"). Seven reusable signatures, each a LAYOUT of
+anchored machinery with its own footprint, focal point, circulation and materials (dimensions from the scale checks beside a
+runtime-scaled 1.78 m zombie):
+
+| Signature (purpose) | Min room | Layout / focal point | Assemblies (W × H × D) |
+|---|---|---|---|
+| Boiler room (`boiler-room`) | 5 × 6 m | a bank of 2 (halls 3) horizontal fire-tube boilers backed on one wall, burner fronts into a ≥ 1.5 m aisle, flue stacks into the ceiling, a lagged pipe header with branch drops on the back wall (halls: a breeching duct overhead) | boiler 2.0 × 1.9 × 3.0–3.5 (shell Ø 1.45–1.7, oxide red); bank 6.2 × 2.4 × 3.0; expansion tank 1 × 1.9 × 1 |
+| Generator room (`generator-room`) | 5 × 6.5 m | diesel generator sets as ISLANDS on concrete plinths with a 1 m walkway ring (halls: a pair across a 1.2 m aisle), a switchgear lineup on a wall with a 1 m front strip, a fuel day tank, exhaust risers into the ceiling | genset 3.5–4.0 × 1.75 × 1.5 (ochre; radiator, engine, alternator, silencer); switchgear n × 0.8 × 2.1 × 0.6 |
+| Sewage channel (`sewage-room`) | 4.5 × 7 m | a contained channel down the room's length (dark water at +3 cm, 0.22 m curbs, yellow handrails), 1–2 walkable grated crossings, grating walkways both sides, a sluice gate at the inlet wall, a culvert mouth at the outlet (stops 1.5 m short of a door wall) | channel L × 1.5–2.0 (curbs 0.15 × 0.22, rails 1.05) |
+| Overflow chamber (`overflow-chamber`) | 6 × 6.5 m | a deep basin against the far wall behind a 0.92 m concrete parapet and handrail, an inlet pipe pouring in above the parapet, a submerged weir and a depth staff, a ≥ 1.2 m walkway in front (halls: pump controls + dosing tank) | basin up to 6 × 4 (halls 10 × 7) × 0.92 (+ rail 1.24) |
+| Spillway (`spillway`) | 6 × 8.5 m | a stepped concrete chute along a door-free long wall — 3–5 cascades from a 0.6 m inlet weir (sluice frame) down to a culvert mouth — behind a 0.8 m wall + handrail, a grating catwalk along it, sluice control panels opposite | chute L × 0.8 (+ rail 1.1) × 1.75–2.25 |
+| Turbine hall (`turbine-hall`, halls only) | 9 × 12 m | a turbine-generator set on a 0.4 m plinth down the hall (ribbed casing, coupling, generator with cooling bands, exciter), its penstock from the end wall (or from the ceiling when that wall has a door), a 1.2 m ring, an overhead travelling crane, control panels, an oil tank | set 6–10 × 2.8 × 2.75–3.0 (slate blue / grey) |
+| Ventilation plant (`ventilation-plant`) | 4.5 × 5.5 m | 1–3 big axial wall fans (shroud, pitched blades, guard) on the far wall, an inline fan unit with its duct riser, ducts along the ceiling (bottom ≥ 2.25 m), louvres | wall fan Ø 1.2–2.6 (2.2 × 2.35 × 0.75 at Ø 1.9); inline unit 2 × ceiling × 1.5 |
+
+- **Halls first, then about 60 % of the medium rooms** (short side ≥ 4.5 m, ≥ 26 m²) take a signature; the other rooms keep a
+  small utility role (workshop, maintenance stores, electrical room, pump room, custodial room, first-aid post), closets stay
+  janitor / electrical / supply closets, corridors stay composed service corridors.
+- **The anti-repetition rule** (bounded, seeded): halls first (largest first), then the chosen rooms in door-graph traversal
+  order; a room never takes a signature already used by an annex room within 2 door hops (one door, or across one corridor /
+  hall); weight = signature weight × hall preference (halls) × 6 while unused in the annex × 0.2 ^ uses. A layout that cannot
+  be built in its room (doors / proportions) undoes itself and tries up to 2 other eligible signatures under the same rule,
+  then the room becomes a utility room. Measured on the fixed seed set: 5–7 distinct signatures per annex, all seven across it.
+- **Machinery** is world geometry from the records (`world/trackExt/machines.ts`): locally authored boxes / cylinders merged into
+  one mesh per (annex, material) — about 12 draws and 18–33k triangles per annex — with value-only clones of the shared
+  world-mapped shape materials (painted / brushed steel, panel, concrete, grille, black: no texture loads, shared programs).
+  Collision is honest: every solid part is a collision-only `annexMachine` prop (player / zombie / bullet / ragdoll collision,
+  blocked + sight cells, placed through the dresser's door zones, doorway clear volumes and connectivity check). Channels,
+  basins and chutes are VISUAL water (no water physics, no hazard): their curbs / parapets / walls and water surfaces are
+  collision boxes, so nobody walks in; crossings are walkable. Visual-only parts stay within 0.28 m of a wall, above 2.2 m, flat
+  on the floor or over a blocked footprint (tested). `annexMachine` is classified in both audits: the openables audit's
+  exception ("anchored heavy machinery / sealed plant: not storage") and the physics audit's `machinery` static class.
+- **Fewer, meaningful holders:** the existing purposes dress annex rooms with LEAN rule sets (`ANNEX_RULES`: stores keep
+  shelving, workshops a tool locker, electrical rooms panels + a cabinet, closets one fixture; first-aid posts a medicine
+  cabinet), the signature purposes carry a tool locker / spares shelf / crate where the room's function suggests it, and the
+  iteration-07 dresser adds equipment props (pumps, compressors, transformers, disconnects, ladders …: non-lead uses, so no
+  station palette changes). Annex holders dropped from ~100–125 to ~41–64 per annex; the machinery's collision boxes are
+  budget-exempt (`dressExtensionAreas` `pre` / `rules`).
+- Halls get a fixture every ~5 m of their long side (at least 2).
 
 **Loot** (`game/src/items/lootTables.ts`), finite, seeded once, persisted by the usual keys and never refilled:
 - **Deepest holders:** each annex's deepest 7–8 holders keep their room's normal loot table.
@@ -233,6 +282,9 @@ Tunnels have sparse fixtures, mostly dead or dying.
     paint (the authorised station-surface change); the core layout, records, RNG streams and every core pin are unchanged.
 - **Steam:** a bounded, non-hazardous emitter in `game/src/world/fx.ts`, capped per annex. It is never the gas field and
   never the flare smoke.
+- **Machinery** (lane ROOMS): `world/trackExt/machines.ts` `buildAnnexMachines` (called by `buildTrackExtensions`; stats in
+  `TrackExtStats.machines`, kept out of the per-100 m tunnel figures): one merged mesh per annex and material, built into the
+  station group at build time (warm-up discoverable).
 - **Ambience:** the existing beds through room types; tunnels use tunnel reverb.
 
 ## Tests
@@ -240,7 +292,8 @@ Tunnels have sparse fixtures, mostly dead or dying.
 - **Track extensions:** `track-ext.test.ts` (generation and census), `track-ext-core.test.ts` (core identity and the
   reserve-off proof), `track-ext-coverage.test.ts`, `track-ext-vis.test.ts`, and the opt-in `TRACK_EXT_GEN=1`
   `track-ext-vis-gen.test.ts`.
-- **Content:** `annex-content.test.ts`.
+- **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
+  anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
 - **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
   `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
   1–2 m, into `qa-artifacts/track2-revision-art/`).

@@ -29,6 +29,11 @@ import type {Area, Door, Side, StationLayout} from './stationTypes';
 
 export interface P7DressApi {
   rng: Rng;
+  /**
+   * (task track2-playtest-revision, lane ROOMS; optional) Only these kinds may be placed (intersected with the seeded palette, which is
+   * still drawn the same way): an appended pass (the service annexes) never adds a model the level does not already load.
+   */
+  kinds?: ReadonlySet<string>;
   /** The station dresser's tryPlaceProp (all checks; y >= 0.9 = wall-mounted / hung: reserves, never blocks walking). */
   place(area: Area, kind: PropKind, x: number, z: number, rot: number, o?: {front?: number; ring?: number; y?: number}): PropPlacement | null;
   /** Footprint cells are open floor of the area: not blocked, no door cell / door zone, no platform-edge or stair keep-out. */
@@ -83,7 +88,8 @@ export function dressP7(layout: StationLayout, api: P7DressApi): P7DressStats {
   // Seeded per-station palette: infrastructure + purpose signatures always, ~55% of the other kinds (bounded per-station downloads /
   // GPU texture memory; stations differ). Forked RNG: the palette never shifts the placement draws.
   const prng = api.rng.fork('palette');
-  const palette = p7Palette(p => prng.chance(p));
+  const palette0 = p7Palette(p => prng.chance(p));
+  const palette = api.kinds ? new Set([...palette0].filter(k => api.kinds!.has(k))) : palette0;
   const ctx: Ctx = {layout, api, st, palette, kindPos: null};
   for (const a of layout.areas) {
     if (api.areas && !api.areas(a)) continue; // Track 2 (lane CONTENT): an appended subset pass

@@ -119,7 +119,9 @@ describe('track extensions — the core level is unchanged', () => {
 
   it('runtime fields: the decay field core window, wall-face seeds and shelf-stock seeds stay the core\'s', () => {
     // its extensions reach west and north: the core is translated (GEN-2: reserve off, so the core is main's)
-    const seed = 1788470405;
+    // (task track2-playtest-revision, lane ROOMS: the machinery halls reshaped the annexes — 1788470405's no longer reaches north;
+    // 2654534526 is the first seed of a fresh scan whose extensions translate the core both west and north)
+    const seed = 2654534526;
     const ext = generateStation(seed, {trackExtensions: TRACK_EXT_RESERVE_OFF}), none = generateStation(seed, {trackExtensions: 'none'});
     const e = ext.extensions!;
     expect(e.core.x).toBeGreaterThan(0);

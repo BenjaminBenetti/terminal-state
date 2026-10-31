@@ -171,8 +171,12 @@ const OFFICE_CAB_CORE = '3570ed8b';
 // footprints block annex cells) — the live world the random queries sample changes again (was {lines e6296ba5, circles c6c70805,
 // support 9728d7d2, rails af1f34c5, finds 11c31ab0}); the core pins above still hold byte for byte (coreView drops the extensions'
 // cells, their blocked footprints and appended records). gen/levels.ts / gen/grid.ts untouched.
-const OFFICE_SHUT = {lines: 'd7c9a265', circles: 'fd0c3f65', support: '3633f80e', rails: 'c0990205', finds: '41c7c82f'};
-const OFFICE_OPEN = {lines: 'd7c9a265', circles: 'fd0c3f65', support: '3633f80e', rails: 'c0990205', finds: '41c7c82f'};
+// Task track2-playtest-revision-20261031 (lane ROOMS): the live Office world changed again — its street station's annexes are re-laid
+// (machinery halls, signature machinery boxes, lean furniture; the grid grows differently east / south), so the same seeded queries
+// sample a different world (the query code is unchanged; the core-view pins above did not move). Was shut = open {lines d7c9a265,
+// circles fd0c3f65, support 3633f80e, rails c0990205, finds 41c7c82f} (shut = open, as now).
+const OFFICE_SHUT = {lines: '69abd718', circles: '2ac511c5', support: 'ea00599b', rails: '5e871885', finds: '0c734d22'};
+const OFFICE_OPEN = {lines: '69abd718', circles: '2ac511c5', support: 'ea00599b', rails: '5e871885', finds: '0c734d22'};
 /** (the near-cab queries only touch the tower: unchanged by the extensions) */
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};
@@ -182,6 +186,8 @@ const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rai
 // Track 2 (lane CONTENT): its two hatch annexes are now dressed (gen/annexContent.ts, appended after every core pass: prop footprints
 // block annex cells) — the live world changes again (was {lines 98db9ae5, circles 958d5d98, support 0f5d72cc, rails 967a2aa5,
 // finds fdfd6e2b}); SUBWAY (core, reserve off and on) still holds byte for byte. gen/levels.ts / gen/grid.ts untouched.
-const SUBWAY_LIVE = {lines: 'f3ead7d8', circles: 'f2f9e858', support: '14ebe369', rails: '967a2aa5', finds: '8b2e7b36'};
+// (task track2-playtest-revision lane ROOMS: seed 1234's annexes re-laid — halls, machinery boxes, lean furniture; was {lines f3ead7d8,
+// circles f2f9e858, support 14ebe369, rails 967a2aa5, finds 8b2e7b36}; the core / reserve-off pins are unchanged)
+const SUBWAY_LIVE = {lines: '5316efe5', circles: 'e28fe105', support: '8501fb29', rails: '8f0e3c65', finds: 'dcd8c5b9'};
 /** The fixture runs no PathFinder (finds = the empty hash). */
 const FIXTURE = {lines: '2278f298', circles: 'c101d1b8', support: '1243b7fb', rails: 'ca023ed8', finds: '811c9dc5'};

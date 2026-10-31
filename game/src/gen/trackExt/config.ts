@@ -62,6 +62,9 @@ export const TRACK_EXT: TrackExtConfig = {
     doorCells: 3,
     loopChance: 0.7,
     steps: 420,
+    // task track2-playtest-revision (lane ROOMS): 2-3 machinery halls per annex (9-12 x 12-16 m, 3.6-4.2 m ceilings) inside the
+    // same area target — the tight network stays, punctuated by big signature rooms (user feedback 5)
+    hall: {count: [2, 3], short: [9, 12], long: [12, 16], ceil: [3.6, 4.2], spacing: 2, tries: 8, slack: 0.02},
   },
   coreReserveM: 40,
   hatch: {s: [2, 10]},
