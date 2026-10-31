@@ -68,16 +68,59 @@ export function bodyWeights(welded, skel, hairW = null, opts = {}) {
       // the nearest torso vertex may itself carry a shoulder (UpperArm) share: strip it and renormalise
       let s = 0; for (let k = 0; k < 4; k++) { if (ARM.has(sw.joints[i * 4 + k])) sw.weights[i * 4 + k] = 0; s += sw.weights[i * 4 + k]; }
       if (s <= 1e-6) { sw.joints.fill(0, i * 4, i * 4 + 4); sw.joints[i * 4] = JI.Chest; sw.weights.fill(0, i * 4, i * 4 + 4); sw.weights[i * 4] = 1; }
-      else { for (let k = 0; k < 4; k++) sw.weights[i * 4 + k] /= s; sw.weights[i * 4] += 1 - (sw.weights[i * 4] + sw.weights[i * 4 + 1] + sw.weights[i * 4 + 2] + sw.weights[i * 4 + 3]); }
+      else {
+        // renormalise; sort the row (largest first, emptied slots last) and put the float residual on the largest weight
+        const row = [0, 1, 2, 3].map(k => [sw.weights[i * 4 + k] / s, sw.joints[i * 4 + k]]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+        row.forEach(([w, j], k) => { sw.weights[i * 4 + k] = w; sw.joints[i * 4 + k] = w > 0 ? j : 0; });
+        sw.weights[i * 4] += 1 - (sw.weights[i * 4] + sw.weights[i * 4 + 1] + sw.weights[i * 4 + 2] + sw.weights[i * 4 + 3]);
+      }
       hairFixed++;
     }
   }
   return {...sw, stats: {...sw.stats, hair: hairW ? {hairVertices: hairW.reduce((a, b) => a + b, 0), hairVerticesWithArmWeights: hairArmVerts, reassignedFromNearestTorsoVertex: hairFixed, rule: 'hair never takes arm weights: rows with any arm share copy the nearest non-hair torso vertex, arm share stripped, renormalised'} : null}};
 }
 
-/** Dress weights (welded dress in game space) by closest-point transfer from the welded body. */
+/**
+ * Dress weights (welded dress in game space) by closest-point transfer from the welded body.
+ * opts.mode: 'rule' (shared skirt rule below the crotch: Hips + partial thigh follow), 'legs' (closest leg point everywhere;
+ * opts.skirt false), or 'legs-thigh' ('legs', then shin / foot influences moved to the thigh of the same side: the skirt follows
+ * the thighs, never the shins — in kneeling poses the shins lie face-down on the floor and would carry the hem under it).
+ */
 export function dressWeights(dressWelded, bodyWelded, bodyW, skel, opts = {}) {
-  return transferWeights(dressWelded, bodyWelded, bodyW, rigDescriptor(skel), {thighMax: opts.thighMax ?? 0.45, smoothIters: opts.smoothIters ?? 3, skirt: opts.skirt ?? true, grid: buildGrid(bodyWelded.pos, bodyWelded.idx, 0.03)});
+  const mode = opts.mode ?? (opts.skirt === false ? 'legs' : 'rule');
+  const tw = transferWeights(dressWelded, bodyWelded, bodyW, rigDescriptor(skel), {thighMax: opts.thighMax ?? 0.45, smoothIters: opts.smoothIters ?? 3, skirt: mode === 'rule', grid: buildGrid(bodyWelded.pos, bodyWelded.idx, 0.03)});
+  let remapped = 0;
+  if (mode === 'legs-thigh') {
+    const n = tw.joints.length / 4;
+    for (let i = 0; i < n; i++) {
+      const row = new Map();
+      for (let k = 0; k < 4; k++) {
+        let j = tw.joints[i * 4 + k]; const w = tw.weights[i * 4 + k]; if (!w) continue;
+        const nm = JOINT_NAMES[j];
+        if (/_(Shin|Foot)$/.test(nm)) { j = JI[nm.slice(0, 2) + 'Thigh']; remapped++; }
+        row.set(j, (row.get(j) ?? 0) + w);
+      }
+      const e = [...row.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+      for (let k = 0; k < 4; k++) { tw.joints[i * 4 + k] = e[k]?.[0] ?? 0; tw.weights[i * 4 + k] = e[k]?.[1] ?? 0; }
+    }
+  }
+  // sleeveless garment (opts.noArms, default true): arm-chain influences (picked up where the strap rests just outside the
+  // shoulder joint) move to Chest — otherwise the strap / neckline swings off the body whenever the T-pose arms come down
+  let armRows = 0;
+  if (opts.noArms ?? true) {
+    const n = tw.joints.length / 4;
+    for (let i = 0; i < n; i++) {
+      let moved = 0;
+      for (let k = 0; k < 4; k++) if (ARM.has(tw.joints[i * 4 + k]) && tw.weights[i * 4 + k] > 0) { moved += tw.weights[i * 4 + k]; tw.weights[i * 4 + k] = 0; }
+      if (!moved) continue;
+      armRows++;
+      let slot = -1;
+      for (let k = 0; k < 4; k++) if (tw.joints[i * 4 + k] === JI.Chest && tw.weights[i * 4 + k] > 0) slot = k;
+      if (slot < 0) for (let k = 0; k < 4; k++) if (tw.weights[i * 4 + k] === 0) { slot = k; break; }
+      tw.joints[i * 4 + slot] = JI.Chest; tw.weights[i * 4 + slot] += moved;
+    }
+  }
+  return {...tw, stats: {...tw.stats, mode, ...(mode === 'legs-thigh' ? {shinFootInfluencesMovedToThigh: remapped} : {}), sleeveless: opts.noArms ?? true, rowsWithArmWeightMovedToChest: armRows}};
 }
 
 /** Welded weights -> native vertices. */

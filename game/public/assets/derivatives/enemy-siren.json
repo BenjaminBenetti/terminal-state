@@ -3,11 +3,11 @@
  "task": "studio-track1-siren-blightbelly-20261031-01",
  "lane": "RIGS (appearance-locked Siren rig path)",
  "generatedBy": "tools/asset-pipeline/enemy/build-siren.mjs",
- "builtAt": "2026-10-31T00:53:56.367Z",
+ "builtAt": "2026-10-31T01:16:22.727Z",
  "output": {
   "file": "game/public/assets/models/enemy-siren.glb",
   "bytes": 12873516,
-  "sha256": "9133916d48631a127cc07f9338833c2d0aa056bea68b17b1f0fdcdb7d25d0417",
+  "sha256": "4ac5d8cae88e1655d0e721eeab2442d16d12697a695a433b6670f0a35997098b",
   "meshes": [
    {
     "name": "SirenBody",
@@ -61,7 +61,7 @@
   "preserved": "native POSITION / NORMAL / TEXCOORD_0 / indices / materials / textures (image bytes) — byte-identical; positions differ only by the recorded uniform transform, applied through the skins' inverse bind matrices",
   "added": "JOINTS_0 / WEIGHTS_0 per native vertex, 18-joint skeleton, two skins sharing it, 6 procedural clips, scene extras, node / mesh names",
   "proof": {
-   "file": "/workspaces/subway-game/game/public/assets/models/enemy-siren.glb",
+   "file": "game/public/assets/models/enemy-siren.glb",
    "parts": [
     {
      "name": "SirenBody",
@@ -597,6 +597,7 @@
    "legs": {
     "crotchY": 0.771,
     "hipY": 0.833,
+    "thighSectionY": 0.733,
     "thighCentreX": [
      0.0937,
      -0.0935
@@ -893,7 +894,7 @@
    "check": {
     "vertices": 20781,
     "maxSumError": 2.98e-8,
-    "badEntries": 4
+    "badEntries": 0
    }
   },
   "dress": {
@@ -903,11 +904,14 @@
     "maxDistToBodyM": 0.3265,
     "verticesFartherThan10cm": 8210,
     "thighFollowMax": 0.45,
-    "smoothIters": 3
+    "smoothIters": 3,
+    "mode": "rule",
+    "sleeveless": true,
+    "rowsWithArmWeightMovedToChest": 278
    },
    "check": {
     "vertices": 29319,
-    "maxSumError": 2.98e-8,
+    "maxSumError": 5.96e-8,
     "badEntries": 0
    }
   },
@@ -945,21 +949,21 @@
    }
   },
   "dormantSolve": {
-   "hipsY": -0.5001,
-   "hipsZ": -0.12,
-   "armFlex": 0,
+   "hipsY": -0.4196,
+   "hipsZ": -0.08,
+   "armFlex": 4,
    "regionLowsM": {
-    "handL": 0.0951,
-    "armL": 0.2959,
-    "head": 0.5347,
-    "torso": 0.3791,
-    "pelvis": 0.2617,
-    "armR": 0.3014,
-    "handR": 0.0959,
-    "legL": 0.0061,
+    "handL": 0.0041,
+    "armL": 0.2125,
+    "head": 0.3943,
+    "torso": 0.4012,
+    "pelvis": 0.3246,
+    "armR": 0.2189,
+    "handR": 0.0041,
+    "legL": 0.0062,
     "legR": 0.006
    },
-   "lowestY": 0.006
+   "lowestY": 0.0041
   },
   "deathSolve": {
    "hipsY": -0.6496,
@@ -970,18 +974,18 @@
     "head": 0.094,
     "torso": 0.008,
     "pelvis": 0.0578,
-    "armR": 0.1766,
+    "armR": 0.1821,
     "handR": 0.1746,
     "legL": 0.0709,
-    "legR": 0.0737
+    "legR": 0.0722
    }
   },
   "floorGuard": {
    "method": "per frame: Hips raised so the lowest CPU-skinned BODY vertex stays >= 5 mm above the floor",
    "clips": {
     "Rise": {
-     "frames": 20,
-     "maxLiftM": 0.2558
+     "frames": 16,
+     "maxLiftM": 0.2125
     },
     "Attack": {
      "frames": 7,
@@ -992,54 +996,54 @@
      "maxLiftM": 0
     },
     "Death": {
-     "frames": 40,
-     "maxLiftM": 0.1611
+     "frames": 17,
+     "maxLiftM": 0.158
     }
    }
   },
   "verify": {
    "Dormant": {
     "frames": 121,
-    "bodyMinY": 0.004,
+    "bodyMinY": -0.0022,
     "bodyFramesBelowMinus1cm": 0,
-    "topY": 0.7714,
+    "topY": 0.7202,
     "maxLegReach": 0,
-    "dressMinY": -0.3336,
-    "dressMaxSinkBelowFloorM": 0.3336,
+    "dressMinY": -0.2219,
+    "dressMaxSinkBelowFloorM": 0.2219,
     "dressFramesWithVerticesBelowFloor": 121,
-    "dressMaxShareBelowFloor": 0.5268,
+    "dressMaxShareBelowFloor": 0.3346,
     "boundsM": {
      "min": [
-      -0.4349,
-      -0.3336,
-      -0.695
+      -0.4279,
+      -0.2219,
+      -0.715
      ],
      "max": [
-      0.3703,
-      0.7714,
-      0.6108
+      0.3626,
+      0.7265,
+      0.7033
      ]
     }
    },
    "Rise": {
     "frames": 31,
-    "bodyMinY": -0.0019,
+    "bodyMinY": -0.0013,
     "bodyFramesBelowMinus1cm": 0,
-    "topY": 1.5281,
+    "topY": 1.5517,
     "maxLegReach": 0,
-    "dressMinY": -0.3283,
-    "dressMaxSinkBelowFloorM": 0.3283,
-    "dressFramesWithVerticesBelowFloor": 15,
-    "dressMaxShareBelowFloor": 0.5159,
+    "dressMinY": -0.2489,
+    "dressMaxSinkBelowFloorM": 0.2489,
+    "dressFramesWithVerticesBelowFloor": 16,
+    "dressMaxShareBelowFloor": 0.4283,
     "boundsM": {
      "min": [
-      -0.4349,
-      -0.3283,
-      -0.7531
+      -0.4278,
+      -0.2489,
+      -0.7119
      ],
      "max": [
-      0.3722,
-      1.5281,
+      0.3679,
+      1.5517,
       0.757
      ]
     }
@@ -1117,21 +1121,21 @@
     "frames": 55,
     "bodyMinY": -0.0019,
     "bodyFramesBelowMinus1cm": 0,
-    "topY": 1.6479,
+    "topY": 1.6609,
     "maxLegReach": 0.9138,
-    "dressMinY": -0.2499,
-    "dressMaxSinkBelowFloorM": 0.2499,
+    "dressMinY": -0.2338,
+    "dressMaxSinkBelowFloorM": 0.2338,
     "dressFramesWithVerticesBelowFloor": 39,
-    "dressMaxShareBelowFloor": 0.4966,
+    "dressMaxShareBelowFloor": 0.4764,
     "boundsM": {
      "min": [
       -0.7416,
-      -0.2499,
-      -0.7854
+      -0.2338,
+      -0.8037
      ],
      "max": [
       0.6494,
-      1.6479,
+      1.6609,
       1.2455
      ]
     }
@@ -1323,25 +1327,25 @@
   },
   "dormant": {
    "footprintM": {
-    "minX": -0.4349,
-    "maxX": 0.3703,
-    "minZ": -0.6909,
-    "maxZ": 0.6052
+    "minX": -0.4278,
+    "maxX": 0.3625,
+    "minZ": -0.7119,
+    "maxZ": 0.7006
    },
-   "topY": 0.7704,
-   "lowestBodyY": 0.006,
+   "topY": 0.7215,
+   "lowestBodyY": 0.0041,
    "groundingOffsetM": 0,
-   "hipsOffsetY": -0.5001,
-   "headY": 0.6677,
+   "hipsOffsetY": -0.4196,
+   "headY": 0.5536,
    "headPos": [
-    0.0044,
-    0.6677,
-    0.4291
+    0.005,
+    0.5536,
+    0.5353
    ],
    "chestPos": [
-    0.0006,
-    0.5818,
-    0.1321
+    0.001,
+    0.5773,
+    0.2253
    ],
    "note": "Root on the floor at the spawn point; Dormant frame 0 rests the knees / shins / claws on y = 0 (floor solve), the skirt pools below the floor line by up to dressMaxSinkBelowFloorM (skinning only)."
   },
@@ -1360,36 +1364,36 @@
   "clipBoundsM": {
    "min": [
     -0.7416,
-    -0.3336,
-    -0.7854
+    -0.2489,
+    -0.8037
    ],
    "max": [
     0.6494,
-    1.6479,
+    1.6609,
     1.2455
    ]
   },
   "cullSphere": {
    "center": [
     -0.0461,
-    0.6571,
-    0.2301
+    0.706,
+    0.2209
    ],
-   "radius": 1.58
+   "radius": 1.5638
   },
   "modelSpace": "+Z forward, +Y up, +X = character left, metres; feet / Root at the origin",
   "note": "User-supplied Siren (Pale Apparition body + Ghost Dress), appearance-locked: native vertices / UVs / normals / materials / textures unchanged; technical rig, uniform fit and procedural clips only."
  },
  "stats": {
-  "seconds": 50.5,
+  "seconds": 54.6,
   "bodyWeights": {
    "vertices": 20781,
    "maxSumError": 2.98e-8,
-   "badEntries": 4
+   "badEntries": 0
   },
   "dressWeights": {
    "vertices": 29319,
-   "maxSumError": 2.98e-8,
+   "maxSumError": 5.96e-8,
    "badEntries": 0
   },
   "weldedBodyVertices": 15426,

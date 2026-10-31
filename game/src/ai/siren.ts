@@ -29,8 +29,9 @@
 //  - hp = 2 x ZOMBIE_STATS.shambler.hp (the ordinary zombie; derived, never the coated 165, never a literal);
 //  - chase 4.2 m/s: 1.65 x the shambler's 2.55, a little under the rat/dog's 4.4; faster than a walking (3.4) or aiming (2.1) player,
 //    slower than a sprint (5.8) — sprinting, doors, ladders (she cannot climb) and breaking sight are the counterplay;
-//  - claw: range 1.3 m (shambler 1.35), 14 damage (shambler 10, coated 15), swing 1.0 s with the claws landing at 0.42 s (a readable
-//    wind-up) and 0.55 s recovery after the swing (zombies 0.45) -> one swing per 1.55 s, the same cadence as a shambler's
+//  - claw: range 1.3 m (shambler 1.35), 14 damage (shambler 10, coated 15), swing 1.0 s with the claws landing at 0.40 s (a readable
+//    wind-up; = lane RIGS's Attack clip in enemy-siren.glb: 1.0 s, impactTime 0.40, windupEnd 0.28) and 0.55 s recovery after the
+//    swing (zombies 0.45) -> one swing per 1.55 s, the same cadence as a shambler's
 //    (1.1 + 0.45). The hit test is the zombie brain's: ONE test per swing at the impact moment — player within range + 0.45 m,
 //    inside 1.2 rad of her facing, within swipe reach vertically and in sight (LOS). During the wind-up she lunges 2.4 m/s from
 //    0.12 s until the impact while farther than 0.75 m (at most ~0.7 m): backing off at walking speed through the wind-up still
@@ -48,7 +49,7 @@ export const SIREN_STATS: ZombieStats = {
   attackRange: 1.3,
   attackDamage: 14,
   attackDuration: 1.0,
-  attackImpact: 0.42,
+  attackImpact: 0.4,
   attackCooldown: 0.55,
   sightRange: ZOMBIE_STATS.shambler.sightRange,
   radius: 0.3,
@@ -75,13 +76,15 @@ export const SIREN_WAKE = {
     /** Effective range = the beam's published attractRange (20 m x battery output), capped here (m). */
     maxRange: LURE.maxRange,
     /**
-     * Body sample points of the dormant (floor-hunched) pose, [right, up, forward] metres from her feet in her own frame (yaw):
-     * back / torso, head + shoulders, both flanks, hips / dress. Any one lit with a clear ray from the lens wakes her.
+     * Body sample points of the dormant (floor-hunched) pose, [side, up, forward] metres from her feet in her own frame (yaw):
+     * chest / back, head, both flanks, hips / dress — from lane RIGS's measured Dormant pose (derivatives/enemy-siren.json
+     * extras.dormant: chest (0, 0.51, 0.16), head (0, 0.54, 0.47), hips y 0.30 at z -0.12, top 0.67, footprint x -0.44..0.37);
+     * tests check each lies on her actual dormant hit volumes. Any one lit with a clear ray from the lens wakes her.
      */
-    points: [[0, 0.45, 0.05], [0, 0.72, 0.28], [0.22, 0.36, -0.02], [-0.22, 0.36, -0.02], [0, 0.24, -0.32]] as readonly (readonly [number, number, number])[],
+    points: [[0, 0.5, 0.16], [0, 0.54, 0.45], [0.18, 0.4, 0.02], [-0.18, 0.4, 0.02], [0, 0.3, -0.12]] as readonly (readonly [number, number, number])[],
   },
-  /** Rise duration (s) when the model gives none; a model's Rise clip length is clamped to [riseMin, riseMax]. */
-  riseS: 1.1, riseMin: 0.6, riseMax: 2.0,
+  /** Rise duration (s) when the model gives none (= RIGS's Rise clip, 1.0 s); a model's Rise clip length is clamped to [riseMin, riseMax]. */
+  riseS: 1.0, riseMin: 0.6, riseMax: 2.0,
 } as const;
 
 /** Claw swipe extras on top of SIREN_STATS (the lunge through the wind-up). */

@@ -6,9 +6,11 @@
 // system (wake persistence across revisits, retry, model-missing skip, QA spawns not persisted) and the vein footprint (bounded,
 // clipped to her storey's floor, never through a wall / down a storey; faded and disposed).
 
-import {describe, expect, it, vi} from 'vitest';
+import {beforeAll, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
-import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {fileURLToPath} from 'node:url';
+import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {NodeIO} from '@gltf-transform/core';
 import {CELL, FLOOR, Grid, PathFinder} from '../src/gen/grid';
 import {levelsOf, singleLevel, type Levels} from '../src/gen/levels';
 import {ZOMBIE_STATS, ZombieBrain, type BrainOutput, type BrainWorld} from '../src/ai/brain';
@@ -17,7 +19,7 @@ import {lureWorld} from '../src/ai/lightLure';
 import {LightSources, type LightSource} from '../src/world/lightSources';
 import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE, SirenBrain, sirenBodyPoints, sirenLitBy, type SirenLightProbe} from '../src/ai/siren';
 import {SIREN_CUES, SIREN_HUM_PACE, firstHumDelay} from '../src/ai/sirenCues';
-import {SIREN_CLIPS, SIREN_MODEL_KEY, SirenActor} from '../src/ai/sirenActor';
+import {SIREN_CLIPS, SIREN_MODEL_KEY, SirenActor, type SirenExtras} from '../src/ai/sirenActor';
 import {SIREN_LANE, SirenSystem, sirenVeinSeed, type SirenHost} from '../src/ai/sirenSystem';
 import {ENEMY_ARCHETYPES, createEnemyActor, enemyCues, type EnemyActor} from '../src/ai/creatureArchetypes';
 import {RATDOG_STATS} from '../src/ai/creatureActor';
@@ -27,6 +29,7 @@ import {enemiesToSpawn, mergeKilled} from '../src/run/memory';
 import {SPRINT_SPEED, WALK_SPEED} from '../src/player/player';
 import type {Sfx} from '../src/audio/sfx';
 import type {ZombieSpawn} from '../src/gen/station';
+import type {HitVolume} from '../src/ai/zombieActor';
 import {FIX, levelFixture} from './helpers/levelFixture';
 
 const DT = 1 / 30;
@@ -240,7 +243,7 @@ describe('Siren wake trigger (b): the active flashlight actually on her body', (
   it('torch on but pointed away (off-cone), switched off, or too dim for the distance: dormant', () => {
     for (const setup of [
       (s: Sim) => torch(s, eye, {x: 40, y: 1.6, z: 5}),        // beam away from her
-      (s: Sim, b: SirenBrain) => torch(s, eye, {x: torso(b).x, y: torso(b).y, z: torso(b).z + 6}), // swept past: 36 deg off
+      (s: Sim, b: SirenBrain) => torch(s, eye, {x: torso(b).x, y: torso(b).y, z: torso(b).z + 7}), // swept past: every body point >= 38 deg off
       (s: Sim, b: SirenBrain) => torch(s, eye, torso(b), 0),    // off (inactive, range 0)
       (s: Sim, b: SirenBrain) => torch(s, eye, torso(b), 0.3),  // weak battery: 6 m range, she is 8 m away
     ]) {
@@ -530,6 +533,58 @@ describe('Siren actor (synthetic shared-skeleton rig; the real GLB is lane RIGS\
     const a = new SirenActor(syntheticSiren(), spawnAt(0, 0), () => { n++; return 0.5; });
     expect(n).toBe(3);
     a.dispose();
+  });
+});
+
+describe('Siren actor on lane RIGS\'s enemy-siren.glb (the real asset; textures stripped: node has no image decoder)', () => {
+  let real: GLTF;
+  beforeAll(async () => {
+    const io = new NodeIO();
+    const doc = await io.read(fileURLToPath(new URL('../public/assets/models/enemy-siren.glb', import.meta.url)));
+    for (const t of doc.getRoot().listTextures()) t.dispose();
+    const bin = await io.writeBinary(doc);
+    real = await new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));
+  });
+  /** Distance from p to the surface of a hit volume (negative inside). */
+  const toVolume = (p: {x: number; y: number; z: number}, v: HitVolume) => {
+    if (!v.b) return Math.hypot(p.x - v.a.x, p.y - v.a.y, p.z - v.a.z) - v.r;
+    const ab = [v.b.x - v.a.x, v.b.y - v.a.y, v.b.z - v.a.z], ap = [p.x - v.a.x, p.y - v.a.y, p.z - v.a.z];
+    const t = Math.max(0, Math.min(1, (ab[0] * ap[0] + ab[1] * ap[1] + ab[2] * ap[2]) / Math.max(1e-9, ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2)));
+    return Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t) - v.r;
+  };
+  it('contract: the six clips, shared bones, extras; SIREN_STATS / SIREN_WAKE timing = the clips; hit radii from hitRadii', () => {
+    const ex = real.scene.userData.enemySiren as SirenExtras & {clips: Record<string, {duration: number; impactTime?: number; groundSpeed?: number}>; hitRadii: Record<string, number>};
+    expect(real.animations.map(a => a.name).sort()).toEqual([...SIREN_CLIPS].sort());
+    expect(SIREN_STATS.attackDuration).toBeCloseTo(ex.clips.Attack.duration, 6);
+    expect(SIREN_STATS.attackImpact).toBeCloseTo(ex.clips.Attack.impactTime!, 6);
+    expect(SIREN_WAKE.riseS).toBeCloseTo(ex.clips.Rise.duration, 6);
+    expect(ex.clips.Run.groundSpeed).toBeCloseTo(SIREN_STATS.chaseSpeed, 1); // Run plays at ~1x at full chase
+    const a = new SirenActor(real, spawnAt(4, 5), seq());
+    expect(a.hasRig).toBe(true);
+    expect(a.brain.riseS).toBeCloseTo(ex.clips.Rise.duration, 6);
+    expect(a.hit).toEqual({head: ex.hitRadii.head, torso: ex.hitRadii.torso, arm: ex.hitRadii.arm, leg: ex.hitRadii.leg});
+    expect(a.meshes.map(m => [m.name, a.slotOf(m)])).toEqual([['SirenBody', 'body'], ['SirenDress', 'upper']]);
+    a.dispose();
+  });
+  it('dormant: low, and every flashlight sample point lies on her dormant body volumes; risen: RIGS\'s forward-leaning run-ready stance', () => {
+    for (const yaw of [0, 0.7, -2.2]) {
+      const a = new SirenActor(real, spawnAt(4, 5, yaw), seq());
+      a.root.position.y = 0;
+      for (let i = 0; i < 10; i++) a.animate(DT, 'Idle', 0);
+      expect(a.clip).toBe('Dormant');
+      const vols = a.updateVolumes();
+      const head = vols.find(v => v.part === 'head')!.a;
+      expect(head.y).toBeLessThan(0.8);
+      for (const p of sirenBodyPoints(a.brain)) expect(Math.min(...vols.map(v => toVolume(p, v))), `yaw ${yaw} point ${JSON.stringify(p)}`).toBeLessThan(0.1);
+      a.brain.wake('qa');
+      for (let i = 0; i < 40; i++) a.animate(DT, 'Idle', 0);
+      a.brain.state = 'idle';
+      for (let i = 0; i < 15; i++) a.animate(DT, 'Idle', 0);
+      expect(a.clip).toBe('Stand');
+      // Rise ends leaning forward, ready to run (hips ~0.72 m, head joint ~1.34 m; the Run clip leans the same way)
+      expect(a.updateVolumes().find(v => v.part === 'head')!.a.y).toBeGreaterThan(1.3);
+      a.dispose();
+    }
   });
 });
 

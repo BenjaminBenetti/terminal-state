@@ -1,8 +1,8 @@
 // Task track1-siren-blightbelly-20261031 (lane RIGS): hand-authored procedural Siren clips (NOT mocap), evaluated with the
 // shared humanoid pose machinery (zombie/lib/pose.mjs Rig: FK, 2-bone leg IK, arm aiming; zombie/lib/clips.mjs realize) on
 // the Siren's own 18-joint skeleton. Pose animation is behaviour only — the mesh is deformed solely by skinning at runtime.
-//   Dormant  4.0 s loop  kneeling, sitting back toward the heels, torso folded forward over the knees, head hanging, claws
-//                        resting on the floor; slow breathing (chest / spine pitch), faint head sway
+//   Dormant  4.0 s loop  kneeling nearly upright, torso bowed far forward over the knees, head hanging, arms straight down with
+//                        the claws resting on the floor; slow breathing (chest / spine pitch), faint head sway
 //   Rise     1.0 s       dormant -> push up from the floor -> one foot planted -> predatory stance
 //   Run      0.6 s loop  fast, aggressive, leaning forward, claws reaching (authored ground speed in SIREN_CLIPS.Run)
 //   Attack   1.0 s       readable wind-up (right claw raised back, torso twisted) -> diagonal swipe (impact 0.40 s) ->
@@ -43,13 +43,24 @@ function armLocal(P, side, a) {
 }
 /** Torso / legs params + world arm specs -> realize() parameter set. */
 function key(T, armL, armR = null) {
-  const P = {hips: T.hips, hipsRot: T.hipsRot, spine: T.spine, chest: T.chest, neck: T.neck, head: T.head, legL: T.legL, legR: T.legR};
+  const P = {hips: T.hips.slice(), hipsRot: T.hipsRot, spine: T.spine, chest: T.chest, neck: T.neck, head: T.head, legL: legLocal(T, T.legL, 'L'), legR: legLocal(T, T.legR ?? T.legL, 'R')};
+  if (T.ground) P.ground = T.ground;
   P.armL = armLocal(P, 'L', armL);
   P.armR = armR ? armLocal(P, 'R', armR) : armLocal(P, 'R', armL);
   return P;
 }
-const fkLeg = (thigh, shin, foot) => ({mode: 'fk', thigh, shin, foot});
-const mirrorFk = l => ({mode: 'fk', thigh: [l.thigh[0], -l.thigh[1], -l.thigh[2]], shin: [l.shin[0], -l.shin[1], -l.shin[2]], foot: [l.foot[0], -l.foot[1], -l.foot[2]]});
+/**
+ * FK legs given by WORLD pitch (deg; 0 = bone straight down, + swings the lower end backward, - forward): {mode: 'fkw', thigh:
+ * [pitchW, yaw, roll], shin: pitchW, foot: pitchW (0 = foot flat forward, 90 = toes down, 180 = toes back / sole up)}. Converted to
+ * the local rotations realize() expects (thigh relative to the Hips pitch; shin / foot relative to their parent). R mirrors L
+ * (yaw / roll negated) unless the key gives legR explicitly with `side: 'R'`.
+ */
+const fkw = (thigh, shin, foot, side = null) => ({mode: 'fkw', thigh, shin, foot, side});
+function legLocal(T, l, side) {
+  if (!l || l.mode !== 'fkw') return l;
+  const sg = side === 'R' && l.side !== 'R' ? -1 : 1;
+  return {mode: 'fk', thigh: [l.thigh[0] - T.hipsRot[0], sg * (l.thigh[1] ?? 0), sg * (l.thigh[2] ?? 0)], shin: [l.shin - l.thigh[0], 0, 0], foot: [l.foot - l.shin, 0, 0]};
+}
 
 // ------------------------------------------------------------------------------------------------ poses
 /** Predatory stance (end of Rise, base of Attack / Hit): crouched, pelvis tipped forward, claws forward and ready. */
@@ -61,11 +72,13 @@ export function stance() {
 
 /** Dormant base (t-independent): see the header. `ctx.dormant` = {hipsY, armFlex} solved by the builder (floor contact). */
 export function dormantPose(ctx = {}, breath = 0, sway = 0) {
-  const D = ctx.dormant ?? {hipsY: -0.48, armFlex: 35, hipsZ: -0.12};
-  const L = fkLeg([-75, 6, 4], [140, 0, 0], [70, 0, 0]);
-  return key({hips: [0, D.hipsY + 0.004 * breath, D.hipsZ], hipsRot: [35 + 0.6 * breath, 0, 0], spine: [20 + 1.2 * breath, 0.8 * sway, 0], chest: [18 - 1.6 * breath, 0.6 * sway, 0],
-    neck: [12 + 0.8 * breath, 2.0 * sway, 0], head: [14 - 1.2 * breath, 3.0 * sway, 1.5 * sway], legL: L, legR: mirrorFk(L)},
-  {dirW: [0.22, -0.9, 0.2], flexW: [-0.1, 0.1, 1], flex: D.armFlex, wrist: -20, wristSide: 0});
+  const D = ctx.dormant ?? {hipsY: -0.40, armFlex: 10, hipsZ: -0.08};
+  // kneeling nearly upright (thighs ~12 deg forward: the hips stay high, so the Hips-weighted skirt sinks as little as a kneel
+  // allows), pelvis tipped 45 deg and torso bowed far forward over the knees (the tipped pelvis also swings the skirt back /
+  // up), arms hanging straight down with the claws on the floor, head hanging
+  return key({hips: [0, D.hipsY + 0.004 * breath, D.hipsZ], hipsRot: [45 + 0.6 * breath, 0, 0], spine: [30 + 1.2 * breath, 0.8 * sway, 0], chest: [20 - 1.6 * breath, 0.6 * sway, 0],
+    neck: [8 + 0.8 * breath, 2.0 * sway, 0], head: [12 - 1.2 * breath, 3.0 * sway, 1.5 * sway], legL: fkw([-12, 6, 3], 92, 158)},
+  {dirW: [0.12, -0.98, 0.06], flexW: [-0.1, 0.1, 1], flex: D.armFlex, wrist: -25, wristSide: 0});
 }
 
 function dormant(rig, t, T, ctx) {
@@ -109,6 +122,14 @@ function slerpQ(a, b, t) {
   return a.map((v, i) => (v * Math.sin((1 - t) * th) + bb[i] * Math.sin(t * th)) / s);
 }
 const EASE = {inOut: t => t * t * (3 - 2 * t), in: t => t * t, out: t => 1 - (1 - t) * (1 - t), linear: t => t, snap: t => 1 - Math.pow(1 - t, 3)};
+/** Keys flagged `ground` get their hips height solved once by ctx.ground (the builder's floor-contact solve); cached per clip. */
+function groundedKeys(name, build, ctx) {
+  ctx.cache ??= {};
+  if (ctx.cache[name]) return ctx.cache[name];
+  const keys = build(ctx);
+  if (ctx.ground) for (const k of keys) if (k.p.ground) k.p.hips[1] = ctx.ground(k.p, k.p.ground);
+  return (ctx.cache[name] = keys);
+}
 function keyed(rig, keys, t) {
   let i = 0;
   while (i < keys.length - 2 && t > keys[i + 1].t) i++;
@@ -119,13 +140,13 @@ function keyed(rig, keys, t) {
 }
 
 function riseKeys(ctx) {
-  const D = ctx.dormant ?? {hipsY: -0.48, armFlex: 35, hipsZ: -0.12};
-  const kneelUp = fkLeg([-12, 4, 3], [102, 0, 0], [72, 0, 0]);
-  const push = key({hips: [0, D.hipsY + 0.10, D.hipsZ + 0.02], hipsRot: [30, 0, 0], spine: [10, 0, 0], chest: [4, 0, 0], neck: [-8, 0, 0], head: [-22, 0, 0], legL: kneelUp, legR: mirrorFk(kneelUp)},
+  const D = ctx.dormant ?? {hipsY: -0.40, armFlex: 10, hipsZ: -0.08};
+  // kneeling upright, torso still forward, head coming up, claws leaving the floor
+  const push = key({hips: [0, D.hipsY + 0.10, D.hipsZ + 0.02], hipsRot: [30, 0, 0], spine: [10, 0, 0], chest: [4, 0, 0], neck: [-8, 0, 0], head: [-22, 0, 0], legL: fkw([-6, 5, 3], 92, 160), ground: 'legs'},
     {dirW: [0.25, -0.85, 0.45], flexW: [-0.1, 0.3, 1], flex: 22, wrist: -25});
   // left foot planted forward (lunge kneel), right knee still down
-  const lunge = key({hips: [0, -0.33, D.hipsZ + 0.05], hipsRot: [24, 6, 0], spine: [6, 0, 0], chest: [2, 0, 0], neck: [-10, 0, 0], head: [-16, 0, 0],
-    legL: fkLeg([-80, 8, 2], [78, 0, 0], [-6, 0, 0]), legR: mirrorFk(fkLeg([-8, 4, 3], [98, 0, 0], [40, 0, 0]))},
+  const lunge = key({hips: [0, -0.33, D.hipsZ + 0.05], hipsRot: [22, 6, 0], spine: [6, 0, 0], chest: [2, 0, 0], neck: [-10, 0, 0], head: [-16, 0, 0],
+    legL: fkw([-62, 6, 2], 4, 2), legR: fkw([8, 4, 3], 93, 150), ground: 'legs'},
   {dirW: [0.45, -0.5, 0.75], flexW: [-0.3, 0.7, 0.5], flex: 30, wristSide: -10});
   const st = stance();
   return [{t: 0, p: dormantPose(ctx)}, {t: 0.32, p: push, ease: 'inOut'}, {t: 0.62, p: lunge, ease: 'inOut'}, {t: 1.0, p: st, ease: 'out'}];
@@ -165,15 +186,14 @@ function deathKeys(ctx) {
   const jolt = key({hips: [0, -0.08, -0.06], hipsRot: [4, -6, 4], spine: [-8, -4, 0], chest: [-14, -6, 4], neck: [-12, 0, 0], head: [-28, -10, 12],
     legL: {mode: 'ik', z: 0.09, x: 0.03, lift: 0, pitch: 0, yaw: 8}, legR: {mode: 'ik', z: -0.17, x: 0.03, lift: 0, pitch: 8, yaw: -10}},
   {dirW: [0.85, -0.2, -0.3], flexW: [-0.2, 0.9, 0.2], flex: 35, wristSide: 0});
-  const kneelL = fkLeg([-30, 4, 4], [118, 0, 0], [70, 0, 0]);
-  const kneel = key({hips: [0, -0.43, -0.10], hipsRot: [16, -6, 6], spine: [10, -4, 4], chest: [10, -4, 4], neck: [16, 0, 0], head: [12, -16, 10], legL: kneelL, legR: mirrorFk(kneelL)},
+  const kneel = key({hips: [0, -0.43, -0.10], hipsRot: [16, -6, 6], spine: [10, -4, 4], chest: [10, -4, 4], neck: [16, 0, 0], head: [12, -16, 10], legL: fkw([-8, 4, 4], 93, 158), ground: 'legs'},
     {dirW: [0.4, -0.9, 0.1], flexW: [-0.2, 0, 1], flex: 15, wrist: -10});
   const tip = key({hips: [0.02, -0.55, 0.10], hipsRot: [55, -8, 8], spine: [8, -4, 4], chest: [8, -2, 4], neck: [6, 0, 0], head: [0, -30, 10],
-    legL: fkLeg([-40, 4, 4], [90, 0, 0], [50, 0, 0]), legR: mirrorFk(fkLeg([-30, 4, 4], [100, 0, 0], [55, 0, 0]))},
+    legL: fkw([-12, 4, 4], 93, 158), legR: fkw([-4, -4, -4], 94, 160, 'R'), ground: 'legs'},
   {dirW: [0.45, -0.6, 0.65], flexW: [-0.2, 0.5, 0.8], flex: 25, wrist: -20});
   const hy = ctx.deathHipsY ?? -0.70;
   const prone = key({hips: [0.03, hy, 0.18], hipsRot: [86, -4, 6], spine: [2, -2, 2], chest: [2, -2, 2], neck: [-6, -20, 0], head: [-6, -50, 0],
-    legL: fkLeg([-2, 4, 4], [12, 0, 0], [40, 0, 0]), legR: mirrorFk(fkLeg([4, 6, 2], [18, 0, 0], [45, 0, 0]))},
+    legL: fkw([84, 4, 4], 94, 168), legR: fkw([86, -6, -2], 96, 170, 'R')},
   {dirW: [0.75, 0.0, 0.65], flexW: [-0.6, 0, 0.8], flex: 30, wrist: 0},
   {explicit: true, dirW: [-0.25, 0.0, -0.97], flexW: [0.9, 0, 0.3], flex: 10, wrist: 0});
   return [{t: 0, p: st}, {t: 0.14, p: jolt, ease: 'snap'}, {t: 0.62, p: kneel, ease: 'in'}, {t: 0.95, p: kneel, ease: 'linear'}, {t: 1.35, p: tip, ease: 'in'}, {t: 1.62, p: prone, ease: 'in'}, {t: 1.8, p: prone, ease: 'out'}];
@@ -206,11 +226,11 @@ export function evalClip(rig, name, t, ctx = {}) {
   const T = SIREN_CLIPS[name].duration;
   switch (name) {
     case 'Dormant': return dormant(rig, t, T, ctx);
-    case 'Rise': return keyed(rig, riseKeys(ctx), t);
+    case 'Rise': return keyed(rig, groundedKeys('Rise', riseKeys, ctx), t);
     case 'Run': return run(rig, t, T);
-    case 'Attack': return keyed(rig, attackKeys(), t);
-    case 'Hit': return keyed(rig, hitKeys(), t);
-    case 'Death': return keyed(rig, deathKeys(ctx), t);
+    case 'Attack': return keyed(rig, groundedKeys('Attack', attackKeys, ctx), t);
+    case 'Hit': return keyed(rig, groundedKeys('Hit', hitKeys, ctx), t);
+    case 'Death': return keyed(rig, groundedKeys('Death', deathKeys, ctx), t);
   }
   throw new Error('unknown Siren clip ' + name);
 }

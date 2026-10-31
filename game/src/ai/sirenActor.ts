@@ -6,7 +6,7 @@
 // supplied emissive) / wound feedback, and plays the clips; no per-instance scale jitter).
 // Skeleton: the shared 18-joint humanoid names (tools/asset-pipeline/zombie/lib/skeleton.mjs), so the humanoid ragdoll (physics
 // HUMANOID_RIG) and the humanoid corpse volumes apply. Extras (`scene.userData.enemySiren`, all optional): clips {name: {duration,
-// loop, impact, groundSpeed}}, hit {head, torso, arm, leg} radii (model m), girth {torso, arm, leg} ragdoll multipliers.
+// loop, impactTime, groundSpeed}}, hitRadii {head, torso, arm, leg} (model m), girth {torso, arm, leg} ragdoll multipliers.
 //
 // Clips (contract): Dormant (floor-hunched breathing loop), Rise (once), Run, Attack (claw swipe), Hit, Death. The brain's states map
 // onto them: dormant -> Dormant, rise -> Rise (timed to SirenBrain.riseS), 'Attack' -> Attack timed to SIREN_STATS.attackDuration,
@@ -38,8 +38,11 @@ const BONES = ['Hips', 'Neck', 'Head', 'L_UpperArm', 'L_Hand', 'R_UpperArm', 'R_
 /** Hit radii (model m) when the extras give none: a slender figure (a zombie body is ~0.135 / 0.2 / 0.075 / 0.1). */
 export const SIREN_HIT_DEFAULT = {head: 0.12, torso: 0.17, arm: 0.065, leg: 0.085} as const;
 
+/** lane RIGS's `scene.userData.enemySiren` (derivatives/enemy-siren.json `extras`); every field optional here. */
 export interface SirenExtras {
-  clips?: Record<string, {duration?: number; loop?: boolean; impact?: number | null; groundSpeed?: number}>;
+  clips?: Record<string, {duration?: number; loop?: boolean; impactTime?: number; groundSpeed?: number}>;
+  hitRadii?: Partial<typeof SIREN_HIT_DEFAULT>;
+  /** Older name for hitRadii (accepted). */
   hit?: Partial<typeof SIREN_HIT_DEFAULT>;
   girth?: {torso: number; arm: number; leg: number};
 }
@@ -86,7 +89,7 @@ export class SirenActor {
     this.root = SkeletonUtils.clone(gltf.scene);
     this.root.name = 'enemy-siren';
     this.extras = (gltf.scene.userData.enemySiren ?? {}) as SirenExtras;
-    this.hit = {...SIREN_HIT_DEFAULT, ...(this.extras.hit ?? {})};
+    this.hit = {...SIREN_HIT_DEFAULT, ...(this.extras.hitRadii ?? this.extras.hit ?? {})};
     this.girth = this.extras.girth;
     this.brain = new SirenBrain(spawn.x, spawn.z, spawn.yaw, undefined, dormant);
     this.brain.bodyScale = this.scale;

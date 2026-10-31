@@ -14,7 +14,13 @@ import {computeNormals} from '../../zombie/lib/mesh.mjs';
 const TAU = Math.PI * 2;
 
 /** Tube along a path; cross-section ellipse (a along U, b along V) per ring; optional end caps. */
-function tube(out, rings, {segs = 20, caps = true, u0 = 0, u1 = 1} = {}) {
+function tube(out, rings0, {segs = 20, caps = true, u0 = 0, u1 = 1, step = 0.02} = {}) {
+  // subdivide so consecutive rings are <= `step` apart (dense, evenly sampled cross-sections)
+  const rings = [rings0[0]];
+  for (let k = 1; k < rings0.length; k++) {
+    const a = rings0[k - 1], b = rings0[k], d = Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1], b.c[2] - a.c[2]), n = Math.max(1, Math.ceil(d / step));
+    for (let i = 1; i <= n; i++) { const t = i / n; rings.push({c: a.c.map((v, q) => v + (b.c[q] - v) * t), U: b.U, V: b.V, a: a.a + (b.a - a.a) * t, b: a.b + (b.b - a.b) * t}); }
+  }
   const base = out.pos.length / 3;
   rings.forEach((r, k) => {
     for (let s = 0; s <= segs; s++) {
@@ -65,8 +71,8 @@ export async function writeStandinHumanoid(file) {
   const m = {pos: [], uv: [], idx: []};
   for (const sg of [1, -1]) {
     // leg (ankle -> hip) and foot
-    tube(m, ringsY([[sg * 0.10, 0.03, 0, 0.045, 0.05], [sg * 0.10, 0.08, -0.01, 0.040, 0.042], [sg * 0.10, 0.20, -0.01, 0.048, 0.050], [sg * 0.098, 0.45, -0.01, 0.055, 0.058], [sg * 0.092, 0.65, -0.01, 0.07, 0.07], [sg * 0.085, 0.84, -0.01, 0.08, 0.08]]), {segs: 18});
-    tube(m, [{c: [sg * 0.10, 0.03, -0.07], U: [1, 0, 0], V: [0, 1, 0], a: 0.04, b: 0.028}, {c: [sg * 0.10, 0.03, 0.04], U: [1, 0, 0], V: [0, 1, 0], a: 0.045, b: 0.03}, {c: [sg * 0.10, 0.025, 0.13], U: [1, 0, 0], V: [0, 1, 0], a: 0.04, b: 0.02}], {segs: 14});
+    tube(m, ringsY([[sg * 0.11, 0.03, 0, 0.045, 0.05], [sg * 0.11, 0.08, -0.01, 0.040, 0.042], [sg * 0.11, 0.20, -0.01, 0.048, 0.050], [sg * 0.108, 0.45, -0.01, 0.055, 0.058], [sg * 0.104, 0.65, -0.01, 0.065, 0.068], [sg * 0.10, 0.84, -0.01, 0.075, 0.078]]), {segs: 18});
+    tube(m, [{c: [sg * 0.11, 0.03, -0.07], U: [1, 0, 0], V: [0, 1, 0], a: 0.04, b: 0.028}, {c: [sg * 0.11, 0.03, 0.04], U: [1, 0, 0], V: [0, 1, 0], a: 0.045, b: 0.03}, {c: [sg * 0.11, 0.025, 0.13], U: [1, 0, 0], V: [0, 1, 0], a: 0.04, b: 0.02}], {segs: 14});
     // arm (shoulder -> wrist -> flat hand), horizontal T-pose
     tube(m, ringsX([[sg * 0.08, 1.36, -0.03, 0.05, 0.05], [sg * 0.16, 1.36, -0.03, 0.045, 0.045], [sg * 0.34, 1.355, -0.025, 0.04, 0.04], [sg * 0.45, 1.355, -0.02, 0.034, 0.034], [sg * 0.55, 1.355, -0.015, 0.022, 0.028],
       [sg * 0.60, 1.355, -0.01, 0.02, 0.05], [sg * 0.68, 1.35, -0.005, 0.016, 0.045], [sg * 0.73, 1.345, 0, 0.008, 0.02]]), {segs: 16});

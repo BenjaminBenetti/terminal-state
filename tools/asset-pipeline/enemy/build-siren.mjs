@@ -36,7 +36,8 @@ export const SIREN = {
   dress: {uploadId: 'fbe47869acac46f3a52d808bab79f80a', label: 'Ghost Dress', bytes: 8325776, sha256: 'aa3e731f0bfd6f1a80c5c0ee56c019f1c0d1625c347c5978db56988fa55a2a8c'},
   heightM: 1.70,       // game-scale choice: top of the head / hair 1.70 m (ordinary zombies 1.65-1.80 m)
   hairLumMax: 60,      // base-colour luminance below which a body vertex is hair (analysis mask only)
-  // measured scan (evidence/RIGS/dress-fit-scan.md): the strap rests on the right shoulder; s ~1.30 clears the buttocks
+  // measured scan (task lane notes RIGS.notes): fixed-scale scan 1.22-1.42 with the strap on the right shoulder; skin poke-through
+  // (exact ray test) is cleared at the buttocks from s ~1.29 with the dress 1 cm back; the optimiser refines from here
   dressFit: {init: {s: 1.30, t: [-0.040, 0.790, -0.012]}},
   skin: {smoothIters: 4},
   dressSkin: {thighMax: 0.45, skirt: true},
@@ -157,6 +158,7 @@ async function main() {
     ...(B.dress ? [{name: 'SirenDress', srcDoc: (await readSource(B.dress.src.file, B.dress.src.sha256)).doc, M: B.dress.M, srcFile: B.cfg.dress.uploadId ?? path.relative(REPO, B.dress.src.file), srcSha256: B.dress.src.sha256}] : [])]);
   log(`  appearance proof ok=${proof.ok} ${proof.parts.map(p => `${p.name}: attrs ${Object.values(p.attributes).every(a => a.equal)} idx ${p.indices.equal} mat ${p.materialEqual} bind ${p.bindPose.maxPositionErrorM}`).join(' | ')} | textures bytes ${proof.textures.encodedBytesEqual} pixels ${proof.textures.pixelsEqual}`);
   if (!proof.ok) throw new Error('APPEARANCE PROOF FAILED — output not acceptable');
+  proof.file = path.relative(REPO, proof.file);
   // the sources must still be byte-identical after the build
   for (const p of [B.bodySrc, B.dress?.src].filter(Boolean)) if (sha256File(p.file) !== p.sha256) throw new Error('SOURCE CHANGED ' + p.file);
   let files = [];

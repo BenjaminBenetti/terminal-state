@@ -51,7 +51,7 @@ function regionLows(rig, skel, mesh, pose) {
 const minY = P => { let m = Infinity; for (let i = 1; i < P.length; i += 3) if (P[i] < m) m = P[i]; return m; };
 
 /** Dormant floor solve: legs (knees / shins / feet) touch the floor; claws rest on it. */
-function solveDormant(rig, skel, mesh, base = {hipsY: -0.48, armFlex: 35, hipsZ: -0.12}) {
+function solveDormant(rig, skel, mesh, base = {hipsY: -0.40, armFlex: 10, hipsZ: -0.08}) {
   const D = {...base};
   const lows = () => regionLows(rig, skel, mesh, realize(rig, dormantPose({dormant: D}))).lows;
   for (let round = 0; round < 3; round++) {
@@ -67,11 +67,11 @@ function solveDormant(rig, skel, mesh, base = {hipsY: -0.48, armFlex: 35, hipsZ:
 }
 
 /** Prone death: hips height so the lowest body point rests 8 mm above the floor (bisection). */
-function solveDeath(rig, skel, mesh) {
+function solveDeath(rig, skel, mesh, ground) {
   let lo = -1.2, hi = 0, best = null;
-  const at = hy => minY(skinPositions(mesh, skel, rig.fk(evalClip(rig, 'Death', SIREN_CLIPS.Death.duration, {deathHipsY: hy}))));
+  const at = hy => minY(skinPositions(mesh, skel, rig.fk(evalClip(rig, 'Death', SIREN_CLIPS.Death.duration, {deathHipsY: hy, ground}))));
   for (let it = 0; it < 30; it++) { const mid = (lo + hi) / 2; const m = at(mid); best = {hipsY: mid, minY: m}; if (m > 0.008) hi = mid; else lo = mid; }
-  const {lows} = regionLows(rig, skel, mesh, evalClip(rig, 'Death', SIREN_CLIPS.Death.duration, {deathHipsY: best.hipsY}));
+  const {lows} = regionLows(rig, skel, mesh, evalClip(rig, 'Death', SIREN_CLIPS.Death.duration, {deathHipsY: best.hipsY, ground}));
   return {hipsY: r4(best.hipsY), lowestY: r4(best.minY), regionLowsM: Object.fromEntries(Object.entries(lows).map(([k, v]) => [k, r4(v)]))};
 }
 
@@ -178,9 +178,18 @@ export async function buildSiren(cfg, log = () => {}) {
   // ---- clips ----
   log('[5] clips (floor solves, guard, verify)');
   const rig = new Rig(skel);
+  // key ground solve: hips height so the lowest LEG (knee / shin / foot) point rests 6 mm above the floor (bisection)
+  const groundLog = [];
+  const ground = (P, which) => {
+    let lo = P.hips[1] - 0.6, hi = P.hips[1] + 0.6;
+    const low = hy => { const L = regionLows(rig, skel, bodyMesh, realize(rig, {...P, hips: [P.hips[0], hy, P.hips[2]]})).lows; return which === 'legs' ? Math.min(L.legL, L.legR) : Math.min(...Object.values(L)); };
+    for (let it = 0; it < 26; it++) { const mid = (lo + hi) / 2; if (low(mid) > 0.006) hi = mid; else lo = mid; }
+    groundLog.push({which, hipsY: r4(hi)});
+    return hi;
+  };
   const dormant = solveDormant(rig, skel, bodyMesh);
-  const death = solveDeath(rig, skel, bodyMesh);
-  const ctx = {dormant, deathHipsY: death.hipsY};
+  const death = solveDeath(rig, skel, bodyMesh, ground);
+  const ctx = {dormant, deathHipsY: death.hipsY, ground};
   const clips = Object.keys(SIREN_CLIPS).map(name => sampleClip(rig, name, ctx));
   const guarded = {};
   for (const c of clips) if (['Rise', 'Attack', 'Hit', 'Death'].includes(c.name)) guarded[c.name] = floorGuard(rig, skel, bodyMesh, c);
@@ -214,7 +223,7 @@ export async function buildSiren(cfg, log = () => {}) {
     modelSpace: '+Z forward, +Y up, +X = character left, metres; feet / Root at the origin',
     note: 'User-supplied Siren (Pale Apparition body + Ghost Dress), appearance-locked: native vertices / UVs / normals / materials / textures unchanged; technical rig, uniform fit and procedural clips only.',
   };
-  return {cfg, bodySrc, bodyFp, bp, place, native, P, N, welded, map, hairV, hairW, samples: S, hairS, skel, sw, bodyNative, bodyMesh, dress, rig, clips, ctx, dormant, death, guarded, verify, radii, extras,
+  return {cfg, bodySrc, bodyFp, bp, place, native, P, N, welded, map, hairV, hairW, samples: S, hairS, skel, sw, bodyNative, bodyMesh, dress, rig, clips, ctx, dormant, death, guarded, verify, radii, extras, keyGround: groundLog,
     stats: {seconds: +((Date.now() - t0) / 1000).toFixed(1), bodyWeights: weightStats(bodyNative), dressWeights: dress ? weightStats(dress.native) : null, weldedBodyVertices: welded.pos.length / 3, weldedDressVertices: dress ? dress.welded.pos.length / 3 : null,
       pokeThroughBind: dress ? (({flags: _f, ...r}) => r)(pokeThrough({pos: P, nrm: N, testIds: [...Array(P.length / 3).keys()].filter(i => !hairV || !hairV[i])}, dress.pos, dress.idx)) : null, runGait: RUN_GAIT}};
 }

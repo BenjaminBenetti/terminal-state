@@ -11,7 +11,7 @@ import {ENEMY_ARCHETYPES} from './creatureArchetypes';
 /** Lazily loaded enemy models: library key -> url + catalogue bytes (progress weight). */
 export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {
   enemy_blightbelly: {url: 'assets/models/enemy-blightbelly.glb', bytes: 2_221_420},
-  enemy_siren: {url: 'assets/models/enemy-siren.glb', bytes: 12_000_000},
+  enemy_siren: {url: 'assets/models/enemy-siren.glb', bytes: 12_873_516},
 };
 
 /** The lazy enemy model keys a layout's spawns use (sorted; families without a lazy model contribute none). */

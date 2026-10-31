@@ -65,7 +65,10 @@ export function estimateSkeleton(pts, hair = null) {
 
   // --- hips & legs ---
   const hipY = Math.min(crotchY + 0.18 * k, Math.max(crotchY + 0.06 * k, 0.49 * H));
-  const thigh = {L: legCluster(crotchY - 0.04 * k, 'L'), R: legCluster(crotchY - 0.04 * k, 'R')};
+  // thigh sections 4 cm below the crotch (or the first height further down where both legs are separate sections)
+  let thighY = crotchY - 0.04 * k, thigh = null;
+  for (; thighY > crotchY - 0.25 * k; thighY -= 0.005) { const t = {L: legCluster(thighY, 'L'), R: legCluster(thighY, 'R')}; if (t.L && t.R) { thigh = t; break; } }
+  if (!thigh) throw new Error('skeleton: thigh sections not found');
   const pelvis = central(clustersAt(hipY));
   const pelvisZ = pelvis.min[1] + 0.45 * (pelvis.max[1] - pelvis.min[1]);
   const legs = {};
@@ -75,7 +78,7 @@ export function estimateSkeleton(pts, hair = null) {
     const kc = legCluster(kneeY, side);
     legs[side] = {hip: [0.8 * thigh[side].c[0], hipY, pelvisZ], knee: [kc.c[0], kneeY, kc.c[1]], ankle: [sh.c[0], ankleY, sh.c[1]], toe: [foot[side].bx, 0.03 * k, foot[side].z1 - 0.02 * k]};
   }
-  log.legs = {crotchY: +crotchY.toFixed(3), hipY: +hipY.toFixed(3), thighCentreX: [+thigh.L.c[0].toFixed(4), +thigh.R.c[0].toFixed(4)], pelvisZ: +pelvisZ.toFixed(4),
+  log.legs = {crotchY: +crotchY.toFixed(3), hipY: +hipY.toFixed(3), thighSectionY: +thighY.toFixed(3), thighCentreX: [+thigh.L.c[0].toFixed(4), +thigh.R.c[0].toFixed(4)], pelvisZ: +pelvisZ.toFixed(4),
     method: 'crotch = lowest merge of the leg sections (non-hair samples); hip height = 0.49H clamped to crotch+[0.06,0.18] (x H/1.78); hip x = 0.8 x thigh centre 4 cm below the crotch; knee at 50% ankle->hip, centred in the leg section; ankle centred in the shin section'};
 
   // --- arms (perpendicular slices along the arm axis) ---
