@@ -202,6 +202,9 @@ tiers), `enemies/<level>.html` (profile, eligibility), `enemies/families.html` (
   once-per-run dead indices.
 - `game/tests/enemy-spawn-tables.test.ts` — coverage, neutral resolution, test-only 0 / 2 modifiers, validation, persistence.
 - `game/tests/enemy-spawn-reference.test.ts` — the reference: coverage, runtime agreement, census, maths, this page's names.
+- `game/tests/annex-content.test.ts` (Track 2) — the `service` zone: declared per annex-bearing level, appended after every core spawn
+  and tagged, annex areas only, within the per-annex budget / keep-off / spacing, the core's spawns and families unchanged, no
+  Siren in an annex, kills remembered. Stage 5 of the parity pins: the live layouts of annex seeds (core views unchanged).
 - Downstream: the Subway fingerprints (`game/tests/office-gen.test.ts`) and loot goldens (`game/tests/loot-golden.test.ts`).
 
 ```sh
