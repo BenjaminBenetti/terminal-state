@@ -17,6 +17,7 @@ import {MODEL_FILES} from '../src/assets/manifest';
 import {CreatureActor, CreatureBrain, RATDOG_STATS, LUNGE} from '../src/ai/creatureActor';
 import {createEnemyActor, ENEMY_ARCHETYPES, enemyCues, RATDOG_CUES, ZOMBIE_CUES, archetypeOf, type EnemyActor} from '../src/ai/creatureArchetypes';
 import {ENEMY_POOL, assignEnemyArchetypes, enemyRoll, pickEnemyArchetype} from '../src/ai/creatureSpawn';
+import {spawnProfile} from '../src/ai/spawnTables'; // task track1 (lane SPAWN): assignEnemyArchetypes takes the level's profile explicitly
 import {ZOMBIE_STATS, type BrainWorld} from '../src/ai/brain';
 import {ARCHETYPES, generateStation} from '../src/gen/station';
 import type {ZombieSpawn} from '../src/gen/station';
@@ -131,13 +132,15 @@ describe('enemy archetype registry + spawn weights', () => {
       const seed = (s * 2654435761) >>> 0;
       const count = 11 + (s % 6); // the generator places 11..16 spawns
       const layout = {seed, zombies: Array.from({length: count}, () => ({} as {archetype?: 'zombie' | 'ratdog'}))};
-      const k = assignEnemyArchetypes(layout);
+      assignEnemyArchetypes(layout, spawnProfile('subway'));
+      // Task track1-siren-blightbelly-20261031 (lane SPAWN): the return counts every non-zombie (Blightbellies too): count rat/dogs
+      const k = layout.zombies.filter(z => z.archetype === 'ratdog').length;
       rat += k; n += count;
       if (k === 0) zeroStations++;
       if (k > 1) multi++;
       if (s < 50) { // deterministic per seed / index
         const again = {seed, zombies: Array.from({length: count}, () => ({} as {archetype?: 'zombie' | 'ratdog'}))};
-        assignEnemyArchetypes(again);
+        assignEnemyArchetypes(again, spawnProfile('subway'));
         expect(again.zombies.map(z => z.archetype)).toEqual(layout.zombies.map(z => z.archetype));
       }
     }

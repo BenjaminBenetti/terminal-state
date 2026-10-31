@@ -16,6 +16,11 @@ import type {WoundableActor} from '../damage/wounds';
 import type {Sfx} from '../audio/sfx';
 import type {ZombieSpawn} from '../gen/station';
 import {CreatureActor, RATDOG_STATS} from './creatureActor';
+import {BLIGHT_CUES, BLIGHTBELLY_STATS} from './blightbelly'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT)
+import {BlightbellyActor} from './blightbellyActor'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT)
+import {SIREN_STATS} from './siren'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
+import {SIREN_MODEL_KEY, SirenActor} from './sirenActor'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
+import {SIREN_CUES} from './sirenCues'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
 import {ENEMY_POOL, type EnemyArchetypeId} from './creatureSpawn';
 
 export {ENEMY_POOL, type EnemyArchetypeId};
@@ -103,6 +108,8 @@ export const RATDOG_CUES: EnemyCues = {
 };
 
 export function enemyCues(z: EnemyActor): EnemyCues {
+  if (archetypeOf(z) === 'blightbelly') return BLIGHT_CUES; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): deep groans, heavy gait
+  if (archetypeOf(z) === 'siren') return SIREN_CUES; // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant hum, one wake scream, no groans
   return archetypeOf(z) === 'ratdog' ? RATDOG_CUES : ZOMBIE_CUES;
 }
 
@@ -123,6 +130,16 @@ export interface EnemyArchetypeDef {
 export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
   zombie: {id: 'zombie', label: 'Infected', model: null, stats: null, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.6,
     source: 'zombie wardrobe registry (ai/outfits.ts); stats ZOMBIE_STATS by shambler / coated type'},
+  // Task track1-siren-blightbelly-20261031 (lane SPAWN): key order zombie, blightbelly, siren, ratdog = ENEMY_FAMILY_IDS (= roll order).
+  // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the obese, pustule-covered zombie subtype that bursts once when killed
+  // (ai/blightbelly.ts stats / burst, ai/blightbellyActor.ts, ai/blightBurst.ts); model lazily loaded per layout (ai/enemyModels.ts).
+  blightbelly: {id: 'blightbelly', label: 'Blightbelly', model: 'enemy_blightbelly', stats: BLIGHTBELLY_STATS, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.5,
+    source: 'Meshy T2.5 text-to-3D (Track 1 Blightbelly attempt 2, refine) -> derivative enemy-blightbelly.glb (lane RIGB: shared 18-joint rig, pustule domes, heavy procedural clips)'},
+  // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant floor-hunched humming apparition, woken only by ~2 m proximity, the
+  // lit flashlight on her or a hit; then one scream, Rise, fast Run + claw swipes (ai/siren.ts, sirenActor.ts, sirenSystem.ts).
+  // No ladder links (no climb clip); voice height = her hunched mouth (standing 1.5). Model lazily loaded per layout (ai/enemyModels.ts).
+  siren: {id: 'siren', label: 'Siren', model: SIREN_MODEL_KEY, stats: SIREN_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.5,
+    source: 'user-supplied Pale Apparition body + Ghost Dress GLBs (appearance locked) -> derivative enemy-siren.glb (lane RIGS: unit fit, dress attachment, shared 18-joint rig + clips)'},
   ratdog: {id: 'ratdog', label: 'Tunnel scavenger (rat/dog)', model: 'creature_ratdog', stats: RATDOG_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.35,
     source: 'Field Notes core asset quadruped-02 concept -> Meshy T2.5 replacement -> derivative creature-ratdog-t25.glb (new rig + procedural clips)'},
 };
@@ -135,6 +152,19 @@ export function createEnemyActor(spawn: ZombieSpawn, models: Record<string, GLTF
   if (spawn.archetype === 'ratdog') {
     const g = models[ENEMY_ARCHETYPES.ratdog.model!];
     if (g) return {actor: new CreatureActor(g, spawn, rand), fallback: false};
+    return {actor: zombie(), fallback: true};
+  }
+  // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly when its (lazily loaded) model is there, else a zombie stands in
+  if (spawn.archetype === 'blightbelly') {
+    const g = models[ENEMY_ARCHETYPES.blightbelly.model!];
+    if (g) return {actor: new BlightbellyActor(g, spawn, rand), fallback: false};
+    return {actor: zombie(), fallback: true};
+  }
+  // Task track1-siren-blightbelly-20261031 (lane SIREN): the Siren (dormant) when her lazily loaded model is there. The game never asks
+  // without it (ai/sirenSystem.ts skip(): the spawn is skipped, not a zombie); direct callers (tests / QA) get the counted fallback.
+  if (spawn.archetype === 'siren') {
+    const g = models[ENEMY_ARCHETYPES.siren.model!];
+    if (g) return {actor: new SirenActor(g, spawn, rand), fallback: false};
     return {actor: zombie(), fallback: true};
   }
   return {actor: zombie(), fallback: false};

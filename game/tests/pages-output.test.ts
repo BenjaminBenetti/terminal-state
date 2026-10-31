@@ -33,7 +33,7 @@ beforeAll(() => {
   site = buildSite({commit: COMMIT, readSource: sourceReader(ROOT)});
   ref = JSON.parse(site.get('data/loot.json')!) as LootReference;
   enemyRef = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
-}, 120000);
+}, 240000); // task track1-siren-blightbelly-20261031 (lane SPAWN): the full build now runs the 20-level eligibility census too (track3 lane PROFILES: + the mall censuses; lane INTEG: + the mall's 20-level Siren eligibility census — the whole file took ~114 s here, so 240 s keeps CI headroom)
 
 const pages = () => [...site.keys()].filter(p => p.endsWith('.html'));
 /** Copy of the site with one file replaced / added (validator rejection tests). */
@@ -429,22 +429,18 @@ describe('reference site validator rejects unsafe or broken output', () => {
       const file = `enemies/${slug(level.id)}.html`;
       return mutated(file, site.get(file)!.replace(`id="room-${slug(level.rooms.rows[0]!.room)}"`, 'id="room-gone"'));
     }, /no rendered place for room key/],
-    // task track3-eaton-centre-20261031 (lane PROFILES): the mall's horde pool / Track1 family hooks / rare rules must have their places
+    // task track3-eaton-centre-20261031 (lane PROFILES / INTEG): the mall's horde pool and every eligibility rule (the mall's Siren with
+    // its whole-level spacing) must have their places
     ['a level page missing its horde section', () => {
       const level = enemyRef.levels.find(l => l.horde)!;
       const file = `enemies/${slug(level.id)}.html`;
       return mutated(file, site.get(file)!.replace('id="horde"', 'id="horde-gone"'));
     }, /no rendered place for horde pool/],
-    ['a level page missing a family hook anchor', () => {
-      const level = enemyRef.levels.find(l => l.hooks.length)!;
+    ['a level page missing an eligibility rule anchor (the mall Siren)', () => {
+      const level = enemyRef.levels.find(l => l.id === 'mall')!;
       const file = `enemies/${slug(level.id)}.html`;
-      return mutated(file, site.get(file)!.replace(`id="hook-${slug(level.hooks[0]!.family)}"`, 'id="hook-gone"'));
-    }, /no rendered place for family hook/],
-    ['a level page missing a rare rule anchor', () => {
-      const level = enemyRef.levels.find(l => l.rare.length)!;
-      const file = `enemies/${slug(level.id)}.html`;
-      return mutated(file, site.get(file)!.replace(`id="rare-${slug(level.rare[0]!.family)}"`, 'id="rare-gone"'));
-    }, /no rendered place for rare rule/],
+      return mutated(file, site.get(file)!.replace(`id="elig-${slug(level.pool.eligibility[0]!.family)}"`, 'id="elig-gone"'));
+    }, /no rendered place for eligibility rule mall\/siren/],
     ['enemy data that the manifest digest does not name', () => {
       const data = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
       return mutated('data/enemies.json', `${JSON.stringify({...data, meta: {...data.meta, dataHash: 'ffffffff'}})}\n`);

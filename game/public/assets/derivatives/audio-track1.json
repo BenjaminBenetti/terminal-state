@@ -1,0 +1,1948 @@
+{
+ "task": "studio-track1-siren-blightbelly-20261031-01",
+ "lane": "AUDIO (Siren hum / scream, Blightbelly burst / gas hiss)",
+ "generatedBy": "tools/audio-pipeline/build-track1.mjs",
+ "policy": "Sound Lab only: one runtime derivative per authorized Sound Lab job of the initial 6-job batch (authorization.json soundLab.initialMaxPostJobs = 6; the primary was the sole submitter; no retries / rerolls; whole-second durations). No synthesis, stock, pitch / rate variants or layering. Takes failing the structural gate are never shipped (none failed). The Siren claw swipes and Blightbelly attacks reuse existing cues (zombieAttack / impactFlesh / zombieDeath / fleshTear / bodyFall).",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (envelope, spectrum, pitch track, loudness). Human audition required — portable pack reference/tasks/track1-siren-blightbelly-20261031/audition/.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "auditioned": false,
+ "soundLab": {
+  "endpoint": "http://10.0.0.59:7871",
+  "kit": {
+   "name": "Last Line Sound Lab CPU",
+   "version": "0.1.0"
+  },
+  "model": "stabilityai/stable-audio-3-small-sfx",
+  "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+  "weightsRepo": "stabilityai/stable-audio-3-optimized",
+  "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+  "profile": "w8a8",
+  "upstreamCode": {
+   "repo": "https://github.com/Stability-AI/stable-audio-3",
+   "commit": "77e0398c26f7d22d801ec1bb036307e8b231f741",
+   "committed": "2026-10-11T03:32:19-04:00",
+   "path": "optimized/tflite",
+   "license": "MIT (code only; does not cover model weights)"
+  },
+  "runner": "tools/audio-pipeline/soundlab_runner.py (primary; flock /tmp/ll-soundlab.lock; SOUND_LAB_MAX_POSTS=6)",
+  "jobs": 6
+ },
+ "rawArchive": "reference/tasks/track1-siren-blightbelly-20261031/audio/ (raw WAVs + lab / runner sidecars in raw/, intents / ACKs / terminals in ledger/, runner.log, queue.json, PLAN.json, QC.json + qc/*.png)",
+ "design": {
+  "sirenHum": "Short PHRASES, not a seamless loop: each raw is one complete melodic phrase (start + end of its own); the Siren plays one phrase, then a randomised gap (audio/sfx.ts SIREN_HUM.gapS), variants alternate. Reasons: a loop would crossfade inside held notes (hum-02 ends ~1 octave below its start), would repeat mechanically, and could not re-run the vocal route / storey gate per phrase; a phrase fades out cleanly on wake.",
+  "sirenScream": "One-shot with a short tail: the raw scream body plus its own ~60–120 ms release (the raws cut off sharply, as prompted); the room tail comes from the game reverb send. Loudest enemy vocal through the existing master compressor (no limiter bypass, no extra gain stage).",
+  "blightBurst": "One-shot transient + decay (peak-ceiling bound: the burst is impulsive).",
+  "blightHiss": "One-shot ~3.7 s broadband gas hiss that fades (long 0.8 s cosine fade over the raw's own decay); played once at the burst point after the burst."
+ },
+ "loudness": {
+  "method": "ITU-R BS.1770-4 K-weighting, 400 ms blocks / 75 % overlap, -70 LUFS absolute + -10 LU relative gate (mono); sample peak (no true-peak oversampling)",
+  "targets": {
+   "sirenHum": {
+    "targetLufs": -18,
+    "peakCeilingDbfs": -1
+   },
+   "sirenScream": {
+    "targetLufs": -16,
+    "peakCeilingDbfs": -1
+   },
+   "blightBurst": {
+    "targetLufs": -16,
+    "peakCeilingDbfs": -1
+   },
+   "blightHiss": {
+    "targetLufs": -18,
+    "peakCeilingDbfs": -1
+   }
+  }
+ },
+ "mixCalibration": {
+  "note": "Per-cue momentary-max loudness at the source (derivative x CUE_GAIN, before distance / occlusion / master). Reference cues re-derived from their raws + recorded ops. Target: scream = the loudest enemy vocal, ~2.7 LU above a zombie groan and ~1.3 LU above a zombie death (brightness at 1–3 kHz adds perceived piercing quality); hum soft, ~6 LU under a groan; burst near a zombie death with a -1 dBFS transient; hiss ~ flesh-tear / hurt level.",
+  "new": {
+   "sirenHum": {
+    "integratedLufs": -18,
+    "momentaryMaxLufs": -13.8,
+    "cueGain": 0.3,
+    "mixMomentaryMaxLufs": -24.3,
+    "mixPeakDbfs": -15.2
+   },
+   "sirenScream": {
+    "integratedLufs": -16,
+    "momentaryMaxLufs": -14.9,
+    "cueGain": 0.9,
+    "mixMomentaryMaxLufs": -15.8,
+    "mixPeakDbfs": -6.7
+   },
+   "blightBurst": {
+    "integratedLufs": -22.4,
+    "momentaryMaxLufs": -19.9,
+    "cueGain": 0.9,
+    "mixMomentaryMaxLufs": -20.8,
+    "mixPeakDbfs": -1.9
+   },
+   "blightHiss": {
+    "integratedLufs": -18,
+    "momentaryMaxLufs": -15,
+    "cueGain": 0.32,
+    "mixMomentaryMaxLufs": -24.9,
+    "mixPeakDbfs": -13.8
+   }
+  },
+  "reference": {
+   "cough": {
+    "takes": 10,
+    "integratedLufs": -21.8,
+    "momentaryMaxLufs": -17.5,
+    "cueGain": 0.38,
+    "mixMomentaryMaxLufs": -25.9
+   },
+   "zombieGroan": {
+    "takes": 4,
+    "integratedLufs": -16.4,
+    "momentaryMaxLufs": -13.4,
+    "cueGain": 0.55,
+    "mixMomentaryMaxLufs": -18.5
+   },
+   "hurt": {
+    "takes": 4,
+    "integratedLufs": -17.4,
+    "momentaryMaxLufs": -17.1,
+    "cueGain": 0.45,
+    "mixMomentaryMaxLufs": -24
+   },
+   "shotgunShot": {
+    "takes": 3,
+    "integratedLufs": -23.3,
+    "momentaryMaxLufs": -17.6,
+    "cueGain": 1,
+    "mixMomentaryMaxLufs": -17.6
+   },
+   "zombieDeath": {
+    "takes": 3,
+    "integratedLufs": -17.6,
+    "momentaryMaxLufs": -12.7,
+    "cueGain": 0.6,
+    "mixMomentaryMaxLufs": -17.1
+   },
+   "zombieAttack": {
+    "takes": 3,
+    "integratedLufs": -17.7,
+    "momentaryMaxLufs": -15.8,
+    "cueGain": 0.6,
+    "mixMomentaryMaxLufs": -20.3
+   },
+   "breakGlass": {
+    "takes": 3,
+    "integratedLufs": -19.9,
+    "momentaryMaxLufs": -13.6,
+    "cueGain": 0.62,
+    "mixMomentaryMaxLufs": -17.8
+   },
+   "fleshTear": {
+    "takes": 3,
+    "integratedLufs": -19.9,
+    "momentaryMaxLufs": -17.9,
+    "cueGain": 0.42,
+    "mixMomentaryMaxLufs": -25.5
+   },
+   "creatureGrowl": {
+    "takes": 3,
+    "integratedLufs": -14.9,
+    "momentaryMaxLufs": -12.9,
+    "cueGain": 0.5,
+    "mixMomentaryMaxLufs": -18.9
+   },
+   "creatureSnarl": {
+    "takes": 3,
+    "integratedLufs": -16.7,
+    "momentaryMaxLufs": -14.5,
+    "cueGain": 0.6,
+    "mixMomentaryMaxLufs": -18.9
+   }
+  }
+ },
+ "qc": {
+  "gate": "tools/audio-pipeline/lib/structural.mjs cueVerdict (raw AND derivative must pass)",
+  "rawQc": "reference/tasks/track1-siren-blightbelly-20261031/audio/QC.json",
+  "images": "reference/tasks/track1-siren-blightbelly-20261031/audio/qc/*.png (raws), reference/tasks/track1-siren-blightbelly-20261031/audio/qc/built/*.png (shipped derivatives, pre-MP3)"
+ },
+ "totals": {
+  "derivatives": 6,
+  "bytes": 292569,
+  "cuesCovered": 4,
+  "cues": 4
+ },
+ "gaps": [],
+ "excluded": [],
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/t1-siren-hum-01.mp3",
+   "url": "assets/audio/t1-siren-hum-01.mp3",
+   "bytes": 71053,
+   "sha256": "22e984e994883369481de07c2740a66085afaea769903fea7bb7d36cdec708c2",
+   "cue": "sirenHum",
+   "durationS": 4.3897,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "t1-siren-hum-01",
+    "rawFile": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-hum-01.wav",
+    "rawSha256": "fa9b1ad88104ae90458d6db37c854d0efeb320ac7a8bb5d150b178dda72a6fb3",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-woman-softly-humming-a-short-haunting_w8a8_seed417730581_000437.wav",
+    "labSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-hum-01.lab.json",
+    "labSidecarSha256": "bf7502469592181f930641b3fdc19c411d4aa4500e7a7b3f68311d18d6149153",
+    "runnerSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-hum-01.sidecar.json",
+    "jobId": "20261031T000437-417730581",
+    "prompt": "TrackType: SFX, a woman softly humming a short haunting wordless lullaby, a slow sad melody under her breath, breathy and ghostly, close mic, recorded dry with no echo or reverb, no words, no instruments, no background noise.",
+    "negativePrompt": "",
+    "seed": 417730581,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 6,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawLoudness": {
+     "integratedLufs": -31.1,
+     "momentaryMaxLufs": -26.2
+    },
+    "rawStructural": {
+     "durationS": 6,
+     "peakDbfs": -17.6,
+     "rmsDbfs": -31.7,
+     "crestDb": 14.1,
+     "clippedFrac": 0,
+     "quietFrac": 0.286,
+     "activeFrac": 0.767,
+     "levelSpreadDb": 7.77,
+     "attack": {
+      "onsetS": 0.25,
+      "peakS": 0.54,
+      "riseMs": 205
+     },
+     "decay": {
+      "firstQuarterDb": -26.5,
+      "lastQuarterDb": -39.8,
+      "lastMinusFirstDb": -13.3,
+      "slopeDbPerS": -9.4,
+      "activeEndS": 5.1
+     },
+     "spectral": {
+      "centroidHz": 287,
+      "flatness": 0.01,
+      "rolloff85Hz": 519,
+      "bands": {
+       "0-300Hz": 0.784,
+       "300-1000Hz": 0.203,
+       "1000-3000Hz": 0.013,
+       "3000-8000Hz": 0,
+       "8000-22050Hz": 0
+      }
+     },
+     "pitch": {
+      "voicedFrac": 0.899,
+      "f0MedianHz": 219,
+      "f0P5Hz": 196,
+      "f0P95Hz": 250,
+      "rangeSt": 4.21,
+      "notes": 9,
+      "noteSteps": 4,
+      "movementSt": 13.39,
+      "segments": [
+       {
+        "t0": 0.41,
+        "t1": 0.73,
+        "st": 2.22,
+        "hz": 250
+       },
+       {
+        "t0": 0.78,
+        "t1": 1.37,
+        "st": -0.75,
+        "hz": 210
+       },
+       {
+        "t0": 1.44,
+        "t1": 2.03,
+        "st": 0.42,
+        "hz": 225
+       },
+       {
+        "t0": 2.1,
+        "t1": 2.43,
+        "st": -2.09,
+        "hz": 195
+       },
+       {
+        "t0": 2.45,
+        "t1": 2.65,
+        "st": 1.81,
+        "hz": 244
+       },
+       {
+        "t0": 2.65,
+        "t1": 2.97,
+        "st": 0.85,
+        "hz": 231
+       },
+       {
+        "t0": 2.97,
+        "t1": 3.52,
+        "st": 0.06,
+        "hz": 220
+       },
+       {
+        "t0": 3.52,
+        "t1": 3.89,
+        "st": -0.63,
+        "hz": 212
+       },
+       {
+        "t0": 3.89,
+        "t1": 4.52,
+        "st": -0.23,
+        "hz": 217
+       }
+      ]
+     }
+    },
+    "rawVerdict": {
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 4.39,
+    "peakDbfs": -4.7,
+    "rmsDbfs": -17.4,
+    "crestDb": 12.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.042,
+    "activeFrac": 0.989,
+    "levelSpreadDb": 6.1,
+    "attack": {
+     "onsetS": 0.01,
+     "peakS": 0.3,
+     "riseMs": 200
+    },
+    "decay": {
+     "firstQuarterDb": -13.4,
+     "lastQuarterDb": -23.2,
+     "lastMinusFirstDb": -9.7,
+     "slopeDbPerS": -4.1,
+     "activeEndS": 4.3
+    },
+    "spectral": {
+     "centroidHz": 287,
+     "flatness": 0.004,
+     "rolloff85Hz": 425,
+     "bands": {
+      "0-300Hz": 0.784,
+      "300-1000Hz": 0.203,
+      "1000-3000Hz": 0.013,
+      "3000-8000Hz": 0,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.959,
+     "f0MedianHz": 220,
+     "f0P5Hz": 196,
+     "f0P95Hz": 249,
+     "rangeSt": 4.12,
+     "notes": 11,
+     "noteSteps": 5,
+     "movementSt": 13.77,
+     "segments": [
+      {
+       "t0": 0.16,
+       "t1": 0.49,
+       "st": 2.23,
+       "hz": 250
+      },
+      {
+       "t0": 0.53,
+       "t1": 1.14,
+       "st": -0.75,
+       "hz": 210
+      },
+      {
+       "t0": 1.14,
+       "t1": 1.29,
+       "st": 0.62,
+       "hz": 228
+      },
+      {
+       "t0": 1.29,
+       "t1": 1.58,
+       "st": 0.63,
+       "hz": 228
+      },
+      {
+       "t0": 1.58,
+       "t1": 1.82,
+       "st": -0.06,
+       "hz": 219
+      },
+      {
+       "t0": 1.86,
+       "t1": 2.18,
+       "st": -2.09,
+       "hz": 195
+      },
+      {
+       "t0": 2.21,
+       "t1": 2.41,
+       "st": 1.76,
+       "hz": 243
+      },
+      {
+       "t0": 2.41,
+       "t1": 2.98,
+       "st": 0.53,
+       "hz": 226
+      },
+      {
+       "t0": 2.98,
+       "t1": 3.29,
+       "st": -0.04,
+       "hz": 219
+      },
+      {
+       "t0": 3.29,
+       "t1": 3.65,
+       "st": -0.65,
+       "hz": 212
+      },
+      {
+       "t0": 3.65,
+       "t1": 4.26,
+       "st": -0.22,
+       "hz": 217
+      }
+     ]
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -13.2
+    },
+    "verdict": {
+     "kind": "hum",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 6.1,
+        "flatness": 0.004,
+        "voicedFrac": 0.959
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -4.7,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "voiced (tonal voice)",
+       "ok": true,
+       "value": 0.959,
+       "need": ">= 0.5",
+       "required": true
+      },
+      {
+       "name": "tonal spectrum",
+       "ok": true,
+       "value": 0.004,
+       "need": "< 0.1",
+       "required": true
+      },
+      {
+       "name": "humming register",
+       "ok": true,
+       "value": 220,
+       "need": "100–700 Hz",
+       "required": true
+      },
+      {
+       "name": "melody-like contour",
+       "ok": true,
+       "value": {
+        "notes": 11,
+        "steps": 5,
+        "rangeSt": 4.12
+       },
+       "need": ">= 3 notes, >= 2 steps >= 1 st",
+       "required": true
+      },
+      {
+       "name": "sustained",
+       "ok": true,
+       "value": 0.989,
+       "need": ">= 0.4",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "outsideTrimRmsDbfs": -61,
+     "outsideTrimS": 1.61,
+     "afterGainDbfs": -48.1,
+     "belowDerivativePeakDb": 43.4,
+     "note": "RMS of the raw outside the trimmed span, after the applied gain. 4/6 raws (both screams, hum-02, the burst) carry the same decoder idle floor in their silent parts (harmonics of 44100/256 = 172.27 Hz, -60.8 dBFS RMS): it is trimmed away and lies under the fades / under the sound inside the span"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2406,
+     "endS": 4.6303,
+     "startThresholdDbfs": -62.9,
+     "tailThresholdDbfs": -62.9,
+     "maxGapS": 0.15,
+     "holdMs": 80,
+     "note": "first frame above the start threshold (minus pre-roll) to the end of the connected active run"
+    },
+    {
+     "op": "fade",
+     "inS": 0.015,
+     "outS": 0.25,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "ITU-R BS.1770 integrated loudness (K-weighted, gated), mono",
+     "targetLufs": -18,
+     "peakCeilingDbfs": -1,
+     "gainDb": 12.9,
+     "bound": "loudness target"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/t1-siren-hum-02.mp3",
+   "url": "assets/audio/t1-siren-hum-02.mp3",
+   "bytes": 88607,
+   "sha256": "b8847bea61f98b07a650313dc0e5b354bf577789a3d383bd8ea61385623e3f78",
+   "cue": "sirenHum",
+   "durationS": 5.5022,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "t1-siren-hum-02",
+    "rawFile": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-hum-02.wav",
+    "rawSha256": "a1dd4bf97982784c4d6ab1771bb34af14eaa7f970c95395834b4759cdf95de30",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-woman-humming-an-eerie-wavering-melody_w8a8_seed902215367_000442.wav",
+    "labSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-hum-02.lab.json",
+    "labSidecarSha256": "a92f614f91b597e5ea30e812b8915f98200ce06a677de9c5e7772f0c2593d967",
+    "runnerSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-hum-02.sidecar.json",
+    "jobId": "20261031T000442-902215367",
+    "prompt": "TrackType: SFX, a woman humming an eerie wavering melody of a few slow notes, low and mournful, quiet and intimate, close mic, recorded dry with no echo or reverb, no words, no instruments, no background noise.",
+    "negativePrompt": "",
+    "seed": 902215367,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 6,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawLoudness": {
+     "integratedLufs": -17.2,
+     "momentaryMaxLufs": -13.8
+    },
+    "rawStructural": {
+     "durationS": 6,
+     "peakDbfs": -5.4,
+     "rmsDbfs": -17.6,
+     "crestDb": 12.2,
+     "clippedFrac": 0,
+     "quietFrac": 0.126,
+     "activeFrac": 0.892,
+     "levelSpreadDb": 6.32,
+     "attack": {
+      "onsetS": 0.18,
+      "peakS": 2.79,
+      "riseMs": 590
+     },
+     "decay": {
+      "firstQuarterDb": -16.8,
+      "lastQuarterDb": -21.7,
+      "lastMinusFirstDb": -4.9,
+      "slopeDbPerS": -13.3,
+      "activeEndS": 5.6
+     },
+     "spectral": {
+      "centroidHz": 304,
+      "flatness": 0,
+      "rolloff85Hz": 309,
+      "bands": {
+       "0-300Hz": 0.337,
+       "300-1000Hz": 0.663,
+       "1000-3000Hz": 0,
+       "3000-8000Hz": 0,
+       "8000-22050Hz": 0
+      }
+     },
+     "pitch": {
+      "voicedFrac": 0.998,
+      "f0MedianHz": 296,
+      "f0P5Hz": 150,
+      "f0P95Hz": 335,
+      "rangeSt": 13.95,
+      "notes": 9,
+      "noteSteps": 5,
+      "movementSt": 22.63,
+      "segments": [
+       {
+        "t0": 0.24,
+        "t1": 0.44,
+        "st": -3.62,
+        "hz": 240
+       },
+       {
+        "t0": 0.46,
+        "t1": 0.65,
+        "st": -0.89,
+        "hz": 281
+       },
+       {
+        "t0": 0.68,
+        "t1": 0.96,
+        "st": 1.5,
+        "hz": 323
+       },
+       {
+        "t0": 0.96,
+        "t1": 2.24,
+        "st": 1.86,
+        "hz": 330
+       },
+       {
+        "t0": 2.37,
+        "t1": 2.77,
+        "st": -1.73,
+        "hz": 268
+       },
+       {
+        "t0": 2.77,
+        "t1": 3.11,
+        "st": -0.25,
+        "hz": 292
+       },
+       {
+        "t0": 3.11,
+        "t1": 4.77,
+        "st": -0.01,
+        "hz": 296
+       },
+       {
+        "t0": 5.02,
+        "t1": 5.18,
+        "st": -11.17,
+        "hz": 155
+       },
+       {
+        "t0": 5.18,
+        "t1": 5.57,
+        "st": -11.85,
+        "hz": 149
+       }
+      ]
+     }
+    },
+    "rawVerdict": {
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 5.502,
+    "peakDbfs": -6.2,
+    "rmsDbfs": -18.1,
+    "crestDb": 11.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.056,
+    "activeFrac": 0.964,
+    "levelSpreadDb": 6.33,
+    "attack": {
+     "onsetS": 0.05,
+     "peakS": 2.62,
+     "riseMs": 550
+    },
+    "decay": {
+     "firstQuarterDb": -17.5,
+     "lastQuarterDb": -22.4,
+     "lastMinusFirstDb": -4.9,
+     "slopeDbPerS": -8.6,
+     "activeEndS": 5.4
+    },
+    "spectral": {
+     "centroidHz": 304,
+     "flatness": 0,
+     "rolloff85Hz": 310,
+     "bands": {
+      "0-300Hz": 0.337,
+      "300-1000Hz": 0.663,
+      "1000-3000Hz": 0,
+      "3000-8000Hz": 0,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.996,
+     "f0MedianHz": 296,
+     "f0P5Hz": 150,
+     "f0P95Hz": 335,
+     "rangeSt": 13.91,
+     "notes": 9,
+     "noteSteps": 5,
+     "movementSt": 22.86,
+     "segments": [
+      {
+       "t0": 0.08,
+       "t1": 0.27,
+       "st": -3.65,
+       "hz": 240
+      },
+      {
+       "t0": 0.29,
+       "t1": 0.48,
+       "st": -0.91,
+       "hz": 281
+      },
+      {
+       "t0": 0.51,
+       "t1": 0.64,
+       "st": 1.28,
+       "hz": 319
+      },
+      {
+       "t0": 0.64,
+       "t1": 2.08,
+       "st": 1.82,
+       "hz": 329
+      },
+      {
+       "t0": 2.18,
+       "t1": 2.39,
+       "st": -1.68,
+       "hz": 269
+      },
+      {
+       "t0": 2.39,
+       "t1": 2.57,
+       "st": -1.93,
+       "hz": 265
+      },
+      {
+       "t0": 2.64,
+       "t1": 4.53,
+       "st": -0.08,
+       "hz": 295
+      },
+      {
+       "t0": 4.85,
+       "t1": 5,
+       "st": -11.18,
+       "hz": 155
+      },
+      {
+       "t0": 5,
+       "t1": 5.36,
+       "st": -11.87,
+       "hz": 149
+      }
+     ]
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -14.5
+    },
+    "verdict": {
+     "kind": "hum",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 6.33,
+        "flatness": 0,
+        "voicedFrac": 0.996
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -6.2,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "voiced (tonal voice)",
+       "ok": true,
+       "value": 0.996,
+       "need": ">= 0.5",
+       "required": true
+      },
+      {
+       "name": "tonal spectrum",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.1",
+       "required": true
+      },
+      {
+       "name": "humming register",
+       "ok": true,
+       "value": 296,
+       "need": "100–700 Hz",
+       "required": true
+      },
+      {
+       "name": "melody-like contour",
+       "ok": true,
+       "value": {
+        "notes": 9,
+        "steps": 5,
+        "rangeSt": 13.91
+       },
+       "need": ">= 3 notes, >= 2 steps >= 1 st",
+       "required": true
+      },
+      {
+       "name": "sustained",
+       "ok": true,
+       "value": 0.964,
+       "need": ">= 0.4",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "outsideTrimRmsDbfs": -60.5,
+     "outsideTrimS": 0.498,
+     "afterGainDbfs": -61.3,
+     "belowDerivativePeakDb": 55.1,
+     "note": "RMS of the raw outside the trimmed span, after the applied gain. 4/6 raws (both screams, hum-02, the burst) carry the same decoder idle floor in their silent parts (harmonics of 44100/256 = 172.27 Hz, -60.8 dBFS RMS): it is trimmed away and lies under the fades / under the sound inside the span"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1704,
+     "endS": 5.6727,
+     "startThresholdDbfs": -48.9,
+     "tailThresholdDbfs": -48.9,
+     "maxGapS": 0.15,
+     "holdMs": 80,
+     "note": "first frame above the start threshold (minus pre-roll) to the end of the connected active run"
+    },
+    {
+     "op": "fade",
+     "inS": 0.015,
+     "outS": 0.25,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "ITU-R BS.1770 integrated loudness (K-weighted, gated), mono",
+     "targetLufs": -18,
+     "peakCeilingDbfs": -1,
+     "gainDb": -0.8,
+     "bound": "loudness target"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/t1-siren-scream-01.mp3",
+   "url": "assets/audio/t1-siren-scream-01.mp3",
+   "bytes": 27167,
+   "sha256": "fa8cf96dbdd365215a4e92fa344e3ef3bae6f0e60bd5575082c3fed7bc71a4dc",
+   "cue": "sirenScream",
+   "durationS": 1.6666,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "t1-siren-scream-01",
+    "rawFile": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-scream-01.wav",
+    "rawSha256": "f608822c87a7538a0c24453297a4cf4eb3de8fe23e881a030440f62e26b4a4e5",
+    "rawBytes": 529244,
+    "labFile": "sfx_a-woman-s-sudden-piercing-shriek-one-hig_w8a8_seed285061943_000446.wav",
+    "labSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-scream-01.lab.json",
+    "labSidecarSha256": "651386ce7e0d0d1d7947fd79f0495a2307bab8a2220e58d20bd9591da1c8ae4a",
+    "runnerSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-scream-01.sidecar.json",
+    "jobId": "20261031T000446-285061943",
+    "prompt": "TrackType: SFX, a woman's sudden piercing shriek, one high-pitched horrified scream that cuts off sharply, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 285061943,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawLoudness": {
+     "integratedLufs": -14.7,
+     "momentaryMaxLufs": -12.5
+    },
+    "rawStructural": {
+     "durationS": 3,
+     "peakDbfs": -4.5,
+     "rmsDbfs": -18.5,
+     "crestDb": 14,
+     "clippedFrac": 0,
+     "quietFrac": 0.477,
+     "activeFrac": 0.533,
+     "levelSpreadDb": 4.62,
+     "attack": {
+      "onsetS": 0.42,
+      "peakS": 0.675,
+      "riseMs": 65
+     },
+     "decay": {
+      "firstQuarterDb": -15.2,
+      "lastQuarterDb": -17.3,
+      "lastMinusFirstDb": -2,
+      "slopeDbPerS": -27.1,
+      "activeEndS": 2
+     },
+     "spectral": {
+      "centroidHz": 1716,
+      "flatness": 0.019,
+      "rolloff85Hz": 1864,
+      "bands": {
+       "0-300Hz": 0.002,
+       "300-1000Hz": 0.006,
+       "1000-3000Hz": 0.921,
+       "3000-8000Hz": 0.069,
+       "8000-22050Hz": 0.002
+      }
+     },
+     "pitch": {
+      "voicedFrac": 0.942,
+      "f0MedianHz": 1574,
+      "f0P5Hz": 1098,
+      "f0P95Hz": 1696,
+      "rangeSt": 7.53,
+      "notes": 4,
+      "noteSteps": 1,
+      "movementSt": 2.67,
+      "segments": [
+       {
+        "t0": 0.57,
+        "t1": 1.18,
+        "st": 1.05,
+        "hz": 1672
+       },
+       {
+        "t0": 1.18,
+        "t1": 1.36,
+        "st": -0.04,
+        "hz": 1571
+       },
+       {
+        "t0": 1.36,
+        "t1": 1.5,
+        "st": -0.74,
+        "hz": 1509
+       },
+       {
+        "t0": 1.5,
+        "t1": 1.72,
+        "st": -1.62,
+        "hz": 1434
+       }
+      ]
+     }
+    },
+    "rawVerdict": {
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 1.667,
+    "peakDbfs": -6.6,
+    "rmsDbfs": -18.1,
+    "crestDb": 11.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.057,
+    "activeFrac": 0.97,
+    "levelSpreadDb": 4.17,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.165,
+     "riseMs": 125
+    },
+    "decay": {
+     "firstQuarterDb": -17.2,
+     "lastQuarterDb": -19.6,
+     "lastMinusFirstDb": -2.4,
+     "slopeDbPerS": -10.3,
+     "activeEndS": 1.6
+    },
+    "spectral": {
+     "centroidHz": 1716,
+     "flatness": 0.017,
+     "rolloff85Hz": 1837,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.006,
+      "1000-3000Hz": 0.921,
+      "3000-8000Hz": 0.069,
+      "8000-22050Hz": 0.002
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.956,
+     "f0MedianHz": 1574,
+     "f0P5Hz": 1098,
+     "f0P95Hz": 1696,
+     "rangeSt": 7.53,
+     "notes": 4,
+     "noteSteps": 1,
+     "movementSt": 2.67,
+     "segments": [
+      {
+       "t0": 0.15,
+       "t1": 0.77,
+       "st": 1.05,
+       "hz": 1672
+      },
+      {
+       "t0": 0.77,
+       "t1": 0.94,
+       "st": -0.04,
+       "hz": 1571
+      },
+      {
+       "t0": 0.94,
+       "t1": 1.08,
+       "st": -0.74,
+       "hz": 1509
+      },
+      {
+       "t0": 1.08,
+       "t1": 1.3,
+       "st": -1.62,
+       "hz": 1434
+      }
+     ]
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -14.6
+    },
+    "verdict": {
+     "kind": "scream",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 4.17,
+        "flatness": 0.017,
+        "voicedFrac": 0.956
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -6.6,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "fast rise to the peak",
+       "ok": true,
+       "value": 125,
+       "need": "<= 600 ms",
+       "required": true
+      },
+      {
+       "name": "bright",
+       "ok": true,
+       "value": {
+        "centroidHz": 1716,
+        "shareAbove1k": 0.992
+       },
+       "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz",
+       "required": true
+      },
+      {
+       "name": "loud raw",
+       "ok": true,
+       "value": -6.6,
+       "need": ">= -12 dBFS",
+       "required": true
+      },
+      {
+       "name": "a voice (pitched)",
+       "ok": true,
+       "value": {
+        "voicedFrac": 0.956,
+        "f0MedianHz": 1574
+       },
+       "need": "voiced >= 0.2",
+       "required": true
+      },
+      {
+       "name": "ends (active end s)",
+       "value": 1.6,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "outsideTrimRmsDbfs": -60.8,
+     "outsideTrimS": 1.333,
+     "afterGainDbfs": -62.9,
+     "belowDerivativePeakDb": 56.3,
+     "note": "RMS of the raw outside the trimmed span, after the applied gain. 4/6 raws (both screams, hum-02, the burst) carry the same decoder idle floor in their silent parts (harmonics of 44100/256 = 172.27 Hz, -60.8 dBFS RMS): it is trimmed away and lies under the fades / under the sound inside the span"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.418,
+     "endS": 2.0846,
+     "startThresholdDbfs": -51.6,
+     "tailThresholdDbfs": -53.6,
+     "maxGapS": 0.12,
+     "holdMs": 60,
+     "note": "first frame above the start threshold (minus pre-roll) to the end of the connected active run"
+    },
+    {
+     "op": "fade",
+     "inS": 0.003,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "ITU-R BS.1770 integrated loudness (K-weighted, gated), mono",
+     "targetLufs": -16,
+     "peakCeilingDbfs": -1,
+     "gainDb": -2.1,
+     "bound": "loudness target"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/t1-siren-scream-02.mp3",
+   "url": "assets/audio/t1-siren-scream-02.mp3",
+   "bytes": 33436,
+   "sha256": "ddeccacecf985514f5340f02c030bd212a4a10712cf518c452d19d9e13f0b5a8",
+   "cue": "sirenScream",
+   "durationS": 2.0475,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "t1-siren-scream-02",
+    "rawFile": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-scream-02.wav",
+    "rawSha256": "b8a513b0e5fee7449acec16916a85b19c94fbc2c61c67026e64070b8817ea334",
+    "rawBytes": 529244,
+    "labFile": "sfx_a-feral-inhuman-banshee-scream-shrill-an_w8a8_seed763405128_000451.wav",
+    "labSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-scream-02.lab.json",
+    "labSidecarSha256": "91863bc945123c4570adba2ff4fd4a11796f4cc03a210b974f9e80aa7f539799",
+    "runnerSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-siren-scream-02.sidecar.json",
+    "jobId": "20261031T000451-763405128",
+    "prompt": "TrackType: SFX, a feral inhuman banshee scream, shrill and raw, rising fast then breaking off, a monster woman screaming in rage, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 763405128,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 3,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawLoudness": {
+     "integratedLufs": -12.5,
+     "momentaryMaxLufs": -11.4
+    },
+    "rawStructural": {
+     "durationS": 3,
+     "peakDbfs": -2,
+     "rmsDbfs": -15.7,
+     "crestDb": 13.7,
+     "clippedFrac": 0,
+     "quietFrac": 0.365,
+     "activeFrac": 0.667,
+     "levelSpreadDb": 6.85,
+     "attack": {
+      "onsetS": 0.06,
+      "peakS": 1.3,
+      "riseMs": 215
+     },
+     "decay": {
+      "firstQuarterDb": -15.2,
+      "lastQuarterDb": -14.8,
+      "lastMinusFirstDb": 0.4,
+      "slopeDbPerS": -34.8,
+      "activeEndS": 2.05
+     },
+     "spectral": {
+      "centroidHz": 1516,
+      "flatness": 0.021,
+      "rolloff85Hz": 1870,
+      "bands": {
+       "0-300Hz": 0.002,
+       "300-1000Hz": 0.004,
+       "1000-3000Hz": 0.972,
+       "3000-8000Hz": 0.021,
+       "8000-22050Hz": 0.001
+      }
+     },
+     "pitch": {
+      "voicedFrac": 0.541,
+      "f0MedianHz": 1078,
+      "f0P5Hz": 605,
+      "f0P95Hz": 1396,
+      "rangeSt": 14.48,
+      "notes": 0,
+      "noteSteps": 0,
+      "movementSt": 0,
+      "segments": []
+     }
+    },
+    "rawVerdict": {
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 2.047,
+    "peakDbfs": -5.8,
+    "rmsDbfs": -17.8,
+    "crestDb": 12,
+    "clippedFrac": 0,
+    "quietFrac": 0.071,
+    "activeFrac": 1,
+    "levelSpreadDb": 7.28,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.92,
+     "riseMs": 215
+    },
+    "decay": {
+     "firstQuarterDb": -18.9,
+     "lastQuarterDb": -18.6,
+     "lastMinusFirstDb": 0.3,
+     "slopeDbPerS": -12.7,
+     "activeEndS": 2
+    },
+    "spectral": {
+     "centroidHz": 1516,
+     "flatness": 0.02,
+     "rolloff85Hz": 1868,
+     "bands": {
+      "0-300Hz": 0.002,
+      "300-1000Hz": 0.004,
+      "1000-3000Hz": 0.972,
+      "3000-8000Hz": 0.021,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.538,
+     "f0MedianHz": 1118,
+     "f0P5Hz": 614,
+     "f0P95Hz": 1393,
+     "rangeSt": 14.19,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -16,
+     "momentaryMaxLufs": -15.2
+    },
+    "verdict": {
+     "kind": "scream",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 7.28,
+        "flatness": 0.02,
+        "voicedFrac": 0.538
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -5.8,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "fast rise to the peak",
+       "ok": true,
+       "value": 215,
+       "need": "<= 600 ms",
+       "required": true
+      },
+      {
+       "name": "bright",
+       "ok": true,
+       "value": {
+        "centroidHz": 1516,
+        "shareAbove1k": 0.994
+       },
+       "need": "centroid >= 1200 Hz, >= 50 % above 1 kHz",
+       "required": true
+      },
+      {
+       "name": "loud raw",
+       "ok": true,
+       "value": -5.8,
+       "need": ">= -12 dBFS",
+       "required": true
+      },
+      {
+       "name": "a voice (pitched)",
+       "ok": true,
+       "value": {
+        "voicedFrac": 0.538,
+        "f0MedianHz": 1118
+       },
+       "need": "voiced >= 0.2",
+       "required": true
+      },
+      {
+       "name": "ends (active end s)",
+       "value": 2,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "outsideTrimRmsDbfs": -60.8,
+     "outsideTrimS": 0.953,
+     "afterGainDbfs": -64.6,
+     "belowDerivativePeakDb": 58.8,
+     "note": "RMS of the raw outside the trimmed span, after the applied gain. 4/6 raws (both screams, hum-02, the burst) carry the same decoder idle floor in their silent parts (harmonics of 44100/256 = 172.27 Hz, -60.8 dBFS RMS): it is trimmed away and lies under the fades / under the sound inside the span"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0571,
+     "endS": 2.1046,
+     "startThresholdDbfs": -49.4,
+     "tailThresholdDbfs": -51.4,
+     "maxGapS": 0.12,
+     "holdMs": 60,
+     "note": "first frame above the start threshold (minus pre-roll) to the end of the connected active run"
+    },
+    {
+     "op": "fade",
+     "inS": 0.003,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "ITU-R BS.1770 integrated loudness (K-weighted, gated), mono",
+     "targetLufs": -16,
+     "peakCeilingDbfs": -1,
+     "gainDb": -3.8,
+     "bound": "loudness target"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/t1-blight-burst-01.mp3",
+   "url": "assets/audio/t1-blight-burst-01.mp3",
+   "bytes": 9613,
+   "sha256": "4cdb84d572f390c7dfe50c77847a256169d124a04bde0b924f957f2e76a41e9c",
+   "cue": "blightBurst",
+   "durationS": 0.5681,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "t1-blight-burst-01",
+    "rawFile": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-blight-burst-01.wav",
+    "rawSha256": "87790119024fa66db1d78d416748903195e3a56d71291341151dd94ce7dc7cbe",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-wet-fleshy-burst-swollen-pustules-rupt_w8a8_seed118843906_000456.wav",
+    "labSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-blight-burst-01.lab.json",
+    "labSidecarSha256": "11f1ba0599f66117ff9a25d45180db48da833810a28862716a191a73065b664d",
+    "runnerSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-blight-burst-01.sidecar.json",
+    "jobId": "20261031T000456-118843906",
+    "prompt": "TrackType: SFX, a wet fleshy burst, swollen pustules rupturing with a heavy squelching pop and a liquid splatter, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 118843906,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawLoudness": {
+     "integratedLufs": -24.9,
+     "momentaryMaxLufs": -22.2
+    },
+    "rawStructural": {
+     "durationS": 2,
+     "peakDbfs": -3.3,
+     "rmsDbfs": -31.1,
+     "crestDb": 27.8,
+     "clippedFrac": 0,
+     "quietFrac": 0.83,
+     "activeFrac": 0.25,
+     "levelSpreadDb": 10.09,
+     "attack": {
+      "onsetS": 0.215,
+      "peakS": 0.245,
+      "riseMs": 30
+     },
+     "decay": {
+      "firstQuarterDb": -19,
+      "lastQuarterDb": -46.3,
+      "lastMinusFirstDb": -27.4,
+      "slopeDbPerS": -18.4,
+      "activeEndS": 0.7
+     },
+     "spectral": {
+      "centroidHz": 3721,
+      "flatness": 0.374,
+      "rolloff85Hz": 6988,
+      "bands": {
+       "0-300Hz": 0.253,
+       "300-1000Hz": 0.115,
+       "1000-3000Hz": 0.1,
+       "3000-8000Hz": 0.411,
+       "8000-22050Hz": 0.12
+      }
+     },
+     "pitch": {
+      "voicedFrac": 0,
+      "f0MedianHz": null,
+      "rangeSt": 0,
+      "notes": 0,
+      "noteSteps": 0,
+      "movementSt": 0,
+      "segments": []
+     }
+    },
+    "rawVerdict": {
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.568,
+    "peakDbfs": -1,
+    "rmsDbfs": -23.3,
+    "crestDb": 22.3,
+    "clippedFrac": 0,
+    "quietFrac": 0.398,
+    "activeFrac": 0.818,
+    "levelSpreadDb": 8.29,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.03,
+     "riseMs": 30
+    },
+    "decay": {
+     "firstQuarterDb": -16.2,
+     "lastQuarterDb": -39.2,
+     "lastMinusFirstDb": -23,
+     "slopeDbPerS": -76.3,
+     "activeEndS": 0.45
+    },
+    "spectral": {
+     "centroidHz": 3737,
+     "flatness": 0.393,
+     "rolloff85Hz": 7381,
+     "bands": {
+      "0-300Hz": 0.251,
+      "300-1000Hz": 0.115,
+      "1000-3000Hz": 0.1,
+      "3000-8000Hz": 0.413,
+      "8000-22050Hz": 0.121
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -22.4,
+     "momentaryMaxLufs": -19.9
+    },
+    "verdict": {
+     "kind": "burst",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 8.29,
+        "flatness": 0.393,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": 30,
+       "need": "<= 60 ms",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": {
+        "activeEndS": 0.45,
+        "lastMinusFirstDb": -23,
+        "slopeDbPerS": -76.3
+       },
+       "need": "ends >= 0.5 s early or -15 dB, slope < 0",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.251,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "outsideTrimRmsDbfs": -60.8,
+     "outsideTrimS": 1.432,
+     "afterGainDbfs": -58.5,
+     "belowDerivativePeakDb": 57.5,
+     "note": "RMS of the raw outside the trimmed span, after the applied gain. 4/6 raws (both screams, hum-02, the burst) carry the same decoder idle floor in their silent parts (harmonics of 44100/256 = 172.27 Hz, -60.8 dBFS RMS): it is trimmed away and lies under the fades / under the sound inside the span"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.2135,
+     "endS": 0.7816,
+     "startThresholdDbfs": -51.1,
+     "tailThresholdDbfs": -56.1,
+     "maxGapS": 0.1,
+     "holdMs": 60,
+     "note": "first frame above the start threshold (minus pre-roll) to the end of the connected active run"
+    },
+    {
+     "op": "fade",
+     "inS": 0.001,
+     "outS": 0.12,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "ITU-R BS.1770 integrated loudness (K-weighted, gated), mono",
+     "targetLufs": -16,
+     "peakCeilingDbfs": -1,
+     "gainDb": 2.29,
+     "bound": "peak ceiling"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/t1-blight-hiss-01.mp3",
+   "url": "assets/audio/t1-blight-hiss-01.mp3",
+   "bytes": 62693,
+   "sha256": "bdbc9bbbea24ff2aa6538baac2d4a50f4104f031d228124f6cd85eb68bb7e00f",
+   "cue": "blightHiss",
+   "durationS": 3.8837,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "t1-blight-hiss-01",
+    "rawFile": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-blight-hiss-01.wav",
+    "rawSha256": "e51960891245fa899566a856cf5cac419c5760ba682de081a28224a8c4c863aa",
+    "rawBytes": 705644,
+    "labFile": "sfx_thick-toxic-gas-venting-from-a-ruptured_w8a8_seed640918227_000500.wav",
+    "labSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-blight-hiss-01.lab.json",
+    "labSidecarSha256": "2de11865dcaa32988782431732b97f507247ee03da64b915443afadec997c842",
+    "runnerSidecar": "reference/tasks/track1-siren-blightbelly-20261031/audio/raw/t1-blight-hiss-01.sidecar.json",
+    "jobId": "20261031T000500-640918227",
+    "prompt": "TrackType: SFX, thick toxic gas venting from a ruptured body, a long wet hiss of escaping gas that slowly fades out, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 640918227,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 4,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawLoudness": {
+     "integratedLufs": -32.6,
+     "momentaryMaxLufs": -29.6
+    },
+    "rawStructural": {
+     "durationS": 4,
+     "peakDbfs": -18.5,
+     "rmsDbfs": -35.1,
+     "crestDb": 16.6,
+     "clippedFrac": 0,
+     "quietFrac": 0.09,
+     "activeFrac": 0.95,
+     "levelSpreadDb": 7.84,
+     "attack": {
+      "onsetS": 0,
+      "peakS": 0.34,
+      "riseMs": 265
+     },
+     "decay": {
+      "firstQuarterDb": -31.9,
+      "lastQuarterDb": -46.9,
+      "lastMinusFirstDb": -15,
+      "slopeDbPerS": -9.5,
+      "activeEndS": 3.8
+     },
+     "spectral": {
+      "centroidHz": 2841,
+      "flatness": 0.204,
+      "rolloff85Hz": 5774,
+      "bands": {
+       "0-300Hz": 0.07,
+       "300-1000Hz": 0.329,
+       "1000-3000Hz": 0.356,
+       "3000-8000Hz": 0.13,
+       "8000-22050Hz": 0.115
+      }
+     },
+     "pitch": {
+      "voicedFrac": 0,
+      "f0MedianHz": null,
+      "rangeSt": 0,
+      "notes": 0,
+      "noteSteps": 0,
+      "movementSt": 0,
+      "segments": []
+     }
+    },
+    "rawVerdict": {
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 3.884,
+    "peakDbfs": -3.9,
+    "rmsDbfs": -20.4,
+    "crestDb": 16.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.129,
+    "activeFrac": 0.922,
+    "levelSpreadDb": 7.25,
+    "attack": {
+     "onsetS": 0.025,
+     "peakS": 0.34,
+     "riseMs": 240
+    },
+    "decay": {
+     "firstQuarterDb": -17,
+     "lastQuarterDb": -31,
+     "lastMinusFirstDb": -14,
+     "slopeDbPerS": -9.3,
+     "activeEndS": 3.6
+    },
+    "spectral": {
+     "centroidHz": 2842,
+     "flatness": 0.205,
+     "rolloff85Hz": 5852,
+     "bands": {
+      "0-300Hz": 0.07,
+      "300-1000Hz": 0.329,
+      "1000-3000Hz": 0.355,
+      "3000-8000Hz": 0.13,
+      "8000-22050Hz": 0.116
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -18,
+     "momentaryMaxLufs": -15
+    },
+    "verdict": {
+     "kind": "hiss",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 7.25,
+        "flatness": 0.205,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -3.9,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "noise-like spectrum",
+       "ok": true,
+       "value": 0.205,
+       "need": ">= 0.1",
+       "required": true
+      },
+      {
+       "name": "unvoiced",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.2",
+       "required": true
+      },
+      {
+       "name": "broadband",
+       "ok": true,
+       "value": {
+        "maxBandShare": 0.355
+       },
+       "need": "no band > 60 %",
+       "required": true
+      },
+      {
+       "name": "fades out",
+       "ok": true,
+       "value": {
+        "lastMinusFirstDb": -14,
+        "slopeDbPerS": -9.3
+       },
+       "need": "last quarter <= -8 dB vs first, slope < 0",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "outsideTrimRmsDbfs": -76.1,
+     "outsideTrimS": 0.116,
+     "afterGainDbfs": -61.5,
+     "belowDerivativePeakDb": 57.6,
+     "note": "RMS of the raw outside the trimmed span, after the applied gain. 4/6 raws (both screams, hum-02, the burst) carry the same decoder idle floor in their silent parts (harmonics of 44100/256 = 172.27 Hz, -60.8 dBFS RMS): it is trimmed away and lies under the fades / under the sound inside the span"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 3.8837,
+     "startThresholdDbfs": -65.5,
+     "tailThresholdDbfs": -66.1,
+     "maxGapS": 0.15,
+     "holdMs": 40,
+     "note": "first frame above the start threshold (minus pre-roll) to the end of the connected active run"
+    },
+    {
+     "op": "fade",
+     "inS": 0.02,
+     "outS": 0.8,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "ITU-R BS.1770 integrated loudness (K-weighted, gated), mono",
+     "targetLufs": -18,
+     "peakCeilingDbfs": -1,
+     "gainDb": 14.6,
+     "bound": "loudness target"
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  }
+ ]
+}

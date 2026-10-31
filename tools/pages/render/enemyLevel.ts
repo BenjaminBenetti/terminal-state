@@ -2,18 +2,20 @@
 // EnemyReference object: generation contexts with exact count ranges, the family pool with conditional shares and denominator,
 // the zombie type split (a zombie sub-distribution, not families), the baseline placement rules per context, storey moves, the
 // room modifier table (missing = 1×), the sampled census labelled with its corpus, and where each value is tuned.
-import type {EnemyLevelInfo, LevelCensus, PlacementInfo, SpawnContextInfo} from '../enemyReferenceTypes';
+// Task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: + the difficulty tier, the profile's family eligibility rules and
+// the sampled eligibility census (draws vs placed per level of a restricted family).
+import type {EligibilityCensus, EnemyLevelInfo, LevelCensus, PlacementInfo, SpawnContextInfo} from '../enemyReferenceTypes';
 import {badge, esc, filterBox, href, num, range, renderPage, searchAttr, table} from './html';
 import {probCell, prose, shareCell} from './common';
 import {
-  ALL_FAMILIES_KEY, ctxAnchor, hookAnchor, rareAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, familyAnchor, familyCell, familyLabel, keyKindLabel, labelWithId, modifierFieldLabel,
-  modifierStatus, mult, roomAnchor, uniform, ZOMBIE_FAMILY, type EnemySite,
+  ALL_FAMILIES_KEY, ctxAnchor, eligAnchor, ENEMIES_HOW_TO, enemyCrumbs, enemyLevelPage, enemySourceLoc, expectedCell, familyAnchor, familyCell, familyLabel,
+  keyKindLabel, labelWithId, modifierFieldLabel, modifierStatus, mult, poolShareCell, roomAnchor, uniform, ZOMBIE_FAMILY, type EnemySite,
 } from './enemies';
 
 const SECTIONS: Array<[string, string]> = [
   ['contexts', 'Generation contexts'],
   ['families', 'Enemy families'],
-  ['family-hooks', 'Family hooks and rare placement'],
+  ['eligibility', 'Family eligibility'],
   ['horde', 'Roaming hordes (separate pool)'],
   ['zombie-types', 'Zombie types'],
   ['placement', 'Placement rules'],
@@ -25,8 +27,8 @@ const SECTIONS: Array<[string, string]> = [
 ];
 
 function toc(level: EnemyLevelInfo): string {
-  const shown = SECTIONS.filter(([id]) => (id === 'storey-moves' ? level.levelMoves !== null
-    : id === 'family-hooks' ? level.hooks.length + level.rare.length > 0 : id === 'horde' ? level.horde !== null : true));
+  const shown = SECTIONS.filter(([id]) => (id === 'storey-moves' ? level.levelMoves !== null : id === 'eligibility' ? level.pool.eligibility.length > 0
+    : id === 'horde' ? level.horde !== null : true));
   return `<nav class="toc" aria-label="${esc(level.name)} enemy spawn sections"><h2>On this page</h2><ul>${shown
     .map(([id, label]) => `<li><a href="#${esc(id)}">${esc(label)}</a></li>`).join('')}</ul></nav>`;
 }
@@ -93,38 +95,8 @@ function ambientBudget(es: EnemySite, level: EnemyLevelInfo): string {
 <p class="note">Defined at ${enemySourceLoc(es, b.at)}.</p></section>`;
 }
 
-// ------------------------------------------------------------------------------------------------------------- hooks / rare / horde
-// Task track3-eaton-centre-20261031 (lane PROFILES): Track1 family hooks, rare placement and the separate roaming-horde pool.
-
-function hooksSection(es: EnemySite, level: EnemyLevelInfo): string {
-  if (!level.hooks.length && !level.rare.length) return '';
-  const hooks = level.hooks.length ? table({
-    caption: `${level.name}: ambient family hooks (Track1 families declared before the registry has them)`,
-    head: ['Family id', 'Ambient share once typed', 'Expected per level once typed', 'Status', 'Note'],
-    numeric: [2],
-    rowHeader: 0,
-    rows: level.hooks.map(h => [`<code>${esc(h.family)}</code>`, probCell(h.share), num(h.expectedPerLevelIfTyped), `${badge(h.active ? 'typed' : 'inactive', h.active ? 'exact' : 'notderivable')} ${prose(h.status)}`, prose(h.note)]),
-    rowAttrs: level.hooks.map(h => `id="${esc(hookAnchor(h.family))}"`),
-    className: 'rows',
-  }) : '';
-  const rare = level.rare.length ? table({
-    caption: `${level.name}: rare placement over the whole level (applied after the family roll)`,
-    head: ['Family id', 'Cap per level', 'Spacing (m)', 'Expected before the cap', 'Status', 'Why'],
-    numeric: [1, 2, 3],
-    rowHeader: 0,
-    rows: level.rare.map(r => [`<code>${esc(r.family)}</code>`, num(r.capPerLevel), num(r.spacingM), num(r.expectedBeforeCap), badge(r.status, r.status === 'live' ? 'exact' : 'notderivable'), prose(r.why)]),
-    rowAttrs: level.rare.map(r => `id="${esc(rareAnchor(r.family))}"`),
-    className: 'rows',
-  }) : '';
-  return `<h2 id="family-hooks">Family hooks and rare placement</h2>
-<p>A <em>family hook</em> declares an ambient family before the enemy registry exports it. While the registry lacks it the hook is
-<strong>inactive</strong>: no spawn can be that family and its share stays with the zombies of the typed pool above. Once the
-registry exports it, the profile must list it in its typed pool (validation fails until then). Hooks never apply to hordes.</p>
-${hooks}
-${rare}
-${level.rare.map(r => `<p>${prose(r.semantics)}</p>`).join('\n')}
-<p class="note">Defined at ${[...new Set([...level.hooks.map(h => h.at), ...level.rare.map(r => r.at)].map(a => enemySourceLoc(es, a)))].join(', ')}.</p>`;
-}
+// ------------------------------------------------------------------------------------------------------------- horde
+// Task track3-eaton-centre-20261031 (lane PROFILES): the separate roaming-horde pool.
 
 function hordeSection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
   const h = level.horde;
@@ -160,7 +132,7 @@ function familiesSection(es: EnemySite, level: EnemyLevelInfo, p: string): strin
     const row = pool.rows.find(r => r.family === f.id);
     const expected = pool.expectedPerLevel.find(e => e.family === f.id);
     if (!row) return [familyCell(es, p, f.id), '<span class="muted">not in pool</span>', '<span class="muted">never spawns in this level</span>', '0'];
-    return [familyCell(es, p, f.id), num(row.weight), shareCell(row.share, row.weight, pool.denominator), expected ? num(expected.mean) : '<span class="muted">not stated</span>'];
+    return [familyCell(es, p, f.id), num(row.weight), poolShareCell(level, row), expectedCell(expected)];
   });
   // Pool rows the registry does not know were rejected by makeEnemySite; every registry family has a row here.
   return `<h2 id="families">Enemy families</h2>
@@ -177,7 +149,61 @@ ${table({
     className: 'rows',
   })}
 <p class="note">Expected per level = share × spawns tried per level (E = ${num(level.total.mean)}), with neutral room modifiers and before
-any placement shortfall. Defined at ${enemySourceLoc(es, pool.at)}.</p>`;
+any placement shortfall${pool.eligibility.length ? '; a family with an eligibility rule and its fallback family are measured instead (sampled placed per level, see <a href="#eligibility">family eligibility</a>)' : ''}.
+Defined at ${enemySourceLoc(es, pool.at)}.</p>`;
+}
+
+// ------------------------------------------------------------------------------------------------------------- eligibility
+
+function eligibilityCensusBlock(es: EnemySite, level: EnemyLevelInfo, p: string, c: EligibilityCensus | null): string {
+  if (!c) return '<p class="note">This build contains no eligibility census: the placed share of a restricted family is not measured here.</p>';
+  const ctxLabel = (id: string) => level.contexts.find(x => x.id === id)?.label ?? id;
+  const placed = table({
+    caption: `${level.name}: placed spawns per family (sampled eligibility census: ${c.layouts} layouts)`,
+    head: ['Family', 'Placed over the sample', 'Mean per level', 'Placed share'],
+    numeric: [1, 2],
+    rowHeader: 0,
+    rows: c.placed.map(r => [familyCell(es, p, r.family), num(r.total), num(r.perLevel), probCell(r.share)]),
+  });
+  const restricted = c.restricted.map(r => `${table({
+    caption: `${level.name}: ${familyLabel(es, r.family)} draws vs placed (sampled: ${c.layouts} layouts)`,
+    head: ['Draws (roll landed on it)', 'Placed', 'Placed per level (mean)', 'Levels with none', 'Most in one level'],
+    numeric: [0, 1, 2, 3, 4],
+    rows: [[num(r.draws), num(r.placed), num(r.perLevel.mean), `${num(r.perLevel.none)} of ${num(c.layouts)}`, num(r.perLevel.max)]],
+  })}
+${table({
+    caption: `${level.name}: ${familyLabel(es, r.family)} per generated level (sampled histogram)`,
+    head: ['Placed in one level', 'Layouts'],
+    numeric: [0, 1],
+    rows: r.perLevel.histogram.map(h => [num(h.count), num(h.layouts)]),
+  })}
+${r.fallbacks.length ? table({
+    caption: `${level.name}: ${familyLabel(es, r.family)} draws that fell back, by the first failed criterion (sampled)`,
+    head: ['Criterion', 'Draws'],
+    numeric: [1],
+    rows: r.fallbacks.map(f => [esc(f.reason), num(f.draws)]),
+  }) : ''}
+${r.byContext.length ? `<p>Placed by context: ${r.byContext.map(x => `<a href="#${esc(ctxAnchor(x.context))}">${esc(ctxLabel(x.context))}</a> ${num(x.placed)}`).join(' · ')}.</p>` : ''}`).join('\n');
+  return `<div class="callout"><p>${badge('sampled', 'info')} <strong>Observed, not a rule.</strong> ${prose(c.note)}</p></div>
+${placed}
+${restricted}`;
+}
+
+function eligibilitySection(es: EnemySite, level: EnemyLevelInfo, p: string): string {
+  const el = level.pool.eligibility;
+  if (!el.length) return '';
+  const blocks = el.map(e => `<section id="${esc(eligAnchor(e.family))}">
+<h3>${esc(familyLabel(es, e.family))} <span class="summary-meta">· ${esc(e.family)}</span></h3>
+<p>${prose(e.why)}. A draw of ${esc(familyLabel(es, e.family))} becomes ${familyCell(es, p, e.fallback)} unless <strong>every</strong> criterion holds:</p>
+<ol>${e.criteria.map(c => `<li>${prose(c)}</li>`).join('')}</ol>
+${e.spacing ? `<p>Whole-level spacing ${num(e.spacing.metres)} m: ${prose(e.spacing.why)}. ${enemySourceLoc(es, e.spacing.at)}</p>\n` : ''}<p class="note">Rule defined at ${enemySourceLoc(es, e.at)}.</p>
+</section>`).join('\n');
+  return `<h2 id="eligibility">Family eligibility</h2>
+<p>A family with an eligibility rule takes a placed slot only where its rule holds. Its <em>draw</em> share (weight / Σ weights)
+is exact; a draw where the rule fails becomes the fallback family, so the family's <em>placed</em> share is lower and is measured
+below. The other families' draws never change (the roll is the same; nothing is renormalised).</p>
+${blocks}
+${eligibilityCensusBlock(es, level, p, level.eligibilityCensus)}`;
 }
 
 function zombieTypesSection(es: EnemySite, level: EnemyLevelInfo): string {
@@ -473,13 +499,14 @@ export function renderEnemyLevelPage(es: EnemySite, level: EnemyLevelInfo): stri
   const body = `${toc(level)}
 <dl class="facts">
 <dt>Level id</dt><dd><code>${esc(level.id)}</code></dd>
+<dt>Difficulty tier</dt><dd>${num(level.tier.value)} — ${prose(level.tier.note)} ${enemySourceLoc(es, level.tier.at)}</dd>
 <dt>Spawn profile</dt><dd>${esc(level.profile.label)} — ${enemySourceLoc(es, level.profile.at)}</dd>
 <dt>Spawns tried per level</dt><dd>${range(level.total.lo, level.total.hi)} (E = ${num(level.total.mean)}), over ${plural(level.contexts.length, 'generation context')}</dd>
 <dt>Room modifiers</dt><dd>${modifierStatus(es, level)}</dd>
 </dl>
 ${contextsSection(es, level)}
 ${familiesSection(es, level, p)}
-${hooksSection(es, level)}
+${eligibilitySection(es, level, p)}
 ${hordeSection(es, level, p)}
 ${zombieTypesSection(es, level)}
 ${placementSection(es, level)}
@@ -490,7 +517,7 @@ ${censusSection(es, level, p, level.census)}
 <h2 id="how-to-read">How to read these numbers</h2>
 <ul>
 <li><strong>Count range</strong> = intensity: how many spawns one run of a context tries to place, drawn uniformly. E[count] = (lo + hi) / 2.</li>
-<li><strong>Conditional share</strong> = weight / Σ weights: the chance that one <em>placed</em> spawn is that family. It sets the mix, not the number.</li>
+<li><strong>Conditional share</strong> = weight / Σ weights: the chance that one <em>placed</em> spawn draws that family. It sets the mix, not the number. A family with an eligibility rule places fewer than it draws (measured, sampled).</li>
 <li><strong>Area weights and caps</strong> decide where spawns go and are not chances. Eligibility, spacing, caps and tries can leave a
 level with fewer spawns than the count drew.</li>
 <li><strong>Per 100 m²</strong> figures are sampled over eligible floor of a named corpus, never a runtime rule.</li>

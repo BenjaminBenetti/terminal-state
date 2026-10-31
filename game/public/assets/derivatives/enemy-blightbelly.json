@@ -1,0 +1,1792 @@
+{
+ "schema": "the-last-line/derivative-manifest@1",
+ "asset": "enemy-blightbelly",
+ "title": "Blightbelly (obese pustule zombie) - rigged runtime derivative of the accepted Meshy T2.5 model (prototype)",
+ "task": "track1-siren-blightbelly-20261031",
+ "lane": "RIGB",
+ "generatedBy": "tools/asset-pipeline/enemy/build-blightbelly.mjs",
+ "builtAt": "2026-10-31T00:49:35.049Z",
+ "buildSeconds": 14,
+ "status": {
+  "approved": false,
+  "gameReady": false,
+  "stage": "unapproved prototype derivative; art / anatomy / deformation / gameplay fit not certified",
+  "licenseClearance": "none - a derivative of an AI generation (Meshy); access to it grants no licence, commercial or production clearance"
+ },
+ "honesty": {
+  "sourceHadSkeleton": false,
+  "rig": "NEW derivative skeleton (shared 18-joint naming / hierarchy of the zombie wardrobe) and automatic skin weights created by this CPU pipeline",
+  "animation": "hand-authored procedural keyframes / gait functions (lib/blightbelly-clips.mjs) sampled with this body's own joint positions - NOT motion capture",
+  "pustules": "procedural geometry added by this builder (seeded), not part of the Meshy output",
+  "generation": "no AI generation, inference, model download or network service was used by this builder; the Meshy model was generated earlier by the task primary (ledger below)"
+ },
+ "provenance": "generated (Meshy T2.5 text-to-3D, smart topology, 2K PBR refine) + local derivative work",
+ "source": {
+  "file": "reference/tasks/track1-siren-blightbelly-20261031/meshy/raw/a2-refine/model.glb",
+  "sha256Verified": "478b2b338ceaf98ffa57ad37796744f64365b74b5ea8d935813b21b77e0346a5",
+  "bytes": 8704376,
+  "readOnly": true,
+  "rawKeptOutsideGit": "reference/ (external, ignored) - the raw GLB and its textures are not modified or shipped",
+  "triangles": 21147,
+  "vertices": 21144,
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "baseColorFactor": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metallicRoughnessSynthesised": false
+  },
+  "doubleSided": true,
+  "textures": {
+   "baseColor": [
+    2048,
+    2048,
+    "image/jpeg",
+    3474577
+   ],
+   "metallicRoughness": [
+    2048,
+    2048,
+    "image/jpeg",
+    1769903
+   ],
+   "normal": [
+    2048,
+    2048,
+    "image/jpeg",
+    2527290
+   ]
+  },
+  "metallicRoughnessChannelStats": [
+   {
+    "min": 220,
+    "max": 255,
+    "mean": 254.6
+   },
+   {
+    "min": 49,
+    "max": 229,
+    "mean": 169.4
+   },
+   {
+    "min": 0,
+    "max": 241,
+    "mean": 0.7
+   }
+  ],
+  "meshy": {
+   "ledger": "reference/tasks/track1-siren-blightbelly-20261031/meshy/ledger.jsonl",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "preview": {
+    "taskId": "01a18f47-ef88-70c2-add2-230a05fe5cd1",
+    "status": "SUCCEEDED",
+    "credits": 5,
+    "sha256": "ba438c32919b739a6f48c171af8aec44674e6d51672e155fa66820622a1633eb",
+    "bytes": 382052,
+    "prompt": "Full-body game character of a morbidly obese zombie man, extremely fat and bloated like a sumo wrestler: a huge round pot belly hanging over his belt, very wide waist and hips, thick fat arms and legs, double chin, no visible muscles. His swollen skin is covered in dozens of large lumpy protruding boils and pustules, yellow-green with red inflamed rims, clustered on the belly, chest, arms and back. Sickly mottled grey-green skin, bald head. Torn stained tank top riding up over the belly, ragged dark trousers. Standing upright in a neutral A-pose, arms away from the body, facing forward. Realistic survival-horror style, no weapons, no base.",
+    "settings": {
+     "ai_model": "meshy-t2.5",
+     "model_type": "smart-topology",
+     "target_polycount": 20000,
+     "pose_mode": "a-pose",
+     "target_formats": [
+      "glb"
+     ]
+    },
+    "qc": "PASS (shape): morbidly obese silhouette 1.15 x 1.81 x 0.64 m at runtime scale (meshy/a2-preview-vs-heavyset.png), big belly, A-pose, bald, ragged trousers; boils subtle in geometry -> carried by the refine texture prompt",
+    "t25Evidence": "request ai_model meshy-t2.5 + smart-topology; 5 credits (T2/T2.5/6-lite price; smart-topology accepts only t2 / t2.5); smart-topology triangle count near the 20k target"
+   },
+   "refine": {
+    "taskId": "01a18f48-a0cd-744a-83e4-92ffccf69b39",
+    "status": "SUCCEEDED",
+    "credits": 10,
+    "inheritsPreview": "01a18f47-ef88-70c2-add2-230a05fe5cd1 (verified T2.5 preview)",
+    "sha256": "478b2b338ceaf98ffa57ad37796744f64365b74b5ea8d935813b21b77e0346a5",
+    "bytes": 8704376,
+    "texturePrompt": "sickly mottled grey-green zombie skin covered in many swollen yellow-green pustules and boils with inflamed red rims, dark bruised veins, grime, torn stained off-white tank top remnants, ragged dark brown work trousers, worn leather belt",
+    "settings": {
+     "preview_task_id": "01a18f47-ef88-70c2-add2-230a05fe5cd1",
+     "ai_model": "(omitted: inherits the verified T2.5 preview, per the tool schema refine cannot name t2.5)",
+     "enable_pbr": true,
+     "texture_resolution": "2k",
+     "target_formats": [
+      "glb"
+     ]
+    },
+    "textures": [
+     "base_color.png",
+     "metallic.png",
+     "roughness.png",
+     "normal.png"
+    ],
+    "qc": "PASS: obese silhouette unchanged from the preview (1.15 x 1.81 x 0.64 m at x1.9), grey-green bruised skin, bloody mouth, stained tank top over the belly, belt + dark trousers (meshy/a2-refine-vs-heavyset.png). Boils in the texture are sparse (two chest clusters + a few spots) -> readability via procedural rig-bound pustule clusters in the runtime derivative (also the burst source)."
+   },
+   "rejectedAttempt": {
+    "stage": "a1-preview",
+    "taskId": "01a18f46-dac5-71ef-9e5e-4b5d61f85747",
+    "credits": 5,
+    "qc": "FAIL — not obese: gaunt muscular body, flat abdomen, no belly, no visible boils / pustules (render meshy/a1-preview-vs-heavyset.png: thinner than the existing heavyset zombie). Refine NOT run (texturing cannot change the silhouette); second attempt per authorization (documented QC failure)."
+   },
+   "ledgerTotal": {
+    "posts": 3,
+    "credits": 20,
+    "completeAttempts": 1,
+    "failedPreviewAttempts": 1,
+    "capRemaining": {
+     "posts": 1,
+     "credits": 10
+    }
+   },
+   "decision": "Accepted; no further Meshy jobs.",
+   "provider": "Meshy text-to-3D (meshy_text_to_3d preview + meshy_text_to_3d_refine)",
+   "aiModel": "meshy-t2.5",
+   "smartTopology": true,
+   "renderQc": "reference/tasks/track1-siren-blightbelly-20261031/meshy/a2-refine-vs-heavyset.png"
+  }
+ },
+ "outputs": {
+  "glb": {
+   "path": "game/public/assets/models/enemy-blightbelly.glb",
+   "bytes": 2221420,
+   "sha256": "20c5ecff63c4d1bcd76cb883a923dc17202efd618e4263b7d7425756deff5f77",
+   "format": "glTF 2.0 binary; KHR_mesh_quantization (NORMAL int8 normalized; required); JPEG body textures, PNG pustule gradient; JOINTS_0 u8 / WEIGHTS_0 normalized u8; two SkinnedMesh nodes on one skin"
+  },
+  "textures": {
+   "baseColor": {
+    "size": 2048,
+    "format": "JPEG",
+    "quality": 88,
+    "bytes": 853028,
+    "edits": "inflamed halos painted round the pustule domes (125662 texels)"
+   },
+   "metallicRoughness": {
+    "size": 1024,
+    "format": "JPEG 4:4:4 (source packed map: G roughness, B metallic; resized)",
+    "quality": 88,
+    "bytes": 170848
+   },
+   "normal": {
+    "size": 1024,
+    "format": "JPEG 4:4:4 tangent-space (source map resized; glTF convention, no tangents: three.js derivative tangents)",
+    "quality": 92,
+    "bytes": 195346
+   },
+   "pustules": {
+    "size": [
+     64,
+     64
+    ],
+    "format": "PNG gradient strip (apex -> rim, 4 variant rows)",
+    "bytes": 736
+   }
+  }
+ },
+ "conventions": {
+  "units": "metres",
+  "up": "+Y",
+  "facing": "+Z",
+  "floor": "y = 0",
+  "origin": "midpoint between the feet",
+  "handedness": "L_ = character left = +X",
+  "heightM": 1.85,
+  "bindPose": "A-pose as generated (arms ~23 deg off vertical)",
+  "bindRotations": "identity (bone frames aligned with model space)"
+ },
+ "placement": {
+  "scale": 1.945967302098687,
+  "pivot": [
+   0.00012224726378917694,
+   -0.4753420054912567,
+   0.013427747413516045
+  ],
+  "flipFacing": false,
+  "offset": [
+   0,
+   0,
+   0
+  ],
+  "note": "scaled to 1.85 m; source faced +Z: no rotation; feet midpoint (bbox centres of soles below 4 cm) moved to origin",
+  "nativeBounds": {
+   "min": [
+    -0.302,
+    -0.4753,
+    -0.1663
+   ],
+   "max": [
+    0.302,
+    0.4753,
+    0.1677
+   ]
+  },
+  "boundsM": {
+   "min": [
+    -0.588,
+    0,
+    -0.35
+   ],
+   "max": [
+    0.587,
+    1.85,
+    0.3
+   ]
+  },
+  "sizeM": [
+   1.175,
+   1.85,
+   0.65
+  ]
+ },
+ "facing": {
+  "facing": 1,
+  "margin": 0.0489,
+  "method": "sole bbox z-centre (lowest 3% of height) vs shin centroid (8-12%): toes extend toward the front"
+ },
+ "landmarks": {
+  "densify": {
+   "method": "per-edge midpoint split (consistent across shared edges, linear position/UV/normal) until every edge <= maxEdge; surface and texture mapping unchanged",
+   "maxEdge": 0.0042781,
+   "passes": 5,
+   "sourceTriangles": 21147,
+   "sourceVertices": 21144,
+   "triangles": 420646,
+   "vertices": 239343,
+   "longestEdge": 0.0042779
+  },
+  "weldedVertices": 210452,
+  "droppedFragmentVertices": 683,
+  "method": "densified (max edge 0.0045 x height) and welded; in every 1 cm slice below 0.72 m, XZ clusters smaller than 0.15 x the slice's largest (thin pocket / belt / hem fragments of the low-poly source that the leg / crotch rule would read as legs) are left out of the LANDMARK point cloud only (the mesh keeps them)"
+ },
+ "skeleton": {
+  "jointCount": 18,
+  "joints": [
+   {
+    "name": "Root",
+    "parent": null,
+    "bindWorldPosition": [
+     0,
+     0,
+     0
+    ]
+   },
+   {
+    "name": "Hips",
+    "parent": "Root",
+    "bindWorldPosition": [
+     0,
+     0.69,
+     -0.1079
+    ]
+   },
+   {
+    "name": "Spine",
+    "parent": "Hips",
+    "bindWorldPosition": [
+     0,
+     0.9675,
+     -0.0576
+    ]
+   },
+   {
+    "name": "Chest",
+    "parent": "Spine",
+    "bindWorldPosition": [
+     0,
+     1.3005,
+     -0.1127
+    ]
+   },
+   {
+    "name": "Neck",
+    "parent": "Chest",
+    "bindWorldPosition": [
+     0,
+     1.615,
+     -0.0672
+    ]
+   },
+   {
+    "name": "Head",
+    "parent": "Neck",
+    "bindWorldPosition": [
+     0,
+     1.709,
+     -0.0572
+    ]
+   },
+   {
+    "name": "L_UpperArm",
+    "parent": "Chest",
+    "bindWorldPosition": [
+     0.3031,
+     1.4451,
+     -0.1529
+    ]
+   },
+   {
+    "name": "L_Forearm",
+    "parent": "L_UpperArm",
+    "bindWorldPosition": [
+     0.3954,
+     1.2209,
+     -0.1756
+    ]
+   },
+   {
+    "name": "L_Hand",
+    "parent": "L_Forearm",
+    "bindWorldPosition": [
+     0.5152,
+     1.0303,
+     -0.0791
+    ]
+   },
+   {
+    "name": "R_UpperArm",
+    "parent": "Chest",
+    "bindWorldPosition": [
+     -0.3031,
+     1.4451,
+     -0.1529
+    ]
+   },
+   {
+    "name": "R_Forearm",
+    "parent": "R_UpperArm",
+    "bindWorldPosition": [
+     -0.3954,
+     1.2209,
+     -0.1756
+    ]
+   },
+   {
+    "name": "R_Hand",
+    "parent": "R_Forearm",
+    "bindWorldPosition": [
+     -0.5152,
+     1.0303,
+     -0.0791
+    ]
+   },
+   {
+    "name": "L_Thigh",
+    "parent": "Hips",
+    "bindWorldPosition": [
+     0.1681,
+     0.69,
+     -0.1079
+    ]
+   },
+   {
+    "name": "L_Shin",
+    "parent": "L_Thigh",
+    "bindWorldPosition": [
+     0.2458,
+     0.4025,
+     -0.0705
+    ]
+   },
+   {
+    "name": "L_Foot",
+    "parent": "L_Shin",
+    "bindWorldPosition": [
+     0.2681,
+     0.115,
+     -0.1025
+    ]
+   },
+   {
+    "name": "R_Thigh",
+    "parent": "Hips",
+    "bindWorldPosition": [
+     -0.1681,
+     0.69,
+     -0.1079
+    ]
+   },
+   {
+    "name": "R_Shin",
+    "parent": "R_Thigh",
+    "bindWorldPosition": [
+     -0.2458,
+     0.4025,
+     -0.0705
+    ]
+   },
+   {
+    "name": "R_Foot",
+    "parent": "R_Shin",
+    "bindWorldPosition": [
+     -0.2681,
+     0.115,
+     -0.1025
+    ]
+   }
+  ],
+  "ends": {
+   "Head": [
+    0,
+    1.85,
+    -0.0572
+   ],
+   "L_Hand": [
+    0.6382,
+    0.8382,
+    0.0184
+   ],
+   "R_Hand": [
+    -0.6382,
+    0.8382,
+    0.0184
+   ],
+   "L_Foot": [
+    0.3193,
+    0.03,
+    0.1862
+   ],
+   "R_Foot": [
+    -0.3193,
+    0.03,
+    0.1862
+   ]
+  },
+  "boneLengthsM": {
+   "Hips": 0.6984,
+   "Spine": 0.282,
+   "Chest": 0.3375,
+   "Neck": 0.3178,
+   "Head": 0.0945,
+   "L_UpperArm": 0.3382,
+   "L_Forearm": 0.2435,
+   "L_Hand": 0.2449,
+   "R_UpperArm": 0.3382,
+   "R_Forearm": 0.2435,
+   "R_Hand": 0.2449,
+   "L_Thigh": 0.1681,
+   "L_Shin": 0.3002,
+   "L_Foot": 0.2901,
+   "R_Thigh": 0.1681,
+   "R_Shin": 0.3002,
+   "R_Foot": 0.2901
+  },
+  "validationIssues": [
+   "hipY/H=0.373 outside [0.44, 0.58]",
+   "shoulderHalfWidth/H=0.164 outside [0.07, 0.14]",
+   "thigh/H=0.162 outside [0.17, 0.27]",
+   "shin/H=0.157 outside [0.17, 0.27]"
+  ],
+  "validationNote": "the anthropometric ranges of autorig.validateSkeleton are for ordinary adults; this body is deliberately short-legged and obese (hip / thigh / shin ratios below range are the generated proportions, not a detection failure: see the joint overlay render)",
+  "shoulderRefinement": {
+   "method": "acromion = outer shoulder-top edge (steepest 1 cm drop of the top-surface profile within 0.25 m outward of the generic detection); joint 5 cm below / 2 cm medial (skeleton.mjs offsets), slab-centred z; symmetrised; shoulder cut plane T moved to it",
+   "raw": {
+    "L": {
+     "joint": [
+      0.3031,
+      1.4456,
+      -0.1528
+     ],
+     "acromion": [
+      0.3231,
+      1.4956
+     ],
+     "dropM": 0.0323,
+     "detected": [
+      0.2331,
+      1.5051,
+      -0.1351
+     ]
+    },
+    "R": {
+     "joint": [
+      -0.3031,
+      1.4446,
+      -0.1531
+     ],
+     "acromion": [
+      -0.3231,
+      1.4946
+     ],
+     "dropM": 0.0276,
+     "detected": [
+      -0.2331,
+      1.5051,
+      -0.1351
+     ]
+    }
+   },
+   "result": {
+    "L_UpperArm": [
+     0.3031,
+     1.4451,
+     -0.1529
+    ],
+    "R_UpperArm": [
+     -0.3031,
+     1.4451,
+     -0.1529
+    ]
+   },
+   "profileL": [
+    [
+     0.213,
+     1.587
+    ],
+    [
+     0.223,
+     1.584
+    ],
+    [
+     0.233,
+     1.581
+    ],
+    [
+     0.243,
+     1.575
+    ],
+    [
+     0.253,
+     1.57
+    ],
+    [
+     0.263,
+     1.563
+    ],
+    [
+     0.273,
+     1.555
+    ],
+    [
+     0.283,
+     1.547
+    ],
+    [
+     0.293,
+     1.537
+    ],
+    [
+     0.303,
+     1.528
+    ],
+    [
+     0.313,
+     1.513
+    ],
+    [
+     0.323,
+     1.496
+    ],
+    [
+     0.333,
+     1.463
+    ],
+    [
+     0.343,
+     1.438
+    ],
+    [
+     0.353,
+     1.424
+    ],
+    [
+     0.363,
+     1.413
+    ],
+    [
+     0.373,
+     1.398
+    ],
+    [
+     0.383,
+     1.388
+    ],
+    [
+     0.393,
+     1.374
+    ],
+    [
+     0.403,
+     1.358
+    ],
+    [
+     0.413,
+     1.342
+    ],
+    [
+     0.423,
+     1.331
+    ],
+    [
+     0.433,
+     1.322
+    ],
+    [
+     0.443,
+     1.312
+    ],
+    [
+     0.453,
+     1.3
+    ],
+    [
+     0.463,
+     1.288
+    ],
+    [
+     0.473,
+     1.272
+    ],
+    [
+     0.483,
+     1.259
+    ],
+    [
+     0.493,
+     1.247
+    ],
+    [
+     0.503,
+     1.225
+    ],
+    [
+     0.513,
+     1.204
+    ]
+   ]
+  },
+  "estimation": {
+   "feet": {
+    "L": [
+     0.319,
+     0,
+     -0.0012
+    ],
+    "R": [
+     -0.3195,
+     0,
+     -0.0001
+    ],
+    "toeZ": 0.2062,
+    "shinDepth": 0.177,
+    "ankleTransitionY": 0.13,
+    "ankleY": 0.115,
+    "method": "boot depth widens >1.3x shin depth below ankle; joint 1.5 cm under transition"
+   },
+   "arm_L": {
+    "armpitY": 1.235,
+    "forearmAxisDir": [
+     0.4779,
+     -0.7945,
+     0.3746
+    ],
+    "forearmAngleFromVerticalDeg": 37.4,
+    "wristT": 0.09,
+    "wristRadius": 0.0673,
+    "tipT": 0.359,
+    "acromion": [
+     0.258,
+     1.5521
+    ],
+    "shoulderSlabZ": [
+     -0.24,
+     -0.03
+    ],
+    "upperArmAngleFromVerticalDeg": 29.8,
+    "method": "arm = slice clusters separated from torso; forearm PCA axis; wrist = min radius 11-27 cm from tip; shoulder from acromion (top-surface slope over 4 cm < -0.8 after the trapezius plateau) -5 cm/-2 cm medial, slab-centred in z; elbow 54% shoulder->wrist centred in limb section"
+   },
+   "arm_R": {
+    "armpitY": 1.235,
+    "forearmAxisDir": [
+     -0.4678,
+     -0.7969,
+     0.3822
+    ],
+    "forearmAngleFromVerticalDeg": 37.2,
+    "wristT": 0.1,
+    "wristRadius": 0.0741,
+    "tipT": 0.362,
+    "acromion": [
+     -0.248,
+     1.5582
+    ],
+    "shoulderSlabZ": [
+     -0.242,
+     -0.028
+    ],
+    "upperArmAngleFromVerticalDeg": 31.2,
+    "method": "arm = slice clusters separated from torso; forearm PCA axis; wrist = min radius 11-27 cm from tip; shoulder from acromion (top-surface slope over 4 cm < -0.8 after the trapezius plateau) -5 cm/-2 cm medial, slab-centred in z; elbow 54% shoulder->wrist centred in limb section"
+   },
+   "neck": {
+    "neckMinY": 1.655,
+    "neckWidth": 0.1763,
+    "neckBaseY": 1.615,
+    "headTop": 1.85,
+    "headPivotY": 1.709,
+    "method": "narrowest slice above shoulders; base where width >1.9x neck; head pivot at 40% base->top"
+   },
+   "legs": {
+    "crotchY": 0.51,
+    "hipY": 0.69,
+    "thighCentreX": [
+     0.1995,
+     -0.2207
+    ],
+    "method": "crotch = lowest merge of leg clusters; hip height = 0.49H clamped to crotch+[0.06,0.18]; hip x = 0.8 x thigh centre 4 cm below crotch; knee at 50% ankle->hip, centred in leg section; ankle centred in shin section"
+   },
+   "rawPaired": {
+    "armpitPt": {
+     "L": [
+      0.272,
+      1.235,
+      -0.135
+     ],
+     "R": [
+      -0.2725,
+      1.235,
+      -0.1352
+     ]
+    },
+    "acromionPt": {
+     "L": [
+      0.2581,
+      1.5521,
+      -0.135
+     ],
+     "R": [
+      -0.2481,
+      1.5582,
+      -0.1352
+     ]
+    },
+    "shoulder": {
+     "L": [
+      0.2381,
+      1.5021,
+      -0.135
+     ],
+     "R": [
+      -0.2281,
+      1.5082,
+      -0.1352
+     ]
+    },
+    "elbow": {
+     "L": [
+      0.3936,
+      1.221,
+      -0.1758
+     ],
+     "R": [
+      -0.3972,
+      1.2209,
+      -0.1755
+     ]
+    },
+    "wrist": {
+     "L": [
+      0.5164,
+      1.0377,
+      -0.0792
+     ],
+     "R": [
+      -0.5141,
+      1.0229,
+      -0.079
+     ]
+    },
+    "handTip": {
+     "L": [
+      0.6357,
+      0.8445,
+      0.0141
+     ],
+     "R": [
+      -0.6407,
+      0.8318,
+      0.0228
+     ]
+    },
+    "hip": {
+     "L": [
+      0.1596,
+      0.69,
+      -0.1079
+     ],
+     "R": [
+      -0.1765,
+      0.69,
+      -0.1079
+     ]
+    },
+    "knee": {
+     "L": [
+      0.2453,
+      0.4025,
+      -0.0593
+     ],
+     "R": [
+      -0.2463,
+      0.4025,
+      -0.0817
+     ]
+    },
+    "ankle": {
+     "L": [
+      0.2678,
+      0.115,
+      -0.102
+     ],
+     "R": [
+      -0.2683,
+      0.115,
+      -0.103
+     ]
+    },
+    "toe": {
+     "L": [
+      0.319,
+      0.03,
+      0.1862
+     ],
+     "R": [
+      -0.3195,
+      0.03,
+      0.1862
+     ]
+    }
+   },
+   "shoulderCutPlanes": {
+    "L": {
+     "A": [
+      0.2722,
+      1.235,
+      -0.1351
+     ],
+     "T": [
+      0.3231,
+      1.4951,
+      -0.1351
+     ]
+    },
+    "R": {
+     "A": [
+      -0.2722,
+      1.235,
+      -0.1351
+     ],
+     "T": [
+      -0.3231,
+      1.4951,
+      -0.1351
+     ]
+    },
+    "method": "plane through armpit wall point A and acromion T, containing the front-back axis"
+   }
+  }
+ },
+ "skinning": {
+  "method": "zombie/lib/skin.mjs region classification + chain weights + masked Laplacian smoothing on the welded source mesh (UV-seam copies share weights), + belly thigh fade",
+  "bellyThighFade": {
+   "verticesChanged": 444,
+   "weightMovedToHips": 58.8665,
+   "start": 0.06,
+   "end": 0.16,
+   "rampY": 0.14,
+   "note": "torso-region vertices whose z is start..end m IN FRONT of the hip joints lose their thigh-chain weight to Hips (smoothstep), ramped in over rampY m above the crotch line"
+  },
+  "regionVertexCounts": {
+   "legR": 1191,
+   "torso": 5215,
+   "armL": 1542,
+   "legL": 1079,
+   "armR": 1541
+  },
+  "armVerticesAdoptedOutsideFlood": {
+   "L": 0,
+   "R": 0
+  },
+  "verticesWithMoreThan4Truncated": 0,
+  "smoothIters": 4,
+  "smoothLambda": 0.5,
+  "armRule": "wall"
+ },
+ "mesh": {
+  "node": "BlightbellyBody",
+  "vertices": 21144,
+  "triangles": 21147,
+  "weldedVertices": 10568,
+  "geometryHash": "2a1e8229afecd5b2",
+  "note": "the Meshy smart-topology mesh and UVs unchanged (placed: uniform scale + translation); no simplification / re-UV / re-bake"
+ },
+ "profile": {
+  "heightM": 1.85,
+  "landmarks": {
+   "ankle": 0.115,
+   "knee": 0.4025,
+   "crotch": 0.51,
+   "hip": 0.69,
+   "spine": 0.9675,
+   "chest": 1.3005,
+   "armpit": 1.235,
+   "neck": 1.615,
+   "head": 1.709,
+   "top": 1.85
+  },
+  "limb": {
+   "L_UpperArm": {
+    "length": 0.2435,
+    "radius": 0.0857,
+    "samples": 68
+   },
+   "L_Forearm": {
+    "length": 0.2449,
+    "radius": 0.0678,
+    "samples": 82
+   },
+   "R_UpperArm": {
+    "length": 0.2435,
+    "radius": 0.0857,
+    "samples": 68
+   },
+   "R_Forearm": {
+    "length": 0.2449,
+    "radius": 0.0678,
+    "samples": 79
+   },
+   "L_Thigh": {
+    "length": 0.3002,
+    "radius": 0.1498,
+    "samples": 327
+   },
+   "L_Shin": {
+    "length": 0.2901,
+    "radius": 0.087,
+    "samples": 79
+   },
+   "R_Thigh": {
+    "length": 0.3002,
+    "radius": 0.1498,
+    "samples": 148
+   },
+   "R_Shin": {
+    "length": 0.2901,
+    "radius": 0.087,
+    "samples": 82
+   }
+  },
+  "head": {
+   "halfWidth": 0.1033,
+   "depth": 0.2613
+  },
+  "torso": {
+   "chest": {
+    "w": 0.3867,
+    "d": 0.4532
+   },
+   "waist": {
+    "w": 0.6689,
+    "d": 0.3012
+   },
+   "hips": {
+    "w": 0.6974,
+    "d": 0.514
+   }
+  }
+ },
+ "pustules": {
+  "node": "BlightbellyPustules",
+  "method": "lib/pustules.mjs (seeded clusters on the welded body surface; per-dome skin weights copied from the surface point; halo painted into the base colour)",
+  "spec": {
+   "seed": 11605639,
+   "minSpacing": 0.15,
+   "mainR": [
+    0.026,
+    0.04
+   ],
+   "satellites": [
+    2,
+    4
+   ],
+   "satR": [
+    0.42,
+    0.72
+   ],
+   "satDist": [
+    1.45,
+    2.3
+   ],
+   "heightK": [
+    0.38,
+    0.6
+   ],
+   "rings": 3,
+   "segments": 10,
+   "sink": 0.3,
+   "variants": 4,
+   "prefer": {
+    "skin": 3,
+    "boil": 10,
+    "cloth": 0.2
+   },
+   "satelliteNever": [
+    "dark"
+   ],
+   "quotas": [
+    {
+     "bone": "Chest",
+     "n": 5,
+     "sides": [
+      1,
+      -1
+     ],
+     "front": [
+      1,
+      1,
+      -1,
+      -1,
+      1
+     ]
+    },
+    {
+     "bone": "Spine",
+     "n": 3,
+     "sides": [
+      1,
+      -1
+     ],
+     "front": [
+      1,
+      1,
+      -1
+     ],
+     "frontBias": 0.05
+    },
+    {
+     "bone": "L_UpperArm",
+     "n": 4,
+     "lateral": 0.05,
+     "minSpacing": 0.11
+    },
+    {
+     "bone": "R_UpperArm",
+     "n": 4,
+     "lateral": 0.05,
+     "minSpacing": 0.11
+    }
+   ],
+   "halo": {
+    "reach": 1.8,
+    "strength": 0.45,
+    "colour": [
+     150,
+     44,
+     38
+    ]
+   }
+  },
+  "rejectedBuriedDomes": 1,
+  "clusters": 15,
+  "domes": 45,
+  "triangles": 3150,
+  "vertices": 1845,
+  "perBone": {
+   "Chest": 5,
+   "Spine": 2,
+   "L_UpperArm": 4,
+   "R_UpperArm": 4
+  },
+  "anchorClasses": {
+   "skin": 14,
+   "boil": 0,
+   "cloth": 2
+  },
+  "skipped": [
+   {
+    "bone": "Spine",
+    "reason": "main dome buried (fold / crease)"
+   }
+  ],
+  "burstPoints": [
+   {
+    "bone": "Chest",
+    "offset": [
+     0.1872,
+     0.2119,
+     0.1027
+    ],
+    "r": 0.0913,
+    "normal": [
+     0.368,
+     0.4475,
+     0.8151
+    ],
+    "domes": 4,
+    "worldBind": [
+     0.1872,
+     1.5124,
+     -0.01
+    ]
+   },
+   {
+    "bone": "Chest",
+    "offset": [
+     -0.324,
+     0.1909,
+     0.0031
+    ],
+    "r": 0.0763,
+    "normal": [
+     -0.881,
+     0.3803,
+     0.2815
+    ],
+    "domes": 3,
+    "worldBind": [
+     -0.324,
+     1.4914,
+     -0.1096
+    ]
+   },
+   {
+    "bone": "Chest",
+    "offset": [
+     0.2834,
+     0.1879,
+     -0.1226
+    ],
+    "r": 0.085,
+    "normal": [
+     0.4543,
+     0.1302,
+     -0.8813
+    ],
+    "domes": 2,
+    "worldBind": [
+     0.2834,
+     1.4884,
+     -0.2353
+    ]
+   },
+   {
+    "bone": "Chest",
+    "offset": [
+     -0.2054,
+     0.1384,
+     -0.1476
+    ],
+    "r": 0.0581,
+    "normal": [
+     -0.4221,
+     0.2894,
+     -0.8591
+    ],
+    "domes": 2,
+    "worldBind": [
+     -0.2054,
+     1.4389,
+     -0.2603
+    ]
+   },
+   {
+    "bone": "Chest",
+    "offset": [
+     0.1667,
+     0.0736,
+     0.2296
+    ],
+    "r": 0.0875,
+    "normal": [
+     0.1951,
+     0.5532,
+     0.8099
+    ],
+    "domes": 2,
+    "worldBind": [
+     0.1667,
+     1.3741,
+     0.1169
+    ]
+   },
+   {
+    "bone": "Spine",
+    "offset": [
+     0.1943,
+     0.1414,
+     0.2526
+    ],
+    "r": 0.0854,
+    "normal": [
+     0.7186,
+     0.3504,
+     0.6007
+    ],
+    "domes": 4,
+    "worldBind": [
+     0.1943,
+     1.1089,
+     0.195
+    ]
+   },
+   {
+    "bone": "Spine",
+    "offset": [
+     -0.1453,
+     0.3165,
+     0.17
+    ],
+    "r": 0.0693,
+    "normal": [
+     -0.2988,
+     -0.5399,
+     0.7869
+    ],
+    "domes": 4,
+    "worldBind": [
+     -0.1453,
+     1.284,
+     0.1124
+    ]
+   },
+   {
+    "bone": "L_UpperArm",
+    "offset": [
+     0.096,
+     -0.1156,
+     0.057
+    ],
+    "r": 0.0931,
+    "normal": [
+     0.7616,
+     0.4174,
+     0.4957
+    ],
+    "domes": 3,
+    "worldBind": [
+     0.3991,
+     1.3295,
+     -0.0959
+    ]
+   },
+   {
+    "bone": "L_UpperArm",
+    "offset": [
+     0.048,
+     -0.0905,
+     -0.1107
+    ],
+    "r": 0.0938,
+    "normal": [
+     0.4053,
+     0.2761,
+     -0.8715
+    ],
+    "domes": 3,
+    "worldBind": [
+     0.3511,
+     1.3546,
+     -0.2636
+    ]
+   },
+   {
+    "bone": "L_UpperArm",
+    "offset": [
+     0.0349,
+     0.0173,
+     0.0405
+    ],
+    "r": 0.0946,
+    "normal": [
+     0.933,
+     0.2329,
+     0.2742
+    ],
+    "domes": 4,
+    "worldBind": [
+     0.338,
+     1.4624,
+     -0.1124
+    ]
+   },
+   {
+    "bone": "L_UpperArm",
+    "offset": [
+     0.0895,
+     -0.2227,
+     -0.1084
+    ],
+    "r": 0.0818,
+    "normal": [
+     0.0874,
+     -0.412,
+     -0.907
+    ],
+    "domes": 3,
+    "worldBind": [
+     0.3926,
+     1.2224,
+     -0.2613
+    ]
+   },
+   {
+    "bone": "R_UpperArm",
+    "offset": [
+     -0.0281,
+     -0.1069,
+     -0.1202
+    ],
+    "r": 0.0975,
+    "normal": [
+     -0.1412,
+     0.1119,
+     -0.9836
+    ],
+    "domes": 3,
+    "worldBind": [
+     -0.3312,
+     1.3382,
+     -0.2731
+    ]
+   },
+   {
+    "bone": "R_UpperArm",
+    "offset": [
+     -0.1802,
+     -0.1722,
+     -0.0389
+    ],
+    "r": 0.0994,
+    "normal": [
+     -0.8181,
+     0.4972,
+     -0.2888
+    ],
+    "domes": 3,
+    "worldBind": [
+     -0.4833,
+     1.2729,
+     -0.1918
+    ]
+   },
+   {
+    "bone": "R_UpperArm",
+    "offset": [
+     -0.0897,
+     -0.0822,
+     0.0302
+    ],
+    "r": 0.0803,
+    "normal": [
+     -0.7525,
+     0.4924,
+     0.4374
+    ],
+    "domes": 2,
+    "worldBind": [
+     -0.3928,
+     1.3629,
+     -0.1227
+    ]
+   },
+   {
+    "bone": "R_UpperArm",
+    "offset": [
+     -0.0898,
+     -0.2221,
+     -0.1071
+    ],
+    "r": 0.0774,
+    "normal": [
+     -0.0825,
+     -0.4078,
+     -0.9093
+    ],
+    "domes": 3,
+    "worldBind": [
+     -0.3929,
+     1.223,
+     -0.26
+    ]
+   }
+  ]
+ },
+ "clips": {
+  "method": "hand-authored procedural keyframes / gait functions (lib/blightbelly-clips.mjs) at 30 fps, legs by foot-planting IK (zombie/lib/pose.mjs); not motion capture",
+  "fps": 30,
+  "meta": {
+   "Idle": {
+    "duration": 3.6,
+    "loop": true,
+    "frames": 109
+   },
+   "Walk": {
+    "duration": 1.4,
+    "loop": true,
+    "frames": 43,
+    "groundSpeed": 0.4
+   },
+   "Run": {
+    "duration": 0.8,
+    "loop": true,
+    "frames": 25,
+    "groundSpeed": 1.5
+   },
+   "Attack": {
+    "duration": 1.5,
+    "loop": false,
+    "frames": 46,
+    "impactTime": 0.7
+   },
+   "Hit": {
+    "duration": 0.5,
+    "loop": false,
+    "frames": 16
+   },
+   "Death": {
+    "duration": 2.3,
+    "loop": false,
+    "frames": 70,
+    "burstTime": 0.38
+   }
+  },
+  "runtime": {
+   "attackDuration": 1.5,
+   "attackImpact": 0.7,
+   "walkGroundSpeed": 0.4,
+   "runGroundSpeed": 1.5,
+   "deathBurstTime": 0.38,
+   "note": "ZombieStats.attackDuration / attackImpact should match Attack; locomotion clips are authored in place for groundSpeed at timeScale 1 (ai/zombieActor.ts scales by speed / (groundSpeed x actor scale), clamped 0.35..1.8); Death swells to its peak at burstTime (a natural moment for the pustule burst; bursting at t = 0 also works)"
+  },
+  "deathSolve": {
+   "tune": {
+    "hipsPitch": -95,
+    "hipsRoll": 10.125,
+    "neck": -25.797,
+    "head": -1,
+    "headYaw": -20,
+    "armLz": -0.575,
+    "armRz": -0.063,
+    "footLz": 0.389,
+    "footRz": 0.154
+   },
+   "hipsY": -0.4242,
+   "cost": 0.007085,
+   "evals": 109,
+   "contact": {
+    "legR": 0.019,
+    "pelvis": 0.019,
+    "armL": 0.023,
+    "torso": 0.01,
+    "head": 0.098,
+    "legL": 0.015,
+    "armR": 0.015,
+    "outfit.torso": 0.035,
+    "outfit.armR": 0.01,
+    "outfit.armL": 0.01
+   },
+   "solvedAgainst": "body + pustules"
+  },
+  "floorGuard": {
+   "method": "per frame: Hips raised so the lowest CPU-skinned vertex (body + pustules) stays >= 5 mm above the floor (Attack / Hit / Death)",
+   "clips": {
+    "Attack": {
+     "frames": 0,
+     "maxLiftM": 0
+    },
+    "Hit": {
+     "frames": 0,
+     "maxLiftM": 0
+    },
+    "Death": {
+     "frames": 0,
+     "maxLiftM": 0
+    }
+   }
+  }
+ },
+ "verification": {
+  "cpuSkinningFloor": {
+   "Idle": {
+    "frames": 109,
+    "minY": 0,
+    "atT": 3.43333,
+    "framesBelowMinus1cm": 0,
+    "maxLegReach": 0.9546,
+    "feet": {
+     "L": {
+      "minY": 0,
+      "stanceLowestPointMaxY": 0,
+      "stanceFrames": 109
+     },
+     "R": {
+      "minY": 0,
+      "stanceLowestPointMaxY": 0,
+      "stanceFrames": 109
+     }
+    }
+   },
+   "Walk": {
+    "frames": 43,
+    "minY": 0,
+    "atT": 1.13333,
+    "framesBelowMinus1cm": 0,
+    "maxLegReach": 0.9471,
+    "feet": {
+     "L": {
+      "minY": 0,
+      "stanceLowestPointMaxY": 0.0065,
+      "stanceFrames": 23
+     },
+     "R": {
+      "minY": 0,
+      "stanceLowestPointMaxY": 0.0074,
+      "stanceFrames": 24
+     }
+    }
+   },
+   "Run": {
+    "frames": 25,
+    "minY": 0,
+    "atT": 0.6,
+    "framesBelowMinus1cm": 0,
+    "maxLegReach": 0.9512,
+    "feet": {
+     "L": {
+      "minY": 0,
+      "stanceLowestPointMaxY": 0.0039,
+      "stanceFrames": 8
+     },
+     "R": {
+      "minY": 0,
+      "stanceLowestPointMaxY": 0.0038,
+      "stanceFrames": 8
+     }
+    }
+   },
+   "Attack": {
+    "frames": 46,
+    "minY": 0,
+    "atT": 0.3,
+    "framesBelowMinus1cm": 0,
+    "maxLegReach": 0.9335,
+    "feet": {
+     "L": {
+      "minY": 0
+     },
+     "R": {
+      "minY": 0
+     }
+    }
+   },
+   "Hit": {
+    "frames": 16,
+    "minY": 0,
+    "atT": 0.4,
+    "framesBelowMinus1cm": 0,
+    "maxLegReach": 0.9309,
+    "feet": {
+     "L": {
+      "minY": 0
+     },
+     "R": {
+      "minY": 0
+     }
+    }
+   },
+   "Death": {
+    "frames": 70,
+    "minY": 0,
+    "atT": 0.2,
+    "framesBelowMinus1cm": 0,
+    "maxLegReach": 1.1335,
+    "feet": {
+     "L": {
+      "minY": 0
+     },
+     "R": {
+      "minY": 0
+     }
+    }
+   }
+  },
+  "clearance": {
+   "method": "every 2nd frame: CPU-skinned forearm / hand (resp. thigh) vertices that are clear of the torso in the bind pose (> 3 cm / 6 cm) vs the posed torso surface above the crotch; depth = distance behind the closest torso triangle along its outward normal (oriented by the bind vertex normals)",
+   "testedVertices": {
+    "arms": 2772,
+    "thighs": 323
+   },
+   "arms": {
+    "Bind": {
+     "maxDepthM": 0.0595,
+     "worstT": 0,
+     "maxVertsDeeperThan1cm": 3,
+     "framesTested": 1
+    },
+    "Idle": {
+     "maxDepthM": 0.0938,
+     "worstT": 3.53333,
+     "maxVertsDeeperThan1cm": 5,
+     "framesTested": 55
+    },
+    "Walk": {
+     "maxDepthM": 0.1068,
+     "worstT": 0.46667,
+     "maxVertsDeeperThan1cm": 10,
+     "framesTested": 22
+    },
+    "Run": {
+     "maxDepthM": 0.0802,
+     "worstT": 0.2,
+     "maxVertsDeeperThan1cm": 18,
+     "framesTested": 13
+    },
+    "Attack": {
+     "maxDepthM": 0.0903,
+     "worstT": 1.13333,
+     "maxVertsDeeperThan1cm": 4,
+     "framesTested": 23
+    },
+    "Hit": {
+     "maxDepthM": 0.0888,
+     "worstT": 0.26667,
+     "maxVertsDeeperThan1cm": 5,
+     "framesTested": 8
+    },
+    "Death": {
+     "maxDepthM": 0.0828,
+     "worstT": 0,
+     "maxVertsDeeperThan1cm": 4,
+     "framesTested": 35
+    }
+   },
+   "thighs": {
+    "Bind": {
+     "maxDepthM": 0.0746,
+     "worstT": 0,
+     "maxVertsDeeperThan1cm": 109,
+     "framesTested": 1
+    },
+    "Idle": {
+     "maxDepthM": 0.0821,
+     "worstT": 1.2,
+     "maxVertsDeeperThan1cm": 104,
+     "framesTested": 55
+    },
+    "Walk": {
+     "maxDepthM": 0.1151,
+     "worstT": 0,
+     "maxVertsDeeperThan1cm": 101,
+     "framesTested": 22
+    },
+    "Run": {
+     "maxDepthM": 0.1125,
+     "worstT": 0.4,
+     "maxVertsDeeperThan1cm": 93,
+     "framesTested": 13
+    },
+    "Attack": {
+     "maxDepthM": 0.1138,
+     "worstT": 1.33333,
+     "maxVertsDeeperThan1cm": 105,
+     "framesTested": 23
+    },
+    "Hit": {
+     "maxDepthM": 0.0835,
+     "worstT": 0.06667,
+     "maxVertsDeeperThan1cm": 102,
+     "framesTested": 8
+    },
+    "Death": {
+     "maxDepthM": 0.1141,
+     "worstT": 1.2,
+     "maxVertsDeeperThan1cm": 110,
+     "framesTested": 35
+    }
+   }
+  },
+  "motionStretch": {
+   "triangles": 21147,
+   "p50": 1.004,
+   "p99": 3.167,
+   "max": 9.95,
+   "over2x": 893,
+   "over3x": 261,
+   "fractionOver": 0.0123,
+   "worstClips": {
+    "Run": 61,
+    "Hit": 44,
+    "Attack": 40,
+    "Death": 69
+   },
+   "poses": 107,
+   "method": "per triangle: worst edge length ratio posed / bind over every 3rd frame of all six clips (CPU skinning); body alone"
+  }
+ },
+ "hit": {
+  "radii": {
+   "head": 0.1066,
+   "torso": 0.3197,
+   "arm": 0.1036,
+   "leg": 0.1658,
+   "belly": {
+    "bone": "Spine",
+    "offset": [
+     0.0152,
+     -0.0462,
+     0.1564
+    ],
+    "r": 0.3561
+   },
+   "torsoP90": 0.3519,
+   "method": "torso: 75th percentile distance of torso-region vertices (crotch..neck) to the Hips-Spine-Chest-Neck chain (capsule Hips->Neck in ai/zombieActor.ts updateVolumes); belly: sphere at the centroid of the front torso vertices in the Spine-0.20..+0.15 m band (offset from the Spine bone, bind frame = model frame), r = 85th pct; head: 75th pct distance above the neck base to the Head joint->top segment; limbs: autorig bodyProfile radii x1.35 (arm) / x1.4 (leg) like zombie/lib/hit.mjs (unclamped)"
+  },
+  "collider": {
+   "radius": 0.42,
+   "diameter": 0.84,
+   "narrowestOpeningM": 1,
+   "clearancePerSideM": 0.08,
+   "note": "motor circle radius 0.42 m (ordinary zombie 0.33, coated 0.38): covers the torso / belly core (95th pct horizontal radius 0.395 m) and passes the narrowest walk-through openings (2-cell doors, 1.0 m in the 0.5 m nav grid) with 0.08 m per side; the swinging arms and the belly rim may visually brush door jambs (no collision)"
+  },
+  "footprint": {
+   "torsoHalfWidthM": 0.432,
+   "torsoFrontZ": 0.3,
+   "torsoBackZ": -0.35,
+   "torsoMaxRadiusM": 0.443,
+   "torsoRadiusP95": 0.395,
+   "armOuterXM": 0.588,
+   "collider": {
+    "radius": 0.42,
+    "diameter": 0.84,
+    "narrowestOpeningM": 1,
+    "clearancePerSideM": 0.08,
+    "note": "motor circle radius 0.42 m (ordinary zombie 0.33, coated 0.38): covers the torso / belly core (95th pct horizontal radius 0.395 m) and passes the narrowest walk-through openings (2-cell doors, 1.0 m in the 0.5 m nav grid) with 0.08 m per side; the swinging arms and the belly rim may visually brush door jambs (no collision)"
+   }
+  },
+  "heightM": 1.85,
+  "notes": [
+   "ai/zombieActor.ts updateVolumes: head sphere (r head), torso capsule Hips->Neck (r torso), limb capsules UpperArm->Hand (r arm), Thigh->Foot (r leg); the belly sphere is an optional extra volume (bone Spine + offset, r) for the forward bulge the capsule does not cover",
+   "all values in model metres at actor root scale 1 (multiply by the runtime scale)"
+  ]
+ },
+ "runtime": {
+  "modelKey": "enemy_blightbelly",
+  "url": "assets/models/enemy-blightbelly.glb",
+  "extras": "gltf.scene.userData.enemyBlightbelly",
+  "meshes": {
+   "body": "BlightbellyBody",
+   "pustules": "BlightbellyPustules (hide / shrink after the burst)"
+  },
+  "bones": "same 18 names as the zombie bodies (ai/zombieActor.ts BONES all present)"
+ },
+ "limitations": [
+  "Automatic approximate skin weights on a low-poly (21 k triangle) source: LBS volume loss at shoulders / elbows / hips in strong poses; the belly is rigid with Hips / Spine (no jiggle / secondary motion).",
+  "Procedural (not mocap) clips; no facial rig, no finger / twist bones.",
+  "Pustules are rigid domes riding the skin (no swelling animation); the burst itself is a runtime VFX (lane BLIGHT) at the exported burst points.",
+  "Hidden-side geometry and texture of the source are AI-generated (Meshy); the texture atlas has dilation streaks in unused space.",
+  "The obese silhouette is wider than the motor collider (arms / belly rim may brush door jambs in 1.0 m openings; no collision change).",
+  "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false."
+ ],
+ "rebuild": "flock /tmp/track1-heavy.lock node --max-old-space-size=3500 tools/asset-pipeline/enemy/build-blightbelly.mjs && node tools/asset-pipeline/enemy/qa/blightbelly-sheets.mjs"
+}

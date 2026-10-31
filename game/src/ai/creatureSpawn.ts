@@ -14,7 +14,9 @@
 
 import {hashString, mulberry32} from '../core/rng';
 import type {Area} from '../gen/stationTypes';
-import {ENEMY_POOL, roomFamilyPool, spawnProfile, type EnemyFamilyId, type FamilyPool, type SpawnProfile} from './spawnTables';
+import {
+  ENEMY_POOL, eligibleFamily, roomFamilyPool, type EligibilityLayout, type EligibilitySpawn, type EnemyFamilyId, type FamilyPool, type SpawnProfile,
+} from './spawnTables';
 
 export {ENEMY_POOL, ENEMY_POPULATION_SCALE, ENEMY_SPAWNS, ENEMY_SPAWNS_BASELINE} from './spawnTables';
 
@@ -39,20 +41,25 @@ export function pickEnemyArchetype(seed: number, index: number, pool: FamilyPool
 /**
  * Tag every spawn of a generated layout with its archetype (zombie spawns keep their shambler /
  * coated type for the outfit pick; a non-zombie archetype ignores it). Returns the non-zombie count.
- * Lane SPAWN: `profile` = the logical level's spawn profile (default: the Subway's); a spawn's pool is its room's
+ * Lane SPAWN: `profile` = the logical level's spawn profile (task track1: REQUIRED — no silent Subway default); a spawn's pool is its room's
  * (spawnTables roomFamilyPool: purpose / room-type modifiers; untouched when the room has no entry).
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): then the profile's family ELIGIBILITY (spawnTables eligibleFamily): a draw
+ * of a family that may not spawn there (an Office Siren outside an eligible office-floor room) becomes the rule's fallback (a
+ * zombie). Same roll, no RNG, other families untouched. Call ONCE per level, after every context (annexes too) has placed.
  */
 export function assignEnemyArchetypes(
-  layout: {seed: number; zombies: {archetype?: EnemyArchetypeId; area?: number; horde?: number}[]; areas?: readonly Pick<Area, 'purpose' | 'type'>[]},
-  profile: SpawnProfile = spawnProfile('subway'),
+  layout: {seed: number; zombies: ({archetype?: EnemyArchetypeId; area?: number; horde?: number} & EligibilitySpawn)[]; areas?: readonly (Pick<Area, 'purpose' | 'type'> & Partial<Pick<Area, 'kind' | 'w' | 'h'>>)[]} & EligibilityLayout,
+  profile: SpawnProfile,
 ): number {
   let n = 0;
+  const placed = new Map<EnemyFamilyId, number>();
   layout.zombies.forEach((s, i) => {
     // Task track3-eaton-centre-20261031 (lane HORDE): roaming-horde members keep the family their horde pool gave them (ai/hordePlace.ts)
     // — the ambient pool never applies to them. Skipping consumes no draw (the roll is a hash of (seed, index)).
     if (s.horde !== undefined) return;
     const area = s.area !== undefined ? layout.areas?.[s.area] : undefined;
-    s.archetype = pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area));
+    s.archetype = eligibleFamily(profile, pickEnemyArchetype(layout.seed, i, roomFamilyPool(profile, area)), layout, s, i, placed);
+    placed.set(s.archetype, (placed.get(s.archetype) ?? 0) + 1);
     if (s.archetype !== 'zombie') n++;
   });
   return n;

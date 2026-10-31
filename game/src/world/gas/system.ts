@@ -21,6 +21,14 @@
 // - stateListeners: leaving play hides the HUD.
 // The Subway (no office windows, no roof) is inert: no handler ever claims a hit, no field exists, no outdoor exposure.
 // No infection state, enemy effect or AI change; intact windows and the green sky do nothing.
+//
+// Task track1-siren-blightbelly-20261031 (lane BLIGHT): TEMPORARY LOCAL PUFFS (world/gas/puff.ts) — addPuff({id, level, x, y,
+// z, radius?, peak?, durationS?}) on ANY level / storey, the Subway too (a Blightbelly's death cloud). Each puff is a small
+// bounded field round its burst on that storey's grid (walls, storey isolation, the same diffusion / tick), created on demand
+// and disposed when it expires; the breach field, the roof and the window handling are unchanged. ONE exposure calculation:
+// c = max(min(GAS.CAP, breach field + puffs) at the eye, roof outdoor) -> the same threshold / dps / protection (mask + filter)
+// / HUD / cough path; the puffs' cells share their storey's volumetric gas layer, composed with the breach field on upload.
+// No puff: one more boolean in the fast path. Section build / teardown clear the puffs (never saved: no re-emission).
 
 import * as THREE from 'three';
 import type {Vec3, WorldHit} from '../../combat/hitscan';
@@ -31,6 +39,7 @@ import {WINDOWS_LANE, WindowBreaches, paneCentre, sourceCells, type Breach, type
 import {roofAirOf, roofBlend, type RoofAir} from '../roofAir'; // task gas-mask-roof-feedback-20261030 (item 10): the toxic roof
 import {GasHud} from '../../ui/gasHud';
 import {GAS, GasField} from './field';
+import {GasPuffs, type PuffGrid, type PuffSpec} from './puff'; // task track1-siren-blightbelly-20261031 (lane BLIGHT)
 
 /** What the gas system needs from Game (structural: tests drive it with a fake host). */
 export interface GasHost {
@@ -63,7 +72,11 @@ export type GasSource = 'field' | 'outdoor' | null;
  * (GAS.ROOF_OUTDOOR_C x the roof blend), `source` = which one `c` is (null below GAS.HUD_MIN), `dps` = the damage being applied
  * (0 when protected / below the threshold), `damage` = total gas damage dealt.
  */
-export interface GasExposure { c: number; protected: boolean; dps: number; damage: number; outdoor: number; source: GasSource }
+export interface GasExposure {
+  c: number; protected: boolean; dps: number; damage: number; outdoor: number; source: GasSource;
+  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): the temporary puffs' part of `c` (QA; already inside c). */
+  puff?: number;
+}
 
 const GLASS = new THREE.Color(0xc9d8dc);
 const tv = new THREE.Vector3(), tn = new THREE.Vector3(), td = new THREE.Vector3();
@@ -81,7 +94,9 @@ export class GasSystem {
   /** Integration point: the HUD hint while in gas ("Put on your gas mask (Q)" / "No filter" …). */
   hintFor: (protectedNow: boolean) => string = p => (p ? '' : 'Put on your gas mask (Q)');
   /** This frame's exposure. */
-  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null};
+  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0};
+  /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): temporary local puffs of the current world (any level / storey). */
+  readonly puffs = new GasPuffs();
   /** Task gas-mask-roof-feedback-20261030 (item 10): the office roof (its outside atmosphere; null on the Subway / between worlds). */
   roof: RoofAir | null = null;
   /** Counters (QA / tests). */
@@ -105,16 +120,21 @@ export class GasSystem {
   build(layout: StationLayout): void {
     this.clear();
     this.roof = roofAirOf(layout);
-    const o = this.host.tower.office, w = o?.windows;
-    if (!o || !w) return;
-    this.windows = new WindowBreaches(w.plans, w.view);
-    // the fields cover the tower footprint (+ the closed ring); the elevator shaft is closed on every storey
-    const ex = o.info.exterior, shaft = layout.office?.elevator?.shaft;
-    const domain = {x0: Math.floor(ex.x0 / CELL) - 1, y0: Math.floor(ex.z0 / CELL) - 1, x1: Math.ceil(ex.x1 / CELL) + 1, y1: Math.ceil(ex.z1 / CELL) + 1};
+    // the elevator shaft is closed on every storey (breach field and puffs alike)
+    const shaft = layout.office?.elevator?.shaft;
     const closed = shaft ? (cx: number, cy: number) => {
       const x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
       return x > shaft.x0 && x < shaft.x1 && z > shaft.z0 && z < shaft.z1;
     } : undefined;
+    // lane BLIGHT: puffs may start on any storey of this world (layout.levels index; a single-level station = its grid)
+    const levels = layout.levels?.length ? layout.levels : [{id: 0, grid: layout.grid}];
+    this.puffs.world = {grid: lv => (levels[lv]?.grid as PuffGrid | undefined) ?? null, closed};
+    const o = this.host.tower.office, w = o?.windows;
+    if (!o || !w) return;
+    this.windows = new WindowBreaches(w.plans, w.view);
+    // the fields cover the tower footprint (+ the closed ring)
+    const ex = o.info.exterior;
+    const domain = {x0: Math.floor(ex.x0 / CELL) - 1, y0: Math.floor(ex.z0 / CELL) - 1, x1: Math.ceil(ex.x1 / CELL) + 1, y1: Math.ceil(ex.z1 / CELL) + 1};
     const storeys = new Set(w.plans.map(p => p.level));
     this.field = new GasField(layout.levels.filter(l => storeys.has(l.id)).map(l => ({id: l.id, grid: l.grid})), {domain, closed});
     const rec = this.host.run.laneStore(WINDOWS_LANE);
@@ -133,7 +153,9 @@ export class GasSystem {
     this.windows = null;
     this.field = null;
     this.roof = null;
-    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null});
+    this.puffs.clear(); // lane BLIGHT: temporary puffs never outlive their world (never saved: no re-emission on a revisit)
+    this.puffs.world = null;
+    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0});
     this.hud.clear();
   }
 
@@ -161,12 +183,70 @@ export class GasSystem {
     return f.addBreach({id: ref.id, level: ref.plan.level, cells: sourceCells(ref, grid)});
   }
 
-  /** Changed storeys' fields -> their volumetric layers (at most once per tick each). */
+  /**
+   * Changed storeys' fields -> their volumetric layers (at most once per tick each). Lane BLIGHT: a storey with live puffs
+   * uploads the breach field + its puffs (saturating at GAS.CAP); a changed / just-expired puff uploads its own rect composed
+   * with the breach field there (an expired one clears its cells once). Without puffs: exactly the old uploads.
+   */
   private upload(): void {
-    const f = this.field;
-    if (!f) return;
-    const rect = f.rect;
-    for (const s of f.drainChanged()) { this.host.atmosphere.setGasLayer(s.level, s.c, rect); this.counts.uploads++; }
+    const f = this.field, P = this.puffs;
+    const puffLevels = P.active ? P.levels() : null;
+    if (f) {
+      const rect = f.rect;
+      for (const s of f.drainChanged()) {
+        this.host.atmosphere.setGasLayer(s.level, puffLevels?.has(s.level) ? this.compose(s.level, rect, s.c) : s.c, rect);
+        this.counts.uploads++;
+      }
+    }
+    for (const p of P.drainChanged()) {
+      const rect = p.rect, st = f?.storey(p.level);
+      this.host.atmosphere.setGasLayer(p.level, this.compose(p.level, rect, st ? null : undefined), rect);
+      this.counts.uploads++;
+    }
+  }
+
+  private scratch = new Float32Array(0);
+  /**
+   * Lane BLIGHT: the layer values of `rect` on storey `level` = min(GAS.CAP, breach field + live puffs). `base` = the breach
+   * storey's own array over `rect` (its full upload), `null` = sample the breach storey into the rect, undefined = no breach gas.
+   * Cost: a copy of the rect + the puffs' own cells (each puff domain is at most 31 x 31 cells).
+   */
+  private compose(level: number, rect: {x0: number; y0: number; w: number; h: number}, base: Float32Array | null | undefined): Float32Array {
+    const n = rect.w * rect.h;
+    if (this.scratch.length < n) this.scratch = new Float32Array(n);
+    const out = this.scratch.subarray(0, n);
+    if (base) out.set(base.subarray(0, n)); else out.fill(0);
+    const st = base === null ? this.field?.storey(level) ?? null : null;
+    if (st) {
+      const fr = this.field!.rect;
+      for (let y = 0; y < rect.h; y++) {
+        const ly = rect.y0 + y - fr.y0;
+        if (ly < 0 || ly >= fr.h) continue;
+        for (let x = 0; x < rect.w; x++) {
+          const lx = rect.x0 + x - fr.x0;
+          if (lx >= 0 && lx < fr.w) out[y * rect.w + x] = st.c[ly * fr.w + lx];
+        }
+      }
+    }
+    for (const p of this.puffs.list) {
+      if (p.level !== level) continue;
+      const x0 = Math.max(rect.x0, p.ox), y0 = Math.max(rect.y0, p.oy), x1 = Math.min(rect.x0 + rect.w, p.ox + p.dw), y1 = Math.min(rect.y0 + rect.h, p.oy + p.dh);
+      for (let cy = y0; cy < y1; cy++) for (let cx = x0; cx < x1; cx++) {
+        const i = (cy - rect.y0) * rect.w + (cx - rect.x0), v = out[i] + p.c[(cy - p.oy) * p.dw + (cx - p.ox)];
+        out[i] = v > GAS.CAP ? GAS.CAP : v;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Lane BLIGHT: a temporary local toxic puff (a Blightbelly's death cloud) on storey `spec.level` of the current world — any
+   * level, the Subway too. Bounded / coalesced (world/gas/puff.ts PUFF); false without a world or an open cell there.
+   */
+  addPuff(spec: PuffSpec): boolean {
+    const p = this.puffs.add(spec);
+    if (p) this.upload();
+    return !!p;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -231,22 +311,27 @@ export class GasSystem {
   // Per frame (play dt)
 
   frame(dt: number): void {
-    const f = this.field, roof = this.roof;
-    if (!f && !roof) { this.hud.clear(); return; }
-    if (f) { f.tick(dt); this.upload(); }
+    const f = this.field, roof = this.roof, P = this.puffs;
+    if (!f && !roof && !P.active) { this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff)
+    if (f) f.tick(dt);
+    if (P.active) P.tick(dt);
+    this.upload();
     // ONE exposure calculation per frame at the eye: the breach-gas field and (task gas-mask-roof-feedback-20261030, item 10) the
     // roof's outside atmosphere — c = max(field, outdoor), never a sum (the field has no storey on the roof, the outdoor weight is
     // 0 below the hatch: indoor floors never see the outside air)
-    const P = this.host.player, e = this.exposure;
-    const cField = P.alive && f ? f.concentrationAt(P.x, P.eye, P.z) : 0;
-    const cOut = P.alive && roof ? GAS.ROOF_OUTDOOR_C * roofBlend(P.x, P.eye, P.z, roof) : 0;
+    const e = this.exposure;
+    const pl = this.host.player;
+    // lane BLIGHT: the breach field + the temporary puffs share the gas (saturating at the cap, never stacking beyond it)
+    const cPuff = pl.alive && P.active ? P.concentrationAt(pl.x, pl.eye, pl.z) : 0;
+    const cField = pl.alive ? Math.min(GAS.CAP, (f ? f.concentrationAt(pl.x, pl.eye, pl.z) : 0) + cPuff) : 0;
+    const cOut = pl.alive && roof ? GAS.ROOF_OUTDOOR_C * roofBlend(pl.x, pl.eye, pl.z, roof) : 0;
     const c = Math.max(cField, cOut);
     const raw = GAS.DPS_MAX * Math.min(1, Math.max(0, (c - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
     const prot = c >= Math.min(GAS.HUD_MIN, GAS.THRESHOLD) ? this.protection() : false;
     const dps = prot ? 0 : raw;
-    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut;
+    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut; e.puff = cPuff;
     e.source = c < GAS.HUD_MIN ? null : cOut > cField ? 'outdoor' : 'field';
-    if (dps > 0 && dt > 0 && P.alive) { P.takeDamage(dps * dt); e.damage += dps * dt; }
+    if (dps > 0 && dt > 0 && pl.alive) { pl.takeDamage(dps * dt); e.damage += dps * dt; }
     // the fallback haze stands in for the volumetric breach gas only: the roof's outdoor murk is the scene fog, always drawn
     const haze = (!!this.host.atmosphereBypass || !this.host.atmosphere.active) && e.source === 'field';
     this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze});

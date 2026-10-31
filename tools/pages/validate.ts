@@ -21,7 +21,7 @@ import vm from 'node:vm';
 import type {EnemyReference} from './enemyReferenceTypes';
 import {
   ctxAnchor, ENEMIES_FAMILIES, ENEMIES_HOW_TO, ENEMIES_INDEX, enemyLevelPage, familyAnchor, RESERVED_ENEMY_PAGES, roomAnchor, termAnchor,
-  hookAnchor, rareAnchor, // task track3-eaton-centre-20261031 (lane PROFILES)
+  eligAnchor, // task track3-eaton-centre-20261031 (lane INTEG)
 } from './render/enemies';
 import {ACCESS_LABEL, href, NAV, SOURCE_REPO_URL} from './render/html';
 
@@ -324,11 +324,11 @@ function checkEnemyCoverage(files: SiteFiles, idCache: Map<string, Set<string>>,
       for (const c of level.contexts) need(page, ctxAnchor(c.id), `context ${level.id}/${c.id}`);
       for (const f of ref.families) need(page, familyAnchor(f.id), `family ${f.id} in ${level.id}`);
       for (const r of level.rooms.rows) need(page, roomAnchor(r.room), `room key ${level.id}/${r.room}`);
-      // task track3-eaton-centre-20261031 (lane PROFILES): family hooks, rare rules, the horde pool and ambient budgets need their places
-      const hooks = level.hooks ?? [], rare = level.rare ?? [];
-      if (hooks.length + rare.length) need(page, 'family-hooks', `family hooks / rare placement of ${level.id}`);
-      for (const h of hooks) need(page, hookAnchor(h.family), `family hook ${level.id}/${h.family}`);
-      for (const r of rare) need(page, rareAnchor(r.family), `rare rule ${level.id}/${r.family}`);
+      // task track3-eaton-centre-20261031 (lane PROFILES / INTEG): eligibility rules (with their spacing), the horde pool and ambient
+      // budgets need their places
+      const elig = level.pool?.eligibility ?? [];
+      if (elig.length) need(page, 'eligibility', `family eligibility of ${level.id}`);
+      for (const e of elig) need(page, eligAnchor(e.family), `eligibility rule ${level.id}/${e.family}`);
       if (level.horde) need(page, 'horde', `horde pool of ${level.id}`);
       if (level.budgets) need(page, 'ambient-budget', `ambient budget of ${level.id}`);
     }

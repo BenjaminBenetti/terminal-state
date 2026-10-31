@@ -4,6 +4,8 @@
 //  - runtime agreement: every number === the profile API, context runs === what the real generator runs, the census === a fresh
 //    generation of the registered generator (eligible m² = cells its own candidate filter accepted x CELL²);
 //  - exact maths (E[count], shares, expected coated share vs the real type roll), determinism, source links, docs agreement.
+//  - task track1-siren-blightbelly-20261031 (lane SPAWN), schema 2: tiers === the registry, family stats / rules === the exported
+//    constants (Siren hp = 2 x the shambler's), eligibility rules === the profile, the eligibility census === a fresh generation.
 
 import {describe, expect, it} from 'vitest';
 import {existsSync, readFileSync} from 'node:fs';
@@ -11,14 +13,19 @@ import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import type {LevelId} from '../src/levels/types';
 import {ENEMY_ARCHETYPES} from '../src/ai/creatureArchetypes';
 import {
-  ENEMY_FAMILY_IDS, SPAWN_CONTEXT_IDS, rollZombieTypes, roomKey, setSpawnCensusHook, spawnProfile, type SpawnCandidateReport, type SpawnProfile,
+  ENEMY_FAMILY_IDS, SPAWN_CONTEXT_IDS, rollZombieTypes, roomFamilyPool, roomKey, setSpawnCensusHook, spawnProfile, type SpawnCandidateReport, type SpawnProfile,
 } from '../src/ai/spawnTables';
+import {pickEnemyArchetype} from '../src/ai/creatureSpawn';
+import {ZOMBIE_STATS} from '../src/ai/brain';
+import {SIREN_STATS, SIREN_WAKE} from '../src/ai/siren';
+import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../src/ai/blightbelly';
 import {Rng} from '../src/core/rng';
 import {CELL} from '../src/gen/grid';
 import {OFFICE_FLOORS} from '../src/gen/office/frame';
 import {startWeaponFor} from '../src/weapons/pistol';
 import {
-  ENEMY_CENSUS_SEEDS, ENEMY_GENERATED_FROM, ENEMY_LEVEL_ADAPTER, buildEnemyReference, enemyCensus, expectedCoatedShare,
+  ENEMY_CENSUS_SEEDS, ENEMY_ELIGIBILITY_SEEDS, ENEMY_FAMILY_ADAPTER, ENEMY_GENERATED_FROM, ENEMY_LEVEL_ADAPTER, buildEnemyReference, eligibilityCensus,
+  enemyCensus, expectedCoatedShare, ruleRows,
 } from '../../tools/pages/enemyReference';
 import {ENEMY_REFERENCE_SCHEMA, type EnemyReference, type SourceLoc} from '../../tools/pages/enemyReferenceTypes';
 
@@ -100,11 +107,23 @@ describe('enemy spawn reference: runtime agreement', () => {
       expect([L.total.lo, L.total.hi, L.total.mean]).toEqual([lo, hi, mean]);
       const den = P.families.reduce((s, [, w]) => s + w, 0);
       expect(L.pool.denominator).toBe(den);
+      const affected = new Set(Object.entries(P.eligibility ?? {}).flatMap(([f, r]) => [f, r!.fallback]));
       L.pool.rows.forEach((row, i) => {
         expect(row.weight).toBe(P.families[i][1]);
         expect(row.share).toBeCloseTo(P.families[i][1] / den, 7);
-        expect(L.pool.expectedPerLevel[i].mean).toBeCloseTo(row.share * L.total.mean, 6);
+        expect(!!row.restricted).toBe(!!P.eligibility?.[row.family as keyof typeof P.eligibility]);
+        const e = L.pool.expectedPerLevel[i];
+        if (affected.has(row.family)) {
+          // a restricted family and its fallback: measured by the eligibility census (placed per level), never share x total
+          expect(e.basis).toBe('sampled');
+          expect(e.mean).toBe(L.eligibilityCensus!.placed.find(x => x.family === row.family)!.perLevel);
+        } else {
+          expect(e.basis).toBe('exact');
+          expect(e.mean!).toBeCloseTo(row.share * L.total.mean, 6);
+        }
       });
+      expect(L.tier.value).toBe(LEVELS[L.id as LevelId].tier);
+      expect(L.pool.eligibility.map(e => e.family)).toEqual(Object.keys(P.eligibility ?? {}));
       expect(L.zombieTypes.types[0]).toEqual({type: 'coated', chance: P.zombieTypes.coatedChance});
       expect(L.rooms.entries).toEqual([]);
       for (const row of L.rooms.rows) {
@@ -126,7 +145,9 @@ describe('enemy spawn reference: runtime agreement', () => {
 
   it('the sampled census is the registered generator: placed / eligible floor agree with a fresh generation', () => {
     const r = ref();
-    expect(r.meta.census.map(c => [c.level, c.seeds])).toEqual(LEVEL_IDS.map(l => [l, [...ENEMY_CENSUS_SEEDS]]));
+    // the room census for every level, then the eligibility census for every level whose profile restricts a family (Office)
+    expect(r.meta.census.map(c => [c.level, c.seeds])).toEqual(LEVEL_IDS.flatMap(l => [[l, [...ENEMY_CENSUS_SEEDS]],
+      ...(Object.keys(spawnProfile(l).eligibility ?? {}).length ? [[l, [...ENEMY_ELIGIBILITY_SEEDS]]] : [])]));
     for (const L of r.levels) {
       const c = L.census!;
       expect(c.layouts).toBe(ENEMY_CENSUS_SEEDS.length);
@@ -152,6 +173,66 @@ describe('enemy spawn reference: runtime agreement', () => {
       const eligible = new Set(cen.areas.map(a => a.key));
       for (const s of cen.spawns) expect(eligible.has(s.key), s.key).toBe(true);
     }
+  });
+});
+
+describe('enemy spawn reference: tiers, family stats, eligibility (task track1, schema 2)', () => {
+  it('every level shows its registry tier (Subway 0, Office 1) and the tier knob', () => {
+    expect(ref().levels.map(l => [l.id, l.tier.value])).toEqual(LEVEL_IDS.map(id => [id, LEVELS[id].tier]));
+    expect([level('subway').tier.value, level('office').tier.value]).toEqual([0, 1]);
+    for (const L of ref().levels) {
+      expect(L.tier.note).toMatch(/no automatic scaling/);
+      expect(L.knobs.find(k => k.what === 'difficulty tier')!.value).toBe(L.tier.value);
+    }
+  });
+
+  it('family stats and behaviour rules are the exported constants (no copied numbers)', () => {
+    const fam = (id: string) => ref().families.find(f => f.id === id)!;
+    expect(fam('zombie').stats.map(v => [v.variant, v.hp])).toEqual([['shambler', ZOMBIE_STATS.shambler.hp], ['coated', ZOMBIE_STATS.coated.hp]]);
+    const siren = fam('siren').stats[0];
+    expect(siren).toMatchObject({variant: null, hp: SIREN_STATS.hp, chaseSpeed: SIREN_STATS.chaseSpeed, attackDamage: SIREN_STATS.attackDamage});
+    expect(siren.hp).toBe(2 * ZOMBIE_STATS.shambler.hp); // double the ordinary zombie, not the coated one
+    expect(fam('blightbelly').stats[0]).toMatchObject({hp: BLIGHTBELLY_STATS.hp, chaseSpeed: BLIGHTBELLY_STATS.chaseSpeed, radius: BLIGHTBELLY_STATS.radius});
+    const wake = fam('siren').rules.find(g => g.title.startsWith('Dormant wake'))!;
+    expect(wake.rows.find(r => r.what.startsWith('proximity wake: plan distance'))!.value).toBe(SIREN_WAKE.proximityM);
+    const burst = fam('blightbelly').rules.find(g => g.title.startsWith('Death burst'))!;
+    expect(burst.rows.find(r => r.what.startsWith('blast damage to the player'))!.value).toBe(BLIGHTBELLY_BURST.blastMax);
+    expect(burst.rows.find(r => r.what.startsWith('toxic gas cloud life'))!.value).toBe(BLIGHTBELLY_BURST.gasDurationS);
+    // every leaf of every rules constant is listed (labelled, else by its key path): nothing silently dropped
+    for (const id of ENEMY_FAMILY_IDS) {
+      for (const [k, r] of ENEMY_FAMILY_ADAPTER[id].rules.entries()) expect(fam(id).rules[k].rows).toEqual(ruleRows(r.value));
+      const d = ENEMY_ARCHETYPES[id];
+      if (d.stats) expect(ENEMY_FAMILY_ADAPTER[id].stats.some(v => v.stats === d.stats), `${id} registry stats`).toBe(true);
+    }
+    const leaves = (o: object): number => Object.values(o).reduce((n: number, v) => n + (v && typeof v === 'object' && !Array.isArray(v) ? leaves(v) : 1), 0);
+    expect(ruleRows(SIREN_WAKE).length).toBe(leaves(SIREN_WAKE));
+  });
+
+  it('eligibility rules === the profile; the eligibility census === a fresh generation (draws, placed, fallbacks)', () => {
+    const o = level('office');
+    const P = spawnProfile('office');
+    expect(o.pool.eligibility).toHaveLength(1);
+    const e = o.pool.eligibility[0];
+    expect([e.family, e.contexts, e.fallback, e.maxPerLevel]).toEqual(['siren', [...P.eligibility!.siren!.contexts], 'zombie', P.eligibility!.siren!.maxPerLevel]);
+    expect(e.criteria.length).toBeGreaterThanOrEqual(8);
+    expect(level('subway').pool.eligibility).toEqual([]);
+    expect(level('subway').eligibilityCensus).toBeNull();
+    const c = o.eligibilityCensus!;
+    expect(c.layouts).toBe(ENEMY_ELIGIBILITY_SEEDS.length);
+    expect(c.note).toMatch(/^SAMPLED/);
+    const s = c.restricted[0];
+    expect(s.family).toBe('siren');
+    expect(s.placed).toBe(c.placed.find(x => x.family === 'siren')!.total);
+    expect(s.draws - s.placed).toBe(s.fallbacks.reduce((n, f) => n + f.draws, 0));
+    expect(s.perLevel.histogram.reduce((n, h) => n + h.layouts, 0)).toBe(c.layouts);
+    expect(s.perLevel.max).toBeLessThanOrEqual(P.eligibility!.siren!.maxPerLevel!);
+    expect(s.byContext.map(x => x.context)).toEqual(['floor']);
+    // one seed against a fresh generation
+    const seed = ENEMY_ELIGIBILITY_SEEDS[3];
+    const fresh = LEVELS.office.generate('main', {levelSeed: seed, startWeapon: startWeaponFor(false)});
+    const one = eligibilityCensus('office', [seed]).restricted[0];
+    expect(one.placed).toBe(fresh.zombies.filter(z => z.archetype === 'siren').length);
+    expect(one.draws).toBe(fresh.zombies.filter((z, i) => pickEnemyArchetype(fresh.seed, i, roomFamilyPool(P, fresh.areas[z.area])) === 'siren').length);
   });
 });
 
