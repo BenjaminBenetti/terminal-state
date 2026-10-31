@@ -407,9 +407,6 @@ const onWall = (e: Env, kind: MachineKind, s: Side, t: number, w: number, d: num
  * connected piece touching all its doors; `keep` cells (access strips, island rings) must be walkable and are reserved. Pushes one
  * collision-only 'annexMachine' prop per box (y 0: lifted onto the floor with the rest of the dressing) and the records.
  */
-/** Debug sink (tests / census only): failure reasons of tryPlace when set. */
-export const ROOMS_DEBUG: {log: string[] | null} = {log: null};
-
 function tryPlace(e: Env, recs: readonly AnnexMachine[], keep: readonly MachineBox[] = [], zoneOk = false): boolean {
   const {ctx, a, layout} = e, g = ctx.g;
   // local undo (the room's outer transaction, placeAnnexMachinery, also logs every mask change: a failed LAYOUT undoes all of it)
@@ -417,27 +414,22 @@ function tryPlace(e: Env, recs: readonly AnnexMachine[], keep: readonly MachineB
   /** Cells this placement itself blocked (its own boxes may share a cell: sub-cell curbs, a keep strip beside a footprint). */
   const mine = new Set<number>();
   const mark = (arr: Uint8Array, i: number) => { if (arr[i] !== 1) { undo.push([arr, i, arr[i]]); markCell(ctx, arr, i); } };
-  let why = '';
   const fail = () => {
     for (let k = undo.length - 1; k >= 0; k--) undo[k][0][undo[k][1]] = undo[k][2];
     layout.props.length = p0;
-    ROOMS_DEBUG.log?.push(`${a.id} ${recs.map(m => m.kind).join('+')}: ${why}`);
     return false;
   };
   for (const m of recs) {
     for (const b of machineBoxes(m)) {
-      if (b.h > e.ceil - 0.02) { why = `ceil ${b.h} > ${e.ceil}`; return fail(); }
+      if (b.h > e.ceil - 0.02) return fail();
       const [cx0, cy0, cx1, cy1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
       for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
-        if (!g.inBounds(cx, cy)) { why = 'bounds'; return fail(); }
+        if (!g.inBounds(cx, cy)) return fail();
         const i = g.idx(cx, cy);
         if (mine.has(i)) continue;
-        if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || ctx.keep[i] || ctx.edge[i] || ctx.doorCell[i] || (!zoneOk && ctx.zone[i])) {
-          why = `cell ${g.cells[i] !== FLOOR ? 'notfloor' : g.area[i] !== a.id ? 'area' : g.blocked[i] ? 'blocked' : ctx.keep[i] ? 'keep' : ctx.edge[i] ? 'edge' : ctx.doorCell[i] ? 'door' : 'zone'}`;
-          return fail();
-        }
+        if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || ctx.keep[i] || ctx.edge[i] || ctx.doorCell[i] || (!zoneOk && ctx.zone[i])) return fail();
       }
-      if (propBlocksDoorway(layout, b.x, b.z, b.hx, b.hz, e.floorY, b.h)) { why = 'doorway'; return fail(); }
+      if (propBlocksDoorway(layout, b.x, b.z, b.hx, b.hz, e.floorY, b.h)) return fail();
       for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
         const i = g.idx(cx, cy);
         mine.add(i);
@@ -451,11 +443,11 @@ function tryPlace(e: Env, recs: readonly AnnexMachine[], keep: readonly MachineB
     const [cx0, cy0, cx1, cy1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       if (!g.inBounds(cx, cy) || g.area[g.idx(cx, cy)] !== a.id || mine.has(g.idx(cx, cy))) continue;
-      if (!g.walkable(cx, cy)) { why = 'keep blocked'; return fail(); }
+      if (!g.walkable(cx, cy)) return fail();
       mark(ctx.keep, g.idx(cx, cy));
     }
   }
-  if (!areaConnected(ctx, a)) { why = 'connectivity'; return fail(); }
+  if (!areaConnected(ctx, a)) return fail();
   e.placed += layout.props.length - p0;
   e.out.push(...recs);
   return true;
@@ -558,7 +550,17 @@ function generatorLayout(e: Env): boolean {
   const sg = switchgear(e, e.hall ? 7 : 4);
   const want = e.hall ? 2 : 1;
   let got = 0;
-  for (let k = 0; k < want; k++) {
+  // a hall: a PAIR of sets side by side across a 1.2 m aisle first (one transaction), else single islands
+  if (e.hall) {
+    const alongX = e.x1 - e.x0 >= e.z1 - e.z0, off = gd / 2 + 0.6;
+    for (const sp of islandSpots(e, gw, 2 * gd + 1.2, ring)) {
+      const h = Math.min(1.75, e.ceil - 0.1), flip = e.rng.chance(0.5) ? Math.PI : 0;
+      const recs = [-1, 1].map(sg2 => rec(e, 'genset', sp.x + (alongX ? 0 : sg2 * off), sp.z + (alongX ? sg2 * off : 0), sp.rot + flip, gw, gd, h));
+      const hx = alongX ? gw / 2 : gd + 0.6, hz = alongX ? gd + 0.6 : gw / 2;
+      if (tryPlace(e, recs, [ringBox(sp.x, sp.z, hx, hz, ring)])) { got = 2; break; }
+    }
+  }
+  for (let k = got; k < want; k++) {
     let ok = false;
     for (const sp of islandSpots(e, gw, gd, ring)) {
       const h = Math.min(1.75, e.ceil - 0.1);
@@ -613,6 +615,8 @@ function sewageLayout(e: Env): boolean {
       const x = alongX ? cxw : e.x0 + v, z = alongX ? e.z0 + v : czw;
       addVisual(e, rec(e, 'catwalk', x, z, rot, L, ww, 0.03, [0]));
     }
+    // a hall: the pump control panels and a dosing tank (best effort)
+    if (e.hall) { switchgear(e, 3); wallTank(e); }
     wallPipes(e, 2, alongX ? ['W', 'E'] : ['N', 'S']);
     return true;
   }
@@ -633,7 +637,12 @@ function overflowLayout(e: Env): boolean {
       const t = snap(t0 + (len - w) / 2) + w / 2;
       const m = onWall(e, 'basin', s, t, w, d, MACHINE_DIMS.parapet, [snap(e.rng.range(-w / 4, w / 4))]);
       if (!tryPlace(e, [m], [frontStrip(e, s, t, w, d, ring)])) continue;
-      if (e.hall) addVisual(e, onWall(e, 'pipeRun', s, t, w + 1, 0.28, 0.3, [Math.min(e.ceil - 0.3, 3.2), 2]));
+      if (e.hall) {
+        addVisual(e, onWall(e, 'pipeRun', s, t, w + 1, 0.28, 0.3, [Math.min(e.ceil - 0.3, 3.2), 2]));
+        // the pump / penstock controls and a dosing tank (best effort)
+        switchgear(e, 3, [s]);
+        wallTank(e, [s]);
+      }
       wallPipes(e, 1, [s]);
       return true;
     }
@@ -803,11 +812,6 @@ export function placeAnnexMachinery(layout: StationLayout, plan: AnnexRoomPlan, 
       tried.add(s);
       const n0 = out.length;
       e.placed = 0;
-      if (ROOMS_DEBUG.log) {
-        let bl = 0, kp = 0, nf = 0;
-        for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) { const i = ctx.g.idx(x, y); if (ctx.g.blocked[i]) bl++; if (ctx.keep[i]) kp++; if (ctx.g.cells[i] !== FLOOR) nf++; }
-        ROOMS_DEBUG.log.push(`room ${a.id} ${(a.w * CELL).toFixed(1)}x${(a.h * CELL).toFixed(1)} ceil ${e.ceil.toFixed(2)} hall ${e.hall} doors ${doors.length} main ${main}: try ${s} [blocked ${bl} keep ${kp} notfloor ${nf} of ${a.w * a.h}; tx depth ${ctx.tx.depth}]`);
-      }
       begin(ctx);
       if (LAYOUTS[s](e)) { commit(ctx); ok = true; break; }
       rollback(ctx);

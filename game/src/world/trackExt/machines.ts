@@ -280,7 +280,9 @@ function channel(b: Build, m: AnnexMachine): void {
   const p = m.p ?? [];
   for (let i = 0; i + 1 < p.length; i += 2) {
     b.plane('water', p[i], -hd + D.curb, p[i + 1], hd - D.curb, 0.01);
-    b.box('grate', p[i], 0.0, -hd, p[i + 1], 0.03, hd);
+    // bearing bars across the channel (the water shows between them), edge angles and kick plates
+    for (let x = p[i] + 0.08; x < p[i + 1] - 0.05; x += 0.1) b.box('galv', x - 0.012, 0.005, -hd, x + 0.012, 0.03, hd);
+    for (const z of [-hd + D.curb, hd - D.curb - 0.04]) b.box('dark', p[i], 0, z, p[i + 1], 0.032, z + 0.04);
     for (const x of [p[i], p[i + 1] - 0.05]) b.box('dark', x, 0, -hd, x + 0.05, 0.08, hd);
   }
   void hw;

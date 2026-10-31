@@ -122,22 +122,28 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
  * service spawns (context 'service', counted separately: " + service N") and loose floor finds after every core record; the live
  * entries of annex levels moved. Stage 5 / 6 values: 7:rifle 57751997 / a3bb2bd6; 7:pistol 57751997 / cfa5e53e; 42:rifle 7e096c0f / 401f6ea3; 42:pistol 7e096c0f / 8dff5091; 1234:rifle 02befcf6 / 24fee8eb; 1234:pistol 02befcf6 / 6aeaa743; 16920:rifle:island-ends 3109e626 / 93c64910; 24839:rifle:express e54ed472 / ba61040b; 32758:rifle:interchange 5169b3f5 / 8da5b0dd; 40677:rifle:split 5e2bd6b6 / 175d9888; 48596:rifle:deep 790b8072 / f0a91704.
  * Their core views reproduce SUBWAY_GOLDEN_RESERVE (asserted every run).
+ * Stage 8 (task track2-playtest-revision-20261031, lane ROOMS - pin history in tests/enemy-spawn-parity.test.ts): the annexes'
+ * machinery halls and room signatures re-lay every annex (its areas, collision-only machinery boxes, lean dressing) and the
+ * extension rng / grid growth, so the live entries of annex levels moved again (the station counts, the service counts and every
+ * non-annex entry - 1, 9001 - are unchanged). Stage 7 values: 7 cd34227e / dea399bd (pistol 1f239b59); 42 58c94fba / 56948c2c
+ * (pistol 7cefb386); 1234 9dfb7d48 / bb4af627 (pistol dda30867); 16920 463c82be / ec88e4cc; 24839 48e23d1e / 51ae0a89; 32758
+ * dc230828 / 143e86f3; 40677 f9aec9de / 0b478480; 48596 e109a6c9 / b0ca260f.
  */
 export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   '1:rifle': ['71fdd11f', '70dde302', 'station 28 (L0 22 L1 2 L2 4)'],
   '1:pistol': ['71fdd11f', '04660593', 'station 28 (L0 22 L1 2 L2 4)'],
-  '7:rifle': ['cd34227e', 'dea399bd', 'station 23 (L0 18 L1 3 L2 2) + service 4'],
-  '7:pistol': ['cd34227e', '1f239b59', 'station 23 (L0 18 L1 3 L2 2) + service 4'],
-  '42:rifle': ['58c94fba', '56948c2c', 'station 30 (L0 23 L1 2 L2 5) + service 4'],
-  '42:pistol': ['58c94fba', '7cefb386', 'station 30 (L0 23 L1 2 L2 5) + service 4'],
-  '1234:rifle': ['9dfb7d48', 'bb4af627', 'station 31 (L0 21 L1 6 L2 4) + service 6'],
-  '1234:pistol': ['9dfb7d48', 'dda30867', 'station 31 (L0 21 L1 6 L2 4) + service 6'],
+  '7:rifle': ['ffade4f1', '2b3e78cd', 'station 23 (L0 18 L1 3 L2 2) + service 4'],
+  '7:pistol': ['ffade4f1', '1860211f', 'station 23 (L0 18 L1 3 L2 2) + service 4'],
+  '42:rifle': ['b0016b10', 'a6488730', 'station 30 (L0 23 L1 2 L2 5) + service 4'],
+  '42:pistol': ['b0016b10', 'e01ab485', 'station 30 (L0 23 L1 2 L2 5) + service 4'],
+  '1234:rifle': ['6fb2916a', 'c570d8ca', 'station 31 (L0 21 L1 6 L2 4) + service 6'],
+  '1234:pistol': ['6fb2916a', 'f3e93b59', 'station 31 (L0 21 L1 6 L2 4) + service 6'],
   '9001:rifle:side-mezzanine': ['b8410519', '0bfe5634', 'station 30 (L0 23 L1 2 L2 5)'],
-  '16920:rifle:island-ends': ['463c82be', 'ec88e4cc', 'station 30 (L0 22 L1 5 L2 3) + service 10'],
-  '24839:rifle:express': ['48e23d1e', '51ae0a89', 'station 25 (L0 17 L1 4 L2 4) + service 4'],
-  '32758:rifle:interchange': ['dc230828', '143e86f3', 'station 31 (L0 23 L1 3 L2 5) + service 9'],
-  '40677:rifle:split': ['f9aec9de', '0b478480', 'station 23 (L0 18 L1 2 L2 3) + service 4'],
-  '48596:rifle:deep': ['e109a6c9', 'b0ca260f', 'station 31 (L0 23 L1 3 L2 5) + service 3'],
+  '16920:rifle:island-ends': ['627b3374', '19071d9d', 'station 30 (L0 22 L1 5 L2 3) + service 10'],
+  '24839:rifle:express': ['8c8eb43e', '0c54c1fa', 'station 25 (L0 17 L1 4 L2 4) + service 4'],
+  '32758:rifle:interchange': ['f61184c7', '5d1e2499', 'station 31 (L0 23 L1 3 L2 5) + service 9'],
+  '40677:rifle:split': ['4f4a715a', '88097a6a', 'station 23 (L0 18 L1 2 L2 3) + service 4'],
+  '48596:rifle:deep': ['a66ab2b8', '5c6e050e', 'station 31 (L0 23 L1 3 L2 5) + service 3'],
 };
 /**
  * Stage 5 (GEN-2): the CORE VIEW of the live Subway layouts — the core station generated with the reserve (a layout change; its
@@ -174,11 +180,13 @@ export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = 
  * spawns (context 'service', counted separately) and loose floor finds after every core record; the core view still reproduces
  * OFFICE_GOLDEN byte for byte (asserted every run). Entries without an annex equal OFFICE_GOLDEN.
  */
+// (stage 8, task track2-playtest-revision lane ROOMS: the annex machinery halls / room signatures re-lay the annexes; stage 7 values
+// 222 fc17be7a / e2d2d41d, 3333 66709f4c / adaf922a, 4242 b7048532 / 36b424a5; every count unchanged)
 export const OFFICE_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   ...OFFICE_GOLDEN,
-  '222:pistol': ['fc17be7a', 'e2d2d41d', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 7'],
-  '3333:pistol': ['66709f4c', 'adaf922a', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 6'],
-  '4242:pistol': ['b7048532', '36b424a5', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 9'],
+  '222:pistol': ['4384f11a', 'b748d73a', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 7'],
+  '3333:pistol': ['7f512bec', 'a15d6865', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 6'],
+  '4242:pistol': ['2b09e0ee', 'ad3deacb', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 9'],
 };
 
 /**
